@@ -1664,102 +1664,119 @@ Sema::CheckBuiltinFunctionCall(FunctionDecl *FDecl, unsigned BuiltinID,
   case Builtin::BI__sync_fetch_and_add_4:
   case Builtin::BI__sync_fetch_and_add_8:
   case Builtin::BI__sync_fetch_and_add_16:
+  case Builtin::BI__sync_fetch_and_add_cap:
   case Builtin::BI__sync_fetch_and_sub:
   case Builtin::BI__sync_fetch_and_sub_1:
   case Builtin::BI__sync_fetch_and_sub_2:
   case Builtin::BI__sync_fetch_and_sub_4:
   case Builtin::BI__sync_fetch_and_sub_8:
   case Builtin::BI__sync_fetch_and_sub_16:
+  case Builtin::BI__sync_fetch_and_sub_cap:
   case Builtin::BI__sync_fetch_and_or:
   case Builtin::BI__sync_fetch_and_or_1:
   case Builtin::BI__sync_fetch_and_or_2:
   case Builtin::BI__sync_fetch_and_or_4:
   case Builtin::BI__sync_fetch_and_or_8:
   case Builtin::BI__sync_fetch_and_or_16:
+  case Builtin::BI__sync_fetch_and_or_cap:
   case Builtin::BI__sync_fetch_and_and:
   case Builtin::BI__sync_fetch_and_and_1:
   case Builtin::BI__sync_fetch_and_and_2:
   case Builtin::BI__sync_fetch_and_and_4:
   case Builtin::BI__sync_fetch_and_and_8:
   case Builtin::BI__sync_fetch_and_and_16:
+  case Builtin::BI__sync_fetch_and_and_cap:
   case Builtin::BI__sync_fetch_and_xor:
   case Builtin::BI__sync_fetch_and_xor_1:
   case Builtin::BI__sync_fetch_and_xor_2:
   case Builtin::BI__sync_fetch_and_xor_4:
   case Builtin::BI__sync_fetch_and_xor_8:
   case Builtin::BI__sync_fetch_and_xor_16:
+  case Builtin::BI__sync_fetch_and_xor_cap:
   case Builtin::BI__sync_fetch_and_nand:
   case Builtin::BI__sync_fetch_and_nand_1:
   case Builtin::BI__sync_fetch_and_nand_2:
   case Builtin::BI__sync_fetch_and_nand_4:
   case Builtin::BI__sync_fetch_and_nand_8:
   case Builtin::BI__sync_fetch_and_nand_16:
+  case Builtin::BI__sync_fetch_and_nand_cap:
   case Builtin::BI__sync_add_and_fetch:
   case Builtin::BI__sync_add_and_fetch_1:
   case Builtin::BI__sync_add_and_fetch_2:
   case Builtin::BI__sync_add_and_fetch_4:
   case Builtin::BI__sync_add_and_fetch_8:
   case Builtin::BI__sync_add_and_fetch_16:
+  case Builtin::BI__sync_add_and_fetch_cap:
   case Builtin::BI__sync_sub_and_fetch:
   case Builtin::BI__sync_sub_and_fetch_1:
   case Builtin::BI__sync_sub_and_fetch_2:
   case Builtin::BI__sync_sub_and_fetch_4:
   case Builtin::BI__sync_sub_and_fetch_8:
   case Builtin::BI__sync_sub_and_fetch_16:
+  case Builtin::BI__sync_sub_and_fetch_cap:
   case Builtin::BI__sync_and_and_fetch:
   case Builtin::BI__sync_and_and_fetch_1:
   case Builtin::BI__sync_and_and_fetch_2:
   case Builtin::BI__sync_and_and_fetch_4:
   case Builtin::BI__sync_and_and_fetch_8:
   case Builtin::BI__sync_and_and_fetch_16:
+  case Builtin::BI__sync_and_and_fetch_cap:
   case Builtin::BI__sync_or_and_fetch:
   case Builtin::BI__sync_or_and_fetch_1:
   case Builtin::BI__sync_or_and_fetch_2:
   case Builtin::BI__sync_or_and_fetch_4:
   case Builtin::BI__sync_or_and_fetch_8:
   case Builtin::BI__sync_or_and_fetch_16:
+  case Builtin::BI__sync_or_and_fetch_cap:
   case Builtin::BI__sync_xor_and_fetch:
   case Builtin::BI__sync_xor_and_fetch_1:
   case Builtin::BI__sync_xor_and_fetch_2:
   case Builtin::BI__sync_xor_and_fetch_4:
   case Builtin::BI__sync_xor_and_fetch_8:
   case Builtin::BI__sync_xor_and_fetch_16:
+  case Builtin::BI__sync_xor_and_fetch_cap:
   case Builtin::BI__sync_nand_and_fetch:
   case Builtin::BI__sync_nand_and_fetch_1:
   case Builtin::BI__sync_nand_and_fetch_2:
   case Builtin::BI__sync_nand_and_fetch_4:
   case Builtin::BI__sync_nand_and_fetch_8:
   case Builtin::BI__sync_nand_and_fetch_16:
+  case Builtin::BI__sync_nand_and_fetch_cap:
   case Builtin::BI__sync_val_compare_and_swap:
   case Builtin::BI__sync_val_compare_and_swap_1:
   case Builtin::BI__sync_val_compare_and_swap_2:
   case Builtin::BI__sync_val_compare_and_swap_4:
   case Builtin::BI__sync_val_compare_and_swap_8:
   case Builtin::BI__sync_val_compare_and_swap_16:
+  case Builtin::BI__sync_val_compare_and_swap_cap:
   case Builtin::BI__sync_bool_compare_and_swap:
   case Builtin::BI__sync_bool_compare_and_swap_1:
   case Builtin::BI__sync_bool_compare_and_swap_2:
   case Builtin::BI__sync_bool_compare_and_swap_4:
   case Builtin::BI__sync_bool_compare_and_swap_8:
   case Builtin::BI__sync_bool_compare_and_swap_16:
+  case Builtin::BI__sync_bool_compare_and_swap_cap:
   case Builtin::BI__sync_lock_test_and_set:
   case Builtin::BI__sync_lock_test_and_set_1:
   case Builtin::BI__sync_lock_test_and_set_2:
   case Builtin::BI__sync_lock_test_and_set_4:
   case Builtin::BI__sync_lock_test_and_set_8:
   case Builtin::BI__sync_lock_test_and_set_16:
+  case Builtin::BI__sync_lock_test_and_set_cap:
   case Builtin::BI__sync_lock_release:
   case Builtin::BI__sync_lock_release_1:
   case Builtin::BI__sync_lock_release_2:
   case Builtin::BI__sync_lock_release_4:
   case Builtin::BI__sync_lock_release_8:
   case Builtin::BI__sync_lock_release_16:
+  case Builtin::BI__sync_lock_release_cap:
   case Builtin::BI__sync_swap:
   case Builtin::BI__sync_swap_1:
   case Builtin::BI__sync_swap_2:
   case Builtin::BI__sync_swap_4:
   case Builtin::BI__sync_swap_8:
   case Builtin::BI__sync_swap_16:
+  case Builtin::BI__sync_swap_cap:
     return SemaBuiltinAtomicOverloaded(TheCallResult);
   case Builtin::BI__sync_synchronize:
     Diag(TheCall->getBeginLoc(), diag::warn_atomic_implicit_seq_cst)
@@ -5912,22 +5929,6 @@ Sema::SemaBuiltinAtomicOverloaded(ExprResult TheCallResult) {
         << FirstArg->getType() << FirstArg->getSourceRange();
     return ExprError();
   }
-  // XXXAR: disallow __sync builtins with capabilities for now
-  // It would result in incorrect code generation because we would end up
-  // using the _16 versions and generating i256 in the IR
-  if (pointerType->getPointeeType()->isCHERICapabilityType(Context)) {
-    switch (FDecl->getBuiltinID()) {
-    case Builtin::BI__sync_bool_compare_and_swap:
-    case Builtin::BI__sync_val_compare_and_swap:
-    case Builtin::BI__sync_swap:
-      break;
-    default:
-      // All other builtins generate broken code for now
-      Diag(DRE->getBeginLoc(), diag::err_sync_atomic_builtin_with_capability)
-        << pointerType->getPointeeType() << FirstArg->getSourceRange();
-      return ExprError();
-    }
-  }
 
   QualType ValType = pointerType->getPointeeType();
   if (!ValType->isIntegerType() && !ValType->isAnyPointerType() &&
@@ -5969,9 +5970,9 @@ Sema::SemaBuiltinAtomicOverloaded(ExprResult TheCallResult) {
   // __sync_fetch_and_add_2.
 #define BUILTIN_ROW(x) \
   { Builtin::BI##x##_1, Builtin::BI##x##_2, Builtin::BI##x##_4, \
-    Builtin::BI##x##_8, Builtin::BI##x##_16 }
+    Builtin::BI##x##_8, Builtin::BI##x##_16, Builtin::BI##x##_cap }
 
-  static const unsigned BuiltinIndices[][5] = {
+  static const unsigned BuiltinIndices[][6] = {
     BUILTIN_ROW(__sync_fetch_and_add),
     BUILTIN_ROW(__sync_fetch_and_sub),
     BUILTIN_ROW(__sync_fetch_and_or),
@@ -5994,18 +5995,22 @@ Sema::SemaBuiltinAtomicOverloaded(ExprResult TheCallResult) {
   };
 #undef BUILTIN_ROW
 
-  // Determine the index of the size.
-  unsigned SizeIndex;
-  switch (Context.getTypeSizeInChars(ValType).getQuantity()) {
-  case 1: SizeIndex = 0; break;
-  case 2: SizeIndex = 1; break;
-  case 4: SizeIndex = 2; break;
-  case 8: SizeIndex = 3; break;
-  case 16: SizeIndex = 4; break;
-  default:
-    Diag(DRE->getBeginLoc(), diag::err_atomic_builtin_pointer_size)
-        << FirstArg->getType() << FirstArg->getSourceRange();
-    return ExprError();
+  // Determine the index of the type.
+  unsigned TypeIndex;
+  if (ValType->isCHERICapabilityType(Context)) {
+    TypeIndex = 5;
+  } else {
+    switch (Context.getTypeSizeInChars(ValType).getQuantity()) {
+    case 1: TypeIndex = 0; break;
+    case 2: TypeIndex = 1; break;
+    case 4: TypeIndex = 2; break;
+    case 8: TypeIndex = 3; break;
+    case 16: TypeIndex = 4; break;
+    default:
+      Diag(DRE->getBeginLoc(), diag::err_atomic_builtin_pointer_size)
+          << FirstArg->getType() << FirstArg->getSourceRange();
+      return ExprError();
+    }
   }
 
   // Each of these builtins has one pointer argument, followed by some number of
@@ -6023,6 +6028,7 @@ Sema::SemaBuiltinAtomicOverloaded(ExprResult TheCallResult) {
   case Builtin::BI__sync_fetch_and_add_4:
   case Builtin::BI__sync_fetch_and_add_8:
   case Builtin::BI__sync_fetch_and_add_16:
+  case Builtin::BI__sync_fetch_and_add_cap:
     BuiltinIndex = 0;
     break;
 
@@ -6032,6 +6038,7 @@ Sema::SemaBuiltinAtomicOverloaded(ExprResult TheCallResult) {
   case Builtin::BI__sync_fetch_and_sub_4:
   case Builtin::BI__sync_fetch_and_sub_8:
   case Builtin::BI__sync_fetch_and_sub_16:
+  case Builtin::BI__sync_fetch_and_sub_cap:
     BuiltinIndex = 1;
     break;
 
@@ -6041,6 +6048,7 @@ Sema::SemaBuiltinAtomicOverloaded(ExprResult TheCallResult) {
   case Builtin::BI__sync_fetch_and_or_4:
   case Builtin::BI__sync_fetch_and_or_8:
   case Builtin::BI__sync_fetch_and_or_16:
+  case Builtin::BI__sync_fetch_and_or_cap:
     BuiltinIndex = 2;
     break;
 
@@ -6050,6 +6058,7 @@ Sema::SemaBuiltinAtomicOverloaded(ExprResult TheCallResult) {
   case Builtin::BI__sync_fetch_and_and_4:
   case Builtin::BI__sync_fetch_and_and_8:
   case Builtin::BI__sync_fetch_and_and_16:
+  case Builtin::BI__sync_fetch_and_and_cap:
     BuiltinIndex = 3;
     break;
 
@@ -6059,6 +6068,7 @@ Sema::SemaBuiltinAtomicOverloaded(ExprResult TheCallResult) {
   case Builtin::BI__sync_fetch_and_xor_4:
   case Builtin::BI__sync_fetch_and_xor_8:
   case Builtin::BI__sync_fetch_and_xor_16:
+  case Builtin::BI__sync_fetch_and_xor_cap:
     BuiltinIndex = 4;
     break;
 
@@ -6068,6 +6078,7 @@ Sema::SemaBuiltinAtomicOverloaded(ExprResult TheCallResult) {
   case Builtin::BI__sync_fetch_and_nand_4:
   case Builtin::BI__sync_fetch_and_nand_8:
   case Builtin::BI__sync_fetch_and_nand_16:
+  case Builtin::BI__sync_fetch_and_nand_cap:
     BuiltinIndex = 5;
     WarnAboutSemanticsChange = true;
     break;
@@ -6078,6 +6089,7 @@ Sema::SemaBuiltinAtomicOverloaded(ExprResult TheCallResult) {
   case Builtin::BI__sync_add_and_fetch_4:
   case Builtin::BI__sync_add_and_fetch_8:
   case Builtin::BI__sync_add_and_fetch_16:
+  case Builtin::BI__sync_add_and_fetch_cap:
     BuiltinIndex = 6;
     break;
 
@@ -6087,6 +6099,7 @@ Sema::SemaBuiltinAtomicOverloaded(ExprResult TheCallResult) {
   case Builtin::BI__sync_sub_and_fetch_4:
   case Builtin::BI__sync_sub_and_fetch_8:
   case Builtin::BI__sync_sub_and_fetch_16:
+  case Builtin::BI__sync_sub_and_fetch_cap:
     BuiltinIndex = 7;
     break;
 
@@ -6096,6 +6109,7 @@ Sema::SemaBuiltinAtomicOverloaded(ExprResult TheCallResult) {
   case Builtin::BI__sync_and_and_fetch_4:
   case Builtin::BI__sync_and_and_fetch_8:
   case Builtin::BI__sync_and_and_fetch_16:
+  case Builtin::BI__sync_and_and_fetch_cap:
     BuiltinIndex = 8;
     break;
 
@@ -6105,6 +6119,7 @@ Sema::SemaBuiltinAtomicOverloaded(ExprResult TheCallResult) {
   case Builtin::BI__sync_or_and_fetch_4:
   case Builtin::BI__sync_or_and_fetch_8:
   case Builtin::BI__sync_or_and_fetch_16:
+  case Builtin::BI__sync_or_and_fetch_cap:
     BuiltinIndex = 9;
     break;
 
@@ -6114,6 +6129,7 @@ Sema::SemaBuiltinAtomicOverloaded(ExprResult TheCallResult) {
   case Builtin::BI__sync_xor_and_fetch_4:
   case Builtin::BI__sync_xor_and_fetch_8:
   case Builtin::BI__sync_xor_and_fetch_16:
+  case Builtin::BI__sync_xor_and_fetch_cap:
     BuiltinIndex = 10;
     break;
 
@@ -6123,6 +6139,7 @@ Sema::SemaBuiltinAtomicOverloaded(ExprResult TheCallResult) {
   case Builtin::BI__sync_nand_and_fetch_4:
   case Builtin::BI__sync_nand_and_fetch_8:
   case Builtin::BI__sync_nand_and_fetch_16:
+  case Builtin::BI__sync_nand_and_fetch_cap:
     BuiltinIndex = 11;
     WarnAboutSemanticsChange = true;
     break;
@@ -6133,6 +6150,7 @@ Sema::SemaBuiltinAtomicOverloaded(ExprResult TheCallResult) {
   case Builtin::BI__sync_val_compare_and_swap_4:
   case Builtin::BI__sync_val_compare_and_swap_8:
   case Builtin::BI__sync_val_compare_and_swap_16:
+  case Builtin::BI__sync_val_compare_and_swap_cap:
     BuiltinIndex = 12;
     NumFixed = 2;
     break;
@@ -6143,6 +6161,7 @@ Sema::SemaBuiltinAtomicOverloaded(ExprResult TheCallResult) {
   case Builtin::BI__sync_bool_compare_and_swap_4:
   case Builtin::BI__sync_bool_compare_and_swap_8:
   case Builtin::BI__sync_bool_compare_and_swap_16:
+  case Builtin::BI__sync_bool_compare_and_swap_cap:
     BuiltinIndex = 13;
     NumFixed = 2;
     ResultType = Context.BoolTy;
@@ -6154,6 +6173,7 @@ Sema::SemaBuiltinAtomicOverloaded(ExprResult TheCallResult) {
   case Builtin::BI__sync_lock_test_and_set_4:
   case Builtin::BI__sync_lock_test_and_set_8:
   case Builtin::BI__sync_lock_test_and_set_16:
+  case Builtin::BI__sync_lock_test_and_set_cap:
     BuiltinIndex = 14;
     break;
 
@@ -6163,6 +6183,7 @@ Sema::SemaBuiltinAtomicOverloaded(ExprResult TheCallResult) {
   case Builtin::BI__sync_lock_release_4:
   case Builtin::BI__sync_lock_release_8:
   case Builtin::BI__sync_lock_release_16:
+  case Builtin::BI__sync_lock_release_cap:
     BuiltinIndex = 15;
     NumFixed = 0;
     ResultType = Context.VoidTy;
@@ -6174,6 +6195,7 @@ Sema::SemaBuiltinAtomicOverloaded(ExprResult TheCallResult) {
   case Builtin::BI__sync_swap_4:
   case Builtin::BI__sync_swap_8:
   case Builtin::BI__sync_swap_16:
+  case Builtin::BI__sync_swap_cap:
     BuiltinIndex = 16;
     break;
   }
@@ -6197,7 +6219,7 @@ Sema::SemaBuiltinAtomicOverloaded(ExprResult TheCallResult) {
 
   // Get the decl for the concrete builtin from this, we can tell what the
   // concrete integer type we should convert to is.
-  unsigned NewBuiltinID = BuiltinIndices[BuiltinIndex][SizeIndex];
+  unsigned NewBuiltinID = BuiltinIndices[BuiltinIndex][TypeIndex];
   const char *NewBuiltinName = Context.BuiltinInfo.getName(NewBuiltinID);
   FunctionDecl *NewBuiltinDecl;
   if (NewBuiltinID == BuiltinID)
