@@ -10843,15 +10843,8 @@ static QualType DecodeTypeFromStr(const char *&Str, const ASTContext &Context,
           Context.getLangASForBuiltinAddressSpace(AddrSpace));
         Str = End;
       }
-      if (c == '*') {
-        PointerInterpretationKind PIK =
-            Context.getDefaultPointerInterpretation();
-        if (*Str == 'm') {
-          PIK = PIK_Capability;
-          Str++;
-        }
-        Type = Context.getPointerType(Type, PIK);
-      }
+      if (c == '*')
+        Type = Context.getPointerType(Type);
       else
         Type = Context.getLValueReferenceType(Type);
       break;
@@ -10866,6 +10859,27 @@ static QualType DecodeTypeFromStr(const char *&Str, const ASTContext &Context,
     case 'R':
       Type = Type.withRestrict();
       break;
+    case 'm': {
+      Qualifiers Qs = Type.getQualifiers();
+      if (const auto *PT = Type->getAs<PointerType>())
+        Type = Context.getPointerType(PT->getPointeeType(), PIK_Capability);
+      else if (const auto *LRT = Type->getAs<LValueReferenceType>())
+        Type = Context.getLValueReferenceType(LRT->getPointeeTypeAsWritten(),
+                                              LRT->isSpelledAsLValue(),
+                                              PIK_Capability);
+      else {
+        const auto *BT = Type->getAs<BuiltinType>();
+        assert(BT &&
+               (BT->getKind() == BuiltinType::Int ||
+                BT->getKind() == BuiltinType::UInt) &&
+               "Modifier 'm' only applies to pointers, references and integer "
+               "built-in types");
+        Type = BT->getKind() == BuiltinType::UInt ? Context.UnsignedIntCapTy
+                                                  : Context.IntCapTy;
+      }
+      if (Qs.hasQualifiers())
+        Type = Context.getQualifiedType(Type, Qs);
+    }
     }
   }
 
