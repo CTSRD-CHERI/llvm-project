@@ -319,7 +319,6 @@ void initializeModuleSummaryIndexWrapperPassPass(PassRegistry&);
 void initializeModuloScheduleTestPass(PassRegistry&);
 void initializeMustExecutePrinterPass(PassRegistry&);
 void initializeMustBeExecutedContextPrinterPass(PassRegistry&);
-void initializeNameAnonGlobalLegacyPassPass(PassRegistry&);
 void initializeNaryReassociateLegacyPassPass(PassRegistry&);
 void initializeNewGVNLegacyPassPass(PassRegistry&);
 void initializeObjCARCAAWrapperPassPass(PassRegistry&);
