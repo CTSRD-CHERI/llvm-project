@@ -26,6 +26,7 @@
 ; CHECK-NEXT:       Dominator Tree Construction
 ; CHECK-NEXT:       Natural Loop Information
 ; CHECK-NEXT:       RISCV gather/scatter lowering
+; CHECK-NEXT:       RISCV CodeGenPrepare
 ; CHECK-NEXT:    CHERI bound stack allocations
 ; CHECK-NEXT:    FunctionPass Manager
 ; CHECK-NEXT:       Module Verifier
@@ -61,7 +62,6 @@
 ; CHECK-NEXT:       Expand reduction intrinsics
 ; CHECK-NEXT:       Natural Loop Information
 ; CHECK-NEXT:       TLS Variable Hoist
-; CHECK-NEXT:       RISCV CodeGenPrepare
 ; CHECK-NEXT:       CodeGen Prepare
 ; CHECK-NEXT:       Dominator Tree Construction
 ; CHECK-NEXT:       Exception handling preparation
