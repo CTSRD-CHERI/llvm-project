@@ -13316,15 +13316,10 @@ bool IntExprEvaluator::VisitCastExpr(const CastExpr *E) {
     if (!Visit(SubExpr))
       return false;
 
-    // CHERI: If we are doing an integer cast from a capability, then extract
-    // the int value
-    if (SrcType->isIntCapType()) {
-      APSInt IntValue;
-      if (!EvaluateInteger(SubExpr, IntValue, Info))
-        return false;
-      IntValue.setIsUnsigned(SrcType->isUnsignedIntegerOrEnumerationType());
-      Result = APValue(IntValue);
-    }
+    // CHERI: If we are doing an integer cast to a capability from a plain
+    // integer then make sure we don't reintroduce provenance.
+    if (DestType->isIntCapType() && !SrcType->isIntCapType())
+      Result.setMustBeNullDerivedCap(true);
 
     if (!Result.isInt()) {
       // Allow casts of address-of-label differences if they are no-ops
