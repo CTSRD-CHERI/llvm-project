@@ -3887,8 +3887,6 @@ SDValue RISCVTargetLowering::lowerGlobalAddress(SDValue Op,
   GlobalAddressSDNode *N = cast<GlobalAddressSDNode>(Op);
   assert(N->getOffset() == 0 && "unexpected offset in global node");
 
-  const GlobalValue *GV = N->getGlobal();
-  bool IsLocal = getTargetMachine().shouldAssumeDSOLocal(*GV->getParent(), GV);
   // External variables always have to be loaded from the captable to get bounds
   // and to allow for them to be provided by another DSO without requiring copy
   // relocations.
@@ -3897,7 +3895,8 @@ SDValue RISCVTargetLowering::lowerGlobalAddress(SDValue Op,
   // bounds and therefore would not be checked when we pass the reference to
   // another function. Therefore, we always load from the captable for all
   // global variables.
-  return getAddr(N, Ty, DAG, IsLocal, /*CanDeriveFromPcc=*/false);
+  return getAddr(N, Ty, DAG, N->getGlobal()->isDSOLocal(),
+                 /*CanDeriveFromPcc=*/false);
 }
 
 SDValue RISCVTargetLowering::lowerBlockAddress(SDValue Op,
