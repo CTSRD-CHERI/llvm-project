@@ -11018,8 +11018,10 @@ ScalarEvolution::isLoopBackedgeGuardedByCond(const Loop *L,
                                              ICmpInst::Predicate Pred,
                                              const SCEV *LHS, const SCEV *RHS) {
   // Interpret a null as meaning no loop, where there is obviously no guard
-  // (interprocedural conditions notwithstanding).
-  if (!L) return true;
+  // (interprocedural conditions notwithstanding). Do not bother about
+  // unreachable loops.
+  if (!L || !DT.isReachableFromEntry(L->getHeader()))
+    return true;
 
   if (VerifyIR)
     assert(!verifyFunction(*L->getHeader()->getParent(), &dbgs()) &&
@@ -11076,12 +11078,6 @@ ScalarEvolution::isLoopBackedgeGuardedByCond(const Loop *L,
       return true;
   }
 
-  // If the loop is not reachable from the entry block, we risk running into an
-  // infinite loop as we walk up into the dom tree.  These loops do not matter
-  // anyway, so we just return a conservative answer when we see them.
-  if (!DT.isReachableFromEntry(L->getHeader()))
-    return false;
-
   if (isImpliedViaGuard(Latch, Pred, LHS, RHS))
     return true;
 
@@ -11127,6 +11123,9 @@ bool ScalarEvolution::isBasicBlockEntryGuardedByCond(const BasicBlock *BB,
                                                      ICmpInst::Predicate Pred,
                                                      const SCEV *LHS,
                                                      const SCEV *RHS) {
+  // Do not bother proving facts for unreachable code.
+  if (!DT.isReachableFromEntry(BB))
+    return true;
   if (VerifyIR)
     assert(!verifyFunction(*BB->getParent(), &dbgs()) &&
            "This cannot be done on broken IR!");
