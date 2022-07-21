@@ -186,9 +186,9 @@
 // I386:#define __i386__ 1
 // I386:#define i386 1
 
-// RUN: %clang_cc1 -E -dM -ffreestanding -fgnuc-version=4.2.1 -triple=i386-pc-linux-gnu -target-cpu pentium4 < /dev/null | FileCheck -match-full-lines -check-prefix I386-LINUX -check-prefix I386-LINUX-ALIGN32 %s
-// RUN: %clang_cc1 -x c++ -E -dM -ffreestanding -fgnuc-version=4.2.1 -triple=i386-pc-linux-gnu -target-cpu pentium4 < /dev/null | FileCheck -match-full-lines -check-prefix I386-LINUX -check-prefix I386-LINUX-CXX -check-prefix I386-LINUX-ALIGN32 %s
-// RUN: %clang_cc1 -E -dM -ffreestanding -fgnuc-version=4.2.1 -triple=i386-pc-linux-gnu -target-cpu pentium4 -malign-double < /dev/null | FileCheck -match-full-lines -check-prefix I386-LINUX -check-prefix I386-LINUX-ALIGN64 %s
+// RUN: %clang_cc1 -E -dM -ffreestanding -fgnuc-version=4.2.1 -triple=i386-pc-linux-gnu -target-cpu i486 < /dev/null | FileCheck -match-full-lines -check-prefix I386-LINUX -check-prefix I386-LINUX-ALIGN32 %s
+// RUN: %clang_cc1 -E -dM -ffreestanding -fgnuc-version=4.2.1 -triple=i386-pc-linux-gnu -target-cpu pentium4 < /dev/null | FileCheck -match-full-lines -check-prefix I386-LINUX -check-prefix I386-LINUX-ALIGN64 %s
+// RUN: %clang_cc1 -x c++ -E -dM -ffreestanding -fgnuc-version=4.2.1 -triple=i386-pc-linux-gnu -target-cpu pentium4 < /dev/null | FileCheck -match-full-lines -check-prefix I386-LINUX -check-prefix I386-LINUX-ALIGN64 -check-prefix I386-LINUX-CXX %s
 //
 // I386-LINUX-NOT:#define _LP64
 // I386-LINUX:#define __BIGGEST_ALIGNMENT__ 16
@@ -213,7 +213,6 @@
 // I386-LINUX:#define __FLT_DENORM_MIN__ 1.40129846e-45F
 // I386-LINUX:#define __FLT_DIG__ 6
 // I386-LINUX:#define __FLT_EPSILON__ 1.19209290e-7F
-// I386-LINUX:#define __FLT_EVAL_METHOD__ 0
 // I386-LINUX:#define __FLT_HAS_DENORM__ 1
 // I386-LINUX:#define __FLT_HAS_INFINITY__ 1
 // I386-LINUX:#define __FLT_HAS_QUIET_NAN__ 1
