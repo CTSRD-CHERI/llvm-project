@@ -2809,7 +2809,8 @@ static bool isAllocSiteRemovable(Instruction *AI,
           continue;
         }
 
-        if (isFreeCall(I, &TLI) && getAllocationFamily(I, &TLI) == Family) {
+        if (getFreedOperand(cast<CallBase>(I), &TLI) == PI &&
+            getAllocationFamily(I, &TLI) == Family) {
           assert(Family);
           Users.emplace_back(I);
           continue;
