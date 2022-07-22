@@ -2895,13 +2895,7 @@ const MCExpr *AsmPrinter::lowerConstant(const Constant *CV) {
       return OpExpr;
     assert(!DL.isFatPointer(Op->getType()) && "Fat pointer should not be masked when lowering constant.");
 
-    // Otherwise the pointer is smaller than the resultant integer, mask off
-    // the high bits so we are sure to get a proper truncation if the input is
-    // a constant expr.
-    unsigned InBits = DL.getTypeAllocSizeInBits(Op->getType());
-    const MCExpr *MaskExpr = MCConstantExpr::create(~0ULL >> (64-InBits), Ctx);
-
-    return MCBinaryExpr::createAnd(OpExpr, MaskExpr, Ctx);
+    break; // Error
   }
 
   case Instruction::Sub: {
