@@ -89,18 +89,13 @@ std::string get_temp_file_name()
         abort();
     }
 #else
-    std::string Name;
-    int FD = -1;
-    do {
-        Name = "libcxx.XXXXXX";
-        // XXXAR: this is wrong:
-        // FD = mkstemp(&Name[0]);
-        FD = mkstemp(Name.data());
-        if (FD == -1 && errno == EINVAL) {
-            perror("mkstemp");
-            abort();
-        }
-    } while (FD == -1);
+    std::string Name = "libcxx.XXXXXX";
+    // XXXAR: subobject bounds: FD = mkstemp(&Name[0]);
+    int FD = mkstemp(Name.data());
+    if (FD == -1) {
+        perror("mkstemp");
+        abort();
+    }
     close(FD);
     return Name;
 #endif
