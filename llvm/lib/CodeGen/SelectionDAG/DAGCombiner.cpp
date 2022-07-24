@@ -4975,8 +4975,15 @@ SDValue DAGCombiner::visitSMUL_LOHI(SDNode *N) {
   if (SDValue Res = SimplifyNodeWithTwoResults(N, ISD::MUL, ISD::MULHS))
     return Res;
 
+  SDValue N0 = N->getOperand(0);
+  SDValue N1 = N->getOperand(1);
   EVT VT = N->getValueType(0);
   SDLoc DL(N);
+
+  // canonicalize constant to RHS (vector doesn't have to splat)
+  if (DAG.isConstantIntBuildVectorOrConstantInt(N0) &&
+      !DAG.isConstantIntBuildVectorOrConstantInt(N1))
+    return DAG.getNode(ISD::SMUL_LOHI, DL, N->getVTList(), N1, N0);
 
   // If the type is twice as wide is legal, transform the mulhu to a wider
   // multiply plus a shift.
@@ -4985,8 +4992,8 @@ SDValue DAGCombiner::visitSMUL_LOHI(SDNode *N) {
     unsigned SimpleSize = Simple.getSizeInBits();
     EVT NewVT = EVT::getIntegerVT(*DAG.getContext(), SimpleSize*2);
     if (TLI.isOperationLegal(ISD::MUL, NewVT)) {
-      SDValue Lo = DAG.getNode(ISD::SIGN_EXTEND, DL, NewVT, N->getOperand(0));
-      SDValue Hi = DAG.getNode(ISD::SIGN_EXTEND, DL, NewVT, N->getOperand(1));
+      SDValue Lo = DAG.getNode(ISD::SIGN_EXTEND, DL, NewVT, N0);
+      SDValue Hi = DAG.getNode(ISD::SIGN_EXTEND, DL, NewVT, N1);
       Lo = DAG.getNode(ISD::MUL, DL, NewVT, Lo, Hi);
       // Compute the high part as N1.
       Hi = DAG.getNode(ISD::SRL, DL, NewVT, Lo,
@@ -5006,19 +5013,26 @@ SDValue DAGCombiner::visitUMUL_LOHI(SDNode *N) {
   if (SDValue Res = SimplifyNodeWithTwoResults(N, ISD::MUL, ISD::MULHU))
     return Res;
 
+  SDValue N0 = N->getOperand(0);
+  SDValue N1 = N->getOperand(1);
   EVT VT = N->getValueType(0);
   SDLoc DL(N);
 
+  // canonicalize constant to RHS (vector doesn't have to splat)
+  if (DAG.isConstantIntBuildVectorOrConstantInt(N0) &&
+      !DAG.isConstantIntBuildVectorOrConstantInt(N1))
+    return DAG.getNode(ISD::UMUL_LOHI, DL, N->getVTList(), N1, N0);
+
   // (umul_lohi N0, 0) -> (0, 0)
-  if (isNullConstant(N->getOperand(1))) {
+  if (isNullConstant(N1)) {
     SDValue Zero = DAG.getConstant(0, DL, VT);
     return CombineTo(N, Zero, Zero);
   }
 
   // (umul_lohi N0, 1) -> (N0, 0)
-  if (isOneConstant(N->getOperand(1))) {
+  if (isOneConstant(N1)) {
     SDValue Zero = DAG.getConstant(0, DL, VT);
-    return CombineTo(N, N->getOperand(0), Zero);
+    return CombineTo(N, N0, Zero);
   }
 
   // If the type is twice as wide is legal, transform the mulhu to a wider
@@ -5028,8 +5042,8 @@ SDValue DAGCombiner::visitUMUL_LOHI(SDNode *N) {
     unsigned SimpleSize = Simple.getSizeInBits();
     EVT NewVT = EVT::getIntegerVT(*DAG.getContext(), SimpleSize*2);
     if (TLI.isOperationLegal(ISD::MUL, NewVT)) {
-      SDValue Lo = DAG.getNode(ISD::ZERO_EXTEND, DL, NewVT, N->getOperand(0));
-      SDValue Hi = DAG.getNode(ISD::ZERO_EXTEND, DL, NewVT, N->getOperand(1));
+      SDValue Lo = DAG.getNode(ISD::ZERO_EXTEND, DL, NewVT, N0);
+      SDValue Hi = DAG.getNode(ISD::ZERO_EXTEND, DL, NewVT, N1);
       Lo = DAG.getNode(ISD::MUL, DL, NewVT, Lo, Hi);
       // Compute the high part as N1.
       Hi = DAG.getNode(ISD::SRL, DL, NewVT, Lo,
