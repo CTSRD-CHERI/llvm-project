@@ -687,6 +687,14 @@ bool TargetLowering::SimplifyDemandedBits(SDValue Op, const APInt &DemandedBits,
 SDValue TargetLowering::SimplifyMultipleUseDemandedBits(
     SDValue Op, const APInt &DemandedBits, const APInt &DemandedElts,
     SelectionDAG &DAG, unsigned Depth) const {
+  EVT VT = Op.getValueType();
+
+  // Pretend we don't know anything about scalable vectors for now.
+  // TODO: We can probably do more work on simplifying the operations for
+  // scalable vectors, but for now we just bail out.
+  if (VT.isScalableVector())
+    return SDValue();
+
   // Limit search depth.
   if (Depth >= SelectionDAG::MaxRecursionDepth)
     return SDValue();
@@ -697,7 +705,7 @@ SDValue TargetLowering::SimplifyMultipleUseDemandedBits(
 
   // Not demanding any bits/elts from Op.
   if (DemandedBits == 0 || DemandedElts == 0)
-    return DAG.getUNDEF(Op.getValueType());
+    return DAG.getUNDEF(VT);
 
   bool IsLE = DAG.getDataLayout().isLittleEndian();
   unsigned NumElts = DemandedElts.getBitWidth();
@@ -927,6 +935,13 @@ SDValue TargetLowering::SimplifyMultipleUseDemandedBits(
     SDValue Op, const APInt &DemandedBits, SelectionDAG &DAG,
     unsigned Depth) const {
   EVT VT = Op.getValueType();
+
+  // Pretend we don't know anything about scalable vectors for now.
+  // TODO: We can probably do more work on simplifying the operations for
+  // scalable vectors, but for now we just bail out.
+  if (VT.isScalableVector())
+    return SDValue();
+
   APInt DemandedElts = VT.isVector()
                            ? APInt::getAllOnes(VT.getVectorNumElements())
                            : APInt(1, 1);
