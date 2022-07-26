@@ -132,7 +132,7 @@ def BuiltinRequiresHeader : DiagGroup<"builtin-requires-header">;
 // Generally useful CHERI warnings
 def CHERICaps : DiagGroup<"cheri-capability-misuse">;
 def CHERIProvenance : DiagGroup<"cheri-provenance">;
-def CHERIProvenancePedantic : DiagGroup<"cheri-provenance-pendatic">;
+def CHERIProvenancePedantic : DiagGroup<"cheri-provenance-pedantic">;
 def CHERIMisaligned : DiagGroup<"cheri-misaligned">;
 def CHERIBitwiseOps : DiagGroup<"cheri-bitwise-operations">;
 def CHERIImplicitConversion : DiagGroup<"cheri-implicit-conversion">;
