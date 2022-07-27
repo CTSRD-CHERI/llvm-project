@@ -19,15 +19,15 @@
 TEST_CHERI_NO_SUBOBJECT_WARNING
 
 struct Nasty {
-    Nasty() : i_(0) {}
-    Nasty(int i) : i_(i) {}
-    ~Nasty() {}
+    TEST_CONSTEXPR Nasty() : i_(0) {}
+    TEST_CONSTEXPR Nasty(int i) : i_(i) {}
+    TEST_CONSTEXPR_CXX20 ~Nasty() {}
 
     Nasty * operator&() const { assert(false); return nullptr; }
     int i_;
-    };
+};
 
-int main(int, char**)
+TEST_CONSTEXPR_CXX20 bool tests()
 {
     {
         const std::vector<int> v;
@@ -62,5 +62,14 @@ int main(int, char**)
     }
 #endif
 
-  return 0;
+    return true;
+}
+
+int main(int, char**)
+{
+    tests();
+#if TEST_STD_VER > 17
+    static_assert(tests());
+#endif
+    return 0;
 }
