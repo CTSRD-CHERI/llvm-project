@@ -2454,6 +2454,7 @@ bool TargetLowering::SimplifyDemandedBits(
     assert(!Known.hasConflict() && "Bits known to be one AND zero?");
 
     Known.Zero |= ~InMask;
+    Known.One &= (~Known.Zero);
     break;
   }
   case ISD::EXTRACT_VECTOR_ELT: {
