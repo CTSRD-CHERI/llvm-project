@@ -1192,8 +1192,7 @@ ASTFileSignature ASTWriter::writeUnhashedControlBlock(Preprocessor &PP,
 
 /// Write the control block.
 void ASTWriter::WriteControlBlock(Preprocessor &PP, ASTContext &Context,
-                                  StringRef isysroot,
-                                  const std::string &OutputFile) {
+                                  StringRef isysroot, StringRef OutputFile) {
   using namespace llvm;
 
   Stream.EnterSubblock(CONTROL_BLOCK_ID, 5);
@@ -4486,8 +4485,7 @@ time_t ASTWriter::getTimestampForOutput(const FileEntry *E) const {
   return IncludeTimestamps ? E->getModificationTime() : 0;
 }
 
-ASTFileSignature ASTWriter::WriteAST(Sema &SemaRef,
-                                     const std::string &OutputFile,
+ASTFileSignature ASTWriter::WriteAST(Sema &SemaRef, StringRef OutputFile,
                                      Module *WritingModule, StringRef isysroot,
                                      bool hasErrors,
                                      bool ShouldCacheASTInMemory) {
@@ -4533,7 +4531,7 @@ static void AddLazyVectorDecls(ASTWriter &Writer, Vector &Vec,
 }
 
 ASTFileSignature ASTWriter::WriteASTCore(Sema &SemaRef, StringRef isysroot,
-                                         const std::string &OutputFile,
+                                         StringRef OutputFile,
                                          Module *WritingModule) {
   using namespace llvm;
 
