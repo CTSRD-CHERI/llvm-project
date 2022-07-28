@@ -4488,7 +4488,8 @@ time_t ASTWriter::getTimestampForOutput(const FileEntry *E) const {
 ASTFileSignature ASTWriter::WriteAST(Sema &SemaRef, StringRef OutputFile,
                                      Module *WritingModule, StringRef isysroot,
                                      bool hasErrors,
-                                     bool ShouldCacheASTInMemory) {
+                                     bool ShouldCacheASTInMemory,
+                                     bool OutputPathIndependent) {
   WritingAST = true;
 
   ASTHasCompilerErrors = hasErrors;
@@ -4504,8 +4505,9 @@ ASTFileSignature ASTWriter::WriteAST(Sema &SemaRef, StringRef OutputFile,
   Context = &SemaRef.Context;
   PP = &SemaRef.PP;
   this->WritingModule = WritingModule;
-  ASTFileSignature Signature =
-      WriteASTCore(SemaRef, isysroot, OutputFile, WritingModule);
+  ASTFileSignature Signature = WriteASTCore(
+      SemaRef, isysroot, OutputPathIndependent ? StringRef() : OutputFile,
+      WritingModule);
   Context = nullptr;
   PP = nullptr;
   this->WritingModule = nullptr;
