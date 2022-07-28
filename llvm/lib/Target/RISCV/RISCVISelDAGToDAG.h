@@ -57,6 +57,8 @@ public:
   bool SelectAddrRegImm(SDValue Addr, SDValue &Base, SDValue &Offset);
   bool SelectCapRegImm(SDValue Addr, SDValue &Base, SDValue &Offset);
 
+  bool tryShrinkShlLogicImm(SDNode *Node);
+
   bool selectShiftMask(SDValue N, unsigned ShiftWidth, SDValue &ShAmt);
   bool selectShiftMaskXLen(SDValue N, SDValue &ShAmt) {
     return selectShiftMask(N, Subtarget->getXLen(), ShAmt);
