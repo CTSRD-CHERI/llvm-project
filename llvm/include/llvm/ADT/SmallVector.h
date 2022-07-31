@@ -1284,10 +1284,7 @@ SmallVector<ValueTypeFromRangeType<R>, Size> to_vector(R &&Range) {
   return {std::begin(Range), std::end(Range)};
 }
 template <typename R>
-SmallVector<ValueTypeFromRangeType<R>,
-            CalculateSmallVectorDefaultInlinedElements<
-                ValueTypeFromRangeType<R>>::value>
-to_vector(R &&Range) {
+SmallVector<ValueTypeFromRangeType<R>> to_vector(R &&Range) {
   return {std::begin(Range), std::end(Range)};
 }
 
