@@ -146,17 +146,17 @@ struct Configuration {
   std::pair<llvm::StringRef, llvm::StringRef> thinLTOObjectSuffixReplace;
   std::pair<llvm::StringRef, llvm::StringRef> thinLTOPrefixReplace;
   std::string rpath;
-  std::vector<VersionDefinition> versionDefinitions;
-  std::vector<llvm::StringRef> auxiliaryList;
-  std::vector<llvm::StringRef> filterList;
-  std::vector<llvm::StringRef> passPlugins;
-  std::vector<llvm::StringRef> searchPaths;
-  std::vector<llvm::StringRef> symbolOrderingFile;
-  std::vector<llvm::StringRef> thinLTOModulesToCompile;
-  std::vector<llvm::StringRef> undefined;
-  std::vector<llvm::StringRef> warnIfFileLinked;
-  std::vector<SymbolVersion> dynamicList;
-  std::vector<uint8_t> buildIdVector;
+  llvm::SmallVector<VersionDefinition, 0> versionDefinitions;
+  llvm::SmallVector<llvm::StringRef, 0> auxiliaryList;
+  llvm::SmallVector<llvm::StringRef, 0> filterList;
+  llvm::SmallVector<llvm::StringRef, 0> passPlugins;
+  llvm::SmallVector<llvm::StringRef, 0> searchPaths;
+  llvm::SmallVector<llvm::StringRef, 0> symbolOrderingFile;
+  llvm::SmallVector<llvm::StringRef, 0> thinLTOModulesToCompile;
+  llvm::SmallVector<llvm::StringRef, 0> undefined;
+  llvm::SmallVector<llvm::StringRef, 0> warnIfFileLinked;
+  llvm::SmallVector<SymbolVersion, 0> dynamicList;
+  llvm::SmallVector<uint8_t, 0> buildIdVector;
   llvm::MapVector<std::pair<const InputSectionBase *, const InputSectionBase *>,
                   uint64_t>
       callGraphProfile;
@@ -176,7 +176,8 @@ struct Configuration {
   bool checkDynamicRelocs;
   bool compressDebugSections;
   bool cref;
-  std::vector<std::pair<llvm::GlobPattern, uint64_t>> deadRelocInNonAlloc;
+  llvm::SmallVector<std::pair<llvm::GlobPattern, uint64_t>, 0>
+      deadRelocInNonAlloc;
   bool demangle = true;
   bool dependentLibraries;
   bool disableVerify;
@@ -226,7 +227,7 @@ struct Configuration {
   bool relrGlibc = false;
   bool relrPackDynRelocs = false;
   llvm::DenseSet<llvm::StringRef> saveTempsArgs;
-  std::vector<std::pair<llvm::GlobPattern, uint32_t>> shuffleSections;
+  llvm::SmallVector<std::pair<llvm::GlobPattern, uint32_t>, 0> shuffleSections;
   bool sortCapRelocs;
   bool singleRoRx;
   bool shared;
@@ -246,7 +247,7 @@ struct Configuration {
   bool useAndroidRelrTags = false;
   bool verboseCapRelocs = false;
   bool warnBackrefs;
-  std::vector<llvm::GlobPattern> warnBackrefsExclude;
+  llvm::SmallVector<llvm::GlobPattern, 0> warnBackrefsExclude;
   bool warnCommon;
   bool warnMissingEntry;
   bool warnSymbolOrdering;
