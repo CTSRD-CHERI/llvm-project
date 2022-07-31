@@ -300,7 +300,9 @@ public:
     return const_cast<MergeInputSection *>(this)->getSectionPiece(offset);
   }
 
-  SyntheticSection *getParent() const;
+  SyntheticSection *getParent() const {
+    return cast_or_null<SyntheticSection>(parent);
+  }
 
 private:
   void splitStrings(StringRef s, size_t size);
@@ -397,6 +399,27 @@ private:
 };
 
 static_assert(sizeof(InputSection) <= 168, "InputSection is too big");
+
+class SyntheticSection : public InputSection {
+public:
+  SyntheticSection(uint64_t flags, uint32_t type, uint32_t alignment,
+                   StringRef name)
+      : InputSection(nullptr, flags, type, alignment, {}, name,
+                     InputSectionBase::Synthetic) {}
+
+  virtual ~SyntheticSection() = default;
+  virtual size_t getSize() const = 0;
+  virtual bool updateAllocSize() { return false; }
+  // If the section has the SHF_ALLOC flag and the size may be changed if
+  // thunks are added, update the section size.
+  virtual bool isNeeded() const { return true; }
+  virtual void finalizeContents() {}
+  virtual void writeTo(uint8_t *buf) = 0;
+
+  static bool classof(const SectionBase *sec) {
+    return sec->kind() == InputSectionBase::Synthetic;
+  }
+};
 
 inline bool isDebugSection(const InputSectionBase &sec) {
   return (sec.flags & llvm::ELF::SHF_ALLOC) == 0 &&
