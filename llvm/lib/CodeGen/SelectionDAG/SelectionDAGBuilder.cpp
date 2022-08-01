@@ -7230,7 +7230,6 @@ void SelectionDAGBuilder::visitIntrinsicCall(const CallInst &I,
                              DAG.getZExtOrTrunc(Const, sdl, PtrVT)));
     return;
   }
-
   case Intrinsic::cheri_cap_address_set: {
     if (TLI.hasCapabilitySetAddress()) {
       visitTargetIntrinsic(I, Intrinsic);
@@ -7264,6 +7263,10 @@ void SelectionDAGBuilder::visitIntrinsicCall(const CallInst &I,
     SDValue Delta = DAG.getNode(ISD::SUB, sdl, PtrVT, Addr, CapAddr);
     Res = DAG.getPointerAdd(sdl, Cap, Delta);
     setValue(&I, Res);
+    return;
+  }
+  case Intrinsic::threadlocal_address: {
+    setValue(&I, getValue(I.getOperand(0)));
     return;
   }
   case Intrinsic::get_active_lane_mask: {

@@ -8,7 +8,7 @@
 
 // Check the assembly output to see if we used PCC or DDC
 // RUN: %cheri_cc1 -o - -S %s | FileCheck %s --check-prefixes=ASM,ASM-MIPS
-// RUN: %riscv64_cheri_cc1 -O1 -o - -S %s | FileCheck %s --check-prefixes=ASM,ASM-RISCV
+// RUN: %riscv64_cheri_cc1 -o - -S %s | FileCheck %s --check-prefixes=ASM,ASM-RISCV
 
 void external_fn(void);
 int external_global;
