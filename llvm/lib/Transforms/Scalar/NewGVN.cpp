@@ -3294,6 +3294,7 @@ void NewGVN::verifyIterationSettled(Function &F) {
 
   TouchedInstructions.set();
   TouchedInstructions.reset(0);
+  OpSafeForPHIOfOps.clear();
   iterateTouchedInstructions();
   DenseSet<std::pair<const CongruenceClass *, const CongruenceClass *>>
       EqualClasses;
