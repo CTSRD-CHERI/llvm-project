@@ -1338,7 +1338,7 @@ def  : CheriSetCCPatGpcrGpcr<setgt, (SLT node:$rs2, node:$rs1)>;
 def  : CheriSetCCPatGpcrGpcr<setge, (XORI (SLT node:$rs1, node:$rs2), 1)>;
 def  : CheriSetCCPatGpcrGpcr<setle, (XORI (SLT node:$rs2, node:$rs1), 1)>;
 
-def Select_GPCR_Using_CC_GPR : SelectCC_rrirr<GPCR, GPR>;
+defm Select_GPCR : SelectCC_GPR_rrirr<GPCR>;
 
 /// Control-Flow Instructions
 
