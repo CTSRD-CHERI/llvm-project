@@ -1351,7 +1351,7 @@ struct DeclaratorChunk {
     /// DeclSpec for the function with the qualifier related info.
     DeclSpec *MethodQualifiers;
 
-    /// AtttibuteFactory for the MethodQualifiers.
+    /// AttributeFactory for the MethodQualifiers.
     AttributeFactory *QualAttrFactory;
 
     union {
