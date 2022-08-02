@@ -373,10 +373,6 @@ getFrameRegister(const MachineFunction &MF) const {
     return TFI->hasFP(MF) ? ABI.GetFramePtr() : ABI.GetStackPtr();
 }
 
-bool MipsRegisterInfo::isConstantPhysReg(MCRegister PhysReg) const {
-  return PhysReg == Mips::ZERO || PhysReg == Mips::ZERO_64 || PhysReg == Mips::CNULL;
-}
-
 bool MipsRegisterInfo::canRealignStack(const MachineFunction &MF) const {
   // Avoid realigning functions that explicitly do not want to be realigned.
   // Normally, we should report an error when a function should be dynamically
@@ -409,4 +405,9 @@ bool MipsRegisterInfo::canRealignStack(const MachineFunction &MF) const {
   // We have to reserve the base pointer register in the presence of variable
   // sized objects.
   return MF.getRegInfo().canReserveReg(BP);
+}
+
+bool MipsRegisterInfo::isConstantPhysReg(MCRegister PhysReg) const {
+  return PhysReg == Mips::ZERO_64 || PhysReg == Mips::ZERO ||
+         PhysReg == Mips::CNULL;
 }
