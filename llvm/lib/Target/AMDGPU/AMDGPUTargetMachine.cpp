@@ -327,6 +327,11 @@ static cl::opt<bool> EnablePromoteKernelArguments(
     cl::desc("Enable promotion of flat kernel pointer arguments to global"),
     cl::Hidden, cl::init(true));
 
+static cl::opt<bool> EnableMaxIlpSchedStrategy(
+    "amdgpu-enable-max-ilp-scheduling-strategy",
+    cl::desc("Enable scheduling strategy to maximize ILP for a single wave."),
+    cl::Hidden, cl::init(false));
+
 extern "C" LLVM_EXTERNAL_VISIBILITY void LLVMInitializeAMDGPUTarget() {
   // Register the target
   RegisterTargetMachine<R600TargetMachine> X(getTheAMDGPUTarget());
@@ -1164,6 +1169,10 @@ ScheduleDAGInstrs *GCNPassConfig::createMachineScheduler(
   const GCNSubtarget &ST = C->MF->getSubtarget<GCNSubtarget>();
   if (ST.enableSIScheduler())
     return createSIMachineScheduler(C);
+
+  if (EnableMaxIlpSchedStrategy)
+    return createGCNMaxILPMachineScheduler(C);
+
   return createGCNMaxOccupancyMachineScheduler(C);
 }
 
