@@ -5,9 +5,13 @@ template<typename T>
 concept x = 0;
 #undef concept
 
+// Not a CXX20_KEYWORD(), we should re-enable this check after
+// See https://github.com/CTSRD-CHERI/llvm-project/issues/717
+#if 0
 int co_await = 0; // expected-warning {{'co_await' is a keyword in C++20}}
 int co_return = 0; // expected-warning {{'co_return' is a keyword in C++20}}
 int co_yield = 0; // expected-warning {{'co_yield' is a keyword in C++20}}
+#endif
 int char8_t = 0; // expected-warning {{'char8_t' is a keyword in C++20}}
 int concept = 0; // expected-warning {{'concept' is a keyword in C++20}}
 int requires = 0; // expected-warning {{'requires' is a keyword in C++20}}
