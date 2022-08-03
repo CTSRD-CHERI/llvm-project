@@ -8662,7 +8662,7 @@ SDValue PPCTargetLowering::LowerINT_TO_FP(SDValue Op,
                          {Chain, FP, DAG.getIntPtrConstant(0, dl)}, Flags);
       else
         FP = DAG.getNode(ISD::FP_ROUND, dl, MVT::f32, FP,
-                         DAG.getIntPtrConstant(0, dl));
+                         DAG.getIntPtrConstant(0, dl, /*isTarget=*/true));
     }
     return FP;
   }
@@ -8743,7 +8743,7 @@ SDValue PPCTargetLowering::LowerINT_TO_FP(SDValue Op,
                        {Chain, FP, DAG.getIntPtrConstant(0, dl)}, Flags);
     else
       FP = DAG.getNode(ISD::FP_ROUND, dl, MVT::f32, FP,
-                       DAG.getIntPtrConstant(0, dl));
+                       DAG.getIntPtrConstant(0, dl, /*isTarget=*/true));
   }
   return FP;
 }
@@ -14064,9 +14064,9 @@ combineElementTruncationToVectorTruncation(SDNode *N,
         if (In.isUndef())
           Ops.push_back(DAG.getUNDEF(SrcVT));
         else {
-          SDValue Trunc = DAG.getNode(ISD::FP_ROUND, dl,
-                                      MVT::f32, In.getOperand(0),
-                                      DAG.getIntPtrConstant(1, dl));
+          SDValue Trunc =
+              DAG.getNode(ISD::FP_ROUND, dl, MVT::f32, In.getOperand(0),
+                          DAG.getIntPtrConstant(1, dl, /*isTarget=*/true));
           Ops.push_back(Trunc);
         }
       } else
@@ -14542,8 +14542,8 @@ SDValue PPCTargetLowering::combineFPToIntToFP(SDNode *N,
     SDValue FP = DAG.getNode(FCFOp, dl, FCFTy, Tmp);
 
     if (Op.getValueType() == MVT::f32 && !Subtarget.hasFPCVT()) {
-      FP = DAG.getNode(ISD::FP_ROUND, dl,
-                       MVT::f32, FP, DAG.getIntPtrConstant(0, dl));
+      FP = DAG.getNode(ISD::FP_ROUND, dl, MVT::f32, FP,
+                       DAG.getIntPtrConstant(0, dl, /*isTarget=*/true));
       DCI.AddToWorklist(FP.getNode());
     }
 
