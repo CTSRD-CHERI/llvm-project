@@ -42,26 +42,3 @@ void test() {
 // CHECK-NEXT:       | `-DeclRefExpr {{.*}} <col:3> 'E' lvalue Var {{.*}} 'e' 'E'
 // CHECK-NEXT:       `-ImplicitCastExpr {{.*}} <col:7> 'E' <LValueToRValue>
 // CHECK-NEXT:         `-DeclRefExpr {{.*}} <col:7> 'E' lvalue Var {{.*}} 'e' 'E'
-
-namespace a {
-  void operator-(E, E);
-}
-
-using a::operator-;
-
-void f() {
-  E() - E();
-}
-// CHECK: |-NamespaceDecl {{.*}} <line:46:1, line:48:1> line:46:11{{( imported <undeserialized declarations>)?}} a
-// CHECK-NEXT: | `-FunctionDecl {{.*}} <line:47:3, col:22> col:8{{( imported)?}} used operator- 'void (E, E)'
-// CHECK-NEXT: |   |-ParmVarDecl {{.*}} <col:18> col:19{{( imported)?}} 'E'
-// CHECK-NEXT: |   `-ParmVarDecl {{.*}} <col:21> col:22{{( imported)?}} 'E'
-// CHECK-NEXT: |-UsingDecl {{.*}} <line:50:1, col:18> col:10{{( imported)?}} a::operator-
-// CHECK-NEXT: |-UsingShadowDecl {{.*}} <col:10> col:10{{( imported)?}} implicit Function {{.*}} 'operator-' 'void (E, E)'
-// CHECK-NEXT: `-FunctionDecl {{.*}} <line:52:1, line:54:1> line:52:6{{( imported)?}} f 'void ()'
-// CHECK-NEXT:   `-CompoundStmt {{.*}} <col:10, line:54:1>
-// CHECK-NEXT:     `-CXXOperatorCallExpr {{.*}} <line:53:3, col:11> 'void' '-'
-// CHECK-NEXT:       |-ImplicitCastExpr {{.*}} <col:7> 'void (*)(E, E)' <FunctionToPointerDecay>
-// CHECK-NEXT:       | `-DeclRefExpr {{.*}} <col:7> 'void (E, E)' lvalue Function {{.*}} 'operator-' 'void (E, E)' (UsingShadow {{.*}} 'operator-')
-// CHECK-NEXT:       |-CXXScalarValueInitExpr {{.*}} <col:3, col:5> 'E'
-// CHECK-NEXT:       `-CXXScalarValueInitExpr {{.*}} <col:9, col:11> 'E'
