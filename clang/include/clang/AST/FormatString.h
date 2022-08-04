@@ -128,8 +128,12 @@ public:
     dArg,
     DArg, // Apple extension
     iArg,
+    // C23 conversion specifiers.
+    bArg,
+    BArg,
+
     IntArgBeg = dArg,
-    IntArgEnd = iArg,
+    IntArgEnd = BArg,
 
     oArg,
     OArg, // Apple extension
