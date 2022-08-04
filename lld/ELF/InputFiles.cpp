@@ -1067,8 +1067,7 @@ void ObjFile<ELFT>::initializeSymbols(const object::ELFFile<ELFT> &obj) {
 template <class ELFT> void ObjFile<ELFT>::initializeLocalSymbols() {
   if (!firstGlobal)
     return;
-  localSymStorage = std::make_unique<SymbolUnion[]>(firstGlobal);
-  SymbolUnion *locals = localSymStorage.get();
+  SymbolUnion *locals = makeThreadLocalN<SymbolUnion>(firstGlobal);
 
   ArrayRef<Elf_Sym> eSyms = this->getELFSyms<ELFT>();
   for (size_t i = 0, end = firstGlobal; i != end; ++i) {
