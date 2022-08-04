@@ -2483,19 +2483,19 @@ static uint32_t getAndFeatures() {
   return ret;
 }
 
-static void initializeLocalSymbols(ELFFileBase *file) {
+static void initSectionsAndLocalSyms(ELFFileBase *file, bool ignoreComdats) {
   switch (config->ekind) {
   case ELF32LEKind:
-    cast<ObjFile<ELF32LE>>(file)->initializeLocalSymbols();
+    cast<ObjFile<ELF32LE>>(file)->initSectionsAndLocalSyms(ignoreComdats);
     break;
   case ELF32BEKind:
-    cast<ObjFile<ELF32BE>>(file)->initializeLocalSymbols();
+    cast<ObjFile<ELF32BE>>(file)->initSectionsAndLocalSyms(ignoreComdats);
     break;
   case ELF64LEKind:
-    cast<ObjFile<ELF64LE>>(file)->initializeLocalSymbols();
+    cast<ObjFile<ELF64LE>>(file)->initSectionsAndLocalSyms(ignoreComdats);
     break;
   case ELF64BEKind:
-    cast<ObjFile<ELF64BE>>(file)->initializeLocalSymbols();
+    cast<ObjFile<ELF64BE>>(file)->initSectionsAndLocalSyms(ignoreComdats);
     break;
   default:
     llvm_unreachable("");
@@ -2647,7 +2647,9 @@ void LinkerDriver::link(opt::InputArgList &args) {
 
   // No more lazy bitcode can be extracted at this point. Do post parse work
   // like checking duplicate symbols.
-  parallelForEach(ctx->objectFiles, initializeLocalSymbols);
+  parallelForEach(ctx->objectFiles, [](ELFFileBase *file) {
+    initSectionsAndLocalSyms(file, /*ignoreComdats=*/false);
+  });
   parallelForEach(ctx->objectFiles, postParseObjectFile);
   parallelForEach(ctx->bitcodeFiles,
                   [](BitcodeFile *file) { file->postParse(); });
@@ -2731,7 +2733,9 @@ void LinkerDriver::link(opt::InputArgList &args) {
   // compileBitcodeFiles may have produced lto.tmp object files. After this, no
   // more file will be added.
   auto newObjectFiles = makeArrayRef(ctx->objectFiles).slice(numObjsBeforeLTO);
-  parallelForEach(newObjectFiles, initializeLocalSymbols);
+  parallelForEach(newObjectFiles, [](ELFFileBase *file) {
+    initSectionsAndLocalSyms(file, /*ignoreComdats=*/true);
+  });
   parallelForEach(newObjectFiles, postParseObjectFile);
   for (const DuplicateSymbol &d : ctx->duplicates)
     reportDuplicate(*d.sym, d.file, d.section, d.value);
