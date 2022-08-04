@@ -136,6 +136,11 @@ static cl::opt<bool> EnableShrinkLoadReplaceStoreWithStore(
     cl::desc("DAG combiner enable load/<replace bytes>/store with "
              "a narrower store"));
 
+static cl::opt<bool> EnableVectorFCopySignExtendRound(
+    "combiner-vector-fcopysign-extend-round", cl::Hidden, cl::init(false),
+    cl::desc(
+        "Enable merging extends and rounds into FCOPYSIGN on vector types"));
+
 namespace {
 
   class DAGCombiner {
@@ -15517,11 +15522,7 @@ static inline bool CanCombineFCOPYSIGN_EXTEND_ROUND(SDNode *N) {
     if (N1Op0VT == MVT::f128)
       return false;
 
-    // Avoid mismatched vector operand types, for better instruction selection.
-    if (N1Op0VT.isVector())
-      return false;
-
-    return true;
+    return !N1Op0VT.isVector() || EnableVectorFCopySignExtendRound;
   }
   return false;
 }
