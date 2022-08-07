@@ -2662,7 +2662,7 @@ static Constant *computePointerICmp(CmpInst::Predicate Pred, Value *LHS,
   default:
     return nullptr;
 
-    // Equality comaprisons are easy to fold.
+    // Equality comparisons are easy to fold.
   case CmpInst::ICMP_EQ:
   case CmpInst::ICMP_NE:
     break;
