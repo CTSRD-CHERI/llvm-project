@@ -1027,7 +1027,7 @@ void Sema::checkVariadicArgument(const Expr *E, VariadicCallType CT) {
     DiagRuntimeBehavior(
         E->getBeginLoc(), nullptr,
         PDiag(diag::warn_cxx98_compat_pass_non_pod_arg_to_vararg) << Ty << CT);
-    LLVM_FALLTHROUGH;
+    [[fallthrough]];
   case VAK_Valid:
     if (Ty->isRecordType()) {
       // This is unlikely to be what the user intended. If the class has a
@@ -3445,7 +3445,7 @@ ExprResult Sema::BuildDeclarationNameExpr(
       valueKind = VK_PRValue;
       break;
     }
-    LLVM_FALLTHROUGH;
+    [[fallthrough]];
 
   case Decl::ImplicitParam:
   case Decl::ParmVar: {
@@ -3542,7 +3542,7 @@ ExprResult Sema::BuildDeclarationNameExpr(
       valueKind = VK_LValue;
       break;
     }
-    LLVM_FALLTHROUGH;
+    [[fallthrough]];
 
   case Decl::CXXConversion:
   case Decl::CXXDestructor:
@@ -15221,7 +15221,7 @@ ExprResult Sema::CreateBuiltinBinOp(SourceLocation OpLoc,
     break;
   case BO_And:
     checkObjCPointerIntrospection(*this, LHS, RHS, OpLoc);
-    LLVM_FALLTHROUGH;
+    [[fallthrough]];
   case BO_Xor:
   case BO_Or:
     ResultTy = CheckBitwiseOperands(LHS, RHS, OpLoc, Opc);
@@ -15273,7 +15273,7 @@ ExprResult Sema::CreateBuiltinBinOp(SourceLocation OpLoc,
   case BO_AndAssign:
   case BO_OrAssign: // fallthrough
     DiagnoseSelfAssignment(*this, LHS.get(), RHS.get(), OpLoc, true);
-    LLVM_FALLTHROUGH;
+    [[fallthrough]];
   case BO_XorAssign:
     CompResultTy = CheckBitwiseOperands(LHS, RHS, OpLoc, Opc);
     CompLHSTy = CompResultTy;
