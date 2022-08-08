@@ -1991,7 +1991,7 @@ SDValue DAGCombiner::visitTokenFactor(SDNode *N) {
           Changed = true;
           break;
         }
-        LLVM_FALLTHROUGH;
+        [[fallthrough]];
 
       default:
         // Only add if it isn't already in the list.
@@ -15087,7 +15087,7 @@ SDValue DAGCombiner::visitFMUL(SDNode *N) {
       case ISD::SETLT:
       case ISD::SETLE:
         std::swap(TrueOpnd, FalseOpnd);
-        LLVM_FALLTHROUGH;
+        [[fallthrough]];
       case ISD::SETOGT:
       case ISD::SETUGT:
       case ISD::SETOGE:
