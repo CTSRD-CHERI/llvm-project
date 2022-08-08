@@ -1296,7 +1296,7 @@ static void computeKnownBitsFromOperator(const Operator *I,
   case Instruction::PtrToInt:
   case Instruction::IntToPtr:
     // Fall through and handle them the same as zext/trunc.
-    LLVM_FALLTHROUGH;
+    [[fallthrough]];
   case Instruction::ZExt:
   case Instruction::Trunc: {
     Type *SrcTy = I->getOperand(0)->getType();
@@ -2200,7 +2200,7 @@ static bool isPowerOfTwoRecurrence(const PHINode *PN, bool OrZero,
     // power of two is not sufficient, and it has to be a constant.
     if (!match(Start, m_Power2()) || match(Start, m_SignMask()))
       return false;
-    LLVM_FALLTHROUGH;
+    [[fallthrough]];
   case Instruction::UDiv:
     // Divisor must be a power of two.
     // If OrZero is false, cannot guarantee induction variable is non-zero after
@@ -2212,7 +2212,7 @@ static bool isPowerOfTwoRecurrence(const PHINode *PN, bool OrZero,
   case Instruction::AShr:
     if (!match(Start, m_Power2()) || match(Start, m_SignMask()))
       return false;
-    LLVM_FALLTHROUGH;
+    [[fallthrough]];
   case Instruction::LShr:
     return OrZero || Q.IIQ.isExact(BO);
   default:
@@ -3734,7 +3734,7 @@ static bool cannotBeOrderedLessThanZeroImpl(const Value *V,
         (!SignBitOnly || cast<FPMathOperator>(I)->hasNoNaNs()))
       return true;
 
-    LLVM_FALLTHROUGH;
+    [[fallthrough]];
   case Instruction::FAdd:
   case Instruction::FRem:
     return cannotBeOrderedLessThanZeroImpl(I->getOperand(0), TLI, SignBitOnly,
@@ -5282,7 +5282,7 @@ static bool canCreateUndefOrPoison(const Operator *Op, bool PoisonOnly,
         return false;
       }
     }
-    LLVM_FALLTHROUGH;
+    [[fallthrough]];
   case Instruction::CallBr:
   case Instruction::Invoke: {
     const auto *CB = cast<CallBase>(Op);

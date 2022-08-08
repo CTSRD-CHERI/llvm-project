@@ -959,7 +959,7 @@ public:
       // Check for NOOP conversions.
       if (TLI->isTruncateFree(SrcLT.second, DstLT.second))
         return 0;
-      LLVM_FALLTHROUGH;
+      [[fallthrough]];
     case Instruction::BitCast:
       // Bitcast between types that are legalized to the same type are free and
       // assume int to/from ptr of the same size is also free.
@@ -974,7 +974,7 @@ public:
     case Instruction::ZExt:
       if (TLI->isZExtFree(SrcLT.second, DstLT.second))
         return 0;
-      LLVM_FALLTHROUGH;
+      [[fallthrough]];
     case Instruction::SExt:
       if (I && getTLI()->isExtFree(I))
         return 0;
