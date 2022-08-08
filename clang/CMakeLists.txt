@@ -495,6 +495,9 @@ configure_file(
     @ONLY
 )
 
+# Export CLANG_TABLEGEN_EXE for use by flang docs.
+set(CLANG_TABLEGEN_EXE "${CLANG_TABLEGEN_EXE}" CACHE INTERNAL "")
+
 add_subdirectory(include)
 
 # All targets below may depend on all tablegen'd files.
