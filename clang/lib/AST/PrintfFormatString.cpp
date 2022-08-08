@@ -505,7 +505,7 @@ ArgType PrintfSpecifier::getScalarArgType(ASTContext &Ctx,
       case LengthModifier::AsShort:
         if (Ctx.getTargetInfo().getTriple().isOSMSVCRT())
           return Ctx.IntTy;
-        LLVM_FALLTHROUGH;
+        [[fallthrough]];
       default:
         return ArgType::Invalid();
     }

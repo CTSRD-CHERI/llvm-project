@@ -967,7 +967,7 @@ void USRGenerator::VisitTemplateArgument(const TemplateArgument &Arg) {
 
   case TemplateArgument::TemplateExpansion:
     Out << 'P'; // pack expansion of...
-    LLVM_FALLTHROUGH;
+    [[fallthrough]];
   case TemplateArgument::Template:
     VisitTemplateName(Arg.getAsTemplateOrTemplatePattern());
     break;

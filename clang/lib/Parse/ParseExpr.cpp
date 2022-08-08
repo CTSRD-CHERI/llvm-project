@@ -945,7 +945,7 @@ ExprResult Parser::ParseCastExpression(CastParseKind ParseKind,
       case CastParseKind::UnaryExprOnly:
         if (!getLangOpts().CPlusPlus)
           ParenExprType = CompoundLiteral;
-        LLVM_FALLTHROUGH;
+        [[fallthrough]];
       case CastParseKind::AnyCastExpr:
         ParenExprType = ParenParseOption::CastExpr;
         break;
@@ -1414,7 +1414,7 @@ ExprResult Parser::ParseCastExpression(CastParseKind ParseKind,
   case tok::kw__Alignof:   // unary-expression: '_Alignof' '(' type-name ')'
     if (!getLangOpts().C11)
       Diag(Tok, diag::ext_c11_feature) << Tok.getName();
-    LLVM_FALLTHROUGH;
+    [[fallthrough]];
   case tok::kw_alignof:    // unary-expression: 'alignof' '(' type-id ')'
   case tok::kw___alignof:  // unary-expression: '__alignof' unary-expression
                            // unary-expression: '__alignof' '(' type-name ')'
@@ -1503,7 +1503,7 @@ ExprResult Parser::ParseCastExpression(CastParseKind ParseKind,
                                            Ty.get(), nullptr);
       break;
     }
-    LLVM_FALLTHROUGH;
+    [[fallthrough]];
 
   case tok::annot_decltype:
   case tok::kw_char:
@@ -1623,7 +1623,7 @@ ExprResult Parser::ParseCastExpression(CastParseKind ParseKind,
     }
 
     // Fall through to treat the template-id as an id-expression.
-    LLVM_FALLTHROUGH;
+    [[fallthrough]];
   }
 
   case tok::kw_operator: // [C++] id-expression: operator/conversion-function-id
@@ -1766,7 +1766,7 @@ ExprResult Parser::ParseCastExpression(CastParseKind ParseKind,
       Res = ParseObjCMessageExpression();
       break;
     }
-    LLVM_FALLTHROUGH;
+    [[fallthrough]];
   default:
     NotCastExpr = true;
     return ExprError();
@@ -1797,7 +1797,7 @@ ExprResult Parser::ParseCastExpression(CastParseKind ParseKind,
       if (Tok.isAtStartOfLine())
         return Res;
 
-      LLVM_FALLTHROUGH;
+      [[fallthrough]];
     case tok::period:
     case tok::arrow:
       break;
@@ -1885,7 +1885,7 @@ Parser::ParsePostfixExpressionSuffix(ExprResult LHS) {
         break;
       }
       // Fall through; this isn't a message send.
-      LLVM_FALLTHROUGH;
+      [[fallthrough]];
 
     default:  // Not a postfix-expression suffix.
       return LHS;

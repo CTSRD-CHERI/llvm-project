@@ -1096,7 +1096,7 @@ LambdaCapture::LambdaCapture(SourceLocation Loc, bool Implicit,
   switch (Kind) {
   case LCK_StarThis:
     Bits |= Capture_ByCopy;
-    LLVM_FALLTHROUGH;
+    [[fallthrough]];
   case LCK_This:
     assert(!Var && "'this' capture cannot have a variable!");
     Bits |= Capture_This;
@@ -1104,7 +1104,7 @@ LambdaCapture::LambdaCapture(SourceLocation Loc, bool Implicit,
 
   case LCK_ByCopy:
     Bits |= Capture_ByCopy;
-    LLVM_FALLTHROUGH;
+    [[fallthrough]];
   case LCK_ByRef:
     assert(Var && "capture must have a variable!");
     break;
