@@ -37,7 +37,15 @@ typedef std::chrono::milliseconds ms;
 typedef std::chrono::nanoseconds ns;
 
 ms WaitTime = ms(TEST_SLOW_HOST() ? 750 : 250);
-ms Tolerance = ms(TEST_SLOW_HOST() ? 400 : 200);
+
+// Thread sanitizer causes more overhead and will sometimes cause this test
+// to fail. To prevent this we give Thread sanitizer more time to complete the
+// test.
+#if !defined(TEST_IS_EXECUTED_IN_A_SLOW_ENVIRONMENT)
+ms Tolerance = ms(200);
+#else
+ms Tolerance = ms(200 * 5);
+#endif
 
 void f()
 {
@@ -59,10 +67,11 @@ void f()
         std::shared_lock<std::shared_timed_mutex> lk(m, std::try_to_lock);
         if (lk.owns_lock())
             break;
+        std::this_thread::yield();
     }
     time_point t1 = Clock::now();
     ns d = t1 - t0 - ms(WaitTime);
-    assert(d < ms(200));  // within 200ms
+    assert(d < Tolerance);  // within tolerance
 }
 
 int main(int, char**)
