@@ -1140,7 +1140,7 @@ bool TargetLowering::SimplifyDemandedBits(
 
   // Other users may use these bits.
   bool HasMultiUse = false;
-  if (!Op.getNode()->hasOneUse() && !AssumeSingleUse) {
+  if (!AssumeSingleUse && !Op.getNode()->hasOneUse()) {
     if (Depth >= SelectionDAG::MaxRecursionDepth) {
       // Limit search depth.
       return false;
@@ -2860,7 +2860,7 @@ bool TargetLowering::SimplifyDemandedVectorElts(
   }
 
   // If Op has other users, assume that all elements are needed.
-  if (!Op.getNode()->hasOneUse() && !AssumeSingleUse)
+  if (!AssumeSingleUse && !Op.getNode()->hasOneUse())
     DemandedElts.setAllBits();
 
   // Not demanding any elements from Op.
