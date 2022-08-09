@@ -37,11 +37,6 @@ typedef Clock::duration duration;
 typedef std::chrono::milliseconds ms;
 typedef std::chrono::nanoseconds ns;
 
-#if !TEST_SLOW_HOST()
-ms WaitTime = ms(250);
-#else
-ms WaitTime = ms(750);
-#endif
 
 // Thread sanitizer causes more overhead and will sometimes cause this test
 // to fail. To prevent this we give Thread sanitizer more time to complete the
@@ -59,10 +54,10 @@ void f()
     assert(!m.try_lock_shared());
     assert(!m.try_lock_shared());
     while(!m.try_lock_shared())
-        ;
+        std::this_thread::yield();
     time_point t1 = Clock::now();
     m.unlock_shared();
-    ns d = t1 - t0 - WaitTime;
+    ns d = t1 - t0 - ms(250);
     assert(d < Tolerance);  // within tolerance
 }
 
@@ -72,7 +67,7 @@ int main(int, char**)
     std::vector<std::thread> v;
     for (int i = 0; i < 5; ++i)
         v.push_back(support::make_test_thread(f));
-    std::this_thread::sleep_for(WaitTime);
+    std::this_thread::sleep_for(ms(250));
     m.unlock();
     for (auto& t : v)
         t.join();
