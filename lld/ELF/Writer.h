@@ -13,8 +13,7 @@
 #include "llvm/ADT/StringRef.h"
 #include <cstdint>
 
-namespace lld {
-namespace elf {
+namespace lld::elf {
 class InputFile;
 class OutputSection;
 void copySectionsIntoPartitions();
@@ -63,7 +62,6 @@ bool isMicroMips();
 bool isMipsR6();
 
 bool hasDynamicLinker();
-} // namespace elf
-} // namespace lld
+} // namespace lld::elf
 
 #endif
