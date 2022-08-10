@@ -1635,7 +1635,6 @@ static uint8_t mapVisibility(GlobalValue::VisibilityTypes gvVisibility) {
   llvm_unreachable("unknown visibility");
 }
 
-template <class ELFT>
 static void
 createBitcodeSymbol(Symbol *&sym, const std::vector<bool> &keptComdats,
                     const lto::InputFile::Symbol &objSym, BitcodeFile &f) {
@@ -1680,12 +1679,12 @@ template <class ELFT> void BitcodeFile::parse() {
   for (auto it : llvm::enumerate(obj->symbols()))
     if (!it.value().isUndefined()) {
       Symbol *&sym = symbols[it.index()];
-      createBitcodeSymbol<ELFT>(sym, keptComdats, it.value(), *this);
+      createBitcodeSymbol(sym, keptComdats, it.value(), *this);
     }
   for (auto it : llvm::enumerate(obj->symbols()))
     if (it.value().isUndefined()) {
       Symbol *&sym = symbols[it.index()];
-      createBitcodeSymbol<ELFT>(sym, keptComdats, it.value(), *this);
+      createBitcodeSymbol(sym, keptComdats, it.value(), *this);
     }
 
   for (auto l : obj->getDependentLibraries())
