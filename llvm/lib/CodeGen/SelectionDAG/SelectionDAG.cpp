@@ -4602,6 +4602,7 @@ bool SelectionDAG::canCreateUndefOrPoison(SDValue Op, const APInt &DemandedElts,
   case ISD::PARITY:
   case ISD::SIGN_EXTEND:
   case ISD::ZERO_EXTEND:
+  case ISD::TRUNCATE:
   case ISD::BITCAST:
     return false;
 
