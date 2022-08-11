@@ -3727,14 +3727,6 @@ static ExpressionTrait ExpressionTraitFromTokKind(tok::TokenKind kind) {
   }
 }
 
-static unsigned TypeTraitArity(tok::TokenKind kind) {
-  switch (kind) {
-    default: llvm_unreachable("Not a known type trait");
-#define TYPE_TRAIT(N,Spelling,K) case tok::kw_##Spelling: return N;
-#include "clang/Basic/TokenKinds.def"
-  }
-}
-
 /// Parse the built-in type-trait pseudo-functions that allow
 /// implementation of the TR1/C++11 type traits templates.
 ///
@@ -3748,7 +3740,6 @@ static unsigned TypeTraitArity(tok::TokenKind kind) {
 ///
 ExprResult Parser::ParseTypeTrait() {
   tok::TokenKind Kind = Tok.getKind();
-  unsigned Arity = TypeTraitArity(Kind);
 
   SourceLocation Loc = ConsumeToken();
 
@@ -3782,18 +3773,6 @@ ExprResult Parser::ParseTypeTrait() {
     return ExprError();
 
   SourceLocation EndLoc = Parens.getCloseLocation();
-
-  if (Arity && Args.size() != Arity) {
-    Diag(EndLoc, diag::err_type_trait_arity)
-      << Arity << 0 << (Arity > 1) << (int)Args.size() << SourceRange(Loc);
-    return ExprError();
-  }
-
-  if (!Arity && Args.empty()) {
-    Diag(EndLoc, diag::err_type_trait_arity)
-      << 1 << 1 << 1 << (int)Args.size() << SourceRange(Loc);
-    return ExprError();
-  }
 
   return Actions.ActOnTypeTrait(TypeTraitFromTokKind(Kind), Loc, Args, EndLoc);
 }
