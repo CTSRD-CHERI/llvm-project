@@ -42,16 +42,14 @@ static cl::opt<bool> PreferWholeRegisterMove(
     "riscv-prefer-whole-register-move", cl::init(false), cl::Hidden,
     cl::desc("Prefer whole register move for vector registers."));
 
-namespace llvm {
-namespace RISCVVPseudosTable {
+namespace llvm::RISCVVPseudosTable {
 
 using namespace RISCV;
 
 #define GET_RISCVVPseudosTable_IMPL
 #include "RISCVGenSearchableTables.inc"
 
-} // namespace RISCVVPseudosTable
-} // namespace llvm
+} // namespace llvm::RISCVVPseudosTable
 
 #define DEBUG_TYPE "riscv-isntrinfo"
 
