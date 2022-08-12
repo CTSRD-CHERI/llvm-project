@@ -592,22 +592,6 @@ __attribute__((weak)) extern "C" Elf_Dyn _DYNAMIC[];
 
 static uintptr_t calculateImageBase(struct dl_phdr_info *pinfo) {
   uintptr_t image_base = static_cast<uintptr_t>(pinfo->dlpi_addr);
-#if defined(__ANDROID__) && __ANDROID_API__ < 18
-  if (image_base == 0) {
-    // Normally, an image base of 0 indicates a non-PIE executable. On
-    // versions of Android prior to API 18, the dynamic linker reported a
-    // dlpi_addr of 0 for PIE executables. Compute the true image base
-    // using the PT_PHDR segment.
-    // See https://github.com/android/ndk/issues/505.
-    for (Elf_Half i = 0; i < pinfo->dlpi_phnum; i++) {
-      const Elf_Phdr *phdr = &pinfo->dlpi_phdr[i];
-      if (phdr->p_type == PT_PHDR) {
-        image_base = static_cast<uintptr_t>(pinfo->dlpi_phdr) - phdr->p_vaddr;
-        break;
-      }
-    }
-  }
-#endif
 #ifdef __CHERI_PURE_CAPABILITY__
   // For statically linked pure-capability programs, it is generally not
   // possible to have a dlpi_addr capabibility with address zero but the bounds
@@ -621,7 +605,6 @@ static uintptr_t calculateImageBase(struct dl_phdr_info *pinfo) {
 #endif
   return image_base;
 }
-
 struct _LIBUNWIND_HIDDEN dl_iterate_cb_data {
   LocalAddressSpace *addressSpace;
   UnwindInfoSections *sects;
