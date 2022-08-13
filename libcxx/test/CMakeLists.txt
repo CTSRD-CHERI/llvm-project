@@ -2,6 +2,7 @@ set(LIBCXX_TEST_LINKER_FLAGS "" CACHE STRING
     "Additonal linker flags to pass when compiling the tests")
 set(LIBCXX_TEST_COMPILER_FLAGS "" CACHE STRING
     "Additonal linker flags to pass when compiling the tests")
+add_subdirectory(tools)
 
 # By default, libcxx and libcxxabi share a library directory.
 if (NOT LIBCXX_CXX_ABI_LIBRARY_PATH)
