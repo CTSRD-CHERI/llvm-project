@@ -1563,11 +1563,9 @@ void TextNodeDumper::VisitTypedefType(const TypedefType *T) {
 
 void TextNodeDumper::VisitUnaryTransformType(const UnaryTransformType *T) {
   switch (T->getUTTKind()) {
-#define TRANSFORM_TYPE_TRAIT_DEF(Enum, Trait)                                  \
-  case UnaryTransformType::Enum:                                               \
-    OS << " " #Trait;                                                          \
+  case UnaryTransformType::EnumUnderlyingType:
+    OS << " underlying_type";
     break;
-#include "clang/Basic/TransformTypeTraits.def"
   }
 }
 
