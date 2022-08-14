@@ -1593,8 +1593,16 @@ void TextNodeDumper::VisitTemplateTypeParmType(const TemplateTypeParmType *T) {
 
 void TextNodeDumper::VisitSubstTemplateTypeParmType(
     const SubstTemplateTypeParmType *T) {
+  dumpDeclRef(T->getAssociatedDecl());
+  VisitTemplateTypeParmDecl(T->getReplacedParameter());
   if (auto PackIndex = T->getPackIndex())
     OS << " pack_index " << *PackIndex;
+}
+
+void TextNodeDumper::VisitSubstTemplateTypeParmPackType(
+    const SubstTemplateTypeParmPackType *T) {
+  dumpDeclRef(T->getAssociatedDecl());
+  VisitTemplateTypeParmDecl(T->getReplacedParameter());
 }
 
 void TextNodeDumper::VisitAutoType(const AutoType *T) {
