@@ -9296,8 +9296,13 @@ RISCVTargetLowering::shouldExpandAtomicRMWInIR(AtomicRMWInst *AI) const {
   // For capability pointers we must always use the smallest possible type
   // instead of promoting to i32/i64 to ensure we don't trigger bounds errors.
   const DataLayout &DL = AI->getModule()->getDataLayout();
-  if (DL.isFatPointer(AI->getPointerOperand()->getType()))
+  if (DL.isFatPointer(AI->getPointerOperand()->getType())) {
+    if (!RISCVABI::isCheriPureCapABI(Subtarget.getTargetABI()) &&
+        AI->getOperation() == AtomicRMWInst::Xchg &&
+        DL.isFatPointer(AI->getValOperand()->getType()))
+      return AtomicExpansionKind::CmpXChg;
     return AtomicExpansionKind::None;
+  }
 
   uint64_t Size = DL.getTypeSizeInBits(AI->getType()).getFixedSize();
   if (Size == 8 || Size == 16)
@@ -9450,8 +9455,9 @@ bool RISCVTargetLowering::supportsAtomicOperation(const DataLayout &DL,
         return false;
     } else {
       // In the hybrid ABI with explicit capability addressing, we support all
-      // integer operations, but do not handle capability arguments.
-      if (DL.isFatPointer(PointerTy) && DL.isFatPointer(ValueTy))
+      // integer operations, but only handle XCHG for capability arguments.
+      if (DL.isFatPointer(PointerTy) && DL.isFatPointer(ValueTy) &&
+          RMWI->getOperation() != AtomicRMWInst::Xchg)
         return false;
     }
   }
