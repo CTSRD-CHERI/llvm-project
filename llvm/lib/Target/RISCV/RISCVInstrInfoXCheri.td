@@ -1174,6 +1174,11 @@ def : PatGpcrUimm12<int_cheri_bounded_stack_cap, CSetBoundsImm>;
 def : PatGpcrGpr<int_cheri_bounded_stack_cap_dynamic, CSetBounds>;
 def : PatGpcrUimm12<int_cheri_bounded_stack_cap_dynamic, CSetBoundsImm>;
 
+def : Pat<(ptradd CapFI64:$rs1, simm12:$imm12),
+          (CIncOffsetImm CapFI64:$rs1, simm12:$imm12)>;
+def : Pat<(ptradd CapFI128:$rs1, simm12:$imm12),
+          (CIncOffsetImm CapFI128:$rs1, simm12:$imm12)>;
+
 /// Pointer-Arithmetic Instructions
 
 def : Pat<(int_cheri_cap_to_pointer GPCR:$rs1, GPCRC0IsDDC:$rs2),

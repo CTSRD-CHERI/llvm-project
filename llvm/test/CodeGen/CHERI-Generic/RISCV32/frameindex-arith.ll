@@ -13,8 +13,7 @@ define void @foo() nounwind {
 ; CHECK:       # %bb.0:
 ; CHECK-NEXT:    cincoffset csp, csp, -16
 ; CHECK-NEXT:    csc cra, 8(csp) # 8-byte Folded Spill
-; CHECK-NEXT:    cincoffset ca0, csp, 6
-; CHECK-NEXT:    cincoffset ca0, ca0, 1
+; CHECK-NEXT:    cincoffset ca0, csp, 7
 ; CHECK-NEXT:    csetbounds ca0, ca0, 0
 ; CHECK-NEXT:    ccall bar
 ; CHECK-NEXT:    clc cra, 8(csp) # 8-byte Folded Reload
