@@ -2943,6 +2943,7 @@ static void parseOtoolOptions(const llvm::opt::InputArgList &InputArgs) {
   LeadingAddr = LeadingHeaders = !InputArgs.hasArg(OTOOL_X);
 
   ChainedFixups = InputArgs.hasArg(OTOOL_chained_fixups);
+  DyldInfo = InputArgs.hasArg(OTOOL_dyld_info);
 
   InputFilenames = InputArgs.getAllArgValues(OTOOL_INPUT);
   if (InputFilenames.empty())
