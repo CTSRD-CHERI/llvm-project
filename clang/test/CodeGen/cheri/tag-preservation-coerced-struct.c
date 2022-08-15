@@ -17,7 +17,7 @@ typedef struct {
 // CHECK-NEXT:    call void @llvm.memcpy.p200i8.p200i8.i64(i8 addrspace(200)* align 4 [[TMP0]], i8 addrspace(200)* align 4 bitcast ([[STRUCT_XML_EXPAT_VERSION]] addrspace(200)* @__const.XML_ExpatVersionInfo.ret to i8 addrspace(200)*), i64 12, i1 false) #[[ATTR2:[0-9]+]]
 // CHECK-NEXT:    [[TMP1:%.*]] = bitcast [2 x i64] addrspace(200)* [[RETVAL_COERCE]] to i8 addrspace(200)*
 // CHECK-NEXT:    [[TMP2:%.*]] = bitcast [[STRUCT_XML_EXPAT_VERSION]] addrspace(200)* [[RETVAL]] to i8 addrspace(200)*
-// CHECK-NEXT:    call void @llvm.memcpy.p200i8.p200i8.i64(i8 addrspace(200)* align 8 [[TMP1]], i8 addrspace(200)* align 4 [[TMP2]], i64 12, i1 false)
+// CHECK-NEXT:    call void @llvm.memcpy.p200i8.p200i8.i64(i8 addrspace(200)* align 8 [[TMP1]], i8 addrspace(200)* align 4 [[TMP2]], i64 12, i1 false) #[[ATTR2]]
 // CHECK-NEXT:    [[TMP3:%.*]] = load [2 x i64], [2 x i64] addrspace(200)* [[RETVAL_COERCE]], align 8
 // CHECK-NEXT:    ret [2 x i64] [[TMP3]]
 //
@@ -33,7 +33,7 @@ XML_Expat_Version XML_ExpatVersionInfo(void) {
 // CHECK-NEXT:    store [2 x i64] [[V_COERCE]], [2 x i64] addrspace(200)* [[TMP_COERCE]], align 8
 // CHECK-NEXT:    [[TMP0:%.*]] = bitcast [[STRUCT_XML_EXPAT_VERSION]] addrspace(200)* [[V]] to i8 addrspace(200)*
 // CHECK-NEXT:    [[TMP1:%.*]] = bitcast [2 x i64] addrspace(200)* [[TMP_COERCE]] to i8 addrspace(200)*
-// CHECK-NEXT:    call void @llvm.memcpy.p200i8.p200i8.i64(i8 addrspace(200)* align 4 [[TMP0]], i8 addrspace(200)* align 8 [[TMP1]], i64 12, i1 false)
+// CHECK-NEXT:    call void @llvm.memcpy.p200i8.p200i8.i64(i8 addrspace(200)* align 4 [[TMP0]], i8 addrspace(200)* align 8 [[TMP1]], i64 12, i1 false) #[[ATTR2]]
 // CHECK-NEXT:    [[MAJOR:%.*]] = getelementptr inbounds [[STRUCT_XML_EXPAT_VERSION]], [[STRUCT_XML_EXPAT_VERSION]] addrspace(200)* [[V]], i32 0, i32 0
 // CHECK-NEXT:    [[TMP2:%.*]] = load i32, i32 addrspace(200)* [[MAJOR]], align 4
 // CHECK-NEXT:    ret i32 [[TMP2]]
@@ -54,7 +54,7 @@ int take_XML_ExpatVersionInfo(XML_Expat_Version v) {
 // CHECK-NEXT:    store i32 3, i32 addrspace(200)* [[MICRO]], align 4
 // CHECK-NEXT:    [[TMP0:%.*]] = bitcast [2 x i64] addrspace(200)* [[DOTCOMPOUNDLITERAL_COERCE]] to i8 addrspace(200)*
 // CHECK-NEXT:    [[TMP1:%.*]] = bitcast [[STRUCT_XML_EXPAT_VERSION]] addrspace(200)* [[DOTCOMPOUNDLITERAL]] to i8 addrspace(200)*
-// CHECK-NEXT:    call void @llvm.memcpy.p200i8.p200i8.i64(i8 addrspace(200)* align 8 [[TMP0]], i8 addrspace(200)* align 4 [[TMP1]], i64 12, i1 false)
+// CHECK-NEXT:    call void @llvm.memcpy.p200i8.p200i8.i64(i8 addrspace(200)* align 8 [[TMP0]], i8 addrspace(200)* align 4 [[TMP1]], i64 12, i1 false) #[[ATTR2]]
 // CHECK-NEXT:    [[TMP2:%.*]] = load [2 x i64], [2 x i64] addrspace(200)* [[DOTCOMPOUNDLITERAL_COERCE]], align 8
 // CHECK-NEXT:    [[CALL:%.*]] = call signext i32 @take_XML_ExpatVersionInfo([2 x i64] [[TMP2]])
 // CHECK-NEXT:    ret i32 [[CALL]]
