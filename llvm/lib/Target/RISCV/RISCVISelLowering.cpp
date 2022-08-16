@@ -7086,11 +7086,14 @@ static MachineBasicBlock *emitSplitF64Pseudo(MachineInstr &MI,
       MF.getMachineMemOperand(MPI, MachineMemOperand::MOLoad, 4, Align(8));
   MachineMemOperand *MMOHi = MF.getMachineMemOperand(
       MPI.getWithOffset(4), MachineMemOperand::MOLoad, 4, Align(8));
-  BuildMI(*BB, MI, DL, TII.get(RISCV::LW), LoReg)
+  RISCVABI::ABI ABI = MF.getSubtarget<RISCVSubtarget>().getTargetABI();
+  unsigned LoadOpcode =
+      RISCVABI::isCheriPureCapABI(ABI) ? RISCV::CLW : RISCV::LW;
+  BuildMI(*BB, MI, DL, TII.get(LoadOpcode), LoReg)
       .addFrameIndex(FI)
       .addImm(0)
       .addMemOperand(MMOLo);
-  BuildMI(*BB, MI, DL, TII.get(RISCV::LW), HiReg)
+  BuildMI(*BB, MI, DL, TII.get(LoadOpcode), HiReg)
       .addFrameIndex(FI)
       .addImm(4)
       .addMemOperand(MMOHi);
@@ -7118,12 +7121,15 @@ static MachineBasicBlock *emitBuildPairF64Pseudo(MachineInstr &MI,
       MF.getMachineMemOperand(MPI, MachineMemOperand::MOStore, 4, Align(8));
   MachineMemOperand *MMOHi = MF.getMachineMemOperand(
       MPI.getWithOffset(4), MachineMemOperand::MOStore, 4, Align(8));
-  BuildMI(*BB, MI, DL, TII.get(RISCV::SW))
+  RISCVABI::ABI ABI = MF.getSubtarget<RISCVSubtarget>().getTargetABI();
+  unsigned StoreOpcode =
+      RISCVABI::isCheriPureCapABI(ABI) ? RISCV::CSW : RISCV::SW;
+  BuildMI(*BB, MI, DL, TII.get(StoreOpcode))
       .addReg(LoReg, getKillRegState(MI.getOperand(1).isKill()))
       .addFrameIndex(FI)
       .addImm(0)
       .addMemOperand(MMOLo);
-  BuildMI(*BB, MI, DL, TII.get(RISCV::SW))
+  BuildMI(*BB, MI, DL, TII.get(StoreOpcode))
       .addReg(HiReg, getKillRegState(MI.getOperand(2).isKill()))
       .addFrameIndex(FI)
       .addImm(4)
@@ -7508,15 +7514,16 @@ static bool CC_RISCV(const DataLayout &DL, RISCVABI::ABI ABI, unsigned ValNo,
          "PendingLocs and PendingArgFlags out of sync");
 
   // Handle passing f64 on RV32D with a soft float ABI or when floating point
-  // registers are exhausted.
-  if (UseGPRForF64 && XLen == 32 && ValVT == MVT::f64 && !IsPureCapVarArgs) {
+  // registers are exhausted. Also handle for pure capability varargs which are
+  // always passed on the stack.
+  if ((UseGPRForF64 || IsPureCapVarArgs) && XLen == 32 && ValVT == MVT::f64) {
     assert(!ArgFlags.isSplit() && PendingLocs.empty() &&
            "Can't lower f64 if it is split");
     // Depending on available argument GPRS, f64 may be passed in a pair of
     // GPRs, split between a GPR and the stack, or passed completely on the
     // stack. LowerCall/LowerFormalArguments/LowerReturn must recognise these
-    // cases.
-    Register Reg = State.AllocateReg(ArgGPRs);
+    // cases. Pure capability varargs are always passed on the stack.
+    Register Reg = IsPureCapVarArgs ? 0 : State.AllocateReg(ArgGPRs);
     LocVT = MVT::i32;
     if (!Reg) {
       unsigned StackOffset = State.AllocateStack(8, Align(8));
@@ -7824,7 +7831,8 @@ static SDValue unpackFromMemLoc(SelectionDAG &DAG, SDValue Chain,
 }
 
 static SDValue unpackF64OnRV32DSoftABI(SelectionDAG &DAG, SDValue Chain,
-                                       const CCValAssign &VA, const SDLoc &DL) {
+                                       const CCValAssign &VA, const SDLoc &DL,
+                                       EVT PtrVT) {
   assert(VA.getLocVT() == MVT::i32 && VA.getValVT() == MVT::f64 &&
          "Unexpected VA");
   MachineFunction &MF = DAG.getMachineFunction();
@@ -7834,7 +7842,7 @@ static SDValue unpackF64OnRV32DSoftABI(SelectionDAG &DAG, SDValue Chain,
   if (VA.isMemLoc()) {
     // f64 is passed on the stack.
     int FI = MFI.CreateFixedObject(8, VA.getLocMemOffset(), /*Immutable=*/true);
-    SDValue FIN = DAG.getFrameIndex(FI, MVT::i32);
+    SDValue FIN = DAG.getFrameIndex(FI, PtrVT);
     return DAG.getLoad(MVT::f64, DL, Chain, FIN,
                        MachinePointerInfo::getFixedStack(MF, FI));
   }
@@ -7848,7 +7856,7 @@ static SDValue unpackF64OnRV32DSoftABI(SelectionDAG &DAG, SDValue Chain,
   if (VA.getLocReg() == RISCV::X17) {
     // Second half of f64 is passed on the stack.
     int FI = MFI.CreateFixedObject(4, 0, /*Immutable=*/true);
-    SDValue FIN = DAG.getFrameIndex(FI, MVT::i32);
+    SDValue FIN = DAG.getFrameIndex(FI, PtrVT);
     Hi = DAG.getLoad(MVT::i32, DL, Chain, FIN,
                      MachinePointerInfo::getFixedStack(MF, FI));
   } else {
@@ -8085,7 +8093,7 @@ SDValue RISCVTargetLowering::LowerFormalArguments(
     // Passing f64 on RV32D with a soft float ABI must be handled as a special
     // case.
     if (VA.getLocVT() == MVT::i32 && VA.getValVT() == MVT::f64)
-      ArgValue = unpackF64OnRV32DSoftABI(DAG, Chain, VA, DL);
+      ArgValue = unpackF64OnRV32DSoftABI(DAG, Chain, VA, DL, PtrVT);
     else if (VA.isRegLoc())
       ArgValue = unpackFromRegLoc(DAG, Chain, VA, DL, *this);
     else
