@@ -112,9 +112,9 @@ def update_one_test(test_name: str, input_file: typing.BinaryIO,
                       "--opt-binary", str(args.opt_cmd),
                       str(output_path)]
     utc_cmds = {
-        b'llc': llc_checks_cmd,
-        b'mir': mir_checks_cmd,
-        b'opt': opt_checks_cmd,
+        'llc': llc_checks_cmd,
+        'mir': mir_checks_cmd,
+        'opt': opt_checks_cmd,
     }
 
     with output_path.open("wb") as output_file:
@@ -156,16 +156,16 @@ def update_one_test(test_name: str, input_file: typing.BinaryIO,
 
             m = CHERI_GENERIC_UTC_CMD.match(line)
             if m:
+                utc_cmd = m.group(1).strip()
+                if not utc_cmd:
+                    sys.exit("Empty CHERI-GENERIC-UTC directive: " + line.decode("utf-8"))
+                utc_cmd = list(map(lambda s: s.decode("utf-8"), utc_cmd.split(b' ')))
+                if utc_cmd[0] not in utc_cmds:
+                    sys.exit("Unknown '" + utc_cmd[0] + "' in CHERI-GENERIC-UTC directive: " +
+                             line.decode("utf-8"))
                 if cheri_generic_utcs is None:
                     cheri_generic_utcs = []
-                for s in m.group(1).split(b','):
-                    s = s.strip()
-                    if s not in utc_cmds:
-                        sys.exit("Unknown '" + s.decode("utf-8") + "' in CHERI-GENERIC-UTC directive: " +
-                                 line.decode("utf-8"))
-                    cheri_generic_utcs.append(s)
-                if not cheri_generic_utcs:
-                    sys.exit("Empty CHERI-GENERIC-UTC directive: " + line.decode("utf-8"))
+                cheri_generic_utcs.append(utc_cmd)
 
             converted_line = line.replace(b"iCAPRANGE", b"i" + str(
                 arch_def.cap_range).encode("utf-8"))
@@ -204,9 +204,9 @@ def update_one_test(test_name: str, input_file: typing.BinaryIO,
 
     # TODO: Always be explicit?
     if cheri_generic_utcs is None:
-        cheri_generic_utcs = [b'llc', b'opt']
+        cheri_generic_utcs = [['llc'], ['opt']]
     # Generate the check lines using update_*_test_checks.py
-    for update_cmd in [utc_cmds[k] for k in cheri_generic_utcs]:
+    for update_cmd in [utc_cmds[utc[0]] + utc[1:] for utc in cheri_generic_utcs]:
         # if args.verbose:
         print("Running", " ".join(update_cmd))
         subprocess.check_call(update_cmd)
