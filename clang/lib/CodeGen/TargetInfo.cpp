@@ -390,8 +390,10 @@ static Address emitVoidPtrVAArg(CodeGenFunction &CGF, Address VAListAddr,
 
   // Cast the address we've calculated to the right type.
   llvm::Type *DirectTy = CGF.ConvertTypeForMem(ValueTy);
-  if (IsIndirect)
-    DirectTy = DirectTy->getPointerTo(0);
+  if (IsIndirect) {
+    unsigned AllocaAS = CGF.CGM.getDataLayout().getAllocaAddrSpace();
+    DirectTy = DirectTy->getPointerTo(AllocaAS);
+  }
 
   Address Addr = emitVoidPtrDirectVAArg(CGF, VAListAddr, DirectTy,
                                         DirectSize, DirectAlign,
