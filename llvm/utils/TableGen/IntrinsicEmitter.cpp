@@ -704,11 +704,13 @@ void IntrinsicEmitter::EmitAttributes(const CodeGenIntrinsicTable &Ints,
     unsigned numAttrs = 0;
 
     // The argument attributes are alreadys sorted by argument index.
+    assert(is_sorted(Intrinsic.ArgumentAttributes) &&
+           "Argument attributes are not sorted");
+
     unsigned Ai = 0, Ae = Intrinsic.ArgumentAttributes.size();
     if (Ae) {
       while (Ai != Ae) {
         unsigned AttrIdx = Intrinsic.ArgumentAttributes[Ai].Index;
-
         OS << "      const Attribute::AttrKind AttrParam" << AttrIdx << "[]= {";
         ListSeparator LS(",");
 
@@ -724,6 +726,9 @@ void IntrinsicEmitter::EmitAttributes(const CodeGenIntrinsicTable &Ints,
             break;
           case CodeGenIntrinsic::NoUndef:
             OS << LS << "Attribute::NoUndef";
+            break;
+          case CodeGenIntrinsic::NonNull:
+            OS << LS << "Attribute::NonNull";
             break;
           case CodeGenIntrinsic::Returned:
             OS << LS << "Attribute::Returned";
@@ -760,7 +765,8 @@ void IntrinsicEmitter::EmitAttributes(const CodeGenIntrinsicTable &Ints,
             OS << LSV << V;
           OS << "};\n";
         }
-
+        // AttributeList::ReturnIndex = 0, AttrParam0 corresponds to return
+        // value.
         OS << "      AS[" << numAttrs++ << "] = AttributeList::get(C, "
            << AttrIdx << ", AttrParam" << AttrIdx;
         if (!AllValuesAreZero)
