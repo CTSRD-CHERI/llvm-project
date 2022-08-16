@@ -106,6 +106,14 @@ exit:
   ret void
 }
 
+; UTC_ARGS: --disable
+; CHECK-LABEL: .LJTI1_0:
+; CHECK-NEXT:    .4byte .LBB1_2-.LJTI1_0
+; CHECK-NEXT:    .4byte .LBB1_3-.LJTI1_0
+; CHECK-NEXT:    .4byte .LBB1_4-.LJTI1_0
+; CHECK-NEXT:    .4byte .LBB1_5-.LJTI1_0
+; UTC_ARGS: --enable
+
 define void @above_threshold_all(i32 %in, i32 addrspace(200)* %out) nounwind {
 ; CHECK-LABEL: above_threshold_all:
 ; CHECK:       # %bb.0: # %entry
@@ -185,3 +193,13 @@ bb6:
 exit:
   ret void
 }
+
+; UTC_ARGS: --disable
+; CHECK-LABEL: .LJTI2_0:
+; CHECK-NEXT:    .4byte .LBB2_2-.LJTI2_0
+; CHECK-NEXT:    .4byte .LBB2_3-.LJTI2_0
+; CHECK-NEXT:    .4byte .LBB2_4-.LJTI2_0
+; CHECK-NEXT:    .4byte .LBB2_5-.LJTI2_0
+; CHECK-NEXT:    .4byte .LBB2_6-.LJTI2_0
+; CHECK-NEXT:    .4byte .LBB2_7-.LJTI2_0
+; UTC_ARGS: --enable
