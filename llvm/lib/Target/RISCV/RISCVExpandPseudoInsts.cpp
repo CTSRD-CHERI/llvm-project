@@ -275,6 +275,8 @@ bool RISCVExpandPseudo::expandAuipccInstPair(
   Register DestReg = MI.getOperand(0).getReg();
   Register TmpReg = MI.getOperand(HasTmpReg ? 1 : 0).getReg();
   const MachineOperand &Symbol = MI.getOperand(HasTmpReg ? 2 : 1);
+  if (Symbol.getTargetFlags() & RISCVII::MO_JUMP_TABLE_BASE)
+    FlagsHi |= RISCVII::MO_JUMP_TABLE_BASE;
 
   MachineBasicBlock *NewMBB = MF->CreateMachineBasicBlock(MBB.getBasicBlock());
 

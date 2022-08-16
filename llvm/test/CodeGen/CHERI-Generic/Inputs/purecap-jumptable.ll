@@ -93,4 +93,11 @@ exit:
 @IF-MIPS@; CHECK-NEXT:    .4byte .LBB2_5-.LJTI2_0
 @IF-MIPS@; CHECK-NEXT:    .4byte .LBB2_6-.LJTI2_0
 @IF-MIPS@; CHECK-NEXT:    .4byte .LBB2_7-.LJTI2_0
+@IF-RISCV@; CHECK-LABEL: .LJTI2_0:
+@IF-RISCV@; CHECK-NEXT:    .word .LBB2_2-.Labove_threshold_all$jump_table_base
+@IF-RISCV@; CHECK-NEXT:    .word .LBB2_3-.Labove_threshold_all$jump_table_base
+@IF-RISCV@; CHECK-NEXT:    .word .LBB2_4-.Labove_threshold_all$jump_table_base
+@IF-RISCV@; CHECK-NEXT:    .word .LBB2_5-.Labove_threshold_all$jump_table_base
+@IF-RISCV@; CHECK-NEXT:    .word .LBB2_6-.Labove_threshold_all$jump_table_base
+@IF-RISCV@; CHECK-NEXT:    .word .LBB2_7-.Labove_threshold_all$jump_table_base
 ; UTC_ARGS: --enable

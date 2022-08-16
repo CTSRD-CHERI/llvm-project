@@ -102,47 +102,48 @@ exit:
 define void @above_threshold_all(i32 %in, i32 addrspace(200)* %out) nounwind {
 ; CHECK-LABEL: above_threshold_all:
 ; CHECK:       # %bb.0: # %entry
+; CHECK-NEXT:    cincoffset csp, csp, -16
+; CHECK-NEXT:    csc cra, 0(csp) # 16-byte Folded Spill
 ; CHECK-NEXT:    sext.w a0, a0
-; CHECK-NEXT:    addi a2, zero, 3
-; CHECK-NEXT:    blt a2, a0, .LBB2_5
-; CHECK-NEXT:  # %bb.1: # %entry
-; CHECK-NEXT:    addi a2, zero, 1
-; CHECK-NEXT:    beq a0, a2, .LBB2_9
-; CHECK-NEXT:  # %bb.2: # %entry
-; CHECK-NEXT:    addi a2, zero, 2
-; CHECK-NEXT:    beq a0, a2, .LBB2_10
-; CHECK-NEXT:  # %bb.3: # %entry
-; CHECK-NEXT:    addi a2, zero, 3
-; CHECK-NEXT:    bne a0, a2, .LBB2_14
-; CHECK-NEXT:  # %bb.4: # %bb3
-; CHECK-NEXT:    addi a0, zero, 2
-; CHECK-NEXT:    j .LBB2_13
-; CHECK-NEXT:  .LBB2_5: # %entry
-; CHECK-NEXT:    addi a2, zero, 4
-; CHECK-NEXT:    beq a0, a2, .LBB2_11
-; CHECK-NEXT:  # %bb.6: # %entry
+; CHECK-NEXT:    addi a0, a0, -1
 ; CHECK-NEXT:    addi a2, zero, 5
-; CHECK-NEXT:    beq a0, a2, .LBB2_12
-; CHECK-NEXT:  # %bb.7: # %entry
-; CHECK-NEXT:    addi a2, zero, 6
-; CHECK-NEXT:    bne a0, a2, .LBB2_14
-; CHECK-NEXT:  # %bb.8: # %bb6
-; CHECK-NEXT:    addi a0, zero, 200
-; CHECK-NEXT:    j .LBB2_13
-; CHECK-NEXT:  .LBB2_9: # %bb1
+; CHECK-NEXT:    bltu a2, a0, .LBB2_9
+; CHECK-NEXT:  # %bb.1: # %entry
+; CHECK-NEXT:    slli a0, a0, 2
+; CHECK-NEXT:  .LBB2_10: # %entry
+; CHECK-NEXT:    # Label of block must be emitted
+; CHECK-NEXT:    auipcc ca2, %pcrel_hi(.LJTI2_0)
+; CHECK-NEXT:    cincoffset ca2, ca2, %pcrel_lo(.LBB2_10)
+; CHECK-NEXT:    cincoffset ca0, ca2, a0
+; CHECK-NEXT:    clw a0, 0(ca0)
+; CHECK-NEXT:  .LBB2_11: # %entry
+; CHECK-NEXT:    # Label of block must be emitted
+; CHECK-NEXT:    auipcc ca2, %pcrel_hi(.Labove_threshold_all$jump_table_base)
+; CHECK-NEXT:    cincoffset ca2, ca2, %pcrel_lo(.LBB2_11)
+; CHECK-NEXT:    cincoffset ca0, ca2, a0
+; CHECK-NEXT:    cjr ca0
+; CHECK-NEXT:  .LBB2_2: # %bb1
 ; CHECK-NEXT:    addi a0, zero, 4
-; CHECK-NEXT:    j .LBB2_13
-; CHECK-NEXT:  .LBB2_10: # %bb2
+; CHECK-NEXT:    j .LBB2_8
+; CHECK-NEXT:  .LBB2_3: # %bb2
 ; CHECK-NEXT:    addi a0, zero, 3
-; CHECK-NEXT:    j .LBB2_13
-; CHECK-NEXT:  .LBB2_11: # %bb4
+; CHECK-NEXT:    j .LBB2_8
+; CHECK-NEXT:  .LBB2_4: # %bb3
+; CHECK-NEXT:    addi a0, zero, 2
+; CHECK-NEXT:    j .LBB2_8
+; CHECK-NEXT:  .LBB2_5: # %bb4
 ; CHECK-NEXT:    addi a0, zero, 1
-; CHECK-NEXT:    j .LBB2_13
-; CHECK-NEXT:  .LBB2_12: # %bb5
+; CHECK-NEXT:    j .LBB2_8
+; CHECK-NEXT:  .LBB2_6: # %bb5
 ; CHECK-NEXT:    addi a0, zero, 100
-; CHECK-NEXT:  .LBB2_13: # %exit
+; CHECK-NEXT:    j .LBB2_8
+; CHECK-NEXT:  .LBB2_7: # %bb6
+; CHECK-NEXT:    addi a0, zero, 200
+; CHECK-NEXT:  .LBB2_8: # %exit
 ; CHECK-NEXT:    csw a0, 0(ca1)
-; CHECK-NEXT:  .LBB2_14: # %exit
+; CHECK-NEXT:  .LBB2_9: # %exit
+; CHECK-NEXT:    clc cra, 0(csp) # 16-byte Folded Reload
+; CHECK-NEXT:    cincoffset csp, csp, 16
 ; CHECK-NEXT:    cret
 entry:
   switch i32 %in, label %exit [
@@ -176,4 +177,11 @@ exit:
 }
 
 ; UTC_ARGS: --disable
+; CHECK-LABEL: .LJTI2_0:
+; CHECK-NEXT:    .word .LBB2_2-.Labove_threshold_all$jump_table_base
+; CHECK-NEXT:    .word .LBB2_3-.Labove_threshold_all$jump_table_base
+; CHECK-NEXT:    .word .LBB2_4-.Labove_threshold_all$jump_table_base
+; CHECK-NEXT:    .word .LBB2_5-.Labove_threshold_all$jump_table_base
+; CHECK-NEXT:    .word .LBB2_6-.Labove_threshold_all$jump_table_base
+; CHECK-NEXT:    .word .LBB2_7-.Labove_threshold_all$jump_table_base
 ; UTC_ARGS: --enable
