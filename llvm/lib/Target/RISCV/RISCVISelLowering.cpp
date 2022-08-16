@@ -24,6 +24,7 @@
 #include "llvm/CodeGen/MachineFrameInfo.h"
 #include "llvm/CodeGen/MachineFunction.h"
 #include "llvm/CodeGen/MachineInstrBuilder.h"
+#include "llvm/CodeGen/MachineJumpTableInfo.h"
 #include "llvm/CodeGen/MachineRegisterInfo.h"
 #include "llvm/CodeGen/TargetLoweringObjectFileImpl.h"
 #include "llvm/CodeGen/ValueTypes.h"
@@ -419,6 +420,7 @@ RISCVTargetLowering::RISCVTargetLowering(const TargetMachine &TM,
     setOperationAction(ISD::GlobalAddress, CLenVT, Custom);
     setOperationAction(ISD::BlockAddress, CLenVT, Custom);
     setOperationAction(ISD::ConstantPool, CLenVT, Custom);
+    setOperationAction(ISD::JumpTable, CLenVT, Custom);
     setOperationAction(ISD::GlobalTLSAddress, CLenVT, Custom);
     setOperationAction(ISD::ADDRSPACECAST, CLenVT, Custom);
     setOperationAction(ISD::ADDRSPACECAST, XLenVT, Custom);
@@ -897,8 +899,7 @@ RISCVTargetLowering::RISCVTargetLowering(const TargetMachine &TM,
   setMinFunctionAlignment(FunctionAlignment);
   setPrefFunctionAlignment(FunctionAlignment);
 
-  // FIXME: Jump tables are not implemented yet for purecap.
-  setMinimumJumpTableEntries(RISCVABI::isCheriPureCapABI(ABI) ? UINT_MAX : 5);
+  setMinimumJumpTableEntries(5);
 
   // Jumps are expensive, compared to logic
   setJumpIsExpensive();
@@ -9484,6 +9485,49 @@ bool RISCVTargetLowering::isFMAFasterThanFMulAndFAdd(const MachineFunction &MF,
   }
 
   return false;
+}
+
+bool RISCVTargetLowering::isJumpTableRelative() const {
+  if (!RISCVABI::isCheriPureCapABI(Subtarget.getTargetABI()))
+    return TargetLowering::isJumpTableRelative();
+
+  return true;
+}
+
+unsigned RISCVTargetLowering::getJumpTableEncoding() const {
+  if (!RISCVABI::isCheriPureCapABI(Subtarget.getTargetABI()))
+    return TargetLowering::getJumpTableEncoding();
+
+  return MachineJumpTableInfo::EK_LabelDifference32;
+}
+
+SDValue
+RISCVTargetLowering::getPICJumpTableRelocBase(SDValue Table,
+                                              SelectionDAG &DAG) const {
+  if (!RISCVABI::isCheriPureCapABI(Subtarget.getTargetABI()))
+    return TargetLowering::getPICJumpTableRelocBase(Table, DAG);
+
+  SDLoc DL(Table);
+  Function *Function = &DAG.getMachineFunction().getFunction();
+  MVT CLenVT = Subtarget.typeForCapabilities();
+  SDValue Addr = DAG.getTargetGlobalAddress(Function, DL, CLenVT, 0,
+                                            RISCVII::MO_JUMP_TABLE_BASE);
+  return SDValue(DAG.getMachineNode(RISCV::PseudoCLLC, DL, CLenVT, Addr), 0);
+}
+
+const MCExpr *
+RISCVTargetLowering::getPICJumpTableRelocBaseExpr(const MachineFunction *MF,
+                                                  unsigned JTI,
+                                                  MCContext &Ctx) const {
+  if (!RISCVABI::isCheriPureCapABI(Subtarget.getTargetABI()))
+    return TargetLowering::getPICJumpTableRelocBaseExpr(MF, JTI, Ctx);
+
+  const TargetMachine &TM = getTargetMachine();
+  const Function *Function = &MF->getFunction();
+  TargetLoweringObjectFile *TLOF = TM.getObjFileLowering();
+  MCSymbol *Sym =
+      TLOF->getSymbolWithGlobalValueBase(Function, "$jump_table_base", TM);
+  return MCSymbolRefExpr::create(Sym, Ctx);
 }
 
 Register RISCVTargetLowering::getExceptionPointerRegister(

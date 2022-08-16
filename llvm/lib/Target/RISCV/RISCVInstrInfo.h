@@ -127,6 +127,9 @@ public:
   ArrayRef<std::pair<unsigned, const char *>>
   getSerializableDirectMachineOperandTargetFlags() const override;
 
+  ArrayRef<std::pair<unsigned, const char *>>
+  getSerializableBitmaskMachineOperandTargetFlags() const override;
+
   // Return true if the function can safely be outlined from.
   virtual bool
   isFunctionSafeToOutlineFrom(MachineFunction &MF,

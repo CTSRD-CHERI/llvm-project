@@ -156,7 +156,9 @@ enum {
   // Used to differentiate between target-specific "direct" flags and "bitmask"
   // flags. A machine operand can only have one "direct" flag, but can have
   // multiple "bitmask" flags.
-  MO_DIRECT_FLAG_MASK = 31
+  MO_DIRECT_FLAG_MASK = 31,
+
+  MO_JUMP_TABLE_BASE = 32,
 };
 } // namespace RISCVII
 

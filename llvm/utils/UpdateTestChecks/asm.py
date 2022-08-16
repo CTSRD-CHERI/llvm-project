@@ -93,8 +93,9 @@ ASM_FUNCTION_PPC_RE = re.compile(
 
 ASM_FUNCTION_RISCV_RE = re.compile(
     r'^_?(?P<func>[^:]+):[ \t]*#+[ \t]*@"?(?P=func)"?\n'
-    r'(?:\s*\.?L(?P=func)\$local:\n)?'     # optional .L<func>$local: due to -fno-semantic-interposition
-    r'(?:\s*\.?L(?P=func)\$eh_alias:\n)?'  # optional .L<func>$eh_alias: due to CHERI EH
+    r'(?:\s*\.?L(?P=func)\$local:\n)?'            # optional .L<func>$local: due to -fno-semantic-interposition
+    r'(?:\s*\.?L(?P=func)\$eh_alias:\n)?'         # optional .L<func>$eh_alias: due to CHERI EH
+    r'(?:\s*\.?L(?P=func)\$jump_table_base:\n)?'  # optional .L<func>$jump_table_base: due to CHERI jump tables
     r'(?:\s*\.?Lfunc_begin[^:\n]*:\n)?[^:]*?'
     r'(?P<body>^##?[ \t]+[^:]+:.*?)\s*'
     r'.Lfunc_end[0-9]+:\n',

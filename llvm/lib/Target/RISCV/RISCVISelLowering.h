@@ -418,6 +418,17 @@ public:
   bool isDesirableToCommuteWithShift(const SDNode *N,
                                      CombineLevel Level) const override;
 
+  bool isJumpTableRelative() const override;
+
+  unsigned getJumpTableEncoding() const override;
+
+  SDValue getPICJumpTableRelocBase(SDValue Table,
+                                   SelectionDAG &DAG) const override;
+
+  const MCExpr *
+  getPICJumpTableRelocBaseExpr(const MachineFunction *MF, unsigned JTI,
+                               MCContext &Ctx) const override;
+
   /// If a physical register, this returns the register that receives the
   /// exception address on entry to an EH pad.
   Register

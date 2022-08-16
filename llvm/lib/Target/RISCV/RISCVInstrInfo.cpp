@@ -1246,6 +1246,15 @@ RISCVInstrInfo::getSerializableDirectMachineOperandTargetFlags() const {
       {MO_CCALL, "riscv-ccall"}};
   return makeArrayRef(TargetFlags);
 }
+
+ArrayRef<std::pair<unsigned, const char *>>
+RISCVInstrInfo::getSerializableBitmaskMachineOperandTargetFlags() const {
+  using namespace RISCVII;
+  static const std::pair<unsigned, const char *> TargetFlags[] = {
+      {MO_JUMP_TABLE_BASE, "riscv-jump-table-base"}};
+  return makeArrayRef(TargetFlags);
+}
+
 bool RISCVInstrInfo::isFunctionSafeToOutlineFrom(
     MachineFunction &MF, bool OutlineFromLinkOnceODRs) const {
   const Function &F = MF.getFunction();

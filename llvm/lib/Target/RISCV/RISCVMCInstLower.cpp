@@ -31,7 +31,7 @@ static MCOperand lowerSymbolOperand(const MachineOperand &MO, MCSymbol *Sym,
   MCContext &Ctx = AP.OutContext;
   RISCVMCExpr::VariantKind Kind;
 
-  switch (MO.getTargetFlags()) {
+  switch (MO.getTargetFlags() & ~RISCVII::MO_JUMP_TABLE_BASE) {
   default:
     llvm_unreachable("Unknown target flag on GV operand");
   case RISCVII::MO_None:
@@ -123,9 +123,16 @@ bool llvm::LowerRISCVMachineOperandToMCOperand(const MachineOperand &MO,
   case MachineOperand::MO_MachineBasicBlock:
     MCOp = lowerSymbolOperand(MO, MO.getMBB()->getSymbol(), AP);
     break;
-  case MachineOperand::MO_GlobalAddress:
-    MCOp = lowerSymbolOperand(MO, AP.getSymbolPreferLocal(*MO.getGlobal()), AP);
+  case MachineOperand::MO_GlobalAddress: {
+    const GlobalValue *GV = MO.getGlobal();
+    MCSymbol *Sym;
+    if (MO.getTargetFlags() & RISCVII::MO_JUMP_TABLE_BASE)
+      Sym = AP.getSymbolWithGlobalValueBase(GV, "$jump_table_base");
+    else
+      Sym = AP.getSymbolPreferLocal(*GV);
+    MCOp = lowerSymbolOperand(MO, Sym, AP);
     break;
+  }
   case MachineOperand::MO_BlockAddress:
     MCOp = lowerSymbolOperand(
         MO, AP.GetBlockAddressSymbol(MO.getBlockAddress()), AP);
