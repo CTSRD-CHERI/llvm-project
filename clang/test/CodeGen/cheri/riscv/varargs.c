@@ -137,11 +137,11 @@ struct S {
 // CHECK-IL32PC64-NEXT:    [[TMP6:%.*]] = call i8 addrspace(200)* @llvm.cheri.cap.address.set.i32(i8 addrspace(200)* [[ARGP_CUR2]], i32 [[TMP5]])
 // CHECK-IL32PC64-NEXT:    [[ARGP_NEXT3:%.*]] = getelementptr inbounds i8, i8 addrspace(200)* [[TMP6]], i32 8
 // CHECK-IL32PC64-NEXT:    store i8 addrspace(200)* [[ARGP_NEXT3]], i8 addrspace(200)* addrspace(200)* [[AP]], align 8
-// CHECK-IL32PC64-NEXT:    [[TMP7:%.*]] = bitcast i8 addrspace(200)* [[TMP6]] to %struct.S* addrspace(200)*
-// CHECK-IL32PC64-NEXT:    [[TMP8:%.*]] = load %struct.S*, %struct.S* addrspace(200)* [[TMP7]], align 8
+// CHECK-IL32PC64-NEXT:    [[TMP7:%.*]] = bitcast i8 addrspace(200)* [[TMP6]] to [[STRUCT_S]] addrspace(200)* addrspace(200)*
+// CHECK-IL32PC64-NEXT:    [[TMP8:%.*]] = load [[STRUCT_S]] addrspace(200)*, [[STRUCT_S]] addrspace(200)* addrspace(200)* [[TMP7]], align 8
 // CHECK-IL32PC64-NEXT:    [[TMP9:%.*]] = bitcast [[STRUCT_S]] addrspace(200)* [[AGG_RESULT]] to i8 addrspace(200)*
-// CHECK-IL32PC64-NEXT:    [[TMP10:%.*]] = bitcast %struct.S* [[TMP8]] to i8*
-// CHECK-IL32PC64-NEXT:    call void @llvm.memcpy.p200i8.p0i8.i32(i8 addrspace(200)* align 1 [[TMP9]], i8* align 1 [[TMP10]], i32 64, i1 false)
+// CHECK-IL32PC64-NEXT:    [[TMP10:%.*]] = bitcast [[STRUCT_S]] addrspace(200)* [[TMP8]] to i8 addrspace(200)*
+// CHECK-IL32PC64-NEXT:    call void @llvm.memcpy.p200i8.p200i8.i32(i8 addrspace(200)* align 1 [[TMP9]], i8 addrspace(200)* align 1 [[TMP10]], i32 64, i1 false)
 // CHECK-IL32PC64-NEXT:    ret void
 //
 // CHECK-L64PC128-LABEL: @callee_S(
@@ -173,11 +173,11 @@ struct S {
 // CHECK-L64PC128-NEXT:    [[TMP6:%.*]] = call i8 addrspace(200)* @llvm.cheri.cap.address.set.i64(i8 addrspace(200)* [[ARGP_CUR2]], i64 [[TMP5]])
 // CHECK-L64PC128-NEXT:    [[ARGP_NEXT3:%.*]] = getelementptr inbounds i8, i8 addrspace(200)* [[TMP6]], i64 16
 // CHECK-L64PC128-NEXT:    store i8 addrspace(200)* [[ARGP_NEXT3]], i8 addrspace(200)* addrspace(200)* [[AP]], align 16
-// CHECK-L64PC128-NEXT:    [[TMP7:%.*]] = bitcast i8 addrspace(200)* [[TMP6]] to %struct.S* addrspace(200)*
-// CHECK-L64PC128-NEXT:    [[TMP8:%.*]] = load %struct.S*, %struct.S* addrspace(200)* [[TMP7]], align 16
+// CHECK-L64PC128-NEXT:    [[TMP7:%.*]] = bitcast i8 addrspace(200)* [[TMP6]] to [[STRUCT_S]] addrspace(200)* addrspace(200)*
+// CHECK-L64PC128-NEXT:    [[TMP8:%.*]] = load [[STRUCT_S]] addrspace(200)*, [[STRUCT_S]] addrspace(200)* addrspace(200)* [[TMP7]], align 16
 // CHECK-L64PC128-NEXT:    [[TMP9:%.*]] = bitcast [[STRUCT_S]] addrspace(200)* [[AGG_RESULT]] to i8 addrspace(200)*
-// CHECK-L64PC128-NEXT:    [[TMP10:%.*]] = bitcast %struct.S* [[TMP8]] to i8*
-// CHECK-L64PC128-NEXT:    call void @llvm.memcpy.p200i8.p0i8.i64(i8 addrspace(200)* align 1 [[TMP9]], i8* align 1 [[TMP10]], i64 64, i1 false)
+// CHECK-L64PC128-NEXT:    [[TMP10:%.*]] = bitcast [[STRUCT_S]] addrspace(200)* [[TMP8]] to i8 addrspace(200)*
+// CHECK-L64PC128-NEXT:    call void @llvm.memcpy.p200i8.p200i8.i64(i8 addrspace(200)* align 1 [[TMP9]], i8 addrspace(200)* align 1 [[TMP10]], i64 64, i1 false)
 // CHECK-L64PC128-NEXT:    ret void
 //
 struct S callee_S(int n, ...) {
