@@ -155,6 +155,7 @@ struct CodeGenIntrinsic {
     NoCapture,
     NoAlias,
     NoUndef,
+    NonNull,
     Returned,
     ReadOnly,
     WriteOnly,
