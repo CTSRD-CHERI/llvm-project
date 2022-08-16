@@ -93,6 +93,9 @@ exit:
   ret void
 }
 
+; UTC_ARGS: --disable
+; UTC_ARGS: --enable
+
 define void @above_threshold_all(i32 %in, i32 addrspace(200)* %out) nounwind {
 ; CHECK-LABEL: above_threshold_all:
 ; CHECK:       # %bb.0: # %entry
@@ -167,3 +170,6 @@ bb6:
 exit:
   ret void
 }
+
+; UTC_ARGS: --disable
+; UTC_ARGS: --enable
