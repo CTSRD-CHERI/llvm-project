@@ -111,7 +111,7 @@ Register MipsFunctionInfo::getCapEntryPointReg(MachineFunction &MF) {
   // daddiu $1, $zero, %pcrel_lo(.Lentry_point+4) # +4 since the getpcc is on the previous line
   // cincoffset $c2, $c1, $1
   // XXX: ugly const_cast to ensure the label is emitted
-  MBB.setHasAddressTaken();
+  MBB.setMachineBlockAddressTaken();
   auto BA = BlockAddress::get(const_cast<BasicBlock *>(MBB.getBasicBlock()));
   auto MBBSym = MachineOperand::CreateBA(BA, 0, 0);
   // XXX: we could do this in two instructions instead of three since we
