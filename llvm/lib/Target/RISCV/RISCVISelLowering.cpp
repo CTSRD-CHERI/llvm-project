@@ -7067,20 +7067,26 @@ static MachineBasicBlock *emitReadCycleWidePseudo(MachineInstr &MI,
 
 static MachineBasicBlock *emitSplitF64Pseudo(MachineInstr &MI,
                                              MachineBasicBlock *BB) {
-  assert(MI.getOpcode() == RISCV::SplitF64Pseudo && "Unexpected instruction");
+  assert((MI.getOpcode() == RISCV::SplitF64Pseudo ||
+          MI.getOpcode() == RISCV::SplitStoreF64Pseudo ||
+          MI.getOpcode() == RISCV::CheriSplitStoreF64Pseudo) &&
+         "Unexpected instruction");
 
   MachineFunction &MF = *BB->getParent();
   DebugLoc DL = MI.getDebugLoc();
   const TargetInstrInfo &TII = *MF.getSubtarget().getInstrInfo();
   const TargetRegisterInfo *RI = MF.getSubtarget().getRegisterInfo();
   Register LoReg = MI.getOperand(0).getReg();
+  bool LoRegIsDead = MI.getOperand(0).isDead();
   Register HiReg = MI.getOperand(1).getReg();
-  Register SrcReg = MI.getOperand(2).getReg();
+  bool HiRegIsDead = MI.getOperand(1).isDead();
+  unsigned SrcOpNo = MI.getOpcode() == RISCV::SplitF64Pseudo ? 2 : 3;
+  Register SrcReg = MI.getOperand(SrcOpNo).getReg();
   const TargetRegisterClass *SrcRC = &RISCV::FPR64RegClass;
   int FI = MF.getInfo<RISCVMachineFunctionInfo>()->getMoveF64FrameIndex(MF);
 
-  TII.storeRegToStackSlot(*BB, MI, SrcReg, MI.getOperand(2).isKill(), FI, SrcRC,
-                          RI);
+  TII.storeRegToStackSlot(*BB, MI, SrcReg, MI.getOperand(SrcOpNo).isKill(),
+                          FI, SrcRC, RI);
   MachinePointerInfo MPI = MachinePointerInfo::getFixedStack(MF, FI);
   MachineMemOperand *MMOLo =
       MF.getMachineMemOperand(MPI, MachineMemOperand::MOLoad, 4, Align(8));
@@ -7097,6 +7103,31 @@ static MachineBasicBlock *emitSplitF64Pseudo(MachineInstr &MI,
       .addFrameIndex(FI)
       .addImm(4)
       .addMemOperand(MMOHi);
+
+  if (MI.getOpcode() == RISCV::SplitStoreF64Pseudo ||
+      MI.getOpcode() == RISCV::CheriSplitStoreF64Pseudo) {
+    unsigned StoreOpcode, AddOpcode;
+    if (MI.getOpcode() == RISCV::SplitStoreF64Pseudo) {
+      StoreOpcode = RISCV::SW_DDC;
+      AddOpcode = RISCV::ADDI;
+    } else {
+      StoreOpcode = RISCV::SW_CAP;
+      AddOpcode = RISCV::CIncOffsetImm;
+    }
+
+    Register TmpReg = MI.getOperand(2).getReg();
+    Register DstReg = MI.getOperand(4).getReg();
+    BuildMI(*BB, MI, DL, TII.get(StoreOpcode))
+        .addReg(LoReg, getKillRegState(LoRegIsDead))
+        .addReg(DstReg);
+    BuildMI(*BB, MI, DL, TII.get(AddOpcode), TmpReg)
+        .addReg(DstReg)
+        .addImm(4);
+    BuildMI(*BB, MI, DL, TII.get(StoreOpcode))
+        .addReg(HiReg, getKillRegState(HiRegIsDead))
+        .addReg(TmpReg);
+  }
+
   MI.eraseFromParent(); // The pseudo instruction is gone now.
   return BB;
 }
@@ -7297,6 +7328,8 @@ RISCVTargetLowering::EmitInstrWithCustomInserter(MachineInstr &MI,
   case RISCV::BuildPairF64Pseudo:
     return emitBuildPairF64Pseudo(MI, BB);
   case RISCV::SplitF64Pseudo:
+  case RISCV::SplitStoreF64Pseudo:
+  case RISCV::CheriSplitStoreF64Pseudo:
     return emitSplitF64Pseudo(MI, BB);
   }
 }
