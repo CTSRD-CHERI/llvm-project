@@ -324,10 +324,6 @@ NarrowingKind StandardConversionSequence::getNarrowingKind(
   if (auto *ET = ToType->getAs<EnumType>())
     ToType = ET->getDecl()->getIntegerType();
 
-  // Converting from capability to pointer/integral is always narrowing
-  if (FromType->isCHERICapabilityType(Ctx) && !ToType->isCHERICapabilityType(Ctx))
-    return NK_Type_Narrowing;
-
   switch (Second) {
   // 'bool' is an integral type; dispatch to the right place to handle it.
   case ICK_Boolean_Conversion:
@@ -429,12 +425,15 @@ NarrowingKind StandardConversionSequence::getNarrowingKind(
     assert(ToType->isIntegralOrUnscopedEnumerationType());
     const bool FromSigned = FromType->isSignedIntegerOrEnumerationType();
     const unsigned FromWidth = Ctx.getIntWidth(FromType);
+    const bool FromCap = FromType->isCHERICapabilityType(Ctx);
     const bool ToSigned = ToType->isSignedIntegerOrEnumerationType();
     const unsigned ToWidth = Ctx.getIntWidth(ToType);
+    const bool ToCap = ToType->isCHERICapabilityType(Ctx);
 
     if (FromWidth > ToWidth ||
         (FromWidth == ToWidth && FromSigned != ToSigned) ||
-        (FromSigned && !ToSigned)) {
+        (FromSigned && !ToSigned) ||
+        (FromCap && !ToCap)) {
       // Not all values of FromType can be represented in ToType.
       const Expr *Initializer = IgnoreNarrowingConversion(Ctx, Converted);
 

@@ -38,8 +38,8 @@ void cast_vaddr() {
   v = (ptraddr_t)a;
   v = ptraddr_t(a);
   v = ptraddr_t{a};
-  // hybrid-error@-1 {{type 'void * __capability' cannot be narrowed to 'ptraddr_t' (aka 'unsigned long') in initializer list}}
-  // purecap-error@-2 {{type 'void *' cannot be narrowed to 'ptraddr_t' (aka 'unsigned long') in initializer list}}
+  // hybrid-error@-1 {{cannot initialize a value of type 'ptraddr_t' (aka 'unsigned long') with an lvalue of type 'void * __capability'}}
+  // purecap-error@-2 {{cannot initialize a value of type 'ptraddr_t' (aka 'unsigned long') with an lvalue of type 'void *'}}
 }
 
 void cast_vaddr2() {
@@ -74,8 +74,8 @@ void cast_long() {
   // hybrid-warning@-1 {{cast from capability type 'void * __capability' to non-capability, non-address type 'long' is most likely an error}}
   // purecap-warning@-2 {{cast from capability type 'void *' to non-capability, non-address type 'long' is most likely an error}}
   v = long{a};
-  // hybrid-error@-1 {{type 'void * __capability' cannot be narrowed to 'long' in initializer list}}
-  // purecap-error@-2 {{type 'void *' cannot be narrowed to 'long' in initializer list}}
+  // hybrid-error@-1 {{cannot initialize a value of type 'long' with an lvalue of type 'void * __capability'}}
+  // purecap-error@-2 {{cannot initialize a value of type 'long' with an lvalue of type 'void *'}}
 }
 
 // Should cause narrowing errors
@@ -87,8 +87,8 @@ void cast_int() {
   v = (int)a; // expected-error {{cast from capability to smaller type 'int' loses information}}
   v = int(a); // expected-error {{cast from capability to smaller type 'int' loses information}}
   v = int{a};
-  // hybrid-error@-1 {{type 'void * __capability' cannot be narrowed to 'int' in initializer list}}
-  // purecap-error@-2 {{type 'void *' cannot be narrowed to 'int' in initializer list}}
+  // hybrid-error@-1 {{cannot initialize a value of type 'int' with an lvalue of type 'void * __capability'}}
+  // purecap-error@-2 {{cannot initialize a value of type 'int' with an lvalue of type 'void *'}}
 }
 
 void cast_uintcap() {
@@ -182,13 +182,13 @@ void check_uintcap_to_int() {
   int i = cap;
   i = (int)cap;
   i = int(cap);
-  i = int{cap}; // expected-error {{type 'unsigned __intcap' cannot be narrowed to 'int' in initializer list}} \
-                 // expected-note {{insert an explicit cast to silence this issue}}
+  i = int{cap}; // expected-error {{non-constant-expression cannot be narrowed from type 'unsigned __intcap' to 'int' in initializer list}} \
+                // expected-note {{insert an explicit cast to silence this issue}}
   i = static_cast<int>(cap);
   long l = cap;
   l = (long)cap;
   l = long(cap);
-  l = long{cap}; // expected-error {{type 'unsigned __intcap' cannot be narrowed to 'long' in initializer list}} \
+  l = long{cap}; // expected-error {{non-constant-expression cannot be narrowed from type 'unsigned __intcap' to 'long' in initializer list}} \
                  // expected-note {{insert an explicit cast to silence this issue}}
   l = static_cast<long>(cap);
 
@@ -214,7 +214,7 @@ void cast_ptr() {
   using voidp = void *;
   DO_ALL_CASTS(voidp, a);
   // hybrid-error@-1 3{{cast from capability type 'void * __capability' to non-capability type 'voidp' (aka 'void *') is most likely an error}}
-  // hybrid-error@-2 {{type 'void * __capability' cannot be narrowed to 'voidp' (aka 'void *') in initializer list}}
+  // hybrid-error@-2 {{converting capability type 'void * __capability' to non-capability type 'voidp' (aka 'void *') without an explicit cast; if this is intended use __cheri_fromcap}}
   // hybrid-error@-3 {{const_cast from 'void * __capability' to 'voidp' (aka 'void *') is not allowed}}
   // hybrid-error@-4 {{static_cast from 'void * __capability' to 'voidp' (aka 'void *') changes capability qualifier}}
   // expected-error@-5 {{'void' is not a class}}
@@ -222,7 +222,7 @@ void cast_ptr() {
   using wordp = word *;
   DO_ALL_CASTS(wordp, a);
   // hybrid-error@-1 3 {{cast from capability type 'void * __capability' to non-capability type 'wordp' (aka 'unsigned __intcap *') is most likely an error}}
-  // hybrid-error@-2 {{type 'void * __capability' cannot be narrowed to 'wordp' (aka 'unsigned __intcap *') in initializer list}}
+  // hybrid-error@-2 {{cannot implicitly or explicitly convert non-capability type 'void * __capability' to unrelated capability type 'wordp' (aka 'unsigned __intcap *')}}
   // hybrid-error@-3 {{const_cast from 'void * __capability' to 'wordp' (aka 'unsigned __intcap *') is not allowed}}
   // purecap-error@-4 {{const_cast from 'void *' to 'wordp' (aka 'unsigned __intcap *') is not allowed}}
   // purecap-error@-5 {{cannot initialize a value of type 'wordp' (aka 'unsigned __intcap *') with an lvalue of type 'void *'}}
@@ -233,7 +233,7 @@ void cast_ptr() {
   test_class *__capability b = nullptr;
   DO_ALL_CASTS(test_class_ptr, b);
   // hybrid-error@-1 3 {{cast from capability type 'test_class * __capability' to non-capability type 'test_class_ptr' (aka 'test_class *') is most likely an error}}
-  // hybrid-error@-2 {{test_class * __capability' cannot be narrowed to 'test_class_ptr' (aka 'test_class *') in initializer list}}
+  // hybrid-error@-2 {{converting capability type 'test_class * __capability' to non-capability type 'test_class_ptr' (aka 'test_class *') without an explicit cast; if this is intended use __cheri_fromcap}}
   // hybrid-error@-3 {{static_cast from 'test_class * __capability' to 'test_class_ptr' (aka 'test_class *') changes capability qualifier}}
   // hybrid-error@-4 {{const_cast from 'test_class * __capability' to 'test_class_ptr' (aka 'test_class *') is not allowed}}
   // hybrid-error@-5 {{dynamic_cast from 'test_class * __capability' to 'test_class *' changes capability qualifier}}

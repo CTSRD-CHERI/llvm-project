@@ -475,9 +475,6 @@ class InitListChecker {
   void CheckEmptyInitializable(const InitializedEntity &Entity,
                                SourceLocation Loc);
 
-  bool isCapNarrowing(Expr* expr, QualType DeclType, unsigned *Index,
-                      unsigned *StructuredIndex);
-
 public:
   InitListChecker(Sema &S, const InitializedEntity &Entity, InitListExpr *IL,
                   QualType &T, bool VerifyOnly, bool TreatUnavailableAsInvalid,
@@ -1549,30 +1546,6 @@ void InitListChecker::CheckComplexType(const InitializedEntity &Entity,
   }
 }
 
-bool InitListChecker::isCapNarrowing(Expr* expr, QualType DeclType,
-                                     unsigned *Index, unsigned *StructuredIndex) {
-  // XXXAR: expr->getType() will return int for int&!
-  QualType ExprType = expr->getRealReferenceType(SemaRef.Context);
-  if (ExprType->isCHERICapabilityType(SemaRef.Context) &&
-     !DeclType->isCHERICapabilityType(SemaRef.Context)) {
-    // Initializing a T with a T& should be fine.
-    if (ExprType->isReferenceType() && !DeclType->isReferenceType())
-      return false;
-    // For uintcap_t -> integer conversion fall back to the default diagnostics
-    if (ExprType->isIntCapType() && DeclType->isIntegerType())
-      return false;
-    // TODO: allow for nullptr, etc.
-    if (!VerifyOnly) {
-      SemaRef.Diag(expr->getBeginLoc(), diag::ext_init_list_type_narrowing)
-          << ExprType << DeclType << expr->getSourceRange();
-    }
-    ++(*Index);
-    ++(*StructuredIndex);
-    return true;
-  }
-  return false;
-}
-
 void InitListChecker::CheckScalarType(const InitializedEntity &Entity,
                                       InitListExpr *IList, QualType DeclType,
                                       unsigned &Index,
@@ -1600,10 +1573,6 @@ void InitListChecker::CheckScalarType(const InitializedEntity &Entity,
   }
 
   Expr *expr = IList->getInit(Index);
-  if (isCapNarrowing(expr, DeclType, &Index, &StructuredIndex)) {
-    hadError = true;
-    return;
-  }
   if (InitListExpr *SubIList = dyn_cast<InitListExpr>(expr)) {
     // FIXME: This is invalid, and accepting it causes overload resolution
     // to pick the wrong overload in some corner cases.
@@ -1702,12 +1671,6 @@ void InitListChecker::CheckReferenceType(const InitializedEntity &Entity,
     hadError = true;
 
   expr = Result.getAs<Expr>();
-  if (expr) {
-    if (isCapNarrowing(expr, DeclType, &Index, &StructuredIndex)) {
-      hadError = true;
-      return;
-    }
-  }
   // FIXME: Why are we updating the syntactic init list?
   if (!VerifyOnly && expr)
     IList->setInit(Index, expr);
