@@ -1773,7 +1773,8 @@ CharUnits ASTContext::getDeclAlign(const Decl *D, bool ForAlignof) const {
       if (ForAlignof)
         T = RT->getPointeeType();
       else
-        T = getPointerType(RT->getPointeeType());
+        T = getPointerType(RT->getPointeeType(),
+                           RT->getPointerInterpretation());
     }
     QualType BaseT = getBaseElementType(T);
     if (T->isFunctionType())
