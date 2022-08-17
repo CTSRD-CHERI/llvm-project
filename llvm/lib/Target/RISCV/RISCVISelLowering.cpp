@@ -4243,8 +4243,8 @@ SDValue RISCVTargetLowering::lowerSELECT(SDValue Op, SelectionDAG &DAG) const {
   // (select (setcc lhs, rhs, cc), truev, falsev)
   // -> (riscvisd::select_cc lhs, rhs, cc, truev, falsev)
   if (CondV.getOpcode() == ISD::SETCC &&
-          CondV.getOperand(0).getSimpleValueType() == XLenVT ||
-      CondV.getOperand(0).getSimpleValueType().isFatPointer()) {
+      (CondV.getOperand(0).getSimpleValueType() == XLenVT ||
+       CondV.getOperand(0).getSimpleValueType().isFatPointer())) {
     SDValue LHS = CondV.getOperand(0);
     SDValue RHS = CondV.getOperand(1);
     ISD::CondCode CCVal = cast<CondCodeSDNode>(CondV.getOperand(2))->get();
