@@ -59,25 +59,6 @@ char *__capability global_cap_data_tocap = (__cheri_tocap char *__capability) & 
 // AST-NEXT:  CStyleCastExpr {{.+}} 'char * __capability' <PointerToCHERICapability>
 // AST-NEXT:  UnaryOperator {{.+}} 'char *' prefix '&' cannot overflow
 // AST-NEXT:  DeclRefExpr {{.+}} 'char' lvalue Var {{.+}} 'extern_data' 'char'
-char *__capability global_cap_data_addr_uintcap = (char *__capability)(__cheri_addr unsigned __intcap)&extern_data;
-// FIXME: The following variable should be null-derived in hybrid mode, but that needs some __cheri_addr AST changes
-// FIXME-HYBRID-NEXT: @global_cap_data_addr_uintcap = global i8 addrspace(200)* getelementptr (i8, i8 addrspace(200)* null, i64 ptrtoint (i8* @extern_data to i64)), align 16
-// HYBRID-NEXT: @global_cap_data_addr_uintcap = global i8 addrspace(200)* addrspacecast (i8* @extern_data to i8 addrspace(200)*), align 16
-// PURECAP-NEXT: @global_cap_data_addr_uintcap = addrspace(200) global i8 addrspace(200)* getelementptr (i8, i8 addrspace(200)* null, i64 ptrtoint (i8 addrspace(200)* @extern_data to i64)), align 16
-// AST-LABEL: VarDecl {{.+}} global_cap_data_addr_uintcap 'char * __capability' cinit
-// AST-NEXT:  CStyleCastExpr {{.+}} 'char * __capability' <IntegralToPointer>
-// AST-NEXT:  CStyleCastExpr {{.+}} 'unsigned __intcap' <PointerToIntegral>
-// AST-NEXT:  UnaryOperator {{.+}} 'char *' prefix '&' cannot overflow
-// AST-NEXT:  DeclRefExpr {{.+}} 'char' lvalue Var {{.+}} 'extern_data' 'char'
-char *__capability global_cap_data_addr_uintcap_src_is_cap = (char *__capability)(__cheri_addr unsigned __intcap)(char *__capability) & extern_data;
-// HYBRID-NEXT: @global_cap_data_addr_uintcap_src_is_cap = global i8 addrspace(200)* getelementptr (i8, i8 addrspace(200)* null, i64 ptrtoint (i8* @extern_data to i64)), align 16
-// PURECAP-NEXT: @global_cap_data_addr_uintcap_src_is_cap = addrspace(200) global i8 addrspace(200)* getelementptr (i8, i8 addrspace(200)* null, i64 ptrtoint (i8 addrspace(200)* @extern_data to i64)), align 16
-// AST-LABEL: VarDecl {{.+}} global_cap_data_addr_uintcap_src_is_cap 'char * __capability' cinit
-// AST-NEXT:  CStyleCastExpr {{.+}} 'char * __capability' <IntegralToPointer>
-// AST-NEXT:  CStyleCastExpr {{.+}} 'unsigned __intcap' <CHERICapabilityToAddress>
-// AST-NEXT:  CStyleCastExpr {{.+}} 'char * __capability' <PointerToCHERICapability>
-// AST-NEXT:  UnaryOperator {{.+}} 'char *' prefix '&' cannot overflow
-// AST-NEXT:  DeclRefExpr {{.+}} 'char' lvalue Var {{.+}} 'extern_data' 'char'
 /// The following two should result in an addrspacecast in hybrid mode:
 char *__capability global_cap_data_via_uintcap_explicit = (char *__capability)(unsigned __intcap)(char *__capability) & extern_data;
 // HYBRID-NEXT: @global_cap_data_via_uintcap_explicit = global i8 addrspace(200)* addrspacecast (i8* @extern_data to i8 addrspace(200)*), align 16
@@ -135,14 +116,6 @@ void (*__capability global_fncap_tocap)(void) = (__cheri_tocap void (*__capabili
 // AST-NEXT:  CStyleCastExpr {{.+}} 'void (* __capability)(void)' <PointerToCHERICapability>
 // AST-NEXT:  UnaryOperator {{.+}} 'void (*)(void)' prefix '&' cannot overflow
 // AST-NEXT:  DeclRefExpr {{.+}} 'void (void)' Function {{.+}} 'extern_fn' 'void (void)'
-void (*__capability global_fncap_addr)(void) = (void (*__capability)(void))(__cheri_addr unsigned __intcap)&extern_fn;
-// HYBRID-NEXT: @global_fncap_addr = global void () addrspace(200)* addrspacecast (void ()* @extern_fn to void () addrspace(200)*), align 16
-// PURECAP-NEXT: @global_fncap_addr = addrspace(200) global void () addrspace(200)* bitcast (i8 addrspace(200)* getelementptr (i8, i8 addrspace(200)* null, i64 ptrtoint (void () addrspace(200)* @extern_fn to i64)) to void () addrspace(200)*), align 16
-// AST-LABEL: VarDecl {{.+}} global_fncap_addr 'void (* __capability)(void)' cinit
-// AST-NEXT:  CStyleCastExpr {{.+}} 'void (* __capability)(void)' <IntegralToPointer>
-// AST-NEXT:  CStyleCastExpr {{.+}} 'unsigned __intcap' <PointerToIntegral>
-// AST-NEXT:  UnaryOperator {{.+}} 'void (*)(void)' prefix '&' cannot overflow
-// AST-NEXT:  DeclRefExpr {{.+}} 'void (void)' Function {{.+}} 'extern_fn' 'void (void)'
 
 /// More code-generation checks here, but don't bother with the AST dump:
 
@@ -162,33 +135,17 @@ __intcap global_intcap_data_plus_two_default = (__intcap)(&extern_data + 2);
 __intcap global_intcap_data_addr_cast_long = (__cheri_addr long)&extern_data;
 // HYBRID-NEXT: @global_intcap_data_addr_cast_long = global i8 addrspace(200)* getelementptr (i8, i8 addrspace(200)* null, i64 ptrtoint (i8* @extern_data to i64)), align 16
 // PURECAP-NEXT: @global_intcap_data_addr_cast_long = addrspace(200) global i8 addrspace(200)* getelementptr (i8, i8 addrspace(200)* null, i64 ptrtoint (i8 addrspace(200)* @extern_data to i64)), align 16
-__intcap global_intcap_data_addr_cast_intcap = (__cheri_addr __intcap)&extern_data;
-// FIXME: this should be null-derived in hybrid mode
-// HYBRID-NEXT: @global_intcap_data_addr_cast_intcap = global i8 addrspace(200)* addrspacecast (i8* @extern_data to i8 addrspace(200)*), align 16
-// PURECAP-NEXT: @global_intcap_data_addr_cast_intcap = addrspace(200) global i8 addrspace(200)* getelementptr (i8, i8 addrspace(200)* null, i64 ptrtoint (i8 addrspace(200)* @extern_data to i64)), align 16
 __intcap global_intcap_data_one_past_end_addr_cast_long = (__cheri_addr long)(&extern_data + 1);
 // HYBRID-NEXT: @global_intcap_data_one_past_end_addr_cast_long = global i8 addrspace(200)* getelementptr (i8, i8 addrspace(200)* null, i64 ptrtoint (i8* getelementptr inbounds (i8, i8* @extern_data, i64 1) to i64)), align 16
 // PURECAP-NEXT: @global_intcap_data_one_past_end_addr_cast_long = addrspace(200) global i8 addrspace(200)* getelementptr (i8, i8 addrspace(200)* null, i64 ptrtoint (i8 addrspace(200)* getelementptr inbounds (i8, i8 addrspace(200)* @extern_data, i64 1) to i64)), align 16
-__intcap global_intcap_data_one_past_end_addr_cast_intcap = (__cheri_addr __intcap)(&extern_data + 1);
-// FIXME: this should be null-derived in hybrid mode
-// HYBRID-NEXT: @global_intcap_data_one_past_end_addr_cast_intcap = global i8 addrspace(200)* addrspacecast (i8* getelementptr inbounds (i8, i8* @extern_data, i64 1) to i8 addrspace(200)*), align 16
-// PURECAP-NEXT: @global_intcap_data_one_past_end_addr_cast_intcap = addrspace(200) global i8 addrspace(200)* getelementptr (i8, i8 addrspace(200)* null, i64 ptrtoint (i8 addrspace(200)* getelementptr inbounds (i8, i8 addrspace(200)* @extern_data, i64 1) to i64)), align 16
 __intcap global_intcap_data_plus_two_addr_cast_long = (__cheri_addr long)(&extern_data + 2);
 // HYBRID-NEXT: @global_intcap_data_plus_two_addr_cast_long = global i8 addrspace(200)* getelementptr (i8, i8 addrspace(200)* null, i64 ptrtoint (i8* getelementptr (i8, i8* @extern_data, i64 2) to i64)), align 16
 // PURECAP-NEXT: @global_intcap_data_plus_two_addr_cast_long = addrspace(200) global i8 addrspace(200)* getelementptr (i8, i8 addrspace(200)* null, i64 ptrtoint (i8 addrspace(200)* getelementptr (i8, i8 addrspace(200)* @extern_data, i64 2) to i64)), align 16
-__intcap global_intcap_data_plus_two_addr_cast_intcap = (__cheri_addr __intcap)(&extern_data + 2);
-// FIXME: this should be null-derived in hybrid mode
-// HYBRID-NEXT: @global_intcap_data_plus_two_addr_cast_intcap = global i8 addrspace(200)* addrspacecast (i8* getelementptr (i8, i8* @extern_data, i64 2) to i8 addrspace(200)*), align 16
-// PURECAP-NEXT: @global_intcap_data_plus_two_addr_cast_intcap = addrspace(200) global i8 addrspace(200)* getelementptr (i8, i8 addrspace(200)* null, i64 ptrtoint (i8 addrspace(200)* getelementptr (i8, i8 addrspace(200)* @extern_data, i64 2) to i64)), align 16
 
 /// Similar tests with address of function:
 __intcap global_intcap_fn = (__intcap)(&extern_fn);
 // HYBRID-NEXT: @global_intcap_fn = global i8 addrspace(200)* addrspacecast (i8* bitcast (void ()* @extern_fn to i8*) to i8 addrspace(200)*), align 16
 // PURECAP-NEXT: @global_intcap_fn = addrspace(200) global i8 addrspace(200)* bitcast (void () addrspace(200)* @extern_fn to i8 addrspace(200)*), align 16
-__intcap global_intcap_fn_cast_addr = (__cheri_addr __intcap)((char *)&extern_fn);
-// FIXME: should be null-derived in hybrid mode
-// HYBRID-NEXT: @global_intcap_fn_cast_addr = global i8 addrspace(200)* addrspacecast (i8* bitcast (void ()* @extern_fn to i8*) to i8 addrspace(200)*), align 16
-// PURECAP-NEXT: @global_intcap_fn_cast_addr = addrspace(200) global i8 addrspace(200)* getelementptr (i8, i8 addrspace(200)* null, i64 ptrtoint (void () addrspace(200)* @extern_fn to i64)), align 16
 /// This one is tagged since we are just casting via capability types:
 __intcap global_intcap_fn_cast_tocap = (__intcap)(__cheri_tocap char *__capability)((char *)&extern_fn);
 // HYBRID-NEXT: @global_intcap_fn_cast_tocap = global i8 addrspace(200)* addrspacecast (i8* bitcast (void ()* @extern_fn to i8*) to i8 addrspace(200)*), align 16
@@ -199,10 +156,6 @@ __intcap global_intcap_fn_plus_two_intcap = (__intcap)((char *)&extern_fn + 2);
 // HYBRID-NEXT: @global_intcap_fn_plus_two_intcap = global i8 addrspace(200)* addrspacecast (i8* getelementptr (i8, i8* bitcast (void ()* @extern_fn to i8*), i64 2) to i8 addrspace(200)*), align 16
 // PURECAP-NEXT: @global_intcap_fn_plus_two_intcap = addrspace(200) global i8 addrspace(200)* getelementptr (i8, i8 addrspace(200)* bitcast (void () addrspace(200)* @extern_fn to i8 addrspace(200)*), i64 2), align 16
 /// Just the address should be fine though?
-__intcap global_intcap_fn_plus_two_intcap_addr_intcap = (__cheri_addr __intcap)((char *)&extern_fn + 2);
-// FIXME: should be null-derived in hybrid
-// HYBRID-NEXT: @global_intcap_fn_plus_two_intcap_addr_intcap = global i8 addrspace(200)* addrspacecast (i8* getelementptr (i8, i8* bitcast (void ()* @extern_fn to i8*), i64 2) to i8 addrspace(200)*), align 16
-// PURECAP-NEXT: @global_intcap_fn_plus_two_intcap_addr_intcap = addrspace(200) global i8 addrspace(200)* getelementptr (i8, i8 addrspace(200)* null, i64 ptrtoint (i8 addrspace(200)* getelementptr (i8, i8 addrspace(200)* bitcast (void () addrspace(200)* @extern_fn to i8 addrspace(200)*), i64 2) to i64)), align 16
 __intcap global_intcap_fn_plus_two_intcap_addr_long = (__cheri_addr long)((char *)&extern_fn + 2);
 // HYBRID-NEXT: @global_intcap_fn_plus_two_intcap_addr_long = global i8 addrspace(200)* getelementptr (i8, i8 addrspace(200)* null, i64 ptrtoint (i8* getelementptr (i8, i8* bitcast (void ()* @extern_fn to i8*), i64 2) to i64)), align 16
 // PURECAP-NEXT: @global_intcap_fn_plus_two_intcap_addr_long = addrspace(200) global i8 addrspace(200)* getelementptr (i8, i8 addrspace(200)* null, i64 ptrtoint (i8 addrspace(200)* getelementptr (i8, i8 addrspace(200)* bitcast (void () addrspace(200)* @extern_fn to i8 addrspace(200)*), i64 2) to i64)), align 16
@@ -216,9 +169,6 @@ char *__capability global_cap_data_addr_cast_long_one_past_end = (char *__capabi
 // purecap-warning@-1{{cast from provenance-free integer type to pointer type will give pointer that can not be dereferenced}}
 // HYBRID-NEXT: @global_cap_data_addr_cast_long_one_past_end = global i8 addrspace(200)* addrspacecast (i8* getelementptr inbounds (i8, i8* @extern_data, i64 1) to i8 addrspace(200)*), align 16
 // PURECAP-NEXT: @global_cap_data_addr_cast_long_one_past_end = addrspace(200) global i8 addrspace(200)* getelementptr (i8, i8 addrspace(200)* null, i64 ptrtoint (i8 addrspace(200)* getelementptr inbounds (i8, i8 addrspace(200)* @extern_data, i64 1) to i64)), align 16
-char *__capability global_cap_data_addr_cast_intcap_one_past_end = (char *__capability)(__cheri_addr __intcap)(&extern_data + 1);
-// HYBRID-NEXT: @global_cap_data_addr_cast_intcap_one_past_end = global i8 addrspace(200)* addrspacecast (i8* getelementptr inbounds (i8, i8* @extern_data, i64 1) to i8 addrspace(200)*), align 16
-// PURECAP-NEXT: @global_cap_data_addr_cast_intcap_one_past_end = addrspace(200) global i8 addrspace(200)* getelementptr (i8, i8 addrspace(200)* null, i64 ptrtoint (i8 addrspace(200)* getelementptr inbounds (i8, i8 addrspace(200)* @extern_data, i64 1) to i64)), align 16
 char *__capability global_cap_data_tocap_one_past_end = (__cheri_tocap char *__capability)(char *)(__cheri_addr long)(&extern_data + 1);
 // purecap-warning@-1{{cast from provenance-free integer type to pointer type will give pointer that can not be dereferenced}}
 // HYBRID-NEXT: @global_cap_data_tocap_one_past_end = global i8 addrspace(200)* addrspacecast (i8* getelementptr inbounds (i8, i8* @extern_data, i64 1) to i8 addrspace(200)*), align 16

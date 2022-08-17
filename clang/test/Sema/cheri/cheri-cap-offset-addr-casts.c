@@ -35,6 +35,7 @@ void types_offset(char * __capability c) {
   long x5 = (__cheri_offset short)c; // expected-warning {{target type 'short' is smaller than the type 'long int' of the capability offset field}}
   short x6 = (__cheri_offset long)c;
   char *x7 = (__cheri_offset char*)c; // expected-error {{invalid target type 'char *' for __cheri_offset}}
+  __intcap x8 = (__cheri_offset __intcap)c; // expected-error {{invalid target type '__intcap' for __cheri_offset}}
 }
 
 void types_addr(char * __capability c) {
@@ -49,6 +50,7 @@ void types_addr(char * __capability c) {
   char *x7 = (__cheri_addr char *)c;
   // hybrid-error@-1 {{integral pointer type 'char *' is not a valid target type for __cheri_addr}}
   // purecap-error@-2 {{capability type 'char *' is not a valid target type for __cheri_addr}}
+  __intcap x8 = (__cheri_addr __intcap)c; // expected-error {{invalid target type '__intcap' for __cheri_addr}}
 }
 
 struct foo { char* x; };
