@@ -8,18 +8,18 @@ int & __capability foo();
 /// XXX: This is not true
 // CHECK-ILP32-LABEL: @_Z3barv(
 // CHECK-ILP32-NEXT:  entry:
-// CHECK-ILP32-NEXT:    [[REF:%.*]] = alloca i32 addrspace(200)*, align 4
+// CHECK-ILP32-NEXT:    [[REF:%.*]] = alloca i32 addrspace(200)*, align 8
 // CHECK-ILP32-NEXT:    [[CALL:%.*]] = call nonnull align 4 dereferenceable(4) i32 addrspace(200)* @_Z3foov()
-// CHECK-ILP32-NEXT:    store i32 addrspace(200)* [[CALL]], i32 addrspace(200)** [[REF]], align 4
-// CHECK-ILP32-NEXT:    [[TMP0:%.*]] = load i32 addrspace(200)*, i32 addrspace(200)** [[REF]], align 4
+// CHECK-ILP32-NEXT:    store i32 addrspace(200)* [[CALL]], i32 addrspace(200)** [[REF]], align 8
+// CHECK-ILP32-NEXT:    [[TMP0:%.*]] = load i32 addrspace(200)*, i32 addrspace(200)** [[REF]], align 8
 // CHECK-ILP32-NEXT:    ret i32 addrspace(200)* [[TMP0]]
 //
 // CHECK-LP64-LABEL: @_Z3barv(
 // CHECK-LP64-NEXT:  entry:
-// CHECK-LP64-NEXT:    [[REF:%.*]] = alloca i32 addrspace(200)*, align 8
+// CHECK-LP64-NEXT:    [[REF:%.*]] = alloca i32 addrspace(200)*, align 16
 // CHECK-LP64-NEXT:    [[CALL:%.*]] = call nonnull align 4 dereferenceable(4) i32 addrspace(200)* @_Z3foov()
-// CHECK-LP64-NEXT:    store i32 addrspace(200)* [[CALL]], i32 addrspace(200)** [[REF]], align 8
-// CHECK-LP64-NEXT:    [[TMP0:%.*]] = load i32 addrspace(200)*, i32 addrspace(200)** [[REF]], align 8
+// CHECK-LP64-NEXT:    store i32 addrspace(200)* [[CALL]], i32 addrspace(200)** [[REF]], align 16
+// CHECK-LP64-NEXT:    [[TMP0:%.*]] = load i32 addrspace(200)*, i32 addrspace(200)** [[REF]], align 16
 // CHECK-LP64-NEXT:    ret i32 addrspace(200)* [[TMP0]]
 //
 int & __capability bar() {
