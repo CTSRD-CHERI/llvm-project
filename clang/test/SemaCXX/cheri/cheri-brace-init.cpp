@@ -13,14 +13,14 @@ struct test {
 
 void test_capptr_to_int(void* __capability a) {
   ptraddr_t v{a};
-  // hybrid-error@-1 {{type 'void * __capability' cannot be narrowed to 'ptraddr_t' (aka 'unsigned long') in initializer list}}
-  // purecap-error@-2 {{type 'void *' cannot be narrowed to 'ptraddr_t' (aka 'unsigned long') in initializer list}}
+  // hybrid-error@-1 {{cannot initialize a variable of type 'ptraddr_t' (aka 'unsigned long') with an lvalue of type 'void * __capability'}}
+  // purecap-error@-2 {{cannot initialize a variable of type 'ptraddr_t' (aka 'unsigned long') with an lvalue of type 'void *'}}
   v = ptraddr_t{a};
-  // hybrid-error@-1 {{type 'void * __capability' cannot be narrowed to 'ptraddr_t' (aka 'unsigned long') in initializer list}}
-  // purecap-error@-2 {{type 'void *' cannot be narrowed to 'ptraddr_t' (aka 'unsigned long') in initializer list}}
+  // hybrid-error@-1 {{cannot initialize a value of type 'ptraddr_t' (aka 'unsigned long') with an lvalue of type 'void * __capability'}}
+  // purecap-error@-2 {{cannot initialize a value of type 'ptraddr_t' (aka 'unsigned long') with an lvalue of type 'void *'}}
   ptraddr_t v2 = 0; v2 = {a};
-  // hybrid-error@-1 {{type 'void * __capability' cannot be narrowed to 'ptraddr_t' (aka 'unsigned long') in initializer list}}
-  // purecap-error@-2 {{type 'void *' cannot be narrowed to 'ptraddr_t' (aka 'unsigned long') in initializer list}}
+  // hybrid-error@-1 {{cannot initialize a value of type 'ptraddr_t' (aka 'unsigned long') with an lvalue of type 'void * __capability'}}
+  // purecap-error@-2 {{cannot initialize a value of type 'ptraddr_t' (aka 'unsigned long') with an lvalue of type 'void *'}}
 
   // NB: Compound literals are a GNU C++ extension so we need a single word alias
   using __uintcap = unsigned __intcap;
@@ -45,46 +45,46 @@ void test_capptr_to_int(void* __capability a) {
   // purecap-error@-2 {{cannot initialize a value of type '__intcap' with an lvalue of type 'void *'}}
 
   long l{a};
-  // hybrid-error@-1 {{type 'void * __capability' cannot be narrowed to 'long' in initializer list}}
-  // purecap-error@-2 {{type 'void *' cannot be narrowed to 'long' in initializer list}}
+  // hybrid-error@-1 {{cannot initialize a variable of type 'long' with an lvalue of type 'void * __capability'}}
+  // purecap-error@-2 {{cannot initialize a variable of type 'long' with an lvalue of type 'void *'}}
   l = long{a};
-  // hybrid-error@-1 {{type 'void * __capability' cannot be narrowed to 'long' in initializer list}}
-  // purecap-error@-2 {{type 'void *' cannot be narrowed to 'long' in initializer list}}
+  // hybrid-error@-1 {{cannot initialize a value of type 'long' with an lvalue of type 'void * __capability'}}
+  // purecap-error@-2 {{cannot initialize a value of type 'long' with an lvalue of type 'void *'}}
   long l2 = 0; l2 = {a};
-  // hybrid-error@-1 {{type 'void * __capability' cannot be narrowed to 'long' in initializer list}}
-  // purecap-error@-2 {{type 'void *' cannot be narrowed to 'long' in initializer list}}
+  // hybrid-error@-1 {{cannot initialize a value of type 'long' with an lvalue of type 'void * __capability'}}
+  // purecap-error@-2 {{cannot initialize a value of type 'long' with an lvalue of type 'void *'}}
 
   int i{a};
-  // hybrid-error@-1 {{type 'void * __capability' cannot be narrowed to 'int' in initializer list}}
-  // purecap-error@-2 {{type 'void *' cannot be narrowed to 'int' in initializer list}}
+  // hybrid-error@-1 {{cannot initialize a variable of type 'int' with an lvalue of type 'void * __capability'}}
+  // purecap-error@-2 {{cannot initialize a variable of type 'int' with an lvalue of type 'void *'}}
   i = int{a};
-  // hybrid-error@-1 {{type 'void * __capability' cannot be narrowed to 'int' in initializer list}}
-  // purecap-error@-2 {{type 'void *' cannot be narrowed to 'int' in initializer list}}
+  // hybrid-error@-1 {{cannot initialize a value of type 'int' with an lvalue of type 'void * __capability'}}
+  // purecap-error@-2 {{cannot initialize a value of type 'int' with an lvalue of type 'void *'}}
   int i2 = 0; i2 = {a};
-  // hybrid-error@-1 {{type 'void * __capability' cannot be narrowed to 'int' in initializer list}}
-  // purecap-error@-2 {{type 'void *' cannot be narrowed to 'int' in initializer list}}
+  // hybrid-error@-1 {{cannot initialize a value of type 'int' with an lvalue of type 'void * __capability'}}
+  // purecap-error@-2 {{cannot initialize a value of type 'int' with an lvalue of type 'void *'}}
 }
 
 void test_uintcap_to_int(unsigned __intcap a) {
-  ptraddr_t v{a}; // expected-error {{'unsigned __intcap' cannot be narrowed to 'ptraddr_t'}} \
+  ptraddr_t v{a}; // expected-error {{non-constant-expression cannot be narrowed from type 'unsigned __intcap' to 'ptraddr_t' (aka 'unsigned long') in initializer list}} \
                 // expected-note {{insert an explicit cast to silence this issue}}
-  v = ptraddr_t{a}; // expected-error {{'unsigned __intcap' cannot be narrowed to 'ptraddr_t'}} \
+  v = ptraddr_t{a}; // expected-error {{non-constant-expression cannot be narrowed from type 'unsigned __intcap' to 'ptraddr_t' (aka 'unsigned long') in initializer list}} \
                   // expected-note {{insert an explicit cast to silence this issue}}
-  ptraddr_t v2 = 0; v2 = {a}; // expected-error {{'unsigned __intcap' cannot be narrowed to 'ptraddr_t'}} \
+  ptraddr_t v2 = 0; v2 = {a}; // expected-error {{non-constant-expression cannot be narrowed from type 'unsigned __intcap' to 'ptraddr_t' (aka 'unsigned long') in initializer list}} \
                             // expected-note {{insert an explicit cast to silence this issue}}
 
-  long l{a}; // expected-error {{'unsigned __intcap' cannot be narrowed to 'long'}} \
+  long l{a}; // expected-error {{non-constant-expression cannot be narrowed from type 'unsigned __intcap' to 'long' in initializer list}} \
              // expected-note {{insert an explicit cast to silence this issue}}
-  l = long{a}; // expected-error {{'unsigned __intcap' cannot be narrowed to 'long'}} \
+  l = long{a}; // expected-error {{non-constant-expression cannot be narrowed from type 'unsigned __intcap' to 'long' in initializer list}} \
                // expected-note {{insert an explicit cast to silence this issue}}
-  long l2 = 0; l2 = {a}; // expected-error {{'unsigned __intcap' cannot be narrowed to 'long'}} \
+  long l2 = 0; l2 = {a}; // expected-error {{non-constant-expression cannot be narrowed from type 'unsigned __intcap' to 'long' in initializer list}} \
                          // expected-note {{insert an explicit cast to silence this issue}}
 
-  int i{a}; // expected-error {{'unsigned __intcap' cannot be narrowed to 'int'}} \
+  int i{a}; // expected-error {{non-constant-expression cannot be narrowed from type 'unsigned __intcap' to 'int' in initializer list}} \
             // expected-note {{insert an explicit cast to silence this issue}}
-  i = int{a}; // expected-error {{'unsigned __intcap' cannot be narrowed to 'int'}} \
+  i = int{a}; // expected-error {{non-constant-expression cannot be narrowed from type 'unsigned __intcap' to 'int' in initializer list}} \
               // expected-note {{insert an explicit cast to silence this issue}}
-  int i2 = 0; i2 = {a}; // expected-error {{'unsigned __intcap' cannot be narrowed to 'int'}} \
+  int i2 = 0; i2 = {a}; // expected-error {{non-constant-expression cannot be narrowed from type 'unsigned __intcap' to 'int' in initializer list}} \
                         // expected-note {{insert an explicit cast to silence this issue}}
 
   using __uintcap = unsigned __intcap;
@@ -107,8 +107,8 @@ struct foo {
 };
 
 void test_cap_to_ptr(void* __capability a) {
-  void* non_cap{a}; // expected-error {{type 'void * __capability' cannot be narrowed to 'void *' in initializer list}}
-  void* non_cap2 = {a}; // expected-error {{type 'void * __capability' cannot be narrowed to 'void *' in initializer list}}
+  void* non_cap{a}; // expected-error {{converting capability type 'void * __capability' to non-capability type 'void *' without an explicit cast; if this is intended use __cheri_fromcap}}
+  void* non_cap2 = {a}; // expected-error {{converting capability type 'void * __capability' to non-capability type 'void *' without an explicit cast; if this is intended use __cheri_fromcap}}
   // TODO: These should warn as well
   foo f{a, a}; // expected-error {{converting capability type 'void * __capability' to non-capability type 'void *' without an explicit cast}}
   foo f2;
