@@ -3832,8 +3832,11 @@ ExprResult Sema::BuildCheriOffsetOrAddress(SourceLocation LParenLoc,
       return ExprError();
     }
   }
-  // Otherwise just check that it is a non-enum integer type
-  bool DestIsInt = DestTy->isIntegerType() && !DestTy->isEnumeralType();
+  // Otherwise just check that it is a non-enum integer type (excluding
+  // __intcap, since the semantics of that are unclear, and CodeGen isn't ready
+  // for it regardless).
+  bool DestIsInt = DestTy->isIntegerType() && !DestTy->isEnumeralType() &&
+                   !DestTy->isIntCapType();
   if (!DestIsInt) {
     Diag(SubExpr->getBeginLoc(),
          diag::err_cheri_offset_addr_invalid_target_type)
