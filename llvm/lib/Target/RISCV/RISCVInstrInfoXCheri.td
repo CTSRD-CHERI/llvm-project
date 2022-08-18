@@ -1382,19 +1382,17 @@ def : PatGpcr<int_cheri_cap_load_tags, CLoadTags>;
 
 multiclass CheriExplicitLdPat<PatFrag LoadOp, RVInst Inst,
                               RegisterClass AddrTy> {
-  let AddedComplexity = -10 in
   def : Pat<(LoadOp AddrTy:$rs1), (Inst AddrTy:$rs1)>;
 }
 
 multiclass CheriExplicitStPat<PatFrag StoreOp, RVInst Inst,
                               RegisterClass StTy, RegisterClass AddrTy> {
-  let AddedComplexity = -10 in
   def : Pat<(StoreOp StTy:$rs2, AddrTy:$rs1), (Inst StTy:$rs2, AddrTy:$rs1)>;
 }
 
 /// DDC-relative loads
 
-let Predicates = [HasCheri] in {
+let Predicates = [HasCheri, IsCapMode] in {
 defm : CheriExplicitLdPat<sextloadi8, LB_DDC, GPR>;
 defm : CheriExplicitLdPat<extloadi8, LB_DDC, GPR>;
 defm : CheriExplicitLdPat<sextloadi16, LH_DDC, GPR>;
@@ -1403,12 +1401,12 @@ defm : CheriExplicitLdPat<zextloadi8, LBU_DDC, GPR>;
 defm : CheriExplicitLdPat<zextloadi16, LHU_DDC, GPR>;
 }
 
-let Predicates = [HasCheri, IsRV32] in {
+let Predicates = [HasCheri, IsCapMode, IsRV32] in {
 defm : CheriExplicitLdPat<load, LW_DDC, GPR>;
 defm : CheriExplicitLdPat<load, LC_DDC_64, GPR>;
 }
 
-let Predicates = [HasCheri, IsRV64] in {
+let Predicates = [HasCheri, IsCapMode, IsRV64] in {
 defm : CheriExplicitLdPat<sextloadi32, LW_DDC, GPR>;
 defm : CheriExplicitLdPat<extloadi32, LW_DDC, GPR>;
 defm : CheriExplicitLdPat<load, LD_DDC, GPR>;
@@ -1416,56 +1414,50 @@ defm : CheriExplicitLdPat<zextloadi32, LWU_DDC, GPR>;
 defm : CheriExplicitLdPat<load, LC_DDC_128, GPR>;
 }
 
-let Predicates = [HasCheri, HasStdExtF],
-    AddedComplexity = -10 in
+let Predicates = [HasCheri, IsCapMode, HasStdExtF] in
 def : Pat<(load GPR:$rs1), (FMV_W_X (LW_DDC GPR:$rs1))>;
 
-let Predicates = [HasCheri, HasStdExtD, IsRV32],
-    AddedComplexity = -10 in
+let Predicates = [HasCheri, IsCapMode, HasStdExtD, IsRV32] in
 def : Pat<(load GPR:$rs1),
           (BuildPairF64Pseudo (LW_DDC GPR:$rs1),
                               (LW_DDC (ADDI GPR:$rs1, 4)))>;
 
-let Predicates = [HasCheri, HasStdExtD, IsRV64],
-    AddedComplexity = -10 in
+let Predicates = [HasCheri, IsCapMode, HasStdExtD, IsRV64] in
 def : Pat<(load GPR:$rs1), (FMV_D_X (LD_DDC GPR:$rs1))>;
 
 /// DDC-relative stores
 
-let Predicates = [HasCheri] in {
+let Predicates = [HasCheri, IsCapMode] in {
 defm : CheriExplicitStPat<truncstorei8, SB_DDC, GPR, GPR>;
 defm : CheriExplicitStPat<truncstorei16, SH_DDC, GPR, GPR>;
 }
 
-let Predicates = [HasCheri, IsRV32] in {
+let Predicates = [HasCheri, IsCapMode, IsRV32] in {
 defm : CheriExplicitStPat<store, SW_DDC, GPR, GPR>;
 defm : CheriExplicitStPat<store, SC_DDC_64, GPCR, GPR>;
 }
 
-let Predicates = [HasCheri, IsRV64] in {
+let Predicates = [HasCheri, IsCapMode, IsRV64] in {
 defm : CheriExplicitStPat<truncstorei32, SW_DDC, GPR, GPR>;
 defm : CheriExplicitStPat<store, SD_DDC, GPR, GPR>;
 defm : CheriExplicitStPat<store, SC_DDC_128, GPCR, GPR>;
 }
 
-let Predicates = [HasCheri, HasStdExtF],
-    AddedComplexity = -10 in
+let Predicates = [HasCheri, IsCapMode, HasStdExtF] in
 def : Pat<(store FPR32:$rs2, GPR:$rs1),
           (SW_DDC (FMV_X_W FPR32:$rs2), GPR:$rs1)>;
 
-let Predicates = [HasCheri, HasStdExtD, IsRV32],
-    AddedComplexity = -10 in
+let Predicates = [HasCheri, IsCapMode, HasStdExtD, IsRV32] in
 def : Pat<(store FPR64:$rs2, GPR:$rs1),
           (KILL (SplitStoreF64Pseudo FPR64:$rs2, GPR:$rs1))>;
 
-let Predicates = [HasCheri, HasStdExtD, IsRV64],
-    AddedComplexity = -10 in
+let Predicates = [HasCheri, IsCapMode, HasStdExtD, IsRV64] in
 def : Pat<(store FPR64:$rs2, GPR:$rs1),
           (SD_DDC (FMV_X_D FPR64:$rs2), GPR:$rs1)>;
 
 /// Capability loads
 
-let Predicates = [HasCheri] in {
+let Predicates = [HasCheri, NotCapMode] in {
 defm : CheriExplicitLdPat<sextloadi8, LB_CAP, GPCR>;
 defm : CheriExplicitLdPat<extloadi8, LB_CAP, GPCR>;
 defm : CheriExplicitLdPat<sextloadi16, LH_CAP, GPCR>;
@@ -1474,12 +1466,12 @@ defm : CheriExplicitLdPat<zextloadi8, LBU_CAP, GPCR>;
 defm : CheriExplicitLdPat<zextloadi16, LHU_CAP, GPCR>;
 }
 
-let Predicates = [HasCheri, IsRV32] in {
+let Predicates = [HasCheri, NotCapMode, IsRV32] in {
 defm : CheriExplicitLdPat<load, LW_CAP, GPCR>;
 defm : CheriExplicitLdPat<load, LC_CAP_64, GPCR>;
 }
 
-let Predicates = [HasCheri, IsRV64] in {
+let Predicates = [HasCheri, NotCapMode, IsRV64] in {
 defm : CheriExplicitLdPat<sextloadi32, LW_CAP, GPCR>;
 defm : CheriExplicitLdPat<extloadi32, LW_CAP, GPCR>;
 defm : CheriExplicitLdPat<load, LD_CAP, GPCR>;
@@ -1487,50 +1479,44 @@ defm : CheriExplicitLdPat<zextloadi32, LWU_CAP, GPCR>;
 defm : CheriExplicitLdPat<load, LC_CAP_128, GPCR>;
 }
 
-let Predicates = [HasCheri, HasStdExtF],
-    AddedComplexity = -10 in
+let Predicates = [HasCheri, NotCapMode, HasStdExtF] in
 def : Pat<(load GPCR:$rs1), (FMV_W_X (LW_CAP GPCR:$rs1))>;
 
-let Predicates = [HasCheri, HasStdExtD, IsRV32],
-    AddedComplexity = -10 in
+let Predicates = [HasCheri, NotCapMode, HasStdExtD, IsRV32] in
 def : Pat<(load GPCR:$rs1),
           (BuildPairF64Pseudo (LW_CAP GPCR:$rs1),
                               (LW_CAP (CIncOffsetImm GPCR:$rs1, 4)))>;
 
-let Predicates = [HasCheri, HasStdExtD, IsRV64],
-    AddedComplexity = -10 in
+let Predicates = [HasCheri, NotCapMode, HasStdExtD, IsRV64] in
 def : Pat<(load GPCR:$rs1), (FMV_D_X (LD_CAP GPCR:$rs1))>;
 
 /// Capability stores
 
-let Predicates = [HasCheri] in {
+let Predicates = [HasCheri, NotCapMode] in {
 defm : CheriExplicitStPat<truncstorei8, SB_CAP, GPR, GPCR>;
 defm : CheriExplicitStPat<truncstorei16, SH_CAP, GPR, GPCR>;
 }
 
-let Predicates = [HasCheri, IsRV32] in {
+let Predicates = [HasCheri, NotCapMode, IsRV32] in {
 defm : CheriExplicitStPat<store, SW_CAP, GPR, GPCR>;
 defm : CheriExplicitStPat<store, SC_CAP_64, GPCR, GPCR>;
 }
 
-let Predicates = [HasCheri, IsRV64] in {
+let Predicates = [HasCheri, NotCapMode, IsRV64] in {
 defm : CheriExplicitStPat<truncstorei32, SW_CAP, GPR, GPCR>;
 defm : CheriExplicitStPat<store, SD_CAP, GPR, GPCR>;
 defm : CheriExplicitStPat<store, SC_CAP_128, GPCR, GPCR>;
 }
 
-let Predicates = [HasCheri, HasStdExtF],
-    AddedComplexity = -10 in
+let Predicates = [HasCheri, NotCapMode, HasStdExtF] in
 def : Pat<(store FPR32:$rs2, GPCR:$rs1),
           (SW_CAP (FMV_X_W FPR32:$rs2), GPCR:$rs1)>;
 
-let Predicates = [HasCheri, HasStdExtD, IsRV32],
-    AddedComplexity = -10 in
+let Predicates = [HasCheri, NotCapMode, HasStdExtD, IsRV32] in
 def : Pat<(store FPR64:$rs2, GPCR:$rs1),
           (KILL (CheriSplitStoreF64Pseudo FPR64:$rs2, GPCR:$rs1))>;
 
-let Predicates = [HasCheri, HasStdExtD, IsRV64],
-    AddedComplexity = -10 in
+let Predicates = [HasCheri, NotCapMode, HasStdExtD, IsRV64] in
 def : Pat<(store FPR64:$rs2, GPCR:$rs1),
           (SD_CAP (FMV_X_D FPR64:$rs2), GPCR:$rs1)>;
 
