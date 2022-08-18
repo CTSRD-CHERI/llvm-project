@@ -1,4 +1,5 @@
 ; RUN: llc @PURECAP_HARDFLOAT_ARGS@ < %s -o - | FileCheck %s
+@IFNOT-MIPS@; RUN: llc @PURECAP_HARDFLOAT_ARGS@ -relocation-model=static < %s -o - | FileCheck %s
 ; Check that we can generate jump tables for switch statements.
 ; TODO: this is currently not implemented for CHERI-RISC-V
 
