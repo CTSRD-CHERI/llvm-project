@@ -9213,9 +9213,9 @@ void RISCVTargetLowering::LowerAsmOperandForConstraint(
 Instruction *RISCVTargetLowering::emitLeadingFence(IRBuilderBase &Builder,
                                                    Instruction *Inst,
                                                    AtomicOrdering Ord) const {
-  if (isa<LoadInst>(Inst) && Ord == AtomicOrdering::SequentiallyConsistent)
+  if (Inst->hasAtomicLoad() && Ord == AtomicOrdering::SequentiallyConsistent)
     return Builder.CreateFence(Ord);
-  if (isa<StoreInst>(Inst) && isReleaseOrStronger(Ord))
+  if (Inst->hasAtomicStore() && isReleaseOrStronger(Ord))
     return Builder.CreateFence(AtomicOrdering::Release);
   return nullptr;
 }
@@ -9223,7 +9223,7 @@ Instruction *RISCVTargetLowering::emitLeadingFence(IRBuilderBase &Builder,
 Instruction *RISCVTargetLowering::emitTrailingFence(IRBuilderBase &Builder,
                                                     Instruction *Inst,
                                                     AtomicOrdering Ord) const {
-  if (isa<LoadInst>(Inst) && isAcquireOrStronger(Ord))
+  if (Inst->hasAtomicLoad() && isAcquireOrStronger(Ord))
     return Builder.CreateFence(AtomicOrdering::Acquire);
   return nullptr;
 }
@@ -9261,6 +9261,30 @@ EVT RISCVTargetLowering::getOptimalMemOpType(
   return TargetLowering::getOptimalMemOpType(Op, FuncAttributes);
 }
 
+template <typename Instr>
+static bool
+needsExplicitAddressingModeAtomics(const Instr *I,
+                                   const RISCVSubtarget &Subtarget) {
+  // We have to fall back to the explicit addressing mode atomics when we can't
+  // use the more powerful mode-dependent econdings. This happens when using
+  // capability pointers in non-capability mode and integer pointers in capmode.
+  const DataLayout &DL = I->getModule()->getDataLayout();
+  bool IsCheriPurecap = RISCVABI::isCheriPureCapABI(Subtarget.getTargetABI());
+  return DL.isFatPointer(I->getPointerOperand()->getType()) != IsCheriPurecap;
+}
+
+bool RISCVTargetLowering::shouldInsertFencesForAtomic(
+    const Instruction *I) const {
+  // The CHERI instructions with explicit addressing mode are always relaxed
+  // so we need to insert fences when using them.
+  if (const auto *RMWI = dyn_cast<AtomicRMWInst>(I)) {
+    return needsExplicitAddressingModeAtomics(RMWI, Subtarget);
+  } else if (const auto *CASI = dyn_cast<AtomicCmpXchgInst>(I)) {
+    return needsExplicitAddressingModeAtomics(CASI, Subtarget);
+  }
+  return isa<LoadInst>(I) || isa<StoreInst>(I);
+}
+
 TargetLowering::AtomicExpansionKind
 RISCVTargetLowering::shouldExpandAtomicRMWInIR(AtomicRMWInst *AI) const {
   // atomicrmw {fadd,fsub} must be expanded to use compare-exchange, as floating
@@ -9269,9 +9293,19 @@ RISCVTargetLowering::shouldExpandAtomicRMWInIR(AtomicRMWInst *AI) const {
   if (AI->isFloatingPointOperation())
     return AtomicExpansionKind::CmpXChg;
 
-  unsigned Size = AI->getType()->getPrimitiveSizeInBits();
-  if ((Size == 8 || Size == 16) &&
-      !RISCVABI::isCheriPureCapABI(Subtarget.getTargetABI()))
+  // For capability pointers we must always use the smallest possible type
+  // instead of promoting to i32/i64 to ensure we don't trigger bounds errors.
+  const DataLayout &DL = AI->getModule()->getDataLayout();
+  if (DL.isFatPointer(AI->getPointerOperand()->getType())) {
+    if (!RISCVABI::isCheriPureCapABI(Subtarget.getTargetABI()) &&
+        AI->getOperation() == AtomicRMWInst::Xchg &&
+        DL.isFatPointer(AI->getValOperand()->getType()))
+      return AtomicExpansionKind::CmpXChg;
+    return AtomicExpansionKind::None;
+  }
+
+  uint64_t Size = DL.getTypeSizeInBits(AI->getType()).getFixedSize();
+  if (Size == 8 || Size == 16)
     return AtomicExpansionKind::MaskedIntrinsic;
   return AtomicExpansionKind::None;
 }
@@ -9374,9 +9408,13 @@ Value *RISCVTargetLowering::emitMaskedAtomicRMWIntrinsic(
 TargetLowering::AtomicExpansionKind
 RISCVTargetLowering::shouldExpandAtomicCmpXchgInIR(
     AtomicCmpXchgInst *CI) const {
-  unsigned Size = CI->getCompareOperand()->getType()->getPrimitiveSizeInBits();
+  // For capability pointers we must always use the smallest possible type
+  // instead of promoting to i32/i64 to ensure we don't trigger bounds errors.
+  const DataLayout &DL = CI->getModule()->getDataLayout();
+  uint64_t Size =
+      DL.getTypeSizeInBits(CI->getCompareOperand()->getType()).getFixedSize();
   if ((Size == 8 || Size == 16) &&
-      !RISCVABI::isCheriPureCapABI(Subtarget.getTargetABI()))
+      !DL.isFatPointer(CI->getPointerOperand()->getType()))
     return AtomicExpansionKind::MaskedIntrinsic;
   return AtomicExpansionKind::None;
 }
@@ -9409,13 +9447,20 @@ bool RISCVTargetLowering::supportsAtomicOperation(const DataLayout &DL,
                                                   Type *ValueTy,
                                                   Type *PointerTy,
                                                   Align Alignment) const {
-  // FIXME: we current have to expand CMPXCHG/RMW to libcalls since we are
-  // missing the SelectionDAG nodes+expansions to use the explicit addressing
-  // mode instructions.
-  if (DL.isFatPointer(PointerTy) &&
-      !RISCVABI::isCheriPureCapABI(Subtarget.getTargetABI()) &&
-      (isa<AtomicRMWInst>(AI) || isa<AtomicCmpXchgInst>(AI)))
-    return false;
+  if (auto *RMWI = dyn_cast<AtomicRMWInst>(AI)) {
+    if (RISCVABI::isCheriPureCapABI(Subtarget.getTargetABI())) {
+      // We do not support AtomicRMW for explicit via-integer addressing
+      // in the purecap ABI (yet).
+      if (!DL.isFatPointer(PointerTy))
+        return false;
+    } else {
+      // In the hybrid ABI with explicit capability addressing, we support all
+      // integer operations, but only handle XCHG for capability arguments.
+      if (DL.isFatPointer(PointerTy) && DL.isFatPointer(ValueTy) &&
+          RMWI->getOperation() != AtomicRMWInst::Xchg)
+        return false;
+    }
+  }
   return TargetLowering::supportsAtomicOperation(DL, AI, ValueTy, PointerTy,
                                                  Alignment);
 }
@@ -9443,6 +9488,13 @@ bool RISCVTargetLowering::isFMAFasterThanFMulAndFAdd(const MachineFunction &MF,
   }
 
   return false;
+}
+
+unsigned RISCVTargetLowering::getMinCmpXchgSizeInBits(const Instruction *I,
+                                                      const Value *Ptr) const {
+  if (I->getModule()->getDataLayout().isFatPointer(Ptr->getType()))
+    return 8; // All sizes are supported via capabilities
+  return TargetLowering::getMinCmpXchgSizeInBits(I, Ptr);
 }
 
 Register RISCVTargetLowering::getExceptionPointerRegister(

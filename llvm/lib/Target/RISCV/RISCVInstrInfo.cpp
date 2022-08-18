@@ -832,6 +832,11 @@ bool RISCVInstrInfo::isBranchOffsetInRange(unsigned BranchOp,
   }
 }
 
+// clang-format off
+#define FOR_ALL_INT_SIZES(Pseudo)                                              \
+  Pseudo##8: case Pseudo##16: case Pseudo##32: case Pseudo##64
+// clang-format on
+
 unsigned RISCVInstrInfo::getInstSizeInBytes(const MachineInstr &MI) const {
   unsigned Opcode = MI.getOpcode();
 
@@ -921,11 +926,15 @@ unsigned RISCVInstrInfo::getInstSizeInBytes(const MachineInstr &MI) const {
   case RISCV::PseudoCheriAtomicLoadXor16:
   case RISCV::PseudoCheriAtomicLoadSub8:
   case RISCV::PseudoCheriAtomicLoadSub16:
+  case FOR_ALL_INT_SIZES(RISCV::PseudoCheriAtomicExplicitCapSwap):
+  case FOR_ALL_INT_SIZES(RISCV::PseudoCheriAtomicExplicitCapLoadAdd):
+  case FOR_ALL_INT_SIZES(RISCV::PseudoCheriAtomicExplicitCapLoadAnd):
+  case FOR_ALL_INT_SIZES(RISCV::PseudoCheriAtomicExplicitCapLoadOr):
+  case FOR_ALL_INT_SIZES(RISCV::PseudoCheriAtomicExplicitCapLoadXor):
+  case FOR_ALL_INT_SIZES(RISCV::PseudoCheriAtomicExplicitCapLoadSub):
     return 16;
-  case RISCV::PseudoCheriAtomicLoadNand8:
-  case RISCV::PseudoCheriAtomicLoadNand16:
-  case RISCV::PseudoCheriAtomicLoadNand32:
-  case RISCV::PseudoCheriAtomicLoadNand64:
+  case FOR_ALL_INT_SIZES(RISCV::PseudoCheriAtomicLoadNand):
+  case FOR_ALL_INT_SIZES(RISCV::PseudoCheriAtomicExplicitCapLoadNand):
     return 20;
   case RISCV::PseudoCheriAtomicLoadMax8:
   case RISCV::PseudoCheriAtomicLoadMax16:
@@ -935,6 +944,10 @@ unsigned RISCVInstrInfo::getInstSizeInBytes(const MachineInstr &MI) const {
   case RISCV::PseudoCheriAtomicLoadUMax16:
   case RISCV::PseudoCheriAtomicLoadUMin8:
   case RISCV::PseudoCheriAtomicLoadUMin16:
+  case FOR_ALL_INT_SIZES(RISCV::PseudoCheriAtomicExplicitCapLoadMax):
+  case FOR_ALL_INT_SIZES(RISCV::PseudoCheriAtomicExplicitCapLoadMin):
+  case FOR_ALL_INT_SIZES(RISCV::PseudoCheriAtomicExplicitCapLoadUMax):
+  case FOR_ALL_INT_SIZES(RISCV::PseudoCheriAtomicExplicitCapLoadUMin):
     return 24;
   case RISCV::PseudoCheriAtomicLoadAddCap:
     return 16;
@@ -950,12 +963,16 @@ unsigned RISCVInstrInfo::getInstSizeInBytes(const MachineInstr &MI) const {
   case RISCV::PseudoCheriAtomicLoadUMaxCap:
   case RISCV::PseudoCheriAtomicLoadUMinCap:
     return 24;
-  case RISCV::PseudoCheriCmpXchg8:
-  case RISCV::PseudoCheriCmpXchg16:
-  case RISCV::PseudoCheriCmpXchg32:
-  case RISCV::PseudoCheriCmpXchg64:
+  case FOR_ALL_INT_SIZES(RISCV::PseudoCheriCmpXchg):
   case RISCV::PseudoCheriCmpXchgCap:
     return 16;
+  case RISCV::PseudoCheriCmpXchg8ExplicitCap:
+  case RISCV::PseudoCheriCmpXchg16ExplicitCap:
+  case RISCV::PseudoCheriCmpXchg32ExplicitCap:
+  case RISCV::PseudoCheriCmpXchg64ExplicitCap:
+  case RISCV::PseudoCheriCmpXchgCapExplicitCap:
+    // This is almost the same as PseudoCheriCmpXchg but with an extra move.
+    return 20;
   case TargetOpcode::INLINEASM:
   case TargetOpcode::INLINEASM_BR: {
     const MachineFunction &MF = *MI.getParent()->getParent();
@@ -992,6 +1009,7 @@ unsigned RISCVInstrInfo::getInstSizeInBytes(const MachineInstr &MI) const {
   }
   }
 }
+#undef FOR_ALL_INT_SIZES
 
 bool RISCVInstrInfo::isAsCheapAsAMove(const MachineInstr &MI) const {
   const unsigned Opcode = MI.getOpcode();

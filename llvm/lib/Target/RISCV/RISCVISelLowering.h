@@ -391,9 +391,7 @@ public:
   }
   bool convertSelectOfConstantsToMath(EVT VT) const override { return true; }
 
-  bool shouldInsertFencesForAtomic(const Instruction *I) const override {
-    return isa<LoadInst>(I) || isa<StoreInst>(I);
-  }
+  bool shouldInsertFencesForAtomic(const Instruction *I) const override;
   Instruction *emitLeadingFence(IRBuilderBase &Builder, Instruction *Inst,
                                 AtomicOrdering Ord) const override;
   Instruction *emitTrailingFence(IRBuilderBase &Builder, Instruction *Inst,
@@ -473,6 +471,8 @@ public:
   bool supportsAtomicOperation(const DataLayout &DL, const Instruction *AI,
                                Type *ValueTy, Type *PointerTy,
                                Align Alignment) const override;
+  unsigned getMinCmpXchgSizeInBits(const Instruction *I,
+                                   const Value *Ptr) const override;
 
   TargetLowering::AtomicExpansionKind
   shouldExpandAtomicRMWInIR(AtomicRMWInst *AI) const override;

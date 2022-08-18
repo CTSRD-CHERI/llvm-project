@@ -170,7 +170,7 @@ let hasSideEffects = 0, mayLoad = 0, mayStore = 1, Constraints = "$rd = $rs2" in
 class CheriStoreCond_r<bits<5> op, string opcodestr, RegisterClass rs2Class,
                        RegisterOperand rs1Operand>
     : RVInstCheriTwoSrc<0x7c, op, 0, OPC_CHERI, (outs rs2Class:$rd),
-                        (ins rs2Class:$rs2, rs1Operand:$rs1),
+                        (ins rs1Operand:$rs1, rs2Class:$rs2),
                         opcodestr, "$rs2, $rs1">;
 
 let hasSideEffects = 0, mayLoad = 1, mayStore = 0 in
@@ -1589,6 +1589,16 @@ class PseudoCheriAMO<RegisterClass ValTy=GPR>
   let hasSideEffects = 0;
 }
 
+class PseudoCheriAMOExplicitAddrMode<RegisterClass PtrTy,
+                                     RegisterClass ValTy=GPR>
+    : Pseudo<(outs ValTy:$res, ValTy:$scratch),
+             (ins PtrTy:$addr, ValTy:$incr, ixlenimm:$ordering), []> {
+  let Constraints = "@earlyclobber $res,@earlyclobber $scratch";
+  let mayLoad = 1;
+  let mayStore = 1;
+  let hasSideEffects = 0;
+}
+
 multiclass PseudoCheriAMOPat<string AtomicOp, Instruction BaseInst,
                              RegisterClass ValTy=GPR> {
   def : Pat<(!cast<PatFrag>(AtomicOp#"_monotonic") GPCR:$addr, ValTy:$incr),
@@ -1603,10 +1613,59 @@ multiclass PseudoCheriAMOPat<string AtomicOp, Instruction BaseInst,
             (BaseInst GPCR:$addr, ValTy:$incr, 7)>;
 }
 
+multiclass CheriAMOExplicitCapPseudos<string Size, RegisterClass PtrTy,
+                                      RegisterClass ValTy=GPR> {
+  def NAME#Swap#Size : PseudoCheriAMOExplicitAddrMode<PtrTy, ValTy>;
+  def NAME#LoadAdd#Size : PseudoCheriAMOExplicitAddrMode<PtrTy, ValTy>;
+  def NAME#LoadSub#Size : PseudoCheriAMOExplicitAddrMode<PtrTy, ValTy>;
+  def NAME#LoadAnd#Size : PseudoCheriAMOExplicitAddrMode<PtrTy, ValTy>;
+  def NAME#LoadOr#Size : PseudoCheriAMOExplicitAddrMode<PtrTy, ValTy>;
+  def NAME#LoadXor#Size : PseudoCheriAMOExplicitAddrMode<PtrTy, ValTy>;
+  def NAME#LoadMax#Size : PseudoCheriAMOExplicitAddrMode<PtrTy, ValTy>;
+  def NAME#LoadMin#Size : PseudoCheriAMOExplicitAddrMode<PtrTy, ValTy>;
+  def NAME#LoadUMax#Size : PseudoCheriAMOExplicitAddrMode<PtrTy, ValTy>;
+  def NAME#LoadUMin#Size : PseudoCheriAMOExplicitAddrMode<PtrTy, ValTy>;
+  def NAME#LoadNand#Size : PseudoCheriAMOExplicitAddrMode<PtrTy, ValTy>;
+}
+
+// The explicit address mode atomics are always relaxed, so we only need
+// _monotonic patterns.
+class CheriAMOExplicitModePat<string PatOp, string InsnOp, string Size,
+                              RegisterClass PtrTy, RegisterClass ValTy>
+    : Pat<(!cast<PatFrag>("atomic_" # PatOp # "_" # Size # "_monotonic")
+            PtrTy:$addr, ValTy:$incr),
+          (!cast<Pseudo>("PseudoCheriAtomicExplicitCap" # InsnOp # Size)
+            PtrTy:$addr, ValTy:$incr, 2)>;
+
+multiclass PseudoCheriAMOExplicitCapPats<string Size, RegisterClass PtrTy,
+                                         RegisterClass ValTy> {
+  def : CheriAMOExplicitModePat<"swap", "Swap", Size, PtrTy, ValTy>;
+  def : CheriAMOExplicitModePat<"load_add", "LoadAdd", Size, PtrTy, ValTy>;
+  def : CheriAMOExplicitModePat<"load_sub", "LoadSub", Size, PtrTy, ValTy>;
+  def : CheriAMOExplicitModePat<"load_and", "LoadAnd", Size, PtrTy, ValTy>;
+  def : CheriAMOExplicitModePat<"load_or", "LoadOr", Size, PtrTy, ValTy>;
+  def : CheriAMOExplicitModePat<"load_xor", "LoadXor", Size, PtrTy, ValTy>;
+  def : CheriAMOExplicitModePat<"load_nand", "LoadNand", Size, PtrTy, ValTy>;
+  def : CheriAMOExplicitModePat<"load_max", "LoadMax", Size, PtrTy, ValTy>;
+  def : CheriAMOExplicitModePat<"load_min", "LoadMin", Size, PtrTy, ValTy>;
+  def : CheriAMOExplicitModePat<"load_umax", "LoadUMax", Size, PtrTy, ValTy>;
+  def : CheriAMOExplicitModePat<"load_umin", "LoadUMin", Size, PtrTy, ValTy>;
+}
+
 class PseudoCheriCmpXchg<RegisterClass ValTy=GPR>
     : Pseudo<(outs ValTy:$res, GPR:$scratch),
              (ins GPCR:$addr, ValTy:$cmpval, ValTy:$newval, ixlenimm:$ordering), []> {
   let Constraints = "@earlyclobber $res,@earlyclobber $scratch";
+  let mayLoad = 1;
+  let mayStore = 1;
+  let hasSideEffects = 0;
+}
+
+class PseudoCheriCmpXchgExplicitAddrMode<RegisterClass PtrTy,
+                                         RegisterClass ValTy=GPR>
+    : Pseudo<(outs ValTy:$res, ValTy:$scratch),
+             (ins PtrTy:$addr, ValTy:$cmpval, ValTy:$newval, ixlenimm:$ordering), []> {
+  let Constraints = "@earlyclobber $res,@earlyclobber $scratch,$res = $newval";
   let mayLoad = 1;
   let mayStore = 1;
   let hasSideEffects = 0;
@@ -1624,6 +1683,14 @@ multiclass PseudoCheriCmpXchgPat<string Op, Pseudo CmpXchgInst,
             (CmpXchgInst GPCR:$addr, ValTy:$cmp, ValTy:$new, 6)>;
   def : Pat<(!cast<PatFrag>(Op#"_seq_cst") GPCR:$addr, ValTy:$cmp, ValTy:$new),
             (CmpXchgInst GPCR:$addr, ValTy:$cmp, ValTy:$new, 7)>;
+}
+
+multiclass PseudoCheriCmpXchgPatExplicit<string Op, Pseudo CmpXchgInst,
+                                         RegisterClass PtrTy,
+                                         RegisterClass ValTy=GPR> {
+  // The explicit address mode atomics are always relaxed.
+  def : Pat<(!cast<PatFrag>(Op#"_monotonic") PtrTy:$addr, ValTy:$cmp, ValTy:$new),
+            (CmpXchgInst PtrTy:$addr, ValTy:$cmp, ValTy:$new, 2)>;
 }
 
 multiclass CheriAMOCapPat<string CLenStr, string AtomicOp, string BaseInst> {
@@ -1651,7 +1718,9 @@ def PseudoCheriAtomicLoadMin8 : PseudoCheriAMO;
 def PseudoCheriAtomicLoadUMax8 : PseudoCheriAMO;
 def PseudoCheriAtomicLoadUMin8 : PseudoCheriAMO;
 def PseudoCheriAtomicLoadNand8 : PseudoCheriAMO;
+defm PseudoCheriAtomicExplicitCap : CheriAMOExplicitCapPseudos<"8", GPCR>;
 def PseudoCheriCmpXchg8 : PseudoCheriCmpXchg;
+def PseudoCheriCmpXchg8ExplicitCap : PseudoCheriCmpXchgExplicitAddrMode<GPCR>;
 
 def PseudoCheriAtomicSwap16 : PseudoCheriAMO;
 def PseudoCheriAtomicLoadAdd16 : PseudoCheriAMO;
@@ -1664,10 +1733,14 @@ def PseudoCheriAtomicLoadMin16 : PseudoCheriAMO;
 def PseudoCheriAtomicLoadUMax16 : PseudoCheriAMO;
 def PseudoCheriAtomicLoadUMin16 : PseudoCheriAMO;
 def PseudoCheriAtomicLoadNand16 : PseudoCheriAMO;
+defm PseudoCheriAtomicExplicitCap : CheriAMOExplicitCapPseudos<"16", GPCR>;
 def PseudoCheriCmpXchg16 : PseudoCheriCmpXchg;
+def PseudoCheriCmpXchg16ExplicitCap : PseudoCheriCmpXchgExplicitAddrMode<GPCR>;
 
 def PseudoCheriAtomicLoadNand32 : PseudoCheriAMO;
+defm PseudoCheriAtomicExplicitCap : CheriAMOExplicitCapPseudos<"32", GPCR>;
 def PseudoCheriCmpXchg32 : PseudoCheriCmpXchg;
+def PseudoCheriCmpXchg32ExplicitCap : PseudoCheriCmpXchgExplicitAddrMode<GPCR>;
 
 def PseudoCheriAtomicLoadAddCap : PseudoCheriAMO<GPCR>;
 def PseudoCheriAtomicLoadSubCap : PseudoCheriAMO<GPCR>;
@@ -1680,11 +1753,14 @@ def PseudoCheriAtomicLoadUMaxCap : PseudoCheriAMO<GPCR>;
 def PseudoCheriAtomicLoadUMinCap : PseudoCheriAMO<GPCR>;
 def PseudoCheriAtomicLoadNandCap : PseudoCheriAMO<GPCR>;
 def PseudoCheriCmpXchgCap : PseudoCheriCmpXchg<GPCR>;
+def PseudoCheriCmpXchgCapExplicitCap : PseudoCheriCmpXchgExplicitAddrMode<GPCR, GPCR>;
 } // Predicates = [HasCheri, HasStdExtA]
 
 let Predicates = [HasCheri, HasStdExtA, IsRV64] in {
 def PseudoCheriAtomicLoadNand64 : PseudoCheriAMO;
+defm PseudoCheriAtomicExplicitCap : CheriAMOExplicitCapPseudos<"64", GPCR>;
 def PseudoCheriCmpXchg64 : PseudoCheriCmpXchg;
+def PseudoCheriCmpXchg64ExplicitCap : PseudoCheriCmpXchgExplicitAddrMode<GPCR>;
 } // Predicates = [HasCheri, HasStdExtA, IsRV64]
 
 /// 'I' (Integer) base
@@ -1925,6 +2001,30 @@ defm : CheriLdPat<atomic_load_cap, CLC_128>;
 defm : CheriAtomicStPat<atomic_store_cap, CSC_128, GPCR>;
 defm : CheriAMOCapPat<"128", "atomic_swap_cap", "CAMOSWAP_C">;
 } // Predicates = [HasCheri, HasStdExtA, IsRV64, IsCapMode]
+
+/// Patterns for atomics with explicit capability base register
+
+let Predicates = [HasCheri, HasStdExtA, NotCapMode] in {
+defm : PseudoCheriCmpXchgPatExplicit<"atomic_cmp_swap_8",
+                                     PseudoCheriCmpXchg8ExplicitCap, GPCR>;
+defm : PseudoCheriCmpXchgPatExplicit<"atomic_cmp_swap_16",
+                                     PseudoCheriCmpXchg16ExplicitCap, GPCR>;
+defm : PseudoCheriCmpXchgPatExplicit<"atomic_cmp_swap_32",
+                                     PseudoCheriCmpXchg32ExplicitCap, GPCR>;
+defm : PseudoCheriCmpXchgPatExplicit<"atomic_cmp_swap_cap",
+                                     PseudoCheriCmpXchgCapExplicitCap,
+                                     GPCR, GPCR>;
+defm : PseudoCheriAMOExplicitCapPats<"8", GPCR, GPR>;
+defm : PseudoCheriAMOExplicitCapPats<"16", GPCR, GPR>;
+defm : PseudoCheriAMOExplicitCapPats<"32", GPCR, GPR>;
+} // Predicates = [HasCheri, HasStdExtA, NotCapMode]
+
+let Predicates = [HasCheri, HasStdExtA, IsRV64, NotCapMode] in {
+defm : PseudoCheriCmpXchgPatExplicit<"atomic_cmp_swap_64",
+                                     PseudoCheriCmpXchg64ExplicitCap, GPCR>;
+defm : PseudoCheriAMOExplicitCapPats<"64", GPCR, GPR>;
+} // Predicates = [HasCheri, HasStdExtA, IsRV64, NotCapMode]
+
 
 /// 'F' (Single-Precision Floating-Point) extension
 
