@@ -92,6 +92,7 @@ private:
   bool HasStdExtZicboz = false;
   bool HasStdExtZicbop = false;
   bool HasStdExtZmmul = false;
+  bool HasRV32 = false;
   bool HasRV64 = false;
   bool IsRV32E = false;
   bool HasCheri = false;
