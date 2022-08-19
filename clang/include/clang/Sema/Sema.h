@@ -11439,9 +11439,8 @@ public:
       FunctionDecl *FD, Expr *VariantRef, OMPTraitInfo &TI,
       ArrayRef<Expr *> AdjustArgsNothing,
       ArrayRef<Expr *> AdjustArgsNeedDevicePtr,
-      ArrayRef<OMPDeclareVariantAttr::InteropType> AppendArgs,
-      SourceLocation AdjustArgsLoc, SourceLocation AppendArgsLoc,
-      SourceRange SR);
+      ArrayRef<OMPInteropInfo> AppendArgs, SourceLocation AdjustArgsLoc,
+      SourceLocation AppendArgsLoc, SourceRange SR);
 
   OMPClause *ActOnOpenMPSingleExprClause(OpenMPClauseKind Kind,
                                          Expr *Expr,
