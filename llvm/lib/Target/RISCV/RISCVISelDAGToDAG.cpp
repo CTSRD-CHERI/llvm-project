@@ -2623,6 +2623,7 @@ bool RISCVDAGToDAGISel::doPeepholeMaskedRVV(SDNode *N) {
     Ops.push_back(SDValue(TGlued, TGlued->getNumValues() - 1));
 
   SDNode *Result = CurDAG->getMachineNode(Opc, SDLoc(N), N->getVTList(), Ops);
+  Result->setFlags(N->getFlags());
   ReplaceUses(N, Result);
 
   return true;
@@ -2725,6 +2726,7 @@ bool RISCVDAGToDAGISel::doPeepholeMergeVVMFold() {
 
     SDNode *Result =
         CurDAG->getMachineNode(MaskedOpc, DL, True->getVTList(), Ops);
+    Result->setFlags(True->getFlags());
 
     // Replace vmerge.vvm node by Result.
     ReplaceUses(SDValue(N, 0), SDValue(Result, 0));
