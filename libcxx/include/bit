@@ -89,7 +89,7 @@ _LIBCPP_PUSH_MACROS
 _LIBCPP_BEGIN_NAMESPACE_STD
 
 template<class _Tp>
-_LIBCPP_HIDE_FROM_ABI _LIBCPP_CONSTEXPR_AFTER_CXX11
+_LIBCPP_HIDE_FROM_ABI _LIBCPP_CONSTEXPR_SINCE_CXX14
 _Tp __rotr(_Tp __t, unsigned int __cnt) _NOEXCEPT
 {
     static_assert(__libcpp_is_unsigned_integer<_Tp>::value, "__rotr requires an unsigned integer type");
@@ -101,7 +101,7 @@ _Tp __rotr(_Tp __t, unsigned int __cnt) _NOEXCEPT
 
 #if __has_feature(capabilities)
 template<>
-_LIBCPP_HIDE_FROM_ABI _LIBCPP_CONSTEXPR_AFTER_CXX11 inline
+_LIBCPP_HIDE_FROM_ABI _LIBCPP_CONSTEXPR_SINCE_CXX14 inline
 unsigned __intcap __rotr(unsigned __intcap __t, unsigned int __cnt) _NOEXCEPT {
     // __builtin_cheri_address_set cannot be used in a constant expression (yet), so we return a null-derived integer.
     return std::__rotr(static_cast<ptraddr_t>(__t), __cnt);
@@ -109,7 +109,7 @@ unsigned __intcap __rotr(unsigned __intcap __t, unsigned int __cnt) _NOEXCEPT {
 #endif
 
 template<class _Tp>
-_LIBCPP_HIDE_FROM_ABI _LIBCPP_CONSTEXPR_AFTER_CXX11
+_LIBCPP_HIDE_FROM_ABI _LIBCPP_CONSTEXPR_SINCE_CXX14
 int __countl_zero(_Tp __t) _NOEXCEPT
 {
     static_assert(__libcpp_is_unsigned_integer<_Tp>::value, "__countl_zero requires an unsigned integer type");
@@ -142,7 +142,7 @@ int __countl_zero(_Tp __t) _NOEXCEPT
 
 #if __has_feature(capabilities)
 template<>
-_LIBCPP_HIDE_FROM_ABI _LIBCPP_CONSTEXPR_AFTER_CXX11 inline
+_LIBCPP_HIDE_FROM_ABI _LIBCPP_CONSTEXPR_SINCE_CXX14 inline
 int __countl_zero(unsigned __intcap __t) _NOEXCEPT {
     return std::__countl_zero(static_cast<ptraddr_t>(__t));
 }
