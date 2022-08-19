@@ -1061,14 +1061,9 @@ void CodeGenModule::EmitOpenCLMetadata() {
 
 void CodeGenModule::EmitBackendOptionsMetadata(
     const CodeGenOptions CodeGenOpts) {
-  switch (getTriple().getArch()) {
-  default:
-    break;
-  case llvm::Triple::riscv32:
-  case llvm::Triple::riscv64:
+  if (getTriple().isRISCV()) {
     getModule().addModuleFlag(llvm::Module::Error, "SmallDataLimit",
                               CodeGenOpts.SmallDataLimit);
-    break;
   }
 }
 
