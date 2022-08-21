@@ -935,7 +935,8 @@ public:
   }
 
   InstructionCost getShuffleCost(TTI::ShuffleKind Kind, VectorType *Tp,
-                                 ArrayRef<int> Mask, int Index,
+                                 ArrayRef<int> Mask,
+                                 TTI::TargetCostKind CostKind, int Index,
                                  VectorType *SubTp,
                                  ArrayRef<const Value *> Args = None) {
 
@@ -1517,9 +1518,9 @@ public:
       if (isa<ScalableVectorType>(RetTy))
         return BaseT::getIntrinsicInstrCost(ICA, CostKind);
       unsigned Index = cast<ConstantInt>(Args[1])->getZExtValue();
-      return thisT()->getShuffleCost(TTI::SK_ExtractSubvector,
-                                     cast<VectorType>(Args[0]->getType()), None,
-                                     Index, cast<VectorType>(RetTy));
+      return thisT()->getShuffleCost(
+          TTI::SK_ExtractSubvector, cast<VectorType>(Args[0]->getType()),
+          None, CostKind, Index, cast<VectorType>(RetTy));
     }
     case Intrinsic::vector_insert: {
       // FIXME: Handle case where a scalable vector is inserted into a scalable
@@ -1529,18 +1530,18 @@ public:
       unsigned Index = cast<ConstantInt>(Args[2])->getZExtValue();
       return thisT()->getShuffleCost(
           TTI::SK_InsertSubvector, cast<VectorType>(Args[0]->getType()), None,
-          Index, cast<VectorType>(Args[1]->getType()));
+          CostKind, Index, cast<VectorType>(Args[1]->getType()));
     }
     case Intrinsic::experimental_vector_reverse: {
       return thisT()->getShuffleCost(TTI::SK_Reverse,
                                      cast<VectorType>(Args[0]->getType()), None,
-                                     0, cast<VectorType>(RetTy));
+                                     CostKind, 0, cast<VectorType>(RetTy));
     }
     case Intrinsic::experimental_vector_splice: {
       unsigned Index = cast<ConstantInt>(Args[2])->getZExtValue();
       return thisT()->getShuffleCost(TTI::SK_Splice,
                                      cast<VectorType>(Args[0]->getType()), None,
-                                     Index, cast<VectorType>(RetTy));
+                                     CostKind, Index, cast<VectorType>(RetTy));
     }
     case Intrinsic::vector_reduce_add:
     case Intrinsic::vector_reduce_mul:
@@ -2218,7 +2219,7 @@ public:
       NumVecElts /= 2;
       VectorType *SubTy = FixedVectorType::get(ScalarTy, NumVecElts);
       ShuffleCost += thisT()->getShuffleCost(TTI::SK_ExtractSubvector, Ty, None,
-                                             NumVecElts, SubTy);
+                                             CostKind, NumVecElts, SubTy);
       ArithCost += thisT()->getArithmeticInstrCost(Opcode, SubTy, CostKind);
       Ty = SubTy;
       ++LongVectorCount;
@@ -2232,8 +2233,9 @@ public:
     // architecture-dependent length.
 
     // By default reductions need one shuffle per reduction level.
-    ShuffleCost += NumReduxLevels * thisT()->getShuffleCost(
-                                     TTI::SK_PermuteSingleSrc, Ty, None, 0, Ty);
+    ShuffleCost +=
+        NumReduxLevels * thisT()->getShuffleCost(TTI::SK_PermuteSingleSrc, Ty,
+                                                 None, CostKind, 0, Ty);
     ArithCost +=
         NumReduxLevels * thisT()->getArithmeticInstrCost(Opcode, Ty, CostKind);
     return ShuffleCost + ArithCost +
@@ -2314,8 +2316,8 @@ public:
       auto *SubTy = FixedVectorType::get(ScalarTy, NumVecElts);
       CondTy = FixedVectorType::get(ScalarCondTy, NumVecElts);
 
-      ShuffleCost += thisT()->getShuffleCost(TTI::SK_ExtractSubvector, Ty, None,
-                                             NumVecElts, SubTy);
+      ShuffleCost += thisT()->getShuffleCost(TTI::SK_ExtractSubvector, Ty,
+                                             None, CostKind, NumVecElts, SubTy);
       MinMaxCost +=
           thisT()->getCmpSelInstrCost(CmpOpcode, SubTy, CondTy,
                                       CmpInst::BAD_ICMP_PREDICATE, CostKind) +
@@ -2331,8 +2333,9 @@ public:
     // operations performed on the current platform. That's why several final
     // reduction opertions are perfomed on the vectors with the same
     // architecture-dependent length.
-    ShuffleCost += NumReduxLevels * thisT()->getShuffleCost(
-                                     TTI::SK_PermuteSingleSrc, Ty, None, 0, Ty);
+    ShuffleCost +=
+        NumReduxLevels * thisT()->getShuffleCost(TTI::SK_PermuteSingleSrc, Ty,
+                                                 None, CostKind, 0, Ty);
     MinMaxCost +=
         NumReduxLevels *
         (thisT()->getCmpSelInstrCost(CmpOpcode, Ty, CondTy,
