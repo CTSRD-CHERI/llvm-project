@@ -1068,7 +1068,7 @@ class Sema;
       static_assert(alignof(T) == alignof(void *),
                     "Only works for pointer-aligned types.");
       static_assert(std::is_trivial<T>::value ||
-                        std::is_same_v<ImplicitConversionSequence, T>,
+                        std::is_same<ImplicitConversionSequence, T>::value,
                     "Add destruction logic to OverloadCandidateSet::clear().");
 
       unsigned NBytes = sizeof(T) * N;
