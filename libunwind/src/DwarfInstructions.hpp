@@ -25,7 +25,7 @@
 namespace libunwind {
 
 
-/// DwarfInstructions maps abtract DWARF unwind instructions to a particular
+/// DwarfInstructions maps abstract DWARF unwind instructions to a particular
 /// architecture
 template <typename A, typename R>
 class DwarfInstructions {
@@ -313,10 +313,10 @@ int DwarfInstructions<A, R>::stepWithDwarf(A &addressSpace, pc_t pc,
           else
             return UNW_EBADREG;
         } else if (i == (int)cieInfo.returnAddressRegister) {
-          // Leaf function keeps the return address in register and there is no
-          // explicit intructions how to restore it.
-          returnAddress = registers.getRegister(cieInfo.returnAddressRegister);
-          CHERI_DBG("GETTING RETURN ADDRESS (leaf) %d (%s): %#p \n", i,
+            // Leaf function keeps the return address in register and there is no
+            // explicit instructions how to restore it.
+            returnAddress = registers.getRegister(cieInfo.returnAddressRegister);
+            CHERI_DBG("GETTING RETURN ADDRESS (leaf) %d (%s): %#p \n", i,
                     registers.getRegisterName(i), (void *)returnAddress);
         }
       }
@@ -406,7 +406,7 @@ int DwarfInstructions<A, R>::stepWithDwarf(A &addressSpace, pc_t pc,
 #endif
 
       // Return address is address after call site instruction, so setting IP to
-      // that does simualates a return.
+      // that does simulates a return.
       newRegisters.setIP(returnAddress);
       CHERI_DBG("SETTING RETURN ADDRESS %#p\n", (void *)returnAddress);
 
@@ -717,7 +717,7 @@ DwarfInstructions<A, R>::evaluateExpression(pint_t expression, A &addressSpace,
       svalue = (sint_t)*sp;
       *sp = (pint_t)(svalue >> value);
       if (log)
-        fprintf(stderr, "shift left arithmetric\n");
+        fprintf(stderr, "shift left arithmetic\n");
       break;
 
     case DW_OP_xor:
