@@ -11008,7 +11008,8 @@ QualType ASTContext::getNonProvenanceCarryingType(QualType T) const {
 }
 
 QualType ASTContext::getCorrespondingUnsignedType(QualType T) const {
-  assert((T->hasSignedIntegerRepresentation() || T->isSignedFixedPointType()) &&
+  assert((T->hasIntegerRepresentation() || T->isEnumeralType() ||
+          T->isFixedPointType()) &&
          "Unexpected type");
 
   // Turn <4 x signed int> -> <4 x unsigned int>
@@ -11026,8 +11027,11 @@ QualType ASTContext::getCorrespondingUnsignedType(QualType T) const {
     T = ETy->getDecl()->getIntegerType();
 
   switch (T->castAs<BuiltinType>()->getKind()) {
+  case BuiltinType::Char_U:
+    // Plain `char` is mapped to `unsigned char` even if it's already unsigned
   case BuiltinType::Char_S:
   case BuiltinType::SChar:
+  case BuiltinType::Char8:
     return UnsignedCharTy;
   case BuiltinType::Short:
     return UnsignedShortTy;
@@ -11043,7 +11047,7 @@ QualType ASTContext::getCorrespondingUnsignedType(QualType T) const {
     return UnsignedIntCapTy;
   // wchar_t is special. It is either signed or not, but when it's signed,
   // there's no matching "unsigned wchar_t". Therefore we return the unsigned
-  // version of it's underlying type instead.
+  // version of its underlying type instead.
   case BuiltinType::WChar_S:
     return getUnsignedWCharType();
 
@@ -11072,13 +11076,16 @@ QualType ASTContext::getCorrespondingUnsignedType(QualType T) const {
   case BuiltinType::SatLongFract:
     return SatUnsignedLongFractTy;
   default:
-    llvm_unreachable("Unexpected signed integer or fixed point type");
+    assert((T->hasUnsignedIntegerRepresentation() ||
+            T->isUnsignedFixedPointType()) &&
+           "Unexpected signed integer or fixed point type");
+    return T;
   }
 }
 
 QualType ASTContext::getCorrespondingSignedType(QualType T) const {
-  assert((T->hasUnsignedIntegerRepresentation() ||
-          T->isUnsignedFixedPointType()) &&
+  assert((T->hasIntegerRepresentation() || T->isEnumeralType() ||
+          T->isFixedPointType()) &&
          "Unexpected type");
 
   // Turn <4 x unsigned int> -> <4 x signed int>
@@ -11096,8 +11103,11 @@ QualType ASTContext::getCorrespondingSignedType(QualType T) const {
     T = ETy->getDecl()->getIntegerType();
 
   switch (T->castAs<BuiltinType>()->getKind()) {
+  case BuiltinType::Char_S:
+    // Plain `char` is mapped to `signed char` even if it's already signed
   case BuiltinType::Char_U:
   case BuiltinType::UChar:
+  case BuiltinType::Char8:
     return SignedCharTy;
   case BuiltinType::UShort:
     return ShortTy;
@@ -11111,7 +11121,7 @@ QualType ASTContext::getCorrespondingSignedType(QualType T) const {
     return Int128Ty;
   // wchar_t is special. It is either unsigned or not, but when it's unsigned,
   // there's no matching "signed wchar_t". Therefore we return the signed
-  // version of it's underlying type instead.
+  // version of its underlying type instead.
   case BuiltinType::WChar_U:
     return getSignedWCharType();
 
@@ -11140,7 +11150,10 @@ QualType ASTContext::getCorrespondingSignedType(QualType T) const {
   case BuiltinType::SatULongFract:
     return SatLongFractTy;
   default:
-    llvm_unreachable("Unexpected unsigned integer or fixed point type");
+    assert(
+        (T->hasSignedIntegerRepresentation() || T->isSignedFixedPointType()) &&
+        "Unexpected signed integer or fixed point type");
+    return T;
   }
 }
 
