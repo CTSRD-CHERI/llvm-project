@@ -9589,8 +9589,9 @@ QualType Sema::BuiltinEnumUnderlyingType(QualType BaseType,
 
 QualType Sema::BuiltinAddPointer(QualType BaseType, SourceLocation Loc) {
   QualType Pointer = BaseType.isReferenceable() || BaseType->isVoidType()
-                         ? BuildPointerType(BaseType.getNonReferenceType(), Loc,
-                                            DeclarationName())
+                         ? BuildPointerType(BaseType.getNonReferenceType(),
+                                            PointerInterpretation, Loc,
+                                            DeclarationName(), nullptr)
                          : BaseType;
 
   return Pointer.isNull() ? QualType() : Pointer;
