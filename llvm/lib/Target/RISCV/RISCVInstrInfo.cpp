@@ -1060,10 +1060,14 @@ void RISCVInstrInfo::insertIndirectBranch(MachineBasicBlock &MBB,
   assert(MBB.empty() &&
          "new block should be inserted for expanding unconditional branch");
   assert(MBB.pred_size() == 1);
+  assert(RestoreBB.empty() &&
+         "restore block should be inserted for restoring clobbered registers");
 
   MachineFunction *MF = MBB.getParent();
   MachineRegisterInfo &MRI = MF->getRegInfo();
   const RISCVSubtarget &ST = MF->getSubtarget<RISCVSubtarget>();
+  RISCVMachineFunctionInfo *RVFI = MF->getInfo<RISCVMachineFunctionInfo>();
+  const TargetRegisterInfo *TRI = ST.getRegisterInfo();
 
   if (!isInt<32>(BrOffset))
     report_fatal_error(
@@ -1084,19 +1088,43 @@ void RISCVInstrInfo::insertIndirectBranch(MachineBasicBlock &MBB,
   // uses the same workaround).
   Register ScratchReg = MRI.createVirtualRegister(RC);
   auto II = MBB.end();
-
+  // We may also update the jump target to RestoreBB later.
   MachineInstr &MI = *BuildMI(MBB, II, DL, get(PseudoOpcode))
                           .addReg(ScratchReg, RegState::Define | RegState::Dead)
                           .addMBB(&DestBB, RISCVII::MO_CALL);
 
   RS->enterBasicBlockEnd(MBB);
-  Register Scav = RS->scavengeRegisterBackwards(*RC,
-                                                MI.getIterator(), false, 0);
-  // TODO: The case when there is no scavenged register needs special handling.
-  assert(Scav != RISCV::NoRegister && "No register is scavenged!");
-  MRI.replaceRegWith(ScratchReg, Scav);
+  Register TmpGPR =
+      RS->scavengeRegisterBackwards(*RC, MI.getIterator(),
+                                    /*RestoreAfter=*/false, /*SpAdj=*/0,
+                                    /*AllowSpill=*/false);
+  if (TmpGPR != RISCV::NoRegister)
+    RS->setRegUsed(TmpGPR);
+  else {
+    // The case when there is no scavenged register needs special handling.
+
+    // Pick s11 because it doesn't make a difference.
+    TmpGPR = RISCVABI::isCheriPureCapABI(ST.getTargetABI()) ? RISCV::C27
+                                                            : RISCV::X27;
+
+    int FrameIndex = RVFI->getBranchRelaxationScratchFrameIndex();
+    if (FrameIndex == -1)
+      report_fatal_error("underestimated function size");
+
+    storeRegToStackSlot(MBB, MI, TmpGPR, /*IsKill=*/true, FrameIndex, RC, TRI);
+    TRI->eliminateFrameIndex(std::prev(MI.getIterator()),
+                             /*SpAdj=*/0, /*FIOperandNum=*/1);
+
+    MI.getOperand(1).setMBB(&RestoreBB);
+
+    loadRegFromStackSlot(RestoreBB, RestoreBB.end(), TmpGPR, FrameIndex, RC,
+                         TRI);
+    TRI->eliminateFrameIndex(RestoreBB.back(),
+                             /*SpAdj=*/0, /*FIOperandNum=*/1);
+  }
+
+  MRI.replaceRegWith(ScratchReg, TmpGPR);
   MRI.clearVirtRegs();
-  RS->setRegUsed(Scav);
 }
 
 bool RISCVInstrInfo::reverseBranchCondition(
