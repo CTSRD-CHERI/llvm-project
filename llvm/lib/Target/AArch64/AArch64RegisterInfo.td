@@ -97,7 +97,8 @@ def W28   : AArch64Reg<28, "w28">, DwarfRegNum<[28]>;
 def W29   : AArch64Reg<29, "w29">, DwarfRegNum<[29]>;
 def W30   : AArch64Reg<30, "w30">, DwarfRegNum<[30]>;
 def WSP   : AArch64Reg<31, "wsp">, DwarfRegNum<[31]>;
-def WZR   : AArch64Reg<31, "wzr">, DwarfRegAlias<WSP> { let isConstant = 1; }
+let isConstant = true in
+def WZR   : AArch64Reg<31, "wzr">, DwarfRegAlias<WSP>;
 
 let SubRegIndices = [sub_32] in {
 def X0    : AArch64Reg<0,   "x0",  [W0]>, DwarfRegAlias<W0>;
@@ -132,7 +133,8 @@ def X28   : AArch64Reg<28, "x28", [W28]>, DwarfRegAlias<W28>;
 def FP    : AArch64Reg<29, "x29", [W29]>, DwarfRegAlias<W29>;
 def LR    : AArch64Reg<30, "x30", [W30]>, DwarfRegAlias<W30>;
 def SP    : AArch64Reg<31, "sp",  [WSP]>, DwarfRegAlias<WSP>;
-def XZR   : AArch64Reg<31, "xzr", [WZR]>, DwarfRegAlias<WSP> { let isConstant = 1; }
+let isConstant = true in
+def XZR   : AArch64Reg<31, "xzr", [WZR]>, DwarfRegAlias<WSP>;
 }
 
 // Condition code register.
