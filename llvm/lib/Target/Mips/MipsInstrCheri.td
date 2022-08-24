@@ -287,11 +287,11 @@ def CSetBoundsImm : CheriFmtCSetImm<0x14, uimm11s0, "csetbounds",
 } // llet mayTrap = 1
 def CIncOffset : CheriFmt3Op<0x11, (outs CheriOpnd:$r1), (ins CheriOpnd:$r2, GPR64Opnd:$r3),
                             "cincoffset\t$r1, $r2, $r3",
-                            [(set CheriOpnd:$r1, (ptradd CheriOpnd:$r2, GPR64Opnd:$r3))]>;
+                            [(set CheriOpnd:$r1, (cptradd CheriOpnd:$r2, GPR64Opnd:$r3))]>;
 // We allow CIncOffset $c1, 10 as an alias for CIncOffset $c1, $c1, 10
 let TwoOperandAliasConstraint = "$r1 = $r2" in
 def CIncOffsetImm : CheriFmtCSetImm<0x13, simm11s0, "cincoffset",
-  [(set CheriOpnd:$r1, (ptradd CheriOpnd:$r2, (i64 simm11s0Pattern: $imm)))]>;
+  [(set CheriOpnd:$r1, (cptradd CheriOpnd:$r2, (i64 simm11s0Pattern: $imm)))]>;
 def CSetAddr : CheriFmtCSet<0x22, "addr", "address">;
 let mayTrap = 1, defsCanBeSealed = 1 in
 def CSealEntry : CheriFmt2Op<0x1d, (outs CheriOpnd:$r1), (ins CheriOpnd:$r2),
@@ -372,7 +372,7 @@ def CSetPCCOffset : CheriFmt2Op<7, (outs CheriOpnd:$r1), (ins GPR64Opnd:$r2),
                                 [(set CheriOpnd:$r1, (int_cheri_cap_offset_set (CapRegType (int_cheri_pcc_get)), GPR64Opnd: $r2))]>;
 def CGetPCCIncOffset : CheriFmt2Op<0x13, (outs CheriOpnd:$r1), (ins GPR64Opnd:$r2),
                                 "cgetpccincoffset\t${r1}, $r2",
-                                [(set CheriOpnd:$r1, (ptradd (CapRegType (int_cheri_pcc_get)), GPR64Opnd: $r2))]>;
+                                [(set CheriOpnd:$r1, (cptradd (CapRegType (int_cheri_pcc_get)), GPR64Opnd: $r2))]>;
 def CGetPCCSetAddr : CheriFmt2Op<0x14, (outs CheriOpnd:$r1), (ins GPR64Opnd:$r2),
                                 "cgetpccsetaddr\t${r1}, $r2",
                                 [(set CheriOpnd:$r1, (int_cheri_cap_address_set (CapRegType (int_cheri_pcc_get)), GPR64Opnd: $r2))]>;
@@ -444,8 +444,8 @@ def CTestSubset : CheriFmt3Op<0x20, (outs GPR64Opnd:$r1), (ins CheriOpnd0IsDDC:$
   "ctestsubset\t$r1, $r2, $r3", [(set GPR64Opnd: $r1, (CapSubsetTest CheriOpnd0IsDDC: $r2, CheriOpnd: $r3))]>;
 
 multiclass UseCNullPatterns<dag NullPat> {
-  def : Pat<(ptradd NullPat, (i64 0)), (CapRegType (COPY CNULL))>;
-  def : Pat<(ptradd NullPat, GPR64Opnd:$addr), (CIncOffset CNULL, $addr)>;
+  def : Pat<(cptradd NullPat, (i64 0)), (CapRegType (COPY CNULL))>;
+  def : Pat<(cptradd NullPat, GPR64Opnd:$addr), (CIncOffset CNULL, $addr)>;
   def : Pat<(int_cheri_cap_offset_set NullPat, GPR64Opnd:$addr), (CIncOffset CNULL, $addr)>;
   def : Pat<(int_cheri_cap_address_set NullPat, GPR64Opnd:$addr), (CSetAddr CNULL, $addr)>;
   // The immediate versions should be used first!
@@ -459,10 +459,10 @@ defm : UseCNullPatterns<(inttoptr (i64 0))>;
 
 // Cursors
 let AddedComplexity = 10 in {
-  def : Pat<(ptradd CheriOpnd:$r2, simm11s0Pattern:$imm),
+  def : Pat<(cptradd CheriOpnd:$r2, simm11s0Pattern:$imm),
           (CIncOffsetImm $r2, simm11s0Pattern: $imm)>;
 }
-def : Pat<(ptradd CheriOpnd:$r2, GPR64Opnd:$r3),
+def : Pat<(cptradd CheriOpnd:$r2, GPR64Opnd:$r3),
           (CIncOffset $r2, $r3)>;
 // Int to pointer in address space 0
 def : Pat<(CapRegType (inttoptr (i64 0))),
@@ -537,7 +537,7 @@ multiclass LoadViaCapScaled<bits<2> t, bit sExt, string instr_asm, RegisterOpera
                              (outs RC:$rd),
                              (ins GPR64Opnd:$rt, simm:$offset, CheriOpnd0IsDDC:$cb),
                              !strconcat(instr_asm, "\t$rd, ${rt}, ${offset}(${cb})"),
-                           [(set RC:$rd, (loadType (CapRegType (ptradd CheriOpnd0IsDDC:$cb, (add GPR64Opnd: $rt, (i64 immfrag:$offset))))))]>;
+                           [(set RC:$rd, (loadType (CapRegType (cptradd CheriOpnd0IsDDC:$cb, (add GPR64Opnd: $rt, (i64 immfrag:$offset))))))]>;
 }
 multiclass LoadViaCap<bits<2> t, bit e, string instr_asm, RegisterOperand RC, PatFrag storeType> :
   LoadViaCapScaled<t, e, instr_asm, RC, storeType, simm8, immSExt8>;
@@ -554,7 +554,7 @@ multiclass StoreViaCapScaled<bits<2> t, bit e, string instr_asm, RegisterOperand
                              (outs),
                              (ins RC:$rs, GPR64Opnd:$rt, simm:$offset, CheriOpnd0IsDDC:$cb),
                              !strconcat(instr_asm, "\t$rs, ${rt}, ${offset}(${cb})"),
-                           [(storeType RC:$rs, (CapRegType (ptradd CheriOpnd0IsDDC:$cb, (add GPR64Opnd: $rt, (i64 immfrag:$offset)))))]>;
+                           [(storeType RC:$rs, (CapRegType (cptradd CheriOpnd0IsDDC:$cb, (add GPR64Opnd: $rt, (i64 immfrag:$offset)))))]>;
 }
 multiclass StoreViaCap<bits<2> t, bit e, string instr_asm, RegisterOperand RC, PatFrag storeType> :
   StoreViaCapScaled<t, e, instr_asm, RC, storeType, simm8, immSExt8>;
@@ -940,19 +940,19 @@ def CapFI : ComplexPattern<cPTR, 1, "selectAddrFI", [frameindex], []>;
 // FIXME: truncstore/extload nodes are not being used?
 
 multiclass FrameIndexStorePatterns<PatFrag storeOp, ValueType intTy, Instruction OutOp, PatFrag immfrag> {
-  def : Pat<(storeOp intTy:$rs, (ptradd CapFI:$addr, immfrag:$offset)), (OutOp $rs, ZERO_64, immfrag:$offset, $addr)>;
+  def : Pat<(storeOp intTy:$rs, (cptradd CapFI:$addr, immfrag:$offset)), (OutOp $rs, ZERO_64, immfrag:$offset, $addr)>;
   def : Pat<(storeOp intTy:$rs, CapFI:$addr), (OutOp $rs, ZERO_64, (i64 0), $addr)>;
 }
 multiclass FrameIndexLoadPatterns<PatFrag loadOp, ValueType intTy, Instruction OutOp, PatFrag immfrag> {
-  def : Pat<(intTy (loadOp (ptradd CapFI:$addr, immfrag:$offset))), (OutOp ZERO_64, immfrag:$offset, $addr)>;
+  def : Pat<(intTy (loadOp (cptradd CapFI:$addr, immfrag:$offset))), (OutOp ZERO_64, immfrag:$offset, $addr)>;
   def : Pat<(intTy (loadOp CapFI:$addr)), (OutOp ZERO_64, (i64 0), $addr)>;
 }
 
 // FIXME: avoid this pattern for i8/i16 stack loads
-def : Pat<(store CheriOpnd:$cs, (ptradd CapFI:$addr, simm11s4Pattern:$offset)), (STORECAP $cs, ZERO_64, imm:$offset, $addr)>;
+def : Pat<(store CheriOpnd:$cs, (cptradd CapFI:$addr, simm11s4Pattern:$offset)), (STORECAP $cs, ZERO_64, imm:$offset, $addr)>;
 def : Pat<(store CheriOpnd:$cs, CapFI:$addr), (STORECAP $cs, ZERO_64, (i64 0), $addr)>;
 
-def : Pat<(load (ptradd CapFI:$addr, simm11s4Pattern:$offset)), (LOADCAP ZERO_64, imm:$offset, $addr)>;
+def : Pat<(load (cptradd CapFI:$addr, simm11s4Pattern:$offset)), (LOADCAP ZERO_64, imm:$offset, $addr)>;
 def : Pat<(load CapFI:$addr), (LOADCAP ZERO_64, (i64 0), $addr)>;
 
 // i64 load
@@ -1045,7 +1045,7 @@ def : Pat<(int_cheri_bounded_stack_cap CapFI:$fi, GPR64Opnd:$size),
 def : Pat<(cPTR CapFI:$fi), (CIncOffset (CapFI:$fi), ZERO_64)>;
 let AddedComplexity = 5 in {
   // Add complexity to select this before the generic CIncOffsetImm pattern
-  def : Pat<(ptradd CapFI:$fi, simm11s0Pattern:$offset), (CIncOffsetImm (CapFI:$fi), imm:$offset)>;
+  def : Pat<(cptradd CapFI:$fi, simm11s0Pattern:$offset), (CIncOffsetImm (CapFI:$fi), imm:$offset)>;
 }
 
 def : Pat<(int_cheri_bounded_stack_cap_dynamic CheriOpnd:$cs, GPR64Opnd:$rt),
@@ -1094,9 +1094,9 @@ class CapTableWrapperPat<SDNode node>:
 // def : Pat<(WrapperCapOp CheriOpnd:$cgp, GPR64Opnd:$in),
 //           (CapGlobalAddrPseudo CheriOpnd:$cgp, GPR64Opnd:$in)>;
 
-// Can't use ptradd/shl in output patters
+// Can't use cptradd/shl in output patters
 // def : Pat<(WrapperCapOp CheriOpnd:$cgp, GPR64Opnd:$in),
-//          (ptradd $cgp, (shl imm:$in, 4))>;
+//          (cptradd $cgp, (shl imm:$in, 4))>;
 
 
 def shift_imm_by_4 : OutPatFrag<(ops node:$in), (DSLL (DADDiu ZERO_64, $in), 4)>;

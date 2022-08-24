@@ -123,7 +123,7 @@ def uimm10_lsb0000 : Operand<XLenVT>,
 
 def CapFrameAddrRegImm : ComplexPattern<cPTR, 2,
                                         "SelectCapFrameAddrRegImm",
-                                        [frameindex, ptradd]>;
+                                        [frameindex, cptradd]>;
 def CapRegImm : ComplexPattern<cPTR, 2, "SelectCapRegImm">;
 
 //===----------------------------------------------------------------------===//
@@ -1208,8 +1208,8 @@ def : PatGpcrGpr<int_cheri_cap_flags_set, CSetFlags>;
 def : PatGpcrGpr<int_cheri_cap_offset_set, CSetOffset>;
 def : PatGpcrGpr<int_cheri_cap_address_set, CSetAddr>;
 def : PatGpcrGpr<int_cheri_cap_high_set, CSetHigh>;
-def : PatGpcrGpr<ptradd, CIncOffset>;
-def : PatGpcrSimm12<ptradd, CIncOffsetImm>;
+def : PatGpcrGpr<cptradd, CIncOffset>;
+def : PatGpcrSimm12<cptradd, CIncOffsetImm>;
 def : PatGpcrGpr<int_cheri_cap_bounds_set, CSetBounds>;
 def : PatGpcrGpr<int_cheri_cap_bounds_set_exact, CSetBoundsExact>;
 def : PatGpcrUimm12<int_cheri_cap_bounds_set, CSetBoundsImm>;
@@ -1280,7 +1280,7 @@ multiclass CheriSetCCPatGpcrImm<PatFrag CondOp, Operand ImmTy, dag GprImmDag> {
   def : Pat<(CondOp GPCR:$cs1, (inttoptr ImmTy:$imm12)),
             (OutPatFrag<(ops node:$rs1, node:$imm12), GprImmDag>
               (EXTRACT_SUBREG GPCR:$cs1, sub_cap_addr), ImmTy:$imm12)>;
-  def : Pat<(CondOp GPCR:$cs1, (ptradd (inttoptr (XLenVT 0)), ImmTy:$imm12)),
+  def : Pat<(CondOp GPCR:$cs1, (cptradd (inttoptr (XLenVT 0)), ImmTy:$imm12)),
             (OutPatFrag<(ops node:$rs1, node:$imm12), GprImmDag>
               (EXTRACT_SUBREG GPCR:$cs1, sub_cap_addr), ImmTy:$imm12)>;
   def : Pat<(CondOp GPCR:$cs1,
@@ -1307,7 +1307,7 @@ class CheriSetCCPatGpcrNull<PatFrag CondOp, dag GprDag>
 class Swap<PatFrag BinFrag>
     : PatFrag<(ops node:$a, node:$b), (BinFrag $b, $a)>;
 
-// NB: Constants are wrapped as (ptradd (inttoptr 0) C) so the operand order
+// NB: Constants are wrapped as (cptradd (inttoptr 0) C) so the operand order
 // isn't canonicalised like for integers so we have to add extra patterns for
 // the commutative and inverse cases. Maybe we should support Constant:cN,
 // represent them as (inttoptr C), or just canonicalise the current form?
@@ -1768,7 +1768,7 @@ def PseudoCBRIND : Pseudo<(outs), (ins GPCR:$rs1, simm12:$imm12), []>,
                    PseudoInstExpansion<(CJALR C0, GPCR:$rs1, simm12:$imm12)>;
 
 def : Pat<(brind GPCR:$rs1), (PseudoCBRIND GPCR:$rs1, 0)>;
-def : Pat<(brind (ptradd GPCR:$rs1, simm12:$imm12)),
+def : Pat<(brind (cptradd GPCR:$rs1, simm12:$imm12)),
           (PseudoCBRIND GPCR:$rs1, simm12:$imm12)>;
 } // Predicates = [HasCheri, IsCapMode, IsPureCapABI]
 
