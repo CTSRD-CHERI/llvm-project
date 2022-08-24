@@ -109,10 +109,12 @@ def SDTOther  : SDTypeProfile<1, 0, [SDTCisVT<0, OtherVT>]>; // for 'vt'.
 def SDTUNDEF  : SDTypeProfile<1, 0, []>;                     // for 'undef'.
 def SDTUnaryOp  : SDTypeProfile<1, 1, []>;                   // for bitconvert.
 
-def SDTPtrAddOp : SDTypeProfile<1, 2, [
+def SDTCPtrAddOp : SDTypeProfile<1, 2, [
   SDTCisSameAs<0, 1>, SDTCisPtrTy<0>, SDTCisInt<2>
 ]>;
-
+def SDTPtrAddOp : SDTypeProfile<1, 2, [     // ptradd
+  SDTCisSameAs<0, 1>, SDTCisInt<2>, SDTCisPtrTy<1>
+]>;
 def SDTIntBinOp : SDTypeProfile<1, 2, [     // add, and, or, xor, udiv, etc.
   SDTCisSameAs<0, 1>, SDTCisSameAs<0, 2>, SDTCisInt<0>
 ]>;
@@ -390,6 +392,7 @@ def tblockaddress: SDNode<"ISD::TargetBlockAddress",  SDTPtrLeaf, [],
 
 def add        : SDNode<"ISD::ADD"       , SDTIntBinOp   ,
                         [SDNPCommutative, SDNPAssociative]>;
+def ptradd     : SDNode<"ISD::ADD"       , SDTPtrAddOp, []>;
 def sub        : SDNode<"ISD::SUB"       , SDTIntBinOp>;
 def mul        : SDNode<"ISD::MUL"       , SDTIntBinOp,
                         [SDNPCommutative, SDNPAssociative]>;
@@ -474,7 +477,7 @@ def trunc      : SDNode<"ISD::TRUNCATE"   , SDTIntTruncOp>;
 def bitconvert : SDNode<"ISD::BITCAST"    , SDTUnaryOp>;
 def inttoptr   : SDNode<"ISD::INTTOPTR"   , SDTUnaryOp>;
 def ptrtoint   : SDNode<"ISD::PTRTOINT"   , SDTUnaryOp>;
-def ptradd     : SDNode<"ISD::PTRADD"     , SDTPtrAddOp>;
+def cptradd     : SDNode<"ISD::PTRADD"     , SDTCPtrAddOp>;
 def addrspacecast : SDNode<"ISD::ADDRSPACECAST", SDTUnaryOp>;
 def freeze     : SDNode<"ISD::FREEZE"     , SDTFreeze>;
 def extractelt : SDNode<"ISD::EXTRACT_VECTOR_ELT", SDTVecExtract>;

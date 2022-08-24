@@ -1252,10 +1252,10 @@ performCIncOffsetToCandAddrCombine(SDNode *N, SelectionDAG &DAG,
   // reuse of constants instead of always emitting the NOR64. It also means
   // we don't have to duplicate the pattern for ptraddr and the incoffset intrinsic
   // Tablegen pattern:
-  // def : Pat<(ptradd CheriOpnd: $r1, (sub (i64 0), (and (int_cheri_cap_address_get CheriOpnd: $r1), GPR64Opnd: $mask))),
+  // def : Pat<(cptradd CheriOpnd: $r1, (sub (i64 0), (and (int_cheri_cap_address_get CheriOpnd: $r1), GPR64Opnd: $mask))),
   //           (CAndAddr $r1, (XORi64 (i64 -1), GPR64Opnd:$mask))>;
 
-  // Could be ptraddr or incoffset
+  // Could be cptraddr or incoffset
   SDValue FirstOperand;
   SDValue SecondOperand;
   if (N->getOpcode() == ISD::INTRINSIC_WO_CHAIN) {
@@ -1301,7 +1301,7 @@ performCIncOffsetToCandAddrCombine(SDNode *N, SelectionDAG &DAG,
       // Same operand -> for getaddr and ptraddr -> can combine into the
       // pattern for a CAndAddr.
       //
-      //   (ptradd CheriOpnd:$r1,
+      //   (cptradd CheriOpnd:$r1,
       //           (sub (i64 0),
       //                (and (int_cheri_cap_address_get CheriOpnd:$r1),
       //                     GPR64Opnd:$mask)))
