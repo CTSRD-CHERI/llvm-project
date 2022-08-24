@@ -1123,6 +1123,7 @@ let Predicates = [HasCheri, HasStdExtD, IsRV32] in {
 
 // Stores an FPR via splitting to two GPRs.
 let hasSideEffects = 0, mayLoad = 0, mayStore = 1,
+    Constraints = "@earlyclobber $tmplo,@earlyclobber $tmphi",
     usesCustomInserter = 1 in
 def SplitStoreF64Pseudo
     : Pseudo<(outs GPR:$tmplo, GPR:$tmphi, GPR:$tmpdst),
@@ -1130,6 +1131,7 @@ def SplitStoreF64Pseudo
 
 // Stores an FPR via splitting to two GPRs.
 let hasSideEffects = 0, mayLoad = 0, mayStore = 1,
+    Constraints = "@earlyclobber $tmplo,@earlyclobber $tmphi",
     usesCustomInserter = 1 in
 def CheriSplitStoreF64Pseudo
     : Pseudo<(outs GPR:$tmplo, GPR:$tmphi, GPCR:$tmpdst),
