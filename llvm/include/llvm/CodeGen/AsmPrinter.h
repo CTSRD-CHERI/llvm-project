@@ -197,6 +197,9 @@ protected:
   /// The symbol used to represent the start of the current function for the
   /// purpose of exception handling for pure-capability CHERI targets.
   MCSymbol *CurrentFnBeginForEH = nullptr;
+  
+  /// For dso_local functions, the current $local alias for the function.
+  MCSymbol *CurrentFnBeginLocal = nullptr;
 
   /// A vector of all debug/EH info emitters we should use. This vector
   /// maintains ownership of the emitters.
