@@ -165,6 +165,7 @@ def CheriPedantic : DiagGroup<"cheri-pedantic", [CHERICapabilityToIntegerCast, C
 def MIPSCHERIBugs: DiagGroup<"mips-cheri-bugs">;
 
 def C99Compat : DiagGroup<"c99-compat">;
+def C2xCompat : DiagGroup<"c2x-compat">;
 def CXXCompat: DiagGroup<"c++-compat">;
 def ExternCCompat : DiagGroup<"extern-c-compat">;
 def KeywordCompat : DiagGroup<"keyword-compat">;
