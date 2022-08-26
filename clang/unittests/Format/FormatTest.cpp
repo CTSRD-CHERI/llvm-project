@@ -26019,6 +26019,14 @@ TEST_F(FormatTest, RemoveBraces) {
                "}",
                Style);
 
+  verifyFormat("if (a) // comment\n"
+               "  b = 1;",
+               "if (a) // comment\n"
+               "{\n"
+               "  b = 1;\n"
+               "}",
+               Style);
+
   Style.ColumnLimit = 20;
 
   verifyFormat("int ab = [](int i) {\n"
