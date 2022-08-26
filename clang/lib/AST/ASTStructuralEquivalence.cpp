@@ -1080,8 +1080,6 @@ static bool IsStructurallyEquivalent(StructuralEquivalenceContext &Context,
     if (!IsStructurallyEquivalent(Context, Subst1->getReplacementType(),
                                   Subst2->getReplacementType()))
       return false;
-    if (Subst1->getPackIndex() != Subst2->getPackIndex())
-      return false;
     break;
   }
 
