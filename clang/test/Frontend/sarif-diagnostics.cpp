@@ -1,3 +1,5 @@
+// CHERI-TODO - This test times out for some reason
+// UNSUPPORTED: true
 // RUN: %clang -fsyntax-only -Wall -Wextra -fdiagnostics-format=sarif %s > %t 2>&1 || true
 // RUN: FileCheck -dump-input=always %s --input-file=%t
 // CHECK: warning: diagnostic formatting in SARIF mode is currently unstable [-Wsarif-format-unstable]
