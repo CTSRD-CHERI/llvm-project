@@ -562,8 +562,7 @@ objcopy::parseObjcopyOptions(ArrayRef<const char *> RawArgsArr,
   ObjcopyOptTable T;
 
   const char *const *DashDash =
-      std::find_if(RawArgsArr.begin(), RawArgsArr.end(),
-                   [](StringRef Str) { return Str == "--"; });
+      llvm::find_if(RawArgsArr, [](StringRef Str) { return Str == "--"; });
   ArrayRef<const char *> ArgsArr = makeArrayRef(RawArgsArr.begin(), DashDash);
   if (DashDash != RawArgsArr.end())
     DashDash = std::next(DashDash);
@@ -1223,8 +1222,7 @@ Expected<DriverConfig>
 objcopy::parseStripOptions(ArrayRef<const char *> RawArgsArr,
                            function_ref<Error(Error)> ErrorCallback) {
   const char *const *DashDash =
-      std::find_if(RawArgsArr.begin(), RawArgsArr.end(),
-                   [](StringRef Str) { return Str == "--"; });
+      llvm::find_if(RawArgsArr, [](StringRef Str) { return Str == "--"; });
   ArrayRef<const char *> ArgsArr = makeArrayRef(RawArgsArr.begin(), DashDash);
   if (DashDash != RawArgsArr.end())
     DashDash = std::next(DashDash);
