@@ -3373,7 +3373,7 @@ Value *ScalarExprEmitter::VisitUnaryNot(const UnaryOperator *E) {
   bool IsIntCap = E->getType()->isCHERICapabilityType(CGF.getContext());
   if (IsIntCap)
     Op = CGF.getCapabilityIntegerValue(Op);
-  Op = Builder.CreateNot(Op, "neg");
+  Op = Builder.CreateNot(Op, "not");
   if (IsIntCap)
     Op = CGF.setCapabilityIntegerValue(Base, Op, E->getExprLoc());
   return Op;
