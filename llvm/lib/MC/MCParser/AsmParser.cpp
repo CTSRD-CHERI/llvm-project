@@ -1971,7 +1971,7 @@ bool AsmParser::parseStatement(ParseStatementInfo &Info,
     if (discardLTOSymbol(IDVal))
       return false;
 
-    getTargetParser().doBeforeLabelEmit(Sym);
+    getTargetParser().doBeforeLabelEmit(Sym, IDLoc);
 
     // Emit the label.
     if (!getTargetParser().isParsingMSInlineAsm())
@@ -6341,7 +6341,7 @@ bool HLASMAsmParser::parseAsHLASMLabel(ParseStatementInfo &Info,
           ? LabelVal.upper()
           : LabelVal);
 
-  getTargetParser().doBeforeLabelEmit(Sym);
+  getTargetParser().doBeforeLabelEmit(Sym, LabelLoc);
 
   // Emit the label.
   Out.emitLabel(Sym, LabelLoc);
