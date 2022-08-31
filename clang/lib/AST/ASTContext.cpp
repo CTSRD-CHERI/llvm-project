@@ -5233,7 +5233,9 @@ ASTContext::getDependentTemplateSpecializationType(
                                                    CanonArgs);
 
     // Find the insert position again.
-    DependentTemplateSpecializationTypes.FindNodeOrInsertPos(ID, InsertPos);
+    [[maybe_unused]] auto *Nothing =
+        DependentTemplateSpecializationTypes.FindNodeOrInsertPos(ID, InsertPos);
+    assert(!Nothing && "canonical type broken");
   }
 
   void *Mem = Allocate((sizeof(DependentTemplateSpecializationType) +
@@ -5848,7 +5850,9 @@ QualType ASTContext::getAutoTypeInternal(
         Canon = getAutoTypeInternal(QualType(), Keyword, IsDependent, IsPack,
                                     TypeConstraintConcept, CanonArgs, true);
         // Find the insert position again.
-        AutoTypes.FindNodeOrInsertPos(ID, InsertPos);
+        [[maybe_unused]] auto *Nothing =
+            AutoTypes.FindNodeOrInsertPos(ID, InsertPos);
+        assert(!Nothing && "canonical type broken");
       }
     } else {
       Canon = DeducedType.getCanonicalType();
