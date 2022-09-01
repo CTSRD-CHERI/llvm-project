@@ -36,7 +36,7 @@ void test_dst_unliagned_src_cap_memcpy(void *align1, align2_ptr align2, align4_p
   // expected-note@-2{{use __builtin_assume_aligned() or cast to (u)intptr_t*}}
   // CHECK: call void @llvm.memcpy.p200i8.p200i8.i64(i8 addrspace(200)*
   // CHECK-SAME: align 1 %{{.+}}, i8 addrspace(200)* align 16 %{{.+}}, i64 16, i1 false)
-  // CHECK-SAME: [[PRESERVE_TAGS_ATTRIB_TYPE_A:#[0-9]+]]
+  // CHECK-SAME: [[PRESERVE_TAGS_ATTRIB_TYPE_A:#[0-9]+]]{{$}}
 
   memcpy(align2, src, sizeof(*src));
   // expected-warning@-1{{memcpy operation with capability argument 'a' (aka 'unsigned __intcap') and underaligned destination (aligned to 2 bytes) may be inefficient or result in CHERI tags bits being stripped}}
@@ -78,27 +78,23 @@ void test_no_warn_for_non_caps(short *align2, align2_ptr align2_not_short, int n
 
   memcpy(align2, &not_a_cap, sizeof(not_a_cap)); // no warning
   // CHECK: call void @llvm.memcpy.p200i8.p200i8.i64(i8 addrspace(200)*
-  // CHECK-SAME: align 2 %{{.+}}, i8 addrspace(200)* align 4 %{{.+}}, i64 4, i1 false){{$}}
-  // FIXME-SAME: [[NO_PRESERVE_TAGS_ATTRIB:#[0-9]+]]{{$}}
+  // CHECK-SAME: align 2 %{{.+}}, i8 addrspace(200)* align 4 %{{.+}}, i64 4, i1 false) [[NO_PRESERVE_TAGS_ATTRIB:#[0-9]+]]{{$}}
 
   memcpy(align2, struct_without_cap, sizeof(*struct_without_cap)); // no warning
   // CHECK: call void @llvm.memcpy.p200i8.p200i8.i64(i8 addrspace(200)*
-  // CHECK-SAME: align 2 %{{.+}}, i8 addrspace(200)* align 4 %{{.+}}, i64 8, i1 false){{$}}
-  // FIXME-SAME: [[NO_PRESERVE_TAGS_ATTRIB:#[0-9]+]]{{$}}
+  // CHECK-SAME: align 2 %{{.+}}, i8 addrspace(200)* align 4 %{{.+}}, i64 8, i1 false) [[NO_PRESERVE_TAGS_ATTRIB:#[0-9]+]]{{$}}
 
   memcpy(align2, capptr, sizeof(*capptr));
   // expected-warning@-1{{memcpy operation with capability argument 'unsigned __intcap' and underaligned destination (aligned to 2 bytes) may be inefficient or result in CHERI tags bits being stripped}}
   // expected-note@-2{{use __builtin_assume_aligned() or cast to (u)intptr_t*}}
   // CHECK: call void @llvm.memcpy.p200i8.p200i8.i64(i8 addrspace(200)*
-  // CHECK-SAME: align 2 %{{.+}}, i8 addrspace(200)* align 16 %{{.+}}, i64 16, i1 false)
-  // CHECK-SAME: [[PRESERVE_TAGS_ATTRIB_TYPE_UINTCAP:#[0-9]+]]{{$}}
+  // CHECK-SAME: align 2 %{{.+}}, i8 addrspace(200)* align 16 %{{.+}}, i64 16, i1 false) [[PRESERVE_TAGS_ATTRIB_TYPE_UINTCAP:#[0-9]+]]{{$}}
 
-  memcpy(align2_not_short, struct_with_cap, sizeof(*struct_with_cap));
+  memcpy(align2, struct_with_cap, sizeof(*struct_with_cap));
   // expected-warning@-1{{memcpy operation with capability argument 'struct with_cap' and underaligned destination (aligned to 2 bytes) may be inefficient or result in CHERI tags bits being stripped}}
   // expected-note@-2{{use __builtin_assume_aligned() or cast to (u)intptr_t*}}
   // CHECK: call void @llvm.memcpy.p200i8.p200i8.i64(i8 addrspace(200)*
-  // CHECK-SAME: align 1 %{{.+}}, i8 addrspace(200)* align 16 %{{.+}}, i64 32, i1 false)
-  // CHECK-SAME: [[PRESERVE_TAGS_ATTRIB_TYPE_STRUCT_WITH_CAP:#[0-9]+]]{{$}}
+  // CHECK-SAME: align 2 %{{.+}}, i8 addrspace(200)* align 16 %{{.+}}, i64 32, i1 false) [[PRESERVE_TAGS_ATTRIB_TYPE_STRUCT_WITH_CAP:#[0-9]+]]{{$}}
 }
 
 void test_dst_unliagned_src_cap_memmove(void *align1, align2_ptr align2, align4_ptr align4, align8_ptr align8, align_cap_ptr align_cap, a *src) {
@@ -328,7 +324,7 @@ void test_builtin_assume_aligned_memmove_intermediate_var(char *align1, char *al
   // CHECK-SAME: [[PRESERVE_TAGS_ATTRIB_TYPE_A]]{{$}}
 }
 
-// FIXME-DAG: attributes [[NO_PRESERVE_TAGS_ATTRIB]] = { no_preserve_cheri_tags }
+// CHECK-DAG: attributes [[NO_PRESERVE_TAGS_ATTRIB]] = { no_preserve_cheri_tags }
 // CHECK-DAG: attributes [[PRESERVE_TAGS_ATTRIB_TYPE_A]] = { must_preserve_cheri_tags "frontend-memtransfer-type"="'a' (aka 'unsigned __intcap')" }
 // CHECK-DAG: attributes [[PRESERVE_TAGS_ATTRIB_TYPE_STRUCT_WITH_CAP]] = { must_preserve_cheri_tags "frontend-memtransfer-type"="'struct with_cap'" }
 // CHECK-DAG: attributes [[PRESERVE_TAGS_ATTRIB_TYPE_UINTCAP]] = { must_preserve_cheri_tags "frontend-memtransfer-type"="'unsigned __intcap'" }
