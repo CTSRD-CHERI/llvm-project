@@ -1280,6 +1280,11 @@ Instruction *InstCombinerImpl::foldOpIntoPhi(Instruction &I, PHINode *PN) {
         InV = PN->getIncomingValue(i);
       NewPN->addIncoming(InV, PN->getIncomingBlock(i));
     }
+  } else if (auto *EV = dyn_cast<ExtractValueInst>(&I)) {
+    for (unsigned i = 0; i != NumPHIValues; ++i)
+      NewPN->addIncoming(Builder.CreateExtractValue(PN->getIncomingValue(i),
+                                                    EV->getIndices(), "phi.ev"),
+                         PN->getIncomingBlock(i));
   } else {
     CastInst *CI = cast<CastInst>(&I);
     Type *RetTy = CI->getType();
@@ -3406,6 +3411,10 @@ Instruction *InstCombinerImpl::visitExtractValueInst(ExtractValueInst &EV) {
       return replaceInstUsesWith(EV, NL);
     }
   }
+
+  if (auto *PN = dyn_cast<PHINode>(Agg))
+    if (Instruction *Res = foldOpIntoPhi(EV, PN))
+      return Res;
 
   // We could simplify extracts from other values. Note that nested extracts may
   // already be simplified implicitly by the above: extract (extract (insert) )
