@@ -959,11 +959,13 @@ static bool isLessThanCapSize(const ASTContext &Context,
 }
 
 static bool copiesAtMostTypeSize(const QualType Ty, const ASTContext &Context,
-                                 Optional<CharUnits> Size) {
+                                 Optional<CharUnits> Size,
+                                 uint64_t BitOffset = 0) {
   if (!Size)
     return false;
-  auto TypeSize = Context.getTypeSizeInCharsIfKnown(Ty);
-  return TypeSize && Size <= TypeSize;
+  auto TypeSize = Context.getTypeSize(Ty);
+  assert(BitOffset <= TypeSize);
+  return (uint64_t)Context.toBits(*Size) <= TypeSize - BitOffset;
 }
 
 llvm::PreserveCheriTags
@@ -1004,61 +1006,134 @@ CodeGenTypes::copyShouldPreserveTags(const Expr *DestPtr, const Expr *SrcPtr,
   return DstPreserve;
 }
 
-static const VarDecl *findUnderlyingVarDecl(const Expr *UnderlyingExpr) {
+struct UnderlyingVarDeclInfo {
+  const ValueDecl *MemberDecl = nullptr;
+  QualType CopiedType;
+  uint64_t CopiedTypeOffset = 0;
+  bool ConservativeApproxmation = false;
+  bool CanAffectOtherTypes = false;
+};
+
+static const ValueDecl *
+findUnderlyingVarDeclForCopy(const ASTContext &Context, const Expr *E,
+                             UnderlyingVarDeclInfo &Info,
+                             Optional<CharUnits> Size) {
+  const Expr *UnderlyingExpr = E->IgnoreParenCasts();
   if (auto *UO = dyn_cast<UnaryOperator>(UnderlyingExpr)) {
+    // NB: We only look through AddrOf here to ensure that we don't classify
+    // expressions such as `*(&ptr)` as having a known underlying type (it could
+    // still be anything as that expression is equivalent to just `ptr`).
     if (UO->getOpcode() == UO_AddrOf) {
-      return findUnderlyingVarDecl(UO->getSubExpr());
+      return findUnderlyingVarDeclForCopy(Context, UO->getSubExpr(), Info,
+                                          Size);
     }
-  } else if (auto DRE = dyn_cast<DeclRefExpr>(UnderlyingExpr)) {
-    return dyn_cast<const VarDecl>(DRE->getDecl());
+  } else if (auto *DRE = dyn_cast<DeclRefExpr>(UnderlyingExpr)) {
+    return DRE->getDecl();
+  } else if (auto *ME = dyn_cast<MemberExpr>(UnderlyingExpr)) {
+    Info.MemberDecl = ME->getMemberDecl();
+    UnderlyingVarDeclInfo IgnoredInfo; // Don't update `Info` when recursing.
+    // If the copy size is up to sizeof(member), we can precisely determine the
+    // type and do not have to be conservative.
+    if (copiesAtMostTypeSize(Info.MemberDecl->getType(), Context, Size)) {
+      Info.CopiedType = Info.MemberDecl->getType();
+      return findUnderlyingVarDeclForCopy(Context, ME->getBase(), IgnoredInfo,
+                                          Size);
+    }
+    // For address-of member expressions where the size is not known to be just
+    // that member (or a subset thereof), we must conservatively assume that
+    // the copy extends across all fields of the struct (and possibly
+    // following instances of that struct for arrays and/or containing structs).
+    Info.CanAffectOtherTypes = true;
+    Info.ConservativeApproxmation = true;
+    // There is one optimization we can make though: If copy size - field offset
+    // is up to the size of the containing struct/class we can use that struct
+    // as a precise approximation.
+    // XXX: we could only look at the following fields, but that would make
+    // the analysis rather complicated and is unlikely to have large benefits.
+    if (auto *FD = dyn_cast<FieldDecl>(Info.MemberDecl)) {
+      auto ParentType = QualType(FD->getParent()->getTypeForDecl(), 0);
+      auto FieldOffset = Context.getFieldOffset(FD);
+      if (copiesAtMostTypeSize(ParentType, Context, Size, FieldOffset)) {
+        Info.CopiedType = ParentType;
+        Info.CopiedTypeOffset = FieldOffset;
+        Info.CanAffectOtherTypes = false;
+      }
+    }
+    return findUnderlyingVarDeclForCopy(Context, ME->getBase(), IgnoredInfo,
+                                        Size);
   }
-  // TODO: We could improve analysis for MemberExpr, but only if the copy size
-  //  is <= the size of the member, since memcpy() accross multiple fields is
-  //  a something that exists (despite not being compatible with sub-object
-  //  bounds). For now we just look at the declaration of the entire struct
-  return nullptr;
+  Info.CanAffectOtherTypes = true;
+  return {};
 }
 
 llvm::PreserveCheriTags
 CodeGenTypes::copyShouldPreserveTags(const Expr *E, Optional<CharUnits> Size) {
   assert(E->getType()->isAnyPointerType());
+  assert(!isLessThanCapSize(Context, Size) &&
+         "Should not call this function for small copies!");
   // Ignore the implicit cast to void* for the memcpy call.
   // Note: IgnoreParenImpCasts() might strip function/array-to-pointer decay
   // so we can't always call getPointeeType().
-  QualType Ty = E->IgnoreParenImpCasts()->getType();
-  if (Ty->isAnyPointerType())
-    Ty = Ty->getPointeeType();
+  QualType ExprTy = E->IgnoreParenImpCasts()->getType();
+  QualType PointeeTy =
+      ExprTy->isAnyPointerType() ? ExprTy->getPointeeType() : ExprTy;
+  QualType CheckTy = PointeeTy;
   const Expr *UnderlyingExpr = E->IgnoreParenCasts();
   if (const auto *SL = dyn_cast<StringLiteral>(UnderlyingExpr)) {
     // String literals can never contain tag bits.
     return llvm::PreserveCheriTags::Unnecessary;
   }
   bool EffectiveTypeKnown = false;
-  const VarDecl *UnderlyingVar = findUnderlyingVarDecl(UnderlyingExpr);
-  if (UnderlyingVar) {
-    QualType VarTy = UnderlyingVar->getType();
-    assert(!VarTy->isDependentType() && !VarTy->containsErrors() &&
+  UnderlyingVarDeclInfo UnderlyingInfo;
+  const ValueDecl *UnderlyingDecl = findUnderlyingVarDeclForCopy(
+      Context, UnderlyingExpr, UnderlyingInfo, Size);
+  if (UnderlyingDecl) {
+    auto UnderlyingTy = UnderlyingDecl->getType();
+    assert(!UnderlyingTy->isDependentType() &&
+           !UnderlyingTy->containsErrors() &&
            "Unexpected dependent/error type");
-    if (VarTy->isReferenceType()) {
+    if (UnderlyingTy->isReferenceType()) {
       // If the variable declaration is a C++ reference we can assume that the
       // effective type of the object matches the type of the reference since
       // forming the reference would have been invalid otherwise.
-      Ty = VarTy->getPointeeType();
+      CheckTy = UnderlyingTy->getPointeeType();
       EffectiveTypeKnown = true;
-    } else if (!VarTy->isAnyPointerType()) {
-      // If we found a non-pointer declaration that we are copying to/from, use
+    } else if (!UnderlyingTy->isAnyPointerType()) {
+      // If we found a non-pointer declaration (e.g. address-of a variable), use
       // the type of the declaration for the analysis since that defines the
       // effective type. For pointers we can't assume anything since they could
       // be "allocated objects" without a declared type.
-      Ty = VarTy;
-      EffectiveTypeKnown = true;
+      CheckTy = UnderlyingTy;
+      EffectiveTypeKnown = !UnderlyingInfo.CanAffectOtherTypes;
     }
+    // If we were able to precisely/conservatively determine the copied type
+    // use that instead of the VarDecl type for the tag-preservation checks.
+    if (!UnderlyingInfo.CopiedType.isNull())
+      CheckTy = UnderlyingInfo.CopiedType;
   }
-  return copyShouldPreserveTagsForPointee(Ty, EffectiveTypeKnown, Size);
+  llvm::PreserveCheriTags Result = copyShouldPreserveTagsForPointee(
+      CheckTy, EffectiveTypeKnown, Size, UnderlyingInfo.CopiedTypeOffset);
+  if (UnderlyingInfo.ConservativeApproxmation &&
+      Result == llvm::PreserveCheriTags::Required) {
+    // If we had a MemberExpr and were looking at the entire containing struct
+    // rather than just the single field, we only add the must_preserve_tags
+    // attribute if the pointee type is actually a capability type. This avoids
+    // lots of unnecessary warnings and still lets backend/middle-end decide
+    // how to handle the copy.
+    // TODO: this can be removed once we no longer add must_preserve_cheri_tags.
+    assert(UnderlyingInfo.MemberDecl != nullptr);
+    if (copyShouldPreserveTagsForPointee(UnderlyingInfo.MemberDecl->getType(),
+                                         /*EffectiveTypeKnown=*/true, Size,
+                                         0) !=
+        llvm::PreserveCheriTags::Required)
+      Result = llvm::PreserveCheriTags::Unknown;
+  }
+  return Result;
 }
 
 llvm::PreserveCheriTags CodeGenTypes::copyShouldPreserveTagsForPointee(
-    QualType Pointee, bool EffectiveTypeKnown, Optional<CharUnits> Size) {
+    QualType Pointee, bool EffectiveTypeKnown, Optional<CharUnits> Size,
+    uint64_t CopyOffsetInBits) {
   // Don't add the no_preserve_tags/must_preserve_tags attribute for non-CHERI
   // targets to avoid changing tests and to avoid compile-time impact.
   if (!Context.getTargetInfo().SupportsCapabilities())
@@ -1100,7 +1175,7 @@ llvm::PreserveCheriTags CodeGenTypes::copyShouldPreserveTagsForPointee(
     return llvm::PreserveCheriTags::Unknown;
   }
 
-  if (!copiesAtMostTypeSize(Pointee, Context, Size)) {
+  if (!copiesAtMostTypeSize(Pointee, Context, Size, CopyOffsetInBits)) {
     // We can only mark the copy as non-tag-preserving is we know the size
     // remains within the bounds of the copied type. For example with C++
     // classes, there could be a subclass that contains capabilities, so we have

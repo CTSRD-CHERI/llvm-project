@@ -982,7 +982,7 @@ namespace {
 
       // We can pass EffectiveTypeKnown=true since this a C++ field copy.
       auto PreserveTags = CGF.getTypes().copyShouldPreserveTagsForPointee(
-          RecordTy, /*EffectiveTypeKnown=*/true, MemcpySize);
+          RecordTy, /*EffectiveTypeKnown=*/true, MemcpySize, FirstByteOffset);
       emitMemcpyIR(
           Dest.isBitField() ? Dest.getBitFieldAddress() : Dest.getAddress(CGF),
           Src.isBitField() ? Src.getBitFieldAddress() : Src.getAddress(CGF),

@@ -324,12 +324,15 @@ public:  // These are internal details of CGT that shouldn't be used externally.
   /// pointee type rather than the type of the buffer pointer.
   llvm::PreserveCheriTags
   copyShouldPreserveTagsForPointee(QualType CopyTy, bool EffectiveTypeKnown,
-                                   Optional<CharUnits> Size);
+                                   Optional<CharUnits> Size,
+                                   uint64_t CopyOffsetInBits);
   llvm::PreserveCheriTags
   copyShouldPreserveTagsForPointee(QualType CopyTy, bool EffectiveTypeKnown,
-                                   const llvm::Value *Size) {
+                                   const llvm::Value *Size,
+                                   uint64_t CopyOffsetInBits = 0) {
     return copyShouldPreserveTagsForPointee(CopyTy, EffectiveTypeKnown,
-                                            copySizeInCharUnits(Size));
+                                            copySizeInCharUnits(Size),
+                                            CopyOffsetInBits);
   }
 
   bool isRecordLayoutComplete(const Type *Ty) const;

@@ -43,26 +43,25 @@ void test_member_expr_byval(void *buf, struct TestWithCap t, struct TestNoCap t2
   // CHECK: call void @llvm.memcpy.p200i8.p200i8.i64(
   // CHECK-SAME: , i64 32, i1 false) [[MUST_PRESERVE_CHARPTR:#[0-9]+]]{{$}}
   // No attribute for the following four cases:
-  __builtin_memcpy(buf, &t.not_a_cap, 32);
+  __builtin_memcpy(buf, &t.not_a_cap, 64);
   // CHECK: call void @llvm.memcpy.p200i8.p200i8.i64(
-  // CHECK-SAME: , i64 32, i1 false){{$}}
-  __builtin_memcpy(buf, t.array, 32);
+  // CHECK-SAME: , i64 64, i1 false){{$}}
+  __builtin_memcpy(buf, t.array, 48);
   // CHECK: call void @llvm.memcpy.p200i8.p200i8.i64(
-  // CHECK-SAME: , i64 32, i1 false){{$}}
+  // CHECK-SAME: , i64 48, i1 false){{$}}
   __builtin_memcpy(buf, &t.n, 32);
   // CHECK: call void @llvm.memcpy.p200i8.p200i8.i64(
   // CHECK-SAME: , i64 32, i1 false){{$}}
-  __builtin_memcpy(buf, (&t)->array, 32);
+  __builtin_memcpy(buf, (&t)->array, 48);
   // CHECK: call void @llvm.memcpy.p200i8.p200i8.i64(
-  // CHECK-SAME: , i64 32, i1 false){{$}}
+  // CHECK-SAME: , i64 48, i1 false){{$}}
   __builtin_memcpy(buf, &(&t)->not_a_cap, 32);
   // CHECK: call void @llvm.memcpy.p200i8.p200i8.i64(
   // CHECK-SAME: , i64 32, i1 false){{$}}
 
   // However, for the struct without capabilities all of these should be safe:
   // However, we don't know here that there is no subclass that could have
-  // capabilities following the current object.
-  // TODO: If we know the size of the copy <= sizeof(T), we should set the attribute.
+  // capabilities following the current object, so we have to look at the copy size.
   __builtin_memcpy(buf, &t2, sizeof(t2));
   // CHECK: call void @llvm.memcpy.p200i8.p200i8.i64(
   // CHECK-SAME: , i64 80, i1 false) [[NO_PRESERVE_TAGS:#[0-9]+]]{{$}}
@@ -72,24 +71,24 @@ void test_member_expr_byval(void *buf, struct TestWithCap t, struct TestNoCap t2
   // CHECK-SAME: , i64 96, i1 false){{$}}
   __builtin_memcpy(buf, &t2.not_a_cap, 40);
   // CHECK: call void @llvm.memcpy.p200i8.p200i8.i64(
-  // CHECK-SAME: , i64 40, i1 false){{$}}
-  // TODO-CHECK-SAME: , i64 40, i1 false) [[NO_PRESERVE_TAGS]]{{$}}
+  // CHECK-SAME: , i64 40, i1 false) [[NO_PRESERVE_TAGS]]{{$}}
+  __builtin_memcpy(buf, t2.array, 32);
+  // CHECK: call void @llvm.memcpy.p200i8.p200i8.i64(
+  // CHECK-SAME: , i64 32, i1 false) [[NO_PRESERVE_TAGS]]{{$}}
+  /// Check that we also set the attribute if we are copying beyond
+  /// the end of the array-decay expressions.
   __builtin_memcpy(buf, t2.array, 40);
   // CHECK: call void @llvm.memcpy.p200i8.p200i8.i64(
-  // CHECK-SAME: , i64 40, i1 false){{$}}
-  // TODO-CHECK-SAME: , i64 40, i1 false) [[NO_PRESERVE_TAGS]]{{$}}
+  // CHECK-SAME: , i64 40, i1 false) [[NO_PRESERVE_TAGS]]{{$}}
   __builtin_memcpy(buf, &t2.n, 40);
   // CHECK: call void @llvm.memcpy.p200i8.p200i8.i64(
-  // CHECK-SAME: , i64 40, i1 false){{$}}
-  // TODO-CHECK-SAME: , i64 40, i1 false) [[NO_PRESERVE_TAGS]]{{$}}
+  // CHECK-SAME: , i64 40, i1 false) [[NO_PRESERVE_TAGS]]{{$}}
   __builtin_memcpy(buf, (&t2)->array, 40);
   // CHECK: call void @llvm.memcpy.p200i8.p200i8.i64(
-  // CHECK-SAME: , i64 40, i1 false){{$}}
-  // TODO-CHECK-SAME: , i64 40, i1 false) [[NO_PRESERVE_TAGS]]{{$}}
+  // CHECK-SAME: , i64 40, i1 false) [[NO_PRESERVE_TAGS]]{{$}}
   __builtin_memcpy(buf, &(&t2)->not_a_cap, 40);
   // CHECK: call void @llvm.memcpy.p200i8.p200i8.i64(
-  // CHECK-SAME: , i64 40, i1 false){{$}}
-  // TODO-CHECK-SAME: , i64 40, i1 false) [[NO_PRESERVE_TAGS]]{{$}}
+  // CHECK-SAME: , i64 40, i1 false) [[NO_PRESERVE_TAGS]]{{$}}
 
   // Direct assignment should always the no_preserve_tags attribute (the C2x
   // 6.5 memcpy+"Allocated objects have no declared type." case does not apply):
@@ -177,15 +176,15 @@ void test_member_expr_ref(void *buf, struct TestWithCap &t, struct TestNoCap &t2
   __builtin_memcpy(buf, &t.not_a_cap, 32);
   // CHECK-CXX: call void @llvm.memcpy.p200i8.p200i8.i64(
   // CHECK-CXX-SAME: , i64 32, i1 false){{$}}
-  __builtin_memcpy(buf, t.array, 32);
+  __builtin_memcpy(buf, t.array, 40);
   // CHECK-CXX: call void @llvm.memcpy.p200i8.p200i8.i64(
-  // CHECK-CXX-SAME: , i64 32, i1 false){{$}}
+  // CHECK-CXX-SAME: , i64 40, i1 false){{$}}
   __builtin_memcpy(buf, &t.n, 32);
   // CHECK-CXX: call void @llvm.memcpy.p200i8.p200i8.i64(
   // CHECK-CXX-SAME: , i64 32, i1 false){{$}}
-  __builtin_memcpy(buf, (&t)->array, 32);
+  __builtin_memcpy(buf, (&t)->array, 40);
   // CHECK-CXX: call void @llvm.memcpy.p200i8.p200i8.i64(
-  // CHECK-CXX-SAME: , i64 32, i1 false){{$}}
+  // CHECK-CXX-SAME: , i64 40, i1 false){{$}}
   __builtin_memcpy(buf, &(&t)->not_a_cap, 32);
   // CHECK-CXX: call void @llvm.memcpy.p200i8.p200i8.i64(
   // CHECK-CXX-SAME: , i64 32, i1 false){{$}}
@@ -196,24 +195,19 @@ void test_member_expr_ref(void *buf, struct TestWithCap &t, struct TestNoCap &t2
   // CHECK-CXX-SAME: , i64 40, i1 false) [[NO_PRESERVE_TAGS]]{{$}}
   __builtin_memcpy(buf, &t2.not_a_cap, 40);
   // CHECK-CXX: call void @llvm.memcpy.p200i8.p200i8.i64(
-  // CHECK-CXX-SAME: , i64 40, i1 false){{$}}
-  // TODO-CHECK-CXX-SAME: , i64 40, i1 false) [[NO_PRESERVE_TAGS]]{{$}}
+  // CHECK-CXX-SAME: , i64 40, i1 false) [[NO_PRESERVE_TAGS]]{{$}}
   __builtin_memcpy(buf, t2.array, 40);
   // CHECK-CXX: call void @llvm.memcpy.p200i8.p200i8.i64(
-  // CHECK-CXX-SAME: , i64 40, i1 false){{$}}
-  // TODO-CHECK-CXX-SAME: , i64 40, i1 false) [[NO_PRESERVE_TAGS]]{{$}}
+  // CHECK-CXX-SAME: , i64 40, i1 false) [[NO_PRESERVE_TAGS]]{{$}}
   __builtin_memcpy(buf, &t2.n, 40);
   // CHECK-CXX: call void @llvm.memcpy.p200i8.p200i8.i64(
-  // CHECK-CXX-SAME: , i64 40, i1 false){{$}}
-  // TODO-CHECK-CXX-SAME: , i64 40, i1 false) [[NO_PRESERVE_TAGS]]{{$}}
+  // CHECK-CXX-SAME: , i64 40, i1 false) [[NO_PRESERVE_TAGS]]{{$}}
   __builtin_memcpy(buf, (&t2)->array, 40);
   // CHECK-CXX: call void @llvm.memcpy.p200i8.p200i8.i64(
-  // CHECK-CXX-SAME: , i64 40, i1 false){{$}}
-  // TODO-CHECK-CXX-SAME: , i64 40, i1 false) [[NO_PRESERVE_TAGS]]{{$}}
+  // CHECK-CXX-SAME: , i64 40, i1 false) [[NO_PRESERVE_TAGS]]{{$}}
   __builtin_memcpy(buf, &(&t2)->not_a_cap, 40);
   // CHECK-CXX: call void @llvm.memcpy.p200i8.p200i8.i64(
-  // CHECK-CXX-SAME: , i64 40, i1 false){{$}}
-  // TODO-CHECK-CXX-SAME: , i64 40, i1 false) [[NO_PRESERVE_TAGS]]{{$}}
+  // CHECK-CXX-SAME: , i64 40, i1 false) [[NO_PRESERVE_TAGS]]{{$}}
 
   // Direct assignment should always the no_preserve_tags attribute (the C2x
   // 6.5 memcpy+"Allocated objects have no declared type." case does not apply):
@@ -225,4 +219,4 @@ void test_member_expr_ref(void *buf, struct TestWithCap &t, struct TestNoCap &t2
 
 // CHECK: attributes [[MUST_PRESERVE_STRUCT_WITHCAP]] = { must_preserve_cheri_tags "frontend-memtransfer-type"="'struct TestWithCap'" }
 // CHECK: attributes [[MUST_PRESERVE_CHARPTR]] = { must_preserve_cheri_tags "frontend-memtransfer-type"="'char * __capability'" }
-// CHECK-C: attributes [[NO_PRESERVE_TAGS]] = { no_preserve_cheri_tags }
+// CHECK: attributes [[NO_PRESERVE_TAGS]] = { no_preserve_cheri_tags }
