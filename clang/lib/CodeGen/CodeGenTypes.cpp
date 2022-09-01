@@ -952,6 +952,12 @@ bool CodeGenTypes::isZeroInitializable(QualType T) {
   return true;
 }
 
+static bool isLessThanCapSize(const ASTContext &Context,
+                              Optional<CharUnits> Size) {
+  return Size && *Size < Context.toCharUnitsFromBits(
+                             Context.getTargetInfo().getCHERICapabilityWidth());
+}
+
 static bool copiesAtMostTypeSize(const QualType Ty, const ASTContext &Context,
                                  Optional<CharUnits> Size) {
   if (!Size)
@@ -967,6 +973,10 @@ CodeGenTypes::copyShouldPreserveTags(const Expr *DestPtr, const Expr *SrcPtr,
   // targets to avoid changing tests and to avoid compile-time impact.
   if (!Context.getTargetInfo().SupportsCapabilities())
     return llvm::PreserveCheriTags::Unknown;
+  if (isLessThanCapSize(Context, Size)) {
+    // Copies smaller than capability size do not need to preserve tag bits.
+    return llvm::PreserveCheriTags::Unnecessary;
+  }
   auto DstPreserve = copyShouldPreserveTags(DestPtr, Size);
   if (DstPreserve == llvm::PreserveCheriTags::Unnecessary) {
     // If the destination does not need to preserve tags, we know that we don't
@@ -1019,6 +1029,10 @@ llvm::PreserveCheriTags CodeGenTypes::copyShouldPreserveTagsForPointee(
   // targets to avoid changing tests and to avoid compile-time impact.
   if (!Context.getTargetInfo().SupportsCapabilities())
     return llvm::PreserveCheriTags::Unknown;
+  if (isLessThanCapSize(Context, Size)) {
+    // Copies smaller than capability size do not need to preserve tag bits.
+    return llvm::PreserveCheriTags::Unnecessary;
+  }
   assert(!Pointee.isNull() && "Should only be called for valid types");
   if (Context.containsCapabilities(Pointee)) {
     // If this is a capability type or a structure/union containing

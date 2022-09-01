@@ -14,19 +14,17 @@ void test_addrof_char(struct OneCap *cap, char c, __uint128_t u) {
   // the source does not contain tags
   __builtin_memmove(cap, &c, sizeof(c));
   // CHECK: call void @llvm.memmove.p200i8.p200i8.i64(i8 addrspace(200)* align 16 {{%[a-z0-9]+}}, i8 addrspace(200)* align 1 {{%[a-z0-9.]+}}
-  // CHECK-SAME: , i64 1, i1 false) [[MUST_PRESERVE_ATTR:#[0-9]+]]{{$}}
-  // FIXME-SAME: , i64 1, i1 false) [[NO_PRESERVE_ATTR:#[0-9]+]]{{$}}
+  // CHECK-SAME: , i64 1, i1 false) [[NO_PRESERVE_ATTR:#[0-9]+]]
   __builtin_memmove(&c, cap, sizeof(c));
   // CHECK: call void @llvm.memmove.p200i8.p200i8.i64(i8 addrspace(200)* align 1 {{%[a-z0-9]+}}.addr, i8 addrspace(200)* align 16 {{%[a-z0-9]+}}
-  // CHECK-SAME: , i64 1, i1 false)  [[MUST_PRESERVE_WITH_TYPE_ATTR:#[0-9]+]]{{$}}
-  // FIXME-SAME: , i64 1, i1 false) [[NO_PRESERVE_ATTR:#[0-9]+]]{{$}}
+  // CHECK-SAME: , i64 1, i1 false) [[NO_PRESERVE_ATTR]]{{$}}
 
   // uint128_t cannot not hold tags -> no need to preserve them since we can see the underlying allocation.
   __builtin_memmove(cap, &u, sizeof(u));
   // CHECK: call void @llvm.memmove.p200i8.p200i8.i64(i8 addrspace(200)* align 16 {{%[a-z0-9]+}}, i8 addrspace(200)* align 16 {{%[a-z0-9]+}}
   // FIXME: We can see the underlying decl, this should not need to preserve tags
-  // CHECK-SAME: , i64 16, i1 false) [[MUST_PRESERVE_ATTR]]{{$}}
-  // FIXME-SAME: , i64 16, i1 false) [[NO_PRESERVE_ATTR]]{{$}}
+  // CHECK-SAME: , i64 16, i1 false) [[MUST_PRESERVE_ATTR:#[0-9]+]]{{$}}
+  // FIXME-SAME: , i64 16, i1 false) [[NO_PRESERVE_ATTR:#[0-9]+]]{{$}}
   __builtin_memmove(&u, cap, sizeof(u));
   // CHECK: call void @llvm.memmove.p200i8.p200i8.i64(i8 addrspace(200)* align 16 {{%[a-z0-9]+}}, i8 addrspace(200)* align 16 {{%[a-z0-9]+}}
   // FIXME: We can see the underlying decl, this should not need to preserve tags
@@ -41,10 +39,9 @@ void test_small_copy(struct OneCap *cap1, struct OneCap *cap2) {
   // CHECK: call void @llvm.memmove.p200i8.p200i8.i64(i8 addrspace(200)* align 16 {{%[a-z0-9]+}}, i8 addrspace(200)* align 16 {{%[a-z0-9]+}}
   // CHECK-SAME: , i64 16, i1 false) [[MUST_PRESERVE_WITH_TYPE_ATTR]]{{$}}
   __builtin_memmove(cap1, cap2, 2);
-  // TODO :This copy is too small -> should not preserve tags
+  // This copy is too small -> no need to preserve tags
   // CHECK: call void @llvm.memmove.p200i8.p200i8.i64(i8 addrspace(200)* align 16 {{%[a-z0-9]+}}, i8 addrspace(200)* align 16 {{%[a-z0-9]+}}
-  // CHECK-SAME: , i64 2, i1 false) [[MUST_PRESERVE_WITH_TYPE_ATTR]]{{$}}
-  // FIXME-SAME: , i64 2, i1 false) [[NO_PRESERVE_ATTR]]{{$}}
+  // CHECK-SAME: , i64 2, i1 false) [[NO_PRESERVE_ATTR]]{{$}}
 }
 
 struct strbuf {
@@ -194,4 +191,4 @@ void test_int_buffer(struct OneCap *cap, int *buf) {
 // CHECK: attributes #0 = {
 // CHECK-DAG: attributes [[MUST_PRESERVE_ATTR]] = { must_preserve_cheri_tags }
 // CHECK-DAG: attributes [[MUST_PRESERVE_WITH_TYPE_ATTR]] = { must_preserve_cheri_tags "frontend-memtransfer-type"="'struct OneCap'" }
-// FIXME-DAG: attributes [[NO_PRESERVE_ATTR]] = { no_preserve_cheri_tags }
+// CHECK-DAG: attributes [[NO_PRESERVE_ATTR]] = { no_preserve_cheri_tags }
