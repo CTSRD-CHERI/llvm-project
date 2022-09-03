@@ -1684,7 +1684,7 @@ public:
                                          ArrayRef<TemplateArgument> Args) const;
 
   QualType getTemplateSpecializationType(TemplateName T,
-                                         const TemplateArgumentListInfo &Args,
+                                         ArrayRef<TemplateArgumentLoc> Args,
                                          QualType Canon = QualType()) const;
 
   TypeSourceInfo *
