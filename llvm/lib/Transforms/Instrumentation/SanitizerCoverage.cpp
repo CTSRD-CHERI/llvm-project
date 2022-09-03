@@ -740,7 +740,7 @@ ModuleSanitizerCoverage::CreatePCArray(Function &F,
     } else {
       PCs.push_back(cast<Constant>(IRB.CreatePtrToInt(
           BlockAddress::get(AllBlocks[i]), PcAddrTy)));
-      PCs.push_back(ConstantInt::get(PcAddrTy, 0));
+      PCs.push_back(ConstantInt::getNullValue(PcAddrTy));
     }
   }
   auto *PCArray = CreateFunctionLocalArrayInSection(N * 2, F, PcAddrTy,
