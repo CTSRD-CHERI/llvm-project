@@ -643,7 +643,7 @@ clang::MakeDeductionFailureInfo(ASTContext &Context,
     auto *Saved = new (Context) DFIDeducedMismatchArgs;
     Saved->FirstArg = Info.FirstArg;
     Saved->SecondArg = Info.SecondArg;
-    Saved->TemplateArgs = Info.take();
+    Saved->TemplateArgs = Info.takeSugared();
     Saved->CallArgIndex = Info.CallArgIndex;
     Result.Data = Saved;
     break;
@@ -672,7 +672,7 @@ clang::MakeDeductionFailureInfo(ASTContext &Context,
   }
 
   case Sema::TDK_SubstitutionFailure:
-    Result.Data = Info.take();
+    Result.Data = Info.takeSugared();
     if (Info.hasSFINAEDiagnostic()) {
       PartialDiagnosticAt *Diag = new (Result.Diagnostic) PartialDiagnosticAt(
           SourceLocation(), PartialDiagnostic::NullDiagnostic());
@@ -683,7 +683,7 @@ clang::MakeDeductionFailureInfo(ASTContext &Context,
 
   case Sema::TDK_ConstraintsNotSatisfied: {
     CNSInfo *Saved = new (Context) CNSInfo;
-    Saved->TemplateArgs = Info.take();
+    Saved->TemplateArgs = Info.takeSugared();
     Saved->Satisfaction = Info.AssociatedConstraintsSatisfaction;
     Result.Data = Saved;
     break;
