@@ -363,8 +363,8 @@ void Symbol::extract() const {
 }
 
 uint8_t Symbol::computeBinding() const {
-  if ((visibility != STV_DEFAULT && visibility != STV_PROTECTED &&
-       !usedByDynReloc) ||
+  auto v = visibility();
+  if ((v != STV_DEFAULT && v != STV_PROTECTED && !usedByDynReloc) ||
       versionId == VER_NDX_LOCAL)
     return STB_LOCAL;
   if (binding == STB_GNU_UNIQUE && !config->gnuUnique)
@@ -446,7 +446,7 @@ bool elf::computeIsPreemptible(const Symbol &sym) {
 
   // Only symbols with default visibility that appear in dynsym can be
   // preempted. Symbols with protected visibility cannot be preempted.
-  if (!sym.includeInDynsym() || sym.visibility != STV_DEFAULT)
+  if (!sym.includeInDynsym() || sym.visibility() != STV_DEFAULT)
     return false;
 
   // At this point copy relocations have not been created yet, so any
@@ -479,10 +479,10 @@ void Symbol::mergeProperties(const Symbol &other) {
     exportDynamic = true;
 
   // DSO symbols do not affect visibility in the output.
-  if (!other.isShared() && other.visibility != STV_DEFAULT)
-    visibility = visibility == STV_DEFAULT
-                     ? other.visibility
-                     : std::min(visibility, other.visibility);
+  if (!other.isShared() && other.visibility() != STV_DEFAULT) {
+    uint8_t v = visibility(), ov = other.visibility();
+    setVisibility(v == STV_DEFAULT ? ov : std::min(v, ov));
+  }
 }
 
 void Symbol::resolve(const Symbol &other) {
@@ -520,7 +520,7 @@ void Symbol::resolveUndefined(const Undefined &other) {
   //
   // If this is a non-weak defined symbol in a discarded section, override the
   // existing undefined symbol for better error message later.
-  if ((isShared() && other.visibility != STV_DEFAULT) ||
+  if ((isShared() && other.visibility() != STV_DEFAULT) ||
       (isUndefined() && other.binding != STB_WEAK && other.discardedSecIdx)) {
     replace(other);
     return;
@@ -768,7 +768,7 @@ void Symbol::resolveShared(const SharedSymbol &other) {
       cast<CommonSymbol>(this)->size = other.size;
     return;
   }
-  if (visibility == STV_DEFAULT && (isUndefined() || isLazy())) {
+  if (visibility() == STV_DEFAULT && (isUndefined() || isLazy())) {
     // An undefined symbol with non default visibility must be satisfied
     // in the same DSO.
     uint8_t bind = binding;
