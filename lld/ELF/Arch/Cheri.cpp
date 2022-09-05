@@ -1108,7 +1108,7 @@ void addCapabilityRelocation(Symbol *sym, RelType type, InputSectionBase *sec,
       assert(newSym->isFunc() && "This should only be used for functions");
       assert(newSym->includeInDynsym());
       assert(newSym->binding == llvm::ELF::STB_GLOBAL);
-      assert(newSym->visibility == llvm::ELF::STV_HIDDEN);
+      assert(newSym->visibility() == llvm::ELF::STV_HIDDEN);
       sym = newSym; // Make the relocation point to the newly added symbol
     }
     dynRelSec->addReloc(

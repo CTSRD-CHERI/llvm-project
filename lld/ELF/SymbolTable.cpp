@@ -56,7 +56,7 @@ Defined *SymbolTable::ensureSymbolWillBeInDynsym(Symbol* original) {
   newSym->resolve(*original);
   newSym->setName(newName); // resolve() changes the name to original->name
   newSym->binding = llvm::ELF::STB_GLOBAL;
-  newSym->visibility = llvm::ELF::STV_HIDDEN;
+  newSym->setVisibility(llvm::ELF::STV_HIDDEN);
   newSym->versionId = VER_NDX_GLOBAL;
   newSym->usedByDynReloc = true;
   newSym->isUsedInRegularObj = true;
@@ -135,7 +135,7 @@ Symbol *SymbolTable::insert(StringRef name) {
   sym->setName(name);
   sym->symbolKind = Symbol::PlaceholderKind;
   sym->partition = 1;
-  sym->visibility = STV_DEFAULT;
+  sym->setVisibility(STV_DEFAULT);
   sym->isUsedInRegularObj = false;
   sym->exportDynamic = false;
   sym->inDynamicList = false;
