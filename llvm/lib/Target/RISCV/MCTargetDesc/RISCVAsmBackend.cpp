@@ -105,7 +105,7 @@ RISCVAsmBackend::getFixupKindInfo(MCFixupKind Kind) const {
       {"fixup_riscv_ccall", 0, 64, MCFixupKindInfo::FKF_IsPCRel},
       {"fixup_riscv_rvc_cjump", 2, 11, MCFixupKindInfo::FKF_IsPCRel},
   };
-  static_assert((array_lengthof(Infos)) == RISCV::NumTargetFixupKinds,
+  static_assert((std::size(Infos)) == RISCV::NumTargetFixupKinds,
                 "Not all fixup kinds added to Infos array");
 
   // Fixup kinds from .reloc directive are like R_RISCV_NONE. They
