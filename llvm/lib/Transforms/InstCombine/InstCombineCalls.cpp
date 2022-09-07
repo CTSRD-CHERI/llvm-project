@@ -3417,8 +3417,7 @@ Instruction *InstCombinerImpl::visitCallBase(CallBase &Call) {
 
         if (FunctionType &&
             FunctionType->getZExtValue() != ExpectedType->getZExtValue())
-          dbgs() << Call.getModule()->getName() << ":"
-                 << Call.getDebugLoc().getLine()
+          dbgs() << Call.getModule()->getName()
                  << ": warning: kcfi: " << Call.getCaller()->getName()
                  << ": call to " << CalleeF->getName()
                  << " using a mismatching function pointer type\n";
