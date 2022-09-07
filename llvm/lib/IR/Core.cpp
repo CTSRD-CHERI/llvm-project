@@ -1551,10 +1551,6 @@ LLVMValueRef LLVMConstNUWNeg(LLVMValueRef ConstantVal) {
 }
 
 
-LLVMValueRef LLVMConstFNeg(LLVMValueRef ConstantVal) {
-  return wrap(ConstantExpr::getFNeg(unwrap<Constant>(ConstantVal)));
-}
-
 LLVMValueRef LLVMConstNot(LLVMValueRef ConstantVal) {
   return wrap(ConstantExpr::getNot(unwrap<Constant>(ConstantVal)));
 }
