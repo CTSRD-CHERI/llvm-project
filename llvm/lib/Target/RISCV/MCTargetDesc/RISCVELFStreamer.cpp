@@ -160,6 +160,8 @@ void RISCVTargetELFStreamer::finish() {
 
   if (Features[RISCV::FeatureStdExtC])
     EFlags |= ELF::EF_RISCV_RVC;
+  if (Features[RISCV::FeatureStdExtZtso])
+    EFlags |= ELF::EF_RISCV_TSO;
 
   if (Features[RISCV::FeatureCapMode])
     EFlags |= ELF::EF_RISCV_CAP_MODE;
