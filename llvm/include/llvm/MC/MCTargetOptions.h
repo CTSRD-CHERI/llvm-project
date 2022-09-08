@@ -10,7 +10,6 @@
 #define LLVM_MC_MCTARGETOPTIONS_H
 
 #include "llvm/ADT/ArrayRef.h"
-#include "llvm/Support/Compression.h"
 #include <string>
 #include <vector>
 
@@ -37,6 +36,11 @@ enum class CheriCapabilityTableABI {
 };
 
 enum class TailPaddingAmount : uint64_t { None = 0u };
+
+enum class DebugCompressionType {
+  None, ///< No compression
+  Z,    ///< zlib style complession
+};
 
 enum class EmitDwarfUnwindType {
   Always,          // Always emit dwarf unwind
