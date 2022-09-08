@@ -253,7 +253,7 @@ template <class _CharT, class _ParseCtx, class _Ctx>
 _LIBCPP_HIDE_FROM_ABI constexpr const _CharT*
 __handle_replacement_field(const _CharT* __begin, const _CharT* __end,
                            _ParseCtx& __parse_ctx, _Ctx& __ctx) {
-  __format::__parse_number_result __r =
+  __format::__parse_number_result<_CharT> __r =
       __format::__parse_arg_id(__begin, __end, __parse_ctx);
 
   bool __parse = *__r.__ptr == _CharT(':');
@@ -407,12 +407,12 @@ requires(output_iterator<_OutIt, const _CharT&>) _LIBCPP_HIDE_FROM_ABI _OutIt
         basic_format_args<basic_format_context<_FormatOutIt, _CharT>> __args) {
   if constexpr (same_as<_OutIt, _FormatOutIt>)
     return _VSTD::__format::__vformat_to(
-        basic_format_parse_context{__fmt, __args.__size()},
+        basic_format_parse_context<_CharT>{__fmt, __args.__size()},
         _VSTD::__format_context_create(_VSTD::move(__out_it), __args));
   else {
     __format::__format_buffer<_OutIt, _CharT> __buffer{_VSTD::move(__out_it)};
     _VSTD::__format::__vformat_to(
-        basic_format_parse_context{__fmt, __args.__size()},
+        basic_format_parse_context<_CharT>{__fmt, __args.__size()},
         _VSTD::__format_context_create(__buffer.__make_output_iterator(),
                                        __args));
     return _VSTD::move(__buffer).__out_it();
@@ -487,7 +487,7 @@ _LIBCPP_HIDE_FROM_ABI format_to_n_result<_OutIt> __vformat_to_n(_OutIt __out_it,
                                                                 basic_string_view<_CharT> __fmt,
                                                                 basic_format_args<_Context> __args) {
   __format::__format_to_n_buffer<_OutIt, _CharT> __buffer{_VSTD::move(__out_it), __n};
-  _VSTD::__format::__vformat_to(basic_format_parse_context{__fmt, __args.__size()},
+  _VSTD::__format::__vformat_to(basic_format_parse_context<_CharT>{__fmt, __args.__size()},
                                 _VSTD::__format_context_create(__buffer.__make_output_iterator(), __args));
   return _VSTD::move(__buffer).__result();
 }
@@ -510,7 +510,7 @@ format_to_n(_OutIt __out_it, iter_difference_t<_OutIt> __n, wformat_string<_Args
 template <class _CharT>
 _LIBCPP_HIDE_FROM_ABI size_t __vformatted_size(basic_string_view<_CharT> __fmt, auto __args) {
   __format::__formatted_size_buffer<_CharT> __buffer;
-  _VSTD::__format::__vformat_to(basic_format_parse_context{__fmt, __args.__size()},
+  _VSTD::__format::__vformat_to(basic_format_parse_context<_CharT>{__fmt, __args.__size()},
                                 _VSTD::__format_context_create(__buffer.__make_output_iterator(), __args));
   return _VSTD::move(__buffer).__result();
 }
@@ -538,13 +538,13 @@ requires(output_iterator<_OutIt, const _CharT&>) _LIBCPP_HIDE_FROM_ABI _OutIt
         basic_format_args<basic_format_context<_FormatOutIt, _CharT>> __args) {
   if constexpr (same_as<_OutIt, _FormatOutIt>)
     return _VSTD::__format::__vformat_to(
-        basic_format_parse_context{__fmt, __args.__size()},
+        basic_format_parse_context<_CharT>{__fmt, __args.__size()},
         _VSTD::__format_context_create(_VSTD::move(__out_it), __args,
                                        _VSTD::move(__loc)));
   else {
     __format::__format_buffer<_OutIt, _CharT> __buffer{_VSTD::move(__out_it)};
     _VSTD::__format::__vformat_to(
-        basic_format_parse_context{__fmt, __args.__size()},
+        basic_format_parse_context<_CharT>{__fmt, __args.__size()},
         _VSTD::__format_context_create(__buffer.__make_output_iterator(),
                                        __args, _VSTD::move(__loc)));
     return _VSTD::move(__buffer).__out_it();
@@ -624,7 +624,7 @@ _LIBCPP_HIDE_FROM_ABI format_to_n_result<_OutIt> __vformat_to_n(_OutIt __out_it,
                                                                 basic_format_args<_Context> __args) {
   __format::__format_to_n_buffer<_OutIt, _CharT> __buffer{_VSTD::move(__out_it), __n};
   _VSTD::__format::__vformat_to(
-      basic_format_parse_context{__fmt, __args.__size()},
+      basic_format_parse_context<_CharT>{__fmt, __args.__size()},
       _VSTD::__format_context_create(__buffer.__make_output_iterator(), __args, _VSTD::move(__loc)));
   return _VSTD::move(__buffer).__result();
 }
@@ -651,7 +651,7 @@ template <class _CharT>
 _LIBCPP_HIDE_FROM_ABI size_t __vformatted_size(locale __loc, basic_string_view<_CharT> __fmt, auto __args) {
   __format::__formatted_size_buffer<_CharT> __buffer;
   _VSTD::__format::__vformat_to(
-      basic_format_parse_context{__fmt, __args.__size()},
+      basic_format_parse_context<_CharT>{__fmt, __args.__size()},
       _VSTD::__format_context_create(__buffer.__make_output_iterator(), __args, _VSTD::move(__loc)));
   return _VSTD::move(__buffer).__result();
 }
