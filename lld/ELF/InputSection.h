@@ -164,7 +164,7 @@ public:
 
   ArrayRef<uint8_t> data() const {
     if (uncompressedSize >= 0)
-      uncompress();
+      decompress();
     return rawData;
   }
 
@@ -239,7 +239,7 @@ public:
 protected:
   template <typename ELFT>
   void parseCompressedHeader();
-  void uncompress() const;
+  void decompress() const;
 
   // This field stores the uncompressed size of the compressed data in rawData,
   // or -1 if rawData is not compressed (either because the section wasn't
