@@ -972,10 +972,10 @@ private:
   UnqualifiedId(const UnqualifiedId &Other) = delete;
   const UnqualifiedId &operator=(const UnqualifiedId &) = delete;
 
-public:
   /// Describes the kind of unqualified-id parsed.
   UnqualifiedIdKind Kind;
 
+public:
   struct OFI {
     /// The kind of overloaded operator.
     OverloadedOperatorKind Operator;
