@@ -571,7 +571,7 @@ protected:
 
 template <>
 inline void RelocationBaseSection::addReloc<true>(const DynamicReloc &reloc) {
-  relocsVec[llvm::parallel::threadIndex].push_back(reloc);
+  relocsVec[llvm::parallel::getThreadIndex()].push_back(reloc);
 }
 
 template <class ELFT>
