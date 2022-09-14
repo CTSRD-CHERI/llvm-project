@@ -234,14 +234,20 @@ namespace CallingConv {
 
     /// Used for M68k interrupt routines.
     M68k_INTR = 101,
+    
+    /// Preserve X0-X13, X19-X29, SP, Z0-Z31, P0-P15.
+    AArch64_SME_ABI_Support_Routines_PreserveMost_From_X0 = 102,
+
+    /// Preserve X2-X15, X19-X29, SP, Z0-Z31, P0-P15.
+    AArch64_SME_ABI_Support_Routines_PreserveMost_From_X2 = 103,
 
     /// CHERI_CCall - Calling convention used for CHERI when crossing a
     /// protection boundary.
-    CHERI_CCall = 102,
+    CHERI_CCall = 104,
     /// CHERI_CCallee - Calling convention used for the callee of CHERI_CCall.
     /// Ignores the first two capability arguments and the first integer
     /// argument, zeroes all unused return registers on return.
-    CHERI_CCallee = 103,
+    CHERI_CCallee = 105,
 
     /// The highest possible ID. Must be some 2^k - 1.
     MaxID = 1023
