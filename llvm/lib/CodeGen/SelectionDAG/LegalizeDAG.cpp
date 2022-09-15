@@ -1759,8 +1759,7 @@ void SelectionDAGLegalize::ExpandDYNAMIC_STACKALLOC(SDNode* Node,
     Chain = DAG.getCopyToReg(Chain, dl, SPReg, Tmp1);     // Output chain
   }
 
-  Tmp2 = DAG.getCALLSEQ_END(Chain, DAG.getIntPtrConstant(0, dl, true),
-                            DAG.getIntPtrConstant(0, dl, true), SDValue(), dl);
+  Tmp2 = DAG.getCALLSEQ_END(Chain, 0, 0, SDValue(), dl);
 
   Results.push_back(Tmp1);
   Results.push_back(Tmp2);
