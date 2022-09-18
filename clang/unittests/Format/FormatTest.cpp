@@ -26020,6 +26020,17 @@ TEST_F(FormatTest, RemoveBraces) {
                "}",
                Style);
 
+  verifyFormat("while (0)\n"
+               "  if (a)\n"
+               "    return b;\n"
+               "return a;",
+               "while (0) {\n"
+               "  if (a) {\n"
+               "    return b;\n"
+               "}}\n"
+               "return a;",
+               Style);
+
   Style.ColumnLimit = 65;
   verifyFormat("if (condition) {\n"
                "  ff(Indices,\n"
