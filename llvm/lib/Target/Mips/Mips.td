@@ -248,7 +248,6 @@ include "MipsScheduleP5600.td"
 include "MipsScheduleGeneric.td"
 
 def MipsInstrInfo : InstrInfo {
- let useDeprecatedPositionallyEncodedOperands = 1;
 }
 
 //===----------------------------------------------------------------------===//
