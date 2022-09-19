@@ -3416,6 +3416,8 @@ bool TargetLowering::SimplifyDemandedVectorElts(
     break;
   }
   case ISD::MUL:
+  case ISD::MULHU:
+  case ISD::MULHS:
   case ISD::AND: {
     SDValue Op0 = Op.getOperand(0);
     SDValue Op1 = Op.getOperand(1);
