@@ -165,6 +165,7 @@ static bool COFFTLSDirectory;
 
 // XCOFF specific options.
 static bool XCOFFAuxiliaryHeader;
+static bool XCOFFExceptionSection;
 
 OutputStyleTy Output = OutputStyleTy::LLVM;
 static std::vector<std::string> InputFilenames;
@@ -308,6 +309,7 @@ static void parseOptions(const opt::InputArgList &Args) {
 
   // XCOFF specific options.
   opts::XCOFFAuxiliaryHeader = Args.hasArg(OPT_auxiliary_header);
+  opts::XCOFFExceptionSection = Args.hasArg(OPT_exception_section);
 
   opts::InputFilenames = Args.getAllArgValues(OPT_INPUT);
 }
@@ -401,6 +403,8 @@ static void dumpObject(ObjectFile &Obj, ScopedPrinter &Writer,
   if (opts::FileHeaders)
     Dumper->printFileHeaders();
 
+  // Auxiliary header in XOCFF is right after the file header, so print the data
+  // here.
   if (Obj.isXCOFF() && opts::XCOFFAuxiliaryHeader)
     Dumper->printAuxiliaryHeader();
 
@@ -514,6 +518,10 @@ static void dumpObject(ObjectFile &Obj, ScopedPrinter &Writer,
     if (opts::CGProfile)
       Dumper->printCGProfile();
   }
+
+  if (Obj.isXCOFF() && opts::XCOFFExceptionSection)
+    Dumper->printExceptionSection();
+
   if (opts::PrintStackMap)
     Dumper->printStackMap();
   if (opts::PrintStackSizes)
