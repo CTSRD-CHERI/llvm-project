@@ -161,6 +161,7 @@ public:
 
   // Only implement for XCOFF
   virtual void printAuxiliaryHeader() {}
+  virtual void printExceptionSection() {}
 
   // Only implemented for MachO.
   virtual void printMachODataInCode() { }
