@@ -2070,8 +2070,9 @@ private:
 
     // type[] a in Java
     if (Style.Language == FormatStyle::LK_Java &&
-        PreviousNotConst->is(tok::r_square))
+        PreviousNotConst->is(tok::r_square)) {
       return true;
+    }
 
     // const a = in JavaScript.
     return Style.isJavaScript() && PreviousNotConst->is(tok::kw_const);
@@ -2371,8 +2372,9 @@ private:
     // case, the matching `{` is on the same unwrapped line, so check for the
     // presence of the matching brace to distinguish between those.
     if (PrevToken->is(tok::r_brace) && Tok.is(tok::star) &&
-        !PrevToken->MatchingParen)
+        !PrevToken->MatchingParen) {
       return TT_PointerOrReference;
+    }
 
     if (PrevToken->endsSequence(tok::r_square, tok::l_square, tok::kw_delete))
       return TT_UnaryOperator;
