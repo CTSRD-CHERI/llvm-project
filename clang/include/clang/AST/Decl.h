@@ -4701,7 +4701,7 @@ public:
                                 SourceLocation LBrace);
   static HLSLBufferDecl *CreateDeserialized(ASTContext &C, unsigned ID);
 
-  SourceRange getSourceRange() const LLVM_READONLY {
+  SourceRange getSourceRange() const override LLVM_READONLY {
     return SourceRange(getLocStart(), RBraceLoc);
   }
   SourceLocation getLocStart() const LLVM_READONLY { return KwLoc; }
