@@ -879,6 +879,7 @@ set(LLVM_ENUM_ASM_PRINTERS "")
 set(LLVM_ENUM_ASM_PARSERS "")
 set(LLVM_ENUM_DISASSEMBLERS "")
 set(LLVM_ENUM_TARGETMCAS "")
+set(LLVM_ENUM_EXEGESIS "")
 foreach(t ${LLVM_TARGETS_TO_BUILD})
   set( td ${LLVM_MAIN_SRC_DIR}/lib/Target/${t} )
 
@@ -908,9 +909,13 @@ foreach(t ${LLVM_TARGETS_TO_BUILD})
     set(LLVM_ENUM_DISASSEMBLERS
       "${LLVM_ENUM_DISASSEMBLERS}LLVM_DISASSEMBLER(${t})\n")
   endif()
-    if( EXISTS ${td}/MCA/CMakeLists.txt )
+  if( EXISTS ${td}/MCA/CMakeLists.txt )
     set(LLVM_ENUM_TARGETMCAS
       "${LLVM_ENUM_TARGETMCAS}LLVM_TARGETMCA(${t})\n")
+  endif()
+  if( EXISTS ${LLVM_MAIN_SRC_DIR}/tools/llvm-exegesis/lib/${t}/CMakeLists.txt )
+    set(LLVM_ENUM_EXEGESIS
+      "${LLVM_ENUM_EXEGESIS}LLVM_EXEGESIS(${t})\n")
   endif()
 endforeach(t)
 
@@ -938,6 +943,10 @@ configure_file(
 configure_file(
   ${LLVM_MAIN_INCLUDE_DIR}/llvm/Config/TargetMCAs.def.in
   ${LLVM_INCLUDE_DIR}/llvm/Config/TargetMCAs.def
+  )
+configure_file(
+  ${LLVM_MAIN_INCLUDE_DIR}/llvm/Config/TargetExegesis.def.in
+  ${LLVM_INCLUDE_DIR}/llvm/Config/TargetExegesis.def
   )
 
 # They are not referenced. See set_output_directory().
