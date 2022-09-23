@@ -3595,8 +3595,8 @@ enum CXTemplateArgumentKind {
 };
 
 /**
- *Returns the number of template args of a function decl representing a
- * template specialization.
+ * Returns the number of template args of a function, struct, or class decl
+ * representing a template specialization.
  *
  * If the argument cursor cannot be converted into a template function
  * declaration, -1 is returned.
@@ -3615,8 +3615,9 @@ CINDEX_LINKAGE int clang_Cursor_getNumTemplateArguments(CXCursor C);
 /**
  * Retrieve the kind of the I'th template argument of the CXCursor C.
  *
- * If the argument CXCursor does not represent a FunctionDecl, an invalid
- * template argument kind is returned.
+ * If the argument CXCursor does not represent a FunctionDecl, StructDecl, or
+ * ClassTemplatePartialSpecialization, an invalid template argument kind is
+ * returned.
  *
  * For example, for the following declaration and specialization:
  *   template <typename T, int kInt, bool kBool>
@@ -3635,9 +3636,9 @@ clang_Cursor_getTemplateArgumentKind(CXCursor C, unsigned I);
  * Retrieve a CXType representing the type of a TemplateArgument of a
  *  function decl representing a template specialization.
  *
- * If the argument CXCursor does not represent a FunctionDecl whose I'th
- * template argument has a kind of CXTemplateArgKind_Integral, an invalid type
- * is returned.
+ * If the argument CXCursor does not represent a FunctionDecl, StructDecl,
+ * ClassDecl or ClassTemplatePartialSpecialization whose I'th template argument
+ * has a kind of CXTemplateArgKind_Integral, an invalid type is returned.
  *
  * For example, for the following declaration and specialization:
  *   template <typename T, int kInt, bool kBool>
@@ -3657,7 +3658,8 @@ CINDEX_LINKAGE CXType clang_Cursor_getTemplateArgumentType(CXCursor C,
  *  decl representing a template specialization) as a signed long long.
  *
  * It is undefined to call this function on a CXCursor that does not represent a
- * FunctionDecl or whose I'th template argument is not an integral value.
+ * FunctionDecl, StructDecl, ClassDecl or ClassTemplatePartialSpecialization
+ * whose I'th template argument is not an integral value.
  *
  * For example, for the following declaration and specialization:
  *   template <typename T, int kInt, bool kBool>
@@ -3677,7 +3679,8 @@ CINDEX_LINKAGE long long clang_Cursor_getTemplateArgumentValue(CXCursor C,
  *  decl representing a template specialization) as an unsigned long long.
  *
  * It is undefined to call this function on a CXCursor that does not represent a
- * FunctionDecl or whose I'th template argument is not an integral value.
+ * FunctionDecl, StructDecl, ClassDecl or ClassTemplatePartialSpecialization or
+ * whose I'th template argument is not an integral value.
  *
  * For example, for the following declaration and specialization:
  *   template <typename T, int kInt, bool kBool>
