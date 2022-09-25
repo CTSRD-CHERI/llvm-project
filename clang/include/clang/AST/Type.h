@@ -5352,10 +5352,10 @@ class SubstTemplateTypeParmPackType : public Type, public llvm::FoldingSetNode {
   /// parameter pack is instantiated with.
   const TemplateArgument *Arguments;
 
-  Decl *AssociatedDecl;
+  llvm::PointerIntPair<Decl *, 1, bool> AssociatedDeclAndFinal;
 
   SubstTemplateTypeParmPackType(QualType Canon, Decl *AssociatedDecl,
-                                unsigned Index,
+                                unsigned Index, bool Final,
                                 const TemplateArgument &ArgPack);
 
 public:
@@ -5364,7 +5364,7 @@ public:
   /// A template-like entity which owns the whole pattern being substituted.
   /// This will usually own a set of template parameters, or in some
   /// cases might even be a template parameter itself.
-  Decl *getAssociatedDecl() const { return AssociatedDecl; }
+  Decl *getAssociatedDecl() const;
 
   /// Gets the template parameter declaration that was substituted for.
   const TemplateTypeParmDecl *getReplacedParameter() const;
@@ -5372,6 +5372,9 @@ public:
   /// Returns the index of the replaced parameter in the associated declaration.
   /// This should match the result of `getReplacedParameter()->getIndex()`.
   unsigned getIndex() const { return SubstTemplateTypeParmPackTypeBits.Index; }
+
+  // When true the substitution will be 'Final' (subst node won't be placed).
+  bool getFinal() const;
 
   unsigned getNumArgs() const {
     return SubstTemplateTypeParmPackTypeBits.NumArgs;
@@ -5384,7 +5387,8 @@ public:
 
   void Profile(llvm::FoldingSetNodeID &ID);
   static void Profile(llvm::FoldingSetNodeID &ID, const Decl *AssociatedDecl,
-                      unsigned Index, const TemplateArgument &ArgPack);
+                      unsigned Index, bool Final,
+                      const TemplateArgument &ArgPack);
 
   static bool classof(const Type *T) {
     return T->getTypeClass() == SubstTemplateTypeParmPack;
