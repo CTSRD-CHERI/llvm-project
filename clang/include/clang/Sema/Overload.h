@@ -941,8 +941,6 @@ class Sema;
       return ExplicitCallArguments;
     }
 
-    bool NotValidBecauseConstraintExprHasError() const;
-
   private:
     friend class OverloadCandidateSet;
     OverloadCandidate()
