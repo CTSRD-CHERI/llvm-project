@@ -486,6 +486,10 @@ option(CLANG_INCLUDE_TESTS
        "Generate build targets for the Clang unit tests."
        ${LLVM_INCLUDE_TESTS})
 
+option(CLANG_ENABLE_HLSL "Include HLSL build products" Off)
+# While HLSL support is experimental this should stay hidden.
+mark_as_advanced(CLANG_ENABLE_HLSL)
+
 add_subdirectory(utils/TableGen)
 
 set(CREDUCE_CRASH_TESTCASE_SCRIPT ${CMAKE_CURRENT_SOURCE_DIR}/utils/creduce_crash_testcase.py)
