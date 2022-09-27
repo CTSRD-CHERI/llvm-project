@@ -636,7 +636,7 @@ static llvm::Triple computeTargetTriple(const Driver &D,
   // accordingly to provided ABI name.
 
   if (Target.isMIPS()) {
-    if (A = Args.getLastArg(options::OPT_mabi_EQ)) {
+    if ((A = Args.getLastArg(options::OPT_mabi_EQ))) {
       StringRef ABIName = A->getValue();
       if (Target.isMIPS64() &&
           Target.getEnvironment() == llvm::Triple::CheriPurecap) {
@@ -705,7 +705,7 @@ static llvm::Triple computeTargetTriple(const Driver &D,
   // If target is RISC-V adjust the target triple according to
   // provided architecture name
   if (Target.isRISCV()) {
-    if (A = Args.getLastArg(options::OPT_march_EQ)) {
+    if ((A = Args.getLastArg(options::OPT_march_EQ))) {
       StringRef ArchName = A->getValue();
       if (ArchName.startswith_insensitive("rv32"))
         Target.setArch(llvm::Triple::riscv32);
