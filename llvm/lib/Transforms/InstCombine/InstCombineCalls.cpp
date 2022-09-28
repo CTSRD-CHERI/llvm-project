@@ -155,7 +155,7 @@ Instruction *InstCombinerImpl::SimplifyAnyMemTransfer(AnyMemTransferInst *MI) {
       return nullptr;  // If not 1/2/4/8 bytes, exit.
     uint64_t PtrCpySize = DL.getPointerSize(200);
     Align PtrCpyAlign = DL.getPointerPrefAlignment(200);
-    if ((Size > PtrCpySize) ||
+    if ((Size != PtrCpySize) ||
         (CopyDstAlign.hasValue() && *CopyDstAlign < PtrCpyAlign) ||
         (CopySrcAlign.hasValue() && *CopySrcAlign < PtrCpyAlign))
       return nullptr;
