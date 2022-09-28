@@ -21595,7 +21595,7 @@ Examples:
 .. _int_vp_roundeven:
 
 '``llvm.vp.roundeven.*``' Intrinsics
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 Syntax:
 """""""
