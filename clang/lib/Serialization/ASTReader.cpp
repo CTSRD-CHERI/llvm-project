@@ -6667,7 +6667,7 @@ void TypeLocReader::VisitTypeOfTypeLoc(TypeOfTypeLoc TL) {
   TL.setTypeofLoc(readSourceLocation());
   TL.setLParenLoc(readSourceLocation());
   TL.setRParenLoc(readSourceLocation());
-  TL.setUnderlyingTInfo(GetTypeSourceInfo());
+  TL.setUnmodifiedTInfo(GetTypeSourceInfo());
 }
 
 void TypeLocReader::VisitDecltypeTypeLoc(DecltypeTypeLoc TL) {
