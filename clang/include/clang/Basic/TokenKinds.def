@@ -31,6 +31,9 @@
 #ifndef C99_KEYWORD
 #define C99_KEYWORD(X,Y) KEYWORD(X,KEYC99|(Y))
 #endif
+#ifndef C2X_KEYWORD
+#define C2X_KEYWORD(X,Y) KEYWORD(X,KEYC2X|(Y))
+#endif
 #ifndef COROUTINES_KEYWORD
 // Not a CXX20_KEYWORD() since we disable LangOpts.Coroutines for purecap.
 // See https://github.com/CTSRD-CHERI/llvm-project/issues/717
@@ -418,6 +421,10 @@ KEYWORD(char8_t                     , CHAR8SUPPORT)
 // C11 Extension
 KEYWORD(_Float16                    , KEYALL)
 
+// C2x keywords
+C2X_KEYWORD(typeof                  , KEYGNU)
+C2X_KEYWORD(typeof_unqual           , 0)
+
 // ISO/IEC JTC1 SC22 WG14 N1169 Extension
 KEYWORD(_Accum                      , KEYNOCXX)
 KEYWORD(_Fract                      , KEYNOCXX)
@@ -458,9 +465,6 @@ KEYWORD(__auto_type                 , KEYALL)
 
 // CHERI types
 KEYWORD(__intcap                    , KEYALL)
-
-// GNU Extensions (outside impl-reserved namespace)
-KEYWORD(typeof                      , KEYGNU|KEYC2X)
 
 // MS Extensions
 KEYWORD(__FUNCDNAME__               , KEYMS)
@@ -974,3 +978,4 @@ ANNOTATION(header_unit)
 #undef PUNCTUATOR
 #undef TOK
 #undef C99_KEYWORD
+#undef C2X_KEYWORD
