@@ -2524,6 +2524,12 @@ public:
         return true;
     return false;
   }
+
+  /// Report the maximum number of temporary operands needed by the predicate
+  /// matcher.
+  unsigned countRendererFns() const override {
+    return InsnMatcher->countRendererFns();
+  }
 };
 
 void InstructionMatcher::optimize() {
