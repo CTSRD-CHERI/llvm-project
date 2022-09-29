@@ -521,8 +521,12 @@ class Sema;
     /// specifies that there is no conversion from the source type to
     /// the target type.  AmbiguousConversion represents the unique
     /// ambiguous conversion (C++0x [over.best.ics]p10).
+    /// StaticObjectArgumentConversion represents the conversion rules for
+    /// the synthesized first argument of calls to static member functions
+    /// ([over.best.ics.general]p8).
     enum Kind {
       StandardConversion = 0,
+      StaticObjectArgumentConversion,
       UserDefinedConversion,
       AmbiguousConversion,
       EllipsisConversion,
@@ -594,6 +598,8 @@ class Sema;
       switch (ConversionKind) {
       case Uninitialized: break;
       case StandardConversion: Standard = Other.Standard; break;
+      case StaticObjectArgumentConversion:
+        break;
       case UserDefinedConversion: UserDefined = Other.UserDefined; break;
       case AmbiguousConversion: Ambiguous.copyFrom(Other.Ambiguous); break;
       case EllipsisConversion: break;
@@ -627,6 +633,7 @@ class Sema;
     unsigned getKindRank() const {
       switch (getKind()) {
       case StandardConversion:
+      case StaticObjectArgumentConversion:
         return 0;
 
       case UserDefinedConversion:
@@ -645,6 +652,9 @@ class Sema;
 
     bool isBad() const { return getKind() == BadConversion; }
     bool isStandard() const { return getKind() == StandardConversion; }
+    bool isStaticObjectArgument() const {
+      return getKind() == StaticObjectArgumentConversion;
+    }
     bool isEllipsis() const { return getKind() == EllipsisConversion; }
     bool isAmbiguous() const { return getKind() == AmbiguousConversion; }
     bool isUserDefined() const { return getKind() == UserDefinedConversion; }
@@ -678,6 +688,7 @@ class Sema;
       setKind(StandardConversion);
       Standard = NewSeq;
     }
+    void setStaticObjectArgument() { setKind(StaticObjectArgumentConversion); }
     void setEllipsis() { setKind(EllipsisConversion); }
     void setUserDefined() { setKind(UserDefinedConversion); }
 
