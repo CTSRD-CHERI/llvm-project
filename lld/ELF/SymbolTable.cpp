@@ -134,7 +134,6 @@ Symbol *SymbolTable::insert(StringRef name) {
   memset(sym, 0, sizeof(Symbol));
   sym->setName(name);
   sym->partition = 1;
-  sym->auxIdx = -1;
   sym->verdefIndex = -1;
   sym->versionId = VER_NDX_GLOBAL;
   if (pos != StringRef::npos)
