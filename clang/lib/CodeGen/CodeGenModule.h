@@ -767,6 +767,10 @@ public:
     return VTables.getItaniumVTableContext();
   }
 
+  const ItaniumVTableContext &getItaniumVTableContext() const {
+    return VTables.getItaniumVTableContext();
+  }
+
   MicrosoftVTableContext &getMicrosoftVTableContext() {
     return VTables.getMicrosoftVTableContext();
   }
@@ -1474,6 +1478,8 @@ public:
   void EmitVTableTypeMetadata(const CXXRecordDecl *RD,
                               llvm::GlobalVariable *VTable,
                               const VTableLayout &VTLayout);
+
+  llvm::Type *getVTableComponentType() const;
 
   /// Generate a cross-DSO type identifier for MD.
   llvm::ConstantInt *CreateCrossDsoCfiTypeId(llvm::Metadata *MD);
