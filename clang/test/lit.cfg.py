@@ -64,8 +64,6 @@ tools = [
     'clang-tblgen', 'clang-scan-deps', 'opt', 'llvm-ifs', 'yaml2obj', 'clang-linker-wrapper',
     ToolSubst('%clang_extdef_map', command=FindTool(
         'clang-extdef-mapping'), unresolved='ignore'),
-    ToolSubst('%clang_dxc', command=config.clang,
-        extra_args=['--driver-mode=dxc']),
 ]
 # XXXAR: needed by some CHERI tests:
 tools += ['llvm-readobj', 'llvm-objdump', 'llvm-dwarfdump']
