@@ -53,7 +53,7 @@ Defined *SymbolTable::ensureSymbolWillBeInDynsym(Symbol* original) {
   }
   StringRef newName = saver().save(uniqueName);
   Symbol* newSym = symtab->insert(newName);
-  newSym->resolve(*original);
+  newSym->resolve(cast<Defined>(*original));
   newSym->setName(newName); // resolve() changes the name to original->name
   newSym->binding = llvm::ELF::STB_GLOBAL;
   newSym->setVisibility(llvm::ELF::STV_HIDDEN);
@@ -139,12 +139,6 @@ Symbol *SymbolTable::insert(StringRef name) {
   sym->versionId = VER_NDX_GLOBAL;
   if (pos != StringRef::npos)
     sym->hasVersionSuffix = true;
-  return sym;
-}
-
-Symbol *SymbolTable::addSymbol(const Symbol &newSym) {
-  Symbol *sym = insert(newSym.getName());
-  sym->resolve(newSym);
   return sym;
 }
 
