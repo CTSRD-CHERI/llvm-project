@@ -8839,7 +8839,7 @@ bool PointerExprEvaluator::VisitCastExpr(const CastExpr *E) {
       // Casts from __(u)intcap_t propagate the null-derived status
       Result.MustBeNullDerivedCap = Value.mustBeNullDerivedCap();
     } else {
-      assert(SubExpr->getType()->isIntegerType());
+      assert(SubExpr->getType()->isIntegralOrEnumerationType());
       // In purecap mode this expression can only be provenance-carrying if
       // it came from a valid __(u)_intcap_t. In hybrid mode casting from
       // integer to pointer can result in a valid tagged capability.
