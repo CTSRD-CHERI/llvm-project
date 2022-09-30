@@ -435,7 +435,7 @@ def : InstAlias<"cspecialw $scr, $cs",
 //===----------------------------------------------------------------------===//
 
 let Predicates = [HasCheri], hasSideEffects = 1 in {
-def Clear   : Cheri_clear<0xd, "clear">;
+def CClear  : Cheri_clear<0xe, "cclear">;
 def FPClear : Cheri_clear<0x10, "fpclear">;
 }
 

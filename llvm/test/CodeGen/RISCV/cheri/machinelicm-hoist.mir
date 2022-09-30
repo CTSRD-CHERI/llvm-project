@@ -153,7 +153,7 @@ body:             |
   ; CHECK-NEXT:   [[CToPtr:%[0-9]+]]:gpr = CToPtr [[COPY1]], [[COPY3]]
   ; CHECK-NEXT:   [[CFromPtr:%[0-9]+]]:gpcr = CFromPtr [[COPY3]], [[COPY]]
   ; CHECK-NEXT:   [[CSpecialRW:%[0-9]+]]:gpcr = CSpecialRW 0, [[COPY1]]
-  ; CHECK-NEXT:   Clear 1, 1
+  ; CHECK-NEXT:   CClear 1, 1
   ; CHECK-NEXT:   FPClear 1, 1
   ; CHECK-NEXT:   [[CSeal1:%[0-9]+]]:gpcr = CSeal [[CIncOffsetImm]], [[COPY2]]
   ; CHECK-NEXT:   [[CUnseal1:%[0-9]+]]:gpcr = CUnseal [[CIncOffsetImm]], [[COPY2]]
@@ -261,7 +261,7 @@ body:             |
     %80:gpcr = CSpecialRW 0, %1
 
     ; Fast Register-Clearing Instructions
-    Clear 1, 1
+    CClear 1, 1
     FPClear 1, 1
 
     ; Adjusting to Compressed Capability Precision
