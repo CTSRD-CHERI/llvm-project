@@ -97,7 +97,7 @@ static bool needsInterpSection() {
 }
 
 bool elf::hasDynamicLinker() {
-  return config->shared || config->pie || !ctx->sharedFiles.empty();
+  return config->shared || config->pie || !ctx.sharedFiles.empty();
 }
 
 template <class ELFT> void elf::writeResult() {
@@ -641,7 +641,7 @@ template <class ELFT> static void markUsedLocalSymbols() {
   // See MarkLive<ELFT>::resolveReloc().
   if (config->gcSections)
     return;
-  for (ELFFileBase *file : ctx->objectFiles) {
+  for (ELFFileBase *file : ctx.objectFiles) {
     ObjFile<ELFT> *f = cast<ObjFile<ELFT>>(file);
     for (InputSectionBase *s : f->getSections()) {
       InputSection *isec = dyn_cast_or_null<InputSection>(s);
@@ -712,7 +712,7 @@ template <class ELFT> void Writer<ELFT>::copyLocalSymbols() {
   llvm::TimeTraceScope timeScope("Add local symbols");
   if (config->copyRelocs && config->discard != DiscardPolicy::None)
     markUsedLocalSymbols<ELFT>();
-  for (ELFFileBase *file : ctx->objectFiles) {
+  for (ELFFileBase *file : ctx.objectFiles) {
     for (Symbol *b : file->getLocalSymbols()) {
       assert(b->isLocal() && "should have been caught in initializeSymbols()");
       auto *dr = dyn_cast<Defined>(b);
@@ -1322,7 +1322,7 @@ static DenseMap<const InputSectionBase *, int> buildSectionOrder() {
   for (Symbol *sym : symtab->getSymbols())
     addSym(*sym);
 
-  for (ELFFileBase *file : ctx->objectFiles)
+  for (ELFFileBase *file : ctx.objectFiles)
     for (Symbol *sym : file->getLocalSymbols())
       addSym(*sym);
 
@@ -1738,7 +1738,7 @@ template <class ELFT> void Writer<ELFT>::finalizeAddressDependentContent() {
 // block sections, input sections can shrink when the jump instructions at
 // the end of the section are relaxed.
 static void fixSymbolsAfterShrinking() {
-  for (InputFile *File : ctx->objectFiles) {
+  for (InputFile *File : ctx.objectFiles) {
     parallelForEach(File->getSymbols(), [&](Symbol *Sym) {
       auto *def = dyn_cast<Defined>(Sym);
       if (!def)
@@ -1886,7 +1886,7 @@ template <class ELFT> void Writer<ELFT>::finalizeSections() {
   // It should be okay as no one seems to care about the type.
   // Even the author of gold doesn't remember why gold behaves that way.
   // https://sourceware.org/ml/binutils/2002-03/msg00360.html
-  bool needsDYNAMIC = (config->isPic || !ctx->sharedFiles.empty()); // TODO: --as-needed?
+  bool needsDYNAMIC = (config->isPic || !ctx.sharedFiles.empty()); // TODO: --as-needed?
   if (mainPart->dynamic->parent && needsDYNAMIC) {
     // Set _DYNAMIC to null for static binaries without shared libraries
     // Note: This is needed in order to not have a valid _DYNAMIC if
@@ -2028,7 +2028,7 @@ template <class ELFT> void Writer<ELFT>::finalizeSections() {
     // ld.bfd traces all DT_NEEDED to emulate the logic of the dynamic linker to
     // catch more cases. That is too much for us. Our approach resembles the one
     // used in ld.gold, achieves a good balance to be useful but not too smart.
-    for (SharedFile *file : ctx->sharedFiles) {
+    for (SharedFile *file : ctx.sharedFiles) {
       bool allNeededIsKnown =
           llvm::all_of(file->dtNeeded, [&](StringRef needed) {
             return symtab->soNames.count(CachedHashStringRef(needed));

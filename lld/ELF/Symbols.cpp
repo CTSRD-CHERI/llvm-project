@@ -406,7 +406,7 @@ void elf::printTraceSymbol(const Symbol &sym, StringRef name) {
 
 static void recordWhyExtract(const InputFile *reference,
                              const InputFile &extracted, const Symbol &sym) {
-  ctx->whyExtractRecords.emplace_back(toString(reference), &extracted, sym);
+  ctx.whyExtractRecords.emplace_back(toString(reference), &extracted, sym);
 }
 
 void elf::maybeWarnUnorderableSymbol(const Symbol *sym) {
@@ -579,8 +579,8 @@ void Symbol::resolve(const Undefined &other) {
     // definition. this->file needs to be saved because in the case of LTO it
     // may be reset to nullptr or be replaced with a file named lto.tmp.
     if (backref && !isWeak())
-      ctx->backwardReferences.try_emplace(this,
-                                          std::make_pair(other.file, file));
+      ctx.backwardReferences.try_emplace(this,
+                                         std::make_pair(other.file, file));
     return;
   }
 
@@ -724,7 +724,7 @@ void Symbol::resolve(const LazyObject &other) {
   // should be extracted as the canonical definition instead.
   if (LLVM_UNLIKELY(isCommon()) && elf::config->fortranCommon &&
       other.file->shouldExtractForCommon(getName())) {
-    ctx->backwardReferences.erase(this);
+    ctx.backwardReferences.erase(this);
     other.overwrite(*this);
     other.extract();
     return;
@@ -733,7 +733,7 @@ void Symbol::resolve(const LazyObject &other) {
   if (!isUndefined()) {
     // See the comment in resolveUndefined().
     if (isDefined())
-      ctx->backwardReferences.erase(this);
+      ctx.backwardReferences.erase(this);
     return;
   }
 

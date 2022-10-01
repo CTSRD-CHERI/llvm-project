@@ -144,12 +144,12 @@ int RISCV::getCapabilitySize() const {
 uint32_t RISCV::calcEFlags() const {
   // If there are only binary input files (from -b binary), use a
   // value of 0 for the ELF header flags.
-  if (ctx->objectFiles.empty())
+  if (ctx.objectFiles.empty())
     return 0;
 
-  uint32_t target = getEFlags(ctx->objectFiles.front());
+  uint32_t target = getEFlags(ctx.objectFiles.front());
 
-  for (InputFile *f : ctx->objectFiles) {
+  for (InputFile *f : ctx.objectFiles) {
     uint32_t eflags = getEFlags(f);
     if (eflags & EF_RISCV_RVC)
       target |= EF_RISCV_RVC;
@@ -158,7 +158,7 @@ uint32_t RISCV::calcEFlags() const {
       error(
           toString(f) +
           ": cannot link object files with different floating-point ABI from " +
-          toString(ctx->objectFiles[0]));
+          toString(ctx.objectFiles[0]));
 
     if ((eflags & EF_RISCV_RVE) != (target & EF_RISCV_RVE))
       error(toString(f) +
@@ -179,8 +179,8 @@ uint32_t RISCV::calcEFlags() const {
 bool RISCV::calcIsCheriAbi() const {
   bool isCheriAbi = config->eflags & EF_RISCV_CHERIABI;
 
-  if (config->isCheriAbi && !ctx->objectFiles.empty() && !isCheriAbi)
-    error(toString(ctx->objectFiles.front()) +
+  if (config->isCheriAbi && !ctx.objectFiles.empty() && !isCheriAbi)
+    error(toString(ctx.objectFiles.front()) +
           ": object file is non-CheriABI but emulation forces it");
 
   return isCheriAbi;
@@ -608,7 +608,7 @@ static void initSymbolAnchors() {
   }
   // Store anchors (st_value and st_value+st_size) for symbols relative to text
   // sections.
-  for (InputFile *file : ctx->objectFiles)
+  for (InputFile *file : ctx.objectFiles)
     for (Symbol *sym : file->getSymbols()) {
       auto *d = dyn_cast<Defined>(sym);
       if (!d || d->file != file)
