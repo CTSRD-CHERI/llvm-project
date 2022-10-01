@@ -1104,7 +1104,7 @@ void addCapabilityRelocation(Symbol *sym, RelType type, InputSectionBase *sec,
       // Hack: Add a new global symbol with a unique name so that we can use
       // a dynamic relocation against it.
       // TODO: should it be possible to add STB_LOCAL symbols to .dynsymtab?
-      Defined* newSym = symtab->ensureSymbolWillBeInDynsym(sym);
+      Defined* newSym = symtab.ensureSymbolWillBeInDynsym(sym);
       assert(newSym->isFunc() && "This should only be used for functions");
       assert(newSym->includeInDynsym());
       assert(newSym->binding == llvm::ELF::STB_GLOBAL);

@@ -617,7 +617,7 @@ template <class ELFT> void ObjFile<ELFT>::parse(bool ignoreComdats) {
 
     bool keepGroup =
         (flag & GRP_COMDAT) == 0 || ignoreComdats ||
-        symtab->comdatGroups.try_emplace(CachedHashStringRef(signature), this)
+        symtab.comdatGroups.try_emplace(CachedHashStringRef(signature), this)
             .second;
     if (keepGroup) {
       if (config->relocatable)
@@ -755,7 +755,7 @@ void ObjFile<ELFT>::initializeSections(bool ignoreComdats,
       ArrayRef<Elf_Word> entries =
           cantFail(obj.template getSectionContentsAsArray<Elf_Word>(sec));
       if ((entries[0] & GRP_COMDAT) == 0 || ignoreComdats ||
-          symtab->comdatGroups.find(CachedHashStringRef(signature))->second ==
+          symtab.comdatGroups.find(CachedHashStringRef(signature))->second ==
               this)
         selectedGroups.push_back(entries);
       break;
@@ -1032,8 +1032,6 @@ InputSectionBase *ObjFile<ELFT>::createInputSection(uint32_t idx,
 // its corresponding ELF symbol table.
 template <class ELFT>
 void ObjFile<ELFT>::initializeSymbols(const object::ELFFile<ELFT> &obj) {
-  SymbolTable &symtab = *elf::symtab;
-
   ArrayRef<Elf_Sym> eSyms = this->getELFSyms<ELFT>();
   symbols.resize(eSyms.size());
 
@@ -1415,7 +1413,7 @@ template <class ELFT> void SharedFile::parse() {
   DenseMap<CachedHashStringRef, SharedFile *>::iterator it;
   bool wasInserted;
   std::tie(it, wasInserted) =
-      symtab->soNames.try_emplace(CachedHashStringRef(soName), this);
+      symtab.soNames.try_emplace(CachedHashStringRef(soName), this);
 
   // If a DSO appears more than once on the command line with and without
   // --as-needed, --no-as-needed takes precedence over --as-needed because a
@@ -1450,7 +1448,6 @@ template <class ELFT> void SharedFile::parse() {
   SmallString<0> versionedNameBuffer;
 
   // Add symbols to the symbol table.
-  SymbolTable &symtab = *elf::symtab;
   ArrayRef<Elf_Sym> syms = this->getGlobalELFSyms<ELFT>();
   for (size_t i = 0, e = syms.size(); i != e; ++i) {
     const Elf_Sym &sym = syms[i];
@@ -1642,7 +1639,7 @@ createBitcodeSymbol(Symbol *&sym, const std::vector<bool> &keptComdats,
   uint8_t visibility = mapVisibility(objSym.getVisibility());
 
   if (!sym)
-    sym = symtab->insert(saver().save(objSym.getName()));
+    sym = symtab.insert(saver().save(objSym.getName()));
 
   int c = objSym.getComdatIndex();
   if (objSym.isUndefined() || (c != -1 && !keptComdats[c])) {
@@ -1668,7 +1665,7 @@ void BitcodeFile::parse() {
   for (std::pair<StringRef, Comdat::SelectionKind> s : obj->getComdatTable()) {
     keptComdats.push_back(
         s.second == Comdat::NoDeduplicate ||
-        symtab->comdatGroups.try_emplace(CachedHashStringRef(s.first), this)
+        symtab.comdatGroups.try_emplace(CachedHashStringRef(s.first), this)
             .second);
   }
 
@@ -1687,7 +1684,6 @@ void BitcodeFile::parse() {
 }
 
 void BitcodeFile::parseLazy() {
-  SymbolTable &symtab = *elf::symtab;
   symbols.resize(obj->symbols().size());
   for (auto [i, irSym] : llvm::enumerate(obj->symbols()))
     if (!irSym.isUndefined()) {
@@ -1727,15 +1723,15 @@ void BinaryFile::parse() {
 
   llvm::StringSaver &saver = lld::saver();
 
-  symtab->addAndCheckDuplicate(Defined{nullptr, saver.save(s + "_start"),
-                                       STB_GLOBAL, STV_DEFAULT, STT_OBJECT, 0,
-                                       0, section});
-  symtab->addAndCheckDuplicate(Defined{nullptr, saver.save(s + "_end"),
-                                       STB_GLOBAL, STV_DEFAULT, STT_OBJECT,
-                                       data.size(), 0, section});
-  symtab->addAndCheckDuplicate(Defined{nullptr, saver.save(s + "_size"),
-                                       STB_GLOBAL, STV_DEFAULT, STT_OBJECT,
-                                       data.size(), 0, nullptr});
+  symtab.addAndCheckDuplicate(Defined{nullptr, saver.save(s + "_start"),
+                                      STB_GLOBAL, STV_DEFAULT, STT_OBJECT, 0, 0,
+                                      section});
+  symtab.addAndCheckDuplicate(Defined{nullptr, saver.save(s + "_end"),
+                                      STB_GLOBAL, STV_DEFAULT, STT_OBJECT,
+                                      data.size(), 0, section});
+  symtab.addAndCheckDuplicate(Defined{nullptr, saver.save(s + "_size"),
+                                      STB_GLOBAL, STV_DEFAULT, STT_OBJECT,
+                                      data.size(), 0, nullptr});
 }
 
 ELFFileBase *elf::createObjFile(MemoryBufferRef mb, StringRef archiveName,
@@ -1763,8 +1759,6 @@ ELFFileBase *elf::createObjFile(MemoryBufferRef mb, StringRef archiveName,
 
 template <class ELFT> void ObjFile<ELFT>::parseLazy() {
   const ArrayRef<typename ELFT::Sym> eSyms = this->getELFSyms<ELFT>();
-  SymbolTable &symtab = *elf::symtab;
-
   symbols.resize(eSyms.size());
   for (size_t i = firstGlobal, end = eSyms.size(); i != end; ++i)
     if (eSyms[i].st_shndx != SHN_UNDEF)

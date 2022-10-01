@@ -28,7 +28,7 @@ using namespace llvm::ELF;
 using namespace lld;
 using namespace lld::elf;
 
-std::unique_ptr<SymbolTable> elf::symtab;
+SymbolTable elf::symtab;
 
 Defined *SymbolTable::ensureSymbolWillBeInDynsym(Symbol* original) {
   assert(!original->includeInDynsym() && "Already included in dynsym?");
@@ -48,11 +48,11 @@ Defined *SymbolTable::ensureSymbolWillBeInDynsym(Symbol* original) {
   }
 
   std::string uniqueName = ("__cheri_fnptr_" + original->getName()).str();
-  for (int i = 2; symtab->find(uniqueName); i++) {
+  for (int i = 2; symtab.find(uniqueName); i++) {
     uniqueName = ("__cheri_fnptr" + Twine(i) + "_" + original->getName()).str();
   }
   StringRef newName = saver().save(uniqueName);
-  Symbol* newSym = symtab->insert(newName);
+  Symbol* newSym = symtab.insert(newName);
   newSym->resolve(cast<Defined>(*original));
   newSym->setName(newName); // resolve() changes the name to original->name
   newSym->binding = llvm::ELF::STB_GLOBAL;
