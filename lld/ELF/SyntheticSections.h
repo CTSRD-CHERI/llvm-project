@@ -26,6 +26,7 @@
 #include "llvm/ADT/DenseSet.h"
 #include "llvm/ADT/MapVector.h"
 #include "llvm/MC/StringTableBuilder.h"
+#include "llvm/Support/Compiler.h"
 #include "llvm/Support/Endian.h"
 #include "llvm/Support/Parallel.h"
 #include "llvm/Support/Threading.h"
@@ -1282,7 +1283,7 @@ struct Partition {
   unsigned getNumber() const { return this - &partitions[0] + 1; }
 };
 
-extern Partition *mainPart;
+LLVM_LIBRARY_VISIBILITY extern Partition *mainPart;
 
 inline Partition &SectionBase::getPartition() const {
   assert(isLive());
@@ -1324,7 +1325,7 @@ struct InStruct {
   void reset();
 };
 
-extern InStruct in;
+LLVM_LIBRARY_VISIBILITY extern InStruct in;
 
 } // namespace lld::elf
 
