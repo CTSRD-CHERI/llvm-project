@@ -1107,8 +1107,9 @@ Value *LibCallSimplifier::optimizeMemCpy(CallInst *CI, IRBuilderBase &B) {
     return nullptr;
 
   // memcpy(x, y, n) -> llvm.memcpy(align 1 x, align 1 y, n)
-  CallInst *NewCI = B.CreateMemCpy(CI->getArgOperand(0), Align(1),
-                                   CI->getArgOperand(1), Align(1), Size);
+  CallInst *NewCI =
+      B.CreateMemCpy(CI->getArgOperand(0), Align(1), CI->getArgOperand(1),
+                     Align(1), Size, shouldPreserveTags(CI));
   mergeAttributesAndFlags(NewCI, *CI);
   return CI->getArgOperand(0);
 }
@@ -1156,8 +1157,8 @@ Value *LibCallSimplifier::optimizeMemPCpy(CallInst *CI, IRBuilderBase &B) {
   Value *Dst = CI->getArgOperand(0);
   Value *N = CI->getArgOperand(2);
   // mempcpy(x, y, n) -> llvm.memcpy(align 1 x, align 1 y, n), x + n
-  CallInst *NewCI =
-      B.CreateMemCpy(Dst, Align(1), CI->getArgOperand(1), Align(1), N);
+  CallInst *NewCI = B.CreateMemCpy(Dst, Align(1), CI->getArgOperand(1),
+                                   Align(1), N, shouldPreserveTags(CI));
   // Propagate attributes, but memcpy has no return value, so make sure that
   // any return attributes are compliant.
   // TODO: Attach return value attributes to the 1st operand to preserve them?
@@ -1172,8 +1173,9 @@ Value *LibCallSimplifier::optimizeMemMove(CallInst *CI, IRBuilderBase &B) {
     return nullptr;
 
   // memmove(x, y, n) -> llvm.memmove(align 1 x, align 1 y, n)
-  CallInst *NewCI = B.CreateMemMove(CI->getArgOperand(0), Align(1),
-                                    CI->getArgOperand(1), Align(1), Size);
+  CallInst *NewCI =
+      B.CreateMemMove(CI->getArgOperand(0), Align(1), CI->getArgOperand(1),
+                      Align(1), Size, shouldPreserveTags(CI));
   mergeAttributesAndFlags(NewCI, *CI);
   return CI->getArgOperand(0);
 }
@@ -2864,7 +2866,8 @@ Value *LibCallSimplifier::optimizePuts(CallInst *CI, IRBuilderBase &B) {
 Value *LibCallSimplifier::optimizeBCopy(CallInst *CI, IRBuilderBase &B) {
   // bcopy(src, dst, n) -> llvm.memmove(dst, src, n)
   return B.CreateMemMove(CI->getArgOperand(1), Align(1), CI->getArgOperand(0),
-                         Align(1), CI->getArgOperand(2));
+                         Align(1), CI->getArgOperand(2),
+                         shouldPreserveTags(CI));
 }
 
 bool LibCallSimplifier::hasFloatVersion(StringRef FuncName) {
@@ -3301,7 +3304,7 @@ Value *FortifiedLibCallSimplifier::optimizeMemCpyChk(CallInst *CI,
   if (isFortifiedCallFoldable(CI, 3, 2)) {
     CallInst *NewCI =
         B.CreateMemCpy(CI->getArgOperand(0), Align(1), CI->getArgOperand(1),
-                       Align(1), CI->getArgOperand(2));
+                       Align(1), CI->getArgOperand(2), shouldPreserveTags(CI));
     mergeAttributesAndFlags(NewCI, *CI);
     return CI->getArgOperand(0);
   }
@@ -3313,7 +3316,7 @@ Value *FortifiedLibCallSimplifier::optimizeMemMoveChk(CallInst *CI,
   if (isFortifiedCallFoldable(CI, 3, 2)) {
     CallInst *NewCI =
         B.CreateMemMove(CI->getArgOperand(0), Align(1), CI->getArgOperand(1),
-                        Align(1), CI->getArgOperand(2));
+                        Align(1), CI->getArgOperand(2), shouldPreserveTags(CI));
     mergeAttributesAndFlags(NewCI, *CI);
     return CI->getArgOperand(0);
   }
