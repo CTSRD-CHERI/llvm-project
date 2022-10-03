@@ -767,9 +767,7 @@ Value *LibCallSimplifier::optimizeStrLCpy(CallInst *CI, IRBuilderBase &B) {
   // D[N' - 1] if necessary.
   CallInst *NewCI = B.CreateMemCpy(Dst, Align(1), Src, Align(1),
                         ConstantInt::get(DL.getIntPtrType(PT), NBytes));
-  NewCI->setAttributes(CI->getAttributes());
-  NewCI->removeRetAttrs(AttributeFuncs::typeIncompatible(NewCI->getType()));
-  copyFlags(*CI, NewCI);
+  mergeAttributesAndFlags(NewCI, *CI);
 
   if (!NulTerm) {
     Value *EndOff = ConstantInt::get(CI->getType(), NBytes);
