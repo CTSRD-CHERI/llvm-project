@@ -249,8 +249,9 @@ void LinkerDriver::addFile(StringRef path, bool withLOption) {
     readLinkerScript(mbref);
     return;
   case file_magic::archive: {
+    auto members = getArchiveMembers(mbref);
     if (inWholeArchive) {
-      for (const auto &p : getArchiveMembers(mbref)) {
+      for (const std::pair<MemoryBufferRef, uint64_t> &p : members) {
         if (isBitcode(p.first))
           files.push_back(make<BitcodeFile>(p.first, path, p.second, false));
         else
@@ -259,7 +260,6 @@ void LinkerDriver::addFile(StringRef path, bool withLOption) {
       return;
     }
 
-    auto members = getArchiveMembers(mbref);
     archiveFiles.emplace_back(path, members.size());
 
     // Handle archives and --start-lib/--end-lib using the same code path. This
