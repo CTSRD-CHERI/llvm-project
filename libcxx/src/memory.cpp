@@ -197,7 +197,7 @@ align(size_t alignment, size_t size, void*& ptr, size_t& space)
 #if __has_builtin(__builtin_align_up)
         char* p2 = __builtin_align_up(p1, alignment);
 #else
-        char* p2 = reinterpret_cast<char*>(reinterpret_cast<size_t>(p1 + (alignment - 1)) & -alignment);
+        char* p2 = reinterpret_cast<char*>(reinterpret_cast<uintptr_t>(p1 + (alignment - 1)) & -alignment);
 #endif
         size_t d = static_cast<size_t>(p2 - p1);
         if (d <= space - size)
