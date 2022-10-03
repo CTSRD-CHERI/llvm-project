@@ -1823,6 +1823,8 @@ void TextNodeDumper::VisitVarDecl(const VarDecl *D) {
     case VarDecl::ListInit:
       OS << " listinit";
       break;
+    case VarDecl::ParenListInit:
+      OS << " parenlistinit";
     }
   }
   if (D->needsDestruction(D->getASTContext()))
