@@ -981,7 +981,7 @@ exit:
   ; CHECK: select <2 x i1> <i1 true, i1 false>, <2 x i8> <i8 2, i8 3>, <2 x i8> <i8 3, i8 2>
 
   call void @f.nobuiltin() builtin
-  ; CHECK: call void @f.nobuiltin() #35
+  ; CHECK: call void @f.nobuiltin() #36
 
   call fastcc noalias i32* @f.noalias() noinline
   ; CHECK: call fastcc noalias i32* @f.noalias() #11
@@ -1182,10 +1182,11 @@ define void @intrinsics.codegen() {
 ; CHECK: attributes #29 = { nocallback nofree nosync nounwind willreturn memory(none) }
 ; CHECK: attributes #30 = { nounwind memory(argmem: read) }
 ; CHECK: attributes #31 = { nounwind memory(argmem: readwrite) }
-; CHECK: attributes #32 = { nounwind memory(read) }
-; CHECK: attributes #33 = { nocallback nofree nosync nounwind willreturn }
-; CHECK: attributes #34 = { nocallback nofree nosync nounwind willreturn memory(argmem: readwrite, inaccessiblemem: readwrite) }
-; CHECK: attributes #35 = { builtin }
+; CHECK: attributes #32 = { nocallback nofree nosync nounwind willreturn memory(read) }
+; CHECK: attributes #33 = { nocallback nounwind }
+; CHECK: attributes #34 = { nocallback nofree nosync nounwind willreturn }
+; CHECK: attributes #35 = { nocallback nofree nosync nounwind willreturn memory(argmem: readwrite, inaccessiblemem: readwrite) }
+; CHECK: attributes #36 = { builtin }
 
 ;; Metadata
 
