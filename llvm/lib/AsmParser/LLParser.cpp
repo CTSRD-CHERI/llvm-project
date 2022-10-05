@@ -6440,7 +6440,9 @@ bool LLParser::parseIndirectBr(Instruction *&Inst, PerFunctionState &PFS) {
 // If RetType is a non-function pointer type, then this is the short syntax
 // for the call, which means that RetType is just the return type.  Infer the
 // rest of the function argument types from the arguments that are present.
-static bool resolveFunctionType(Type *RetType, const SmallVector<ParamInfo, 16> &ArgList, FunctionType *&FuncTy) {
+bool LLParser::resolveFunctionType(Type *RetType,
+                                   const SmallVector<ParamInfo, 16> &ArgList,
+                                   FunctionType *&FuncTy) {
   FuncTy = dyn_cast<FunctionType>(RetType);
   if (!FuncTy) {
     // Pull out the types of all of the arguments...
@@ -6449,7 +6451,7 @@ static bool resolveFunctionType(Type *RetType, const SmallVector<ParamInfo, 16> 
       ParamTypes.push_back(ArgList[i].V->getType());
 
     if (!FunctionType::isValidReturnType(RetType))
-      return error(RetTypeLoc, "Invalid result type for LLVM function");
+      return true;
 
     FuncTy = FunctionType::get(RetType, ParamTypes, false);
   }
@@ -6491,7 +6493,7 @@ bool LLParser::parseInvoke(Instruction *&Inst, PerFunctionState &PFS) {
   // rest of the function argument types from the arguments that are present.
   FunctionType *Ty;
   if (resolveFunctionType(RetType, ArgList, Ty))
-    return true;
+    return error(RetTypeLoc, "Invalid result type for LLVM function");
 
   CalleeID.FTy = Ty;
 
@@ -6808,7 +6810,7 @@ bool LLParser::parseCallBr(Instruction *&Inst, PerFunctionState &PFS) {
   // rest of the function argument types from the arguments that are present.
   FunctionType *Ty;
   if (resolveFunctionType(RetType, ArgList, Ty))
-    return true;
+    return error(RetTypeLoc, "Invalid result type for LLVM function");
 
   CalleeID.FTy = Ty;
 
@@ -7204,7 +7206,7 @@ bool LLParser::parseCall(Instruction *&Inst, PerFunctionState &PFS,
   // rest of the function argument types from the arguments that are present.
   FunctionType *Ty;
   if (resolveFunctionType(RetType, ArgList, Ty))
-    return true;
+    return error(RetTypeLoc, "Invalid result type for LLVM function");
 
   CalleeID.FTy = Ty;
 
