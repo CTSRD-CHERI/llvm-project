@@ -3309,8 +3309,7 @@ static SDValue lowerCTLZ_CTTZ_ZERO_UNDEF(SDValue Op, SelectionDAG &DAG) {
   // For CTTZ_ZERO_UNDEF, we need to extract the lowest set bit using X & -X.
   // The trailing zero count is equal to log2 of this single bit value.
   if (Op.getOpcode() == ISD::CTTZ_ZERO_UNDEF) {
-    SDValue Neg =
-        DAG.getNode(ISD::SUB, DL, VT, DAG.getConstant(0, DL, VT), Src);
+    SDValue Neg = DAG.getNegative(Src, DL, VT);
     Src = DAG.getNode(ISD::AND, DL, VT, Src, Neg);
   }
 
@@ -8485,8 +8484,7 @@ performSIGN_EXTEND_INREGCombine(SDNode *N, SelectionDAG &DAG,
       DAG.ComputeNumSignBits(Src.getOperand(0)) > 32) {
     SDLoc DL(N);
     SDValue Freeze = DAG.getFreeze(Src.getOperand(0));
-    SDValue Neg =
-        DAG.getNode(ISD::SUB, DL, VT, DAG.getConstant(0, DL, MVT::i64), Freeze);
+    SDValue Neg = DAG.getNegative(Freeze, DL, VT);
     Neg = DAG.getNode(ISD::SIGN_EXTEND_INREG, DL, MVT::i64, Neg,
                       DAG.getValueType(MVT::i32));
     return DAG.getNode(ISD::SMAX, DL, MVT::i64, Freeze, Neg);
@@ -9737,8 +9735,7 @@ SDValue RISCVTargetLowering::PerformDAGCombine(SDNode *N,
                             DAG.getConstant(1, DL, VT));
         else
           Neg = LHS;
-        SDValue Mask = DAG.getNode(ISD::SUB, DL, VT, DAG.getConstant(0, DL, VT),
-                                   Neg); // -(and (x, 0x1))
+        SDValue Mask = DAG.getNegative(Neg, DL, VT);               // -x
         SDValue And = DAG.getNode(ISD::AND, DL, VT, Mask, Src1); // Mask & z
         return DAG.getNode(Opcode, DL, VT, And, Src2);           // And Op y
       }
