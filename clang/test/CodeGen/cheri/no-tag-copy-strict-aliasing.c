@@ -40,8 +40,7 @@ void no_retain(long **q) {
   // probably be aligned so malloc will retain tags at run time).
   // CHECK: @no_retain(i64 addrspace(200)* addrspace(200)* [[Q:%.*]]) addrspace(200)
   // CHECK:    call void @llvm.memcpy.p200i8.p200i8.i64(i8 addrspace(200)* align 8 {{%[0-9]+}}, i8 addrspace(200)* align 8 {{%[0-9]+}}
-  // CHECK-SAME: , i64 32, i1 false){{$}}
-  // TODO-CHECK-SAME: , i64 32, i1 false) [[NO_TAGS_ATTR:#.*]]{{$}}
+  // CHECK-SAME: , i64 32, i1 false) [[NO_TAGS_ATTR:#.*]]{{$}}
   // CHECK-NEXT:    ret void
 }
 
@@ -61,4 +60,4 @@ void retain_char_array(long **q) {
   // CHECK-NEXT:    ret void
 }
 
-// TODO-CHECK: [[NO_TAGS_ATTR]] = { no_preserve_cheri_tags }
+// CHECK: [[NO_TAGS_ATTR]] = { no_preserve_cheri_tags }

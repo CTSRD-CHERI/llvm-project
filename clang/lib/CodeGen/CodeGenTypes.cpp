@@ -1004,6 +1004,21 @@ CodeGenTypes::copyShouldPreserveTags(const Expr *DestPtr, const Expr *SrcPtr,
   return DstPreserve;
 }
 
+static const VarDecl *findUnderlyingVarDecl(const Expr *UnderlyingExpr) {
+  if (auto *UO = dyn_cast<UnaryOperator>(UnderlyingExpr)) {
+    if (UO->getOpcode() == UO_AddrOf) {
+      return findUnderlyingVarDecl(UO->getSubExpr());
+    }
+  } else if (auto DRE = dyn_cast<DeclRefExpr>(UnderlyingExpr)) {
+    return dyn_cast<const VarDecl>(DRE->getDecl());
+  }
+  // TODO: We could improve analysis for MemberExpr, but only if the copy size
+  //  is <= the size of the member, since memcpy() accross multiple fields is
+  //  a something that exists (despite not being compatible with sub-object
+  //  bounds). For now we just look at the declaration of the entire struct
+  return nullptr;
+}
+
 llvm::PreserveCheriTags
 CodeGenTypes::copyShouldPreserveTags(const Expr *E, Optional<CharUnits> Size) {
   assert(E->getType()->isAnyPointerType());
@@ -1018,14 +1033,28 @@ CodeGenTypes::copyShouldPreserveTags(const Expr *E, Optional<CharUnits> Size) {
     // String literals can never contain tag bits.
     return llvm::PreserveCheriTags::Unnecessary;
   }
-  // TODO: Find the underlying VarDecl to improve diagnostics
-  const VarDecl *UnderlyingVar = nullptr;
-  // TODO: this assertion may be overly aggressive.
-  assert((!UnderlyingVar || UnderlyingVar->getType() == Ty) &&
-         "Passed wrong VarDecl?");
-  // If we have an underlying VarDecl, we can assume that the dynamic type of
-  // the object is known and can perform more detailed analysis.
-  return copyShouldPreserveTagsForPointee(Ty, UnderlyingVar != nullptr, Size);
+  bool EffectiveTypeKnown = false;
+  const VarDecl *UnderlyingVar = findUnderlyingVarDecl(UnderlyingExpr);
+  if (UnderlyingVar) {
+    QualType VarTy = UnderlyingVar->getType();
+    assert(!VarTy->isDependentType() && !VarTy->containsErrors() &&
+           "Unexpected dependent/error type");
+    if (VarTy->isReferenceType()) {
+      // If the variable declaration is a C++ reference we can assume that the
+      // effective type of the object matches the type of the reference since
+      // forming the reference would have been invalid otherwise.
+      Ty = VarTy->getPointeeType();
+      EffectiveTypeKnown = true;
+    } else if (!VarTy->isAnyPointerType()) {
+      // If we found a non-pointer declaration that we are copying to/from, use
+      // the type of the declaration for the analysis since that defines the
+      // effective type. For pointers we can't assume anything since they could
+      // be "allocated objects" without a declared type.
+      Ty = VarTy;
+      EffectiveTypeKnown = true;
+    }
+  }
+  return copyShouldPreserveTagsForPointee(Ty, EffectiveTypeKnown, Size);
 }
 
 llvm::PreserveCheriTags CodeGenTypes::copyShouldPreserveTagsForPointee(
