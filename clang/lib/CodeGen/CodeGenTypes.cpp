@@ -1013,6 +1013,11 @@ CodeGenTypes::copyShouldPreserveTags(const Expr *E, Optional<CharUnits> Size) {
   QualType Ty = E->IgnoreParenImpCasts()->getType();
   if (Ty->isAnyPointerType())
     Ty = Ty->getPointeeType();
+  const Expr *UnderlyingExpr = E->IgnoreParenCasts();
+  if (const auto *SL = dyn_cast<StringLiteral>(UnderlyingExpr)) {
+    // String literals can never contain tag bits.
+    return llvm::PreserveCheriTags::Unnecessary;
+  }
   // TODO: Find the underlying VarDecl to improve diagnostics
   const VarDecl *UnderlyingVar = nullptr;
   // TODO: this assertion may be overly aggressive.

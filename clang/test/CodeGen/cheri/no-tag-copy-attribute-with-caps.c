@@ -110,12 +110,16 @@ void test_string_constant(struct OneCap *cap) {
   // CHECK-LABEL: void @test_string_constant(
   // Same for string -> char*
   __builtin_memmove(cap, "abcdefghijklmnopqrstuvwxyz", sizeof(*cap));
-  // expected-warning@-1{{memcpy operation with capability argument <unknown type> and underaligned destination (aligned to 1 bytes) may be inefficient or result in CHERI tags bits being stripped}} expected-note@-1{{For more information}}
   // CHECK: call void @llvm.memmove.p200i8.p200i8.i64(i8 addrspace(200)* align 16 {{%[a-z0-9]+}}, i8 addrspace(200)* align 1 getelementptr inbounds ([27 x i8], [27 x i8] addrspace(200)* @.str
   // CHECK-SAME: , i64 0
   // CHECK-SAME: , i64 0)
-  // CHECK-SAME: , i64 16, i1 false) [[MUST_PRESERVE_ATTR]]{{$}}
-  // FIXME-SAME: , i64 16, i1 false) [[NO_PRESERVE_ATTR]]{{$}}
+  // CHECK-SAME: , i64 16, i1 false) [[NO_PRESERVE_ATTR]]{{$}}
+  /// Check that the explicit cast does not affect the analysis.
+  __builtin_memmove(cap, (void *)"abcdefghijklmnopqrstuvwxyz", sizeof(*cap));
+  // CHECK: call void @llvm.memmove.p200i8.p200i8.i64(i8 addrspace(200)* align 16 {{%[a-z0-9]+}}, i8 addrspace(200)* align 1 getelementptr inbounds ([27 x i8], [27 x i8] addrspace(200)* @.str
+  // CHECK-SAME: , i64 0
+  // CHECK-SAME: , i64 0)
+  // CHECK-SAME: , i64 16, i1 false) [[NO_PRESERVE_ATTR]]{{$}}
 }
 
 void test_void_buffer(struct OneCap *cap, void *buf) {
