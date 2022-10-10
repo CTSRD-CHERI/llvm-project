@@ -660,6 +660,8 @@ static uint64_t getAttrKindEncoding(Attribute::AttrKind Kind) {
     return bitc::ATTR_KIND_ALLOC_KIND;
   case Attribute::MustPreserveCheriTags:
     return bitc::ATTR_KIND_MUST_PRESERVE_CHERI_TAGS;
+  case Attribute::Memory:
+    return bitc::ATTR_KIND_MEMORY;
   case Attribute::Naked:
     return bitc::ATTR_KIND_NAKED;
   case Attribute::Nest:
