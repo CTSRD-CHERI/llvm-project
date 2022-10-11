@@ -120,7 +120,7 @@ public:
         }
         // no attr on the called func, try call site too
         if (CB->hasFnAttr(Attribute::AttrKind::AllocSize)) {
-          LogAllocSize(CB->getAttributes().getFnAttrs().getAllocSizeArgs());
+          LogAllocSize(CB->getAttributes().getFnAttrs().getAllocSizeArgs().value());
         }
       }
     }
