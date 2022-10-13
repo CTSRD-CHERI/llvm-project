@@ -3159,6 +3159,12 @@ void ExprEngine::VisitCommonDeclRefExpr(const Expr *Ex, const NamedDecl *D,
     return;
   }
 
+  if (const auto *TPO = dyn_cast<TemplateParamObjectDecl>(D)) {
+    // FIXME: We should meaningfully implement this.
+    (void)TPO;
+    return;
+  }
+
   llvm_unreachable("Support for this Decl not implemented.");
 }
 
