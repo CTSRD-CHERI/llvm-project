@@ -318,7 +318,7 @@ void ScopedReportBase::AddDeadMutex(u64 id) {
   rm->stack = 0;
 }
 
-void ScopedReportBase::AddLocation(uptr addr, usize size) {
+void ScopedReportBase::AddLocation(uptr addr, uptr size) {
   if (addr == 0)
     return;
 #if !SANITIZER_GO

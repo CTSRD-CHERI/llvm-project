@@ -20,18 +20,18 @@ namespace __tsan {
 // StackTrace which calls malloc/free to allocate the buffer for
 // addresses in stack traces.
 struct VarSizeStackTrace : public StackTrace {
-  vaddr *trace_buffer;  // Owned.
+  uptr *trace_buffer;  // Owned.
 
   VarSizeStackTrace();
   ~VarSizeStackTrace();
-  void Init(const vaddr *pcs, usize cnt, bool extra_top_pc = false);
+  void Init(const uptr *pcs, uptr cnt, uptr extra_top_pc = 0);
 
   // Reverses the current stack trace order, the top frame goes to the bottom,
   // the last frame goes to the top.
   void ReverseOrder();
 
  private:
-  void ResizeBuffer(usize new_size);
+  void ResizeBuffer(uptr new_size);
 
   VarSizeStackTrace(const VarSizeStackTrace &);
   void operator=(const VarSizeStackTrace &);

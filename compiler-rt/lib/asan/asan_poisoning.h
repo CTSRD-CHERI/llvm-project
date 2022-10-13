@@ -24,7 +24,7 @@ void SetCanPoisonMemory(bool value);
 bool CanPoisonMemory();
 
 // Poisons the shadow memory for "size" bytes starting from "addr".
-void PoisonShadow(uptr addr, usize size, u8 value);
+void PoisonShadow(uptr addr, uptr size, u8 value);
 
 // Poisons the shadow memory for "redzone_size" bytes starting from
 // "addr + size".
@@ -36,7 +36,7 @@ void PoisonShadowPartialRightRedzone(uptr addr,
 // Fast versions of PoisonShadow and PoisonShadowPartialRightRedzone that
 // assume that memory addresses are properly aligned. Use in
 // performance-critical code with care.
-ALWAYS_INLINE void FastPoisonShadow(uptr aligned_beg, usize aligned_size,
+ALWAYS_INLINE void FastPoisonShadow(uptr aligned_beg, uptr aligned_size,
                                     u8 value) {
   DCHECK(!value || CanPoisonMemory());
 #if SANITIZER_FUCHSIA
@@ -74,7 +74,7 @@ ALWAYS_INLINE void FastPoisonShadow(uptr aligned_beg, usize aligned_size,
 }
 
 ALWAYS_INLINE void FastPoisonShadowPartialRightRedzone(
-    uptr aligned_addr, usize size, uptr redzone_size, u8 value) {
+    uptr aligned_addr, uptr size, uptr redzone_size, u8 value) {
   DCHECK(CanPoisonMemory());
   bool poison_partial = flags()->poison_partial;
   u8 *shadow = (u8*)MEM_TO_SHADOW(aligned_addr);
@@ -92,6 +92,6 @@ ALWAYS_INLINE void FastPoisonShadowPartialRightRedzone(
 
 // Calls __sanitizer::ReleaseMemoryPagesToOS() on
 // [MemToShadow(p), MemToShadow(p+size)].
-void FlushUnneededASanShadowMemory(uptr p, usize size);
+void FlushUnneededASanShadowMemory(uptr p, uptr size);
 
 }  // namespace __asan

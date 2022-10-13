@@ -116,11 +116,11 @@ void __tsan_ignore_thread_end() {
   ThreadIgnoreEnd(cur_thread(), CALLERPC);
 }
 
-void __tsan_read_range(void *addr, usize size) {
+void __tsan_read_range(void *addr, uptr size) {
   MemoryAccessRange(cur_thread(), CALLERPC, (uptr)addr, size, false);
 }
 
-void __tsan_write_range(void *addr, usize size) {
+void __tsan_write_range(void *addr, uptr size) {
   MemoryAccessRange(cur_thread(), CALLERPC, (uptr)addr, size, true);
 }
 

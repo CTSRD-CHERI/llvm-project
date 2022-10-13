@@ -94,7 +94,7 @@ static void ReportGenericErrorWrapper(uptr addr, bool is_write, int size,
 }
 
 // --------------- LowLevelAllocateCallbac ---------- {{{1
-static void OnLowLevelAllocate(uptr ptr, usize size) {
+static void OnLowLevelAllocate(uptr ptr, uptr size) {
   PoisonShadow(ptr, size, kAsanInternalHeapMagic);
 }
 
@@ -130,17 +130,17 @@ ASAN_REPORT_ERROR(store, true, 16)
 
 #define ASAN_REPORT_ERROR_N(type, is_write)                                 \
 extern "C" NOINLINE INTERFACE_ATTRIBUTE                                     \
-void __asan_report_ ## type ## _n(uptr addr, usize size) {                   \
+void __asan_report_ ## type ## _n(uptr addr, uptr size) {                   \
   GET_CALLER_PC_BP_SP;                                                      \
   ReportGenericError(pc, bp, sp, addr, is_write, size, 0, true);            \
 }                                                                           \
 extern "C" NOINLINE INTERFACE_ATTRIBUTE                                     \
-void __asan_report_exp_ ## type ## _n(uptr addr, usize size, u32 exp) {      \
+void __asan_report_exp_ ## type ## _n(uptr addr, uptr size, u32 exp) {      \
   GET_CALLER_PC_BP_SP;                                                      \
   ReportGenericError(pc, bp, sp, addr, is_write, size, exp, true);          \
 }                                                                           \
 extern "C" NOINLINE INTERFACE_ATTRIBUTE                                     \
-void __asan_report_ ## type ## _n_noabort(uptr addr, usize size) {           \
+void __asan_report_ ## type ## _n_noabort(uptr addr, uptr size) {           \
   GET_CALLER_PC_BP_SP;                                                      \
   ReportGenericError(pc, bp, sp, addr, is_write, size, 0, false);           \
 }                                                                           \
@@ -187,7 +187,7 @@ ASAN_MEMORY_ACCESS_CALLBACK(store, true, 16)
 
 extern "C"
 NOINLINE INTERFACE_ATTRIBUTE
-void __asan_loadN(uptr addr, usize size) {
+void __asan_loadN(uptr addr, uptr size) {
   if (__asan_region_is_poisoned(addr, size)) {
     GET_CALLER_PC_BP_SP;
     ReportGenericError(pc, bp, sp, addr, false, size, 0, true);
@@ -196,7 +196,7 @@ void __asan_loadN(uptr addr, usize size) {
 
 extern "C"
 NOINLINE INTERFACE_ATTRIBUTE
-void __asan_exp_loadN(uptr addr, usize size, u32 exp) {
+void __asan_exp_loadN(uptr addr, uptr size, u32 exp) {
   if (__asan_region_is_poisoned(addr, size)) {
     GET_CALLER_PC_BP_SP;
     ReportGenericError(pc, bp, sp, addr, false, size, exp, true);
@@ -205,7 +205,7 @@ void __asan_exp_loadN(uptr addr, usize size, u32 exp) {
 
 extern "C"
 NOINLINE INTERFACE_ATTRIBUTE
-void __asan_loadN_noabort(uptr addr, usize size) {
+void __asan_loadN_noabort(uptr addr, uptr size) {
   if (__asan_region_is_poisoned(addr, size)) {
     GET_CALLER_PC_BP_SP;
     ReportGenericError(pc, bp, sp, addr, false, size, 0, false);
@@ -214,7 +214,7 @@ void __asan_loadN_noabort(uptr addr, usize size) {
 
 extern "C"
 NOINLINE INTERFACE_ATTRIBUTE
-void __asan_storeN(uptr addr, usize size) {
+void __asan_storeN(uptr addr, uptr size) {
   if (__asan_region_is_poisoned(addr, size)) {
     GET_CALLER_PC_BP_SP;
     ReportGenericError(pc, bp, sp, addr, true, size, 0, true);
@@ -223,7 +223,7 @@ void __asan_storeN(uptr addr, usize size) {
 
 extern "C"
 NOINLINE INTERFACE_ATTRIBUTE
-void __asan_exp_storeN(uptr addr, usize size, u32 exp) {
+void __asan_exp_storeN(uptr addr, uptr size, u32 exp) {
   if (__asan_region_is_poisoned(addr, size)) {
     GET_CALLER_PC_BP_SP;
     ReportGenericError(pc, bp, sp, addr, true, size, exp, true);
@@ -232,7 +232,7 @@ void __asan_exp_storeN(uptr addr, usize size, u32 exp) {
 
 extern "C"
 NOINLINE INTERFACE_ATTRIBUTE
-void __asan_storeN_noabort(uptr addr, usize size) {
+void __asan_storeN_noabort(uptr addr, uptr size) {
   if (__asan_region_is_poisoned(addr, size)) {
     GET_CALLER_PC_BP_SP;
     ReportGenericError(pc, bp, sp, addr, true, size, 0, false);
@@ -574,8 +574,7 @@ static void UnpoisonDefaultStack() {
   } else {
     CHECK(!SANITIZER_FUCHSIA);
     // If we haven't seen this thread, try asking the OS for stack bounds.
-    uptr tls_addr;
-    usize tls_size, stack_size;
+    uptr tls_addr, tls_size, stack_size;
     GetThreadStackAndTls(/*main=*/false, &bottom, &stack_size, &tls_addr,
                          &tls_size);
     top = bottom + stack_size;

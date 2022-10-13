@@ -95,7 +95,7 @@ extern "C" SANITIZER_INTERFACE_ATTRIBUTE int dfsan_get_track_origins() {
 //  SHADOW_TO_ORIGIN(shadow) = shadow + 0x100000000000
 
 extern "C" SANITIZER_INTERFACE_ATTRIBUTE
-dfsan_label __dfsan_union_load(const dfsan_label *ls, usize n) {
+dfsan_label __dfsan_union_load(const dfsan_label *ls, uptr n) {
   dfsan_label label = ls[0];
   for (uptr i = 1; i != n; ++i)
     label |= ls[i];

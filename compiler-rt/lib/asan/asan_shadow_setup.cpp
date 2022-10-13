@@ -21,7 +21,7 @@
 
 namespace __asan {
 
-static void ProtectGap(uptr addr, usize size) {
+static void ProtectGap(uptr addr, uptr size) {
   if (!flags()->protect_shadow_gap) {
     // The shadow gap is unprotected, so there is a chance that someone
     // is actually using this memory. Which means it needs a shadow...

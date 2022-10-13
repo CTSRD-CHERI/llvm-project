@@ -62,7 +62,7 @@ namespace __hwasan {
 constexpr uptr kZeroBaseShadowStart = 0;
 constexpr uptr kZeroBaseMaxShadowStart = 1 << 18;
 
-static void ProtectGap(uptr addr, usize size) {
+static void ProtectGap(uptr addr, uptr size) {
   __sanitizer::ProtectGap(addr, size, kZeroBaseShadowStart,
                           kZeroBaseMaxShadowStart);
 }

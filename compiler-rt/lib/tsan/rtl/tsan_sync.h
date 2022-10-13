@@ -109,17 +109,17 @@ class MetaMap {
  public:
   MetaMap();
 
-  void AllocBlock(ThreadState *thr, uptr pc, uptr p, usize sz);
+  void AllocBlock(ThreadState *thr, uptr pc, uptr p, uptr sz);
   uptr FreeBlock(Processor *proc, uptr p);
-  bool FreeRange(Processor *proc, uptr p, usize sz);
-  void ResetRange(Processor *proc, uptr p, usize sz);
+  bool FreeRange(Processor *proc, uptr p, uptr sz);
+  void ResetRange(Processor *proc, uptr p, uptr sz);
   MBlock* GetBlock(uptr p);
 
   SyncVar* GetOrCreateAndLock(ThreadState *thr, uptr pc,
                               uptr addr, bool write_lock);
   SyncVar* GetIfExistsAndLock(uptr addr, bool write_lock);
 
-  void MoveMemory(uptr src, uptr dst, usize sz);
+  void MoveMemory(uptr src, uptr dst, uptr sz);
 
   void OnProcIdle(Processor *proc);
 

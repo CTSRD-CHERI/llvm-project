@@ -726,7 +726,7 @@ SANITIZER_INTERFACE_ATTRIBUTE int __dfso_clock_gettime(
   return __dfsw_clock_gettime(clk_id, tp, clk_id_label, tp_label, ret_label);
 }
 
-static void dfsan_set_zero_label(const void *ptr, usize size) {
+static void dfsan_set_zero_label(const void *ptr, uptr size) {
   dfsan_set_label(0, const_cast<void *>(ptr), size);
 }
 

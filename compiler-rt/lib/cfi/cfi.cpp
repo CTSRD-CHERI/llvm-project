@@ -79,7 +79,7 @@ uptr GetShadowSize() {
 }
 
 // This will only work while the shadow is not allocated.
-void SetShadowSize(usize size) {
+void SetShadowSize(uptr size) {
   cfi_shadow_limits_storage.limits.size = size;
 }
 

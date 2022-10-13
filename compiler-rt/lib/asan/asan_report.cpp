@@ -43,9 +43,9 @@ void AppendToErrorMessageBuffer(const char *buffer) {
       (char*)MmapOrDieQuietly(kErrorMessageBufferSize, __func__);
     error_message_buffer_pos = 0;
   }
-  usize length = internal_strlen(buffer);
+  uptr length = internal_strlen(buffer);
   RAW_CHECK(kErrorMessageBufferSize >= error_message_buffer_pos);
-  usize remaining = kErrorMessageBufferSize - error_message_buffer_pos;
+  uptr remaining = kErrorMessageBufferSize - error_message_buffer_pos;
   internal_strncpy(error_message_buffer + error_message_buffer_pos,
                    buffer, remaining);
   error_message_buffer[kErrorMessageBufferSize - 1] = '\0';
@@ -261,20 +261,20 @@ void ReportSanitizerGetAllocatedSizeNotOwned(uptr addr,
   in_report.ReportError(error);
 }
 
-void ReportCallocOverflow(uptr count, usize size, BufferedStackTrace *stack) {
+void ReportCallocOverflow(uptr count, uptr size, BufferedStackTrace *stack) {
   ScopedInErrorReport in_report(/*fatal*/ true);
   ErrorCallocOverflow error(GetCurrentTidOrInvalid(), stack, count, size);
   in_report.ReportError(error);
 }
 
-void ReportReallocArrayOverflow(usize count, usize size,
+void ReportReallocArrayOverflow(uptr count, uptr size,
                                 BufferedStackTrace *stack) {
   ScopedInErrorReport in_report(/*fatal*/ true);
   ErrorReallocArrayOverflow error(GetCurrentTidOrInvalid(), stack, count, size);
   in_report.ReportError(error);
 }
 
-void ReportPvallocOverflow(usize size, BufferedStackTrace *stack) {
+void ReportPvallocOverflow(uptr size, BufferedStackTrace *stack) {
   ScopedInErrorReport in_report(/*fatal*/ true);
   ErrorPvallocOverflow error(GetCurrentTidOrInvalid(), stack, size);
   in_report.ReportError(error);
@@ -288,7 +288,7 @@ void ReportInvalidAllocationAlignment(uptr alignment,
   in_report.ReportError(error);
 }
 
-void ReportInvalidAlignedAllocAlignment(usize size, usize alignment,
+void ReportInvalidAlignedAllocAlignment(uptr size, uptr alignment,
                                         BufferedStackTrace *stack) {
   ScopedInErrorReport in_report(/*fatal*/ true);
   ErrorInvalidAlignedAllocAlignment error(GetCurrentTidOrInvalid(), stack,
@@ -325,8 +325,8 @@ void ReportOutOfMemory(uptr requested_size, BufferedStackTrace *stack) {
 }
 
 void ReportStringFunctionMemoryRangesOverlap(const char *function,
-                                             const char *offset1, usize length1,
-                                             const char *offset2, usize length2,
+                                             const char *offset1, uptr length1,
+                                             const char *offset2, uptr length2,
                                              BufferedStackTrace *stack) {
   ScopedInErrorReport in_report;
   ErrorStringFunctionMemoryRangesOverlap error(
@@ -335,7 +335,7 @@ void ReportStringFunctionMemoryRangesOverlap(const char *function,
   in_report.ReportError(error);
 }
 
-void ReportStringFunctionSizeOverflow(uptr offset, usize size,
+void ReportStringFunctionSizeOverflow(uptr offset, uptr size,
                                       BufferedStackTrace *stack) {
   ScopedInErrorReport in_report;
   ErrorStringFunctionSizeOverflow error(GetCurrentTidOrInvalid(), stack, offset,

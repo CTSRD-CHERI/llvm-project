@@ -108,15 +108,15 @@ void InitializeInterceptors();
 
 void HwasanAllocatorInit();
 
-void *hwasan_malloc(usize size, StackTrace *stack);
-void *hwasan_calloc(uptr nmemb, usize size, StackTrace *stack);
-void *hwasan_realloc(void *ptr, usize size, StackTrace *stack);
-void *hwasan_reallocarray(void *ptr, usize nmemb, usize size, StackTrace *stack);
-void *hwasan_valloc(usize size, StackTrace *stack);
-void *hwasan_pvalloc(usize size, StackTrace *stack);
-void *hwasan_aligned_alloc(uptr alignment, usize size, StackTrace *stack);
-void *hwasan_memalign(uptr alignment, usize size, StackTrace *stack);
-int hwasan_posix_memalign(void **memptr, usize alignment, usize size,
+void *hwasan_malloc(uptr size, StackTrace *stack);
+void *hwasan_calloc(uptr nmemb, uptr size, StackTrace *stack);
+void *hwasan_realloc(void *ptr, uptr size, StackTrace *stack);
+void *hwasan_reallocarray(void *ptr, uptr nmemb, uptr size, StackTrace *stack);
+void *hwasan_valloc(uptr size, StackTrace *stack);
+void *hwasan_pvalloc(uptr size, StackTrace *stack);
+void *hwasan_aligned_alloc(uptr alignment, uptr size, StackTrace *stack);
+void *hwasan_memalign(uptr alignment, uptr size, StackTrace *stack);
+int hwasan_posix_memalign(void **memptr, uptr alignment, uptr size,
                         StackTrace *stack);
 void hwasan_free(void *ptr, StackTrace *stack);
 

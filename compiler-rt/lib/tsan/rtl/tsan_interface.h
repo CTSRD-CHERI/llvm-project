@@ -17,7 +17,6 @@
 
 #include <sanitizer_common/sanitizer_internal_defs.h>
 using __sanitizer::uptr;
-using __sanitizer::usize;
 using __sanitizer::tid_t;
 
 // This header should NOT include any other headers.
@@ -180,7 +179,7 @@ const char *__tsan_locate_address(uptr addr, char *name, uptr name_size,
 
 // Returns the allocation stack for a heap pointer.
 SANITIZER_INTERFACE_ATTRIBUTE
-int __tsan_get_alloc_stack(uptr addr, uptr *trace, usize size, int *thread_id,
+int __tsan_get_alloc_stack(uptr addr, uptr *trace, uptr size, int *thread_id,
                            tid_t *os_id);
 
 #endif  // SANITIZER_GO

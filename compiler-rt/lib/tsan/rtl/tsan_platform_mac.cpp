@@ -45,7 +45,7 @@
 namespace __tsan {
 
 #if !SANITIZER_GO
-static void *SignalSafeGetOrAllocate(uptr *dst, usize size) {
+static void *SignalSafeGetOrAllocate(uptr *dst, uptr size) {
   atomic_uintptr_t *a = (atomic_uintptr_t *)dst;
   void *val = (void *)atomic_load_relaxed(a);
   atomic_signal_fence(memory_order_acquire);  // Turns the previous load into

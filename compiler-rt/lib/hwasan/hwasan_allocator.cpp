@@ -111,14 +111,14 @@ void AllocatorSwallowThreadLocalCache(AllocatorCache *cache) {
   allocator.SwallowCache(cache);
 }
 
-static uptr TaggedSize(usize size) {
+static uptr TaggedSize(uptr size) {
   if (!size) size = 1;
   uptr new_size = RoundUpTo(size, kShadowAlignment);
   CHECK_GE(new_size, size);
   return new_size;
 }
 
-static void *HwasanAllocate(StackTrace *stack, uptr orig_size, usize alignment,
+static void *HwasanAllocate(StackTrace *stack, uptr orig_size, uptr alignment,
                             bool zeroise) {
   if (orig_size > kMaxAllowedMallocSize) {
     if (AllocatorMayReturnNull()) {
@@ -277,7 +277,7 @@ static void HwasanDeallocate(StackTrace *stack, void *tagged_ptr) {
 }
 
 static void *HwasanReallocate(StackTrace *stack, void *tagged_ptr_old,
-                              uptr new_size, usize alignment) {
+                              uptr new_size, uptr alignment) {
   if (!PointerAndMemoryTagsMatch(tagged_ptr_old))
     ReportInvalidFree(stack, reinterpret_cast<uptr>(tagged_ptr_old));
 
@@ -295,7 +295,7 @@ static void *HwasanReallocate(StackTrace *stack, void *tagged_ptr_old,
   return tagged_ptr_new;
 }
 
-static void *HwasanCalloc(StackTrace *stack, uptr nmemb, usize size) {
+static void *HwasanCalloc(StackTrace *stack, uptr nmemb, uptr size) {
   if (UNLIKELY(CheckForCallocOverflow(size, nmemb))) {
     if (AllocatorMayReturnNull())
       return nullptr;
@@ -328,15 +328,15 @@ static uptr AllocationSize(const void *tagged_ptr) {
   return b->get_requested_size();
 }
 
-void *hwasan_malloc(usize size, StackTrace *stack) {
+void *hwasan_malloc(uptr size, StackTrace *stack) {
   return SetErrnoOnNull(HwasanAllocate(stack, size, sizeof(u64), false));
 }
 
-void *hwasan_calloc(uptr nmemb, usize size, StackTrace *stack) {
+void *hwasan_calloc(uptr nmemb, uptr size, StackTrace *stack) {
   return SetErrnoOnNull(HwasanCalloc(stack, nmemb, size));
 }
 
-void *hwasan_realloc(void *ptr, usize size, StackTrace *stack) {
+void *hwasan_realloc(void *ptr, uptr size, StackTrace *stack) {
   if (!ptr)
     return SetErrnoOnNull(HwasanAllocate(stack, size, sizeof(u64), false));
   if (size == 0) {
@@ -346,7 +346,7 @@ void *hwasan_realloc(void *ptr, usize size, StackTrace *stack) {
   return SetErrnoOnNull(HwasanReallocate(stack, ptr, size, sizeof(u64)));
 }
 
-void *hwasan_reallocarray(void *ptr, usize nmemb, usize size, StackTrace *stack) {
+void *hwasan_reallocarray(void *ptr, uptr nmemb, uptr size, StackTrace *stack) {
   if (UNLIKELY(CheckForCallocOverflow(size, nmemb))) {
     errno = errno_ENOMEM;
     if (AllocatorMayReturnNull())
@@ -356,12 +356,12 @@ void *hwasan_reallocarray(void *ptr, usize nmemb, usize size, StackTrace *stack)
   return hwasan_realloc(ptr, nmemb * size, stack);
 }
 
-void *hwasan_valloc(usize size, StackTrace *stack) {
+void *hwasan_valloc(uptr size, StackTrace *stack) {
   return SetErrnoOnNull(
       HwasanAllocate(stack, size, GetPageSizeCached(), false));
 }
 
-void *hwasan_pvalloc(usize size, StackTrace *stack) {
+void *hwasan_pvalloc(uptr size, StackTrace *stack) {
   uptr PageSize = GetPageSizeCached();
   if (UNLIKELY(CheckForPvallocOverflow(size, PageSize))) {
     errno = errno_ENOMEM;
@@ -374,7 +374,7 @@ void *hwasan_pvalloc(usize size, StackTrace *stack) {
   return SetErrnoOnNull(HwasanAllocate(stack, size, PageSize, false));
 }
 
-void *hwasan_aligned_alloc(uptr alignment, usize size, StackTrace *stack) {
+void *hwasan_aligned_alloc(uptr alignment, uptr size, StackTrace *stack) {
   if (UNLIKELY(!CheckAlignedAllocAlignmentAndSize(alignment, size))) {
     errno = errno_EINVAL;
     if (AllocatorMayReturnNull())
@@ -384,7 +384,7 @@ void *hwasan_aligned_alloc(uptr alignment, usize size, StackTrace *stack) {
   return SetErrnoOnNull(HwasanAllocate(stack, size, alignment, false));
 }
 
-void *hwasan_memalign(uptr alignment, usize size, StackTrace *stack) {
+void *hwasan_memalign(uptr alignment, uptr size, StackTrace *stack) {
   if (UNLIKELY(!IsPowerOfTwo(alignment))) {
     errno = errno_EINVAL;
     if (AllocatorMayReturnNull())
@@ -394,7 +394,7 @@ void *hwasan_memalign(uptr alignment, usize size, StackTrace *stack) {
   return SetErrnoOnNull(HwasanAllocate(stack, size, alignment, false));
 }
 
-int hwasan_posix_memalign(void **memptr, usize alignment, usize size,
+int hwasan_posix_memalign(void **memptr, uptr alignment, uptr size,
                         StackTrace *stack) {
   if (UNLIKELY(!CheckPosixMemalignAlignment(alignment))) {
     if (AllocatorMayReturnNull())
@@ -427,13 +427,13 @@ void __hwasan_disable_allocator_tagging() {
 }
 
 uptr __sanitizer_get_current_allocated_bytes() {
-  usize stats[AllocatorStatCount];
+  uptr stats[AllocatorStatCount];
   allocator.GetStats(stats);
   return stats[AllocatorStatAllocated];
 }
 
 uptr __sanitizer_get_heap_size() {
-  usize stats[AllocatorStatCount];
+  uptr stats[AllocatorStatCount];
   allocator.GetStats(stats);
   return stats[AllocatorStatMapped];
 }
@@ -442,7 +442,7 @@ uptr __sanitizer_get_free_bytes() { return 1; }
 
 uptr __sanitizer_get_unmapped_bytes() { return 1; }
 
-uptr __sanitizer_get_estimated_allocated_size(usize size) { return size; }
+uptr __sanitizer_get_estimated_allocated_size(uptr size) { return size; }
 
 int __sanitizer_get_ownership(const void *p) { return AllocationSize(p) != 0; }
 

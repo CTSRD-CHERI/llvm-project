@@ -239,7 +239,7 @@ void MD5_Final(unsigned char *result, MD5_CTX *ctx) {
   internal_memset(ctx, 0, sizeof(*ctx));
 }
 
-MD5Hash md5_hash(const void *data, usize size) {
+MD5Hash md5_hash(const void *data, uptr size) {
   MD5Hash res;
   MD5_CTX ctx;
   MD5_Init(&ctx);

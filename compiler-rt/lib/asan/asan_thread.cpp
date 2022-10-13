@@ -124,7 +124,7 @@ void AsanThread::Destroy() {
 }
 
 void AsanThread::StartSwitchFiber(FakeStack **fake_stack_save, uptr bottom,
-                                  usize size) {
+                                  uptr size) {
   if (atomic_load(&stack_switching_, memory_order_relaxed)) {
     Report("ERROR: starting fiber switch while in fiber switch\n");
     Die();
@@ -302,8 +302,8 @@ AsanThread *CreateMainThread() {
 // OS-specific implementations that need more information passed through.
 void AsanThread::SetThreadStackAndTls(const InitOptions *options) {
   DCHECK_EQ(options, nullptr);
-  usize tls_size = 0;
-  usize stack_size = 0;
+  uptr tls_size = 0;
+  uptr stack_size = 0;
   GetThreadStackAndTls(tid() == kMainTid, &stack_bottom_, &stack_size,
                        &tls_begin_, &tls_size);
   stack_top_ = RoundDownTo(stack_bottom_ + stack_size, SHADOW_GRANULARITY);
