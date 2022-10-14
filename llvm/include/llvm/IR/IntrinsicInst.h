@@ -774,9 +774,7 @@ public:
   }
 
   StringRef getFrontendCopyType() const {
-    return BaseCL::getAttribute(AttributeList::FunctionIndex,
-                                "frontend-memtransfer-type")
-        .getValueAsString();
+    return BaseCL::getFnAttr("frontend-memtransfer-type").getValueAsString();
   }
 
   void setPreserveCheriTags(PreserveCheriTags NewValue, const DataLayout &DL) {

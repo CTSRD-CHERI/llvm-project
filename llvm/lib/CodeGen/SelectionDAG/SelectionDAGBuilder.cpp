@@ -7477,11 +7477,11 @@ void SelectionDAGBuilder::visitVPLoadGather(const VPIntrinsic &VPIntrin, EVT VT,
     bool UniformBase = getUniformBase(PtrOperand, Base, Index, IndexType, Scale,
                                       this, VPIntrin.getParent());
     if (!UniformBase) {
-      Base = DAG.getConstant(0, DL, TLI.getPointerTy(DAG.getDataLayout()));
+      Base = DAG.getConstant(0, DL, TLI.getPointerTy(DAG.getDataLayout(), AS));
       Index = getValue(PtrOperand);
       IndexType = ISD::SIGNED_UNSCALED;
-      Scale =
-          DAG.getTargetConstant(1, DL, TLI.getPointerTy(DAG.getDataLayout()));
+      Scale = DAG.getTargetConstant(1, DL,
+                                    TLI.getPointerTy(DAG.getDataLayout(), AS));
     }
     EVT IdxVT = Index.getValueType();
     EVT EltTy = IdxVT.getVectorElementType();
@@ -7528,11 +7528,11 @@ void SelectionDAGBuilder::visitVPStoreScatter(const VPIntrinsic &VPIntrin,
     bool UniformBase = getUniformBase(PtrOperand, Base, Index, IndexType, Scale,
                                       this, VPIntrin.getParent());
     if (!UniformBase) {
-      Base = DAG.getConstant(0, DL, TLI.getPointerTy(DAG.getDataLayout()));
+      Base = DAG.getConstant(0, DL, TLI.getPointerTy(DAG.getDataLayout(), AS));
       Index = getValue(PtrOperand);
       IndexType = ISD::SIGNED_UNSCALED;
-      Scale =
-          DAG.getTargetConstant(1, DL, TLI.getPointerTy(DAG.getDataLayout()));
+      Scale = DAG.getTargetConstant(1, DL,
+                                    TLI.getPointerTy(DAG.getDataLayout(), AS));
     }
     EVT IdxVT = Index.getValueType();
     EVT EltTy = IdxVT.getVectorElementType();
@@ -7991,8 +7991,7 @@ bool SelectionDAGBuilder::visitMemPCpyCall(const CallInst &I) {
   bool isVol = false;
   SDLoc sdl = getCurSDLoc();
 
-  Attribute CopyType =
-      I.getAttribute(AttributeList::FunctionIndex, "frontend-memtransfer-type");
+  Attribute CopyType = I.getFnAttr("frontend-memtransfer-type");
   // In the mempcpy context we need to pass in a false value for isTailCall
   // because the return pointer needs to be adjusted by the size of
   // the copied memory.

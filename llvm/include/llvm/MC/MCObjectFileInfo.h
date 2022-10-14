@@ -437,8 +437,6 @@ private:
   MCSection *getDwarfComdatSection(const char *Name, uint64_t Hash) const;
 
 public:
-  virtual ~MCObjectFileInfo();
-
   void setSDKVersion(const VersionTuple &TheSDKVersion) {
     SDKVersion = TheSDKVersion;
   }

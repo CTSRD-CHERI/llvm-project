@@ -302,8 +302,6 @@ void MCObjectFileInfo::initMachOMCObjectFileInfo(const Triple &T) {
   TLSExtraDataSection = TLSTLVSection;
 }
 
-MCObjectFileInfo::~MCObjectFileInfo() {}
-
 void MCObjectFileInfo::initELFMCObjectFileInfo(const Triple &T, bool Large) {
   switch (T.getArch()) {
   case Triple::mips:

@@ -608,15 +608,13 @@ void llvm::setPreserveCheriTags(IntrinsicInst *I, PreserveCheriTags NewValue,
     assert(DL.hasCheriCapabilities());
     assert(!I->hasFnAttr(Attribute::NoPreserveCheriTags) &&
            "attempting to set conflicting attributes");
-    I->addAttribute(llvm::AttributeList::FunctionIndex,
-                    llvm::Attribute::MustPreserveCheriTags);
+    I->addFnAttr(llvm::Attribute::MustPreserveCheriTags);
     NumMustPreserveTagAttrs++;
   } else if (NewValue == PreserveCheriTags::Unnecessary) {
     assert(!I->hasFnAttr(Attribute::MustPreserveCheriTags) &&
            "attempting to set conflicting attributes");
     assert(DL.hasCheriCapabilities());
-    I->addAttribute(llvm::AttributeList::FunctionIndex,
-                    llvm::Attribute::NoPreserveCheriTags);
+    I->addFnAttr(llvm::Attribute::NoPreserveCheriTags);
     NumNoPreserveTagAttrs++;
   } else {
     assert(!I->hasFnAttr(Attribute::MustPreserveCheriTags) &&

@@ -2196,8 +2196,7 @@ diagnoseMisalignedCapabiliyCopyDest(CodeGenFunction &CGF, StringRef Function,
   if (MemInst) {
     // If we have a memory intrinsic let the backend diagnose this issue:
     // First, tell the backend that this copy must preserve tags
-    MemInst->addAttribute(llvm::AttributeList::FunctionIndex,
-                          llvm::Attribute::MustPreserveCheriTags);
+    MemInst->addFnAttr(llvm::Attribute::MustPreserveCheriTags);
     // And also tell it what the underlying type was for improved diagnostics.
     std::string TypeName = UnderlyingSrcTy.getAsString();
     std::string CanonicalStr = UnderlyingSrcTy.getCanonicalType().getAsString();
@@ -2205,10 +2204,8 @@ diagnoseMisalignedCapabiliyCopyDest(CodeGenFunction &CGF, StringRef Function,
       TypeName = "'" + TypeName + "' (aka '" + CanonicalStr + "')";
     else
       TypeName = "'" + TypeName + "'";
-    MemInst->addAttribute(llvm::AttributeList::FunctionIndex,
-                          llvm::Attribute::get(CGF.getLLVMContext(),
-                                               "frontend-memtransfer-type",
-                                               TypeName));
+    MemInst->addFnAttr(llvm::Attribute::get(
+        CGF.getLLVMContext(), "frontend-memtransfer-type", TypeName));
     return;
   }
   // Otherwise attempt to diagnose it here (likely to cause false positives)
