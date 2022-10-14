@@ -5130,10 +5130,7 @@ TryListConversion(Sema &S, InitListExpr *From, QualType ToType,
       }
     }
 
-    Result.setStandard();
-    Result.Standard.setAsIdentityConversion();
-    Result.Standard.setFromType(InitTy);
-    Result.Standard.setAllToTypes(InitTy);
+    Result.setAsIdentityConversion(InitTy);
     for (unsigned i = 0; i < e; ++i) {
       Expr *Init = From->getInit(i);
       ImplicitConversionSequence ICS = TryCopyInitialization(

@@ -1684,7 +1684,7 @@ multiclass binary_atomic_op_cap<SDNode atomic_op> {
     return cast<AtomicSDNode>(N)->getMemoryVT().isFatPointer();
   }]>;
 
-  defm NAME : binary_atomic_op_ord<atomic_op>;
+  defm NAME : binary_atomic_op_ord;
 }
 
 multiclass ternary_atomic_op_cap<SDNode atomic_op> {
@@ -1693,7 +1693,7 @@ multiclass ternary_atomic_op_cap<SDNode atomic_op> {
     return cast<AtomicSDNode>(N)->getMemoryVT().isFatPointer();
   }]>;
 
-  defm NAME : ternary_atomic_op_ord<atomic_op>;
+  defm NAME : ternary_atomic_op_ord;
 }
 
 defm atomic_load_add_cap  : binary_atomic_op_cap<atomic_load_add_cap_node>;
