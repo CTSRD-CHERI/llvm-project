@@ -198,8 +198,7 @@ static void annotateNonNullAndDereferenceable(CallInst *CI, ArrayRef<unsigned> A
 static Value *mergeAttributesAndFlags(CallInst *NewCI, const CallInst &Old) {
   NewCI->setAttributes(AttributeList::get(
       NewCI->getContext(), {NewCI->getAttributes(), Old.getAttributes()}));
-  NewCI->removeAttributes(AttributeList::ReturnIndex,
-                          AttributeFuncs::typeIncompatible(NewCI->getType()));
+  NewCI->removeRetAttrs(AttributeFuncs::typeIncompatible(NewCI->getType()));
   return NewCI;
 }
 
@@ -2314,7 +2313,7 @@ Value *LibCallSimplifier::optimizeErrorReporting(CallInst *CI, IRBuilderBase &B,
   // Proceedings of PACT'98, Oct. 1998, IEEE
   if (!CI->hasFnAttr(Attribute::Cold) &&
       isReportingError(Callee, CI, StreamArg)) {
-    CI->addAttribute(AttributeList::FunctionIndex, Attribute::Cold);
+    CI->addFnAttr(Attribute::Cold);
   }
 
   return nullptr;
