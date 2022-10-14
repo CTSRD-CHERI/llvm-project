@@ -10,24 +10,24 @@
 define signext i32 @test() local_unnamed_addr nounwind {
 ; CHECK-LABEL: test:
 ; CHECK:       # %bb.0: # %entry
-; CHECK-NEXT:    daddiu $sp, $sp, -[[#STACKFRAME_SIZE:]]
-; CHECK-NEXT:    sd $ra, [[#STACKFRAME_SIZE - 8]]($sp) # 8-byte Folded Spill
-; CHECK-NEXT:    csc $c17, $sp, [[#CAP_SIZE]]($ddc) # [[#CAP_SIZE]]-byte Folded Spill
+; CHECK-NEXT:    daddiu $sp, $sp, -48
+; CHECK-NEXT:    sd $ra, 40($sp) # 8-byte Folded Spill
+; CHECK-NEXT:    csc $c17, $sp, 16($ddc) # 16-byte Folded Spill
 ; CHECK-NEXT:    addiu $1, $zero, 7
-; CHECK-NEXT:    sw $1, [[#CAP_SIZE - 4]]($sp)
-; CHECK-NEXT:    daddiu $1, $sp, [[#CAP_SIZE - 4]]
+; CHECK-NEXT:    sw $1, 12($sp)
+; CHECK-NEXT:    daddiu $1, $sp, 12
 ; CHECK-NEXT:    cfromddc $c1, $1
 ; CHECK-NEXT:    csetbounds $c17, $c1, 4
 ; CHECK-NEXT:    cgetlen $1, $c17
-; CHECK-NEXT:    cgettag $5, $c17
 ; CHECK-NEXT:    sll $6, $1, 0
 ; CHECK-NEXT:    lui $1, %highest(.L.str)
 ; CHECK-NEXT:    daddiu $1, $1, %higher(.L.str)
 ; CHECK-NEXT:    dsll $1, $1, 16
 ; CHECK-NEXT:    daddiu $1, $1, %hi(.L.str)
 ; CHECK-NEXT:    dsll $1, $1, 16
-; CHECK-NEXT:    jal printf
 ; CHECK-NEXT:    daddiu $4, $1, %lo(.L.str)
+; CHECK-NEXT:    jal printf
+; CHECK-NEXT:    cgettag $5, $c17
 ; CHECK-NEXT:    clw $5, $zero, 4($c17)
 ; CHECK-NEXT:    lui $1, %highest(.L.str.1)
 ; CHECK-NEXT:    daddiu $1, $1, %higher(.L.str.1)
@@ -37,10 +37,10 @@ define signext i32 @test() local_unnamed_addr nounwind {
 ; CHECK-NEXT:    jal printf
 ; CHECK-NEXT:    daddiu $4, $1, %lo(.L.str.1)
 ; CHECK-NEXT:    daddiu $2, $zero, 0
-; CHECK-NEXT:    clc $c17, $sp, [[#CAP_SIZE]]($ddc) # [[#CAP_SIZE]]-byte Folded Reload
-; CHECK-NEXT:    ld $ra, [[#STACKFRAME_SIZE - 8]]($sp) # 8-byte Folded Reload
+; CHECK-NEXT:    clc $c17, $sp, 16($ddc) # 16-byte Folded Reload
+; CHECK-NEXT:    ld $ra, 40($sp) # 8-byte Folded Reload
 ; CHECK-NEXT:    jr $ra
-; CHECK-NEXT:    daddiu $sp, $sp, [[#STACKFRAME_SIZE]]
+; CHECK-NEXT:    daddiu $sp, $sp, 48
 entry:
   %i = alloca i32, align 4
   %0 = bitcast i32* %i to i8*
@@ -88,17 +88,17 @@ entry:
 define signext i32 @test2() local_unnamed_addr nounwind {
 ; CHECK-LABEL: test2:
 ; CHECK:       # %bb.0: # %entry
-; CHECK-NEXT:    daddiu $sp, $sp, -[[#STACKFRAME_SIZE:]]
-; CHECK-NEXT:    sd $ra, [[#STACKFRAME_SIZE - 8]]($sp) # 8-byte Folded Spill
-; CHECK-NEXT:    daddiu $1, $sp, [[#STACKFRAME_SIZE - 12]]
+; CHECK-NEXT:    daddiu $sp, $sp, -16
+; CHECK-NEXT:    sd $ra, 8($sp) # 8-byte Folded Spill
+; CHECK-NEXT:    daddiu $1, $sp, 4
 ; CHECK-NEXT:    cfromddc $c1, $1
 ; CHECK-NEXT:    csetbounds $c1, $c1, 4
 ; CHECK-NEXT:    jal use_cap
 ; CHECK-NEXT:    cincoffset $c3, $c1, 4
 ; CHECK-NEXT:    sll $2, $2, 0
-; CHECK-NEXT:    ld $ra, [[#STACKFRAME_SIZE - 8]]($sp) # 8-byte Folded Reload
+; CHECK-NEXT:    ld $ra, 8($sp) # 8-byte Folded Reload
 ; CHECK-NEXT:    jr $ra
-; CHECK-NEXT:    daddiu $sp, $sp, [[#STACKFRAME_SIZE]]
+; CHECK-NEXT:    daddiu $sp, $sp, 16
 entry:
   %i = alloca i32, align 4
   %arrayidx8 = getelementptr i32, i32* %i, i64 1
@@ -122,17 +122,17 @@ entry:
 define signext i32 @test3() local_unnamed_addr nounwind {
 ; CHECK-LABEL: test3:
 ; CHECK:       # %bb.0: # %entry
-; CHECK-NEXT:    daddiu $sp, $sp, -[[#STACKFRAME_SIZE:]]
-; CHECK-NEXT:    sd $ra, [[#STACKFRAME_SIZE - 8]]($sp) # 8-byte Folded Spill
-; CHECK-NEXT:    daddiu $1, $sp, [[#STACKFRAME_SIZE - 12]]
+; CHECK-NEXT:    daddiu $sp, $sp, -16
+; CHECK-NEXT:    sd $ra, 8($sp) # 8-byte Folded Spill
+; CHECK-NEXT:    daddiu $1, $sp, 4
 ; CHECK-NEXT:    cfromddc $c1, $1
 ; CHECK-NEXT:    csetbounds $c1, $c1, 4
 ; CHECK-NEXT:    jal use_cap
 ; CHECK-NEXT:    cincoffset $c3, $c1, -4
 ; CHECK-NEXT:    sll $2, $2, 0
-; CHECK-NEXT:    ld $ra, [[#STACKFRAME_SIZE - 8]]($sp) # 8-byte Folded Reload
+; CHECK-NEXT:    ld $ra, 8($sp) # 8-byte Folded Reload
 ; CHECK-NEXT:    jr $ra
-; CHECK-NEXT:    daddiu $sp, $sp, [[#STACKFRAME_SIZE]]
+; CHECK-NEXT:    daddiu $sp, $sp, 16
 entry:
   %i = alloca i32, align 4
   %arrayidx8 = getelementptr i32, i32* %i, i64 -1
