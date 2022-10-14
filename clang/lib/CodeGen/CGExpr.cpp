@@ -3482,21 +3482,19 @@ static LValue EmitGlobalVarDeclLValue(CodeGenFunction &CGF,
   return LV;
 }
 
-static llvm::Value *EmitFunctionDeclPointer(CodeGenFunction &CGF,
-                                            GlobalDecl GD,
-                                            bool IsDirectCall) {
-  CodeGenModule &CGM = CGF.CGM;
+static llvm::Constant *EmitFunctionDeclPointer(CodeGenModule &CGM,
+                                               GlobalDecl GD) {
   const FunctionDecl *FD = cast<FunctionDecl>(GD.getDecl());
   if (FD->hasAttr<WeakRefAttr>()) {
     ConstantAddress aliasee = CGM.GetWeakRefReference(FD);
     return aliasee.getPointer();
   }
 
-  llvm::Value *V = CGM.GetAddrOfFunction(GD);
-  auto &TI = CGF.getContext().getTargetInfo();
+  llvm::Constant *V = CGM.GetAddrOfFunction(GD);
+  auto &TI = CGM.getContext().getTargetInfo();
   if (TI.areAllPointersCapabilities()) {
     assert(V->getType()->getPointerAddressSpace() ==
-        CGF.CGM.getTargetCodeGenInfo().getCHERICapabilityAS());
+           CGM.getTargetCodeGenInfo().getCHERICapabilityAS());
   }
 
   if (!FD->hasPrototype()) {
@@ -3508,7 +3506,7 @@ static llvm::Value *EmitFunctionDeclPointer(CodeGenFunction &CGF,
       QualType NoProtoType =
           CGM.getContext().getFunctionNoProtoType(Proto->getReturnType());
       NoProtoType = CGM.getContext().getPointerType(NoProtoType);
-      V = CGF.Builder.CreatePointerBitCastOrAddrSpaceCast(V,
+      V = llvm::ConstantExpr::getBitCast(V,
                                       CGM.getTypes().ConvertType(NoProtoType));
     }
   }
@@ -3518,7 +3516,7 @@ static llvm::Value *EmitFunctionDeclPointer(CodeGenFunction &CGF,
 static LValue EmitFunctionDeclLValue(CodeGenFunction &CGF, const Expr *E,
                                      GlobalDecl GD) {
   const FunctionDecl *FD = cast<FunctionDecl>(GD.getDecl());
-  llvm::Value *V = EmitFunctionDeclPointer(CGF, GD, /*IsDirectCall=*/false);
+  llvm::Value *V = EmitFunctionDeclPointer(CGF.CGM, GD);
   CharUnits Alignment = CGF.getContext().getDeclAlign(FD);
   return CGF.MakeAddrLValue(V, E->getType(), Alignment,
                             AlignmentSource::Decl);
@@ -5861,7 +5859,8 @@ static CGCallee EmitDirectCallee(CodeGenFunction &CGF, GlobalDecl GD) {
     // name to make it clear it's not the actual builtin.
     if (FD->isInlineBuiltinDeclaration() &&
         CGF.CurFn->getName() != FDInlineName) {
-      llvm::Constant *CalleePtr = EmitFunctionDeclPointer(CGF.CGM, GD);
+      llvm::Constant *CalleePtr =
+          cast<llvm::Constant>(EmitFunctionDeclPointer(CGF.CGM, GD));
       llvm::Function *Fn = llvm::cast<llvm::Function>(CalleePtr);
       llvm::Module *M = Fn->getParent();
       llvm::Function *Clone = M->getFunction(FDInlineName);
@@ -5881,8 +5880,7 @@ static CGCallee EmitDirectCallee(CodeGenFunction &CGF, GlobalDecl GD) {
       return CGCallee::forBuiltin(builtinID, FD);
   }
 
-  llvm::Value *CalleePtr =
-      EmitFunctionDeclPointer(CGF, GD, /*IsDirectCall=*/true);
+  llvm::Constant *CalleePtr = EmitFunctionDeclPointer(CGF.CGM, GD);
   if (CGF.CGM.getLangOpts().CUDA && !CGF.CGM.getLangOpts().CUDAIsDevice &&
       FD->hasAttr<CUDAGlobalAttr>())
     CalleePtr = CGF.CGM.getCUDARuntime().getKernelStub(
