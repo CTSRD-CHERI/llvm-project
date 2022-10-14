@@ -1896,7 +1896,7 @@ class TemplateDiff {
         TPO->printAsInit(OS, Policy);
         return;
       }
-      VD->printName(OS);
+      VD->printName(OS, Policy);
       return;
     }
 
