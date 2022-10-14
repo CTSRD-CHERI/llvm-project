@@ -8698,6 +8698,7 @@ public:
   void addGenericBinaryArithmeticOverloads() {
     if (!HasArithmeticOrEnumeralCandidateType)
       return;
+
     for (unsigned Left = FirstPromotedArithmeticType;
          Left < LastPromotedArithmeticType; ++Left) {
       for (unsigned Right = FirstPromotedArithmeticType;
