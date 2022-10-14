@@ -2654,9 +2654,9 @@ static void emitGlobalDtorWithCXAAtExit(CodeGenFunction &CGF,
   // We're assuming that the destructor function is something we can
   // reasonably call with the default CC.  Go ahead and cast it to the
   // right prototype.
-  unsigned AS = CGF.CGM.getTargetCodeGenInfo().getDefaultAS();
   llvm::Type *dtorTy =
-    llvm::FunctionType::get(CGF.VoidTy, CGF.Int8PtrTy, false)->getPointerTo(AS);
+      llvm::FunctionType::get(CGF.VoidTy, CGF.Int8PtrTy, false)
+          ->getPointerTo(CGF.CGM.getDataLayout().getProgramAddressSpace());
 
   // Preserve address space of addr.
   auto AddrAS = addr ? addr->getType()->getPointerAddressSpace() : 0;
@@ -2665,7 +2665,7 @@ static void emitGlobalDtorWithCXAAtExit(CodeGenFunction &CGF,
 
   // Create a variable that binds the atexit to this shared object.
   llvm::Constant *handle =
-      CGF.CGM.CreateRuntimeVariable(CGF.Int8Ty, "__dso_handle", AS);
+      CGF.CGM.CreateRuntimeVariable(CGF.Int8Ty, "__dso_handle");
   auto *GV = cast<llvm::GlobalValue>(handle->stripPointerCasts());
   GV->setVisibility(llvm::GlobalValue::HiddenVisibility);
 

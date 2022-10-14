@@ -1125,9 +1125,7 @@ public:
                         bool Local = false, bool AssumeConvergent = false);
 
   /// Create a new runtime global variable with the specified type and name.
-  llvm::Constant *CreateRuntimeVariable(llvm::Type *Ty,
-                                        StringRef Name,
-                                        unsigned AddressSpace = 0);
+  llvm::Constant *CreateRuntimeVariable(llvm::Type *Ty, StringRef Name);
 
   ///@name Custom Blocks Runtime Interfaces
   ///@{
@@ -1519,8 +1517,8 @@ private:
   void UpdateMultiVersionNames(GlobalDecl GD, const FunctionDecl *FD);
 
   llvm::Constant *
-  GetOrCreateLLVMGlobal(StringRef MangledName, llvm::Type *Ty,
-                        unsigned AddrSpace, const VarDecl *D,
+  GetOrCreateLLVMGlobal(StringRef MangledName, llvm::Type *Ty, LangAS AddrSpace,
+                        const VarDecl *D,
                         ForDefinition_t IsForDefinition = NotForDefinition);
 
   bool GetCPUAndFeaturesAttributes(GlobalDecl GD,
