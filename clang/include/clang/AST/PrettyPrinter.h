@@ -68,7 +68,8 @@ struct PrintingPolicy {
         SuppressCapabilityQualifier(TI && TI->areAllPointersCapabilities()),
         SuppressTemplateArgsInCXXConstructors(false),
         SuppressDefaultTemplateArgs(true), Bool(LO.Bool),
-        Nullptr(LO.CPlusPlus11), Restrict(LO.C99), Alignof(LO.CPlusPlus11),
+        Nullptr(LO.CPlusPlus11 || LO.C2x), NullptrTypeInNamespace(LO.CPlusPlus),
+        Restrict(LO.C99), Alignof(LO.CPlusPlus11),
         UnderscoreAlignof(LO.C11), UseVoidForZeroParams(!LO.CPlusPlus),
         SplitTemplateClosers(!LO.CPlusPlus11), TerseOutput(false),
         PolishForDeclaration(false), Half(LO.Half),
@@ -201,6 +202,9 @@ struct PrintingPolicy {
   /// Whether we should use 'nullptr' rather than '0' as a null pointer
   /// constant.
   unsigned Nullptr : 1;
+
+  /// Whether 'nullptr_t' is in namespace 'std' or not.
+  unsigned NullptrTypeInNamespace : 1;
 
   /// Whether we can use 'restrict' rather than '__restrict'.
   unsigned Restrict : 1;
