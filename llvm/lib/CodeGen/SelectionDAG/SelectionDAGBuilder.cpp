@@ -9219,7 +9219,9 @@ void SelectionDAGBuilder::visitInlineAsm(const CallBase &Call,
 
       if (OpInfo.ConstraintType == TargetLowering::C_Address) {
         assert(InOperandVal.getValueType() ==
-                   TLI.getPointerTy(DAG.getDataLayout()) &&
+                   TLI.getPointerTy(
+                       DAG.getDataLayout(),
+                       DAG.getDataLayout().getGlobalsAddressSpace()) &&
                "Address operands expect pointer values");
 
         unsigned ConstraintID =
