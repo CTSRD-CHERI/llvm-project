@@ -3341,6 +3341,10 @@ Value *FortifiedLibCallSimplifier::optimizeStrpCpyChk(CallInst *CI,
   else
     return nullptr;
 
+  // FIXME: There is really no guarantee that sizeof(size_t) is equal to
+  // sizeof(int*) for every target. So the assumption used here to derive the
+  // SizeTBits based on the size of an integer pointer in address space zero
+  // isn't always valid.
   Type *SizeTTy = DL.getIntPtrType(CI->getContext(),
                                    Dst->getType()->getPointerAddressSpace());
   Value *LenV = ConstantInt::get(SizeTTy, Len);
