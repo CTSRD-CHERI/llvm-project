@@ -540,7 +540,7 @@ void CheriCapTableSection::writeTo(uint8_t* buf) {
   // it in. For the TLS part, assignValuesAndAddCapTableSymbols adds any static
   // relocations needed, and should be procesed by relocateAlloc.
   // TODO: Fill in the raw capability bits and use CBuildCap
-  relocateAlloc(buf, buf + getSize());
+  target->relocateAlloc(*this, buf);
 }
 
 static Defined *findMatchingFunction(const InputSectionBase *isec,
