@@ -199,6 +199,7 @@ add_llvm_component_library(LLVMCodeGen
   RegisterBankInfo.cpp
   SafeStack.cpp
   SafeStackLayout.cpp
+  SanitizerBinaryMetadata.cpp
   ScheduleDAG.cpp
   ScheduleDAGInstrs.cpp
   ScheduleDAGPrinter.cpp
