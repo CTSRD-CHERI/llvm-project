@@ -5311,8 +5311,7 @@ FunctionTemplateDecl *Sema::getMoreSpecializedTemplate(
     }
   }
 
-  if (!Context.getLangOpts().CPlusPlus20 || isa<CXXDeductionGuideDecl>(FD1) ||
-      isa<CXXDeductionGuideDecl>(FD2))
+  if (!Context.getLangOpts().CPlusPlus20)
     return nullptr;
 
   // Match GCC on not implementing [temp.func.order]p6.2.1.
