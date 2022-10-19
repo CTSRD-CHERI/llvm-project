@@ -2936,6 +2936,8 @@ private:
   void ParseNullabilityTypeSpecifiers(ParsedAttributes &attrs);
   void ParseCapabilityQualifier(ParsedAttributes &Attrs);
   void ParseCUDAFunctionAttributes(ParsedAttributes &attrs);
+  bool isHLSLQualifier(const Token &Tok) const;
+  void ParseHLSLQualifiers(ParsedAttributes &Attrs);
 
   VersionTuple ParseVersionTuple(SourceRange &Range);
   void ParseAvailabilityAttribute(IdentifierInfo &Availability,
