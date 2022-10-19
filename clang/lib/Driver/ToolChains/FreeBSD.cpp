@@ -148,7 +148,7 @@ void freebsd::Linker::ConstructJob(Compilation &C, const JobAction &JA,
   // TODO: enable static PIE?
   const bool CheriAbiPIEDefault =
       IsCHERIPureCapABI && !Args.hasArg(options::OPT_static);
-  const bool IsPIEDefault = ToolChain.isPIEDefault() || CheriAbiPIEDefault;
+  const bool IsPIEDefault = ToolChain.isPIEDefault(Args) || CheriAbiPIEDefault;
   // We can't pass -pie to the linker if any of -shared,-r,-no-pie,-no-pie are
   // set
   Arg *ConflictsWithPie = Args.getLastArg(options::OPT_r, options::OPT_shared);
@@ -531,7 +531,9 @@ bool FreeBSD::HasNativeLLVMSupport() const { return true; }
 
 bool FreeBSD::IsUnwindTablesDefault(const ArgList &Args) const { return true; }
 
-bool FreeBSD::isPIEDefault() const { return getSanitizerArgs().requiresPIE(); }
+bool FreeBSD::isPIEDefault(const llvm::opt::ArgList &Args) const {
+  return getSanitizerArgs(Args).requiresPIE();
+}
 
 SanitizerMask FreeBSD::getSupportedSanitizers() const {
   const bool IsAArch64 = getTriple().getArch() == llvm::Triple::aarch64;
