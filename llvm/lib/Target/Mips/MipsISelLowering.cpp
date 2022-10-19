@@ -2673,7 +2673,7 @@ SDValue MipsTargetLowering::lowerADDRSPACECAST(SDValue Op, SelectionDAG &DAG)
     assert(Op.getValueType() == CapType);
     bool IsFunction = false;
     if (GlobalAddressSDNode *GN = dyn_cast<GlobalAddressSDNode>(Src)) {
-      IsFunction = isa<Function>(GN->getGlobal()->getBaseObject());
+      IsFunction = isa<Function>(GN->getGlobal()->getAliaseeObject());
     }
     LLVM_DEBUG(dbgs() << "Lowering addrspacecast: "; Op.dump(&DAG));
     // INTTOPTR will lower to a cincoffset on null in the purecap ABI, so we

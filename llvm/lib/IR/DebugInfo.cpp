@@ -280,8 +280,6 @@ void DebugInfoFinder::processSubprogram(DISubprogram *SP) {
 
 void DebugInfoFinder::processVariable(const Module &M,
                                       const DbgVariableIntrinsic &DVI) {
-  if (DVI.getNumArgOperands() < 3)
-    return; // Missing arguments, can happen when called by llvm-reduce.
   auto *N = dyn_cast<MDNode>(DVI.getVariable());
   if (!N)
     return;
@@ -293,6 +291,8 @@ void DebugInfoFinder::processVariable(const Module &M,
   if (!NodesSeen.insert(DV).second)
     return;
   processScope(DV->getScope());
+  if (DVI.getNumOperands() < 4)
+    return; // Missing arguments, can happen when called by llvm-reduce.
   processType(DV->getType());
 }
 
