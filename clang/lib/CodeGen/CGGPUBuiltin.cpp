@@ -45,9 +45,7 @@ llvm::Function *GetVprintfDeclaration(CodeGenModule& CGM) {
 llvm::Function *GetOpenMPVprintfDeclaration(CodeGenModule &CGM) {
   const char *Name = "__llvm_omp_vprintf";
   llvm::Module &M = CGM.getModule();
-  llvm::Type *ArgTypes[] = {llvm::Type::getInt8PtrTy(M.getContext()),
-                            llvm::Type::getInt8PtrTy(M.getContext()),
-                            llvm::Type::getInt32Ty(M.getContext())};
+  llvm::Type *ArgTypes[] = {CGM.Int8PtrTy, CGM.Int8PtrTy, CGM.Int32Ty};
   llvm::FunctionType *VprintfFuncType = llvm::FunctionType::get(
       llvm::Type::getInt32Ty(M.getContext()), ArgTypes, false);
 

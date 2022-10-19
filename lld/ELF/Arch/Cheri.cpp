@@ -50,7 +50,8 @@ void CheriCapRelocsSection<ELFT>::addSection(InputSectionBase *s) {
   // FIXME: can this happen with ld -r ?
   // error("Compiler should not have generated __cap_relocs section for " + toString(S));
   assert(s->name == "__cap_relocs");
-  assert(s->areRelocsRela && "__cap_relocs should be RELA");
+  const RelsOrRelas<ELFT> rels = s->relsOrRelas<ELFT>();
+  assert(!rels.areRelocsRel() && "__cap_relocs should be RELA");
   // make sure the section is no longer processed
   s->markDead();
 
@@ -60,9 +61,9 @@ void CheriCapRelocsSection<ELFT>::addSection(InputSectionBase *s) {
     return;
   }
   size_t numCapRelocs = s->getSize() / relocSize;
-  if (numCapRelocs * 2 != s->numRelocations) {
+  if (numCapRelocs * 2 != rels.relas.size()) {
     error("expected " + Twine(numCapRelocs * 2) + " relocations for " +
-          toString(s) + " but got " + Twine(s->numRelocations));
+          toString(s) + " but got " + Twine(rels.relas.size()));
     return;
   }
   if (config->verboseCapRelocs)
@@ -153,7 +154,7 @@ std::string CheriCapRelocLocation::toString() const {
 template <class ELFT>
 void CheriCapRelocsSection<ELFT>::processSection(InputSectionBase *s) {
   // TODO: sort by offset (or is that always true?
-  const auto rels = s->relas<ELFT>();
+  const auto rels = s->relsOrRelas<ELFT>().relas;
   for (auto i = rels.begin(), end = rels.end(); i != end; ++i) {
     const auto &locationRel = *i;
     ++i;

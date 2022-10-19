@@ -296,7 +296,7 @@ Defined *InputSectionBase::getEnclosingObject(uint64_t offset) const {
 
 // Returns an object file location string. Used to construct an error message.
 template <class ELFT>
-std::string InputSectionBase::getLocation(uint64_t offset) {
+std::string InputSectionBase::getLocation(uint64_t offset) const {
   std::string secAndOffset =
       (name + "+0x" + Twine::utohexstr(offset) + ")").str();
 
