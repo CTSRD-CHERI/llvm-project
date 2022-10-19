@@ -1427,6 +1427,9 @@ Parser::isCXXDeclarationSpecifier(ImplicitTypenameContext AllowImplicitTypename,
     // OpenCL pipe
   case tok::kw_pipe:
 
+    // HLSL address space qualifiers
+  case tok::kw_groupshared:
+
     // GNU
   case tok::kw_restrict:
   case tok::kw__Complex:
