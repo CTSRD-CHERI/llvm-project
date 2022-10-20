@@ -315,6 +315,11 @@ def note_uintcap_subtract: Note<"in order to perform pointer arithmetic, "
   "cast the right-hand operand to an integer type; if you intended to compute "
   "the difference between the addresses cast both operands to char*">;
 
+def err_missing_vfs_stat_cache_file : Error<
+  "stat cache file '%0' not found">, DefaultFatal;
+def err_invalid_vfs_stat_cache : Error<
+  "invalid stat cache file '%0'">, DefaultFatal;
+
 def err_missing_vfs_overlay_file : Error<
   "virtual filesystem overlay file '%0' not found">, DefaultFatal;
 def err_invalid_vfs_overlay : Error<
