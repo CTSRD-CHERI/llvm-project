@@ -2424,7 +2424,7 @@ static bool isGEPKnownNonNull(const GEPOperator *GEP, unsigned Depth,
     }
 
     // If we have a zero-sized type, the index doesn't matter. Keep looping.
-    if (Q.DL.getTypeAllocSize(GTI.getIndexedType()).getKnownMinSize() == 0)
+    if (Q.DL.getTypeAllocSize(GTI.getIndexedType()).isZero())
       continue;
 
     // Fast path the constant operand case both for efficiency and so we don't
