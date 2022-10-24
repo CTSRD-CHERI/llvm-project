@@ -2312,11 +2312,6 @@ DEF_TRAVERSE_DECL(ParmVarDecl, {
 
 DEF_TRAVERSE_DECL(RequiresExprBodyDecl, {})
 
-DEF_TRAVERSE_DECL(ImplicitConceptSpecializationDecl, {
-  TRY_TO(TraverseTemplateArguments(D->getTemplateArguments().data(),
-                                   D->getTemplateArguments().size()));
-})
-
 #undef DEF_TRAVERSE_DECL
 
 // ----------------- Stmt traversal -----------------
