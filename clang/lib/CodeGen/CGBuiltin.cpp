@@ -2643,11 +2643,11 @@ RValue CodeGenFunction::EmitBuiltinExpr(const GlobalDecl GD, unsigned BuiltinID,
   case Builtin::BI__builtin_va_start:
   case Builtin::BI__va_start:
   case Builtin::BI__builtin_va_end:
-    return RValue::get(
-        EmitVAStartEnd(BuiltinID == Builtin::BI__va_start
-                           ? EmitScalarExpr(E->getArg(0))
-                           : EmitVAListRef(E->getArg(0)).getPointer(),
-                       BuiltinID != Builtin::BI__builtin_va_end));
+    EmitVAStartEnd(BuiltinID == Builtin::BI__va_start
+                       ? EmitScalarExpr(E->getArg(0))
+                       : EmitVAListRef(E->getArg(0)).getPointer(),
+                   BuiltinID != Builtin::BI__builtin_va_end);
+    return RValue::get(nullptr);
   case Builtin::BI__builtin_va_copy: {
     Value *DstPtr = EmitVAListRef(E->getArg(0)).getPointer();
     Value *SrcPtr = EmitVAListRef(E->getArg(1)).getPointer();
@@ -2657,9 +2657,8 @@ RValue CodeGenFunction::EmitBuiltinExpr(const GlobalDecl GD, unsigned BuiltinID,
 
     DstPtr = Builder.CreatePointerBitCastOrAddrSpaceCast(DstPtr, Type);
     SrcPtr = Builder.CreatePointerBitCastOrAddrSpaceCast(SrcPtr, Type);
-    return RValue::get(Builder.CreateCall(CGM.getIntrinsic(Intrinsic::vacopy,
-                                                           { Type, Type }),
-                                          {DstPtr, SrcPtr}));
+    Builder.CreateCall(CGM.getIntrinsic(Intrinsic::vacopy, { Type, Type }), {DstPtr, SrcPtr});
+    return RValue::get(nullptr);
   }
   case Builtin::BI__builtin_abs:
   case Builtin::BI__builtin_labs:
@@ -2932,7 +2931,8 @@ RValue CodeGenFunction::EmitBuiltinExpr(const GlobalDecl GD, unsigned BuiltinID,
 
     Value *ArgValue = EmitScalarExpr(E->getArg(0));
     Function *FnAssume = CGM.getIntrinsic(Intrinsic::assume);
-    return RValue::get(Builder.CreateCall(FnAssume, ArgValue));
+    Builder.CreateCall(FnAssume, ArgValue);
+    return RValue::get(nullptr);
   }
   case Builtin::BI__arithmetic_fence: {
     // Create the builtin call if FastMath is selected, and the target
@@ -3053,7 +3053,8 @@ RValue CodeGenFunction::EmitBuiltinExpr(const GlobalDecl GD, unsigned BuiltinID,
       llvm::ConstantInt::get(Int32Ty, 3);
     Value *Data = llvm::ConstantInt::get(Int32Ty, 1);
     Function *F = CGM.getIntrinsic(Intrinsic::prefetch, Address->getType());
-    return RValue::get(Builder.CreateCall(F, {Address, RW, Locality, Data}));
+    Builder.CreateCall(F, {Address, RW, Locality, Data});
+    return RValue::get(nullptr);
   }
   case Builtin::BI__builtin_readcyclecounter: {
     Function *F = CGM.getIntrinsic(Intrinsic::readcyclecounter);
@@ -3069,9 +3070,11 @@ RValue CodeGenFunction::EmitBuiltinExpr(const GlobalDecl GD, unsigned BuiltinID,
     return RValue::get(Builder.CreateCall(F, {Begin, End}));
   }
   case Builtin::BI__builtin_trap:
-    return RValue::get(EmitTrapCall(Intrinsic::trap));
+    EmitTrapCall(Intrinsic::trap);
+    return RValue::get(nullptr);
   case Builtin::BI__debugbreak:
-    return RValue::get(EmitTrapCall(Intrinsic::debugtrap));
+    EmitTrapCall(Intrinsic::debugtrap);
+    return RValue::get(nullptr);
   case Builtin::BI__builtin_unreachable: {
     EmitUnreachable(E->getExprLoc());
 
@@ -3881,7 +3884,8 @@ RValue CodeGenFunction::EmitBuiltinExpr(const GlobalDecl GD, unsigned BuiltinID,
   }
   case Builtin::BI__builtin_unwind_init: {
     Function *F = CGM.getIntrinsic(Intrinsic::eh_unwind_init);
-    return RValue::get(Builder.CreateCall(F));
+    Builder.CreateCall(F);
+    return RValue::get(nullptr);
   }
   case Builtin::BI__builtin_extend_pointer: {
     // Extends a pointer to the size of an _Unwind_Word, which is
@@ -4667,8 +4671,9 @@ RValue CodeGenFunction::EmitBuiltinExpr(const GlobalDecl GD, unsigned BuiltinID,
     return EmitBuiltinNewDeleteCall(
         E->getCallee()->getType()->castAs<FunctionProtoType>(), E, false);
   case Builtin::BI__builtin_operator_delete:
-    return EmitBuiltinNewDeleteCall(
+    EmitBuiltinNewDeleteCall(
         E->getCallee()->getType()->castAs<FunctionProtoType>(), E, true);
+    return RValue::get(nullptr);
 
   case Builtin::BI__builtin_is_aligned:
     return EmitBuiltinIsAligned(E);
@@ -5005,7 +5010,8 @@ RValue CodeGenFunction::EmitBuiltinExpr(const GlobalDecl GD, unsigned BuiltinID,
   case Builtin::BI__builtin_coro_promise:
     return EmitCoroutineIntrinsic(E, Intrinsic::coro_promise);
   case Builtin::BI__builtin_coro_resume:
-    return EmitCoroutineIntrinsic(E, Intrinsic::coro_resume);
+    EmitCoroutineIntrinsic(E, Intrinsic::coro_resume);
+    return RValue::get(nullptr);
   case Builtin::BI__builtin_coro_frame:
     return EmitCoroutineIntrinsic(E, Intrinsic::coro_frame);
   case Builtin::BI__builtin_coro_noop:
@@ -5013,7 +5019,8 @@ RValue CodeGenFunction::EmitBuiltinExpr(const GlobalDecl GD, unsigned BuiltinID,
   case Builtin::BI__builtin_coro_free:
     return EmitCoroutineIntrinsic(E, Intrinsic::coro_free);
   case Builtin::BI__builtin_coro_destroy:
-    return EmitCoroutineIntrinsic(E, Intrinsic::coro_destroy);
+    EmitCoroutineIntrinsic(E, Intrinsic::coro_destroy);
+    return RValue::get(nullptr);
   case Builtin::BI__builtin_coro_done:
     return EmitCoroutineIntrinsic(E, Intrinsic::coro_done);
   case Builtin::BI__builtin_coro_alloc:
@@ -5446,7 +5453,8 @@ RValue CodeGenFunction::EmitBuiltinExpr(const GlobalDecl GD, unsigned BuiltinID,
     Value *Val = EmitScalarExpr(E->getArg(0));
     Address Address = EmitPointerWithAlignment(E->getArg(1));
     Value *HalfVal = Builder.CreateFPTrunc(Val, Builder.getHalfTy());
-    return RValue::get(Builder.CreateStore(HalfVal, Address));
+    Builder.CreateStore(HalfVal, Address);
+    return RValue::get(nullptr);
   }
   case Builtin::BI__builtin_load_half: {
     Address Address = EmitPointerWithAlignment(E->getArg(0));
@@ -5710,6 +5718,9 @@ RValue CodeGenFunction::EmitBuiltinExpr(const GlobalDecl GD, unsigned BuiltinID,
         V = Builder.CreateBitCast(V, RetTy);
     }
 
+    if (RetTy->isVoidTy())
+      return RValue::get(nullptr);
+
     return RValue::get(V);
   }
 
@@ -5727,6 +5738,8 @@ RValue CodeGenFunction::EmitBuiltinExpr(const GlobalDecl GD, unsigned BuiltinID,
   if (Value *V = EmitTargetBuiltinExpr(BuiltinID, E, ReturnValue)) {
     switch (EvalKind) {
     case TEK_Scalar:
+      if (V->getType()->isVoidTy())
+        return RValue::get(nullptr);
       return RValue::get(V);
     case TEK_Aggregate:
       return RValue::getAggregate(ReturnValue.getValue(),
