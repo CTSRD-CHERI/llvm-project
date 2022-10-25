@@ -19979,9 +19979,7 @@ TEST_F(FormatTest, UnderstandPragmaOption) {
 TEST_F(FormatTest, UnderstandPragmaRegion) {
   auto Style = getLLVMStyleWithColumns(0);
   verifyFormat("#pragma region TEST(FOO : BAR)", Style);
-
-  EXPECT_EQ("#pragma region TEST(FOO : BAR)",
-            format("#pragma region TEST(FOO : BAR)", Style));
+  verifyFormat("#pragma region TEST(FOO: NOSPACE)", Style);
 }
 
 TEST_F(FormatTest, OptimizeBreakPenaltyVsExcess) {
