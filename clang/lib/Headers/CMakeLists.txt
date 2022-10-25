@@ -154,6 +154,7 @@ set(x86_files
   clflushoptintrin.h
   clwbintrin.h
   clzerointrin.h
+  cmpccxaddintrin.h
   crc32intrin.h
   emmintrin.h
   enqcmdintrin.h
