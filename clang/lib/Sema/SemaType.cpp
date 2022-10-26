@@ -6593,6 +6593,9 @@ GetTypeSourceInfoForDeclarator(TypeProcessingState &State,
       CurrTL = TL.getNextTypeLoc().getUnqualifiedLoc();
     }
 
+    while (BTFTagAttributedTypeLoc TL = CurrTL.getAs<BTFTagAttributedTypeLoc>())
+      CurrTL = TL.getNextTypeLoc().getUnqualifiedLoc();
+
     while (DependentAddressSpaceTypeLoc TL =
                CurrTL.getAs<DependentAddressSpaceTypeLoc>()) {
       fillDependentAddressSpaceTypeLoc(TL, D.getTypeObject(i).getAttrs());
