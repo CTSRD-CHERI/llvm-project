@@ -1515,6 +1515,10 @@ Parser::isCXXDeclarationSpecifier(ImplicitTypenameContext AllowImplicitTypename,
   case tok::kw___kindof:
     return TPResult::True;
 
+    // WebAssemblyFuncref
+  case tok::kw___funcref:
+    return TPResult::True;
+
     // Borland
   case tok::kw___pascal:
     return TPResult::True;

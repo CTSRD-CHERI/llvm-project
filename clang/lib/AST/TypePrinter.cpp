@@ -1695,6 +1695,9 @@ void TypePrinter::printAttributedBefore(const AttributedType *T,
     spaceBeforePlaceHolder(OS);
   }
 
+  if (T->isWebAssemblyFuncrefSpec())
+    OS << "__funcref";
+
   // Print nullability type specifiers.
   if (T->getImmediateNullability()) {
     if (T->getAttrKind() == attr::TypeNonNull)
@@ -1729,8 +1732,8 @@ void TypePrinter::printAttributedAfter(const AttributedType *T,
   // Some attributes are printed as qualifiers before the type, so we have
   // nothing left to do.
   if (T->getAttrKind() == attr::ObjCKindOf ||
-      T->getAttrKind() == attr::CHERICapability ||
-      T->isMSTypeSpec() || T->getImmediateNullability())
+      T->getAttrKind() == attr::CHERICapability || T->isMSTypeSpec() ||
+      T->getImmediateNullability() || T->isWebAssemblyFuncrefSpec())
     return;
 
   // Don't print the inert __unsafe_unretained attribute at all.
@@ -1803,6 +1806,7 @@ void TypePrinter::printAttributedAfter(const AttributedType *T,
   case attr::AddressSpace:
   case attr::CmseNSCall:
   case attr::AnnotateType:
+  case attr::WebAssemblyFuncref:
     llvm_unreachable("This attribute should have been handled already");
   case attr::CHERIMethodClass:
     OS << "cheri_method_class(" << "???" << ")"; break;
@@ -2326,6 +2330,8 @@ std::string Qualifiers::getAddrSpaceAsString(LangAS AS) {
     return "__uptr __ptr32";
   case LangAS::ptr64:
     return "__ptr64";
+  case LangAS::wasm_funcref:
+    return "__funcref";
   case LangAS::hlsl_groupshared:
     return "groupshared";
   default:
