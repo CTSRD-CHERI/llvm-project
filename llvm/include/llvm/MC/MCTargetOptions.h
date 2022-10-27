@@ -88,6 +88,7 @@ public:
   std::string ABIName;
   std::string AssemblyLanguage;
   std::string SplitDwarfFile;
+  std::string AsSecureLogFile;
 
   const char *Argv0 = nullptr;
   ArrayRef<std::string> CommandLineArgs;
