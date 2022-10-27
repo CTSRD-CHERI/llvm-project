@@ -155,6 +155,9 @@ struct AssemblerInvocation {
   /// The version of the darwin target variant SDK which was used during the
   /// compilation
   llvm::VersionTuple DarwinTargetVariantSDKVersion;
+
+  /// The name of a file to use with \c .secure_log_unique directives.
+  std::string AsSecureLogFile;
   /// @}
 
 public:
@@ -368,6 +371,8 @@ bool AssemblerInvocation::CreateFromArgs(AssemblerInvocation &Opts,
             .Case("default", EmitDwarfUnwindType::Default);
   }
 
+  Opts.AsSecureLogFile = Args.getLastArgValue(OPT_as_secure_log_file);
+
   return Success;
 }
 
@@ -416,6 +421,7 @@ static bool ExecuteAssemblerImpl(AssemblerInvocation &Opts,
 
   MCTargetOptions MCOptions;
   MCOptions.EmitDwarfUnwind = Opts.EmitDwarfUnwind;
+  MCOptions.AsSecureLogFile = Opts.AsSecureLogFile;
 
   std::unique_ptr<MCRegisterInfo> MRI(
       TheTarget->createMCRegInfo(Opts.Triple, MCOptions));
