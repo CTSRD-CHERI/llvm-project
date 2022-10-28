@@ -245,12 +245,17 @@ __int128 intcap_to_oversized(__intcap_t cap) {
   return (__int128)cap;
 }
 
-// Casts from a capability to an oversized integer previously crashed Clang,
-// but only for purecap and only when lacking a __cheri_addr/__cheri_offset.
+/// Casts from a capability to an oversized integer previously crashed Clang,
+/// but only for purecap and only when lacking a __cheri_addr/__cheri_offset.
+///
+/// NB: This should be zext despite the type being signed in order to be
+/// consistent with integer pointers (which are just the semantics of an
+/// oversized ptrtoint).
+///
 // BOTH-LABEL: @cap_to_oversized(
 // BOTH-NEXT:  entry:
 // BOTH-NEXT:    [[TMP0:%.*]] = tail call i64 @llvm.cheri.cap.address.get.i64(i8 addrspace(200)* [[CAP:%.*]])
-// BOTH-NEXT:    [[CONV:%.*]] = sext i64 [[TMP0]] to i128
+// BOTH-NEXT:    [[CONV:%.*]] = zext i64 [[TMP0]] to i128
 // BOTH-NEXT:    ret i128 [[CONV]]
 //
 __int128 cap_to_oversized(void *__capability cap) {
