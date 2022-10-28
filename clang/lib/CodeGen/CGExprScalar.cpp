@@ -2249,7 +2249,7 @@ static void warnAboutImplicitCToPtr(CodeGenModule &CGM, CastExpr *CE) {
 }
 
 static llvm::Value *createCToPtr(CodeGenFunction &CGF, llvm::Value *Cap,
-                                 llvm::Type *LLVMTy, QualType Ty) {
+                                 llvm::Type *LLVMTy) {
   assert(llvm::isCheriPointer(Cap->getType(), &CGF.CGM.getDataLayout()));
   assert(LLVMTy->isIntegerTy());
   auto DDC =
@@ -2257,11 +2257,9 @@ static llvm::Value *createCToPtr(CodeGenFunction &CGF, llvm::Value *Cap,
   auto CToPtr = CGF.Builder.CreateIntrinsic(
       llvm::Intrinsic::cheri_cap_to_pointer, CGF.PtrDiffTy,
       {DDC, CGF.Builder.CreatePointerCast(Cap, CGF.Int8CheriCapTy)});
-  // sign extend if the target is a signed integer type otherwise zext.
-  // This should only happen when assigning the result to a larger type:
-  // i.e. __int128 or int64_t for CHERI64
-  return CGF.Builder.CreateIntCast(CToPtr, LLVMTy,
-                                   Ty->isSignedIntegerOrEnumerationType());
+  // Truncate or zero-extend if the result type is not the same width as the
+  // address type to match ptrtoint's semantics.
+  return CGF.Builder.CreateIntCast(CToPtr, LLVMTy, /*isSigned=*/false);
 }
 
 // VisitCastExpr - Emit code for an explicit or implicit cast.  Implicit casts
@@ -2626,7 +2624,7 @@ Value *ScalarExprEmitter::VisitCastExpr(CastExpr *CE) {
         Src = CGF.getCapabilityIntegerValue(Src);
       } else {
         warnAboutImplicitCToPtr(CGF.CGM, CE);
-        Src = createCToPtr(CGF, Src, MiddleTy, DestTy);
+        Src = createCToPtr(CGF, Src, MiddleTy);
       }
     }
 
@@ -2701,15 +2699,16 @@ Value *ScalarExprEmitter::VisitCastExpr(CastExpr *CE) {
     }
     if (IsPureCap) {
       PtrExpr = CGF.getPointerAddress(PtrExpr);
-      bool DestSigned = DestTy->isSignedIntegerOrEnumerationType();
       // Insert int cast in case size of result type and capability offset field
       // are not the same. This will be a no-op if the sizes are the same.
-      return Builder.CreateIntCast(PtrExpr, ResultType, DestSigned, "conv");
+      // Like ptrtoint we always zero-extend for oversized result types.
+      return Builder.CreateIntCast(PtrExpr, ResultType, /*isSigned=*/false,
+                                   "conv");
     }
     // ptrtoint will result in CToPtr in the hybrid ABI -> warn about it
     if (E->getType()->isCHERICapabilityType(C)) {
       warnAboutImplicitCToPtr(CGF.CGM, CE);
-      return createCToPtr(CGF, PtrExpr, ResultType, DestTy);
+      return createCToPtr(CGF, PtrExpr, ResultType);
     }
     return Builder.CreatePtrToInt(PtrExpr, ResultType);
   }
