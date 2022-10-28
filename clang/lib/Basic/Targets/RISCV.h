@@ -38,9 +38,9 @@ class RISCVTargetInfo : public TargetInfo {
     } else if (ABI == "lp64" || ABI == "lp64f" || ABI == "lp64d" ||
                ABI == "l64pc128" || ABI == "l64pc128f" || ABI == "l64pc128d") {
       if (HasCheri)
-        Layout = "e-m:e-pf200:128:128:128:64-p:64:64-i64:64-i128:128-n64-S128";
+        Layout = "e-m:e-pf200:128:128:128:64-p:64:64-i64:64-i128:128-n32:64-S128";
       else
-        Layout = "e-m:e-p:64:64-i64:64-i128:128-n64-S128";
+        Layout = "e-m:e-p:64:64-i64:64-i128:128-n32:64-S128";
     } else
       llvm_unreachable("Invalid ABI");
 

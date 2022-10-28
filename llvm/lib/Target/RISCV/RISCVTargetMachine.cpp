@@ -75,7 +75,7 @@ static std::string computeDataLayout(const Triple &TT, StringRef FS,
 
   StringRef IntegerTypes;
   if (TT.isArch64Bit()) {
-    IntegerTypes = "-p:64:64-i64:64-i128:128-n64";
+    IntegerTypes = "-p:64:64-i64:64-i128:128-n32:64";
   } else {
     IntegerTypes = "-p:32:32-i64:64-n32";
   }
