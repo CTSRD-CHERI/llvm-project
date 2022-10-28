@@ -229,6 +229,22 @@ __int128 uintcap_to_oversized(__uintcap_t cap) {
   return (__int128)cap;
 }
 
+// ADDR-LABEL: @intcap_to_oversized(
+// ADDR-NEXT:  entry:
+// ADDR-NEXT:    [[TMP0:%.*]] = tail call i64 @llvm.cheri.cap.address.get.i64(i8 addrspace(200)* [[CAP:%.*]])
+// ADDR-NEXT:    [[CONV:%.*]] = sext i64 [[TMP0]] to i128
+// ADDR-NEXT:    ret i128 [[CONV]]
+//
+// OFFSET-LABEL: @intcap_to_oversized(
+// OFFSET-NEXT:  entry:
+// OFFSET-NEXT:    [[TMP0:%.*]] = tail call i64 @llvm.cheri.cap.offset.get.i64(i8 addrspace(200)* [[CAP:%.*]])
+// OFFSET-NEXT:    [[CONV:%.*]] = sext i64 [[TMP0]] to i128
+// OFFSET-NEXT:    ret i128 [[CONV]]
+//
+__int128 intcap_to_oversized(__intcap_t cap) {
+  return (__int128)cap;
+}
+
 // Casts from a capability to an oversized integer previously crashed Clang,
 // but only for purecap and only when lacking a __cheri_addr/__cheri_offset.
 // BOTH-LABEL: @cap_to_oversized(
