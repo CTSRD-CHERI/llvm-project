@@ -123,6 +123,10 @@ static MCTargetStreamer *createTargetAsmStreamer(MCStreamer &S,
   return new XCoreTargetAsmStreamer(S, OS);
 }
 
+static MCTargetStreamer *createNullTargetStreamer(MCStreamer &S) {
+  return new XCoreTargetStreamer(S);
+}
+
 // Force static initialization.
 extern "C" LLVM_EXTERNAL_VISIBILITY void LLVMInitializeXCoreTargetMC() {
   // Register the MC asm info.
@@ -146,4 +150,7 @@ extern "C" LLVM_EXTERNAL_VISIBILITY void LLVMInitializeXCoreTargetMC() {
 
   TargetRegistry::RegisterAsmTargetStreamer(getTheXCoreTarget(),
                                             createTargetAsmStreamer);
+
+  TargetRegistry::RegisterNullTargetStreamer(getTheXCoreTarget(),
+                                             createNullTargetStreamer);
 }
