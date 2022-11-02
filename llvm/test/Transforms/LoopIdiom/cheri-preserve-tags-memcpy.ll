@@ -133,6 +133,6 @@ attributes #1 = { no_preserve_cheri_tags }
 attributes #2 = { must_preserve_cheri_tags }
 
 ; UTC_ARGS: --disable
-; CHECK: attributes #1 = { argmemonly nocallback nofree nounwind willreturn }
+; CHECK: attributes #1 = { nocallback nofree nounwind willreturn memory(argmem: readwrite) }
 ; CHECK: attributes #[[ATTR2]] = { no_preserve_cheri_tags }
 ; CHECK: attributes #[[ATTR3]] = { must_preserve_cheri_tags }
