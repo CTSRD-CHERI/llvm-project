@@ -18,6 +18,7 @@
 #include "llvm/CodeGen/CallingConvLower.h"
 #include "llvm/CodeGen/SelectionDAG.h"
 #include "llvm/CodeGen/TargetLowering.h"
+#include "llvm/Support/TargetParser.h"
 
 namespace llvm {
 class RISCVSubtarget;
@@ -340,11 +341,6 @@ enum NodeType : unsigned {
   CLA_TLS_IE,
 };
 } // namespace RISCVISD
-
-namespace RISCV {
-// We use 64 bits as the known part in the scalable vector types.
-static constexpr unsigned RVVBitsPerBlock = 64;
-} // namespace RISCV
 
 class RISCVTargetLowering : public TargetLowering {
   const RISCVSubtarget &Subtarget;
