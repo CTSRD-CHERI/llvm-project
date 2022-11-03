@@ -774,8 +774,16 @@ public:
     /// \p minnum matches the behavior of \p llvm.minnum.*.
     FMin,
 
+    /// Increment one up to a maximum value.
+    /// *p = (old u>= v) ? 0 : (old + 1)
+    UIncWrap,
+
+    /// Decrement one until a minimum value or zero.
+    /// *p = ((old == 0) || (old u> v)) ? v : (old - 1)
+    UDecWrap,
+
     FIRST_BINOP = Xchg,
-    LAST_BINOP = FMin,
+    LAST_BINOP = UDecWrap,
     BAD_BINOP
   };
 
@@ -787,7 +795,7 @@ private:
 
   template <unsigned Offset>
   using BinOpBitfieldElement =
-      typename Bitfield::Element<BinOp, Offset, 4, BinOp::LAST_BINOP>;
+      typename Bitfield::Element<BinOp, Offset, 5, BinOp::LAST_BINOP>;
 
 public:
   AtomicRMWInst(BinOp Operation, Value *Ptr, Value *Val, Align Alignment,
