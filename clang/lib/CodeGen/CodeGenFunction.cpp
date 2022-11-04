@@ -905,7 +905,9 @@ void CodeGenFunction::StartFunction(GlobalDecl GD, QualType RetTy,
   // backends as they don't need it -- instructions on these architectures are
   // always atomically patchable at runtime.
   if (CGM.getCodeGenOpts().HotPatch &&
-      getContext().getTargetInfo().getTriple().isX86())
+      getContext().getTargetInfo().getTriple().isX86() &&
+      getContext().getTargetInfo().getTriple().getEnvironment() !=
+          llvm::Triple::CODE16)
     Fn->addFnAttr("patchable-function", "prologue-short-redirect");
 
   if (const FunctionDecl *FD = dyn_cast_or_null<FunctionDecl>(D)) {
