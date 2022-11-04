@@ -6003,7 +6003,6 @@ struct ImmediateCallVisitor : public RecursiveASTVisitor<ImmediateCallVisitor> {
   bool VisitBlockDecl(BlockDecl *B) { return false; }
 
   bool VisitCompoundStmt(CompoundStmt *B) {
-    assert(false && "Unexpected Compound statement in default parameter or initializer");
     return false;
   }
 
