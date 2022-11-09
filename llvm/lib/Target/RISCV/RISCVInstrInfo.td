@@ -1889,6 +1889,7 @@ include "RISCVInstrInfoZicbo.td"
 //===----------------------------------------------------------------------===//
 
 include "RISCVInstrInfoXVentana.td"
+include "RISCVInstrInfoXTHead.td"
 
 //===----------------------------------------------------------------------===//
 // Non-standard Extensions
