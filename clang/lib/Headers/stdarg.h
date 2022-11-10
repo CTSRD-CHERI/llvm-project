@@ -18,8 +18,6 @@ typedef __builtin_va_list __gnuc_va_list;
 #undef __need___va_list
 #else
 #define __STDARG_H
-#ifndef _VA_LIST
-
 #if !defined(_VA_LIST) && !defined(_VA_LIST_DECLARED)
 typedef __builtin_va_list va_list;
 #define _VA_LIST
