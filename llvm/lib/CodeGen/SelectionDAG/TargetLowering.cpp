@@ -298,9 +298,13 @@ bool TargetLowering::findOptimalMemOpLowering(
     }
 
     // If we are preserving capabilities, the first VT must be a capability
-    if (Op.PreserveTags == PreserveCheriTags::Required && MemOps.empty() &&
-        !VT.isFatPointer()) {
-      return false;
+    if (Op.PreserveTags == PreserveCheriTags::Required && MemOps.empty()) {
+      assert(cheriCapabilityType().isValid());
+      assert(Size >= cheriCapabilityType().getStoreSize().getFixedSize() &&
+             "PreserveCheriTags::Required should not be possible for copies of "
+             "less than capability size");
+      if (!VT.isFatPointer())
+        return false;
     }
 
     MemOps.push_back(VT);

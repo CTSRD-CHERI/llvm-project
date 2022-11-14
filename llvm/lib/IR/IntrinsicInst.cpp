@@ -557,6 +557,13 @@ void llvm::setPreserveCheriTags(IntrinsicInst *I, PreserveCheriTags NewValue,
     assert(DL.hasCheriCapabilities());
     assert(!I->hasFnAttr(Attribute::NoPreserveCheriTags) &&
            "attempting to set conflicting attributes");
+#ifndef NDEBUG
+    if (auto MTI = dyn_cast<AnyMemTransferInst>(I))
+      if (auto *Length = dyn_cast<ConstantInt>(MTI->getLength()))
+        assert(Length->getZExtValue() >= DL.getMaxPointerSize() &&
+               "must_preserve_cheri_tags cannot be set on copies of less than "
+               "capability size");
+#endif
     I->addAttribute(llvm::AttributeList::FunctionIndex,
                     llvm::Attribute::MustPreserveCheriTags);
     NumMustPreserveTagAttrs++;

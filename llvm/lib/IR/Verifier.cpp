@@ -2000,6 +2000,13 @@ void Verifier::verifyFunctionAttrs(FunctionType *FT, AttributeList Attrs,
            "Attribute 'jumptable' requires 'unnamed_addr'", V);
   }
 
+  if (Attrs.hasFnAttribute(Attribute::NoPreserveCheriTags))
+    Assert(DL.hasCheriCapabilities(),
+           "Attribute 'no_preserve_cheri_tags' requires a CHERI target", V);
+  if (Attrs.hasFnAttribute(Attribute::MustPreserveCheriTags))
+    Assert(DL.hasCheriCapabilities(),
+           "Attribute 'must_preserve_cheri_tags' requires a CHERI target", V);
+
   if (Attrs.hasFnAttribute(Attribute::AllocSize)) {
     std::pair<unsigned, Optional<unsigned>> Args =
         Attrs.getAllocSizeArgs(AttributeList::FunctionIndex);
@@ -4705,6 +4712,20 @@ void Verifier::visitIntrinsicCall(Intrinsic::ID ID, CallBase &Call) {
     if (const auto *MTI = dyn_cast<MemTransferInst>(MI)) {
       Assert(IsValidAlignment(MTI->getSourceAlignment()),
              "alignment of arg 1 of memory intrinsic must be 0 or a power of 2",
+             Call);
+      if (DL.hasCheriCapabilities() &&
+          MTI->shouldPreserveCheriTags() == PreserveCheriTags::Required)
+        if (auto *Length = dyn_cast<ConstantInt>(MTI->getLength()))
+          Assert(Length->getZExtValue() >= DL.getMaxPointerSize(),
+                 "Attribute 'must_preserve_cheri_tags' cannot be set on copies "
+                 "of less than capability size",
+                 Call);
+    } else {
+      Assert(shouldPreserveTags(MI) != PreserveCheriTags::Required,
+             "Attribute 'must_preserve_cheri_tags' cannot be used with memset",
+             Call);
+      Assert(shouldPreserveTags(MI) != PreserveCheriTags::Unnecessary,
+             "Attribute 'no_preserve_cheri_tags' cannot be used with memset",
              Call);
     }
 
