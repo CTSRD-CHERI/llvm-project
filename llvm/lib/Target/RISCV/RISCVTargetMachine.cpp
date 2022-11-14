@@ -57,14 +57,16 @@ static std::string computeDataLayout(const Triple &TT, StringRef FS,
 
   StringRef CapTypes = "";
   StringRef PurecapOptions = "";
-  if (FS.contains("+xcheri")) {
+  RISCVABI::ABI ABI = RISCVABI::getTargetABI(Options.MCOptions.getABIName());
+  bool IsPurecapABI =
+      ABI != RISCVABI::ABI_Unknown && RISCVABI::isCheriPureCapABI(ABI);
+  if (FS.contains("+xcheri") || IsPurecapABI) {
     if (TT.isArch64Bit())
       CapTypes = "-pf200:128:128:128:64";
     else
       CapTypes = "-pf200:64:64:64:32";
 
-    RISCVABI::ABI ABI = RISCVABI::getTargetABI(Options.MCOptions.getABIName());
-    if (ABI != RISCVABI::ABI_Unknown && RISCVABI::isCheriPureCapABI(ABI))
+    if (IsPurecapABI)
       PurecapOptions = "-A200-P200-G200";
   }
 

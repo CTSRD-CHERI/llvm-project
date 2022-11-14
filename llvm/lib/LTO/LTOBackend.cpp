@@ -192,6 +192,15 @@ createTargetMachine(const Config &Conf, const Target *TheTarget, Module &M) {
     RelocModel =
         M.getPICLevel() == PICLevel::NotPIC ? Reloc::Static : Reloc::PIC_;
 
+  TargetOptions TOpts = Conf.Options;
+  if (const MDString *ModuleTargetABI =
+          dyn_cast_or_null<MDString>(M.getModuleFlag("target-abi"))) {
+    if (Conf.Options.MCOptions.ABIName != ModuleTargetABI->getString()) {
+      /* report_fatal_error("target-abi metadata was ignored!"); */
+      TOpts.MCOptions.ABIName = ModuleTargetABI->getString().str();
+    }
+  }
+
   Optional<CodeModel::Model> CodeModel;
   if (Conf.CodeModel)
     CodeModel = *Conf.CodeModel;
@@ -199,8 +208,8 @@ createTargetMachine(const Config &Conf, const Target *TheTarget, Module &M) {
     CodeModel = M.getCodeModel();
 
   std::unique_ptr<TargetMachine> TM(TheTarget->createTargetMachine(
-      TheTriple, Conf.CPU, Features.getString(), Conf.Options, RelocModel,
-      CodeModel, Conf.CGOptLevel));
+      TheTriple, Conf.CPU, Features.getString(), TOpts, RelocModel, CodeModel,
+      Conf.CGOptLevel));
   assert(TM && "Failed to create target machine");
   return TM;
 }
