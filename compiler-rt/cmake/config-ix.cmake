@@ -120,6 +120,7 @@ check_cxx_compiler_flag(/wd4800 COMPILER_RT_HAS_WD4800_FLAG)
 
 # Symbols.
 check_symbol_exists(__func__ "" COMPILER_RT_HAS_FUNC_SYMBOL)
+check_symbol_exists(__CHERI_PURE_CAPABILITY__ "" COMPILER_RT_IS_CHERI_PURECAP)
 
 # Includes.
 check_cxx_compiler_flag(-nostdinc++ COMPILER_RT_HAS_NOSTDINCXX_FLAG)
@@ -192,8 +193,9 @@ file(WRITE ${SIMPLE_SOURCE} "#include <stdlib.h>\n#include <stdio.h>\nint main()
 # Detect whether the current target platform is 32-bit or 64-bit, and setup
 # the correct commandline flags needed to attempt to target 32-bit and 64-bit.
 if (NOT CMAKE_SIZEOF_VOID_P EQUAL 4 AND
-    NOT CMAKE_SIZEOF_VOID_P EQUAL 8)
-  message(WARNING "Please use architecture with 4 or 8 byte pointers.")
+    NOT CMAKE_SIZEOF_VOID_P EQUAL 8 AND
+    NOT COMPILER_RT_IS_CHERI_PURECAP)
+  message(FATAL_ERROR "Please use architecture with 4 or 8 byte pointers.")
 endif()
 
 test_targets()
@@ -282,7 +284,9 @@ set(MIPS_CHERI_PURECAP mips64c128)
 set(PPC32 powerpc)
 set(PPC64 powerpc64 powerpc64le)
 set(RISCV32 riscv32)
+set(RISCV32_PURECAP riscv32c)
 set(RISCV64 riscv64)
+set(RISCV64_PURECAP riscv64c)
 set(S390X s390x)
 set(SPARC sparc)
 set(SPARCV9 sparcv9)
@@ -296,7 +300,7 @@ if(APPLE)
   set(X86_64 x86_64 x86_64h)
 endif()
 
-set(ALL_SANITIZER_COMMON_SUPPORTED_ARCH ${X86} ${X86_64} ${PPC64} ${RISCV64}
+set(ALL_SANITIZER_COMMON_SUPPORTED_ARCH ${X86} ${X86_64} ${PPC64} ${RISCV64} ${RISCV64_PURECAP}
     ${ARM32} ${ARM64} ${MIPS32} ${MIPS64} ${MIPS_CHERI_PURECAP} ${S390X} ${SPARC} ${SPARCV9})
 set(ALL_ASAN_SUPPORTED_ARCH ${X86} ${X86_64} ${ARM32} ${ARM64} ${RISCV64}
     ${MIPS32} ${MIPS64} ${PPC64} ${S390X} ${SPARC} ${SPARCV9})
@@ -331,7 +335,7 @@ set(ALL_MEMPROF_SUPPORTED_ARCH ${X86_64})
 set(ALL_PROFILE_SUPPORTED_ARCH ${X86} ${X86_64} ${ARM32} ${ARM64} ${PPC32} ${PPC64}
     ${MIPS32} ${MIPS64} ${S390X} ${SPARC} ${SPARCV9})
 set(ALL_TSAN_SUPPORTED_ARCH ${X86_64} ${MIPS64} ${ARM64} ${PPC64} ${S390X})
-set(ALL_UBSAN_SUPPORTED_ARCH ${X86} ${X86_64} ${ARM32} ${ARM64} ${RISCV64}
+set(ALL_UBSAN_SUPPORTED_ARCH ${X86} ${X86_64} ${ARM32} ${ARM64} ${RISCV64} ${RISCV64_PURECAP}
     ${MIPS32} ${MIPS64} ${MIPS_CHERI_PURECAP} ${PPC64} ${S390X} ${SPARC} ${SPARCV9})
 set(ALL_SAFESTACK_SUPPORTED_ARCH ${X86} ${X86_64} ${ARM64} ${MIPS32} ${MIPS64})
 set(ALL_CFI_SUPPORTED_ARCH ${X86} ${X86_64} ${ARM32} ${ARM64} ${MIPS64})

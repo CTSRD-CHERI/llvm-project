@@ -52,13 +52,13 @@ inline bool CheckAlignedAllocAlignmentAndSize(usize alignment, usize size) {
 
 // Checks posix_memalign() parameters, verifies that alignment is a power of two
 // and a multiple of sizeof(void *).
-inline bool CheckPosixMemalignAlignment(uptr alignment) {
+inline bool CheckPosixMemalignAlignment(usize alignment) {
   return alignment != 0 && IsPowerOfTwo(alignment) &&
          (alignment % sizeof(void *)) == 0;
 }
 
 // Returns true if calloc(size, n) call overflows on size*n calculation.
-inline bool CheckForCallocOverflow(uptr size, uptr n) {
+inline bool CheckForCallocOverflow(usize size, usize n) {
   if (!size)
     return false;
   usize max = (usize)-1L;
@@ -67,7 +67,7 @@ inline bool CheckForCallocOverflow(uptr size, uptr n) {
 
 // Returns true if the size passed to pvalloc overflows when rounded to the next
 // multiple of page_size.
-inline bool CheckForPvallocOverflow(uptr size, uptr page_size) {
+inline bool CheckForPvallocOverflow(usize size, usize page_size) {
   return RoundUpTo(size, page_size) < size;
 }
 

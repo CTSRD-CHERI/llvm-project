@@ -1317,7 +1317,7 @@ void TestReleaseFreeMemoryToOS() {
 
   for (uptr class_id = 1; class_id <= Allocator::SizeClassMapT::kLargestClassID;
       class_id++) {
-    const uptr chunk_size = Allocator::SizeClassMapT::Size(class_id);
+    const usize chunk_size = Allocator::SizeClassMapT::Size(class_id);
     const uptr chunk_size_scaled = chunk_size >> Allocator::kCompactPtrScale;
     const uptr max_chunks =
         kAllocatedPagesCount * GetPageSizeCached() / chunk_size;

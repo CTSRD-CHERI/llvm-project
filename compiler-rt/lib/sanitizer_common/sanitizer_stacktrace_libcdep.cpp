@@ -77,13 +77,12 @@ class StackTraceTextPrinter {
   const bool symbolize_ = false;
 };
 
-static void CopyStringToBuffer(const InternalScopedString &str, char *out_buf,
-                               uptr out_buf_size) {
+static void CopyStringToBuffer(const InternalScopedString &str, char *out_buf, usize out_buf_size) {
   if (!out_buf_size)
     return;
 
   CHECK_GT(out_buf_size, 0);
-  uptr copy_size = Min(str.length(), out_buf_size - 1);
+  usize copy_size = Min(str.length(), out_buf_size - 1);
   internal_memcpy(out_buf, str.data(), copy_size);
   out_buf[copy_size] = '\0';
 }

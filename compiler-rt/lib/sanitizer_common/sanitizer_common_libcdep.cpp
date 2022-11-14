@@ -128,7 +128,7 @@ void SetSandboxingCallback(void (*f)()) {
   sandboxing_callback = f;
 }
 
-uptr ReservedAddressRange::InitAligned(uptr size, uptr align,
+uptr ReservedAddressRange::InitAligned(usize size, usize align,
                                        const char *name) {
   CHECK(IsPowerOfTwo(align));
   if (align <= GetPageSizeCached())

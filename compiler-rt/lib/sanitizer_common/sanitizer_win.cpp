@@ -355,7 +355,7 @@ bool DontDumpShadowMemory(uptr addr, usize length) {
   return true;
 }
 
-uptr MapDynamicShadow(uptr shadow_size_bytes, uptr shadow_scale,
+uptr MapDynamicShadow(usize shadow_size_bytes, uptr shadow_scale,
                       uptr min_shadow_base_alignment,
                       UNUSED uptr &high_mem_end) {
   const uptr granularity = GetMmapGranularity();
@@ -393,8 +393,8 @@ uptr FindAvailableMemoryRange(usize size, usize alignment, uptr left_padding,
   return 0;
 }
 
-uptr MapDynamicShadowAndAliases(uptr shadow_size, uptr alias_size,
-                                uptr num_aliases, uptr ring_buffer_size) {
+uptr MapDynamicShadowAndAliases(usize shadow_size, usize alias_size,
+                                usize num_aliases, usize ring_buffer_size) {
   CHECK(false && "HWASan aliasing is unimplemented on Windows");
   return 0;
 }

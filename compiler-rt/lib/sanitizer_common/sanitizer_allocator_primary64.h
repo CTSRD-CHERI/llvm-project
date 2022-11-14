@@ -859,7 +859,7 @@ class SizeClassAllocator64 {
   void MaybeReleaseToOS(MemoryMapperT *memory_mapper, uptr class_id,
                         bool force) {
     RegionInfo *region = GetRegionInfo(class_id);
-    const uptr chunk_size = ClassIdToSize(class_id);
+    const usize chunk_size = ClassIdToSize(class_id);
     const uptr page_size = GetPageSizeCached();
 
     uptr n = region->num_freed_chunks;
