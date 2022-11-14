@@ -106,6 +106,7 @@ private:
   bool HasShortForwardBranchOpt = false;
   bool HasLUIADDIFusion = false;
   bool HasForcedAtomics = false;
+  bool HasOptimizedZeroStrideLoad = true;
   unsigned XLen = 32;
   unsigned ZvlLen = 0;
   MVT XLenVT = MVT::i32;
@@ -208,6 +209,7 @@ public:
   bool enableUnalignedScalarMem() const { return EnableUnalignedScalarMem; }
   bool hasLUIADDIFusion() const { return HasLUIADDIFusion; }
   bool hasForcedAtomics() const { return HasForcedAtomics; }
+  bool hasOptimizedZeroStrideLoad() const { return HasOptimizedZeroStrideLoad; }
   MVT getXLenVT() const { return XLenVT; }
   unsigned getXLen() const { return XLen; }
   unsigned getFLen() const {
