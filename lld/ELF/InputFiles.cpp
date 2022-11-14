@@ -1227,6 +1227,7 @@ void ArchiveFile::parse() {
   for (const Archive::Symbol &sym : file->symbols())
     symtab->addSymbol(LazyArchive{*this, sym});
 
+  symtab->getArchives().push_back(this);
   // Inform a future invocation of ObjFile<ELFT>::initializeSymbols() that this
   // archive has been processed.
   parsed = true;
@@ -1254,6 +1255,45 @@ void ArchiveFile::fetch(const Archive::Symbol &sym) {
   InputFile *file = createObjectFile(mb, getName(), c.getChildOffset());
   file->groupId = groupId;
   parseFile(file);
+
+  children.insert(std::make_pair(c.getChildOffset(), file));
+}
+
+// Adds all remaining files to a (potentially) different symbol table.
+// Only call this when all lazy symbols have been resolved.
+void ArchiveFile::fetchRemaining(SymbolTable *sTab) {
+  Error err = Error::success();
+
+  for (const llvm::object::Archive::Child &c : file->children(err)) {
+
+    if (!seen.insert(c.getChildOffset()).second)
+      continue;
+
+    MemoryBufferRef MB =
+        CHECK(c.getMemoryBufferRef(),
+              toString(this) +
+                  ": could not get the buffer for a child of the archive");
+
+    InputFile *ifile = createObjectFile(
+        MB, getName(), c.getParent()->isThin() ? 0 : c.getChildOffset());
+    ifile->groupId = groupId;
+
+    children.insert(std::make_pair(c.getChildOffset(), ifile));
+
+    parseFile(ifile);
+  }
+
+  if (err)
+    error(toString(this) + ": Error getting all of archives children\n");
+
+  // Now we reorder the Map.
+  llvm::sort(children.begin(), children.end(),
+             [](std::pair<uint64_t, InputFile *> a,
+                std::pair<uint64_t, InputFile *> b) -> bool {
+               return a.first < b.first;
+             });
+
+  children.orderChanged();
 }
 
 // The handling of tentative definitions (COMMON symbols) in archives is murky.

@@ -416,8 +416,15 @@ template <class ELFT> void elf::createSyntheticSections() {
 
   if (config->capabilitySize > 0) {
     InX<ELFT>::capRelocs = make<CheriCapRelocsSection<ELFT>>();
-    in.cheriCapTable = make<CheriCapTableSection>();
+    in.cheriCapTable = make<CheriCapTableSection>(false);
+
     add(in.cheriCapTable);
+
+    if (config->isCheriOS()) {
+      in.cheriCapTableLocal = make<CheriCapTableSection>(true);
+      add(in.cheriCapTableLocal);
+    }
+
     if (config->capTableScope != CapTableScopePolicy::All) {
       in.cheriCapTableMapping = make<CheriCapTableMappingSection>();
       add(in.cheriCapTableMapping);
@@ -941,6 +948,11 @@ bool elf::isRelroSection(const OutputSection *sec) {
     return config->zNow || !config->isPic;
   }
 
+  // CapTableLocal contains some ABI defined fixed offset entries that are R/W
+  // and so this cannot be RELRO
+  if (in.cheriCapTableLocal && sec == in.cheriCapTableLocal->getParent())
+    return false;
+
   // .dynamic section contains data for the dynamic linker, and
   // there's no need to write to it at runtime, so it's better to put
   // it into RELRO.
@@ -1136,6 +1148,8 @@ void PhdrEntry::add(OutputSection *sec) {
   p_align = std::max(p_align, sec->alignment);
   if (p_type == PT_LOAD)
     sec->ptLoad = this;
+  if (p_type == PT_TLS)
+    sec->ptTLS = this;
 }
 
 // The beginning and the ending of .rel[a].plt section are marked
@@ -2121,6 +2135,10 @@ template <class ELFT> void Writer<ELFT>::finalizeSections() {
     in.cheriCapTable->assignValuesAndAddCapTableSymbols<ELFT>();
   }
 
+  if (in.cheriCapTableLocal) {
+    in.cheriCapTableLocal->assignValuesAndAddCapTableSymbols<ELFT>();
+  }
+
   // Now handle __cap_relocs (must be before RelaDyn because it might
   // result in new dynamic relocations being added)
   if (InX<ELFT>::capRelocs) {
@@ -2170,6 +2188,27 @@ template <class ELFT> void Writer<ELFT>::finalizeSections() {
 
       if (sym->includeInDynsym()) {
         partitions[sym->partition - 1].dynSymTab->addSymbol(sym);
+
+        // CheriOS decides at runtime which function entry to expose, so add all
+        // of them to the DynSymTab
+
+        if (config->isCheriOS() && sym->isFunc()) {
+          SmallVector<char, 100> strBuf;
+
+          Symbol *crossDomain = symtab->find(
+              ("__cross_domain_" + sym->getName()).toStringRef(strBuf));
+          if (crossDomain)
+            partitions[sym->partition - 1].dynSymTab->addSymbol(crossDomain);
+
+          strBuf.clear();
+
+          Symbol *crossDomainTrusted = symtab->find(
+              ("__cross_domain_trusted_" + sym->getName()).toStringRef(strBuf));
+          if (crossDomainTrusted)
+            partitions[sym->partition - 1].dynSymTab->addSymbol(
+                crossDomainTrusted);
+        }
+
         if (auto *file = dyn_cast_or_null<SharedFile>(sym->file))
           if (file->isNeeded && !sym->isUndefined())
             addVerneed(sym);
@@ -2443,6 +2482,9 @@ template <class ELFT> void Writer<ELFT>::addStartEndSymbols() {
     define("__cap_table_start", "__cap_table_end",
            in.cheriCapTable->getOutputSection());
 
+  if (in.cheriCapTableLocal)
+    define("__cap_table_local_start", "__cap_table_local_end",
+           in.cheriCapTableLocal->getOutputSection());
   if (OutputSection *sec = findSection(".ARM.exidx"))
     define("__exidx_start", "__exidx_end", sec);
 }
@@ -2853,7 +2895,9 @@ template <class ELFT> void Writer<ELFT>::assignFileOffsets() {
 // Finalize the program headers. We call this function after we assign
 // file offsets and VAs to all sections.
 template <class ELFT> void Writer<ELFT>::setPhdrs(Partition &part) {
+  uint64_t phd_ndx = 0;
   for (PhdrEntry *p : part.phdrs) {
+    p->ndx = phd_ndx++;
     OutputSection *first = p->firstSec;
     OutputSection *last = p->lastSec;
 

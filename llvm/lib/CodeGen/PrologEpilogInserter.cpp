@@ -808,8 +808,15 @@ void PEI::calculateFrameObjectOffsets(MachineFunction &MF) {
   bool StackGrowsDown =
     TFI.getStackGrowthDirection() == TargetFrameLowering::StackGrowsDown;
 
+  bool PartitionUnsafeObjects = TFI.partitionUnsafeObjects();
+
   // Loop over all of the stack objects, assigning sequential addresses...
   MachineFrameInfo &MFI = MF.getFrameInfo();
+
+  if (PartitionUnsafeObjects && MFI.hasStaticUnsafeObjects()) {
+    // This object must be put on the stack immediately after the unsafe region
+    MFI.setUnsafeEndIndex(TFI.createUnsafeEndObject(MF));
+  }
 
   // Start at the beginning of the local area.
   // The Offset is the distance from the stack top in the direction
@@ -824,6 +831,10 @@ void PEI::calculateFrameObjectOffsets(MachineFunction &MF) {
   // Skew to be applied to alignment.
   unsigned Skew = TFI.getStackAlignmentSkew(MF);
 
+  assert(!(MFI.getStackProtectorIndex() >= 0 && MFI.hasStaticUnsafeObjects() &&
+           PartitionUnsafeObjects) &&
+         "Stack protector does not play with unsafe regions");
+
 #ifdef EXPENSIVE_CHECKS
   for (unsigned i = 0, e = MFI.getObjectIndexEnd(); i != e; ++i)
     if (!MFI.isDeadObjectIndex(i) &&
@@ -836,23 +847,59 @@ void PEI::calculateFrameObjectOffsets(MachineFunction &MF) {
   // non-fixed objects can't be allocated right at the start of local area.
   // Adjust 'Offset' to point to the end of last fixed sized preallocated
   // object.
-  for (int i = MFI.getObjectIndexBegin(); i != 0; ++i) {
-    if (MFI.getStackID(i) !=
-        TargetStackID::Default) // Only allocate objects on the default stack.
-      continue;
 
-    int64_t FixedOff;
-    if (StackGrowsDown) {
-      // The maximum distance from the stack pointer is at lower address of
-      // the object -- which is given by offset. For down growing stack
-      // the offset is negative, so we negate the offset to get the distance.
-      FixedOff = -MFI.getObjectOffset(i);
-    } else {
-      // The maximum distance from the start pointer is at the upper
-      // address of the object.
-      FixedOff = MFI.getObjectOffset(i) + MFI.getObjectSize(i);
+  // If we have unsafe stacks then the fixed objects are on the _previous_ stack
+  // and so don't overlap with ours
+  if (!(MFI.hasStaticUnsafeObjects() && PartitionUnsafeObjects)) {
+    for (int i = MFI.getObjectIndexBegin(); i != 0; ++i) {
+      if (MFI.getStackID(i) !=
+          TargetStackID::Default) // Only allocate objects on the default stack.
+        continue;
+
+      int64_t FixedOff;
+      if (StackGrowsDown) {
+        // The maximum distance from the stack pointer is at lower address of
+        // the object -- which is given by offset. For down growing stack
+        // the offset is negative, so we negate the offset to get the distance.
+        FixedOff = -MFI.getObjectOffset(i);
+      } else {
+        // The maximum distance from the start pointer is at the upper
+        // address of the object.
+        FixedOff = MFI.getObjectOffset(i) + MFI.getObjectSize(i);
+      }
+      if (FixedOff > Offset)
+        Offset = FixedOff;
     }
-    if (FixedOff > Offset) Offset = FixedOff;
+  }
+
+  Align MaxAlign = MFI.getMaxAlign();
+
+  if (PartitionUnsafeObjects && MFI.hasStaticUnsafeObjects()) {
+
+    // Unsafe objects should be allocated before any safe objects. Spill
+    // registers are considered safe.
+
+    for (unsigned i = 0, e = MFI.getObjectIndexEnd(); i != e; ++i) {
+      if (!MFI.isObjectSafe(i) && MFI.getStackID(i) == TargetStackID::Default &&
+          !MFI.isDeadObjectIndex(i)) {
+        AdjustStackOffset(MFI, i, StackGrowsDown, Offset, MaxAlign, Skew);
+      }
+    }
+
+    int64_t UnsafeEnd = Offset;
+
+    // Now we must allocate the unsafe end object.
+
+    int UnsafeIdx = MFI.getUnsafeEndIndex();
+    if (UnsafeIdx != -1) {
+      Offset = alignTo(Offset, MFI.getMaxAlign(), Skew);
+      // So the unsafe end object comes immediately after unsafe. We can still
+      // scavenge wasted space here.
+      UnsafeEnd = Offset;
+      AdjustStackOffset(MFI, UnsafeIdx, StackGrowsDown, Offset, MaxAlign, Skew);
+    }
+
+    MFI.setUnsafeStackSize(UnsafeEnd - LocalAreaOffset);
   }
 
   // First assign frame offsets to stack objects that are used to spill
@@ -865,6 +912,9 @@ void PEI::calculateFrameObjectOffsets(MachineFunction &MF) {
 
       // If the stack grows down, we need to add the size to find the lowest
       // address of the object.
+      assert((!PartitionUnsafeObjects || MFI.isObjectSafe(i)) &&
+             "Callee saved registers should be safe");
+
       Offset += MFI.getObjectSize(i);
 
       // Adjust to alignment boundary
@@ -895,7 +945,6 @@ void PEI::calculateFrameObjectOffsets(MachineFunction &MF) {
   // FixedCSEnd is the stack offset to the end of the fixed and callee-save
   // stack area.
   int64_t FixedCSEnd = Offset;
-  Align MaxAlign = MFI.getMaxAlign();
 
   // Make sure the special register scavenging spill slot is closest to the
   // incoming stack pointer if a frame pointer is required and is closer
@@ -1024,12 +1073,15 @@ void PEI::calculateFrameObjectOffsets(MachineFunction &MF) {
       continue;
     if (MFI.isDeadObjectIndex(i))
       continue;
-    if (MFI.getStackProtectorIndex() == (int)i || EHRegNodeFrameIndex == (int)i)
+    if (MFI.getStackProtectorIndex() == (int)i ||
+        EHRegNodeFrameIndex == (int)i || MFI.getUnsafeEndIndex() == (int)i)
       continue;
     if (ProtectedObjs.count(i))
       continue;
     if (MFI.getStackID(i) !=
         TargetStackID::Default) // Only allocate objects on the default stack.
+      continue;
+    if (PartitionUnsafeObjects && !MFI.isObjectSafe(i))
       continue;
 
     // Add the objects that we need to allocate to our working set.
@@ -1050,6 +1102,7 @@ void PEI::calculateFrameObjectOffsets(MachineFunction &MF) {
   // can use the holes when allocating later stack objects.  Only do this if
   // stack protector isn't being used and the target requests it and we're
   // optimizing.
+  // It is OK to scavenge slots in the unsafe region - even for safe objects.
   BitVector StackBytesFree;
   if (!ObjectsToAllocate.empty() &&
       MF.getTarget().getOptLevel() != CodeGenOpt::None &&

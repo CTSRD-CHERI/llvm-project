@@ -172,12 +172,15 @@ SDValue MipsTargetLowering::getGlobalReg(SelectionDAG &DAG, EVT Ty,
   return DAG.getRegister(FI->getGlobalBaseReg(MF, IsForTls), Ty);
 }
 
-SDValue MipsTargetLowering::getCapGlobalReg(SelectionDAG &DAG, EVT Ty) const {
+SDValue MipsTargetLowering::getCapGlobalReg(SelectionDAG &DAG, EVT Ty,
+                                            bool local) const {
   assert(Ty.isFatPointer());
   assert(ABI.IsCheriPureCap());
   MachineFunction &MF = DAG.getMachineFunction();
   MipsFunctionInfo *FI = MF.getInfo<MipsFunctionInfo>();
-  return DAG.getRegister(FI->getCapGlobalBaseRegForGlobalISel(MF), Ty);
+  return DAG.getRegister(local ? FI->getCapLocalBaseRegForGlobalISel(MF)
+                               : FI->getCapGlobalBaseRegForGlobalISel(MF),
+                         Ty);
 }
 
 SDValue MipsTargetLowering::getTargetNode(GlobalAddressSDNode *N, EVT Ty,
@@ -2895,7 +2898,14 @@ lowerGlobalTLSAddress(SDValue Op, SelectionDAG &DAG) const
   const GlobalValue *GV = GA->getGlobal();
   TLSModel::Model model = getTargetMachine().getTLSModel(GV);
 
-  if (Subtarget.getABI().IsCheriPureCap()) {
+  // In CheriOS ABI we also use the captable for TLS
+  if (Subtarget.getABI().IsCheriOS()) {
+    auto PtrInfo = MachinePointerInfo::getCapTable(DAG.getMachineFunction());
+    EVT Ty = Op.getValueType();
+    EVT GlobalTy = Ty.isFatPointer() ? Ty : CapType;
+    return getDataFromCapTable(GA, SDLoc(GA), GlobalTy, DAG, DAG.getEntryNode(),
+                               PtrInfo, true);
+  } else if (Subtarget.getABI().IsCheriPureCap()) {
     const Type *GVTy = GV->getType();
     if (DAG.getDataLayout().isFatPointer(GVTy)) {
       EVT OffsetVT = getPointerRangeTy(DAG.getDataLayout(),
@@ -3822,32 +3832,51 @@ SDValue MipsTargetLowering::lowerBR_JT(SDValue Op,
       ISD::SEXTLOAD, dl, MVT::i64, Chain, LoadAddr,
       MachinePointerInfo::getJumpTable(DAG.getMachineFunction()), MemVT);
   Chain = JTEntryValue.getValue(1);
-  assert(isJumpTableRelative());
-  // Each jump table entry contains .4byte	.LBB0_N - .LJTI0_0.
-  // Since the jump table comes before .text this will generally be a positive
-  // number that we can add to the address of the jump-table to get the
-  // address of the basic block:
 
-  // TODO: use a smarter model for jump tables, this is just used because
-  // there is existing infrastucture. Maybe use offset from beginning of func
-  // instead?
+  SDValue Target;
 
-  // Addr is a data capability so won't have Permit_Execute so we have to derive
-  // a new capability from PCC:
-  // We use the jump table capability as the target address capability and
-  // then add on the value loaded from the jump table to get the actual basic
-  // block address:
-  // addrof(BB) = addrof(JT) + *(JT[INDEX])
-  // New PPC = CIncOffset, PCC, (addrof(BB) - addrof(PCC))
-  // This can be done slightly more efficiently as:
-  // New PPC = CIncOffset, PCC, (CSub(JT, PCC) + *(JT[INDEX]))
-  // But not the following since it might cause JT to become unrepresentable:
-  // New PPC = CIncOffset, PCC, (CSub(JT + *(JT[INDEX]), PCC))
-  JTEntryValue = convertToPCCDerivedCap(Jumptable, dl, DAG, JTEntryValue);
-  auto SealEntry =
-      DAG.getConstant(Intrinsic::cheri_cap_seal_entry, dl, MVT::i64);
-  JTEntryValue = DAG.getNode(ISD::INTRINSIC_WO_CHAIN, dl, CapType, SealEntry, JTEntryValue);
-  return DAG.getNode(ISD::BRIND, dl, MVT::Other, Chain, JTEntryValue);
+  if (ABI.IsCheriOS()) {
+
+    // In CheriOS jump table entries are .LBBX_N - FunctionStart.
+    // The ABI specifies a particular (normally C12) should contain a cap to the
+    // start of the function
+    MachineFunction &MF = DAG.getMachineFunction();
+    const TargetRegisterClass *RC = getRegClassFor(PTy.V);
+    unsigned Reg = MF.addLiveIn(ABI.GetFunctionAddress(), RC);
+    SDValue FuncStart = DAG.getCopyFromReg(Chain, dl, Reg, PTy);
+    Target = DAG.getNode(ISD::PTRADD, dl, PTy, FuncStart, JTEntryValue);
+
+  } else {
+
+    // In the normal Purecap ABI each jump table entry contains .4byte .LBBX_N -
+    // .LJTIX_0 Since the jump table comes before .text this will generally be a
+    // positive number that we can add to the address of the jump-table to get
+    // the address of the basic block:
+
+    // TODO: use a smarter model for jump tables, this is just used because
+    // there is existing infrastucture. Maybe use offset from beginning of func
+    // instead?
+
+    // Addr is a data capability so won't have Permit_Execute so we have to derive
+    // a new capability from PCC:
+    // We use the jump table capability as the target address capability and
+    // then add on the value loaded from the jump table to get the actual basic
+    // block address:
+    // addrof(BB) = addrof(JT) + *(JT[INDEX])
+    // New PPC = CIncOffset, PCC, (addrof(BB) - addrof(PCC))
+    // This can be done slightly more efficiently as:
+    // New PPC = CIncOffset, PCC, (CSub(JT, PCC) + *(JT[INDEX]))
+    // But not the following since it might cause JT to become unrepresentable:
+    // New PPC = CIncOffset, PCC, (CSub(JT + *(JT[INDEX]), PCC))
+    assert(isJumpTableRelative());
+    JTEntryValue = convertToPCCDerivedCap(Jumptable, dl, DAG, JTEntryValue);
+    auto SealEntry =
+        DAG.getConstant(Intrinsic::cheri_cap_seal_entry, dl, MVT::i64);
+    Target = DAG.getNode(ISD::INTRINSIC_WO_CHAIN, dl, CapType, SealEntry,
+                         JTEntryValue);
+  }
+
+  return DAG.getNode(ISD::BRIND, dl, MVT::Other, Chain, Target);
 }
 
 //===----------------------------------------------------------------------===//
@@ -4589,6 +4618,15 @@ MipsTargetLowering::LowerCall(TargetLowering::CallLoweringInfo &CLI,
   SmallVector<SDValue, 8> Ops(1, Chain);
   SDVTList NodeTys = DAG.getVTList(MVT::Other, MVT::Glue);
 
+  if (ABI.IsCheriOS()) {
+    assert(!MFI.hasVarSizedUnsafeObjects() && "Need extra code for this");
+    // idc is caller saved here by moving it to c18 which our caller restores to
+    // idc for us
+    RegsToPass.push_back(std::make_pair(
+        ABI.GetReturnData(),
+        DAG.getRegister(FuncInfo->getCapLocalBaseRegForGlobalISel(MF),
+                        CapType)));
+  }
   getOpndList(Ops, RegsToPass, IsPIC, GlobalOrExternal, InternalLinkage,
               IsCallReloc, CLI, Callee, Chain);
 
@@ -4713,10 +4751,12 @@ SDValue MipsTargetLowering::LowerCallResult(
       }
     }
 
-    if (!LocalCallOptimization) {
+    if (!LocalCallOptimization && !ABI.IsCheriOS()) {
       // Note: we don't need to restore the entry $cgp when calling a DSO local
       // function since all local functions ensure that $cgp on entry == $cgp on exit
-      Chain = DAG.getCopyToReg(Chain, DL, ABI.GetGlobalCapability(), getCapGlobalReg(CLI.DAG, CapType), InFlag);
+      Chain =
+          DAG.getCopyToReg(Chain, DL, ABI.GetGlobalCapability(),
+                           getCapGlobalReg(CLI.DAG, CapType, false), InFlag);
       InFlag = Chain.getValue(1);
     } else {
       // TODO: at -O1 assert that $cgp before and after is the same?
@@ -5698,16 +5738,40 @@ bool MipsTargetLowering::isFPImmLegal(const APFloat &Imm, EVT VT,
 }
 
 unsigned MipsTargetLowering::getJumpTableEncoding() const {
-  // XXXAR: should we emit capabilities instead?
-  if (ABI.IsCheriPureCap())
-    return MachineJumpTableInfo::EK_LabelDifference32;
-  // TODO: use EK_Custom32 with function entry point - label address?
+  if (ABI.IsCheriPureCap()) {
+    if (ABI.IsCheriOS())
+      return MachineJumpTableInfo::EK_Custom32;
+    else
+      return MachineJumpTableInfo::
+          EK_LabelDifference32; // XXXAR: should we emit capabilities instead?
+  }
+
+  // TODO: use EK_Custom32 with function entry point - label address? (This is
+  // currently what CheriOS does)
 
   // FIXME: For space reasons this should be: EK_GPRel32BlockAddress.
   if (ABI.IsN64() && isPositionIndependent())
     return MachineJumpTableInfo::EK_GPRel64BlockAddress;
 
   return TargetLowering::getJumpTableEncoding();
+}
+
+// When functions are bounded then case blocks cannot be relative to either GP
+// or jump tables Instead we store the difference between the case block and the
+// function start in the jump table
+const MCExpr *MipsTargetLowering::LowerCustomJumpTableEntry(
+    const MachineJumpTableInfo *MJTI, const MachineBasicBlock *MBB,
+    unsigned uid, MCContext &Ctx) const {
+
+  const MCExpr *CaseBlock = MCSymbolRefExpr::create(MBB->getSymbol(), Ctx);
+  const MachineFunction *MF = MBB->getParent();
+
+  MCSymbol *FuncStartSym = MF->getTarget().getSymbol(&MF->getFunction());
+
+  const MCExpr *FuncStart = MCSymbolRefExpr::create(FuncStartSym, Ctx);
+  const MCExpr *Value = MCBinaryExpr::createSub(CaseBlock, FuncStart, Ctx);
+
+  return Value;
 }
 
 bool MipsTargetLowering::useSoftFloat() const {

@@ -8260,9 +8260,6 @@ static void HandleCHERICapabilityAttr(QualType &CurType, TypeProcessingState &st
   case TAL_DeclName:
     llvm_unreachable(
         "Keyword attribute should never be parsed after declaration's name");
-
-  default:
-    llvm_unreachable("Unknown type attribute location");
   }
 
   CurType = S.BuildPointerInterpretationAttr(CurType, PIK_Capability,

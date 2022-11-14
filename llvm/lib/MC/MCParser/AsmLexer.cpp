@@ -908,6 +908,7 @@ AsmToken AsmLexer::LexToken() {
               .StartsWith("captab_hi", {AsmToken::PercentCapTab_Hi, 10})
               .StartsWith("captab_rel", {AsmToken::PercentCapTab_Rel, 11})
               .StartsWith("captab20", {AsmToken::PercentCapTab20, 9})
+              .StartsWith("captab_tls20", {AsmToken::PercentCapTabTLS20, 13})
               .StartsWith("captab_tlsgd_hi", {AsmToken::PercentCapTabTlsgd_Hi, 16})
               .StartsWith("captab_tlsgd_lo", {AsmToken::PercentCapTabTlsgd_Lo, 16})
               .StartsWith("captab_tlsldm_hi", {AsmToken::PercentCapTabTlsldm_Hi, 17})

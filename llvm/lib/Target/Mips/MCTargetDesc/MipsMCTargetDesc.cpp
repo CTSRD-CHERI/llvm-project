@@ -170,6 +170,8 @@ public:
   virtual bool isCapTableLoad(const MCInst &Inst,
                               int64_t &Offset) const override {
     // cap table loads have a zero register offset and are relative to $c26
+    // FIXME: Would be nice to get register from ABI rather than hard coding.
+    // CheriOS uses $c25 and $c26 for captables.
     if (Inst.getOpcode() == Mips::LOADCAP &&
         (Inst.getOperand(1).getReg() == Mips::ZERO_64 ||
          Inst.getOperand(1).getReg() == Mips::ZERO) &&

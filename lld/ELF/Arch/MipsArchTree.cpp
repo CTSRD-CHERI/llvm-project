@@ -97,9 +97,9 @@ static void checkFlags(ArrayRef<FileFlags> files) {
 static uint32_t getMiscFlags(ArrayRef<FileFlags> files) {
   uint32_t ret = 0;
   for (const FileFlags &f : files)
-    ret |= f.flags &
-           (EF_MIPS_ABI | EF_MIPS_ABI2 | EF_MIPS_ARCH_ASE | EF_MIPS_NOREORDER |
-            EF_MIPS_MICROMIPS | EF_MIPS_NAN2008 | EF_MIPS_32BITMODE);
+    ret |= f.flags & (EF_MIPS_ABI | EF_MIPS_ABI2 | EF_MIPS_ARCH_ASE |
+                      EF_MIPS_NOREORDER | EF_MIPS_MICROMIPS | EF_MIPS_NAN2008 |
+                      EF_MIPS_32BITMODE | EF_MIPS_CHERIOSABI);
   return ret;
 }
 

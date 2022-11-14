@@ -1598,7 +1598,7 @@ SDValue MipsSETargetLowering::lowerINTRINSIC_WO_CHAIN(SDValue Op,
     return SDValue();
   case Intrinsic::mips_captable_get:
     if (ABI.IsCheriPureCap())
-      return getCapGlobalReg(DAG, CapType);
+      return getCapGlobalReg(DAG, CapType, false);
     DAG.getContext()->diagnose(DiagnosticInfoUnsupported(
         DAG.getMachineFunction().getFunction(),
         "the current ABI does not use a captable", DL.getDebugLoc()));

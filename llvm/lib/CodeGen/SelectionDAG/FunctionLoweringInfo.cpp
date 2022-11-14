@@ -168,8 +168,17 @@ void FunctionLoweringInfo::set(const Function &fn, MachineFunction &mf,
                 TySize, 0, /*IsImmutable=*/false, /*isAliased=*/true);
             MF->getFrameInfo().setObjectAlignment(FrameIndex, Alignment);
           } else {
-            FrameIndex = MF->getFrameInfo().CreateStackObject(TySize, Alignment,
-                                                              false, AI);
+            bool Assume = true; // TODO: get this from target
+
+            MDNode *TMeta = AI->getMetadata("temporal");
+
+            bool IsSafe = TMeta == nullptr
+                              ? Assume
+                              : (cast<MDString>(TMeta->getOperand(0))
+                                     ->getString()
+                                     .compare("safe") == 0);
+            FrameIndex = MF->getFrameInfo().CreateStackObject(
+                TySize, Alignment, false, AI, 0, IsSafe);
           }
 
           // Scalable vectors may need a special StackID to distinguish

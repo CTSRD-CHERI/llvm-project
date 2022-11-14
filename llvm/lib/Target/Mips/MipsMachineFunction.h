@@ -36,10 +36,14 @@ public:
   Register getGlobalBaseRegUnchecked() const;
 
   bool capGlobalBaseRegSet() const;
+  bool capLocalBaseRegSet() const;
+
   Register getCapEntryPointReg(MachineFunction &MF);
   Register getCapGlobalBaseReg(MachineFunction &MF);
   Register getCapGlobalBaseRegForGlobalISel(MachineFunction &MF);
   Register getGlobalBaseRegForGlobalISel(MachineFunction &MF);
+  Register getCapLocalBaseReg(MachineFunction &MF);
+  Register getCapLocalBaseRegForGlobalISel(MachineFunction &MF);
 
   // Insert instructions to initialize the global base register in the
   // first MBB of the function.
@@ -47,6 +51,7 @@ public:
   // Insert instructions to initialize the capability global base register in
   // the first MBB of the function.
   void initCapGlobalBaseReg(MachineFunction &MF);
+  void initCapLocalBaseReg(MachineFunction &MF);
 
   int getVarArgsFrameIndex() const { return VarArgsFrameIndex; }
   void setVarArgsFrameIndex(int Index) { VarArgsFrameIndex = Index; }
@@ -92,8 +97,14 @@ public:
   std::map<const char *, const Mips16HardFloatInfo::FuncSignature *>
   StubsNeeded;
 
+  MCSymbol *getUntrustedExternalEntrySymbol(MachineFunction &MF);
+  MCSymbol *getTrustedExternalEntrySymbol(MachineFunction &MF);
+
 private:
   virtual void anchor();
+
+  MCSymbol *UntrustedExternalEntrySymbol = nullptr;
+  MCSymbol *TrustedExternalEntrySymbol = nullptr;
 
   /// SRetReturnReg - Some subtargets require that sret lowering includes
   /// returning the value of the returned struct in a register. This field
@@ -109,6 +120,9 @@ private:
   /// use as the capability global base register. This is used for all global
   /// accesses in the purecap ABI.
   Register CapGlobalBaseReg;
+  /// Same as the global register but for thread local accesses (currently only
+  /// for CheriOS)
+  Register CapLocalBaseReg;
   Register CapComputedEntryPoint; /// $pcc-derived entry point register
   Register CapABIEntryPointReg; /// $c12 for the legacy ABI
 

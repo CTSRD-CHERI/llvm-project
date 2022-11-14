@@ -923,6 +923,7 @@ MipsInstrInfo::getSerializableDirectMachineOperandTargetFlags() const {
     { MO_CAPTAB11,         "mips-captable11" },
     { MO_CAPTAB_CALL11,    "mips-captable11-call" },
     { MO_CAPTAB20,         "mips-captable20" },
+    { MO_CAPTAB_TLS20,     "mips-captable-tls20"},
     { MO_CAPTAB_CALL20,    "mips-captable20-call" },
     { MO_CAPTAB_LO16,      "mips-captable-lo16" },
     { MO_CAPTAB_HI16,      "mips-captable-hi16" },

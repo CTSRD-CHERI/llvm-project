@@ -15,6 +15,20 @@
 
 namespace llvm {
 
+namespace escape {
+enum analysis_type {
+  NONE = 0,
+  ALL_SAFE = 1,
+  ALL_UNSAFE = 2,
+  USE_CAPTURE_TRACK = 3,
+  ANALYSIS = 4,
+  ANALYSIS_ALL_SAFE = 5,
+};
+}
+
+extern escape::analysis_type getTemporalAnalysisType();
+extern int getTemporalExpandLimit();
+
 enum class ExceptionHandling {
   None,     ///< No exception support
   DwarfCFI, ///< DWARF-like instruction based exceptions
@@ -90,6 +104,8 @@ public:
   StringRef getABIName() const;
 
   static CheriCapabilityTableABI cheriCapabilityTableABI();
+
+  static bool isCheriOSABI();
 
   /// getAssemblyLanguage - If this returns a non-empty string this represents
   /// the textual name of the assembly language that we will use for this

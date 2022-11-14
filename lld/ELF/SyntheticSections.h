@@ -1258,6 +1258,7 @@ struct InStruct {
   GotPltSection *gotPlt;
   IgotPltSection *igotPlt;
   CheriCapTableSection *cheriCapTable;
+  CheriCapTableSection *cheriCapTableLocal;
   // For per-file/per-function tables:
   CheriCapTableMappingSection *cheriCapTableMapping;
   PPC64LongBranchTargetSection *ppc64LongBranchTarget;

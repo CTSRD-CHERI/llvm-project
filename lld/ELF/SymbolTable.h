@@ -69,6 +69,10 @@ public:
   // Removed upstream, needed for CHERI
   std::vector<Symbol*> &getSymbols() { return symVector; }
 
+  // Used by CHERI to sort symbols based on the order they appear in archive
+  // files
+  std::vector<ArchiveFile *> &getArchives() { return arcVector; }
+
 private:
   std::vector<Symbol *> findByVersion(SymbolVersion ver);
   std::vector<Symbol *> findAllByVersion(SymbolVersion ver);
@@ -95,6 +99,9 @@ private:
   // can have the same name. We use this map to handle "extern C++ {}"
   // directive in version scripts.
   llvm::Optional<llvm::StringMap<std::vector<Symbol *>>> demangledSyms;
+
+  // A vector of archives files that contributed symbols to this table
+  std::vector<ArchiveFile *> arcVector;
 };
 
 extern SymbolTable *symtab;

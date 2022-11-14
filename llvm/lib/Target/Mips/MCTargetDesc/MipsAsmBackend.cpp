@@ -235,12 +235,16 @@ static unsigned adjustFixupValue(const MCFixup &Fixup, uint64_t Value,
     break;
   case Mips::fixup_CHERI_CAPTABLE20:
   case Mips::fixup_CHERI_CAPCALL20:
+  case Mips::fixup_CHERI_CAPTABLE_TLS20:
     // Forcing a signed division because Value can be negative.
     Value = (int64_t)Value / 16;
     // We now check if Value can be encoded as a 16-bit signed immediate.
     if (!isInt<16>(Value)) {
-      StringRef type = Kind == Mips::fixup_CHERI_CAPTABLE20 ?
-                       "CAPTABLE20" : "CAPCALL20";
+      StringRef type =
+          Kind == Mips::fixup_CHERI_CAPTABLE_TLS20
+              ? "CAPTABLE_TLS20"
+              : (Kind == Mips::fixup_CHERI_CAPTABLE20 ? "CAPTABLE20"
+                                                      : "CAPCALL20");
       Ctx.reportError(Fixup.getLoc(), "out of range " + type + " fixup");
       return 0;
     }
@@ -385,6 +389,8 @@ Optional<MCFixupKind> MipsAsmBackend::getFixupKind(StringRef Name) const {
       .Case("R_MIPS_CHERI_CAPCALL_LO16", (MCFixupKind)Mips::fixup_CHERI_CAPCALL_LO16)
       .Case("R_MIPS_CHERI_CAPTABLE11", (MCFixupKind)Mips::fixup_CHERI_CAPTABLE11)
       .Case("R_MIPS_CHERI_CAPTABLE20", (MCFixupKind)Mips::fixup_CHERI_CAPTABLE20)
+      // CHERI TLS (CheriOS style)
+      .Case("R_MIPS_CHERI_CAPTABLE_TLS20", (MCFixupKind)Mips::fixup_CHERI_CAPTABLE_TLS20)
       .Case("R_MIPS_CHERI_CAPTABLE_HI16", (MCFixupKind)Mips::fixup_CHERI_CAPTABLE_HI16)
       .Case("R_MIPS_CHERI_CAPTABLE_LO16", (MCFixupKind)Mips::fixup_CHERI_CAPTABLE_LO16)
       // CHERI TLS:
@@ -479,6 +485,7 @@ getFixupKindInfo(MCFixupKind Kind) const {
 
     { "fixup_CHERI_CAPTABLE11",          0,     11,   0 },
     { "fixup_CHERI_CAPTABLE20",          0,     16,   0 },
+    { "fixup_CHERI_CAPTABLE_TLS20",      0,     16,   0 },
     { "fixup_CHERI_CAPTABLE_HI16",       0,     16,   0 },
     { "fixup_CHERI_CAPTABLE_LO16",       0,     16,   0 },
     { "fixup_CHERI_CAPCALL11",           0,     11,   0 },
@@ -580,6 +587,7 @@ getFixupKindInfo(MCFixupKind Kind) const {
 
     { "fixup_CHERI_CAPTABLE11",    21,    11,   0 },
     { "fixup_CHERI_CAPTABLE20",    16,    16,   0 },
+    { "fixup_CHERI_CAPTABLE_TLS20", 16,  16,   0 },
     { "fixup_CHERI_CAPTABLE_HI16", 16,    16,   0 },
     { "fixup_CHERI_CAPTABLE_LO16", 16,    16,   0 },
     { "fixup_CHERI_CAPCALL11",     21,    11,   0 },
