@@ -1253,7 +1253,7 @@ static bool structContainsExactlyOneFieldThatIsACapability(llvm::StructType* STy
 /// destination type; in this situation the values of bits which not
 /// present in the src are undefined.
 static llvm::Value *CreateCoercedLoad(Address Src, llvm::Type *Ty,
-                                      CodeGenFunction &CGF) {
+                                      QualType CType, CodeGenFunction &CGF) {
   llvm::Type *SrcTy = Src.getElementType();
 
   // If SrcTy and Ty are the same, just do a load.
@@ -1325,10 +1325,12 @@ static llvm::Value *CreateCoercedLoad(Address Src, llvm::Type *Ty,
   // Otherwise do coercion through memory. This is stupid, but simple.
   Address Tmp =
       CreateTempAllocaForCoercion(CGF, Ty, Src.getAlignment(), Src.getName());
-  CGF.Builder.CreateMemCpy(
-      Tmp.getPointer(), Tmp.getAlignment().getAsAlign(), Src.getPointer(),
-      Src.getAlignment().getAsAlign(),
-      llvm::ConstantInt::get(CGF.IntPtrTy, SrcSize.getKnownMinSize()));
+  auto *Size = llvm::ConstantInt::get(CGF.IntPtrTy, SrcSize.getKnownMinSize());
+  auto PreserveTags = CGF.getTypes().copyShouldPreserveTagsForPointee(
+      CType, /*EffectiveTypeKnown=*/true, Size);
+  CGF.Builder.CreateMemCpy(Tmp.getPointer(), Tmp.getAlignment().getAsAlign(),
+                           Src.getPointer(), Src.getAlignment().getAsAlign(),
+                           Size, PreserveTags);
   return CGF.Builder.CreateLoad(Tmp);
 }
 
@@ -1356,10 +1358,8 @@ void CodeGenFunction::EmitAggregateStore(llvm::Value *Val, Address Dest,
 ///
 /// This safely handles the case when the src type is larger than the
 /// destination type; the upper bits of the src will be lost.
-static void CreateCoercedStore(llvm::Value *Src,
-                               Address Dst,
-                               bool DstIsVolatile,
-                               CodeGenFunction &CGF) {
+static void CreateCoercedStore(llvm::Value *Src, Address Dst, QualType CType,
+                               bool DstIsVolatile, CodeGenFunction &CGF) {
   llvm::Type *SrcTy = Src->getType();
   llvm::Type *DstTy = Dst.getElementType();
   if (SrcTy == DstTy) {
@@ -1429,12 +1429,14 @@ static void CreateCoercedStore(llvm::Value *Src,
     //
     // FIXME: Assert that we aren't truncating non-padding bits when have access
     // to that information.
+    auto *Size = llvm::ConstantInt::get(CGF.IntPtrTy, DstSize.getFixedSize());
+    auto PreserveTags = CGF.getTypes().copyShouldPreserveTagsForPointee(
+        CType, /*EffectiveTypeKnown=*/true, Size);
     Address Tmp = CreateTempAllocaForCoercion(CGF, SrcTy, Dst.getAlignment());
     CGF.Builder.CreateStore(Src, Tmp);
-    CGF.Builder.CreateMemCpy(
-        Dst.getPointer(), Dst.getAlignment().getAsAlign(), Tmp.getPointer(),
-        Tmp.getAlignment().getAsAlign(),
-        llvm::ConstantInt::get(CGF.IntPtrTy, DstSize.getFixedSize()));
+    CGF.Builder.CreateMemCpy(Dst.getPointer(), Dst.getAlignment().getAsAlign(),
+                             Tmp.getPointer(), Tmp.getAlignment().getAsAlign(),
+                             Size, PreserveTags);
   }
 }
 
@@ -2761,10 +2763,13 @@ void CodeGenFunction::EmitFunctionProlog(const CGFunctionInfo &FI,
           // FIXME: We should have a common utility for generating an aggregate
           // copy.
           CharUnits Size = getContext().getTypeSizeInChars(Ty);
+          assert(!CGM.getTarget().areAllPointersCapabilities() &&
+                 "Missing test case for llvm::PreserveCheriTags");
           Builder.CreateMemCpy(
               AlignedTemp.getPointer(), AlignedTemp.getAlignment().getAsAlign(),
               ParamAddr.getPointer(), ParamAddr.getAlignment().getAsAlign(),
-              llvm::ConstantInt::get(IntPtrTy, Size.getQuantity()));
+              llvm::ConstantInt::get(IntPtrTy, Size.getQuantity()),
+              llvm::PreserveCheriTags::TODO);
           V = AlignedTemp;
         }
         ArgVals.push_back(ParamValue::forIndirect(V));
@@ -2967,7 +2972,10 @@ void CodeGenFunction::EmitFunctionProlog(const CGFunctionInfo &FI,
         }
 
         if (SrcSize > DstSize) {
-          Builder.CreateMemCpy(Ptr, AddrToStoreInto, DstSize);
+          assert(!CGM.getTarget().areAllPointersCapabilities() &&
+                 "Missing test case for llvm::PreserveCheriTags");
+          Builder.CreateMemCpy(Ptr, AddrToStoreInto, DstSize,
+                               llvm::PreserveCheriTags::TODO);
         }
 
       } else {
@@ -2975,7 +2983,7 @@ void CodeGenFunction::EmitFunctionProlog(const CGFunctionInfo &FI,
         assert(NumIRArgs == 1);
         auto AI = Fn->getArg(FirstIRArg);
         AI->setName(Arg->getName() + ".coerce");
-        CreateCoercedStore(AI, Ptr, /*DstIsVolatile=*/false, *this);
+        CreateCoercedStore(AI, Ptr, Ty, /*DstIsVolatile=*/false, *this);
       }
 
       // Match to what EmitParmDecl is expecting for this type.
@@ -3561,7 +3569,7 @@ void CodeGenFunction::EmitFunctionEpilog(const CGFunctionInfo &FI,
       // If the value is offset in memory, apply the offset now.
       Address V = emitAddressAtOffset(*this, ReturnValue, RetAI);
 
-      RV = CreateCoercedLoad(V, RetAI.getCoerceToType(), *this);
+      RV = CreateCoercedLoad(V, RetAI.getCoerceToType(), RetTy, *this);
     }
 
     // In ARC, end functions that return a retainable type with a call
@@ -4782,6 +4790,7 @@ RValue CodeGenFunction::EmitCall(const CGFunctionInfo &CallInfo,
   for (CallArgList::const_iterator I = CallArgs.begin(), E = CallArgs.end();
        I != E; ++I, ++info_it, ++ArgNo) {
     const ABIArgInfo &ArgInfo = info_it->info;
+    QualType ArgType = info_it->type;
 
     // Insert a padding argument to ensure proper alignment.
     if (IRFunctionArgs.hasPaddingArg(ArgNo))
@@ -5015,10 +5024,13 @@ RValue CodeGenFunction::EmitCall(const CGFunctionInfo &CallInfo,
         // of the destination type to allow loading all of it. The bits past
         // the source value are left undef.
         if (SrcSize < DstSize) {
+          assert(!CGM.getTarget().areAllPointersCapabilities() &&
+                 "Missing test case for llvm::PreserveCheriTags");
           Address TempAlloca
             = CreateTempAlloca(STy, Src.getAlignment(),
                                Src.getName() + ".coerce");
-          Builder.CreateMemCpy(TempAlloca, Src, SrcSize);
+          Builder.CreateMemCpy(TempAlloca, Src, SrcSize,
+                               llvm::PreserveCheriTags::TODO);
           Src = TempAlloca;
         } else {
           Src = Builder.CreateBitCast(Src,
@@ -5035,7 +5047,7 @@ RValue CodeGenFunction::EmitCall(const CGFunctionInfo &CallInfo,
         // In the simple case, just pass the coerced loaded value.
         assert(NumIRArgs == 1);
         llvm::Value *Load =
-            CreateCoercedLoad(Src, ArgInfo.getCoerceToType(), *this);
+            CreateCoercedLoad(Src, ArgInfo.getCoerceToType(), ArgType, *this);
 
         if (CallInfo.isCmseNSCall()) {
           // For certain parameter types, clear padding bits, as they may reveal
@@ -5573,7 +5585,7 @@ RValue CodeGenFunction::EmitCall(const CGFunctionInfo &CallInfo,
 
       // If the value is offset in memory, apply the offset now.
       Address StorePtr = emitAddressAtOffset(*this, DestPtr, RetAI);
-      CreateCoercedStore(CI, StorePtr, DestIsVolatile, *this);
+      CreateCoercedStore(CI, StorePtr, RetTy, DestIsVolatile, *this);
 
       return convertTempToRValue(DestPtr, RetTy, SourceLocation());
     }
