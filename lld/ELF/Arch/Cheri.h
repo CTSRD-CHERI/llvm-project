@@ -1,5 +1,6 @@
 #pragma once
 
+#include "../OutputSections.h"
 #include "../SymbolTable.h"
 #include "../Symbols.h"
 #include "../SyntheticSections.h"
@@ -316,6 +317,30 @@ inline void readOnlyCapRelocsError(Symbol &sym, const Twine &sourceMsg) {
         " in a read-only section; pass -Wl,-z,notext if you really want to do "
         "this" +
         sourceMsg);
+}
+
+// For CHERI MCU compartments, the $cgp register points to the middle of the
+// globals section for a given compartment, with bounds set to include all of
+// that compartment's globals.  Calculate the address of the symbol relative
+// to the middle of $cgp.
+inline uint64_t getBiasedCGPOffset(const Symbol &sym)
+{
+  auto *OutputSection = sym.getOutputSection();
+  if (!OutputSection)
+    fatal("Unable to compute bias for CGP-relative relocation"
+          " against symbol " + sym.getName() +
+          " which does not appear in any section");
+  uint64_t CGP = OutputSection->addr + OutputSection->size / 2;
+  return sym.getVA() - CGP;
+}
+
+// Same with getBiasedCGPOffset(), but we only care about the bottom 12 bits
+// to be used by COMPARTMENT_CGPREL_LO
+inline uint64_t getBiasedCGPOffsetLo12(const Symbol &sym)
+{
+  int64_t Displacement = getBiasedCGPOffset(sym);
+  uint64_t mask = Displacement < 0 ? -1 : 0;
+  return (mask << 11) | (Displacement & ((1L << 11) - 1));
 }
 
 template <typename ELFT>

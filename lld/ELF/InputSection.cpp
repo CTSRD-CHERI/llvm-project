@@ -727,27 +727,6 @@ uint64_t InputSectionBase::getRelocTargetVA(const InputFile *file, RelType type,
                                             const Symbol &sym, RelExpr expr,
                                             const InputSectionBase *isec,
                                             uint64_t offset) {
-  // For CHERI MCU compartments, the $cgp register points to the middle of the
-  // globals section for a given compartment, with bounds set to include all of
-  // that compartment's globals.  Calculate the address of the symbol relative
-  // to the middle of $cgp.
-  auto getBiasedCGPOffset = [&]() {
-    auto *OutputSection = sym.getOutputSection();
-    if (!OutputSection)
-      fatal("Unable to compute bias for CGP-relative relocation in " +
-            file->getName() + " against symbol " + sym.getName() +
-            " which does not appear in any section");
-    uint64_t Size = OutputSection->size;
-    uint64_t Bias = Size / 2;
-    uint64_t CGP = sym.getOutputSection()->addr + Bias;
-    return sym.getVA() - CGP;
-  };
-  auto getBiasedCGPOffsetLo12 = [&]() {
-    int64_t Displacement = getBiasedCGPOffset();
-    int64_t mask = Displacement < 0 ? -1 : 0;
-    return (mask << 11) | (Displacement & ((1L << 11) - 1));
-  };
-
   // We only treat symbols as "imported" when they refer an exported symbol
   // from a different compartment (or no compartment, ex. __export_mem_*)
   addCHERIImportedSymbol(&sym, file);
@@ -974,9 +953,9 @@ uint64_t InputSectionBase::getRelocTargetVA(const InputFile *file, RelType type,
     return in.cheriCapTable->getTlsOffset(sym);
   case R_CHERI_COMPARTMENT_CGPREL_LO_I:
   case R_CHERI_COMPARTMENT_CGPREL_LO_S:
-    return getBiasedCGPOffsetLo12();
+    return getBiasedCGPOffsetLo12(sym);
   case R_CHERI_COMPARTMENT_CGPREL_HI:
-    return (getBiasedCGPOffset() - getBiasedCGPOffsetLo12()) >> 11;
+    return (getBiasedCGPOffset(sym) - getBiasedCGPOffsetLo12(sym)) >> 11;
   case R_CHERI_COMPARTMENT_SIZE:
     return sym.getSize();
   default:

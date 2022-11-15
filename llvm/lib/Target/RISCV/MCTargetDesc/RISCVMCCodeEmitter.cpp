@@ -456,12 +456,15 @@ unsigned RISCVMCCodeEmitter::getImmOpValue(const MCInst &MI, unsigned OpNo,
       break;
     case RISCVMCExpr::VK_RISCV_CHERI_COMPARTMENT_CGPREL_HI:
       FixupKind = RISCV::fixup_riscv_cheri_compartment_cgprel_hi;
+      RelaxCandidate = true;
       break;
     case RISCVMCExpr::VK_RISCV_CHERI_COMPARTMENT_CGPREL_LO_I:
       FixupKind = RISCV::fixup_riscv_cheri_compartment_cgprel_lo_i;
+      RelaxCandidate = true;
       break;
     case RISCVMCExpr::VK_RISCV_CHERI_COMPARTMENT_CGPREL_LO_S:
       FixupKind = RISCV::fixup_riscv_cheri_compartment_cgprel_lo_s;
+      RelaxCandidate = true;
       break;
     case RISCVMCExpr::VK_RISCV_CHERI_COMPARTMENT_PCCREL_HI:
       FixupKind = RISCV::fixup_riscv_cheri_compartment_pccrel_hi;

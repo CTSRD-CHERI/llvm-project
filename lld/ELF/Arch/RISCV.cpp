@@ -6,6 +6,7 @@
 //
 //===----------------------------------------------------------------------===//
 
+#include "Cheri.h"
 #include "InputFiles.h"
 #include "OutputSections.h"
 #include "Symbols.h"
@@ -689,8 +690,15 @@ static void initSymbolAnchors() {
 }
 
 // Relax R_RISCV_CALL/R_RISCV_CALL_PLT auipc+jalr to c.j, c.jal, or jal.
+// Relax R_RISCV_CHERI_CCALL auipcc+cjalr to c.cj, c.cjal, or cjal.
 static void relaxCall(const InputSection &sec, size_t i, uint64_t loc,
                       Relocation &r, uint32_t &remove) {
+  // We need to emit the correct relocations for CHERI, although the instruction
+  // encodings are exactly the same with vanilla RISC-V.
+  auto jalRVCType = (r.type == R_RISCV_CHERI_CCALL) ? R_RISCV_CHERI_RVC_CJUMP
+                                                    : R_RISCV_RVC_JUMP;
+  auto jalType = (r.type == R_RISCV_CHERI_CCALL) ? R_RISCV_CHERI_CJAL
+                                                 : R_RISCV_JAL;
   const bool rvc = config->eflags & EF_RISCV_RVC;
   const Symbol &sym = *r.sym;
   const uint64_t insnPair = read64le(sec.rawData.data() + r.offset);
@@ -700,18 +708,47 @@ static void relaxCall(const InputSection &sec, size_t i, uint64_t loc,
   const int64_t displace = dest - loc;
 
   if (rvc && isInt<12>(displace) && rd == 0) {
-    sec.relaxAux->relocTypes[i] = R_RISCV_RVC_JUMP;
-    sec.relaxAux->writes.push_back(0xa001); // c.j
+    sec.relaxAux->relocTypes[i] = jalRVCType;
+    sec.relaxAux->writes.push_back(0xa001); // c.[c]j
     remove = 6;
   } else if (rvc && isInt<12>(displace) && rd == X_RA &&
              !config->is64) { // RV32C only
-    sec.relaxAux->relocTypes[i] = R_RISCV_RVC_JUMP;
-    sec.relaxAux->writes.push_back(0x2001); // c.jal
+    sec.relaxAux->relocTypes[i] = jalRVCType;
+    sec.relaxAux->writes.push_back(0x2001); // c.[c]jal
     remove = 6;
   } else if (isInt<21>(displace)) {
-    sec.relaxAux->relocTypes[i] = R_RISCV_JAL;
-    sec.relaxAux->writes.push_back(0x6f | rd << 7); // jal
+    sec.relaxAux->relocTypes[i] = jalType;
+    sec.relaxAux->writes.push_back(0x6f | rd << 7); // [c]jal
     remove = 4;
+  }
+}
+
+// Relax auicgp + cincoffset/memop to cincoffset/memop cgp
+static void relaxCGP(const InputSection &sec, size_t i, uint64_t loc,
+                     Relocation &r, uint32_t &remove) {
+  uint64_t hival = getBiasedCGPOffset(*r.sym) - getBiasedCGPOffsetLo12(*r.sym);
+  // We can only relax when imm == 0 in auicgp rd, imm.
+  if (hival != 0)
+    return;
+  uint32_t insn = read32le(sec.rawData.data() + r.offset);
+  switch (r.type) {
+  case R_RISCV_CHERI_COMPARTMENT_CGPREL_HI:
+    // Remove auicgp rd, 0.
+    sec.relaxAux->relocTypes[i] = R_RISCV_RELAX;
+    remove = 4;
+    break;
+  case R_RISCV_CHERI_COMPARTMENT_CGPREL_LO_I:
+    // cincoffset/load rd, cs1, %lo(x) => cincoffset/load rd, cgp, %lo(x)
+    sec.relaxAux->relocTypes[i] = R_RISCV_CHERI_COMPARTMENT_CGPREL_LO_I;
+    insn = (insn & ~(31 << 15)) | (3 << 15);
+    sec.relaxAux->writes.push_back(insn);
+    break;
+  case R_RISCV_CHERI_COMPARTMENT_CGPREL_LO_S:
+    // store cs2, cs1, %lo(x) => store cs2, cgp, %lo(x)
+    sec.relaxAux->relocTypes[i] = R_RISCV_CHERI_COMPARTMENT_CGPREL_LO_S;
+    insn = (insn & ~(31 << 15)) | (3 << 15);
+    sec.relaxAux->writes.push_back(insn);
+    break;
   }
 }
 
@@ -756,10 +793,17 @@ static bool relax(InputSection &sec) {
     }
     case R_RISCV_CALL:
     case R_RISCV_CALL_PLT:
+    case R_RISCV_CHERI_CCALL:
       if (i + 1 != sec.relocations.size() &&
           sec.relocations[i + 1].type == R_RISCV_RELAX)
         relaxCall(sec, i, loc, r, remove);
       break;
+    case R_RISCV_CHERI_COMPARTMENT_CGPREL_HI:
+    case R_RISCV_CHERI_COMPARTMENT_CGPREL_LO_I:
+    case R_RISCV_CHERI_COMPARTMENT_CGPREL_LO_S:
+      if (i + 1 != sec.relocations.size() &&
+          sec.relocations[i + 1].type == R_RISCV_RELAX)
+        relaxCGP(sec, i, loc, r, remove);
     }
 
     // For all anchors whose offsets are <= r.offset, they are preceded by
@@ -845,7 +889,7 @@ void elf::riscvFinalizeRelax(int passes) {
       for (size_t i = 0, e = rels.size(); i != e; ++i) {
         uint32_t remove = aux.relocDeltas[i] - delta;
         delta = aux.relocDeltas[i];
-        if (remove == 0)
+        if (remove == 0 && aux.relocTypes[i] == R_RISCV_NONE)
           continue;
 
         // Copy from last location to the current relocated location.
@@ -872,15 +916,23 @@ void elf::riscvFinalizeRelax(int passes) {
             }
           }
         } else if (RelType newType = aux.relocTypes[i]) {
-          const uint32_t insn = aux.writes[writesIdx++];
           switch (newType) {
+          case R_RISCV_RELAX:
+            break;
           case R_RISCV_RVC_JUMP:
+          case R_RISCV_CHERI_RVC_CJUMP:
             skip = 2;
-            write16le(p, insn);
+            write16le(p, aux.writes[writesIdx++]);
             break;
           case R_RISCV_JAL:
+          case R_RISCV_CHERI_CJAL:
             skip = 4;
-            write32le(p, insn);
+            write32le(p, aux.writes[writesIdx++]);
+            break;
+          case R_RISCV_CHERI_COMPARTMENT_CGPREL_LO_I:
+          case R_RISCV_CHERI_COMPARTMENT_CGPREL_LO_S:
+            skip = 4;
+            write32le(p, aux.writes[writesIdx++]);
             break;
           default:
             llvm_unreachable("unsupported type");
