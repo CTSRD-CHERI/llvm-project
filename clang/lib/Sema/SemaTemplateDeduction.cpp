@@ -2141,11 +2141,9 @@ static Sema::TemplateDeductionResult DeduceTemplateArgumentsByTypeMatch(
     //
     //     T __capability
     case Type::DependentPointer: {
-      const DependentPointerType *PointerParam =
-          cast<DependentPointerType>(Param);
+      const auto *PointerParam = cast<DependentPointerType>(P);
 
-      if (const DependentPointerType *PointerArg =
-              dyn_cast<DependentPointerType>(Arg)) {
+      if (const auto *PointerArg = dyn_cast<DependentPointerType>(A)) {
         // Perform deduction on the pointer type.
         if (Sema::TemplateDeductionResult Result =
                 DeduceTemplateArgumentsByTypeMatch(
@@ -2161,7 +2159,7 @@ static Sema::TemplateDeductionResult DeduceTemplateArgumentsByTypeMatch(
         return Sema::TDK_Success;
       }
 
-      if (const PointerType *PointerArg = dyn_cast<PointerType>(Arg)) {
+      if (const auto *PointerArg = dyn_cast<PointerType>(A)) {
         QualType DefaultPointerArg =
             S.Context.getPointerType(PointerArg->getPointeeType());
 
@@ -2180,7 +2178,7 @@ static Sema::TemplateDeductionResult DeduceTemplateArgumentsByTypeMatch(
         return Sema::TDK_Success;
       }
 
-      if (const ReferenceType *ReferenceArg = dyn_cast<ReferenceType>(Arg)) {
+      if (const auto *ReferenceArg = dyn_cast<ReferenceType>(A)) {
         QualType DefaultReferenceArg;
         QualType PointeeType = ReferenceArg->getPointeeTypeAsWritten();
         if (isa<LValueReferenceType>(ReferenceArg)) {
