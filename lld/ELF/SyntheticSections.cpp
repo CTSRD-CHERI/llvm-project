@@ -1563,20 +1563,23 @@ DynamicSection<ELFT>::computeContents() {
     }
     if (in.cheriCapTable && in.cheriCapTable->isNeeded()) {
       addInSec(DT_MIPS_CHERI_CAPTABLE, in.cheriCapTable);
-      addSize(DT_MIPS_CHERI_CAPTABLESZ, in.cheriCapTable->getParent());
+      addInt(DT_MIPS_CHERI_CAPTABLESZ, in.cheriCapTable->getParent()->size);
     }
     if (in.cheriCapTableMapping && in.cheriCapTableMapping->isNeeded()) {
       addInSec(DT_MIPS_CHERI_CAPTABLE_MAPPING, in.cheriCapTableMapping);
-      addSize(DT_MIPS_CHERI_CAPTABLE_MAPPINGSZ, in.cheriCapTableMapping->getParent());
+      addInt(DT_MIPS_CHERI_CAPTABLE_MAPPINGSZ,
+             in.cheriCapTableMapping->getParent()->size);
     }
     if (InX<ELFT>::capRelocs && InX<ELFT>::capRelocs->isNeeded()) {
       addInSec(DT_MIPS_CHERI___CAPRELOCS, InX<ELFT>::capRelocs);
-      addSize(DT_MIPS_CHERI___CAPRELOCSSZ, InX<ELFT>::capRelocs->getParent());
+      addInt(DT_MIPS_CHERI___CAPRELOCSSZ,
+             InX<ELFT>::capRelocs->getParent()->size);
     }
   } else if (config->emachine == EM_RISCV) {
     if (InX<ELFT>::capRelocs && InX<ELFT>::capRelocs->isNeeded()) {
       addInSec(DT_RISCV_CHERI___CAPRELOCS, InX<ELFT>::capRelocs);
-      addSize(DT_RISCV_CHERI___CAPRELOCSSZ, InX<ELFT>::capRelocs->getParent());
+      addInt(DT_RISCV_CHERI___CAPRELOCSSZ,
+             InX<ELFT>::capRelocs->getParent()->size);
     }
   }
 
