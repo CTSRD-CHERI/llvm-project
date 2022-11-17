@@ -481,10 +481,12 @@ SDValue VETargetLowering::LowerFormalArguments(
       Offset += 4;
 
     int FI = MF.getFrameInfo().CreateFixedObject(ValSize, Offset, true);
-    InVals.push_back(
-        DAG.getLoad(VA.getValVT(), DL, Chain,
-                    DAG.getFrameIndex(FI, getPointerTy(MF.getDataLayout())),
-                    MachinePointerInfo::getFixedStack(MF, FI)));
+    InVals.push_back(DAG.getLoad(
+        VA.getValVT(), DL, Chain,
+        DAG.getFrameIndex(
+            FI, getPointerTy(MF.getDataLayout(),
+                             DAG.getDataLayout().getAllocaAddrSpace())),
+        MachinePointerInfo::getFixedStack(MF, FI)));
   }
 
   if (!IsVarArg)
@@ -535,7 +537,8 @@ SDValue VETargetLowering::LowerCall(TargetLowering::CallLoweringInfo &CLI,
   SelectionDAG &DAG = CLI.DAG;
   SDLoc DL = CLI.DL;
   SDValue Chain = CLI.Chain;
-  auto PtrVT = getPointerTy(DAG.getDataLayout());
+  auto PtrVT = getPointerTy(DAG.getDataLayout(),
+                            DAG.getDataLayout().getProgramAddressSpace());
 
   // VE target does not yet support tail call optimization.
   CLI.IsTailCall = false;
@@ -1377,7 +1380,8 @@ SDValue VETargetLowering::lowerSTORE(SDValue Op, SelectionDAG &DAG) const {
 SDValue VETargetLowering::lowerVASTART(SDValue Op, SelectionDAG &DAG) const {
   MachineFunction &MF = DAG.getMachineFunction();
   VEMachineFunctionInfo *FuncInfo = MF.getInfo<VEMachineFunctionInfo>();
-  auto PtrVT = getPointerTy(DAG.getDataLayout());
+  auto PtrVT = getPointerTy(DAG.getDataLayout(),
+                            DAG.getDataLayout().getAllocaAddrSpace());
 
   // Need frame address to find the address of VarArgsFrameIndex.
   MF.getFrameInfo().setFrameAddressIsTaken(true);
@@ -1538,7 +1542,8 @@ static SDValue lowerFRAMEADDR(SDValue Op, SelectionDAG &DAG,
                               const VESubtarget *Subtarget) {
   SDLoc DL(Op);
   MachineFunction &MF = DAG.getMachineFunction();
-  EVT PtrVT = TLI.getPointerTy(MF.getDataLayout());
+  EVT PtrVT = TLI.getPointerTy(MF.getDataLayout(),
+                               DAG.getDataLayout().getAllocaAddrSpace());
 
   MachineFrameInfo &MFI = MF.getFrameInfo();
   MFI.setFrameAddressIsTaken(true);
