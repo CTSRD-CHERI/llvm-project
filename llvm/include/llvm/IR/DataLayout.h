@@ -92,15 +92,15 @@ struct LayoutAlignElem {
 struct PointerAlignElem {
   Align ABIAlign;
   Align PrefAlign;
-  uint32_t TypeByteWidth;
+  uint32_t TypeBitWidth;
   uint32_t AddressSpace;
-  uint32_t IndexWidth;
+  uint32_t IndexBitWidth;
   bool IsFatPointer;
 
   /// Initializer
-  static PointerAlignElem get(uint32_t AddressSpace, Align ABIAlign,
-                              Align PrefAlign, uint32_t TypeByteWidth,
-                              uint32_t IndexWidth, bool IsFatPointer);
+  static PointerAlignElem getInBits(uint32_t AddressSpace, Align ABIAlign,
+                                    Align PrefAlign, uint32_t TypeBitWidth,
+                                    uint32_t IndexBitWidth, bool IsFatPointer);
 
   bool operator==(const PointerAlignElem &rhs) const;
 };
@@ -182,9 +182,9 @@ private:
 
   /// Attempts to set the alignment of a pointer in the given address space.
   /// Returns an error description on failure.
-  Error setPointerAlignment(uint32_t AddrSpace, Align ABIAlign, Align PrefAlign,
-                            uint32_t TypeByteWidth, uint32_t IndexWidth,
-                            bool IsFatPointer);
+  Error setPointerAlignmentInBits(uint32_t AddrSpace, Align ABIAlign,
+                                  Align PrefAlign, uint32_t TypeBitWidth,
+                                  uint32_t IndexBitWidth, bool IsFatPointer);
 
   /// Internal helper to get alignment for integer of given bitwidth.
   Align getIntegerAlignment(uint32_t BitWidth, bool abi_or_pref) const;
@@ -409,7 +409,8 @@ public:
     return getPointerAddrSizeInBits(Ty->getPointerAddressSpace());
   }
 
-  /// Layout pointer size
+  /// Layout pointer size in bytes, rounded up to a whole
+  /// number of bytes.
   /// FIXME: The defaults need to be removed once all of
   /// the backends/clients are updated.
   unsigned getPointerSize(LLVM_DEFAULT_AS_PARAM(AS)) const;
@@ -417,7 +418,8 @@ public:
   /// Returns the maximum index size over all address spaces.
   unsigned getMaxIndexSize() const;
 
-  // Index size used for address calculation.
+  // Index size in bytes used for address calculation,
+  /// rounded up to a whole number of bytes.
   unsigned getIndexSize(unsigned AS) const;
 
   /// Return the address spaces containing non-integral pointers.  Pointers in
@@ -444,7 +446,7 @@ public:
   /// FIXME: The defaults need to be removed once all of
   /// the backends/clients are updated.
   unsigned getPointerSizeInBits(LLVM_DEFAULT_AS_PARAM(AS)) const {
-    return getPointerSize(AS) * 8;
+    return getPointerAlignElem(AS).TypeBitWidth;
   }
 
   /// Returns the maximum index size over all address spaces.
@@ -454,7 +456,7 @@ public:
 
   /// Size in bits of index used for address calculation in getelementptr.
   unsigned getIndexSizeInBits(unsigned AS) const {
-    return getIndexSize(AS) * 8;
+    return getPointerAlignElem(AS).IndexBitWidth;
   }
 
   /// Layout pointer size, in bits, based on the type.  If this function is
@@ -513,7 +515,7 @@ public:
   /// For example, returns 5 for i36 and 10 for x86_fp80.
   TypeSize getTypeStoreSize(Type *Ty) const {
     TypeSize BaseSize = getTypeSizeInBits(Ty);
-    return { (BaseSize.getKnownMinSize() + 7) / 8, BaseSize.isScalable() };
+    return {divideCeil(BaseSize.getKnownMinSize(), 8), BaseSize.isScalable()};
   }
 
   /// Returns the maximum number of bits that may be overwritten by
