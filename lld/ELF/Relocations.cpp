@@ -842,10 +842,10 @@ private:
 };
 } // namespace
 
-static void addRelativeReloc(InputSectionBase *isec, uint64_t offsetInSec,
+static void addRelativeReloc(InputSectionBase &isec, uint64_t offsetInSec,
                              Symbol &sym, int64_t addend, RelExpr expr,
                              RelType type) {
-  Partition &part = isec->getPartition();
+  Partition &part = isec.getPartition();
 
   // Add a relative relocation. If relrDyn section is enabled, and the
   // relocation offset is guaranteed to be even, add the relocation to
@@ -853,9 +853,9 @@ static void addRelativeReloc(InputSectionBase *isec, uint64_t offsetInSec,
   // relrDyn sections don't support odd offsets. Also, relrDyn sections
   // don't store the addend values, so we must write it to the relocated
   // address.
-  if (part.relrDyn && isec->alignment >= 2 && offsetInSec % 2 == 0) {
-    isec->relocations.push_back({expr, type, offsetInSec, addend, &sym});
-    part.relrDyn->relocs.push_back({isec, offsetInSec});
+  if (part.relrDyn && isec.alignment >= 2 && offsetInSec % 2 == 0) {
+    isec.relocations.push_back({expr, type, offsetInSec, addend, &sym});
+    part.relrDyn->relocs.push_back({&isec, offsetInSec});
     return;
   }
   part.relaDyn->addRelativeReloc(target->relativeRel, isec, offsetInSec, sym,
@@ -863,22 +863,22 @@ static void addRelativeReloc(InputSectionBase *isec, uint64_t offsetInSec,
 }
 
 template <class PltSection, class GotPltSection>
-static void addPltEntry(PltSection *plt, GotPltSection *gotPlt,
-                        RelocationBaseSection *rel, RelType type, Symbol &sym) {
-  plt->addEntry(sym);
+static void addPltEntry(PltSection &plt, GotPltSection &gotPlt,
+                        RelocationBaseSection &rel, RelType type, Symbol &sym) {
+  plt.addEntry(sym);
   if (config->isCheriAbi) {
     // TODO: More normal .got.plt rather than piggy-backing on .captable. We
     // pass R_CHERI_CAPABILITY_TABLE_INDEX rather than the more obvious
     // R_CHERI_CAPABILITY_TABLE_INDEX_CALL to force dynamic relocations into
     // .rela.dyn rather than .rela.plt so no rtld changes are needed, as the
     // latter doesn't really achieve anything without lazy binding.
-    in.cheriCapTable->addEntry(sym, R_CHERI_CAPABILITY_TABLE_INDEX, plt, 0);
+    in.cheriCapTable->addEntry(sym, R_CHERI_CAPABILITY_TABLE_INDEX, &plt, 0);
   } else {
-    gotPlt->addEntry(sym);
-    rel->addReloc({type, gotPlt, sym.getGotPltOffset(),
-                   sym.isPreemptible ? DynamicReloc::AgainstSymbol
-                                     : DynamicReloc::AddendOnlyWithTargetVA,
-                   sym, 0, R_ABS});
+    gotPlt.addEntry(sym);
+    rel.addReloc({type, &gotPlt, sym.getGotPltOffset(),
+                  sym.isPreemptible ? DynamicReloc::AgainstSymbol
+                                    : DynamicReloc::AddendOnlyWithTargetVA,
+                  sym, 0, R_ABS});
   }
 }
 
@@ -898,7 +898,7 @@ static void addGotEntry(Symbol &sym) {
   if (!config->isPic || isAbsolute(sym))
     in.got->relocations.push_back({R_ABS, target->symbolicRel, off, 0, &sym});
   else
-    addRelativeReloc(in.got, off, sym, 0, R_ABS, target->symbolicRel);
+    addRelativeReloc(*in.got, off, sym, 0, R_ABS, target->symbolicRel);
 }
 
 static void addTpOffsetGotEntry(Symbol &sym) {
@@ -909,7 +909,7 @@ static void addTpOffsetGotEntry(Symbol &sym) {
     return;
   }
   mainPart->relaDyn->addAddendOnlyRelocIfNonPreemptible(
-      target->tlsGotRel, in.got, off, sym, target->symbolicRel);
+      target->tlsGotRel, *in.got, off, sym, target->symbolicRel);
 }
 
 // Return true if we can define a symbol in the executable that
@@ -1068,7 +1068,7 @@ static void processRelocAux(InputSectionBase &sec, RelExpr expr, RelType type,
   if (canWrite) {
     RelType rel = target->getDynRel(type);
     if (expr == R_GOT || (rel == target->symbolicRel && !sym.isPreemptible)) {
-      addRelativeReloc(&sec, offset, sym, addend, expr, type);
+      addRelativeReloc(sec, offset, sym, addend, expr, type);
       return;
     } else if (rel != 0) {
       if (config->emachine == EM_MIPS && rel == target->symbolicRel)
@@ -1225,7 +1225,7 @@ handleTlsRelocation(RelType type, Symbol &sym, InputSectionBase &c,
     if (in.got->addDynTlsEntry(sym)) {
       uint64_t off = in.got->getGlobalDynOffset(sym);
       mainPart->relaDyn->addAddendOnlyRelocIfNonPreemptible(
-          target->tlsDescRel, in.got, off, sym, target->tlsDescRel);
+          target->tlsDescRel, *in.got, off, sym, target->tlsDescRel);
     }
     if (expr != R_TLSDESC_CALL)
       c.relocations.push_back({expr, type, offset, addend, &sym});
@@ -1369,7 +1369,7 @@ handleTlsRelocation(RelType type, Symbol &sym, InputSectionBase &c,
         addTpOffsetGotEntry(sym);
       // R_GOT needs a relative relocation for PIC on i386 and Hexagon.
       if (expr == R_GOT && config->isPic && !target->usesOnlyLowPageBits(type))
-        addRelativeReloc(&c, offset, sym, addend, expr, type);
+        addRelativeReloc(c, offset, sym, addend, expr, type);
       else
         c.relocations.push_back({expr, type, offset, addend, &sym});
     }
@@ -1673,7 +1673,7 @@ static bool handleNonPreemptibleIfunc(Symbol &sym) {
   // may alter section/value, so create a copy of the symbol to make
   // section/value fixed.
   auto *directSym = makeDefined(cast<Defined>(sym));
-  addPltEntry(in.iplt, in.igotPlt, in.relaIplt, target->iRelativeRel,
+  addPltEntry(*in.iplt, *in.igotPlt, *in.relaIplt, target->iRelativeRel,
               *directSym);
   sym.pltIndex = directSym->pltIndex;
 
@@ -1703,7 +1703,7 @@ void elf::postScanRelocations() {
     if (sym.needsGot)
       addGotEntry(sym);
     if (sym.needsPlt)
-      addPltEntry(in.plt, in.gotPlt, in.relaPlt, target->pltRel, sym);
+      addPltEntry(*in.plt, *in.gotPlt, *in.relaPlt, target->pltRel, sym);
     if (sym.needsCopy) {
       if (sym.isObject()) {
         addCopyRelSymbol(cast<SharedSymbol>(sym));
@@ -1721,7 +1721,7 @@ void elf::postScanRelocations() {
             // PPC32 canonical PLT entries are at the beginning of .glink
             cast<Defined>(sym).value = in.plt->headerSize;
             in.plt->headerSize += 16;
-            cast<PPC32GlinkSection>(in.plt)->canonical_plts.push_back(&sym);
+            cast<PPC32GlinkSection>(*in.plt).canonical_plts.push_back(&sym);
           }
         }
       }
@@ -2247,7 +2247,7 @@ void elf::hexagonTLSSymbolUpdate(ArrayRef<OutputSection *> outputSections) {
           for (Relocation &rel : isec->relocations)
             if (rel.sym->type == llvm::ELF::STT_TLS && rel.expr == R_PLT_PC) {
               if (needEntry) {
-                addPltEntry(in.plt, in.gotPlt, in.relaPlt, target->pltRel,
+                addPltEntry(*in.plt, *in.gotPlt, *in.relaPlt, target->pltRel,
                             *sym);
                 needEntry = false;
               }

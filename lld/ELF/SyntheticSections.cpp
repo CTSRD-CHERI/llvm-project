@@ -1334,8 +1334,8 @@ DynamicSection<ELFT>::computeContents() {
   auto addInt = [&](int32_t tag, uint64_t val) {
     entries.emplace_back(tag, val);
   };
-  auto addInSec = [&](int32_t tag, const InputSection *sec) {
-    entries.emplace_back(tag, sec->getVA());
+  auto addInSec = [&](int32_t tag, const InputSection &sec) {
+    entries.emplace_back(tag, sec.getVA());
   };
 
   for (StringRef s : config->filterList)
@@ -1411,7 +1411,7 @@ DynamicSection<ELFT>::computeContents() {
   if (part.relaDyn->isNeeded() ||
       (in.relaIplt->isNeeded() &&
        part.relaDyn->getParent() == in.relaIplt->getParent())) {
-    addInSec(part.relaDyn->dynamicTag, part.relaDyn);
+    addInSec(part.relaDyn->dynamicTag, *part.relaDyn);
     entries.emplace_back(part.relaDyn->sizeDynamicTag, addRelaSz(part.relaDyn));
 
     bool isRela = config->isRela;
@@ -1429,7 +1429,7 @@ DynamicSection<ELFT>::computeContents() {
   }
   if (part.relrDyn && !part.relrDyn->relocs.empty()) {
     addInSec(config->useAndroidRelrTags ? DT_ANDROID_RELR : DT_RELR,
-             part.relrDyn);
+             *part.relrDyn);
     addInt(config->useAndroidRelrTags ? DT_ANDROID_RELRSZ : DT_RELRSZ,
            part.relrDyn->getParent()->size);
     addInt(config->useAndroidRelrTags ? DT_ANDROID_RELRENT : DT_RELRENT,
@@ -1442,14 +1442,14 @@ DynamicSection<ELFT>::computeContents() {
   // case, so here we always use relaPlt as marker for the beginning of
   // .rel[a].plt section.
   if (isMain && (in.relaPlt->isNeeded() || in.relaIplt->isNeeded())) {
-    addInSec(DT_JMPREL, in.relaPlt);
+    addInSec(DT_JMPREL, *in.relaPlt);
     entries.emplace_back(DT_PLTRELSZ, addPltRelSz());
     switch (config->emachine) {
     case EM_MIPS:
-      addInSec(DT_MIPS_PLTGOT, in.gotPlt);
+      addInSec(DT_MIPS_PLTGOT, *in.gotPlt);
       break;
     case EM_SPARCV9:
-      addInSec(DT_PLTGOT, in.plt);
+      addInSec(DT_PLTGOT, *in.plt);
       break;
     case EM_AARCH64:
       if (llvm::find_if(in.relaPlt->relocs, [](const DynamicReloc &r) {
@@ -1459,7 +1459,7 @@ DynamicSection<ELFT>::computeContents() {
         addInt(DT_AARCH64_VARIANT_PCS, 0);
       LLVM_FALLTHROUGH;
     default:
-      addInSec(DT_PLTGOT, in.gotPlt);
+      addInSec(DT_PLTGOT, *in.gotPlt);
       break;
     }
     addInt(DT_PLTREL, config->isRela ? DT_RELA : DT_REL);
@@ -1472,16 +1472,16 @@ DynamicSection<ELFT>::computeContents() {
       addInt(DT_AARCH64_PAC_PLT, 0);
   }
 
-  addInSec(DT_SYMTAB, part.dynSymTab);
+  addInSec(DT_SYMTAB, *part.dynSymTab);
   addInt(DT_SYMENT, sizeof(Elf_Sym));
-  addInSec(DT_STRTAB, part.dynStrTab);
+  addInSec(DT_STRTAB, *part.dynStrTab);
   addInt(DT_STRSZ, part.dynStrTab->getSize());
   if (!config->zText)
     addInt(DT_TEXTREL, 0);
   if (part.gnuHashTab)
-    addInSec(DT_GNU_HASH, part.gnuHashTab);
+    addInSec(DT_GNU_HASH, *part.gnuHashTab);
   if (part.hashTab)
-    addInSec(DT_HASH, part.hashTab);
+    addInSec(DT_HASH, *part.hashTab);
 
   if (isMain) {
     if (Out::preinitArray) {
@@ -1506,13 +1506,13 @@ DynamicSection<ELFT>::computeContents() {
   }
 
   if (part.verSym && part.verSym->isNeeded())
-    addInSec(DT_VERSYM, part.verSym);
+    addInSec(DT_VERSYM, *part.verSym);
   if (part.verDef && part.verDef->isLive()) {
-    addInSec(DT_VERDEF, part.verDef);
+    addInSec(DT_VERDEF, *part.verDef);
     addInt(DT_VERDEFNUM, getVerDefNum());
   }
   if (part.verNeed && part.verNeed->isNeeded()) {
-    addInSec(DT_VERNEED, part.verNeed);
+    addInSec(DT_VERNEED, *part.verNeed);
     unsigned needNum = 0;
     for (SharedFile *f : sharedFiles)
       if (!f->vernauxs.empty())
@@ -1531,10 +1531,10 @@ DynamicSection<ELFT>::computeContents() {
       addInt(DT_MIPS_GOTSYM, b->dynsymIndex);
     else
       addInt(DT_MIPS_GOTSYM, part.dynSymTab->getNumSymbols());
-    addInSec(DT_PLTGOT, in.mipsGot);
+    addInSec(DT_PLTGOT, *in.mipsGot);
     if (in.mipsRldMap) {
       if (!config->pie && !config->shared)
-        addInSec(DT_MIPS_RLD_MAP, in.mipsRldMap);
+        addInSec(DT_MIPS_RLD_MAP, *in.mipsRldMap);
       // Store the offset to the .rld_map section
       // relative to the address of the tag.
       addInt(DT_MIPS_RLD_MAP_REL,
@@ -1561,22 +1561,22 @@ DynamicSection<ELFT>::computeContents() {
         checkMipsShlibCompatible(f, f->cheriFlags, targetCheriFlags);
     }
     if (in.cheriCapTable && in.cheriCapTable->isNeeded()) {
-      addInSec(DT_MIPS_CHERI_CAPTABLE, in.cheriCapTable);
+      addInSec(DT_MIPS_CHERI_CAPTABLE, *in.cheriCapTable);
       addInt(DT_MIPS_CHERI_CAPTABLESZ, in.cheriCapTable->getParent()->size);
     }
     if (in.cheriCapTableMapping && in.cheriCapTableMapping->isNeeded()) {
-      addInSec(DT_MIPS_CHERI_CAPTABLE_MAPPING, in.cheriCapTableMapping);
+      addInSec(DT_MIPS_CHERI_CAPTABLE_MAPPING, *in.cheriCapTableMapping);
       addInt(DT_MIPS_CHERI_CAPTABLE_MAPPINGSZ,
              in.cheriCapTableMapping->getParent()->size);
     }
     if (InX<ELFT>::capRelocs && InX<ELFT>::capRelocs->isNeeded()) {
-      addInSec(DT_MIPS_CHERI___CAPRELOCS, InX<ELFT>::capRelocs);
+      addInSec(DT_MIPS_CHERI___CAPRELOCS, *InX<ELFT>::capRelocs);
       addInt(DT_MIPS_CHERI___CAPRELOCSSZ,
              InX<ELFT>::capRelocs->getParent()->size);
     }
   } else if (config->emachine == EM_RISCV) {
     if (InX<ELFT>::capRelocs && InX<ELFT>::capRelocs->isNeeded()) {
-      addInSec(DT_RISCV_CHERI___CAPRELOCS, InX<ELFT>::capRelocs);
+      addInSec(DT_RISCV_CHERI___CAPRELOCS, *InX<ELFT>::capRelocs);
       addInt(DT_RISCV_CHERI___CAPRELOCSSZ,
              InX<ELFT>::capRelocs->getParent()->size);
     }
@@ -1585,7 +1585,7 @@ DynamicSection<ELFT>::computeContents() {
   // DT_PPC_GOT indicates to glibc Secure PLT is used. If DT_PPC_GOT is absent,
   // glibc assumes the old-style BSS PLT layout which we don't support.
   if (config->emachine == EM_PPC)
-    addInSec(DT_PPC_GOT, in.got);
+    addInSec(DT_PPC_GOT, *in.got);
 
   // Glink dynamic tag is required by the V2 abi if the plt section isn't empty.
   if (config->emachine == EM_PPC64 && in.plt->isNeeded()) {
@@ -1668,7 +1668,7 @@ void RelocationBaseSection::addSymbolReloc(RelType dynType,
 }
 
 void RelocationBaseSection::addRelativeReloc(
-    RelType dynType, InputSectionBase *inputSec, uint64_t offsetInSec,
+    RelType dynType, InputSectionBase &inputSec, uint64_t offsetInSec,
     Symbol &sym, int64_t addend, RelType addendRelType, RelExpr expr) {
   // This function should only be called for non-preemptible symbols or
   // RelExpr values that refer to an address inside the output file (e.g. the
@@ -1676,19 +1676,19 @@ void RelocationBaseSection::addRelativeReloc(
   assert((!sym.isPreemptible || expr == R_GOT) &&
          "cannot add relative relocation against preemptible symbol");
   assert(expr != R_ADDEND && "expected non-addend relocation expression");
-  addReloc(DynamicReloc::AddendOnlyWithTargetVA, dynType, inputSec, offsetInSec,
-           sym, addend, expr, addendRelType);
+  addReloc(DynamicReloc::AddendOnlyWithTargetVA, dynType, &inputSec,
+           offsetInSec, sym, addend, expr, addendRelType);
 }
 
 void RelocationBaseSection::addAddendOnlyRelocIfNonPreemptible(
-    RelType dynType, InputSectionBase *isec, uint64_t offsetInSec, Symbol &sym,
+    RelType dynType, InputSectionBase &isec, uint64_t offsetInSec, Symbol &sym,
     RelType addendRelType) {
   // No need to write an addend to the section for preemptible symbols.
   if (sym.isPreemptible)
-    addReloc({dynType, isec, offsetInSec, DynamicReloc::AgainstSymbol, sym, 0,
+    addReloc({dynType, &isec, offsetInSec, DynamicReloc::AgainstSymbol, sym, 0,
               R_ABS});
   else
-    addReloc(DynamicReloc::AddendOnlyWithTargetVA, dynType, isec, offsetInSec,
+    addReloc(DynamicReloc::AddendOnlyWithTargetVA, dynType, &isec, offsetInSec,
              sym, 0, R_ABS, addendRelType);
 }
 

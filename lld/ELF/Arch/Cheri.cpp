@@ -341,7 +341,7 @@ void CheriCapRelocsSection<ELFT>::addCapReloc(CheriCapRelocLocation loc,
       // relocation against the image base.
       relativeToLoadAddress = true;
       mainPart->relaDyn->addRelativeReloc(
-          elf::target->relativeRel, this, currentEntryOffset + fieldSize,
+          elf::target->relativeRel, *this, currentEntryOffset + fieldSize,
           *target.sym(), addend, lld::elf::target->symbolicRel, R_ABS);
     }
     assert((currentEntryOffset + fieldSize) < getSize());
@@ -943,7 +943,7 @@ void CheriCapTableSection::assignValuesAndAddCapTableSymbols() {
       this->relocations.push_back({R_TPREL, target->symbolicRel, offset, 0, s});
     else
       mainPart->relaDyn->addAddendOnlyRelocIfNonPreemptible(
-          target->tlsGotRel, this, offset, *s, target->symbolicRel);
+          target->tlsGotRel, *this, offset, *s, target->symbolicRel);
   }
 
   valuesAssigned = true;

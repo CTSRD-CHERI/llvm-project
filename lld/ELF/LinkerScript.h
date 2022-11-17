@@ -313,7 +313,7 @@ public:
   bool hasPhdrsCommands() { return !phdrsCommands.empty(); }
   bool isAether(const OutputSection *sec) const { return sec == aether; }
   uint64_t getDot() { return dot; }
-  void discard(InputSectionBase *s);
+  void discard(InputSectionBase &s);
 
   ExprValue getSymbolValue(StringRef name, const Twine &loc);
 
