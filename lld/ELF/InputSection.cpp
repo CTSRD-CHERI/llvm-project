@@ -299,7 +299,7 @@ std::string InputSectionBase::getLocation(uint64_t offset) const {
   std::string file = toString(getFile<ELFT>());
   if (Defined *d = getEnclosingFunction(offset))
     return file + ":(function " + toString(*d) + ": " + secAndOffset;
-  else if (Defined *d = getEnclosingObject<ELFT>(offset))
+  else if (Defined *d = getEnclosingObject(offset))
     return file + ":(object " + toString(*d) + ": " + secAndOffset + ")";
 
   return file + ":(" + secAndOffset;
@@ -1513,11 +1513,6 @@ template std::string InputSectionBase::getLocation<ELF32LE>(uint64_t) const;
 template std::string InputSectionBase::getLocation<ELF32BE>(uint64_t) const;
 template std::string InputSectionBase::getLocation<ELF64LE>(uint64_t) const;
 template std::string InputSectionBase::getLocation<ELF64BE>(uint64_t) const;
-
-template Defined *InputSectionBase::getEnclosingFunction<ELF32LE>(uint64_t Offset) const;
-template Defined *InputSectionBase::getEnclosingFunction<ELF32BE>(uint64_t Offset) const;
-template Defined *InputSectionBase::getEnclosingFunction<ELF64LE>(uint64_t Offset) const;
-template Defined *InputSectionBase::getEnclosingFunction<ELF64BE>(uint64_t Offset) const;
 
 template void InputSection::writeTo<ELF32LE>(uint8_t *);
 template void InputSection::writeTo<ELF32BE>(uint8_t *);
