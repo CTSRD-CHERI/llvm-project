@@ -642,8 +642,7 @@ RISCVTargetLowering::RISCVTargetLowering(const TargetMachine &TM,
 
       setOperationAction({ISD::ROTL, ISD::ROTR}, VT, Expand);
 
-      setOperationAction({ISD::CTTZ, ISD::CTLZ, ISD::CTPOP, ISD::BSWAP}, VT,
-                         Expand);
+      setOperationAction({ISD::CTTZ, ISD::CTLZ, ISD::CTPOP}, VT, Expand);
 
       setOperationAction(ISD::BSWAP, VT, Expand);
       setOperationAction(ISD::VP_BSWAP, VT, Expand);
