@@ -9978,6 +9978,33 @@ SDValue RISCVTargetLowering::PerformDAGCombine(SDNode *N,
       }
     }
 
+    // (select (x < 0), y, z)  -> x >> (XLEN - 1) & (y - z) + z
+    // (select (x >= 0), y, z) -> x >> (XLEN - 1) & (z - y) + y
+    if (!Subtarget.hasShortForwardBranchOpt() && isa<ConstantSDNode>(TrueV) &&
+        isa<ConstantSDNode>(FalseV) && isNullConstant(RHS) &&
+        (CCVal == ISD::CondCode::SETLT || CCVal == ISD::CondCode::SETGE)) {
+      if (CCVal == ISD::CondCode::SETGE)
+        std::swap(TrueV, FalseV);
+
+      int64_t TrueSImm = cast<ConstantSDNode>(TrueV)->getSExtValue();
+      int64_t FalseSImm = cast<ConstantSDNode>(FalseV)->getSExtValue();
+      // Only handle simm12, if it is not in this range, it can be considered as
+      // register.
+      if (isInt<12>(TrueSImm) && isInt<12>(FalseSImm) &&
+          isInt<12>(TrueSImm - FalseSImm)) {
+        SDValue SRA =
+            DAG.getNode(ISD::SRA, DL, VT, LHS,
+                        DAG.getConstant(Subtarget.getXLen() - 1, DL, VT));
+        SDValue AND =
+            DAG.getNode(ISD::AND, DL, VT, SRA,
+                        DAG.getConstant(TrueSImm - FalseSImm, DL, VT));
+        return DAG.getNode(ISD::ADD, DL, VT, AND, FalseV);
+      }
+
+      if (CCVal == ISD::CondCode::SETGE)
+        std::swap(TrueV, FalseV);
+    }
+
     if (combine_CC(LHS, RHS, CC, DL, DAG, Subtarget)) {
       if (LHS.getValueType().isFatPointer()) {
         LHS = DAG.getTargetExtractSubreg(RISCV::sub_cap_addr, DL,
