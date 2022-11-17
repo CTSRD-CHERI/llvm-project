@@ -147,7 +147,7 @@ struct CheriAddressingModeFolder : public MachineFunctionPass {
         // If all uses of this variable have folded into immediate args, then
         // the dbg values are not particularly useful and can be deleted since
         // there is no register holding the target address.
-        I->eraseFromParentAndMarkDBGValuesForRemoval();
+        I->eraseFromParent();
       }
     }
   }
