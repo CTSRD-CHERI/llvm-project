@@ -304,6 +304,9 @@ bool RISCVTargetInfo::handleTargetFeatures(std::vector<std::string> &Features,
     HasCheri = true;
     CapSize = XLen * 2;
   }
+  if (ABI.empty())
+    ABI = llvm::RISCV::computeDefaultABIFromArch(*ISAInfo).str();
+
   setDataLayout();
 
   return true;
@@ -315,10 +318,6 @@ bool RISCVTargetInfo::validateTarget(DiagnosticsEngine &Diags) const {
       << "pure capability ABI requires xcheri extension to be specified";
     return false;
   }
-
-  if (ABI.empty())
-    ABI = llvm::RISCV::computeDefaultABIFromArch(*ISAInfo).str();
-
   return true;
 }
 
