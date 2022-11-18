@@ -1275,13 +1275,12 @@ template <class ELFT> struct InX {
   // XXXAR: needs to be templated because writing depends on endianess
   // TODO: use the non-templated version
   static std::unique_ptr<CheriCapRelocsSection<ELFT>> capRelocs;
-  static std::unique_ptr<MipsAbiFlagsSection<ELFT>> mipsAbiFlags;
+  static MipsAbiFlagsSection<ELFT> *mipsAbiFlags;
 };
 
 template <class ELFT>
 std::unique_ptr<CheriCapRelocsSection<ELFT>> InX<ELFT>::capRelocs;
-template <class ELFT>
-std::unique_ptr<MipsAbiFlagsSection<ELFT>> InX<ELFT>::mipsAbiFlags;
+template <class ELFT> MipsAbiFlagsSection<ELFT> *InX<ELFT>::mipsAbiFlags;
 } // namespace elf
 } // namespace lld
 

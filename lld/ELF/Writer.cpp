@@ -373,7 +373,7 @@ template <class ELFT> void elf::createSyntheticSections() {
       in.mipsRldMap = std::make_unique<MipsRldMapSection>();
       add(*in.mipsRldMap);
     }
-    InX<ELFT>::mipsAbiFlags.reset(MipsAbiFlagsSection<ELFT>::create());
+    InX<ELFT>::mipsAbiFlags = MipsAbiFlagsSection<ELFT>::create();
     if (InX<ELFT>::mipsAbiFlags)
       add(*InX<ELFT>::mipsAbiFlags);
     if (auto *sec = MipsOptionsSection<ELFT>::create())
