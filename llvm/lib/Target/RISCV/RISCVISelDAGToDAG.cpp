@@ -133,7 +133,8 @@ static SDNode *selectImmWithConstantPool(SelectionDAG *CurDAG, const SDLoc &DL,
   const RISCVTargetLowering *TLI = Subtarget.getTargetLowering();
   ConstantPoolSDNode *CP = cast<ConstantPoolSDNode>(CurDAG->getConstantPool(
       ConstantInt::get(EVT(VT).getTypeForEVT(*CurDAG->getContext()), Imm), VT));
-  SDValue Addr = TLI->getAddr(CP, *CurDAG);
+  SDValue Addr = TLI->getAddr(CP, VT, *CurDAG, /*IsLocal=*/true,
+                              /*CanDeriveFromPcc=*/true);
   SDValue Offset = CurDAG->getTargetConstant(0, DL, VT);
   // Since there is no data race, the chain can be the entry node.
   SDNode *Load = CurDAG->getMachineNode(RISCV::LD, DL, VT, Addr, Offset,
