@@ -8466,13 +8466,6 @@ void RISCVTargetLowering::computeKnownBitsForTargetNode(const SDValue Op,
       if (BitWidth >= 32)
         Known.Zero.setBitsFrom(31);
       break;
-    }
-    break;
-  }
-  case ISD::INTRINSIC_WO_CHAIN: {
-    switch (cast<ConstantSDNode>(Op.getOperand(0))->getZExtValue()) {
-    default:
-      break;
     case Intrinsic::cheri_round_representable_length: {
       KnownBits KnownLengthBits = DAG.computeKnownBits(Op.getOperand(1));
       uint64_t MinLength = KnownLengthBits.One.getZExtValue();
