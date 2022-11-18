@@ -190,8 +190,8 @@ bool RISCVRegisterInfo::eliminateFrameIndex(MachineBasicBlock::iterator II,
   MachineInstr &MI = *II;
   MachineFunction &MF = *MI.getParent()->getParent();
   MachineRegisterInfo &MRI = MF.getRegInfo();
-  const RISCVSubtarget &STI = MF.getSubtarget<RISCVSubtarget>();
-  const RISCVInstrInfo *TII = STI.getInstrInfo();
+  const RISCVSubtarget &ST = MF.getSubtarget<RISCVSubtarget>();
+  const RISCVInstrInfo *TII = ST.getInstrInfo();
   const TargetRegisterInfo *TRI = MF.getSubtarget().getRegisterInfo();
   DebugLoc DL = MI.getDebugLoc();
 
@@ -202,6 +202,19 @@ bool RISCVRegisterInfo::eliminateFrameIndex(MachineBasicBlock::iterator II,
   bool IsRVVSpill = RISCV::isRVVSpill(MI);
   if (!IsRVVSpill)
     Offset += StackOffset::getFixed(MI.getOperand(FIOperandNum + 1).getImm());
+
+  if (Offset.getScalable() &&
+      ST.getRealMinVLen() == ST.getRealMaxVLen()) {
+    // For an exact VLEN value, scalable offsets become constant and thus
+    // can be converted entirely into fixed offsets.
+    int64_t FixedValue = Offset.getFixed();
+    int64_t ScalableValue = Offset.getScalable();
+    assert(ScalableValue % 8 == 0 &&
+           "Scalable offset is not a multiple of a single vector size.");
+    int64_t NumOfVReg = ScalableValue / 8;
+    int64_t VLENB = ST.getRealMinVLen() / 8;
+    Offset = StackOffset::getFixed(FixedValue + NumOfVReg * VLENB);
+  }
 
   if (!isInt<32>(Offset.getFixed())) {
     report_fatal_error(
@@ -241,7 +254,7 @@ bool RISCVRegisterInfo::eliminateFrameIndex(MachineBasicBlock::iterator II,
     // The offset won't fit in an immediate, so use a scratch register instead
     // Modify Offset and FrameReg appropriately.
 
-    const bool isPureCapABI = RISCVABI::isCheriPureCapABI(STI.getTargetABI());
+    const bool isPureCapABI = RISCVABI::isCheriPureCapABI(ST.getTargetABI());
     unsigned Opc;
     unsigned ImmOpc;
     if (isPureCapABI) {
@@ -284,7 +297,7 @@ bool RISCVRegisterInfo::eliminateFrameIndex(MachineBasicBlock::iterator II,
 
   // Add in the scalable offset which has already been computed in DestReg.
   if (Offset.getScalable()) {
-    assert(!RISCVABI::isCheriPureCapABI(STI.getTargetABI()) &&
+    assert(!RISCVABI::isCheriPureCapABI(ST.getTargetABI()) &&
            "This code needs to be updated for purecap");
     assert(DestReg && "DestReg should be valid");
     BuildMI(MBB, II, DL, TII->get(ScalableAdjOpc), DestReg)
