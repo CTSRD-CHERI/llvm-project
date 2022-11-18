@@ -88,7 +88,7 @@ protected:
   int CapSize = -1;
   // Note: clang/Basic should not depend on llvm/IR headers so we have to
   // duplicate this information here.
-  bool isCheriAddrSpace(unsigned AS) const { return AS == 200; }
+  bool isCheriAddrSpace(LangAS AS) const { return AS == LangAS::cheri_capability; }
 
 public:
   MipsTargetInfo(const llvm::Triple &Triple, const TargetOptions &Opts)
@@ -557,15 +557,15 @@ public:
 
   uint64_t getPointerRangeForCHERICapability() const override { return 64; }
 
-  uint64_t getPointerWidthV(unsigned AddrSpace) const override {
+  uint64_t getPointerWidthV(LangAS AddrSpace) const override {
     return isCheriAddrSpace(AddrSpace) ? CapSize : PointerWidth;
   }
 
-  uint64_t getPointerRangeV(unsigned AddrSpace) const override {
+  uint64_t getPointerRangeV(LangAS AddrSpace) const override {
     return isCheriAddrSpace(AddrSpace) ? getPointerRangeForCHERICapability() : PointerWidth;
   }
 
-  uint64_t getPointerAlignV(unsigned AddrSpace) const override {
+  uint64_t getPointerAlignV(LangAS AddrSpace) const override {
     return isCheriAddrSpace(AddrSpace) ? CapSize : PointerAlign;
   }
 

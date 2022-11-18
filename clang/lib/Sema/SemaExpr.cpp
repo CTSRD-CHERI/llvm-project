@@ -16973,7 +16973,7 @@ ExprResult Sema::ActOnGNUNullExpr(SourceLocation TokenLoc) {
   // pointers on the target.
   QualType Ty;
   const auto& TI = Context.getTargetInfo();
-  unsigned pw = TI.getPointerWidth(0);
+  unsigned pw = TI.getPointerWidth(LangAS::Default);
   if (TI.areAllPointersCapabilities() && pw == TI.getIntCapWidth())
     Ty = Context.IntCapTy;
   else if (pw == TI.getIntWidth())

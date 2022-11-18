@@ -65,7 +65,7 @@ enum class LangAS : unsigned {
   FirstTargetAddressSpace,
 
   // TODO: should we add this:
-  // cheri_capability = FirstTargetAddressSpace + 200,
+  cheri_capability = FirstTargetAddressSpace + 200,
 };
 
 /// The type of a lookup table which maps from language-specific address spaces
