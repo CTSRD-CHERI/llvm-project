@@ -720,12 +720,6 @@ public:
 
   unsigned getAddressSpaceForType(QualType T);
 
-  unsigned getTargetAddressSpace(LangAS AddrSpace);
-
-  inline unsigned getTargetAddressSpace(Qualifiers Q) {
-    return getTargetAddressSpace(Q.getAddressSpace());
-  }
-
   CodeGenTypes &getTypes() { return Types; }
 
   CodeGenVTables &getVTables() { return VTables; }

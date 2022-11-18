@@ -92,7 +92,7 @@ Address CodeGenFunction::CreateTempAlloca(llvm::Type *Ty, CharUnits Align,
   // in C++ the auto variables are in the default address space. Therefore
   // cast alloca to the default address space when necessary.
   if (getASTAllocaAddressSpace() != LangAS::Default) {
-    auto DestAddrSpace = CGM.getTargetAddressSpace(LangAS::Default);
+    auto DestAddrSpace = getContext().getTargetAddressSpace(LangAS::Default);
     llvm::IRBuilderBase::InsertPointGuard IPG(Builder);
     // When ArraySize is nullptr, alloca is inserted at AllocaInsertPt,
     // otherwise alloca is inserted at the current insertion point of the
@@ -401,7 +401,7 @@ static Address createReferenceTemporary(CodeGenFunction &CGF,
             CGF.CGM.getModule(), Init->getType(), /*isConstant=*/true,
             llvm::GlobalValue::PrivateLinkage, Init, ".ref.tmp", nullptr,
             llvm::GlobalValue::NotThreadLocal,
-            CGF.CGM.getTargetAddressSpace(AS));
+            CGF.getContext().getTargetAddressSpace(AS));
         CharUnits alignment = CGF.getContext().getTypeAlignInChars(Ty);
         GV->setAlignment(alignment.getAsAlign());
         llvm::Constant *C = GV;
@@ -409,7 +409,7 @@ static Address createReferenceTemporary(CodeGenFunction &CGF,
           C = TCG.performAddrSpaceCast(
               CGF.CGM, GV, AS, LangAS::Default,
               GV->getValueType()->getPointerTo(
-                  CGF.CGM.getTargetAddressSpace(LangAS::Default)));
+                  CGF.getContext().getTargetAddressSpace(LangAS::Default)));
         // FIXME: Should we put the new global into a COMDAT?
         return Address(C, alignment);
       }

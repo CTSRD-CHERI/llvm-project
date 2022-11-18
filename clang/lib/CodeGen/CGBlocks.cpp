@@ -184,7 +184,7 @@ static llvm::Constant *buildBlockDescriptor(CodeGenModule &CGM,
   if (CGM.getLangOpts().OpenCL)
     i8p =
       llvm::Type::getInt8PtrTy(
-           CGM.getLLVMContext(), CGM.getTargetAddressSpace(LangAS::opencl_constant));
+           CGM.getLLVMContext(), C.getTargetAddressSpace(LangAS::opencl_constant));
   else
     i8p = CGM.VoidPtrTy;
 
@@ -248,7 +248,7 @@ static llvm::Constant *buildBlockDescriptor(CodeGenModule &CGM,
 
   unsigned AddrSpace = CGM.getTargetCodeGenInfo().getDefaultAS();
   if (C.getLangOpts().OpenCL)
-    AddrSpace = CGM.getTargetAddressSpace(LangAS::opencl_constant);
+    AddrSpace = C.getTargetAddressSpace(LangAS::opencl_constant);
 
   llvm::GlobalValue::LinkageTypes linkage;
   if (descName.empty()) {
@@ -1150,7 +1150,7 @@ llvm::Type *CodeGenModule::getBlockDescriptorType() {
   // Now form a pointer to that.
   unsigned AddrSpace = getTargetCodeGenInfo().getDefaultAS();
   if (getLangOpts().OpenCL)
-    AddrSpace = getTargetAddressSpace(LangAS::opencl_constant);
+    AddrSpace = getContext().getTargetAddressSpace(LangAS::opencl_constant);
   BlockDescriptorType = llvm::PointerType::get(BlockDescriptorType, AddrSpace);
   return BlockDescriptorType;
 }
@@ -1376,7 +1376,7 @@ static llvm::Constant *buildGlobalBlock(CodeGenModule &CGM,
 
   unsigned AddrSpace = 0;
   if (CGM.getContext().getLangOpts().OpenCL)
-    AddrSpace = CGM.getTargetAddressSpace(LangAS::opencl_global);
+    AddrSpace = CGM.getContext().getTargetAddressSpace(LangAS::opencl_global);
 
   llvm::GlobalVariable *literal = fields.finishAndCreateGlobal(
       "__block_literal_global", blockInfo.BlockAlign,
@@ -1443,10 +1443,9 @@ void CodeGenFunction::setBlockContextParameter(const ImplicitParamDecl *D,
   // directly as BlockPointer.
   BlockPointer = Builder.CreatePointerCast(
       arg,
-      BlockInfo->StructureType->getPointerTo(
-          getContext().getLangOpts().OpenCL
-              ? CGM.getTargetAddressSpace(LangAS::opencl_generic)
-              : CGM.getTargetCodeGenInfo().getDefaultAS()),
+      BlockInfo->StructureType->getPointerTo(getContext().getTargetAddressSpace(
+          getContext().getLangOpts().OpenCL ? LangAS::opencl_generic
+                                            : LangAS::Default)),
       "block");
 }
 

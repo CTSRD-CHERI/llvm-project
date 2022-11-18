@@ -257,7 +257,7 @@ llvm::Constant *CodeGenModule::getOrCreateStaticVarDecl(
 
   llvm::Type *LTy = getTypes().ConvertTypeForMem(Ty);
   LangAS AS = GetGlobalVarAddressSpace(&D);
-  unsigned TargetAS = getTargetAddressSpace(AS);
+  unsigned TargetAS = getContext().getTargetAddressSpace(AS);
 
   // OpenCL variables in local address space and CUDA shared
   // variables cannot have an initializer.
@@ -287,7 +287,7 @@ llvm::Constant *CodeGenModule::getOrCreateStaticVarDecl(
   if (AS != ExpectedAS) {
     Addr = getTargetCodeGenInfo().performAddrSpaceCast(
         *this, GV, AS, ExpectedAS,
-        LTy->getPointerTo(getTargetAddressSpace(ExpectedAS)));
+        LTy->getPointerTo(getContext().getTargetAddressSpace(ExpectedAS)));
   }
 
   setStaticLocalDeclAddress(&D, Addr);

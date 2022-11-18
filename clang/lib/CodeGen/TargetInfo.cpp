@@ -522,27 +522,11 @@ llvm::Value *TargetCodeGenInfo::performAddrSpaceCast(
       Src, DestTy, Src->hasName() ? Src->getName() + ".ascast" : "");
 }
 
-unsigned TargetCodeGenInfo::getAddressSpaceForType(QualType DestTy,
-                                                   ASTContext& Context) const {
-  if (DestTy->isCHERICapabilityType(Context)) {
-    return getCHERICapabilityAS();
-  }
-  return Context.getTargetAddressSpace(DestTy.getQualifiers());
-}
-
 llvm::Value *TargetCodeGenInfo::getPointerAddress(CodeGen::CodeGenFunction &CGF,
                                                   llvm::Value *V,
                                                   const Twine &Name) const {
   assert(isa<llvm::PointerType>(V->getType()));
   return CGF.Builder.CreatePtrToInt(V, CGF.PtrDiffTy);
-}
-
-bool TargetCodeGenInfo::canMarkAsNonNull(QualType DestTy, ASTContext& Context) const {
-  unsigned AS = getAddressSpaceForType(DestTy, Context);
-  if (AS == 0 || (Context.getTargetInfo().SupportsCapabilities() &&
-                  AS == getCHERICapabilityAS()))
-    return true;
-  return false;
 }
 
 llvm::Constant *
@@ -9761,9 +9745,10 @@ llvm::Constant *AMDGPUTargetCodeGenInfo::getNullPointer(
     QualType QT) const {
   if (CGM.getContext().getTargetNullPointerValue(QT) == 0)
     return llvm::ConstantPointerNull::get(PT);
-  // XXXAR: FIXME: remove const_cast here
+
+  auto &Ctx = CGM.getContext();
   auto NPT = llvm::PointerType::get(PT->getElementType(),
-      const_cast<CodeGen::CodeGenModule &>(CGM).getTargetAddressSpace(LangAS::opencl_generic));
+      Ctx.getTargetAddressSpace(LangAS::opencl_generic));
   return llvm::ConstantExpr::getAddrSpaceCast(
       llvm::ConstantPointerNull::get(NPT), PT);
 }
@@ -9775,7 +9760,7 @@ AMDGPUTargetCodeGenInfo::getGlobalVarAddressSpace(CodeGenModule &CGM,
          !(CGM.getLangOpts().CUDA && CGM.getLangOpts().CUDAIsDevice) &&
          "Address space agnostic languages only");
   LangAS DefaultGlobalAS = getLangASFromTargetAS(
-      CGM.getTargetAddressSpace(LangAS::opencl_global));
+      CGM.getContext().getTargetAddressSpace(LangAS::opencl_global));
   if (!D)
     return DefaultGlobalAS;
 

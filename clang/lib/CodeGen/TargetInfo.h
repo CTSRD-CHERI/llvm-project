@@ -340,9 +340,6 @@ public:
                                             LangAS DestAddr, llvm::Type *DestTy,
                                             bool IsNonNull = false) const;
 
-  virtual unsigned getAddressSpaceForType(QualType DestTy,
-                                          ASTContext& Context) const;
-  virtual bool canMarkAsNonNull(QualType DestTy, ASTContext& Context) const;
   /// Perform address space cast of a constant expression of pointer type.
   /// \param V is the LLVM constant to be casted to another address space.
   /// \param SrcAddr is the language address space of \p V.

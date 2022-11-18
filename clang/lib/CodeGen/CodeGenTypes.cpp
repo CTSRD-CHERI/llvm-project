@@ -647,7 +647,7 @@ llvm::Type *CodeGenTypes::ConvertType(QualType T) {
     // the underlying type
     unsigned AS = RTy->isCHERICapability()
                       ? CGM.getTargetCodeGenInfo().getCHERICapabilityAS()
-                      : CGM.getTargetAddressSpace(ETy.getQualifiers());
+                      : CGM.getTypes().getTargetAddressSpace(ETy);
     ResultType = llvm::PointerType::get(PointeeType, AS);
     break;
   }
@@ -957,4 +957,25 @@ bool CodeGenTypes::isZeroInitializable(QualType T) {
 
 bool CodeGenTypes::isZeroInitializable(const RecordDecl *RD) {
   return getCGRecordLayout(RD).isZeroInitializable();
+}
+
+unsigned CodeGenTypes::getTargetAddressSpace(QualType T) const {
+  if (T->isCHERICapabilityType(Context)) {
+    return CGM.getTargetCodeGenInfo().getCHERICapabilityAS();
+  }
+  // Return the address space for the type. If the type is a
+  // function type without an address space qualifier, the
+  // program address space is used. Otherwise, the target picks
+  // the best address space based on the type information
+  return T->isFunctionType() && !T.hasAddressSpace()
+             ? getDataLayout().getProgramAddressSpace()
+             : Context.getTargetAddressSpace(T.getQualifiers());
+}
+
+bool CodeGenTypes::canMarkAsNonNull(QualType DestTy) const {
+  unsigned AS = getTargetAddressSpace(DestTy);
+  if (AS == 0 || (Context.getTargetInfo().SupportsCapabilities() &&
+                  AS == CGM.getTargetCodeGenInfo().getCHERICapabilityAS()))
+    return true;
+  return false;
 }

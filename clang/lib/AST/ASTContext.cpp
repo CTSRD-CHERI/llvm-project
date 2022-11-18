@@ -2271,7 +2271,8 @@ TypeInfo ASTContext::getTypeInfoImpl(const Type *T) const {
       Width = Target->getCHERICapabilityWidth();
       Align = Target->getCHERICapabilityAlign();
     } else {
-      AS = getTargetAddressSpace(cast<BlockPointerType>(T)->getPointeeType());
+      AS = getTargetAddressSpace(
+          cast<BlockPointerType>(T)->getPointeeType().getAddressSpace());
       Width = Target->getPointerWidth(AS);
       Align = Target->getPointerAlign(AS);
     }
@@ -2285,7 +2286,8 @@ TypeInfo ASTContext::getTypeInfoImpl(const Type *T) const {
       Width = Target->getCHERICapabilityWidth();
       Align = Target->getCHERICapabilityAlign();
     } else {
-      AS = getTargetAddressSpace(cast<ReferenceType>(T)->getPointeeType());
+      AS = getTargetAddressSpace(
+          cast<ReferenceType>(T)->getPointeeType().getAddressSpace());
       Width = Target->getPointerWidth(AS);
       Align = Target->getPointerAlign(AS);
     }
@@ -2306,7 +2308,7 @@ TypeInfo ASTContext::getTypeInfoImpl(const Type *T) const {
       Width = Target->getCHERICapabilityWidth();
       Align = Target->getCHERICapabilityAlign();
     } else {
-      AS = getTargetAddressSpace(PointeeTy);
+      AS = getTargetAddressSpace(PointeeTy.getAddressSpace());
       Width = Target->getPointerWidth(AS);
       Align = Target->getPointerAlign(AS);
     }

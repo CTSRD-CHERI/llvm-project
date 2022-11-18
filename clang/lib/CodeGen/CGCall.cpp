@@ -2347,8 +2347,7 @@ void CodeGenModule::ConstructAttributeList(StringRef Name,
       if (!PTy->isIncompleteType() && PTy->isConstantSizeType())
         RetAttrs.addDereferenceableAttr(
             getMinimumObjectSize(PTy).getQuantity());
-      if (getTargetCodeGenInfo().canMarkAsNonNull(PTy, Context) &&
-          !CodeGenOpts.NullPointerIsValid)
+      if (getTypes().canMarkAsNonNull(PTy) && !CodeGenOpts.NullPointerIsValid)
         RetAttrs.addAttribute(llvm::Attribute::NonNull);
       if (PTy->isObjectType()) {
         llvm::Align Alignment =
@@ -2396,8 +2395,7 @@ void CodeGenModule::ConstructAttributeList(StringRef Name,
         FI.arg_begin()->type.castAs<PointerType>()->getPointeeType();
 
     if (!CodeGenOpts.NullPointerIsValid &&
-        getTargetCodeGenInfo().canMarkAsNonNull(FI.arg_begin()->type,
-                                                getContext())) {
+        getTypes().canMarkAsNonNull(FI.arg_begin()->type)) {
       Attrs.addAttribute(llvm::Attribute::NonNull);
       Attrs.addDereferenceableAttr(getMinimumObjectSize(ThisTy).getQuantity());
     } else {
@@ -2527,8 +2525,7 @@ void CodeGenModule::ConstructAttributeList(StringRef Name,
       if (!PTy->isIncompleteType() && PTy->isConstantSizeType())
         Attrs.addDereferenceableAttr(
             getMinimumObjectSize(PTy).getQuantity());
-      if (getTargetCodeGenInfo().canMarkAsNonNull(PTy, Context) &&
-          !CodeGenOpts.NullPointerIsValid)
+      if (getTypes().canMarkAsNonNull(PTy) && !CodeGenOpts.NullPointerIsValid)
         Attrs.addAttribute(llvm::Attribute::NonNull);
       if (PTy->isObjectType()) {
         llvm::Align Alignment =
@@ -2835,8 +2832,7 @@ void CodeGenFunction::EmitFunctionProlog(const CGFunctionInfo &FI,
               llvm::Align Alignment =
                   CGM.getNaturalTypeAlignment(ETy).getAsAlign();
               AI->addAttrs(llvm::AttrBuilder(getLLVMContext()).addAlignmentAttr(Alignment));
-              if (CGM.getTargetCodeGenInfo().canMarkAsNonNull(ETy,
-                                                              getContext()) &&
+              if (CGM.getTypes().canMarkAsNonNull(ETy) &&
                   !CGM.getCodeGenOpts().NullPointerIsValid)
                 AI->addAttr(llvm::Attribute::NonNull);
             }

@@ -35,7 +35,7 @@ llvm::Type *CGOpenCLRuntime::convertOpenCLSpecificType(const Type *T) {
          "Not an OpenCL specific type!");
 
   llvm::LLVMContext& Ctx = CGM.getLLVMContext();
-  uint32_t AddrSpc = CGM.getTargetAddressSpace(
+  uint32_t AddrSpc = CGM.getContext().getTargetAddressSpace(
       CGM.getContext().getOpenCLTypeAddrSpace(T));
   switch (cast<BuiltinType>(T)->getKind()) {
   default:
@@ -90,7 +90,7 @@ llvm::PointerType *CGOpenCLRuntime::getSamplerType(const Type *T) {
   if (!SamplerTy)
     SamplerTy = llvm::PointerType::get(llvm::StructType::create(
       CGM.getLLVMContext(), "opencl.sampler_t"),
-      CGM.getTargetAddressSpace(
+      CGM.getContext().getTargetAddressSpace(
           CGM.getContext().getOpenCLTypeAddrSpace(T)));
   return SamplerTy;
 }
@@ -119,7 +119,7 @@ llvm::PointerType *CGOpenCLRuntime::getGenericVoidPointerType() {
   assert(CGM.getLangOpts().OpenCL);
   return llvm::IntegerType::getInt8PtrTy(
       CGM.getLLVMContext(),
-      CGM.getTargetAddressSpace(LangAS::opencl_generic));
+      CGM.getContext().getTargetAddressSpace(LangAS::opencl_generic));
 }
 
 // Get the block literal from an expression derived from the block expression.

@@ -393,12 +393,7 @@ static bool checkAliasedGlobal(DiagnosticsEngine &Diags,
 }
 
 unsigned CodeGenModule::getAddressSpaceForType(QualType T) {
-    return getTargetCodeGenInfo().getAddressSpaceForType(T, getContext());
-}
-
-unsigned CodeGenModule::getTargetAddressSpace(LangAS AddrSpace) {
-  unsigned Result = getContext().getTargetAddressSpace(AddrSpace);
-  return Result;
+    return getTypes().getTargetAddressSpace(T);
 }
 
 void CodeGenModule::checkAliases() {
@@ -4692,7 +4687,7 @@ void CodeGenModule::EmitGlobalVarDefinition(const VarDecl *D,
   // from the type of the global (this happens with unions).
   if (!GV || GV->getValueType() != InitType ||
       GV->getType()->getAddressSpace() !=
-          getTargetAddressSpace(GetGlobalVarAddressSpace(D))) {
+          getContext().getTargetAddressSpace(GetGlobalVarAddressSpace(D))) {
 
     // Move the old entry aside so that we'll create a new one.
     Entry->setName(StringRef());
@@ -5832,7 +5827,7 @@ ConstantAddress CodeGenModule::GetAddrOfGlobalTemporary(
       Linkage = llvm::GlobalVariable::InternalLinkage;
     }
   }
-  auto TargetAS = getTargetAddressSpace(AddrSpace);
+  auto TargetAS = getContext().getTargetAddressSpace(AddrSpace);
   auto *GV = new llvm::GlobalVariable(
       getModule(), Type, Constant, Linkage, InitialValue, Name.c_str(),
       /*InsertBefore=*/nullptr, llvm::GlobalVariable::NotThreadLocal, TargetAS);
@@ -5847,7 +5842,8 @@ ConstantAddress CodeGenModule::GetAddrOfGlobalTemporary(
   if (AddrSpace != LangAS::Default)
     CV = getTargetCodeGenInfo().performAddrSpaceCast(
         *this, GV, AddrSpace, LangAS::Default,
-        Type->getPointerTo(getTargetAddressSpace(LangAS::Default)));
+        Type->getPointerTo(
+            getContext().getTargetAddressSpace(LangAS::Default)));
 
   // Update the map with the new temporary. If we created a placeholder above,
   // replace it with the new global now.
