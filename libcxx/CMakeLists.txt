@@ -970,14 +970,10 @@ if (LIBCXX_INCLUDE_BENCHMARKS)
 endif()
 
 if (LIBCXX_INCLUDE_TESTS)
-  if (LIBCXX_STANDALONE_BUILD)
-    include(AddLLVM) # for get_llvm_lit_path
-    get_llvm_lit_path(LIT_BASE_DIR LIT_FILE_NAME)
-    set(LLVM_EXTERNAL_LIT ${LIT_BASE_DIR}/${LIT_FILE_NAME} CACHE STRING "" FORCE)
-  endif()
   add_subdirectory(test)
   add_subdirectory(lib/abi)
   if (LIBCXX_STANDALONE_BUILD)
+    include(AddLLVM) # for get_llvm_lit_path
     # Make sure the llvm-lit script is generated into the bin directory, and
     # do it after adding all tests, since the generated script will only work
     # correctly discovered tests against test locations from the source tree
