@@ -17,7 +17,6 @@
 #include "LinkerScript.h"
 #include "Symbols.h"
 #include "SyntheticSections.h"
-#include "lld/Common/CommonLinkerContext.h"
 #include "lld/Common/ErrorHandler.h"
 #include "lld/Common/Memory.h"
 #include "lld/Common/Strings.h"
@@ -53,7 +52,7 @@ Defined *SymbolTable::ensureSymbolWillBeInDynsym(Symbol* original) {
   }
   auto localDef = cast<Defined>(original);
   Defined* newSym = cast<Defined>(symtab->addSymbol(Defined{localDef->file,
-      saver().save(uniqueName), llvm::ELF::STB_GLOBAL, llvm::ELF::STV_HIDDEN,
+      saver.save(uniqueName), llvm::ELF::STB_GLOBAL, llvm::ELF::STV_HIDDEN,
       localDef->type, localDef->value, localDef->size, localDef->section}));
 
   assert(newSym->isFunc() && "This should only be used for functions");
