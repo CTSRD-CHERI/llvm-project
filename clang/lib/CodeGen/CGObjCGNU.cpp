@@ -987,7 +987,7 @@ class CGObjCGNUstep2 : public CGObjCGNUstep {
 
     auto LiteralLength = SL->getLength();
 
-    if ((CGM.getTarget().getPointerWidth(0) == 64) &&
+    if ((CGM.getTarget().getPointerWidth(LangAS::Default) == 64) &&
         (LiteralLength < 9) && !isNonASCII) {
       // Tiny strings are only used on 64-bit platforms.  They store 8 7-bit
       // ASCII characters in the high 56 bits, followed by a 4-bit length and a
@@ -2193,8 +2193,8 @@ CGObjCGNU::CGObjCGNU(CodeGenModule &cgm, unsigned runtimeABIVersion,
   // XXXAR: I think this code want's an integer which has the same range as a
   // pointer and not the same width:
   // TODO: rename?
-  IntPtrTy = llvm::IntegerType::get(VMContext,
-     CGM.getTarget().getPointerRange(CGM.getTargetCodeGenInfo().getDefaultAS()));
+  IntPtrTy = llvm::IntegerType::get(
+      VMContext, CGM.getTarget().getPointerRange(LangAS::Default));
 
   // IntPtrTy = llvm::IntegerType::get(VMContext,
   //   CGM.getDataLayout().getPointerSizeInBits());
@@ -3324,8 +3324,7 @@ void CGObjCGNU::GenerateProtocolHolderCategory() {
 /// bitfield / with the 63rd bit set will be 1<<64.
 llvm::Constant *CGObjCGNU::MakeBitField(ArrayRef<bool> bits) {
   int bitCount = bits.size();
-  int ptrBits = CGM.getTarget().getPointerRange(
-      CGM.getTargetCodeGenInfo().getDefaultAS());
+  int ptrBits = CGM.getTarget().getPointerRange(LangAS::Default);
   if (bitCount < ptrBits) {
     uint64_t val = 1;
     for (int i=0 ; i<bitCount ; ++i) {

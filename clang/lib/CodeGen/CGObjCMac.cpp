@@ -2415,8 +2415,8 @@ void IvarLayoutBuilder::visitBlock(const CGBlockInfo &blockInfo) {
     Qualifiers::GC GCAttr = GetGCAttrTypeForType(CGM.getContext(), type);
 
     if (GCAttr == Qualifiers::Strong) {
-      assert(CGM.getContext().getTypeSize(type)
-                == CGM.getTarget().getPointerWidth(0));
+      assert(CGM.getContext().getTypeSize(type) ==
+             CGM.getTarget().getPointerWidth(LangAS::Default));
       IvarsInfo.push_back(IvarInfo(fieldOffset, /*size in words*/ 1));
     }
   }
@@ -2709,7 +2709,7 @@ llvm::Constant *CGObjCCommonMac::getBitmapBlockLayout(bool ComputeByrefLayout) {
   llvm::Constant *nullPtr = llvm::Constant::getNullValue(CGM.Int8PtrTy);
   if (RunSkipBlockVars.empty())
     return nullPtr;
-  unsigned WordSizeInBits = CGM.getTarget().getPointerWidth(0);
+  unsigned WordSizeInBits = CGM.getTarget().getPointerWidth(LangAS::Default);
   unsigned ByteSizeInBits = CGM.getTarget().getCharWidth();
   unsigned WordSizeInBytes = WordSizeInBits/ByteSizeInBits;
 
@@ -2895,7 +2895,7 @@ void CGObjCCommonMac::fillRunSkipBlockVars(CodeGenModule &CGM,
   RunSkipBlockVars.clear();
   bool hasUnion = false;
 
-  unsigned WordSizeInBits = CGM.getTarget().getPointerWidth(0);
+  unsigned WordSizeInBits = CGM.getTarget().getPointerWidth(LangAS::Default);
   unsigned ByteSizeInBits = CGM.getTarget().getCharWidth();
   unsigned WordSizeInBytes = WordSizeInBits/ByteSizeInBits;
 

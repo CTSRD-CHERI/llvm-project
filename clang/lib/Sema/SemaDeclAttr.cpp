@@ -4616,7 +4616,7 @@ static void parseModeAttrArg(Sema &S, StringRef Str, unsigned &DestWidth,
     break;
   case 7:
     if (Str == "pointer") {
-      DestWidth = S.Context.getTargetInfo().getPointerWidth(0);
+      DestWidth = S.Context.getTargetInfo().getPointerWidth(LangAS::Default);
       if (S.Context.getTargetInfo().areAllPointersCapabilities()) {
         IntegerMode = false;
         CapabilityMode = true;

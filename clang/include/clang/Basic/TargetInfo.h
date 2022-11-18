@@ -360,10 +360,11 @@ public:
   IntType getUIntMaxType() const {
     return getCorrespondingUnsignedType(IntMaxType);
   }
-  IntType getPtrDiffType(unsigned AddrSpace) const {
-    return AddrSpace == 0 ? PtrDiffType : getPtrDiffTypeV(AddrSpace);
+  IntType getPtrDiffType(LangAS AddrSpace) const {
+    return AddrSpace == LangAS::Default ? PtrDiffType
+                                        : getPtrDiffTypeV(AddrSpace);
   }
-  IntType getUnsignedPtrDiffType(unsigned AddrSpace) const {
+  IntType getUnsignedPtrDiffType(LangAS AddrSpace) const {
     return getCorrespondingUnsignedType(getPtrDiffType(AddrSpace));
   }
   IntType getIntPtrType() const { return IntPtrType; }
@@ -443,30 +444,26 @@ public:
 
   /// Return the width of pointers on this target, for the
   /// specified address space.
-  uint64_t getPointerWidth(unsigned AddrSpace) const {
-    if (AddrSpace == 0) {
-      if (areAllPointersCapabilities())
-        return getCHERICapabilityWidth();
-      return PointerWidth;
-    }
-    return getPointerWidthV(AddrSpace);
+  uint64_t getPointerWidth(LangAS AddrSpace) const {
+    if (AddrSpace == LangAS::Default && areAllPointersCapabilities())
+      return getCHERICapabilityWidth();
+    return AddrSpace == LangAS::Default ? PointerWidth
+                                        : getPointerWidthV(AddrSpace);
   }
+
   /// \brief Returns the integer range for the pointer.  For architectures
   /// where pointers are integers, this will be the same as the size.
-  uint64_t getPointerRange(unsigned AddrSpace) const {
-    if (AddrSpace == 0 && areAllPointersCapabilities()) {
+  uint64_t getPointerRange(LangAS AddrSpace) const {
+    if (AddrSpace == LangAS::Default && areAllPointersCapabilities())
       return getPointerRangeForCHERICapability();
-    }
-    // Eventually we may want to special case AS0.
     return getPointerRangeV(AddrSpace);
   }
-  uint64_t getPointerAlign(unsigned AddrSpace) const {
-    if (AddrSpace == 0) {
-      if (areAllPointersCapabilities())
-        return getCHERICapabilityAlign();
-      return PointerAlign;
-    }
-    return getPointerAlignV(AddrSpace);
+
+  uint64_t getPointerAlign(LangAS AddrSpace) const {
+    if (AddrSpace == LangAS::Default && areAllPointersCapabilities())
+      return getCHERICapabilityAlign();
+    return AddrSpace == LangAS::Default ? PointerAlign
+                                        : getPointerAlignV(AddrSpace);
   }
 
   /// Return the maximum width of pointers on this target.
@@ -639,7 +636,8 @@ public:
 
   /// Determine whether the __int128 type is supported on this target.
   virtual bool hasInt128Type() const {
-    return (getPointerRange(0) >= 64) || getTargetOpts().ForceEnableInt128;
+    return (getPointerRange(LangAS::Default) >= 64) ||
+           getTargetOpts().ForceEnableInt128;
   } // FIXME
 
   /// Determine whether the _BitInt type is supported on this target. This
@@ -868,7 +866,9 @@ public:
   unsigned getProgramAddressSpace() const { return ProgramAddrSpace; }
 
   // Return the size of unwind_word for this target.
-  virtual unsigned getUnwindWordWidth() const { return getPointerWidth(0); }
+  virtual unsigned getUnwindWordWidth() const {
+    return getPointerWidth(LangAS::Default);
+  }
 
   /// Return the "preferred" register width on this target.
   virtual unsigned getRegisterWidth() const {
@@ -1531,6 +1531,11 @@ public:
   }
 
   const LangASMap &getAddressSpaceMap() const { return *AddrSpaceMap; }
+  unsigned getTargetAddressSpace(LangAS AS) const {
+    if (isTargetAddressSpace(AS))
+      return toTargetAddressSpace(AS);
+    return getAddressSpaceMap()[(unsigned)AS];
+  }
 
   /// Map from the address space field in builtin description strings to the
   /// language address space.
@@ -1736,16 +1741,16 @@ public:
 protected:
   /// Copy type and layout related info.
   void copyAuxTarget(const TargetInfo *Aux);
-  virtual uint64_t getPointerWidthV(unsigned AddrSpace) const {
+  virtual uint64_t getPointerWidthV(LangAS AddrSpace) const {
     return PointerWidth;
   }
-  virtual uint64_t getPointerRangeV(unsigned AddrSpace) const {
+  virtual uint64_t getPointerRangeV(LangAS AddrSpace) const {
     return getPointerWidthV(AddrSpace);
   }
-  virtual uint64_t getPointerAlignV(unsigned AddrSpace) const {
+  virtual uint64_t getPointerAlignV(LangAS AddrSpace) const {
     return PointerAlign;
   }
-  virtual enum IntType getPtrDiffTypeV(unsigned AddrSpace) const {
+  virtual enum IntType getPtrDiffTypeV(LangAS AddrSpace) const {
     return PtrDiffType;
   }
   virtual ArrayRef<const char *> getGCCRegNames() const = 0;

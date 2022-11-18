@@ -140,16 +140,16 @@ public:
 
   uint64_t getCHERICapabilityAlign() const override { return CapSize; }
 
-  uint64_t getPointerWidthV(unsigned AddrSpace) const override {
-    return (AddrSpace == 200) ? CapSize : PointerWidth;
+  uint64_t getPointerWidthV(LangAS AddrSpace) const override {
+    return (AddrSpace == LangAS::cheri_capability) ? CapSize : PointerWidth;
   }
 
-  uint64_t getPointerRangeV(unsigned AddrSpace) const override {
-    return (AddrSpace == 200) ? getPointerRangeForCHERICapability() : PointerWidth;
+  uint64_t getPointerRangeV(LangAS AddrSpace) const override {
+    return (AddrSpace == LangAS::cheri_capability) ? getPointerRangeForCHERICapability() : PointerWidth;
   }
 
-  uint64_t getPointerAlignV(unsigned AddrSpace) const override {
-    return (AddrSpace == 200) ? CapSize : PointerAlign;
+  uint64_t getPointerAlignV(LangAS AddrSpace) const override {
+    return (AddrSpace == LangAS::cheri_capability) ? CapSize : PointerAlign;
   }
 
   bool SupportsCapabilities() const override { return HasCheri; }

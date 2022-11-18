@@ -64,8 +64,8 @@ enum class LangAS : unsigned {
   // specified by address space attributes __attribute__(address_space(n))).
   FirstTargetAddressSpace,
 
-  // TODO: should we add this:
-  // cheri_capability = FirstTargetAddressSpace + 200,
+  // Currently 200 is used for CHERI capabilities on all targets.
+  cheri_capability = FirstTargetAddressSpace + 200,
 };
 
 /// The type of a lookup table which maps from language-specific address spaces

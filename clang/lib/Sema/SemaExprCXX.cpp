@@ -2661,7 +2661,9 @@ bool Sema::FindAllocationFunctions(SourceLocation StartLoc, SourceRange Range,
   // tree? Or should the consumer just recalculate the value?
   // FIXME: Using a dummy value will interact poorly with attribute enable_if.
   IntegerLiteral Size(
-      Context, llvm::APInt::getZero(Context.getTargetInfo().getPointerRange(0)),
+      Context,
+      llvm::APInt::getZero(
+          Context.getTargetInfo().getPointerRange(LangAS::Default)),
       Context.getSizeType(), SourceLocation());
   AllocArgs.push_back(&Size);
 

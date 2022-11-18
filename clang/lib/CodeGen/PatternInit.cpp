@@ -51,7 +51,7 @@ llvm::Constant *clang::CodeGen::initializationPatternFor(CodeGenModule &CGM,
       // unavailable due to needing to return a constant. If we really wanted
       // to we could have an ugly hack to use a hidden global variable.
       unsigned PtrRange = CGM.getContext().getTargetInfo().getPointerRange(
-          PtrTy->getAddressSpace());
+          LangAS::cheri_capability);
       if (PtrRange > 64)
         llvm_unreachable("pattern initialization of unsupported pointer range");
 
@@ -64,8 +64,8 @@ llvm::Constant *clang::CodeGen::initializationPatternFor(CodeGenModule &CGM,
       llvm::Constant *I8Ptr = llvm::ConstantExpr::getGetElementPtr(I8Ty, NullPtr, Int);
       return llvm::ConstantExpr::getBitCast(I8Ptr, PtrTy);
     } else {
-      unsigned PtrWidth = CGM.getContext().getTargetInfo().getPointerWidth(
-          PtrTy->getAddressSpace());
+      unsigned PtrWidth =
+          CGM.getDataLayout().getPointerSizeInBits(PtrTy->getAddressSpace());
       if (PtrWidth > 64)
         llvm_unreachable("pattern initialization of unsupported pointer width");
       llvm::Type *IntTy = llvm::IntegerType::get(CGM.getLLVMContext(), PtrWidth);
