@@ -6431,7 +6431,7 @@ RValue CodeGenFunction::EmitCall(QualType CalleeType, const CGCallee &OrigCallee
     auto *Error = createBasicBlock("cheri_invoke_fail");
     Builder.CreateCondBr(IsZero, Continue, Error);
     llvm::FunctionType *FTy = llvm::FunctionType::get(VoidTy, IntTy, false);
-    llvm::AttrBuilder B;
+    llvm::AttrBuilder B(getLLVMContext());
     B.addAttribute(llvm::Attribute::NoReturn);
     llvm::FunctionCallee ErrorFn =
         CGM.CreateRuntimeFunction(FTy, "__cxa_cheri_sandbox_invoke_failure",
