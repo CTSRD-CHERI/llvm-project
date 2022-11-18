@@ -2795,14 +2795,9 @@ public:
                                              QualType typeDomain) const;
 
 private:
-  unsigned getTargetAddressSpace(QualType T) const {
-    return getTargetAddressSpace(T.getQualifiers());
-  }
-
+  unsigned getTargetAddressSpace(QualType T) const;
 public:
-  unsigned getTargetAddressSpace(Qualifiers Q) const {
-    return getTargetAddressSpace(Q.getAddressSpace());
-  }
+  unsigned getTargetAddressSpace(Qualifiers Q) const;
 
   unsigned getTargetAddressSpace(LangAS AS) const;
 

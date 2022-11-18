@@ -668,10 +668,7 @@ llvm::Type *CodeGenTypes::ConvertType(QualType T) {
     llvm::Type *PointeeType = ConvertTypeForMem(ETy);
     if (PointeeType->isVoidTy())
       PointeeType = llvm::Type::getInt8Ty(getLLVMContext());
-
-    unsigned AS = PointeeType->isFunctionTy()
-                      ? getDataLayout().getProgramAddressSpace()
-                      : CGM.getTargetAddressSpace(ETy.getQualifiers());
+    unsigned AS = CGM.getAddressSpaceForType(ETy);
     // XXXAR: If Pty is a capability, we have to use AS200
     if (PTy->isCHERICapability())
       AS = CGM.getTargetCodeGenInfo().getCHERICapabilityAS();
@@ -775,11 +772,16 @@ llvm::Type *CodeGenTypes::ConvertType(QualType T) {
     llvm::Type *PointeeType = CGM.getLangOpts().OpenCL
                                   ? CGM.getGenericBlockLiteralType()
                                   : ConvertTypeForMem(FTy);
-    // XXXAR: If Ty is capability, use AS200 otherwise the same as LangAS as the
-    // underlying type
-    unsigned AS = Ty->isCHERICapabilityType(CGM.getContext())
-                      ? CGM.getTargetCodeGenInfo().getCHERICapabilityAS()
-                      : CGM.getTargetAddressSpace(FTy.getQualifiers());
+    // Block pointers lower to function type. For function type,
+    // getTargetAddressSpace() returns default address space for
+    // function pointer i.e. program address space. Therefore, for block
+    // pointers, it is important to pass qualifiers when calling
+    // getTargetAddressSpace(), to ensure that we get the address space
+    // for data pointers and not function pointers.
+    unsigned AS = Context.getTargetAddressSpace(FTy.getQualifiers());
+   // XXXAR: If Pty is a capability, we have to use AS200
+   if (Ty->isCHERICapabilityType(Context))
+     AS = CGM.getTargetCodeGenInfo().getCHERICapabilityAS();
     ResultType = llvm::PointerType::get(PointeeType, AS);
     break;
   }
