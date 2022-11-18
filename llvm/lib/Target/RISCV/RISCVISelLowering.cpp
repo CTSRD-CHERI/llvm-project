@@ -10787,6 +10787,8 @@ bool RISCVTargetLowering::shouldConvertFpToSat(unsigned Op, EVT FPVT,
 }
 
 unsigned RISCVTargetLowering::getJumpTableEncoding() const {
+  if (RISCVABI::isCheriPureCapABI(Subtarget.getTargetABI()))
+    return MachineJumpTableInfo::EK_LabelDifference32;
   // If we are using the small code model, we can reduce size of jump table
   // entry to 4 bytes.
   if (Subtarget.is64Bit() && !isPositionIndependent() &&
@@ -10830,13 +10832,6 @@ bool RISCVTargetLowering::isJumpTableRelative() const {
     return TargetLowering::isJumpTableRelative();
 
   return true;
-}
-
-unsigned RISCVTargetLowering::getJumpTableEncoding() const {
-  if (!RISCVABI::isCheriPureCapABI(Subtarget.getTargetABI()))
-    return TargetLowering::getJumpTableEncoding();
-
-  return MachineJumpTableInfo::EK_LabelDifference32;
 }
 
 SDValue

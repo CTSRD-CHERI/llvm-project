@@ -562,8 +562,6 @@ public:
   SDValue BuildSDIVPow2(SDNode *N, const APInt &Divisor, SelectionDAG &DAG,
                         SmallVectorImpl<SDNode *> &Created) const override;
 
-  unsigned getJumpTableEncoding() const override;
-
   const MCExpr *LowerCustomJumpTableEntry(const MachineJumpTableInfo *MJTI,
                                           const MachineBasicBlock *MBB,
                                           unsigned uid,
