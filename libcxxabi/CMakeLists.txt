@@ -37,10 +37,6 @@ if (CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR OR LIBCXXABI_STANDALONE_B
   set(PACKAGE_STRING "${PACKAGE_NAME} ${PACKAGE_VERSION}")
   set(PACKAGE_BUGREPORT "llvm-bugs@lists.llvm.org")
 
-  # Add the CMake module path of libcxx so we can reuse HandleOutOfTreeLLVM.cmake
-  set(LIBCXXABI_LIBCXX_CMAKE_PATH "${LIBCXXABI_LIBCXX_PATH}/cmake/Modules")
-  list(APPEND CMAKE_MODULE_PATH "${LIBCXXABI_LIBCXX_CMAKE_PATH}")
-
   # In a standalone build, we don't have llvm to automatically generate the
   # llvm-lit script for us.  So we need to provide an explicit directory that
   # the configurator should write the script into.
@@ -48,10 +44,7 @@ if (CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR OR LIBCXXABI_STANDALONE_B
   set(LLVM_LIT_OUTPUT_DIR "${LIBCXXABI_BINARY_DIR}/bin")
 
   # Find the LLVM sources and simulate LLVM CMake options.
-  if (NOT DEFINED LLVM_PATH)
-    set(LLVM_PATH ${CMAKE_CURRENT_LIST_DIR}/../llvm CACHE PATH "" FORCE)
-  endif()
-  include(${LLVM_PATH}/cmake/modules/HandleStandaloneBuild.cmake)
+  include(HandleOutOfTreeLLVM)
 endif()
 
 if (LIBCXXABI_STANDALONE_BUILD)

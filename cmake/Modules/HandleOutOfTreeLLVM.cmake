@@ -1,4 +1,6 @@
-string(TOUPPER "${PROJECT_NAME}" _proj_upper)
+if (NOT DEFINED LLVM_PATH)
+  set(LLVM_PATH ${CMAKE_CURRENT_LIST_DIR}/../../llvm CACHE PATH "" FORCE)
+endif()
 
 if(NOT IS_DIRECTORY ${LLVM_PATH})
     message(FATAL_ERROR

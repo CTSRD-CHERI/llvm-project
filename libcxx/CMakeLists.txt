@@ -43,10 +43,7 @@ if (CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR OR LIBCXX_STANDALONE_BUIL
   set(LLVM_LIT_OUTPUT_DIR "${LIBCXX_BINARY_DIR}/bin")
 
   # Find the LLVM sources and simulate LLVM CMake options.
-  if (NOT DEFINED LLVM_PATH)
-    set(LLVM_PATH ${CMAKE_CURRENT_LIST_DIR}/../llvm CACHE PATH "" FORCE)
-  endif()
-  include(${LLVM_PATH}/cmake/modules/HandleStandaloneBuild.cmake)
+  include(HandleOutOfTreeLLVM)
 endif()
 
 if (LIBCXX_STANDALONE_BUILD)
