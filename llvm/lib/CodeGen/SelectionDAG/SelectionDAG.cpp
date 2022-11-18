@@ -4093,7 +4093,7 @@ unsigned SelectionDAG::ComputeNumSignBits(SDValue Op, const APInt &DemandedElts,
 
   case ISD::BITCAST: {
     if (VT.isScalableVector())
-      return 1;
+      break;
     SDValue N0 = Op.getOperand(0);
     EVT SrcVT = N0.getValueType();
     unsigned SrcBits = SrcVT.getScalarSizeInBits();
@@ -4152,7 +4152,7 @@ unsigned SelectionDAG::ComputeNumSignBits(SDValue Op, const APInt &DemandedElts,
     return std::max(Tmp, Tmp2);
   case ISD::SIGN_EXTEND_VECTOR_INREG: {
     if (VT.isScalableVector())
-      return 1;
+      break;
     SDValue Src = Op.getOperand(0);
     EVT SrcVT = Src.getValueType();
     APInt DemandedSrcElts = DemandedElts.zext(SrcVT.getVectorNumElements());
@@ -4371,7 +4371,7 @@ unsigned SelectionDAG::ComputeNumSignBits(SDValue Op, const APInt &DemandedElts,
   }
   case ISD::EXTRACT_ELEMENT: {
     if (VT.isScalableVector())
-      return 1;
+      break;
     const int KnownSign = ComputeNumSignBits(Op.getOperand(0), Depth+1);
     const int BitWidth = Op.getValueSizeInBits();
     const int Items = Op.getOperand(0).getValueSizeInBits() / BitWidth;
@@ -4386,7 +4386,7 @@ unsigned SelectionDAG::ComputeNumSignBits(SDValue Op, const APInt &DemandedElts,
   }
   case ISD::INSERT_VECTOR_ELT: {
     if (VT.isScalableVector())
-      return 1;
+      break;
     // If we know the element index, split the demand between the
     // source vector and the inserted element, otherwise assume we need
     // the original demanded vector elements and the value.
@@ -4417,8 +4417,7 @@ unsigned SelectionDAG::ComputeNumSignBits(SDValue Op, const APInt &DemandedElts,
     return Tmp;
   }
   case ISD::EXTRACT_VECTOR_ELT: {
-    if (VT.isScalableVector())
-      return 1;
+    assert(!VT.isScalableVector());
     SDValue InVec = Op.getOperand(0);
     SDValue EltNo = Op.getOperand(1);
     EVT VecVT = InVec.getValueType();
@@ -4458,7 +4457,7 @@ unsigned SelectionDAG::ComputeNumSignBits(SDValue Op, const APInt &DemandedElts,
   }
   case ISD::CONCAT_VECTORS: {
     if (VT.isScalableVector())
-      return 1;
+      break;
     // Determine the minimum number of sign bits across all demanded
     // elts of the input vectors. Early out if the result is already 1.
     Tmp = std::numeric_limits<unsigned>::max();
@@ -4478,7 +4477,7 @@ unsigned SelectionDAG::ComputeNumSignBits(SDValue Op, const APInt &DemandedElts,
   }
   case ISD::INSERT_SUBVECTOR: {
     if (VT.isScalableVector())
-      return 1;
+      break;
     // Demand any elements from the subvector and the remainder from the src its
     // inserted into.
     SDValue Src = Op.getOperand(0);
@@ -4586,12 +4585,12 @@ unsigned SelectionDAG::ComputeNumSignBits(SDValue Op, const APInt &DemandedElts,
       Opcode == ISD::INTRINSIC_VOID) {
     // TODO: This can probably be removed once target code is audited.  This
     // is here purely to reduce patch size and review complexity.
-    if (VT.isScalableVector())
-      return 1;
-    unsigned NumBits =
+    if (!VT.isScalableVector()) {
+      unsigned NumBits =
         TLI->ComputeNumSignBitsForTargetNode(Op, DemandedElts, *this, Depth);
-    if (NumBits > 1)
-      FirstAnswer = std::max(FirstAnswer, NumBits);
+      if (NumBits > 1)
+        FirstAnswer = std::max(FirstAnswer, NumBits);
+    }
   }
 
   // Finally, if we can prove that the top bits of the result are 0's or 1's,
