@@ -2370,7 +2370,7 @@ template <class ELFT> void SymbolTableSection<ELFT>::writeTo(uint8_t *buf) {
       // meaning for uninstantiated common symbols (--no-define-common).
       eSym->st_shndx = SHN_COMMON;
       eSym->st_value = commonSec->alignment;
-      eSym->st_size = cast<Defined>(sym)->size;
+      eSym->st_size = cast<Defined>(sym)->getSize();
     } else {
       const uint32_t shndx = getSymSectionIndex(sym);
       if (isDefinedHere) {
@@ -2381,7 +2381,7 @@ template <class ELFT> void SymbolTableSection<ELFT>::writeTo(uint8_t *buf) {
         // to us if that's the case. We'll leave it as zero because by not
         // setting a value, we can get the exact same outputs for two sets of
         // input files that differ only in undefined symbol size in DSOs.
-        eSym->st_size = shndx != SHN_UNDEF ? cast<Defined>(sym)->size : 0;
+        eSym->st_size = shndx != SHN_UNDEF ? cast<Defined>(sym)->getSize() : 0;
       } else {
         eSym->st_shndx = 0;
         eSym->st_value = 0;
@@ -3733,7 +3733,7 @@ bool ThunkSection::assignOffsets() {
     off = alignTo(off, t->alignment);
     t->setOffset(off);
     uint32_t size = t->size();
-    t->getThunkTargetSym()->size = size;
+    t->getThunkTargetSym()->setSize(size);
     off += size;
   }
   bool changed = off != size;

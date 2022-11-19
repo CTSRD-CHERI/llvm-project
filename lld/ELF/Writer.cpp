@@ -1772,14 +1772,14 @@ static void fixSymbolsAfterShrinking() {
         def->value -= inputSec->bytesDropped;
         return;
       }
-
-      if (def->value + def->size > NewSize && def->value <= OldSize &&
-          def->value + def->size <= OldSize) {
+      auto defSize = def->getSize();
+      if (def->value + defSize > NewSize && def->value <= OldSize &&
+          def->value + defSize <= OldSize) {
         LLVM_DEBUG(llvm::dbgs()
                    << "Shrinking symbol " << Sym->getName() << " from "
-                   << def->size << " to " << def->size - inputSec->bytesDropped
+                   << defSize << " to " << defSize - inputSec->bytesDropped
                    << " bytes\n");
-        def->size -= inputSec->bytesDropped;
+        def->reduceSize(inputSec->bytesDropped);
       }
     });
   }
@@ -2282,7 +2282,7 @@ template <class ELFT> void Writer<ELFT>::finalizeSections() {
         reg->type = STT_NOTYPE;
         reg->section = nullptr;
         reg->value = 0;
-        reg->size = 0;
+        reg->setSize(0);
         /* Avoid crashes when calling getSize() */
         reg->isSectionStartSymbol = false;
       }

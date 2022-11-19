@@ -100,7 +100,7 @@ SymbolAndOffset::fromSectionWithOffset(InputSectionBase *isec, int64_t offset,
       if (d->section != isec)
         continue;
       if ((int64_t)d->value <= offset &&
-          offset <= (int64_t)d->value + (int64_t)d->size) {
+          offset <= (int64_t)d->value + (int64_t)d->getSize()) {
         // XXXAR: should we accept any symbol that encloses or only exact
         // matches?
         if ((int64_t)d->value == offset && (d->isFunc() || d->isObject()))

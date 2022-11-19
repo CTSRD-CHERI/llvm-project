@@ -265,15 +265,19 @@ uint64_t Symbol::getCapTableOffset(const InputSectionBase *isec,
     in.cheriCapTable->getIndex(*this, isec, offset);
 }
 
+uint64_t Defined::getSize() const {
+  if (LLVM_UNLIKELY(config->isCheriAbi && isSectionStartSymbol)) {
+    assert(value == 0 && "Bad section start symbol?");
+    if (!section)
+      return 0; // Section is not included in the output
+    return section->getOutputSection()->size;
+  }
+  return size;
+}
+
 uint64_t Symbol::getSize() const {
   if (const auto *dr = dyn_cast<Defined>(this)) {
-    if (config->isCheriAbi && dr->isSectionStartSymbol) {
-      assert(dr->value == 0 && "Bad section start symbol?");
-      if (!dr->section)
-        return 0; // Section is not included in the output
-      return dr->section->getOutputSection()->size;
-    }
-    return dr->size;
+    return dr->getSize();
   }
   // FIXME: assuming it is always shared broke this
   if (isa<Undefined>(this))

@@ -350,9 +350,14 @@ public:
         size(size), section(section) {}
 
   static bool classof(const Symbol *s) { return s->isDefined(); }
+  void setSize(uint64_t newSize) { size = newSize; }
+  void reduceSize(uint64_t diff) { size -= diff; }
+  uint64_t getSize() const;
 
   uint64_t value;
-  uint64_t size;
+private:
+  uint64_t size; // Avoid accessing this directly due to CHERI st_size hack.
+public:
   SectionBase *section;
 };
 

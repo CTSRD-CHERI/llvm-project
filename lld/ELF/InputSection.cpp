@@ -256,7 +256,7 @@ Defined *InputSectionBase::getEnclosingSymbol(uint64_t offset) const {
   for (Symbol *b : file->getSymbols())
     if (Defined *d = dyn_cast<Defined>(b))
       if (d->section == this && d->type == SymbolType && d->value <= offset &&
-          offset < d->value + d->size)
+          offset < d->value + d->getSize())
         return d;
   return nullptr;
 }
@@ -322,7 +322,7 @@ std::string InputSectionBase::getObjMsg(uint64_t off) const {
   // Find a symbol that encloses a given location.
   for (Symbol *b : file->getSymbols())
     if (auto *d = dyn_cast<Defined>(b))
-      if (d->section == this && d->value <= off && off < d->value + d->size)
+      if (d->section == this && d->value <= off && off < d->value + d->getSize())
         return filename + ":(" + toString(*d) + ")" + archive;
 
   // If there's no symbol, print out the offset in the section.
@@ -1213,7 +1213,7 @@ static void switchMorestackCallsToMorestackNonSplit(
     while (it != morestackCalls.end() && (*it)->offset < f->value)
       ++it;
     // Adjust all calls inside the function.
-    while (it != morestackCalls.end() && (*it)->offset < f->value + f->size) {
+    while (it != morestackCalls.end() && (*it)->offset < f->value + f->getSize()) {
       (*it)->sym = moreStackNonSplit;
       ++it;
     }
@@ -1223,7 +1223,7 @@ static void switchMorestackCallsToMorestackNonSplit(
 static bool enclosingPrologueAttempted(uint64_t offset,
                                        const DenseSet<Defined *> &prologues) {
   for (Defined *f : prologues)
-    if (f->value <= offset && offset < f->value + f->size)
+    if (f->value <= offset && offset < f->value + f->getSize())
       return true;
   return false;
 }
