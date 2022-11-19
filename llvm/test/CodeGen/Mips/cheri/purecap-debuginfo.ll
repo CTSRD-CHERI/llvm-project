@@ -44,7 +44,7 @@
 // CHECK-NEXT:                   DW_AT_name	("i")
 // CHECK-NEXT:                   DW_AT_decl_file	("/src/test/CodeGen/cheri/cheri-debug-info.c")
 // CHECK-NEXT:                   DW_AT_decl_line	(20)
-// CHECK-NEXT:                   DW_AT_type	([[INTPTR_TYPE_INFO_ADDR:0x000.+]] "int*")
+// CHECK-NEXT:                   DW_AT_type	([[INTPTR_TYPE_INFO_ADDR:0x000.+]] "int *")
 // CHECK-EMPTY:
 // CHECK-NEXT: DW_TAG_lexical_block
 // MIPS-NEXT:                   DW_AT_low_pc	(0x0000000000000020)
