@@ -158,7 +158,6 @@ class LLVM_LIBRARY_VISIBILITY RISCV32TargetInfo : public RISCVTargetInfo {
 public:
   RISCV32TargetInfo(const llvm::Triple &Triple, const TargetOptions &Opts)
       : RISCVTargetInfo(Triple, Opts) {
-    ABI = "ilp32";
     IntPtrType = SignedInt;
     PtrDiffType = SignedInt;
     SizeType = UnsignedInt;
@@ -196,7 +195,6 @@ class LLVM_LIBRARY_VISIBILITY RISCV64TargetInfo : public RISCVTargetInfo {
 public:
   RISCV64TargetInfo(const llvm::Triple &Triple, const TargetOptions &Opts)
       : RISCVTargetInfo(Triple, Opts) {
-    ABI = "lp64";
     LongWidth = LongAlign = PointerWidth = PointerAlign = 64;
     IntMaxType = Int64Type = SignedLong;
   }
