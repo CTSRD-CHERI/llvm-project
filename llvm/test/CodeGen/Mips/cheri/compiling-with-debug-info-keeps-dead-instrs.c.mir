@@ -166,7 +166,7 @@ body:             |
   ; This used to keep the cincoffsetimm even though it was only used by debug instructions
   ; CHECK-NOT: CIncOffsetImm
   ; The DBG_VALUE should have been updated to use $noreg:
-  ; CHECK-NEXT: DBG_VALUE $noreg, $noreg, !19, !DIExpression(), debug-location !26
+  ; CHECK-NEXT: DBG_VALUE %4:cherigpr, $noreg, !19, !DIExpression(), debug-location !26
   ; CHECK-NEXT:   [[CAPLOAD32_:%[0-9]+]]:gpr32 = CAPLOAD32 $zero_64, 160, [[COPY]], debug-location !27 :: (load (s32) from %ir.0, !tbaa !28, addrspace 200)
 
   bb.0.entry:
