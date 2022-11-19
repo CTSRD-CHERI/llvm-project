@@ -2512,8 +2512,8 @@ Address CodeGenFunction::EmitFieldAnnotations(const FieldDecl *D,
       PTy ? PTy->getAddressSpace() : CGM.Int8PtrTy->getPointerAddressSpace();
   llvm::PointerType *IntrinTy =
       llvm::PointerType::getWithSamePointeeType(CGM.Int8PtrTy, AS);
-  llvm::Function *F =
-      CGM.getIntrinsic(llvm::Intrinsic::ptr_annotation, IntrinTy);
+  llvm::Function *F = CGM.getIntrinsic(llvm::Intrinsic::ptr_annotation,
+                                       {IntrinTy, GlobalsInt8PtrTy});
 
   for (const auto *I : D->specific_attrs<AnnotateAttr>()) {
     // FIXME Always emit the cast inst so we can differentiate between

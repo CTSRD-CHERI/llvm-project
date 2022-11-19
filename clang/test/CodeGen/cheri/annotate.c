@@ -164,11 +164,11 @@ void issue327(void) {
 // CHECK-SAME: i8 addrspace(200)* null)
 
 // HYBRID: define {{[^@]+}} @issue327()
-// HYBRID: call i8* @llvm.ptr.annotation.p0i8.p0i8(i8* %{{.+}}, i8* getelementptr inbounds ([13 x i8], [13 x i8]* @.str.4, i32 0, i32 0),
+// HYBRID: call i8 addrspace(200)* @llvm.ptr.annotation.p200i8.p0i8(i8 addrspace(200)* %{{.+}}, i8* getelementptr inbounds ([13 x i8], [13 x i8]* @.str.4, i32 0, i32 0),
 // HYBRID-SAME: i8* getelementptr inbounds ([[FILENAME_ARRAY]], [[FILENAME_ARRAY]]* @.str.1, i32 0, i32 0),
 // HYBRID-SAME: i32 [[MYANNOTATION_LINE:150]],
 // HYBRID-SAME: i8* null)
-// HYBRID: call i8* @llvm.ptr.annotation.p0i8.p0i8(i8* %{{.+}}, i8* getelementptr inbounds ([13 x i8], [13 x i8]* @.str.4, i32 0, i32 0),
+// HYBRID: call i8 addrspace(200)* @llvm.ptr.annotation.p200i8.p0i8(i8 addrspace(200)* %{{.+}}, i8* getelementptr inbounds ([13 x i8], [13 x i8]* @.str.4, i32 0, i32 0),
 // HYBRID-SAME: i8* getelementptr inbounds ([[FILENAME_ARRAY]], [[FILENAME_ARRAY]]* @.str.1, i32 0, i32 0),
 // HYBRID-SAME: i32 [[MYANNOTATION_LINE]],
 // HYBRID-SAME: i8* null)
