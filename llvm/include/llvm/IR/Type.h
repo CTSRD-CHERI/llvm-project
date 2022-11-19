@@ -128,6 +128,8 @@ public:
              bool NoDetails = false) const;
 
   void dump() const;
+  static std::string dbgString(const Type *V);
+  static std::string dbgString(const Type &V);
 
   /// Return the LLVMContext in which this type was uniqued.
   LLVMContext &getContext() const { return Context; }

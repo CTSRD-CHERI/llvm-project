@@ -104,36 +104,6 @@ Value::~Value() {
   destroyValueName();
 }
 
-namespace llvm {
-std::string valueDbgString(const llvm::Value &V);
-std::string valueDbgString(const llvm::Value *V);
-std::string typeDbgString(const llvm::Type *T);
-std::string typeDbgString(const llvm::Type &T);
-} // namespace llvm
-std::string llvm::valueDbgString(const llvm::Value *V) {
-  if (!V)
-    return "nullptr";
-  std::string DbgStr;
-  llvm::raw_string_ostream OS(DbgStr);
-  V->print(OS, true);
-  return OS.str();
-}
-std::string llvm::valueDbgString(const llvm::Value &V) {
-  return valueDbgString(&V);
-}
-
-std::string llvm::typeDbgString(const llvm::Type *T) {
-  if (!T)
-    return "nullptr";
-  std::string DbgStr;
-  llvm::raw_string_ostream OS(DbgStr);
-  T->print(OS, true, false);
-  return OS.str();
-}
-std::string llvm::typeDbgString(const llvm::Type &T) {
-  return typeDbgString(&T);
-}
-
 void Value::deleteValue() {
   switch (getValueID()) {
 #define HANDLE_VALUE(Name)                                                     \

@@ -230,6 +230,8 @@ public:
 
   /// Support for debugging, callable in GDB: V->dump()
   void dump() const;
+  static std::string dbgString(const Value *V);
+  static std::string dbgString(const Value &V);
 
   /// Implement operator<< on Value.
   /// @{

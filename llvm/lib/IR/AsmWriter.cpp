@@ -4836,9 +4836,34 @@ void ModuleSlotTracker::collectMDNodes(MachineMDNodeListType &L, unsigned LB,
 LLVM_DUMP_METHOD
 void Value::dump() const { print(dbgs(), /*IsForDebug=*/true); dbgs() << '\n'; }
 
+LLVM_DUMP_METHOD std::string Value::dbgString(const llvm::Value *V) {
+  if (!V)
+    return "nullptr";
+  std::string DbgStr;
+  llvm::raw_string_ostream OS(DbgStr);
+  V->print(OS, true);
+  return OS.str();
+}
+
+LLVM_DUMP_METHOD std::string Value::dbgString(const llvm::Value &V) {
+  return Value::dbgString(&V);
+}
+
 // Type::dump - allow easy printing of Types from the debugger.
 LLVM_DUMP_METHOD
 void Type::dump() const { print(dbgs(), /*IsForDebug=*/true); dbgs() << '\n'; }
+
+LLVM_DUMP_METHOD std::string Type::dbgString(const llvm::Type *T) {
+  if (!T)
+    return "nullptr";
+  std::string DbgStr;
+  llvm::raw_string_ostream OS(DbgStr);
+  T->print(OS, true, false);
+  return OS.str();
+}
+LLVM_DUMP_METHOD std::string Type::dbgString(const llvm::Type &T) {
+  return Type::dbgString(&T);
+}
 
 // Module::dump() - Allow printing of Modules from the debugger.
 LLVM_DUMP_METHOD

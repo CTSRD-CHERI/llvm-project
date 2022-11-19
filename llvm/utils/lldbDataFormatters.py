@@ -218,24 +218,24 @@ def get_expression_path(val):
     return stream.GetData()
 
 
-def ValueSummaryProvider(valobj, internal_dict):
+def get_expr_summary(valobj, expr):
     if valobj.GetValue() is None:
         return None
-    summary = valobj.GetFrame().EvaluateExpression(
-        'llvm::valueDbgString(' + get_expression_path(valobj) + ')').GetSummary()
-    if summary is None:
-        summary = "ERROR"
-    return summary.strip('\"')  # strip the quotes added by std::string summary
+    expr = valobj.GetFrame().EvaluateExpression(expr)
+    if expr.GetError().Success():
+        summary = expr.GetSummary().strip('\"')  # strip the quotes added by std::string summary
+    else:
+        summary = "ERROR: " + expr.GetError().GetCString()
+    del expr
+    return summary
+
+
+def ValueSummaryProvider(valobj, internal_dict):
+    return get_expr_summary(valobj, '::llvm::Value::dbgString(' + get_expression_path(valobj) + ')')
 
 
 def TypeSummaryProvider(valobj, internal_dict):
-    if valobj.GetValue() is None:
-        return None
-    summary = valobj.GetFrame().EvaluateExpression(
-        'llvm::typeDbgString(' + get_expression_path(valobj) + ')').GetSummary()
-    if summary is None:
-        summary = "ERROR"
-    return summary.strip('\"')  # strip the quotes added by std::string summary
+    return get_expr_summary(valobj, '::llvm::Type::dbgString(' + get_expression_path(valobj) + ')')
 
 
 class PointerIntPairSynthProvider:
