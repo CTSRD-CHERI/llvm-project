@@ -38,3 +38,5 @@ target_link_libraries(clang-linker-wrapper
   )
 
 install(TARGETS clang-linker-wrapper RUNTIME DESTINATION bin)
+# TODO: port this to remove getUnqual
+remove_definitions(-DLLVM_NO_DEFAULT_ADDRESS_SPACE)

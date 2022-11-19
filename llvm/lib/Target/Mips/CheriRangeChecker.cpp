@@ -1,5 +1,3 @@
-#define DEBUG_TYPE "cheri-range-checker"
-
 #include "Mips.h"
 #include "llvm/ADT/StringSwitch.h"
 #include "llvm/Analysis/ValueTracking.h"
@@ -14,6 +12,7 @@
 #include "llvm/IR/Intrinsics.h"
 #include "llvm/IR/LLVMContext.h"
 #include "llvm/IR/Module.h"
+#include "llvm/IR/Verifier.h"
 #include "llvm/Pass.h"
 #include "llvm/Transforms/Utils/CheriSetBounds.h"
 #include "llvm/Transforms/Utils/Local.h"
@@ -22,7 +21,7 @@
 #include <tuple>
 #include <utility>
 
-#include "llvm/IR/Verifier.h"
+#define DEBUG_TYPE "cheri-range-checker"
 
 using namespace llvm;
 using std::pair;
