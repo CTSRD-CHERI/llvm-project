@@ -1,7 +1,7 @@
 ; RUN: %cheri_purecap_llc -O0 %s -o - | FileCheck %s
 ; ModuleID = 'cmpcap.c'
 source_filename = "cmpcap.c"
-target datalayout = "E-m:e-pf200:128:128-i8:8:32-i16:16:32-i64:64-n32:64-S128"
+target datalayout = "E-m:e-pf200:128:128:128:64-i8:8:32-i16:16:32-i64:64-n32:64-S128"
 target triple = "cheri-unknown-freebsd"
 
 %struct.bigbuf = type { [5 x i8 addrspace(200)*] }

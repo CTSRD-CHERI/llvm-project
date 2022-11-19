@@ -3,7 +3,7 @@
 ; RUN: %cheri_opt -S -instsimplify %s -o - | %cheri_llc -O3 -filetype=asm -o - | FileCheck %s -check-prefix OPT
 ; Test that we can assemble this at -O0 (used to be a problem before csetaddr was added)
 ; RUN: %cheri_llc -O0 %s -filetype=asm -o /dev/null
-target datalayout = "E-m:e-pf200:128:128-i8:8:32-i16:16:32-i64:64-n32:64-S128"
+target datalayout = "E-m:e-pf200:128:128:128:64-i8:8:32-i16:16:32-i64:64-n32:64-S128"
 target triple = "cheri-unknown-freebsd"
 
 declare i64 @check_fold(i64) #0

@@ -1,7 +1,7 @@
 ; RUN: %cheri_purecap_llc -o - -float-abi=soft -O0 -mips-ssection-threshold=0 %s | %cheri_FileCheck %s
 ; ModuleID = '/home/alr48/obj/build/llvm-build/fnmatch-ccd909-bugpoint-reduce.ll-reduced-simplified.bc'
 source_filename = "fnmatch-ccd909-bugpoint-reduce.ll-output-0ec4103.bc"
-target datalayout = "E-m:e-pf200:128:128-i8:8:32-i16:16:32-i64:64-n32:64-S128-A200"
+target datalayout = "E-m:e-pf200:128:128:128:64-i8:8:32-i16:16:32-i64:64-n32:64-S128-A200"
 target triple = "cheri-unknown-freebsd"
 
 module asm ".ident\09\22$FreeBSD$\22"

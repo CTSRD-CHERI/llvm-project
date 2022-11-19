@@ -1,5 +1,5 @@
-; RUNs: %cheri128_purecap_opt -data-layout="E-m:m-pf200:128:128-i8:8:32-i16:16:32-i64:64-n32:64-S128-A200-P200-G200" -atomic-expand -S -cheri-cap-table-abi=pcrel %s -o - -debug-only=atomic-expand -print-before-all
-; RUNs: %cheri128_purecap_opt -data-layout="E-m:m-pf200:128:128-i8:8:32-i16:16:32-i64:64-n32:64-S128-A200-P200-G200" -atomic-expand -S -cheri-cap-table-abi=pcrel %s -o - -debug-only=atomic-expand -print-before-all
+; RUNs: %cheri128_purecap_opt -data-layout="E-m:m-pf200:128:128:128:64-i8:8:32-i16:16:32-i64:64-n32:64-S128-A200-P200-G200" -atomic-expand -S -cheri-cap-table-abi=pcrel %s -o - -debug-only=atomic-expand -print-before-all
+; RUNs: %cheri128_purecap_opt -data-layout="E-m:m-pf200:128:128:128:64-i8:8:32-i16:16:32-i64:64-n32:64-S128-A200-P200-G200" -atomic-expand -S -cheri-cap-table-abi=pcrel %s -o - -debug-only=atomic-expand -print-before-all
 ; RUsN: %cheri_purecap_llc -cheri-cap-table-abi=pcrel %s -o - -O0 -print-before=atomic-expand -print-after=atomic-expand -debug-only=atomic-expand
 ; RUN: %cheri_purecap_llc -verify-machineinstrs -cheri-cap-table-abi=pcrel %s -o - -O2 | FileCheck %s
 ; TODO: | FileCheck %s -enable-var-scope

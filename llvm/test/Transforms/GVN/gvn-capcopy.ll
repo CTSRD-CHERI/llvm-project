@@ -1,6 +1,6 @@
 ; RUN: opt -gvn -S -o - %s | FileCheck %s
 
-target datalayout = "e-m:e-pf200:128:128-i8:8:32-i16:16:32-i64:64-i128:128-n32:64-S128"
+target datalayout = "e-m:e-pf200:128:128:128:64-i8:8:32-i16:16:32-i64:64-i128:128-n32:64-S128"
 
 ; CHECK-LABEL: DoCapabilityThing
 ; CHECK-NOT: undef

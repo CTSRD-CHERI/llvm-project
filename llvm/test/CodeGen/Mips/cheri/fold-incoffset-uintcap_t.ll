@@ -1,7 +1,7 @@
 ; REQUIRES: clang
 ; RUN: %cheri_opt %s -S -O3 | FileCheck %s -check-prefix IR
 ; RUN: %cheri_opt %s -S -O3 | %cheri_llc -o - | FileCheck %s
-target datalayout = "E-m:e-pf200:128:128-i8:8:32-i16:16:32-i64:64-n32:64-S128"
+target datalayout = "E-m:e-pf200:128:128:128:64-i8:8:32-i16:16:32-i64:64-n32:64-S128"
 target triple = "cheri-unknown-freebsd"
 
 

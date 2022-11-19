@@ -1,5 +1,5 @@
 ; RUN: %cheri_opt -S -instcombine %s -o - | FileCheck %s
-target datalayout = "pf200:128:128-A200-P200-G200"
+target datalayout = "pf200:128:128:128:64-A200-P200-G200"
 
 
 declare i64 @check_fold(i64)

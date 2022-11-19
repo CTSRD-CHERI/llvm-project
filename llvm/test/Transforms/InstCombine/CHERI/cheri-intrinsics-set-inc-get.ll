@@ -1,5 +1,5 @@
 ; RUN: opt -S -instcombine %s -o - | FileCheck %s
-target datalayout = "pf200:128:128-A200-P200-G200"
+target datalayout = "pf200:128:128:128:64-A200-P200-G200"
 
 declare i64 @llvm.cheri.cap.address.get.i64(i8 addrspace(200)*)
 declare i8 addrspace(200)* @llvm.cheri.cap.address.set.i64(i8 addrspace(200)*, i64)
