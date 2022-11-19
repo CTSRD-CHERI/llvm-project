@@ -3,8 +3,8 @@
 ; This used to create a broken function.
 ; FIXME: the getoffset+add sequence should be folded to an increment
 ; REQUIRES: mips-registered-target
-; RUN: opt -mtriple=riscv64 --relocation-model=pic -target-abi l64pc128d -mattr=+xcheri,+cap-mode,+f,+d -S -instcombine -O3 %s -o - | FileCheck %s
-; RUN: opt -mtriple=riscv64 --relocation-model=pic -target-abi l64pc128d -mattr=+xcheri,+cap-mode,+f,+d -S -O3 %s | llc -mtriple=riscv64 --relocation-model=pic -target-abi l64pc128d -mattr=+xcheri,+cap-mode,+f,+d -O3 -o - | FileCheck %s --check-prefix ASM
+; RUN: opt -mtriple=riscv64 --relocation-model=pic -target-abi l64pc128d -mattr=+xcheri,+cap-mode,+f,+d -S -passes=instcombine %s -o - | FileCheck %s
+; RUN: opt -mtriple=riscv64 --relocation-model=pic -target-abi l64pc128d -mattr=+xcheri,+cap-mode,+f,+d -S '-passes=default<O3>' %s | llc -mtriple=riscv64 --relocation-model=pic -target-abi l64pc128d -mattr=+xcheri,+cap-mode,+f,+d -O3 -o - | FileCheck %s --check-prefix ASM
 target datalayout = "e-m:e-pf200:128:128:128:64-p:64:64-i64:64-i128:128-n64-S128-A200-P200-G200"
 
 @d = common addrspace(200) global i64 0, align 4
@@ -33,11 +33,11 @@ define void @g(i64 %x, i64 %y) addrspace(200) nounwind {
 ; ASM-NEXT:    csc ca0, 0(ca1)
 ; ASM-NEXT:    cret
 ; CHECK-LABEL: define {{[^@]+}}@g
-; CHECK-SAME: (i64 [[X:%.*]], i64 [[Y:%.*]]) local_unnamed_addr addrspace(200) #[[ATTR0:[0-9]+]] {
-; CHECK-NEXT:    [[TMP3:%.*]] = tail call i64 @llvm.cheri.cap.offset.get.i64(i8 addrspace(200)* bitcast (i64 addrspace(200)* @d to i8 addrspace(200)*))
-; CHECK-NEXT:    [[ADD:%.*]] = add i64 [[Y]], [[X]]
-; CHECK-NEXT:    [[ADD1:%.*]] = add i64 [[ADD]], [[TMP3]]
-; CHECK-NEXT:    [[TMP11:%.*]] = tail call i8 addrspace(200)* @llvm.cheri.cap.offset.set.i64(i8 addrspace(200)* bitcast (i64 addrspace(200)* @d to i8 addrspace(200)*), i64 [[ADD1]])
+; CHECK-SAME: (i64 [[X:%.*]], i64 [[Y:%.*]]) addrspace(200) #[[ATTR0:[0-9]+]] {
+; CHECK-NEXT:    [[TMP3:%.*]] = call i64 @llvm.cheri.cap.offset.get.i64(i8 addrspace(200)* bitcast (i64 addrspace(200)* @d to i8 addrspace(200)*))
+; CHECK-NEXT:    [[ADD:%.*]] = add i64 [[TMP3]], [[X]]
+; CHECK-NEXT:    [[ADD1:%.*]] = add i64 [[ADD]], [[Y]]
+; CHECK-NEXT:    [[TMP11:%.*]] = call i8 addrspace(200)* @llvm.cheri.cap.offset.set.i64(i8 addrspace(200)* bitcast (i64 addrspace(200)* @d to i8 addrspace(200)*), i64 [[ADD1]])
 ; CHECK-NEXT:    store i8 addrspace(200)* [[TMP11]], i8 addrspace(200)* addrspace(200)* @e, align 32
 ; CHECK-NEXT:    ret void
 ;
