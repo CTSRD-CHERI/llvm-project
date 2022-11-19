@@ -24,11 +24,11 @@ int annotated_global __attribute__((annotate("global"))) = 1;
 // CHECK-SAME: i32 [[ANNOTATED_GLOBAL_LINE:9]], i8 addrspace(200)* null }], section "llvm.metadata"
 
 // CHECK-LABEL: define {{[^@]+}}@var_annotation
-// CHECK-SAME: () addrspace(200) [[ATTR0:#.*]] {
+// CHECK-SAME: () addrspace(200)
 // CHECK-NEXT:  entry:
 // CHECK-NEXT:    [[B:%.*]] = alloca i32, align 4, addrspace(200)
 // CHECK-NEXT:    [[B1:%.*]] = bitcast i32 addrspace(200)* [[B]] to i8 addrspace(200)*
-// CHECK-NEXT:    call void @llvm.var.annotation.p200i8(i8 addrspace(200)* [[B1]], i8 addrspace(200)* getelementptr inbounds ([4 x i8], [4 x i8] addrspace(200)* @.str.3, i32 0, i32 0),
+// CHECK-NEXT:    call void @llvm.var.annotation.p200i8.p200i8(i8 addrspace(200)* [[B1]], i8 addrspace(200)* getelementptr inbounds ([4 x i8], [4 x i8] addrspace(200)* @.str.3, i32 0, i32 0),
 // CHECK-SAME:  i8 addrspace(200)* getelementptr inbounds ([[FILENAME_ARRAY]],
 // CHECK-SAME:  [[FILENAME_ARRAY]] addrspace(200)* @.str.1, i32 0, i32 0),
 // CHECK-SAME:  i32 [[@LINE+17]],
@@ -36,11 +36,11 @@ int annotated_global __attribute__((annotate("global"))) = 1;
 // CHECK-NEXT:    ret void
 //
 // HYBRID-LABEL: define {{[^@]+}}@var_annotation
-// HYBRID-SAME: () [[ATTR0:#.*]] {
+// HYBRID-SAME: ()
 // HYBRID-NEXT:  entry:
 // HYBRID-NEXT:    [[B:%.*]] = alloca i32, align 4
 // HYBRID-NEXT:    [[B1:%.*]] = bitcast i32* [[B]] to i8*
-// HYBRID-NEXT:    call void @llvm.var.annotation.p0i8(i8* [[B1]], i8* getelementptr inbounds ([4 x i8], [4 x i8]* @.str.3, i32 0, i32 0),
+// HYBRID-NEXT:    call void @llvm.var.annotation.p0i8.p0i8(i8* [[B1]], i8* getelementptr inbounds ([4 x i8], [4 x i8]* @.str.3, i32 0, i32 0),
 // HYBRID-SAME:  i8* getelementptr inbounds ([[FILENAME_ARRAY:\[[0-9]+ x i8\]]],
 // HYBRID-SAME:  [[FILENAME_ARRAY]]* @.str.1, i32 0, i32 0),
 // HYBRID-SAME:  i32 [[@LINE+5]],
@@ -52,11 +52,11 @@ void var_annotation(void) {
 }
 
 // Should be overloaded and args in AS200
-// CHECK: declare void @llvm.var.annotation.p200i8(i8 addrspace(200)*, i8 addrspace(200)*, i8 addrspace(200)*, i32, i8 addrspace(200)*) addrspace(200)
-// HYBRID: declare void @llvm.var.annotation.p0i8(i8*, i8*, i8*, i32, i8*)
+// CHECK: declare void @llvm.var.annotation.p200i8.p200i8(i8 addrspace(200)*, i8 addrspace(200)*, i8 addrspace(200)*, i32, i8 addrspace(200)*) addrspace(200)
+// HYBRID: declare void @llvm.var.annotation.p0i8.p0i8(i8*, i8*, i8*, i32, i8*)
 
 // CHECK-LABEL: define {{[^@]+}}@ptr_annotation
-// CHECK-SAME: () addrspace(200) [[ATTR0]] {
+// CHECK-SAME: () addrspace(200)
 // CHECK-NEXT:  entry:
 // CHECK-NEXT:    [[VAR:%.*]] = alloca [[STRUCT_ANON:%.*]], align 4, addrspace(200)
 // CHECK-NEXT:    [[U:%.*]] = getelementptr inbounds [[STRUCT_ANON]], [[STRUCT_ANON]] addrspace(200)* [[VAR]], i32 0, i32 0
@@ -72,7 +72,7 @@ void var_annotation(void) {
 // CHECK-NEXT:    ret i32 0
 //
 // HYBRID-LABEL: define {{[^@]+}}@ptr_annotation
-// HYBRID-SAME: () [[ATTR0]] {
+// HYBRID-SAME: ()
 // HYBRID-NEXT:  entry:
 // HYBRID-NEXT:    [[VAR:%.*]] = alloca [[STRUCT_ANON:%.*]], align 4
 // HYBRID-NEXT:    [[U:%.*]] = getelementptr inbounds [[STRUCT_ANON]], %struct.anon* [[VAR]], i32 0, i32 0
@@ -102,7 +102,7 @@ int ptr_annotation(void) {
 // HYBRID: declare i8* @llvm.ptr.annotation.p0i8.p0i8(i8*, i8*, i8*, i32, i8*)
 
 // CHECK-LABEL: define {{[^@]+}}@builtin_annotation
-// CHECK-SAME: (i64 signext [[X:%.*]]) addrspace(200) [[ATTR0]] {
+// CHECK-SAME: (i64 noundef signext [[X:%.*]]) addrspace(200)
 // CHECK-NEXT:  entry:
 // CHECK-NEXT:    [[X_ADDR:%.*]] = alloca i64, align 8, addrspace(200)
 // CHECK-NEXT:    [[Y:%.*]] = alloca i64, align 8, addrspace(200)
@@ -119,7 +119,7 @@ int ptr_annotation(void) {
 // CHECK-NEXT:    ret i32 [[CONV]]
 //
 // HYBRID-LABEL: define {{[^@]+}}@builtin_annotation
-// HYBRID-SAME: (i64 signext [[X:%.*]]) [[ATTR0]] {
+// HYBRID-SAME: (i64 noundef signext [[X:%.*]])
 // HYBRID-NEXT:  entry:
 // HYBRID-NEXT:    [[X_ADDR:%.*]] = alloca i64, align 8
 // HYBRID-NEXT:    [[Y:%.*]] = alloca i64, align 8

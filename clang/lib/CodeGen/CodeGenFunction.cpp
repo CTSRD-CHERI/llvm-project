@@ -2494,7 +2494,7 @@ void CodeGenFunction::EmitVarAnnotations(const VarDecl *D, llvm::Value *V) {
   // FIXME We create a new bitcast for every annotation because that's what
   // llvm-gcc was doing.
   auto AnnotateIntrin =
-      CGM.getIntrinsic(llvm::Intrinsic::var_annotation, Int8PtrTy);
+      CGM.getIntrinsic(llvm::Intrinsic::var_annotation, {Int8PtrTy, GlobalsInt8PtrTy});
   for (const auto *I : D->specific_attrs<AnnotateAttr>())
     EmitAnnotationCall(AnnotateIntrin,
                        Builder.CreatePointerBitCastOrAddrSpaceCast(
