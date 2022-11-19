@@ -20,9 +20,6 @@
 ; RUN:     --check-prefixes=MIPS64-N64,MIPSR6-N64
 
 
-; Somehow broken by CHERI
-; XFAIL: *
-
 ; Check the use of frame indexes in the msa pseudo f16 instructions.
 
 @k = external global float
