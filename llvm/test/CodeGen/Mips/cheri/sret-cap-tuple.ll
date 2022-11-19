@@ -133,14 +133,14 @@ define internal { i64, i64, i64, i64 } @get_tuple_i64_impl() unnamed_addr addrsp
 ; CHECK-LABEL: get_tuple_i64_impl:
 ; CHECK:       # %bb.0:
 ; CHECK-NEXT:    # kill: def $c1 killed $c3
+; CHECK-NEXT:    daddiu $1, $zero, 10
+; CHECK-NEXT:    csd $1, $zero, 0($c3)
 ; CHECK-NEXT:    daddiu $1, $zero, 40
 ; CHECK-NEXT:    csd $1, $zero, 24($c3)
 ; CHECK-NEXT:    daddiu $1, $zero, 30
 ; CHECK-NEXT:    csd $1, $zero, 16($c3)
 ; CHECK-NEXT:    daddiu $1, $zero, 20
 ; CHECK-NEXT:    csd $1, $zero, 8($c3)
-; CHECK-NEXT:    daddiu $1, $zero, 10
-; CHECK-NEXT:    csd $1, $zero, 0($c3)
 ; CHECK-NEXT:    cjr $c17
 ; CHECK-NEXT:    nop
   ret { i64, i64, i64, i64 } { i64 10,  i64 20,  i64 30, i64 40 }
@@ -150,14 +150,14 @@ define internal { i8 addrspace(200)*, i8 addrspace(200)*, i8 addrspace(200)*, i8
 ; CHECK-LABEL: get_tuple_cap_impl:
 ; CHECK:       # %bb.0:
 ; CHECK-NEXT:    # kill: def $c1 killed $c3
+; CHECK-NEXT:    cincoffset $c1, $cnull, 10
+; CHECK-NEXT:    csc $c1, $zero, 0($c3)
 ; CHECK-NEXT:    cincoffset $c1, $cnull, 40
 ; CHECK-NEXT:    csc $c1, $zero, 48($c3)
 ; CHECK-NEXT:    cincoffset $c1, $cnull, 30
 ; CHECK-NEXT:    csc $c1, $zero, 32($c3)
 ; CHECK-NEXT:    cincoffset $c1, $cnull, 20
 ; CHECK-NEXT:    csc $c1, $zero, 16($c3)
-; CHECK-NEXT:    cincoffset $c1, $cnull, 10
-; CHECK-NEXT:    csc $c1, $zero, 0($c3)
 ; CHECK-NEXT:    cjr $c17
 ; CHECK-NEXT:    nop
   ret { i8 addrspace(200)*, i8 addrspace(200)*, i8 addrspace(200)*, i8 addrspace(200)* } {

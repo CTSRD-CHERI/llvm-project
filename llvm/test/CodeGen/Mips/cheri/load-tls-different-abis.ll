@@ -32,11 +32,11 @@ entry:
 ; MIPS-NEXT:  %9:gpr64 = LUi64 target-flags(mips-gpoff-hi) @test
 ; MIPS-NEXT:  %10:gpr64 = DADDu %9:gpr64, $t9_64
 ; MIPS-NEXT:  %0:gpr64 = DADDiu %10:gpr64, target-flags(mips-gpoff-lo) @test
-; MIPS-NEXT:  %1:gpr64 = RDHWR64 $hwr29
-; MIPS-NEXT:  $v1_64 = COPY %1
-; MIPS-NEXT:  %2:gpr64 = LD %0:gpr64, target-flags(mips-gottprel) @global_tls :: (load (s64))
+; MIPS-NEXT:  %1:gpr64 = LD %0:gpr64, target-flags(mips-gottprel) @global_tls :: (load (s64))
+; MIPS-NEXT:  %2:gpr64 = RDHWR64 $hwr29
+; MIPS-NEXT:  $v1_64 = COPY %2:gpr64
 ; MIPS-NEXT:  %3:gpr64 = COPY $v1_64
-; MIPS-NEXT:  %4:gpr64 = DADDu %3:gpr64, killed %2
+; MIPS-NEXT:  %4:gpr64 = DADDu %3:gpr64, killed %1:gpr64
 ; MIPS-NEXT:  %5:gpr64 = LD killed %4:gpr64, 0 :: (dereferenceable load (s64) from @global_tls)
 ; MIPS-NEXT:  %6:gpr64 = LD %0:gpr64, target-flags(mips-got-disp) @global_normal :: (load (s64) from got)
 ; MIPS-NEXT:  %7:gpr64 = LD killed %6:gpr64, 0 :: (dereferenceable load (s64) from @global_normal)
@@ -79,12 +79,12 @@ entry:
 ; MIPS-NEXT: daddu	$1, $1, $25
 ; MIPS-NEXT: daddiu	$1, $1, %lo(%neg(%gp_rel(test))) # encoding: [0x64,0x21,A,A]
 ; MIPS-NEXT:           #   fixup A - offset: 0, value: %lo(%neg(%gp_rel(test))), kind: fixup_Mips_GPOFF_LO
+; MIPS-NEXT: ld	$2, %gottprel(global_tls)($1) # encoding: [0xdc,0x22,A,A]
+; MIPS-NEXT:           #   fixup A - offset: 0, value: %gottprel(global_tls), kind: fixup_Mips_GOTTPREL
 ; MIPS-NEXT: .set	push
 ; MIPS-NEXT: .set	mips32r2
 ; MIPS-NEXT: rdhwr	$3, $29
 ; MIPS-NEXT: .set	pop
-; MIPS-NEXT: ld	$2, %gottprel(global_tls)($1) # encoding: [0xdc,0x22,A,A]
-; MIPS-NEXT:           #   fixup A - offset: 0, value: %gottprel(global_tls), kind: fixup_Mips_GOTTPREL
 ; MIPS-NEXT: daddu	$2, $3, $2
 ; MIPS-NEXT: ld	$2, 0($2)
 ; MIPS-NEXT: ld	$1, %got_disp(global_normal)($1) # encoding: [0xdc,0x21,A,A]
