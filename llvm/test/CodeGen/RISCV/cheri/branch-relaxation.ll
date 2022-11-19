@@ -44,12 +44,12 @@ define i32 @relax_cjal(i1 %a) nounwind {
 ; CHECK-NEXT:    #APP
 ; CHECK-NEXT:    .zero 1048576
 ; CHECK-NEXT:    #NO_APP
-; CHECK-NEXT:    addi a0, zero, 1
+; CHECK-NEXT:    li a0, 1
 ; CHECK-NEXT:    cret
 ; CHECK-NEXT:  .LBB1_2: # %jmp
 ; CHECK-NEXT:    #APP
 ; CHECK-NEXT:    #NO_APP
-; CHECK-NEXT:    addi a0, zero, 1
+; CHECK-NEXT:    li a0, 1
 ; CHECK-NEXT:    cret
   br i1 %a, label %iftrue, label %jmp
 

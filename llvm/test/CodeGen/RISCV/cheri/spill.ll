@@ -26,24 +26,23 @@ define void @test_spill_slot(i8 addrspace(200)** %ptr) nounwind {
 ; RV32IXCHERI-ILP32-NEXT:    sc ca1, 16(sp) # 8-byte Folded Spill
 ; RV32IXCHERI-ILP32-NEXT:    #APP
 ; RV32IXCHERI-ILP32-NEXT:    nop
-; RV32IXCHERI-ILP32-EMPTY:
 ; RV32IXCHERI-ILP32-NEXT:    #NO_APP
 ; RV32IXCHERI-ILP32-NEXT:    lc ca0, 16(sp) # 8-byte Folded Reload
 ; RV32IXCHERI-ILP32-NEXT:    lw a1, 12(sp) # 4-byte Folded Reload
 ; RV32IXCHERI-ILP32-NEXT:    sc ca0, 0(a1)
-; RV32IXCHERI-ILP32-NEXT:    lw s11, 28(sp) # 4-byte Folded Reload
-; RV32IXCHERI-ILP32-NEXT:    lw s10, 32(sp) # 4-byte Folded Reload
-; RV32IXCHERI-ILP32-NEXT:    lw s9, 36(sp) # 4-byte Folded Reload
-; RV32IXCHERI-ILP32-NEXT:    lw s8, 40(sp) # 4-byte Folded Reload
-; RV32IXCHERI-ILP32-NEXT:    lw s7, 44(sp) # 4-byte Folded Reload
-; RV32IXCHERI-ILP32-NEXT:    lw s6, 48(sp) # 4-byte Folded Reload
-; RV32IXCHERI-ILP32-NEXT:    lw s5, 52(sp) # 4-byte Folded Reload
-; RV32IXCHERI-ILP32-NEXT:    lw s4, 56(sp) # 4-byte Folded Reload
-; RV32IXCHERI-ILP32-NEXT:    lw s3, 60(sp) # 4-byte Folded Reload
-; RV32IXCHERI-ILP32-NEXT:    lw s2, 64(sp) # 4-byte Folded Reload
-; RV32IXCHERI-ILP32-NEXT:    lw s1, 68(sp) # 4-byte Folded Reload
-; RV32IXCHERI-ILP32-NEXT:    lw s0, 72(sp) # 4-byte Folded Reload
 ; RV32IXCHERI-ILP32-NEXT:    lw ra, 76(sp) # 4-byte Folded Reload
+; RV32IXCHERI-ILP32-NEXT:    lw s0, 72(sp) # 4-byte Folded Reload
+; RV32IXCHERI-ILP32-NEXT:    lw s1, 68(sp) # 4-byte Folded Reload
+; RV32IXCHERI-ILP32-NEXT:    lw s2, 64(sp) # 4-byte Folded Reload
+; RV32IXCHERI-ILP32-NEXT:    lw s3, 60(sp) # 4-byte Folded Reload
+; RV32IXCHERI-ILP32-NEXT:    lw s4, 56(sp) # 4-byte Folded Reload
+; RV32IXCHERI-ILP32-NEXT:    lw s5, 52(sp) # 4-byte Folded Reload
+; RV32IXCHERI-ILP32-NEXT:    lw s6, 48(sp) # 4-byte Folded Reload
+; RV32IXCHERI-ILP32-NEXT:    lw s7, 44(sp) # 4-byte Folded Reload
+; RV32IXCHERI-ILP32-NEXT:    lw s8, 40(sp) # 4-byte Folded Reload
+; RV32IXCHERI-ILP32-NEXT:    lw s9, 36(sp) # 4-byte Folded Reload
+; RV32IXCHERI-ILP32-NEXT:    lw s10, 32(sp) # 4-byte Folded Reload
+; RV32IXCHERI-ILP32-NEXT:    lw s11, 28(sp) # 4-byte Folded Reload
 ; RV32IXCHERI-ILP32-NEXT:    addi sp, sp, 80
 ; RV32IXCHERI-ILP32-NEXT:    ret
 ;
@@ -68,24 +67,23 @@ define void @test_spill_slot(i8 addrspace(200)** %ptr) nounwind {
 ; RV64IXCHERI-LP64-NEXT:    sc ca1, 16(sp) # 16-byte Folded Spill
 ; RV64IXCHERI-LP64-NEXT:    #APP
 ; RV64IXCHERI-LP64-NEXT:    nop
-; RV64IXCHERI-LP64-EMPTY:
 ; RV64IXCHERI-LP64-NEXT:    #NO_APP
 ; RV64IXCHERI-LP64-NEXT:    lc ca0, 16(sp) # 16-byte Folded Reload
 ; RV64IXCHERI-LP64-NEXT:    ld a1, 8(sp) # 8-byte Folded Reload
 ; RV64IXCHERI-LP64-NEXT:    sc ca0, 0(a1)
-; RV64IXCHERI-LP64-NEXT:    ld s11, 40(sp) # 8-byte Folded Reload
-; RV64IXCHERI-LP64-NEXT:    ld s10, 48(sp) # 8-byte Folded Reload
-; RV64IXCHERI-LP64-NEXT:    ld s9, 56(sp) # 8-byte Folded Reload
-; RV64IXCHERI-LP64-NEXT:    ld s8, 64(sp) # 8-byte Folded Reload
-; RV64IXCHERI-LP64-NEXT:    ld s7, 72(sp) # 8-byte Folded Reload
-; RV64IXCHERI-LP64-NEXT:    ld s6, 80(sp) # 8-byte Folded Reload
-; RV64IXCHERI-LP64-NEXT:    ld s5, 88(sp) # 8-byte Folded Reload
-; RV64IXCHERI-LP64-NEXT:    ld s4, 96(sp) # 8-byte Folded Reload
-; RV64IXCHERI-LP64-NEXT:    ld s3, 104(sp) # 8-byte Folded Reload
-; RV64IXCHERI-LP64-NEXT:    ld s2, 112(sp) # 8-byte Folded Reload
-; RV64IXCHERI-LP64-NEXT:    ld s1, 120(sp) # 8-byte Folded Reload
-; RV64IXCHERI-LP64-NEXT:    ld s0, 128(sp) # 8-byte Folded Reload
 ; RV64IXCHERI-LP64-NEXT:    ld ra, 136(sp) # 8-byte Folded Reload
+; RV64IXCHERI-LP64-NEXT:    ld s0, 128(sp) # 8-byte Folded Reload
+; RV64IXCHERI-LP64-NEXT:    ld s1, 120(sp) # 8-byte Folded Reload
+; RV64IXCHERI-LP64-NEXT:    ld s2, 112(sp) # 8-byte Folded Reload
+; RV64IXCHERI-LP64-NEXT:    ld s3, 104(sp) # 8-byte Folded Reload
+; RV64IXCHERI-LP64-NEXT:    ld s4, 96(sp) # 8-byte Folded Reload
+; RV64IXCHERI-LP64-NEXT:    ld s5, 88(sp) # 8-byte Folded Reload
+; RV64IXCHERI-LP64-NEXT:    ld s6, 80(sp) # 8-byte Folded Reload
+; RV64IXCHERI-LP64-NEXT:    ld s7, 72(sp) # 8-byte Folded Reload
+; RV64IXCHERI-LP64-NEXT:    ld s8, 64(sp) # 8-byte Folded Reload
+; RV64IXCHERI-LP64-NEXT:    ld s9, 56(sp) # 8-byte Folded Reload
+; RV64IXCHERI-LP64-NEXT:    ld s10, 48(sp) # 8-byte Folded Reload
+; RV64IXCHERI-LP64-NEXT:    ld s11, 40(sp) # 8-byte Folded Reload
 ; RV64IXCHERI-LP64-NEXT:    addi sp, sp, 144
 ; RV64IXCHERI-LP64-NEXT:    ret
   %a = load volatile i8 addrspace(200)*, i8 addrspace(200)** %ptr

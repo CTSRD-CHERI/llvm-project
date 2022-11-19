@@ -27,8 +27,8 @@ define dso_local void @bar() addrspace(200) nounwind {
 ; RV32IXCHERI-IL32PC64-NEXT:    lui a0, 1
 ; RV32IXCHERI-IL32PC64-NEXT:    addi a0, a0, -1008
 ; RV32IXCHERI-IL32PC64-NEXT:    cincoffset csp, csp, a0
-; RV32IXCHERI-IL32PC64-NEXT:    clc cs0, 2016(csp) # 8-byte Folded Reload
 ; RV32IXCHERI-IL32PC64-NEXT:    clc cra, 2024(csp) # 8-byte Folded Reload
+; RV32IXCHERI-IL32PC64-NEXT:    clc cs0, 2016(csp) # 8-byte Folded Reload
 ; RV32IXCHERI-IL32PC64-NEXT:    cincoffset csp, csp, 2032
 ; RV32IXCHERI-IL32PC64-NEXT:    cret
 ;

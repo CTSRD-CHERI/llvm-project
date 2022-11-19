@@ -56,8 +56,8 @@ define i32 @dynamic_alloca(iXLEN %x) nounwind {
 ; RV32IXCHERI-NEXT:    csetbounds ca0, ca2, a0
 ; RV32IXCHERI-NEXT:    ccall use_arg
 ; RV32IXCHERI-NEXT:    cincoffset csp, cs0, -16
-; RV32IXCHERI-NEXT:    clc cs0, 0(csp) # 8-byte Folded Reload
 ; RV32IXCHERI-NEXT:    clc cra, 8(csp) # 8-byte Folded Reload
+; RV32IXCHERI-NEXT:    clc cs0, 0(csp) # 8-byte Folded Reload
 ; RV32IXCHERI-NEXT:    cincoffset csp, csp, 16
 ; RV32IXCHERI-NEXT:    cret
 ;
@@ -81,8 +81,8 @@ define i32 @dynamic_alloca(iXLEN %x) nounwind {
 ; RV64IXCHERI-NEXT:    csetbounds ca0, ca2, a0
 ; RV64IXCHERI-NEXT:    ccall use_arg
 ; RV64IXCHERI-NEXT:    cincoffset csp, cs0, -32
-; RV64IXCHERI-NEXT:    clc cs0, 0(csp) # 16-byte Folded Reload
 ; RV64IXCHERI-NEXT:    clc cra, 16(csp) # 16-byte Folded Reload
+; RV64IXCHERI-NEXT:    clc cs0, 0(csp) # 16-byte Folded Reload
 ; RV64IXCHERI-NEXT:    cincoffset csp, csp, 32
 ; RV64IXCHERI-NEXT:    cret
   %var = alloca i32, iXLEN %x, align 4, addrspace(200)

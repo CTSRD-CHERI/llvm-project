@@ -16,7 +16,7 @@ define void @test_clgc(i32 signext %n) {
 ; RV32I-NEXT:    # Label of block must be emitted
 ; RV32I-NEXT:    auipcc ca1, %captab_pcrel_hi(g)
 ; RV32I-NEXT:    clc ca1, %pcrel_lo(.LBB0_3)(ca1)
-; RV32I-NEXT:    mv a2, zero
+; RV32I-NEXT:    li a2, 0
 ; RV32I-NEXT:  .LBB0_1: # %loop
 ; RV32I-NEXT:    # =>This Inner Loop Header: Depth=1
 ; RV32I-NEXT:    clw a3, 0(ca1)
@@ -31,7 +31,7 @@ define void @test_clgc(i32 signext %n) {
 ; RV64I-NEXT:    # Label of block must be emitted
 ; RV64I-NEXT:    auipcc ca1, %captab_pcrel_hi(g)
 ; RV64I-NEXT:    clc ca1, %pcrel_lo(.LBB0_3)(ca1)
-; RV64I-NEXT:    mv a2, zero
+; RV64I-NEXT:    li a2, 0
 ; RV64I-NEXT:  .LBB0_1: # %loop
 ; RV64I-NEXT:    # =>This Inner Loop Header: Depth=1
 ; RV64I-NEXT:    clw a3, 0(ca1)
@@ -62,7 +62,7 @@ define void @test_cla_tls_ie(i32 signext %n) {
 ; RV32I-NEXT:    # Label of block must be emitted
 ; RV32I-NEXT:    auipcc ca1, %tls_ie_captab_pcrel_hi(ie)
 ; RV32I-NEXT:    clw a2, %pcrel_lo(.LBB1_3)(ca1)
-; RV32I-NEXT:    mv a1, zero
+; RV32I-NEXT:    li a1, 0
 ; RV32I-NEXT:    cincoffset ca2, ctp, a2
 ; RV32I-NEXT:  .LBB1_1: # %loop
 ; RV32I-NEXT:    # =>This Inner Loop Header: Depth=1
@@ -78,7 +78,7 @@ define void @test_cla_tls_ie(i32 signext %n) {
 ; RV64I-NEXT:    # Label of block must be emitted
 ; RV64I-NEXT:    auipcc ca1, %tls_ie_captab_pcrel_hi(ie)
 ; RV64I-NEXT:    cld a2, %pcrel_lo(.LBB1_3)(ca1)
-; RV64I-NEXT:    mv a1, zero
+; RV64I-NEXT:    li a1, 0
 ; RV64I-NEXT:    cincoffset ca2, ctp, a2
 ; RV64I-NEXT:  .LBB1_1: # %loop
 ; RV64I-NEXT:    # =>This Inner Loop Header: Depth=1
@@ -111,8 +111,8 @@ define void @test_clc_tls_gd(i32 signext %n) nounwind {
 ; RV32I-NEXT:    csc cs0, 16(csp) # 8-byte Folded Spill
 ; RV32I-NEXT:    csc cs1, 8(csp) # 8-byte Folded Spill
 ; RV32I-NEXT:    csc cs2, 0(csp) # 8-byte Folded Spill
-; RV32I-NEXT:    mv s2, a0
-; RV32I-NEXT:    mv s0, zero
+; RV32I-NEXT:    mv s0, a0
+; RV32I-NEXT:    li s2, 0
 ; RV32I-NEXT:  .LBB2_3: # %entry
 ; RV32I-NEXT:    # Label of block must be emitted
 ; RV32I-NEXT:    auipcc cs1, %tls_gd_captab_pcrel_hi(gd)
@@ -122,13 +122,13 @@ define void @test_clc_tls_gd(i32 signext %n) nounwind {
 ; RV32I-NEXT:    cmove ca0, cs1
 ; RV32I-NEXT:    ccall __tls_get_addr
 ; RV32I-NEXT:    clw a0, 0(ca0)
-; RV32I-NEXT:    addi s0, s0, 1
-; RV32I-NEXT:    blt s0, s2, .LBB2_1
+; RV32I-NEXT:    addi s2, s2, 1
+; RV32I-NEXT:    blt s2, s0, .LBB2_1
 ; RV32I-NEXT:  # %bb.2: # %ret
-; RV32I-NEXT:    clc cs2, 0(csp) # 8-byte Folded Reload
-; RV32I-NEXT:    clc cs1, 8(csp) # 8-byte Folded Reload
-; RV32I-NEXT:    clc cs0, 16(csp) # 8-byte Folded Reload
 ; RV32I-NEXT:    clc cra, 24(csp) # 8-byte Folded Reload
+; RV32I-NEXT:    clc cs0, 16(csp) # 8-byte Folded Reload
+; RV32I-NEXT:    clc cs1, 8(csp) # 8-byte Folded Reload
+; RV32I-NEXT:    clc cs2, 0(csp) # 8-byte Folded Reload
 ; RV32I-NEXT:    cincoffset csp, csp, 32
 ; RV32I-NEXT:    cret
 ;
@@ -139,8 +139,8 @@ define void @test_clc_tls_gd(i32 signext %n) nounwind {
 ; RV64I-NEXT:    csc cs0, 32(csp) # 16-byte Folded Spill
 ; RV64I-NEXT:    csc cs1, 16(csp) # 16-byte Folded Spill
 ; RV64I-NEXT:    csc cs2, 0(csp) # 16-byte Folded Spill
-; RV64I-NEXT:    mv s2, a0
-; RV64I-NEXT:    mv s0, zero
+; RV64I-NEXT:    mv s0, a0
+; RV64I-NEXT:    li s2, 0
 ; RV64I-NEXT:  .LBB2_3: # %entry
 ; RV64I-NEXT:    # Label of block must be emitted
 ; RV64I-NEXT:    auipcc cs1, %tls_gd_captab_pcrel_hi(gd)
@@ -150,13 +150,13 @@ define void @test_clc_tls_gd(i32 signext %n) nounwind {
 ; RV64I-NEXT:    cmove ca0, cs1
 ; RV64I-NEXT:    ccall __tls_get_addr
 ; RV64I-NEXT:    clw a0, 0(ca0)
-; RV64I-NEXT:    addiw s0, s0, 1
-; RV64I-NEXT:    blt s0, s2, .LBB2_1
+; RV64I-NEXT:    addiw s2, s2, 1
+; RV64I-NEXT:    blt s2, s0, .LBB2_1
 ; RV64I-NEXT:  # %bb.2: # %ret
-; RV64I-NEXT:    clc cs2, 0(csp) # 16-byte Folded Reload
-; RV64I-NEXT:    clc cs1, 16(csp) # 16-byte Folded Reload
-; RV64I-NEXT:    clc cs0, 32(csp) # 16-byte Folded Reload
 ; RV64I-NEXT:    clc cra, 48(csp) # 16-byte Folded Reload
+; RV64I-NEXT:    clc cs0, 32(csp) # 16-byte Folded Reload
+; RV64I-NEXT:    clc cs1, 16(csp) # 16-byte Folded Reload
+; RV64I-NEXT:    clc cs2, 0(csp) # 16-byte Folded Reload
 ; RV64I-NEXT:    cincoffset csp, csp, 64
 ; RV64I-NEXT:    cret
 entry:

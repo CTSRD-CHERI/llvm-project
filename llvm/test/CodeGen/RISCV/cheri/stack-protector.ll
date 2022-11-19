@@ -49,8 +49,8 @@ define void @caller() addrspace(200) nounwind sspstrong {
 ; IL32PC64-NEXT:    clw a1, 12(csp)
 ; IL32PC64-NEXT:    bne a0, a1, .LBB0_2
 ; IL32PC64-NEXT:  # %bb.1:
-; IL32PC64-NEXT:    clc cs0, 16(csp) # 8-byte Folded Reload
 ; IL32PC64-NEXT:    clc cra, 24(csp) # 8-byte Folded Reload
+; IL32PC64-NEXT:    clc cs0, 16(csp) # 8-byte Folded Reload
 ; IL32PC64-NEXT:    cincoffset csp, csp, 32
 ; IL32PC64-NEXT:    cret
 ; IL32PC64-NEXT:  .LBB0_2:
@@ -73,8 +73,8 @@ define void @caller() addrspace(200) nounwind sspstrong {
 ; L64PC128-NEXT:    cld a1, 8(csp)
 ; L64PC128-NEXT:    bne a0, a1, .LBB0_2
 ; L64PC128-NEXT:  # %bb.1:
-; L64PC128-NEXT:    clc cs0, 16(csp) # 16-byte Folded Reload
 ; L64PC128-NEXT:    clc cra, 32(csp) # 16-byte Folded Reload
+; L64PC128-NEXT:    clc cs0, 16(csp) # 16-byte Folded Reload
 ; L64PC128-NEXT:    cincoffset csp, csp, 48
 ; L64PC128-NEXT:    cret
 ; L64PC128-NEXT:  .LBB0_2:

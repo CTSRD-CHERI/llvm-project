@@ -19,8 +19,8 @@ define i8 addrspace(200)* @pluto() addrspace(200) nounwind {
 ; IL32PC64-NEXT:    cincoffset ca0, csp, 0
 ; IL32PC64-NEXT:    csetbounds ca0, ca0, 64
 ; IL32PC64-NEXT:    cincoffset csp, cs0, -128
-; IL32PC64-NEXT:    clc cs0, 112(csp) # 8-byte Folded Reload
 ; IL32PC64-NEXT:    clc cra, 120(csp) # 8-byte Folded Reload
+; IL32PC64-NEXT:    clc cs0, 112(csp) # 8-byte Folded Reload
 ; IL32PC64-NEXT:    cincoffset csp, csp, 128
 ; IL32PC64-NEXT:    cret
 ;
@@ -36,8 +36,8 @@ define i8 addrspace(200)* @pluto() addrspace(200) nounwind {
 ; L64PC128-NEXT:    cincoffset ca0, csp, 0
 ; L64PC128-NEXT:    csetbounds ca0, ca0, 64
 ; L64PC128-NEXT:    cincoffset csp, cs0, -128
-; L64PC128-NEXT:    clc cs0, 96(csp) # 16-byte Folded Reload
 ; L64PC128-NEXT:    clc cra, 112(csp) # 16-byte Folded Reload
+; L64PC128-NEXT:    clc cs0, 96(csp) # 16-byte Folded Reload
 ; L64PC128-NEXT:    cincoffset csp, csp, 128
 ; L64PC128-NEXT:    cret
 bb:

@@ -14,7 +14,7 @@ define i32 @get_ith_word(i32 signext %i, ...) nounwind {
 ; CHECK-NEXT:    # =>This Inner Loop Header: Depth=1
 ; CHECK-NEXT:    cmove ca2, ca1
 ; CHECK-NEXT:    sext.w a3, a0
-; CHECK-NEXT:    addi a0, a0, -1
+; CHECK-NEXT:    addiw a0, a0, -1
 ; CHECK-NEXT:    cincoffset ca1, ca1, 4
 ; CHECK-NEXT:    bgtz a3, .LBB0_1
 ; CHECK-NEXT:  # %bb.2: # %while.end
@@ -59,7 +59,7 @@ define i8 addrspace(200)* @get_ith_cap(i32 signext %i, ...) nounwind {
 ; CHECK-NEXT:  .LBB1_1: # %while.cond
 ; CHECK-NEXT:    # =>This Inner Loop Header: Depth=1
 ; CHECK-NEXT:    sext.w a3, a0
-; CHECK-NEXT:    addi a0, a0, -1
+; CHECK-NEXT:    addiw a0, a0, -1
 ; CHECK-NEXT:    cgetaddr a2, ca1
 ; CHECK-NEXT:    addi a2, a2, 15
 ; CHECK-NEXT:    andi a2, a2, -16
@@ -110,7 +110,7 @@ define void @test_varargs_odd_cap_reg() nounwind {
 ; CHECK:       # %bb.0: # %entry
 ; CHECK-NEXT:    cincoffset csp, csp, -32
 ; CHECK-NEXT:    csc cra, 16(csp) # 16-byte Folded Spill
-; CHECK-NEXT:    addi a0, zero, 1
+; CHECK-NEXT:    li a0, 1
 ; CHECK-NEXT:    csc cnull, 0(csp)
 ; CHECK-NEXT:    ccall varargs
 ; CHECK-NEXT:    clc cra, 16(csp) # 16-byte Folded Reload
