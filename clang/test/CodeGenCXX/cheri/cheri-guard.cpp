@@ -5,7 +5,7 @@ struct foo {
 
 // CHECK: @_ZGVZ1fvE1x = internal addrspace(200) global i64 0, align 8
 foo *f() {
-  // CHECK-LABEL: define dso_local %struct.foo addrspace(200)* @_Z1fv()
+  // CHECK-LABEL: define dso_local noundef %struct.foo addrspace(200)* @_Z1fv()
   // CHECK: [[LOADED_GUARD:%.+]] = load atomic i8, i8 addrspace(200)* bitcast (i64 addrspace(200)* @_ZGVZ1fvE1x to i8 addrspace(200)*) acquire, align 8
   // CHECK-NEXT: [[UNINITIALIZED:%.+]] = icmp eq i8 [[LOADED_GUARD]], 0
   // CHECK-NEXT: br i1 [[UNINITIALIZED]], label %[[ACQUIRE_LABEL:.+]], label %[[EXIT_LABEL:[^, !]+]]
@@ -16,7 +16,7 @@ foo *f() {
   // CHECK-NEXT: br i1 [[TOBOOL]], label %[[INITIALIZE_LABEL:.+]], label %[[EXIT_LABEL]]
 
   // CHECK: [[INITIALIZE_LABEL]]:
-  // CHECK-NEXT: call void @_ZN3fooC1Ev(%struct.foo addrspace(200)* nonnull align 1 dereferenceable(1) @_ZZ1fvE1x)
+  // CHECK-NEXT: call void @_ZN3fooC1Ev(%struct.foo addrspace(200)* noundef nonnull align 1 dereferenceable(1) @_ZZ1fvE1x)
   // CHECK-NEXT: call void @__cxa_guard_release(i64 addrspace(200)* @_ZGVZ1fvE1x)
   // CHECK-NEXT: br label %[[EXIT_LABEL]]
 

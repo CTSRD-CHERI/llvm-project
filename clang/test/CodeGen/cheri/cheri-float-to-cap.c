@@ -3,7 +3,7 @@
 // RUN:  %cheri_purecap_cc1 -o - -O2 -emit-llvm %s | FileCheck %s --check-prefix=OPT
 
 // CHECK-LABEL: define {{[^@]+}}@test_long
-// CHECK-SAME: () addrspace(200) [[ATTR0:#.*]] {
+// CHECK-SAME: () addrspace(200) #[[ATTR0:[0-9]+]] {
 // CHECK-NEXT:  entry:
 // CHECK-NEXT:    [[D:%.*]] = alloca double, align 8, addrspace(200)
 // CHECK-NEXT:    [[L:%.*]] = alloca i64, align 8, addrspace(200)
@@ -19,7 +19,7 @@
 // CHECK-NEXT:    ret double [[TMP2]]
 //
 // OPT-LABEL: define {{[^@]+}}@test_long
-// OPT-SAME: () local_unnamed_addr addrspace(200) [[ATTR0:#.*]] {
+// OPT-SAME: () local_unnamed_addr addrspace(200) #[[ATTR0:[0-9]+]] {
 // OPT-NEXT:  entry:
 // OPT-NEXT:    ret double 1.234000e+03
 //
@@ -32,7 +32,7 @@ double test_long(void) {
 }
 
 // CHECK-LABEL: define {{[^@]+}}@test_intcap
-// CHECK-SAME: () addrspace(200) [[ATTR0]] {
+// CHECK-SAME: () addrspace(200) #[[ATTR0]] {
 // CHECK-NEXT:  entry:
 // CHECK-NEXT:    [[D:%.*]] = alloca double, align 8, addrspace(200)
 // CHECK-NEXT:    [[CAP:%.*]] = alloca i8 addrspace(200)*, align 16, addrspace(200)
@@ -50,7 +50,7 @@ double test_long(void) {
 // CHECK-NEXT:    ret double [[TMP4]]
 //
 // OPT-LABEL: define {{[^@]+}}@test_intcap
-// OPT-SAME: () local_unnamed_addr addrspace(200) [[ATTR0]] {
+// OPT-SAME: () local_unnamed_addr addrspace(200) #[[ATTR0]] {
 // OPT-NEXT:  entry:
 // OPT-NEXT:    ret double 1.234000e+03
 //
@@ -63,7 +63,7 @@ double test_intcap(void) {
 }
 
 // CHECK-LABEL: define {{[^@]+}}@test_ulong
-// CHECK-SAME: () addrspace(200) [[ATTR0]] {
+// CHECK-SAME: () addrspace(200) #[[ATTR0]] {
 // CHECK-NEXT:  entry:
 // CHECK-NEXT:    [[D:%.*]] = alloca double, align 8, addrspace(200)
 // CHECK-NEXT:    [[L:%.*]] = alloca i64, align 8, addrspace(200)
@@ -79,7 +79,7 @@ double test_intcap(void) {
 // CHECK-NEXT:    ret double [[TMP2]]
 //
 // OPT-LABEL: define {{[^@]+}}@test_ulong
-// OPT-SAME: () local_unnamed_addr addrspace(200) [[ATTR0]] {
+// OPT-SAME: () local_unnamed_addr addrspace(200) #[[ATTR0]] {
 // OPT-NEXT:  entry:
 // OPT-NEXT:    ret double 1.234000e+03
 //
@@ -92,7 +92,7 @@ double test_ulong(void) {
 }
 
 // CHECK-LABEL: define {{[^@]+}}@test_uintcap
-// CHECK-SAME: () addrspace(200) [[ATTR0]] {
+// CHECK-SAME: () addrspace(200) #[[ATTR0]] {
 // CHECK-NEXT:  entry:
 // CHECK-NEXT:    [[D:%.*]] = alloca double, align 8, addrspace(200)
 // CHECK-NEXT:    [[CAP:%.*]] = alloca i8 addrspace(200)*, align 16, addrspace(200)
@@ -110,7 +110,7 @@ double test_ulong(void) {
 // CHECK-NEXT:    ret double [[TMP4]]
 //
 // OPT-LABEL: define {{[^@]+}}@test_uintcap
-// OPT-SAME: () local_unnamed_addr addrspace(200) [[ATTR0]] {
+// OPT-SAME: () local_unnamed_addr addrspace(200) #[[ATTR0]] {
 // OPT-NEXT:  entry:
 // OPT-NEXT:    ret double 1.234000e+03
 //

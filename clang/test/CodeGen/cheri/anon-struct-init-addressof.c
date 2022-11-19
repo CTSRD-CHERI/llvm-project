@@ -25,7 +25,7 @@ typedef int idtype_t;
 extern int procctl(idtype_t, pid_t, int, void *);
 
 // CHECK-LABEL: define {{[^@]+}}@test
-// CHECK-SAME: (i32 signext [[PARENT:%.*]]) addrspace(200) [[ATTR0:#.*]] {
+// CHECK-SAME: (i32 noundef signext [[PARENT:%.*]]) addrspace(200) #[[ATTR0:[0-9]+]] {
 // CHECK-NEXT:  entry:
 // CHECK-NEXT:    [[PARENT_ADDR:%.*]] = alloca i32, align 4, addrspace(200)
 // CHECK-NEXT:    [[INFO:%.*]] = alloca [10 x %struct.procctl_reaper_pidinfo], align 4, addrspace(200)
@@ -44,7 +44,7 @@ extern int procctl(idtype_t, pid_t, int, void *);
 // CHECK-NEXT:    [[ARRAYDECAY1:%.*]] = getelementptr inbounds [10 x %struct.procctl_reaper_pidinfo], [10 x %struct.procctl_reaper_pidinfo] addrspace(200)* [[INFO]], i64 0, i64 0
 // CHECK-NEXT:    store [[STRUCT_PROCCTL_REAPER_PIDINFO]] addrspace(200)* [[ARRAYDECAY1]], [[STRUCT_PROCCTL_REAPER_PIDINFO]] addrspace(200)* addrspace(200)* [[RP_PIDS]], align 16
 // CHECK-NEXT:    [[TMP3:%.*]] = bitcast [[STRUCT_PROCCTL_REAPER_PIDS]] addrspace(200)* [[DOTCOMPOUNDLITERAL]] to i8 addrspace(200)*
-// CHECK-NEXT:    [[CALL:%.*]] = call signext i32 @procctl(i32 signext 0, i32 signext [[TMP1]], i32 signext 22, i8 addrspace(200)* [[TMP3]])
+// CHECK-NEXT:    [[CALL:%.*]] = call signext i32 @procctl(i32 noundef signext 0, i32 noundef signext [[TMP1]], i32 noundef signext 22, i8 addrspace(200)* noundef [[TMP3]])
 // CHECK-NEXT:    store i32 [[CALL]], i32 addrspace(200)* [[R]], align 4
 // CHECK-NEXT:    [[TMP4:%.*]] = load i32, i32 addrspace(200)* [[R]], align 4
 // CHECK-NEXT:    ret i32 [[TMP4]]

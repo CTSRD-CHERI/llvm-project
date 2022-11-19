@@ -14,8 +14,8 @@ extern int s32;
 // CHECK-NEXT:  entry:
 // CHECK-NEXT:    [[TMP0:%.*]] = load i32, i32* @u32, align 4
 // CHECK-NEXT:    [[CONV:%.*]] = zext i32 [[TMP0]] to i64
-// CHECK-NEXT:    [[TMP2:%.*]] = getelementptr i8, i8 addrspace(200)* null, i64 [[CONV]]
-// CHECK-NEXT:    ret i8 addrspace(200)* [[TMP2]]
+// CHECK-NEXT:    [[TMP1:%.*]] = getelementptr i8, i8 addrspace(200)* null, i64 [[CONV]]
+// CHECK-NEXT:    ret i8 addrspace(200)* [[TMP1]]
 //
 __uintcap_t zext_cap() {
   return static_cast<__uintcap_t>(u32);
@@ -36,8 +36,8 @@ unsigned long long zext_64() {
 // CHECK-NEXT:  entry:
 // CHECK-NEXT:    [[TMP0:%.*]] = load i32, i32* @s32, align 4
 // CHECK-NEXT:    [[CONV:%.*]] = sext i32 [[TMP0]] to i64
-// CHECK-NEXT:    [[TMP2:%.*]] = getelementptr i8, i8 addrspace(200)* null, i64 [[CONV]]
-// CHECK-NEXT:    ret i8 addrspace(200)* [[TMP2]]
+// CHECK-NEXT:    [[TMP1:%.*]] = getelementptr i8, i8 addrspace(200)* null, i64 [[CONV]]
+// CHECK-NEXT:    ret i8 addrspace(200)* [[TMP1]]
 //
 __intcap_t sext_cap() {
   return static_cast<__intcap_t>(s32);

@@ -44,7 +44,8 @@ extern struct double_cap_array double_cap_array;
 extern struct mixed mixed;
 extern union int_or_cap int_or_cap;
 
-// MIPS-LABEL: define {{[^@]+}}@caller() #0
+// MIPS-LABEL: define {{[^@]+}}@caller
+// MIPS-SAME: () #[[ATTR0:[0-9]+]] {
 // MIPS-NEXT:  entry:
 // MIPS-NEXT:    [[NULL_CAP:%.*]] = alloca i8 addrspace(200)*, align 16
 // MIPS-NEXT:    [[NULL_UINTCAP:%.*]] = alloca i8 addrspace(200)*, align 16
@@ -68,28 +69,29 @@ extern union int_or_cap int_or_cap;
 // MIPS-NEXT:    store i8 addrspace(200)* [[TMP1]], i8 addrspace(200)** [[INDIRECT_ARG_TEMP1]], align 16
 // MIPS-NEXT:    store i8 addrspace(200)* [[TMP2]], i8 addrspace(200)** [[INDIRECT_ARG_TEMP2]], align 16
 // MIPS-NEXT:    store i8 addrspace(200)* [[TMP3]], i8 addrspace(200)** [[INDIRECT_ARG_TEMP3]], align 16
-// MIPS-NEXT:    call void (i64, ...) @callee(i64 signext 0, i8 addrspace(200)** [[INDIRECT_ARG_TEMP]], i8 addrspace(200)** [[INDIRECT_ARG_TEMP1]], i8 addrspace(200)** [[INDIRECT_ARG_TEMP2]], i8 addrspace(200)** [[INDIRECT_ARG_TEMP3]])
+// MIPS-NEXT:    call void (i64, ...) @callee(i64 noundef signext 0, i8 addrspace(200)** noundef [[INDIRECT_ARG_TEMP]], i8 addrspace(200)** noundef [[INDIRECT_ARG_TEMP1]], i8 addrspace(200)** noundef [[INDIRECT_ARG_TEMP2]], i8 addrspace(200)** noundef [[INDIRECT_ARG_TEMP3]])
 // MIPS-NEXT:    [[TMP4:%.*]] = bitcast %struct.single_cap* [[BYVAL_TEMP]] to i8*
 // MIPS-NEXT:    call void @llvm.memcpy.p0i8.p0i8.i64(i8* align 16 [[TMP4]], i8* align 16 bitcast (%struct.single_cap* @single_cap to i8*), i64 16, i1 false)
-// MIPS-NEXT:    call void (i64, ...) @callee(i64 signext 1, %struct.single_cap* [[BYVAL_TEMP]])
+// MIPS-NEXT:    call void (i64, ...) @callee(i64 noundef signext 1, %struct.single_cap* noundef [[BYVAL_TEMP]])
 // MIPS-NEXT:    [[TMP5:%.*]] = bitcast %struct.double_cap* [[BYVAL_TEMP4]] to i8*
 // MIPS-NEXT:    call void @llvm.memcpy.p0i8.p0i8.i64(i8* align 16 [[TMP5]], i8* align 16 bitcast (%struct.double_cap* @double_cap to i8*), i64 32, i1 false)
-// MIPS-NEXT:    call void (i64, ...) @callee(i64 signext 2, %struct.double_cap* [[BYVAL_TEMP4]])
+// MIPS-NEXT:    call void (i64, ...) @callee(i64 noundef signext 2, %struct.double_cap* noundef [[BYVAL_TEMP4]])
 // MIPS-NEXT:    [[TMP6:%.*]] = bitcast %struct.single_cap_array* [[BYVAL_TEMP5]] to i8*
 // MIPS-NEXT:    call void @llvm.memcpy.p0i8.p0i8.i64(i8* align 16 [[TMP6]], i8* align 16 bitcast (%struct.single_cap_array* @single_cap_array to i8*), i64 16, i1 false)
-// MIPS-NEXT:    call void (i64, ...) @callee(i64 signext 3, %struct.single_cap_array* [[BYVAL_TEMP5]])
+// MIPS-NEXT:    call void (i64, ...) @callee(i64 noundef signext 3, %struct.single_cap_array* noundef [[BYVAL_TEMP5]])
 // MIPS-NEXT:    [[TMP7:%.*]] = bitcast %struct.double_cap_array* [[BYVAL_TEMP6]] to i8*
 // MIPS-NEXT:    call void @llvm.memcpy.p0i8.p0i8.i64(i8* align 16 [[TMP7]], i8* align 16 bitcast (%struct.double_cap_array* @double_cap_array to i8*), i64 32, i1 false)
-// MIPS-NEXT:    call void (i64, ...) @callee(i64 signext 4, %struct.double_cap_array* [[BYVAL_TEMP6]])
+// MIPS-NEXT:    call void (i64, ...) @callee(i64 noundef signext 4, %struct.double_cap_array* noundef [[BYVAL_TEMP6]])
 // MIPS-NEXT:    [[TMP8:%.*]] = bitcast %struct.mixed* [[BYVAL_TEMP7]] to i8*
 // MIPS-NEXT:    call void @llvm.memcpy.p0i8.p0i8.i64(i8* align 16 [[TMP8]], i8* align 16 bitcast (%struct.mixed* @mixed to i8*), i64 32, i1 false)
-// MIPS-NEXT:    call void (i64, ...) @callee(i64 signext 5, %struct.mixed* [[BYVAL_TEMP7]])
+// MIPS-NEXT:    call void (i64, ...) @callee(i64 noundef signext 5, %struct.mixed* noundef [[BYVAL_TEMP7]])
 // MIPS-NEXT:    [[TMP9:%.*]] = bitcast %union.int_or_cap* [[BYVAL_TEMP8]] to i8*
 // MIPS-NEXT:    call void @llvm.memcpy.p0i8.p0i8.i64(i8* align 16 [[TMP9]], i8* align 16 bitcast (%union.int_or_cap* @int_or_cap to i8*), i64 16, i1 false)
-// MIPS-NEXT:    call void (i64, ...) @callee(i64 signext 6, %union.int_or_cap* [[BYVAL_TEMP8]])
+// MIPS-NEXT:    call void (i64, ...) @callee(i64 noundef signext 6, %union.int_or_cap* noundef [[BYVAL_TEMP8]])
 // MIPS-NEXT:    ret void
 //
-// RV32IXCHERI-LABEL: define {{[^@]+}}@caller() #0
+// RV32IXCHERI-LABEL: define {{[^@]+}}@caller
+// RV32IXCHERI-SAME: () #[[ATTR0:[0-9]+]] {
 // RV32IXCHERI-NEXT:  entry:
 // RV32IXCHERI-NEXT:    [[NULL_CAP:%.*]] = alloca i8 addrspace(200)*, align 8
 // RV32IXCHERI-NEXT:    [[NULL_UINTCAP:%.*]] = alloca i8 addrspace(200)*, align 8
@@ -113,28 +115,29 @@ extern union int_or_cap int_or_cap;
 // RV32IXCHERI-NEXT:    store i8 addrspace(200)* [[TMP1]], i8 addrspace(200)** [[INDIRECT_ARG_TEMP1]], align 8
 // RV32IXCHERI-NEXT:    store i8 addrspace(200)* [[TMP2]], i8 addrspace(200)** [[INDIRECT_ARG_TEMP2]], align 8
 // RV32IXCHERI-NEXT:    store i8 addrspace(200)* [[TMP3]], i8 addrspace(200)** [[INDIRECT_ARG_TEMP3]], align 8
-// RV32IXCHERI-NEXT:    call void (i32, ...) @callee(i32 0, i8 addrspace(200)** [[INDIRECT_ARG_TEMP]], i8 addrspace(200)** [[INDIRECT_ARG_TEMP1]], i8 addrspace(200)** [[INDIRECT_ARG_TEMP2]], i8 addrspace(200)** [[INDIRECT_ARG_TEMP3]])
+// RV32IXCHERI-NEXT:    call void (i32, ...) @callee(i32 noundef 0, i8 addrspace(200)** noundef [[INDIRECT_ARG_TEMP]], i8 addrspace(200)** noundef [[INDIRECT_ARG_TEMP1]], i8 addrspace(200)** noundef [[INDIRECT_ARG_TEMP2]], i8 addrspace(200)** noundef [[INDIRECT_ARG_TEMP3]])
 // RV32IXCHERI-NEXT:    [[TMP4:%.*]] = bitcast %struct.single_cap* [[BYVAL_TEMP]] to i8*
 // RV32IXCHERI-NEXT:    call void @llvm.memcpy.p0i8.p0i8.i32(i8* align 8 [[TMP4]], i8* align 8 bitcast (%struct.single_cap* @single_cap to i8*), i32 8, i1 false)
-// RV32IXCHERI-NEXT:    call void (i32, ...) @callee(i32 1, %struct.single_cap* [[BYVAL_TEMP]])
+// RV32IXCHERI-NEXT:    call void (i32, ...) @callee(i32 noundef 1, %struct.single_cap* noundef [[BYVAL_TEMP]])
 // RV32IXCHERI-NEXT:    [[TMP5:%.*]] = bitcast %struct.double_cap* [[BYVAL_TEMP4]] to i8*
 // RV32IXCHERI-NEXT:    call void @llvm.memcpy.p0i8.p0i8.i32(i8* align 8 [[TMP5]], i8* align 8 bitcast (%struct.double_cap* @double_cap to i8*), i32 16, i1 false)
-// RV32IXCHERI-NEXT:    call void (i32, ...) @callee(i32 2, %struct.double_cap* [[BYVAL_TEMP4]])
+// RV32IXCHERI-NEXT:    call void (i32, ...) @callee(i32 noundef 2, %struct.double_cap* noundef [[BYVAL_TEMP4]])
 // RV32IXCHERI-NEXT:    [[TMP6:%.*]] = bitcast %struct.single_cap_array* [[BYVAL_TEMP5]] to i8*
 // RV32IXCHERI-NEXT:    call void @llvm.memcpy.p0i8.p0i8.i32(i8* align 8 [[TMP6]], i8* align 8 bitcast (%struct.single_cap_array* @single_cap_array to i8*), i32 8, i1 false)
-// RV32IXCHERI-NEXT:    call void (i32, ...) @callee(i32 3, %struct.single_cap_array* [[BYVAL_TEMP5]])
+// RV32IXCHERI-NEXT:    call void (i32, ...) @callee(i32 noundef 3, %struct.single_cap_array* noundef [[BYVAL_TEMP5]])
 // RV32IXCHERI-NEXT:    [[TMP7:%.*]] = bitcast %struct.double_cap_array* [[BYVAL_TEMP6]] to i8*
 // RV32IXCHERI-NEXT:    call void @llvm.memcpy.p0i8.p0i8.i32(i8* align 8 [[TMP7]], i8* align 8 bitcast (%struct.double_cap_array* @double_cap_array to i8*), i32 16, i1 false)
-// RV32IXCHERI-NEXT:    call void (i32, ...) @callee(i32 4, %struct.double_cap_array* [[BYVAL_TEMP6]])
+// RV32IXCHERI-NEXT:    call void (i32, ...) @callee(i32 noundef 4, %struct.double_cap_array* noundef [[BYVAL_TEMP6]])
 // RV32IXCHERI-NEXT:    [[TMP8:%.*]] = bitcast %struct.mixed* [[BYVAL_TEMP7]] to i8*
 // RV32IXCHERI-NEXT:    call void @llvm.memcpy.p0i8.p0i8.i32(i8* align 8 [[TMP8]], i8* align 8 bitcast (%struct.mixed* @mixed to i8*), i32 16, i1 false)
-// RV32IXCHERI-NEXT:    call void (i32, ...) @callee(i32 5, %struct.mixed* [[BYVAL_TEMP7]])
+// RV32IXCHERI-NEXT:    call void (i32, ...) @callee(i32 noundef 5, %struct.mixed* noundef [[BYVAL_TEMP7]])
 // RV32IXCHERI-NEXT:    [[TMP9:%.*]] = bitcast %union.int_or_cap* [[BYVAL_TEMP8]] to i8*
 // RV32IXCHERI-NEXT:    call void @llvm.memcpy.p0i8.p0i8.i32(i8* align 8 [[TMP9]], i8* align 8 bitcast (%union.int_or_cap* @int_or_cap to i8*), i32 8, i1 false)
-// RV32IXCHERI-NEXT:    call void (i32, ...) @callee(i32 6, %union.int_or_cap* [[BYVAL_TEMP8]])
+// RV32IXCHERI-NEXT:    call void (i32, ...) @callee(i32 noundef 6, %union.int_or_cap* noundef [[BYVAL_TEMP8]])
 // RV32IXCHERI-NEXT:    ret void
 //
-// RV64IXCHERI-LABEL: define {{[^@]+}}@caller() #0
+// RV64IXCHERI-LABEL: define {{[^@]+}}@caller
+// RV64IXCHERI-SAME: () #[[ATTR0:[0-9]+]] {
 // RV64IXCHERI-NEXT:  entry:
 // RV64IXCHERI-NEXT:    [[NULL_CAP:%.*]] = alloca i8 addrspace(200)*, align 16
 // RV64IXCHERI-NEXT:    [[NULL_UINTCAP:%.*]] = alloca i8 addrspace(200)*, align 16
@@ -158,25 +161,25 @@ extern union int_or_cap int_or_cap;
 // RV64IXCHERI-NEXT:    store i8 addrspace(200)* [[TMP1]], i8 addrspace(200)** [[INDIRECT_ARG_TEMP1]], align 16
 // RV64IXCHERI-NEXT:    store i8 addrspace(200)* [[TMP2]], i8 addrspace(200)** [[INDIRECT_ARG_TEMP2]], align 16
 // RV64IXCHERI-NEXT:    store i8 addrspace(200)* [[TMP3]], i8 addrspace(200)** [[INDIRECT_ARG_TEMP3]], align 16
-// RV64IXCHERI-NEXT:    call void (i64, ...) @callee(i64 0, i8 addrspace(200)** [[INDIRECT_ARG_TEMP]], i8 addrspace(200)** [[INDIRECT_ARG_TEMP1]], i8 addrspace(200)** [[INDIRECT_ARG_TEMP2]], i8 addrspace(200)** [[INDIRECT_ARG_TEMP3]])
+// RV64IXCHERI-NEXT:    call void (i64, ...) @callee(i64 noundef 0, i8 addrspace(200)** noundef [[INDIRECT_ARG_TEMP]], i8 addrspace(200)** noundef [[INDIRECT_ARG_TEMP1]], i8 addrspace(200)** noundef [[INDIRECT_ARG_TEMP2]], i8 addrspace(200)** noundef [[INDIRECT_ARG_TEMP3]])
 // RV64IXCHERI-NEXT:    [[TMP4:%.*]] = bitcast %struct.single_cap* [[BYVAL_TEMP]] to i8*
 // RV64IXCHERI-NEXT:    call void @llvm.memcpy.p0i8.p0i8.i64(i8* align 16 [[TMP4]], i8* align 16 bitcast (%struct.single_cap* @single_cap to i8*), i64 16, i1 false)
-// RV64IXCHERI-NEXT:    call void (i64, ...) @callee(i64 1, %struct.single_cap* [[BYVAL_TEMP]])
+// RV64IXCHERI-NEXT:    call void (i64, ...) @callee(i64 noundef 1, %struct.single_cap* noundef [[BYVAL_TEMP]])
 // RV64IXCHERI-NEXT:    [[TMP5:%.*]] = bitcast %struct.double_cap* [[BYVAL_TEMP4]] to i8*
 // RV64IXCHERI-NEXT:    call void @llvm.memcpy.p0i8.p0i8.i64(i8* align 16 [[TMP5]], i8* align 16 bitcast (%struct.double_cap* @double_cap to i8*), i64 32, i1 false)
-// RV64IXCHERI-NEXT:    call void (i64, ...) @callee(i64 2, %struct.double_cap* [[BYVAL_TEMP4]])
+// RV64IXCHERI-NEXT:    call void (i64, ...) @callee(i64 noundef 2, %struct.double_cap* noundef [[BYVAL_TEMP4]])
 // RV64IXCHERI-NEXT:    [[TMP6:%.*]] = bitcast %struct.single_cap_array* [[BYVAL_TEMP5]] to i8*
 // RV64IXCHERI-NEXT:    call void @llvm.memcpy.p0i8.p0i8.i64(i8* align 16 [[TMP6]], i8* align 16 bitcast (%struct.single_cap_array* @single_cap_array to i8*), i64 16, i1 false)
-// RV64IXCHERI-NEXT:    call void (i64, ...) @callee(i64 3, %struct.single_cap_array* [[BYVAL_TEMP5]])
+// RV64IXCHERI-NEXT:    call void (i64, ...) @callee(i64 noundef 3, %struct.single_cap_array* noundef [[BYVAL_TEMP5]])
 // RV64IXCHERI-NEXT:    [[TMP7:%.*]] = bitcast %struct.double_cap_array* [[BYVAL_TEMP6]] to i8*
 // RV64IXCHERI-NEXT:    call void @llvm.memcpy.p0i8.p0i8.i64(i8* align 16 [[TMP7]], i8* align 16 bitcast (%struct.double_cap_array* @double_cap_array to i8*), i64 32, i1 false)
-// RV64IXCHERI-NEXT:    call void (i64, ...) @callee(i64 4, %struct.double_cap_array* [[BYVAL_TEMP6]])
+// RV64IXCHERI-NEXT:    call void (i64, ...) @callee(i64 noundef 4, %struct.double_cap_array* noundef [[BYVAL_TEMP6]])
 // RV64IXCHERI-NEXT:    [[TMP8:%.*]] = bitcast %struct.mixed* [[BYVAL_TEMP7]] to i8*
 // RV64IXCHERI-NEXT:    call void @llvm.memcpy.p0i8.p0i8.i64(i8* align 16 [[TMP8]], i8* align 16 bitcast (%struct.mixed* @mixed to i8*), i64 32, i1 false)
-// RV64IXCHERI-NEXT:    call void (i64, ...) @callee(i64 5, %struct.mixed* [[BYVAL_TEMP7]])
+// RV64IXCHERI-NEXT:    call void (i64, ...) @callee(i64 noundef 5, %struct.mixed* noundef [[BYVAL_TEMP7]])
 // RV64IXCHERI-NEXT:    [[TMP9:%.*]] = bitcast %union.int_or_cap* [[BYVAL_TEMP8]] to i8*
 // RV64IXCHERI-NEXT:    call void @llvm.memcpy.p0i8.p0i8.i64(i8* align 16 [[TMP9]], i8* align 16 bitcast (%union.int_or_cap* @int_or_cap to i8*), i64 16, i1 false)
-// RV64IXCHERI-NEXT:    call void (i64, ...) @callee(i64 6, %union.int_or_cap* [[BYVAL_TEMP8]])
+// RV64IXCHERI-NEXT:    call void (i64, ...) @callee(i64 noundef 6, %union.int_or_cap* noundef [[BYVAL_TEMP8]])
 // RV64IXCHERI-NEXT:    ret void
 //
 void caller(void) {
@@ -193,7 +196,7 @@ void caller(void) {
 }
 
 // MIPS-LABEL: define {{[^@]+}}@callee
-// MIPS-SAME: (i64 signext [[SEL:%.*]], ...) #0
+// MIPS-SAME: (i64 noundef signext [[SEL:%.*]], ...) #[[ATTR0]] {
 // MIPS-NEXT:  entry:
 // MIPS-NEXT:    [[SEL_ADDR:%.*]] = alloca i64, align 8
 // MIPS-NEXT:    [[NULL_CAP:%.*]] = alloca i8 addrspace(200)*, align 16
@@ -316,7 +319,7 @@ void caller(void) {
 // MIPS-NEXT:    ret void
 //
 // RV32IXCHERI-LABEL: define {{[^@]+}}@callee
-// RV32IXCHERI-SAME: (i32 [[SEL:%.*]], ...) #0
+// RV32IXCHERI-SAME: (i32 noundef [[SEL:%.*]], ...) #[[ATTR0]] {
 // RV32IXCHERI-NEXT:  entry:
 // RV32IXCHERI-NEXT:    [[SEL_ADDR:%.*]] = alloca i32, align 4
 // RV32IXCHERI-NEXT:    [[NULL_CAP:%.*]] = alloca i8 addrspace(200)*, align 8
@@ -439,7 +442,7 @@ void caller(void) {
 // RV32IXCHERI-NEXT:    ret void
 //
 // RV64IXCHERI-LABEL: define {{[^@]+}}@callee
-// RV64IXCHERI-SAME: (i64 [[SEL:%.*]], ...) #0
+// RV64IXCHERI-SAME: (i64 noundef [[SEL:%.*]], ...) #[[ATTR0]] {
 // RV64IXCHERI-NEXT:  entry:
 // RV64IXCHERI-NEXT:    [[SEL_ADDR:%.*]] = alloca i64, align 8
 // RV64IXCHERI-NEXT:    [[NULL_CAP:%.*]] = alloca i8 addrspace(200)*, align 16

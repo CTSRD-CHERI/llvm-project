@@ -8,16 +8,16 @@ int a();
 #pragma weak a
 int d();
 int e();
-// PCREL-LABEL: define {{[^@]+}}@b() local_unnamed_addr addrspace(200) #0
+// PCREL-LABEL: @b(
 // PCREL-NEXT:  entry:
 // PCREL-NEXT:    br i1 icmp ne (i32 (...) addrspace(200)* @a, i32 (...) addrspace(200)* null), label [[IF_THEN:%.*]], label [[IF_END:%.*]]
 // PCREL:       if.then:
-// PCREL-NEXT:    [[CALL:%.*]] = tail call signext i32 bitcast (i32 (...) addrspace(200)* @d to i32 () addrspace(200)*)() #2
+// PCREL-NEXT:    [[CALL:%.*]] = tail call signext i32 bitcast (i32 (...) addrspace(200)* @d to i32 () addrspace(200)*)() #[[ATTR2:[0-9]+]]
 // PCREL-NEXT:    br label [[IF_END]]
 // PCREL:       if.end:
 // PCREL-NEXT:    br i1 icmp eq (i32 addrspace(200)* bitcast (i32 (...) addrspace(200)* @a to i32 addrspace(200)*), i32 addrspace(200)* null), label [[CLEANUP:%.*]], label [[IF_END2:%.*]]
 // PCREL:       if.end2:
-// PCREL-NEXT:    [[CALL3:%.*]] = tail call signext i32 bitcast (i32 (...) addrspace(200)* @e to i32 () addrspace(200)*)() #2
+// PCREL-NEXT:    [[CALL3:%.*]] = tail call signext i32 bitcast (i32 (...) addrspace(200)* @e to i32 () addrspace(200)*)() #[[ATTR2]]
 // PCREL-NEXT:    br label [[CLEANUP]]
 // PCREL:       cleanup:
 // PCREL-NEXT:    [[RETVAL_0:%.*]] = phi i32 addrspace(200)* [ bitcast (i32 (...) addrspace(200)* @a to i32 addrspace(200)*), [[IF_END2]] ], [ null, [[IF_END]] ]

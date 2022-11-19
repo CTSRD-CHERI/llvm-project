@@ -40,10 +40,10 @@ void do_stuff(ns_dtab *tab);
 // PCREL-NEXT:    [[TMP4:%.*]] = load i32, i32 addrspace(200)* [[I]], align 4
 // PCREL-NEXT:    [[INC:%.*]] = add nsw i32 [[TMP4]], 1
 // PCREL-NEXT:    store i32 [[INC]], i32 addrspace(200)* [[I]], align 4
-// PCREL-NEXT:    br label [[FOR_COND]]
+// PCREL-NEXT:    br label [[FOR_COND]], !llvm.loop [[LOOP2:![0-9]+]]
 // PCREL:       for.end:
 // PCREL-NEXT:    [[ARRAYDECAY:%.*]] = getelementptr inbounds [2 x %struct._ns_dtab], [2 x %struct._ns_dtab] addrspace(200)* [[DTAB]], i64 0, i64 0
-// PCREL-NEXT:    call void @do_stuff(%struct._ns_dtab addrspace(200)* [[ARRAYDECAY]])
+// PCREL-NEXT:    call void @do_stuff([[STRUCT__NS_DTAB]] addrspace(200)* noundef [[ARRAYDECAY]])
 // PCREL-NEXT:    ret void
 //
 void test(void *mdata) {

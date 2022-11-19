@@ -6,21 +6,21 @@
 // MIPS64C128-LABEL: @get_uninitialised_cap(
 // MIPS64C128-NEXT:  entry:
 // MIPS64C128-NEXT:    [[CAP:%.*]] = alloca i32 addrspace(200)*, align 16
-// MIPS64C128-NEXT:    store i32 addrspace(200)* bitcast (i8 addrspace(200)* getelementptr (i8, i8 addrspace(200)* null, i64 -6148914691236517206) to i32 addrspace(200)*), i32 addrspace(200)** [[CAP]], align 16
+// MIPS64C128-NEXT:    store i32 addrspace(200)* bitcast (i8 addrspace(200)* getelementptr (i8, i8 addrspace(200)* null, i64 -6148914691236517206) to i32 addrspace(200)*), i32 addrspace(200)** [[CAP]], align 16, !annotation !2
 // MIPS64C128-NEXT:    [[TMP0:%.*]] = load i32 addrspace(200)*, i32 addrspace(200)** [[CAP]], align 16
 // MIPS64C128-NEXT:    ret i32 addrspace(200)* [[TMP0]]
 //
 // RISCV32-LABEL: @get_uninitialised_cap(
 // RISCV32-NEXT:  entry:
 // RISCV32-NEXT:    [[CAP:%.*]] = alloca i32 addrspace(200)*, align 8
-// RISCV32-NEXT:    store i32 addrspace(200)* bitcast (i8 addrspace(200)* getelementptr (i8, i8 addrspace(200)* null, i32 -1) to i32 addrspace(200)*), i32 addrspace(200)** [[CAP]], align 8
+// RISCV32-NEXT:    store i32 addrspace(200)* bitcast (i8 addrspace(200)* getelementptr (i8, i8 addrspace(200)* null, i32 -1) to i32 addrspace(200)*), i32 addrspace(200)** [[CAP]], align 8, !annotation !4
 // RISCV32-NEXT:    [[TMP0:%.*]] = load i32 addrspace(200)*, i32 addrspace(200)** [[CAP]], align 8
 // RISCV32-NEXT:    ret i32 addrspace(200)* [[TMP0]]
 //
 // RISCV64-LABEL: @get_uninitialised_cap(
 // RISCV64-NEXT:  entry:
 // RISCV64-NEXT:    [[CAP:%.*]] = alloca i32 addrspace(200)*, align 16
-// RISCV64-NEXT:    store i32 addrspace(200)* bitcast (i8 addrspace(200)* getelementptr (i8, i8 addrspace(200)* null, i64 -6148914691236517206) to i32 addrspace(200)*), i32 addrspace(200)** [[CAP]], align 16
+// RISCV64-NEXT:    store i32 addrspace(200)* bitcast (i8 addrspace(200)* getelementptr (i8, i8 addrspace(200)* null, i64 -6148914691236517206) to i32 addrspace(200)*), i32 addrspace(200)** [[CAP]], align 16, !annotation !4
 // RISCV64-NEXT:    [[TMP0:%.*]] = load i32 addrspace(200)*, i32 addrspace(200)** [[CAP]], align 16
 // RISCV64-NEXT:    ret i32 addrspace(200)* [[TMP0]]
 //
@@ -41,17 +41,17 @@ struct S {
 // MIPS64C128-LABEL: @get_uninitialised_struct(
 // MIPS64C128-NEXT:  entry:
 // MIPS64C128-NEXT:    [[TMP0:%.*]] = bitcast %struct.S* [[AGG_RESULT:%.*]] to i8*
-// MIPS64C128-NEXT:    call void @llvm.memset.p0i8.i64(i8* align 16 [[TMP0]], i8 0, i64 64, i1 false)
+// MIPS64C128-NEXT:    call void @llvm.memset.p0i8.i64(i8* align 16 [[TMP0]], i8 0, i64 64, i1 false), !annotation !2
 // MIPS64C128-NEXT:    [[TMP1:%.*]] = getelementptr inbounds [[STRUCT_S:%.*]], %struct.S* [[AGG_RESULT]], i32 0, i32 0
-// MIPS64C128-NEXT:    store i16 addrspace(200)* bitcast (i8 addrspace(200)* getelementptr (i8, i8 addrspace(200)* null, i64 -6148914691236517206) to i16 addrspace(200)*), i16 addrspace(200)** [[TMP1]], align 16
+// MIPS64C128-NEXT:    store i16 addrspace(200)* bitcast (i8 addrspace(200)* getelementptr (i8, i8 addrspace(200)* null, i64 -6148914691236517206) to i16 addrspace(200)*), i16 addrspace(200)** [[TMP1]], align 16, !annotation !2
 // MIPS64C128-NEXT:    [[TMP2:%.*]] = getelementptr inbounds [[STRUCT_S]], %struct.S* [[AGG_RESULT]], i32 0, i32 1
 // MIPS64C128-NEXT:    [[TMP3:%.*]] = getelementptr inbounds [2 x i8 addrspace(200)*], [2 x i8 addrspace(200)*]* [[TMP2]], i32 0, i32 0
-// MIPS64C128-NEXT:    store i8 addrspace(200)* getelementptr (i8, i8 addrspace(200)* null, i64 -6148914691236517206), i8 addrspace(200)** [[TMP3]], align 16
+// MIPS64C128-NEXT:    store i8 addrspace(200)* getelementptr (i8, i8 addrspace(200)* null, i64 -6148914691236517206), i8 addrspace(200)** [[TMP3]], align 16, !annotation !2
 // MIPS64C128-NEXT:    [[TMP4:%.*]] = getelementptr inbounds [2 x i8 addrspace(200)*], [2 x i8 addrspace(200)*]* [[TMP2]], i32 0, i32 1
-// MIPS64C128-NEXT:    store i8 addrspace(200)* getelementptr (i8, i8 addrspace(200)* null, i64 -6148914691236517206), i8 addrspace(200)** [[TMP4]], align 16
+// MIPS64C128-NEXT:    store i8 addrspace(200)* getelementptr (i8, i8 addrspace(200)* null, i64 -6148914691236517206), i8 addrspace(200)** [[TMP4]], align 16, !annotation !2
 // MIPS64C128-NEXT:    [[TMP5:%.*]] = getelementptr inbounds [[STRUCT_S]], %struct.S* [[AGG_RESULT]], i32 0, i32 2
 // MIPS64C128-NEXT:    [[TMP6:%.*]] = getelementptr inbounds [[UNION_ANON:%.*]], %union.anon* [[TMP5]], i32 0, i32 0
-// MIPS64C128-NEXT:    store i8 addrspace(200)* getelementptr (i8, i8 addrspace(200)* null, i64 -6148914691236517206), i8 addrspace(200)** [[TMP6]], align 16
+// MIPS64C128-NEXT:    store i8 addrspace(200)* getelementptr (i8, i8 addrspace(200)* null, i64 -6148914691236517206), i8 addrspace(200)** [[TMP6]], align 16, !annotation !2
 // MIPS64C128-NEXT:    ret void
 //
 // RISCV32-LABEL: @get_uninitialised_struct(
@@ -60,7 +60,7 @@ struct S {
 // RISCV32-NEXT:    [[TMP0:%.*]] = bitcast %struct.S* [[AGG_RESULT:%.*]] to i8*
 // RISCV32-NEXT:    store i8* [[TMP0]], i8** [[RESULT_PTR]], align 4
 // RISCV32-NEXT:    [[TMP1:%.*]] = bitcast %struct.S* [[AGG_RESULT]] to i8*
-// RISCV32-NEXT:    call void @llvm.memcpy.p0i8.p0i8.i32(i8* align 8 [[TMP1]], i8* align 8 bitcast (%struct.S* @__const.get_uninitialised_struct.s to i8*), i32 32, i1 false)
+// RISCV32-NEXT:    call void @llvm.memcpy.p0i8.p0i8.i32(i8* align 8 [[TMP1]], i8* align 8 bitcast (%struct.S* @__const.get_uninitialised_struct.s to i8*), i32 32, i1 false), !annotation !4
 // RISCV32-NEXT:    ret void
 //
 // RISCV64-LABEL: @get_uninitialised_struct(
@@ -69,17 +69,17 @@ struct S {
 // RISCV64-NEXT:    [[TMP0:%.*]] = bitcast %struct.S* [[AGG_RESULT:%.*]] to i8*
 // RISCV64-NEXT:    store i8* [[TMP0]], i8** [[RESULT_PTR]], align 8
 // RISCV64-NEXT:    [[TMP1:%.*]] = bitcast %struct.S* [[AGG_RESULT]] to i8*
-// RISCV64-NEXT:    call void @llvm.memset.p0i8.i64(i8* align 16 [[TMP1]], i8 0, i64 64, i1 false)
+// RISCV64-NEXT:    call void @llvm.memset.p0i8.i64(i8* align 16 [[TMP1]], i8 0, i64 64, i1 false), !annotation !4
 // RISCV64-NEXT:    [[TMP2:%.*]] = getelementptr inbounds [[STRUCT_S:%.*]], %struct.S* [[AGG_RESULT]], i32 0, i32 0
-// RISCV64-NEXT:    store i16 addrspace(200)* bitcast (i8 addrspace(200)* getelementptr (i8, i8 addrspace(200)* null, i64 -6148914691236517206) to i16 addrspace(200)*), i16 addrspace(200)** [[TMP2]], align 16
+// RISCV64-NEXT:    store i16 addrspace(200)* bitcast (i8 addrspace(200)* getelementptr (i8, i8 addrspace(200)* null, i64 -6148914691236517206) to i16 addrspace(200)*), i16 addrspace(200)** [[TMP2]], align 16, !annotation !4
 // RISCV64-NEXT:    [[TMP3:%.*]] = getelementptr inbounds [[STRUCT_S]], %struct.S* [[AGG_RESULT]], i32 0, i32 1
 // RISCV64-NEXT:    [[TMP4:%.*]] = getelementptr inbounds [2 x i8 addrspace(200)*], [2 x i8 addrspace(200)*]* [[TMP3]], i32 0, i32 0
-// RISCV64-NEXT:    store i8 addrspace(200)* getelementptr (i8, i8 addrspace(200)* null, i64 -6148914691236517206), i8 addrspace(200)** [[TMP4]], align 16
+// RISCV64-NEXT:    store i8 addrspace(200)* getelementptr (i8, i8 addrspace(200)* null, i64 -6148914691236517206), i8 addrspace(200)** [[TMP4]], align 16, !annotation !4
 // RISCV64-NEXT:    [[TMP5:%.*]] = getelementptr inbounds [2 x i8 addrspace(200)*], [2 x i8 addrspace(200)*]* [[TMP3]], i32 0, i32 1
-// RISCV64-NEXT:    store i8 addrspace(200)* getelementptr (i8, i8 addrspace(200)* null, i64 -6148914691236517206), i8 addrspace(200)** [[TMP5]], align 16
+// RISCV64-NEXT:    store i8 addrspace(200)* getelementptr (i8, i8 addrspace(200)* null, i64 -6148914691236517206), i8 addrspace(200)** [[TMP5]], align 16, !annotation !4
 // RISCV64-NEXT:    [[TMP6:%.*]] = getelementptr inbounds [[STRUCT_S]], %struct.S* [[AGG_RESULT]], i32 0, i32 2
 // RISCV64-NEXT:    [[TMP7:%.*]] = getelementptr inbounds [[UNION_ANON:%.*]], %union.anon* [[TMP6]], i32 0, i32 0
-// RISCV64-NEXT:    store i8 addrspace(200)* getelementptr (i8, i8 addrspace(200)* null, i64 -6148914691236517206), i8 addrspace(200)** [[TMP7]], align 16
+// RISCV64-NEXT:    store i8 addrspace(200)* getelementptr (i8, i8 addrspace(200)* null, i64 -6148914691236517206), i8 addrspace(200)** [[TMP7]], align 16, !annotation !4
 // RISCV64-NEXT:    ret void
 //
 struct S get_uninitialised_struct(void) {

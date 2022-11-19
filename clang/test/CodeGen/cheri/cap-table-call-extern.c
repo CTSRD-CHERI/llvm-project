@@ -9,11 +9,11 @@ fnptr fn = &extern_func;
 static fnptr fn2 = &extern_func;
 
 // CHECK-LABEL: define {{[^@]+}}@test
-// CHECK-SAME: () local_unnamed_addr addrspace(200) [[ATTR1:#.*]] {
+// CHECK-SAME: () local_unnamed_addr addrspace(200) #[[ATTR1:[0-9]+]] {
 // CHECK-NEXT:  entry:
-// CHECK-NEXT:    [[TMP0:%.*]] = load void () addrspace(200)*, void () addrspace(200)* addrspace(200)* @fn, align 16, [[TBAA2:!tbaa !.*]]
-// CHECK-NEXT:    store void () addrspace(200)* [[TMP0]], void () addrspace(200)* addrspace(200)* @fn2, align 16, [[TBAA2]]
-// CHECK-NEXT:    call void [[TMP0]]() [[ATTR2:#.*]]
+// CHECK-NEXT:    [[TMP0:%.*]] = load void () addrspace(200)*, void () addrspace(200)* addrspace(200)* @fn, align 16, !tbaa [[TBAA2:![0-9]+]]
+// CHECK-NEXT:    store void () addrspace(200)* [[TMP0]], void () addrspace(200)* addrspace(200)* @fn2, align 16, !tbaa [[TBAA2]]
+// CHECK-NEXT:    call void [[TMP0]]() #[[ATTR2:[0-9]+]]
 // CHECK-NEXT:    ret void
 //
 void test(void) {

@@ -17,6 +17,7 @@ char *start, *end;
 // PURECAP128-NEXT:    [[TMP1:%.*]] = load i8 addrspace(200)*, i8 addrspace(200)* addrspace(200)* @end, align 16
 // PURECAP128-NEXT:    call void @llvm.clear_cache.p200i8(i8 addrspace(200)* [[TMP0]], i8 addrspace(200)* [[TMP1]])
 // PURECAP128-NEXT:    ret void
+//
 void clear_cache(void) {
 	__builtin___clear_cache(start, end);
 }

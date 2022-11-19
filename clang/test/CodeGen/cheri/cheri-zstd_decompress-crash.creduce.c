@@ -10,13 +10,13 @@
 #define ZSTD_PREFETCH() __builtin_prefetch(0)
 
 // HYBRID-LABEL: define {{[^@]+}}@fn1
-// HYBRID-SAME: () [[ATTR0:#.*]] {
+// HYBRID-SAME: () #[[ATTR0:[0-9]+]] {
 // HYBRID-NEXT:  entry:
 // HYBRID-NEXT:    call void @llvm.prefetch.p0i8(i8* null, i32 0, i32 3, i32 1)
 // HYBRID-NEXT:    ret i32 0
 //
 // PURECAP-LABEL: define {{[^@]+}}@fn1
-// PURECAP-SAME: () addrspace(200) [[ATTR0:#.*]] {
+// PURECAP-SAME: () addrspace(200) #[[ATTR0:[0-9]+]] {
 // PURECAP-NEXT:  entry:
 // PURECAP-NEXT:    call void @llvm.prefetch.p200i8(i8 addrspace(200)* null, i32 0, i32 3, i32 1)
 // PURECAP-NEXT:    ret i32 0
@@ -27,9 +27,8 @@ int fn1(void) {
 }
 
 // Another function to check non-null parameter
-//
 // HYBRID-128-LABEL: define {{[^@]+}}@prefetch
-// HYBRID-128-SAME: (i8* [[ARG:%.*]]) [[ATTR0:#.*]] {
+// HYBRID-128-SAME: (i8* noundef [[ARG:%.*]]) #[[ATTR0]] {
 // HYBRID-128-NEXT:  entry:
 // HYBRID-128-NEXT:    [[ARG_ADDR:%.*]] = alloca i8*, align 8
 // HYBRID-128-NEXT:    store i8* [[ARG]], i8** [[ARG_ADDR]], align 8
@@ -38,7 +37,7 @@ int fn1(void) {
 // HYBRID-128-NEXT:    ret void
 //
 // HYBRID-64-LABEL: define {{[^@]+}}@prefetch
-// HYBRID-64-SAME: (i8* [[ARG:%.*]]) [[ATTR0:#.*]] {
+// HYBRID-64-SAME: (i8* noundef [[ARG:%.*]]) #[[ATTR0]] {
 // HYBRID-64-NEXT:  entry:
 // HYBRID-64-NEXT:    [[ARG_ADDR:%.*]] = alloca i8*, align 4
 // HYBRID-64-NEXT:    store i8* [[ARG]], i8** [[ARG_ADDR]], align 4
@@ -47,7 +46,7 @@ int fn1(void) {
 // HYBRID-64-NEXT:    ret void
 //
 // PURECAP-128-LABEL: define {{[^@]+}}@prefetch
-// PURECAP-128-SAME: (i8 addrspace(200)* [[ARG:%.*]]) addrspace(200) [[ATTR0:#.*]] {
+// PURECAP-128-SAME: (i8 addrspace(200)* noundef [[ARG:%.*]]) addrspace(200) #[[ATTR0]] {
 // PURECAP-128-NEXT:  entry:
 // PURECAP-128-NEXT:    [[ARG_ADDR:%.*]] = alloca i8 addrspace(200)*, align 16, addrspace(200)
 // PURECAP-128-NEXT:    store i8 addrspace(200)* [[ARG]], i8 addrspace(200)* addrspace(200)* [[ARG_ADDR]], align 16
@@ -56,7 +55,7 @@ int fn1(void) {
 // PURECAP-128-NEXT:    ret void
 //
 // PURECAP-64-LABEL: define {{[^@]+}}@prefetch
-// PURECAP-64-SAME: (i8 addrspace(200)* [[ARG:%.*]]) addrspace(200) [[ATTR0:#.*]] {
+// PURECAP-64-SAME: (i8 addrspace(200)* noundef [[ARG:%.*]]) addrspace(200) #[[ATTR0]] {
 // PURECAP-64-NEXT:  entry:
 // PURECAP-64-NEXT:    [[ARG_ADDR:%.*]] = alloca i8 addrspace(200)*, align 8, addrspace(200)
 // PURECAP-64-NEXT:    store i8 addrspace(200)* [[ARG]], i8 addrspace(200)* addrspace(200)* [[ARG_ADDR]], align 8

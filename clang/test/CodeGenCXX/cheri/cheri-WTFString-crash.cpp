@@ -32,9 +32,9 @@ typedef uint64_t MachineWord;
 const size_t machineWordAlignmentMask = sizeof(MachineWord) - 1;
 
 // CHECK-LABEL: define {{[^@]+}}@_Z22isAlignedToMachineWordPKv
-// CHECK-SAME: (i8 addrspace(200)* [[POINTER:%.*]]) local_unnamed_addr addrspace(200) [[ATTR0:#.*]] {
+// CHECK-SAME: (i8 addrspace(200)* noundef [[POINTER:%.*]]) local_unnamed_addr addrspace(200) #[[ATTR0:[0-9]+]] {
 // CHECK-NEXT:  entry:
-// CHECK-NEXT:    [[TMP0:%.*]] = tail call i64 @llvm.cheri.cap.address.get.i64(i8 addrspace(200)* [[POINTER]]) [[ATTR2:#.*]]
+// CHECK-NEXT:    [[TMP0:%.*]] = tail call i64 @llvm.cheri.cap.address.get.i64(i8 addrspace(200)* [[POINTER]]) #[[ATTR2:[0-9]+]]
 // CHECK-NEXT:    [[AND_I:%.*]] = and i64 [[TMP0]], 7
 // CHECK-NEXT:    [[TOBOOL_NOT_I:%.*]] = icmp eq i64 [[AND_I]], 0
 // CHECK-NEXT:    ret i1 [[TOBOOL_NOT_I]]

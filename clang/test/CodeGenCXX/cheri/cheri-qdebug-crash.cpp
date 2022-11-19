@@ -18,7 +18,7 @@ QTextStream& operator<<(QTextStream&, QTextStreamManipulator);
 QTextStreamManipulator qSetPadChar();
 
 // HYBRID-LABEL: define {{[^@]+}}@_ZN6QDebug7putUcs4Ev
-// HYBRID-SAME: (%class.QDebug* nonnull align 1 dereferenceable(1) [[THIS:%.*]]) #[[ATTR0:[0-9]+]] align 2 {
+// HYBRID-SAME: (%class.QDebug* noundef nonnull align 1 dereferenceable(1) [[THIS:%.*]]) #[[ATTR0:[0-9]+]] align 2 {
 // HYBRID-NEXT:  entry:
 // HYBRID-NEXT:    [[THIS_ADDR:%.*]] = alloca %class.QDebug*, align 8
 // HYBRID-NEXT:    [[AGG_TMP:%.*]] = alloca [[CLASS_QTEXTSTREAMMANIPULATOR:%.*]], align 8
@@ -38,11 +38,11 @@ QTextStreamManipulator qSetPadChar();
 // HYBRID-NEXT:    [[TMP6:%.*]] = load i64, i64* [[TMP5]], align 8
 // HYBRID-NEXT:    [[TMP7:%.*]] = getelementptr inbounds { i64, i64 }, { i64, i64 }* [[TMP4]], i32 0, i32 1
 // HYBRID-NEXT:    [[TMP8:%.*]] = load i64, i64* [[TMP7]], align 8
-// HYBRID-NEXT:    [[CALL2:%.*]] = call nonnull align 1 dereferenceable(1) %class.QTextStream* @_ZlsR11QTextStream22QTextStreamManipulator(%class.QTextStream* nonnull align 1 dereferenceable(1) [[TS]], i64 inreg [[TMP6]], i64 inreg [[TMP8]])
+// HYBRID-NEXT:    [[CALL2:%.*]] = call noundef nonnull align 1 dereferenceable(1) %class.QTextStream* @_ZlsR11QTextStream22QTextStreamManipulator(%class.QTextStream* noundef nonnull align 1 dereferenceable(1) [[TS]], i64 inreg [[TMP6]], i64 inreg [[TMP8]])
 // HYBRID-NEXT:    ret void
 //
 // PURECAP-LABEL: define {{[^@]+}}@_ZN6QDebug7putUcs4Ev
-// PURECAP-SAME: ([[CLASS_QDEBUG:%.*]] addrspace(200)* nonnull align 1 dereferenceable(1) [[THIS:%.*]]) addrspace(200) #[[ATTR0:[0-9]+]] align 2 {
+// PURECAP-SAME: ([[CLASS_QDEBUG:%.*]] addrspace(200)* noundef nonnull align 1 dereferenceable(1) [[THIS:%.*]]) addrspace(200) #[[ATTR0:[0-9]+]] align 2 {
 // PURECAP-NEXT:  entry:
 // PURECAP-NEXT:    [[THIS_ADDR:%.*]] = alloca [[CLASS_QDEBUG]] addrspace(200)*, align 16, addrspace(200)
 // PURECAP-NEXT:    [[AGG_TMP:%.*]] = alloca [[CLASS_QTEXTSTREAMMANIPULATOR:%.*]], align 16, addrspace(200)
@@ -58,7 +58,7 @@ QTextStreamManipulator qSetPadChar();
 // PURECAP-NEXT:    [[TMP3:%.*]] = bitcast [[CLASS_QTEXTSTREAMMANIPULATOR]] addrspace(200)* [[AGG_TMP]] to { { i8 addrspace(200)*, i64 } } addrspace(200)*
 // PURECAP-NEXT:    [[TMP4:%.*]] = getelementptr inbounds { { i8 addrspace(200)*, i64 } }, { { i8 addrspace(200)*, i64 } } addrspace(200)* [[TMP3]], i32 0, i32 0
 // PURECAP-NEXT:    [[TMP5:%.*]] = load { i8 addrspace(200)*, i64 }, { i8 addrspace(200)*, i64 } addrspace(200)* [[TMP4]], align 16
-// PURECAP-NEXT:    [[CALL2:%.*]] = call nonnull align 1 dereferenceable(1) [[CLASS_QTEXTSTREAM:%.*]] addrspace(200)* @_ZlsR11QTextStream22QTextStreamManipulator([[CLASS_QTEXTSTREAM]] addrspace(200)* nonnull align 1 dereferenceable(1) [[TS]], { i8 addrspace(200)*, i64 } inreg [[TMP5]])
+// PURECAP-NEXT:    [[CALL2:%.*]] = call noundef nonnull align 1 dereferenceable(1) [[CLASS_QTEXTSTREAM:%.*]] addrspace(200)* @_ZlsR11QTextStream22QTextStreamManipulator([[CLASS_QTEXTSTREAM]] addrspace(200)* noundef nonnull align 1 dereferenceable(1) [[TS]], { i8 addrspace(200)*, i64 } inreg [[TMP5]])
 // PURECAP-NEXT:    ret void
 //
 void QDebug::putUcs4() {

@@ -4,7 +4,8 @@
 // RUN: %cheri_cc1 -o - -O0 -emit-llvm %s | FileCheck %s -check-prefix N64
 
 extern int test_ptr(char *c);
-// PURECAP-LABEL: define {{[^@]+}}@test_array() addrspace(200) #0
+// PURECAP-LABEL: define {{[^@]+}}@test_array
+// PURECAP-SAME: () addrspace(200) #[[ATTR0:[0-9]+]] {
 // PURECAP-NEXT:  entry:
 // PURECAP-NEXT:    [[BUF:%.*]] = alloca [1024 x i8], align 1, addrspace(200)
 // PURECAP-NEXT:    [[ARRAYDECAY:%.*]] = getelementptr inbounds [1024 x i8], [1024 x i8] addrspace(200)* [[BUF]], i64 0, i64 0
@@ -14,10 +15,11 @@ extern int test_ptr(char *c);
 // PURECAP-NEXT:    [[DIFF:%.*]] = sub i64 [[ALIGNED_INTPTR]], [[PTRADDR]]
 // PURECAP-NEXT:    [[ALIGNED_RESULT:%.*]] = getelementptr inbounds i8, i8 addrspace(200)* [[ARRAYDECAY]], i64 [[DIFF]]
 // PURECAP-NEXT:    call void @llvm.assume(i1 true) [ "align"(i8 addrspace(200)* [[ALIGNED_RESULT]], i64 16) ]
-// PURECAP-NEXT:    [[CALL:%.*]] = call signext i32 @test_ptr(i8 addrspace(200)* [[ALIGNED_RESULT]])
+// PURECAP-NEXT:    [[CALL:%.*]] = call signext i32 @test_ptr(i8 addrspace(200)* noundef [[ALIGNED_RESULT]])
 // PURECAP-NEXT:    ret i32 [[CALL]]
 //
-// N64-LABEL: define {{[^@]+}}@test_array() #0
+// N64-LABEL: define {{[^@]+}}@test_array
+// N64-SAME: () #[[ATTR0:[0-9]+]] {
 // N64-NEXT:  entry:
 // N64-NEXT:    [[BUF:%.*]] = alloca [1024 x i8], align 1
 // N64-NEXT:    [[ARRAYDECAY:%.*]] = getelementptr inbounds [1024 x i8], [1024 x i8]* [[BUF]], i64 0, i64 0
@@ -27,7 +29,7 @@ extern int test_ptr(char *c);
 // N64-NEXT:    [[DIFF:%.*]] = sub i64 [[ALIGNED_INTPTR]], [[INTPTR]]
 // N64-NEXT:    [[ALIGNED_RESULT:%.*]] = getelementptr inbounds i8, i8* [[ARRAYDECAY]], i64 [[DIFF]]
 // N64-NEXT:    call void @llvm.assume(i1 true) [ "align"(i8* [[ALIGNED_RESULT]], i64 16) ]
-// N64-NEXT:    [[CALL:%.*]] = call signext i32 @test_ptr(i8* [[ALIGNED_RESULT]])
+// N64-NEXT:    [[CALL:%.*]] = call signext i32 @test_ptr(i8* noundef [[ALIGNED_RESULT]])
 // N64-NEXT:    ret i32 [[CALL]]
 //
 int test_array(void) {

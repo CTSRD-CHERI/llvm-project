@@ -9,7 +9,7 @@ class A {
     static const __uintcap_t flags = thinFlag | reservedFlag;
 };
 
-// CHECK-LABEL: define {{[^@]+}}@_Z1fv() #0
+// CHECK-LABEL: @_Z1fv(
 // CHECK-NEXT:  entry:
 // CHECK-NEXT:    [[A:%.*]] = alloca [[CLASS_A:%.*]], align 1
 // CHECK-NEXT:    [[X:%.*]] = alloca i8 addrspace(200)*, align 16

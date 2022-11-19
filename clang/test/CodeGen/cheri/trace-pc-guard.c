@@ -41,9 +41,9 @@ extern int fail2(void);
 // MIPS-NEXT:    [[FOO:%.*]] = alloca [10 x i8], align 1
 // MIPS-NEXT:    call void @__sanitizer_cov_trace_pc_guard(i32* getelementptr inbounds ([1 x i32], [1 x i32]* @__sancov_gen_, i32 0, i64 0)) #[[ATTR3:[0-9]+]]
 // MIPS-NEXT:    [[ARRAYDECAY:%.*]] = getelementptr inbounds [10 x i8], [10 x i8]* [[FOO]], i64 0, i64 0
-// MIPS-NEXT:    [[CALL:%.*]] = call i8* @gets(i8* [[ARRAYDECAY]])
+// MIPS-NEXT:    [[CALL:%.*]] = call i8* @gets(i8* noundef [[ARRAYDECAY]])
 // MIPS-NEXT:    [[ARRAYDECAY1:%.*]] = getelementptr inbounds [10 x i8], [10 x i8]* [[FOO]], i64 0, i64 0
-// MIPS-NEXT:    [[CALL2:%.*]] = call signext i32 @puts(i8* [[ARRAYDECAY1]])
+// MIPS-NEXT:    [[CALL2:%.*]] = call signext i32 @puts(i8* noundef [[ARRAYDECAY1]])
 // MIPS-NEXT:    ret i32 0
 //
 // PURECAP-LABEL: define {{[^@]+}}@main
@@ -52,9 +52,9 @@ extern int fail2(void);
 // PURECAP-NEXT:    [[FOO:%.*]] = alloca [10 x i8], align 1, addrspace(200)
 // PURECAP-NEXT:    call void @__sanitizer_cov_trace_pc_guard(i32 addrspace(200)* getelementptr inbounds ([1 x i32], [1 x i32] addrspace(200)* @__sancov_gen_, i32 0, i64 0)) #[[ATTR3:[0-9]+]]
 // PURECAP-NEXT:    [[ARRAYDECAY:%.*]] = getelementptr inbounds [10 x i8], [10 x i8] addrspace(200)* [[FOO]], i64 0, i64 0
-// PURECAP-NEXT:    [[CALL:%.*]] = call i8 addrspace(200)* @gets(i8 addrspace(200)* [[ARRAYDECAY]])
+// PURECAP-NEXT:    [[CALL:%.*]] = call i8 addrspace(200)* @gets(i8 addrspace(200)* noundef [[ARRAYDECAY]])
 // PURECAP-NEXT:    [[ARRAYDECAY1:%.*]] = getelementptr inbounds [10 x i8], [10 x i8] addrspace(200)* [[FOO]], i64 0, i64 0
-// PURECAP-NEXT:    [[CALL2:%.*]] = call signext i32 @puts(i8 addrspace(200)* [[ARRAYDECAY1]])
+// PURECAP-NEXT:    [[CALL2:%.*]] = call signext i32 @puts(i8 addrspace(200)* noundef [[ARRAYDECAY1]])
 // PURECAP-NEXT:    ret i32 0
 //
 int main(void) {
@@ -65,7 +65,7 @@ int main(void) {
 }
 
 // MIPS-LABEL: define {{[^@]+}}@func2
-// MIPS-SAME: (i32 signext [[I:%.*]]) #[[ATTR0]] comdat {
+// MIPS-SAME: (i32 noundef signext [[I:%.*]]) #[[ATTR0]] comdat {
 // MIPS-NEXT:  entry:
 // MIPS-NEXT:    [[RETVAL:%.*]] = alloca i32, align 4
 // MIPS-NEXT:    [[I_ADDR:%.*]] = alloca i32, align 4
@@ -101,7 +101,7 @@ int main(void) {
 // MIPS-NEXT:    ret i32 [[TMP3]]
 //
 // PURECAP-LABEL: define {{[^@]+}}@func2
-// PURECAP-SAME: (i32 signext [[I:%.*]]) addrspace(200) #[[ATTR0]] comdat {
+// PURECAP-SAME: (i32 noundef signext [[I:%.*]]) addrspace(200) #[[ATTR0]] comdat {
 // PURECAP-NEXT:  entry:
 // PURECAP-NEXT:    [[RETVAL:%.*]] = alloca i32, align 4, addrspace(200)
 // PURECAP-NEXT:    [[I_ADDR:%.*]] = alloca i32, align 4, addrspace(200)

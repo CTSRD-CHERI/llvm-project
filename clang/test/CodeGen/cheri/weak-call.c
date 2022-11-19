@@ -4,7 +4,7 @@
 
 void a(void);
 #pragma weak a
-// CHECK-LABEL: define {{[^@]+}}@b() addrspace(200) #0
+// CHECK-LABEL: @b(
 // CHECK-NEXT:  entry:
 // CHECK-NEXT:    call void @a()
 // CHECK-NEXT:    ret void

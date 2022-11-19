@@ -7,7 +7,7 @@ typedef struct _ns_dtab {
  nss_method method;
 } ns_dtab;
 
-// CHECK-LABEL: define {{[^@]+}}@compat_setgrent() addrspace(200) #0
+// CHECK-LABEL: @compat_setgrent(
 // CHECK-NEXT:  entry:
 // CHECK-NEXT:    [[DTAB:%.*]] = alloca [1 x %struct._ns_dtab], align 16, addrspace(200)
 // CHECK-NEXT:    [[TMP0:%.*]] = bitcast [1 x %struct._ns_dtab] addrspace(200)* [[DTAB]] to i8 addrspace(200)*

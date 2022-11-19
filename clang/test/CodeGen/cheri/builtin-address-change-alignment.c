@@ -10,7 +10,7 @@ struct AlignedAsCap {
 };
 
 // CHECK-LABEL: define {{[^@]+}}@check_alignment_memcpy_inc_offset
-// CHECK-SAME: (i8 addrspace(200)* [[TMPBUFFER:%.*]], [[STRUCT_ALIGNEDASCAP:%.*]] addrspace(200)* [[A:%.*]]) addrspace(200) #0
+// CHECK-SAME: (i8 addrspace(200)* noundef [[TMPBUFFER:%.*]], [[STRUCT_ALIGNEDASCAP:%.*]] addrspace(200)* noundef [[A:%.*]]) addrspace(200) #[[ATTR0:[0-9]+]] {
 // CHECK-NEXT:  entry:
 // CHECK-NEXT:    [[TMPBUFFER_ADDR:%.*]] = alloca i8 addrspace(200)*, align 16, addrspace(200)
 // CHECK-NEXT:    [[A_ADDR:%.*]] = alloca [[STRUCT_ALIGNEDASCAP]] addrspace(200)*, align 16, addrspace(200)
@@ -28,7 +28,7 @@ void check_alignment_memcpy_inc_offset(void *tmpbuffer, struct AlignedAsCap *a) 
 }
 
 // CHECK-LABEL: define {{[^@]+}}@check_alignment_memcpy_set_offset
-// CHECK-SAME: (i8 addrspace(200)* [[TMPBUFFER:%.*]], [[STRUCT_ALIGNEDASCAP:%.*]] addrspace(200)* [[A:%.*]], i64 signext [[NEW_OFFSET:%.*]]) addrspace(200) #0
+// CHECK-SAME: (i8 addrspace(200)* noundef [[TMPBUFFER:%.*]], [[STRUCT_ALIGNEDASCAP:%.*]] addrspace(200)* noundef [[A:%.*]], i64 noundef signext [[NEW_OFFSET:%.*]]) addrspace(200) #[[ATTR0]] {
 // CHECK-NEXT:  entry:
 // CHECK-NEXT:    [[TMPBUFFER_ADDR:%.*]] = alloca i8 addrspace(200)*, align 16, addrspace(200)
 // CHECK-NEXT:    [[A_ADDR:%.*]] = alloca [[STRUCT_ALIGNEDASCAP]] addrspace(200)*, align 16, addrspace(200)
@@ -49,7 +49,7 @@ void check_alignment_memcpy_set_offset(void *tmpbuffer, struct AlignedAsCap *a, 
 }
 
 // CHECK-LABEL: define {{[^@]+}}@check_alignment_memcpy_set_address
-// CHECK-SAME: (i8 addrspace(200)* [[TMPBUFFER:%.*]], [[STRUCT_ALIGNEDASCAP:%.*]] addrspace(200)* [[A:%.*]], i64 signext [[NEW_ADDR:%.*]]) addrspace(200) #0
+// CHECK-SAME: (i8 addrspace(200)* noundef [[TMPBUFFER:%.*]], [[STRUCT_ALIGNEDASCAP:%.*]] addrspace(200)* noundef [[A:%.*]], i64 noundef signext [[NEW_ADDR:%.*]]) addrspace(200) #[[ATTR0]] {
 // CHECK-NEXT:  entry:
 // CHECK-NEXT:    [[TMPBUFFER_ADDR:%.*]] = alloca i8 addrspace(200)*, align 16, addrspace(200)
 // CHECK-NEXT:    [[A_ADDR:%.*]] = alloca [[STRUCT_ALIGNEDASCAP]] addrspace(200)*, align 16, addrspace(200)
@@ -73,9 +73,9 @@ void check_alignment_memcpy_set_address(void *tmpbuffer, struct AlignedAsCap *a,
 /// result (this would assert if we were to retain the type in codegen).
 
 // CHECK-LABEL: define {{[^@]+}}@check_return_inc_offset
-// CHECK-SAME: (%struct.AlignedAsCap addrspace(200)* [[A:%.*]]) addrspace(200) #0
+// CHECK-SAME: ([[STRUCT_ALIGNEDASCAP:%.*]] addrspace(200)* noundef [[A:%.*]]) addrspace(200) #[[ATTR0]] {
 // CHECK-NEXT:  entry:
-// CHECK-NEXT:    [[A_ADDR:%.*]] = alloca [[STRUCT_ALIGNEDASCAP:%.*]] addrspace(200)*, align 16, addrspace(200)
+// CHECK-NEXT:    [[A_ADDR:%.*]] = alloca [[STRUCT_ALIGNEDASCAP]] addrspace(200)*, align 16, addrspace(200)
 // CHECK-NEXT:    store [[STRUCT_ALIGNEDASCAP]] addrspace(200)* [[A]], [[STRUCT_ALIGNEDASCAP]] addrspace(200)* addrspace(200)* [[A_ADDR]], align 16
 // CHECK-NEXT:    [[TMP0:%.*]] = load [[STRUCT_ALIGNEDASCAP]] addrspace(200)*, [[STRUCT_ALIGNEDASCAP]] addrspace(200)* addrspace(200)* [[A_ADDR]], align 16
 // CHECK-NEXT:    [[TMP1:%.*]] = bitcast [[STRUCT_ALIGNEDASCAP]] addrspace(200)* [[TMP0]] to i8 addrspace(200)*
@@ -87,9 +87,9 @@ void *check_return_inc_offset(struct AlignedAsCap *a) {
 }
 
 // CHECK-LABEL: define {{[^@]+}}@check_return_set_offset
-// CHECK-SAME: (%struct.AlignedAsCap addrspace(200)* [[A:%.*]], i64 signext [[NEW_OFFSET:%.*]]) addrspace(200) #0
+// CHECK-SAME: ([[STRUCT_ALIGNEDASCAP:%.*]] addrspace(200)* noundef [[A:%.*]], i64 noundef signext [[NEW_OFFSET:%.*]]) addrspace(200) #[[ATTR0]] {
 // CHECK-NEXT:  entry:
-// CHECK-NEXT:    [[A_ADDR:%.*]] = alloca [[STRUCT_ALIGNEDASCAP:%.*]] addrspace(200)*, align 16, addrspace(200)
+// CHECK-NEXT:    [[A_ADDR:%.*]] = alloca [[STRUCT_ALIGNEDASCAP]] addrspace(200)*, align 16, addrspace(200)
 // CHECK-NEXT:    [[NEW_OFFSET_ADDR:%.*]] = alloca i64, align 8, addrspace(200)
 // CHECK-NEXT:    store [[STRUCT_ALIGNEDASCAP]] addrspace(200)* [[A]], [[STRUCT_ALIGNEDASCAP]] addrspace(200)* addrspace(200)* [[A_ADDR]], align 16
 // CHECK-NEXT:    store i64 [[NEW_OFFSET]], i64 addrspace(200)* [[NEW_OFFSET_ADDR]], align 8
@@ -104,9 +104,9 @@ void *check_return_set_offset(struct AlignedAsCap *a, long new_offset) {
 }
 
 // CHECK-LABEL: define {{[^@]+}}@check_return_set_addr
-// CHECK-SAME: (%struct.AlignedAsCap addrspace(200)* [[A:%.*]], i64 signext [[NEW_ADDR:%.*]]) addrspace(200) #0
+// CHECK-SAME: ([[STRUCT_ALIGNEDASCAP:%.*]] addrspace(200)* noundef [[A:%.*]], i64 noundef signext [[NEW_ADDR:%.*]]) addrspace(200) #[[ATTR0]] {
 // CHECK-NEXT:  entry:
-// CHECK-NEXT:    [[A_ADDR:%.*]] = alloca [[STRUCT_ALIGNEDASCAP:%.*]] addrspace(200)*, align 16, addrspace(200)
+// CHECK-NEXT:    [[A_ADDR:%.*]] = alloca [[STRUCT_ALIGNEDASCAP]] addrspace(200)*, align 16, addrspace(200)
 // CHECK-NEXT:    [[NEW_ADDR_ADDR:%.*]] = alloca i64, align 8, addrspace(200)
 // CHECK-NEXT:    store [[STRUCT_ALIGNEDASCAP]] addrspace(200)* [[A]], [[STRUCT_ALIGNEDASCAP]] addrspace(200)* addrspace(200)* [[A_ADDR]], align 16
 // CHECK-NEXT:    store i64 [[NEW_ADDR]], i64 addrspace(200)* [[NEW_ADDR_ADDR]], align 8

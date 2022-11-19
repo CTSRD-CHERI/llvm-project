@@ -18,25 +18,25 @@ struct A {
 
 long use_p2m_impl(A *a, long (A::*fp)());
 // MIPS-LABEL: define {{[^@]+}}@_Z7use_p2mP1AMS_FlvE
-// MIPS-SAME: (%struct.A* [[A:%.*]], i64 inreg [[FP_COERCE0:%.*]], i64 inreg [[FP_COERCE1:%.*]]) local_unnamed_addr #[[ATTR0:[0-9]+]] {
+// MIPS-SAME: (%struct.A* noundef [[A:%.*]], i64 inreg [[FP_COERCE0:%.*]], i64 inreg [[FP_COERCE1:%.*]]) local_unnamed_addr #[[ATTR0:[0-9]+]] {
 // MIPS-NEXT:  entry:
-// MIPS-NEXT:    [[CALL:%.*]] = tail call i64 @_Z12use_p2m_implP1AMS_FlvE(%struct.A* [[A]], i64 inreg [[FP_COERCE0]], i64 inreg [[FP_COERCE1]]) #[[ATTR3:[0-9]+]]
+// MIPS-NEXT:    [[CALL:%.*]] = tail call noundef i64 @_Z12use_p2m_implP1AMS_FlvE(%struct.A* noundef [[A]], i64 inreg [[FP_COERCE0]], i64 inreg [[FP_COERCE1]]) #[[ATTR3:[0-9]+]]
 // MIPS-NEXT:    ret i64 [[CALL]]
 //
 // MIPS-PURECAP-LABEL: define {{[^@]+}}@_Z7use_p2mP1AMS_FlvE
-// MIPS-PURECAP-SAME: ([[STRUCT_A:%.*]] addrspace(200)* [[A:%.*]], i8 addrspace(200)* inreg [[FP_COERCE0:%.*]], i64 inreg [[FP_COERCE1:%.*]]) local_unnamed_addr addrspace(200) #[[ATTR0:[0-9]+]] {
+// MIPS-PURECAP-SAME: ([[STRUCT_A:%.*]] addrspace(200)* noundef [[A:%.*]], i8 addrspace(200)* inreg [[FP_COERCE0:%.*]], i64 inreg [[FP_COERCE1:%.*]]) local_unnamed_addr addrspace(200) #[[ATTR0:[0-9]+]] {
 // MIPS-PURECAP-NEXT:  entry:
-// MIPS-PURECAP-NEXT:    [[CALL:%.*]] = tail call i64 @_Z12use_p2m_implP1AMS_FlvE([[STRUCT_A]] addrspace(200)* [[A]], i8 addrspace(200)* inreg [[FP_COERCE0]], i64 inreg [[FP_COERCE1]]) #[[ATTR3:[0-9]+]]
+// MIPS-PURECAP-NEXT:    [[CALL:%.*]] = tail call noundef i64 @_Z12use_p2m_implP1AMS_FlvE([[STRUCT_A]] addrspace(200)* noundef [[A]], i8 addrspace(200)* inreg [[FP_COERCE0]], i64 inreg [[FP_COERCE1]]) #[[ATTR3:[0-9]+]]
 // MIPS-PURECAP-NEXT:    ret i64 [[CALL]]
 //
 // RISCV64-LABEL: define {{[^@]+}}@_Z7use_p2mP1AMS_FlvE
-// RISCV64-SAME: (%struct.A* [[A:%.*]], [2 x i64] [[FP_COERCE:%.*]]) local_unnamed_addr #[[ATTR0:[0-9]+]] {
+// RISCV64-SAME: (%struct.A* noundef [[A:%.*]], [2 x i64] [[FP_COERCE:%.*]]) local_unnamed_addr #[[ATTR0:[0-9]+]] {
 // RISCV64-NEXT:  entry:
-// RISCV64-NEXT:    [[CALL:%.*]] = tail call i64 @_Z12use_p2m_implP1AMS_FlvE(%struct.A* [[A]], [2 x i64] [[FP_COERCE]]) #[[ATTR3:[0-9]+]]
+// RISCV64-NEXT:    [[CALL:%.*]] = tail call noundef i64 @_Z12use_p2m_implP1AMS_FlvE(%struct.A* noundef [[A]], [2 x i64] [[FP_COERCE]]) #[[ATTR3:[0-9]+]]
 // RISCV64-NEXT:    ret i64 [[CALL]]
 //
 // RISCV64-PURECAP-LABEL: define {{[^@]+}}@_Z7use_p2mP1AMS_FlvE
-// RISCV64-PURECAP-SAME: ([[STRUCT_A:%.*]] addrspace(200)* [[A:%.*]], { i8 addrspace(200)*, i64 } addrspace(200)* nocapture readonly [[TMP0:%.*]]) local_unnamed_addr addrspace(200) #[[ATTR0:[0-9]+]] {
+// RISCV64-PURECAP-SAME: ([[STRUCT_A:%.*]] addrspace(200)* noundef [[A:%.*]], { i8 addrspace(200)*, i64 } addrspace(200)* nocapture noundef readonly [[TMP0:%.*]]) local_unnamed_addr addrspace(200) #[[ATTR0:[0-9]+]] {
 // RISCV64-PURECAP-NEXT:  entry:
 // RISCV64-PURECAP-NEXT:    [[INDIRECT_ARG_TEMP:%.*]] = alloca { i8 addrspace(200)*, i64 }, align 16, addrspace(200)
 // RISCV64-PURECAP-NEXT:    [[FP:%.*]] = load { i8 addrspace(200)*, i64 }, { i8 addrspace(200)*, i64 } addrspace(200)* [[TMP0]], align 16, !tbaa [[TBAA4:![0-9]+]]
@@ -46,17 +46,17 @@ long use_p2m_impl(A *a, long (A::*fp)());
 // RISCV64-PURECAP-NEXT:    store i8 addrspace(200)* [[FP_FCA_0_EXTRACT]], i8 addrspace(200)* addrspace(200)* [[DOTFCA_0_GEP]], align 16, !tbaa [[TBAA4]]
 // RISCV64-PURECAP-NEXT:    [[DOTFCA_1_GEP:%.*]] = getelementptr inbounds { i8 addrspace(200)*, i64 }, { i8 addrspace(200)*, i64 } addrspace(200)* [[INDIRECT_ARG_TEMP]], i64 0, i32 1
 // RISCV64-PURECAP-NEXT:    store i64 [[FP_FCA_1_EXTRACT]], i64 addrspace(200)* [[DOTFCA_1_GEP]], align 16, !tbaa [[TBAA4]]
-// RISCV64-PURECAP-NEXT:    [[CALL:%.*]] = call i64 @_Z12use_p2m_implP1AMS_FlvE([[STRUCT_A]] addrspace(200)* [[A]], { i8 addrspace(200)*, i64 } addrspace(200)* nonnull [[INDIRECT_ARG_TEMP]]) #[[ATTR3:[0-9]+]]
+// RISCV64-PURECAP-NEXT:    [[CALL:%.*]] = call noundef i64 @_Z12use_p2m_implP1AMS_FlvE([[STRUCT_A]] addrspace(200)* noundef [[A]], { i8 addrspace(200)*, i64 } addrspace(200)* noundef nonnull [[INDIRECT_ARG_TEMP]]) #[[ATTR3:[0-9]+]]
 // RISCV64-PURECAP-NEXT:    ret i64 [[CALL]]
 //
 // RISCV32-LABEL: define {{[^@]+}}@_Z7use_p2mP1AMS_FlvE
-// RISCV32-SAME: (%struct.A* [[A:%.*]], [2 x i32] [[FP_COERCE:%.*]]) local_unnamed_addr #[[ATTR0:[0-9]+]] {
+// RISCV32-SAME: (%struct.A* noundef [[A:%.*]], [2 x i32] [[FP_COERCE:%.*]]) local_unnamed_addr #[[ATTR0:[0-9]+]] {
 // RISCV32-NEXT:  entry:
-// RISCV32-NEXT:    [[CALL:%.*]] = tail call i32 @_Z12use_p2m_implP1AMS_FlvE(%struct.A* [[A]], [2 x i32] [[FP_COERCE]]) #[[ATTR3:[0-9]+]]
+// RISCV32-NEXT:    [[CALL:%.*]] = tail call noundef i32 @_Z12use_p2m_implP1AMS_FlvE(%struct.A* noundef [[A]], [2 x i32] [[FP_COERCE]]) #[[ATTR3:[0-9]+]]
 // RISCV32-NEXT:    ret i32 [[CALL]]
 //
 // RISCV32-PURECAP-LABEL: define {{[^@]+}}@_Z7use_p2mP1AMS_FlvE
-// RISCV32-PURECAP-SAME: ([[STRUCT_A:%.*]] addrspace(200)* [[A:%.*]], { i8 addrspace(200)*, i32 } addrspace(200)* nocapture readonly [[TMP0:%.*]]) local_unnamed_addr addrspace(200) #[[ATTR0:[0-9]+]] {
+// RISCV32-PURECAP-SAME: ([[STRUCT_A:%.*]] addrspace(200)* noundef [[A:%.*]], { i8 addrspace(200)*, i32 } addrspace(200)* nocapture noundef readonly [[TMP0:%.*]]) local_unnamed_addr addrspace(200) #[[ATTR0:[0-9]+]] {
 // RISCV32-PURECAP-NEXT:  entry:
 // RISCV32-PURECAP-NEXT:    [[INDIRECT_ARG_TEMP:%.*]] = alloca { i8 addrspace(200)*, i32 }, align 8, addrspace(200)
 // RISCV32-PURECAP-NEXT:    [[FP:%.*]] = load { i8 addrspace(200)*, i32 }, { i8 addrspace(200)*, i32 } addrspace(200)* [[TMP0]], align 8, !tbaa [[TBAA4:![0-9]+]]
@@ -66,7 +66,7 @@ long use_p2m_impl(A *a, long (A::*fp)());
 // RISCV32-PURECAP-NEXT:    store i8 addrspace(200)* [[FP_FCA_0_EXTRACT]], i8 addrspace(200)* addrspace(200)* [[DOTFCA_0_GEP]], align 8, !tbaa [[TBAA4]]
 // RISCV32-PURECAP-NEXT:    [[DOTFCA_1_GEP:%.*]] = getelementptr inbounds { i8 addrspace(200)*, i32 }, { i8 addrspace(200)*, i32 } addrspace(200)* [[INDIRECT_ARG_TEMP]], i32 0, i32 1
 // RISCV32-PURECAP-NEXT:    store i32 [[FP_FCA_1_EXTRACT]], i32 addrspace(200)* [[DOTFCA_1_GEP]], align 8, !tbaa [[TBAA4]]
-// RISCV32-PURECAP-NEXT:    [[CALL:%.*]] = call i32 @_Z12use_p2m_implP1AMS_FlvE([[STRUCT_A]] addrspace(200)* [[A]], { i8 addrspace(200)*, i32 } addrspace(200)* nonnull [[INDIRECT_ARG_TEMP]]) #[[ATTR3:[0-9]+]]
+// RISCV32-PURECAP-NEXT:    [[CALL:%.*]] = call noundef i32 @_Z12use_p2m_implP1AMS_FlvE([[STRUCT_A]] addrspace(200)* noundef [[A]], { i8 addrspace(200)*, i32 } addrspace(200)* noundef nonnull [[INDIRECT_ARG_TEMP]]) #[[ATTR3:[0-9]+]]
 // RISCV32-PURECAP-NEXT:    ret i32 [[CALL]]
 //
 __attribute__((noinline)) long use_p2m(A *a, long (A::*fp)()) {
@@ -75,19 +75,19 @@ __attribute__((noinline)) long use_p2m(A *a, long (A::*fp)()) {
 // MIPS-LABEL: define {{[^@]+}}@_Z8pass_p2mv
 // MIPS-SAME: () local_unnamed_addr #[[ATTR2:[0-9]+]] {
 // MIPS-NEXT:  entry:
-// MIPS-NEXT:    [[CALL:%.*]] = tail call i64 @_Z7use_p2mP1AMS_FlvE(%struct.A* null, i64 inreg 8, i64 inreg 1)
+// MIPS-NEXT:    [[CALL:%.*]] = tail call noundef i64 @_Z7use_p2mP1AMS_FlvE(%struct.A* noundef null, i64 inreg 8, i64 inreg 1)
 // MIPS-NEXT:    ret i64 [[CALL]]
 //
 // MIPS-PURECAP-LABEL: define {{[^@]+}}@_Z8pass_p2mv
 // MIPS-PURECAP-SAME: () local_unnamed_addr addrspace(200) #[[ATTR2:[0-9]+]] {
 // MIPS-PURECAP-NEXT:  entry:
-// MIPS-PURECAP-NEXT:    [[CALL:%.*]] = tail call i64 @_Z7use_p2mP1AMS_FlvE([[STRUCT_A:%.*]] addrspace(200)* null, i8 addrspace(200)* inreg getelementptr (i8, i8 addrspace(200)* null, i64 16), i64 inreg 1)
+// MIPS-PURECAP-NEXT:    [[CALL:%.*]] = tail call noundef i64 @_Z7use_p2mP1AMS_FlvE([[STRUCT_A:%.*]] addrspace(200)* noundef null, i8 addrspace(200)* inreg getelementptr (i8, i8 addrspace(200)* null, i64 16), i64 inreg 1)
 // MIPS-PURECAP-NEXT:    ret i64 [[CALL]]
 //
 // RISCV64-LABEL: define {{[^@]+}}@_Z8pass_p2mv
 // RISCV64-SAME: () local_unnamed_addr #[[ATTR2:[0-9]+]] {
 // RISCV64-NEXT:  entry:
-// RISCV64-NEXT:    [[CALL:%.*]] = tail call i64 @_Z7use_p2mP1AMS_FlvE(%struct.A* null, [2 x i64] [i64 9, i64 0])
+// RISCV64-NEXT:    [[CALL:%.*]] = tail call noundef i64 @_Z7use_p2mP1AMS_FlvE(%struct.A* noundef null, [2 x i64] [i64 9, i64 0])
 // RISCV64-NEXT:    ret i64 [[CALL]]
 //
 // RISCV64-PURECAP-LABEL: define {{[^@]+}}@_Z8pass_p2mv
@@ -98,13 +98,13 @@ __attribute__((noinline)) long use_p2m(A *a, long (A::*fp)()) {
 // RISCV64-PURECAP-NEXT:    store i8 addrspace(200)* getelementptr (i8, i8 addrspace(200)* null, i64 17), i8 addrspace(200)* addrspace(200)* [[DOTFCA_0_GEP]], align 16, !tbaa [[TBAA4]]
 // RISCV64-PURECAP-NEXT:    [[DOTFCA_1_GEP:%.*]] = getelementptr inbounds { i8 addrspace(200)*, i64 }, { i8 addrspace(200)*, i64 } addrspace(200)* [[INDIRECT_ARG_TEMP]], i64 0, i32 1
 // RISCV64-PURECAP-NEXT:    store i64 0, i64 addrspace(200)* [[DOTFCA_1_GEP]], align 16, !tbaa [[TBAA4]]
-// RISCV64-PURECAP-NEXT:    [[CALL:%.*]] = call i64 @_Z7use_p2mP1AMS_FlvE([[STRUCT_A:%.*]] addrspace(200)* null, { i8 addrspace(200)*, i64 } addrspace(200)* nonnull [[INDIRECT_ARG_TEMP]])
+// RISCV64-PURECAP-NEXT:    [[CALL:%.*]] = call noundef i64 @_Z7use_p2mP1AMS_FlvE([[STRUCT_A:%.*]] addrspace(200)* noundef null, { i8 addrspace(200)*, i64 } addrspace(200)* noundef nonnull [[INDIRECT_ARG_TEMP]])
 // RISCV64-PURECAP-NEXT:    ret i64 [[CALL]]
 //
 // RISCV32-LABEL: define {{[^@]+}}@_Z8pass_p2mv
 // RISCV32-SAME: () local_unnamed_addr #[[ATTR2:[0-9]+]] {
 // RISCV32-NEXT:  entry:
-// RISCV32-NEXT:    [[CALL:%.*]] = tail call i32 @_Z7use_p2mP1AMS_FlvE(%struct.A* null, [2 x i32] [i32 5, i32 0])
+// RISCV32-NEXT:    [[CALL:%.*]] = tail call noundef i32 @_Z7use_p2mP1AMS_FlvE(%struct.A* noundef null, [2 x i32] [i32 5, i32 0])
 // RISCV32-NEXT:    ret i32 [[CALL]]
 //
 // RISCV32-PURECAP-LABEL: define {{[^@]+}}@_Z8pass_p2mv
@@ -115,7 +115,7 @@ __attribute__((noinline)) long use_p2m(A *a, long (A::*fp)()) {
 // RISCV32-PURECAP-NEXT:    store i8 addrspace(200)* getelementptr (i8, i8 addrspace(200)* null, i32 9), i8 addrspace(200)* addrspace(200)* [[DOTFCA_0_GEP]], align 8, !tbaa [[TBAA4]]
 // RISCV32-PURECAP-NEXT:    [[DOTFCA_1_GEP:%.*]] = getelementptr inbounds { i8 addrspace(200)*, i32 }, { i8 addrspace(200)*, i32 } addrspace(200)* [[INDIRECT_ARG_TEMP]], i32 0, i32 1
 // RISCV32-PURECAP-NEXT:    store i32 0, i32 addrspace(200)* [[DOTFCA_1_GEP]], align 8, !tbaa [[TBAA4]]
-// RISCV32-PURECAP-NEXT:    [[CALL:%.*]] = call i32 @_Z7use_p2mP1AMS_FlvE([[STRUCT_A:%.*]] addrspace(200)* null, { i8 addrspace(200)*, i32 } addrspace(200)* nonnull [[INDIRECT_ARG_TEMP]])
+// RISCV32-PURECAP-NEXT:    [[CALL:%.*]] = call noundef i32 @_Z7use_p2mP1AMS_FlvE([[STRUCT_A:%.*]] addrspace(200)* noundef null, { i8 addrspace(200)*, i32 } addrspace(200)* noundef nonnull [[INDIRECT_ARG_TEMP]])
 // RISCV32-PURECAP-NEXT:    ret i32 [[CALL]]
 //
 long pass_p2m() {

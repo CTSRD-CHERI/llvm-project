@@ -4,7 +4,7 @@
 // expected-no-diagnostics
 
 // CHECK-LABEL: define {{[^@]+}}@assume_aligned_ptr
-// CHECK-SAME: (i8* [[PTR:%.*]]) #0
+// CHECK-SAME: (i8* noundef [[PTR:%.*]]) #[[ATTR0:[0-9]+]] {
 // CHECK-NEXT:  entry:
 // CHECK-NEXT:    [[PTR_ADDR:%.*]] = alloca i8*, align 8
 // CHECK-NEXT:    store i8* [[PTR]], i8** [[PTR_ADDR]], align 8
@@ -14,7 +14,7 @@
 // CHECK-NEXT:    ret i32* [[TMP1]]
 //
 // PURECAP-LABEL: define {{[^@]+}}@assume_aligned_ptr
-// PURECAP-SAME: (i8 addrspace(200)* [[PTR:%.*]]) addrspace(200) #0
+// PURECAP-SAME: (i8 addrspace(200)* noundef [[PTR:%.*]]) addrspace(200) #[[ATTR0:[0-9]+]] {
 // PURECAP-NEXT:  entry:
 // PURECAP-NEXT:    [[PTR_ADDR:%.*]] = alloca i8 addrspace(200)*, align 16, addrspace(200)
 // PURECAP-NEXT:    store i8 addrspace(200)* [[PTR]], i8 addrspace(200)* addrspace(200)* [[PTR_ADDR]], align 16
@@ -28,7 +28,7 @@ int* assume_aligned_ptr(void* ptr) {
 }
 
 // CHECK-LABEL: define {{[^@]+}}@assume_aligned_cap
-// CHECK-SAME: (i8 addrspace(200)* [[PTR:%.*]]) #0
+// CHECK-SAME: (i8 addrspace(200)* noundef [[PTR:%.*]]) #[[ATTR0]] {
 // CHECK-NEXT:  entry:
 // CHECK-NEXT:    [[PTR_ADDR:%.*]] = alloca i8 addrspace(200)*, align 16
 // CHECK-NEXT:    store i8 addrspace(200)* [[PTR]], i8 addrspace(200)** [[PTR_ADDR]], align 16
@@ -38,7 +38,7 @@ int* assume_aligned_ptr(void* ptr) {
 // CHECK-NEXT:    ret i32 addrspace(200)* [[TMP1]]
 //
 // PURECAP-LABEL: define {{[^@]+}}@assume_aligned_cap
-// PURECAP-SAME: (i8 addrspace(200)* [[PTR:%.*]]) addrspace(200) #0
+// PURECAP-SAME: (i8 addrspace(200)* noundef [[PTR:%.*]]) addrspace(200) #[[ATTR0]] {
 // PURECAP-NEXT:  entry:
 // PURECAP-NEXT:    [[PTR_ADDR:%.*]] = alloca i8 addrspace(200)*, align 16, addrspace(200)
 // PURECAP-NEXT:    store i8 addrspace(200)* [[PTR]], i8 addrspace(200)* addrspace(200)* [[PTR_ADDR]], align 16

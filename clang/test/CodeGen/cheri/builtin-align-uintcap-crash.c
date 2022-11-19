@@ -4,35 +4,41 @@
 // https://github.com/CTSRD-CHERI/llvm-project/issues/412
 // RUN: %cheri_purecap_cc1 -o - -emit-llvm %s | FileCheck %s
 
-// CHECK-LABEL: define {{[^@]+}}@long_up() addrspace(200) #0
+// CHECK-LABEL: define {{[^@]+}}@long_up
+// CHECK-SAME: () addrspace(200) #[[ATTR0:[0-9]+]] {
 // CHECK-NEXT:  entry:
 // CHECK-NEXT:    ret i64 16
 //
 long long_up() { return __builtin_align_up((long)1, 16); }
-// CHECK-LABEL: define {{[^@]+}}@long_down() addrspace(200) #0
+// CHECK-LABEL: define {{[^@]+}}@long_down
+// CHECK-SAME: () addrspace(200) #[[ATTR0]] {
 // CHECK-NEXT:  entry:
 // CHECK-NEXT:    ret i64 0
 //
 long long_down() { return __builtin_align_down((long)1, 16); }
-// CHECK-LABEL: define {{[^@]+}}@cap_up() addrspace(200) #0
+// CHECK-LABEL: define {{[^@]+}}@cap_up
+// CHECK-SAME: () addrspace(200) #[[ATTR0]] {
 // CHECK-NEXT:  entry:
 // CHECK-NEXT:    ret i8 addrspace(200)* getelementptr (i8, i8 addrspace(200)* null, i64 16)
 //
 __uintcap_t cap_up() { return __builtin_align_up((__uintcap_t)1, 16); }
-// CHECK-LABEL: define {{[^@]+}}@cap_down() addrspace(200) #0
+// CHECK-LABEL: define {{[^@]+}}@cap_down
+// CHECK-SAME: () addrspace(200) #[[ATTR0]] {
 // CHECK-NEXT:  entry:
 // CHECK-NEXT:    ret i8 addrspace(200)* null
 //
 __uintcap_t cap_down() { return __builtin_align_down((__uintcap_t)1, 16); }
 
-// CHECK-LABEL: define {{[^@]+}}@a() addrspace(200) #0
+// CHECK-LABEL: define {{[^@]+}}@a
+// CHECK-SAME: () addrspace(200) #[[ATTR0]] {
 // CHECK-NEXT:  entry:
 // CHECK-NEXT:    [[TMP0:%.*]] = load i32, i32 addrspace(200)* null, align 4
 // CHECK-NEXT:    ret i32 [[TMP0]]
 //
 int a() { return ((int *)0)[__builtin_align_up((long)0, 16) / 1]; }
 // The original test case produced by creduce:
-// CHECK-LABEL: define {{[^@]+}}@b() addrspace(200) #0
+// CHECK-LABEL: define {{[^@]+}}@b
+// CHECK-SAME: () addrspace(200) #[[ATTR0]] {
 // CHECK-NEXT:  entry:
 // CHECK-NEXT:    [[TMP0:%.*]] = call i64 @llvm.cheri.cap.address.get.i64(i8 addrspace(200)* null)
 // CHECK-NEXT:    [[TMP1:%.*]] = call i64 @llvm.cheri.cap.address.get.i64(i8 addrspace(200)* getelementptr (i8, i8 addrspace(200)* null, i64 1))

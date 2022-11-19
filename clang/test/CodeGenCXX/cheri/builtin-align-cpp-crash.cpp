@@ -2,7 +2,7 @@
 // RUN: %cheri_purecap_cc1 -o - -O2 -emit-llvm  %s | FileCheck %s
 // Found while trying to use the builtin in QtBase
 // CHECK-LABEL: define {{[^@]+}}@test1
-// CHECK-SAME: (i8 addrspace(200)* [[C:%.*]], i32 signext [[B:%.*]]) local_unnamed_addr addrspace(200) #0
+// CHECK-SAME: (i8 addrspace(200)* noundef [[C:%.*]], i32 noundef signext [[B:%.*]]) local_unnamed_addr addrspace(200) #[[ATTR0:[0-9]+]] {
 // CHECK-NEXT:  entry:
 // CHECK-NEXT:    [[ALIGNMENT:%.*]] = zext i32 [[B]] to i64
 // CHECK-NEXT:    [[PTRADDR:%.*]] = tail call i64 @llvm.cheri.cap.address.get.i64(i8 addrspace(200)* [[C]])
@@ -19,7 +19,7 @@ extern "C" char* test1(char* c, int b) {
 
 // Found while compiling libnv
 // CHECK-LABEL: define {{[^@]+}}@test2
-// CHECK-SAME: (i8 addrspace(200)* [[VALUE:%.*]]) local_unnamed_addr addrspace(200) #0
+// CHECK-SAME: (i8 addrspace(200)* noundef [[VALUE:%.*]]) local_unnamed_addr addrspace(200) #[[ATTR0]] {
 // CHECK-NEXT:  entry:
 // CHECK-NEXT:    [[PTRADDR:%.*]] = tail call i64 @llvm.cheri.cap.address.get.i64(i8 addrspace(200)* [[VALUE]])
 // CHECK-NEXT:    [[OVER_BOUNDARY:%.*]] = add i64 [[PTRADDR]], 3
