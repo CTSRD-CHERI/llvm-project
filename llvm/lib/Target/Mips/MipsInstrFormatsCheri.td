@@ -55,24 +55,6 @@ class CheriFmtGet<bits<3> op, dag outs, dag ins, string asmstr,
   let r1 = cb;
   let r2 = 0;
 }
-class CheriFmtGetCause<bits<5> op, dag outs, dag ins, string asmstr,
-                list<dag> pattern> :
-  CheriFmtRegs<0, 4,outs, ins, asmstr, pattern> {
-  bits<5>  rd;
-  let r0 = rd;
-  let r1 = 0;
-  let r2 = 0;
-}
-class CheriFmtSetCause<bits<5> op, dag outs, dag ins, string asmstr,
-                list<dag> pattern> :
-  CheriFmtRegs<4, 4,outs, ins, asmstr, pattern> {
-  bits<5>  rs;
-  let r0 = 0;
-  let r1 = 0;
-  let r2 = rs;
-  let hasSideEffects = 1;
-}
-
 
 // CSet*
 class CheriFmtSet<bits<3> op, dag outs, dag ins, string asmstr,
