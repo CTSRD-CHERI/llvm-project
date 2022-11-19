@@ -71,23 +71,25 @@ struct CheriCapReloc {
   }
 };
 
-template <class ELFT> class CheriCapRelocsSection : public SyntheticSection {
+// FIXME: should de-template this class properly
+class CheriCapRelocsSection : public SyntheticSection {
 public:
   CheriCapRelocsSection();
-  static constexpr size_t fieldSize = ELFT::Is64Bits ? 8 : 4;
-  static constexpr size_t relocSize = fieldSize * 5;
   // Add a __cap_relocs section from in input object file
+  template <class ELFT>
   void addSection(InputSectionBase *s);
   bool isNeeded() const override { return !relocsMap.empty() || !legacyInputs.empty(); }
   size_t getSize() const override { return relocsMap.size() * entsize; }
   void finalizeContents() override;
   void writeTo(uint8_t *buf) override;
+  template <class ELFT>
   void addCapReloc(CheriCapRelocLocation loc, const SymbolAndOffset &target,
                    bool targetNeedsDynReloc, int64_t capabilityOffset,
                    Symbol *sourceSymbol = nullptr);
 
 private:
-  void processSection(InputSectionBase *s);
+  template <class ELFT> void writeToImpl(uint8_t *);
+  template <class ELFT> void processSection(InputSectionBase *s);
   bool addEntry(CheriCapRelocLocation loc, CheriCapReloc relocation) {
     auto it = relocsMap.insert(std::make_pair(loc, relocation));
     // assert(it.first->second == Relocation);

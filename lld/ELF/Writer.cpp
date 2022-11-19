@@ -167,7 +167,7 @@ void elf::combineEhSections() {
   llvm::erase_value(inputSections, nullptr);
 }
 
-template <class ELFT> void elf::combineCapRelocsSections() {
+void elf::combineCapRelocsSections() {
   for (InputSectionBase *&s : inputSections) {
     if (s->name != "__cap_relocs")
       continue;
@@ -176,7 +176,7 @@ template <class ELFT> void elf::combineCapRelocsSections() {
     // We only gather the sections here and add the cap_relocs during
     // finalizeContents() The reason for this is that we don't know if symbols
     // are preemptible when this function is called.
-    InX<ELFT>::capRelocs->addSection(s);
+    invokeELFT(in.capRelocs->addSection, s);
     s = nullptr;
   }
   llvm::erase_value(inputSections, nullptr);
@@ -353,7 +353,7 @@ template <class ELFT> void elf::createSyntheticSections() {
   add(*in.bssRelRo);
 
   if (config->capabilitySize > 0) {
-    InX<ELFT>::capRelocs = std::make_unique<CheriCapRelocsSection<ELFT>>();
+    in.capRelocs = std::make_unique<CheriCapRelocsSection>();
     in.cheriCapTable = std::make_unique<CheriCapTableSection>();
     add(*in.cheriCapTable);
     if (config->capTableScope != CapTableScopePolicy::All) {
@@ -2029,8 +2029,8 @@ template <class ELFT> void Writer<ELFT>::finalizeSections() {
 
   // Now handle __cap_relocs (must be before RelaDyn because it might
   // result in new dynamic relocations being added)
-  if (InX<ELFT>::capRelocs) {
-    finalizeSynthetic(InX<ELFT>::capRelocs.get());
+  if (in.capRelocs) {
+    finalizeSynthetic(in.capRelocs.get());
   }
 
   if (in.plt && in.plt->isNeeded())
@@ -3117,8 +3117,3 @@ template void elf::writeResult<ELF32LE>();
 template void elf::writeResult<ELF32BE>();
 template void elf::writeResult<ELF64LE>();
 template void elf::writeResult<ELF64BE>();
-
-template void elf::combineCapRelocsSections<ELF32LE>();
-template void elf::combineCapRelocsSections<ELF32BE>();
-template void elf::combineCapRelocsSections<ELF64LE>();
-template void elf::combineCapRelocsSections<ELF64BE>();

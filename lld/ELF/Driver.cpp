@@ -2308,8 +2308,6 @@ static uint32_t getAndFeatures() {
 void LinkerDriver::link(opt::InputArgList &args) {
   llvm::TimeTraceScope timeScope("Link", StringRef("LinkerDriver::Link"));
 
-  InX<ELFT>::capRelocs = nullptr;
-
   // If a --hash-style option was not given, set to a default value,
   // which varies depending on the target.
   if (!args.hasArg(OPT_hash_style)) {
@@ -2612,9 +2610,9 @@ void LinkerDriver::link(opt::InputArgList &args) {
   // output sections in the usual way.
   if (!config->relocatable) {
     combineEhSections();
-    if (InX<ELFT>::capRelocs) {
-      combineCapRelocsSections<ELFT>();
-      inputSections.push_back(InX<ELFT>::capRelocs.get());
+    if (in.capRelocs) {
+      combineCapRelocsSections();
+      inputSections.push_back(in.capRelocs.get());
     }
   }
 

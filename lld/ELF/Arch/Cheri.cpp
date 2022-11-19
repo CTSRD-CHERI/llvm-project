@@ -22,6 +22,8 @@ namespace elf {
 
 // See CheriBSD crt_init_globals()
 template <class ELFT> struct InMemoryCapRelocEntry {
+  static constexpr size_t fieldSize = ELFT::Is64Bits ? 8 : 4;
+  static constexpr size_t relocSize = fieldSize * 5;
   using NativeUint = typename ELFT::uint;
   using CapRelocUint = llvm::support::detail::packed_endian_specific_integral<
       NativeUint, ELFT::TargetEndianness, llvm::support::aligned>;
@@ -36,18 +38,17 @@ template <class ELFT> struct InMemoryCapRelocEntry {
   CapRelocUint permissions;
 };
 
-template <class ELFT>
-CheriCapRelocsSection<ELFT>::CheriCapRelocsSection()
+CheriCapRelocsSection::CheriCapRelocsSection()
     : SyntheticSection((config->isPic && !config->relativeCapRelocsOnly)
                            ? SHF_ALLOC | SHF_WRITE /* XXX: actually RELRO */
                            : SHF_ALLOC,
                        SHT_PROGBITS, config->wordsize, "__cap_relocs") {
-  this->entsize = relocSize;
+  this->entsize = config->wordsize * 5;
 }
 
 // TODO: copy MipsABIFlagsSection::create() instead of current impl?
 template <class ELFT>
-void CheriCapRelocsSection<ELFT>::addSection(InputSectionBase *s) {
+void CheriCapRelocsSection::addSection(InputSectionBase *s) {
   // FIXME: can this happen with ld -r ?
   // error("Compiler should not have generated __cap_relocs section for " + toString(S));
   assert(s->name == "__cap_relocs");
@@ -61,7 +62,7 @@ void CheriCapRelocsSection<ELFT>::addSection(InputSectionBase *s) {
           ": " + toString(s));
     return;
   }
-  size_t numCapRelocs = s->getSize() / relocSize;
+  size_t numCapRelocs = s->getSize() / InMemoryCapRelocEntry<ELFT>::relocSize;
   if (numCapRelocs * 2 != rels.relas.size()) {
     error("expected " + Twine(numCapRelocs * 2) + " relocations for " +
           toString(s) + " but got " + Twine(rels.relas.size()));
@@ -73,11 +74,11 @@ void CheriCapRelocsSection<ELFT>::addSection(InputSectionBase *s) {
   legacyInputs.push_back(s);
 }
 
-template <class ELFT> void CheriCapRelocsSection<ELFT>::finalizeContents() {
+void CheriCapRelocsSection::finalizeContents() {
   for (InputSectionBase *s : legacyInputs) {
     if (config->verboseCapRelocs)
       message("Processing legacy cap relocs from " + toString(s->file) + "\n");
-    processSection(s);
+    invokeELFT(processSection, s);
   }
 }
 
@@ -153,7 +154,7 @@ std::string CheriCapRelocLocation::toString() const {
 }
 
 template <class ELFT>
-void CheriCapRelocsSection<ELFT>::processSection(InputSectionBase *s) {
+void CheriCapRelocsSection::processSection(InputSectionBase *s) {
   // TODO: sort by offset (or is that always true?
   const auto rels = s->relsOrRelas<ELFT>().relas;
   for (auto i = rels.begin(), end = rels.end(); i != end; ++i) {
@@ -166,6 +167,7 @@ void CheriCapRelocsSection<ELFT>::processSection(InputSectionBase *s) {
             Twine(entsize) + " but got " + Twine(locationRel.r_offset));
       return;
     }
+    constexpr unsigned fieldSize = InMemoryCapRelocEntry<ELFT>::fieldSize;
     if (targetRel.r_offset != locationRel.r_offset + fieldSize) {
       error("corrupted __cap_relocs: expected target relocation (" +
             Twine(targetRel.r_offset) +
@@ -265,18 +267,18 @@ void CheriCapRelocsSection<ELFT>::processSection(InputSectionBase *s) {
     assert(locationSym->isSection());
     auto *locationDef = cast<Defined>(locationSym);
     auto *locationSec = cast<InputSectionBase>(locationDef->section);
-    addCapReloc({locationSec, (uint64_t)locationRel.r_addend}, realTarget,
-                targetNeedsDynReloc, targetCapabilityOffset,
-                realLocation.sym());
+    addCapReloc<ELFT>({locationSec, (uint64_t)locationRel.r_addend}, realTarget,
+                      targetNeedsDynReloc, targetCapabilityOffset,
+                      realLocation.sym());
   }
 }
 
 template <class ELFT>
-void CheriCapRelocsSection<ELFT>::addCapReloc(CheriCapRelocLocation loc,
-                                              const SymbolAndOffset &target,
-                                              bool targetNeedsDynReloc,
-                                              int64_t capabilityOffset,
-                                              Symbol *sourceSymbol) {
+void CheriCapRelocsSection::addCapReloc(CheriCapRelocLocation loc,
+                                        const SymbolAndOffset &target,
+                                        bool targetNeedsDynReloc,
+                                        int64_t capabilityOffset,
+                                        Symbol *sourceSymbol) {
   if (config->relativeCapRelocsOnly) {
     if (targetNeedsDynReloc) {
       error("Cannot add __cap_reloc against target that needs a dynamic "
@@ -288,7 +290,7 @@ void CheriCapRelocsSection<ELFT>::addCapReloc(CheriCapRelocLocation loc,
     // Allow relocations in __cap_relocs section for legacy mode
     targetNeedsDynReloc = targetNeedsDynReloc || config->isPic || config->pie;
   }
-  uint64_t currentEntryOffset = relocsMap.size() * relocSize;
+  uint64_t currentEntryOffset = relocsMap.size() * entsize;
 
   auto sourceMsg = [&]() -> std::string {
     return sourceSymbol ? verboseToString(sourceSymbol) : loc.toString();
@@ -332,6 +334,7 @@ void CheriCapRelocsSection<ELFT>::addCapReloc(CheriCapRelocLocation loc,
     // will be zero unless we are targeting a string constant as these
     // don't have a symbol and will be like .rodata.str+0x1234
     int64_t addend = target.offset;
+    constexpr unsigned fieldSize = InMemoryCapRelocEntry<ELFT>::fieldSize;
     // Capability target is the second field
     if (target.sym()->isPreemptible) {
       mainPart->relaDyn->addSymbolReloc(
@@ -467,15 +470,16 @@ struct CaptablePermissions {
       UINT64_C(1) << ((sizeof(typename ELFT::uint) * 8) - 2);
 };
 
-template <class ELFT> void CheriCapRelocsSection<ELFT>::writeTo(uint8_t *buf) {
-  static_assert(relocSize == sizeof(InMemoryCapRelocEntry<ELFT>),
-                "cap relocs size mismatch");
+template <class ELFT>
+void CheriCapRelocsSection::writeToImpl(uint8_t *buf) {
+  assert(entsize == sizeof(InMemoryCapRelocEntry<ELFT>) &&
+         "cap relocs size mismatch");
   uint64_t offset = 0;
   for (const auto &i : relocsMap) {
     const CheriCapRelocLocation &location = i.first;
     const CheriCapReloc &reloc = i.second;
     assert(location.offset <= location.section->getSize());
-    // We write the virtual address of the location in in both static and the
+    // We write the virtual address of the location in both static and the
     // shared library case:
     // In the static case we can compute the final virtual address and write it
     // In the dynamic case we write the virtual address relative to the load
@@ -539,7 +543,7 @@ template <class ELFT> void CheriCapRelocsSection<ELFT>::writeTo(uint8_t *buf) {
     //              << ", size=" << utohexstr(TargetSize)
     //              << ", permissions=" << utohexstr(Permissions) << "\n";
     //     }
-    offset += relocSize;
+    offset += InMemoryCapRelocEntry<ELFT>::relocSize;
   }
 
   // FIXME: this totally breaks dynamic relocs!!! need to do in finalize()
@@ -558,6 +562,10 @@ template <class ELFT> void CheriCapRelocsSection<ELFT>::writeTo(uint8_t *buf) {
                        return a.capability_location < b.capability_location;
                      });
   assert(offset == getSize() && "Not all data written?");
+}
+
+void CheriCapRelocsSection::writeTo(uint8_t *buf) {
+  invokeELFT(writeToImpl, buf);
 }
 
 
@@ -941,10 +949,10 @@ void CheriCapTableSection::assignValuesAndAddCapTableSymbols() {
   valuesAssigned = true;
 }
 
-template class elf::CheriCapRelocsSection<ELF32LE>;
-template class elf::CheriCapRelocsSection<ELF32BE>;
-template class elf::CheriCapRelocsSection<ELF64LE>;
-template class elf::CheriCapRelocsSection<ELF64BE>;
+template void CheriCapRelocsSection::addSection<ELF32LE>(InputSectionBase *s);
+template void CheriCapRelocsSection::addSection<ELF32BE>(InputSectionBase *s);
+template void CheriCapRelocsSection::addSection<ELF64LE>(InputSectionBase *s);
+template void CheriCapRelocsSection::addSection<ELF64BE>(InputSectionBase *s);
 
 template void
 CheriCapTableSection::assignValuesAndAddCapTableSymbols<ELF32LE>();
@@ -1157,8 +1165,8 @@ void addCapabilityRelocation(Symbol *sym, RelType type, InputSectionBase *sec,
     if (config->relativeCapRelocsOnly) {
       assert(!sym->isPreemptible);
     }
-    InX<ELFT>::capRelocs->addCapReloc({sec, offset}, {sym, 0u},
-                                      sym->isPreemptible, addend);
+    in.capRelocs->addCapReloc<ELFT>({sec, offset}, {sym, 0u},
+                                    sym->isPreemptible, addend);
   } else {
     assert(config->localCapRelocsMode == CapRelocsMode::CBuildCap);
     error("CBuildCap method not implemented yet!");
