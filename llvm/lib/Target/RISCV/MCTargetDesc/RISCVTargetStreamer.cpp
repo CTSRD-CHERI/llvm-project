@@ -34,6 +34,7 @@ void RISCVTargetStreamer::emitDirectiveOptionRelax() {}
 void RISCVTargetStreamer::emitDirectiveOptionNoRelax() {}
 void RISCVTargetStreamer::emitDirectiveOptionCapMode() {}
 void RISCVTargetStreamer::emitDirectiveOptionNoCapMode() {}
+void RISCVTargetStreamer::emitDirectiveVariantCC(MCSymbol &Symbol) {}
 void RISCVTargetStreamer::emitAttribute(unsigned Attribute, unsigned Value) {}
 void RISCVTargetStreamer::finishAttributeSection() {}
 void RISCVTargetStreamer::emitTextAttribute(unsigned Attribute,

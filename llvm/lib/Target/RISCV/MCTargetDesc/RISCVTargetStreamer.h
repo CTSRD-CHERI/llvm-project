@@ -35,6 +35,7 @@ public:
   virtual void emitDirectiveOptionNoRelax();
   virtual void emitDirectiveOptionCapMode();
   virtual void emitDirectiveOptionNoCapMode();
+  virtual void emitDirectiveVariantCC(MCSymbol &Symbol);
   virtual void emitAttribute(unsigned Attribute, unsigned Value);
   virtual void finishAttributeSection();
   virtual void emitTextAttribute(unsigned Attribute, StringRef String);
