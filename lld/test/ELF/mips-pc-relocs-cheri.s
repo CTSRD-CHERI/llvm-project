@@ -4,7 +4,7 @@
 # RUN:         %s -o %t1.o
 # RUN: llvm-mc -filetype=obj -triple=mips64-unknown-freebsd \
 # RUN:         %S/Inputs/mips-dynamic.s -o %t2.o
-# RUN: ld.lld %t1.o %t2.o -image-base=0x10000 -o %t.exe
+# RUN: ld.lld %t1.o %t2.o --image-base=0x10000 -o %t.exe
 # RUN: llvm-objdump -d %t.exe | FileCheck %s
 
 # REQUIRES: mips
