@@ -60,24 +60,6 @@ Type *IRBuilderBase::getCurrentFunctionReturnType() const {
   return BB->getParent()->getReturnType();
 }
 
-Value *IRBuilderBase::getCastedInt8PtrValue(Value *Ptr, unsigned TargetAS) {
-  PointerType *PT = cast<PointerType>(Ptr->getType());
-  unsigned AS = PT->getAddressSpace();
-  if (PT->getElementType()->isIntegerTy(8) && AS == TargetAS)
-    return Ptr;
-
-  // Otherwise, we need to insert a bitcast.
-  PT = getInt8PtrTy(TargetAS);
-  Instruction *I;
-  if (TargetAS == AS)
-    I = new BitCastInst(Ptr, PT, "");
-  else
-    I = new AddrSpaceCastInst(Ptr, PT, "");
-  BB->getInstList().insert(InsertPt, I);
-  SetInstDebugLocation(I);
-  return I;
-}
-
 Value *IRBuilderBase::getCastedInt8PtrValue(Value *Ptr) {
   auto *PT = cast<PointerType>(Ptr->getType());
   if (PT->isOpaqueOrPointeeTypeMatches(getInt8Ty()))

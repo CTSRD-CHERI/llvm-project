@@ -953,7 +953,6 @@ private:
                                   const Twine &Name = "");
 
   Value *getCastedInt8PtrValue(Value *Ptr);
-  Value *getCastedInt8PtrValue(Value *Ptr, unsigned AS);
 
   //===--------------------------------------------------------------------===//
   // Instruction creation methods: Terminators
