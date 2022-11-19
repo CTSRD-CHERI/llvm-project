@@ -2639,7 +2639,7 @@ CGObjCGNU::GenerateMessageSendSuper(CodeGenFunction &CGF,
   llvm::Value *imp = LookupIMPSuper(CGF, ObjCSuper, cmd, MSI);
   if (AS != 0)
     MSI.MessengerType =
-      llvm::PointerType::get(MSI.MessengerType->getElementType(), AS);
+        llvm::PointerType::getWithSamePointeeType(MSI.MessengerType, AS);
   imp = EnforceType(Builder, imp, MSI.MessengerType);
 
   llvm::Metadata *impMD[] = {
@@ -2826,8 +2826,8 @@ CGObjCGNU::GenerateMessageSend(CodeGenFunction &CGF,
       // of the pointer, or we will end up deriving a DDC-relative capability,
       // which won't have the execute permission.
       MSI.MessengerType =
-        llvm::PointerType::get(MSI.MessengerType->getElementType(), 0);
-  }
+          llvm::PointerType::getWithSamePointeeType(MSI.MessengerType, 0);
+    }
 
   // Reset the receiver in case the lookup modified it
   ActualArgs[0] = CallArg(RValue::get(Receiver), ASTIdTy);
