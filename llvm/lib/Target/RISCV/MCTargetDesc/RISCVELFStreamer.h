@@ -111,6 +111,7 @@ public:
   void emitDirectiveOptionNoRelax() override;
   void emitDirectiveOptionCapMode() override;
   void emitDirectiveOptionNoCapMode() override;
+  void emitDirectiveVariantCC(MCSymbol &Symbol) override;
 
   void finish() override;
 };
