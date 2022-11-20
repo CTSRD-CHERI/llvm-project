@@ -5,7 +5,7 @@
 // RUN: %cheri_cc1 -o - -O2 -S %s | FileCheck %s -check-prefixes=ASM,MIPS-ASM
 
 // CHECK-LABEL: define {{[^@]+}}@is_aligned
-// CHECK-SAME: (i8 addrspace(200)* [[PTR:%.*]], i64 signext [[ALIGN:%.*]]) local_unnamed_addr addrspace(200) #0
+// CHECK-SAME: (i8 addrspace(200)* noundef [[PTR:%.*]], i64 noundef signext [[ALIGN:%.*]]) local_unnamed_addr addrspace(200) #[[ATTR0:[0-9]+]] {
 // CHECK-NEXT:  entry:
 // CHECK-NEXT:    [[MASK:%.*]] = add i64 [[ALIGN]], -1
 // CHECK-NEXT:    [[PTRADDR:%.*]] = tail call i64 @llvm.cheri.cap.address.get.i64(i8 addrspace(200)* [[PTR]])
@@ -27,7 +27,7 @@ _Bool is_aligned(void *ptr, long align) {
 }
 
 // CHECK-LABEL: define {{[^@]+}}@align_up
-// CHECK-SAME: (i8 addrspace(200)* [[PTR:%.*]], i64 signext [[ALIGN:%.*]]) local_unnamed_addr addrspace(200) #2
+// CHECK-SAME: (i8 addrspace(200)* noundef [[PTR:%.*]], i64 noundef signext [[ALIGN:%.*]]) local_unnamed_addr addrspace(200) #[[ATTR2:[0-9]+]] {
 // CHECK-NEXT:  entry:
 // CHECK-NEXT:    [[MASK:%.*]] = add i64 [[ALIGN]], -1
 // CHECK-NEXT:    [[PTRADDR:%.*]] = tail call i64 @llvm.cheri.cap.address.get.i64(i8 addrspace(200)* [[PTR]])
@@ -57,7 +57,7 @@ void* align_up(void *ptr, long align) {
 }
 
 // CHECK-LABEL: define {{[^@]+}}@align_down
-// CHECK-SAME: (i8 addrspace(200)* [[PTR:%.*]], i64 signext [[ALIGN:%.*]]) local_unnamed_addr addrspace(200) #2
+// CHECK-SAME: (i8 addrspace(200)* noundef [[PTR:%.*]], i64 noundef signext [[ALIGN:%.*]]) local_unnamed_addr addrspace(200) #[[ATTR2]] {
 // CHECK-NEXT:  entry:
 // CHECK-NEXT:    [[PTRADDR:%.*]] = tail call i64 @llvm.cheri.cap.address.get.i64(i8 addrspace(200)* [[PTR]])
 // CHECK-NEXT:    [[TMP0:%.*]] = add i64 [[ALIGN]], -1

@@ -5,6 +5,6 @@
 // possible to create IR whereby the arguments passed differs from what is
 // allowed as per the function prototype.
 void a() {
-  // PCREL: call void bitcast (void () addrspace(200)* @a to void (i32) addrspace(200)*)(i32 signext 3)
+  // PCREL: call void bitcast (void () addrspace(200)* @a to void (i32) addrspace(200)*)(i32 noundef signext 3)
   a(3);
 }

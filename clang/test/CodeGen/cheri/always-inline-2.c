@@ -42,9 +42,9 @@ int call_not_inlined(void) {
 // This function must be inlined even at -O0
 // CHECK-LABEL: define dso_local signext i32 @call_not_inlined()
 // CHECK-NEXT: entry:
-// OPT-NEXT:                    [[CALL:%.+]] = {{(tail )?}}call signext i32 @not_inlined(i32 signext 0)
-// N64-NOOPT-NEXT:              [[CALL:%.+]] = {{(tail )?}}call signext i32 @not_inlined(i32 signext 0)
-// PURECAP-CAPTABLE-NOOPT-NEXT: [[CALL:%.+]] = {{(tail )?}}call signext i32 @not_inlined(i32 signext 0)
+// OPT-NEXT:                    [[CALL:%.+]] = {{(tail )?}}call signext i32 @not_inlined(i32 noundef signext 0)
+// N64-NOOPT-NEXT:              [[CALL:%.+]] = {{(tail )?}}call signext i32 @not_inlined(i32 noundef signext 0)
+// PURECAP-CAPTABLE-NOOPT-NEXT: [[CALL:%.+]] = {{(tail )?}}call signext i32 @not_inlined(i32 noundef signext 0)
 // CHECK-NEXT:    ret i32 [[CALL]]
 // CHECK-NEXT: }
 
@@ -61,8 +61,8 @@ int call_maybe_inlined(void) {
 // CHECK-LABEL: define dso_local signext i32 @call_maybe_inlined()
 // CHECK-NEXT: entry:
 // OPT-NEXT:     ret i32 7
-// N64-NOOPT-NEXT:              [[CALL:%.+]] = call signext i32 @maybe_inlined(i32 signext 0)
-// PURECAP-CAPTABLE-NOOPT-NEXT: [[CALL:%.+]] = call signext i32 @maybe_inlined(i32 signext 0)
+// N64-NOOPT-NEXT:              [[CALL:%.+]] = call signext i32 @maybe_inlined(i32 noundef signext 0)
+// PURECAP-CAPTABLE-NOOPT-NEXT: [[CALL:%.+]] = call signext i32 @maybe_inlined(i32 noundef signext 0)
 // NOOPT-NEXT:   ret i32 [[CALL]]
 // CHECK-NEXT: }
 // OPT-NOT: maybe_inlined

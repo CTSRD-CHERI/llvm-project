@@ -17,7 +17,7 @@ long get_tp(void) {
 }
 
 // CHECK-LABEL: define {{[^@]+}}@set_tp
-// CHECK-SAME: (i64 [[VALUE:%[a-z0-9]+]])
+// CHECK-SAME: (i64 noundef [[VALUE:%[a-z0-9]+]])
 // CHECK-NEXT:  entry:
 // CHECK-NEXT:    [[VALUE_ADDR:%.*]] = alloca i64, align 8
 // CHECK-NEXT:    store i64 [[VALUE]], i64{{( addrspace\(200\))?}}* [[VALUE_ADDR]], align 8
@@ -38,7 +38,7 @@ __uintcap_t get_ctp(void) {
   return cap_tp;
 }
 // CHECK-LABEL: define {{[^@]+}}@set_ctp
-// CHECK-SAME: (i8 addrspace(200)* [[VALUE:%[a-z0-9]+]])
+// CHECK-SAME: (i8 addrspace(200)* noundef [[VALUE:%[a-z0-9]+]])
 // CHECK-NEXT:  entry:
 // CHECK-NEXT:    [[VALUE_ADDR:%.*]] = alloca i8 addrspace(200)*, align 16
 // CHECK-NEXT:    store i8 addrspace(200)* [[VALUE]], i8 addrspace(200)*{{( addrspace\(200\))?}}* [[VALUE_ADDR]], align 16
@@ -63,7 +63,7 @@ struct StackPtr *__capability get_csp(void) {
   return cap_sp;
 }
 // CHECK-LABEL: define {{[^@]+}}@set_csp
-// CHECK-SAME: (%struct.StackPtr addrspace(200)* [[VALUE:%[a-z0-9]+]])
+// CHECK-SAME: (%struct.StackPtr addrspace(200)* noundef [[VALUE:%[a-z0-9]+]])
 // CHECK-NEXT:  entry:
 // CHECK-NEXT:    [[VALUE_ADDR:%.*]] = alloca [[STRUCT_STACKPTR:%.*]] addrspace(200)*, align 16
 // CHECK-NEXT:    store [[STRUCT_STACKPTR]] addrspace(200)* [[VALUE]], [[STRUCT_STACKPTR]] addrspace(200)*{{( addrspace\(200\))?}}* [[VALUE_ADDR]], align 16
@@ -87,7 +87,7 @@ long get_gp_addr(void) {
 }
 
 // CHECK-LABEL: define {{[^@]+}}@set_gp_addr
-// CHECK-SAME: (i64 [[VALUE:%[a-z0-9]+]])
+// CHECK-SAME: (i64 noundef [[VALUE:%[a-z0-9]+]])
 // CHECK-NEXT:  entry:
 // CHECK-NEXT:    [[VALUE_ADDR:%.*]] = alloca i64, align 8
 // CHECK-NEXT:    store i64 [[VALUE]], i64{{( addrspace\(200\))?}}* [[VALUE_ADDR]], align 8

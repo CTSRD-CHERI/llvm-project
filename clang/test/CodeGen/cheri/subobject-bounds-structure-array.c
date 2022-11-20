@@ -24,7 +24,7 @@ typedef struct {
 
 // NOTE: bounds must be set before the GEP:
 // CHECK-LABEL: define {{[^@]+}}@test_struct_with_array1
-// CHECK-SAME: ([[STRUCT_STRUCT_WITH_ARRAY:%.*]] addrspace(200)* readonly [[S:%.*]], i64 signext [[INDEX:%.*]]) local_unnamed_addr addrspace(200) #[[ATTR0:[0-9]+]] {
+// CHECK-SAME: ([[STRUCT_STRUCT_WITH_ARRAY:%.*]] addrspace(200)* noundef readonly [[S:%.*]], i64 noundef signext [[INDEX:%.*]]) local_unnamed_addr addrspace(200) #[[ATTR0:[0-9]+]] {
 // CHECK-NEXT:  entry:
 // CHECK-NEXT:    [[BUF:%.*]] = getelementptr inbounds [[STRUCT_STRUCT_WITH_ARRAY]], [[STRUCT_STRUCT_WITH_ARRAY]] addrspace(200)* [[S]], i64 0, i32 1
 // CHECK-NEXT:    [[TMP0:%.*]] = bitcast [10 x i32] addrspace(200)* [[BUF]] to i8 addrspace(200)*
@@ -40,7 +40,7 @@ int test_struct_with_array1(struct_with_array *s, long index) {
 }
 
 // CHECK-LABEL: define {{[^@]+}}@test_struct_with_array2
-// CHECK-SAME: ([[STRUCT_STRUCT_WITH_ARRAY:%.*]] addrspace(200)* noalias nocapture sret([[STRUCT_STRUCT_WITH_ARRAY]]) align 8 [[AGG_RESULT:%.*]], [[STRUCT_STRUCT_WITH_ARRAY]] addrspace(200)* nocapture readonly [[S:%.*]], i64 signext [[INDEX:%.*]]) local_unnamed_addr addrspace(200) #[[ATTR2:[0-9]+]] {
+// CHECK-SAME: ([[STRUCT_STRUCT_WITH_ARRAY:%.*]] addrspace(200)* noalias nocapture writeonly sret([[STRUCT_STRUCT_WITH_ARRAY]]) align 8 [[AGG_RESULT:%.*]], [[STRUCT_STRUCT_WITH_ARRAY]] addrspace(200)* nocapture noundef readonly [[S:%.*]], i64 noundef signext [[INDEX:%.*]]) local_unnamed_addr addrspace(200) #[[ATTR2:[0-9]+]] {
 // CHECK-NEXT:  entry:
 // CHECK-NEXT:    [[ARRAYIDX:%.*]] = getelementptr inbounds [[STRUCT_STRUCT_WITH_ARRAY]], [[STRUCT_STRUCT_WITH_ARRAY]] addrspace(200)* [[S]], i64 [[INDEX]]
 // CHECK-NEXT:    [[TMP0:%.*]] = bitcast [[STRUCT_STRUCT_WITH_ARRAY]] addrspace(200)* [[AGG_RESULT]] to i8 addrspace(200)*
@@ -60,7 +60,7 @@ typedef struct {
 } struct_with_ptr;
 
 // CHECK-LABEL: define {{[^@]+}}@test_struct_with_ptr1
-// CHECK-SAME: ([[STRUCT_STRUCT_WITH_PTR:%.*]] addrspace(200)* nocapture readonly [[S:%.*]], i64 signext [[INDEX:%.*]]) local_unnamed_addr addrspace(200) #[[ATTR4:[0-9]+]] {
+// CHECK-SAME: ([[STRUCT_STRUCT_WITH_PTR:%.*]] addrspace(200)* nocapture noundef readonly [[S:%.*]], i64 noundef signext [[INDEX:%.*]]) local_unnamed_addr addrspace(200) #[[ATTR4:[0-9]+]] {
 // CHECK-NEXT:  entry:
 // CHECK-NEXT:    [[BUF:%.*]] = getelementptr inbounds [[STRUCT_STRUCT_WITH_PTR]], [[STRUCT_STRUCT_WITH_PTR]] addrspace(200)* [[S]], i64 0, i32 1
 // CHECK-NEXT:    [[TMP0:%.*]] = load i32 addrspace(200)*, i32 addrspace(200)* addrspace(200)* [[BUF]], align 16, !tbaa [[TBAA10:![0-9]+]]
@@ -73,7 +73,7 @@ int test_struct_with_ptr1(struct_with_ptr *s, long index) {
 }
 
 // CHECK-LABEL: define {{[^@]+}}@test_struct_with_ptr2
-// CHECK-SAME: ([[STRUCT_STRUCT_WITH_PTR:%.*]] addrspace(200)* noalias nocapture sret([[STRUCT_STRUCT_WITH_PTR]]) align 16 [[AGG_RESULT:%.*]], [[STRUCT_STRUCT_WITH_PTR]] addrspace(200)* nocapture readonly [[S:%.*]], i64 signext [[INDEX:%.*]]) local_unnamed_addr addrspace(200) #[[ATTR2]] {
+// CHECK-SAME: ([[STRUCT_STRUCT_WITH_PTR:%.*]] addrspace(200)* noalias nocapture writeonly sret([[STRUCT_STRUCT_WITH_PTR]]) align 16 [[AGG_RESULT:%.*]], [[STRUCT_STRUCT_WITH_PTR]] addrspace(200)* nocapture noundef readonly [[S:%.*]], i64 noundef signext [[INDEX:%.*]]) local_unnamed_addr addrspace(200) #[[ATTR2]] {
 // CHECK-NEXT:  entry:
 // CHECK-NEXT:    [[ARRAYIDX:%.*]] = getelementptr inbounds [[STRUCT_STRUCT_WITH_PTR]], [[STRUCT_STRUCT_WITH_PTR]] addrspace(200)* [[S]], i64 [[INDEX]]
 // CHECK-NEXT:    [[TMP0:%.*]] = bitcast [[STRUCT_STRUCT_WITH_PTR]] addrspace(200)* [[AGG_RESULT]] to i8 addrspace(200)*
@@ -90,7 +90,7 @@ typedef struct {
   char buf[];
 } struct_vla;
 // CHECK-LABEL: define {{[^@]+}}@test_vla_a
-// CHECK-SAME: ([[STRUCT_STRUCT_VLA:%.*]] addrspace(200)* [[S:%.*]], i64 signext [[INDEX:%.*]]) local_unnamed_addr addrspace(200) #[[ATTR5:[0-9]+]] {
+// CHECK-SAME: ([[STRUCT_STRUCT_VLA:%.*]] addrspace(200)* noundef [[S:%.*]], i64 noundef signext [[INDEX:%.*]]) local_unnamed_addr addrspace(200) #[[ATTR5:[0-9]+]] {
 // CHECK-NEXT:  entry:
 // CHECK-NEXT:    [[TMP0:%.*]] = getelementptr inbounds [[STRUCT_STRUCT_VLA]], [[STRUCT_STRUCT_VLA]] addrspace(200)* [[S]], i64 0, i32 1, i64 0
 // CHECK-NEXT:    [[CUR_OFFSET:%.*]] = tail call i64 @llvm.cheri.cap.offset.get.i64(i8 addrspace(200)* nonnull [[TMP0]])
@@ -107,7 +107,7 @@ int test_vla_a(struct_vla *s, long index) {
   return 0;
 }
 // CHECK-LABEL: define {{[^@]+}}@test_vla_b
-// CHECK-SAME: (i64 signext [[INDEX:%.*]]) local_unnamed_addr addrspace(200) #[[ATTR5]] {
+// CHECK-SAME: (i64 noundef signext [[INDEX:%.*]]) local_unnamed_addr addrspace(200) #[[ATTR5]] {
 // CHECK-NEXT:  entry:
 // CHECK-NEXT:    [[RETVAL:%.*]] = alloca [[STRUCT_STRUCT_VLA:%.*]], align 4, addrspace(200)
 // CHECK-NEXT:    [[TMP0:%.*]] = getelementptr inbounds [[STRUCT_STRUCT_VLA]], [[STRUCT_STRUCT_VLA]] addrspace(200)* [[RETVAL]], i64 0, i32 1, i64 0
@@ -119,7 +119,7 @@ int test_vla_a(struct_vla *s, long index) {
 // CHECK-NEXT:    store i8 65, i8 addrspace(200)* [[ARRAYIDX]], align 1, !tbaa [[TBAA9]]
 // CHECK-NEXT:    [[DOTFCA_0_GEP:%.*]] = getelementptr inbounds [[STRUCT_STRUCT_VLA]], [[STRUCT_STRUCT_VLA]] addrspace(200)* [[RETVAL]], i64 0, i32 0
 // CHECK-NEXT:    [[DOTFCA_0_LOAD:%.*]] = load i32, i32 addrspace(200)* [[DOTFCA_0_GEP]], align 4
-// CHECK-NEXT:    [[DOTFCA_0_INSERT:%.*]] = insertvalue { i32 } undef, i32 [[DOTFCA_0_LOAD]], 0
+// CHECK-NEXT:    [[DOTFCA_0_INSERT:%.*]] = insertvalue { i32 } poison, i32 [[DOTFCA_0_LOAD]], 0
 // CHECK-NEXT:    ret { i32 } [[DOTFCA_0_INSERT]]
 //
 struct_vla test_vla_b(long index) {
@@ -133,7 +133,7 @@ typedef struct {
   char buf[0];
 } struct_fake_vla1;
 // CHECK-LABEL: define {{[^@]+}}@test_fake_vla1
-// CHECK-SAME: ([[STRUCT_STRUCT_FAKE_VLA1:%.*]] addrspace(200)* [[S:%.*]], i64 signext [[INDEX:%.*]]) local_unnamed_addr addrspace(200) #[[ATTR5]] {
+// CHECK-SAME: ([[STRUCT_STRUCT_FAKE_VLA1:%.*]] addrspace(200)* noundef [[S:%.*]], i64 noundef signext [[INDEX:%.*]]) local_unnamed_addr addrspace(200) #[[ATTR5]] {
 // CHECK-NEXT:  entry:
 // CHECK-NEXT:    [[TMP0:%.*]] = getelementptr inbounds [[STRUCT_STRUCT_FAKE_VLA1]], [[STRUCT_STRUCT_FAKE_VLA1]] addrspace(200)* [[S]], i64 0, i32 1, i64 0
 // CHECK-NEXT:    [[CUR_OFFSET:%.*]] = tail call i64 @llvm.cheri.cap.offset.get.i64(i8 addrspace(200)* nonnull [[TMP0]])
@@ -155,7 +155,7 @@ typedef struct {
   char buf[1];
 } struct_fake_vla2;
 // CHECK-LABEL: define {{[^@]+}}@test_fake_vla2
-// CHECK-SAME: ([[STRUCT_STRUCT_FAKE_VLA2:%.*]] addrspace(200)* [[S:%.*]], i64 signext [[INDEX:%.*]]) local_unnamed_addr addrspace(200) #[[ATTR5]] {
+// CHECK-SAME: ([[STRUCT_STRUCT_FAKE_VLA2:%.*]] addrspace(200)* noundef [[S:%.*]], i64 noundef signext [[INDEX:%.*]]) local_unnamed_addr addrspace(200) #[[ATTR5]] {
 // CHECK-NEXT:  entry:
 // CHECK-NEXT:    [[TMP0:%.*]] = getelementptr inbounds [[STRUCT_STRUCT_FAKE_VLA2]], [[STRUCT_STRUCT_FAKE_VLA2]] addrspace(200)* [[S]], i64 0, i32 1, i64 0
 // CHECK-NEXT:    [[CUR_OFFSET:%.*]] = tail call i64 @llvm.cheri.cap.offset.get.i64(i8 addrspace(200)* nonnull [[TMP0]])
@@ -173,7 +173,7 @@ int test_fake_vla2(struct_fake_vla2 *s, long index) {
 }
 
 // CHECK-LABEL: define {{[^@]+}}@test_vla_c
-// CHECK-SAME: (i32 signext [[LEN:%.*]], i64 signext [[INDEX:%.*]]) local_unnamed_addr addrspace(200) #[[ATTR6:[0-9]+]] {
+// CHECK-SAME: (i32 noundef signext [[LEN:%.*]], i64 noundef signext [[INDEX:%.*]]) local_unnamed_addr addrspace(200) #[[ATTR6:[0-9]+]] {
 // CHECK-NEXT:  entry:
 // CHECK-NEXT:    [[TMP0:%.*]] = zext i32 [[LEN]] to i64
 // CHECK-NEXT:    [[VLA:%.*]] = alloca i32, i64 [[TMP0]], align 4, addrspace(200)
@@ -182,7 +182,7 @@ int test_fake_vla2(struct_fake_vla2 *s, long index) {
 // CHECK-NEXT:    [[CUR_LEN:%.*]] = call i64 @llvm.cheri.cap.length.get.i64(i8 addrspace(200)* nonnull [[TMP1]])
 // CHECK-NEXT:    [[REMAINING_BYTES:%.*]] = sub i64 [[CUR_LEN]], [[CUR_OFFSET]]
 // CHECK-NEXT:    [[TMP2:%.*]] = call i8 addrspace(200)* @llvm.cheri.cap.bounds.set.i64(i8 addrspace(200)* nonnull [[TMP1]], i64 [[REMAINING_BYTES]])
-// CHECK-NEXT:    call void @use_buf(i8 addrspace(200)* [[TMP2]]) #[[ATTR10:[0-9]+]]
+// CHECK-NEXT:    call void @use_buf(i8 addrspace(200)* noundef [[TMP2]]) #[[ATTR11:[0-9]+]]
 // CHECK-NEXT:    [[CUR_OFFSET4:%.*]] = call i64 @llvm.cheri.cap.offset.get.i64(i8 addrspace(200)* [[TMP2]])
 // CHECK-NEXT:    [[CUR_LEN5:%.*]] = call i64 @llvm.cheri.cap.length.get.i64(i8 addrspace(200)* [[TMP2]])
 // CHECK-NEXT:    [[REMAINING_BYTES6:%.*]] = sub i64 [[CUR_LEN5]], [[CUR_OFFSET4]]
@@ -206,14 +206,12 @@ typedef int ext_vector_size_int32_8 __attribute__((ext_vector_type(8)));
 
 // No bounds on vector indexing:
 // CHECK-LABEL: define {{[^@]+}}@test_vector
-// CHECK-SAME: (i32 inreg [[V4_COERCE:%.*]], i192 [[TMP0:%.*]], i64 inreg [[V8_COERCE0:%.*]], i64 inreg [[V8_COERCE1:%.*]], i64 inreg [[V8_COERCE2:%.*]], i64 inreg [[V8_COERCE3:%.*]]) local_unnamed_addr addrspace(200) #[[ATTR8:[0-9]+]] {
+// CHECK-SAME: (i32 inreg noundef [[V4_COERCE:%.*]], i192 [[TMP0:%.*]], i64 inreg noundef [[V8_COERCE0:%.*]], i64 inreg noundef [[V8_COERCE1:%.*]], i64 inreg noundef [[V8_COERCE2:%.*]], i64 inreg noundef [[V8_COERCE3:%.*]]) local_unnamed_addr addrspace(200) #[[ATTR8:[0-9]+]] {
 // CHECK-NEXT:  entry:
-// CHECK-NEXT:    [[TMP1:%.*]] = bitcast i32 [[V4_COERCE]] to <4 x i8>
-// CHECK-NEXT:    [[TMP2:%.*]] = bitcast i64 [[V8_COERCE3]] to <2 x i32>
-// CHECK-NEXT:    [[VECEXT:%.*]] = extractelement <4 x i8> [[TMP1]], i32 3
-// CHECK-NEXT:    [[VECEXT3:%.*]] = extractelement <2 x i32> [[TMP2]], i32 1
-// CHECK-NEXT:    [[CONV:%.*]] = sext i8 [[VECEXT]] to i32
-// CHECK-NEXT:    [[ADD:%.*]] = add nsw i32 [[VECEXT3]], [[CONV]]
+// CHECK-NEXT:    [[VECEXT3:%.*]] = trunc i64 [[V8_COERCE3]] to i32
+// CHECK-NEXT:    [[SEXT:%.*]] = shl i32 [[V4_COERCE]], 24
+// CHECK-NEXT:    [[CONV:%.*]] = ashr exact i32 [[SEXT]], 24
+// CHECK-NEXT:    [[ADD:%.*]] = add nsw i32 [[CONV]], [[VECEXT3]]
 // CHECK-NEXT:    ret i32 [[ADD]]
 //
 int test_vector(v4i8 v4, ext_vector_size_int32_8 v8) {
@@ -224,7 +222,7 @@ int test_vector(v4i8 v4, ext_vector_size_int32_8 v8) {
 
 // Even with an arbitraty index (backend should guarantee that it is never out of bounds)
 // CHECK-LABEL: define {{[^@]+}}@test_vector2
-// CHECK-SAME: (i64 signext [[INDEX:%.*]], i32 inreg [[V4_COERCE:%.*]], i128 [[TMP0:%.*]], i64 inreg [[V8_COERCE0:%.*]], i64 inreg [[V8_COERCE1:%.*]], i64 inreg [[V8_COERCE2:%.*]], i64 inreg [[V8_COERCE3:%.*]]) local_unnamed_addr addrspace(200) #[[ATTR8]] {
+// CHECK-SAME: (i64 noundef signext [[INDEX:%.*]], i32 inreg noundef [[V4_COERCE:%.*]], i128 [[TMP0:%.*]], i64 inreg noundef [[V8_COERCE0:%.*]], i64 inreg noundef [[V8_COERCE1:%.*]], i64 inreg noundef [[V8_COERCE2:%.*]], i64 inreg noundef [[V8_COERCE3:%.*]]) local_unnamed_addr addrspace(200) #[[ATTR8]] {
 // CHECK-NEXT:  entry:
 // CHECK-NEXT:    [[TMP1:%.*]] = bitcast i32 [[V4_COERCE]] to <4 x i8>
 // CHECK-NEXT:    [[TMP2:%.*]] = bitcast i64 [[V8_COERCE0]] to <2 x i32>
@@ -251,7 +249,7 @@ int test_vector2(long index, v4i8 v4, ext_vector_size_int32_8 v8) {
 }
 
 // CHECK-LABEL: define {{[^@]+}}@test_ptr_to_array1
-// CHECK-SAME: ([10 x i32] addrspace(200)* readonly [[ARRAY:%.*]], i64 signext [[INDEX:%.*]]) local_unnamed_addr addrspace(200) #[[ATTR0]] {
+// CHECK-SAME: ([10 x i32] addrspace(200)* noundef readonly [[ARRAY:%.*]], i64 noundef signext [[INDEX:%.*]]) local_unnamed_addr addrspace(200) #[[ATTR0]] {
 // CHECK-NEXT:  entry:
 // CHECK-NEXT:    [[TMP0:%.*]] = bitcast [10 x i32] addrspace(200)* [[ARRAY]] to i8 addrspace(200)*
 // CHECK-NEXT:    [[TMP1:%.*]] = tail call i8 addrspace(200)* @llvm.cheri.cap.bounds.set.i64(i8 addrspace(200)* [[TMP0]], i64 40)
@@ -264,7 +262,7 @@ int test_ptr_to_array1(int (*array)[10], long index) {
   return (*array)[index]; // expected-remark{{setting sub-object bounds for array subscript on 'int [10]' to 40 bytes}}
 }
 // CHECK-LABEL: define {{[^@]+}}@test_ptr_to_array2
-// CHECK-SAME: ([10 x i32] addrspace(200)* readnone [[ARRAY:%.*]], i64 signext [[INDEX:%.*]]) local_unnamed_addr addrspace(200) #[[ATTR9:[0-9]+]] {
+// CHECK-SAME: ([10 x i32] addrspace(200)* noundef readnone [[ARRAY:%.*]], i64 noundef signext [[INDEX:%.*]]) local_unnamed_addr addrspace(200) #[[ATTR10:[0-9]+]] {
 // CHECK-NEXT:  entry:
 // CHECK-NEXT:    [[ARRAYDECAY:%.*]] = getelementptr inbounds [10 x i32], [10 x i32] addrspace(200)* [[ARRAY]], i64 [[INDEX]], i64 0
 // CHECK-NEXT:    [[TMP0:%.*]] = bitcast i32 addrspace(200)* [[ARRAYDECAY]] to i8 addrspace(200)*
@@ -278,7 +276,7 @@ int* test_ptr_to_array2(int (*array)[10], long index) {
   // TODO: should avoid setting bounds for array decay inside array subscript (or just optimize away the redundant csetbounds)
 }
 // CHECK-LABEL: define {{[^@]+}}@test_ptr_to_array3
-// CHECK-SAME: ([10 x [5 x i32]] addrspace(200)* readnone [[ARRAY:%.*]], i64 signext [[INDEX:%.*]]) local_unnamed_addr addrspace(200) #[[ATTR9]] {
+// CHECK-SAME: ([10 x [5 x i32]] addrspace(200)* noundef readnone [[ARRAY:%.*]], i64 noundef signext [[INDEX:%.*]]) local_unnamed_addr addrspace(200) #[[ATTR10]] {
 // CHECK-NEXT:  entry:
 // CHECK-NEXT:    [[TMP0:%.*]] = bitcast [10 x [5 x i32]] addrspace(200)* [[ARRAY]] to i8 addrspace(200)*
 // CHECK-NEXT:    [[TMP1:%.*]] = tail call i8 addrspace(200)* @llvm.cheri.cap.bounds.set.i64(i8 addrspace(200)* [[TMP0]], i64 200)
@@ -295,7 +293,7 @@ int* test_ptr_to_array3(int (*array)[10][5], long index) {
   // TODO: should avoid setting bounds for array decay inside array subscript (or just optimize away the redundant csetbounds)
 }
 // CHECK-LABEL: define {{[^@]+}}@test_ptr_to_array4
-// CHECK-SAME: ([10 x [5 x i32]] addrspace(200)* readnone [[ARRAY:%.*]], i64 signext [[INDEX:%.*]]) local_unnamed_addr addrspace(200) #[[ATTR9]] {
+// CHECK-SAME: ([10 x [5 x i32]] addrspace(200)* noundef readnone [[ARRAY:%.*]], i64 noundef signext [[INDEX:%.*]]) local_unnamed_addr addrspace(200) #[[ATTR10]] {
 // CHECK-NEXT:  entry:
 // CHECK-NEXT:    [[ARRAYIDX:%.*]] = getelementptr inbounds [10 x [5 x i32]], [10 x [5 x i32]] addrspace(200)* [[ARRAY]], i64 [[INDEX]]
 // CHECK-NEXT:    [[TMP0:%.*]] = bitcast [10 x [5 x i32]] addrspace(200)* [[ARRAYIDX]] to i8 addrspace(200)*
@@ -315,7 +313,7 @@ int* test_ptr_to_array4(int (*array)[10][5], long index) {
   // TODO: should avoid setting bounds for array decay inside array subscript (or just optimize away the redundant csetbounds)
 }
 // CHECK-LABEL: define {{[^@]+}}@test_ptr_to_array5
-// CHECK-SAME: ([10 x [5 x i32]] addrspace(200)* readonly [[ARRAY:%.*]], i64 signext [[INDEX:%.*]]) local_unnamed_addr addrspace(200) #[[ATTR0]] {
+// CHECK-SAME: ([10 x [5 x i32]] addrspace(200)* noundef readonly [[ARRAY:%.*]], i64 noundef signext [[INDEX:%.*]]) local_unnamed_addr addrspace(200) #[[ATTR0]] {
 // CHECK-NEXT:  entry:
 // CHECK-NEXT:    [[TMP0:%.*]] = bitcast [10 x [5 x i32]] addrspace(200)* [[ARRAY]] to i8 addrspace(200)*
 // CHECK-NEXT:    [[TMP1:%.*]] = tail call i8 addrspace(200)* @llvm.cheri.cap.bounds.set.i64(i8 addrspace(200)* [[TMP0]], i64 200)
@@ -344,7 +342,7 @@ typedef struct {
 } my_struct21;
 
 // CHECK-LABEL: define {{[^@]+}}@test21a
-// CHECK-SAME: ([[STRUCT_MY_STRUCT21:%.*]] addrspace(200)* [[S:%.*]], i64 signext [[INDEX:%.*]]) local_unnamed_addr addrspace(200) #[[ATTR5]] {
+// CHECK-SAME: ([[STRUCT_MY_STRUCT21:%.*]] addrspace(200)* noundef writeonly [[S:%.*]], i64 noundef signext [[INDEX:%.*]]) local_unnamed_addr addrspace(200) #[[ATTR5]] {
 // CHECK-NEXT:  entry:
 // CHECK-NEXT:    [[TMP0:%.*]] = getelementptr inbounds [[STRUCT_MY_STRUCT21]], [[STRUCT_MY_STRUCT21]] addrspace(200)* [[S]], i64 0, i32 0, i64 0
 // CHECK-NEXT:    [[TMP1:%.*]] = tail call i8 addrspace(200)* @llvm.cheri.cap.bounds.set.i64(i8 addrspace(200)* [[TMP0]], i64 10)
@@ -357,7 +355,7 @@ int test21a(my_struct21 *s, long index) {
   return 0;
 }
 // CHECK-LABEL: define {{[^@]+}}@test21b
-// CHECK-SAME: ([[STRUCT_MY_STRUCT21:%.*]] addrspace(200)* nocapture readnone [[S:%.*]], i64 signext [[INDEX:%.*]]) local_unnamed_addr addrspace(200) #[[ATTR5]] {
+// CHECK-SAME: ([[STRUCT_MY_STRUCT21:%.*]] addrspace(200)* nocapture noundef readnone [[S:%.*]], i64 noundef signext [[INDEX:%.*]]) local_unnamed_addr addrspace(200) #[[ATTR5]] {
 // CHECK-NEXT:  entry:
 // CHECK-NEXT:    [[RETVAL:%.*]] = alloca { i64, i64 }, align 8, addrspace(200)
 // CHECK-NEXT:    [[TMP0:%.*]] = bitcast { i64, i64 } addrspace(200)* [[RETVAL]] to i8 addrspace(200)*
@@ -366,7 +364,7 @@ int test21a(my_struct21 *s, long index) {
 // CHECK-NEXT:    store i8 65, i8 addrspace(200)* [[ARRAYIDX]], align 1, !tbaa [[TBAA9]]
 // CHECK-NEXT:    [[DOTFCA_0_GEP:%.*]] = getelementptr inbounds { i64, i64 }, { i64, i64 } addrspace(200)* [[RETVAL]], i64 0, i32 0
 // CHECK-NEXT:    [[DOTFCA_0_LOAD:%.*]] = load i64, i64 addrspace(200)* [[DOTFCA_0_GEP]], align 8
-// CHECK-NEXT:    [[DOTFCA_0_INSERT:%.*]] = insertvalue { i64, i64 } undef, i64 [[DOTFCA_0_LOAD]], 0
+// CHECK-NEXT:    [[DOTFCA_0_INSERT:%.*]] = insertvalue { i64, i64 } poison, i64 [[DOTFCA_0_LOAD]], 0
 // CHECK-NEXT:    [[DOTFCA_1_GEP:%.*]] = getelementptr inbounds { i64, i64 }, { i64, i64 } addrspace(200)* [[RETVAL]], i64 0, i32 1
 // CHECK-NEXT:    [[DOTFCA_1_LOAD:%.*]] = load i64, i64 addrspace(200)* [[DOTFCA_1_GEP]], align 8
 // CHECK-NEXT:    [[DOTFCA_1_INSERT:%.*]] = insertvalue { i64, i64 } [[DOTFCA_0_INSERT]], i64 [[DOTFCA_1_LOAD]], 1
@@ -379,7 +377,7 @@ my_struct21 test21b(my_struct21 *s, long index) {
 }
 
 // CHECK-LABEL: define {{[^@]+}}@test21c
-// CHECK-SAME: ([[STRUCT_MY_STRUCT21:%.*]] addrspace(200)* [[S:%.*]], i64 signext [[INDEX:%.*]]) local_unnamed_addr addrspace(200) #[[ATTR5]] {
+// CHECK-SAME: ([[STRUCT_MY_STRUCT21:%.*]] addrspace(200)* noundef writeonly [[S:%.*]], i64 noundef signext [[INDEX:%.*]]) local_unnamed_addr addrspace(200) #[[ATTR5]] {
 // CHECK-NEXT:  entry:
 // CHECK-NEXT:    [[TMP0:%.*]] = getelementptr inbounds [[STRUCT_MY_STRUCT21]], [[STRUCT_MY_STRUCT21]] addrspace(200)* [[S]], i64 0, i32 0, i64 0
 // CHECK-NEXT:    [[TMP1:%.*]] = tail call i8 addrspace(200)* @llvm.cheri.cap.bounds.set.i64(i8 addrspace(200)* [[TMP0]], i64 10)
@@ -395,7 +393,7 @@ int test21c(my_struct21 *s, long index) {
 }
 
 // CHECK-LABEL: define {{[^@]+}}@test21d
-// CHECK-SAME: ([[STRUCT_MY_STRUCT21:%.*]] addrspace(200)* [[S:%.*]], i64 signext [[INDEX:%.*]]) local_unnamed_addr addrspace(200) #[[ATTR5]] {
+// CHECK-SAME: ([[STRUCT_MY_STRUCT21:%.*]] addrspace(200)* noundef writeonly [[S:%.*]], i64 noundef signext [[INDEX:%.*]]) local_unnamed_addr addrspace(200) #[[ATTR5]] {
 // CHECK-NEXT:  entry:
 // CHECK-NEXT:    [[TMP0:%.*]] = getelementptr inbounds [[STRUCT_MY_STRUCT21]], [[STRUCT_MY_STRUCT21]] addrspace(200)* [[S]], i64 0, i32 0, i64 0
 // CHECK-NEXT:    [[TMP1:%.*]] = tail call i8 addrspace(200)* @llvm.cheri.cap.bounds.set.i64(i8 addrspace(200)* [[TMP0]], i64 10)
@@ -415,7 +413,7 @@ typedef struct {
   char buf[10];
 } my_struct22;
 // CHECK-LABEL: define {{[^@]+}}@test22a
-// CHECK-SAME: ([[STRUCT_MY_STRUCT22:%.*]] addrspace(200)* [[S:%.*]], i64 signext [[INDEX:%.*]]) local_unnamed_addr addrspace(200) #[[ATTR5]] {
+// CHECK-SAME: ([[STRUCT_MY_STRUCT22:%.*]] addrspace(200)* noundef writeonly [[S:%.*]], i64 noundef signext [[INDEX:%.*]]) local_unnamed_addr addrspace(200) #[[ATTR5]] {
 // CHECK-NEXT:  entry:
 // CHECK-NEXT:    [[TMP0:%.*]] = getelementptr inbounds [[STRUCT_MY_STRUCT22]], [[STRUCT_MY_STRUCT22]] addrspace(200)* [[S]], i64 0, i32 1, i64 0
 // CHECK-NEXT:    [[TMP1:%.*]] = tail call i8 addrspace(200)* @llvm.cheri.cap.bounds.set.i64(i8 addrspace(200)* nonnull [[TMP0]], i64 10)
@@ -428,7 +426,7 @@ int test22a(my_struct22 *s, long index) {
   return 0;
 }
 // CHECK-LABEL: define {{[^@]+}}@test22b
-// CHECK-SAME: (i64 signext [[INDEX:%.*]]) local_unnamed_addr addrspace(200) #[[ATTR5]] {
+// CHECK-SAME: (i64 noundef signext [[INDEX:%.*]]) local_unnamed_addr addrspace(200) #[[ATTR5]] {
 // CHECK-NEXT:  entry:
 // CHECK-NEXT:    [[RETVAL:%.*]] = alloca { i64, i64 }, align 8, addrspace(200)
 // CHECK-NEXT:    [[TMPCAST:%.*]] = bitcast { i64, i64 } addrspace(200)* [[RETVAL]] to [[STRUCT_MY_STRUCT22:%.*]] addrspace(200)*
@@ -438,7 +436,7 @@ int test22a(my_struct22 *s, long index) {
 // CHECK-NEXT:    store i8 65, i8 addrspace(200)* [[ARRAYIDX]], align 1, !tbaa [[TBAA9]]
 // CHECK-NEXT:    [[DOTFCA_0_GEP:%.*]] = getelementptr inbounds { i64, i64 }, { i64, i64 } addrspace(200)* [[RETVAL]], i64 0, i32 0
 // CHECK-NEXT:    [[DOTFCA_0_LOAD:%.*]] = load i64, i64 addrspace(200)* [[DOTFCA_0_GEP]], align 8
-// CHECK-NEXT:    [[DOTFCA_0_INSERT:%.*]] = insertvalue { i64, i64 } undef, i64 [[DOTFCA_0_LOAD]], 0
+// CHECK-NEXT:    [[DOTFCA_0_INSERT:%.*]] = insertvalue { i64, i64 } poison, i64 [[DOTFCA_0_LOAD]], 0
 // CHECK-NEXT:    [[DOTFCA_1_GEP:%.*]] = getelementptr inbounds { i64, i64 }, { i64, i64 } addrspace(200)* [[RETVAL]], i64 0, i32 1
 // CHECK-NEXT:    [[DOTFCA_1_LOAD:%.*]] = load i64, i64 addrspace(200)* [[DOTFCA_1_GEP]], align 8
 // CHECK-NEXT:    [[DOTFCA_1_INSERT:%.*]] = insertvalue { i64, i64 } [[DOTFCA_0_INSERT]], i64 [[DOTFCA_1_LOAD]], 1
@@ -457,7 +455,7 @@ typedef union {
 } my_union25;
 
 // CHECK-LABEL: define {{[^@]+}}@test25a
-// CHECK-SAME: ([[UNION_MY_UNION25:%.*]] addrspace(200)* [[U:%.*]], i64 signext [[INDEX:%.*]]) local_unnamed_addr addrspace(200) #[[ATTR5]] {
+// CHECK-SAME: ([[UNION_MY_UNION25:%.*]] addrspace(200)* noundef writeonly [[U:%.*]], i64 noundef signext [[INDEX:%.*]]) local_unnamed_addr addrspace(200) #[[ATTR5]] {
 // CHECK-NEXT:  entry:
 // CHECK-NEXT:    [[TMP0:%.*]] = bitcast [[UNION_MY_UNION25]] addrspace(200)* [[U]] to i8 addrspace(200)*
 // CHECK-NEXT:    [[TMP1:%.*]] = tail call i8 addrspace(200)* @llvm.cheri.cap.bounds.set.i64(i8 addrspace(200)* [[TMP0]], i64 10)
@@ -470,7 +468,7 @@ int test25a(my_union25 *u, long index) {
   return 0;
 }
 // CHECK-LABEL: define {{[^@]+}}@test25b
-// CHECK-SAME: ([[UNION_MY_UNION25:%.*]] addrspace(200)* noalias sret([[UNION_MY_UNION25]]) align 8 [[AGG_RESULT:%.*]], i64 signext [[INDEX:%.*]]) local_unnamed_addr addrspace(200) #[[ATTR5]] {
+// CHECK-SAME: ([[UNION_MY_UNION25:%.*]] addrspace(200)* noalias writeonly sret([[UNION_MY_UNION25]]) align 8 [[AGG_RESULT:%.*]], i64 noundef signext [[INDEX:%.*]]) local_unnamed_addr addrspace(200) #[[ATTR5]] {
 // CHECK-NEXT:  entry:
 // CHECK-NEXT:    [[TMP0:%.*]] = bitcast [[UNION_MY_UNION25]] addrspace(200)* [[AGG_RESULT]] to i8 addrspace(200)*
 // CHECK-NEXT:    [[TMP1:%.*]] = tail call i8 addrspace(200)* @llvm.cheri.cap.bounds.set.i64(i8 addrspace(200)* [[TMP0]], i64 10)
@@ -484,7 +482,7 @@ my_union25 test25b(long index) {
   return u2; // prevent u2 from being optimzed out
 }
 // CHECK-LABEL: define {{[^@]+}}@test25c
-// CHECK-SAME: ([[UNION_MY_UNION25:%.*]] addrspace(200)* [[U:%.*]], i64 signext [[INDEX:%.*]]) local_unnamed_addr addrspace(200) #[[ATTR5]] {
+// CHECK-SAME: ([[UNION_MY_UNION25:%.*]] addrspace(200)* noundef writeonly [[U:%.*]], i64 noundef signext [[INDEX:%.*]]) local_unnamed_addr addrspace(200) #[[ATTR5]] {
 // CHECK-NEXT:  entry:
 // CHECK-NEXT:    [[TMP0:%.*]] = bitcast [[UNION_MY_UNION25]] addrspace(200)* [[U]] to i8 addrspace(200)*
 // CHECK-NEXT:    [[TMP1:%.*]] = tail call i8 addrspace(200)* @llvm.cheri.cap.bounds.set.i64(i8 addrspace(200)* [[TMP0]], i64 10)
@@ -499,7 +497,7 @@ int test25c(my_union25 *u, long index) {
   return 0;
 }
 // CHECK-LABEL: define {{[^@]+}}@test25d
-// CHECK-SAME: ([[UNION_MY_UNION25:%.*]] addrspace(200)* [[U:%.*]], i64 signext [[INDEX:%.*]]) local_unnamed_addr addrspace(200) #[[ATTR5]] {
+// CHECK-SAME: ([[UNION_MY_UNION25:%.*]] addrspace(200)* noundef writeonly [[U:%.*]], i64 noundef signext [[INDEX:%.*]]) local_unnamed_addr addrspace(200) #[[ATTR5]] {
 // CHECK-NEXT:  entry:
 // CHECK-NEXT:    [[TMP0:%.*]] = bitcast [[UNION_MY_UNION25]] addrspace(200)* [[U]] to i8 addrspace(200)*
 // CHECK-NEXT:    [[TMP1:%.*]] = tail call i8 addrspace(200)* @llvm.cheri.cap.bounds.set.i64(i8 addrspace(200)* [[TMP0]], i64 10)
@@ -520,18 +518,18 @@ typedef struct {
 } my_struct28;
 
 // CHECK-LABEL: define {{[^@]+}}@test28a
-// CHECK-SAME: (i64 signext [[INDEX:%.*]]) local_unnamed_addr addrspace(200) #[[ATTR6]] {
+// CHECK-SAME: (i64 noundef signext [[INDEX:%.*]]) local_unnamed_addr addrspace(200) #[[ATTR6]] {
 // CHECK-NEXT:  entry:
 // CHECK-NEXT:    [[ARRAY23:%.*]] = alloca [100 x i8], align 1, addrspace(200)
 // CHECK-NEXT:    [[ARRAY23_SUB:%.*]] = getelementptr inbounds [100 x i8], [100 x i8] addrspace(200)* [[ARRAY23]], i64 0, i64 0
-// CHECK-NEXT:    call void @llvm.lifetime.start.p200i8(i64 100, i8 addrspace(200)* nonnull [[ARRAY23_SUB]]) #[[ATTR10]]
+// CHECK-NEXT:    call void @llvm.lifetime.start.p200i8(i64 100, i8 addrspace(200)* nonnull [[ARRAY23_SUB]]) #[[ATTR11]]
 // CHECK-NEXT:    [[TMP0:%.*]] = call i8 addrspace(200)* @llvm.cheri.cap.bounds.set.i64(i8 addrspace(200)* nonnull [[ARRAY23_SUB]], i64 100)
 // CHECK-NEXT:    [[ARRAYIDX:%.*]] = getelementptr inbounds [100 x i8], [100 x i8] addrspace(200)* [[ARRAY23]], i64 0, i64 80
 // CHECK-NEXT:    [[TMP1:%.*]] = call i8 addrspace(200)* @llvm.cheri.cap.bounds.set.i64(i8 addrspace(200)* nonnull [[ARRAYIDX]], i64 10)
 // CHECK-NEXT:    [[ARRAYIDX2:%.*]] = getelementptr inbounds i8, i8 addrspace(200)* [[TMP1]], i64 [[INDEX]]
 // CHECK-NEXT:    store i8 65, i8 addrspace(200)* [[ARRAYIDX2]], align 1, !tbaa [[TBAA9]]
-// CHECK-NEXT:    call void @use_buf(i8 addrspace(200)* [[TMP0]]) #[[ATTR10]]
-// CHECK-NEXT:    call void @llvm.lifetime.end.p200i8(i64 100, i8 addrspace(200)* nonnull [[ARRAY23_SUB]]) #[[ATTR10]]
+// CHECK-NEXT:    call void @use_buf(i8 addrspace(200)* noundef [[TMP0]]) #[[ATTR11]]
+// CHECK-NEXT:    call void @llvm.lifetime.end.p200i8(i64 100, i8 addrspace(200)* nonnull [[ARRAY23_SUB]]) #[[ATTR11]]
 // CHECK-NEXT:    ret i32 0
 //
 int test28a(long index) {
@@ -544,7 +542,7 @@ int test28a(long index) {
 }
 
 // CHECK-LABEL: define {{[^@]+}}@test28b
-// CHECK-SAME: ([[STRUCT_MY_STRUCT28:%.*]] addrspace(200)* addrspace(200)* nocapture readonly [[ARRAY1:%.*]], i64 signext [[INDEX:%.*]]) local_unnamed_addr addrspace(200) #[[ATTR2]] {
+// CHECK-SAME: ([[STRUCT_MY_STRUCT28:%.*]] addrspace(200)* addrspace(200)* nocapture noundef readonly [[ARRAY1:%.*]], i64 noundef signext [[INDEX:%.*]]) local_unnamed_addr addrspace(200) #[[ATTR2]] {
 // CHECK-NEXT:  entry:
 // CHECK-NEXT:    [[ARRAYIDX:%.*]] = getelementptr inbounds [[STRUCT_MY_STRUCT28]] addrspace(200)*, [[STRUCT_MY_STRUCT28]] addrspace(200)* addrspace(200)* [[ARRAY1]], i64 4
 // CHECK-NEXT:    [[TMP0:%.*]] = load [[STRUCT_MY_STRUCT28]] addrspace(200)*, [[STRUCT_MY_STRUCT28]] addrspace(200)* addrspace(200)* [[ARRAYIDX]], align 16, !tbaa [[TBAA14:![0-9]+]]
@@ -561,19 +559,19 @@ int test28b(my_struct28 **array1, long index) {
 }
 
 // CHECK-LABEL: define {{[^@]+}}@test28c
-// CHECK-SAME: (i64 signext [[INDEX1:%.*]], i64 signext [[INDEX2:%.*]]) local_unnamed_addr addrspace(200) #[[ATTR6]] {
+// CHECK-SAME: (i64 noundef signext [[INDEX1:%.*]], i64 noundef signext [[INDEX2:%.*]]) local_unnamed_addr addrspace(200) #[[ATTR6]] {
 // CHECK-NEXT:  entry:
 // CHECK-NEXT:    [[ARRAY23:%.*]] = alloca [100 x i8], align 1, addrspace(200)
 // CHECK-NEXT:    [[ARRAY23_SUB:%.*]] = getelementptr inbounds [100 x i8], [100 x i8] addrspace(200)* [[ARRAY23]], i64 0, i64 0
-// CHECK-NEXT:    call void @llvm.lifetime.start.p200i8(i64 100, i8 addrspace(200)* nonnull [[ARRAY23_SUB]]) #[[ATTR10]]
+// CHECK-NEXT:    call void @llvm.lifetime.start.p200i8(i64 100, i8 addrspace(200)* nonnull [[ARRAY23_SUB]]) #[[ATTR11]]
 // CHECK-NEXT:    [[TMP0:%.*]] = call i8 addrspace(200)* @llvm.cheri.cap.bounds.set.i64(i8 addrspace(200)* nonnull [[ARRAY23_SUB]], i64 100)
 // CHECK-NEXT:    [[SUBSCRIPT_WITH_BOUNDS:%.*]] = bitcast i8 addrspace(200)* [[TMP0]] to [5 x %struct.my_struct28] addrspace(200)*
 // CHECK-NEXT:    [[TMP1:%.*]] = getelementptr inbounds [5 x %struct.my_struct28], [5 x %struct.my_struct28] addrspace(200)* [[SUBSCRIPT_WITH_BOUNDS]], i64 0, i64 [[INDEX1]], i32 0, i64 0
 // CHECK-NEXT:    [[TMP2:%.*]] = call i8 addrspace(200)* @llvm.cheri.cap.bounds.set.i64(i8 addrspace(200)* [[TMP1]], i64 10)
 // CHECK-NEXT:    [[ARRAYIDX2:%.*]] = getelementptr inbounds i8, i8 addrspace(200)* [[TMP2]], i64 [[INDEX2]]
 // CHECK-NEXT:    store i8 65, i8 addrspace(200)* [[ARRAYIDX2]], align 1, !tbaa [[TBAA9]]
-// CHECK-NEXT:    call void @use_buf(i8 addrspace(200)* [[TMP0]]) #[[ATTR10]]
-// CHECK-NEXT:    call void @llvm.lifetime.end.p200i8(i64 100, i8 addrspace(200)* nonnull [[ARRAY23_SUB]]) #[[ATTR10]]
+// CHECK-NEXT:    call void @use_buf(i8 addrspace(200)* noundef [[TMP0]]) #[[ATTR11]]
+// CHECK-NEXT:    call void @llvm.lifetime.end.p200i8(i64 100, i8 addrspace(200)* nonnull [[ARRAY23_SUB]]) #[[ATTR11]]
 // CHECK-NEXT:    ret i32 0
 //
 int test28c(long index1, long index2) {
@@ -586,7 +584,7 @@ int test28c(long index1, long index2) {
 }
 
 // CHECK-LABEL: define {{[^@]+}}@test28d
-// CHECK-SAME: ([[STRUCT_MY_STRUCT28:%.*]] addrspace(200)* addrspace(200)* nocapture readonly [[ARRAY1:%.*]], i64 signext [[INDEX1:%.*]], i64 signext [[INDEX2:%.*]]) local_unnamed_addr addrspace(200) #[[ATTR2]] {
+// CHECK-SAME: ([[STRUCT_MY_STRUCT28:%.*]] addrspace(200)* addrspace(200)* nocapture noundef readonly [[ARRAY1:%.*]], i64 noundef signext [[INDEX1:%.*]], i64 noundef signext [[INDEX2:%.*]]) local_unnamed_addr addrspace(200) #[[ATTR2]] {
 // CHECK-NEXT:  entry:
 // CHECK-NEXT:    [[ARRAYIDX:%.*]] = getelementptr inbounds [[STRUCT_MY_STRUCT28]] addrspace(200)*, [[STRUCT_MY_STRUCT28]] addrspace(200)* addrspace(200)* [[ARRAY1]], i64 [[INDEX1]]
 // CHECK-NEXT:    [[TMP0:%.*]] = load [[STRUCT_MY_STRUCT28]] addrspace(200)*, [[STRUCT_MY_STRUCT28]] addrspace(200)* addrspace(200)* [[ARRAYIDX]], align 16, !tbaa [[TBAA14]]

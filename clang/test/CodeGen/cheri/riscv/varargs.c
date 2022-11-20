@@ -95,7 +95,7 @@ void *callee(int n, ...) {
 //
 // CHECK-L64PC128-LABEL: @caller(
 // CHECK-L64PC128-NEXT:  entry:
-// CHECK-L64PC128-NEXT:    [[CALL:%.*]] = call i8 addrspace(200)* (i32, ...) @callee(i32 signext 4, i32 signext 1, i32 signext 2, i32 signext 3, i8 addrspace(200)* [[P:%.*]])
+// CHECK-L64PC128-NEXT:    [[CALL:%.*]] = call i8 addrspace(200)* (i32, ...) @callee(i32 noundef signext 4, i32 noundef signext 1, i32 noundef signext 2, i32 noundef signext 3, i8 addrspace(200)* [[P:%.*]])
 // CHECK-L64PC128-NEXT:    ret i8 addrspace(200)* [[CALL]]
 //
 void *caller(void *p) {
@@ -211,7 +211,7 @@ struct S callee_S(int n, ...) {
 // CHECK-L64PC128-NEXT:    [[TMP1:%.*]] = bitcast [[STRUCT_S]] addrspace(200)* [[BYVAL_TEMP]] to i8 addrspace(200)*
 // CHECK-L64PC128-NEXT:    [[TMP2:%.*]] = bitcast [[STRUCT_S]] addrspace(200)* [[S:%.*]] to i8 addrspace(200)*
 // CHECK-L64PC128-NEXT:    call void @llvm.memcpy.p200i8.p200i8.i64(i8 addrspace(200)* align 1 [[TMP1]], i8 addrspace(200)* align 1 [[TMP2]], i64 64, i1 false)
-// CHECK-L64PC128-NEXT:    call void ([[STRUCT_S]] addrspace(200)*, i32, ...) @callee_S([[STRUCT_S]] addrspace(200)* sret([[STRUCT_S]]) align 1 [[AGG_RESULT]], i32 signext 4, i32 signext 1, i32 signext 2, i32 signext 3, [[STRUCT_S]] addrspace(200)* [[BYVAL_TEMP]])
+// CHECK-L64PC128-NEXT:    call void ([[STRUCT_S]] addrspace(200)*, i32, ...) @callee_S([[STRUCT_S]] addrspace(200)* sret([[STRUCT_S]]) align 1 [[AGG_RESULT]], i32 noundef signext 4, i32 noundef signext 1, i32 noundef signext 2, i32 noundef signext 3, [[STRUCT_S]] addrspace(200)* [[BYVAL_TEMP]])
 // CHECK-L64PC128-NEXT:    ret void
 //
 struct S caller_S(struct S s) {

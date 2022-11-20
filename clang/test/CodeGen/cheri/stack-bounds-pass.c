@@ -40,16 +40,16 @@ int pass_arg(void) {
 // DBG-NEXT:  -Checking if load/store needs bounds (GEP offset is 0):   %3 = load i32, i32 addrspace(200)* %x, align 4
 // DBG-NEXT:   -Load/store size=4, alloca size=4, current GEP offset=0 for i32
 // DBG-NEXT:   -Load/store is in bounds -> can reuse $csp for   %3 = load i32, i32 addrspace(200)* %x, align 4
-// DBG-NEXT:  -Adding stack bounds since it is passed to call:   %call1 = call i32 addrspace(200)* @call(i32 addrspace(200)* %x)
-// DBG-NEXT: Found alloca use that needs bounds:   %call1 = call i32 addrspace(200)* @call(i32 addrspace(200)* %x)
+// DBG-NEXT:  -Adding stack bounds since it is passed to call:   %call1 = call i32 addrspace(200)* @call(i32 addrspace(200)* noundef %x)
+// DBG-NEXT: Found alloca use that needs bounds:   %call1 = call i32 addrspace(200)* @call(i32 addrspace(200)* noundef %x)
 // DBG-NEXT:  -Checking if load/store needs bounds (GEP offset is 0):   store i32 %add, i32 addrspace(200)* %x, align 4
 // DBG-NEXT:   -Load/store size=4, alloca size=4, current GEP offset=0 for i32
 // DBG-NEXT:   -Load/store is in bounds -> can reuse $csp for   store i32 %add, i32 addrspace(200)* %x, align 4
 // DBG-NEXT:  -Checking if load/store needs bounds (GEP offset is 0):   %2 = load i32, i32 addrspace(200)* %x, align 4
 // DBG-NEXT:   -Load/store size=4, alloca size=4, current GEP offset=0 for i32
 // DBG-NEXT:   -Load/store is in bounds -> can reuse $csp for   %2 = load i32, i32 addrspace(200)* %x, align 4
-// DBG-NEXT:  -Adding stack bounds since it is passed to call:   %call = call i32 addrspace(200)* @call(i32 addrspace(200)* %x)
-// DBG-NEXT: Found alloca use that needs bounds:   %call = call i32 addrspace(200)* @call(i32 addrspace(200)* %x)
+// DBG-NEXT:  -Adding stack bounds since it is passed to call:   %call = call i32 addrspace(200)* @call(i32 addrspace(200)* noundef %x)
+// DBG-NEXT: Found alloca use that needs bounds:   %call = call i32 addrspace(200)* @call(i32 addrspace(200)* noundef %x)
 // DBG-NEXT:  -Checking if load/store needs bounds (GEP offset is 0):   store i32 5, i32 addrspace(200)* %x, align 4
 // DBG-NEXT:   -Load/store size=4, alloca size=4, current GEP offset=0 for i32
 // DBG-NEXT:   -Load/store is in bounds -> can reuse $csp for   store i32 5, i32 addrspace(200)* %x, align 4
