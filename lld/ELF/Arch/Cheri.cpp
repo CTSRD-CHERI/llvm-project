@@ -181,7 +181,7 @@ void CheriCapRelocsSection::processSection(InputSectionBase *s) {
     //           << Twine((int)LocationSym.Type) << " against "
     //           << toString(TargetSym) << "\n";
     auto *rawInput = reinterpret_cast<const InMemoryCapRelocEntry<ELFT> *>(
-        s->data().begin() + capRelocsOffset);
+        s->content().begin() + capRelocsOffset);
     int64_t targetCapabilityOffset = (int64_t)rawInput->offset;
     assert(rawInput->size == 0 && "Clang should not have set size in __cap_relocs");
     if (!isa<Defined>(locationSym)) {
