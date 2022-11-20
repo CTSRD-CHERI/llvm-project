@@ -103,13 +103,13 @@ namespace test3 {
   // CHECK:       [[ADJUST_AND_IS_VIRTUAL:%.*]] = extractvalue { i64, i64 } [[MEMPTR]], 1
   // CHECK:       [[ADJUST:%.*]] = ashr i64 [[ADJUST_AND_IS_VIRTUAL]], 1
   // CHECK:       [[T0:%.*]] = bitcast [[A]]* [[TEMP]] to i8*
-  // CHECK:       [[VTABLE_ADDR:%.*]] = getelementptr inbounds i8, i8* [[T0]], i64 [[ADJUST]]
-  // CHECK:       [[ADJUSTED:%.*]] = bitcast i8* [[VTABLE_ADDR]] to [[A]]*
+  // CHECK:       [[T1:%.*]] = getelementptr inbounds i8, i8* [[T0]], i64 [[ADJUST]]
+  // CHECK:       [[ADJUSTED:%.*]] = bitcast i8* [[T1]] to [[A]]*
   // CHECK:       [[MEMBER:%.*]] = extractvalue { i64, i64 } [[MEMPTR]], 0
   // CHECK:       [[T0:%.*]] = and i64 [[ADJUST_AND_IS_VIRTUAL]], 1
   // CHECK:       [[IS_VIRTUAL:%.*]] = icmp ne i64 [[T0]], 0
   // CHECK:       br i1 [[IS_VIRTUAL]],
-  // CHECK:       [[T0:%.*]] = bitcast i8* [[VTABLE_ADDR]] to i8**
+  // CHECK:       [[T0:%.*]] = bitcast [[A]]* [[ADJUSTED]] to i8**
   // CHECK:       [[VPTR:%.*]] = load i8*, i8** [[T0]], align 8
   // CHECK:       [[TRUNC:%.*]] = trunc i64 [[MEMBER]] to i32
   // CHECK:       [[ZEXT:%.*]] = zext i32 [[TRUNC]] to i64
