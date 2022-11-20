@@ -1009,17 +1009,12 @@ static bool UpgradeIntrinsicFunction1(Function *F, Function *&NewFn) {
             Intrinsic::getDeclaration(F->getParent(), Intrinsic::prefetch, Tys);
         return true;
       }
-    } else if (Name.startswith("ptr.annotation.")) {
-      Type *Tys[] = {F->getReturnType(), F->getFunctionType()->params()[1] };
-      NewFn = Intrinsic::getDeclaration(F->getParent(),
-                                        Intrinsic::ptr_annotation, Tys);
-      if (F->arg_size() == 4 || NewFn != F) {
-        if (F->arg_size() == 4)
-          rename(F);
-        return true;
-      } else {
-        NewFn = nullptr;
-      }
+    } else if (Name.startswith("ptr.annotation.") && F->arg_size() == 4) {
+      rename(F);
+      NewFn = Intrinsic::getDeclaration(
+          F->getParent(), Intrinsic::ptr_annotation,
+          {F->arg_begin()->getType(), F->getArg(1)->getType()});
+      return true;
     }
     break;
 
@@ -1066,16 +1061,12 @@ static bool UpgradeIntrinsicFunction1(Function *F, Function *&NewFn) {
                                         { ArgTy, ArgTy });
       return true;
     }
-    if (Name == "var.annotation") {
-      NewFn = Intrinsic::getDeclaration(F->getParent(),
-                                        Intrinsic::var_annotation, ArgTy);
-      if (F->arg_size() == 4 || NewFn != F) {
-        if (F->arg_size() == 4)
-          rename(F);
-        return true;
-      } else {
-        NewFn = nullptr;
-      }
+    if (Name == "var.annotation" && F->arg_size() == 4) {
+      rename(F);
+      NewFn = Intrinsic::getDeclaration(
+          F->getParent(), Intrinsic::var_annotation,
+          {{F->arg_begin()->getType(), F->getArg(1)->getType()}});
+      return true;
     }
     break;
   }
