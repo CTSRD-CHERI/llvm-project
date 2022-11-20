@@ -101,7 +101,7 @@ void cast_uintcap() {
   // PURECAP-AST-NEXT: DeclRefExpr {{.+}} 'a' 'void *'
   v = reinterpret_cast<unsigned __intcap>(nullptr);
   // AST: CXXReinterpretCastExpr {{.*}} {{.*}} 'unsigned __intcap __attribute__((cheri_no_provenance))':'unsigned __intcap' reinterpret_cast<unsigned __intcap> <PointerToIntegral>
-  // AST-NEXT: CXXNullPtrLiteralExpr {{.+}} 'nullptr_t'
+  // AST-NEXT: CXXNullPtrLiteralExpr {{.+}} 'std::nullptr_t'
   v = static_cast<unsigned __intcap>(a);
   // hybrid-error@-1 {{static_cast from 'void * __capability' to 'unsigned __intcap' is not allowed}}
   // purecap-error@-2 {{static_cast from 'void *' to 'unsigned __intcap' is not allowed}}
@@ -138,7 +138,7 @@ void cast_intcap() {
   // PURECAP-AST-NEXT: DeclRefExpr {{.+}} 'a' 'void *'
   v = reinterpret_cast<__intcap>(nullptr);
   // AST: CXXReinterpretCastExpr {{.*}} {{.*}} '__intcap __attribute__((cheri_no_provenance))':'__intcap' reinterpret_cast<__intcap> <PointerToIntegral>
-  // AST-NEXT: CXXNullPtrLiteralExpr {{.+}} 'nullptr_t'
+  // AST-NEXT: CXXNullPtrLiteralExpr {{.+}} 'std::nullptr_t'
   v = static_cast<__intcap>(a);
   // hybrid-error@-1 {{static_cast from 'void * __capability' to '__intcap' is not allowed}}
   // purecap-error@-2 {{static_cast from 'void *' to '__intcap' is not allowed}}

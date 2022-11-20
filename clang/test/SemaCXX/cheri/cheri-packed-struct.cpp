@@ -16,7 +16,7 @@ struct inherit_from_template_good : public packed_T_and_cap<char[sizeof(void*)]>
   char pad[sizeof(void*)];
 };
 
-struct inherit_from_template_bad : public packed_T_and_cap<char[sizeof(void*) - 1]> { // expected-note-re {{in instantiation of template class 'packed_T_and_cap<char [{{15|31}}]>' requested here}}
+struct inherit_from_template_bad : public packed_T_and_cap<char[sizeof(void*) - 1]> { // expected-note-re {{in instantiation of template class 'packed_T_and_cap<char[{{15|31}}]>' requested here}}
   char pad[sizeof(void*)];
 };
 

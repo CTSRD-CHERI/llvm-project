@@ -15,7 +15,7 @@ x foo;
 // instantiate it:
 void test(void* value) {
   c<int, 16>(value);
-  // CHECK: call i8 addrspace(200)* @_Z1cIiLi16EEPvS0_(i8 addrspace(200)*
+  // CHECK: call noundef i8 addrspace(200)* @_Z1cIiLi16EEPvS0_(i8 addrspace(200)*
 #ifndef CODEGEN
   c<struct x, foo>(value); // expected-error{{no matching function for call to 'c'}}
 #endif

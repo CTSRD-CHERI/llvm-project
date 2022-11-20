@@ -78,11 +78,11 @@ void decay(void) {
   // PURECAP-AST: -FunctionDecl {{.*}} line:[[@LINE-3]]:6 referenced decay 'void (void)'
   // PURECAP-AST: CStyleCastExpr {{.*}} <col:13, col:33> 'long' <CHERICapabilityToAddress>{{$}}
   // PURECAP-AST-NEXT: ImplicitCastExpr {{.*}} <col:33> 'char *' <ArrayToPointerDecay> part_of_explicit_cast{{$}}
-  // PURECAP-AST-NEXT: -DeclRefExpr {{.*}} 'char [1]' lvalue Var {{.*}} 'buf' 'char [1]'{{$}}
+  // PURECAP-AST-NEXT: -DeclRefExpr {{.*}} 'char[1]' lvalue Var {{.*}} 'buf' 'char[1]'{{$}}
   long x2 = (__cheri_offset long) buf;
   // PURECAP-AST: CStyleCastExpr {{.*}} <col:13, col:35> 'long' <CHERICapabilityToOffset>{{$}}
   // PURECAP-AST-NEXT: ImplicitCastExpr {{.*}} <col:35> 'char *' <ArrayToPointerDecay> part_of_explicit_cast{{$}}
-  // PURECAP-AST-NEXT: -DeclRefExpr {{.*}} 'char [1]' lvalue Var {{.*}} 'buf' 'char [1]'{{$}}
+  // PURECAP-AST-NEXT: -DeclRefExpr {{.*}} 'char[1]' lvalue Var {{.*}} 'buf' 'char[1]'{{$}}
 
   // Also check function-to-pointer decay:
   long x3 = (__cheri_addr long) decay;

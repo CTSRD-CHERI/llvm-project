@@ -46,11 +46,11 @@ int main() {
   // expected-error@-3 {{static_cast from 'void *' to 'uint' (aka 'unsigned int') is not allowed}}
 
   // also try casting from nullptr_t
-  DO_CASTS(ulong, nullptr); //expected-error {{static_cast from 'nullptr_t' to 'ulong' (aka 'unsigned long') is not allowed}}
+  DO_CASTS(ulong, nullptr); //expected-error {{static_cast from 'std::nullptr_t' to 'ulong' (aka 'unsigned long') is not allowed}}
   DO_CASTS(uint, nullptr);
   // nopurecap-error@-1 3 {{cast from pointer to smaller type 'uint' (aka 'unsigned int') loses information}}
   // purecap-error@-2 3 {{cast from capability to smaller type 'uint' (aka 'unsigned int') loses information}}
-  // expected-error@-3 {{static_cast from 'nullptr_t' to 'uint' (aka 'unsigned int') is not allowed}}
+  // expected-error@-3 {{static_cast from 'std::nullptr_t' to 'uint' (aka 'unsigned int') is not allowed}}
 
   // Check that static_cast from T* <-> T* __capability is not allowed
   typedef char *CAP char_capptr;
