@@ -27,7 +27,7 @@ IntptrStruct set_int() {
 // CHECK-LABEL: define {{[^@]+}}@set_int2
 // CHECK-SAME: (i8 addrspace(200)* inreg [[P_COERCE:%.*]]) local_unnamed_addr addrspace(200) #[[ATTR0]] {
 // CHECK-NEXT:  entry:
-// CHECK-NEXT:    [[DOTFCA_0_INSERT:%.*]] = insertvalue { i8 addrspace(200)* } undef, i8 addrspace(200)* [[P_COERCE]], 0
+// CHECK-NEXT:    [[DOTFCA_0_INSERT:%.*]] = insertvalue { i8 addrspace(200)* } poison, i8 addrspace(200)* [[P_COERCE]], 0
 // CHECK-NEXT:    ret { i8 addrspace(200)* } [[DOTFCA_0_INSERT]]
 //
 IntptrStruct set_int2(IntptrStruct p) {
@@ -79,7 +79,7 @@ typedef union {
 _Static_assert(sizeof(GreaterThanIntCapSizeUnion) > sizeof(void*), "");
 
 // CHECK-LABEL: define {{[^@]+}}@greater_than_intcap_size_union
-// CHECK-SAME: ([[UNION_GREATERTHANINTCAPSIZEUNION:%.*]] addrspace(200)* noalias nocapture sret([[UNION_GREATERTHANINTCAPSIZEUNION]]) align 16 [[AGG_RESULT:%.*]]) local_unnamed_addr addrspace(200) #[[ATTR2:[0-9]+]] {
+// CHECK-SAME: ([[UNION_GREATERTHANINTCAPSIZEUNION:%.*]] addrspace(200)* noalias nocapture writeonly sret([[UNION_GREATERTHANINTCAPSIZEUNION]]) align 16 [[AGG_RESULT:%.*]]) local_unnamed_addr addrspace(200) #[[ATTR2:[0-9]+]] {
 // CHECK-NEXT:  entry:
 // CHECK-NEXT:    [[PTR:%.*]] = getelementptr inbounds [[UNION_GREATERTHANINTCAPSIZEUNION]], [[UNION_GREATERTHANINTCAPSIZEUNION]] addrspace(200)* [[AGG_RESULT]], i64 0, i32 0
 // CHECK-NEXT:    store i8 addrspace(200)* bitcast (i32 addrspace(200)* @global to i8 addrspace(200)*), i8 addrspace(200)* addrspace(200)* [[PTR]], align 16, !tbaa [[TBAA2:![0-9]+]]
@@ -138,7 +138,7 @@ typedef struct {
 } ThreeLongs;
 
 // CHECK-LABEL: define {{[^@]+}}@three_longs
-// CHECK-SAME: ([[STRUCT_THREELONGS:%.*]] addrspace(200)* noalias nocapture sret([[STRUCT_THREELONGS]]) align 8 [[AGG_RESULT:%.*]]) local_unnamed_addr addrspace(200) #[[ATTR3:[0-9]+]] {
+// CHECK-SAME: ([[STRUCT_THREELONGS:%.*]] addrspace(200)* noalias nocapture writeonly sret([[STRUCT_THREELONGS]]) align 8 [[AGG_RESULT:%.*]]) local_unnamed_addr addrspace(200) #[[ATTR3:[0-9]+]] {
 // CHECK-NEXT:  entry:
 // CHECK-NEXT:    [[TMP0:%.*]] = bitcast [[STRUCT_THREELONGS]] addrspace(200)* [[AGG_RESULT]] to i8 addrspace(200)*
 // CHECK-NEXT:    tail call void @llvm.memcpy.p200i8.p200i8.i64(i8 addrspace(200)* noundef nonnull align 8 dereferenceable(24) [[TMP0]], i8 addrspace(200)* noundef nonnull align 8 dereferenceable(24) bitcast ([[STRUCT_THREELONGS]] addrspace(200)* @__const.three_longs.t to i8 addrspace(200)*), i64 24, i1 false)
@@ -237,7 +237,7 @@ long read_int_and_long_2() {
 // CHECK-LABEL: define {{[^@]+}}@int_and_long2
 // CHECK-SAME: (i64 inreg [[ARG_COERCE0:%.*]], i64 inreg [[ARG_COERCE1:%.*]]) local_unnamed_addr addrspace(200) #[[ATTR0]] {
 // CHECK-NEXT:  entry:
-// CHECK-NEXT:    [[DOTFCA_0_INSERT:%.*]] = insertvalue { i64, i64 } undef, i64 [[ARG_COERCE0]], 0
+// CHECK-NEXT:    [[DOTFCA_0_INSERT:%.*]] = insertvalue { i64, i64 } poison, i64 [[ARG_COERCE0]], 0
 // CHECK-NEXT:    [[DOTFCA_1_INSERT:%.*]] = insertvalue { i64, i64 } [[DOTFCA_0_INSERT]], i64 [[ARG_COERCE1]], 1
 // CHECK-NEXT:    ret { i64, i64 } [[DOTFCA_1_INSERT]]
 //
@@ -263,7 +263,7 @@ typedef struct {
 // CHECK-NEXT:  entry:
 // CHECK-NEXT:    [[TMP0:%.*]] = getelementptr i8, i8 addrspace(200)* [[IN_COERCE0]], i64 1
 // CHECK-NEXT:    [[ADD_PTR:%.*]] = getelementptr inbounds i32, i32 addrspace(200)* [[IN_COERCE1]], i64 1
-// CHECK-NEXT:    [[DOTFCA_0_INSERT:%.*]] = insertvalue { i8 addrspace(200)*, i32 addrspace(200)* } undef, i8 addrspace(200)* [[TMP0]], 0
+// CHECK-NEXT:    [[DOTFCA_0_INSERT:%.*]] = insertvalue { i8 addrspace(200)*, i32 addrspace(200)* } poison, i8 addrspace(200)* [[TMP0]], 0
 // CHECK-NEXT:    [[DOTFCA_1_INSERT:%.*]] = insertvalue { i8 addrspace(200)*, i32 addrspace(200)* } [[DOTFCA_0_INSERT]], i32 addrspace(200)* [[ADD_PTR]], 1
 // CHECK-NEXT:    ret { i8 addrspace(200)*, i32 addrspace(200)* } [[DOTFCA_1_INSERT]]
 //
@@ -284,7 +284,7 @@ typedef struct {
 } ThreeCapsStruct;
 
 // CHECK-LABEL: define {{[^@]+}}@three_caps_struct
-// CHECK-SAME: ([[STRUCT_THREECAPSSTRUCT:%.*]] addrspace(200)* noalias nocapture sret([[STRUCT_THREECAPSSTRUCT]]) align 16 [[AGG_RESULT:%.*]], i64 [[TMP0:%.*]], i8 addrspace(200)* inreg [[IN_COERCE0:%.*]], i8 addrspace(200)* inreg [[IN_COERCE1:%.*]], i8 addrspace(200)* inreg [[IN_COERCE2:%.*]]) local_unnamed_addr addrspace(200) #[[ATTR2]] {
+// CHECK-SAME: ([[STRUCT_THREECAPSSTRUCT:%.*]] addrspace(200)* noalias nocapture writeonly sret([[STRUCT_THREECAPSSTRUCT]]) align 16 [[AGG_RESULT:%.*]], i64 [[TMP0:%.*]], i8 addrspace(200)* inreg [[IN_COERCE0:%.*]], i8 addrspace(200)* inreg [[IN_COERCE1:%.*]], i8 addrspace(200)* inreg [[IN_COERCE2:%.*]]) local_unnamed_addr addrspace(200) #[[ATTR2]] {
 // CHECK-NEXT:  entry:
 // CHECK-NEXT:    [[CAP1:%.*]] = getelementptr inbounds [[STRUCT_THREECAPSSTRUCT]], [[STRUCT_THREECAPSSTRUCT]] addrspace(200)* [[AGG_RESULT]], i64 0, i32 0
 // CHECK-NEXT:    [[TMP1:%.*]] = getelementptr i8, i8 addrspace(200)* [[IN_COERCE0]], i64 1
@@ -323,7 +323,7 @@ typedef struct {
 // CHECK-NEXT:  entry:
 // CHECK-NEXT:    [[ADD:%.*]] = add nsw i64 [[IN_COERCE0]], 1
 // CHECK-NEXT:    [[TMP0:%.*]] = getelementptr i8, i8 addrspace(200)* [[IN_COERCE2]], i64 2
-// CHECK-NEXT:    [[DOTFCA_0_INSERT:%.*]] = insertvalue { i64, i64, i8 addrspace(200)* } undef, i64 [[ADD]], 0
+// CHECK-NEXT:    [[DOTFCA_0_INSERT:%.*]] = insertvalue { i64, i64, i8 addrspace(200)* } poison, i64 [[ADD]], 0
 // CHECK-NEXT:    [[DOTFCA_2_INSERT:%.*]] = insertvalue { i64, i64, i8 addrspace(200)* } [[DOTFCA_0_INSERT]], i8 addrspace(200)* [[TMP0]], 2
 // CHECK-NEXT:    ret { i64, i64, i8 addrspace(200)* } [[DOTFCA_2_INSERT]]
 //
@@ -346,7 +346,7 @@ typedef struct {
 // CHECK-NEXT:  entry:
 // CHECK-NEXT:    [[TMP0:%.*]] = getelementptr i8, i8 addrspace(200)* [[IN_COERCE0]], i64 2
 // CHECK-NEXT:    [[ADD3:%.*]] = add nsw i64 [[IN_COERCE1]], 1
-// CHECK-NEXT:    [[DOTFCA_0_INSERT:%.*]] = insertvalue { i8 addrspace(200)*, i64, i64 } undef, i8 addrspace(200)* [[TMP0]], 0
+// CHECK-NEXT:    [[DOTFCA_0_INSERT:%.*]] = insertvalue { i8 addrspace(200)*, i64, i64 } poison, i8 addrspace(200)* [[TMP0]], 0
 // CHECK-NEXT:    [[DOTFCA_1_INSERT:%.*]] = insertvalue { i8 addrspace(200)*, i64, i64 } [[DOTFCA_0_INSERT]], i64 [[ADD3]], 1
 // CHECK-NEXT:    ret { i8 addrspace(200)*, i64, i64 } [[DOTFCA_1_INSERT]]
 //
@@ -366,7 +366,7 @@ typedef struct {
   long i;
 } CapCapInt;
 // CHECK-LABEL: define {{[^@]+}}@cap_cap_int
-// CHECK-SAME: ([[STRUCT_CAPCAPINT:%.*]] addrspace(200)* noalias nocapture sret([[STRUCT_CAPCAPINT]]) align 16 [[AGG_RESULT:%.*]], i64 [[TMP0:%.*]], i8 addrspace(200)* inreg [[IN_COERCE0:%.*]], i8 addrspace(200)* inreg [[IN_COERCE1:%.*]], i64 inreg [[IN_COERCE2:%.*]], i64 inreg [[IN_COERCE3:%.*]]) local_unnamed_addr addrspace(200) #[[ATTR2]] {
+// CHECK-SAME: ([[STRUCT_CAPCAPINT:%.*]] addrspace(200)* noalias nocapture writeonly sret([[STRUCT_CAPCAPINT]]) align 16 [[AGG_RESULT:%.*]], i64 [[TMP0:%.*]], i8 addrspace(200)* inreg [[IN_COERCE0:%.*]], i8 addrspace(200)* inreg [[IN_COERCE1:%.*]], i64 inreg [[IN_COERCE2:%.*]], i64 inreg [[IN_COERCE3:%.*]]) local_unnamed_addr addrspace(200) #[[ATTR2]] {
 // CHECK-NEXT:  entry:
 // CHECK-NEXT:    [[C1:%.*]] = getelementptr inbounds [[STRUCT_CAPCAPINT]], [[STRUCT_CAPCAPINT]] addrspace(200)* [[AGG_RESULT]], i64 0, i32 0
 // CHECK-NEXT:    [[TMP1:%.*]] = getelementptr i8, i8 addrspace(200)* [[IN_COERCE0]], i64 2
@@ -399,7 +399,7 @@ typedef struct {
   __uintcap_t c2;
 } IntCapCap;
 // CHECK-LABEL: define {{[^@]+}}@int_cap_cap
-// CHECK-SAME: ([[STRUCT_INTCAPCAP:%.*]] addrspace(200)* noalias nocapture sret([[STRUCT_INTCAPCAP]]) align 16 [[AGG_RESULT:%.*]], i64 [[TMP0:%.*]], i64 inreg [[IN_COERCE0:%.*]], i64 inreg [[IN_COERCE1:%.*]], i8 addrspace(200)* inreg [[IN_COERCE2:%.*]], i8 addrspace(200)* inreg [[IN_COERCE3:%.*]]) local_unnamed_addr addrspace(200) #[[ATTR2]] {
+// CHECK-SAME: ([[STRUCT_INTCAPCAP:%.*]] addrspace(200)* noalias nocapture writeonly sret([[STRUCT_INTCAPCAP]]) align 16 [[AGG_RESULT:%.*]], i64 [[TMP0:%.*]], i64 inreg [[IN_COERCE0:%.*]], i64 inreg [[IN_COERCE1:%.*]], i8 addrspace(200)* inreg [[IN_COERCE2:%.*]], i8 addrspace(200)* inreg [[IN_COERCE3:%.*]]) local_unnamed_addr addrspace(200) #[[ATTR2]] {
 // CHECK-NEXT:  entry:
 // CHECK-NEXT:    [[I:%.*]] = getelementptr inbounds [[STRUCT_INTCAPCAP]], [[STRUCT_INTCAPCAP]] addrspace(200)* [[AGG_RESULT]], i64 0, i32 0
 // CHECK-NEXT:    [[ADD:%.*]] = add nsw i64 [[IN_COERCE0]], 1
@@ -435,7 +435,7 @@ typedef struct {
 // CHECK-NEXT:  entry:
 // CHECK-NEXT:    [[ADD:%.*]] = add nsw i64 [[IN_COERCE0]], 1
 // CHECK-NEXT:    [[ADD4:%.*]] = add nsw i64 [[IN_COERCE1]], 2
-// CHECK-NEXT:    [[DOTFCA_0_INSERT:%.*]] = insertvalue { i64, i64 } undef, i64 [[ADD]], 0
+// CHECK-NEXT:    [[DOTFCA_0_INSERT:%.*]] = insertvalue { i64, i64 } poison, i64 [[ADD]], 0
 // CHECK-NEXT:    [[DOTFCA_1_INSERT:%.*]] = insertvalue { i64, i64 } [[DOTFCA_0_INSERT]], i64 [[ADD4]], 1
 // CHECK-NEXT:    ret { i64, i64 } [[DOTFCA_1_INSERT]]
 //
@@ -458,7 +458,7 @@ typedef struct {
 // CHECK-NEXT:  entry:
 // CHECK-NEXT:    [[TMP0:%.*]] = getelementptr i8, i8 addrspace(200)* [[IN_COERCE0]], i64 1
 // CHECK-NEXT:    [[TMP1:%.*]] = getelementptr i8, i8 addrspace(200)* [[IN_COERCE1]], i64 2
-// CHECK-NEXT:    [[DOTFCA_0_INSERT:%.*]] = insertvalue { i8 addrspace(200)*, i8 addrspace(200)* } undef, i8 addrspace(200)* [[TMP0]], 0
+// CHECK-NEXT:    [[DOTFCA_0_INSERT:%.*]] = insertvalue { i8 addrspace(200)*, i8 addrspace(200)* } poison, i8 addrspace(200)* [[TMP0]], 0
 // CHECK-NEXT:    [[DOTFCA_1_INSERT:%.*]] = insertvalue { i8 addrspace(200)*, i8 addrspace(200)* } [[DOTFCA_0_INSERT]], i8 addrspace(200)* [[TMP1]], 1
 // CHECK-NEXT:    ret { i8 addrspace(200)*, i8 addrspace(200)* } [[DOTFCA_1_INSERT]]
 //
@@ -478,7 +478,7 @@ typedef struct {
 } TwoCapArrayAndInt;
 
 // CHECK-LABEL: define {{[^@]+}}@two_cap_array_and_int
-// CHECK-SAME: ([[STRUCT_TWOCAPARRAYANDINT:%.*]] addrspace(200)* noalias nocapture sret([[STRUCT_TWOCAPARRAYANDINT]]) align 16 [[AGG_RESULT:%.*]], i64 [[TMP0:%.*]], i8 addrspace(200)* inreg [[IN_COERCE0:%.*]], i8 addrspace(200)* inreg [[IN_COERCE1:%.*]], i64 inreg [[IN_COERCE2:%.*]], i64 inreg [[IN_COERCE3:%.*]]) local_unnamed_addr addrspace(200) #[[ATTR2]] {
+// CHECK-SAME: ([[STRUCT_TWOCAPARRAYANDINT:%.*]] addrspace(200)* noalias nocapture writeonly sret([[STRUCT_TWOCAPARRAYANDINT]]) align 16 [[AGG_RESULT:%.*]], i64 [[TMP0:%.*]], i8 addrspace(200)* inreg [[IN_COERCE0:%.*]], i8 addrspace(200)* inreg [[IN_COERCE1:%.*]], i64 inreg [[IN_COERCE2:%.*]], i64 inreg [[IN_COERCE3:%.*]]) local_unnamed_addr addrspace(200) #[[ATTR2]] {
 // CHECK-NEXT:  entry:
 // CHECK-NEXT:    [[ARRAYINIT_BEGIN:%.*]] = getelementptr inbounds [[STRUCT_TWOCAPARRAYANDINT]], [[STRUCT_TWOCAPARRAYANDINT]] addrspace(200)* [[AGG_RESULT]], i64 0, i32 0, i64 0
 // CHECK-NEXT:    [[TMP1:%.*]] = getelementptr i8, i8 addrspace(200)* [[IN_COERCE0]], i64 1
@@ -511,7 +511,7 @@ typedef struct {
 } TwoIntArrayAndCap;
 
 // CHECK-LABEL: define {{[^@]+}}@two_int_array_and_cap
-// CHECK-SAME: ([[STRUCT_TWOINTARRAYANDCAP:%.*]] addrspace(200)* noalias nocapture sret([[STRUCT_TWOINTARRAYANDCAP]]) align 16 [[AGG_RESULT:%.*]], i64 [[TMP0:%.*]], i64 inreg [[IN_COERCE0:%.*]], i64 inreg [[IN_COERCE1:%.*]], i8 addrspace(200)* inreg [[IN_COERCE2:%.*]]) local_unnamed_addr addrspace(200) #[[ATTR2]] {
+// CHECK-SAME: ([[STRUCT_TWOINTARRAYANDCAP:%.*]] addrspace(200)* noalias nocapture writeonly sret([[STRUCT_TWOINTARRAYANDCAP]]) align 16 [[AGG_RESULT:%.*]], i64 [[TMP0:%.*]], i64 inreg [[IN_COERCE0:%.*]], i64 inreg [[IN_COERCE1:%.*]], i8 addrspace(200)* inreg [[IN_COERCE2:%.*]]) local_unnamed_addr addrspace(200) #[[ATTR2]] {
 // CHECK-NEXT:  entry:
 // CHECK-NEXT:    [[ARRAYINIT_BEGIN:%.*]] = getelementptr inbounds [[STRUCT_TWOINTARRAYANDCAP]], [[STRUCT_TWOINTARRAYANDCAP]] addrspace(200)* [[AGG_RESULT]], i64 0, i32 0, i64 0
 // CHECK-NEXT:    [[ADD:%.*]] = add nsw i64 [[IN_COERCE0]], 1
@@ -554,7 +554,7 @@ typedef struct {
 // CHECK-NEXT:    [[RETVAL_SROA_0_0_EXTRACT_SHIFT:%.*]] = lshr i128 [[ADD]], 64
 // CHECK-NEXT:    [[RETVAL_SROA_0_0_EXTRACT_TRUNC:%.*]] = trunc i128 [[RETVAL_SROA_0_0_EXTRACT_SHIFT]] to i64
 // CHECK-NEXT:    [[RETVAL_SROA_2_0_EXTRACT_TRUNC:%.*]] = trunc i128 [[ADD]] to i64
-// CHECK-NEXT:    [[DOTFCA_0_INSERT:%.*]] = insertvalue { i64, i64 } undef, i64 [[RETVAL_SROA_0_0_EXTRACT_TRUNC]], 0
+// CHECK-NEXT:    [[DOTFCA_0_INSERT:%.*]] = insertvalue { i64, i64 } poison, i64 [[RETVAL_SROA_0_0_EXTRACT_TRUNC]], 0
 // CHECK-NEXT:    [[DOTFCA_1_INSERT:%.*]] = insertvalue { i64, i64 } [[DOTFCA_0_INSERT]], i64 [[RETVAL_SROA_2_0_EXTRACT_TRUNC]], 1
 // CHECK-NEXT:    ret { i64, i64 } [[DOTFCA_1_INSERT]]
 //
@@ -577,7 +577,7 @@ typedef struct {
 } Int128AndCap;
 
 // CHECK-LABEL: define {{[^@]+}}@int128_and_cap
-// CHECK-SAME: ([[STRUCT_INT128ANDCAP:%.*]] addrspace(200)* noalias nocapture sret([[STRUCT_INT128ANDCAP]]) align 16 [[AGG_RESULT:%.*]], i64 [[TMP0:%.*]], i64 inreg [[IN_COERCE0:%.*]], i64 inreg [[IN_COERCE1:%.*]], i8 addrspace(200)* inreg [[IN_COERCE2:%.*]]) local_unnamed_addr addrspace(200) #[[ATTR2]] {
+// CHECK-SAME: ([[STRUCT_INT128ANDCAP:%.*]] addrspace(200)* noalias nocapture writeonly sret([[STRUCT_INT128ANDCAP]]) align 16 [[AGG_RESULT:%.*]], i64 [[TMP0:%.*]], i64 inreg [[IN_COERCE0:%.*]], i64 inreg [[IN_COERCE1:%.*]], i8 addrspace(200)* inreg [[IN_COERCE2:%.*]]) local_unnamed_addr addrspace(200) #[[ATTR2]] {
 // CHECK-NEXT:  entry:
 // CHECK-NEXT:    [[I128:%.*]] = getelementptr inbounds [[STRUCT_INT128ANDCAP]], [[STRUCT_INT128ANDCAP]] addrspace(200)* [[AGG_RESULT]], i64 0, i32 0
 // CHECK-NEXT:    [[IN_SROA_2_0_INSERT_EXT:%.*]] = zext i64 [[IN_COERCE1]] to i128
