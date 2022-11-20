@@ -1,5 +1,5 @@
-// RUN: %cheri_cc1 %s -o - -emit-llvm -O1 -Weverything -Werror -verify | FileCheck %s
-// RUN: %cheri_purecap_cc1 %s -o - -emit-llvm -O1 -Weverything -Werror -verify | FileCheck %s
+// RUN: %cheri_cc1 %s -o - -emit-llvm -O1 -Weverything -Werror -verify -Wno-declaration-after-statement | FileCheck %s
+// RUN: %cheri_purecap_cc1 %s -o - -emit-llvm -O1 -Weverything -Werror -Wno-declaration-after-statement -verify | FileCheck %s
 // expected-no-diagnostics
 
 #include <cheriintrin.h>
