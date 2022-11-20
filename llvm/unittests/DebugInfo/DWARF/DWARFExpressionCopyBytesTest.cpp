@@ -160,7 +160,7 @@ void DWARFExpressionCopyBytesTest::parseCFIsAndCheckExpression(
         return Instr;
       }
     }
-    return NoneType();
+    return None;
   };
 
   std::unique_ptr<DWARFContext> Ctx = DWARFContext::create(E);
