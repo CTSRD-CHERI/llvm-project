@@ -959,17 +959,14 @@ bool CodeGenTypes::isZeroInitializable(const RecordDecl *RD) {
   return getCGRecordLayout(RD).isZeroInitializable();
 }
 
-unsigned CodeGenTypes::getTargetAddressSpace(QualType T) const {
-  if (T->isCHERICapabilityType(Context)) {
-    return CGM.getTargetCodeGenInfo().getCHERICapabilityAS();
-  }
+unsigned CodeGenTypes::getTargetAddressSpace(QualType PointeeTy) const {
   // Return the address space for the type. If the type is a
   // function type without an address space qualifier, the
   // program address space is used. Otherwise, the target picks
   // the best address space based on the type information
-  return T->isFunctionType() && !T.hasAddressSpace()
+  return PointeeTy->isFunctionType() && !PointeeTy.hasAddressSpace()
              ? getDataLayout().getProgramAddressSpace()
-             : Context.getTargetAddressSpace(T.getQualifiers());
+             : Context.getTargetAddressSpace(PointeeTy.getQualifiers());
 }
 
 bool CodeGenTypes::canMarkAsNonNull(QualType DestTy) const {
