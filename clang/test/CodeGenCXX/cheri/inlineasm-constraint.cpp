@@ -19,29 +19,29 @@ char DummyData32[32];
 char DummyData64[64];
 
 // HYBRID-LABEL: define {{[^@]+}}@_Z4testv
-// HYBRID-SAME: () local_unnamed_addr [[ATTR0:#.*]] {
+// HYBRID-SAME: () local_unnamed_addr #[[ATTR0:[0-9]+]] {
 // HYBRID-NEXT:  entry:
 // HYBRID-NEXT:    [[TMP0:%.*]] = load i32, i32* bitcast ([4 x i8]* @DummyData4 to i32*), align 1
-// HYBRID-NEXT:    call void asm sideeffect "lb $$zero, $0", "=*r|m,0,~{memory},~{$1}"([4 x i8]* nonnull @DummyData4, i32 [[TMP0]]) [[ATTR1:#.*]], !srcloc !2
+// HYBRID-NEXT:    call void asm sideeffect "lb $$zero, $0", "=*r|m,0,~{memory},~{$1}"([4 x i8]* nonnull elementtype([4 x i8]) @DummyData4, i32 [[TMP0]]) #[[ATTR1:[0-9]+]], !srcloc !2
 // HYBRID-NEXT:    [[TMP1:%.*]] = load i64, i64* bitcast ([8 x i8]* @DummyData8 to i64*), align 1
-// HYBRID-NEXT:    call void asm sideeffect "lb $$zero, $0", "=*r|m,0,~{memory},~{$1}"([8 x i8]* nonnull @DummyData8, i64 [[TMP1]]) [[ATTR1]], !srcloc !2
-// HYBRID-NEXT:    call void asm sideeffect "lb $$zero, $0", "=*r|m,*0,~{memory},~{$1}"([16 x i8]* nonnull @DummyData16, [16 x i8]* nonnull @DummyData16) [[ATTR1]], !srcloc !2
-// HYBRID-NEXT:    call void asm sideeffect "lb $$zero, $0", "=*r|m,*0,~{memory},~{$1}"([32 x i8]* nonnull @DummyData32, [32 x i8]* nonnull @DummyData32) [[ATTR1]], !srcloc !2
-// HYBRID-NEXT:    call void asm sideeffect "lb $$zero, $0", "=*r|m,*0,~{memory},~{$1}"([64 x i8]* nonnull @DummyData64, [64 x i8]* nonnull @DummyData64) [[ATTR1]], !srcloc !2
-// HYBRID-NEXT:    [[TMP2:%.*]] = load i8, i8* getelementptr inbounds ([4 x i8], [4 x i8]* @DummyData4, i64 0, i64 0), align 1, [[TBAA3:!tbaa !.*]]
+// HYBRID-NEXT:    call void asm sideeffect "lb $$zero, $0", "=*r|m,0,~{memory},~{$1}"([8 x i8]* nonnull elementtype([8 x i8]) @DummyData8, i64 [[TMP1]]) #[[ATTR1]], !srcloc !2
+// HYBRID-NEXT:    call void asm sideeffect "lb $$zero, $0", "=*r|m,*0,~{memory},~{$1}"([16 x i8]* nonnull elementtype([16 x i8]) @DummyData16, [16 x i8]* nonnull elementtype([16 x i8]) @DummyData16) #[[ATTR1]], !srcloc !2
+// HYBRID-NEXT:    call void asm sideeffect "lb $$zero, $0", "=*r|m,*0,~{memory},~{$1}"([32 x i8]* nonnull elementtype([32 x i8]) @DummyData32, [32 x i8]* nonnull elementtype([32 x i8]) @DummyData32) #[[ATTR1]], !srcloc !2
+// HYBRID-NEXT:    call void asm sideeffect "lb $$zero, $0", "=*r|m,*0,~{memory},~{$1}"([64 x i8]* nonnull elementtype([64 x i8]) @DummyData64, [64 x i8]* nonnull elementtype([64 x i8]) @DummyData64) #[[ATTR1]], !srcloc !2
+// HYBRID-NEXT:    [[TMP2:%.*]] = load i8, i8* getelementptr inbounds ([4 x i8], [4 x i8]* @DummyData4, i64 0, i64 0), align 1, !tbaa [[TBAA3:![0-9]+]]
 // HYBRID-NEXT:    ret i8 [[TMP2]]
 //
 // PURECAP-LABEL: define {{[^@]+}}@_Z4testv
-// PURECAP-SAME: () local_unnamed_addr addrspace(200) [[ATTR0:#.*]] {
+// PURECAP-SAME: () local_unnamed_addr addrspace(200) #[[ATTR0:[0-9]+]] {
 // PURECAP-NEXT:  entry:
 // PURECAP-NEXT:    [[TMP0:%.*]] = load i32, i32 addrspace(200)* bitcast ([4 x i8] addrspace(200)* @DummyData4 to i32 addrspace(200)*), align 1
-// PURECAP-NEXT:    call void asm sideeffect "clb $$zero, $$zero, $0", "=*r|m,0,~{memory},~{$1}"([4 x i8] addrspace(200)* nonnull @DummyData4, i32 [[TMP0]]) [[ATTR1:#.*]], !srcloc !2
+// PURECAP-NEXT:    call void asm sideeffect "clb $$zero, $$zero, $0", "=*r|m,0,~{memory},~{$1}"([4 x i8] addrspace(200)* nonnull elementtype([4 x i8]) @DummyData4, i32 [[TMP0]]) #[[ATTR1:[0-9]+]], !srcloc !2
 // PURECAP-NEXT:    [[TMP1:%.*]] = load i64, i64 addrspace(200)* bitcast ([8 x i8] addrspace(200)* @DummyData8 to i64 addrspace(200)*), align 1
-// PURECAP-NEXT:    call void asm sideeffect "clb $$zero, $$zero, $0", "=*r|m,0,~{memory},~{$1}"([8 x i8] addrspace(200)* nonnull @DummyData8, i64 [[TMP1]]) [[ATTR1]], !srcloc !2
-// PURECAP-NEXT:    call void asm sideeffect "clb $$zero, $$zero, $0", "=*r|m,*0,~{memory},~{$1}"([16 x i8] addrspace(200)* nonnull @DummyData16, [16 x i8] addrspace(200)* nonnull @DummyData16) [[ATTR1]], !srcloc !2
-// PURECAP-NEXT:    call void asm sideeffect "clb $$zero, $$zero, $0", "=*r|m,*0,~{memory},~{$1}"([32 x i8] addrspace(200)* nonnull @DummyData32, [32 x i8] addrspace(200)* nonnull @DummyData32) [[ATTR1]], !srcloc !2
-// PURECAP-NEXT:    call void asm sideeffect "clb $$zero, $$zero, $0", "=*r|m,*0,~{memory},~{$1}"([64 x i8] addrspace(200)* nonnull @DummyData64, [64 x i8] addrspace(200)* nonnull @DummyData64) [[ATTR1]], !srcloc !2
-// PURECAP-NEXT:    [[TMP2:%.*]] = load i8, i8 addrspace(200)* getelementptr inbounds ([4 x i8], [4 x i8] addrspace(200)* @DummyData4, i64 0, i64 0), align 1, [[TBAA3:!tbaa !.*]]
+// PURECAP-NEXT:    call void asm sideeffect "clb $$zero, $$zero, $0", "=*r|m,0,~{memory},~{$1}"([8 x i8] addrspace(200)* nonnull elementtype([8 x i8]) @DummyData8, i64 [[TMP1]]) #[[ATTR1]], !srcloc !2
+// PURECAP-NEXT:    call void asm sideeffect "clb $$zero, $$zero, $0", "=*r|m,*0,~{memory},~{$1}"([16 x i8] addrspace(200)* nonnull elementtype([16 x i8]) @DummyData16, [16 x i8] addrspace(200)* nonnull elementtype([16 x i8]) @DummyData16) #[[ATTR1]], !srcloc !2
+// PURECAP-NEXT:    call void asm sideeffect "clb $$zero, $$zero, $0", "=*r|m,*0,~{memory},~{$1}"([32 x i8] addrspace(200)* nonnull elementtype([32 x i8]) @DummyData32, [32 x i8] addrspace(200)* nonnull elementtype([32 x i8]) @DummyData32) #[[ATTR1]], !srcloc !2
+// PURECAP-NEXT:    call void asm sideeffect "clb $$zero, $$zero, $0", "=*r|m,*0,~{memory},~{$1}"([64 x i8] addrspace(200)* nonnull elementtype([64 x i8]) @DummyData64, [64 x i8] addrspace(200)* nonnull elementtype([64 x i8]) @DummyData64) #[[ATTR1]], !srcloc !2
+// PURECAP-NEXT:    [[TMP2:%.*]] = load i8, i8 addrspace(200)* getelementptr inbounds ([4 x i8], [4 x i8] addrspace(200)* @DummyData4, i64 0, i64 0), align 1, !tbaa [[TBAA3:![0-9]+]]
 // PURECAP-NEXT:    ret i8 [[TMP2]]
 //
 char test() {
@@ -54,21 +54,21 @@ char test() {
 }
 
 // HYBRID-LABEL: define {{[^@]+}}@_Z8test_ptrPv
-// HYBRID-SAME: (i8* [[P:%.*]]) local_unnamed_addr [[ATTR0]] {
+// HYBRID-SAME: (i8* noundef [[P:%.*]]) local_unnamed_addr #[[ATTR0]] {
 // HYBRID-NEXT:  entry:
 // HYBRID-NEXT:    [[P_ADDR:%.*]] = alloca i8*, align 8
-// HYBRID-NEXT:    store i8* [[P]], i8** [[P_ADDR]], align 8, [[TBAA6:!tbaa !.*]]
-// HYBRID-NEXT:    call void asm sideeffect "lb $$zero, $0", "=*r|m,0,~{memory},~{$1}"(i8** nonnull [[P_ADDR]], i8* [[P]]) [[ATTR1]], !srcloc !2
-// HYBRID-NEXT:    [[TMP0:%.*]] = load i8*, i8** [[P_ADDR]], align 8, [[TBAA6]]
+// HYBRID-NEXT:    store i8* [[P]], i8** [[P_ADDR]], align 8, !tbaa [[TBAA6:![0-9]+]]
+// HYBRID-NEXT:    call void asm sideeffect "lb $$zero, $0", "=*r|m,0,~{memory},~{$1}"(i8** nonnull elementtype(i8*) [[P_ADDR]], i8* [[P]]) #[[ATTR1]], !srcloc !2
+// HYBRID-NEXT:    [[TMP0:%.*]] = load i8*, i8** [[P_ADDR]], align 8, !tbaa [[TBAA6]]
 // HYBRID-NEXT:    ret i8* [[TMP0]]
 //
 // PURECAP-LABEL: define {{[^@]+}}@_Z8test_ptrPv
-// PURECAP-SAME: (i8 addrspace(200)* [[P:%.*]]) local_unnamed_addr addrspace(200) [[ATTR0]] {
+// PURECAP-SAME: (i8 addrspace(200)* noundef [[P:%.*]]) local_unnamed_addr addrspace(200) #[[ATTR0]] {
 // PURECAP-NEXT:  entry:
 // PURECAP-NEXT:    [[P_ADDR:%.*]] = alloca i8 addrspace(200)*, align 16, addrspace(200)
-// PURECAP-NEXT:    store i8 addrspace(200)* [[P]], i8 addrspace(200)* addrspace(200)* [[P_ADDR]], align 16, [[TBAA6:!tbaa !.*]]
-// PURECAP-NEXT:    call void asm sideeffect "clb $$zero, $$zero, $0", "=*r|m,0,~{memory},~{$1}"(i8 addrspace(200)* addrspace(200)* nonnull [[P_ADDR]], i8 addrspace(200)* [[P]]) [[ATTR1]], !srcloc !2
-// PURECAP-NEXT:    [[TMP0:%.*]] = load i8 addrspace(200)*, i8 addrspace(200)* addrspace(200)* [[P_ADDR]], align 16, [[TBAA6]]
+// PURECAP-NEXT:    store i8 addrspace(200)* [[P]], i8 addrspace(200)* addrspace(200)* [[P_ADDR]], align 16, !tbaa [[TBAA6:![0-9]+]]
+// PURECAP-NEXT:    call void asm sideeffect "clb $$zero, $$zero, $0", "=*r|m,0,~{memory},~{$1}"(i8 addrspace(200)* addrspace(200)* nonnull elementtype(i8 addrspace(200)*) [[P_ADDR]], i8 addrspace(200)* [[P]]) #[[ATTR1]], !srcloc !2
+// PURECAP-NEXT:    [[TMP0:%.*]] = load i8 addrspace(200)*, i8 addrspace(200)* addrspace(200)* [[P_ADDR]], align 16, !tbaa [[TBAA6]]
 // PURECAP-NEXT:    ret i8 addrspace(200)* [[TMP0]]
 //
 void* test_ptr(void* p) {
