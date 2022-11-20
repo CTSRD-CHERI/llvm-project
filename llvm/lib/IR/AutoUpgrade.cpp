@@ -4210,13 +4210,17 @@ void llvm::UpgradeIntrinsicCall(CallBase *CI, Function *NewFn) {
 
   case Intrinsic::var_annotation:
     // Upgrade from versions that lacked the annotation attribute argument.
-    //    assert(CI->arg_size() == 4 &&
-    //           "Before LLVM 12.0 this intrinsic took four arguments");
+    if (CI->arg_size() != 4) {
+      DefaultCase();
+      return;
+    }
     // Create a new call with an added null annotation attribute argument.
     NewCall = Builder.CreateCall(
         NewFn,
         {CI->getArgOperand(0), CI->getArgOperand(1), CI->getArgOperand(2),
          CI->getArgOperand(3), Constant::getNullValue(Builder.getInt8PtrTy())});
+    NewCall->takeName(CI);
+    CI->replaceAllUsesWith(NewCall);
     CI->eraseFromParent();
     return;
 
