@@ -71,9 +71,9 @@ void test2(union WithNestedStruct* un) {
   // aggressive-remark-re@-2{{setting sub-object bounds for pointer to 'struct (unnamed struct at {{.+}}subobject-bounds-union.c:53:3)' to 64 bytes}}
   // very-aggressive-remark-re@-3{{setting sub-object bounds for field 'nested' (pointer to 'struct (unnamed struct at {{.+}}subobject-bounds-union.c:53:3)') to 8 bytes}}
   call(&un->buffer);
-  // aggressive-remark@-1{{using size of containing type 'union WithNestedStruct' instead of object type 'char [64]' for subobject bounds on union member}}
-  // aggressive-remark@-2{{setting sub-object bounds for pointer to 'char [64]' to 64 bytes}}
-  // very-aggressive-remark@-3{{etting sub-object bounds for field 'buffer' (pointer to 'char [64]') to 64 bytes}}
+  // aggressive-remark@-1{{using size of containing type 'union WithNestedStruct' instead of object type 'char[64]' for subobject bounds on union member}}
+  // aggressive-remark@-2{{setting sub-object bounds for pointer to 'char[64]' to 64 bytes}}
+  // very-aggressive-remark@-3{{etting sub-object bounds for field 'buffer' (pointer to 'char[64]') to 64 bytes}}
 }
 
 // Real VLA with empty [] are not allow in unions but the pre-C99 versions with 0/1 might exist

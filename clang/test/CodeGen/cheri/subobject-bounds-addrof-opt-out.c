@@ -126,11 +126,11 @@ struct a {
 struct a c(void) {
   struct a d[1];
   do_stuff(&d->b); // expected-remark{{setting sub-object bounds for field 'b' (pointer to 'int') to 4 bytes}}
-  // expected-remark@-1{{setting bounds for array decay on 'struct a [1]' to 4 bytes}}
-  // CHECK-NEXT: decay 'struct a [1]' subobj bounds check: decay on constant size array -> setting bounds for 'struct a [1]' decay to 4
+  // expected-remark@-1{{setting bounds for array decay on 'struct a[1]' to 4 bytes}}
+  // CHECK-NEXT: decay 'struct a[1]' subobj bounds check: decay on constant size array -> setting bounds for 'struct a[1]' decay to 4
   // CHECK-NEXT: subobj bounds check: got MemberExpr -> Bounds mode is everywhere-unsafe -> setting bounds for 'int' address to 4
-  return d[0]; // expected-remark{{setting bounds for array subscript on 'struct a [1]' to 4 bytes}}
-  // CHECK-NEXT: subscript 'struct a [1]' subobj bounds check: subscript on constant size array -> setting bounds for 'struct a [1]' subscript to 4
+  return d[0]; // expected-remark{{setting bounds for array subscript on 'struct a[1]' to 4 bytes}}
+  // CHECK-NEXT: subscript 'struct a[1]' subobj bounds check: subscript on constant size array -> setting bounds for 'struct a[1]' subscript to 4
 }
 
 typedef struct WithBoundsPls NoBoundsTypedef __attribute__((cheri_no_subobject_bounds));
@@ -232,34 +232,34 @@ void test_expression_opt_out(void) {
 
   // bounds on array decay+subobject addressof
   do_stuff(&(((struct foo *)(f.bar.array))->other));
-  // expected-remark@-1{{setting sub-object bounds for field 'array' (array decay on 'char [10]') to 10 bytes}}
+  // expected-remark@-1{{setting sub-object bounds for field 'array' (array decay on 'char[10]') to 10 bytes}}
   // expected-remark@-2{{setting sub-object bounds for field 'other' (pointer to 'float') to 4 bytes}}
-  // CHECK-NEXT: decay 'char [10]' subobj bounds check: got MemberExpr -> decay on constant size array -> setting bounds for 'char [10]' decay to 10
+  // CHECK-NEXT: decay 'char[10]' subobj bounds check: got MemberExpr -> decay on constant size array -> setting bounds for 'char[10]' decay to 10
   // CHECK-NEXT: address 'float' subobj bounds check: got MemberExpr -> Bounds mode is everywhere-unsafe -> setting bounds for 'float' address to 4
   // no bounds on array decay but bounds on addressof
   do_stuff(&(((struct foo *)__builtin_no_change_bounds(f.bar.array))->other));
-  // expected-remark@-1{{not setting bounds for array decay on 'char [10]' (__builtin_no_change_bounds() expression)}}
+  // expected-remark@-1{{not setting bounds for array decay on 'char[10]' (__builtin_no_change_bounds() expression)}}
   // expected-remark@-2{{setting sub-object bounds for field 'other' (pointer to 'float') to 4 bytes}}
-  // CHECK-NEXT: decay 'char [10]' subobj bounds check: __builtin_no_change_bounds() expression -> not setting bounds
+  // CHECK-NEXT: decay 'char[10]' subobj bounds check: __builtin_no_change_bounds() expression -> not setting bounds
   // CHECK-NEXT: address 'float' subobj bounds check: got MemberExpr -> Bounds mode is everywhere-unsafe -> setting bounds for 'float' address to 4
   // no bounds on either
   do_stuff(&__builtin_no_change_bounds(((struct foo *)__builtin_no_change_bounds(f.bar.array))->other));
-  // expected-remark@-1{{not setting bounds for array decay on 'char [10]' (__builtin_no_change_bounds() expression)}}
+  // expected-remark@-1{{not setting bounds for array decay on 'char[10]' (__builtin_no_change_bounds() expression)}}
   // expected-remark@-2{{not setting bounds for pointer to 'float' (__builtin_no_change_bounds() expression)}}
-  // CHECK-NEXT: decay 'char [10]' subobj bounds check: __builtin_no_change_bounds() expression -> not setting bounds
+  // CHECK-NEXT: decay 'char[10]' subobj bounds check: __builtin_no_change_bounds() expression -> not setting bounds
   // CHECK-NEXT: address 'float' subobj bounds check: __builtin_no_change_bounds() expression -> not setting bounds
 
   // no bounds on the subscript, but bounds on the addressoff
   do_stuff(&(__builtin_no_change_bounds(f.bar.array)[0]));
-  // expected-remark@-1{{not setting bounds for array subscript on 'char [10]' (__builtin_no_change_bounds() expression)}}
+  // expected-remark@-1{{not setting bounds for array subscript on 'char[10]' (__builtin_no_change_bounds() expression)}}
   // expected-remark@-2{{setting sub-object bounds for pointer to 'char' to 1 bytes}}
-  // CHECK-NEXT: subscript 'char [10]' subobj bounds check: __builtin_no_change_bounds() expression -> not setting bounds
+  // CHECK-NEXT: subscript 'char[10]' subobj bounds check: __builtin_no_change_bounds() expression -> not setting bounds
   // CHECK-NEXT: address 'char' subobj bounds check: Found array subscript -> index is a constant -> bounds-mode is very-aggressive -> bounds on array[CONST] are fine -> Bounds mode is everywhere-unsafe -> setting bounds for 'char' address to 1
   do_stuff(&__builtin_no_change_bounds(__builtin_no_change_bounds(f.bar.array)[0]));
-  // expected-remark@-1{{not setting bounds for array subscript on 'char [10]' (__builtin_no_change_bounds() expression)}}
+  // expected-remark@-1{{not setting bounds for array subscript on 'char[10]' (__builtin_no_change_bounds() expression)}}
   // expected-remark@-2{{not setting bounds for pointer to 'char' (__builtin_no_change_bounds() expression)}}
 
-  // CHECK-NEXT: subscript 'char [10]' subobj bounds check: __builtin_no_change_bounds() expression -> not setting bounds
+  // CHECK-NEXT: subscript 'char[10]' subobj bounds check: __builtin_no_change_bounds() expression -> not setting bounds
   // CHECK-NEXT: address 'char' subobj bounds check: __builtin_no_change_bounds() expression -> not setting bounds
 }
 
@@ -271,10 +271,10 @@ struct fake_vla {
 
 void test_past_end_macro(struct fake_vla *fv) {
   do_stuff(fv->data[1]); // expected-remark-re{{setting sub-object bounds for field 'data' (array subscript on 'void *[1]') to {{16|32}} bytes}}
-  // CHECK-NEXT: subscript 'void * __capability [1]' subobj bounds check: got MemberExpr -> subscript on constant size array -> setting bounds for 'void * __capability [1]' subscript to {{16|32}}
+  // CHECK-NEXT: subscript 'void * __capability[1]' subobj bounds check: got MemberExpr -> subscript on constant size array -> setting bounds for 'void * __capability[1]' subscript to {{16|32}}
   do_stuff(__PAST_END(fv->data, 1)); // expected-remark{{not setting bounds for array subscript on 'typeof (*(fv->data)) *' (aka 'void **') (array subscript on non-array type)}}
   // expected-remark@-1 {{not setting bounds for array decay on 'void *[1]' (__builtin_no_change_bounds() expression)}}
-  // CHECK-NEXT: decay 'void * __capability [1]' subobj bounds check: __builtin_no_change_bounds() expression -> not setting bounds
+  // CHECK-NEXT: decay 'void * __capability[1]' subobj bounds check: __builtin_no_change_bounds() expression -> not setting bounds
   // CHECK-NEXT: subscript 'typeof (*(fv->data)) * __capability' subobj bounds check: array subscript on non-array type -> not setting bounds
 }
 
@@ -298,37 +298,37 @@ struct with_2d_array {
 void test_multidim_array(struct with_2d_array* s, int index) {
   // to get the start of a 2d array you have to use &array2d[0][0]
   do_stuff(&s->array2d[0][0]);
-  // this is fine: expected-remark@-1{{setting sub-object bounds for field 'array2d' (array subscript on 'int [3][4]') to 48 bytes}}
-  // this is not fine! expected-remark@-2{{setting sub-object bounds for array subscript on 'int [4]' to 16 bytes}}
+  // this is fine: expected-remark@-1{{setting sub-object bounds for field 'array2d' (array subscript on 'int[3][4]') to 48 bytes}}
+  // this is not fine! expected-remark@-2{{setting sub-object bounds for array subscript on 'int[4]' to 16 bytes}}
   // this is not fine! expected-remark@-3{{setting sub-object bounds for pointer to 'int' to 4 byte}}
-  // CHECK-NEXT: subscript 'int [3][4]' subobj bounds check: got MemberExpr -> subscript on constant size array -> setting bounds for 'int [3][4]' subscript to 48
-  // CHECK-NEXT: subscript 'int [4]' subobj bounds check: subscript on constant size array -> setting bounds for 'int [4]' subscript to 16
+  // CHECK-NEXT: subscript 'int[3][4]' subobj bounds check: got MemberExpr -> subscript on constant size array -> setting bounds for 'int[3][4]' subscript to 48
+  // CHECK-NEXT: subscript 'int[4]' subobj bounds check: subscript on constant size array -> setting bounds for 'int[4]' subscript to 16
   // CHECK-NEXT: address 'int' subobj bounds check: Found array subscript -> index is a constant -> bounds-mode is very-aggressive -> bounds on array[CONST] are fine -> Bounds mode is everywhere-unsafe -> setting bounds for 'int' address to 4
 
   // Also wrong:
   do_stuff(&__builtin_no_change_bounds(s->array2d)[0][0]);
-  // expected-remark@-1{{not setting bounds for array subscript on 'int [3][4]' (__builtin_no_change_bounds() expression)}}
-  // expected-remark@-2{{setting sub-object bounds for array subscript on 'int [4]' to 16 bytes}}
+  // expected-remark@-1{{not setting bounds for array subscript on 'int[3][4]' (__builtin_no_change_bounds() expression)}}
+  // expected-remark@-2{{setting sub-object bounds for array subscript on 'int[4]' to 16 bytes}}
   // expected-remark@-3{{setting sub-object bounds for pointer to 'int' to 4 byte}}
-  // CHECK-NEXT: subscript 'int [3][4]' subobj bounds check: __builtin_no_change_bounds() expression -> not setting bounds
-  // CHECK-NEXT: subscript 'int [4]' subobj bounds check: subscript on constant size array -> setting bounds for 'int [4]' subscript to 16
+  // CHECK-NEXT: subscript 'int[3][4]' subobj bounds check: __builtin_no_change_bounds() expression -> not setting bounds
+  // CHECK-NEXT: subscript 'int[4]' subobj bounds check: subscript on constant size array -> setting bounds for 'int[4]' subscript to 16
   // CHECK-NEXT: address 'int' subobj bounds check: Found array subscript -> index is a constant -> bounds-mode is very-aggressive -> bounds on array[CONST] are fine -> Bounds mode is everywhere-unsafe -> setting bounds for 'int' address to 4
 
   // This works:
   do_stuff(&__builtin_no_change_bounds(__builtin_no_change_bounds(s->array2d[0])[0]));
-  // expected-remark@-1{{setting sub-object bounds for field 'array2d' (array subscript on 'int [3][4]') to 48 bytes}}
-  // expected-remark@-2{{not setting bounds for array subscript on 'int [4]' (__builtin_no_change_bounds() expression)}}
+  // expected-remark@-1{{setting sub-object bounds for field 'array2d' (array subscript on 'int[3][4]') to 48 bytes}}
+  // expected-remark@-2{{not setting bounds for array subscript on 'int[4]' (__builtin_no_change_bounds() expression)}}
   // expected-remark@-3{{not setting bounds for pointer to 'int' (__builtin_no_change_bounds() expression)}}
-  // CHECK-NEXT: subscript 'int [3][4]' subobj bounds check: got MemberExpr -> subscript on constant size array -> setting bounds for 'int [3][4]' subscript to 48
-  // CHECK-NEXT: subscript 'int [4]' subobj bounds check: __builtin_no_change_bounds() expression -> not setting bounds
+  // CHECK-NEXT: subscript 'int[3][4]' subobj bounds check: got MemberExpr -> subscript on constant size array -> setting bounds for 'int[3][4]' subscript to 48
+  // CHECK-NEXT: subscript 'int[4]' subobj bounds check: __builtin_no_change_bounds() expression -> not setting bounds
   // CHECK-NEXT: address 'int' subobj bounds check: __builtin_no_change_bounds() expression -> not setting bounds
 
   do_stuff(__array2d_start_pointer(s->array2d));
-  // expected-remark@-1{{setting sub-object bounds for field 'array2d' (array subscript on 'int [3][4]') to 48 bytes}}
-  // expected-remark@-2{{not setting bounds for array subscript on 'int [4]' (__builtin_no_change_bounds() expression)}}
+  // expected-remark@-1{{setting sub-object bounds for field 'array2d' (array subscript on 'int[3][4]') to 48 bytes}}
+  // expected-remark@-2{{not setting bounds for array subscript on 'int[4]' (__builtin_no_change_bounds() expression)}}
   // expected-remark@-3{{not setting bounds for pointer to 'int' (__builtin_no_change_bounds() expression)}}
-  // CHECK-NEXT: subscript 'int [3][4]' subobj bounds check: got MemberExpr -> subscript on constant size array -> setting bounds for 'int [3][4]' subscript to 48
-  // CHECK-NEXT: subscript 'int [4]' subobj bounds check: __builtin_no_change_bounds() expression -> not setting bounds
+  // CHECK-NEXT: subscript 'int[3][4]' subobj bounds check: got MemberExpr -> subscript on constant size array -> setting bounds for 'int[3][4]' subscript to 48
+  // CHECK-NEXT: subscript 'int[4]' subobj bounds check: __builtin_no_change_bounds() expression -> not setting bounds
   // CHECK-NEXT: address 'int' subobj bounds check: __builtin_no_change_bounds() expression -> not setting bounds
 
   // do_stuff(&s->array2d[index][index]);

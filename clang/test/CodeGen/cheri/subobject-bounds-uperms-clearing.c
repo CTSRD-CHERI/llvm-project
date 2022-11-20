@@ -90,8 +90,8 @@ int main(int argc, char **argv) {
   char *ptr = &f.a + (argc - 1); // expected-remark{{setting sub-object bounds for field 'a' (pointer to 'char') to 1 bytes}}
   void *full_struct = &f; // expected-remark{{setting bounds for pointer to 'struct foo' to 2 bytes}}
   printf("subobject ptr=%#p!\n", ptr); // should have uperm 2 cleared
-  // expected-remark@-1{{setting sub-object bounds for array decay on 'char [20]' to 20 bytes}}
+  // expected-remark@-1{{setting sub-object bounds for array decay on 'char[20]' to 20 bytes}}
   printf("full struct ptr=%#p!\n", full_struct); // should not have uperm 2 cleared
-  // expected-remark@-1{{setting sub-object bounds for array decay on 'char [22]' to 22 bytes}}
+  // expected-remark@-1{{setting sub-object bounds for array decay on 'char[22]' to 22 bytes}}
   return 0;
 }

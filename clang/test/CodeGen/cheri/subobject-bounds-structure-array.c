@@ -36,7 +36,7 @@ typedef struct {
 //
 int test_struct_with_array1(struct_with_array *s, long index) {
   // should set bounds to 10
-  return s->buf[index]; // expected-remark{{setting sub-object bounds for field 'buf' (array subscript on 'int [10]') to 40 bytes}}
+  return s->buf[index]; // expected-remark{{setting sub-object bounds for field 'buf' (array subscript on 'int[10]') to 40 bytes}}
 }
 
 // CHECK-LABEL: define {{[^@]+}}@test_struct_with_array2
@@ -103,7 +103,7 @@ typedef struct {
 //
 int test_vla_a(struct_vla *s, long index) {
   // can't set bounds here, have to trust the caller's bounds
-  s->buf[index] = 'A'; // expected-remark{{setting sub-object bounds for field 'buf' (array subscript on 'char []') to remaining bytes (member is potential variable length array)}}
+  s->buf[index] = 'A'; // expected-remark{{setting sub-object bounds for field 'buf' (array subscript on 'char[]') to remaining bytes (member is potential variable length array)}}
   return 0;
 }
 // CHECK-LABEL: define {{[^@]+}}@test_vla_b
@@ -124,7 +124,7 @@ int test_vla_a(struct_vla *s, long index) {
 //
 struct_vla test_vla_b(long index) {
   struct_vla s2;
-  s2.buf[index] = 'A'; // expected-remark{{setting sub-object bounds for field 'buf' (array subscript on 'char []') to remaining bytes (member is potential variable length array)}}
+  s2.buf[index] = 'A'; // expected-remark{{setting sub-object bounds for field 'buf' (array subscript on 'char[]') to remaining bytes (member is potential variable length array)}}
   return s2;           // prevent s2 from being optimzed out
 }
 
@@ -146,7 +146,7 @@ typedef struct {
 //
 int test_fake_vla1(struct_fake_vla1 *s, long index) {
   // can't set bounds here, have to trust the caller's bounds
-  s->buf[index] = 'A'; // expected-remark{{setting sub-object bounds for field 'buf' (array subscript on 'char [0]') to remaining bytes (member is potential variable length array)}}
+  s->buf[index] = 'A'; // expected-remark{{setting sub-object bounds for field 'buf' (array subscript on 'char[0]') to remaining bytes (member is potential variable length array)}}
   return 0;
 }
 
@@ -168,7 +168,7 @@ typedef struct {
 //
 int test_fake_vla2(struct_fake_vla2 *s, long index) {
   // can't set bounds here, have to trust the caller's bounds
-  s->buf[index] = 'A'; // expected-remark{{setting sub-object bounds for field 'buf' (array subscript on 'char [1]') to remaining bytes (member is potential variable length array)}}
+  s->buf[index] = 'A'; // expected-remark{{setting sub-object bounds for field 'buf' (array subscript on 'char[1]') to remaining bytes (member is potential variable length array)}}
   return 0;
 }
 
@@ -194,9 +194,9 @@ int test_fake_vla2(struct_fake_vla2 *s, long index) {
 //
 int test_vla_c(int len, long index) {
   int buf[len];
-  use_buf(&buf);     // expected-remark{{setting bounds for pointer to 'int [len]' to remaining bytes (variable length array type)}}
-  return buf[index]; // expected-remark{{setting bounds for array decay on 'int [len]' to remaining bytes (array decay on variable size type)}}
-  // expected-remark@-1{{setting bounds for array subscript on 'int [len]' to remaining bytes (array subscript on variable size type)}}
+  use_buf(&buf);     // expected-remark{{setting bounds for pointer to 'int[len]' to remaining bytes (variable length array type)}}
+  return buf[index]; // expected-remark{{setting bounds for array decay on 'int[len]' to remaining bytes (array decay on variable size type)}}
+  // expected-remark@-1{{setting bounds for array subscript on 'int[len]' to remaining bytes (array subscript on variable size type)}}
   // TODO: should avoid setting bounds for array decay inside array subscript (or just optimize away the redundant csetbounds)
 }
 
@@ -259,7 +259,7 @@ int test_vector2(long index, v4i8 v4, ext_vector_size_int32_8 v8) {
 // CHECK-NEXT:    ret i32 [[TMP2]]
 //
 int test_ptr_to_array1(int (*array)[10], long index) {
-  return (*array)[index]; // expected-remark{{setting sub-object bounds for array subscript on 'int [10]' to 40 bytes}}
+  return (*array)[index]; // expected-remark{{setting sub-object bounds for array subscript on 'int[10]' to 40 bytes}}
 }
 // CHECK-LABEL: define {{[^@]+}}@test_ptr_to_array2
 // CHECK-SAME: ([10 x i32] addrspace(200)* noundef readnone [[ARRAY:%.*]], i64 noundef signext [[INDEX:%.*]]) local_unnamed_addr addrspace(200) #[[ATTR10:[0-9]+]] {
@@ -272,7 +272,7 @@ int test_ptr_to_array1(int (*array)[10], long index) {
 //
 int* test_ptr_to_array2(int (*array)[10], long index) {
   return array[index]; // expected-remark{{not setting bounds for array subscript on 'int (*)[10]' (array subscript on non-array type)}}
-  // expected-remark@-1{{setting sub-object bounds for array decay on 'int [10]' to 40 bytes}}
+  // expected-remark@-1{{setting sub-object bounds for array decay on 'int[10]' to 40 bytes}}
   // TODO: should avoid setting bounds for array decay inside array subscript (or just optimize away the redundant csetbounds)
 }
 // CHECK-LABEL: define {{[^@]+}}@test_ptr_to_array3
@@ -288,8 +288,8 @@ int* test_ptr_to_array2(int (*array)[10], long index) {
 // CHECK-NEXT:    ret i32 addrspace(200)* [[DECAY_WITH_BOUNDS]]
 //
 int* test_ptr_to_array3(int (*array)[10][5], long index) {
-  return (*array)[index]; // expected-remark{{setting sub-object bounds for array subscript on 'int [10][5]' to 200 bytes}}
-  // expected-remark@-1{{setting sub-object bounds for array decay on 'int [5]' to 20 bytes}}
+  return (*array)[index]; // expected-remark{{setting sub-object bounds for array subscript on 'int[10][5]' to 200 bytes}}
+  // expected-remark@-1{{setting sub-object bounds for array decay on 'int[5]' to 20 bytes}}
   // TODO: should avoid setting bounds for array decay inside array subscript (or just optimize away the redundant csetbounds)
 }
 // CHECK-LABEL: define {{[^@]+}}@test_ptr_to_array4
@@ -308,8 +308,8 @@ int* test_ptr_to_array3(int (*array)[10][5], long index) {
 int* test_ptr_to_array4(int (*array)[10][5], long index) {
   return array[index][index];
   // expected-remark@-1{{not setting bounds for array subscript on 'int (*)[10][5]' (array subscript on non-array type)}}
-  // expected-remark@-2{{setting sub-object bounds for array subscript on 'int [10][5]' to 200 bytes}}
-  // expected-remark@-3{{setting sub-object bounds for array decay on 'int [5]' to 20 bytes}}
+  // expected-remark@-2{{setting sub-object bounds for array subscript on 'int[10][5]' to 200 bytes}}
+  // expected-remark@-3{{setting sub-object bounds for array decay on 'int[5]' to 20 bytes}}
   // TODO: should avoid setting bounds for array decay inside array subscript (or just optimize away the redundant csetbounds)
 }
 // CHECK-LABEL: define {{[^@]+}}@test_ptr_to_array5
@@ -328,8 +328,8 @@ int* test_ptr_to_array4(int (*array)[10][5], long index) {
 //
 int test_ptr_to_array5(int (*array)[10][5], long index) {
   return (*array)[index][index];
-  // expected-remark@-1{{setting sub-object bounds for array subscript on 'int [10][5]' to 200 bytes}}
-  // expected-remark@-2{{setting sub-object bounds for array subscript on 'int [5]' to 20 bytes}}
+  // expected-remark@-1{{setting sub-object bounds for array subscript on 'int[10][5]' to 200 bytes}}
+  // expected-remark@-2{{setting sub-object bounds for array subscript on 'int[5]' to 20 bytes}}
 }
 
 // TODO: C++ array references
@@ -351,7 +351,7 @@ typedef struct {
 // CHECK-NEXT:    ret i32 0
 //
 int test21a(my_struct21 *s, long index) {
-  s->buf[index] = 'A';  // expected-remark{{setting sub-object bounds for field 'buf' (array subscript on 'char [10]') to 10 bytes}}
+  s->buf[index] = 'A';  // expected-remark{{setting sub-object bounds for field 'buf' (array subscript on 'char[10]') to 10 bytes}}
   return 0;
 }
 // CHECK-LABEL: define {{[^@]+}}@test21b
@@ -372,7 +372,7 @@ int test21a(my_struct21 *s, long index) {
 //
 my_struct21 test21b(my_struct21 *s, long index) {
   my_struct21 s2;
-  s2.buf[index] = 'A'; // expected-remark{{setting sub-object bounds for field 'buf' (array subscript on 'char [10]') to 10 bytes}}
+  s2.buf[index] = 'A'; // expected-remark{{setting sub-object bounds for field 'buf' (array subscript on 'char[10]') to 10 bytes}}
   return s2; // prevent s2 from being optimzed out
 }
 
@@ -387,7 +387,7 @@ my_struct21 test21b(my_struct21 *s, long index) {
 //
 int test21c(my_struct21 *s, long index) {
   // Should not set bounds on s here, but should do for buf
-  s[0].buf[index] = 'A'; // expected-remark{{setting sub-object bounds for field 'buf' (array subscript on 'char [10]') to 10 bytes}}
+  s[0].buf[index] = 'A'; // expected-remark{{setting sub-object bounds for field 'buf' (array subscript on 'char[10]') to 10 bytes}}
   // expected-remark@-1{{not setting bounds for array subscript on 'my_struct21 *' (array subscript on non-array type)}}
   return 0;
 }
@@ -403,7 +403,7 @@ int test21c(my_struct21 *s, long index) {
 //
 int test21d(my_struct21 *s, long index) {
   // Should not set bounds on s here, but should do for buf
-  (*s).buf[index] = 'A'; // expected-remark{{setting sub-object bounds for field 'buf' (array subscript on 'char [10]') to 10 bytes}}
+  (*s).buf[index] = 'A'; // expected-remark{{setting sub-object bounds for field 'buf' (array subscript on 'char[10]') to 10 bytes}}
   return 0;
 }
 
@@ -422,7 +422,7 @@ typedef struct {
 // CHECK-NEXT:    ret i32 0
 //
 int test22a(my_struct22 *s, long index) {
-  s->buf[index] = 'A'; // expected-remark{{setting sub-object bounds for field 'buf' (array subscript on 'char [10]') to 10 bytes}}
+  s->buf[index] = 'A'; // expected-remark{{setting sub-object bounds for field 'buf' (array subscript on 'char[10]') to 10 bytes}}
   return 0;
 }
 // CHECK-LABEL: define {{[^@]+}}@test22b
@@ -444,7 +444,7 @@ int test22a(my_struct22 *s, long index) {
 //
 my_struct22 test22b(long index) {
   my_struct22 s2;
-  s2.buf[index] = 'A'; // expected-remark{{setting sub-object bounds for field 'buf' (array subscript on 'char [10]') to 10 bytes}}
+  s2.buf[index] = 'A'; // expected-remark{{setting sub-object bounds for field 'buf' (array subscript on 'char[10]') to 10 bytes}}
   return s2; // prevent s2 from being optimzed out
 }
 
@@ -464,7 +464,7 @@ typedef union {
 // CHECK-NEXT:    ret i32 0
 //
 int test25a(my_union25 *u, long index) {
-  u->buf[index] = 'A'; // expected-remark{{setting sub-object bounds for field 'buf' (array subscript on 'char [10]') to 10 bytes}}
+  u->buf[index] = 'A'; // expected-remark{{setting sub-object bounds for field 'buf' (array subscript on 'char[10]') to 10 bytes}}
   return 0;
 }
 // CHECK-LABEL: define {{[^@]+}}@test25b
@@ -478,7 +478,7 @@ int test25a(my_union25 *u, long index) {
 //
 my_union25 test25b(long index) {
   my_union25 u2;
-  u2.buf[index] = 'A'; // expected-remark{{setting sub-object bounds for field 'buf' (array subscript on 'char [10]') to 10 bytes}}
+  u2.buf[index] = 'A'; // expected-remark{{setting sub-object bounds for field 'buf' (array subscript on 'char[10]') to 10 bytes}}
   return u2; // prevent u2 from being optimzed out
 }
 // CHECK-LABEL: define {{[^@]+}}@test25c
@@ -492,7 +492,7 @@ my_union25 test25b(long index) {
 //
 int test25c(my_union25 *u, long index) {
   // Should not set bounds on u here, but should do for buf
-  u[0].buf[index] = 'A'; // expected-remark{{setting sub-object bounds for field 'buf' (array subscript on 'char [10]') to 10 bytes}}
+  u[0].buf[index] = 'A'; // expected-remark{{setting sub-object bounds for field 'buf' (array subscript on 'char[10]') to 10 bytes}}
   // expected-remark@-1{{not setting bounds for array subscript on 'my_union25 *' (array subscript on non-array type)}}
   return 0;
 }
@@ -507,7 +507,7 @@ int test25c(my_union25 *u, long index) {
 //
 int test25d(my_union25 *u, long index) {
   // Should not set bounds on u here, but should do for buf
-  (*u).buf[index] = 'A'; // expected-remark{{setting sub-object bounds for field 'buf' (array subscript on 'char [10]') to 10 bytes}}
+  (*u).buf[index] = 'A'; // expected-remark{{setting sub-object bounds for field 'buf' (array subscript on 'char[10]') to 10 bytes}}
   return 0;
 }
 
@@ -534,10 +534,10 @@ typedef struct {
 //
 int test28a(long index) {
   my_struct28 array2[5];
-  array2[4].buf1[index] = 'A'; // expected-remark{{setting sub-object bounds for field 'buf1' (array subscript on 'char [10]') to 10 bytes}}
-  // expected-remark@-1{{setting bounds for array subscript on 'my_struct28 [5]' to 100 bytes}}
+  array2[4].buf1[index] = 'A'; // expected-remark{{setting sub-object bounds for field 'buf1' (array subscript on 'char[10]') to 10 bytes}}
+  // expected-remark@-1{{setting bounds for array subscript on 'my_struct28[5]' to 100 bytes}}
   use_buf(&array2); // prevent array from being optimized away
-  // expected-remark@-1{{setting bounds for pointer to 'my_struct28 [5]' to 100 bytes}}
+  // expected-remark@-1{{setting bounds for pointer to 'my_struct28[5]' to 100 bytes}}
   return 0;
 }
 
@@ -553,7 +553,7 @@ int test28a(long index) {
 // CHECK-NEXT:    ret i32 0
 //
 int test28b(my_struct28 **array1, long index) {
-  array1[4]->buf1[index] = 'A'; // expected-remark{{setting sub-object bounds for field 'buf1' (array subscript on 'char [10]') to 10 bytes}}
+  array1[4]->buf1[index] = 'A'; // expected-remark{{setting sub-object bounds for field 'buf1' (array subscript on 'char[10]') to 10 bytes}}
   // expected-remark@-1{{not setting bounds for array subscript on 'my_struct28 **' (array subscript on non-array type)}}
   return 0;
 }
@@ -576,10 +576,10 @@ int test28b(my_struct28 **array1, long index) {
 //
 int test28c(long index1, long index2) {
   my_struct28 array2[5];
-  array2[index1].buf1[index2] = 'A'; // expected-remark{{setting sub-object bounds for field 'buf1' (array subscript on 'char [10]') to 10 bytes}}
-  // expected-remark@-1{{setting bounds for array subscript on 'my_struct28 [5]' to 100 bytes}}
+  array2[index1].buf1[index2] = 'A'; // expected-remark{{setting sub-object bounds for field 'buf1' (array subscript on 'char[10]') to 10 bytes}}
+  // expected-remark@-1{{setting bounds for array subscript on 'my_struct28[5]' to 100 bytes}}
   use_buf(&array2); // prevent array from being optimized away
-  // expected-remark@-1{{setting bounds for pointer to 'my_struct28 [5]' to 100 bytes}}
+  // expected-remark@-1{{setting bounds for pointer to 'my_struct28[5]' to 100 bytes}}
   return 0;
 }
 
@@ -595,7 +595,7 @@ int test28c(long index1, long index2) {
 // CHECK-NEXT:    ret i32 0
 //
 int test28d(my_struct28 **array1, long index1, long index2) {
-  array1[index1]->buf1[index2] = 'A'; // expected-remark{{setting sub-object bounds for field 'buf1' (array subscript on 'char [10]') to 10 bytes}}
+  array1[index1]->buf1[index2] = 'A'; // expected-remark{{setting sub-object bounds for field 'buf1' (array subscript on 'char[10]') to 10 bytes}}
   // expected-remark@-1{{not setting bounds for array subscript on 'my_struct28 **' (array subscript on non-array type)}}
   return 0;
 }

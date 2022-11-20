@@ -32,9 +32,9 @@ extern int weak_array[5];
 
 int test_weak_array(void) {
   if (weak_array) {
-    // expected-remark@-1{{not setting bounds for array decay on 'int [5]' (referenced value is a weak symbol and could therefore be NULL)}}
+    // expected-remark@-1{{not setting bounds for array decay on 'int[5]' (referenced value is a weak symbol and could therefore be NULL)}}
     return weak_array[0];
-    // expected-remark@-1{{not setting bounds for array subscript on 'int [5]' (referenced value is a weak symbol and could therefore be NULL)}}
+    // expected-remark@-1{{not setting bounds for array subscript on 'int[5]' (referenced value is a weak symbol and could therefore be NULL)}}
   }
   return 0;
 }

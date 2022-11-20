@@ -17,8 +17,8 @@ void *test_basic(void *data, long index) {
     int size;
     char data[255];
   } *l = data;
-  int x = l->data[index]; // expected-remark{{setting sub-object bounds for field 'data' (array subscript on 'char [255]') to 255 bytes}}
-  return &l->data;        // expected-remark{{setting sub-object bounds for field 'data' (pointer to 'char [255]') to 255 bytes}}
+  int x = l->data[index]; // expected-remark{{setting sub-object bounds for field 'data' (array subscript on 'char[255]') to 255 bytes}}
+  return &l->data;        // expected-remark{{setting sub-object bounds for field 'data' (pointer to 'char[255]') to 255 bytes}}
 }
 
 // CHECK-LABEL: @test_opt_out(
@@ -49,8 +49,8 @@ void *test_remaining_size(void *data, long index) {
     int size;
     char data[255] __attribute__((cheri_subobject_bounds_use_remaining_size));
   } *l = data;
-  int x = l->data[index]; // expected-remark{{setting sub-object bounds for field 'data' (array subscript on 'char [255]') to remaining bytes (member has use-remaining-size attribute)}}
-  return &l->data;        // expected-remark{{setting sub-object bounds for field 'data' (pointer to 'char [255]') to remaining bytes (member has use-remaining-size attribute)}}
+  int x = l->data[index]; // expected-remark{{setting sub-object bounds for field 'data' (array subscript on 'char[255]') to remaining bytes (member has use-remaining-size attribute)}}
+  return &l->data;        // expected-remark{{setting sub-object bounds for field 'data' (pointer to 'char[255]') to remaining bytes (member has use-remaining-size attribute)}}
 }
 
 // CHECK-LABEL: @test_remaining_size_not_array(
@@ -138,8 +138,8 @@ void *test_remaining_size_maximum(void *data, long index) {
     int size;
     char data[255] __attribute__((cheri_subobject_bounds_use_remaining_size(127)));
   } *l = data;
-  int x = l->data[index]; // expected-remark{{setting sub-object bounds for field 'data' (array subscript on 'char [255]') to min(127, remaining) bytes (member has use-remaining-size attribute)}}
-  return &l->data;        // expected-remark{{setting sub-object bounds for field 'data' (pointer to 'char [255]') to min(127, remaining) bytes (member has use-remaining-size attribute)}}
+  int x = l->data[index]; // expected-remark{{setting sub-object bounds for field 'data' (array subscript on 'char[255]') to min(127, remaining) bytes (member has use-remaining-size attribute)}}
+  return &l->data;        // expected-remark{{setting sub-object bounds for field 'data' (pointer to 'char[255]') to min(127, remaining) bytes (member has use-remaining-size attribute)}}
 }
 
 // CHECK-LABEL: @test_vla(
@@ -156,8 +156,8 @@ void *test_vla(void *data, long index) {
     int size;
     char vla[]; // should use the remaining size:
   } *l = data;
-  int x = l->vla[index]; // expected-remark{{setting sub-object bounds for field 'vla' (array subscript on 'char []') to remaining bytes (member is potential variable length array)}}
-  return &l->vla;        // expected-remark{{setting sub-object bounds for field 'vla' (pointer to 'char []') to remaining bytes (member is potential variable length array)}}
+  int x = l->vla[index]; // expected-remark{{setting sub-object bounds for field 'vla' (array subscript on 'char[]') to remaining bytes (member is potential variable length array)}}
+  return &l->vla;        // expected-remark{{setting sub-object bounds for field 'vla' (pointer to 'char[]') to remaining bytes (member is potential variable length array)}}
 }
 
 #ifdef NOTYET

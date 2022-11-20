@@ -27,7 +27,7 @@ typedef struct {
 //
 void test_struct_member_decay(struct_with_array *s, long index) {
   // should set bounds to 10
-  overflow_buffer(s->buf); // expected-remark{{setting sub-object bounds for field 'buf' (array decay on 'int [10]') to 40 bytes}}
+  overflow_buffer(s->buf); // expected-remark{{setting sub-object bounds for field 'buf' (array decay on 'int[10]') to 40 bytes}}
 }
 
 // CHECK-LABEL: define {{[^@]+}}@test_local_array_decay
@@ -44,7 +44,7 @@ void test_struct_member_decay(struct_with_array *s, long index) {
 void test_local_array_decay(struct_with_array *s, long index) {
   int buffer[12];
   // should set bounds to 10
-  overflow_buffer(buffer); // expected-remark{{setting bounds for array decay on 'int [12]' to 48 bytes}}
+  overflow_buffer(buffer); // expected-remark{{setting bounds for array decay on 'int[12]' to 48 bytes}}
 }
 
 // CHECK-LABEL: define {{[^@]+}}@return_stack_decay
@@ -59,7 +59,7 @@ void test_local_array_decay(struct_with_array *s, long index) {
 //
 void* return_stack_decay(struct_with_array *s, long index) {
   int buffer[21];
-  return buffer; // expected-remark{{setting bounds for array decay on 'int [21]' to 84 bytes}}
+  return buffer; // expected-remark{{setting bounds for array decay on 'int[21]' to 84 bytes}}
   // expected-warning@-1{{address of stack memory associated with local variable 'buffer' returned}}
 }
 
@@ -73,7 +73,7 @@ float global_buffer[100];
 //
 void test_global_array_decay(long index) {
   // should set bounds to 100 * 4
-  overflow_buffer(global_buffer); // expected-remark{{setting bounds for array decay on 'float [100]' to 400 bytes}}
+  overflow_buffer(global_buffer); // expected-remark{{setting bounds for array decay on 'float[100]' to 400 bytes}}
 }
 
 struct foo {
@@ -89,7 +89,7 @@ struct foo {
 // CHECK-NEXT:    ret void
 //
 void test_global_struct_array_decay(struct_with_array *s, long index) {
-  overflow_buffer(global_foo.buffer); // expected-remark{{setting sub-object bounds for field 'buffer' (array decay on 'int [1]') to 4 bytes}}
+  overflow_buffer(global_foo.buffer); // expected-remark{{setting sub-object bounds for field 'buffer' (array decay on 'int[1]') to 4 bytes}}
 }
 
 // CHECK-LABEL: define {{[^@]+}}@test_local_vla_decay
@@ -107,7 +107,7 @@ void test_global_struct_array_decay(struct_with_array *s, long index) {
 void test_local_vla_decay(struct_with_array *s, long size) {
   // TODO: should not set bounds here since the backend will bound the VLA
   int vla[size];
-  overflow_buffer(vla); // expected-remark{{setting bounds for array decay on 'int [size]' to remaining bytes (array decay on variable size type)}}
+  overflow_buffer(vla); // expected-remark{{setting bounds for array decay on 'int[size]' to remaining bytes (array decay on variable size type)}}
 }
 
 struct vla_struct {
@@ -128,7 +128,7 @@ struct vla_struct {
 // CHECK-NEXT:    ret void
 //
 void test_vla_struct_member_decay(struct vla_struct *s, long index) {
-  overflow_buffer(s->vla); // expected-remark{{setting sub-object bounds for field 'vla' (array decay on 'int []') to remaining bytes (member is potential variable length array)}}
+  overflow_buffer(s->vla); // expected-remark{{setting sub-object bounds for field 'vla' (array decay on 'int[]') to remaining bytes (member is potential variable length array)}}
 }
 
 struct fake_vla_struct {
@@ -149,7 +149,7 @@ struct fake_vla_struct {
 // CHECK-NEXT:    ret void
 //
 void test_fake_vla_struct_member_decay(struct fake_vla_struct *s, long index) {
-  overflow_buffer(s->fake_vla); // expected-remark{{setting sub-object bounds for field 'fake_vla' (array decay on 'int [0]') to remaining bytes (member is potential variable length array)}}
+  overflow_buffer(s->fake_vla); // expected-remark{{setting sub-object bounds for field 'fake_vla' (array decay on 'int[0]') to remaining bytes (member is potential variable length array)}}
 }
 
 struct fake_vla_struct2 {
@@ -171,5 +171,5 @@ struct fake_vla_struct2 {
 //
 void test_fake_vla_struct2_member_decay(struct fake_vla_struct2 *s, long index) {
   // TODO: should set reverse bounds here: raise bottom to current offset
-  overflow_buffer(s->fake_vla2); // expected-remark{{setting sub-object bounds for field 'fake_vla2' (array decay on 'int [1]') to remaining bytes (member is potential variable length array)}}
+  overflow_buffer(s->fake_vla2); // expected-remark{{setting sub-object bounds for field 'fake_vla2' (array decay on 'int[1]') to remaining bytes (member is potential variable length array)}}
 }

@@ -41,7 +41,7 @@ struct TP {
 //
 char *test_UA(union UA *ua) {
   return &ua->a[1];
-  // expected-remark@-1 {{setting sub-object bounds for field 'a' (array subscript on 'char [2]') to 2 bytes}}
+  // expected-remark@-1 {{setting sub-object bounds for field 'a' (array subscript on 'char[2]') to 2 bytes}}
   // expected-remark@-2 {{using size of containing type 'union UA' instead of object type 'char' for subobject bounds on union member}}
   // expected-remark@-3 {{setting sub-object bounds for pointer to 'char' to 2 bytes}}
 }
@@ -60,8 +60,8 @@ char *test_UA(union UA *ua) {
 //
 char *test_SA(struct SA *sa) {
   return &sa->a[1];
-  // expected-remark@-1 {{setting sub-object bounds for field 'a' (array subscript on 'char [2]') to 2 bytes}}
-  // expected-remark@-2 {{using size of containing type 'char [2]' instead of object type 'char' for subobject bounds on &array[<CONSTANT>]}}
+  // expected-remark@-1 {{setting sub-object bounds for field 'a' (array subscript on 'char[2]') to 2 bytes}}
+  // expected-remark@-2 {{using size of containing type 'char[2]' instead of object type 'char' for subobject bounds on &array[<CONSTANT>]}}
   // expected-remark@-3 {{setting sub-object bounds for pointer to 'char' to 2 bytes}}
 }
 
@@ -84,7 +84,7 @@ char *test_SA(struct SA *sa) {
 //
 char *test_TA(struct TA *ta) {
   return &ta->a[1];
-  // expected-remark@-1 {{setting sub-object bounds for field 'a' (array subscript on 'char [2]') to remaining bytes (member has use-remaining-size attribute)}}
+  // expected-remark@-1 {{setting sub-object bounds for field 'a' (array subscript on 'char[2]') to remaining bytes (member has use-remaining-size attribute)}}
   // expected-remark@-2 {{setting sub-object bounds for field 'a' (pointer to 'char') to remaining bytes (member has use-remaining-size attribute)}}
 }
 
