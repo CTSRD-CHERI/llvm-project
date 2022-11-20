@@ -33,7 +33,7 @@ define hidden void @optsize_preserve_tags_memcpy(i8 addrspace(200)* %dst, i8 add
 ; CHECK:       # %bb.0:
 ; CHECK-NEXT:    cincoffset csp, csp, -16
 ; CHECK-NEXT:    csc cra, 0(csp) # 16-byte Folded Spill
-; CHECK-NEXT:    addi a2, zero, 31
+; CHECK-NEXT:    li a2, 31
 ; CHECK-NEXT:    ccall memcpy
 ; CHECK-NEXT:    clc cra, 0(csp) # 16-byte Folded Reload
 ; CHECK-NEXT:    cincoffset csp, csp, 16
@@ -83,7 +83,7 @@ define hidden void @optsize_preserve_tags_memmove(i8 addrspace(200)* %dst, i8 ad
 ; CHECK:       # %bb.0:
 ; CHECK-NEXT:    cincoffset csp, csp, -16
 ; CHECK-NEXT:    csc cra, 0(csp) # 16-byte Folded Spill
-; CHECK-NEXT:    addi a2, zero, 31
+; CHECK-NEXT:    li a2, 31
 ; CHECK-NEXT:    ccall memmove
 ; CHECK-NEXT:    clc cra, 0(csp) # 16-byte Folded Reload
 ; CHECK-NEXT:    cincoffset csp, csp, 16

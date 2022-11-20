@@ -23,13 +23,13 @@ define void @use_after_call() addrspace(200) nounwind {
 ; CHECK-NEXT:    csc cs0, 16(csp) # 16-byte Folded Spill
 ; CHECK-NEXT:    cincoffset ca0, csp, 12
 ; CHECK-NEXT:    csetbounds cs0, ca0, 4
-; CHECK-NEXT:    addi a0, zero, 123
+; CHECK-NEXT:    li a0, 123
 ; CHECK-NEXT:    csw a0, 12(csp)
 ; CHECK-NEXT:    ccall foo
 ; CHECK-NEXT:    cmove ca0, cs0
 ; CHECK-NEXT:    ccall one_arg
-; CHECK-NEXT:    clc cs0, 16(csp) # 16-byte Folded Reload
 ; CHECK-NEXT:    clc cra, 32(csp) # 16-byte Folded Reload
+; CHECK-NEXT:    clc cs0, 16(csp) # 16-byte Folded Reload
 ; CHECK-NEXT:    cincoffset csp, csp, 48
 ; CHECK-NEXT:    cret
 ;
@@ -37,7 +37,7 @@ define void @use_after_call() addrspace(200) nounwind {
 ; HYBRID:       # %bb.0:
 ; HYBRID-NEXT:    addi sp, sp, -16
 ; HYBRID-NEXT:    sd ra, 8(sp) # 8-byte Folded Spill
-; HYBRID-NEXT:    addi a0, zero, 123
+; HYBRID-NEXT:    li a0, 123
 ; HYBRID-NEXT:    sw a0, 4(sp)
 ; HYBRID-NEXT:    call foo@plt
 ; HYBRID-NEXT:    addi a0, sp, 4
@@ -68,9 +68,9 @@ define void @use_after_call_no_store() addrspace(200) nounwind {
 ; CHECK-NEXT:    ccall one_arg
 ; CHECK-NEXT:    cmove ca0, cs1
 ; CHECK-NEXT:    ccall one_arg
-; CHECK-NEXT:    clc cs1, 16(csp) # 16-byte Folded Reload
-; CHECK-NEXT:    clc cs0, 32(csp) # 16-byte Folded Reload
 ; CHECK-NEXT:    clc cra, 48(csp) # 16-byte Folded Reload
+; CHECK-NEXT:    clc cs0, 32(csp) # 16-byte Folded Reload
+; CHECK-NEXT:    clc cs1, 16(csp) # 16-byte Folded Reload
 ; CHECK-NEXT:    cincoffset csp, csp, 64
 ; CHECK-NEXT:    cret
 ;
@@ -114,9 +114,9 @@ define void @multi_use() addrspace(200) nounwind {
 ; CHECK-NEXT:    ccall one_arg
 ; CHECK-NEXT:    cmove ca0, cs1
 ; CHECK-NEXT:    ccall one_arg
-; CHECK-NEXT:    clc cs1, 16(csp) # 16-byte Folded Reload
-; CHECK-NEXT:    clc cs0, 32(csp) # 16-byte Folded Reload
 ; CHECK-NEXT:    clc cra, 48(csp) # 16-byte Folded Reload
+; CHECK-NEXT:    clc cs0, 32(csp) # 16-byte Folded Reload
+; CHECK-NEXT:    clc cs1, 16(csp) # 16-byte Folded Reload
 ; CHECK-NEXT:    cincoffset csp, csp, 64
 ; CHECK-NEXT:    cret
 ;

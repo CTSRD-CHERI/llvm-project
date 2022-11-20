@@ -48,8 +48,8 @@ define void @multiple_uses_big_constant() addrspace(200) nounwind {
 ; ASM-NEXT:    ccall check_fold_i8ptr
 ; ASM-NEXT:    cmove ca0, cs0
 ; ASM-NEXT:    ccall check_fold_i8ptr
-; ASM-NEXT:    clc cs0, 0(csp) # 16-byte Folded Reload
 ; ASM-NEXT:    clc cra, 16(csp) # 16-byte Folded Reload
+; ASM-NEXT:    clc cs0, 0(csp) # 16-byte Folded Reload
 ; ASM-NEXT:    cincoffset csp, csp, 32
 ; ASM-NEXT:    cret
 ; CHECK-LABEL: define {{[^@]+}}@multiple_uses_big_constant

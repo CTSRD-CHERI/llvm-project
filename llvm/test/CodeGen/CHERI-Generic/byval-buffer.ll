@@ -57,25 +57,25 @@ define dso_local void @clang_purecap_byval_args() local_unnamed_addr addrspace(2
 ; RV64-STATIC-NEXT:    sd s1, 1032(sp) # 8-byte Folded Spill
 ; RV64-STATIC-NEXT:    lui s1, %hi(global_foo)
 ; RV64-STATIC-NEXT:    addi s0, s1, %lo(global_foo)
-; RV64-STATIC-NEXT:    addi a2, zero, 1024
+; RV64-STATIC-NEXT:    li a2, 1024
 ; RV64-STATIC-NEXT:    mv a0, s0
-; RV64-STATIC-NEXT:    mv a1, zero
+; RV64-STATIC-NEXT:    li a1, 0
 ; RV64-STATIC-NEXT:    call memset@plt
 ; RV64-STATIC-NEXT:    lb a0, %lo(global_foo)(s1)
-; RV64-STATIC-NEXT:    mv a1, zero
+; RV64-STATIC-NEXT:    li a1, 0
 ; RV64-STATIC-NEXT:    call assert_eq@plt
 ; RV64-STATIC-NEXT:    addi a0, sp, 8
-; RV64-STATIC-NEXT:    addi a2, zero, 1024
+; RV64-STATIC-NEXT:    li a2, 1024
 ; RV64-STATIC-NEXT:    mv a1, s0
 ; RV64-STATIC-NEXT:    call memcpy@plt
 ; RV64-STATIC-NEXT:    addi a0, sp, 8
 ; RV64-STATIC-NEXT:    call foo_byval
 ; RV64-STATIC-NEXT:    lb a0, %lo(global_foo)(s1)
-; RV64-STATIC-NEXT:    mv a1, zero
+; RV64-STATIC-NEXT:    li a1, 0
 ; RV64-STATIC-NEXT:    call assert_eq@plt
-; RV64-STATIC-NEXT:    ld s1, 1032(sp) # 8-byte Folded Reload
-; RV64-STATIC-NEXT:    ld s0, 1040(sp) # 8-byte Folded Reload
 ; RV64-STATIC-NEXT:    ld ra, 1048(sp) # 8-byte Folded Reload
+; RV64-STATIC-NEXT:    ld s0, 1040(sp) # 8-byte Folded Reload
+; RV64-STATIC-NEXT:    ld s1, 1032(sp) # 8-byte Folded Reload
 ; RV64-STATIC-NEXT:    addi sp, sp, 1056
 ; RV64-STATIC-NEXT:    ret
 ;
@@ -88,28 +88,27 @@ define dso_local void @clang_purecap_byval_args() local_unnamed_addr addrspace(2
 ; RV64-PIC-NEXT:    # Label of block must be emitted
 ; RV64-PIC-NEXT:    auipc s0, %pcrel_hi(.Lglobal_foo$local)
 ; RV64-PIC-NEXT:    addi s0, s0, %pcrel_lo(.LBB0_1)
-; RV64-PIC-NEXT:    addi a2, zero, 1024
+; RV64-PIC-NEXT:    li a2, 1024
 ; RV64-PIC-NEXT:    mv a0, s0
-; RV64-PIC-NEXT:    mv a1, zero
+; RV64-PIC-NEXT:    li a1, 0
 ; RV64-PIC-NEXT:    call memset@plt
 ; RV64-PIC-NEXT:    lb a0, 0(s0)
-; RV64-PIC-NEXT:    mv a1, zero
+; RV64-PIC-NEXT:    li a1, 0
 ; RV64-PIC-NEXT:    call assert_eq@plt
 ; RV64-PIC-NEXT:    addi a0, sp, 16
-; RV64-PIC-NEXT:    addi a2, zero, 1024
+; RV64-PIC-NEXT:    li a2, 1024
 ; RV64-PIC-NEXT:    mv a1, s0
 ; RV64-PIC-NEXT:    call memcpy@plt
 ; RV64-PIC-NEXT:    addi a0, sp, 16
 ; RV64-PIC-NEXT:    call foo_byval
 ; RV64-PIC-NEXT:    lb a0, 0(s0)
-; RV64-PIC-NEXT:    mv a1, zero
+; RV64-PIC-NEXT:    li a1, 0
 ; RV64-PIC-NEXT:    call assert_eq@plt
-; RV64-PIC-NEXT:    ld s0, 1040(sp) # 8-byte Folded Reload
 ; RV64-PIC-NEXT:    ld ra, 1048(sp) # 8-byte Folded Reload
+; RV64-PIC-NEXT:    ld s0, 1040(sp) # 8-byte Folded Reload
 ; RV64-PIC-NEXT:    addi sp, sp, 1056
 ; RV64-PIC-NEXT:    ret
 ;
-; Note: MIPS passes the first 64 byval bytes in registers
 ; MIPS-LABEL: clang_purecap_byval_args:
 ; MIPS:       # %bb.0: # %entry
 ; MIPS-NEXT:    daddiu $sp, $sp, -992
@@ -174,24 +173,24 @@ define dso_local void @clang_purecap_byval_args() local_unnamed_addr addrspace(2
 ; PURECAP-RV64-NEXT:    # Label of block must be emitted
 ; PURECAP-RV64-NEXT:    auipcc cs0, %captab_pcrel_hi(global_foo)
 ; PURECAP-RV64-NEXT:    clc cs0, %pcrel_lo(.LBB0_1)(cs0)
-; PURECAP-RV64-NEXT:    addi a2, zero, 1024
+; PURECAP-RV64-NEXT:    li a2, 1024
 ; PURECAP-RV64-NEXT:    cmove ca0, cs0
-; PURECAP-RV64-NEXT:    mv a1, zero
+; PURECAP-RV64-NEXT:    li a1, 0
 ; PURECAP-RV64-NEXT:    ccall memset
 ; PURECAP-RV64-NEXT:    clb a0, 0(cs0)
-; PURECAP-RV64-NEXT:    mv a1, zero
+; PURECAP-RV64-NEXT:    li a1, 0
 ; PURECAP-RV64-NEXT:    ccall assert_eq
 ; PURECAP-RV64-NEXT:    cincoffset ca0, csp, 16
-; PURECAP-RV64-NEXT:    addi a2, zero, 1024
+; PURECAP-RV64-NEXT:    li a2, 1024
 ; PURECAP-RV64-NEXT:    cmove ca1, cs0
 ; PURECAP-RV64-NEXT:    ccall memcpy
 ; PURECAP-RV64-NEXT:    cincoffset ca0, csp, 16
 ; PURECAP-RV64-NEXT:    ccall foo_byval
 ; PURECAP-RV64-NEXT:    clb a0, 0(cs0)
-; PURECAP-RV64-NEXT:    mv a1, zero
+; PURECAP-RV64-NEXT:    li a1, 0
 ; PURECAP-RV64-NEXT:    ccall assert_eq
-; PURECAP-RV64-NEXT:    clc cs0, 1040(csp) # 16-byte Folded Reload
 ; PURECAP-RV64-NEXT:    clc cra, 1056(csp) # 16-byte Folded Reload
+; PURECAP-RV64-NEXT:    clc cs0, 1040(csp) # 16-byte Folded Reload
 ; PURECAP-RV64-NEXT:    cincoffset csp, csp, 1072
 ; PURECAP-RV64-NEXT:    cret
 ;
@@ -238,6 +237,7 @@ define dso_local void @clang_purecap_byval_args() local_unnamed_addr addrspace(2
 ; PURECAP-MIPS-NEXT:    daddiu $1, $zero, 1104
 ; PURECAP-MIPS-NEXT:    cjr $c17
 ; PURECAP-MIPS-NEXT:    cincoffset $c11, $c11, $1
+; Note: MIPS passes the first 64 byval bytes in registers
 entry:
   call void @llvm.memset.p200i8.i64(i8 addrspace(200)* nonnull align 8 dereferenceable(1024) getelementptr inbounds (%struct.foo, %struct.foo addrspace(200)* @global_foo, i64 0, i32 0, i64 0), i8 0, i64 1024, i1 false)
   %0 = load i8, i8 addrspace(200)* getelementptr inbounds (%struct.foo, %struct.foo addrspace(200)* @global_foo, i64 0, i32 0, i64 0), align 8

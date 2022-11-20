@@ -17,8 +17,8 @@ define void @memcpy_no_attr(%struct.pair addrspace(200)* %a, %struct.pair addrsp
 ; CHECK:       # %bb.0: # %entry
 ; CHECK-NEXT:    cincoffset csp, csp, -16
 ; CHECK-NEXT:    csc cra, 8(csp) # 8-byte Folded Spill
-; CHECK-NEXT:    addi a2, zero, 16
-; CHECK-NEXT:    mv a3, zero
+; CHECK-NEXT:    li a2, 16
+; CHECK-NEXT:    li a3, 0
 ; CHECK-NEXT:    ccall memcpy
 ; CHECK-NEXT:    clc cra, 8(csp) # 8-byte Folded Reload
 ; CHECK-NEXT:    cincoffset csp, csp, 16
@@ -35,8 +35,8 @@ define void @memmove_no_attr(%struct.pair addrspace(200)* %a, %struct.pair addrs
 ; CHECK:       # %bb.0: # %entry
 ; CHECK-NEXT:    cincoffset csp, csp, -16
 ; CHECK-NEXT:    csc cra, 8(csp) # 8-byte Folded Spill
-; CHECK-NEXT:    addi a2, zero, 16
-; CHECK-NEXT:    mv a3, zero
+; CHECK-NEXT:    li a2, 16
+; CHECK-NEXT:    li a3, 0
 ; CHECK-NEXT:    ccall memmove
 ; CHECK-NEXT:    clc cra, 8(csp) # 8-byte Folded Reload
 ; CHECK-NEXT:    cincoffset csp, csp, 16
@@ -54,8 +54,8 @@ define void @memcpy_must_preserve(%struct.pair addrspace(200)* %a, %struct.pair 
 ; CHECK:       # %bb.0: # %entry
 ; CHECK-NEXT:    cincoffset csp, csp, -16
 ; CHECK-NEXT:    csc cra, 8(csp) # 8-byte Folded Spill
-; CHECK-NEXT:    addi a2, zero, 16
-; CHECK-NEXT:    mv a3, zero
+; CHECK-NEXT:    li a2, 16
+; CHECK-NEXT:    li a3, 0
 ; CHECK-NEXT:    ccall memcpy
 ; CHECK-NEXT:    clc cra, 8(csp) # 8-byte Folded Reload
 ; CHECK-NEXT:    cincoffset csp, csp, 16
@@ -72,8 +72,8 @@ define void @memmove_must_preserve(%struct.pair addrspace(200)* %a, %struct.pair
 ; CHECK:       # %bb.0: # %entry
 ; CHECK-NEXT:    cincoffset csp, csp, -16
 ; CHECK-NEXT:    csc cra, 8(csp) # 8-byte Folded Spill
-; CHECK-NEXT:    addi a2, zero, 16
-; CHECK-NEXT:    mv a3, zero
+; CHECK-NEXT:    li a2, 16
+; CHECK-NEXT:    li a3, 0
 ; CHECK-NEXT:    ccall memmove
 ; CHECK-NEXT:    clc cra, 8(csp) # 8-byte Folded Reload
 ; CHECK-NEXT:    cincoffset csp, csp, 16

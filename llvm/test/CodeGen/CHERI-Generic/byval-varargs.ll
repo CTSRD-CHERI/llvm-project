@@ -29,23 +29,23 @@ define signext i32 @test_alloca() local_unnamed_addr addrspace(200) nounwind {
 ; RV64-LABEL: test_alloca:
 ; RV64:       # %bb.0: # %entry
 ; RV64-NEXT:    addi sp, sp, -2032
-; RV64-NEXT:    sd ra, 2024(sp)
+; RV64-NEXT:    sd ra, 2024(sp) # 8-byte Folded Spill
 ; RV64-NEXT:    addi sp, sp, -32
 ; RV64-NEXT:    addi a0, sp, 1032
-; RV64-NEXT:    addi a2, zero, 1024
-; RV64-NEXT:    mv a1, zero
+; RV64-NEXT:    li a2, 1024
+; RV64-NEXT:    li a1, 0
 ; RV64-NEXT:    call memset@plt
 ; RV64-NEXT:    addi a0, sp, 1032
 ; RV64-NEXT:    call byref@plt
 ; RV64-NEXT:    addi a0, sp, 8
 ; RV64-NEXT:    addi a1, sp, 1032
-; RV64-NEXT:    addi a2, zero, 1024
+; RV64-NEXT:    li a2, 1024
 ; RV64-NEXT:    call memcpy@plt
-; RV64-NEXT:    addi a0, zero, 1024
+; RV64-NEXT:    li a0, 1024
 ; RV64-NEXT:    addi a1, sp, 8
 ; RV64-NEXT:    call varargs@plt
 ; RV64-NEXT:    addi sp, sp, 32
-; RV64-NEXT:    ld ra, 2024(sp)
+; RV64-NEXT:    ld ra, 2024(sp) # 8-byte Folded Reload
 ; RV64-NEXT:    addi sp, sp, 2032
 ; RV64-NEXT:    ret
 ;
@@ -97,31 +97,31 @@ define signext i32 @test_alloca() local_unnamed_addr addrspace(200) nounwind {
 ; PURECAP-RV64-LABEL: test_alloca:
 ; PURECAP-RV64:       # %bb.0: # %entry
 ; PURECAP-RV64-NEXT:    cincoffset csp, csp, -2032
-; PURECAP-RV64-NEXT:    csc cra, 2016(csp)
-; PURECAP-RV64-NEXT:    csc cs0, 2000(csp)
-; PURECAP-RV64-NEXT:    csc cs1, 1984(csp)
+; PURECAP-RV64-NEXT:    csc cra, 2016(csp) # 16-byte Folded Spill
+; PURECAP-RV64-NEXT:    csc cs0, 2000(csp) # 16-byte Folded Spill
+; PURECAP-RV64-NEXT:    csc cs1, 1984(csp) # 16-byte Folded Spill
 ; PURECAP-RV64-NEXT:    cincoffset csp, csp, -96
 ; PURECAP-RV64-NEXT:    cincoffset ca0, csp, 1056
 ; PURECAP-RV64-NEXT:    csetbounds cs0, ca0, 1024
-; PURECAP-RV64-NEXT:    addi a2, zero, 1024
+; PURECAP-RV64-NEXT:    li a2, 1024
 ; PURECAP-RV64-NEXT:    cmove ca0, cs0
-; PURECAP-RV64-NEXT:    mv a1, zero
+; PURECAP-RV64-NEXT:    li a1, 0
 ; PURECAP-RV64-NEXT:    ccall memset
 ; PURECAP-RV64-NEXT:    cmove ca0, cs0
 ; PURECAP-RV64-NEXT:    ccall byref
 ; PURECAP-RV64-NEXT:    cincoffset ca0, csp, 32
 ; PURECAP-RV64-NEXT:    csetbounds cs1, ca0, 1024
-; PURECAP-RV64-NEXT:    addi a2, zero, 1024
+; PURECAP-RV64-NEXT:    li a2, 1024
 ; PURECAP-RV64-NEXT:    cmove ca0, cs1
 ; PURECAP-RV64-NEXT:    cmove ca1, cs0
 ; PURECAP-RV64-NEXT:    ccall memcpy
-; PURECAP-RV64-NEXT:    addi a0, zero, 1024
+; PURECAP-RV64-NEXT:    li a0, 1024
 ; PURECAP-RV64-NEXT:    csc cs1, 0(csp)
 ; PURECAP-RV64-NEXT:    ccall varargs
 ; PURECAP-RV64-NEXT:    cincoffset csp, csp, 96
-; PURECAP-RV64-NEXT:    clc cs1, 1984(csp)
-; PURECAP-RV64-NEXT:    clc cs0, 2000(csp)
-; PURECAP-RV64-NEXT:    clc cra, 2016(csp)
+; PURECAP-RV64-NEXT:    clc cra, 2016(csp) # 16-byte Folded Reload
+; PURECAP-RV64-NEXT:    clc cs0, 2000(csp) # 16-byte Folded Reload
+; PURECAP-RV64-NEXT:    clc cs1, 1984(csp) # 16-byte Folded Reload
 ; PURECAP-RV64-NEXT:    cincoffset csp, csp, 2032
 ; PURECAP-RV64-NEXT:    cret
 ;
@@ -197,24 +197,24 @@ define signext i32 @test_byval() local_unnamed_addr addrspace(200) nounwind {
 ; RV64-LABEL: test_byval:
 ; RV64:       # %bb.0: # %entry
 ; RV64-NEXT:    addi sp, sp, -2032
-; RV64-NEXT:    sd ra, 2024(sp)
+; RV64-NEXT:    sd ra, 2024(sp) # 8-byte Folded Spill
 ; RV64-NEXT:    addi sp, sp, -32
 ; RV64-NEXT:    addi a0, sp, 1032
-; RV64-NEXT:    addi a2, zero, 1024
-; RV64-NEXT:    mv a1, zero
+; RV64-NEXT:    li a2, 1024
+; RV64-NEXT:    li a1, 0
 ; RV64-NEXT:    call memset@plt
 ; RV64-NEXT:    addi a0, sp, 1032
 ; RV64-NEXT:    call byref@plt
 ; RV64-NEXT:    addi a0, sp, 8
 ; RV64-NEXT:    addi a1, sp, 1032
-; RV64-NEXT:    addi a2, zero, 1024
+; RV64-NEXT:    li a2, 1024
 ; Call memcpy for local alloca: dst=sp+8, src=sp+1032, size=1024
 ; RV64-NEXT:    call memcpy@plt
-; RV64-NEXT:    addi a0, zero, 1024
+; RV64-NEXT:    li a0, 1024
 ; RV64-NEXT:    addi a1, sp, 8
 ; RV64-NEXT:    call varargs@plt
 ; RV64-NEXT:    addi sp, sp, 32
-; RV64-NEXT:    ld ra, 2024(sp)
+; RV64-NEXT:    ld ra, 2024(sp) # 8-byte Folded Reload
 ; RV64-NEXT:    addi sp, sp, 2032
 ; RV64-NEXT:    ret
 ;
@@ -275,32 +275,32 @@ define signext i32 @test_byval() local_unnamed_addr addrspace(200) nounwind {
 ; Stack frame size should be > 2048 (split into two instructions)
 ; PURECAP-RV64:       # %bb.0: # %entry
 ; PURECAP-RV64-NEXT:    cincoffset csp, csp, -2032
-; PURECAP-RV64-NEXT:    csc cra, 2016(csp)
-; PURECAP-RV64-NEXT:    csc cs0, 2000(csp)
-; PURECAP-RV64-NEXT:    csc cs1, 1984(csp)
+; PURECAP-RV64-NEXT:    csc cra, 2016(csp) # 16-byte Folded Spill
+; PURECAP-RV64-NEXT:    csc cs0, 2000(csp) # 16-byte Folded Spill
+; PURECAP-RV64-NEXT:    csc cs1, 1984(csp) # 16-byte Folded Spill
 ; PURECAP-RV64-NEXT:    cincoffset csp, csp, -96
 ; PURECAP-RV64-NEXT:    cincoffset ca0, csp, 1056
 ; PURECAP-RV64-NEXT:    csetbounds cs0, ca0, 1024
-; PURECAP-RV64-NEXT:    addi a2, zero, 1024
+; PURECAP-RV64-NEXT:    li a2, 1024
 ; PURECAP-RV64-NEXT:    cmove ca0, cs0
-; PURECAP-RV64-NEXT:    mv a1, zero
+; PURECAP-RV64-NEXT:    li a1, 0
 ; PURECAP-RV64-NEXT:    ccall memset
 ; PURECAP-RV64-NEXT:    cmove ca0, cs0
 ; PURECAP-RV64-NEXT:    ccall byref
 ; PURECAP-RV64-NEXT:    cincoffset ca0, csp, 32
-; PURECAP-RV64-NEXT:    addi a2, zero, 1024
+; PURECAP-RV64-NEXT:    li a2, 1024
 ; PURECAP-RV64-NEXT:    cincoffset cs1, csp, 32
 ; PURECAP-RV64-NEXT:    cmove ca1, cs0
 ; Note: no bounds for implicit byval arg memcpy()
 ; TODO: should we add the csetbounds here? Not really necessary if we trust memcpy().
 ; PURECAP-RV64-NEXT:    ccall memcpy
-; PURECAP-RV64-NEXT:    addi a0, zero, 1024
+; PURECAP-RV64-NEXT:    li a0, 1024
 ; PURECAP-RV64-NEXT:    csc cs1, 0(csp)
 ; PURECAP-RV64-NEXT:    ccall varargs
 ; PURECAP-RV64-NEXT:    cincoffset csp, csp, 96
-; PURECAP-RV64-NEXT:    clc cs1, 1984(csp)
-; PURECAP-RV64-NEXT:    clc cs0, 2000(csp)
-; PURECAP-RV64-NEXT:    clc cra, 2016(csp)
+; PURECAP-RV64-NEXT:    clc cra, 2016(csp) # 16-byte Folded Reload
+; PURECAP-RV64-NEXT:    clc cs0, 2000(csp) # 16-byte Folded Reload
+; PURECAP-RV64-NEXT:    clc cs1, 1984(csp) # 16-byte Folded Reload
 ; PURECAP-RV64-NEXT:    cincoffset csp, csp, 2032
 ; PURECAP-RV64-NEXT:    cret
 ;

@@ -40,20 +40,20 @@ define dso_local i32 @_Z8do_catchv() local_unnamed_addr addrspace(200) uwtable p
 ; CHECK-NEXT:    mv s0, a0
 ; CHECK-NEXT:  .LBB0_2: # %return
 ; CHECK-NEXT:    mv a0, s0
-; CHECK-NEXT:    clc cs1, 0(csp) # 16-byte Folded Reload
-; CHECK-NEXT:    clc cs0, 16(csp) # 16-byte Folded Reload
 ; CHECK-NEXT:    clc cra, 32(csp) # 16-byte Folded Reload
+; CHECK-NEXT:    clc cs0, 16(csp) # 16-byte Folded Reload
+; CHECK-NEXT:    clc cs1, 0(csp) # 16-byte Folded Reload
 ; CHECK-NEXT:    cincoffset csp, csp, 48
 ; CHECK-NEXT:    cret
 ; CHECK-NEXT:  .LBB0_3: # %lpad
 ; CHECK-NEXT:  .Ltmp2:
 ; CHECK-NEXT:    sext.w s1, a1
 ; CHECK-NEXT:    ccall __cxa_begin_catch
-; CHECK-NEXT:    addi s0, zero, 2
+; CHECK-NEXT:    li s0, 2
 ; CHECK-NEXT:    bne s1, s0, .LBB0_5
 ; CHECK-NEXT:  # %bb.4: # %catch1
 ; CHECK-NEXT:    ccall __cxa_end_catch
-; CHECK-NEXT:    addi s0, zero, 1
+; CHECK-NEXT:    li s0, 1
 ; CHECK-NEXT:    j .LBB0_2
 ; CHECK-NEXT:  .LBB0_5: # %catch
 ; CHECK-NEXT:    ccall __cxa_end_catch

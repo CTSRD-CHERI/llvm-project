@@ -20,28 +20,22 @@ declare i8 addrspace(200)* @stpncpy(i8 addrspace(200)*, i8 addrspace(200)*, i64)
 define void @test_strcpy_to_memcpy(i8 addrspace(200)* align 8 %dst) addrspace(200) nounwind {
 ; CHECK-ASM-LABEL: test_strcpy_to_memcpy:
 ; CHECK-ASM:       # %bb.0: # %entry
-; CHECK-ASM-NEXT:    csb zero, 16(ca0)
-; CHECK-ASM-NEXT:    lui a1, 29554
-; CHECK-ASM-NEXT:    addiw a1, a1, 1559
-; CHECK-ASM-NEXT:    slli a1, a1, 12
-; CHECK-ASM-NEXT:    addi a1, a1, -1949
-; CHECK-ASM-NEXT:    slli a1, a1, 12
-; CHECK-ASM-NEXT:    addi a1, a1, 515
-; CHECK-ASM-NEXT:    slli a1, a1, 12
-; CHECK-ASM-NEXT:    addi a1, a1, 1585
+; CHECK-ASM-NEXT:  .LBB0_1: # %entry
+; CHECK-ASM-NEXT:    # Label of block must be emitted
+; CHECK-ASM-NEXT:    auipcc ca1, %pcrel_hi(.LCPI0_0)
+; CHECK-ASM-NEXT:    cincoffset ca1, ca1, %pcrel_lo(.LBB0_1)
+; CHECK-ASM-NEXT:    cld a1, 0(ca1)
+; CHECK-ASM-NEXT:  .LBB0_2: # %entry
+; CHECK-ASM-NEXT:    # Label of block must be emitted
+; CHECK-ASM-NEXT:    auipcc ca2, %pcrel_hi(.LCPI0_1)
+; CHECK-ASM-NEXT:    cincoffset ca2, ca2, %pcrel_lo(.LBB0_2)
+; CHECK-ASM-NEXT:    cld a2, 0(ca2)
 ; CHECK-ASM-NEXT:    csd a1, 8(ca0)
-; CHECK-ASM-NEXT:    lui a1, 130
-; CHECK-ASM-NEXT:    addiw a1, a1, -421
-; CHECK-ASM-NEXT:    slli a1, a1, 13
-; CHECK-ASM-NEXT:    addi a1, a1, 931
-; CHECK-ASM-NEXT:    slli a1, a1, 14
-; CHECK-ASM-NEXT:    addi a1, a1, 1731
-; CHECK-ASM-NEXT:    slli a1, a1, 15
-; CHECK-ASM-NEXT:    addi a1, a1, -1947
-; CHECK-ASM-NEXT:    csd a1, 0(ca0)
+; CHECK-ASM-NEXT:    csb zero, 16(ca0)
+; CHECK-ASM-NEXT:    csd a2, 0(ca0)
 ; CHECK-ASM-NEXT:    cret
 ; CHECK-IR-LABEL: define {{[^@]+}}@test_strcpy_to_memcpy
-; CHECK-IR-SAME: (i8 addrspace(200)* align 8 [[DST:%.*]]) addrspace(200) #[[ATTR0:[0-9]+]] {
+; CHECK-IR-SAME: (i8 addrspace(200)* align 8 [[DST:%.*]]) addrspace(200) #[[ATTR1:[0-9]+]] {
 ; CHECK-IR-NEXT:  entry:
 ; CHECK-IR-NEXT:    call void @llvm.memcpy.p200i8.p200i8.i64(i8 addrspace(200)* noundef nonnull align 8 dereferenceable(17) [[DST]], i8 addrspace(200)* noundef nonnull align 8 dereferenceable(17) getelementptr inbounds ([17 x i8], [17 x i8] addrspace(200)* @str, i64 0, i64 0), i64 17, i1 false) #[[ATTR3:[0-9]+]]
 ; CHECK-IR-NEXT:    ret void
@@ -54,30 +48,24 @@ entry:
 define void @test_stpcpy_to_memcpy(i8 addrspace(200)* align 8 %dst) addrspace(200) nounwind {
 ; CHECK-ASM-LABEL: test_stpcpy_to_memcpy:
 ; CHECK-ASM:       # %bb.0: # %entry
-; CHECK-ASM-NEXT:    csb zero, 16(ca0)
-; CHECK-ASM-NEXT:    lui a1, 29554
-; CHECK-ASM-NEXT:    addiw a1, a1, 1559
-; CHECK-ASM-NEXT:    slli a1, a1, 12
-; CHECK-ASM-NEXT:    addi a1, a1, -1949
-; CHECK-ASM-NEXT:    slli a1, a1, 12
-; CHECK-ASM-NEXT:    addi a1, a1, 515
-; CHECK-ASM-NEXT:    slli a1, a1, 12
-; CHECK-ASM-NEXT:    addi a1, a1, 1585
+; CHECK-ASM-NEXT:  .LBB1_1: # %entry
+; CHECK-ASM-NEXT:    # Label of block must be emitted
+; CHECK-ASM-NEXT:    auipcc ca1, %pcrel_hi(.LCPI1_0)
+; CHECK-ASM-NEXT:    cincoffset ca1, ca1, %pcrel_lo(.LBB1_1)
+; CHECK-ASM-NEXT:    cld a1, 0(ca1)
+; CHECK-ASM-NEXT:  .LBB1_2: # %entry
+; CHECK-ASM-NEXT:    # Label of block must be emitted
+; CHECK-ASM-NEXT:    auipcc ca2, %pcrel_hi(.LCPI1_1)
+; CHECK-ASM-NEXT:    cincoffset ca2, ca2, %pcrel_lo(.LBB1_2)
+; CHECK-ASM-NEXT:    cld a2, 0(ca2)
 ; CHECK-ASM-NEXT:    csd a1, 8(ca0)
-; CHECK-ASM-NEXT:    lui a1, 130
-; CHECK-ASM-NEXT:    addiw a1, a1, -421
-; CHECK-ASM-NEXT:    slli a1, a1, 13
-; CHECK-ASM-NEXT:    addi a1, a1, 931
-; CHECK-ASM-NEXT:    slli a1, a1, 14
-; CHECK-ASM-NEXT:    addi a1, a1, 1731
-; CHECK-ASM-NEXT:    slli a1, a1, 15
-; CHECK-ASM-NEXT:    addi a1, a1, -1947
-; CHECK-ASM-NEXT:    csd a1, 0(ca0)
+; CHECK-ASM-NEXT:    csb zero, 16(ca0)
+; CHECK-ASM-NEXT:    csd a2, 0(ca0)
 ; CHECK-ASM-NEXT:    cret
 ; CHECK-IR-LABEL: define {{[^@]+}}@test_stpcpy_to_memcpy
-; CHECK-IR-SAME: (i8 addrspace(200)* align 8 [[DST:%.*]]) addrspace(200) #[[ATTR0]] {
+; CHECK-IR-SAME: (i8 addrspace(200)* align 8 [[DST:%.*]]) addrspace(200) #[[ATTR1]] {
 ; CHECK-IR-NEXT:  entry:
-; CHECK-IR-NEXT:    call void @llvm.memcpy.p200i8.p200i8.i64(i8 addrspace(200)* noundef nonnull align 8 dereferenceable(17) [[DST]], i8 addrspace(200)* noundef nonnull align 8 dereferenceable(17) getelementptr inbounds ([17 x i8], [17 x i8] addrspace(200)* @str, i64 0, i64 0), i64 17, i1 false) #[[ATTR3]]
+; CHECK-IR-NEXT:    call void @llvm.memcpy.p200i8.p200i8.i64(i8 addrspace(200)* noundef nonnull align 8 dereferenceable(17) [[DST]], i8 addrspace(200)* noundef nonnull align 8 dereferenceable(17) getelementptr inbounds ([17 x i8], [17 x i8] addrspace(200)* @str, i64 0, i64 0), i64 17, i1 false) #[[ATTR4:[0-9]+]]
 ; CHECK-IR-NEXT:    ret void
 ;
 entry:
@@ -98,18 +86,18 @@ define void @test_strcat_to_memcpy(i8 addrspace(200)* align 8 %dst) addrspace(20
 ; CHECK-ASM-NEXT:    # Label of block must be emitted
 ; CHECK-ASM-NEXT:    auipcc ca1, %captab_pcrel_hi(.Lstr)
 ; CHECK-ASM-NEXT:    clc ca1, %pcrel_lo(.LBB2_1)(ca1)
-; CHECK-ASM-NEXT:    addi a2, zero, 17
+; CHECK-ASM-NEXT:    li a2, 17
 ; CHECK-ASM-NEXT:    ccall memcpy
-; CHECK-ASM-NEXT:    clc cs0, 0(csp) # 16-byte Folded Reload
 ; CHECK-ASM-NEXT:    clc cra, 16(csp) # 16-byte Folded Reload
+; CHECK-ASM-NEXT:    clc cs0, 0(csp) # 16-byte Folded Reload
 ; CHECK-ASM-NEXT:    cincoffset csp, csp, 32
 ; CHECK-ASM-NEXT:    cret
 ; CHECK-IR-LABEL: define {{[^@]+}}@test_strcat_to_memcpy
-; CHECK-IR-SAME: (i8 addrspace(200)* align 8 [[DST:%.*]]) addrspace(200) #[[ATTR0]] {
+; CHECK-IR-SAME: (i8 addrspace(200)* align 8 [[DST:%.*]]) addrspace(200) #[[ATTR1]] {
 ; CHECK-IR-NEXT:  entry:
 ; CHECK-IR-NEXT:    [[STRLEN:%.*]] = call i64 @strlen(i8 addrspace(200)* noundef nonnull dereferenceable(1) [[DST]])
 ; CHECK-IR-NEXT:    [[ENDPTR:%.*]] = getelementptr i8, i8 addrspace(200)* [[DST]], i64 [[STRLEN]]
-; CHECK-IR-NEXT:    call void @llvm.memcpy.p200i8.p200i8.i64(i8 addrspace(200)* noundef nonnull align 1 dereferenceable(17) [[ENDPTR]], i8 addrspace(200)* noundef nonnull align 8 dereferenceable(17) getelementptr inbounds ([17 x i8], [17 x i8] addrspace(200)* @str, i64 0, i64 0), i64 17, i1 false) #[[ATTR4:[0-9]+]]
+; CHECK-IR-NEXT:    call void @llvm.memcpy.p200i8.p200i8.i64(i8 addrspace(200)* noundef nonnull align 1 dereferenceable(17) [[ENDPTR]], i8 addrspace(200)* noundef nonnull align 8 dereferenceable(17) getelementptr inbounds ([17 x i8], [17 x i8] addrspace(200)* @str, i64 0, i64 0), i64 17, i1 false) #[[ATTR4]]
 ; CHECK-IR-NEXT:    ret void
 ;
 entry:
@@ -121,28 +109,22 @@ entry:
 define void @test_strncpy_to_memcpy(i8 addrspace(200)* align 8 %dst) addrspace(200) nounwind {
 ; CHECK-ASM-LABEL: test_strncpy_to_memcpy:
 ; CHECK-ASM:       # %bb.0: # %entry
-; CHECK-ASM-NEXT:    csb zero, 16(ca0)
-; CHECK-ASM-NEXT:    lui a1, 29554
-; CHECK-ASM-NEXT:    addiw a1, a1, 1559
-; CHECK-ASM-NEXT:    slli a1, a1, 12
-; CHECK-ASM-NEXT:    addi a1, a1, -1949
-; CHECK-ASM-NEXT:    slli a1, a1, 12
-; CHECK-ASM-NEXT:    addi a1, a1, 515
-; CHECK-ASM-NEXT:    slli a1, a1, 12
-; CHECK-ASM-NEXT:    addi a1, a1, 1585
+; CHECK-ASM-NEXT:  .LBB3_1: # %entry
+; CHECK-ASM-NEXT:    # Label of block must be emitted
+; CHECK-ASM-NEXT:    auipcc ca1, %pcrel_hi(.LCPI3_0)
+; CHECK-ASM-NEXT:    cincoffset ca1, ca1, %pcrel_lo(.LBB3_1)
+; CHECK-ASM-NEXT:    cld a1, 0(ca1)
+; CHECK-ASM-NEXT:  .LBB3_2: # %entry
+; CHECK-ASM-NEXT:    # Label of block must be emitted
+; CHECK-ASM-NEXT:    auipcc ca2, %pcrel_hi(.LCPI3_1)
+; CHECK-ASM-NEXT:    cincoffset ca2, ca2, %pcrel_lo(.LBB3_2)
+; CHECK-ASM-NEXT:    cld a2, 0(ca2)
 ; CHECK-ASM-NEXT:    csd a1, 8(ca0)
-; CHECK-ASM-NEXT:    lui a1, 130
-; CHECK-ASM-NEXT:    addiw a1, a1, -421
-; CHECK-ASM-NEXT:    slli a1, a1, 13
-; CHECK-ASM-NEXT:    addi a1, a1, 931
-; CHECK-ASM-NEXT:    slli a1, a1, 14
-; CHECK-ASM-NEXT:    addi a1, a1, 1731
-; CHECK-ASM-NEXT:    slli a1, a1, 15
-; CHECK-ASM-NEXT:    addi a1, a1, -1947
-; CHECK-ASM-NEXT:    csd a1, 0(ca0)
+; CHECK-ASM-NEXT:    csb zero, 16(ca0)
+; CHECK-ASM-NEXT:    csd a2, 0(ca0)
 ; CHECK-ASM-NEXT:    cret
 ; CHECK-IR-LABEL: define {{[^@]+}}@test_strncpy_to_memcpy
-; CHECK-IR-SAME: (i8 addrspace(200)* align 8 [[DST:%.*]]) addrspace(200) #[[ATTR0]] {
+; CHECK-IR-SAME: (i8 addrspace(200)* align 8 [[DST:%.*]]) addrspace(200) #[[ATTR1]] {
 ; CHECK-IR-NEXT:  entry:
 ; CHECK-IR-NEXT:    call void @llvm.memcpy.p200i8.p200i8.i64(i8 addrspace(200)* noundef nonnull align 8 dereferenceable(17) [[DST]], i8 addrspace(200)* noundef nonnull align 8 dereferenceable(17) getelementptr inbounds ([17 x i8], [17 x i8] addrspace(200)* @str, i64 0, i64 0), i64 17, i1 false) #[[ATTR3]]
 ; CHECK-IR-NEXT:    ret void
@@ -162,15 +144,15 @@ define void @test_stpncpy_to_memcpy(i8 addrspace(200)* align 8 %dst) addrspace(2
 ; CHECK-ASM-NEXT:    # Label of block must be emitted
 ; CHECK-ASM-NEXT:    auipcc ca1, %captab_pcrel_hi(.Lstr)
 ; CHECK-ASM-NEXT:    clc ca1, %pcrel_lo(.LBB4_1)(ca1)
-; CHECK-ASM-NEXT:    addi a2, zero, 17
+; CHECK-ASM-NEXT:    li a2, 17
 ; CHECK-ASM-NEXT:    ccall stpncpy
 ; CHECK-ASM-NEXT:    clc cra, 0(csp) # 16-byte Folded Reload
 ; CHECK-ASM-NEXT:    cincoffset csp, csp, 16
 ; CHECK-ASM-NEXT:    cret
 ; CHECK-IR-LABEL: define {{[^@]+}}@test_stpncpy_to_memcpy
-; CHECK-IR-SAME: (i8 addrspace(200)* align 8 [[DST:%.*]]) addrspace(200) #[[ATTR0]] {
+; CHECK-IR-SAME: (i8 addrspace(200)* align 8 [[DST:%.*]]) addrspace(200) #[[ATTR1]] {
 ; CHECK-IR-NEXT:  entry:
-; CHECK-IR-NEXT:    [[CALL:%.*]] = call i8 addrspace(200)* @stpncpy(i8 addrspace(200)* [[DST]], i8 addrspace(200)* getelementptr inbounds ([17 x i8], [17 x i8] addrspace(200)* @str, i64 0, i64 0), i64 17) #[[ATTR0]]
+; CHECK-IR-NEXT:    [[CALL:%.*]] = call i8 addrspace(200)* @stpncpy(i8 addrspace(200)* [[DST]], i8 addrspace(200)* getelementptr inbounds ([17 x i8], [17 x i8] addrspace(200)* @str, i64 0, i64 0), i64 17) #[[ATTR1]]
 ; CHECK-IR-NEXT:    ret void
 ;
 entry:

@@ -32,8 +32,8 @@ define { i8, i1 } @test_cmpxchg_strong_i8(i8 addrspace(200)* %ptr, i8 %exp, i8 %
 ; PURECAP-LIBCALLS-NEXT:    csb a1, 7(csp)
 ; PURECAP-LIBCALLS-NEXT:    cincoffset ca1, csp, 7
 ; PURECAP-LIBCALLS-NEXT:    csetbounds ca1, ca1, 1
-; PURECAP-LIBCALLS-NEXT:    addi a3, zero, 4
-; PURECAP-LIBCALLS-NEXT:    addi a4, zero, 2
+; PURECAP-LIBCALLS-NEXT:    li a3, 4
+; PURECAP-LIBCALLS-NEXT:    li a4, 2
 ; PURECAP-LIBCALLS-NEXT:    ccall __atomic_compare_exchange_1
 ; PURECAP-LIBCALLS-NEXT:    clb a1, 7(csp)
 ; PURECAP-LIBCALLS-NEXT:    mv a2, a0
@@ -49,8 +49,8 @@ define { i8, i1 } @test_cmpxchg_strong_i8(i8 addrspace(200)* %ptr, i8 %exp, i8 %
 ; HYBRID-NEXT:    sw ra, 12(sp) # 4-byte Folded Spill
 ; HYBRID-NEXT:    sb a1, 11(sp)
 ; HYBRID-NEXT:    addi a1, sp, 11
-; HYBRID-NEXT:    addi a3, zero, 4
-; HYBRID-NEXT:    addi a4, zero, 2
+; HYBRID-NEXT:    li a3, 4
+; HYBRID-NEXT:    li a4, 2
 ; HYBRID-NEXT:    call __atomic_compare_exchange_1_c@plt
 ; HYBRID-NEXT:    lb a1, 11(sp)
 ; HYBRID-NEXT:    mv a2, a0
@@ -87,8 +87,8 @@ define { i16, i1 } @test_cmpxchg_strong_i16(i16 addrspace(200)* %ptr, i16 %exp, 
 ; PURECAP-LIBCALLS-NEXT:    cincoffset ca3, csp, 6
 ; PURECAP-LIBCALLS-NEXT:    csetbounds ca5, ca3, 2
 ; PURECAP-LIBCALLS-NEXT:    csh a1, 6(csp)
-; PURECAP-LIBCALLS-NEXT:    addi a3, zero, 4
-; PURECAP-LIBCALLS-NEXT:    addi a4, zero, 2
+; PURECAP-LIBCALLS-NEXT:    li a3, 4
+; PURECAP-LIBCALLS-NEXT:    li a4, 2
 ; PURECAP-LIBCALLS-NEXT:    cmove ca1, ca5
 ; PURECAP-LIBCALLS-NEXT:    ccall __atomic_compare_exchange_2
 ; PURECAP-LIBCALLS-NEXT:    clh a1, 6(csp)
@@ -105,8 +105,8 @@ define { i16, i1 } @test_cmpxchg_strong_i16(i16 addrspace(200)* %ptr, i16 %exp, 
 ; HYBRID-NEXT:    sw ra, 12(sp) # 4-byte Folded Spill
 ; HYBRID-NEXT:    sh a1, 10(sp)
 ; HYBRID-NEXT:    addi a1, sp, 10
-; HYBRID-NEXT:    addi a3, zero, 4
-; HYBRID-NEXT:    addi a4, zero, 2
+; HYBRID-NEXT:    li a3, 4
+; HYBRID-NEXT:    li a4, 2
 ; HYBRID-NEXT:    call __atomic_compare_exchange_2_c@plt
 ; HYBRID-NEXT:    lh a1, 10(sp)
 ; HYBRID-NEXT:    mv a2, a0
@@ -141,8 +141,8 @@ define { i32, i1 } @test_cmpxchg_strong_i32(i32 addrspace(200)* %ptr, i32 %exp, 
 ; PURECAP-LIBCALLS-NEXT:    cincoffset ca3, csp, 4
 ; PURECAP-LIBCALLS-NEXT:    csetbounds ca5, ca3, 4
 ; PURECAP-LIBCALLS-NEXT:    csw a1, 4(csp)
-; PURECAP-LIBCALLS-NEXT:    addi a3, zero, 4
-; PURECAP-LIBCALLS-NEXT:    addi a4, zero, 2
+; PURECAP-LIBCALLS-NEXT:    li a3, 4
+; PURECAP-LIBCALLS-NEXT:    li a4, 2
 ; PURECAP-LIBCALLS-NEXT:    cmove ca1, ca5
 ; PURECAP-LIBCALLS-NEXT:    ccall __atomic_compare_exchange_4
 ; PURECAP-LIBCALLS-NEXT:    clw a1, 4(csp)
@@ -159,8 +159,8 @@ define { i32, i1 } @test_cmpxchg_strong_i32(i32 addrspace(200)* %ptr, i32 %exp, 
 ; HYBRID-NEXT:    sw ra, 12(sp) # 4-byte Folded Spill
 ; HYBRID-NEXT:    sw a1, 8(sp)
 ; HYBRID-NEXT:    addi a1, sp, 8
-; HYBRID-NEXT:    addi a3, zero, 4
-; HYBRID-NEXT:    addi a4, zero, 2
+; HYBRID-NEXT:    li a3, 4
+; HYBRID-NEXT:    li a4, 2
 ; HYBRID-NEXT:    call __atomic_compare_exchange_4_c@plt
 ; HYBRID-NEXT:    lw a1, 8(sp)
 ; HYBRID-NEXT:    mv a2, a0
@@ -187,8 +187,8 @@ define { i64, i1 } @test_cmpxchg_strong_i64(i64 addrspace(200)* %ptr, i64 %exp, 
 ; PURECAP-NEXT:    csetbounds ca1, ca0, 8
 ; PURECAP-NEXT:    csw a3, 12(csp)
 ; PURECAP-NEXT:    csw a2, 8(csp)
-; PURECAP-NEXT:    addi a4, zero, 4
-; PURECAP-NEXT:    addi a5, zero, 2
+; PURECAP-NEXT:    li a4, 4
+; PURECAP-NEXT:    li a5, 2
 ; PURECAP-NEXT:    cmove ca0, ct0
 ; PURECAP-NEXT:    mv a2, a7
 ; PURECAP-NEXT:    mv a3, a6
@@ -198,8 +198,8 @@ define { i64, i1 } @test_cmpxchg_strong_i64(i64 addrspace(200)* %ptr, i64 %exp, 
 ; PURECAP-NEXT:    csw a1, 4(cs0)
 ; PURECAP-NEXT:    csw a2, 0(cs0)
 ; PURECAP-NEXT:    csb a0, 8(cs0)
-; PURECAP-NEXT:    clc cs0, 16(csp) # 8-byte Folded Reload
 ; PURECAP-NEXT:    clc cra, 24(csp) # 8-byte Folded Reload
+; PURECAP-NEXT:    clc cs0, 16(csp) # 8-byte Folded Reload
 ; PURECAP-NEXT:    cincoffset csp, csp, 32
 ; PURECAP-NEXT:    cret
 ;
@@ -215,8 +215,8 @@ define { i64, i1 } @test_cmpxchg_strong_i64(i64 addrspace(200)* %ptr, i64 %exp, 
 ; HYBRID-NEXT:    sw a3, 4(sp)
 ; HYBRID-NEXT:    sw a2, 0(sp)
 ; HYBRID-NEXT:    mv a1, sp
-; HYBRID-NEXT:    addi a4, zero, 4
-; HYBRID-NEXT:    addi a5, zero, 2
+; HYBRID-NEXT:    li a4, 4
+; HYBRID-NEXT:    li a5, 2
 ; HYBRID-NEXT:    cmove ca0, ct0
 ; HYBRID-NEXT:    mv a2, a7
 ; HYBRID-NEXT:    mv a3, a6
@@ -226,8 +226,8 @@ define { i64, i1 } @test_cmpxchg_strong_i64(i64 addrspace(200)* %ptr, i64 %exp, 
 ; HYBRID-NEXT:    sw a1, 4(s0)
 ; HYBRID-NEXT:    sw a2, 0(s0)
 ; HYBRID-NEXT:    sb a0, 8(s0)
-; HYBRID-NEXT:    lw s0, 8(sp) # 4-byte Folded Reload
 ; HYBRID-NEXT:    lw ra, 12(sp) # 4-byte Folded Reload
+; HYBRID-NEXT:    lw s0, 8(sp) # 4-byte Folded Reload
 ; HYBRID-NEXT:    addi sp, sp, 16
 ; HYBRID-NEXT:    ret
   %1 = cmpxchg i64 addrspace(200)* %ptr, i64 %exp, i64 %new acq_rel acquire
@@ -256,8 +256,8 @@ define { i8 addrspace(200)*, i1 } @test_cmpxchg_strong_cap(i8 addrspace(200)* ad
 ; PURECAP-LIBCALLS-NEXT:    cincoffset ca3, csp, 0
 ; PURECAP-LIBCALLS-NEXT:    csetbounds ca5, ca3, 8
 ; PURECAP-LIBCALLS-NEXT:    csc ca1, 0(csp)
-; PURECAP-LIBCALLS-NEXT:    addi a3, zero, 4
-; PURECAP-LIBCALLS-NEXT:    addi a4, zero, 2
+; PURECAP-LIBCALLS-NEXT:    li a3, 4
+; PURECAP-LIBCALLS-NEXT:    li a4, 2
 ; PURECAP-LIBCALLS-NEXT:    cmove ca1, ca5
 ; PURECAP-LIBCALLS-NEXT:    ccall __atomic_compare_exchange_cap
 ; PURECAP-LIBCALLS-NEXT:    clc ca1, 0(csp)
@@ -274,8 +274,8 @@ define { i8 addrspace(200)*, i1 } @test_cmpxchg_strong_cap(i8 addrspace(200)* ad
 ; HYBRID-NEXT:    sw ra, 12(sp) # 4-byte Folded Spill
 ; HYBRID-NEXT:    sc ca1, 0(sp)
 ; HYBRID-NEXT:    mv a1, sp
-; HYBRID-NEXT:    addi a3, zero, 4
-; HYBRID-NEXT:    addi a4, zero, 2
+; HYBRID-NEXT:    li a3, 4
+; HYBRID-NEXT:    li a4, 2
 ; HYBRID-NEXT:    call __atomic_compare_exchange_cap_c@plt
 ; HYBRID-NEXT:    lc ca1, 0(sp)
 ; HYBRID-NEXT:    mv a2, a0
@@ -310,8 +310,8 @@ define { i32 addrspace(200)*, i1 } @test_cmpxchg_strong_cap_i32(i32 addrspace(20
 ; PURECAP-LIBCALLS-NEXT:    cincoffset ca3, csp, 0
 ; PURECAP-LIBCALLS-NEXT:    csetbounds ca5, ca3, 8
 ; PURECAP-LIBCALLS-NEXT:    csc ca1, 0(csp)
-; PURECAP-LIBCALLS-NEXT:    addi a3, zero, 4
-; PURECAP-LIBCALLS-NEXT:    addi a4, zero, 2
+; PURECAP-LIBCALLS-NEXT:    li a3, 4
+; PURECAP-LIBCALLS-NEXT:    li a4, 2
 ; PURECAP-LIBCALLS-NEXT:    cmove ca1, ca5
 ; PURECAP-LIBCALLS-NEXT:    ccall __atomic_compare_exchange_cap
 ; PURECAP-LIBCALLS-NEXT:    clc ca1, 0(csp)
@@ -328,8 +328,8 @@ define { i32 addrspace(200)*, i1 } @test_cmpxchg_strong_cap_i32(i32 addrspace(20
 ; HYBRID-NEXT:    sw ra, 12(sp) # 4-byte Folded Spill
 ; HYBRID-NEXT:    sc ca1, 0(sp)
 ; HYBRID-NEXT:    mv a1, sp
-; HYBRID-NEXT:    addi a3, zero, 4
-; HYBRID-NEXT:    addi a4, zero, 2
+; HYBRID-NEXT:    li a3, 4
+; HYBRID-NEXT:    li a4, 2
 ; HYBRID-NEXT:    call __atomic_compare_exchange_cap_c@plt
 ; HYBRID-NEXT:    lc ca1, 0(sp)
 ; HYBRID-NEXT:    mv a2, a0
@@ -367,8 +367,8 @@ define { i8, i1 } @test_cmpxchg_weak_i8(i8 addrspace(200)* %ptr, i8 %exp, i8 %ne
 ; PURECAP-LIBCALLS-NEXT:    csb a1, 7(csp)
 ; PURECAP-LIBCALLS-NEXT:    cincoffset ca1, csp, 7
 ; PURECAP-LIBCALLS-NEXT:    csetbounds ca1, ca1, 1
-; PURECAP-LIBCALLS-NEXT:    addi a3, zero, 4
-; PURECAP-LIBCALLS-NEXT:    addi a4, zero, 2
+; PURECAP-LIBCALLS-NEXT:    li a3, 4
+; PURECAP-LIBCALLS-NEXT:    li a4, 2
 ; PURECAP-LIBCALLS-NEXT:    ccall __atomic_compare_exchange_1
 ; PURECAP-LIBCALLS-NEXT:    clb a1, 7(csp)
 ; PURECAP-LIBCALLS-NEXT:    mv a2, a0
@@ -384,8 +384,8 @@ define { i8, i1 } @test_cmpxchg_weak_i8(i8 addrspace(200)* %ptr, i8 %exp, i8 %ne
 ; HYBRID-NEXT:    sw ra, 12(sp) # 4-byte Folded Spill
 ; HYBRID-NEXT:    sb a1, 11(sp)
 ; HYBRID-NEXT:    addi a1, sp, 11
-; HYBRID-NEXT:    addi a3, zero, 4
-; HYBRID-NEXT:    addi a4, zero, 2
+; HYBRID-NEXT:    li a3, 4
+; HYBRID-NEXT:    li a4, 2
 ; HYBRID-NEXT:    call __atomic_compare_exchange_1_c@plt
 ; HYBRID-NEXT:    lb a1, 11(sp)
 ; HYBRID-NEXT:    mv a2, a0
@@ -422,8 +422,8 @@ define { i16, i1 } @test_cmpxchg_weak_i16(i16 addrspace(200)* %ptr, i16 %exp, i1
 ; PURECAP-LIBCALLS-NEXT:    cincoffset ca3, csp, 6
 ; PURECAP-LIBCALLS-NEXT:    csetbounds ca5, ca3, 2
 ; PURECAP-LIBCALLS-NEXT:    csh a1, 6(csp)
-; PURECAP-LIBCALLS-NEXT:    addi a3, zero, 4
-; PURECAP-LIBCALLS-NEXT:    addi a4, zero, 2
+; PURECAP-LIBCALLS-NEXT:    li a3, 4
+; PURECAP-LIBCALLS-NEXT:    li a4, 2
 ; PURECAP-LIBCALLS-NEXT:    cmove ca1, ca5
 ; PURECAP-LIBCALLS-NEXT:    ccall __atomic_compare_exchange_2
 ; PURECAP-LIBCALLS-NEXT:    clh a1, 6(csp)
@@ -440,8 +440,8 @@ define { i16, i1 } @test_cmpxchg_weak_i16(i16 addrspace(200)* %ptr, i16 %exp, i1
 ; HYBRID-NEXT:    sw ra, 12(sp) # 4-byte Folded Spill
 ; HYBRID-NEXT:    sh a1, 10(sp)
 ; HYBRID-NEXT:    addi a1, sp, 10
-; HYBRID-NEXT:    addi a3, zero, 4
-; HYBRID-NEXT:    addi a4, zero, 2
+; HYBRID-NEXT:    li a3, 4
+; HYBRID-NEXT:    li a4, 2
 ; HYBRID-NEXT:    call __atomic_compare_exchange_2_c@plt
 ; HYBRID-NEXT:    lh a1, 10(sp)
 ; HYBRID-NEXT:    mv a2, a0
@@ -476,8 +476,8 @@ define { i32, i1 } @test_cmpxchg_weak_i32(i32 addrspace(200)* %ptr, i32 %exp, i3
 ; PURECAP-LIBCALLS-NEXT:    cincoffset ca3, csp, 4
 ; PURECAP-LIBCALLS-NEXT:    csetbounds ca5, ca3, 4
 ; PURECAP-LIBCALLS-NEXT:    csw a1, 4(csp)
-; PURECAP-LIBCALLS-NEXT:    addi a3, zero, 4
-; PURECAP-LIBCALLS-NEXT:    addi a4, zero, 2
+; PURECAP-LIBCALLS-NEXT:    li a3, 4
+; PURECAP-LIBCALLS-NEXT:    li a4, 2
 ; PURECAP-LIBCALLS-NEXT:    cmove ca1, ca5
 ; PURECAP-LIBCALLS-NEXT:    ccall __atomic_compare_exchange_4
 ; PURECAP-LIBCALLS-NEXT:    clw a1, 4(csp)
@@ -494,8 +494,8 @@ define { i32, i1 } @test_cmpxchg_weak_i32(i32 addrspace(200)* %ptr, i32 %exp, i3
 ; HYBRID-NEXT:    sw ra, 12(sp) # 4-byte Folded Spill
 ; HYBRID-NEXT:    sw a1, 8(sp)
 ; HYBRID-NEXT:    addi a1, sp, 8
-; HYBRID-NEXT:    addi a3, zero, 4
-; HYBRID-NEXT:    addi a4, zero, 2
+; HYBRID-NEXT:    li a3, 4
+; HYBRID-NEXT:    li a4, 2
 ; HYBRID-NEXT:    call __atomic_compare_exchange_4_c@plt
 ; HYBRID-NEXT:    lw a1, 8(sp)
 ; HYBRID-NEXT:    mv a2, a0
@@ -522,8 +522,8 @@ define { i64, i1 } @test_cmpxchg_weak_i64(i64 addrspace(200)* %ptr, i64 %exp, i6
 ; PURECAP-NEXT:    csetbounds ca1, ca0, 8
 ; PURECAP-NEXT:    csw a3, 12(csp)
 ; PURECAP-NEXT:    csw a2, 8(csp)
-; PURECAP-NEXT:    addi a4, zero, 4
-; PURECAP-NEXT:    addi a5, zero, 2
+; PURECAP-NEXT:    li a4, 4
+; PURECAP-NEXT:    li a5, 2
 ; PURECAP-NEXT:    cmove ca0, ct0
 ; PURECAP-NEXT:    mv a2, a7
 ; PURECAP-NEXT:    mv a3, a6
@@ -533,8 +533,8 @@ define { i64, i1 } @test_cmpxchg_weak_i64(i64 addrspace(200)* %ptr, i64 %exp, i6
 ; PURECAP-NEXT:    csw a1, 4(cs0)
 ; PURECAP-NEXT:    csw a2, 0(cs0)
 ; PURECAP-NEXT:    csb a0, 8(cs0)
-; PURECAP-NEXT:    clc cs0, 16(csp) # 8-byte Folded Reload
 ; PURECAP-NEXT:    clc cra, 24(csp) # 8-byte Folded Reload
+; PURECAP-NEXT:    clc cs0, 16(csp) # 8-byte Folded Reload
 ; PURECAP-NEXT:    cincoffset csp, csp, 32
 ; PURECAP-NEXT:    cret
 ;
@@ -550,8 +550,8 @@ define { i64, i1 } @test_cmpxchg_weak_i64(i64 addrspace(200)* %ptr, i64 %exp, i6
 ; HYBRID-NEXT:    sw a3, 4(sp)
 ; HYBRID-NEXT:    sw a2, 0(sp)
 ; HYBRID-NEXT:    mv a1, sp
-; HYBRID-NEXT:    addi a4, zero, 4
-; HYBRID-NEXT:    addi a5, zero, 2
+; HYBRID-NEXT:    li a4, 4
+; HYBRID-NEXT:    li a5, 2
 ; HYBRID-NEXT:    cmove ca0, ct0
 ; HYBRID-NEXT:    mv a2, a7
 ; HYBRID-NEXT:    mv a3, a6
@@ -561,8 +561,8 @@ define { i64, i1 } @test_cmpxchg_weak_i64(i64 addrspace(200)* %ptr, i64 %exp, i6
 ; HYBRID-NEXT:    sw a1, 4(s0)
 ; HYBRID-NEXT:    sw a2, 0(s0)
 ; HYBRID-NEXT:    sb a0, 8(s0)
-; HYBRID-NEXT:    lw s0, 8(sp) # 4-byte Folded Reload
 ; HYBRID-NEXT:    lw ra, 12(sp) # 4-byte Folded Reload
+; HYBRID-NEXT:    lw s0, 8(sp) # 4-byte Folded Reload
 ; HYBRID-NEXT:    addi sp, sp, 16
 ; HYBRID-NEXT:    ret
   %1 = cmpxchg weak i64 addrspace(200)* %ptr, i64 %exp, i64 %new acq_rel acquire
@@ -591,8 +591,8 @@ define { i8 addrspace(200)*, i1 } @test_cmpxchg_weak_cap(i8 addrspace(200)* addr
 ; PURECAP-LIBCALLS-NEXT:    cincoffset ca3, csp, 0
 ; PURECAP-LIBCALLS-NEXT:    csetbounds ca5, ca3, 8
 ; PURECAP-LIBCALLS-NEXT:    csc ca1, 0(csp)
-; PURECAP-LIBCALLS-NEXT:    addi a3, zero, 4
-; PURECAP-LIBCALLS-NEXT:    addi a4, zero, 2
+; PURECAP-LIBCALLS-NEXT:    li a3, 4
+; PURECAP-LIBCALLS-NEXT:    li a4, 2
 ; PURECAP-LIBCALLS-NEXT:    cmove ca1, ca5
 ; PURECAP-LIBCALLS-NEXT:    ccall __atomic_compare_exchange_cap
 ; PURECAP-LIBCALLS-NEXT:    clc ca1, 0(csp)
@@ -609,8 +609,8 @@ define { i8 addrspace(200)*, i1 } @test_cmpxchg_weak_cap(i8 addrspace(200)* addr
 ; HYBRID-NEXT:    sw ra, 12(sp) # 4-byte Folded Spill
 ; HYBRID-NEXT:    sc ca1, 0(sp)
 ; HYBRID-NEXT:    mv a1, sp
-; HYBRID-NEXT:    addi a3, zero, 4
-; HYBRID-NEXT:    addi a4, zero, 2
+; HYBRID-NEXT:    li a3, 4
+; HYBRID-NEXT:    li a4, 2
 ; HYBRID-NEXT:    call __atomic_compare_exchange_cap_c@plt
 ; HYBRID-NEXT:    lc ca1, 0(sp)
 ; HYBRID-NEXT:    mv a2, a0
@@ -645,8 +645,8 @@ define { i32 addrspace(200)*, i1 } @test_cmpxchg_weak_cap_i32(i32 addrspace(200)
 ; PURECAP-LIBCALLS-NEXT:    cincoffset ca3, csp, 0
 ; PURECAP-LIBCALLS-NEXT:    csetbounds ca5, ca3, 8
 ; PURECAP-LIBCALLS-NEXT:    csc ca1, 0(csp)
-; PURECAP-LIBCALLS-NEXT:    addi a3, zero, 4
-; PURECAP-LIBCALLS-NEXT:    addi a4, zero, 2
+; PURECAP-LIBCALLS-NEXT:    li a3, 4
+; PURECAP-LIBCALLS-NEXT:    li a4, 2
 ; PURECAP-LIBCALLS-NEXT:    cmove ca1, ca5
 ; PURECAP-LIBCALLS-NEXT:    ccall __atomic_compare_exchange_cap
 ; PURECAP-LIBCALLS-NEXT:    clc ca1, 0(csp)
@@ -663,8 +663,8 @@ define { i32 addrspace(200)*, i1 } @test_cmpxchg_weak_cap_i32(i32 addrspace(200)
 ; HYBRID-NEXT:    sw ra, 12(sp) # 4-byte Folded Spill
 ; HYBRID-NEXT:    sc ca1, 0(sp)
 ; HYBRID-NEXT:    mv a1, sp
-; HYBRID-NEXT:    addi a3, zero, 4
-; HYBRID-NEXT:    addi a4, zero, 2
+; HYBRID-NEXT:    li a3, 4
+; HYBRID-NEXT:    li a4, 2
 ; HYBRID-NEXT:    call __atomic_compare_exchange_cap_c@plt
 ; HYBRID-NEXT:    lc ca1, 0(sp)
 ; HYBRID-NEXT:    mv a2, a0

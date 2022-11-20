@@ -35,8 +35,8 @@ define hidden void @optsize_preserve_tags_memcpy(i8 addrspace(200)* %dst, i8 add
 ; CHECK:       # %bb.0:
 ; CHECK-NEXT:    cincoffset csp, csp, -16
 ; CHECK-NEXT:    csc cra, 8(csp) # 8-byte Folded Spill
-; CHECK-NEXT:    addi a2, zero, 31
-; CHECK-NEXT:    mv a3, zero
+; CHECK-NEXT:    li a2, 31
+; CHECK-NEXT:    li a3, 0
 ; CHECK-NEXT:    ccall memcpy
 ; CHECK-NEXT:    clc cra, 8(csp) # 8-byte Folded Reload
 ; CHECK-NEXT:    cincoffset csp, csp, 16
@@ -68,18 +68,18 @@ define hidden void @default_preserve_tags_memcpy(i8 addrspace(200)* %dst, i8 add
 define hidden void @optnone_preserve_tags_memmove(i8 addrspace(200)* %dst, i8 addrspace(200)* %src) optnone noinline nounwind {
 ; CHECK-LABEL: optnone_preserve_tags_memmove:
 ; CHECK:       # %bb.0:
-; CHECK-NEXT:    clc ca6, 0(ca1)
+; CHECK-NEXT:    clc ca2, 0(ca1)
 ; CHECK-NEXT:    clc ca3, 8(ca1)
 ; CHECK-NEXT:    clc ca4, 16(ca1)
 ; CHECK-NEXT:    clw a5, 24(ca1)
-; CHECK-NEXT:    clh a2, 28(ca1)
+; CHECK-NEXT:    clh a6, 28(ca1)
 ; CHECK-NEXT:    clb a1, 30(ca1)
 ; CHECK-NEXT:    csb a1, 30(ca0)
-; CHECK-NEXT:    csh a2, 28(ca0)
+; CHECK-NEXT:    csh a6, 28(ca0)
 ; CHECK-NEXT:    csw a5, 24(ca0)
 ; CHECK-NEXT:    csc ca4, 16(ca0)
 ; CHECK-NEXT:    csc ca3, 8(ca0)
-; CHECK-NEXT:    csc ca6, 0(ca0)
+; CHECK-NEXT:    csc ca2, 0(ca0)
 ; CHECK-NEXT:    cret
   tail call void @llvm.memmove.p200i8.p200i8.i64(i8 addrspace(200)* noundef nonnull align 16 dereferenceable(31) %dst, i8 addrspace(200)* noundef nonnull align 16 dereferenceable(31) %src, i64 31, i1 false) must_preserve_cheri_tags
   ret void
@@ -90,8 +90,8 @@ define hidden void @optsize_preserve_tags_memmove(i8 addrspace(200)* %dst, i8 ad
 ; CHECK:       # %bb.0:
 ; CHECK-NEXT:    cincoffset csp, csp, -16
 ; CHECK-NEXT:    csc cra, 8(csp) # 8-byte Folded Spill
-; CHECK-NEXT:    addi a2, zero, 31
-; CHECK-NEXT:    mv a3, zero
+; CHECK-NEXT:    li a2, 31
+; CHECK-NEXT:    li a3, 0
 ; CHECK-NEXT:    ccall memmove
 ; CHECK-NEXT:    clc cra, 8(csp) # 8-byte Folded Reload
 ; CHECK-NEXT:    cincoffset csp, csp, 16
