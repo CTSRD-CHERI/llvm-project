@@ -288,14 +288,18 @@ def main():
       if '-ast-dump' in clang_args:
         print('WARNING: Skipping -ast-dump RUN line: ' + l, file=sys.stderr)
         continue
-      if '-fsynatx-only' in clang_args:
+      if '-fsyntax-only' in clang_args:
         print('WARNING: Skipping -fsynatx-only RUN line: ' + l, file=sys.stderr)
+        continue
+      if '-emit-llvm' not in clang_args:
+        print('WARNING: Skipping assembly output RUN line: ' + l, file=sys.stderr)
         continue
 
       # Permit piping the output through opt
       if not (len(commands) == 2 or
               (len(commands) == 3 and commands[1].startswith('opt'))):
         print('WARNING: Skipping non-clang RUN line: ' + l, file=sys.stderr)
+        continue
 
       # Extract -check-prefix in FileCheck args
       filecheck_cmd = commands[-1]
