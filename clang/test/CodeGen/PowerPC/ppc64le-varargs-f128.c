@@ -105,7 +105,7 @@ void long_double(int n, ...) {
 
 // IEEE-LABEL: define{{.*}} void @long_double_struct
 // IEEE: %[[AP1:[0-9a-zA-Z_.]+]] = bitcast i8** %[[AP:[0-9a-zA-Z_.]+]] to i8*
-// IEEE: call void @llvm.va_start(i8* %[[AP1]])
+// IEEE: call void @llvm.va_start.p0i8(i8* %[[AP1]])
 // IEEE: %[[CUR:[0-9a-zA-Z_.]+]] = load i8*, i8** %[[AP]]
 // IEEE: %[[P0:[0-9a-zA-Z_.]+]] = ptrtoint i8* %[[CUR]] to i64
 // IEEE: %[[P1:[0-9a-zA-Z_.]+]] = add i64 %[[P0]], 15
@@ -121,7 +121,7 @@ void long_double(int n, ...) {
 // IEEE: %[[V4:[0-9a-zA-Z_.]+]] = load fp128, fp128* %[[COERCE]], align 16
 // IEEE: call void @foo_ls(fp128 inreg %[[V4]])
 // IEEE: %[[AP2:[0-9a-zA-Z_.]+]] = bitcast i8** %[[AP]] to i8*
-// IEEE: call void @llvm.va_end(i8* %[[AP2]])
+// IEEE: call void @llvm.va_end.p0i8(i8* %[[AP2]])
 void long_double_struct(int n, ...) {
   va_list ap;
   va_start(ap, n);

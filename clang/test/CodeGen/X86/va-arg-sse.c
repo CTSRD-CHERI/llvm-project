@@ -22,7 +22,7 @@ struct S a[5];
 // CHECK-NEXT:    store i32 0, i32* [[K]], align 4
 // CHECK-NEXT:    [[ARRAYDECAY:%.*]] = getelementptr inbounds [1 x %struct.__va_list_tag], [1 x %struct.__va_list_tag]* [[AP]], i64 0, i64 0
 // CHECK-NEXT:    [[ARRAYDECAY1:%.*]] = bitcast %struct.__va_list_tag* [[ARRAYDECAY]] to i8*
-// CHECK-NEXT:    call void @llvm.va_start(i8* [[ARRAYDECAY1]])
+// CHECK-NEXT:    call void @llvm.va_start.p0i8(i8* [[ARRAYDECAY1]])
 // CHECK-NEXT:    store %struct.S* getelementptr inbounds ([5 x %struct.S], [5 x %struct.S]* @a, i64 0, i64 2), %struct.S** [[P]], align 8
 // CHECK-NEXT:    [[ARRAYDECAY2:%.*]] = getelementptr inbounds [1 x %struct.__va_list_tag], [1 x %struct.__va_list_tag]* [[AP]], i64 0, i64 0
 // CHECK-NEXT:    [[FP_OFFSET_P:%.*]] = getelementptr inbounds [[STRUCT___VA_LIST_TAG:%.*]], %struct.__va_list_tag* [[ARRAYDECAY2]], i32 0, i32 1
@@ -61,7 +61,7 @@ struct S a[5];
 // CHECK-NEXT:    call void @llvm.memcpy.p0i8.p0i8.i64(i8* align 4 [[TMP13]], i8* align 4 [[TMP14]], i64 12, i1 false)
 // CHECK-NEXT:    [[ARRAYDECAY3:%.*]] = getelementptr inbounds [1 x %struct.__va_list_tag], [1 x %struct.__va_list_tag]* [[AP]], i64 0, i64 0
 // CHECK-NEXT:    [[ARRAYDECAY34:%.*]] = bitcast %struct.__va_list_tag* [[ARRAYDECAY3]] to i8*
-// CHECK-NEXT:    call void @llvm.va_end(i8* [[ARRAYDECAY34]])
+// CHECK-NEXT:    call void @llvm.va_end.p0i8(i8* [[ARRAYDECAY34]])
 // CHECK-NEXT:    [[TMP15:%.*]] = load %struct.S*, %struct.S** [[P]], align 8
 // CHECK-NEXT:    [[TOBOOL:%.*]] = icmp ne %struct.S* [[TMP15]], null
 // CHECK-NEXT:    br i1 [[TOBOOL]], label [[LAND_LHS_TRUE:%.*]], label [[IF_END:%.*]]
