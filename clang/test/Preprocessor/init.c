@@ -344,6 +344,7 @@
 // CHERI128-NEXT:     #define __PTRADDR_FMTo__ "lo"
 // CHERI128-NEXT:     #define __PTRADDR_FMTu__ "lu"
 // CHERI128-NEXT:     #define __PTRADDR_FMTx__ "lx"
+// CHERI128-NEXT:     #define __PTRADDR_MAX__ 18446744073709551615UL
 // CHERI128-NEXT:     #define __PTRADDR_TYPE__ long unsigned int
 // CHERI128-NEXT:     #define __PTRADDR_WIDTH__ 64
 // CHERI128-NEXT:     #define __PTRDIFF_FMTd__ "ld"
@@ -355,6 +356,7 @@
 // CHERI64-NEXT:      #define __PTRADDR_FMTo__ "o"
 // CHERI64-NEXT:      #define __PTRADDR_FMTu__ "u"
 // CHERI64-NEXT:      #define __PTRADDR_FMTx__ "x"
+// CHERI64-NEXT:      #define __PTRADDR_MAX__ 4294967295U
 // CHERI64-NEXT:      #define __PTRADDR_TYPE__ unsigned int
 // CHERI64-NEXT:      #define __PTRADDR_WIDTH__ 32
 // CHERI64-NEXT:      #define __PTRDIFF_FMTd__ "d"
@@ -1833,6 +1835,8 @@
 // WEBASSEMBLY-NEXT:#define __PTRADDR_FMTo__ "lo"
 // WEBASSEMBLY-NEXT:#define __PTRADDR_FMTu__ "lu"
 // WEBASSEMBLY-NEXT:#define __PTRADDR_FMTx__ "lx"
+// WEBASSEMBLY32-NEXT:#define __PTRADDR_MAX__ 4294967295UL
+// WEBASSEMBLY64-NEXT:#define __PTRADDR_MAX__ 18446744073709551615UL
 // WEBASSEMBLY-NEXT:#define __PTRADDR_TYPE__ long unsigned int
 // WEBASSEMBLY32-NEXT:#define __PTRADDR_WIDTH__ 32
 // WEBASSEMBLY64-NEXT:#define __PTRADDR_WIDTH__ 64

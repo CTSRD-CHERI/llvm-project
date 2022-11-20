@@ -221,6 +221,7 @@
 // AARCH64-NEXT: #define __PTRADDR_FMTo__ "lo"
 // AARCH64-NEXT: #define __PTRADDR_FMTu__ "lu"
 // AARCH64-NEXT: #define __PTRADDR_FMTx__ "lx"
+// AARCH64-NEXT: #define __PTRADDR_MAX__ 18446744073709551615UL
 // AARCH64-NEXT: #define __PTRADDR_TYPE__ long unsigned int
 // AARCH64-NEXT: #define __PTRADDR_WIDTH__ 64
 // AARCH64-NEXT: #define __PTRDIFF_FMTd__ "ld"
