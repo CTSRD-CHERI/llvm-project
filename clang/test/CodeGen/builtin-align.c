@@ -130,7 +130,7 @@ TYPE get_type(void) {
 // CHECK-USHORT-NEXT:    ret i1 [[IS_ALIGNED]]
 //
 // CHECK-CAP_POINTER-LABEL: define {{[^@]+}}@is_aligned
-// CHECK-CAP_POINTER-SAME: (i8 addrspace(200)* [[PTR:%.*]], i32 signext [[ALIGN:%.*]]) #0
+// CHECK-CAP_POINTER-SAME: (i8 addrspace(200)* noundef [[PTR:%.*]], i32 noundef signext [[ALIGN:%.*]]) #0
 // CHECK-CAP_POINTER-NEXT:  entry:
 // CHECK-CAP_POINTER-NEXT:    [[ALIGNMENT:%.*]] = zext i32 [[ALIGN]] to i64
 // CHECK-CAP_POINTER-NEXT:    [[MASK:%.*]] = sub i64 [[ALIGNMENT]], 1
@@ -140,7 +140,7 @@ TYPE get_type(void) {
 // CHECK-CAP_POINTER-NEXT:    ret i1 [[IS_ALIGNED]]
 //
 // CHECK-INTCAP-LABEL: define {{[^@]+}}@is_aligned
-// CHECK-INTCAP-SAME: (i8 addrspace(200)* [[PTR:%.*]], i32 signext [[ALIGN:%.*]]) #0
+// CHECK-INTCAP-SAME: (i8 addrspace(200)* noundef [[PTR:%.*]], i32 noundef signext [[ALIGN:%.*]]) #0
 // CHECK-INTCAP-NEXT:  entry:
 // CHECK-INTCAP-NEXT:    [[ALIGNMENT:%.*]] = zext i32 [[ALIGN]] to i64
 // CHECK-INTCAP-NEXT:    [[MASK:%.*]] = sub i64 [[ALIGNMENT]], 1
@@ -205,7 +205,7 @@ _Bool is_aligned(TYPE ptr, unsigned align) {
 // CHECK-USHORT-NEXT:    ret i16 [[ALIGNED_RESULT]]
 //
 // CHECK-CAP_POINTER-LABEL: define {{[^@]+}}@align_up
-// CHECK-CAP_POINTER-SAME: (i8 addrspace(200)* [[PTR:%.*]], i32 signext [[ALIGN:%.*]]) #0
+// CHECK-CAP_POINTER-SAME: (i8 addrspace(200)* noundef [[PTR:%.*]], i32 noundef signext [[ALIGN:%.*]]) #0
 // CHECK-CAP_POINTER-NEXT:  entry:
 // CHECK-CAP_POINTER-NEXT:    [[ALIGNMENT:%.*]] = zext i32 [[ALIGN]] to i64
 // CHECK-CAP_POINTER-NEXT:    [[MASK:%.*]] = sub i64 [[ALIGNMENT]], 1
@@ -219,7 +219,7 @@ _Bool is_aligned(TYPE ptr, unsigned align) {
 // CHECK-CAP_POINTER-NEXT:    ret i8 addrspace(200)* [[ALIGNED_RESULT]]
 //
 // CHECK-INTCAP-LABEL: define {{[^@]+}}@align_up
-// CHECK-INTCAP-SAME: (i8 addrspace(200)* [[PTR:%.*]], i32 signext [[ALIGN:%.*]]) #0
+// CHECK-INTCAP-SAME: (i8 addrspace(200)* noundef [[PTR:%.*]], i32 noundef signext [[ALIGN:%.*]]) #0
 // CHECK-INTCAP-NEXT:  entry:
 // CHECK-INTCAP-NEXT:    [[ALIGNMENT:%.*]] = zext i32 [[ALIGN]] to i64
 // CHECK-INTCAP-NEXT:    [[MASK:%.*]] = sub i64 [[ALIGNMENT]], 1
@@ -284,7 +284,7 @@ TYPE align_up(TYPE ptr, unsigned align) {
 // CHECK-USHORT-NEXT:    ret i16 [[ALIGNED_RESULT]]
 //
 // CHECK-CAP_POINTER-LABEL: define {{[^@]+}}@align_down
-// CHECK-CAP_POINTER-SAME: (i8 addrspace(200)* [[PTR:%.*]], i32 signext [[ALIGN:%.*]]) #0
+// CHECK-CAP_POINTER-SAME: (i8 addrspace(200)* noundef [[PTR:%.*]], i32 noundef signext [[ALIGN:%.*]]) #0
 // CHECK-CAP_POINTER-NEXT:  entry:
 // CHECK-CAP_POINTER-NEXT:    [[ALIGNMENT:%.*]] = zext i32 [[ALIGN]] to i64
 // CHECK-CAP_POINTER-NEXT:    [[MASK:%.*]] = sub i64 [[ALIGNMENT]], 1
@@ -297,7 +297,7 @@ TYPE align_up(TYPE ptr, unsigned align) {
 // CHECK-CAP_POINTER-NEXT:    ret i8 addrspace(200)* [[ALIGNED_RESULT]]
 //
 // CHECK-INTCAP-LABEL: define {{[^@]+}}@align_down
-// CHECK-INTCAP-SAME: (i8 addrspace(200)* [[PTR:%.*]], i32 signext [[ALIGN:%.*]]) #0
+// CHECK-INTCAP-SAME: (i8 addrspace(200)* noundef [[PTR:%.*]], i32 noundef signext [[ALIGN:%.*]]) #0
 // CHECK-INTCAP-NEXT:  entry:
 // CHECK-INTCAP-NEXT:    [[ALIGNMENT:%.*]] = zext i32 [[ALIGN]] to i64
 // CHECK-INTCAP-NEXT:    [[MASK:%.*]] = sub i64 [[ALIGNMENT]], 1
