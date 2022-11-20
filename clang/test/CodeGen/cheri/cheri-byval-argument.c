@@ -30,8 +30,8 @@ void foo(void) {
 
 // MEMCPY-LABEL: define dso_local void @foo()
 // MEMCPY:       call void @llvm.memcpy.p200i8.p200i8.i64
-// MEMCPY-NEXT:  call void @do_stuff_extern(%struct.big addrspace(200)* byval(%struct.big) align 8 {{%.+}})
-// MEMCPY-LABEL: declare void @do_stuff_extern(%struct.big addrspace(200)* byval(%struct.big) align 8)
+// MEMCPY-NEXT:  call void @do_stuff_extern(%struct.big addrspace(200)* noundef byval(%struct.big) align 8 {{%.+}})
+// MEMCPY-LABEL: declare void @do_stuff_extern(%struct.big addrspace(200)* noundef byval(%struct.big) align 8)
 
 
 // EXPANDED-LABEL: define dso_local void @foo()
@@ -45,5 +45,5 @@ void foo(void) {
 
 // N64-MEMCPY-LABEL: define dso_local void @foo()
 // N64-MEMCPY: call void @llvm.memcpy.p0i8.p0i8.i64
-// N64-MEMCPY: call void @do_stuff_extern(%struct.big* byval(%struct.big) align 8 {{%.+}})
-// N64-MEMCPY-LABEL: declare void @do_stuff_extern(%struct.big* byval(%struct.big) align 8)
+// N64-MEMCPY: call void @do_stuff_extern(%struct.big* noundef byval(%struct.big) align 8 {{%.+}})
+// N64-MEMCPY-LABEL: declare void @do_stuff_extern(%struct.big* noundef byval(%struct.big) align 8)
