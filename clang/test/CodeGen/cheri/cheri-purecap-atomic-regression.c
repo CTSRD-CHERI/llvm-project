@@ -23,7 +23,7 @@
 // Now clang can tell that it is dereferncing a null pointer an returns undef
 // NULL_INVALID-OPT-NEXT:    ret i32 undef
 // This uses a crazy alignment value (the maximum) because it is loading a null pointer, not a bug!
-// NO_DELETE_NULL-OPT-NEXT:    [[TMP0:%.*]] = load i32, i32 addrspace(200)* null, align 536870912, !tbaa !2
+// NO_DELETE_NULL-OPT-NEXT:    [[TMP0:%.*]] = load i32, i32 addrspace(200)* null, align 4294967296, !tbaa !2
 // NO_DELETE_NULL-OPT-NEXT:    ret i32 [[TMP0]]
 int main(void) {
   _Atomic(int*) p = (int*)0;
