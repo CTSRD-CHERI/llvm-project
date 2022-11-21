@@ -108,7 +108,7 @@ int main(void) {
 // CHECK: entry:
 // CHECK:   store i32 %n, i32* %n.addr, align 4
 // CHECK:   %ap1 = bitcast i8** %ap to i8*
-// CHECK:   call void @llvm.va_start(i8* %ap1)
+// CHECK:   call void @llvm.va_start.p0i8(i8* %ap1)
 // CHECK:   %argp.cur = load i8*, i8** %ap, align 8
 // CHECK:   %argp.next = getelementptr inbounds i8, i8* %argp.cur, i64 16
 // CHECK:   store i8* %argp.next, i8** %ap, align 8
@@ -116,7 +116,7 @@ int main(void) {
 // CHECK:   %1 = load ppc_fp128, ppc_fp128* %0, align 8
 // CHECK:   store ppc_fp128 %1, ppc_fp128* %r, align 16
 // CHECK:   %ap2 = bitcast i8** %ap to i8*
-// CHECK:   call void @llvm.va_end(i8* %ap2)
+// CHECK:   call void @llvm.va_end.p0i8(i8* %ap2)
 // CHECK:   %2 = load ppc_fp128, ppc_fp128* %r, align 16
 // CHECK:   ret ppc_fp128 %2
 // CHECK: }
