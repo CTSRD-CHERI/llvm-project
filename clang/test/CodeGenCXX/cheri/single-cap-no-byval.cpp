@@ -16,11 +16,11 @@ struct ExecState;
 JsValue throwException(ExecState *, JsValue);
 
 // CHECK-LABEL: define {{[^@]+}}@_Z4testv()
-// MIPS: call inreg i8 addrspace(200)* @_Z14throwExceptionP9ExecState7JsValue(%struct.ExecState addrspace(200)* null, i8 addrspace(200)* inreg %{{[a-z.0-9]+}})
-// RV64: call %union.JsValue @_Z14throwExceptionP9ExecState7JsValue(%struct.ExecState addrspace(200)* null, i8 addrspace(200)* %{{[a-z.0-9]+}})
+// MIPS: call inreg i8 addrspace(200)* @_Z14throwExceptionP9ExecState7JsValue(%struct.ExecState addrspace(200)* noundef null, i8 addrspace(200)* inreg %{{[a-z.0-9]+}})
+// RV64: call %union.JsValue @_Z14throwExceptionP9ExecState7JsValue(%struct.ExecState addrspace(200)* noundef null, i8 addrspace(200)* %{{[a-z.0-9]+}})
 //
-// MIPS: declare inreg i8 addrspace(200)* @_Z14throwExceptionP9ExecState7JsValue(%struct.ExecState addrspace(200)*, i8 addrspace(200)* inreg)
-// RV64: declare %union.JsValue @_Z14throwExceptionP9ExecState7JsValue(%struct.ExecState addrspace(200)*, i8 addrspace(200)*)
+// MIPS: declare inreg i8 addrspace(200)* @_Z14throwExceptionP9ExecState7JsValue(%struct.ExecState addrspace(200)* noundef, i8 addrspace(200)* inreg)
+// RV64: declare %union.JsValue @_Z14throwExceptionP9ExecState7JsValue(%struct.ExecState addrspace(200)* noundef, i8 addrspace(200)*)
 bool test() {
   JsValue j{1};
   JsValue j2 = throwException(nullptr, j);
@@ -36,52 +36,52 @@ long cptr(const JsValue *);
 long val(JsValue);
 
 // CHECK-LABEL: define {{[^@]+}}@_Z8test_refv()
-// CHECK:    [[CALL:%.*]] = call i64 @_Z3refR7JsValue(%union.JsValue addrspace(200)* nonnull align 16 dereferenceable(16) %{{[a-z.0-9]+}})
-// CHECK: declare i64 @_Z3refR7JsValue(%union.JsValue addrspace(200)* nonnull align 16 dereferenceable(16))
+// CHECK:    [[CALL:%.*]] = call noundef i64 @_Z3refR7JsValue(%union.JsValue addrspace(200)* noundef nonnull align 16 dereferenceable(16) %{{[a-z.0-9]+}})
+// CHECK: declare noundef i64 @_Z3refR7JsValue(%union.JsValue addrspace(200)* noundef nonnull align 16 dereferenceable(16))
 long test_ref() {
   JsValue j{1};
   return ref(j);
 }
 
 // CHECK-LABEL: define {{[^@]+}}@_Z9test_crefv()
-// CHECK:    [[CALL:%.*]] = call i64 @_Z4crefRK7JsValue(%union.JsValue addrspace(200)* nonnull align 16 dereferenceable(16) %{{[a-z.0-9]+}})
-// CHECK: declare i64 @_Z4crefRK7JsValue(%union.JsValue addrspace(200)* nonnull align 16 dereferenceable(16))
+// CHECK:    [[CALL:%.*]] = call noundef i64 @_Z4crefRK7JsValue(%union.JsValue addrspace(200)* noundef nonnull align 16 dereferenceable(16) %{{[a-z.0-9]+}})
+// CHECK: declare noundef i64 @_Z4crefRK7JsValue(%union.JsValue addrspace(200)* noundef nonnull align 16 dereferenceable(16))
 long test_cref() {
   JsValue j{1};
   return cref(j);
 }
 
 // CHECK-LABEL: define {{[^@]+}}@_Z9test_rrefv()
-// CHECK:    [[CALL:%.*]] = call i64 @_Z4rrefO7JsValue(%union.JsValue addrspace(200)* nonnull align 16 dereferenceable(16) %{{[a-z.0-9]+}})
-// CHECK: declare i64 @_Z4rrefO7JsValue(%union.JsValue addrspace(200)* nonnull align 16 dereferenceable(16))
+// CHECK:    [[CALL:%.*]] = call noundef i64 @_Z4rrefO7JsValue(%union.JsValue addrspace(200)* noundef nonnull align 16 dereferenceable(16) %{{[a-z.0-9]+}})
+// CHECK: declare noundef i64 @_Z4rrefO7JsValue(%union.JsValue addrspace(200)* noundef nonnull align 16 dereferenceable(16))
 long test_rref() { return rref(JsValue{1}); }
 
 // CHECK-LABEL: define {{[^@]+}}@_Z10test_crrefv()
-// CHECK:    [[CALL:%.*]] = call i64 @_Z5crrefOK7JsValue(%union.JsValue addrspace(200)* nonnull align 16 dereferenceable(16) %{{[a-z.0-9]+}})
-// CHECK: declare i64 @_Z5crrefOK7JsValue(%union.JsValue addrspace(200)* nonnull align 16 dereferenceable(16))
+// CHECK:    [[CALL:%.*]] = call noundef i64 @_Z5crrefOK7JsValue(%union.JsValue addrspace(200)* noundef nonnull align 16 dereferenceable(16) %{{[a-z.0-9]+}})
+// CHECK: declare noundef i64 @_Z5crrefOK7JsValue(%union.JsValue addrspace(200)* noundef nonnull align 16 dereferenceable(16))
 long test_crref() { return crref(JsValue{1}); }
 
 // CHECK-LABEL: define {{[^@]+}}@_Z8test_ptrv()
-// CHECK:    [[CALL:%.*]] = call i64 @_Z3ptrP7JsValue(%union.JsValue addrspace(200)* nonnull %{{[a-z.0-9]+}})
-// CHECK: declare i64 @_Z3ptrP7JsValue(%union.JsValue addrspace(200)*)
+// CHECK:    [[CALL:%.*]] = call noundef i64 @_Z3ptrP7JsValue(%union.JsValue addrspace(200)* noundef nonnull %{{[a-z.0-9]+}})
+// CHECK: declare noundef i64 @_Z3ptrP7JsValue(%union.JsValue addrspace(200)* noundef)
 long test_ptr() {
   JsValue j{1};
   return ptr(&j);
 }
 
 // CHECK-LABEL: define {{[^@]+}}@_Z9test_cptrv()
-// CHECK:    [[CALL:%.*]] = call i64 @_Z4cptrPK7JsValue(%union.JsValue addrspace(200)* nonnull %{{[a-z.0-9]+}})
-// CHECK: declare i64 @_Z4cptrPK7JsValue(%union.JsValue addrspace(200)*)
+// CHECK:    [[CALL:%.*]] = call noundef i64 @_Z4cptrPK7JsValue(%union.JsValue addrspace(200)* noundef nonnull %{{[a-z.0-9]+}})
+// CHECK: declare noundef i64 @_Z4cptrPK7JsValue(%union.JsValue addrspace(200)* noundef)
 long test_cptr() {
   JsValue j{1};
   return cptr(&j);
 }
 
 // CHECK-LABEL: define {{[^@]+}}@_Z8test_valv()
-// MIPS:     call i64 @_Z3val7JsValue(i8 addrspace(200)* inreg %{{[a-z.0-9]+}})
-// RV64:     call i64 @_Z3val7JsValue(i8 addrspace(200)*  %{{[a-z.0-9]+}})
-// MIPS: declare i64 @_Z3val7JsValue(i8 addrspace(200)* inreg)
-// RV64: declare i64 @_Z3val7JsValue(i8 addrspace(200)*)
+// MIPS:     call noundef i64 @_Z3val7JsValue(i8 addrspace(200)* inreg %{{[a-z.0-9]+}})
+// RV64:     call noundef i64 @_Z3val7JsValue(i8 addrspace(200)* %{{[a-z.0-9]+}})
+// MIPS: declare noundef i64 @_Z3val7JsValue(i8 addrspace(200)* inreg)
+// RV64: declare noundef i64 @_Z3val7JsValue(i8 addrspace(200)*)
 long test_val() {
   JsValue j{1};
   return val(j);
