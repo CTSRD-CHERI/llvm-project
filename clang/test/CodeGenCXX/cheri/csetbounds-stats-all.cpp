@@ -42,7 +42,7 @@ void test_onstack_int_overaligned(struct Foo *s) {
 
 void test__stack_array(void) {
   char buf[333];
-  do_stuff_with_buf(buf); // CSV-NEXT: 0,333,?,"{{.+}}/csetbounds-stats-all.cpp:45:21","Add subobject bounds","array decay for char [333]"
+  do_stuff_with_buf(buf); // CSV-NEXT: 0,333,?,"{{.+}}/csetbounds-stats-all.cpp:45:21","Add subobject bounds","array decay for char[333]"
 }
 
 void test_alloca(int n) {
@@ -53,7 +53,7 @@ void test_alloca(int n) {
 void test_varlen_stack_array(int n) {
   char varlenbuf[n];
   do_stuff_with_buf(varlenbuf);
-  // CSV-NEXT: 0,<unknown>,?,"{{.+}}/csetbounds-stats-all.cpp:55:21","Add subobject bounds","array decay for char [n]"
+  // CSV-NEXT: 0,<unknown>,?,"{{.+}}/csetbounds-stats-all.cpp:55:21","Add subobject bounds","array decay for char[n]"
 }
 
 struct Foo global_foo;

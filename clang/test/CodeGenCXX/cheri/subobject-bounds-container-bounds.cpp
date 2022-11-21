@@ -23,9 +23,9 @@ extern "C" void call_ref(int &i);
 // CHECK-NEXT:    ret void
 //
 extern "C" void test(struct Foo *f) {
-  call(&f->buffer[64]); // expected-remark {{using size of containing type 'int [64]' instead of object type 'int' for subobject bounds on &array[<CONSTANT>]}}
+  call(&f->buffer[64]); // expected-remark {{using size of containing type 'int[64]' instead of object type 'int' for subobject bounds on &array[<CONSTANT>]}}
   // expected-remark@-1{{setting sub-object bounds for pointer to 'int' to 256 bytes}}
-  // expected-remark@-2{{setting sub-object bounds for field 'buffer' (array subscript on 'int [64]') to 256 bytes}}
+  // expected-remark@-2{{setting sub-object bounds for field 'buffer' (array subscript on 'int[64]') to 256 bytes}}
 }
 // CHECK-LABEL: @test2(
 // CHECK-NEXT:  entry:
@@ -41,7 +41,7 @@ extern "C" void test(struct Foo *f) {
 extern "C" void test2(struct Foo *f) {
   call_ref(f->buffer[64]);
   // expected-remark@-1{{setting sub-object bounds for field 'buffer' (reference to 'int') to 4 bytes}}
-  // expected-remark@-2{{setting sub-object bounds for field 'buffer' (array subscript on 'int [64]') to 256 bytes}}
+  // expected-remark@-2{{setting sub-object bounds for field 'buffer' (array subscript on 'int[64]') to 256 bytes}}
 }
 
 union U {

@@ -39,7 +39,7 @@ char &ref_from_rval_ref(char &&ref) {
 
 char array_ref_subscript(char (&ref)[5], int n) {
   // Should still set bounds on array subscripts
-  return ref[n];  // expected-remark{{setting bounds for array subscript on 'char [5]' to 5 bytes}}
+  return ref[n];  // expected-remark{{setting bounds for array subscript on 'char[5]' to 5 bytes}}
 }
 
 // A less reduced version of the original test case: pointer_traits<char*>::pointer_to(std::string::__data[0])
@@ -71,6 +71,6 @@ void *test() {
   __attribute__((cheri_no_subobject_bounds)) char buffer[10];
   return pointer_traits<char *>::pointer_to(buffer[0]);
   // FIXME: we should probably also take the opt-out annotation into account for array subscripts
-  // expected-remark@-2{{setting bounds for array subscript on 'char [10] __attribute__((cheri_no_subobject_bounds))' to 10 bytes}}
+  // expected-remark@-2{{setting bounds for array subscript on 'char[10] __attribute__((cheri_no_subobject_bounds))' to 10 bytes}}
   // expected-remark@-3{{not setting bounds for reference to 'char __attribute__((cheri_no_subobject_bounds))' (array type has opt-out attribute)}}
 }
