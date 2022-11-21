@@ -33,7 +33,7 @@
 // RUN: %cheri_purecap_clang -### -no-canonical-prefixes %s 2>&1 -r | FileCheck -check-prefix PURECAP-RELOCATABLE %s
 // PURECAP-RELOCATABLE: "{{.+}}/ld"
 // PURECAP-RELOCATABLE-NOT: "-pie"
-// PURECAP-RELOCATABLE: "-o" "a.out" "{{[^"]*}}crt1.o"
+// PURECAP-RELOCATABLE: "-o" "a.out"
 // PURECAP-RELOCATABLE-NOT: "-pie"
 // PURECAP-RELOCATABLE: "-r"
 // PURECAP-RELOCATABLE-NOT: "-pie"
