@@ -149,7 +149,7 @@ define i32 @fcvt_w_d_sat(double %a) nounwind {
 ; RV32I-NEXT:    call __fixdfsi@plt
 ; RV32I-NEXT:    lui s5, 524288
 ; RV32I-NEXT:    lui s4, 524288
-; RV32I-NEXT:    blt s3, s0, .LBB3_2
+; RV32I-NEXT:    bltz s3, .LBB3_2
 ; RV32I-NEXT:  # %bb.1: # %start
 ; RV32I-NEXT:    mv s4, a0
 ; RV32I-NEXT:  .LBB3_2: # %start
@@ -714,8 +714,8 @@ define i64 @fcvt_l_d_sat(double %a) nounwind {
 ; RV32I-NEXT:    mv a1, s0
 ; RV32I-NEXT:    call __fixdfdi@plt
 ; RV32I-NEXT:    mv s5, a1
-; RV32I-NEXT:    mv a1, s2
-; RV32I-NEXT:    blt s6, s2, .LBB12_2
+; RV32I-NEXT:    li a1, 0
+; RV32I-NEXT:    bltz s6, .LBB12_2
 ; RV32I-NEXT:  # %bb.1: # %start
 ; RV32I-NEXT:    mv a1, a0
 ; RV32I-NEXT:  .LBB12_2: # %start
@@ -1526,7 +1526,7 @@ define signext i16 @fcvt_w_s_sat_i16(double %a) nounwind {
 ; RV32I-NEXT:    mv a1, s1
 ; RV32I-NEXT:    call __fixdfsi@plt
 ; RV32I-NEXT:    lui s4, 1048568
-; RV32I-NEXT:    blt s3, s0, .LBB26_2
+; RV32I-NEXT:    bltz s3, .LBB26_2
 ; RV32I-NEXT:  # %bb.1: # %start
 ; RV32I-NEXT:    mv s4, a0
 ; RV32I-NEXT:  .LBB26_2: # %start
@@ -1844,7 +1844,7 @@ define signext i8 @fcvt_w_s_sat_i8(double %a) nounwind {
 ; RV32I-NEXT:    mv a1, s1
 ; RV32I-NEXT:    call __fixdfsi@plt
 ; RV32I-NEXT:    li s4, -128
-; RV32I-NEXT:    blt s3, s0, .LBB30_2
+; RV32I-NEXT:    bltz s3, .LBB30_2
 ; RV32I-NEXT:  # %bb.1: # %start
 ; RV32I-NEXT:    mv s4, a0
 ; RV32I-NEXT:  .LBB30_2: # %start
