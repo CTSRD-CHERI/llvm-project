@@ -173,10 +173,13 @@ void riscv::getRISCVTargetFeatures(const Driver &D, const llvm::Triple &Triple,
     }
   }
 
-  if (Args.hasFlag(options::OPT_mxcheri_rvc, options::OPT_mno_xcheri_rvc, false))
-    Features.push_back("+xcheri-rvc");
-  else
-    Features.push_back("-xcheri-rvc");
+  if (llvm::is_contained(Features, "+xcheri")) {
+    if (Args.hasFlag(options::OPT_mxcheri_rvc, options::OPT_mno_xcheri_rvc,
+                     false))
+      Features.push_back("+xcheri-rvc");
+    else
+      Features.push_back("-xcheri-rvc");
+  }
 
   // GCC Compatibility: -mno-save-restore is default, unless -msave-restore is
   // specified.
