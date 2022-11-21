@@ -20,9 +20,9 @@ void test1() {
 }
 
 // X86-LABEL: define {{.*}} @_ZN1BaSEOS_
-// CHERI: define linkonce_odr nonnull align 8 dereferenceable(28) %struct.B addrspace(200)* @_ZN1BaSEOS_(%struct.B addrspace(200)* nonnull align 8 dereferenceable(28) %this, %struct.B addrspace(200)* nonnull align 8 dereferenceable(28) %0) addrspace(200)
-// X86:   call nonnull align 1 dereferenceable(1) %struct.A* @_ZN1AaSEOS_(%struct.A* nonnull align 1 dereferenceable(1) %a, %struct.A* nonnull align 1 dereferenceable(1) %a2)
-// CHERI: call nonnull align 1 dereferenceable(1) %struct.A addrspace(200)* @_ZN1AaSEOS_(%struct.A addrspace(200)* nonnull align 1 dereferenceable(1) %a, %struct.A addrspace(200)* nonnull align 1 dereferenceable(1) %a2)
+// CHERI: define linkonce_odr noundef nonnull align 8 dereferenceable(28) %struct.B addrspace(200)* @_ZN1BaSEOS_(%struct.B addrspace(200)* noundef nonnull align 8 dereferenceable(28) %this, %struct.B addrspace(200)* noundef nonnull align 8 dereferenceable(28) %0) addrspace(200)
+// X86:   call noundef nonnull align 1 dereferenceable(1) %struct.A* @_ZN1AaSEOS_(%struct.A* noundef nonnull align 1 dereferenceable(1) %a, %struct.A* noundef nonnull align 1 dereferenceable(1) %a2)
+// CHERI: call noundef nonnull align 1 dereferenceable(1) %struct.A addrspace(200)* @_ZN1AaSEOS_(%struct.A addrspace(200)* noundef nonnull align 1 dereferenceable(1) %a, %struct.A addrspace(200)* noundef nonnull align 1 dereferenceable(1) %a2)
 // BOTH-NOT: store
 // X86:   call void @llvm.memcpy.p0i8.p0i8.i64(i8* align 4 {{.+}}, i8* align 4 {{.+}}, i64 24, i1 false)
 // CHERI: call void @llvm.memcpy.p200i8.p200i8.i64(i8 addrspace(200)* align 4 %3, i8 addrspace(200)* align 4 %4, i64 24, i1 false)
