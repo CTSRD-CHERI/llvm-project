@@ -900,9 +900,10 @@ void CheriCapTableSection::assignValuesAndAddCapTableSymbols() {
     // be allocated before us in the static TLS block.
     if (!s->isPreemptible && !config->shared)
       this->relocations.push_back({R_TPREL, target->symbolicRel, offset, 0, s});
-    else
+    else 
+      // FIXME: casting to GotSection here is a massive hack!!
       mainPart->relaDyn->addAddendOnlyRelocIfNonPreemptible(
-          target->tlsGotRel, *this, offset, *s, target->symbolicRel);
+          target->tlsGotRel, *(GotSection *)this, offset, *s, target->symbolicRel);
   }
 
   valuesAssigned = true;
