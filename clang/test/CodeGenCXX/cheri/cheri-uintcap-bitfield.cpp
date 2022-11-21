@@ -43,7 +43,7 @@ struct ShortDataLong {
 };
 
 // CHECK-LABEL: define {{[^@]+}}@setMsecsLong
-// CHECK-SAME: ([[STRUCT_SHORTDATALONG:%.*]] addrspace(200)* [[DATA:%.*]], i64 signext [[F:%.*]]) addrspace(200) #[[ATTR0:[0-9]+]] {
+// CHECK-SAME: ([[STRUCT_SHORTDATALONG:%.*]] addrspace(200)* noundef [[DATA:%.*]], i64 noundef signext [[F:%.*]]) addrspace(200) #[[ATTR0:[0-9]+]] {
 // CHECK-NEXT:  entry:
 // CHECK-NEXT:    [[DATA_ADDR:%.*]] = alloca [[STRUCT_SHORTDATALONG]] addrspace(200)*, align 16, addrspace(200)
 // CHECK-NEXT:    [[F_ADDR:%.*]] = alloca i64, align 8, addrspace(200)
