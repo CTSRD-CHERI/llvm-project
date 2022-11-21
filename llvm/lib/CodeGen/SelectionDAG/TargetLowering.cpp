@@ -8763,7 +8763,7 @@ TargetLowering::expandUnalignedLoad(LoadSDNode *LD, SelectionDAG &DAG) const {
     DiagnosticInfoCheriInefficient Warning(
         MF.getFunction(), dl.getDebugLoc(),
         "found underaligned load of capability type (aligned to " +
-            Twine(LD->getAlignment()) + " bytes instead of " + Twine(CapAlign) +
+            Twine(LD->getAlign().value()) + " bytes instead of " + Twine(CapAlign) +
             "). Will use memcpy() instead of capability load to preserve tags "
             "if it is aligned correctly at runtime");
     DAG.getContext()->diagnose(Warning);
@@ -8779,7 +8779,7 @@ TargetLowering::expandUnalignedLoad(LoadSDNode *LD, SelectionDAG &DAG) const {
                                        DAG);
     SDValue Ch = DAG.getMemcpy(
         Chain, dl, BoundedTmpPtr, BoundedPtr,
-        DAG.getConstant(CapAlign, dl, MVT::i64), Align(LD->getAlignment()),
+        DAG.getConstant(CapAlign, dl, MVT::i64), LD->getAlign(),
         /*isVolatile=*/false, /*AlwaysInline=*/false, /*isTailCall=*/false,
         PreserveCheriTags::Required, TmpPtrInfo, LD->getPointerInfo(),
         AAMDNodes(), nullptr, "!!<CHERI-NODIAG>!!");
@@ -8942,7 +8942,7 @@ SDValue TargetLowering::expandUnalignedStore(StoreSDNode *ST,
     DiagnosticInfoCheriInefficient Warning(
         MF.getFunction(), dl.getDebugLoc(),
         "found underaligned store of capability type (aligned to " +
-            Twine(ST->getAlignment()) + " bytes instead of " + Twine(CapAlign) +
+            Twine(ST->getAlign().value()) + " bytes instead of " + Twine(CapAlign) +
             "). Will use memcpy() instead of capability load to preserve tags "
             "if it is aligned correctly at runtime");
     DAG.getContext()->diagnose(Warning);
@@ -8959,7 +8959,7 @@ SDValue TargetLowering::expandUnalignedStore(StoreSDNode *ST,
                                        CapAlign, DAG);
     auto Result = DAG.getMemcpy(
         Ch, dl, Ptr, TmpPtr, DAG.getConstant(CapAlign, dl, MVT::i64),
-        Align(ST->getAlignment()), /*isVolatile=*/false, /*AlwaysInline=*/false,
+        ST->getAlign(), /*isVolatile=*/false, /*AlwaysInline=*/false,
         /*isTailCall=*/false, PreserveCheriTags::Required, ST->getPointerInfo(),
         TmpPtrInfo, AAMDNodes(), nullptr, "!!<CHERI-NODIAG>!!");
     return Result;
