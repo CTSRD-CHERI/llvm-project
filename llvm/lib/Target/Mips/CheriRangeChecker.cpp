@@ -100,9 +100,8 @@ class CheriRangeChecker : public FunctionPass,
                              Src, cheri::SetBoundsPointerSource::Heap};
       }
     } else if (AllocaInst *AI = dyn_cast<AllocaInst>(Src.Base)) {
-      PointerType *AllocaTy = AI->getType();
       Value *ArraySize = AI->getArraySize();
-      Type *AllocationTy = AllocaTy->getElementType();
+      Type *AllocationTy = AI->getAllocatedType();
       unsigned ElementSize = TD->getTypeAllocSize(AllocationTy);
       if (ElementSize == 1)
         return AllocOperands{ArraySize, nullptr, Src,
