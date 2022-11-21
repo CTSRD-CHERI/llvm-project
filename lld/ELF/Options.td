@@ -738,7 +738,6 @@ def captable_scope_function: F<"captable-scope=function">,
   HelpText<"Use one captable per function for global accesses (very slow but minimizes scope of $cgp)">;
 
 // Options listed below are silently ignored for now for compatibility.
-def: F<"detect-odr-violations">;
 def: Flag<["-"], "d">;
 def: Flag<["-"], "g">;
 def: F<"long-plt">;
