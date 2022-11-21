@@ -15,19 +15,19 @@ struct Foo {
 
 extern "C" Foo *test_foo_not_aligned() { return new Foo; }
 // CHECK-LABEL: @test_foo_not_aligned(
-// CHECK: call {{.+}} @_Znwm(i64 zeroext 4)
+// CHECK: call {{.+}} @_Znwm(i64 noundef zeroext 4)
 // CHECK-NOT: bounds.set
 
 
 extern "C" Foo *test_foo_not_aligned_array() { return new Foo[2]; }
 // CHECK-LABEL: @test_foo_not_aligned_array(
-// CHECK: call {{.+}} @_Znam(i64 zeroext 8)
+// CHECK: call {{.+}} @_Znam(i64 noundef zeroext 8)
 // CHECK-NOT: bounds.set
 
 
 extern "C" Foo *test_foo_not_aligned_array_nonconst(int n) { return new Foo[n]; }
 // CHECK-LABEL: @test_foo_not_aligned_array_nonconst(
-// CHECK: call {{.+}} @_Znam(i64 zeroext %{{.+}})
+// CHECK: call {{.+}} @_Znam(i64 noundef zeroext %{{.+}})
 // CHECK-NOT: bounds.set
 
 

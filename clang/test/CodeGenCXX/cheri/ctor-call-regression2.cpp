@@ -28,4 +28,4 @@ void e() { C(&d, a::b); }
 
 // UTC_ARGS: --disable
 // C::C(int* cap, a):
-// CHECK: declare void @_ZN1CC1EPi1a(%class.C addrspace(200)* nonnull align 1 dereferenceable(1), i32 addrspace(200)*, i8 inreg) unnamed_addr
+// CHECK: declare void @_ZN1CC1EPi1a(%class.C addrspace(200)* noundef nonnull align 1 dereferenceable(1), i32 addrspace(200)* noundef, i8 inreg) unnamed_addr

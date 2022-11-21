@@ -47,7 +47,7 @@ void lock() {
   // instead of a csetoffset on null
   // CHECK-LABEL: @_Z4lockv()
   // CHECK: entry:
-  // CHECK-NEXT: call zeroext i1 @_Z17testAndSetAcquirePvS_(i8 addrspace(200)* null, i8 addrspace(200)* getelementptr (i8, i8 addrspace(200)* null, i64 2))
+  // CHECK-NEXT: call noundef zeroext i1 @_Z17testAndSetAcquirePvS_(i8 addrspace(200)* noundef null, i8 addrspace(200)* noundef getelementptr (i8, i8 addrspace(200)* null, i64 2))
   if (testAndSetAcquire(nullptr, dummyLockedForWrite))
     return;
 

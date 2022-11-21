@@ -4,4 +4,4 @@
 enum { a };
 void b() { new int[a]; }
 // CHECK-LABEL: @_Z1bv()
-// CHECK: call noalias nonnull i8 addrspace(200)* @_Znam(i64 zeroext 0) #2
+// CHECK: call noalias noundef nonnull i8 addrspace(200)* @_Znam(i64 noundef zeroext 0) #2
