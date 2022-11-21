@@ -49,7 +49,7 @@ void do_test() {
   test_good<__intcap>(1);
   test_good<unsigned __intcap>(1);
   // This should decay to const char*:
-  test_good<const char(&)[4], const char *>("foo"); // hybrid-note{{in instantiation of function template specialization 'test_good<char const (&)[4], const char *>' requested here}}
+  test_good<const char(&)[4], const char *>("foo"); // hybrid-note{{in instantiation of function template specialization 'test_good<const char (&)[4], const char *>' requested here}}
   // passing function pointers should also be allowed
   test_good(&do_test);                            // hybrid-note{{in instantiation of function template specialization 'test_good<void (*)(), void (*)()>' requested here}}
   test_good<void(void), void (*)(void)>(do_test); // hybrid-note{{in instantiation of function template specialization 'test_good<void (), void (*)()>' requested here}}
