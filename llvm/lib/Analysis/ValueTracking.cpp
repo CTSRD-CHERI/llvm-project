@@ -1343,6 +1343,9 @@ static void computeKnownBitsFromOperator(const Operator *I,
     // Address space conversions between CHERI capability and integer pointer
     // do not affect the virtual address bits
     if (SrcTy->isIntOrPtrTy() && isCheriPointer(SrcTy, &Q.DL) != isCheriPointer(DestTy, &Q.DL)) {
+      unsigned SrcBitWidth = Q.DL.getPointerAddrSizeInBits(SrcTy);
+      if (SrcBitWidth != Known.getBitWidth())
+        Known = Known.trunc(SrcBitWidth);
       computeKnownBits(I->getOperand(0), Known, Depth + 1, Q);
       break;
     }
