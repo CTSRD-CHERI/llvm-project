@@ -577,6 +577,13 @@ Constant *FoldReinterpretLoadFromConst(Constant *C, Type *LoadTy,
         // Materializing a zero can be done trivially without a bitcast
         return Constant::getNullValue(LoadTy);
       Type *CastTy = LoadTy->isPtrOrPtrVectorTy() ? DL.getIntPtrType(LoadTy) : LoadTy;
+      // If we are loading a pointer type where not all bits can be set by an
+      // inttoptr instruction (e.g. CHERI capabilities or other fat pointers),
+      // we should not attempt to create bitcast here.
+      if (LoadTy->isPtrOrPtrVectorTy() &&
+          DL.getTypeSizeInBits(LoadTy->getScalarType()) !=
+              DL.getPointerAddrSizeInBits(LoadTy->getScalarType()))
+        return nullptr;
       Res = FoldBitCast(Res, CastTy, DL);
       if (LoadTy->isPtrOrPtrVectorTy()) {
         // For vector of pointer, we needed to first convert to a vector of integer, then do vector inttoptr
