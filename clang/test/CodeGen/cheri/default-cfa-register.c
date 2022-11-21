@@ -3,12 +3,11 @@
 // RUN: llvm-dwarfdump -debug-frame %t.purecap.o | FileCheck %s -check-prefixes PURECAP,CHECK
 // RUN: %cheri_cc1 "-mrelocation-model" "pic" -debug-info-kind=standalone -emit-obj -o %t.hybrid.o %s
 // RUN: llvm-dwarfdump -debug-frame %t.hybrid.o | FileCheck %s -check-prefixes HYBRID,CHECK
-// RUN: llvm-dwarfdump -debug-frame %t.hybrid.o
 
 // Also check that the register is correct when invoking the driver instead of -cc1
-// RUN: %cheri_clang -g -c -o %t.hybrid-driver.o %s -fomit-frame-pointer -gdwarf-4 -v -fno-addrsig -fno-unwind-tables
+// RUN: %cheri_clang -g -c -o %t.hybrid-driver.o %s -fomit-frame-pointer -gdwarf-4 -v -fno-addrsig -fno-unwind-tables -fno-asynchronous-unwind-tables
 // RUN: llvm-dwarfdump -debug-frame %t.hybrid-driver.o | FileCheck %s -check-prefixes HYBRID,CHECK
-// RUN: %cheri_purecap_clang -g -c -o %t.purecap-driver.o %s -fomit-frame-pointer -gdwarf-4 -fno-addrsig -fno-unwind-tables
+// RUN: %cheri_purecap_clang -g -c -o %t.purecap-driver.o %s -fomit-frame-pointer -gdwarf-4 -fno-addrsig -fno-unwind-tables -fno-asynchronous-unwind-tables
 // RUN: llvm-dwarfdump -debug-frame %t.purecap-driver.o | FileCheck %s -check-prefixes PURECAP,CHECK
 
 int* external_func(int);
@@ -22,6 +21,8 @@ int* test(int i) {
 
 // CHECK-LABEL: 00000000
 // CHECK-NEXT: Format: DWARF32
+/// NB: Exception handling uses Version 1 unconditionally, so if this ends up
+/// being 1, the driver logic may have changed and we need additional flags.
 // CHECK-NEXT: Version: 4
 // n64 uses ra (register 31)
 // HYBRID:  Return address column: 31
