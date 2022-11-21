@@ -14,7 +14,7 @@ struct addrinfo {
 };
 
 // OPTNONE-LABEL: define {{[^@]+}}@c
-// OPTNONE-SAME: (i8 addrspace(200)* [[A:%.*]]) addrspace(200) #[[ATTR0:[0-9]+]] {
+// OPTNONE-SAME: (i8 addrspace(200)* noundef [[A:%.*]]) addrspace(200) #[[ATTR0:[0-9]+]] {
 // OPTNONE-NEXT:  entry:
 // OPTNONE-NEXT:    [[RETVAL:%.*]] = alloca [[STRUCT_ADDRINFO:%.*]], align 16, addrspace(200)
 // OPTNONE-NEXT:    [[A_ADDR:%.*]] = alloca i8 addrspace(200)*, align 16, addrspace(200)
@@ -28,11 +28,11 @@ struct addrinfo {
 // OPTNONE-NEXT:    ret { i8 addrspace(200)* } [[TMP3]]
 //
 // CHECK-LABEL: define {{[^@]+}}@c
-// CHECK-SAME: (i8 addrspace(200)* nocapture readonly [[A:%.*]]) local_unnamed_addr addrspace(200) #[[ATTR0:[0-9]+]] {
+// CHECK-SAME: (i8 addrspace(200)* nocapture noundef readonly [[A:%.*]]) local_unnamed_addr addrspace(200) #[[ATTR0:[0-9]+]] {
 // CHECK-NEXT:  entry:
 // CHECK-NEXT:    [[RETVAL_SROA_0_0_A_ADDR_0__SROA_CAST:%.*]] = bitcast i8 addrspace(200)* [[A]] to i8 addrspace(200)* addrspace(200)*
 // CHECK-NEXT:    [[RETVAL_SROA_0_0_COPYLOAD:%.*]] = load i8 addrspace(200)*, i8 addrspace(200)* addrspace(200)* [[RETVAL_SROA_0_0_A_ADDR_0__SROA_CAST]], align 1
-// CHECK-NEXT:    [[DOTFCA_0_INSERT:%.*]] = insertvalue { i8 addrspace(200)* } undef, i8 addrspace(200)* [[RETVAL_SROA_0_0_COPYLOAD]], 0
+// CHECK-NEXT:    [[DOTFCA_0_INSERT:%.*]] = insertvalue { i8 addrspace(200)* } poison, i8 addrspace(200)* [[RETVAL_SROA_0_0_COPYLOAD]], 0
 // CHECK-NEXT:    ret { i8 addrspace(200)* } [[DOTFCA_0_INSERT]]
 //
 struct addrinfo c(char *a) {
@@ -58,7 +58,7 @@ struct group {
 };
 void do_stuff(struct group *g);
 // OPTNONE-LABEL: define {{[^@]+}}@copy_group
-// OPTNONE-SAME: (i8 addrspace(200)* [[A:%.*]]) addrspace(200) #[[ATTR0]] {
+// OPTNONE-SAME: (i8 addrspace(200)* noundef [[A:%.*]]) addrspace(200) #[[ATTR0]] {
 // OPTNONE-NEXT:  entry:
 // OPTNONE-NEXT:    [[A_ADDR:%.*]] = alloca i8 addrspace(200)*, align 16, addrspace(200)
 // OPTNONE-NEXT:    [[BUFFER:%.*]] = alloca [16 x i8], align 1, addrspace(200)
@@ -71,18 +71,18 @@ void do_stuff(struct group *g);
 // OPTNONE-NEXT:    [[TMP1:%.*]] = bitcast i8 addrspace(200)* [[ARRAYDECAY1]] to [[STRUCT_GROUP]] addrspace(200)*
 // OPTNONE-NEXT:    store [[STRUCT_GROUP]] addrspace(200)* [[TMP1]], [[STRUCT_GROUP]] addrspace(200)* addrspace(200)* [[G]], align 16
 // OPTNONE-NEXT:    [[TMP2:%.*]] = load [[STRUCT_GROUP]] addrspace(200)*, [[STRUCT_GROUP]] addrspace(200)* addrspace(200)* [[G]], align 16
-// OPTNONE-NEXT:    call void @do_stuff([[STRUCT_GROUP]] addrspace(200)* [[TMP2]])
+// OPTNONE-NEXT:    call void @do_stuff([[STRUCT_GROUP]] addrspace(200)* noundef [[TMP2]])
 // OPTNONE-NEXT:    ret void
 //
 // CHECK-LABEL: define {{[^@]+}}@copy_group
-// CHECK-SAME: (i8 addrspace(200)* [[A:%.*]]) local_unnamed_addr addrspace(200) #[[ATTR2:[0-9]+]] {
+// CHECK-SAME: (i8 addrspace(200)* noundef [[A:%.*]]) local_unnamed_addr addrspace(200) #[[ATTR2:[0-9]+]] {
 // CHECK-NEXT:  entry:
 // CHECK-NEXT:    [[BUFFER:%.*]] = alloca i8 addrspace(200)*, align 16, addrspace(200)
 // CHECK-NEXT:    [[TMP0:%.*]] = bitcast i8 addrspace(200)* addrspace(200)* [[BUFFER]] to i8 addrspace(200)*
 // CHECK-NEXT:    call void @llvm.lifetime.start.p200i8(i64 16, i8 addrspace(200)* nonnull [[TMP0]]) #[[ATTR5:[0-9]+]]
 // CHECK-NEXT:    store i8 addrspace(200)* [[A]], i8 addrspace(200)* addrspace(200)* [[BUFFER]], align 16
 // CHECK-NEXT:    [[TMP1:%.*]] = bitcast i8 addrspace(200)* addrspace(200)* [[BUFFER]] to [[STRUCT_GROUP:%.*]] addrspace(200)*
-// CHECK-NEXT:    call void @do_stuff([[STRUCT_GROUP]] addrspace(200)* nonnull [[TMP1]]) #[[ATTR5]]
+// CHECK-NEXT:    call void @do_stuff([[STRUCT_GROUP]] addrspace(200)* noundef nonnull [[TMP1]]) #[[ATTR5]]
 // CHECK-NEXT:    call void @llvm.lifetime.end.p200i8(i64 16, i8 addrspace(200)* nonnull [[TMP0]]) #[[ATTR5]]
 // CHECK-NEXT:    ret void
 //
@@ -96,7 +96,7 @@ void copy_group(const char *a) {
 }
 
 // OPTNONE-LABEL: define {{[^@]+}}@copy_group2
-// OPTNONE-SAME: (i8 addrspace(200)* [[A:%.*]], i8 addrspace(200)* [[BUFFER:%.*]]) addrspace(200) #[[ATTR0]] {
+// OPTNONE-SAME: (i8 addrspace(200)* noundef [[A:%.*]], i8 addrspace(200)* noundef [[BUFFER:%.*]]) addrspace(200) #[[ATTR0]] {
 // OPTNONE-NEXT:  entry:
 // OPTNONE-NEXT:    [[A_ADDR:%.*]] = alloca i8 addrspace(200)*, align 16, addrspace(200)
 // OPTNONE-NEXT:    [[BUFFER_ADDR:%.*]] = alloca i8 addrspace(200)*, align 16, addrspace(200)
@@ -110,16 +110,16 @@ void copy_group(const char *a) {
 // OPTNONE-NEXT:    [[TMP3:%.*]] = bitcast i8 addrspace(200)* [[TMP2]] to [[STRUCT_GROUP]] addrspace(200)*
 // OPTNONE-NEXT:    store [[STRUCT_GROUP]] addrspace(200)* [[TMP3]], [[STRUCT_GROUP]] addrspace(200)* addrspace(200)* [[G]], align 16
 // OPTNONE-NEXT:    [[TMP4:%.*]] = load [[STRUCT_GROUP]] addrspace(200)*, [[STRUCT_GROUP]] addrspace(200)* addrspace(200)* [[G]], align 16
-// OPTNONE-NEXT:    call void @do_stuff([[STRUCT_GROUP]] addrspace(200)* [[TMP4]])
+// OPTNONE-NEXT:    call void @do_stuff([[STRUCT_GROUP]] addrspace(200)* noundef [[TMP4]])
 // OPTNONE-NEXT:    ret void
 //
 // CHECK-LABEL: define {{[^@]+}}@copy_group2
-// CHECK-SAME: (i8 addrspace(200)* [[A:%.*]], i8 addrspace(200)* [[BUFFER:%.*]]) local_unnamed_addr addrspace(200) #[[ATTR2]] {
+// CHECK-SAME: (i8 addrspace(200)* noundef [[A:%.*]], i8 addrspace(200)* noundef [[BUFFER:%.*]]) local_unnamed_addr addrspace(200) #[[ATTR2]] {
 // CHECK-NEXT:  entry:
 // CHECK-NEXT:    [[A_ADDR_0_BUFFER_ADDR_0__SROA_CAST:%.*]] = bitcast i8 addrspace(200)* [[BUFFER]] to i8 addrspace(200)* addrspace(200)*
 // CHECK-NEXT:    store i8 addrspace(200)* [[A]], i8 addrspace(200)* addrspace(200)* [[A_ADDR_0_BUFFER_ADDR_0__SROA_CAST]], align 1
 // CHECK-NEXT:    [[TMP0:%.*]] = bitcast i8 addrspace(200)* [[BUFFER]] to [[STRUCT_GROUP:%.*]] addrspace(200)*
-// CHECK-NEXT:    tail call void @do_stuff([[STRUCT_GROUP]] addrspace(200)* [[TMP0]]) #[[ATTR5]]
+// CHECK-NEXT:    tail call void @do_stuff([[STRUCT_GROUP]] addrspace(200)* noundef [[TMP0]]) #[[ATTR5]]
 // CHECK-NEXT:    ret void
 //
 void copy_group2(const char *a, char *buffer) {
@@ -134,7 +134,7 @@ void copy_group2(const char *a, char *buffer) {
 }
 
 // OPTNONE-LABEL: define {{[^@]+}}@copy_group3
-// OPTNONE-SAME: (i8 addrspace(200)* [[BUFFER:%.*]], i8 addrspace(200)* inreg [[A_COERCE:%.*]], i64 signext [[SIZE:%.*]]) addrspace(200) #[[ATTR0]] {
+// OPTNONE-SAME: (i8 addrspace(200)* noundef [[BUFFER:%.*]], i8 addrspace(200)* inreg [[A_COERCE:%.*]], i64 noundef signext [[SIZE:%.*]]) addrspace(200) #[[ATTR0]] {
 // OPTNONE-NEXT:  entry:
 // OPTNONE-NEXT:    [[A:%.*]] = alloca [[STRUCT_GROUP:%.*]], align 16, addrspace(200)
 // OPTNONE-NEXT:    [[BUFFER_ADDR:%.*]] = alloca i8 addrspace(200)*, align 16, addrspace(200)
@@ -152,18 +152,18 @@ void copy_group2(const char *a, char *buffer) {
 // OPTNONE-NEXT:    [[TMP4:%.*]] = bitcast i8 addrspace(200)* [[TMP3]] to [[STRUCT_GROUP]] addrspace(200)*
 // OPTNONE-NEXT:    store [[STRUCT_GROUP]] addrspace(200)* [[TMP4]], [[STRUCT_GROUP]] addrspace(200)* addrspace(200)* [[G]], align 16
 // OPTNONE-NEXT:    [[TMP5:%.*]] = load [[STRUCT_GROUP]] addrspace(200)*, [[STRUCT_GROUP]] addrspace(200)* addrspace(200)* [[G]], align 16
-// OPTNONE-NEXT:    call void @do_stuff([[STRUCT_GROUP]] addrspace(200)* [[TMP5]])
+// OPTNONE-NEXT:    call void @do_stuff([[STRUCT_GROUP]] addrspace(200)* noundef [[TMP5]])
 // OPTNONE-NEXT:    ret void
 //
 // CHECK-LABEL: define {{[^@]+}}@copy_group3
-// CHECK-SAME: (i8 addrspace(200)* [[BUFFER:%.*]], i8 addrspace(200)* inreg [[A_COERCE:%.*]], i64 signext [[SIZE:%.*]]) local_unnamed_addr addrspace(200) #[[ATTR2]] {
+// CHECK-SAME: (i8 addrspace(200)* noundef [[BUFFER:%.*]], i8 addrspace(200)* inreg [[A_COERCE:%.*]], i64 noundef signext [[SIZE:%.*]]) local_unnamed_addr addrspace(200) #[[ATTR2]] {
 // CHECK-NEXT:  entry:
 // CHECK-NEXT:    [[A_SROA_0:%.*]] = alloca i8 addrspace(200)*, align 16, addrspace(200)
 // CHECK-NEXT:    store i8 addrspace(200)* [[A_COERCE]], i8 addrspace(200)* addrspace(200)* [[A_SROA_0]], align 16
 // CHECK-NEXT:    [[A_SROA_0_0__SROA_CAST4:%.*]] = bitcast i8 addrspace(200)* addrspace(200)* [[A_SROA_0]] to i8 addrspace(200)*
 // CHECK-NEXT:    call void @llvm.memcpy.p200i8.p200i8.i64(i8 addrspace(200)* align 1 [[BUFFER]], i8 addrspace(200)* nonnull align 16 [[A_SROA_0_0__SROA_CAST4]], i64 [[SIZE]], i1 false) #[[ATTR6:[0-9]+]]
 // CHECK-NEXT:    [[TMP0:%.*]] = bitcast i8 addrspace(200)* [[BUFFER]] to [[STRUCT_GROUP:%.*]] addrspace(200)*
-// CHECK-NEXT:    tail call void @do_stuff([[STRUCT_GROUP]] addrspace(200)* [[TMP0]]) #[[ATTR5]]
+// CHECK-NEXT:    tail call void @do_stuff([[STRUCT_GROUP]] addrspace(200)* noundef [[TMP0]]) #[[ATTR5]]
 // CHECK-NEXT:    ret void
 //
 void copy_group3(char *buffer, struct group a, long size) {
