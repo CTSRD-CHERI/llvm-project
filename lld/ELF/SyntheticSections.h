@@ -104,6 +104,7 @@ public:
   bool isNeeded() const override;
   void writeTo(uint8_t *buf) override;
 
+  void addConstant(const Relocation &r);
   void addEntry(Symbol &sym);
   bool addTlsDescEntry(Symbol &sym);
   bool addDynTlsEntry(Symbol &sym);
@@ -517,8 +518,7 @@ public:
   }
   /// Add a dynamic relocation using the target address of \p sym as the addend
   /// if \p sym is non-preemptible. Otherwise add a relocation against \p sym.
-  void addAddendOnlyRelocIfNonPreemptible(RelType dynType,
-                                          InputSectionBase &isec,
+  void addAddendOnlyRelocIfNonPreemptible(RelType dynType, InputSectionBase &sec,
                                           uint64_t offsetInSec, Symbol &sym,
                                           RelType addendRelType);
   template <bool shard = false>
@@ -540,8 +540,7 @@ public:
              getLocationMessage(sec, sym, offsetInSec));
     }
     if (writeAddend)
-      sec.relocations.push_back(
-          {expr, addendRelType, offsetInSec, addend, &sym});
+      sec.addReloc({expr, addendRelType, offsetInSec, addend, &sym});
     addReloc<shard>({dynType, &sec, offsetInSec, kind, sym, addend, expr});
   }
   bool isNeeded() const override {
