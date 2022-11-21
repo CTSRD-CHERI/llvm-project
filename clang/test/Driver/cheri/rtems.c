@@ -5,7 +5,7 @@
 // RUN:     --sysroot=%S/platform 2>&1 \
 // RUN:     | FileCheck -check-prefixes=CHECK,CHECK-AARCH64 %s
 // CHECK: {{.*}}clang{{.*}}" "-cc1"
-// CHECK: "-munwind-tables"
+// CHECK: "-funwind-tables=2"
 // CHECK-NOT: "-fno-use-init-array"
 // CHECK: "-isysroot" "[[SYSROOT:[^"]+]]"
 // CHECK: "-internal-externc-isystem" "[[SYSROOT]]{{/|\\\\}}include"
