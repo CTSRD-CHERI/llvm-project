@@ -3954,6 +3954,9 @@ void InStruct::reset() {
   attributes.reset();
   bss.reset();
   bssRelRo.reset();
+  capRelocs.reset();
+  cheriCapTableMapping.reset();
+  cheriCapTableMapping.reset();
   got.reset();
   gotPlt.reset();
   igotPlt.reset();
