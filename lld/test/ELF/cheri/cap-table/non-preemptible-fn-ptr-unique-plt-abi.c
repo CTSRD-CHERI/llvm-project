@@ -36,7 +36,12 @@
 // RUN: llvm-readobj --dyn-symbols --dyn-relocations --cap-relocs --cap-table %t.exe | FileCheck %s --check-prefixes CHECK,CHECK-NONPREEMPTIBLE
 
 // CHECK-LABEL: Dynamic Relocations {
-// With the version script default_callback comes first
+// The function pointer to the global function should be in .captable once and twice in .rodata
+// CHECK-NO-VERSION-SCRIPT-NEXT:   R_MIPS_CHERI_CAPABILITY/R_MIPS_NONE/R_MIPS_NONE default_callback{{$}}
+// CHECK-NO-VERSION-SCRIPT-NEXT:   R_MIPS_CHERI_CAPABILITY/R_MIPS_NONE/R_MIPS_NONE default_callback{{$}}
+// one reference in .captable
+// CHECK-NO-VERSION-SCRIPT-NEXT:   R_MIPS_CHERI_CAPABILITY/R_MIPS_NONE/R_MIPS_NONE default_callback{{$}}
+// Now the synthetic symbol
 // CHECK-NONPREEMPTIBLE-NEXT:   R_MIPS_CHERI_CAPABILITY/R_MIPS_NONE/R_MIPS_NONE __cheri_fnptr_default_callback{{$}}
 // CHECK-NONPREEMPTIBLE-NEXT:   R_MIPS_CHERI_CAPABILITY/R_MIPS_NONE/R_MIPS_NONE __cheri_fnptr_default_callback{{$}}
 // one reference in .captable
@@ -48,12 +53,6 @@
 // CHECK-NEXT:   R_MIPS_CHERI_CAPABILITY/R_MIPS_NONE/R_MIPS_NONE __cheri_fnptr_static_callback{{$}}
 // one reference in .captable
 // CHECK-NEXT:   R_MIPS_CHERI_CAPABILITY/R_MIPS_NONE/R_MIPS_NONE __cheri_fnptr_static_callback{{$}}
-
-// The function pointer to the global function should be in .captable once and twice in .rodata
-// CHECK-NO-VERSION-SCRIPT-NEXT:   R_MIPS_CHERI_CAPABILITY/R_MIPS_NONE/R_MIPS_NONE default_callback{{$}}
-// CHECK-NO-VERSION-SCRIPT-NEXT:   R_MIPS_CHERI_CAPABILITY/R_MIPS_NONE/R_MIPS_NONE default_callback{{$}}
-// one reference in .captable
-// CHECK-NO-VERSION-SCRIPT-NEXT:   R_MIPS_CHERI_CAPABILITY/R_MIPS_NONE/R_MIPS_NONE default_callback{{$}}
 
 // We need a R_MIPS_CHERI_CAPABILITY_CALL relocation against use_callback to call a function (potentially) in another DSO
 // CHECK-SHLINEXT:     R_MIPS_CHERI_CAPABILITY_CALL/R_MIPS_NONE/R_MIPS_NONE check_if_default{{$}}
@@ -69,29 +68,6 @@
 // CHECK-NEXT:     Section: Undefined (0x0)
 // CHECK-NEXT:   }
 // With the version script/when building an executable we also need to add a fake symbol for default_callback
-// CHECK-NONPREEMPTIBLE-NEXT:   Symbol {
-// CHECK-NONPREEMPTIBLE-NEXT:     Name: __cheri_fnptr_default_callback ({{.+}})
-// CHECK-NONPREEMPTIBLE-NEXT:     Value:
-// CHECK-NONPREEMPTIBLE-NEXT:     Size: 12
-// CHECK-NONPREEMPTIBLE-NEXT:     Binding: Local (0x0)
-// CHECK-NONPREEMPTIBLE-NEXT:     Type: Function (0x2)
-// CHECK-NONPREEMPTIBLE-NEXT:     Other [ (0x2)
-// CHECK-NONPREEMPTIBLE-NEXT:       STV_HIDDEN (0x2)
-// CHECK-NONPREEMPTIBLE-NEXT:     ]
-// CHECK-NONPREEMPTIBLE-NEXT:     Section: .text (0x
-// CHECK-NONPREEMPTIBLE-NEXT:   }
-// CHECK-NEXT:   Symbol {
-// Check that we added a "fake" symbol for the local return1 symbol:
-// CHECK-NEXT:     Name: __cheri_fnptr_static_callback ({{.+}})
-// CHECK-NEXT:     Value:
-// CHECK-NEXT:     Size: 12
-// CHECK-NEXT:     Binding: Local (0x0)
-// CHECK-NEXT:     Type: Function (0x2)
-// CHECK-NEXT:     Other [ (0x2)
-// CHECK-NEXT:       STV_HIDDEN (0x2)
-// CHECK-NEXT:     ]
-// CHECK-NEXT:     Section: .text (0x
-// CHECK-NEXT:   }
 // CHECK-NO-VERSION-SCRIPT-NEXT:  Symbol {
 // CHECK-NO-VERSION-SCRIPT-NEXT:    Name: default_callback (
 // CHECK-NO-VERSION-SCRIPT-NEXT:    Value:
@@ -112,6 +88,29 @@
 // CHECK-SHLIB-NEXT:    ]
 // CHECK-SHLIB-NEXT:    Section: .text (0x
 // CHECK-SHLIB-NEXT:  }
+// CHECK-NONPREEMPTIBLE-NEXT:   Symbol {
+// CHECK-NONPREEMPTIBLE-NEXT:     Name: __cheri_fnptr_default_callback ({{.+}})
+// CHECK-NONPREEMPTIBLE-NEXT:     Value:
+// CHECK-NONPREEMPTIBLE-NEXT:     Size: 12
+// CHECK-NONPREEMPTIBLE-NEXT:     Binding: Global (0x1)
+// CHECK-NONPREEMPTIBLE-NEXT:     Type: Function (0x2)
+// CHECK-NONPREEMPTIBLE-NEXT:     Other [ (0x2)
+// CHECK-NONPREEMPTIBLE-NEXT:       STV_HIDDEN (0x2)
+// CHECK-NONPREEMPTIBLE-NEXT:     ]
+// CHECK-NONPREEMPTIBLE-NEXT:     Section: .text (0x
+// CHECK-NONPREEMPTIBLE-NEXT:   }
+// CHECK-NEXT:   Symbol {
+// Check that we added a "fake" symbol for the local return1 symbol:
+// CHECK-NEXT:     Name: __cheri_fnptr_static_callback ({{.+}})
+// CHECK-NEXT:     Value:
+// CHECK-NEXT:     Size: 12
+// CHECK-NEXT:     Binding: Global (0x1)
+// CHECK-NEXT:     Type: Function (0x2)
+// CHECK-NEXT:     Other [ (0x2)
+// CHECK-NEXT:       STV_HIDDEN (0x2)
+// CHECK-NEXT:     ]
+// CHECK-NEXT:     Section: .text (0x
+// CHECK-NEXT:   }
 // CHECK-NEXT: ]
 // __cap_relocs should be empty other than the one global reference to callbacks
 // CHECK-NEXT: CHERI __cap_relocs [

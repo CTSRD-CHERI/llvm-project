@@ -36,8 +36,9 @@ Defined *SymbolTable::ensureSymbolWillBeInDynsym(Symbol* original) {
   assert(original->isFunc() && "This should only be used for functions");
   // Hack: Add a new global symbol with a unique name so that we can use
   // a dynamic relocation against it.
+  // TODO: It would be nice to just be able to reuse the original symbol, but we
+  // can't have STB_LOCAL symbols in .dynsym
   // TODO: should it be possible to add STB_LOCAL symbols to .dynsymtab?
-  // create a unique name:
 
   auto it = localSymbolsForDynsym.find(original);
   if (it != localSymbolsForDynsym.end()) {
@@ -51,21 +52,24 @@ Defined *SymbolTable::ensureSymbolWillBeInDynsym(Symbol* original) {
   for (int i = 2; symtab->find(uniqueName); i++) {
     uniqueName = ("__cheri_fnptr" + Twine(i) + "_" + original->getName()).str();
   }
-  auto localDef = cast<Defined>(original);
-  Defined* newSym = cast<Defined>(symtab->addSymbol(Defined{localDef->file,
-      saver().save(uniqueName), llvm::ELF::STB_GLOBAL, llvm::ELF::STV_HIDDEN,
-      localDef->type, localDef->value, localDef->getSize(), localDef->section}));
-
-  assert(newSym->isFunc() && "This should only be used for functions");
-  // TODO: would be nice to just set this on Sym, but we can't have
-  // STB_LOCAL symbols in .dynsym
+  StringRef newName = saver().save(uniqueName);
+  Symbol* newSym = symtab->insert(newName);
+  newSym->resolve(*original);
+  newSym->setName(newName); // resolve() changes the name to original->name
+  newSym->binding = llvm::ELF::STB_GLOBAL;
+  newSym->visibility = llvm::ELF::STV_HIDDEN;
+  newSym->versionId = VER_NDX_GLOBAL;
   newSym->usedByDynReloc = true;
   newSym->isPreemptible = false;
+  assert(newSym->computeBinding() == llvm::ELF::STB_GLOBAL);
+
+  assert(newSym->isFunc() && "This should only be used for functions");
+
   if (config->verboseCapRelocs)
     message("Adding new symbol " + toString(*newSym) +
             " to allow relocation against " + verboseToString(original));
-  localSymbolsForDynsym[original] = newSym;
-  return newSym;
+  localSymbolsForDynsym[original] = cast<Defined>(newSym);
+  return cast<Defined>(newSym);
 }
 
 

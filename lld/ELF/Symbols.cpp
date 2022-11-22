@@ -367,7 +367,8 @@ MemoryBufferRef LazyArchive::getMemberBuffer() {
 }
 
 uint8_t Symbol::computeBinding() const {
-  if ((visibility != STV_DEFAULT && visibility != STV_PROTECTED) ||
+  if ((visibility != STV_DEFAULT && visibility != STV_PROTECTED &&
+       !usedByDynReloc) ||
       versionId == VER_NDX_LOCAL)
     return STB_LOCAL;
   if (binding == STB_GNU_UNIQUE && !config->gnuUnique)

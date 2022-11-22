@@ -38,9 +38,9 @@
 
 // CHECK-LABEL: Dynamic Relocations {
 // We need a R_MIPS_CHERI_CAPABILITY relocation against return1 to ensure that the dynamic linker creates a unique trampoline
-// CHECK-NEXT:    R_MIPS_CHERI_CAPABILITY/R_MIPS_NONE/R_MIPS_NONE __cheri_fnptr_return1{{$}}
 // R_MIPS_CHERI_CAPABILITY against the global function pointer:
 // CHECK-SHLIB-NEXT:   R_MIPS_CHERI_CAPABILITY/R_MIPS_NONE/R_MIPS_NONE global_return2{{$}}
+// CHECK-NEXT:    R_MIPS_CHERI_CAPABILITY/R_MIPS_NONE/R_MIPS_NONE __cheri_fnptr_return1{{$}}
 // In executables with --export-dynamic we add a new hidden symbol:
 // CHECK-NODYN-NEXT:     R_MIPS_CHERI_CAPABILITY/R_MIPS_NONE/R_MIPS_NONE __cheri_fnptr_global_return2{{$}}
 // We need a R_MIPS_CHERI_CAPABILITY_CALL relocation against use_callback to call a function in another DSO
@@ -56,30 +56,6 @@
 // CHECK-NEXT:     Other: 0
 // CHECK-NEXT:     Section: Undefined (0x0)
 // CHECK-NEXT:   }
-// CHECK-NEXT:   Symbol {
-// Check that we added a "fake" symbol for the local return1 symbol:
-// CHECK-NEXT:     Name: __cheri_fnptr_return1 ({{.+}})
-// CHECK-NEXT:     Value:
-// CHECK-NEXT:     Size: 12
-// CHECK-NEXT:     Binding: Local (0x0)
-// CHECK-NEXT:     Type: Function (0x2)
-// CHECK-NEXT:     Other [ (0x2)
-// CHECK-NEXT:       STV_HIDDEN (0x2)
-// CHECK-NEXT:     ]
-// CHECK-NEXT:     Section: .text (0x{{.+}})
-// CHECK-NEXT:   }
-// For executables without --export-dynamic we also create a "fake" symbol alias for global_return2
-// CHECK-NODYN-NEXT:   Symbol {
-// CHECK-NODYN-NEXT:     Name: __cheri_fnptr_global_return2 ({{.+}})
-// CHECK-NODYN-NEXT:     Value:
-// CHECK-NODYN-NEXT:     Size: 12
-// CHECK-NODYN-NEXT:     Binding: Local (0x0)
-// CHECK-NODYN-NEXT:     Type: Function (0x2)
-// CHECK-NODYN-NEXT:     Other [ (0x2)
-// CHECK-NODYN-NEXT:       STV_HIDDEN (0x2)
-// CHECK-NODYN-NEXT:     ]
-// CHECK-NODYN-NEXT:     Section: .text (0x{{.+}})
-// CHECK-NODYN-NEXT:   }
 // CHECK-SHLIB-NEXT:   Symbol {
 // CHECK-SHLIB-NEXT:     Name: global_return2 ({{.+}})
 // CHECK-SHLIB-NEXT:     Value:
@@ -98,6 +74,30 @@
 // CHECK-NEXT:     Other: 0
 // CHECK-NEXT:     Section: Undefined (0x0)
 // CHECK-NEXT:   }
+// CHECK-NEXT:   Symbol {
+// Check that we added a "fake" symbol for the local return1 symbol:
+// CHECK-NEXT:     Name: __cheri_fnptr_return1 ({{.+}})
+// CHECK-NEXT:     Value:
+// CHECK-NEXT:     Size: 12
+// CHECK-NEXT:     Binding: Global (0x1)
+// CHECK-NEXT:     Type: Function (0x2)
+// CHECK-NEXT:     Other [ (0x2)
+// CHECK-NEXT:       STV_HIDDEN (0x2)
+// CHECK-NEXT:     ]
+// CHECK-NEXT:     Section: .text (0x{{.+}})
+// CHECK-NEXT:   }
+// For executables without --export-dynamic we also create a "fake" symbol alias for global_return2
+// CHECK-NODYN-NEXT:   Symbol {
+// CHECK-NODYN-NEXT:     Name: __cheri_fnptr_global_return2 ({{.+}})
+// CHECK-NODYN-NEXT:     Value:
+// CHECK-NODYN-NEXT:     Size: 12
+// CHECK-NODYN-NEXT:     Binding: Global (0x1)
+// CHECK-NODYN-NEXT:     Type: Function (0x2)
+// CHECK-NODYN-NEXT:     Other [ (0x2)
+// CHECK-NODYN-NEXT:       STV_HIDDEN (0x2)
+// CHECK-NODYN-NEXT:     ]
+// CHECK-NODYN-NEXT:     Section: .text (0x{{.+}})
+// CHECK-NODYN-NEXT:   }
 // CHECK-NEXT: ]
 // __cap_relocs should be empty! we need a dynamic relocaiton for return1 since we are using it as a function pointer
 // CHECK-NEXT: There is no __cap_relocs section in the file.
