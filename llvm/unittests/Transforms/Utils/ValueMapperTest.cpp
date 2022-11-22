@@ -330,7 +330,7 @@ TEST(ValueMapperTest, mapValueLocalInArgList) {
   FunctionType *FTy =
       FunctionType::get(Type::getVoidTy(C), Type::getInt8Ty(C), false);
   std::unique_ptr<Function> F(
-      Function::Create(FTy, GlobalValue::ExternalLinkage, "F"));
+      Function::Create(FTy, GlobalValue::ExternalLinkage, 0, "F"));
   Argument &A = *F->arg_begin();
 
   auto *LAM = LocalAsMetadata::get(&A);
