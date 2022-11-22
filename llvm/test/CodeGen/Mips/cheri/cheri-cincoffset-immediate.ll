@@ -1,8 +1,4 @@
-; RUN: %cheri_llc %s -o - | FileCheck %s
-; ModuleID = 'ptradd.c'
-source_filename = "ptradd.c"
-target datalayout = "E-m:e-pf200:256:256-i8:8:32-i16:16:32-i64:64-n32:64-S128-A200"
-target triple = "cheri-unknown-freebsd"
+; RUN: %cheri_purecap_llc %s -o - | FileCheck %s
 
 ; Function Attrs: norecurse nounwind readnone
 define i8 addrspace(200)* @imm(i8 addrspace(200)* readnone %a) local_unnamed_addr #0 {

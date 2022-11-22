@@ -1,8 +1,4 @@
 ; RUN: %cheri_purecap_llc -cheri-cap-table-abi=pcrel -mxcaptable -o - %s | FileCheck %s -check-prefix PCREL
-; ModuleID = 'cheri-got-jumptable.c'
-source_filename = "cheri-got-jumptable.c"
-target datalayout = "E-m:e-pf200:256:256-i8:8:32-i16:16:32-i64:64-n32:64-S128-A200"
-target triple = "cheri-unknown-freebsd"
 
 ; Function Attrs: noinline nounwind
 define i32 @get_next_format_from_precision(i8 addrspace(200)* addrspace(200)* %pf) #0 {

@@ -1,10 +1,7 @@
-; RUN: %cheri_llc %s -target-abi purecap -o - -asm-verbose -verify-regalloc -O0 | %cheri_FileCheck %s
-; RUN: %cheri_llc %s -target-abi purecap -o - -asm-verbose -verify-regalloc -O1 | %cheri_FileCheck %s -check-prefix OPT
-; RUN: %cheri_llc %s -target-abi purecap -o - -asm-verbose -verify-regalloc -O2 | %cheri_FileCheck %s -check-prefix OPT
-; ModuleID = '/local/scratch/alr48/cheri/llvm/tools/clang/test/CodeGenCXX/cheri-pointer-to-member-simple.cpp'
-source_filename = "/local/scratch/alr48/cheri/llvm/tools/clang/test/CodeGenCXX/cheri-pointer-to-member-simple.cpp"
-target datalayout = "E-m:e-pf200:256:256-i8:8:32-i16:16:32-i64:64-n32:64-S128-A200"
-target triple = "cheri-unknown-freebsd"
+; RUN: %cheri_purecap_llc %s -o - -asm-verbose -verify-regalloc -O0 | %cheri_FileCheck %s
+; RUN: %cheri_purecap_llc %s -o - -asm-verbose -verify-regalloc -O1 | %cheri_FileCheck %s -check-prefix OPT
+; RUN: %cheri_purecap_llc %s -o - -asm-verbose -verify-regalloc -O2 | %cheri_FileCheck %s -check-prefix OPT
+
 
 %class.A = type <{ i32 (...) addrspace(200)* addrspace(200)*, i32, i32, [24 x i8] }>
 
@@ -58,13 +55,13 @@ memptr.end:                                       ; preds = %memptr.nonvirtual, 
   ; CHECK: cgetaddr $1, [[MEMPTR]]
   ; CHECK: clc     $c1, $1, 0($c1)
   ; CHECK: csc     $c1, [[STACK_TARGET_FN_PTR:\$zero, (([0-9]+|sp))\(\$c11\)]]
-  ; CHECK: j       .LBB0_4
+  ; CHECK: b       .LBB0_4
   ; CHECK: nop
 
   ; CHECK: .LBB0_3:                                # %memptr.nonvirtual
   ; CHECK: clc     $c1, [[STACK_MEMPTR_PTR]]      # {{16|32}}-byte Folded Reload
   ; CHECK: csc     $c1, [[STACK_TARGET_FN_PTR]]
-  ; CHECK: j       .LBB0_4
+  ; CHECK: b       .LBB0_4
   ; CHECK: nop
   ; CHECK: .LBB0_4:                                # %memptr.end
   ; CHECK-NEXT: clc     $c3, [[STACK_THIS_ADJ]]

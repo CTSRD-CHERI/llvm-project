@@ -1,11 +1,6 @@
 ; RUN: %cheri_purecap_llc -cheri-cap-table-abi=plt %s -mxcaptable=true  -o - -O0 | FileCheck %s -check-prefixes CHECK,BIGTABLE
 ; RUN: %cheri_purecap_llc -cheri-cap-table-abi=plt %s -mxcaptable=false -o - -O0 | FileCheck %s -check-prefixes CHECK,SMALLTABLE
 
-; ModuleID = '/Users/alex/cheri/llvm/tools/clang/test/CodeGen/CHERI/cap-table-call-extern.c'
-source_filename = "/Users/alex/cheri/llvm/tools/clang/test/CodeGen/CHERI/cap-table-call-extern.c"
-target datalayout = "E-m:e-pf200:256:256-i8:8:32-i16:16:32-i64:64-n32:64-S128-A200"
-target triple = "cheri-unknown-freebsd"
-
 @global = local_unnamed_addr addrspace(200) global i64 123, align 8
 
 declare void @extern_func() #0

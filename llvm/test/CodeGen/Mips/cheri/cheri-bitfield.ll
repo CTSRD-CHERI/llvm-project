@@ -3,9 +3,6 @@
 ; ModuleID = 'bit.c'
 ; Test that we can correctly legalise i128 and generate pointer arithmetic that
 ; doesn't crash the compiler.
-source_filename = "bit.c"
-target datalayout = "E-m:e-pf200:256:256-i8:8:32-i16:16:32-i64:64-n32:64-S128-A200"
-target triple = "cheri-unknown-freebsd"
 
 %struct.foo = type { i128 }
 

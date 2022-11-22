@@ -1,8 +1,4 @@
-; RUN: %cheri128_purecap_llc -O1 %s -o - | FileCheck %s --check-prefixes=CHECK
-; ModuleID = 'cheri-stack.c'
-source_filename = "cheri-stack.c"
-target datalayout = "E-m:e-pf200:256:256-i8:8:32-i16:16:32-i64:64-n32:64-S128-A200"
-target triple = "cheri-unknown-freebsd"
+; RUN: %cheri_purecap_llc -O1 %s -o - | FileCheck %s --check-prefixes=CHECK
 
 define void @dynamic_alloca(i32 signext %x) local_unnamed_addr #0 {
 entry:

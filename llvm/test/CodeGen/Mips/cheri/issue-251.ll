@@ -4,11 +4,6 @@
 ; Can't fold the immediate in csetoffset on NULL
 ; https://github.com/CTSRD-CHERI/llvm/issues/251
 
-; ModuleID = 'test.c'
-source_filename = "test.c"
-target datalayout = "E-m:e-pf200:256:256-i8:8:32-i16:16:32-i64:64-n32:64-S128-A200"
-target triple = "cheri-unknown-freebsd"
-
 ; Function Attrs: noinline nounwind optnone
 define void @func() #0 {
 entry:
