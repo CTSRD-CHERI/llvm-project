@@ -143,7 +143,6 @@ Defined *ElfSym::mipsLocalGp;
 Defined *ElfSym::cheriCapabilityTable;
 Defined *ElfSym::relaIpltStart;
 Defined *ElfSym::relaIpltEnd;
-Defined *ElfSym::riscvGlobalPointer;
 Defined *ElfSym::tlsModuleBase;
 SmallVector<SymbolAux, 0> elf::symAux;
 
