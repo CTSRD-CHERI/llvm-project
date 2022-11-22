@@ -59,7 +59,7 @@
 // HEADERS-NEXT: 07
 // HEADERS-NEXT: 08     .MIPS.options
 // HEADERS-NEXT: 09     .MIPS.abiflags
-// HEADERS-NEXT: None   .bss .pdr .comment .symtab .shstrtab .strtab
+// HEADERS-NEXT: None   .bss .mdebug.abi64 .pdr .comment .symtab .shstrtab .strtab
 
 // MIPS-RELOCS-LABEL:      Relocation section '.rel.dyn' {{.+}} contains 1 entries:
 // MIPS-RELOCS-NEXT: Offset             Info             Type                            Symbol's Value  Symbol's Name
