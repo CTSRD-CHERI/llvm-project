@@ -1,9 +1,5 @@
-; RUN: %cheri_purecap_opt -S -O3 %s | FileCheck %s
-
-; ModuleID = '/Users/alex/cheri/llvm/tools/clang/test/CodeGen/cheri-vla.c'
-source_filename = "/Users/alex/cheri/llvm/tools/clang/test/CodeGen/cheri-vla.c"
-target datalayout = "E-m:e-pf200:256:256-i8:8:32-i16:16:32-i64:64-n32:64-S128-A200"
-target triple = "cheri-unknown-freebsd"
+; RUN: opt -S -passes=instcombine %s | FileCheck %s
+target datalayout = "E-m:e-pf200:128:128:128:64-i8:8:32-i16:16:32-i64:64-n32:64-S128-A200-P200-G200"
 
 @char_ptr = external local_unnamed_addr addrspace(200) global i8 addrspace(200)*, align 32
 @char_data = external addrspace(200) global i8, align 1
@@ -30,6 +26,7 @@ define void @foo() local_unnamed_addr #0 {
   ; Other targets don't do so leave it like this
   call void @test(i8 addrspace(200)* getelementptr inbounds ([5 x i8], [5 x i8] addrspace(200)* @.str, i64 0, i64 0)) #1
   ; CHECK-NOTYET: call void @test(i8 addrspace(200)* nonnull getelementptr inbounds ([5 x i8], [5 x i8] addrspace(200)* @.str, i64 0, i64 0))
+  ; CHECK: call void @test(i8 addrspace(200)* getelementptr inbounds ([5 x i8], [5 x i8] addrspace(200)* @.str, i64 0, i64 0))
   ret void
 }
 
