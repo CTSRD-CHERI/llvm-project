@@ -1046,7 +1046,7 @@ void PhdrEntry::add(OutputSection *sec) {
 // need these symbols, since IRELATIVE relocs are resolved through GOT
 // and PLT. For details, see http://www.airs.com/blog/archives/403.
 template <class ELFT> void Writer<ELFT>::addRelIpltSymbols() {
-  if (config->relocatable || config->isPic)
+  if (config->isPic)
     return;
 
   // By default, __rela_iplt_{start,end} belong to a dummy section 0
@@ -1867,51 +1867,46 @@ static void removeUnusedSyntheticSections() {
 
 // Create output section objects and add them to OutputSections.
 template <class ELFT> void Writer<ELFT>::finalizeSections() {
-  Out::preinitArray = findSection(".preinit_array");
-  Out::initArray = findSection(".init_array");
-  Out::finiArray = findSection(".fini_array");
-
-  // The linker needs to define SECNAME_start, SECNAME_end and SECNAME_stop
-  // symbols for sections, so that the runtime can get the start and end
-  // addresses of each section by section name. Add such symbols.
   if (!config->relocatable) {
+    Out::preinitArray = findSection(".preinit_array");
+    Out::initArray = findSection(".init_array");
+    Out::finiArray = findSection(".fini_array");
+
+    // The linker needs to define SECNAME_start, SECNAME_end and SECNAME_stop
+    // symbols for sections, so that the runtime can get the start and end
+    // addresses of each section by section name. Add such symbols.
     addStartEndSymbols();
     for (SectionCommand *cmd : script->sectionCommands)
       if (auto *osd = dyn_cast<OutputDesc>(cmd))
         addStartStopSymbols(osd->osec);
-  }
 
-  // Add _DYNAMIC symbol. Unlike GNU gold, our _DYNAMIC symbol has no type.
-  // It should be okay as no one seems to care about the type.
-  // Even the author of gold doesn't remember why gold behaves that way.
-  // https://sourceware.org/ml/binutils/2002-03/msg00360.html
-  bool needsDYNAMIC = (config->isPic || !ctx.sharedFiles.empty()); // TODO: --as-needed?
-  if (mainPart->dynamic->parent && needsDYNAMIC) {
-    // Set _DYNAMIC to null for static binaries without shared libraries
-    // Note: This is needed in order to not have a valid _DYNAMIC if
-    // --export-dynamic is passed to a static executable. Some programs check
-    // if they are dynamically linked using `if (&_DYNAMIC != 0)` so we should
-    // keep this check working.
-    auto *s = symtab.addSymbol(
-        Defined{/*file=*/nullptr, "_DYNAMIC", STB_WEAK, STV_HIDDEN, STT_NOTYPE,
-                /*value=*/0, /*size=*/0, mainPart->dynamic.get()});
-    s->isUsedInRegularObj = true;
-    // In CheriABI we want sensible bounds if we do &_DYNAMIC in C code
-    s->isSectionStartSymbol = true;
-  }
-
-  // The common check if a program is dynamically linked (&_DYNAMIC != 0)
-  // will not work in the early CHERI startup. In PIC code we also can't
-  // use dla _DYNAMIC since that needs either $gp or text relocations
-  // Instead we just let the linker generate a new symbol _HAS__DYNAMIC
-  if (auto *reference = symtab.find("_HAS__DYNAMIC"))
-    if (!reference->isDefined()) {
-      Defined *hasDynamicSym = addAbsolute("_HAS__DYNAMIC");
-      hasDynamicSym->value = needsDYNAMIC ? 1 : 0;
+    // Add _DYNAMIC symbol. Unlike GNU gold, our _DYNAMIC symbol has no type.
+    // It should be okay as no one seems to care about the type.
+    // Even the author of gold doesn't remember why gold behaves that way.
+    // https://sourceware.org/ml/binutils/2002-03/msg00360.html
+    bool needsDYNAMIC = (config->isPic || !ctx.sharedFiles.empty()); // TODO: --as-needed?
+    if (mainPart->dynamic->parent && needsDYNAMIC) {
+      Symbol *s = symtab.addSymbol(Defined{
+          /*file=*/nullptr, "_DYNAMIC", STB_WEAK, STV_HIDDEN, STT_NOTYPE,
+          /*value=*/0, /*size=*/0, mainPart->dynamic.get()});
+      s->isUsedInRegularObj = true;
+      // In CheriABI we want sensible bounds if we do &_DYNAMIC in C code
+      s->isSectionStartSymbol = true;
     }
 
-  // Define __rel[a]_iplt_{start,end} symbols if needed.
-  addRelIpltSymbols();
+    // The common check if a program is dynamically linked (&_DYNAMIC != 0)
+    // will not work in the early CHERI startup. In PIC code we also can't
+    // use dla _DYNAMIC since that needs either $gp or text relocations
+    // Instead we just let the linker generate a new symbol _HAS__DYNAMIC
+    if (auto *reference = symtab.find("_HAS__DYNAMIC"))
+      if (!reference->isDefined()) {
+        Defined *hasDynamicSym = addAbsolute("_HAS__DYNAMIC");
+        hasDynamicSym->value = needsDYNAMIC ? 1 : 0;
+      }
+
+    // Define __rel[a]_iplt_{start,end} symbols if needed.
+    addRelIpltSymbols();
+  }
 
   // RISC-V's gp can address +/- 2 KiB, set it to .sdata + 0x800. This symbol
   // should only be defined in an executable. If .sdata does not exist, its
@@ -1946,98 +1941,97 @@ template <class ELFT> void Writer<ELFT>::finalizeSections() {
   }
 
   StringRef captableSym = "_CHERI_CAPABILITY_TABLE_";
-  if (in.cheriCapTable) {
-    // When creating relocatable output we should not define the
-    // _CHERI_CAPABILITY_TABLE_ symbol because otherwise we get duplicate
-    // symbol errors when linking that into a final executable
-    if (!config->relocatable)
-      ElfSym::cheriCapabilityTable =
-          addOptionalRegular(captableSym, in.cheriCapTable.get(), 0);
-  }
-  {
+  if (!config->relocatable) {
     llvm::TimeTraceScope timeScope("Finalize .eh_frame");
+
+    if (in.cheriCapTable) {
+      // When creating relocatable output we should not define the
+      // _CHERI_CAPABILITY_TABLE_ symbol because otherwise we get duplicate
+      // symbol errors when linking that into a final executable
+      if (!config->relocatable)
+        ElfSym::cheriCapabilityTable =
+            addOptionalRegular(captableSym, in.cheriCapTable.get(), 0);
+    }
     // This responsible for splitting up .eh_frame section into
     // pieces. The relocation scan uses those pieces, so this has to be
     // earlier.
     for (Partition &part : partitions)
       finalizeSynthetic(part.ehFrame.get());
-  }
 
-  if (config->hasDynSymTab) {
-    parallelForEach(symtab.getSymbols(), [](Symbol *sym) {
-      sym->isPreemptible = computeIsPreemptible(*sym);
-    });
+    if (config->hasDynSymTab) {
+      parallelForEach(symtab.getSymbols(), [](Symbol *sym) {
+        sym->isPreemptible = computeIsPreemptible(*sym);
+      });
+    }
   }
 
   // Change values of linker-script-defined symbols from placeholders (assigned
   // by declareSymbols) to actual definitions.
   script->processSymbolAssignments();
 
-  {
+  if (!config->relocatable) {
     llvm::TimeTraceScope timeScope("Scan relocations");
     // Scan relocations. This must be done after every symbol is declared so
     // that we can correctly decide if a dynamic relocation is needed. This is
     // called after processSymbolAssignments() because it needs to know whether
     // a linker-script-defined symbol is absolute.
     ppc64noTocRelax.clear();
-    if (!config->relocatable) {
-      scanRelocations<ELFT>();
-      reportUndefinedSymbols();
-      postScanRelocations();
+    scanRelocations<ELFT>();
+    reportUndefinedSymbols();
+    postScanRelocations();
+
+    // Do the cap table index assignment
+    // Must come before CapRelocs->finalizeContents() because it can add
+    // __cap_relocs
+    if (in.cheriCapTable) {
+      // Ensure that we always have a _CHERI_CAPABILITY_TABLE_ symbol if the
+      // cap table exists. This makes llvm-objdump more useful since it can now
+      // print the target of a cap table load
+      if (!ElfSym::cheriCapabilityTable && in.cheriCapTable->isNeeded()) {
+        ElfSym::cheriCapabilityTable = cast<Defined>(
+            symtab.addSymbol(Defined{nullptr, captableSym, STB_LOCAL,
+              STV_HIDDEN, STT_NOTYPE, 0, 0, in.cheriCapTable.get()}));
+        ElfSym::cheriCapabilityTable->isSectionStartSymbol = true;
+        assert(!ElfSym::cheriCapabilityTable->isPreemptible);
+      }
+      in.cheriCapTable->assignValuesAndAddCapTableSymbols<ELFT>();
     }
-  }
 
-  // Do the cap table index assignment
-  // Must come before CapRelocs->finalizeContents() because it can add
-  // __cap_relocs
-  if (in.cheriCapTable) {
-    // Ensure that we always have a _CHERI_CAPABILITY_TABLE_ symbol if the
-    // cap table exists. This makes llvm-objdump more useful since it can now
-    // print the target of a cap table load
-    if (!ElfSym::cheriCapabilityTable && in.cheriCapTable->isNeeded()) {
-      ElfSym::cheriCapabilityTable = cast<Defined>(
-          symtab.addSymbol(Defined{nullptr, captableSym, STB_LOCAL,
-            STV_HIDDEN, STT_NOTYPE, 0, 0, in.cheriCapTable.get()}));
-      ElfSym::cheriCapabilityTable->isSectionStartSymbol = true;
-      assert(!ElfSym::cheriCapabilityTable->isPreemptible);
+    // Now handle __cap_relocs (must be before RelaDyn because it might
+    // result in new dynamic relocations being added)
+    if (in.capRelocs) {
+      finalizeSynthetic(in.capRelocs.get());
     }
-    in.cheriCapTable->assignValuesAndAddCapTableSymbols<ELFT>();
-  }
+    if (in.plt && in.plt->isNeeded())
+      in.plt->addSymbols();
+    if (in.iplt && in.iplt->isNeeded())
+      in.iplt->addSymbols();
 
-  // Now handle __cap_relocs (must be before RelaDyn because it might
-  // result in new dynamic relocations being added)
-  if (in.capRelocs) {
-    finalizeSynthetic(in.capRelocs.get());
-  }
-
-  if (in.plt && in.plt->isNeeded())
-    in.plt->addSymbols();
-  if (in.iplt && in.iplt->isNeeded())
-    in.iplt->addSymbols();
-
-  if (config->unresolvedSymbolsInShlib != UnresolvedPolicy::Ignore) {
-    auto diagnose =
-        config->unresolvedSymbolsInShlib == UnresolvedPolicy::ReportError
-            ? errorOrWarn
-            : warn;
-    // Error on undefined symbols in a shared object, if all of its DT_NEEDED
-    // entries are seen. These cases would otherwise lead to runtime errors
-    // reported by the dynamic linker.
-    //
-    // ld.bfd traces all DT_NEEDED to emulate the logic of the dynamic linker to
-    // catch more cases. That is too much for us. Our approach resembles the one
-    // used in ld.gold, achieves a good balance to be useful but not too smart.
-    for (SharedFile *file : ctx.sharedFiles) {
-      bool allNeededIsKnown =
-          llvm::all_of(file->dtNeeded, [&](StringRef needed) {
-            return symtab.soNames.count(CachedHashStringRef(needed));
-          });
-      if (!allNeededIsKnown)
-        continue;
-      for (Symbol *sym : file->requiredSymbols)
-        if (sym->isUndefined() && !sym->isWeak())
-          diagnose("undefined reference due to --no-allow-shlib-undefined: " +
-                   toString(*sym) + "\n>>> referenced by " + toString(file));
+    if (config->unresolvedSymbolsInShlib != UnresolvedPolicy::Ignore) {
+      auto diagnose =
+          config->unresolvedSymbolsInShlib == UnresolvedPolicy::ReportError
+              ? errorOrWarn
+              : warn;
+      // Error on undefined symbols in a shared object, if all of its DT_NEEDED
+      // entries are seen. These cases would otherwise lead to runtime errors
+      // reported by the dynamic linker.
+      //
+      // ld.bfd traces all DT_NEEDED to emulate the logic of the dynamic linker
+      // to catch more cases. That is too much for us. Our approach resembles
+      // the one used in ld.gold, achieves a good balance to be useful but not
+      // too smart.
+      for (SharedFile *file : ctx.sharedFiles) {
+        bool allNeededIsKnown =
+            llvm::all_of(file->dtNeeded, [&](StringRef needed) {
+              return symtab.soNames.count(CachedHashStringRef(needed));
+            });
+        if (!allNeededIsKnown)
+          continue;
+        for (Symbol *sym : file->requiredSymbols)
+          if (sym->isUndefined() && !sym->isWeak())
+            diagnose("undefined reference due to --no-allow-shlib-undefined: " +
+                     toString(*sym) + "\n>>> referenced by " + toString(file));
+      }
     }
   }
 
