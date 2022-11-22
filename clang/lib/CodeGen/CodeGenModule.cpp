@@ -3289,7 +3289,7 @@ ConstantAddress CodeGenModule::GetWeakRefReference(const ValueDecl *VD) {
   // See if there is already something with the target's name in the module.
   llvm::GlobalValue *Entry = GetGlobalValue(AA->getAliasee());
   if (Entry) {
-    unsigned AS = getContext().getTargetAddressSpace(VD->getType().getQualifiers());
+    unsigned AS = getContext().getTargetAddressSpace(VD->getType());
     auto Ptr = llvm::ConstantExpr::getBitCast(Entry, DeclTy->getPointerTo(AS));
     return ConstantAddress(Ptr, DeclTy, Alignment);
   }

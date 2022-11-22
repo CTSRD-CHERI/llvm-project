@@ -16328,7 +16328,7 @@ void Sema::CheckArrayAccess(const Expr *BaseExpr, const Expr *IndexExpr,
       const auto &ASTC = getASTContext();
       unsigned AddrBits =
           ASTC.getTargetInfo().getPointerWidth(ASTC.getTargetAddressSpace(
-              EffectiveType->getCanonicalTypeInternal().getQualifiers()));
+              EffectiveType->getCanonicalTypeInternal()));
       if (index.getBitWidth() < AddrBits)
         index = index.zext(AddrBits);
       Optional<CharUnits> ElemCharUnits =

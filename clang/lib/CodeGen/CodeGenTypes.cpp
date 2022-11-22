@@ -800,10 +800,10 @@ llvm::Type *CodeGenTypes::ConvertType(QualType T) {
     // Block pointers lower to function type. For function type,
     // getTargetAddressSpace() returns default address space for
     // function pointer i.e. program address space. Therefore, for block
-    // pointers, it is important to pass qualifiers when calling
-    // getTargetAddressSpace(), to ensure that we get the address space
-    // for data pointers and not function pointers.
-    unsigned AS = Context.getTargetAddressSpace(FTy.getQualifiers());
+    // pointers, it is important to pass the pointee AST address space when
+    // calling getTargetAddressSpace(), to ensure that we get the LLVM IR
+    // address space for data pointers and not function pointers.
+    unsigned AS = Context.getTargetAddressSpace(FTy.getAddressSpace());
    // XXXAR: If Pty is a capability, we have to use AS200
    if (Ty->isCHERICapabilityType(Context))
      AS = CGM.getTargetCodeGenInfo().getCHERICapabilityAS();
@@ -997,7 +997,7 @@ unsigned CodeGenTypes::getTargetAddressSpace(QualType PointeeTy) const {
   // the best address space based on the type information
   return PointeeTy->isFunctionType() && !PointeeTy.hasAddressSpace()
              ? getDataLayout().getProgramAddressSpace()
-             : Context.getTargetAddressSpace(PointeeTy.getQualifiers());
+             : Context.getTargetAddressSpace(PointeeTy.getAddressSpace());
 }
 
 bool CodeGenTypes::canMarkAsNonNull(QualType DestTy) const {
