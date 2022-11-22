@@ -1,11 +1,7 @@
 ; RUN: %cheri_llc -cheri-cfi -relocation-model=pic %s -o - | FileCheck %s
-; ModuleID = 'callret.c'
-target datalayout = "E-m:m-pf200:256:256-i8:8:32-i16:16:32-i64:64-n32:64-S128"
-target triple = "cheri-unknown-freebsd"
 
-; Function Attrs: nounwind
 ; CHECK-LABEL: bar
-define i32 @bar(i32 signext %x) #0 {
+define i32 @bar(i32 signext %x) nounwind {
 entry:
 ; Check that we're deriving a PCC-relative return capability and spilling it to the stack
 ; CHECK: cgetpcc	$c16
@@ -27,9 +23,8 @@ entry:
 
 declare i32 @foo(i32 signext) #1
 
-; Function Attrs: nounwind
 ; CHECK-LABEL: baz
-define i32 @baz(i32 signext %x) #0 {
+define i32 @baz(i32 signext %x) nounwind {
 entry:
   %x.addr = alloca i32, align 4
   store i32 %x, i32* %x.addr, align 4
@@ -39,10 +34,3 @@ entry:
 ; CHECK: jr	$ra
   ret i32 %0
 }
-
-attributes #0 = { nounwind }
-attributes #1 = { nounwind }
-
-!llvm.ident = !{!0}
-
-!0 = !{!"clang version 3.7.0 (ssh://dc552@vica.cl.cam.ac.uk:/home/dc552/CHERISDK/llvm/tools/clang 80929b3db96cf6409ddd5339c73b3616e9ec872c) (ssh://dc552@vica.cl.cam.ac.uk:/home/dc552/CHERISDK/llvm 7747414cd65fe72c94dd4219668e6bc025f92ad6)"}

@@ -1,8 +1,4 @@
 ; RUN: %cheri_llc -O1 %s -o - | FileCheck %s
-; ModuleID = 'incoffset.c'
-source_filename = "incoffset.c"
-target datalayout = "E-m:e-pf200:256:256-i8:8:32-i16:16:32-i64:64-n32:64-S128"
-target triple = "cheri-unknown-freebsd"
 
 ; Function Attrs: norecurse nounwind
 define void @doThing(i8 addrspace(200)* nocapture readonly %in, i8 addrspace(200)* nocapture %out) local_unnamed_addr #0 {

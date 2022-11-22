@@ -3,9 +3,6 @@
 ; RUN: %cheri128_opt -data-layout="Eme-pf200:128:128:128:64-i8:8:32-i16:16:32-i64:64-n32:64-S128" -o - \
 ; RUN:     -O2 -S %s | %cheri128_llc - -o - | FileCheck %s -check-prefixes ASM,N64-CHERI128-BAD-CODE
 
-; source_filename = "/Users/alex/cheri/llvm/tools/clang/test/CodeGen/cheri/libcxx-filesystem-crash.cpp-reduce.ll"
-; target datalayout = "Eme-pf200:128:128:128:64-i8:8:32-i16:16:32-i64:64-n32:64-S128"
-; target datalayout = "Eme-pf200:256:256:256:64-i8:8:32-i16:16:32-i64:64-n32:64-S128"
 
 %class.duration = type { i128 }
 

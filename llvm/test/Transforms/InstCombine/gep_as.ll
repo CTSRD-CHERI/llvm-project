@@ -1,6 +1,5 @@
-; RUN: opt -instcombine -S < %s | FileCheck %s
-; ModuleID = '<stdin>'
-target datalayout = "E-m:m-pf200:256:256:256:64-i8:8:32-i16:16:32-i64:64-n32:64-S128"
+; RUN: opt -passes=instcombine -S < %s | FileCheck %s
+target datalayout = "pf200:128:128:128:64"
 target triple = "riscv64-unknown-freebsd"
 
 define i32 @main() {

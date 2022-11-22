@@ -1,7 +1,4 @@
 ; RUN: %cheri_llc -O0 %s -o - | FileCheck %s
-; ModuleID = 'builtin.c'
-target datalayout = "E-pf200:256:256:256-p:64:64:64-i1:8:8-i8:8:32-i16:16:32-i32:32:32-i64:64:64-f32:32:32-f64:64:64-n32:64-S256"
-target triple = "cheri-unknown-freebsd"
 
 @results = common global [12 x i8 addrspace(200)*] zeroinitializer, align 32
 

@@ -1,7 +1,4 @@
-; RUN: %cheri_purecap_llc -verify-machineinstrs -cheri-cap-table-abi=pcrel %s -o - | FileCheck %s -enable-var-scope
-; ModuleID = 'atomic.c'
-target datalayout = "E-m:m-pf200:256:256-i8:8:32-i16:16:32-i64:64-n32:64-S128-A200"
-target triple = "cheri-unknown-freebsd"
+; RUN: %cheri_purecap_llc -verify-machineinstrs %s -o - | FileCheck %s -enable-var-scope
 
 @d = common addrspace(200) global i64 0, align 8
 @w = common addrspace(200) global i32 0, align 4

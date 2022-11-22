@@ -1,9 +1,6 @@
-; RUN: %cheri_llc %s -o - -relocation-model=static | %cheri_FileCheck %s
-; RUN: %cheri_llc %s -o - -relocation-model=pic | %cheri_FileCheck %s
-; RUN: %cheri_llc %s -o - -filetype=obj | llvm-readobj -r - | %cheri_FileCheck -check-prefix=RELOCS %s
-; ModuleID = 'global_init.c'
-target datalayout = "E-m:m-pf200:256:256-i8:8:32-i16:16:32-i64:64-n32:64-S128-A200"
-target triple = "cheri-unknown-freebsd"
+; RUN: %cheri_purecap_llc %s -o - -relocation-model=static | %cheri_FileCheck %s
+; RUN: %cheri_purecap_llc %s -o - -relocation-model=pic | %cheri_FileCheck %s
+; RUN: %cheri_purecap_llc %s -o - -filetype=obj | llvm-readobj -r - | %cheri_FileCheck -check-prefix=RELOCS %s
 
 @a = common addrspace(200) global [5 x i32] zeroinitializer, align 4
 @b = addrspace(200) global [3 x i32 addrspace(200)*] [
