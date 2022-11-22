@@ -48,12 +48,6 @@ using namespace llvm;
 
 #define DEBUG_TYPE "mips"
 
-static llvm::cl::opt<bool>
-UnsafeUsage(
-"cheri-test-mode", llvm::cl::Hidden,
-llvm::cl::init(false));
-
-
 static cl::opt<bool>
     EnableMulMulFix("mfix4300", cl::init(false),
                     cl::desc("Enable the VR4300 mulmul bug fix."), cl::Hidden);
