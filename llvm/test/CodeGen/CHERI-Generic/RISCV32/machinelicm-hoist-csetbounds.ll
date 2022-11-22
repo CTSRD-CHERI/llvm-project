@@ -38,33 +38,30 @@ define dso_local void @hoist_csetbounds(i32 signext %cond, %struct.foo addrspace
 ; CHECK-NEXT:    csc cs1, 24(csp) # 8-byte Folded Spill
 ; CHECK-NEXT:    csc cs2, 16(csp) # 8-byte Folded Spill
 ; CHECK-NEXT:    csc cs3, 8(csp) # 8-byte Folded Spill
-; CHECK-NEXT:    csc cs4, 0(csp) # 8-byte Folded Spill
-; CHECK-NEXT:    cmove cs3, ca1
-; CHECK-NEXT:    seqz s1, s3
-; CHECK-NEXT:    cincoffset cs2, ca1, 4
-; CHECK-NEXT:    addi s0, zero, -1
-; CHECK-NEXT:    addi s4, zero, 99
+; CHECK-NEXT:    cmove cs0, ca1
+; CHECK-NEXT:    cincoffset cs1, ca1, 4
+; CHECK-NEXT:    li s2, -1
+; CHECK-NEXT:    li s3, 99
 ; CHECK-NEXT:    j .LBB0_2
 ; CHECK-NEXT:  .LBB0_1: # %for.inc
 ; CHECK-NEXT:    # in Loop: Header=BB0_2 Depth=1
-; CHECK-NEXT:    addi s0, s0, 1
-; CHECK-NEXT:    bgeu s0, s4, .LBB0_4
+; CHECK-NEXT:    addi s2, s2, 1
+; CHECK-NEXT:    bgeu s2, s3, .LBB0_4
 ; CHECK-NEXT:  .LBB0_2: # %for.body
 ; CHECK-NEXT:    # =>This Inner Loop Header: Depth=1
-; CHECK-NEXT:    bnez s1, .LBB0_1
+; CHECK-NEXT:    beqz s0, .LBB0_1
 ; CHECK-NEXT:  # %bb.3: # %if.then
 ; CHECK-NEXT:    # in Loop: Header=BB0_2 Depth=1
-; CHECK-NEXT:    csetbounds ca0, cs3, 4
-; CHECK-NEXT:    csetbounds ca1, cs2, 4
+; CHECK-NEXT:    csetbounds ca0, cs0, 4
+; CHECK-NEXT:    csetbounds ca1, cs1, 4
 ; CHECK-NEXT:    ccall call
 ; CHECK-NEXT:    j .LBB0_1
 ; CHECK-NEXT:  .LBB0_4: # %for.cond.cleanup
-; CHECK-NEXT:    clc cs4, 0(csp) # 8-byte Folded Reload
-; CHECK-NEXT:    clc cs3, 8(csp) # 8-byte Folded Reload
-; CHECK-NEXT:    clc cs2, 16(csp) # 8-byte Folded Reload
-; CHECK-NEXT:    clc cs1, 24(csp) # 8-byte Folded Reload
-; CHECK-NEXT:    clc cs0, 32(csp) # 8-byte Folded Reload
 ; CHECK-NEXT:    clc cra, 40(csp) # 8-byte Folded Reload
+; CHECK-NEXT:    clc cs0, 32(csp) # 8-byte Folded Reload
+; CHECK-NEXT:    clc cs1, 24(csp) # 8-byte Folded Reload
+; CHECK-NEXT:    clc cs2, 16(csp) # 8-byte Folded Reload
+; CHECK-NEXT:    clc cs3, 8(csp) # 8-byte Folded Reload
 ; CHECK-NEXT:    cincoffset csp, csp, 48
 ; CHECK-NEXT:    cret
 ; HOIST-OPT-LABEL: define {{[^@]+}}@hoist_csetbounds
