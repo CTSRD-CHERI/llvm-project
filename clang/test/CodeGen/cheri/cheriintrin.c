@@ -134,7 +134,7 @@ void test(void *__capability cap, char *__capability cap2, __SIZE_TYPE__ i) {
   _Static_assert(CHERI_PERM_STORE_CAP != 0, "must be defined");
   _Static_assert(CHERI_PERM_STORE_LOCAL_CAP != 0, "must be defined");
   _Static_assert(CHERI_PERM_SEAL != 0, "must be defined");
-  _Static_assert(CHERI_PERM_CCALL != 0, "must be defined");
+  _Static_assert(CHERI_PERM_INVOKE != 0, "must be defined");
   _Static_assert(CHERI_PERM_UNSEAL != 0, "must be defined");
   _Static_assert(CHERI_PERM_SYSTEM_REGS != 0, "must be defined");
   /* Check that CHERI_PERMS_T is defined */
