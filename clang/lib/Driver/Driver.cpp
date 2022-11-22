@@ -43,7 +43,6 @@
 #include "ToolChains/PPCLinux.h"
 #include "ToolChains/PS4CPU.h"
 #include "ToolChains/RISCVToolchain.h"
-#include "ToolChains/RTEMS.h"
 #include "ToolChains/SPIRV.h"
 #include "ToolChains/Solaris.h"
 #include "ToolChains/TCE.h"
@@ -5654,14 +5653,6 @@ const ToolChain &Driver::getToolChain(const ArgList &Args,
       break;
     case llvm::Triple::Hurd:
       TC = std::make_unique<toolchains::Hurd>(*this, Target, Args);
-      break;
-    case llvm::Triple::RTEMS:
-      if (Target.getVendor() == llvm::Triple::Myriad)
-        TC = std::make_unique<toolchains::MyriadToolChain>(*this, Target,
-                                                            Args);
-      else
-        // FIXME: This will probably break the x86 rtems build but should work for MIPS/CHERI
-        TC = std::make_unique<toolchains::RTEMS>(*this, Target, Args);
       break;
     case llvm::Triple::ZOS:
       TC = std::make_unique<toolchains::ZOS>(*this, Target, Args);
