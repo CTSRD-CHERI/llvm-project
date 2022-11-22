@@ -139,6 +139,8 @@ PointerAlignElem PointerAlignElem::getInBits(uint32_t AddressSpace,
   retval.TypeBitWidth = TypeBitWidth;
   retval.IndexBitWidth = IndexBitWidth;
   retval.IsFatPointer = IsFatPointer;
+  if (IsFatPointer && IndexBitWidth == TypeBitWidth)
+    report_fatal_error("Fat pointers must have different type and index size");
   return retval;
 }
 
@@ -349,10 +351,7 @@ Error DataLayout::parseSpecifier(StringRef Desc) {
 
       // Size of index used in GEP for address calculation.
       // The parameter is optional. By default it is equal to size of pointer.
-      // XXXAR: For compatibility make isFat default to index width = 64 bits so
-      // we don't have to add the index width to the datalayout immediately
-      unsigned IndexSize = isFat ? 8 : PointerMemSize;
-
+      unsigned IndexSize = PointerMemSize;
       // Preferred alignment.
       unsigned PointerPrefAlign = PointerABIAlign;
       if (!Rest.empty()) {
@@ -643,6 +642,8 @@ Error DataLayout::setPointerAlignmentInBits(uint32_t AddrSpace, Align ABIAlign,
     I->TypeBitWidth = TypeBitWidth;
     I->IndexBitWidth = IndexBitWidth;
     I->IsFatPointer = IsFatPointer;
+    if (IsFatPointer && IndexBitWidth == TypeBitWidth)
+      report_fatal_error("Fat pointers must have different type and index size");
     // Value was replaced, re-calculate HasCheriCapabilities
     HasCheriCapabilities = any_of(
         Pointers, [](const PointerAlignElem &P) { return P.IsFatPointer; });
