@@ -191,11 +191,6 @@ class LLVMAnyPointerType<LLVMType elty>
   let isAny = true;
 }
 
-class LLVMFatPointerType<LLVMType elty>
-  : LLVMType<iFATPTRAny>{
-  LLVMType ElTy = elty;
-}
-
 // Match the type of another intrinsic parameter.  Number is an index into the
 // list of overloaded types for the intrinsic, excluding all the fixed types.
 // The Number value must refer to a previously listed type.  For example:
@@ -266,7 +261,7 @@ def llvm_anyptr_ty     : LLVMAnyPointerType<llvm_i8_ty>;          // (space)i8*
 def llvm_prog_ptr_ty   : LLVMDataLayoutPointerType<llvm_i8_ty, "P">; // (prog)i8*
 def llvm_alloca_ptr_ty : LLVMDataLayoutPointerType<llvm_i8_ty, "A">; // (alloca)i8*
 def llvm_global_ptr_ty : LLVMDataLayoutPointerType<llvm_i8_ty, "G">; // (globals)i8*
-def llvm_fatptr_ty     : LLVMFatPointerType<llvm_i8_ty>;          // (space)i8*
+def llvm_fatptr_ty     : LLVMQualPointerType<llvm_i8_ty, 200>;       // (AS200)i8*
 def llvm_anyptrptr_ty  : LLVMAnyPointerType<llvm_ptr_ty>;         // i8*(space)*
 def llvm_empty_ty      : LLVMType<OtherVT>;                       // { }
 def llvm_descriptor_ty : LLVMPointerType<llvm_empty_ty>;          // { }*
