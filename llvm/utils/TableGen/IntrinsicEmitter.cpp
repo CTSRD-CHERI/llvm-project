@@ -253,11 +253,12 @@ enum IIT_Info {
   IIT_V3 = 53,
   IIT_EXTERNREF = 54,
   IIT_FUNCREF = 55,
-  IIT_IFATPTR64 = 56,
-  IIT_IFATPTR128 = 57,
-  IIT_IFATPTR256 = 58,
-  IIT_IFATPTR512 = 59,
-  IIT_IFATPTRAny = 60,
+  IIT_DATALAYOUTPTR = 56,
+  IIT_IFATPTR64 = 57,
+  IIT_IFATPTR128 = 58,
+  IIT_IFATPTR256 = 59,
+  IIT_IFATPTR512 = 60,
+  IIT_IFATPTRAny = 61,
 };
 
 static void EncodeFixedValueType(MVT::SimpleValueType VT,
@@ -376,16 +377,28 @@ static void EncodeFixedType(Record *R, std::vector<unsigned char> &ArgCodes,
   }
 
   case MVT::iPTR: {
-    unsigned AddrSpace = 0;
-    if (R->isSubClassOf("LLVMQualPointerType")) {
-      AddrSpace = R->getValueAsInt("AddrSpace");
-      assert(AddrSpace < 256 && "Address space exceeds 255");
-    }
-    if (AddrSpace) {
-      Sig.push_back(IIT_ANYPTR);
-      Sig.push_back(AddrSpace);
+    if (R->isSubClassOf("LLVMDataLayoutPointerType")) {
+      StringRef AddrSpaceChar = R->getValueAsString("AddrSpace");
+      if (AddrSpaceChar.size() != 1 ||
+          !StringRef("AGP").contains(AddrSpaceChar))
+        PrintFatalError(R,
+                        "Invalid address space value: '" + AddrSpaceChar + "'");
+      Sig.push_back(IIT_DATALAYOUTPTR);
+      Sig.push_back(AddrSpaceChar[0]);
     } else {
-      Sig.push_back(IIT_PTR);
+      unsigned AddrSpace = 0;
+      if (R->isSubClassOf("LLVMQualPointerType")) {
+        AddrSpace = R->getValueAsInt("AddrSpace");
+        if (!isUInt<8>(AddrSpace))
+          PrintFatalError(R,
+                          "Address space " + Twine(AddrSpace) + " exceeds 255");
+      }
+      if (AddrSpace) {
+        Sig.push_back(IIT_ANYPTR);
+        Sig.push_back(AddrSpace);
+      } else {
+        Sig.push_back(IIT_PTR);
+      }
     }
     return EncodeFixedType(R->getValueAsDef("ElTy"), ArgCodes, NextArgCode, Sig,
                            Mapping);

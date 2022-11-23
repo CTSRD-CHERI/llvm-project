@@ -854,7 +854,7 @@ void Verifier::visitGlobalAlias(const GlobalAlias &GA) {
 
 void Verifier::visitGlobalIFunc(const GlobalIFunc &GI) {
   // Pierce through ConstantExprs and GlobalAliases and check that the resolver
-  // has a Function 
+  // has a Function
   const Function *Resolver = GI.getResolverFunction();
   Assert(Resolver, "IFunc must have a Function resolver", &GI);
 
@@ -4708,7 +4708,7 @@ void Verifier::visitIntrinsicCall(Intrinsic::ID ID, CallBase &Call) {
   // Walk the descriptors to extract overloaded types.
   SmallVector<Type *, 4> ArgTys;
   Intrinsic::MatchIntrinsicTypesResult Res =
-      Intrinsic::matchIntrinsicSignature(IFTy, TableRef, ArgTys);
+      Intrinsic::matchIntrinsicSignature(IFTy, TableRef, DL, ArgTys);
   Assert(Res != Intrinsic::MatchIntrinsicTypes_NoMatchRet,
          "Intrinsic has incorrect return type!", IF);
   Assert(Res != Intrinsic::MatchIntrinsicTypes_NoMatchArg,

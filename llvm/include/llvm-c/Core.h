@@ -2517,14 +2517,19 @@ LLVMValueRef LLVMGetIntrinsicDeclaration(LLVMModuleRef Mod,
                                          LLVMTypeRef *ParamTypes,
                                          size_t ParamCount);
 
+LLVM_ATTRIBUTE_C_DEPRECATED(LLVMTypeRef LLVMIntrinsicGetType(
+                                LLVMContextRef Ctx, unsigned ID,
+                                LLVMTypeRef *ParamTypes, size_t ParamCount),
+                            "Use LLVMIntrinsicGetType2 instead to support "
+                            "datalayout-dependent intrinsics");
 /**
  * Retrieves the type of an intrinsic.  For overloaded intrinsics, parameter
  * types must be provided to uniquely identify an overload.
  *
  * @see llvm::Intrinsic::getType()
  */
-LLVMTypeRef LLVMIntrinsicGetType(LLVMContextRef Ctx, unsigned ID,
-                                 LLVMTypeRef *ParamTypes, size_t ParamCount);
+LLVMTypeRef LLVMIntrinsicGetType2(LLVMModuleRef Mod, unsigned ID,
+                                  LLVMTypeRef *ParamTypes, size_t ParamCount);
 
 /**
  * Retrieves the name of an intrinsic.

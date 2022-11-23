@@ -174,6 +174,13 @@ class LLVMQualPointerType<LLVMType elty, int addrspace>
   int AddrSpace = addrspace;
 }
 
+class LLVMDataLayoutPointerType<LLVMType elty, string addrspace>
+  : LLVMType<iPTR>{
+  LLVMType ElTy = elty;
+  // Must be one of 'A', 'G', 'P' (the DataLayout-defined address spaces)
+  string AddrSpace = addrspace;
+}
+
 class LLVMPointerType<LLVMType elty>
   : LLVMQualPointerType<elty, 0>;
 
@@ -256,6 +263,9 @@ def llvm_ppcf128_ty    : LLVMType<ppcf128>;
 def llvm_ptr_ty        : LLVMPointerType<llvm_i8_ty>;             // i8*
 def llvm_ptrptr_ty     : LLVMPointerType<llvm_ptr_ty>;            // i8**
 def llvm_anyptr_ty     : LLVMAnyPointerType<llvm_i8_ty>;          // (space)i8*
+def llvm_prog_ptr_ty   : LLVMDataLayoutPointerType<llvm_i8_ty, "P">; // (prog)i8*
+def llvm_alloca_ptr_ty : LLVMDataLayoutPointerType<llvm_i8_ty, "A">; // (alloca)i8*
+def llvm_global_ptr_ty : LLVMDataLayoutPointerType<llvm_i8_ty, "G">; // (globals)i8*
 def llvm_fatptr_ty     : LLVMFatPointerType<llvm_i8_ty>;          // (space)i8*
 def llvm_anyptrptr_ty  : LLVMAnyPointerType<llvm_ptr_ty>;         // i8*(space)*
 def llvm_empty_ty      : LLVMType<OtherVT>;                       // { }

@@ -117,7 +117,8 @@ static Optional<Instruction *> modifyIntrinsicCall(
     std::function<void(SmallVectorImpl<Value *> &, SmallVectorImpl<Type *> &)>
         Func) {
   SmallVector<Type *, 4> ArgTys;
-  if (!Intrinsic::getIntrinsicSignature(II.getCalledFunction(), ArgTys))
+  if (!Intrinsic::getIntrinsicSignature(II.getCalledFunction(),
+                                        IC.getDataLayout(), ArgTys))
     return None;
 
   SmallVector<Value *, 8> Args(II.args());
@@ -1140,7 +1141,8 @@ static Value *simplifyAMDGCNMemoryIntrinsicDemanded(InstCombiner &IC,
   // Validate function argument and return types, extracting overloaded types
   // along the way.
   SmallVector<Type *, 6> OverloadTys;
-  if (!Intrinsic::getIntrinsicSignature(II.getCalledFunction(), OverloadTys))
+  if (!Intrinsic::getIntrinsicSignature(II.getCalledFunction(),
+                                        IC.getDataLayout(), OverloadTys))
     return nullptr;
 
   Module *M = II.getParent()->getParent()->getParent();

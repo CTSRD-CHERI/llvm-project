@@ -2428,7 +2428,17 @@ LLVMTypeRef LLVMIntrinsicGetType(LLVMContextRef Ctx, unsigned ID,
                                  LLVMTypeRef *ParamTypes, size_t ParamCount) {
   auto IID = llvm_map_to_intrinsic_id(ID);
   ArrayRef<Type*> Tys(unwrap(ParamTypes), ParamCount);
-  return wrap(llvm::Intrinsic::getType(*unwrap(Ctx), IID, Tys));
+  DataLayout DefaultDL("");
+  return wrap(llvm::Intrinsic::getType(*unwrap(Ctx), IID, DefaultDL, Tys));
+}
+
+LLVMTypeRef LLVMIntrinsicGetType2(LLVMModuleRef Mod, unsigned ID,
+                                  LLVMTypeRef *ParamTypes, size_t ParamCount) {
+  auto IID = llvm_map_to_intrinsic_id(ID);
+  ArrayRef<Type *> Tys(unwrap(ParamTypes), ParamCount);
+  Module *M = unwrap(Mod);
+  return wrap(
+      llvm::Intrinsic::getType(M->getContext(), IID, M->getDataLayout(), Tys));
 }
 
 const char *LLVMIntrinsicCopyOverloadedName(unsigned ID,

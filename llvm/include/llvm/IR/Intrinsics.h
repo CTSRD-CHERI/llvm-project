@@ -29,6 +29,7 @@ class Function;
 class LLVMContext;
 class Module;
 class AttributeList;
+class DataLayout;
 
 /// This namespace contains an enum with a value for every intrinsic/builtin
 /// function known by LLVM. The enum values are returned by
@@ -74,8 +75,8 @@ namespace Intrinsic {
   std::string getNameNoUnnamedTypes(ID Id, ArrayRef<Type *> Tys);
 
   /// Return the function type for an intrinsic.
-  FunctionType *getType(LLVMContext &Context, ID id,
-                        ArrayRef<Type*> Tys = None);
+  FunctionType *getType(LLVMContext &Context, ID id, const DataLayout &DL,
+                        ArrayRef<Type *> Tys = None);
 
   /// Returns true if the intrinsic can be overloaded.
   bool isOverloaded(ID id);
@@ -142,6 +143,7 @@ namespace Intrinsic {
       VecOfBitcastsToInt,
       AMX,
       PPCQuad,
+      DataLayoutQualPointer,
     } Kind;
 
     union {
@@ -151,6 +153,7 @@ namespace Intrinsic {
       unsigned Struct_NumElements;
       unsigned Argument_Info;
       ElementCount Vector_Width;
+      char DataLayout_Pointer_AddressSpace;
     };
 
     enum ArgKind {
@@ -208,6 +211,7 @@ namespace Intrinsic {
       Result.Vector_Width = ElementCount::get(Width, IsScalable);
       return Result;
     }
+    unsigned getPointerAddressSpace(const DataLayout &DL) const;
   };
 
   /// Return the IIT table descriptor for the specified intrinsic into an array
@@ -228,6 +232,7 @@ namespace Intrinsic {
   /// otherwise.
   MatchIntrinsicTypesResult
   matchIntrinsicSignature(FunctionType *FTy, ArrayRef<IITDescriptor> &Infos,
+                          const DataLayout &DL,
                           SmallVectorImpl<Type *> &ArgTys);
 
   /// Verify if the intrinsic has variable arguments. This method is intended to
@@ -241,7 +246,8 @@ namespace Intrinsic {
   /// AgTys vector.
   ///
   /// Returns false if the given function is not a valid intrinsic call.
-  bool getIntrinsicSignature(Function *F, SmallVectorImpl<Type *> &ArgTys);
+  bool getIntrinsicSignature(Function *F, const DataLayout &DL,
+                             SmallVectorImpl<Type *> &ArgTys);
 
   // Checks if the intrinsic name matches with its signature and if not
   // returns the declaration with the same signature and remangled name.
