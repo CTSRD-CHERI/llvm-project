@@ -16,8 +16,8 @@ declare void @eightparams64(i64 %a, i64 %b, i64 %c, i64 %d, i64 %e, i64 %f, i64 
 declare void @struct(%struct.s* byval(%struct.s) %a, i32 %b, i32 %c, i32 %d)
 declare void @inalloca(<{ %struct.s }>* inalloca(<{ %struct.s }>))
 
-declare i8* @llvm.stacksave.p0i8()
-declare void @llvm.stackrestore.p0i8(i8*)
+declare i8* @llvm.stacksave()
+declare void @llvm.stackrestore(i8*)
 
 ; We should get pushes for x86, even though there is a reserved call frame.
 ; Make sure we don't touch x86-64, and that turning it off works.

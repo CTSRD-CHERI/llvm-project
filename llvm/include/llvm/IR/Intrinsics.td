@@ -556,9 +556,9 @@ def int_seh_scope_end : Intrinsic<[], [], [IntrNoMem]>;
 
 // Note: we treat stacksave/stackrestore as writemem because we don't otherwise
 // model their dependencies on allocas.
-def int_stacksave     : DefaultAttrsIntrinsic<[llvm_anyptr_ty]>,
+def int_stacksave     : DefaultAttrsIntrinsic<[llvm_alloca_ptr_ty]>,
                         GCCBuiltin<"__builtin_stack_save">;
-def int_stackrestore  : DefaultAttrsIntrinsic<[], [llvm_anyptr_ty]>,
+def int_stackrestore  : DefaultAttrsIntrinsic<[], [llvm_alloca_ptr_ty]>,
                         GCCBuiltin<"__builtin_stack_restore">;
 
 def int_get_dynamic_area_offset : DefaultAttrsIntrinsic<[llvm_anyint_ty]>;

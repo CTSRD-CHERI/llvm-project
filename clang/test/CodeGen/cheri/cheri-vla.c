@@ -11,13 +11,13 @@ extern void test(const char*);
 // CHECK-NEXT:    ret void
 // CHECK:       for.body:
 // CHECK-NEXT:    [[I_05:%.*]] = phi i64 [ 1, [[ENTRY:%.*]] ], [ [[INC:%.*]], [[FOR_BODY]] ]
-// CHECK-NEXT:    [[TMP0:%.*]] = call i8 addrspace(200)* @llvm.stacksave.p200i8()
+// CHECK-NEXT:    [[TMP0:%.*]] = call i8 addrspace(200)* @llvm.stacksave()
 // CHECK-NEXT:    [[VLA:%.*]] = alloca i8, i64 [[I_05]], align 1, addrspace(200)
 // CHECK-NEXT:    [[SUB:%.*]] = add nsw i64 [[I_05]], -1
 // CHECK-NEXT:    [[ARRAYIDX:%.*]] = getelementptr inbounds i8, i8 addrspace(200)* [[VLA]], i64 [[SUB]]
 // CHECK-NEXT:    store i8 0, i8 addrspace(200)* [[ARRAYIDX]], align 1, !tbaa [[TBAA2:![0-9]+]]
 // CHECK-NEXT:    call void @test(i8 addrspace(200)* noundef nonnull [[VLA]]) #[[ATTR3:[0-9]+]]
-// CHECK-NEXT:    call void @llvm.stackrestore.p200i8(i8 addrspace(200)* [[TMP0]])
+// CHECK-NEXT:    call void @llvm.stackrestore(i8 addrspace(200)* [[TMP0]])
 // CHECK-NEXT:    [[INC]] = add nuw nsw i64 [[I_05]], 1
 // CHECK-NEXT:    [[EXITCOND_NOT:%.*]] = icmp eq i64 [[INC]], 32
 // CHECK-NEXT:    br i1 [[EXITCOND_NOT]], label [[FOR_COND_CLEANUP:%.*]], label [[FOR_BODY]], !llvm.loop [[LOOP5:![0-9]+]]

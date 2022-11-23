@@ -38,10 +38,10 @@ entry:
 define void @exportedfun(%struct.a* %a) {
 ; CHECK-LABEL: define {{[^@]+}}@exportedfun
 ; CHECK-SAME: (%struct.a* nocapture nofree readnone [[A:%.*]]) {
-; CHECK-NEXT:    [[INALLOCA_SAVE:%.*]] = tail call i8* @llvm.stacksave.p0i8() #[[ATTR1:[0-9]+]]
+; CHECK-NEXT:    [[INALLOCA_SAVE:%.*]] = tail call i8* @llvm.stacksave() #[[ATTR1:[0-9]+]]
 ; CHECK-NEXT:    [[ARGMEM:%.*]] = alloca inalloca <{ [[STRUCT_A:%.*]] }>, align 4
 ; CHECK-NEXT:    call x86_thiscallcc void @internalfun(%struct.a* noalias nocapture nofree readnone undef, <{ [[STRUCT_A]] }>* noundef nonnull inalloca(<{ [[STRUCT_A]] }>) align 4 dereferenceable(1) [[ARGMEM]])
-; CHECK-NEXT:    call void @llvm.stackrestore.p0i8(i8* nofree [[INALLOCA_SAVE]])
+; CHECK-NEXT:    call void @llvm.stackrestore(i8* nofree [[INALLOCA_SAVE]])
 ; CHECK-NEXT:    ret void
 ;
   %inalloca.save = tail call i8* @llvm.stacksave()

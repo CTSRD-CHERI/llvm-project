@@ -1031,17 +1031,6 @@ static bool UpgradeIntrinsicFunction1(Function *F, Function *&NewFn) {
       NewFn = nullptr;
       return true;
     }
-    if (Name == "stacksave") {
-      NewFn = Intrinsic::getDeclaration(F->getParent(), Intrinsic::stacksave,
-                                        F->getReturnType());
-      return true;
-    }
-    if (Name == "stackrestore") {
-      auto *ArgTy = F->arg_begin()->getType();
-      NewFn = Intrinsic::getDeclaration(F->getParent(), Intrinsic::stackrestore,
-                                        ArgTy);
-      return true;
-    }
     break;
 
   case 'v': {

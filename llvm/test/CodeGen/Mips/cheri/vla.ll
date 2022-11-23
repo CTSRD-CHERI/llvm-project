@@ -6,10 +6,10 @@
 ; Function Attrs: noinline nounwind optnone
 ; define void @foo(i64 %i) {
 ; entry:
-;   %saved_stack = call i8 addrspace(200)* @llvm.stacksave.p200i8()
+;   %saved_stack = call i8 addrspace(200)* @llvm.stacksave()
 ;   %vla = alloca i8, i64 %i, align 1, addrspace(200)
 ;   call void @test(i8 addrspace(200)* %vla)
-;   call void @llvm.stackrestore.p200i8(i8 addrspace(200)* %saved_stack)
+;   call void @llvm.stackrestore(i8 addrspace(200)* %saved_stack)
 ;   ret void
 ; }
 
@@ -45,7 +45,7 @@ entry:
 }
 
 ; Function Attrs: nounwind
-declare i8 addrspace(200)* @llvm.stacksave.p200i8() #1
+declare i8 addrspace(200)* @llvm.stacksave() #1
 
 declare void @test(i8 addrspace(200)*) #2
 
@@ -56,4 +56,4 @@ declare i8 addrspace(200)* @llvm.cheri.pcc.get() #3
 declare i8 addrspace(200)* @llvm.cheri.cap.offset.set.i64(i8 addrspace(200)*, i64) #3
 
 ; Function Attrs: nounwind
-declare void @llvm.stackrestore.p200i8(i8 addrspace(200)*) #1
+declare void @llvm.stackrestore(i8 addrspace(200)*) #1

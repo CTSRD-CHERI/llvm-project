@@ -63,11 +63,11 @@ return:		; preds = %bb, %entry
 }
 
 ; CHECK-LABEL: define void @foo(
-; CHECK: %tmp = call i8* @llvm.stacksave.p0i8()
+; CHECK: %tmp = call i8* @llvm.stacksave()
 ; CHECK: alloca i8
 ; CHECK-NOT: stacksave
 ; CHECK: call void @bar(
-; CHECK-NEXT: call void @llvm.stackrestore.p0i8(i8* %tmp)
+; CHECK-NEXT: call void @llvm.stackrestore(i8* %tmp)
 ; CHECK: ret void
 
 declare void @bar(i32, i8*, i8*, i8*, i8*, i32)
@@ -103,11 +103,11 @@ return:
 ; CHECK-LABEL: define void @test3(
 ; CHECK: loop:
 ; CHECK: %i = phi i32 [ 0, %entry ], [ %i1, %loop ]
-; CHECK: %save1 = call i8* @llvm.stacksave.p0i8()
+; CHECK: %save1 = call i8* @llvm.stacksave()
 ; CHECK: %argmem = alloca inalloca i32
 ; CHECK: store i32 0, i32* %argmem
 ; CHECK: call void @inalloca_callee(i32* {{.*}} inalloca(i32) %argmem)
-; CHECK: call void @llvm.stackrestore.p0i8(i8* %save1)
+; CHECK: call void @llvm.stackrestore(i8* %save1)
 ; CHECK: br i1 %done, label %loop, label %return
 ; CHECK: ret void
 

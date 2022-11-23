@@ -30,10 +30,10 @@ for.body:                                         ; preds = %for.body, %for.body
   ; CHECK-NEXT: csetbounds $c{{[0-9]+}}, [[BOUNDED_ALLOCA]], ${{[0-9]+}}
 
   %i.05 = phi i32 [ 0, %for.body.lr.ph ], [ %inc, %for.body ]
-  %1 = call i8 addrspace(200)* @llvm.stacksave.p200i8()
+  %1 = call i8 addrspace(200)* @llvm.stacksave()
   %vla = alloca i32, i64 %0, align 4, addrspace(200)
   call void @use_arg(i32 addrspace(200)* nonnull %vla) #1
-  call void @llvm.stackrestore.p200i8(i8 addrspace(200)* %1)
+  call void @llvm.stackrestore(i8 addrspace(200)* %1)
   %inc = add nuw nsw i32 %i.05, 1
   %exitcond = icmp eq i32 %inc, %x
   br i1 %exitcond, label %for.cond.cleanup, label %for.body
@@ -42,11 +42,11 @@ for.body:                                         ; preds = %for.body, %for.body
 }
 
 ; Function Attrs: nounwind
-declare i8 addrspace(200)* @llvm.stacksave.p200i8() #0
+declare i8 addrspace(200)* @llvm.stacksave() #0
 
 declare void @use_arg(i32 addrspace(200)*) #0
 
 ; Function Attrs: nounwind
-declare void @llvm.stackrestore.p200i8(i8 addrspace(200)*) #0
+declare void @llvm.stackrestore(i8 addrspace(200)*) #0
 
 attributes #0 = { nounwind }

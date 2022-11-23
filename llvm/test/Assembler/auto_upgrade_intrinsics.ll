@@ -216,9 +216,9 @@ declare void @llvm.stackrestore(i8 addrspace(200)*)
 define void @tests.stacksave.stackrestore() {
   ; CHECK-LABEL: @tests.stacksave.stackrestore(
   %save1 = call i8 addrspace(200)* @llvm.stacksave()
-  ; CHECK: %save1 = call i8 addrspace(200)* @llvm.stacksave.p200i8()
+  ; CHECK: %save1 = call i8 addrspace(200)* @llvm.stacksave()
   call void @llvm.stackrestore(i8 addrspace(200)* %save1)
-  ; CHECK:   call void @llvm.stackrestore.p200i8(i8 addrspace(200)* %save1)
+  ; CHECK:   call void @llvm.stackrestore(i8 addrspace(200)* %save1)
 
   ret void
 }
@@ -233,5 +233,5 @@ define void @tests.stacksave.stackrestore() {
 ; CHECK: declare void @llvm.lifetime.start.p0p0s_s.0(i64 immarg, %0** nocapture)
 ; CHECK: declare void @llvm.lifetime.end.p0p0s_s.0(i64 immarg, %0** nocapture)
 
-; CHECK: declare i8 addrspace(200)* @llvm.stacksave.p200i8()
-; CHECK: declare void @llvm.stackrestore.p200i8(i8 addrspace(200)*)
+; CHECK: declare i8 addrspace(200)* @llvm.stacksave()
+; CHECK: declare void @llvm.stackrestore(i8 addrspace(200)*)

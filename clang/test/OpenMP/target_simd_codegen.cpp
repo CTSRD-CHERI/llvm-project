@@ -507,7 +507,7 @@ int bar(int n){
 //
 // CHECK: define {{.*}}[[FS1]]
 //
-// CHECK:          i8* @llvm.stacksave.p0i8()
+// CHECK:          i8* @llvm.stacksave()
 // CHECK-32:       store i32 %{{.+}}, i32* %__vla_expr
 // OMP50:       [[IF:%.+]] = icmp sgt i32 {{[^,]+}}, 60
 // CHECK-64:       [[B_ADDR:%.+]] = bitcast i[[SZ]]* [[B_CADDR:%.+]] to i32*

@@ -21,10 +21,10 @@ define internal void @callee(i32 %N) {
 define void @foo(i32 %N) {
 ; CHECK-LABEL: @foo(
 ; CHECK: alloca i32, i32 %{{.*}}
-; CHECK: call i8* @llvm.stacksave.p0i8()
+; CHECK: call i8* @llvm.stacksave()
 ; CHECK: alloca i32, i32 %{{.*}}
 ; CHECK: call void @ext
-; CHECK: call void @llvm.stackrestore.p0i8
+; CHECK: call void @llvm.stackrestore
 ; CHECK: ret
 
 entry:

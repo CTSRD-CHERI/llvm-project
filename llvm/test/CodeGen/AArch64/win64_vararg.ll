@@ -193,7 +193,7 @@ define void @vla(i32, i8*, ...) local_unnamed_addr {
   call void @llvm.lifetime.start.p0i8(i64 8, i8* nonnull %4) #5
   call void @llvm.va_start(i8* nonnull %4)
   %5 = zext i32 %0 to i64
-  %6 = call i8* @llvm.stacksave.p0i8()
+  %6 = call i8* @llvm.stacksave()
   %7 = alloca i8, i64 %5, align 1
   %8 = load i8*, i8** %3, align 8
   %9 = sext i32 %0 to i64
@@ -202,13 +202,13 @@ define void @vla(i32, i8*, ...) local_unnamed_addr {
   %12 = or i64 %11, 2
   %13 = call i32 @__stdio_common_vsprintf(i64 %12, i8* nonnull %7, i64 %9, i8* %1, i8* null, i8* %8)
   call void @llvm.va_end(i8* nonnull %4)
-  call void @llvm.stackrestore.p0i8(i8* %6)
+  call void @llvm.stackrestore(i8* %6)
   call void @llvm.lifetime.end.p0i8(i64 8, i8* nonnull %4) #5
   ret void
 }
 
-declare i8* @llvm.stacksave.p0i8()
-declare void @llvm.stackrestore.p0i8(i8*)
+declare i8* @llvm.stacksave()
+declare void @llvm.stackrestore(i8*)
 
 ; CHECK-LABEL: snprintf
 ; CHECK-DAG: sub     sp,  sp, #96
