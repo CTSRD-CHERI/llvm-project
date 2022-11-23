@@ -12,7 +12,7 @@ set(_cxx_abi_link_flag "${LIBUNWIND_TEST_CXX_ABI_LIB_PATH}")
 if(NOT _cxx_abi_link_flag)
   if ("${LIBUNWIND_CXX_ABI}" STREQUAL "default")
     if (${CMAKE_SYSTEM_NAME} MATCHES "Linux")
-      set(_cxx_abi_link_flag "libsupc++")
+      set(_cxx_abi_link_flag "-lsupc++")
     elseif (${CMAKE_SYSTEM_NAME} MATCHES "FreeBSD")
       set(_cxx_abi_link_flag "-lcxxrt")
     elseif(APPLE)
@@ -112,6 +112,8 @@ set(SERIALIZED_LIT_PARAMS "# Lit parameters serialized here for llvm-lit to pick
 macro(serialize_lit_param param value)
   string(APPEND SERIALIZED_LIT_PARAMS "config.${param} = ${value}\n")
 endmacro()
+
+serialize_lit_param(cxx_abi_link_flag "\"${_cxx_abi_link_flag}\"")
 
 serialize_lit_param(enable_experimental False)
 

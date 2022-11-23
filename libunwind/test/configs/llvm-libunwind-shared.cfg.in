@@ -49,6 +49,7 @@ config.substitutions.append(('%{compile_flags}',
 config.substitutions.append(('%{link_flags}',
     '-L {0} -Wl,-rpath,{0} -lunwind -ldl {1}'.format('@LIBUNWIND_LIBRARY_DIR@', ' '.join(link_flags))
 ))
+config.substitutions.append(('%{link_libcxxabi}', config.cxx_abi_link_flag))
 config.substitutions.append(('%{exec}', ''))
 
 import os, site
