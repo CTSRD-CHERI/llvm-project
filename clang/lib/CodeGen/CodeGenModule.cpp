@@ -4090,10 +4090,9 @@ llvm::Constant *CodeGenModule::GetOrCreateLLVMFunction(
     // Make sure the result is of the correct type.
     // (If function is requested for a definition, we always need to create a new
     // function, not just return a bitcast.)
-    if (!IsForDefinition) {
+    if (!IsForDefinition)
       return llvm::ConstantExpr::getBitCast(
-          Entry, Ty->getPointerTo(getFunctionAddrSpace()));
-    }
+          Entry, Ty->getPointerTo(Entry->getAddressSpace()));
   }
 
   // This function doesn't have a complete type (for example, the return
