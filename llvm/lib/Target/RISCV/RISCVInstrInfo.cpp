@@ -503,7 +503,8 @@ void RISCVInstrInfo::storeRegToStackSlot(MachineBasicBlock &MBB,
                                          MachineBasicBlock::iterator I,
                                          Register SrcReg, bool IsKill, int FI,
                                          const TargetRegisterClass *RC,
-                                         const TargetRegisterInfo *TRI) const {
+                                         const TargetRegisterInfo *TRI,
+                                         Register VReg) const {
   const RISCVSubtarget &ST = MBB.getParent()->getSubtarget<RISCVSubtarget>();
   DebugLoc DL;
   if (I != MBB.end())
@@ -612,7 +613,8 @@ void RISCVInstrInfo::loadRegFromStackSlot(MachineBasicBlock &MBB,
                                           MachineBasicBlock::iterator I,
                                           Register DstReg, int FI,
                                           const TargetRegisterClass *RC,
-                                          const TargetRegisterInfo *TRI) const {
+                                          const TargetRegisterInfo *TRI,
+                                          Register VReg) const {
   const RISCVSubtarget &ST = MBB.getParent()->getSubtarget<RISCVSubtarget>();
   DebugLoc DL;
   if (I != MBB.end())
@@ -1099,14 +1101,14 @@ void RISCVInstrInfo::insertIndirectBranch(MachineBasicBlock &MBB,
     if (FrameIndex == -1)
       report_fatal_error("underestimated function size");
 
-    storeRegToStackSlot(MBB, MI, TmpGPR, /*IsKill=*/true, FrameIndex, RC, TRI);
+    storeRegToStackSlot(MBB, MI, TmpGPR, /*IsKill=*/true, FrameIndex, RC, TRI, Register());
     TRI->eliminateFrameIndex(std::prev(MI.getIterator()),
                              /*SpAdj=*/0, /*FIOperandNum=*/1);
 
     MI.getOperand(1).setMBB(&RestoreBB);
 
     loadRegFromStackSlot(RestoreBB, RestoreBB.end(), TmpGPR, FrameIndex, RC,
-                         TRI);
+                         TRI, Register());
     TRI->eliminateFrameIndex(RestoreBB.back(),
                              /*SpAdj=*/0, /*FIOperandNum=*/1);
   }
