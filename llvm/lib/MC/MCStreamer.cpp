@@ -253,7 +253,7 @@ void MCStreamer::emitCheriIntcapGeneric(const MCExpr *Expr, unsigned CapSize,
                                         SMLoc Loc) {
   // Pad to ensure that the (u)intcap_t is aligned
   // Note: this assumes that capability alignment is the same as the size.
-  emitValueToAlignment(CapSize, 0, 1, 0);
+  emitValueToAlignment(Align(CapSize), 0, 1, 0);
   int64_t AbsValue;
   if (Expr->evaluateAsAbsolute(AbsValue, *this) && AbsValue == 0) {
     // Emit a single zero-fill block for zero values.
@@ -1318,7 +1318,7 @@ void MCStreamer::emitSLEB128Value(const MCExpr *Value) {}
 void MCStreamer::emitFill(const MCExpr &NumBytes, uint64_t Value, SMLoc Loc) {}
 void MCStreamer::emitFill(const MCExpr &NumValues, int64_t Size, int64_t Expr,
                           SMLoc Loc) {}
-void MCStreamer::emitValueToAlignment(unsigned ByteAlignment, int64_t Value,
+void MCStreamer::emitValueToAlignment(Align Alignment, int64_t Value,
                                       unsigned ValueSize,
                                       unsigned MaxBytesToEmit) {}
 void MCStreamer::emitCodeAlignment(Align Alignment, const MCSubtargetInfo *STI,
