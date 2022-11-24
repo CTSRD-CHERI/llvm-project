@@ -941,7 +941,7 @@ void MipsTargetELFStreamer::finish() {
       if (Section.useCodeAlign())
         OS.emitCodeAlignment(Alignment, &STI, Alignment.value());
       else
-        OS.emitValueToAlignment(Alignment.value(), 0, 1, Alignment.value());
+        OS.emitValueToAlignment(Alignment, 0, 1, Alignment.value());
     }
   }
 
