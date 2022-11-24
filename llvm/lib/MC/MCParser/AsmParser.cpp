@@ -74,8 +74,6 @@ using namespace llvm;
 
 MCAsmParserSemaCallback::~MCAsmParserSemaCallback() = default;
 
-extern cl::opt<unsigned> AsmMacroMaxNestingDepth;
-
 namespace {
 
 /// Helper types for tracking macro definitions.
@@ -756,6 +754,8 @@ public:
 } // end anonymous namespace
 
 namespace llvm {
+
+extern cl::opt<unsigned> AsmMacroMaxNestingDepth;
 
 extern MCAsmParserExtension *createDarwinAsmParser();
 extern MCAsmParserExtension *createELFAsmParser();
