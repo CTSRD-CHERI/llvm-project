@@ -8566,8 +8566,11 @@ const SCEV *ScalarEvolution::BackedgeTakenInfo::getConstantMax(
 
 const SCEV *ScalarEvolution::BackedgeTakenInfo::getSymbolicMax(
     const BasicBlock *ExitingBlock, ScalarEvolution *SE) const {
-  // FIXME: Need to implement this. Return exact for now.
-  return getExact(ExitingBlock, SE);
+  for (const auto &ENT : ExitNotTaken)
+    if (ENT.ExitingBlock == ExitingBlock && ENT.hasAlwaysTruePredicate())
+      return ENT.SymbolicMaxNotTaken;
+
+  return SE->getCouldNotCompute();
 }
 
 /// getConstantMax - Get the constant max backedge taken count for the loop.
@@ -8617,6 +8620,13 @@ ScalarEvolution::ExitLimit::ExitLimit(
   if (ConstantMaxNotTaken->isZero())
     ExactNotTaken = ConstantMaxNotTaken;
 
+  // FIXME: For now, SymbolicMaxNotTaken is either exact (if available) or
+  // constant max. In the future, we are planning to make it more powerful.
+  if (isa<SCEVCouldNotCompute>(ExactNotTaken))
+    SymbolicMaxNotTaken = ConstantMaxNotTaken;
+  else
+    SymbolicMaxNotTaken = ExactNotTaken;
+
   assert((isa<SCEVCouldNotCompute>(ExactNotTaken) ||
           !isa<SCEVCouldNotCompute>(ConstantMaxNotTaken)) &&
          "Exact is not allowed to be less precise than Max");
@@ -8653,7 +8663,8 @@ ScalarEvolution::BackedgeTakenInfo::BackedgeTakenInfo(
         BasicBlock *ExitBB = EEI.first;
         const ExitLimit &EL = EEI.second;
         return ExitNotTakenInfo(ExitBB, EL.ExactNotTaken,
-                                EL.ConstantMaxNotTaken, EL.Predicates);
+                                EL.ConstantMaxNotTaken, EL.SymbolicMaxNotTaken,
+                                EL.Predicates);
   });
   assert((isa<SCEVCouldNotCompute>(ConstantMax) ||
           isa<SCEVConstant>(ConstantMax)) &&
@@ -14758,9 +14769,6 @@ ScalarEvolution::computeSymbolicMaxBackedgeTakenCount(const Loop *L) {
   for (BasicBlock *ExitingBB : ExitingBlocks) {
     const SCEV *ExitCount =
         getExitCount(L, ExitingBB, ScalarEvolution::SymbolicMaximum);
-    if (isa<SCEVCouldNotCompute>(ExitCount))
-      ExitCount = getExitCount(L, ExitingBB,
-                                  ScalarEvolution::ConstantMaximum);
     if (!isa<SCEVCouldNotCompute>(ExitCount)) {
       assert(DT.dominates(ExitingBB, L->getLoopLatch()) &&
              "We should only have known counts for exiting blocks that "
