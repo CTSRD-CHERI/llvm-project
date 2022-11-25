@@ -472,6 +472,7 @@ bool RISCVRegisterInfo::getRegAllocationHints(
     switch (MI.getOpcode()) {
     default:
       return false;
+    case RISCV::ADD:
     case RISCV::SLLI:
       return true;
     case RISCV::ADDI:
