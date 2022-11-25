@@ -13397,6 +13397,7 @@ static void PrintLoopInfo(raw_ostream &OS, ScalarEvolution *SE,
     OS << "Unpredictable symbolic max backedge-taken count. ";
   }
 
+  OS << "\n";
   if (ExitingBlocks.size() > 1)
     for (BasicBlock *ExitingBlock : ExitingBlocks) {
       OS << "  symbolic max exit count for " << ExitingBlock->getName() << ": "
@@ -13404,8 +13405,7 @@ static void PrintLoopInfo(raw_ostream &OS, ScalarEvolution *SE,
          << "\n";
     }
 
-  OS << "\n"
-        "Loop ";
+  OS << "Loop ";
   L->getHeader()->printAsOperand(OS, /*PrintType=*/false);
   OS << ": ";
 
