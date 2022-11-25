@@ -8636,11 +8636,6 @@ ScalarEvolution::ExitLimit::ExitLimit(
     : ExitLimit(E, M, MaxOrZero, {&PredSet}) {
 }
 
-ScalarEvolution::ExitLimit::ExitLimit(const SCEV *E, const SCEV *M,
-                                      bool MaxOrZero)
-    : ExitLimit(E, M, MaxOrZero, None) {
-}
-
 /// Allocate memory for BackedgeTakenInfo and copy the not-taken count of each
 /// computable exit into a persistent ExitNotTakenInfo array.
 ScalarEvolution::BackedgeTakenInfo::BackedgeTakenInfo(
