@@ -120,7 +120,7 @@ entry:
 
   %ap = alloca i8*, align 8
   %ap2 = bitcast i8** %ap to i8*
-  call void @llvm.va_start.p0i8(i8* %ap2)
+  call void @llvm.va_start(i8* %ap2)
 
   call void asm sideeffect "teqi $$zero, 1", ""()
   %arg1 = va_arg i8** %ap, i16
@@ -132,7 +132,7 @@ entry:
   %e2 = getelementptr [3 x i16], [3 x i16]* @hwords, i32 0, i32 2
   store volatile i16 %arg2, i16* %e2, align 2
 
-  call void @llvm.va_end.p0i8(i8* %ap2)
+  call void @llvm.va_end(i8* %ap2)
 
   ret void
 }
@@ -235,7 +235,7 @@ entry:
 
   %ap = alloca i8*, align 8
   %ap2 = bitcast i8** %ap to i8*
-  call void @llvm.va_start.p0i8(i8* %ap2)
+  call void @llvm.va_start(i8* %ap2)
 
   call void asm sideeffect "teqi $$zero, 1", ""()
   %arg1 = va_arg i8** %ap, i32
@@ -247,7 +247,7 @@ entry:
   %e2 = getelementptr [3 x i32], [3 x i32]* @words, i32 0, i32 2
   store volatile i32 %arg2, i32* %e2, align 4
 
-  call void @llvm.va_end.p0i8(i8* %ap2)
+  call void @llvm.va_end(i8* %ap2)
 
   ret void
 }
@@ -357,7 +357,7 @@ entry:
 
   %ap = alloca i8*, align 8
   %ap2 = bitcast i8** %ap to i8*
-  call void @llvm.va_start.p0i8(i8* %ap2)
+  call void @llvm.va_start(i8* %ap2)
 
   call void asm sideeffect "teqi $$zero, 1", ""()
   %arg1 = va_arg i8** %ap, i64
@@ -369,7 +369,7 @@ entry:
   %e2 = getelementptr [3 x i64], [3 x i64]* @dwords, i32 0, i32 2
   store volatile i64 %arg2, i64* %e2, align 8
 
-  call void @llvm.va_end.p0i8(i8* %ap2)
+  call void @llvm.va_end(i8* %ap2)
 
   ret void
 }
@@ -472,7 +472,7 @@ entry:
 
   %ap = alloca i8*, align 8
   %ap2 = bitcast i8** %ap to i8*
-  call void @llvm.va_start.p0i8(i8* %ap2)
+  call void @llvm.va_start(i8* %ap2)
 
   call void asm sideeffect "teqi $$zero, 1", ""()
   %arg1 = va_arg i8** %ap, i16
@@ -484,7 +484,7 @@ entry:
   %e2 = getelementptr [3 x i16], [3 x i16]* @hwords, i32 0, i32 2
   store volatile i16 %arg2, i16* %e2, align 2
 
-  call void @llvm.va_end.p0i8(i8* %ap2)
+  call void @llvm.va_end(i8* %ap2)
 
   ret void
 }
@@ -587,7 +587,7 @@ entry:
 
   %ap = alloca i8*, align 8
   %ap2 = bitcast i8** %ap to i8*
-  call void @llvm.va_start.p0i8(i8* %ap2)
+  call void @llvm.va_start(i8* %ap2)
 
   call void asm sideeffect "teqi $$zero, 1", ""()
   %arg1 = va_arg i8** %ap, i32
@@ -599,7 +599,7 @@ entry:
   %e2 = getelementptr [3 x i32], [3 x i32]* @words, i32 0, i32 2
   store volatile i32 %arg2, i32* %e2, align 4
 
-  call void @llvm.va_end.p0i8(i8* %ap2)
+  call void @llvm.va_end(i8* %ap2)
 
   ret void
 }
@@ -709,7 +709,7 @@ entry:
 
   %ap = alloca i8*, align 8
   %ap2 = bitcast i8** %ap to i8*
-  call void @llvm.va_start.p0i8(i8* %ap2)
+  call void @llvm.va_start(i8* %ap2)
 
   call void asm sideeffect "teqi $$zero, 1", ""()
   %arg1 = va_arg i8** %ap, i64
@@ -721,7 +721,7 @@ entry:
   %e2 = getelementptr [3 x i64], [3 x i64]* @dwords, i32 0, i32 2
   store volatile i64 %arg2, i64* %e2, align 8
 
-  call void @llvm.va_end.p0i8(i8* %ap2)
+  call void @llvm.va_end(i8* %ap2)
 
   ret void
 }
@@ -823,7 +823,7 @@ entry:
 
   %ap = alloca i8*, align 8
   %ap2 = bitcast i8** %ap to i8*
-  call void @llvm.va_start.p0i8(i8* %ap2)
+  call void @llvm.va_start(i8* %ap2)
 
   call void asm sideeffect "teqi $$zero, 1", ""()
   %arg1 = va_arg i8** %ap, i16
@@ -835,7 +835,7 @@ entry:
   %e2 = getelementptr [3 x i16], [3 x i16]* @hwords, i32 0, i32 2
   store volatile i16 %arg2, i16* %e2, align 2
 
-  call void @llvm.va_end.p0i8(i8* %ap2)
+  call void @llvm.va_end(i8* %ap2)
 
   ret void
 }
@@ -937,7 +937,7 @@ entry:
 
   %ap = alloca i8*, align 8
   %ap2 = bitcast i8** %ap to i8*
-  call void @llvm.va_start.p0i8(i8* %ap2)
+  call void @llvm.va_start(i8* %ap2)
 
   call void asm sideeffect "teqi $$zero, 1", ""()
   %arg1 = va_arg i8** %ap, i32
@@ -949,7 +949,7 @@ entry:
   %e2 = getelementptr [3 x i32], [3 x i32]* @words, i32 0, i32 2
   store volatile i32 %arg2, i32* %e2, align 4
 
-  call void @llvm.va_end.p0i8(i8* %ap2)
+  call void @llvm.va_end(i8* %ap2)
 
   ret void
 }
@@ -1058,7 +1058,7 @@ entry:
 
   %ap = alloca i8*, align 8
   %ap2 = bitcast i8** %ap to i8*
-  call void @llvm.va_start.p0i8(i8* %ap2)
+  call void @llvm.va_start(i8* %ap2)
 
   call void asm sideeffect "teqi $$zero, 1", ""()
   %arg1 = va_arg i8** %ap, i64
@@ -1070,10 +1070,10 @@ entry:
   %e2 = getelementptr [3 x i64], [3 x i64]* @dwords, i32 0, i32 2
   store volatile i64 %arg2, i64* %e2, align 8
 
-  call void @llvm.va_end.p0i8(i8* %ap2)
+  call void @llvm.va_end(i8* %ap2)
 
   ret void
 }
 
-declare void @llvm.va_start.p0i8(i8*)
-declare void @llvm.va_end.p0i8(i8*)
+declare void @llvm.va_start(i8*)
+declare void @llvm.va_end(i8*)

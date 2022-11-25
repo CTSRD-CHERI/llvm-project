@@ -10,7 +10,7 @@
 // CHECK-IL32PC64-NEXT:  entry:
 // CHECK-IL32PC64-NEXT:    [[AP:%.*]] = alloca i8 addrspace(200)*, align 8, addrspace(200)
 // CHECK-IL32PC64-NEXT:    [[AP1:%.*]] = bitcast i8 addrspace(200)* addrspace(200)* [[AP]] to i8 addrspace(200)*
-// CHECK-IL32PC64-NEXT:    call void @llvm.va_start.p200i8(i8 addrspace(200)* [[AP1]])
+// CHECK-IL32PC64-NEXT:    call void @llvm.va_start(i8 addrspace(200)* [[AP1]])
 // CHECK-IL32PC64-NEXT:    br label [[FOR_COND:%.*]]
 // CHECK-IL32PC64:       for.cond:
 // CHECK-IL32PC64-NEXT:    [[N_ADDR_0:%.*]] = phi i32 [ [[N]], [[ENTRY:%.*]] ], [ [[DEC:%.*]], [[FOR_INC:%.*]] ]
@@ -37,7 +37,7 @@
 // CHECK-IL32PC64-NEXT:    [[TMP6:%.*]] = bitcast i8 addrspace(200)* [[TMP5]] to i8 addrspace(200)* addrspace(200)*
 // CHECK-IL32PC64-NEXT:    [[TMP7:%.*]] = load i8 addrspace(200)*, i8 addrspace(200)* addrspace(200)* [[TMP6]], align 8
 // CHECK-IL32PC64-NEXT:    [[AP4:%.*]] = bitcast i8 addrspace(200)* addrspace(200)* [[AP]] to i8 addrspace(200)*
-// CHECK-IL32PC64-NEXT:    call void @llvm.va_end.p200i8(i8 addrspace(200)* [[AP4]])
+// CHECK-IL32PC64-NEXT:    call void @llvm.va_end(i8 addrspace(200)* [[AP4]])
 // CHECK-IL32PC64-NEXT:    ret i8 addrspace(200)* [[TMP7]]
 //
 // CHECK-L64PC128-LABEL: define {{[^@]+}}@callee
@@ -45,7 +45,7 @@
 // CHECK-L64PC128-NEXT:  entry:
 // CHECK-L64PC128-NEXT:    [[AP:%.*]] = alloca i8 addrspace(200)*, align 16, addrspace(200)
 // CHECK-L64PC128-NEXT:    [[AP1:%.*]] = bitcast i8 addrspace(200)* addrspace(200)* [[AP]] to i8 addrspace(200)*
-// CHECK-L64PC128-NEXT:    call void @llvm.va_start.p200i8(i8 addrspace(200)* [[AP1]])
+// CHECK-L64PC128-NEXT:    call void @llvm.va_start(i8 addrspace(200)* [[AP1]])
 // CHECK-L64PC128-NEXT:    br label [[FOR_COND:%.*]]
 // CHECK-L64PC128:       for.cond:
 // CHECK-L64PC128-NEXT:    [[N_ADDR_0:%.*]] = phi i32 [ [[N]], [[ENTRY:%.*]] ], [ [[DEC:%.*]], [[FOR_INC:%.*]] ]
@@ -72,7 +72,7 @@
 // CHECK-L64PC128-NEXT:    [[TMP6:%.*]] = bitcast i8 addrspace(200)* [[TMP5]] to i8 addrspace(200)* addrspace(200)*
 // CHECK-L64PC128-NEXT:    [[TMP7:%.*]] = load i8 addrspace(200)*, i8 addrspace(200)* addrspace(200)* [[TMP6]], align 16
 // CHECK-L64PC128-NEXT:    [[AP4:%.*]] = bitcast i8 addrspace(200)* addrspace(200)* [[AP]] to i8 addrspace(200)*
-// CHECK-L64PC128-NEXT:    call void @llvm.va_end.p200i8(i8 addrspace(200)* [[AP4]])
+// CHECK-L64PC128-NEXT:    call void @llvm.va_end(i8 addrspace(200)* [[AP4]])
 // CHECK-L64PC128-NEXT:    ret i8 addrspace(200)* [[TMP7]]
 //
 void *callee(int n, ...) {
@@ -118,7 +118,7 @@ struct S {
 // CHECK-IL32PC64-NEXT:    [[AP:%.*]] = alloca i8 addrspace(200)*, align 8, addrspace(200)
 // CHECK-IL32PC64-NEXT:    [[TMP0:%.*]] = bitcast [[STRUCT_S]] addrspace(200)* [[AGG_RESULT]] to i8 addrspace(200)*
 // CHECK-IL32PC64-NEXT:    [[AP1:%.*]] = bitcast i8 addrspace(200)* addrspace(200)* [[AP]] to i8 addrspace(200)*
-// CHECK-IL32PC64-NEXT:    call void @llvm.va_start.p200i8(i8 addrspace(200)* [[AP1]])
+// CHECK-IL32PC64-NEXT:    call void @llvm.va_start(i8 addrspace(200)* [[AP1]])
 // CHECK-IL32PC64-NEXT:    br label [[FOR_COND:%.*]]
 // CHECK-IL32PC64:       for.cond:
 // CHECK-IL32PC64-NEXT:    [[N_ADDR_0:%.*]] = phi i32 [ [[N]], [[ENTRY:%.*]] ], [ [[DEC:%.*]], [[FOR_INC:%.*]] ]
@@ -155,7 +155,7 @@ struct S {
 // CHECK-L64PC128-NEXT:    [[AP:%.*]] = alloca i8 addrspace(200)*, align 16, addrspace(200)
 // CHECK-L64PC128-NEXT:    [[TMP0:%.*]] = bitcast [[STRUCT_S]] addrspace(200)* [[AGG_RESULT]] to i8 addrspace(200)*
 // CHECK-L64PC128-NEXT:    [[AP1:%.*]] = bitcast i8 addrspace(200)* addrspace(200)* [[AP]] to i8 addrspace(200)*
-// CHECK-L64PC128-NEXT:    call void @llvm.va_start.p200i8(i8 addrspace(200)* [[AP1]])
+// CHECK-L64PC128-NEXT:    call void @llvm.va_start(i8 addrspace(200)* [[AP1]])
 // CHECK-L64PC128-NEXT:    br label [[FOR_COND:%.*]]
 // CHECK-L64PC128:       for.cond:
 // CHECK-L64PC128-NEXT:    [[N_ADDR_0:%.*]] = phi i32 [ [[N]], [[ENTRY:%.*]] ], [ [[DEC:%.*]], [[FOR_INC:%.*]] ]

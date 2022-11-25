@@ -8,8 +8,8 @@ define i32 @foo(i32 %guard, ...) {
   %vl = alloca i8*, align 8
   %1 = bitcast i8** %vl to i8*
   call void @llvm.lifetime.start.p0i8(i64 32, i8* %1)
-  call void @llvm.va_start.p0i8(i8* %1)
-  call void @llvm.va_end.p0i8(i8* %1)
+  call void @llvm.va_start(i8* %1)
+  call void @llvm.va_end(i8* %1)
   call void @llvm.lifetime.end.p0i8(i64 32, i8* %1)
   ret i32 0
 }
@@ -24,8 +24,8 @@ define i32 @foo(i32 %guard, ...) {
 ; CHECK: call void @llvm.memcpy.p0i8.p0i8.i64(i8* align 8 [[C]], i8* align 8 bitcast ({{.*}} @__msan_va_arg_tls to i8*), i64 [[B]], i1 false)
 
 declare void @llvm.lifetime.start.p0i8(i64, i8* nocapture) #1
-declare void @llvm.va_start.p0i8(i8*) #2
-declare void @llvm.va_end.p0i8(i8*) #2
+declare void @llvm.va_start(i8*) #2
+declare void @llvm.va_end(i8*) #2
 declare void @llvm.lifetime.end.p0i8(i64, i8* nocapture) #1
 
 define i32 @bar() {

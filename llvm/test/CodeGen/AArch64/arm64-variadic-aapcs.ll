@@ -4,7 +4,7 @@
 
 @var = dso_local global %va_list zeroinitializer, align 8
 
-declare void @llvm.va_start.p0i8(i8*)
+declare void @llvm.va_start(i8*)
 
 define dso_local void @test_simple(i32 %n, ...) {
 ; CHECK-LABEL: test_simple:
@@ -37,7 +37,7 @@ define dso_local void @test_simple(i32 %n, ...) {
 ; CHECK: str     [[GRVR]], [x[[VA_LIST]], #24]
 
   %addr = bitcast %va_list* @var to i8*
-  call void @llvm.va_start.p0i8(i8* %addr)
+  call void @llvm.va_start(i8* %addr)
 
   ret void
 }
@@ -72,7 +72,7 @@ define dso_local void @test_fewargs(i32 %n, i32 %n1, i32 %n2, float %m, ...) {
 ; CHECK: str  [[GRVR_OFFS]], [x[[VA_LIST]], #24]
 
   %addr = bitcast %va_list* @var to i8*
-  call void @llvm.va_start.p0i8(i8* %addr)
+  call void @llvm.va_start(i8* %addr)
 
   ret void
 }
@@ -81,7 +81,7 @@ define dso_local void @test_nospare([8 x i64], [8 x float], ...) {
 ; CHECK-LABEL: test_nospare:
 
   %addr = bitcast %va_list* @var to i8*
-  call void @llvm.va_start.p0i8(i8* %addr)
+  call void @llvm.va_start(i8* %addr)
 ; CHECK-NOT: sub sp, sp
 ; CHECK: mov [[STACK:x[0-9]+]], sp
 ; CHECK: add x[[VAR:[0-9]+]], {{x[0-9]+}}, :lo12:var
@@ -103,24 +103,24 @@ define dso_local void @test_offsetstack([8 x i64], [2 x i64], [3 x float], ...) 
 ; CHECK-DAG: str [[STACK_TOP]], [x[[VAR]]]
 
   %addr = bitcast %va_list* @var to i8*
-  call void @llvm.va_start.p0i8(i8* %addr)
+  call void @llvm.va_start(i8* %addr)
   ret void
 }
 
-declare void @llvm.va_end.p0i8(i8*)
+declare void @llvm.va_end(i8*)
 
 define dso_local void @test_va_end() nounwind {
 ; CHECK-LABEL: test_va_end:
 ; CHECK-NEXT: %bb.0
 
   %addr = bitcast %va_list* @var to i8*
-  call void @llvm.va_end.p0i8(i8* %addr)
+  call void @llvm.va_end(i8* %addr)
 
   ret void
 ; CHECK-NEXT: ret
 }
 
-declare void @llvm.va_copy.p0i8.p0i8(i8* %dest, i8* %src)
+declare void @llvm.va_copy(i8* %dest, i8* %src)
 
 @second_list = dso_local global %va_list zeroinitializer
 
@@ -128,7 +128,7 @@ define dso_local void @test_va_copy() {
 ; CHECK-LABEL: test_va_copy:
   %srcaddr = bitcast %va_list* @var to i8*
   %dstaddr = bitcast %va_list* @second_list to i8*
-  call void @llvm.va_copy.p0i8.p0i8(i8* %dstaddr, i8* %srcaddr)
+  call void @llvm.va_copy(i8* %dstaddr, i8* %srcaddr)
 
 ; CHECK: add x[[SRC:[0-9]+]], {{x[0-9]+}}, :lo12:var
 

@@ -12,7 +12,7 @@ entry:
   %ap = alloca i8*, align 8
   %0 = bitcast i8** %ap to i8*
   call void @llvm.lifetime.start.p0i8(i64 8, i8* nonnull %0) #2
-  call void @llvm.va_start.p0i8(i8* nonnull %0)
+  call void @llvm.va_start(i8* nonnull %0)
   %argp.cur = load i8*, i8** %ap, align 8
   %argp.next = getelementptr inbounds i8, i8* %argp.cur, i64 8
   store i8* %argp.next, i8** %ap, align 8
@@ -35,7 +35,7 @@ entry:
   %13 = addrspacecast i8 addrspace(200)* %8 to i8*
   %14 = ptrtoint i8* %13 to i64
   %call = call i32 (i8*, ...) @printf(i8* getelementptr inbounds ([28 x i8], [28 x i8]* @.str, i64 0, i64 0), i64 signext %12, i32 signext %3, i64 signext %14, i32 signext %11)
-  call void @llvm.va_end.p0i8(i8* nonnull %0)
+  call void @llvm.va_end(i8* nonnull %0)
   call void @llvm.lifetime.end.p0i8(i64 8, i8* nonnull %0) #2
   ret i32 0
 
@@ -54,13 +54,13 @@ declare i32 @test_non_variadic(i8* %i1, i32 %i2, i8 addrspace(200)* nonnull %cap
 declare void @llvm.lifetime.start.p0i8(i64, i8* nocapture) #1
 
 ; Function Attrs: nounwind
-declare void @llvm.va_start.p0i8(i8*) #2
+declare void @llvm.va_start(i8*) #2
 
 ; Function Attrs: nounwind
 declare i32 @printf(i8* nocapture readonly, ...) local_unnamed_addr #3
 
 ; Function Attrs: nounwind
-declare void @llvm.va_end.p0i8(i8*) #2
+declare void @llvm.va_end(i8*) #2
 
 ; Function Attrs: argmemonly nounwind
 declare void @llvm.lifetime.end.p0i8(i64, i8* nocapture) #1

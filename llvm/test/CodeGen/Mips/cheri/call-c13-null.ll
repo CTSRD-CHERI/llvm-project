@@ -177,13 +177,13 @@ entry:
   %ap = alloca i8 addrspace(200)*, align 16, addrspace(200)
   %ap1 = bitcast i8 addrspace(200)* addrspace(200)* %ap to i8 addrspace(200)*
   call void @llvm.lifetime.start.p200i8(i64 32, i8 addrspace(200)* %ap1) #1
-  call void @llvm.va_start.p200i8(i8 addrspace(200)* %ap1)
-  ; call void @llvm.va_copy.p200i8.p200i8(i8 addrspace(200)* bitcast (i8 addrspace(200)* addrspace(200)* @va_cpy to i8 addrspace(200)*), i8 addrspace(200)* %0)
+  call void @llvm.va_start(i8 addrspace(200)* %ap1)
+  ; call void @llvm.va_copy(i8 addrspace(200)* bitcast (i8 addrspace(200)* addrspace(200)* @va_cpy to i8 addrspace(200)*), i8 addrspace(200)* %0)
 
   %first_arg = call i8 addrspace(200)* @llvm.cheri.cap.offset.increment.i64(i8 addrspace(200)* %in_arg1, i64 77)
   %0 = call i8 addrspace(200)* @one_arg(i8 addrspace(200)* %first_arg)
 
-  call void @llvm.va_end.p200i8(i8 addrspace(200)* %ap1)
+  call void @llvm.va_end(i8 addrspace(200)* %ap1)
   call void @llvm.lifetime.end.p200i8(i64 32, i8 addrspace(200)* %ap1) #1
   ret void
 }
@@ -273,13 +273,13 @@ declare i8 addrspace(200)* @llvm.cheri.cap.offset.increment.i64(i8 addrspace(200
 declare void @llvm.lifetime.start.p200i8(i64, i8 addrspace(200)* nocapture) #1
 
 ; Function Attrs: nounwind
-declare void @llvm.va_start.p200i8(i8 addrspace(200)*) #1
+declare void @llvm.va_start(i8 addrspace(200)*) #1
 
 ; Function Attrs: nounwind
-declare void @llvm.va_copy.p200i8.p200i8(i8 addrspace(200)*, i8 addrspace(200)*) #1
+declare void @llvm.va_copy(i8 addrspace(200)*, i8 addrspace(200)*) #1
 
 ; Function Attrs: nounwind
-declare void @llvm.va_end.p200i8(i8 addrspace(200)*) #1
+declare void @llvm.va_end(i8 addrspace(200)*) #1
 
 ; Function Attrs: nounwind
 declare void @llvm.lifetime.end.p200i8(i64, i8 addrspace(200)* nocapture) #1

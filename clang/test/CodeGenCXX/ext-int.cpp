@@ -169,13 +169,13 @@ void TakesVarargs(int i, ...) {
   __builtin_va_start(args, i);
   // LIN64: %[[STARTAD:.+]] = getelementptr inbounds [1 x %struct.__va_list_tag], [1 x %struct.__va_list_tag]* %[[ARGS]]
   // LIN64: %[[STARTAD1:.+]] = bitcast %struct.__va_list_tag* %[[STARTAD]] to i8*
-  // LIN64: call void @llvm.va_start.p0i8(i8* %[[STARTAD1]])
+  // LIN64: call void @llvm.va_start(i8* %[[STARTAD1]])
   // LIN32: %[[ARGSLLIFETIMESTART:.+]] = bitcast i8** %[[ARGS]] to i8*
   // LIN32: %[[ARGSSTART:.+]] = bitcast i8** %[[ARGS]] to i8*
-  // LIN32: call void @llvm.va_start.p0i8(i8* %[[ARGSSTART]])
+  // LIN32: call void @llvm.va_start(i8* %[[ARGSSTART]])
   // WIN: %[[ARGSLLIFETIMESTART:.+]] = bitcast i8** %[[ARGS]] to i8*
   // WIN: %[[ARGSSTART:.+]] = bitcast i8** %[[ARGS]] to i8*
-  // WIN: call void @llvm.va_start.p0i8(i8* %[[ARGSSTART]])
+  // WIN: call void @llvm.va_start(i8* %[[ARGSSTART]])
 
   _BitInt(92) A = __builtin_va_arg(args, _BitInt(92));
   // LIN64: %[[AD1:.+]] = getelementptr inbounds [1 x %struct.__va_list_tag], [1 x %struct.__va_list_tag]* %[[ARGS]]
@@ -275,11 +275,11 @@ void TakesVarargs(int i, ...) {
   __builtin_va_end(args);
   // LIN64: %[[ENDAD:.+]] = getelementptr inbounds [1 x %struct.__va_list_tag], [1 x %struct.__va_list_tag]* %[[ARGS]]
   // LIN64: %[[ENDAD1:.+]] = bitcast %struct.__va_list_tag* %[[ENDAD]] to i8*
-  // LIN64: call void @llvm.va_end.p0i8(i8* %[[ENDAD1]])
+  // LIN64: call void @llvm.va_end(i8* %[[ENDAD1]])
   // LIN32: %[[ARGSEND:.+]] = bitcast i8** %[[ARGS]] to i8*
-  // LIN32: call void @llvm.va_end.p0i8(i8* %[[ARGSEND]])
+  // LIN32: call void @llvm.va_end(i8* %[[ARGSEND]])
   // WIN: %[[ARGSEND:.+]] = bitcast i8** %[[ARGS]] to i8*
-  // WIN: call void @llvm.va_end.p0i8(i8* %[[ARGSEND]])
+  // WIN: call void @llvm.va_end(i8* %[[ARGSEND]])
 }
 void typeid_tests() {
   // LIN: define{{.*}} void @_Z12typeid_testsv()

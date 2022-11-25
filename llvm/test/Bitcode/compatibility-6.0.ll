@@ -1343,16 +1343,16 @@ define void @instructions.va_arg(i8* %v, ...) {
   %ap2 = bitcast i8** %ap to i8*
 
   call void @llvm.va_start(i8* %ap2)
-  ; CHECK: call void @llvm.va_start.p0i8(i8* %ap2)
+  ; CHECK: call void @llvm.va_start(i8* %ap2)
 
   va_arg i8* %ap2, i32
   ; CHECK: va_arg i8* %ap2, i32
 
   call void @llvm.va_copy(i8* %v, i8* %ap2)
-  ; CHECK: call void @llvm.va_copy.p0i8.p0i8(i8* %v, i8* %ap2)
+  ; CHECK: call void @llvm.va_copy(i8* %v, i8* %ap2)
 
   call void @llvm.va_end(i8* %ap2)
-  ; CHECK: call void @llvm.va_end.p0i8(i8* %ap2)
+  ; CHECK: call void @llvm.va_end(i8* %ap2)
 
   ret void
 }
@@ -1677,10 +1677,10 @@ define i8** @constexpr() {
 ; CHECK: attributes #33 = { inaccessiblememonly }
 ; CHECK: attributes #34 = { inaccessiblemem_or_argmemonly }
 ; CHECK: attributes #35 = { nofree nosync nounwind readnone willreturn }
-; CHECK: attributes #36 = { argmemonly nounwind readonly }
-; CHECK: attributes #37 = { argmemonly nounwind }
-; CHECK: attributes #38 = { nounwind readonly }
-; CHECK: attributes #39 = { nofree nosync nounwind willreturn }
+; CHECK: attributes #36 = { nofree nosync nounwind willreturn }
+; CHECK: attributes #37 = { argmemonly nounwind readonly }
+; CHECK: attributes #38 = { argmemonly nounwind }
+; CHECK: attributes #39 = { nounwind readonly }
 ; CHECK: attributes #40 = { writeonly }
 ; CHECK: attributes #41 = { speculatable }
 ; CHECK: attributes #42 = { inaccessiblemem_or_argmemonly nofree nosync nounwind willreturn }

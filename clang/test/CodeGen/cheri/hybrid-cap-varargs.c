@@ -212,7 +212,7 @@ void caller(void) {
 // MIPS-NEXT:    [[AP:%.*]] = alloca i8*, align 8
 // MIPS-NEXT:    store i64 [[SEL]], i64* [[SEL_ADDR]], align 8
 // MIPS-NEXT:    [[AP1:%.*]] = bitcast i8** [[AP]] to i8*
-// MIPS-NEXT:    call void @llvm.va_start.p0i8(i8* [[AP1]])
+// MIPS-NEXT:    call void @llvm.va_start(i8* [[AP1]])
 // MIPS-NEXT:    [[TMP0:%.*]] = load i64, i64* [[SEL_ADDR]], align 8
 // MIPS-NEXT:    switch i64 [[TMP0]], label [[SW_EPILOG:%.*]] [
 // MIPS-NEXT:    i64 0, label [[SW_BB:%.*]]
@@ -315,7 +315,7 @@ void caller(void) {
 // MIPS-NEXT:    br label [[SW_EPILOG]]
 // MIPS:       sw.epilog:
 // MIPS-NEXT:    [[AP26:%.*]] = bitcast i8** [[AP]] to i8*
-// MIPS-NEXT:    call void @llvm.va_end.p0i8(i8* [[AP26]])
+// MIPS-NEXT:    call void @llvm.va_end(i8* [[AP26]])
 // MIPS-NEXT:    ret void
 //
 // RV32IXCHERI-LABEL: define {{[^@]+}}@callee
@@ -335,7 +335,7 @@ void caller(void) {
 // RV32IXCHERI-NEXT:    [[AP:%.*]] = alloca i8*, align 4
 // RV32IXCHERI-NEXT:    store i32 [[SEL]], i32* [[SEL_ADDR]], align 4
 // RV32IXCHERI-NEXT:    [[AP1:%.*]] = bitcast i8** [[AP]] to i8*
-// RV32IXCHERI-NEXT:    call void @llvm.va_start.p0i8(i8* [[AP1]])
+// RV32IXCHERI-NEXT:    call void @llvm.va_start(i8* [[AP1]])
 // RV32IXCHERI-NEXT:    [[TMP0:%.*]] = load i32, i32* [[SEL_ADDR]], align 4
 // RV32IXCHERI-NEXT:    switch i32 [[TMP0]], label [[SW_EPILOG:%.*]] [
 // RV32IXCHERI-NEXT:    i32 0, label [[SW_BB:%.*]]
@@ -438,7 +438,7 @@ void caller(void) {
 // RV32IXCHERI-NEXT:    br label [[SW_EPILOG]]
 // RV32IXCHERI:       sw.epilog:
 // RV32IXCHERI-NEXT:    [[AP26:%.*]] = bitcast i8** [[AP]] to i8*
-// RV32IXCHERI-NEXT:    call void @llvm.va_end.p0i8(i8* [[AP26]])
+// RV32IXCHERI-NEXT:    call void @llvm.va_end(i8* [[AP26]])
 // RV32IXCHERI-NEXT:    ret void
 //
 // RV64IXCHERI-LABEL: define {{[^@]+}}@callee
@@ -458,7 +458,7 @@ void caller(void) {
 // RV64IXCHERI-NEXT:    [[AP:%.*]] = alloca i8*, align 8
 // RV64IXCHERI-NEXT:    store i64 [[SEL]], i64* [[SEL_ADDR]], align 8
 // RV64IXCHERI-NEXT:    [[AP1:%.*]] = bitcast i8** [[AP]] to i8*
-// RV64IXCHERI-NEXT:    call void @llvm.va_start.p0i8(i8* [[AP1]])
+// RV64IXCHERI-NEXT:    call void @llvm.va_start(i8* [[AP1]])
 // RV64IXCHERI-NEXT:    [[TMP0:%.*]] = load i64, i64* [[SEL_ADDR]], align 8
 // RV64IXCHERI-NEXT:    switch i64 [[TMP0]], label [[SW_EPILOG:%.*]] [
 // RV64IXCHERI-NEXT:    i64 0, label [[SW_BB:%.*]]
@@ -561,7 +561,7 @@ void caller(void) {
 // RV64IXCHERI-NEXT:    br label [[SW_EPILOG]]
 // RV64IXCHERI:       sw.epilog:
 // RV64IXCHERI-NEXT:    [[AP26:%.*]] = bitcast i8** [[AP]] to i8*
-// RV64IXCHERI-NEXT:    call void @llvm.va_end.p0i8(i8* [[AP26]])
+// RV64IXCHERI-NEXT:    call void @llvm.va_end(i8* [[AP26]])
 // RV64IXCHERI-NEXT:    ret void
 //
 void callee(long sel, ...) {

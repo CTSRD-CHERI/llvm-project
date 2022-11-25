@@ -45,12 +45,12 @@ entry:
   %xo_vap1 = bitcast i8 addrspace(200)* addrspace(200)* %xo_vap to i8 addrspace(200)*
   ; Load the address of b
   ; Store the va_list (passed in $c13) in the global
-  call void @llvm.va_start.p200i8(i8 addrspace(200)* %xo_vap1)
+  call void @llvm.va_start(i8 addrspace(200)* %xo_vap1)
   ret void
 }
 
 ; Function Attrs: nounwind
-declare void @llvm.va_start.p200i8(i8 addrspace(200)*) #0
+declare void @llvm.va_start(i8 addrspace(200)*) #0
 
 attributes #0 = { nounwind }
 

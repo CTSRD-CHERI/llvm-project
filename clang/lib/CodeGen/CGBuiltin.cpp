@@ -732,14 +732,14 @@ EncompassingIntegerType(ArrayRef<struct WidthAndSignedness> Types) {
 }
 
 Value *CodeGenFunction::EmitVAStartEnd(Value *ArgValue, bool IsStart) {
-  unsigned AS = CGM.getTargetCodeGenInfo().getDefaultAS();
+  unsigned AS = CGM.getDataLayout().getAllocaAddrSpace();
   llvm::Type *DestType = llvm::PointerType::get(Int8Ty, AS);
   if (ArgValue->getType() != DestType)
     ArgValue = Builder.CreatePointerBitCastOrAddrSpaceCast(ArgValue, DestType,
                                          ArgValue->getName().data());
 
   Intrinsic::ID inst = IsStart ? Intrinsic::vastart : Intrinsic::vaend;
-  return Builder.CreateCall(CGM.getIntrinsic(inst, DestType), ArgValue);
+  return Builder.CreateCall(CGM.getIntrinsic(inst), ArgValue);
 }
 
 /// Checks if using the result of __builtin_object_size(p, @p From) in place of
@@ -2734,8 +2734,7 @@ RValue CodeGenFunction::EmitBuiltinExpr(const GlobalDecl GD, unsigned BuiltinID,
 
     DstPtr = Builder.CreatePointerBitCastOrAddrSpaceCast(DstPtr, Type);
     SrcPtr = Builder.CreatePointerBitCastOrAddrSpaceCast(SrcPtr, Type);
-    return RValue::get(Builder.CreateCall(CGM.getIntrinsic(Intrinsic::vacopy,
-                                                           { Type, Type }),
+    return RValue::get(Builder.CreateCall(CGM.getIntrinsic(Intrinsic::vacopy),
                                           {DstPtr, SrcPtr}));
   }
   case Builtin::BI__builtin_abs:

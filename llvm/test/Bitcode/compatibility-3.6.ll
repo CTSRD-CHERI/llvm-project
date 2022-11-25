@@ -1055,24 +1055,24 @@ proceed:
 ;; Intrinsic Functions
 
 ; Intrinsic Functions -- Variable Argument Handling
-declare void @llvm.va_start.p0i8(i8*)
-declare void @llvm.va_copy.p0i8.p0i8(i8*, i8*)
-declare void @llvm.va_end.p0i8(i8*)
+declare void @llvm.va_start(i8*)
+declare void @llvm.va_copy(i8*, i8*)
+declare void @llvm.va_end(i8*)
 define void @instructions.va_arg(i8* %v, ...) {
   %ap = alloca i8*
   %ap2 = bitcast i8** %ap to i8*
 
-  call void @llvm.va_start.p0i8(i8* %ap2)
-  ; CHECK: call void @llvm.va_start.p0i8(i8* %ap2)
+  call void @llvm.va_start(i8* %ap2)
+  ; CHECK: call void @llvm.va_start(i8* %ap2)
 
   va_arg i8* %ap2, i32
   ; CHECK: va_arg i8* %ap2, i32
 
-  call void @llvm.va_copy.p0i8.p0i8(i8* %v, i8* %ap2)
-  ; CHECK: call void @llvm.va_copy.p0i8.p0i8(i8* %v, i8* %ap2)
+  call void @llvm.va_copy(i8* %v, i8* %ap2)
+  ; CHECK: call void @llvm.va_copy(i8* %v, i8* %ap2)
 
-  call void @llvm.va_end.p0i8(i8* %ap2)
-  ; CHECK: call void @llvm.va_end.p0i8(i8* %ap2)
+  call void @llvm.va_end(i8* %ap2)
+  ; CHECK: call void @llvm.va_end(i8* %ap2)
 
   ret void
 }
@@ -1180,10 +1180,10 @@ define void @intrinsics.codegen() {
 ; CHECK: attributes #27 = { uwtable }
 ; CHECK: attributes #28 = { "cpu"="cortex-a8" }
 ; CHECK: attributes #29 = { nofree nosync nounwind readnone willreturn }
-; CHECK: attributes #30 = { argmemonly nounwind readonly }
-; CHECK: attributes #31 = { argmemonly nounwind }
-; CHECK: attributes #32 = { nounwind readonly }
-; CHECK: attributes #33 = { nofree nosync nounwind willreturn }
+; CHECK: attributes #30 = { nofree nosync nounwind willreturn }
+; CHECK: attributes #31 = { argmemonly nounwind readonly }
+; CHECK: attributes #32 = { argmemonly nounwind }
+; CHECK: attributes #33 = { nounwind readonly }
 ; CHECK: attributes #34 = { inaccessiblemem_or_argmemonly nofree nosync nounwind willreturn }
 ; CHECK: attributes #35 = { builtin }
 

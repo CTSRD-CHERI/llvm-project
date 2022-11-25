@@ -26,7 +26,7 @@ entry:
   %ap = alloca i8 addrspace(200)*, align 8, addrspace(200)
   %0 = bitcast i8 addrspace(200)* addrspace(200)* %ap to i8 addrspace(200)*
   call void @llvm.lifetime.start.p200i8(i64 8, i8 addrspace(200)* nonnull %0) #2
-  call void @llvm.va_start.p200i8(i8 addrspace(200)* nonnull %0)
+  call void @llvm.va_start(i8 addrspace(200)* nonnull %0)
   %ap.promoted = load i8 addrspace(200)*, i8 addrspace(200)* addrspace(200)* %ap, align 8
   br label %while.cond
 
@@ -42,7 +42,7 @@ while.end:
   store i8 addrspace(200)* %argp.next, i8 addrspace(200)* addrspace(200)* %ap, align 8
   %1 = bitcast i8 addrspace(200)* %argp.next6 to i32 addrspace(200)*
   %2 = load i32, i32 addrspace(200)* %1, align 4
-  call void @llvm.va_end.p200i8(i8 addrspace(200)* nonnull %0)
+  call void @llvm.va_end(i8 addrspace(200)* nonnull %0)
   call void @llvm.lifetime.end.p200i8(i64 8, i8 addrspace(200)* nonnull %0) #2
   ret i32 %2
 }
@@ -75,7 +75,7 @@ entry:
   %ap = alloca i8 addrspace(200)*, align 8, addrspace(200)
   %0 = bitcast i8 addrspace(200)* addrspace(200)* %ap to i8 addrspace(200)*
   call void @llvm.lifetime.start.p200i8(i64 8, i8 addrspace(200)* nonnull %0)
-  call void @llvm.va_start.p200i8(i8 addrspace(200)* nonnull %0)
+  call void @llvm.va_start(i8 addrspace(200)* nonnull %0)
   %ap.promoted = load i8 addrspace(200)*, i8 addrspace(200)* addrspace(200)* %ap, align 8
   br label %while.cond
 
@@ -95,7 +95,7 @@ while.end:
   store i8 addrspace(200)* %argp.next, i8 addrspace(200)* addrspace(200)* %ap, align 8
   %5 = bitcast i8 addrspace(200)* %4 to i8 addrspace(200)* addrspace(200)*
   %6 = load i8 addrspace(200)*, i8 addrspace(200)* addrspace(200)* %5, align 8
-  call void @llvm.va_end.p200i8(i8 addrspace(200)* nonnull %0)
+  call void @llvm.va_end(i8 addrspace(200)* nonnull %0)
   call void @llvm.lifetime.end.p200i8(i64 8, i8 addrspace(200)* nonnull %0)
   ret i8 addrspace(200)* %6
 }
@@ -122,8 +122,8 @@ entry:
 }
 
 declare void @llvm.lifetime.start.p200i8(i64, i8 addrspace(200)* nocapture)
-declare void @llvm.va_start.p200i8(i8 addrspace(200)*)
+declare void @llvm.va_start(i8 addrspace(200)*)
 declare i32 @llvm.cheri.cap.address.get(i8 addrspace(200)*)
 declare i8 addrspace(200)* @llvm.cheri.cap.address.set(i8 addrspace(200)*, i32)
-declare void @llvm.va_end.p200i8(i8 addrspace(200)*)
+declare void @llvm.va_end(i8 addrspace(200)*)
 declare void @llvm.lifetime.end.p200i8(i64, i8 addrspace(200)* nocapture)

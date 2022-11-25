@@ -32,15 +32,15 @@ define void @copy_to_global(i8 addrspace(200)* nocapture readnone %y, i32 signex
   %1 = alloca i8 addrspace(200)*, align 32, addrspace(200)
   %2 = bitcast i8 addrspace(200)* addrspace(200)* %1 to i8 addrspace(200)*
   %3 = addrspacecast i8 addrspace(200)* %2 to i8*
-  call void @llvm.va_start.p200i8(i8 addrspace(200)* %2)
-  call void @llvm.va_copy.p200i8.p200i8(i8 addrspace(200)* bitcast (i8 addrspace(200)* addrspace(200)* @va_copy to i8 addrspace(200)*), i8 addrspace(200)* %2)
-  call void @llvm.va_end.p200i8(i8 addrspace(200)* %2)
+  call void @llvm.va_start(i8 addrspace(200)* %2)
+  call void @llvm.va_copy(i8 addrspace(200)* bitcast (i8 addrspace(200)* addrspace(200)* @va_copy to i8 addrspace(200)*), i8 addrspace(200)* %2)
+  call void @llvm.va_end(i8 addrspace(200)* %2)
   ret void
 }
 
-declare void @llvm.va_start.p200i8(i8 addrspace(200)*)
-declare void @llvm.va_copy.p200i8.p200i8(i8 addrspace(200)*, i8 addrspace(200)*)
-declare void @llvm.va_end.p200i8(i8 addrspace(200)*)
+declare void @llvm.va_start(i8 addrspace(200)*)
+declare void @llvm.va_copy(i8 addrspace(200)*, i8 addrspace(200)*)
+declare void @llvm.va_end(i8 addrspace(200)*)
 
 ; Check that va_copy can copy from a global to a register.
 ; TODO: there is no need to set the bounds on the va_copy() destination since
@@ -71,7 +71,7 @@ define i8 addrspace(200)* @copy_from_global() nounwind {
 ; CHECK-NEXT:    cincoffset $c11, $c11, 64
   %1 = alloca i8 addrspace(200)*, align 32, addrspace(200)
   %2 = bitcast i8 addrspace(200)* addrspace(200)* %1 to i8 addrspace(200)*
-  call void @llvm.va_copy.p200i8.p200i8(i8 addrspace(200)* %2, i8 addrspace(200)* bitcast (i8 addrspace(200)* addrspace(200)* @va_copy to i8 addrspace(200)*))
+  call void @llvm.va_copy(i8 addrspace(200)* %2, i8 addrspace(200)* bitcast (i8 addrspace(200)* addrspace(200)* @va_copy to i8 addrspace(200)*))
   %3 = load i8 addrspace(200)*, i8 addrspace(200)* addrspace(200)* %1, align 32
   ret i8 addrspace(200)* %3
 }
@@ -110,10 +110,10 @@ define void @pass_va_list(i8 addrspace(200)* nocapture readnone %y, i32 signext 
 ; CHECK-NEXT:    cincoffset $c11, $c11, 64
   %1 = alloca i8 addrspace(200)*, align 32, addrspace(200)
   %2 = bitcast i8 addrspace(200)* addrspace(200)* %1 to i8 addrspace(200)*
-  call void @llvm.va_start.p200i8(i8 addrspace(200)* %2)
+  call void @llvm.va_start(i8 addrspace(200)* %2)
   %3 = load i8 addrspace(200)*, i8 addrspace(200)* addrspace(200)* %1, align 32
   %4 = call i32 @f(i32 signext 1, i32 signext 2, i8 addrspace(200)* %3)
-  call void @llvm.va_end.p200i8(i8 addrspace(200)* %2)
+  call void @llvm.va_end(i8 addrspace(200)* %2)
   ret void
 }
 
