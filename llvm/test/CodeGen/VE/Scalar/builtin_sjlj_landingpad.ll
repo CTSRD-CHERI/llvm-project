@@ -263,6 +263,8 @@ define dso_local i32 @foo(i32 %arg) local_unnamed_addr personality i8* bitcast (
 ; PIC-NEXT:    .p2align	2
 ; PIC-NEXT:  .LJTI0_0:
 ; PIC-NEXT:    .4byte	.LBB0_6-foo
+; PIC-NEXT:  .L.LJTI0_0_end0:
+; PIC-NEXT:    .size .LJTI0_0, .L.LJTI0_0_end0-.LJTI0_0
 ; PIC-NEXT:    .section	.gcc_except_table,"a",@progbits
 ; PIC-NEXT:    .p2align	2
 ; PIC-NEXT:  GCC_except_table0:
