@@ -126,6 +126,7 @@
 #include <map>
 #include <memory>
 #include <numeric>
+#include <optional>
 #include <tuple>
 #include <utility>
 #include <vector>
@@ -713,7 +714,7 @@ CompareValueComplexity(EquivalenceClasses<const Value *> &EqCacheValue,
 // more efficient.
 // If the max analysis depth was reached, return None, assuming we do not know
 // if they are equivalent for sure.
-static Optional<int>
+static std::optional<int>
 CompareSCEVComplexity(EquivalenceClasses<const SCEV *> &EqCacheSCEV,
                       EquivalenceClasses<const Value *> &EqCacheValue,
                       const LoopInfo *const LI, const SCEV *LHS,
@@ -5126,7 +5127,7 @@ struct BinaryOp {
 } // end anonymous namespace
 
 /// Try to map \p V into a BinaryOp, and return \c None on failure.
-static Optional<BinaryOp> MatchBinaryOp(Value *V, DominatorTree &DT) {
+static std::optional<BinaryOp> MatchBinaryOp(Value *V, DominatorTree &DT) {
   auto *Op = dyn_cast<Operator>(V);
   if (!Op)
     return None;
@@ -6960,7 +6961,7 @@ ConstantRange ScalarEvolution::getRangeViaFactoring(const SCEV *Start,
 
     explicit SelectPattern(ScalarEvolution &SE, unsigned BitWidth,
                            const SCEV *S) {
-      Optional<unsigned> CastOp;
+      std::optional<unsigned> CastOp;
       APInt Offset(BitWidth, 0);
 
       assert(SE.getTypeSizeInBits(S->getType()) == BitWidth &&
@@ -8164,7 +8165,7 @@ unsigned ScalarEvolution::getSmallConstantTripMultiple(const Loop *L) {
   SmallVector<BasicBlock *, 8> ExitingBlocks;
   L->getExitingBlocks(ExitingBlocks);
 
-  Optional<unsigned> Res;
+  std::optional<unsigned> Res;
   for (auto *ExitingBB : ExitingBlocks) {
     unsigned Multiple = getSmallConstantTripMultiple(L, ExitingBB);
     if (!Res)
@@ -9205,7 +9206,7 @@ ScalarEvolution::ExitLimit ScalarEvolution::computeShiftCompareExitLimit(
   // above) in PNOut and the opcode of the shift operation in OpCodeOut.
   auto MatchShiftRecurrence =
       [&](Value *V, PHINode *&PNOut, Instruction::BinaryOps &OpCodeOut) {
-    Optional<Instruction::BinaryOps> PostShiftOpCode;
+    std::optional<Instruction::BinaryOps> PostShiftOpCode;
 
     {
       Instruction::BinaryOps OpC;
@@ -10002,7 +10003,7 @@ static const SCEV *SolveLinEquationWithOverflow(const APInt &A, const SCEV *B,
 /// coefficients.
 /// This function returns None if the addrec coefficients are not compile-
 /// time constants.
-static Optional<std::tuple<APInt, APInt, APInt, APInt, unsigned>>
+static std::optional<std::tuple<APInt, APInt, APInt, APInt, unsigned>>
 GetQuadraticEquation(const SCEVAddRecExpr *AddRec) {
   assert(AddRec->getNumOperands() == 3 && "This is not a quadratic chrec!");
   const SCEVConstant *LC = dyn_cast<SCEVConstant>(AddRec->getOperand(0));
