@@ -3884,8 +3884,8 @@ llvm::Function *CGObjCGNU::ModuleInitFunction() {
   llvm::PointerType *symtabTy = cast<llvm::PointerType>(symtab->getType());
   llvm::Constant *module = [&] {
     llvm::Type *moduleEltTys[] = {
-      LongTy, LongTy, PtrToInt8Ty, llvm::PointerType::get(symtabTy->getElementType(), AS), IntTy
-    };
+        LongTy, LongTy, PtrToInt8Ty,
+        llvm::PointerType::getWithSamePointeeType(symtabTy, AS), IntTy};
     llvm::StructType *moduleTy =
       llvm::StructType::get(CGM.getLLVMContext(),
          makeArrayRef(moduleEltTys).drop_back(unsigned(RuntimeVersion < 10)));
@@ -3937,8 +3937,9 @@ llvm::Function *CGObjCGNU::ModuleInitFunction() {
   Builder.SetInsertPoint(EntryBB);
 
   llvm::PointerType *moduleTy = cast<llvm::PointerType>(module->getType());
-  llvm::FunctionType *FT =
-    llvm::FunctionType::get(Builder.getVoidTy(), llvm::PointerType::get(moduleTy->getElementType(), AS), true);
+  llvm::FunctionType *FT = llvm::FunctionType::get(
+      Builder.getVoidTy(),
+      llvm::PointerType::getWithSamePointeeType(moduleTy, AS), true);
   llvm::FunctionCallee Register =
       CGM.CreateRuntimeFunction(FT, "__objc_exec_class");
   Builder.CreateCall(Register, module);

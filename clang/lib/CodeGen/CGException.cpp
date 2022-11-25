@@ -636,10 +636,10 @@ void CodeGenFunction::EnterCXXTryStmt(const CXXTryStmt &S, bool IsFnTryBlock) {
       CatchTypeInfo TypeInfo{nullptr, 0};
       if (CaughtType->isObjCObjectPointerType()) {
         TypeInfo.RTTI = CGM.getObjCRuntime().GetEHType(CaughtType);
-        TypeInfo.RTTI =
-            llvm::ConstantExpr::getPointerBitCastOrAddrSpaceCast(TypeInfo.RTTI,
-                    cast<llvm::PointerType>(TypeInfo.RTTI->getType())
-                      ->getElementType()->getPointerTo(0));
+        TypeInfo.RTTI = llvm::ConstantExpr::getPointerBitCastOrAddrSpaceCast(
+            TypeInfo.RTTI,
+            llvm::PointerType::getWithSamePointeeType(
+                cast<llvm::PointerType>(TypeInfo.RTTI->getType()), 0));
       } else
         TypeInfo = CGM.getCXXABI().getAddrOfCXXCatchHandlerType(
             CaughtType, C->getCaughtType());
