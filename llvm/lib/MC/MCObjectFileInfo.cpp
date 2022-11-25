@@ -80,10 +80,6 @@ void MCObjectFileInfo::initMachOMCObjectFileInfo(const Triple &T) {
 
   FDECFIEncoding = dwarf::DW_EH_PE_pcrel;
 
-  // .comm doesn't support alignment before Leopard.
-  if (T.isMacOSX() && T.isMacOSXVersionLT(10, 5))
-    CommDirectiveSupportsAlignment = false;
-
   TextSection // .text
     = Ctx->getMachOSection("__TEXT", "__text",
                            MachO::S_ATTR_PURE_INSTRUCTIONS,
@@ -566,8 +562,6 @@ void MCObjectFileInfo::initCOFFMCObjectFileInfo(const Triple &T) {
   // and to set the ISA selection bit for calls accordingly.
   const bool IsThumb = T.getArch() == Triple::thumb;
 
-  CommDirectiveSupportsAlignment = true;
-
   // COFF
   BSSSection = Ctx->getCOFFSection(
       ".bss", COFF::IMAGE_SCN_CNT_UNINITIALIZED_DATA |
@@ -1045,7 +1039,6 @@ void MCObjectFileInfo::initMCObjectFileInfo(MCContext &MCCtx, bool PIC,
   Ctx = &MCCtx;
 
   // Common.
-  CommDirectiveSupportsAlignment = true;
   SupportsWeakOmittedEHFrame = true;
   SupportsCompactUnwindWithoutEHFrame = false;
   OmitDwarfIfHaveCompactUnwind = false;
