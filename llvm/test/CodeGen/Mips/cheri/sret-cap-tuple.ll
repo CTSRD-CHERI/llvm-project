@@ -95,6 +95,7 @@ define internal void @test3(i8 addrspace(200)* align 16 dereferenceable(16) %ctr
 ; CHECK-NEXT:    cld $7, $zero, 120($c11)
 ; CHECK-NEXT:    cld $6, $zero, 112($c11)
 ; CHECK-NEXT:    cld $5, $zero, 104($c11)
+; CHECK-NEXT:    cld $4, $zero, 96($c11)
 ; CHECK-NEXT:    cld $1, $zero, 168($c11)
 ; CHECK-NEXT:    cld $2, $zero, 176($c11)
 ; CHECK-NEXT:    cld $3, $zero, 184($c11)
@@ -103,7 +104,6 @@ define internal void @test3(i8 addrspace(200)* align 16 dereferenceable(16) %ctr
 ; CHECK-NEXT:    cld $14, $zero, 208($c11)
 ; CHECK-NEXT:    cld $15, $zero, 216($c11)
 ; CHECK-NEXT:    cld $24, $zero, 160($c11)
-; CHECK-NEXT:    cld $4, $zero, 96($c11)
 ; CHECK-NEXT:    cmove $c2, $c11
 ; CHECK-NEXT:    csd $24, $zero, 0($c2)
 ; CHECK-NEXT:    csd $15, $zero, 56($c2)

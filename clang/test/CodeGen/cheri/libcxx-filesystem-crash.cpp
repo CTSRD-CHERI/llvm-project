@@ -96,8 +96,8 @@ extern "C" __int128 test2(duration<__int128_t> &e) {
   // PURECAP-CHERI128-BAD-CODE-NEXT: cincoffset $c11, $c11, -16
   // PURECAP-CHERI128-BAD-CODE-NEXT: clc $c1, $zero, 0($c3)
   // PURECAP-CHERI128-BAD-CODE-NEXT: csc $c1, $zero, 0($c11)
-  // PURECAP-CHERI128-BAD-CODE-NEXT: cld $3, $zero, 8($c11)
   // PURECAP-CHERI128-BAD-CODE-NEXT: cld $2, $zero, 0($c11)
+  // PURECAP-CHERI128-BAD-CODE-NEXT: cld $3, $zero, 8($c11)
   // PURECAP-CHERI128-BAD-CODE-NEXT: cjr $c17
   // PURECAP-CHERI128-BAD-CODE-NEXT: cincoffset $c11, $c11, 16
 
