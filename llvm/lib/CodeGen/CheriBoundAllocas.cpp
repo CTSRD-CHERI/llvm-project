@@ -166,9 +166,8 @@ public:
       B.SetCurrentDebugLocation(AI->getDebugLoc());
 
       Align ForcedAlignment;
-      PointerType *AllocaTy = AI->getType();
-      assert(isCheriPointer(AllocaTy, &DL));
-      Type *AllocationTy = AllocaTy->getElementType();
+      assert(isCheriPointer(AI->getType(), &DL));
+      Type *AllocationTy = AI->getAllocatedType();
       Value *ArraySize = B.CreateZExtOrTrunc(AI->getArraySize(), SizeTy);
 
       // Create a new (AS 0) alloca
@@ -310,7 +309,7 @@ public:
         Instruction *AllocaI8 = cast<Instruction>(B.CreateBitCast(AI, I8CapTy));
         Value *SingleBoundedAlloc =
             B.CreateCall(SetBoundsIntrin, {AllocaI8, Size});
-        SingleBoundedAlloc = B.CreateBitCast(SingleBoundedAlloc, AllocaTy);
+        SingleBoundedAlloc = B.CreateBitCast(SingleBoundedAlloc, AI->getType());
         for (Use *U : UsesThatNeedBounds) {
           U->set(SingleBoundedAlloc);
         }
@@ -362,7 +361,7 @@ public:
             // just so we can do the setbounds in a different basic block.
             Value *AllocaI8 = B.CreateBitCast(AI, I8CapTy);
             auto WithBounds = B.CreateCall(SetBoundsIntrin, {AllocaI8, Size});
-            BoundedAlloca = B.CreateBitCast(WithBounds, AllocaTy);
+            BoundedAlloca = B.CreateBitCast(WithBounds, AI->getType());
             ReplacedUses.insert({{I, IncomingBB}, BoundedAlloca});
           } else {
             // Multiple uses in the same instruction -> reuse existing call.
