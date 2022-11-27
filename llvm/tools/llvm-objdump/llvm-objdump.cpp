@@ -86,6 +86,7 @@
 #include <algorithm>
 #include <cctype>
 #include <cstring>
+#include <optional>
 #include <system_error>
 #include <unordered_map>
 #include <utility>
@@ -903,7 +904,7 @@ addMissingWasmCodeSymbols(const WasmObjectFile &Obj,
 static void addPltEntries(const ObjectFile &Obj,
                           std::map<SectionRef, SectionSymbolsTy> &AllSymbols,
                           StringSaver &Saver) {
-  Optional<SectionRef> Plt;
+  std::optional<SectionRef> Plt;
   for (const SectionRef &Section : Obj.sections()) {
     Expected<StringRef> SecNameOrErr = Section.getName();
     if (!SecNameOrErr) {
@@ -2738,7 +2739,7 @@ static void printRawClangAST(const ObjectFile *Obj) {
     ClangASTSectionName = "clangast";
   }
 
-  Optional<object::SectionRef> ClangASTSection;
+  std::optional<object::SectionRef> ClangASTSection;
   for (auto Sec : ToolSectionFilter(*Obj)) {
     StringRef Name;
     if (Expected<StringRef> NameOrErr = Sec.getName())
@@ -2773,7 +2774,7 @@ static void printFaultMaps(const ObjectFile *Obj) {
     return;
   }
 
-  Optional<object::SectionRef> FaultMapSection;
+  std::optional<object::SectionRef> FaultMapSection;
 
   for (auto Sec : ToolSectionFilter(*Obj)) {
     StringRef Name;
