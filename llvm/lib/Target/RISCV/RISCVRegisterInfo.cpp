@@ -188,6 +188,74 @@ bool RISCVRegisterInfo::hasReservedSpillSlot(const MachineFunction &MF,
   return true;
 }
 
+void RISCVRegisterInfo::adjustReg(MachineBasicBlock &MBB,
+                                  MachineBasicBlock::iterator MBBI,
+                                  const DebugLoc &DL, Register DestReg,
+                                  Register SrcReg, int64_t Val,
+                                  MachineInstr::MIFlag Flag,
+                                  MaybeAlign RequiredAlign) const {
+  const uint64_t Align = RequiredAlign.valueOrOne().value();
+  MachineRegisterInfo &MRI = MBB.getParent()->getRegInfo();
+  const RISCVSubtarget &ST = MBB.getParent()->getSubtarget<RISCVSubtarget>();
+  const RISCVInstrInfo *TII = ST.getInstrInfo();
+
+  unsigned Opc;
+  unsigned OpcImm;
+  const bool IsPureCapABI = RISCVABI::isCheriPureCapABI(ST.getTargetABI());
+  if (IsPureCapABI) {
+    Opc = RISCV::CIncOffset;
+    OpcImm = RISCV::CIncOffsetImm;
+  } else {
+    Opc = RISCV::ADD;
+    OpcImm = RISCV::ADDI;
+  }
+
+  if (DestReg == SrcReg && Val == 0)
+    return;
+
+  if (isInt<12>(Val)) {
+    BuildMI(MBB, MBBI, DL, TII->get(OpcImm), DestReg)
+        .addReg(SrcReg)
+        .addImm(Val)
+        .setMIFlag(Flag);
+    return;
+  }
+
+  // Try to split the offset across two ADDIs. We need to keep the intermediate
+  // result aligned after each ADDI.  We need to determine the maximum value we
+  // can put in each ADDI. In the negative direction, we can use -2048 which is
+  // always sufficiently aligned. In the positive direction, we need to find the
+  // largest 12-bit immediate that is aligned.  Exclude -4096 since it can be
+  // created with LUI.
+  assert(Align < 2048 && "Required alignment too large");
+  int64_t MaxPosAdjStep = 2048 - Align;
+  if (Val > -4096 && Val <= (2 * MaxPosAdjStep)) {
+    int64_t FirstAdj = Val < 0 ? -2048 : MaxPosAdjStep;
+    Val -= FirstAdj;
+    BuildMI(MBB, MBBI, DL, TII->get(OpcImm), DestReg)
+        .addReg(SrcReg)
+        .addImm(FirstAdj)
+        .setMIFlag(Flag);
+    BuildMI(MBB, MBBI, DL, TII->get(OpcImm), DestReg)
+        .addReg(DestReg, RegState::Kill)
+        .addImm(Val)
+        .setMIFlag(Flag);
+    return;
+  }
+
+  if (Val < 0 && !IsPureCapABI) {
+    Val = -Val;
+    Opc = RISCV::SUB;
+  }
+
+  Register ScratchReg = MRI.createVirtualRegister(&RISCV::GPRRegClass);
+  TII->movImm(MBB, MBBI, DL, ScratchReg, Val, Flag);
+  BuildMI(MBB, MBBI, DL, TII->get(Opc), DestReg)
+      .addReg(SrcReg)
+      .addReg(ScratchReg, RegState::Kill)
+      .setMIFlag(Flag);
+}
+
 void RISCVRegisterInfo::adjustReg(MachineBasicBlock::iterator II, Register DestReg,
                                   Register SrcReg, StackOffset Offset) const {
 
