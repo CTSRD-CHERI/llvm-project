@@ -44,6 +44,7 @@ define void @just_above_threshold() local_unnamed_addr addrspace(200) nounwind {
 ; CHECK-NEXT:    lui a0, 1
 ; CHECK-NEXT:    addiw a0, a0, -2048
 ; CHECK-NEXT:    cincoffset ca0, csp, a0
+; CHECK-NEXT:    cincoffset ca0, ca0, 0
 ; CHECK-NEXT:    csetbounds ca0, ca0, 16
 ; CHECK-NEXT:    ccall use_i128
 ; CHECK-NEXT:    cincoffset ca0, csp, 24
