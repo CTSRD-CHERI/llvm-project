@@ -4,16 +4,16 @@
 ; The test checks that loads should not be moved below a stackrestore boundary.
 define void @stackrestore1(ptr %out) {
 ; CHECK-LABEL: @stackrestore1(
-; CHECK-NEXT:    [[STACK:%.*]] = call ptr @llvm.stacksave()
+; CHECK-NEXT:    [[STACK:%.*]] = call ptr @llvm.stacksave.p0()
 ; CHECK-NEXT:    [[LOCAL_ALLOCA:%.*]] = alloca [16 x i8], align 4
 ; CHECK-NEXT:    store <4 x float> <float 0x3FF3333340000000, float 0x3FF3333340000000, float 0x3FF3333340000000, float 0x3FF3333340000000>, ptr [[LOCAL_ALLOCA]], align 4
 ; CHECK-NEXT:    [[TMP1:%.*]] = load <4 x float>, ptr [[LOCAL_ALLOCA]], align 4
-; CHECK-NEXT:    call void @llvm.stackrestore(ptr [[STACK]])
+; CHECK-NEXT:    call void @llvm.stackrestore.p0(ptr [[STACK]])
 ; CHECK-NEXT:    [[SHUFFLE:%.*]] = shufflevector <4 x float> [[TMP1]], <4 x float> poison, <4 x i32> <i32 2, i32 3, i32 0, i32 1>
 ; CHECK-NEXT:    store <4 x float> [[SHUFFLE]], ptr [[OUT:%.*]], align 4
 ; CHECK-NEXT:    ret void
 ;
-  %stack = call ptr @llvm.stacksave()
+  %stack = call ptr @llvm.stacksave.p0()
   %local_alloca = alloca [16 x i8], align 4
   store float 0x3FF3333340000000, ptr %local_alloca, align 4
   %addr1 = getelementptr inbounds i8, ptr %local_alloca, i64 4
@@ -26,7 +26,7 @@ define void @stackrestore1(ptr %out) {
   %val1 = load float, ptr %addr1, align 4
   %val2 = load float, ptr %addr2, align 4
   %val3 = load float, ptr %addr3, align 4
-  call void @llvm.stackrestore(i8* %stack)
+  call void @llvm.stackrestore.p0(i8* %stack)
   %outaddr2 = getelementptr inbounds float, ptr %out, i64 2
   store float %val0, ptr %outaddr2, align 4
   %outaddr3 = getelementptr inbounds float, ptr %out, i64 3
@@ -37,5 +37,5 @@ define void @stackrestore1(ptr %out) {
   ret void
 }
 
-declare i8* @llvm.stacksave()
-declare void @llvm.stackrestore(i8*)
+declare i8* @llvm.stacksave.p0()
+declare void @llvm.stackrestore.p0(i8*)
