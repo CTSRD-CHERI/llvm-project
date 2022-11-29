@@ -27,11 +27,11 @@ define void @pad_large() local_unnamed_addr addrspace(200) {
 ; OPT128-LABEL: @pad_large(
 ; OPT128-NEXT:  entry:
 ; OPT128-NEXT:    [[TMP0:%.*]] = alloca { [16388 x i8], [28 x i8] }, align 32, addrspace(200)
-; OPT128-NEXT:    [[TMP1:%.*]] = bitcast { [16388 x i8], [28 x i8] } addrspace(200)* [[TMP0]] to [16388 x i8] addrspace(200)*
-; OPT128-NEXT:    [[TMP2:%.*]] = bitcast { [16388 x i8], [28 x i8] } addrspace(200)* [[TMP0]] to i8 addrspace(200)*
-; OPT128-NEXT:    [[TMP3:%.*]] = call i8 addrspace(200)* @llvm.cheri.bounded.stack.cap.i64(i8 addrspace(200)* [[TMP2]], i64 16416)
-; OPT128-NEXT:    [[TMP4:%.*]] = bitcast i8 addrspace(200)* [[TMP3]] to { [16388 x i8], [28 x i8] } addrspace(200)*
-; OPT128-NEXT:    [[PTR:%.*]] = getelementptr inbounds [16388 x i8], { [16388 x i8], [28 x i8] } addrspace(200)* [[TMP4]], i64 0, i64 0
+; OPT128-NEXT:    [[WITHOUT_TAIL_PADDING:%.*]] = bitcast { [16388 x i8], [28 x i8] } addrspace(200)* [[TMP0]] to [16388 x i8] addrspace(200)*
+; OPT128-NEXT:    [[TMP1:%.*]] = bitcast { [16388 x i8], [28 x i8] } addrspace(200)* [[TMP0]] to i8 addrspace(200)*
+; OPT128-NEXT:    [[TMP2:%.*]] = call i8 addrspace(200)* @llvm.cheri.bounded.stack.cap.i64(i8 addrspace(200)* [[TMP1]], i64 16416)
+; OPT128-NEXT:    [[TMP3:%.*]] = bitcast i8 addrspace(200)* [[TMP2]] to [16388 x i8] addrspace(200)*
+; OPT128-NEXT:    [[PTR:%.*]] = getelementptr inbounds [16388 x i8], [16388 x i8] addrspace(200)* [[TMP3]], i64 0, i64 0
 ; OPT128-NEXT:    call void @keep_live(i8 addrspace(200)* nonnull [[PTR]])
 ; OPT128-NEXT:    ret void
 ;
@@ -56,3 +56,31 @@ entry:
   store volatile i8 0, i8 addrspace(200)* %ptr
   ret void
 }
+
+;; A large alloca with a struct type - incorrect handling of the new alloca type
+;; resulted in invalid IR after catching up with API changes when merging to LLVM 14.
+
+%struct.snmp_pdu = type { [100 x %struct.asn_oid], i32 }
+%struct.asn_oid = type { [28 x i32] }
+
+@snmp_discover_engine_resp = addrspace(200) global %struct.snmp_pdu zeroinitializer, align 4
+declare void @snmp_pdu_free(%struct.snmp_pdu addrspace(200)* noundef) addrspace(200)
+
+define dso_local void @snmp_discover_engine(%struct.snmp_pdu addrspace(200)* noalias sret(%struct.snmp_pdu) align 4 %agg.result) addrspace(200) nounwind {
+; OPT128-LABEL: @snmp_discover_engine(
+; OPT128-NEXT:  entry:
+; OPT128-NEXT:    [[BYVAL_TEMP:%.*]] = alloca { [[STRUCT_SNMP_PDU:%.*]], [12 x i8] }, align 16, addrspace(200)
+; OPT128-NEXT:    [[WITHOUT_TAIL_PADDING:%.*]] = bitcast { [[STRUCT_SNMP_PDU]], [12 x i8] } addrspace(200)* [[BYVAL_TEMP]] to [[STRUCT_SNMP_PDU]] addrspace(200)*
+; OPT128-NEXT:    [[TMP0:%.*]] = bitcast { [[STRUCT_SNMP_PDU]], [12 x i8] } addrspace(200)* [[BYVAL_TEMP]] to i8 addrspace(200)*
+; OPT128-NEXT:    [[TMP1:%.*]] = call i8 addrspace(200)* @llvm.cheri.bounded.stack.cap.i64(i8 addrspace(200)* [[TMP0]], i64 11216)
+; OPT128-NEXT:    [[TMP2:%.*]] = bitcast i8 addrspace(200)* [[TMP1]] to [[STRUCT_SNMP_PDU]] addrspace(200)*
+; OPT128-NEXT:    call void @snmp_pdu_free([[STRUCT_SNMP_PDU]] addrspace(200)* [[TMP2]])
+; OPT128-NEXT:    ret void
+;
+entry:
+  %byval-temp = alloca %struct.snmp_pdu, align 4, addrspace(200)
+  call void @snmp_pdu_free(%struct.snmp_pdu addrspace(200)* %byval-temp)
+  ret void
+}
+
+declare void @llvm.memcpy.p200i8.p200i8.i64(i8 addrspace(200)* noalias nocapture writeonly, i8 addrspace(200)* noalias nocapture readonly, i64, i1 immarg) addrspace(200)

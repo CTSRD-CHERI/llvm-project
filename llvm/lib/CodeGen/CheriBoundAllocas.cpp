@@ -168,6 +168,7 @@ public:
       Align ForcedAlignment;
       assert(isCheriPointer(AI->getType(), &DL));
       Type *AllocationTy = AI->getAllocatedType();
+      PointerType *AllocaPtrTy = AI->getType();
       Value *ArraySize = B.CreateZExtOrTrunc(AI->getArraySize(), SizeTy);
 
       // Create a new (AS 0) alloca
@@ -269,22 +270,26 @@ public:
             ArrayType::get(Type::getInt8Ty(F.getContext()),
                            static_cast<uint64_t>(TailPadding));
           Type *TypeWithPadding = StructType::get(AllocatedType, PaddingType);
-          auto *NewAI =
-            new AllocaInst(TypeWithPadding, AI->getType()->getAddressSpace(),
-                           nullptr, "", AI);
-          NewAI->takeName(AI);
-          NewAI->setAlignment(AI->getAlign());
-          NewAI->setUsedWithInAlloca(AI->isUsedWithInAlloca());
-          NewAI->setSwiftError(AI->isSwiftError());
-          NewAI->copyMetadata(*AI);
-
-          auto *NewPtr = new BitCastInst(NewAI, AI->getType(), "", AI);
-          AI->replaceAllUsesWith(NewPtr);
-          AI->eraseFromParent();
-          AI = NewAI;
-          Size =
-            ConstantInt::get(SizeTy,
-                             AllocaSize + static_cast<uint64_t>(TailPadding));
+          // Instead of cloning the alloca, mutate it in-place to avoid missing
+          // some important metadata (debug info/attributes/etc.).
+          AI->setAllocatedType(TypeWithPadding);
+          if (!AI->getType()->isOpaquePointerTy()) {
+            // Explicitly create a bitcast instruction to allow us to RAUW all
+            // uses after changing the type (not needed with opaque pointers).
+            // We have to use a NULL source temporarily since we can only use
+            // AI after calling AI->mutateType(), and RAUW will assert if
+            // called after AI->mutateType(), so we need this temporary.
+            auto *NewPtr = new BitCastInst(
+                ConstantPointerNull::get(AllocaPtrTy), AllocaPtrTy,
+                "without-tail-padding", AI->getNextNonDebugInstruction());
+            AI->replaceAllUsesWith(NewPtr);
+            AI->mutateType(
+                TypeWithPadding->getPointerTo(AI->getAddressSpace()));
+            // Finally, set bitcast source to AI
+            NewPtr->getOperandUse(0).set(AI);
+          }
+          Size = ConstantInt::get(
+              SizeTy, AllocaSize + static_cast<uint64_t>(TailPadding));
         }
       }
 
@@ -309,7 +314,7 @@ public:
         Instruction *AllocaI8 = cast<Instruction>(B.CreateBitCast(AI, I8CapTy));
         Value *SingleBoundedAlloc =
             B.CreateCall(SetBoundsIntrin, {AllocaI8, Size});
-        SingleBoundedAlloc = B.CreateBitCast(SingleBoundedAlloc, AI->getType());
+        SingleBoundedAlloc = B.CreateBitCast(SingleBoundedAlloc, AllocaPtrTy);
         for (Use *U : UsesThatNeedBounds) {
           U->set(SingleBoundedAlloc);
         }
@@ -361,7 +366,7 @@ public:
             // just so we can do the setbounds in a different basic block.
             Value *AllocaI8 = B.CreateBitCast(AI, I8CapTy);
             auto WithBounds = B.CreateCall(SetBoundsIntrin, {AllocaI8, Size});
-            BoundedAlloca = B.CreateBitCast(WithBounds, AI->getType());
+            BoundedAlloca = B.CreateBitCast(WithBounds, AllocaPtrTy);
             ReplacedUses.insert({{I, IncomingBB}, BoundedAlloca});
           } else {
             // Multiple uses in the same instruction -> reuse existing call.
