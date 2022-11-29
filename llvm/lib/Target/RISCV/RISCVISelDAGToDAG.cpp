@@ -1835,10 +1835,12 @@ void RISCVDAGToDAGISel::Select(SDNode *Node) {
         /*IsMasked*/ false, /*IsTU*/ false, /*IsStrided*/ true, /*FF*/ false,
         Log2SEW, static_cast<unsigned>(LMUL));
     MachineSDNode *Load =
-        CurDAG->getMachineNode(P->Pseudo, DL, Node->getVTList(), Operands);
-
+        CurDAG->getMachineNode(P->Pseudo, DL, {VT, MVT::Other}, Operands);
+    // Update the chain.
+    ReplaceUses(Src.getValue(1), SDValue(Load, 1));
+    // Record the mem-refs
     CurDAG->setNodeMemRefs(Load, {Ld->getMemOperand()});
-
+    // Replace the splat with the vlse.
     ReplaceNode(Node, Load);
     return;
   }
