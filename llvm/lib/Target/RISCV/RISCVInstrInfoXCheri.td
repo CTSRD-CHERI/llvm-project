@@ -1092,23 +1092,23 @@ def : InstAlias<"c.cincoffsetimm16csp $rd, $imm",
 
 let Predicates = [HasCheri, IsCapMode] in {
 let hasSideEffects = 0, mayLoad = 0, mayStore = 0, isCodeGenOnly = 0,
-    isAsmParserOnly = 1 in
+    isAsmParserOnly = 1, Size = 8 in
 def PseudoCLLC : Pseudo<(outs GPCR:$dst), (ins bare_symbol:$src), [],
                         "cllc", "$dst, $src">;
 
 let hasSideEffects = 0, mayLoad = 1, mayStore = 0, isCodeGenOnly = 0,
-    isAsmParserOnly = 1 in
+    isAsmParserOnly = 1, Size = 8 in
 def PseudoCLGC : Pseudo<(outs GPCR:$dst), (ins bare_symbol:$src), [],
                         "clgc", "$dst, $src">;
 
 let hasSideEffects = 0, mayLoad = 1, mayStore = 0, isCodeGenOnly = 0,
-    isAsmParserOnly = 1 in
+    isAsmParserOnly = 1, Size = 8 in
 def PseudoCLA_TLS_IE : Pseudo<(outs GPR:$dst, GPCR:$tmp),
                               (ins bare_symbol:$src), [],
                               "cla.tls.ie", "$dst, $src, $tmp">;
 
 let hasSideEffects = 0, mayLoad = 0, mayStore = 0, isCodeGenOnly = 0,
-    isAsmParserOnly = 1 in
+    isAsmParserOnly = 1, Size = 8 in
 def PseudoCLC_TLS_GD : Pseudo<(outs GPCR:$dst), (ins bare_symbol:$src), [],
                               "clc.tls.gd", "$dst, $src">;
 
@@ -1562,18 +1562,18 @@ defm : AMOCapPat<"128", "atomic_swap_cap", "AMOSWAP_C">;
 } // Predicates = [HasCheri, HasStdExtA, IsRV64, NotCapMode]
 
 let Predicates = [HasCheri, HasStdExtA] in {
-def PseudoAtomicLoadAddCap : PseudoAMO<GPCR>;
-def PseudoAtomicLoadSubCap : PseudoAMO<GPCR>;
-def PseudoAtomicLoadAndCap : PseudoAMO<GPCR>;
-def PseudoAtomicLoadOrCap : PseudoAMO<GPCR>;
-def PseudoAtomicLoadXorCap : PseudoAMO<GPCR>;
-def PseudoAtomicLoadMaxCap : PseudoAMO<GPCR>;
-def PseudoAtomicLoadMinCap : PseudoAMO<GPCR>;
-def PseudoAtomicLoadUMaxCap : PseudoAMO<GPCR>;
-def PseudoAtomicLoadUMinCap : PseudoAMO<GPCR>;
-def PseudoAtomicLoadNandCap : PseudoAMO<GPCR>;
-def PseudoCmpXchgCap : PseudoCmpXchg<GPCR>;
-} // Predicates = [HasCheri, HasStdExtA]
+def PseudoAtomicLoadAddCap : PseudoAMO<GPCR> { let Size = 16; }
+def PseudoAtomicLoadSubCap : PseudoAMO<GPCR> { let Size = 20; }
+def PseudoAtomicLoadAndCap : PseudoAMO<GPCR> { let Size = 20; }
+def PseudoAtomicLoadOrCap : PseudoAMO<GPCR> { let Size = 20; }
+def PseudoAtomicLoadXorCap : PseudoAMO<GPCR> { let Size = 20; }
+def PseudoAtomicLoadMaxCap : PseudoAMO<GPCR> { let Size = 24; }
+def PseudoAtomicLoadMinCap : PseudoAMO<GPCR> { let Size = 24; }
+def PseudoAtomicLoadUMaxCap : PseudoAMO<GPCR> { let Size = 24; }
+def PseudoAtomicLoadUMinCap : PseudoAMO<GPCR> { let Size = 24; }
+def PseudoAtomicLoadNandCap : PseudoAMO<GPCR> { let Size = 24; }
+def PseudoCmpXchgCap : PseudoCmpXchg<GPCR> { let Size = 16; }
+} // Predicates = [HasCheri, HasStdExtA]f
 
 let Predicates = [HasCheri, HasStdExtA, NotCapMode] in {
 defm : PseudoAMOPat<"atomic_load_add_cap", PseudoAtomicLoadAddCap, GPCR>;
@@ -1704,51 +1704,51 @@ multiclass CheriAMOCapPat<string CLenStr, string AtomicOp, string BaseInst> {
 }
 
 let Predicates = [HasCheri, HasStdExtA] in {
-def PseudoCheriAtomicSwap8 : PseudoCheriAMO;
-def PseudoCheriAtomicLoadAdd8 : PseudoCheriAMO;
-def PseudoCheriAtomicLoadSub8 : PseudoCheriAMO;
-def PseudoCheriAtomicLoadAnd8 : PseudoCheriAMO;
-def PseudoCheriAtomicLoadOr8 : PseudoCheriAMO;
-def PseudoCheriAtomicLoadXor8 : PseudoCheriAMO;
-def PseudoCheriAtomicLoadMax8 : PseudoCheriAMO;
-def PseudoCheriAtomicLoadMin8 : PseudoCheriAMO;
-def PseudoCheriAtomicLoadUMax8 : PseudoCheriAMO;
-def PseudoCheriAtomicLoadUMin8 : PseudoCheriAMO;
-def PseudoCheriAtomicLoadNand8 : PseudoCheriAMO;
-def PseudoCheriCmpXchg8 : PseudoCheriCmpXchg;
+def PseudoCheriAtomicSwap8 : PseudoCheriAMO { let Size = 16; }
+def PseudoCheriAtomicLoadAdd8 : PseudoCheriAMO { let Size = 16; }
+def PseudoCheriAtomicLoadSub8 : PseudoCheriAMO { let Size = 16; }
+def PseudoCheriAtomicLoadAnd8 : PseudoCheriAMO { let Size = 16; }
+def PseudoCheriAtomicLoadOr8 : PseudoCheriAMO { let Size = 16; }
+def PseudoCheriAtomicLoadXor8 : PseudoCheriAMO { let Size = 16; }
+def PseudoCheriAtomicLoadMax8 : PseudoCheriAMO { let Size = 24; }
+def PseudoCheriAtomicLoadMin8 : PseudoCheriAMO { let Size = 24; }
+def PseudoCheriAtomicLoadUMax8 : PseudoCheriAMO { let Size = 24; }
+def PseudoCheriAtomicLoadUMin8 : PseudoCheriAMO { let Size = 24; }
+def PseudoCheriAtomicLoadNand8 : PseudoCheriAMO { let Size = 20; }
+def PseudoCheriCmpXchg8 : PseudoCheriCmpXchg { let Size = 16; }
 
-def PseudoCheriAtomicSwap16 : PseudoCheriAMO;
-def PseudoCheriAtomicLoadAdd16 : PseudoCheriAMO;
-def PseudoCheriAtomicLoadSub16 : PseudoCheriAMO;
-def PseudoCheriAtomicLoadAnd16 : PseudoCheriAMO;
-def PseudoCheriAtomicLoadOr16 : PseudoCheriAMO;
-def PseudoCheriAtomicLoadXor16 : PseudoCheriAMO;
-def PseudoCheriAtomicLoadMax16 : PseudoCheriAMO;
-def PseudoCheriAtomicLoadMin16 : PseudoCheriAMO;
-def PseudoCheriAtomicLoadUMax16 : PseudoCheriAMO;
-def PseudoCheriAtomicLoadUMin16 : PseudoCheriAMO;
-def PseudoCheriAtomicLoadNand16 : PseudoCheriAMO;
-def PseudoCheriCmpXchg16 : PseudoCheriCmpXchg;
+def PseudoCheriAtomicSwap16 : PseudoCheriAMO { let Size = 16; }
+def PseudoCheriAtomicLoadAdd16 : PseudoCheriAMO { let Size = 16; }
+def PseudoCheriAtomicLoadSub16 : PseudoCheriAMO { let Size = 16; }
+def PseudoCheriAtomicLoadAnd16 : PseudoCheriAMO { let Size = 16; }
+def PseudoCheriAtomicLoadOr16 : PseudoCheriAMO { let Size = 16; }
+def PseudoCheriAtomicLoadXor16 : PseudoCheriAMO { let Size = 16; }
+def PseudoCheriAtomicLoadMax16 : PseudoCheriAMO { let Size = 24; }
+def PseudoCheriAtomicLoadMin16 : PseudoCheriAMO { let Size = 24; }
+def PseudoCheriAtomicLoadUMax16 : PseudoCheriAMO { let Size = 24; }
+def PseudoCheriAtomicLoadUMin16 : PseudoCheriAMO { let Size = 24; }
+def PseudoCheriAtomicLoadNand16 : PseudoCheriAMO { let Size = 20; }
+def PseudoCheriCmpXchg16 : PseudoCheriCmpXchg { let Size = 16; }
 
-def PseudoCheriAtomicLoadNand32 : PseudoCheriAMO;
-def PseudoCheriCmpXchg32 : PseudoCheriCmpXchg;
+def PseudoCheriAtomicLoadNand32 : PseudoCheriAMO { let Size = 20; }
+def PseudoCheriCmpXchg32 : PseudoCheriCmpXchg { let Size = 16; }
 
-def PseudoCheriAtomicLoadAddCap : PseudoCheriAMO<GPCR>;
-def PseudoCheriAtomicLoadSubCap : PseudoCheriAMO<GPCR>;
-def PseudoCheriAtomicLoadAndCap : PseudoCheriAMO<GPCR>;
-def PseudoCheriAtomicLoadOrCap : PseudoCheriAMO<GPCR>;
-def PseudoCheriAtomicLoadXorCap : PseudoCheriAMO<GPCR>;
-def PseudoCheriAtomicLoadMaxCap : PseudoCheriAMO<GPCR>;
-def PseudoCheriAtomicLoadMinCap : PseudoCheriAMO<GPCR>;
-def PseudoCheriAtomicLoadUMaxCap : PseudoCheriAMO<GPCR>;
-def PseudoCheriAtomicLoadUMinCap : PseudoCheriAMO<GPCR>;
-def PseudoCheriAtomicLoadNandCap : PseudoCheriAMO<GPCR>;
-def PseudoCheriCmpXchgCap : PseudoCheriCmpXchg<GPCR>;
+def PseudoCheriAtomicLoadAddCap : PseudoCheriAMO<GPCR> { let Size = 16; }
+def PseudoCheriAtomicLoadSubCap : PseudoCheriAMO<GPCR> { let Size = 20; }
+def PseudoCheriAtomicLoadAndCap : PseudoCheriAMO<GPCR> { let Size = 20; }
+def PseudoCheriAtomicLoadOrCap : PseudoCheriAMO<GPCR> { let Size = 20; }
+def PseudoCheriAtomicLoadXorCap : PseudoCheriAMO<GPCR> { let Size = 20; }
+def PseudoCheriAtomicLoadMaxCap : PseudoCheriAMO<GPCR> { let Size = 24; }
+def PseudoCheriAtomicLoadMinCap : PseudoCheriAMO<GPCR> { let Size = 24; }
+def PseudoCheriAtomicLoadUMaxCap : PseudoCheriAMO<GPCR> { let Size = 24; }
+def PseudoCheriAtomicLoadUMinCap : PseudoCheriAMO<GPCR> { let Size = 24; }
+def PseudoCheriAtomicLoadNandCap : PseudoCheriAMO<GPCR> { let Size = 24; }
+def PseudoCheriCmpXchgCap : PseudoCheriCmpXchg<GPCR> { let Size = 16; }
 } // Predicates = [HasCheri, HasStdExtA]
 
 let Predicates = [HasCheri, HasStdExtA, IsRV64] in {
-def PseudoCheriAtomicLoadNand64 : PseudoCheriAMO;
-def PseudoCheriCmpXchg64 : PseudoCheriCmpXchg;
+def PseudoCheriAtomicLoadNand64 : PseudoCheriAMO { let Size = 20; }
+def PseudoCheriCmpXchg64 : PseudoCheriCmpXchg { let Size = 16; }
 } // Predicates = [HasCheri, HasStdExtA, IsRV64]
 
 /// 'I' (Integer) base
@@ -1770,14 +1770,14 @@ def : Pat<(brind (ptradd GPCR:$rs1, simm12:$imm12)),
 
 let Predicates = [HasCheri, IsCapMode],
     isCall = 1, isBarrier = 1, isCodeGenOnly = 0, hasSideEffects = 0,
-    mayStore = 0, mayLoad = 0 in
+    mayStore = 0, mayLoad = 0, Size = 8 in
 def PseudoCCALLReg : Pseudo<(outs GPCR:$rd),
                             (ins cap_call_symbol:$func), []> {
   let AsmString = "ccall\t$rd, $func";
 }
 
 let Predicates = [HasCheri, IsCapMode],
-    isCall = 1, Defs = [C1], isCodeGenOnly = 0 in
+    isCall = 1, Defs = [C1], isCodeGenOnly = 0, Size = 8 in
 def PseudoCCALL : Pseudo<(outs), (ins cap_call_symbol:$func), []> {
   let AsmString = "ccall\t$func";
 }
@@ -1802,7 +1802,7 @@ def PseudoCRET : Pseudo<(outs), (ins), [(riscv_ret_flag)]>,
 
 let Predicates = [HasCheri, IsCapMode],
     isCall = 1, isTerminator = 1, isReturn = 1, isBarrier = 1, Uses = [C2],
-    isCodeGenOnly = 0 in
+    isCodeGenOnly = 0, Size = 8 in
 def PseudoCTAIL : Pseudo<(outs), (ins cap_call_symbol:$dst), []> {
   let AsmString = "ctail\t$dst";
 }
@@ -1821,7 +1821,7 @@ def : Pat<(riscv_cap_tail texternalsym:$dst),
 } // Predicates = [HasCheri, IsCapMode, IsPureCapABI]
 
 let Predicates = [HasCheri, IsCapMode, IsPureCapABI] in
-let isCall = 0, isBarrier = 1, isBranch = 1, isTerminator = 1,
+let isCall = 0, isBarrier = 1, isBranch = 1, isTerminator = 1, Size = 8,
     isCodeGenOnly = 0, hasSideEffects = 0, mayStore = 0, mayLoad = 0 in
 def PseudoCJump : Pseudo<(outs GPCR:$rd),
                          (ins pseudo_cap_jump_symbol:$target), []> {

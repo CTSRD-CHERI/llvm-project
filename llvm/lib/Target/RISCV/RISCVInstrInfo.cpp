@@ -1085,87 +1085,6 @@ unsigned RISCVInstrInfo::getInstSizeInBytes(const MachineInstr &MI) const {
 
   unsigned Opcode = MI.getOpcode();
 
-  // FIXME: move these values over to tablegen after the merge
-  // to catch up with https://reviews.llvm.org/D118175
-  switch (Opcode) {
-  default:
-    break;
-  // These values are determined based on RISCVExpandAtomicPseudoInsts,
-  // RISCVExpandPseudoInsts and RISCVMCCodeEmitter, depending on where the
-  // pseudos are expanded.
-  case RISCV::PseudoCCALLReg:
-  case RISCV::PseudoCCALL:
-  case RISCV::PseudoCJump:
-  case RISCV::PseudoCTAIL:
-  case RISCV::PseudoCLLC:
-  case RISCV::PseudoCLGC:
-  case RISCV::PseudoCLA_TLS_IE:
-  case RISCV::PseudoCLC_TLS_GD:
-    return 8;
-  case RISCV::PseudoAtomicLoadAddCap:
-    return 16;
-  case RISCV::PseudoAtomicLoadSubCap:
-  case RISCV::PseudoAtomicLoadAndCap:
-  case RISCV::PseudoAtomicLoadOrCap:
-  case RISCV::PseudoAtomicLoadXorCap:
-    return 20;
-  case RISCV::PseudoAtomicLoadNandCap:
-    return 24;
-  case RISCV::PseudoAtomicLoadMaxCap:
-  case RISCV::PseudoAtomicLoadMinCap:
-  case RISCV::PseudoAtomicLoadUMaxCap:
-  case RISCV::PseudoAtomicLoadUMinCap:
-    return 24;
-  case RISCV::PseudoCmpXchgCap:
-    return 16;
-  case RISCV::PseudoCheriAtomicSwap8:
-  case RISCV::PseudoCheriAtomicSwap16:
-  case RISCV::PseudoCheriAtomicLoadAdd8:
-  case RISCV::PseudoCheriAtomicLoadAdd16:
-  case RISCV::PseudoCheriAtomicLoadAnd8:
-  case RISCV::PseudoCheriAtomicLoadAnd16:
-  case RISCV::PseudoCheriAtomicLoadOr8:
-  case RISCV::PseudoCheriAtomicLoadOr16:
-  case RISCV::PseudoCheriAtomicLoadXor8:
-  case RISCV::PseudoCheriAtomicLoadXor16:
-  case RISCV::PseudoCheriAtomicLoadSub8:
-  case RISCV::PseudoCheriAtomicLoadSub16:
-    return 16;
-  case RISCV::PseudoCheriAtomicLoadNand8:
-  case RISCV::PseudoCheriAtomicLoadNand16:
-  case RISCV::PseudoCheriAtomicLoadNand32:
-  case RISCV::PseudoCheriAtomicLoadNand64:
-    return 20;
-  case RISCV::PseudoCheriAtomicLoadMax8:
-  case RISCV::PseudoCheriAtomicLoadMax16:
-  case RISCV::PseudoCheriAtomicLoadMin8:
-  case RISCV::PseudoCheriAtomicLoadMin16:
-  case RISCV::PseudoCheriAtomicLoadUMax8:
-  case RISCV::PseudoCheriAtomicLoadUMax16:
-  case RISCV::PseudoCheriAtomicLoadUMin8:
-  case RISCV::PseudoCheriAtomicLoadUMin16:
-    return 24;
-  case RISCV::PseudoCheriAtomicLoadAddCap:
-    return 16;
-  case RISCV::PseudoCheriAtomicLoadSubCap:
-  case RISCV::PseudoCheriAtomicLoadAndCap:
-  case RISCV::PseudoCheriAtomicLoadOrCap:
-  case RISCV::PseudoCheriAtomicLoadXorCap:
-    return 20;
-  case RISCV::PseudoCheriAtomicLoadNandCap:
-    return 24;
-  case RISCV::PseudoCheriAtomicLoadMaxCap:
-  case RISCV::PseudoCheriAtomicLoadMinCap:
-  case RISCV::PseudoCheriAtomicLoadUMaxCap:
-  case RISCV::PseudoCheriAtomicLoadUMinCap:
-    return 24;
-  case RISCV::PseudoCheriCmpXchg8:
-  case RISCV::PseudoCheriCmpXchg16:
-  case RISCV::PseudoCheriCmpXchg32:
-  case RISCV::PseudoCheriCmpXchg64:
-  case RISCV::PseudoCheriCmpXchgCap:
-    return 16;
-  }
   if (Opcode == TargetOpcode::INLINEASM ||
       Opcode == TargetOpcode::INLINEASM_BR) {
     const MachineFunction &MF = *MI.getParent()->getParent();
@@ -1183,7 +1102,12 @@ unsigned RISCVInstrInfo::getInstSizeInBytes(const MachineInstr &MI) const {
     if (isCompressibleInst(MI, &ST, MRI, STI))
       return 2;
   }
-  return get(Opcode).getSize();
+  auto Result = get(Opcode).getSize();
+  // Check that all pseudos have the appropriate size defined in tablegen.
+  // TODO: is returning 0 for COPY correct or should we be more conservative?
+  if (Result == 0 && MI.isPseudo() && isTargetSpecificOpcode(Opcode))
+    report_fatal_error("Unexpected zero size for pseudo: " + getName(Opcode));
+  return Result;
 }
 
 bool RISCVInstrInfo::isAsCheapAsAMove(const MachineInstr &MI) const {
