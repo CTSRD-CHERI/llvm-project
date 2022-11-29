@@ -1,6 +1,6 @@
 // We run the compiled binary + sizes of stack arguments depend on the arch.
 // REQUIRES: native && target-x86_64
-// RUN: clang++ %s -o %t -fexperimental-sanitize-metadata=covered,uar && %t | tee /dev/stderr | FileCheck %s
+// RUN: %clangxx %s -o %t -fexperimental-sanitize-metadata=covered,uar && %t | tee /dev/stderr | FileCheck %s
 
 // CHECK: metadata add version 1
 

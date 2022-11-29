@@ -1,12 +1,12 @@
 // REQUIRES: native && target-x86_64
-// RUN: clang++ %s -o %t && %t | FileCheck %s
-// RUN: clang++ %s -o %t -fexperimental-sanitize-metadata=covered && %t | FileCheck -check-prefix=CHECK-C %s
-// RUN: clang++ %s -o %t -fexperimental-sanitize-metadata=atomics && %t | FileCheck -check-prefix=CHECK-A %s
-// RUN: clang++ %s -o %t -fexperimental-sanitize-metadata=uar && %t | FileCheck -check-prefix=CHECK-U %s
-// RUN: clang++ %s -o %t -fexperimental-sanitize-metadata=covered,atomics && %t | FileCheck -check-prefix=CHECK-CA %s
-// RUN: clang++ %s -o %t -fexperimental-sanitize-metadata=covered,uar && %t | FileCheck -check-prefix=CHECK-CU %s
-// RUN: clang++ %s -o %t -fexperimental-sanitize-metadata=atomics,uar && %t | FileCheck -check-prefix=CHECK-AU %s
-// RUN: clang++ %s -o %t -fexperimental-sanitize-metadata=covered,atomics,uar && %t | FileCheck -check-prefix=CHECK-CAU %s
+// RUN: %clangxx %s -o %t && %t | FileCheck %s
+// RUN: %clangxx %s -o %t -fexperimental-sanitize-metadata=covered && %t | FileCheck -check-prefix=CHECK-C %s
+// RUN: %clangxx %s -o %t -fexperimental-sanitize-metadata=atomics && %t | FileCheck -check-prefix=CHECK-A %s
+// RUN: %clangxx %s -o %t -fexperimental-sanitize-metadata=uar && %t | FileCheck -check-prefix=CHECK-U %s
+// RUN: %clangxx %s -o %t -fexperimental-sanitize-metadata=covered,atomics && %t | FileCheck -check-prefix=CHECK-CA %s
+// RUN: %clangxx %s -o %t -fexperimental-sanitize-metadata=covered,uar && %t | FileCheck -check-prefix=CHECK-CU %s
+// RUN: %clangxx %s -o %t -fexperimental-sanitize-metadata=atomics,uar && %t | FileCheck -check-prefix=CHECK-AU %s
+// RUN: %clangxx %s -o %t -fexperimental-sanitize-metadata=covered,atomics,uar && %t | FileCheck -check-prefix=CHECK-CAU %s
 
 // CHECK-NOT: metadata add
 // CHECK: main

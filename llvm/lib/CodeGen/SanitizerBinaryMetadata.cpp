@@ -54,7 +54,7 @@ bool MachineSanitizerBinaryMetadata::runOnMachineFunction(MachineFunction &MF) {
     return false;
   auto &AuxMDs = *cast<MDTuple>(MD->getOperand(1));
   // Assume it currently only has features.
-  assert(AuxMDs.size() == 1);
+  // assert(AuxMDs.size() == 1);
   auto *Features = cast<ConstantAsMetadata>(AuxMDs.getOperand(0))->getValue();
   if (!Features->getUniqueInteger()[kSanitizerBinaryMetadataUARBit])
     return false;
