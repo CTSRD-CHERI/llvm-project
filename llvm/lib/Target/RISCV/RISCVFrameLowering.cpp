@@ -289,18 +289,6 @@ uint64_t RISCVFrameLowering::getStackSizeWithRVVPadding(
   return alignTo(MFI.getStackSize() + RVFI->getRVVPadding(), getStackAlign());
 }
 
-void RISCVFrameLowering::adjustReg(MachineBasicBlock &MBB,
-                                   MachineBasicBlock::iterator MBBI,
-                                   const DebugLoc &DL, Register DestReg,
-                                   Register SrcReg, int64_t Val,
-                                   MachineInstr::MIFlag Flag) const {
-  // We must keep the stack pointer aligned through any intermediate
-  // updates.
-  const RISCVRegisterInfo &RI = *STI.getRegisterInfo();
-  RI.adjustReg(MBB, MBBI, DL, DestReg, SrcReg, StackOffset::getFixed(Val),
-               Flag, getStackAlign());
-}
-
 // Returns the register used to hold the frame pointer.
 Register RISCVFrameLowering::getFPReg() const {
   if (RISCVABI::isCheriPureCapABI(STI.getTargetABI()))
@@ -445,7 +433,8 @@ void RISCVFrameLowering::emitPrologue(MachineFunction &MF,
   }
 
   // Allocate space on the stack if necessary.
-  adjustReg(MBB, MBBI, DL, SPReg, SPReg, -StackSize, MachineInstr::FrameSetup);
+  RI->adjustReg(MBB, MBBI, DL, SPReg, SPReg, StackOffset::getFixed(-StackSize),
+                MachineInstr::FrameSetup, getStackAlign());
 
   // Emit ".cfi_def_cfa_offset RealStackSize"
   unsigned CFIIndex = MF.addFrameInst(
@@ -492,9 +481,9 @@ void RISCVFrameLowering::emitPrologue(MachineFunction &MF,
     // The frame pointer does need to be reserved from register allocation.
     assert(MF.getRegInfo().isReserved(FPReg) && "FP not reserved");
 
-    adjustReg(MBB, MBBI, DL, FPReg, SPReg,
-              RealStackSize - RVFI->getVarArgsSaveSize(),
-              MachineInstr::FrameSetup);
+    RI->adjustReg(MBB, MBBI, DL, FPReg, SPReg,
+                  StackOffset::getFixed(RealStackSize - RVFI->getVarArgsSaveSize()),
+                  MachineInstr::FrameSetup, getStackAlign());
 
     // Emit ".cfi_def_cfa $fp, RVFI->getVarArgsSaveSize()"
     unsigned CFIIndex = MF.addFrameInst(MCCFIInstruction::cfiDefCfa(
@@ -510,8 +499,9 @@ void RISCVFrameLowering::emitPrologue(MachineFunction &MF,
         getStackSizeWithRVVPadding(MF) - FirstSPAdjustAmount;
     assert(SecondSPAdjustAmount > 0 &&
            "SecondSPAdjustAmount should be greater than zero");
-    adjustReg(MBB, MBBI, DL, SPReg, SPReg, -SecondSPAdjustAmount,
-              MachineInstr::FrameSetup);
+    RI->adjustReg(MBB, MBBI, DL, SPReg, SPReg,
+                  StackOffset::getFixed(-SecondSPAdjustAmount),
+                  MachineInstr::FrameSetup, getStackAlign());
 
     // If we are using a frame-pointer, and thus emitted ".cfi_def_cfa fp, 0",
     // don't emit an sp-based .cfi_def_cfa_offset
@@ -646,8 +636,9 @@ void RISCVFrameLowering::emitEpilogue(MachineFunction &MF,
   if (RI->hasStackRealignment(MF) || MFI.hasVarSizedObjects() ||
       !hasReservedCallFrame(MF)) {
     assert(hasFP(MF) && "frame pointer should not have been eliminated");
-    adjustReg(MBB, LastFrameDestroy, DL, SPReg, FPReg, -FPOffset,
-              MachineInstr::FrameDestroy);
+    RI->adjustReg(MBB, LastFrameDestroy, DL, SPReg, FPReg,
+                  StackOffset::getFixed(-FPOffset),
+                  MachineInstr::FrameDestroy, getStackAlign());
   } else {
     if (RVVStackSize)
       adjustStackForRVV(MF, MBB, LastFrameDestroy, DL, RVVStackSize,
@@ -661,15 +652,17 @@ void RISCVFrameLowering::emitEpilogue(MachineFunction &MF,
     assert(SecondSPAdjustAmount > 0 &&
            "SecondSPAdjustAmount should be greater than zero");
 
-    adjustReg(MBB, LastFrameDestroy, DL, SPReg, SPReg, SecondSPAdjustAmount,
-              MachineInstr::FrameDestroy);
+    RI->adjustReg(MBB, LastFrameDestroy, DL, SPReg, SPReg,
+                  StackOffset::getFixed(SecondSPAdjustAmount),
+                  MachineInstr::FrameDestroy, getStackAlign());
   }
 
   if (FirstSPAdjustAmount)
     StackSize = FirstSPAdjustAmount;
 
   // Deallocate stack
-  adjustReg(MBB, MBBI, DL, SPReg, SPReg, StackSize, MachineInstr::FrameDestroy);
+  RI->adjustReg(MBB, MBBI, DL, SPReg, SPReg, StackOffset::getFixed(StackSize),
+                MachineInstr::FrameDestroy, getStackAlign());
 
   // Emit epilogue for shadow call stack.
   emitSCSEpilogue(MF, MBB, MBBI, DL);
@@ -1177,7 +1170,9 @@ MachineBasicBlock::iterator RISCVFrameLowering::eliminateCallFramePseudoInstr(
           Opcode == RISCV::ADJCALLSTACKDOWNCAP)
         Amount = -Amount;
 
-      adjustReg(MBB, MI, DL, SPReg, SPReg, Amount, MachineInstr::NoFlags);
+      const RISCVRegisterInfo &RI = *STI.getRegisterInfo();
+      RI.adjustReg(MBB, MI, DL, SPReg, SPReg, StackOffset::getFixed(Amount),
+                   MachineInstr::NoFlags, getStackAlign());
     }
   }
 
