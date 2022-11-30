@@ -193,7 +193,8 @@ void RISCVRegisterInfo::adjustReg(MachineBasicBlock &MBB,
                                   const DebugLoc &DL, Register DestReg,
                                   Register SrcReg, int64_t Val,
                                   MachineInstr::MIFlag Flag,
-                                  MaybeAlign RequiredAlign) const {
+                                  MaybeAlign RequiredAlign,
+                                  bool KillSrcReg) const {
   const uint64_t Align = RequiredAlign.valueOrOne().value();
   MachineRegisterInfo &MRI = MBB.getParent()->getRegInfo();
   const RISCVSubtarget &ST = MBB.getParent()->getSubtarget<RISCVSubtarget>();
@@ -215,7 +216,7 @@ void RISCVRegisterInfo::adjustReg(MachineBasicBlock &MBB,
 
   if (isInt<12>(Val)) {
     BuildMI(MBB, MBBI, DL, TII->get(OpcImm), DestReg)
-        .addReg(SrcReg)
+        .addReg(SrcReg, getKillRegState(KillSrcReg))
         .addImm(Val)
         .setMIFlag(Flag);
     return;
@@ -233,7 +234,7 @@ void RISCVRegisterInfo::adjustReg(MachineBasicBlock &MBB,
     int64_t FirstAdj = Val < 0 ? -2048 : MaxPosAdjStep;
     Val -= FirstAdj;
     BuildMI(MBB, MBBI, DL, TII->get(OpcImm), DestReg)
-        .addReg(SrcReg)
+        .addReg(SrcReg, getKillRegState(KillSrcReg))
         .addImm(FirstAdj)
         .setMIFlag(Flag);
     BuildMI(MBB, MBBI, DL, TII->get(OpcImm), DestReg)
@@ -251,7 +252,7 @@ void RISCVRegisterInfo::adjustReg(MachineBasicBlock &MBB,
   Register ScratchReg = MRI.createVirtualRegister(&RISCV::GPRRegClass);
   TII->movImm(MBB, MBBI, DL, ScratchReg, Val, Flag);
   BuildMI(MBB, MBBI, DL, TII->get(Opc), DestReg)
-      .addReg(SrcReg)
+      .addReg(SrcReg, getKillRegState(KillSrcReg))
       .addReg(ScratchReg, RegState::Kill)
       .setMIFlag(Flag);
 }
@@ -264,23 +265,12 @@ void RISCVRegisterInfo::adjustReg(MachineBasicBlock::iterator II, Register DestR
 
   MachineInstr &MI = *II;
   MachineFunction &MF = *MI.getParent()->getParent();
-  MachineRegisterInfo &MRI = MF.getRegInfo();
   const RISCVSubtarget &ST = MF.getSubtarget<RISCVSubtarget>();
   const RISCVInstrInfo *TII = ST.getInstrInfo();
   DebugLoc DL = MI.getDebugLoc();
   MachineBasicBlock &MBB = *MI.getParent();
 
   bool SrcRegIsKill = false;
-
-  unsigned Opc;
-  unsigned OpcImm;
-  if (RISCVABI::isCheriPureCapABI(ST.getTargetABI())) {
-    Opc = RISCV::CIncOffset;
-    OpcImm = RISCV::CIncOffsetImm;
-  } else {
-    Opc = RISCV::ADD;
-    OpcImm = RISCV::ADDI;
-  }
 
   if (Offset.getScalable()) {
     unsigned ScalableAdjOpc = RISCV::ADD;
@@ -297,21 +287,9 @@ void RISCVRegisterInfo::adjustReg(MachineBasicBlock::iterator II, Register DestR
     SrcRegIsKill = true;
   }
 
-  if (Offset.getFixed()) {
-    // TODO: Merge this with FrameLowerings adjustReg which knows a few
-    // more tricks than this does for fixed offsets.
-    if (isInt<12>(Offset.getFixed())) {
-      BuildMI(MBB, II, DL, TII->get(OpcImm), DestReg)
-        .addReg(SrcReg, getKillRegState(SrcRegIsKill))
-        .addImm(Offset.getFixed());
-    } else {
-      Register ScratchReg = MRI.createVirtualRegister(&RISCV::GPRRegClass);
-      TII->movImm(MBB, II, DL, ScratchReg, Offset.getFixed());
-      BuildMI(MBB, II, DL, TII->get(Opc), DestReg)
-        .addReg(SrcReg, getKillRegState(SrcRegIsKill))
-        .addReg(ScratchReg, RegState::Kill);
-    }
-  }
+  if (Offset.getFixed())
+    adjustReg(MBB, II, DL, DestReg, SrcReg, Offset.getFixed(),
+              MachineInstr::NoFlags, None, SrcRegIsKill);
 }
 
 
@@ -325,7 +303,6 @@ bool RISCVRegisterInfo::eliminateFrameIndex(MachineBasicBlock::iterator II,
   MachineRegisterInfo &MRI = MF.getRegInfo();
   const RISCVSubtarget &ST = MF.getSubtarget<RISCVSubtarget>();
   const RISCVInstrInfo *TII = ST.getInstrInfo();
-  const TargetRegisterInfo *TRI = MF.getSubtarget().getRegisterInfo();
   DebugLoc DL = MI.getDebugLoc();
 
   int FrameIndex = MI.getOperand(FIOperandNum).getIndex();
