@@ -503,8 +503,7 @@ public:
 
   // Check if any one of SanitizeBinaryMetadata* is enabled.
   bool hasSanitizeBinaryMetadata() const {
-    return SanitizeBinaryMetadataCovered || SanitizeBinaryMetadataAtomics ||
-           SanitizeBinaryMetadataUAR;
+    return SanitizeBinaryMetadataCovered || SanitizeBinaryMetadataAtomics;
   }
 };
 
