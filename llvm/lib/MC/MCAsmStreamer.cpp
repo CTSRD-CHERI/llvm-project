@@ -777,6 +777,9 @@ bool MCAsmStreamer::emitSymbolAttribute(MCSymbol *Symbol,
   case MCSA_Exported:
     // Non-AIX assemblers currently do not support exported visibility.
     return false;
+  case MCSA_Memtag:
+    OS << "\t.memtag\t";
+    break;
   }
 
   Symbol->print(OS, MAI);
