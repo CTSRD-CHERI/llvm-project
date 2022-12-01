@@ -1694,7 +1694,7 @@ CodeGenTypes::GetFunctionType(const CGFunctionInfo &FI) {
       // sret things on win32 aren't void, they return the sret pointer.
       QualType ret = FI.getReturnType();
       llvm::Type *ty = ConvertType(ret);
-      unsigned addressSpace = CGM.getContext().getTargetAddressSpace(ret);
+      unsigned addressSpace = CGM.getTypes().getTargetAddressSpace(ret);
       resultType = llvm::PointerType::get(ty, addressSpace);
     } else {
       resultType = llvm::Type::getVoidTy(getLLVMContext());
@@ -1718,7 +1718,7 @@ CodeGenTypes::GetFunctionType(const CGFunctionInfo &FI) {
   if (IRFunctionArgs.hasSRetArg()) {
     QualType Ret = FI.getReturnType();
     llvm::Type *Ty = ConvertType(Ret);
-    unsigned AddressSpace = CGM.getContext().getTargetAddressSpace(Ret);
+    unsigned AddressSpace = CGM.getTypes().getTargetAddressSpace(Ret);
     ArgTypes[IRFunctionArgs.getSRetArgNo()] =
         llvm::PointerType::get(Ty, AddressSpace);
   }

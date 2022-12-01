@@ -307,6 +307,7 @@ public:  // These are internal details of CGT that shouldn't be used externally.
     return RecordsBeingLaidOut.count(Ty);
   }
   bool canMarkAsNonNull(QualType DestTy) const;
+  unsigned getTargetAddressSpace(QualType T) const;
 };
 
 }  // end namespace CodeGen
