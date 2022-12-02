@@ -1630,7 +1630,7 @@ void ASTWriter::WriteInputFiles(SourceManager &SourceMgr,
           Entry.IsTransient,
           Entry.IsTopLevelModuleMap};
 
-      EmitRecordWithPath(IFAbbrevCode, Record, Entry.File.getName());
+      EmitRecordWithPath(IFAbbrevCode, Record, Entry.File.getNameAsRequested());
     }
 
     // Emit content hash for this file.
