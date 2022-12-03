@@ -974,7 +974,7 @@ Optional<APInt> DataLayout::getGEPIndexForOffset(Type *&ElemTy,
     unsigned ElemSizeInBits = getTypeSizeInBits(ElemTy).getFixedSize();
     // GEPs over non-multiple of 8 size vector elements are invalid.
     if (ElemSizeInBits % 8 != 0)
-      return None;
+      return std::nullopt;
 
     return getElementIndex(TypeSize::Fixed(ElemSizeInBits / 8), Offset);
   }
@@ -983,7 +983,7 @@ Optional<APInt> DataLayout::getGEPIndexForOffset(Type *&ElemTy,
     const StructLayout *SL = getStructLayout(STy);
     uint64_t IntOffset = Offset.getZExtValue();
     if (IntOffset >= SL->getSizeInBytes())
-      return None;
+      return std::nullopt;
 
     unsigned Index = SL->getElementContainingOffset(IntOffset);
     Offset -= SL->getElementOffset(Index);
@@ -992,7 +992,7 @@ Optional<APInt> DataLayout::getGEPIndexForOffset(Type *&ElemTy,
   }
 
   // Non-aggregate type.
-  return None;
+  return std::nullopt;
 }
 
 SmallVector<APInt> DataLayout::getGEPIndicesForOffset(Type *&ElemTy,

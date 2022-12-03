@@ -62,7 +62,7 @@ AllocaInst::getAllocationSizeInBits(const DataLayout &DL) const {
   if (isArrayAllocation()) {
     auto *C = dyn_cast<ConstantInt>(getArraySize());
     if (!C)
-      return None;
+      return std::nullopt;
     assert(!Size.isScalable() && "Array elements cannot have a scalable size");
     Size *= C->getZExtValue();
   }
@@ -861,7 +861,7 @@ Instruction *CallInst::CreateMalloc(Instruction *InsertBefore,
                                     Function *MallocF,
                                     const Twine &Name) {
   return createMalloc(InsertBefore, nullptr, IntPtrTy, AllocTy, AllocSize,
-                      ArraySize, None, MallocF, Name);
+                      ArraySize, std::nullopt, MallocF, Name);
 }
 Instruction *CallInst::CreateMalloc(Instruction *InsertBefore,
                                     Type *IntPtrTy, Type *AllocTy,
@@ -886,7 +886,7 @@ Instruction *CallInst::CreateMalloc(BasicBlock *InsertAtEnd,
                                     Value *AllocSize, Value *ArraySize,
                                     Function *MallocF, const Twine &Name) {
   return createMalloc(nullptr, InsertAtEnd, IntPtrTy, AllocTy, AllocSize,
-                      ArraySize, None, MallocF, Name);
+                      ArraySize, std::nullopt, MallocF, Name);
 }
 Instruction *CallInst::CreateMalloc(BasicBlock *InsertAtEnd,
                                     Type *IntPtrTy, Type *AllocTy,
@@ -933,7 +933,7 @@ static Instruction *createFree(Value *Source,
 
 /// CreateFree - Generate the IR for a call to the builtin free function.
 Instruction *CallInst::CreateFree(Value *Source, Instruction *InsertBefore) {
-  return createFree(Source, None, InsertBefore, nullptr);
+  return createFree(Source, std::nullopt, InsertBefore, nullptr);
 }
 Instruction *CallInst::CreateFree(Value *Source,
                                   ArrayRef<OperandBundleDef> Bundles,
@@ -945,7 +945,8 @@ Instruction *CallInst::CreateFree(Value *Source,
 /// Note: This function does not add the call to the basic block, that is the
 /// responsibility of the caller.
 Instruction *CallInst::CreateFree(Value *Source, BasicBlock *InsertAtEnd) {
-  Instruction *FreeCall = createFree(Source, None, nullptr, InsertAtEnd);
+  Instruction *FreeCall =
+      createFree(Source, std::nullopt, nullptr, InsertAtEnd);
   assert(FreeCall && "CreateFree did not create a CallInst");
   return FreeCall;
 }
@@ -4724,7 +4725,7 @@ SwitchInstProfUpdateWrapper::eraseFromParent() {
 SwitchInstProfUpdateWrapper::CaseWeightOpt
 SwitchInstProfUpdateWrapper::getSuccessorWeight(unsigned idx) {
   if (!Weights)
-    return None;
+    return std::nullopt;
   return (*Weights)[idx];
 }
 
@@ -4754,7 +4755,7 @@ SwitchInstProfUpdateWrapper::getSuccessorWeight(const SwitchInst &SI,
           ->getValue()
           .getZExtValue();
 
-  return None;
+  return std::nullopt;
 }
 
 //===----------------------------------------------------------------------===//
