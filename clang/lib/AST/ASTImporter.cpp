@@ -223,7 +223,7 @@ namespace clang {
     template<typename T>
     Expected<Optional<T>> import(Optional<T> From) {
       if (!From)
-        return None;
+        return std::nullopt;
       return import(*From);
     }
 
@@ -8558,7 +8558,7 @@ Optional<unsigned> ASTImporter::getFieldIndex(Decl *F) {
 
   auto *Owner = dyn_cast<RecordDecl>(F->getDeclContext());
   if (!Owner)
-    return None;
+    return std::nullopt;
 
   unsigned Index = 0;
   for (const auto *D : Owner->decls()) {
@@ -8571,7 +8571,7 @@ Optional<unsigned> ASTImporter::getFieldIndex(Decl *F) {
 
   llvm_unreachable("Field was not found in its parent context.");
 
-  return None;
+  return std::nullopt;
 }
 
 ASTImporter::FoundDeclsTy
@@ -10036,7 +10036,7 @@ ASTImporter::getImportDeclErrorIfAny(Decl *FromD) const {
   if (Pos != ImportDeclErrors.end())
     return Pos->second;
   else
-    return None;
+    return std::nullopt;
 }
 
 void ASTImporter::setImportDeclError(Decl *From, ASTImportError Error) {
