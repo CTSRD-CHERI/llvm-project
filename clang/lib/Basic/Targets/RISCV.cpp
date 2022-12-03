@@ -323,7 +323,7 @@ RISCVTargetInfo::getVScaleRange(const LangOptions &LangOpts) const {
                           MaxVLen / llvm::RISCV::RVVBitsPerBlock);
   }
 
-  return None;
+  return std::nullopt;
 }
 
 /// Return true if has this feature, need to sync with handleTargetFeatures.
@@ -336,7 +336,7 @@ bool RISCVTargetInfo::hasFeature(StringRef Feature) const {
                     .Case("32bit", !Is64Bit)
                     .Case("64bit", Is64Bit)
                     .Case("xcheri", HasCheri)
-                    .Default(None);
+                    .Default(std::nullopt);
   if (Result)
     return Result.value();
 

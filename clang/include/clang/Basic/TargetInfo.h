@@ -996,7 +996,7 @@ public:
   /// Returns target-specific min and max values VScale_Range.
   virtual Optional<std::pair<unsigned, unsigned>>
   getVScaleRange(const LangOptions &LangOpts) const {
-    return None;
+    return std::nullopt;
   }
   /// The __builtin_clz* and __builtin_ctz* built-in
   /// functions are specified to have undefined results for zero inputs, but
@@ -1221,7 +1221,7 @@ public:
   /// Replace some escaped characters with another string based on
   /// target-specific rules
   virtual llvm::Optional<std::string> handleAsmEscapedChar(char C) const {
-    return llvm::None;
+    return std::nullopt;
   }
 
   /// Returns a string of target-specific clobbers, in LLVM format.
@@ -1239,7 +1239,9 @@ public:
   }
 
   /// Returns the target ID if supported.
-  virtual llvm::Optional<std::string> getTargetID() const { return llvm::None; }
+  virtual llvm::Optional<std::string> getTargetID() const {
+    return std::nullopt;
+  }
 
   const char *getDataLayoutString() const {
     assert(!DataLayoutString.empty() && "Uninitialized DataLayout!");
@@ -1474,7 +1476,9 @@ public:
 
   // Get the cache line size of a given cpu. This method switches over
   // the given cpu and returns "None" if the CPU is not found.
-  virtual Optional<unsigned> getCPUCacheLineSize() const { return None; }
+  virtual Optional<unsigned> getCPUCacheLineSize() const {
+    return std::nullopt;
+  }
 
   // Returns maximal number of args passed in registers.
   unsigned getRegParmMax() const {
@@ -1696,7 +1700,7 @@ public:
   /// \returns Otherwise return None and no conversion will be emitted in the
   /// DWARF.
   virtual Optional<unsigned> getDWARFAddressSpace(unsigned AddressSpace) const {
-    return None;
+    return std::nullopt;
   }
 
   /// \returns The version of the SDK which was used during the compilation if
@@ -1752,7 +1756,7 @@ protected:
   virtual ArrayRef<const char *> getGCCRegNames() const = 0;
   virtual ArrayRef<GCCRegAlias> getGCCRegAliases() const = 0;
   virtual ArrayRef<AddlRegName> getGCCAddlRegNames() const {
-    return None;
+    return std::nullopt;
   }
 
  private:
