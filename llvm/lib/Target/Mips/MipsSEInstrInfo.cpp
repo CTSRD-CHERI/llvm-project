@@ -249,7 +249,7 @@ MipsSEInstrInfo::isCopyInstrImpl(const MachineInstr &MI) const {
   // FIXME: Handle CRead/WriteHWR here as well?
   if (isReadOrWriteToDSPReg(MI, isDSPControlWrite)) {
     if (!MI.getOperand(1).isImm() || MI.getOperand(1).getImm() != (1 << 4))
-      return None;
+      return std::nullopt;
     else if (isDSPControlWrite) {
       return DestSourcePair{MI.getOperand(2), MI.getOperand(0)};
 
@@ -259,7 +259,7 @@ MipsSEInstrInfo::isCopyInstrImpl(const MachineInstr &MI) const {
   } else if (MI.isMoveReg() || isORCopyInst(MI) || isCIncOffsetCopyInst(MI)) {
     return DestSourcePair{MI.getOperand(0), MI.getOperand(1)};
   }
-  return None;
+  return std::nullopt;
 }
 
 void MipsSEInstrInfo::
