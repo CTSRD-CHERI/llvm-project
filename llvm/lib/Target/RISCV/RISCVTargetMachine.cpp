@@ -36,6 +36,7 @@
 #include "llvm/Support/FormattedStream.h"
 #include "llvm/Target/TargetOptions.h"
 #include "llvm/Transforms/IPO.h"
+#include <optional>
 using namespace llvm;
 
 static cl::opt<bool> EnableRedundantCopyElimination(
@@ -105,7 +106,7 @@ RISCVTargetMachine::RISCVTargetMachine(const Target &T, const Triple &TT,
                                        StringRef CPU, StringRef FS,
                                        const TargetOptions &Options,
                                        Optional<Reloc::Model> RM,
-                                       Optional<CodeModel::Model> CM,
+                                       std::optional<CodeModel::Model> CM,
                                        CodeGenOpt::Level OL, bool JIT)
     : LLVMTargetMachine(T, computeDataLayout(TT, FS, Options), TT, CPU,
                         FS, Options, getEffectiveRelocModel(TT, RM),
