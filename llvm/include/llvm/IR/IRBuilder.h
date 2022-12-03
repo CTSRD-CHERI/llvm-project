@@ -808,8 +808,9 @@ public:
   ///
   /// The optional argument \p OpBundles specifies operand bundles that are
   /// added to the call instruction.
-  CallInst *CreateAssumption(Value *Cond,
-                             ArrayRef<OperandBundleDef> OpBundles = llvm::None);
+  CallInst *
+  CreateAssumption(Value *Cond,
+                   ArrayRef<OperandBundleDef> OpBundles = std::nullopt);
 
   /// Create a llvm.experimental.noalias.scope.decl intrinsic call.
   Instruction *CreateNoAliasScopeDeclaration(Value *Scope);
@@ -1083,7 +1084,7 @@ public:
   }
   InvokeInst *CreateInvoke(FunctionType *Ty, Value *Callee,
                            BasicBlock *NormalDest, BasicBlock *UnwindDest,
-                           ArrayRef<Value *> Args = None,
+                           ArrayRef<Value *> Args = std::nullopt,
                            const Twine &Name = "") {
     InvokeInst *II =
         InvokeInst::Create(Ty, Callee, NormalDest, UnwindDest, Args);
@@ -1102,7 +1103,7 @@ public:
 
   InvokeInst *CreateInvoke(FunctionCallee Callee, BasicBlock *NormalDest,
                            BasicBlock *UnwindDest,
-                           ArrayRef<Value *> Args = None,
+                           ArrayRef<Value *> Args = std::nullopt,
                            const Twine &Name = "") {
     return CreateInvoke(Callee.getFunctionType(), Callee.getCallee(),
                         NormalDest, UnwindDest, Args, Name);
@@ -1112,7 +1113,7 @@ public:
   CallBrInst *CreateCallBr(FunctionType *Ty, Value *Callee,
                            BasicBlock *DefaultDest,
                            ArrayRef<BasicBlock *> IndirectDests,
-                           ArrayRef<Value *> Args = None,
+                           ArrayRef<Value *> Args = std::nullopt,
                            const Twine &Name = "") {
     return Insert(CallBrInst::Create(Ty, Callee, DefaultDest, IndirectDests,
                                      Args), Name);
@@ -1130,7 +1131,7 @@ public:
 
   CallBrInst *CreateCallBr(FunctionCallee Callee, BasicBlock *DefaultDest,
                            ArrayRef<BasicBlock *> IndirectDests,
-                           ArrayRef<Value *> Args = None,
+                           ArrayRef<Value *> Args = std::nullopt,
                            const Twine &Name = "") {
     return CreateCallBr(Callee.getFunctionType(), Callee.getCallee(),
                         DefaultDest, IndirectDests, Args, Name);
@@ -1166,7 +1167,7 @@ public:
   }
 
   CleanupPadInst *CreateCleanupPad(Value *ParentPad,
-                                   ArrayRef<Value *> Args = None,
+                                   ArrayRef<Value *> Args = std::nullopt,
                                    const Twine &Name = "") {
     return Insert(CleanupPadInst::Create(ParentPad, Args), Name);
   }
@@ -1614,8 +1615,8 @@ public:
   CallInst *CreateConstrainedFPBinOp(
       Intrinsic::ID ID, Value *L, Value *R, Instruction *FMFSource = nullptr,
       const Twine &Name = "", MDNode *FPMathTag = nullptr,
-      Optional<RoundingMode> Rounding = None,
-      Optional<fp::ExceptionBehavior> Except = None);
+      Optional<RoundingMode> Rounding = std::nullopt,
+      Optional<fp::ExceptionBehavior> Except = std::nullopt);
 
   Value *CreateNeg(Value *V, const Twine &Name = "", bool HasNUW = false,
                    bool HasNSW = false) {
@@ -2096,8 +2097,8 @@ public:
       Intrinsic::ID ID, Value *V, Type *DestTy,
       Instruction *FMFSource = nullptr, const Twine &Name = "",
       MDNode *FPMathTag = nullptr,
-      Optional<RoundingMode> Rounding = None,
-      Optional<fp::ExceptionBehavior> Except = None);
+      Optional<RoundingMode> Rounding = std::nullopt,
+      Optional<fp::ExceptionBehavior> Except = std::nullopt);
 
   // Provided to resolve 'CreateIntCast(Ptr, Ptr, "...")', giving a
   // compile time error, instead of converting the string to bool for the
@@ -2255,9 +2256,10 @@ private:
                           bool IsSignaling);
 
 public:
-  CallInst *CreateConstrainedFPCmp(
-      Intrinsic::ID ID, CmpInst::Predicate P, Value *L, Value *R,
-      const Twine &Name = "", Optional<fp::ExceptionBehavior> Except = None);
+  CallInst *
+  CreateConstrainedFPCmp(Intrinsic::ID ID, CmpInst::Predicate P, Value *L,
+                         Value *R, const Twine &Name = "",
+                         Optional<fp::ExceptionBehavior> Except = std::nullopt);
 
   //===--------------------------------------------------------------------===//
   // Instruction creation methods: Other Instructions
@@ -2279,8 +2281,8 @@ private:
 
 public:
   CallInst *CreateCall(FunctionType *FTy, Value *Callee,
-                       ArrayRef<Value *> Args = None, const Twine &Name = "",
-                       MDNode *FPMathTag = nullptr) {
+                       ArrayRef<Value *> Args = std::nullopt,
+                       const Twine &Name = "", MDNode *FPMathTag = nullptr) {
     CallInst *CI = CallInst::Create(FTy, Callee, Args, DefaultOperandBundles);
     if (IsFPConstrained)
       setConstrainedFPCallAttr(CI);
@@ -2300,7 +2302,8 @@ public:
     return Insert(CI, Name);
   }
 
-  CallInst *CreateCall(FunctionCallee Callee, ArrayRef<Value *> Args = None,
+  CallInst *CreateCall(FunctionCallee Callee,
+                       ArrayRef<Value *> Args = std::nullopt,
                        const Twine &Name = "", MDNode *FPMathTag = nullptr) {
     return CreateCall(Callee.getFunctionType(), Callee.getCallee(), Args, Name,
                       FPMathTag);
@@ -2315,8 +2318,8 @@ public:
 
   CallInst *CreateConstrainedFPCall(
       Function *Callee, ArrayRef<Value *> Args, const Twine &Name = "",
-      Optional<RoundingMode> Rounding = None,
-      Optional<fp::ExceptionBehavior> Except = None);
+      Optional<RoundingMode> Rounding = std::nullopt,
+      Optional<fp::ExceptionBehavior> Except = std::nullopt);
 
   Value *CreateSelect(Value *C, Value *True, Value *False,
                       const Twine &Name = "", Instruction *MDFrom = nullptr);
@@ -2542,47 +2545,49 @@ private:
 public:
   IRBuilder(LLVMContext &C, FolderTy Folder, InserterTy Inserter = InserterTy(),
             MDNode *FPMathTag = nullptr,
-            ArrayRef<OperandBundleDef> OpBundles = None)
+            ArrayRef<OperandBundleDef> OpBundles = std::nullopt)
       : IRBuilderBase(C, this->Folder, this->Inserter, FPMathTag, OpBundles),
         Folder(Folder), Inserter(Inserter) {}
 
   explicit IRBuilder(LLVMContext &C, MDNode *FPMathTag = nullptr,
-                     ArrayRef<OperandBundleDef> OpBundles = None)
+                     ArrayRef<OperandBundleDef> OpBundles = std::nullopt)
       : IRBuilderBase(C, this->Folder, this->Inserter, FPMathTag, OpBundles) {}
 
   explicit IRBuilder(BasicBlock *TheBB, FolderTy Folder,
                      MDNode *FPMathTag = nullptr,
-                     ArrayRef<OperandBundleDef> OpBundles = None)
+                     ArrayRef<OperandBundleDef> OpBundles = std::nullopt)
       : IRBuilderBase(TheBB->getContext(), this->Folder, this->Inserter,
-                      FPMathTag, OpBundles), Folder(Folder) {
+                      FPMathTag, OpBundles),
+        Folder(Folder) {
     SetInsertPoint(TheBB);
   }
 
   explicit IRBuilder(BasicBlock *TheBB, MDNode *FPMathTag = nullptr,
-                     ArrayRef<OperandBundleDef> OpBundles = None)
+                     ArrayRef<OperandBundleDef> OpBundles = std::nullopt)
       : IRBuilderBase(TheBB->getContext(), this->Folder, this->Inserter,
                       FPMathTag, OpBundles) {
     SetInsertPoint(TheBB);
   }
 
   explicit IRBuilder(Instruction *IP, MDNode *FPMathTag = nullptr,
-                     ArrayRef<OperandBundleDef> OpBundles = None)
-      : IRBuilderBase(IP->getContext(), this->Folder, this->Inserter,
-                      FPMathTag, OpBundles) {
+                     ArrayRef<OperandBundleDef> OpBundles = std::nullopt)
+      : IRBuilderBase(IP->getContext(), this->Folder, this->Inserter, FPMathTag,
+                      OpBundles) {
     SetInsertPoint(IP);
   }
 
   IRBuilder(BasicBlock *TheBB, BasicBlock::iterator IP, FolderTy Folder,
             MDNode *FPMathTag = nullptr,
-            ArrayRef<OperandBundleDef> OpBundles = None)
+            ArrayRef<OperandBundleDef> OpBundles = std::nullopt)
       : IRBuilderBase(TheBB->getContext(), this->Folder, this->Inserter,
-                      FPMathTag, OpBundles), Folder(Folder) {
+                      FPMathTag, OpBundles),
+        Folder(Folder) {
     SetInsertPoint(TheBB, IP);
   }
 
   IRBuilder(BasicBlock *TheBB, BasicBlock::iterator IP,
             MDNode *FPMathTag = nullptr,
-            ArrayRef<OperandBundleDef> OpBundles = None)
+            ArrayRef<OperandBundleDef> OpBundles = std::nullopt)
       : IRBuilderBase(TheBB->getContext(), this->Folder, this->Inserter,
                       FPMathTag, OpBundles) {
     SetInsertPoint(TheBB, IP);
