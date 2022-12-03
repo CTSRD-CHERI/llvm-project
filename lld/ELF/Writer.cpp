@@ -1866,6 +1866,7 @@ static void removeUnusedSyntheticSections() {
 
 // Create output section objects and add them to OutputSections.
 template <class ELFT> void Writer<ELFT>::finalizeSections() {
+  StringRef captableSym = "_CHERI_CAPABILITY_TABLE_";
   if (!config->relocatable) {
     Out::preinitArray = findSection(".preinit_array");
     Out::initArray = findSection(".init_array");
@@ -1936,11 +1937,6 @@ template <class ELFT> void Writer<ELFT>::finalizeSections() {
         ElfSym::tlsModuleBase = cast<Defined>(s);
       }
     }
-  }
-
-  StringRef captableSym = "_CHERI_CAPABILITY_TABLE_";
-  if (!config->relocatable) {
-    llvm::TimeTraceScope timeScope("Finalize .eh_frame");
 
     if (in.cheriCapTable) {
       // When creating relocatable output we should not define the
@@ -1950,11 +1946,15 @@ template <class ELFT> void Writer<ELFT>::finalizeSections() {
         ElfSym::cheriCapabilityTable =
             addOptionalRegular(captableSym, in.cheriCapTable.get(), 0);
     }
+
     // This responsible for splitting up .eh_frame section into
     // pieces. The relocation scan uses those pieces, so this has to be
     // earlier.
-    for (Partition &part : partitions)
-      finalizeSynthetic(part.ehFrame.get());
+    {
+      llvm::TimeTraceScope timeScope("Finalize .eh_frame");
+      for (Partition &part : partitions)
+        finalizeSynthetic(part.ehFrame.get());
+    }
 
     if (config->hasDynSymTab) {
       parallelForEach(symtab.getSymbols(), [](Symbol *sym) {
