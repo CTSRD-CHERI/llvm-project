@@ -783,7 +783,7 @@ bool LLParser::parseMDNodeID(MDNode *&Result) {
 
   // Otherwise, create MDNode forward reference.
   auto &FwdRef = ForwardRefMDNodes[MID];
-  FwdRef = std::make_pair(MDTuple::getTemporary(Context, None), IDLoc);
+  FwdRef = std::make_pair(MDTuple::getTemporary(Context, std::nullopt), IDLoc);
 
   Result = FwdRef.first.get();
   NumberedMetadata[MID].reset(Result);
@@ -2155,7 +2155,7 @@ bool LLParser::parseOptionalFunctionMetadata(Function &F) {
 ///   ::= /* empty */
 ///   ::= 'align' 4
 bool LLParser::parseOptionalAlignment(MaybeAlign &Alignment, bool AllowParens) {
-  Alignment = None;
+  Alignment = std::nullopt;
   if (!EatIfPresent(lltok::kw_align))
     return false;
   LocTy AlignLoc = Lex.getLoc();
@@ -2267,7 +2267,7 @@ static Optional<MemoryEffects::Location> keywordToLoc(lltok::Kind Tok) {
   case lltok::kw_inaccessiblemem:
     return MemoryEffects::InaccessibleMem;
   default:
-    return None;
+    return std::nullopt;
   }
 }
 
@@ -2282,7 +2282,7 @@ static Optional<ModRefInfo> keywordToModRef(lltok::Kind Tok) {
   case lltok::kw_readwrite:
     return ModRefInfo::ModRef;
   default:
-    return None;
+    return std::nullopt;
   }
 }
 
@@ -2297,7 +2297,7 @@ Optional<MemoryEffects> LLParser::parseMemoryAttr() {
   Lex.Lex();
   if (!EatIfPresent(lltok::lparen)) {
     tokError("expected '('");
-    return None;
+    return std::nullopt;
   }
 
   bool SeenLoc = false;
@@ -2307,7 +2307,7 @@ Optional<MemoryEffects> LLParser::parseMemoryAttr() {
       Lex.Lex();
       if (!EatIfPresent(lltok::colon)) {
         tokError("expected ':' after location");
-        return None;
+        return std::nullopt;
       }
     }
 
@@ -2318,7 +2318,7 @@ Optional<MemoryEffects> LLParser::parseMemoryAttr() {
                  "or access kind (none, read, write, readwrite)");
       else
         tokError("expected access kind (none, read, write, readwrite)");
-      return None;
+      return std::nullopt;
     }
 
     Lex.Lex();
@@ -2328,7 +2328,7 @@ Optional<MemoryEffects> LLParser::parseMemoryAttr() {
     } else {
       if (SeenLoc) {
         tokError("default access kind must be specified first");
-        return None;
+        return std::nullopt;
       }
       ME = MemoryEffects(*MR);
     }
@@ -2338,7 +2338,7 @@ Optional<MemoryEffects> LLParser::parseMemoryAttr() {
   } while (EatIfPresent(lltok::comma));
 
   tokError("unterminated memory attribute");
-  return None;
+  return std::nullopt;
 }
 
 /// parseOptionalCommaAlign
@@ -2415,7 +2415,7 @@ bool LLParser::parseAllocSizeArguments(unsigned &BaseSizeArg,
                    "'allocsize' indices can't refer to the same parameter");
     HowManyArg = HowMany;
   } else
-    HowManyArg = None;
+    HowManyArg = std::nullopt;
 
   auto EndParen = Lex.getLoc();
   if (!EatIfPresent(lltok::rparen))
