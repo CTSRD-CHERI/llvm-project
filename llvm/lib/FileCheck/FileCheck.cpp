@@ -708,7 +708,7 @@ Pattern::parseCallExpr(StringRef &Expr, StringRef FuncName,
                      .Case("min", min)
                      .Case("mul", operator*)
                      .Case("sub", operator-)
-                     .Default(None);
+                     .Default(std::nullopt);
 
   if (!OptFunc)
     return ErrorDiagnostic::get(
@@ -776,7 +776,7 @@ Expected<std::unique_ptr<Expression>> Pattern::parseNumericSubstitutionBlock(
     FileCheckPatternContext *Context, const SourceMgr &SM) {
   std::unique_ptr<ExpressionAST> ExpressionASTPointer = nullptr;
   StringRef DefExpr = StringRef();
-  DefinedNumericVariable = None;
+  DefinedNumericVariable = std::nullopt;
   ExpressionFormat ExplicitFormat = ExpressionFormat();
   unsigned Precision = 0;
 
@@ -2709,8 +2709,9 @@ Error FileCheckPatternContext::defineCmdlineVariables(
       StringRef CmdlineDefExpr = CmdlineDef.substr(1);
       Optional<NumericVariable *> DefinedNumericVariable;
       Expected<std::unique_ptr<Expression>> ExpressionResult =
-          Pattern::parseNumericSubstitutionBlock(
-              CmdlineDefExpr, DefinedNumericVariable, false, None, this, SM);
+          Pattern::parseNumericSubstitutionBlock(CmdlineDefExpr,
+                                                 DefinedNumericVariable, false,
+                                                 std::nullopt, this, SM);
       if (!ExpressionResult) {
         Errs = joinErrors(std::move(Errs), ExpressionResult.takeError());
         continue;
