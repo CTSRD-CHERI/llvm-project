@@ -331,8 +331,8 @@ static void dumpLoclistsSection(raw_ostream &OS, DIDumpOptions DumpOpts,
     if (DumpOffset) {
       if (DumpOffset >= Offset && DumpOffset < EndOffset) {
         Offset = *DumpOffset;
-        Loc.dumpLocationList(&Offset, OS, /*BaseAddr=*/None, MRI, Obj, nullptr,
-                             DumpOpts, /*Indent=*/0);
+        Loc.dumpLocationList(&Offset, OS, /*BaseAddr=*/std::nullopt, MRI, Obj,
+                             nullptr, DumpOpts, /*Indent=*/0);
         OS << "\n";
         return;
       }
@@ -451,8 +451,8 @@ void DWARFContext::dump(
     if (*Off) {
       uint64_t Offset = **Off;
       Loc.dumpLocationList(&Offset, OS,
-                           /*BaseAddr=*/None, getRegisterInfo(), *DObj, nullptr,
-                           LLDumpOpts, /*Indent=*/0);
+                           /*BaseAddr=*/std::nullopt, getRegisterInfo(), *DObj,
+                           nullptr, LLDumpOpts, /*Indent=*/0);
       OS << "\n";
     } else {
       Loc.dumpRange(0, Data.getData().size(), OS, getRegisterInfo(), *DObj,
@@ -617,7 +617,7 @@ void DWARFContext::dump(
     const auto &CUs = compile_units();
     auto I = CUs.begin();
     if (I == CUs.end())
-      return None;
+      return std::nullopt;
     return (*I)->getAddrOffsetSectionItem(Index);
   };
 
@@ -1161,7 +1161,7 @@ getExpressionFrameOffset(ArrayRef<uint8_t> Expr,
       return Offset;
     // Fallthrough. Do not accept ex. (DW_OP_breg W29, DW_OP_stack_value)
   }
-  return None;
+  return std::nullopt;
 }
 
 void DWARFContext::addLocalsForDie(DWARFCompileUnit *CU, DWARFDie Subprogram,
