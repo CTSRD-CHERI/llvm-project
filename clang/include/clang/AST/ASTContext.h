@@ -2349,7 +2349,7 @@ public:
 
   Optional<CharUnits> getTypeSizeInCharsIfKnown(QualType Ty) const {
     if (Ty->isIncompleteType() || Ty->isDependentType())
-      return None;
+      return std::nullopt;
     return getTypeSizeInChars(Ty);
   }
 

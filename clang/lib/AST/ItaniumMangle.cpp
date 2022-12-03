@@ -6589,7 +6589,7 @@ ItaniumMangleContext *ItaniumMangleContext::create(ASTContext &Context,
   return new ItaniumMangleContextImpl(
       Context, Diags,
       [](ASTContext &, const NamedDecl *) -> llvm::Optional<unsigned> {
-        return llvm::None;
+        return std::nullopt;
       },
       IsAux);
 }
