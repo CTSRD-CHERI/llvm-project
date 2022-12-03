@@ -419,7 +419,8 @@ void VPIntrinsic::setVectorLengthParam(Value *NewEVL) {
   setArgOperand(*EVLPos, NewEVL);
 }
 
-Optional<unsigned> VPIntrinsic::getMaskParamPos(Intrinsic::ID IntrinsicID) {
+std::optional<unsigned>
+VPIntrinsic::getMaskParamPos(Intrinsic::ID IntrinsicID) {
   switch (IntrinsicID) {
   default:
     return std::nullopt;
@@ -431,7 +432,7 @@ Optional<unsigned> VPIntrinsic::getMaskParamPos(Intrinsic::ID IntrinsicID) {
   }
 }
 
-Optional<unsigned>
+std::optional<unsigned>
 VPIntrinsic::getVectorLengthParamPos(Intrinsic::ID IntrinsicID) {
   switch (IntrinsicID) {
   default:
@@ -447,7 +448,8 @@ VPIntrinsic::getVectorLengthParamPos(Intrinsic::ID IntrinsicID) {
 /// \return the alignment of the pointer used by this load/store/gather or
 /// scatter.
 MaybeAlign VPIntrinsic::getPointerAlignment() const {
-  Optional<unsigned> PtrParamOpt = getMemoryPointerParamPos(getIntrinsicID());
+  std::optional<unsigned> PtrParamOpt =
+      getMemoryPointerParamPos(getIntrinsicID());
   assert(PtrParamOpt && "no pointer argument!");
   return getParamAlign(PtrParamOpt.value());
 }
@@ -459,7 +461,8 @@ Value *VPIntrinsic::getMemoryPointerParam() const {
   return nullptr;
 }
 
-Optional<unsigned> VPIntrinsic::getMemoryPointerParamPos(Intrinsic::ID VPID) {
+std::optional<unsigned>
+VPIntrinsic::getMemoryPointerParamPos(Intrinsic::ID VPID) {
   switch (VPID) {
   default:
     break;
@@ -479,7 +482,7 @@ Value *VPIntrinsic::getMemoryDataParam() const {
   return getArgOperand(DataParamOpt.value());
 }
 
-Optional<unsigned> VPIntrinsic::getMemoryDataParamPos(Intrinsic::ID VPID) {
+std::optional<unsigned> VPIntrinsic::getMemoryDataParamPos(Intrinsic::ID VPID) {
   switch (VPID) {
   default:
     break;
@@ -504,7 +507,8 @@ bool VPIntrinsic::isVPIntrinsic(Intrinsic::ID ID) {
 }
 
 // Equivalent non-predicated opcode
-Optional<unsigned> VPIntrinsic::getFunctionalOpcodeForVP(Intrinsic::ID ID) {
+std::optional<unsigned>
+VPIntrinsic::getFunctionalOpcodeForVP(Intrinsic::ID ID) {
   switch (ID) {
   default:
     break;
@@ -715,7 +719,8 @@ unsigned VPReductionIntrinsic::getStartParamPos() const {
   return *VPReductionIntrinsic::getStartParamPos(getIntrinsicID());
 }
 
-Optional<unsigned> VPReductionIntrinsic::getVectorParamPos(Intrinsic::ID ID) {
+std::optional<unsigned>
+VPReductionIntrinsic::getVectorParamPos(Intrinsic::ID ID) {
   switch (ID) {
 #define BEGIN_REGISTER_VP_INTRINSIC(VPID, ...) case Intrinsic::VPID:
 #define VP_PROPERTY_REDUCTION(STARTPOS, VECTORPOS) return VECTORPOS;
@@ -727,7 +732,8 @@ Optional<unsigned> VPReductionIntrinsic::getVectorParamPos(Intrinsic::ID ID) {
   return std::nullopt;
 }
 
-Optional<unsigned> VPReductionIntrinsic::getStartParamPos(Intrinsic::ID ID) {
+std::optional<unsigned>
+VPReductionIntrinsic::getStartParamPos(Intrinsic::ID ID) {
   switch (ID) {
 #define BEGIN_REGISTER_VP_INTRINSIC(VPID, ...) case Intrinsic::VPID:
 #define VP_PROPERTY_REDUCTION(STARTPOS, VECTORPOS) return STARTPOS;
