@@ -3276,7 +3276,7 @@ void PragmaFPHandler::HandlePragma(Preprocessor &PP,
             .Case("reassociate", TokFPAnnotValue::Reassociate)
             .Case("exceptions", TokFPAnnotValue::Exceptions)
             .Case("eval_method", TokFPAnnotValue::EvalMethod)
-            .Default(None);
+            .Default(std::nullopt);
     if (!FlagKind) {
       PP.Diag(Tok.getLocation(), diag::err_pragma_fp_invalid_option)
           << /*MissingOption=*/false << OptionInfo;
@@ -3309,7 +3309,7 @@ void PragmaFPHandler::HandlePragma(Preprocessor &PP,
               .Case("on", LangOptions::FPModeKind::FPM_On)
               .Case("off", LangOptions::FPModeKind::FPM_Off)
               .Case("fast", LangOptions::FPModeKind::FPM_Fast)
-              .Default(llvm::None);
+              .Default(std::nullopt);
       if (!AnnotValue->ContractValue) {
         PP.Diag(Tok.getLocation(), diag::err_pragma_fp_invalid_argument)
             << PP.getSpelling(Tok) << OptionInfo->getName() << *FlagKind;
@@ -3321,7 +3321,7 @@ void PragmaFPHandler::HandlePragma(Preprocessor &PP,
               II->getName())
               .Case("on", LangOptions::FPModeKind::FPM_On)
               .Case("off", LangOptions::FPModeKind::FPM_Off)
-              .Default(llvm::None);
+              .Default(std::nullopt);
       if (!AnnotValue->ReassociateValue) {
         PP.Diag(Tok.getLocation(), diag::err_pragma_fp_invalid_argument)
             << PP.getSpelling(Tok) << OptionInfo->getName() << *FlagKind;
@@ -3334,7 +3334,7 @@ void PragmaFPHandler::HandlePragma(Preprocessor &PP,
               .Case("ignore", LangOptions::FPE_Ignore)
               .Case("maytrap", LangOptions::FPE_MayTrap)
               .Case("strict", LangOptions::FPE_Strict)
-              .Default(llvm::None);
+              .Default(std::nullopt);
       if (!AnnotValue->ExceptionsValue) {
         PP.Diag(Tok.getLocation(), diag::err_pragma_fp_invalid_argument)
             << PP.getSpelling(Tok) << OptionInfo->getName() << *FlagKind;
@@ -3347,7 +3347,7 @@ void PragmaFPHandler::HandlePragma(Preprocessor &PP,
               .Case("source", LangOptions::FPEvalMethodKind::FEM_Source)
               .Case("double", LangOptions::FPEvalMethodKind::FEM_Double)
               .Case("extended", LangOptions::FPEvalMethodKind::FEM_Extended)
-              .Default(llvm::None);
+              .Default(std::nullopt);
       if (!AnnotValue->EvalMethodValue) {
         PP.Diag(Tok.getLocation(), diag::err_pragma_fp_invalid_argument)
             << PP.getSpelling(Tok) << OptionInfo->getName() << *FlagKind;
