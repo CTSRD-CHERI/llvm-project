@@ -306,7 +306,7 @@ public:
     bool IsSwiftAsync : 1;
     bool IsSwiftError : 1;
     bool IsCFGuardTarget : 1;
-    MaybeAlign Alignment = None;
+    MaybeAlign Alignment = std::nullopt;
     Type *IndirectType = nullptr;
 
     ArgListEntry()
