@@ -3274,7 +3274,7 @@ FoldCondBranchOnValueKnownInPredecessorImpl(BranchInst *BI, DomTreeUpdater *DTU,
     MergeBlockIntoPredecessor(EdgeBB, DTU);
 
     // Signal repeat, simplifying any other constants.
-    return None;
+    return std::nullopt;
   }
 
   return false;
@@ -3289,8 +3289,8 @@ static bool FoldCondBranchOnValueKnownInPredecessor(BranchInst *BI,
   do {
     // Note that None means "we changed things, but recurse further."
     Result = FoldCondBranchOnValueKnownInPredecessorImpl(BI, DTU, DL, AC);
-    EverChanged |= Result == None || *Result;
-  } while (Result == None);
+    EverChanged |= Result == std::nullopt || *Result;
+  } while (Result == std::nullopt);
   return EverChanged;
 }
 
@@ -3565,7 +3565,7 @@ shouldFoldCondBranchesToCommonDestination(BranchInst *BI, BranchInst *PBI,
     if (PBITrueProb.isUnknown() || PBITrueProb.getCompl() < Likely)
       return {{Instruction::Or, true}};
   }
-  return None;
+  return std::nullopt;
 }
 
 static bool performBranchToCommonDestFolding(BranchInst *BI, BranchInst *PBI,
