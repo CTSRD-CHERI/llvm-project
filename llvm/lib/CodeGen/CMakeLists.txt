@@ -121,7 +121,6 @@ add_llvm_component_library(LLVMCodeGen
   MachineFunctionSplitter.cpp
   MachineInstrBundle.cpp
   MachineInstr.cpp
-  MachineLateInstrsCleanup.cpp
   MachineLICM.cpp
   MachineLoopInfo.cpp
   MachineLoopUtils.cpp
