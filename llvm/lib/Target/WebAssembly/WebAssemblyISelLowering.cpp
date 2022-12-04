@@ -1450,7 +1450,8 @@ static bool IsWebAssemblyGlobal(SDValue Op) {
   return false;
 }
 
-static Optional<unsigned> IsWebAssemblyLocal(SDValue Op, SelectionDAG &DAG) {
+static std::optional<unsigned> IsWebAssemblyLocal(SDValue Op,
+                                                  SelectionDAG &DAG) {
   const FrameIndexSDNode *FI = dyn_cast<FrameIndexSDNode>(Op);
   if (!FI)
     return std::nullopt;
@@ -1478,7 +1479,7 @@ SDValue WebAssemblyTargetLowering::LowerStore(SDValue Op,
                                    SN->getMemoryVT(), SN->getMemOperand());
   }
 
-  if (Optional<unsigned> Local = IsWebAssemblyLocal(Base, DAG)) {
+  if (std::optional<unsigned> Local = IsWebAssemblyLocal(Base, DAG)) {
     if (!Offset->isUndef())
       report_fatal_error("unexpected offset when storing to webassembly local",
                          false);
@@ -1515,7 +1516,7 @@ SDValue WebAssemblyTargetLowering::LowerLoad(SDValue Op,
                                    LN->getMemoryVT(), LN->getMemOperand());
   }
 
-  if (Optional<unsigned> Local = IsWebAssemblyLocal(Base, DAG)) {
+  if (std::optional<unsigned> Local = IsWebAssemblyLocal(Base, DAG)) {
     if (!Offset->isUndef())
       report_fatal_error(
           "unexpected offset when loading from webassembly local", false);

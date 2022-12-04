@@ -28,6 +28,7 @@
 #include "llvm/MC/MCInstrDesc.h"
 #include "llvm/Target/TargetMachine.h"
 #include <cassert>
+#include <optional>
 
 using namespace llvm;
 
@@ -1032,7 +1033,7 @@ MipsInstrInfo::getSerializableDirectMachineOperandTargetFlags() const {
   return makeArrayRef(Flags);
 }
 
-Optional<ParamLoadedValue>
+std::optional<ParamLoadedValue>
 MipsInstrInfo::describeLoadedValue(const MachineInstr &MI, Register Reg) const {
   DIExpression *Expr =
       DIExpression::get(MI.getMF()->getFunction().getContext(), {});
@@ -1074,7 +1075,7 @@ MipsInstrInfo::getAsIntImmediate(const MachineOperand &Op,
       auto *Def = MRI.getUniqueVRegDef(Reg);
       switch (Def->getOpcode()) {
       default:
-        return None; // Unknown immediate
+        return std::nullopt; // Unknown immediate
       case Mips::ADDiu:
       case Mips::DADDiu:
       case Mips::ORi:
@@ -1082,12 +1083,12 @@ MipsInstrInfo::getAsIntImmediate(const MachineOperand &Op,
         Register BaseReg = Def->getOperand(1).getReg();
         if (BaseReg == Mips::ZERO || BaseReg == Mips::ZERO_64)
           return Def->getOperand(2).getImm();
-        return None;
+        return std::nullopt;
       }
       }
     }
   }
-  return None; // Unknown immediate
+  return std::nullopt; // Unknown immediate
 }
 
 bool MipsInstrInfo::isSetBoundsInstr(const MachineInstr &I,
@@ -1119,8 +1120,8 @@ bool MipsInstrInfo::isPtrAddInstr(const MachineInstr &I,
   }
 }
 
-Optional<RegImmPair> MipsInstrInfo::isAddImmediate(const MachineInstr &MI,
-                                                   Register Reg) const {
+std::optional<RegImmPair> MipsInstrInfo::isAddImmediate(const MachineInstr &MI,
+                                                        Register Reg) const {
   // TODO: Handle cases where Reg is a super- or sub-register of the
   // destination register.
   const MachineOperand &Op0 = MI.getOperand(0);

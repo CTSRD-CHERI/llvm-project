@@ -8811,7 +8811,7 @@ struct NodeExtensionHelper {
   /// SExt. If \p SExt is None, this returns the source of this operand.
   /// \see ::getSource().
   SDValue getOrCreateExtendedOp(const SDNode *Root, SelectionDAG &DAG,
-                                Optional<bool> SExt) const {
+                                std::optional<bool> SExt) const {
     if (!SExt.has_value())
       return OrigOperand;
 
@@ -8901,7 +8901,7 @@ struct NodeExtensionHelper {
     }
   }
 
-  using CombineToTry = std::function<Optional<CombineResult>(
+  using CombineToTry = std::function<std::optional<CombineResult>(
       SDNode * /*Root*/, const NodeExtensionHelper & /*LHS*/,
       const NodeExtensionHelper & /*RHS*/)>;
 
@@ -9076,8 +9076,8 @@ struct CombineResult {
   unsigned TargetOpcode;
   // No value means no extension is needed. If extension is needed, the value
   // indicates if it needs to be sign extended.
-  Optional<bool> SExtLHS;
-  Optional<bool> SExtRHS;
+  std::optional<bool> SExtLHS;
+  std::optional<bool> SExtRHS;
   /// Root of the combine.
   SDNode *Root;
   /// LHS of the TargetOpcode.
@@ -9086,8 +9086,8 @@ struct CombineResult {
   NodeExtensionHelper RHS;
 
   CombineResult(unsigned TargetOpcode, SDNode *Root,
-                const NodeExtensionHelper &LHS, Optional<bool> SExtLHS,
-                const NodeExtensionHelper &RHS, Optional<bool> SExtRHS)
+                const NodeExtensionHelper &LHS, std::optional<bool> SExtLHS,
+                const NodeExtensionHelper &RHS, std::optional<bool> SExtRHS)
       : TargetOpcode(TargetOpcode), SExtLHS(SExtLHS), SExtRHS(SExtRHS),
         Root(Root), LHS(LHS), RHS(RHS) {}
 
@@ -9115,7 +9115,7 @@ struct CombineResult {
 ///
 /// \returns None if the pattern doesn't match or a CombineResult that can be
 /// used to apply the pattern.
-static Optional<CombineResult>
+static std::optional<CombineResult>
 canFoldToVWWithSameExtensionImpl(SDNode *Root, const NodeExtensionHelper &LHS,
                                  const NodeExtensionHelper &RHS, bool AllowSExt,
                                  bool AllowZExt) {
@@ -9141,7 +9141,7 @@ canFoldToVWWithSameExtensionImpl(SDNode *Root, const NodeExtensionHelper &LHS,
 ///
 /// \returns None if the pattern doesn't match or a CombineResult that can be
 /// used to apply the pattern.
-static Optional<CombineResult>
+static std::optional<CombineResult>
 canFoldToVWWithSameExtension(SDNode *Root, const NodeExtensionHelper &LHS,
                              const NodeExtensionHelper &RHS) {
   return canFoldToVWWithSameExtensionImpl(Root, LHS, RHS, /*AllowSExt=*/true,
@@ -9152,9 +9152,9 @@ canFoldToVWWithSameExtension(SDNode *Root, const NodeExtensionHelper &LHS,
 ///
 /// \returns None if the pattern doesn't match or a CombineResult that can be
 /// used to apply the pattern.
-static Optional<CombineResult> canFoldToVW_W(SDNode *Root,
-                                             const NodeExtensionHelper &LHS,
-                                             const NodeExtensionHelper &RHS) {
+static std::optional<CombineResult>
+canFoldToVW_W(SDNode *Root, const NodeExtensionHelper &LHS,
+              const NodeExtensionHelper &RHS) {
   if (!RHS.areVLAndMaskCompatible(Root))
     return std::nullopt;
 
@@ -9177,7 +9177,7 @@ static Optional<CombineResult> canFoldToVW_W(SDNode *Root,
 ///
 /// \returns None if the pattern doesn't match or a CombineResult that can be
 /// used to apply the pattern.
-static Optional<CombineResult>
+static std::optional<CombineResult>
 canFoldToVWWithSEXT(SDNode *Root, const NodeExtensionHelper &LHS,
                     const NodeExtensionHelper &RHS) {
   return canFoldToVWWithSameExtensionImpl(Root, LHS, RHS, /*AllowSExt=*/true,
@@ -9188,7 +9188,7 @@ canFoldToVWWithSEXT(SDNode *Root, const NodeExtensionHelper &LHS,
 ///
 /// \returns None if the pattern doesn't match or a CombineResult that can be
 /// used to apply the pattern.
-static Optional<CombineResult>
+static std::optional<CombineResult>
 canFoldToVWWithZEXT(SDNode *Root, const NodeExtensionHelper &LHS,
                     const NodeExtensionHelper &RHS) {
   return canFoldToVWWithSameExtensionImpl(Root, LHS, RHS, /*AllowSExt=*/false,
@@ -9199,9 +9199,9 @@ canFoldToVWWithZEXT(SDNode *Root, const NodeExtensionHelper &LHS,
 ///
 /// \returns None if the pattern doesn't match or a CombineResult that can be
 /// used to apply the pattern.
-static Optional<CombineResult> canFoldToVW_SU(SDNode *Root,
-                                              const NodeExtensionHelper &LHS,
-                                              const NodeExtensionHelper &RHS) {
+static std::optional<CombineResult>
+canFoldToVW_SU(SDNode *Root, const NodeExtensionHelper &LHS,
+               const NodeExtensionHelper &RHS) {
   if (!LHS.SupportsSExt || !RHS.SupportsZExt)
     return std::nullopt;
   if (!LHS.areVLAndMaskCompatible(Root) || !RHS.areVLAndMaskCompatible(Root))
@@ -9298,7 +9298,7 @@ combineBinOp_VLToVWBinOp_VL(SDNode *N, TargetLowering::DAGCombinerInfo &DCI) {
 
       for (NodeExtensionHelper::CombineToTry FoldingStrategy :
            FoldingStrategies) {
-        Optional<CombineResult> Res = FoldingStrategy(N, LHS, RHS);
+        std::optional<CombineResult> Res = FoldingStrategy(N, LHS, RHS);
         if (Res) {
           Matched = true;
           CombinesToApply.push_back(*Res);
@@ -11698,7 +11698,7 @@ static bool CC_RISCVAssign2XLen(unsigned XLen, CCState &State,
 }
 
 static unsigned allocateRVVReg(MVT ValVT, unsigned ValNo,
-                               Optional<unsigned> FirstMaskArgument,
+                               std::optional<unsigned> FirstMaskArgument,
                                CCState &State, const RISCVTargetLowering &TLI) {
   const TargetRegisterClass *RC = TLI.getRegClassFor(ValVT);
   if (RC == &RISCV::VRRegClass) {
@@ -11723,7 +11723,7 @@ static bool CC_RISCV(const DataLayout &DL, RISCVABI::ABI ABI, unsigned ValNo,
                      MVT ValVT, MVT LocVT, CCValAssign::LocInfo LocInfo,
                      ISD::ArgFlagsTy ArgFlags, CCState &State, bool IsFixed,
                      bool IsRet, Type *OrigTy, const RISCVTargetLowering &TLI,
-                     Optional<unsigned> FirstMaskArgument) {
+                     std::optional<unsigned> FirstMaskArgument) {
   const RISCVSubtarget &Subtarget = TLI.getSubtarget();
   unsigned XLen = DL.getLargestLegalIntTypeSizeInBits();
   assert(XLen == 32 || XLen == 64);
@@ -11973,7 +11973,7 @@ static bool CC_RISCV(const DataLayout &DL, RISCVABI::ABI ABI, unsigned ValNo,
 }
 
 template <typename ArgTy>
-static Optional<unsigned> preAssignMask(const ArgTy &Args) {
+static std::optional<unsigned> preAssignMask(const ArgTy &Args) {
   for (const auto &ArgIdx : enumerate(Args)) {
     MVT ArgVT = ArgIdx.value().VT;
     if (ArgVT.isVector() && ArgVT.getVectorElementType() == MVT::i1)
@@ -11989,7 +11989,7 @@ void RISCVTargetLowering::analyzeInputArgs(
   unsigned NumArgs = Ins.size();
   FunctionType *FType = MF.getFunction().getFunctionType();
 
-  Optional<unsigned> FirstMaskArgument;
+  std::optional<unsigned> FirstMaskArgument;
   if (Subtarget.hasVInstructions())
     FirstMaskArgument = preAssignMask(Ins);
 
@@ -12020,7 +12020,7 @@ void RISCVTargetLowering::analyzeOutputArgs(
     CallLoweringInfo *CLI, RISCVCCAssignFn Fn) const {
   unsigned NumArgs = Outs.size();
 
-  Optional<unsigned> FirstMaskArgument;
+  std::optional<unsigned> FirstMaskArgument;
   if (Subtarget.hasVInstructions())
     FirstMaskArgument = preAssignMask(Outs);
 
@@ -12206,7 +12206,7 @@ static bool CC_RISCV_FastCC(const DataLayout &DL, RISCVABI::ABI ABI,
                             ISD::ArgFlagsTy ArgFlags, CCState &State,
                             bool IsFixed, bool IsRet, Type *OrigTy,
                             const RISCVTargetLowering &TLI,
-                            Optional<unsigned> FirstMaskArgument) {
+                            std::optional<unsigned> FirstMaskArgument) {
 
   // X5 and X6 might be used for save-restore libcall.
   static const MCPhysReg GPRList[] = {
@@ -12953,7 +12953,7 @@ bool RISCVTargetLowering::CanLowerReturn(
   SmallVector<CCValAssign, 16> RVLocs;
   CCState CCInfo(CallConv, IsVarArg, MF, RVLocs, Context);
 
-  Optional<unsigned> FirstMaskArgument;
+  std::optional<unsigned> FirstMaskArgument;
   if (Subtarget.hasVInstructions())
     FirstMaskArgument = preAssignMask(Outs);
 
