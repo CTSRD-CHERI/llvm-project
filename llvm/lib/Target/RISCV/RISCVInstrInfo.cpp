@@ -1256,17 +1256,17 @@ RISCVInstrInfo::getAsIntImmediate(const MachineOperand &Op,
       auto *Def = MRI.getUniqueVRegDef(Reg);
       switch (Def->getOpcode()) {
       default:
-        return None; // Unknown immediate
+        return std::nullopt; // Unknown immediate
       case RISCV::ADDI:
       case RISCV::ADDIW:
       case RISCV::ORI:
         if (Def->getOperand(1).getReg() == RISCV::X0)
           return Def->getOperand(2).getImm();
-        return None;
+        return std::nullopt;
       }
     }
   }
-  return None; // Unknown immediate
+  return std::nullopt; // Unknown immediate
 }
 
 bool RISCVInstrInfo::isSetBoundsInstr(const MachineInstr &I,
@@ -1344,7 +1344,7 @@ bool RISCVInstrInfo::isCheriGetAddressInst(MachineInstr &MI) const {
   return MI.getOpcode() == RISCV::PseudoCGetAddr;
 }
 
-Optional<DestSourcePair>
+std::optional<DestSourcePair>
 RISCVInstrInfo::isCopyInstrImpl(const MachineInstr &MI) const {
   if (MI.isMoveReg())
     return DestSourcePair{MI.getOperand(0), MI.getOperand(1)};
@@ -2648,7 +2648,7 @@ bool RISCV::isRVVSpill(const MachineInstr &MI) {
   return true;
 }
 
-Optional<std::pair<unsigned, unsigned>>
+std::optional<std::pair<unsigned, unsigned>>
 RISCV::isRVVSpillForZvlsseg(unsigned Opcode) {
   switch (Opcode) {
   default:
