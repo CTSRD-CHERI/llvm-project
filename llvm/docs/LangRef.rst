@@ -15087,8 +15087,10 @@ type.
 Semantics:
 """"""""""
 
-This function returns the same values as the libm ``lround``
-functions would, but without setting errno.
+This function returns the same values as the libm ``lround`` functions
+would, but without setting errno. If the rounded value is too large to
+be stored in the result type, the return value is a non-deterministic
+value (equivalent to `freeze poison`).
 
 '``llvm.llround.*``' Intrinsic
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
@@ -15123,7 +15125,9 @@ Semantics:
 """"""""""
 
 This function returns the same values as the libm ``llround``
-functions would, but without setting errno.
+functions would, but without setting errno. If the rounded value is
+too large to be stored in the result type, the return value is a
+non-deterministic value (equivalent to `freeze poison`).
 
 '``llvm.lrint.*``' Intrinsic
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
@@ -15164,8 +15168,10 @@ type.
 Semantics:
 """"""""""
 
-This function returns the same values as the libm ``lrint``
-functions would, but without setting errno.
+This function returns the same values as the libm ``lrint`` functions
+would, but without setting errno. If the rounded value is too large to
+be stored in the result type, the return value is a non-deterministic
+value (equivalent to `freeze poison`).
 
 '``llvm.llrint.*``' Intrinsic
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
@@ -15199,8 +15205,10 @@ type.
 Semantics:
 """"""""""
 
-This function returns the same values as the libm ``llrint``
-functions would, but without setting errno.
+This function returns the same values as the libm ``llrint`` functions
+would, but without setting errno. If the rounded value is too large to
+be stored in the result type, the return value is a non-deterministic
+value (equivalent to `freeze poison`).
 
 Bit Manipulation Intrinsics
 ---------------------------
