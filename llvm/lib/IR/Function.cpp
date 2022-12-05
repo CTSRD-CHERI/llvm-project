@@ -1860,7 +1860,7 @@ bool Intrinsic::getIntrinsicSignature(Function *F,
   return true;
 }
 
-Optional<Function *> Intrinsic::remangleIntrinsicFunction(Function *F) {
+std::optional<Function *> Intrinsic::remangleIntrinsicFunction(Function *F) {
   SmallVector<Type *, 4> ArgTys;
   if (!getIntrinsicSignature(F, ArgTys))
     return std::nullopt;
@@ -2075,7 +2075,7 @@ void Function::setEntryCount(uint64_t Count, Function::ProfileCountType Type,
   setEntryCount(ProfileCount(Count, Type), Imports);
 }
 
-Optional<ProfileCount> Function::getEntryCount(bool AllowSynthetic) const {
+std::optional<ProfileCount> Function::getEntryCount(bool AllowSynthetic) const {
   MDNode *MD = getMetadata(LLVMContext::MD_prof);
   if (MD && MD->getOperand(0))
     if (MDString *MDS = dyn_cast<MDString>(MD->getOperand(0))) {
@@ -2115,7 +2115,7 @@ void Function::setSectionPrefix(StringRef Prefix) {
               MDB.createFunctionSectionPrefix(Prefix));
 }
 
-Optional<StringRef> Function::getSectionPrefix() const {
+std::optional<StringRef> Function::getSectionPrefix() const {
   if (MDNode *MD = getMetadata(LLVMContext::MD_section_prefix)) {
     assert(cast<MDString>(MD->getOperand(0))
                ->getString()
