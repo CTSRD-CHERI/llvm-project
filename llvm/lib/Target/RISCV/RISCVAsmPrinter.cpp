@@ -15,6 +15,7 @@
 #include "MCTargetDesc/RISCVMCExpr.h"
 #include "MCTargetDesc/RISCVTargetStreamer.h"
 #include "RISCV.h"
+#include "RISCVMachineFunctionInfo.h"
 #include "RISCVTargetMachine.h"
 #include "TargetInfo/RISCVTargetInfo.h"
 #include "llvm/ADT/Statistic.h"
@@ -229,6 +230,12 @@ void RISCVAsmPrinter::emitAttributes() {
 }
 
 void RISCVAsmPrinter::emitFunctionEntryLabel() {
+  const auto *RMFI = MF->getInfo<RISCVMachineFunctionInfo>();
+  if (RMFI->isVectorCall()) {
+    auto &RTS =
+        static_cast<RISCVTargetStreamer &>(*OutStreamer->getTargetStreamer());
+    RTS.emitDirectiveVariantCC(*CurrentFnSym);
+  }
   AsmPrinter::emitFunctionEntryLabel();
   auto &Subtarget = MF->getSubtarget<RISCVSubtarget>();
   const MachineJumpTableInfo *MJTI = MF->getJumpTableInfo();

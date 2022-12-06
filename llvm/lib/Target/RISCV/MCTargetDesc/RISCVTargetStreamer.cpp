@@ -13,6 +13,7 @@
 #include "RISCVTargetStreamer.h"
 #include "RISCVBaseInfo.h"
 #include "RISCVMCTargetDesc.h"
+#include "llvm/MC/MCSymbol.h"
 #include "llvm/Support/FormattedStream.h"
 #include "llvm/Support/RISCVAttributes.h"
 #include "llvm/Support/RISCVISAInfo.h"
@@ -106,6 +107,10 @@ void RISCVTargetAsmStreamer::emitDirectiveOptionCapMode() {
 
 void RISCVTargetAsmStreamer::emitDirectiveOptionNoCapMode() {
   OS << "\t.option\tnocapmode\n";
+}
+
+void RISCVTargetAsmStreamer::emitDirectiveVariantCC(MCSymbol &Symbol) {
+  OS << "\t.variant_cc\t" << Symbol.getName() << "\n";
 }
 
 void RISCVTargetAsmStreamer::emitAttribute(unsigned Attribute, unsigned Value) {
