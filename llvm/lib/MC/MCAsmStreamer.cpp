@@ -212,11 +212,10 @@ public:
   /// @param Size - The size of the common symbol.
   /// @param ByteAlignment - The alignment of the common symbol in bytes.
   void emitLocalCommonSymbol(MCSymbol *Symbol, uint64_t Size,
-                             unsigned ByteAlignment,
-                             TailPaddingAmount TailPadding) override;
+                             Align ByteAlignment, TailPaddingAmount TailPadding) override;
 
-  void emitZerofill(MCSection *Section, MCSymbol *Symbol, uint64_t Size,
-                    unsigned ByteAlignment, TailPaddingAmount TailPadding,
+  void emitZerofill(MCSection *Section, MCSymbol *Symbol = nullptr,
+                    uint64_t Size = 0, Align ByteAlignment = Align(1), TailPaddingAmount TailPadding = TailPaddingAmount::None,
                     SMLoc Loc = SMLoc()) override;
 
   void emitTBSSSymbol(MCSection *Section, MCSymbol *Symbol, uint64_t Size,
@@ -993,12 +992,10 @@ void MCAsmStreamer::emitCommonSymbol(MCSymbol *Symbol, uint64_t Size,
   Symbol->print(OS, MAI);
   OS << ',' << (Size + static_cast<uint64_t>(TailPadding));
 
-  if (ByteAlignment != 0) {
-    if (MAI->getCOMMDirectiveAlignmentIsInBytes())
-      OS << ',' << ByteAlignment;
-    else
-      OS << ',' << Log2_32(ByteAlignment);
-  }
+  if (MAI->getCOMMDirectiveAlignmentIsInBytes())
+    OS << ',' << ByteAlignment;
+  else
+    OS << ',' << Log2_32(ByteAlignment);
   EmitEOL();
   if (TailPadding != TailPaddingAmount::None) {
     // If we added padding, we need to emit an explicit symbol size directive
@@ -1017,7 +1014,7 @@ void MCAsmStreamer::emitCommonSymbol(MCSymbol *Symbol, uint64_t Size,
 }
 
 void MCAsmStreamer::emitLocalCommonSymbol(MCSymbol *Symbol, uint64_t Size,
-                                          unsigned ByteAlign,
+                                          Align ByteAlign,
                                           TailPaddingAmount TailPadding) {
   if (TailPadding != TailPaddingAmount::None) {
     AddComment("adding " + Twine(static_cast<uint64_t>(TailPadding)) +
@@ -1032,11 +1029,10 @@ void MCAsmStreamer::emitLocalCommonSymbol(MCSymbol *Symbol, uint64_t Size,
     case LCOMM::NoAlignment:
       llvm_unreachable("alignment not supported on .lcomm!");
     case LCOMM::ByteAlignment:
-      OS << ',' << ByteAlign;
+      OS << ',' << ByteAlign.value();
       break;
     case LCOMM::Log2Alignment:
-      assert(isPowerOf2_32(ByteAlign) && "alignment must be a power of 2");
-      OS << ',' << Log2_32(ByteAlign);
+      OS << ',' << Log2(ByteAlign);
       break;
     }
   }
@@ -1051,7 +1047,7 @@ void MCAsmStreamer::emitLocalCommonSymbol(MCSymbol *Symbol, uint64_t Size,
 }
 
 void MCAsmStreamer::emitZerofill(MCSection *Section, MCSymbol *Symbol,
-                                 uint64_t Size, unsigned ByteAlignment,
+                                 uint64_t Size, Align ByteAlignment,
                                  TailPaddingAmount TailPadding, SMLoc Loc) {
   if (Symbol)
     assignFragment(Symbol, &Section->getDummyFragment());
@@ -1074,8 +1070,7 @@ void MCAsmStreamer::emitZerofill(MCSection *Section, MCSymbol *Symbol,
     OS << ',';
     Symbol->print(OS, MAI);
     OS << ',' << (Size + static_cast<uint64_t>(TailPadding));
-    if (ByteAlignment != 0)
-      OS << ',' << Log2_32(ByteAlignment);
+    OS << ',' << Log2(ByteAlignment);
   }
   EmitEOL();
   if (TailPadding != TailPaddingAmount::None) {
