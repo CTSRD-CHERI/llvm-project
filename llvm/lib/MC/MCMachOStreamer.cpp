@@ -107,10 +107,10 @@ public:
                         TailPaddingAmount TailPadding) override;
 
   void emitLocalCommonSymbol(MCSymbol *Symbol, uint64_t Size,
-                             unsigned ByteAlignment,
-                             TailPaddingAmount TailPadding) override;
-  void emitZerofill(MCSection *Section, MCSymbol *Symbol, uint64_t Size,
-                    unsigned ByteAlignment, TailPaddingAmount TailPadding,
+                             Align ByteAlignment, TailPaddingAmount TailPadding) override;
+  void emitZerofill(MCSection *Section, MCSymbol *Symbol = nullptr,
+                    uint64_t Size = 0, Align ByteAlignment = Align(1),
+                    TailPaddingAmount TailPadding = TailPaddingAmount::None,
                     SMLoc Loc = SMLoc()) override;
   void emitTBSSSymbol(MCSection *Section, MCSymbol *Symbol, uint64_t Size,
                       unsigned ByteAlignment,
@@ -445,7 +445,7 @@ void MCMachOStreamer::emitCommonSymbol(MCSymbol *Symbol, uint64_t Size,
 }
 
 void MCMachOStreamer::emitLocalCommonSymbol(MCSymbol *Symbol, uint64_t Size,
-                                            unsigned ByteAlignment,
+                                            Align ByteAlignment,
                                             TailPaddingAmount TailPadding) {
   // '.lcomm' is equivalent to '.zerofill'.
   return emitZerofill(getContext().getObjectFileInfo()->getDataBSSSection(),
@@ -453,7 +453,7 @@ void MCMachOStreamer::emitLocalCommonSymbol(MCSymbol *Symbol, uint64_t Size,
 }
 
 void MCMachOStreamer::emitZerofill(MCSection *Section, MCSymbol *Symbol,
-                                   uint64_t Size, unsigned ByteAlignment,
+                                   uint64_t Size, Align ByteAlignment,
                                    TailPaddingAmount TailPadding, SMLoc Loc) {
   assert(TailPadding == TailPaddingAmount::None && "Not implemented yet");
   // On darwin all virtual sections have zerofill type. Disallow the usage of
@@ -472,7 +472,7 @@ void MCMachOStreamer::emitZerofill(MCSection *Section, MCSymbol *Symbol,
 
   // The symbol may not be present, which only creates the section.
   if (Symbol) {
-    emitValueToAlignment(Align(ByteAlignment), 0, 1, 0);
+    emitValueToAlignment(ByteAlignment, 0, 1, 0);
     emitLabel(Symbol);
     emitZeros(Size);
   }
@@ -484,7 +484,7 @@ void MCMachOStreamer::emitZerofill(MCSection *Section, MCSymbol *Symbol,
 void MCMachOStreamer::emitTBSSSymbol(MCSection *Section, MCSymbol *Symbol,
                                      uint64_t Size, unsigned ByteAlignment,
                                      TailPaddingAmount TailPadding) {
-  emitZerofill(Section, Symbol, Size, ByteAlignment, TailPadding);
+  emitZerofill(Section, Symbol, Size, Align(ByteAlignment), TailPadding);
 }
 
 void MCMachOStreamer::emitInstToData(const MCInst &Inst,

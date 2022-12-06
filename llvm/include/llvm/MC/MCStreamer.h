@@ -685,7 +685,7 @@ public:
   /// \param Size - The size of the common symbol.
   /// \param ByteAlignment - The alignment of the common symbol in bytes.
   virtual void emitLocalCommonSymbol(MCSymbol *Symbol, uint64_t Size,
-                                     unsigned ByteAlignment,
+                                     Align ByteAlignment,
                                      TailPaddingAmount TailPadding);
 
   /// Emit the zerofill section and an optional symbol.
@@ -695,9 +695,9 @@ public:
   /// \param Size - The size of the zerofill symbol.
   /// \param ByteAlignment - The alignment of the zerofill symbol if
   /// non-zero. This must be a power of 2 on some targets.
-  virtual void emitZerofill(MCSection *Section, MCSymbol *Symbol, uint64_t Size,
-                            unsigned ByteAlignment,
-                            TailPaddingAmount TailPadding,
+  virtual void emitZerofill(MCSection *Section, MCSymbol *Symbol = nullptr,
+                            uint64_t Size = 0, Align ByteAlignment = Align(1),
+                            TailPaddingAmount TailPadding = TailPaddingAmount::None,
                             SMLoc Loc = SMLoc()) = 0;
 
   /// Emit a thread local bss (.tbss) symbol.
