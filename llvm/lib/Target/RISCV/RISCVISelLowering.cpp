@@ -12595,6 +12595,9 @@ SDValue RISCVTargetLowering::LowerFormalArguments(
   MachineFrameInfo &MFI = MF.getFrameInfo();
   RISCVMachineFunctionInfo *RVFI = MF.getInfo<RISCVMachineFunctionInfo>();
   unsigned XLenInBytes = Subtarget.getXLen() / 8;
+  if (any_of(ArgLocs,
+             [](CCValAssign &VA) { return VA.getLocVT().isScalableVector(); }))
+    MF.getInfo<RISCVMachineFunctionInfo>()->setIsVectorCall();
   if (IsVarArg && RISCVABI::isCheriPureCapABI(Subtarget.getTargetABI())) {
     // Record the frame index of the first variable argument
     // which is a value necessary to VASTART.
@@ -13106,7 +13109,7 @@ RISCVTargetLowering::LowerReturn(SDValue Chain, CallingConv::ID CallConv,
                                  const SmallVectorImpl<ISD::OutputArg> &Outs,
                                  const SmallVectorImpl<SDValue> &OutVals,
                                  const SDLoc &DL, SelectionDAG &DAG) const {
-  const MachineFunction &MF = DAG.getMachineFunction();
+  MachineFunction &MF = DAG.getMachineFunction();
   const RISCVSubtarget &STI = MF.getSubtarget<RISCVSubtarget>();
 
   // Stores the assignment of the return value to a location.
@@ -13176,6 +13179,10 @@ RISCVTargetLowering::LowerReturn(SDValue Chain, CallingConv::ID CallConv,
   if (Glue.getNode()) {
     RetOps.push_back(Glue);
   }
+
+  if (any_of(RVLocs,
+             [](CCValAssign &VA) { return VA.getLocVT().isScalableVector(); }))
+    MF.getInfo<RISCVMachineFunctionInfo>()->setIsVectorCall();
 
   unsigned RetOpc = RISCVISD::RET_FLAG;
   // Interrupt service routines use different return instructions.
