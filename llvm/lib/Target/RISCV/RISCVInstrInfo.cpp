@@ -504,7 +504,6 @@ void RISCVInstrInfo::storeRegToStackSlot(MachineBasicBlock &MBB,
 
   unsigned Opcode;
   bool IsScalableVector = true;
-  bool IsZvlsseg = true;
   if (RISCVABI::isCheriPureCapABI(ST.getTargetABI())) {
     if (RISCV::GPRRegClass.hasSubClassEq(RC)) {
       Opcode = TRI->getRegSizeInBits(RISCV::GPRRegClass) == 32 ? RISCV::CSW
@@ -544,16 +543,12 @@ void RISCVInstrInfo::storeRegToStackSlot(MachineBasicBlock &MBB,
       IsScalableVector = false;
     } else if (RISCV::VRRegClass.hasSubClassEq(RC)) {
       Opcode = RISCV::PseudoVSPILL_M1;
-      IsZvlsseg = false;
     } else if (RISCV::VRM2RegClass.hasSubClassEq(RC)) {
       Opcode = RISCV::PseudoVSPILL_M2;
-      IsZvlsseg = false;
     } else if (RISCV::VRM4RegClass.hasSubClassEq(RC)) {
       Opcode = RISCV::PseudoVSPILL_M4;
-      IsZvlsseg = false;
     } else if (RISCV::VRM8RegClass.hasSubClassEq(RC)) {
       Opcode = RISCV::PseudoVSPILL_M8;
-      IsZvlsseg = false;
     } else if (RISCV::VRN2M1RegClass.hasSubClassEq(RC))
       Opcode = RISCV::PseudoVSPILL2_M1;
     else if (RISCV::VRN2M2RegClass.hasSubClassEq(RC))
@@ -586,16 +581,10 @@ void RISCVInstrInfo::storeRegToStackSlot(MachineBasicBlock &MBB,
         MemoryLocation::UnknownSize, MFI.getObjectAlign(FI));
 
     MFI.setStackID(FI, TargetStackID::ScalableVector);
-    auto MIB = BuildMI(MBB, I, DL, get(Opcode))
-                   .addReg(SrcReg, getKillRegState(IsKill))
-                   .addFrameIndex(FI)
-                   .addMemOperand(MMO);
-    if (IsZvlsseg) {
-      // For spilling/reloading Zvlsseg registers, append the dummy field for
-      // the scaled vector length. The argument will be used when expanding
-      // these pseudo instructions.
-      MIB.addReg(RISCV::X0);
-    }
+    BuildMI(MBB, I, DL, get(Opcode))
+        .addReg(SrcReg, getKillRegState(IsKill))
+        .addFrameIndex(FI)
+        .addMemOperand(MMO);
   } else {
     MachineMemOperand *MMO = MF->getMachineMemOperand(
         MachinePointerInfo::getFixedStack(*MF, FI), MachineMemOperand::MOStore,
@@ -624,7 +613,6 @@ void RISCVInstrInfo::loadRegFromStackSlot(MachineBasicBlock &MBB,
 
   unsigned Opcode;
   bool IsScalableVector = true;
-  bool IsZvlsseg = true;
   if (RISCVABI::isCheriPureCapABI(ST.getTargetABI())) {
     if (RISCV::GPRRegClass.hasSubClassEq(RC)) {
       Opcode = TRI->getRegSizeInBits(RISCV::GPRRegClass) == 32 ? RISCV::CLW
@@ -665,16 +653,12 @@ void RISCVInstrInfo::loadRegFromStackSlot(MachineBasicBlock &MBB,
       IsScalableVector = false;
     } else if (RISCV::VRRegClass.hasSubClassEq(RC)) {
       Opcode = RISCV::PseudoVRELOAD_M1;
-      IsZvlsseg = false;
     } else if (RISCV::VRM2RegClass.hasSubClassEq(RC)) {
       Opcode = RISCV::PseudoVRELOAD_M2;
-      IsZvlsseg = false;
     } else if (RISCV::VRM4RegClass.hasSubClassEq(RC)) {
       Opcode = RISCV::PseudoVRELOAD_M4;
-      IsZvlsseg = false;
     } else if (RISCV::VRM8RegClass.hasSubClassEq(RC)) {
       Opcode = RISCV::PseudoVRELOAD_M8;
-      IsZvlsseg = false;
     } else if (RISCV::VRN2M1RegClass.hasSubClassEq(RC))
       Opcode = RISCV::PseudoVRELOAD2_M1;
     else if (RISCV::VRN2M2RegClass.hasSubClassEq(RC))
@@ -707,15 +691,9 @@ void RISCVInstrInfo::loadRegFromStackSlot(MachineBasicBlock &MBB,
         MemoryLocation::UnknownSize, MFI.getObjectAlign(FI));
 
     MFI.setStackID(FI, TargetStackID::ScalableVector);
-    auto MIB = BuildMI(MBB, I, DL, get(Opcode), DstReg)
-                   .addFrameIndex(FI)
-                   .addMemOperand(MMO);
-    if (IsZvlsseg) {
-      // For spilling/reloading Zvlsseg registers, append the dummy field for
-      // the scaled vector length. The argument will be used when expanding
-      // these pseudo instructions.
-      MIB.addReg(RISCV::X0);
-    }
+    BuildMI(MBB, I, DL, get(Opcode), DstReg)
+        .addFrameIndex(FI)
+        .addMemOperand(MMO);
   } else {
     MachineMemOperand *MMO = MF->getMachineMemOperand(
         MachinePointerInfo::getFixedStack(*MF, FI), MachineMemOperand::MOLoad,
