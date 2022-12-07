@@ -34,7 +34,7 @@ public:
                void(MCSymbol *Symbol, uint64_t Size, unsigned ByteAlignment, TailPaddingAmount TailPadding));
   MOCK_METHOD5(emitZerofill,
                void(MCSection *Section, MCSymbol *Symbol, uint64_t Size,
-                    Align ByteAlignment, TailPaddingAmount TailPadding, SMLoc Loc));
+                    unsigned ByteAlignment, TailPaddingAmount TailPadding, SMLoc Loc));
 
   // The following are mock methods to be used in tests.
 

@@ -65,10 +65,10 @@ public:
                               bool KeepOriginalSym) override;
 
   void emitLocalCommonSymbol(MCSymbol *Symbol, uint64_t Size,
-                             Align ByteAlignment,TailPaddingAmount TailPadding) override;
+                             unsigned ByteAlignment, TailPaddingAmount TailPadding) override;
 
   void emitZerofill(MCSection *Section, MCSymbol *Symbol = nullptr,
-                    uint64_t Size = 0, Align ByteAlignment = Align(1),
+                    uint64_t Size = 0, unsigned ByteAlignment = 0,
                     TailPaddingAmount TailPadding = TailPaddingAmount::None,
                     SMLoc L = SMLoc()) override;
   void emitTBSSSymbol(MCSection *Section, MCSymbol *Symbol, uint64_t Size,

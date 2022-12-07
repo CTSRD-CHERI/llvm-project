@@ -6120,7 +6120,7 @@ bool MasmParser::parseDirectiveComm(bool IsLocal) {
 
   // Create the Symbol as a common or local common with Size and Pow2Alignment.
   if (IsLocal) {
-    getStreamer().emitLocalCommonSymbol(Sym, Size, Align(1 << Pow2Alignment), TailPaddingAmount::None);
+    getStreamer().emitLocalCommonSymbol(Sym, Size, 1 << Pow2Alignment, TailPaddingAmount::None);
     return false;
   }
 
