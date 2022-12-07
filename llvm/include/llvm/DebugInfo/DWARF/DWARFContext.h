@@ -111,6 +111,10 @@ class DWARFContext : public DIContext {
     MacroDwoSection
   };
 
+  // When set parses debug_info.dwo/debug_abbrev.dwo manually and populates CU
+  // Index, and TU Index for DWARF5.
+  bool ParseCUTUIndexManually;
+
 public:
   DWARFContext(std::unique_ptr<const DWARFObject> DObj,
                std::string DWPName = "",
@@ -462,6 +466,14 @@ public:
   /// TODO: change input parameter from "uint64_t Address" into
   ///       "SectionedAddress Address"
   DWARFCompileUnit *getCompileUnitForDataAddress(uint64_t Address);
+
+  /// Returns whether CU/TU should be populated manually. TU Index populated
+  /// manually only for DWARF5.
+  bool getParseCUTUIndexManually() const { return ParseCUTUIndexManually; }
+
+  /// Sets whether CU/TU should be populated manually. TU Index populated
+  /// manually only for DWARF5.
+  void setParseCUTUIndexManually(bool PCUTU) { ParseCUTUIndexManually = PCUTU; }
 
 private:
   /// Parse a macro[.dwo] or macinfo[.dwo] section.
