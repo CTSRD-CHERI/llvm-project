@@ -113,8 +113,8 @@ public:
                     TailPaddingAmount TailPadding = TailPaddingAmount::None,
                     SMLoc Loc = SMLoc()) override;
   void emitTBSSSymbol(MCSection *Section, MCSymbol *Symbol, uint64_t Size,
-                      unsigned ByteAlignment,
-                      TailPaddingAmount TailPadding) override;
+                      Align ByteAlignment = Align(1),
+                      TailPaddingAmount TailPadding = TailPaddingAmount::None) override;
 
   void emitIdent(StringRef IdentString) override {
     llvm_unreachable("macho doesn't support this directive");
@@ -482,9 +482,9 @@ void MCMachOStreamer::emitZerofill(MCSection *Section, MCSymbol *Symbol,
 // This should always be called with the thread local bss section.  Like the
 // .zerofill directive this doesn't actually switch sections on us.
 void MCMachOStreamer::emitTBSSSymbol(MCSection *Section, MCSymbol *Symbol,
-                                     uint64_t Size, unsigned ByteAlignment,
+                                     uint64_t Size, Align ByteAlignment,
                                      TailPaddingAmount TailPadding) {
-  emitZerofill(Section, Symbol, Size, Align(ByteAlignment), TailPadding);
+  emitZerofill(Section, Symbol, Size, ByteAlignment, TailPadding);
 }
 
 void MCMachOStreamer::emitInstToData(const MCInst &Inst,

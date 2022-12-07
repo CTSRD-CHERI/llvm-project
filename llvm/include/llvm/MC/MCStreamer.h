@@ -707,8 +707,8 @@ public:
   /// \param ByteAlignment - The alignment of the thread local common symbol
   /// if non-zero.  This must be a power of 2 on some targets.
   virtual void emitTBSSSymbol(MCSection *Section, MCSymbol *Symbol,
-                              uint64_t Size, unsigned ByteAlignment,
-                              TailPaddingAmount TailPadding);
+                              uint64_t Size, Align ByteAlignment = Align(1),
+                              TailPaddingAmount TailPadding = TailPaddingAmount::None);
 
   /// @}
   /// \name Generating Data
