@@ -50,7 +50,7 @@ public:
   void emitAssignment(MCSymbol *Symbol, const MCExpr *Value) override;
   bool emitSymbolAttribute(MCSymbol *Symbol, MCSymbolAttr Attribute) override;
   void emitZerofill(MCSection *Section, MCSymbol *Symbol, uint64_t Size,
-                    unsigned ByteAlignment, TailPaddingAmount TailPadding, SMLoc Loc = SMLoc()) override;
+                    Align ByteAlignment, TailPaddingAmount TailPadding, SMLoc Loc = SMLoc()) override;
   void emitCommonSymbol(MCSymbol *Symbol, uint64_t Size,
                         unsigned ByteAlignment, TailPaddingAmount TailPadding) override;
 

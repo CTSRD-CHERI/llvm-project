@@ -294,14 +294,14 @@ void MCWinCOFFStreamer::emitCommonSymbol(MCSymbol *S, uint64_t Size,
 }
 
 void MCWinCOFFStreamer::emitLocalCommonSymbol(MCSymbol *S, uint64_t Size,
-                                              unsigned ByteAlignment,
+                                              Align ByteAlignment,
                                               TailPaddingAmount TailPadding) {
   auto *Symbol = cast<MCSymbolCOFF>(S);
 
   MCSection *Section = getContext().getObjectFileInfo()->getBSSSection();
   pushSection();
   switchSection(Section);
-  emitValueToAlignment(Align(ByteAlignment), 0, 1, 0);
+  emitValueToAlignment(ByteAlignment, 0, 1, 0);
   emitLabel(Symbol);
   Symbol->setExternal(false);
   emitZeros(Size);
@@ -319,7 +319,7 @@ void MCWinCOFFStreamer::emitWeakReference(MCSymbol *AliasS,
 }
 
 void MCWinCOFFStreamer::emitZerofill(MCSection *Section, MCSymbol *Symbol,
-                                     uint64_t Size, unsigned ByteAlignment,
+                                     uint64_t Size, Align ByteAlignment,
                                      TailPaddingAmount TailPadding, SMLoc Loc) {
   llvm_unreachable("not implemented");
 }
