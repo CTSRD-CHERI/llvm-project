@@ -220,8 +220,8 @@ public:
                     SMLoc Loc = SMLoc()) override;
 
   void emitTBSSSymbol(MCSection *Section, MCSymbol *Symbol, uint64_t Size,
-                      unsigned ByteAlignment,
-                      TailPaddingAmount TailPadding) override;
+                      Align ByteAlignment = Align(1),
+                      TailPaddingAmount TailPadding = TailPaddingAmount::None) override;
 
   void emitBinaryData(StringRef Data) override;
 
@@ -1087,7 +1087,7 @@ void MCAsmStreamer::emitZerofill(MCSection *Section, MCSymbol *Symbol,
 // This depends that the symbol has already been mangled from the original,
 // e.g. _a.
 void MCAsmStreamer::emitTBSSSymbol(MCSection *Section, MCSymbol *Symbol,
-                                   uint64_t Size, unsigned ByteAlignment,
+                                   uint64_t Size, Align ByteAlignment,
                                    TailPaddingAmount TailPadding) {
   assignFragment(Symbol, &Section->getDummyFragment());
 
@@ -1107,7 +1107,8 @@ void MCAsmStreamer::emitTBSSSymbol(MCSection *Section, MCSymbol *Symbol,
 
   // Output align if we have it.  We default to 1 so don't bother printing
   // that.
-  if (ByteAlignment > 1) OS << ", " << Log2_32(ByteAlignment);
+  if (ByteAlignment > 1)
+    OS << ", " << Log2(ByteAlignment);
 
   EmitEOL();
   if (TailPadding != TailPaddingAmount::None) {

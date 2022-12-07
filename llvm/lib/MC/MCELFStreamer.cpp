@@ -736,7 +736,7 @@ void MCELFStreamer::emitZerofill(MCSection *Section, MCSymbol *Symbol,
 }
 
 void MCELFStreamer::emitTBSSSymbol(MCSection *Section, MCSymbol *Symbol,
-                                   uint64_t Size, unsigned ByteAlignment,
+                                   uint64_t Size, Align ByteAlignment,
                                    TailPaddingAmount TailPadding) {
   llvm_unreachable("ELF doesn't support this directive");
 }

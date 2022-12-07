@@ -72,8 +72,8 @@ public:
                     TailPaddingAmount TailPadding = TailPaddingAmount::None,
                     SMLoc L = SMLoc()) override;
   void emitTBSSSymbol(MCSection *Section, MCSymbol *Symbol, uint64_t Size,
-                      unsigned ByteAlignment,
-                      TailPaddingAmount TailPadding) override;
+                      Align ByteAlignment = Align(1),
+                      TailPaddingAmount TailPadding = TailPaddingAmount::None) override;
   void emitValueImpl(const MCExpr *Value, unsigned Size,
                      SMLoc Loc = SMLoc()) override;
 

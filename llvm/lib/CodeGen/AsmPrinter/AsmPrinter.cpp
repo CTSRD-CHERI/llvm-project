@@ -837,8 +837,7 @@ void AsmPrinter::emitGlobalVariable(const GlobalVariable *GV) {
 
     if (GVKind.isThreadBSS()) {
       TheSection = getObjFileLowering().getTLSBSSSection();
-      OutStreamer->emitTBSSSymbol(TheSection, MangSym, Size, Alignment.value(),
-                                  TailPadding);
+      OutStreamer->emitTBSSSymbol(TheSection, MangSym, Size, Alignment, TailPadding);
     } else if (GVKind.isThreadData()) {
       OutStreamer->switchSection(TheSection);
 
