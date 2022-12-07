@@ -97,7 +97,7 @@ private:
   void emitValueToAlignment(Align Alignment, int64_t Value, unsigned ValueSize,
                             unsigned MaxBytesToEmit) override {}
   void emitZerofill(MCSection *Section, MCSymbol *Symbol, uint64_t Size,
-                    Align ByteAlignment, TailPaddingAmount TailPadding, SMLoc Loc) override {}
+                    unsigned ByteAlignment, TailPaddingAmount TailPadding, SMLoc Loc) override {}
 
   unsigned findRegisterByName(const StringRef RegName) const {
     // FIXME: Can we do better than this ?

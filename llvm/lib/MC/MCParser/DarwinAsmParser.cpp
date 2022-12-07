@@ -902,7 +902,7 @@ bool DarwinAsmParser::parseDirectiveZerofill(StringRef, SMLoc) {
     getStreamer().emitZerofill(
         getContext().getMachOSection(Segment, Section, MachO::S_ZEROFILL, 0,
                                      SectionKind::getBSS()),
-        /*Symbol=*/nullptr, /*Size=*/0, Align(1), TailPaddingAmount::None, SectionLoc);
+        /*Symbol=*/nullptr, /*Size=*/0, /*ByteAlignment=*/0, TailPaddingAmount::None, SectionLoc);
     return false;
   }
 
@@ -958,10 +958,10 @@ bool DarwinAsmParser::parseDirectiveZerofill(StringRef, SMLoc) {
   // Create the zerofill Symbol with Size and Pow2Alignment
   //
   // FIXME: Arch specific.
-  getStreamer().emitZerofill(
-      getContext().getMachOSection(Segment, Section, MachO::S_ZEROFILL, 0,
-                                   SectionKind::getBSS()),
-      Sym, Size, Align(1 << Pow2Alignment), TailPaddingAmount::None, SectionLoc);
+  getStreamer().emitZerofill(getContext().getMachOSection(
+                               Segment, Section, MachO::S_ZEROFILL,
+                               0, SectionKind::getBSS()),
+                             Sym, Size, 1 << Pow2Alignment, TailPaddingAmount::None, SectionLoc);
 
   return false;
 }
