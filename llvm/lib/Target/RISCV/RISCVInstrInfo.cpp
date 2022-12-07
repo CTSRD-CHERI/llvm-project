@@ -338,69 +338,69 @@ void RISCVInstrInfo::copyPhysReg(MachineBasicBlock &MBB,
     Opc = RISCV::FSGNJ_D;
     IsScalableVector = false;
   } else if (RISCV::VRRegClass.contains(DstReg, SrcReg)) {
-    Opc = RISCV::PseudoVMV1R_V;
+    Opc = RISCV::VMV1R_V;
     LMul = RISCVII::LMUL_1;
   } else if (RISCV::VRM2RegClass.contains(DstReg, SrcReg)) {
-    Opc = RISCV::PseudoVMV2R_V;
+    Opc = RISCV::VMV2R_V;
     LMul = RISCVII::LMUL_2;
   } else if (RISCV::VRM4RegClass.contains(DstReg, SrcReg)) {
-    Opc = RISCV::PseudoVMV4R_V;
+    Opc = RISCV::VMV4R_V;
     LMul = RISCVII::LMUL_4;
   } else if (RISCV::VRM8RegClass.contains(DstReg, SrcReg)) {
-    Opc = RISCV::PseudoVMV8R_V;
+    Opc = RISCV::VMV8R_V;
     LMul = RISCVII::LMUL_8;
   } else if (RISCV::VRN2M1RegClass.contains(DstReg, SrcReg)) {
-    Opc = RISCV::PseudoVMV1R_V;
+    Opc = RISCV::VMV1R_V;
     SubRegIdx = RISCV::sub_vrm1_0;
     NF = 2;
     LMul = RISCVII::LMUL_1;
   } else if (RISCV::VRN2M2RegClass.contains(DstReg, SrcReg)) {
-    Opc = RISCV::PseudoVMV2R_V;
+    Opc = RISCV::VMV2R_V;
     SubRegIdx = RISCV::sub_vrm2_0;
     NF = 2;
     LMul = RISCVII::LMUL_2;
   } else if (RISCV::VRN2M4RegClass.contains(DstReg, SrcReg)) {
-    Opc = RISCV::PseudoVMV4R_V;
+    Opc = RISCV::VMV4R_V;
     SubRegIdx = RISCV::sub_vrm4_0;
     NF = 2;
     LMul = RISCVII::LMUL_4;
   } else if (RISCV::VRN3M1RegClass.contains(DstReg, SrcReg)) {
-    Opc = RISCV::PseudoVMV1R_V;
+    Opc = RISCV::VMV1R_V;
     SubRegIdx = RISCV::sub_vrm1_0;
     NF = 3;
     LMul = RISCVII::LMUL_1;
   } else if (RISCV::VRN3M2RegClass.contains(DstReg, SrcReg)) {
-    Opc = RISCV::PseudoVMV2R_V;
+    Opc = RISCV::VMV2R_V;
     SubRegIdx = RISCV::sub_vrm2_0;
     NF = 3;
     LMul = RISCVII::LMUL_2;
   } else if (RISCV::VRN4M1RegClass.contains(DstReg, SrcReg)) {
-    Opc = RISCV::PseudoVMV1R_V;
+    Opc = RISCV::VMV1R_V;
     SubRegIdx = RISCV::sub_vrm1_0;
     NF = 4;
     LMul = RISCVII::LMUL_1;
   } else if (RISCV::VRN4M2RegClass.contains(DstReg, SrcReg)) {
-    Opc = RISCV::PseudoVMV2R_V;
+    Opc = RISCV::VMV2R_V;
     SubRegIdx = RISCV::sub_vrm2_0;
     NF = 4;
     LMul = RISCVII::LMUL_2;
   } else if (RISCV::VRN5M1RegClass.contains(DstReg, SrcReg)) {
-    Opc = RISCV::PseudoVMV1R_V;
+    Opc = RISCV::VMV1R_V;
     SubRegIdx = RISCV::sub_vrm1_0;
     NF = 5;
     LMul = RISCVII::LMUL_1;
   } else if (RISCV::VRN6M1RegClass.contains(DstReg, SrcReg)) {
-    Opc = RISCV::PseudoVMV1R_V;
+    Opc = RISCV::VMV1R_V;
     SubRegIdx = RISCV::sub_vrm1_0;
     NF = 6;
     LMul = RISCVII::LMUL_1;
   } else if (RISCV::VRN7M1RegClass.contains(DstReg, SrcReg)) {
-    Opc = RISCV::PseudoVMV1R_V;
+    Opc = RISCV::VMV1R_V;
     SubRegIdx = RISCV::sub_vrm1_0;
     NF = 7;
     LMul = RISCVII::LMUL_1;
   } else if (RISCV::VRN8M1RegClass.contains(DstReg, SrcReg)) {
-    Opc = RISCV::PseudoVMV1R_V;
+    Opc = RISCV::VMV1R_V;
     SubRegIdx = RISCV::sub_vrm1_0;
     NF = 8;
     LMul = RISCVII::LMUL_1;
@@ -535,8 +535,8 @@ void RISCVInstrInfo::storeRegToStackSlot(MachineBasicBlock &MBB,
     }
   } else {
     if (RISCV::GPRRegClass.hasSubClassEq(RC)) {
-      Opcode = TRI->getRegSizeInBits(RISCV::GPRRegClass) == 32 ? RISCV::SW
-                                                               : RISCV::SD;
+      Opcode = TRI->getRegSizeInBits(RISCV::GPRRegClass) == 32 ?
+               RISCV::SW : RISCV::SD;
       IsScalableVector = false;
     } else if (RISCV::GPCRRegClass.hasSubClassEq(RC)) {
       Opcode = TRI->getRegSizeInBits(RISCV::GPCRRegClass) == 64 ? RISCV::SC_64
@@ -552,13 +552,13 @@ void RISCVInstrInfo::storeRegToStackSlot(MachineBasicBlock &MBB,
       Opcode = RISCV::FSD;
       IsScalableVector = false;
     } else if (RISCV::VRRegClass.hasSubClassEq(RC)) {
-      Opcode = RISCV::PseudoVSPILL_M1;
+      Opcode = RISCV::VS1R_V;
     } else if (RISCV::VRM2RegClass.hasSubClassEq(RC)) {
-      Opcode = RISCV::PseudoVSPILL_M2;
+      Opcode = RISCV::VS2R_V;
     } else if (RISCV::VRM4RegClass.hasSubClassEq(RC)) {
-      Opcode = RISCV::PseudoVSPILL_M4;
+      Opcode = RISCV::VS4R_V;
     } else if (RISCV::VRM8RegClass.hasSubClassEq(RC)) {
-      Opcode = RISCV::PseudoVSPILL_M8;
+      Opcode = RISCV::VS8R_V;
     } else if (RISCV::VRN2M1RegClass.hasSubClassEq(RC))
       Opcode = RISCV::PseudoVSPILL2_M1;
     else if (RISCV::VRN2M2RegClass.hasSubClassEq(RC))
@@ -644,10 +644,9 @@ void RISCVInstrInfo::loadRegFromStackSlot(MachineBasicBlock &MBB,
     }
   } else {
     if (RISCV::GPRRegClass.hasSubClassEq(RC)) {
-      Opcode = TRI->getRegSizeInBits(RISCV::GPRRegClass) == 32 ? RISCV::LW
-                                                               : RISCV::LD;
+      Opcode = TRI->getRegSizeInBits(RISCV::GPRRegClass) == 32 ?
+               RISCV::LW : RISCV::LD;
       IsScalableVector = false;
-
     } else if (RISCV::GPCRRegClass.hasSubClassEq(RC)) {
       Opcode = TRI->getRegSizeInBits(RISCV::GPCRRegClass) == 64 ? RISCV::LC_64
                                                                 : RISCV::LC_128;
@@ -662,13 +661,13 @@ void RISCVInstrInfo::loadRegFromStackSlot(MachineBasicBlock &MBB,
       Opcode = RISCV::FLD;
       IsScalableVector = false;
     } else if (RISCV::VRRegClass.hasSubClassEq(RC)) {
-      Opcode = RISCV::PseudoVRELOAD_M1;
+      Opcode = RISCV::VL1RE8_V;
     } else if (RISCV::VRM2RegClass.hasSubClassEq(RC)) {
-      Opcode = RISCV::PseudoVRELOAD_M2;
+      Opcode = RISCV::VL2RE8_V;
     } else if (RISCV::VRM4RegClass.hasSubClassEq(RC)) {
-      Opcode = RISCV::PseudoVRELOAD_M4;
+      Opcode = RISCV::VL4RE8_V;
     } else if (RISCV::VRM8RegClass.hasSubClassEq(RC)) {
-      Opcode = RISCV::PseudoVRELOAD_M8;
+      Opcode = RISCV::VL8RE8_V;
     } else if (RISCV::VRN2M1RegClass.hasSubClassEq(RC))
       Opcode = RISCV::PseudoVRELOAD2_M1;
     else if (RISCV::VRN2M2RegClass.hasSubClassEq(RC))
