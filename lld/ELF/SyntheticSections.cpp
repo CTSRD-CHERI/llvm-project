@@ -3924,6 +3924,7 @@ void PartitionIndexSection::writeTo(uint8_t *buf) {
 
 void InStruct::reset() {
   attributes.reset();
+  riscvAttributes.reset();
   bss.reset();
   bssRelRo.reset();
   capRelocs.reset();
