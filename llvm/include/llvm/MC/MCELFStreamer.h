@@ -56,9 +56,8 @@ public:
   void emitWeakReference(MCSymbol *Alias, const MCSymbol *Symbol) override;
   bool emitSymbolAttribute(MCSymbol *Symbol, MCSymbolAttr Attribute) override;
   void emitSymbolDesc(MCSymbol *Symbol, unsigned DescValue) override;
-  void emitCommonSymbol(MCSymbol *Symbol, uint64_t Size, unsigned ByteAlignment,
+  void emitCommonSymbol(MCSymbol *Symbol, uint64_t Size, Align ByteAlignment,
                         TailPaddingAmount TailPadding) override;
-
 
   void emitELFSize(MCSymbol *Symbol, const MCExpr *Value) override;
   void emitELFSymverDirective(const MCSymbol *OriginalSym, StringRef Name,

@@ -5093,7 +5093,7 @@ bool AsmParser::parseDirectiveComm(bool IsLocal) {
     return false;
   }
 
-  getStreamer().emitCommonSymbol(Sym, Size, 1 << Pow2Alignment,
+  getStreamer().emitCommonSymbol(Sym, Size, Align(1ULL << Pow2Alignment),
                                  TailPaddingAmount::None);
   return false;
 }

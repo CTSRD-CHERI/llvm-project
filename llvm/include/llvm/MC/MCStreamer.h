@@ -672,10 +672,9 @@ public:
   ///
   /// \param Symbol - The common symbol to emit.
   /// \param Size - The size of the common symbol.
-  /// \param ByteAlignment - The alignment of the symbol if
-  /// non-zero. This must be a power of 2.
+  /// \param ByteAlignment - The alignment of the symbol.
   virtual void emitCommonSymbol(MCSymbol *Symbol, uint64_t Size,
-                                unsigned ByteAlignment,
+                                Align ByteAlignment,
                                 TailPaddingAmount TailPadding) = 0;
 
   /// Emit a local common (.lcomm) symbol.

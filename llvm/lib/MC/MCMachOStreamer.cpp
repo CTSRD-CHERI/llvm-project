@@ -103,7 +103,7 @@ public:
   void emitThumbFunc(MCSymbol *Func) override;
   bool emitSymbolAttribute(MCSymbol *Symbol, MCSymbolAttr Attribute) override;
   void emitSymbolDesc(MCSymbol *Symbol, unsigned DescValue) override;
-  void emitCommonSymbol(MCSymbol *Symbol, uint64_t Size, unsigned ByteAlignment,
+  void emitCommonSymbol(MCSymbol *Symbol, uint64_t Size, Align ByteAlignment,
                         TailPaddingAmount TailPadding) override;
 
   void emitLocalCommonSymbol(MCSymbol *Symbol, uint64_t Size,
@@ -433,7 +433,7 @@ void MCMachOStreamer::emitSymbolDesc(MCSymbol *Symbol, unsigned DescValue) {
 }
 
 void MCMachOStreamer::emitCommonSymbol(MCSymbol *Symbol, uint64_t Size,
-                                       unsigned ByteAlignment,
+                                       Align ByteAlignment,
                                        TailPaddingAmount TailPadding) {
   assert(TailPadding == TailPaddingAmount::None && "Not supported yet");
   // FIXME: Darwin 'as' does appear to allow redef of a .comm by itself.
@@ -441,7 +441,7 @@ void MCMachOStreamer::emitCommonSymbol(MCSymbol *Symbol, uint64_t Size,
 
   getAssembler().registerSymbol(*Symbol);
   Symbol->setExternal(true);
-  Symbol->setCommon(Size, ByteAlignment);
+  Symbol->setCommon(Size, ByteAlignment.value());
 }
 
 void MCMachOStreamer::emitLocalCommonSymbol(MCSymbol *Symbol, uint64_t Size,
