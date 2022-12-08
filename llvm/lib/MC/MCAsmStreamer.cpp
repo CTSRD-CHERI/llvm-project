@@ -203,7 +203,7 @@ public:
                                 unsigned FunctionSize, bool hasDebug) override;
 
   void emitELFSize(MCSymbol *Symbol, const MCExpr *Value) override;
-  void emitCommonSymbol(MCSymbol *Symbol, uint64_t Size, unsigned ByteAlignment,
+  void emitCommonSymbol(MCSymbol *Symbol, uint64_t Size, Align ByteAlignment,
                         TailPaddingAmount TailPadding) override;
 
   /// Emit a local common (.lcomm) symbol.
@@ -982,7 +982,7 @@ void MCAsmStreamer::emitELFSize(MCSymbol *Symbol, const MCExpr *Value) {
 }
 
 void MCAsmStreamer::emitCommonSymbol(MCSymbol *Symbol, uint64_t Size,
-                                     unsigned ByteAlignment,
+                                     Align ByteAlignment,
                                      TailPaddingAmount TailPadding) {
   if (TailPadding != TailPaddingAmount::None) {
     AddComment("adding " + Twine(static_cast<uint64_t>(TailPadding)) +
@@ -994,9 +994,9 @@ void MCAsmStreamer::emitCommonSymbol(MCSymbol *Symbol, uint64_t Size,
   OS << ',' << (Size + static_cast<uint64_t>(TailPadding));
 
   if (MAI->getCOMMDirectiveAlignmentIsInBytes())
-    OS << ',' << ByteAlignment;
+    OS << ',' << ByteAlignment.value();
   else
-    OS << ',' << Log2_32(ByteAlignment);
+    OS << ',' << Log2(ByteAlignment);
   EmitEOL();
   if (TailPadding != TailPaddingAmount::None) {
     // If we added padding, we need to emit an explicit symbol size directive
@@ -1011,7 +1011,6 @@ void MCAsmStreamer::emitCommonSymbol(MCSymbol *Symbol, uint64_t Size,
   MCSymbolXCOFF *XSym = dyn_cast<MCSymbolXCOFF>(Symbol);
   if (XSym && XSym->hasRename())
     emitXCOFFRenameDirective(XSym, XSym->getSymbolTableName());
-
 }
 
 void MCAsmStreamer::emitLocalCommonSymbol(MCSymbol *Symbol, uint64_t Size,
