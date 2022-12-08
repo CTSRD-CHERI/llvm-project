@@ -2924,6 +2924,10 @@ void LinkerDriver::link(opt::InputArgList &args) {
       ctx.inputSections.push_back(in.capRelocs.get());
   }
 
+  // Merge .riscv.attributes sections.
+  if (config->emachine == EM_RISCV)
+    mergeRISCVAttributesSections();
+
   {
     llvm::TimeTraceScope timeScope("Assign sections");
 
