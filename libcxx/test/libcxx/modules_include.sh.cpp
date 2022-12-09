@@ -22,6 +22,9 @@
 // This test times out - fixed in https://reviews.llvm.org/D151654
 // REQUIRES: D151654
 
+// The Android headers don't appear to be compatible with modules yet
+// XFAIL: LIBCXX-ANDROID-FIXME
+
 // Prevent <ext/hash_map> from generating deprecated warnings for this test.
 #if defined(__DEPRECATED)
 #    undef __DEPRECATED
