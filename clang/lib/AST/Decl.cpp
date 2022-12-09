@@ -4344,6 +4344,10 @@ bool FieldDecl::isZeroSize(const ASTContext &Ctx) const {
   return true;
 }
 
+bool FieldDecl::isPotentiallyOverlapping() const {
+  return hasAttr<NoUniqueAddressAttr>() && getType()->getAsCXXRecordDecl();
+}
+
 unsigned FieldDecl::getFieldIndex() const {
   const FieldDecl *Canonical = getCanonicalDecl();
   if (Canonical != this)
