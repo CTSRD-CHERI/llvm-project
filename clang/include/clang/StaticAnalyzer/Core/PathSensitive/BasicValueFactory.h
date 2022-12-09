@@ -217,15 +217,15 @@ public:
 
   const llvm::APSInt &getZeroWithTypeSize(QualType T) {
     assert(T->isScalarType());
-    return getValue(0, Ctx.getTypeSize(T), true);
+    return getValue(0, Ctx.getIntWidth(T), true);
   }
 
   const llvm::APSInt &getZeroWithPtrWidth(bool isUnsigned = true) {
-    return getValue(0, Ctx.getTypeSize(Ctx.VoidPtrTy), isUnsigned);
+    return getValue(0, Ctx.getIntWidth(Ctx.VoidPtrTy), isUnsigned);
   }
 
   const llvm::APSInt &getIntWithPtrWidth(uint64_t X, bool isUnsigned) {
-    return getValue(X, Ctx.getTypeSize(Ctx.VoidPtrTy), isUnsigned);
+    return getValue(X, Ctx.getIntWidth(Ctx.VoidPtrTy), isUnsigned);
   }
 
   const llvm::APSInt &getTruthValue(bool b, QualType T) {
