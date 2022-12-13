@@ -1,5 +1,3 @@
-; Bitcode compatibility test for llvm
-;
 ; Please update this file when making any IR changes. Information on the
 ; release process for this file is available here:
 ;
