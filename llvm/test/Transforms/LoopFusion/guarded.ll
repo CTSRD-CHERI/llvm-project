@@ -3,9 +3,6 @@
 
 @B = common global [1024 x i32] zeroinitializer, align 16
 
-; CHECK: void @dep_free_parametric
-; CHECK-next: entry:
-; CHECK: ret void
 define void @dep_free_parametric(i32* noalias %A, i64 %N) {
 ; CHECK-LABEL: @dep_free_parametric(
 ; CHECK-NEXT:  entry:
@@ -94,18 +91,6 @@ bb12:                                        ; preds = %bb15, %bb14
 ; Test that `%add` is moved in for.first.preheader, and the two loops for.first
 ; and for.second are fused.
 
-; CHECK: void @moveinsts_preheader
-; CHECK-LABEL: for.first.guard:
-; CHECK: br i1 %cmp.guard, label %for.first.preheader, label %for.end
-; CHECK-LABEL: for.first.preheader:
-; CHECK-NEXT:  %add = add nsw i32 %x, 1
-; CHECK-NEXT:  br label %for.first
-; CHECK-LABEL: for.first:
-; CHECK:   br i1 %cmp.j, label %for.first, label %for.second.exit
-; CHECK-LABEL: for.second.exit:
-; CHECK-NEXT:   br label %for.end
-; CHECK-LABEL: for.end:
-; CHECK-NEXT:   ret void
 define void @moveinsts_preheader(i32* noalias %A, i32* noalias %B, i64 %N, i32 %x) {
 ; CHECK-LABEL: @moveinsts_preheader(
 ; CHECK-NEXT:  for.first.guard:
@@ -174,18 +159,6 @@ for.end:
 ; Test that `%add` is moved in for.second.exit, and the two loops for.first
 ; and for.second are fused.
 
-; CHECK: void @moveinsts_exitblock
-; CHECK-LABEL: for.first.guard:
-; CHECK: br i1 %cmp.guard, label %for.first.preheader, label %for.end
-; CHECK-LABEL: for.first.preheader:
-; CHECK-NEXT:  br label %for.first
-; CHECK-LABEL: for.first:
-; CHECK:   br i1 %cmp.j, label %for.first, label %for.second.exit
-; CHECK-LABEL: for.second.exit:
-; CHECK-NEXT:  %add = add nsw i32 %x, 1
-; CHECK-NEXT:   br label %for.end
-; CHECK-LABEL: for.end:
-; CHECK-NEXT:   ret void
 define void @moveinsts_exitblock(i32* noalias %A, i32* noalias %B, i64 %N, i32 %x) {
 ; CHECK-LABEL: @moveinsts_exitblock(
 ; CHECK-NEXT:  for.first.guard:
@@ -254,19 +227,6 @@ for.end:
 ; Test that `%add` is moved in for.first.guard, and the two loops for.first
 ; and for.second are fused.
 
-; CHECK: void @moveinsts_guardblock
-; CHECK-LABEL: for.first.guard:
-; CHECK-NEXT: %cmp.guard = icmp slt i64 0, %N
-; CHECK-NEXT:  %add = add nsw i32 %x, 1
-; CHECK: br i1 %cmp.guard, label %for.first.preheader, label %for.end
-; CHECK-LABEL: for.first.preheader:
-; CHECK-NEXT:  br label %for.first
-; CHECK-LABEL: for.first:
-; CHECK:   br i1 %cmp.j, label %for.first, label %for.second.exit
-; CHECK-LABEL: for.second.exit:
-; CHECK-NEXT:   br label %for.end
-; CHECK-LABEL: for.end:
-; CHECK-NEXT:   ret void
 define void @moveinsts_guardblock(i32* noalias %A, i32* noalias %B, i64 %N, i32 %x) {
 ; CHECK-LABEL: @moveinsts_guardblock(
 ; CHECK-NEXT:  for.first.guard:
@@ -335,20 +295,6 @@ for.end:
 ; Test that the incoming block of `%j.lcssa` is updated correctly
 ; from for.second.guard to for.first.guard, and the two loops for.first and
 ; for.second are fused.
-
-; CHECK: i64 @updatephi_guardnonloopblock
-; CHECK-LABEL: for.first.guard:
-; CHECK-NEXT: %cmp.guard = icmp slt i64 0, %N
-; CHECK: br i1 %cmp.guard, label %for.first.preheader, label %for.end
-; CHECK-LABEL: for.first.preheader:
-; CHECK-NEXT:  br label %for.first
-; CHECK-LABEL: for.first:
-; CHECK:   br i1 %cmp.j, label %for.first, label %for.second.exit
-; CHECK-LABEL: for.second.exit:
-; CHECK-NEXT:   br label %for.end
-; CHECK-LABEL: for.end:
-; CHECK-NEXT:   %j.lcssa = phi i64 [ 0, %for.first.guard ], [ %j.02, %for.second.exit ]
-; CHECK-NEXT:   ret i64 %j.lcssa
 
 define i64 @updatephi_guardnonloopblock(i32* noalias %A, i32* noalias %B, i64 %N, i32 %x) {
 ; CHECK-LABEL: @updatephi_guardnonloopblock(
