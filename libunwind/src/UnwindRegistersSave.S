@@ -9,6 +9,12 @@
 #include "assembly.h"
 #include "__libunwind_config.h"
 
+#define FROM_0_TO_15 0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15
+#define FROM_16_TO_31 16,17,18,19,20,21,22,23,24,25,26,27,28,29,30,31
+
+#define FROM_0_TO_31 0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29,30,31
+#define FROM_32_TO_63 32,33,34,35,36,37,38,39,40,41,42,43,44,45,46,47,48,49,50,51,52,53,54,55,56,57,58,59,60,61,62,63
+
 #if defined(_AIX)
     .toc
 #else
@@ -359,37 +365,9 @@ DEFINE_LIBUNWIND_FUNCTION(__unw_getcontext)
   .set noat
   .set noreorder
   .set nomacro
-  sd    $1, (8 * 1)($4)
-  sd    $2, (8 * 2)($4)
-  sd    $3, (8 * 3)($4)
-  sd    $4, (8 * 4)($4)
-  sd    $5, (8 * 5)($4)
-  sd    $6, (8 * 6)($4)
-  sd    $7, (8 * 7)($4)
-  sd    $8, (8 * 8)($4)
-  sd    $9, (8 * 9)($4)
-  sd    $10, (8 * 10)($4)
-  sd    $11, (8 * 11)($4)
-  sd    $12, (8 * 12)($4)
-  sd    $13, (8 * 13)($4)
-  sd    $14, (8 * 14)($4)
-  sd    $15, (8 * 15)($4)
-  sd    $16, (8 * 16)($4)
-  sd    $17, (8 * 17)($4)
-  sd    $18, (8 * 18)($4)
-  sd    $19, (8 * 19)($4)
-  sd    $20, (8 * 20)($4)
-  sd    $21, (8 * 21)($4)
-  sd    $22, (8 * 22)($4)
-  sd    $23, (8 * 23)($4)
-  sd    $24, (8 * 24)($4)
-  sd    $25, (8 * 25)($4)
-  sd    $26, (8 * 26)($4)
-  sd    $27, (8 * 27)($4)
-  sd    $28, (8 * 28)($4)
-  sd    $29, (8 * 29)($4)
-  sd    $30, (8 * 30)($4)
-  sd    $31, (8 * 31)($4)
+  .irp i,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29,30,31
+    sd $\i, (8 * \i)($4)
+  .endr
   # Store return address to pc
   sd    $31, (8 * 32)($4)
   # hi and lo
@@ -398,38 +376,9 @@ DEFINE_LIBUNWIND_FUNCTION(__unw_getcontext)
   mflo  $8
   sd    $8,  (8 * 34)($4)
 #ifdef __mips_hard_float
-  sdc1  $f0, (8 * 35)($4)
-  sdc1  $f1, (8 * 36)($4)
-  sdc1  $f2, (8 * 37)($4)
-  sdc1  $f3, (8 * 38)($4)
-  sdc1  $f4, (8 * 39)($4)
-  sdc1  $f5, (8 * 40)($4)
-  sdc1  $f6, (8 * 41)($4)
-  sdc1  $f7, (8 * 42)($4)
-  sdc1  $f8, (8 * 43)($4)
-  sdc1  $f9, (8 * 44)($4)
-  sdc1  $f10, (8 * 45)($4)
-  sdc1  $f11, (8 * 46)($4)
-  sdc1  $f12, (8 * 47)($4)
-  sdc1  $f13, (8 * 48)($4)
-  sdc1  $f14, (8 * 49)($4)
-  sdc1  $f15, (8 * 50)($4)
-  sdc1  $f16, (8 * 51)($4)
-  sdc1  $f17, (8 * 52)($4)
-  sdc1  $f18, (8 * 53)($4)
-  sdc1  $f19, (8 * 54)($4)
-  sdc1  $f20, (8 * 55)($4)
-  sdc1  $f21, (8 * 56)($4)
-  sdc1  $f22, (8 * 57)($4)
-  sdc1  $f23, (8 * 58)($4)
-  sdc1  $f24, (8 * 59)($4)
-  sdc1  $f25, (8 * 60)($4)
-  sdc1  $f26, (8 * 61)($4)
-  sdc1  $f27, (8 * 62)($4)
-  sdc1  $f28, (8 * 63)($4)
-  sdc1  $f29, (8 * 64)($4)
-  sdc1  $f30, (8 * 65)($4)
-  sdc1  $f31, (8 * 66)($4)
+  .irp i,FROM_0_TO_31
+    sdc1 $f\i, (280+8*\i)($4)
+  .endr
 #endif
   jr	$31
   # return UNW_ESUCCESS
@@ -1275,19 +1224,19 @@ DEFINE_LIBUNWIND_FUNCTION(__unw_getcontext)
 
 #elif defined(__riscv)
 
-.macro save_fpr num
+.macro save_fpr num, ctxreg
 #ifdef __CHERI_PURE_CAPABILITY__
-  cfsd   f\num, (RISCV_FOFFSET + RISCV_FSIZE * \num)(ca0)
+  cfsd   f\num, (RISCV_FOFFSET + RISCV_FSIZE * \num)(c\ctxreg)
 #else
-  FSTORE f\num, (RISCV_FOFFSET + RISCV_FSIZE * \num)(a0)
+  FSTORE f\num, (RISCV_FOFFSET + RISCV_FSIZE * \num)(\ctxreg)
 #endif
 .endm
 
-.macro save_gpr num
+.macro save_gpr num, ctxreg
 #ifdef __CHERI_PURE_CAPABILITY__
-  csc   c\num, (__SIZEOF_CHERI_CAPABILITY__ * \num)(ca0)
+  csc   c\num, (__SIZEOF_CHERI_CAPABILITY__ * \num)(c\ctxreg)
 #else
-  ISTORE x\num, (RISCV_ISIZE * \num)(a0)
+  ISTORE x\num, (RISCV_ISIZE * \num)(\ctxreg)
 #endif
 .endm
 
@@ -1301,73 +1250,16 @@ DEFINE_LIBUNWIND_FUNCTION(__unw_getcontext)
 #ifdef __CHERI_PURE_CAPABILITY__
   csc   c1, (__SIZEOF_CHERI_CAPABILITY__ * 0)(ca0) // store ra as pc
 #else
-  ISTORE    x1, (8 * 0)(a0) // store ra as pc
+  ISTORE    x1, (RISCV_ISIZE * 0)(a0) // store ra as pc
 #endif
-  save_gpr 1
-  save_gpr 2
-  save_gpr 3
-  save_gpr 4
-  save_gpr 5
-  save_gpr 6
-  save_gpr 7
-  save_gpr 8
-  save_gpr 9
-  save_gpr 10
-  save_gpr 11
-  save_gpr 12
-  save_gpr 13
-  save_gpr 14
-  save_gpr 15
-  save_gpr 16
-  save_gpr 17
-  save_gpr 18
-  save_gpr 19
-  save_gpr 20
-  save_gpr 21
-  save_gpr 22
-  save_gpr 23
-  save_gpr 24
-  save_gpr 25
-  save_gpr 26
-  save_gpr 27
-  save_gpr 28
-  save_gpr 29
-  save_gpr 30
-  save_gpr 31
+  .irp i,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29,30,31
+    save_gpr \i, a0
+  .endr
 
 # if defined(__riscv_flen)
-  save_fpr 0
-  save_fpr 1
-  save_fpr 2
-  save_fpr 3
-  save_fpr 4
-  save_fpr 5
-  save_fpr 6
-  save_fpr 7
-  save_fpr 8
-  save_fpr 9
-  save_fpr 10
-  save_fpr 11
-  save_fpr 12
-  save_fpr 13
-  save_fpr 14
-  save_fpr 15
-  save_fpr 16
-  save_fpr 17
-  save_fpr 18
-  save_fpr 19
-  save_fpr 20
-  save_fpr 21
-  save_fpr 22
-  save_fpr 23
-  save_fpr 24
-  save_fpr 25
-  save_fpr 26
-  save_fpr 27
-  save_fpr 28
-  save_fpr 29
-  save_fpr 30
-  save_fpr 31
+  .irp i,FROM_0_TO_31
+    save_fpr \i, a0
+  .endr
 # endif
 
   li     a0, 0  // return UNW_ESUCCESS
@@ -1399,22 +1291,9 @@ DEFINE_LIBUNWIND_FUNCTION(__unw_getcontext)
   stg %r14, 8(%r2)
 
   // Save FPRs
-  std %f0, 144(%r2)
-  std %f1, 152(%r2)
-  std %f2, 160(%r2)
-  std %f3, 168(%r2)
-  std %f4, 176(%r2)
-  std %f5, 184(%r2)
-  std %f6, 192(%r2)
-  std %f7, 200(%r2)
-  std %f8, 208(%r2)
-  std %f9, 216(%r2)
-  std %f10, 224(%r2)
-  std %f11, 232(%r2)
-  std %f12, 240(%r2)
-  std %f13, 248(%r2)
-  std %f14, 256(%r2)
-  std %f15, 264(%r2)
+  .irp i,FROM_0_TO_15
+    std %f\i, (144+8*\i)(%r2)
+  .endr
 
   // Return UNW_ESUCCESS
   lghi %r2, 0
@@ -1429,72 +1308,15 @@ DEFINE_LIBUNWIND_FUNCTION(__unw_getcontext)
 #  thread_state pointer is in $a0($r4)
 #
 DEFINE_LIBUNWIND_FUNCTION(__unw_getcontext)
-  st.d    $r1, $a0, (8 * 1)
-  st.d    $r2, $a0, (8 * 2)
-  st.d    $r3, $a0, (8 * 3)
-  st.d    $r4, $a0, (8 * 4)
-  st.d    $r5, $a0, (8 * 5)
-  st.d    $r6, $a0, (8 * 6)
-  st.d    $r7, $a0, (8 * 7)
-  st.d    $r8, $a0, (8 * 8)
-  st.d    $r9, $a0, (8 * 9)
-  st.d    $r10, $a0, (8 * 10)
-  st.d    $r11, $a0, (8 * 11)
-  st.d    $r12, $a0, (8 * 12)
-  st.d    $r13, $a0, (8 * 13)
-  st.d    $r14, $a0, (8 * 14)
-  st.d    $r15, $a0, (8 * 15)
-  st.d    $r16, $a0, (8 * 16)
-  st.d    $r17, $a0, (8 * 17)
-  st.d    $r18, $a0, (8 * 18)
-  st.d    $r19, $a0, (8 * 19)
-  st.d    $r20, $a0, (8 * 20)
-  st.d    $r21, $a0, (8 * 21)
-  st.d    $r22, $a0, (8 * 22)
-  st.d    $r23, $a0, (8 * 23)
-  st.d    $r24, $a0, (8 * 24)
-  st.d    $r25, $a0, (8 * 25)
-  st.d    $r26, $a0, (8 * 26)
-  st.d    $r27, $a0, (8 * 27)
-  st.d    $r28, $a0, (8 * 28)
-  st.d    $r29, $a0, (8 * 29)
-  st.d    $r30, $a0, (8 * 30)
-  st.d    $r31, $a0, (8 * 31)
+  .irp i,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29,30,31
+    st.d $r\i, $a0, (8*\i)
+  .endr
   st.d    $r1,  $a0, (8 * 32) // store $ra to pc
 
 # if __loongarch_frlen == 64
-  fst.d    $f0, $a0, (8 * 33 + 8 * 0)
-  fst.d    $f1, $a0, (8 * 33 + 8 * 1)
-  fst.d    $f2, $a0, (8 * 33 + 8 * 2)
-  fst.d    $f3, $a0, (8 * 33 + 8 * 3)
-  fst.d    $f4, $a0, (8 * 33 + 8 * 4)
-  fst.d    $f5, $a0, (8 * 33 + 8 * 5)
-  fst.d    $f6, $a0, (8 * 33 + 8 * 6)
-  fst.d    $f7, $a0, (8 * 33 + 8 * 7)
-  fst.d    $f8, $a0, (8 * 33 + 8 * 8)
-  fst.d    $f9, $a0, (8 * 33 + 8 * 9)
-  fst.d    $f10, $a0, (8 * 33 + 8 * 10)
-  fst.d    $f11, $a0, (8 * 33 + 8 * 11)
-  fst.d    $f12, $a0, (8 * 33 + 8 * 12)
-  fst.d    $f13, $a0, (8 * 33 + 8 * 13)
-  fst.d    $f14, $a0, (8 * 33 + 8 * 14)
-  fst.d    $f15, $a0, (8 * 33 + 8 * 15)
-  fst.d    $f16, $a0, (8 * 33 + 8 * 16)
-  fst.d    $f17, $a0, (8 * 33 + 8 * 17)
-  fst.d    $f18, $a0, (8 * 33 + 8 * 18)
-  fst.d    $f19, $a0, (8 * 33 + 8 * 19)
-  fst.d    $f20, $a0, (8 * 33 + 8 * 20)
-  fst.d    $f21, $a0, (8 * 33 + 8 * 21)
-  fst.d    $f22, $a0, (8 * 33 + 8 * 22)
-  fst.d    $f23, $a0, (8 * 33 + 8 * 23)
-  fst.d    $f24, $a0, (8 * 33 + 8 * 24)
-  fst.d    $f25, $a0, (8 * 33 + 8 * 25)
-  fst.d    $f26, $a0, (8 * 33 + 8 * 26)
-  fst.d    $f27, $a0, (8 * 33 + 8 * 27)
-  fst.d    $f28, $a0, (8 * 33 + 8 * 28)
-  fst.d    $f29, $a0, (8 * 33 + 8 * 29)
-  fst.d    $f30, $a0, (8 * 33 + 8 * 30)
-  fst.d    $f31, $a0, (8 * 33 + 8 * 31)
+  .irp i,FROM_0_TO_31
+    fst.d $f\i, $a0, (8 * 33 + 8 * \i)
+  .endr
 # endif
 
   move     $a0, $zero  // UNW_ESUCCESS
