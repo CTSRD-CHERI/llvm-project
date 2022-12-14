@@ -602,7 +602,8 @@ class Priv_rr<string opcodestr, bits<7> funct7>
 //===----------------------------------------------------------------------===//
 
 let hasSideEffects = 0, mayLoad = 0, mayStore = 0 in {
-let isReMaterializable = 1, isAsCheapAsAMove = 1 in
+let isReMaterializable = 1, isAsCheapAsAMove = 1,
+    IsSignExtendingOpW = 1 in
 def LUI : RVInstU<OPC_LUI, (outs GPR:$rd), (ins uimm20_lui:$imm20),
                   "lui", "$rd, $imm20">, Sched<[WriteIALU]>;
 
@@ -630,11 +631,13 @@ def BLTU : BranchCC_rri<0b110, "bltu">;
 def BGEU : BranchCC_rri<0b111, "bgeu">;
 
 let Predicates = [NotCapMode] in {
+let IsSignExtendingOpW = 1 in {
 def LB  : Load_ri<0b000, "lb">, Sched<[WriteLDB, ReadMemBase]>;
 def LH  : Load_ri<0b001, "lh">, Sched<[WriteLDH, ReadMemBase]>;
 def LW  : Load_ri<0b010, "lw">, Sched<[WriteLDW, ReadMemBase]>;
 def LBU : Load_ri<0b100, "lbu">, Sched<[WriteLDB, ReadMemBase]>;
 def LHU : Load_ri<0b101, "lhu">, Sched<[WriteLDH, ReadMemBase]>;
+}
 
 def SB : Store_rri<0b000, "sb">, Sched<[WriteSTB, ReadStoreData, ReadMemBase]>;
 def SH : Store_rri<0b001, "sh">, Sched<[WriteSTH, ReadStoreData, ReadMemBase]>;
@@ -646,8 +649,10 @@ def SW : Store_rri<0b010, "sw">, Sched<[WriteSTW, ReadStoreData, ReadMemBase]>;
 let isReMaterializable = 1, isAsCheapAsAMove = 1 in
 def ADDI  : ALU_ri<0b000, "addi">;
 
+let IsSignExtendingOpW = 1 in {
 def SLTI  : ALU_ri<0b010, "slti">;
 def SLTIU : ALU_ri<0b011, "sltiu">;
+}
 
 let isReMaterializable = 1, isAsCheapAsAMove = 1 in {
 def XORI  : ALU_ri<0b100, "xori">;
@@ -666,10 +671,12 @@ def SUB  : ALU_rr<0b0100000, 0b000, "sub">,
            Sched<[WriteIALU, ReadIALU, ReadIALU]>;
 def SLL  : ALU_rr<0b0000000, 0b001, "sll">,
            Sched<[WriteShiftReg, ReadShiftReg, ReadShiftReg]>;
+let IsSignExtendingOpW = 1 in {
 def SLT  : ALU_rr<0b0000000, 0b010, "slt">,
            Sched<[WriteIALU, ReadIALU, ReadIALU]>;
 def SLTU : ALU_rr<0b0000000, 0b011, "sltu">,
            Sched<[WriteIALU, ReadIALU, ReadIALU]>;
+}
 def XOR  : ALU_rr<0b0000000, 0b100, "xor", /*Commutable*/1>,
            Sched<[WriteIALU, ReadIALU, ReadIALU]>;
 def SRL  : ALU_rr<0b0000000, 0b101, "srl">,
@@ -764,6 +771,7 @@ def SD    : Store_rri<0b011, "sd">, Sched<[WriteSTD, ReadStoreData, ReadMemBase]
 
 
 let Predicates = [IsRV64] in {
+let IsSignExtendingOpW = 1 in {
 let hasSideEffects = 0, mayLoad = 0, mayStore = 0 in
 def ADDIW : RVInstI<0b000, OPC_OP_IMM_32, (outs GPR:$rd),
                     (ins GPR:$rs1, simm12:$imm12),
@@ -784,6 +792,7 @@ def SRLW  : ALUW_rr<0b0000000, 0b101, "srlw">,
             Sched<[WriteShiftReg32, ReadShiftReg32, ReadShiftReg32]>;
 def SRAW  : ALUW_rr<0b0100000, 0b101, "sraw">,
             Sched<[WriteShiftReg32, ReadShiftReg32, ReadShiftReg32]>;
+} // IsSignExtendingOpW = 1
 } // Predicates = [IsRV64]
 
 //===----------------------------------------------------------------------===//
