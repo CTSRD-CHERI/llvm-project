@@ -1000,9 +1000,10 @@ Instruction *foldSetOffsetOrAddress(InstCombiner *IC, IntrinsicInst *II) {
   return nullptr;
 }
 
-static Optional<bool> getKnownSign(Value *Op, Instruction *CxtI,
-                                   const DataLayout &DL, AssumptionCache *AC,
-                                   DominatorTree *DT) {
+static std::optional<bool> getKnownSign(Value *Op, Instruction *CxtI,
+                                        const DataLayout &DL,
+                                        AssumptionCache *AC,
+                                        DominatorTree *DT) {
   KnownBits Known = computeKnownBits(Op, DL, 0, AC, CxtI, DT);
   if (Known.isNonNegative())
     return false;
@@ -1454,7 +1455,7 @@ Instruction *InstCombinerImpl::visitCallInst(CallInst &CI) {
     if (match(IIOperand, m_Select(m_Value(), m_Neg(m_Value(X)), m_Deferred(X))))
       return replaceOperand(*II, 0, X);
 
-    if (Optional<bool> Sign = getKnownSign(IIOperand, II, DL, &AC, &DT)) {
+    if (std::optional<bool> Sign = getKnownSign(IIOperand, II, DL, &AC, &DT)) {
       // abs(x) -> x if x >= 0
       if (!*Sign)
         return replaceInstUsesWith(*II, IIOperand);
@@ -2286,7 +2287,7 @@ Instruction *InstCombinerImpl::visitCallInst(CallInst &CI) {
     uint64_t SetBoundsSize = cast<ConstantInt>(Op1)->getZExtValue();
     // TODO: do it for non-alloca insts
     // Infer the minimum accessible bytes:
-    Optional<uint64_t> MinAccessibleBytes;
+    std::optional<uint64_t> MinAccessibleBytes;
     if (auto AI = dyn_cast<AllocaInst>(Op0)) {
       auto AllocaSizeBits = AI->getAllocationSizeInBits(DL);
       if (!AllocaSizeBits)
