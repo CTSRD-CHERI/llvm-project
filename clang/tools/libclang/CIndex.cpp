@@ -7033,7 +7033,7 @@ void clang_enableStackTraces(void) {
 void clang_executeOnThread(void (*fn)(void *), void *user_data,
                            unsigned stack_size) {
   llvm::thread Thread(stack_size == 0 ? clang::DesiredStackSize
-                                      : llvm::Optional<unsigned>(stack_size),
+                                      : std::optional<unsigned>(stack_size),
                       fn, user_data);
   Thread.join();
 }
@@ -8237,13 +8237,13 @@ static CXVersion convertVersion(VersionTuple In) {
 
   Out.Major = In.getMajor();
 
-  Optional<unsigned> Minor = In.getMinor();
+  std::optional<unsigned> Minor = In.getMinor();
   if (Minor)
     Out.Minor = *Minor;
   else
     return Out;
 
-  Optional<unsigned> Subminor = In.getSubminor();
+  std::optional<unsigned> Subminor = In.getSubminor();
   if (Subminor)
     Out.Subminor = *Subminor;
 
