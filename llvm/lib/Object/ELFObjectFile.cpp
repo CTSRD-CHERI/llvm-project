@@ -178,11 +178,11 @@ SubtargetFeatures ELFObjectFileBase::getARMFeatures() const {
   std::optional<unsigned> Attr =
       Attributes.getAttributeValue(ARMBuildAttrs::CPU_arch);
   if (Attr)
-    isV7 = Attr.value() == ARMBuildAttrs::v7;
+    isV7 = *Attr == ARMBuildAttrs::v7;
 
   Attr = Attributes.getAttributeValue(ARMBuildAttrs::CPU_arch_profile);
   if (Attr) {
-    switch (Attr.value()) {
+    switch (*Attr) {
     case ARMBuildAttrs::ApplicationProfile:
       Features.AddFeature("aclass");
       break;
@@ -201,7 +201,7 @@ SubtargetFeatures ELFObjectFileBase::getARMFeatures() const {
 
   Attr = Attributes.getAttributeValue(ARMBuildAttrs::THUMB_ISA_use);
   if (Attr) {
-    switch (Attr.value()) {
+    switch (*Attr) {
     default:
       break;
     case ARMBuildAttrs::Not_Allowed:
@@ -216,7 +216,7 @@ SubtargetFeatures ELFObjectFileBase::getARMFeatures() const {
 
   Attr = Attributes.getAttributeValue(ARMBuildAttrs::FP_arch);
   if (Attr) {
-    switch (Attr.value()) {
+    switch (*Attr) {
     default:
       break;
     case ARMBuildAttrs::Not_Allowed:
@@ -240,7 +240,7 @@ SubtargetFeatures ELFObjectFileBase::getARMFeatures() const {
 
   Attr = Attributes.getAttributeValue(ARMBuildAttrs::Advanced_SIMD_arch);
   if (Attr) {
-    switch (Attr.value()) {
+    switch (*Attr) {
     default:
       break;
     case ARMBuildAttrs::Not_Allowed:
@@ -259,7 +259,7 @@ SubtargetFeatures ELFObjectFileBase::getARMFeatures() const {
 
   Attr = Attributes.getAttributeValue(ARMBuildAttrs::MVE_arch);
   if (Attr) {
-    switch (Attr.value()) {
+    switch (*Attr) {
     default:
       break;
     case ARMBuildAttrs::Not_Allowed:
@@ -278,7 +278,7 @@ SubtargetFeatures ELFObjectFileBase::getARMFeatures() const {
 
   Attr = Attributes.getAttributeValue(ARMBuildAttrs::DIV_use);
   if (Attr) {
-    switch (Attr.value()) {
+    switch (*Attr) {
     default:
       break;
     case ARMBuildAttrs::DisallowDIV:
@@ -564,7 +564,7 @@ void ELFObjectFileBase::setARMSubArch(Triple &TheTriple) const {
   std::optional<unsigned> Attr =
       Attributes.getAttributeValue(ARMBuildAttrs::CPU_arch);
   if (Attr) {
-    switch (Attr.value()) {
+    switch (*Attr) {
     case ARMBuildAttrs::v4:
       Triple += "v4";
       break;
@@ -596,7 +596,7 @@ void ELFObjectFileBase::setARMSubArch(Triple &TheTriple) const {
       std::optional<unsigned> ArchProfileAttr =
           Attributes.getAttributeValue(ARMBuildAttrs::CPU_arch_profile);
       if (ArchProfileAttr &&
-          ArchProfileAttr.value() == ARMBuildAttrs::MicroControllerProfile)
+          *ArchProfileAttr == ARMBuildAttrs::MicroControllerProfile)
         Triple += "v7m";
       else
         Triple += "v7";
