@@ -339,7 +339,7 @@ bool RISCVTargetInfo::hasFeature(StringRef Feature) const {
                     .Case("xcheri", HasCheri)
                     .Default(std::nullopt);
   if (Result)
-    return Result.value();
+    return *Result;
 
   if (ISAInfo->isSupportedExtensionFeature(Feature))
     return ISAInfo->hasExtension(Feature);
