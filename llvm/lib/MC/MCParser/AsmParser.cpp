@@ -4247,10 +4247,10 @@ bool AsmParser::parseDirectiveCFIEndProc() {
 /// parse register name or number.
 bool AsmParser::parseRegisterOrRegisterNumber(int64_t &Register,
                                               SMLoc DirectiveLoc) {
-  unsigned RegNo;
+  MCRegister RegNo;
 
   if (getLexer().isNot(AsmToken::Integer)) {
-    if (getTargetParser().ParseRegister(RegNo, DirectiveLoc, DirectiveLoc))
+    if (getTargetParser().parseRegister(RegNo, DirectiveLoc, DirectiveLoc))
       return true;
     Register = getContext().getRegisterInfo()->getDwarfRegNum(RegNo, true);
     if (Register == -1 && RegNo != 0) {
