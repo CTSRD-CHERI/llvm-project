@@ -4,11 +4,11 @@
 ; RUN: llc -mtriple=riscv64 -verify-machineinstrs < %s \
 ; RUN:   | FileCheck -check-prefix=RV64I %s
 
-declare void @notdead(i8*)
-declare i8* @llvm.frameaddress(i32)
-declare i8* @llvm.returnaddress(i32)
+declare void @notdead(ptr)
+declare ptr @llvm.frameaddress(i32)
+declare ptr @llvm.returnaddress(i32)
 
-define i8* @test_frameaddress_0() nounwind {
+define ptr @test_frameaddress_0() nounwind {
 ; RV32I-LABEL: test_frameaddress_0:
 ; RV32I:       # %bb.0:
 ; RV32I-NEXT:    addi sp, sp, -16
@@ -32,11 +32,11 @@ define i8* @test_frameaddress_0() nounwind {
 ; RV64I-NEXT:    ld s0, 0(sp) # 8-byte Folded Reload
 ; RV64I-NEXT:    addi sp, sp, 16
 ; RV64I-NEXT:    ret
-  %1 = call i8* @llvm.frameaddress(i32 0)
-  ret i8* %1
+  %1 = call ptr @llvm.frameaddress(i32 0)
+  ret ptr %1
 }
 
-define i8* @test_frameaddress_0_alloca() nounwind {
+define ptr @test_frameaddress_0_alloca() nounwind {
 ; RV32I-LABEL: test_frameaddress_0_alloca:
 ; RV32I:       # %bb.0:
 ; RV32I-NEXT:    addi sp, sp, -112
@@ -65,13 +65,12 @@ define i8* @test_frameaddress_0_alloca() nounwind {
 ; RV64I-NEXT:    addi sp, sp, 128
 ; RV64I-NEXT:    ret
   %1 = alloca [100 x i8]
-  %2 = bitcast [100 x i8]* %1 to i8*
-  call void @notdead(i8* %2)
-  %3 = call i8* @llvm.frameaddress(i32 0)
-  ret i8* %3
+  call void @notdead(ptr %1)
+  %2 = call ptr @llvm.frameaddress(i32 0)
+  ret ptr %2
 }
 
-define i8* @test_frameaddress_2() nounwind {
+define ptr @test_frameaddress_2() nounwind {
 ; RV32I-LABEL: test_frameaddress_2:
 ; RV32I:       # %bb.0:
 ; RV32I-NEXT:    addi sp, sp, -16
@@ -97,11 +96,11 @@ define i8* @test_frameaddress_2() nounwind {
 ; RV64I-NEXT:    ld s0, 0(sp) # 8-byte Folded Reload
 ; RV64I-NEXT:    addi sp, sp, 16
 ; RV64I-NEXT:    ret
-  %1 = call i8* @llvm.frameaddress(i32 2)
-  ret i8* %1
+  %1 = call ptr @llvm.frameaddress(i32 2)
+  ret ptr %1
 }
 
-define i8* @test_frameaddress_3_alloca() nounwind {
+define ptr @test_frameaddress_3_alloca() nounwind {
 ; RV32I-LABEL: test_frameaddress_3_alloca:
 ; RV32I:       # %bb.0:
 ; RV32I-NEXT:    addi sp, sp, -112
@@ -134,13 +133,12 @@ define i8* @test_frameaddress_3_alloca() nounwind {
 ; RV64I-NEXT:    addi sp, sp, 128
 ; RV64I-NEXT:    ret
   %1 = alloca [100 x i8]
-  %2 = bitcast [100 x i8]* %1 to i8*
-  call void @notdead(i8* %2)
-  %3 = call i8* @llvm.frameaddress(i32 3)
-  ret i8* %3
+  call void @notdead(ptr %1)
+  %2 = call ptr @llvm.frameaddress(i32 3)
+  ret ptr %2
 }
 
-define i8* @test_returnaddress_0() nounwind {
+define ptr @test_returnaddress_0() nounwind {
 ; RV32I-LABEL: test_returnaddress_0:
 ; RV32I:       # %bb.0:
 ; RV32I-NEXT:    mv a0, ra
@@ -150,11 +148,11 @@ define i8* @test_returnaddress_0() nounwind {
 ; RV64I:       # %bb.0:
 ; RV64I-NEXT:    mv a0, ra
 ; RV64I-NEXT:    ret
-  %1 = call i8* @llvm.returnaddress(i32 0)
-  ret i8* %1
+  %1 = call ptr @llvm.returnaddress(i32 0)
+  ret ptr %1
 }
 
-define i8* @test_returnaddress_0_alloca() nounwind {
+define ptr @test_returnaddress_0_alloca() nounwind {
 ; RV32I-LABEL: test_returnaddress_0_alloca:
 ; RV32I:       # %bb.0:
 ; RV32I-NEXT:    addi sp, sp, -112
@@ -183,13 +181,12 @@ define i8* @test_returnaddress_0_alloca() nounwind {
 ; RV64I-NEXT:    addi sp, sp, 128
 ; RV64I-NEXT:    ret
   %1 = alloca [100 x i8]
-  %2 = bitcast [100 x i8]* %1 to i8*
-  call void @notdead(i8* %2)
-  %3 = call i8* @llvm.returnaddress(i32 0)
-  ret i8* %3
+  call void @notdead(ptr %1)
+  %2 = call ptr @llvm.returnaddress(i32 0)
+  ret ptr %2
 }
 
-define i8* @test_returnaddress_2() nounwind {
+define ptr @test_returnaddress_2() nounwind {
 ; RV32I-LABEL: test_returnaddress_2:
 ; RV32I:       # %bb.0:
 ; RV32I-NEXT:    addi sp, sp, -16
@@ -217,8 +214,8 @@ define i8* @test_returnaddress_2() nounwind {
 ; RV64I-NEXT:    ld s0, 0(sp) # 8-byte Folded Reload
 ; RV64I-NEXT:    addi sp, sp, 16
 ; RV64I-NEXT:    ret
-  %1 = call i8* @llvm.returnaddress(i32 2)
-  ret i8* %1
+  %1 = call ptr @llvm.returnaddress(i32 2)
+  ret ptr %1
 }
 
 define i8* @test_returnaddress_3_alloca() nounwind {
