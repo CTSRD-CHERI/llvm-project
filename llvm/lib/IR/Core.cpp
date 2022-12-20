@@ -542,6 +542,8 @@ LLVMTypeKind LLVMGetTypeKind(LLVMTypeRef Ty) {
     return LLVMScalableVectorTypeKind;
   case Type::SizedCapabilityTyID:
     llvm_unreachable("Fixed-size capabilities are unsupported via the C API");
+  case Type::TargetExtTyID:
+    return LLVMTargetExtTypeKind;
   case Type::TypedPointerTyID:
     llvm_unreachable("Typed pointers are unsupported via the C API");
   }
@@ -858,6 +860,17 @@ LLVMTypeRef LLVMVoidType(void)  {
 }
 LLVMTypeRef LLVMLabelType(void) {
   return LLVMLabelTypeInContext(LLVMGetGlobalContext());
+}
+
+LLVMTypeRef LLVMTargetExtTypeInContext(LLVMContextRef C, const char *Name,
+                                       LLVMTypeRef *TypeParams,
+                                       unsigned TypeParamCount,
+                                       unsigned *IntParams,
+                                       unsigned IntParamCount) {
+  ArrayRef<Type *> TypeParamArray(unwrap(TypeParams), TypeParamCount);
+  ArrayRef<unsigned> IntParamArray(IntParams, IntParamCount);
+  return wrap(
+      TargetExtType::get(*unwrap(C), Name, TypeParamArray, IntParamArray));
 }
 
 /*===-- Operations on values ----------------------------------------------===*/

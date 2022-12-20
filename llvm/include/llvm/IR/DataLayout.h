@@ -758,6 +758,10 @@ inline TypeSize DataLayout::getTypeSizeInBits(Type *Ty) const {
   }
   case Type::SizedCapabilityTyID:
     return TypeSize::Fixed(cast<SizedCapabilityType>(Ty)->getBitWidth());
+  case Type::TargetExtTyID: {
+    Type *LayoutTy = cast<TargetExtType>(Ty)->getLayoutType();
+    return getTypeSizeInBits(LayoutTy);
+  }
   default:
     llvm_unreachable("DataLayout::getTypeSizeInBits(): Unsupported type");
   }

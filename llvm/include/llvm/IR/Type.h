@@ -83,6 +83,7 @@ public:
     ScalableVectorTyID, ///< Scalable SIMD vector type
     SizedCapabilityTyID,///< Fixed-size CHERI capability type
     TypedPointerTyID,   ///< Typed pointer used by some GPU targets
+    TargetExtTyID,      ///< Target extension type
   };
 
 private:
@@ -203,6 +204,9 @@ public:
   /// Return true if this is X86 AMX.
   bool isX86_AMXTy() const { return getTypeID() == X86_AMXTyID; }
 
+  /// Return true if this is a target extension type.
+  bool isTargetExtTy() const { return getTypeID() == TargetExtTyID; }
+
   /// Return true if this is a FP type or a vector of FP.
   bool isFPOrFPVectorTy() const { return getScalarType()->isFloatingPointTy(); }
 
@@ -281,7 +285,7 @@ public:
   /// includes all first-class types except struct and array types.
   bool isSingleValueType() const {
     return isFloatingPointTy() || isX86_MMXTy() || isIntegerTy() ||
-           isPointerTy() || isVectorTy() || isX86_AMXTy();
+           isPointerTy() || isVectorTy() || isX86_AMXTy() || isTargetExtTy();
   }
 
   /// Return true if the type is an aggregate type. This means it is valid as
@@ -302,7 +306,8 @@ public:
       return true;
     // If it is not something that can have a size (e.g. a function or label),
     // it doesn't have a size.
-    if (getTypeID() != StructTyID && getTypeID() != ArrayTyID && !isVectorTy())
+    if (getTypeID() != StructTyID && getTypeID() != ArrayTyID &&
+        !isVectorTy() && getTypeID() != TargetExtTyID)
       return false;
     // Otherwise we have to try harder to decide.
     return isSizedDerivedType(Visited);
@@ -399,6 +404,8 @@ public:
     assert(getTypeID() == ArrayTyID);
     return ContainedTys[0];
   }
+
+  inline StringRef getTargetExtName() const;
 
   /// This method is deprecated without replacement. Pointer element types are
   /// not available with opaque pointers.

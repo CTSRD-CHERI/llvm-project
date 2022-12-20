@@ -845,6 +845,10 @@ Align DataLayout::getAlignment(Type *Ty, bool abi_or_pref) const {
     return Align(64);
   case Type::SizedCapabilityTyID:
     return Align(cast<SizedCapabilityType>(Ty)->getBitWidth() / 8);
+  case Type::TargetExtTyID: {
+    Type *LayoutTy = cast<TargetExtType>(Ty)->getLayoutType();
+    return getAlignment(LayoutTy, abi_or_pref);
+  }
   default:
     llvm_unreachable("Bad type for getAlignment!!!");
   }
