@@ -94,6 +94,7 @@ add_llvm_component_library(LLVMTransformUtils
   Analysis
   Core
   Support
+  TargetParser
   )
 
 add_definitions(-DLLVM_NO_DEFAULT_ADDRESS_SPACE)

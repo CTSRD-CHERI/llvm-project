@@ -59,6 +59,7 @@ add_llvm_target(RISCVCodeGen
   SelectionDAG
   Support
   Target
+  TargetParser
   TransformUtils
   GlobalISel
 

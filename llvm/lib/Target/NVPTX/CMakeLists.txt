@@ -57,6 +57,7 @@ add_llvm_target(NVPTXCodeGen
   SelectionDAG
   Support
   Target
+  TargetParser
   TransformUtils
   Vectorize
 
