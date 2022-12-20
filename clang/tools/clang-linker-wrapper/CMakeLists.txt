@@ -14,8 +14,10 @@ set(LLVM_LINK_COMPONENTS
   Object
   Option
   Support
+  TargetParser
   CodeGen
-  LTO)
+  LTO
+  )
 
 set(LLVM_TARGET_DEFINITIONS LinkerWrapperOpts.td)
 tablegen(LLVM LinkerWrapperOpts.inc -gen-opt-parser-defs)
