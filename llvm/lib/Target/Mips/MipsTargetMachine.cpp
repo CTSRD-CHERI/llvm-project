@@ -73,6 +73,7 @@ extern "C" LLVM_EXTERNAL_VISIBILITY void LLVMInitializeMipsTarget() {
   initializeCheriRangeCheckerPass(*PR);
   initializeMipsPostLegalizerCombinerPass(*PR);
   initializeMipsMulMulBugFixPass(*PR);
+  initializeMipsDAGToDAGISelPass(*PR);
 }
 
 static std::string computeDataLayout(const Triple &TT, StringRef CPU,
