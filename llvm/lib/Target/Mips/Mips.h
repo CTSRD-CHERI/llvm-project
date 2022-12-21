@@ -18,49 +18,50 @@
 #include "llvm/Target/TargetMachine.h"
 
 namespace llvm {
-  class MipsTargetMachine;
-  class ModulePass;
-  class FunctionPass;
-  class MachineFunctionPass;
-  class MipsRegisterBankInfo;
-  class MipsSubtarget;
-  class MipsTargetMachine;
-  class InstructionSelector;
-  class PassRegistry;
+class FunctionPass;
+class InstructionSelector;
+class MachineFunctionPass;
+class MipsRegisterBankInfo;
+class MipsSubtarget;
+class MipsTargetMachine;
+class MipsTargetMachine;
+class ModulePass;
+class PassRegistry;
 
-  ModulePass *createMipsOs16Pass();
-  ModulePass *createMips16HardFloatPass();
+ModulePass *createMipsOs16Pass();
+ModulePass *createMips16HardFloatPass();
 
-  FunctionPass *createMipsModuleISelDagPass();
-  FunctionPass *createMipsOptimizePICCallPass();
-  FunctionPass *createMipsDelaySlotFillerPass();
-  FunctionPass *createMipsBranchExpansion();
-  FunctionPass *createMipsConstantIslandPass();
-  FunctionPass *createMicroMipsSizeReducePass();
-  FunctionPass *createMipsExpandPseudoPass();
-  FunctionPass *createMipsPreLegalizeCombiner();
-  FunctionPass *createMipsPostLegalizeCombiner(bool IsOptNone);
-  FunctionPass *createMipsMulMulBugPass();
+FunctionPass *createMipsModuleISelDagPass();
+FunctionPass *createMipsOptimizePICCallPass();
+FunctionPass *createMipsDelaySlotFillerPass();
+FunctionPass *createMipsBranchExpansion();
+FunctionPass *createMipsConstantIslandPass();
+FunctionPass *createMicroMipsSizeReducePass();
+FunctionPass *createMipsExpandPseudoPass();
+FunctionPass *createMipsPreLegalizeCombiner();
+FunctionPass *createMipsPostLegalizeCombiner(bool IsOptNone);
+FunctionPass *createMipsMulMulBugPass();
 
-  FunctionPass *createCheriInvalidatePass();
-  FunctionPass *createCheriRangeChecker();
-  FunctionPass *createCheriLoopPointerDecanonicalize();
+FunctionPass *createCheriInvalidatePass();
+FunctionPass *createCheriRangeChecker();
+FunctionPass *createCheriLoopPointerDecanonicalize();
 
-  MachineFunctionPass *createCheriAddressingModeFolder();
-  MachineFunctionPass *createCheri128FailHardPass();
-  InstructionSelector *createMipsInstructionSelector(const MipsTargetMachine &,
-                                                     MipsSubtarget &,
-                                                     MipsRegisterBankInfo &);
+MachineFunctionPass *createCheriAddressingModeFolder();
+MachineFunctionPass *createCheri128FailHardPass();
+InstructionSelector *createMipsInstructionSelector(const MipsTargetMachine &,
+                                                   MipsSubtarget &,
+                                                   MipsRegisterBankInfo &);
 
-  void initializeMipsDelaySlotFillerPass(PassRegistry &);
-  void initializeMipsBranchExpansionPass(PassRegistry &);
-  void initializeMicroMipsSizeReducePass(PassRegistry &);
-  void initializeMipsPreLegalizerCombinerPass(PassRegistry&);
-  void initializeMipsOptimizePICCallPass(PassRegistry &);
-  void initializeCheriAddressingModeFolderPass(PassRegistry &);
-  void initializeCheriRangeCheckerPass(PassRegistry &);
-  void initializeMipsPostLegalizerCombinerPass(PassRegistry &);
-  void initializeMipsMulMulBugFixPass(PassRegistry&);
-} // end namespace llvm;
+void initializeMicroMipsSizeReducePass(PassRegistry &);
+void initializeMipsBranchExpansionPass(PassRegistry &);
+void initializeMipsDAGToDAGISelPass(PassRegistry &);
+void initializeMipsDelaySlotFillerPass(PassRegistry &);
+void initializeMipsMulMulBugFixPass(PassRegistry &);
+void initializeMipsOptimizePICCallPass(PassRegistry &);
+void initializeCheriAddressingModeFolderPass(PassRegistry &);
+void initializeCheriRangeCheckerPass(PassRegistry &);
+void initializeMipsPostLegalizerCombinerPass(PassRegistry &);
+void initializeMipsPreLegalizerCombinerPass(PassRegistry &);
+} // namespace llvm
 
 #endif
