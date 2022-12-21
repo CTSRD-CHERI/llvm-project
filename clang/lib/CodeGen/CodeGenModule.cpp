@@ -4257,8 +4257,7 @@ llvm::Constant *CodeGenModule::GetFunctionStart(const ValueDecl *Decl) {
 
   return llvm::ConstantExpr::getBitCast(
       llvm::NoCFIValue::get(F),
-      llvm::Type::getInt8PtrTy(VMContext,
-                               getDataLayout().getProgramAddressSpace()));
+      llvm::Type::getInt8PtrTy(VMContext, F->getAddressSpace()));
 }
 
 static const FunctionDecl *
