@@ -4204,8 +4204,9 @@ llvm::Constant *CodeGenModule::GetOrCreateLLVMFunction(
     assert(F->getFunctionType() == Ty);
     return F;
   }
-  llvm::Type *PTy = llvm::PointerType::get(Ty, getFunctionAddrSpace());
-  return llvm::ConstantExpr::getBitCast(F, PTy);
+
+  return llvm::ConstantExpr::getBitCast(F,
+                                        Ty->getPointerTo(F->getAddressSpace()));
 }
 
 /// GetAddrOfFunction - Return the address of the given function.  If Ty is
