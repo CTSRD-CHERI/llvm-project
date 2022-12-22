@@ -442,7 +442,13 @@ public:
   unsigned getNumBits() const {
     const std::pair<SVal, uintptr_t> *D =
       static_cast<const std::pair<SVal, uintptr_t> *>(Data);
-    return D->second;
+    return D->second & 255;
+  }
+
+  bool hasProvenance() const {
+    const std::pair<SVal, uintptr_t> *D =
+        static_cast<const std::pair<SVal, uintptr_t> *>(Data);
+    return D->second & 256;
   }
 
 private:
