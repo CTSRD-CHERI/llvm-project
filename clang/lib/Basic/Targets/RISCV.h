@@ -62,8 +62,6 @@ protected:
     IntPtrType = TargetInfo::SignedIntCap;
   }
 
-  static const Builtin::Info BuiltinInfo[];
-
 public:
   RISCVTargetInfo(const llvm::Triple &Triple, const TargetOptions &)
       : TargetInfo(Triple) {
