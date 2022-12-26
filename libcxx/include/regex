@@ -6884,6 +6884,7 @@ _LIBCPP_POP_MACROS
 #  include <iosfwd>
 #  include <iterator>
 #  include <new>
+#  include <type_traits>
 #  include <typeinfo>
 #  include <utility>
 #endif
