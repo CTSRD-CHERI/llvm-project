@@ -92,6 +92,7 @@ add_llvm_component_library(LLVMAnalysis
   LegacyDivergenceAnalysis.cpp
   Lint.cpp
   Loads.cpp
+  Local.cpp
   LoopAccessAnalysis.cpp
   LoopAnalysisManager.cpp
   LoopCacheAnalysis.cpp
