@@ -44,9 +44,9 @@ ArrayRef<MCPhysReg> MipsABIInfo::GetByValArgRegs() const {
   if (IsCheriPureCap())
     return {};
   if (IsO32())
-    return makeArrayRef(O32IntRegs);
+    return ArrayRef(O32IntRegs);
   if (IsN32() || IsN64())
-    return makeArrayRef(Mips64IntRegs);
+    return ArrayRef(Mips64IntRegs);
   llvm_unreachable("Unhandled ABI");
 }
 
@@ -54,9 +54,9 @@ ArrayRef<MCPhysReg> MipsABIInfo::GetVarArgRegs() const {
   if (IsCheriPureCap())
     return makeArrayRef(CheriCapArgRegs);
   if (IsO32())
-    return makeArrayRef(O32IntRegs);
+    return ArrayRef(O32IntRegs);
   if (IsN32() || IsN64())
-    return makeArrayRef(Mips64IntRegs);
+    return ArrayRef(Mips64IntRegs);
   llvm_unreachable("Unhandled ABI");
 }
 

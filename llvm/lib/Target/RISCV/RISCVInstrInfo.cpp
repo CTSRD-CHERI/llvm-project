@@ -2079,7 +2079,7 @@ RISCVInstrInfo::getSerializableDirectMachineOperandTargetFlags() const {
       {MO_TLS_IE_CAPTAB_PCREL_HI, "riscv-tls-ie-captab-pcrel-hi"},
       {MO_TLS_GD_CAPTAB_PCREL_HI, "riscv-tls-gd-captab-pcrel-hi"},
       {MO_CCALL, "riscv-ccall"}};
-  return makeArrayRef(TargetFlags);
+  return ArrayRef(TargetFlags);
 }
 
 ArrayRef<std::pair<unsigned, const char *>>
