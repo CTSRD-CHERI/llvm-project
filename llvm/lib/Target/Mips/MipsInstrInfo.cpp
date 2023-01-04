@@ -1030,7 +1030,7 @@ MipsInstrInfo::getSerializableDirectMachineOperandTargetFlags() const {
     { MO_CAPTAB_TPREL_HI16,  "mips-captable-gottprel-hi16" },
     { MO_CAPTAB_TPREL_LO16,  "mips-captable-gottprel-lo16" },
   };
-  return makeArrayRef(Flags);
+ return ArrayRef(Flags);
 }
 
 std::optional<ParamLoadedValue>

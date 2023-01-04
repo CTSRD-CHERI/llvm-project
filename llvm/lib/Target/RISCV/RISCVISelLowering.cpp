@@ -12899,7 +12899,7 @@ SDValue RISCVTargetLowering::LowerFormalArguments(
                                    true);
     RVFI->setVarArgsFrameIndex(FI);
   } else if (IsVarArg) {
-    ArrayRef<MCPhysReg> ArgRegs = makeArrayRef(ArgGPRs);
+    ArrayRef<MCPhysReg> ArgRegs = ArrayRef(ArgGPRs);
     unsigned Idx = CCInfo.getFirstUnallocated(ArgRegs);
     const TargetRegisterClass *RC = &RISCV::GPRRegClass;
     MachineRegisterInfo &RegInfo = MF.getRegInfo();
