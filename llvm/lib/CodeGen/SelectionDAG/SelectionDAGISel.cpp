@@ -1380,7 +1380,7 @@ static void processDbgDeclares(FunctionLoweringInfo &FuncInfo) {
         if (!Address) {
           LLVM_DEBUG(dbgs() << "processDbgDeclares skipping " << *DI
                             << " (bad address)\n");
-          return;
+          continue;
         }
         processDbgDeclare(FuncInfo, Address, DI->getExpression(),
                           DI->getVariable(), DI->getDebugLoc());
