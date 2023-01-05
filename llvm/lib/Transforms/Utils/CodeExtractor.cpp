@@ -1098,31 +1098,17 @@ static void insertLifetimeMarkersSurroundingCall(
   auto NegativeOne = ConstantInt::getSigned(Type::getInt64Ty(Ctx), -1);
   Instruction *Term = TheCall->getParent()->getTerminator();
 
-  // The memory argument to a lifetime marker must be a i8*. Cache any bitcasts
-  // needed to satisfy this requirement so they may be reused.
-  DenseMap<Value *, Value *> Bitcasts;
-
   // Emit lifetime markers for the pointers given in \p Objects. Insert the
   // markers before the call if \p InsertBefore, and after the call otherwise.
-  auto insertMarkers = [&](Intrinsic::ID IID, ArrayRef<Value *> Objects,
+  auto insertMarkers = [&](Intrinsic::ID MarkerFunc, ArrayRef<Value *> Objects,
                            bool InsertBefore) {
     for (Value *Mem : Objects) {
       assert((!isa<Instruction>(Mem) || cast<Instruction>(Mem)->getFunction() ==
                                             TheCall->getFunction()) &&
              "Input memory not defined in original function");
-      auto Int8PtrTy =
-          Type::getInt8PtrTy(Ctx, Mem->getType()->getPointerAddressSpace());
-      Value *&MemAsI8Ptr = Bitcasts[Mem];
-      if (!MemAsI8Ptr) {
-        if (Mem->getType() == Int8PtrTy)
-          MemAsI8Ptr = Mem;
-        else
-          MemAsI8Ptr =
-              CastInst::CreatePointerCast(Mem, Int8PtrTy, "lt.cast", TheCall);
-      }
 
-      auto MarkerFunc = llvm::Intrinsic::getDeclaration(M, IID, Int8PtrTy);
-      auto Marker = CallInst::Create(MarkerFunc, {NegativeOne, MemAsI8Ptr});
+      Function *Func = Intrinsic::getDeclaration(M, MarkerFunc, Mem->getType());
+      auto Marker = CallInst::Create(Func, {NegativeOne, Mem});
       if (InsertBefore)
         Marker->insertBefore(TheCall);
       else
@@ -1131,12 +1117,12 @@ static void insertLifetimeMarkersSurroundingCall(
   };
 
   if (!LifetimesStart.empty()) {
-    insertMarkers(llvm::Intrinsic::lifetime_start, LifetimesStart,
+    insertMarkers(Intrinsic::lifetime_start, LifetimesStart,
                   /*InsertBefore=*/true);
   }
 
   if (!LifetimesEnd.empty()) {
-    insertMarkers(llvm::Intrinsic::lifetime_end, LifetimesEnd,
+    insertMarkers(Intrinsic::lifetime_end, LifetimesEnd,
                   /*InsertBefore=*/false);
   }
 }
