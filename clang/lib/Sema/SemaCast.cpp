@@ -3846,7 +3846,8 @@ bool Sema::CheckCHERIAssignCompatible(QualType LHS, QualType RHS,
   // XXXKG: Allow non-const to const assignment
   QualType MergedTy = Context.mergeTypes(
       LHS, RHS, /*OfBlockPointer=*/false, /*Unqualified=*/false,
-      /*BlockReturnType=*/false, /*IncludeCapabilityQualifier=*/false,
+      /*BlockReturnType=*/false, /*IsConditionalOperator*/false,
+      /*IncludeCapabilityQualifier=*/false,
       /*MergeVoidPtr=*/false, /*MergeLHSConst=*/false);
   if (MergedTy.isNull()) {
     // As a special case we allow changing the types if either:
@@ -3855,7 +3856,7 @@ bool Sema::CheckCHERIAssignCompatible(QualType LHS, QualType RHS,
     //   const-qualified
     MergedTy = Context.mergeTypes(
         LHS, RHS, /*OfBlockPointer=*/false, /*Unqualified=*/false,
-        /*BlockReturnType=*/false, /*IncludeCapabilityQualifier=*/false,
+        /*BlockReturnType=*/false, /*IsConditionalOperator*/false, /*IncludeCapabilityQualifier=*/false,
         /*MergeVoidPtr=*/true, /*MergeLHSConst=*/true);
     if (!MergedTy.isNull()) {
       if (InsertBitCast) {
