@@ -38,6 +38,7 @@
 #include "llvm/Option/Option.h"
 #include "llvm/Support/ErrorHandling.h"
 #include "llvm/Support/FileSystem.h"
+#include "llvm/Support/FileUtilities.h"
 #include "llvm/Support/Path.h"
 #include "llvm/Support/TargetParser.h"
 #include "llvm/Support/VersionTuple.h"
@@ -96,6 +97,33 @@ ToolChain::ToolChain(const Driver &D, const llvm::Triple &T,
     IsCheriPurecap = true;
 
   // FIXME: Should we update triple enviroment to purecap? Or will that break RISCV?
+}
+
+llvm::Expected<std::unique_ptr<llvm::MemoryBuffer>>
+ToolChain::executeToolChainProgram(StringRef Executable) const {
+  llvm::SmallString<64> OutputFile;
+  llvm::sys::fs::createTemporaryFile("toolchain-program", "txt", OutputFile);
+  llvm::FileRemover OutputRemover(OutputFile.c_str());
+  std::optional<llvm::StringRef> Redirects[] = {
+      {""},
+      OutputFile.str(),
+      {""},
+  };
+
+  std::string ErrorMessage;
+  if (llvm::sys::ExecuteAndWait(Executable, {}, {}, Redirects,
+                                /* SecondsToWait */ 0,
+                                /*MemoryLimit*/ 0, &ErrorMessage))
+    return llvm::createStringError(std::error_code(),
+                                   Executable + ": " + ErrorMessage);
+
+  llvm::ErrorOr<std::unique_ptr<llvm::MemoryBuffer>> OutputBuf =
+      llvm::MemoryBuffer::getFile(OutputFile.c_str());
+  if (!OutputBuf)
+    return llvm::createStringError(OutputBuf.getError(),
+                                   "Failed to read stdout of " + Executable +
+                                       ": " + OutputBuf.getError().message());
+  return std::move(*OutputBuf);
 }
 
 void ToolChain::setTripleEnvironment(llvm::Triple::EnvironmentType Env) {
@@ -1099,6 +1127,11 @@ bool ToolChain::addFastMathRuntimeIfAvailable(const ArgList &Args,
   }
 
   return false;
+}
+
+Expected<SmallVector<std::string>>
+ToolChain::getSystemGPUArchs(const llvm::opt::ArgList &Args) const {
+  return SmallVector<std::string>();
 }
 
 SanitizerMask ToolChain::getSupportedSanitizers() const {
