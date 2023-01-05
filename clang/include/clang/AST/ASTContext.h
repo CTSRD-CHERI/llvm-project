@@ -2922,11 +2922,13 @@ public:
   // Functions for calculating composite types
   QualType mergeTypes(QualType, QualType, bool OfBlockPointer = false,
                       bool Unqualified = false, bool BlockReturnType = false,
+                      bool IsConditionalOperator = false,
                       bool IncludeCapabilityQualifier = true,
                       bool MergeVoidPtr = false,
                       bool MergeLHSConst = false);
   QualType mergeFunctionTypes(QualType, QualType, bool OfBlockPointer=false,
-                              bool Unqualified = false, bool AllowCXX = false);
+                              bool Unqualified = false, bool AllowCXX = false,
+                              bool IsConditionalOperator = false);
   QualType mergeFunctionParameterTypes(QualType, QualType,
                                        bool OfBlockPointer = false,
                                        bool Unqualified = false);
