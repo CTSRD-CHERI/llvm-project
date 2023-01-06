@@ -1066,7 +1066,7 @@ class CGObjCGNUstep2 : public CGObjCGNUstep {
       // Hash.  Not currently initialised by the compiler.
       Fields.addInt(Int32Ty, 0);
       // pointer to the data string.
-      auto Arr = llvm::makeArrayRef(&ToBuf[0], ToPtr+1);
+      auto Arr = llvm::ArrayRef(&ToBuf[0], ToPtr + 1);
       auto *C = llvm::ConstantDataArray::get(VMContext, Arr);
       auto *Buffer = new llvm::GlobalVariable(TheModule, C->getType(),
           /*isConstant=*/true, llvm::GlobalValue::PrivateLinkage, C, ".str");
@@ -3889,7 +3889,7 @@ llvm::Function *CGObjCGNU::ModuleInitFunction() {
         llvm::PointerType::getWithSamePointeeType(symtabTy, AS), IntTy};
     llvm::StructType *moduleTy =
       llvm::StructType::get(CGM.getLLVMContext(),
-         makeArrayRef(moduleEltTys).drop_back(unsigned(RuntimeVersion < 10)));
+         ArrayRef(moduleEltTys).drop_back(unsigned(RuntimeVersion < 10)));
 
     ConstantInitBuilder builder(CGM);
     auto module = builder.beginStruct(moduleTy);
