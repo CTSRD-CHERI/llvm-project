@@ -10469,7 +10469,7 @@ SDValue AArch64TargetLowering::ReconstructShuffle(SDValue Op,
     unsigned NumSrcElts = VTSize / EltVT.getFixedSizeInBits();
     EVT DestVT = EVT::getVectorVT(*DAG.getContext(), EltVT, NumSrcElts);
 
-    if (SrcVTSize.getFixedSize() < VTSize) {
+    if (SrcVTSize.getFixedValue() < VTSize) {
       assert(2 * SrcVTSize == VTSize);
       // We can pad out the smaller vector for free, so if it's part of a
       // shuffle...
@@ -10479,7 +10479,7 @@ SDValue AArch64TargetLowering::ReconstructShuffle(SDValue Op,
       continue;
     }
 
-    if (SrcVTSize.getFixedSize() != 2 * VTSize) {
+    if (SrcVTSize.getFixedValue() != 2 * VTSize) {
       LLVM_DEBUG(
           dbgs() << "Reshuffle failed: result vector too small to extract\n");
       return SDValue();
