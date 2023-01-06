@@ -157,7 +157,7 @@ RISCVTargetLowering::RISCVTargetLowering(const TargetMachine &TM,
       if (VT.getVectorMinNumElements() < MinElts)
         return;
 
-      unsigned Size = VT.getSizeInBits().getKnownMinSize();
+      unsigned Size = VT.getSizeInBits().getKnownMinValue();
       const TargetRegisterClass *RC;
       if (Size <= RISCV::RVVBitsPerBlock)
         RC = &RISCV::VRRegClass;
@@ -1644,7 +1644,7 @@ static void translateSetCCForBranch(const SDLoc &DL, SDValue &LHS, SDValue &RHS,
 
 RISCVII::VLMUL RISCVTargetLowering::getLMUL(MVT VT) {
   assert(VT.isScalableVector() && "Expecting a scalable vector type");
-  unsigned KnownSize = VT.getSizeInBits().getKnownMinSize();
+  unsigned KnownSize = VT.getSizeInBits().getKnownMinValue();
   if (VT.getVectorElementType() == MVT::i1)
     KnownSize *= 8;
 
@@ -5701,7 +5701,7 @@ static SDValue lowerVectorIntrinsicScalars(SDValue Op, SelectionDAG &DAG,
     // Optimize for constant AVL
     if (isa<ConstantSDNode>(AVL)) {
       unsigned EltSize = VT.getScalarSizeInBits();
-      unsigned MinSize = VT.getSizeInBits().getKnownMinSize();
+      unsigned MinSize = VT.getSizeInBits().getKnownMinValue();
 
       unsigned VectorBitsMax = Subtarget.getRealMaxVLen();
       unsigned MaxVLMAX =
@@ -6696,7 +6696,7 @@ SDValue RISCVTargetLowering::lowerVECTOR_REVERSE(SDValue Op,
     return DAG.getNode(ISD::TRUNCATE, DL, VecVT, Op2);
   }
   unsigned EltSize = VecVT.getScalarSizeInBits();
-  unsigned MinSize = VecVT.getSizeInBits().getKnownMinSize();
+  unsigned MinSize = VecVT.getSizeInBits().getKnownMinValue();
   unsigned VectorBitsMax = Subtarget.getRealMaxVLen();
   unsigned MaxVLMAX =
     RISCVTargetLowering::computeVLMAX(VectorBitsMax, EltSize, MinSize);
