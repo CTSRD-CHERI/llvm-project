@@ -1521,7 +1521,7 @@ struct DeclaratorChunk {
     /// prototype. Typically these are tag declarations.
     ArrayRef<NamedDecl *> getDeclsInPrototype() const {
       assert(ExceptionSpecType == EST_None);
-      return llvm::makeArrayRef(DeclsInPrototype, NumExceptionsOrDecls);
+      return llvm::ArrayRef(DeclsInPrototype, NumExceptionsOrDecls);
     }
 
     /// Determine whether this function declarator had a
@@ -1768,7 +1768,7 @@ public:
   }
 
   ArrayRef<Binding> bindings() const {
-    return llvm::makeArrayRef(Bindings, NumBindings);
+    return llvm::ArrayRef(Bindings, NumBindings);
   }
 
   bool isSet() const { return LSquareLoc.isValid(); }
