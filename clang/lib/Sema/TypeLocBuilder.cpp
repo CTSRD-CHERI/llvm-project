@@ -59,7 +59,7 @@ void TypeLocBuilder::grow(size_t NewCapacity) {
   Index = NewIndex;
 }
 
-TypeLoc TypeLocBuilder::pushImpl(QualType T, size_t LocalSize, unsigned LocalAlignment) {
+TypeLoc TypeLocBuilder::pushImpl(QualType T, size_t LocalSize, llvm::Align LocalAlignment) {
 #ifndef NDEBUG
   QualType TLast = TypeLoc(T, nullptr).getNextTypeLoc().getType();
   assert(TLast == LastTy &&
@@ -69,95 +69,87 @@ TypeLoc TypeLocBuilder::pushImpl(QualType T, size_t LocalSize, unsigned LocalAli
 
   assert(LocalAlignment <= BufferMaxAlignment && "Unexpected alignment");
 
-  // If we need to grow, grow by a factor of 2.
-  if (LocalSize > Index) {
-    size_t RequiredCapacity = Capacity + (LocalSize - Index);
-    size_t NewCapacity = Capacity * 2;
-    while (RequiredCapacity > NewCapacity)
-      NewCapacity *= 2;
-    grow(NewCapacity);
-  }
-
   // Because we're adding elements to the TypeLoc backwards, we have to
   // do some extra work to keep everything aligned appropriately.
   // FIXME: This algorithm is a absolute mess because every TypeLoc returned
   // needs to be valid.  Partial TypeLocs are a terrible idea.
-  // FIXME: 4 and 8 are sufficient at the moment, but it's pretty ugly to
-  // hardcode them.
-  if (LocalAlignment == 4) {
-    if (NumBytesAtAlign8 == 0) {
-      NumBytesAtAlign4 += LocalSize;
-    } else {
-      unsigned Padding = NumBytesAtAlign4 % 8;
-      if (Padding == 0) {
-        if (LocalSize % 8 == 0) {
-          // Everything is set: there's no padding and we don't need to add
-          // any.
-        } else {
-          assert(LocalSize % 8 == 4);
-          // No existing padding; add in 4 bytes padding
-          memmove(&Buffer[Index - 4], &Buffer[Index], NumBytesAtAlign4);
-          Index -= 4;
-        }
-      } else {
-        assert(Padding == 4);
-        if (LocalSize % 8 == 0) {
-          // Everything is set: there's 4 bytes padding and we don't need
-          // to add any.
-        } else {
-          assert(LocalSize % 8 == 4);
-          // There are 4 bytes padding, but we don't need any; remove it.
-          memmove(&Buffer[Index + 4], &Buffer[Index], NumBytesAtAlign4);
-          Index += 4;
-        }
-      }
-      NumBytesAtAlign4 += LocalSize;
-    }
-  } else if (LocalAlignment == 8) {
-    if (NumBytesAtAlign8 == 0) {
-      // We have not seen any 8-byte aligned element yet. We insert a padding
-      // only if the new Index is not 8-byte-aligned.
-      if ((Index - LocalSize) % 8 != 0) {
-        memmove(&Buffer[Index - 4], &Buffer[Index], NumBytesAtAlign4);
-        Index -= 4;
-      }
-    } else {
-      unsigned Padding = NumBytesAtAlign4 % 8;
-      if (Padding == 0) {
-        if (LocalSize % 8 == 0) {
-          // Everything is set: there's no padding and we don't need to add
-          // any.
-        } else {
-          assert(LocalSize % 8 == 4);
-          // No existing padding; add in 4 bytes padding
-          memmove(&Buffer[Index - 4], &Buffer[Index], NumBytesAtAlign4);
-          Index -= 4;
-        }
-      } else {
-        assert(Padding == 4);
-        if (LocalSize % 8 == 0) {
-          // Everything is set: there's 4 bytes padding and we don't need
-          // to add any.
-        } else {
-          assert(LocalSize % 8 == 4);
-          // There are 4 bytes padding, but we don't need any; remove it.
-          memmove(&Buffer[Index + 4], &Buffer[Index], NumBytesAtAlign4);
-          Index += 4;
-        }
-      }
-    }
 
-    // Forget about any padding.
-    NumBytesAtAlign4 = 0;
-    NumBytesAtAlign8 += LocalSize;
-  } else {
-    assert(LocalSize == 0);
+  // Recalculate layout, but don't update LayoutBlocks yet
+  llvm::SmallVector<size_t, MaxLayoutBlocks> Deltas;
+  size_t Offset = LocalSize;
+  for (auto &Block : llvm::reverse(LayoutBlocks)) {
+    Offset = llvm::alignTo(Offset, Block.Align);
+    Deltas.push_back(Offset - Block.Offset);
+    Offset += Block.Size;
+  }
+  llvm::Align NewAlign = std::max(LocalAlignment, LayoutBlocks[0].Align);
+  size_t NewSize = llvm::alignTo(Offset, NewAlign);
+
+  assert(NewSize == TypeLoc::getFullDataSizeForType(T) &&
+         "incorrect data size provided to CreateTypeSourceInfo!");
+
+  // If we need to grow, grow by a factor of 2.
+  if (NewSize > Capacity) {
+    size_t NewCapacity = Capacity * 2;
+    while (NewSize > NewCapacity)
+      NewCapacity *= 2;
+    grow(NewCapacity);
   }
 
-  Index -= LocalSize;
+  // Move blocks for the new layout and update LayoutBlocks to match.
+  //
+  // Within the buffer we have a prefix of blocks moving left, a prefix of
+  // blocks moving right or no blocks moving at all. We treat no blocks moving
+  // at all as a special case of moving left.
+  //
+  // Note that LayoutBlocks and Deltas are stored in opposite orders; the
+  // left-most block is last in LayoutBlocks but first in Deltas.
+  size_t NewIndex = Capacity - NewSize;
+  size_t SizeDelta = Index - NewIndex;
+  if (Deltas[0] <= SizeDelta) {
+    // Move blocks left (from left to right)
+    auto BI = LayoutBlocks.rbegin();
+    auto BE = LayoutBlocks.rend();
+    auto DI = Deltas.begin();
+    for (; BI != BE && *DI < SizeDelta; ++BI, ++DI) {
+      size_t NewOffset = BI->Offset + *DI;
+      memmove(&Buffer[NewIndex + NewOffset], &Buffer[Index + BI->Offset],
+              BI->Size);
+      BI->Offset = NewOffset;
+    }
+    for (; BI != BE; ++BI, ++DI) {
+      assert(*DI == SizeDelta && "Unexpected block delta after left prefix");
+      size_t NewOffset = BI->Offset + *DI;
+      BI->Offset = NewOffset;
+    }
+  } else {
+    // Move blocks right (from right to left)
+    auto BI = LayoutBlocks.begin();
+    auto BE = LayoutBlocks.end();
+    auto DI = Deltas.rbegin();
+    for (; BI != BE && *DI == SizeDelta; ++BI, ++DI) {
+      size_t NewOffset = BI->Offset + *DI;
+      BI->Offset = NewOffset;
+    }
+    for (; BI != BE; ++BI, ++DI) {
+      assert(*DI > SizeDelta && "Unexpected block delta after right prefix");
+      size_t NewOffset = BI->Offset + *DI;
+      memmove(&Buffer[NewIndex + NewOffset], &Buffer[Index + BI->Offset],
+              BI->Size);
+      BI->Offset = NewOffset;
+    }
+  }
 
-  assert(Capacity - Index == TypeLoc::getFullDataSizeForType(T) &&
-         "incorrect data size provided to CreateTypeSourceInfo!");
+  // Update TypeLoc buffer start index to match
+  Index = NewIndex;
+
+  // Record this element's block, merging with existing blocks subsumed by it.
+  LayoutBlock NewBlock(0, LocalSize, LocalAlignment);
+  while (!LayoutBlocks.empty() && LayoutBlocks.back().Align <= NewBlock.Align) {
+    NewBlock.Size = LayoutBlocks.back().Offset + LayoutBlocks.back().Size;
+    LayoutBlocks.pop_back();
+  }
+  LayoutBlocks.push_back(NewBlock);
 
   return getTemporaryTypeLoc(T);
 }

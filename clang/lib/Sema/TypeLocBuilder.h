@@ -20,8 +20,6 @@
 namespace clang {
 
 class TypeLocBuilder {
-  enum { InlineCapacity = 8 * sizeof(SourceLocation) };
-
   /// The underlying location-data buffer.  Data grows from the end
   /// of the buffer backwards.
   char *Buffer;
@@ -38,14 +36,35 @@ class TypeLocBuilder {
 #endif
 
   /// The inline buffer.
-  enum { BufferMaxAlignment = alignof(void *) };
+  enum { BufferMaxAlignment = alignof(max_align_t) };
+  enum { InlineCapacity = llvm::alignTo<BufferMaxAlignment>(8 * sizeof(SourceLocation)) };
   alignas(BufferMaxAlignment) char InlineBuffer[InlineCapacity];
-  unsigned NumBytesAtAlign4, NumBytesAtAlign8;
+
+  /// Represents a block of elements in the TypeLoc's layout that are fixed
+  /// relative to each other due to alignment requirements (i.e. all elements
+  /// have alignment no greater than the first element in the block). Note
+  /// that Size is the unpadded size.
+  struct LayoutBlock {
+    size_t Offset;
+    size_t Size;
+    llvm::Align Align;
+
+    LayoutBlock(size_t Offset, size_t Size, llvm::Align Align)
+        : Offset(Offset), Size(Size), Align(Align) {}
+  };
+
+  /// Represents the entire layout of a TypeLoc as a list of LayoutBlock
+  /// elements. Stored in reverse order for more efficient insertion and
+  /// deletion, i.e. entries are in decreasing offset and alignment order.
+  /// To avoid handling the empty edge-case, this is never empty; empty is
+  /// instead represented with a byte-aligned 0-byte block.
+  enum { MaxLayoutBlocks = llvm::CTLog2<BufferMaxAlignment>() };
+  SmallVector<LayoutBlock, MaxLayoutBlocks> LayoutBlocks;
 
 public:
   TypeLocBuilder()
       : Buffer(InlineBuffer), Capacity(InlineCapacity), Index(InlineCapacity),
-        NumBytesAtAlign4(0), NumBytesAtAlign8(0) {}
+        LayoutBlocks({LayoutBlock(0, 0, llvm::Align())}) {}
 
   ~TypeLocBuilder() {
     if (Buffer != InlineBuffer)
@@ -67,7 +86,7 @@ public:
   /// previously retrieved from this builder.
   TypeSpecTypeLoc pushTypeSpec(QualType T) {
     size_t LocalSize = TypeSpecTypeLoc::LocalDataSize;
-    unsigned LocalAlign = TypeSpecTypeLoc::LocalDataAlignment;
+    llvm::Align LocalAlign = llvm::Align(TypeSpecTypeLoc::LocalDataAlignment);
     return pushImpl(T, LocalSize, LocalAlign).castAs<TypeSpecTypeLoc>();
   }
 
@@ -77,7 +96,7 @@ public:
     LastTy = QualType();
 #endif
     Index = Capacity;
-    NumBytesAtAlign4 = NumBytesAtAlign8 = 0;
+    LayoutBlocks = {LayoutBlock(0, 0, llvm::Align())};
   }
 
   /// Tell the TypeLocBuilder that the type it is storing has been
@@ -93,7 +112,7 @@ public:
   template <class TyLocType> TyLocType push(QualType T) {
     TyLocType Loc = TypeLoc(T, nullptr).castAs<TyLocType>();
     size_t LocalSize = Loc.getLocalDataSize();
-    unsigned LocalAlign = Loc.getLocalDataAlignment();
+    llvm::Align LocalAlign = llvm::Align(Loc.getLocalDataAlignment());
     return pushImpl(T, LocalSize, LocalAlign).castAs<TyLocType>();
   }
 
@@ -124,7 +143,7 @@ public:
 
 private:
 
-  TypeLoc pushImpl(QualType T, size_t LocalSize, unsigned LocalAlignment);
+  TypeLoc pushImpl(QualType T, size_t LocalSize, llvm::Align LocalAlignment);
 
   /// Grow to the given capacity.
   void grow(size_t NewCapacity);

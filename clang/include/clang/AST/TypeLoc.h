@@ -65,21 +65,9 @@ protected:
 public:
   TypeLoc() = default;
   TypeLoc(QualType ty, void *opaqueData)
-      : Ty(ty.getAsOpaquePtr()), Data(opaqueData) {
-    // XXX
-    if ((uintptr_t)opaqueData > 0x40000000 &&
-        (uintptr_t)opaqueData < 0x60000000 &&
-        !__builtin_cheri_tag_get(opaqueData))
-      __builtin_trap();
-  }
+      : Ty(ty.getAsOpaquePtr()), Data(opaqueData) {}
   TypeLoc(const Type *ty, void *opaqueData)
-      : Ty(ty), Data(opaqueData) {
-    // XXX
-    if ((uintptr_t)opaqueData > 0x40000000 &&
-        (uintptr_t)opaqueData < 0x60000000 &&
-        !__builtin_cheri_tag_get(opaqueData))
-      __builtin_trap();
-  }
+      : Ty(ty), Data(opaqueData) {}
 
   /// Convert to the specified TypeLoc type, asserting that this TypeLoc
   /// is of the desired type.
