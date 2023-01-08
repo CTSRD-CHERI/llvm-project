@@ -228,6 +228,9 @@ static const int KillSigs[] = {
 #ifdef SIGEMT
   , SIGEMT
 #endif
+#ifdef SIGPROT
+  , SIGPROT
+#endif
 };
 
 /// Signals that represent requests for status.
