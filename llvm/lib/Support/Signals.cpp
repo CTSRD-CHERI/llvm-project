@@ -97,7 +97,7 @@ static bool findModulesAndOffsets(void **StackTrace, int Depth,
 /// same width.
 static FormattedNumber format_ptr(void *PC) {
   // Each byte is two hex digits plus 2 for the 0x prefix.
-  unsigned PtrWidth = 2 + 2 * sizeof(void *);
+  unsigned PtrWidth = 2 + 2 * sizeof(ptraddr_t);
   return format_hex((uint64_t)PC, PtrWidth);
 }
 
