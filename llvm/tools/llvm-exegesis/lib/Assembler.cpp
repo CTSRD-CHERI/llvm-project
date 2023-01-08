@@ -268,7 +268,7 @@ namespace {
 // single function will be loaded into memory.
 class TrackingSectionMemoryManager : public SectionMemoryManager {
 public:
-  explicit TrackingSectionMemoryManager(uintptr_t *CodeSize)
+  explicit TrackingSectionMemoryManager(size_t *CodeSize)
       : CodeSize(CodeSize) {}
 
   uint8_t *allocateCodeSection(size_t Size, unsigned Alignment,
@@ -280,7 +280,7 @@ public:
   }
 
 private:
-  uintptr_t *const CodeSize = nullptr;
+  size_t *const CodeSize = nullptr;
 };
 
 } // namespace
