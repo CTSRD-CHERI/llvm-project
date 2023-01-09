@@ -68,7 +68,7 @@ protected:
 public:
   // Forward so that the regular new and delete do not hide global ones.
   void *operator new(size_t Bytes, ASTContext &C,
-                     size_t Alignment = 8) noexcept {
+                     size_t Alignment = llvm::alignTo<alignof(Attr)>(8)) noexcept {
     return ::operator new(Bytes, C, Alignment);
   }
   void operator delete(void *Ptr, ASTContext &C, size_t Alignment) noexcept {
