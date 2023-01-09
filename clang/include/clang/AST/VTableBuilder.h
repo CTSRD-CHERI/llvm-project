@@ -221,12 +221,19 @@ private:
     return static_cast<uintptr_t>(Value & ~7ULL);
   }
 
+  // Prefer uintptr_t if it can store any uint64_t value in order to support
+  // architectures with strict pointer provenance like CHERI.
+  using ValueType =
+    std::conditional_t<std::numeric_limits<uint64_t>::max() <=
+                       std::numeric_limits<uintptr_t>::max(),
+                       uintptr_t, uint64_t>;
+
   /// The kind is stored in the lower 3 bits of the value. For offsets, we
   /// make use of the facts that classes can't be larger than 2^55 bytes,
   /// so we store the offset in the lower part of the 61 bits that remain.
   /// (The reason that we're not simply using a PointerIntPair here is that we
   /// need the offsets to be 64-bit, even when on a 32-bit machine).
-  int64_t Value;
+  ValueType Value;
 };
 
 class VTableLayout {
