@@ -2918,7 +2918,7 @@ createSymbols(
   });
 
   size_t numSymbols = 0;
-  for (ArrayRef<GdbSymbol> v : makeArrayRef(symbols.get(), numShards))
+  for (ArrayRef<GdbSymbol> v : ArrayRef(symbols.get(), numShards))
     numSymbols += v.size();
 
   // The return type is a flattened vector, so we'll copy each vector
@@ -3815,7 +3815,7 @@ static uint8_t getAbiVersion() {
 
   if (config->emachine == EM_AMDGPU && !ctx.objectFiles.empty()) {
     uint8_t ver = ctx.objectFiles[0]->abiVersion;
-    for (InputFile *file : makeArrayRef(ctx.objectFiles).slice(1))
+    for (InputFile *file : ArrayRef(ctx.objectFiles).slice(1))
       if (file->abiVersion != ver)
         error("incompatible ABI version: " + toString(file));
     return ver;
