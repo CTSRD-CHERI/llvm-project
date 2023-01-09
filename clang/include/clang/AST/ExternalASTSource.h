@@ -387,7 +387,7 @@ public:
     if (isOffset()) {
       assert(Source &&
              "Cannot deserialize a lazy pointer without an AST source");
-      Ptr = reinterpret_cast<uint64_t>((Source->*Get)(Ptr >> 1));
+      Ptr = reinterpret_cast<PtrType>((Source->*Get)(Ptr >> 1));
     }
     return reinterpret_cast<T*>(Ptr);
   }
