@@ -350,12 +350,17 @@ LLVM_DUMP_METHOD void NestedNameSpecifier::dump(llvm::raw_ostream &OS,
   print(OS, PrintingPolicy(LO));
 }
 
-unsigned
-NestedNameSpecifierLoc::getLocalDataLength(NestedNameSpecifier *Qualifier) {
+// XXX: Should really return a list of fields; relies on alignof(void *) >
+// alignof(unsigned) as fields saved one at a time but we lay out assuming
+// fields are combined. For all supported ABIs this is true, but later LLVMs
+// use a uint64_t instead of unsigned so this would break on ILP32.
+std::pair<unsigned, llvm::Align>
+NestedNameSpecifierLoc::getLocalDataLayout(NestedNameSpecifier *Qualifier) {
   assert(Qualifier && "Expected a non-NULL qualifier");
 
   // Location of the trailing '::'.
   unsigned Length = sizeof(unsigned);
+  llvm::Align Align(alignof(unsigned));
 
   switch (Qualifier->getKind()) {
   case NestedNameSpecifier::Global:
@@ -374,35 +379,80 @@ NestedNameSpecifierLoc::getLocalDataLength(NestedNameSpecifier *Qualifier) {
   case NestedNameSpecifier::TypeSpec:
     // The "void*" that points at the TypeLoc data.
     // Note: the 'template' keyword is part of the TypeLoc.
-    Length += sizeof(void *);
+    Length += llvm::alignTo(sizeof(void *), Align);
+    Align = std::max(Align, llvm::Align(alignof(void *)));
     break;
   }
 
-  return Length;
+  return std::make_pair(Length, Align);
 }
 
-unsigned
-NestedNameSpecifierLoc::getDataLength(NestedNameSpecifier *Qualifier) {
-  unsigned Length = 0;
-  for (; Qualifier; Qualifier = Qualifier->getPrefix())
-    Length += getLocalDataLength(Qualifier);
-  return Length;
+std::pair<unsigned, unsigned>
+NestedNameSpecifierLoc::getLocalDataRange(NestedNameSpecifier *Qualifier) {
+  if (!Qualifier)
+    return std::make_pair(0, 0);
+
+  // We want to know where the last component is, so layout its prefix in its
+  // entirety and then tack this component on the end.
+  auto LocalLayout = getLocalDataLayout(Qualifier);
+  Qualifier = Qualifier->getPrefix();
+
+  // A block of elements in the data's layout that are fixed relative to each
+  // other due to alignment requirements (i.e. all elements have alignment no
+  // greater than the first element in the block). Note that Length is the
+  // unpadded length.
+  struct Block {
+    unsigned Offset;
+    unsigned Length;
+    llvm::Align Alignment;
+    Block(unsigned Offset, unsigned Length, llvm::Align Alignment)
+        : Offset(Offset), Length(Length), Alignment(Alignment) {}
+  };
+
+  // Represents the entire layout of the data as a list of Block elements.
+  // Stored in reverse order for more efficient insertion and deletion, i.e.
+  // entries are in decreasing offset and alignment order.
+  // To avoid handling the empty edge-case, this is never empty; empty is
+  // instead represented with a byte-aligned 0-byte block.
+  // Since we know only two types are stored in data (source locations and
+  // pointers), use an inline length of 2 so we should stay small.
+  llvm::SmallVector<Block, 2> Blocks({Block(0, 0, llvm::Align())});
+
+  // Loop over the qualifiers, adding the data for each onto the front of our
+  // current layout.
+  unsigned Offset = 0;
+  for (; Qualifier; Qualifier = Qualifier->getPrefix()) {
+    // Recalculate layout, updating Blocks
+    auto PrefixLayout = getLocalDataLayout(Qualifier);
+    Offset = PrefixLayout.first;
+    for (auto &Block : llvm::reverse(Blocks)) {
+      Offset = llvm::alignTo(Offset, Block.Alignment);
+      Block.Offset = Offset;
+      Offset += Block.Length;
+    }
+
+    // Record this element's block, merging with existing blocks subsumed by it.
+    Block NewBlock(0, PrefixLayout.first, PrefixLayout.second);
+    while (!Blocks.empty() && Blocks.back().Alignment <= NewBlock.Alignment) {
+      NewBlock.Length = Blocks.back().Offset + Blocks.back().Length;
+      Blocks.pop_back();
+    }
+    Blocks.push_back(NewBlock);
+  }
+  return std::make_pair(llvm::alignTo(Offset, LocalLayout.second),
+                        LocalLayout.first);
 }
 
-/// Load a (possibly unaligned) source location from a given address
-/// and offset.
+/// Load a source location from a given address and offset.
 static SourceLocation LoadSourceLocation(void *Data, unsigned Offset) {
-  unsigned Raw;
-  memcpy(&Raw, static_cast<char *>(Data) + Offset, sizeof(unsigned));
+  unsigned Raw =
+      *reinterpret_cast<unsigned *>(static_cast<char *>(Data) + Offset);
   return SourceLocation::getFromRawEncoding(Raw);
 }
 
-/// Load a (possibly unaligned) pointer from a given address and
-/// offset.
+/// Load a pointer from a given address and offset.
 static void *LoadPointer(void *Data, unsigned Offset) {
-  void *Result;
-  memcpy(&Result, static_cast<char *>(Data) + Offset, sizeof(void*));
-  return Result;
+  return *reinterpret_cast<void **>(static_cast<char *>(Data) + Offset);
 }
 
 SourceRange NestedNameSpecifierLoc::getSourceRange() const {
@@ -421,7 +471,7 @@ SourceRange NestedNameSpecifierLoc::getLocalSourceRange() const {
   if (!Qualifier)
     return SourceRange();
 
-  unsigned Offset = getDataLength(Qualifier->getPrefix());
+  unsigned Offset = getLocalDataOffset(Qualifier);
   switch (Qualifier->getKind()) {
   case NestedNameSpecifier::Global:
     return LoadSourceLocation(Data, Offset);
@@ -439,8 +489,9 @@ SourceRange NestedNameSpecifierLoc::getLocalSourceRange() const {
     // Note: the 'template' keyword is part of the TypeLoc.
     void *TypeData = LoadPointer(Data, Offset);
     TypeLoc TL(Qualifier->getAsType(), TypeData);
+    Offset += llvm::alignTo<alignof(unsigned)>(sizeof(void *));
     return SourceRange(TL.getBeginLoc(),
-                       LoadSourceLocation(Data, Offset + sizeof(void*)));
+                       LoadSourceLocation(Data, Offset));
   }
   }
 
@@ -453,21 +504,22 @@ TypeLoc NestedNameSpecifierLoc::getTypeLoc() const {
     return TypeLoc();
 
   // The "void*" that points at the TypeLoc data.
-  unsigned Offset = getDataLength(Qualifier->getPrefix());
+  unsigned Offset = getLocalDataOffset(Qualifier);
   void *TypeData = LoadPointer(Data, Offset);
   return TypeLoc(Qualifier->getAsType(), TypeData);
 }
 
-static void Append(char *Start, char *End, char *&Buffer, unsigned &BufferSize,
-                   unsigned &BufferCapacity) {
+static void Append(char *Start, char *End, llvm::Align Alignment, char *&Buffer,
+                   unsigned &BufferSize, unsigned &BufferCapacity) {
   if (Start == End)
     return;
 
-  if (BufferSize + (End - Start) > BufferCapacity) {
+  size_t Adjustment = llvm::offsetToAlignment(BufferSize, Alignment);
+  if (BufferSize + Adjustment + (End - Start) > BufferCapacity) {
     // Reallocate the buffer.
     unsigned NewCapacity = std::max(
         (unsigned)(BufferCapacity ? BufferCapacity * 2 : sizeof(void *) * 2),
-        (unsigned)(BufferSize + (End - Start)));
+        (unsigned)(BufferSize + Adjustment + (End - Start)));
     if (!BufferCapacity) {
       char *NewBuffer = static_cast<char *>(llvm::safe_malloc(NewCapacity));
       if (Buffer)
@@ -479,8 +531,8 @@ static void Append(char *Start, char *End, char *&Buffer, unsigned &BufferSize,
     BufferCapacity = NewCapacity;
   }
   assert(Buffer && Start && End && End > Start && "Illegal memory buffer copy");
-  memcpy(Buffer + BufferSize, Start, End - Start);
-  BufferSize += End - Start;
+  memcpy(Buffer + BufferSize + Adjustment, Start, End - Start);
+  BufferSize += Adjustment + (End - Start);
 }
 
 /// Save a source location to the given buffer.
@@ -489,7 +541,7 @@ static void SaveSourceLocation(SourceLocation Loc, char *&Buffer,
   unsigned Raw = Loc.getRawEncoding();
   Append(reinterpret_cast<char *>(&Raw),
          reinterpret_cast<char *>(&Raw) + sizeof(unsigned),
-         Buffer, BufferSize, BufferCapacity);
+         llvm::Align(alignof(unsigned)), Buffer, BufferSize, BufferCapacity);
 }
 
 /// Save a pointer to the given buffer.
@@ -497,7 +549,7 @@ static void SavePointer(void *Ptr, char *&Buffer, unsigned &BufferSize,
                         unsigned &BufferCapacity) {
   Append(reinterpret_cast<char *>(&Ptr),
          reinterpret_cast<char *>(&Ptr) + sizeof(void *),
-         Buffer, BufferSize, BufferCapacity);
+         llvm::Align(alignof(void *)), Buffer, BufferSize, BufferCapacity);
 }
 
 NestedNameSpecifierLocBuilder::
@@ -513,9 +565,9 @@ NestedNameSpecifierLocBuilder(const NestedNameSpecifierLocBuilder &Other)
     return;
   }
 
-  // Deep copy
-  Append(Other.Buffer, Other.Buffer + Other.BufferSize, Buffer, BufferSize,
-         BufferCapacity);
+  // Deep copy (alignment doesn't matter, our buffer is empty)
+  Append(Other.Buffer, Other.Buffer + Other.BufferSize, llvm::Align(), Buffer,
+         BufferSize, BufferCapacity);
 }
 
 NestedNameSpecifierLocBuilder &
@@ -550,10 +602,10 @@ operator=(const NestedNameSpecifierLocBuilder &Other) {
     return *this;
   }
 
-  // Deep copy.
+  // Deep copy (alignment doesn't matter, our buffer is empty)
   BufferSize = 0;
-  Append(Other.Buffer, Other.Buffer + Other.BufferSize, Buffer, BufferSize,
-         BufferCapacity);
+  Append(Other.Buffer, Other.Buffer + Other.BufferSize, llvm::Align(), Buffer,
+         BufferSize, BufferCapacity);
   return *this;
 }
 

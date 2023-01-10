@@ -243,13 +243,29 @@ class NestedNameSpecifierLoc {
   NestedNameSpecifier *Qualifier = nullptr;
   void *Data = nullptr;
 
-  /// Determines the data length for the last component in the
+  /// Determines the data length and alignment for the last component in the
   /// given nested-name-specifier.
-  static unsigned getLocalDataLength(NestedNameSpecifier *Qualifier);
+  static std::pair<unsigned, llvm::Align>
+  getLocalDataLayout(NestedNameSpecifier *Qualifier);
+
+  /// Determines the data offset and length for the last component in the
+  /// given nested-name-specifier.
+  static std::pair<unsigned, unsigned>
+  getLocalDataRange(NestedNameSpecifier *Qualifier);
+
+  /// Determines the data offset for the last component in the
+  /// given nested-name-specifier.
+  static unsigned getLocalDataOffset(NestedNameSpecifier *Qualifier) {
+    auto Range = getLocalDataRange(Qualifier);
+    return Range.first;
+  }
 
   /// Determines the data length for the entire
   /// nested-name-specifier.
-  static unsigned getDataLength(NestedNameSpecifier *Qualifier);
+  static unsigned getDataLength(NestedNameSpecifier *Qualifier) {
+    auto Range = getLocalDataRange(Qualifier);
+    return Range.first + Range.second;
+  }
 
 public:
   /// Construct an empty nested-name-specifier.
