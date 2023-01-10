@@ -1880,6 +1880,9 @@ def : Pat<(binop_allwusers<add> GPR:$rs1, (AddiPair:$rs2)),
                  (AddiPairImmSmall AddiPair:$rs2))>;
 }
 
+let hasSideEffects = 1, isMeta = 1 in
+def PseudoMemBarrier : Pseudo<(outs), (ins), [(membarrier)]>;
+
 //===----------------------------------------------------------------------===//
 // Standard extensions
 //===----------------------------------------------------------------------===//
