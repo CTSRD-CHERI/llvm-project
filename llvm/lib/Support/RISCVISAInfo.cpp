@@ -37,7 +37,7 @@ struct RISCVSupportedExtension {
 
 } // end anonymous namespace
 
-static constexpr StringLiteral AllStdExts = "mafdqlcbkjtpvn";
+static constexpr StringLiteral AllStdExts = "mafdqlcbkjtpvnh";
 
 static const RISCVSupportedExtension SupportedExtensions[] = {
     {"i", RISCVExtensionVersion{2, 0}},
@@ -48,6 +48,8 @@ static const RISCVSupportedExtension SupportedExtensions[] = {
     {"d", RISCVExtensionVersion{2, 0}},
     {"c", RISCVExtensionVersion{2, 0}},
     {"xcheri", RISCVExtensionVersion{0, 0}},
+
+    {"h", RISCVExtensionVersion{1, 0}},
 
     {"zihintpause", RISCVExtensionVersion{2, 0}},
 
@@ -285,17 +287,14 @@ static int multiLetterExtensionRank(const std::string &ExtName) {
   case 's':
     HighOrder = 0;
     break;
-  case 'h':
-    HighOrder = 1;
-    break;
   case 'z':
-    HighOrder = 2;
+    HighOrder = 1;
     // `z` extension must be sorted by canonical order of second letter.
     // e.g. zmx has higher rank than zax.
     LowOrder = singleLetterExtensionRank(ExtName[1]);
     break;
   case 'x':
-    HighOrder = 3;
+    HighOrder = 2;
     break;
   default:
     llvm_unreachable("Unknown prefix for multi-char extension");
@@ -612,8 +611,8 @@ RISCVISAInfo::parseArchString(StringRef Arch, bool EnableExperimentalExtension,
 
     // The order is OK, then push it into features.
     // TODO: Use version number when setting target features
-    // Currently LLVM supports only "mafdcv".
-    StringRef SupportedStandardExtension = "mafdcv";
+    // Currently LLVM supports only "mafdcvh".
+    StringRef SupportedStandardExtension = "mafdcvh";
     if (!SupportedStandardExtension.contains(C))
       return createStringError(errc::invalid_argument,
                                "unsupported standard user-level extension '%c'",
