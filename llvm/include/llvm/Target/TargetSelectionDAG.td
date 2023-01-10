@@ -644,7 +644,7 @@ def readcyclecounter : SDNode<"ISD::READCYCLECOUNTER", SDTIntLeaf,
                      [SDNPHasChain, SDNPSideEffect]>;
 
 def membarrier : SDNode<"ISD::MEMBARRIER", SDTNone,
-                        [SDNPHasChain,SDNPSideEffect]>;
+                        [SDNPHasChain, SDNPSideEffect]>;
 
 def atomic_fence : SDNode<"ISD::ATOMIC_FENCE" , SDTAtomicFence,
                           [SDNPHasChain, SDNPSideEffect]>;
