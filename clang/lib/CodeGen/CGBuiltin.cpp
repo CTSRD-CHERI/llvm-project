@@ -2214,7 +2214,7 @@ static void diagnoseMisalignedCapabiliyCopyDest(CodeGenFunction &CGF,
                                                 const Expr *Src, CallInst *CI) {
   AnyMemTransferInst *MemInst = cast<AnyMemTransferInst>(CI);
   diagnoseMisalignedCapabiliyCopyDest(
-      CGF, Function, Src, CharUnits::fromQuantity(MemInst->getDestAlignment()),
+      CGF, Function, Src, CharUnits::fromQuantity(MemInst->getDestAlign().value()),
       MemInst);
 }
 
