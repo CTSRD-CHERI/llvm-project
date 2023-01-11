@@ -2,14 +2,14 @@
 ; PR15286
 
 %va_list = type {i8, i8, i16, ptr, ptr}
-declare void @llvm.va_copy.p0(ptr, ptr)
+declare void @llvm.va_copy.p0.p0(ptr, ptr)
 
 define void @test_vacopy() nounwind {
 entry:
 	%0 = alloca %va_list
 	%1 = alloca %va_list
 
-	call void @llvm.va_copy.p0(ptr %1, ptr %0)
+	call void @llvm.va_copy.p0.p0(ptr %1, ptr %0)
 
 	ret void
 }
