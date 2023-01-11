@@ -5268,7 +5268,7 @@ MipsTargetLowering::getSingleConstraintMatchWeight(
     break;
   case 'f': // FPU or MSA register
     if (Subtarget.hasMSA() && type->isVectorTy() &&
-        type->getPrimitiveSizeInBits().getFixedSize() == 128)
+        type->getPrimitiveSizeInBits().getFixedValue() == 128)
       weight = CW_Register;
     else if (type->isFloatTy())
       weight = CW_Register;

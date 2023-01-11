@@ -753,7 +753,7 @@ inline TypeSize DataLayout::getTypeSizeInBits(Type *Ty) const {
     VectorType *VTy = cast<VectorType>(Ty);
     auto EltCnt = VTy->getElementCount();
     uint64_t MinBits = EltCnt.getKnownMinValue() *
-                       getTypeSizeInBits(VTy->getElementType()).getFixedSize();
+                       getTypeSizeInBits(VTy->getElementType()).getFixedValue();
     return TypeSize(MinBits, EltCnt.isScalable());
   }
   case Type::SizedCapabilityTyID:
