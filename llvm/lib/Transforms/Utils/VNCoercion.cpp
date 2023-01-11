@@ -29,14 +29,14 @@ bool canCoerceMustAliasedValueToLoad(Value *StoredVal, Type *LoadTy,
       isFirstClassAggregateOrScalableType(StoredTy))
     return false;
 
-  uint64_t StoreSize = DL.getTypeSizeInBits(StoredTy).getFixedSize();
+  uint64_t StoreSize = DL.getTypeSizeInBits(StoredTy).getFixedValue();
 
   // The store size must be byte-aligned to support future type casts.
   if (llvm::alignTo(StoreSize, 8) != StoreSize)
     return false;
 
   // The store has to be at least as big as the load.
-  if (StoreSize < DL.getTypeSizeInBits(LoadTy).getFixedSize())
+  if (StoreSize < DL.getTypeSizeInBits(LoadTy).getFixedValue())
     return false;
 
   bool StoredNI = DL.isNonIntegralPointerType(StoredTy->getScalarType());
@@ -66,7 +66,7 @@ bool canCoerceMustAliasedValueToLoad(Value *StoredVal, Type *LoadTy,
   // The implementation below uses inttoptr for vectors of unequal size; we
   // can't allow this for non integral pointers. We could teach it to extract
   // exact subvectors if desired.
-  if (StoredNI && StoreSize != DL.getTypeSizeInBits(LoadTy).getFixedSize())
+  if (StoredNI && StoreSize != DL.getTypeSizeInBits(LoadTy).getFixedValue())
     return false;
 
   if (StoredTy->isTargetExtTy() || LoadTy->isTargetExtTy())
@@ -92,8 +92,8 @@ Value *coerceAvailableValueToLoadType(Value *StoredVal, Type *LoadedTy,
   // If this is already the right type, just return it.
   Type *StoredValTy = StoredVal->getType();
 
-  uint64_t StoredValSize = DL.getTypeSizeInBits(StoredValTy).getFixedSize();
-  uint64_t LoadedValSize = DL.getTypeSizeInBits(LoadedTy).getFixedSize();
+  uint64_t StoredValSize = DL.getTypeSizeInBits(StoredValTy).getFixedValue();
+  uint64_t LoadedValSize = DL.getTypeSizeInBits(LoadedTy).getFixedValue();
 
   // If the store and reload are the same size, we can always reuse it.
   if (StoredValSize == LoadedValSize) {
@@ -154,8 +154,8 @@ Value *coerceAvailableValueToLoadType(Value *StoredVal, Type *LoadedTy,
   // If this is a big-endian system, we need to shift the value down to the low
   // bits so that a truncate will work.
   if (DL.isBigEndian()) {
-    uint64_t ShiftAmt = DL.getTypeStoreSizeInBits(StoredValTy).getFixedSize() -
-                        DL.getTypeStoreSizeInBits(LoadedTy).getFixedSize();
+    uint64_t ShiftAmt = DL.getTypeStoreSizeInBits(StoredValTy).getFixedValue() -
+                        DL.getTypeStoreSizeInBits(LoadedTy).getFixedValue();
     StoredVal = Helper.CreateLShr(
         StoredVal, ConstantInt::get(StoredVal->getType(), ShiftAmt));
   }
@@ -204,7 +204,7 @@ static int analyzeLoadFromClobberingWrite(Type *LoadTy, Value *LoadPtr,
   if (StoreBase != LoadBase)
     return -1;
 
-  uint64_t LoadSize = DL.getTypeSizeInBits(LoadTy).getFixedSize();
+  uint64_t LoadSize = DL.getTypeSizeInBits(LoadTy).getFixedValue();
 
   if ((WriteSizeInBits & 7) | (LoadSize & 7))
     return -1;
@@ -254,7 +254,7 @@ int analyzeLoadFromClobberingStore(Type *LoadTy, Value *LoadPtr,
 
   Value *StorePtr = DepSI->getPointerOperand();
   uint64_t StoreSize =
-      DL.getTypeSizeInBits(DepSI->getValueOperand()->getType()).getFixedSize();
+      DL.getTypeSizeInBits(DepSI->getValueOperand()->getType()).getFixedValue();
   return analyzeLoadFromClobberingWrite(LoadTy, LoadPtr, StorePtr, StoreSize,
                                         DL, TLI);
 }
@@ -369,7 +369,7 @@ int analyzeLoadFromClobberingLoad(Type *LoadTy, Value *LoadPtr, LoadInst *DepLI,
   int64_t LoadOffs = 0;
   const Value *LoadBase =
       GetPointerBaseWithConstantOffset(LoadPtr, LoadOffs, DL);
-  unsigned LoadSize = DL.getTypeStoreSize(LoadTy).getFixedSize();
+  unsigned LoadSize = DL.getTypeStoreSize(LoadTy).getFixedValue();
 
   unsigned Size =
       getLoadLoadClobberFullWidthSize(LoadBase, LoadOffs, LoadSize, DepLI);
@@ -452,8 +452,8 @@ static Value *getStoreValueForLoadHelper(Value *SrcVal, unsigned Offset,
   }
 
   uint64_t StoreSize =
-      (DL.getTypeSizeInBits(SrcVal->getType()).getFixedSize() + 7) / 8;
-  uint64_t LoadSize = (DL.getTypeSizeInBits(LoadTy).getFixedSize() + 7) / 8;
+      (DL.getTypeSizeInBits(SrcVal->getType()).getFixedValue() + 7) / 8;
+  uint64_t LoadSize = (DL.getTypeSizeInBits(LoadTy).getFixedValue() + 7) / 8;
 
   if ((LoadSize == StoreSize) && Offset == 0 &&
        SrcVal->getType()->isPointerTy() && LoadTy->isPointerTy())
@@ -518,8 +518,8 @@ Value *getLoadValueForLoad(LoadInst *SrcVal, unsigned Offset, Type *LoadTy,
   // If Offset+LoadTy exceeds the size of SrcVal, then we must be wanting to
   // widen SrcVal out to a larger load.
   unsigned SrcValStoreSize =
-      DL.getTypeStoreSize(SrcVal->getType()).getFixedSize();
-  unsigned LoadSize = DL.getTypeStoreSize(LoadTy).getFixedSize();
+      DL.getTypeStoreSize(SrcVal->getType()).getFixedValue();
+  unsigned LoadSize = DL.getTypeStoreSize(LoadTy).getFixedValue();
   if (Offset + LoadSize > SrcValStoreSize) {
     assert(SrcVal->isSimple() && "Cannot widen volatile/atomic load!");
     assert(SrcVal->getType()->isIntegerTy() && "Can't widen non-integer load");
@@ -563,8 +563,8 @@ Value *getLoadValueForLoad(LoadInst *SrcVal, unsigned Offset, Type *LoadTy,
 Constant *getConstantLoadValueForLoad(Constant *SrcVal, unsigned Offset,
                                       Type *LoadTy, const DataLayout &DL) {
   unsigned SrcValStoreSize =
-      DL.getTypeStoreSize(SrcVal->getType()).getFixedSize();
-  unsigned LoadSize = DL.getTypeStoreSize(LoadTy).getFixedSize();
+      DL.getTypeStoreSize(SrcVal->getType()).getFixedValue();
+  unsigned LoadSize = DL.getTypeStoreSize(LoadTy).getFixedValue();
   if (Offset + LoadSize > SrcValStoreSize)
     return nullptr;
   return getConstantStoreValueForLoad(SrcVal, Offset, LoadTy, DL);
@@ -576,7 +576,7 @@ Value *getMemInstValueForLoad(MemIntrinsic *SrcInst, unsigned Offset,
                               Type *LoadTy, Instruction *InsertPt,
                               const DataLayout &DL) {
   LLVMContext &Ctx = LoadTy->getContext();
-  uint64_t LoadSize = DL.getTypeSizeInBits(LoadTy).getFixedSize() / 8;
+  uint64_t LoadSize = DL.getTypeSizeInBits(LoadTy).getFixedValue() / 8;
   IRBuilder<> Builder(InsertPt);
 
   // We know that this method is only called when the mem transfer fully
@@ -622,7 +622,7 @@ Value *getMemInstValueForLoad(MemIntrinsic *SrcInst, unsigned Offset,
 Constant *getConstantMemInstValueForLoad(MemIntrinsic *SrcInst, unsigned Offset,
                                          Type *LoadTy, const DataLayout &DL) {
   LLVMContext &Ctx = LoadTy->getContext();
-  uint64_t LoadSize = DL.getTypeSizeInBits(LoadTy).getFixedSize() / 8;
+  uint64_t LoadSize = DL.getTypeSizeInBits(LoadTy).getFixedValue() / 8;
 
   // We know that this method is only called when the mem transfer fully
   // provides the bits for the load.
