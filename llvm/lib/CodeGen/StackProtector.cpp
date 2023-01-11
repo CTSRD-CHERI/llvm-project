@@ -66,6 +66,9 @@ static cl::opt<bool>
                              "code (should be used for testing only)"),
                     cl::init(false), cl::Hidden);
 
+static cl::opt<bool> DisableCheckNoReturn("disable-check-noreturn-call",
+                                          cl::init(false), cl::Hidden);
+
 char StackProtector::ID = 0;
 
 StackProtector::StackProtector() : FunctionPass(ID) {
@@ -467,7 +470,7 @@ bool StackProtector::InsertStackProtectors() {
     if (&BB == FailBB)
       continue;
     Instruction *CheckLoc = dyn_cast<ReturnInst>(BB.getTerminator());
-    if (!CheckLoc) {
+    if (!CheckLoc && !DisableCheckNoReturn) {
       for (auto &Inst : BB) {
         auto *CB = dyn_cast<CallBase>(&Inst);
         if (!CB)
