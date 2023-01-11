@@ -350,10 +350,10 @@ void RegDefsUses::init(const MachineInstr &MI) {
   // If MI is a call, add RA to Defs to prevent users of RA from going into
   // delay slot.
   if (MI.isCall()) {
-    assert(MI.getDesc().getNumImplicitDefs() <= 2 &&
+    assert(MI.getDesc().implicit_defs().size() <= 2 &&
            "Expected one implicit def for call instruction");
-    for (unsigned i = 0; i < MI.getDesc().getNumImplicitDefs(); i++) {
-      MCPhysReg Reg = MI.getDesc().getImplicitDefs()[i];
+    for (unsigned i = 0; i < MI.getDesc().implicit_defs().size(); i++) {
+      MCPhysReg Reg = MI.getDesc().implicit_defs()[i];
       // XXXAR: currently $cgp is marked as a def for cjalr since I don't see
       // a better way to ensure that $cgp is saved and restored prior to the
       // call. However, $cgp will only be clobbered after the cjalr instruction
