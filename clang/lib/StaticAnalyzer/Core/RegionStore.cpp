@@ -48,7 +48,14 @@ private:
   enum { Symbolic = 0x2 };
 
   llvm::PointerIntPair<const MemRegion *, 2> P;
-  uint64_t Data;
+
+  // Prefer uintptr_t if it can store any uint64_t value in order to support
+  // architectures with strict pointer provenance like CHERI.
+  using DataType =
+    std::conditional_t<std::numeric_limits<uint64_t>::max() <=
+                       std::numeric_limits<uintptr_t>::max(),
+                       uintptr_t, uint64_t>;
+  DataType Data;
 
   /// Create a key for a binding to region \p r, which has a symbolic offset
   /// from region \p Base.
@@ -91,7 +98,7 @@ public:
 
   void Profile(llvm::FoldingSetNodeID& ID) const {
     ID.AddPointer(P.getOpaqueValue());
-    ID.AddInteger(Data);
+    ID.AddInteger(static_cast<uint64_t>(Data));
   }
 
   static BindingKey Make(const MemRegion *R, Kind k);
