@@ -1485,7 +1485,7 @@ static void computeKnownBitsFromOperator(const Operator *I,
       KnownBits IndexBits(IndexBitWidth);
       computeKnownBits(Index, IndexBits, Depth + 1, Q);
       TypeSize IndexTypeSize = Q.DL.getTypeAllocSize(IndexedTy);
-      uint64_t TypeSizeInBytes = IndexTypeSize.getKnownMinSize();
+      uint64_t TypeSizeInBytes = IndexTypeSize.getKnownMinValue();
       KnownBits ScalingFactor(IndexBitWidth);
       // Multiply by current sizeof type.
       // &A[i] == A + i * sizeof(*A[i]).
