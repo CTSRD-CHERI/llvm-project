@@ -15,7 +15,7 @@ define void @test(i1 %b) {
 ; CHECK-LABEL: @test(
 ; CHECK-NEXT:  entry:
 ; CHECK-NEXT:    [[X:%.*]] = alloca i8, align 1
-; CHECK-NEXT:    [[INALLOCA_SAVE:%.*]] = call i8* @llvm.stacksave()
+; CHECK-NEXT:    [[INALLOCA_SAVE:%.*]] = call i8* @llvm.stacksave.p0i8()
 ; CHECK-NEXT:    [[ARGMEM:%.*]] = alloca inalloca <{ [[STRUCT_S:%.*]] }>, align 4
 ; CHECK-NEXT:    [[TMP0:%.*]] = getelementptr inbounds <{ [[STRUCT_S]] }>, <{ [[STRUCT_S]] }>* [[ARGMEM]], i32 0, i32 0
 ; CHECK-NEXT:    [[TMP1:%.*]] = getelementptr inbounds [[STRUCT_S]], %struct.S* [[TMP0]], i32 0, i32 0
@@ -29,7 +29,7 @@ define void @test(i1 %b) {
 ; CHECK-NEXT:    br label [[EXIT]]
 ; CHECK:       exit:
 ; CHECK-NEXT:    call void @f(<{ [[STRUCT_S]] }>* inalloca(<{ [[STRUCT_S]] }>) [[ARGMEM]])
-; CHECK-NEXT:    call void @llvm.stackrestore(i8* [[INALLOCA_SAVE]])
+; CHECK-NEXT:    call void @llvm.stackrestore.p0i8(i8* [[INALLOCA_SAVE]])
 ; CHECK-NEXT:    ret void
 ;
 entry:
