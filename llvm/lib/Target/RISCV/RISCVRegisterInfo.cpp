@@ -768,8 +768,7 @@ bool RISCVRegisterInfo::getRegAllocationHints(
   auto tryAddHint = [&](const MachineOperand &VRRegMO, const MachineOperand &MO,
                         bool NeedGPRC) -> void {
     Register Reg = MO.getReg();
-    Register PhysReg =
-        Register::isPhysicalRegister(Reg) ? Reg : Register(VRM->getPhys(Reg));
+    Register PhysReg = Reg.isPhysical() ? Reg : Register(VRM->getPhys(Reg));
     if (PhysReg && (!NeedGPRC || RISCV::GPRCRegClass.contains(PhysReg))) {
       assert((MO.getSubReg() == 0 || MO.getSubReg() == RISCV::sub_cap_addr) &&
              "Unexpected subreg!");
@@ -820,8 +819,7 @@ bool RISCVRegisterInfo::getRegAllocationHints(
     if (!MO.isReg())
       return true;
     Register Reg = MO.getReg();
-    Register PhysReg =
-        Register::isPhysicalRegister(Reg) ? Reg : Register(VRM->getPhys(Reg));
+    Register PhysReg = Reg.isPhysical() ? Reg : Register(VRM->getPhys(Reg));
     return PhysReg && RISCV::GPRCRegClass.contains(PhysReg);
   };
 
