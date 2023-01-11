@@ -103,7 +103,7 @@ StmtIteratorBase::StmtIteratorBase(Decl** dgi, Decl** dge)
 
 StmtIteratorBase::StmtIteratorBase(const VariableArrayType* t)
     : DGI(nullptr), RawVAPtr(SizeOfTypeVAMode) {
-  RawVAPtr |= reinterpret_cast<uintptr_t>(t);
+  setVAPtr(t);
 }
 
 Stmt*& StmtIteratorBase::GetDeclExpr() const {
