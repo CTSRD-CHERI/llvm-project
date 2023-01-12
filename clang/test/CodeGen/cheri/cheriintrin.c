@@ -76,9 +76,7 @@ void test(void *__capability cap, char *__capability cap2, __SIZE_TYPE__ i);
 // CHECK64-NEXT:    [[TMP25:%.*]] = call i8 addrspace(200)* @llvm.cheri.cap.type.copy(i8 addrspace(200)* [[CAP]], i8 addrspace(200)* [[CAP2]])
 // CHECK64-NEXT:    call void @use_cap(i8 addrspace(200)* noundef [[TMP25]])
 // CHECK64-NEXT:    [[TMP26:%.*]] = call i64 @llvm.cheri.cap.perms.get.i64(i8 addrspace(200)* [[CAP]])
-// CHECK64-NEXT:    [[CONV:%.*]] = trunc i64 [[TMP26]] to i32
-// CHECK64-NEXT:    [[CONV2:%.*]] = zext i32 [[CONV]] to i64
-// CHECK64-NEXT:    call void @use_size_t(i64 noundef [[CONV2]])
+// CHECK64-NEXT:    call void @use_size_t(i64 noundef [[TMP26]])
 // CHECK64-NEXT:    [[TMP27:%.*]] = call i8 addrspace(200)* @llvm.cheri.cap.perms.and.i64(i8 addrspace(200)* [[CAP]], i64 4)
 // CHECK64-NEXT:    call void @use_cap(i8 addrspace(200)* noundef [[TMP27]])
 // CHECK64-NEXT:    [[TMP28:%.*]] = call i8 addrspace(200)* @llvm.cheri.cap.perms.and.i64(i8 addrspace(200)* [[CAP]], i64 -3)
