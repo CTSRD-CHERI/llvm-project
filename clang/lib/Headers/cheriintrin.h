@@ -39,7 +39,7 @@
 #define cheri_bounds_set_exact(x, y) __builtin_cheri_bounds_set_exact((x), (y))
 
 /* Object types, sealing and unsealing: */
-typedef long cheri_otype_t;
+typedef __PTRDIFF_TYPE__ cheri_otype_t;
 #if defined(__mips__) || defined(__riscv)
 /* CHERI-MIPS and CHERI-RISC-V use negative numbers for hardware-interpreted
  * otypes */
