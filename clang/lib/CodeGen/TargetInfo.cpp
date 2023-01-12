@@ -296,21 +296,28 @@ LLVM_DUMP_METHOD void ABIArgInfo::dump() const {
 static llvm::Value *emitRoundPointerUpToAlignment(CodeGenFunction &CGF,
                                                   llvm::Value *Ptr,
                                                   CharUnits Align) {
-  llvm::Value *PtrAsInt = Ptr;
   // OverflowArgArea = (OverflowArgArea + Align - 1) & -Align;
-  PtrAsInt = CGF.getPointerAddress(PtrAsInt);
-  PtrAsInt = CGF.Builder.CreateAdd(PtrAsInt,
-        llvm::ConstantInt::get(CGF.IntPtrTy, Align.getQuantity() - 1));
-  PtrAsInt = CGF.Builder.CreateAnd(PtrAsInt,
-           llvm::ConstantInt::get(CGF.IntPtrTy, -Align.getQuantity()));
-  if (CGF.CGM.getDataLayout().isFatPointer(Ptr->getType())) {
-    PtrAsInt = CGF.getTargetHooks().setPointerAddress(
-        CGF, Ptr, PtrAsInt, Ptr->getName() + ".aligned",
-        CGF.CurCodeDecl->getLocation());
-  } else {
-    PtrAsInt = CGF.Builder.CreateIntToPtr(PtrAsInt, Ptr->getType(),
-                                          Ptr->getName() + ".aligned");
-  }
+  // PtrAsInt = CGF.getPointerAddress(PtrAsInt);
+  // PtrAsInt = CGF.Builder.CreateAdd(PtrAsInt,
+  //       llvm::ConstantInt::get(CGF.IntPtrTy, Align.getQuantity() - 1));
+  // PtrAsInt = CGF.Builder.CreateAnd(PtrAsInt,
+  //          llvm::ConstantInt::get(CGF.IntPtrTy, -Align.getQuantity()));
+  // if (CGF.CGM.getDataLayout().isFatPointer(Ptr->getType())) {
+  //   PtrAsInt = CGF.getTargetHooks().setPointerAddress(
+  //       CGF, Ptr, PtrAsInt, Ptr->getName() + ".aligned",
+  //       CGF.CurCodeDecl->getLocation());
+  // } else {
+  //   PtrAsInt = CGF.Builder.CreateIntToPtr(PtrAsInt, Ptr->getType(),
+  //                                         Ptr->getName() + ".aligned");
+  // }
+  // return PtrAsInt;
+  llvm::Value *PtrAsInt = Ptr;
+  llvm::Value *RoundUp = CGF.Builder.CreateConstInBoundsGEP1_32(
+      CGF.Builder.getInt8Ty(), Ptr, Align.getQuantity() - 1);
+  return CGF.Builder.CreateIntrinsic(
+      llvm::Intrinsic::ptrmask, {CGF.AllocaInt8PtrTy, CGF.IntPtrTy},
+      {RoundUp, llvm::ConstantInt::get(CGF.IntPtrTy, -Align.getQuantity())},
+      nullptr, Ptr->getName() + ".aligned");
   return PtrAsInt;
 }
 
