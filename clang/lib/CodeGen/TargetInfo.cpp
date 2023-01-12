@@ -12888,6 +12888,12 @@ llvm::Value *TargetCodeGenInfo::createEnqueuedBlockKernel(
       CGF.getTypes().ClangCallConvToLLVMCallConv(CallingConv::CC_OpenCLKernel);
   F->setCallingConv(KernelCC);
 
+  llvm::AttrBuilder KernelAttrs(C);
+
+  // FIXME: This is missing setTargetAttributes
+  CGF.CGM.addDefaultFunctionDefinitionAttributes(KernelAttrs);
+  F->addFnAttrs(KernelAttrs);
+
   auto IP = CGF.Builder.saveIP();
   auto *BB = llvm::BasicBlock::Create(C, "entry", F);
   auto &Builder = CGF.Builder;
@@ -12895,10 +12901,6 @@ llvm::Value *TargetCodeGenInfo::createEnqueuedBlockKernel(
   llvm::SmallVector<llvm::Value *, 2> Args(llvm::make_pointer_range(F->args()));
   llvm::CallInst *Call = Builder.CreateCall(Invoke, Args);
   Call->setCallingConv(Invoke->getCallingConv());
-
-  // FIXME: Apply default attributes
-  F->addFnAttr(llvm::Attribute::NoUnwind);
-  F->addFnAttr(llvm::Attribute::Convergent);
 
   Builder.CreateRetVoid();
   Builder.restoreIP(IP);
@@ -12950,10 +12952,12 @@ llvm::Value *AMDGPUTargetCodeGenInfo::createEnqueuedBlockKernel(
                                    &CGF.CGM.getModule());
   F->setCallingConv(llvm::CallingConv::AMDGPU_KERNEL);
 
-  // FIXME: Apply default attributes
-  F->addFnAttr(llvm::Attribute::NoUnwind);
-  F->addFnAttr(llvm::Attribute::Convergent);
-  F->addFnAttr("enqueued-block");
+  llvm::AttrBuilder KernelAttrs(C);
+  // FIXME: The invoke isn't applying the right attributes either
+  // FIXME: This is missing setTargetAttributes
+  CGF.CGM.addDefaultFunctionDefinitionAttributes(KernelAttrs);
+  KernelAttrs.addAttribute("enqueued-block");
+  F->addFnAttrs(KernelAttrs);
 
   auto IP = CGF.Builder.saveIP();
   auto *BB = llvm::BasicBlock::Create(C, "entry", F);
