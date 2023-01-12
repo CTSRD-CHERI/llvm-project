@@ -861,7 +861,7 @@ static bool verifyInsExtInstruction(const MachineInstr &MI, StringRef &ErrInfo,
 //  Perform target specific instruction verification.
 template<unsigned Width, unsigned Scale>
 bool checkScaledImmediate(const MachineInstr &MI, StringRef& ErrInfo, unsigned OpndIdx) {
-  assert(MI.getDesc().OpInfo[OpndIdx].OperandType == MCOI::OPERAND_IMMEDIATE);
+  assert(MI.getDesc().operands()[OpndIdx].OperandType == MCOI::OPERAND_IMMEDIATE);
   if (MI.getOperand(OpndIdx).isImm() && !isShiftedInt<Width, Scale>(MI.getOperand(OpndIdx).getImm())) {
     ErrInfo = "Operand immediate is not representable!";
     return false;

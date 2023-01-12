@@ -178,7 +178,7 @@ bool MipsSEDAGToDAGISel::replaceUsesWithCheriNullReg(
     // Also, we have to check that the register class of the operand
     // contains the null register.
     // This can happen for instructions where register zero encodes $ddc.
-    auto OperandType = MI->getDesc().OpInfo[OpNo].OperandType;
+    auto OperandType = MI->getDesc().operands()[OpNo].OperandType;
     if (OperandType != Mips::OPERAND_CHERI_GPR_OR_NULL) {
       if (OperandType == Mips::OPERAND_CHERI_GPR_OR_DDC) {
         LLVM_DEBUG(dbgs() << "Cannot replace use of NULL register for operand "

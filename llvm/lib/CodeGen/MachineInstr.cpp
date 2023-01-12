@@ -1477,7 +1477,7 @@ bool MachineInstr::mayTrap() const {
   }
   if (hasProperty(MCID::MayTrapOnSealedInput)) {
     for (const auto &Op : explicit_uses()) {
-      auto &OpInfo = getDesc().OpInfo[getOperandNo(&Op)];
+      auto &OpInfo = getDesc().operands()[getOperandNo(&Op)];
       if (OpInfo.mustBeUnsealedCapability() && Op.maybeSealed()) {
         // TODO: Check whether the def is safe (e.g. produced by a previous
         // CIncOffset, etc).
