@@ -6511,6 +6511,7 @@ void Clang::ConstructJob(Compilation &C, const JobAction &JA,
           << "-fcoroutines-ts"
           << "purecap " + TC.getTriple().str();
     } else {
+      D.Diag(diag::warn_deperecated_fcoroutines_ts_flag);
       CmdArgs.push_back("-fcoroutines-ts");
     }
   }
