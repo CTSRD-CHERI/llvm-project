@@ -5173,7 +5173,7 @@ static TypeSourceInfo *GetFullTypeForDeclarator(TypeProcessingState &state,
       // Array parameters have an interpretation based on the qualifiers
       // (deferred until attribute parsing) and default interpretation. All
       // other arrays are implicit based on their container (if any).
-      llvm::Optional<PointerInterpretationKind> PIK = llvm::None;
+      llvm::Optional<PointerInterpretationKind> PIK = std::nullopt;
       if (D.isPrototypeContext() &&
           !hasOuterPointerLikeChunk(D, chunkIndex))
         PIK = Context.getDefaultPointerInterpretation();
