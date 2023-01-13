@@ -5208,7 +5208,9 @@ bool SimplifyCFGOpt::simplifyUnreachable(UnreachableInst *UI) {
           DTU->applyUpdates(Updates);
           Updates.clear();
         }
-        removeUnwindEdge(TI->getParent(), DTU);
+        auto *CI = cast<CallInst>(removeUnwindEdge(TI->getParent(), DTU));
+        if (!CI->doesNotThrow())
+          CI->setDoesNotThrow();
         Changed = true;
       }
     } else if (auto *CSI = dyn_cast<CatchSwitchInst>(TI)) {
