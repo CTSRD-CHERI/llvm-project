@@ -259,6 +259,7 @@ public:
     ComplexPairTy LHS;
     ComplexPairTy RHS;
     QualType Ty;  // Computation Type.
+    FPOptions FPFeatures;
   };
 
   BinOpInfo EmitBinOps(const BinaryOperator *E,
@@ -654,6 +655,7 @@ ComplexPairTy ComplexExprEmitter::EmitBinAdd(const BinOpInfo &Op) {
   llvm::Value *ResR, *ResI;
 
   if (Op.LHS.first->getType()->isFloatingPointTy()) {
+    CodeGenFunction::CGFPOptionsRAII FPOptsRAII(CGF, Op.FPFeatures);
     ResR = Builder.CreateFAdd(Op.LHS.first,  Op.RHS.first,  "add.r");
     if (Op.LHS.second && Op.RHS.second)
       ResI = Builder.CreateFAdd(Op.LHS.second, Op.RHS.second, "add.i");
@@ -672,6 +674,7 @@ ComplexPairTy ComplexExprEmitter::EmitBinAdd(const BinOpInfo &Op) {
 ComplexPairTy ComplexExprEmitter::EmitBinSub(const BinOpInfo &Op) {
   llvm::Value *ResR, *ResI;
   if (Op.LHS.first->getType()->isFloatingPointTy()) {
+    CodeGenFunction::CGFPOptionsRAII FPOptsRAII(CGF, Op.FPFeatures);
     ResR = Builder.CreateFSub(Op.LHS.first, Op.RHS.first, "sub.r");
     if (Op.LHS.second && Op.RHS.second)
       ResI = Builder.CreateFSub(Op.LHS.second, Op.RHS.second, "sub.i");
@@ -764,6 +767,7 @@ ComplexPairTy ComplexExprEmitter::EmitBinMul(const BinOpInfo &Op) {
     // FIXME: C11 also provides for imaginary types which would allow folding
     // still more of this within the type system.
 
+    CodeGenFunction::CGFPOptionsRAII FPOptsRAII(CGF, Op.FPFeatures);
     if (Op.LHS.second && Op.RHS.second) {
       // If both operands are complex, emit the core math directly, and then
       // test for NaNs. If we find NaNs in the result, we delegate to a libcall
@@ -865,6 +869,7 @@ ComplexPairTy ComplexExprEmitter::EmitBinDiv(const BinOpInfo &Op) {
     //
     // FIXME: We would be able to avoid the libcall in many places if we
     // supported imaginary types in addition to complex types.
+    CodeGenFunction::CGFPOptionsRAII FPOptsRAII(CGF, Op.FPFeatures);
     if (RHSi && !CGF.getLangOpts().FastMath) {
       BinOpInfo LibCallOp = Op;
       // If LHS was a real, supply a null imaginary part.
@@ -1036,6 +1041,7 @@ ComplexExprEmitter::EmitBinOps(const BinaryOperator *E,
     Ops.Ty = PromotionType;
   else
     Ops.Ty = E->getType();
+  Ops.FPFeatures = E->getFPFeaturesInEffect(CGF.getLangOpts());
   return Ops;
 }
 
@@ -1050,8 +1056,9 @@ EmitCompoundAssignLValue(const CompoundAssignOperator *E,
   if (const AtomicType *AT = LHSTy->getAs<AtomicType>())
     LHSTy = AT->getValueType();
 
-  CodeGenFunction::CGFPOptionsRAII FPOptsRAII(CGF, E);
   BinOpInfo OpInfo;
+  OpInfo.FPFeatures = E->getFPFeaturesInEffect(CGF.getLangOpts());
+  CodeGenFunction::CGFPOptionsRAII FPOptsRAII(CGF, OpInfo.FPFeatures);
 
   // Load the RHS and LHS operands.
   // __block variables need to have the rhs evaluated first, plus this should
