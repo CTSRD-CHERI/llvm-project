@@ -14,6 +14,7 @@
 #ifndef LLVM_MC_MCINSTRDESC_H
 #define LLVM_MC_MCINSTRDESC_H
 
+#include "llvm/ADT/ArrayRef.h"
 #include "llvm/ADT/iterator_range.h"
 #include "llvm/MC/MCRegister.h"
 
@@ -221,9 +222,9 @@ public:
   int getOperandConstraint(unsigned OpNum,
                            MCOI::OperandConstraint Constraint) const {
     if (OpNum < NumOperands &&
-        (OpInfo[OpNum].Constraints & (1 << Constraint))) {
+        (operands()[OpNum].Constraints & (1 << Constraint))) {
       unsigned ValuePos = 4 + Constraint * 4;
-      return (int)(OpInfo[OpNum].Constraints >> ValuePos) & 0x0f;
+      return (int)(operands()[OpNum].Constraints >> ValuePos) & 0x0f;
     }
     return -1;
   }
@@ -243,8 +244,8 @@ public:
   const_opInfo_iterator opInfo_begin() const { return OpInfo; }
   const_opInfo_iterator opInfo_end() const { return OpInfo + NumOperands; }
 
-  iterator_range<const_opInfo_iterator> operands() const {
-    return make_range(opInfo_begin(), opInfo_end());
+  ArrayRef<MCOperandInfo> operands() const {
+    return ArrayRef(OpInfo, NumOperands);
   }
 
   /// Return the number of MachineOperands that are register
@@ -636,7 +637,7 @@ public:
   int findFirstPredOperandIdx() const {
     if (isPredicable()) {
       for (unsigned i = 0, e = getNumOperands(); i != e; ++i)
-        if (OpInfo[i].isPredicate())
+        if (operands()[i].isPredicate())
           return i;
     }
     return -1;
