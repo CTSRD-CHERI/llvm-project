@@ -457,8 +457,7 @@ void MachineLICMBase::ProcessMI(MachineInstr *MI,
     Register Reg = MO.getReg();
     if (!Reg)
       continue;
-    assert(Register::isPhysicalRegister(Reg) &&
-           "Not expecting virtual register!");
+    assert(Reg.isPhysical() && "Not expecting virtual register!");
 
     if (!MO.isDef()) {
       if (Reg && (PhysRegDefs.test(Reg) || PhysRegClobbers.test(Reg)))
@@ -849,7 +848,7 @@ MachineLICMBase::calcRegisterCost(const MachineInstr *MI, bool ConsiderSeen,
     if (!MO.isReg() || MO.isImplicit())
       continue;
     Register Reg = MO.getReg();
-    if (!Register::isVirtualRegister(Reg))
+    if (!Reg.isVirtual())
       continue;
 
     // FIXME: It seems bad to use RegSeen only for some of these calculations.
@@ -921,9 +920,9 @@ static bool isInvariantStore(const MachineInstr &MI,
       Register Reg = MO.getReg();
       // If operand is a virtual register, check if it comes from a copy of a
       // physical register.
-      if (Register::isVirtualRegister(Reg))
+      if (Reg.isVirtual())
         Reg = TRI->lookThruCopyLike(MO.getReg(), MRI);
-      if (Register::isVirtualRegister(Reg))
+      if (Reg.isVirtual())
         return false;
       if (!TRI->isCallerPreservedPhysReg(Reg.asMCReg(), *MI.getMF()))
         return false;
@@ -952,7 +951,7 @@ static bool isCopyFeedingInvariantStore(const MachineInstr &MI,
   const MachineFunction *MF = MI.getMF();
   // Check that we are copying a constant physical register.
   Register CopySrcReg = MI.getOperand(1).getReg();
-  if (Register::isVirtualRegister(CopySrcReg))
+  if (CopySrcReg.isVirtual())
     return false;
 
   if (!TRI->isCallerPreservedPhysReg(CopySrcReg.asMCReg(), *MF))
@@ -960,8 +959,7 @@ static bool isCopyFeedingInvariantStore(const MachineInstr &MI,
 
   Register CopyDstReg = MI.getOperand(0).getReg();
   // Check if any of the uses of the copy are invariant stores.
-  assert(Register::isVirtualRegister(CopyDstReg) &&
-         "copy dst is not a virtual reg");
+  assert(CopyDstReg.isVirtual() && "copy dst is not a virtual reg");
 
   for (MachineInstr &UseMI : MRI->use_instructions(CopyDstReg)) {
     if (UseMI.mayStore() && isInvariantStore(UseMI, TRI, MRI))
@@ -1034,7 +1032,7 @@ bool MachineLICMBase::HasLoopPHIUse(const MachineInstr *MI) const {
       if (!MO.isReg() || !MO.isDef())
         continue;
       Register Reg = MO.getReg();
-      if (!Register::isVirtualRegister(Reg))
+      if (!Reg.isVirtual())
         continue;
       for (MachineInstr &UseMI : MRI->use_instructions(Reg)) {
         // A PHI may cause a copy to be inserted.
@@ -1104,7 +1102,7 @@ bool MachineLICMBase::IsCheapInstruction(MachineInstr &MI) const {
       continue;
     --NumDefs;
     Register Reg = DefMO.getReg();
-    if (Register::isPhysicalRegister(Reg))
+    if (Reg.isPhysical())
       continue;
 
     if (!TII->hasLowDefLatency(SchedModel, MI, i))
@@ -1197,7 +1195,7 @@ bool MachineLICMBase::IsProfitableToHoist(MachineInstr &MI) {
     if (!MO.isReg() || MO.isImplicit())
       continue;
     Register Reg = MO.getReg();
-    if (!Register::isVirtualRegister(Reg))
+    if (!Reg.isVirtual())
       continue;
     if (MO.isDef() && HasHighOperandLatency(MI, i, Reg)) {
       LLVM_DEBUG(dbgs() << "Hoist High Latency: " << MI);
@@ -1354,13 +1352,11 @@ bool MachineLICMBase::EliminateCSE(
       const MachineOperand &MO = MI->getOperand(i);
 
       // Physical registers may not differ here.
-      assert((!MO.isReg() || MO.getReg() == 0 ||
-              !Register::isPhysicalRegister(MO.getReg()) ||
+      assert((!MO.isReg() || MO.getReg() == 0 || !MO.getReg().isPhysical() ||
               MO.getReg() == Dup->getOperand(i).getReg()) &&
              "Instructions with different phys regs are not identical!");
 
-      if (MO.isReg() && MO.isDef() &&
-          !Register::isPhysicalRegister(MO.getReg()))
+      if (MO.isReg() && MO.isDef() && !MO.getReg().isPhysical())
         Defs.push_back(i);
     }
 
