@@ -2952,7 +2952,7 @@ private:
                                   SourceLocation ScopeLoc,
                                   ParsedAttr::Syntax Syntax);
 
-  Optional<AvailabilitySpec> ParseAvailabilitySpec();
+  std::optional<AvailabilitySpec> ParseAvailabilitySpec();
   ExprResult ParseAvailabilityCheckExpr(SourceLocation StartLoc);
 
   void ParseExternalSourceSymbolAttribute(IdentifierInfo &ExternalSourceSymbol,
@@ -3073,7 +3073,7 @@ private:
   void ParseTypeQualifierListOpt(
       DeclSpec &DS, unsigned AttrReqs = AR_AllAttributesParsed,
       bool AtomicAllowed = true, bool IdentifierRequired = false,
-      Optional<llvm::function_ref<void()>> CodeCompletionHandler =
+      std::optional<llvm::function_ref<void()>> CodeCompletionHandler =
           std::nullopt);
   void ParseDirectDeclarator(Declarator &D);
   void ParseDecompositionDeclarator(Declarator &D);
@@ -3083,7 +3083,7 @@ private:
                                bool IsAmbiguous, bool RequiresArg = false);
   void InitCXXThisScopeForDeclaratorIfRelevant(
       const Declarator &D, const DeclSpec &DS,
-      llvm::Optional<Sema::CXXThisScopeRAII> &ThisScope);
+      std::optional<Sema::CXXThisScopeRAII> &ThisScope);
   bool ParseRefQualifier(bool &RefQualifierIsLValueRef,
                          SourceLocation &RefQualifierLoc);
   bool isFunctionDeclaratorIdentifierList();

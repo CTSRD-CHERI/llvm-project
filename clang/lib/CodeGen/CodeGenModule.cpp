@@ -3175,7 +3175,7 @@ bool CodeGenModule::MayBeEmittedEagerly(const ValueDecl *Global) {
   // we have if the level of the declare target attribute is -1. Note that we
   // check somewhere else if we should emit this at all.
   if (LangOpts.OpenMP >= 50 && !LangOpts.OpenMPSimd) {
-    llvm::Optional<OMPDeclareTargetDeclAttr *> ActiveAttr =
+    std::optional<OMPDeclareTargetDeclAttr *> ActiveAttr =
         OMPDeclareTargetDeclAttr::getActiveAttr(Global);
     if (!ActiveAttr || (*ActiveAttr)->getLevel() != (unsigned)-1)
       return false;
@@ -3439,7 +3439,7 @@ void CodeGenModule::EmitGlobal(GlobalDecl GD) {
         !Context.isMSStaticDataMemberInlineDefinition(VD)) {
       if (LangOpts.OpenMP) {
         // Emit declaration of the must-be-emitted declare target variable.
-        if (llvm::Optional<OMPDeclareTargetDeclAttr::MapTypeTy> Res =
+        if (std::optional<OMPDeclareTargetDeclAttr::MapTypeTy> Res =
                 OMPDeclareTargetDeclAttr::isDeclareTargetDeclaration(VD)) {
           bool UnifiedMemoryEnabled =
               getOpenMPRuntime().hasRequiresUnifiedSharedMemory();
@@ -4951,7 +4951,7 @@ void CodeGenModule::EmitGlobalVarDefinition(const VarDecl *D,
   const VarDecl *InitDecl;
   const Expr *InitExpr = D->getAnyInitializer(InitDecl);
 
-  Optional<ConstantEmitter> emitter;
+  std::optional<ConstantEmitter> emitter;
 
   // CUDA E.2.4.1 "__shared__ variables cannot have an initialization
   // as part of their declaration."  Sema has already checked for
@@ -5111,7 +5111,7 @@ void CodeGenModule::EmitGlobalVarDefinition(const VarDecl *D,
 
   CharUnits AlignVal = getContext().getDeclAlign(D);
   // Check for alignment specifed in an 'omp allocate' directive.
-  if (llvm::Optional<CharUnits> AlignValFromAllocate =
+  if (std::optional<CharUnits> AlignValFromAllocate =
           getOMPAllocateAlignment(D))
     AlignVal = *AlignValFromAllocate;
   GV->setAlignment(AlignVal.getAsAlign());
@@ -6165,7 +6165,7 @@ ConstantAddress CodeGenModule::GetAddrOfGlobalTemporary(
   LangAS AddrSpace =
       VD ? GetGlobalVarAddressSpace(VD) : MaterializedType.getAddressSpace();
 
-  Optional<ConstantEmitter> emitter;
+  std::optional<ConstantEmitter> emitter;
   llvm::Constant *InitialValue = nullptr;
   bool Constant = false;
   llvm::Type *Type;

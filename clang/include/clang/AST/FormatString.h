@@ -244,7 +244,7 @@ public:
 
   bool isPrintfKind() const { return IsPrintf; }
 
-  Optional<ConversionSpecifier> getStandardSpecifier() const;
+  std::optional<ConversionSpecifier> getStandardSpecifier() const;
 
 protected:
   bool IsPrintf;
@@ -469,7 +469,7 @@ public:
 
   bool hasStandardLengthModifier() const;
 
-  Optional<LengthModifier> getCorrectedLengthModifier() const;
+  std::optional<LengthModifier> getCorrectedLengthModifier() const;
 
   bool hasStandardConversionSpecifier(const LangOptions &LangOpt) const;
 
