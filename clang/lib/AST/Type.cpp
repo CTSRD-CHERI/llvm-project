@@ -51,6 +51,7 @@
 #include <cassert>
 #include <cstdint>
 #include <cstring>
+#include <optional>
 #include <type_traits>
 
 using namespace clang;

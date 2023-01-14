@@ -51,6 +51,7 @@
 #include <algorithm>
 #include <cstring>
 #include <functional>
+#include <optional>
 #include <unordered_map>
 
 using namespace clang;
