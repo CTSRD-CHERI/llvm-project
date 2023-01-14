@@ -60,6 +60,7 @@
 #include "llvm/Support/ScopedPrinter.h"
 #include "llvm/Support/X86TargetParser.h"
 #include "llvm/Transforms/Utils/Local.h"
+#include <optional>
 #include <sstream>
 
 using namespace clang;

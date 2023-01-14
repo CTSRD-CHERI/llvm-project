@@ -42,6 +42,7 @@
 #include "llvm/Support/raw_ostream.h"
 #include <cassert>
 #include <numeric>
+#include <optional>
 
 // XXXAR: TODO fix default address space in this file as well
 #define getUnqual(arg) get(arg, 0u)
