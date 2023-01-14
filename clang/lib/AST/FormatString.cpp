@@ -781,7 +781,7 @@ const char *ConversionSpecifier::toString() const {
   return nullptr;
 }
 
-Optional<ConversionSpecifier>
+std::optional<ConversionSpecifier>
 ConversionSpecifier::getStandardSpecifier() const {
   ConversionSpecifier::Kind NewKind;
 
@@ -1082,7 +1082,8 @@ bool FormatSpecifier::hasStandardLengthConversionCombination() const {
   return true;
 }
 
-Optional<LengthModifier> FormatSpecifier::getCorrectedLengthModifier() const {
+std::optional<LengthModifier>
+FormatSpecifier::getCorrectedLengthModifier() const {
   if (CS.isAnyIntArg() || CS.getKind() == ConversionSpecifier::nArg) {
     if (LM.getKind() == LengthModifier::AsLongDouble ||
         LM.getKind() == LengthModifier::AsQuad) {

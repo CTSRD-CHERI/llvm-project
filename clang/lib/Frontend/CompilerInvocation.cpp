@@ -2514,7 +2514,8 @@ static const auto &getFrontendActionTable() {
 }
 
 /// Maps command line option to frontend action.
-static Optional<frontend::ActionKind> getFrontendAction(OptSpecifier &Opt) {
+static std::optional<frontend::ActionKind>
+getFrontendAction(OptSpecifier &Opt) {
   for (const auto &ActionOpt : getFrontendActionTable())
     if (ActionOpt.second == Opt.getID())
       return ActionOpt.first;
@@ -2523,7 +2524,7 @@ static Optional<frontend::ActionKind> getFrontendAction(OptSpecifier &Opt) {
 }
 
 /// Maps frontend action to command line option.
-static Optional<OptSpecifier>
+static std::optional<OptSpecifier>
 getProgramActionOpt(frontend::ActionKind ProgramAction) {
   for (const auto &ActionOpt : getFrontendActionTable())
     if (ActionOpt.first == ProgramAction)
@@ -2548,7 +2549,7 @@ static void GenerateFrontendArgs(const FrontendOptions &Opts,
 #include "clang/Driver/Options.inc"
 #undef FRONTEND_OPTION_WITH_MARSHALLING
 
-  Optional<OptSpecifier> ProgramActionOpt =
+  std::optional<OptSpecifier> ProgramActionOpt =
       getProgramActionOpt(Opts.ProgramAction);
 
   // Generating a simple flag covers most frontend actions.
@@ -2727,7 +2728,7 @@ static bool ParseFrontendArgs(FrontendOptions &Opts, ArgList &Args,
   Opts.ProgramAction = frontend::ParseSyntaxOnly;
   if (const Arg *A = Args.getLastArg(OPT_Action_Group)) {
     OptSpecifier Opt = OptSpecifier(A->getOption().getID());
-    Optional<frontend::ActionKind> ProgramAction = getFrontendAction(Opt);
+    std::optional<frontend::ActionKind> ProgramAction = getFrontendAction(Opt);
     assert(ProgramAction && "Option specifier not in Action_Group.");
 
     if (ProgramAction == frontend::ASTDump &&
