@@ -773,7 +773,8 @@ namespace llvm {
 ///                  allocator supports it).
 /// \return The allocated memory. Could be NULL.
 inline void *operator new(size_t Bytes, llvm::MCContext &C,
-                          size_t Alignment = 8) noexcept {
+                          size_t Alignment =
+                              llvm::alignTo<alignof(max_align_t)>(8)) noexcept {
   return C.allocate(Bytes, Alignment);
 }
 /// Placement delete companion to the new above.
@@ -806,7 +807,8 @@ inline void operator delete(void *Ptr, llvm::MCContext &C, size_t) noexcept {
 ///                  allocator supports it).
 /// \return The allocated memory. Could be NULL.
 inline void *operator new[](size_t Bytes, llvm::MCContext &C,
-                            size_t Alignment = 8) noexcept {
+                            size_t Alignment =
+                                llvm::alignTo<alignof(max_align_t)>(8)) noexcept {
   return C.allocate(Bytes, Alignment);
 }
 
