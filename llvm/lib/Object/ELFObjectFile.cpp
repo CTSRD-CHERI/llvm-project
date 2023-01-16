@@ -311,7 +311,7 @@ Expected<SubtargetFeatures> ELFObjectFileBase::getRISCVFeatures() const {
 
   RISCVAttributeParser Attributes;
   if (Error E = getBuildAttributes(Attributes)) {
-    return E;
+    return std::move(E);
   }
 
   std::optional<StringRef> Attr =
