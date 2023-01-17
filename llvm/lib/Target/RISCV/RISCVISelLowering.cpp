@@ -11764,6 +11764,7 @@ static MachineBasicBlock *emitSelectPseudo(MachineInstr &MI,
   // multiple selects with the exact same condition (same LHS, RHS and CC).
   // The selects may be interleaved with other instructions if the other
   // instructions meet some requirements we deem safe:
+  // - They are not pseudo instructions.
   // - They are debug instructions. Otherwise,
   // - They do not have side-effects, do not access memory and their inputs do
   //   not depend on the results of the select pseudo-instructions.
@@ -11809,7 +11810,8 @@ static MachineBasicBlock *emitSelectPseudo(MachineInstr &MI,
       continue;
     }
     if (SequenceMBBI->hasUnmodeledSideEffects() ||
-        SequenceMBBI->mayLoadOrStore())
+        SequenceMBBI->mayLoadOrStore() ||
+        SequenceMBBI->usesCustomInsertionHook())
       break;
     if (llvm::any_of(SequenceMBBI->operands(), [&](MachineOperand &MO) {
           return MO.isReg() && MO.isUse() && SelectDests.count(MO.getReg());
