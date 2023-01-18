@@ -705,8 +705,6 @@ RISCVISAInfo::parseArchString(StringRef Arch, bool EnableExperimentalExtension,
       }
 
       if (!IgnoreUnknown && Name.size() == Type.size()) {
-        if (IgnoreUnknown)
-          continue;
         return createStringError(errc::invalid_argument,
                                  "%s name missing after '%s'",
                                  Desc.str().c_str(), Type.str().c_str());
@@ -725,8 +723,6 @@ RISCVISAInfo::parseArchString(StringRef Arch, bool EnableExperimentalExtension,
 
       // Check if duplicated extension.
       if (!IgnoreUnknown && llvm::is_contained(AllExts, Name)) {
-        if (IgnoreUnknown)
-          continue;
         return createStringError(errc::invalid_argument, "duplicated %s '%s'",
                                  Desc.str().c_str(), Name.str().c_str());
       }
