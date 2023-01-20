@@ -3278,6 +3278,11 @@ static void RenderSSPOptions(const Driver &D, const ToolChain &TC,
       StackProtectorLevel = LangOptions::SSPStrong;
     else if (A->getOption().matches(options::OPT_fstack_protector_all))
       StackProtectorLevel = LangOptions::SSPReq;
+    if (EffectiveTriple.isBPF() && StackProtectorLevel != LangOptions::SSPOff) {
+      D.Diag(diag::warn_drv_unsupported_option_for_target)
+          << A->getSpelling() << EffectiveTriple.getTriple();
+      StackProtectorLevel = DefaultStackProtectorLevel;
+    }
     if (StackProtectorLevel && TC.isCheriPurecap()) {
       TC.getDriver().Diag(diag::warn_drv_ignored_ssp_purecap)
           << A->getOption().getName();
