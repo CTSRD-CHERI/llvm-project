@@ -7962,7 +7962,7 @@ void TestNonADLCall3() {
 // CHECK-NEXT:        },
 // CHECK-NEXT:        "valueCategory": "prvalue",
 // CHECK-NEXT:        "ctorType": {
-// CHECK-NEXT:         "qualType": "void (const NS::X &) noexcept"
+// CHECK-NEXT:         "qualType": "void (const X &) noexcept"
 // CHECK-NEXT:        },
 // CHECK-NEXT:        "hadMultipleCandidates": true,
 // CHECK-NEXT:        "constructionKind": "complete",
@@ -7983,7 +7983,8 @@ void TestNonADLCall3() {
 // CHECK-NEXT:           }
 // CHECK-NEXT:          },
 // CHECK-NEXT:          "type": {
-// CHECK-NEXT:           "qualType": "const NS::X"
+// CHECK-NEXT:           "desugaredQualType": "const NS::X",
+// CHECK-NEXT:           "qualType": "const X"
 // CHECK-NEXT:          },
 // CHECK-NEXT:          "valueCategory": "lvalue",
 // CHECK-NEXT:          "castKind": "NoOp",
@@ -8115,7 +8116,7 @@ void TestNonADLCall3() {
 // CHECK-NEXT:        },
 // CHECK-NEXT:        "valueCategory": "prvalue",
 // CHECK-NEXT:        "ctorType": {
-// CHECK-NEXT:         "qualType": "void (const NS::X &) noexcept"
+// CHECK-NEXT:         "qualType": "void (const X &) noexcept"
 // CHECK-NEXT:        },
 // CHECK-NEXT:        "hadMultipleCandidates": true,
 // CHECK-NEXT:        "constructionKind": "complete",
@@ -8136,7 +8137,8 @@ void TestNonADLCall3() {
 // CHECK-NEXT:           }
 // CHECK-NEXT:          },
 // CHECK-NEXT:          "type": {
-// CHECK-NEXT:           "qualType": "const NS::X"
+// CHECK-NEXT:           "desugaredQualType": "const NS::X",
+// CHECK-NEXT:           "qualType": "const X"
 // CHECK-NEXT:          },
 // CHECK-NEXT:          "valueCategory": "lvalue",
 // CHECK-NEXT:          "castKind": "NoOp",
@@ -8393,7 +8395,7 @@ void TestNonADLCall3() {
 // CHECK-NEXT:        },
 // CHECK-NEXT:        "valueCategory": "prvalue",
 // CHECK-NEXT:        "ctorType": {
-// CHECK-NEXT:         "qualType": "void (const NS::X &) noexcept"
+// CHECK-NEXT:         "qualType": "void (const X &) noexcept"
 // CHECK-NEXT:        },
 // CHECK-NEXT:        "hadMultipleCandidates": true,
 // CHECK-NEXT:        "constructionKind": "complete",
@@ -8414,7 +8416,8 @@ void TestNonADLCall3() {
 // CHECK-NEXT:           }
 // CHECK-NEXT:          },
 // CHECK-NEXT:          "type": {
-// CHECK-NEXT:           "qualType": "const NS::X"
+// CHECK-NEXT:           "desugaredQualType": "const NS::X",
+// CHECK-NEXT:           "qualType": "const X"
 // CHECK-NEXT:          },
 // CHECK-NEXT:          "valueCategory": "lvalue",
 // CHECK-NEXT:          "castKind": "NoOp",
@@ -8717,7 +8720,7 @@ void TestNonADLCall3() {
 // CHECK-NEXT:        },
 // CHECK-NEXT:        "valueCategory": "prvalue",
 // CHECK-NEXT:        "ctorType": {
-// CHECK-NEXT:         "qualType": "void (const NS::X &) noexcept"
+// CHECK-NEXT:         "qualType": "void (const X &) noexcept"
 // CHECK-NEXT:        },
 // CHECK-NEXT:        "hadMultipleCandidates": true,
 // CHECK-NEXT:        "constructionKind": "complete",
@@ -8738,7 +8741,8 @@ void TestNonADLCall3() {
 // CHECK-NEXT:           }
 // CHECK-NEXT:          },
 // CHECK-NEXT:          "type": {
-// CHECK-NEXT:           "qualType": "const NS::X"
+// CHECK-NEXT:           "desugaredQualType": "const NS::X",
+// CHECK-NEXT:           "qualType": "const X"
 // CHECK-NEXT:          },
 // CHECK-NEXT:          "valueCategory": "lvalue",
 // CHECK-NEXT:          "castKind": "NoOp",
@@ -8870,7 +8874,7 @@ void TestNonADLCall3() {
 // CHECK-NEXT:        },
 // CHECK-NEXT:        "valueCategory": "prvalue",
 // CHECK-NEXT:        "ctorType": {
-// CHECK-NEXT:         "qualType": "void (const NS::X &) noexcept"
+// CHECK-NEXT:         "qualType": "void (const X &) noexcept"
 // CHECK-NEXT:        },
 // CHECK-NEXT:        "hadMultipleCandidates": true,
 // CHECK-NEXT:        "constructionKind": "complete",
@@ -8891,7 +8895,8 @@ void TestNonADLCall3() {
 // CHECK-NEXT:           }
 // CHECK-NEXT:          },
 // CHECK-NEXT:          "type": {
-// CHECK-NEXT:           "qualType": "const NS::X"
+// CHECK-NEXT:           "desugaredQualType": "const NS::X",
+// CHECK-NEXT:           "qualType": "const X"
 // CHECK-NEXT:          },
 // CHECK-NEXT:          "valueCategory": "lvalue",
 // CHECK-NEXT:          "castKind": "NoOp",
@@ -9150,7 +9155,7 @@ void TestNonADLCall3() {
 // CHECK-NEXT:        },
 // CHECK-NEXT:        "valueCategory": "prvalue",
 // CHECK-NEXT:        "ctorType": {
-// CHECK-NEXT:         "qualType": "void (const NS::X &) noexcept"
+// CHECK-NEXT:         "qualType": "void (const X &) noexcept"
 // CHECK-NEXT:        },
 // CHECK-NEXT:        "hadMultipleCandidates": true,
 // CHECK-NEXT:        "constructionKind": "complete",
@@ -9171,7 +9176,8 @@ void TestNonADLCall3() {
 // CHECK-NEXT:           }
 // CHECK-NEXT:          },
 // CHECK-NEXT:          "type": {
-// CHECK-NEXT:           "qualType": "const NS::X"
+// CHECK-NEXT:           "desugaredQualType": "const NS::X",
+// CHECK-NEXT:           "qualType": "const X"
 // CHECK-NEXT:          },
 // CHECK-NEXT:          "valueCategory": "lvalue",
 // CHECK-NEXT:          "castKind": "NoOp",
