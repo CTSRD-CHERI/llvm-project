@@ -3444,7 +3444,7 @@ KnownBits SelectionDAG::computeKnownBits(SDValue Op, const APInt &DemandedElts,
     Known2 = computeKnownBits(Op.getOperand(0), DemandedElts, Depth + 1);
     // If we have a known 1, its position is our upper bound.
     unsigned PossibleTZ = Known2.countMaxTrailingZeros();
-    unsigned LowBits = Log2_32(PossibleTZ) + 1;
+    unsigned LowBits = llvm::bit_width(PossibleTZ);
     Known.Zero.setBitsFrom(LowBits);
     break;
   }
@@ -3453,7 +3453,7 @@ KnownBits SelectionDAG::computeKnownBits(SDValue Op, const APInt &DemandedElts,
     Known2 = computeKnownBits(Op.getOperand(0), DemandedElts, Depth + 1);
     // If we have a known 1, its position is our upper bound.
     unsigned PossibleLZ = Known2.countMaxLeadingZeros();
-    unsigned LowBits = Log2_32(PossibleLZ) + 1;
+    unsigned LowBits = llvm::bit_width(PossibleLZ);
     Known.Zero.setBitsFrom(LowBits);
     break;
   }
@@ -3461,7 +3461,7 @@ KnownBits SelectionDAG::computeKnownBits(SDValue Op, const APInt &DemandedElts,
     Known2 = computeKnownBits(Op.getOperand(0), DemandedElts, Depth + 1);
     // If we know some of the bits are zero, they can't be one.
     unsigned PossibleOnes = Known2.countMaxPopulation();
-    Known.Zero.setBitsFrom(Log2_32(PossibleOnes) + 1);
+    Known.Zero.setBitsFrom(llvm::bit_width(PossibleOnes));
     break;
   }
   case ISD::PARITY: {
