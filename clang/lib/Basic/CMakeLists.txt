@@ -122,6 +122,7 @@ add_clang_library(clangBasic
   DEPENDS
   ${basic_deps}
   omp_gen
+  RISCVTargetParserTableGen
   )
 
 target_link_libraries(clangBasic
