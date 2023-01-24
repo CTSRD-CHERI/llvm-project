@@ -7156,7 +7156,7 @@ static SDValue getMemcpyLoadsAndStores(
         NewAlign = NewAlign.previous();
 
     if (MemOps[0].isFatPointer()) {
-      assert(NewAlign == DL.getABITypeAlignment(Ty) &&
+      assert(NewAlign == DL.getABITypeAlign(Ty) &&
              "Stack not capability-aligned?");
     }
     if (NewAlign > Alignment) {
