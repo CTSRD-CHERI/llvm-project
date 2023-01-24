@@ -61,7 +61,6 @@ add_llvm_component_library(LLVMAnalysis
   DomPrinter.cpp
   DomTreeUpdater.cpp
   DominanceFrontier.cpp
-  EHPersonalities.cpp
   FunctionPropertiesAnalysis.cpp
   GlobalsModRef.cpp
   GuardUtils.cpp
