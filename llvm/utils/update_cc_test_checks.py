@@ -392,6 +392,7 @@ def main():
                                       prefixes,
                                       func_dict, func, False,
                                       ti.args.function_signature,
+                                      ti.args.version,
                                       global_vars_seen_dict,
                                       is_filtered=builder.is_filtered())
         else:
@@ -459,6 +460,7 @@ def main():
                       mangled,
                       False,
                       args.function_signature,
+                      args.version,
                       global_vars_seen_dict,
                       is_filtered=builder.is_filtered()))
               if line.rstrip('\n') == '//':
