@@ -16587,7 +16587,7 @@ static SDValue PerformSplittingToNarrowingStores(StoreSDNode *St,
 
     SDValue Store = DAG.getTruncStore(
         Ch, DL, Extract, NewPtr, St->getPointerInfo().getWithOffset(NewOffset),
-        NewToVT, Alignment.value(), MMOFlags, AAInfo);
+        NewToVT, Alignment, MMOFlags, AAInfo);
     Stores.push_back(Store);
   }
   return DAG.getNode(ISD::TokenFactor, DL, MVT::Other, Stores);
@@ -16628,7 +16628,7 @@ static SDValue PerformSplittingMVETruncToNarrowingStores(StoreSDNode *St,
     SDValue Extract = Trunc.getOperand(i);
     SDValue Store = DAG.getTruncStore(
         Ch, DL, Extract, NewPtr, St->getPointerInfo().getWithOffset(NewOffset),
-        NewToVT, Alignment.value(), MMOFlags, AAInfo);
+        NewToVT, Alignment, MMOFlags, AAInfo);
     Stores.push_back(Store);
   }
   return DAG.getNode(ISD::TokenFactor, DL, MVT::Other, Stores);
@@ -16664,8 +16664,8 @@ static SDValue PerformExtractFpToIntStores(StoreSDNode *St, SelectionDAG &DAG) {
   AAMDNodes AAInfo = St->getAAInfo();
   EVT NewToVT = EVT::getIntegerVT(C, VT.getSizeInBits());
   SDValue Store = DAG.getTruncStore(Ch, DL, SDValue(GetLane, 0), BasePtr,
-                                    St->getPointerInfo(), NewToVT,
-                                    Alignment.value(), MMOFlags, AAInfo);
+                                    St->getPointerInfo(), NewToVT, Alignment,
+                                    MMOFlags, AAInfo);
 
   return Store;
 }
