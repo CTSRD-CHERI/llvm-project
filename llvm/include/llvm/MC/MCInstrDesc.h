@@ -245,11 +245,6 @@ public:
   /// well.
   unsigned getNumOperands() const { return NumOperands; }
 
-  using const_opInfo_iterator = const MCOperandInfo *;
-
-  const_opInfo_iterator opInfo_begin() const { return OpInfo; }
-  const_opInfo_iterator opInfo_end() const { return OpInfo + NumOperands; }
-
   ArrayRef<MCOperandInfo> operands() const {
     return ArrayRef(OpInfo, NumOperands);
   }
