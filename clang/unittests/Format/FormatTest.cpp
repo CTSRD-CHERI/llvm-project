@@ -22634,6 +22634,28 @@ TEST_F(FormatTest, DisableRegions) {
                    "/* clang-format off */\n"
                    "/* long long long long long long line */\n",
                    getLLVMStyleWithColumns(20)));
+
+  verifyFormat("int *i;\n"
+               "// clang-format off:\n"
+               "int* j;\n"
+               "// clang-format on: 1\n"
+               "int *k;",
+               "int* i;\n"
+               "// clang-format off:\n"
+               "int* j;\n"
+               "// clang-format on: 1\n"
+               "int* k;");
+
+  verifyFormat("int *i;\n"
+               "// clang-format off:0\n"
+               "int* j;\n"
+               "// clang-format only\n"
+               "int* k;",
+               "int* i;\n"
+               "// clang-format off:0\n"
+               "int* j;\n"
+               "// clang-format only\n"
+               "int* k;");
 }
 
 TEST_F(FormatTest, DoNotCrashOnInvalidInput) {
