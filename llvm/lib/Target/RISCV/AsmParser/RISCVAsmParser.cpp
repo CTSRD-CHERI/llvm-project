@@ -307,7 +307,7 @@ public:
 
 /// RISCVOperand - Instances of this class represent a parsed machine
 /// instruction
-struct RISCVOperand : public MCParsedAsmOperand {
+struct RISCVOperand final : public MCParsedAsmOperand {
 
   enum class KindTy {
     Token,
