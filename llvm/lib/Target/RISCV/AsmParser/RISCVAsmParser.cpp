@@ -209,6 +209,7 @@ class RISCVAsmParser : public MCTargetAsmParser {
   OperandMatchResultTy parseMaskReg(OperandVector &Operands);
   OperandMatchResultTy parseInsnDirectiveOpcode(OperandVector &Operands);
   OperandMatchResultTy parseGPRAsFPR(OperandVector &Operands);
+  OperandMatchResultTy parseFRMArg(OperandVector &Operands);
 
   bool parseOperand(OperandVector &Operands, StringRef Mnemonic);
 
@@ -315,6 +316,7 @@ struct RISCVOperand : public MCParsedAsmOperand {
     SystemRegister,
     SpecialCapRegister,
     VType,
+    FRM,
   } Kind;
 
   bool IsRV64;
@@ -347,6 +349,10 @@ struct RISCVOperand : public MCParsedAsmOperand {
     unsigned Val;
   };
 
+  struct FRMOp {
+    RISCVFPRndMode::RoundingMode FRM;
+  };
+
   SMLoc StartLoc, EndLoc;
   union {
     StringRef Tok;
@@ -355,6 +361,7 @@ struct RISCVOperand : public MCParsedAsmOperand {
     struct SysRegOp SysReg;
     struct SpecialCapRegOp SpecialCapReg;
     struct VTypeOp VType;
+    struct FRMOp FRM;
   };
 
   RISCVOperand(KindTy K) : Kind(K) {}
@@ -383,6 +390,9 @@ public:
       break;
     case KindTy::VType:
       VType = o.VType;
+      break;
+    case KindTy::FRM:
+      FRM = o.FRM;
       break;
     }
   }
@@ -578,18 +588,7 @@ public:
   }
 
   /// Return true if the operand is a valid floating point rounding mode.
-  bool isFRMArg() const {
-    if (!isImm())
-      return false;
-    const MCExpr *Val = getImm();
-    auto *SVal = dyn_cast<MCSymbolRefExpr>(Val);
-    if (!SVal || SVal->getKind() != MCSymbolRefExpr::VK_None)
-      return false;
-
-    StringRef Str = SVal->getSymbol().getName();
-
-    return RISCVFPRndMode::stringToRoundingMode(Str) != RISCVFPRndMode::Invalid;
-  }
+  bool isFRMArg() const { return Kind == KindTy::FRM; }
 
   bool isImmXLenLI() const {
     int64_t Imm;
@@ -948,6 +947,11 @@ public:
     return VType.Val;
   }
 
+  RISCVFPRndMode::RoundingMode getFRM() const {
+    assert(Kind == KindTy::FRM && "Invalid type access!");
+    return FRM.FRM;
+  }
+
   void print(raw_ostream &OS) const override {
     auto RegName = [](MCRegister Reg) {
       if (Reg)
@@ -975,6 +979,11 @@ public:
     case KindTy::VType:
       OS << "<vtype: ";
       RISCVVType::printVType(getVType(), OS);
+      OS << '>';
+      break;
+    case KindTy::FRM:
+      OS << "<frm: ";
+      roundingModeToString(getFRM());
       OS << '>';
       break;
     }
@@ -1031,6 +1040,15 @@ public:
     Op->SpecialCapReg.Length = Str.size();
     Op->SpecialCapReg.Encoding = Encoding;
     Op->StartLoc = S;
+    return Op;
+  }
+
+  static std::unique_ptr<RISCVOperand>
+  createFRMArg(RISCVFPRndMode::RoundingMode FRM, SMLoc S, bool IsRV64) {
+    auto Op = std::make_unique<RISCVOperand>(KindTy::FRM);
+    Op->FRM.FRM = FRM;
+    Op->StartLoc = S;
+    Op->EndLoc = S;
     Op->IsRV64 = IsRV64;
     return Op;
   }
@@ -1133,20 +1151,9 @@ public:
     Inst.addOperand(MCOperand::createImm(Imm));
   }
 
-  // Returns the rounding mode represented by this RISCVOperand. Should only
-  // be called after checking isFRMArg.
-  RISCVFPRndMode::RoundingMode getRoundingMode() const {
-    // isFRMArg has validated the operand, meaning this cast is safe.
-    auto SE = cast<MCSymbolRefExpr>(getImm());
-    RISCVFPRndMode::RoundingMode FRM =
-        RISCVFPRndMode::stringToRoundingMode(SE->getSymbol().getName());
-    assert(FRM != RISCVFPRndMode::Invalid && "Invalid rounding mode");
-    return FRM;
-  }
-
   void addFRMArgOperands(MCInst &Inst, unsigned N) const {
     assert(N == 1 && "Invalid number of operands!");
-    Inst.addOperand(MCOperand::createImm(getRoundingMode()));
+    Inst.addOperand(MCOperand::createImm(getFRM()));
   }
 };
 } // end anonymous namespace.
@@ -1424,12 +1431,6 @@ bool RISCVAsmParser::MatchAndEmitInstruction(SMLoc IDLoc, unsigned &Opcode,
     SMLoc ErrorLoc = ((RISCVOperand &)*Operands[ErrorInfo]).getStartLoc();
     return Error(ErrorLoc, "operand must be formed of letters selected "
                            "in-order from 'iorw' or be 0");
-  }
-  case Match_InvalidFRMArg: {
-    SMLoc ErrorLoc = ((RISCVOperand &)*Operands[ErrorInfo]).getStartLoc();
-    return Error(
-        ErrorLoc,
-        "operand must be a valid floating point rounding mode mnemonic");
   }
   case Match_InvalidBareSymbol: {
     SMLoc ErrorLoc = ((RISCVOperand &)*Operands[ErrorInfo]).getStartLoc();
@@ -2084,6 +2085,25 @@ OperandMatchResultTy RISCVAsmParser::parseGPRAsFPR(OperandVector &Operands) {
   getLexer().Lex();
   Operands.push_back(RISCVOperand::createReg(
       RegNo, S, E, isRV64(), !getSTI().hasFeature(RISCV::FeatureStdExtF)));
+  return MatchOperand_Success;
+}
+
+OperandMatchResultTy RISCVAsmParser::parseFRMArg(OperandVector &Operands) {
+  if (getLexer().isNot(AsmToken::Identifier)) {
+    TokError("operand must be a valid floating point rounding mode mnemonic");
+    return MatchOperand_ParseFail;
+  }
+
+  StringRef Str = getLexer().getTok().getIdentifier();
+  RISCVFPRndMode::RoundingMode FRM = RISCVFPRndMode::stringToRoundingMode(Str);
+
+  if (FRM == RISCVFPRndMode::Invalid) {
+    TokError("operand must be a valid floating point rounding mode mnemonic");
+    return MatchOperand_ParseFail;
+  }
+
+  Operands.push_back(RISCVOperand::createFRMArg(FRM, getLoc(), isRV64()));
+  Lex(); // Eat identifier token.
   return MatchOperand_Success;
 }
 
