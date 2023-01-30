@@ -157,7 +157,7 @@ class UImmAsmOperand<int width, string suffix = "">
 def FenceArg : AsmOperandClass {
   let Name = "FenceArg";
   let RenderMethod = "addFenceArgOperands";
-  let DiagnosticType = "InvalidFenceArg";
+  let ParserMethod = "parseFenceArg";
 }
 
 def fencearg : Operand<XLenVT> {
