@@ -339,7 +339,7 @@ MCSymbol *MCStreamer::getDwarfLineTableSymbol(unsigned CUID) {
 }
 
 bool MCStreamer::hasUnfinishedDwarfFrameInfo() {
-  return !DwarfFrameInfos.empty() && !DwarfFrameInfos.back().End;
+  return !FrameInfoStack.empty();
 }
 
 MCDwarfFrameInfo *MCStreamer::getCurrentDwarfFrameInfo() {
@@ -349,7 +349,7 @@ MCDwarfFrameInfo *MCStreamer::getCurrentDwarfFrameInfo() {
                              ".cfi_startproc and .cfi_endproc directives");
     return nullptr;
   }
-  return &DwarfFrameInfos.back();
+  return &DwarfFrameInfos[FrameInfoStack.back().first];
 }
 
 bool MCStreamer::emitCVFileDirective(unsigned FileNo, StringRef Filename,
@@ -506,7 +506,8 @@ void MCStreamer::emitConditionalAssignment(MCSymbol *Symbol,
 void MCStreamer::emitCFISections(bool EH, bool Debug) {}
 
 void MCStreamer::emitCFIStartProc(bool IsSimple, SMLoc Loc) {
-  if (hasUnfinishedDwarfFrameInfo())
+  if (!FrameInfoStack.empty() &&
+      getCurrentSectionOnly() == FrameInfoStack.back().second)
     return getContext().reportError(
         Loc, "starting new .cfi frame before finishing the previous one");
 
@@ -525,6 +526,7 @@ void MCStreamer::emitCFIStartProc(bool IsSimple, SMLoc Loc) {
     }
   }
 
+  FrameInfoStack.emplace_back(DwarfFrameInfos.size(), getCurrentSectionOnly());
   DwarfFrameInfos.push_back(Frame);
 }
 
@@ -536,6 +538,7 @@ void MCStreamer::emitCFIEndProc() {
   if (!CurFrame)
     return;
   emitCFIEndProcImpl(*CurFrame);
+  FrameInfoStack.pop_back();
 }
 
 void MCStreamer::emitCFIEndProcImpl(MCDwarfFrameInfo &Frame) {
