@@ -13828,6 +13828,11 @@ bool RISCVTargetLowering::isUsedByReturnOnly(SDNode *N, SDValue &Chain) const {
     return false;
 
   SDNode *Copy = *N->use_begin();
+  
+  if (Copy->getOpcode() == ISD::BITCAST) {
+    return isUsedByReturnOnly(Copy, Chain);
+  }
+  
   // TODO: Handle additional opcodes in order to support tail-calling libcalls
   // with soft float ABIs.
   if (Copy->getOpcode() != ISD::CopyToReg) {
