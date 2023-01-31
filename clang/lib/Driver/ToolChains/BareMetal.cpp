@@ -55,7 +55,7 @@ static bool findRISCVMultilibs(const Driver &D,
 
     Result.Multilibs =
         MultilibSetBuilder().Either(Imac, Imafdc).makeMultilibSet();
-    return Result.Multilibs.select(Flags, Result.SelectedMultilib);
+    return Result.Multilibs.select(Flags, Result.SelectedMultilibs);
   }
   if (TargetTriple.isRISCV32()) {
     MultilibBuilder Imac =
@@ -89,7 +89,7 @@ static bool findRISCVMultilibs(const Driver &D,
 
     Result.Multilibs =
         MultilibSetBuilder().Either(I, Im, Iac, Imac, Imafc).makeMultilibSet();
-    return Result.Multilibs.select(Flags, Result.SelectedMultilib);
+    return Result.Multilibs.select(Flags, Result.SelectedMultilibs);
   }
   return false;
 }
@@ -186,7 +186,7 @@ static bool findMultilibsFromYAML(const ToolChain &TC, const Driver &D,
   if (ErrorOrMultilibSet.getError())
     return false;
   Result.Multilibs = ErrorOrMultilibSet.get();
-  return Result.Multilibs.select(Flags, Result.SelectedMultilib);
+  return Result.Multilibs.select(Flags, Result.SelectedMultilibs);
 }
 
 static constexpr llvm::StringLiteral MultilibFilename = "multilib.yaml";
@@ -218,14 +218,14 @@ void BareMetal::findMultilibs(const Driver &D, const llvm::Triple &Triple,
   DetectedMultilibs Result;
   if (isRISCVBareMetal(Triple)) {
     if (findRISCVMultilibs(D, Triple, Args, Result)) {
-      SelectedMultilib = Result.SelectedMultilib;
+      SelectedMultilibs = Result.SelectedMultilibs;
       Multilibs = Result.Multilibs;
     }
   } else {
     llvm::SmallString<128> MultilibPath(computeBaseSysRoot(D, Triple));
     llvm::sys::path::append(MultilibPath, MultilibFilename);
     findMultilibsFromYAML(*this, D, MultilibPath, Args, Result);
-    SelectedMultilib = Result.SelectedMultilib;
+    SelectedMultilibs = Result.SelectedMultilibs;
     Multilibs = Result.Multilibs;
   }
 }
@@ -240,8 +240,10 @@ Tool *BareMetal::buildLinker() const {
 }
 
 std::string BareMetal::computeSysRoot() const {
-  return computeBaseSysRoot(getDriver(), getTriple()) +
-         SelectedMultilib.osSuffix();
+  std::string Result = computeBaseSysRoot(getDriver(), getTriple());
+  if (!SelectedMultilibs.empty())
+    Result += SelectedMultilibs.back().osSuffix();
+  return Result;
 }
 
 void BareMetal::AddClangSystemIncludeArgs(const ArgList &DriverArgs,
