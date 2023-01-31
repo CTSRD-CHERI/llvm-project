@@ -60,15 +60,34 @@ private:
                            MachineBasicBlock::iterator MBBI, bool IsMasked,
                            MVT VT, bool PtrIsCap,
                            MachineBasicBlock::iterator &NextMBBI);
+#ifndef NDEBUG
+  unsigned getInstSizeInBytes(const MachineFunction &MF) const {
+    unsigned Size = 0;
+    for (auto &MBB : MF)
+      for (auto &MI : MBB)
+        Size += TII->getInstSizeInBytes(MI);
+    return Size;
+  }
+#endif
 };
 
 char RISCVExpandAtomicPseudo::ID = 0;
 
 bool RISCVExpandAtomicPseudo::runOnMachineFunction(MachineFunction &MF) {
   TII = static_cast<const RISCVInstrInfo *>(MF.getSubtarget().getInstrInfo());
+
+#ifndef NDEBUG
+  const unsigned OldSize = getInstSizeInBytes(MF);
+#endif
+
   bool Modified = false;
   for (auto &MBB : MF)
     Modified |= expandMBB(MBB);
+
+#ifndef NDEBUG
+  const unsigned NewSize = getInstSizeInBytes(MF);
+  assert(OldSize >= NewSize);
+#endif
   return Modified;
 }
 
