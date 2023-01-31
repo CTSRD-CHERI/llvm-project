@@ -1418,10 +1418,6 @@ tools::ParsePICArgs(const ToolChain &ToolChain, const ArgList &Args) {
     }
   }
 
-  // AMDGPU-specific defaults for PIC.
-  if (Triple.getArch() == llvm::Triple::amdgcn)
-    PIC = true;
-
   // Pure-capability code defaults to PIC
   // XXX: this will only work with the explicit triple, not if the ABI name
   if (Triple.getEnvironment() == llvm::Triple::CheriPurecap)
