@@ -262,6 +262,7 @@ class RISCVAsmParser : public MCTargetAsmParser {
   }
 
   std::unique_ptr<RISCVOperand> defaultMaskRegOp() const;
+  std::unique_ptr<RISCVOperand> defaultFRMArgOp() const;
 
 public:
   enum RISCVMatchResultTy {
@@ -2918,6 +2919,11 @@ bool RISCVAsmParser::checkPseudoAddTPRel(MCInst &Inst,
 std::unique_ptr<RISCVOperand> RISCVAsmParser::defaultMaskRegOp() const {
   return RISCVOperand::createReg(RISCV::NoRegister, llvm::SMLoc(),
                                  llvm::SMLoc(), isRV64());
+}
+
+std::unique_ptr<RISCVOperand> RISCVAsmParser::defaultFRMArgOp() const {
+  return RISCVOperand::createFRMArg(RISCVFPRndMode::RoundingMode::DYN,
+                                    llvm::SMLoc());
 }
 
 bool RISCVAsmParser::validateInstruction(MCInst &Inst,
