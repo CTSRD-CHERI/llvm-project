@@ -16,30 +16,33 @@ class RISCVReg<bits<5> Enc, string n, list<string> alt = []> : Register<n> {
   let AltNames = alt;
 }
 
+class RISCVRegWithSubRegs<bits<5> Enc, string n, list<Register> subregs,
+                          list<string> alt = []>
+      : RegisterWithSubRegs<n, subregs> {
+  let HWEncoding{4-0} = Enc;
+  let AltNames = alt;
+}
+
 class RISCVReg16<bits<5> Enc, string n, list<string> alt = []> : Register<n> {
   let HWEncoding{4-0} = Enc;
   let AltNames = alt;
 }
 
 def sub_16 : SubRegIndex<16>;
-class RISCVReg32<RISCVReg16 subreg> : Register<""> {
-  let HWEncoding{4-0} = subreg.HWEncoding{4-0};
-  let SubRegs = [subreg];
+class RISCVReg32<RISCVReg16 subreg>
+  : RISCVRegWithSubRegs<subreg.HWEncoding{4-0}, subreg.AsmName, [subreg],
+                        subreg.AltNames> {
   let SubRegIndices = [sub_16];
-  let AsmName = subreg.AsmName;
-  let AltNames = subreg.AltNames;
 }
 
 // Because RISCVReg64 register have AsmName and AltNames that alias with their
 // 16/32-bit sub-register, RISCVAsmParser will need to coerce a register number
 // from a RISCVReg16/RISCVReg32 to the equivalent RISCVReg64 when appropriate.
 def sub_32 : SubRegIndex<32>;
-class RISCVReg64<RISCVReg32 subreg> : Register<""> {
-  let HWEncoding{4-0} = subreg.HWEncoding{4-0};
-  let SubRegs = [subreg];
+class RISCVReg64<RISCVReg32 subreg>
+  : RISCVRegWithSubRegs<subreg.HWEncoding{4-0}, subreg.AsmName, [subreg],
+                        subreg.AltNames> {
   let SubRegIndices = [sub_32];
-  let AsmName = subreg.AsmName;
-  let AltNames = subreg.AltNames;
 }
 
 // I don't think the size matters here as it's only used if there are multiple
@@ -57,13 +60,6 @@ class RISCVCapReg<RISCVReg subreg, string n, list<string> alt = []> : Register<n
 }
 
 class RISCVCapRegPseudo<bits<5> Enc, string n, list<string> alt = []> : Register<n> {
-  let HWEncoding{4-0} = Enc;
-  let AltNames = alt;
-}
-
-class RISCVRegWithSubRegs<bits<5> Enc, string n, list<Register> subregs,
-                          list<string> alt = []>
-      : RegisterWithSubRegs<n, subregs> {
   let HWEncoding{4-0} = Enc;
   let AltNames = alt;
 }
