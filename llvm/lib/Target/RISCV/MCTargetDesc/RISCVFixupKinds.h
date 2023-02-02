@@ -130,6 +130,11 @@ enum Fixups {
   // compressed capability jump instruction
   fixup_riscv_rvc_cjump,
 
+  // $CGP-relative global.  11-bit (subject to change).
+  fixup_riscv_cheri_compartment_global,
+  // Size of the symbol.
+  fixup_riscv_cheri_compartment_size,
+
   // Used as a sentinel, must be the last
   fixup_riscv_invalid,
   NumTargetFixupKinds = fixup_riscv_invalid - FirstTargetFixupKind

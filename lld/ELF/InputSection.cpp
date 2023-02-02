@@ -927,6 +927,10 @@ uint64_t InputSectionBase::getRelocTargetVA(const InputFile *file, RelType type,
   case R_MIPS_CHERI_CAPTAB_TPREL:
     assert(a == 0 && "capability table index relocs should not have addends");
     return in.cheriCapTable->getTlsOffset(sym);
+  case R_CHERI_COMPARTMENT_GLOBAL:
+    return isec->getOffset(sym.getVA() - sym.getOutputSection()->addr);
+  case R_CHERI_COMPARTMENT_SIZE:
+    return sym.getSize();
   default:
     llvm_unreachable("invalid expression");
   }

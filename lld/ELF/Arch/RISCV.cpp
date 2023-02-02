@@ -348,6 +348,10 @@ RelExpr RISCV::getRelExpr(const RelType type, const Symbol &s,
     return R_CHERI_CAPABILITY_TABLE_TLSIE_ENTRY_PC;
   case R_RISCV_CHERI_TLS_GD_CAPTAB_PCREL_HI20:
     return R_CHERI_CAPABILITY_TABLE_TLSGD_ENTRY_PC;
+  case R_RISCV_CHERI_COMPARTMENT_GLOBAL:
+    return R_CHERI_COMPARTMENT_GLOBAL;
+  case R_RISCV_CHERI_COMPARTMENT_SIZE:
+    return R_CHERI_COMPARTMENT_SIZE;
   case R_RISCV_RELAX:
     return config->relax ? R_RELAX_HINT : R_NONE;
   default:
@@ -555,6 +559,27 @@ void RISCV::relocate(uint8_t *loc, const Relocation &rel, uint64_t val) const {
 
   case R_RISCV_RELAX:
     return; // Ignored (for now)
+
+  case R_RISCV_CHERI_COMPARTMENT_GLOBAL:
+  case R_RISCV_CHERI_COMPARTMENT_SIZE: {
+    checkInt(loc, val, 12, rel);
+    uint32_t opc = read32le(loc) & 0x7f;
+    if ((opc == 0x3) || (opc == 0x5b)) {
+      // Loads or CIncOffset
+      uint32_t insn = read32le(loc) & 0x000fffff;
+      write32le(loc, insn | (val << 20));
+    } else {
+      //Stores
+      assert(opc == 0x23);
+      // Stores have their immediate fields split because RISC-V prematurely
+      // optimises for small pipelines with no FPU.
+      uint32_t insn = read32le(loc) & 0x1fff07f;
+      uint32_t val_high = val & 0xfe0;
+      uint32_t val_low = val & 0x1f;
+      write32le(loc, insn | (val_high << 20) | (val_low << 7));
+    }
+    break;
+  }
 
   default:
     llvm_unreachable("unknown relocation");

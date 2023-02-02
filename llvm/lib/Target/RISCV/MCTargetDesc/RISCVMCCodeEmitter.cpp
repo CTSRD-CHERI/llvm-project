@@ -454,6 +454,12 @@ unsigned RISCVMCCodeEmitter::getImmOpValue(const MCInst &MI, unsigned OpNo,
       FixupKind = RISCV::fixup_riscv_ccall;
       RelaxCandidate = true;
       break;
+    case RISCVMCExpr::VK_RISCV_CHERI_COMPARTMENT_GLOBAL:
+      FixupKind = RISCV::fixup_riscv_cheri_compartment_global;
+      break;
+    case RISCVMCExpr::VK_RISCV_CHERI_COMPARTMENT_SIZE:
+      FixupKind = RISCV::fixup_riscv_cheri_compartment_size;
+      break;
     }
   } else if (Kind == MCExpr::SymbolRef &&
              cast<MCSymbolRefExpr>(Expr)->getKind() == MCSymbolRefExpr::VK_None) {

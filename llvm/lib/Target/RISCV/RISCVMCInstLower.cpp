@@ -88,6 +88,12 @@ static MCOperand lowerSymbolOperand(const MachineOperand &MO, MCSymbol *Sym,
   case RISCVII::MO_CCALL:
     Kind = RISCVMCExpr::VK_RISCV_CCALL;
     break;
+  case RISCVII::MO_CHERI_COMPARTMENT_GLOBAL:
+    Kind = RISCVMCExpr::VK_RISCV_CHERI_COMPARTMENT_GLOBAL;
+    break;
+  case RISCVII::MO_CHERI_COMPARTMENT_SIZE:
+    Kind = RISCVMCExpr::VK_RISCV_CHERI_COMPARTMENT_SIZE;
+    break;
   }
 
   const MCExpr *ME =

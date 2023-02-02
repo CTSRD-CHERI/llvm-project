@@ -152,6 +152,8 @@ enum {
   MO_TLS_IE_CAPTAB_PCREL_HI = 15,
   MO_TLS_GD_CAPTAB_PCREL_HI = 16,
   MO_CCALL = 17,
+  MO_CHERI_COMPARTMENT_GLOBAL = 18,
+  MO_CHERI_COMPARTMENT_SIZE = 20,
 
   // Used to differentiate between target-specific "direct" flags and "bitmask"
   // flags. A machine operand can only have one "direct" flag, but can have
@@ -304,6 +306,7 @@ enum ABI {
   ABI_L64PC128,
   ABI_L64PC128F,
   ABI_L64PC128D,
+  ABI_CHERIOT,
   ABI_Unknown
 };
 
@@ -334,6 +337,7 @@ inline static bool isCheriPureCapABI(ABI TargetABI) {
   case ABI_L64PC128:
   case ABI_L64PC128F:
   case ABI_L64PC128D:
+  case ABI_CHERIOT:
     return true;
   default:
     llvm_unreachable("Improperly initialised target ABI");

@@ -732,8 +732,13 @@ public:
       return false;
     RISCVMCExpr::VariantKind VK;
     int64_t Imm;
+    bool IsValid;
     bool IsConstantImm = evaluateConstantImm(getImm(), Imm, VK);
-    return IsConstantImm && isUInt<12>(Imm) && VK == RISCVMCExpr::VK_RISCV_None;
+    if (!IsConstantImm)
+      IsValid = RISCVAsmParser::classifySymbolRef(getImm(), VK);
+    else
+      IsValid = isUInt<12>(Imm);
+    return IsValid && ((VK == RISCVMCExpr::VK_RISCV_None) || (VK == RISCVMCExpr::VK_RISCV_CHERI_COMPARTMENT_SIZE));
   }
 
   bool isSImm12() const {
@@ -750,7 +755,8 @@ public:
     return IsValid && ((IsConstantImm && VK == RISCVMCExpr::VK_RISCV_None) ||
                        VK == RISCVMCExpr::VK_RISCV_LO ||
                        VK == RISCVMCExpr::VK_RISCV_PCREL_LO ||
-                       VK == RISCVMCExpr::VK_RISCV_TPREL_LO);
+                       VK == RISCVMCExpr::VK_RISCV_TPREL_LO ||
+                       VK == RISCVMCExpr::VK_RISCV_CHERI_COMPARTMENT_GLOBAL);
   }
 
   bool isSImm12Lsb0() const { return isBareSimmNLsb0<12>(); }

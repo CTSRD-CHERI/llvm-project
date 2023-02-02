@@ -303,6 +303,8 @@ def : ProcessorModel<"sifive-u74", SiFive7Model, [Feature64Bit,
 
 def : ProcessorModel<"cheriot", NoSchedModel, [FeatureCheri,
                                                FeatureCapMode,
+                                               FeatureStdExtC,
+                                               FeatureStdExtM,
                                                FeatureCheriRVC]>;
 
 //===----------------------------------------------------------------------===//

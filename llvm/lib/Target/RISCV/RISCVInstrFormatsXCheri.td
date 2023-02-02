@@ -27,6 +27,7 @@ def uimm8 : Operand<XLenVT>, ImmLeaf<XLenVT, [{return isUInt<8>(Imm);}]> {
 def uimm12 : Operand<XLenVT>, ImmLeaf<XLenVT, [{return isUInt<12>(Imm);}]> {
   let ParserMatchClass = UImmAsmOperand<12>;
   let DecoderMethod = "decodeUImmOperand<12>";
+  let EncoderMethod = "getImmOpValue";
 }
 
 def SpecialCapRegisterAsmOperand : AsmOperandClass {

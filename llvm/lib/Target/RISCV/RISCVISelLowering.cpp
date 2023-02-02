@@ -79,6 +79,7 @@ RISCVTargetLowering::RISCVTargetLowering(const TargetMachine &TM,
   case RISCVABI::ABI_ILP32:
   case RISCVABI::ABI_ILP32F:
   case RISCVABI::ABI_ILP32D:
+  case RISCVABI::ABI_CHERIOT:
   case RISCVABI::ABI_IL32PC64:
   case RISCVABI::ABI_IL32PC64F:
   case RISCVABI::ABI_IL32PC64D:
@@ -2760,8 +2761,9 @@ SDValue RISCVTargetLowering::getAddr(NodeTy *N, EVT Ty, SelectionDAG &DAG,
   SDLoc DL(N);
 
   if (RISCVABI::isCheriPureCapABI(Subtarget.getTargetABI())) {
+    bool IsTiny = getTargetMachine().getCodeModel() == CodeModel::Tiny;
     SDValue Addr = getTargetNode(N, DL, Ty, DAG, 0);
-    if (IsLocal && CanDeriveFromPcc) {
+    if ((IsLocal && CanDeriveFromPcc) || IsTiny) {
       // Use PC-relative addressing to access the symbol. This generates the
       // pattern (PseudoCLLC sym), which expands to
       // (cincoffsetimm (auipcc %pcrel_hi(sym)) %pcrel_lo(auipc)).
@@ -7416,6 +7418,7 @@ static bool CC_RISCV(const DataLayout &DL, RISCVABI::ABI ABI, unsigned ValNo,
   case RISCVABI::ABI_LP64:
   case RISCVABI::ABI_IL32PC64:
   case RISCVABI::ABI_L64PC128:
+  case RISCVABI::ABI_CHERIOT:
     break;
   case RISCVABI::ABI_ILP32F:
   case RISCVABI::ABI_LP64F:

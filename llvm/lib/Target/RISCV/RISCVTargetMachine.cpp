@@ -39,6 +39,7 @@ extern "C" LLVM_EXTERNAL_VISIBILITY void LLVMInitializeRISCVTarget() {
   auto *PR = PassRegistry::getPassRegistry();
   initializeGlobalISel(*PR);
   initializeRISCVMergeBaseOffsetOptPass(*PR);
+  initializeRISCVCheriCleanupOptPass(*PR);
   initializeRISCVExpandPseudoPass(*PR);
   initializeRISCVInsertVSETVLIPass(*PR);
 }
@@ -78,15 +79,25 @@ static Reloc::Model getEffectiveRelocModel(const Triple &TT,
   return *RM;
 }
 
+static CodeModel::Model getEffectiveCodeModel(Optional<CodeModel::Model> CM,
+                                              CodeModel::Model Default,
+                                              const TargetOptions &Options) {
+  if ((Options.MCOptions.ABIName == "cheriot") && CM &&
+      (*CM == CodeModel::Tiny))
+    return *CM;
+  return getEffectiveCodeModel(CM, Default);
+}
+
 RISCVTargetMachine::RISCVTargetMachine(const Target &T, const Triple &TT,
                                        StringRef CPU, StringRef FS,
                                        const TargetOptions &Options,
                                        Optional<Reloc::Model> RM,
                                        Optional<CodeModel::Model> CM,
                                        CodeGenOpt::Level OL, bool JIT)
-    : LLVMTargetMachine(T, computeDataLayout(TT, FS, Options), TT, CPU,
-                        FS, Options, getEffectiveRelocModel(TT, RM),
-                        getEffectiveCodeModel(CM, CodeModel::Small), OL),
+    : LLVMTargetMachine(T, computeDataLayout(TT, FS, Options), TT, CPU, FS,
+                        Options, getEffectiveRelocModel(TT, RM),
+                        ::getEffectiveCodeModel(CM, CodeModel::Small, Options),
+                        OL),
       TLOF(std::make_unique<RISCVELFTargetObjectFile>()) {
   initAsmInfo();
 
@@ -221,5 +232,6 @@ void RISCVPassConfig::addPreEmitPass2() {
 void RISCVPassConfig::addPreRegAlloc() {
   if (TM->getOptLevel() != CodeGenOpt::None)
     addPass(createRISCVMergeBaseOffsetOptPass());
+  addPass(createRISCVCheriCleanupOptPass());
   addPass(createRISCVInsertVSETVLIPass());
 }

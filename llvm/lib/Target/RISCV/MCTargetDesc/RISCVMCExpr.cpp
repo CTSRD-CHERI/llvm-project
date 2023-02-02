@@ -127,6 +127,8 @@ RISCVMCExpr::VariantKind RISCVMCExpr::getVariantKindForName(StringRef name) {
       .Case("tprel_cincoffset", VK_RISCV_TPREL_CINCOFFSET)
       .Case("tls_ie_captab_pcrel_hi", VK_RISCV_TLS_IE_CAPTAB_PCREL_HI)
       .Case("tls_gd_captab_pcrel_hi", VK_RISCV_TLS_GD_CAPTAB_PCREL_HI)
+      .Case("cheri_compartment_global", VK_RISCV_CHERI_COMPARTMENT_GLOBAL)
+      .Case("cheri_compartment_size", VK_RISCV_CHERI_COMPARTMENT_SIZE)
       .Default(VK_RISCV_Invalid);
 }
 
@@ -169,6 +171,10 @@ StringRef RISCVMCExpr::getVariantKindName(VariantKind Kind) {
     return "call_plt";
   case VK_RISCV_CCALL:
     return "ccall";
+  case VK_RISCV_CHERI_COMPARTMENT_GLOBAL:
+    return "cheri_compartment_global";
+  case VK_RISCV_CHERI_COMPARTMENT_SIZE:
+    return "cheri_compartment_size";
   case VK_RISCV_32_PCREL:
     return "32_pcrel";
   }

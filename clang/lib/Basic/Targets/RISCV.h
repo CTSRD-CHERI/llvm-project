@@ -27,7 +27,7 @@ class RISCVTargetInfo : public TargetInfo {
     StringRef Layout;
 
     if (ABI == "ilp32" || ABI == "ilp32f" || ABI == "ilp32d" ||
-        ABI == "ilp32e" ||
+        ABI == "ilp32e" || ABI == "cheriot" ||
         ABI == "il32pc64" || ABI == "il32pc64f" || ABI == "il32pc64d" ||
         ABI == "il32pc64e") {
       if (HasCheri)
@@ -185,7 +185,8 @@ public:
       ABI = Name;
       return true;
     }
-    if (Name == "il32pc64" || Name == "il32pc64f" || Name == "il32pc64d") {
+    if (Name == "il32pc64" || Name == "il32pc64f" || Name == "il32pc64d" ||
+        Name == "cheriot") {
       setCapabilityABITypes();
       CapabilityABI = true;
       ABI = Name;

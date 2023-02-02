@@ -1215,7 +1215,10 @@ RISCVInstrInfo::getSerializableDirectMachineOperandTargetFlags() const {
       {MO_TPREL_CINCOFFSET, "riscv-tprel-cincoffset"},
       {MO_TLS_IE_CAPTAB_PCREL_HI, "riscv-tls-ie-captab-pcrel-hi"},
       {MO_TLS_GD_CAPTAB_PCREL_HI, "riscv-tls-gd-captab-pcrel-hi"},
-      {MO_CCALL, "riscv-ccall"}};
+      {MO_CCALL, "riscv-ccall"},
+      {MO_CHERI_COMPARTMENT_GLOBAL, "riscv-compartment-global"},
+      {MO_CHERI_COMPARTMENT_SIZE, "riscv-compartment-size"},
+  };
   return makeArrayRef(TargetFlags);
 }
 bool RISCVInstrInfo::isFunctionSafeToOutlineFrom(
