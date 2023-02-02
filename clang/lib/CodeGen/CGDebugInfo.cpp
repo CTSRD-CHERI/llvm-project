@@ -1303,6 +1303,7 @@ static unsigned getDwarfCC(CallingConv CC) {
   case CC_CHERICCall:
   case CC_CHERICCallee:
   case CC_CHERICCallback:
+  case CC_CHERILibCall:
     return 0;
   case CC_X86RegCall:
     return llvm::dwarf::DW_CC_LLVM_X86RegCall;

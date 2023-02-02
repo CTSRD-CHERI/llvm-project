@@ -14429,6 +14429,18 @@ Decl *Sema::ActOnStartOfFunctionDef(Scope *FnBodyScope, Decl *D,
       getCurLexicalContext()->getDeclKind() != Decl::ObjCImplementation)
     Diag(FD->getLocation(), diag::warn_function_def_in_objc_container);
 
+  if (FD->getType()->getAs<FunctionType>()->getCallConv() == CC_CHERILibCall &&
+      !Context.getLangOpts().CheriCompartmentName.empty())
+    Diag(FD->getLocation(),
+         diag::err_cheri_libcall_implemented_wrong_compartment)
+        << Context.getLangOpts().CheriCompartmentName;
+  else if (FD->hasAttr<CHERICompartmentNameAttr>() &&
+           (FD->getAttr<CHERICompartmentNameAttr>()->getCompartmentName() !=
+            Context.getLangOpts().CheriCompartmentName))
+    Diag(FD->getLocation(), diag::err_cheri_implemented_wrong_compartment)
+        << FD->getAttr<CHERICompartmentNameAttr>()->getCompartmentName()
+        << Context.getLangOpts().CheriCompartmentName;
+
   return D;
 }
 

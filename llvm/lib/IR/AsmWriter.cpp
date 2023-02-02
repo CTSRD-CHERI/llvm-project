@@ -324,6 +324,9 @@ static void PrintCallingConv(unsigned cc, raw_ostream &Out) {
   case CallingConv::SPIR_KERNEL:   Out << "spir_kernel"; break;
   case CallingConv::CHERI_CCall:   Out << "chericcallcc"; break;
   case CallingConv::CHERI_CCallee: Out << "chericcallcce"; break;
+  case CallingConv::CHERI_LibCall:
+    Out << "cherilibcallcc";
+    break;
   case CallingConv::Swift:         Out << "swiftcc"; break;
   case CallingConv::SwiftTail:     Out << "swifttailcc"; break;
   case CallingConv::X86_INTR:      Out << "x86_intrcc"; break;

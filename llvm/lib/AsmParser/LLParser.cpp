@@ -1822,6 +1822,9 @@ bool LLParser::parseOptionalCallingConv(unsigned &CC) {
   case lltok::kw_coldcc:         CC = CallingConv::Cold; break;
   case lltok::kw_chericcallcc:   CC = CallingConv::CHERI_CCall; break;
   case lltok::kw_chericcallcce:  CC = CallingConv::CHERI_CCallee; break;
+  case lltok::kw_cherilibcallcc:
+    CC = CallingConv::CHERI_LibCall;
+    break;
   case lltok::kw_cfguard_checkcc: CC = CallingConv::CFGuard_Check; break;
   case lltok::kw_x86_stdcallcc:  CC = CallingConv::X86_StdCall; break;
   case lltok::kw_x86_fastcallcc: CC = CallingConv::X86_FastCall; break;

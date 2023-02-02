@@ -74,6 +74,11 @@ RISCVTargetLowering::RISCVTargetLowering(const TargetMachine &TM,
     ABI = Subtarget.is64Bit() ? RISCVABI::ABI_LP64 : RISCVABI::ABI_ILP32;
   }
 
+  if (ABI == RISCVABI::ABI_CHERIOT)
+    for (int LCID = 0; LCID < RTLIB::UNKNOWN_LIBCALL; ++LCID)
+      setLibcallCallingConv(static_cast<RTLIB::Libcall>(LCID),
+                            CallingConv::CHERI_LibCall);
+
   switch (ABI) {
   default:
     report_fatal_error("Don't know how to lower this ABI");
@@ -8038,6 +8043,7 @@ SDValue RISCVTargetLowering::LowerFormalArguments(
   case CallingConv::C:
   case CallingConv::Fast:
   case CallingConv::CHERI_CCallee:
+  case CallingConv::CHERI_LibCall:
     break;
   case CallingConv::GHC:
     if (!MF.getSubtarget().getFeatureBits()[RISCV::FeatureStdExtF] ||
@@ -8496,6 +8502,35 @@ SDValue RISCVTargetLowering::LowerCall(CallLoweringInfo &CLI,
         RegsToPass.emplace_back(RISCV::C6, Import);
       } else {
         RegsToPass.emplace_back(RISCV::C6, Callee);
+      }
+    }
+  } else if (CallConv == CallingConv::CHERI_LibCall) {
+    // CHERI MCU libcalls are stateless functions that exist in a shared
+    // compartment.  They are provided by the normal import / export
+    // mechanism, but are invoked directly rather than via the compartment
+    // switcher.
+    auto &Fn = MF.getFunction();
+    if (Fn.hasFnAttribute("cheri-compartment")) {
+      StringRef CalleeName;
+      if (CLI.CB) {
+        if (auto *CFn = CLI.CB->getCalledFunction())
+          CalleeName = CFn->getName();
+      } else
+        CalleeName =
+            cast<ExternalSymbolSDNode>(CLI.Callee.getNode())->getSymbol();
+      if (!CalleeName.empty()) {
+        std::string ImportName =
+            (Twine("__import_libcalls_") + CalleeName).str();
+        auto *GV = Fn.getParent()->getGlobalVariable(ImportName);
+        // The global will have been created only if an import is required.  If
+        // not, then skip this and call directly.
+        if (GV) {
+          auto ImportPtr = DAG.getGlobalAddress(GV, DL, PtrVT, 0, 0);
+          auto Import =
+              DAG.getLoad(PtrVT, DL, Chain, ImportPtr,
+                          MachinePointerInfo(200, 0), 8 /*alignment*/);
+          Callee = Import;
+        }
       }
     }
   }

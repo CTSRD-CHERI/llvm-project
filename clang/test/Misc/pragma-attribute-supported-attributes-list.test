@@ -28,6 +28,8 @@
 // CHECK-NEXT: CFICanonicalJumpTable (SubjectMatchRule_function)
 // CHECK-NEXT: CFUnknownTransfer (SubjectMatchRule_function)
 // CHECK-NEXT: CHERICCallee (SubjectMatchRule_function)
+// CHECK-NEXT: CHERICompartmentName (SubjectMatchRule_function)
+// CHECK-NEXT: CHERILibCall (SubjectMatchRule_function)
 // CHECK-NEXT: CHERISubobjectBoundsUseRemainingSize (SubjectMatchRule_field, SubjectMatchRule_record)
 // CHECK-NEXT: CPUDispatch (SubjectMatchRule_function)
 // CHECK-NEXT: CPUSpecific (SubjectMatchRule_function)

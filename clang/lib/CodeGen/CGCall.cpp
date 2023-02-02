@@ -50,6 +50,8 @@ unsigned CodeGenTypes::ClangCallConvToLLVMCallConv(CallingConv CC) {
   case CC_CHERICCall:
   case CC_CHERICCallback:
     return llvm::CallingConv::CHERI_CCall;
+  case CC_CHERILibCall:
+    return llvm::CallingConv::CHERI_LibCall;
   case CC_CHERICCallee: return llvm::CallingConv::CHERI_CCallee;
   case CC_X86StdCall: return llvm::CallingConv::X86_StdCall;
   case CC_X86FastCall: return llvm::CallingConv::X86_FastCall;

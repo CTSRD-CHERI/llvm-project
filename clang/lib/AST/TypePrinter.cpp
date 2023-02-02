@@ -1007,6 +1007,9 @@ void TypePrinter::printFunctionAfter(const FunctionType::ExtInfo &Info,
     case CC_CHERICCall:
       OS << " __attribute__((cheri_ccall))";
       break;
+    case CC_CHERILibCall:
+      OS << " __attribute__((cheri_libcall))";
+      break;
     case CC_CHERICCallee:
       OS << " __attribute__((cheri_ccallee))";
       break;
@@ -1772,6 +1775,9 @@ void TypePrinter::printAttributedAfter(const AttributedType *T,
   case attr::CHERICCall: OS << "cheri_ccall"; break;
   case attr::CHERICCallback: OS << "cheri_ccallback"; break;
   case attr::CHERICCallee: OS << "cheri_ccallee"; break;
+  case attr::CHERILibCall:
+    OS << "cheri_libcall";
+    break;
   case attr::FastCall: OS << "fastcall"; break;
   case attr::StdCall: OS << "stdcall"; break;
   case attr::ThisCall: OS << "thiscall"; break;

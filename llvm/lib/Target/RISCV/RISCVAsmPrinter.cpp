@@ -193,6 +193,12 @@ bool RISCVAsmPrinter::runOnMachineFunction(MachineFunction &MF) {
          OutStreamer->getContext().getOrCreateSymbol(MF.getName()),
          MF.getRegInfo().liveins().size()});
 
+  if (MF.getFunction().getCallingConv() == CallingConv::CHERI_LibCall)
+    CompartmentEntries.push_back(
+        {"libcalls", MF.getFunction(),
+         OutStreamer->getContext().getOrCreateSymbol(MF.getName()),
+         MF.getRegInfo().liveins().size()});
+
   return false;
 }
 

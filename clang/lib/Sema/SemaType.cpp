@@ -115,6 +115,7 @@ static void diagnoseBadTypeAttribute(Sema &S, const ParsedAttr &attr,
   case ParsedAttr::AT_CHERICCall:                                              \
   case ParsedAttr::AT_CHERICCallee:                                            \
   case ParsedAttr::AT_CHERICCallback:                                          \
+  case ParsedAttr::AT_CHERILibCall:                                            \
   case ParsedAttr::AT_CHERICompartmentName:                                    \
   case ParsedAttr::AT_FastCall:                                                \
   case ParsedAttr::AT_StdCall:                                                 \
@@ -7482,6 +7483,8 @@ static Attr *getCCTypeAttr(ASTContext &Ctx, ParsedAttr &Attr) {
     return createSimpleAttr<CHERICCalleeAttr>(Ctx, Attr);
   case ParsedAttr::AT_CHERICCallback:
     return createSimpleAttr<CHERICCallAttr>(Ctx, Attr);
+  case ParsedAttr::AT_CHERILibCall:
+    return createSimpleAttr<CHERILibCallAttr>(Ctx, Attr);
   case ParsedAttr::AT_CHERICompartmentName: {
     StringRef Str;
     if (Attr.isArgExpr(0))

@@ -259,6 +259,9 @@ namespace CallingConv {
     /// Ignores the first two capability arguments and the first integer
     /// argument, zeroes all unused return registers on return.
     CHERI_CCallee = 103,
+    /// CHERI_LibCalL - Calling convention used for cross-library calls to a
+    /// stateless compartment.
+    CHERI_LibCall = 104,
 
     /// The highest possible calling convention ID. Must be some 2^k - 1.
     MaxID = 1023
