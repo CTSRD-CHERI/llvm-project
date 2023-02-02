@@ -13,8 +13,11 @@ define dso_local nonnull i32 addrspace(200)* @a() local_unnamed_addr addrspace(2
 entry:
   ; CHECK-LABEL: a:
   ; If we're generating a $cgp-relative offset and a size for address-taken accesses to globals
-  ; CHECK: cincoffset      ca0, cgp, %cheri_compartment_rel(x)
-  ; CHECK: csetbounds ca0, ca0, %cheri_size(x) 
+  ; CHECK: auicgp
+  ; CHECK-SAME: %cheri_compartment_cgprel_hi(x)
+  ; CHECK: cincoffset
+  ; CHECK-SAME: %cheri_compartment_cgprel_lo_i(x)
+  ; CHECK: csetbounds ca0, ca0, %cheri_compartment_size(x)
   ret i32 addrspace(200)* @x
 }
 
@@ -23,8 +26,11 @@ define dso_local i32 @v() addrspace(200) #1 {
 entry:
   ; Check that we're not setting bounds on direct accesses to globals
   ; CHECK-LABEL: v:
-  ; CHECK: clw     a0, %cheri_compartment_rel(x)(cgp)
-  ; CHECK-NEXT: cret
+  ; XCHECK: auicgp
+  ; XCHECK-SAME: %cheri_compartment_cgprel_hi(x)
+  ; XCHECK: clw 
+  ; XCHECK-SAME: %cheri_compartment_cgprel_lo_i(x)
+  ; XCHECK-NEXT: cret
   %0 = load i32, i32 addrspace(200)* @x, align 4, !tbaa !5
   ret i32 %0
 }

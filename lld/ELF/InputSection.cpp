@@ -639,6 +639,7 @@ static Relocation *getRISCVPCRelHi20(const Symbol *sym, uint64_t addend) {
   for (auto it = range.first; it != range.second; ++it)
     if (it->type == R_RISCV_PCREL_HI20 || it->type == R_RISCV_GOT_HI20 ||
         it->type == R_RISCV_TLS_GD_HI20 || it->type == R_RISCV_TLS_GOT_HI20 ||
+        it->type == R_RISCV_CHERI_COMPARTMENT_PCCREL_HI ||
         it->type == R_RISCV_CHERI_CAPTAB_PCREL_HI20 ||
         it->type == R_RISCV_CHERI_TLS_GD_CAPTAB_PCREL_HI20 ||
         it->type == R_RISCV_CHERI_TLS_IE_CAPTAB_PCREL_HI20)
@@ -927,8 +928,11 @@ uint64_t InputSectionBase::getRelocTargetVA(const InputFile *file, RelType type,
   case R_MIPS_CHERI_CAPTAB_TPREL:
     assert(a == 0 && "capability table index relocs should not have addends");
     return in.cheriCapTable->getTlsOffset(sym);
-  case R_CHERI_COMPARTMENT_GLOBAL:
-    return isec->getOffset(sym.getVA() - sym.getOutputSection()->addr);
+  case R_CHERI_COMPARTMENT_CGPREL_LO_I:
+  case R_CHERI_COMPARTMENT_CGPREL_LO_S:
+    return isec->getOffset(sym.getVA() - sym.getOutputSection()->addr) & ((1<<14)-1);
+  case R_CHERI_COMPARTMENT_CGPREL_HI:
+    return (isec->getOffset(sym.getVA() - sym.getOutputSection()->addr) & ~((1<<14)-1)) >> 14;
   case R_CHERI_COMPARTMENT_SIZE:
     return sym.getSize();
   default:

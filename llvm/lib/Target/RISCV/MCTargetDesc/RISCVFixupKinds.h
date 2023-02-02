@@ -130,8 +130,16 @@ enum Fixups {
   // compressed capability jump instruction
   fixup_riscv_rvc_cjump,
 
-  // $CGP-relative global.  11-bit (subject to change).
-  fixup_riscv_cheri_compartment_global,
+  // $cgp-relative global, used with auicgp instructions
+  fixup_riscv_cheri_compartment_cgprel_hi,
+  // $cgp-relative global, used with RV32 I instructions
+  fixup_riscv_cheri_compartment_cgprel_lo_i,
+  // $cgp-relative global, used with RV32 S instructions
+  fixup_riscv_cheri_compartment_cgprel_lo_s,
+  // PCC-relative upper
+  fixup_riscv_cheri_compartment_pccrel_hi,
+  // PCC-relative lower offset
+  fixup_riscv_cheri_compartment_pccrel_lo,
   // Size of the symbol.
   fixup_riscv_cheri_compartment_size,
 

@@ -311,6 +311,7 @@ RelExpr RISCV::getRelExpr(const RelType type, const Symbol &s,
   case R_RISCV_JAL:
   case R_RISCV_CHERI_CJAL:
   case R_RISCV_BRANCH:
+  case R_RISCV_CHERI_COMPARTMENT_PCCREL_HI:
   case R_RISCV_PCREL_HI20:
   case R_RISCV_RVC_BRANCH:
   case R_RISCV_RVC_JUMP:
@@ -323,6 +324,7 @@ RelExpr RISCV::getRelExpr(const RelType type, const Symbol &s,
     return R_PLT_PC;
   case R_RISCV_GOT_HI20:
     return R_GOT_PC;
+  case R_RISCV_CHERI_COMPARTMENT_PCCREL_LO:
   case R_RISCV_PCREL_LO12_I:
   case R_RISCV_PCREL_LO12_S:
     return R_RISCV_PC_INDIRECT;
@@ -348,8 +350,12 @@ RelExpr RISCV::getRelExpr(const RelType type, const Symbol &s,
     return R_CHERI_CAPABILITY_TABLE_TLSIE_ENTRY_PC;
   case R_RISCV_CHERI_TLS_GD_CAPTAB_PCREL_HI20:
     return R_CHERI_CAPABILITY_TABLE_TLSGD_ENTRY_PC;
-  case R_RISCV_CHERI_COMPARTMENT_GLOBAL:
-    return R_CHERI_COMPARTMENT_GLOBAL;
+  case R_RISCV_CHERI_COMPARTMENT_CGPREL_HI:
+    return R_CHERI_COMPARTMENT_CGPREL_HI;
+  case R_RISCV_CHERI_COMPARTMENT_CGPREL_LO_I:
+    return R_CHERI_COMPARTMENT_CGPREL_LO_I;
+  case R_RISCV_CHERI_COMPARTMENT_CGPREL_LO_S:
+    return R_CHERI_COMPARTMENT_CGPREL_LO_S;
   case R_RISCV_CHERI_COMPARTMENT_SIZE:
     return R_CHERI_COMPARTMENT_SIZE;
   case R_RISCV_RELAX:
@@ -560,24 +566,41 @@ void RISCV::relocate(uint8_t *loc, const Relocation &rel, uint64_t val) const {
   case R_RISCV_RELAX:
     return; // Ignored (for now)
 
-  case R_RISCV_CHERI_COMPARTMENT_GLOBAL:
-  case R_RISCV_CHERI_COMPARTMENT_SIZE: {
+  case R_RISCV_CHERI_COMPARTMENT_PCCREL_LO:
+    // Attach a negative sign bit to LO12 if the offset is negative.
+    // However, if HI20 alone is enough to reach the target, then this should
+    // not be done and LO14 should just be 0 regardless.
+    if (int64_t(val) >= 0 || (val & 0x7ff) == 0)
+        val &= 0x7ff;
+    else
+        val = (uint64_t(-1) & ~0x7ff) | (val & 0x7ff);
+    LLVM_FALLTHROUGH;
+  case R_RISCV_CHERI_COMPARTMENT_CGPREL_LO_I:
     checkInt(loc, val, 12, rel);
-    uint32_t opc = read32le(loc) & 0x7f;
-    if ((opc == 0x3) || (opc == 0x5b)) {
-      // Loads or CIncOffset
-      uint32_t insn = read32le(loc) & 0x000fffff;
-      write32le(loc, insn | (val << 20));
-    } else {
-      //Stores
-      assert(opc == 0x23);
-      // Stores have their immediate fields split because RISC-V prematurely
-      // optimises for small pipelines with no FPU.
-      uint32_t insn = read32le(loc) & 0x1fff07f;
-      uint32_t val_high = val & 0xfe0;
-      uint32_t val_low = val & 0x1f;
-      write32le(loc, insn | (val_high << 20) | (val_low << 7));
-    }
+    write32le(loc, (read32le(loc) & 0x000fffff) | (val << 20));
+    break;
+  case R_RISCV_CHERI_COMPARTMENT_SIZE:
+    checkUInt(loc, val, 12, rel);
+    write32le(loc, (read32le(loc) & 0x000fffff) | (val << 20));
+    break;
+  case R_RISCV_CHERI_COMPARTMENT_CGPREL_LO_S: {
+    // Stores have their immediate fields split because RISC-V prematurely
+    // optimises for small pipelines with no FPU.
+    uint32_t insn = read32le(loc) & 0x1fff07f;
+    uint32_t val_high = val & 0xfe0;
+    uint32_t val_low = val & 0x1f;
+    write32le(loc, insn | (val_high << 20) | (val_low << 7));
+    break;
+  }
+  case R_RISCV_CHERI_COMPARTMENT_PCCREL_HI:
+    if (int64_t(val) < 0)
+       val = (val + 0x7ff) & ~0x7ff;
+    val = int64_t(val) >> 11;
+    LLVM_FALLTHROUGH;
+  case R_RISCV_CHERI_COMPARTMENT_CGPREL_HI: {
+    checkInt(loc, val, 20, rel);
+    uint32_t insn = read32le(loc) & 0x00000fff;
+    write32le(loc, insn | (val << 12));
     break;
   }
 

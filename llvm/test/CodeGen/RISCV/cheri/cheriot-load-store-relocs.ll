@@ -9,13 +9,16 @@ target triple = "riscv32-unknown-unknown"
 define dso_local i32 @example_entry(i32 addrspace(200)* nocapture readnone %input) local_unnamed_addr addrspace(200) #0 {
 entry:
   ; Check that we generate relocations folded into the loads and stores for
-  ; globals.
-  ; CHECK: clw     
-  ; CHECK: %cheri_compartment_rel(temp)(cgp)
+  ; globals.  This is currently broken by the move to post-RA expansion of
+  ; cllc.  Keep the test around to check for the new sequence.  If the
+  ; optimisation is reintroduced, delete the X from the XCHECK lines.
+  ; CHECK: auicgp
+  ; CHECK-SAME: %cheri_compartment_cgprel_hi(temp)
+  ; XCHECK: clw
+  ; CHECK: cincoffset
+  ; CHECK-SAME: %cheri_compartment_cgprel_lo_i(temp)
   %0 = load i32, i32 addrspace(200)* @temp, align 4, !tbaa !5
   %inc = add nsw i32 %0, 1
-  ; CHECK: csw
-  ; CHECK: %cheri_compartment_rel(temp)(cgp)
   store i32 %inc, i32 addrspace(200)* @temp, align 4, !tbaa !5
   ret i32 %0
 }

@@ -64,6 +64,9 @@ private:
                             MachineBasicBlock::iterator MBBI,
                             MachineBasicBlock::iterator &NextMBBI,
                             unsigned FlagsHi, unsigned SecondOpcode);
+  bool expandAuicgpInstPair(MachineBasicBlock &MBB,
+                            MachineBasicBlock::iterator MBBI,
+                            unsigned SecondOpcode);
   bool expandCapLoadLocalCap(MachineBasicBlock &MBB,
                              MachineBasicBlock::iterator MBBI,
                              MachineBasicBlock::iterator &NextMBBI);
@@ -179,6 +182,30 @@ bool RISCVExpandPseudo::expandMI(MachineBasicBlock &MBB,
   return false;
 }
 
+
+bool RISCVExpandPseudo::expandAuicgpInstPair(MachineBasicBlock &MBB,
+                                             MachineBasicBlock::iterator MBBI,
+                                             unsigned SecondOpcode) {
+  MachineInstr &MI = *MBBI;
+  DebugLoc DL = MI.getDebugLoc();
+
+  bool HasTmpReg = MI.getNumOperands() > 2;
+  Register DestReg = MI.getOperand(0).getReg();
+  Register TmpReg = MI.getOperand(HasTmpReg ? 1 : 0).getReg();
+  const MachineOperand &Symbol = MI.getOperand(HasTmpReg ? 2 : 1);
+
+  BuildMI(MBB, MBBI, DL, TII->get(RISCV::AUICGP), DestReg)
+      .addDisp(Symbol, 0, RISCVII::MO_CHERI_COMPARTMENT_CGPREL_HI);
+  BuildMI(MBB, MBBI, DL, TII->get(SecondOpcode), DestReg)
+      .addReg(TmpReg)
+      .addDisp(Symbol, 0, RISCVII::MO_CHERI_COMPARTMENT_CGPREL_LO_I);
+  BuildMI(MBB, MBBI, DL, TII->get(RISCV::CSetBoundsImm), DestReg)
+      .addReg(DestReg)
+      .addDisp(Symbol, 0, RISCVII::MO_CHERI_COMPARTMENT_SIZE);
+  MI.eraseFromParent();
+  return true;
+}
+
 bool RISCVExpandPseudo::expandAuipcInstPair(
     MachineBasicBlock &MBB, MachineBasicBlock::iterator MBBI,
     MachineBasicBlock::iterator &NextMBBI, unsigned FlagsHi,
@@ -267,6 +294,9 @@ bool RISCVExpandPseudo::expandAuipccInstPair(
     MachineBasicBlock &MBB, MachineBasicBlock::iterator MBBI,
     MachineBasicBlock::iterator &NextMBBI, unsigned FlagsHi,
     unsigned SecondOpcode) {
+  bool IsCheriot =
+      MBB.getParent()->getSubtarget<RISCVSubtarget>().getTargetABI() ==
+      RISCVABI::ABI_CHERIOT;
   MachineFunction *MF = MBB.getParent();
   MachineInstr &MI = *MBBI;
   DebugLoc DL = MI.getDebugLoc();
@@ -288,7 +318,15 @@ bool RISCVExpandPseudo::expandAuipccInstPair(
       .addDisp(Symbol, 0, FlagsHi);
   BuildMI(NewMBB, DL, TII->get(SecondOpcode), DestReg)
       .addReg(TmpReg)
-      .addMBB(NewMBB, RISCVII::MO_PCREL_LO);
+      .addMBB(NewMBB, IsCheriot ? RISCVII::MO_CHERI_COMPARTMENT_PCCREL_LO
+                                : RISCVII::MO_PCREL_LO);
+  if (MF->getSubtarget<RISCVSubtarget>().isRV32E() && Symbol.isGlobal() &&
+      isa<GlobalVariable>(Symbol.getGlobal()) &&
+      (cast<GlobalVariable>(Symbol.getGlobal())->getSection() !=
+       ".compartment_imports"))
+    BuildMI(NewMBB, DL, TII->get(RISCV::CSetBoundsImm), DestReg)
+        .addReg(DestReg)
+        .addDisp(Symbol, 0, RISCVII::MO_CHERI_COMPARTMENT_SIZE);
 
   // Move all the rest of the instructions to NewMBB.
   NewMBB->splice(NewMBB->end(), &MBB, std::next(MBBI), MBB.end());
@@ -309,8 +347,18 @@ bool RISCVExpandPseudo::expandAuipccInstPair(
 bool RISCVExpandPseudo::expandCapLoadLocalCap(
     MachineBasicBlock &MBB, MachineBasicBlock::iterator MBBI,
     MachineBasicBlock::iterator &NextMBBI) {
-  return expandAuipccInstPair(MBB, MBBI, NextMBBI, RISCVII::MO_PCREL_HI,
-                              RISCV::CIncOffsetImm);
+  bool IsCheriot =
+      MBB.getParent()->getSubtarget<RISCVSubtarget>().getTargetABI() ==
+      RISCVABI::ABI_CHERIOT;
+  if (IsCheriot) {
+    const MachineOperand &Symbol = MBBI->getOperand(1);
+    const GlobalValue *GV = Symbol.getGlobal();
+    if (isa<Function>(GV) || cast<GlobalVariable>(GV)->isConstant())
+      return expandAuipccInstPair(MBB, MBBI, NextMBBI,
+                                  RISCVII::MO_CHERI_COMPARTMENT_PCCREL_HI, RISCV::CIncOffsetImm);
+    return expandAuicgpInstPair(MBB, MBBI, RISCV::CIncOffsetImm);
+  }
+  return expandAuipccInstPair(MBB, MBBI, NextMBBI, RISCVII::MO_PCREL_HI, RISCV::CIncOffsetImm);
 }
 
 bool RISCVExpandPseudo::expandCapLoadGlobalCap(

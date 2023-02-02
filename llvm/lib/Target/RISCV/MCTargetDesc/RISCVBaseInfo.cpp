@@ -55,7 +55,8 @@ ABI computeTargetABI(const Triple &TT, FeatureBitset FeatureBits,
               "target-abi)\n";
     TargetABI = ABI_Unknown;
   } else if (IsRV32E && TargetABI != ABI_ILP32E &&
-             TargetABI != ABI_IL32PC64E && TargetABI != ABI_Unknown) {
+             TargetABI != ABI_IL32PC64E && TargetABI != ABI_Unknown &&
+             TargetABI != ABI_CHERIOT) {
     // TODO: move this checking to RISCVTargetLowering and RISCVAsmParser
     errs() << "Only the ilp32e and il32pc64e ABIs are supported for RV32E "
               "(ignoring target-abi)\n";

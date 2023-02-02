@@ -211,6 +211,24 @@ def GPCR : RegisterClass<"RISCV", [CLenVT], 64, (add
   let RegInfos = CLenRI;
 }
 
+def GPRE : RegisterClass<"RISCV", [XLenVT], 32, (add
+    (sequence "X%u", 10, 15),
+    (sequence "X%u", 5, 7),
+    (sequence "X%u", 8, 9),
+    (sequence "X%u", 0, 4)
+  )> {
+  let RegInfos = XLenRI;
+}
+
+def GPCRE : RegisterClass<"RISCV", [CLenVT], 64, (add
+    (sequence "C%u", 10, 15),
+    (sequence "C%u", 5, 7),
+    (sequence "C%u", 8, 9),
+    (sequence "C%u", 0, 4)
+  )> {
+  let RegInfos = CLenRI;
+}
+
 def GPCRC0IsDDC : RegisterClass<"RISCV", [CLenVT], 64, (add
     (sequence "C%u", 10, 17),
     (sequence "C%u", 5, 7),

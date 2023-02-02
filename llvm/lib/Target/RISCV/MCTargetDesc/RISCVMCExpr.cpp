@@ -79,6 +79,7 @@ const MCFixup *RISCVMCExpr::getPCRelHiFixup(const MCFragment **DFOut) const {
     case RISCV::fixup_riscv_got_hi20:
     case RISCV::fixup_riscv_tls_got_hi20:
     case RISCV::fixup_riscv_tls_gd_hi20:
+    case RISCV::fixup_riscv_cheri_compartment_pccrel_hi:
     case RISCV::fixup_riscv_pcrel_hi20:
     case RISCV::fixup_riscv_captab_pcrel_hi20:
     case RISCV::fixup_riscv_tls_ie_captab_pcrel_hi20:
@@ -127,7 +128,11 @@ RISCVMCExpr::VariantKind RISCVMCExpr::getVariantKindForName(StringRef name) {
       .Case("tprel_cincoffset", VK_RISCV_TPREL_CINCOFFSET)
       .Case("tls_ie_captab_pcrel_hi", VK_RISCV_TLS_IE_CAPTAB_PCREL_HI)
       .Case("tls_gd_captab_pcrel_hi", VK_RISCV_TLS_GD_CAPTAB_PCREL_HI)
-      .Case("cheri_compartment_global", VK_RISCV_CHERI_COMPARTMENT_GLOBAL)
+      .Case("cheri_compartment_cgprel_hi", VK_RISCV_CHERI_COMPARTMENT_CGPREL_HI)
+      .Case("cheri_compartment_cgprel_lo_i", VK_RISCV_CHERI_COMPARTMENT_CGPREL_LO_I)
+      .Case("cheri_compartment_cgprel_lo_s", VK_RISCV_CHERI_COMPARTMENT_CGPREL_LO_S)
+      .Case("cheri_compartment_pccrel_hi", VK_RISCV_CHERI_COMPARTMENT_PCCREL_HI)
+      .Case("cheri_compartment_pccrel_lo", VK_RISCV_CHERI_COMPARTMENT_PCCREL_LO)
       .Case("cheri_compartment_size", VK_RISCV_CHERI_COMPARTMENT_SIZE)
       .Default(VK_RISCV_Invalid);
 }
@@ -171,8 +176,16 @@ StringRef RISCVMCExpr::getVariantKindName(VariantKind Kind) {
     return "call_plt";
   case VK_RISCV_CCALL:
     return "ccall";
-  case VK_RISCV_CHERI_COMPARTMENT_GLOBAL:
-    return "cheri_compartment_global";
+  case VK_RISCV_CHERI_COMPARTMENT_CGPREL_HI:
+    return "cheri_compartment_cgprel_hi";
+  case VK_RISCV_CHERI_COMPARTMENT_CGPREL_LO_I:
+    return "cheri_compartment_cgprel_lo_i";
+  case VK_RISCV_CHERI_COMPARTMENT_CGPREL_LO_S:
+    return "cheri_compartment_cgprel_lo_s";
+  case VK_RISCV_CHERI_COMPARTMENT_PCCREL_HI:
+    return "cheri_compartment_pccrel_hi";
+  case VK_RISCV_CHERI_COMPARTMENT_PCCREL_LO:
+    return "cheri_compartment_pccrel_lo";
   case VK_RISCV_CHERI_COMPARTMENT_SIZE:
     return "cheri_compartment_size";
   case VK_RISCV_32_PCREL:

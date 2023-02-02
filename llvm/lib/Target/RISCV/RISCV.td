@@ -305,6 +305,7 @@ def : ProcessorModel<"cheriot", NoSchedModel, [FeatureCheri,
                                                FeatureCapMode,
                                                FeatureStdExtC,
                                                FeatureStdExtM,
+                                               FeatureRV32E,
                                                FeatureCheriRVC]>;
 
 //===----------------------------------------------------------------------===//

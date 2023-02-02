@@ -152,8 +152,12 @@ enum {
   MO_TLS_IE_CAPTAB_PCREL_HI = 15,
   MO_TLS_GD_CAPTAB_PCREL_HI = 16,
   MO_CCALL = 17,
-  MO_CHERI_COMPARTMENT_GLOBAL = 18,
-  MO_CHERI_COMPARTMENT_SIZE = 20,
+  MO_CHERI_COMPARTMENT_CGPREL_HI = 18,
+  MO_CHERI_COMPARTMENT_CGPREL_LO_I = 19,
+  MO_CHERI_COMPARTMENT_CGPREL_LO_S = 20,
+  MO_CHERI_COMPARTMENT_PCCREL_HI = 21,
+  MO_CHERI_COMPARTMENT_PCCREL_LO = 22,
+  MO_CHERI_COMPARTMENT_SIZE = 23,
 
   // Used to differentiate between target-specific "direct" flags and "bitmask"
   // flags. A machine operand can only have one "direct" flag, but can have

@@ -207,6 +207,9 @@ def uimm20_lui : UImm20Operand {
 def uimm20_auipc : UImm20Operand {
   let ParserMatchClass = UImmAsmOperand<20, "AUIPC">;
 }
+def uimm20_auigp : UImm20Operand {
+  let ParserMatchClass = UImmAsmOperand<20, "AUIGP">;
+}
 
 def Simm21Lsb0JALAsmOperand : SImmAsmOperand<21, "Lsb0JAL"> {
   let ParserMethod = "parseJALOffset";

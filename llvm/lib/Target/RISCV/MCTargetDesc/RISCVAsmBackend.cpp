@@ -105,7 +105,11 @@ RISCVAsmBackend::getFixupKindInfo(MCFixupKind Kind) const {
       {"fixup_riscv_ccall", 0, 64, MCFixupKindInfo::FKF_IsPCRel},
       {"fixup_riscv_rvc_cjump", 2, 11, MCFixupKindInfo::FKF_IsPCRel},
 
-      {"fixup_riscv_cheri_compartment_global", 20, 12, 0},
+      {"fixup_riscv_cheri_compartment_cgprel_hi", 0, 32, 0},
+      {"fixup_riscv_cheri_compartment_cgprel_lo_i", 0, 32, 0},
+      {"fixup_riscv_cheri_compartment_cgprel_lo_s", 0, 32, 0},
+      {"fixup_riscv_cheri_compartment_pccrel_hi", 12, 20, MCFixupKindInfo::FKF_IsPCRel | MCFixupKindInfo::FKF_IsTarget},
+      {"fixup_riscv_cheri_compartment_pccrel_lo", 0, 32, MCFixupKindInfo::FKF_IsPCRel | MCFixupKindInfo::FKF_IsTarget},
       {"fixup_riscv_cheri_compartment_size", 20, 12, 0},
   };
   static_assert((array_lengthof(Infos)) == RISCV::NumTargetFixupKinds,
@@ -437,6 +441,23 @@ static uint64_t adjustFixupValue(const MCFixup &Fixup, uint64_t Value,
   case RISCV::fixup_riscv_pcrel_lo12_i:
   case RISCV::fixup_riscv_tprel_lo12_i:
     return Value & 0xfff;
+  case RISCV::fixup_riscv_cheri_compartment_pccrel_hi: {
+    if (int64_t(Value) < 0)
+        Value = (Value + 0x7ff) & ~0x7ff;
+    return (Value >> 11) & 0xfffff;
+  }
+  case RISCV::fixup_riscv_cheri_compartment_pccrel_lo: {
+    // Attach a negative sign bit to LO14 if the offset is negative.
+    // However, if HI20 alone is enough to reach the target, then this should
+    // not be done and LO14 should just be 0 regardless.
+    if (int64_t(Value) >= 0 || (Value & 0x7ff) == 0)
+      Value &= 0x7ff;
+    else
+      Value = (uint64_t(-1) & ~0x7ff) | (Value & 0x7ff);
+    // let Inst{31-20} = imm12{11-0};
+    uint32_t lowbits = Value & 0xfff;
+    return lowbits << 20;
+  }
   case RISCV::fixup_riscv_lo12_s:
   case RISCV::fixup_riscv_pcrel_lo12_s:
   case RISCV::fixup_riscv_tprel_lo12_s:
@@ -532,11 +553,13 @@ bool RISCVAsmBackend::evaluateTargetFixup(
   switch (Fixup.getTargetKind()) {
   default:
     llvm_unreachable("Unexpected fixup kind!");
+  case RISCV::fixup_riscv_cheri_compartment_pccrel_hi:
   case RISCV::fixup_riscv_pcrel_hi20:
     AUIPCFixup = &Fixup;
     AUIPCDF = DF;
     AUIPCTarget = Target;
     break;
+  case RISCV::fixup_riscv_cheri_compartment_pccrel_lo:
   case RISCV::fixup_riscv_pcrel_lo12_i:
   case RISCV::fixup_riscv_pcrel_lo12_s: {
     AUIPCFixup = cast<RISCVMCExpr>(Fixup.getValue())->getPCRelHiFixup(&AUIPCDF);
@@ -609,6 +632,7 @@ void RISCVAsmBackend::applyFixup(const MCAssembler &Asm, const MCFixup &Fixup,
   // For each byte of the fragment that the fixup touches, mask in the
   // bits from the fixup value.
   for (unsigned i = 0; i != NumBytes; ++i) {
+    assert((Data[Offset + i] & uint8_t((Value >> (i * 8)) & 0xff)) == 0);
     Data[Offset + i] |= uint8_t((Value >> (i * 8)) & 0xff);
   }
 }
