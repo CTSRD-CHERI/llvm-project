@@ -8493,8 +8493,8 @@ SDValue RISCVTargetLowering::LowerCall(CallLoweringInfo &CLI,
       if (F) {
         StringRef Compartment =
             F->getFnAttribute("cheri-compartment").getValueAsString();
-        std::string ImportName =
-            (Twine("__import_") + Compartment + "_" + F->getName()).str();
+        std::string ImportName = getImportExportTableName(
+            Compartment, F->getName(), CallConv, /*IsImport*/ true);
         auto *GV = F->getParent()->getGlobalVariable(ImportName);
         auto ImportPtr = DAG.getGlobalAddress(GV, DL, PtrVT, 0, 0);
         auto Import = DAG.getLoad(PtrVT, DL, Chain, ImportPtr,
@@ -8512,15 +8512,20 @@ SDValue RISCVTargetLowering::LowerCall(CallLoweringInfo &CLI,
     auto &Fn = MF.getFunction();
     if (Fn.hasFnAttribute("cheri-compartment")) {
       StringRef CalleeName;
+      StringRef CompartmentName = "libcalls";
       if (CLI.CB) {
-        if (auto *CFn = CLI.CB->getCalledFunction())
+        if (auto *CFn = CLI.CB->getCalledFunction()) {
           CalleeName = CFn->getName();
+          if (CFn->hasFnAttribute("cheri-compartment"))
+            CompartmentName =
+                CFn->getFnAttribute("cheri-compartment").getValueAsString();
+        }
       } else
         CalleeName =
             cast<ExternalSymbolSDNode>(CLI.Callee.getNode())->getSymbol();
       if (!CalleeName.empty()) {
-        std::string ImportName =
-            (Twine("__import_libcalls_") + CalleeName).str();
+        std::string ImportName = getImportExportTableName(
+            CompartmentName, CalleeName, CallConv, /*IsImport*/ true);
         auto *GV = Fn.getParent()->getGlobalVariable(ImportName);
         // The global will have been created only if an import is required.  If
         // not, then skip this and call directly.

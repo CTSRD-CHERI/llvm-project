@@ -71,12 +71,22 @@ public:
   void emitEndOfAsmFile(Module &M) override;
 
 private:
+  /**
+   * Struct describing compartment exports that must be emitted for this
+   * compilation unit.
+   */
   struct CompartmentExport
   {
+    /// The compartment name for the function.
     std::string CompartmentName;
+    /// The IR function corresponding to the function.
     const Function &Fn;
+    /// The symbol for the function
     MCSymbol *FnSym;
+    /// The number of registers that are live on entry to this function
     size_t LiveIns;
+    /// Emit this export as a local symbol even if the function is not local.
+    bool forceLocal = false;
   };
   SmallVector<CompartmentExport, 1> CompartmentEntries;
   void emitAttributes();
@@ -184,20 +194,32 @@ bool RISCVAsmPrinter::runOnMachineFunction(MachineFunction &MF) {
 
   SetupMachineFunction(MF);
   emitFunctionBody();
-  if (MF.getFunction().getCallingConv() == CallingConv::CHERI_CCallee)
-    CompartmentEntries.push_back(
-        {std::string(MF.getFunction()
-                         .getFnAttribute("cheri-compartment")
-                         .getValueAsString()),
-         MF.getFunction(),
-         OutStreamer->getContext().getOrCreateSymbol(MF.getName()),
-         MF.getRegInfo().liveins().size()});
+  auto &Fn = MF.getFunction();
+  // The low 3 bits of the flags field specify the number of registers to
+  // clear.  The next two provide the set of
+  int interruptFlag = 0;
+  if (Fn.hasFnAttribute("interrupt-state"))
+    interruptFlag = StringSwitch<int>(
+                        Fn.getFnAttribute("interrupt-state").getValueAsString())
+                        .Case("enabled", 1 << 3)
+                        .Case("disabled", 2 << 3)
+                        .Default(0);
 
-  if (MF.getFunction().getCallingConv() == CallingConv::CHERI_LibCall)
+  if (Fn.getCallingConv() == CallingConv::CHERI_CCallee)
     CompartmentEntries.push_back(
-        {"libcalls", MF.getFunction(),
+        {std::string(Fn.getFnAttribute("cheri-compartment").getValueAsString()),
+         Fn, OutStreamer->getContext().getOrCreateSymbol(MF.getName()),
+         MF.getRegInfo().liveins().size() + interruptFlag});
+  else if (Fn.getCallingConv() == CallingConv::CHERI_LibCall)
+    CompartmentEntries.push_back(
+        {"libcalls", Fn,
          OutStreamer->getContext().getOrCreateSymbol(MF.getName()),
-         MF.getRegInfo().liveins().size()});
+         MF.getRegInfo().liveins().size() + interruptFlag});
+  else if (interruptFlag != 0)
+    CompartmentEntries.push_back(
+        {std::string(Fn.getFnAttribute("cheri-compartment").getValueAsString()),
+         Fn, OutStreamer->getContext().getOrCreateSymbol(MF.getName()),
+         MF.getRegInfo().liveins().size() + interruptFlag, true});
 
   return false;
 }
@@ -218,16 +240,15 @@ void RISCVAsmPrinter::emitEndOfAsmFile(Module &M) {
     OutStreamer->SwitchSection(Exports);
     auto CompartmentStartSym = C.getOrCreateSymbol("__compartment_pcc_start");
     for (auto &Entry : CompartmentEntries) {
-      std::string ExportName("__export_");
-      ExportName += Entry.CompartmentName;
-      ExportName += '_';
-      ExportName += Entry.FnSym->getName();
+      std::string ExportName = getImportExportTableName(
+          Entry.CompartmentName, Entry.Fn.getName(), Entry.Fn.getCallingConv(),
+          /*IsImport*/ false);
       auto Sym = C.getOrCreateSymbol(ExportName);
       OutStreamer->emitSymbolAttribute(Sym, MCSA_ELF_TypeObject);
       // If the function isn't global, don't make its export table entry global
       // either.  Two different compilation units in the same compartment may
       // export different static things.
-      if (Entry.Fn.hasExternalLinkage())
+      if (Entry.Fn.hasExternalLinkage() && !Entry.forceLocal)
         OutStreamer->emitSymbolAttribute(Sym, MCSA_Global);
       OutStreamer->emitValueToAlignment(4);
       OutStreamer->emitLabel(Sym);

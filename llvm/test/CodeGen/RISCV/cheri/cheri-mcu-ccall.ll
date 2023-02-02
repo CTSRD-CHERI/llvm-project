@@ -137,6 +137,9 @@ attributes #6 = { minsize nounwind optsize }
 ; BOTH:        .p2align        3
 ; BOTH:__import_other_test8callee:
 ; BOTH:        .word   __export_other_test8callee
+; This is not a libcall, so it shouldn't have any add to set low bits in this
+; pointer.
+; BOTH-NOT: +
 ; BOTH:        .word   0
 ; BOTH:        .size   __import_other_test8callee, 8
 ; BOTH:        .section        .compartment_exports,"a",@progbits

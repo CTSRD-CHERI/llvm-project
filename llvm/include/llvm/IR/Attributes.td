@@ -324,6 +324,7 @@ def : CompatRule<"isEqual<SafeStackAttr>">;
 def : CompatRule<"isEqual<ShadowCallStackAttr>">;
 def : CompatRule<"isEqual<UseSampleProfileAttr>">;
 def : CompatRule<"isEqual<NoProfileAttr>">;
+def : CompatRule<"isInterruptPostureCompatible">;
 
 class MergeRule<string F> {
   // The name of the function called to merge the attributes of the caller and

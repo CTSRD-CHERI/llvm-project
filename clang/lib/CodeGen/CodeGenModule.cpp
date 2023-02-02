@@ -3806,14 +3806,33 @@ llvm::Constant *CodeGenModule::GetAddrOfFunction(GlobalDecl GD,
                                     /*IsThunk=*/false, llvm::AttributeList(),
                                     IsForDefinition);
   auto *FD = cast<FunctionDecl>(GD.getDecl());
-  if (FD->hasAttr<CHERICompartmentNameAttr>())
+  bool isExportedFunction = false;
+  if (FD->hasAttr<CHERICompartmentNameAttr>()) {
     cast<llvm::Function>(F->stripPointerCasts())
         ->addFnAttr(
             "cheri-compartment",
             FD->getAttr<CHERICompartmentNameAttr>()->getCompartmentName());
-  else if (!getLangOpts().CheriCompartmentName.empty())
+    isExportedFunction = true;
+  } else {
+    auto CC = FD->getType()->castAs<FunctionType>()->getCallConv();
+    if (CC == CC_CHERICCallback)
+      isExportedFunction = true;
+    else if (!getLangOpts().CheriCompartmentName.empty() &&
+             (CC != CC_CHERILibCall))
+      cast<llvm::Function>(F->stripPointerCasts())
+          ->addFnAttr("cheri-compartment", getLangOpts().CheriCompartmentName);
+  }
+
+  if (FD->hasAttr<InterruptStateAttr>())
     cast<llvm::Function>(F->stripPointerCasts())
-        ->addFnAttr("cheri-compartment", getLangOpts().CheriCompartmentName);
+        ->addFnAttr("interrupt-state",
+                    InterruptStateAttr::ConvertInterruptStateToStr(
+                        FD->getAttr<InterruptStateAttr>()->getState()));
+  else if (isExportedFunction)
+    // Exported functions with no explicit interrupt state have interrupts
+    // enabled.
+    cast<llvm::Function>(F->stripPointerCasts())
+        ->addFnAttr("interrupt-state", "enabled");
 
   // Returns kernel handle for HIP kernel stub function.
   if (LangOpts.CUDA && !LangOpts.CUDAIsDevice &&

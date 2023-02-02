@@ -2087,12 +2087,39 @@ struct StrBoolAttr {
   };
 #include "llvm/IR/Attributes.inc"
 
+/// Check if two functions have compatible interrupt posture attributes.  This
+/// is important only for inlining: it is always safe to outline because the
+/// outlined version will inherit the interrupt posture of the caller.
+static bool isInterruptPostureCompatible(const Function &caller,
+                                         const Function &callee) {
+  enum Interrupts { Disabled, Enabled, Inherit, Invalid };
+  // If the interrupt posture attribute is not present then the function
+  // inherits interrupt posture.
+  auto getInterrupts = [](const Function &fn) {
+    return fn.hasFnAttribute("interrupt-state")
+               ? StringSwitch<Interrupts>(
+                     fn.getFnAttribute("interrupt-state").getValueAsString())
+                     .Case("disabled", Disabled)
+                     .Case("enabled", Enabled)
+                     .Case("inherit", Inherit)
+                     .Default(Invalid)
+               : Inherit;
+  };
+  auto callerInterrupts = getInterrupts(caller);
+  auto calleeInterrupts = getInterrupts(callee);
+  // It is safe to inline any function that inherits the interrupt posture from
+  // the caller and any function that
+  return (calleeInterrupts == Inherit) ||
+         (calleeInterrupts == callerInterrupts);
+}
+
 #define GET_ATTR_COMPAT_FUNC
 #include "llvm/IR/Attributes.inc"
 
 bool AttributeFuncs::areInlineCompatible(const Function &Caller,
                                          const Function &Callee) {
-  return hasCompatibleFnAttrs(Caller, Callee);
+  return hasCompatibleFnAttrs(Caller, Callee) &&
+         isInterruptPostureCompatible(Caller, Callee);
 }
 
 bool AttributeFuncs::areOutlineCompatible(const Function &A,

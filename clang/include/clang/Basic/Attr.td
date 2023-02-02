@@ -787,6 +787,18 @@ def Annotate : InheritableParamAttr {
   let Documentation = [Undocumented];
 }
 
+def InterruptState : InheritableAttr, TargetSpecificAttr<TargetRISCV> {
+  let Spellings = [CXX11<"cheri", "interrupt_state">,
+                   C2x<"cheri", "interrupt_state">,
+                   GNU<"cheri_interrupt_state">];
+  let Args = [EnumArgument<"State", "InterruptState",
+                           ["enabled", "disabled", "inherit"],
+                           ["Enabled", "Disabled", "Inherit"],
+                           1>];
+  let Subjects = SubjectList<[Function,CXXMethod]>;
+  let Documentation = [Undocumented];
+}
+
 def ARMInterrupt : InheritableAttr, TargetSpecificAttr<TargetARM> {
   // NOTE: If you add any additional spellings, M68kInterrupt's,
   // MSP430Interrupt's, MipsInterrupt's and AnyX86Interrupt's spellings

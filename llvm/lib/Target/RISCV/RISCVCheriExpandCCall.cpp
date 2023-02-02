@@ -20,10 +20,37 @@ using namespace llvm;
 
 namespace {
 
+enum Interrupts { Disabled, Enabled, Inherit };
+
 /**
- * Perform pre-codegen expansion of CHERI cross-domain calls.  This inserts the
- * compartment import symbols and performs any lowering that's easier in the
- * IR.
+ * Returns the interrupt status associated with the specified function.
+ */
+Interrupts getInterruptStatus(const Function &fn) {
+  // If the interrupt posture attribute is not present then the function
+  // inherits interrupt posture.
+  if (fn.hasFnAttribute("interrupt-state")) {
+    return StringSwitch<Interrupts>(
+               fn.getFnAttribute("interrupt-state").getValueAsString())
+        .Case("disabled", Disabled)
+        .Case("enabled", Enabled)
+        .Case("inherit", Inherit)
+        .Default(Inherit);
+  }
+  return Inherit;
+}
+
+bool isSafeToDirectCall(const Function &from, const Function &to) {
+  auto toStatus = getInterruptStatus(to);
+  if (toStatus == Inherit)
+    return true;
+  auto fromStatus = getInterruptStatus(from);
+  return fromStatus == toStatus;
+}
+
+/**
+ * Perform pre-codegen expansion of CHERI cross-domain calls.  This inserts
+ * the compartment import symbols and performs any lowering that's easier in
+ * the IR.
  */
 class RISCVCheriExpandCCall : public ModulePass,
                               public InstVisitor<RISCVCheriExpandCCall> {
@@ -31,14 +58,17 @@ class RISCVCheriExpandCCall : public ModulePass,
   Module *M;
   /// Have we made any changes to the module yet?
   bool Modified;
-  /// Export table entries are opaque from the perspective of this pass, cache a
-  /// type to use as a placeholder.
+  /// Export table entries are opaque from the perspective of this pass, cache
+  /// a type to use as a placeholder.
   IntegerType *I8Ty;
   /// Type to use for addresses.  We must be able to add 1 to this to set the
   /// low bit.
   IntegerType *AddrTy;
   /// The name used for the library pseudo-compartment
   static constexpr char const *LibraryCompartmentName = "libcalls";
+  /// Set of calls that must be converted to indirect calls to correctly
+  /// preserve interrupt status.
+  SmallVector<CallBase *, 8> IndirectCalls;
 
 public:
   /// Unique-address identifier for the pass.
@@ -61,6 +91,13 @@ public:
                                        F.hasExternalLinkage());
   }
 
+  /// Insert
+  GlobalVariable *getOrInsertInternalImportTableEntry(Function &F) {
+    return getOrInsertImportTableEntry(
+        getCalleeCompartmentName(F), F.getName(), CallingConv::CHERI_LibCall,
+        false, (F.getCallingConv() == CallingConv::CHERI_CCallee));
+  }
+
   /**
    * Insert an import table entry for calling the function called `FnName` in
    * compartment `Compartment`.  The calling convention is specified by `CC`.
@@ -69,25 +106,31 @@ public:
    */
   GlobalVariable *getOrInsertImportTableEntry(StringRef Compartment,
                                               StringRef FnName, int CC,
-                                              bool IsExternal) {
+                                              bool IsExternal,
+                                              bool IsAlsoExported = false) {
     std::string ImportName =
-        (Twine("__import_") + Compartment + "_" + FnName).str();
+        getImportExportTableName(Compartment, FnName, CC, /*isImport*/ true);
     // If we already have the import table entry, stop now
-    if (auto *Import = M->getGlobalVariable(ImportName))
+    if (auto *Import = M->getGlobalVariable(ImportName, !IsExternal))
       return Import;
-    std::string ExportName =
-        (Twine("__export_") + Compartment + "_" + FnName).str();
-    Constant *Export = new GlobalVariable(
-        *M, I8Ty, true, GlobalValue::ExternalLinkage, nullptr, ExportName,
-        nullptr, GlobalValue::NotThreadLocal, 0);
+    std::string ExportName = getImportExportTableName(
+        Compartment, FnName, IsAlsoExported ? CallingConv::CHERI_CCall : CC,
+        /*isImport*/ false);
+    Constant *Export = M->getGlobalVariable(ExportName);
+    if (Export == nullptr)
+      Export = new GlobalVariable(*M, I8Ty, true, GlobalValue::ExternalLinkage,
+                                  nullptr, ExportName, nullptr,
+                                  GlobalValue::NotThreadLocal, 0);
     auto *ImportType =
         StructType::create({Export->getType(), Export->getType()});
     auto AS0PtrTy = I8Ty->getPointerTo(0);
     Export = ConstantExpr::getBitCast(Export, AS0PtrTy);
-    // LibCalls set the low bit in the target address to indicate to the loader
-    // that it should provide a capability that bypasses the compartment
-    // switcher.
-    if (CC == CallingConv::CHERI_LibCall)
+    // LibCalls set the low bit in the target address to indicate to the
+    // loader that it should provide a capability that bypasses the
+    // compartment switcher.  Calls that exist to toggle the interrupt status
+    // are processed as library calls, irrespective of their internal calling
+    // convention.
+    if ((CC == CallingConv::CHERI_LibCall) || (CC < CallingConv::FirstTargetCC))
       Export = ConstantExpr::getGetElementPtr(
           I8Ty, Export, ConstantInt::get(AddrTy, 1), true);
     auto *ImportValue = ConstantStruct::get(
@@ -133,8 +176,8 @@ public:
    */
   void visitCallBase(CallBase &C) {
     // Make sure that we'll emit the compartment switcher symbol if there are
-    // any indirect cross-compartment calls, even though we're not transforming
-    // this call.
+    // any indirect cross-compartment calls, even though we're not
+    // transforming this call.
     if (C.isIndirectCall() &&
         (C.getCallingConv() == CallingConv::CHERI_CCall)) {
       Modified = true;
@@ -171,13 +214,24 @@ public:
       }
       return;
     }
-    if ((CC != CallingConv::CHERI_CCall) && (CC != CallingConv::CHERI_LibCall))
+    Function &Caller = *C.getParent()->getParent();
+    if ((CC != CallingConv::CHERI_CCall) &&
+        (CC != CallingConv::CHERI_LibCall)) {
+      if (isSafeToDirectCall(Caller, *F))
+        return;
+      // If it is not safe to direct call, then we need to use an indirect
+      // call.  Set the calling convention to libcall and insert the export
+      // table entry.
+      C.setCallingConv(CallingConv::CHERI_LibCall);
+      getOrInsertInternalImportTableEntry(*F);
+      IndirectCalls.push_back(&C);
+      Modified = true;
       return;
+    }
     // If we are calling a function from the same compartment as its
     // definition, we will do a direct call, so don't insert an import table
     // entry.
-    if (getCalleeCompartmentName(*F) ==
-        getCallerCompartmentName(*C.getParent()->getParent()))
+    if (getCalleeCompartmentName(*F) == getCallerCompartmentName(Caller))
       return;
     getOrInsertImportTableEntry(*F);
     Modified = true;
@@ -186,8 +240,8 @@ public:
   /**
    * Process all cross-compartment calls, inserting any necessary import table
    * entry and changing the calling convention for exported functions to give
-   * the correct lowering.  If there are any cross-compartment calls, insert the
-   * compartment-switcher symbol for later use.
+   * the correct lowering.  If there are any cross-compartment calls, insert
+   * the compartment-switcher symbol for later use.
    */
   bool runOnModule(Module &Mod) override {
     M = &Mod;
@@ -204,12 +258,13 @@ public:
           if (Ctx.supportsTypedPointers())
             Import = ConstantExpr::getBitCast(Import, PtrTy->getPointerTo(200));
           Value *FPtr = new LoadInst(PtrTy, Import, "import_table_load", I);
-          FPtr = new BitCastInst(FPtr, F.getType(), "fake_fptr", I);
+          if (Ctx.supportsTypedPointers())
+            FPtr = new BitCastInst(FPtr, F.getType(), "fake_fptr", I);
           U.set(FPtr);
         }
       };
-      // Functions that are exposed as callbacks have the `CHERI_CCall` calling
-      // convention in the IR)
+      // Functions that are exposed as callbacks have the `CHERI_CCall`
+      // calling convention in the IR)
       if (F.getCallingConv() == CallingConv::CHERI_CCall) {
         // Reset the calling convention to ccallee so that it's lowered
         // correctly.
@@ -236,6 +291,20 @@ public:
           ConvertToImportTableReference(U);
         }
       }
+    }
+
+    for (auto *Call : IndirectCalls) {
+      auto &F = *Call->getCalledFunction();
+      Constant *Import = getOrInsertInternalImportTableEntry(F);
+      Type *PtrTy = PointerType::get(Ctx, 200);
+      if (Ctx.supportsTypedPointers())
+        Import = ConstantExpr::getBitCast(Import, PtrTy->getPointerTo(200));
+      Value *FPtr = new LoadInst(PtrTy, Import, "import_table_load", Call);
+      if (Ctx.supportsTypedPointers())
+        FPtr = new BitCastInst(
+            FPtr, PointerType::getWithSamePointeeType(F.getType(), 200),
+            "fake_fptr", Call);
+      Call->setCalledOperand(FPtr);
     }
 
     // If we've found a cross-domain call, make sure that there's a symbol for

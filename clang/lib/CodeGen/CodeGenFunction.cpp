@@ -906,6 +906,11 @@ void CodeGenFunction::StartFunction(GlobalDecl GD, QualType RetTy,
         if (auto *ClsAttr = FD->getAttr<CHERIMethodClassAttr>())
           CGM.EmitSandboxDefinedMethod(ClsAttr->getDefaultClass()->getName(),
                                        FD->getName(), Fn);
+      if (FD->hasAttr<InterruptStateAttr>())
+        cast<llvm::Function>(Fn->stripPointerCasts())
+            ->addFnAttr("interrupt-state",
+                        InterruptStateAttr::ConvertInterruptStateToStr(
+                            FD->getAttr<InterruptStateAttr>()->getState()));
     }
   }
   // Add no-jump-tables value.
