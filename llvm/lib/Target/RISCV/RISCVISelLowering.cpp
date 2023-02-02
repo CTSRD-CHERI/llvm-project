@@ -7873,10 +7873,14 @@ static bool CC_RISCV_FastCC(const DataLayout &DL, RISCVABI::ABI ABI,
                             Optional<unsigned> FirstMaskArgument) {
 
   // X5 and X6 might be used for save-restore libcall.
-  static const MCPhysReg GPRList[] = {
+  static const MCPhysReg GPRListFull[] = {
       RISCV::X10, RISCV::X11, RISCV::X12, RISCV::X13, RISCV::X14,
       RISCV::X15, RISCV::X16, RISCV::X17, RISCV::X7,  RISCV::X28,
       RISCV::X29, RISCV::X30, RISCV::X31};
+  static const MCPhysReg GPRListE[] = {RISCV::X10, RISCV::X11, RISCV::X12,
+                                       RISCV::X13, RISCV::X14, RISCV::X15};
+  auto GPRList{TLI.getSubtarget().isRV32E() ? ArrayRef<MCPhysReg>{GPRListE}
+                                            : ArrayRef<MCPhysReg>{GPRListFull}};
 
   if (LocVT == MVT::i32 || LocVT == MVT::i64) {
     if (unsigned Reg = State.AllocateReg(GPRList)) {
@@ -7887,10 +7891,15 @@ static bool CC_RISCV_FastCC(const DataLayout &DL, RISCVABI::ABI ABI,
 
   if (LocVT.isFatPointer()) {
     // C5 and C6 might be used for save-restore libcall.
-    static const MCPhysReg GPCRList[] = {
+    static const MCPhysReg GPCRListFull[] = {
         RISCV::C10, RISCV::C11, RISCV::C12, RISCV::C13, RISCV::C14,
         RISCV::C15, RISCV::C16, RISCV::C17, RISCV::C7,  RISCV::C28,
         RISCV::C29, RISCV::C30, RISCV::C31};
+    static const MCPhysReg GPCRListE[] = {RISCV::C10, RISCV::C11, RISCV::C12,
+                                          RISCV::C13, RISCV::C14, RISCV::C15};
+    auto GPCRList{TLI.getSubtarget().isRV32E()
+                      ? ArrayRef<MCPhysReg>{GPCRListE}
+                      : ArrayRef<MCPhysReg>{GPCRListFull}};
     if (unsigned Reg = State.AllocateReg(GPCRList)) {
       State.addLoc(CCValAssign::getReg(ValNo, ValVT, Reg, LocVT, LocInfo));
       return false;
