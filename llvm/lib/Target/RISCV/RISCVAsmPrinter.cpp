@@ -24,9 +24,11 @@
 #include "llvm/CodeGen/MachineInstr.h"
 #include "llvm/CodeGen/MachineModuleInfo.h"
 #include "llvm/MC/MCAsmInfo.h"
+#include "llvm/MC/MCExpr.h"
 #include "llvm/MC/MCInst.h"
 #include "llvm/MC/MCStreamer.h"
 #include "llvm/MC/MCSymbol.h"
+#include "llvm/MC/MCSectionELF.h"
 #include "llvm/Support/TargetRegistry.h"
 #include "llvm/Support/raw_ostream.h"
 using namespace llvm;
@@ -69,6 +71,14 @@ public:
   void emitEndOfAsmFile(Module &M) override;
 
 private:
+  struct CompartmentExport
+  {
+    std::string CompartmentName;
+    const Function &Fn;
+    MCSymbol *FnSym;
+    size_t LiveIns;
+  };
+  SmallVector<CompartmentExport, 1> CompartmentEntries;
   void emitAttributes();
 };
 }
@@ -174,6 +184,15 @@ bool RISCVAsmPrinter::runOnMachineFunction(MachineFunction &MF) {
 
   SetupMachineFunction(MF);
   emitFunctionBody();
+  if (MF.getFunction().getCallingConv() == CallingConv::CHERI_CCallee)
+    CompartmentEntries.push_back(
+        {std::string(MF.getFunction()
+                         .getFnAttribute("cheri-compartment")
+                         .getValueAsString()),
+         MF.getFunction(),
+         OutStreamer->getContext().getOrCreateSymbol(MF.getName()),
+         MF.getRegInfo().liveins().size()});
+
   return false;
 }
 
@@ -186,8 +205,33 @@ void RISCVAsmPrinter::emitEndOfAsmFile(Module &M) {
   RISCVTargetStreamer &RTS =
       static_cast<RISCVTargetStreamer &>(*OutStreamer->getTargetStreamer());
 
+  if (!CompartmentEntries.empty()) {
+    auto &C = OutStreamer->getContext();
+    auto *Exports = C.getELFSection(".compartment_exports",
+          ELF::SHT_PROGBITS, ELF::SHF_ALLOC);
+    OutStreamer->SwitchSection(Exports);
+    auto CompartmentStartSym = C.getOrCreateSymbol("__compartment_pcc_start");
+    for (auto &Entry : CompartmentEntries) {
+      std::string ExportName("__export_");
+      ExportName += Entry.CompartmentName;
+      ExportName += '_';
+      ExportName += Entry.FnSym->getName();
+      auto Sym = C.getOrCreateSymbol(ExportName);
+      OutStreamer->emitSymbolAttribute(Sym, MCSA_ELF_TypeObject);
+      OutStreamer->emitSymbolAttribute(Sym, MCSA_Global);
+      OutStreamer->emitValueToAlignment(4);
+      OutStreamer->emitLabel(Sym);
+      emitLabelDifference(Entry.FnSym, CompartmentStartSym, 2);
+      // FIXME: Get stack size as function attribute
+      OutStreamer->emitIntValue(0, 1);
+      OutStreamer->emitIntValue(Entry.LiveIns, 1);
+      OutStreamer->emitELFSize(Sym, MCConstantExpr::create(4, C));
+    }
+  }
+
   if (TM.getTargetTriple().isOSBinFormatELF())
     RTS.finishAttributeSection();
+
 }
 
 void RISCVAsmPrinter::emitAttributes() {

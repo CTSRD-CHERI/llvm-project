@@ -428,6 +428,9 @@ public:
   /// input is a header file (i.e. -x c-header).
   bool IsHeaderFile = false;
 
+  /// The name of the CHERI compartment for this compilation unit.
+  std::string CheriCompartmentName;
+
   LangOptions();
 
   // Define accessors/mutators for language options of enumeration type.

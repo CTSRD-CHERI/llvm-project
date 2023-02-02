@@ -527,6 +527,9 @@ static bool FixupInvocation(CompilerInvocation &Invocation,
         << Args.getLastArg(OPT_fprofile_remapping_file_EQ)->getAsString(Args)
         << "-fno-legacy-pass-manager";
 
+  if (Arg *A = Args.getLastArg(OPT_cheri_compartment_EQ))
+    LangOpts.CheriCompartmentName = A->getValue();
+
   return Diags.getNumErrors() == NumErrorsBefore;
 }
 
@@ -3535,6 +3538,9 @@ void CompilerInvocation::GenerateLangArgs(const LangOptions &Opts,
     GenerateArg(Args, OPT_fexperimental_relative_cxx_abi_vtables, SA);
   else
     GenerateArg(Args, OPT_fno_experimental_relative_cxx_abi_vtables, SA);
+
+  if (Opts.CheriCompartmentName != std::string())
+    GenerateArg(Args, OPT_cheri_compartment_EQ, Opts.CheriCompartmentName, SA);
 }
 
 bool CompilerInvocation::ParseLangArgs(LangOptions &Opts, ArgList &Args,

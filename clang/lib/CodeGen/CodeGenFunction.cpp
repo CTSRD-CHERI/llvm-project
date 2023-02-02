@@ -898,10 +898,13 @@ void CodeGenFunction::StartFunction(GlobalDecl GD, QualType RetTy,
   if (const FunctionDecl *FD = dyn_cast_or_null<FunctionDecl>(D)) {
     auto *FT =
       dyn_cast<FunctionType>(FD->getType().getDesugaredType(getContext()));
-    if (FT && (FT->getCallConv() == CC_CHERICCallee))
+    if (FT && (FT->getCallConv() == CC_CHERICCallee)) {
+      Fn->addFnAttr("cheri-compartment",
+              CGM.getLangOpts().CheriCompartmentName);
       if (auto *ClsAttr = FD->getAttr<CHERIMethodClassAttr>())
         CGM.EmitSandboxDefinedMethod(ClsAttr->getDefaultClass()->getName(),
                                      FD->getName(), Fn);
+    }
   }
   // Add no-jump-tables value.
   if (CGM.getCodeGenOpts().NoUseJumpTables)

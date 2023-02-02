@@ -5821,6 +5821,8 @@ void Clang::ConstructJob(Compilation &C, const JobAction &JA,
     Args.AddAllArgs(CmdArgs, options::OPT_fopenmp_version_EQ);
   }
 
+  Args.AddLastArg(CmdArgs, options::OPT_cheri_compartment_EQ);
+
   const SanitizerArgs &Sanitize = TC.getSanitizerArgs();
   Sanitize.addArgs(TC, Args, CmdArgs, InputType);
 

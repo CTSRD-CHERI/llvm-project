@@ -508,6 +508,9 @@ def cheri_Group : OptionGroup<"<CHERI specific options>">, HelpText<"CHERI OPTIO
 def q_rtems : Flag<["-"], "qrtems">, Flags<[NoXarchOption]>, Group<cheri_Group>,
   HelpText<"Hack for RTEMS to use start.o instead of crt0.o">;
 
+def cheri_compartment_EQ : Joined<["-"], "cheri-compartment=">, Flags<[CC1Option]>,
+  Group<cheri_Group>, HelpText<"The name of the compartment that includes this compilation unit">;
+
 def cheri_EQ : Joined<["-"], "cheri=">, Flags<[NoXarchOption]>, Group<cheri_Group>,
   HelpText<"Enable CHERI support, specifying the size (in bits) of CHERI capabilities">;
 def cheri : Flag<["-"], "cheri">, Flags<[NoXarchOption]>, Group<cheri_Group>,

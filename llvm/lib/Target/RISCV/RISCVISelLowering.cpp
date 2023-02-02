@@ -7787,14 +7787,13 @@ static SDValue convertValVTToLocVT(SelectionDAG &DAG, SDValue Val,
 // passed with CCValAssign::Indirect.
 static SDValue unpackFromMemLoc(SelectionDAG &DAG, SDValue Chain,
                                 const CCValAssign &VA, const SDLoc &DL,
-                                EVT PtrVT) {
+                                EVT PtrVT, bool ViaCap) {
   MachineFunction &MF = DAG.getMachineFunction();
   MachineFrameInfo &MFI = MF.getFrameInfo();
   EVT LocVT = VA.getLocVT();
   EVT ValVT = VA.getValVT();
   int FI = MFI.CreateFixedObject(ValVT.getStoreSize(), VA.getLocMemOffset(),
                                  /*Immutable=*/true);
-  SDValue FIN = DAG.getFrameIndex(FI, PtrVT);
   SDValue Val;
 
   ISD::LoadExtType ExtType;
@@ -7807,9 +7806,17 @@ static SDValue unpackFromMemLoc(SelectionDAG &DAG, SDValue Chain,
     ExtType = ISD::NON_EXTLOAD;
     break;
   }
-  Val = DAG.getExtLoad(
+  if (ViaCap)
+    Val = DAG.getExtLoad(
+      ExtType, DL, LocVT, Chain,
+      DAG.getPointerAdd(DL, DAG.getCopyFromReg(Chain, DL, RISCV::C5, MVT::iFATPTR64), VA.getLocMemOffset()),
+      MachinePointerInfo::getFixedStack(DAG.getMachineFunction(), FI), ValVT);
+  else {
+    SDValue FIN = DAG.getFrameIndex(FI, PtrVT);
+    Val = DAG.getExtLoad(
       ExtType, DL, LocVT, Chain, FIN,
       MachinePointerInfo::getFixedStack(DAG.getMachineFunction(), FI), ValVT);
+  }
   return Val;
 }
 
@@ -8030,6 +8037,7 @@ SDValue RISCVTargetLowering::LowerFormalArguments(
     report_fatal_error("Unsupported calling convention");
   case CallingConv::C:
   case CallingConv::Fast:
+  case CallingConv::CHERI_CCallee:
     break;
   case CallingConv::GHC:
     if (!MF.getSubtarget().getFeatureBits()[RISCV::FeatureStdExtF] ||
@@ -8069,6 +8077,7 @@ SDValue RISCVTargetLowering::LowerFormalArguments(
                      CallConv == CallingConv::Fast ? CC_RISCV_FastCC
                                                    : CC_RISCV);
 
+  bool hasStackArguments = false;
   for (unsigned i = 0, e = ArgLocs.size(); i != e; ++i) {
     CCValAssign &VA = ArgLocs[i];
     SDValue ArgValue;
@@ -8079,7 +8088,9 @@ SDValue RISCVTargetLowering::LowerFormalArguments(
     else if (VA.isRegLoc())
       ArgValue = unpackFromRegLoc(DAG, Chain, VA, DL, *this);
     else
-      ArgValue = unpackFromMemLoc(DAG, Chain, VA, DL, PtrVT);
+      ArgValue = unpackFromMemLoc(DAG, Chain, VA, DL, PtrVT, CallConv ==
+              CallingConv::CHERI_CCallee);
+    hasStackArguments |= VA.isMemLoc();
 
     if (VA.getLocInfo() == CCValAssign::Indirect) {
       // If the original argument was split and passed by reference (e.g. i128
@@ -8107,6 +8118,9 @@ SDValue RISCVTargetLowering::LowerFormalArguments(
     }
     InVals.push_back(ArgValue);
   }
+
+  if (hasStackArguments && (CallConv == CallingConv::CHERI_CCallee))
+    MF.getRegInfo().addLiveIn(RISCV::C5);
 
   MachineFrameInfo &MFI = MF.getFrameInfo();
   RISCVMachineFunctionInfo *RVFI = MF.getInfo<RISCVMachineFunctionInfo>();
@@ -8336,6 +8350,7 @@ SDValue RISCVTargetLowering::LowerCall(CallLoweringInfo &CLI,
   SmallVector<std::pair<Register, SDValue>, 8> RegsToPass;
   SmallVector<SDValue, 8> MemOpChains;
   SDValue StackPtr;
+
   for (unsigned i = 0, j = 0, e = ArgLocs.size(); i != e; ++i) {
     CCValAssign &VA = ArgLocs[i];
     SDValue ArgValue = OutVals[i];
@@ -8452,18 +8467,42 @@ SDValue RISCVTargetLowering::LowerCall(CallLoweringInfo &CLI,
           DAG.getStore(Chain, DL, ArgValue, Address, MachinePointerInfo()));
     }
   }
-
   // Join the stores, which are independent of one another.
   if (!MemOpChains.empty())
     Chain = DAG.getNode(ISD::TokenFactor, DL, MVT::Other, MemOpChains);
 
   SDValue Glue;
 
+  // For CHERI CCalls, pass the on-stack argument frame as an extra capability.
+  if (CallConv == CallingConv::CHERI_CCall ||
+      CallConv == CallingConv::CHERI_CCallee) {
+    if (NumBytes > 0) {
+      SDValue BoundedArgFrame =
+          DAG.getNode(RISCVISD::BOUNDS_SET, DL, PtrVT, StackPtr,
+                      DAG.getIntPtrConstant(NumBytes, DL));
+      RegsToPass.emplace_back(RISCV::C5, BoundedArgFrame);
+    }
+    if (CallConv == CallingConv::CHERI_CCall) {
+      auto *F = CLI.CB->getCalledFunction();
+      StringRef Compartment =
+          F->getFnAttribute("cheri-compartment").getValueAsString();
+      std::string ImportName =
+          (Twine("__import_") + Compartment + "_" + F->getName()).str();
+      auto *GV = F->getParent()->getGlobalVariable(ImportName);
+      auto ImportPtr = DAG.getGlobalAddress(GV, DL, PtrVT, 0, 0);
+      auto Import = DAG.getLoad(PtrVT, DL, Chain, ImportPtr,
+                                MachinePointerInfo(200, 0), 8 /*alignment*/);
+      RegsToPass.emplace_back(RISCV::C6, Import);
+    }
+  }
+
   // Build a sequence of copy-to-reg nodes, chained and glued together.
   for (auto &Reg : RegsToPass) {
     Chain = DAG.getCopyToReg(Chain, DL, Reg.first, Reg.second, Glue);
     Glue = Chain.getValue(1);
   }
+
+
 
   // Validate that none of the argument registers have been marked as
   // reserved, if so report an error. Do the same for the return address if this
@@ -8553,7 +8592,10 @@ SDValue RISCVTargetLowering::LowerCall(CallLoweringInfo &CLI,
   }
 
   if (RISCVABI::isCheriPureCapABI(Subtarget.getTargetABI()))
-    Chain = DAG.getNode(RISCVISD::CAP_CALL, DL, NodeTys, Ops);
+    if (CallConv == CallingConv::CHERI_CCall)
+      Chain = DAG.getNode(RISCVISD::CAP_COMPARTMENT_CALL, DL, NodeTys, Ops);
+    else
+      Chain = DAG.getNode(RISCVISD::CAP_CALL, DL, NodeTys, Ops);
   else
     Chain = DAG.getNode(RISCVISD::CALL, DL, NodeTys, Ops);
 
@@ -8755,6 +8797,8 @@ const char *RISCVTargetLowering::getTargetNodeName(unsigned Opcode) const {
   NODE_NAME_CASE(CAP_SEALED_GET)
   NODE_NAME_CASE(CAP_SUBSET_TEST)
   NODE_NAME_CASE(CAP_EQUAL_EXACT)
+  NODE_NAME_CASE(CAP_COMPARTMENT_CALL)
+  NODE_NAME_CASE(BOUNDS_SET)
   NODE_NAME_CASE(RET_FLAG)
   NODE_NAME_CASE(URET_FLAG)
   NODE_NAME_CASE(SRET_FLAG)

@@ -1244,6 +1244,8 @@ def warn_objc_cdirective_format_string :
           "%select{method|CFfunction}2">,
   InGroup<ObjCCStringFormat>, DefaultIgnore;
 
+def err_cheri_ccallee_no_compartment: Error<
+  "CHERI compartment entry points require a compartment name provided with -cheri-compartment=">;
 def err_cheri_method_class_must_exist: Error<
   "attributes '%0' requires a valid declaration">;
 def err_cheri_method_class_must_have_correct_type: Error<

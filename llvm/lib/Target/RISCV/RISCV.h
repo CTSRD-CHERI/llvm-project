@@ -52,6 +52,9 @@ void initializeRISCVInsertVSETVLIPass(PassRegistry &);
 FunctionPass *createRISCVCheriCleanupOptPass();
 void initializeRISCVCheriCleanupOptPass(PassRegistry &);
 
+ModulePass *createRISCVCheriExpandCCallPass();
+void initializeRISCVCheriExpandCCallPass(PassRegistry &);
+
 InstructionSelector *createRISCVInstructionSelector(const RISCVTargetMachine &,
                                                     RISCVSubtarget &,
                                                     RISCVRegisterBankInfo &);

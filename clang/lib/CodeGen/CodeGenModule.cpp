@@ -3805,6 +3805,11 @@ llvm::Constant *CodeGenModule::GetAddrOfFunction(GlobalDecl GD,
   auto *F = GetOrCreateLLVMFunction(MangledName, Ty, GD, ForVTable, DontDefer,
                                     /*IsThunk=*/false, llvm::AttributeList(),
                                     IsForDefinition);
+  auto *FD = cast<FunctionDecl>(GD.getDecl());
+  if (FD->hasAttr<CHERICompartmentNameAttr>())
+    cast<llvm::Function>(F)->addFnAttr("cheri-compartment",
+                 FD->getAttr<CHERICompartmentNameAttr>()->getCompartmentName());
+
   // Returns kernel handle for HIP kernel stub function.
   if (LangOpts.CUDA && !LangOpts.CUDAIsDevice &&
       cast<FunctionDecl>(GD.getDecl())->hasAttr<CUDAGlobalAttr>()) {

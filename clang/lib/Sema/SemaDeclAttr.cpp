@@ -2237,6 +2237,15 @@ static void handleCHERIMethodSuffix(Sema &S, Decl *D, const ParsedAttr &Attr) {
   D->addAttr(::new (S.Context) CHERIMethodSuffixAttr(S.Context, Attr, Str));
 }
 
+static void handleCHERICompartmentName(Sema &S, Decl *D, const ParsedAttr &Attr) {
+  StringRef Str;
+  SourceLocation LiteralLoc;
+  if (!S.checkStringLiteralArgumentAttr(Attr, 0, Str, &LiteralLoc))
+    return;
+  D->addAttr(::new (S.Context) CHERICompartmentNameAttr(S.Context, Attr, Str));
+}
+
+
 static void
 handleCHERISubobjectBoundsUseRemainingSizeAttr(Sema &S, Decl *D,
                                                const ParsedAttr &AL) {
@@ -4946,7 +4955,11 @@ bool Sema::CheckCallingConvAttr(const ParsedAttr &Attrs, CallingConv &CC,
     return false;
   }
 
-  unsigned ReqArgs = Attrs.getKind() == ParsedAttr::AT_Pcs ? 1 : 0;
+  unsigned ReqArgs =
+      (Attrs.getKind() == ParsedAttr::AT_Pcs) ||
+              (Attrs.getKind() == ParsedAttr::AT_CHERICompartmentName)
+          ? 1
+          : 0;
   if (!Attrs.checkExactlyNumArgs(*this, ReqArgs)) {
     Attrs.setInvalid();
     return true;
@@ -5019,6 +5032,18 @@ bool Sema::CheckCallingConvAttr(const ParsedAttr &Attrs, CallingConv &CC,
   case ParsedAttr::AT_CHERICCallback:
     CC = CC_CHERICCallback;
     break;
+  case ParsedAttr::AT_CHERICompartmentName: {
+    StringRef CompartmentName;
+    if (!checkStringLiteralArgumentAttr(Attrs, 0, CompartmentName)) {
+      Attrs.setInvalid();
+      return true;
+    }
+    if (CompartmentName == Context.getLangOpts().CheriCompartmentName)
+      CC = CC_CHERICCallee;
+    else
+      CC = CC_CHERICCall;
+    break;
+  }
   case ParsedAttr::AT_IntelOclBicc:
     CC = CC_IntelOclBicc;
     break;
@@ -8370,6 +8395,9 @@ static void ProcessDeclAttribute(Sema &S, Scope *scope, Decl *D,
   case ParsedAttr::AT_CHERIMethodSuffix:
     handleCHERIMethodSuffix(S, D, AL);
     break;
+  case ParsedAttr::AT_CHERICompartmentName:
+    handleCHERICompartmentName(S, D, AL);
+    break;
   case ParsedAttr::AT_PointerInterpretationCaps:
     handleSimpleAttribute<PointerInterpretationCapsAttr>(S, D, AL);
     break;
@@ -8379,10 +8407,13 @@ static void ProcessDeclAttribute(Sema &S, Scope *scope, Decl *D,
   case ParsedAttr::AT_CHERISubobjectBoundsUseRemainingSize:
     handleCHERISubobjectBoundsUseRemainingSizeAttr(S, D, AL);
     break;
+  case ParsedAttr::AT_CHERICCallee:
+    if (S.getLangOpts().CheriCompartmentName == std::string())
+      S.Diag(D->getLocation(), diag::err_cheri_ccallee_no_compartment);
+    LLVM_FALLTHROUGH;
+  case ParsedAttr::AT_CHERICCall:
   case ParsedAttr::AT_StdCall:
   case ParsedAttr::AT_CDecl:
-  case ParsedAttr::AT_CHERICCall:
-  case ParsedAttr::AT_CHERICCallee:
   case ParsedAttr::AT_CHERICCallback:
   case ParsedAttr::AT_FastCall:
   case ParsedAttr::AT_ThisCall:

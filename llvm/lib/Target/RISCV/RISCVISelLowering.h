@@ -92,6 +92,8 @@ enum NodeType : unsigned {
   // (returns (Lo, Hi)). It takes a chain operand.
   READ_CYCLE_WIDE,
   CAP_CALL,
+  /// Cross-compartment call.
+  CAP_COMPARTMENT_CALL,
   CAP_TAIL,
   /// Legalised int_cheri_cap_tag_get
   CAP_TAG_GET,
@@ -101,6 +103,8 @@ enum NodeType : unsigned {
   CAP_SUBSET_TEST,
   /// Legalised int_cheri_cap_equal_exact
   CAP_EQUAL_EXACT,
+  /// DAG node for CSetBounds
+  BOUNDS_SET,
   // Generalized Reverse and Generalized Or-Combine - directly matching the
   // semantics of the named RISC-V instructions. Lowered as custom nodes as
   // TableGen chokes when faced with commutative permutations in deeply-nested

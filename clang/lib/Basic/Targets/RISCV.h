@@ -169,6 +169,13 @@ public:
   bool validateTarget(DiagnosticsEngine &Diags) const override;
 
   bool hasExtIntType() const override { return true; }
+
+  CallingConvCheckResult checkCallingConvention(CallingConv CC) const override {
+    if ((CC == CallingConv::CC_CHERICCall) ||
+        (CC == CallingConv::CC_CHERICCallee))
+      return ABI == "cheriot" ? CCCR_OK : CCCR_Warning;
+    return TargetInfo::checkCallingConvention(CC);
+  }
 };
 class LLVM_LIBRARY_VISIBILITY RISCV32TargetInfo : public RISCVTargetInfo {
 public:

@@ -37,8 +37,8 @@ def CSR_IL32PC64D_L64PC128D
                        F8_D, F9_D, (sequence "F%u_D", 18, 27))>;
 
 def CSR_CHERIOT
-    : CalleeSavedRegs<(add X1, X3, X4, X8, X9,
-                           C1, C3, C4, C8, C9)>;
+    : CalleeSavedRegs<(add X1, X3, X8, X9,
+                           C1, C3, C8, C9)>;
 
 // Needed for implementation of RISCVRegisterInfo::getNoPreservedMask()
 def CSR_NoRegs : CalleeSavedRegs<(add)>;

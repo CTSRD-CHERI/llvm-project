@@ -2291,6 +2291,14 @@ def CHERIMethodClass : DeclOrTypeAttr { // InheritableAttr {
   let Args = [IdentifierArgument<"DefaultClass">];
 }
 
+def CHERICompartmentName : DeclOrTypeAttr {
+  let Spellings = [GNU<"cheri_compartment">];
+  let Documentation = [Undocumented];
+  let Subjects = SubjectList<[Function], ErrorDiag>;
+  let Args = [StringArgument<"CompartmentName">];
+}
+
+
 def CHERINoSubobjectBounds : DeclOrTypeAttr {
   let Spellings = [GNU<"cheri_no_subobject_bounds">,
                    CXX11<"cheri","no_subobject_bounds">,

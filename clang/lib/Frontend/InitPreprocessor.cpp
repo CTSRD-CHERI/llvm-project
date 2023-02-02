@@ -500,6 +500,8 @@ static void InitializeStandardPredefinedMacros(const TargetInfo &TI,
     if (LangOpts.CUDAIsDevice)
       Builder.defineMacro("__HIP_DEVICE_COMPILE__");
   }
+  if (LangOpts.CheriCompartmentName != std::string())
+    Builder.defineMacro("__CHERI_COMPARTMENT__", LangOpts.CheriCompartmentName);
 }
 
 /// Initialize the predefined C++ language feature test macros defined in
