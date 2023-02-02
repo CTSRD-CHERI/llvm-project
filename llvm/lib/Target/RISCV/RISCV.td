@@ -301,6 +301,10 @@ def : ProcessorModel<"sifive-u74", SiFive7Model, [Feature64Bit,
                                                   FeatureStdExtD,
                                                   FeatureStdExtC]>;
 
+def : ProcessorModel<"cheriot", NoSchedModel, [FeatureCheri,
+                                               FeatureCapMode,
+                                               FeatureCheriRVC]>;
+
 //===----------------------------------------------------------------------===//
 // Define the RISC-V target.
 //===----------------------------------------------------------------------===//
