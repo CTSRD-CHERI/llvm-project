@@ -15,10 +15,13 @@ entry:
 define dso_local cherilibcallcc i32 @callFromLibcall() local_unnamed_addr addrspace(200) #1 {
 entry:
 ; CHECK-LABEL: callFromLibcall:
-; Calls to libcalls from the library compartment should be direct calls
-; CHECK: ccall   foo
+; Calls to libcalls from the same compilation unit should be direct calls
+; CHECK: auipcc  ca0, %cheri_compartment_pccrel_hi(__library_import_libcalls_foo)
+; CHECK-NOT: ccall   foo
+; CHECK: ccall   add
   %call1 = tail call cherilibcallcc i32 @foo() #3
-  %add = add nsw i32 %call1, 3
+  %call2 = tail call cherilibcallcc i32 @add(i32 1, i32 2) #3
+  %add = add nsw i32 %call1, %call2
   ret i32 %add
 }
 

@@ -189,10 +189,6 @@ public:
       return;
     // Some intrinsics are expanded in the back end
     if (F->isIntrinsic()) {
-      // Emit a direct call for any libcalls if we're in the libcalls
-      // pseudo-compartment.
-      if (!C.getParent()->getParent()->hasFnAttribute("cheri-compartment"))
-        return;
       const char *FnName = nullptr;
       switch (F->getIntrinsicID()) {
       default:
@@ -230,8 +226,15 @@ public:
     }
     // If we are calling a function from the same compartment as its
     // definition, we will do a direct call, so don't insert an import table
-    // entry.
-    if (getCalleeCompartmentName(*F) == getCallerCompartmentName(Caller))
+    // entry.  LibCalls may be across libraries so, conservatively, assume that
+    // they might be in different libraries.
+    if ((CC != CallingConv::CHERI_LibCall) &&
+        (getCalleeCompartmentName(*F) == getCallerCompartmentName(Caller)))
+      return;
+    // If the function is defined in the same compilation unit as the caller, do
+    // a direct call if safe to do so (interrupt status changes require an
+    // indirect call).
+    if (!F->isDeclaration() && isSafeToDirectCall(*F, Caller))
       return;
     getOrInsertImportTableEntry(*F);
     Modified = true;
