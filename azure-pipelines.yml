@@ -1,0 +1,54 @@
+trigger:
+- cheriot
+
+variables:
+  isMain: $[eq(variables['Build.SourceBranch'], 'refs/heads/cheriot')]
+
+jobs:
+############################################## Linux Builds
+- job:
+  displayName: LLVM Linux Build
+  pool:
+    vmImage: ubuntu-20.04
+    name: Portmeirion
+  timeoutInMinutes: 300
+  strategy:
+    matrix:
+      Clang Release:
+        CC: clang
+        CXX: clang++
+        CXXFLAGS: -stdlib=libstdc++
+        BuildType: Release
+        BuildName: release
+        Sanitizer:
+  variables:
+  - name: PKG_NAME
+    value: cheriot-llvm-install-x86_64-linux-$(BuildName)
+  steps:
+  - checkout: self
+    submodules: true
+
+  - script: |
+      set -eo pipefail
+      sudo apt-get update
+      sudo apt-get install -y clang ninja-build lld
+      sudo snap install cmake --classic
+      curl -sL https://aka.ms/InstallAzureCLIDeb | sudo bash
+    displayName: 'Install Build Dependencies'
+  - task: CMake@1
+    displayName: 'CMake'
+    inputs:
+      cmakeArgs: |
+        ../llvm -DCMAKE_BUILD_TYPE=$(BuildType)  -DCMAKE_C_COMPILER=$(CC) -DCMAKE_CXX_COMPILER=$(CXX) -DCMAKE_CXX_FLAGS=$(CXXFLAGS) -DLLVM_USE_SANITIZER=$(Sanitizer) -DLLVM_ENABLE_PROJECTS="clang;clang-tools-extra;lld" -DCMAKE_INSTALL_PREFIX=install -DLLVM_ENABLE_UNWIND_TABLES=NO -DLLVM_ENABLE_LLD=ON -DLLVM_TARGETS_TO_BUILD=RISCV -DLLVM_DISTRIBUTION_COMPONENTS="clang;clangd;lld;llvm-objdump;clang-tidy;clang-format" -G Ninja
+  - script: |
+      set -eo pipefail
+      export NINJA_STATUS='%p [%f:%s/%t] %o/s, %es'
+      ninja install-distribution
+    workingDirectory: build
+    displayName: 'Compile clang, clangd and lld'
+  - script: |
+      cp llvm/LICENSE.TXT build/install/LLVM-LICENSE.TXT
+  - publish: build/install
+    condition: and(succeeded(), eq(variables.isMain, 'true'))
+    artifact: LLVM
+    displayName: 'Uploading LLVM toolchain'
