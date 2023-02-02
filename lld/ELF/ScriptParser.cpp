@@ -871,6 +871,8 @@ OutputSection *ScriptParser::readOutputSectionDescription(StringRef outSec) {
     cmd->alignExpr = checkAlignment(readParenExpr(), location);
   if (consume("SUBALIGN"))
     cmd->subalignExpr = checkAlignment(readParenExpr(), location);
+  if (consume("CAPALIGN"))
+    cmd->isCapAligned = true;
 
   // Parse constraints.
   if (consume("ONLY_IF_RO"))

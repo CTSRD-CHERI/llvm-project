@@ -41,6 +41,7 @@ public:
   void relocate(uint8_t *loc, const Relocation &rel,
                 uint64_t val) const override;
   bool relaxOnce(int pass) const override;
+  uint64_t cheriRequiredAlignment(uint64_t) const override;
 };
 
 } // end anonymous namespace
@@ -607,6 +608,19 @@ void RISCV::relocate(uint8_t *loc, const Relocation &rel, uint64_t val) const {
   default:
     llvm_unreachable("unknown relocation");
   }
+}
+
+uint64_t RISCV::cheriRequiredAlignment(uint64_t size) const {
+  // FIXME: Non-CherIoT targets will have different calculations here
+  uint64_t mantissaWidth = 9;
+  auto mantissaWidthMinusOneMask = (uint64_t(1) << (mantissaWidth - 1)) - 1;
+  uint64_t msbIdxPlusOne = 64 - countLeadingZeros(size);
+  uint64_t e = std::max<int64_t>(int64_t(msbIdxPlusOne) - mantissaWidth, 0);
+  // If we are very close to the top, then we need to round up one more
+  if (((size >> (e + 1)) & mantissaWidthMinusOneMask) ==
+      mantissaWidthMinusOneMask)
+    ++e;
+  return uint64_t(1) << e;
 }
 
 namespace {

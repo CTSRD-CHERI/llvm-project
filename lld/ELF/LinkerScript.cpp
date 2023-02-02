@@ -877,6 +877,36 @@ void LinkerScript::output(InputSection *s) {
   expandOutputSection(pos - before);
 }
 
+// Perform a worst case estimate of the output section CHERI alignment.
+// This is roughly the same logic as the loop in assignOffsets() to loop
+// through all commands and input sections in an output section to calculate
+// the total size.
+static uint64_t outputSectionCheriAlignment(OutputSection *sec)
+{
+  uint64_t total = 0;
+
+  for (BaseCommand *base : sec->sectionCommands) {
+    if (auto *cmd = dyn_cast<SymbolAssignment>(base)) {
+      continue;
+    }
+
+    // Add BYTE(), SHORT(), LONG(), or QUAD().
+    if (auto *cmd = dyn_cast<ByteCommand>(base)) {
+      total += cmd->size;
+      continue;
+    }
+
+    // Add two alignment to the size, one for unaligned start one for unaligned
+    // end which is the worst case scenario.
+    for (InputSection *s : cast<InputSectionDescription>(base)->sections) {
+      total += s->getSize() + 2 * s->alignment;
+    }
+  }
+
+  uint64_t ret = target->cheriRequiredAlignment(total);
+  return ret;
+}
+
 void LinkerScript::switchTo(OutputSection *sec) {
   ctx->outSec = sec;
 
@@ -887,6 +917,12 @@ void LinkerScript::switchTo(OutputSection *sec) {
   } else {
     // ctx->outSec->alignment is the max of ALIGN and the maximum of input
     // section alignments.
+    if (sec->isCapAligned) {
+      uint64_t capAlignment = outputSectionCheriAlignment(ctx->outSec);
+      if (capAlignment > 1) {
+        ctx->outSec->alignment = std::max<uint64_t>(capAlignment, ctx->outSec->alignment);
+      }
+    }
     ctx->outSec->addr = advance(0, ctx->outSec->alignment);
     expandMemoryRegions(ctx->outSec->addr - pos);
   }
@@ -1013,6 +1049,21 @@ void LinkerScript::assignOffsets(OutputSection *sec) {
   // as they are not part of the process image.
   if (!(sec->flags & SHF_ALLOC))
     dot = savedDot;
+
+  // Round up the size and alignment to the required alignment for
+  // capabilities.
+  if (sec->isCapAligned) {
+    // Target-specific size for capability alignment for objects of the
+    // given size.
+    uint64_t capAlignment = target->cheriRequiredAlignment(sec->size);
+    // If capabilities require additional alignment, round the start and length
+    // alignment to these values.
+    if (capAlignment > 1) {
+      capAlignment = std::max<uint64_t>(capAlignment, sec->alignment);
+      sec->size = alignTo(sec->size, capAlignment);
+      advance(0, capAlignment);
+    }
+  }
 }
 
 static bool isDiscardable(OutputSection &sec) {

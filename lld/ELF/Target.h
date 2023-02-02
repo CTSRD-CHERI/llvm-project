@@ -172,6 +172,9 @@ public:
   virtual void relaxTlsLdToLe(uint8_t *loc, const Relocation &rel,
                               uint64_t val) const;
 
+  /// Returns the alignment required for a CHERI capability of the given size.
+  virtual uint64_t cheriRequiredAlignment(uint64_t) const { return 0; }
+
 protected:
   // On FreeBSD x86_64 the first page cannot be mmaped.
   // On Linux this is controlled by vm.mmap_min_addr. At least on some x86_64
