@@ -1198,7 +1198,9 @@ static void readConfigs(opt::InputArgList &args) {
       args.getLastArgValue(OPT_print_symbol_order);
   config->relax = args.hasFlag(OPT_relax, OPT_no_relax, true);
   config->rpath = getRpath(args);
-  config->relocatable = args.hasArg(OPT_relocatable);
+  config->relocatable =
+      args.hasArg(OPT_relocatable) || args.hasArg(OPT_compartment);
+  config->compartment = args.hasArg(OPT_compartment);
   config->saveTemps = args.hasArg(OPT_save_temps);
   assert(config->searchPaths.empty() && "Should not be set yet!");
   config->searchPaths = args::getStrings(args, OPT_library_path);

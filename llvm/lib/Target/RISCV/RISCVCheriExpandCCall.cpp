@@ -59,7 +59,7 @@ public:
     auto *ImportValue = ConstantStruct::get(
         ImportType, Export, ConstantPointerNull::get(Export->getType()));
     auto *Import = new GlobalVariable(
-        *M, ImportType, true, GlobalValue::ExternalLinkage, ImportValue,
+        *M, ImportType, true, GlobalValue::LinkOnceODRLinkage, ImportValue,
         ImportName, nullptr, GlobalValue::NotThreadLocal, 200);
     Import->setComdat(M->getOrInsertComdat(ImportName));
     Import->setSection(".compartment_imports");

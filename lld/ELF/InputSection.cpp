@@ -112,7 +112,7 @@ InputSectionBase::InputSectionBase(InputFile *file, uint64_t flags,
 // That flag doesn't make sense in an executable.
 static uint64_t getFlags(uint64_t flags) {
   flags &= ~(uint64_t)SHF_INFO_LINK;
-  if (!config->relocatable)
+  if (!config->relocatable || config->compartment)
     flags &= ~(uint64_t)SHF_GROUP;
   return flags;
 }
@@ -706,6 +706,26 @@ uint64_t InputSectionBase::getRelocTargetVA(const InputFile *file, RelType type,
                                             const Symbol &sym, RelExpr expr,
                                             const InputSectionBase *isec,
                                             uint64_t offset) {
+  // For CHERI MCU compartments, the $cgp register points to the middle of the
+  // globals section for a given compartment, with bounds set to include all of
+  // that compartment's globals.  Calculate the address of the symbol relative
+  // to the middle of $cgp.
+  auto getBiasedCGPOffset = [&]() {
+    auto *OutputSection = sym.getOutputSection();
+    if (!OutputSection)
+      fatal("Unable to compute bias for CGP-relative relocation in " +
+            file->getName() + " against symbol " + sym.getName() +
+            " which does not appear in any section");
+    uint64_t Size = OutputSection->size;
+    uint64_t Bias = Size / 2;
+    uint64_t CGP = sym.getOutputSection()->addr + Bias;
+    return sym.getVA() - CGP;
+  };
+  auto getBiasedCGPOffsetLo12 = [&]() {
+    int64_t Displacement = getBiasedCGPOffset();
+    int64_t mask = Displacement < 0 ? -1 : 0;
+    return (mask << 11) | (Displacement & ((1L << 11) - 1));
+  };
   switch (expr) {
   case R_ABS:
   case R_DTPREL:
@@ -902,14 +922,12 @@ uint64_t InputSectionBase::getRelocTargetVA(const InputFile *file, RelType type,
   }
   case R_CHERI_CAPABILITY_TABLE_TLSGD_ENTRY_PC: {
     assert(a == 0 && "capability table index relocs should not have addends");
-    uint64_t capTableOffset =
-        in.cheriCapTable->getDynTlsOffset(sym);
+    uint64_t capTableOffset = in.cheriCapTable->getDynTlsOffset(sym);
     return ElfSym::cheriCapabilityTable->getVA() + capTableOffset - p;
   }
   case R_CHERI_CAPABILITY_TABLE_TLSIE_ENTRY_PC: {
     assert(a == 0 && "capability table index relocs should not have addends");
-    uint64_t capTableOffset =
-        in.cheriCapTable->getTlsOffset(sym);
+    uint64_t capTableOffset = in.cheriCapTable->getTlsOffset(sym);
     return ElfSym::cheriCapabilityTable->getVA() + capTableOffset - p;
   }
   case R_CHERI_CAPABILITY_TABLE_REL:
@@ -930,9 +948,9 @@ uint64_t InputSectionBase::getRelocTargetVA(const InputFile *file, RelType type,
     return in.cheriCapTable->getTlsOffset(sym);
   case R_CHERI_COMPARTMENT_CGPREL_LO_I:
   case R_CHERI_COMPARTMENT_CGPREL_LO_S:
-    return isec->getOffset(sym.getVA() - sym.getOutputSection()->addr) & ((1<<14)-1);
+    return getBiasedCGPOffsetLo12();
   case R_CHERI_COMPARTMENT_CGPREL_HI:
-    return (isec->getOffset(sym.getVA() - sym.getOutputSection()->addr) & ~((1<<14)-1)) >> 14;
+    return (getBiasedCGPOffset() - getBiasedCGPOffsetLo12()) >> 11;
   case R_CHERI_COMPARTMENT_SIZE:
     return sym.getSize();
   default:

@@ -133,7 +133,7 @@ attributes #6 = { minsize nounwind optsize }
 
 ; BOTH:        .type   __import_other_test8callee,@object # @__import_other_test8callee
 ; BOTH:        .section        .compartment_imports,"aG",@progbits,__import_other_test8callee,comdat
-; BOTH:        .globl  __import_other_test8callee
+; BOTH:        .weak  __import_other_test8callee
 ; BOTH:        .p2align        3
 ; BOTH:__import_other_test8callee:
 ; BOTH:        .word   __export_other_test8callee

@@ -44,6 +44,9 @@ bool RISCVELFTargetObjectFile::isGlobalInSmallSection(
   if (!GVA)
     return false;
 
+  if (GO->hasComdat())
+    return false;
+
   // If the variable has an explicit section, it is placed in that section.
   if (GVA->hasSection()) {
     StringRef Section = GVA->getSection();

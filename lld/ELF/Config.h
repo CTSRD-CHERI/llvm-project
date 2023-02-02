@@ -208,6 +208,7 @@ struct Configuration {
   bool printIcfSections;
   bool relax;
   bool relocatable;
+  bool compartment = false;
   bool relrPackDynRelocs;
   bool saveTemps;
   std::vector<std::pair<llvm::GlobPattern, uint32_t>> shuffleSections;

@@ -624,7 +624,7 @@ void ObjFile<ELFT>::initializeSections(bool ignoreComdats) {
           symtab->comdatGroups.try_emplace(CachedHashStringRef(signature), this)
               .second;
       if (keepGroup) {
-        if (config->relocatable)
+        if (config->relocatable && !config->compartment)
           this->sections[i] = createInputSection(sec);
         selectedGroups.push_back(entries);
         continue;
