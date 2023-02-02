@@ -222,11 +222,11 @@ public:
   }
 
   const llvm::APSInt &getZeroWithPtrWidth(bool isUnsigned = true) {
-    return getValue(0, Ctx.getTypeSize(Ctx.VoidPtrTy), isUnsigned);
+    return getValue(0, Ctx.getIntRange(Ctx.VoidPtrTy), isUnsigned);
   }
 
   const llvm::APSInt &getIntWithPtrWidth(uint64_t X, bool isUnsigned) {
-    return getValue(X, Ctx.getTypeSize(Ctx.VoidPtrTy), isUnsigned);
+    return getValue(X, Ctx.getIntRange(Ctx.VoidPtrTy), isUnsigned);
   }
 
   const llvm::APSInt &getTruthValue(bool b, QualType T) {
