@@ -10962,7 +10962,10 @@ private:
 
 public:
   RISCVABIInfo(CodeGen::CodeGenTypes &CGT, unsigned XLen, unsigned FLen)
-      : DefaultABIInfo(CGT), XLen(XLen), FLen(FLen) {}
+      : DefaultABIInfo(CGT), XLen(XLen), FLen(FLen) {
+    if (CGT.getTarget().getABI() == "cheriot")
+      RuntimeCC = llvm::CallingConv::CHERI_LibCall;
+  }
 
   // DefaultABIInfo's classifyReturnType and classifyArgumentType are
   // non-virtual, but computeInfo is virtual, so we overload it.

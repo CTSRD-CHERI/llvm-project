@@ -1919,7 +1919,12 @@ bool AtomicExpand::expandAtomicOpToLibcall(
     LibcallName += "_c";
   }
   FunctionCallee LibcallFn = M->getOrInsertFunction(LibcallName, FnType, Attr);
+  auto CC = TLI->getLibcallCallingConv(RTLibType);
+  if (auto *Fn = dyn_cast<Function>(
+          LibcallFn.getCallee()->stripPointerCastsAndAliases()))
+    Fn->setCallingConv(CC);
   CallInst *Call = Builder.CreateCall(LibcallFn, Args);
+  Call->setCallingConv(CC);
   Call->setAttributes(Attr);
   Value *Result = Call;
 
