@@ -672,6 +672,10 @@ bool ItaniumMangleContextImpl::shouldMangleCXXName(const NamedDecl *D) {
     if (FD->hasAttr<OverloadableAttr>())
       return true;
 
+    // CHERI cross-compartment calls need mangling.
+    if (FD->hasAttr<CHERICompartmentNameAttr>())
+      return true;
+
     // "main" is not mangled.
     if (FD->isMain())
       return false;

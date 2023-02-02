@@ -2281,7 +2281,10 @@ TypeInfo ASTContext::getTypeInfoImpl(const Type *T) const {
     auto PointeeTy = cast<PointerType>(T)->getPointeeType();
     if (PointeeTy->isFunctionProtoType()) {
       auto FPT = PointeeTy->getAs<FunctionProtoType>();
-      if (FPT->getCallConv() == CC_CHERICCallback) {
+      // Old-style libcheri callbacks are two capabilities for the code and data
+      // and an integer for the vtable index.
+      if ((FPT->getCallConv() == CC_CHERICCallback) &&
+          (getTargetInfo().cheriCallbackKind() == TargetInfo::CCB_Struct)) {
         Width = Target->getCHERICapabilityWidth() * 3;
         Align = Target->getCHERICapabilityAlign();
         break;
