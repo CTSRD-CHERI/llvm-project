@@ -52,9 +52,13 @@ namespace swiftcall {
     CodeGen::CodeGenTypes &CGT;
   protected:
     llvm::CallingConv::ID RuntimeCC;
+    /// The calling convention to use for atomic libcalls
+    CallingConv AtomicsCC;
+
   public:
     ABIInfo(CodeGen::CodeGenTypes &cgt)
-        : CGT(cgt), RuntimeCC(llvm::CallingConv::C) {}
+        : CGT(cgt), RuntimeCC(llvm::CallingConv::C),
+          AtomicsCC(CallingConv::CC_C) {}
 
     virtual ~ABIInfo();
 
@@ -74,6 +78,9 @@ namespace swiftcall {
     llvm::CallingConv::ID getRuntimeCC() const {
       return RuntimeCC;
     }
+
+    /// Returns the clang calling convention to use for atomic libcalls.
+    CallingConv getAtomicsCC() const { return AtomicsCC; }
 
     virtual void computeInfo(CodeGen::CGFunctionInfo &FI) const = 0;
 

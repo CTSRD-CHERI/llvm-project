@@ -218,8 +218,9 @@ public:
   const CGFunctionInfo &
   arrangeBuiltinFunctionDeclaration(CanQualType resultType,
                                     ArrayRef<CanQualType> argTypes);
-  const CGFunctionInfo &arrangeBuiltinFunctionCall(QualType resultType,
-                                                   const CallArgList &args);
+  const CGFunctionInfo &
+  arrangeBuiltinFunctionCall(QualType resultType, const CallArgList &args,
+                             FunctionType::ExtInfo info = {});
 
   /// Objective-C methods are C functions with some implicit parameters.
   const CGFunctionInfo &arrangeObjCMethodDeclaration(const ObjCMethodDecl *MD);

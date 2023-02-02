@@ -10963,8 +10963,10 @@ private:
 public:
   RISCVABIInfo(CodeGen::CodeGenTypes &CGT, unsigned XLen, unsigned FLen)
       : DefaultABIInfo(CGT), XLen(XLen), FLen(FLen) {
-    if (CGT.getTarget().getABI() == "cheriot")
+    if (CGT.getTarget().getABI() == "cheriot") {
       RuntimeCC = llvm::CallingConv::CHERI_LibCall;
+      AtomicsCC = CallingConv::CC_CHERILibCall;
+    }
   }
 
   // DefaultABIInfo's classifyReturnType and classifyArgumentType are

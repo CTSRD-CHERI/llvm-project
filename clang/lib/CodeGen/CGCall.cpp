@@ -661,17 +661,16 @@ CodeGenTypes::arrangeBlockFunctionDeclaration(const FunctionProtoType *proto,
                                  RequiredArgs::forPrototypePlus(proto, 1));
 }
 
-const CGFunctionInfo &
-CodeGenTypes::arrangeBuiltinFunctionCall(QualType resultType,
-                                         const CallArgList &args) {
+const CGFunctionInfo &CodeGenTypes::arrangeBuiltinFunctionCall(
+    QualType resultType, const CallArgList &args, FunctionType::ExtInfo info) {
   // FIXME: Kill copy.
   SmallVector<CanQualType, 16> argTypes;
   for (const auto &Arg : args)
     argTypes.push_back(Context.getCanonicalParamType(Arg.Ty));
-  return arrangeLLVMFunctionInfo(
-      GetReturnType(resultType), /*instanceMethod=*/false,
-      /*chainCall=*/false, argTypes, FunctionType::ExtInfo(),
-      /*paramInfos=*/ {}, RequiredArgs::All);
+  return arrangeLLVMFunctionInfo(GetReturnType(resultType),
+                                 /*instanceMethod=*/false,
+                                 /*chainCall=*/false, argTypes, info,
+                                 /*paramInfos=*/{}, RequiredArgs::All);
 }
 
 const CGFunctionInfo &

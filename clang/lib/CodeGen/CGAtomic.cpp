@@ -326,8 +326,13 @@ static RValue emitAtomicLibcall(CodeGenFunction &CGF,
                                 StringRef fnName,
                                 QualType resultType,
                                 CallArgList &args) {
+  FunctionType::ExtInfo info;
+  CallingConv atomicCC = CGF.getTypes().getABIInfo().getAtomicsCC();
+  if (atomicCC != CallingConv::CC_C)
+    info = info.withCallingConv(atomicCC);
+
   const CGFunctionInfo &fnInfo =
-    CGF.CGM.getTypes().arrangeBuiltinFunctionCall(resultType, args);
+      CGF.CGM.getTypes().arrangeBuiltinFunctionCall(resultType, args, info);
   llvm::FunctionType *fnTy = CGF.CGM.getTypes().GetFunctionType(fnInfo);
   llvm::AttrBuilder fnAttrB;
   fnAttrB.addAttribute(llvm::Attribute::NoUnwind);
