@@ -36,21 +36,16 @@ public:
     return "CHERI pre-codegen ccall expansion";
   }
 
-  void visitCallBase(CallBase &C) {
-    if (C.isIndirectCall())
-      return;
-    if (C.getCallingConv() != CallingConv::CHERI_CCall)
-      return;
-    auto *F = C.getCalledFunction();
+  GlobalVariable *getOrInsertExportTableEntry(Function &F) {
     StringRef Compartment =
-        F->getFnAttribute("cheri-compartment").getValueAsString();
+        F.getFnAttribute("cheri-compartment").getValueAsString();
     std::string ImportName =
-        (Twine("__import_") + Compartment + "_" + F->getName()).str();
+        (Twine("__import_") + Compartment + "_" + F.getName()).str();
     // If we already have the import table entry, stop now
-    if (M->getGlobalVariable(ImportName))
-      return;
+    if (auto *Import = M->getGlobalVariable(ImportName))
+      return Import;
     std::string ExportName =
-        (Twine("__export_") + Compartment + "_" + F->getName()).str();
+        (Twine("__export_") + Compartment + "_" + F.getName()).str();
     auto *Export = new GlobalVariable(
         *M, I8Ty, true, GlobalValue::ExternalLinkage, nullptr, ExportName,
         nullptr, GlobalValue::NotThreadLocal, 0);
@@ -59,19 +54,65 @@ public:
     auto *ImportValue = ConstantStruct::get(
         ImportType, Export, ConstantPointerNull::get(Export->getType()));
     auto *Import = new GlobalVariable(
-        *M, ImportType, true, GlobalValue::LinkOnceODRLinkage, ImportValue,
-        ImportName, nullptr, GlobalValue::NotThreadLocal, 200);
-    Import->setComdat(M->getOrInsertComdat(ImportName));
+        *M, ImportType, true,
+        F.hasExternalLinkage() ? GlobalValue::LinkOnceODRLinkage
+                               : GlobalValue::InternalLinkage,
+        ImportValue, ImportName, nullptr, GlobalValue::NotThreadLocal, 200);
+    if (F.hasExternalLinkage())
+      Import->setComdat(M->getOrInsertComdat(ImportName));
     Import->setSection(".compartment_imports");
+    return Import;
+  }
+
+  void visitCallBase(CallBase &C) {
+    // Make sure that we'll emit the compartment switcher symbol if there are
+    if (C.isIndirectCall() &&
+        (C.getCallingConv() != CallingConv::CHERI_CCall)) {
+      Modified = true;
+      return;
+    }
+    if (C.getCallingConv() != CallingConv::CHERI_CCall)
+      return;
+    auto *F = C.getCalledFunction();
+    if (F)
+      getOrInsertExportTableEntry(*F);
     Modified = true;
   }
 
   bool runOnModule(Module &Mod) override {
     M = &Mod;
+    auto &Ctx = Mod.getContext();
     Modified = false;
     I8Ty = IntegerType::get(M->getContext(), 8);
-    for (Function &F : Mod)
+    for (Function &F : Mod) {
       visit(F);
+      // Functions that are exposed as callbacks have the `CHERI_CCall` calling
+      // convention in the IR)
+      if (F.getCallingConv() == CallingConv::CHERI_CCall) {
+        // Reset the calling convention to ccallee so that it's lowered
+        // correctly.
+        F.setCallingConv(CallingConv::CHERI_CCallee);
+        for (auto &U : F.uses()) {
+          // If this is a function call and we're just calling the
+          // function, we want to be using the function directly, so do
+          // nothing.
+          if (auto *CI = dyn_cast<CallBase>(U.getUser())) {
+            if (CI->getCalledOperand() == &F)
+              continue;
+          }
+          if (auto *I = dyn_cast<Instruction>(U.getUser())) {
+            Constant *Import = getOrInsertExportTableEntry(F);
+            Type *PtrTy = PointerType::get(Ctx, 200);
+            if (Ctx.supportsTypedPointers())
+              Import =
+                  ConstantExpr::getBitCast(Import, PtrTy->getPointerTo(200));
+            Value *FPtr = new LoadInst(PtrTy, Import, "import_table_load", I);
+            FPtr = new BitCastInst(FPtr, F.getType(), "fake_fptr", I);
+            U.set(FPtr);
+          }
+        }
+      }
+    }
 
     // If we've found a cross-domain call, make sure that there's a symbol for
     // the compartment switcher.

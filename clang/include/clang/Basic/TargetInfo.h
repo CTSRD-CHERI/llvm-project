@@ -1502,6 +1502,19 @@ public:
   /// SupportsCapabilities - Returns true if the target supports capabilities.
   virtual bool SupportsCapabilities() const { return false; }
 
+  /// The ABI used for CHERI CCalls
+  enum CheriCCallbackABIKind {
+    /// The CHERI ccallback calling convention is unsupported.
+    CCB_None,
+    /// The CHERI MIPS-style ABI using a capability and index.
+    CCB_Struct,
+    /// The import / export table ABI.
+    CCB_ImportTable
+  };
+
+  /// Returns the CHERI CCall callback ABI kind.
+  virtual CheriCCallbackABIKind cheriCallbackKind() const { return CCB_None; }
+
   enum CallingConvKind {
     CCK_Default,
     CCK_ClangABI4OrPS4,

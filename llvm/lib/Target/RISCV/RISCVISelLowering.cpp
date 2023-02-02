@@ -8484,15 +8484,19 @@ SDValue RISCVTargetLowering::LowerCall(CallLoweringInfo &CLI,
     }
     if (CallConv == CallingConv::CHERI_CCall) {
       auto *F = CLI.CB->getCalledFunction();
-      StringRef Compartment =
-          F->getFnAttribute("cheri-compartment").getValueAsString();
-      std::string ImportName =
-          (Twine("__import_") + Compartment + "_" + F->getName()).str();
-      auto *GV = F->getParent()->getGlobalVariable(ImportName);
-      auto ImportPtr = DAG.getGlobalAddress(GV, DL, PtrVT, 0, 0);
-      auto Import = DAG.getLoad(PtrVT, DL, Chain, ImportPtr,
-                                MachinePointerInfo(200, 0), 8 /*alignment*/);
-      RegsToPass.emplace_back(RISCV::C6, Import);
+      if (F) {
+        StringRef Compartment =
+            F->getFnAttribute("cheri-compartment").getValueAsString();
+        std::string ImportName =
+            (Twine("__import_") + Compartment + "_" + F->getName()).str();
+        auto *GV = F->getParent()->getGlobalVariable(ImportName);
+        auto ImportPtr = DAG.getGlobalAddress(GV, DL, PtrVT, 0, 0);
+        auto Import = DAG.getLoad(PtrVT, DL, Chain, ImportPtr,
+                                  MachinePointerInfo(200, 0), 8 /*alignment*/);
+        RegsToPass.emplace_back(RISCV::C6, Import);
+      } else {
+        RegsToPass.emplace_back(RISCV::C6, Callee);
+      }
     }
   }
 

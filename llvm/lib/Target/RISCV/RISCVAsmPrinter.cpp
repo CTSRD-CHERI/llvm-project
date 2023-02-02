@@ -207,8 +207,8 @@ void RISCVAsmPrinter::emitEndOfAsmFile(Module &M) {
 
   if (!CompartmentEntries.empty()) {
     auto &C = OutStreamer->getContext();
-    auto *Exports = C.getELFSection(".compartment_exports",
-          ELF::SHT_PROGBITS, ELF::SHF_ALLOC);
+    auto *Exports = C.getELFSection(".compartment_exports", ELF::SHT_PROGBITS,
+                                    ELF::SHF_ALLOC);
     OutStreamer->SwitchSection(Exports);
     auto CompartmentStartSym = C.getOrCreateSymbol("__compartment_pcc_start");
     for (auto &Entry : CompartmentEntries) {
@@ -218,7 +218,11 @@ void RISCVAsmPrinter::emitEndOfAsmFile(Module &M) {
       ExportName += Entry.FnSym->getName();
       auto Sym = C.getOrCreateSymbol(ExportName);
       OutStreamer->emitSymbolAttribute(Sym, MCSA_ELF_TypeObject);
-      OutStreamer->emitSymbolAttribute(Sym, MCSA_Global);
+      // If the function isn't global, don't make its export table entry global
+      // either.  Two different compilation units in the same compartment may
+      // export different static things.
+      if (Entry.Fn.hasExternalLinkage())
+        OutStreamer->emitSymbolAttribute(Sym, MCSA_Global);
       OutStreamer->emitValueToAlignment(4);
       OutStreamer->emitLabel(Sym);
       emitLabelDifference(Entry.FnSym, CompartmentStartSym, 2);

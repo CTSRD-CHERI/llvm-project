@@ -6228,7 +6228,9 @@ RValue CodeGenFunction::EmitCall(QualType CalleeType, const CGCallee &OrigCallee
   // Note: It doesn't actually matter what the order of the number and class
   // are, as they will be in a different category of register.  This is *not*
   // necessarily the case for implementations that have a merged register file!
-  if (FnType->getCallConv() == CC_CHERICCallback) {
+  if ((FnType->getCallConv() == CC_CHERICCallback) &&
+      getContext().getTargetInfo().cheriCallbackKind() ==
+          TargetInfo::CCB_Struct) {
     CallCHERIInvoke = true;
     SmallVector<QualType, 16> NewParams;
     // Add the method number

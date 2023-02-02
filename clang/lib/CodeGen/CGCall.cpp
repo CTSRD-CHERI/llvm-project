@@ -5372,7 +5372,9 @@ RValue CodeGenFunction::EmitCall(const CGFunctionInfo &CallInfo,
   // Set tail call kind if necessary.
   if (llvm::CallInst *Call = dyn_cast<llvm::CallInst>(CI)) {
     if ((TargetDecl && TargetDecl->hasAttr<NotTailCalledAttr>()) ||
-        (CallingConv == llvm::CallingConv::CHERI_CCall))
+        ((CallingConv == llvm::CallingConv::CHERI_CCall) &&
+         (getContext().getTargetInfo().cheriCallbackKind() ==
+          TargetInfo::CCB_ImportTable)))
       Call->setTailCallKind(llvm::CallInst::TCK_NoTail);
     else if (IsMustTail)
       Call->setTailCallKind(llvm::CallInst::TCK_MustTail);

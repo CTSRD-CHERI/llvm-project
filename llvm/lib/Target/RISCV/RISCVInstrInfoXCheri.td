@@ -1722,6 +1722,8 @@ def : Pat<(riscv_cap_compartment_call tglobaladdr:$func),
           (PseudoCompartmentCall tglobaladdr:$func)>;
 def : Pat<(riscv_cap_compartment_call texternalsym:$func),
           (PseudoCompartmentCall texternalsym:$func)>;
+def : Pat<(riscv_cap_compartment_call GPCR:$func),
+          (PseudoCompartmentCall GPCR:$func)>;
 } // Predicates = [HasCheri, IsCapMode, IsPureCapABI]
 
 let Predicates = [HasCheri, IsCapMode, IsPureCapABI],

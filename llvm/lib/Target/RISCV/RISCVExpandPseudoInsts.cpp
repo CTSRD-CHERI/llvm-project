@@ -196,9 +196,11 @@ bool RISCVExpandPseudo::expandCompartmentCall(MachineBasicBlock &MBB,
   // here and so we can use it.
   // FIXME: This copies and pastes a lot of code from expandAuipccInstPair.
 
-  MachineOperand Switcher =
-    MachineOperand::CreateGA(MBB.getParent()->getFunction()
-        .getParent()->getGlobalVariable(".compartment_switcher"), 0);
+  auto *SwitcherGA =
+      MBB.getParent()->getFunction().getParent()->getGlobalVariable(
+          ".compartment_switcher");
+  assert(SwitcherGA);
+  MachineOperand Switcher = MachineOperand::CreateGA(SwitcherGA, 0);
   auto *MF = MBB.getParent();
   MachineInstr &MI = *MBBI;
   DebugLoc DL = MBBI->getDebugLoc();
