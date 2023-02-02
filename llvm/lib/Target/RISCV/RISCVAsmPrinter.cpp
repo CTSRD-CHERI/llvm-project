@@ -84,7 +84,7 @@ private:
     /// The symbol for the function
     MCSymbol *FnSym;
     /// The number of registers that are live on entry to this function
-    size_t LiveIns;
+    int LiveIns;
     /// Emit this export as a local symbol even if the function is not local.
     bool forceLocal = false;
   };
@@ -205,21 +205,41 @@ bool RISCVAsmPrinter::runOnMachineFunction(MachineFunction &MF) {
                         .Case("disabled", 2 << 3)
                         .Default(0);
 
+  // For the CHERI MCU ABI, find the highest used argument register.  The
+  // switcher will zero all of the ones above this.
+  auto countUsedArgRegisters = [](auto const &MF) -> int {
+    static constexpr int ArgRegCount = 7;
+    static const MCPhysReg ArgGPCRsE[ArgRegCount] = {
+        RISCV::C10, RISCV::C11, RISCV::C12, RISCV::C13,
+        RISCV::C14, RISCV::C15, RISCV::C5};
+    auto LiveIns = MF.getRegInfo().liveins();
+    auto *TRI = MF.getRegInfo().getTargetRegisterInfo();
+    int NumArgRegs = 0;
+    for (auto LI : LiveIns)
+      for (int i = 0; i < ArgRegCount; i++)
+        if ((ArgGPCRsE[i] == LI.first) ||
+            TRI->isSubRegister(ArgGPCRsE[i], LI.first)) {
+          NumArgRegs = std::max(NumArgRegs, i + 1);
+          break;
+        }
+    return NumArgRegs;
+  };
+
   if (Fn.getCallingConv() == CallingConv::CHERI_CCallee)
     CompartmentEntries.push_back(
         {std::string(Fn.getFnAttribute("cheri-compartment").getValueAsString()),
          Fn, OutStreamer->getContext().getOrCreateSymbol(MF.getName()),
-         MF.getRegInfo().liveins().size() + interruptFlag});
+         countUsedArgRegisters(MF) + interruptFlag});
   else if (Fn.getCallingConv() == CallingConv::CHERI_LibCall)
     CompartmentEntries.push_back(
         {"libcalls", Fn,
          OutStreamer->getContext().getOrCreateSymbol(MF.getName()),
-         MF.getRegInfo().liveins().size() + interruptFlag});
+         countUsedArgRegisters(MF) + interruptFlag});
   else if (interruptFlag != 0)
     CompartmentEntries.push_back(
         {std::string(Fn.getFnAttribute("cheri-compartment").getValueAsString()),
          Fn, OutStreamer->getContext().getOrCreateSymbol(MF.getName()),
-         MF.getRegInfo().liveins().size() + interruptFlag, true});
+         countUsedArgRegisters(MF) + interruptFlag, true});
 
   return false;
 }
