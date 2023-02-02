@@ -146,7 +146,15 @@ Instruction *InstCombinerImpl::SimplifyAnyMemTransfer(AnyMemTransferInst *MI) {
   assert(Size && "0-sized memory transferring should be removed already.");
 
   Type *CpyTy = nullptr;
-  if (Size > 8 || (Size&(Size-1))) {
+
+  // On CHERI systems, we must use capability loads and stores when copying
+  // anything that may need pointers.  If we expand them to integer loads and
+  // stores then we lose provenance.
+  uint64_t MayNeedCopyAsPointer = 8;
+  if (DL.isFatPointer(200))
+    MayNeedCopyAsPointer = DL.getPointerSize(200) / 2;
+
+  if (Size > MayNeedCopyAsPointer || (Size & (Size - 1))) {
     // This heuristic is silly, because it prevents us from doing vector
     // loads and stores.  It also means that on CHERI we weren't optimising
     // single-pointer copies.  For now, special case pointer signed and aligned
