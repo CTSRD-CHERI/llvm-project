@@ -632,8 +632,8 @@ public:
     return BaseT::preferPredicateOverEpilogue(L, LI, SE, AC, TLI, DT, LVL, IAI);
   }
 
-  PredicationStyle emitGetActiveLaneMask() {
-    return BaseT::emitGetActiveLaneMask();
+  TailFoldingStyle getPreferredTailFoldingStyle() {
+    return BaseT::getPreferredTailFoldingStyle();
   }
 
   std::optional<Instruction *> instCombineIntrinsic(InstCombiner &IC,
