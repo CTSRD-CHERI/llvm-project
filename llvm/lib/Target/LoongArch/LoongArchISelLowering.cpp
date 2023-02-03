@@ -3202,3 +3202,11 @@ bool LoongArchTargetLowering::isLegalAddressingMode(const DataLayout &DL,
 
   return true;
 }
+
+bool LoongArchTargetLowering::hasAndNotCompare(SDValue Y) const {
+  // TODO: Support vectors.
+  if (Y.getValueType().isVector())
+    return false;
+
+  return !isa<ConstantSDNode>(Y);
+}
