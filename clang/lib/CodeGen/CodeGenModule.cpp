@@ -71,9 +71,9 @@
 #include "llvm/Support/FileSystem.h"
 #include "llvm/Support/YAMLParser.h"
 #include "llvm/Support/TimeProfiler.h"
-#include "llvm/Support/X86TargetParser.h"
 #include "llvm/Transforms/Utils/CheriSetBounds.h"
 #include "llvm/Support/xxhash.h"
+#include "llvm/TargetParser/X86TargetParser.h"
 #include <optional>
 
 using namespace clang;
