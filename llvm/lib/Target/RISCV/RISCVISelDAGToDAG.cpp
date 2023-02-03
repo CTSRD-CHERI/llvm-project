@@ -543,13 +543,10 @@ void RISCVDAGToDAGISel::selectVSETVLI(SDNode *Node) {
   unsigned IntNo = Node->getConstantOperandVal(IntNoOffset);
 
   assert((IntNo == Intrinsic::riscv_vsetvli ||
-          IntNo == Intrinsic::riscv_vsetvlimax ||
-          IntNo == Intrinsic::riscv_vsetvli_opt ||
-          IntNo == Intrinsic::riscv_vsetvlimax_opt) &&
+          IntNo == Intrinsic::riscv_vsetvlimax) &&
          "Unexpected vsetvli intrinsic");
 
-  bool VLMax = IntNo == Intrinsic::riscv_vsetvlimax ||
-               IntNo == Intrinsic::riscv_vsetvlimax_opt;
+  bool VLMax = IntNo == Intrinsic::riscv_vsetvlimax;
   unsigned Offset = IntNoOffset + (VLMax ? 1 : 2);
 
   assert(Node->getNumOperands() == Offset + 2 &&
@@ -1288,8 +1285,8 @@ void RISCVDAGToDAGISel::Select(SDNode *Node) {
                                                {Cmp, Mask, VL, MaskSEW}));
       return;
     }
-    case Intrinsic::riscv_vsetvli_opt:
-    case Intrinsic::riscv_vsetvlimax_opt:
+    case Intrinsic::riscv_vsetvli:
+    case Intrinsic::riscv_vsetvlimax:
       return selectVSETVLI(Node);
     }
     break;
@@ -1300,9 +1297,6 @@ void RISCVDAGToDAGISel::Select(SDNode *Node) {
       // By default we do not custom select any intrinsic.
     default:
       break;
-    case Intrinsic::riscv_vsetvli:
-    case Intrinsic::riscv_vsetvlimax:
-      return selectVSETVLI(Node);
     case Intrinsic::riscv_vlseg2:
     case Intrinsic::riscv_vlseg3:
     case Intrinsic::riscv_vlseg4:
