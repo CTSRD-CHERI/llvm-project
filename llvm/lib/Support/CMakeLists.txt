@@ -176,7 +176,6 @@ add_llvm_component_library(LLVMSupport
   InstructionCost.cpp
   IntEqClasses.cpp
   IntervalMap.cpp
-  ItaniumManglingCanonicalizer.cpp
   JSON.cpp
   KnownBits.cpp
   LEB128.cpp
@@ -219,7 +218,6 @@ add_llvm_component_library(LLVMSupport
   StringSaver.cpp
   StringRef.cpp
   SuffixTree.cpp
-  SymbolRemappingReader.cpp
   SystemUtils.cpp
   TarWriter.cpp
   ThreadPool.cpp
