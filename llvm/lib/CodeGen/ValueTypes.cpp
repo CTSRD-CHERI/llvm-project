@@ -11,6 +11,7 @@
 #include "llvm/IR/DerivedTypes.h"
 #include "llvm/IR/Cheri.h"
 #include "llvm/IR/Type.h"
+#include "llvm/Support/Debug.h"
 #include "llvm/Support/ErrorHandling.h"
 #include "llvm/Support/TypeSize.h"
 #include "llvm/Support/WithColor.h"
@@ -178,6 +179,13 @@ std::string EVT::getEVTString() const {
   case MVT::externref: return "externref";
   }
 }
+
+#if !defined(NDEBUG) || defined(LLVM_ENABLE_DUMP)
+void EVT::dump() const {
+  print(dbgs());
+  dbgs() << "\n";
+}
+#endif
 
 /// getTypeForEVT - This method returns an LLVM type corresponding to the
 /// specified EVT.  For integer types, this returns an unsigned type.  Note
