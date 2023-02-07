@@ -3266,7 +3266,7 @@ void SelectionDAGISel::SelectCodeCommon(SDNode *NodeToMatch,
       if (CaseSize == 0) break;
 
       // Otherwise, execute the case we found.
-      LLVM_DEBUG(dbgs() << "  TypeSwitch[" << EVT(CurNodeVT).getEVTString()
+      LLVM_DEBUG(dbgs() << "  TypeSwitch[" << CurNodeVT
                         << "] from " << SwitchStart << " to " << MatcherIndex
                         << '\n');
       continue;

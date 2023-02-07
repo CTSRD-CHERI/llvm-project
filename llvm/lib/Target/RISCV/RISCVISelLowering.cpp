@@ -12755,7 +12755,7 @@ void RISCVTargetLowering::analyzeInputArgs(
            ArgFlags, CCInfo, /*IsFixed=*/true, IsRet, ArgTy, *this,
            FirstMaskArgument)) {
       LLVM_DEBUG(dbgs() << "InputArg #" << i << " has unhandled type "
-                        << EVT(ArgVT).getEVTString() << '\n');
+                        << ArgVT << '\n');
       llvm_unreachable(nullptr);
     }
   }
@@ -12781,7 +12781,7 @@ void RISCVTargetLowering::analyzeOutputArgs(
            ArgFlags, CCInfo, Outs[i].IsFixed, IsRet, OrigTy, *this,
            FirstMaskArgument)) {
       LLVM_DEBUG(dbgs() << "OutputArg #" << i << " has unhandled type "
-                        << EVT(ArgVT).getEVTString() << "\n");
+                        << ArgVT << "\n");
       llvm_unreachable(nullptr);
     }
   }
