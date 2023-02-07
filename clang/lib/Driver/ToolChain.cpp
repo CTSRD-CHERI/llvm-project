@@ -214,8 +214,8 @@ static void getARMMultilibFlags(const Driver &D,
                                       const llvm::opt::ArgList &Args,
                                       Multilib::flags_list &Result) {
   std::vector<StringRef> Features;
-  llvm::ARM::FPUKind FPUKind =
-      tools::arm::getARMTargetFeatures(D, Triple, Args, Features, false);
+  llvm::ARM::FPUKind FPUKind = tools::arm::getARMTargetFeatures(
+      D, Triple, Args, Features, false /*ForAs*/, true /*ForMultilib*/);
   const auto UnifiedFeatures = tools::unifyTargetFeatures(Features);
   llvm::DenseSet<StringRef> FeatureSet(UnifiedFeatures.begin(),
                                        UnifiedFeatures.end());
