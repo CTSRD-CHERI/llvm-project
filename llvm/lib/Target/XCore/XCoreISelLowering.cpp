@@ -1297,7 +1297,7 @@ SDValue XCoreTargetLowering::LowerCCCArguments(
         {
 #ifndef NDEBUG
           errs() << "LowerFormalArguments Unhandled argument type: "
-                 << RegVT.getEVTString() << "\n";
+                 << RegVT << "\n";
 #endif
           llvm_unreachable(nullptr);
         }
