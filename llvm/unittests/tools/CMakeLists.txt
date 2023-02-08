@@ -8,10 +8,6 @@ if (TARGET llvm-exegesis)
   add_subdirectory(llvm-exegesis)
 endif()
 
-if (TARGET llvm-profdata)
-  add_subdirectory(llvm-profdata)
-endif()
-
 add_subdirectory(llvm-profgen)
 if (TARGET llvm-mca)
   add_subdirectory(llvm-mca)
