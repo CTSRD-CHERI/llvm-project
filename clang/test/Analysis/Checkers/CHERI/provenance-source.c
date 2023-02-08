@@ -38,7 +38,7 @@ char no_prov(int d, char p) {
   intptr_t s = a + b; // expected-warning{{Result of '+' on capability type '__intcap'; it is unclear which side should be used as the source of provenance; consider indicating the provenance-carrying argument explicitly by casting the other argument to 'ptrdiff_t'. Note: along this path, LHS and RHS were derived from NULL}}
                       // expected-warning@-1{{binary expression on capability types 'intptr_t' (aka '__intcap') and 'intptr_t'; it is not clear which should be used as the source of provenance; currently provenance is inherited from the left-hand side}}
 
-  return *(char*)s; // expected-warning{{NULL-derived capability is used as pointer}}
+  return *(char*)s; // expected-warning{{Capability with ambiguous provenance is used as pointer}}
 }
 
 char right_prov_cond(int d, char *p, int x) {
@@ -54,7 +54,6 @@ char right_prov_cond(int d, char *p, int x) {
                       // expected-warning@-1{{Result of '+' on capability type '__intcap'; it is unclear which side should be used as the source of provenance; consider indicating the provenance-carrying argument explicitly by casting the other argument to 'ptrdiff_t'. Note: along this path, LHS was derived from NULL, RHS was derived from pointer}}
                       // expected-warning@-2{{binary expression on capability types 'intptr_t' (aka '__intcap') and 'intptr_t'; it is not clear which should be used as the source of provenance; currently provenance is inherited from the left-hand side}}
   return *(char*)s;// expected-warning{{Capability with ambiguous provenance is used as pointer}}
-                   // expected-warning@-1{{NULL-derived capability is used as pointer}}
 }
 
 intptr_t no_bug(int *p, intptr_t *u) {
@@ -88,7 +87,7 @@ char add_var(int *p, int x, int c) {
 
 int * null_derived(int x) {
   intptr_t u = (intptr_t)x;
-  return (int*)u; // expected-warning{{NULL-derived capability is used as pointer}}
+  return (int*)u; // expected-warning{{Invalid capability is used as pointer}}
 }
 
 uintptr_t fn1(char *str, int f) {
@@ -99,10 +98,18 @@ uintptr_t fn1(char *str, int f) {
     // expected-warning@-2{{binary expression on capability types 'intptr_t' (aka '__intcap') and 'intptr_t'; it is not clear which should be used as the source of provenance; currently provenance is inherited from the left-hand side}}
 }
 
-int fp1(char *s1, char *s2) {
+char* ptr_diff(char *s1, char *s2) {
   intptr_t a = (intptr_t)s1;
   intptr_t b = (intptr_t)s2;
-  return a - b;
+  intptr_t d = a - b; // expected-warning{{Pointer difference as capability}}
+  return (char*)d; // expected-warning{{Invalid capability is used as pointer}}
+}
+
+char* ptr_diff2(int x, char *s) {
+  intptr_t a = (intptr_t)x;
+  intptr_t b = (intptr_t)s;
+  intptr_t d = a - b;
+  return (char*)d; // expected-warning{{Invalid capability is used as pointer}}
 }
 
 void *fp2(char *p) {
@@ -137,7 +144,7 @@ uintptr_t fn2(char *a, char *b) {
 
 char *ptrdiff(char *a, unsigned x) {
   intptr_t ip = ((ptrdiff_t)a | (intptr_t)x);
-  char *p = (char*) ip; // expected-warning{{NULL-derived capability is used as pointer}}
+  char *p = (char*) ip; // expected-warning{{Invalid capability is used as pointer}}
   return p;
 }
 
