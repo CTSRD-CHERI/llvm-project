@@ -17136,7 +17136,7 @@ static SDValue PerformReduceShuffleCombine(SDNode *N, SelectionDAG &DAG) {
   for (int E : Mask) {
     if (E < 0 || E >= (int)Mask.size())
       return SDValue();
-    SetElts |= 1 << E;
+    SetElts.setBit(E);
   }
   if (!SetElts.isAllOnes())
     return SDValue();
