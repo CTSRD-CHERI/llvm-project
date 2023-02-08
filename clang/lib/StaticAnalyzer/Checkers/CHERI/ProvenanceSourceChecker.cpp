@@ -27,12 +27,13 @@ class ProvenanceSourceChecker : public Checker<check::PostStmt<CastExpr>,
                                                check::DeadSymbols> {
   std::unique_ptr<BugType> AmbiguousProvenanceBinOpBugType;
   std::unique_ptr<BugType> AmbiguousProvenancePtrBugType;
-  std::unique_ptr<BugType> NullDerivedCapPtrBugType;
+  std::unique_ptr<BugType> InvalidCapPtrBugType;
+  std::unique_ptr<BugType> PtrdiffAsIntCapBugType;
 
 private:
-  class NullDerivedCapBugVisitor : public BugReporterVisitor {
+  class InvalidCapBugVisitor : public BugReporterVisitor {
   public:
-    NullDerivedCapBugVisitor(SymbolRef SR) : Sym(SR) {}
+    InvalidCapBugVisitor(SymbolRef SR) : Sym(SR) {}
 
     void Profile(llvm::FoldingSetNodeID &ID) const override {
       static int X = 0;
@@ -80,30 +81,37 @@ private:
                                             bool RHSIsAddr,
                                             bool RHSIsNullDerived) const;
 
+  ExplodedNode *emitPtrdiffAsIntCapWarn(const BinaryOperator *BO,
+                                        CheckerContext &C) const;
+
   static void propagateProvenanceInfoForBinOp(ExplodedNode *N,
                                               const BinaryOperator *BO,
                                               CheckerContext &C,
-                                              bool NullDerivedCap);
+                                              bool IsInvalidCap);
 };
 } // namespace
 
-REGISTER_SET_WITH_PROGRAMSTATE(NullDerivedCap, SymbolRef)
+REGISTER_SET_WITH_PROGRAMSTATE(InvalidCap, SymbolRef)
 REGISTER_SET_WITH_PROGRAMSTATE(AmbiguousProvenanceSym, SymbolRef)
 REGISTER_SET_WITH_PROGRAMSTATE(AmbiguousProvenanceReg, const MemRegion *)
 REGISTER_TRAIT_WITH_PROGRAMSTATE(Ptr2IntCapId, unsigned)
 
 ProvenanceSourceChecker::ProvenanceSourceChecker() {
   AmbiguousProvenanceBinOpBugType.reset(
-            new BugType(this,
+      new BugType(this,
                   "Binary operation with ambiguous provenance",
                   "CHERI portability"));
   AmbiguousProvenancePtrBugType.reset(
       new BugType(this,
                   "Capability with ambiguous provenance used as pointer",
                   "CHERI portability"));
-  NullDerivedCapPtrBugType.reset(
+  InvalidCapPtrBugType.reset(
       new BugType(this,
-                  "NULL-derived capability used as pointer",
+                  "Invalid capability used as pointer",
+                  "CHERI portability"));
+  PtrdiffAsIntCapBugType.reset(
+      new BugType(this,
+                  "Pointer difference as capability",
                   "CHERI portability"));
 }
 
@@ -135,15 +143,14 @@ void ProvenanceSourceChecker::checkPostStmt(const CastExpr *CE,
       return; // skip locAsInteger
 
     ProgramStateRef State = C.getState();
-    State = State->add<NullDerivedCap>(IntCapSym);
+    State = State->add<InvalidCap>(IntCapSym);
     C.addTransition(State);
   } else if (isPointerToIntCapCast(CE)) {
     // Prev node may be reclaimed as "uninteresting", in this case we will not
     // be able to create path diagnostic for it; therefore we modify the state,
     // i.e. create the node that definitely will not be deleted
-    ProgramStateRef State = C.getState();
-    unsigned PrevId = State->get<Ptr2IntCapId>();
-    C.addTransition(State->set<Ptr2IntCapId>(PrevId + 1));
+    ProgramStateRef const State = C.getState();
+    C.addTransition(State->set<Ptr2IntCapId>(State->get<Ptr2IntCapId>() + 1));
   }
 }
 
@@ -165,7 +172,7 @@ static bool hasNoProvenance(ProgramStateRef State, const SVal &Val) {
     return !LocAsInt->hasProvenance();
 
   SymbolRef Sym = Val.getAsSymbol();
-  if (Sym && State->contains<NullDerivedCap>(Sym))
+  if (Sym && State->contains<InvalidCap>(Sym))
     return true;
   return false;
 }
@@ -219,10 +226,10 @@ void ProvenanceSourceChecker::checkPreStmt(const CastExpr *CE,
     if (!ErrNode)
       return;
     R = std::make_unique<PathSensitiveBugReport>(
-        *NullDerivedCapPtrBugType, "NULL-derived capability is used as pointer",
+        *InvalidCapPtrBugType, "Invalid capability is used as pointer",
         ErrNode);
     if (SymbolRef S = SrcVal.getAsSymbol())
-      R->addVisitor(std::make_unique<NullDerivedCapBugVisitor>(S));
+      R->addVisitor(std::make_unique<InvalidCapBugVisitor>(S));
   } else
     return;
 
@@ -239,6 +246,31 @@ static bool justConverted2IntCap(Expr *E, const ASTContext &Ctx) {
       return true;
   }
   return false;
+}
+
+ExplodedNode *ProvenanceSourceChecker::emitPtrdiffAsIntCapWarn(
+    const BinaryOperator *BO, CheckerContext &C) const {
+  // Generate the report.
+  ExplodedNode *ErrNode = C.generateNonFatalErrorNode();
+  if (!ErrNode)
+    return nullptr;
+  auto R = std::make_unique<PathSensitiveBugReport>(
+      *PtrdiffAsIntCapBugType, "Pointer difference as capability",
+      ErrNode);
+  R->addRange(BO->getSourceRange());
+
+  const SVal &LHSVal = C.getSVal(BO->getLHS());
+  R->markInteresting(LHSVal);
+  if (const MemRegion *Reg = LHSVal.getAsRegion())
+    R->addVisitor(std::make_unique<Ptr2IntBugVisitor>(Reg));
+
+  const SVal &RHSVal = C.getSVal(BO->getRHS());
+  R->markInteresting(RHSVal);
+  if (const MemRegion *Reg = RHSVal.getAsRegion())
+    R->addVisitor(std::make_unique<Ptr2IntBugVisitor>(Reg));
+
+  C.emitReport(std::move(R));
+  return ErrNode;
 }
 
 ExplodedNode *ProvenanceSourceChecker::emitAmbiguousProvenanceWarn(
@@ -287,14 +319,14 @@ ExplodedNode *ProvenanceSourceChecker::emitAmbiguousProvenanceWarn(
   const SVal &LHSVal = C.getSVal(BO->getLHS());
   R->markInteresting(LHSVal);
   if (SymbolRef LS = LHSVal.getAsSymbol())
-    R->addVisitor(std::make_unique<NullDerivedCapBugVisitor>(LS));
+    R->addVisitor(std::make_unique<InvalidCapBugVisitor>(LS));
   if (const MemRegion *Reg = LHSVal.getAsRegion())
     R->addVisitor(std::make_unique<Ptr2IntBugVisitor>(Reg));
 
   const SVal &RHSVal = C.getSVal(BO->getRHS());
   R->markInteresting(RHSVal);
   if (SymbolRef RS = RHSVal.getAsSymbol())
-    R->addVisitor(std::make_unique<NullDerivedCapBugVisitor>(RS));
+    R->addVisitor(std::make_unique<InvalidCapBugVisitor>(RS));
   if (const MemRegion *Reg = RHSVal.getAsRegion())
     R->addVisitor(std::make_unique<Ptr2IntBugVisitor>(Reg));
 
@@ -304,7 +336,7 @@ ExplodedNode *ProvenanceSourceChecker::emitAmbiguousProvenanceWarn(
 
 void ProvenanceSourceChecker::propagateProvenanceInfoForBinOp(
     ExplodedNode *N, const BinaryOperator *BO, CheckerContext &C,
-    bool NullDerivedRes) {
+    bool IsInvalidCap) {
 
   ProgramStateRef State = N->getState();
   SVal ResVal = C.getSVal(BO);
@@ -316,16 +348,16 @@ void ProvenanceSourceChecker::propagateProvenanceInfoForBinOp(
   }
 
   if (SymbolRef ResSym = ResVal.getAsSymbol())
-    State = NullDerivedRes ? State->add<NullDerivedCap>(ResSym)
-                           : State->add<AmbiguousProvenanceSym>(ResSym);
+    State = IsInvalidCap ? State->add<InvalidCap>(ResSym)
+                         : State->add<AmbiguousProvenanceSym>(ResSym);
   else if (const MemRegion *Reg = ResVal.getAsRegion())
     State = State->add<AmbiguousProvenanceReg>(Reg);
   else
     return; // no result to propagate to
 
   const NoteTag *BinOpTag =
-      NullDerivedRes ? nullptr // note will be added in BugVisitor
-                     : C.getNoteTag("Binary operator has ambiguous provenance");
+      IsInvalidCap ? nullptr // note will be added in BugVisitor
+                   : C.getNoteTag("Binary operator has ambiguous provenance");
 
   C.addTransition(State, N, BinOpTag);
 }
@@ -365,19 +397,26 @@ void ProvenanceSourceChecker::checkPostStmt(const BinaryOperator *BO,
   bool const RHSActiveProv = !justConverted2IntCap(RHS, C.getASTContext());
 
   ExplodedNode *N;
-  bool const NullDerivedRes = LHSIsNullDerived && RHSIsNullDerived;
+  bool InvalidCap;
   if (LHSActiveProv && RHSActiveProv && !IsSub) {
     N = emitAmbiguousProvenanceWarn(BO, C, LHSIsAddr, LHSIsNullDerived,
-                                    RHSIsAddr, RHSIsNullDerived);
+                                      RHSIsAddr, RHSIsNullDerived);
     if (!N)
       N = C.getPredecessor();
-  } else if (NullDerivedRes) {
+    InvalidCap = false;
+  } else if (IsSub && LHSIsAddr && RHSIsAddr) {
+    N = emitPtrdiffAsIntCapWarn(BO, C);
+    if (!N)
+      N = C.getPredecessor();
+    InvalidCap = true;
+  } else if (LHSIsNullDerived && (RHSIsNullDerived || IsSub)) {
     N = C.getPredecessor();
+    InvalidCap = true;
   } else
     return;
 
   // Propagate info for result
-  propagateProvenanceInfoForBinOp(N, BO, C, NullDerivedRes);
+  propagateProvenanceInfoForBinOp(N, BO, C, InvalidCap);
 }
 
 void ProvenanceSourceChecker::checkDeadSymbols(SymbolReaper &SymReaper,
@@ -385,11 +424,11 @@ void ProvenanceSourceChecker::checkDeadSymbols(SymbolReaper &SymReaper,
   ProgramStateRef State = C.getState();
 
   bool Removed = false;
-  const NullDerivedCapTy &Set = State->get<NullDerivedCap>();
+  const InvalidCapTy &Set = State->get<InvalidCap>();
   for (const auto &Sym : Set) {
     if (!SymReaper.isDead(Sym))
       continue;
-    State = State->remove<NullDerivedCap>(Sym);
+    State = State->remove<InvalidCap>(Sym);
     Removed = true;
   }
 
@@ -416,7 +455,7 @@ static void describeCast(raw_ostream &OS, const CastExpr *CE,
 }
 
 PathDiagnosticPieceRef
-ProvenanceSourceChecker::NullDerivedCapBugVisitor::VisitNode(
+ProvenanceSourceChecker::InvalidCapBugVisitor::VisitNode(
     const ExplodedNode *N, BugReporterContext &BRC,
     PathSensitiveBugReport &BR) {
 
@@ -434,7 +473,7 @@ ProvenanceSourceChecker::NullDerivedCapBugVisitor::VisitNode(
     if (Sym != N->getSVal(CE).getAsSymbol())
       return nullptr;
 
-    if (!N->getState()->contains<NullDerivedCap>(Sym))
+    if (!N->getState()->contains<InvalidCap>(Sym))
       return nullptr;
 
     OS << "NULL-derived capability: ";
@@ -445,15 +484,20 @@ ProvenanceSourceChecker::NullDerivedCapBugVisitor::VisitNode(
           || BinaryOperator::isMultiplicativeOp(OpCode)
           || BinaryOperator::isBitwiseOp(OpCode)))
       return nullptr;
+    bool const IsSub = OpCode == clang::BO_Sub || OpCode == clang::BO_SubAssign;
 
     if (!BO->getType()->isIntCapType() || Sym != N->getSVal(BO).getAsSymbol())
       return nullptr;
 
-    if (!N->getState()->contains<NullDerivedCap>(Sym))
+    if (!N->getState()->contains<InvalidCap>(Sym))
       return nullptr;
 
-    OS << "Result of '" << BO->getOpcodeStr()
-       << "' is a NULL-derived capability";
+    OS << "Result of '" << BO->getOpcodeStr() << "'";
+    if (hasNoProvenance(N->getState(), N->getSVal(BO->getLHS())) &&
+        (hasNoProvenance(N->getState(), N->getSVal(BO->getRHS())) || IsSub))
+      OS << " is a NULL-derived capability";
+    else
+      OS << " is an invalid capability";
   } else
     return nullptr;
 
