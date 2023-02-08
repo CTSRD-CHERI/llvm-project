@@ -38,6 +38,7 @@ class TestingConfig(object):
             'LLDB',
             'LD_PRELOAD',
             'LLVM_SYMBOLIZER_PATH',
+            'LLVM_PROFILE_FILE',
             'ASAN_SYMBOLIZER_PATH',
             'HWASAN_SYMBOLIZER_PATH',
             'LSAN_SYMBOLIZER_PATH',
