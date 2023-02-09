@@ -306,7 +306,6 @@ SubtargetFeatures ELFObjectFileBase::getRISCVFeatures() const {
 
   if (PlatformFlags & ELF::EF_RISCV_CAP_MODE) {
     Features.AddFeature("xcheri");
-    Features.AddFeature("xcheri-rvc");
     Features.AddFeature("cap-mode");
   }
 

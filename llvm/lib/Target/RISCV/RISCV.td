@@ -375,11 +375,11 @@ def FeatureCheri
 def HasCheri : Predicate<"Subtarget->hasCheri()">,
                          AssemblerPredicate<(all_of FeatureCheri),
                          "CHERI Extension">;
-def FeatureCheriRVC
-    : SubtargetFeature<"xcheri-rvc", "EnableCheriRVCInstrs", "true",
-                       "Enable CHERI RVC Instructions.">;
+def FeatureCheriNoRVC
+    : SubtargetFeature<"xcheri-norvc", "EnableCheriRVCInstrs", "false",
+                       "Disable CHERI RVC Instructions.">;
 def HasCheriRVC : Predicate<"Subtarget->enableCheriRVCInstrs()">,
-                  AssemblerPredicate<(all_of FeatureCheriRVC),
+                  AssemblerPredicate<(all_of (not FeatureCheriNoRVC)),
                                      "CHERI RVC Instructions">;
 
 def FeatureCapMode

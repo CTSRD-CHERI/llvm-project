@@ -103,7 +103,7 @@ private:
   bool IsCapMode = false;
   bool EnableLinkerRelax = false;
   bool EnableRVCHintInstrs = true;
-  bool EnableCheriRVCInstrs = false;
+  bool EnableCheriRVCInstrs = true;
   bool EnableSaveRestore = false;
   unsigned XLen = 32;
   ExtZvl ZvlLen = ExtZvl::NotSet;
