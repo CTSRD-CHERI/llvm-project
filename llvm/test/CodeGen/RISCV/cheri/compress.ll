@@ -8,6 +8,8 @@
 ; RUN:   | llvm-objdump -d -M no-aliases - | FileCheck %s
 ; RUN: %riscv64_cheri_purecap_llc -mattr=+c,+xcheri,+cap-mode,+xcheri-rvc -filetype=obj < %t.tgtattr \
 ; RUN:   | llvm-objdump -d -M no-aliases - | FileCheck %s
+; RUN: %riscv64_cheri_purecap_llc -mattr=+c,+xcheri,+cap-mode -filetype=obj < %t.tgtattr \
+; RUN:   | llvm-objdump -d -M no-aliases - | FileCheck %s --check-prefix=CHECK-NORVC
 
 ; RUN: cat %s > %t.fnattr
 ; RUN: echo 'attributes #0 = { nounwind "target-features"="+c,+xcheri,+cap-mode,+xcheri-rvc" }' >> %t.fnattr
@@ -15,6 +17,10 @@
 ; RUN:   | llvm-objdump -d --mattr=+c,+xcheri-rvc -M no-aliases - | FileCheck %s
 ; RUN: %riscv64_cheri_purecap_llc -filetype=obj < %t.fnattr \
 ; RUN:   | llvm-objdump -d --mattr=+c,+xcheri-rvc -M no-aliases - | FileCheck %s
+; RUN: cat %s > %t.fnattr
+; RUN: echo 'attributes #0 = { nounwind "target-features"="+c,+xcheri,+cap-mode" }' >> %t.fnattr
+; RUN: %riscv64_cheri_purecap_llc -filetype=obj < %t.fnattr \
+; RUN:   | llvm-objdump -d --mattr=+c,+xcheri-rvc -M no-aliases - | FileCheck %s --check-prefix=CHECK-NORVC
 
 ; Basic check that we can use CHERI compressed instructions
 
@@ -33,6 +39,20 @@ define i32 @loadstore(i32 addrspace(200)* %intptrarg, i8 addrspace(200)* addrspa
 ; CHECK-NEXT:    c.mv a0, a2
 ; CHECK-NEXT:    c.cincoffset16csp csp, 32
 ; CHECK-NEXT:    c.cjr cra
+; CHECK-NORVC-LABEL: <loadstore>:
+; CHECK-NORVC-NEXT:  {{[^a-z.]}}cincoffset csp, csp, -32
+; CHECK-NORVC-NEXT:  {{[^a-z.]}}clw a2, 0(ca0)
+; CHECK-NORVC-NEXT:  {{[^a-z.]}}c.li a3, 1
+; CHECK-NORVC-NEXT:  {{[^a-z.]}}csw a3, 0(ca0)
+; CHECK-NORVC-NEXT:  {{[^a-z.]}}clc ca0, 0(ca1)
+; CHECK-NORVC-NEXT:  {{[^a-z.]}}csc ca0, 0(ca1)
+; CHECK-NORVC-NEXT:  {{[^a-z.]}}csc ca0, 16(csp)
+; CHECK-NORVC-NEXT:  {{[^a-z.]}}clc ca0, 16(csp)
+; CHECK-NORVC-NEXT:  {{[^a-z.]}}csw a2, 0(csp)
+; CHECK-NORVC-NEXT:  {{[^a-z.]}}clw a0, 0(csp)
+; CHECK-NORVC-NEXT:  {{[^a-z.]}}c.mv a0, a2
+; CHECK-NORVC-NEXT:  {{[^a-z.]}}cincoffset csp, csp, 32
+; CHECK-NORVC-NEXT:  {{[^a-z.]}}cjalr cnull, 0(cra)
   %stackptr = alloca i8 addrspace(200)*, align 16, addrspace(200)
   %stackint = alloca i32, align 16, addrspace(200)
   %val = load volatile i32, i32 addrspace(200)* %intptrarg
@@ -62,6 +82,21 @@ define i32 @call() addrspace(200) #0 {
 ; CHECK-NEXT:    c.clccsp cra, {{104|128}}(csp)
 ; CHECK-NEXT:    c.cincoffset16csp csp, {{112|144}}
 ; CHECK-NEXT:    c.cjr cra
+; CHECK-NORVC-LABEL: <call>:
+; CHECK-NORVC-NEXT:  {{[^a-z.]}}cincoffset csp, csp, -144
+; CHECK-NORVC-NEXT:  {{[^a-z.]}}csc cra, 128(csp)
+; CHECK-NORVC-NEXT:  {{[^a-z.]}}cincoffset ca0, csp, 64
+; CHECK-NORVC-NEXT:  {{[^a-z.]}}csetbounds ca0, ca0, 64
+; CHECK-NORVC-NEXT:  {{[^a-z.]}}cincoffset ca1, ca0, 48
+; CHECK-NORVC-NEXT:  {{[^a-z.]}}cincoffset ca0, csp, 0
+; CHECK-NORVC-NEXT:  {{[^a-z.]}}csetbounds ca0, ca0, 64
+; CHECK-NORVC-NEXT:  {{[^a-z.]}}cincoffset ca0, ca0, 12
+; CHECK-NORVC-NEXT:  {{[^a-z.]}}auipcc cra, 0
+; CHECK-NORVC-NEXT:  {{[^a-z.]}}cjalr cra, 0(cra)
+; CHECK-NORVC-NEXT:  {{[^a-z.]}}clc cra, 128(csp)
+; CHECK-NORVC-NEXT:  {{[^a-z.]}}cincoffset csp, csp, 144
+; CHECK-NORVC-NEXT:  {{[^a-z.]}}cjalr cnull, 0(cra)
+
   %ptrarray = alloca [4 x i8 addrspace(200)*], align 16, addrspace(200)
   %intarray = alloca [16 x i32], align 1, addrspace(200)
   %ptrgep = getelementptr inbounds [4 x i8 addrspace(200)*], [4 x i8 addrspace(200)*] addrspace(200)* %ptrarray, i64 0, i64 3
