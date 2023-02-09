@@ -21,6 +21,14 @@
 // DEFAULT: "-target-feature" "-save-restore"
 // DEFAULT-NOT: "-target-feature" "+save-restore"
 
+// RUN: %clang -target riscv32 -### %s -march=rv32ixcheri 2>&1 | FileCheck %s --check-prefixes=XCHERI,XCHERI-NORVC
+// RUN: %clang -target riscv64 -### %s -march=rv64ixcheri 2>&1 | FileCheck %s --check-prefixes=XCHERI,XCHERI-NORVC
+// RUN: %clang -target riscv32-unknown-elf -### %s -march=rv64ixcheri -mxcheri-rvc 2>&1 | FileCheck %s --check-prefixes=XCHERI,XCHERI-RVC
+// RUN: %clang -target riscv32-unknown-elf -### %s -march=rv64ixcheri -mno-xcheri-rvc 2>&1 | FileCheck %s --check-prefixes=XCHERI,XCHERI-NORVC
+// XCHERI: "-target-feature" "+xcheri"
+// XCHERI-RVC: "-target-feature" "+xcheri-rvc"
+// XCHERI-NORVC: "-target-feature" "-xcheri-rvc"
+
 // RUN: %clang -target riscv32-linux -### %s -fsyntax-only 2>&1 \
 // RUN:   | FileCheck %s -check-prefix=DEFAULT-LINUX
 // RUN: %clang -target riscv64-linux -### %s -fsyntax-only 2>&1 \
