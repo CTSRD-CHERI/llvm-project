@@ -1,7 +1,7 @@
-# RUN: llvm-mc %s -triple=riscv64 -mattr=+c,+xcheri,+xcheri-rvc,+cap-mode -riscv-no-aliases -show-encoding \
+# RUN: llvm-mc %s -triple=riscv64 -mattr=+c,+xcheri,+cap-mode -riscv-no-aliases -show-encoding \
 # RUN:     | FileCheck -check-prefixes=CHECK-ASM,CHECK-ASM-AND-OBJ %s
-# RUN: llvm-mc -filetype=obj -triple riscv64 -mattr=+c,+xcheri,+xcheri-rvc,+cap-mode < %s \
-# RUN:     | llvm-objdump -M no-aliases --mattr=+c,+xcheri,+xcheri-rvc,+cap-mode -d - \
+# RUN: llvm-mc -filetype=obj -triple riscv64 -mattr=+c,+xcheri,+cap-mode < %s \
+# RUN:     | llvm-objdump -M no-aliases --mattr=+c,+xcheri,+cap-mode -d - \
 # RUN:     | FileCheck -check-prefixes=CHECK-ASM-AND-OBJ %s
 
 ## Different encoding between RV64 and RV32 (see rv32cxcheri-cap-mode-only-valid.s)
