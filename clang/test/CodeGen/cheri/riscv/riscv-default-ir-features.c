@@ -30,15 +30,11 @@
 // RUN: %clang --target=riscv64 -march=rv64ixcheri -mabi=l64pc128 -S -mno-xcheri-rvc -emit-llvm %s -o - \
 // RUN:   | FileCheck %s --check-prefixes=CHECK,RV64-XCHERI-PURECAP '-DFEATURES=+64bit,+cap-mode,+relax,+xcheri,-save-restore,-xcheri-rvc'
 
-/// FIXME: Enabling -mxcheri-rvc with a non-CHERI triple shouldn't enable the CHERI datalayout
-// RUN: not %clang --target=riscv32 -mxcheri-rvc -S -emit-llvm %s -o - \
-// RUN:   | FileCheck %s --check-prefixes=CHECK,RV32-XCHERI '-DFEATURES=+a,+c,+m,+relax,+xcheri-rvc,-save-restore'
-// FIXME: %clang --target=riscv32 -mxcheri-rvc -S -emit-llvm %s -o - \
-// FIXME:   | FileCheck %s --check-prefixes=CHECK,RV32-NOCHERI '-DFEATURES=+a,+c,+m,+relax,+xcheri-rvc,-save-restore'
-// RUN: not %clang --target=riscv64 -mxcheri-rvc -S -emit-llvm %s -o - \
-// RUN:   | FileCheck %s --check-prefixes=CHECK,RV64-XCHERI '-DFEATURES=+64bit,+a,+c,+m,+relax,+xcheri-rvc,-save-restore'
-// FIXME: %clang --target=riscv64 -mxcheri-rvc -S -emit-llvm %s -o - \
-// FIXME:   | FileCheck %s --check-prefixes=CHECK,RV64-NOCHERI '-DFEATURES=+64bit,+a,+c,+m,+relax,+xcheri-rvc,-save-restore'
+/// Enabling -mxcheri-rvc with a non-CHERI triple shouldn't enable the CHERI datalayout
+// RUN: %clang --target=riscv32 -mxcheri-rvc -S -emit-llvm %s -o - \
+// RUN:   | FileCheck %s --check-prefixes=CHECK,RV32-NOCHERI '-DFEATURES=+a,+c,+m,+relax,+xcheri-rvc,-save-restore'
+// RUN: %clang --target=riscv64 -mxcheri-rvc -S -emit-llvm %s -o - \
+// RUN:   | FileCheck %s --check-prefixes=CHECK,RV64-NOCHERI '-DFEATURES=+64bit,+a,+c,+m,+relax,+xcheri-rvc,-save-restore'
 // RUN: %clang --target=riscv32 -mno-xcheri-rvc -S -emit-llvm %s -o - \
 // RUN:   | FileCheck %s --check-prefixes=CHECK,RV32-NOCHERI '-DFEATURES=+a,+c,+m,+relax,-save-restore,-xcheri-rvc'
 // RUN: %clang --target=riscv64 -mno-xcheri-rvc -S -emit-llvm %s -o - \
