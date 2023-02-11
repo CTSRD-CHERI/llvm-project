@@ -8052,6 +8052,12 @@ static QualType checkConditionalPointerCompatibility(Sema &S, ExprResult &LHS,
     rhptee = RHSTy->castAs<PointerType>()->getPointeeType();
   }
 
+  // Get the pointer interpretation.
+  PointerInterpretationKind PIK = S.Context.getDefaultPointerInterpretation();
+  if (LHSTy->isCHERICapabilityType(S.Context, false) ||
+      RHSTy->isCHERICapabilityType(S.Context, false))
+    PIK = PIK_Capability;
+
   // C99 6.5.15p6: If both operands are pointers to compatible types or to
   // differently qualified versions of compatible types, the result type is
   // a pointer to an appropriately qualified version of the composite
@@ -8114,7 +8120,7 @@ static QualType checkConditionalPointerCompatibility(Sema &S, ExprResult &LHS,
     // to get a consistent AST.
     QualType incompatTy;
     incompatTy = S.Context.getPointerType(
-        S.Context.getAddrSpaceQualType(S.Context.VoidTy, ResultAddrSpace));
+        S.Context.getAddrSpaceQualType(S.Context.VoidTy, ResultAddrSpace), PIK);
     LHS = S.ImpCastExprToType(LHS.get(), incompatTy, LHSCastKind);
     RHS = S.ImpCastExprToType(RHS.get(), incompatTy, RHSCastKind);
 
@@ -8148,15 +8154,8 @@ static QualType checkConditionalPointerCompatibility(Sema &S, ExprResult &LHS,
   }();
   if (IsBlockPointer)
     ResultTy = S.Context.getBlockPointerType(ResultTy);
-  else {
-    PointerInterpretationKind PIK =
-        S.Context.getDefaultPointerInterpretation();
-    if (LHSTy->isCHERICapabilityType(S.Context, false) ||
-        RHSTy->isCHERICapabilityType(S.Context, false)) {
-      PIK = PIK_Capability;
-    }
+  else
     ResultTy = S.Context.getPointerType(ResultTy, PIK);
-  }
 
   LHS = S.ImpCastExprToType(LHS.get(), ResultTy, LHSCastKind);
   RHS = S.ImpCastExprToType(RHS.get(), ResultTy, RHSCastKind);
