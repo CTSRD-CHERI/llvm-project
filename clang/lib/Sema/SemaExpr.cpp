@@ -8124,6 +8124,10 @@ static QualType checkConditionalPointerCompatibility(Sema &S, ExprResult &LHS,
     LHS = S.ImpCastExprToType(LHS.get(), incompatTy, LHSCastKind);
     RHS = S.ImpCastExprToType(RHS.get(), incompatTy, RHSCastKind);
 
+    // Implicit pointer-to-capability casts in hybrid code can be an error.
+    if (LHS.isInvalid() || RHS.isInvalid())
+      return QualType();
+
     // FIXME: For OpenCL the warning emission and cast to void* leaves a room
     // for casts between types with incompatible address space qualifiers.
     // For the following code the compiler produces casts between global and
