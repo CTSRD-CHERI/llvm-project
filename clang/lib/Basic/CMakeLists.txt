@@ -72,6 +72,7 @@ add_clang_library(clangBasic
   OpenCLOptions.cpp
   OpenMPKinds.cpp
   OperatorPrecedence.cpp
+  ParsedAttrInfo.cpp
   ProfileList.cpp
   NoSanitizeList.cpp
   SanitizerSpecialCaseList.cpp
