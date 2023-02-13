@@ -352,6 +352,12 @@ enum NodeType : unsigned {
   CLGC,
   LA_TLS_IE,
   CLA_TLS_IE,
+
+  TH_LWD,
+  TH_LWUD,
+  TH_LDD,
+  TH_SWD,
+  TH_SDD,
 };
 } // namespace RISCVISD
 
