@@ -545,7 +545,7 @@ namespace llvm {
   FunctionPass *createEHContGuardCatchretPass();
 
   /// Create Hardware Loop pass. \see HardwareLoops.cpp
-  FunctionPass *createHardwareLoopsPass();
+  FunctionPass *createHardwareLoopsLegacyPass();
 
   /// Create CHERI pass to bound alloca.s
   ModulePass *createCheriBoundAllocasPass();
