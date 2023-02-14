@@ -206,6 +206,9 @@ class X86Subtarget final : public X86GenSubtargetInfo {
   /// Processor has MOVDIR64B instruction (direct store 64 bytes).
   bool HasMOVDIR64B = false;
 
+  /// Processor has CHERI instructions.
+  bool HasCHERI = false;
+
   /// Processor has ptwrite instruction.
   bool HasPTWRITE = false;
 
