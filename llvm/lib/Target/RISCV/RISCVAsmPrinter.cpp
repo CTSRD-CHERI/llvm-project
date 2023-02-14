@@ -87,6 +87,8 @@ private:
     int LiveIns;
     /// Emit this export as a local symbol even if the function is not local.
     bool forceLocal = false;
+    /// The size in bytes of the stack frame, 0 if not used.
+    uint32_t stackSize = 0;
   };
   SmallVector<CompartmentExport, 1> CompartmentEntries;
   void emitAttributes();
@@ -226,10 +228,12 @@ bool RISCVAsmPrinter::runOnMachineFunction(MachineFunction &MF) {
   };
 
   if (Fn.getCallingConv() == CallingConv::CHERI_CCallee)
+    // FIXME: Get stack size as function attribute if specified
     CompartmentEntries.push_back(
         {std::string(Fn.getFnAttribute("cheri-compartment").getValueAsString()),
          Fn, OutStreamer->getContext().getOrCreateSymbol(MF.getName()),
-         countUsedArgRegisters(MF) + interruptFlag});
+         countUsedArgRegisters(MF) + interruptFlag, false,
+         static_cast<uint32_t>(MF.getFrameInfo().getStackSize())});
   else if (Fn.getCallingConv() == CallingConv::CHERI_LibCall)
     CompartmentEntries.push_back(
         {"libcalls", Fn,
@@ -273,8 +277,11 @@ void RISCVAsmPrinter::emitEndOfAsmFile(Module &M) {
       OutStreamer->emitValueToAlignment(4);
       OutStreamer->emitLabel(Sym);
       emitLabelDifference(Entry.FnSym, CompartmentStartSym, 2);
-      // FIXME: Get stack size as function attribute
-      OutStreamer->emitIntValue(0, 1);
+      auto stackSize = Entry.stackSize;
+      // Round up to multiple of 8 and divide by 8.
+      stackSize = (stackSize + 7) / 8;
+      // TODO: We should probably warn if the std::min truncates here.
+      OutStreamer->emitIntValue(std::min(uint32_t(255), stackSize), 1);
       OutStreamer->emitIntValue(Entry.LiveIns, 1);
       OutStreamer->emitELFSize(Sym, MCConstantExpr::create(4, C));
     }
