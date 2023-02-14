@@ -26,6 +26,7 @@ let Namespace = "X86" in {
   def sub_16bit    : SubRegIndex<16>;
   def sub_16bit_hi : SubRegIndex<16, 16>;
   def sub_32bit    : SubRegIndex<32>;
+  def sub_64bit    : SubRegIndex<64>;
   def sub_xmm      : SubRegIndex<128>;
   def sub_ymm      : SubRegIndex<256>;
   def sub_mask_0   : SubRegIndex<-1>;
@@ -165,7 +166,7 @@ def R15D : X86Reg<"r15d", 15, [R15W,R15WH]>;
 }
 
 // 64-bit registers, X86-64 only
-let SubRegIndices = [sub_32bit] in {
+let SubRegIndices = [sub_32bit], CoveredBySubRegs = 1 in {
 def RAX : X86Reg<"rax", 0, [EAX]>, DwarfRegNum<[0, -2, -2]>;
 def RDX : X86Reg<"rdx", 2, [EDX]>, DwarfRegNum<[1, -2, -2]>;
 def RCX : X86Reg<"rcx", 1, [ECX]>, DwarfRegNum<[2, -2, -2]>;
@@ -176,7 +177,7 @@ def RBP : X86Reg<"rbp", 5, [EBP]>, DwarfRegNum<[6, -2, -2]>;
 def RSP : X86Reg<"rsp", 4, [ESP]>, DwarfRegNum<[7, -2, -2]>;
 
 // These also require REX.
-let CostPerUse = [1] in {
+let CostPerUse = [1], CoveredBySubRegs = 1 in {
 def R8  : X86Reg<"r8",   8, [R8D]>,  DwarfRegNum<[ 8, -2, -2]>;
 def R9  : X86Reg<"r9",   9, [R9D]>,  DwarfRegNum<[ 9, -2, -2]>;
 def R10 : X86Reg<"r10", 10, [R10D]>, DwarfRegNum<[10, -2, -2]>;
@@ -186,6 +187,30 @@ def R13 : X86Reg<"r13", 13, [R13D]>, DwarfRegNum<[13, -2, -2]>;
 def R14 : X86Reg<"r14", 14, [R14D]>, DwarfRegNum<[14, -2, -2]>;
 def R15 : X86Reg<"r15", 15, [R15D]>, DwarfRegNum<[15, -2, -2]>;
 def RIP : X86Reg<"rip",  0, [EIP]>,  DwarfRegNum<[16, -2, -2]>;
+}}
+
+// Capability registers, X86-64 + CHERI only
+let SubRegIndices = [sub_64bit] in {
+def CAX : X86Reg<"cax", 0, [RAX]>, DwarfRegNum<[0, -2, -2]>;
+def CDX : X86Reg<"cdx", 2, [RDX]>, DwarfRegNum<[1, -2, -2]>;
+def CCX : X86Reg<"ccx", 1, [RCX]>, DwarfRegNum<[2, -2, -2]>;
+def CBX : X86Reg<"cbx", 3, [RBX]>, DwarfRegNum<[3, -2, -2]>;
+def CSI : X86Reg<"csi", 6, [RSI]>, DwarfRegNum<[4, -2, -2]>;
+def CDI : X86Reg<"cdi", 7, [RDI]>, DwarfRegNum<[5, -2, -2]>;
+def CBP : X86Reg<"cbp", 5, [RBP]>, DwarfRegNum<[6, -2, -2]>;
+def CSP : X86Reg<"csp", 4, [RSP]>, DwarfRegNum<[7, -2, -2]>;
+
+// These also require REX.
+let SubRegIndices = [sub_64bit], CostPerUse = [1] in {
+def C8  : X86Reg<"c8",   8, [R8]>,  DwarfRegNum<[ 8, -2, -2]>;
+def C9  : X86Reg<"c9",   9, [R9]>,  DwarfRegNum<[ 9, -2, -2]>;
+def C10 : X86Reg<"c10", 10, [R10]>, DwarfRegNum<[10, -2, -2]>;
+def C11 : X86Reg<"c11", 11, [R11]>, DwarfRegNum<[11, -2, -2]>;
+def C12 : X86Reg<"c12", 12, [R12]>, DwarfRegNum<[12, -2, -2]>;
+def C13 : X86Reg<"c13", 13, [R13]>, DwarfRegNum<[13, -2, -2]>;
+def C14 : X86Reg<"c14", 14, [R14]>, DwarfRegNum<[14, -2, -2]>;
+def C15 : X86Reg<"c15", 15, [R15]>, DwarfRegNum<[15, -2, -2]>;
+def CIP : X86Reg<"cip",  0, [RIP]>,  DwarfRegNum<[16, -2, -2]>;
 }}
 
 // MMX Registers. These are actually aliased to ST0 .. ST7
@@ -376,6 +401,11 @@ def RIZ : X86Reg<"riz", 4>;
 // CET registers - Shadow Stack Pointer
 def SSP : X86Reg<"ssp", 0>;
 
+// Additional capability registers
+def DDC : X86Reg<"ddc", 0>;
+def CFS : X86Reg<"cfs", 1>;
+def CGS : X86Reg<"cgs", 2>;
+
 //===----------------------------------------------------------------------===//
 // Register Class Definitions... now that we have all of the pieces, define the
 // top-level register classes.  The order specified in the register list is
@@ -430,16 +460,30 @@ def GR64 : RegisterClass<"X86", [i64], 64,
                          (add RAX, RCX, RDX, RSI, RDI, R8, R9, R10, R11,
                               RBX, R14, R15, R12, R13, RBP, RSP, RIP)>;
 
+// GRC - capability GPRs.  As above, this includes CIP.
+def GRC : RegisterClass<"X86", [iFATPTR128], 128,
+                        (add CAX, CCX, CDX, CSI, CDI, C8, C9, C10, C11,
+                             CBX, C14, C15, C12, C13, CBP, CSP, CIP)>;
+
 // GR64PLTSafe - 64-bit GPRs without R10, R11, RSP and RIP. Could be used when
 // emitting code for intrinsics, which use implict input registers.
 def GR64PLTSafe : RegisterClass<"X86", [i64], 64,
                               (add RAX, RCX, RDX, RSI, RDI, R8, R9,
                                    RBX, R14, R15, R12, R13, RBP)>;
 
+// GRCPLTSafe - capability GPRs without C10, C11, CSP and CIP. Could be used
+// when emitting code for intrinsics, which use implict input registers.
+def GRCPLTSafe : RegisterClass<"X86", [iFATPTR128], 128,
+                               (add CAX, CCX, CDX, CSI, CDI, C8, C9,
+                                    CBX, C14, C15, C12, C13, CBP)>;
+
 // Segment registers for use by MOV instructions (and others) that have a
 //   segment register as one operand.  Always contain a 16-bit segment
 //   descriptor.
 def SEGMENT_REG : RegisterClass<"X86", [i16], 16, (add CS, DS, SS, ES, FS, GS)>;
+
+// CAP_REG - additional capability registers.
+def CAP_REG : RegisterClass<"X86", [iFATPTR128], 128, (add DDC, CFS, CGS)>;
 
 // Debug registers.
 def DEBUG_REG : RegisterClass<"X86", [i32], 32, (sequence "DR%u", 0, 15)>;
@@ -482,12 +526,18 @@ def GR32_NOREX : RegisterClass<"X86", [i32], 32,
 // GR64_NOREX - GR64 registers which do not require a REX prefix.
 def GR64_NOREX : RegisterClass<"X86", [i64], 64,
                             (add RAX, RCX, RDX, RSI, RDI, RBX, RBP, RSP, RIP)>;
+// GRC_NOREX - GRC registers which do not require a REX prefix.
+def GRC_NOREX : RegisterClass<"X86", [iFATPTR128], 128,
+                            (add CAX, CCX, CDX, CSI, CDI, CBX, CBP, CSP, CIP)>;
 
 // GR32_NOSP - GR32 registers except ESP.
 def GR32_NOSP : RegisterClass<"X86", [i32], 32, (sub GR32, ESP)>;
 
 // GR64_NOSP - GR64 registers except RSP (and RIP).
 def GR64_NOSP : RegisterClass<"X86", [i64], 64, (sub GR64, RSP, RIP)>;
+
+// GRC_NOSP - GRC registers except CSP (and CIP).
+def GRC_NOSP : RegisterClass<"X86", [iFATPTR128], 128, (sub GRC, CSP, CIP)>;
 
 // GR32_NOREX_NOSP - GR32 registers which do not require a REX prefix except
 // ESP.
@@ -497,6 +547,10 @@ def GR32_NOREX_NOSP : RegisterClass<"X86", [i32], 32,
 // GR64_NOREX_NOSP - GR64_NOREX registers except RSP.
 def GR64_NOREX_NOSP : RegisterClass<"X86", [i64], 64,
                                     (and GR64_NOREX, GR64_NOSP)>;
+
+// GRC_NOREX_NOSP - GRC_NOREX registers except CSP.
+def GRC_NOREX_NOSP : RegisterClass<"X86", [iFATPTR128], 128,
+                                   (and GRC_NOREX, GRC_NOSP)>;
 
 // Register classes used for ABIs that use 32-bit address accesses,
 // while using the whole x84_64 ISA.
