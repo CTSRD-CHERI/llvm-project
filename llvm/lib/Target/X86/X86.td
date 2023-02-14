@@ -19,6 +19,8 @@ include "llvm/Target/Target.td"
 // X86 Subtarget state
 //
 
+def ModeCapability : SubtargetFeature<"cap-mode", "InCapMode", "true",
+                                  "Capability mode (x86_64c)">;
 def Mode64Bit : SubtargetFeature<"64bit-mode", "In64BitMode", "true",
                                   "64-bit mode (x86_64)">;
 def Mode32Bit : SubtargetFeature<"32bit-mode", "In32BitMode", "true",

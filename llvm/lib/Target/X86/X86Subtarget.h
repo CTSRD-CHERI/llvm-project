@@ -537,6 +537,9 @@ private:
   /// Required vector width from function attribute.
   unsigned RequiredVectorWidth;
 
+  /// True if compiling for capability mode, false for 16-bit or 32-bit.
+  bool InCapMode = false;
+
   /// True if compiling for 64-bit, false for 16-bit or 32-bit.
   bool In64BitMode = false;
 
@@ -611,6 +614,10 @@ private:
   void initSubtargetFeatures(StringRef CPU, StringRef TuneCPU, StringRef FS);
 
 public:
+  bool isCapMode() const {
+    return InCapMode;
+  }
+
   /// Is this x86_64? (disregarding specific ABI / programming model)
   bool is64Bit() const {
     return In64BitMode;
