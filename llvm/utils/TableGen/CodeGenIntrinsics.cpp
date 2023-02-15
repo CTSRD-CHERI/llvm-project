@@ -326,7 +326,8 @@ bool CodeGenIntrinsic::isParamAPointer(unsigned ParamIdx) const {
   if (ParamIdx >= IS.ParamVTs.size())
     return false;
   MVT ParamType = MVT(IS.ParamVTs[ParamIdx]);
-  return ParamType == MVT::iPTR || ParamType == MVT::iPTRAny;
+  return ParamType == MVT::iPTR || ParamType == MVT::iPTRAny ||
+         ParamType == MVT::cPTR;
 }
 
 bool CodeGenIntrinsic::isParamImmArg(unsigned ParamIdx) const {
