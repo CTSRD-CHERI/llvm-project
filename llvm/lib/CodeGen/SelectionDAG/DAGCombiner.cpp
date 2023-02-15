@@ -855,9 +855,11 @@ public:
 
 class EmptyMatchContext {
   SelectionDAG &DAG;
+  const TargetLowering &TLI;
 
 public:
-  EmptyMatchContext(SelectionDAG &DAG, SDNode *Root) : DAG(DAG) {}
+  EmptyMatchContext(SelectionDAG &DAG, const TargetLowering &TLI, SDNode *Root)
+      : DAG(DAG), TLI(TLI) {}
 
   bool match(SDValue OpN, unsigned Opcode) const {
     return Opcode == OpN->getOpcode();
@@ -867,16 +869,22 @@ public:
   template <typename... ArgT> SDValue getNode(ArgT &&...Args) {
     return DAG.getNode(std::forward<ArgT>(Args)...);
   }
+
+  bool isOperationLegalOrCustom(unsigned Op, EVT VT,
+                                bool LegalOnly = false) const {
+    return TLI.isOperationLegalOrCustom(Op, VT, LegalOnly);
+  }
 };
 
 class VPMatchContext {
   SelectionDAG &DAG;
+  const TargetLowering &TLI;
   SDValue RootMaskOp;
   SDValue RootVectorLenOp;
 
 public:
-  VPMatchContext(SelectionDAG &DAG, SDNode *Root)
-      : DAG(DAG), RootMaskOp(), RootVectorLenOp() {
+  VPMatchContext(SelectionDAG &DAG, const TargetLowering &TLI, SDNode *Root)
+      : DAG(DAG), TLI(TLI), RootMaskOp(), RootVectorLenOp() {
     assert(Root->isVPOpcode());
     if (auto RootMaskPos = ISD::getVPMaskIdx(Root->getOpcode()))
       RootMaskOp = Root->getOperand(*RootMaskPos);
@@ -968,6 +976,12 @@ public:
            ISD::getVPExplicitVectorLengthIdx(VPOpcode) == 4);
     return DAG.getNode(VPOpcode, DL, VT,
                        {N1, N2, N3, RootMaskOp, RootVectorLenOp}, Flags);
+  }
+
+  bool isOperationLegalOrCustom(unsigned Op, EVT VT,
+                                bool LegalOnly = false) const {
+    unsigned VPOp = ISD::getVPForBaseOpcode(Op);
+    return TLI.isOperationLegalOrCustom(VPOp, VT, LegalOnly);
   }
 };
 
@@ -15146,7 +15160,7 @@ SDValue DAGCombiner::visitFADDForFMACombine(SDNode *N) {
   SDValue N1 = N->getOperand(1);
   EVT VT = N->getValueType(0);
   SDLoc SL(N);
-  MatchContextClass matcher(DAG, N);
+  MatchContextClass matcher(DAG, TLI, N);
   const TargetOptions &Options = DAG.getTarget().Options;
 
   bool UseVP = std::is_same_v<MatchContextClass, VPMatchContext>;
@@ -15157,9 +15171,9 @@ SDValue DAGCombiner::visitFADDForFMACombine(SDNode *N) {
   bool HasFMAD = !UseVP && (LegalOperations && TLI.isFMADLegal(DAG, N));
 
   // Floating-point multiply-add without intermediate rounding.
-  unsigned FMAOpc = UseVP ? ISD::VP_FMA : ISD::FMA;
-  bool HasFMA = TLI.isFMAFasterThanFMulAndFAdd(DAG.getMachineFunction(), VT) &&
-                (!LegalOperations || TLI.isOperationLegalOrCustom(FMAOpc, VT));
+  bool HasFMA =
+      TLI.isFMAFasterThanFMulAndFAdd(DAG.getMachineFunction(), VT) &&
+      (!LegalOperations || matcher.isOperationLegalOrCustom(ISD::FMA, VT));
 
   // No valid opcode, do not combine.
   if (!HasFMAD && !HasFMA)
