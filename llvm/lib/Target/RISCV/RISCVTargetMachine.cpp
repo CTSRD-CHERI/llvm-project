@@ -82,7 +82,6 @@ extern "C" LLVM_EXTERNAL_VISIBILITY void LLVMInitializeRISCVTarget() {
   initializeRISCVExpandPseudoPass(*PR);
   initializeRISCVInsertVSETVLIPass(*PR);
   initializeRISCVDAGToDAGISelPass(*PR);
-  initializeRISCVInitUndefPass(*PR);
 }
 
 static std::string computeDataLayout(const Triple &TT, StringRef FS,
@@ -288,7 +287,6 @@ public:
   void addMachineSSAOptimization() override;
   void addPreRegAlloc() override;
   void addPostRegAlloc() override;
-  void addOptimizedRegAlloc() override;
 };
 } // namespace
 
@@ -385,13 +383,6 @@ void RISCVPassConfig::addPreRegAlloc() {
   addPass(createRISCVInsertVSETVLIPass());
   if (TM->getOptLevel() != CodeGenOpt::None)
     addPass(createCheriGetAddressElimPass());
-}
-
-void RISCVPassConfig::addOptimizedRegAlloc() {
-  if (getOptimizeRegAlloc())
-    insertPass(&DetectDeadLanesID, &RISCVInitUndefID);
-
-  TargetPassConfig::addOptimizedRegAlloc();
 }
 
 void RISCVPassConfig::addPostRegAlloc() {
