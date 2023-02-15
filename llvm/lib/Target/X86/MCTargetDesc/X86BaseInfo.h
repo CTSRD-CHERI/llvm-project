@@ -754,32 +754,35 @@ namespace X86II {
     // OpSize - OpSizeFixed implies instruction never needs a 0x66 prefix.
     // OpSize16 means this is a 16-bit instruction and needs 0x66 prefix in
     // 32-bit mode. OpSize32 means this is a 32-bit instruction needs a 0x66
-    // prefix in 16-bit mode.
+    // prefix in 16-bit mode.  OpSizeCap means this is a CHERI instruction
+    // that needs a 0x06 prefix
     OpSizeShift = 7,
     OpSizeMask = 0x3 << OpSizeShift,
 
     OpSizeFixed  = 0 << OpSizeShift,
     OpSize16     = 1 << OpSizeShift,
     OpSize32     = 2 << OpSizeShift,
+    OpSizeCap    = 3 << OpSizeShift,
 
     // AsSize - AdSizeX implies this instruction determines its need of 0x67
     // prefix from a normal ModRM memory operand. The other types indicate that
     // an operand is encoded with a specific width and a prefix is needed if
     // it differs from the current mode.
     AdSizeShift = OpSizeShift + 2,
-    AdSizeMask  = 0x3 << AdSizeShift,
+    AdSizeMask  = 0x7 << AdSizeShift,
 
     AdSizeX  = 0 << AdSizeShift,
     AdSize16 = 1 << AdSizeShift,
     AdSize32 = 2 << AdSizeShift,
     AdSize64 = 3 << AdSizeShift,
+    AdSizeCap = 4 << AdSizeShift,
 
     //===------------------------------------------------------------------===//
     // OpPrefix - There are several prefix bytes that are used as opcode
     // extensions. These are 0x66, 0xF3, and 0xF2. If this field is 0 there is
     // no prefix.
     //
-    OpPrefixShift = AdSizeShift + 2,
+    OpPrefixShift = AdSizeShift + 3,
     OpPrefixMask  = 0x3 << OpPrefixShift,
 
     // PD - Prefix code for packed double precision vector floating point
@@ -902,19 +905,19 @@ namespace X86II {
 
     // Encoding
     EncodingShift = SSEDomainShift + 2,
-    EncodingMask = 0x3 << EncodingShift,
+    EncodingMask = 0x3ULL << EncodingShift,
 
     // VEX - encoding using 0xC4/0xC5
-    VEX = 1 << EncodingShift,
+    VEX = 1ULL << EncodingShift,
 
     /// XOP - Opcode prefix used by XOP instructions.
-    XOP = 2 << EncodingShift,
+    XOP = 2ULL << EncodingShift,
 
     // VEX_EVEX - Specifies that this instruction use EVEX form which provides
     // syntax support up to 32 512-bit register operands and up to 7 16-bit
     // mask operands as well as source operand data swizzling/memory operand
     // conversion, eviction hint, and rounding mode.
-    EVEX = 3 << EncodingShift,
+    EVEX = 3ULL << EncodingShift,
 
     // Opcode
     OpcodeShift   = EncodingShift + 2,

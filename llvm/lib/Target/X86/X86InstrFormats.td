@@ -179,23 +179,27 @@ class OperandSize<bits<2> val> {
 def OpSizeFixed  : OperandSize<0>; // Never needs a 0x66 prefix.
 def OpSize16     : OperandSize<1>; // Needs 0x66 prefix in 32-bit mode.
 def OpSize32     : OperandSize<2>; // Needs 0x66 prefix in 16-bit mode.
+def OpSizeCap    : OperandSize<3>; // Needs 0x06 prefix.
 
 // Address size for encodings that change based on mode.
-class AddressSize<bits<2> val> {
-  bits<2> Value = val;
+class AddressSize<bits<3> val> {
+  bits<3> Value = val;
 }
 def AdSizeX  : AddressSize<0>; // Address size determined using addr operand.
 def AdSize16 : AddressSize<1>; // Encodes a 16-bit address.
 def AdSize32 : AddressSize<2>; // Encodes a 32-bit address.
 def AdSize64 : AddressSize<3>; // Encodes a 64-bit address.
+def AdSizeCap : AddressSize<4>; // Encodes a capability address.
 
 // Prefix byte classes which are used to indicate to the ad-hoc machine code
 // emitter that various prefix bytes are required.
 class OpSize16 { OperandSize OpSize = OpSize16; }
 class OpSize32 { OperandSize OpSize = OpSize32; }
+class OpSizeCap { OperandSize OpSize = OpSizeCap; }
 class AdSize16 { AddressSize AdSize = AdSize16; }
 class AdSize32 { AddressSize AdSize = AdSize32; }
 class AdSize64 { AddressSize AdSize = AdSize64; }
+class AdSizeCap { AddressSize AdSize = AdSizeCap; }
 class REX_W  { bit hasREX_WPrefix = 1; }
 class LOCK   { bit hasLockPrefix = 1; }
 class REP    { bit hasREPPrefix = 1; }
@@ -310,7 +314,7 @@ class X86Inst<bits<8> opcod, Format f, ImmType i, dag outs, dag ins,
   bits<2> OpSizeBits = OpSize.Value;
   AddressSize AdSize = AdSizeX; // Does this instruction's encoding change
                                 // based on address size of the mode?
-  bits<2> AdSizeBits = AdSize.Value;
+  bits<3> AdSizeBits = AdSize.Value;
 
   Prefix OpPrefix = NoPrfx; // Which prefix byte does this inst have?
   bits<3> OpPrefixBits = OpPrefix.Value;
@@ -371,31 +375,31 @@ class X86Inst<bits<8> opcod, Format f, ImmType i, dag outs, dag ins,
   // TSFlags layout should be kept in sync with X86BaseInfo.h.
   let TSFlags{6-0}   = FormBits;
   let TSFlags{8-7}   = OpSizeBits;
-  let TSFlags{10-9}  = AdSizeBits;
+  let TSFlags{11-9}  = AdSizeBits;
   // No need for 3rd bit, we don't need to distinguish NoPrfx from PS.
-  let TSFlags{12-11} = OpPrefixBits{1-0};
-  let TSFlags{16-13} = OpMapBits;
-  let TSFlags{17}    = hasREX_WPrefix;
-  let TSFlags{21-18} = ImmT.Value;
-  let TSFlags{24-22} = FPForm.Value;
-  let TSFlags{25}    = hasLockPrefix;
-  let TSFlags{26}    = hasREPPrefix;
-  let TSFlags{28-27} = ExeDomain.Value;
-  let TSFlags{30-29} = OpEncBits;
-  let TSFlags{38-31} = Opcode;
+  let TSFlags{13-12} = OpPrefixBits{1-0};
+  let TSFlags{17-14} = OpMapBits;
+  let TSFlags{18}    = hasREX_WPrefix;
+  let TSFlags{22-19} = ImmT.Value;
+  let TSFlags{25-23} = FPForm.Value;
+  let TSFlags{26}    = hasLockPrefix;
+  let TSFlags{27}    = hasREPPrefix;
+  let TSFlags{29-28} = ExeDomain.Value;
+  let TSFlags{31-30} = OpEncBits;
+  let TSFlags{39-32} = Opcode;
   // Currently no need for second bit in TSFlags - W Ignore is equivalent to 0.
-  let TSFlags{39}    = HasVEX_W;
-  let TSFlags{40}    = hasVEX_4V;
-  let TSFlags{41}    = hasVEX_L;
-  let TSFlags{42}    = hasEVEX_K;
-  let TSFlags{43}    = hasEVEX_Z;
-  let TSFlags{44}    = hasEVEX_L2;
-  let TSFlags{45}    = hasEVEX_B;
+  let TSFlags{40}    = HasVEX_W;
+  let TSFlags{41}    = hasVEX_4V;
+  let TSFlags{42}    = hasVEX_L;
+  let TSFlags{43}    = hasEVEX_K;
+  let TSFlags{44}    = hasEVEX_Z;
+  let TSFlags{45}    = hasEVEX_L2;
+  let TSFlags{46}    = hasEVEX_B;
   // If we run out of TSFlags bits, it's possible to encode this in 3 bits.
-  let TSFlags{52-46} = CD8_Scale;
-  let TSFlags{53}    = hasEVEX_RC;
-  let TSFlags{54}    = hasNoTrackPrefix;
-  let TSFlags{55}    = ExplicitVEXPrefix;
+  let TSFlags{53-47} = CD8_Scale;
+  let TSFlags{54}    = hasEVEX_RC;
+  let TSFlags{55}    = hasNoTrackPrefix;
+  let TSFlags{56}    = ExplicitVEXPrefix;
 }
 
 class PseudoI<dag oops, dag iops, list<dag> pattern>
