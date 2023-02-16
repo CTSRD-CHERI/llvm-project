@@ -363,6 +363,7 @@ let RenderMethod = "addMemOperands", SuperClasses = [X86MemAsmOperand] in {
   def X86Mem128AsmOperand : AsmOperandClass { let Name = "Mem128"; }
   def X86Mem256AsmOperand : AsmOperandClass { let Name = "Mem256"; }
   def X86Mem512AsmOperand : AsmOperandClass { let Name = "Mem512"; }
+  def X86MemCapAsmOperand : AsmOperandClass { let Name = "MemCap"; }
   // Gather mem operands
   def X86Mem64_RC128Operand  : AsmOperandClass { let Name = "Mem64_RC128"; }
   def X86Mem128_RC128Operand : AsmOperandClass { let Name = "Mem128_RC128"; }
@@ -417,6 +418,7 @@ def i8mem   : X86MemOperand<"printbytemem",   X86Mem8AsmOperand>;
 def i16mem  : X86MemOperand<"printwordmem",  X86Mem16AsmOperand>;
 def i32mem  : X86MemOperand<"printdwordmem",  X86Mem32AsmOperand>;
 def i64mem  : X86MemOperand<"printqwordmem",  X86Mem64AsmOperand>;
+def capmem  : X86MemOperand<"printcapmem",  X86MemCapAsmOperand>;
 def i128mem : X86MemOperand<"printxmmwordmem", X86Mem128AsmOperand>;
 def i256mem : X86MemOperand<"printymmwordmem", X86Mem256AsmOperand>;
 def i512mem : X86MemOperand<"printzmmwordmem", X86Mem512AsmOperand>;
@@ -1198,6 +1200,7 @@ def loadi32 : PatFrag<(ops node:$ptr), (i32 (unindexedload node:$ptr)), [{
 }]>;
 
 def loadi64  : PatFrag<(ops node:$ptr), (i64 (load node:$ptr))>;
+def loadcap  : PatFrag<(ops node:$ptr), (iFATPTR128 (load node:$ptr))>;
 def loadf16  : PatFrag<(ops node:$ptr), (f16 (load node:$ptr))>;
 def loadf32  : PatFrag<(ops node:$ptr), (f32 (load node:$ptr))>;
 def loadf64  : PatFrag<(ops node:$ptr), (f64 (load node:$ptr))>;
