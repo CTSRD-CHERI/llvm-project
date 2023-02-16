@@ -1920,7 +1920,6 @@ include "RISCVInstrInfoZb.td"
 include "RISCVInstrInfoZc.td"
 include "RISCVInstrInfoZk.td"
 include "RISCVInstrInfoV.td"
-include "RISCVInstrInfoZfa.td"
 include "RISCVInstrInfoZfh.td"
 include "RISCVInstrInfoZicbo.td"
 
