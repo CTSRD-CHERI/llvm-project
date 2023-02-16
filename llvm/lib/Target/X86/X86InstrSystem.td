@@ -178,6 +178,8 @@ def ADDR16_PREFIX : I<0x67, PrefixByte, (outs), (ins), "addr16", []>,
                       Requires<[In32BitMode]>;
 def ADDR32_PREFIX : I<0x67, PrefixByte, (outs), (ins), "addr32", []>,
                       Requires<[In64BitMode]>;
+def ADDRCAP_PREFIX : I<0x07, PrefixByte, (outs), (ins), "addrcap", []>,
+                      Requires<[In64BitMode,HasCHERI]>;
 } // SchedRW
 
 //===----------------------------------------------------------------------===//

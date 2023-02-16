@@ -2257,6 +2257,10 @@ def REX64_PREFIX : I<0x48, PrefixByte, (outs),  (ins), "rex64", []>,
 
 // Data16 instruction prefix
 def DATA16_PREFIX : I<0x66, PrefixByte, (outs),  (ins), "data16", []>;
+
+// OpCap instruction prefix
+def OPCAP_PREFIX : I<0x06, PrefixByte, (outs),  (ins), "opcap", []>,
+                     Requires<[In64BitMode,HasCHERI]>;
 } // SchedRW
 
 // Repeat string operation instruction prefixes
