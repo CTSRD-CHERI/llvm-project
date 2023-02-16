@@ -10062,7 +10062,7 @@ static SDValue performBITREVERSECombine(SDNode *N, SelectionDAG &DAG,
 
   EVT VT = N->getValueType(0);
   if (!VT.isScalarInteger() || VT.getSizeInBits() >= Subtarget.getXLen() ||
-      !isPowerOf2_32(VT.getSizeInBits()))
+      !llvm::has_single_bit<uint32_t>(VT.getSizeInBits()))
     return SDValue();
 
   SDLoc DL(N);
