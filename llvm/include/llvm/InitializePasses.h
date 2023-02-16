@@ -208,7 +208,6 @@ void initializeLocalStackSlotPassPass(PassRegistry&);
 void initializeLocalizerPass(PassRegistry&);
 void initializeLoopAccessLegacyAnalysisPass(PassRegistry&);
 void initializeLoopDataPrefetchLegacyPassPass(PassRegistry&);
-void initializeLoopDeletionLegacyPassPass(PassRegistry&);
 void initializeLoopExtractorLegacyPassPass(PassRegistry &);
 void initializeLoopGuardWideningLegacyPassPass(PassRegistry&);
 void initializeLoopIdiomRecognizeLegacyPassPass(PassRegistry&);
