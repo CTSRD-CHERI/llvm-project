@@ -1612,6 +1612,8 @@ def MOV32rr : I<0x89, MRMDestReg, (outs GR32:$dst), (ins GR32:$src),
                 "mov{l}\t{$src, $dst|$dst, $src}", []>, OpSize32;
 def MOV64rr : RI<0x89, MRMDestReg, (outs GR64:$dst), (ins GR64:$src),
                  "mov{q}\t{$src, $dst|$dst, $src}", []>;
+def MOVCrr  : CI<0x89, MRMDestReg, (outs GRC:$dst), (ins GRC:$src),
+                 "mov{c}\t{$src, $dst|$dst, $src}", []>;
 }
 
 let isReMaterializable = 1, isAsCheapAsAMove = 1, isMoveImm = 1 in {
@@ -1662,6 +1664,9 @@ def MOV64mi32 : RIi32S<0xC7, MRM0m, (outs), (ins i64mem:$dst, i64i32imm:$src),
                        "mov{q}\t{$src, $dst|$dst, $src}",
                        [(store i64immSExt32_su:$src, addr:$dst)]>,
                        Requires<[In64BitMode]>;
+def MOVCmi32 : CIi32S<0xC7, MRM0m, (outs), (ins capmem:$dst, i64i32imm:$src),
+                       "mov{c}\t{$src, $dst|$dst, $src}",
+                       [(store i64immSExt32_su:$src, addr:$dst)]>;
 } // SchedRW
 
 def : Pat<(i32 relocImm:$src), (MOV32ri relocImm:$src)>;
@@ -1797,6 +1802,9 @@ def MOV32rr_REV : I<0x8B, MRMSrcReg, (outs GR32:$dst), (ins GR32:$src),
 def MOV64rr_REV : RI<0x8B, MRMSrcReg, (outs GR64:$dst), (ins GR64:$src),
                      "mov{q}\t{$src, $dst|$dst, $src}", []>,
                      FoldGenData<"MOV64rr">;
+def MOVCrr_REV : CI<0x8B, MRMSrcReg, (outs GRC:$dst), (ins GRC:$src),
+                     "mov{c}\t{$src, $dst|$dst, $src}", []>,
+                     FoldGenData<"MOVCrr">;
 }
 
 // Reversed version with ".s" suffix for GAS compatibility.
@@ -1808,6 +1816,8 @@ def : InstAlias<"mov{l}.s\t{$src, $dst|$dst, $src}",
                 (MOV32rr_REV GR32:$dst, GR32:$src), 0>;
 def : InstAlias<"mov{q}.s\t{$src, $dst|$dst, $src}",
                 (MOV64rr_REV GR64:$dst, GR64:$src), 0>;
+def : InstAlias<"mov{c}.s\t{$src, $dst|$dst, $src}",
+                (MOVCrr_REV GRC:$dst, GRC:$src), 0>;
 def : InstAlias<"mov.s\t{$src, $dst|$dst, $src}",
                 (MOV8rr_REV GR8:$dst, GR8:$src), 0, "att">;
 def : InstAlias<"mov.s\t{$src, $dst|$dst, $src}",
@@ -1816,6 +1826,8 @@ def : InstAlias<"mov.s\t{$src, $dst|$dst, $src}",
                 (MOV32rr_REV GR32:$dst, GR32:$src), 0, "att">;
 def : InstAlias<"mov.s\t{$src, $dst|$dst, $src}",
                 (MOV64rr_REV GR64:$dst, GR64:$src), 0, "att">;
+def : InstAlias<"mov.s\t{$src, $dst|$dst, $src}",
+                (MOVCrr_REV GRC:$dst, GRC:$src), 0, "att">;
 
 let canFoldAsLoad = 1, isReMaterializable = 1, SchedRW = [WriteLoad] in {
 def MOV8rm  : I<0x8A, MRMSrcMem, (outs GR8 :$dst), (ins i8mem :$src),
@@ -1830,6 +1842,9 @@ def MOV32rm : I<0x8B, MRMSrcMem, (outs GR32:$dst), (ins i32mem:$src),
 def MOV64rm : RI<0x8B, MRMSrcMem, (outs GR64:$dst), (ins i64mem:$src),
                  "mov{q}\t{$src, $dst|$dst, $src}",
                  [(set GR64:$dst, (load addr:$src))]>;
+def MOVCrm  : CI<0x8B, MRMSrcMem, (outs GRC:$dst), (ins capmem:$src),
+                 "mov{c}\t{$src, $dst|$dst, $src}",
+                 [(set GRC:$dst, (loadcap addr:$src))]>;
 }
 
 let SchedRW = [WriteStore] in {
@@ -1845,6 +1860,9 @@ def MOV32mr : I<0x89, MRMDestMem, (outs), (ins i32mem:$dst, GR32:$src),
 def MOV64mr : RI<0x89, MRMDestMem, (outs), (ins i64mem:$dst, GR64:$src),
                  "mov{q}\t{$src, $dst|$dst, $src}",
                  [(store GR64:$src, addr:$dst)]>;
+def MOVCmr  : CI<0x89, MRMDestMem, (outs), (ins capmem:$dst, GRC:$src),
+                 "mov{c}\t{$src, $dst|$dst, $src}",
+                 [(store GRC:$src, addr:$dst)]>;
 } // SchedRW
 
 // Versions of MOV8rr, MOV8mr, and MOV8rm that use i8mem_NOREX and GR8_NOREX so
