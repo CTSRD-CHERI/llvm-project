@@ -158,6 +158,19 @@ def MOV64cr : I<0x22, MRMSrcReg, (outs CONTROL_REG:$dst), (ins GR64:$src),
 } // SchedRW
 
 //===----------------------------------------------------------------------===//
+// Moves to and from additional capability registers
+
+let SchedRW = [WriteMove] in {
+def MOVCrc  : I<0x24, MRMDestReg, (outs GRC:$dst), (ins CAP_REG:$src),
+                "mov{c}\t{$src, $dst|$dst, $src}", []>, TB,
+                Requires<[In64BitMode,HasCHERI]>;
+
+def MOVCcr  : I<0x25, MRMSrcReg, (outs CAP_REG:$dst), (ins GRC:$src),
+                "mov{c}\t{$src, $dst|$dst, $src}", []>, TB,
+                Requires<[In64BitMode,HasCHERI]>;
+} // SchedRW
+
+//===----------------------------------------------------------------------===//
 // Segment override instruction prefixes
 
 let SchedRW = [WriteNop] in {
