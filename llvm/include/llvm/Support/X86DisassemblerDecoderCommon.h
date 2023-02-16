@@ -65,7 +65,9 @@ enum attributeBits {
   ATTR_EVEXK  = 0x1 << 10,
   ATTR_EVEXKZ = 0x1 << 11,
   ATTR_EVEXB  = 0x1 << 12,
-  ATTR_max    = 0x1 << 13,
+  ATTR_OPCAP  = 0x1 << 13,
+  ATTR_ADCAP  = 0x1 << 14,
+  ATTR_max    = 0x1 << 15,
 };
 
 // Combinations of the above attributes that are relevant to instruction
@@ -116,6 +118,28 @@ enum attributeBits {
   ENUM_ENTRY(IC_64BIT_REXW_OPSIZE,  8,  "The Dynamic Duo!  Prefer over all "   \
                                         "else because this changes most "      \
                                         "operands' meaning")                   \
+  ENUM_ENTRY(IC_64BIT_ADCAP,        4,  "requires an ADCAP prefix, so "        \
+                                        "operands change width; overrides "    \
+                                        "ADSIZE")                              \
+  ENUM_ENTRY(IC_64BIT_XD_ADCAP,     4,  "Just as meaningful as IC_XD_ADSIZE")  \
+  ENUM_ENTRY(IC_64BIT_XS_ADCAP,     4,  "Just as meaningful as IC_XS_ADSIZE")  \
+  ENUM_ENTRY(IC_64BIT_REXW_ADCAP,   6,  "Just as meaningful as "               \
+                                        "IC_64BIT_REXW_ADSIZE")                \
+  ENUM_ENTRY(IC_64BIT_REXW_XD_ADCAP, 6, "Just as meaningful as "               \
+                                        "IC_64BIT_REXW_ADCAP")                 \
+  ENUM_ENTRY(IC_64BIT_REXW_XS_ADCAP, 6, "Just as meaningful as "               \
+                                        "IC_64BIT_REXW_ADCAP")                 \
+  ENUM_ENTRY(IC_64BIT_OPSIZE_ADCAP, 7,  "requires OPSIZE and ADCAP prefixes")  \
+  ENUM_ENTRY(IC_64BIT_XD_OPSIZE_ADCAP, 8, "requires OPSIZE and ADCAP "         \
+                                        "prefixes")                            \
+  ENUM_ENTRY(IC_64BIT_XS_OPSIZE_ADCAP, 8, "requires OPSIZE and ADCAP "         \
+                                        "prefixes")                            \
+  ENUM_ENTRY(IC_64BIT_REXW_OPSIZE_ADCAP, 9, "requires REX.W, 0x66, and ADCAP") \
+  ENUM_ENTRY(IC_64BIT_OPCAP,        6,  "requires an OPCAP prefix, so "        \
+                                        "operands change width; overrides "    \
+                                        "OPSIZE and REX.W")                    \
+  ENUM_ENTRY(IC_64BIT_OPCAP_ADSIZE, 7,  "requires ADSIZE and OPCAP prefixes")  \
+  ENUM_ENTRY(IC_64BIT_OPCAP_ADCAP,  7,  "requires ADCAP and OPCAP prefixes")   \
   ENUM_ENTRY(IC_VEX,                1,  "requires a VEX prefix")               \
   ENUM_ENTRY(IC_VEX_XS,             2,  "requires VEX and the XS prefix")      \
   ENUM_ENTRY(IC_VEX_XD,             2,  "requires VEX and the XD prefix")      \
@@ -388,6 +412,7 @@ enum ModRMDecisionType {
   ENUM_ENTRY(ENCODING_RW,     "(AX..DI, R8W..R15W)")                           \
   ENUM_ENTRY(ENCODING_RD,     "(EAX..EDI, R8D..R15D)")                         \
   ENUM_ENTRY(ENCODING_RO,     "(RAX..RDI, R8..R15)")                           \
+  ENUM_ENTRY(ENCODING_RC,     "(CAX..CDI, C8..C15)")                           \
   ENUM_ENTRY(ENCODING_FP,     "Position on floating-point stack in ModR/M "    \
                               "byte.")                                         \
                                                                                \
@@ -417,6 +442,7 @@ enum OperandEncoding {
   ENUM_ENTRY(TYPE_R16,        "2-byte")                                        \
   ENUM_ENTRY(TYPE_R32,        "4-byte")                                        \
   ENUM_ENTRY(TYPE_R64,        "8-byte")                                        \
+  ENUM_ENTRY(TYPE_RC,         "capability")                                    \
   ENUM_ENTRY(TYPE_IMM,        "immediate operand")                             \
   ENUM_ENTRY(TYPE_UIMM8,      "1-byte unsigned immediate operand")             \
   ENUM_ENTRY(TYPE_M,          "Memory operand")                                \
@@ -438,6 +464,7 @@ enum OperandEncoding {
   ENUM_ENTRY(TYPE_SEGMENTREG, "Segment register operand")                      \
   ENUM_ENTRY(TYPE_DEBUGREG,   "Debug register operand")                        \
   ENUM_ENTRY(TYPE_CONTROLREG, "Control register operand")                      \
+  ENUM_ENTRY(TYPE_CAPREG,     "Additional capability register operand")        \
   ENUM_ENTRY(TYPE_BNDR,       "MPX bounds register")                           \
                                                                                \
   ENUM_ENTRY(TYPE_Rv,         "Register operand of operand size")              \

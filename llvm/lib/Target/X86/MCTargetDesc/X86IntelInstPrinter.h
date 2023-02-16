@@ -65,6 +65,10 @@ public:
     O << "qword ptr ";
     printMemReference(MI, OpNo, O);
   }
+  void printcapmem(const MCInst *MI, unsigned OpNo, raw_ostream &O) {
+    O << "cap ptr ";
+    printMemReference(MI, OpNo, O);
+  }
   void printxmmwordmem(const MCInst *MI, unsigned OpNo, raw_ostream &O) {
     O << "xmmword ptr ";
     printMemReference(MI, OpNo, O);

@@ -60,6 +60,9 @@ public:
   void printqwordmem(const MCInst *MI, unsigned OpNo, raw_ostream &O) {
     printMemReference(MI, OpNo, O);
   }
+  void printcapmem(const MCInst *MI, unsigned OpNo, raw_ostream &O) {
+    printMemReference(MI, OpNo, O);
+  }
   void printxmmwordmem(const MCInst *MI, unsigned OpNo, raw_ostream &O) {
     printMemReference(MI, OpNo, O);
   }

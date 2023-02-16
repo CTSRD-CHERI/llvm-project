@@ -146,11 +146,11 @@ namespace X86Local {
   };
 
   enum {
-    OpSize16 = 1, OpSize32 = 2
+    OpSize16 = 1, OpSize32 = 2, OpSizeCap = 3,
   };
 
   enum {
-    AdSize16 = 1, AdSize32 = 2, AdSize64 = 3
+    AdSize16 = 1, AdSize32 = 2, AdSize64 = 3, AdSizeCap = 4,
   };
 }
 

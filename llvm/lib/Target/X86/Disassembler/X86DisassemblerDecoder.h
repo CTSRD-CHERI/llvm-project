@@ -202,6 +202,42 @@ namespace X86Disassembler {
   ENTRY(R14)        \
   ENTRY(R15)
 
+#define EA_BASES_CAP    \
+  ENTRY(CAX)            \
+  ENTRY(CCX)            \
+  ENTRY(CDX)            \
+  ENTRY(CBX)            \
+  ENTRY(sibcap)         \
+  ENTRY(CBP)            \
+  ENTRY(CSI)            \
+  ENTRY(CDI)            \
+  ENTRY(C8)             \
+  ENTRY(C9)             \
+  ENTRY(C10)            \
+  ENTRY(C11)            \
+  ENTRY(C12)            \
+  ENTRY(C13)            \
+  ENTRY(C14)            \
+  ENTRY(C15)
+
+#define REGS_CAP    \
+  ENTRY(CAX)        \
+  ENTRY(CCX)        \
+  ENTRY(CDX)        \
+  ENTRY(CBX)        \
+  ENTRY(CSP)        \
+  ENTRY(CBP)        \
+  ENTRY(CSI)        \
+  ENTRY(CDI)        \
+  ENTRY(C8)         \
+  ENTRY(C9)         \
+  ENTRY(C10)        \
+  ENTRY(C11)        \
+  ENTRY(C12)        \
+  ENTRY(C13)        \
+  ENTRY(C14)        \
+  ENTRY(C15)
+
 #define REGS_MMX  \
   ENTRY(MM0)      \
   ENTRY(MM1)      \
@@ -374,6 +410,11 @@ namespace X86Disassembler {
   ENTRY(CR14)         \
   ENTRY(CR15)
 
+#define REGS_ADDCAP   \
+  ENTRY(DDC)          \
+  ENTRY(CFS)          \
+  ENTRY(CGS)
+
 #undef  REGS_TMM
 #define REGS_TMM  \
   ENTRY(TMM0)     \
@@ -388,17 +429,20 @@ namespace X86Disassembler {
 #define ALL_EA_BASES  \
   EA_BASES_16BIT      \
   EA_BASES_32BIT      \
-  EA_BASES_64BIT
+  EA_BASES_64BIT      \
+  EA_BASES_CAP
 
 #define ALL_SIB_BASES \
   REGS_32BIT          \
-  REGS_64BIT
+  REGS_64BIT          \
+  REGS_CAP
 
 #define ALL_REGS      \
   REGS_8BIT           \
   REGS_16BIT          \
   REGS_32BIT          \
   REGS_64BIT          \
+  REGS_CAP            \
   REGS_MMX            \
   REGS_XMM            \
   REGS_YMM            \
@@ -408,6 +452,7 @@ namespace X86Disassembler {
   REGS_SEGMENT        \
   REGS_DEBUG          \
   REGS_CONTROL        \
+  REGS_ADDCAP         \
   REGS_TMM            \
   ENTRY(RIP)
 
@@ -427,13 +472,15 @@ enum EABase {
 };
 
 /// All possible values of the SIB index field.
-/// borrows entries from ALL_EA_BASES with the special case that
+/// borrows non-CAP entries from ALL_EA_BASES with the special case that
 /// sib is synonymous with NONE.
 /// Vector SIB: index can be XMM or YMM.
 enum SIBIndex {
   SIB_INDEX_NONE,
 #define ENTRY(x) SIB_INDEX_##x,
-  ALL_EA_BASES
+  EA_BASES_16BIT
+  EA_BASES_32BIT
+  EA_BASES_64BIT
   REGS_XMM
   REGS_YMM
   REGS_ZMM
@@ -550,6 +597,10 @@ struct InternalInstruction {
   bool hasAdSize;
   // Operand-size override
   bool hasOpSize;
+  // Cap Address-size override
+  bool hasAdCap;
+  // Cap Operand-size override
+  bool hasOpCap;
   // Lock prefix
   bool hasLockPrefix;
   // The repeat prefix if any

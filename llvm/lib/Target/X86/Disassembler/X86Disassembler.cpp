@@ -314,6 +314,18 @@ static int readPrefixes(struct InternalInstruction *insn) {
     case 0x67: // Address-size override
       insn->hasAdSize = true;
       break;
+    case 0x06: // Capability Operand Size
+      if (insn->mode == MODE_64BIT)
+        insn->hasOpCap = true;
+      else
+        isPrefix = false;
+      break;
+    case 0x07: // Capability Address Size
+      if (insn->mode == MODE_64BIT)
+        insn->hasAdCap = true;
+      else
+        isPrefix = false;
+      break;
     default: // Not a prefix byte
       isPrefix = false;
       break;
@@ -493,15 +505,21 @@ static int readPrefixes(struct InternalInstruction *insn) {
     insn->displacementSize = (insn->hasAdSize ? 2 : 4);
     insn->immediateSize = (insn->hasOpSize ? 2 : 4);
   } else if (insn->mode == MODE_64BIT) {
-    if (insn->rexPrefix && wFromREX(insn->rexPrefix)) {
+    if (insn->hasOpCap) {
+      insn->registerSize = 16;
+      insn->addressSize = (insn->hasAdCap ? 16 : (insn->hasAdSize ? 4 : 8));
+      insn->displacementSize = 4;
+      insn->immediateSize = 4;
+      insn->hasOpSize = false;
+    } else if (insn->rexPrefix && wFromREX(insn->rexPrefix)) {
       insn->registerSize = 8;
-      insn->addressSize = (insn->hasAdSize ? 4 : 8);
+      insn->addressSize = (insn->hasAdCap ? 16 : (insn->hasAdSize ? 4 : 8));
       insn->displacementSize = 4;
       insn->immediateSize = 4;
       insn->hasOpSize = false;
     } else {
       insn->registerSize = (insn->hasOpSize ? 2 : 4);
-      insn->addressSize = (insn->hasAdSize ? 4 : 8);
+      insn->addressSize = (insn->hasAdCap ? 16 : (insn->hasAdSize ? 4 : 8));
       insn->displacementSize = (insn->hasOpSize ? 2 : 4);
       insn->immediateSize = (insn->hasOpSize ? 2 : 4);
     }
@@ -527,6 +545,10 @@ static int readSIB(struct InternalInstruction *insn) {
   case 8:
     insn->sibIndexBase = SIB_INDEX_RAX;
     sibBaseBase = SIB_BASE_RAX;
+    break;
+  case 16:
+    insn->sibIndexBase = SIB_INDEX_RAX;
+    sibBaseBase = SIB_BASE_CAX;
     break;
   }
 
@@ -635,6 +657,10 @@ static int readModRM(struct InternalInstruction *insn) {
     insn->regBase = MODRM_REG_RAX;
     insn->eaRegBase = EA_REG_RAX;
     break;
+  case 16:
+    insn->regBase = MODRM_REG_CAX;
+    insn->eaRegBase = EA_REG_CAX;
+    break;
   }
 
   reg |= rFromREX(insn->rexPrefix) << 3;
@@ -686,8 +712,10 @@ static int readModRM(struct InternalInstruction *insn) {
     break;
   }
   case 4:
-  case 8: {
-    EABase eaBaseBase = (insn->addressSize == 4 ? EA_BASE_EAX : EA_BASE_RAX);
+  case 8:
+  case 16: {
+    EABase eaBaseBase = (insn->addressSize == 16 ? EA_BASE_CAX :
+                         (insn->addressSize == 4 ? EA_BASE_EAX : EA_BASE_RAX));
 
     switch (mod) {
     case 0x0:
@@ -697,7 +725,8 @@ static int readModRM(struct InternalInstruction *insn) {
       // the extension bits (REX.b and EVEX.x) are ignored.
       switch (rm & 7) {
       case 0x4: // SIB byte is present
-        insn->eaBase = (insn->addressSize == 4 ? EA_BASE_sib : EA_BASE_sib64);
+        insn->eaBase = (insn->addressSize == 16 ? EA_BASE_sibcap :
+                        (insn->addressSize == 4 ? EA_BASE_sib : EA_BASE_sib64));
         if (readSIB(insn) || readDisplacement(insn))
           return -1;
         break;
@@ -777,6 +806,11 @@ static int readModRM(struct InternalInstruction *insn) {
       if (index > 0xf)                                                         \
         *valid = 0;                                                            \
       return prefix##_RAX + index;                                             \
+    case TYPE_RC:                                                              \
+      index &= mask;                                                           \
+      if (index > 0xf)                                                         \
+        *valid = 0;                                                            \
+      return prefix##_CAX + index;                                             \
     case TYPE_ZMM:                                                             \
       return prefix##_ZMM0 + index;                                            \
     case TYPE_YMM:                                                             \
@@ -806,6 +840,10 @@ static int readModRM(struct InternalInstruction *insn) {
       return prefix##_DR0 + index;                                             \
     case TYPE_CONTROLREG:                                                      \
       return prefix##_CR0 + index;                                             \
+    case TYPE_CAPREG:                                                          \
+      if (index > 2)                                                           \
+        *valid = 0;                                                            \
+      return prefix##_DDC + index;                                             \
     case TYPE_MVSIBX:                                                          \
       return prefix##_XMM0 + index;                                            \
     case TYPE_MVSIBY:                                                          \
@@ -1176,6 +1214,10 @@ static int getInstructionID(struct InternalInstruction *insn,
       attrMask |= ATTR_OPSIZE;
     if (insn->hasAdSize)
       attrMask |= ATTR_ADSIZE;
+    if (insn->hasOpCap)
+      attrMask |= ATTR_OPCAP;
+    if (insn->hasAdCap)
+      attrMask |= ATTR_ADCAP;
     if (insn->opcodeType == ONEBYTE) {
       if (insn->repeatPrefix == 0xf3 && (insn->opcode == 0x90))
         // Special support for PAUSE
@@ -1408,6 +1450,11 @@ static int readOpcodeRegister(struct InternalInstruction *insn, uint8_t size) {
         (Reg)(MODRM_REG_RAX +
               ((bFromREX(insn->rexPrefix) << 3) | (insn->opcode & 7)));
     break;
+  case 16:
+    insn->opcodeRegister =
+        (Reg)(MODRM_REG_CAX +
+              ((bFromREX(insn->rexPrefix) << 3) | (insn->opcode & 7)));
+    break;
   }
 
   return 0;
@@ -1613,7 +1660,7 @@ static int readOperands(struct InternalInstruction *insn) {
         return -1;
       break;
     case ENCODING_Ia:
-      if (readImmediate(insn, insn->addressSize))
+      if (readImmediate(insn, insn->addressSize == 16 ? 8 : insn->addressSize))
         return -1;
       break;
     case ENCODING_IRC:
@@ -1685,7 +1732,8 @@ namespace X86 {
     BP_SI = 502,
     BP_DI = 503,
     sib   = 504,
-    sib64 = 505
+    sib64 = 505,
+    sibcap = 506
   };
 } // namespace X86
 
@@ -1764,9 +1812,13 @@ MCDisassembler::DecodeStatus X86GenericDisassembler::getInstruction(
   bool Ret = translateInstruction(Instr, Insn, this);
   if (!Ret) {
     unsigned Flags = X86::IP_NO_PREFIX;
+    if (Insn.hasAdCap)
+      Flags |= X86::IP_HAS_AD_CAP;
     if (Insn.hasAdSize)
       Flags |= X86::IP_HAS_AD_SIZE;
     if (!Insn.mandatoryPrefix) {
+      if (Insn.hasOpCap)
+        Flags |= X86::IP_HAS_OP_CAP;
       if (Insn.hasOpSize)
         Flags |= X86::IP_HAS_OP_SIZE;
       if (Insn.repeatPrefix == 0xf2)
@@ -2135,8 +2187,9 @@ static bool translateRMMemory(MCInst &mcInst, InternalInstruction &insn,
                                         insn.displacementOffset,
                                         insn.displacement + pcrel, Dis);
         // Section 2.2.1.6
-        baseReg = MCOperand::createReg(insn.addressSize == 4 ? X86::EIP :
-                                                               X86::RIP);
+        baseReg = MCOperand::createReg(insn.addressSize == 16 ? X86::CIP :
+                                       (insn.addressSize == 4 ? X86::EIP :
+                                                                X86::RIP));
       }
       else
         baseReg = MCOperand::createReg(X86::NoRegister);
@@ -2219,6 +2272,7 @@ static bool translateRM(MCInst &mcInst, const OperandSpecifier &operand,
   case TYPE_R16:
   case TYPE_R32:
   case TYPE_R64:
+  case TYPE_RC:
   case TYPE_Rv:
   case TYPE_MM64:
   case TYPE_XMM:
@@ -2229,6 +2283,7 @@ static bool translateRM(MCInst &mcInst, const OperandSpecifier &operand,
   case TYPE_VK:
   case TYPE_DEBUGREG:
   case TYPE_CONTROLREG:
+  case TYPE_CAPREG:
   case TYPE_BNDR:
     return translateRMRegister(mcInst, insn);
   case TYPE_M:

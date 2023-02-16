@@ -292,6 +292,11 @@ InstructionContext RecognizableInstr::insnContext() const {
       errs() << "Instruction does not use a prefix: " << Name << "\n";
       llvm_unreachable("Invalid prefix");
     }
+  } else if (OpSize == X86Local::OpSizeCap) {
+    if (AdSize == X86Local::AdSize32)
+      insnContext = IC_64BIT_OPCAP_ADSIZE;
+    else
+      insnContext = IC_64BIT_OPCAP;
   } else if (Is64Bit || HasREX_WPrefix || AdSize == X86Local::AdSize64) {
     if (HasREX_WPrefix && (OpSize == X86Local::OpSize16 || OpPrefix == X86Local::PD))
       insnContext = IC_64BIT_REXW_OPSIZE;
@@ -827,6 +832,7 @@ void RecognizableInstr::emitDecodePath(DisassemblerTables &tables) const {
   case X86Local::AdSize16: AddressSize = 16; break;
   case X86Local::AdSize32: AddressSize = 32; break;
   case X86Local::AdSize64: AddressSize = 64; break;
+  case X86Local::AdSizeCap: AddressSize = 129; break;
   }
 
   assert(opcodeType && "Opcode type not set");
@@ -887,6 +893,8 @@ OperandType RecognizableInstr::typeFromString(const std::string &s,
   TYPE("i64i32imm",           TYPE_IMM)
   TYPE("i64i8imm",            TYPE_IMM)
   TYPE("GR64",                TYPE_R64)
+  TYPE("capmem",              TYPE_M)
+  TYPE("GRC",                 TYPE_RC)
   TYPE("i8mem",               TYPE_M)
   TYPE("i8imm",               TYPE_IMM)
   TYPE("u4imm",               TYPE_UIMM8)
@@ -936,6 +944,7 @@ OperandType RecognizableInstr::typeFromString(const std::string &s,
   TYPE("SEGMENT_REG",         TYPE_SEGMENTREG)
   TYPE("DEBUG_REG",           TYPE_DEBUGREG)
   TYPE("CONTROL_REG",         TYPE_CONTROLREG)
+  TYPE("CAP_REG",             TYPE_CAPREG)
   TYPE("srcidx8",             TYPE_SRCIDX)
   TYPE("srcidx16",            TYPE_SRCIDX)
   TYPE("srcidx32",            TYPE_SRCIDX)
@@ -1047,6 +1056,7 @@ RecognizableInstr::rmRegisterEncodingFromString(const std::string &s,
   ENCODING("GR32",            ENCODING_RM)
   ENCODING("GR32orGR64",      ENCODING_RM)
   ENCODING("GR64",            ENCODING_RM)
+  ENCODING("GRC",             ENCODING_RM)
   ENCODING("GR8",             ENCODING_RM)
   ENCODING("VR128",           ENCODING_RM)
   ENCODING("VR128X",          ENCODING_RM)
@@ -1081,6 +1091,7 @@ RecognizableInstr::roRegisterEncodingFromString(const std::string &s,
   ENCODING("GR32",            ENCODING_REG)
   ENCODING("GR32orGR64",      ENCODING_REG)
   ENCODING("GR64",            ENCODING_REG)
+  ENCODING("GRC",             ENCODING_REG)
   ENCODING("GR8",             ENCODING_REG)
   ENCODING("VR128",           ENCODING_REG)
   ENCODING("FR128",           ENCODING_REG)
@@ -1090,6 +1101,7 @@ RecognizableInstr::roRegisterEncodingFromString(const std::string &s,
   ENCODING("SEGMENT_REG",     ENCODING_REG)
   ENCODING("DEBUG_REG",       ENCODING_REG)
   ENCODING("CONTROL_REG",     ENCODING_REG)
+  ENCODING("CAP_REG",         ENCODING_REG)
   ENCODING("VR256",           ENCODING_REG)
   ENCODING("VR256X",          ENCODING_REG)
   ENCODING("VR128X",          ENCODING_REG)
@@ -1127,6 +1139,7 @@ RecognizableInstr::vvvvRegisterEncodingFromString(const std::string &s,
                                                   uint8_t OpSize) {
   ENCODING("GR32",            ENCODING_VVVV)
   ENCODING("GR64",            ENCODING_VVVV)
+  ENCODING("GRC",             ENCODING_VVVV)
   ENCODING("FR32",            ENCODING_VVVV)
   ENCODING("FR128",           ENCODING_VVVV)
   ENCODING("FR64",            ENCODING_VVVV)
@@ -1170,6 +1183,7 @@ RecognizableInstr::memoryEncodingFromString(const std::string &s,
   ENCODING("i16mem",          ENCODING_RM)
   ENCODING("i32mem",          ENCODING_RM)
   ENCODING("i64mem",          ENCODING_RM)
+  ENCODING("capmem",          ENCODING_RM)
   ENCODING("i8mem",           ENCODING_RM)
   ENCODING("shmem",           ENCODING_RM)
   ENCODING("ssmem",           ENCODING_RM)

@@ -718,6 +718,7 @@ public:
   bool hasCLDEMOTE() const { return HasCLDEMOTE; }
   bool hasMOVDIRI() const { return HasMOVDIRI; }
   bool hasMOVDIR64B() const { return HasMOVDIR64B; }
+  bool hasCHERI() const { return HasCHERI; }
   bool hasPTWRITE() const { return HasPTWRITE; }
   bool isSHLDSlow() const { return IsSHLDSlow; }
   bool isPMULLDSlow() const { return IsPMULLDSlow; }

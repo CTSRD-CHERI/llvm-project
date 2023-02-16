@@ -146,6 +146,21 @@ static inline bool inheritsFrom(InstructionContext child,
   case IC_64BIT_REXW_OPSIZE:
   case IC_64BIT_REXW_ADSIZE:
     return false;
+  case IC_64BIT_ADCAP:
+  case IC_64BIT_XD_ADCAP:
+  case IC_64BIT_XS_ADCAP:
+  case IC_64BIT_REXW_ADCAP:
+  case IC_64BIT_REXW_XD_ADCAP:
+  case IC_64BIT_REXW_XS_ADCAP:
+  case IC_64BIT_OPSIZE_ADCAP:
+  case IC_64BIT_XD_OPSIZE_ADCAP:
+  case IC_64BIT_XS_OPSIZE_ADCAP:
+  case IC_64BIT_REXW_OPSIZE_ADCAP:
+  case IC_64BIT_OPCAP:
+  case IC_64BIT_OPCAP_ADSIZE:
+  case IC_64BIT_OPCAP_ADCAP:
+    // XXX: Not sure about these at all
+    return false;
   case IC_VEX:
     return (VEX_LIG && VEX_WIG && inheritsFrom(child, IC_VEX_L_W)) ||
            (VEX_WIG && inheritsFrom(child, IC_VEX_W)) ||
@@ -925,6 +940,34 @@ void DisassemblerTables::emitContextTable(raw_ostream &o, unsigned &i) const {
         if (index & ATTR_EVEXB)
           o << "_B";
       }
+    } else if ((index & ATTR_64BIT) && (index & ATTR_OPCAP)) {
+      if ((index & ATTR_ADCAP))
+        o << "IC_64BIT_OPCAP_ADCAP";
+      else if ((index & ATTR_ADSIZE))
+        o << "IC_64BIT_OPCAP_ADSIZE";
+      else
+        o << "IC_64BIT_OPCAP";
+    } else if ((index & ATTR_64BIT) && (index & ATTR_ADCAP)) {
+      if ((index & ATTR_REXW) && (index & ATTR_OPSIZE))
+        o << "IC_64BIT_REXW_OPSIZE_ADCAP";
+      else if ((index & ATTR_OPSIZE) && (index & ATTR_XD))
+        o << "IC_64BIT_XD_OPSIZE_ADCAP";
+      else if ((index & ATTR_OPSIZE) && (index & ATTR_XS))
+        o << "IC_64BIT_XS_OPSIZE_ADCAP";
+      else if ((index & ATTR_OPSIZE))
+        o << "IC_64BIT_OPSIZE_ADCAP";
+      else if ((index & ATTR_REXW) && (index & ATTR_XD))
+        o << "IC_64BIT_REXW_XD_ADCAP";
+      else if ((index & ATTR_REXW) && (index & ATTR_XS))
+        o << "IC_64BIT_REXW_XS_ADCAP";
+      else if ((index & ATTR_XD))
+        o << "IC_64BIT_XD_ADCAP";
+      else if ((index & ATTR_XS))
+        o << "IC_64BIT_XS_ADCAP";
+      else if ((index & ATTR_REXW))
+        o << "IC_64BIT_REXW_ADCAP";
+      else
+        o << "IC_64BIT_ADCAP";
     } else if ((index & ATTR_64BIT) && (index & ATTR_REXW) && (index & ATTR_XS))
       o << "IC_64BIT_REXW_XS";
     else if ((index & ATTR_64BIT) && (index & ATTR_REXW) && (index & ATTR_XD))

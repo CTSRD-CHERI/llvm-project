@@ -67,6 +67,8 @@ namespace X86 {
     IP_USE_EVEX =      1U << 9,
     IP_USE_DISP8 =     1U << 10,
     IP_USE_DISP32 =    1U << 11,
+    IP_HAS_OP_CAP =    1U << 12,
+    IP_HAS_AD_CAP =    1U << 13,
   };
 
   enum OperandType : unsigned {
