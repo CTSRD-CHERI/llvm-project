@@ -993,6 +993,16 @@ class VRS2I<bits<8> o, Format F, dag outs, dag ins, string asm,
            list<dag> pattern>
       : VS2I<o, F, outs, ins, asm, pattern>, VEX_W;
 
+// CHERI Instruction templates
+//
+
+class CI<bits<8> o, Format F, dag outs, dag ins, string asm,
+         list<dag> pattern>
+      : I<o, F, outs, ins, asm, pattern>, OpSizeCap, Requires<[HasCHERI]>;
+class CIi32S <bits<8> o, Format F, dag outs, dag ins, string asm,
+              list<dag> pattern>
+      : Ii32S<o, F, outs, ins, asm, pattern>, OpSizeCap, Requires<[HasCHERI]>;
+
 // MMX Instruction templates
 //
 
