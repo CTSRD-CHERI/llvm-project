@@ -1752,4 +1752,8 @@ def ProvenanceSourceChecker : Checker<"ProvenanceSourceChecker">,
   HelpText<"Check expressions with ambiguous provenance source.">,
   Documentation<NotDocumented>;
 
+def CapabilityCopyChecker : Checker<"CapabilityCopyChecker">,
+  HelpText<"Check tag-stripping memory copy.">,
+  Documentation<NotDocumented>;
+
 } // end alpha.cheri
