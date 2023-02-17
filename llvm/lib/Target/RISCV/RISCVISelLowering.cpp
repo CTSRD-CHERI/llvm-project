@@ -1069,7 +1069,9 @@ RISCVTargetLowering::RISCVTargetLowering(const TargetMachine &TM,
   // Function alignments.
   const Align FunctionAlignment(Subtarget.hasStdExtCOrZca() ? 2 : 4);
   setMinFunctionAlignment(FunctionAlignment);
-  setPrefFunctionAlignment(FunctionAlignment);
+  // Set preferred alignments.
+  setPrefFunctionAlignment(Subtarget.getPrefFunctionAlignment());
+  setPrefLoopAlignment(Subtarget.getPrefLoopAlignment());
 
   setMinimumJumpTableEntries(5);
 
