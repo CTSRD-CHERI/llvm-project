@@ -616,15 +616,18 @@ def Xi32 : X86TypeInfo<i32, "l", GR32, loadi32, i32mem,
 def Xi64 : X86TypeInfo<i64, "q", GR64, loadi64, i64mem,
                        Imm32S, i64i32imm, i64immSExt32_su, i64i8imm, i64immSExt8_su,
                        1, OpSizeFixed, 1>;
+def XiC  : X86TypeInfo<iFATPTR128, "c", GRC, loadcap, capmem,
+                       Imm32S, i64i32imm, i64immSExt32_su, i64i8imm, i64immSExt8_su,
+                       1, OpSizeCap, 0>;
 
 /// ITy - This instruction base class takes the type info for the instruction.
 /// Using this, it:
 /// 1. Concatenates together the instruction mnemonic with the appropriate
 ///    suffix letter, a tab, and the arguments.
-/// 2. Infers whether the instruction should have a 0x66 prefix byte.
+/// 2. Infers whether the instruction should have a 0x66 or 0x06 prefix byte.
 /// 3. Infers whether the instruction should have a 0x40 REX_W prefix.
 /// 4. Infers whether the low bit of the opcode should be 0 (for i8 operations)
-///    or 1 (for i16,i32,i64 operations).
+///    or 1 (for i16,i32,i64,iFATPTR128 operations).
 class ITy<bits<8> opcode, Format f, X86TypeInfo typeinfo, dag outs, dag ins,
           string mnemonic, string args, list<dag> pattern>
   : I<{opcode{7}, opcode{6}, opcode{5}, opcode{4},
@@ -645,6 +648,14 @@ class BinOpRR<bits<8> opcode, string mnemonic, X86TypeInfo typeinfo,
         mnemonic, "{$src2, $src1|$src1, $src2}", pattern>,
     Sched<[sched]>;
 
+// BinOpCR - Instructions like "addc creg, creg, reg".
+class BinOpCR<bits<8> opcode, string mnemonic, X86TypeInfo typeinfo,
+              dag outlist, X86FoldableSchedWrite sched, list<dag> pattern>
+  : ITy<opcode, MRMDestReg, XiC, outlist,
+        (ins XiC.RegClass:$src1, typeinfo.RegClass:$src2),
+        mnemonic, "{$src2, $src1|$src1, $src2}", pattern>,
+    Sched<[sched]>;
+
 // BinOpRR_F - Instructions like "cmp reg, Reg", where the pattern has
 // just a EFLAGS as a result.
 class BinOpRR_F<bits<8> opcode, string mnemonic, X86TypeInfo typeinfo,
@@ -661,6 +672,14 @@ class BinOpRR_RF<bits<8> opcode, string mnemonic, X86TypeInfo typeinfo,
             [(set typeinfo.RegClass:$dst, EFLAGS,
                   (opnode typeinfo.RegClass:$src1, typeinfo.RegClass:$src2))]>;
 
+// BinOpCR_CF - Instructions like "addc creg, creg, reg", where the pattern has
+// both a regclass and EFLAGS as a result.
+class BinOpCR_CF<bits<8> opcode, string mnemonic, X86TypeInfo typeinfo,
+                 SDNode opnode>
+  : BinOpCR<opcode, mnemonic, typeinfo, (outs XiC.RegClass:$dst), WriteALU,
+            [(set XiC.RegClass:$dst, EFLAGS,
+                  (opnode XiC.RegClass:$src1, typeinfo.RegClass:$src2))]>;
+
 // BinOpRR_RFF - Instructions like "adc reg, reg, reg", where the pattern has
 // both a regclass and EFLAGS as a result, and has EFLAGS as input.
 class BinOpRR_RFF<bits<8> opcode, string mnemonic, X86TypeInfo typeinfo,
@@ -676,6 +695,20 @@ class BinOpRR_Rev<bits<8> opcode, string mnemonic, X86TypeInfo typeinfo,
   : ITy<opcode, MRMSrcReg, typeinfo,
         (outs typeinfo.RegClass:$dst),
         (ins typeinfo.RegClass:$src1, typeinfo.RegClass:$src2),
+        mnemonic, "{$src2, $dst|$dst, $src2}", []>,
+    Sched<[sched]> {
+  // The disassembler should know about this, but not the asmparser.
+  let isCodeGenOnly = 1;
+  let ForceDisassemble = 1;
+  let hasSideEffects = 0;
+}
+
+// BinOpCR_Rev - Instructions like "addc creg, creg, reg" (reversed encoding).
+class BinOpCR_Rev<bits<8> opcode, string mnemonic, X86TypeInfo typeinfo,
+                  X86FoldableSchedWrite sched = WriteALU>
+  : ITy<opcode, MRMSrcReg, XiC,
+        (outs XiC.RegClass:$dst),
+        (ins XiC.RegClass:$src1, typeinfo.RegClass:$src2),
         mnemonic, "{$src2, $dst|$dst, $src2}", []>,
     Sched<[sched]> {
   // The disassembler should know about this, but not the asmparser.
@@ -708,6 +741,14 @@ class BinOpRM<bits<8> opcode, string mnemonic, X86TypeInfo typeinfo,
         mnemonic, "{$src2, $src1|$src1, $src2}", pattern>,
     Sched<[sched.Folded, sched.ReadAfterFold]>;
 
+// BinOpCM - Instructions like "addc creg, creg, [mem]".
+class BinOpCM<bits<8> opcode, string mnemonic, X86TypeInfo typeinfo,
+              dag outlist, X86FoldableSchedWrite sched, list<dag> pattern>
+  : ITy<opcode, MRMSrcMem, XiC, outlist,
+        (ins XiC.RegClass:$src1, typeinfo.MemOperand:$src2),
+        mnemonic, "{$src2, $src1|$src1, $src2}", pattern>,
+    Sched<[sched.Folded, sched.ReadAfterFold]>;
+
 // BinOpRM - Instructions like "adc reg, reg, [mem]".
 // There is an implicit register read at the end of the operand sequence.
 class BinOpRM_ImplicitUse<bits<8> opcode, string mnemonic, X86TypeInfo typeinfo,
@@ -734,6 +775,13 @@ class BinOpRM_RF<bits<8> opcode, string mnemonic, X86TypeInfo typeinfo,
   : BinOpRM<opcode, mnemonic, typeinfo, (outs typeinfo.RegClass:$dst), WriteALU,
             [(set typeinfo.RegClass:$dst, EFLAGS,
             (opnode typeinfo.RegClass:$src1, (typeinfo.LoadNode addr:$src2)))]>;
+
+// BinOpCM_CF - Instructions like "add reg, reg, [mem]".
+class BinOpCM_CF<bits<8> opcode, string mnemonic, X86TypeInfo typeinfo,
+                 SDNode opnode>
+  : BinOpCM<opcode, mnemonic, typeinfo, (outs XiC.RegClass:$dst), WriteALU,
+            [(set XiC.RegClass:$dst, EFLAGS,
+            (opnode XiC.RegClass:$src1, (typeinfo.LoadNode addr:$src2)))]>;
 
 // BinOpRM_RFF - Instructions like "adc reg, reg, [mem]".
 class BinOpRM_RFF<bits<8> opcode, string mnemonic, X86TypeInfo typeinfo,
@@ -813,10 +861,28 @@ class BinOpMR<bits<8> opcode, string mnemonic, X86TypeInfo typeinfo,
         (outs), (ins typeinfo.MemOperand:$dst, typeinfo.RegClass:$src),
         mnemonic, "{$src, $dst|$dst, $src}", pattern>;
 
+// BinOpCMR - Instructions like "addc [mem], reg".
+class BinOpCMR<bits<8> opcode, string mnemonic, X86TypeInfo typeinfo,
+               list<dag> pattern>
+  : ITy<opcode, MRMDestMem, XiC,
+        (outs), (ins XiC.MemOperand:$dst, typeinfo.RegClass:$src),
+        mnemonic, "{$src, $dst|$dst, $src}", pattern>;
+
 // BinOpMR_RMW - Instructions like "add [mem], reg".
 class BinOpMR_RMW<bits<8> opcode, string mnemonic, X86TypeInfo typeinfo,
                   SDNode opnode>
   : BinOpMR<opcode, mnemonic, typeinfo,
+          [(store (opnode (load addr:$dst), typeinfo.RegClass:$src), addr:$dst),
+           (implicit EFLAGS)]>, Sched<[WriteALURMW,
+                                       // base, scale, index, offset, segment
+                                       ReadDefault, ReadDefault, ReadDefault,
+                                       ReadDefault, ReadDefault,
+                                       WriteALU.ReadAfterFold]>;  // reg
+
+// BinOpCMR_RMW - Instructions like "add [mem], reg".
+class BinOpCMR_RMW<bits<8> opcode, string mnemonic, X86TypeInfo typeinfo,
+                   SDNode opnode>
+  : BinOpCMR<opcode, mnemonic, typeinfo,
           [(store (opnode (load addr:$dst), typeinfo.RegClass:$src), addr:$dst),
            (implicit EFLAGS)]>, Sched<[WriteALURMW,
                                        // base, scale, index, offset, segment
@@ -1025,6 +1091,48 @@ multiclass ArithBinOp_RF<bits<8> BaseOpc, bits<8> BaseOpc2, bits<8> BaseOpc4,
                            "{$src, %rax|rax, $src}">;
 }
 
+/// ArithBinOp_CF - This is an arithmetic binary operator where the pattern is
+/// defined with "(set GPC:$dst, EFLAGS, (...".
+///
+/// It would be nice to get rid of the second and third argument here, but
+/// tblgen can't handle dependent type references aggressively enough: PR8330
+multiclass ArithBinOp_CF<bits<8> BaseOpc, bits<8> BaseOpc2, bits<8> BaseOpc4,
+                         string mnemonic, Format RegMRM, Format MemMRM,
+                         SDNode opnodeflag, SDNode opnode,
+                         bit ConvertibleToThreeAddress> {
+  let Defs = [EFLAGS], Predicates = [HasCHERI,In64BitMode] in {
+    let Constraints = "$src1 = $dst" in {
+      def NAME#Ccr : BinOpCR_CF<BaseOpc, mnemonic, Xi64, opnodeflag>;
+      def NAME#Ccr_REV : BinOpCR_Rev<BaseOpc2, mnemonic, Xi64>, FoldGenData<NAME#Ccr>;
+
+      def NAME#Crm   : BinOpCM_CF<BaseOpc2, mnemonic, Xi64, opnodeflag>;
+
+      let isConvertibleToThreeAddress = ConvertibleToThreeAddress in {
+        // NOTE: These are order specific, we want the ri8 forms to be listed
+        // first so that they are slightly preferred to the ri forms.
+        def NAME#Cri8  : BinOpRI8_RF<0x82, mnemonic, XiC, opnodeflag, RegMRM>;
+
+        def NAME#Cri32 : BinOpRI_RF<0x80, mnemonic, XiC, opnodeflag, RegMRM>;
+      }
+    } // Constraints = "$src1 = $dst"
+
+    let mayLoad = 1, mayStore = 1 in {
+      def NAME#Cmr    : BinOpCMR_RMW<BaseOpc, mnemonic, Xi64, opnode>;
+    }
+
+    // NOTE: These are order specific, we want the mi8 forms to be listed
+    // first so that they are slightly preferred to the mi forms.
+    def NAME#Cmi8   : BinOpMI8_RMW<mnemonic, XiC, opnode, MemMRM>;
+
+    def NAME#Cmi32  : BinOpMI_RMW<0x80, mnemonic, XiC, opnode, MemMRM>;
+
+  } // Defs = [EFLAGS]
+
+  let Predicates = [HasCHERI,In64BitMode] in
+  def NAME#Ci32  : BinOpAI<BaseOpc4, mnemonic, XiC, CAX,
+                           "{$src, %cax|cax, $src}">;
+}
+
 /// ArithBinOp_RFF - This is an arithmetic binary operator where the pattern is
 /// defined with "(set GPR:$dst, EFLAGS, (node LHS, RHS, EFLAGS))" like ADC and
 /// SBB.
@@ -1202,6 +1310,19 @@ defm ADD : ArithBinOp_RF<0x00, 0x02, 0x04, "add", MRM0r, MRM0m,
 let isCompare = 1 in {
 defm SUB : ArithBinOp_RF<0x28, 0x2A, 0x2C, "sub", MRM5r, MRM5m,
                          X86sub_flag, sub, 0, 1, 0>;
+}
+
+defm AND : ArithBinOp_CF<0x20, 0x22, 0x24, "and", MRM4r, MRM4m,
+                         X86ptrand_flag, ptrand, 0>;
+defm OR  : ArithBinOp_CF<0x08, 0x0A, 0x0C, "or", MRM1r, MRM1m,
+                         X86ptror_flag, ptror, 0>;
+defm XOR : ArithBinOp_CF<0x30, 0x32, 0x34, "xor", MRM6r, MRM6m,
+                         X86ptrxor_flag, ptrxor, 0>;
+defm ADD : ArithBinOp_CF<0x00, 0x02, 0x04, "add", MRM0r, MRM0m,
+                         X86ptradd_flag, ptradd, 1>;
+let isCompare = 1 in {
+defm SUB : ArithBinOp_CF<0x28, 0x2A, 0x2C, "sub", MRM5r, MRM5m,
+                         X86ptrsub_flag, ptrsub, 1>;
 }
 
 // Version of XOR8rr_NOREX that use GR8_NOREX. This is used by the handling of

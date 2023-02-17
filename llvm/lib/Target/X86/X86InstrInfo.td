@@ -35,6 +35,12 @@ def SDTBinaryArithWithFlags : SDTypeProfile<2, 2,
                                              SDTCisSameAs<0, 3>,
                                              SDTCisInt<0>, SDTCisVT<1, i32>]>;
 
+def SDTBinaryCapArithWithFlags : SDTypeProfile<2, 2,
+                                            [SDTCisSameAs<0, 2>,
+                                             SDTCisInt<3>,
+                                             SDTCisVT<0, iFATPTR128>,
+                                             SDTCisVT<1, i32>]>;
+
 // SDTBinaryArithWithFlagsInOut - RES1, EFLAGS = op LHS, RHS, EFLAGS
 def SDTBinaryArithWithFlagsInOut : SDTypeProfile<2, 3,
                                             [SDTCisSameAs<0, 2>,
@@ -266,6 +272,12 @@ def X86xor_flag  : SDNode<"X86ISD::XOR",  SDTBinaryArithWithFlags,
                           [SDNPCommutative]>;
 def X86and_flag  : SDNode<"X86ISD::AND",  SDTBinaryArithWithFlags,
                           [SDNPCommutative]>;
+
+def X86ptradd_flag : SDNode<"X86ISD::PTRADD",  SDTBinaryCapArithWithFlags>;
+def X86ptrsub_flag : SDNode<"X86ISD::PTRSUB",  SDTBinaryCapArithWithFlags>;
+def X86ptror_flag  : SDNode<"X86ISD::PTROR",   SDTBinaryCapArithWithFlags>;
+def X86ptrxor_flag : SDNode<"X86ISD::PTRXOR",  SDTBinaryCapArithWithFlags>;
+def X86ptrand_flag : SDNode<"X86ISD::PTRAND",  SDTBinaryCapArithWithFlags>;
 
 def X86lock_add  : SDNode<"X86ISD::LADD",  SDTLockBinaryArithWithFlags,
                           [SDNPHasChain, SDNPMayStore, SDNPMayLoad,

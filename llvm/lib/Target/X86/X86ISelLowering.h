@@ -404,6 +404,11 @@ namespace llvm {
     OR,
     XOR,
     AND,
+    PTRADD,
+    PTRSUB,
+    PTROR,
+    PTRXOR,
+    PTRAND,
 
     // Bit field extract.
     BEXTR,
