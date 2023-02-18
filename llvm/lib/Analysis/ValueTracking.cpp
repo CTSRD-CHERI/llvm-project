@@ -2740,6 +2740,12 @@ bool isKnownNonZero(const Value *V, const APInt &DemandedElts, unsigned Depth,
             Q.DL.getTypeSizeInBits(I->getType()).getFixedValue())
       return isKnownNonZero(I->getOperand(0), Depth, Q);
     break;
+  case Instruction::Sub:
+    if (auto *C = dyn_cast<Constant>(I->getOperand(0)))
+      if (C->isNullValue() &&
+          isKnownNonZero(I->getOperand(1), DemandedElts, Depth, Q))
+        return true;
+    break;
   case Instruction::Or:
     // X | Y != 0 if X != 0 or Y != 0.
     return isKnownNonZero(I->getOperand(0), DemandedElts, Depth, Q) ||
@@ -2884,8 +2890,26 @@ bool isKnownNonZero(const Value *V, const APInt &DemandedElts, unsigned Depth,
            isGuaranteedNotToBePoison(I->getOperand(0), Q.AC, Q.CxtI, Q.DT,
                                      Depth);
   case Instruction::Call:
-    if (cast<CallInst>(I)->getIntrinsicID() == Intrinsic::vscale)
-      return true;
+    if (auto *II = dyn_cast<IntrinsicInst>(I)) {
+      switch (II->getIntrinsicID()) {
+      case Intrinsic::abs:
+      case Intrinsic::bitreverse:
+      case Intrinsic::bswap:
+      case Intrinsic::ctpop:
+        if (isKnownNonZero(II->getArgOperand(0), DemandedElts, Depth, Q))
+          return true;
+        break;
+      case Intrinsic::uadd_sat:
+        if (isKnownNonZero(II->getArgOperand(0), DemandedElts, Depth, Q) ||
+            isKnownNonZero(II->getArgOperand(1), DemandedElts, Depth, Q))
+          return true;
+        break;
+      case Intrinsic::vscale:
+        return true;
+      default:
+        break;
+      }
+    }
     break;
   }
 
