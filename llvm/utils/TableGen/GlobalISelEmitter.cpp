@@ -6368,4 +6368,4 @@ namespace llvm {
 void EmitGlobalISel(RecordKeeper &RK, raw_ostream &OS) {
   GlobalISelEmitter(RK).run(OS);
 }
-} // End llvm namespace
+} // namespace llvm
