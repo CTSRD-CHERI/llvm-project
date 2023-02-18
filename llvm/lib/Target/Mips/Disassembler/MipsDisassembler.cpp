@@ -44,28 +44,28 @@ class MipsDisassembler : public MCDisassembler {
 public:
   MipsDisassembler(const MCSubtargetInfo &STI, MCContext &Ctx, bool IsBigEndian)
       : MCDisassembler(STI, Ctx),
-        IsMicroMips(STI.getFeatureBits()[Mips::FeatureMicroMips]),
+        IsMicroMips(STI.hasFeature(Mips::FeatureMicroMips)),
         IsBigEndian(IsBigEndian) {}
 
-  bool hasMips2() const { return STI.getFeatureBits()[Mips::FeatureMips2]; }
-  bool hasMips3() const { return STI.getFeatureBits()[Mips::FeatureMips3]; }
-  bool hasMips32() const { return STI.getFeatureBits()[Mips::FeatureMips32]; }
+  bool hasMips2() const { return STI.hasFeature(Mips::FeatureMips2); }
+  bool hasMips3() const { return STI.hasFeature(Mips::FeatureMips3); }
+  bool hasMips32() const { return STI.hasFeature(Mips::FeatureMips32); }
 
   bool hasMips32r6() const {
-    return STI.getFeatureBits()[Mips::FeatureMips32r6];
+    return STI.hasFeature(Mips::FeatureMips32r6);
   }
 
-  bool isFP64() const { return STI.getFeatureBits()[Mips::FeatureFP64Bit]; }
+  bool isFP64() const { return STI.hasFeature(Mips::FeatureFP64Bit); }
 
-  bool isGP64() const { return STI.getFeatureBits()[Mips::FeatureGP64Bit]; }
+  bool isGP64() const { return STI.hasFeature(Mips::FeatureGP64Bit); }
 
-  bool isPTR64() const { return STI.getFeatureBits()[Mips::FeaturePTR64Bit]; }
+  bool isPTR64() const { return STI.hasFeature(Mips::FeaturePTR64Bit); }
 
-  bool hasCnMips() const { return STI.getFeatureBits()[Mips::FeatureCnMips]; }
+  bool hasCnMips() const { return STI.hasFeature(Mips::FeatureCnMips); }
 
-  bool hasCHERI() const { return STI.getFeatureBits()[Mips::FeatureMipsCheri]; }
+  bool hasCHERI() const { return STI.hasFeature(Mips::FeatureMipsCheri); }
 
-  bool hasCnMipsP() const { return STI.getFeatureBits()[Mips::FeatureCnMipsP]; }
+  bool hasCnMipsP() const { return STI.hasFeature(Mips::FeatureCnMipsP); }
 
   bool hasCOP3() const {
     // Only present in MIPS-I and MIPS-II

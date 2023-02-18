@@ -54,11 +54,11 @@ std::optional<unsigned> llvm::getCheriCapabilitySize(FeatureBitset Features) {
 }
 
 static bool isMicroMips(const MCSubtargetInfo *STI) {
-  return STI->getFeatureBits()[Mips::FeatureMicroMips];
+  return STI->hasFeature(Mips::FeatureMicroMips);
 }
 
 static bool isMips32r6(const MCSubtargetInfo *STI) {
-  return STI->getFeatureBits()[Mips::FeatureMips32r6];
+  return STI->hasFeature(Mips::FeatureMips32r6);
 }
 
 MipsTargetStreamer::MipsTargetStreamer(MCStreamer &S)
