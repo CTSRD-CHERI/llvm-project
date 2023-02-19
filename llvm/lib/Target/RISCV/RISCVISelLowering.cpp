@@ -11618,13 +11618,6 @@ static MachineBasicBlock *emitSplitF64Pseudo(MachineInstr &MI,
   bool HiRegIsDead = MI.getOperand(1).isDead();
   unsigned SrcOpNo = MI.getOpcode() == RISCV::SplitF64Pseudo ? 2 : 3;
   Register SrcReg = MI.getOperand(SrcOpNo).getReg();
-  if (Subtarget.hasStdExtD() && Subtarget.hasStdExtZfa() &&
-      !Subtarget.is64Bit()) {
-    BuildMI(*BB, MI, DL, TII.get(RISCV::FMV_X_W_FPR64), LoReg).addReg(SrcReg);
-    BuildMI(*BB, MI, DL, TII.get(RISCV::FMVH_X_D), HiReg).addReg(SrcReg);
-    MI.eraseFromParent(); // The pseudo instruction is gone now.
-    return BB;
-  }
 
   const TargetRegisterClass *SrcRC = &RISCV::FPR64RegClass;
   int FI = MF.getInfo<RISCVMachineFunctionInfo>()->getMoveF64FrameIndex(MF);
@@ -11689,14 +11682,6 @@ static MachineBasicBlock *emitBuildPairF64Pseudo(MachineInstr &MI,
   Register DstReg = MI.getOperand(0).getReg();
   Register LoReg = MI.getOperand(1).getReg();
   Register HiReg = MI.getOperand(2).getReg();
-  if (Subtarget.hasStdExtD() && Subtarget.hasStdExtZfa() &&
-      !Subtarget.is64Bit()) {
-    BuildMI(*BB, MI, DL, TII.get(RISCV::FMVP_D_X), DstReg)
-        .addReg(LoReg)
-        .addReg(HiReg);
-    MI.eraseFromParent();
-    return BB;
-  }
 
   const TargetRegisterClass *DstRC = &RISCV::FPR64RegClass;
   int FI = MF.getInfo<RISCVMachineFunctionInfo>()->getMoveF64FrameIndex(MF);
