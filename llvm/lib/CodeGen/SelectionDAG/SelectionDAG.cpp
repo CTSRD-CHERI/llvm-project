@@ -2748,7 +2748,7 @@ bool SelectionDAG::isSplatValue(SDValue V, const APInt &DemandedElts,
     // TODO: Handle source ops splats with undefs.
     auto CheckSplatSrc = [&](SDValue Src, const APInt &SrcElts) {
       APInt SrcUndefs;
-      return (SrcElts.countPopulation() == 1) ||
+      return (SrcElts.popcount() == 1) ||
              (isSplatValue(Src, SrcElts, SrcUndefs, Depth + 1) &&
               (SrcElts & SrcUndefs).isZero());
     };
@@ -5305,7 +5305,7 @@ SDValue SelectionDAG::getNode(unsigned Opcode, const SDLoc &DL, EVT VT,
       return getConstant(Val.byteSwap(), DL, VT, C->isTargetOpcode(),
                          C->isOpaque());
     case ISD::CTPOP:
-      return getConstant(Val.countPopulation(), DL, VT, C->isTargetOpcode(),
+      return getConstant(Val.popcount(), DL, VT, C->isTargetOpcode(),
                          C->isOpaque());
     case ISD::CTLZ:
     case ISD::CTLZ_ZERO_UNDEF:
