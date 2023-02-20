@@ -2291,7 +2291,8 @@ void SymbolTableBaseSection::addSymbol(Symbol *b) {
   if (config->compartment) {
     if (auto *def = dyn_cast<Defined>(b)) {
       auto *section = dyn_cast_or_null<InputSection>(def->section);
-      if (!section || (section->name != ".compartment_exports")) {
+      if (!section || ((section->name != ".compartment_exports") &&
+                       !section->name.startswith(".compartment_exports."))) {
         b->binding = STB_LOCAL;
       }
     }
