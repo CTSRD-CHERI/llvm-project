@@ -1802,7 +1802,7 @@ bool TargetLowering::SimplifyDemandedBits(
       Known.Zero.setLowBits(ShAmt);
 
       // Attempt to avoid multi-use ops if we don't need anything from them.
-      if (!InDemandedMask.isAllOnesValue() || !DemandedElts.isAllOnesValue()) {
+      if (!InDemandedMask.isAllOnes() || !DemandedElts.isAllOnes()) {
         SDValue DemandedOp0 = SimplifyMultipleUseDemandedBits(
             Op0, InDemandedMask, DemandedElts, TLO.DAG, Depth + 1);
         if (DemandedOp0) {
@@ -1907,7 +1907,7 @@ bool TargetLowering::SimplifyDemandedBits(
       Known.Zero.setHighBits(ShAmt);
 
       // Attempt to avoid multi-use ops if we don't need anything from them.
-      if (!InDemandedMask.isAllOnesValue() || !DemandedElts.isAllOnesValue()) {
+      if (!InDemandedMask.isAllOnes() || !DemandedElts.isAllOnes()) {
         SDValue DemandedOp0 = SimplifyMultipleUseDemandedBits(
             Op0, InDemandedMask, DemandedElts, TLO.DAG, Depth + 1);
         if (DemandedOp0) {
