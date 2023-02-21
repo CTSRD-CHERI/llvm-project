@@ -3657,6 +3657,8 @@ X86
 
 .. option:: -mbmi2, -mno-bmi2
 
+.. option:: -mcheri, -mno-cheri
+
 .. option:: -mcldemote, -mno-cldemote
 
 .. option:: -mclflushopt, -mno-clflushopt
