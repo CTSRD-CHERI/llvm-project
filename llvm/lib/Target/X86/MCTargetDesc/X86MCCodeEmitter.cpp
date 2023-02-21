@@ -1346,7 +1346,9 @@ bool X86MCCodeEmitter::emitOpcodePrefix(int MemOperand, const MCInst &MI,
   uint64_t TSFlags = Desc.TSFlags;
 
   // Emit the operand size opcode prefix as needed.
-  if ((TSFlags & X86II::OpSizeMask) ==
+  if ((TSFlags & X86II::OpSizeMask) == X86II::OpSizeCap)
+    emitByte(0x06, OS);
+  else if ((TSFlags & X86II::OpSizeMask) ==
       (STI.hasFeature(X86::Mode16Bit) ? X86II::OpSize32 : X86II::OpSize16))
     emitByte(0x66, OS);
 
