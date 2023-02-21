@@ -1186,7 +1186,15 @@ enum NodeType {
   /// address.
   PTRTOINT,
   INTTOPTR,
+
+  /// Binary operations on fat pointers with the second source operand as an
+  /// integer.  These are only required for pointers that are not represented
+  /// purely by numeric value of the base address.
   PTRADD,
+  PTRSUB,
+  PTRAND,
+  PTROR,
+  PTRXOR,
 
   /// GC_TRANSITION_START/GC_TRANSITION_END - These operators mark the
   /// beginning and end of GC transition  sequence, and carry arbitrary
