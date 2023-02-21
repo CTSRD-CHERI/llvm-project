@@ -966,40 +966,40 @@ multiclass FrameIndexPatterns<ValueType iFatptrTy, ComplexPattern Addr> {
   def : Pat<(load Addr:$addr), (LOADCAP ZERO_64, (i64 0), $addr)>;
 
   // i64 load
-  defm: FrameIndexLoadPatterns<load, iFATPTR128, i64, Addr, CAPLOAD64, simm8s3Pattern>;
+  defm: FrameIndexLoadPatterns<load, iFatptrTy, i64, Addr, CAPLOAD64, simm8s3Pattern>;
 
   // i32 load
-  defm: FrameIndexLoadPatterns<sextloadi32, iFATPTR128, i64, Addr, CAPLOAD3264, simm8s2Pattern>;
-  defm: FrameIndexLoadPatterns<extloadi32, iFATPTR128, i64, Addr, CAPLOAD3264, simm8s2Pattern>;
-  defm: FrameIndexLoadPatterns<zextloadi32, iFATPTR128, i64, Addr, CAPLOADU32, simm8s2Pattern>;
-  defm: FrameIndexLoadPatterns<load, iFATPTR128, i32, Addr, CAPLOAD32, simm8s2Pattern>;
+  defm: FrameIndexLoadPatterns<sextloadi32, iFatptrTy, i64, Addr, CAPLOAD3264, simm8s2Pattern>;
+  defm: FrameIndexLoadPatterns<extloadi32, iFatptrTy, i64, Addr, CAPLOAD3264, simm8s2Pattern>;
+  defm: FrameIndexLoadPatterns<zextloadi32, iFatptrTy, i64, Addr, CAPLOADU32, simm8s2Pattern>;
+  defm: FrameIndexLoadPatterns<load, iFatptrTy, i32, Addr, CAPLOAD32, simm8s2Pattern>;
 
   // i16 load
-  defm: FrameIndexLoadPatterns<zextloadi16, iFATPTR128, i32, Addr, CAPLOADU1632, simm8s1Pattern>;
-  defm: FrameIndexLoadPatterns<zextloadi16, iFATPTR128, i64, Addr, CAPLOADU16, simm8s1Pattern>;
-  defm: FrameIndexLoadPatterns<sextloadi16, iFATPTR128, i32, Addr, CAPLOAD1632, simm8s1Pattern>;
-  defm: FrameIndexLoadPatterns<sextloadi16, iFATPTR128, i64, Addr, CAPLOAD16, simm8s1Pattern>;
+  defm: FrameIndexLoadPatterns<zextloadi16, iFatptrTy, i32, Addr, CAPLOADU1632, simm8s1Pattern>;
+  defm: FrameIndexLoadPatterns<zextloadi16, iFatptrTy, i64, Addr, CAPLOADU16, simm8s1Pattern>;
+  defm: FrameIndexLoadPatterns<sextloadi16, iFatptrTy, i32, Addr, CAPLOAD1632, simm8s1Pattern>;
+  defm: FrameIndexLoadPatterns<sextloadi16, iFatptrTy, i64, Addr, CAPLOAD16, simm8s1Pattern>;
   // Use clhu instead of clh for anyext to match MIPS
-  defm: FrameIndexLoadPatterns<extloadi16, iFATPTR128, i32, Addr, CAPLOADU1632, simm8s1Pattern>;
-  defm: FrameIndexLoadPatterns<extloadi16, iFATPTR128, i64, Addr, CAPLOADU16, simm8s1Pattern>;
+  defm: FrameIndexLoadPatterns<extloadi16, iFatptrTy, i32, Addr, CAPLOADU1632, simm8s1Pattern>;
+  defm: FrameIndexLoadPatterns<extloadi16, iFatptrTy, i64, Addr, CAPLOADU16, simm8s1Pattern>;
 
   // i8 load
-  defm: FrameIndexLoadPatterns<zextloadi8, iFATPTR128, i32, Addr, CAPLOADU832, simm8Pattern>;
-  defm: FrameIndexLoadPatterns<zextloadi8, iFATPTR128, i64, Addr, CAPLOADU8, simm8Pattern>;
-  defm: FrameIndexLoadPatterns<sextloadi8, iFATPTR128, i32, Addr, CAPLOAD832, simm8Pattern>;
-  defm: FrameIndexLoadPatterns<sextloadi8, iFATPTR128, i64, Addr, CAPLOAD8, simm8Pattern>;
+  defm: FrameIndexLoadPatterns<zextloadi8, iFatptrTy, i32, Addr, CAPLOADU832, simm8Pattern>;
+  defm: FrameIndexLoadPatterns<zextloadi8, iFatptrTy, i64, Addr, CAPLOADU8, simm8Pattern>;
+  defm: FrameIndexLoadPatterns<sextloadi8, iFatptrTy, i32, Addr, CAPLOAD832, simm8Pattern>;
+  defm: FrameIndexLoadPatterns<sextloadi8, iFatptrTy, i64, Addr, CAPLOAD8, simm8Pattern>;
   // Use clbu instead of clb for anyext to match MIPS
-  defm: FrameIndexLoadPatterns<extloadi8, iFATPTR128, i32, Addr, CAPLOADU832, simm8Pattern>;
-  defm: FrameIndexLoadPatterns<extloadi8, iFATPTR128, i64, Addr, CAPLOADU8, simm8Pattern>;
+  defm: FrameIndexLoadPatterns<extloadi8, iFatptrTy, i32, Addr, CAPLOADU832, simm8Pattern>;
+  defm: FrameIndexLoadPatterns<extloadi8, iFatptrTy, i64, Addr, CAPLOADU8, simm8Pattern>;
 
   // i1 load
-  defm: FrameIndexLoadPatterns<zextloadi1, iFATPTR128, i32, Addr, CAPLOADU832, simm8Pattern>;
-  defm: FrameIndexLoadPatterns<zextloadi1, iFATPTR128, i64, Addr, CAPLOADU8, simm8Pattern>;
-  defm: FrameIndexLoadPatterns<sextloadi1, iFATPTR128, i32, Addr, CAPLOAD832, simm8Pattern>;
-  defm: FrameIndexLoadPatterns<sextloadi1, iFATPTR128, i64, Addr, CAPLOAD8, simm8Pattern>;
+  defm: FrameIndexLoadPatterns<zextloadi1, iFatptrTy, i32, Addr, CAPLOADU832, simm8Pattern>;
+  defm: FrameIndexLoadPatterns<zextloadi1, iFatptrTy, i64, Addr, CAPLOADU8, simm8Pattern>;
+  defm: FrameIndexLoadPatterns<sextloadi1, iFatptrTy, i32, Addr, CAPLOAD832, simm8Pattern>;
+  defm: FrameIndexLoadPatterns<sextloadi1, iFatptrTy, i64, Addr, CAPLOAD8, simm8Pattern>;
   // Use clbu instead of clb for anyext to match MIPS
-  defm: FrameIndexLoadPatterns<extloadi1, iFATPTR128, i32, Addr, CAPLOADU832, simm8Pattern>;
-  defm: FrameIndexLoadPatterns<extloadi1, iFATPTR128, i64, Addr, CAPLOADU8, simm8Pattern>;
+  defm: FrameIndexLoadPatterns<extloadi1, iFatptrTy, i32, Addr, CAPLOADU832, simm8Pattern>;
+  defm: FrameIndexLoadPatterns<extloadi1, iFatptrTy, i64, Addr, CAPLOADU8, simm8Pattern>;
 
   // stores
 
