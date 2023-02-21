@@ -4378,15 +4378,15 @@ bool X86AsmParser::MatchAndEmitATTInstruction(SMLoc IDLoc, unsigned &Opcode,
   // 80-bit floating point, which use the suffixes s,l,t respectively.
   //
   // Otherwise, we assume that this may be an integer instruction, which comes
-  // in 8/16/32/64-bit forms using the b,w,l,q suffixes respectively.
-  const char *Suffixes = Base[0] != 'f' ? "bwlq" : "slt\0";
-  // MemSize corresponding to Suffixes.  { 8, 16, 32, 64 }    { 32, 64, 80, 0 }
-  const char *MemSize = Base[0] != 'f' ? "\x08\x10\x20\x40" : "\x20\x40\x50\0";
+  // in 8/16/32/64/129-bit forms using the b,w,l,q,c suffixes respectively.
+  const char *Suffixes = Base[0] != 'f' ? "bwlqc" : "slt\0\0";
+  // MemSize corresponding to Suffixes.  { 8, 16, 32, 64, 129 }    { 32, 64, 80, 0, 0 }
+  const char *MemSize = Base[0] != 'f' ? "\x08\x10\x20\x40\x81" : "\x20\x40\x50\0\0";
 
   // Check for the various suffix matches.
   uint64_t ErrorInfoIgnore;
   FeatureBitset ErrorInfoMissingFeatures; // Init suppresses compiler warnings.
-  unsigned Match[4];
+  unsigned Match[5];
 
   // Some instruction like VPMULDQ is NOT the variant of VPMULD but a new one.
   // So we should make sure the suffix matcher only works for memory variant
@@ -4452,7 +4452,7 @@ bool X86AsmParser::MatchAndEmitATTInstruction(SMLoc IDLoc, unsigned &Opcode,
   // If we had multiple suffix matches, then identify this as an ambiguous
   // match.
   if (NumSuccessfulMatches > 1) {
-    char MatchChars[4];
+    char MatchChars[array_lengthof(Match)];
     unsigned NumMatches = 0;
     for (unsigned I = 0, E = array_lengthof(Match); I != E; ++I)
       if (Match[I] == Match_Success)
@@ -4477,7 +4477,7 @@ bool X86AsmParser::MatchAndEmitATTInstruction(SMLoc IDLoc, unsigned &Opcode,
 
   // If all of the instructions reported an invalid mnemonic, then the original
   // mnemonic was invalid.
-  if (llvm::count(Match, Match_MnemonicFail) == 4) {
+  if (llvm::count(Match, Match_MnemonicFail) == array_lengthof(Match)) {
     if (OriginalError == Match_MnemonicFail)
       return Error(IDLoc, "invalid instruction mnemonic '" + Base + "'",
                    Op.getLocRange(), MatchingInlineAsm);
