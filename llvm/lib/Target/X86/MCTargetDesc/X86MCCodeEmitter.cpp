@@ -214,6 +214,18 @@ static bool is64BitMemOperand(const MCInst &MI, unsigned Op) {
 }
 #endif
 
+/// \param Op operand # of the memory operand.
+///
+/// \returns true if the specified instruction has a capability memory operand.
+static bool isCapMemOperand(const MCInst &MI, unsigned Op) {
+  const MCOperand &BaseReg = MI.getOperand(Op + X86::AddrBaseReg);
+
+  if (BaseReg.getReg() != 0 &&
+      X86MCRegisterClasses[X86::GRCRegClassID].contains(BaseReg.getReg()))
+    return true;
+  return false;
+}
+
 enum GlobalOffsetTableExprKind { GOT_None, GOT_Normal, GOT_SymDiff };
 
 /// Check if this expression starts with  _GLOBAL_OFFSET_TABLE_ and if it is
@@ -671,28 +683,40 @@ bool X86MCCodeEmitter::emitPrefixImpl(unsigned &CurOp, const MCInst &MI,
     emitByte(0xF2, OS);
 
   // Emit the address size opcode prefix as needed.
-  bool NeedAddressOverride;
+  bool NeedAddressOverride, NeedCapAddress;
   uint64_t AdSize = TSFlags & X86II::AdSizeMask;
   if ((STI.hasFeature(X86::Mode16Bit) && AdSize == X86II::AdSize32) ||
-      (STI.hasFeature(X86::Mode32Bit) && AdSize == X86II::AdSize16) ||
-      (STI.hasFeature(X86::Mode64Bit) && AdSize == X86II::AdSize32)) {
+             (STI.hasFeature(X86::Mode32Bit) && AdSize == X86II::AdSize16) ||
+             (STI.hasFeature(X86::Mode64Bit) && AdSize == X86II::AdSize32)) {
     NeedAddressOverride = true;
+    NeedCapAddress = false;
+  } else if (STI.hasFeature(X86::Mode64Bit) && AdSize == X86II::AdSizeCap) {
+    NeedAddressOverride = false;
+    NeedCapAddress = false;
   } else if (MemoryOperand < 0) {
     NeedAddressOverride = false;
+    NeedCapAddress = false;
   } else if (STI.hasFeature(X86::Mode64Bit)) {
     assert(!is16BitMemOperand(MI, MemoryOperand, STI));
     NeedAddressOverride = is32BitMemOperand(MI, MemoryOperand);
+    NeedCapAddress = isCapMemOperand(MI, MemoryOperand);
   } else if (STI.hasFeature(X86::Mode32Bit)) {
     assert(!is64BitMemOperand(MI, MemoryOperand));
+    assert(!isCapMemOperand(MI, MemoryOperand));
     NeedAddressOverride = is16BitMemOperand(MI, MemoryOperand, STI);
+    NeedCapAddress = false;
   } else {
     assert(STI.hasFeature(X86::Mode16Bit));
     assert(!is64BitMemOperand(MI, MemoryOperand));
+    assert(!isCapMemOperand(MI, MemoryOperand));
     NeedAddressOverride = !is16BitMemOperand(MI, MemoryOperand, STI);
+    NeedCapAddress = false;
   }
 
   if (NeedAddressOverride)
     emitByte(0x67, OS);
+  else if (NeedCapAddress)
+    emitByte(0x07, OS);
 
   // Encoding type for this instruction.
   uint64_t Encoding = TSFlags & X86II::EncodingMask;
@@ -710,14 +734,17 @@ bool X86MCCodeEmitter::emitPrefixImpl(unsigned &CurOp, const MCInst &MI,
     unsigned siReg = MI.getOperand(1).getReg();
     assert(((siReg == X86::SI && MI.getOperand(0).getReg() == X86::DI) ||
             (siReg == X86::ESI && MI.getOperand(0).getReg() == X86::EDI) ||
-            (siReg == X86::RSI && MI.getOperand(0).getReg() == X86::RDI)) &&
+            (siReg == X86::RSI && MI.getOperand(0).getReg() == X86::RDI) ||
+            (siReg == X86::CSI && MI.getOperand(0).getReg() == X86::CDI)) &&
            "SI and DI register sizes do not match");
     // Emit segment override opcode prefix as needed (not for %ds).
     if (MI.getOperand(2).getReg() != X86::DS)
       emitSegmentOverridePrefix(2, MI, OS);
     // Emit AdSize prefix as needed.
-    if ((!STI.hasFeature(X86::Mode32Bit) && siReg == X86::ESI) ||
-        (STI.hasFeature(X86::Mode32Bit) && siReg == X86::SI))
+    if (STI.hasFeature(X86::Mode64Bit) && siReg == X86::CSI)
+      emitByte(0x07, OS);
+    else if ((!STI.hasFeature(X86::Mode32Bit) && siReg == X86::ESI) ||
+             (STI.hasFeature(X86::Mode32Bit) && siReg == X86::SI))
       emitByte(0x67, OS);
     CurOp += 3; // Consume operands.
     break;
@@ -728,8 +755,10 @@ bool X86MCCodeEmitter::emitPrefixImpl(unsigned &CurOp, const MCInst &MI,
     if (MI.getOperand(1).getReg() != X86::DS)
       emitSegmentOverridePrefix(1, MI, OS);
     // Emit AdSize prefix as needed.
-    if ((!STI.hasFeature(X86::Mode32Bit) && siReg == X86::ESI) ||
-        (STI.hasFeature(X86::Mode32Bit) && siReg == X86::SI))
+    if (STI.hasFeature(X86::Mode64Bit) && siReg == X86::CSI)
+      emitByte(0x07, OS);
+    else if ((!STI.hasFeature(X86::Mode32Bit) && siReg == X86::ESI) ||
+             (STI.hasFeature(X86::Mode32Bit) && siReg == X86::SI))
       emitByte(0x67, OS);
     CurOp += 2; // Consume operands.
     break;
@@ -737,8 +766,10 @@ bool X86MCCodeEmitter::emitPrefixImpl(unsigned &CurOp, const MCInst &MI,
   case X86II::RawFrmDst: {
     unsigned siReg = MI.getOperand(0).getReg();
     // Emit AdSize prefix as needed.
-    if ((!STI.hasFeature(X86::Mode32Bit) && siReg == X86::EDI) ||
-        (STI.hasFeature(X86::Mode32Bit) && siReg == X86::DI))
+    if (STI.hasFeature(X86::Mode64Bit) && siReg == X86::CDI)
+      emitByte(0x07, OS);
+    else if ((!STI.hasFeature(X86::Mode32Bit) && siReg == X86::EDI) ||
+             (STI.hasFeature(X86::Mode32Bit) && siReg == X86::DI))
       emitByte(0x67, OS);
     ++CurOp; // Consume operand.
     break;

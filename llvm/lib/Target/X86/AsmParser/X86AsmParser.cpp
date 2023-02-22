@@ -1214,10 +1214,16 @@ private:
     assert(FeatureBitset({mode}) == (STI.getFeatureBits() & AllModes));
   }
 
-  unsigned getPointerWidth() {
+  unsigned getPointerWidth(unsigned BaseReg) {
     if (is16BitMode()) return 16;
     if (is32BitMode()) return 32;
-    if (is64BitMode()) return 64;
+    if (is64BitMode()) {
+      if (BaseReg != 0 &&
+          X86MCRegisterClasses[X86::GRCRegClassID].contains(BaseReg))
+        return 129;
+      else
+        return 64;
+    }
     llvm_unreachable("invalid mode");
   }
 
@@ -1279,10 +1285,11 @@ static bool CheckBaseRegAndIndexRegAndScale(unsigned BaseReg, unsigned IndexReg,
   // To support VSIB, IndexReg can be 128-bit or 256-bit registers.
 
   if (BaseReg != 0 &&
-      !(BaseReg == X86::RIP || BaseReg == X86::EIP ||
+      !(BaseReg == X86::RIP || BaseReg == X86::EIP || BaseReg == X86::CIP ||
         X86MCRegisterClasses[X86::GR16RegClassID].contains(BaseReg) ||
         X86MCRegisterClasses[X86::GR32RegClassID].contains(BaseReg) ||
-        X86MCRegisterClasses[X86::GR64RegClassID].contains(BaseReg))) {
+        X86MCRegisterClasses[X86::GR64RegClassID].contains(BaseReg) ||
+        X86MCRegisterClasses[X86::GRCRegClassID].contains(BaseReg))) {
     ErrMsg = "invalid base+index expression";
     return true;
   }
@@ -1299,9 +1306,9 @@ static bool CheckBaseRegAndIndexRegAndScale(unsigned BaseReg, unsigned IndexReg,
     return true;
   }
 
-  if (((BaseReg == X86::RIP || BaseReg == X86::EIP) && IndexReg != 0) ||
-      IndexReg == X86::EIP || IndexReg == X86::RIP ||
-      IndexReg == X86::ESP || IndexReg == X86::RSP) {
+  if (((BaseReg == X86::RIP || BaseReg == X86::EIP || BaseReg == X86::CIP) && IndexReg != 0) ||
+      IndexReg == X86::EIP || IndexReg == X86::RIP || IndexReg == X86::CIP ||
+      IndexReg == X86::ESP || IndexReg == X86::RSP || IndexReg == X86::CSP) {
     ErrMsg = "invalid base+index expression";
     return true;
   }
@@ -1322,9 +1329,18 @@ static bool CheckBaseRegAndIndexRegAndScale(unsigned BaseReg, unsigned IndexReg,
   }
 
   if (BaseReg != 0 && IndexReg != 0) {
+    if (X86MCRegisterClasses[X86::GRCRegClassID].contains(BaseReg) &&
+        (X86MCRegisterClasses[X86::GR16RegClassID].contains(IndexReg) ||
+         X86MCRegisterClasses[X86::GR32RegClassID].contains(IndexReg) ||
+         X86MCRegisterClasses[X86::GRCRegClassID].contains(IndexReg) ||
+         IndexReg == X86::EIZ)) {
+      ErrMsg = "base register is capability, but index register is not 64-bit";
+      return true;
+    }
     if (X86MCRegisterClasses[X86::GR64RegClassID].contains(BaseReg) &&
         (X86MCRegisterClasses[X86::GR16RegClassID].contains(IndexReg) ||
          X86MCRegisterClasses[X86::GR32RegClassID].contains(IndexReg) ||
+         X86MCRegisterClasses[X86::GRCRegClassID].contains(IndexReg) ||
          IndexReg == X86::EIZ)) {
       ErrMsg = "base register is 64-bit, but index register is not";
       return true;
@@ -1332,13 +1348,15 @@ static bool CheckBaseRegAndIndexRegAndScale(unsigned BaseReg, unsigned IndexReg,
     if (X86MCRegisterClasses[X86::GR32RegClassID].contains(BaseReg) &&
         (X86MCRegisterClasses[X86::GR16RegClassID].contains(IndexReg) ||
          X86MCRegisterClasses[X86::GR64RegClassID].contains(IndexReg) ||
+         X86MCRegisterClasses[X86::GRCRegClassID].contains(IndexReg) ||
          IndexReg == X86::RIZ)) {
       ErrMsg = "base register is 32-bit, but index register is not";
       return true;
     }
     if (X86MCRegisterClasses[X86::GR16RegClassID].contains(BaseReg)) {
       if (X86MCRegisterClasses[X86::GR32RegClassID].contains(IndexReg) ||
-          X86MCRegisterClasses[X86::GR64RegClassID].contains(IndexReg)) {
+          X86MCRegisterClasses[X86::GR64RegClassID].contains(IndexReg) ||
+          X86MCRegisterClasses[X86::GRCRegClassID].contains(IndexReg)) {
         ErrMsg = "base register is 16-bit, but index register is not";
         return true;
       }
@@ -1352,7 +1370,7 @@ static bool CheckBaseRegAndIndexRegAndScale(unsigned BaseReg, unsigned IndexReg,
 
   // RIP/EIP-relative addressing is only supported in 64-bit mode.
   if (!Is64BitMode && BaseReg != 0 &&
-      (BaseReg == X86::RIP || BaseReg == X86::EIP)) {
+      (BaseReg == X86::RIP || BaseReg == X86::EIP || BaseReg == X86::CIP)) {
     ErrMsg = "IP-relative addressing requires 64-bit mode";
     return true;
   }
@@ -1580,7 +1598,7 @@ std::unique_ptr<X86Operand> X86AsmParser::DefaultMemSIOperand(SMLoc Loc) {
   bool Parse32 = is32BitMode() || Code16GCC;
   unsigned Basereg = is64BitMode() ? X86::RSI : (Parse32 ? X86::ESI : X86::SI);
   const MCExpr *Disp = MCConstantExpr::create(0, getContext());
-  return X86Operand::CreateMem(getPointerWidth(), /*SegReg=*/0, Disp,
+  return X86Operand::CreateMem(getPointerWidth(Basereg), /*SegReg=*/0, Disp,
                                /*BaseReg=*/Basereg, /*IndexReg=*/0, /*Scale=*/1,
                                Loc, Loc, 0);
 }
@@ -1589,7 +1607,7 @@ std::unique_ptr<X86Operand> X86AsmParser::DefaultMemDIOperand(SMLoc Loc) {
   bool Parse32 = is32BitMode() || Code16GCC;
   unsigned Basereg = is64BitMode() ? X86::RDI : (Parse32 ? X86::EDI : X86::DI);
   const MCExpr *Disp = MCConstantExpr::create(0, getContext());
-  return X86Operand::CreateMem(getPointerWidth(), /*SegReg=*/0, Disp,
+  return X86Operand::CreateMem(getPointerWidth(Basereg), /*SegReg=*/0, Disp,
                                /*BaseReg=*/Basereg, /*IndexReg=*/0, /*Scale=*/1,
                                Loc, Loc, 0);
 }
@@ -1597,10 +1615,12 @@ std::unique_ptr<X86Operand> X86AsmParser::DefaultMemDIOperand(SMLoc Loc) {
 bool X86AsmParser::IsSIReg(unsigned Reg) {
   switch (Reg) {
   default: llvm_unreachable("Only (R|E)SI and (R|E)DI are expected!");
+  case X86::CSI:
   case X86::RSI:
   case X86::ESI:
   case X86::SI:
     return true;
+  case X86::CDI:
   case X86::RDI:
   case X86::EDI:
   case X86::DI:
@@ -1612,6 +1632,8 @@ unsigned X86AsmParser::GetSIDIForRegClass(unsigned RegClassID, unsigned Reg,
                                           bool IsSIReg) {
   switch (RegClassID) {
   default: llvm_unreachable("Unexpected register class");
+  case X86::GRCRegClassID:
+    return IsSIReg ? X86::CSI : X86::CDI;
   case X86::GR64RegClassID:
     return IsSIReg ? X86::RSI : X86::RDI;
   case X86::GR32RegClassID:
@@ -1671,7 +1693,9 @@ bool X86AsmParser::VerifyAndAdjustOperands(OperandVector &OrigOperands,
                        "mismatching source and destination index registers");
         }
 
-        if (X86MCRegisterClasses[X86::GR64RegClassID].contains(OrigReg))
+        if (X86MCRegisterClasses[X86::GRCRegClassID].contains(OrigReg))
+          RegClassID = X86::GRCRegClassID;
+        else if (X86MCRegisterClasses[X86::GR64RegClassID].contains(OrigReg))
           RegClassID = X86::GR64RegClassID;
         else if (X86MCRegisterClasses[X86::GR32RegClassID].contains(OrigReg))
           RegClassID = X86::GR32RegClassID;
@@ -1686,7 +1710,7 @@ bool X86AsmParser::VerifyAndAdjustOperands(OperandVector &OrigOperands,
         FinalReg = GetSIDIForRegClass(RegClassID, FinalReg, IsSI);
 
         if (FinalReg != OrigReg) {
-          std::string RegName = IsSI ? "ES:(R|E)SI" : "ES:(R|E)DI";
+          std::string RegName = IsSI ? "ES:(C|R|E)SI" : "ES:(C|R|E)DI";
           Warnings.push_back(std::make_pair(
               OrigOp.getStartLoc(),
               "memory operand is only for determining the size, " + RegName +
@@ -1732,14 +1756,14 @@ bool X86AsmParser::CreateMemForMSInlineAsm(
   if (Info.isKind(InlineAsmIdentifierInfo::IK_Label)) {
     // Insert an explicit size if the user didn't have one.
     if (!Size) {
-      Size = getPointerWidth();
+      Size = getPointerWidth(BaseReg);
       InstInfo->AsmRewrites->emplace_back(AOK_SizeDirective, Start,
                                           /*Len=*/0, Size);
     }
     // Create an absolute memory reference in order to match against
     // instructions taking a PC relative operand.
-    Operands.push_back(X86Operand::CreateMem(getPointerWidth(), Disp, Start,
-                                             End, Size, Identifier,
+    Operands.push_back(X86Operand::CreateMem(getPointerWidth(BaseReg), Disp,
+                                             Start, End, Size, Identifier,
                                              Info.Label.Decl));
     return false;
   }
@@ -1758,8 +1782,8 @@ bool X86AsmParser::CreateMemForMSInlineAsm(
   // It is widely common for MS InlineAsm to use a global variable and one/two
   // registers in a mmory expression, and though unaccessible via rip/eip.
   if (IsGlobalLV && (BaseReg || IndexReg)) {
-    Operands.push_back(X86Operand::CreateMem(getPointerWidth(), Disp, Start,
-                                             End, Size, Identifier, Decl,
+    Operands.push_back(X86Operand::CreateMem(getPointerWidth(BaseReg), Disp,
+                                             Start, End, Size, Identifier, Decl,
                                              FrontendSize));
     return false;
   }
@@ -1768,8 +1792,8 @@ bool X86AsmParser::CreateMemForMSInlineAsm(
   // get the matching correct in some cases.
   BaseReg = BaseReg ? BaseReg : 1;
   Operands.push_back(X86Operand::CreateMem(
-      getPointerWidth(), SegReg, Disp, BaseReg, IndexReg, Scale, Start, End,
-      Size,
+      getPointerWidth(BaseReg), SegReg, Disp, BaseReg, IndexReg, Scale, Start,
+      End, Size,
       /*DefaultBaseReg=*/X86::RIP, Identifier, Decl, FrontendSize));
   return false;
 }
@@ -2464,6 +2488,7 @@ bool X86AsmParser::ParseIntelMemoryOperandSize(unsigned &Size) {
     .Cases("MMWORD","mmword", 64)
     .Cases("XWORD", "xword", 80)
     .Cases("TBYTE", "tbyte", 80)
+    .Cases("CAP", "cap", 129)
     .Cases("XMMWORD", "xmmword", 128)
     .Cases("YMMWORD", "ymmword", 256)
     .Cases("ZMMWORD", "zmmword", 512)
@@ -2497,7 +2522,7 @@ bool X86AsmParser::ParseIntelOperand(OperandVector &Operands) {
   // Register operand.
   unsigned RegNo = 0;
   if (Tok.is(AsmToken::Identifier) && !ParseRegister(RegNo, Start, End)) {
-    if (RegNo == X86::RIP)
+    if (RegNo == X86::RIP || RegNo == X86::CIP)
       return Error(Start, "rip can only be used as a base register");
     // A Register followed by ':' is considered a segment override
     if (Tok.isNot(AsmToken::Colon)) {
@@ -2557,7 +2582,8 @@ bool X86AsmParser::ParseIntelOperand(OperandVector &Operands) {
     Size = SM.getElementSize() << 3;
 
   if (Scale == 0 && BaseReg != X86::ESP && BaseReg != X86::RSP &&
-      (IndexReg == X86::ESP || IndexReg == X86::RSP))
+      BaseReg != X86::CSP &&
+      (IndexReg == X86::ESP || IndexReg == X86::RSP || IndexReg == X86::CSP))
     std::swap(BaseReg, IndexReg);
 
   // If BaseReg is a vector register and IndexReg is not, swap them unless
@@ -2598,20 +2624,20 @@ bool X86AsmParser::ParseIntelOperand(OperandVector &Operands) {
   // When parsing x64 MS-style assembly, all non-absolute references to a named
   // variable default to RIP-relative.
   if (Parser.isParsingMasm() && is64BitMode() && SM.getElementSize() > 0) {
-    Operands.push_back(X86Operand::CreateMem(getPointerWidth(), RegNo, Disp,
-                                             BaseReg, IndexReg, Scale, Start,
-                                             End, Size,
+    Operands.push_back(X86Operand::CreateMem(getPointerWidth(BaseReg), RegNo,
+                                             Disp, BaseReg, IndexReg, Scale,
+                                             Start, End, Size,
                                              /*DefaultBaseReg=*/X86::RIP));
     return false;
   }
 
   if ((BaseReg || IndexReg || RegNo))
-    Operands.push_back(X86Operand::CreateMem(getPointerWidth(), RegNo, Disp,
-                                             BaseReg, IndexReg, Scale, Start,
-                                             End, Size));
+    Operands.push_back(X86Operand::CreateMem(getPointerWidth(BaseReg), RegNo,
+                                             Disp, BaseReg, IndexReg, Scale,
+                                             Start, End, Size));
   else
     Operands.push_back(
-        X86Operand::CreateMem(getPointerWidth(), Disp, Start, End, Size));
+        X86Operand::CreateMem(getPointerWidth(0), Disp, Start, End, Size));
   return false;
 }
 
@@ -2896,9 +2922,9 @@ bool X86AsmParser::ParseMemOperand(unsigned SegReg, const MCExpr *Disp,
   if (!parseOptionalToken(AsmToken::LParen)) {
     if (SegReg == 0)
       Operands.push_back(
-          X86Operand::CreateMem(getPointerWidth(), Disp, StartLoc, EndLoc));
+          X86Operand::CreateMem(getPointerWidth(0), Disp, StartLoc, EndLoc));
     else
-      Operands.push_back(X86Operand::CreateMem(getPointerWidth(), SegReg, Disp,
+      Operands.push_back(X86Operand::CreateMem(getPointerWidth(0), SegReg, Disp,
                                                0, 0, 1, StartLoc, EndLoc));
     return false;
   }
@@ -2994,12 +3020,12 @@ bool X86AsmParser::ParseMemOperand(unsigned SegReg, const MCExpr *Disp,
     return Error(BaseLoc, ErrMsg);
 
   if (SegReg || BaseReg || IndexReg)
-    Operands.push_back(X86Operand::CreateMem(getPointerWidth(), SegReg, Disp,
-                                             BaseReg, IndexReg, Scale, StartLoc,
-                                             EndLoc));
+    Operands.push_back(X86Operand::CreateMem(getPointerWidth(BaseReg), SegReg,
+                                             Disp, BaseReg, IndexReg, Scale,
+                                             StartLoc, EndLoc));
   else
     Operands.push_back(
-        X86Operand::CreateMem(getPointerWidth(), Disp, StartLoc, EndLoc));
+        X86Operand::CreateMem(getPointerWidth(0), Disp, StartLoc, EndLoc));
   return false;
 }
 
@@ -4105,7 +4131,8 @@ void X86AsmParser::applyLVICFIMitigation(MCInst &Inst, MCStreamer &Out) {
     unsigned Basereg =
         is64BitMode() ? X86::RSP : (Parse32 ? X86::ESP : X86::SP);
     const MCExpr *Disp = MCConstantExpr::create(0, getContext());
-    auto ShlMemOp = X86Operand::CreateMem(getPointerWidth(), /*SegReg=*/0, Disp,
+    auto ShlMemOp = X86Operand::CreateMem(getPointerWidth(Basereg),
+                                          /*SegReg=*/0, Disp,
                                           /*BaseReg=*/Basereg, /*IndexReg=*/0,
                                           /*Scale=*/1, SMLoc{}, SMLoc{}, 0);
     ShlInst.setOpcode(X86::SHL64mi);
@@ -4588,7 +4615,7 @@ bool X86AsmParser::MatchAndEmitIntelInstruction(SMLoc IDLoc, unsigned &Opcode,
     static const char *const PtrSizedInstrs[] = {"call", "jmp", "push"};
     for (const char *Instr : PtrSizedInstrs) {
       if (Mnemonic == Instr) {
-        UnsizedMemOp->Mem.Size = getPointerWidth();
+        UnsizedMemOp->Mem.Size = getPointerWidth(0);
         break;
       }
     }
@@ -4605,7 +4632,7 @@ bool X86AsmParser::MatchAndEmitIntelInstruction(SMLoc IDLoc, unsigned &Opcode,
     if (X86Op->isImm()) {
       // If it's not a constant fall through and let remainder take care of it.
       const auto *CE = dyn_cast<MCConstantExpr>(X86Op->getImm());
-      unsigned Size = getPointerWidth();
+      unsigned Size = getPointerWidth(0);
       if (CE &&
           (isIntN(Size, CE->getValue()) || isUIntN(Size, CE->getValue()))) {
         SmallString<16> Tmp;
