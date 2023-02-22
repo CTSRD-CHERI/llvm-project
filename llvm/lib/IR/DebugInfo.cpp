@@ -1965,7 +1965,8 @@ void at::trackAssignments(Function::iterator Start, Function::iterator End,
   }
 }
 
-void AssignmentTrackingPass::runOnFunction(Function &F) {
+bool AssignmentTrackingPass::runOnFunction(Function &F) {
+  bool Changed = false;
   // Collect a map of {backing storage : dbg.declares} (currently "backing
   // storage" is limited to Allocas). We'll use this to find dbg.declares to
   // delete after running `trackAssignments`.
@@ -2018,8 +2019,10 @@ void AssignmentTrackingPass::runOnFunction(Function &F) {
       // Delete DDI because the variable location is now tracked using
       // assignment tracking.
       DDI->eraseFromParent();
+      Changed = true;
     }
   }
+  return Changed;
 }
 
 static const char *AssignmentTrackingModuleFlag =
@@ -2042,7 +2045,8 @@ bool llvm::isAssignmentTrackingEnabled(const Module &M) {
 
 PreservedAnalyses AssignmentTrackingPass::run(Function &F,
                                               FunctionAnalysisManager &AM) {
-  runOnFunction(F);
+  if (!runOnFunction(F))
+    return PreservedAnalyses::all();
 
   // Record that this module uses assignment tracking. It doesn't matter that
   // some functons in the module may not use it - the debug info in those
@@ -2058,8 +2062,12 @@ PreservedAnalyses AssignmentTrackingPass::run(Function &F,
 
 PreservedAnalyses AssignmentTrackingPass::run(Module &M,
                                               ModuleAnalysisManager &AM) {
+  bool Changed = false;
   for (auto &F : M)
-    runOnFunction(F);
+    Changed |= runOnFunction(F);
+
+  if (!Changed)
+    return PreservedAnalyses::all();
 
   // Record that this module uses assignment tracking.
   setAssignmentTrackingModuleFlag(M);
