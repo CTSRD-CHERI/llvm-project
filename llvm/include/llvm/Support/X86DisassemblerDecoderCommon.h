@@ -332,7 +332,7 @@ enum OpcodeType {
 //
 // If a ModR/M byte is not required, "required" is left unset, and the values
 // for each instructionID are identical.
-typedef uint16_t InstrUID;
+typedef uint32_t InstrUID;
 
 // ModRMDecisionType - describes the type of ModR/M decision, allowing the
 // consumer to determine the number of entries in it.

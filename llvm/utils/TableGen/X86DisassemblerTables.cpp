@@ -94,7 +94,8 @@ static inline bool inheritsFrom(InstructionContext child,
            (noPrefix && inheritsFrom(child, IC_64BIT_OPSIZE, noPrefix)) ||
            (!AdSize64 && inheritsFrom(child, IC_64BIT_ADSIZE)) ||
            (noPrefix && inheritsFrom(child, IC_64BIT_XD, noPrefix))     ||
-           (noPrefix && inheritsFrom(child, IC_64BIT_XS, noPrefix)));
+           (noPrefix && inheritsFrom(child, IC_64BIT_XS, noPrefix)) ||
+           inheritsFrom(child, IC_64BIT_ADCAP));
   case IC_OPSIZE:
     return inheritsFrom(child, IC_64BIT_OPSIZE) ||
            inheritsFrom(child, IC_OPSIZE_ADSIZE);
@@ -123,11 +124,13 @@ static inline bool inheritsFrom(InstructionContext child,
     return((noPrefix && inheritsFrom(child, IC_64BIT_REXW_XS, noPrefix)) ||
            (noPrefix && inheritsFrom(child, IC_64BIT_REXW_XD, noPrefix)) ||
            (noPrefix && inheritsFrom(child, IC_64BIT_REXW_OPSIZE, noPrefix)) ||
-           (!AdSize64 && inheritsFrom(child, IC_64BIT_REXW_ADSIZE)));
+           (!AdSize64 && inheritsFrom(child, IC_64BIT_REXW_ADSIZE)) ||
+           inheritsFrom(child, IC_64BIT_REXW_ADCAP));
   case IC_64BIT_OPSIZE:
     return inheritsFrom(child, IC_64BIT_REXW_OPSIZE) ||
            (!AdSize64 && inheritsFrom(child, IC_64BIT_OPSIZE_ADSIZE)) ||
            (!AdSize64 && inheritsFrom(child, IC_64BIT_REXW_ADSIZE)) ||
+           inheritsFrom(child, IC_64BIT_REXW_ADCAP) ||
            (!AdSize64 && inheritsFrom(child, IC_64BIT_VEX_OPSIZE_ADSIZE));
   case IC_64BIT_XD:
     return (inheritsFrom(child, IC_64BIT_REXW_XD) ||
@@ -147,6 +150,7 @@ static inline bool inheritsFrom(InstructionContext child,
   case IC_64BIT_REXW_ADSIZE:
     return false;
   case IC_64BIT_ADCAP:
+    return (noPrefix && inheritsFrom(child, IC_64BIT_OPSIZE_ADCAP, noPrefix));
   case IC_64BIT_XD_ADCAP:
   case IC_64BIT_XS_ADCAP:
   case IC_64BIT_REXW_ADCAP:
@@ -736,7 +740,7 @@ void DisassemblerTables::emitModRMDecision(raw_ostream &o1, raw_ostream &o2,
     o1 << "/*Table" << EntryNumber << "*/\n";
     i1++;
     for (unsigned I : ModRMDecision) {
-      o1.indent(i1 * 2) << format("0x%hx", I) << ", /*"
+      o1.indent(i1 * 2) << format("0x%x", I) << ", /*"
                         << InstructionSpecifiers[I].name << "*/\n";
     }
     i1--;
@@ -764,9 +768,9 @@ void DisassemblerTables::emitModRMDecision(raw_ostream &o1, raw_ostream &o2,
       break;
   }
 
-  // We assume that the index can fit into uint16_t.
-  assert(sEntryNumber < 65536U &&
-         "Index into ModRMDecision is too large for uint16_t!");
+  // We assume that the index can fit into uint32_t.
+  assert(sEntryNumber < UINT_MAX / 2 &&
+         "Index into ModRMDecision is too large for uint32_t!");
   (void)sEntryNumber;
 
   ++sTableNumber;
@@ -1137,7 +1141,7 @@ void DisassemblerTables::setTableFields(OpcodeType          type,
         inheritsFrom((InstructionContext)index, IC_64BIT))
       continue;
 
-    bool adSize64 = addressSize == 64;
+    bool adSize64 = addressSize >= 64;
     if (inheritsFrom((InstructionContext)index,
                      InstructionSpecifiers[uid].insnContext, noPrefix,
                      ignoresVEX_L, ignoresVEX_W, adSize64))

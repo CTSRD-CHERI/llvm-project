@@ -1575,7 +1575,8 @@ static int readOperands(struct InternalInstruction *insn) {
         return -1;
 
       // Reject if SIB wasn't used.
-      if (insn->eaBase != EA_BASE_sib && insn->eaBase != EA_BASE_sib64)
+      if (insn->eaBase != EA_BASE_sib && insn->eaBase != EA_BASE_sib64 &&
+          insn->eaBase != EA_BASE_sibcap)
         return -1;
 
       // If sibIndex was set to SIB_INDEX_NONE, index offset is 4.
@@ -1612,7 +1613,8 @@ static int readOperands(struct InternalInstruction *insn) {
       break;
     case ENCODING_SIB:
       // Reject if SIB wasn't used.
-      if (insn->eaBase != EA_BASE_sib && insn->eaBase != EA_BASE_sib64)
+      if (insn->eaBase != EA_BASE_sib && insn->eaBase != EA_BASE_sib64 &&
+          insn->eaBase != EA_BASE_sibcap)
         return -1;
       if (readModRM(insn))
         return -1;
@@ -2062,7 +2064,8 @@ static void translateImmediate(MCInst &mcInst, uint64_t immediate,
 /// @return             - 0 on success; -1 otherwise
 static bool translateRMRegister(MCInst &mcInst,
                                 InternalInstruction &insn) {
-  if (insn.eaBase == EA_BASE_sib || insn.eaBase == EA_BASE_sib64) {
+  if (insn.eaBase == EA_BASE_sib || insn.eaBase == EA_BASE_sib64 ||
+      insn.eaBase == EA_BASE_sibcap) {
     debug("A R/M register operand may not have a SIB byte");
     return true;
   }
@@ -2121,7 +2124,8 @@ static bool translateRMMemory(MCInst &mcInst, InternalInstruction &insn,
   MCOperand segmentReg;
   uint64_t pcrel = 0;
 
-  if (insn.eaBase == EA_BASE_sib || insn.eaBase == EA_BASE_sib64) {
+  if (insn.eaBase == EA_BASE_sib || insn.eaBase == EA_BASE_sib64 ||
+      insn.eaBase == EA_BASE_sibcap) {
     if (insn.sibBase != SIB_BASE_NONE) {
       switch (insn.sibBase) {
       default:
@@ -2165,6 +2169,7 @@ static bool translateRMMemory(MCInst &mcInst, InternalInstruction &insn,
            (insn.sibBase == SIB_BASE_NONE && insn.mode != MODE_64BIT) ||
            (insn.sibBase != SIB_BASE_NONE &&
             insn.sibBase != SIB_BASE_ESP && insn.sibBase != SIB_BASE_RSP &&
+            insn.sibBase != SIB_BASE_CSP && insn.sibBase != SIB_BASE_C12 &&
             insn.sibBase != SIB_BASE_R12D && insn.sibBase != SIB_BASE_R12))) {
         indexReg = MCOperand::createReg(insn.addressSize == 4 ? X86::EIZ :
                                                                 X86::RIZ);
