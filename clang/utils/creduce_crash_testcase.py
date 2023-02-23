@@ -891,7 +891,8 @@ class Reducer(object):
             noargs_opts_to_remove=["-dwarf-column-info", "-munwind-tables", "-ggnu-pubnames"],
             one_arg_opts_to_remove=["-split-dwarf-file", "-split-dwarf-output"],
             noargs_opts_to_remove_startswith=["-debug-info-kind=", "-dwarf-version=", "-debugger-tuning=",
-                                              "-fdebug-prefix-map=", "-fdebug-compilation-dir="],
+                                              "-fdebug-prefix-map=", "-fdebug-compilation-dir=",
+                                              "-fcoverage-compilation-dir="],
         )
         # try emitting llvm-ir (i.e. frontend bug):
         print("Checking whether -emit-llvm crashes:", end="", flush=True)
@@ -1068,12 +1069,25 @@ class Reducer(object):
         new_command = self._try_remove_args(
             new_command, infile, "Checking whether compiling without thread model flags crashes:",
             one_arg_opts_to_remove=["-mthread-model"],
-            noargs_opts_to_remove_startswith=["-ftls-model=initial-exec"],
+            noargs_opts_to_remove_startswith=["-ftls-model="],
         )
+        previous = list(new_command)
         new_command = self._try_remove_args(
             new_command, infile, "Checking whether compiling without -target-feature flags crashes:",
             one_arg_opts_to_remove=["-target-feature"],
         )
+        if previous == new_command and "-target-feature" in new_command:
+            print(red("Some of the -target-feature flags are required, trying to reduce"))
+            target_features = []
+            for i, arg in enumerate(new_command):
+                if arg == "-target-feature" and i + 1 < len(new_command):
+                    target_features.append(new_command[i + 1])
+            for feature in target_features:
+                new_command = self._try_remove_args(
+                    new_command, infile, f"Checking whether compiling without '-target-feature {feature}' crashes:",
+                    one_arg_opts_to_remove_if={"-target-feature": lambda a: a == feature}
+                )
+
         new_command = self._try_remove_args(
             new_command, infile, "Checking whether compiling without various MIPS flags crashes:",
             one_arg_opts_to_remove_if={
@@ -1086,12 +1100,19 @@ class Reducer(object):
         )
         new_command = self._try_remove_args(
             new_command, infile, "Checking whether compiling without -mrelax-all crashes:",
-            noargs_opts_to_remove=["-mrelax-all"],
+            noargs_opts_to_remove=["-mrelax-all", "--mrelax-relocations"],
         )
         new_command = self._try_remove_args(
             new_command, infile, "Checking whether compiling without -D flags crashes:",
             noargs_opts_to_remove=["-sys-header-deps"],
-            one_arg_opts_to_remove=["-D"]
+            one_arg_opts_to_remove=["-D"],
+            noargs_opts_to_remove_startswith=["-D"]
+        )
+        new_command = self._try_remove_args(
+            new_command, infile, "Checking whether compiling without include flags crashes:",
+            noargs_opts_to_remove=["-nostdsysteminc"],
+            one_arg_opts_to_remove=["-I", "-isystem", "-internal-isystem"],
+            noargs_opts_to_remove_startswith=["-I", "-isystem"]
         )
         new_command = self._try_remove_args(
             new_command, infile, "Checking whether compiling without include flags crashes:",
@@ -1100,6 +1121,10 @@ class Reducer(object):
         new_command = self._try_remove_args(
             new_command, infile, "Checking whether compiling without function/data sections crashes:",
             noargs_opts_to_remove=["-ffunction-sections", "-fdata-sections"],
+        )
+        new_command = self._try_remove_args(
+            new_command, infile, "Checking whether compiling without -ffp-contract= crashes:",
+            noargs_opts_to_remove_startswith=["-ffp-contract="]
         )
         new_command = self._try_remove_args(
             new_command, infile, "Checking whether compiling without -x flag crashes:",
@@ -1137,6 +1162,10 @@ class Reducer(object):
             noargs_opts_to_remove=["-ffreestanding"])
 
         new_command = self._try_remove_args(
+            new_command, infile, "Checking whether -f(no-)signed-char can be removed:",
+            noargs_opts_to_remove=["-fno-signed-char", "-fsigned-char"])
+
+        new_command = self._try_remove_args(
             new_command, infile, "Checking whether TLS/relocation model options can be removed:",
             noargs_opts_to_remove_startswith=["-ftls-model="],
             one_arg_opts_to_remove=["-mrelocation-model"])
@@ -1152,6 +1181,10 @@ class Reducer(object):
         new_command = self._try_remove_args(
             new_command, infile, "Checking whether -target-abi option can be removed:",
             one_arg_opts_to_remove=["-target-abi"])
+
+        new_command = self._try_remove_args(
+            new_command, infile, "Checking whether -msmall-data-limit option can be removed:",
+            one_arg_opts_to_remove=["-msmall-data-limit"])
 
         # try to remove some arguments that should not be needed
         new_command = self._try_remove_args(
