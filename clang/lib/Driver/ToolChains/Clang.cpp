@@ -6578,21 +6578,6 @@ void Clang::ConstructJob(Compilation &C, const JobAction &JA,
   if (TC.IsEncodeExtendedBlockSignatureDefault())
     CmdArgs.push_back("-fencode-extended-block-signature");
 
-  if (Args.hasFlag(options::OPT_fcoroutines_ts, options::OPT_fno_coroutines_ts,
-                   false) &&
-      types::isCXX(InputType)) {
-    if (TC.isCheriPurecap()) {
-      // C++ Coroutines are not yet supported for purecap.
-      // https://github.com/CTSRD-CHERI/llvm-project/issues/717
-      D.Diag(diag::err_drv_unsupported_opt_for_target)
-          << "-fcoroutines-ts"
-          << "purecap " + TC.getTriple().str();
-    } else {
-      D.Diag(diag::warn_deperecated_fcoroutines_ts_flag);
-      CmdArgs.push_back("-fcoroutines-ts");
-    }
-  }
-
   if (Args.hasFlag(options::OPT_fcoro_aligned_allocation,
                    options::OPT_fno_coro_aligned_allocation, false) &&
       types::isCXX(InputType))
