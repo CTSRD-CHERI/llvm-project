@@ -5,7 +5,7 @@
 /// This only happened in C++ mode, when compiling as C it worked as expected
 /// because the MemberExpr was lowered to a global load rather than constant folded.
 // RUN: %riscv64_cheri_cc1 -xc -o - -emit-llvm %s | FileCheck %s --check-prefixes=CHECK,CHECK-C
-// RUN: %riscv64_cheri_cc1 -xc++ -o - -emit-llvm %s | FileCheck %s --check-prefixes=CHECK
+// RUN: %riscv64_cheri_cc1 -xc++ -o - -emit-llvm %s | FileCheck %s --check-prefixes=CHECK,CHECK-CXX
 
 #ifdef __cplusplus
 extern "C" {
@@ -30,8 +30,6 @@ __intcap_t test_const_var() { return const_var; }
 //
 __intcap_t test_const_var_binop() { return const_var + 1; }
 
-#ifndef __cplusplus
-
 const struct {
   __intcap_t value;
 } const_struct = {1};
@@ -40,6 +38,11 @@ const struct {
 // CHECK-C-NEXT:  entry:
 // CHECK-C-NEXT:    [[TMP0:%.*]] = load i8 addrspace(200)*, i8 addrspace(200)** getelementptr inbounds ([[STRUCT_ANON:%.*]], %struct.anon* @const_struct, i32 0, i32 0), align 16
 // CHECK-C-NEXT:    ret i8 addrspace(200)* [[TMP0]]
+//
+// CHECK-CXX-LABEL: define {{[^@]+}}@test_const_struct
+// CHECK-CXX-SAME: () #[[ATTR0]] {
+// CHECK-CXX-NEXT:  entry:
+// CHECK-CXX-NEXT:    ret i8 addrspace(200)* getelementptr (i8, i8 addrspace(200)* null, i64 1)
 //
 __intcap_t test_const_struct() { return const_struct.value; }
 
@@ -53,8 +56,16 @@ __intcap_t test_const_struct() { return const_struct.value; }
 // CHECK-C-NEXT:    [[TMP3:%.*]] = call i8 addrspace(200)* @llvm.cheri.cap.address.set.i64(i8 addrspace(200)* [[TMP0]], i64 [[ADD]])
 // CHECK-C-NEXT:    ret i8 addrspace(200)* [[TMP3]]
 //
+// CHECK-CXX-LABEL: define {{[^@]+}}@test_const_struct_binop
+// CHECK-CXX-SAME: () #[[ATTR0]] {
+// CHECK-CXX-NEXT:  entry:
+// CHECK-CXX-NEXT:    [[TMP0:%.*]] = call i64 @llvm.cheri.cap.address.get.i64(i8 addrspace(200)* getelementptr (i8, i8 addrspace(200)* null, i64 1))
+// CHECK-CXX-NEXT:    [[TMP1:%.*]] = call i64 @llvm.cheri.cap.address.get.i64(i8 addrspace(200)* getelementptr (i8, i8 addrspace(200)* null, i64 1))
+// CHECK-CXX-NEXT:    [[ADD:%.*]] = add nsw i64 [[TMP0]], [[TMP1]]
+// CHECK-CXX-NEXT:    [[TMP2:%.*]] = call i8 addrspace(200)* @llvm.cheri.cap.address.set.i64(i8 addrspace(200)* getelementptr (i8, i8 addrspace(200)* null, i64 1), i64 [[ADD]])
+// CHECK-CXX-NEXT:    ret i8 addrspace(200)* [[TMP2]]
+//
 __intcap_t test_const_struct_binop() { return const_struct.value + 1; }
-#endif
 
 #ifdef __cplusplus
 }
