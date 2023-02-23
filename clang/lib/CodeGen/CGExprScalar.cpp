@@ -1968,9 +1968,13 @@ Value *ScalarExprEmitter::VisitMemberExpr(MemberExpr *E) {
   } else {
     Expr::EvalResult Result;
     if (E->EvaluateAsInt(Result, CGF.getContext(), Expr::SE_AllowSideEffects)) {
-      llvm::APSInt Value = Result.Val.getInt();
       CGF.EmitIgnoredExpr(E->getBase());
-      return Builder.getInt(Value);
+      llvm::Value *Value = Builder.getInt(Result.Val.getInt());
+      if (E->getType()->isCHERICapabilityType(CGF.getContext())) {
+        assert(ConvertType(E->getType()) == CGF.Int8CheriCapTy);
+        Value = CGF.getNullDerivedCapability(ConvertType(E->getType()), Value);
+      }
+      return Value;
     }
   }
 
