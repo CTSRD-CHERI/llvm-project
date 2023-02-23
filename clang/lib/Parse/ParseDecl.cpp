@@ -1353,6 +1353,7 @@ void Parser::ParseAvailabilityAttribute(IdentifierInfo &Availability,
 /// keyword-arg:
 ///   'language' '=' <string>
 ///   'defined_in' '=' <string>
+///   'USR' '=' <string>
 ///   'generated_declaration'
 void Parser::ParseExternalSourceSymbolAttribute(
     IdentifierInfo &ExternalSourceSymbol, SourceLocation Loc,
@@ -1368,6 +1369,7 @@ void Parser::ParseExternalSourceSymbolAttribute(
     Ident_language = PP.getIdentifierInfo("language");
     Ident_defined_in = PP.getIdentifierInfo("defined_in");
     Ident_generated_declaration = PP.getIdentifierInfo("generated_declaration");
+    Ident_USR = PP.getIdentifierInfo("USR");
   }
 
   ExprResult Language;
@@ -1375,6 +1377,8 @@ void Parser::ParseExternalSourceSymbolAttribute(
   ExprResult DefinedInExpr;
   bool HasDefinedIn = false;
   IdentifierLoc *GeneratedDeclaration = nullptr;
+  ExprResult USR;
+  bool HasUSR = false;
 
   // Parse the language/defined_in/generated_declaration keywords
   do {
@@ -1396,7 +1400,8 @@ void Parser::ParseExternalSourceSymbolAttribute(
       continue;
     }
 
-    if (Keyword != Ident_language && Keyword != Ident_defined_in) {
+    if (Keyword != Ident_language && Keyword != Ident_defined_in &&
+        Keyword != Ident_USR) {
       Diag(Tok, diag::err_external_source_symbol_expected_keyword);
       SkipUntil(tok::r_paren, StopAtSemi);
       return;
@@ -1409,16 +1414,22 @@ void Parser::ParseExternalSourceSymbolAttribute(
       return;
     }
 
-    bool HadLanguage = HasLanguage, HadDefinedIn = HasDefinedIn;
+    bool HadLanguage = HasLanguage, HadDefinedIn = HasDefinedIn,
+         HadUSR = HasUSR;
     if (Keyword == Ident_language)
       HasLanguage = true;
+    else if (Keyword == Ident_USR)
+      HasUSR = true;
     else
       HasDefinedIn = true;
 
     if (Tok.isNot(tok::string_literal)) {
       Diag(Tok, diag::err_expected_string_literal)
           << /*Source='external_source_symbol attribute'*/ 3
-          << /*language | source container*/ (Keyword != Ident_language);
+          << /*language | source container | USR*/ (
+                 Keyword == Ident_language
+                     ? 0
+                     : (Keyword == Ident_defined_in ? 1 : 2));
       SkipUntil(tok::comma, tok::r_paren, StopAtSemi | StopBeforeMatch);
       continue;
     }
@@ -1430,6 +1441,14 @@ void Parser::ParseExternalSourceSymbolAttribute(
         continue;
       }
       Language = ParseStringLiteralExpression();
+    } else if (Keyword == Ident_USR) {
+      if (HadUSR) {
+        Diag(KeywordLoc, diag::err_external_source_symbol_duplicate_clause)
+            << Keyword;
+        ParseStringLiteralExpression();
+        continue;
+      }
+      USR = ParseStringLiteralExpression();
     } else {
       assert(Keyword == Ident_defined_in && "Invalid clause keyword!");
       if (HadDefinedIn) {
@@ -1448,8 +1467,8 @@ void Parser::ParseExternalSourceSymbolAttribute(
   if (EndLoc)
     *EndLoc = T.getCloseLocation();
 
-  ArgsUnion Args[] = {Language.get(), DefinedInExpr.get(),
-                      GeneratedDeclaration};
+  ArgsUnion Args[] = {Language.get(), DefinedInExpr.get(), GeneratedDeclaration,
+                      USR.get()};
   Attrs.addNew(&ExternalSourceSymbol, SourceRange(Loc, T.getCloseLocation()),
                ScopeName, ScopeLoc, Args, std::size(Args), Syntax);
 }
