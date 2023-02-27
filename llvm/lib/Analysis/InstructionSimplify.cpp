@@ -4934,6 +4934,10 @@ static Value *simplifyGEPInst(Type *SrcTy, Value *Ptr,
       !all_of(Indices, [](Value *V) { return isa<Constant>(V); }))
     return nullptr;
 
+  if (!ConstantExpr::isSupportedGetElementPtr(SrcTy))
+    return ConstantFoldGetElementPtr(SrcTy, cast<Constant>(Ptr), InBounds,
+                                     std::nullopt, Indices);
+
   auto *CE = ConstantExpr::getGetElementPtr(SrcTy, cast<Constant>(Ptr), Indices,
                                             InBounds);
   return ConstantFoldConstant(CE, Q.DL);
