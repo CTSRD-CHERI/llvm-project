@@ -20,6 +20,7 @@
 
 // The Windows headers don't appear to be compatible with modules
 // UNSUPPORTED: windows
+// UNSUPPORTED: buildhost=windows
 
 // This test times out - fixed in https://reviews.llvm.org/D151654
 // REQUIRES: D151654
