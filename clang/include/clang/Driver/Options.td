@@ -6240,6 +6240,9 @@ def print_stats : Flag<["-"], "print-stats">,
 def stats_file : Joined<["-"], "stats-file=">,
   HelpText<"Filename to write statistics to">,
   MarshallingInfoString<FrontendOpts<"StatsFile">>;
+def stats_file_append : Flag<["-"], "stats-file-append">,
+  HelpText<"If stats should be appended to stats-file instead of overwriting it">,
+  MarshallingInfoFlag<FrontendOpts<"AppendStats">>;
 def cheri_stats_file : Joined<["-"], "cheri-stats-file=">,
   HelpText<"Filename to write CHERI statistics to">,
   MarshallingInfoString<CodeGenOpts<"CHERIStatsFile">>;
