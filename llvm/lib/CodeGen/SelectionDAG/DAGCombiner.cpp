@@ -5171,9 +5171,6 @@ SDValue DAGCombiner::visitABD(SDNode *N) {
   // fold (abd c1, c2)
   if (SDValue C = DAG.FoldConstantArithmetic(Opcode, DL, VT, {N0, N1}))
     return C;
-  // reassociate if possible
-  if (SDValue C = reassociateOps(Opcode, DL, N0, N1, N->getFlags()))
-    return C;
 
   // canonicalize constant to RHS.
   if (DAG.isConstantIntBuildVectorOrConstantInt(N0) &&
