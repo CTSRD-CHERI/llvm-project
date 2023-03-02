@@ -61,6 +61,7 @@ private:
   void finalizeAddressDependentContent();
   void optimizeBasicBlockJumps();
   void sortInputSections();
+  void sortOrphanSections();
   void finalizeSections();
   void checkExecuteOnly();
   void setReservedSymbolSections();
@@ -1497,9 +1498,13 @@ template <class ELFT> void Writer<ELFT>::sortSections() {
   script->processInsertCommands();
   script->adjustOutputSections();
 
-  if (!script->hasSectionsCommand)
-    return;
+  if (script->hasSectionsCommand)
+    sortOrphanSections();
 
+  script->adjustSectionsAfterSorting();
+}
+
+template <class ELFT> void Writer<ELFT>::sortOrphanSections() {
   // Orphan sections are sections present in the input files which are
   // not explicitly placed into the output file by the linker script.
   //
@@ -1574,8 +1579,6 @@ template <class ELFT> void Writer<ELFT>::sortSections() {
     std::rotate(pos, nonScriptI, end);
     nonScriptI = end;
   }
-
-  script->adjustSectionsAfterSorting();
 }
 
 static bool compareByFilePosition(InputSection *a, InputSection *b) {
