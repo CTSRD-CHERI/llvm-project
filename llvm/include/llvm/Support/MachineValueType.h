@@ -291,8 +291,9 @@ namespace llvm {
       externref      = 193,    // WebAssembly's externref type
       x86amx         = 194,    // This is an X86 AMX value
       i64x8          = 195,    // 8 Consecutive GPRs (AArch64)
+      aarch64svcount = 196,    // AArch64 predicate-as-counter
 
-      c64            = i64x8 + 1,  // This is a 64 bit capability value
+      c64            = aarch64svcount + 1,  // This is a 64 bit capability value
       c128           = c64 + 1,    // This is a 128 bit capability value
       c256           = c128 + 1,   // This is a 256 bit capability value
 
@@ -420,6 +421,16 @@ namespace llvm {
     bool isScalableVector() const {
       return (SimpleTy >= MVT::FIRST_SCALABLE_VECTOR_VALUETYPE &&
               SimpleTy <= MVT::LAST_SCALABLE_VECTOR_VALUETYPE);
+    }
+
+    /// Return true if this is a custom target type that has a scalable size.
+    bool isScalableTargetExtVT() const {
+      return SimpleTy == MVT::aarch64svcount;
+    }
+
+    /// Return true if the type is a scalable type.
+    bool isScalableVT() const {
+      return isScalableVector() || isScalableTargetExtVT();
     }
 
     bool isFixedLengthVector() const {
@@ -984,6 +995,7 @@ namespace llvm {
       case v2i8:
       case v1i16:
       case v1f16: return TypeSize::Fixed(16);
+      case aarch64svcount:
       case nxv16i1:
       case nxv2i8:
       case nxv1i16:
