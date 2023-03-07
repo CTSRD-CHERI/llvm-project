@@ -2710,6 +2710,10 @@ SDValue DAGCombiner::visitADDLike(SDNode *N) {
       !DAG.isConstantIntBuildVectorOrConstantInt(N1))
     return DAG.getNode(ISD::ADD, DL, VT, N1, N0);
 
+  if (areBitwiseNotOfEachother(N0, N1))
+    return DAG.getConstant(APInt::getAllOnes(VT.getScalarSizeInBits()),
+                           SDLoc(N), VT);
+
   // fold vector ops
   if (VT.isVector()) {
     if (SDValue FoldedVOp = SimplifyVBinOp(N, DL))
