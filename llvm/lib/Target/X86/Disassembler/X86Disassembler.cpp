@@ -1270,6 +1270,12 @@ static int getInstructionID(struct InternalInstruction *insn,
       attrMask |= ATTR_OPSIZE;
   }
 
+  if (insn->mode == MODE_64BIT && insn->opcodeType == ONEBYTE &&
+      insn->opcode == 0x8D && insn->hasOpCap) {
+    // LEAC uses capability addresses always.
+    insn->addressSize = 16;
+  }
+
 
   if (getInstructionIDWithAttrMask(&instructionID, insn, attrMask))
     return -1;

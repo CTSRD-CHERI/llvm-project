@@ -35,6 +35,11 @@ let isReMaterializable = 1 in
 def LEA64r   : RI<0x8D, MRMSrcMem, (outs GR64:$dst), (ins lea64mem:$src),
                   "lea{q}\t{$src|$dst}, {$dst|$src}",
                   [(set GR64:$dst, lea64addr:$src)]>;
+
+let isReMaterializable = 1 in
+def LEACr    : CI<0x8D, MRMSrcMem, (outs GRC:$dst), (ins leacapmem:$src),
+                  "lea{c}\t{$src|$dst}, {$dst|$src}",
+                  [(set GRC:$dst, leacapaddr:$src)]>, AdSizeCap;
 } // SchedRW
 
 //===----------------------------------------------------------------------===//

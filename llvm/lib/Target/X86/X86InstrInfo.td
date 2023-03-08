@@ -819,6 +819,13 @@ def lea64mem : Operand<i64> {
   let ParserMatchClass = X86MemAsmOperand;
 }
 
+// Memory operands that use capability pointers in both LP64 and purecap.
+def leacapmem : Operand<iFATPTR128> {
+  let PrintMethod = "printMemReference";
+  let MIOperandInfo = (ops GRC, i8imm, GRC_NOSP, i32imm, SEGMENT_REG);
+  let ParserMatchClass = X86MemAsmOperand;
+}
+
 let RenderMethod = "addMaskPairOperands" in {
   def VK1PairAsmOperand : AsmOperandClass { let Name = "VK1Pair"; }
   def VK2PairAsmOperand : AsmOperandClass { let Name = "VK2Pair"; }
@@ -877,6 +884,10 @@ def tls64addr : ComplexPattern<i64, 5, "selectTLSADDRAddr",
 
 def tls64baseaddr : ComplexPattern<i64, 5, "selectTLSADDRAddr",
                                [tglobaltlsaddr], []>;
+
+def leacapaddr : ComplexPattern<iFATPTR128, 5, "selectLEAAddr",
+                        [add, sub, mul, X86mul_imm, shl, or, frameindex,
+                         X86WrapperRIP], []>;
 
 def vectoraddr : ComplexPattern<iPTR, 5, "selectVectorAddr", [],[SDNPWantParent]>;
 
