@@ -1871,7 +1871,7 @@ static unsigned GetNumNodeResults(Record *Operator, CodeGenDAGPatterns &CDP) {
     return 0;  // All return nothing.
 
   if (Operator->isSubClassOf("Intrinsic"))
-    return CDP.getIntrinsic(Operator).IS.RetVTs.size();
+    return CDP.getIntrinsic(Operator).IS.RetTys.size();
 
   if (Operator->isSubClassOf("SDNode"))
     return CDP.getSDNodeInfo(Operator).getNumResults();
@@ -2525,11 +2525,12 @@ bool TreePatternNode::ApplyTypeConstraints(TreePattern &TP, bool NotRegisters) {
     bool MadeChange = false;
 
     // Apply the result type to the node.
-    unsigned NumRetVTs = Int->IS.RetVTs.size();
-    unsigned NumParamVTs = Int->IS.ParamVTs.size();
+    unsigned NumRetVTs = Int->IS.RetTys.size();
+    unsigned NumParamVTs = Int->IS.ParamTys.size();
 
     for (unsigned i = 0, e = NumRetVTs; i != e; ++i)
-      MadeChange |= UpdateNodeType(i, Int->IS.RetVTs[i], TP);
+      MadeChange |= UpdateNodeType(
+          i, getValueType(Int->IS.RetTys[i]->getValueAsDef("VT")), TP);
 
     if (getNumChildren() != NumParamVTs + 1) {
       TP.error("Intrinsic '" + Int->Name + "' expects " + Twine(NumParamVTs) +
@@ -2543,7 +2544,8 @@ bool TreePatternNode::ApplyTypeConstraints(TreePattern &TP, bool NotRegisters) {
     for (unsigned i = 0, e = getNumChildren()-1; i != e; ++i) {
       MadeChange |= getChild(i+1)->ApplyTypeConstraints(TP, NotRegisters);
 
-      MVT::SimpleValueType OpVT = Int->IS.ParamVTs[i];
+      MVT::SimpleValueType OpVT =
+          getValueType(Int->IS.ParamTys[i]->getValueAsDef("VT"));
       assert(getChild(i + 1)->getNumTypes() == 1 && "Unhandled case");
       MadeChange |= getChild(i + 1)->UpdateNodeType(0, OpVT, TP);
     }
@@ -2997,7 +2999,7 @@ TreePatternNodePtr TreePattern::ParseTreePattern(Init *TheInit,
 
     // If this intrinsic returns void, it must have side-effects and thus a
     // chain.
-    if (Int.IS.RetVTs.empty())
+    if (Int.IS.RetTys.empty())
       Operator = getDAGPatterns().get_intrinsic_void_sdnode();
     else if (!Int.ME.doesNotAccessMemory() || Int.hasSideEffects)
       // Has side-effects, requires chain.
