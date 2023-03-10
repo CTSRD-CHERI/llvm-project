@@ -85,33 +85,43 @@ MCInst RISCVInstrInfo::getNop() const {
 }
 
 unsigned RISCVInstrInfo::isLoadFromStackSlot(const MachineInstr &MI,
-                                             int &FrameIndex) const {
+                                             int &FrameIndex,
+                                             unsigned &MemBytes) const {
   switch (MI.getOpcode()) {
   default:
     return 0;
   case RISCV::LB:
   case RISCV::LBU:
+  case RISCV::CLB:
+  case RISCV::CLBU:
+    MemBytes = 1;
+    break;
   case RISCV::LH:
   case RISCV::LHU:
   case RISCV::FLH:
+  case RISCV::CLH:
+  case RISCV::CLHU:
+    MemBytes = 2;
+    break;
   case RISCV::LW:
   case RISCV::FLW:
   case RISCV::LWU:
-  case RISCV::LD:
-  case RISCV::FLD:
-  case RISCV::LC_64:
-  case RISCV::LC_128:
-  case RISCV::CLB:
-  case RISCV::CLBU:
-  case RISCV::CLH:
-  case RISCV::CLHU:
   case RISCV::CLW:
   case RISCV::CFLW:
   case RISCV::CLWU:
+    MemBytes = 4;
+    break;
+  case RISCV::LD:
+  case RISCV::FLD:
+  case RISCV::LC_64:
   case RISCV::CLD:
   case RISCV::CFLD:
   case RISCV::CLC_64:
+    MemBytes = 8;
+    break;
   case RISCV::CLC_128:
+  case RISCV::LC_128:
+    MemBytes = 16;
     break;
   }
 
@@ -125,28 +135,38 @@ unsigned RISCVInstrInfo::isLoadFromStackSlot(const MachineInstr &MI,
 }
 
 unsigned RISCVInstrInfo::isStoreToStackSlot(const MachineInstr &MI,
-                                            int &FrameIndex) const {
+                                            int &FrameIndex,
+                                            unsigned &MemBytes) const {
   switch (MI.getOpcode()) {
   default:
     return 0;
   case RISCV::SB:
+  case RISCV::CSB:
+    MemBytes = 1;
+    break;
   case RISCV::SH:
-  case RISCV::SW:
   case RISCV::FSH:
+  case RISCV::CSH:
+    MemBytes = 2;
+    break;
+  case RISCV::SW:
   case RISCV::FSW:
+  case RISCV::CSW:
+  case RISCV::CFSW:
+    MemBytes = 4;
+    break;
   case RISCV::SD:
   case RISCV::FSD:
   case RISCV::SC_64:
-  case RISCV::SC_128:
-  case RISCV::CSB:
-  case RISCV::CSH:
-  case RISCV::CSW:
-  case RISCV::CFSW:
   case RISCV::CSD:
   case RISCV::CFSD:
   case RISCV::CSC_64:
-  case RISCV::CSC_128:
+    MemBytes = 8;
     break;
+  case RISCV::SC_128:
+  case RISCV::CSC_128:
+      MemBytes = 16;
+      break;
   }
 
   if (MI.getOperand(1).isFI() && MI.getOperand(2).isImm() &&
