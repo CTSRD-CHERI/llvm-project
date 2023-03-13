@@ -46,8 +46,8 @@ void copy_intptr(int **ppy) {
   *ppy = *v; // no-warning: copy as int*
 }
 
-void swapfunc(void *a, void *b, int n) {
-  long i = (n);
+static void swapfunc(void *a, void *b, int n) {
+  long i = n;
   char *pi = (char *)(a);
   char *pj = (char *)(b);
   do {
@@ -69,11 +69,20 @@ void *realloc_impl(void *ptr, size_t size) {
   return dst;
 }
 
-void memcpy_impl(void* src0, void *dst0, size_t len) {
+void memcpy_impl_good(void* src0, void *dst0, size_t len) {
   char *src = src0;
   char *dst = dst0;
 
-  if (len < sizeof(BLOCK_TYPE))
+  if ((len < sizeof(BLOCK_TYPE)) || ((long)src & (BLOCK_SIZE - 1)) || ((long)dst & (BLOCK_SIZE - 1)))
+    while (len--)
+      *dst++ = *src++; // no-warning
+}
+
+void memcpy_impl_bad(void* src0, void *dst0, size_t len) {
+  char *src = src0;
+  char *dst = dst0;
+
+  if (len < sizeof(BLOCK_TYPE)+1)
     while (len--)
       *dst++ = *src++; // expected-warning{{Tag-stripping store of a capability}}
 }
