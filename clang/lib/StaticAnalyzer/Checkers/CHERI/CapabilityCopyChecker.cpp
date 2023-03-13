@@ -15,6 +15,8 @@
 #include "clang/StaticAnalyzer/Core/Checker.h"
 #include "clang/StaticAnalyzer/Core/CheckerManager.h"
 #include "clang/StaticAnalyzer/Core/PathSensitive/CheckerContext.h"
+#include "clang/ASTMatchers/ASTMatchFinder.h"
+#include "clang/ASTMatchers/ASTMatchers.h"
 
 using namespace clang;
 using namespace ento;
@@ -48,7 +50,8 @@ public:
 
 class CapabilityCopyChecker : public Checker<check::PostStmt<BinaryOperator>,
                                              check::Location,
-                                             check::Bind> {
+                                             check::Bind,
+                                             check::BranchCondition> {
   std::unique_ptr<BugType> UseCapAsNonCap;
   std::unique_ptr<BugType> StoreCapAsNonCap;
 
@@ -59,6 +62,7 @@ public:
   void checkLocation(SVal l, bool isLoad, const Stmt *S,
                      CheckerContext &C) const;
   void checkBind(SVal L, SVal V, const Stmt *S, CheckerContext &C) const;
+  void checkBranchCondition(const Stmt *Condition, CheckerContext &Ctx) const;
 
 private:
   bool checkBinaryOpArg(CheckerContext &C, const Expr* E) const;
@@ -67,6 +71,7 @@ private:
 } // namespace
 
 REGISTER_SET_WITH_PROGRAMSTATE(VoidPtrArgDeref, const MemRegion *)
+REGISTER_LIST_WITH_PROGRAMSTATE(WhileBoundVar, SymbolRef)
 
 CapabilityCopyChecker::CapabilityCopyChecker() {
   UseCapAsNonCap.reset(
@@ -202,6 +207,53 @@ static bool isCapabilityStorage(CheckerContext &C, const MemRegion *R) {
   return false;
 }
 
+static auto whileConditionMatcher() {
+  using namespace clang::ast_matchers;
+
+  // (--len)
+  // FIXME: PreDec for do-while; PostDec for while
+  auto U =
+      unaryOperator(hasOperatorName("--"), hasUnaryOperand(expr().bind("len")));
+  // (--len > 0)
+  auto BO = binaryOperation(
+      hasAnyOperatorName("!=", ">"),
+      hasLHS(U),
+      hasRHS(ignoringImplicit(integerLiteral(equals(0))))
+  );
+  return stmt(anyOf(U, BO));
+}
+
+static bool isInsideSmallConstantBoundLoop(const Stmt *S, CheckerContext &C,
+                                           unsigned BlockSize) {
+  ASTContext &ASTCtx = C.getASTContext();
+  SValBuilder &SVB = C.getSValBuilder();
+  unsigned CapSize = ASTCtx.getTypeSize(ASTCtx.VoidPtrTy);
+  unsigned IterNum4CapCopy = CapSize / BlockSize;
+  const NonLoc &ItVal = SVB.makeIntVal(IterNum4CapCopy, true);
+
+  auto BoundVarList = C.getState()->get<WhileBoundVar>();
+  for (auto &&V : BoundVarList) {
+    auto SmallLoop =
+        SVB.evalBinOpNN(C.getState(), clang::BO_GE, nonloc::SymbolVal(V), ItVal,
+                        SVB.getConditionType());
+    if (auto LC = SmallLoop.getAs<DefinedOrUnknownSVal>())
+      if (!C.getState()->assume(*LC, true))
+        return true;
+    return false;
+  }
+
+  using namespace clang::ast_matchers;
+  if (C.blockCount() == 1) {
+    // first iter
+    auto doWhileStmtMatcher = doStmt(hasCondition(whileConditionMatcher()));
+    auto M = match(stmt(hasParent(doWhileStmtMatcher)), *S, C.getASTContext());
+    if (!M.empty())
+      return true; // decide on second iteration
+  }
+
+  return false;
+}
+
 void CapabilityCopyChecker::checkBind(SVal L, SVal V, const Stmt *S,
                                       CheckerContext &C) const {
   const MemRegion *MR = L.getAsRegion();
@@ -211,20 +263,26 @@ void CapabilityCopyChecker::checkBind(SVal L, SVal V, const Stmt *S,
   const QualType &PointeeTy = L.getType(C.getASTContext())->getPointeeType();
   if (!isNonCapScalarType(PointeeTy, C.getASTContext()))
     return;
-
   /* Non-capability scalar store */
+
   const CHERITagState &ValTag = getTagState(V, C);
-  if ((ValTag.isTagged() || ValTag.mayBeTagged())
-      && isCapabilityStorage(C, MR)) {
-    /* Storing capability to capability storage as non-cap*/
-    if (ExplodedNode *ErrNode = C.generateNonFatalErrorNode()) {
-      auto W = std::make_unique<PathSensitiveBugReport>(
-          *StoreCapAsNonCap, "Tag-stripping store of a capability",
-          ErrNode);
-      W->addRange(S->getSourceRange());
-      C.emitReport(std::move(W));
-      return;
-    }
+  if (!ValTag.isTagged() && !ValTag.mayBeTagged())
+    return;
+
+  if (!isCapabilityStorage(C, MR))
+    return;
+
+  // Skip if loop bound is not big enough to copy capability
+  unsigned BlockSize = C.getASTContext().getTypeSize(PointeeTy);
+  if (isInsideSmallConstantBoundLoop(S, C, BlockSize))
+    return;
+
+  /* Storing capability to capability storage as non-cap*/
+  if (ExplodedNode *ErrNode = C.generateNonFatalErrorNode()) {
+    auto W = std::make_unique<PathSensitiveBugReport>(
+        *StoreCapAsNonCap, "Tag-stripping store of a capability", ErrNode);
+    W->addRange(S->getSourceRange());
+    C.emitReport(std::move(W));
   }
 }
 
@@ -272,6 +330,44 @@ void CapabilityCopyChecker::checkPostStmt(const BinaryOperator *BO,
     return;
 
   checkBinaryOpArg(C, BO->getLHS()) || checkBinaryOpArg(C, BO->getRHS());
+}
+
+void CapabilityCopyChecker::checkBranchCondition(const Stmt *Condition,
+                                                 CheckerContext &Ctx) const {
+  using namespace clang::ast_matchers;
+  // TODO: do-while, merge with second matcher
+  auto childOfWhile = stmt(hasParent(stmt(anyOf(whileStmt(), doStmt()))));
+  auto L = match(childOfWhile, *Condition, Ctx.getASTContext());
+  if (L.empty())
+    return;
+
+  auto whileCond = whileConditionMatcher();
+
+  auto M = match(whileCond, *Condition, Ctx.getASTContext());
+  if (M.size() != 1)
+    return;
+
+  const SVal &CondVal = Ctx.getSVal(Condition);
+  if (Ctx.getSVal(Condition).isUnknownOrUndef())
+    return;
+
+  ProgramStateRef ThenSt, ElseSt;
+  std::tie(ThenSt, ElseSt) =
+      Ctx.getState()->assume(CondVal.castAs<DefinedOrUnknownSVal>());
+  for (auto I : M) {
+    auto L = I.getNodeAs<Expr>("len");
+    if (SymbolRef ISym = Ctx.getSVal(L).getAsSymbol()) {
+      if (ThenSt)
+        ThenSt = ThenSt->add<WhileBoundVar>(ISym);
+      if (ElseSt)
+        ElseSt = ElseSt->set<WhileBoundVar>(llvm::ImmutableList<SymbolRef>());
+    } else
+      return;
+  }
+  if (ThenSt)
+    Ctx.addTransition(ThenSt);
+  if (ElseSt)
+    Ctx.addTransition(ElseSt);
 }
 
 void ento::registerCapabilityCopyChecker(CheckerManager &mgr) {
