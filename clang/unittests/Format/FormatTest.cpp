@@ -24163,6 +24163,14 @@ TEST_F(FormatTest, RequiresClausesPositions) {
                Style);
 
   verifyFormat("template <typename T>\n"
+               "int S::bar(T t) &&\n"
+               "  requires F<T>\n"
+               "{\n"
+               "  return 5;\n"
+               "}",
+               Style);
+
+  verifyFormat("template <typename T>\n"
                "int bar(T t)\n"
                "  requires F<T>;",
                Style);
@@ -24171,6 +24179,14 @@ TEST_F(FormatTest, RequiresClausesPositions) {
   verifyFormat("template <typename T>\n"
                "requires F<T>\n"
                "int bar(T t) {\n"
+               "  return 5;\n"
+               "}",
+               Style);
+
+  verifyFormat("template <typename T>\n"
+               "int S::bar(T t) &&\n"
+               "requires F<T>\n"
+               "{\n"
                "  return 5;\n"
                "}",
                Style);
@@ -24188,6 +24204,7 @@ TEST_F(FormatTest, RequiresClausesPositions) {
                "template <typename T> requires Foo<T> void bar() {}\n"
                "template <typename T> void bar() requires Foo<T> {}\n"
                "template <typename T> void bar() requires Foo<T>;\n"
+               "template <typename T> void S::bar() && requires Foo<T> {}\n"
                "template <typename T> requires Foo<T> Bar(T) -> Bar<T>;",
                Style);
 
@@ -24199,6 +24216,8 @@ TEST_F(FormatTest, RequiresClausesPositions) {
                "requires Foo<T> void bar() {}\n"
                "template <typename AAAAAAA>\n"
                "void bar() requires Foo<T> {}\n"
+               "template <typename T>\n"
+               "void S::bar() && requires Foo<T> {}\n"
                "template <typename AAAAAAA>\n"
                "requires Foo<T> Baz(T) -> Baz<T>;",
                ColumnStyle);
@@ -24243,6 +24262,9 @@ TEST_F(FormatTest, RequiresClausesPositions) {
                "void bar()\n"
                "requires Foo<T>;\n"
                "template <typename T>\n"
+               "void S::bar() &&\n"
+               "requires Foo<T> {}\n"
+               "template <typename T>\n"
                "requires Foo<T> Bar(T) -> Bar<T>;",
                Style);
 
@@ -24271,6 +24293,9 @@ TEST_F(FormatTest, RequiresClausesPositions) {
                "  requires Foo<T> void bar() {}\n"
                "template <typename T>\n"
                "void bar()\n"
+               "  requires Foo<T> {}\n"
+               "template <typename T>\n"
+               "void S::bar() &&\n"
                "  requires Foo<T> {}\n"
                "template <typename T>\n"
                "  requires Foo<T> Bar(T) -> Bar<T>;",
@@ -24303,6 +24328,9 @@ TEST_F(FormatTest, RequiresClausesPositions) {
                "void bar() requires Foo<T>\n"
                "{}\n"
                "template <typename T> void bar() requires Foo<T>;\n"
+               "template <typename T>\n"
+               "void S::bar() && requires Foo<T>\n"
+               "{}\n"
                "template <typename T> requires Foo<T>\n"
                "Bar(T) -> Bar<T>;",
                Style);
