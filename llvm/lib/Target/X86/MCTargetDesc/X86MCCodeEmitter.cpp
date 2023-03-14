@@ -402,8 +402,10 @@ void X86MCCodeEmitter::emitMemModRMByte(const MCInst &MI, unsigned Op,
 
   // Handle %rip relative addressing.
   if (BaseReg == X86::RIP ||
+      BaseReg == X86::CIP ||
       BaseReg == X86::EIP) { // [disp32+rIP] in X86-64 mode
-    assert(STI.hasFeature(X86::Mode64Bit) &&
+    assert((STI.hasFeature(X86::Mode64Bit) ||
+            STI.hasFeature(X86::ModeCapability)) &&
            "Rip-relative addressing requires 64-bit mode");
     assert(IndexReg.getReg() == 0 && !ForceSIB &&
            "Invalid rip-relative address");
@@ -552,7 +554,8 @@ void X86MCCodeEmitter::emitMemModRMByte(const MCInst &MI, unsigned Op,
       BaseRegNo != N86::ESP &&
       // If there is no base register and we're in 64-bit mode, we need a SIB
       // byte to emit an addr that is just 'disp32' (the non-RIP relative form).
-      (!STI.hasFeature(X86::Mode64Bit) || BaseReg != 0)) {
+      ((!STI.hasFeature(X86::Mode64Bit) &&
+        !STI.hasFeature(X86::ModeCapability)) || BaseReg != 0)) {
 
     if (BaseReg == 0) { // [disp32]     in X86-32 mode
       emitByte(modRMByte(0, RegOpcodeField, 5), OS);
@@ -693,9 +696,16 @@ bool X86MCCodeEmitter::emitPrefixImpl(unsigned &CurOp, const MCInst &MI,
   } else if (STI.hasFeature(X86::Mode64Bit) && AdSize == X86II::AdSizeCap) {
     NeedAddressOverride = false;
     NeedCapAddress = false;
+  } else if (STI.hasFeature(X86::ModeCapability) && AdSize == X86II::AdSize64) {
+    NeedAddressOverride = false;
+    NeedCapAddress = false;
   } else if (MemoryOperand < 0) {
     NeedAddressOverride = false;
     NeedCapAddress = false;
+  } else if (STI.hasFeature(X86::ModeCapability)) {
+    assert(!is16BitMemOperand(MI, MemoryOperand, STI));
+    NeedAddressOverride = false;
+    NeedCapAddress = !isCapMemOperand(MI, MemoryOperand);
   } else if (STI.hasFeature(X86::Mode64Bit)) {
     assert(!is16BitMemOperand(MI, MemoryOperand, STI));
     NeedAddressOverride = is32BitMemOperand(MI, MemoryOperand);
@@ -741,7 +751,8 @@ bool X86MCCodeEmitter::emitPrefixImpl(unsigned &CurOp, const MCInst &MI,
     if (MI.getOperand(2).getReg() != X86::DS)
       emitSegmentOverridePrefix(2, MI, OS);
     // Emit AdSize prefix as needed.
-    if (STI.hasFeature(X86::Mode64Bit) && siReg == X86::CSI)
+    if ((STI.hasFeature(X86::ModeCapability) && siReg == X86::RSI) ||
+        (STI.hasFeature(X86::Mode64Bit) && siReg == X86::CSI))
       emitByte(0x07, OS);
     else if ((!STI.hasFeature(X86::Mode32Bit) && siReg == X86::ESI) ||
              (STI.hasFeature(X86::Mode32Bit) && siReg == X86::SI))
@@ -755,7 +766,8 @@ bool X86MCCodeEmitter::emitPrefixImpl(unsigned &CurOp, const MCInst &MI,
     if (MI.getOperand(1).getReg() != X86::DS)
       emitSegmentOverridePrefix(1, MI, OS);
     // Emit AdSize prefix as needed.
-    if (STI.hasFeature(X86::Mode64Bit) && siReg == X86::CSI)
+    if ((STI.hasFeature(X86::ModeCapability) && siReg == X86::RSI) ||
+        (STI.hasFeature(X86::Mode64Bit) && siReg == X86::CSI))
       emitByte(0x07, OS);
     else if ((!STI.hasFeature(X86::Mode32Bit) && siReg == X86::ESI) ||
              (STI.hasFeature(X86::Mode32Bit) && siReg == X86::SI))
@@ -766,7 +778,8 @@ bool X86MCCodeEmitter::emitPrefixImpl(unsigned &CurOp, const MCInst &MI,
   case X86II::RawFrmDst: {
     unsigned siReg = MI.getOperand(0).getReg();
     // Emit AdSize prefix as needed.
-    if (STI.hasFeature(X86::Mode64Bit) && siReg == X86::CDI)
+    if ((STI.hasFeature(X86::ModeCapability) && siReg == X86::RDI) ||
+        (STI.hasFeature(X86::Mode64Bit) && siReg == X86::CDI))
       emitByte(0x07, OS);
     else if ((!STI.hasFeature(X86::Mode32Bit) && siReg == X86::EDI) ||
              (STI.hasFeature(X86::Mode32Bit) && siReg == X86::DI))
@@ -1404,9 +1417,11 @@ bool X86MCCodeEmitter::emitOpcodePrefix(int MemOperand, const MCInst &MI,
   }
 
   // Handle REX prefix.
-  assert((STI.hasFeature(X86::Mode64Bit) || !(TSFlags & X86II::REX_W)) &&
+  assert((STI.hasFeature(X86::Mode64Bit) ||
+          STI.hasFeature(X86::ModeCapability) || !(TSFlags & X86II::REX_W)) &&
          "REX.W requires 64bit mode.");
-  bool HasREX = STI.hasFeature(X86::Mode64Bit)
+  bool HasREX = STI.hasFeature(X86::Mode64Bit) ||
+    STI.hasFeature(X86::ModeCapability)
                     ? emitREXPrefix(MemOperand, MI, STI, OS)
                     : false;
 
@@ -1505,7 +1520,8 @@ void X86MCCodeEmitter::encodeInstruction(const MCInst &MI, raw_ostream &OS,
   case X86II::RawFrm:
     emitByte(BaseOpcode + OpcodeOffset, OS);
 
-    if (!STI.hasFeature(X86::Mode64Bit) || !isPCRel32Branch(MI, MCII))
+    if (!(STI.hasFeature(X86::Mode64Bit) ||
+          STI.hasFeature(X86::ModeCapability)) || !isPCRel32Branch(MI, MCII))
       break;
 
     const MCOperand &Op = MI.getOperand(CurOp++);

@@ -165,6 +165,28 @@ static inline bool inheritsFrom(InstructionContext child,
   case IC_64BIT_OPCAP_ADCAP:
     // XXX: Not sure about these at all
     return false;
+  case IC_CAP_XD_OPSIZE:
+  case IC_CAP_XS_OPSIZE:
+    return false;
+  case IC_CAP_REXW_XD:
+  case IC_CAP_REXW_XS:
+  case IC_CAP_REXW_OPSIZE:
+    return false;
+  case IC_CAP_ADCAP:
+    return (noPrefix && inheritsFrom(child, IC_CAP_OPSIZE_ADCAP, noPrefix));
+  case IC_CAP_XD_ADCAP:
+  case IC_CAP_XS_ADCAP:
+  case IC_CAP_REXW_ADCAP:
+  case IC_CAP_REXW_XD_ADCAP:
+  case IC_CAP_REXW_XS_ADCAP:
+  case IC_CAP_OPSIZE_ADCAP:
+  case IC_CAP_XD_OPSIZE_ADCAP:
+  case IC_CAP_XS_OPSIZE_ADCAP:
+  case IC_CAP_REXW_OPSIZE_ADCAP:
+  case IC_CAP_OPCAP:
+  case IC_CAP_OPCAP_ADCAP:
+    // XXX: Not sure about these at all
+    return false;
   case IC_VEX:
     return (VEX_LIG && VEX_WIG && inheritsFrom(child, IC_VEX_L_W)) ||
            (VEX_WIG && inheritsFrom(child, IC_VEX_W)) ||
@@ -944,6 +966,53 @@ void DisassemblerTables::emitContextTable(raw_ostream &o, unsigned &i) const {
         if (index & ATTR_EVEXB)
           o << "_B";
       }
+    } else if ((index & ATTR_CAPABILITY)) {
+      if ((index & ATTR_OPCAP)) {
+        if ((index & ATTR_ADCAP))
+          o << "IC_CAP_OPCAP_ADCAP";
+        else
+          o << "IC_CAP_OPCAP";
+      } else if ((index & ATTR_ADCAP)) {
+        if ((index & ATTR_REXW) && (index & ATTR_OPSIZE))
+          o << "IC_CAP_REXW_OPSIZE_ADCAP";
+        else if ((index & ATTR_OPSIZE) && (index & ATTR_XD))
+          o << "IC_CAP_XD_OPSIZE_ADCAP";
+        else if ((index & ATTR_OPSIZE) && (index & ATTR_XS))
+          o << "IC_CAP_XS_OPSIZE_ADCAP";
+        else if ((index & ATTR_OPSIZE))
+          o << "IC_CAP_OPSIZE_ADCAP";
+        else if ((index & ATTR_REXW) && (index & ATTR_XD))
+          o << "IC_CAP_REXW_XD_ADCAP";
+        else if ((index & ATTR_REXW) && (index & ATTR_XS))
+          o << "IC_CAP_REXW_XS_ADCAP";
+        else if ((index & ATTR_XD))
+          o << "IC_CAP_XD_ADCAP";
+        else if ((index & ATTR_XS))
+          o << "IC_CAP_XS_ADCAP";
+        else if ((index & ATTR_REXW))
+          o << "IC_CAP_REXW_ADCAP";
+        else
+          o << "IC_CAP_ADCAP";
+      } else if ((index & ATTR_REXW) && (index & ATTR_XS))
+        o << "IC_CAP_REXW_XS";
+      else if ((index & ATTR_REXW) && (index & ATTR_XD))
+        o << "IC_CAP_REXW_XD";
+      else if ((index & ATTR_REXW) && (index & ATTR_OPSIZE))
+        o << "IC_CAP_REXW_OPSIZE";
+      else if ((index & ATTR_XD) && (index & ATTR_OPSIZE))
+        o << "IC_CAP_XD_OPSIZE";
+      else if ((index & ATTR_XS) && (index & ATTR_OPSIZE))
+        o << "IC_CAP_XS_OPSIZE";
+      else if ((index & ATTR_XS))
+        o << "IC_CAP_XS";
+      else if ((index & ATTR_XD))
+        o << "IC_CAP_XD";
+      else if ((index & ATTR_OPSIZE))
+        o << "IC_CAP_OPSIZE";
+      else if ((index & ATTR_REXW))
+        o << "IC_CAP_REXW";
+      else
+        o << "IC_CAP";
     } else if ((index & ATTR_64BIT) && (index & ATTR_OPCAP)) {
       if ((index & ATTR_ADCAP))
         o << "IC_64BIT_OPCAP_ADCAP";

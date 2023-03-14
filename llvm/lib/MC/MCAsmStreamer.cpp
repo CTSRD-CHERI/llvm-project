@@ -566,6 +566,7 @@ void MCAsmStreamer::emitAssemblerFlag(MCAssemblerFlag Flag) {
   case MCAF_Code16:                OS << '\t'<< MAI->getCode16Directive();break;
   case MCAF_Code32:                OS << '\t'<< MAI->getCode32Directive();break;
   case MCAF_Code64:                OS << '\t'<< MAI->getCode64Directive();break;
+  case MCAF_Code64Capability:      OS << '\t'<< MAI->getCode64CapabilityDirective();break;
   }
   EmitEOL();
 }

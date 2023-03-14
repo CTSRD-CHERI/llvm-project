@@ -203,7 +203,8 @@ template <typename T> static bool consume(InternalInstruction *insn, T &ptr) {
 }
 
 static bool isREX(struct InternalInstruction *insn, uint8_t prefix) {
-  return insn->mode == MODE_64BIT && prefix >= 0x40 && prefix <= 0x4f;
+  return (insn->mode == MODE_64BIT || insn->mode == MODE_CAPABILITY) &&
+    prefix >= 0x40 && prefix <= 0x4f;
 }
 
 // Consumes all of an instruction's prefix bytes, and marks the
@@ -315,13 +316,13 @@ static int readPrefixes(struct InternalInstruction *insn) {
       insn->hasAdSize = true;
       break;
     case 0x06: // Capability Operand Size
-      if (insn->mode == MODE_64BIT)
+      if (insn->mode == MODE_64BIT || insn->mode == MODE_CAPABILITY)
         insn->hasOpCap = true;
       else
         isPrefix = false;
       break;
     case 0x07: // Capability Address Size
-      if (insn->mode == MODE_64BIT)
+      if (insn->mode == MODE_64BIT || insn->mode == MODE_CAPABILITY)
         insn->hasAdCap = true;
       else
         isPrefix = false;
@@ -349,7 +350,8 @@ static int readPrefixes(struct InternalInstruction *insn) {
       return -1;
     }
 
-    if ((insn->mode == MODE_64BIT || (byte1 & 0xc0) == 0xc0) &&
+    if ((insn->mode == MODE_64BIT || insn->mode == MODE_CAPABILITY ||
+         (byte1 & 0xc0) == 0xc0) &&
         ((~byte1 & 0x8) == 0x8) && ((byte2 & 0x4) == 0x4)) {
       insn->vectorExtensionType = TYPE_EVEX;
     } else {
@@ -370,7 +372,7 @@ static int readPrefixes(struct InternalInstruction *insn) {
       }
 
       // We simulate the REX prefix for simplicity's sake
-      if (insn->mode == MODE_64BIT) {
+      if (insn->mode == MODE_64BIT || insn->mode == MODE_CAPABILITY) {
         insn->rexPrefix = 0x40 |
                           (wFromEVEX3of4(insn->vectorExtensionPrefix[2]) << 3) |
                           (rFromEVEX2of4(insn->vectorExtensionPrefix[1]) << 2) |
@@ -391,7 +393,8 @@ static int readPrefixes(struct InternalInstruction *insn) {
       return -1;
     }
 
-    if (insn->mode == MODE_64BIT || (byte1 & 0xc0) == 0xc0)
+    if (insn->mode == MODE_64BIT || insn->mode == MODE_CAPABILITY ||
+        (byte1 & 0xc0) == 0xc0)
       insn->vectorExtensionType = TYPE_VEX_3B;
     else
       --insn->readerCursor;
@@ -403,7 +406,7 @@ static int readPrefixes(struct InternalInstruction *insn) {
 
       // We simulate the REX prefix for simplicity's sake
 
-      if (insn->mode == MODE_64BIT)
+      if (insn->mode == MODE_64BIT || insn->mode == MODE_CAPABILITY)
         insn->rexPrefix = 0x40 |
                           (wFromVEX3of3(insn->vectorExtensionPrefix[2]) << 3) |
                           (rFromVEX2of3(insn->vectorExtensionPrefix[1]) << 2) |
@@ -422,7 +425,8 @@ static int readPrefixes(struct InternalInstruction *insn) {
       return -1;
     }
 
-    if (insn->mode == MODE_64BIT || (byte1 & 0xc0) == 0xc0)
+    if (insn->mode == MODE_64BIT || insn->mode == MODE_CAPABILITY ||
+        (byte1 & 0xc0) == 0xc0)
       insn->vectorExtensionType = TYPE_VEX_2B;
     else
       --insn->readerCursor;
@@ -431,7 +435,7 @@ static int readPrefixes(struct InternalInstruction *insn) {
       insn->vectorExtensionPrefix[0] = byte;
       consume(insn, insn->vectorExtensionPrefix[1]);
 
-      if (insn->mode == MODE_64BIT)
+      if (insn->mode == MODE_64BIT || insn->mode == MODE_CAPABILITY)
         insn->rexPrefix =
             0x40 | (rFromVEX2of2(insn->vectorExtensionPrefix[1]) << 2);
 
@@ -466,7 +470,7 @@ static int readPrefixes(struct InternalInstruction *insn) {
 
       // We simulate the REX prefix for simplicity's sake
 
-      if (insn->mode == MODE_64BIT)
+      if (insn->mode == MODE_64BIT || insn->mode == MODE_CAPABILITY)
         insn->rexPrefix = 0x40 |
                           (wFromXOP3of3(insn->vectorExtensionPrefix[2]) << 3) |
                           (rFromXOP2of3(insn->vectorExtensionPrefix[1]) << 2) |
@@ -520,6 +524,25 @@ static int readPrefixes(struct InternalInstruction *insn) {
     } else {
       insn->registerSize = (insn->hasOpSize ? 2 : 4);
       insn->addressSize = (insn->hasAdCap ? 16 : (insn->hasAdSize ? 4 : 8));
+      insn->displacementSize = (insn->hasOpSize ? 2 : 4);
+      insn->immediateSize = (insn->hasOpSize ? 2 : 4);
+    }
+  } else if (insn->mode == MODE_CAPABILITY) {
+    if (insn->hasOpCap) {
+      insn->registerSize = 16;
+      insn->addressSize = (insn->hasAdCap ? 8 : 16);
+      insn->displacementSize = 4;
+      insn->immediateSize = 4;
+      insn->hasOpSize = false;
+    } else if (insn->rexPrefix && wFromREX(insn->rexPrefix)) {
+      insn->registerSize = 8;
+      insn->addressSize = (insn->hasAdCap ? 8 : 16);
+      insn->displacementSize = 4;
+      insn->immediateSize = 4;
+      insn->hasOpSize = false;
+    } else {
+      insn->registerSize = (insn->hasOpSize ? 2 : 4);
+      insn->addressSize = (insn->hasAdCap ? 8 : 16);
       insn->displacementSize = (insn->hasOpSize ? 2 : 4);
       insn->immediateSize = (insn->hasOpSize ? 2 : 4);
     }
@@ -667,7 +690,8 @@ static int readModRM(struct InternalInstruction *insn) {
   rm |= bFromREX(insn->rexPrefix) << 3;
 
   evexrm = 0;
-  if (insn->vectorExtensionType == TYPE_EVEX && insn->mode == MODE_64BIT) {
+  if (insn->vectorExtensionType == TYPE_EVEX &&
+      (insn->mode == MODE_64BIT || insn->mode == MODE_CAPABILITY)) {
     reg |= r2FromEVEX2of4(insn->vectorExtensionPrefix[1]) << 4;
     evexrm = xFromEVEX2of4(insn->vectorExtensionPrefix[1]) << 4;
   }
@@ -1129,6 +1153,9 @@ static int getInstructionID(struct InternalInstruction *insn,
 
   attrMask = ATTR_NONE;
 
+  if (insn->mode == MODE_CAPABILITY)
+    attrMask |= ATTR_CAPABILITY;
+
   if (insn->mode == MODE_64BIT)
     attrMask |= ATTR_64BIT;
 
@@ -1270,8 +1297,8 @@ static int getInstructionID(struct InternalInstruction *insn,
       attrMask |= ATTR_OPSIZE;
   }
 
-  if (insn->mode == MODE_64BIT && insn->opcodeType == ONEBYTE &&
-      insn->opcode == 0x8D && insn->hasOpCap) {
+  if ((insn->mode == MODE_64BIT || insn->mode == MODE_CAPABILITY) &&
+      insn->opcodeType == ONEBYTE && insn->opcode == 0x8D && insn->hasOpCap) {
     // LEAC uses capability addresses always.
     insn->addressSize = 16;
   }
@@ -1282,7 +1309,7 @@ static int getInstructionID(struct InternalInstruction *insn,
 
   // The following clauses compensate for limitations of the tables.
 
-  if (insn->mode != MODE_64BIT &&
+  if (insn->mode != MODE_64BIT && insn->mode != MODE_CAPABILITY &&
       insn->vectorExtensionType != TYPE_NO_VEX_XOP) {
     // The tables can't distinquish between cases where the W-bit is used to
     // select register size and cases where its a required part of the opcode.
@@ -1533,7 +1560,7 @@ static int readVVVV(struct InternalInstruction *insn) {
   else
     return -1;
 
-  if (insn->mode != MODE_64BIT)
+  if (insn->mode != MODE_64BIT && insn->mode != MODE_CAPABILITY)
     vvvv &= 0xf; // Can only clear bit 4. Bit 3 must be cleared later.
 
   insn->vvvv = static_cast<Reg>(vvvv);
@@ -1590,7 +1617,8 @@ static int readOperands(struct InternalInstruction *insn) {
         insn->sibIndex = (SIBIndex)(insn->sibIndexBase + 4);
 
       // If EVEX.v2 is set this is one of the 16-31 registers.
-      if (insn->vectorExtensionType == TYPE_EVEX && insn->mode == MODE_64BIT &&
+      if (insn->vectorExtensionType == TYPE_EVEX &&
+          (insn->mode == MODE_64BIT || insn->mode == MODE_CAPABILITY) &&
           v2FromEVEX4of4(insn->vectorExtensionPrefix[3]))
         insn->sibIndex = (SIBIndex)(insn->sibIndex + 16);
 
@@ -1704,7 +1732,7 @@ static int readOperands(struct InternalInstruction *insn) {
       needVVVV = 0; // Mark that we have found a VVVV operand.
       if (!hasVVVV)
         return -1;
-      if (insn->mode != MODE_64BIT)
+      if (insn->mode != MODE_64BIT && insn->mode != MODE_CAPABILITY)
         insn->vvvv = static_cast<Reg>(insn->vvvv & 0x7);
       if (fixupReg(insn, &Op))
         return -1;
@@ -1786,6 +1814,9 @@ X86GenericDisassembler::X86GenericDisassembler(
     return;
   } else if (FB[X86::Mode64Bit]) {
     fMode = MODE_64BIT;
+    return;
+  } else if (FB[X86::ModeCapability]) {
+    fMode = MODE_CAPABILITY;
     return;
   }
 
@@ -1919,7 +1950,9 @@ static bool translateSrcIndex(MCInst &mcInst, InternalInstruction &insn) {
   unsigned baseRegNo;
 
   if (insn.mode == MODE_64BIT)
-    baseRegNo = insn.hasAdSize ? X86::ESI : X86::RSI;
+    baseRegNo = insn.hasAdCap ? X86::CSI : insn.hasAdSize ? X86::ESI : X86::RSI;
+  else if (insn.mode == MODE_CAPABILITY)
+    baseRegNo = insn.hasAdCap ? X86::CSI : X86::RSI;
   else if (insn.mode == MODE_32BIT)
     baseRegNo = insn.hasAdSize ? X86::SI : X86::ESI;
   else {
@@ -1944,7 +1977,9 @@ static bool translateDstIndex(MCInst &mcInst, InternalInstruction &insn) {
   unsigned baseRegNo;
 
   if (insn.mode == MODE_64BIT)
-    baseRegNo = insn.hasAdSize ? X86::EDI : X86::RDI;
+    baseRegNo = insn.hasAdCap ? X86::CDI : insn.hasAdSize ? X86::EDI : X86::RDI;
+  else if (insn.mode == MODE_CAPABILITY)
+    baseRegNo = insn.hasAdCap ? X86::CDI : X86::RDI;
   else if (insn.mode == MODE_32BIT)
     baseRegNo = insn.hasAdSize ? X86::DI : X86::EDI;
   else {
@@ -2172,7 +2207,8 @@ static bool translateRMMemory(MCInst &mcInst, InternalInstruction &insn,
       // -A scale other than 1 is used.
       if (!ForceSIB &&
           (insn.sibScale != 1 ||
-           (insn.sibBase == SIB_BASE_NONE && insn.mode != MODE_64BIT) ||
+           (insn.sibBase == SIB_BASE_NONE && insn.mode != MODE_64BIT &&
+            insn.mode != MODE_CAPABILITY) ||
            (insn.sibBase != SIB_BASE_NONE &&
             insn.sibBase != SIB_BASE_ESP && insn.sibBase != SIB_BASE_RSP &&
             insn.sibBase != SIB_BASE_CSP && insn.sibBase != SIB_BASE_C12 &&
@@ -2191,7 +2227,7 @@ static bool translateRMMemory(MCInst &mcInst, InternalInstruction &insn,
         debug("EA_BASE_NONE and EA_DISP_NONE for ModR/M base");
         return true;
       }
-      if (insn.mode == MODE_64BIT){
+      if (insn.mode == MODE_64BIT || insn.mode == MODE_CAPABILITY) {
         pcrel = insn.startLocation +
                 insn.displacementOffset + insn.displacementSize;
         tryAddingPcLoadReferenceComment(insn.startLocation +

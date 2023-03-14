@@ -67,7 +67,8 @@ enum attributeBits {
   ATTR_EVEXB  = 0x1 << 12,
   ATTR_OPCAP  = 0x1 << 13,
   ATTR_ADCAP  = 0x1 << 14,
-  ATTR_max    = 0x1 << 15,
+  ATTR_CAPABILITY = 0x1 << 15,
+  ATTR_max    = 0x1 << 16,
 };
 
 // Combinations of the above attributes that are relevant to instruction
@@ -79,6 +80,8 @@ enum attributeBits {
   ENUM_ENTRY(IC,                    0,  "says nothing about the instruction")  \
   ENUM_ENTRY(IC_64BIT,              1,  "says the instruction applies in "     \
                                         "64-bit mode but no more")             \
+  ENUM_ENTRY(IC_CAP,                1,  "says the instruction applies in "     \
+                                        "capability mode but no more")         \
   ENUM_ENTRY(IC_OPSIZE,             3,  "requires an OPSIZE prefix, so "       \
                                         "operands change width")               \
   ENUM_ENTRY(IC_ADSIZE,             3,  "requires an ADSIZE prefix, so "       \
@@ -140,6 +143,40 @@ enum attributeBits {
                                         "OPSIZE and REX.W")                    \
   ENUM_ENTRY(IC_64BIT_OPCAP_ADSIZE, 7,  "requires ADSIZE and OPCAP prefixes")  \
   ENUM_ENTRY(IC_64BIT_OPCAP_ADCAP,  7,  "requires ADCAP and OPCAP prefixes")   \
+  ENUM_ENTRY(IC_CAP_REXW,           5,  "requires a REX.W prefix, so operands "\
+                                        "change width; overrides IC_OPSIZE")   \
+  ENUM_ENTRY(IC_CAP_OPSIZE,         3,  "Just as meaningful as IC_OPSIZE")     \
+  ENUM_ENTRY(IC_CAP_XD,             6,  "XD instructions are SSE; REX.W is "   \
+                                        "secondary")                           \
+  ENUM_ENTRY(IC_CAP_XS,             6,  "Just as meaningful as IC_CAP_XD")     \
+  ENUM_ENTRY(IC_CAP_XD_OPSIZE,      3,  "Just as meaningful as IC_XD_OPSIZE")  \
+  ENUM_ENTRY(IC_CAP_XS_OPSIZE,      3,  "Just as meaningful as IC_XS_OPSIZE")  \
+  ENUM_ENTRY(IC_CAP_REXW_XS,        7,  "OPSIZE could mean a different "       \
+                                        "opcode")                              \
+  ENUM_ENTRY(IC_CAP_REXW_XD,        7,  "Just as meaningful as "               \
+                                        "IC_CAP_REXW_XS")                      \
+  ENUM_ENTRY(IC_CAP_REXW_OPSIZE,    8,  "The Dynamic Duo!  Prefer over all "   \
+                                        "else because this changes most "      \
+                                        "operands' meaning")                   \
+  ENUM_ENTRY(IC_CAP_ADCAP,          4,  "requires an ADCAP prefix, so "        \
+                                        "operands change width; overrides "    \
+                                        "ADSIZE")                              \
+  ENUM_ENTRY(IC_CAP_XD_ADCAP,       4,  "Just as meaningful as IC_XD_ADSIZE")  \
+  ENUM_ENTRY(IC_CAP_XS_ADCAP,       4,  "Just as meaningful as IC_XS_ADSIZE")  \
+  ENUM_ENTRY(IC_CAP_REXW_ADCAP,     6,  "Just as meaningful as "               \
+                                        "IC_CAP_REXW_ADSIZE")                  \
+  ENUM_ENTRY(IC_CAP_REXW_XD_ADCAP,  6,  "Just as meaningful as "               \
+                                        "IC_CAP_REXW_ADCAP")                   \
+  ENUM_ENTRY(IC_CAP_REXW_XS_ADCAP,  6,  "Just as meaningful as "               \
+                                        "IC_CAP_REXW_ADCAP")                   \
+  ENUM_ENTRY(IC_CAP_OPSIZE_ADCAP,   7,  "requires OPSIZE and ADCAP prefixes")  \
+  ENUM_ENTRY(IC_CAP_XD_OPSIZE_ADCAP, 8, "requires OPSIZE and ADCAP prefixes")  \
+  ENUM_ENTRY(IC_CAP_XS_OPSIZE_ADCAP, 8, "requires OPSIZE and ADCAP prefixes")  \
+  ENUM_ENTRY(IC_CAP_REXW_OPSIZE_ADCAP, 9, "requires REX.W, 0x66, and ADCAP")   \
+  ENUM_ENTRY(IC_CAP_OPCAP,          6,  "requires an OPCAP prefix, so "        \
+                                        "operands change width; overrides "    \
+                                        "OPSIZE and REX.W")                    \
+  ENUM_ENTRY(IC_CAP_OPCAP_ADCAP,    7,  "requires ADCAP and OPCAP prefixes")   \
   ENUM_ENTRY(IC_VEX,                1,  "requires a VEX prefix")               \
   ENUM_ENTRY(IC_VEX_XS,             2,  "requires VEX and the XS prefix")      \
   ENUM_ENTRY(IC_VEX_XD,             2,  "requires VEX and the XD prefix")      \
@@ -496,7 +533,8 @@ static const unsigned X86_MAX_OPERANDS = 6;
 enum DisassemblerMode {
   MODE_16BIT,
   MODE_32BIT,
-  MODE_64BIT
+  MODE_64BIT,
+  MODE_CAPABILITY
 };
 
 } // namespace X86Disassembler

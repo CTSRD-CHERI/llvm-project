@@ -372,7 +372,8 @@ static bool isFirstMacroFusibleInst(const MCInst &Inst,
 ///   - If the instruction has a ESP/EBP base register, use SS.
 ///   - Otherwise use DS.
 uint8_t X86AsmBackend::determinePaddingPrefix(const MCInst &Inst) const {
-  assert((STI.hasFeature(X86::Mode32Bit) || STI.hasFeature(X86::Mode64Bit)) &&
+  assert((STI.hasFeature(X86::Mode32Bit) || STI.hasFeature(X86::Mode64Bit) ||
+          STI.hasFeature(X86::ModeCapability)) &&
          "Prefixes can be added only in 32-bit or 64-bit mode.");
   const MCInstrDesc &Desc = MCII->get(Inst.getOpcode());
   uint64_t TSFlags = Desc.TSFlags;
@@ -413,7 +414,7 @@ uint8_t X86AsmBackend::determinePaddingPrefix(const MCInst &Inst) const {
   if (SegmentReg != 0)
     return X86::getSegmentOverridePrefixForReg(SegmentReg);
 
-  if (STI.hasFeature(X86::Mode64Bit))
+  if (STI.hasFeature(X86::Mode64Bit) || STI.hasFeature(X86::ModeCapability))
     return X86::CS_Encoding;
 
   if (MemoryOperand >= 0) {
@@ -572,7 +573,8 @@ bool X86AsmBackend::canPadBranches(MCObjectStreamer &OS) const {
     return false;
 
   // Branches only need to be aligned in 32-bit or 64-bit mode.
-  if (!(STI.hasFeature(X86::Mode64Bit) || STI.hasFeature(X86::Mode32Bit)))
+  if (!(STI.hasFeature(X86::Mode64Bit) || STI.hasFeature(X86::Mode32Bit) ||
+        STI.hasFeature(X86::ModeCapability)))
     return false;
 
   return true;
@@ -1079,7 +1081,8 @@ void X86AsmBackend::finishLayout(MCAssembler const &Asm,
 unsigned X86AsmBackend::getMaximumNopSize(const MCSubtargetInfo &STI) const {
   if (STI.hasFeature(X86::Mode16Bit))
     return 4;
-  if (!STI.hasFeature(X86::FeatureNOPL) && !STI.hasFeature(X86::Mode64Bit))
+  if (!STI.hasFeature(X86::FeatureNOPL) && !STI.hasFeature(X86::Mode64Bit) &&
+      !STI.hasFeature(X86::ModeCapability))
     return 1;
   if (STI.getFeatureBits()[X86::TuningFast7ByteNOP])
     return 7;

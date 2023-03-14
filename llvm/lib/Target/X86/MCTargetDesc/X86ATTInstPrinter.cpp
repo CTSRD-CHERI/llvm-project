@@ -58,6 +58,10 @@ void X86ATTInstPrinter::printInst(const MCInst *MI, uint64_t Address,
       (STI.getFeatureBits()[X86::Mode64Bit])) {
     OS << "\tcallq\t";
     printPCRelImm(MI, Address, 0, OS);
+  } else if (MI->getOpcode() == X86::CALLpcrel32 &&
+      (STI.getFeatureBits()[X86::ModeCapability])) {
+    OS << "\tcallc\t";
+    printPCRelImm(MI, Address, 0, OS);
   }
   // data16 and data32 both have the same encoding of 0x66. While data32 is
   // valid only in 16 bit systems, data16 is valid in the rest.

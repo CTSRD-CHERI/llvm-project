@@ -1191,6 +1191,10 @@ private:
 
   bool ParseZ(std::unique_ptr<X86Operand> &Z, const SMLoc &StartLoc);
 
+  bool isCapabilityMode() const {
+    // FIXME: Can tablegen auto-generate this?
+    return getSTI().getFeatureBits()[X86::ModeCapability];
+  }
   bool is64BitMode() const {
     // FIXME: Can tablegen auto-generate this?
     return getSTI().getFeatureBits()[X86::Mode64Bit];
@@ -1205,7 +1209,8 @@ private:
   }
   void SwitchMode(unsigned mode) {
     MCSubtargetInfo &STI = copySTI();
-    FeatureBitset AllModes({X86::Mode64Bit, X86::Mode32Bit, X86::Mode16Bit});
+    FeatureBitset AllModes({X86::ModeCapability, X86::Mode64Bit, X86::Mode32Bit,
+        X86::Mode16Bit});
     FeatureBitset OldMode = STI.getFeatureBits() & AllModes;
     FeatureBitset FB = ComputeAvailableFeatures(
       STI.ToggleFeature(OldMode.flip(mode)));
@@ -1217,7 +1222,7 @@ private:
   unsigned getPointerWidth(unsigned BaseReg) {
     if (is16BitMode()) return 16;
     if (is32BitMode()) return 32;
-    if (is64BitMode()) {
+    if (is64BitMode() || isCapabilityMode()) {
       if (BaseReg != 0 &&
           X86MCRegisterClasses[X86::GRCRegClassID].contains(BaseReg))
         return 129;
@@ -1596,7 +1601,8 @@ OperandMatchResultTy X86AsmParser::tryParseRegister(unsigned &RegNo,
 
 std::unique_ptr<X86Operand> X86AsmParser::DefaultMemSIOperand(SMLoc Loc) {
   bool Parse32 = is32BitMode() || Code16GCC;
-  unsigned Basereg = is64BitMode() ? X86::RSI : (Parse32 ? X86::ESI : X86::SI);
+  unsigned Basereg = isCapabilityMode() ? X86::CSI :
+    (is64BitMode() ? X86::RSI : (Parse32 ? X86::ESI : X86::SI));
   const MCExpr *Disp = MCConstantExpr::create(0, getContext());
   return X86Operand::CreateMem(getPointerWidth(Basereg), /*SegReg=*/0, Disp,
                                /*BaseReg=*/Basereg, /*IndexReg=*/0, /*Scale=*/1,
@@ -1605,7 +1611,8 @@ std::unique_ptr<X86Operand> X86AsmParser::DefaultMemSIOperand(SMLoc Loc) {
 
 std::unique_ptr<X86Operand> X86AsmParser::DefaultMemDIOperand(SMLoc Loc) {
   bool Parse32 = is32BitMode() || Code16GCC;
-  unsigned Basereg = is64BitMode() ? X86::RDI : (Parse32 ? X86::EDI : X86::DI);
+  unsigned Basereg = isCapabilityMode() ? X86::CDI :
+    (is64BitMode() ? X86::RDI : (Parse32 ? X86::EDI : X86::DI));
   const MCExpr *Disp = MCConstantExpr::create(0, getContext());
   return X86Operand::CreateMem(getPointerWidth(Basereg), /*SegReg=*/0, Disp,
                                /*BaseReg=*/Basereg, /*IndexReg=*/0, /*Scale=*/1,
@@ -2613,7 +2620,8 @@ bool X86AsmParser::ParseIntelOperand(OperandVector &Operands) {
     std::swap(BaseReg, IndexReg);
 
   if ((BaseReg || IndexReg) &&
-      CheckBaseRegAndIndexRegAndScale(BaseReg, IndexReg, Scale, is64BitMode(),
+      CheckBaseRegAndIndexRegAndScale(BaseReg, IndexReg, Scale,
+                                      is64BitMode() || isCapabilityMode(),
                                       ErrMsg))
     return Error(Start, ErrMsg);
   if (isParsingMSInlineAsm())
@@ -2623,11 +2631,14 @@ bool X86AsmParser::ParseIntelOperand(OperandVector &Operands) {
 
   // When parsing x64 MS-style assembly, all non-absolute references to a named
   // variable default to RIP-relative.
-  if (Parser.isParsingMasm() && is64BitMode() && SM.getElementSize() > 0) {
+  if (Parser.isParsingMasm() && (is64BitMode() || isCapabilityMode()) &&
+      SM.getElementSize() > 0) {
     Operands.push_back(X86Operand::CreateMem(getPointerWidth(BaseReg), RegNo,
                                              Disp, BaseReg, IndexReg, Scale,
                                              Start, End, Size,
-                                             /*DefaultBaseReg=*/X86::RIP));
+                                             /*DefaultBaseReg=*/
+                                             isCapabilityMode() ? X86::CIP :
+                                             X86::RIP));
     return false;
   }
 
@@ -3015,7 +3026,8 @@ bool X86AsmParser::ParseMemOperand(unsigned SegReg, const MCExpr *Disp,
     return false;
   }
 
-  if (CheckBaseRegAndIndexRegAndScale(BaseReg, IndexReg, Scale, is64BitMode(),
+  if (CheckBaseRegAndIndexRegAndScale(BaseReg, IndexReg, Scale,
+                                      is64BitMode() || isCapabilityMode(),
                                       ErrMsg))
     return Error(BaseLoc, ErrMsg);
 
@@ -3355,7 +3367,7 @@ bool X86AsmParser::ParseInstruction(ParseInstructionInfo &Info, StringRef Name,
   if (PatchedName == "data32") {
     if (is32BitMode())
       return Error(NameLoc, "redundant data32 prefix");
-    if (is64BitMode())
+    if (is64BitMode() || isCapabilityMode())
       return Error(NameLoc, "'data32' is not supported in 64-bit mode");
     // Hack to 'data16' for the table lookup.
     PatchedName = "data16";
@@ -4128,8 +4140,8 @@ void X86AsmParser::applyLVICFIMitigation(MCInst &Inst, MCStreamer &Out) {
   case X86::RETI64: {
     MCInst ShlInst, FenceInst;
     bool Parse32 = is32BitMode() || Code16GCC;
-    unsigned Basereg =
-        is64BitMode() ? X86::RSP : (Parse32 ? X86::ESP : X86::SP);
+    unsigned Basereg = isCapabilityMode() ? X86::CSP :
+      (is64BitMode() ? X86::RSP : (Parse32 ? X86::ESP : X86::SP));
     const MCExpr *Disp = MCConstantExpr::create(0, getContext());
     auto ShlMemOp = X86Operand::CreateMem(getPointerWidth(Basereg),
                                           /*SegReg=*/0, Disp,
@@ -4637,7 +4649,7 @@ bool X86AsmParser::MatchAndEmitIntelInstruction(SMLoc IDLoc, unsigned &Opcode,
           (isIntN(Size, CE->getValue()) || isUIntN(Size, CE->getValue()))) {
         SmallString<16> Tmp;
         Tmp += Base;
-        Tmp += (is64BitMode())
+        Tmp += isCapabilityMode() ? "c" : (is64BitMode())
                    ? "q"
                    : (is32BitMode()) ? "l" : (is16BitMode()) ? "w" : " ";
         Op.setTokenValue(Tmp);
@@ -4935,6 +4947,12 @@ bool X86AsmParser::ParseDirectiveCode(StringRef IDVal, SMLoc L) {
     if (!is64BitMode()) {
       SwitchMode(X86::Mode64Bit);
       getParser().getStreamer().emitAssemblerFlag(MCAF_Code64);
+    }
+  } else if (IDVal == ".code64cap") {
+    Parser.Lex();
+    if (!isCapabilityMode()) {
+      SwitchMode(X86::ModeCapability);
+      getParser().getStreamer().emitAssemblerFlag(MCAF_Code64Capability);
     }
   } else {
     Error(L, "unknown directive " + IDVal);

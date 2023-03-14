@@ -52,7 +52,8 @@ enum MCAssemblerFlag {
   MCAF_SubsectionsViaSymbols, ///< .subsections_via_symbols (MachO)
   MCAF_Code16,                ///< .code16 (X86) / .code 16 (ARM)
   MCAF_Code32,                ///< .code32 (X86) / .code 32 (ARM)
-  MCAF_Code64                 ///< .code64 (X86)
+  MCAF_Code64,                ///< .code64 (X86)
+  MCAF_Code64Capability       ///< .code64cap (X86)
 };
 
 enum MCDataRegionType {
