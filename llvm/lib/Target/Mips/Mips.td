@@ -53,10 +53,6 @@ class AdditionalRequires<list<Predicate> preds> {
   list<Predicate> AdditionalPredicates = preds;
 }
 
-def Cap64      : HwMode<"+cheri64,-cheri128,-cheri256">;
-def Cap128     : HwMode<"+cheri128,-cheri64,-cheri256">;
-def Cap256     : HwMode<"+cheri256,-cheri128,-cheri64">;
-
 //===----------------------------------------------------------------------===//
 // Mips Subtarget features                                                    //
 //===----------------------------------------------------------------------===//
@@ -167,6 +163,13 @@ def FeatureMipsCheri128 : SubtargetFeature<"cheri128", "IsCheri128", "true",
 def FeatureMipsCheri256 : SubtargetFeature<"cheri256", "IsCheri256", "true",
                                 "Capabilities are 256 bits",
                                 [FeatureMipsCheri]>;
+def HasCheri : Predicate<"Subtarget->isCheri()">,
+                         AssemblerPredicate<(all_of FeatureMipsCheri),
+                         "CHERI Extension">;
+def Cap64      : HwMode<"+cheri64,-cheri128,-cheri256", [HasCheri]>;
+def Cap128     : HwMode<"+cheri128,-cheri64,-cheri256", [HasCheri]>;
+def Cap256     : HwMode<"+cheri256,-cheri128,-cheri64", [HasCheri]>;
+
 def FeatureCheriExactEquals :
   SubtargetFeature<"cheri-exact-equals", "UseCheriExactEquals", "true",
                    "CHERI capability comparison are exact (comparing all bits"
