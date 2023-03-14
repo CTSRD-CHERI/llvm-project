@@ -237,10 +237,6 @@ const CodeGenOptions &ABIInfo::getCodeGenOpts() const {
 
 bool ABIInfo::isAndroid() const { return getTarget().getTriple().isAndroid(); }
 
-bool ABIInfo::isOHOSFamily() const {
-  return getTarget().getTriple().isOHOSFamily();
-}
-
 bool ABIInfo::isHomogeneousAggregateBaseType(QualType Ty) const {
   return false;
 }
@@ -5867,7 +5863,7 @@ ABIArgInfo AArch64ABIInfo::coerceIllegalVector(QualType Ty) const {
 
   uint64_t Size = getContext().getTypeSize(Ty);
   // Android promotes <2 x i8> to i16, not i32
-  if ((isAndroid() || isOHOSFamily()) && (Size <= 16)) {
+  if (isAndroid() && (Size <= 16)) {
     llvm::Type *ResType = llvm::Type::getInt16Ty(getVMContext());
     return ABIArgInfo::getDirect(ResType);
   }
@@ -6474,7 +6470,7 @@ public:
     case llvm::Triple::MuslEABIHF:
       return true;
     default:
-      return getTarget().getTriple().isOHOSFamily();
+      return false;
     }
   }
 
