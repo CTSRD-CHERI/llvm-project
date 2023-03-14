@@ -18,10 +18,10 @@
 TEST_CHERI_NO_SUBOBJECT_WARNING
 
 template <typename CharT>
-void test ( const CharT *s, size_t len ) {
+void test ( const CharT *s, std::size_t len ) {
     std::basic_string_view<CharT> sv ( s, len );
     assert ( sv.length() == len );
-    for ( size_t i = 0; i < len; ++i ) {
+    for ( std::size_t i = 0; i < len; ++i ) {
         assert (  sv.at(i) == s[i] );
         assert ( &sv.at(i) == s + i );
     }
