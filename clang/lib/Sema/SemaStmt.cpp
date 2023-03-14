@@ -4402,7 +4402,6 @@ template <> struct DenseMapInfo<CatchHandlerType> {
 
 namespace {
 class CatchTypePublicBases {
-  ASTContext &Ctx;
   const llvm::DenseMap<QualType, CXXCatchStmt *> &TypesToCheck;
 
   CXXCatchStmt *FoundHandler;
@@ -4410,10 +4409,9 @@ class CatchTypePublicBases {
   QualType TestAgainstType;
 
 public:
-  CatchTypePublicBases(ASTContext &Ctx,
-                       const llvm::DenseMap<QualType, CXXCatchStmt *> &T,
+  CatchTypePublicBases(const llvm::DenseMap<QualType, CXXCatchStmt *> &T,
                        QualType QT)
-      : Ctx(Ctx), TypesToCheck(T), FoundHandler(nullptr), TestAgainstType(QT) {}
+      : TypesToCheck(T), FoundHandler(nullptr), TestAgainstType(QT) {}
 
   CXXCatchStmt *getFoundHandler() const { return FoundHandler; }
   QualType getFoundHandlerType() const { return FoundHandlerType; }
@@ -4512,7 +4510,7 @@ StmtResult Sema::ActOnCXXTryBlock(SourceLocation TryLoc, Stmt *TryBlock,
       // as the original type.
       CXXBasePaths Paths;
       Paths.setOrigin(RD);
-      CatchTypePublicBases CTPB(Context, HandledBaseTypes,
+      CatchTypePublicBases CTPB(HandledBaseTypes,
                                 H->getCaughtType().getCanonicalType());
       if (RD->lookupInBases(CTPB, Paths)) {
         const CXXCatchStmt *Problem = CTPB.getFoundHandler();
