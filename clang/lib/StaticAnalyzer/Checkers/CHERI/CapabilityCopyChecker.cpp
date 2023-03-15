@@ -65,12 +65,13 @@ public:
   void checkBranchCondition(const Stmt *Condition, CheckerContext &Ctx) const;
 
 private:
-  bool checkBinaryOpArg(CheckerContext &C, const Expr* E) const;
+  ExplodedNode *checkBinaryOpArg(CheckerContext &C, const Expr* E) const;
 
 };
 } // namespace
 
 REGISTER_SET_WITH_PROGRAMSTATE(VoidPtrArgDeref, const MemRegion *)
+REGISTER_SET_WITH_PROGRAMSTATE(UnalignedPtr, const MemRegion *)
 REGISTER_LIST_WITH_PROGRAMSTATE(WhileBoundVar, SymbolRef)
 
 CapabilityCopyChecker::CapabilityCopyChecker() {
@@ -110,6 +111,9 @@ static const MemRegion *stripNonCapShift(const MemRegion * R, ASTContext &ASTCtx
 }
 
 static bool isVoidPtrArgRegion(const MemRegion *Reg) {
+  if (!Reg)
+      return false;
+
   // 1. Reg is pointed by void* symbol
   const SymbolicRegion *SymReg = Reg->getSymbolicBase();
   if (!SymReg)
@@ -125,7 +129,8 @@ static bool isVoidPtrArgRegion(const MemRegion *Reg) {
          && BaseRegOrigin->getMemorySpace()->hasStackParametersStorage();
 }
 
-static CHERITagState getTagState(SVal Val, CheckerContext &C) {
+static CHERITagState getTagState(SVal Val, CheckerContext &C,
+                                 bool AcceptUnaligned = true) {
   if (Val.isUnknownOrUndef())
     return CHERITagState::getUnknown();
 
@@ -138,7 +143,8 @@ static CHERITagState getTagState(SVal Val, CheckerContext &C) {
   if (SymbolRef Sym = Val.getAsSymbol()) {
     if (const MemRegion *MR = Sym->getOriginRegion()) {
       const MemRegion *SuperReg = stripNonCapShift(MR, C.getASTContext());
-      if (isVoidPtrArgRegion(SuperReg))
+      if (isVoidPtrArgRegion(SuperReg) &&
+          (AcceptUnaligned || !C.getState()->contains<UnalignedPtr>(SuperReg)))
         return CHERITagState::getMayBeTagged();
       if (MR != SuperReg && isa<TypedValueRegion>(SuperReg)) {
         const SVal &SuperVal = C.getState()->getSVal(SuperReg);
@@ -196,8 +202,11 @@ void CapabilityCopyChecker::checkLocation(SVal l, bool isLoad, const Stmt *S,
   C.addTransition(State, C.getPredecessor(), Tag);
 }
 
-static bool isCapabilityStorage(CheckerContext &C, const MemRegion *R) {
+static bool isCapabilityStorage(CheckerContext &C, const MemRegion *R,
+                                bool AcceptUnaligned = true) {
   const MemRegion *BaseReg = stripNonCapShift(R, C.getASTContext());
+  if (!AcceptUnaligned && C.getState()->contains<UnalignedPtr>(BaseReg))
+    return false;
   if (const auto *SymR = dyn_cast<SymbolicRegion>(BaseReg)) {
     QualType const Ty = SymR->getSymbol()->getType();
     if (Ty->isVoidPointerType())
@@ -227,7 +236,7 @@ static bool isInsideSmallConstantBoundLoop(const Stmt *S, CheckerContext &C,
                                            unsigned BlockSize) {
   ASTContext &ASTCtx = C.getASTContext();
   SValBuilder &SVB = C.getSValBuilder();
-  unsigned CapSize = ASTCtx.getTypeSize(ASTCtx.VoidPtrTy);
+  unsigned CapSize = getCapabilityTypeSize(ASTCtx);
   unsigned IterNum4CapCopy = CapSize / BlockSize;
   const NonLoc &ItVal = SVB.makeIntVal(IterNum4CapCopy, true);
 
@@ -286,10 +295,10 @@ void CapabilityCopyChecker::checkBind(SVal L, SVal V, const Stmt *S,
   }
 }
 
-bool CapabilityCopyChecker::checkBinaryOpArg(CheckerContext &C, const Expr* E) const {
+ExplodedNode *CapabilityCopyChecker::checkBinaryOpArg(CheckerContext &C, const Expr* E) const {
   ASTContext &ASTCtx = C.getASTContext();
   if (!isNonCapScalarType(E->getType(), ASTCtx))
-    return false;
+    return nullptr;
 
   const SVal &Val = C.getSVal(E);
   const MemRegion *MR = Val.getAsRegion();
@@ -297,15 +306,15 @@ bool CapabilityCopyChecker::checkBinaryOpArg(CheckerContext &C, const Expr* E) c
     // Check if Val is a part of capability
     SymbolRef Sym = Val.getAsSymbol();
     if (!Sym)
-      return false;
+      return nullptr;
     const MemRegion *OrigRegion = Sym->getOriginRegion();
     if (!OrigRegion)
-      return false;
+      return nullptr;
     const MemRegion *SReg = stripNonCapShift(OrigRegion, C.getASTContext());
     const SVal &WiderVal = C.getState()->getSVal(SReg, ASTCtx.CharTy);
     MR = WiderVal.getAsRegion();
     if (!MR)
-      return false;
+      return nullptr;
   }
 
   if (C.getState()->contains<VoidPtrArgDeref>(MR)) {
@@ -318,18 +327,70 @@ bool CapabilityCopyChecker::checkBinaryOpArg(CheckerContext &C, const Expr* E) c
           ErrNode);
       W->addRange(E->getSourceRange());
       C.emitReport(std::move(W));
-      return true;
+      return ErrNode;
     }
   }
-  return false;
+  return nullptr;
+}
+
+static const MemRegion *isCapAlignCheck(const BinaryOperator *BO, CheckerContext &C) {
+  if (BO->getOpcode() != clang::BO_And)
+    return nullptr;
+
+  long CapAlignMask =
+      getCapabilityTypeAlign(C.getASTContext()).getQuantity() - 1;
+
+  const SVal &RHSVal = C.getSVal(BO->getRHS());
+  if (!RHSVal.isConstant(CapAlignMask))
+    return nullptr;
+
+  return C.getSVal(BO->getLHS()).getAsRegion();
 }
 
 void CapabilityCopyChecker::checkPostStmt(const BinaryOperator *BO,
                                           CheckerContext &C) const {
-  if (BO->isAssignmentOp())
-    return;
+  ExplodedNode *N = nullptr;
 
-  checkBinaryOpArg(C, BO->getLHS()) || checkBinaryOpArg(C, BO->getRHS());
+  /* Check for capability repr bytes used in arithmetic */
+  if (!BO->isAssignmentOp() || BO->isCompoundAssignmentOp()) {
+    N = checkBinaryOpArg(C, BO->getLHS());
+    if (!N)
+      N = checkBinaryOpArg(C, BO->getRHS());
+  }
+  if (!N)
+    N = C.getPredecessor();
+
+  /* Handle alignment check */
+  if (auto ExprPtrReg = isCapAlignCheck(BO, C)) {
+    if (!isVoidPtrArgRegion(ExprPtrReg))
+      return;
+    ProgramStateRef State = N->getState();
+
+    SVal AndVal = C.getSVal(BO);
+    if (AndVal.isUnknown()) {
+      const LocationContext *LCtx = C.getLocationContext();
+      AndVal = C.getSValBuilder().conjureSymbolVal(
+          nullptr, BO, LCtx, BO->getType(), C.blockCount());
+      State = State->BindExpr(BO, LCtx, AndVal);
+    }
+
+    SValBuilder &SVB = C.getSValBuilder();
+    auto PtrIsCapAligned = SVB.evalEQ(State, AndVal, SVB.makeIntVal(0, true));
+    ProgramStateRef Aligned, NotAligned;
+    std::tie(Aligned, NotAligned) =
+        State->assume(PtrIsCapAligned.castAs<DefinedOrUnknownSVal>());
+
+    if (NotAligned) {
+      // If void* argument value is not capability aligned, then it cannot
+      // be a pointer to capability
+      NotAligned = NotAligned->add<UnalignedPtr>(ExprPtrReg->StripCasts());
+      C.addTransition(NotAligned);
+    }
+
+    if (Aligned)
+      C.addTransition(Aligned);
+  }
+
 }
 
 void CapabilityCopyChecker::checkBranchCondition(const Stmt *Condition,
