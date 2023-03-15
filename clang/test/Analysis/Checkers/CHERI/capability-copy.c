@@ -73,9 +73,18 @@ void memcpy_impl_good(void* src0, void *dst0, size_t len) {
   char *src = src0;
   char *dst = dst0;
 
-  if ((len < sizeof(BLOCK_TYPE)) || ((long)src & (BLOCK_SIZE - 1)) || ((long)dst & (BLOCK_SIZE - 1)))
+  if ((len < sizeof(BLOCK_TYPE)))
     while (len--)
       *dst++ = *src++; // no-warning
+}
+
+void memcpy_impl_unaligned(void* src0, void *dst0, size_t len) {
+  char *src = src0;
+  char *dst = dst0;
+
+  if ((len < sizeof(BLOCK_TYPE)) || ((long)src & (BLOCK_SIZE - 1)) || ((long)dst & (BLOCK_SIZE - 1)))
+    while (len--)
+      *dst++ = *src++; // expected-warning{{Tag-stripping store of a capability}}
 }
 
 void memcpy_impl_bad(void* src0, void *dst0, size_t len) {
