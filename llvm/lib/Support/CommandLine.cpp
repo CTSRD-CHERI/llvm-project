@@ -2758,7 +2758,7 @@ StringMap<Option *> &cl::getRegisteredOptions(SubCommand &Sub) {
   initCommonOptions();
   auto &Subs = GlobalParser->RegisteredSubCommands;
   (void)Subs;
-  assert(is_contained(Subs, &Sub));
+  assert(Subs.contains(&Sub));
   return Sub.OptionsMap;
 }
 
