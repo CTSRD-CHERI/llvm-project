@@ -1131,6 +1131,12 @@ def C_CSDCSP : CCheriStackStore<0b111, "c.sdsp", GPR, uimm9_lsb000> {
 }
 
 } // Predicates = [HasCheri, HasCheriRVC, HasStdExtC, IsCapMode]
+let hasSideEffects = 0, mayLoad = 0, mayStore = 0, isMoveReg = 1,
+    isAsCheapAsAMove = 1,
+    Predicates = [HasCheri, HasCheriRVC, HasStdExtCOrZca, IsCapMode] in
+def C_CMove : RVInst16CR<0b1000, 0b10, (outs GPCRNoC0:$rs1), (ins GPCRNoC0:$rs2),
+                         "c.cmove", "$rs1, $rs2">,
+           Sched<[WriteIALU, ReadIALU]>;
 } // DecoderNamespace = "CapModeOnly_"
 
 let Predicates = [HasCheri, HasCheriRVC, HasStdExtC, IsCapMode] in {
@@ -1171,6 +1177,11 @@ def : InstAlias<"c.cfsd $rs2, ${imm}(${rs1})", (C_CFSD FPR64C:$rs2, GPCRC:$rs1, 
 def : InstAlias<"c.cfldcsp $rd, ${imm}(${rs1})", (C_CFLDCSP FPR64:$rd, CSP:$rs1, uimm9_lsb000:$imm), 0>;
 def : InstAlias<"c.cfsdcsp $rs2, ${imm}(${rs1})", (C_CFSDCSP FPR64:$rs2, CSP:$rs1, uimm9_lsb000:$imm), 0>;
 def : InstAlias<"c.cj $offset", (C_J simm12_lsb0:$offset), 0>;
+}
+
+let Predicates = [HasCheri, HasCheriRVC, HasStdExtCOrZca, IsCapMode] in {
+def : CompressPat<(CMove GPCRNoC0:$cs1, GPCRNoC0:$cs2),
+                  (C_CMove GPCRNoC0:$cs1, GPCRNoC0:$cs2)>;
 }
 
 //===----------------------------------------------------------------------===//
