@@ -701,35 +701,11 @@ static int64_t getTlsTpOffset(const Symbol &s) {
   }
 }
 
-// If the symbol is declared in a different compartment, record it
-// as imported. If the symbol doesn't have a compartment, record
-// its address.
-static void addCHERIImportedSymbol(const Symbol *sym, const InputFile *file) {
-  if (!config->shouldEmitCompartmentReport())
-    return;
-  auto *def = dyn_cast<Defined>(sym);
-  if (!def)
-    return;
-  auto *section = dyn_cast_or_null<InputSection>(def->section);
-  Configuration::CompartmentSymbols::Import import;
-  if (!section)
-    import.address = APInt(32, sym->getVA(0), false);
-  else if (section->file != file)
-    import.compartment = section->file->getName();
-  else
-    return; // Ignore calls to same compartment
-  import.name = sym->getName();
-  config->compartments[file->getName()].imports.insert(std::move(import));
-}
-
 uint64_t InputSectionBase::getRelocTargetVA(const InputFile *file, RelType type,
                                             int64_t a, uint64_t p,
                                             const Symbol &sym, RelExpr expr,
                                             const InputSectionBase *isec,
                                             uint64_t offset) {
-  // We only treat symbols as "imported" when they refer an exported symbol
-  // from a different compartment (or no compartment, ex. __export_mem_*)
-  addCHERIImportedSymbol(&sym, file);
 
   switch (expr) {
   case R_ABS:
@@ -1575,6 +1551,15 @@ template Defined *InputSectionBase::getEnclosingFunction<ELF32LE>(uint64_t Offse
 template Defined *InputSectionBase::getEnclosingFunction<ELF32BE>(uint64_t Offset) const;
 template Defined *InputSectionBase::getEnclosingFunction<ELF64LE>(uint64_t Offset) const;
 template Defined *InputSectionBase::getEnclosingFunction<ELF64BE>(uint64_t Offset) const;
+
+template Defined *
+InputSectionBase::getEnclosingObject<ELF32LE>(uint64_t Offset) const;
+template Defined *
+InputSectionBase::getEnclosingObject<ELF32BE>(uint64_t Offset) const;
+template Defined *
+InputSectionBase::getEnclosingObject<ELF64LE>(uint64_t Offset) const;
+template Defined *
+InputSectionBase::getEnclosingObject<ELF64BE>(uint64_t Offset) const;
 
 template void InputSection::writeTo<ELF32LE>(uint8_t *);
 template void InputSection::writeTo<ELF32BE>(uint8_t *);

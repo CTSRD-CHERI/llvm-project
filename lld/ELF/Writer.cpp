@@ -26,6 +26,7 @@
 #include "lld/Common/Strings.h"
 #include "llvm/ADT/StringMap.h"
 #include "llvm/ADT/StringSwitch.h"
+#include "llvm/Support/JSON.h"
 #include "llvm/Support/Parallel.h"
 #include "llvm/Support/RandomNumberGenerator.h"
 #include "llvm/Support/SHA1.h"
@@ -706,11 +707,6 @@ template <class ELFT> void Writer<ELFT>::run() {
     writeBuildId();
     if (errorCount())
       return;
-
-    if (config->shouldEmitCompartmentReport()) {
-      config->finalHash =
-          SHA256::hash({buffer->getBufferStart(), buffer->getBufferSize()});
-    }
 
     if (auto e = buffer->commit())
       error("failed to write to the output file: " + toString(std::move(e)));
@@ -2380,7 +2376,6 @@ template <class ELFT> void Writer<ELFT>::finalizeSections() {
 
       if (!outSec->isLive() && outSec != Out::elfHeader &&
           !script->isAether(outSec)) {
-        // errs() << "Symbol " << toString(*Reg) << " points to garbage collected output section " << OutSec->Name << "\n";
         reg->type = STT_NOTYPE;
         reg->section = nullptr;
         reg->value = 0;
@@ -3095,7 +3090,432 @@ template <class ELFT> void Writer<ELFT>::openFile() {
   }
   buffer = std::move(*bufferOrErr);
   Out::bufferStart = buffer->getBufferStart();
+  Out::bufferSize = buffer->getBufferSize();
 }
+
+/**
+ * Helper class that builds and emits the compartment report.
+ *
+ * FIXME: This assumes that the host is little endian.  Apparently some
+ * big-endian platforms still exist, so we should fix this before upstreaming.
+ */
+class CompartmentReportWriter {
+  /// CHERIoT import table entry.
+  struct ImportTableEntry {
+    /// Start address (target endian)
+    uint32_t start;
+    /// Length address (target endian)
+    uint32_t length;
+  };
+  /**
+   * Export table entry.  Metadata associated with a function that is exported
+   * from a compartment.
+   */
+  struct ExportTableEntry {
+    /// The offset of the start of the function in PCC.
+    uint16_t functionStart;
+    /// The minimum stack space that the entry point requires (in units of 8
+    /// bytes).
+    uint8_t minimumStackSize;
+    /**
+     * Flags.  See the accessors for how these are used.
+     */
+    uint8_t flags;
+
+    /// Return the number of argument registers used for the call
+    uint8_t argument_registers() const { return flags & 0b111; }
+
+    /// Return a string indicating the interrupt status for this function.
+    const char *interrupt_status() const {
+      const char *interrupt_status[] = {"inherit", "enabled", "disabled",
+                                        "invalid"};
+      int field = (flags >> 3) & 0b11;
+      assert(field < 3);
+      return interrupt_status[field];
+    }
+
+    /// Returns true if this is an exported sealing type, false otherwise.
+    bool is_sealing_type() const { return flags & 0b100000; }
+  };
+
+  /// The root of the report
+  json::Object Json;
+  /// The buffer holding the output
+  uint8_t *buffer;
+  /// Map from compartment names to compartments.
+  std::map<std::string, json::Object> compartments;
+  /// The section that holds sealed objects.
+  OutputSection *sealedObjects;
+  /// The section that holds export tables.
+  OutputSection *exportTables;
+
+  /**
+   * Map from file names to the metadata about their exports.  This is a bit
+   * clunky, because we don't have a good way of mapping from an export table
+   * to a compartment name.
+   */
+  std::unordered_map<std::string, json::Array> exportsByFile;
+
+  /**
+   * Format `bytes` as a hex string.  If `spaces` is non-zero, emits a space
+   * every `spaces` bytes.
+   */
+  auto formatHex(ArrayRef<uint8_t> bytes, int spaces = 0) {
+    std::string str;
+    raw_string_ostream s{str};
+    int writtenBytes = 0;
+    for (uint8_t b : bytes) {
+      writtenBytes++;
+      if ((spaces != 0) && (writtenBytes > 1) &&
+          ((writtenBytes % spaces) == 1)) {
+        s << ' ';
+      }
+      s << format_hex_no_prefix(b, 2);
+    }
+    return s.str();
+  };
+
+  /**
+   * If `outputSection` contains an input section that contains `address`,
+   * return it. Return `nullptr` in all other cases.
+   */
+  InputSection *findInputSection(OutputSection *outputSection,
+                                 uint32_t address) {
+    uint32_t start = outputSection->getLMA();
+    uint32_t end = start + outputSection->size;
+    // Give up if this address isn't in the desired section
+    if ((address < start) || (address >= end))
+      return nullptr;
+    // Find the displacement within the output section
+    uint32_t offset = address - start;
+    for (auto *inSec : getInputSections(outputSection))
+      if ((inSec->outSecOff <= offset) &&
+          ((inSec->outSecOff + inSec->getSize()) > offset))
+        return inSec;
+    return nullptr;
+  }
+
+  /**
+   * Add the import table for `compartmentName`.  The `table` argument contains
+   * the import table in the linked binary.
+   */
+  void addImports(StringRef compartmentName, ArrayRef<ImportTableEntry> table) {
+    // Skip the placeholder for the compartment switcher.
+    table = table.drop_front();
+    json::Array imports;
+    uint32_t sealedRangeStart = sealedObjects->getLMA();
+
+    // Process each import table entry.
+    for (auto entry : table) {
+      // If the length is not zero then this must either an MMIO import or a
+      // static sealed object.
+      if (entry.length != 0) {
+        // First check if this is a sealed object.
+        if (auto inSec = findInputSection(sealedObjects, entry.start)) {
+          uint32_t start = entry.start - sealedRangeStart;
+          auto *sym =
+              inSec->getEnclosingObject<ELF32LE>(start - inSec->outSecOff);
+          if (!sym) {
+            error("Compartment '" + compartmentName +
+                  "' imports non-existent sealed object");
+            continue;
+          }
+          if (sym->getSize() != entry.length)
+            error("Import from compartment '" + compartmentName +
+                  "' refers to sealed object '" + sym->getName() +
+                  " with length " + utostr(sym->getSize()) +
+                  " but requests an import of length " + utostr(entry.length) +
+                  ".");
+          uint32_t sealingType = *reinterpret_cast<uint32_t *>(
+              buffer + sealedObjects->offset + start);
+          auto *sealingSec = findInputSection(exportTables, sealingType);
+          if (!sealingSec) {
+            error("Sealed object '" + sym->getName() + "' for compartment '" +
+                  compartmentName + "' has a sealing type address 0x" +
+                  utohexstr(sealingType) +
+                  " that does not appear in any export table");
+            continue;
+          }
+          auto *exportType = sealingSec->getEnclosingObject<ELF32LE>(
+              sealingType - exportTables->getLMA() - sealingSec->outSecOff);
+          if (!exportType) {
+            error("Sealed object '" + sym->getName() + "' for compartment '" +
+                  compartmentName + "' has a sealing type address 0x" +
+                  utohexstr(sealingType) +
+                  ", which does not correspond to a symbol in an export table");
+            continue;
+          }
+
+          auto typeName = exportType->getName();
+          if (!typeName.consume_front("__export.sealing_type.")) {
+            error("Sealed object '" + sym->getName() + "' for compartment '" +
+                  compartmentName + "' uses an invalid sealing type '" +
+                  typeName + ".");
+            continue;
+          }
+          auto [compartment, keyName] = typeName.split('.');
+
+          imports.push_back(json::Object{
+              {"kind", "SealedObject"},
+              {"sealing_type",
+               json::Object{{"provided_by", sealingSec->file->getName()},
+                            {"compartment", compartment},
+                            {"key", keyName},
+                            {"symbol", exportType->getName()}}},
+              {"contents", formatHex({buffer + sealedObjects->offset + start +
+                                          sizeof(uint64_t),
+                                      entry.length - sizeof(uint64_t)},
+                                     4)}});
+        } else
+          imports.push_back(json::Object{{"kind", "MMIO"},
+                                         {"start", entry.start},
+                                         {"length", entry.length}});
+        continue;
+      }
+      // A few compartments have empty entries that the loader fills in with
+      // sealing capabilities, skip those.  If they're not the privileged
+      // compartments, the loader will not provide any capabilities in these.
+      if (entry.start == 0)
+        continue;
+      uint32_t base = exportTables->getLMA();
+      uint32_t target = entry.start;
+      bool isLibcall = target & 1;
+      target &= ~uint32_t(1);
+      if (auto *inSec = findInputSection(exportTables, target)) {
+        auto inputBase = base + inSec->outSecOff;
+        if (auto *sym =
+                inSec->getEnclosingObject<ELF32LE>(target - inputBase)) {
+          auto name = sym->getName();
+          json::Object importEntry{
+              {"kind", isLibcall ? "LibraryFunction" : "CompartmentExport"},
+              {"provided_by", inSec->file->getName()},
+              {"export_symbol", name}};
+          if (name.consume_front("__library_export_")) {
+            if (!isLibcall)
+              error("Compartment '" + compartmentName +
+                    "' imports library function '" + sym->getName() +
+                    "' as cross-compartment call");
+            size_t functionNameStart = name.find("__Z");
+            if (functionNameStart != StringRef::npos)
+              importEntry.insert({"function", demangleItanium(name.substr(
+                                                  functionNameStart + 1))});
+          } else if (name.consume_front("__export_")) {
+            size_t functionNameStart = name.find("__Z");
+            if (functionNameStart != StringRef::npos) {
+              importEntry.insert(
+                  {"compartment_name", name.take_front(functionNameStart)});
+              importEntry.insert({"function", demangleItanium(name.substr(
+                                                  functionNameStart + 1))});
+            }
+          }
+          imports.push_back(std::move(importEntry));
+          // FIXME: Error if sym->isLocal() and the export table is not
+          // the one corresponding to the import table.
+        } else
+          error("Import table for compartment '" + compartmentName +
+                "' refers to address 0x" + utohexstr(target) +
+                ", which is not a valid export");
+      } else
+        error("Import table for compartment '" + compartmentName +
+              "' refers to address 0x" + utohexstr(target) +
+              ", which is not a valid export");
+    }
+    if (!imports.empty()) {
+      auto &compartment = compartments[compartmentName.str()];
+      compartment.insert({"imports", std::move(imports)});
+    }
+  }
+
+  /**
+   * Add an input section.  Adds the hashes of this input section.
+   */
+  void addInput(InputSectionBase *inSec, json::Array *inputs) {
+    if (auto *ms = dyn_cast<MergeSyntheticSection>(inSec)) {
+      for (auto *mergedSection : ms->sections) {
+        addInput(mergedSection, inputs);
+      }
+      return;
+    }
+    json::Object sectionEntry{{"section_name", inSec->name},
+                              {"size", static_cast<int64_t>(inSec->getSize())},
+                              {"file", inSec->file->getName().str()}};
+    // Yes, InputSection really does return an ArrayRef with a non-zero
+    // length but a null pointer for the data for BSS sections.
+    if (inSec->data().data() != nullptr)
+      sectionEntry.insert({"sha256", formatHex(SHA256::hash(inSec->data()))});
+    inputs->push_back(std::move(sectionEntry));
+  }
+
+  /**
+   * Process the exports output section.  This is made by concatenating all of
+   * the
+   */
+  void processExports(OutputSection *sec) {
+    exportTables = sec;
+    // Look at all of the export tables in turn
+    for (auto *inSec : getInputSections(sec)) {
+      // Skip pcc, ddc, and the error handler.
+      constexpr uint64_t firstEntryOffset = 20;
+      uint64_t offset = firstEntryOffset;
+      // Skip ones that don't actually import anything.
+      if (inSec->getSize() <= offset)
+        continue;
+      uint8_t *sectionStartInOutput = buffer + sec->offset + inSec->outSecOff;
+      ArrayRef<ExportTableEntry> table{
+          reinterpret_cast<ExportTableEntry *>(sectionStartInOutput + offset),
+          (inSec->getSize() - offset) / sizeof(ExportTableEntry)};
+      json::Array exports;
+      for (const auto &e : table) {
+        auto *sym = inSec->getEnclosingObject<ELF32LE>(offset);
+        offset += sizeof(ExportTableEntry);
+        if (!sym) {
+          error("Export table entry " +
+                utostr((offset - firstEntryOffset - sizeof(ExportTableEntry)) /
+                       sizeof(ExportTableEntry)) +
+                " from " + toString(inSec->file) +
+                " has no symbol associated with it");
+          continue;
+        }
+
+        json::Object entry{
+            {"kind", e.is_sealing_type() ? "SealingKey" : "Function"},
+            {"exported", !sym->isLocal()},
+            {"export_symbol", sym->getName()}};
+
+        if (!e.is_sealing_type()) {
+          entry.insert({"start_offset", e.functionStart});
+          entry.insert({"register_arguments", e.argument_registers()});
+          entry.insert({"interrupt_status", e.interrupt_status()});
+        }
+        exports.push_back(std::move(entry));
+      }
+      if (!exports.empty()) {
+        exportsByFile[inSec->file->getName().str()] = std::move(exports);
+      }
+    }
+  }
+
+  /**
+   * Process and output section.
+   */
+  void addOutputSection(OutputSection *sec) {
+    auto *outputStart = buffer + sec->offset;
+    // Special case the things that are not compartments.
+    if (StringSwitch<bool>(sec->name)
+            .Case(".loader_start", true)
+            .Case("compartment_switcher_code", true)
+            .Case(".loader_code", true)
+            .Case(".loader_data", true)
+            .Default(false)) {
+      json::Object sectionDescription({{"section_name", sec->name.str()},
+                                       {"inputs", json::Array()},
+                                       {"output", json::Object()}});
+      auto inputs = sectionDescription.getArray("inputs");
+      for (auto *inSec : getInputSections(sec))
+        addInput(inSec, inputs);
+      sectionDescription.getObject("output")->insert(
+          {"sha256",
+           formatHex(SHA256::hash({buffer + sec->offset, sec->size}))});
+      Json.getObject("core")->insert(
+          {sec->name.str(), std::move(sectionDescription)});
+    } else if (sec->name.endswith("_code")) {
+      auto compartmentName = sec->name.drop_back(5);
+      if (compartmentName.startswith("."))
+        compartmentName = compartmentName.drop_front(1);
+
+      auto &compartment = compartments[compartmentName.str()];
+
+      // If this is a code section, we want to record the hashes of the
+      // contents.
+      json::Object sectionDescription({{"name", sec->name.str()},
+                                       {"inputs", json::Array()},
+                                       {"output", json::Object()}});
+      auto inputs = sectionDescription.getArray("inputs");
+      for (auto *inSec : getInputSections(sec)) {
+        if (inSec->file) {
+          auto it = exportsByFile.find(inSec->file->getName().str());
+          if (it != exportsByFile.end()) {
+            compartment.insert({"exports", std::move(it->second)});
+            exportsByFile.erase(it);
+          }
+        }
+        if (inSec->name == ".compartment_import_table") {
+          addImports(compartmentName,
+                     {reinterpret_cast<ImportTableEntry *>(outputStart),
+                      inSec->getSize() / sizeof(ImportTableEntry)});
+        } else
+          addInput(inSec, inputs);
+      }
+      sectionDescription.getObject("output")->insert(
+          {"sha256", formatHex(SHA256::hash({outputStart, sec->size}))});
+      compartment.insert({"code", std::move(sectionDescription)});
+    } else if (sec->name.endswith("_data")) {
+      auto compartmentName = sec->name.drop_back(5);
+      if (compartmentName.startswith("."))
+        compartmentName = compartmentName.drop_front(1);
+
+      auto &compartment = compartments[compartmentName.str()];
+
+      // If this is a code section, we want to record the hashes of the
+      // contents.
+      json::Object sectionDescription({{"name", sec->name.str()},
+                                       {"inputs", json::Array()},
+                                       {"output", json::Object()}});
+      auto inputs = sectionDescription.getArray("inputs");
+      for (auto *inSec : getInputSections(sec))
+        addInput(inSec, inputs);
+      sectionDescription.getObject("output")->insert(
+          {"sha256", formatHex(SHA256::hash({outputStart, sec->size}))});
+      compartment.insert({"data", std::move(sectionDescription)});
+    }
+  }
+
+  /**
+   * Write the output to the specified file.
+   */
+  void writeToFile(StringRef file) {
+    if (!exportsByFile.empty())
+      for (auto &i : exportsByFile)
+        error(
+            toString(i.first) +
+            " contains an export table that was not attached to a compartment");
+    std::error_code ec;
+    raw_fd_ostream out(file, ec, sys::fs::OF_TextWithCRLF);
+    if (ec)
+      fatal("failed to create compartment file" + file + ": " + ec.message());
+
+    // Pretty print JSON output
+    json::OStream JOS(out, /* pretty */ 2);
+    JOS.value(json::Value(std::move(Json)));
+  }
+
+public:
+  /**
+   * Write the compartment report.
+   */
+  CompartmentReportWriter(StringRef fileName, uint8_t *buffer,
+                          size_t bufferSize)
+      : Json({{"file", fileName},
+              {"core", json::Object()},
+              {"compartments", json::Object()}}),
+        buffer(buffer) {
+    if (config->shouldEmitCompartmentReport()) {
+      for (OutputSection *sec : outputSections)
+        if (sec->name == ".compartment_export_tables") {
+          processExports(sec);
+        } else if (sec->name == ".sealed_objects")
+          sealedObjects = sec;
+      for (OutputSection *sec : outputSections)
+        addOutputSection(sec);
+      auto *compartmentJson = Json.getObject("compartments");
+      for (auto &c : compartments)
+        compartmentJson->insert({c.first, std::move(c.second)});
+      Json.insert(
+          {"final_hash", formatHex(SHA256::hash({buffer, bufferSize}))});
+      writeToFile(config->compartmentReportFile);
+    }
+  }
+};
 
 template <class ELFT> void Writer<ELFT>::writeSectionsBinary() {
   for (OutputSection *sec : outputSections)
@@ -3150,6 +3570,10 @@ template <class ELFT> void Writer<ELFT>::writeSections() {
   for (OutputSection *sec : outputSections)
     if (sec->type != SHT_REL && sec->type != SHT_RELA)
       sec->writeTo<ELFT>(Out::bufferStart + sec->offset);
+
+  // Write a compartment report, if requested.
+  CompartmentReportWriter{config->outputFile, Out::bufferStart,
+                          Out::bufferSize};
 
   // Finally, check that all dynamic relocation addends were written correctly.
   if (config->checkDynamicRelocs && config->writeAddends) {

@@ -2237,146 +2237,6 @@ template <class ELFT> static uint32_t getAndFeatures() {
   return ret;
 }
 
-// If the symbol is declared in the export table ELF section, add it to
-// the compartment exported symbols
-static void addCHERIExportedSymbol(const Symbol *sym, const InputFile *file) {
-  if (!config->shouldEmitCompartmentReport())
-    return;
-  auto *def = dyn_cast<Defined>(sym);
-  if (!def)
-    return;
-  auto *section = dyn_cast_or_null<InputSection>(def->section);
-  if (!section)
-    return;
-  // Needs to be in the right ELF section
-  if ((section->file == file) && (section->name == ".compartment_export_table"))
-    config->compartments[file->getName()].exports.insert(sym->getName());
-}
-
-// Calculate the hash of each ELF section in the compartment
-static void addCHERICompartmentHashes(const InputFile *file) {
-  if (!config->shouldEmitCompartmentReport() || config->compartments.empty() ||
-      !file)
-    return;
-
-  auto fileName = file->getName();
-  auto &compartment = config->compartments[fileName];
-
-  // Per section hash
-  for (auto *section : file->getSections()) {
-    if (!section || section->name.empty() || !section->data().data())
-      continue;
-
-    // Calculate the section hash's digest for specific sections
-    if (section->name == ".pcc" || section->name == ".gdc")
-      compartment.hashes[section->name] = SHA256::hash(section->data());
-  }
-}
-
-// Dumps the JSON compartment structure to a file called:
-// <output_file>.compartments
-static void dump_json_compartments() {
-  if (!config->shouldEmitCompartmentReport() || config->compartments.empty())
-    return;
-
-  auto formatHash = [](ArrayRef<uint8_t> bytes) {
-    std::string str;
-    raw_string_ostream s{str};
-    for (uint8_t b : bytes) {
-      s << format_hex_no_prefix(b, 2);
-    }
-    return s.str();
-  };
-
-  // Build the JSON object with all compartments and symbols
-  json::Object Json({{"hash", formatHash(config->finalHash)},
-                     {"file", config->outputFile},
-                     {"compartments", json::Array()}});
-  auto *compartments = Json.getArray("compartments");
-
-  auto demangleExport = [](StringRef compartment, StringRef symbol,
-                           std::string &tmp) {
-    auto *libcallsPrefix = "__library_export_libcalls_";
-    auto prefix =
-        Twine{"__export_", sys::path::stem(compartment)}.concat("_").str();
-    if (!symbol.startswith(prefix)) {
-      if (symbol.startswith(libcallsPrefix))
-        prefix = libcallsPrefix;
-      else
-        return symbol;
-    }
-    StringRef suffix = symbol.substr(prefix.size());
-    tmp = demangleItanium(suffix);
-    return StringRef(tmp);
-  };
-
-  for (auto &pair : config->compartments) {
-    auto &name = pair.first;
-    auto &lists = pair.second;
-    json::Object Comp(
-        {{"compartment_name", name.str()}, {"hashes", json::Object()}});
-    // Exports are simple, just list the names
-    if (!lists.exports.empty()) {
-      Comp.insert({"exports", json::Array{}});
-      auto *exports = Comp.getArray("exports");
-      for (auto &E : lists.exports) {
-        std::string tmp;
-        exports->push_back(demangleExport(name, E, tmp).str());
-      }
-    }
-    // Imports have two layouts: with address or with compartment name
-    if (!lists.imports.empty()) {
-      Comp.insert({"imports", json::Array{}});
-      auto *imports = Comp.getArray("imports");
-      for (auto &I : lists.imports) {
-        // Symbols with compartment names
-        if (!I.compartment.empty()) {
-          std::string tmp;
-          json::Object import(
-              {{"compartment", I.compartment},
-               {"name", demangleExport(I.compartment, I.name, tmp).str()}});
-          imports->push_back(json::Value(std::move(import)));
-
-          // Symbols without compartment names
-        } else {
-          llvm::SmallVector<char, 10> address;
-          address.push_back('0');
-          address.push_back('x');
-          I.address.toString(address, /*radix*/ 16, /*signed*/ false);
-          StringRef name = I.name;
-          name.consume_front("__export_mem_");
-          json::Object import({{"address", address}, {"name", name}});
-          imports->push_back(json::Value(std::move(import)));
-        }
-      }
-    }
-    // Hashes of each ELF section and of the whole compartment
-    auto *hashes = Comp.getObject("hashes");
-    for (auto &H : lists.hashes) {
-      StringRef sectionName = StringSwitch<StringRef>(H.first)
-                                  .Case(".pcc", "unlinked-code")
-                                  .Case(".gdc", "unlinked-globals")
-                                  .Case("compartment", "linked-compartment")
-                                  .Default(H.first);
-      hashes->try_emplace(sectionName, formatHash(H.second));
-    }
-    compartments->push_back(json::Value(std::move(Comp)));
-  }
-
-  // Print it to a file
-  // FIXME: This should be a command line option
-  std::error_code ec;
-  raw_fd_ostream out(config->compartmentReportFile, ec,
-                     sys::fs::OF_TextWithCRLF);
-  if (ec)
-    fatal("failed to create compartment file" + config->compartmentReportFile +
-          ": " + ec.message());
-
-  // Pretty print JSON format as <binary-name>.compartments
-  json::OStream JOS(out, /* pretty */ 2);
-  JOS.value(json::Value(std::move(Json)));
-}
-
 // Do actual linking. Note that when this function is called,
 // all linker scripts have already been parsed.
 template <class ELFT> void LinkerDriver::link(opt::InputArgList &args) {
@@ -2439,17 +2299,6 @@ template <class ELFT> void LinkerDriver::link(opt::InputArgList &args) {
       auto fileName = files[i]->getName();
       llvm::TimeTraceScope timeScope("Parse input files", fileName);
       parseFile(files[i]);
-
-      // Populate CHERI export compartment data for each file
-      // Imported symbols are dealt with in InputSectionBase::getRelocTargetVA
-      // FIXME: There should be a command line option to enable this
-      config->compartments[fileName] = Configuration::CompartmentSymbols();
-      auto *obj = cast<ObjFile<ELFT>>(files[i]);
-      for (Symbol *sym : obj->getGlobalSymbols())
-        addCHERIExportedSymbol(sym, files[i]);
-
-      // Calculate the hashes of the ELF sections in each compartment
-      addCHERICompartmentHashes(files[i]);
     }
   }
 
@@ -2747,7 +2596,4 @@ template <class ELFT> void LinkerDriver::link(opt::InputArgList &args) {
   // Write the result to the file.
   writeResult<ELFT>();
 
-  // After everything, all CHERI __import/__export symbols have been computed
-  // we just dump the JSON onto a known file.
-  dump_json_compartments();
 }

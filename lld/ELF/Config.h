@@ -373,38 +373,8 @@ struct Configuration {
   // True if we are creating a pure-capability CheriABI output.
   bool isCheriAbi = false;
 
-  // List of imported/exported symbols per CHERI compartment
-  struct CompartmentSymbols {
-    struct Import {
-      // If the import has no compartment, show its address
-      llvm::APInt address;
-      // If it does, show its compartment
-      llvm::StringRef compartment;
-      // Symbol name
-      llvm::StringRef name;
-      // For std::set
-      bool operator<(const Import &other) const {
-        return compartment < other.compartment ||
-               address.getZExtValue() < other.address.getZExtValue() ||
-               name < other.name;
-      }
-    };
-    // Name of the compartment and symbol that this compartment imports
-    // If no compartment found, prints the effective address
-    std::set<Import> imports;
-    // Name of the symbols exported by this compartment
-    std::set<llvm::StringRef> exports;
-    // Hash of the compartment's sections/data
-    std::map<llvm::StringRef, std::array<uint8_t, 32>> hashes;
-  };
-
-  // List of CHERI compartment symbols in a given executable
-  std::map<llvm::StringRef, CompartmentSymbols> compartments;
-
   /// The name of the compartment report file
   StringRef compartmentReportFile;
-
-  std::array<uint8_t, 32> finalHash;
 
   /// Should we emit a compartment report file?
   bool shouldEmitCompartmentReport() { return !compartmentReportFile.empty(); }
