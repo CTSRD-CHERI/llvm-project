@@ -1476,7 +1476,12 @@ def : Pat<(int_cheri_pcc_get), (CSpecialRW SCR_PCC.Encoding, C0)>;
 
 /// Adjusting to Compressed Capability Precision Instructions
 
+let Predicates = [HasXCheriAll] in
 def : PatGpr<int_cheri_round_representable_length, CRRL>;
+// CRRL is equivalent to (length + ~mask) & mask.
+let Predicates = [HasXCheriStdCompat] in
+def : Pat<(XLenVT (int_cheri_round_representable_length (XLenVT GPR:$rs1))),
+          (AND (ADD GPR:$rs1, (XORI (CRAM GPR:$rs1), -1)), (CRAM GPR:$rs1))>;
 def : PatGpr<int_cheri_representable_alignment_mask, CRAM>;
 
 /// Tag-Memory Access Instructions
