@@ -984,9 +984,7 @@ void EmitAssemblyHelper::RunOptimizationPipeline(
           });
     }
 
-    if (CodeGenOpts.OptimizationLevel == 0) {
-      MPM = PB.buildO0DefaultPipeline(Level, IsLTO || IsThinLTO);
-    } else if (IsThinLTO) {
+    if (IsThinLTO) {
       MPM = PB.buildThinLTOPreLinkDefaultPipeline(Level);
     } else if (IsLTO) {
       MPM = PB.buildLTOPreLinkDefaultPipeline(Level);
