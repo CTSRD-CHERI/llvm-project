@@ -195,7 +195,6 @@ findDefaultVersion(StringRef ExtName) {
 void RISCVISAInfo::addExtension(StringRef ExtName, unsigned MajorVersion,
                                 unsigned MinorVersion) {
   RISCVExtensionInfo Ext;
-  Ext.ExtName = ExtName.str();
   Ext.MajorVersion = MajorVersion;
   Ext.MinorVersion = MinorVersion;
   Exts[ExtName.str()] = Ext;
