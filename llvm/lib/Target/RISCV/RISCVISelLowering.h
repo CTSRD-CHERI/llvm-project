@@ -935,6 +935,7 @@ private:
   SDValue expandUnalignedRVVStore(SDValue Op, SelectionDAG &DAG) const;
 
   bool hasCapabilitySetAddress() const override { return true; }
+  bool hasCapabilitySetOffset() const override;
 
   TailPaddingAmount
   getTailPaddingForPreciseBounds(uint64_t Size) const override;

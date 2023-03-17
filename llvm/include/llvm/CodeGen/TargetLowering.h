@@ -3258,6 +3258,7 @@ public:
 
   // Return true if the target has a capability set address instruction.
   virtual bool hasCapabilitySetAddress() const { return false; }
+  virtual bool hasCapabilitySetOffset() const { return true; }
   MVT cheriCapabilityType() const { return CapType; }
   bool cheriCapabilityTypeHasPreciseBounds() const {
     return CapTypeHasPreciseBounds;

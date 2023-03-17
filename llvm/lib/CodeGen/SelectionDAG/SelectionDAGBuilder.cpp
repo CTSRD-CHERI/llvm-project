@@ -7488,6 +7488,33 @@ void SelectionDAGBuilder::visitIntrinsicCall(const CallInst &I,
     setValue(&I, Res);
     return;
   }
+  case Intrinsic::cheri_cap_offset_set: {
+    if (TLI.hasCapabilitySetOffset()) {
+      visitTargetIntrinsic(I, Intrinsic);
+      return;
+    }
+    assert(TLI.hasCapabilitySetAddress() &&
+           "Expansion of offset_set requires address_set!");
+    Value *CapV = I.getArgOperand(0);
+    SDValue Cap = getValue(CapV);
+    Value *OffsetV = I.getArgOperand(1);
+    SDValue Offset = getValue(OffsetV);
+    // offset_set(cap, offset) -> address_set(cap, base_get(cap) + offset)
+    EVT AddrVT = TLI.getPointerRangeTy(
+        DAG.getDataLayout(), CapV->getType()->getPointerAddressSpace());
+    EVT CapVT = TLI.getPointerTy(DAG.getDataLayout(),
+                                 CapV->getType()->getPointerAddressSpace());
+    SDValue CapBase = DAG.getNode(
+        ISD::INTRINSIC_WO_CHAIN, sdl, AddrVT,
+        DAG.getConstant(Intrinsic::cheri_cap_base_get, sdl, AddrVT), Cap);
+    SDValue NewAddr = DAG.getNode(ISD::ADD, sdl, AddrVT, CapBase, Offset);
+    Res = DAG.getNode(
+        ISD::INTRINSIC_WO_CHAIN, sdl, CapVT,
+        DAG.getConstant(Intrinsic::cheri_cap_address_set, sdl, AddrVT), Cap,
+        NewAddr);
+    setValue(&I, Res);
+    return;
+  }
   case Intrinsic::threadlocal_address: {
     setValue(&I, getValue(I.getOperand(0)));
     return;

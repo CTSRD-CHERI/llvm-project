@@ -1301,6 +1301,7 @@ def : PatGpcrGpcr<int_cheri_cap_seal, CSeal>;
 def : PatGpcrGpcr<int_cheri_cap_unseal, CUnseal>;
 def : PatGpcrGpr<int_cheri_cap_perms_and, CAndPerm>;
 def : PatGpcrGpr<int_cheri_cap_flags_set, CSetFlags>;
+let Predicates = [HasXCheriAll] in
 def : PatGpcrGpr<int_cheri_cap_offset_set, CSetOffset>;
 def : PatGpcrGpr<int_cheri_cap_address_set, CSetAddr>;
 def : PatGpcrGpr<int_cheri_cap_high_set, CSetHigh>;
