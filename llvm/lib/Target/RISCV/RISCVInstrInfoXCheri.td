@@ -1283,6 +1283,7 @@ def : PatGpcr<int_cheri_cap_type_get, CGetType>;
 def : PatGpcr<int_cheri_cap_base_get, CGetBase>;
 def : PatGpcr<int_cheri_cap_length_get, CGetLen>;
 def : PatGpcr<riscv_cap_tag_get, CGetTag>;
+let Predicates = [HasXCheriAll] in
 def : PatGpcr<riscv_cap_sealed_get, CGetSealed>;
 let Predicates = [HasXCheriAll] in
 def : PatGpcr<int_cheri_cap_offset_get, CGetOffset>;
