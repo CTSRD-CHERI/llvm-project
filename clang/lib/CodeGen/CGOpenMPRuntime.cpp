@@ -9957,6 +9957,9 @@ void CGOpenMPRuntime::emitTargetCall(
         DynCGroupMem,
     };
 
+    llvm::OpenMPIRBuilder::InsertPointTy AllocaIP(
+        CGF.AllocaInsertPt->getParent(), CGF.AllocaInsertPt->getIterator());
+
     // The target region is an outlined function launched by the runtime
     // via calls to __tgt_target_kernel().
     //
@@ -9971,7 +9974,7 @@ void CGOpenMPRuntime::emitTargetCall(
     // of teams and threads so no additional calls to the runtime are required.
     // Check the error code and execute the host version if required.
     CGF.Builder.restoreIP(OMPBuilder.emitTargetKernel(
-        CGF.Builder, Return, RTLoc, DeviceID, NumTeams, NumThreads,
+        CGF.Builder, AllocaIP, Return, RTLoc, DeviceID, NumTeams, NumThreads,
         OutlinedFnID, KernelArgs));
 
     llvm::BasicBlock *OffloadFailedBlock =
