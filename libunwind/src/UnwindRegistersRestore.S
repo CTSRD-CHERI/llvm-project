@@ -663,6 +663,13 @@ Lnovec:
 
 #elif defined(__aarch64__)
 
+#if defined(__CHERI_PURE_CAPABILITY__) && defined(RTLD_SANDBOX)
+DEFINE_LIBUNWIND_FUNCTION(__rtld_unw_setcontext)
+	ret
+END_LIBUNWIND_FUNCTION(__rtld_unw_setcontext)
+WEAK_ALIAS(__rtld_unw_setcontext, _rtld_unw_setcontext)
+#endif
+
 //
 // extern "C" void __libunwind_Registers_arm64_jumpto(Registers_arm64 *);
 //
@@ -688,9 +695,17 @@ DEFINE_LIBUNWIND_FUNCTION(__libunwind_Registers_arm64_jumpto)
   ldp    c24,c25, [c0, #0x180]
   ldp    c26,c27, [c0, #0x1a0]
   ldp    c28,c29, [c0, #0x1c0]
+#ifdef RTLD_SANDBOX
+  add    c0, c0, #0x210
+  // Restore Executive stack pointer here
+  bl     _rtld_unw_setcontext
+  ldr    c30,     [c0, #-0x10]  // restore pcc into clr
+  sub    c0, c0, #0x210
+  add    c16,c0, #0x230
+#else
   ldr    c30,     [c0, #0x200]  // restore pcc into clr
-
   add    c16,c0, #0x220
+#endif
   ldp    d0, d1,  [c16, #0x000]
   ldp    d2, d3,  [c16, #0x010]
   ldp    d4, d5,  [c16, #0x020]

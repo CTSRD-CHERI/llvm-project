@@ -675,7 +675,8 @@ enum {
   UNW_ARM64_C30 = 228,
   UNW_ARM64_CLR = 228,
   UNW_ARM64_C31 = 229,
-  UNW_ARM64_CSP = 229
+  UNW_ARM64_CSP = 229,
+  UNW_ARM64_CCSP = 230
 };
 
 // 32-bit ARM registers. Numbers match DWARF for ARM spec #3.1 Table 1.

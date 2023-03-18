@@ -21,6 +21,9 @@
 #include "DwarfParser.hpp"
 #include "config.h"
 
+#ifdef __CHERI_PURE_CAPABILITY__
+#include <cheri/cheric.h>
+#endif
 
 namespace libunwind {
 
@@ -362,6 +365,20 @@ int DwarfInstructions<A, R>::stepWithDwarf(A &addressSpace, pc_t pc,
         }
         if (r2)
           newRegisters.setRegister(UNW_PPC64_R2, r2);
+      }
+#endif
+
+#if defined(__CHERI_PURE_CAPABILITY__) && defined(RTLD_SANDBOX)
+      // If the return address is in Executive mode, then it is almost certainly
+      // pointing to a trampoline. The only exception is when the current PCC is
+      // also running in Executive mode, that is, when it is already running an
+      // RTLD function. We ignore this case for now.
+      if ((cheri_getperm(returnAddress) & CHERI_PERM_EXECUTIVE) != 0) {
+        uintcap_t ccsp = registers.getCapabilityRegister(UNW_ARM64_CCSP);
+        newRegisters.setRegister(
+            UNW_ARM64_CCSP, addressSpace.getCapability(ccsp));
+        returnAddress = addressSpace.getCapability(ccsp + 16);
+        newRegisters.setSP(addressSpace.getCapability(ccsp + 32));
       }
 #endif
 
