@@ -4140,6 +4140,7 @@ void PragmaMaxTokensTotalHandler::HandlePragma(Preprocessor &PP,
 }
 
 // Handle '#pragma clang riscv intrinsic vector'.
+//        '#pragma clang riscv intrinsic sifive_vector'.
 void PragmaRISCVHandler::HandlePragma(Preprocessor &PP,
                                       PragmaIntroducer Introducer,
                                       Token &FirstToken) {
@@ -4155,9 +4156,11 @@ void PragmaRISCVHandler::HandlePragma(Preprocessor &PP,
 
   PP.Lex(Tok);
   II = Tok.getIdentifierInfo();
-  if (!II || !II->isStr("vector")) {
+  StringRef IntrinsicClass = II->getName();
+  if (!II || !(II->isStr("vector") || II->isStr("sifive_vector"))) {
     PP.Diag(Tok.getLocation(), diag::warn_pragma_invalid_argument)
-        << PP.getSpelling(Tok) << "riscv" << /*Expected=*/true << "'vector'";
+        << PP.getSpelling(Tok) << "riscv" << /*Expected=*/true
+        << "'vector' or 'sifive_vector'";
     return;
   }
 
@@ -4168,5 +4171,8 @@ void PragmaRISCVHandler::HandlePragma(Preprocessor &PP,
     return;
   }
 
-  Actions.DeclareRISCVVBuiltins = true;
+  if (IntrinsicClass == "vector")
+    Actions.DeclareRISCVVBuiltins = true;
+  else if (IntrinsicClass == "sifive_vector")
+    Actions.DeclareRISCVVectorBuiltins = true;
 }
