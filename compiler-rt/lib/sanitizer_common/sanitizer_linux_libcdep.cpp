@@ -584,6 +584,7 @@ static void GetTls(uptr *addr, usize *size) {
       *addr = (uptr)tcb->tcb_dtv[1];
     }
   }
+#else
 #error "Unknown OS"
 #endif
 }
