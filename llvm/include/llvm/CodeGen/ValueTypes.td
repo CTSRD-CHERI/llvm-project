@@ -238,8 +238,9 @@ def x86amx    : ValueType<8192, 194>;  // X86 AMX value
 def i64x8     : ValueType<512,  195>;  // 8 Consecutive GPRs (AArch64)
 def aarch64svcount
               : ValueType<16,   196>;  // AArch64 predicate-as-counter
+def spirvbuiltin : ValueType<0,  197>; // SPIR-V's builtin type
 
-def c64  : ValueType<64,  !add(aarch64svcount.Value, 1)>;  // 64-bit capability value
+def c64  : ValueType<64,  !add(spirvbuiltin.Value, 1)>;  // 64-bit capability value
 def c128 : ValueType<128, !add(c64.Value,   1)>;  // 128-bit capability value
 def c256 : ValueType<256, !add(c128.Value,  1)>;  // 256-bit capability value
 

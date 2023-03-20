@@ -292,8 +292,9 @@ namespace llvm {
       x86amx         = 194,    // This is an X86 AMX value
       i64x8          = 195,    // 8 Consecutive GPRs (AArch64)
       aarch64svcount = 196,    // AArch64 predicate-as-counter
+      spirvbuiltin   = 197,    // SPIR-V's builtin type
 
-      c64            = aarch64svcount + 1,  // This is a 64 bit capability value
+      c64            = spirvbuiltin + 1,  // This is a 64 bit capability value
       c128           = c64 + 1,    // This is a 128 bit capability value
       c256           = c128 + 1,   // This is a 256 bit capability value
 
@@ -1168,7 +1169,9 @@ namespace llvm {
       case v2048i32:
       case v2048f32:  return TypeSize::Fixed(65536);
       case funcref:
-      case externref: return TypeSize::Fixed(0); // opaque type
+      case externref:
+      case spirvbuiltin:
+        return TypeSize::Fixed(0); // opaque type
       }
     }
 
