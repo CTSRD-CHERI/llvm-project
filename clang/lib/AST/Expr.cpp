@@ -2076,6 +2076,10 @@ Expr *ignoreImplicitSemaNodes(Expr *E) {
   if (auto *Full = dyn_cast<FullExpr>(E))
     return Full->getSubExpr();
 
+  if (auto *CPLIE = dyn_cast<CXXParenListInitExpr>(E);
+      CPLIE && CPLIE->getInitExprs().size() == 1)
+    return CPLIE->getInitExprs()[0];
+
   return E;
 }
 } // namespace
