@@ -7646,9 +7646,8 @@ const Attr *TreeTransform<Derived>::TransformAttr(const Attr *R) {
   case attr::X:                                                                \
     return getDerived().Transform##X##Attr(cast<X##Attr>(R));
 #include "clang/Basic/AttrList.inc"
-  default:
-    return R;
   }
+  return R;
 }
 
 template <typename Derived>
@@ -7664,8 +7663,6 @@ const Attr *TreeTransform<Derived>::TransformStmtAttr(const Stmt *OrigS,
   case attr::X:                                                                \
     return getDerived().TransformStmt##X##Attr(OrigS, InstS, cast<X##Attr>(R));
 #include "clang/Basic/AttrList.inc"
-  default:
-    return R;
   }
   return TransformAttr(R);
 }
