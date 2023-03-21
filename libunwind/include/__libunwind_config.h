@@ -18,7 +18,11 @@
 #define _LIBUNWIND_HIGHEST_DWARF_REGISTER_X86_64    32
 #define _LIBUNWIND_HIGHEST_DWARF_REGISTER_PPC       112
 #define _LIBUNWIND_HIGHEST_DWARF_REGISTER_PPC64     116
+#ifdef RTLD_SANDBOX
+#define _LIBUNWIND_HIGHEST_DWARF_REGISTER_MORELLO   230
+#else
 #define _LIBUNWIND_HIGHEST_DWARF_REGISTER_MORELLO   229
+#endif
 #define _LIBUNWIND_HIGHEST_DWARF_REGISTER_ARM64     95
 #define _LIBUNWIND_HIGHEST_DWARF_REGISTER_ARM       287
 #define _LIBUNWIND_HIGHEST_DWARF_REGISTER_OR1K      32
@@ -72,9 +76,15 @@
 # elif defined(__aarch64__)
 #  define _LIBUNWIND_TARGET_AARCH64 1
 #  if defined(__CHERI_PURE_CAPABILITY__)
-#    define _LIBUNWIND_CONTEXT_SIZE 100
+#    if defined(RTLD_SANDBOX)
+#      define _LIBUNWIND_CONTEXT_SIZE 102
+#    else
+#      define _LIBUNWIND_CONTEXT_SIZE 100
+#    endif
 #    if defined(__SEH__)
 #      error "Pure-capability aarch64 SEH not supported"
+#    elif defined(RTLD_SANDBOX)
+#      define _LIBUNWIND_CURSOR_SIZE 126
 #    else
 #      define _LIBUNWIND_CURSOR_SIZE 124
 #    endif

@@ -824,6 +824,13 @@ DEFINE_LIBUNWIND_FUNCTION(__unw_getcontext)
 
 #elif defined(__aarch64__)
 
+#if defined(__CHERI_PURE_CAPABILITY__) && defined(RTLD_SANDBOX)
+DEFINE_LIBUNWIND_FUNCTION(__rtld_unw_getcontext)
+	ret
+END_LIBUNWIND_FUNCTION(__rtld_unw_getcontext)
+WEAK_ALIAS(__rtld_unw_getcontext, _rtld_unw_getcontext)
+#endif
+
 //
 // extern int __unw_getcontext(unw_context_t* thread_state)
 //
@@ -848,12 +855,20 @@ DEFINE_LIBUNWIND_FUNCTION(__unw_getcontext)
   stp    c24,c25, [c0, #0x180]
   stp    c26,c27, [c0, #0x1a0]
   stp    c28,c29, [c0, #0x1c0]
-  str    c30,     [c0, #0x1e0]
-  mov    c1,csp
-  str    c1,      [c0, #0x1f0]
+  mov    c1, csp
+  stp    c30,c1,  [c0, #0x1e0]
   str    c30,     [c0, #0x200]    // store return address as pcc
+#ifdef RTLD_SANDBOX
+  add    c0, c0, #0x210
+  // Store Executive stack pointer here
+  bl     _rtld_unw_getcontext
+  ldr    c30, [c0, #-0x10]
+  // skip cpsr
+  add    c0, c0, #0x20
+#else
   // skip cpsr
   add    c0, c0, #0x220
+#endif
   stp    d0, d1,  [c0, #0x000]
   stp    d2, d3,  [c0, #0x010]
   stp    d4, d5,  [c0, #0x020]
