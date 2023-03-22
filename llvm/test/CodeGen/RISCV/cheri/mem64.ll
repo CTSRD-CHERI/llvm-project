@@ -12,7 +12,7 @@ define dso_local i64 @ddc_lb(i8 *%ptr) nounwind {
 ; CHECK-LP64-LABEL: ddc_lb:
 ; CHECK-LP64:       # %bb.0:
 ; CHECK-LP64-NEXT:    lb a1, 0(a0)
-; CHECK-LP64-NEXT:    lb a0, 1(a0)
+; CHECK-LP64-NEXT:    lbu a0, 1(a0)
 ; CHECK-LP64-NEXT:    mv a0, a1
 ; CHECK-LP64-NEXT:    ret
 ;

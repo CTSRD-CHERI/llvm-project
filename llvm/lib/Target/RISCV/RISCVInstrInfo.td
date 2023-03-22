@@ -1657,7 +1657,7 @@ multiclass LdPat<PatFrag LoadOp, RVInst Inst, ValueType vt = XLenVT> {
 }
 
 defm : LdPat<sextloadi8, LB>, Requires<[NotCapMode]>;
-defm : LdPat<extloadi8, LB>, Requires<[NotCapMode]>;
+defm : LdPat<extloadi8, LBU>, Requires<[NotCapMode]>; // Prefer unsigned due to no c.lb in Zcb.
 defm : LdPat<sextloadi16, LH>, Requires<[NotCapMode]>;
 defm : LdPat<extloadi16, LH>, Requires<[NotCapMode]>;
 defm : LdPat<load, LW, i32>, Requires<[IsRV32, NotCapMode]>;

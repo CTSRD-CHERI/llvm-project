@@ -12,7 +12,7 @@ define i32 @ddc_lb(i8 *%ptr) nounwind {
 ; CHECK-ILP32-LABEL: ddc_lb:
 ; CHECK-ILP32:       # %bb.0:
 ; CHECK-ILP32-NEXT:    lb a1, 0(a0)
-; CHECK-ILP32-NEXT:    lb a0, 1(a0)
+; CHECK-ILP32-NEXT:    lbu a0, 1(a0)
 ; CHECK-ILP32-NEXT:    mv a0, a1
 ; CHECK-ILP32-NEXT:    ret
 ;
