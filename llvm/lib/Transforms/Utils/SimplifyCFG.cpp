@@ -1126,7 +1126,7 @@ static void CloneInstructionsIntoPredecessorBlockAndUpdateSSAUses(
     // it is tied to the instruction itself, not the value or position.
     // Similarly strip attributes on call parameters that may cause UB in
     // location the call is moved to.
-    NewBonusInst->dropUndefImplyingAttrsAndUnknownMetadata(
+    NewBonusInst->dropUBImplyingAttrsAndUnknownMetadata(
         LLVMContext::MD_annotation);
 
     NewBonusInst->insertInto(PredBlock, PTI->getIterator());
@@ -3028,7 +3028,7 @@ bool SimplifyCFGOpt::SpeculativelyExecuteBB(BranchInst *BI, BasicBlock *ThenBB,
       if (!isa<DbgAssignIntrinsic>(&I))
         I.setDebugLoc(DebugLoc());
     }
-    I.dropUndefImplyingAttrsAndUnknownMetadata();
+    I.dropUBImplyingAttrsAndUnknownMetadata();
 
     // Drop ephemeral values.
     if (EphTracker.contains(&I)) {
