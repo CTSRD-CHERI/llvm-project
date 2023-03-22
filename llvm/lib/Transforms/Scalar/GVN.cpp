@@ -1958,8 +1958,10 @@ bool GVNPass::processAssumeIntrinsic(AssumeInst *IntrinsicI) {
         MSSAU->insertDef(cast<MemoryDef>(NewDef), /*RenameUses=*/false);
       }
     }
-    if (isAssumeWithEmptyBundle(*IntrinsicI))
+    if (isAssumeWithEmptyBundle(*IntrinsicI)) {
       markInstructionForDeletion(IntrinsicI);
+      return true;
+    }
     return false;
   } else if (isa<Constant>(V)) {
     // If it's not false, and constant, it must evaluate to true. This means our
