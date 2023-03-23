@@ -429,6 +429,7 @@ enum ABI {
   ABI_LP64,
   ABI_LP64F,
   ABI_LP64D,
+  ABI_LP64E,
   ABI_L64PC128,
   ABI_L64PC128F,
   ABI_L64PC128D,
@@ -454,6 +455,7 @@ inline static bool isCheriPureCapABI(ABI TargetABI) {
   case ABI_LP64:
   case ABI_LP64F:
   case ABI_LP64D:
+  case ABI_LP64E:
     return false;
   case ABI_IL32PC64:
   case ABI_IL32PC64F:
