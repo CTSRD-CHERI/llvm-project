@@ -15231,8 +15231,11 @@ SDValue RISCVTargetLowering::LowerCall(CallLoweringInfo &CLI,
     MF.getFrameInfo().setHasTailCall();
     if (RISCVABI::isCheriPureCapABI(Subtarget.getTargetABI()))
       return DAG.getNode(RISCVISD::CAP_TAIL, DL, NodeTys, Ops);
-    else
-      return DAG.getNode(RISCVISD::TAIL, DL, NodeTys, Ops);
+    else {
+      SDValue Ret = DAG.getNode(RISCVISD::TAIL, DL, NodeTys, Ops);
+      DAG.addNoMergeSiteInfo(Ret.getNode(), CLI.NoMerge);
+      return Ret;
+    }
   }
 
   if (RISCVABI::isCheriPureCapABI(Subtarget.getTargetABI()))
