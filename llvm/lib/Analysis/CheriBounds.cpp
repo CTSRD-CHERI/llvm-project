@@ -139,6 +139,7 @@ bool CheriNeedBoundsChecker::useNeedsBounds(const Use &U,
     case Intrinsic::cheri_cap_build:
     case Intrinsic::cheri_cap_conditional_seal:
     case Intrinsic::cheri_cap_diff:
+    case Intrinsic::cheri_cap_equal_exact:
     case Intrinsic::cheri_cap_from_pointer:
     case Intrinsic::cheri_cap_length_get:
     case Intrinsic::cheri_cap_load_tags:
