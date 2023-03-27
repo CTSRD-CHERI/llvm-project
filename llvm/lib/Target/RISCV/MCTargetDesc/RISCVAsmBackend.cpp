@@ -396,7 +396,7 @@ bool RISCVAsmBackend::writeNopData(raw_ostream &OS, uint64_t Count,
   }
 
   bool UseCompressedNop = STI->hasFeature(RISCV::FeatureStdExtC) ||
-                          STI->hasFeature(RISCV::FeatureExtZca);
+                          STI->hasFeature(RISCV::FeatureStdExtZca);
   // The canonical nop on RVC is c.nop.
   if (Count % 4 == 2) {
     OS.write(UseCompressedNop ? "\x01\0" : "\0\0", 2);
@@ -634,7 +634,7 @@ bool RISCVAsmBackend::shouldInsertExtraNopBytesForCodeAlign(
     return false;
 
   bool UseCompressedNop = STI->hasFeature(RISCV::FeatureStdExtC) ||
-                          STI->hasFeature(RISCV::FeatureExtZca);
+                          STI->hasFeature(RISCV::FeatureStdExtZca);
   unsigned MinNopLen = UseCompressedNop ? 2 : 4;
 
   if (AF.getAlignment() <= MinNopLen) {
