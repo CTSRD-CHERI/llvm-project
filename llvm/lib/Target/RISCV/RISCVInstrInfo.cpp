@@ -1047,7 +1047,7 @@ unsigned RISCVInstrInfo::insertBranch(
   // Shouldn't be a fall through.
   assert(TBB && "insertBranch must not be told to insert a fallthrough");
   assert((Cond.size() == 3 || Cond.size() == 0) &&
-         "RISCV branch conditions have two components!");
+         "RISC-V branch conditions have two components!");
 
   MachineFunction *MF = MBB.getParent();
   const RISCVSubtarget &ST = MF->getSubtarget<RISCVSubtarget>();
