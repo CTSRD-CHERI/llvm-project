@@ -79,7 +79,6 @@ set(LLVM_TEST_DEPENDS
           llvm-cxxfilt
           llvm-cxxmap
           llvm-debuginfo-analyzer
-          llvm-debuginfod
           llvm-debuginfod-find
           llvm-diff
           llvm-dis
@@ -224,6 +223,10 @@ endif()
 
 if (LLVM_INCLUDE_DXIL_TESTS)
   list(APPEND LLVM_TEST_DEPENDS dxil-dis)
+endif()
+
+if(LLVM_ENABLE_HTTPLIB)
+  list(APPEND LLVM_TEST_DEPENDS llvm-debuginfod)
 endif()
 
 add_custom_target(llvm-test-depends DEPENDS ${LLVM_TEST_DEPENDS})
