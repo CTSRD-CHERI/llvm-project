@@ -1188,6 +1188,36 @@ bool RISCVTargetLowering::getTgtMemIntrinsic(IntrinsicInfo &Info,
                                              MachineFunction &MF,
                                              unsigned Intrinsic) const {
   auto &DL = I.getModule()->getDataLayout();
+
+  auto SetRVVLoadStoreInfo = [&](unsigned PtrOp, bool IsStore,
+                                 bool IsUnitStrided) {
+    Info.opc = IsStore ? ISD::INTRINSIC_VOID : ISD::INTRINSIC_W_CHAIN;
+    Info.ptrVal = I.getArgOperand(PtrOp);
+    Type *MemTy;
+    if (IsStore) {
+      // Store value is the first operand.
+      MemTy = I.getArgOperand(0)->getType();
+    } else {
+      // Use return type. If it's segment load, return type is a struct.
+      MemTy = I.getType();
+      if (MemTy->isStructTy())
+        MemTy = MemTy->getStructElementType(0);
+    }
+    if (!IsUnitStrided)
+      MemTy = MemTy->getScalarType();
+
+    Info.memVT = getValueType(DL, MemTy);
+    Info.align = Align(DL.getTypeSizeInBits(MemTy->getScalarType()) / 8);
+    Info.size = MemoryLocation::UnknownSize;
+    Info.flags |=
+        IsStore ? MachineMemOperand::MOStore : MachineMemOperand::MOLoad;
+    return true;
+  };
+
+  if (I.getMetadata(LLVMContext::MD_nontemporal) != nullptr)
+    Info.flags |= MachineMemOperand::MONonTemporal;
+
+  Info.flags |= RISCVTargetLowering::getTargetMMOFlags(I);
   switch (Intrinsic) {
   default:
     return false;
@@ -1209,24 +1239,11 @@ bool RISCVTargetLowering::getTgtMemIntrinsic(IntrinsicInfo &Info,
                  MachineMemOperand::MOVolatile;
     return true;
   case Intrinsic::riscv_masked_strided_load:
-    Info.opc = ISD::INTRINSIC_W_CHAIN;
-    Info.ptrVal = I.getArgOperand(1);
-    Info.memVT = getValueType(DL, I.getType()->getScalarType());
-    Info.align = Align(DL.getTypeSizeInBits(I.getType()->getScalarType()) / 8);
-    Info.size = MemoryLocation::UnknownSize;
-    Info.flags |= MachineMemOperand::MOLoad;
-    return true;
+    return SetRVVLoadStoreInfo(/*PtrOp*/ 1, /*IsStore*/ false,
+                               /*IsUnitStrided*/ false);
   case Intrinsic::riscv_masked_strided_store:
-    Info.opc = ISD::INTRINSIC_VOID;
-    Info.ptrVal = I.getArgOperand(1);
-    Info.memVT =
-        getValueType(DL, I.getArgOperand(0)->getType()->getScalarType());
-    Info.align = Align(
-        DL.getTypeSizeInBits(I.getArgOperand(0)->getType()->getScalarType()) /
-        8);
-    Info.size = MemoryLocation::UnknownSize;
-    Info.flags |= MachineMemOperand::MOStore;
-    return true;
+    return SetRVVLoadStoreInfo(/*PtrOp*/ 1, /*IsStore*/ true,
+                               /*IsUnitStrided*/ false);
   case Intrinsic::riscv_seg2_load:
   case Intrinsic::riscv_seg3_load:
   case Intrinsic::riscv_seg4_load:
@@ -1234,17 +1251,8 @@ bool RISCVTargetLowering::getTgtMemIntrinsic(IntrinsicInfo &Info,
   case Intrinsic::riscv_seg6_load:
   case Intrinsic::riscv_seg7_load:
   case Intrinsic::riscv_seg8_load:
-    Info.opc = ISD::INTRINSIC_W_CHAIN;
-    Info.ptrVal = I.getArgOperand(0);
-    Info.memVT =
-        getValueType(DL, I.getType()->getStructElementType(0)->getScalarType());
-    Info.align =
-        Align(DL.getTypeSizeInBits(
-                  I.getType()->getStructElementType(0)->getScalarType()) /
-              8);
-    Info.size = MemoryLocation::UnknownSize;
-    Info.flags |= MachineMemOperand::MOLoad;
-    return true;
+    return SetRVVLoadStoreInfo(/*PtrOp*/ 0, /*IsStore*/ false,
+                               /*IsUnitStrided*/ false);
   case Intrinsic::riscv_seg2_store:
   case Intrinsic::riscv_seg3_store:
   case Intrinsic::riscv_seg4_store:
@@ -1252,17 +1260,10 @@ bool RISCVTargetLowering::getTgtMemIntrinsic(IntrinsicInfo &Info,
   case Intrinsic::riscv_seg6_store:
   case Intrinsic::riscv_seg7_store:
   case Intrinsic::riscv_seg8_store:
-    Info.opc = ISD::INTRINSIC_VOID;
     // Operands are (vec, ..., vec, ptr, vl, int_id)
-    Info.ptrVal = I.getArgOperand(I.getNumOperands() - 3);
-    Info.memVT =
-        getValueType(DL, I.getArgOperand(0)->getType()->getScalarType());
-    Info.align = Align(
-        DL.getTypeSizeInBits(I.getArgOperand(0)->getType()->getScalarType()) /
-        8);
-    Info.size = MemoryLocation::UnknownSize;
-    Info.flags |= MachineMemOperand::MOStore;
-    return true;
+    return SetRVVLoadStoreInfo(/*PtrOp*/ I.getNumOperands() - 3,
+                               /*IsStore*/ true,
+                               /*IsUnitStrided*/ false);
   }
 }
 
