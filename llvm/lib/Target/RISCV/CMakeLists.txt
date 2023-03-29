@@ -34,12 +34,11 @@ add_llvm_target(RISCVCodeGen
   RISCVMacroFusion.cpp
   RISCVMCInstLower.cpp
   RISCVMergeBaseOffset.cpp
+  RISCVOptWInstrs.cpp
   RISCVRedundantCopyElimination.cpp
   RISCVRegisterInfo.cpp
   RISCVRVVInitUndef.cpp
-  RISCVSExtWRemoval.cpp
   RISCVSelectionDAGInfo.cpp
-  RISCVStripWSuffix.cpp
   RISCVSubtarget.cpp
   RISCVTargetMachine.cpp
   RISCVTargetObjectFile.cpp
