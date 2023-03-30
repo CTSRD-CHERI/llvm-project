@@ -9187,7 +9187,7 @@ define i32 @atomicrmw_nand_i32_seq_cst(i32 addrspace(200)* %a, i32 %b) nounwind 
 ; RV32IAXCHERI-NEXT:    clr.w.aqrl a2, (ca0)
 ; RV32IAXCHERI-NEXT:    and a3, a2, a1
 ; RV32IAXCHERI-NEXT:    not a3, a3
-; RV32IAXCHERI-NEXT:    csc.w.aqrl a3, a3, (ca0)
+; RV32IAXCHERI-NEXT:    csc.w.rl a3, a3, (ca0)
 ; RV32IAXCHERI-NEXT:    bnez a3, .LBB134_1
 ; RV32IAXCHERI-NEXT:  # %bb.2:
 ; RV32IAXCHERI-NEXT:    mv a0, a2
@@ -9209,7 +9209,7 @@ define i32 @atomicrmw_nand_i32_seq_cst(i32 addrspace(200)* %a, i32 %b) nounwind 
 ; RV64IAXCHERI-NEXT:    clr.w.aqrl a2, (ca0)
 ; RV64IAXCHERI-NEXT:    and a3, a2, a1
 ; RV64IAXCHERI-NEXT:    not a3, a3
-; RV64IAXCHERI-NEXT:    csc.w.aqrl a3, a3, (ca0)
+; RV64IAXCHERI-NEXT:    csc.w.rl a3, a3, (ca0)
 ; RV64IAXCHERI-NEXT:    bnez a3, .LBB134_1
 ; RV64IAXCHERI-NEXT:  # %bb.2:
 ; RV64IAXCHERI-NEXT:    mv a0, a2
@@ -12524,7 +12524,7 @@ define i64 @atomicrmw_nand_i64_seq_cst(i64 addrspace(200)* %a, i64 %b) nounwind 
 ; RV64IAXCHERI-NEXT:    clr.d.aqrl a2, (ca0)
 ; RV64IAXCHERI-NEXT:    and a3, a2, a1
 ; RV64IAXCHERI-NEXT:    not a3, a3
-; RV64IAXCHERI-NEXT:    csc.d.aqrl a3, a3, (ca0)
+; RV64IAXCHERI-NEXT:    csc.d.rl a3, a3, (ca0)
 ; RV64IAXCHERI-NEXT:    bnez a3, .LBB189_1
 ; RV64IAXCHERI-NEXT:  # %bb.2:
 ; RV64IAXCHERI-NEXT:    mv a0, a2

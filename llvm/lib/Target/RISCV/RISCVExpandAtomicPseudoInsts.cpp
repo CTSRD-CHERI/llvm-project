@@ -400,7 +400,7 @@ static unsigned getSCForRMW32(bool PtrIsCap, AtomicOrdering Ordering) {
   case AtomicOrdering::AcquireRelease:
     return PtrIsCap ? RISCV::CSC_W_RL : RISCV::SC_W_RL;
   case AtomicOrdering::SequentiallyConsistent:
-    return PtrIsCap ? RISCV::CSC_W_AQ_RL : RISCV::SC_W_AQ_RL;
+    return PtrIsCap ? RISCV::CSC_W_RL : RISCV::SC_W_RL;
   }
 }
 
@@ -434,7 +434,7 @@ static unsigned getSCForRMW64(bool PtrIsCap, AtomicOrdering Ordering) {
   case AtomicOrdering::AcquireRelease:
     return PtrIsCap ? RISCV::CSC_D_RL : RISCV::SC_D_RL;
   case AtomicOrdering::SequentiallyConsistent:
-    return PtrIsCap ? RISCV::CSC_D_AQ_RL : RISCV::SC_D_AQ_RL;
+    return PtrIsCap ? RISCV::CSC_D_RL : RISCV::SC_D_RL;
   }
 }
 

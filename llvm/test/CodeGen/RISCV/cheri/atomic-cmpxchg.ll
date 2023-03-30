@@ -1574,7 +1574,7 @@ define void @cmpxchg_i32_seq_cst_monotonic(ptr addrspace(200) %ptr, i32 %cmp, i3
 ; RV32IAXCHERI-NEXT:    clr.w.aqrl a3, (ca0)
 ; RV32IAXCHERI-NEXT:    bne a3, a1, .LBB27_3
 ; RV32IAXCHERI-NEXT:  # %bb.2: # in Loop: Header=BB27_1 Depth=1
-; RV32IAXCHERI-NEXT:    csc.w.aqrl a4, a2, (ca0)
+; RV32IAXCHERI-NEXT:    csc.w.rl a4, a2, (ca0)
 ; RV32IAXCHERI-NEXT:    bnez a4, .LBB27_1
 ; RV32IAXCHERI-NEXT:  .LBB27_3:
 ; RV32IAXCHERI-NEXT:    cret
@@ -1600,7 +1600,7 @@ define void @cmpxchg_i32_seq_cst_monotonic(ptr addrspace(200) %ptr, i32 %cmp, i3
 ; RV64IAXCHERI-NEXT:    clr.w.aqrl a3, (ca0)
 ; RV64IAXCHERI-NEXT:    bne a3, a1, .LBB27_3
 ; RV64IAXCHERI-NEXT:  # %bb.2: # in Loop: Header=BB27_1 Depth=1
-; RV64IAXCHERI-NEXT:    csc.w.aqrl a4, a2, (ca0)
+; RV64IAXCHERI-NEXT:    csc.w.rl a4, a2, (ca0)
 ; RV64IAXCHERI-NEXT:    bnez a4, .LBB27_1
 ; RV64IAXCHERI-NEXT:  .LBB27_3:
 ; RV64IAXCHERI-NEXT:    cret
@@ -1629,7 +1629,7 @@ define void @cmpxchg_i32_seq_cst_acquire(ptr addrspace(200) %ptr, i32 %cmp, i32 
 ; RV32IAXCHERI-NEXT:    clr.w.aqrl a3, (ca0)
 ; RV32IAXCHERI-NEXT:    bne a3, a1, .LBB28_3
 ; RV32IAXCHERI-NEXT:  # %bb.2: # in Loop: Header=BB28_1 Depth=1
-; RV32IAXCHERI-NEXT:    csc.w.aqrl a4, a2, (ca0)
+; RV32IAXCHERI-NEXT:    csc.w.rl a4, a2, (ca0)
 ; RV32IAXCHERI-NEXT:    bnez a4, .LBB28_1
 ; RV32IAXCHERI-NEXT:  .LBB28_3:
 ; RV32IAXCHERI-NEXT:    cret
@@ -1655,7 +1655,7 @@ define void @cmpxchg_i32_seq_cst_acquire(ptr addrspace(200) %ptr, i32 %cmp, i32 
 ; RV64IAXCHERI-NEXT:    clr.w.aqrl a3, (ca0)
 ; RV64IAXCHERI-NEXT:    bne a3, a1, .LBB28_3
 ; RV64IAXCHERI-NEXT:  # %bb.2: # in Loop: Header=BB28_1 Depth=1
-; RV64IAXCHERI-NEXT:    csc.w.aqrl a4, a2, (ca0)
+; RV64IAXCHERI-NEXT:    csc.w.rl a4, a2, (ca0)
 ; RV64IAXCHERI-NEXT:    bnez a4, .LBB28_1
 ; RV64IAXCHERI-NEXT:  .LBB28_3:
 ; RV64IAXCHERI-NEXT:    cret
@@ -1684,7 +1684,7 @@ define void @cmpxchg_i32_seq_cst_seq_cst(ptr addrspace(200) %ptr, i32 %cmp, i32 
 ; RV32IAXCHERI-NEXT:    clr.w.aqrl a3, (ca0)
 ; RV32IAXCHERI-NEXT:    bne a3, a1, .LBB29_3
 ; RV32IAXCHERI-NEXT:  # %bb.2: # in Loop: Header=BB29_1 Depth=1
-; RV32IAXCHERI-NEXT:    csc.w.aqrl a4, a2, (ca0)
+; RV32IAXCHERI-NEXT:    csc.w.rl a4, a2, (ca0)
 ; RV32IAXCHERI-NEXT:    bnez a4, .LBB29_1
 ; RV32IAXCHERI-NEXT:  .LBB29_3:
 ; RV32IAXCHERI-NEXT:    cret
@@ -1710,7 +1710,7 @@ define void @cmpxchg_i32_seq_cst_seq_cst(ptr addrspace(200) %ptr, i32 %cmp, i32 
 ; RV64IAXCHERI-NEXT:    clr.w.aqrl a3, (ca0)
 ; RV64IAXCHERI-NEXT:    bne a3, a1, .LBB29_3
 ; RV64IAXCHERI-NEXT:  # %bb.2: # in Loop: Header=BB29_1 Depth=1
-; RV64IAXCHERI-NEXT:    csc.w.aqrl a4, a2, (ca0)
+; RV64IAXCHERI-NEXT:    csc.w.rl a4, a2, (ca0)
 ; RV64IAXCHERI-NEXT:    bnez a4, .LBB29_1
 ; RV64IAXCHERI-NEXT:  .LBB29_3:
 ; RV64IAXCHERI-NEXT:    cret
@@ -2228,7 +2228,7 @@ define void @cmpxchg_i64_seq_cst_monotonic(ptr addrspace(200) %ptr, i64 %cmp, i6
 ; RV64IAXCHERI-NEXT:    clr.d.aqrl a3, (ca0)
 ; RV64IAXCHERI-NEXT:    bne a3, a1, .LBB37_3
 ; RV64IAXCHERI-NEXT:  # %bb.2: # in Loop: Header=BB37_1 Depth=1
-; RV64IAXCHERI-NEXT:    csc.d.aqrl a4, a2, (ca0)
+; RV64IAXCHERI-NEXT:    csc.d.rl a4, a2, (ca0)
 ; RV64IAXCHERI-NEXT:    bnez a4, .LBB37_1
 ; RV64IAXCHERI-NEXT:  .LBB37_3:
 ; RV64IAXCHERI-NEXT:    cret
@@ -2293,7 +2293,7 @@ define void @cmpxchg_i64_seq_cst_acquire(ptr addrspace(200) %ptr, i64 %cmp, i64 
 ; RV64IAXCHERI-NEXT:    clr.d.aqrl a3, (ca0)
 ; RV64IAXCHERI-NEXT:    bne a3, a1, .LBB38_3
 ; RV64IAXCHERI-NEXT:  # %bb.2: # in Loop: Header=BB38_1 Depth=1
-; RV64IAXCHERI-NEXT:    csc.d.aqrl a4, a2, (ca0)
+; RV64IAXCHERI-NEXT:    csc.d.rl a4, a2, (ca0)
 ; RV64IAXCHERI-NEXT:    bnez a4, .LBB38_1
 ; RV64IAXCHERI-NEXT:  .LBB38_3:
 ; RV64IAXCHERI-NEXT:    cret
@@ -2358,7 +2358,7 @@ define void @cmpxchg_i64_seq_cst_seq_cst(ptr addrspace(200) %ptr, i64 %cmp, i64 
 ; RV64IAXCHERI-NEXT:    clr.d.aqrl a3, (ca0)
 ; RV64IAXCHERI-NEXT:    bne a3, a1, .LBB39_3
 ; RV64IAXCHERI-NEXT:  # %bb.2: # in Loop: Header=BB39_1 Depth=1
-; RV64IAXCHERI-NEXT:    csc.d.aqrl a4, a2, (ca0)
+; RV64IAXCHERI-NEXT:    csc.d.rl a4, a2, (ca0)
 ; RV64IAXCHERI-NEXT:    bnez a4, .LBB39_1
 ; RV64IAXCHERI-NEXT:  .LBB39_3:
 ; RV64IAXCHERI-NEXT:    cret
