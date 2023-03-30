@@ -348,7 +348,7 @@ RISCVTargetLowering::RISCVTargetLowering(const TargetMachine &TM,
   if (Subtarget.is64Bit())
     setOperationAction(ISD::ABS, MVT::i32, Custom);
 
-  if (!Subtarget.hasVendorXVentanaCondOps() &&
+  if (!Subtarget.hasStdExtZicond() && !Subtarget.hasVendorXVentanaCondOps() &&
       !Subtarget.hasVendorXTHeadCondMov())
     setOperationAction(ISD::SELECT, XLenVT, Custom);
 
