@@ -2093,6 +2093,11 @@ public:
                            : nullptr;
   }
 
+  void setConditionVariableDeclStmt(DeclStmt *CondVar) {
+    assert(hasVarStorage());
+    getTrailingObjects<Stmt *>()[varOffset()] = CondVar;
+  }
+
   Stmt *getInit() {
     return hasInitStorage() ? getTrailingObjects<Stmt *>()[initOffset()]
                             : nullptr;
@@ -2325,6 +2330,11 @@ public:
                            : nullptr;
   }
 
+  void setConditionVariableDeclStmt(DeclStmt *CondVar) {
+    assert(hasVarStorage());
+    getTrailingObjects<Stmt *>()[varOffset()] = CondVar;
+  }
+
   SwitchCase *getSwitchCaseList() { return FirstCase; }
   const SwitchCase *getSwitchCaseList() const { return FirstCase; }
   void setSwitchCaseList(SwitchCase *SC) { FirstCase = SC; }
@@ -2488,6 +2498,11 @@ public:
                            : nullptr;
   }
 
+  void setConditionVariableDeclStmt(DeclStmt *CondVar) {
+    assert(hasVarStorage());
+    getTrailingObjects<Stmt *>()[varOffset()] = CondVar;
+  }
+
   SourceLocation getWhileLoc() const { return WhileStmtBits.WhileLoc; }
   void setWhileLoc(SourceLocation L) { WhileStmtBits.WhileLoc = L; }
 
@@ -2577,6 +2592,8 @@ public:
 /// the init/cond/inc parts of the ForStmt will be null if they were not
 /// specified in the source.
 class ForStmt : public Stmt {
+  friend class ASTStmtReader;
+
   enum { INIT, CONDVAR, COND, INC, BODY, END_EXPR };
   Stmt* SubExprs[END_EXPR]; // SubExprs[INIT] is an expression or declstmt.
   SourceLocation LParenLoc, RParenLoc;
@@ -2604,8 +2621,16 @@ public:
 
   /// If this ForStmt has a condition variable, return the faux DeclStmt
   /// associated with the creation of that condition variable.
+  DeclStmt *getConditionVariableDeclStmt() {
+    return reinterpret_cast<DeclStmt*>(SubExprs[CONDVAR]);
+  }
+
   const DeclStmt *getConditionVariableDeclStmt() const {
     return reinterpret_cast<DeclStmt*>(SubExprs[CONDVAR]);
+  }
+
+  void setConditionVariableDeclStmt(DeclStmt *CondVar) {
+    SubExprs[CONDVAR] = CondVar;
   }
 
   Expr *getCond() { return reinterpret_cast<Expr*>(SubExprs[COND]); }
