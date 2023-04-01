@@ -8,7 +8,7 @@
 ; RUN: sed 's/@ATTRS@/optnone noinline/g' %s | opt -mtriple=riscv64 -S \
 ; RUN:   -cheri-bound-allocas \
 ; RUN:   -cheri-stack-bounds-single-intrinsic-threshold=1 \
-; RUN:   | FileCheck %s --check-prefix=NONE
+; RUN:   | FileCheck %s --check-prefix=SIMPLE
 ; RUN: sed 's/@ATTRS@//g' %s | opt -mtriple=riscv64 -S \
 ; RUN:   -cheri-bound-allocas \
 ; RUN:   -cheri-stack-bounds-single-intrinsic-threshold=1 \
@@ -34,6 +34,12 @@ define i32 @load_store_direct(i32 %a) @ATTRS@ {
 ; FULL-NEXT:    [[TMP2:%.*]] = load i32, i32 addrspace(200)* [[TMP1]], align 4
 ; FULL-NEXT:    ret i32 [[TMP2]]
 ;
+; SIMPLE-LABEL: @load_store_direct(
+; SIMPLE-NEXT:    [[TMP1:%.*]] = alloca i32, align 4, addrspace(200)
+; SIMPLE-NEXT:    store i32 [[A:%.*]], i32 addrspace(200)* [[TMP1]], align 4
+; SIMPLE-NEXT:    [[TMP2:%.*]] = load i32, i32 addrspace(200)* [[TMP1]], align 4
+; SIMPLE-NEXT:    ret i32 [[TMP2]]
+;
 ; NONE-LABEL: @load_store_direct(
 ; NONE-NEXT:    [[TMP1:%.*]] = alloca i32, align 4, addrspace(200)
 ; NONE-NEXT:    [[TMP2:%.*]] = bitcast i32 addrspace(200)* [[TMP1]] to i8 addrspace(200)*
@@ -42,12 +48,6 @@ define i32 @load_store_direct(i32 %a) @ATTRS@ {
 ; NONE-NEXT:    store i32 [[A:%.*]], i32 addrspace(200)* [[TMP4]], align 4
 ; NONE-NEXT:    [[TMP5:%.*]] = load i32, i32 addrspace(200)* [[TMP4]], align 4
 ; NONE-NEXT:    ret i32 [[TMP5]]
-;
-; SIMPLE-LABEL: @load_store_direct(
-; SIMPLE-NEXT:    [[TMP1:%.*]] = alloca i32, align 4, addrspace(200)
-; SIMPLE-NEXT:    store i32 [[A:%.*]], i32 addrspace(200)* [[TMP1]], align 4
-; SIMPLE-NEXT:    [[TMP2:%.*]] = load i32, i32 addrspace(200)* [[TMP1]], align 4
-; SIMPLE-NEXT:    ret i32 [[TMP2]]
 ;
   %1 = alloca i32, align 4, addrspace(200)
   store i32 %a, i32 addrspace(200)* %1
@@ -64,17 +64,6 @@ define i32 @load_store_indirect(i32 %a) @ATTRS@ {
 ; FULL-NEXT:    [[TMP4:%.*]] = load i32, i32 addrspace(200)* [[TMP3]], align 4
 ; FULL-NEXT:    ret i32 [[TMP4]]
 ;
-; NONE-LABEL: @load_store_indirect(
-; NONE-NEXT:    [[TMP1:%.*]] = alloca i32, align 4, addrspace(200)
-; NONE-NEXT:    [[TMP2:%.*]] = bitcast i32 addrspace(200)* [[TMP1]] to i8 addrspace(200)*
-; NONE-NEXT:    [[TMP3:%.*]] = call i8 addrspace(200)* @llvm.cheri.bounded.stack.cap.i64(i8 addrspace(200)* [[TMP2]], i64 4)
-; NONE-NEXT:    [[TMP4:%.*]] = bitcast i8 addrspace(200)* [[TMP3]] to i32 addrspace(200)*
-; NONE-NEXT:    [[TMP5:%.*]] = getelementptr i32, i32 addrspace(200)* [[TMP4]], i64 1
-; NONE-NEXT:    [[TMP6:%.*]] = getelementptr i32, i32 addrspace(200)* [[TMP5]], i64 -1
-; NONE-NEXT:    store i32 [[A:%.*]], i32 addrspace(200)* [[TMP6]], align 4
-; NONE-NEXT:    [[TMP7:%.*]] = load i32, i32 addrspace(200)* [[TMP6]], align 4
-; NONE-NEXT:    ret i32 [[TMP7]]
-;
 ; SIMPLE-LABEL: @load_store_indirect(
 ; SIMPLE-NEXT:    [[TMP1:%.*]] = alloca i32, align 4, addrspace(200)
 ; SIMPLE-NEXT:    [[TMP2:%.*]] = bitcast i32 addrspace(200)* [[TMP1]] to i8 addrspace(200)*
@@ -85,6 +74,17 @@ define i32 @load_store_indirect(i32 %a) @ATTRS@ {
 ; SIMPLE-NEXT:    store i32 [[A:%.*]], i32 addrspace(200)* [[TMP6]], align 4
 ; SIMPLE-NEXT:    [[TMP7:%.*]] = load i32, i32 addrspace(200)* [[TMP6]], align 4
 ; SIMPLE-NEXT:    ret i32 [[TMP7]]
+;
+; NONE-LABEL: @load_store_indirect(
+; NONE-NEXT:    [[TMP1:%.*]] = alloca i32, align 4, addrspace(200)
+; NONE-NEXT:    [[TMP2:%.*]] = bitcast i32 addrspace(200)* [[TMP1]] to i8 addrspace(200)*
+; NONE-NEXT:    [[TMP3:%.*]] = call i8 addrspace(200)* @llvm.cheri.bounded.stack.cap.i64(i8 addrspace(200)* [[TMP2]], i64 4)
+; NONE-NEXT:    [[TMP4:%.*]] = bitcast i8 addrspace(200)* [[TMP3]] to i32 addrspace(200)*
+; NONE-NEXT:    [[TMP5:%.*]] = getelementptr i32, i32 addrspace(200)* [[TMP4]], i64 1
+; NONE-NEXT:    [[TMP6:%.*]] = getelementptr i32, i32 addrspace(200)* [[TMP5]], i64 -1
+; NONE-NEXT:    store i32 [[A:%.*]], i32 addrspace(200)* [[TMP6]], align 4
+; NONE-NEXT:    [[TMP7:%.*]] = load i32, i32 addrspace(200)* [[TMP6]], align 4
+; NONE-NEXT:    ret i32 [[TMP7]]
 ;
   %1 = alloca i32, align 4, addrspace(200)
   %2 = getelementptr i32, i32 addrspace(200)* %1, i64 1
