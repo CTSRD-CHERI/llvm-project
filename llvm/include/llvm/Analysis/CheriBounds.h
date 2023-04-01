@@ -19,17 +19,16 @@ public:
     assert(I->getType()->isPointerTy());
     PointerAS = I->getType()->getPointerAddressSpace();
   }
-  bool check(const Use &U) const;
+  bool check(const Use &U, bool Simple = false) const;
   void findUsesThatNeedBounds(SmallVectorImpl<Use *> *UsesThatNeedBounds,
-                              bool BoundAllUses,
-                              bool *MustUseSingleIntrinsic) const;
+                              bool BoundAllUses, bool Simple = false) const;
   bool anyUseNeedsBounds() const;
 
 private:
   bool useNeedsBounds(const Use &U, const APInt &CurrentGEPOffset,
-                      unsigned Depth) const;
+                      unsigned Depth, unsigned MaxDepth) const;
   bool anyUserNeedsBounds(const Instruction *I, const APInt &CurrentGEPOffset,
-                          unsigned Depth) const;
+                          unsigned Depth, unsigned MaxDepth) const;
   bool canLoadStoreBeOutOfBounds(const Instruction *I, const Use &U,
                                  const APInt &CurrentGEPOffset,
                                  unsigned Depth) const;

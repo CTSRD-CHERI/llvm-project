@@ -13,14 +13,18 @@ using namespace llvm;
   DBG_MESSAGE(llvm::right_justify("-", Depth + 1) << __VA_ARGS__)
 
 // This is similar to CaptureTracking but we treat way more cases as "captured"
-bool CheriNeedBoundsChecker::check(const Use &U) const {
+bool CheriNeedBoundsChecker::check(const Use &U, bool Simple) const {
   if (!MinSizeInBytes) {
     DBG_MESSAGE("dyanmic size alloca always needs bounds: ";
                 U.getUser()->dump());
     return true;
   }
   APInt CurrentGEPOffset = APInt(DL.getIndexSizeInBits(PointerAS), 0);
-  bool Result = useNeedsBounds(U, CurrentGEPOffset, 1);
+  // MaxDepth of 1 effectively means GEPs will be treated as needing bounds
+  // (unless they have no uses), i.e. we're only looking at loads/stores to the
+  // original pointer.
+  unsigned MaxDepth = Simple ? 1 : 10;
+  bool Result = useNeedsBounds(U, CurrentGEPOffset, 1, MaxDepth);
   if (Result) {
     DBG_MESSAGE("Found alloca use that needs bounds: "; U.getUser()->dump());
   }
@@ -29,10 +33,10 @@ bool CheriNeedBoundsChecker::check(const Use &U) const {
 
 void CheriNeedBoundsChecker::findUsesThatNeedBounds(
     SmallVectorImpl<Use *> *UsesThatNeedBounds, bool BoundAllUses,
-    bool *MustUseSingleIntrinsic) const {
+    bool Simple) const {
   // TODO: don't replace load/store instructions with the bounded value
   for (Use &U : RootInst->uses()) {
-    if (BoundAllUses || check(U)) {
+    if (BoundAllUses || check(U, Simple)) {
       UsesThatNeedBounds->push_back(&U);
     }
   }
@@ -50,10 +54,11 @@ bool CheriNeedBoundsChecker::anyUseNeedsBounds() const {
 
 bool CheriNeedBoundsChecker::useNeedsBounds(const Use &U,
                                             const APInt &CurrentGEPOffset,
-                                            unsigned Depth) const {
+                                            unsigned Depth,
+                                            unsigned MaxDepth) const {
   const Instruction *I = cast<Instruction>(U.getUser());
   // Value *V = U->get();
-  if (Depth > 10) {
+  if (Depth > MaxDepth) {
     DBG_INDENTED("reached max depth, assuming bounds needed.\n");
     return true;
   }
@@ -205,7 +210,7 @@ bool CheriNeedBoundsChecker::useNeedsBounds(const Use &U,
                    I->dump());
       return true;
     }
-    return anyUserNeedsBounds(GEPI, NewGepOffset, Depth);
+    return anyUserNeedsBounds(GEPI, NewGepOffset, Depth, MaxDepth);
   }
   case Instruction::PHI:
   case Instruction::Select:
@@ -213,7 +218,7 @@ bool CheriNeedBoundsChecker::useNeedsBounds(const Use &U,
   case Instruction::AddrSpaceCast:
     // If any use of the cast/phi/selects needs bounds then we must add bounds
     // for the initial value.
-    return anyUserNeedsBounds(I, CurrentGEPOffset, Depth);
+    return anyUserNeedsBounds(I, CurrentGEPOffset, Depth, MaxDepth);
   case Instruction::ICmp:
     // comparisons need bounds since cexeq takes bounds into account.
     // TODO: when only comparing addresses we might not need them
@@ -239,11 +244,12 @@ bool CheriNeedBoundsChecker::useNeedsBounds(const Use &U,
 
 bool CheriNeedBoundsChecker::anyUserNeedsBounds(const Instruction *I,
                                                 const APInt &CurrentGEPOffset,
-                                                unsigned Depth) const {
+                                                unsigned Depth,
+                                                unsigned MaxDepth) const {
   DBG_INDENTED("Checking if " << I->getOpcodeName() << " needs stack bounds: ";
                I->dump());
   for (const Use &U : I->uses()) {
-    if (useNeedsBounds(U, CurrentGEPOffset, Depth + 1)) {
+    if (useNeedsBounds(U, CurrentGEPOffset, Depth + 1, MaxDepth)) {
       DBG_INDENTED("Adding stack bounds since " << I->getOpcodeName()
                                                 << " user needs bounds: ";
                    U.getUser()->dump());
