@@ -109,10 +109,10 @@ bool CheriNeedBoundsChecker::useNeedsBounds(const Use &U,
       auto SizeArg = I->getOperand(1);
       if (auto CI = dyn_cast<ConstantInt>(SizeArg)) {
         if (MinSizeInBytes) {
-          APInt Zero(CurrentGEPOffset.getBitWidth(), 0);
           APInt Max(CurrentGEPOffset.getBitWidth(), *MinSizeInBytes);
-          APInt LastAddr = CurrentGEPOffset + CI->getValue();
-          if (CurrentGEPOffset.slt(Zero) || LastAddr.sgt(Max)) {
+          bool Overflow;
+          APInt LastAddr = CurrentGEPOffset.sadd_ov(CI->getValue(), Overflow);
+          if (CurrentGEPOffset.isNegative() || LastAddr.sgt(Max) || Overflow) {
             DBG_INDENTED(I->getFunction()->getName()
                              << ": setbounds use offset OUT OF BOUNDS and will "
                                 "trap -> adding csetbounds: ";
@@ -291,15 +291,16 @@ bool CheriNeedBoundsChecker::canLoadStoreBeOutOfBounds(
   } else {
     llvm_unreachable("Invalid load/store type");
   }
-  auto Size = DL.getTypeStoreSize(LoadStoreType);
+  APInt Size = APInt(CurrentGEPOffset.getBitWidth(),
+                     DL.getTypeStoreSize(LoadStoreType).getFixedSize());
   DBG_INDENTED("Load/store size="
                    << Size << ", alloca size=" << MinSizeInBytes
                    << ", current GEP offset=" << CurrentGEPOffset << " for ";
                LoadStoreType->dump(););
-  APInt Zero(CurrentGEPOffset.getBitWidth(), 0);
   APInt Max(CurrentGEPOffset.getBitWidth(), *MinSizeInBytes);
-  APInt LastAddr = CurrentGEPOffset + Size;
-  if (CurrentGEPOffset.slt(Zero) || LastAddr.sgt(Max)) {
+  bool Overflow;
+  APInt LastAddr = CurrentGEPOffset.sadd_ov(Size, Overflow);
+  if (CurrentGEPOffset.isNegative() || LastAddr.sgt(Max) || Overflow) {
     DBG_INDENTED(I->getFunction()->getName()
                      << ": stack load/store offset OUT OF BOUNDS -> adding "
                         "csetbounds: ";

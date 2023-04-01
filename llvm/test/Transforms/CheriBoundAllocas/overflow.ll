@@ -14,9 +14,12 @@ define void @test_store(i32 %a) {
 ; CHECK-LABEL: @test_store(
 ; CHECK-NEXT:    [[TMP1:%.*]] = alloca [4 x i8], align 1, addrspace(200)
 ; CHECK-NEXT:    [[TMP2:%.*]] = bitcast [4 x i8] addrspace(200)* [[TMP1]] to i8 addrspace(200)*
-; CHECK-NEXT:    [[TMP3:%.*]] = getelementptr i8, i8 addrspace(200)* [[TMP2]], i32 2147483646
-; CHECK-NEXT:    [[TMP4:%.*]] = bitcast i8 addrspace(200)* [[TMP3]] to i32 addrspace(200)*
-; CHECK-NEXT:    store volatile i32 [[A:%.*]], i32 addrspace(200)* [[TMP4]], align 2
+; CHECK-NEXT:    [[TMP3:%.*]] = call i8 addrspace(200)* @llvm.cheri.bounded.stack.cap.i32(i8 addrspace(200)* [[TMP2]], i32 4)
+; CHECK-NEXT:    [[TMP4:%.*]] = bitcast i8 addrspace(200)* [[TMP3]] to [4 x i8] addrspace(200)*
+; CHECK-NEXT:    [[TMP5:%.*]] = bitcast [4 x i8] addrspace(200)* [[TMP4]] to i8 addrspace(200)*
+; CHECK-NEXT:    [[TMP6:%.*]] = getelementptr i8, i8 addrspace(200)* [[TMP5]], i32 2147483646
+; CHECK-NEXT:    [[TMP7:%.*]] = bitcast i8 addrspace(200)* [[TMP6]] to i32 addrspace(200)*
+; CHECK-NEXT:    store volatile i32 [[A:%.*]], i32 addrspace(200)* [[TMP7]], align 2
 ; CHECK-NEXT:    ret void
 ;
   %1 = alloca [4 x i8], align 1, addrspace(200)
@@ -35,9 +38,12 @@ define void @test_setbounds(i32 %a) {
 ; CHECK-LABEL: @test_setbounds(
 ; CHECK-NEXT:    [[TMP1:%.*]] = alloca [4 x i8], align 1, addrspace(200)
 ; CHECK-NEXT:    [[TMP2:%.*]] = bitcast [4 x i8] addrspace(200)* [[TMP1]] to i8 addrspace(200)*
-; CHECK-NEXT:    [[TMP3:%.*]] = getelementptr i8, i8 addrspace(200)* [[TMP2]], i32 2147483646
-; CHECK-NEXT:    [[TMP4:%.*]] = call i8 addrspace(200)* @llvm.cheri.cap.bounds.set.i32(i8 addrspace(200)* [[TMP3]], i32 4)
-; CHECK-NEXT:    call void @use(i8 addrspace(200)* [[TMP4]])
+; CHECK-NEXT:    [[TMP3:%.*]] = call i8 addrspace(200)* @llvm.cheri.bounded.stack.cap.i32(i8 addrspace(200)* [[TMP2]], i32 4)
+; CHECK-NEXT:    [[TMP4:%.*]] = bitcast i8 addrspace(200)* [[TMP3]] to [4 x i8] addrspace(200)*
+; CHECK-NEXT:    [[TMP5:%.*]] = bitcast [4 x i8] addrspace(200)* [[TMP4]] to i8 addrspace(200)*
+; CHECK-NEXT:    [[TMP6:%.*]] = getelementptr i8, i8 addrspace(200)* [[TMP5]], i32 2147483646
+; CHECK-NEXT:    [[TMP7:%.*]] = call i8 addrspace(200)* @llvm.cheri.cap.bounds.set.i32(i8 addrspace(200)* [[TMP6]], i32 4)
+; CHECK-NEXT:    call void @use(i8 addrspace(200)* [[TMP7]])
 ; CHECK-NEXT:    ret void
 ;
   %1 = alloca [4 x i8], align 1, addrspace(200)
