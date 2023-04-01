@@ -51,7 +51,6 @@ enum class StackBoundsMethod {
   ForAllUsesIfOneNeedsBounds, // This is not particularly useful, just for
                               // comparison
   IfNeeded,
-  AllUses,
 };
 
 static cl::opt<StackBoundsMethod> BoundsSettingMode(
@@ -66,10 +65,25 @@ static cl::opt<StackBoundsMethod> BoundsSettingMode(
                           "least one use neededs bounds, otherwise omit"),
                clEnumValN(StackBoundsMethod::IfNeeded, "if-needed",
                           "Set stack allocation bounds for all uses except for "
-                          "loads/stores to statically known in-bounds offsets"),
-               clEnumValN(StackBoundsMethod::AllUses, "all-uses",
-                          "Set stack allocation bounds even for loads/stores "
-                          "to statically known in-bounds offset")));
+                          "loads/stores to statically known in-bounds offsets")));
+
+enum class StackBoundsAnalysis {
+  Default,
+  None,
+  Full,
+};
+
+static cl::opt<StackBoundsAnalysis> BoundsSettingAnalysis(
+    "cheri-stack-bounds-analysis",
+    cl::desc("Strategy for analysing bounds for stack capabilities:"),
+    cl::init(StackBoundsAnalysis::Default),
+    cl::values(clEnumValN(StackBoundsAnalysis::Default, "default",
+                          "Use the default strategy (none for "
+                          "-O0/optnone, full otherwise)"),
+               clEnumValN(StackBoundsAnalysis::None, "none",
+                          "Assume all uses require bounds"),
+               clEnumValN(StackBoundsAnalysis::Full, "full",
+                          "Fully analyse whether bounds are required")));
 
 STATISTIC(NumProcessed,  "Number of allocas that were analyzed for CHERI bounds");
 STATISTIC(NumDynamicAllocas,  "Number of dyanmic allocas that were analyzed"); // TODO: skip them
@@ -131,6 +145,10 @@ public:
 
     const DataLayout &DL = M->getDataLayout();
     StackBoundsMethod BoundsMode = BoundsSettingMode;
+    StackBoundsAnalysis BoundsAnalysis = BoundsSettingAnalysis;
+    if (BoundsAnalysis == StackBoundsAnalysis::Default)
+      BoundsAnalysis = IsOptNone ? StackBoundsAnalysis::None
+                                 : StackBoundsAnalysis::Full;
 
     // This intrinsic both helps for rematerialising and acts as a marker so
     // isIntrinsicReturningPointerAliasingArgumentWithoutCapturing can safely
@@ -198,9 +216,8 @@ public:
         NeedBounds = false;
       } else {
         CheriNeedBoundsChecker BoundsChecker(AI, DL);
-        // With -O0 or =always we set bounds on every stack allocation even
-        // if it is not necessary
-        bool BoundAll = IsOptNone || BoundsMode == StackBoundsMethod::AllUses;
+        // With None we assume bounds are needed on every stack allocation use
+        bool BoundAll = BoundsAnalysis == StackBoundsAnalysis::None;
         BoundsChecker.findUsesThatNeedBounds(&UsesThatNeedBounds, BoundAll,
                                              &MustUseSingleIntrinsic);
         NeedBounds = !UsesThatNeedBounds.empty();
