@@ -11,12 +11,12 @@
 // DISAS: 00000000000000e4: R_MIPS_CHERI_CAPCALL20/R_MIPS_NONE/R_MIPS_NONE check_if_default
 // DISAS: 0000000000000114: R_MIPS_CHERI_CAPTAB20/R_MIPS_NONE/R_MIPS_NONE static_callback
 // DISAS: 0000000000000118: R_MIPS_CHERI_CAPCALL20/R_MIPS_NONE/R_MIPS_NONE check_if_default
-// DISAS: 00000000000001b4: R_MIPS_CHERI_CAPTAB20/R_MIPS_NONE/R_MIPS_NONE callbacks
-// DISAS: 00000000000001bc: R_MIPS_CHERI_CAPCALL20/R_MIPS_NONE/R_MIPS_NONE check_if_default
+// DISAS: 0000000000000194: R_MIPS_CHERI_CAPTAB20/R_MIPS_NONE/R_MIPS_NONE callbacks
+// DISAS: 000000000000019c: R_MIPS_CHERI_CAPCALL20/R_MIPS_NONE/R_MIPS_NONE check_if_default
 
 // RUN: %cheri128_purecap_cc1 -mllvm -cheri-cap-table-abi=plt -emit-obj -o %t2.o -DOTHER_FILE %s
 // RUN: llvm-objdump --syms %t2.o | FileCheck %s --check-prefix OTHER_FILE-SYMS
-// OTHER_FILE-SYMS: 0000000000000000 g F .text 0000000000000028 .protected check_if_default
+// OTHER_FILE-SYMS: 0000000000000000 g F .text 0000000000000024 .protected check_if_default
 
 // Check that we emit a R_CHERI_CAPABILITY relocation instead of __cap_relocs for shlib/pie/dynamically linked exe
 // Also check that we only emit exactly one fake symbol for each function pointer!
@@ -80,7 +80,7 @@
 // CHECK-SHLIB-NEXT:  Symbol {
 // CHECK-SHLIB-NEXT:    Name: check_if_default (
 // CHECK-SHLIB-NEXT:    Value:
-// CHECK-SHLIB-NEXT:    Size: 40
+// CHECK-SHLIB-NEXT:    Size: 36
 // CHECK-SHLIB-NEXT:    Binding: Global (0x1)
 // CHECK-SHLIB-NEXT:    Type: Function (0x2)
 // CHECK-SHLIB-NEXT:    Other [ (0x3)
@@ -140,14 +140,14 @@
 // STATIC-NEXT:  DynamicSymbols [
 // STATIC-NEXT:  ]
 // STATIC-NEXT:  CHERI __cap_relocs [
-// STATIC-NEXT:     0x030630 (callbacks)     Base: 0x203c0 (default_callback+0) Length: 12 Perms: Function
-// STATIC-NEXT:     0x030640 Base: 0x20448 (static_callback+0) Length: 12 Perms: Function
-// STATIC-NEXT:     0x030650 Base: 0x203c0 (default_callback+0) Length: 12 Perms: Function
-// STATIC-NEXT:     0x030660 Base: 0x20448 (static_callback+0) Length: 12 Perms: Function
-// STATIC-NEXT:     0x030670 (default_callback@CAPTABLE) Base: 0x203c0 (default_callback+0) Length: 12 Perms: Function
-// STATIC-NEXT:     0x030680 (check_if_default@CAPTABLE) Base: 0x20600 (check_if_default+0) Length: {{.+}} Perms: Function
-// STATIC-NEXT:     0x030690 (static_callback@CAPTABLE.2) Base: 0x20448 (static_callback+0) Length: 12 Perms: Function
-// STATIC-NEXT:     0x0306a0 (callbacks@CAPTABLE.3) Base: 0x30630 (callbacks+0) Length: 64 Perms: Constant
+// STATIC-NEXT:     0x030600 (callbacks)     Base: 0x203c0 (default_callback+0) Length: 12 Perms: Function
+// STATIC-NEXT:     0x030610 Base: 0x20448 (static_callback+0) Length: 12 Perms: Function
+// STATIC-NEXT:     0x030620 Base: 0x203c0 (default_callback+0) Length: 12 Perms: Function
+// STATIC-NEXT:     0x030630 Base: 0x20448 (static_callback+0) Length: 12 Perms: Function
+// STATIC-NEXT:     0x030640 (default_callback@CAPTABLE) Base: 0x203c0 (default_callback+0) Length: 12 Perms: Function
+// STATIC-NEXT:     0x030650 (check_if_default@CAPTABLE) Base: 0x205d0 (check_if_default+0) Length: {{.+}} Perms: Function
+// STATIC-NEXT:     0x030660 (static_callback@CAPTABLE.2) Base: 0x20448 (static_callback+0) Length: 12 Perms: Function
+// STATIC-NEXT:     0x030670 (callbacks@CAPTABLE.3) Base: 0x30600 (callbacks+0) Length: 64 Perms: Constant
 // STATIC-NEXT:  ]
 // STATIC-NEXT:  CHERI .captable [
 // STATIC-NEXT:    0x0      default_callback@CAPTABLE

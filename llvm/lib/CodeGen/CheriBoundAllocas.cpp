@@ -79,7 +79,7 @@ static cl::opt<StackBoundsAnalysis> BoundsSettingAnalysis(
     cl::desc("Strategy for analysing bounds for stack capabilities:"),
     cl::init(StackBoundsAnalysis::Default),
     cl::values(clEnumValN(StackBoundsAnalysis::Default, "default",
-                          "Use the default strategy (none for "
+                          "Use the default strategy (simple for "
                           "-O0/optnone, full otherwise)"),
                clEnumValN(StackBoundsAnalysis::None, "none",
                           "Assume all uses require bounds"),
@@ -150,7 +150,7 @@ public:
     StackBoundsMethod BoundsMode = BoundsSettingMode;
     StackBoundsAnalysis BoundsAnalysis = BoundsSettingAnalysis;
     if (BoundsAnalysis == StackBoundsAnalysis::Default)
-      BoundsAnalysis = IsOptNone ? StackBoundsAnalysis::None
+      BoundsAnalysis = IsOptNone ? StackBoundsAnalysis::Simple
                                  : StackBoundsAnalysis::Full;
 
     // This intrinsic both helps for rematerialising and acts as a marker so
