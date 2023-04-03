@@ -7603,8 +7603,9 @@ static unsigned getISDForVPIntrinsic(const VPIntrinsic &VPIntrin) {
   return *ResOPC;
 }
 
-void SelectionDAGBuilder::visitVPLoad(const VPIntrinsic &VPIntrin, EVT VT,
-                                      SmallVector<SDValue, 7> &OpValues) {
+void SelectionDAGBuilder::visitVPLoad(
+    const VPIntrinsic &VPIntrin, EVT VT,
+    const SmallVectorImpl<SDValue> &OpValues) {
   SDLoc DL = getCurSDLoc();
   Value *PtrOperand = VPIntrin.getArgOperand(0);
   MaybeAlign Alignment = VPIntrin.getPointerAlignment();
@@ -7629,8 +7630,9 @@ void SelectionDAGBuilder::visitVPLoad(const VPIntrinsic &VPIntrin, EVT VT,
   setValue(&VPIntrin, LD);
 }
 
-void SelectionDAGBuilder::visitVPGather(const VPIntrinsic &VPIntrin, EVT VT,
-                                        SmallVector<SDValue, 7> &OpValues) {
+void SelectionDAGBuilder::visitVPGather(
+    const VPIntrinsic &VPIntrin, EVT VT,
+    const SmallVectorImpl<SDValue> &OpValues) {
   SDLoc DL = getCurSDLoc();
   const TargetLowering &TLI = DAG.getTargetLoweringInfo();
   Value *PtrOperand = VPIntrin.getArgOperand(0);
@@ -7670,8 +7672,8 @@ void SelectionDAGBuilder::visitVPGather(const VPIntrinsic &VPIntrin, EVT VT,
   setValue(&VPIntrin, LD);
 }
 
-void SelectionDAGBuilder::visitVPStore(const VPIntrinsic &VPIntrin,
-                                       SmallVector<SDValue, 7> &OpValues) {
+void SelectionDAGBuilder::visitVPStore(
+    const VPIntrinsic &VPIntrin, const SmallVectorImpl<SDValue> &OpValues) {
   SDLoc DL = getCurSDLoc();
   Value *PtrOperand = VPIntrin.getArgOperand(1);
   EVT VT = OpValues[0].getValueType();
@@ -7692,8 +7694,8 @@ void SelectionDAGBuilder::visitVPStore(const VPIntrinsic &VPIntrin,
   setValue(&VPIntrin, ST);
 }
 
-void SelectionDAGBuilder::visitVPScatter(const VPIntrinsic &VPIntrin,
-                                              SmallVector<SDValue, 7> &OpValues) {
+void SelectionDAGBuilder::visitVPScatter(
+    const VPIntrinsic &VPIntrin, const SmallVectorImpl<SDValue> &OpValues) {
   SDLoc DL = getCurSDLoc();
   const TargetLowering &TLI = DAG.getTargetLoweringInfo();
   Value *PtrOperand = VPIntrin.getArgOperand(1);
@@ -7735,7 +7737,8 @@ void SelectionDAGBuilder::visitVPScatter(const VPIntrinsic &VPIntrin,
 }
 
 void SelectionDAGBuilder::visitVPStridedLoad(
-    const VPIntrinsic &VPIntrin, EVT VT, SmallVectorImpl<SDValue> &OpValues) {
+    const VPIntrinsic &VPIntrin, EVT VT,
+    const SmallVectorImpl<SDValue> &OpValues) {
   SDLoc DL = getCurSDLoc();
   Value *PtrOperand = VPIntrin.getArgOperand(0);
   MaybeAlign Alignment = VPIntrin.getPointerAlignment();
@@ -7760,7 +7763,7 @@ void SelectionDAGBuilder::visitVPStridedLoad(
 }
 
 void SelectionDAGBuilder::visitVPStridedStore(
-    const VPIntrinsic &VPIntrin, SmallVectorImpl<SDValue> &OpValues) {
+    const VPIntrinsic &VPIntrin, const SmallVectorImpl<SDValue> &OpValues) {
   SDLoc DL = getCurSDLoc();
   Value *PtrOperand = VPIntrin.getArgOperand(1);
   EVT VT = OpValues[0].getValueType();
