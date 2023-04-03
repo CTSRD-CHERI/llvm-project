@@ -565,7 +565,7 @@ namespace {
                                 const SDLoc &dl, MVT VT, SDNode *Node);
     MachineSDNode *emitPCMPESTR(unsigned ROpc, unsigned MOpc, bool MayFoldLoad,
                                 const SDLoc &dl, MVT VT, SDNode *Node,
-                                SDValue &InFlag);
+                                SDValue &InGlue);
 
     bool tryOptimizeRem8Extend(SDNode *N);
 
@@ -3972,7 +3972,7 @@ MachineSDNode *X86DAGToDAGISel::emitPCMPISTR(unsigned ROpc, unsigned MOpc,
 MachineSDNode *X86DAGToDAGISel::emitPCMPESTR(unsigned ROpc, unsigned MOpc,
                                              bool MayFoldLoad, const SDLoc &dl,
                                              MVT VT, SDNode *Node,
-                                             SDValue &InFlag) {
+                                             SDValue &InGlue) {
   SDValue N0 = Node->getOperand(0);
   SDValue N2 = Node->getOperand(2);
   SDValue Imm = Node->getOperand(4);
@@ -3983,10 +3983,10 @@ MachineSDNode *X86DAGToDAGISel::emitPCMPESTR(unsigned ROpc, unsigned MOpc,
   SDValue Tmp0, Tmp1, Tmp2, Tmp3, Tmp4;
   if (MayFoldLoad && tryFoldLoad(Node, N2, Tmp0, Tmp1, Tmp2, Tmp3, Tmp4)) {
     SDValue Ops[] = { N0, Tmp0, Tmp1, Tmp2, Tmp3, Tmp4, Imm,
-                      N2.getOperand(0), InFlag };
+                      N2.getOperand(0), InGlue };
     SDVTList VTs = CurDAG->getVTList(VT, MVT::i32, MVT::Other, MVT::Glue);
     MachineSDNode *CNode = CurDAG->getMachineNode(MOpc, dl, VTs, Ops);
-    InFlag = SDValue(CNode, 3);
+    InGlue = SDValue(CNode, 3);
     // Update the chain.
     ReplaceUses(N2.getValue(1), SDValue(CNode, 2));
     // Record the mem-refs
@@ -3994,10 +3994,10 @@ MachineSDNode *X86DAGToDAGISel::emitPCMPESTR(unsigned ROpc, unsigned MOpc,
     return CNode;
   }
 
-  SDValue Ops[] = { N0, N2, Imm, InFlag };
+  SDValue Ops[] = { N0, N2, Imm, InGlue };
   SDVTList VTs = CurDAG->getVTList(VT, MVT::i32, MVT::Glue);
   MachineSDNode *CNode = CurDAG->getMachineNode(ROpc, dl, VTs, Ops);
-  InFlag = SDValue(CNode, 2);
+  InGlue = SDValue(CNode, 2);
   return CNode;
 }
 
@@ -4900,21 +4900,21 @@ void X86DAGToDAGISel::Select(SDNode *Node) {
         unsigned PtrReg = Use64BitPtr ? X86::RAX : X86::EAX;
         SDValue Chain = CurDAG->getCopyToReg(Node->getOperand(0), dl, PtrReg,
                                              Node->getOperand(2), SDValue());
-        SDValue InFlag = Chain.getValue(1);
+        SDValue InGlue = Chain.getValue(1);
 
         if (IntNo == Intrinsic::x86_sse3_monitor ||
             IntNo == Intrinsic::x86_monitorx) {
           // Copy the other two operands to ECX and EDX.
           Chain = CurDAG->getCopyToReg(Chain, dl, X86::ECX, Node->getOperand(3),
-                                       InFlag);
-          InFlag = Chain.getValue(1);
+                                       InGlue);
+          InGlue = Chain.getValue(1);
           Chain = CurDAG->getCopyToReg(Chain, dl, X86::EDX, Node->getOperand(4),
-                                       InFlag);
-          InFlag = Chain.getValue(1);
+                                       InGlue);
+          InGlue = Chain.getValue(1);
         }
 
         MachineSDNode *CNode = CurDAG->getMachineNode(Opc, dl, MVT::Other,
-                                                      { Chain, InFlag});
+                                                      { Chain, InGlue});
         ReplaceNode(Node, CNode);
         return;
       }
@@ -5221,7 +5221,7 @@ void X86DAGToDAGISel::Select(SDNode *Node) {
         std::swap(N0, N1);
     }
 
-    SDValue InFlag = CurDAG->getCopyToReg(CurDAG->getEntryNode(), dl, LoReg,
+    SDValue InGlue = CurDAG->getCopyToReg(CurDAG->getEntryNode(), dl, LoReg,
                                           N0, SDValue()).getValue(1);
 
     MachineSDNode *CNode;
@@ -5235,7 +5235,7 @@ void X86DAGToDAGISel::Select(SDNode *Node) {
         VTs = CurDAG->getVTList(NVT, NVT, MVT::i32, MVT::Other);
 
       SDValue Ops[] = { Tmp0, Tmp1, Tmp2, Tmp3, Tmp4, N1.getOperand(0),
-                        InFlag };
+                        InGlue };
       CNode = CurDAG->getMachineNode(MOpc, dl, VTs, Ops);
 
       // Update the chain.
@@ -5251,7 +5251,7 @@ void X86DAGToDAGISel::Select(SDNode *Node) {
       else
         VTs = CurDAG->getVTList(NVT, NVT, MVT::i32);
 
-      CNode = CurDAG->getMachineNode(ROpc, dl, VTs, {N1, InFlag});
+      CNode = CurDAG->getMachineNode(ROpc, dl, VTs, {N1, InGlue});
     }
 
     ReplaceUses(SDValue(Node, 0), SDValue(CNode, 0));
@@ -5303,14 +5303,14 @@ void X86DAGToDAGISel::Select(SDNode *Node) {
         std::swap(N0, N1);
     }
 
-    SDValue InFlag = CurDAG->getCopyToReg(CurDAG->getEntryNode(), dl, LoReg,
+    SDValue InGlue = CurDAG->getCopyToReg(CurDAG->getEntryNode(), dl, LoReg,
                                           N0, SDValue()).getValue(1);
     SDValue ResHi, ResLo;
     if (foldedLoad) {
       SDValue Chain;
       MachineSDNode *CNode = nullptr;
       SDValue Ops[] = { Tmp0, Tmp1, Tmp2, Tmp3, Tmp4, N1.getOperand(0),
-                        InFlag };
+                        InGlue };
       if (UseMULXHi) {
         SDVTList VTs = CurDAG->getVTList(NVT, MVT::Other);
         CNode = CurDAG->getMachineNode(MOpc, dl, VTs, Ops);
@@ -5326,7 +5326,7 @@ void X86DAGToDAGISel::Select(SDNode *Node) {
         SDVTList VTs = CurDAG->getVTList(MVT::Other, MVT::Glue);
         CNode = CurDAG->getMachineNode(MOpc, dl, VTs, Ops);
         Chain = SDValue(CNode, 0);
-        InFlag = SDValue(CNode, 1);
+        InGlue = SDValue(CNode, 1);
       }
 
       // Update the chain.
@@ -5334,7 +5334,7 @@ void X86DAGToDAGISel::Select(SDNode *Node) {
       // Record the mem-refs
       CurDAG->setNodeMemRefs(CNode, {cast<LoadSDNode>(N1)->getMemOperand()});
     } else {
-      SDValue Ops[] = { N1, InFlag };
+      SDValue Ops[] = { N1, InGlue };
       if (UseMULXHi) {
         SDVTList VTs = CurDAG->getVTList(NVT);
         SDNode *CNode = CurDAG->getMachineNode(Opc, dl, VTs, Ops);
@@ -5347,7 +5347,7 @@ void X86DAGToDAGISel::Select(SDNode *Node) {
       } else {
         SDVTList VTs = CurDAG->getVTList(MVT::Glue);
         SDNode *CNode = CurDAG->getMachineNode(Opc, dl, VTs, Ops);
-        InFlag = SDValue(CNode, 0);
+        InGlue = SDValue(CNode, 0);
       }
     }
 
@@ -5356,8 +5356,8 @@ void X86DAGToDAGISel::Select(SDNode *Node) {
       if (!ResLo) {
         assert(LoReg && "Register for low half is not defined!");
         ResLo = CurDAG->getCopyFromReg(CurDAG->getEntryNode(), dl, LoReg,
-                                       NVT, InFlag);
-        InFlag = ResLo.getValue(2);
+                                       NVT, InGlue);
+        InGlue = ResLo.getValue(2);
       }
       ReplaceUses(SDValue(Node, 0), ResLo);
       LLVM_DEBUG(dbgs() << "=> "; ResLo.getNode()->dump(CurDAG);
@@ -5368,8 +5368,8 @@ void X86DAGToDAGISel::Select(SDNode *Node) {
       if (!ResHi) {
         assert(HiReg && "Register for high half is not defined!");
         ResHi = CurDAG->getCopyFromReg(CurDAG->getEntryNode(), dl, HiReg,
-                                       NVT, InFlag);
-        InFlag = ResHi.getValue(2);
+                                       NVT, InGlue);
+        InGlue = ResHi.getValue(2);
       }
       ReplaceUses(SDValue(Node, 1), ResHi);
       LLVM_DEBUG(dbgs() << "=> "; ResHi.getNode()->dump(CurDAG);
@@ -5432,7 +5432,7 @@ void X86DAGToDAGISel::Select(SDNode *Node) {
     bool foldedLoad = tryFoldLoad(Node, N1, Tmp0, Tmp1, Tmp2, Tmp3, Tmp4);
     bool signBitIsZero = CurDAG->SignBitIsZero(N0);
 
-    SDValue InFlag;
+    SDValue InGlue;
     if (NVT == MVT::i8) {
       // Special case for div8, just use a move with zero extension to AX to
       // clear the upper 8 bits (AH).
@@ -5455,15 +5455,15 @@ void X86DAGToDAGISel::Select(SDNode *Node) {
       }
       Chain  = CurDAG->getCopyToReg(Chain, dl, X86::AX, SDValue(Move, 0),
                                     SDValue());
-      InFlag = Chain.getValue(1);
+      InGlue = Chain.getValue(1);
     } else {
-      InFlag =
+      InGlue =
         CurDAG->getCopyToReg(CurDAG->getEntryNode(), dl,
                              LoReg, N0, SDValue()).getValue(1);
       if (isSigned && !signBitIsZero) {
         // Sign extend the low part into the high part.
-        InFlag =
-          SDValue(CurDAG->getMachineNode(SExtOpcode, dl, MVT::Glue, InFlag),0);
+        InGlue =
+          SDValue(CurDAG->getMachineNode(SExtOpcode, dl, MVT::Glue, InGlue),0);
       } else {
         // Zero out the high part, effectively zero extending the input.
         SDVTList VTs = CurDAG->getVTList(MVT::i32, MVT::i32);
@@ -5493,24 +5493,24 @@ void X86DAGToDAGISel::Select(SDNode *Node) {
           llvm_unreachable("Unexpected division source");
         }
 
-        InFlag = CurDAG->getCopyToReg(CurDAG->getEntryNode(), dl, ClrReg,
-                                      ClrNode, InFlag).getValue(1);
+        InGlue = CurDAG->getCopyToReg(CurDAG->getEntryNode(), dl, ClrReg,
+                                      ClrNode, InGlue).getValue(1);
       }
     }
 
     if (foldedLoad) {
       SDValue Ops[] = { Tmp0, Tmp1, Tmp2, Tmp3, Tmp4, N1.getOperand(0),
-                        InFlag };
+                        InGlue };
       MachineSDNode *CNode =
         CurDAG->getMachineNode(MOpc, dl, MVT::Other, MVT::Glue, Ops);
-      InFlag = SDValue(CNode, 1);
+      InGlue = SDValue(CNode, 1);
       // Update the chain.
       ReplaceUses(N1.getValue(1), SDValue(CNode, 0));
       // Record the mem-refs
       CurDAG->setNodeMemRefs(CNode, {cast<LoadSDNode>(N1)->getMemOperand()});
     } else {
-      InFlag =
-        SDValue(CurDAG->getMachineNode(ROpc, dl, MVT::Glue, N1, InFlag), 0);
+      InGlue =
+        SDValue(CurDAG->getMachineNode(ROpc, dl, MVT::Glue, N1, InGlue), 0);
     }
 
     // Prevent use of AH in a REX instruction by explicitly copying it to
@@ -5526,9 +5526,9 @@ void X86DAGToDAGISel::Select(SDNode *Node) {
           isSigned ? X86::MOVSX32rr8_NOREX : X86::MOVZX32rr8_NOREX;
 
       SDNode *RNode = CurDAG->getMachineNode(AHExtOpcode, dl, MVT::i32,
-                                             MVT::Glue, AHCopy, InFlag);
+                                             MVT::Glue, AHCopy, InGlue);
       SDValue Result(RNode, 0);
-      InFlag = SDValue(RNode, 1);
+      InGlue = SDValue(RNode, 1);
 
       Result =
           CurDAG->getTargetExtractSubreg(X86::sub_8bit, dl, MVT::i8, Result);
@@ -5540,8 +5540,8 @@ void X86DAGToDAGISel::Select(SDNode *Node) {
     // Copy the division (low) result, if it is needed.
     if (!SDValue(Node, 0).use_empty()) {
       SDValue Result = CurDAG->getCopyFromReg(CurDAG->getEntryNode(), dl,
-                                                LoReg, NVT, InFlag);
-      InFlag = Result.getValue(2);
+                                                LoReg, NVT, InGlue);
+      InGlue = Result.getValue(2);
       ReplaceUses(SDValue(Node, 0), Result);
       LLVM_DEBUG(dbgs() << "=> "; Result.getNode()->dump(CurDAG);
                  dbgs() << '\n');
@@ -5549,8 +5549,8 @@ void X86DAGToDAGISel::Select(SDNode *Node) {
     // Copy the remainder (high) result, if it is needed.
     if (!SDValue(Node, 1).use_empty()) {
       SDValue Result = CurDAG->getCopyFromReg(CurDAG->getEntryNode(), dl,
-                                              HiReg, NVT, InFlag);
-      InFlag = Result.getValue(2);
+                                              HiReg, NVT, InGlue);
+      InGlue = Result.getValue(2);
       ReplaceUses(SDValue(Node, 1), Result);
       LLVM_DEBUG(dbgs() << "=> "; Result.getNode()->dump(CurDAG);
                  dbgs() << '\n');
@@ -5864,11 +5864,11 @@ void X86DAGToDAGISel::Select(SDNode *Node) {
       break;
 
     // Copy the two implicit register inputs.
-    SDValue InFlag = CurDAG->getCopyToReg(CurDAG->getEntryNode(), dl, X86::EAX,
+    SDValue InGlue = CurDAG->getCopyToReg(CurDAG->getEntryNode(), dl, X86::EAX,
                                           Node->getOperand(1),
                                           SDValue()).getValue(1);
-    InFlag = CurDAG->getCopyToReg(CurDAG->getEntryNode(), dl, X86::EDX,
-                                  Node->getOperand(3), InFlag).getValue(1);
+    InGlue = CurDAG->getCopyToReg(CurDAG->getEntryNode(), dl, X86::EDX,
+                                  Node->getOperand(3), InGlue).getValue(1);
 
     bool NeedIndex = !SDValue(Node, 0).use_empty();
     bool NeedMask = !SDValue(Node, 1).use_empty();
@@ -5880,13 +5880,13 @@ void X86DAGToDAGISel::Select(SDNode *Node) {
       unsigned ROpc = Subtarget->hasAVX() ? X86::VPCMPESTRMrr : X86::PCMPESTRMrr;
       unsigned MOpc = Subtarget->hasAVX() ? X86::VPCMPESTRMrm : X86::PCMPESTRMrm;
       CNode = emitPCMPESTR(ROpc, MOpc, MayFoldLoad, dl, MVT::v16i8, Node,
-                           InFlag);
+                           InGlue);
       ReplaceUses(SDValue(Node, 1), SDValue(CNode, 0));
     }
     if (NeedIndex || !NeedMask) {
       unsigned ROpc = Subtarget->hasAVX() ? X86::VPCMPESTRIrr : X86::PCMPESTRIrr;
       unsigned MOpc = Subtarget->hasAVX() ? X86::VPCMPESTRIrm : X86::PCMPESTRIrm;
-      CNode = emitPCMPESTR(ROpc, MOpc, MayFoldLoad, dl, MVT::i32, Node, InFlag);
+      CNode = emitPCMPESTR(ROpc, MOpc, MayFoldLoad, dl, MVT::i32, Node, InGlue);
       ReplaceUses(SDValue(Node, 0), SDValue(CNode, 0));
     }
     // Connect the flag usage to the last instruction created.

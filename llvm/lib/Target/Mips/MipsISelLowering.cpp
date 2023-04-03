@@ -4055,13 +4055,13 @@ getOpndList(SmallVectorImpl<SDValue> &Ops,
 
   // Build a sequence of copy-to-reg nodes chained together with token
   // chain and flag operands which copy the outgoing args into registers.
-  // The InFlag in necessary since all emitted instructions must be
+  // The InGlue in necessary since all emitted instructions must be
   // stuck together.
-  SDValue InFlag;
+  SDValue InGlue;
 
   for (auto &R : RegsToPass) {
-    Chain = CLI.DAG.getCopyToReg(Chain, CLI.DL, R.first, R.second, InFlag);
-    InFlag = Chain.getValue(1);
+    Chain = CLI.DAG.getCopyToReg(Chain, CLI.DL, R.first, R.second, InGlue);
+    InGlue = Chain.getValue(1);
   }
 
   // Add argument registers to the end of the list so that they are
@@ -4085,8 +4085,8 @@ getOpndList(SmallVectorImpl<SDValue> &Ops,
   }
   Ops.push_back(CLI.DAG.getRegisterMask(Mask));
 
-  if (InFlag.getNode())
-    Ops.push_back(InFlag);
+  if (InGlue.getNode())
+    Ops.push_back(InGlue);
 }
 
 void MipsTargetLowering::AdjustInstrPostInstrSelection(MachineInstr &MI,
@@ -4601,20 +4601,20 @@ MipsTargetLowering::LowerCall(TargetLowering::CallLoweringInfo &CLI,
     else
       Chain = DAG.getNode(MipsISD::JmpLink, DL, NodeTys, Ops);
   }
-  SDValue InFlag = Chain.getValue(1);
+  SDValue InGlue = Chain.getValue(1);
 
   DAG.addCallSiteInfo(Chain.getNode(), std::move(CSInfo));
 
   // Create the CALLSEQ_END node in the case of where it is not a call to
   // memcpy.
   if (!(MemcpyInByVal)) {
-    Chain = DAG.getCALLSEQ_END(Chain, NextStackOffset, 0, InFlag, DL);
-    InFlag = Chain.getValue(1);
+    Chain = DAG.getCALLSEQ_END(Chain, NextStackOffset, 0, InGlue, DL);
+    InGlue = Chain.getValue(1);
   }
 
   // Handle result values, copying them out of physregs into vregs that we
   // return.
-  return LowerCallResult(Chain, InFlag, CallConv, IsVarArg, Ins, DL, DAG,
+  return LowerCallResult(Chain, InGlue, CallConv, IsVarArg, Ins, DL, DAG,
                          InVals, CLI);
 }
 
@@ -4641,7 +4641,7 @@ SDValue MipsTargetLowering::cFromDDC(SelectionDAG &DAG, const SDLoc DL,
 /// LowerCallResult - Lower the result values of a call into the
 /// appropriate copies out of appropriate physical registers.
 SDValue MipsTargetLowering::LowerCallResult(
-    SDValue Chain, SDValue InFlag, CallingConv::ID CallConv, bool IsVarArg,
+    SDValue Chain, SDValue InGlue, CallingConv::ID CallConv, bool IsVarArg,
     const SmallVectorImpl<ISD::InputArg> &Ins, const SDLoc &DL,
     SelectionDAG &DAG, SmallVectorImpl<SDValue> &InVals,
     TargetLowering::CallLoweringInfo &CLI) const {
@@ -4693,8 +4693,8 @@ SDValue MipsTargetLowering::LowerCallResult(
     if (!LocalCallOptimization) {
       // Note: we don't need to restore the entry $cgp when calling a DSO local
       // function since all local functions ensure that $cgp on entry == $cgp on exit
-      Chain = DAG.getCopyToReg(Chain, DL, ABI.GetGlobalCapability(), getCapGlobalReg(CLI.DAG, CapType), InFlag);
-      InFlag = Chain.getValue(1);
+      Chain = DAG.getCopyToReg(Chain, DL, ABI.GetGlobalCapability(), getCapGlobalReg(CLI.DAG, CapType), InGlue);
+      InGlue = Chain.getValue(1);
     } else {
       // TODO: at -O1 assert that $cgp before and after is the same?
 #if 0
@@ -4713,9 +4713,9 @@ SDValue MipsTargetLowering::LowerCallResult(
     assert(VA.isRegLoc() && "Can only return in registers!");
 
     SDValue Val = DAG.getCopyFromReg(Chain, DL, RVLocs[i].getLocReg(),
-                                     RVLocs[i].getLocVT(), InFlag);
+                                     RVLocs[i].getLocVT(), InGlue);
     Chain = Val.getValue(1);
-    InFlag = Val.getValue(2);
+    InGlue = Val.getValue(2);
 
     if (VA.isUpperBitsInLoc()) {
       unsigned ValSizeInBits = Ins[i].ArgVT.getSizeInBits();
@@ -5042,7 +5042,7 @@ MipsTargetLowering::LowerReturn(SDValue Chain, CallingConv::ID CallConv,
   // Analyze return values.
   CCInfo.AnalyzeReturn(Outs, RetCC_Mips);
 
-  SDValue Flag;
+  SDValue Glue;
   SmallVector<SDValue, 4> RetOps(1, Chain);
   bool zeroV0 = true;
   bool zeroV1 = true;
@@ -5092,7 +5092,7 @@ MipsTargetLowering::LowerReturn(SDValue Chain, CallingConv::ID CallConv,
           DAG.getConstant(LocSizeInBits - ValSizeInBits, DL, VA.getLocVT()));
     }
 
-    Chain = DAG.getCopyToReg(Chain, DL, VA.getLocReg(), Val, Flag);
+    Chain = DAG.getCopyToReg(Chain, DL, VA.getLocReg(), Val, Glue);
     switch (VA.getLocReg()) {
       case Mips::V0_64:
       case Mips::V0:
@@ -5111,33 +5111,33 @@ MipsTargetLowering::LowerReturn(SDValue Chain, CallingConv::ID CallConv,
     }
 
     // Guarantee that all emitted copies are stuck together with flags.
-    Flag = Chain.getValue(1);
+    Glue = Chain.getValue(1);
     RetOps.push_back(DAG.getRegister(VA.getLocReg(), VA.getLocVT()));
   }
   if (CallConv == CallingConv::CHERI_CCall ||
       CallConv == CallingConv::CHERI_CCallee) {
     if (zeroV0) {
       Chain = DAG.getCopyToReg(Chain, DL, Mips::V0_64,
-          DAG.getConstant(0, DL, MVT::i64), Flag);
-      Flag = Chain.getValue(1);
+          DAG.getConstant(0, DL, MVT::i64), Glue);
+      Glue = Chain.getValue(1);
       RetOps.push_back(DAG.getRegister(Mips::V0_64, MVT::i64));
     }
     if (zeroV1) {
       Chain = DAG.getCopyToReg(Chain, DL, Mips::V1_64,
-          DAG.getConstant(0, DL, MVT::i64), Flag);
-      Flag = Chain.getValue(1);
+          DAG.getConstant(0, DL, MVT::i64), Glue);
+      Glue = Chain.getValue(1);
       RetOps.push_back(DAG.getRegister(Mips::V1_64, MVT::i64));
     }
     if (zeroC3) {
       Chain = DAG.getCopyToReg(Chain, DL, Mips::C3,
-                               DAG.getNullCapability(DL), Flag);
-      Flag = Chain.getValue(1);
+                               DAG.getNullCapability(DL), Glue);
+      Glue = Chain.getValue(1);
       RetOps.push_back(DAG.getRegister(Mips::C3, CapType));
     }
     if (zeroC4) {
       Chain = DAG.getCopyToReg(Chain, DL, Mips::C4,
-                               DAG.getNullCapability(DL), Flag);
-      Flag = Chain.getValue(1);
+                               DAG.getNullCapability(DL), Glue);
+      Glue = Chain.getValue(1);
       RetOps.push_back(DAG.getRegister(Mips::C4, CapType));
     }
   }
@@ -5160,8 +5160,8 @@ MipsTargetLowering::LowerReturn(SDValue Chain, CallingConv::ID CallConv,
       llvm_unreachable("sret virtual register not created in the entry block");
     SDValue Val = DAG.getCopyFromReg(Chain, DL, Reg, SRetTy);
 
-    Chain = DAG.getCopyToReg(Chain, DL, V0, Val, Flag);
-    Flag = Chain.getValue(1);
+    Chain = DAG.getCopyToReg(Chain, DL, V0, Val, Glue);
+    Glue = Chain.getValue(1);
     RetOps.push_back(DAG.getRegister(V0, SRetTy));
   }
 
@@ -5174,17 +5174,17 @@ MipsTargetLowering::LowerReturn(SDValue Chain, CallingConv::ID CallConv,
                         << MF.getName() << "(is varargs: "
                         << MF.getFunction().isVarArg() << ")\n");
       Chain = DAG.getCopyToReg(Chain, DL, Mips::C13,
-                               DAG.getNullCapability(DL), Flag);
-      Flag = Chain.getValue(1);
+                               DAG.getNullCapability(DL), Glue);
+      Glue = Chain.getValue(1);
       RetOps.push_back(DAG.getRegister(Mips::C13, CapType));
     }
   }
 
   RetOps[0] = Chain;  // Update chain.
 
-  // Add the flag if we have it.
-  if (Flag.getNode())
-    RetOps.push_back(Flag);
+  // Add the glue if we have it.
+  if (Glue.getNode())
+    RetOps.push_back(Glue);
 
   if (ABI.IsCheriPureCap())
     return DAG.getNode(MipsISD::CapRet, DL, MVT::Other, RetOps);

@@ -1867,7 +1867,7 @@ def PseudoCCALLIndirect : Pseudo<(outs), (ins GPCR:$rs1),
 
 let Predicates = [HasCheri, IsCapMode, IsPureCapABI],
     isBarrier = 1, isReturn = 1, isTerminator = 1 in
-def PseudoCRET : Pseudo<(outs), (ins), [(riscv_ret_flag)]>,
+def PseudoCRET : Pseudo<(outs), (ins), [(riscv_ret_glue)]>,
                  PseudoInstExpansion<(CJALR C0, C1, 0)>;
 
 let Predicates = [HasCheri, IsCapMode],
