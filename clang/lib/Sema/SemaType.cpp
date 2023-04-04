@@ -8678,7 +8678,8 @@ static void handleCheriNoProvenanceAttr(QualType &T, TypeProcessingState &State,
   Attr.setUsedAsTypeAttr();
   if (!T->isIntCapType()) {
     S.Diag(Attr.getLoc(), diag::err_attribute_wrong_decl_type_str)
-        << Attr.getAttrName() << "capability types";
+        << Attr.getAttrName() << Attr.isRegularKeywordAttribute()
+        << "capability types";
     return;
   }
   if (T->hasAttr(attr::CHERINoProvenance))
