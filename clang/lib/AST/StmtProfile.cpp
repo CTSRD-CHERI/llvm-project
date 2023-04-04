@@ -1534,7 +1534,7 @@ void StmtProfiler::VisitDesignatedInitExpr(const DesignatedInitExpr *S) {
       assert(D.isArrayRangeDesignator());
       ID.AddInteger(2);
     }
-    ID.AddInteger(D.getFirstExprIndex());
+    ID.AddInteger(D.getArrayIndex());
   }
 }
 
