@@ -1125,7 +1125,7 @@ public:
 
   /// Emit the a pseudo probe into the current section.
   virtual void emitPseudoProbe(uint64_t Guid, uint64_t Index, uint64_t Type,
-                               uint64_t Attr,
+                               uint64_t Attr, uint64_t Discriminator,
                                const MCPseudoProbeInlineStack &InlineStack,
                                MCSymbol *FnSym);
 
