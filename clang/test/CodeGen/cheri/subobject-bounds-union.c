@@ -2,7 +2,6 @@
 // Check that we only set bounds on union member expressions in very-aggressive mode
 // FIXME: or should it be aggressive vs safe behave instead (i.e. set bounds in aggressive mode)?
 // RUN: %cheri_purecap_cc1 -cheri-bounds=subobject-safe -O2 -std=c11 -emit-llvm %s -o - -Rcheri-subobject-bounds -verify=aggressive,expected | FileCheck %s
-// RUN: %cheri_purecap_cc1 -no-opaque-pointers -cheri-bounds=subobject-safe -O2 -std=c11 -emit-llvm %s -o - -Rcheri-subobject-bounds -verify=aggressive,expected | FileCheck %s --check-prefix=TYPED
 // RUN: %cheri_purecap_cc1 -cheri-bounds=aggressive -O2 -std=c11 -emit-llvm %s -o - -Rcheri-subobject-bounds -verify=aggressive,expected | FileCheck %s
 // RUN: %cheri_purecap_cc1 -cheri-bounds=very-aggressive -O2 -std=c11 -emit-llvm %s -o - -Rcheri-subobject-bounds -verify=very-aggressive,expected | FileCheck %s --check-prefix=VERY-AGGRESSIVE
 
@@ -44,16 +43,6 @@ void call(void* arg);
 // CHECK-NEXT:    tail call void @call(ptr addrspace(200) noundef [[TMP0]]) #[[ATTR3]]
 // CHECK-NEXT:    tail call void @call(ptr addrspace(200) noundef [[TMP0]]) #[[ATTR3]]
 // CHECK-NEXT:    ret void
-//
-// TYPED-LABEL: define {{[^@]+}}@test
-// TYPED-SAME: ([[UNION_SOCKUNION:%.*]] addrspace(200)* noundef [[UN:%.*]]) local_unnamed_addr addrspace(200) #[[ATTR0:[0-9]+]] {
-// TYPED-NEXT:  entry:
-// TYPED-NEXT:    [[TMP0:%.*]] = bitcast [[UNION_SOCKUNION]] addrspace(200)* [[UN]] to i8 addrspace(200)*
-// TYPED-NEXT:    [[TMP1:%.*]] = tail call i8 addrspace(200)* @llvm.cheri.cap.bounds.set.i64(i8 addrspace(200)* [[TMP0]], i64 28)
-// TYPED-NEXT:    tail call void @call(i8 addrspace(200)* noundef [[TMP1]]) #[[ATTR3:[0-9]+]]
-// TYPED-NEXT:    tail call void @call(i8 addrspace(200)* noundef [[TMP1]]) #[[ATTR3]]
-// TYPED-NEXT:    tail call void @call(i8 addrspace(200)* noundef [[TMP1]]) #[[ATTR3]]
-// TYPED-NEXT:    ret void
 //
 // VERY-AGGRESSIVE-LABEL: define {{[^@]+}}@test
 // VERY-AGGRESSIVE-SAME: (ptr addrspace(200) noundef [[UN:%.*]]) local_unnamed_addr addrspace(200) #[[ATTR0:[0-9]+]] {
@@ -101,21 +90,6 @@ union WithNestedStruct {
 // CHECK-NEXT:    tail call void @call(ptr addrspace(200) noundef [[TMP2]]) #[[ATTR3]]
 // CHECK-NEXT:    tail call void @call(ptr addrspace(200) noundef [[TMP2]]) #[[ATTR3]]
 // CHECK-NEXT:    ret void
-//
-// TYPED-LABEL: define {{[^@]+}}@test2
-// TYPED-SAME: ([[UNION_WITHNESTEDSTRUCT:%.*]] addrspace(200)* noundef [[UN:%.*]]) local_unnamed_addr addrspace(200) #[[ATTR0]] {
-// TYPED-NEXT:  entry:
-// TYPED-NEXT:    [[TMP0:%.*]] = bitcast [[UNION_WITHNESTEDSTRUCT]] addrspace(200)* [[UN]] to i8 addrspace(200)*
-// TYPED-NEXT:    [[TMP1:%.*]] = tail call i8 addrspace(200)* @llvm.cheri.cap.bounds.set.i64(i8 addrspace(200)* [[TMP0]], i64 4)
-// TYPED-NEXT:    tail call void @call(i8 addrspace(200)* noundef [[TMP1]]) #[[ATTR3]]
-// TYPED-NEXT:    [[B:%.*]] = getelementptr inbounds [[UNION_WITHNESTEDSTRUCT]], [[UNION_WITHNESTEDSTRUCT]] addrspace(200)* [[UN]], i64 0, i32 0, i32 1
-// TYPED-NEXT:    [[TMP2:%.*]] = bitcast i32 addrspace(200)* [[B]] to i8 addrspace(200)*
-// TYPED-NEXT:    [[TMP3:%.*]] = tail call i8 addrspace(200)* @llvm.cheri.cap.bounds.set.i64(i8 addrspace(200)* nonnull [[TMP2]], i64 4)
-// TYPED-NEXT:    tail call void @call(i8 addrspace(200)* noundef [[TMP3]]) #[[ATTR3]]
-// TYPED-NEXT:    [[TMP4:%.*]] = tail call i8 addrspace(200)* @llvm.cheri.cap.bounds.set.i64(i8 addrspace(200)* [[TMP0]], i64 64)
-// TYPED-NEXT:    tail call void @call(i8 addrspace(200)* noundef [[TMP4]]) #[[ATTR3]]
-// TYPED-NEXT:    tail call void @call(i8 addrspace(200)* noundef [[TMP4]]) #[[ATTR3]]
-// TYPED-NEXT:    ret void
 //
 // VERY-AGGRESSIVE-LABEL: define {{[^@]+}}@test2
 // VERY-AGGRESSIVE-SAME: (ptr addrspace(200) noundef [[UN:%.*]]) local_unnamed_addr addrspace(200) #[[ATTR0]] {
@@ -192,29 +166,6 @@ union WithVLA3 {
 // CHECK-NEXT:    tail call void @call(ptr addrspace(200) noundef [[TMP2]]) #[[ATTR3]]
 // CHECK-NEXT:    ret void
 //
-// TYPED-LABEL: define {{[^@]+}}@test3
-// TYPED-SAME: ([[UNION_WITHVLA1:%.*]] addrspace(200)* noundef [[UN1:%.*]], [[UNION_WITHVLA2:%.*]] addrspace(200)* noundef [[UN2:%.*]], [[UNION_WITHVLA3:%.*]] addrspace(200)* noundef [[UN3:%.*]]) local_unnamed_addr addrspace(200) #[[ATTR0]] {
-// TYPED-NEXT:  entry:
-// TYPED-NEXT:    [[TMP0:%.*]] = bitcast [[UNION_WITHVLA1]] addrspace(200)* [[UN1]] to i8 addrspace(200)*
-// TYPED-NEXT:    [[CUR_OFFSET:%.*]] = tail call i64 @llvm.cheri.cap.offset.get.i64(i8 addrspace(200)* [[TMP0]])
-// TYPED-NEXT:    [[CUR_LEN:%.*]] = tail call i64 @llvm.cheri.cap.length.get.i64(i8 addrspace(200)* [[TMP0]])
-// TYPED-NEXT:    [[REMAINING_BYTES:%.*]] = sub i64 [[CUR_LEN]], [[CUR_OFFSET]]
-// TYPED-NEXT:    [[TMP1:%.*]] = tail call i8 addrspace(200)* @llvm.cheri.cap.bounds.set.i64(i8 addrspace(200)* [[TMP0]], i64 [[REMAINING_BYTES]])
-// TYPED-NEXT:    tail call void @call(i8 addrspace(200)* noundef [[TMP1]]) #[[ATTR3]]
-// TYPED-NEXT:    [[TMP2:%.*]] = bitcast [[UNION_WITHVLA2]] addrspace(200)* [[UN2]] to i8 addrspace(200)*
-// TYPED-NEXT:    [[CUR_OFFSET1:%.*]] = tail call i64 @llvm.cheri.cap.offset.get.i64(i8 addrspace(200)* [[TMP2]])
-// TYPED-NEXT:    [[CUR_LEN2:%.*]] = tail call i64 @llvm.cheri.cap.length.get.i64(i8 addrspace(200)* [[TMP2]])
-// TYPED-NEXT:    [[REMAINING_BYTES3:%.*]] = sub i64 [[CUR_LEN2]], [[CUR_OFFSET1]]
-// TYPED-NEXT:    [[TMP3:%.*]] = tail call i8 addrspace(200)* @llvm.cheri.cap.bounds.set.i64(i8 addrspace(200)* [[TMP2]], i64 [[REMAINING_BYTES3]])
-// TYPED-NEXT:    tail call void @call(i8 addrspace(200)* noundef [[TMP3]]) #[[ATTR3]]
-// TYPED-NEXT:    [[TMP4:%.*]] = bitcast [[UNION_WITHVLA3]] addrspace(200)* [[UN3]] to i8 addrspace(200)*
-// TYPED-NEXT:    [[CUR_OFFSET5:%.*]] = tail call i64 @llvm.cheri.cap.offset.get.i64(i8 addrspace(200)* [[TMP4]])
-// TYPED-NEXT:    [[CUR_LEN6:%.*]] = tail call i64 @llvm.cheri.cap.length.get.i64(i8 addrspace(200)* [[TMP4]])
-// TYPED-NEXT:    [[REMAINING_BYTES7:%.*]] = sub i64 [[CUR_LEN6]], [[CUR_OFFSET5]]
-// TYPED-NEXT:    [[TMP5:%.*]] = tail call i8 addrspace(200)* @llvm.cheri.cap.bounds.set.i64(i8 addrspace(200)* [[TMP4]], i64 [[REMAINING_BYTES7]])
-// TYPED-NEXT:    tail call void @call(i8 addrspace(200)* noundef [[TMP5]]) #[[ATTR3]]
-// TYPED-NEXT:    ret void
-//
 // VERY-AGGRESSIVE-LABEL: define {{[^@]+}}@test3
 // VERY-AGGRESSIVE-SAME: (ptr addrspace(200) noundef [[UN1:%.*]], ptr addrspace(200) noundef [[UN2:%.*]], ptr addrspace(200) noundef [[UN3:%.*]]) local_unnamed_addr addrspace(200) #[[ATTR0]] {
 // VERY-AGGRESSIVE-NEXT:  entry:
@@ -262,16 +213,6 @@ struct StructWithNestedUnion {
 // CHECK-NEXT:    tail call void @call(ptr addrspace(200) noundef [[TMP0]]) #[[ATTR3]]
 // CHECK-NEXT:    tail call void @call(ptr addrspace(200) noundef [[TMP0]]) #[[ATTR3]]
 // CHECK-NEXT:    ret void
-//
-// TYPED-LABEL: define {{[^@]+}}@rmlock_regression
-// TYPED-SAME: ([[STRUCT_STRUCTWITHNESTEDUNION:%.*]] addrspace(200)* noundef [[S:%.*]]) local_unnamed_addr addrspace(200) #[[ATTR0]] {
-// TYPED-NEXT:  entry:
-// TYPED-NEXT:    [[NESTED:%.*]] = getelementptr inbounds [[STRUCT_STRUCTWITHNESTEDUNION]], [[STRUCT_STRUCTWITHNESTEDUNION]] addrspace(200)* [[S]], i64 0, i32 1
-// TYPED-NEXT:    [[TMP0:%.*]] = bitcast [[UNION_NESTED:%.*]] addrspace(200)* [[NESTED]] to i8 addrspace(200)*
-// TYPED-NEXT:    [[TMP1:%.*]] = tail call i8 addrspace(200)* @llvm.cheri.cap.bounds.set.i64(i8 addrspace(200)* nonnull [[TMP0]], i64 32)
-// TYPED-NEXT:    tail call void @call(i8 addrspace(200)* noundef [[TMP1]]) #[[ATTR3]]
-// TYPED-NEXT:    tail call void @call(i8 addrspace(200)* noundef [[TMP1]]) #[[ATTR3]]
-// TYPED-NEXT:    ret void
 //
 // VERY-AGGRESSIVE-LABEL: define {{[^@]+}}@rmlock_regression
 // VERY-AGGRESSIVE-SAME: (ptr addrspace(200) noundef [[S:%.*]]) local_unnamed_addr addrspace(200) #[[ATTR0]] {
