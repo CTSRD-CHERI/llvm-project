@@ -1340,6 +1340,7 @@ void Sema::ActOnPragmaFEnvAccess(SourceLocation Loc, bool IsEnabled) {
       Diag(Loc, diag::err_pragma_fenv_requires_precise);
   }
   NewFPFeatures.setAllowFEnvAccessOverride(IsEnabled);
+  NewFPFeatures.setRoundingMathOverride(IsEnabled);
   FpPragmaStack.Act(Loc, PSK_Set, StringRef(), NewFPFeatures);
   CurFPFeatures = NewFPFeatures.applyOverrides(getLangOpts());
 }
