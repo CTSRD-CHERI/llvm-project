@@ -5095,6 +5095,10 @@ static bool haveNoCommonBitsSetCommutative(SDValue A, SDValue B) {
                                       SDValue Other) {
     if (SDValue NotOperand =
             getBitwiseNotOperand(Not, Mask, /* AllowUndefs */ true)) {
+      if (NotOperand->getOpcode() == ISD::ZERO_EXTEND ||
+          NotOperand->getOpcode() == ISD::TRUNCATE)
+        NotOperand = NotOperand->getOperand(0);
+
       if (Other == NotOperand)
         return true;
       if (Other->getOpcode() == ISD::AND)
@@ -5103,6 +5107,13 @@ static bool haveNoCommonBitsSetCommutative(SDValue A, SDValue B) {
     }
     return false;
   };
+
+  if (A->getOpcode() == ISD::ZERO_EXTEND || A->getOpcode() == ISD::TRUNCATE)
+    A = A->getOperand(0);
+
+  if (B->getOpcode() == ISD::ZERO_EXTEND || B->getOpcode() == ISD::TRUNCATE)
+    B = B->getOperand(0);
+
   if (A->getOpcode() == ISD::AND)
     return MatchNoCommonBitsPattern(A->getOperand(0), A->getOperand(1), B) ||
            MatchNoCommonBitsPattern(A->getOperand(1), A->getOperand(0), B);
