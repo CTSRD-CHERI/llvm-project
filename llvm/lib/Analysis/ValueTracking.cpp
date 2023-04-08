@@ -4599,8 +4599,6 @@ void computeKnownFPClass(const Value *V, const APInt &DemandedElts,
   default:
     break;
   }
-
-  // TODO: Handle assumes
 }
 
 KnownFPClass llvm::computeKnownFPClass(
