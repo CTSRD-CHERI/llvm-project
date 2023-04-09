@@ -4553,8 +4553,28 @@ static void computeKnownFPClass(const Value *V, KnownFPClass &Known,
   computeKnownFPClass(V, DemandedElts, InterestedClasses, Known, Depth, Q, TLI);
 }
 
+static void computeKnownFPClassForFPTrunc(const Operator *Op,
+                                          const APInt &DemandedElts,
+                                          FPClassTest InterestedClasses,
+                                          KnownFPClass &Known, unsigned Depth,
+                                          const Query &Q,
+                                          const TargetLibraryInfo *TLI) {
+  if ((InterestedClasses & fcNan) == fcNone)
+    return;
+
+  KnownFPClass KnownSrc;
+  computeKnownFPClass(Op->getOperand(0), DemandedElts, InterestedClasses,
+                      KnownSrc, Depth + 1, Q, TLI);
+  if (KnownSrc.isKnownNeverNaN())
+    Known.knownNot(fcNan);
+
+  // Infinity needs a range check.
+  // TODO: Sign bit should be preserved
+}
+
 // TODO: Merge implementations of isKnownNeverNaN, isKnownNeverInfinity,
 // CannotBeNegativeZero, cannotBeOrderedLessThanZero into here.
+
 void computeKnownFPClass(const Value *V, const APInt &DemandedElts,
                          FPClassTest InterestedClasses, KnownFPClass &Known,
                          unsigned Depth, const Query &Q,
@@ -4766,6 +4786,11 @@ void computeKnownFPClass(const Value *V, const APInt &DemandedElts,
 
         break;
       }
+      case Intrinsic::fptrunc_round: {
+        computeKnownFPClassForFPTrunc(Op, DemandedElts, InterestedClasses,
+                                      Known, Depth, Q, TLI);
+        break;
+      }
       case Intrinsic::arithmetic_fence: {
         computeKnownFPClass(II->getArgOperand(0), DemandedElts,
                             InterestedClasses, Known, Depth + 1, Q, TLI);
@@ -4893,16 +4918,8 @@ void computeKnownFPClass(const Value *V, const APInt &DemandedElts,
     break;
   }
   case Instruction::FPTrunc: {
-    if ((InterestedClasses & fcNan) == fcNone)
-      break;
-
-    KnownFPClass KnownSrc;
-    computeKnownFPClass(Op->getOperand(0), DemandedElts,
-                        InterestedClasses, KnownSrc, Depth + 1, Q, TLI);
-    if (KnownSrc.isKnownNeverNaN())
-      Known.knownNot(fcNan);
-
-    // Infinity needs a range check.
+    computeKnownFPClassForFPTrunc(Op, DemandedElts, InterestedClasses, Known,
+                                  Depth, Q, TLI);
     break;
   }
   case Instruction::SIToFP:
