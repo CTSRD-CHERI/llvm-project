@@ -2104,8 +2104,8 @@ void TreePatternNode::InlinePatternFragments(
     }
 
     // Recursively inline children nodes.
-    std::vector<std::vector<TreePatternNodePtr> > ChildAlternatives;
-    ChildAlternatives.resize(T->getNumChildren());
+    std::vector<std::vector<TreePatternNodePtr>> ChildAlternatives(
+        T->getNumChildren());
     for (unsigned i = 0, e = T->getNumChildren(); i != e; ++i) {
       TreePatternNodePtr Child = T->getChildShared(i);
       InlinePatternFragments(Child, TP, ChildAlternatives[i]);
@@ -2124,8 +2124,7 @@ void TreePatternNode::InlinePatternFragments(
     }
 
     // The end result is an all-pairs construction of the resultant pattern.
-    std::vector<unsigned> Idxs;
-    Idxs.resize(ChildAlternatives.size());
+    std::vector<unsigned> Idxs(ChildAlternatives.size());
     bool NotDone;
     do {
       // Create the variant and add it to the output list.
@@ -4550,8 +4549,7 @@ static void CombineChildVariants(
       return;
 
   // The end result is an all-pairs construction of the resultant pattern.
-  std::vector<unsigned> Idxs;
-  Idxs.resize(ChildVariants.size());
+  std::vector<unsigned> Idxs(ChildVariants.size());
   bool NotDone;
   do {
 #ifndef NDEBUG
@@ -4712,8 +4710,8 @@ static void GenerateVariantsOf(TreePatternNodePtr N,
   }
 
   // Compute permutations of all children.
-  std::vector<std::vector<TreePatternNodePtr>> ChildVariants;
-  ChildVariants.resize(N->getNumChildren());
+  std::vector<std::vector<TreePatternNodePtr>> ChildVariants(
+      N->getNumChildren());
   for (unsigned i = 0, e = N->getNumChildren(); i != e; ++i)
     GenerateVariantsOf(N->getChildShared(i), ChildVariants[i], CDP, DepVars);
 
