@@ -101,6 +101,7 @@ add_llvm_component_library(LLVMCodeGen
   LLVMTargetMachine.cpp
   LocalStackSlotAllocation.cpp
   LoopTraversal.cpp
+  LowLevelType.cpp
   LowLevelTypeUtils.cpp
   LowerEmuTLS.cpp
   MachineBasicBlock.cpp
