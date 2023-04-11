@@ -8548,7 +8548,7 @@ static void HandleCHERICapabilityQualifier(QualType &CurType,
         ParsedAttr *attrCopy = declarator.getAttributePool().create(
             const_cast<IdentifierInfo *>(attr.getAttrName()), attr.getRange(),
             const_cast<IdentifierInfo *>(attr.getScopeName()),
-            attr.getScopeLoc(), nullptr, 0, ParsedAttr::AS_Keyword);
+            attr.getScopeLoc(), nullptr, 0, attr.getForm());
         chunk.getAttrs().addAtEnd(attrCopy);
         return;
       }
@@ -9306,8 +9306,7 @@ static void assignInheritanceModel(Sema &S, CXXRecordDecl *RD) {
                           ? S.ImplicitMSInheritanceAttrLoc
                           : RD->getSourceRange();
     RD->addAttr(MSInheritanceAttr::CreateImplicit(
-        S.getASTContext(), BestCase, Loc, AttributeCommonInfo::AS_Microsoft,
-        MSInheritanceAttr::Spelling(IM)));
+        S.getASTContext(), BestCase, Loc, MSInheritanceAttr::Spelling(IM)));
     S.Consumer.AssignInheritanceModel(RD);
   }
 }
