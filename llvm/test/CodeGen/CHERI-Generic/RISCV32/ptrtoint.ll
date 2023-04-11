@@ -55,12 +55,12 @@ define internal i32 @ptrtoint_plus_var(i8 addrspace(200)* %cap, i32 %add) addrsp
 define internal i32 @ptrtoint_null() addrspace(200) nounwind {
 ; CHECK-LABEL: ptrtoint_null:
 ; CHECK:       # %bb.0:
-; CHECK-NEXT:    cgetaddr a0, cnull
+; CHECK-NEXT:    li a0, 0
 ; CHECK-NEXT:    cret
 ;
 ; HYBRID-LABEL: ptrtoint_null:
 ; HYBRID:       # %bb.0:
-; HYBRID-NEXT:    ctoptr a0, cnull, ddc
+; HYBRID-NEXT:    li a0, 0
 ; HYBRID-NEXT:    ret
   %ret = ptrtoint i8 addrspace(200)* null to i32
   ret i32 %ret
@@ -69,14 +69,12 @@ define internal i32 @ptrtoint_null() addrspace(200) nounwind {
 define internal i32 @ptrtoint_null_plus_const() addrspace(200) nounwind {
 ; CHECK-LABEL: ptrtoint_null_plus_const:
 ; CHECK:       # %bb.0:
-; CHECK-NEXT:    cgetaddr a0, cnull
-; CHECK-NEXT:    addi a0, a0, 2
+; CHECK-NEXT:    li a0, 2
 ; CHECK-NEXT:    cret
 ;
 ; HYBRID-LABEL: ptrtoint_null_plus_const:
 ; HYBRID:       # %bb.0:
-; HYBRID-NEXT:    ctoptr a0, cnull, ddc
-; HYBRID-NEXT:    addi a0, a0, 2
+; HYBRID-NEXT:    li a0, 2
 ; HYBRID-NEXT:    ret
   %zero = ptrtoint i8 addrspace(200)* null to i32
   %ret = add i32 %zero, 2
@@ -86,14 +84,12 @@ define internal i32 @ptrtoint_null_plus_const() addrspace(200) nounwind {
 define internal i32 @ptrtoint_null_plus_var(i32 %add) addrspace(200) nounwind {
 ; CHECK-LABEL: ptrtoint_null_plus_var:
 ; CHECK:       # %bb.0:
-; CHECK-NEXT:    cgetaddr a1, cnull
-; CHECK-NEXT:    add a0, a1, a0
+; CHECK-NEXT:    add a0, zero, a0
 ; CHECK-NEXT:    cret
 ;
 ; HYBRID-LABEL: ptrtoint_null_plus_var:
 ; HYBRID:       # %bb.0:
-; HYBRID-NEXT:    ctoptr a1, cnull, ddc
-; HYBRID-NEXT:    add a0, a1, a0
+; HYBRID-NEXT:    add a0, zero, a0
 ; HYBRID-NEXT:    ret
   %zero = ptrtoint i8 addrspace(200)* null to i32
   %ret = add i32 %zero, %add

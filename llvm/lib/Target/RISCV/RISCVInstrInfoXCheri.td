@@ -1227,7 +1227,8 @@ def : Pat<(int_cheri_cap_from_pointer (CLenVT (int_cheri_ddc_get)), GPR:$rs2),
 
 def : Pat<(int_cheri_cap_from_pointer DDC, (XLenVT 0)), (CLenVT (COPY C0))>;
 def : Pat<(inttoptr (XLenVT 0)), (CLenVT (COPY C0))>;
-def : Pat<(XLenVT (ptrtoint (CLenVT C0))), (XLenVT (COPY (XLenVT X0)))>;
+def : Pat<(XLenVT (ptrtoint (CLenVT (inttoptr (XLenVT 0))))),
+          (XLenVT (COPY (XLenVT X0)))>;
 
 /// Pointer-Comparison Instructions
 
