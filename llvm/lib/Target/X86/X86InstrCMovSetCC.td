@@ -14,7 +14,7 @@
 
 // CMOV instructions.
 let isCodeGenOnly = 1, ForceDisassemble = 1 in {
-let Uses = [EFLAGS], Predicates = [HasCMov], Constraints = "$src1 = $dst",
+let Uses = [EFLAGS], Predicates = [HasCMov,HasCHERI], Constraints = "$src1 = $dst",
     isCommutable = 1, SchedRW = [WriteCMOV] in {
   def CMOV16rr
     : I<0x40, MRMSrcRegCC, (outs GR16:$dst), (ins GR16:$src1, GR16:$src2, ccode:$cond),
@@ -33,9 +33,14 @@ let Uses = [EFLAGS], Predicates = [HasCMov], Constraints = "$src1 = $dst",
         "cmov${cond}{q}\t{$src2, $dst|$dst, $src2}",
         [(set GR64:$dst,
               (X86cmov GR64:$src1, GR64:$src2, timm:$cond, EFLAGS))]>, TB;
+  def CMOVCrr
+    :CI<0x40, MRMSrcRegCC, (outs GRC:$dst), (ins GRC:$src1, GRC:$src2, ccode:$cond),
+        "cmov${cond}{c}\t{$src2, $dst|$dst, $src2}",
+        [(set GRC:$dst,
+              (X86cmov GRC:$src1, GRC:$src2, timm:$cond, EFLAGS))]>, TB;
 }
 
-let Uses = [EFLAGS], Predicates = [HasCMov], Constraints = "$src1 = $dst",
+let Uses = [EFLAGS], Predicates = [HasCMov,HasCHERI], Constraints = "$src1 = $dst",
     SchedRW = [WriteCMOV.Folded, WriteCMOV.ReadAfterFold] in {
   def CMOV16rm
     : I<0x40, MRMSrcMemCC, (outs GR16:$dst), (ins GR16:$src1, i16mem:$src2, ccode:$cond),
@@ -51,6 +56,11 @@ let Uses = [EFLAGS], Predicates = [HasCMov], Constraints = "$src1 = $dst",
     :RI<0x40, MRMSrcMemCC, (outs GR64:$dst), (ins GR64:$src1, i64mem:$src2, ccode:$cond),
         "cmov${cond}{q}\t{$src2, $dst|$dst, $src2}",
         [(set GR64:$dst, (X86cmov GR64:$src1, (loadi64 addr:$src2),
+                                  timm:$cond, EFLAGS))]>, TB;
+  def CMOVCrm
+    :CI<0x40, MRMSrcMemCC, (outs GRC:$dst), (ins GRC:$src1, capmem:$src2, ccode:$cond),
+        "cmov${cond}{c}\t{$src2, $dst|$dst, $src2}",
+        [(set GRC:$dst, (X86cmov GRC:$src1, (loadcap addr:$src2),
                                   timm:$cond, EFLAGS))]>, TB;
 } // Uses = [EFLAGS], Predicates = [HasCMov], Constraints = "$src1 = $dst"
 } // isCodeGenOnly = 1, ForceDisassemble = 1
@@ -70,6 +80,7 @@ let Predicates = [HasCMov] in {
             (CMOV32rm GR32:$src2, addr:$src1, (inv_cond_XFORM timm:$cond))>;
   def : Pat<(X86cmov (loadi64 addr:$src1), GR64:$src2, timm:$cond, EFLAGS),
             (CMOV64rm GR64:$src2, addr:$src1, (inv_cond_XFORM timm:$cond))>;
+  // XXX Add CMOVCrm here?
 }
 
 // SetCC instructions.
@@ -97,7 +108,10 @@ multiclass CMOV_SETCC_Aliases<string Cond, int CC> {
                   (CMOV64rr GR64:$dst, GR64:$src, CC), 0>;
   def : InstAlias<"cmov"#Cond#"{q}\t{$src, $dst|$dst, $src}",
                   (CMOV64rm GR64:$dst, i64mem:$src, CC), 0>;
-
+  def : InstAlias<"cmov"#Cond#"{c}\t{$src, $dst|$dst, $src}",
+                  (CMOVCrr GRC:$dst, GRC:$src, CC), 0>;
+  def : InstAlias<"cmov"#Cond#"{c}\t{$src, $dst|$dst, $src}",
+                  (CMOVCrm GRC:$dst, capmem:$src, CC), 0>;
   def : InstAlias<"set"#Cond#"\t$dst", (SETCCr GR8:$dst, CC), 0>;
   def : InstAlias<"set"#Cond#"\t$dst", (SETCCm i8mem:$dst, CC), 0>;
 }
@@ -121,7 +135,7 @@ defm : CMOV_SETCC_Aliases<"g" , 15>;
 
 // SALC is an undocumented instruction. Information for this instruction can be found
 // here http://www.rcollins.org/secrets/opcodes/SALC.html
-// Set AL if carry. 
+// Set AL if carry.
 let Uses = [EFLAGS], Defs = [AL], SchedRW = [WriteALU] in {
   def SALC : I<0xD6, RawFrm, (outs), (ins), "salc", []>, Requires<[Not64BitMode]>;
 }
