@@ -2,11 +2,8 @@
 ;; This previously asserted on RISC-V due to a broken ISel pattern.
 ;; We pipe this input through instcombine first to ensure SelectionDAG sees canonical IR.
 ; RUN: opt @PURECAP_HARDFLOAT_ARGS@ -passes=instcombine -S < %s | FileCheck %s --check-prefix=CHECK-IR
-@IFNOT-RISCV@; RUN: opt @PURECAP_HARDFLOAT_ARGS@ -passes=instcombine -S < %s | llc @PURECAP_HARDFLOAT_ARGS@ | FileCheck %s --check-prefix=PURECAP
-@IFNOT-RISCV@; RUN: opt @HYBRID_HARDFLOAT_ARGS@ -passes=instcombine -S < %s | llc @HYBRID_HARDFLOAT_ARGS@ | FileCheck %s --check-prefix=HYBRID
-@IF-RISCV@; RUN: opt @PURECAP_HARDFLOAT_ARGS@ -passes=instcombine -S < %s | not --crash llc @PURECAP_HARDFLOAT_ARGS@ 2>&1 | FileCheck %s --check-prefix BAD-COPY
-@IF-RISCV@; RUN: opt @HYBRID_HARDFLOAT_ARGS@ -passes=instcombine -S < %s | not --crash llc @HYBRID_HARDFLOAT_ARGS@ 2>&1 | FileCheck %s --check-prefix BAD-COPY
-@IF-RISCV@; BAD-COPY: Impossible reg-to-reg copy
+; RUN: opt @PURECAP_HARDFLOAT_ARGS@ -passes=instcombine -S < %s | llc @PURECAP_HARDFLOAT_ARGS@ | FileCheck %s --check-prefix=PURECAP
+; RUN: opt @HYBRID_HARDFLOAT_ARGS@ -passes=instcombine -S < %s | llc @HYBRID_HARDFLOAT_ARGS@ | FileCheck %s --check-prefix=HYBRID
 
 define internal i8 addrspace(200)* @test(i8 addrspace(200)* addrspace(200)* %ptr, i8 addrspace(200)* %cap, iCAPRANGE %offset) nounwind {
 entry:

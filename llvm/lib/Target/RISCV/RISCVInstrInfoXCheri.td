@@ -1225,7 +1225,6 @@ def : Pat<(int_cheri_cap_from_pointer (CLenVT (int_cheri_ddc_get)), GPR:$rs2),
 
 /// Null Capability Patterns
 
-def : Pat<(int_cheri_cap_from_pointer DDC, (XLenVT 0)), (CLenVT (COPY C0))>;
 def : Pat<(inttoptr (XLenVT 0)), (CLenVT (COPY C0))>;
 def : Pat<(XLenVT (ptrtoint (CLenVT (inttoptr (XLenVT 0))))),
           (XLenVT (COPY (XLenVT X0)))>;
