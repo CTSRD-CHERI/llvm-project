@@ -38,23 +38,20 @@ entry:
 define internal i8 addrspace(200)* @cap_from_ptr_zero(i8 addrspace(200)* addrspace(200)* %ptr, i8 addrspace(200)* %cap) nounwind {
 ; PURECAP-LABEL: cap_from_ptr_zero:
 ; PURECAP:       # %bb.0: # %entry
-; PURECAP-NEXT:    cfromptr ca1, ca1, zero
-; PURECAP-NEXT:    csc ca1, 0(ca0)
-; PURECAP-NEXT:    cmove ca0, ca1
+; PURECAP-NEXT:    csc cnull, 0(ca0)
+; PURECAP-NEXT:    cmove ca0, cnull
 ; PURECAP-NEXT:    cret
 ;
 ; HYBRID-LABEL: cap_from_ptr_zero:
 ; HYBRID:       # %bb.0: # %entry
-; HYBRID-NEXT:    cfromptr ca1, ca1, zero
-; HYBRID-NEXT:    sc.cap ca1, (ca0)
-; HYBRID-NEXT:    cmove ca0, ca1
+; HYBRID-NEXT:    sc.cap cnull, (ca0)
+; HYBRID-NEXT:    cmove ca0, cnull
 ; HYBRID-NEXT:    ret
 ; CHECK-IR-LABEL: define {{[^@]+}}@cap_from_ptr_zero
 ; CHECK-IR-SAME: (i8 addrspace(200)* addrspace(200)* [[PTR:%.*]], i8 addrspace(200)* [[CAP:%.*]]) #[[ATTR0]] {
 ; CHECK-IR-NEXT:  entry:
-; CHECK-IR-NEXT:    [[NEW:%.*]] = call i8 addrspace(200)* @llvm.cheri.cap.from.pointer.i32(i8 addrspace(200)* [[CAP]], i32 0)
-; CHECK-IR-NEXT:    store i8 addrspace(200)* [[NEW]], i8 addrspace(200)* addrspace(200)* [[PTR]], align 16
-; CHECK-IR-NEXT:    ret i8 addrspace(200)* [[NEW]]
+; CHECK-IR-NEXT:    store i8 addrspace(200)* null, i8 addrspace(200)* addrspace(200)* [[PTR]], align 16
+; CHECK-IR-NEXT:    ret i8 addrspace(200)* null
 ;
 entry:
   %new = call i8 addrspace(200)* @llvm.cheri.cap.from.pointer.i32(i8 addrspace(200)* %cap, i32 0)
@@ -96,24 +93,20 @@ entry:
 define internal i8 addrspace(200)* @cap_from_ptr_ddc_zero(i8 addrspace(200)* addrspace(200)* %ptr) nounwind {
 ; PURECAP-LABEL: cap_from_ptr_ddc_zero:
 ; PURECAP:       # %bb.0: # %entry
-; PURECAP-NEXT:    cfromptr ca1, ddc, zero
-; PURECAP-NEXT:    csc ca1, 0(ca0)
-; PURECAP-NEXT:    cmove ca0, ca1
+; PURECAP-NEXT:    csc cnull, 0(ca0)
+; PURECAP-NEXT:    cmove ca0, cnull
 ; PURECAP-NEXT:    cret
 ;
 ; HYBRID-LABEL: cap_from_ptr_ddc_zero:
 ; HYBRID:       # %bb.0: # %entry
-; HYBRID-NEXT:    cfromptr ca1, ddc, zero
-; HYBRID-NEXT:    sc.cap ca1, (ca0)
-; HYBRID-NEXT:    cmove ca0, ca1
+; HYBRID-NEXT:    sc.cap cnull, (ca0)
+; HYBRID-NEXT:    cmove ca0, cnull
 ; HYBRID-NEXT:    ret
 ; CHECK-IR-LABEL: define {{[^@]+}}@cap_from_ptr_ddc_zero
 ; CHECK-IR-SAME: (i8 addrspace(200)* addrspace(200)* [[PTR:%.*]]) #[[ATTR0]] {
 ; CHECK-IR-NEXT:  entry:
-; CHECK-IR-NEXT:    [[DDC:%.*]] = call i8 addrspace(200)* @llvm.cheri.ddc.get()
-; CHECK-IR-NEXT:    [[NEW:%.*]] = call i8 addrspace(200)* @llvm.cheri.cap.from.pointer.i32(i8 addrspace(200)* [[DDC]], i32 0)
-; CHECK-IR-NEXT:    store i8 addrspace(200)* [[NEW]], i8 addrspace(200)* addrspace(200)* [[PTR]], align 16
-; CHECK-IR-NEXT:    ret i8 addrspace(200)* [[NEW]]
+; CHECK-IR-NEXT:    store i8 addrspace(200)* null, i8 addrspace(200)* addrspace(200)* [[PTR]], align 16
+; CHECK-IR-NEXT:    ret i8 addrspace(200)* null
 ;
 entry:
   %ddc = call i8 addrspace(200)* @llvm.cheri.ddc.get()
