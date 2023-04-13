@@ -50,9 +50,8 @@ define internal i8 addrspace(200)* @cap_from_ptr_zero(i8 addrspace(200)* addrspa
 ; CHECK-IR-LABEL: define {{[^@]+}}@cap_from_ptr_zero
 ; CHECK-IR-SAME: (i8 addrspace(200)* addrspace(200)* [[PTR:%.*]], i8 addrspace(200)* [[CAP:%.*]]) #[[ATTR0]] {
 ; CHECK-IR-NEXT:  entry:
-; CHECK-IR-NEXT:    [[NEW:%.*]] = call i8 addrspace(200)* @llvm.cheri.cap.from.pointer.i64(i8 addrspace(200)* [[CAP]], i64 0)
-; CHECK-IR-NEXT:    store i8 addrspace(200)* [[NEW]], i8 addrspace(200)* addrspace(200)* [[PTR]], align 16
-; CHECK-IR-NEXT:    ret i8 addrspace(200)* [[NEW]]
+; CHECK-IR-NEXT:    store i8 addrspace(200)* null, i8 addrspace(200)* addrspace(200)* [[PTR]], align 16
+; CHECK-IR-NEXT:    ret i8 addrspace(200)* null
 ;
 entry:
   %new = call i8 addrspace(200)* @llvm.cheri.cap.from.pointer.i64(i8 addrspace(200)* %cap, i64 0)
@@ -106,10 +105,8 @@ define internal i8 addrspace(200)* @cap_from_ptr_ddc_zero(i8 addrspace(200)* add
 ; CHECK-IR-LABEL: define {{[^@]+}}@cap_from_ptr_ddc_zero
 ; CHECK-IR-SAME: (i8 addrspace(200)* addrspace(200)* [[PTR:%.*]]) #[[ATTR0]] {
 ; CHECK-IR-NEXT:  entry:
-; CHECK-IR-NEXT:    [[DDC:%.*]] = call i8 addrspace(200)* @llvm.cheri.ddc.get()
-; CHECK-IR-NEXT:    [[NEW:%.*]] = call i8 addrspace(200)* @llvm.cheri.cap.from.pointer.i64(i8 addrspace(200)* [[DDC]], i64 0)
-; CHECK-IR-NEXT:    store i8 addrspace(200)* [[NEW]], i8 addrspace(200)* addrspace(200)* [[PTR]], align 16
-; CHECK-IR-NEXT:    ret i8 addrspace(200)* [[NEW]]
+; CHECK-IR-NEXT:    store i8 addrspace(200)* null, i8 addrspace(200)* addrspace(200)* [[PTR]], align 16
+; CHECK-IR-NEXT:    ret i8 addrspace(200)* null
 ;
 entry:
   %ddc = call i8 addrspace(200)* @llvm.cheri.ddc.get()

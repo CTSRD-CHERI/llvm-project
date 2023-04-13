@@ -6000,7 +6000,11 @@ static Value *simplifyBinaryIntrinsic(Function *F, Value *Op0, Value *Op1,
     if (Constant *Result = computePointerDifference(Q.DL, Op0, Op1))
       return ConstantExpr::getIntegerCast(Result, ReturnType, true);
     break;
-
+  case Intrinsic::cheri_cap_from_pointer:
+    // (cheri_cap_from_pointer x, 0) -> null
+    if (match(Op1, m_Zero()))
+      return Constant::getNullValue(ReturnType);
+    break;
   // csetbounds(csetbounds(x, len), len) -> csetbounds(x, len)
   // This can happen with subobject bounds
   case Intrinsic::cheri_bounded_stack_cap:
