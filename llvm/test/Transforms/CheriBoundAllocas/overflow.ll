@@ -9,7 +9,6 @@ declare void @use(i8 addrspace(200)*)
 ;; Check that overflowing a signed pointer index width offset (here, 32-bit)
 ;; with offset + size is correctly handled rather than regarding the store as
 ;; in bounds due to the final byte not exceeding the upper bound.
-;; TODO: Fix
 define void @test_store(i32 %a) {
 ; CHECK-LABEL: @test_store(
 ; CHECK-NEXT:    [[TMP1:%.*]] = alloca [4 x i8], align 1, addrspace(200)
@@ -33,7 +32,6 @@ define void @test_store(i32 %a) {
 ;; Check that overflowing a signed pointer index width offset (here, 32-bit)
 ;; with offset + size is correctly handled rather than regarding the setbounds
 ;; as in bounds due to the final byte not exceeding the upper bound.
-;; TODO: Fix
 define void @test_setbounds(i32 %a) {
 ; CHECK-LABEL: @test_setbounds(
 ; CHECK-NEXT:    [[TMP1:%.*]] = alloca [4 x i8], align 1, addrspace(200)
