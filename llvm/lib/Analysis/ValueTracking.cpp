@@ -4656,7 +4656,8 @@ void computeKnownFPClass(const Value *V, const APInt &DemandedElts,
           Known.knownNot(fcNegative);
         break;
       }
-      case Intrinsic::sqrt: {
+      case Intrinsic::sqrt:
+      case Intrinsic::experimental_constrained_sqrt: {
         KnownFPClass KnownSrc;
         FPClassTest InterestedSrcs = InterestedClasses;
         if (InterestedClasses & fcNan)
