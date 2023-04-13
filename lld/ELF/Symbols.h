@@ -540,6 +540,9 @@ struct ElfSym {
   // .captable section
   static Defined *cheriCapabilityTable;
 
+  // __global_pointer$ for RISC-V.
+  static Defined *riscvGlobalPointer;
+
   // __rel{,a}_iplt_{start,end} symbols.
   static Defined *relaIpltStart;
   static Defined *relaIpltEnd;
