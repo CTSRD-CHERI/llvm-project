@@ -6944,8 +6944,7 @@ Value *llvm::simplifyLoadInst(LoadInst *LI, Value *PtrOp,
 
 static Value *simplifyInstructionWithOperands(Instruction *I,
                                               ArrayRef<Value *> NewOps,
-                                              const SimplifyQuery &SQ,
-                                              OptimizationRemarkEmitter *ORE) {
+                                              const SimplifyQuery &SQ) {
   const SimplifyQuery Q = SQ.CxtI ? SQ : SQ.getWithInstruction(I);
 
   switch (I->getOpcode()) {
@@ -7060,17 +7059,15 @@ static Value *simplifyInstructionWithOperands(Instruction *I,
 
 Value *llvm::simplifyInstructionWithOperands(Instruction *I,
                                              ArrayRef<Value *> NewOps,
-                                             const SimplifyQuery &SQ,
-                                             OptimizationRemarkEmitter *ORE) {
+                                             const SimplifyQuery &SQ) {
   assert(NewOps.size() == I->getNumOperands() &&
          "Number of operands should match the instruction!");
-  return ::simplifyInstructionWithOperands(I, NewOps, SQ, ORE);
+  return ::simplifyInstructionWithOperands(I, NewOps, SQ);
 }
 
-Value *llvm::simplifyInstruction(Instruction *I, const SimplifyQuery &SQ,
-                                 OptimizationRemarkEmitter *ORE) {
+Value *llvm::simplifyInstruction(Instruction *I, const SimplifyQuery &SQ) {
   SmallVector<Value *, 8> Ops(I->operands());
-  Value *Result = ::simplifyInstructionWithOperands(I, Ops, SQ, ORE);
+  Value *Result = ::simplifyInstructionWithOperands(I, Ops, SQ);
 
   /// If called on unreachable code, the instruction may simplify to itself.
   /// Make life easier for users by detecting that case here, and returning a
