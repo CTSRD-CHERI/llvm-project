@@ -173,6 +173,21 @@ static Value *EmitFromInt(CodeGenFunction &CGF, llvm::Value *V,
   return V;
 }
 
+static llvm::Value *CheckAtomicAlignment(CodeGenFunction &CGF,
+                                         const CallExpr *E) {
+  ASTContext &Ctx = CGF.getContext();
+  Address Ptr = CGF.EmitPointerWithAlignment(E->getArg(0));
+  unsigned Bytes = Ptr.getElementType()->isPointerTy()
+                       ? Ctx.getTypeSizeInChars(Ctx.VoidPtrTy).getQuantity()
+                       : Ptr.getElementType()->getScalarSizeInBits() / 8;
+  unsigned Align = Ptr.getAlignment().getQuantity();
+  if (Align % Bytes != 0) {
+    DiagnosticsEngine &Diags = CGF.CGM.getDiags();
+    Diags.Report(E->getBeginLoc(), diag::warn_sync_op_misaligned);
+  }
+  return Ptr.getPointer();
+}
+
 /// Utility to insert an atomic instruction based on Intrinsic::ID
 /// and the expression node.
 static Value *MakeBinaryAtomicValue(
@@ -185,7 +200,7 @@ static Value *MakeBinaryAtomicValue(
                                   E->getArg(0)->getType()->getPointeeType()));
   assert(CGF.getContext().hasSameUnqualifiedType(T, E->getArg(1)->getType()));
 
-  llvm::Value *DestPtr = CGF.EmitScalarExpr(E->getArg(0));
+  llvm::Value *DestPtr = CheckAtomicAlignment(CGF, E);
 
   llvm::Value *Args[2];
   Args[0] = DestPtr;
@@ -224,23 +239,9 @@ static Value *EmitNontemporalLoad(CodeGenFunction &CGF, const CallExpr *E) {
   return CGF.EmitLoadOfScalar(LV, E->getExprLoc());
 }
 
-static void CheckAtomicAlignment(CodeGenFunction &CGF, const CallExpr *E) {
-  ASTContext &Ctx = CGF.getContext();
-  Address Ptr = CGF.EmitPointerWithAlignment(E->getArg(0));
-  unsigned Bytes = Ptr.getElementType()->isPointerTy()
-                       ? Ctx.getTypeSizeInChars(Ctx.VoidPtrTy).getQuantity()
-                       : Ptr.getElementType()->getScalarSizeInBits() / 8;
-  unsigned Align = Ptr.getAlignment().getQuantity();
-  if (Align % Bytes != 0) {
-    DiagnosticsEngine &Diags = CGF.CGM.getDiags();
-    Diags.Report(E->getBeginLoc(), diag::warn_sync_op_misaligned);
-  }
-}
-
 static RValue EmitBinaryAtomic(CodeGenFunction &CGF,
                                llvm::AtomicRMWInst::BinOp Kind,
                                const CallExpr *E) {
-  CheckAtomicAlignment(CGF, E);
   return RValue::get(MakeBinaryAtomicValue(CGF, Kind, E));
 }
 
@@ -252,14 +253,13 @@ static RValue EmitBinaryAtomicPost(CodeGenFunction &CGF,
                                    const CallExpr *E,
                                    Instruction::BinaryOps Op,
                                    bool Invert = false) {
-  CheckAtomicAlignment(CGF, E);
   QualType T = E->getType();
   assert(E->getArg(0)->getType()->isPointerType());
   assert(CGF.getContext().hasSameUnqualifiedType(T,
                                   E->getArg(0)->getType()->getPointeeType()));
   assert(CGF.getContext().hasSameUnqualifiedType(T, E->getArg(1)->getType()));
 
-  llvm::Value *DestPtr = CGF.EmitScalarExpr(E->getArg(0));
+  llvm::Value *DestPtr = CheckAtomicAlignment(CGF, E);
   unsigned AddrSpace = DestPtr->getType()->getPointerAddressSpace();
   bool IsCheriCap = T->isCHERICapabilityType(CGF.CGM.getContext());
 
@@ -310,9 +310,8 @@ static RValue EmitBinaryAtomicPost(CodeGenFunction &CGF,
 /// invoke the function EmitAtomicCmpXchgForMSIntrin.
 static Value *MakeAtomicCmpXchgValue(CodeGenFunction &CGF, const CallExpr *E,
                                      bool ReturnBool) {
-  CheckAtomicAlignment(CGF, E);
   QualType T = ReturnBool ? E->getArg(1)->getType() : E->getType();
-  llvm::Value *DestPtr = CGF.EmitScalarExpr(E->getArg(0));
+  llvm::Value *DestPtr = CheckAtomicAlignment(CGF, E);
 
   Value *Args[3];
   Args[0] = DestPtr;
@@ -4221,8 +4220,7 @@ RValue CodeGenFunction::EmitBuiltinExpr(const GlobalDecl GD, unsigned BuiltinID,
   case Builtin::BI__sync_lock_release_8:
   case Builtin::BI__sync_lock_release_cap:
   case Builtin::BI__sync_lock_release_16: {
-    CheckAtomicAlignment(*this, E);
-    Value *Ptr = EmitScalarExpr(E->getArg(0));
+    Value *Ptr = CheckAtomicAlignment(*this, E);
     QualType ElTy = E->getArg(0)->getType()->getPointeeType();
     CharUnits StoreSize = getContext().getTypeSizeInChars(ElTy);
     llvm::Type *ITy;
