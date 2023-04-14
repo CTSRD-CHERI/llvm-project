@@ -39,7 +39,7 @@
 #define cheri_bounds_set_exact(x, y) __builtin_cheri_bounds_set_exact((x), (y))
 
 /* Object types, sealing and unsealing: */
-typedef long cheri_otype_t;
+typedef __PTRDIFF_TYPE__ cheri_otype_t;
 #if defined(__mips__) || defined(__riscv)
 /* CHERI-MIPS and CHERI-RISC-V use negative numbers for hardware-interpreted
  * otypes */
@@ -67,7 +67,10 @@ typedef long cheri_otype_t;
 #define cheri_type_copy(x, y) __builtin_cheri_cap_type_copy((x), (y))
 
 /* Capability permissions: */
-typedef enum __attribute__((flag_enum, enum_extensibility(open))) {
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wfixed-enum-extension"
+/* Use __PTRADDR_TYPE__ as the underlying type to avoid unnecessary truncates */
+typedef enum __attribute__((flag_enum, enum_extensibility(open))) : __PTRADDR_TYPE__ {
   CHERI_PERM_GLOBAL = __CHERI_CAP_PERMISSION_GLOBAL__,
   CHERI_PERM_EXECUTE = __CHERI_CAP_PERMISSION_PERMIT_EXECUTE__,
   CHERI_PERM_LOAD = __CHERI_CAP_PERMISSION_PERMIT_LOAD__,
@@ -82,9 +85,9 @@ typedef enum __attribute__((flag_enum, enum_extensibility(open))) {
   /* TODO: architecture-dependent permissions */
 } cheri_perms_t;
 #define cheri_perms_get(x) ((cheri_perms_t)(__builtin_cheri_perms_get(x)))
-#define cheri_perms_and(x, y) __builtin_cheri_perms_and((x), (__SIZE_TYPE__)(y))
+#define cheri_perms_and(x, y) __builtin_cheri_perms_and((x), (cheri_perms_t)(y))
 #define cheri_perms_clear(x, y)                                                \
-  __builtin_cheri_perms_and((x), ~(__SIZE_TYPE__)(y))
+  __builtin_cheri_perms_and((x), ~(__PTRADDR_TYPE__)(y))
 
 /* Accessors for capability registers. Currently exposes DDC and PCC. */
 #define cheri_ddc_get() __builtin_cheri_global_data_get()
