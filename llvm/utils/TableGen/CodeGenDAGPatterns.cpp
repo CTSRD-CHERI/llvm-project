@@ -2023,13 +2023,13 @@ bool TreePatternNode::isIsomorphicTo(const TreePatternNode *N,
 TreePatternNodePtr TreePatternNode::clone() const {
   TreePatternNodePtr New;
   if (isLeaf()) {
-    New = std::make_shared<TreePatternNode>(getLeafValue(), getNumTypes());
+    New = makeIntrusiveRefCnt<TreePatternNode>(getLeafValue(), getNumTypes());
   } else {
     std::vector<TreePatternNodePtr> CChildren;
     CChildren.reserve(Children.size());
     for (unsigned i = 0, e = getNumChildren(); i != e; ++i)
       CChildren.push_back(getChild(i)->clone());
-    New = std::make_shared<TreePatternNode>(getOperator(), std::move(CChildren),
+    New = makeIntrusiveRefCnt<TreePatternNode>(getOperator(), std::move(CChildren),
                                             getNumTypes());
   }
   New->setName(getName());
@@ -2132,7 +2132,7 @@ void TreePatternNode::InlinePatternFragments(
       NewChildren.reserve(ChildAlternatives.size());
       for (unsigned i = 0, e = ChildAlternatives.size(); i != e; ++i)
         NewChildren.push_back(ChildAlternatives[i][Idxs[i]]);
-      TreePatternNodePtr R = std::make_shared<TreePatternNode>(
+      TreePatternNodePtr R = makeIntrusiveRefCnt<TreePatternNode>(
           T->getOperator(), std::move(NewChildren), T->getNumTypes());
 
       // Copy over properties.
@@ -2876,7 +2876,7 @@ TreePatternNodePtr TreePattern::ParseTreePattern(Init *TheInit,
         OpName);
 
     // Input argument?
-    TreePatternNodePtr Res = std::make_shared<TreePatternNode>(DI, 1);
+    TreePatternNodePtr Res = makeIntrusiveRefCnt<TreePatternNode>(DI, 1);
     if (R->getName() == "node" && !OpName.empty()) {
       if (OpName.empty())
         error("'node' argument requires a name to match with operand list");
@@ -2891,7 +2891,7 @@ TreePatternNodePtr TreePattern::ParseTreePattern(Init *TheInit,
   if (isa<UnsetInit>(TheInit)) {
     if (OpName.empty())
       error("'?' argument requires a name to match with operand list");
-    TreePatternNodePtr Res = std::make_shared<TreePatternNode>(TheInit, 1);
+    TreePatternNodePtr Res = makeIntrusiveRefCnt<TreePatternNode>(TheInit, 1);
     Args.push_back(std::string(OpName));
     Res->setName(OpName);
     return Res;
@@ -2902,7 +2902,7 @@ TreePatternNodePtr TreePattern::ParseTreePattern(Init *TheInit,
       error("Constant int or bit argument should not have a name!");
     if (isa<BitInit>(TheInit))
       TheInit = TheInit->convertInitializerTo(IntRecTy::get(RK));
-    return std::make_shared<TreePatternNode>(TheInit, 1);
+    return makeIntrusiveRefCnt<TreePatternNode>(TheInit, 1);
   }
 
   if (BitsInit *BI = dyn_cast<BitsInit>(TheInit)) {
@@ -3006,7 +3006,7 @@ TreePatternNodePtr TreePattern::ParseTreePattern(Init *TheInit,
     else // Otherwise, no chain.
       Operator = getDAGPatterns().get_intrinsic_wo_chain_sdnode();
 
-    Children.insert(Children.begin(), std::make_shared<TreePatternNode>(
+    Children.insert(Children.begin(), makeIntrusiveRefCnt<TreePatternNode>(
                                           IntInit::get(RK, IID), 1));
   }
 
@@ -3032,7 +3032,7 @@ TreePatternNodePtr TreePattern::ParseTreePattern(Init *TheInit,
   }
 
   TreePatternNodePtr Result =
-      std::make_shared<TreePatternNode>(Operator, std::move(Children),
+      makeIntrusiveRefCnt<TreePatternNode>(Operator, std::move(Children),
                                         NumResults);
   Result->setName(OpName);
 
@@ -3947,7 +3947,7 @@ void CodeGenDAGPatterns::parseInstructionPattern(
       OpNode->setTransformFn(nullptr);
       std::vector<TreePatternNodePtr> Children;
       Children.push_back(OpNode);
-      OpNode = std::make_shared<TreePatternNode>(Xform, std::move(Children),
+      OpNode = makeIntrusiveRefCnt<TreePatternNode>(Xform, std::move(Children),
                                                  OpNode->getNumTypes());
     }
 
@@ -3958,7 +3958,7 @@ void CodeGenDAGPatterns::parseInstructionPattern(
     I.error("Input operand $" + InstInputs.begin()->first +
             " occurs in pattern but not in operands list!");
 
-  TreePatternNodePtr ResultPattern = std::make_shared<TreePatternNode>(
+  TreePatternNodePtr ResultPattern = makeIntrusiveRefCnt<TreePatternNode>(
       I.getRecord(), std::move(ResultNodeOperands),
       GetNumNodeResults(I.getRecord(), *this));
   // Copy fully inferred output node types to instruction result pattern.
@@ -4278,7 +4278,7 @@ static TreePatternNodePtr PromoteXForms(TreePatternNodePtr N) {
       N->setTransformFn(nullptr);
       std::vector<TreePatternNodePtr> Children;
       Children.push_back(PromoteXForms(N));
-      return std::make_shared<TreePatternNode>(Xform, std::move(Children),
+      return makeIntrusiveRefCnt<TreePatternNode>(Xform, std::move(Children),
                                                N->getNumTypes());
   }
 
@@ -4566,7 +4566,7 @@ static void CombineChildVariants(
     std::vector<TreePatternNodePtr> NewChildren;
     for (unsigned i = 0, e = ChildVariants.size(); i != e; ++i)
       NewChildren.push_back(ChildVariants[i][Idxs[i]]);
-    TreePatternNodePtr R = std::make_shared<TreePatternNode>(
+    TreePatternNodePtr R = makeIntrusiveRefCnt<TreePatternNode>(
         Orig->getOperator(), std::move(NewChildren), Orig->getNumTypes());
 
     // Copy over properties.
