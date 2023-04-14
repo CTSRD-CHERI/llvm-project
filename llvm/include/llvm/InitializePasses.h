@@ -149,7 +149,6 @@ void initializeGuardWideningLegacyPassPass(PassRegistry&);
 void initializeHardwareLoopsLegacyPass(PassRegistry&);
 void initializeMIRProfileLoaderPassPass(PassRegistry &);
 void initializeIPSCCPLegacyPassPass(PassRegistry&);
-void initializeIRCELegacyPassPass(PassRegistry&);
 void initializeIRSimilarityIdentifierWrapperPassPass(PassRegistry&);
 void initializeIRTranslatorPass(PassRegistry&);
 void initializeIVUsersWrapperPassPass(PassRegistry&);
