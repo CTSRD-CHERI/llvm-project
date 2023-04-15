@@ -1957,6 +1957,7 @@ include "RISCVInstrInfoZfa.td"
 include "RISCVInstrInfoZfh.td"
 include "RISCVInstrInfoZicbo.td"
 include "RISCVInstrInfoZicond.td"
+include "RISCVInstrInfoZihintntl.td"
 
 //===----------------------------------------------------------------------===//
 // Vendor extensions
@@ -1964,7 +1965,6 @@ include "RISCVInstrInfoZicond.td"
 
 include "RISCVInstrInfoXVentana.td"
 include "RISCVInstrInfoXTHead.td"
-include "RISCVInstrInfoZihintntl.td"
 include "RISCVInstrInfoXSf.td"
 
 //===----------------------------------------------------------------------===//
