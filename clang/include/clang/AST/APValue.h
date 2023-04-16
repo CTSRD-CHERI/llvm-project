@@ -269,9 +269,9 @@ private:
   };
   struct LV;
   struct Vec {
-    APValue *Elts;
-    unsigned NumElts;
-    Vec() : Elts(nullptr), NumElts(0) {}
+    APValue *Elts = nullptr;
+    unsigned NumElts = 0;
+    Vec() = default;
     ~Vec() { delete[] Elts; }
   };
   struct Arr {
