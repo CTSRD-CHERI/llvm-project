@@ -7255,7 +7255,7 @@ static SDValue getMemcpyLoadsAndStores(
   AAMDNodes NewAAInfo = AAInfo;
   NewAAInfo.TBAA = NewAAInfo.TBAAStruct = nullptr;
 
-  const Value *SrcVal = SrcPtrInfo.V.dyn_cast<const Value *>();
+  const Value *SrcVal = dyn_cast_if_present<const Value *>(SrcPtrInfo.V);
   bool isConstant =
       AA && SrcVal &&
       AA->pointsToConstantMemory(MemoryLocation(SrcVal, Size, AAInfo));
