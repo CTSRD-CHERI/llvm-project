@@ -77,6 +77,7 @@ add_llvm_target(MipsCodeGen
   AsmPrinter
   CodeGen
   Core
+  GlobalISel
   MC
   MipsDesc
   MipsInfo
@@ -84,7 +85,6 @@ add_llvm_target(MipsCodeGen
   Support
   Target
   TargetParser
-  GlobalISel
   ScalarOpts
   TransformUtils
 

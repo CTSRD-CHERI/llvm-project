@@ -97,8 +97,10 @@ add_llvm_target(AArch64CodeGen
   AArch64Utils
   Analysis
   AsmPrinter
+  CFGuard
   CodeGen
   Core
+  GlobalISel
   MC
   Scalar
   SelectionDAG
@@ -106,12 +108,10 @@ add_llvm_target(AArch64CodeGen
   Target
   TargetParser
   TransformUtils
-  GlobalISel
-  CFGuard
 
   ADD_TO_COMPONENT
   AArch64
-)
+  )
 
 # TODO: remove
 add_definitions(-DLLVM_TARGETLOWERINGINFO_DEFAULT_AS=0)

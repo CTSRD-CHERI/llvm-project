@@ -52,9 +52,10 @@ add_llvm_target(RISCVCodeGen
   LINK_COMPONENTS
   Analysis
   AsmPrinter
-  Core
-  IPO
   CodeGen
+  Core
+  GlobalISel
+  IPO
   MC
   RISCVDesc
   RISCVInfo
@@ -63,7 +64,6 @@ add_llvm_target(RISCVCodeGen
   Target
   TargetParser
   TransformUtils
-  GlobalISel
 
   ADD_TO_COMPONENT
   RISCV

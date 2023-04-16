@@ -80,7 +80,7 @@ add_llvm_target(WebAssemblyCodeGen
 
   ADD_TO_COMPONENT
   WebAssembly
-)
+  )
 
 # TODO: remove
 add_definitions(-DLLVM_TARGETLOWERINGINFO_DEFAULT_AS=0)

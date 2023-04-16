@@ -47,7 +47,7 @@ add_llvm_target(LanaiCodeGen
 
   ADD_TO_COMPONENT
   Lanai
-)
+  )
 
 # TODO: remove
 add_definitions(-DLLVM_TARGETLOWERINGINFO_DEFAULT_AS=0)

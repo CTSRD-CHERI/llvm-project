@@ -87,7 +87,7 @@ add_llvm_target(HexagonCodeGen
 
   ADD_TO_COMPONENT
   Hexagon
-)
+  )
 
 # TODO: remove
 add_definitions(-DLLVM_TARGETLOWERINGINFO_DEFAULT_AS=0)
