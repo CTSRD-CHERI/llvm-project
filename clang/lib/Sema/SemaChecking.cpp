@@ -2190,6 +2190,7 @@ Sema::CheckBuiltinFunctionCall(FunctionDecl *FDecl, unsigned BuiltinID,
     return SemaBuiltinCHERICapCreate(*this, TheCall);
   case Builtin::BI__builtin_cheri_bounds_set:
   case Builtin::BI__builtin_cheri_bounds_set_exact:
+  case Builtin::BI__builtin_cheri_high_set:
   case Builtin::BI__builtin_cheri_perms_and:
   case Builtin::BI__builtin_cheri_flags_set: {
     // The CHERI mutators should accept capability pointer types and
@@ -2292,6 +2293,7 @@ Sema::CheckBuiltinFunctionCall(FunctionDecl *FDecl, unsigned BuiltinID,
   case Builtin::BI__builtin_cheri_address_get:
   case Builtin::BI__builtin_cheri_base_get:
   case Builtin::BI__builtin_cheri_flags_get:
+  case Builtin::BI__builtin_cheri_high_get:
   case Builtin::BI__builtin_cheri_length_get:
   case Builtin::BI__builtin_cheri_offset_get:
   case Builtin::BI__builtin_cheri_perms_get:

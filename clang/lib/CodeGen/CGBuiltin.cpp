@@ -4955,6 +4955,18 @@ RValue CodeGenFunction::EmitBuiltinExpr(const GlobalDecl GD, unsigned BuiltinID,
                                 {EmitCastToVoidPtr(Cap), Flags}),
         Cap->getType()));
   }
+  case Builtin::BI__builtin_cheri_high_get:
+    return RValue::get(Builder.CreateIntrinsic(
+        llvm::Intrinsic::cheri_cap_high_get, {SizeTy},
+        {EmitCastToVoidPtr(EmitScalarExpr(E->getArg(0)))}));
+  case Builtin::BI__builtin_cheri_high_set: {
+    Value *Cap = EmitScalarExpr(E->getArg(0));
+    Value *HighBits = EmitScalarExpr(E->getArg(1));
+    return RValue::get(Builder.CreateBitCast(
+        Builder.CreateIntrinsic(llvm::Intrinsic::cheri_cap_high_set, {SizeTy},
+                                {EmitCastToVoidPtr(Cap), HighBits}),
+        Cap->getType()));
+  }
   case Builtin::BI__builtin_cheri_length_get:
     return RValue::get(Builder.CreateIntrinsic(
         llvm::Intrinsic::cheri_cap_length_get, {SizeTy},
