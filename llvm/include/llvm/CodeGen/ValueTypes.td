@@ -24,6 +24,7 @@ class ValueType<int size, int value> {
   int isFP = false;
   int isVector = false;
   int isScalable = false;
+  int isCapability = false;
 }
 
 class VTAny<int value> : ValueType<0, value> {
@@ -52,6 +53,11 @@ class VTVec<int nelem, ValueType elt, int value>
 class VTScalableVec<int nelem, ValueType elt, int value>
     : VTVec<nelem, elt, value> {
   let isScalable = true;
+}
+
+class VTCapability<int size, int value>
+  : ValueType<size, value> {
+    let isCapability = true;
 }
 
 defset list<ValueType> ValueTypes = {
@@ -285,12 +291,12 @@ def aarch64svcount
               : ValueType<16,   196>;  // AArch64 predicate-as-counter
 def spirvbuiltin : ValueType<0,  197>; // SPIR-V's builtin type
 
-def c64  : ValueType<64,  !add(spirvbuiltin.Value, 1)>;  // 64-bit capability value
-def c128 : ValueType<128, !add(c64.Value,   1)>;  // 128-bit capability value
-def c256 : ValueType<256, !add(c128.Value,  1)>;  // 256-bit capability value
+def c64  : VTCapability<64,  !add(spirvbuiltin.Value, 1)>;  // 64-bit capability value
+def c128 : VTCapability<128, !add(c64.Value,   1)>;  // 128-bit capability value
+def c256 : VTCapability<256, !add(c128.Value,  1)>;  // 256-bit capability value
 
 // Pseudo valuetype mapped to the current capability pointer size.
-def cPTR       : ValueType<0, 247>;
+def cPTR       : VTAny<247>;
 
 def token      : ValueType<0, 248>;  // TokenTy
 def MetadataVT : ValueType<0, 249> { // Metadata
