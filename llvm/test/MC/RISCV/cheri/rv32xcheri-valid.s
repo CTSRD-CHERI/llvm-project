@@ -58,6 +58,9 @@ csetoffset c1, c2, x3
 # CHECK-INST: csetaddr cra, csp, gp
 # CHECK: encoding: [0xdb,0x00,0x31,0x20]
 csetaddr c1, c2, x3
+# CHECK-INST: csethigh cra, csp, gp
+# CHECK: encoding: [0xdb,0x00,0x31,0x2c]
+csethigh c1, c2, x3
 # CHECK-INST: cincoffset cra, csp, gp
 # CHECK: encoding: [0xdb,0x00,0x31,0x22]
 cincoffset c1, c2, x3
