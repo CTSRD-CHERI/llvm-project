@@ -17,6 +17,7 @@ declare i1 @llvm.cheri.cap.sealed.get(i8 addrspace(200)*)
 declare i64 @llvm.cheri.cap.offset.get.i64(i8 addrspace(200)*)
 declare i64 @llvm.cheri.cap.flags.get.i64(i8 addrspace(200)*)
 declare i64 @llvm.cheri.cap.address.get.i64(i8 addrspace(200)*)
+declare i64 @llvm.cheri.cap.high.get.i64(i8 addrspace(200)*)
 
 define i64 @perms_get(i8 addrspace(200)* %cap) nounwind {
 ; PURECAP-LABEL: perms_get:
@@ -146,6 +147,20 @@ define i64 @address_get(i8 addrspace(200)* %cap) nounwind {
   ret i64 %address
 }
 
+define i64 @high_get(i8 addrspace(200)* %cap) nounwind {
+; PURECAP-LABEL: high_get:
+; PURECAP:       # %bb.0:
+; PURECAP-NEXT:    cgethigh a0, ca0
+; PURECAP-NEXT:    cret
+;
+; HYBRID-LABEL: high_get:
+; HYBRID:       # %bb.0:
+; HYBRID-NEXT:    cgethigh a0, ca0
+; HYBRID-NEXT:    ret
+  %high = call i64 @llvm.cheri.cap.high.get.i64(i8 addrspace(200)* %cap)
+  ret i64 %high
+}
+
 ; Capability-Modification Instructions
 
 declare i8 addrspace(200)* @llvm.cheri.cap.seal(i8 addrspace(200)*, i8 addrspace(200)*)
@@ -156,6 +171,7 @@ declare i8 addrspace(200)* @llvm.cheri.cap.offset.set.i64(i8 addrspace(200)*, i6
 declare i8 addrspace(200)* @llvm.cheri.cap.address.set.i64(i8 addrspace(200)*, i64)
 declare i8 addrspace(200)* @llvm.cheri.cap.bounds.set.i64(i8 addrspace(200)*, i64)
 declare i8 addrspace(200)* @llvm.cheri.cap.bounds.set.exact.i64(i8 addrspace(200)*, i64)
+declare i8 addrspace(200)* @llvm.cheri.cap.high.set.i64(i8 addrspace(200)*, i64)
 declare i8 addrspace(200)* @llvm.cheri.cap.tag.clear(i8 addrspace(200)*)
 declare i8 addrspace(200)* @llvm.cheri.cap.build(i8 addrspace(200)*, i8 addrspace(200)*)
 declare i8 addrspace(200)* @llvm.cheri.cap.type.copy(i8 addrspace(200)*, i8 addrspace(200)*)
@@ -271,6 +287,20 @@ define i8 addrspace(200)* @bounds_set_exact(i8 addrspace(200)* %cap, i64 %bounds
 ; HYBRID-NEXT:    csetboundsexact ca0, ca0, a1
 ; HYBRID-NEXT:    ret
   %newcap = call i8 addrspace(200)* @llvm.cheri.cap.bounds.set.exact.i64(i8 addrspace(200)* %cap, i64 %bounds)
+  ret i8 addrspace(200)* %newcap
+}
+
+define i8 addrspace(200)* @high_set(i8 addrspace(200)* %cap, i64 %high) nounwind {
+; PURECAP-LABEL: high_set:
+; PURECAP:       # %bb.0:
+; PURECAP-NEXT:    csethigh ca0, ca0, a1
+; PURECAP-NEXT:    cret
+;
+; HYBRID-LABEL: high_set:
+; HYBRID:       # %bb.0:
+; HYBRID-NEXT:    csethigh ca0, ca0, a1
+; HYBRID-NEXT:    ret
+  %newcap = call i8 addrspace(200)* @llvm.cheri.cap.high.set.i64(i8 addrspace(200)* %cap, i64 %high)
   ret i8 addrspace(200)* %newcap
 }
 

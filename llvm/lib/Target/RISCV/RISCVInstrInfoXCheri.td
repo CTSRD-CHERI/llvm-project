@@ -1170,6 +1170,7 @@ def : PatGpcr<riscv_cap_sealed_get, CGetSealed>;
 def : PatGpcr<int_cheri_cap_offset_get, CGetOffset>;
 def : PatGpcr<int_cheri_cap_flags_get, CGetFlags>;
 def : PatGpcr<int_cheri_cap_address_get, CGetAddr>;
+def : PatGpcr<int_cheri_cap_high_get, CGetHigh>;
 
 /// Capability-Modification Instructions
 
@@ -1179,6 +1180,7 @@ def : PatGpcrGpr<int_cheri_cap_perms_and, CAndPerm>;
 def : PatGpcrGpr<int_cheri_cap_flags_set, CSetFlags>;
 def : PatGpcrGpr<int_cheri_cap_offset_set, CSetOffset>;
 def : PatGpcrGpr<int_cheri_cap_address_set, CSetAddr>;
+def : PatGpcrGpr<int_cheri_cap_high_set, CSetHigh>;
 def : PatGpcrGpr<ptradd, CIncOffset>;
 def : PatGpcrSimm12<ptradd, CIncOffsetImm>;
 def : PatGpcrGpr<int_cheri_cap_bounds_set, CSetBounds>;

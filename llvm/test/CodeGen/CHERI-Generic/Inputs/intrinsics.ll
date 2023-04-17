@@ -15,6 +15,7 @@ declare i1 @llvm.cheri.cap.sealed.get(i8 addrspace(200)*)
 declare iCAPRANGE @llvm.cheri.cap.offset.get.iCAPRANGE(i8 addrspace(200)*)
 declare iCAPRANGE @llvm.cheri.cap.flags.get.iCAPRANGE(i8 addrspace(200)*)
 declare iCAPRANGE @llvm.cheri.cap.address.get.iCAPRANGE(i8 addrspace(200)*)
+declare iCAPRANGE @llvm.cheri.cap.high.get.iCAPRANGE(i8 addrspace(200)*)
 
 define iCAPRANGE @perms_get(i8 addrspace(200)* %cap) nounwind {
   %perms = call iCAPRANGE @llvm.cheri.cap.perms.get.iCAPRANGE(i8 addrspace(200)* %cap)
@@ -63,6 +64,13 @@ define iCAPRANGE @address_get(i8 addrspace(200)* %cap) nounwind {
   ret iCAPRANGE %address
 }
 
+@IF-MIPS@;; llvm.cheri.cap.high.get is not supported for MIPS - this could be added by
+@IF-MIPS@;; spilling via memory but since CHERI-MIPS is EOL we skip this test instead.
+@IFNOT-MIPS@define iCAPRANGE @high_get(i8 addrspace(200)* %cap) nounwind {
+@IFNOT-MIPS@  %high = call iCAPRANGE @llvm.cheri.cap.high.get.iCAPRANGE(i8 addrspace(200)* %cap)
+@IFNOT-MIPS@  ret iCAPRANGE %high
+@IFNOT-MIPS@}
+
 ; Capability-Modification Instructions
 
 declare i8 addrspace(200)* @llvm.cheri.cap.seal(i8 addrspace(200)*, i8 addrspace(200)*)
@@ -73,6 +81,7 @@ declare i8 addrspace(200)* @llvm.cheri.cap.offset.set.iCAPRANGE(i8 addrspace(200
 declare i8 addrspace(200)* @llvm.cheri.cap.address.set.iCAPRANGE(i8 addrspace(200)*, iCAPRANGE)
 declare i8 addrspace(200)* @llvm.cheri.cap.bounds.set.iCAPRANGE(i8 addrspace(200)*, iCAPRANGE)
 declare i8 addrspace(200)* @llvm.cheri.cap.bounds.set.exact.iCAPRANGE(i8 addrspace(200)*, iCAPRANGE)
+declare i8 addrspace(200)* @llvm.cheri.cap.high.set.iCAPRANGE(i8 addrspace(200)*, iCAPRANGE)
 declare i8 addrspace(200)* @llvm.cheri.cap.tag.clear(i8 addrspace(200)*)
 declare i8 addrspace(200)* @llvm.cheri.cap.build(i8 addrspace(200)*, i8 addrspace(200)*)
 declare i8 addrspace(200)* @llvm.cheri.cap.type.copy(i8 addrspace(200)*, i8 addrspace(200)*)
@@ -118,6 +127,13 @@ define i8 addrspace(200)* @bounds_set_exact(i8 addrspace(200)* %cap, iCAPRANGE %
   %newcap = call i8 addrspace(200)* @llvm.cheri.cap.bounds.set.exact.iCAPRANGE(i8 addrspace(200)* %cap, iCAPRANGE %bounds)
   ret i8 addrspace(200)* %newcap
 }
+
+@IF-MIPS@;; llvm.cheri.cap.high.set is not supported for MIPS - this could be added by
+@IF-MIPS@;; spilling via memory but since CHERI-MIPS is EOL we skip this test instead.
+@IFNOT-MIPS@define i8 addrspace(200)* @high_set(i8 addrspace(200)* %cap, iCAPRANGE %high) nounwind {
+@IFNOT-MIPS@  %newcap = call i8 addrspace(200)* @llvm.cheri.cap.high.set.iCAPRANGE(i8 addrspace(200)* %cap, iCAPRANGE %high)
+@IFNOT-MIPS@  ret i8 addrspace(200)* %newcap
+@IFNOT-MIPS@}
 
 define i8 addrspace(200)* @bounds_set_immediate(i8 addrspace(200)* %cap) nounwind {
   %newcap = call i8 addrspace(200)* @llvm.cheri.cap.bounds.set.iCAPRANGE(i8 addrspace(200)* %cap, iCAPRANGE 42)
