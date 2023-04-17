@@ -49,6 +49,7 @@ add_llvm_target(NVPTXCodeGen
   Analysis
   AsmPrinter
   CodeGen
+  CodeGenTypes
   Core
   IPO
   MC
