@@ -5283,7 +5283,7 @@ public:
     //===------------------------------------------------------------------===//
     // FieldDesignatorInfo
 
-    /// Initializes a field designator.
+    /// Creates a field designator.
     static Designator CreateFieldDesignator(const IdentifierInfo *FieldName,
                                             SourceLocation DotLoc,
                                             SourceLocation FieldLoc) {
@@ -5294,15 +5294,14 @@ public:
 
     const IdentifierInfo *getFieldName() const;
 
-    FieldDecl *getField() const {
+    FieldDecl *getFieldDecl() const {
       assert(isFieldDesignator() && "Only valid on a field designator");
       if (FieldInfo.NameOrField & 0x01)
         return nullptr;
-      else
-        return reinterpret_cast<FieldDecl *>(FieldInfo.NameOrField);
+      return reinterpret_cast<FieldDecl *>(FieldInfo.NameOrField);
     }
 
-    void setField(FieldDecl *FD) {
+    void setFieldDecl(FieldDecl *FD) {
       assert(isFieldDesignator() && "Only valid on a field designator");
       FieldInfo.NameOrField = reinterpret_cast<uintptr_t>(FD);
     }
@@ -5320,7 +5319,7 @@ public:
     //===------------------------------------------------------------------===//
     // ArrayOrRangeDesignator
 
-    /// Initializes an array designator.
+    /// Creates an array designator.
     static Designator CreateArrayDesignator(unsigned Index,
                                             SourceLocation LBracketLoc,
                                             SourceLocation RBracketLoc) {
@@ -5330,7 +5329,7 @@ public:
       return D;
     }
 
-    /// Initializes a GNU array-range designator.
+    /// Creates a GNU array-range designator.
     static Designator CreateArrayRangeDesignator(unsigned Index,
                                                  SourceLocation LBracketLoc,
                                                  SourceLocation EllipsisLoc,
@@ -5364,12 +5363,6 @@ public:
       assert((isArrayDesignator() || isArrayRangeDesignator()) &&
              "Only valid on an array or array-range designator");
       return ArrayOrRangeInfo.RBracketLoc;
-    }
-
-    unsigned xgetFirstExprIndex() const {
-      assert((isArrayDesignator() || isArrayRangeDesignator()) &&
-             "Only valid on an array or array-range designator");
-      return ArrayOrRangeInfo.Index;
     }
 
     SourceLocation getBeginLoc() const LLVM_READONLY {
