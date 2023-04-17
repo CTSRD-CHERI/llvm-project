@@ -316,6 +316,7 @@ def CGetSealed : Cheri_r<0x5, "cgetsealed">;
 def CGetOffset : Cheri_r<0x6, "cgetoffset">;
 def CGetFlags  : Cheri_r<0x7, "cgetflags">;
 def CGetAddr   : Cheri_r<0xf, "cgetaddr">;
+def CGetHigh   : Cheri_r<0x17, "cgethigh">;
 }
 
 //===----------------------------------------------------------------------===//

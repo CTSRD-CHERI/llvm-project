@@ -36,6 +36,9 @@ cgetflags x1, c2
 # CHECK-INST: cgetaddr ra, csp
 # CHECK: encoding: [0xdb,0x00,0xf1,0xfe]
 cgetaddr x1, c2
+# CHECK-INST: cgethigh ra, csp
+# CHECK: encoding: [0xdb,0x00,0x71,0xff]
+cgethigh x1, c2
 
 # CHECK-INST: cseal cra, csp, cgp
 # CHECK: encoding: [0xdb,0x00,0x31,0x16]
