@@ -20,6 +20,8 @@
 #define cheri_address_get(x) __builtin_cheri_address_get(x)
 #define cheri_address_set(x, y) __builtin_cheri_address_set((x), (y))
 #define cheri_base_get(x) __builtin_cheri_base_get(x)
+#define cheri_high_get(x) __builtin_cheri_high_get(x)
+#define cheri_high_set(x, y) __builtin_cheri_high_set((x), (y))
 #define cheri_length_get(x) __builtin_cheri_length_get(x)
 #define cheri_offset_get(x) __builtin_cheri_offset_get(x)
 #define cheri_offset_set(x, y) __builtin_cheri_offset_set((x), (y))
