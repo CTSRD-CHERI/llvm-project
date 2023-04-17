@@ -4839,6 +4839,13 @@ void computeKnownFPClass(const Value *V, const APInt &DemandedElts,
     break;
   }
   case Instruction::FMul: {
+    // X * X is always non-negative or a NaN.
+    if (Op->getOperand(0) == Op->getOperand(1))
+      Known.knownNot(fcNegative);
+
+    if ((InterestedClasses & fcNan) != fcNan)
+      break;
+
     KnownFPClass KnownLHS, KnownRHS;
     computeKnownFPClass(Op->getOperand(1), DemandedElts,
                         fcNan | fcInf | fcZero | fcSubnormal, KnownRHS,
