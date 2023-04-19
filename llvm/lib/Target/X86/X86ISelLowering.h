@@ -410,6 +410,10 @@ namespace llvm {
     PTRXOR,
     PTRAND,
 
+    // Test representability of capability lengths.
+    CRAM,
+    CRRL,
+
     // Bit field extract.
     BEXTR,
     BEXTRI,

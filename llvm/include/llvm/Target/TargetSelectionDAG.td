@@ -462,6 +462,7 @@ def ptrsub     : SDNode<"ISD::PTRSUB"     , SDTFatPtrBinOp>;
 def ptrand     : SDNode<"ISD::PTRAND"     , SDTFatPtrBinOp>;
 def ptror      : SDNode<"ISD::PTROR"      , SDTFatPtrBinOp>;
 def ptrxor     : SDNode<"ISD::PTRXOR"     , SDTFatPtrBinOp>;
+def cram       : SDNode<"ISD::CRAM"       , SDTIntBinOp>;
 def addrspacecast : SDNode<"ISD::ADDRSPACECAST", SDTUnaryOp>;
 def extractelt : SDNode<"ISD::EXTRACT_VECTOR_ELT", SDTVecExtract>;
 def insertelt  : SDNode<"ISD::INSERT_VECTOR_ELT", SDTVecInsert>;

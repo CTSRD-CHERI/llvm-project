@@ -1316,6 +1316,25 @@ let isCompare = 1 in {
 defm SUB : ArithBinOp_RF<0x28, 0x2A, 0x2C, "sub", MRM5r, MRM5m,
                          X86sub_flag, sub, 0, 1, 0>;
 }
+//defm CRAM : ArithBinOp_RF<0x1F, 0x1F, 0x1F, "cram", MRM0r, MRM0m,
+//                         X86cram, cram, 0, 0, 0>;
+//def CRAM : BinOpMR_F<0x1F, "cram", Xi64, opnode>;
+//def CRAM : BinOpMR_RMW<0x1F, "cram", Xi64, cram>;
+
+let hasNoSchedulingInfo = 1, Predicates = [HasCHERI,In64BitMode] in {
+def CRAMrr : I<0x1F, MRMSrcReg, (outs GR64:$dst),
+                                 (ins GR64:$src1),
+                  "cram\t{$src1, $dst|$dst, $src1}",
+                  [(set GR64:$dst, (not GR64:$src1))]>;//, Requires<[In64BitMode];
+
+def CRAMrm : I<0x1F, MRMSrcMem, (outs GR64:$dst),
+                                 (ins i64mem:$src1),
+                  "cram\t{$src1, $dst|$dst, $src1}",
+                  [(set GR64:$dst, (not addr:$src1))]>;//, Requires<[In64BitMode];
+}
+//def : Pat<(store (X86cram GR64:$src, (loadi64 addr:$dst), EFLAGS),
+//                 addr:$dst),
+//          (CRAM64mr addr:$dst, GR64:$src)>;
 
 defm AND : ArithBinOp_CF<0x20, 0x22, 0x24, "and", MRM4r, MRM4m,
                          X86ptrand_flag, ptrand, 0>;

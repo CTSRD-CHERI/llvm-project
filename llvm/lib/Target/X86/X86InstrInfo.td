@@ -272,7 +272,7 @@ def X86xor_flag  : SDNode<"X86ISD::XOR",  SDTBinaryArithWithFlags,
                           [SDNPCommutative]>;
 def X86and_flag  : SDNode<"X86ISD::AND",  SDTBinaryArithWithFlags,
                           [SDNPCommutative]>;
-
+//def X86cram : SDNode<"X86ISD::CRAM",  SDTBinaryArithWithFlags>;
 def X86ptradd_flag : SDNode<"X86ISD::PTRADD",  SDTBinaryCapArithWithFlags>;
 def X86ptrsub_flag : SDNode<"X86ISD::PTRSUB",  SDTBinaryCapArithWithFlags>;
 def X86ptror_flag  : SDNode<"X86ISD::PTROR",   SDTBinaryCapArithWithFlags>;
