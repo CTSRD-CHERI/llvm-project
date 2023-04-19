@@ -1802,6 +1802,11 @@ void TypePrinter::printAttributedAfter(const AttributedType *T,
     return;
   }
 
+  if (T->getAttrKind() == attr::ArmStreaming) {
+    OS << "__arm_streaming";
+    return;
+  }
+
   OS << " __attribute__((";
   switch (T->getAttrKind()) {
 #define TYPE_ATTR(NAME)
@@ -1843,6 +1848,7 @@ void TypePrinter::printAttributedAfter(const AttributedType *T,
   case attr::CmseNSCall:
   case attr::AnnotateType:
   case attr::WebAssemblyFuncref:
+  case attr::ArmStreaming:
     llvm_unreachable("This attribute should have been handled already");
   case attr::CHERIMethodClass:
     OS << "cheri_method_class(" << "???" << ")"; break;
