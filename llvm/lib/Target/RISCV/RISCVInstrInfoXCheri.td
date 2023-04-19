@@ -1310,7 +1310,11 @@ def : PatGpcrSimm12<cptradd, CIncOffsetImm>;
 def : PatGpcrGpr<int_cheri_cap_bounds_set, CSetBounds>;
 def : PatGpcrGpr<int_cheri_cap_bounds_set_exact, CSetBoundsExact>;
 def : PatGpcrUimm12<int_cheri_cap_bounds_set, CSetBoundsImm>;
+let Predicates = [HasXCheriAll] in
 def : PatGpcr<int_cheri_cap_tag_clear, CClearTag, CLenVT>;
+let Predicates = [HasXCheriStdCompat] in
+def : Pat<(int_cheri_cap_tag_clear GPCR:$cs1),
+          (CSetHigh GPCR:$cs1, (CGetHigh GPCR:$cs1))>;
 def : PatGpcrGpcr<int_cheri_cap_build, CBuildCap>;
 def : PatGpcrGpcr<int_cheri_cap_type_copy, CCopyType>;
 def : PatGpcrGpcr<int_cheri_cap_conditional_seal, CCSeal>;
