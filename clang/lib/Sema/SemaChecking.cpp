@@ -236,6 +236,18 @@ static bool SemaBuiltinCHERICapCreate(Sema &S, CallExpr *TheCall) {
   return false;
 }
 
+/// Check whether we are targeting the RISC-V CHERI standard, and if we are emit
+/// an appropriate error message
+static bool checkNonStdCheriIntrin(Sema &S, CallExpr *TheCall) {
+  const auto &TI = S.Context.getTargetInfo();
+  if (TI.getTriple().isRISCV() && TI.hasFeature("xcheri-std-compat")) {
+    S.Diag(TheCall->getBeginLoc(), diag::err_riscv_builtin_requires_extension)
+        << true << TheCall->getSourceRange() << "xcheri (without std-compat)";
+    return true;
+  }
+  return false;
+}
+
 /// Check that argument \p ArgIndex is a capability type (or an array/function
 /// that decays to a capability type.
 static bool checkCapArg(Sema &S, CallExpr *TheCall, unsigned ArgIndex,
@@ -2639,10 +2651,16 @@ Sema::CheckBuiltinFunctionCall(FunctionDecl *FDecl, unsigned BuiltinID,
     }
     break;
   }
+  case Builtin::BI__builtin_cheri_cap_load_tags:
+    if (checkNonStdCheriIntrin(*this, TheCall))
+      return ExprError(); // Not supported in standard CHERI RISC-V
+    break;
   case Builtin::BI__builtin_cheri_seal:
   case Builtin::BI__builtin_cheri_unseal:
   case Builtin::BI__builtin_cheri_conditional_seal:
   case Builtin::BI__builtin_cheri_cap_type_copy: {
+    if (checkNonStdCheriIntrin(*this, TheCall))
+      return ExprError(); // Not supported in standard CHERI RISC-V
     // Seal/unseal work in almost same way as the setters: value to be
     // unsealed/sealed comes first and should therefore be the result type,
     // second argument is overloaded to be any capability type.
