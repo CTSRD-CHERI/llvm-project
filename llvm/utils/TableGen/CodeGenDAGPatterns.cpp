@@ -1772,7 +1772,7 @@ bool TreePatternNode::UpdateNodeTypeFromInst(unsigned ResNo,
 }
 
 bool TreePatternNode::ContainsUnresolvedType(TreePattern &TP) const {
-  for (unsigned i = 0, e = Types.size(); i != e; ++i)
+  for (unsigned i = 0, e = getNumTypes(); i != e; ++i)
     if (!TP.getInfer().isConcrete(Types[i], true))
       return true;
   for (unsigned i = 0, e = getNumChildren(); i != e; ++i)
@@ -1782,7 +1782,7 @@ bool TreePatternNode::ContainsUnresolvedType(TreePattern &TP) const {
 }
 
 bool TreePatternNode::hasProperTypeByHwMode() const {
-  for (const TypeSetByHwMode &S : Types)
+  for (const TypeSetByHwMode &S : getExtTypes())
     if (!S.isSimple())
       return true;
   for (const TreePatternNodePtr &C : Children)
@@ -1792,7 +1792,7 @@ bool TreePatternNode::hasProperTypeByHwMode() const {
 }
 
 bool TreePatternNode::hasPossibleType() const {
-  for (const TypeSetByHwMode &S : Types)
+  for (const TypeSetByHwMode &S : getExtTypes())
     if (!S.isPossible())
       return false;
   for (const TreePatternNodePtr &C : Children)
@@ -1802,7 +1802,7 @@ bool TreePatternNode::hasPossibleType() const {
 }
 
 bool TreePatternNode::setDefaultMode(unsigned Mode) {
-  for (TypeSetByHwMode &S : Types) {
+  for (TypeSetByHwMode &S : getExtTypes()) {
     S.makeSimple(Mode);
     // Check if the selected mode had a type conflict.
     if (S.get(DefaultMode).empty())
@@ -1942,7 +1942,7 @@ void TreePatternNode::print(raw_ostream &OS) const {
   else
     OS << '(' << getOperator()->getName();
 
-  for (unsigned i = 0, e = Types.size(); i != e; ++i) {
+  for (unsigned i = 0, e = getNumTypes(); i != e; ++i) {
     OS << ':';
     getExtType(i).writeToStream(OS);
   }
@@ -2034,7 +2034,7 @@ TreePatternNodePtr TreePatternNode::clone() const {
   }
   New->setName(getName());
   New->setNamesAsPredicateArg(getNamesAsPredicateArg());
-  New->Types = Types;
+  llvm::copy(getExtTypes(), New->getExtTypes().begin());
   New->setPredicateCalls(getPredicateCalls());
   New->setGISelFlagsRecord(getGISelFlagsRecord());
   New->setTransformFn(getTransformFn());
@@ -2044,7 +2044,7 @@ TreePatternNodePtr TreePatternNode::clone() const {
 /// RemoveAllTypes - Recursively strip all the types of this tree.
 void TreePatternNode::RemoveAllTypes() {
   // Reset to unknown type.
-  std::fill(Types.begin(), Types.end(), TypeSetByHwMode());
+  std::fill(getExtTypes().begin(), getExtTypes().end(), TypeSetByHwMode());
   if (isLeaf()) return;
   for (unsigned i = 0, e = getNumChildren(); i != e; ++i)
     getChild(i)->RemoveAllTypes();
@@ -2140,10 +2140,10 @@ void TreePatternNode::InlinePatternFragments(
       R->setPredicateCalls(getPredicateCalls());
       R->setGISelFlagsRecord(getGISelFlagsRecord());
       R->setTransformFn(getTransformFn());
-      for (unsigned i = 0, e = getNumTypes(); i != e; ++i)
+      for (unsigned i = 0, e = getNumTypes(); i != e; ++i) {
         R->setType(i, getExtType(i));
-      for (unsigned i = 0, e = getNumResults(); i != e; ++i)
         R->setResultIndex(i, getResultIndex(i));
+      }
 
       // Register alternative.
       OutAlternatives.push_back(R);
@@ -2479,7 +2479,7 @@ bool TreePatternNode::ApplyTypeConstraints(TreePattern &TP, bool NotRegisters) {
     if (DefInit *DI = dyn_cast<DefInit>(getLeafValue())) {
       // If it's a regclass or something else known, include the type.
       bool MadeChange = false;
-      for (unsigned i = 0, e = Types.size(); i != e; ++i)
+      for (unsigned i = 0, e = getNumTypes(); i != e; ++i)
         MadeChange |= UpdateNodeType(i, getImplicitType(DI->getDef(), i,
                                                         NotRegisters,
                                                         !hasName(), TP), TP);
@@ -2487,7 +2487,7 @@ bool TreePatternNode::ApplyTypeConstraints(TreePattern &TP, bool NotRegisters) {
     }
 
     if (IntInit *II = dyn_cast<IntInit>(getLeafValue())) {
-      assert(Types.size() == 1 && "Invalid IntInit");
+      assert(getNumTypes() == 1 && "Invalid IntInit");
 
       // Int inits are always integers. :)
       bool MadeChange = TP.getInfer().EnforceInteger(Types[0]);
@@ -2722,7 +2722,7 @@ bool TreePatternNode::ApplyTypeConstraints(TreePattern &TP, bool NotRegisters) {
     bool MadeChange = false;
 
     if (!NotRegisters) {
-      assert(Types.size() == 1 && "ComplexPatterns only produce one result!");
+      assert(getNumTypes() == 1 && "ComplexPatterns only produce one result!");
       Record *T = CDP.getComplexPattern(getOperator()).getValueType();
       const CodeGenHwModes &CGH = CDP.getTargetInfo().getHwModes();
       const ValueTypeByHwMode VVT = getValueTypeByHwMode(T, CGH);
