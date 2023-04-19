@@ -1325,12 +1325,22 @@ let hasNoSchedulingInfo = 1, Predicates = [HasCHERI,In64BitMode] in {
 def CRAMrr : I<0x1F, MRMSrcReg, (outs GR64:$dst),
                                  (ins GR64:$src1),
                   "cram\t{$src1, $dst|$dst, $src1}",
-                  [(set GR64:$dst, (not GR64:$src1))]>;//, Requires<[In64BitMode];
+                  [(set GR64:$dst, (int_cheri_round_representable_length GR64:$src1))]>;
 
 def CRAMrm : I<0x1F, MRMSrcMem, (outs GR64:$dst),
                                  (ins i64mem:$src1),
                   "cram\t{$src1, $dst|$dst, $src1}",
-                  [(set GR64:$dst, (not addr:$src1))]>;//, Requires<[In64BitMode];
+                  [(set GR64:$dst, (int_cheri_round_representable_length addr:$src1))]>;
+
+def CRRLrr : I<0x1E, MRMSrcReg, (outs GR64:$dst),
+                                 (ins GR64:$src1),
+                  "crrl\t{$src1, $dst|$dst, $src1}",
+                  [(set GR64:$dst, (int_cheri_representable_alignment_mask GR64:$src1))]>;
+
+def CRRLrm : I<0x1E, MRMSrcMem, (outs GR64:$dst),
+                                 (ins i64mem:$src1),
+                  "crrl\t{$src1, $dst|$dst, $src1}",
+                  [(set GR64:$dst, (int_cheri_representable_alignment_mask addr:$src1))]>;
 }
 //def : Pat<(store (X86cram GR64:$src, (loadi64 addr:$dst), EFLAGS),
 //                 addr:$dst),
