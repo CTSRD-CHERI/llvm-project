@@ -5227,9 +5227,7 @@ bool AArch64TargetLowering::shouldRemoveExtendFromGSIndex(EVT IndexVT,
 
 bool AArch64TargetLowering::isVectorLoadExtDesirable(SDValue ExtVal) const {
   return ExtVal.getValueType().isScalableVector() ||
-         useSVEForFixedLengthVectorVT(
-             ExtVal.getValueType(),
-             /*OverrideNEON=*/Subtarget->useSVEForFixedLengthVectors());
+         Subtarget->useSVEForFixedLengthVectors();
 }
 
 unsigned getGatherVecOpcode(bool IsScaled, bool IsSigned, bool NeedsExtend) {
