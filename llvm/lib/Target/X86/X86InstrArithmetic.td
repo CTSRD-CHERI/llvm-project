@@ -1325,22 +1325,34 @@ let hasNoSchedulingInfo = 1, Predicates = [HasCHERI,In64BitMode] in {
 def CRAMrr : I<0x1F, MRMSrcReg, (outs GR64:$dst),
                                  (ins GR64:$src1),
                   "cram\t{$src1, $dst|$dst, $src1}",
-                  [(set GR64:$dst, (int_cheri_round_representable_length GR64:$src1))]>;
+                  [(set GR64:$dst, (int_cheri_representable_alignment_mask GR64:$src1))]>;
 
 def CRAMrm : I<0x1F, MRMSrcMem, (outs GR64:$dst),
                                  (ins i64mem:$src1),
                   "cram\t{$src1, $dst|$dst, $src1}",
-                  [(set GR64:$dst, (int_cheri_round_representable_length addr:$src1))]>;
+                  [(set GR64:$dst, (int_cheri_representable_alignment_mask addr:$src1))]>;
 
 def CRRLrr : I<0x1E, MRMSrcReg, (outs GR64:$dst),
                                  (ins GR64:$src1),
                   "crrl\t{$src1, $dst|$dst, $src1}",
-                  [(set GR64:$dst, (int_cheri_representable_alignment_mask GR64:$src1))]>;
+                  [(set GR64:$dst, (int_cheri_round_representable_length GR64:$src1))]>;
 
 def CRRLrm : I<0x1E, MRMSrcMem, (outs GR64:$dst),
                                  (ins i64mem:$src1),
                   "crrl\t{$src1, $dst|$dst, $src1}",
-                  [(set GR64:$dst, (int_cheri_representable_alignment_mask addr:$src1))]>;
+                  [(set GR64:$dst, (int_cheri_round_representable_length addr:$src1))]>;
+
+def GCBASErr : I<0x7A, MRMSrcReg, (outs GR64:$dst),
+                                 (ins GRC:$src1),
+                  "gcbase\t{$src1, $dst|$dst, $src1}",
+                  [(set GR64:$dst, (int_cheri_cap_base_get GRC:$src1))]>,
+                  XD;
+
+def GCBASErm : I<0x7A, MRMSrcMem, (outs GR64:$dst),
+                                 (ins capmem:$src1),
+                  "gcbase\t{$src1, $dst|$dst, $src1}",
+                  [(set GR64:$dst, (int_cheri_cap_base_get addr:$src1))]>,
+                  XD;
 }
 //def : Pat<(store (X86cram GR64:$src, (loadi64 addr:$dst), EFLAGS),
 //                 addr:$dst),
