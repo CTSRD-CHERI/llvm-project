@@ -78,9 +78,8 @@ public:
   // Add a __cap_relocs section from in input object file
   template <class ELFT>
   void addSection(InputSectionBase *s);
-  bool isNeeded() const override { return !relocsMap.empty() || !legacyInputs.empty(); }
+  bool isNeeded() const override { return !relocsMap.empty(); }
   size_t getSize() const override { return relocsMap.size() * entsize; }
-  void finalizeContents() override;
   void writeTo(uint8_t *buf) override;
   template <class ELFT>
   void addCapReloc(CheriCapRelocLocation loc, const SymbolAndOffset &target,
@@ -108,12 +107,9 @@ private:
   // TODO: list of added dynamic relocations?
 
   llvm::MapVector<CheriCapRelocLocation, CheriCapReloc> relocsMap;
-  std::vector<InputSectionBase *> legacyInputs;
   // If we have dynamic relocations we can't sort the __cap_relocs section
   // before writing it. TODO: actually we can but it will require refactoring
   bool containsDynamicRelocations = false;
-  // If this is true reduce number of warnings for compat
-  bool containsLegacyCapRelocs() const { return !legacyInputs.empty(); }
 };
 
 // General cap table structure (for CapSize = 2*WordSize):
