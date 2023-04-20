@@ -167,21 +167,6 @@ void elf::combineEhSections() {
   llvm::erase_value(inputSections, nullptr);
 }
 
-void elf::combineCapRelocsSections() {
-  for (InputSectionBase *&s : inputSections) {
-    if (s->name != "__cap_relocs")
-      continue;
-    // Factory.addInputSec(S, getOutputSectionName(S->Name), InX<ELFT>::CapRelocs->OutSec);
-
-    // We only gather the sections here and add the cap_relocs during
-    // finalizeContents() The reason for this is that we don't know if symbols
-    // are preemptible when this function is called.
-    invokeELFT(in.capRelocs->addSection, s);
-    s = nullptr;
-  }
-  llvm::erase_value(inputSections, nullptr);
-}
-
 static Defined *addOptionalRegular(StringRef name, SectionBase *sec,
                                    uint64_t val, uint8_t stOther = STV_HIDDEN,
                                    bool canBeSectionStart = true) {

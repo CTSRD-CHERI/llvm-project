@@ -46,42 +46,6 @@ CheriCapRelocsSection::CheriCapRelocsSection()
   this->entsize = config->wordsize * 5;
 }
 
-// TODO: copy MipsABIFlagsSection::create() instead of current impl?
-template <class ELFT>
-void CheriCapRelocsSection::addSection(InputSectionBase *s) {
-  // FIXME: can this happen with ld -r ?
-  // error("Compiler should not have generated __cap_relocs section for " + toString(S));
-  assert(s->name == "__cap_relocs");
-  const RelsOrRelas<ELFT> rels = s->relsOrRelas<ELFT>();
-  assert(!rels.areRelocsRel() && "__cap_relocs should be RELA");
-  // make sure the section is no longer processed
-  s->markDead();
-
-  if ((s->getSize() % entsize) != 0) {
-    error("__cap_relocs section size is not a multiple of " + Twine(entsize) +
-          ": " + toString(s));
-    return;
-  }
-  size_t numCapRelocs = s->getSize() / InMemoryCapRelocEntry<ELFT>::relocSize;
-  if (numCapRelocs * 2 != rels.relas.size()) {
-    error("expected " + Twine(numCapRelocs * 2) + " relocations for " +
-          toString(s) + " but got " + Twine(rels.relas.size()));
-    return;
-  }
-  if (config->verboseCapRelocs)
-    message("Adding cap relocs from " + toString(s->file) + "\n");
-
-  legacyInputs.push_back(s);
-}
-
-void CheriCapRelocsSection::finalizeContents() {
-  for (InputSectionBase *s : legacyInputs) {
-    if (config->verboseCapRelocs)
-      message("Processing legacy cap relocs from " + toString(s->file) + "\n");
-    invokeELFT(processSection, s);
-  }
-}
-
 SymbolAndOffset
 SymbolAndOffset::fromSectionWithOffset(InputSectionBase *isec, int64_t offset,
                                        const SymbolAndOffset *Default) {
@@ -363,7 +327,7 @@ void CheriCapRelocsSection::addCapReloc(CheriCapRelocLocation loc,
 
 template<typename ELFT>
 static uint64_t getTargetSize(const CheriCapRelocLocation &location,
-                              const CheriCapReloc &reloc, bool strict) {
+                              const CheriCapReloc &reloc) {
   uint64_t targetSize = reloc.target.sym()->getSize();
   if (targetSize > INT_MAX) {
     error("Insanely large symbol size for " + reloc.target.verboseToString() +
@@ -447,10 +411,7 @@ static uint64_t getTargetSize(const CheriCapRelocLocation &location,
       std::string msg = "could not determine size of cap reloc against " +
           reloc.target.verboseToString() +
           "\n>>> referenced by " + location.toString();
-      if (strict)
-        warn(msg);
-      else
-        nonFatalWarning(msg);
+      warn(msg);
     }
     if (UnknownSectionSize) {
       warn("Could not find size for symbol " + reloc.target.verboseToString() +
@@ -509,8 +470,7 @@ void CheriCapRelocsSection::writeToImpl(uint8_t *buf) {
       targetVA = reloc.target.offset;
     } else {
       // For non-preemptible symbols we can write the target size:
-      targetSize = getTargetSize<ELFT>(location, reloc,
-                                       /*strict=*/!containsLegacyCapRelocs());
+      targetSize = getTargetSize<ELFT>(location, reloc);
     }
     uint64_t targetOffset = reloc.capabilityOffset;
     uint64_t permissions = 0;
@@ -948,11 +908,6 @@ void CheriCapTableSection::assignValuesAndAddCapTableSymbols() {
 
   valuesAssigned = true;
 }
-
-template void CheriCapRelocsSection::addSection<ELF32LE>(InputSectionBase *s);
-template void CheriCapRelocsSection::addSection<ELF32BE>(InputSectionBase *s);
-template void CheriCapRelocsSection::addSection<ELF64LE>(InputSectionBase *s);
-template void CheriCapRelocsSection::addSection<ELF64BE>(InputSectionBase *s);
 
 template void
 CheriCapTableSection::assignValuesAndAddCapTableSymbols<ELF32LE>();

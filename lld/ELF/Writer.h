@@ -23,7 +23,6 @@ class InputSectionBase;
 void copySectionsIntoPartitions();
 template <class ELFT> void createSyntheticSections();
 void combineEhSections();
-void combineCapRelocsSections();
 template <class ELFT> void writeResult();
 
 // This describes a program header entry.
