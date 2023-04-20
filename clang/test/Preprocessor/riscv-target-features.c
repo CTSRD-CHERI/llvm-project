@@ -782,7 +782,7 @@
 // CHECK-ZACAS-EXT: __riscv_zacas 1000000{{$}}
 
 // RUN: %clang -target riscv64-unknown-none -march=rv64gcxcheri -x c -E -dM %s \
-// RUN:   -o - | FileCheck %s --check-prefixes=CHECK-XCHERI,CHECK-XCHERI-NO-STD-COMPAT --implicit-check-not=__riscv_
+// RUN:   -o - | FileCheck %s --check-prefixes=CHECK-XCHERI --implicit-check-not=__riscv_
 // RUN: %clang -target riscv64-unknown-none -march=rv64gcxcheri -mxcheri-std-compat -x c -E -dM %s \
 // RUN:   -o - | FileCheck %s --check-prefixes=CHECK-XCHERI,CHECK-XCHERI-STD-COMPAT --implicit-check-not=__riscv_
 
@@ -806,12 +806,10 @@
 // CHECK-XCHERI-NEXT: #define __riscv_m 2000000
 // CHECK-XCHERI-NEXT: #define __riscv_mul 1
 // CHECK-XCHERI-NEXT: #define __riscv_muldiv 1
-// FIXME: xcheri should be defined for std-compat
-// CHECK-XCHERI-NO-STD-COMPAT-NEXT: #define __riscv_xcheri 0
-// FIXME: The next one should use underscores!
-// CHECK-XCHERI-STD-COMPAT-NEXT: #define __riscv_xcheri -std-compat 0
+// CHECK-XCHERI-NEXT: #define __riscv_xcheri 0
 // CHECK-XCHERI-NEXT: #define __riscv_xcheri_mode_dependent_jumps 1
 // CHECK-XCHERI-NEXT: #define __riscv_xcheri_no_relocation 1
+// CHECK-XCHERI-STD-COMPAT-NEXT: #define __riscv_xcheri_std_compat 0
 // CHECK-XCHERI-NEXT: #define __riscv_xcheri_tag_clear 1
 // CHECK-XCHERI-NEXT: #define __riscv_xlen 64
 // CHECK-XCHERI-NEXT: #define __riscv_zicsr 2000000

@@ -177,8 +177,11 @@ void RISCVTargetInfo::getTargetDefines(const LangOptions &Opts,
     auto ExtName = Extension.first;
     auto ExtInfo = Extension.second;
 
+    // Replace '-' with '_' to ensure the result is a single PP token.
+    std::string EscapedName = ExtName;
+    std::replace(EscapedName.begin(), EscapedName.end(), '-', '_');
     Builder.defineMacro(
-        Twine("__riscv_", ExtName),
+        Twine("__riscv_", EscapedName),
         Twine(getVersionValue(ExtInfo.MajorVersion, ExtInfo.MinorVersion)));
   }
 
