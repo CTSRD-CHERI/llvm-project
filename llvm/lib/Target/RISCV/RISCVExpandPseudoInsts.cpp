@@ -62,6 +62,10 @@ private:
   bool expandCapLoadTLSGDCap(MachineBasicBlock &MBB,
                              MachineBasicBlock::iterator MBBI,
                              MachineBasicBlock::iterator &NextMBBI);
+  bool expandCheriExplicitCapLoadStore(MachineBasicBlock &MBB,
+                                       MachineBasicBlock::iterator MBBI,
+                                       unsigned ExplicitModeOp,
+                                       unsigned OtherModeOp, bool IsCapOp);
   bool expandCGetAddr(MachineBasicBlock &MBB, MachineBasicBlock::iterator MBBI);
   bool expandCCOp(MachineBasicBlock &MBB, MachineBasicBlock::iterator MBBI,
                   MachineBasicBlock::iterator &NextMBBI);
@@ -130,6 +134,24 @@ bool RISCVExpandPseudo::expandMI(MachineBasicBlock &MBB,
     return expandCapLoadLocalCap(MBB, MBBI, NextMBBI);
   case RISCV::PseudoCLGC:
     return expandCapLoadGlobalCap(MBB, MBBI, NextMBBI);
+#define EXPAND_MODE(insn)                                                      \
+  case RISCV::Pseudo_##insn##_CAP:                                             \
+    return expandCheriExplicitCapLoadStore(MBB, MBBI, RISCV::insn##_CAP,       \
+                                           RISCV::insn, true);                 \
+  case RISCV::Pseudo_##insn##_DDC:                                             \
+    return expandCheriExplicitCapLoadStore(MBB, MBBI, RISCV::insn##_DDC,       \
+                                           RISCV::C##insn, false);
+
+    EXPAND_MODE(LB)
+    EXPAND_MODE(LBU)
+    EXPAND_MODE(LH)
+    EXPAND_MODE(LHU)
+    EXPAND_MODE(LW)
+    EXPAND_MODE(LWU)
+    EXPAND_MODE(LD)
+    EXPAND_MODE(LC_64)
+    EXPAND_MODE(LC_128)
+
   case RISCV::PseudoCLA_TLS_IE:
     return expandCapLoadTLSIEAddress(MBB, MBBI, NextMBBI);
   case RISCV::PseudoCLC_TLS_GD:
@@ -255,6 +277,52 @@ bool RISCVExpandPseudo::expandCapLoadTLSGDCap(
   return expandAuipccInstPair(MBB, MBBI, NextMBBI,
                               RISCVII::MO_TLS_GD_CAPTAB_PCREL_HI,
                               RISCV::CIncOffsetImm);
+}
+
+/// Expands an expilict capability load (in hybrid mode) to a mode switch around
+/// the normal load/store operation to execute it in capability mode.
+bool RISCVExpandPseudo::expandCheriExplicitCapLoadStore(
+    MachineBasicBlock &MBB, MachineBasicBlock::iterator MBBI,
+    unsigned ExplicitModeOp, unsigned OtherModeOp, bool IsCapOp) {
+  MachineFunction *MF = MBB.getParent();
+  MachineInstr &MI = *MBBI;
+  DebugLoc DL = MI.getDebugLoc();
+  if (MF->getSubtarget<RISCVSubtarget>().hasXCheriNonStd()) {
+    // If we have the non-standard extensions, use the explicit mode insns.
+    BuildMI(MBB, MBBI, DL, TII->get(ExplicitModeOp))
+        .add(MI.getOperand(0))
+        .add(MI.getOperand(1));
+    MI.eraseFromParent();
+    return true;
+  }
+  Register BaseReg;
+  auto *TRI = MF->getRegInfo().getTargetRegisterInfo();
+  if (IsCapOp)
+    BaseReg = TRI->getSubReg(MI.getOperand(1).getReg(), RISCV::sub_cap_addr);
+  else
+    BaseReg = TRI->getMatchingSuperReg(
+        MI.getOperand(1).getReg(), RISCV::sub_cap_addr, &RISCV::GPCRRegClass);
+
+  assert(BaseReg.isValid());
+
+  // NB: We emit the "wrong mode" load/store here since using the other
+  // instruction will result in e.g. "Attempting to emit CLB instruction but the
+  // Feature_IsCapMode predicate(s) are not met". This is safe since the raw
+  // encoding is the same.
+  // Note: This pass runs right at the end of the pipeline, so instructions will
+  // not move around (so we don't need a TargetOpcode::BUNDLE here which is
+  // not handled by the remaining RISC-V codegen infrastructure).
+  BuildMI(MBB, MBBI, DL,
+          TII->get(IsCapOp ? RISCV::ModeSwitchCap : RISCV::ModeSwitchInt));
+  BuildMI(MBB, MBBI, DL, TII->get(OtherModeOp))
+      .add(MI.getOperand(0))
+      .addReg(BaseReg, MI.getOperand(1).getTargetFlags())
+      .addImm(0);
+  BuildMI(MBB, MBBI, DL,
+          TII->get(IsCapOp ? RISCV::ModeSwitchInt : RISCV::ModeSwitchCap));
+  MI.eraseFromParent();
+
+  return true;
 }
 
 bool RISCVExpandPseudo::expandCGetAddr(MachineBasicBlock &MBB,
