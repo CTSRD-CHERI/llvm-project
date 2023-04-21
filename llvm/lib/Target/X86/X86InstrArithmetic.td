@@ -1353,6 +1353,18 @@ def GCBASErm : I<0x7A, MRMSrcMem, (outs GR64:$dst),
                   "gcbase\t{$src1, $dst|$dst, $src1}",
                   [(set GR64:$dst, (int_cheri_cap_base_get addr:$src1))]>,
                   XD;
+
+def GCLENrr : I<0x7A, MRMSrcReg, (outs GR64:$dst),
+                                 (ins GRC:$src1),
+                  "gclen\t{$src1, $dst|$dst, $src1}",
+                  [(set GR64:$dst, (int_cheri_cap_length_get GRC:$src1))]>,
+                  XS;
+
+def GCLENrm : I<0x7A, MRMSrcMem, (outs GR64:$dst),
+                                 (ins capmem:$src1),
+                  "gclen\t{$src1, $dst|$dst, $src1}",
+                  [(set GR64:$dst, (int_cheri_cap_length_get addr:$src1))]>,
+                  XS;
 }
 //def : Pat<(store (X86cram GR64:$src, (loadi64 addr:$dst), EFLAGS),
 //                 addr:$dst),
