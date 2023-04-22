@@ -1401,6 +1401,18 @@ def GCTAGrm : I<0x7B, MRMSrcMem, (outs GR64:$dst),
                   "gctag\t{$src1, $dst|$dst, $src1}",
                   [(set GR64:$dst, (int_cheri_cap_tag_get addr:$src1))]>,
                   TB;
+
+def GCTYPErr : I<0x7A, MRMSrcReg, (outs GR64:$dst),
+                                 (ins GRC:$src1),
+                  "gctype\t{$src1, $dst|$dst, $src1}",
+                  [(set GR64:$dst, (int_cheri_cap_type_get GRC:$src1))]>,
+                  PD;
+
+def GCTYPErm : I<0x7A, MRMSrcMem, (outs GR64:$dst),
+                                 (ins capmem:$src1),
+                  "gctype\t{$src1, $dst|$dst, $src1}",
+                  [(set GR64:$dst, (int_cheri_cap_type_get addr:$src1))]>,
+                  PD;
 }
 //def : Pat<(store (X86cram GR64:$src, (loadi64 addr:$dst), EFLAGS),
 //                 addr:$dst),
