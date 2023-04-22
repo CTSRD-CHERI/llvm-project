@@ -1377,6 +1377,18 @@ def GCOFFrm : I<0x7B, MRMSrcMem, (outs GR64:$dst),
                   "gcoff\t{$src1, $dst|$dst, $src1}",
                   [(set GR64:$dst, (int_cheri_cap_offset_get addr:$src1))]>,
                   PD;
+
+def GCPERMrr : I<0x7A, MRMSrcReg, (outs GR64:$dst),
+                                 (ins GRC:$src1),
+                  "gcperm\t{$src1, $dst|$dst, $src1}",
+                  [(set GR64:$dst, (int_cheri_cap_perms_get GRC:$src1))]>,
+                  TB;
+
+def GCPERMrm : I<0x7A, MRMSrcMem, (outs GR64:$dst),
+                                 (ins capmem:$src1),
+                  "gcperm\t{$src1, $dst|$dst, $src1}",
+                  [(set GR64:$dst, (int_cheri_cap_perms_get addr:$src1))]>,
+                  TB;
 }
 //def : Pat<(store (X86cram GR64:$src, (loadi64 addr:$dst), EFLAGS),
 //                 addr:$dst),
