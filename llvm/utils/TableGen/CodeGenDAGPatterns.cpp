@@ -4425,6 +4425,9 @@ static void collectModes(std::set<unsigned> &Modes, const TreePatternNode *N) {
 
 void CodeGenDAGPatterns::ExpandHwModeBasedTypes() {
   const CodeGenHwModes &CGH = getTargetInfo().getHwModes();
+  if (CGH.getNumModeIds() == 1)
+    return;
+
   std::vector<PatternToMatch> Copy;
   PatternsToMatch.swap(Copy);
 
