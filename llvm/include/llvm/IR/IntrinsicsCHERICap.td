@@ -51,7 +51,7 @@ def int_cheri_cap_type_get :
             [IntrNoMem, IntrWillReturn]>;
 def int_cheri_cap_tag_get  :
   GCCBuiltin<"__builtin_cheri_tag_get">,
-  Intrinsic<[llvm_i1_ty],
+  Intrinsic<[llvm_anyint_ty],
             [llvm_fatptr_ty],
             [IntrNoMem, IntrWillReturn]>;
 def int_cheri_cap_sealed_get  :
