@@ -151,6 +151,12 @@ bool RISCVExpandPseudo::expandMI(MachineBasicBlock &MBB,
     EXPAND_MODE(LD)
     EXPAND_MODE(LC_64)
     EXPAND_MODE(LC_128)
+    EXPAND_MODE(SB)
+    EXPAND_MODE(SH)
+    EXPAND_MODE(SW)
+    EXPAND_MODE(SD)
+    EXPAND_MODE(SC_64)
+    EXPAND_MODE(SC_128)
 
   case RISCV::PseudoCLA_TLS_IE:
     return expandCapLoadTLSIEAddress(MBB, MBBI, NextMBBI);

@@ -188,6 +188,20 @@ class CheriStore_r<bits<5> op, string opcodestr, RegisterClass rs2Class,
                         (ins rs2Class:$rs2, rs1Operand:$rs1),
                         opcodestr, "$rs2, $rs1">;
 
+multiclass ExplicitCheriStore_r<bits<5> op, string opcodestr, RegisterClass rs2Class,
+                                RegisterOperand rs1Operand,
+                                list<Predicate> ExtraPreds = []> {
+  let Predicates = !listconcat([HasXCheriAll], ExtraPreds) in
+  def NAME: CheriStore_r<op, opcodestr, rs2Class, rs1Operand>;
+  // Adding a mode switch either side of the load expands to 3 instructions.
+  // The predicate here is HasCheriCommon, since in the xcheri case we can
+  // just expand this to an explicit mode load.
+  let hasSideEffects = 0, mayLoad = 0, mayStore = 1, Size = 12,
+      Predicates = !listconcat([HasCheriCommon], ExtraPreds) in
+  def Pseudo_#NAME : Pseudo<(outs), (ins rs2Class:$rs2, rs1Operand:$rs1), [],
+                            "pseudo_"#opcodestr, "$rs2, $rs1">;
+}
+
 let hasSideEffects = 0, mayLoad = 0, mayStore = 1, Constraints = "$rd = $rs2" in
 class CheriStoreCond_r<bits<5> op, string opcodestr, RegisterClass rs2Class,
                        RegisterOperand rs1Operand>
@@ -574,22 +588,13 @@ defm LC_64_DDC  : ExplicitCheriLoad_r<0b00011, "lc.ddc", GPCR, GPRMemZeroOffset,
 
 defm LC_128_DDC : ExplicitCheriLoad_r<0b10111, "lc.ddc", GPCR, GPRMemZeroOffset, [IsRV64]>;
 
-let Predicates = [HasXCheriAll] in {
-def SB_DDC  : CheriStore_r<0b00000, "sb.ddc", GPR, GPRMemZeroOffset>;
-def SH_DDC  : CheriStore_r<0b00001, "sh.ddc", GPR, GPRMemZeroOffset>;
-def SW_DDC  : CheriStore_r<0b00010, "sw.ddc", GPR, GPRMemZeroOffset>;
-}
-
-let Predicates = [HasXCheriAll, IsRV64] in {
-def SD_DDC  : CheriStore_r<0b00011, "sd.ddc", GPR, GPRMemZeroOffset>;
-}
-
-let DecoderNamespace = "RISCV32Only_",
-    Predicates = [HasXCheriAll, IsRV32] in
-def SC_DDC_64  : CheriStore_r<0b00011, "sc.ddc", GPCR, GPRMemZeroOffset>;
-
-let Predicates = [HasXCheriAll, IsRV64] in
-def SC_DDC_128 : CheriStore_r<0b00100, "sc.ddc", GPCR, GPRMemZeroOffset>;
+defm SB_DDC  : ExplicitCheriStore_r<0b00000, "sb.ddc", GPR, GPRMemZeroOffset>;
+defm SH_DDC  : ExplicitCheriStore_r<0b00001, "sh.ddc", GPR, GPRMemZeroOffset>;
+defm SW_DDC  : ExplicitCheriStore_r<0b00010, "sw.ddc", GPR, GPRMemZeroOffset>;
+defm SD_DDC  : ExplicitCheriStore_r<0b00011, "sd.ddc", GPR, GPRMemZeroOffset, [IsRV64]>;
+let DecoderNamespace = "RISCV32Only_" in
+defm SC_64_DDC  : ExplicitCheriStore_r<0b00011, "sc.ddc", GPCR, GPRMemZeroOffset, [IsRV32]>;
+defm SC_128_DDC : ExplicitCheriStore_r<0b00100, "sc.ddc", GPCR, GPRMemZeroOffset, [IsRV64]>;
 
 defm LB_CAP  : ExplicitCheriLoad_r<0b01000, "lb.cap",  GPR, GPCRMemZeroOffset>;
 defm LH_CAP  : ExplicitCheriLoad_r<0b01001, "lh.cap",  GPR, GPCRMemZeroOffset>;
@@ -605,22 +610,13 @@ defm LC_64_CAP  : ExplicitCheriLoad_r<0b01011, "lc.cap", GPCR, GPCRMemZeroOffset
 
 defm LC_128_CAP : ExplicitCheriLoad_r<0b11111, "lc.cap", GPCR, GPCRMemZeroOffset, [IsRV64]>;
 
-let Predicates = [HasXCheriAll] in {
-def SB_CAP  : CheriStore_r<0b01000, "sb.cap", GPR, GPCRMemZeroOffset>;
-def SH_CAP  : CheriStore_r<0b01001, "sh.cap", GPR, GPCRMemZeroOffset>;
-def SW_CAP  : CheriStore_r<0b01010, "sw.cap", GPR, GPCRMemZeroOffset>;
-}
-
-let Predicates = [HasXCheriAll, IsRV64] in {
-def SD_CAP  : CheriStore_r<0b01011, "sd.cap", GPR, GPCRMemZeroOffset>;
-}
-
-let DecoderNamespace = "RISCV32Only_",
-    Predicates = [HasXCheriAll, IsRV32] in
-def SC_CAP_64  : CheriStore_r<0b01011, "sc.cap", GPCR, GPCRMemZeroOffset>;
-
-let Predicates = [HasXCheriAll, IsRV64] in
-def SC_CAP_128 : CheriStore_r<0b01100, "sc.cap", GPCR, GPCRMemZeroOffset>;
+defm SB_CAP  : ExplicitCheriStore_r<0b01000, "sb.cap", GPR, GPCRMemZeroOffset>;
+defm SH_CAP  : ExplicitCheriStore_r<0b01001, "sh.cap", GPR, GPCRMemZeroOffset>;
+defm SW_CAP  : ExplicitCheriStore_r<0b01010, "sw.cap", GPR, GPCRMemZeroOffset>;
+defm SD_CAP  : ExplicitCheriStore_r<0b01011, "sd.cap", GPR, GPCRMemZeroOffset, [IsRV64]>;
+let DecoderNamespace = "RISCV32Only_" in
+defm SC_64_CAP  : ExplicitCheriStore_r<0b01011, "sc.cap", GPCR, GPCRMemZeroOffset, [IsRV32]>;
+defm SC_128_CAP : ExplicitCheriStore_r<0b01100, "sc.cap", GPCR, GPCRMemZeroOffset, [IsRV64]>;
 
 let Predicates = [HasXCheriAll, HasStdExtA] in {
 def LR_B_DDC  : CheriLoad_r<0b10000, "lr.b.ddc",  GPR, GPRMemZeroOffset>;
@@ -1525,7 +1521,8 @@ multiclass CheriExplicitStPat<PatFrag StoreOp, RVInst Inst,
                               RegisterClass StTy, RegisterClass AddrTy,
                               ValueType StoreVt = XLenVT,
                               ValueType AddrVt = XLenVT> {
-  def : Pat<(StoreOp (StoreVt StTy:$rs2), (AddrVt AddrTy:$rs1)), (Inst StTy:$rs2, AddrTy:$rs1)>;
+  def : Pat<(StoreOp (StoreVt StTy:$rs2), (AddrVt AddrTy:$rs1)),
+            (!cast<Pseudo>("Pseudo_"#Inst) StTy:$rs2, AddrTy:$rs1)>;
 }
 
 /// DDC-relative loads
@@ -1565,33 +1562,33 @@ def : Pat<(load (XLenVT GPR:$rs1)), (FMV_D_X (Pseudo_LD_DDC (XLenVT GPR:$rs1)))>
 
 /// DDC-relative stores
 
-let Predicates = [HasXCheriAll, IsCapMode] in {
+let Predicates = [HasCheriCommon, IsCapMode] in {
 defm : CheriExplicitStPat<truncstorei8, SB_DDC, GPR, GPR>;
 defm : CheriExplicitStPat<truncstorei16, SH_DDC, GPR, GPR>;
 }
 
-let Predicates = [HasXCheriAll, IsCapMode, IsRV32] in {
+let Predicates = [HasCheriCommon, IsCapMode, IsRV32] in {
 defm : CheriExplicitStPat<store, SW_DDC, GPR, GPR>;
-defm : CheriExplicitStPat<store, SC_DDC_64, GPCR, GPR, CLenVT, XLenVT>;
+defm : CheriExplicitStPat<store, SC_64_DDC, GPCR, GPR, CLenVT, XLenVT>;
 }
 
-let Predicates = [HasXCheriAll, IsCapMode, IsRV64] in {
+let Predicates = [HasCheriCommon, IsCapMode, IsRV64] in {
 defm : CheriExplicitStPat<truncstorei32, SW_DDC, GPR, GPR>;
 defm : CheriExplicitStPat<store, SD_DDC, GPR, GPR>;
-defm : CheriExplicitStPat<store, SC_DDC_128, GPCR, GPR, CLenVT, XLenVT>;
+defm : CheriExplicitStPat<store, SC_128_DDC, GPCR, GPR, CLenVT, XLenVT>;
 }
 
-let Predicates = [HasXCheriAll, IsCapMode, HasStdExtF] in
+let Predicates = [HasCheriCommon, IsCapMode, HasStdExtF] in
 def : Pat<(store FPR32:$rs2, (XLenVT GPR:$rs1)),
-          (SW_DDC (FMV_X_W FPR32:$rs2), (XLenVT GPR:$rs1))>;
+          (Pseudo_SW_DDC (FMV_X_W FPR32:$rs2), (XLenVT GPR:$rs1))>;
 
-let Predicates = [HasXCheriAll, IsCapMode, HasStdExtD, IsRV32] in
+let Predicates = [HasCheriCommon, IsCapMode, HasStdExtD, IsRV32] in
 def : Pat<(store FPR64:$rs2, (XLenVT GPR:$rs1)),
           (KILL (SplitStoreF64Pseudo FPR64:$rs2, (XLenVT GPR:$rs1)))>;
 
-let Predicates = [HasXCheriAll, IsCapMode, HasStdExtD, IsRV64] in
+let Predicates = [HasCheriCommon, IsCapMode, HasStdExtD, IsRV64] in
 def : Pat<(store FPR64:$rs2, (XLenVT GPR:$rs1)),
-          (SD_DDC (FMV_X_D FPR64:$rs2), (XLenVT GPR:$rs1))>;
+          (Pseudo_SD_DDC (FMV_X_D FPR64:$rs2), (XLenVT GPR:$rs1))>;
 
 /// Capability loads
 
@@ -1630,33 +1627,33 @@ def : Pat<(load GPCR:$rs1), (FMV_D_X (Pseudo_LD_CAP GPCR:$rs1))>;
 
 /// Capability stores
 
-let Predicates = [HasXCheriAll, NotCapMode] in {
+let Predicates = [HasCheriCommon, NotCapMode] in {
 defm : CheriExplicitStPat<truncstorei8, SB_CAP, GPR, GPCR, XLenVT, CLenVT>;
 defm : CheriExplicitStPat<truncstorei16, SH_CAP, GPR, GPCR, XLenVT, CLenVT>;
 }
 
-let Predicates = [HasXCheriAll, NotCapMode, IsRV32] in {
+let Predicates = [HasCheriCommon, NotCapMode, IsRV32] in {
 defm : CheriExplicitStPat<store, SW_CAP, GPR, GPCR, XLenVT, CLenVT>;
-defm : CheriExplicitStPat<store, SC_CAP_64, GPCR, GPCR, CLenVT, CLenVT>;
+defm : CheriExplicitStPat<store, SC_64_CAP, GPCR, GPCR, CLenVT, CLenVT>;
 }
 
-let Predicates = [HasXCheriAll, NotCapMode, IsRV64] in {
+let Predicates = [HasCheriCommon, NotCapMode, IsRV64] in {
 defm : CheriExplicitStPat<truncstorei32, SW_CAP, GPR, GPCR, XLenVT, CLenVT>;
 defm : CheriExplicitStPat<store, SD_CAP, GPR, GPCR, XLenVT, CLenVT>;
-defm : CheriExplicitStPat<store, SC_CAP_128, GPCR, GPCR, CLenVT, CLenVT>;
+defm : CheriExplicitStPat<store, SC_128_CAP, GPCR, GPCR, CLenVT, CLenVT>;
 }
 
-let Predicates = [HasXCheriAll, NotCapMode, HasStdExtF] in
+let Predicates = [HasCheriCommon, NotCapMode, HasStdExtF] in
 def : Pat<(store FPR32:$rs2, GPCR:$rs1),
-          (SW_CAP (FMV_X_W FPR32:$rs2), GPCR:$rs1)>;
+          (Pseudo_SW_CAP (FMV_X_W FPR32:$rs2), GPCR:$rs1)>;
 
-let Predicates = [HasXCheriAll, NotCapMode, HasStdExtD, IsRV32] in
+let Predicates = [HasCheriCommon, NotCapMode, HasStdExtD, IsRV32] in
 def : Pat<(store FPR64:$rs2, GPCR:$rs1),
           (KILL (CheriSplitStoreF64Pseudo FPR64:$rs2, GPCR:$rs1))>;
 
-let Predicates = [HasXCheriAll, NotCapMode, HasStdExtD, IsRV64] in
+let Predicates = [HasCheriCommon, NotCapMode, HasStdExtD, IsRV64] in
 def : Pat<(store FPR64:$rs2, GPCR:$rs1),
-          (SD_CAP (FMV_X_D FPR64:$rs2), GPCR:$rs1)>;
+          (Pseudo_SD_CAP (FMV_X_D FPR64:$rs2), GPCR:$rs1)>;
 
 /// Non-Capability Mode Instructions
 

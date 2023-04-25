@@ -424,3 +424,324 @@ entry:
   %plus_one = fadd double %result, 1.0
   ret double %plus_one
 }
+
+define internal void @store_8(i8 %value, i8 addrspace(200)* %dst) nounwind {
+; PURECAP-LABEL: store_8:
+; PURECAP:       # %bb.0: # %entry
+; PURECAP-NEXT:    csb a0, 0(ca1)
+; PURECAP-NEXT:    cret
+;
+; HYBRID-LABEL: store_8:
+; HYBRID:       # %bb.0: # %entry
+; HYBRID-NEXT:    modesw.cap
+; HYBRID-NEXT:    sb a0, 0(a1)
+; HYBRID-NEXT:    modesw.int
+; HYBRID-NEXT:    ret
+;
+; HYBRID-XCHERI-LABEL: store_8:
+; HYBRID-XCHERI:       # %bb.0: # %entry
+; HYBRID-XCHERI-NEXT:    sb.cap a0, (ca1)
+; HYBRID-XCHERI-NEXT:    ret
+;
+; PURECAP-DDC-LOADS-LABEL: store_8:
+; PURECAP-DDC-LOADS:       # %bb.0: # %entry
+; PURECAP-DDC-LOADS-NEXT:    modesw.int
+; PURECAP-DDC-LOADS-NEXT:    csb a0, 0(ca1)
+; PURECAP-DDC-LOADS-NEXT:    modesw.cap
+; PURECAP-DDC-LOADS-NEXT:    cret
+entry:
+  store i8 %value, i8 addrspace(200)* %dst
+  ret void
+}
+
+define internal void @store_16(i16 %value, i16 addrspace(200)* %dst) nounwind {
+; PURECAP-LABEL: store_16:
+; PURECAP:       # %bb.0: # %entry
+; PURECAP-NEXT:    csh a0, 0(ca1)
+; PURECAP-NEXT:    cret
+;
+; HYBRID-LABEL: store_16:
+; HYBRID:       # %bb.0: # %entry
+; HYBRID-NEXT:    modesw.cap
+; HYBRID-NEXT:    sh a0, 0(a1)
+; HYBRID-NEXT:    modesw.int
+; HYBRID-NEXT:    ret
+;
+; HYBRID-XCHERI-LABEL: store_16:
+; HYBRID-XCHERI:       # %bb.0: # %entry
+; HYBRID-XCHERI-NEXT:    sh.cap a0, (ca1)
+; HYBRID-XCHERI-NEXT:    ret
+;
+; PURECAP-DDC-LOADS-LABEL: store_16:
+; PURECAP-DDC-LOADS:       # %bb.0: # %entry
+; PURECAP-DDC-LOADS-NEXT:    modesw.int
+; PURECAP-DDC-LOADS-NEXT:    csh a0, 0(ca1)
+; PURECAP-DDC-LOADS-NEXT:    modesw.cap
+; PURECAP-DDC-LOADS-NEXT:    cret
+entry:
+  store i16 %value, i16 addrspace(200)* %dst
+  ret void
+}
+
+define internal void @store_32(i32 %value, i32 addrspace(200)* %dst) nounwind {
+; PURECAP-LABEL: store_32:
+; PURECAP:       # %bb.0: # %entry
+; PURECAP-NEXT:    csw a0, 0(ca1)
+; PURECAP-NEXT:    cret
+;
+; HYBRID-LABEL: store_32:
+; HYBRID:       # %bb.0: # %entry
+; HYBRID-NEXT:    modesw.cap
+; HYBRID-NEXT:    sw a0, 0(a1)
+; HYBRID-NEXT:    modesw.int
+; HYBRID-NEXT:    ret
+;
+; HYBRID-XCHERI-LABEL: store_32:
+; HYBRID-XCHERI:       # %bb.0: # %entry
+; HYBRID-XCHERI-NEXT:    sw.cap a0, (ca1)
+; HYBRID-XCHERI-NEXT:    ret
+;
+; PURECAP-DDC-LOADS-LABEL: store_32:
+; PURECAP-DDC-LOADS:       # %bb.0: # %entry
+; PURECAP-DDC-LOADS-NEXT:    modesw.int
+; PURECAP-DDC-LOADS-NEXT:    csw a0, 0(ca1)
+; PURECAP-DDC-LOADS-NEXT:    modesw.cap
+; PURECAP-DDC-LOADS-NEXT:    cret
+entry:
+  store i32 %value, i32 addrspace(200)* %dst
+  ret void
+}
+
+define internal void @store_64(i64 %value, i64 addrspace(200)* %dst) nounwind {
+; PURECAP-LABEL: store_64:
+; PURECAP:       # %bb.0: # %entry
+; PURECAP-NEXT:    csd a0, 0(ca1)
+; PURECAP-NEXT:    cret
+;
+; HYBRID-LABEL: store_64:
+; HYBRID:       # %bb.0: # %entry
+; HYBRID-NEXT:    modesw.cap
+; HYBRID-NEXT:    sd a0, 0(a1)
+; HYBRID-NEXT:    modesw.int
+; HYBRID-NEXT:    ret
+;
+; HYBRID-XCHERI-LABEL: store_64:
+; HYBRID-XCHERI:       # %bb.0: # %entry
+; HYBRID-XCHERI-NEXT:    sd.cap a0, (ca1)
+; HYBRID-XCHERI-NEXT:    ret
+;
+; PURECAP-DDC-LOADS-LABEL: store_64:
+; PURECAP-DDC-LOADS:       # %bb.0: # %entry
+; PURECAP-DDC-LOADS-NEXT:    modesw.int
+; PURECAP-DDC-LOADS-NEXT:    csd a0, 0(ca1)
+; PURECAP-DDC-LOADS-NEXT:    modesw.cap
+; PURECAP-DDC-LOADS-NEXT:    cret
+entry:
+  store i64 %value, i64 addrspace(200)* %dst
+  ret void
+}
+
+define internal void @store_cap(i8 addrspace(200)* %value, i8 addrspace(200)* addrspace(200)* %dst) nounwind {
+; PURECAP-LABEL: store_cap:
+; PURECAP:       # %bb.0: # %entry
+; PURECAP-NEXT:    csc ca0, 0(ca1)
+; PURECAP-NEXT:    cret
+;
+; HYBRID-LABEL: store_cap:
+; HYBRID:       # %bb.0: # %entry
+; HYBRID-NEXT:    modesw.cap
+; HYBRID-NEXT:    sc ca0, 0(a1)
+; HYBRID-NEXT:    modesw.int
+; HYBRID-NEXT:    ret
+;
+; HYBRID-XCHERI-LABEL: store_cap:
+; HYBRID-XCHERI:       # %bb.0: # %entry
+; HYBRID-XCHERI-NEXT:    sc.cap ca0, (ca1)
+; HYBRID-XCHERI-NEXT:    ret
+;
+; PURECAP-DDC-LOADS-LABEL: store_cap:
+; PURECAP-DDC-LOADS:       # %bb.0: # %entry
+; PURECAP-DDC-LOADS-NEXT:    modesw.int
+; PURECAP-DDC-LOADS-NEXT:    csd a0, 0(ca1)
+; PURECAP-DDC-LOADS-NEXT:    modesw.cap
+; PURECAP-DDC-LOADS-NEXT:    cret
+entry:
+  store i8 addrspace(200)* %value, i8 addrspace(200)* addrspace(200)* %dst
+  ret void
+}
+
+define internal void @store_f16(half %value, half addrspace(200)* %dst) nounwind {
+; PURECAP-LABEL: store_f16:
+; PURECAP:       # %bb.0: # %entry
+; PURECAP-NEXT:    cincoffset csp, csp, -32
+; PURECAP-NEXT:    csc cra, 16(csp) # 16-byte Folded Spill
+; PURECAP-NEXT:    csc cs0, 0(csp) # 16-byte Folded Spill
+; PURECAP-NEXT:    cmove cs0, ca0
+; PURECAP-NEXT:    ccall __extendhfsf2
+; PURECAP-NEXT:    lui a0, 260096
+; PURECAP-NEXT:    fmv.w.x fa5, a0
+; PURECAP-NEXT:    fadd.s fa0, fa0, fa5
+; PURECAP-NEXT:    ccall __truncsfhf2
+; PURECAP-NEXT:    fmv.x.w a0, fa0
+; PURECAP-NEXT:    csh a0, 0(cs0)
+; PURECAP-NEXT:    clc cra, 16(csp) # 16-byte Folded Reload
+; PURECAP-NEXT:    clc cs0, 0(csp) # 16-byte Folded Reload
+; PURECAP-NEXT:    cincoffset csp, csp, 32
+; PURECAP-NEXT:    cret
+;
+; HYBRID-LABEL: store_f16:
+; HYBRID:       # %bb.0: # %entry
+; HYBRID-NEXT:    addi sp, sp, -32
+; HYBRID-NEXT:    sd ra, 24(sp) # 8-byte Folded Spill
+; HYBRID-NEXT:    sc ca0, 0(sp) # 16-byte Folded Spill
+; HYBRID-NEXT:    call __extendhfsf2@plt
+; HYBRID-NEXT:    lui a0, 260096
+; HYBRID-NEXT:    fmv.w.x fa5, a0
+; HYBRID-NEXT:    fadd.s fa0, fa0, fa5
+; HYBRID-NEXT:    call __truncsfhf2@plt
+; HYBRID-NEXT:    fmv.x.w a0, fa0
+; HYBRID-NEXT:    lc ca1, 0(sp) # 16-byte Folded Reload
+; HYBRID-NEXT:    modesw.cap
+; HYBRID-NEXT:    sh a0, 0(a1)
+; HYBRID-NEXT:    modesw.int
+; HYBRID-NEXT:    ld ra, 24(sp) # 8-byte Folded Reload
+; HYBRID-NEXT:    addi sp, sp, 32
+; HYBRID-NEXT:    ret
+;
+; HYBRID-XCHERI-LABEL: store_f16:
+; HYBRID-XCHERI:       # %bb.0: # %entry
+; HYBRID-XCHERI-NEXT:    addi sp, sp, -32
+; HYBRID-XCHERI-NEXT:    sd ra, 24(sp) # 8-byte Folded Spill
+; HYBRID-XCHERI-NEXT:    sc ca0, 0(sp) # 16-byte Folded Spill
+; HYBRID-XCHERI-NEXT:    call __extendhfsf2@plt
+; HYBRID-XCHERI-NEXT:    lui a0, 260096
+; HYBRID-XCHERI-NEXT:    fmv.w.x fa5, a0
+; HYBRID-XCHERI-NEXT:    fadd.s fa0, fa0, fa5
+; HYBRID-XCHERI-NEXT:    call __truncsfhf2@plt
+; HYBRID-XCHERI-NEXT:    fmv.x.w a0, fa0
+; HYBRID-XCHERI-NEXT:    lc ca1, 0(sp) # 16-byte Folded Reload
+; HYBRID-XCHERI-NEXT:    sh.cap a0, (ca1)
+; HYBRID-XCHERI-NEXT:    ld ra, 24(sp) # 8-byte Folded Reload
+; HYBRID-XCHERI-NEXT:    addi sp, sp, 32
+; HYBRID-XCHERI-NEXT:    ret
+;
+; PURECAP-DDC-LOADS-LABEL: store_f16:
+; PURECAP-DDC-LOADS:       # %bb.0: # %entry
+; PURECAP-DDC-LOADS-NEXT:    cincoffset csp, csp, -32
+; PURECAP-DDC-LOADS-NEXT:    csc cra, 16(csp) # 16-byte Folded Spill
+; PURECAP-DDC-LOADS-NEXT:    csc cs0, 0(csp) # 16-byte Folded Spill
+; PURECAP-DDC-LOADS-NEXT:    mv s0, a0
+; PURECAP-DDC-LOADS-NEXT:    ccall __extendhfsf2
+; PURECAP-DDC-LOADS-NEXT:    lui a0, 260096
+; PURECAP-DDC-LOADS-NEXT:    fmv.w.x fa5, a0
+; PURECAP-DDC-LOADS-NEXT:    fadd.s fa0, fa0, fa5
+; PURECAP-DDC-LOADS-NEXT:    ccall __truncsfhf2
+; PURECAP-DDC-LOADS-NEXT:    fmv.x.w a0, fa0
+; PURECAP-DDC-LOADS-NEXT:    modesw.int
+; PURECAP-DDC-LOADS-NEXT:    csh a0, 0(cs0)
+; PURECAP-DDC-LOADS-NEXT:    modesw.cap
+; PURECAP-DDC-LOADS-NEXT:    clc cra, 16(csp) # 16-byte Folded Reload
+; PURECAP-DDC-LOADS-NEXT:    clc cs0, 0(csp) # 16-byte Folded Reload
+; PURECAP-DDC-LOADS-NEXT:    cincoffset csp, csp, 32
+; PURECAP-DDC-LOADS-NEXT:    cret
+entry:
+  %plus_one = fadd half %value, 1.0
+  store half %plus_one, half addrspace(200)* %dst
+  ret void
+}
+
+define internal void @store_f32(float %value, float addrspace(200)* %dst) nounwind {
+; PURECAP-LABEL: store_f32:
+; PURECAP:       # %bb.0: # %entry
+; PURECAP-NEXT:    lui a1, 260096
+; PURECAP-NEXT:    fmv.w.x fa5, a1
+; PURECAP-NEXT:    fadd.s fa5, fa0, fa5
+; PURECAP-NEXT:    cfsw fa5, 0(ca0)
+; PURECAP-NEXT:    cret
+;
+; HYBRID-LABEL: store_f32:
+; HYBRID:       # %bb.0: # %entry
+; HYBRID-NEXT:    lui a1, 260096
+; HYBRID-NEXT:    fmv.w.x fa5, a1
+; HYBRID-NEXT:    fadd.s fa5, fa0, fa5
+; HYBRID-NEXT:    fmv.x.w a1, fa5
+; HYBRID-NEXT:    modesw.cap
+; HYBRID-NEXT:    sw a1, 0(a0)
+; HYBRID-NEXT:    modesw.int
+; HYBRID-NEXT:    ret
+;
+; HYBRID-XCHERI-LABEL: store_f32:
+; HYBRID-XCHERI:       # %bb.0: # %entry
+; HYBRID-XCHERI-NEXT:    lui a1, 260096
+; HYBRID-XCHERI-NEXT:    fmv.w.x fa5, a1
+; HYBRID-XCHERI-NEXT:    fadd.s fa5, fa0, fa5
+; HYBRID-XCHERI-NEXT:    fmv.x.w a1, fa5
+; HYBRID-XCHERI-NEXT:    sw.cap a1, (ca0)
+; HYBRID-XCHERI-NEXT:    ret
+;
+; PURECAP-DDC-LOADS-LABEL: store_f32:
+; PURECAP-DDC-LOADS:       # %bb.0: # %entry
+; PURECAP-DDC-LOADS-NEXT:    lui a1, 260096
+; PURECAP-DDC-LOADS-NEXT:    fmv.w.x fa5, a1
+; PURECAP-DDC-LOADS-NEXT:    fadd.s fa5, fa0, fa5
+; PURECAP-DDC-LOADS-NEXT:    fmv.x.w a1, fa5
+; PURECAP-DDC-LOADS-NEXT:    modesw.int
+; PURECAP-DDC-LOADS-NEXT:    csw a1, 0(ca0)
+; PURECAP-DDC-LOADS-NEXT:    modesw.cap
+; PURECAP-DDC-LOADS-NEXT:    cret
+entry:
+  %plus_one = fadd float %value, 1.0
+  store float %plus_one, float addrspace(200)* %dst
+  ret void
+}
+
+define internal void @store_f64(double %value, double addrspace(200)* %dst) nounwind {
+; PURECAP-LABEL: store_f64:
+; PURECAP:       # %bb.0: # %entry
+; PURECAP-NEXT:  .LBB18_1: # %entry
+; PURECAP-NEXT:    # Label of block must be emitted
+; PURECAP-NEXT:    auipcc ca1, %pcrel_hi(.LCPI18_0)
+; PURECAP-NEXT:    cincoffset ca1, ca1, %pcrel_lo(.LBB18_1)
+; PURECAP-NEXT:    cfld fa5, 0(ca1)
+; PURECAP-NEXT:    fadd.d fa5, fa0, fa5
+; PURECAP-NEXT:    cfsd fa5, 0(ca0)
+; PURECAP-NEXT:    cret
+;
+; HYBRID-LABEL: store_f64:
+; HYBRID:       # %bb.0: # %entry
+; HYBRID-NEXT:    lui a1, %hi(.LCPI18_0)
+; HYBRID-NEXT:    fld fa5, %lo(.LCPI18_0)(a1)
+; HYBRID-NEXT:    fadd.d fa5, fa0, fa5
+; HYBRID-NEXT:    fmv.x.d a1, fa5
+; HYBRID-NEXT:    modesw.cap
+; HYBRID-NEXT:    sd a1, 0(a0)
+; HYBRID-NEXT:    modesw.int
+; HYBRID-NEXT:    ret
+;
+; HYBRID-XCHERI-LABEL: store_f64:
+; HYBRID-XCHERI:       # %bb.0: # %entry
+; HYBRID-XCHERI-NEXT:    lui a1, %hi(.LCPI18_0)
+; HYBRID-XCHERI-NEXT:    fld fa5, %lo(.LCPI18_0)(a1)
+; HYBRID-XCHERI-NEXT:    fadd.d fa5, fa0, fa5
+; HYBRID-XCHERI-NEXT:    fmv.x.d a1, fa5
+; HYBRID-XCHERI-NEXT:    sd.cap a1, (ca0)
+; HYBRID-XCHERI-NEXT:    ret
+;
+; PURECAP-DDC-LOADS-LABEL: store_f64:
+; PURECAP-DDC-LOADS:       # %bb.0: # %entry
+; PURECAP-DDC-LOADS-NEXT:  .LBB18_1: # %entry
+; PURECAP-DDC-LOADS-NEXT:    # Label of block must be emitted
+; PURECAP-DDC-LOADS-NEXT:    auipcc ca1, %pcrel_hi(.LCPI18_0)
+; PURECAP-DDC-LOADS-NEXT:    cincoffset ca1, ca1, %pcrel_lo(.LBB18_1)
+; PURECAP-DDC-LOADS-NEXT:    cfld fa5, 0(ca1)
+; PURECAP-DDC-LOADS-NEXT:    fadd.d fa5, fa0, fa5
+; PURECAP-DDC-LOADS-NEXT:    fmv.x.d a1, fa5
+; PURECAP-DDC-LOADS-NEXT:    modesw.int
+; PURECAP-DDC-LOADS-NEXT:    csd a1, 0(ca0)
+; PURECAP-DDC-LOADS-NEXT:    modesw.cap
+; PURECAP-DDC-LOADS-NEXT:    cret
+entry:
+  %plus_one = fadd double %value, 1.0
+  store double %plus_one, double addrspace(200)* %dst
+  ret void
+}
