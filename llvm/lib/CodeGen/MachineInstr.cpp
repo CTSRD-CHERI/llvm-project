@@ -1767,7 +1767,7 @@ void MachineInstr::print(raw_ostream &OS, ModuleSlotTracker &MST,
     if (FirstOp) FirstOp = false; else OS << ",";
     OS << " ";
 
-    if (isDebugValue() && MO.isMetadata()) {
+    if (isDebugValueLike() && MO.isMetadata()) {
       // Pretty print DBG_VALUE* instructions.
       auto *DIV = dyn_cast<DILocalVariable>(MO.getMetadata());
       if (DIV && !DIV->getName().empty())
@@ -1923,7 +1923,7 @@ void MachineInstr::print(raw_ostream &OS, ModuleSlotTracker &MST,
   }
 
   // Print extra comments for DEBUG_VALUE.
-  if (isDebugValue() && getDebugVariableOp().isMetadata()) {
+  if (isDebugValueLike() && getDebugVariableOp().isMetadata()) {
     if (!HaveSemi) {
       OS << ";";
       HaveSemi = true;
