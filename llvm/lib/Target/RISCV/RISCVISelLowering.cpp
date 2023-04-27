@@ -15096,9 +15096,7 @@ RISCVTargetLowering::LowerReturn(SDValue Chain, CallingConv::ID CallConv,
     StringRef Kind =
       MF.getFunction().getFnAttribute("interrupt").getValueAsString();
 
-    if (Kind == "user")
-      RetOpc = RISCVISD::URET_GLUE;
-    else if (Kind == "supervisor")
+    if (Kind == "supervisor")
       RetOpc = RISCVISD::SRET_GLUE;
     else
       RetOpc = RISCVISD::MRET_GLUE;
@@ -15178,7 +15176,6 @@ const char *RISCVTargetLowering::getTargetNodeName(unsigned Opcode) const {
   NODE_NAME_CASE(CAP_SUBSET_TEST)
   NODE_NAME_CASE(CAP_EQUAL_EXACT)
   NODE_NAME_CASE(RET_GLUE)
-  NODE_NAME_CASE(URET_GLUE)
   NODE_NAME_CASE(SRET_GLUE)
   NODE_NAME_CASE(MRET_GLUE)
   NODE_NAME_CASE(CALL)
