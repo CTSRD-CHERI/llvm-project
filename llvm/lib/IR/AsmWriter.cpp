@@ -428,7 +428,7 @@ static void PrintShuffleMask(raw_ostream &Out, Type *Ty, ArrayRef<int> Mask) {
   bool FirstElt = true;
   if (all_of(Mask, [](int Elt) { return Elt == 0; })) {
     Out << "zeroinitializer";
-  } else if (all_of(Mask, [](int Elt) { return Elt == UndefMaskElem; })) {
+  } else if (all_of(Mask, [](int Elt) { return Elt == PoisonMaskElem; })) {
     Out << "poison";
   } else {
     Out << "<";
@@ -438,7 +438,7 @@ static void PrintShuffleMask(raw_ostream &Out, Type *Ty, ArrayRef<int> Mask) {
       else
         Out << ", ";
       Out << "i32 ";
-      if (Elt == UndefMaskElem)
+      if (Elt == PoisonMaskElem)
         Out << "poison";
       else
         Out << Elt;

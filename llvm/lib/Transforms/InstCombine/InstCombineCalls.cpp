@@ -3030,7 +3030,7 @@ Instruction *InstCombinerImpl::visitCallInst(CallInst &CI) {
       for (i = 0; i != SubVecNumElts; ++i)
         WidenMask.push_back(i);
       for (; i != VecNumElts; ++i)
-        WidenMask.push_back(UndefMaskElem);
+        WidenMask.push_back(PoisonMaskElem);
 
       Value *WidenShuffle = Builder.CreateShuffleVector(SubVec, WidenMask);
 
@@ -3325,7 +3325,7 @@ Instruction *InstCombinerImpl::visitCallInst(CallInst &CI) {
     int Sz = Mask.size();
     SmallBitVector UsedIndices(Sz);
     for (int Idx : Mask) {
-      if (Idx == UndefMaskElem || UsedIndices.test(Idx))
+      if (Idx == PoisonMaskElem || UsedIndices.test(Idx))
         break;
       UsedIndices.set(Idx);
     }
