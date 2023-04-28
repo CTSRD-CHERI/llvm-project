@@ -4605,7 +4605,7 @@ static bool hasOuterPointerLikeChunk(const Declarator &D, unsigned endIndex) {
   return false;
 }
 
-static bool IsNoDerefableChunk(DeclaratorChunk Chunk) {
+static bool IsNoDerefableChunk(const DeclaratorChunk &Chunk) {
   return (Chunk.Kind == DeclaratorChunk::Pointer ||
           Chunk.Kind == DeclaratorChunk::Array);
 }
