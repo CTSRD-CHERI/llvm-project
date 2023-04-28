@@ -3721,9 +3721,11 @@ def mcmodel_EQ_medany : Flag<["-"], "mcmodel=medany">, Group<m_Group>,
 def menable_experimental_extensions : Flag<["-"], "menable-experimental-extensions">, Group<m_Group>,
   HelpText<"Enable use of experimental RISC-V extensions.">;
 def mrvv_vector_bits_EQ : Joined<["-"], "mrvv-vector-bits=">, Group<m_Group>,
-  HelpText<"Specify the size in bits of an RVV vector register. Defaults to the"
-           " vector length agnostic value of \"scalable\". Also accepts \"zvl\""
-           " to use the value implied by -march/-mcpu (RISC-V only)">;
+  HelpText<"Specify the size in bits of an RVV vector register. Defaults to "
+           "the vector length agnostic value of \"scalable\". Accepts power of "
+           "2 values between 64 and 65536. Also accepts \"zvl\" "
+           "to use the value implied by -march/-mcpu. Value will be reflected "
+           "in __riscv_v_fixed_vlen preprocessor define (RISC-V only)">;
 // TODO: Remove these options (https://github.com/CTSRD-CHERI/llvm-project/issues/681)
 def mxcheri_norvc : Flag<["-"], "mxcheri-norvc">, Group<m_riscv_Features_Group>,
   HelpText<"Disable using compressed CHERI instructions">;
