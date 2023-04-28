@@ -16361,7 +16361,13 @@ bool RISCVTargetLowering::allowsMisalignedMemoryAccesses(
     return true;
   }
 
-  return false;
+  // Note: We lower an unmasked unaligned vector access to an equally sized
+  // e8 element type access.  Given this, we effectively support all unmasked
+  // misaligned accesses.  TODO: Work through the codegen implications of
+  // allowing such accesses to be formed, and considered fast.
+  if (Fast)
+    *Fast = 0;
+  return Subtarget.enableUnalignedVectorMem();
 }
 
 bool RISCVTargetLowering::splitValueIntoRegisterParts(
@@ -16536,7 +16542,8 @@ bool RISCVTargetLowering::isLegalStridedLoadStore(const DataLayout &DL,
   if (!isLegalElementTypeForRVV(ScalarType))
     return false;
 
-  if (Alignment < DL.getTypeStoreSize(ScalarType).getFixedValue())
+  if (!Subtarget.enableUnalignedVectorMem() &&
+      Alignment < DL.getTypeStoreSize(ScalarType).getFixedValue())
     return false;
 
   return true;
