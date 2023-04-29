@@ -2615,10 +2615,6 @@ public:
         std::make_unique<SwiftABIInfo>(CGT, /*SwiftErrorInRegister=*/true);
   }
 
-  const X86_64ABIInfo &getABIInfo() const {
-    return static_cast<const X86_64ABIInfo&>(TargetCodeGenInfo::getABIInfo());
-  }
-
   /// Disable tail call on x86-64. The epilogue code before the tail jump blocks
   /// autoreleaseRV/retainRV and autoreleaseRV/unsafeClaimRV optimizations.
   bool markARCOptimizedReturnCallsAsNoTail() const override { return true; }
@@ -2655,7 +2651,7 @@ public:
       bool HasAVXType = false;
       for (CallArgList::const_iterator
              it = args.begin(), ie = args.end(); it != ie; ++it) {
-        if (getABIInfo().isPassedUsingAVXType(it->Ty)) {
+        if (getABIInfo<X86_64ABIInfo>().isPassedUsingAVXType(it->Ty)) {
           HasAVXType = true;
           break;
         }
@@ -6528,10 +6524,6 @@ public:
     SwiftInfo = std::make_unique<ARMSwiftABIInfo>(CGT);
   }
 
-  const ARMABIInfo &getABIInfo() const {
-    return static_cast<const ARMABIInfo&>(TargetCodeGenInfo::getABIInfo());
-  }
-
   int getDwarfEHStackPointer(CodeGen::CodeGenModule &M) const override {
     return 13;
   }
@@ -6550,7 +6542,8 @@ public:
   }
 
   unsigned getSizeOfUnwindException() const override {
-    if (getABIInfo().isEABI()) return 88;
+    if (getABIInfo<ARMABIInfo>().isEABI())
+      return 88;
     return TargetCodeGenInfo::getSizeOfUnwindException();
   }
 
@@ -6617,7 +6610,7 @@ public:
 
     Fn->addFnAttr("interrupt", Kind);
 
-    ARMABIKind ABI = cast<ARMABIInfo>(getABIInfo()).getABIKind();
+    ARMABIKind ABI = getABIInfo<ARMABIInfo>().getABIKind();
     if (ABI == ARMABIKind::APCS)
       return;
 
@@ -7555,10 +7548,6 @@ public:
 class SystemZTargetCodeGenInfo : public TargetCodeGenInfo {
   ASTContext &Ctx;
 
-  const SystemZABIInfo &getABIInfo() const {
-    return static_cast<const SystemZABIInfo&>(TargetCodeGenInfo::getABIInfo());
-  }
-
   // These are used for speeding up the search for a visible vector ABI.
   mutable bool HasVisibleVecABIFlag = false;
   mutable std::set<const Type *> SeenTypes;
@@ -8007,8 +7996,9 @@ bool SystemZTargetCodeGenInfo::isVectorTypeBased(const Type *Ty,
     // it will be passed in a vector register. A wide (>16 bytes) vector will
     // be passed via "hidden" pointer where any extra alignment is not
     // required (per GCC).
-    const Type *SingleEltTy =
-      getABIInfo().GetSingleElementType(QualType(Ty, 0)).getTypePtr();
+    const Type *SingleEltTy = getABIInfo<SystemZABIInfo>()
+                                  .GetSingleElementType(QualType(Ty, 0))
+                                  .getTypePtr();
     bool SingleVecEltStruct = SingleEltTy != Ty && SingleEltTy->isVectorType() &&
       Ctx.getTypeSize(SingleEltTy) == Ctx.getTypeSize(Ty);
     if (Ty->isVectorType() || SingleVecEltStruct)
@@ -12298,10 +12288,6 @@ class BPFTargetCodeGenInfo : public TargetCodeGenInfo {
 public:
   BPFTargetCodeGenInfo(CodeGenTypes &CGT)
       : TargetCodeGenInfo(std::make_unique<BPFABIInfo>(CGT)) {}
-
-  const BPFABIInfo &getABIInfo() const {
-    return static_cast<const BPFABIInfo&>(TargetCodeGenInfo::getABIInfo());
-  }
 };
 
 }
