@@ -1456,7 +1456,7 @@ def PseudoCCSUBW : Pseudo<(outs GPR:$dst),
                    Sched<[WriteSFB, ReadSFB, ReadSFB, ReadSFB, ReadSFB, ReadSFB]>;
 }
 
-multiclass SelectCC_GPR_rrirr<RegisterClass valty> {
+multiclass SelectCC_GPR_rrirr<DAGOperand valty> {
   let usesCustomInserter = 1 in
   def _Using_CC_GPR : Pseudo<(outs valty:$dst),
                              (ins GPR:$lhs, GPR:$rhs, ixlenimm:$cc,
