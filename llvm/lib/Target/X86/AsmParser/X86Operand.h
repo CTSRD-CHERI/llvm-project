@@ -389,7 +389,8 @@ struct X86Operand final : public MCParsedAsmOperand {
 
   bool isSrcIdx() const {
     return !getMemIndexReg() && getMemScale() == 1 &&
-      (getMemBaseReg() == X86::RSI || getMemBaseReg() == X86::ESI ||
+      (getMemBaseReg() == X86::CSI ||
+       getMemBaseReg() == X86::RSI || getMemBaseReg() == X86::ESI ||
        getMemBaseReg() == X86::SI) && isa<MCConstantExpr>(getMemDisp()) &&
       cast<MCConstantExpr>(getMemDisp())->getValue() == 0;
   }
@@ -405,11 +406,15 @@ struct X86Operand final : public MCParsedAsmOperand {
   bool isSrcIdx64() const {
     return isMem64() && isSrcIdx();
   }
+  bool isSrcIdxC() const {
+    return isMemCap() && isSrcIdx();
+  }
 
   bool isDstIdx() const {
     return !getMemIndexReg() && getMemScale() == 1 &&
       (getMemSegReg() == 0 || getMemSegReg() == X86::ES) &&
-      (getMemBaseReg() == X86::RDI || getMemBaseReg() == X86::EDI ||
+      (getMemBaseReg() == X86::CDI ||
+       getMemBaseReg() == X86::RDI || getMemBaseReg() == X86::EDI ||
        getMemBaseReg() == X86::DI) && isa<MCConstantExpr>(getMemDisp()) &&
       cast<MCConstantExpr>(getMemDisp())->getValue() == 0;
   }
@@ -423,6 +428,9 @@ struct X86Operand final : public MCParsedAsmOperand {
     return isMem32() && isDstIdx();
   }
   bool isDstIdx64() const {
+    return isMem64() && isDstIdx();
+  }
+  bool isDstIdxC() const {
     return isMem64() && isDstIdx();
   }
 

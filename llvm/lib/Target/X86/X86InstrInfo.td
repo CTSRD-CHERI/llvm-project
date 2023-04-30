@@ -542,6 +542,10 @@ let RenderMethod = "addSrcIdxOperands" in {
     let Name = "SrcIdx64";
     let SuperClasses = [X86Mem64AsmOperand];
   }
+  def X86SrcIdxCOperand : AsmOperandClass {
+    let Name = "SrcIdxC";
+    let SuperClasses = [X86MemCapAsmOperand];
+  }
 } // RenderMethod = "addSrcIdxOperands"
 
 let RenderMethod = "addDstIdxOperands" in {
@@ -560,6 +564,10 @@ let RenderMethod = "addDstIdxOperands" in {
  def X86DstIdx64Operand : AsmOperandClass {
    let Name = "DstIdx64";
    let SuperClasses = [X86Mem64AsmOperand];
+ }
+ def X86DstIdxCOperand : AsmOperandClass {
+   let Name = "DstIdxC";
+   let SuperClasses = [X86MemCapAsmOperand];
  }
 } // RenderMethod = "addDstIdxOperands"
 
@@ -624,10 +632,12 @@ def srcidx8  : X86SrcIdxOperand<"printSrcIdx8",  X86SrcIdx8Operand>;
 def srcidx16 : X86SrcIdxOperand<"printSrcIdx16", X86SrcIdx16Operand>;
 def srcidx32 : X86SrcIdxOperand<"printSrcIdx32", X86SrcIdx32Operand>;
 def srcidx64 : X86SrcIdxOperand<"printSrcIdx64", X86SrcIdx64Operand>;
+def srcidxC  : X86SrcIdxOperand<"printSrcIdxC",  X86SrcIdxCOperand>;
 def dstidx8  : X86DstIdxOperand<"printDstIdx8",  X86DstIdx8Operand>;
 def dstidx16 : X86DstIdxOperand<"printDstIdx16", X86DstIdx16Operand>;
 def dstidx32 : X86DstIdxOperand<"printDstIdx32", X86DstIdx32Operand>;
 def dstidx64 : X86DstIdxOperand<"printDstIdx64", X86DstIdx64Operand>;
+def dstidxC  : X86DstIdxOperand<"printDstIdxC",  X86DstIdxCOperand>;
 
 class X86MemOffsOperand<Operand immOperand, string printMethod,
                         AsmOperandClass parserMatchClass>
@@ -1594,6 +1604,9 @@ let Defs = [RDI], Uses = [RAX,RDI,DF] in
 def STOSQ : RI<0xAB, RawFrmDst, (outs), (ins dstidx64:$dst),
                "stosq\t{%rax, $dst|$dst, rax}", []>,
                Requires<[In64BitMode]>;
+//let Defs = [CDI], Uses = [CAX,CDI,DF] in
+//def STOSC : CI<0xAB, RawFrmDst, (outs), (ins dstidxC:$dst),
+//              "stosc\t{%cax, $dst|$dst, cax}", []>;
 
 let Defs = [EDI,EFLAGS], Uses = [AL,EDI,DF] in
 def SCASB : I<0xAE, RawFrmDst, (outs), (ins dstidx8:$dst),
@@ -2327,6 +2340,9 @@ let Defs = [RAX,ESI], Uses = [ESI,DF] in
 def LODSQ : RI<0xAD, RawFrmSrc, (outs), (ins srcidx64:$src),
                "lodsq\t{$src, %rax|rax, $src}", []>,
                Requires<[In64BitMode]>;
+let Defs = [CAX,ESI], Uses = [ESI,DF] in
+def LODSC : CI<0xAD, RawFrmSrc, (outs), (ins srcidxC:$src),
+              "lodsc\t{$src, %cax|cax, $src}", []>;
 }
 
 let SchedRW = [WriteSystem] in {
@@ -3452,14 +3468,17 @@ def : InstAlias<"lodsb\t$src", (LODSB srcidx8:$src),  0>;
 def : InstAlias<"lodsw\t$src", (LODSW srcidx16:$src), 0>;
 def : InstAlias<"lods{l|d}\t$src", (LODSL srcidx32:$src), 0>;
 def : InstAlias<"lodsq\t$src", (LODSQ srcidx64:$src), 0>, Requires<[In64BitMode]>;
+def : InstAlias<"lodsc\t$src", (LODSC srcidxC:$src), 0>, Requires<[In64BitMode]>;
 def : InstAlias<"lods\t{$src, %al|al, $src}", (LODSB srcidx8:$src),  0>;
 def : InstAlias<"lods\t{$src, %ax|ax, $src}", (LODSW srcidx16:$src), 0>;
 def : InstAlias<"lods\t{$src, %eax|eax, $src}", (LODSL srcidx32:$src), 0>;
 def : InstAlias<"lods\t{$src, %rax|rax, $src}", (LODSQ srcidx64:$src), 0>, Requires<[In64BitMode]>;
+def : InstAlias<"lods\t{$src, %cax|rax, $src}", (LODSC srcidxC:$src), 0>, Requires<[In64BitMode]>;
 def : InstAlias<"lods\t$src", (LODSB srcidx8:$src),  0, "intel">;
 def : InstAlias<"lods\t$src", (LODSW srcidx16:$src), 0, "intel">;
 def : InstAlias<"lods\t$src", (LODSL srcidx32:$src), 0, "intel">;
 def : InstAlias<"lods\t$src", (LODSQ srcidx64:$src), 0, "intel">, Requires<[In64BitMode]>;
+def : InstAlias<"lods\t$src", (LODSC srcidxC:$src), 0, "intel">, Requires<[In64BitMode]>;
 
 
 // stos aliases. Accept the source being omitted because it's implicit in
@@ -3469,14 +3488,17 @@ def : InstAlias<"stosb\t$dst", (STOSB dstidx8:$dst),  0>;
 def : InstAlias<"stosw\t$dst", (STOSW dstidx16:$dst), 0>;
 def : InstAlias<"stos{l|d}\t$dst", (STOSL dstidx32:$dst), 0>;
 def : InstAlias<"stosq\t$dst", (STOSQ dstidx64:$dst), 0>, Requires<[In64BitMode]>;
+//def : InstAlias<"stosc\t$dst", (STOSC dstidxC:$dst), 0>, Requires<[InCapMode]>;
 def : InstAlias<"stos\t{%al, $dst|$dst, al}", (STOSB dstidx8:$dst),  0>;
 def : InstAlias<"stos\t{%ax, $dst|$dst, ax}", (STOSW dstidx16:$dst), 0>;
 def : InstAlias<"stos\t{%eax, $dst|$dst, eax}", (STOSL dstidx32:$dst), 0>;
 def : InstAlias<"stos\t{%rax, $dst|$dst, rax}", (STOSQ dstidx64:$dst), 0>, Requires<[In64BitMode]>;
+//def : InstAlias<"stos\t{%cax, $dst|$dst, cax}", (STOSC dstidxC:$dst), 0>, Requires<[InCapMode]>;
 def : InstAlias<"stos\t$dst", (STOSB dstidx8:$dst),  0, "intel">;
 def : InstAlias<"stos\t$dst", (STOSW dstidx16:$dst), 0, "intel">;
 def : InstAlias<"stos\t$dst", (STOSL dstidx32:$dst), 0, "intel">;
 def : InstAlias<"stos\t$dst", (STOSQ dstidx64:$dst), 0, "intel">, Requires<[In64BitMode]>;
+//def : InstAlias<"stos\t$dst", (STOSC dstidxC:$dst), 0, "intel">, Requires<[InCapMode]>;
 
 
 // scas aliases. Accept the destination being omitted because it's implicit

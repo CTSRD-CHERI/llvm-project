@@ -88,6 +88,9 @@ public:
   void printSrcIdx64(const MCInst *MI, unsigned OpNo, raw_ostream &O) {
     printSrcIdx(MI, OpNo, O);
   }
+  void printSrcIdxC(const MCInst *MI, unsigned OpNo, raw_ostream &O) {
+    printSrcIdx(MI, OpNo, O);
+  }
   void printDstIdx8(const MCInst *MI, unsigned OpNo, raw_ostream &O) {
     printDstIdx(MI, OpNo, O);
   }
@@ -98,6 +101,9 @@ public:
     printDstIdx(MI, OpNo, O);
   }
   void printDstIdx64(const MCInst *MI, unsigned OpNo, raw_ostream &O) {
+    printDstIdx(MI, OpNo, O);
+  }
+  void printDstIdxC(const MCInst *MI, unsigned OpNo, raw_ostream &O) {
     printDstIdx(MI, OpNo, O);
   }
   void printMemOffs8(const MCInst *MI, unsigned OpNo, raw_ostream &O) {

@@ -950,10 +950,12 @@ OperandType RecognizableInstr::typeFromString(const std::string &s,
   TYPE("srcidx16",            TYPE_SRCIDX)
   TYPE("srcidx32",            TYPE_SRCIDX)
   TYPE("srcidx64",            TYPE_SRCIDX)
+  TYPE("srcidxC",             TYPE_SRCIDX)
   TYPE("dstidx8",             TYPE_DSTIDX)
   TYPE("dstidx16",            TYPE_DSTIDX)
   TYPE("dstidx32",            TYPE_DSTIDX)
   TYPE("dstidx64",            TYPE_DSTIDX)
+  TYPE("dstidxC",             TYPE_DSTIDX)
   TYPE("offset16_8",          TYPE_MOFFS)
   TYPE("offset16_16",         TYPE_MOFFS)
   TYPE("offset16_32",         TYPE_MOFFS)
@@ -1263,10 +1265,12 @@ RecognizableInstr::relocationEncodingFromString(const std::string &s,
   ENCODING("srcidx16",           ENCODING_SI)
   ENCODING("srcidx32",           ENCODING_SI)
   ENCODING("srcidx64",           ENCODING_SI)
+  ENCODING("srcidxC",            ENCODING_SI)
   ENCODING("dstidx8",            ENCODING_DI)
   ENCODING("dstidx16",           ENCODING_DI)
   ENCODING("dstidx32",           ENCODING_DI)
   ENCODING("dstidx64",           ENCODING_DI)
+  ENCODING("dstidxC",            ENCODING_DI)
   errs() << "Unhandled relocation encoding " << s << "\n";
   llvm_unreachable("Unhandled relocation encoding");
 }

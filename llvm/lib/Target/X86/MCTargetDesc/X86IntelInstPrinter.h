@@ -103,6 +103,10 @@ public:
     O << "qword ptr ";
     printSrcIdx(MI, OpNo, O);
   }
+  void printSrcIdxC(const MCInst *MI, unsigned OpNo, raw_ostream &O) {
+    O << "cword ptr ";
+    printSrcIdx(MI, OpNo, O);
+  }
   void printDstIdx8(const MCInst *MI, unsigned OpNo, raw_ostream &O) {
     O << "byte ptr ";
     printDstIdx(MI, OpNo, O);
@@ -117,6 +121,10 @@ public:
   }
   void printDstIdx64(const MCInst *MI, unsigned OpNo, raw_ostream &O) {
     O << "qword ptr ";
+    printDstIdx(MI, OpNo, O);
+  }
+  void printDstIdxC(const MCInst *MI, unsigned OpNo, raw_ostream &O) {
+    O << "cword ptr ";
     printDstIdx(MI, OpNo, O);
   }
   void printMemOffs8(const MCInst *MI, unsigned OpNo, raw_ostream &O) {

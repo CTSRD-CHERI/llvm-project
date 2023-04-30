@@ -3536,7 +3536,7 @@ bool X86AsmParser::ParseInstruction(ParseInstructionInfo &Info, StringRef Name,
   if (Name.startswith("lods") &&
       (Operands.size() == 1 || Operands.size() == 2) &&
       (Name == "lods" || Name == "lodsb" || Name == "lodsw" ||
-       Name == "lodsl" || Name == "lodsd" || Name == "lodsq")) {
+       Name == "lodsl" || Name == "lodsd" || Name == "lodsq" || Name == "lodsc")) {
     TmpOperands.push_back(DefaultMemSIOperand(NameLoc));
     HadVerifyError = VerifyAndAdjustOperands(Operands, TmpOperands);
   }
