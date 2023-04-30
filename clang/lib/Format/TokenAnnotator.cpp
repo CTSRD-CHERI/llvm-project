@@ -2166,6 +2166,11 @@ private:
   /// something that is likely a type.
   bool isStartOfName(const FormatToken &Tok) {
     assert(Tok.is(TT_Unknown));
+
+    // Handled in ExpressionParser for Verilog.
+    if (Style.isVerilog())
+      return false;
+
     if (Tok.isNot(tok::identifier) || !Tok.Previous)
       return false;
 
