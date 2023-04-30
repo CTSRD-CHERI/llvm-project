@@ -2929,8 +2929,8 @@ bool isKnownNonZero(const Value *V, const APInt &DemandedElts, unsigned Depth,
                         I->getOperand(1));
   case Instruction::Or:
     // X | Y != 0 if X != 0 or Y != 0.
-    return isKnownNonZero(I->getOperand(0), DemandedElts, Depth, Q) ||
-           isKnownNonZero(I->getOperand(1), DemandedElts, Depth, Q);
+    return isKnownNonZero(I->getOperand(1), DemandedElts, Depth, Q) ||
+           isKnownNonZero(I->getOperand(0), DemandedElts, Depth, Q);
   case Instruction::SExt:
   case Instruction::ZExt:
     // ext X != 0 if X != 0.
@@ -2995,8 +2995,8 @@ bool isKnownNonZero(const Value *V, const APInt &DemandedElts, unsigned Depth,
     // non-zero.
     auto *BO = cast<OverflowingBinaryOperator>(V);
     if (Q.IIQ.hasNoUnsignedWrap(BO))
-      return isKnownNonZero(I->getOperand(0), DemandedElts, Depth, Q) ||
-             isKnownNonZero(I->getOperand(1), DemandedElts, Depth, Q);
+      return isKnownNonZero(I->getOperand(1), DemandedElts, Depth, Q) ||
+             isKnownNonZero(I->getOperand(0), DemandedElts, Depth, Q);
 
     return isNonZeroAdd(DemandedElts, Depth, Q, BitWidth, I->getOperand(0),
                         I->getOperand(1), Q.IIQ.hasNoSignedWrap(BO));
@@ -3072,9 +3072,7 @@ bool isKnownNonZero(const Value *V, const APInt &DemandedElts, unsigned Depth,
       case Intrinsic::bitreverse:
       case Intrinsic::bswap:
       case Intrinsic::ctpop:
-        if (isKnownNonZero(II->getArgOperand(0), DemandedElts, Depth, Q))
-          return true;
-        break;
+        return isKnownNonZero(II->getArgOperand(0), DemandedElts, Depth, Q);
       case Intrinsic::ssub_sat:
         return isNonZeroSub(DemandedElts, Depth, Q, BitWidth,
                             II->getArgOperand(0), II->getArgOperand(1));
@@ -3084,10 +3082,8 @@ bool isKnownNonZero(const Value *V, const APInt &DemandedElts, unsigned Depth,
                             /*NSW*/ true);
       case Intrinsic::umax:
       case Intrinsic::uadd_sat:
-        if (isKnownNonZero(II->getArgOperand(0), DemandedElts, Depth, Q) ||
-            isKnownNonZero(II->getArgOperand(1), DemandedElts, Depth, Q))
-          return true;
-        break;
+        return isKnownNonZero(II->getArgOperand(1), DemandedElts, Depth, Q) ||
+               isKnownNonZero(II->getArgOperand(0), DemandedElts, Depth, Q);
       case Intrinsic::smin:
       case Intrinsic::smax: {
         auto KnownOpImpliesNonZero = [&](const KnownBits &K) {
