@@ -4216,7 +4216,7 @@ MipsTargetLowering::LowerCall(TargetLowering::CallLoweringInfo &CLI,
                              ES ? ES->getSymbol() : nullptr);
 
   // Get a count of how many bytes are to be pushed on the stack.
-  unsigned NextStackOffset = CCInfo.getNextStackOffset();
+  unsigned StackSize = CCInfo.getStackSize();
 
   // Call site info for function parameters tracking.
   MachineFunction::CallSiteInfo CSInfo;
@@ -4226,8 +4226,8 @@ MipsTargetLowering::LowerCall(TargetLowering::CallLoweringInfo &CLI,
   bool InternalLinkage = false;
   if (IsTailCall) {
     IsTailCall = isEligibleForTailCallOptimization(
-        CCInfo, NextStackOffset, *MF.getInfo<MipsFunctionInfo>());
-     if (GlobalAddressSDNode *G = dyn_cast<GlobalAddressSDNode>(Callee)) {
+        CCInfo, StackSize, *MF.getInfo<MipsFunctionInfo>());
+    if (GlobalAddressSDNode *G = dyn_cast<GlobalAddressSDNode>(Callee)) {
       InternalLinkage = G->getGlobal()->hasInternalLinkage();
       IsTailCall &= (InternalLinkage || G->getGlobal()->hasLocalLinkage() ||
                      G->getGlobal()->hasPrivateLinkage() ||
@@ -4246,10 +4246,10 @@ MipsTargetLowering::LowerCall(TargetLowering::CallLoweringInfo &CLI,
   // ByValChain is the output chain of the last Memcpy node created for copying
   // byval arguments to the stack.
   unsigned StackAlignment = TFL->getStackAlignment();
-  NextStackOffset = alignTo(NextStackOffset, StackAlignment);
+  StackSize = alignTo(StackSize, StackAlignment);
 
   if (!(IsTailCall || MemcpyInByVal))
-    Chain = DAG.getCALLSEQ_START(Chain, NextStackOffset, 0, DL);
+    Chain = DAG.getCALLSEQ_START(Chain, StackSize, 0, DL);
 
   SDValue StackPtr =
       DAG.getCopyFromReg(Chain, DL, ABI.GetStackPtr(),
@@ -4608,7 +4608,7 @@ MipsTargetLowering::LowerCall(TargetLowering::CallLoweringInfo &CLI,
   // Create the CALLSEQ_END node in the case of where it is not a call to
   // memcpy.
   if (!(MemcpyInByVal)) {
-    Chain = DAG.getCALLSEQ_END(Chain, NextStackOffset, 0, InGlue, DL);
+    Chain = DAG.getCALLSEQ_END(Chain, StackSize, 0, InGlue, DL);
     InGlue = Chain.getValue(1);
   }
 
@@ -4845,7 +4845,7 @@ SDValue MipsTargetLowering::LowerFormalArguments(
         "Functions with the interrupt attribute cannot have arguments!");
 
   CCInfo.AnalyzeFormalArguments(Ins, CC_Mips_FixedArg);
-  MipsFI->setFormalArgInfo(CCInfo.getNextStackOffset(),
+  MipsFI->setFormalArgInfo(CCInfo.getStackSize(),
                            CCInfo.getInRegsParamsCount() > 0);
 
   unsigned CurArgIdx = 0;
@@ -5869,7 +5869,7 @@ void MipsTargetLowering::writeVarArgRegs(std::vector<SDValue> &OutChains,
   }
 
   if (ArgRegs.size() == Idx)
-    VaArgOffset = alignTo(State.getNextStackOffset(), RegSizeInBytes);
+    VaArgOffset = alignTo(State.getStackSize(), RegSizeInBytes);
   else {
     VaArgOffset =
         (int)ABI.GetCalleeAllocdArgSizeInBytes(State.getCallingConv()) -
