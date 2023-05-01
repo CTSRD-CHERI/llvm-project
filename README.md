@@ -16,7 +16,7 @@ CSA performs inter-procedural path-sensitive analysis in the boundary of one tra
 * Fires a warning when the `(u)intptr_t` value obtained from the ambiguous-provenance-operation is cast to pointer type
 * Fires a warning when `NULL`-derived `(u)intptr_t` capability is cast to pointer type
 
-### CapabilityCopyChecker (WIP)
+### CapabilityCopyChecker
 
 Detects tag-stripping loads and stores that may be used to copy or swap capabilities
 
@@ -33,28 +33,30 @@ void memcpy_impl(void* src0, void *dst0, size_t len) {
 
 ## Build
 
-Use [cheribuild](https://github.com/CTSRD-CHERI/cheribuild) to build llvm with `--llvm/no-skip-static-analyzer` flag:
+Use fork of [cheribuild](https://github.ckm/rems-project/cheribuild/commits/use-csa) to build from the source code:
 
 ```
-cheribuild.py llvm --llvm/no-skip-static-analyzer
+cheribuild.py cheri-csa
 ```
 
 ## Usage
 
 ### Single compilation
 
-Add ``--analyze -Xanalyzer -analyzer-checker=core,alpha.cheri.ProvenanceSourceChecker[,OTHER_CHECKERS]`` to clang options.
+1. Compile with clang from cheri-csa build
+2. Add ``--analyze -Xanalyzer -analyzer-checker=core,alpha.cheri.ProvenanceSourceChecker,alpha.cheri.CapabilityCopyChecker[,OTHER_CHECKERS]`` to clang options.
 
 ### Analysing projects with scan-build
 
 #### Using scan-build directly
 
 ```
-~/cheri/output/sdk/bin/scan-build --keep-cc \
-  -enable-checker alpha.cheri.ProvenanceSourceChecker \
-  --use-cc ~/cheri/output/sdk/bin/clang \
-  --use-c++ ~/cheri/output/sdk/bin/clang++ \
-  BUILD_COMMAND
+$ ~/cheri/output/cheri-csa/bin/scan-build --keep-cc \
+    -enable-checker alpha.cheri.ProvenanceSourceChecker,alpha.cheri.CapabilityCopyChecker \
+    --use-cc ~/cheri/output/sdk/bin/clang \
+    --use-c++ ~/cheri/output/sdk/bin/clang++ \
+    BUILD_COMMAND
+$ ~/cheri/output/cheri-csa/bin/scan-view /tmp/scan-build-<timestamp>
 ```
 
 The idea is to trick the build system into calling the ccc-analyser wrapper instead of the original compiler. ccc-analyser, in turn, invokes the original compiler (provided by ``--use-cc``) and its own clang for static analysis, passing all the compiler options provided by the build system to both[^2].
@@ -65,9 +67,15 @@ Therefore BUILD_COMMAND should either
 * use CC and CXX variables for obtaining the compiler path (scan-build will set CC and CXX to ccc-analyser and cxx-analyser, respectively),
 * or directly invoke ccc/cxx-analyser instead of cheri-clang.
     
-#### Analysing with cherbuild
+#### Analysing with cheribuild
 
-``use-csa`` flag was added to cheribuild [here](https://github.com/rems-project/cheribuild/commits/use-csa) to support analysing projects that can be built with cheribuild.
+``use-csa`` flag was added to the fork of cheribuild [here](https://github.ckm/rems-project/cheribuild/commits/use-csa) to support analysing projects that can be built with cheribuild.
+
+```
+$ cheribuild.py <project>-riscv64-purecap --<project>/use-csa --skip-install --clean
+$ ~/cheri/output/cheri-csa/bin/scan-view /tmp/scan-build-<timestamp>
+```
+
 
 ##### To add ``use-csa`` option to the project:
 
