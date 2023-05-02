@@ -3547,7 +3547,7 @@ bool X86AsmParser::ParseInstruction(ParseInstructionInfo &Info, StringRef Name,
   if (Name.startswith("stos") &&
       (Operands.size() == 1 || Operands.size() == 2) &&
       (Name == "stos" || Name == "stosb" || Name == "stosw" ||
-       Name == "stosl" || Name == "stosd" || Name == "stosq")) {
+       Name == "stosl" || Name == "stosd" || Name == "stosq" || Name == "stosc")) {
     TmpOperands.push_back(DefaultMemDIOperand(NameLoc));
     HadVerifyError = VerifyAndAdjustOperands(Operands, TmpOperands);
   }
