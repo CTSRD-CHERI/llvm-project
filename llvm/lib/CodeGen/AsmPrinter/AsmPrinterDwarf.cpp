@@ -110,7 +110,7 @@ unsigned AsmPrinter::GetSizeOfEncodedValue(unsigned Encoding) const {
   case dwarf::DW_EH_PE_absptr:
     assert(!MF->getDataLayout().isFatPointer(0u) &&
            "Should not use GetSizeOfEncodedValue when emitting capabilities");
-    return MF->getDataLayout().getPointerSize();
+    return MAI->getCodePointerSize();
   case dwarf::DW_EH_PE_udata2:
     return 2;
   case dwarf::DW_EH_PE_udata4:
