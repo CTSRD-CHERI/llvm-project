@@ -699,6 +699,14 @@ DecodeStatus RISCVDisassembler::getInstruction(MCInst &MI, uint64_t &Size,
     if (Result != MCDisassembler::Fail)
       return Result;
   }
+  if (STI.hasFeature(RISCV::FeatureStdExtZcmt)) {
+    LLVM_DEBUG(
+        dbgs() << "Trying Zcmt table (16-bit Table Jump Instructions):\n");
+    Result = decodeInstruction(DecoderTableRVZcmt16, MI, Insn, Address,
+                               this, STI);
+    if (Result != MCDisassembler::Fail)
+      return Result;
+  }
 
   if (STI.hasFeature(RISCV::FeatureCapMode)) {
     LLVM_DEBUG(dbgs() << "Trying CapModeOnly_16 table:\n");
