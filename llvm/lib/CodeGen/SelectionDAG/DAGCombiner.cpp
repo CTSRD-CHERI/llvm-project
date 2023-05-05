@@ -15651,7 +15651,7 @@ SDValue DAGCombiner::visitFSUBForFMACombine(SDNode *N) {
     }
   }
 
-  auto isReassociable = [Options](SDNode *N) {
+  auto isReassociable = [&Options](SDNode *N) {
     return Options.UnsafeFPMath || N->getFlags().hasAllowReassociation();
   };
 
