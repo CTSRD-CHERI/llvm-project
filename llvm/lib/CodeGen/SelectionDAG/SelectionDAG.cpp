@@ -3988,6 +3988,7 @@ SelectionDAG::computeOverflowForSignedAdd(SDValue N0, SDValue N1) const {
   if (ComputeNumSignBits(N0) > 1 && ComputeNumSignBits(N1) > 1)
     return OFK_Never;
 
+  // TODO: Add ConstantRange::signedAddMayOverflow handling.
   return OFK_Sometime;
 }
 
@@ -4019,6 +4020,32 @@ SelectionDAG::computeOverflowForUnsignedAdd(SDValue N0, SDValue N1) const {
       return OFK_Never;
   }
 
+  // TODO: Add ConstantRange::unsignedAddMayOverflow handling.
+  return OFK_Sometime;
+}
+
+SelectionDAG::OverflowKind
+SelectionDAG::computeOverflowForSignedSub(SDValue N0, SDValue N1) const {
+  // X - 0 never overflow
+  if (isNullConstant(N1))
+    return OFK_Never;
+
+  // If both operands each have at least two sign bits, the subtraction
+  // cannot overflow.
+  if (ComputeNumSignBits(N0) > 1 && ComputeNumSignBits(N1) > 1)
+    return OFK_Never;
+
+  // TODO: Add ConstantRange::signedSubMayOverflow handling.
+  return OFK_Sometime;
+}
+
+SelectionDAG::OverflowKind
+SelectionDAG::computeOverflowForUnsignedSub(SDValue N0, SDValue N1) const {
+  // X - 0 never overflow
+  if (isNullConstant(N1))
+    return OFK_Never;
+
+  // TODO: Add ConstantRange::unsignedSubMayOverflow handling.
   return OFK_Sometime;
 }
 
