@@ -520,6 +520,10 @@ bool X86FastISel::X86FastEmitStore(EVT VT, unsigned ValReg, X86AddressMode &AM,
     // Must be in x86-64 mode.
     Opc = (IsNonTemporal && HasSSE2) ? X86::MOVNTI_64mr : X86::MOV64mr;
     break;
+  case MVT::iFATPTR128:
+    // Must be in x86-64 mode.
+    Opc = (IsNonTemporal && HasSSE2) ? X86::MOVNTI_Cmr : X86::MOVCmr;
+    break;
   case MVT::f32:
     if (X86ScalarSSEf32) {
       if (IsNonTemporal && HasSSE4A)

@@ -1002,6 +1002,9 @@ class CI<bits<8> o, Format F, dag outs, dag ins, string asm,
 class CIi32S <bits<8> o, Format F, dag outs, dag ins, string asm,
               list<dag> pattern>
       : Ii32S<o, F, outs, ins, asm, pattern>, OpSizeCap, Requires<[HasCHERI]>;
+class CIN<bits<8> o, Format F, dag outs, dag ins, string asm,
+         list<dag> pattern>
+      : I<o, F, outs, ins, asm, pattern>, OpSizeCap;
 
 // MMX Instruction templates
 //

@@ -3127,6 +3127,10 @@ def MOVNTI_64mr : RI<0xC3, MRMDestMem, (outs), (ins i64mem:$dst, GR64:$src),
                      "movnti{q}\t{$src, $dst|$dst, $src}",
                      [(nontemporalstore (i64 GR64:$src), addr:$dst)]>,
                   PS, Requires<[HasSSE2]>;
+def MOVNTI_Cmr : CIN<0xC3, MRMDestMem, (outs), (ins capmem:$dst, GRC:$src),
+                    "movnti{c}\t{$src, $dst|$dst, $src}",
+                    [(nontemporalstore (iFATPTR128 GRC:$src), addr:$dst)]>,
+                 PS, Requires<[HasSSE2,HasCHERI,In64BitMode]>;
 } // SchedRW = [WriteStoreNT]
 
 let Predicates = [HasAVX, NoVLX] in {
@@ -8020,4 +8024,3 @@ let isCommutable = 0 in {
   defm GF2P8AFFINEQB    : GF2P8AFFINE_common<0xCE, "gf2p8affineqb",
                                              X86GF2P8affineqb>, TAPD;
 }
-
