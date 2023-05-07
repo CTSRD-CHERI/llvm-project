@@ -2011,7 +2011,7 @@ public:
 
 private:
   PredefinedExpr(SourceLocation L, QualType FNTy, IdentKind IK,
-                 bool IsTransparent, StringLiteral *SL);
+                 StringLiteral *SL);
 
   explicit PredefinedExpr(EmptyShell Empty, bool HasFunctionName);
 
@@ -2026,12 +2026,8 @@ private:
 
 public:
   /// Create a PredefinedExpr.
-  ///
-  /// If IsTransparent, the PredefinedExpr is transparently handled as a
-  /// StringLiteral.
   static PredefinedExpr *Create(const ASTContext &Ctx, SourceLocation L,
-                                QualType FNTy, IdentKind IK, bool IsTransparent,
-                                StringLiteral *SL);
+                                QualType FNTy, IdentKind IK, StringLiteral *SL);
 
   /// Create an empty PredefinedExpr.
   static PredefinedExpr *CreateEmpty(const ASTContext &Ctx,
@@ -2040,8 +2036,6 @@ public:
   IdentKind getIdentKind() const {
     return static_cast<IdentKind>(PredefinedExprBits.Kind);
   }
-
-  bool isTransparent() const { return PredefinedExprBits.IsTransparent; }
 
   SourceLocation getLocation() const { return PredefinedExprBits.Loc; }
   void setLocation(SourceLocation L) { PredefinedExprBits.Loc = L; }
