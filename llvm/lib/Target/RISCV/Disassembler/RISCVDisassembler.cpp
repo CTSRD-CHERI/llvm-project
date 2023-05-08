@@ -213,6 +213,17 @@ static DecodeStatus DecodeGPRPF64RegisterClass(MCInst &Inst, uint32_t RegNo,
   return MCDisassembler::Success;
 }
 
+static DecodeStatus DecodeSR07RegisterClass(MCInst &Inst, uint64_t RegNo,
+                                            uint64_t Address,
+                                            const void *Decoder) {
+  if (RegNo >= 8)
+    return MCDisassembler::Fail;
+
+  MCRegister Reg = (RegNo < 2) ? (RegNo + RISCV::X8) : (RegNo - 2 + RISCV::X18);
+  Inst.addOperand(MCOperand::createReg(Reg));
+  return MCDisassembler::Success;
+}
+
 static DecodeStatus DecodeVRRegisterClass(MCInst &Inst, uint32_t RegNo,
                                           uint64_t Address,
                                           const MCDisassembler *Decoder) {
@@ -430,6 +441,12 @@ static DecodeStatus decodeXTHeadMemPair(MCInst &Inst, uint32_t Insn,
                                         uint64_t Address,
                                         const MCDisassembler *Decoder);
 
+static DecodeStatus decodeZcmpRlist(MCInst &Inst, unsigned Imm,
+                                    uint64_t Address, const void *Decoder);
+
+static DecodeStatus decodeZcmpSpimm(MCInst &Inst, unsigned Imm,
+                                    uint64_t Address, const void *Decoder);
+
 #include "RISCVGenDisassemblerTables.inc"
 
 static DecodeStatus decodeRVCInstrRdRs1ImmZero(MCInst &Inst, uint32_t Insn,
@@ -513,6 +530,22 @@ static DecodeStatus decodeXTHeadMemPair(MCInst &Inst, uint32_t Insn,
   else
     Inst.addOperand(MCOperand::createImm(4));
 
+  return MCDisassembler::Success;
+}
+
+static DecodeStatus decodeZcmpRlist(MCInst &Inst, unsigned Imm,
+                                    uint64_t Address, const void *Decoder) {
+  if (Imm <= 3)
+    return MCDisassembler::Fail;
+  Inst.addOperand(MCOperand::createImm(Imm));
+  return MCDisassembler::Success;
+}
+
+// spimm is based on rlist now.
+static DecodeStatus decodeZcmpSpimm(MCInst &Inst, unsigned Imm,
+                                    uint64_t Address, const void *Decoder) {
+  // TODO: check if spimm matches rlist
+  Inst.addOperand(MCOperand::createImm(Imm));
   return MCDisassembler::Success;
 }
 
@@ -704,6 +737,15 @@ DecodeStatus RISCVDisassembler::getInstruction(MCInst &MI, uint64_t &Size,
         dbgs() << "Trying Zcmt table (16-bit Table Jump Instructions):\n");
     Result = decodeInstruction(DecoderTableRVZcmt16, MI, Insn, Address,
                                this, STI);
+    if (Result != MCDisassembler::Fail)
+      return Result;
+  }
+  if (STI.hasFeature(RISCV::FeatureStdExtZcmp)) {
+    LLVM_DEBUG(
+        dbgs()
+        << "Trying Zcmp table (16-bit Push/Pop & Double Move Instructions):\n");
+    Result =
+        decodeInstruction(DecoderTableRVZcmp16, MI, Insn, Address, this, STI);
     if (Result != MCDisassembler::Fail)
       return Result;
   }
