@@ -1687,6 +1687,14 @@ public:
     getArgs()[Arg] = ArgExpr;
   }
 
+  bool isImmediateEscalating() const {
+    return CXXConstructExprBits.IsImmediateEscalating;
+  }
+
+  void setIsImmediateEscalating(bool Set) {
+    CXXConstructExprBits.IsImmediateEscalating = Set;
+  }
+
   SourceLocation getBeginLoc() const LLVM_READONLY;
   SourceLocation getEndLoc() const LLVM_READONLY;
   SourceRange getParenOrBraceRange() const { return ParenOrBraceRange; }

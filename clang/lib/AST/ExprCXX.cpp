@@ -1135,6 +1135,7 @@ CXXConstructExpr::CXXConstructExpr(
   CXXConstructExprBits.StdInitListInitialization = StdInitListInitialization;
   CXXConstructExprBits.ZeroInitialization = ZeroInitialization;
   CXXConstructExprBits.ConstructionKind = ConstructKind;
+  CXXConstructExprBits.IsImmediateEscalating = false;
   CXXConstructExprBits.Loc = Loc;
 
   Stmt **TrailingArgs = getTrailingArgs();
