@@ -8504,10 +8504,9 @@ SystemZTargetLowering::emitMemMemWrapper(MachineInstr &MI,
           .addReg(RemSrcReg).addImm(SrcDisp);
       MBB->addSuccessor(AllDoneMBB);
       MBB = AllDoneMBB;
-      if (Opcode != SystemZ::MVC) {
+      if (EndMBB) {
         EXRL_MIB.addReg(SystemZ::CC, RegState::ImplicitDefine);
-        if (EndMBB)
-          MBB->addLiveIn(SystemZ::CC);
+        MBB->addLiveIn(SystemZ::CC);
       }
     }
   }
