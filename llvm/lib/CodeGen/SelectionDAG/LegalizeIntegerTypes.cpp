@@ -2323,8 +2323,6 @@ SDValue DAGTypeLegalizer::PromoteIntOp_VECREDUCE(SDNode *N) {
     // to either sign_ext or zero_ext in the undefined case.
     switch (TLI.getBooleanContents(InVT)) {
     case TargetLoweringBase::UndefinedBooleanContent:
-      Op = SExtOrZExtPromotedInteger(N->getOperand(0));
-      break;
     case TargetLoweringBase::ZeroOrOneBooleanContent:
       Op = ZExtPromotedInteger(N->getOperand(0));
       break;
@@ -2344,8 +2342,6 @@ SDValue DAGTypeLegalizer::PromoteIntOp_VECREDUCE(SDNode *N) {
     // to either sign_ext or zero_ext in the undefined case.
     switch (TLI.getBooleanContents(InVT)) {
     case TargetLoweringBase::UndefinedBooleanContent:
-      Op = SExtOrZExtPromotedInteger(N->getOperand(0));
-      break;
     case TargetLoweringBase::ZeroOrOneBooleanContent:
       Op = ZExtPromotedInteger(N->getOperand(0));
       break;
