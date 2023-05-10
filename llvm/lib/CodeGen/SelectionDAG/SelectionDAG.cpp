@@ -3085,7 +3085,7 @@ KnownBits SelectionDAG::computeKnownBits(SDValue Op, const APInt &DemandedElts,
       }
 
       // Known bits are the values that are shared by every demanded element.
-      Known = KnownBits::commonBits(Known, Known2);
+      Known = Known.intersectWith(Known2);
 
       // If we don't know any bits, early out.
       if (Known.isUnknown())
@@ -3108,7 +3108,7 @@ KnownBits SelectionDAG::computeKnownBits(SDValue Op, const APInt &DemandedElts,
     if (!!DemandedLHS) {
       SDValue LHS = Op.getOperand(0);
       Known2 = computeKnownBits(LHS, DemandedLHS, Depth + 1);
-      Known = KnownBits::commonBits(Known, Known2);
+      Known = Known.intersectWith(Known2);
     }
     // If we don't know any bits, early out.
     if (Known.isUnknown())
@@ -3116,7 +3116,7 @@ KnownBits SelectionDAG::computeKnownBits(SDValue Op, const APInt &DemandedElts,
     if (!!DemandedRHS) {
       SDValue RHS = Op.getOperand(1);
       Known2 = computeKnownBits(RHS, DemandedRHS, Depth + 1);
-      Known = KnownBits::commonBits(Known, Known2);
+      Known = Known.intersectWith(Known2);
     }
     break;
   }
@@ -3134,7 +3134,7 @@ KnownBits SelectionDAG::computeKnownBits(SDValue Op, const APInt &DemandedElts,
       if (!!DemandedSub) {
         SDValue Sub = Op.getOperand(i);
         Known2 = computeKnownBits(Sub, DemandedSub, Depth + 1);
-        Known = KnownBits::commonBits(Known, Known2);
+        Known = Known.intersectWith(Known2);
       }
       // If we don't know any bits, early out.
       if (Known.isUnknown())
@@ -3164,7 +3164,7 @@ KnownBits SelectionDAG::computeKnownBits(SDValue Op, const APInt &DemandedElts,
     }
     if (!!DemandedSrcElts) {
       Known2 = computeKnownBits(Src, DemandedSrcElts, Depth + 1);
-      Known = KnownBits::commonBits(Known, Known2);
+      Known = Known.intersectWith(Known2);
     }
     break;
   }
@@ -3254,8 +3254,7 @@ KnownBits SelectionDAG::computeKnownBits(SDValue Op, const APInt &DemandedElts,
         if (DemandedElts[i]) {
           unsigned Shifts = IsLE ? i : NumElts - 1 - i;
           unsigned Offset = (Shifts % SubScale) * BitWidth;
-          Known = KnownBits::commonBits(Known,
-                                        Known2.extractBits(BitWidth, Offset));
+          Known = Known.intersectWith(Known2.extractBits(BitWidth, Offset));
           // If we don't know any bits, early out.
           if (Known.isUnknown())
             break;
@@ -3353,7 +3352,7 @@ KnownBits SelectionDAG::computeKnownBits(SDValue Op, const APInt &DemandedElts,
     Known2 = computeKnownBits(Op.getOperand(1), DemandedElts, Depth+1);
 
     // Only known if known in both the LHS and RHS.
-    Known = KnownBits::commonBits(Known, Known2);
+    Known = Known.intersectWith(Known2);
     break;
   case ISD::SELECT_CC:
     Known = computeKnownBits(Op.getOperand(3), DemandedElts, Depth+1);
@@ -3363,7 +3362,7 @@ KnownBits SelectionDAG::computeKnownBits(SDValue Op, const APInt &DemandedElts,
     Known2 = computeKnownBits(Op.getOperand(2), DemandedElts, Depth+1);
 
     // Only known if known in both the LHS and RHS.
-    Known = KnownBits::commonBits(Known, Known2);
+    Known = Known.intersectWith(Known2);
     break;
   case ISD::SMULO:
   case ISD::UMULO:
@@ -3443,8 +3442,7 @@ KnownBits SelectionDAG::computeKnownBits(SDValue Op, const APInt &DemandedElts,
         Known2.One.lshrInPlace(Amt);
         Known2.Zero.lshrInPlace(Amt);
       }
-      Known.One |= Known2.One;
-      Known.Zero |= Known2.Zero;
+      Known = Known.unionWith(Known2);
     }
     break;
   case ISD::SHL_PARTS:
@@ -3814,11 +3812,11 @@ KnownBits SelectionDAG::computeKnownBits(SDValue Op, const APInt &DemandedElts,
     Known.Zero.setAllBits();
     if (DemandedVal) {
       Known2 = computeKnownBits(InVal, Depth + 1);
-      Known = KnownBits::commonBits(Known, Known2.zextOrTrunc(BitWidth));
+      Known = Known.intersectWith(Known2.zextOrTrunc(BitWidth));
     }
     if (!!DemandedVecElts) {
       Known2 = computeKnownBits(InVec, DemandedVecElts, Depth + 1);
-      Known = KnownBits::commonBits(Known, Known2);
+      Known = Known.intersectWith(Known2);
     }
     break;
   }
