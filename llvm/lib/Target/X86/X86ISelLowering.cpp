@@ -30281,10 +30281,12 @@ static SDValue LowerFMINIMUM_FMAXIMUM(SDValue Op, const X86Subtarget &Subtarget,
   SDLoc DL(Op);
   uint64_t SizeInBits = VT.getScalarSizeInBits();
   APInt PreferredZero = APInt::getZero(SizeInBits);
+  APInt OppositeZero = PreferredZero;
   EVT IVT = VT.changeTypeToInteger();
   X86ISD::NodeType MinMaxOp;
   if (Op.getOpcode() == ISD::FMAXIMUM) {
     MinMaxOp = X86ISD::FMAX;
+    OppositeZero.setSignBit();
   } else {
     PreferredZero.setSignBit();
     MinMaxOp = X86ISD::FMIN;
@@ -30309,12 +30311,12 @@ static SDValue LowerFMINIMUM_FMAXIMUM(SDValue Op, const X86Subtarget &Subtarget,
   // We check if any of operands is NaN and return NaN. Then we check if any of
   // operands is zero or negative zero (for fmaximum and fminimum respectively)
   // to ensure the correct zero is returned.
-  auto IsPreferredZero = [PreferredZero](SDValue Op) {
+  auto MatchesZero = [](SDValue Op, APInt Zero) {
     Op = peekThroughBitcasts(Op);
     if (auto *CstOp = dyn_cast<ConstantFPSDNode>(Op))
-      return CstOp->getValueAPF().bitcastToAPInt() == PreferredZero;
+      return CstOp->getValueAPF().bitcastToAPInt() == Zero;
     if (auto *CstOp = dyn_cast<ConstantSDNode>(Op))
-      return CstOp->getAPIntValue() == PreferredZero;
+      return CstOp->getAPIntValue() == Zero;
     if (Op->getOpcode() == ISD::BUILD_VECTOR ||
         Op->getOpcode() == ISD::SPLAT_VECTOR) {
       for (const SDValue &OpVal : Op->op_values()) {
@@ -30323,7 +30325,9 @@ static SDValue LowerFMINIMUM_FMAXIMUM(SDValue Op, const X86Subtarget &Subtarget,
         auto *CstOp = dyn_cast<ConstantFPSDNode>(OpVal);
         if (!CstOp)
           return false;
-        if (CstOp->getValueAPF().bitcastToAPInt() != PreferredZero)
+        if (!CstOp->getValueAPF().isZero())
+          continue;
+        if (CstOp->getValueAPF().bitcastToAPInt() != Zero)
           return false;
       }
       return true;
@@ -30338,11 +30342,12 @@ static SDValue LowerFMINIMUM_FMAXIMUM(SDValue Op, const X86Subtarget &Subtarget,
                           DAG.isKnownNeverZeroFloat(X) ||
                           DAG.isKnownNeverZeroFloat(Y);
   SDValue NewX, NewY;
-  if (IgnoreSignedZero || IsPreferredZero(Y)) {
+  if (IgnoreSignedZero || MatchesZero(Y, PreferredZero) ||
+      MatchesZero(X, OppositeZero)) {
     // Operands are already in right order or order does not matter.
     NewX = X;
     NewY = Y;
-  } else if (IsPreferredZero(X)) {
+  } else if (MatchesZero(X, PreferredZero) || MatchesZero(Y, OppositeZero)) {
     NewX = Y;
     NewY = X;
   } else if (!VT.isVector() && (VT == MVT::f16 || Subtarget.hasDQI()) &&
