@@ -2142,7 +2142,7 @@ struct AutoTypeLocInfo : TypeSpecLocInfo {
   NestedNameSpecifierLoc NestedNameSpec;
   SourceLocation TemplateKWLoc;
   SourceLocation ConceptNameLoc;
-  NamedDecl *FoundDecl;
+  NamedDecl *FoundDecl = nullptr;
   SourceLocation LAngleLoc;
   SourceLocation RAngleLoc;
 
