@@ -8740,12 +8740,33 @@ RISCVTargetLowering::LowerReturn(SDValue Chain, CallingConv::ID CallConv,
 
   SDValue Glue;
   SmallVector<SDValue, 4> RetOps(1, Chain);
+  bool zeroX10 = false;
+  bool zeroX11 = false;
+  if (CallConv == CallingConv::CHERI_CCall ||
+      CallConv == CallingConv::CHERI_CCallee) {
+    zeroX10 = true;
+    zeroX11 = true;
+  }
 
   // Copy the result values into the output registers.
   for (unsigned i = 0, e = RVLocs.size(); i < e; ++i) {
     SDValue Val = OutVals[i];
     CCValAssign &VA = RVLocs[i];
     assert(VA.isRegLoc() && "Can only return in registers!");
+
+    if (CallConv == CallingConv::CHERI_CCall ||
+        CallConv == CallingConv::CHERI_CCallee) {
+      switch (VA.getLocReg()) {
+      case RISCV::X10:
+      case RISCV::C10:
+        zeroX10 = false;
+        break;
+      case RISCV::X11:
+      case RISCV::C11:
+        zeroX11 = false;
+        break;
+      }
+    }
 
     if (VA.getLocVT() == MVT::i32 && VA.getValVT() == MVT::f64) {
       // Handle returning f64 on RV32D with a soft float ABI.
@@ -8785,6 +8806,16 @@ RISCVTargetLowering::LowerReturn(SDValue Chain, CallingConv::ID CallConv,
       RetOps.push_back(DAG.getRegister(VA.getLocReg(), VA.getLocVT()));
     }
   }
+  auto zeroRegister = [&](auto Reg) {
+    Chain = DAG.getCopyToReg(Chain, DL, Reg, DAG.getConstant(0, DL, MVT::i32),
+                             Glue);
+    Glue = Chain.getValue(1);
+    RetOps.push_back(DAG.getRegister(Reg, MVT::i32));
+  };
+  if (zeroX10)
+    zeroRegister(RISCV::X10);
+  if (zeroX11)
+    zeroRegister(RISCV::X11);
 
   RetOps[0] = Chain; // Update chain.
 
