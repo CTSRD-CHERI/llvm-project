@@ -57,8 +57,6 @@ public:
 
   BitVector getReservedRegs(const MachineFunction &MF) const override;
 
-  bool requiresRegisterScavenging(const MachineFunction &MF) const override;
-
   /// Stack Frame Processing Methods
   bool eliminateFrameIndex(MachineBasicBlock::iterator II,
                            int SPAdj, unsigned FIOperandNum,
