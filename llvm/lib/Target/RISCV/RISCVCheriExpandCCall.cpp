@@ -254,16 +254,21 @@ public:
     AddrTy = IntegerType::get(M->getContext(), 32);
     for (Function &F : Mod) {
       visit(F);
-      auto ConvertToImportTableReference = [&](Use &U) {
-        if (auto *I = dyn_cast<Instruction>(U.getUser())) {
+      auto ConvertToImportTableReference = [&](SmallVector<Use *> &Uses) {
+        if (!Uses.empty()) {
           Constant *Import = getOrInsertImportTableEntry(F);
-          Type *PtrTy = PointerType::get(Ctx, 200);
-          if (Ctx.supportsTypedPointers())
-            Import = ConstantExpr::getBitCast(Import, PtrTy->getPointerTo(200));
-          Value *FPtr = new LoadInst(PtrTy, Import, "import_table_load", I);
-          if (Ctx.supportsTypedPointers())
-            FPtr = new BitCastInst(FPtr, F.getType(), "fake_fptr", I);
-          U.set(FPtr);
+          for (auto *U : Uses) {
+            if (auto *I = dyn_cast<Instruction>(U->getUser())) {
+              Type *PtrTy = PointerType::get(Ctx, 200);
+              if (Ctx.supportsTypedPointers())
+                Import =
+                    ConstantExpr::getBitCast(Import, PtrTy->getPointerTo(200));
+              Value *FPtr = new LoadInst(PtrTy, Import, "import_table_load", I);
+              if (Ctx.supportsTypedPointers())
+                FPtr = new BitCastInst(FPtr, F.getType(), "fake_fptr", I);
+              U->set(FPtr);
+            }
+          }
         }
       };
       // Functions that are exposed as callbacks have the `CHERI_CCall`
@@ -272,17 +277,20 @@ public:
         // Reset the calling convention to ccallee so that it's lowered
         // correctly.
         F.setCallingConv(CallingConv::CHERI_CCallee);
+        SmallVector<Use *> Uses;
         for (auto &U : F.uses()) {
           // If this is a function call and we're just calling the
           // function, we want to be using the function directly, so do
           // nothing.
           if (auto *CI = dyn_cast<CallBase>(U.getUser())) {
-            if (CI->getCalledOperand() == &F)
+            if (CI->getCalledOperandUse() == U)
               continue;
           }
-          ConvertToImportTableReference(U);
+          Uses.push_back(&U);
         }
+        ConvertToImportTableReference(Uses);
       } else if (F.getCallingConv() == CallingConv::CHERI_LibCall) {
+        SmallVector<Use *> Uses;
         for (auto &U : F.uses()) {
           // If this is a function call and we're just calling the
           // function, we want to be using the function directly, so do
@@ -291,8 +299,9 @@ public:
             if (CI->getCalledOperand() == &F)
               continue;
           }
-          ConvertToImportTableReference(U);
+          Uses.push_back(&U);
         }
+        ConvertToImportTableReference(Uses);
       }
     }
 
