@@ -373,6 +373,94 @@ void RISCVFrameLowering::emitPrologue(MachineFunction &MF,
   if (MF.getFunction().getCallingConv() == CallingConv::GHC)
     return;
 
+  if (MF.getFunction().getCallingConv() == CallingConv::CHERI_CCall ||
+      MF.getFunction().getCallingConv() == CallingConv::CHERI_CCallee) {
+    // For CHERIoT cross-compartment calls, sret pointers and pointers to
+    // on-stack arguments are impossible for either the switcher (it doesn't
+    // know the required sizes) or the programmer of the callee (they are not
+    // exposed in the C/C++ abstract machine) to check.  The compiler therefore
+    // inserts these checks.  They are fairly large and could possibly be pulled
+    // out into a helper function, but they're also rare (returning on-stack
+    // structures or taking many arguments are both generally a bad idea for
+    // cross-compartment calls).
+    MachineBasicBlock *failMBB = nullptr;
+    auto createFailMBB = [&]() {
+      if (failMBB != nullptr)
+        return;
+      failMBB = MF.CreateMachineBasicBlock();
+      MF.push_back(failMBB);
+      MachineBasicBlock::iterator failMBBI = failMBB->begin();
+      BuildMI(*failMBB, failMBBI, DL, TII->get(RISCV::ADDI))
+          .addDef(RISCV::X10)
+          .addReg(RISCV::X0)
+          .addImm(-1);
+      BuildMI(*failMBB, failMBBI, DL, TII->get(RISCV::ADDI))
+          .addDef(RISCV::X11)
+          .addReg(RISCV::X0)
+          .addImm(-1);
+      BuildMI(*failMBB, failMBBI, DL, TII->get(RISCV::PseudoCRET))
+          .addReg(RISCV::X10, RegState::Implicit)
+          .addReg(RISCV::X11, RegState::Implicit);
+      MBB.addSuccessor(failMBB);
+    };
+    auto createChecks = [&](unsigned Reg, uint64_t Size) {
+      createFailMBB();
+      // x6 (t1) and x7 (t2) are unused in the prolog, so we can use them
+      // here without any problems.
+      // Check that the base is equal to the start
+      BuildMI(MBB, MBBI, DL, TII->get(RISCV::CGetAddr))
+          .addDef(RISCV::X6)
+          .addReg(Reg);
+      BuildMI(MBB, MBBI, DL, TII->get(RISCV::CGetBase))
+          .addDef(RISCV::X7)
+          .addReg(Reg);
+      BuildMI(MBB, MBBI, DL, TII->get(RISCV::BNE))
+          .addDef(RISCV::X6)
+          .addReg(RISCV::X7)
+          .addMBB(failMBB);
+      // Check that the base is above the current stack pointer.
+      BuildMI(MBB, MBBI, DL, TII->get(RISCV::BLT))
+          .addReg(RISCV::X6)
+          .addReg(RISCV::X2) // sp
+          .addMBB(failMBB);
+      // Check that the length is at least the expected size
+      BuildMI(MBB, MBBI, DL, TII->get(RISCV::CGetLen))
+          .addDef(RISCV::X6)
+          .addReg(Reg);
+      BuildMI(MBB, MBBI, DL, TII->get(RISCV::ADDI))
+          .addDef(RISCV::X7)
+          .addReg(RISCV::X0)
+          .addImm(Size);
+      BuildMI(MBB, MBBI, DL, TII->get(RISCV::BLT))
+          .addReg(RISCV::X6)
+          .addReg(RISCV::X7)
+          .addMBB(failMBB);
+      // Check that we have the expected permissions
+      BuildMI(MBB, MBBI, DL, TII->get(RISCV::CGetPerm))
+          .addDef(RISCV::X6)
+          .addReg(Reg);
+      BuildMI(MBB, MBBI, DL, TII->get(RISCV::ADDI))
+          .addDef(RISCV::X7)
+          .addReg(RISCV::X0)
+          .addImm(0x7e); // RWclgm permissions.
+      BuildMI(MBB, MBBI, DL, TII->get(RISCV::BNE))
+          .addReg(RISCV::X6)
+          .addReg(RISCV::X7)
+          .addMBB(failMBB);
+    };
+    if (RVFI->getStackArgumentSize() > 0)
+      createChecks(RISCV::C5, RVFI->getStackArgumentSize());
+
+    auto &F = MF.getFunction();
+    if (!F.args().empty()) {
+      auto *Arg = F.args().begin();
+      if (Arg->hasStructRetAttr())
+        createChecks(RISCV::C10,
+                     F.getParent()->getDataLayout().getTypeStoreSize(
+                         Arg->getParamStructRetType()));
+    }
+  }
+
   // Emit prologue for shadow call stack.
   emitSCSPrologue(MF, MBB, MBBI, DL);
 
