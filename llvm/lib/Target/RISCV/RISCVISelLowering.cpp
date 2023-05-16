@@ -14953,7 +14953,7 @@ SDValue RISCVTargetLowering::LowerFormalArguments(
   if (IsVarArg && RISCVABI::isCheriPureCapABI(Subtarget.getTargetABI())) {
     // Record the frame index of the first variable argument
     // which is a value necessary to VASTART.
-    int FI = MFI.CreateFixedObject(XLenInBytes, CCInfo.getNextStackOffset(),
+    int FI = MFI.CreateFixedObject(XLenInBytes, CCInfo.getStackSize(),
                                    true);
     RVFI->setVarArgsFrameIndex(FI);
   } else if (IsVarArg) {
