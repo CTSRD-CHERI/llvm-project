@@ -747,7 +747,7 @@ static bool relax(InputSection &sec) {
   auto &aux = *sec.relaxAux;
   bool changed = false;
   ArrayRef<SymbolAnchor> sa = ArrayRef(aux.anchors);
-  uint32_t delta = 0;
+  uint64_t delta = 0;
 
   std::fill_n(aux.relocTypes.get(), sec.relocs().size(), R_RISCV_NONE);
   aux.writes.clear();
