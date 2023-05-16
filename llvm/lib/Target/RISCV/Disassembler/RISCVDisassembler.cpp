@@ -12,6 +12,7 @@
 
 #include "MCTargetDesc/RISCVBaseInfo.h"
 #include "MCTargetDesc/RISCVMCTargetDesc.h"
+#include "RISCVRegisterInfo.h"
 #include "TargetInfo/RISCVTargetInfo.h"
 #include "llvm/MC/MCContext.h"
 #include "llvm/MC/MCDecoderOps.h"
@@ -41,6 +42,9 @@ public:
   DecodeStatus getInstruction(MCInst &Instr, uint64_t &Size,
                               ArrayRef<uint8_t> Bytes, uint64_t Address,
                               raw_ostream &CStream) const override;
+
+private:
+  void addSPOperands(MCInst &MI) const;
 };
 } // end anonymous namespace
 
@@ -312,45 +316,11 @@ static DecodeStatus decodeVMaskReg(MCInst &Inst, uint64_t RegNo,
   return MCDisassembler::Success;
 }
 
-// Add implied SP operand for instructions *SP compressed instructions. The SP
-// operand isn't explicitly encoded in the instruction.
-static void addImplySP(MCInst &Inst) {
-  if (Inst.getOpcode() == RISCV::C_LWSP || Inst.getOpcode() == RISCV::C_SWSP ||
-      Inst.getOpcode() == RISCV::C_LDSP || Inst.getOpcode() == RISCV::C_SDSP ||
-      Inst.getOpcode() == RISCV::C_FLWSP ||
-      Inst.getOpcode() == RISCV::C_FSWSP ||
-      Inst.getOpcode() == RISCV::C_FLDSP ||
-      Inst.getOpcode() == RISCV::C_FSDSP ||
-      Inst.getOpcode() == RISCV::C_ADDI4SPN) {
-    Inst.addOperand(MCOperand::createReg(RISCV::X2));
-  }
-  if (Inst.getOpcode() == RISCV::C_ADDI16SP) {
-    Inst.addOperand(MCOperand::createReg(RISCV::X2));
-    Inst.addOperand(MCOperand::createReg(RISCV::X2));
-  }
-  if (Inst.getOpcode() == RISCV::C_CLWCSP || Inst.getOpcode() == RISCV::C_CSWCSP ||
-      Inst.getOpcode() == RISCV::C_CLDCSP || Inst.getOpcode() == RISCV::C_CSDCSP ||
-      Inst.getOpcode() == RISCV::C_CLCCSP_64 ||
-      Inst.getOpcode() == RISCV::C_CSCCSP_64 ||
-      Inst.getOpcode() == RISCV::C_CLCCSP_128 ||
-      Inst.getOpcode() == RISCV::C_CSCCSP_128 ||
-      Inst.getOpcode() == RISCV::C_CFLDCSP ||
-      Inst.getOpcode() == RISCV::C_CFSDCSP ||
-      Inst.getOpcode() == RISCV::C_CIncOffsetImm4CSPN) {
-    Inst.addOperand(MCOperand::createReg(RISCV::C2));
-  }
-  if (Inst.getOpcode() == RISCV::C_CIncOffsetImm16CSP) {
-    Inst.addOperand(MCOperand::createReg(RISCV::C2));
-    Inst.addOperand(MCOperand::createReg(RISCV::C2));
-  }
-}
-
 template <unsigned N>
 static DecodeStatus decodeUImmOperand(MCInst &Inst, uint32_t Imm,
                                       int64_t Address,
                                       const MCDisassembler *Decoder) {
   assert(isUInt<N>(Imm) && "Invalid immediate");
-  addImplySP(Inst);
   Inst.addOperand(MCOperand::createImm(Imm));
   return MCDisassembler::Success;
 }
@@ -369,7 +339,6 @@ static DecodeStatus decodeSImmOperand(MCInst &Inst, uint32_t Imm,
                                       int64_t Address,
                                       const MCDisassembler *Decoder) {
   assert(isUInt<N>(Imm) && "Invalid immediate");
-  addImplySP(Inst);
   // Sign-extend the number in the bottom N bits of Imm
   Inst.addOperand(MCOperand::createImm(SignExtend64<N>(Imm)));
   return MCDisassembler::Success;
@@ -549,6 +518,18 @@ static DecodeStatus decodeZcmpSpimm(MCInst &Inst, unsigned Imm,
   return MCDisassembler::Success;
 }
 
+// Add implied SP operand for C.*SP compressed instructions. The SP operand
+// isn't explicitly encoded in the instruction.
+void RISCVDisassembler::addSPOperands(MCInst &MI) const {
+  const MCInstrDesc &MCID = MCII->get(MI.getOpcode());
+  for (unsigned i = 0; i < MCID.getNumOperands(); i++){
+    if (MCID.operands()[i].RegClass == RISCV::SPRegClassID)
+      MI.insert(MI.begin() + i, MCOperand::createReg(RISCV::X2));
+    if (MCID.operands()[i].RegClass == RISCV::CSPRegClassID)
+      MI.insert(MI.begin() + i, MCOperand::createReg(RISCV::C2));
+  }
+}
+
 DecodeStatus RISCVDisassembler::getInstruction(MCInst &MI, uint64_t &Size,
                                                ArrayRef<uint8_t> Bytes,
                                                uint64_t Address,
@@ -719,8 +700,10 @@ DecodeStatus RISCVDisassembler::getInstruction(MCInst &MI, uint64_t &Size,
     LLVM_DEBUG(dbgs() << "Trying RISCV32CapModeOnly_16 table:\n");
     Result = decodeInstruction(DecoderTableRISCV32CapModeOnly_16, MI, Insn,
                                Address, this, STI);
-    if (Result != MCDisassembler::Fail)
+    if (Result != MCDisassembler::Fail) {
+      addSPOperands(MI);
       return Result;
+    }
   }
 
   if (!STI.hasFeature(RISCV::Feature64Bit)) {
@@ -729,8 +712,10 @@ DecodeStatus RISCVDisassembler::getInstruction(MCInst &MI, uint64_t &Size,
     // Calling the auto-generated decoder function.
     Result = decodeInstruction(DecoderTableRISCV32Only_16, MI, Insn, Address,
                                this, STI);
-    if (Result != MCDisassembler::Fail)
+    if (Result != MCDisassembler::Fail) {
+      addSPOperands(MI);
       return Result;
+    }
   }
   if (STI.hasFeature(RISCV::FeatureStdExtZcmt)) {
     LLVM_DEBUG(
@@ -754,11 +739,17 @@ DecodeStatus RISCVDisassembler::getInstruction(MCInst &MI, uint64_t &Size,
     LLVM_DEBUG(dbgs() << "Trying CapModeOnly_16 table:\n");
     Result = decodeInstruction(DecoderTableCapModeOnly_16, MI, Insn, Address,
                                this, STI);
-    if (Result != MCDisassembler::Fail)
+    if (Result != MCDisassembler::Fail) {
+      addSPOperands(MI);
       return Result;
+    }
   }
 
   LLVM_DEBUG(dbgs() << "Trying RISCV_C table (16-bit Instruction):\n");
   // Calling the auto-generated decoder function.
-  return decodeInstruction(DecoderTable16, MI, Insn, Address, this, STI);
+  Result = decodeInstruction(DecoderTable16, MI, Insn, Address, this, STI);
+  if (Result != MCDisassembler::Fail)
+    addSPOperands(MI);
+
+  return Result;
 }
