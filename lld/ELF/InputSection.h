@@ -137,7 +137,7 @@ public:
   // Used by --optimize-bb-jumps and RISC-V linker relaxation temporarily to
   // indicate the number of bytes which is not counted in the size. This should
   // be reset to zero after uses.
-  uint16_t bytesDropped = 0;
+  uint32_t bytesDropped = 0;
 
   // Whether the section needs to be padded with a NOP filler due to
   // deleteFallThruJmpInsn.
@@ -399,7 +399,7 @@ private:
 
 // TODO: drop the extra SmallVector<Relocation, 0>, it should not longer be
 // needed.
-static_assert(sizeof(InputSection) <= 160 + sizeof(std::vector<DynamicReloc>),
+static_assert(sizeof(InputSection) <= 168 + sizeof(std::vector<DynamicReloc>),
               "InputSection is too big");
 
 inline bool isDebugSection(const InputSectionBase &sec) {
