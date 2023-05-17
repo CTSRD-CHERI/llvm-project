@@ -41,12 +41,9 @@ protected:
   void getOSDefines(const LangOptions &Opts, const llvm::Triple &Triple,
                     MacroBuilder &Builder) const override {
     Builder.defineMacro("__CloudABI__");
-    Builder.defineMacro("__ELF__");
 
     // CloudABI uses ISO/IEC 10646:2012 for wchar_t, char16_t and char32_t.
     Builder.defineMacro("__STDC_ISO_10646__", "201206L");
-    Builder.defineMacro("__STDC_UTF_16__");
-    Builder.defineMacro("__STDC_UTF_32__");
   }
 
 public:
@@ -61,7 +58,6 @@ protected:
                     MacroBuilder &Builder) const override {
     // Ananas defines
     Builder.defineMacro("__Ananas__");
-    Builder.defineMacro("__ELF__");
   }
 
 public:
@@ -177,7 +173,6 @@ protected:
     // DragonFly defines; list based off of gcc output
     Builder.defineMacro("__DragonFly__");
     Builder.defineMacro("__DragonFly_cc_version", "100001");
-    Builder.defineMacro("__ELF__");
     Builder.defineMacro("__KPRINTF_ATTRIBUTE__");
     Builder.defineMacro("__tune_i386__");
     DefineStd(Builder, "unix", Opts);
@@ -222,7 +217,6 @@ protected:
     Builder.defineMacro("__FreeBSD_cc_version", Twine(CCVersion));
     Builder.defineMacro("__KPRINTF_ATTRIBUTE__");
     DefineStd(Builder, "unix", Opts);
-    Builder.defineMacro("__ELF__");
 
     // On FreeBSD, wchar_t contains the number of the code point as
     // used by the character set of the locale. These character sets are
@@ -276,7 +270,6 @@ protected:
     DefineStd(Builder, "unix", Opts);
     Builder.defineMacro("__FreeBSD_kernel__");
     Builder.defineMacro("__GLIBC__");
-    Builder.defineMacro("__ELF__");
     if (Opts.POSIXThreads)
       Builder.defineMacro("_REENTRANT");
     if (Opts.CPlusPlus)
@@ -295,7 +288,6 @@ protected:
                     MacroBuilder &Builder) const override {
     // Haiku defines; list based off of gcc output
     Builder.defineMacro("__HAIKU__");
-    Builder.defineMacro("__ELF__");
     DefineStd(Builder, "unix", Opts);
     if (this->HasFloat128)
       Builder.defineMacro("__FLOAT128__");
@@ -332,7 +324,6 @@ protected:
     Builder.defineMacro("__gnu_hurd__");
     Builder.defineMacro("__MACH__");
     Builder.defineMacro("__GLIBC__");
-    Builder.defineMacro("__ELF__");
     if (Opts.POSIXThreads)
       Builder.defineMacro("_REENTRANT");
     if (Opts.CPlusPlus)
@@ -357,7 +348,6 @@ protected:
     Builder.defineMacro("_EM_LSIZE", "4");
     Builder.defineMacro("_EM_FSIZE", "4");
     Builder.defineMacro("_EM_DSIZE", "8");
-    Builder.defineMacro("__ELF__");
     DefineStd(Builder, "unix", Opts);
   }
 
@@ -374,7 +364,6 @@ protected:
     // Linux defines; list based off of gcc output
     DefineStd(Builder, "unix", Opts);
     DefineStd(Builder, "linux", Opts);
-    Builder.defineMacro("__ELF__");
     if (Triple.isAndroid()) {
       Builder.defineMacro("__ANDROID__", "1");
       this->PlatformName = "android";
@@ -436,7 +425,6 @@ protected:
     // NetBSD defines; list based off of gcc output
     Builder.defineMacro("__NetBSD__");
     Builder.defineMacro("__unix__");
-    Builder.defineMacro("__ELF__");
     if (Opts.POSIXThreads)
       Builder.defineMacro("_REENTRANT");
   }
@@ -458,7 +446,6 @@ protected:
 
     Builder.defineMacro("__OpenBSD__");
     DefineStd(Builder, "unix", Opts);
-    Builder.defineMacro("__ELF__");
     if (Opts.POSIXThreads)
       Builder.defineMacro("_REENTRANT");
     if (this->HasFloat128)
@@ -504,10 +491,8 @@ protected:
   void getOSDefines(const LangOptions &Opts, const llvm::Triple &Triple,
                     MacroBuilder &Builder) const override {
     // PS3 PPU defines.
-    Builder.defineMacro("__PPC__");
     Builder.defineMacro("__PPU__");
     Builder.defineMacro("__CELLOS_LV2__");
-    Builder.defineMacro("__ELF__");
     Builder.defineMacro("__LP32__");
     Builder.defineMacro("_ARCH_PPC64");
     Builder.defineMacro("__powerpc64__");
@@ -535,7 +520,6 @@ protected:
     Builder.defineMacro("__FreeBSD_cc_version", "900001");
     Builder.defineMacro("__KPRINTF_ATTRIBUTE__");
     DefineStd(Builder, "unix", Opts);
-    Builder.defineMacro("__ELF__");
     Builder.defineMacro("__SCE__");
     Builder.defineMacro("__STDC_NO_COMPLEX__");
     Builder.defineMacro("__STDC_NO_THREADS__");
@@ -610,7 +594,6 @@ protected:
     // RTEMS defines; list based off of gcc output
 
     Builder.defineMacro("__rtems__");
-    Builder.defineMacro("__ELF__");
     if (Opts.CPlusPlus)
       Builder.defineMacro("_GNU_SOURCE");
   }
@@ -645,7 +628,6 @@ protected:
                     MacroBuilder &Builder) const override {
     DefineStd(Builder, "sun", Opts);
     DefineStd(Builder, "unix", Opts);
-    Builder.defineMacro("__ELF__");
     Builder.defineMacro("__svr4__");
     Builder.defineMacro("__SVR4");
     // Solaris headers require _XOPEN_SOURCE to be set to 600 for C99 and
@@ -876,7 +858,6 @@ protected:
       Builder.defineMacro("_GNU_SOURCE");
 
     DefineStd(Builder, "unix", Opts);
-    Builder.defineMacro("__ELF__");
     Builder.defineMacro("__native_client__");
   }
 
@@ -923,7 +904,6 @@ protected:
   void getOSDefines(const LangOptions &Opts, const llvm::Triple &Triple,
                     MacroBuilder &Builder) const override {
     Builder.defineMacro("__Fuchsia__");
-    Builder.defineMacro("__ELF__");
     if (Opts.POSIXThreads)
       Builder.defineMacro("_REENTRANT");
     // Required by the libc++ locale support.
@@ -1017,8 +997,6 @@ protected:
                     MacroBuilder &Builder) const override {
     // Linux defines; list based off of gcc output
     DefineStd(Builder, "unix", Opts);
-
-    Builder.defineMacro("__ELF__");
 
     // Generic OHOS target defines
     if (Triple.isOHOSFamily()) {
