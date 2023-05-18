@@ -9756,7 +9756,8 @@ bool ASTContext::areCompatibleRVVTypes(QualType FirstType,
                  VT->getElementType().getCanonicalType() ==
                      FirstType->getRVVEltType(*this);
         if (VT->getVectorKind() == VectorType::GenericVector)
-          return getTypeSize(SecondType) == getRVVTypeSize(*this, BT) &&
+          return FirstType->isRVVVLSBuiltinType() &&
+                 getTypeSize(SecondType) == getRVVTypeSize(*this, BT) &&
                  hasSameType(VT->getElementType(),
                              getBuiltinVectorTypeInfo(BT).ElementType);
       }
@@ -9778,6 +9779,9 @@ bool ASTContext::areLaxCompatibleRVVTypes(QualType FirstType,
   auto IsLaxCompatible = [this](QualType FirstType, QualType SecondType) {
     const auto *BT = FirstType->getAs<BuiltinType>();
     if (!BT)
+      return false;
+
+    if (!BT->isRVVVLSBuiltinType())
       return false;
 
     const auto *VecTy = SecondType->getAs<VectorType>();
