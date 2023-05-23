@@ -769,7 +769,6 @@ public:
   bool lowerInterleavedStore(StoreInst *SI, ShuffleVectorInst *SVI,
                              unsigned Factor) const override;
 
-private:
   /// RISCVCCAssignFn - This target-specific function extends the default
   /// CCValAssign with additional information used to lower RISC-V calling
   /// conventions.
@@ -781,6 +780,7 @@ private:
                                const RISCVTargetLowering &TLI,
                                std::optional<unsigned> FirstMaskArgument);
 
+private:
   void analyzeInputArgs(MachineFunction &MF, CCState &CCInfo,
                         const SmallVectorImpl<ISD::InputArg> &Ins, bool IsRet,
                         RISCVCCAssignFn Fn) const;
@@ -916,6 +916,26 @@ private:
   /// faster than two FDIVs.
   unsigned combineRepeatedFPDivisors() const override;
 };
+
+namespace RISCV {
+
+bool CC_RISCV(const DataLayout &DL, RISCVABI::ABI ABI, unsigned ValNo,
+              MVT ValVT, MVT LocVT, CCValAssign::LocInfo LocInfo,
+              ISD::ArgFlagsTy ArgFlags, CCState &State, bool IsFixed,
+              bool IsRet, Type *OrigTy, const RISCVTargetLowering &TLI,
+              std::optional<unsigned> FirstMaskArgument);
+
+bool CC_RISCV_FastCC(const DataLayout &DL, RISCVABI::ABI ABI, unsigned ValNo,
+                     MVT ValVT, MVT LocVT, CCValAssign::LocInfo LocInfo,
+                     ISD::ArgFlagsTy ArgFlags, CCState &State, bool IsFixed,
+                     bool IsRet, Type *OrigTy, const RISCVTargetLowering &TLI,
+                     std::optional<unsigned> FirstMaskArgument);
+
+bool CC_RISCV_GHC(unsigned ValNo, MVT ValVT, MVT LocVT,
+                  CCValAssign::LocInfo LocInfo, ISD::ArgFlagsTy ArgFlags,
+                  CCState &State);
+} // end namespace RISCV
+
 namespace RISCVVIntrinsicsTable {
 
 struct RISCVVIntrinsicInfo {
