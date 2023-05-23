@@ -842,7 +842,7 @@ namespace TestConstexprVariableTemplateWithInitializer {
   inline constexpr in_place_type_t<_Tp> in_place_type{};
   // CHECK:     -VarTemplateDecl 0x{{.+}} <line:[[@LINE-2]]:3, line:[[@LINE-1]]:55> col:41 in_place_type
   // CHECK-NEXT: |-TemplateTypeParmDecl 0x{{.+}} <line:[[@LINE-3]]:13, col:22> col:22 referenced typename depth 0 index 0 _Tp
-  // CHECK-NEXT: `-VarDecl 0x{{.+}} <line:[[@LINE-3]]:3, col:55> col:41 in_place_type 'const in_place_type_t<_Tp>':'const in_place_type_t<_Tp>' inline constexpr listinit
+  // CHECK-NEXT: `-VarDecl 0x{{.+}} <line:[[@LINE-3]]:3, col:55> col:41 in_place_type 'const in_place_type_t<_Tp>' inline constexpr listinit
   // CHECK-NEXT:  `-InitListExpr 0x{{.+}} <col:54, col:55> 'void'
 
   template <typename T> constexpr T call_init(0);
