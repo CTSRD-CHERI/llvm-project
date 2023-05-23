@@ -113,6 +113,7 @@
 ; CHECK-NEXT:       RISC-V Merge Base Offset
 ; CHECK-NEXT:       RISC-V Insert VSETVLI pass
 ; CHECK-NEXT:       Cheri Get Address Elimination
+; CHECK-NEXT:       RISC-V Insert Read/Write CSR Pass
 ; CHECK-NEXT:       Detect Dead Lanes
 ; CHECK-NEXT:       RISC-V init undef pass
 ; CHECK-NEXT:       Process Implicit Definitions
