@@ -28,7 +28,6 @@ class AllocatorStats {
   void Init() {
     internal_memset(this, 0, sizeof(*this));
   }
-  void InitLinkerInitialized() {}
 
   void Add(AllocatorStat i, usize v) {
     v += atomic_load(&stats_[i], memory_order_relaxed);
