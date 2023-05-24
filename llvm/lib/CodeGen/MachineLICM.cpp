@@ -580,8 +580,8 @@ void MachineLICMBase::HoistRegionPostRA() {
     if (!PhysRegClobbers.test(Def) && !TermRegs.test(Def)) {
       bool Safe = true;
       MachineInstr *MI = Candidate.MI;
-      for (const MachineOperand &MO : MI->operands()) {
-        if (!MO.isReg() || MO.isDef() || !MO.getReg())
+      for (const MachineOperand &MO : MI->all_uses()) {
+        if (!MO.getReg())
           continue;
         Register Reg = MO.getReg();
         if (PhysRegDefs.test(Reg) ||
@@ -605,8 +605,9 @@ void MachineLICMBase::AddToLiveIns(MCRegister Reg) {
     if (!BB->isLiveIn(Reg))
       BB->addLiveIn(Reg);
     for (MachineInstr &MI : *BB) {
-      for (MachineOperand &MO : MI.operands()) {
-        if (!MO.isReg() || !MO.getReg() || MO.isDef()) continue;
+      for (MachineOperand &MO : MI.all_uses()) {
+        if (!MO.getReg())
+          continue;
         if (MO.getReg() == Reg || TRI->isSuperRegister(Reg, MO.getReg()))
           MO.setIsKill(false);
       }
@@ -674,8 +675,8 @@ bool MachineLICMBase::isTriviallyReMaterializable(
   if (!TII->isTriviallyReMaterializable(MI))
     return false;
 
-  for (const MachineOperand &MO : MI.operands()) {
-    if (MO.isReg() && MO.isUse() && MO.getReg().isVirtual())
+  for (const MachineOperand &MO : MI.all_uses()) {
+    if (MO.getReg().isVirtual())
       return false;
   }
 
@@ -1028,9 +1029,7 @@ bool MachineLICMBase::HasLoopPHIUse(const MachineInstr *MI) const {
   SmallVector<const MachineInstr*, 8> Work(1, MI);
   do {
     MI = Work.pop_back_val();
-    for (const MachineOperand &MO : MI->operands()) {
-      if (!MO.isReg() || !MO.isDef())
-        continue;
+    for (const MachineOperand &MO : MI->all_defs()) {
       Register Reg = MO.getReg();
       if (!Reg.isVirtual())
         continue;
@@ -1469,8 +1468,8 @@ bool MachineLICMBase::Hoist(MachineInstr *MI, MachineBasicBlock *Preheader) {
     // Clear the kill flags of any register this instruction defines,
     // since they may need to be live throughout the entire loop
     // rather than just live for part of it.
-    for (MachineOperand &MO : MI->operands())
-      if (MO.isReg() && MO.isDef() && !MO.isDead())
+    for (MachineOperand &MO : MI->all_defs())
+      if (!MO.isDead())
         MRI->clearKillFlags(MO.getReg());
 
     // Add to the CSE map.
