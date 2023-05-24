@@ -15331,7 +15331,7 @@ const SCEV *ScalarEvolution::applyLoopGuards(const SCEV *Expr, const Loop *L) {
         if (RHS->getType()->isPointerTy())
           return;
         RHS = getUMaxExpr(RHS, One);
-        LLVM_FALLTHROUGH;
+        [[fallthrough]];
       case CmpInst::ICMP_SLT: {
         RHS = getMinusSCEV(RHS, One);
         RHS = DividesBy ? GetPreviousSCEVDividesByDivisor(RHS, DividesBy) : RHS;
