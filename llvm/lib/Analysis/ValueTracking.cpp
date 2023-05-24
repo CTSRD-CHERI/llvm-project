@@ -1473,6 +1473,8 @@ static void computeKnownBitsFromOperator(const Operator *I,
           Result.Zero.setSignBit();
         if (KnownVal.One.isSignBitSet())
           Result.One.setSignBit();
+        if (Result.hasConflict())
+          Result.setAllZero();
       }
       return Result;
     };
