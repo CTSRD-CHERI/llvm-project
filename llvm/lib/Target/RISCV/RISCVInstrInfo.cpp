@@ -332,6 +332,13 @@ void RISCVInstrInfo::copyPhysReg(MachineBasicBlock &MBB,
                                  const DebugLoc &DL, MCRegister DstReg,
                                  MCRegister SrcReg, bool KillSrc,
                                  MachineInstr::MIFlag Flag) const {
+  const TargetRegisterInfo *TRI = STI.getRegisterInfo();
+
+  if (RISCV::GPRPF64RegClass.contains(DstReg))
+    DstReg = TRI->getSubReg(DstReg, RISCV::sub_32);
+  if (RISCV::GPRPF64RegClass.contains(SrcReg))
+    SrcReg = TRI->getSubReg(SrcReg, RISCV::sub_32);
+
   if (RISCV::GPRRegClass.contains(DstReg, SrcReg)) {
     BuildMI(MBB, MBBI, DL, get(RISCV::ADDI), DstReg)
         .addReg(SrcReg, getKillRegState(KillSrc))
@@ -348,10 +355,9 @@ void RISCVInstrInfo::copyPhysReg(MachineBasicBlock &MBB,
   // Handle copy from csr
   if (RISCV::VCSRRegClass.contains(SrcReg) &&
       RISCV::GPRRegClass.contains(DstReg)) {
-    const TargetRegisterInfo &TRI = *STI.getRegisterInfo();
     BuildMI(MBB, MBBI, DL, get(RISCV::CSRRS), DstReg)
-      .addImm(RISCVSysReg::lookupSysRegByName(TRI.getName(SrcReg))->Encoding)
-      .addReg(RISCV::X0);
+        .addImm(RISCVSysReg::lookupSysRegByName(TRI->getName(SrcReg))->Encoding)
+        .addReg(RISCV::X0);
     return;
   }
 
@@ -364,7 +370,6 @@ void RISCVInstrInfo::copyPhysReg(MachineBasicBlock &MBB,
   if (RISCV::FPR16RegClass.contains(DstReg, SrcReg)) {
     if (!STI.hasStdExtZfh() && STI.hasStdExtZfhmin()) {
       // Zfhmin subset doesn't have FSGNJ_H, replaces FSGNJ_H with FSGNJ_S.
-      const TargetRegisterInfo *TRI = STI.getRegisterInfo();
       DstReg = TRI->getMatchingSuperReg(DstReg, RISCV::sub_16,
                                         &RISCV::FPR32RegClass);
       SrcReg = TRI->getMatchingSuperReg(SrcReg, RISCV::sub_16,
@@ -501,8 +506,6 @@ void RISCVInstrInfo::copyPhysReg(MachineBasicBlock &MBB,
         MIB.addReg(RISCV::VTYPE, RegState::Implicit);
       }
     } else {
-      const TargetRegisterInfo *TRI = STI.getRegisterInfo();
-
       int I = 0, End = NF, Incr = 1;
       unsigned SrcEncoding = TRI->getEncodingValue(SrcReg);
       unsigned DstEncoding = TRI->getEncodingValue(DstReg);
@@ -585,6 +588,9 @@ void RISCVInstrInfo::storeRegToStackSlot(MachineBasicBlock &MBB,
     } else if (RISCV::GPCRRegClass.hasSubClassEq(RC)) {
       Opcode = TRI->getRegSizeInBits(RISCV::GPCRRegClass) == 64 ? RISCV::SC_64
                                                                 : RISCV::SC_128;
+      IsScalableVector = false;
+    } else if (RISCV::GPRPF64RegClass.hasSubClassEq(RC)) {
+      Opcode = RISCV::PseudoRV32ZdinxSD;
       IsScalableVector = false;
     } else if (RISCV::FPR16RegClass.hasSubClassEq(RC)) {
       Opcode = RISCV::FSH;
@@ -695,6 +701,9 @@ void RISCVInstrInfo::loadRegFromStackSlot(MachineBasicBlock &MBB,
     } else if (RISCV::GPCRRegClass.hasSubClassEq(RC)) {
       Opcode = TRI->getRegSizeInBits(RISCV::GPCRRegClass) == 64 ? RISCV::LC_64
                                                                 : RISCV::LC_128;
+      IsScalableVector = false;
+    } else if (RISCV::GPRPF64RegClass.hasSubClassEq(RC)) {
+      Opcode = RISCV::PseudoRV32ZdinxLD;
       IsScalableVector = false;
     } else if (RISCV::FPR16RegClass.hasSubClassEq(RC)) {
       Opcode = RISCV::FLH;
@@ -1411,6 +1420,7 @@ bool RISCVInstrInfo::isAsCheapAsAMove(const MachineInstr &MI) const {
   case RISCV::FSGNJ_S:
   case RISCV::FSGNJ_H:
   case RISCV::FSGNJ_D_INX:
+  case RISCV::FSGNJ_D_IN32X:
   case RISCV::FSGNJ_S_INX:
   case RISCV::FSGNJ_H_INX:
     // The canonical floating-point move is fsgnj rd, rs, rs.
@@ -1544,6 +1554,7 @@ RISCVInstrInfo::isCopyInstrImpl(const MachineInstr &MI) const {
   case RISCV::FSGNJ_S:
   case RISCV::FSGNJ_H:
   case RISCV::FSGNJ_D_INX:
+  case RISCV::FSGNJ_D_IN32X:
   case RISCV::FSGNJ_S_INX:
   case RISCV::FSGNJ_H_INX:
     // The canonical floating-point move is fsgnj rd, rs, rs.

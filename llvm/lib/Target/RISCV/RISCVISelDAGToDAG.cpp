@@ -896,7 +896,7 @@ void RISCVDAGToDAGISel::Select(SDNode *Node) {
       if (Subtarget->is64Bit())
         Opc = HasZdinx ? RISCV::COPY : RISCV::FMV_D_X;
       else
-        Opc = RISCV::FCVT_D_W;
+        Opc = HasZdinx ? RISCV::FCVT_D_W_IN32X : RISCV::FCVT_D_W;
       break;
     }
 
@@ -2326,7 +2326,7 @@ bool RISCVDAGToDAGISel::SelectCapFrameAddrRegImm(SDValue Cap, SDValue &Base,
 }
 
 bool RISCVDAGToDAGISel::SelectRegImmCommon(SDValue Addr, SDValue &Base,
-                                           SDValue &Offset, EVT PtrVT) {
+                                           SDValue &Offset, EVT PtrVT, bool IsINX) {
   if (Addr.getValueType().isFatPointer() != PtrVT.isFatPointer())
     return false;
   if (SelectFrameIndexCommon(Addr, Base, Offset, PtrVT))
@@ -2341,9 +2341,10 @@ bool RISCVDAGToDAGISel::SelectRegImmCommon(SDValue Addr, SDValue &Base,
     return true;
   }
 
+  int64_t RV32ZdinxRange = IsINX ? 4 : 0;
   if (CurDAG->isBaseWithConstantOffset(Addr)) {
     int64_t CVal = cast<ConstantSDNode>(Addr.getOperand(1))->getSExtValue();
-    if (isInt<12>(CVal)) {
+    if (isInt<12>(CVal) && isInt<12>(CVal + RV32ZdinxRange)) {
       Base = Addr.getOperand(0);
       if (Base.getOpcode() == RISCVISD::ADD_LO) {
         SDValue LoOperand = Base.getOperand(1);
@@ -2378,7 +2379,8 @@ bool RISCVDAGToDAGISel::SelectRegImmCommon(SDValue Addr, SDValue &Base,
   if ((Addr.getOpcode() == ISD::ADD || Addr.getOpcode() == ISD::PTRADD) &&
       isa<ConstantSDNode>(Addr.getOperand(1))) {
     int64_t CVal = cast<ConstantSDNode>(Addr.getOperand(1))->getSExtValue();
-    assert(!isInt<12>(CVal) && "simm12 not already handled?");
+    assert(!(isInt<12>(CVal) && isInt<12>(CVal + RV32ZdinxRange)) &&
+           "simm12 not already handled?");
 
     // Handle immediates in the range [-4096,-2049] or [2048, 4094]. We can use
     // an ADDI for part of the offset and fold the rest into the load/store.
@@ -2422,14 +2424,14 @@ bool RISCVDAGToDAGISel::SelectRegImmCommon(SDValue Addr, SDValue &Base,
 }
 
 bool RISCVDAGToDAGISel::SelectAddrRegImm(SDValue Cap, SDValue &Base,
-                                         SDValue &Offset) {
-  return SelectRegImmCommon(Cap, Base, Offset, Subtarget->getXLenVT());
+                                         SDValue &Offset, bool IsINX) {
+  return SelectRegImmCommon(Cap, Base, Offset, Subtarget->getXLenVT(), IsINX);
 }
 
 bool RISCVDAGToDAGISel::SelectCapRegImm(SDValue Cap, SDValue &Base,
                                         SDValue &Offset) {
   return SelectRegImmCommon(Cap, Base, Offset,
-                            Subtarget->typeForCapabilities());
+                            Subtarget->typeForCapabilities(), false);
 }
 
 bool RISCVDAGToDAGISel::selectShiftMask(SDValue N, unsigned ShiftWidth,

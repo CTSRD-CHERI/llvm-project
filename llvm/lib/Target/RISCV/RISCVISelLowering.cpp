@@ -140,6 +140,8 @@ RISCVTargetLowering::RISCVTargetLowering(const TargetMachine &TM,
   if (Subtarget.hasStdExtZdinx()) {
     if (Subtarget.is64Bit())
       addRegisterClass(MVT::f64, &RISCV::GPRF64RegClass);
+    else
+      addRegisterClass(MVT::f64, &RISCV::GPRPF64RegClass);
   }
 
   if (Subtarget.hasCheri()) {
@@ -13268,7 +13270,8 @@ static MachineBasicBlock *emitSplitF64Pseudo(MachineInstr &MI,
                                              const RISCVSubtarget &Subtarget) {
   assert((MI.getOpcode() == RISCV::SplitF64Pseudo ||
           MI.getOpcode() == RISCV::SplitStoreF64Pseudo ||
-          MI.getOpcode() == RISCV::CheriSplitStoreF64Pseudo) &&
+          MI.getOpcode() == RISCV::CheriSplitStoreF64Pseudo ||
+          MI.getOpcode() == RISCV::SplitF64Pseudo_INX) &&
          "Unexpected instruction");
 
   MachineFunction &MF = *BB->getParent();
@@ -13279,10 +13282,15 @@ static MachineBasicBlock *emitSplitF64Pseudo(MachineInstr &MI,
   bool LoRegIsDead = MI.getOperand(0).isDead();
   Register HiReg = MI.getOperand(1).getReg();
   bool HiRegIsDead = MI.getOperand(1).isDead();
-  unsigned SrcOpNo = MI.getOpcode() == RISCV::SplitF64Pseudo ? 2 : 3;
+  unsigned SrcOpNo = (MI.getOpcode() == RISCV::SplitF64Pseudo ||
+                      MI.getOpcode() == RISCV::SplitF64Pseudo_INX)
+                         ? 2
+                         : 3;
   Register SrcReg = MI.getOperand(SrcOpNo).getReg();
 
-  const TargetRegisterClass *SrcRC = &RISCV::FPR64RegClass;
+  const TargetRegisterClass *SrcRC = MI.getOpcode() == RISCV::SplitF64Pseudo_INX
+                                         ? &RISCV::GPRPF64RegClass
+                                         : &RISCV::FPR64RegClass;
   int FI = MF.getInfo<RISCVMachineFunctionInfo>()->getMoveF64FrameIndex(MF);
 
   TII.storeRegToStackSlot(*BB, MI, SrcReg, MI.getOperand(SrcOpNo).isKill(),
@@ -13335,7 +13343,8 @@ static MachineBasicBlock *emitSplitF64Pseudo(MachineInstr &MI,
 static MachineBasicBlock *emitBuildPairF64Pseudo(MachineInstr &MI,
                                                  MachineBasicBlock *BB,
                                                  const RISCVSubtarget &Subtarget) {
-  assert(MI.getOpcode() == RISCV::BuildPairF64Pseudo &&
+  assert((MI.getOpcode() == RISCV::BuildPairF64Pseudo ||
+          MI.getOpcode() == RISCV::BuildPairF64Pseudo_INX) &&
          "Unexpected instruction");
 
   MachineFunction &MF = *BB->getParent();
@@ -13346,7 +13355,9 @@ static MachineBasicBlock *emitBuildPairF64Pseudo(MachineInstr &MI,
   Register LoReg = MI.getOperand(1).getReg();
   Register HiReg = MI.getOperand(2).getReg();
 
-  const TargetRegisterClass *DstRC = &RISCV::FPR64RegClass;
+  const TargetRegisterClass *DstRC =
+      MI.getOpcode() == RISCV::BuildPairF64Pseudo_INX ? &RISCV::GPRPF64RegClass
+                                                      : &RISCV::FPR64RegClass;
   int FI = MF.getInfo<RISCVMachineFunctionInfo>()->getMoveF64FrameIndex(MF);
 
   MachinePointerInfo MPI = MachinePointerInfo::getFixedStack(MF, FI);
@@ -13384,6 +13395,7 @@ static bool isSelectPseudo(MachineInstr &MI) {
   case RISCV::Select_FPR32INX_Using_CC_GPR:
   case RISCV::Select_FPR64_Using_CC_GPR:
   case RISCV::Select_FPR64INX_Using_CC_GPR:
+  case RISCV::Select_FPR64IN32X_Using_CC_GPR:
     return true;
   }
 }
@@ -13898,12 +13910,15 @@ RISCVTargetLowering::EmitInstrWithCustomInserter(MachineInstr &MI,
   case RISCV::Select_FPR32INX_Using_CC_GPR:
   case RISCV::Select_FPR64_Using_CC_GPR:
   case RISCV::Select_FPR64INX_Using_CC_GPR:
+  case RISCV::Select_FPR64IN32X_Using_CC_GPR:
     return emitSelectPseudo(MI, BB, Subtarget);
   case RISCV::BuildPairF64Pseudo:
+  case RISCV::BuildPairF64Pseudo_INX:
     return emitBuildPairF64Pseudo(MI, BB, Subtarget);
   case RISCV::SplitF64Pseudo:
   case RISCV::SplitStoreF64Pseudo:
   case RISCV::CheriSplitStoreF64Pseudo:
+  case RISCV::SplitF64Pseudo_INX:
     return emitSplitF64Pseudo(MI, BB, Subtarget);
   case RISCV::PseudoQuietFLE_H:
     return emitQuietFCMP(MI, BB, RISCV::FLE_H, RISCV::FEQ_H, Subtarget);
@@ -13925,10 +13940,16 @@ RISCVTargetLowering::EmitInstrWithCustomInserter(MachineInstr &MI,
     return emitQuietFCMP(MI, BB, RISCV::FLE_D, RISCV::FEQ_D, Subtarget);
   case RISCV::PseudoQuietFLE_D_INX:
     return emitQuietFCMP(MI, BB, RISCV::FLE_D_INX, RISCV::FEQ_D_INX, Subtarget);
+  case RISCV::PseudoQuietFLE_D_IN32X:
+    return emitQuietFCMP(MI, BB, RISCV::FLE_D_IN32X, RISCV::FEQ_D_IN32X,
+                         Subtarget);
   case RISCV::PseudoQuietFLT_D:
     return emitQuietFCMP(MI, BB, RISCV::FLT_D, RISCV::FEQ_D, Subtarget);
   case RISCV::PseudoQuietFLT_D_INX:
     return emitQuietFCMP(MI, BB, RISCV::FLT_D_INX, RISCV::FEQ_D_INX, Subtarget);
+  case RISCV::PseudoQuietFLT_D_IN32X:
+    return emitQuietFCMP(MI, BB, RISCV::FLT_D_IN32X, RISCV::FEQ_D_IN32X,
+                         Subtarget);
 
     // =========================================================================
     // VFCVT
@@ -14114,6 +14135,7 @@ RISCVTargetLowering::EmitInstrWithCustomInserter(MachineInstr &MI,
   case RISCV::PseudoFROUND_S_INX:
   case RISCV::PseudoFROUND_D:
   case RISCV::PseudoFROUND_D_INX:
+  case RISCV::PseudoFROUND_D_IN32X:
     return emitFROUND(MI, BB, Subtarget);
   }
 }
@@ -16132,7 +16154,8 @@ RISCVTargetLowering::getRegForInlineAsmConstraint(const TargetRegisterInfo *TRI,
   // Subtarget into account.
   if (Res.second == &RISCV::GPRF16RegClass ||
       Res.second == &RISCV::GPRF32RegClass ||
-      Res.second == &RISCV::GPRF64RegClass)
+      Res.second == &RISCV::GPRF64RegClass ||
+      Res.second == &RISCV::GPRPF64RegClass)
     return std::make_pair(Res.first, &RISCV::GPRRegClass);
 
   return Res;

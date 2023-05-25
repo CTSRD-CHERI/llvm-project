@@ -54,8 +54,12 @@ public:
   bool SelectCapFrameAddrRegImm(SDValue Cap, SDValue &Base, SDValue &Offset);
   bool SelectBase(SDValue Addr, SDValue &Base, EVT PtrVT);
   bool SelectRegImmCommon(SDValue Addr, SDValue &Base, SDValue &Offset,
-                          EVT PtrVT);
-  bool SelectAddrRegImm(SDValue Addr, SDValue &Base, SDValue &Offset);
+                          EVT PtrVT, bool IsINX);
+  bool SelectAddrRegImm(SDValue Addr, SDValue &Base, SDValue &Offset,
+                        bool IsINX = false);
+  bool SelectAddrRegImmINX(SDValue Addr, SDValue &Base, SDValue &Offset) {
+    return SelectAddrRegImm(Addr, Base, Offset, true);
+  }
   bool SelectCapRegImm(SDValue Addr, SDValue &Base, SDValue &Offset);
 
   bool SelectAddrRegRegScale(SDValue Addr, unsigned MaxShiftAmount,
