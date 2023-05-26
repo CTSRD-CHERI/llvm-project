@@ -94,8 +94,7 @@ inline size_t Log(size_t X) {
   return static_cast<size_t>((sizeof(unsigned long long) * 8) - Clzll(X) - 1);
 }
 
-size_t PageSize();
-
+inline size_t PageSize() { return 4096; }
 inline uint8_t *RoundUpByPage(uint8_t *P) {
 #if __has_builtin(__builtin_align_up)
   return __builtin_align_up(P, PageSize());
