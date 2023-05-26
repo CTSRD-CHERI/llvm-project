@@ -36,6 +36,13 @@ public:
   virtual void emitDirectiveOptionCapMode();
   virtual void emitDirectiveOptionNoCapMode();
   virtual void emitDirectiveVariantCC(MCSymbol &Symbol);
+  virtual void emitDirectiveOptionArchFullArch(StringRef Value,
+                                               bool &PrefixEmitted);
+  virtual void emitDirectiveOptionArchPlus(StringRef Value, bool &PrefixEmitted,
+                                           bool EmitComma);
+  virtual void emitDirectiveOptionArchMinus(StringRef Value,
+                                            bool &PrefixEmitted,
+                                            bool EmitComma);
   virtual void emitAttribute(unsigned Attribute, unsigned Value);
   virtual void finishAttributeSection();
   virtual void emitTextAttribute(unsigned Attribute, StringRef String);
@@ -71,6 +78,12 @@ public:
   void emitDirectiveOptionCapMode() override;
   void emitDirectiveOptionNoCapMode() override;
   void emitDirectiveVariantCC(MCSymbol &Symbol) override;
+  void emitDirectiveOptionArchFullArch(StringRef Value,
+                                       bool &PrefixEmitted) override;
+  void emitDirectiveOptionArchPlus(StringRef Value, bool &PrefixEmitted,
+                                   bool EmitComma) override;
+  void emitDirectiveOptionArchMinus(StringRef Value, bool &PrefixEmitted,
+                                    bool EmitComma) override;
 };
 
 }
