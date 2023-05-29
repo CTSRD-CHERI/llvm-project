@@ -14864,7 +14864,7 @@ Value *CodeGenFunction::EmitX86BuiltinExpr(unsigned BuiltinID,
 
     // Unaligned nontemporal store of the scalar value.
     StoreInst *SI = Builder.CreateDefaultAlignedStore(Src, BC);
-    SI->setMetadata(CGM.getModule().getMDKindID("nontemporal"), Node);
+    SI->setMetadata(llvm::LLVMContext::MD_nontemporal, Node);
     SI->setAlignment(llvm::Align(1));
     return SI;
   }
@@ -20613,8 +20613,7 @@ Value *CodeGenFunction::EmitRISCVBuiltinExpr(unsigned BuiltinID,
     LoadInst *Load = Builder.CreateLoad(
         Address(Ops[0], ResTy, CharUnits::fromQuantity(Width / 8)));
 
-    Load->setMetadata(CGM.getModule().getMDKindID("nontemporal"),
-                      NontemporalNode);
+    Load->setMetadata(llvm::LLVMContext::MD_nontemporal, NontemporalNode);
     Load->setMetadata(CGM.getModule().getMDKindID("riscv-nontemporal-domain"),
                       RISCVDomainNode);
 
@@ -20630,8 +20629,7 @@ Value *CodeGenFunction::EmitRISCVBuiltinExpr(unsigned BuiltinID,
         getLLVMContext(), llvm::ConstantAsMetadata::get(Builder.getInt32(1)));
 
     StoreInst *Store = Builder.CreateDefaultAlignedStore(Ops[1], Ops[0]);
-    Store->setMetadata(CGM.getModule().getMDKindID("nontemporal"),
-                       NontemporalNode);
+    Store->setMetadata(llvm::LLVMContext::MD_nontemporal, NontemporalNode);
     Store->setMetadata(CGM.getModule().getMDKindID("riscv-nontemporal-domain"),
                        RISCVDomainNode);
 
