@@ -10,6 +10,9 @@
 // run-time libraries. See sanitizer_libc.h for details.
 //===----------------------------------------------------------------------===//
 
+// Do not redefine builtins; this file is defining the builtin replacements.
+#define SANITIZER_COMMON_NO_REDEFINE_BUILTINS
+
 #include "sanitizer_allocator_internal.h"
 #include "sanitizer_common.h"
 #include "sanitizer_libc.h"
@@ -58,7 +61,11 @@ void *internal_memmove(void *dest, const void *src, usize n) {
   return memmove(dest, src, n);
 }
 #else
-void *internal_memcpy(void *dest, const void *src, usize n) {
+void *internal_memcpy(void *dest, const void *src, usize n)
+    ALIAS(__sanitizer_internal_memcpy);
+SANITIZER_INTERFACE_ATTRIBUTE
+extern "C" void *__sanitizer_internal_memcpy(void *dest, const void *src,
+                                             usize n) {
   char *d = (char*)dest;
   const char *s = (const char *)src;
   for (usize i = 0; i < n; ++i)
@@ -66,7 +73,11 @@ void *internal_memcpy(void *dest, const void *src, usize n) {
   return dest;
 }
 
-void *internal_memmove(void *dest, const void *src, usize n) {
+void *internal_memmove(void *dest, const void *src, usize n)
+    ALIAS(__sanitizer_internal_memmove);
+SANITIZER_INTERFACE_ATTRIBUTE
+extern "C" void *__sanitizer_internal_memmove(void *dest, const void *src,
+                                              usize n) {
   char *d = (char*)dest;
   const char *s = (const char *)src;
   sptr i, signed_n = (sptr)n;
@@ -85,7 +96,10 @@ void *internal_memmove(void *dest, const void *src, usize n) {
 }
 #endif
 
-void *internal_memset(void* s, int c, usize n) {
+void *internal_memset(void *s, int c, usize n)
+    ALIAS(__sanitizer_internal_memset);
+SANITIZER_INTERFACE_ATTRIBUTE
+extern "C" void *__sanitizer_internal_memset(void *s, int c, usize n) {
   // Optimize for the most performance-critical case:
   if (IsAligned(s, 16) && (n % 16) == 0) {
     u64 *p = reinterpret_cast<u64*>(s);
