@@ -925,6 +925,7 @@ public:
     setNoSignedZeroOverride(!Value);
     setAllowReciprocalOverride(!Value);
     setAllowApproxFuncOverride(!Value);
+    setMathErrnoOverride(Value);
     if (Value)
       /* Precise mode implies fp_contract=on and disables ffast-math */
       setAllowFPContractWithinStatement();
