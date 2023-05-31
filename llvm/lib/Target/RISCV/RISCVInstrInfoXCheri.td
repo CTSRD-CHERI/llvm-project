@@ -1624,24 +1624,24 @@ multiclass AMOCapPat<string CLenStr, string AtomicOp, string BaseInst> {
 }
 
 let Predicates = [HasCheri, IsRV32, NotCapMode] in {
-defm : LdPat<load, LC_64, c64>;
-defm : StPat<store, SC_64, GPCR, c64>;
+def : LdPat<load, LC_64, c64>;
+def : StPat<store, SC_64, GPCR, c64>;
 } // Predicates = [HasCheri, IsRV32, NotCapMode]
 
 let Predicates = [HasCheri, IsRV64, NotCapMode] in {
-defm : LdPat<load, LC_128, c128>;
-defm : StPat<store, SC_128, GPCR, c128>;
+def : LdPat<load, LC_128, c128>;
+def : StPat<store, SC_128, GPCR, c128>;
 } // Predicates = [HasCheri, IsRV64, NotCapMode]
 
 let Predicates = [HasCheri, HasStdExtA, IsRV32, NotCapMode] in {
-defm : LdPat<atomic_load_cap, LC_64, c64>;
-defm : AtomicStPat<atomic_store_cap, SC_64, GPCR, c64>;
+def : LdPat<atomic_load_cap, LC_64, c64>;
+def : AtomicStPat<atomic_store_cap, SC_64, GPCR, c64>;
 defm : AMOCapPat<"64", "atomic_swap_cap", "AMOSWAP_C">;
 } // Predicates = [HasCheri, HasStdExtA, IsRV32, NotCapMode]
 
 let Predicates = [HasCheri, HasStdExtA, IsRV64, NotCapMode] in {
-defm : LdPat<atomic_load_cap, LC_128, c128>;
-defm : AtomicStPat<atomic_store_cap, SC_128, GPCR, c128>;
+def : LdPat<atomic_load_cap, LC_128, c128>;
+def : AtomicStPat<atomic_store_cap, SC_128, GPCR, c128>;
 defm : AMOCapPat<"128", "atomic_swap_cap", "AMOSWAP_C">;
 } // Predicates = [HasCheri, HasStdExtA, IsRV64, NotCapMode]
 

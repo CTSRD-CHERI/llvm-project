@@ -480,11 +480,11 @@ let Predicates = [HasStdExtD, NotCapMode] in {
 
 /// Loads
 
-defm : LdPat<load, FLD, f64>;
+def : LdPat<load, FLD, f64>;
 
 /// Stores
 
-defm : StPat<store, FSD, FPR64, f64>;
+def : StPat<store, FSD, FPR64, f64>;
 
 } // Predicates = [HasStdExtD, NotCapMode]
 
