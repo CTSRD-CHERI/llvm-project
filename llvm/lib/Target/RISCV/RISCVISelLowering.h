@@ -385,9 +385,10 @@ enum NodeType : unsigned {
   // have memop! In fact, starting from FIRST_TARGET_MEMORY_OPCODE all
   // opcodes will be thought as target memory ops!
 
-  // Load address.
-  LA = ISD::FIRST_TARGET_MEMORY_OPCODE,
+  // Represents an AUIPC+L[WD] pair. Selected to PseudoLGA.
+  LGA = ISD::FIRST_TARGET_MEMORY_OPCODE,
   CLGC,
+  // Load initial exec thread-local address.
   LA_TLS_IE,
   CLA_TLS_IE,
 
