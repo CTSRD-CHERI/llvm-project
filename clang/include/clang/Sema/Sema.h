@@ -13822,7 +13822,6 @@ private:
   Scope *CurScope;
 
   mutable IdentifierInfo *Ident_super;
-  mutable IdentifierInfo *Ident___float128;
 
   /// Nullability type specifiers.
   IdentifierInfo *Ident__Nonnull = nullptr;
@@ -13871,7 +13870,6 @@ public:
   }
 
   IdentifierInfo *getSuperIdentifier() const;
-  IdentifierInfo *getFloat128Identifier() const;
 
   ObjCContainerDecl *getObjCDeclContext() const;
 
