@@ -37,13 +37,10 @@ void RISCVTargetStreamer::emitDirectiveOptionCapMode() {}
 void RISCVTargetStreamer::emitDirectiveOptionNoCapMode() {}
 void RISCVTargetStreamer::emitDirectiveVariantCC(MCSymbol &Symbol) {}
 void RISCVTargetStreamer::emitDirectiveOptionArchFullArch(StringRef Value,
-                                                          bool &hasDotOption) {}
-void RISCVTargetStreamer::emitDirectiveOptionArchPlus(StringRef Value,
-                                                      bool &hasDotOption,
-                                                      bool EmitComma) {}
-void RISCVTargetStreamer::emitDirectiveOptionArchMinus(StringRef Value,
-                                                       bool &hasDotOption,
-                                                       bool EmitComma) {}
+                                                          bool &PrefixEmitted) {
+}
+void RISCVTargetStreamer::emitDirectiveOptionArchPlusOrMinus(
+    StringRef Value, bool Enable, bool &PrefixEmitted, bool EmitComma) {}
 void RISCVTargetStreamer::emitAttribute(unsigned Attribute, unsigned Value) {}
 void RISCVTargetStreamer::finishAttributeSection() {}
 void RISCVTargetStreamer::emitTextAttribute(unsigned Attribute,
@@ -157,18 +154,11 @@ void RISCVTargetAsmStreamer::emitDirectiveOptionArchFullArch(
   OS << Value;
   emitCommaOrNextLine(OS, false);
 }
-void RISCVTargetAsmStreamer::emitDirectiveOptionArchPlus(StringRef Value,
-                                                         bool &PrefixEmitted,
-                                                         bool EmitComma) {
+
+void RISCVTargetAsmStreamer::emitDirectiveOptionArchPlusOrMinus(
+    StringRef Value, bool Enable, bool &PrefixEmitted, bool EmitComma) {
   emitDirectiveOptionArchPrefix(OS, PrefixEmitted);
-  OS << "+" << Value;
-  emitCommaOrNextLine(OS, EmitComma);
-}
-void RISCVTargetAsmStreamer::emitDirectiveOptionArchMinus(StringRef Value,
-                                                          bool &PrefixEmitted,
-                                                          bool EmitComma) {
-  emitDirectiveOptionArchPrefix(OS, PrefixEmitted);
-  OS << "-" << Value;
+  OS << (Enable ? "+" : "-") << Value;
   emitCommaOrNextLine(OS, EmitComma);
 }
 
