@@ -5413,7 +5413,8 @@ static SDValue getTargetNode(JumpTableSDNode *N, SDLoc DL, EVT Ty,
 
 template <class NodeTy>
 SDValue RISCVTargetLowering::getAddr(NodeTy *N, EVT Ty, SelectionDAG &DAG,
-                                     bool IsLocal, bool CanDeriveFromPcc) const {
+                                     bool IsLocal, bool CanDeriveFromPcc,
+                                     bool IsExternWeak) const {
   SDLoc DL(N);
 
   if (RISCVABI::isCheriPureCapABI(Subtarget.getTargetABI())) {
@@ -5482,10 +5483,28 @@ SDValue RISCVTargetLowering::getAddr(NodeTy *N, EVT Ty, SelectionDAG &DAG,
     return DAG.getNode(RISCVISD::ADD_LO, DL, Ty, MNHi, AddrLo);
   }
   case CodeModel::Medium: {
+    SDValue Addr = getTargetNode(N, DL, Ty, DAG, 0);
+    if (IsExternWeak) {
+      // An extern weak symbol may be undefined, i.e. have value 0, which may
+      // not be within 2GiB of PC, so use GOT-indirect addressing to access the
+      // symbol. This generates the pattern (PseudoLGA sym), which expands to
+      // (ld (addi (auipc %got_pcrel_hi(sym)) %pcrel_lo(auipc))).
+      MachineFunction &MF = DAG.getMachineFunction();
+      MachineMemOperand *MemOp = MF.getMachineMemOperand(
+          MachinePointerInfo::getGOT(MF),
+          MachineMemOperand::MOLoad | MachineMemOperand::MODereferenceable |
+              MachineMemOperand::MOInvariant,
+          LLT(Ty.getSimpleVT()), Align(Ty.getFixedSizeInBits() / 8));
+      SDValue Load =
+          DAG.getMemIntrinsicNode(RISCVISD::LGA, DL,
+                                  DAG.getVTList(Ty, MVT::Other),
+                                  {DAG.getEntryNode(), Addr}, Ty, MemOp);
+      return Load;
+    }
+
     // Generate a sequence for accessing addresses within any 2GiB range within
     // the address space. This generates the pattern (PseudoLLA sym), which
     // expands to (addi (auipc %pcrel_hi(sym)) %pcrel_lo(auipc)).
-    SDValue Addr = getTargetNode(N, DL, Ty, DAG, 0);
     return DAG.getNode(RISCVISD::LLA, DL, Ty, Addr);
   }
   }
@@ -5505,8 +5524,9 @@ SDValue RISCVTargetLowering::lowerGlobalAddress(SDValue Op,
   // bounds and therefore would not be checked when we pass the reference to
   // another function. Therefore, we always load from the captable for all
   // global variables.
-  return getAddr(N, Ty, DAG, N->getGlobal()->isDSOLocal(),
-                 /*CanDeriveFromPcc=*/false);
+  const GlobalValue *GV = N->getGlobal();
+  return getAddr(N, Ty, DAG, GV->isDSOLocal(), /*CanDeriveFromPcc=*/false,
+                 GV->hasExternalWeakLinkage());
 }
 
 SDValue RISCVTargetLowering::lowerBlockAddress(SDValue Op,
