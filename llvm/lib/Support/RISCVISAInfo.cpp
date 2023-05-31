@@ -153,7 +153,6 @@ static const RISCVSupportedExtension SupportedExperimentalExtensions[] = {
     {"zvfbfmin", RISCVExtensionVersion{0, 6}},
     {"zvfbfwma", RISCVExtensionVersion{0, 6}},
     {"zvfh", RISCVExtensionVersion{0, 1}},
-    {"zvfhmin", RISCVExtensionVersion{0, 1}},
     {"ztso", RISCVExtensionVersion{0, 1}},
 
     // vector crypto
@@ -945,7 +944,6 @@ static const char *ImpliedExtsZve64x[] = {"zve32x", "zvl64b"};
 static const char *ImpliedExtsZvfbfmin[] = {"zve32f"};
 static const char *ImpliedExtsZvfbfwma[] = {"zve32f"};
 static const char *ImpliedExtsZvfh[] = {"zve32f", "zfhmin"};
-static const char *ImpliedExtsZvfhmin[] = {"zve32f"};
 static const char *ImpliedExtsZvkn[] = {"zvbb", "zvbc", "zvkned", "zvknhb",
                                         "zvkt"};
 static const char *ImpliedExtsZvkng[] = {"zvkg", "zvkn"};
@@ -1007,7 +1005,6 @@ static constexpr ImpliedExtsEntry ImpliedExts[] = {
     {{"zvfbfmin"}, {ImpliedExtsZvfbfmin}},
     {{"zvfbfwma"}, {ImpliedExtsZvfbfwma}},
     {{"zvfh"}, {ImpliedExtsZvfh}},
-    {{"zvfhmin"}, {ImpliedExtsZvfhmin}},
     {{"zvkn"}, {ImpliedExtsZvkn}},
     {{"zvkng"}, {ImpliedExtsZvkng}},
     {{"zvknhb"}, {ImpliedExtsZvknhb}},
