@@ -700,9 +700,10 @@ RISCVISAInfo::parseArchString(StringRef Arch, bool EnableExperimentalExtension,
 
   auto StdExtsItr = StdExts.begin();
   auto StdExtsEnd = StdExts.end();
-  auto GoToNextExt = [](StringRef::iterator &I, unsigned ConsumeLength) {
+  auto GoToNextExt = [](StringRef::iterator &I, unsigned ConsumeLength,
+                        StringRef::iterator E) {
     I += 1 + ConsumeLength;
-    if (*I == '_')
+    if (I != E && *I == '_')
       ++I;
   };
   for (auto I = Exts.begin(), E = Exts.end(); I != E;) {
@@ -738,7 +739,7 @@ RISCVISAInfo::parseArchString(StringRef Arch, bool EnableExperimentalExtension,
                                      ExperimentalExtensionVersionCheck)) {
       if (IgnoreUnknown) {
         consumeError(std::move(E));
-        GoToNextExt(I, ConsumeLength);
+        GoToNextExt(I, ConsumeLength, Exts.end());
         continue;
       }
       return std::move(E);
@@ -748,7 +749,7 @@ RISCVISAInfo::parseArchString(StringRef Arch, bool EnableExperimentalExtension,
     // Currently LLVM supports only "mafdcvh".
     if (!isSupportedExtension(StringRef(&C, 1))) {
       if (IgnoreUnknown) {
-        GoToNextExt(I, ConsumeLength);
+        GoToNextExt(I, ConsumeLength, Exts.end());
         continue;
       }
       return createStringError(errc::invalid_argument,
@@ -759,7 +760,7 @@ RISCVISAInfo::parseArchString(StringRef Arch, bool EnableExperimentalExtension,
 
     // Consume full extension name and version, including any optional '_'
     // between this extension and the next
-    GoToNextExt(I, ConsumeLength);
+    GoToNextExt(I, ConsumeLength, Exts.end());
   }
 
   // Handle other types of extensions other than the standard
