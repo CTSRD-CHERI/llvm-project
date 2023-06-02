@@ -4558,6 +4558,8 @@ SDValue RISCVTargetLowering::LowerIS_FPCLASS(SDValue Op,
   if (Check & fcNegZero)
     TDCMask |= RISCV::FPMASK_Negative_Zero;
 
+  bool IsOneBitMask = isPowerOf2_32(TDCMask);
+
   SDValue TDCMaskV = DAG.getConstant(TDCMask, DL, XLenVT);
 
   if (VT.isVector()) {
@@ -4569,6 +4571,10 @@ SDValue RISCVTargetLowering::LowerIS_FPCLASS(SDValue Op,
       auto [Mask, VL] = getDefaultScalableVLOps(VT0, DL, DAG, Subtarget);
       SDValue FPCLASS = DAG.getNode(RISCVISD::FCLASS_VL, DL, DstVT, Op0, Mask,
                                     VL, Op->getFlags());
+      if (IsOneBitMask)
+        return DAG.getSetCC(DL, VT, FPCLASS,
+                            DAG.getConstant(TDCMask, DL, DstVT),
+                            ISD::CondCode::SETEQ);
       SDValue AND = DAG.getNode(ISD::AND, DL, DstVT, FPCLASS,
                                 DAG.getConstant(TDCMask, DL, DstVT));
       return DAG.getSetCC(DL, VT, AND, DAG.getConstant(0, DL, DstVT),
@@ -4587,6 +4593,13 @@ SDValue RISCVTargetLowering::LowerIS_FPCLASS(SDValue Op,
 
     TDCMaskV = DAG.getNode(RISCVISD::VMV_V_X_VL, DL, ContainerDstVT,
                            DAG.getUNDEF(ContainerDstVT), TDCMaskV, VL);
+    if (IsOneBitMask) {
+      SDValue VMSEQ =
+          DAG.getNode(RISCVISD::SETCC_VL, DL, ContainerVT,
+                      {FPCLASS, TDCMaskV, DAG.getCondCode(ISD::SETEQ),
+                       DAG.getUNDEF(ContainerVT), Mask, VL});
+      return convertFromScalableVector(VT, VMSEQ, DAG, Subtarget);
+    }
     SDValue AND = DAG.getNode(RISCVISD::AND_VL, DL, ContainerDstVT, FPCLASS,
                               TDCMaskV, DAG.getUNDEF(ContainerDstVT), Mask, VL);
 
