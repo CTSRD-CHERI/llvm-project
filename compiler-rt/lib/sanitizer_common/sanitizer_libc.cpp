@@ -10,9 +10,6 @@
 // run-time libraries. See sanitizer_libc.h for details.
 //===----------------------------------------------------------------------===//
 
-// Do not redefine builtins; this file is defining the builtin replacements.
-#define SANITIZER_COMMON_NO_REDEFINE_BUILTINS
-
 #include "sanitizer_allocator_internal.h"
 #include "sanitizer_common.h"
 #include "sanitizer_libc.h"
@@ -54,21 +51,14 @@ extern "C" void *memcpy(void *dest, const void *src, unsigned long n);
 extern "C" void *memmove(void *dest, const void *src, unsigned long n);
 // For purecap we need to maintain tags in memcpy()/memmove() -> for now
 // just use the libc versions (since we only use libfuzzer and that can link libc)
-extern "C" {
-SANITIZER_INTERFACE_ATTRIBUTE void *__sanitizer_internal_memcpy(void *dest,
-                                                                const void *src,
-                                                                usize n) {
+void *internal_memcpy(void *dest, const void *src, usize n) {
   return memcpy(dest, src, n);
 }
-SANITIZER_INTERFACE_ATTRIBUTE void *__sanitizer_internal_memmove(
-    void *dest, const void *src, usize n) {
+void *internal_memmove(void *dest, const void *src, usize n) {
   return memmove(dest, src, n);
 }
 #else
-extern "C" {
-SANITIZER_INTERFACE_ATTRIBUTE void *__sanitizer_internal_memcpy(void *dest,
-                                                                const void *src,
-                                                                usize n) {
+void *internal_memcpy(void *dest, const void *src, usize n) {
   char *d = (char*)dest;
   const char *s = (const char *)src;
   for (usize i = 0; i < n; ++i)
@@ -76,8 +66,7 @@ SANITIZER_INTERFACE_ATTRIBUTE void *__sanitizer_internal_memcpy(void *dest,
   return dest;
 }
 
-SANITIZER_INTERFACE_ATTRIBUTE void *__sanitizer_internal_memmove(
-    void *dest, const void *src, usize n) {
+void *internal_memmove(void *dest, const void *src, usize n) {
   char *d = (char*)dest;
   const char *s = (const char *)src;
   sptr i, signed_n = (sptr)n;
@@ -96,8 +85,7 @@ SANITIZER_INTERFACE_ATTRIBUTE void *__sanitizer_internal_memmove(
 }
 #endif
 
-SANITIZER_INTERFACE_ATTRIBUTE void *__sanitizer_internal_memset(void *s, int c,
-                                                                usize n) {
+void *internal_memset(void* s, int c, usize n) {
   // Optimize for the most performance-critical case:
   if (IsAligned(s, 16) && (n % 16) == 0) {
     u64 *p = reinterpret_cast<u64*>(s);
@@ -120,7 +108,6 @@ SANITIZER_INTERFACE_ATTRIBUTE void *__sanitizer_internal_memset(void *s, int c,
   }
   return s;
 }
-}  // extern "C"
 
 usize internal_strcspn(const char *s, const char *reject) {
   usize i;
