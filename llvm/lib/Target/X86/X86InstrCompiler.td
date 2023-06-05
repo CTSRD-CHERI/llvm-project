@@ -394,6 +394,31 @@ def REP_MOVSQ_64 : RI<0xA5, RawFrm, (outs), (ins),
                     "{rep;movsq (%rsi), %es:(%rdi)|rep movsq es:[rdi], [rsi]}",
                     [(X86rep_movs i64)]>, REP, AdSize64,
                    Requires<[IsLP64]>;
+def REP_MOVSC_64 : CI<0xA5, RawFrm, (outs), (ins),
+                   "{rep;movsc (%rsi), %es:(%rdi)|rep movsc es:[rdi], [rsi]}",
+                   [(X86rep_movs iFATPTR128)]>, REP, AdSize64;
+}
+
+let Defs = [RCX,RDI,RSI], Uses = [RCX,RDI,RSI], isCodeGenOnly = 1 in {
+def REP_MOVSB_C : I<0xA4, RawFrm, (outs), (ins),
+                    "{rep;movsb (%csi), %es:(%cdi)|rep movsb es:[cdi], [csi]}",
+                    [(X86rep_movs i8)]>, REP, AdSizeCap,
+                   Requires<[IsLP64]>;
+def REP_MOVSW_C : I<0xA5, RawFrm, (outs), (ins),
+                    "{rep;movsw (%csi), %es:(%cdi)|rep movsw es:[cdi], [csi]}",
+                    [(X86rep_movs i16)]>, REP, AdSizeCap, OpSize16,
+                   Requires<[IsLP64]>;
+def REP_MOVSD_C : I<0xA5, RawFrm, (outs), (ins),
+                    "{rep;movsl (%csi), %es:(%cdi)|rep movsdi es:[cdi], [csi]}",
+                    [(X86rep_movs i32)]>, REP, AdSizeCap, OpSize32,
+                   Requires<[IsLP64]>;
+def REP_MOVSQ_C : RI<0xA5, RawFrm, (outs), (ins),
+                    "{rep;movsq (%csi), %es:(%cdi)|rep movsq es:[cdi], [csi]}",
+                    [(X86rep_movs i64)]>, REP, AdSizeCap,
+                   Requires<[IsLP64]>;
+def REP_MOVSC_C : CI<0xA5, RawFrm, (outs), (ins),
+                   "{rep;movsc (%csi), %es:(%cdi)|rep movsc es:[cdi], [csi]}",
+                   [(X86rep_movs iFATPTR128)]>, REP, AdSizeCap;
 }
 
 // FIXME: Should use "(X86rep_stos AL)" as the pattern.

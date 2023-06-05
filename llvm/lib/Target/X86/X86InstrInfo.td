@@ -1589,6 +1589,8 @@ def MOVSL : I<0xA5, RawFrmDstSrc, (outs), (ins dstidx32:$dst, srcidx32:$src),
 def MOVSQ : RI<0xA5, RawFrmDstSrc, (outs), (ins dstidx64:$dst, srcidx64:$src),
                "movsq\t{$src, $dst|$dst, $src}", []>,
                Requires<[In64BitMode]>;
+def MOVSC : CI<0xA5, RawFrmDstSrc, (outs), (ins dstidxC:$dst, srcidxC:$src),
+              "movsc\t{$src, $dst|$dst, $src}", []>;
 }
 
 let Defs = [EDI], Uses = [AL,EDI,DF] in
@@ -3333,6 +3335,7 @@ def : MnemonicAlias<"smovb", "movsb", "att">;
 def : MnemonicAlias<"smovw", "movsw", "att">;
 def : MnemonicAlias<"smovl", "movsl", "att">;
 def : MnemonicAlias<"smovq", "movsq", "att">;
+def : MnemonicAlias<"smovc", "movsc", "att">;
 
 def : MnemonicAlias<"ud2a",  "ud2",  "att">;
 def : MnemonicAlias<"ud2bw", "ud1w", "att">;
@@ -3530,6 +3533,7 @@ def : InstAlias<"movs\t{$src, $dst|$dst, $src}", (MOVSB dstidx8:$dst, srcidx8:$s
 def : InstAlias<"movs\t{$src, $dst|$dst, $src}", (MOVSW dstidx16:$dst, srcidx16:$src), 0, "intel">;
 def : InstAlias<"movs\t{$src, $dst|$dst, $src}", (MOVSL dstidx32:$dst, srcidx32:$src), 0, "intel">;
 def : InstAlias<"movs\t{$src, $dst|$dst, $src}", (MOVSQ dstidx64:$dst, srcidx64:$src), 0, "intel">, Requires<[In64BitMode]>;
+def : InstAlias<"movs\t{$src, $dst|$dst, $src}", (MOVSC dstidxC:$dst, srcidxC:$src), 0, "intel">;
 
 // div and idiv aliases for explicit A register.
 def : InstAlias<"div{b}\t{$src, %al|al, $src}", (DIV8r  GR8 :$src)>;

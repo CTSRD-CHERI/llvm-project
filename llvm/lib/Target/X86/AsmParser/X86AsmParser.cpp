@@ -3576,7 +3576,7 @@ bool X86AsmParser::ParseInstruction(ParseInstructionInfo &Info, StringRef Name,
   // Add default SI and DI operands to "movs[bwlq]".
   if (((Name.startswith("movs") &&
         (Name == "movs" || Name == "movsb" || Name == "movsw" ||
-         Name == "movsl" || Name == "movsd" || Name == "movsq")) ||
+         Name == "movsl" || Name == "movsd" || Name == "movsq" || Name == "movsc")) ||
        (Name.startswith("smov") &&
         (Name == "smov" || Name == "smovb" || Name == "smovw" ||
          Name == "smovl" || Name == "smovd" || Name == "smovq"))) &&
