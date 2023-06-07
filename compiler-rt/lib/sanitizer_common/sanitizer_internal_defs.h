@@ -269,11 +269,6 @@ static_assert(sizeof(sptr) == sizeof(__INTPTR_TYPE__), "");
 #  define PREFETCH(x) __builtin_prefetch(x)
 # endif
 # define WARN_UNUSED_RESULT __attribute__((warn_unused_result))
-# if __has_attribute(uninitialized)
-#  define UNINITIALIZED __attribute__((uninitialized))
-# else  // __has_attribute(uninitialized)
-#  define UNINITIALIZED
-# endif  // __has_attribute(uninitialized)
 #endif  // _MSC_VER
 
 #if !defined(_MSC_VER) || defined(__clang__)
@@ -296,6 +291,12 @@ static_assert(sizeof(sptr) == sizeof(__INTPTR_TYPE__), "");
 #  define FALLTHROUGH [[fallthrough]]
 #else
 #  define FALLTHROUGH
+#endif
+
+#if __has_attribute(uninitialized)
+#  define UNINITIALIZED __attribute__((uninitialized))
+#else
+#  define UNINITIALIZED
 #endif
 
 // Unaligned versions of basic types.
