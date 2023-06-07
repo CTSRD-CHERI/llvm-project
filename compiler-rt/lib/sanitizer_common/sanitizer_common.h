@@ -854,7 +854,11 @@ inline const char *ModuleArchToString(ModuleArch arch) {
   return "";
 }
 
+#if SANITIZER_APPLE
+const usize kModuleUUIDSize = 16;
+#else
 const usize kModuleUUIDSize = 32;
+#endif
 const usize kMaxSegName = 16;
 
 // Represents a binary loaded into virtual memory (e.g. this can be an
