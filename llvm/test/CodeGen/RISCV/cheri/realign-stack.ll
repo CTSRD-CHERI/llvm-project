@@ -13,8 +13,7 @@ define i8 addrspace(200)* @pluto() addrspace(200) nounwind {
 ; IL32PC64-NEXT:    csc cra, 120(csp) # 8-byte Folded Spill
 ; IL32PC64-NEXT:    csc cs0, 112(csp) # 8-byte Folded Spill
 ; IL32PC64-NEXT:    cincoffset cs0, csp, 128
-; IL32PC64-NEXT:    cgetaddr a0, csp
-; IL32PC64-NEXT:    andi a0, a0, -64
+; IL32PC64-NEXT:    andi a0, sp, -64
 ; IL32PC64-NEXT:    csetaddr csp, csp, a0
 ; IL32PC64-NEXT:    cincoffset ca0, csp, 0
 ; IL32PC64-NEXT:    csetbounds ca0, ca0, 64
@@ -30,8 +29,7 @@ define i8 addrspace(200)* @pluto() addrspace(200) nounwind {
 ; L64PC128-NEXT:    csc cra, 112(csp) # 16-byte Folded Spill
 ; L64PC128-NEXT:    csc cs0, 96(csp) # 16-byte Folded Spill
 ; L64PC128-NEXT:    cincoffset cs0, csp, 128
-; L64PC128-NEXT:    cgetaddr a0, csp
-; L64PC128-NEXT:    andi a0, a0, -64
+; L64PC128-NEXT:    andi a0, sp, -64
 ; L64PC128-NEXT:    csetaddr csp, csp, a0
 ; L64PC128-NEXT:    cincoffset ca0, csp, 0
 ; L64PC128-NEXT:    csetbounds ca0, ca0, 64

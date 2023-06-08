@@ -17,8 +17,7 @@ define i32 @caller(i32 zeroext %n) nounwind {
 ; RV32IXCHERI-NEXT:    csc cs1, 40(csp) # 8-byte Folded Spill
 ; RV32IXCHERI-NEXT:    csc cs2, 32(csp) # 8-byte Folded Spill
 ; RV32IXCHERI-NEXT:    cincoffset cs0, csp, 64
-; RV32IXCHERI-NEXT:    cgetaddr a1, csp
-; RV32IXCHERI-NEXT:    andi a1, a1, -64
+; RV32IXCHERI-NEXT:    andi a1, sp, -64
 ; RV32IXCHERI-NEXT:    csetaddr csp, csp, a1
 ; RV32IXCHERI-NEXT:    cmove cs1, csp
 ; RV32IXCHERI-NEXT:    mv s2, a0
@@ -53,8 +52,7 @@ define i32 @caller(i32 zeroext %n) nounwind {
 ; RV64IXCHERI-NEXT:    csc cs1, 80(csp) # 16-byte Folded Spill
 ; RV64IXCHERI-NEXT:    csc cs2, 64(csp) # 16-byte Folded Spill
 ; RV64IXCHERI-NEXT:    cincoffset cs0, csp, 128
-; RV64IXCHERI-NEXT:    cgetaddr a1, csp
-; RV64IXCHERI-NEXT:    andi a1, a1, -64
+; RV64IXCHERI-NEXT:    andi a1, sp, -64
 ; RV64IXCHERI-NEXT:    csetaddr csp, csp, a1
 ; RV64IXCHERI-NEXT:    cmove cs1, csp
 ; RV64IXCHERI-NEXT:    mv s2, a0

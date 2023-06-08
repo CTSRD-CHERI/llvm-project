@@ -530,34 +530,38 @@ void RISCVFrameLowering::emitPrologue(MachineFunction &MF,
     const RISCVRegisterInfo *RI = STI.getRegisterInfo();
     if (RI->hasStackRealignment(MF)) {
       Align MaxAlignment = MFI.getMaxAlign();
-      unsigned SPAddrReg;
+      Register SPAddrSrcReg;
+      Register SPAddrDstReg;
+      // For purecap we need a temporary register for the address of SP since
+      // we don't have a capability-based ANDI/ALIGN instruction.
       if (RISCVABI::isCheriPureCapABI(STI.getTargetABI())) {
-        SPAddrReg = MF.getRegInfo().createVirtualRegister(&RISCV::GPRRegClass);
-        BuildMI(MBB, MBBI, DL, TII->get(RISCV::CGetAddr), SPAddrReg)
-            .addReg(SPReg);
+        SPAddrDstReg =
+            MF.getRegInfo().createVirtualRegister(&RISCV::GPRRegClass);
+        SPAddrSrcReg = RI->getSubReg(SPReg, RISCV::sub_cap_addr);
       } else {
-        SPAddrReg = SPReg;
+        SPAddrSrcReg = SPReg;
+        SPAddrDstReg = SPReg;
       }
 
       const RISCVInstrInfo *TII = STI.getInstrInfo();
       if (isInt<12>(-(int)MaxAlignment.value())) {
-        BuildMI(MBB, MBBI, DL, TII->get(RISCV::ANDI), SPAddrReg)
-            .addReg(SPAddrReg)
+        BuildMI(MBB, MBBI, DL, TII->get(RISCV::ANDI), SPAddrDstReg)
+            .addReg(SPAddrSrcReg)
             .addImm(-(int)MaxAlignment.value())
             .setMIFlag(MachineInstr::FrameSetup);
       } else {
         unsigned ShiftAmount = Log2(MaxAlignment);
         Register VR;
         if (RISCVABI::isCheriPureCapABI(STI.getTargetABI()))
-          VR = SPAddrReg;
+          VR = SPAddrDstReg;
         else
           VR = MF.getRegInfo().createVirtualRegister(&RISCV::GPRRegClass);
 
         BuildMI(MBB, MBBI, DL, TII->get(RISCV::SRLI), VR)
-            .addReg(SPAddrReg)
+            .addReg(SPAddrSrcReg)
             .addImm(ShiftAmount)
             .setMIFlag(MachineInstr::FrameSetup);
-        BuildMI(MBB, MBBI, DL, TII->get(RISCV::SLLI), SPAddrReg)
+        BuildMI(MBB, MBBI, DL, TII->get(RISCV::SLLI), SPAddrDstReg)
             .addReg(VR)
             .addImm(ShiftAmount)
             .setMIFlag(MachineInstr::FrameSetup);
@@ -566,7 +570,7 @@ void RISCVFrameLowering::emitPrologue(MachineFunction &MF,
       if (RISCVABI::isCheriPureCapABI(STI.getTargetABI()))
         BuildMI(MBB, MBBI, DL, TII->get(RISCV::CSetAddr), SPReg)
             .addReg(SPReg)
-            .addReg(SPAddrReg);
+            .addReg(SPAddrDstReg);
 
       // FP will be used to restore the frame in the epilogue, so we need
       // another base register BP to record SP after re-alignment. SP will
