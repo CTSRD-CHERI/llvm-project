@@ -64,8 +64,7 @@ define void @hoist_alloca_uncond(i32 signext %cond) local_unnamed_addr addrspace
 ; CHECK-NEXT:    csc cs2, 672(csp) # 8-byte Folded Spill
 ; CHECK-NEXT:    csc cs3, 664(csp) # 8-byte Folded Spill
 ; CHECK-NEXT:    cincoffset cs0, csp, 704
-; CHECK-NEXT:    cgetaddr a0, csp
-; CHECK-NEXT:    andi a0, a0, -64
+; CHECK-NEXT:    andi a0, sp, -64
 ; CHECK-NEXT:    csetaddr csp, csp, a0
 ; CHECK-NEXT:    li s3, 100
 ; CHECK-NEXT:    cincoffset ca0, csp, 128
@@ -119,8 +118,7 @@ define void @hoist_alloca_cond(i32 signext %cond) local_unnamed_addr addrspace(2
 ; CHECK-NEXT:    csc cs3, 664(csp) # 8-byte Folded Spill
 ; CHECK-NEXT:    csc cs4, 656(csp) # 8-byte Folded Spill
 ; CHECK-NEXT:    cincoffset cs0, csp, 704
-; CHECK-NEXT:    cgetaddr a1, csp
-; CHECK-NEXT:    andi a1, a1, -64
+; CHECK-NEXT:    andi a1, sp, -64
 ; CHECK-NEXT:    csetaddr csp, csp, a1
 ; CHECK-NEXT:    mv s1, a0
 ; CHECK-NEXT:    li s4, 100

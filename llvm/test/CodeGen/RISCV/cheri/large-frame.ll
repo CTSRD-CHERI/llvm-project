@@ -14,8 +14,7 @@ define dso_local void @bar() addrspace(200) nounwind {
 ; RV32IXCHERI-IL32PC64-NEXT:    lui a0, 1048575
 ; RV32IXCHERI-IL32PC64-NEXT:    addi a0, a0, 1008
 ; RV32IXCHERI-IL32PC64-NEXT:    cincoffset csp, csp, a0
-; RV32IXCHERI-IL32PC64-NEXT:    cgetaddr a0, csp
-; RV32IXCHERI-IL32PC64-NEXT:    andi a0, a0, -512
+; RV32IXCHERI-IL32PC64-NEXT:    andi a0, sp, -512
 ; RV32IXCHERI-IL32PC64-NEXT:    csetaddr csp, csp, a0
 ; RV32IXCHERI-IL32PC64-NEXT:    lui a0, 1
 ; RV32IXCHERI-IL32PC64-NEXT:    cincoffset ca1, csp, 512
