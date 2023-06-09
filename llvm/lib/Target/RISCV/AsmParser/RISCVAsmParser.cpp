@@ -3070,6 +3070,15 @@ bool RISCVAsmParser::processInstruction(MCInst &Inst, SMLoc IDLoc,
     if (checkPseudoAddTPRel(Inst, Operands))
       return true;
     break;
+  case RISCV::PseudoCGetAddr: {
+    const MCRegister SrcReg = getContext().getRegisterInfo()->getSubReg(
+        Inst.getOperand(1).getReg(), RISCV::sub_cap_addr);
+    emitToStreamer(Out, MCInstBuilder(RISCV::ADDI)
+                            .addOperand(Inst.getOperand(0))
+                            .addReg(SrcReg)
+                            .addImm(0));
+    return false;
+  }
   case RISCV::PseudoCLLC:
     emitCapLoadLocalCap(Inst, IDLoc, Out);
     return false;

@@ -138,12 +138,12 @@ entry:
 define i64 @get_gp_addr() local_unnamed_addr #0 {
 ; CHECK-L64PC128-LABEL: get_gp_addr:
 ; CHECK-L64PC128:       # %bb.0: # %entry
-; CHECK-L64PC128-NEXT:    cgetaddr a0, cgp
+; CHECK-L64PC128-NEXT:    mv a0, gp
 ; CHECK-L64PC128-NEXT:    cret
 ;
 ; CHECK-LP64-LABEL: get_gp_addr:
 ; CHECK-LP64:       # %bb.0: # %entry
-; CHECK-LP64-NEXT:    cgetaddr a0, cgp
+; CHECK-LP64-NEXT:    mv a0, gp
 ; CHECK-LP64-NEXT:    ret
 entry:
   %0 = tail call i8 addrspace(200)* @llvm.read_register.p200i8(metadata !3)

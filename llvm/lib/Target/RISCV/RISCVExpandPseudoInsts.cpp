@@ -76,6 +76,7 @@ private:
   bool expandCapLoadTLSGDCap(MachineBasicBlock &MBB,
                              MachineBasicBlock::iterator MBBI,
                              MachineBasicBlock::iterator &NextMBBI);
+  bool expandCGetAddr(MachineBasicBlock &MBB, MachineBasicBlock::iterator MBBI);
   bool expandVSetVL(MachineBasicBlock &MBB, MachineBasicBlock::iterator MBBI);
   bool expandVMSET_VMCLR(MachineBasicBlock &MBB,
                          MachineBasicBlock::iterator MBBI, unsigned Opcode);
@@ -121,6 +122,8 @@ bool RISCVExpandPseudo::expandMI(MachineBasicBlock &MBB,
     return expandLoadTLSIEAddress(MBB, MBBI, NextMBBI);
   case RISCV::PseudoLA_TLS_GD:
     return expandLoadTLSGDAddress(MBB, MBBI, NextMBBI);
+  case RISCV::PseudoCGetAddr:
+    return expandCGetAddr(MBB, MBBI);
   case RISCV::PseudoCLLC:
     return expandCapLoadLocalCap(MBB, MBBI, NextMBBI);
   case RISCV::PseudoCLGC:
@@ -345,6 +348,21 @@ bool RISCVExpandPseudo::expandCapLoadTLSGDCap(
   return expandAuipccInstPair(MBB, MBBI, NextMBBI,
                               RISCVII::MO_TLS_GD_CAPTAB_PCREL_HI,
                               RISCV::CIncOffsetImm);
+}
+
+bool RISCVExpandPseudo::expandCGetAddr(MachineBasicBlock &MBB,
+                                       MachineBasicBlock::iterator MBBI) {
+  const auto &STI = MBB.getParent()->getSubtarget<RISCVSubtarget>();
+  DebugLoc DL = MBBI->getDebugLoc();
+  const TargetRegisterInfo *TRI = STI.getRegisterInfo();
+  // TODO: We could replace this pseudo with a subregister read if none of the
+  // readers can end up leaking the capability privileges.
+  BuildMI(MBB, MBBI, DL, TII->get(RISCV::ADDI), MBBI->getOperand(0).getReg())
+      .addReg(TRI->getSubReg(MBBI->getOperand(1).getReg(), RISCV::sub_cap_addr),
+              getRegState(MBBI->getOperand(1)))
+      .addImm(0);
+  MBBI->eraseFromParent(); // The pseudo instruction is gone now.
+  return true;
 }
 
 bool RISCVExpandPseudo::expandVSetVL(MachineBasicBlock &MBB,

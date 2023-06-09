@@ -315,8 +315,11 @@ def CGetTag    : Cheri_r<0x4, "cgettag">;
 def CGetSealed : Cheri_r<0x5, "cgetsealed">;
 def CGetOffset : Cheri_r<0x6, "cgetoffset">;
 def CGetFlags  : Cheri_r<0x7, "cgetflags">;
-def CGetAddr   : Cheri_r<0xf, "cgetaddr">;
 def CGetHigh   : Cheri_r<0x17, "cgethigh">;
+// For backwards compatibility we still accept cgetaddr from assembly.
+let mayStore = false, mayLoad = false, Size = 4, isCodeGenOnly = false in
+def PseudoCGetAddr : Pseudo<(outs GPR:$rd), (ins GPCR:$cs1), [],
+                            "cgetaddr", "$rd, $cs1">;
 }
 
 //===----------------------------------------------------------------------===//
@@ -1169,7 +1172,7 @@ def : PatGpcr<riscv_cap_tag_get, CGetTag>;
 def : PatGpcr<riscv_cap_sealed_get, CGetSealed>;
 def : PatGpcr<int_cheri_cap_offset_get, CGetOffset>;
 def : PatGpcr<int_cheri_cap_flags_get, CGetFlags>;
-def : PatGpcr<int_cheri_cap_address_get, CGetAddr>;
+def : Pat<(int_cheri_cap_address_get GPCR:$cs1), (PseudoCGetAddr GPCR:$cs1)>;
 def : PatGpcr<int_cheri_cap_high_get, CGetHigh>;
 
 /// Capability-Modification Instructions
@@ -1214,7 +1217,7 @@ def : PatGpcrGpcr<int_cheri_cap_diff, CSub>;
 let Predicates = [IsPureCapABI] in {
 def : Pat<(inttoptr GPR:$rs2), (CIncOffset C0, GPR:$rs2)>;
 def : Pat<(inttoptr simm12:$imm12), (CIncOffsetImm C0, simm12:$imm12)>;
-def : Pat<(ptrtoint GPCR:$rs1), (CGetAddr GPCR:$rs1)>;
+def : Pat<(ptrtoint GPCR:$rs1), (PseudoCGetAddr GPCR:$rs1)>;
 }
 
 let Predicates = [NotPureCapABI] in {

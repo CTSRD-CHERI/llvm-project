@@ -118,7 +118,7 @@ define i32 @alloca_not_in_entry(i1 %arg) local_unnamed_addr addrspace(200) nounw
 ; ASM-NEXT:    j .LBB1_1
 ; ASM-NEXT:  .LBB1_1: # %do_alloca
 ; ASM-NEXT:    cmove ca0, csp
-; ASM-NEXT:    cgetaddr a1, ca0
+; ASM-NEXT:    mv a1, a0
 ; ASM-NEXT:    addi a1, a1, -16
 ; ASM-NEXT:    csetaddr ca1, ca0, a1
 ; ASM-NEXT:    csetbounds ca0, ca1, 16
@@ -153,7 +153,7 @@ define i32 @alloca_not_in_entry(i1 %arg) local_unnamed_addr addrspace(200) nounw
 ; ASM-OPT-NEXT:    csc cra, 16(csp) # 16-byte Folded Spill
 ; ASM-OPT-NEXT:    csc cs0, 0(csp) # 16-byte Folded Spill
 ; ASM-OPT-NEXT:    cincoffset cs0, csp, 32
-; ASM-OPT-NEXT:    cgetaddr a0, csp
+; ASM-OPT-NEXT:    mv a0, sp
 ; ASM-OPT-NEXT:    addi a0, a0, -16
 ; ASM-OPT-NEXT:    csetaddr ca0, csp, a0
 ; ASM-OPT-NEXT:    csetbounds ca1, ca0, 16
@@ -230,7 +230,7 @@ define i32 @crash_reproducer(i1 %arg) local_unnamed_addr addrspace(200) nounwind
 ; ASM-NEXT:  .LBB2_1: # %entry.while.end_crit_edge
 ; ASM-NEXT:  .LBB2_2: # %while.body
 ; ASM-NEXT:    cmove ca0, csp
-; ASM-NEXT:    cgetaddr a1, ca0
+; ASM-NEXT:    mv a1, a0
 ; ASM-NEXT:    addi a1, a1, -16
 ; ASM-NEXT:    csetaddr ca1, ca0, a1
 ; ASM-NEXT:    csetbounds ca0, ca1, 16
@@ -261,7 +261,7 @@ define i32 @crash_reproducer(i1 %arg) local_unnamed_addr addrspace(200) nounwind
 ; ASM-OPT-NEXT:    csc cra, 16(csp) # 16-byte Folded Spill
 ; ASM-OPT-NEXT:    csc cs0, 0(csp) # 16-byte Folded Spill
 ; ASM-OPT-NEXT:    cincoffset cs0, csp, 32
-; ASM-OPT-NEXT:    cgetaddr a0, csp
+; ASM-OPT-NEXT:    mv a0, sp
 ; ASM-OPT-NEXT:    addi a0, a0, -16
 ; ASM-OPT-NEXT:    csetaddr ca0, csp, a0
 ; ASM-OPT-NEXT:    csetbounds ca1, ca0, 16

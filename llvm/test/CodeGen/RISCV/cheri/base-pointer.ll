@@ -21,7 +21,7 @@ define i32 @caller(i32 zeroext %n) nounwind {
 ; RV32IXCHERI-NEXT:    csetaddr csp, csp, a1
 ; RV32IXCHERI-NEXT:    cmove cs1, csp
 ; RV32IXCHERI-NEXT:    mv s2, a0
-; RV32IXCHERI-NEXT:    cgetaddr a0, csp
+; RV32IXCHERI-NEXT:    mv a0, sp
 ; RV32IXCHERI-NEXT:    addi a1, s2, 15
 ; RV32IXCHERI-NEXT:    andi a1, a1, -16
 ; RV32IXCHERI-NEXT:    crrl a2, a1
@@ -56,7 +56,7 @@ define i32 @caller(i32 zeroext %n) nounwind {
 ; RV64IXCHERI-NEXT:    csetaddr csp, csp, a1
 ; RV64IXCHERI-NEXT:    cmove cs1, csp
 ; RV64IXCHERI-NEXT:    mv s2, a0
-; RV64IXCHERI-NEXT:    cgetaddr a0, csp
+; RV64IXCHERI-NEXT:    mv a0, sp
 ; RV64IXCHERI-NEXT:    addi a1, s2, 15
 ; RV64IXCHERI-NEXT:    andi a1, a1, -16
 ; RV64IXCHERI-NEXT:    crrl a2, a1

@@ -136,12 +136,12 @@ define i32 @flags_get(i8 addrspace(200)* %cap) nounwind {
 define i32 @address_get(i8 addrspace(200)* %cap) nounwind {
 ; PURECAP-LABEL: address_get:
 ; PURECAP:       # %bb.0:
-; PURECAP-NEXT:    cgetaddr a0, ca0
+; PURECAP-NEXT:    mv a0, a0
 ; PURECAP-NEXT:    cret
 ;
 ; HYBRID-LABEL: address_get:
 ; HYBRID:       # %bb.0:
-; HYBRID-NEXT:    cgetaddr a0, ca0
+; HYBRID-NEXT:    mv a0, a0
 ; HYBRID-NEXT:    ret
   %address = call i32 @llvm.cheri.cap.address.get.i32(i8 addrspace(200)* %cap)
   ret i32 %address
