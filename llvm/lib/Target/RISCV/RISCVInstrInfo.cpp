@@ -1206,6 +1206,15 @@ bool RISCVInstrInfo::isPtrAddInstr(const MachineInstr &I,
   }
 }
 
+unsigned int RISCVInstrInfo::getCheriAddressSubregIdx(MVT CapTy) const {
+  assert(CapTy.isFatPointer());
+  return RISCV::sub_cap_addr;
+}
+
+bool RISCVInstrInfo::isCheriGetAddressInst(MachineInstr &MI) const {
+  return MI.getOpcode() == RISCV::PseudoCGetAddr;
+}
+
 Optional<DestSourcePair>
 RISCVInstrInfo::isCopyInstrImpl(const MachineInstr &MI) const {
   if (MI.isMoveReg())

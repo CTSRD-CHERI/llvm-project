@@ -110,6 +110,11 @@ static bool couldReadCapMetadata(MachineInstr *MI,
 }
 
 bool CheriGetAddressElim::runOnMachineFunction(MachineFunction &MF) {
+  MVT CapTy = MF.getSubtarget().getTargetLowering()->cheriCapabilityType();
+  // Skip this pass if the function is compiler without CHERI support.
+  if (!CapTy.isValid())
+    return false;
+
   LLVM_DEBUG(
       dbgs() << "********** Cheri Get Address Elimination  **********\n"
              << "********** Function: " << MF.getName() << '\n');
@@ -121,7 +126,6 @@ bool CheriGetAddressElim::runOnMachineFunction(MachineFunction &MF) {
   const TargetRegisterInfo *TRI = MF.getSubtarget().getRegisterInfo();
 
   bool Changed = false;
-  MVT CapTy = MF.getSubtarget().getTargetLowering()->cheriCapabilityType();
   unsigned RegIdx = TII->getCheriAddressSubregIdx(CapTy);
 
   // Gather all the get address instructions in the function to be processed.

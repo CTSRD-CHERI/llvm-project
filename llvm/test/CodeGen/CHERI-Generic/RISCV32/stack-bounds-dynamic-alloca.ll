@@ -158,8 +158,7 @@ define i32 @alloca_not_in_entry(i1 %arg) local_unnamed_addr addrspace(200) nounw
 ; ASM-OPT-NEXT:    csc cra, 8(csp) # 8-byte Folded Spill
 ; ASM-OPT-NEXT:    csc cs0, 0(csp) # 8-byte Folded Spill
 ; ASM-OPT-NEXT:    cincoffset cs0, csp, 16
-; ASM-OPT-NEXT:    mv a0, sp
-; ASM-OPT-NEXT:    addi a0, a0, -16
+; ASM-OPT-NEXT:    addi a0, sp, -16
 ; ASM-OPT-NEXT:    csetaddr ca0, csp, a0
 ; ASM-OPT-NEXT:    csetbounds ca1, ca0, 16
 ; ASM-OPT-NEXT:    cmove csp, ca0
@@ -267,8 +266,7 @@ define i32 @crash_reproducer(i1 %arg) local_unnamed_addr addrspace(200) nounwind
 ; ASM-OPT-NEXT:    csc cra, 8(csp) # 8-byte Folded Spill
 ; ASM-OPT-NEXT:    csc cs0, 0(csp) # 8-byte Folded Spill
 ; ASM-OPT-NEXT:    cincoffset cs0, csp, 16
-; ASM-OPT-NEXT:    mv a0, sp
-; ASM-OPT-NEXT:    addi a0, a0, -16
+; ASM-OPT-NEXT:    addi a0, sp, -16
 ; ASM-OPT-NEXT:    csetaddr ca0, csp, a0
 ; ASM-OPT-NEXT:    csetbounds ca1, ca0, 16
 ; ASM-OPT-NEXT:    cmove csp, ca0

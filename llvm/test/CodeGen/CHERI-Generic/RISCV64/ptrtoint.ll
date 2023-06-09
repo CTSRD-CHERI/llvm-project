@@ -21,7 +21,6 @@ define internal i64 @ptrtoint(i8 addrspace(200)* %cap) addrspace(200) nounwind {
 define internal i64 @ptrtoint_plus_const(i8 addrspace(200)* %cap) addrspace(200) nounwind {
 ; CHECK-LABEL: ptrtoint_plus_const:
 ; CHECK:       # %bb.0:
-; CHECK-NEXT:    mv a0, a0
 ; CHECK-NEXT:    addi a0, a0, 2
 ; CHECK-NEXT:    cret
 ;
@@ -38,7 +37,6 @@ define internal i64 @ptrtoint_plus_const(i8 addrspace(200)* %cap) addrspace(200)
 define internal i64 @ptrtoint_plus_var(i8 addrspace(200)* %cap, i64 %add) addrspace(200) nounwind {
 ; CHECK-LABEL: ptrtoint_plus_var:
 ; CHECK:       # %bb.0:
-; CHECK-NEXT:    mv a0, a0
 ; CHECK-NEXT:    add a0, a0, a1
 ; CHECK-NEXT:    cret
 ;

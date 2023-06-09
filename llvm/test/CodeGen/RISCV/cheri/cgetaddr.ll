@@ -16,11 +16,10 @@ entry:
   ret i64 %ret
 }
 
-;; TODO: We should be able to avoid the getaddr instruction here and emit `addi 1` instead.
+;; We can avoid the getaddr instruction here and emit `addi 1` instead.
 define i64 @getaddr_plus_one(i8 addrspace(200)* %arg) nounwind {
 ; CHECK-LABEL: getaddr_plus_one:
 ; CHECK:       # %bb.0: # %entry
-; CHECK-NEXT:    mv a0, a0
 ; CHECK-NEXT:    addi a0, a0, 1
 ; CHECK-NEXT:    cret
 entry:

@@ -42,16 +42,15 @@ define i32 @dynamic_alloca(iXLEN %x) nounwind {
 ; RV32IXCHERI-NEXT:    csc cra, 8(csp) # 8-byte Folded Spill
 ; RV32IXCHERI-NEXT:    csc cs0, 0(csp) # 8-byte Folded Spill
 ; RV32IXCHERI-NEXT:    cincoffset cs0, csp, 16
-; RV32IXCHERI-NEXT:    mv a1, sp
 ; RV32IXCHERI-NEXT:    slli a0, a0, 2
-; RV32IXCHERI-NEXT:    addi a2, a0, 15
-; RV32IXCHERI-NEXT:    andi a2, a2, -16
-; RV32IXCHERI-NEXT:    crrl a3, a2
-; RV32IXCHERI-NEXT:    sub a1, a1, a3
-; RV32IXCHERI-NEXT:    cram a2, a2
-; RV32IXCHERI-NEXT:    and a1, a1, a2
+; RV32IXCHERI-NEXT:    addi a1, a0, 15
+; RV32IXCHERI-NEXT:    andi a1, a1, -16
+; RV32IXCHERI-NEXT:    crrl a2, a1
+; RV32IXCHERI-NEXT:    sub a3, sp, a2
+; RV32IXCHERI-NEXT:    cram a1, a1
+; RV32IXCHERI-NEXT:    and a1, a3, a1
 ; RV32IXCHERI-NEXT:    csetaddr ca1, csp, a1
-; RV32IXCHERI-NEXT:    csetbounds ca2, ca1, a3
+; RV32IXCHERI-NEXT:    csetbounds ca2, ca1, a2
 ; RV32IXCHERI-NEXT:    cmove csp, ca1
 ; RV32IXCHERI-NEXT:    csetbounds ca0, ca2, a0
 ; RV32IXCHERI-NEXT:    ccall use_arg
@@ -67,16 +66,15 @@ define i32 @dynamic_alloca(iXLEN %x) nounwind {
 ; RV64IXCHERI-NEXT:    csc cra, 16(csp) # 16-byte Folded Spill
 ; RV64IXCHERI-NEXT:    csc cs0, 0(csp) # 16-byte Folded Spill
 ; RV64IXCHERI-NEXT:    cincoffset cs0, csp, 32
-; RV64IXCHERI-NEXT:    mv a1, sp
 ; RV64IXCHERI-NEXT:    slli a0, a0, 2
-; RV64IXCHERI-NEXT:    addi a2, a0, 15
-; RV64IXCHERI-NEXT:    andi a2, a2, -16
-; RV64IXCHERI-NEXT:    crrl a3, a2
-; RV64IXCHERI-NEXT:    sub a1, a1, a3
-; RV64IXCHERI-NEXT:    cram a2, a2
-; RV64IXCHERI-NEXT:    and a1, a1, a2
+; RV64IXCHERI-NEXT:    addi a1, a0, 15
+; RV64IXCHERI-NEXT:    andi a1, a1, -16
+; RV64IXCHERI-NEXT:    crrl a2, a1
+; RV64IXCHERI-NEXT:    sub a3, sp, a2
+; RV64IXCHERI-NEXT:    cram a1, a1
+; RV64IXCHERI-NEXT:    and a1, a3, a1
 ; RV64IXCHERI-NEXT:    csetaddr ca1, csp, a1
-; RV64IXCHERI-NEXT:    csetbounds ca2, ca1, a3
+; RV64IXCHERI-NEXT:    csetbounds ca2, ca1, a2
 ; RV64IXCHERI-NEXT:    cmove csp, ca1
 ; RV64IXCHERI-NEXT:    csetbounds ca0, ca2, a0
 ; RV64IXCHERI-NEXT:    ccall use_arg
