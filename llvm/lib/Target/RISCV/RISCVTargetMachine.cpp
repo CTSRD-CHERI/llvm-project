@@ -235,4 +235,6 @@ void RISCVPassConfig::addPreRegAlloc() {
   if (TM->getOptLevel() != CodeGenOpt::None)
     addPass(createRISCVMergeBaseOffsetOptPass());
   addPass(createRISCVInsertVSETVLIPass());
+  if (TM->getOptLevel() != CodeGenOpt::None)
+    addPass(createCheriGetAddressElimPass());
 }

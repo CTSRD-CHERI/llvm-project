@@ -59,8 +59,7 @@ define i8 addrspace(200)* @get_ith_cap(i32 signext %i, ...) nounwind {
 ; CHECK-NEXT:    addi a0, a0, 1
 ; CHECK-NEXT:  .LBB1_1: # %while.cond
 ; CHECK-NEXT:    # =>This Inner Loop Header: Depth=1
-; CHECK-NEXT:    mv a2, a1
-; CHECK-NEXT:    addi a2, a2, 7
+; CHECK-NEXT:    addi a2, a1, 7
 ; CHECK-NEXT:    andi a2, a2, -8
 ; CHECK-NEXT:    csetaddr ca2, ca1, a2
 ; CHECK-NEXT:    addi a0, a0, -1
