@@ -42,7 +42,7 @@ define i32 @dynamic_alloca(iXLEN %x) nounwind {
 ; RV32IXCHERI-NEXT:    csc cra, 8(csp) # 8-byte Folded Spill
 ; RV32IXCHERI-NEXT:    csc cs0, 0(csp) # 8-byte Folded Spill
 ; RV32IXCHERI-NEXT:    cincoffset cs0, csp, 16
-; RV32IXCHERI-NEXT:    cgetaddr a1, csp
+; RV32IXCHERI-NEXT:    mv a1, sp
 ; RV32IXCHERI-NEXT:    slli a0, a0, 2
 ; RV32IXCHERI-NEXT:    addi a2, a0, 15
 ; RV32IXCHERI-NEXT:    andi a2, a2, -16
@@ -67,7 +67,7 @@ define i32 @dynamic_alloca(iXLEN %x) nounwind {
 ; RV64IXCHERI-NEXT:    csc cra, 16(csp) # 16-byte Folded Spill
 ; RV64IXCHERI-NEXT:    csc cs0, 0(csp) # 16-byte Folded Spill
 ; RV64IXCHERI-NEXT:    cincoffset cs0, csp, 32
-; RV64IXCHERI-NEXT:    cgetaddr a1, csp
+; RV64IXCHERI-NEXT:    mv a1, sp
 ; RV64IXCHERI-NEXT:    slli a0, a0, 2
 ; RV64IXCHERI-NEXT:    addi a2, a0, 15
 ; RV64IXCHERI-NEXT:    andi a2, a2, -16

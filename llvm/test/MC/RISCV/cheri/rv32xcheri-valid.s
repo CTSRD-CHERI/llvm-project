@@ -33,8 +33,8 @@ cgetoffset x1, c2
 # CHECK-INST: cgetflags ra, csp
 # CHECK: encoding: [0xdb,0x00,0x71,0xfe]
 cgetflags x1, c2
-# CHECK-INST: cgetaddr ra, csp
-# CHECK: encoding: [0xdb,0x00,0xf1,0xfe]
+# CHECK-INST: addi ra, sp, 0
+# CHECK: encoding: [0x93,0x00,0x01,0x00]
 cgetaddr x1, c2
 # CHECK-INST: cgethigh ra, csp
 # CHECK: encoding: [0xdb,0x00,0x71,0xff]

@@ -203,12 +203,12 @@ define i32 addrspace(200)* @atomic_cap_ptr_add(i32 addrspace(200)* addrspace(200
 ; PURECAP-LIBCALLS-NEXT:    csc cs2, 16(csp) # 16-byte Folded Spill
 ; PURECAP-LIBCALLS-NEXT:    cmove cs0, ca0
 ; PURECAP-LIBCALLS-NEXT:    clc ca3, 0(ca0)
-; PURECAP-LIBCALLS-NEXT:    cgetaddr s2, ca1
+; PURECAP-LIBCALLS-NEXT:    mv s2, a1
 ; PURECAP-LIBCALLS-NEXT:    cincoffset ca0, csp, 0
 ; PURECAP-LIBCALLS-NEXT:    csetbounds cs1, ca0, 16
 ; PURECAP-LIBCALLS-NEXT:  .LBB6_1: # %atomicrmw.start
 ; PURECAP-LIBCALLS-NEXT:    # =>This Inner Loop Header: Depth=1
-; PURECAP-LIBCALLS-NEXT:    cgetaddr a0, ca3
+; PURECAP-LIBCALLS-NEXT:    mv a0, a3
 ; PURECAP-LIBCALLS-NEXT:    add a0, a0, s2
 ; PURECAP-LIBCALLS-NEXT:    csetaddr ca2, ca3, a0
 ; PURECAP-LIBCALLS-NEXT:    csc ca3, 0(csp)
@@ -235,10 +235,10 @@ define i32 addrspace(200)* @atomic_cap_ptr_add(i32 addrspace(200)* addrspace(200
 ; HYBRID-NEXT:    sd s0, 32(sp) # 8-byte Folded Spill
 ; HYBRID-NEXT:    sc ca0, 0(sp) # 16-byte Folded Spill
 ; HYBRID-NEXT:    lc.cap ca3, (ca0)
-; HYBRID-NEXT:    cgetaddr s0, ca1
+; HYBRID-NEXT:    mv s0, a1
 ; HYBRID-NEXT:  .LBB6_1: # %atomicrmw.start
 ; HYBRID-NEXT:    # =>This Inner Loop Header: Depth=1
-; HYBRID-NEXT:    cgetaddr a0, ca3
+; HYBRID-NEXT:    mv a0, a3
 ; HYBRID-NEXT:    add a0, a0, s0
 ; HYBRID-NEXT:    csetaddr ca2, ca3, a0
 ; HYBRID-NEXT:    sc ca3, 16(sp)
@@ -281,12 +281,12 @@ define i32 addrspace(200)* @atomic_cap_ptr_sub(i32 addrspace(200)* addrspace(200
 ; PURECAP-LIBCALLS-NEXT:    csc cs2, 16(csp) # 16-byte Folded Spill
 ; PURECAP-LIBCALLS-NEXT:    cmove cs0, ca0
 ; PURECAP-LIBCALLS-NEXT:    clc ca3, 0(ca0)
-; PURECAP-LIBCALLS-NEXT:    cgetaddr s2, ca1
+; PURECAP-LIBCALLS-NEXT:    mv s2, a1
 ; PURECAP-LIBCALLS-NEXT:    cincoffset ca0, csp, 0
 ; PURECAP-LIBCALLS-NEXT:    csetbounds cs1, ca0, 16
 ; PURECAP-LIBCALLS-NEXT:  .LBB7_1: # %atomicrmw.start
 ; PURECAP-LIBCALLS-NEXT:    # =>This Inner Loop Header: Depth=1
-; PURECAP-LIBCALLS-NEXT:    cgetaddr a0, ca3
+; PURECAP-LIBCALLS-NEXT:    mv a0, a3
 ; PURECAP-LIBCALLS-NEXT:    sub a0, a0, s2
 ; PURECAP-LIBCALLS-NEXT:    csetaddr ca2, ca3, a0
 ; PURECAP-LIBCALLS-NEXT:    csc ca3, 0(csp)
@@ -313,10 +313,10 @@ define i32 addrspace(200)* @atomic_cap_ptr_sub(i32 addrspace(200)* addrspace(200
 ; HYBRID-NEXT:    sd s0, 32(sp) # 8-byte Folded Spill
 ; HYBRID-NEXT:    sc ca0, 0(sp) # 16-byte Folded Spill
 ; HYBRID-NEXT:    lc.cap ca3, (ca0)
-; HYBRID-NEXT:    cgetaddr s0, ca1
+; HYBRID-NEXT:    mv s0, a1
 ; HYBRID-NEXT:  .LBB7_1: # %atomicrmw.start
 ; HYBRID-NEXT:    # =>This Inner Loop Header: Depth=1
-; HYBRID-NEXT:    cgetaddr a0, ca3
+; HYBRID-NEXT:    mv a0, a3
 ; HYBRID-NEXT:    sub a0, a0, s0
 ; HYBRID-NEXT:    csetaddr ca2, ca3, a0
 ; HYBRID-NEXT:    sc ca3, 16(sp)
@@ -359,12 +359,12 @@ define i32 addrspace(200)* @atomic_cap_ptr_and(i32 addrspace(200)* addrspace(200
 ; PURECAP-LIBCALLS-NEXT:    csc cs2, 16(csp) # 16-byte Folded Spill
 ; PURECAP-LIBCALLS-NEXT:    cmove cs0, ca0
 ; PURECAP-LIBCALLS-NEXT:    clc ca3, 0(ca0)
-; PURECAP-LIBCALLS-NEXT:    cgetaddr s2, ca1
+; PURECAP-LIBCALLS-NEXT:    mv s2, a1
 ; PURECAP-LIBCALLS-NEXT:    cincoffset ca0, csp, 0
 ; PURECAP-LIBCALLS-NEXT:    csetbounds cs1, ca0, 16
 ; PURECAP-LIBCALLS-NEXT:  .LBB8_1: # %atomicrmw.start
 ; PURECAP-LIBCALLS-NEXT:    # =>This Inner Loop Header: Depth=1
-; PURECAP-LIBCALLS-NEXT:    cgetaddr a0, ca3
+; PURECAP-LIBCALLS-NEXT:    mv a0, a3
 ; PURECAP-LIBCALLS-NEXT:    and a0, a0, s2
 ; PURECAP-LIBCALLS-NEXT:    csetaddr ca2, ca3, a0
 ; PURECAP-LIBCALLS-NEXT:    csc ca3, 0(csp)
@@ -391,10 +391,10 @@ define i32 addrspace(200)* @atomic_cap_ptr_and(i32 addrspace(200)* addrspace(200
 ; HYBRID-NEXT:    sd s0, 32(sp) # 8-byte Folded Spill
 ; HYBRID-NEXT:    sc ca0, 0(sp) # 16-byte Folded Spill
 ; HYBRID-NEXT:    lc.cap ca3, (ca0)
-; HYBRID-NEXT:    cgetaddr s0, ca1
+; HYBRID-NEXT:    mv s0, a1
 ; HYBRID-NEXT:  .LBB8_1: # %atomicrmw.start
 ; HYBRID-NEXT:    # =>This Inner Loop Header: Depth=1
-; HYBRID-NEXT:    cgetaddr a0, ca3
+; HYBRID-NEXT:    mv a0, a3
 ; HYBRID-NEXT:    and a0, a0, s0
 ; HYBRID-NEXT:    csetaddr ca2, ca3, a0
 ; HYBRID-NEXT:    sc ca3, 16(sp)
@@ -438,12 +438,12 @@ define i32 addrspace(200)* @atomic_cap_ptr_nand(i32 addrspace(200)* addrspace(20
 ; PURECAP-LIBCALLS-NEXT:    csc cs2, 16(csp) # 16-byte Folded Spill
 ; PURECAP-LIBCALLS-NEXT:    cmove cs0, ca0
 ; PURECAP-LIBCALLS-NEXT:    clc ca3, 0(ca0)
-; PURECAP-LIBCALLS-NEXT:    cgetaddr s2, ca1
+; PURECAP-LIBCALLS-NEXT:    mv s2, a1
 ; PURECAP-LIBCALLS-NEXT:    cincoffset ca0, csp, 0
 ; PURECAP-LIBCALLS-NEXT:    csetbounds cs1, ca0, 16
 ; PURECAP-LIBCALLS-NEXT:  .LBB9_1: # %atomicrmw.start
 ; PURECAP-LIBCALLS-NEXT:    # =>This Inner Loop Header: Depth=1
-; PURECAP-LIBCALLS-NEXT:    cgetaddr a0, ca3
+; PURECAP-LIBCALLS-NEXT:    mv a0, a3
 ; PURECAP-LIBCALLS-NEXT:    and a0, a0, s2
 ; PURECAP-LIBCALLS-NEXT:    not a0, a0
 ; PURECAP-LIBCALLS-NEXT:    csetaddr ca2, ca3, a0
@@ -471,10 +471,10 @@ define i32 addrspace(200)* @atomic_cap_ptr_nand(i32 addrspace(200)* addrspace(20
 ; HYBRID-NEXT:    sd s0, 32(sp) # 8-byte Folded Spill
 ; HYBRID-NEXT:    sc ca0, 0(sp) # 16-byte Folded Spill
 ; HYBRID-NEXT:    lc.cap ca3, (ca0)
-; HYBRID-NEXT:    cgetaddr s0, ca1
+; HYBRID-NEXT:    mv s0, a1
 ; HYBRID-NEXT:  .LBB9_1: # %atomicrmw.start
 ; HYBRID-NEXT:    # =>This Inner Loop Header: Depth=1
-; HYBRID-NEXT:    cgetaddr a0, ca3
+; HYBRID-NEXT:    mv a0, a3
 ; HYBRID-NEXT:    and a0, a0, s0
 ; HYBRID-NEXT:    not a0, a0
 ; HYBRID-NEXT:    csetaddr ca2, ca3, a0
@@ -518,12 +518,12 @@ define i32 addrspace(200)* @atomic_cap_ptr_or(i32 addrspace(200)* addrspace(200)
 ; PURECAP-LIBCALLS-NEXT:    csc cs2, 16(csp) # 16-byte Folded Spill
 ; PURECAP-LIBCALLS-NEXT:    cmove cs0, ca0
 ; PURECAP-LIBCALLS-NEXT:    clc ca3, 0(ca0)
-; PURECAP-LIBCALLS-NEXT:    cgetaddr s2, ca1
+; PURECAP-LIBCALLS-NEXT:    mv s2, a1
 ; PURECAP-LIBCALLS-NEXT:    cincoffset ca0, csp, 0
 ; PURECAP-LIBCALLS-NEXT:    csetbounds cs1, ca0, 16
 ; PURECAP-LIBCALLS-NEXT:  .LBB10_1: # %atomicrmw.start
 ; PURECAP-LIBCALLS-NEXT:    # =>This Inner Loop Header: Depth=1
-; PURECAP-LIBCALLS-NEXT:    cgetaddr a0, ca3
+; PURECAP-LIBCALLS-NEXT:    mv a0, a3
 ; PURECAP-LIBCALLS-NEXT:    or a0, a0, s2
 ; PURECAP-LIBCALLS-NEXT:    csetaddr ca2, ca3, a0
 ; PURECAP-LIBCALLS-NEXT:    csc ca3, 0(csp)
@@ -550,10 +550,10 @@ define i32 addrspace(200)* @atomic_cap_ptr_or(i32 addrspace(200)* addrspace(200)
 ; HYBRID-NEXT:    sd s0, 32(sp) # 8-byte Folded Spill
 ; HYBRID-NEXT:    sc ca0, 0(sp) # 16-byte Folded Spill
 ; HYBRID-NEXT:    lc.cap ca3, (ca0)
-; HYBRID-NEXT:    cgetaddr s0, ca1
+; HYBRID-NEXT:    mv s0, a1
 ; HYBRID-NEXT:  .LBB10_1: # %atomicrmw.start
 ; HYBRID-NEXT:    # =>This Inner Loop Header: Depth=1
-; HYBRID-NEXT:    cgetaddr a0, ca3
+; HYBRID-NEXT:    mv a0, a3
 ; HYBRID-NEXT:    or a0, a0, s0
 ; HYBRID-NEXT:    csetaddr ca2, ca3, a0
 ; HYBRID-NEXT:    sc ca3, 16(sp)
@@ -596,12 +596,12 @@ define i32 addrspace(200)* @atomic_cap_ptr_xor(i32 addrspace(200)* addrspace(200
 ; PURECAP-LIBCALLS-NEXT:    csc cs2, 16(csp) # 16-byte Folded Spill
 ; PURECAP-LIBCALLS-NEXT:    cmove cs0, ca0
 ; PURECAP-LIBCALLS-NEXT:    clc ca3, 0(ca0)
-; PURECAP-LIBCALLS-NEXT:    cgetaddr s2, ca1
+; PURECAP-LIBCALLS-NEXT:    mv s2, a1
 ; PURECAP-LIBCALLS-NEXT:    cincoffset ca0, csp, 0
 ; PURECAP-LIBCALLS-NEXT:    csetbounds cs1, ca0, 16
 ; PURECAP-LIBCALLS-NEXT:  .LBB11_1: # %atomicrmw.start
 ; PURECAP-LIBCALLS-NEXT:    # =>This Inner Loop Header: Depth=1
-; PURECAP-LIBCALLS-NEXT:    cgetaddr a0, ca3
+; PURECAP-LIBCALLS-NEXT:    mv a0, a3
 ; PURECAP-LIBCALLS-NEXT:    xor a0, a0, s2
 ; PURECAP-LIBCALLS-NEXT:    csetaddr ca2, ca3, a0
 ; PURECAP-LIBCALLS-NEXT:    csc ca3, 0(csp)
@@ -628,10 +628,10 @@ define i32 addrspace(200)* @atomic_cap_ptr_xor(i32 addrspace(200)* addrspace(200
 ; HYBRID-NEXT:    sd s0, 32(sp) # 8-byte Folded Spill
 ; HYBRID-NEXT:    sc ca0, 0(sp) # 16-byte Folded Spill
 ; HYBRID-NEXT:    lc.cap ca3, (ca0)
-; HYBRID-NEXT:    cgetaddr s0, ca1
+; HYBRID-NEXT:    mv s0, a1
 ; HYBRID-NEXT:  .LBB11_1: # %atomicrmw.start
 ; HYBRID-NEXT:    # =>This Inner Loop Header: Depth=1
-; HYBRID-NEXT:    cgetaddr a0, ca3
+; HYBRID-NEXT:    mv a0, a3
 ; HYBRID-NEXT:    xor a0, a0, s0
 ; HYBRID-NEXT:    csetaddr ca2, ca3, a0
 ; HYBRID-NEXT:    sc ca3, 16(sp)

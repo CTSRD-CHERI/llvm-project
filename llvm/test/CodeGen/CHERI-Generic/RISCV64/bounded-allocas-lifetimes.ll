@@ -38,12 +38,12 @@ define void @dynamic_alloca(i64 zeroext %n) {
   ; CHECK-NEXT:   [[COPY:%[0-9]+]]:gpr = COPY $x10
   ; CHECK-NEXT:   ADJCALLSTACKDOWNCAP 0, 0, implicit-def dead $c2, implicit $c2
   ; CHECK-NEXT:   [[COPY1:%[0-9]+]]:gpcr = COPY $c2
-  ; CHECK-NEXT:   [[CGetAddr:%[0-9]+]]:gpr = CGetAddr [[COPY1]]
+  ; CHECK-NEXT:   [[PseudoCGetAddr:%[0-9]+]]:gpr = PseudoCGetAddr [[COPY1]]
   ; CHECK-NEXT:   [[SLLI:%[0-9]+]]:gpr = SLLI [[COPY]], 2
   ; CHECK-NEXT:   [[ADDI:%[0-9]+]]:gpr = nuw ADDI [[SLLI]], 15
   ; CHECK-NEXT:   [[ANDI:%[0-9]+]]:gpr = ANDI killed [[ADDI]], -16
   ; CHECK-NEXT:   [[CRRL:%[0-9]+]]:gpr = CRRL [[ANDI]]
-  ; CHECK-NEXT:   [[SUB:%[0-9]+]]:gpr = SUB killed [[CGetAddr]], [[CRRL]]
+  ; CHECK-NEXT:   [[SUB:%[0-9]+]]:gpr = SUB killed [[PseudoCGetAddr]], [[CRRL]]
   ; CHECK-NEXT:   [[CRAM:%[0-9]+]]:gpr = CRAM [[ANDI]]
   ; CHECK-NEXT:   [[AND:%[0-9]+]]:gpr = AND killed [[SUB]], killed [[CRAM]]
   ; CHECK-NEXT:   [[CSetAddr:%[0-9]+]]:gpcr = CSetAddr [[COPY1]], killed [[AND]]

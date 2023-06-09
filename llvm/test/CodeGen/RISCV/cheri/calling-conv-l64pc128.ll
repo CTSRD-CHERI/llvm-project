@@ -60,7 +60,7 @@ define i8 addrspace(200)* @get_ith_cap(i32 signext %i, ...) nounwind {
 ; CHECK-NEXT:    # =>This Inner Loop Header: Depth=1
 ; CHECK-NEXT:    sext.w a3, a0
 ; CHECK-NEXT:    addiw a0, a0, -1
-; CHECK-NEXT:    cgetaddr a2, ca1
+; CHECK-NEXT:    mv a2, a1
 ; CHECK-NEXT:    addi a2, a2, 15
 ; CHECK-NEXT:    andi a2, a2, -16
 ; CHECK-NEXT:    csetaddr ca2, ca1, a2

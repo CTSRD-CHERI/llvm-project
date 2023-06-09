@@ -96,7 +96,7 @@ body:             |
   ; CHECK-NEXT:   [[CGetTag:%[0-9]+]]:gpr = CGetTag [[COPY2]]
   ; CHECK-NEXT:   [[CGetSealed:%[0-9]+]]:gpr = CGetSealed [[COPY2]]
   ; CHECK-NEXT:   [[CGetOffset:%[0-9]+]]:gpr = CGetOffset [[COPY2]]
-  ; CHECK-NEXT:   [[CGetAddr:%[0-9]+]]:gpr = CGetAddr [[COPY2]]
+  ; CHECK-NEXT:   [[PseudoCGetAddr:%[0-9]+]]:gpr = PseudoCGetAddr [[COPY2]]
   ; CHECK-NEXT:   [[CClearTag:%[0-9]+]]:gpcr = CClearTag [[COPY1]]
   ; CHECK-NEXT:   [[CSub:%[0-9]+]]:gpr = CSub [[COPY1]], [[COPY2]]
   ; CHECK-NEXT:   [[CMove:%[0-9]+]]:gpcr = CMove [[COPY1]]
@@ -228,7 +228,7 @@ body:             |
     %14:gpr = CGetTag %2
     %15:gpr = CGetSealed %2
     %16:gpr = CGetOffset %2
-    %17:gpr = CGetAddr %2
+    %17:gpr = PseudoCGetAddr %2
     ; However, mutators can't since the input could be sealed/untagged/other constraints
     %30:gpcr = CSeal %1, %2
     %31:gpcr = CUnseal %1, %2
