@@ -2547,7 +2547,7 @@ Address CodeGenFunction::EmitFieldAnnotations(const FieldDecl *D,
   unsigned AS =
       PTy ? PTy->getAddressSpace() : CGM.Int8PtrTy->getPointerAddressSpace();
   llvm::PointerType *IntrinTy =
-      llvm::PointerType::getWithSamePointeeType(CGM.Int8PtrTy, AS);
+      llvm::PointerType::get(CGM.getLLVMContext(), AS);
   llvm::Function *F = CGM.getIntrinsic(llvm::Intrinsic::ptr_annotation,
                                        {IntrinTy, CGM.ConstGlobalsPtrTy});
 
