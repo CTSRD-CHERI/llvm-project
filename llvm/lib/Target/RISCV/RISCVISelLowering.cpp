@@ -550,6 +550,10 @@ RISCVTargetLowering::RISCVTargetLowering(const TargetMachine &TM,
   if (Subtarget.hasCheri())
     setTargetDAGCombine(ISD::INTRINSIC_WO_CHAIN);
 
+  if (Subtarget.hasStdExtZicbop()) {
+    setOperationAction(ISD::PREFETCH, MVT::Other, Legal);
+  }
+
   if (Subtarget.hasStdExtA()) {
     setMaxAtomicSizeInBitsSupported(Subtarget.getXLen());
     if (RISCVABI::isCheriPureCapABI(ABI))
