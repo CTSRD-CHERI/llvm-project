@@ -61,8 +61,8 @@ enum class BuildIdKind { None, Fast, Md5, Sha1, Hexstring, Uuid };
 
 enum class CapTableScopePolicy { All, File, Function };
 
-// For --call-graph-profile-sort={none,hfsort}.
-enum class CGProfileSortKind { None, Hfsort };
+// For --call-graph-profile-sort={none,hfsort,cdsort}.
+enum class CGProfileSortKind { None, Hfsort, Cdsort };
 
 // For --discard-{all,locals,none}.
 enum class DiscardPolicy { Default, All, Locals, None };
