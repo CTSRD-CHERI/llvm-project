@@ -11,6 +11,9 @@
 //
 //===----------------------------------------------------------------------===//
 
+#ifndef LLVM_SUPPORT_DEBUGOPTIONS_H
+#define LLVM_SUPPORT_DEBUGOPTIONS_H
+
 namespace llvm {
 
 // These are invoked internally before parsing command line options.
@@ -28,3 +31,5 @@ void initDebugOptions();
 void initRandomSeedOptions();
 
 } // namespace llvm
+
+#endif // LLVM_SUPPORT_DEBUGOPTIONS_H
