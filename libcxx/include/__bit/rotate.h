@@ -43,7 +43,7 @@ unsigned __intcap __rotr(unsigned __intcap __t, unsigned int __cnt) _NOEXCEPT {
 #if _LIBCPP_STD_VER >= 20
 
 template <__libcpp_unsigned_integer _Tp>
-_LIBCPP_HIDE_FROM_ABI constexpr _Tp rotl(_Tp __t, unsigned int __cnt) noexcept {
+[[nodiscard]] _LIBCPP_HIDE_FROM_ABI constexpr _Tp rotl(_Tp __t, unsigned int __cnt) noexcept {
   const unsigned int __dig = numeric_limits<_Tp>::digits;
   if ((__cnt % __dig) == 0)
     return __t;
@@ -59,7 +59,7 @@ _LIBCPP_HIDE_FROM_ABI constexpr inline unsigned __intcap rotl(unsigned __intcap 
 #endif
 
 template <__libcpp_unsigned_integer _Tp>
-_LIBCPP_HIDE_FROM_ABI constexpr _Tp rotr(_Tp __t, unsigned int __cnt) noexcept {
+[[nodiscard]] _LIBCPP_HIDE_FROM_ABI constexpr _Tp rotr(_Tp __t, unsigned int __cnt) noexcept {
   return std::__rotr(__t, __cnt);
 }
 
