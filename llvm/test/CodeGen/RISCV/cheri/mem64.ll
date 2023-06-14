@@ -175,7 +175,7 @@ define i64 @ddc_lc(i8 addrspace(200) **%ptr) nounwind {
 ; CHECK-LP64:       # %bb.0:
 ; CHECK-LP64-NEXT:    lc ca1, 0(a0)
 ; CHECK-LP64-NEXT:    lc ca0, 128(a0)
-; CHECK-LP64-NEXT:    csub a0, ca1, ca0
+; CHECK-LP64-NEXT:    sub a0, a1, a0
 ; CHECK-LP64-NEXT:    ret
 ;
 ; CHECK-L64PC128-LABEL: ddc_lc:
@@ -183,7 +183,7 @@ define i64 @ddc_lc(i8 addrspace(200) **%ptr) nounwind {
 ; CHECK-L64PC128-NEXT:    lc.ddc ca1, (a0)
 ; CHECK-L64PC128-NEXT:    addi a0, a0, 128
 ; CHECK-L64PC128-NEXT:    lc.ddc ca0, (a0)
-; CHECK-L64PC128-NEXT:    csub a0, ca1, ca0
+; CHECK-L64PC128-NEXT:    sub a0, a1, a0
 ; CHECK-L64PC128-NEXT:    cret
   %1 = load i8 addrspace(200) *, i8 addrspace(200) **%ptr
   %2 = getelementptr i8 addrspace(200) *, i8 addrspace(200) **%ptr, i32 8
@@ -459,14 +459,14 @@ define i64 @cap_lc(i8 addrspace(200) *addrspace(200) *%cap) nounwind {
 ; CHECK-LP64-NEXT:    lc.cap ca1, (ca0)
 ; CHECK-LP64-NEXT:    cincoffset ca0, ca0, 336
 ; CHECK-LP64-NEXT:    lc.cap ca0, (ca0)
-; CHECK-LP64-NEXT:    csub a0, ca1, ca0
+; CHECK-LP64-NEXT:    sub a0, a1, a0
 ; CHECK-LP64-NEXT:    ret
 ;
 ; CHECK-L64PC128-LABEL: cap_lc:
 ; CHECK-L64PC128:       # %bb.0:
 ; CHECK-L64PC128-NEXT:    clc ca1, 0(ca0)
 ; CHECK-L64PC128-NEXT:    clc ca0, 336(ca0)
-; CHECK-L64PC128-NEXT:    csub a0, ca1, ca0
+; CHECK-L64PC128-NEXT:    sub a0, a1, a0
 ; CHECK-L64PC128-NEXT:    cret
   %1 = load i8 addrspace(200) *, i8 addrspace(200) *addrspace(200) *%cap
   %2 = getelementptr i8 addrspace(200) *, i8 addrspace(200) *addrspace(200) *%cap, i32 21

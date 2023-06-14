@@ -457,12 +457,12 @@ define i8 addrspace(200)* @from_ddc(i32 %ptr) nounwind {
 define i32 @diff(i8 addrspace(200)* %cap1, i8 addrspace(200)* %cap2) nounwind {
 ; PURECAP-LABEL: diff:
 ; PURECAP:       # %bb.0:
-; PURECAP-NEXT:    csub a0, ca0, ca1
+; PURECAP-NEXT:    sub a0, a0, a1
 ; PURECAP-NEXT:    cret
 ;
 ; HYBRID-LABEL: diff:
 ; HYBRID:       # %bb.0:
-; HYBRID-NEXT:    csub a0, ca0, ca1
+; HYBRID-NEXT:    sub a0, a0, a1
 ; HYBRID-NEXT:    ret
   %diff = call i32 @llvm.cheri.cap.diff(i8 addrspace(200)* %cap1, i8 addrspace(200)* %cap2)
   ret i32 %diff

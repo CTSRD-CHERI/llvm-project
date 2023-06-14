@@ -375,7 +375,10 @@ let mayTrap = 1 in {
 def CToPtr      : Cheri_rr<0x12, "ctoptr", GPR, GPCRC0IsDDC>;
 def CFromPtr    : Cheri_rr<0x13, "cfromptr", GPCR, GPR, GPCRC0IsDDC>;
 }
-def CSub        : Cheri_rr<0x14, "csub", GPR, GPCR>;
+let hasSideEffects = 0, mayLoad = 0, mayStore = 0, isCodeGenOnly = 0,
+    isAsmParserOnly = 1 in
+def PseudoCSub : Pseudo<(outs GPR:$rd), (ins GPCR:$cs1, GPCR:$cs2), [],
+                        "csub", "$rd, $cs1, $cs2">;
 let isMoveReg = 1, isReMaterializable = 1, isAsCheapAsAMove = 1,
     defsCanBeSealed = 1 in
 def CMove       : Cheri_r<0xa, "cmove", GPCR>;
@@ -1212,7 +1215,9 @@ def : Pat<(int_cheri_cap_to_pointer GPCR:$rs1, GPCRC0IsDDC:$rs2),
           (CToPtr GPCR:$rs1, GPCRC0IsDDC:$rs2)>;
 def : Pat<(int_cheri_cap_from_pointer GPCRC0IsDDC:$rs1, GPR:$rs2),
           (CFromPtr GPCRC0IsDDC:$rs1, GPR:$rs2)>;
-def : PatGpcrGpcr<int_cheri_cap_diff, CSub>;
+def : Pat<(int_cheri_cap_diff GPCR:$cs1, GPCR:$cs2),
+          (SUB (EXTRACT_SUBREG GPCR:$cs1, sub_cap_addr),
+               (EXTRACT_SUBREG GPCR:$cs2, sub_cap_addr))>;
 
 let Predicates = [IsPureCapABI] in {
 def : Pat<(inttoptr GPR:$rs2), (CIncOffset C0, GPR:$rs2)>;
