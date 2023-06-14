@@ -6,12 +6,12 @@
 define i32 @subp(i8 addrspace(200)* readnone %a, i8 addrspace(200)* readnone %b) nounwind {
 ; HYBRID-LABEL: subp:
 ; HYBRID:       # %bb.0:
-; HYBRID-NEXT:    csub a0, ca0, ca1
+; HYBRID-NEXT:    sub a0, a0, a1
 ; HYBRID-NEXT:    ret
 ;
 ; PURECAP-LABEL: subp:
 ; PURECAP:       # %bb.0:
-; PURECAP-NEXT:    csub a0, ca0, ca1
+; PURECAP-NEXT:    sub a0, a0, a1
 ; PURECAP-NEXT:    cret
   %1 = tail call i32 @llvm.cheri.cap.diff.i32(i8 addrspace(200)* %a, i8 addrspace(200)* %b)
   ret i32 %1
