@@ -1726,8 +1726,6 @@ CodeGenTypes::GetFunctionType(const CGFunctionInfo &FI) {
 
   // Add type for inalloca argument.
   if (IRFunctionArgs.hasInallocaArg()) {
-    auto ArgStruct = FI.getArgStruct();
-    assert(ArgStruct);
     // XXXAR: is this correct?
     unsigned AS = CGM.getTargetCodeGenInfo().getDefaultAS();
     ArgTypes[IRFunctionArgs.getInallocaArgNo()] =
