@@ -685,7 +685,6 @@ llvm::Type *CodeGenTypes::ConvertType(QualType T) {
   case Type::RValueReference: {
     const ReferenceType *RTy = cast<ReferenceType>(Ty);
     QualType ETy = RTy->getPointeeType();
-    // llvm::Type *PointeeType = ConvertTypeForMem(ETy);
     // XXXAR: If Rty is capability, use AS200 otherwise the same as LangAS as
     // the underlying type
     unsigned AS = RTy->isCHERICapability()
