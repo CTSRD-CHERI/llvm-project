@@ -9,6 +9,7 @@
 #include "../ClangTidy.h"
 #include "../ClangTidyModule.h"
 #include "../ClangTidyModuleRegistry.h"
+#include "CheriRepresentableSubobjectCheck.h"
 #include "DefinitionsInHeadersCheck.h"
 #include "MisleadingBidirectional.h"
 #include "MisleadingIdentifier.h"
@@ -33,6 +34,8 @@ namespace misc {
 class MiscModule : public ClangTidyModule {
 public:
   void addCheckFactories(ClangTidyCheckFactories &CheckFactories) override {
+    CheckFactories.registerCheck<CheriRepresentableSubobjectCheck>(
+        "misc-cheri-representable-subobject");
     CheckFactories.registerCheck<DefinitionsInHeadersCheck>(
         "misc-definitions-in-headers");
     CheckFactories.registerCheck<MisleadingBidirectionalCheck>(
