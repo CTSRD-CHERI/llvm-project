@@ -2109,8 +2109,6 @@ void CodeGenFunction::EmitSEHExceptionCodeSave(CodeGenFunction &ParentCGF,
     // pointer is stored in the second field. So, GEP 20 bytes backwards and
     // load the pointer.
     SEHInfo = Builder.CreateConstInBoundsGEP1_32(Int8Ty, EntryFP, -20);
-    unsigned DefaultAS = CGM.getTargetCodeGenInfo().getDefaultAS();
-    SEHInfo = Builder.CreateBitCast(SEHInfo, Int8PtrTy->getPointerTo(DefaultAS));
     SEHInfo = Builder.CreateAlignedLoad(Int8PtrTy, SEHInfo, getPointerAlign());
     SEHCodeSlotStack.push_back(recoverAddrOfEscapedLocal(
         ParentCGF, ParentCGF.SEHCodeSlotStack.back(), ParentFP));
@@ -2124,11 +2122,9 @@ void CodeGenFunction::EmitSEHExceptionCodeSave(CodeGenFunction &ParentCGF,
   // };
   // int exceptioncode = exception_pointers->ExceptionRecord->ExceptionCode;
   unsigned DefaultAS = CGM.getTargetCodeGenInfo().getDefaultAS();
-  llvm::Type *RecordTy = CGM.Int32Ty->getPointerTo(DefaultAS);
+  llvm::Type *RecordTy = llvm::PointerType::get(getLLVMContext(), DefaultAS);
   llvm::Type *PtrsTy = llvm::StructType::get(RecordTy, CGM.VoidPtrTy);
-  llvm::Value *Ptrs = Builder.CreateBitCast(SEHInfo,
-                                            PtrsTy->getPointerTo(DefaultAS));
-  llvm::Value *Rec = Builder.CreateStructGEP(PtrsTy, Ptrs, 0);
+  llvm::Value *Rec = Builder.CreateStructGEP(PtrsTy, SEHInfo, 0);
   Rec = Builder.CreateAlignedLoad(RecordTy, Rec, getPointerAlign());
   llvm::Value *Code = Builder.CreateAlignedLoad(Int32Ty, Rec, getIntAlign());
   assert(!SEHCodeSlotStack.empty() && "emitting EH code outside of __except");

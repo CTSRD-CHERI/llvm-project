@@ -106,7 +106,9 @@ bool isAtomicStoreOp(AtomicExpr::AtomicOp Op) {
         llvm::Type *IntTy = CGF.Builder.getIntNTy(AtomicSizeInBits);
         auto Addr = CGF.Builder.CreatePointerBitCastOrAddrSpaceCast(
             VoidPtrAddr,
-            IntTy->getPointerTo(CGF.CGM.getTargetCodeGenInfo().getDefaultAS()),
+            llvm::PointerType::get(
+                CGF.getLLVMContext(),
+                CGF.CGM.getTargetCodeGenInfo().getDefaultAS()),
             "atomic_bitfield_base");
         BFI = OrigBFI;
         BFI.Offset = Offset;
@@ -832,8 +834,8 @@ AddDirectArgument(CodeGenFunction &CGF, CallArgList &Args,
           CGF.getContext().getIntTypeForBitwidth(SizeInBits, /*Signed=*/false);
       ITy = llvm::IntegerType::get(CGF.getLLVMContext(), SizeInBits);
     }
-    llvm::Type *IPtrTy =
-        ITy->getPointerTo(CGF.CGM.getTargetCodeGenInfo().getDefaultAS());
+    llvm::Type *IPtrTy = llvm::PointerType::get(
+        CGF.getLLVMContext(), CGF.CGM.getTargetCodeGenInfo().getDefaultAS());
     Address Ptr = Address(CGF.Builder.CreateBitCast(Val, IPtrTy), ITy, Align);
     Val = CGF.EmitLoadOfScalar(Ptr, false,
                                CGF.getContext().getPointerType(ValTy), Loc);

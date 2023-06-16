@@ -1856,9 +1856,6 @@ private:
       return C;
 
     llvm::Type *origPtrTy = C->getType();
-    unsigned AS = origPtrTy->getPointerAddressSpace();
-    llvm::Type *charPtrTy = CGM.Int8Ty->getPointerTo(AS);
-    C = llvm::ConstantExpr::getBitCast(C, charPtrTy);
     C = llvm::ConstantExpr::getGetElementPtr(CGM.Int8Ty, C, getOffset());
     C = llvm::ConstantExpr::getPointerCast(C, origPtrTy);
     return C;
@@ -1991,8 +1988,7 @@ ConstantLValueEmitter::tryEmitBase(const APValue::LValueBase &base) {
   // Handle typeid(T).
   if (TypeInfoLValue TI = base.dyn_cast<TypeInfoLValue>()) {
     unsigned GlobalAS = CGM.getDataLayout().getGlobalsAddressSpace();
-    llvm::Type *StdTypeInfoPtrTy =
-        CGM.getTypes().ConvertType(base.getTypeInfoType())->getPointerTo(GlobalAS);
+    llvm::Type *StdTypeInfoPtrTy = llvm::PointerType::get(CGM.getLLVMContext(), GlobalAS);
     llvm::Constant *TypeInfo =
         CGM.GetAddrOfRTTIDescriptor(QualType(TI.getType(), 0));
     if (TypeInfo->getType() != StdTypeInfoPtrTy)

@@ -1438,9 +1438,11 @@ void CodeGenFunction::setBlockContextParameter(const ImplicitParamDecl *D,
   // directly as BlockPointer.
   BlockPointer = Builder.CreatePointerCast(
       arg,
-      BlockInfo->StructureType->getPointerTo(getContext().getTargetAddressSpace(
-          getContext().getLangOpts().OpenCL ? LangAS::opencl_generic
-                                            : LangAS::Default)),
+      llvm::PointerType::get(
+          getLLVMContext(),
+          getContext().getTargetAddressSpace(getContext().getLangOpts().OpenCL
+                                                 ? LangAS::opencl_generic
+                                                 : LangAS::Default)),
       "block");
 }
 

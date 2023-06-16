@@ -238,7 +238,7 @@ CGNVCUDARuntime::CGNVCUDARuntime(CodeGenModule &CGM)
   unsigned DefaultAS = CGM.getTargetCodeGenInfo().getDefaultAS();
   CharPtrTy = llvm::PointerType::get(Types.ConvertType(Ctx.CharTy), DefaultAS);
   VoidPtrTy = cast<llvm::PointerType>(Types.ConvertType(Ctx.VoidPtrTy));
-  VoidPtrPtrTy = VoidPtrTy->getPointerTo(DefaultAS);
+  VoidPtrPtrTy = llvm::PointerType::get(CGM.getLLVMContext(), DefaultAS);
 }
 
 llvm::FunctionCallee CGNVCUDARuntime::getSetupArgumentFn() const {
@@ -269,10 +269,8 @@ llvm::FunctionType *CGNVCUDARuntime::getCallbackFnTy() const {
 }
 
 llvm::FunctionType *CGNVCUDARuntime::getRegisterLinkedBinaryFnTy() const {
-  auto *CallbackFnTy = getCallbackFnTy();
-  auto *RegisterGlobalsFnTy = getRegisterGlobalsFnTy();
-  llvm::Type *Params[] = {RegisterGlobalsFnTy->getPointerTo(), VoidPtrTy,
-                          VoidPtrTy, CallbackFnTy->getPointerTo()};
+  llvm::Type *Params[] = {llvm::PointerType::getUnqual(Context), VoidPtrTy,
+                          VoidPtrTy, llvm::PointerType::getUnqual(Context)};
   return llvm::FunctionType::get(VoidTy, Params, false);
 }
 
@@ -539,8 +537,11 @@ llvm::Function *CGNVCUDARuntime::makeRegisterGlobalsFn() {
   // void __cudaRegisterFunction(void **, const char *, char *, const char *,
   //                             int, uint3*, uint3*, dim3*, dim3*, int*)
   llvm::Type *RegisterFuncParams[] = {
-      VoidPtrPtrTy, CharPtrTy, CharPtrTy, CharPtrTy, IntTy,
-      VoidPtrTy,    VoidPtrTy, VoidPtrTy, VoidPtrTy, IntTy->getPointerTo(DefaultAS)};
+      VoidPtrPtrTy, CharPtrTy,
+      CharPtrTy,    CharPtrTy,
+      IntTy,        VoidPtrTy,
+      VoidPtrTy,    VoidPtrTy,
+      VoidPtrTy,    llvm::PointerType::get(Context, DefaultAS)};
   llvm::FunctionCallee RegisterFunc = CGM.CreateRuntimeFunction(
       llvm::FunctionType::get(IntTy, RegisterFuncParams, false),
       addUnderscoredPrefixToName("RegisterFunction"));
@@ -563,7 +564,7 @@ llvm::Function *CGNVCUDARuntime::makeRegisterGlobalsFn() {
         NullPtr,
         NullPtr,
         NullPtr,
-        llvm::ConstantPointerNull::get(IntTy->getPointerTo(DefaultAS))};
+        llvm::ConstantPointerNull::get(llvm::PointerType::get(Context, DefaultAS))};
     Builder.CreateCall(RegisterFunc, Args);
   }
 

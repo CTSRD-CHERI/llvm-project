@@ -120,11 +120,11 @@ static void EmitDeclDestroy(CodeGenFunction &CGF, const VarDecl &D,
     CXXDestructorDecl *Dtor = Record->getDestructor();
 
     Func = CGM.getAddrAndTypeOfCXXStructor(GlobalDecl(Dtor, Dtor_Complete));
-    auto DestAS =
-        CGM.getTargetCodeGenInfo().getAddrSpaceOfCxaAtexitPtrParam();
-    auto DestTy = CGF.getTypes().ConvertType(Type)->getPointerTo(
-        CGM.getContext().getTargetAddressSpace(DestAS));
     if (CGF.getContext().getLangOpts().OpenCL) {
+      auto DestAS =
+          CGM.getTargetCodeGenInfo().getAddrSpaceOfCxaAtexitPtrParam();
+      auto *DestTy = llvm::PointerType::get(
+          CGM.getLLVMContext(), CGM.getContext().getTargetAddressSpace(DestAS));
       auto SrcAS = D.getType().getQualifiers().getAddressSpace();
       if (DestAS == SrcAS)
         Argument = llvm::ConstantExpr::getBitCast(Addr.getPointer(), DestTy);
@@ -133,7 +133,7 @@ static void EmitDeclDestroy(CodeGenFunction &CGF, const VarDecl &D,
         // of the global destructor function should be adjusted accordingly.
         Argument = llvm::ConstantPointerNull::get(DestTy);
     } else {
-      Argument = llvm::ConstantExpr::getBitCast(Addr.getPointer(), DestTy);
+      Argument = Addr.getPointer();
     }
   // Otherwise, the standard logic requires a helper function.
   } else {
