@@ -220,6 +220,12 @@ static bool valueDominatesPHI(Value *V, PHINode *P, const DominatorTree *DT) {
     // Arguments and constants dominate all instructions.
     return true;
 
+  // If we are processing instructions (and/or basic blocks) that have not been
+  // fully added to a function, the parent nodes may still be null. Simply
+  // return the conservative answer in these cases.
+  if (!I->getParent() || !P->getParent() || !I->getFunction())
+    return false;
+
   // If we have a DominatorTree then do a precise test.
   if (DT)
     return DT->dominates(I, P);
@@ -2634,7 +2640,7 @@ static bool isAllocDisjoint(const Value *V) {
   // that might be resolve lazily to symbols in another dynamically-loaded
   // library (and, thus, could be malloc'ed by the implementation).
   if (const AllocaInst *AI = dyn_cast<AllocaInst>(V))
-    return AI->isStaticAlloca();
+    return AI->getParent() && AI->getFunction() && AI->isStaticAlloca();
   if (const GlobalValue *GV = dyn_cast<GlobalValue>(V))
     return (GV->hasLocalLinkage() || GV->hasHiddenVisibility() ||
             GV->hasProtectedVisibility() || GV->hasGlobalUnnamedAddr()) &&
@@ -3665,7 +3671,7 @@ static Value *simplifyICmpWithDominatingAssume(CmpInst::Predicate Predicate,
                                                Value *LHS, Value *RHS,
                                                const SimplifyQuery &Q) {
   // Gracefully handle instructions that have not been inserted yet.
-  if (!Q.AC || !Q.CxtI)
+  if (!Q.AC || !Q.CxtI || !Q.CxtI->getParent())
     return nullptr;
 
   for (Value *AssumeBaseOp : {LHS, RHS}) {
@@ -6732,6 +6738,9 @@ static Value *simplifyIntrinsic(CallBase *Call, Value *Callee,
   if (!NumOperands) {
     switch (IID) {
     case Intrinsic::vscale: {
+      // Call may not be inserted into the IR yet at point of calling simplify.
+      if (!Call->getParent() || !Call->getParent()->getParent())
+        return nullptr;
       auto Attr = Call->getFunction()->getFnAttribute(Attribute::VScaleRange);
       if (!Attr.isValid())
         return nullptr;
@@ -7179,7 +7188,10 @@ static bool replaceAndRecursivelySimplifyImpl(
     // Replace the instruction with its simplified value.
     I->replaceAllUsesWith(SimpleV);
 
-    if (!I->isEHPad() && !I->isTerminator() && !I->mayHaveSideEffects())
+    // Gracefully handle edge cases where the instruction is not wired into any
+    // parent block.
+    if (I->getParent() && !I->isEHPad() && !I->isTerminator() &&
+        !I->mayHaveSideEffects())
       I->eraseFromParent();
   } else {
     Worklist.insert(I);
@@ -7208,7 +7220,10 @@ static bool replaceAndRecursivelySimplifyImpl(
     // Replace the instruction with its simplified value.
     I->replaceAllUsesWith(SimpleV);
 
-    if (!I->isEHPad() && !I->isTerminator() && !I->mayHaveSideEffects())
+    // Gracefully handle edge cases where the instruction is not wired into any
+    // parent block.
+    if (I->getParent() && !I->isEHPad() && !I->isTerminator() &&
+        !I->mayHaveSideEffects())
       I->eraseFromParent();
   }
   return Simplified;
