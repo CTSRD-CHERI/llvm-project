@@ -293,6 +293,10 @@ def warn_subobject_bounds_unknown_type :
   Warning<"unhandled type %0 in CHERI bounds setting">,
   InGroup<CheriSubobjectBoundsSuspicous>, DefaultWarnNoWerror;
 
+def warn_subobject_bounds_unrepresentable :
+  Warning<"subobject bounds on %0 may be imprecise">,
+  InGroup<CheriSubobjectUnrepresentable>, DefaultWarnNoWerror;
+
 def warn_cheri_memintrin_misaligned_inefficient : Warning<
   "%0 operation with capability argument %2 and underaligned destination"
   " (aligned to %1 bytes) may be inefficient or result in CHERI tags bits"
