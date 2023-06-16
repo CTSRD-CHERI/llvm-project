@@ -31,36 +31,37 @@ template <class _Tp>
 using __make_unsigned_t = __make_unsigned(_Tp);
 
 #else
-typedef
-    __type_list<unsigned char,
-    __type_list<unsigned short,
-    __type_list<unsigned int,
-    __type_list<unsigned long,
-    __type_list<unsigned long long,
+// clang-format off
+typedef __type_list<unsigned char,
+        __type_list<unsigned short,
+        __type_list<unsigned int,
+        __type_list<unsigned long,
+        __type_list<unsigned long long,
 #  ifndef _LIBCPP_HAS_NO_INT128
-    __type_list<__uint128_t,
+        __type_list<__uint128_t,
 #  endif
 #  if __has_feature(capabilities)
-    __type_list<__uintcap_t,
+        __type_list<__uintcap_t,
 #  endif
-    __nat
+        __nat
 #  ifndef _LIBCPP_HAS_NO_INT128
-    >
+        >
 #  endif
 #  if __has_feature(capabilities)
-    >
+        >
 #  endif
-    > > > > > __unsigned_types;
+        > > > > > __unsigned_types;
+// clang-format on
 
 template <class _Tp, bool = is_integral<_Tp>::value || is_enum<_Tp>::value>
-struct __make_unsigned {};
+struct __make_unsigned{};
 
 template <class _Tp>
-struct __make_unsigned<_Tp, true>
-{
-    typedef typename __find_first<__unsigned_types, sizeof(_Tp)>::type type;
+struct __make_unsigned<_Tp, true> {
+  typedef typename __find_first<__unsigned_types, sizeof(_Tp)>::type type;
 };
 
+// clang-format off
 template <> struct __make_unsigned<bool,               true> {};
 template <> struct __make_unsigned<  signed short,     true> {typedef unsigned short     type;};
 template <> struct __make_unsigned<unsigned short,     true> {typedef unsigned short     type;};
@@ -78,6 +79,7 @@ template <> struct __make_unsigned<__uint128_t,        true> {typedef __uint128_
 template <> struct __make_unsigned<  signed __intcap,  true> {typedef unsigned __intcap type;};
 template <> struct __make_unsigned<unsigned __intcap,  true> {typedef unsigned __intcap type;};
 #  endif
+// clang-format on
 
 template <class _Tp>
 using __make_unsigned_t = __apply_cv_t<_Tp, typename __make_unsigned<__remove_cv_t<_Tp> >::type>;
@@ -90,14 +92,14 @@ struct make_unsigned {
 };
 
 #if _LIBCPP_STD_VER >= 14
-template <class _Tp> using make_unsigned_t = __make_unsigned_t<_Tp>;
+template <class _Tp>
+using make_unsigned_t = __make_unsigned_t<_Tp>;
 #endif
 
 #ifndef _LIBCPP_CXX03_LANG
 template <class _Tp>
-_LIBCPP_HIDE_FROM_ABI constexpr
-__make_unsigned_t<_Tp> __to_unsigned_like(_Tp __x) noexcept {
-    return static_cast<__make_unsigned_t<_Tp> >(__x);
+_LIBCPP_HIDE_FROM_ABI constexpr __make_unsigned_t<_Tp> __to_unsigned_like(_Tp __x) noexcept {
+  return static_cast<__make_unsigned_t<_Tp> >(__x);
 }
 #endif
 
