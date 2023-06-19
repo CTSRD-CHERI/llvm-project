@@ -6010,6 +6010,7 @@ private:
   // For LinearMapKind, these are the constants used to derive the value.
   ConstantInt *LinearOffset = nullptr;
   ConstantInt *LinearMultiplier = nullptr;
+  bool LinearMapValWrapped = false;
 
   // For ArrayKind, this is the array.
   GlobalVariable *Array = nullptr;
@@ -6070,6 +6071,8 @@ SwitchLookupTable::SwitchLookupTable(
     bool LinearMappingPossible = true;
     APInt PrevVal;
     APInt DistToPrev;
+    // When linear map is monotonic, we can attach nsw.
+    bool Inc, Wrapped = false;
     assert(TableSize >= 2 && "Should be a SingleValue table.");
     // Check if there is the same distance between two consecutive values.
     for (uint64_t I = 0; I < TableSize; ++I) {
@@ -6089,12 +6092,15 @@ SwitchLookupTable::SwitchLookupTable(
           LinearMappingPossible = false;
           break;
         }
+        Wrapped |=
+            Dist.isStrictlyPositive() ? Val.sle(PrevVal) : Val.sgt(PrevVal);
       }
       PrevVal = Val;
     }
     if (LinearMappingPossible) {
       LinearOffset = cast<ConstantInt>(TableContents[0]);
       LinearMultiplier = ConstantInt::get(M.getContext(), DistToPrev);
+      LinearMapValWrapped = Wrapped;
       Kind = LinearMapKind;
       ++NumLinearMaps;
       return;
@@ -6143,9 +6149,14 @@ Value *SwitchLookupTable::BuildLookup(Value *Index, IRBuilder<> &Builder) {
     Value *Result = Builder.CreateIntCast(Index, LinearMultiplier->getType(),
                                           false, "switch.idx.cast");
     if (!LinearMultiplier->isOne())
-      Result = Builder.CreateMul(Result, LinearMultiplier, "switch.idx.mult");
+      Result = Builder.CreateMul(Result, LinearMultiplier, "switch.idx.mult",
+                                 /*HasNUW = */ false,
+                                 /*HasNSW = */ !LinearMapValWrapped);
+
     if (!LinearOffset->isZero())
-      Result = Builder.CreateAdd(Result, LinearOffset, "switch.offset");
+      Result = Builder.CreateAdd(Result, LinearOffset, "switch.offset",
+                                 /*HasNUW = */ false,
+                                 /*HasNSW = */ !LinearMapValWrapped);
     return Result;
   }
   case BitMapKind: {
