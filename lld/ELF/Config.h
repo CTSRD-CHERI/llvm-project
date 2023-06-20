@@ -207,7 +207,6 @@ struct Config {
   bool armHasMovtMovw = false;
   bool armJ1J2BranchEncoding = false;
   bool asNeeded = false;
-  bool armBe8 = false;
   BsymbolicKind bsymbolic = BsymbolicKind::None;
   // make dynamic relocations that are not supported by
   // FreeBSD _rtld_relocate_nonplt_self an error.
