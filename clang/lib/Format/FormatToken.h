@@ -1228,7 +1228,6 @@ struct AdditionalKeywords {
     case tok::kw___cheri_fromcap:
     case tok::kw___cheri_offset:
     case tok::kw___cheri_addr:
-    case tok::kw___cheri_cast:
       return true;
     default:
       return false;

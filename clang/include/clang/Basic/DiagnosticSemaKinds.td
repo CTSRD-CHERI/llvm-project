@@ -7135,9 +7135,6 @@ def warn_cheri_offset_addr_smaller_target_type: Warning<
   "%select{address|capability offset field}2; truncation may occur">,
   InGroup<CHERICapabilityToIntegerCast>;
 
-def err_cheri_cast : Error<
-  "using __cheri_cast is no longer valid; use __cheri_tocap or __cheri_fromcap instead">;
-
 def warn_cheri_implicit_ctoptr : Warning<
   "the following conversion will result in a CToPtr operation; the behaviour of CToPtr can "
   " be confusing since using CToPtr on an untagged capability will give 0 instead of the "

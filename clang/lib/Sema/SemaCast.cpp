@@ -3912,10 +3912,6 @@ ExprResult Sema::ActOnCheriCast(Scope *S, SourceLocation LParenLoc,
                                 tok::TokenKind Kind, SourceLocation KeywordLoc,
                                 ParsedType Type, SourceLocation RParenLoc,
                                 Expr *SubExpr) {
-  if (Kind == tok::kw___cheri_cast) {
-    Diag(KeywordLoc, diag::err_cheri_cast);
-    return ExprError();
-  }
   TypeSourceInfo *TSInfo = nullptr;
   QualType T = GetTypeFromParser(Type, &TSInfo);
   if (!TSInfo)

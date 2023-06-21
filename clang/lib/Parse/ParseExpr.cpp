@@ -2923,8 +2923,7 @@ Parser::ParseParenExpression(ParenParseOption &ExprType, bool stopIfCastExpr,
                                         BridgeKeywordLoc, Ty.get(),
                                         RParenLoc, SubExpr.get());
   } else if (Tok.isOneOf(tok::kw___cheri_fromcap, tok::kw___cheri_tocap,
-                         tok::kw___cheri_offset, tok::kw___cheri_addr,
-                         tok::kw___cheri_cast)) {
+                         tok::kw___cheri_offset, tok::kw___cheri_addr)) {
     // TODO: (__cheri_bounded_cast struct foo[42])?
     tok::TokenKind tokenKind = Tok.getKind();
     SourceLocation CheriKeywordLoc = ConsumeToken();
