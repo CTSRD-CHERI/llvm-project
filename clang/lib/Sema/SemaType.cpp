@@ -8333,6 +8333,7 @@ static void HandleCHERICapabilityAttr(QualType &CurType, TypeProcessingState &st
     llvm_unreachable("Unknown type attribute location");
   }
 
+  assert(S.Context.getTargetInfo().SupportsCapabilities());
   CurType = S.BuildPointerInterpretationAttr(CurType, PIK_Capability,
                                              attr.getLoc());
 }

@@ -888,8 +888,14 @@ void Parser::ParseNullabilityTypeSpecifiers(ParsedAttributes &attrs) {
 void Parser::ParseCapabilityQualifier(ParsedAttributes &Attrs) {
   IdentifierInfo *AttrName = Tok.getIdentifierInfo();
   SourceLocation AttrNameLoc = Tok.getLocation();
-  Attrs.addNew(AttrName, AttrNameLoc, nullptr, AttrNameLoc, nullptr, 0,
-               ParsedAttr::AS_Keyword);
+  // Report an error if the target does not support CHERI.
+  // TODO: we should not treat __capability as a keyword for non-CHERI.
+  // See https://github.com/CTSRD-CHERI/llvm-project/issues/706.
+  if (!getTargetInfo().SupportsCapabilities())
+    Diag(AttrNameLoc, diag::err_attribute_unsupported) << AttrName << "CHERI";
+  else
+    Attrs.addNew(AttrName, AttrNameLoc, nullptr, AttrNameLoc, nullptr, 0,
+                 ParsedAttr::AS_Keyword);
 }
 
 static bool VersionNumberSeparator(const char Separator) {
