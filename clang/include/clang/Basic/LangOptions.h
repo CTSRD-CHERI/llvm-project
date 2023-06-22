@@ -301,6 +301,7 @@ public:
     CBM_SubObjectsSafe, /// in addition to references also set bounds for
                         /// pointers to subobjects (but only for those where we
                         /// assume that it is safe to do so)
+    CBM_SubObjectsSafeExact, /// same as SubObjectsSafe, but use exact setbounds
     CBM_Aggressive, /// Set bounds for anything that is not definitively unsafe
                     /// or annotated as not wanting bounds
     CBM_VeryAggressive,   /// Same as aggressive but also set bounds on array

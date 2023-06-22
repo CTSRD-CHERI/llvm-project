@@ -615,20 +615,34 @@ def cheri_data_dependent_provenance : Flag<["-"], "cheri-data-dependent-provenan
   Flags<[CC1Option, NoDriverOption, HelpHidden]>, Group<cheri_Group>,
   HelpText<"Use the LHS or NULL provenance of a bitwise-and operation depending on the value of the RHS">,
   MarshallingInfoFlag<LangOpts<"CheriDataDependentProvenance">>;
-def cheri_bounds_EQ : Joined<["-"], "cheri-bounds=">, Flags<[CC1Option]>, Group<cheri_Group>,
-  HelpText<"Choose when to tighten bounds on capabilities. Choices are: "
-           "'conservative' (only stack allocations, default), "
-           "'references-only' (also set bounds on C++ references that are definitely fixed size) "
-           "'subobject-safe' (also set bounds when taking a pointer to a subobject) "
-           "'aggressive' (tighten bounds whenever feasible and not annotated as unsafe) "
-           "'very-aggressive' (same as aggressive but also set bounds for &array[index] expressions) and "
-           "'everywhere-unsafe' (attempt to set bounds everwhere where there isn't an explicit opt-out. "
-           "This is highly unsafe and will almost certainly not work at runtime)">,
-  Values<"conservative,references-only,subobject-safe,aggressive,very-aggressive,everywhere-unsafe">,
-  NormalizedValuesScope<"LangOptions">,
-  NormalizedValues<["CBM_Conservative", "CBM_References", "CBM_SubObjectsSafe", "CBM_Aggressive",
-                    "CBM_VeryAggressive", "CBM_EverywhereUnsafe"]>,
-  MarshallingInfoEnum<LangOpts<"CheriBounds">, "CBM_Conservative">;
+def cheri_bounds_EQ
+    : Joined<["-"], "cheri-bounds=">,
+      Flags<[CC1Option]>,
+      Group<cheri_Group>,
+      HelpText<"Choose when to tighten bounds on capabilities. Choices are: "
+               "'conservative' (only stack allocations, default), "
+               "'references-only' (also set bounds on C++ references that are "
+               "definitely fixed size) "
+               "'subobject-safe' (also set bounds when taking a pointer to a "
+               "subobject) "
+               "'subobject-safe-exact' (same as subobject-safe but force exact "
+               "bounds) "
+               "'aggressive' (tighten bounds whenever feasible and not "
+               "annotated as unsafe) "
+               "'very-aggressive' (same as aggressive but also set bounds for "
+               "&array[index] expressions) and "
+               "'everywhere-unsafe' (attempt to set bounds everwhere where "
+               "there isn't an explicit opt-out. "
+               "This is highly unsafe and will almost certainly not work at "
+               "runtime)">,
+      Values<"conservative,references-only,subobject-safe,subobject-safe-exact,"
+             "aggressive,very-aggressive,everywhere-unsafe">,
+      NormalizedValuesScope<"LangOptions">,
+      NormalizedValues<["CBM_Conservative", "CBM_References",
+                        "CBM_SubObjectsSafe", "CBM_SubObjectsSafeExact",
+                        "CBM_Aggressive", "CBM_VeryAggressive",
+                        "CBM_EverywhereUnsafe"]>,
+      MarshallingInfoEnum<LangOpts<"CheriBounds">, "CBM_Conservative">;
 
 def cheri_cap_to_int_EQ : Joined<["-"], "cheri-cap-to-int=">, Flags<[CC1Option]>, Group<cheri_Group>,
   HelpText<"How to convert capabilities to integer values. Choices are: "

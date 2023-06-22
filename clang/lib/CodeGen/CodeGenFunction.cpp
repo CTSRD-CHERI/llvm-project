@@ -131,7 +131,7 @@ void CodeGenFunction::SetFastMathFlags(FPOptions FPFeatures) {
 llvm::Value *CodeGenFunction::setPointerBounds(
     llvm::Value *V, llvm::Value *Size, SourceLocation Loc,
     const llvm::Twine &Name, StringRef Pass, bool IsSubObject,
-    const llvm::Twine &Details, llvm::MaybeAlign KnownAlignment) {
+    const llvm::Twine &Details, llvm::MaybeAlign KnownAlignment, bool Exact) {
   if (llvm::cheri::ShouldCollectCSetBoundsStats) {
     auto Kind = IsSubObject ? llvm::cheri::SetBoundsPointerSource::SubObject
                             : llvm::cheri::inferPointerSource(V);
@@ -142,7 +142,7 @@ llvm::Value *CodeGenFunction::setPointerBounds(
         Alignment, Size, Pass, Kind, Details,
         Loc.printToString(CGM.getContext().getSourceManager()));
   }
-  return getTargetHooks().setPointerBounds(*this, V, Size, Name);
+  return getTargetHooks().setPointerBounds(*this, V, Size, Name, Exact);
 }
 
 CodeGenFunction::CGFPOptionsRAII::CGFPOptionsRAII(CodeGenFunction &CGF,

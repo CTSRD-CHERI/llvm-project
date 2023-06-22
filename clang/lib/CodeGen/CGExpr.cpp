@@ -734,7 +734,8 @@ tightenCHERIBounds(CodeGenFunction &CGF, SubObjectBoundsKind Kind,
   }
   llvm::Value *Result = CGF.setPointerBounds(
       ValueToBound, SetBoundsSize, Loc, KindStr + ".with.bounds",
-      "Add subobject bounds", TBR.IsSubObject, StatsPrefix + Ty.getAsString());
+      "Add subobject bounds", TBR.IsSubObject, StatsPrefix + Ty.getAsString(),
+      std::nullopt, TBR.UseExactSetBounds);
 
   if (SubobjectBoundsSWPerm.getNumOccurrences() > 0) {
     // Clear the given software permission bit to differentiate subobject-bounds
@@ -1036,7 +1037,7 @@ static ArrayBoundsResult canSetBoundsOnArraySubscript(
         << "Index is not a constant (probably in a per-element loop) -> ");
     // Use the full array bounds in safe mode since there is lots of code that
     // uses &foo[n] to get an unbounded member access instead of foo + n
-    if (BoundsMode <= LangOptions::CBM_SubObjectsSafe) {
+    if (BoundsMode <= LangOptions::CBM_SubObjectsSafeExact) {
       if (BaseTy->isConstantArrayType())
         remarkUsingContainerSize(CGF,DbgOS,  E, BaseTy, ASE->getType(), "&array[n]");
       return ArrayBoundsResult::UseFullArray;
@@ -1192,14 +1193,18 @@ CodeGenFunction::canTightenCheriBounds(QualType Ty, const Expr *E,
     return Result;
   };
   ValueDecl* TargetField = nullptr;
-  const auto ExactBounds = [IsSubObject, &TargetField, &Result](int64_t Size) {
+  const auto ExactBounds = [IsSubObject, BoundsMode,
+                            &TargetField, &Result](int64_t Size) {
     Result.IsSubObject = IsSubObject;
     Result.TargetField = TargetField;
     Result.Size = Size;
+    Result.UseExactSetBounds =
+        BoundsMode == LangOptions::CBM_SubObjectsSafeExact;
     return Result;
   };
-  const auto UseRemainingSize = [IsSubObject, &DbgOS, &Result, &TargetField](
-                                    Twine Msg, uint64_t MaxSize = 0) {
+  const auto UseRemainingSize = [IsSubObject, BoundsMode, &DbgOS, &Result,
+                                 &TargetField](Twine Msg, uint64_t MaxSize = 0,
+                                               bool IsContainerSize = false) {
     Result.IsSubObject = IsSubObject;
     Result.IsContainerSize = false;
     Result.UseRemainingSize = true;
@@ -1211,6 +1216,8 @@ CodeGenFunction::canTightenCheriBounds(QualType Ty, const Expr *E,
       CHERI_BOUNDS_DBG(<< Msg << " -> ");
       Result.DiagMessage = (" (" + Msg + ")").str();
     }
+    Result.UseExactSetBounds =
+        BoundsMode == LangOptions::CBM_SubObjectsSafeExact;
     return Result;
   };
 

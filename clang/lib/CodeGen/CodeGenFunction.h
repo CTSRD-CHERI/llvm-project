@@ -572,6 +572,7 @@ public:
     std::string DiagMessage;
     ValueDecl *TargetField = nullptr;
     const Expr *ContainerAccessExpr = nullptr;
+    bool UseExactSetBounds = false;
   };
   struct CheriContainerBoundsInfo {
     const Expr *LocationExpr = nullptr;
@@ -4921,15 +4922,16 @@ public:
                                 SourceLocation Loc, const llvm::Twine &Name,
                                 StringRef Pass, bool isSubObject,
                                 const llvm::Twine &Details = "",
-                                llvm::MaybeAlign KnownAlignment = std::nullopt);
-
+                                llvm::MaybeAlign KnownAlignment = std::nullopt,
+                                bool Exact = false);
   llvm::Value *
   setPointerBounds(llvm::Value *V, uint64_t Size, SourceLocation Loc,
                    const llvm::Twine &Name, StringRef Pass, bool IsSubObject,
                    const llvm::Twine &Details = "",
-                   llvm::MaybeAlign KnownAlignment = std::nullopt) {
+                   llvm::MaybeAlign KnownAlignment = std::nullopt,
+                   bool Exact = false) {
     return setPointerBounds(V, llvm::ConstantInt::get(Int64Ty, Size), Loc, Name,
-                            Pass, IsSubObject, Details, KnownAlignment);
+                            Pass, IsSubObject, Details, KnownAlignment, Exact);
   }
 
   /// EmitPointerWithAlignment - Given an expression with a pointer type,

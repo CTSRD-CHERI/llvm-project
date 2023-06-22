@@ -306,7 +306,8 @@ public:
   }
   virtual llvm::Value *setPointerBounds(CodeGen::CodeGenFunction &,
                                         llvm::Value *Ptr, llvm::Value *Size,
-                                        const llvm::Twine &Name) const {
+                                        const llvm::Twine &Name,
+                                        bool Exact) const {
     llvm_unreachable("Target does not support CHERI capabilities!\n");
     return nullptr;
   }
