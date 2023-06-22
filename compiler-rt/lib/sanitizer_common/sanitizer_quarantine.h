@@ -98,8 +98,8 @@ class Quarantine {
   usize GetMaxCacheSize() const { return atomic_load_relaxed(&max_cache_size_); }
 
   void Put(Cache *c, Callback cb, Node *ptr, usize size) {
-    usize max_cache_size = GetMaxCacheSize();
-    if (max_cache_size) {
+    uptr max_cache_size = GetMaxCacheSize();
+    if (max_cache_size && size <= GetMaxSize()) {
       c->Enqueue(cb, ptr, size);
     } else {
       // GetMaxCacheSize() == 0 only when GetMaxSize() == 0 (see Init).
