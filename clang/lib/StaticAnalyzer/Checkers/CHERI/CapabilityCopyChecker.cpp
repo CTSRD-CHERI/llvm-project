@@ -62,7 +62,7 @@ public:
   void checkLocation(SVal l, bool isLoad, const Stmt *S,
                      CheckerContext &C) const;
   void checkBind(SVal L, SVal V, const Stmt *S, CheckerContext &C) const;
-  void checkBranchCondition(const Stmt *Condition, CheckerContext &Ctx) const;
+  void checkBranchCondition(const Stmt *Condition, CheckerContext &C) const;
 
 private:
   ExplodedNode *checkBinaryOpArg(CheckerContext &C, const Expr* E) const;
@@ -83,6 +83,10 @@ CapabilityCopyChecker::CapabilityCopyChecker() {
       new BugType(this,
                   "Tag-stripping copy of capability",
                   "CHERI portability"));
+}
+
+static bool isPureCapMode(const ASTContext &C) {
+  return C.getTargetInfo().areAllPointersCapabilities();
 }
 
 static bool isPointerToCapTy(const QualType Type, ASTContext &Ctx) {
@@ -169,6 +173,9 @@ void CapabilityCopyChecker::checkLocation(SVal l, bool isLoad, const Stmt *S,
                                           CheckerContext &C) const {
   if (!isLoad)
     return;
+  ASTContext &ASTCtx = C.getASTContext();
+  if (!isPureCapMode(ASTCtx))
+    return;
 
   const MemRegion *R = l.getAsRegion();
   if (!R || !R->hasStackParametersStorage())
@@ -176,7 +183,7 @@ void CapabilityCopyChecker::checkLocation(SVal l, bool isLoad, const Stmt *S,
 
   // Get ArgVal
   ProgramStateRef State = C.getState();
-  QualType const Ty = l.getType(C.getASTContext());
+  QualType const Ty = l.getType(ASTCtx);
   QualType const ArgValTy = Ty->getPointeeType();
   if (!ArgValTy->isVoidPointerType())
     return;
@@ -188,7 +195,7 @@ void CapabilityCopyChecker::checkLocation(SVal l, bool isLoad, const Stmt *S,
     return;
 
   // If argument has value from caller, CharTy will not be used
-  SVal ArgValDeref = State->getSVal(ArgValAsRegion, C.getASTContext().CharTy);
+  SVal ArgValDeref = State->getSVal(ArgValAsRegion, ASTCtx.CharTy);
 
   const NoteTag *Tag;
   if (const auto *ArgValDerefAsRegion = ArgValDeref.getAsRegion()) {
@@ -265,12 +272,16 @@ static bool isInsideSmallConstantBoundLoop(const Stmt *S, CheckerContext &C,
 
 void CapabilityCopyChecker::checkBind(SVal L, SVal V, const Stmt *S,
                                       CheckerContext &C) const {
+  ASTContext &ASTCtx = C.getASTContext();
+  if (!isPureCapMode(ASTCtx))
+    return;
+
   const MemRegion *MR = L.getAsRegion();
   if (!MR)
     return;
 
-  const QualType &PointeeTy = L.getType(C.getASTContext())->getPointeeType();
-  if (!isNonCapScalarType(PointeeTy, C.getASTContext()))
+  const QualType &PointeeTy = L.getType(ASTCtx)->getPointeeType();
+  if (!isNonCapScalarType(PointeeTy, ASTCtx))
     return;
   /* Non-capability scalar store */
 
@@ -282,7 +293,7 @@ void CapabilityCopyChecker::checkBind(SVal L, SVal V, const Stmt *S,
     return;
 
   // Skip if loop bound is not big enough to copy capability
-  unsigned BlockSize = C.getASTContext().getTypeSize(PointeeTy);
+  unsigned BlockSize = ASTCtx.getTypeSize(PointeeTy);
   if (isInsideSmallConstantBoundLoop(S, C, BlockSize))
     return;
 
@@ -295,8 +306,11 @@ void CapabilityCopyChecker::checkBind(SVal L, SVal V, const Stmt *S,
   }
 }
 
-ExplodedNode *CapabilityCopyChecker::checkBinaryOpArg(CheckerContext &C, const Expr* E) const {
+ExplodedNode *CapabilityCopyChecker::checkBinaryOpArg(CheckerContext &C,
+                                                      const Expr* E) const {
   ASTContext &ASTCtx = C.getASTContext();
+  if (!isPureCapMode(ASTCtx))
+    return nullptr;
   if (!isNonCapScalarType(E->getType(), ASTCtx))
     return nullptr;
 
@@ -349,6 +363,10 @@ static const MemRegion *isCapAlignCheck(const BinaryOperator *BO, CheckerContext
 
 void CapabilityCopyChecker::checkPostStmt(const BinaryOperator *BO,
                                           CheckerContext &C) const {
+  ASTContext &ASTCtx = C.getASTContext();
+  if (!isPureCapMode(ASTCtx))
+    return;
+
   ExplodedNode *N = nullptr;
 
   /* Check for capability repr bytes used in arithmetic */
@@ -394,30 +412,34 @@ void CapabilityCopyChecker::checkPostStmt(const BinaryOperator *BO,
 }
 
 void CapabilityCopyChecker::checkBranchCondition(const Stmt *Condition,
-                                                 CheckerContext &Ctx) const {
+                                                 CheckerContext &C) const {
+  ASTContext &ASTCtx = C.getASTContext();
+  if (!isPureCapMode(ASTCtx))
+    return;
+
   using namespace clang::ast_matchers;
   // TODO: do-while, merge with second matcher
   auto childOfWhile = stmt(hasParent(stmt(anyOf(whileStmt(), doStmt()))));
-  auto L = match(childOfWhile, *Condition, Ctx.getASTContext());
+  auto L = match(childOfWhile, *Condition, ASTCtx);
   if (L.empty())
     return;
 
   auto whileCond = whileConditionMatcher();
 
-  auto M = match(whileCond, *Condition, Ctx.getASTContext());
+  auto M = match(whileCond, *Condition, ASTCtx);
   if (M.size() != 1)
     return;
 
-  const SVal &CondVal = Ctx.getSVal(Condition);
-  if (Ctx.getSVal(Condition).isUnknownOrUndef())
+  const SVal &CondVal = C.getSVal(Condition);
+  if (C.getSVal(Condition).isUnknownOrUndef())
     return;
 
   ProgramStateRef ThenSt, ElseSt;
   std::tie(ThenSt, ElseSt) =
-      Ctx.getState()->assume(CondVal.castAs<DefinedOrUnknownSVal>());
+      C.getState()->assume(CondVal.castAs<DefinedOrUnknownSVal>());
   for (auto I : M) {
     auto L = I.getNodeAs<Expr>("len");
-    if (SymbolRef ISym = Ctx.getSVal(L).getAsSymbol()) {
+    if (SymbolRef ISym = C.getSVal(L).getAsSymbol()) {
       if (ThenSt)
         ThenSt = ThenSt->add<WhileBoundVar>(ISym);
       if (ElseSt)
@@ -426,9 +448,9 @@ void CapabilityCopyChecker::checkBranchCondition(const Stmt *Condition,
       return;
   }
   if (ThenSt)
-    Ctx.addTransition(ThenSt);
+    C.addTransition(ThenSt);
   if (ElseSt)
-    Ctx.addTransition(ElseSt);
+    C.addTransition(ElseSt);
 }
 
 void ento::registerCapabilityCopyChecker(CheckerManager &mgr) {
