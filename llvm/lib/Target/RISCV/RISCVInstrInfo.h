@@ -258,9 +258,6 @@ public:
 
 protected:
   const RISCVSubtarget &STI;
-
-private:
-  unsigned getInstBundleLength(const MachineInstr &MI) const;
 };
 
 namespace RISCV {
