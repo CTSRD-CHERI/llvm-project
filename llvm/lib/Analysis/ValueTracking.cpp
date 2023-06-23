@@ -2718,7 +2718,7 @@ bool isKnownNonZero(const Value *V, const APInt &DemandedElts, unsigned Depth,
   if (PointerType *PtrTy = dyn_cast<PointerType>(V->getType())) {
     // Alloca never returns null, malloc might.
     if (isa<AllocaInst>(V)) {
-      unsigned AS = Q.DL.getAllocaAddrSpace();
+      unsigned AS = PtrTy->getAddressSpace();
       // XXXAR: AMDGPU broke this because their allocaAddressSpace is weird
       if (AS == 0 || Q.DL.isFatPointer(AS))
         return true;
