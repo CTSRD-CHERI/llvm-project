@@ -5019,7 +5019,7 @@ RValue CodeGenFunction::EmitBuiltinExpr(const GlobalDecl GD, unsigned BuiltinID,
       PtrArg = Builder.CreatePtrToInt(PtrArg, IntPtrTy);
     return RValue::get(Builder.CreateBitCast(
         Builder.CreateIntrinsic(Intrinsic::cheri_cap_from_pointer, {IntPtrTy},
-                                {EmitCastToVoidPtr(GlobalCap), PtrArg}),
+                                {GlobalCap, PtrArg}),
         ConvertType(E->getType())));
   }
   case Builtin::BI__builtin_cheri_cap_to_pointer: {
@@ -5028,9 +5028,8 @@ RValue CodeGenFunction::EmitBuiltinExpr(const GlobalDecl GD, unsigned BuiltinID,
            "mode");
     Value *GlobalCap = EmitScalarExpr(E->getArg(0));
     Value *Cap = EmitScalarExpr(E->getArg(1));
-    Value *Ptr = Builder.CreateIntrinsic(
-        llvm::Intrinsic::cheri_cap_to_pointer, {IntPtrTy},
-        {EmitCastToVoidPtr(GlobalCap), EmitCastToVoidPtr(Cap)});
+    Value *Ptr = Builder.CreateIntrinsic(llvm::Intrinsic::cheri_cap_to_pointer,
+                                         {IntPtrTy}, {GlobalCap, Cap});
     auto *ResultTy = ConvertType(E->getType());
     if (ResultTy->isIntegerTy())
       return RValue::get(Builder.CreateIntCast(
@@ -5040,25 +5039,25 @@ RValue CodeGenFunction::EmitBuiltinExpr(const GlobalDecl GD, unsigned BuiltinID,
   }
 
   case Builtin::BI__builtin_cheri_address_get:
-    return RValue::get(Builder.CreateIntrinsic(
-        llvm::Intrinsic::cheri_cap_address_get, {IntPtrTy},
-        {EmitCastToVoidPtr(EmitScalarExpr(E->getArg(0)))}));
+    return RValue::get(
+        Builder.CreateIntrinsic(llvm::Intrinsic::cheri_cap_address_get,
+                                {IntPtrTy}, {EmitScalarExpr(E->getArg(0))}));
   case Builtin::BI__builtin_cheri_address_set: {
     Value *Cap = EmitScalarExpr(E->getArg(0));
     Value *Address = EmitScalarExpr(E->getArg(1));
-    return RValue::get(getTargetHooks().setPointerAddress(
-        *this, EmitCastToVoidPtr(Cap), Address, "", E->getExprLoc()));
+    return RValue::get(getTargetHooks().setPointerAddress(*this, Cap, Address,
+                                                          "", E->getExprLoc()));
   }
   case Builtin::BI__builtin_cheri_base_get:
-    return RValue::get(Builder.CreateIntrinsic(
-        llvm::Intrinsic::cheri_cap_base_get, {SizeTy},
-        {EmitCastToVoidPtr(EmitScalarExpr(E->getArg(0)))}));
+    return RValue::get(
+        Builder.CreateIntrinsic(llvm::Intrinsic::cheri_cap_base_get, {SizeTy},
+                                {EmitScalarExpr(E->getArg(0))}));
   case Builtin::BI__builtin_cheri_bounds_set: {
     Value *Cap = EmitScalarExpr(E->getArg(0));
     Value *Length = EmitScalarExpr(E->getArg(1));
     return RValue::get(Builder.CreateBitCast(
         Builder.CreateIntrinsic(llvm::Intrinsic::cheri_cap_bounds_set, {SizeTy},
-                                {EmitCastToVoidPtr(Cap), Length}),
+                                {Cap, Length}),
         Cap->getType()));
   }
   case Builtin::BI__builtin_cheri_bounds_set_exact: {
@@ -5066,77 +5065,75 @@ RValue CodeGenFunction::EmitBuiltinExpr(const GlobalDecl GD, unsigned BuiltinID,
     Value *Length = EmitScalarExpr(E->getArg(1));
     return RValue::get(Builder.CreateBitCast(
         Builder.CreateIntrinsic(llvm::Intrinsic::cheri_cap_bounds_set_exact,
-                                {SizeTy}, {EmitCastToVoidPtr(Cap), Length}),
+                                {SizeTy}, {Cap, Length}),
         Cap->getType()));
   }
   case Builtin::BI__builtin_cheri_flags_get:
-    return RValue::get(Builder.CreateIntrinsic(
-        llvm::Intrinsic::cheri_cap_flags_get, {SizeTy},
-        {EmitCastToVoidPtr(EmitScalarExpr(E->getArg(0)))}));
+    return RValue::get(
+        Builder.CreateIntrinsic(llvm::Intrinsic::cheri_cap_flags_get, {SizeTy},
+                                {EmitScalarExpr(E->getArg(0))}));
   case Builtin::BI__builtin_cheri_flags_set: {
     Value *Cap = EmitScalarExpr(E->getArg(0));
     Value *Flags = EmitScalarExpr(E->getArg(1));
     return RValue::get(Builder.CreateBitCast(
         Builder.CreateIntrinsic(llvm::Intrinsic::cheri_cap_flags_set, {SizeTy},
-                                {EmitCastToVoidPtr(Cap), Flags}),
+                                {Cap, Flags}),
         Cap->getType()));
   }
   case Builtin::BI__builtin_cheri_high_get:
-    return RValue::get(Builder.CreateIntrinsic(
-        llvm::Intrinsic::cheri_cap_high_get, {SizeTy},
-        {EmitCastToVoidPtr(EmitScalarExpr(E->getArg(0)))}));
+    return RValue::get(
+        Builder.CreateIntrinsic(llvm::Intrinsic::cheri_cap_high_get, {SizeTy},
+                                {EmitScalarExpr(E->getArg(0))}));
   case Builtin::BI__builtin_cheri_high_set: {
     Value *Cap = EmitScalarExpr(E->getArg(0));
     Value *HighBits = EmitScalarExpr(E->getArg(1));
     return RValue::get(Builder.CreateBitCast(
         Builder.CreateIntrinsic(llvm::Intrinsic::cheri_cap_high_set, {SizeTy},
-                                {EmitCastToVoidPtr(Cap), HighBits}),
+                                {Cap, HighBits}),
         Cap->getType()));
   }
   case Builtin::BI__builtin_cheri_length_get:
-    return RValue::get(Builder.CreateIntrinsic(
-        llvm::Intrinsic::cheri_cap_length_get, {SizeTy},
-        {EmitCastToVoidPtr(EmitScalarExpr(E->getArg(0)))}));
+    return RValue::get(
+        Builder.CreateIntrinsic(llvm::Intrinsic::cheri_cap_length_get, {SizeTy},
+                                {EmitScalarExpr(E->getArg(0))}));
   case Builtin::BI__builtin_cheri_perms_and: {
     Value *Cap = EmitScalarExpr(E->getArg(0));
     Value *Perms = EmitScalarExpr(E->getArg(1));
     return RValue::get(Builder.CreateBitCast(
         Builder.CreateIntrinsic(llvm::Intrinsic::cheri_cap_perms_and, {SizeTy},
-                                {EmitCastToVoidPtr(Cap), Perms}),
+                                {Cap, Perms}),
         Cap->getType()));
   }
   case Builtin::BI__builtin_cheri_offset_get:
-    return RValue::get(Builder.CreateIntrinsic(
-        llvm::Intrinsic::cheri_cap_offset_get, {SizeTy},
-        {EmitCastToVoidPtr(EmitScalarExpr(E->getArg(0)))}));
+    return RValue::get(
+        Builder.CreateIntrinsic(llvm::Intrinsic::cheri_cap_offset_get, {SizeTy},
+                                {EmitScalarExpr(E->getArg(0))}));
   case Builtin::BI__builtin_cheri_offset_increment: {
     Value *Cap = EmitScalarExpr(E->getArg(0));
     Value *Increment = EmitScalarExpr(E->getArg(1));
-    return RValue::get(Builder.CreateGEP(Int8Ty, EmitCastToVoidPtr(Cap),
-                                         Increment,
+    return RValue::get(Builder.CreateGEP(Int8Ty, Cap, Increment,
                                          "__builtin_cheri_offset_increment"));
   }
   case Builtin::BI__builtin_cheri_offset_set: {
     Value *Cap = EmitScalarExpr(E->getArg(0));
     Value *Offset = EmitScalarExpr(E->getArg(1));
-    return RValue::get(getTargetHooks().setPointerOffset(
-        *this, EmitCastToVoidPtr(Cap), Offset, "", E->getExprLoc()));
+    return RValue::get(getTargetHooks().setPointerOffset(*this, Cap, Offset, "",
+                                                         E->getExprLoc()));
   }
   case Builtin::BI__builtin_cheri_perms_get:
-    return RValue::get(Builder.CreateIntrinsic(
-        llvm::Intrinsic::cheri_cap_perms_get, {SizeTy},
-        {EmitCastToVoidPtr(EmitScalarExpr(E->getArg(0)))}));
+    return RValue::get(
+        Builder.CreateIntrinsic(llvm::Intrinsic::cheri_cap_perms_get, {SizeTy},
+                                {EmitScalarExpr(E->getArg(0))}));
 
   case Builtin::BI__builtin_cheri_type_get:
-    return RValue::get(Builder.CreateIntrinsic(
-        llvm::Intrinsic::cheri_cap_type_get, {IntPtrTy},
-        {EmitCastToVoidPtr(EmitScalarExpr(E->getArg(0)))}));
+    return RValue::get(
+        Builder.CreateIntrinsic(llvm::Intrinsic::cheri_cap_type_get, {IntPtrTy},
+                                {EmitScalarExpr(E->getArg(0))}));
   case Builtin::BI__builtin_cheri_perms_check: {
     Value *Cap = EmitScalarExpr(E->getArg(0));
     Value *Perms = EmitScalarExpr(E->getArg(1));
-    return RValue::get(
-        Builder.CreateIntrinsic(llvm::Intrinsic::cheri_cap_perms_check,
-                                {SizeTy}, {EmitCastToVoidPtr(Cap), Perms}));
+    return RValue::get(Builder.CreateIntrinsic(
+        llvm::Intrinsic::cheri_cap_perms_check, {SizeTy}, {Cap, Perms}));
   }
   // Round to capability precision:
   // TODO: should we handle targets that don't have any precision constraints
@@ -19571,11 +19568,11 @@ RValue CodeGenFunction::EmitBuiltinAlignTo(const CallExpr *E, bool AlignUp) {
     if (E->getType()->isPointerType()) {
       // The result must point to the same underlying allocation. This means we
       // can use an inbounds GEP to enable better optimization.
-      Value *Base = EmitCastToVoidPtr(Args.Src);
       if (getLangOpts().isSignedOverflowDefined())
-        Result = Builder.CreateGEP(Int8Ty, Base, Difference, "aligned_result");
+        Result =
+            Builder.CreateGEP(Int8Ty, Args.Src, Difference, "aligned_result");
       else
-        Result = EmitCheckedInBoundsGEP(Int8Ty, Base, Difference,
+        Result = EmitCheckedInBoundsGEP(Int8Ty, Args.Src, Difference,
                                         /*SignedIndices=*/true,
                                         /*isSubtraction=*/!AlignUp,
                                         E->getExprLoc(), "aligned_result");
@@ -19585,10 +19582,9 @@ RValue CodeGenFunction::EmitBuiltinAlignTo(const CallExpr *E, bool AlignUp) {
       // result could be either an arbitrary integer value or a valid pointer.
       // Setting the inbounds flag for the arbitrary integer case is not safe.
       assert(E->getType()->isIntCapType());
-      Result = Builder.CreateGEP(Int8Ty, EmitCastToVoidPtr(Args.Src), Difference,
+      Result = Builder.CreateGEP(Int8Ty, Args.Src, Difference,
                                  "aligned_result");
     }
-    Result = Builder.CreatePointerCast(Result, Args.SrcType);
     // Emit an alignment assumption to ensure that the new alignment is
     // propagated to loads/stores, etc.
     emitAlignmentAssumption(Result, E, E->getExprLoc(), Args.Alignment);
@@ -20145,8 +20141,7 @@ Value *CodeGenFunction::EmitWebAssemblyBuiltinExpr(unsigned BuiltinID,
   }
   case WebAssembly::BI__builtin_wasm_table_get: {
     assert(E->getArg(0)->getType()->isArrayType());
-    Value *Table =
-        EmitCastToVoidPtr(EmitArrayToPointerDecay(E->getArg(0)).getPointer());
+    Value *Table = EmitArrayToPointerDecay(E->getArg(0)).getPointer();
     Value *Index = EmitScalarExpr(E->getArg(1));
     Function *Callee;
     if (E->getType().isWebAssemblyExternrefType())
@@ -20160,8 +20155,7 @@ Value *CodeGenFunction::EmitWebAssemblyBuiltinExpr(unsigned BuiltinID,
   }
   case WebAssembly::BI__builtin_wasm_table_set: {
     assert(E->getArg(0)->getType()->isArrayType());
-    Value *Table =
-        EmitCastToVoidPtr(EmitArrayToPointerDecay(E->getArg(0)).getPointer());
+    Value *Table = EmitArrayToPointerDecay(E->getArg(0)).getPointer();
     Value *Index = EmitScalarExpr(E->getArg(1));
     Value *Val = EmitScalarExpr(E->getArg(2));
     Function *Callee;
@@ -20176,15 +20170,13 @@ Value *CodeGenFunction::EmitWebAssemblyBuiltinExpr(unsigned BuiltinID,
   }
   case WebAssembly::BI__builtin_wasm_table_size: {
     assert(E->getArg(0)->getType()->isArrayType());
-    Value *Value =
-        EmitCastToVoidPtr(EmitArrayToPointerDecay(E->getArg(0)).getPointer());
+    Value *Value = EmitArrayToPointerDecay(E->getArg(0)).getPointer();
     Function *Callee = CGM.getIntrinsic(Intrinsic::wasm_table_size);
     return Builder.CreateCall(Callee, Value);
   }
   case WebAssembly::BI__builtin_wasm_table_grow: {
     assert(E->getArg(0)->getType()->isArrayType());
-    Value *Table =
-        EmitCastToVoidPtr(EmitArrayToPointerDecay(E->getArg(0)).getPointer());
+    Value *Table = EmitArrayToPointerDecay(E->getArg(0)).getPointer();
     Value *Val = EmitScalarExpr(E->getArg(1));
     Value *NElems = EmitScalarExpr(E->getArg(2));
 
@@ -20201,8 +20193,7 @@ Value *CodeGenFunction::EmitWebAssemblyBuiltinExpr(unsigned BuiltinID,
   }
   case WebAssembly::BI__builtin_wasm_table_fill: {
     assert(E->getArg(0)->getType()->isArrayType());
-    Value *Table =
-        EmitCastToVoidPtr(EmitArrayToPointerDecay(E->getArg(0)).getPointer());
+    Value *Table = EmitArrayToPointerDecay(E->getArg(0)).getPointer();
     Value *Index = EmitScalarExpr(E->getArg(1));
     Value *Val = EmitScalarExpr(E->getArg(2));
     Value *NElems = EmitScalarExpr(E->getArg(3));
@@ -20220,10 +20211,8 @@ Value *CodeGenFunction::EmitWebAssemblyBuiltinExpr(unsigned BuiltinID,
   }
   case WebAssembly::BI__builtin_wasm_table_copy: {
     assert(E->getArg(0)->getType()->isArrayType());
-    Value *TableX =
-        EmitCastToVoidPtr(EmitArrayToPointerDecay(E->getArg(0)).getPointer());
-    Value *TableY =
-        EmitCastToVoidPtr(EmitArrayToPointerDecay(E->getArg(1)).getPointer());
+    Value *TableX = EmitArrayToPointerDecay(E->getArg(0)).getPointer();
+    Value *TableY = EmitArrayToPointerDecay(E->getArg(1)).getPointer();
     Value *DstIdx = EmitScalarExpr(E->getArg(2));
     Value *SrcIdx = EmitScalarExpr(E->getArg(3));
     Value *NElems = EmitScalarExpr(E->getArg(4));
