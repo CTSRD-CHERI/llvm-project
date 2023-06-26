@@ -928,6 +928,7 @@ static void AddNodeIDCustom(FoldingSetNodeID &ID, const SDNode *N) {
     ID.AddInteger(MN->getRawSubclassData());
     ID.AddInteger(MN->getPointerInfo().getAddrSpace());
     ID.AddInteger(MN->getMemOperand()->getFlags());
+    ID.AddInteger(MN->getMemoryVT().getRawBits());
   }
 }
 
@@ -8267,6 +8268,7 @@ SDValue SelectionDAG::getMemIntrinsicNode(unsigned Opcode, const SDLoc &dl,
         Opcode, dl.getIROrder(), VTList, MemVT, MMO));
     ID.AddInteger(MMO->getPointerInfo().getAddrSpace());
     ID.AddInteger(MMO->getFlags());
+    ID.AddInteger(MemVT.getRawBits());
     void *IP = nullptr;
     if (SDNode *E = FindNodeOrInsertPos(ID, dl, IP)) {
       cast<MemIntrinsicSDNode>(E)->refineAlignment(MMO);
