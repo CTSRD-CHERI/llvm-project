@@ -68,6 +68,7 @@ static const RISCVSupportedExtension SupportedExtensions[] = {
 
     // vendor-defined ('X') extensions
     {"xcheri", RISCVExtensionVersion{0, 0}},
+    {"xsfcie", RISCVExtensionVersion{1, 0}},
     {"xsfvcp", RISCVExtensionVersion{1, 0}},
     {"xtheadba", RISCVExtensionVersion{1, 0}},
     {"xtheadbb", RISCVExtensionVersion{1, 0}},
