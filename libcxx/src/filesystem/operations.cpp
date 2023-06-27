@@ -490,7 +490,7 @@ path __current_path(error_code* ec) {
   Deleter deleter = &::free;
 #else
   auto size = ::pathconf(".", _PC_PATH_MAX);
-  _LIBCPP_ASSERT(size >= 0, "pathconf returned a 0 as max size");
+  _LIBCPP_ASSERT_UNCATEGORIZED(size >= 0, "pathconf returned a 0 as max size");
 
   auto buff = unique_ptr<path::value_type[]>(new path::value_type[size + 1]);
   path::value_type* ptr = buff.get();
@@ -638,7 +638,7 @@ void __permissions(const path& p, perms prms, perm_options opts,
   const bool resolve_symlinks = !has_opt(perm_options::nofollow);
   const bool add_perms = has_opt(perm_options::add);
   const bool remove_perms = has_opt(perm_options::remove);
-  _LIBCPP_ASSERT(
+  _LIBCPP_ASSERT_UNCATEGORIZED(
       (add_perms + remove_perms + has_opt(perm_options::replace)) == 1,
       "One and only one of the perm_options constants replace, add, or remove "
       "is present in opts");
@@ -652,7 +652,7 @@ void __permissions(const path& p, perms prms, perm_options opts,
     set_sym_perms = is_symlink(st);
     if (m_ec)
       return err.report(m_ec);
-    _LIBCPP_ASSERT(st.permissions() != perms::unknown,
+    _LIBCPP_ASSERT_UNCATEGORIZED(st.permissions() != perms::unknown,
                    "Permissions unexpectedly unknown");
     if (add_perms)
       prms |= st.permissions();
@@ -698,7 +698,7 @@ path __read_symlink(const path& p, error_code* ec) {
   detail::SSizeT ret;
   if ((ret = detail::readlink(p.c_str(), buff.get(), size)) == -1)
     return err.report(capture_errno());
-  _LIBCPP_ASSERT(ret > 0, "TODO");
+  _LIBCPP_ASSERT_UNCATEGORIZED(ret > 0, "TODO");
   if (static_cast<size_t>(ret) >= size)
     return err.report(errc::value_too_large);
   buff[ret] = 0;

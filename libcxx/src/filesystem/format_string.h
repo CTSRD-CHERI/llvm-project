@@ -48,7 +48,7 @@ inline _LIBCPP_ATTRIBUTE_FORMAT(__printf__, 1, 0) string vformat_string(const ch
     result.__resize_default_init(size_with_null - 1);
     // ret = ::vsnprintf(&result[0], size_with_null, msg, ap);
     ret = ::vsnprintf(result.data(), size_with_null, msg, ap);
-    _LIBCPP_ASSERT(static_cast<size_t>(ret) == (size_with_null - 1), "TODO");
+    _LIBCPP_ASSERT_UNCATEGORIZED(static_cast<size_t>(ret) == (size_with_null - 1), "TODO");
   }
   return result;
 }
