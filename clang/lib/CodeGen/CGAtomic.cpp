@@ -183,7 +183,7 @@ bool isAtomicStoreOp(AtomicExpr::AtomicOp Op) {
     }
 
     Address getAtomicAddressAsAtomicIntPointer() const {
-      return emitCastToAtomicIntPointer(getAtomicAddress());
+      return castToAtomicIntPointer(getAtomicAddress());
     }
 
     /// Is the atomic size larger than the underlying value type?
@@ -205,7 +205,7 @@ bool isAtomicStoreOp(AtomicExpr::AtomicOp Op) {
 
     /// Cast the given pointer to an integer pointer suitable for atomic
     /// operations if the source.
-    Address emitCastToAtomicIntPointer(Address Addr) const;
+    Address castToAtomicIntPointer(Address Addr) const;
 
     /// If Addr is compatible with the iN that will be used for an atomic
     /// operation, bitcast it. Otherwise, create a temporary that is suitable
@@ -1025,7 +1025,7 @@ RValue CodeGenFunction::EmitAtomicExpr(AtomicExpr *E) {
   assert(Atomics.shouldUseLibcall() == UseLibcall);
 
   if (ShouldCastToIntPtrTy) {
-    Ptr = Atomics.emitCastToAtomicIntPointer(Ptr);
+    Ptr = Atomics.castToAtomicIntPointer(Ptr);
     if (Val1.isValid())
       Val1 = Atomics.convertToAtomicIntPointer(Val1);
     if (Val2.isValid())
@@ -1033,13 +1033,13 @@ RValue CodeGenFunction::EmitAtomicExpr(AtomicExpr *E) {
   }
   if (Dest.isValid()) {
     if (ShouldCastToIntPtrTy)
-      Dest = Atomics.emitCastToAtomicIntPointer(Dest);
+      Dest = Atomics.castToAtomicIntPointer(Dest);
   } else if (E->isCmpXChg())
     Dest = CreateMemTemp(RValTy, "cmpxchg.bool");
   else if (!RValTy->isVoidType()) {
     Dest = Atomics.CreateTempAlloca();
     if (ShouldCastToIntPtrTy)
-      Dest = Atomics.emitCastToAtomicIntPointer(Dest);
+      Dest = Atomics.castToAtomicIntPointer(Dest);
   }
 
   bool IsStore = isAtomicStoreOp(E->getOp());
@@ -1402,16 +1402,14 @@ RValue CodeGenFunction::EmitAtomicExpr(AtomicExpr *E) {
         ResVal = setCapabilityIntegerValue(Res.getScalarVal(), ResVal,
                                            E->getExprLoc());
 
-      Builder.CreateStore(
-          ResVal, Builder.CreateElementBitCast(Dest, ResVal->getType()));
+      Builder.CreateStore(ResVal, Dest.withElementType(ResVal->getType()));
     }
 
     if (RValTy->isVoidType())
       return RValue::get(nullptr);
 
-    return convertTempToRValue(
-        Builder.CreateElementBitCast(Dest, ConvertTypeForMem(RValTy)),
-        RValTy, E->getExprLoc());
+    return convertTempToRValue(Dest.withElementType(ConvertTypeForMem(RValTy)),
+                               RValTy, E->getExprLoc());
   }
 
   if (isa<llvm::ConstantInt>(Order)) {
@@ -1451,9 +1449,8 @@ RValue CodeGenFunction::EmitAtomicExpr(AtomicExpr *E) {
     if (RValTy->isVoidType())
       return RValue::get(nullptr);
 
-    return convertTempToRValue(
-        Builder.CreateElementBitCast(Dest, ConvertTypeForMem(RValTy)),
-        RValTy, E->getExprLoc());
+    return convertTempToRValue(Dest.withElementType(ConvertTypeForMem(RValTy)),
+                               RValTy, E->getExprLoc());
   }
 
   // Long case, when Order isn't obviously constant.
@@ -1523,12 +1520,11 @@ RValue CodeGenFunction::EmitAtomicExpr(AtomicExpr *E) {
     return RValue::get(nullptr);
 
   assert(Atomics.getValueSizeInBits() <= Atomics.getAtomicSizeInBits());
-  return convertTempToRValue(
-      Builder.CreateElementBitCast(Dest, ConvertTypeForMem(RValTy)),
-      RValTy, E->getExprLoc());
+  return convertTempToRValue(Dest.withElementType(ConvertTypeForMem(RValTy)),
+                             RValTy, E->getExprLoc());
 }
 
-Address AtomicInfo::emitCastToAtomicIntPointer(Address addr) const {
+Address AtomicInfo::castToAtomicIntPointer(Address addr) const {
   llvm::Type *ty;
   if (AtomicTy->isCHERICapabilityType(CGF.getContext())) {
     // If capability atomics are natively supported the instruction expects
@@ -1545,7 +1541,7 @@ Address AtomicInfo::emitCastToAtomicIntPointer(Address addr) const {
   } else {
     ty = llvm::IntegerType::get(CGF.getLLVMContext(), AtomicSizeInBits);
   }
-  return CGF.Builder.CreateElementBitCast(addr, ty);
+  return addr.withElementType(ty);
 }
 
 Address AtomicInfo::convertToAtomicIntPointer(Address Addr) const {
@@ -1569,7 +1565,7 @@ Address AtomicInfo::convertToAtomicIntPointer(Address Addr) const {
     Addr = Tmp;
   }
 
-  return emitCastToAtomicIntPointer(Addr);
+  return castToAtomicIntPointer(Addr);
 }
 
 RValue AtomicInfo::convertAtomicTempToRValue(Address addr,
@@ -1648,7 +1644,7 @@ RValue AtomicInfo::ConvertIntToValueOrAtomic(llvm::Value *IntVal,
   }
 
   // Slam the integer into the temporary.
-  Address CastTemp = emitCastToAtomicIntPointer(Temp);
+  Address CastTemp = castToAtomicIntPointer(Temp);
   CGF.Builder.CreateStore(IntVal, CastTemp)
       ->setVolatile(TempIsVolatile);
 
@@ -1831,7 +1827,7 @@ llvm::Value *AtomicInfo::convertRValueToInt(RValue RVal) const {
   Address Addr = materializeRValue(RVal);
 
   // Cast the temporary to the atomic int type and pull a value out.
-  Addr = emitCastToAtomicIntPointer(Addr);
+  Addr = castToAtomicIntPointer(Addr);
   return CGF.Builder.CreateLoad(Addr);
 }
 
@@ -2009,7 +2005,7 @@ void AtomicInfo::EmitAtomicUpdateOp(
                                              /*NumReservedValues=*/2);
   PHI->addIncoming(OldVal, CurBB);
   Address NewAtomicAddr = CreateTempAlloca();
-  Address NewAtomicIntAddr = emitCastToAtomicIntPointer(NewAtomicAddr);
+  Address NewAtomicIntAddr = castToAtomicIntPointer(NewAtomicAddr);
   if ((LVal.isBitField() && BFI.Size != ValueSizeInBits) ||
       requiresMemSetZero(getAtomicAddress().getElementType())) {
     CGF.Builder.CreateStore(PHI, NewAtomicIntAddr);
@@ -2091,7 +2087,7 @@ void AtomicInfo::EmitAtomicUpdateOp(llvm::AtomicOrdering AO, RValue UpdateRVal,
                                              /*NumReservedValues=*/2);
   PHI->addIncoming(OldVal, CurBB);
   Address NewAtomicAddr = CreateTempAlloca();
-  Address NewAtomicIntAddr = emitCastToAtomicIntPointer(NewAtomicAddr);
+  Address NewAtomicIntAddr = castToAtomicIntPointer(NewAtomicAddr);
   if ((LVal.isBitField() && BFI.Size != ValueSizeInBits) ||
       requiresMemSetZero(getAtomicAddress().getElementType())) {
     CGF.Builder.CreateStore(PHI, NewAtomicIntAddr);
@@ -2185,8 +2181,7 @@ void CodeGenFunction::EmitAtomicStore(RValue rvalue, LValue dest,
     llvm::Value *intValue = atomics.convertRValueToInt(rvalue);
 
     // Do the atomic store.
-    Address addr =
-        atomics.emitCastToAtomicIntPointer(atomics.getAtomicAddress());
+    Address addr = atomics.castToAtomicIntPointer(atomics.getAtomicAddress());
     intValue = Builder.CreateIntCast(
         intValue, addr.getElementType(), /*isSigned=*/false);
     llvm::StoreInst *store = Builder.CreateStore(intValue, addr);
