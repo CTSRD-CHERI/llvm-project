@@ -94,6 +94,39 @@ void memcpy_impl_bad(void* src0, void *dst0, size_t len) {
       *dst++ = *src++; // expected-warning{{Tag-stripping store of a capability}}
 }
 
+void charptr(char* src, char *dst) {
+  *dst++ = *src++; // expected-warning{{Tag-stripping store of a capability}}
+}
+
+#define EOL 10
+void c_string(char* src1, char* src2, char* src3, char *src4, char *dst) {
+  int i = 0;
+  while (src1[i])
+    *dst++ = src1[i++]; // no warning
+
+  src2++;
+  while (*src2 != '.')
+    *dst++ = *src2++; // no warning
+
+  char c;
+  while ((c = *src3++))
+    *dst++ = c; // no warning
+
+  while (EOL != (*dst++ = *src4++)); // no warning
+}
+
+struct S {
+  int x;
+  int *p;
+};
+
+void struct_field(void *p) {
+  struct S *ps = p;
+  ps->p = malloc(10*sizeof(int));
+  int x = ps->x;
+  *ps->p = x; // no warning
+}
+
 char voidptr_arg_load1(void *q) {
   char *s = (char*)q; 
   return *s; 
@@ -113,6 +146,22 @@ char fp_malloc() {
 char fp_init_str(void) {
   char s[] = "String literal"; // no warning
   return s[3];
+}
+
+extern size_t strlen(const char *s);
+void strcpy_impl(char* src, char *dst) {
+  size_t len = strlen(src);
+  for (int i=0; i < len; i++)
+    *dst++ = *src++; // no warning
+}
+
+extern const unsigned short int **__ctype_b_loc (void);
+#define isalpha(c) \
+  ((*__ctype_b_loc ())[(int) ((c))] & (unsigned short int) (1 << 10))
+void ctype(char* src, char *dst, int len) {
+  if (isalpha(src[0]))
+    while (--len)
+      *dst++ = *src++; // no warning
 }
 
 // =====     Part of capability representation used as argument in binary operator     =====
