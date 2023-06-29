@@ -2099,6 +2099,7 @@ disassembleObject(ObjectFile &Obj, const ObjectFile &DbgObj,
             // Add a comment which symbol is being loaded for cap-table loads
             int64_t CapTableOffset = std::numeric_limits<int64_t>::min();
             // In .o files we can just use -r to get useful results
+            const MCInstrAnalysis *MIA = DT->InstrAnalysis.get();
             if (MIA && CheriCapTableAddress &&
                 MIA->isCapTableLoad(Inst, CapTableOffset) &&
                 !Obj.isRelocatableObject()) {
