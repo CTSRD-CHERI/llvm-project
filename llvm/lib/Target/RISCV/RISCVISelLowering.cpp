@@ -514,6 +514,8 @@ RISCVTargetLowering::RISCVTargetLowering(const TargetMachine &TM,
     setOperationAction(ISD::GlobalTLSAddress, CLenVT, Custom);
     setOperationAction(ISD::ADDRSPACECAST, CLenVT, Custom);
     setOperationAction(ISD::ADDRSPACECAST, XLenVT, Custom);
+    if (!Subtarget.hasCheriISAv8Semantics())
+      setOperationAction(ISD::PTRTOINT, XLenVT, Custom);
   }
 
   // TODO: On M-mode only targets, the cycle[h] CSR may not be present.
@@ -2859,6 +2861,32 @@ static SDValue lowerCTLZ_CTTZ_ZERO_UNDEF(SDValue Op, SelectionDAG &DAG) {
   return DAG.getNode(ISD::SUB, DL, VT, DAG.getConstant(Adjust, DL, VT), Trunc);
 }
 
+/// The CToPtr instruction is deprecated and will be removed. This function
+/// emits the currently defined semantics of `gettag(x) ? x.addr - base : 0`.
+static SDValue emitCToPtrReplacement(SelectionDAG &DAG, const SDLoc &DL,
+                                     SDValue Cap, SDValue Base, EVT XLenVT) {
+  // Instead of emitting a select instruction (which will be lowered to a branch
+  // since RISC-V lacks conditional move), we can use cgetaddr(x) & -cgettag(x).
+  // This ensures that an unset tag results in an all zeroes mask and a valid
+  // tag bit gives use -1, i.e. all ones.
+  // Note: With Zicond we could lower this to czero.eqz instead.
+  // Ideally we would keep the select here and allow follow-up folds to optimize
+  // the select depending on available instructions, but the MVT::i1 intrinsic
+  // call is optimized poorly, so we expand it manually.
+  SDValue IsTagged = DAG.getNode(RISCVISD::CAP_TAG_GET, DL, XLenVT, Cap);
+  SDValue Mask = DAG.getNode(ISD::SUB, DL, XLenVT,
+                             DAG.getConstant(0, DL, XLenVT), IsTagged);
+  // Using EXTRACT_SUBREG instead of getaddr is safe here since the result is
+  // only used by the AND node, so no capability metadata is leaked.
+  SDValue Addr =
+      DAG.getTargetExtractSubreg(RISCV::sub_cap_addr, DL, XLenVT, Cap);
+  // NB: For the ISAv9 we no longer have DDC relocation, so when expanding
+  // PTRTOINT we do not subtract a base value.
+  if (Base)
+    Addr = DAG.getNode(ISD::SUB, DL, XLenVT, Addr, Base);
+  return DAG.getNode(ISD::AND, DL, XLenVT, Addr, Mask);
+}
+
 // While RVV has alignment restrictions, we should always be able to load as a
 // legal equivalently-sized byte-typed vector instead. This method is
 // responsible for re-expressing a ISD::LOAD via a correctly-aligned type. If
@@ -3008,6 +3036,22 @@ SDValue RISCVTargetLowering::LowerOperation(SDValue Op,
       return Op0;
     unsigned NewOp = ToCap ? ISD::INTTOPTR : ISD::PTRTOINT;
     return DAG.getNode(NewOp, DL, Op.getValueType(), Op0);
+  }
+  case ISD::PTRTOINT: {
+    SDValue Op0 = Op.getOperand(0);
+    if (Op0.getValueType().isFatPointer() &&
+        !Subtarget.hasCheriISAv8Semantics() &&
+        !RISCVABI::isCheriPureCapABI(Subtarget.getTargetABI())) {
+      // In purecap ptrtoint is lowered to an address read using a tablegen
+      // pattern, but for hybrid mode we need to emit the expansion here as
+      // CToPtr is no longer part of ISAv9.
+      // NB: We do not subtract the base of DDC value here, since DDC relocation
+      // has also been removed, and subtracting the base would result in an
+      // integer that points to a different address when dereferenced.
+      return emitCToPtrReplacement(DAG, SDLoc(Op), Op0, SDValue(),
+                                   Op.getValueType());
+    }
+    return Op;
   }
   case ISD::INTRINSIC_WO_CHAIN:
     return LowerINTRINSIC_WO_CHAIN(Op, DAG);
@@ -4638,6 +4682,17 @@ SDValue RISCVTargetLowering::LowerINTRINSIC_WO_CHAIN(SDValue Op,
   switch (IntNo) {
   default:
     break; // Don't custom lower most intrinsics.
+  case Intrinsic::cheri_cap_to_pointer:
+    // Expand CToPtr if the dedicated instruction has been removed.
+    if (!Subtarget.hasCheriISAv8Semantics()) {
+      SDValue AuthBase = DAG.getNode(
+          ISD::INTRINSIC_WO_CHAIN, DL, XLenVT,
+          DAG.getTargetConstant(Intrinsic::cheri_cap_base_get, DL, XLenVT),
+          Op->getOperand(1));
+      return emitCToPtrReplacement(DAG, DL, Op->getOperand(2), AuthBase,
+                                   XLenVT);
+    }
+    break;
   case Intrinsic::thread_pointer: {
     MCPhysReg PhysReg = RISCVABI::isCheriPureCapABI(Subtarget.getTargetABI())
         ? RISCV::C4 : RISCV::X4;
