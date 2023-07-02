@@ -11938,7 +11938,8 @@ static SDValue tryAdvSIMDModImm32(unsigned NewOp, SDValue Op, SelectionDAG &DAG,
       SDValue Mov;
 
       if (LHS)
-        Mov = DAG.getNode(NewOp, dl, MovTy, *LHS,
+        Mov = DAG.getNode(NewOp, dl, MovTy,
+                          DAG.getNode(AArch64ISD::NVCAST, dl, MovTy, *LHS),
                           DAG.getConstant(Value, dl, MVT::i32),
                           DAG.getConstant(Shift, dl, MVT::i32));
       else
@@ -11982,7 +11983,8 @@ static SDValue tryAdvSIMDModImm16(unsigned NewOp, SDValue Op, SelectionDAG &DAG,
       SDValue Mov;
 
       if (LHS)
-        Mov = DAG.getNode(NewOp, dl, MovTy, *LHS,
+        Mov = DAG.getNode(NewOp, dl, MovTy,
+                          DAG.getNode(AArch64ISD::NVCAST, dl, MovTy, *LHS),
                           DAG.getConstant(Value, dl, MVT::i32),
                           DAG.getConstant(Shift, dl, MVT::i32));
       else
