@@ -1,4 +1,4 @@
-/// Check that we use the lib64 directory if it is available
+/// Check that we use the lib32/lib64 directory if it is available
 // RUN: %cheri_clang -no-canonical-prefixes \
 // RUN:   %s --sysroot=%S/Inputs/basic_cheribsd_libcompat_tree -### 2>&1 \
 // RUN:   | FileCheck --check-prefixes=CHECK-CHERI-HYBRID,CHECK-CHERI-HYBRID64 %s
@@ -9,7 +9,6 @@
 // RUN:   %s --sysroot=%S/Inputs/basic_cheribsd_libcompat_tree -### 2>&1 \
 // RUN:   | FileCheck --check-prefixes=CHECK-CHERI-HYBRID,CHECK-CHERI-HYBRID64 %s
 // CHECK-CHERI-HYBRID: ld{{.*}}" "--sysroot=[[SYSROOT:[^"]+]]"
-// TODO: should probably set /libexec/ld-elf64.so.1
 // CHECK-CHERI-HYBRID: "-dynamic-linker" "/libexec/ld-elf.so.1"
 // CHECK-CHERI-HYBRID64: "[[SYSROOT]]/usr/lib64/crt1.o"
 // CHECK-CHERI-HYBRID32: "[[SYSROOT]]/usr/lib32/crt1.o"
@@ -19,16 +18,16 @@
 // CHECK-CHERI-HYBRID: "crtend.o"
 // CHECK-CHERI-HYBRID: "crtn.o"
 
-/// Purecap should never look at lib64:
+/// Check that we use the lib32c/lib64c directory if it is available
 // RUN: %cheri_purecap_clang -no-canonical-prefixes -no-pie \
 // RUN:   %s --sysroot=%S/Inputs/basic_cheribsd_libcompat_tree -### 2>&1 \
-// RUN:   | FileCheck --check-prefixes=CHECK-CHERI-PURECAP %s
+// RUN:   | FileCheck --check-prefixes=CHECK-CHERI-PURECAP,CHECK-CHERI-PURECAP64 %s
 // RUN: %riscv32_cheri_purecap_clang -no-canonical-prefixes -no-pie \
 // RUN:   %s --sysroot=%S/Inputs/basic_cheribsd_libcompat_tree -### 2>&1 \
-// RUN:   | FileCheck --check-prefixes=CHECK-CHERI-PURECAP %s
+// RUN:   | FileCheck --check-prefixes=CHECK-CHERI-PURECAP,CHECK-CHERI-PURECAP32 %s
 // RUN: %riscv64_cheri_purecap_clang -no-canonical-prefixes -no-pie \
 // RUN:   %s --sysroot=%S/Inputs/basic_cheribsd_libcompat_tree -### 2>&1 \
-// RUN:   | FileCheck --check-prefixes=CHECK-CHERI-PURECAP %s
+// RUN:   | FileCheck --check-prefixes=CHECK-CHERI-PURECAP,CHECK-CHERI-PURECAP64 %s
 // PURECAP-MIPS128: "-cc1" "-triple" "mips64c{{128|256}}-unknown-freebsd-purecap"
 // PURECAP-MIPS128: "-target-abi" "purecap"
 // PURECAP-RISCV32: "-cc1" "-triple" "riscv32-unknown-freebsd"
@@ -37,9 +36,12 @@
 // PURECAP-RISCV64: "-target-abi" "l64pc128"
 // CHECK-CHERI-PURECAP: ld{{.*}}" "--sysroot=[[SYSROOT:[^"]+]]"
 // CHECK-CHERI-PURECAP: "-dynamic-linker" "/libexec/ld-elf.so.1"
-// CHECK-CHERI-PURECAP: "crt1.o" "crtbegin.o"
+// CHECK-CHERI-PURECAP64: "[[SYSROOT]]/usr/lib64c/crt1.o"
+// CHECK-CHERI-PURECAP32: "[[SYSROOT]]/usr/lib32c/crt1.o"
 // CHECK-CHERI-PURECAP-NOT: "crti.o"
-// CHECK-CHERI-PURECAP: "-L[[SYSROOT]]/usr/lib"
+// CHECK-CHERI-PURECAP: "crtbegin.o"
+// CHECK-CHERI-PURECAP64: "-L[[SYSROOT]]/usr/lib64c"
+// CHECK-CHERI-PURECAP32: "-L[[SYSROOT]]/usr/lib32c"
 // CHECK-CHERI-PURECAP: "crtend.o"
 // CHECK-CHERI-PURECAP-NOT: "crtn.o"
 
