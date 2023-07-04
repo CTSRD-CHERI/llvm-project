@@ -1104,9 +1104,12 @@ def : InstAlias<"c.cincoffsetimm16csp $rd, $imm",
 
 let Predicates = [HasCheri, IsCapMode] in {
 let hasSideEffects = 0, mayLoad = 0, mayStore = 0, isCodeGenOnly = 0,
-    isAsmParserOnly = 1 in
+    isAsmParserOnly = 1 in {
 def PseudoCLLC : Pseudo<(outs GPCR:$dst), (ins bare_symbol:$src), [],
                         "cllc", "$dst, $src">;
+def PseudoCLLCInbounds : Pseudo<(outs GPCR:$dst), (ins bare_symbol:$src), [],
+                        "cllc.inbounds", "$dst, $src">;
+}
 
 let hasSideEffects = 0, mayLoad = 1, mayStore = 0, isCodeGenOnly = 0,
     isAsmParserOnly = 1 in
