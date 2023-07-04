@@ -431,15 +431,10 @@ FreeBSD::FreeBSD(const Driver &D, const llvm::Triple &Triple,
   // When targeting 32-bit platforms, look for '/usr/lib32(c)/crt1.o' and fall
   // back to '/usr/lib' if it doesn't exist. We also do the same for 64-bit
   // targets with '/usr/lib64(c)'.
-  // XXX: For backwards-compatibility we have an extra '/usr/libcheri' fallback
-  // for purecap; remove this once it is no longer needed.
   std::string CompatLib = (Twine("lib") + (Triple.isArch32Bit() ? "32" : "64") +
                            (IsCheriPurecap ? "c" : "")).str();
   if (D.getVFS().exists(getDriver().SysRoot + "/usr/" + CompatLib + "/crt1.o"))
     getFilePaths().push_back(getDriver().SysRoot + "/usr/" + CompatLib);
-  else if (IsCheriPurecap &&
-           D.getVFS().exists(getDriver().SysRoot + "/usr/libcheri/crt1.o"))
-    getFilePaths().push_back(getDriver().SysRoot + "/usr/libcheri");
   else
     getFilePaths().push_back(getDriver().SysRoot + "/usr/lib");
 }
