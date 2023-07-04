@@ -12570,7 +12570,8 @@ Value *CodeGenFunction::EmitAArch64BuiltinExpr(unsigned BuiltinID,
   case NEON::BI__builtin_neon_vldap1_lane_s64:
   case NEON::BI__builtin_neon_vldap1q_lane_s64: {
     Ops[1] = Builder.CreateBitCast(Ops[1], Ty);
-    Ty = llvm::PointerType::getUnqual(VTy->getElementType());
+    Ty = llvm::PointerType::get(VTy->getElementType(),
+                                      DefaultAS);
     Ops[0] = Builder.CreateBitCast(Ops[0], Ty);
     llvm::LoadInst *LI = Builder.CreateAlignedLoad(
         VTy->getElementType(), Ops[0], PtrOp0.getAlignment());
@@ -12600,7 +12601,7 @@ Value *CodeGenFunction::EmitAArch64BuiltinExpr(unsigned BuiltinID,
   case NEON::BI__builtin_neon_vstl1q_lane_s64: {
     Ops[1] = Builder.CreateBitCast(Ops[1], Ty);
     Ops[1] = Builder.CreateExtractElement(Ops[1], Ops[2]);
-    Ty = llvm::PointerType::getUnqual(Ops[1]->getType());
+    Ty = llvm::PointerType::get(Ops[1]->getType(), DefaultAS);
     llvm::StoreInst *SI = Builder.CreateAlignedStore(
         Ops[1], Builder.CreateBitCast(Ops[0], Ty), PtrOp0.getAlignment());
     SI->setAtomic(llvm::AtomicOrdering::Release);

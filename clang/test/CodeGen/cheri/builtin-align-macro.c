@@ -84,7 +84,7 @@ _Bool is_aligned_builtin(int *ptr, int align) {
 // PURECAP-NEXT:    [[CMP_NOT:%.*]] = icmp eq i64 [[AND]], 0
 // PURECAP-NEXT:    [[SUB1:%.*]] = sub nsw i64 [[ALIGN]], [[AND]]
 // PURECAP-NEXT:    [[RESULT_0_IDX:%.*]] = select i1 [[CMP_NOT]], i64 0, i64 [[SUB1]]
-// PURECAP-NEXT:    [[RESULT_0:%.*]] = getelementptr i8, ptr addrspace(200) [[PTR]], i64 [[RESULT_0_IDX]]
+// PURECAP-NEXT:    [[RESULT_0:%.*]] = getelementptr inbounds i8, ptr addrspace(200) [[PTR]], i64 [[RESULT_0_IDX]]
 // PURECAP-NEXT:    ret ptr addrspace(200) [[RESULT_0]]
 //
 // HYBRID-LABEL: define {{[^@]+}}@align_up_inline
@@ -96,7 +96,7 @@ _Bool is_aligned_builtin(int *ptr, int align) {
 // HYBRID-NEXT:    [[CMP_NOT:%.*]] = icmp eq i64 [[AND]], 0
 // HYBRID-NEXT:    [[SUB1:%.*]] = sub nsw i64 [[ALIGN]], [[AND]]
 // HYBRID-NEXT:    [[RESULT_0_IDX:%.*]] = select i1 [[CMP_NOT]], i64 0, i64 [[SUB1]]
-// HYBRID-NEXT:    [[RESULT_0:%.*]] = getelementptr i8, ptr [[PTR]], i64 [[RESULT_0_IDX]]
+// HYBRID-NEXT:    [[RESULT_0:%.*]] = getelementptr inbounds i8, ptr [[PTR]], i64 [[RESULT_0_IDX]]
 // HYBRID-NEXT:    ret ptr [[RESULT_0]]
 //
 int *align_up_inline(int *ptr, ptraddr_t align) {
