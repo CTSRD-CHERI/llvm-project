@@ -8617,6 +8617,7 @@ void ASTReader::ReadLateParsedTemplates(
 
       auto LT = std::make_unique<LateParsedTemplate>();
       LT->D = GetLocalDecl(*FMod, LateParsed[Idx++]);
+      LT->FPO = FPOptions::getFromOpaqueInt(LateParsed[Idx++]);
 
       ModuleFile *F = getOwningModuleFile(LT->D);
       assert(F && "No module");
