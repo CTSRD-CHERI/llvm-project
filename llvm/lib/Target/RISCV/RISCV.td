@@ -369,6 +369,15 @@ def FeatureRV32E
 def IsRV32E : Predicate<"Subtarget->isRV32E()">,
                         AssemblerPredicate<(all_of FeatureRV32E)>;
 
+// TODO: Once all supported CheriBSD branches are ready for the new semantics
+// this feature should be enabled automatically.
+def FeatureNoCheriV8Compat
+    : SubtargetFeature<"xcheri-no-v8-compat", "HasCheriISAv8Semantics", "false",
+                       "CHERI ISAv8 semantics (trapping, DDC/PCC relocation)">;
+def HasCheriISAv8
+    : Predicate<"Subtarget->hasCheriISAv8Semantics()">,
+                AssemblerPredicate<(all_of (not FeatureNoCheriV8Compat)),
+                "CHERI ISAv8 semantics (trapping, DDC/PCC relocation)">;
 def FeatureCheri
     : SubtargetFeature<"xcheri", "HasCheri", "true",
                        "Implements CHERI extension">;
