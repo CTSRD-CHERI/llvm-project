@@ -97,6 +97,7 @@ body:             |
   ; CHECK-NEXT:   [[CGetSealed:%[0-9]+]]:gpr = CGetSealed [[COPY2]]
   ; CHECK-NEXT:   [[CGetOffset:%[0-9]+]]:gpr = CGetOffset [[COPY2]]
   ; CHECK-NEXT:   [[PseudoCGetAddr:%[0-9]+]]:gpr = PseudoCGetAddr [[COPY2]]
+  ; CHECK-NEXT:   [[CGetHigh:%[0-9]+]]:gpr = CGetHigh [[COPY2]]
   ; CHECK-NEXT:   [[CClearTag:%[0-9]+]]:gpcr = CClearTag [[COPY1]]
   ; CHECK-NEXT:   [[CMove:%[0-9]+]]:gpcr = CMove [[COPY1]]
   ; CHECK-NEXT:   [[CTestSubset:%[0-9]+]]:gpr = CTestSubset [[COPY3]], [[COPY2]]
@@ -108,6 +109,7 @@ body:             |
   ; CHECK-NEXT:   [[CIncOffset:%[0-9]+]]:gpcr = CIncOffset [[CIncOffsetImm]], [[COPY]]
   ; CHECK-NEXT:   [[CIncOffsetImm1:%[0-9]+]]:gpcr = CIncOffsetImm [[CIncOffsetImm]], 10
   ; CHECK-NEXT:   [[CClearTag1:%[0-9]+]]:gpcr = CClearTag [[CIncOffsetImm]]
+  ; CHECK-NEXT:   [[CSetHigh:%[0-9]+]]:gpcr = CSetHigh [[CIncOffsetImm]], [[COPY]]
   ; CHECK-NEXT:   [[CSetFlags1:%[0-9]+]]:gpcr = CSetFlags [[CAndPerm]], [[COPY]]
   ; CHECK-NEXT:   [[CSetOffset1:%[0-9]+]]:gpcr = CSetOffset [[CAndPerm]], [[COPY]]
   ; CHECK-NEXT:   [[CSetAddr1:%[0-9]+]]:gpcr = CSetAddr [[CAndPerm]], [[COPY]]
@@ -120,6 +122,7 @@ body:             |
   ; CHECK-NEXT:   [[CIncOffset2:%[0-9]+]]:gpcr = CIncOffset $c0, [[COPY]]
   ; CHECK-NEXT:   [[CIncOffsetImm3:%[0-9]+]]:gpcr = CIncOffsetImm $c0, 10
   ; CHECK-NEXT:   [[CClearTag3:%[0-9]+]]:gpcr = CClearTag $c0
+  ; CHECK-NEXT:   [[CSetHigh1:%[0-9]+]]:gpcr = CSetHigh $c0, [[COPY]]
   ; CHECK-NEXT:   PseudoBR %bb.2
   ; CHECK-NEXT: {{  $}}
   ; CHECK-NEXT: bb.1.for.cond.cleanup:
@@ -149,6 +152,7 @@ body:             |
   ; CHECK-NEXT:   [[CCopyType:%[0-9]+]]:gpcr = CCopyType [[COPY1]], [[COPY2]]
   ; CHECK-NEXT:   [[CCSeal:%[0-9]+]]:gpcr = CCSeal [[COPY1]], [[COPY2]]
   ; CHECK-NEXT:   [[CSealEntry:%[0-9]+]]:gpcr = CSealEntry [[COPY1]]
+  ; CHECK-NEXT:   [[CSetHigh2:%[0-9]+]]:gpcr = CSetHigh [[COPY1]], [[COPY]]
   ; CHECK-NEXT:   [[CToPtr:%[0-9]+]]:gpr = CToPtr [[COPY1]], [[COPY3]]
   ; CHECK-NEXT:   [[CFromPtr:%[0-9]+]]:gpcr = CFromPtr [[COPY3]], [[COPY]]
   ; CHECK-NEXT:   [[CSpecialRW:%[0-9]+]]:gpcr = CSpecialRW 0, [[COPY1]]
@@ -228,6 +232,7 @@ body:             |
     %15:gpr = CGetSealed %2
     %16:gpr = CGetOffset %2
     %17:gpr = PseudoCGetAddr %2
+    %18:gpr = CGetHigh %2
     ; However, mutators can't since the input could be sealed/untagged/other constraints
     %30:gpcr = CSeal %1, %2
     %31:gpcr = CUnseal %1, %2
@@ -245,6 +250,7 @@ body:             |
     %43:gpcr = CCopyType %1, %2
     %44:gpcr = CCSeal %1, %2
     %45:gpcr = CSealEntry %1
+    %46:gpcr = CSetHigh %1, %0
 
     ; Pointer-arithmetic instructions
     %60:gpr = CToPtr %1, %3  ; can trap
@@ -284,6 +290,7 @@ body:             |
     %143:gpcr = CCopyType %4, %2
     %144:gpcr = CCSeal %4, %2
     %145:gpcr = CSealEntry %4
+    %146:gpcr = CSetHigh %4, %0
 
     ; And a known-tagged+unsealed value:
     %230:gpcr = CSeal %6, %2
@@ -302,6 +309,7 @@ body:             |
     %243:gpcr = CCopyType %6, %2
     %244:gpcr = CCSeal %6, %2
     %245:gpcr = CSealEntry %4
+    %246:gpcr = CSetHigh %4, %0
 
     ; Now try using the mutators on constant NULL:
     %330:gpcr = CSeal $c0, %2
@@ -319,6 +327,7 @@ body:             |
     %344:gpcr = CCopyType $c0, %2
     %345:gpcr = CCSeal $c0, %2
     %346:gpcr = CSealEntry $c0
+    %347:gpcr = CSetHigh $c0, %0
 
   bb.4.for.inc:
     successors: %bb.2(0x7c000000), %bb.1(0x04000000)
