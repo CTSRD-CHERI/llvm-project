@@ -17417,13 +17417,16 @@ Value *RISCVTargetLowering::getIRStackGuard(IRBuilderBase &IRB) const {
 }
 
 bool RISCVTargetLowering::isLegalInterleavedAccessType(
-    VectorType *VTy, unsigned Factor, const DataLayout &DL) const {
+    VectorType *VTy, unsigned Factor, Align Alignment, unsigned AddrSpace,
+    const DataLayout &DL) const {
   EVT VT = getValueType(DL, VTy);
   // Don't lower vlseg/vsseg for vector types that can't be split.
   if (!isTypeLegal(VT))
     return false;
 
-  if (!isLegalElementTypeForRVV(VT.getScalarType()))
+  if (!isLegalElementTypeForRVV(VT.getScalarType()) ||
+      !allowsMemoryAccessForAlignment(VTy->getContext(), DL, VT, AddrSpace,
+                                      Alignment))
     return false;
 
   MVT ContainerVT = VT.getSimpleVT();
@@ -17490,7 +17493,8 @@ bool RISCVTargetLowering::lowerInterleavedLoad(
   IRBuilder<> Builder(LI);
 
   auto *VTy = cast<FixedVectorType>(Shuffles[0]->getType());
-  if (!isLegalInterleavedAccessType(VTy, Factor,
+  if (!isLegalInterleavedAccessType(VTy, Factor, LI->getAlign(),
+                                    LI->getPointerAddressSpace(),
                                     LI->getModule()->getDataLayout()))
     return false;
 
@@ -17543,7 +17547,8 @@ bool RISCVTargetLowering::lowerInterleavedStore(StoreInst *SI,
   // Given SVI : <n*factor x ty>, then VTy : <n x ty>
   auto *VTy = FixedVectorType::get(ShuffleVTy->getElementType(),
                                    ShuffleVTy->getNumElements() / Factor);
-  if (!isLegalInterleavedAccessType(VTy, Factor,
+  if (!isLegalInterleavedAccessType(VTy, Factor, SI->getAlign(),
+                                    SI->getPointerAddressSpace(),
                                     SI->getModule()->getDataLayout()))
     return false;
 
@@ -17587,7 +17592,8 @@ bool RISCVTargetLowering::lowerDeinterleaveIntrinsicToLoad(IntrinsicInst *DI,
   VectorType *VTy = cast<VectorType>(DI->getOperand(0)->getType());
   VectorType *ResVTy = cast<VectorType>(DI->getType()->getContainedType(0));
 
-  if (!isLegalInterleavedAccessType(ResVTy, Factor,
+  if (!isLegalInterleavedAccessType(ResVTy, Factor, LI->getAlign(),
+                                    LI->getPointerAddressSpace(),
                                     LI->getModule()->getDataLayout()))
     return false;
 
@@ -17636,7 +17642,8 @@ bool RISCVTargetLowering::lowerInterleaveIntrinsicToStore(IntrinsicInst *II,
   VectorType *VTy = cast<VectorType>(II->getType());
   VectorType *InVTy = cast<VectorType>(II->getOperand(0)->getType());
 
-  if (!isLegalInterleavedAccessType(InVTy, Factor,
+  if (!isLegalInterleavedAccessType(InVTy, Factor, SI->getAlign(),
+                                    SI->getPointerAddressSpace(),
                                     SI->getModule()->getDataLayout()))
     return false;
 
