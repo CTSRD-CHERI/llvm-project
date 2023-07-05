@@ -111,11 +111,7 @@ public:
 
   bool isAsCheapAsAMove(const MachineInstr &MI) const override;
 
-  bool isGuaranteedNotToTrap(const MachineInstr &MI) const override {
-    if (isGuaranteedValidSetBounds(MI))
-      return true;
-    return false;
-  }
+  bool isGuaranteedNotToTrap(const MachineInstr &MI) const override;
   bool isSetBoundsInstr(const MachineInstr &I, const MachineOperand *&Base,
                         const MachineOperand *&Size) const override;
   bool isPtrAddInstr(const MachineInstr &I, const MachineOperand *&Base,

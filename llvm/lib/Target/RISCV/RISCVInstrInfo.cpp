@@ -1192,6 +1192,43 @@ bool RISCVInstrInfo::isSetBoundsInstr(const MachineInstr &I,
   }
 }
 
+bool RISCVInstrInfo::isGuaranteedNotToTrap(const llvm::MachineInstr &MI) const {
+  const RISCVSubtarget &ST = MI.getMF()->getSubtarget<RISCVSubtarget>();
+  // TODO: This function can be removed once ISAv8 semantics are no longer
+  // supported and the tablegen definitions have been updated to remove the
+  // mayTrap/@traps_if_sealed flags.
+  if (!ST.hasCheriISAv8Semantics()) {
+    // All these instructions were changed to non-trapping.
+    switch (MI.getOpcode()) {
+    case RISCV::CAndPerm:
+    case RISCV::CBuildCap:
+    case RISCV::CCopyType:
+    case RISCV::CCSeal:
+    case RISCV::CFromPtr:
+    case RISCV::CIncOffset:
+    case RISCV::CIncOffsetImm:
+    case RISCV::CSeal:
+    case RISCV::CSealEntry:
+    case RISCV::CSetAddr:
+    case RISCV::CSetBounds:
+    case RISCV::CSetBoundsExact:
+    case RISCV::CSetBoundsImm:
+    case RISCV::CSetFlags:
+    case RISCV::CSetHigh:
+    case RISCV::CSetOffset:
+    case RISCV::CToPtr:
+    case RISCV::CUnseal:
+      return true;
+    default:
+      llvm_unreachable("Unexpected instruction in isGuaranteedNotToTrap");
+      return false;
+    }
+  }
+  if (isGuaranteedValidSetBounds(MI))
+    return true;
+  return false;
+}
+
 bool RISCVInstrInfo::isPtrAddInstr(const MachineInstr &I,
                                    const MachineOperand *&Base,
                                    const MachineOperand *&Increment) const {
