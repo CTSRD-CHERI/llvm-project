@@ -5100,6 +5100,10 @@ bool Sema::CheckRISCVBuiltinFunctionCall(const TargetInfo &TI,
   case RISCVVector::BI__builtin_rvv_vfrdiv_vf_rm:
   case RISCVVector::BI__builtin_rvv_vfwmul_vv_rm:
   case RISCVVector::BI__builtin_rvv_vfwmul_vf_rm:
+  case RISCVVector::BI__builtin_rvv_vfredosum_vs_rm:
+  case RISCVVector::BI__builtin_rvv_vfredusum_vs_rm:
+  case RISCVVector::BI__builtin_rvv_vfwredosum_vs_rm:
+  case RISCVVector::BI__builtin_rvv_vfwredusum_vs_rm:
   case RISCVVector::BI__builtin_rvv_vfsqrt_v_rm_tu:
   case RISCVVector::BI__builtin_rvv_vfrec7_v_rm_tu:
   case RISCVVector::BI__builtin_rvv_vfcvt_x_f_v_rm_tu:
@@ -5147,6 +5151,10 @@ bool Sema::CheckRISCVBuiltinFunctionCall(const TargetInfo &TI,
   case RISCVVector::BI__builtin_rvv_vfrdiv_vf_rm_tu:
   case RISCVVector::BI__builtin_rvv_vfwmul_vv_rm_tu:
   case RISCVVector::BI__builtin_rvv_vfwmul_vf_rm_tu:
+  case RISCVVector::BI__builtin_rvv_vfredosum_vs_rm_tu:
+  case RISCVVector::BI__builtin_rvv_vfredusum_vs_rm_tu:
+  case RISCVVector::BI__builtin_rvv_vfwredosum_vs_rm_tu:
+  case RISCVVector::BI__builtin_rvv_vfwredusum_vs_rm_tu:
   case RISCVVector::BI__builtin_rvv_vfmacc_vv_rm:
   case RISCVVector::BI__builtin_rvv_vfmacc_vf_rm:
   case RISCVVector::BI__builtin_rvv_vfnmacc_vv_rm:
@@ -5215,6 +5223,10 @@ bool Sema::CheckRISCVBuiltinFunctionCall(const TargetInfo &TI,
   case RISCVVector::BI__builtin_rvv_vfrdiv_vf_rm_tama:
   case RISCVVector::BI__builtin_rvv_vfwmul_vv_rm_tama:
   case RISCVVector::BI__builtin_rvv_vfwmul_vf_rm_tama:
+  case RISCVVector::BI__builtin_rvv_vfredosum_vs_rm_tama:
+  case RISCVVector::BI__builtin_rvv_vfredusum_vs_rm_tama:
+  case RISCVVector::BI__builtin_rvv_vfwredosum_vs_rm_tama:
+  case RISCVVector::BI__builtin_rvv_vfwredusum_vs_rm_tama:
   case RISCVVector::BI__builtin_rvv_vfsqrt_v_rm_tum:
   case RISCVVector::BI__builtin_rvv_vfrec7_v_rm_tum:
   case RISCVVector::BI__builtin_rvv_vfcvt_x_f_v_rm_tum:
@@ -5323,6 +5335,10 @@ bool Sema::CheckRISCVBuiltinFunctionCall(const TargetInfo &TI,
   case RISCVVector::BI__builtin_rvv_vfwmsac_vf_rm_tum:
   case RISCVVector::BI__builtin_rvv_vfwnmsac_vv_rm_tum:
   case RISCVVector::BI__builtin_rvv_vfwnmsac_vf_rm_tum:
+  case RISCVVector::BI__builtin_rvv_vfredosum_vs_rm_tum:
+  case RISCVVector::BI__builtin_rvv_vfredusum_vs_rm_tum:
+  case RISCVVector::BI__builtin_rvv_vfwredosum_vs_rm_tum:
+  case RISCVVector::BI__builtin_rvv_vfwredusum_vs_rm_tum:
   case RISCVVector::BI__builtin_rvv_vfadd_vv_rm_tumu:
   case RISCVVector::BI__builtin_rvv_vfadd_vf_rm_tumu:
   case RISCVVector::BI__builtin_rvv_vfsub_vv_rm_tumu:
