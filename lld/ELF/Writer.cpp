@@ -3142,6 +3142,11 @@ class CompartmentReportWriter {
   json::Object Json;
   /// The buffer holding the output
   uint8_t *buffer;
+  /// The length of `buffer`.
+  size_t bufferSize;
+
+  /// Sections for stacks and trusted stacks
+  std::set<OutputSection *> stackSections;
   /// Map from compartment names to compartments.
   std::map<std::string, json::Object> compartments;
   /// The section that holds sealed objects.
@@ -3155,6 +3160,13 @@ class CompartmentReportWriter {
    * to a compartment name.
    */
   std::unordered_map<std::string, json::Array> exportsByFile;
+
+  template <typename T> T read(size_t offset) {
+    if (offset + sizeof(T) > bufferSize)
+      fatal("Offset out of range in output file");
+    return support::endian::read<T>(buffer + offset,
+                                    support::endianness::little);
+  }
 
   /**
    * Format `bytes` as a hex string.  If `spaces` is non-zero, emits a space
@@ -3226,8 +3238,7 @@ class CompartmentReportWriter {
                   " with length " + utostr(sym->getSize()) +
                   " but requests an import of length " + utostr(entry.length) +
                   ".");
-          uint32_t sealingType = *reinterpret_cast<uint32_t *>(
-              buffer + sealedObjects->offset + start);
+          uint32_t sealingType = read<uint32_t>(sealedObjects->offset + start);
           auto *sealingSec = findInputSection(exportTables, sealingType);
           if (!sealingSec) {
             error("Sealed object '" + sym->getName() + "' for compartment '" +
@@ -3396,6 +3407,94 @@ class CompartmentReportWriter {
   }
 
   /**
+   * Process a thread info section.  This section starts with the number of
+   * threads, followed by an array of thread descriptions that include their
+   * priority, entry point (as an export table index) and the location / length
+   * of the stack and trusted stack.
+   */
+  void processThreads(OutputSection *sec) {
+    uint32_t threadCount = read<uint16_t>(sec->offset);
+    if ((threadCount * 18) + 2 > sec->size)
+      fatal("Thread section is too small for reported thread count ");
+
+    size_t offset = sec->offset + 2;
+
+    auto consume32 = [&]() {
+      offset += 4;
+      return read<uint32_t>(offset - 4);
+    };
+
+    auto consume16 = [&]() {
+      offset += 2;
+      return read<uint16_t>(offset - 2);
+    };
+
+    auto checkStack = [&](uint32_t start, uint32_t length) {
+      for (auto i = stackSections.begin(), e = stackSections.end(); i != e;
+           ++i) {
+        if ((start == (*i)->getLMA()) && (length == (*i)->size)) {
+          stackSections.erase(i);
+          return true;
+        }
+      }
+      return false;
+    };
+
+    json::Array threadsArray;
+
+    for (uint32_t i = 0; i < threadCount; i++) {
+      auto priority = consume16();
+      auto entryPoint = consume32();
+      auto stackStart = consume32();
+      auto stackLength = consume16();
+      auto trustedStackStart = consume32();
+      auto trustedStackLength = consume16();
+
+      if (!checkStack(stackStart, stackLength))
+        error("Thread " + Twine(i) + "has invalid stack");
+      if (!checkStack(trustedStackStart, trustedStackLength))
+        error("Thread " + Twine(i) + "has invalid trusted stack");
+
+      json::Object thread{
+          {"priority", priority},
+          {"stack",
+           json::Object{{"start", stackStart}, {"length", stackLength}}},
+          {"trusted_stack",
+           json::Object{{"start", trustedStackStart}, {"length", trustedStackLength}}}};
+      json::Object entryPointDescription;
+      bool foundExport = false;
+
+      if (auto *inSec = findInputSection(exportTables, entryPoint)) {
+        auto inputBase = exportTables->getLMA() + inSec->outSecOff;
+        if (auto *sym =
+                inSec->getEnclosingObject<ELF32LE>(entryPoint - inputBase)) {
+          entryPointDescription.insert({"provided_by", inSec->file->getName()});
+          auto name = sym->getName();
+          if (name.consume_front("__export_")) {
+            size_t functionNameStart = name.find("__Z");
+            if (functionNameStart != StringRef::npos) {
+              entryPointDescription.insert(
+                  {"compartment_name", name.take_front(functionNameStart)});
+              entryPointDescription.insert(
+                  {"function",
+                   demangleItanium(name.substr(functionNameStart + 1))});
+              foundExport = true;
+            }
+          }
+        }
+      }
+      if (!foundExport) {
+        error("Import table for thread " + Twine(i) + "' refers to address 0x" +
+              utohexstr(entryPoint) + ", which is not a valid export");
+        continue;
+      }
+      thread.insert({"entry_point", std::move(entryPointDescription)});
+      threadsArray.push_back(std::move(thread));
+    }
+    Json.insert({"threads", std::move(threadsArray)});
+  }
+
+  /**
    * Process and output section.
    */
   void addOutputSection(OutputSection *sec) {
@@ -3418,6 +3517,11 @@ class CompartmentReportWriter {
            formatHex(SHA256::hash({buffer + sec->offset, sec->size}))});
       Json.getObject("core")->insert(
           {sec->name.str(), std::move(sectionDescription)});
+    } else if (sec->name.startswith(".thread_trusted_stack_") ||
+               sec->name.startswith(".thread_stack_")) {
+      stackSections.insert(sec);
+    } else if (sec->name == ".thread_config") {
+      processThreads(sec);
     } else if (sec->name.endswith("_code")) {
       auto compartmentName = sec->name.drop_back(5);
       if (compartmentName.startswith("."))
@@ -3498,7 +3602,7 @@ public:
       : Json({{"file", fileName},
               {"core", json::Object()},
               {"compartments", json::Object()}}),
-        buffer(buffer) {
+        buffer(buffer), bufferSize(bufferSize) {
     if (config->shouldEmitCompartmentReport()) {
       for (OutputSection *sec : outputSections)
         if (sec->name == ".compartment_export_tables") {
