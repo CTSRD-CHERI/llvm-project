@@ -892,7 +892,7 @@ void Parser::ParseCapabilityQualifier(ParsedAttributes &Attrs) {
   // TODO: we should not treat __capability as a keyword for non-CHERI.
   // See https://github.com/CTSRD-CHERI/llvm-project/issues/706.
   if (!getTargetInfo().SupportsCapabilities())
-    Diag(AttrNameLoc, diag::err_attribute_unsupported) << AttrName << "CHERI";
+    Diag(AttrNameLoc, diag::err_cheri_capability_qualifier_not_supported);
   else
     Attrs.addNew(AttrName, AttrNameLoc, nullptr, AttrNameLoc, nullptr, 0,
                  ParsedAttr::AS_Keyword);

@@ -5,5 +5,4 @@
 // RUN: %clang_cc1 -triple riscv64 -target-feature +xcheri -fsyntax-only %s -verify=cheri
 // cheri-no-diagnostics
 
-// TODO: The message is not quite right (should use qualifier instead of attribute).
-void *__capability foo; // no-cheri-error{{'__capability' attribute is not supported on targets missing CHERI; specify an appropriate -march= or -mcpu=}}
+void *__capability foo; // no-cheri-error{{use of __capability is not supported without CHERI; specify an appropriate -march= or -mcpu=}}

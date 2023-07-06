@@ -1298,9 +1298,12 @@ def note_cheri_func_noproto_explanation : Note<
   "values from the argument registers.">;
 def note_cheri_func_decl_add_types : Note<
   "candidate function declaration needs parameter types">;
-def err_cheri_capability_attribute_ambiguous : Error<
+def err_cheri_capability_qualifier_not_supported : Error<
+  "use of __capability is not supported without CHERI; "
+  "specify an appropriate -march= or -mcpu=">;
+def err_cheri_capability_qualifier_ambiguous : Error<
   "use of __capability is ambiguous">;
-def err_cheri_capability_attribute_pointers_only : Error<
+def err_cheri_capability_qualifier_pointers_only : Error<
   "__capability only applies to pointers; type here is %0">;
 
 def err_objc_var_decl_inclass :
