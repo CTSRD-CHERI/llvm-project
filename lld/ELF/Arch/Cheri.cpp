@@ -517,9 +517,14 @@ template <class ELFT> void CheriCapRelocsSection<ELFT>::writeTo(uint8_t *buf) {
       if (((os->flags & SHF_WRITE) == 0) || isRelroSection(os)) {
         permissions |= CaptablePermissions<ELFT>::readOnly;
       } else if (os->flags & SHF_EXECINSTR) {
+#if 0
+        // This generates a load of annoying spurious warnings with CHERIoT.
+        // It should be reintroduced but conditional on some flag that we can
+        // use to disable it.
         warn("Non-function __cap_reloc against symbol in section with "
              "SHF_EXECINSTR (" + toString(os->name) + ") for symbol " +
              reloc.target.verboseToString());
+#endif
       }
     }
 
