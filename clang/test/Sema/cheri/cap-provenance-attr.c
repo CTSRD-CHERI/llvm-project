@@ -1,8 +1,7 @@
 /// Check that the attribute can be applied at any position
-// RUN: %cheri_purecap_cc1 %s -fsyntax-only -Wall -verify -ast-dump -fcolor-diagnostics
+// RUN: %cheri_purecap_cc1 %s -fsyntax-only -Wall -verify
 /// Check that it also works in hybrid mode
 // RUN: %cheri_cc1 %s -fsyntax-only -Wall -verify=expected,hybrid
-
 
 typedef __uintcap_t uintptr_t;
 
