@@ -3181,10 +3181,6 @@ public:
 
 /// Base class for declarations which introduce a typedef-name.
 class TypedefNameDecl : public TypeDecl, public Redeclarable<TypedefNameDecl> {
-  /// CHERICapTypeForDecl - This indicates the Type object that represents the
-  /// memory capability version of this TypedefNameDecl. It is a cache
-  /// maintained by ASTContext::getTypedefType.
-  mutable const Type *CHERICapTypeForDecl = nullptr;
   friend class ASTContext;
 
   struct alignas(8) ModedTInfo {

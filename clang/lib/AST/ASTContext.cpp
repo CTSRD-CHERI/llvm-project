@@ -4701,42 +4701,16 @@ QualType ASTContext::getTypeDeclTypeSlow(const TypeDecl *Decl) const {
 /// getTypedefType - Return the unique reference to the type for the
 /// specified typedef name decl.
 QualType ASTContext::getTypedefType(const TypedefNameDecl *Decl,
-                                    QualType Underlying,
-                                    bool IsCHERICap) const {
-  if (IsCHERICap && Decl->CHERICapTypeForDecl)
-    return QualType(Decl->CHERICapTypeForDecl, 0);
-  if (!IsCHERICap && Decl->TypeForDecl)
+                                    QualType Underlying) const {
+  if (Decl->TypeForDecl)
     return QualType(Decl->TypeForDecl, 0);
 
   if (Underlying.isNull())
     Underlying = Decl->getUnderlyingType();
   QualType Canonical = getCanonicalType(Underlying);
-  if (IsCHERICap) {
-    if (const PointerType *PT = Canonical->getAs<PointerType>()) {
-      // Create a copy of the typedef whose name is prefixed by "__chericap_"
-      // and whose underlying type is the __capability qualified version of
-      // the pointer type
-      Canonical = getPointerType(PT->getPointeeType(), PIK_Capability);
-      TypeSourceInfo *TInfo = getTrivialTypeSourceInfo(Canonical, Decl->getBeginLoc());
-      DeclContext *DC = const_cast<DeclContext *>(Decl->getDeclContext());
-      std::string typedefName = "__chericap_" + Decl->getNameAsString();
-      TypedefDecl *NewDecl = TypedefDecl::Create(
-          const_cast<ASTContext &>(*this),
-          DC,
-          Decl->getBeginLoc(),
-          Decl->getLocation(),
-          &Idents.get(typedefName),
-          TInfo);
-      DC->addDecl(NewDecl);
-      Decl = NewDecl;
-    }
-  }
   auto *newType = new (*this, TypeAlignment)
-    TypedefType(Type::Typedef, Decl, Underlying, Canonical);
-  if (IsCHERICap)
-    Decl->CHERICapTypeForDecl = newType;
-  else
-    Decl->TypeForDecl = newType;
+      TypedefType(Type::Typedef, Decl, Underlying, Canonical);
+  Decl->TypeForDecl = newType;
   Types.push_back(newType);
   return QualType(newType, 0);
 }
