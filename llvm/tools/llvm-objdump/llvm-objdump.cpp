@@ -48,7 +48,6 @@
 #include "llvm/MC/MCInstrInfo.h"
 #include "llvm/MC/MCObjectFileInfo.h"
 #include "llvm/MC/MCRegisterInfo.h"
-#include "llvm/MC/MCSubtargetInfo.h"
 #include "llvm/MC/MCTargetOptions.h"
 #include "llvm/MC/TargetRegistry.h"
 #include "llvm/Object/Archive.h"
@@ -197,6 +196,7 @@ bool objdump::Demangle;
 bool objdump::Disassemble;
 bool objdump::DisassembleAll;
 bool objdump::SymbolDescription;
+bool objdump::TracebackTable;
 static std::vector<std::string> DisassembleSymbols;
 static bool DisassembleZeroes;
 static std::vector<std::string> DisassemblerOptions;
@@ -443,13 +443,35 @@ static bool getHidden(RelocationRef RelRef) {
   return false;
 }
 
-namespace {
-
 /// Get the column at which we want to start printing the instruction
 /// disassembly, taking into account anything which appears to the left of it.
-unsigned getInstStartColumn(const MCSubtargetInfo &STI) {
+unsigned objdump::getInstStartColumn(const MCSubtargetInfo &STI) {
   return !ShowRawInsn ? 16 : STI.getTargetTriple().isX86() ? 40 : 24;
 }
+
+static void AlignToInstStartColumn(size_t Start, const MCSubtargetInfo &STI,
+                                   raw_ostream &OS) {
+  // The output of printInst starts with a tab. Print some spaces so that
+  // the tab has 1 column and advances to the target tab stop.
+  unsigned TabStop = getInstStartColumn(STI);
+  unsigned Column = OS.tell() - Start;
+  OS.indent(Column < TabStop - 1 ? TabStop - 1 - Column : 7 - Column % 8);
+}
+
+void objdump::printRawData(ArrayRef<uint8_t> Bytes, uint64_t Address,
+                           formatted_raw_ostream &OS,
+                           MCSubtargetInfo const &STI) {
+  size_t Start = OS.tell();
+  if (LeadingAddr)
+    OS << format("%8" PRIx64 ":", Address);
+  if (ShowRawInsn) {
+    OS << ' ';
+    dumpBytes(Bytes, OS);
+  }
+  AlignToInstStartColumn(Start, STI, OS);
+}
+
+namespace {
 
 static bool isAArch64Elf(const ObjectFile &Obj) {
   const auto *Elf = dyn_cast<ELFObjectFileBase>(&Obj);
@@ -490,15 +512,6 @@ static void printRelocation(formatted_raw_ostream &OS, StringRef FileName,
   OS << Name << "\t" << Val;
 }
 
-static void AlignToInstStartColumn(size_t Start, const MCSubtargetInfo &STI,
-                                   raw_ostream &OS) {
-  // The output of printInst starts with a tab. Print some spaces so that
-  // the tab has 1 column and advances to the target tab stop.
-  unsigned TabStop = getInstStartColumn(STI);
-  unsigned Column = OS.tell() - Start;
-  OS.indent(Column < TabStop - 1 ? TabStop - 1 - Column : 7 - Column % 8);
-}
-
 class PrettyPrinter {
 public:
   virtual ~PrettyPrinter() = default;
@@ -512,15 +525,7 @@ public:
       SP->printSourceLine(OS, Address, ObjectFilename, LVP);
     LVP.printBetweenInsts(OS, false);
 
-    size_t Start = OS.tell();
-    if (LeadingAddr)
-      OS << format("%8" PRIx64 ":", Address.Address);
-    if (ShowRawInsn) {
-      OS << ' ';
-      dumpBytes(Bytes, OS);
-    }
-
-    AlignToInstStartColumn(Start, STI, OS);
+    printRawData(Bytes, Address.Address, OS, STI);
 
     if (MI) {
       // See MCInstPrinter::printInst. On targets where a PC relative immediate
@@ -807,7 +812,7 @@ PrettyPrinter &selectPrettyPrinter(Triple const &Triple) {
     return AArch64PrettyPrinterInst;
   }
 }
-}
+} // namespace
 
 static uint8_t getElfSymbolType(const ObjectFile &Obj, const SymbolRef &Sym) {
   assert(Obj.isELF());
@@ -1088,7 +1093,7 @@ SymbolInfoTy objdump::createSymbolInfo(const ObjectFile &Obj,
   const uint64_t Addr = unwrapOrError(Symbol.getAddress(), FileName);
   const StringRef Name = unwrapOrError(Symbol.getName(), FileName);
 
-  if (Obj.isXCOFF() && SymbolDescription) {
+  if (Obj.isXCOFF() && (SymbolDescription || TracebackTable)) {
     const auto &XCOFFObj = cast<XCOFFObjectFile>(Obj);
     DataRefImpl SymbolDRI = Symbol.getRawDataRefImpl();
 
@@ -1109,7 +1114,7 @@ SymbolInfoTy objdump::createSymbolInfo(const ObjectFile &Obj,
 static SymbolInfoTy createDummySymbolInfo(const ObjectFile &Obj,
                                           const uint64_t Addr, StringRef &Name,
                                           uint8_t Type) {
-  if (Obj.isXCOFF() && SymbolDescription)
+  if (Obj.isXCOFF() && (SymbolDescription || TracebackTable))
     return SymbolInfoTy(Addr, Name, std::nullopt, std::nullopt, false);
   else
     return SymbolInfoTy(Addr, Name, Type);
@@ -1742,6 +1747,11 @@ static void disassembleObject(const Target *TheTarget, ObjectFile &Obj,
       }
 
       bool DumpARMELFData = false;
+      bool DumpTracebackTableForXCOFFFunction =
+          Obj.isXCOFF() && Section.isText() && TracebackTable &&
+          Symbols[SI - 1].XCOFFSymInfo.StorageMappingClass &&
+          (*Symbols[SI - 1].XCOFFSymInfo.StorageMappingClass == XCOFF::XMC_PR);
+
       formatted_raw_ostream FOS(outs());
 
       std::unordered_map<uint64_t, std::string> AllLabels;
@@ -1792,6 +1802,16 @@ static void disassembleObject(const Target *TheTarget, ObjectFile &Obj,
               Index += N;
               continue;
             }
+          }
+
+          if (DumpTracebackTableForXCOFFFunction &&
+              doesXCOFFTracebackTableBegin(Bytes.slice(Index, 4))) {
+            dumpTracebackTable(Bytes.slice(Index),
+                               SectionAddr + Index + VMAAdjustment, FOS,
+                               SectionAddr + End + VMAAdjustment, *STI,
+                               cast<XCOFFObjectFile>(&Obj));
+            Index = End;
+            continue;
           }
 
           // Print local label if there's any.
@@ -3174,6 +3194,7 @@ static void parseObjdumpOptions(const llvm::opt::InputArgList &InputArgs) {
   Disassemble = InputArgs.hasArg(OBJDUMP_disassemble);
   DisassembleAll = InputArgs.hasArg(OBJDUMP_disassemble_all);
   SymbolDescription = InputArgs.hasArg(OBJDUMP_symbol_description);
+  TracebackTable = InputArgs.hasArg(OBJDUMP_traceback_table);
   DisassembleSymbols =
       commaSeparatedValues(InputArgs, OBJDUMP_disassemble_symbols_EQ);
   DisassembleZeroes = InputArgs.hasArg(OBJDUMP_disassemble_zeroes);
@@ -3374,7 +3395,7 @@ int main(int argc, char **argv) {
     ArchiveHeaders = FileHeaders = PrivateHeaders = Relocations =
         SectionHeaders = SymbolTable = true;
 
-  if (DisassembleAll || PrintSource || PrintLines ||
+  if (DisassembleAll || PrintSource || PrintLines || TracebackTable ||
       !DisassembleSymbols.empty())
     Disassemble = true;
 
