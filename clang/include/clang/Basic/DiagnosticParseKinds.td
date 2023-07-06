@@ -302,7 +302,7 @@ def err_expected_selector_for_method : Error<
   "expected selector for Objective-C method">;
 def err_expected_property_name : Error<"expected property name">;
 
-def warn_cheri_capability_attribute_location : Warning<
+def warn_cheri_capability_qualifier_location : Warning<
   "use of __capability before the pointer type is deprecated">,
   InGroup<DeprecatedDeclarations>;
 

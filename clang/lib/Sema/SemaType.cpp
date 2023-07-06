@@ -6372,8 +6372,7 @@ fillDependentPointerTypeLoc(DependentPointerTypeLoc DPTL,
     }
   }
 
-  llvm_unreachable(
-      "no cheri_capability attribute found at the expected location!");
+  llvm_unreachable("no __capability qualifier found at the expected location!");
 }
 
 static void fillMatrixTypeLoc(MatrixTypeLoc MTL,
@@ -8213,18 +8212,19 @@ QualType Sema::BuildPointerInterpretationAttr(QualType T,
   } else if (T->isDependentType()) {
     T = Context.getDependentPointerType(T, PIK, QualifierLoc);
   } else {
-    Diag(QualifierLoc, diag::err_cheri_capability_attribute_pointers_only)
-        << T;
+    Diag(QualifierLoc, diag::err_cheri_capability_qualifier_pointers_only) << T;
   }
 
   return T;
 }
 
-/// HandleCHERICapabilityAttr - Process the cheri_capability attribute. It is
+/// HandleCHERICapabilityQualifier - Process the __capability qualifier. It is
 /// only applicable to pointer and reference types and specifies that this
 /// pointer/reference should be treated as a capability.
-static void HandleCHERICapabilityAttr(QualType &CurType, TypeProcessingState &state,
-                                      TypeAttrLocation TAL, ParsedAttr& attr) {
+static void HandleCHERICapabilityQualifier(QualType &CurType,
+                                           TypeProcessingState &state,
+                                           TypeAttrLocation TAL,
+                                           ParsedAttr &attr) {
   Declarator &declarator = state.getDeclarator();
   Sema& S = state.getSema();
   std::string Name = attr.getAttrName()->getName().str();
@@ -8256,14 +8256,15 @@ static void HandleCHERICapabilityAttr(QualType &CurType, TypeProcessingState &st
               if (nextChunk.Kind == DeclaratorChunk::Pointer) {
                 auto Attr = nextChunk.getAttrs();
                 if (!Attr.hasAttribute(ParsedAttr::AT_CHERICapability)) {
-                  S.Diag(nextChunk.Loc, diag::err_cheri_capability_attribute_ambiguous);
+                  S.Diag(nextChunk.Loc,
+                         diag::err_cheri_capability_qualifier_ambiguous);
                   return;
                 }
               }
             }
 
             // Output a deprecated usage warning with a FixItHint
-            S.Diag(chunk.Loc, diag::warn_cheri_capability_attribute_location)
+            S.Diag(chunk.Loc, diag::warn_cheri_capability_qualifier_location)
                 << FixItHint::CreateRemoval(attr.getRange())
                 << FixItHint::CreateInsertion(chunk.Loc.getLocWithOffset(1),
                                               " " + Name + " ");
@@ -8646,7 +8647,7 @@ static void processTypeAttrs(TypeProcessingState &state, QualType &type,
 
     case ParsedAttr::AT_CHERICapability:
       attr.setUsedAsTypeAttr();
-      HandleCHERICapabilityAttr(type, state, TAL, attr);
+      HandleCHERICapabilityQualifier(type, state, TAL, attr);
       break;
     case ParsedAttr::AT_CHERINoSubobjectBounds:
       attr.setUsedAsTypeAttr();
