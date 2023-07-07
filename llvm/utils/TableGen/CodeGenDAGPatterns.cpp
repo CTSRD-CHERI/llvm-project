@@ -370,7 +370,7 @@ bool TypeSetByHwMode::validate() const {
 // --- TypeInfer
 
 bool TypeInfer::MergeInTypeInfo(TypeSetByHwMode &Out,
-                                const TypeSetByHwMode &In) {
+                                const TypeSetByHwMode &In) const {
   ValidateOnExit _1(Out, *this);
   In.validate();
   if (In.empty() || Out == In || TP.hasError())
