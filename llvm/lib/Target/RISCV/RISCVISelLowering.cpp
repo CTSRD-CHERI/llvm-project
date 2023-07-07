@@ -514,8 +514,10 @@ RISCVTargetLowering::RISCVTargetLowering(const TargetMachine &TM,
     setOperationAction(ISD::GlobalTLSAddress, CLenVT, Custom);
     setOperationAction(ISD::ADDRSPACECAST, CLenVT, Custom);
     setOperationAction(ISD::ADDRSPACECAST, XLenVT, Custom);
-    if (!Subtarget.hasCheriISAv8Semantics())
+    if (!Subtarget.hasCheriISAv8Semantics()) {
       setOperationAction(ISD::PTRTOINT, XLenVT, Custom);
+      setOperationAction(ISD::INTTOPTR, CLenVT, Custom);
+    }
   }
 
   // TODO: On M-mode only targets, the cycle[h] CSR may not be present.
@@ -2861,6 +2863,19 @@ static SDValue lowerCTLZ_CTTZ_ZERO_UNDEF(SDValue Op, SelectionDAG &DAG) {
   return DAG.getNode(ISD::SUB, DL, VT, DAG.getConstant(Adjust, DL, VT), Trunc);
 }
 
+/// Emit a replacement for the (to-be) removed CFromPtr instruction.
+static SDValue
+emitCFromPtrReplacement(SelectionDAG &DAG, const SDLoc &DL, SDValue Base,
+                        SDValue IntVal, EVT CLenVT,
+                        unsigned Intrin = Intrinsic::cheri_cap_offset_set) {
+  SDValue AsCap =
+      DAG.getNode(ISD::INTRINSIC_WO_CHAIN, DL, CLenVT,
+                  DAG.getConstant(Intrin, DL, MVT::i64), Base, IntVal);
+  return DAG.getSelectCC(DL, IntVal,
+                         DAG.getConstant(0, DL, IntVal.getValueType()), AsCap,
+                         DAG.getNullCapability(DL), ISD::SETNE);
+}
+
 /// The CToPtr instruction is deprecated and will be removed. This function
 /// emits the currently defined semantics of `gettag(x) ? x.addr - base : 0`.
 static SDValue emitCToPtrReplacement(SelectionDAG &DAG, const SDLoc &DL,
@@ -3036,6 +3051,38 @@ SDValue RISCVTargetLowering::LowerOperation(SDValue Op,
       return Op0;
     unsigned NewOp = ToCap ? ISD::INTTOPTR : ISD::PTRTOINT;
     return DAG.getNode(NewOp, DL, Op.getValueType(), Op0);
+  }
+  case ISD::INTTOPTR: {
+    SDValue Op0 = Op.getOperand(0);
+    if (Op.getValueType().isFatPointer() &&
+        !Subtarget.hasCheriISAv8Semantics() &&
+        !RISCVABI::isCheriPureCapABI(Subtarget.getTargetABI())) {
+      if (isNullConstant(Op0)) {
+        // Do not custom lower (inttoptr 0) here as that is the canonical
+        // representation of capability NULL, and expanding it here disables
+        // matches for this specific pattern.
+        return Op;
+      }
+      SDLoc DL(Op);
+      EVT CLenVT = Op.getValueType();
+      auto GetDDC = DAG.getConstant(Intrinsic::cheri_ddc_get, DL, MVT::i64);
+      auto DDC = DAG.getNode(ISD::INTRINSIC_WO_CHAIN, DL, CapType, GetDDC);
+      // NB: Since DDC relocation is not included as part of ISAv9, we
+      // emit a SetAddress operation instead of the CFromPtr SetOffset. If we
+      // were to use SetOffset, the resulting capability could point to a
+      // different memory location when dereferenced compared to an integer
+      // based DDC-constrained access.
+      // It would be nice if we could just use SetAddr on DDC, but for
+      // consistency between constant inttoptr and non-constant inttoptr
+      // we emit a copy of NULL if the value is zero and otherwise use a SetAddr
+      // on DDC and use a select to choose the correct value. This avoids
+      // getting different values for inttoptr with a constant zero argument and
+      // inttoptr with a variable that happens to be zero (the latter should not
+      // result in a tagged value).
+      return emitCFromPtrReplacement(DAG, DL, DDC, Op0, CLenVT,
+                                     Intrinsic::cheri_cap_address_set);
+    }
+    return Op;
   }
   case ISD::PTRTOINT: {
     SDValue Op0 = Op.getOperand(0);
@@ -4682,6 +4729,13 @@ SDValue RISCVTargetLowering::LowerINTRINSIC_WO_CHAIN(SDValue Op,
   switch (IntNo) {
   default:
     break; // Don't custom lower most intrinsics.
+  case Intrinsic::cheri_cap_from_pointer:
+    // Expand CFromPtr if the dedicated instruction has been removed.
+    if (!Subtarget.hasCheriISAv8Semantics()) {
+      return emitCFromPtrReplacement(DAG, DL, Op.getOperand(1),
+                                     Op.getOperand(2), Op.getValueType());
+    }
+    break;
   case Intrinsic::cheri_cap_to_pointer:
     // Expand CToPtr if the dedicated instruction has been removed.
     if (!Subtarget.hasCheriISAv8Semantics()) {

@@ -370,10 +370,10 @@ def : InstAlias<"csetboundsimm $cd, $cs1, $imm",
 // Pointer-Arithmetic Instructions
 //===----------------------------------------------------------------------===//
 
-let Predicates = [HasCheriISAv8], mayTrap = 1 in
+let Predicates = [HasCheriISAv8], mayTrap = 1 in {
 def CToPtr      : Cheri_rr<0x12, "ctoptr", GPR, GPCRC0IsDDC>;
-let Predicates = [HasCheri], mayTrap = 1 in
 def CFromPtr    : Cheri_rr<0x13, "cfromptr", GPCR, GPR, GPCRC0IsDDC>;
+}
 let Predicates = [HasCheri] in {
 let hasSideEffects = 0, mayLoad = 0, mayStore = 0, isCodeGenOnly = 0,
     isAsmParserOnly = 1 in
@@ -1211,19 +1211,19 @@ def : Pat<(ptradd CapFI128:$rs1, simm12:$imm12),
 
 /// Pointer-Arithmetic Instructions
 
-// int_cheri_cap_to_pointer is expanded in C++ code for ISAv9, so we don't
-// need replacement patterns here.
+// int_cheri_cap_to_pointer and int_cheri_cap_from_pointer are expanded in C++
+// code for ISAv9, so we don't need replacement patterns here.
 // TODO: these intrinsics should probably be removed at some point.
 let Predicates = [HasCheriISAv8] in {
 def : Pat<(int_cheri_cap_to_pointer GPCR:$rs1, GPCRC0IsDDC:$rs2),
           (CToPtr GPCR:$rs1, GPCRC0IsDDC:$rs2)>;
 def : Pat<(int_cheri_cap_to_pointer (CLenVT (int_cheri_ddc_get)), GPCR:$rs1),
           (CToPtr $rs1, DDC)>;
-}
 def : Pat<(int_cheri_cap_from_pointer GPCRC0IsDDC:$rs1, GPR:$rs2),
           (CFromPtr GPCRC0IsDDC:$rs1, GPR:$rs2)>;
 def : Pat<(int_cheri_cap_from_pointer (CLenVT (int_cheri_ddc_get)), GPR:$rs2),
           (CFromPtr DDC, $rs2)>;
+}  // let Predicates = [HasCheriISAv8]
 def : Pat<(int_cheri_cap_diff GPCR:$cs1, GPCR:$cs2),
           (SUB (EXTRACT_SUBREG GPCR:$cs1, sub_cap_addr),
                (EXTRACT_SUBREG GPCR:$cs2, sub_cap_addr))>;
@@ -1234,10 +1234,10 @@ def : Pat<(inttoptr simm12:$imm12), (CIncOffsetImm C0, simm12:$imm12)>;
 def : Pat<(ptrtoint GPCR:$rs1), (PseudoCGetAddr GPCR:$rs1)>;
 }
 
-let Predicates = [NotPureCapABI] in
+let Predicates = [NotPureCapABI, HasCheriISAv8] in {
 def : Pat<(inttoptr GPR:$rs2), (CFromPtr DDC, GPR:$rs2)>;
-let Predicates = [NotPureCapABI, HasCheriISAv8] in
 def : Pat<(ptrtoint GPCR:$rs1), (CToPtr GPCR:$rs1, DDC)>;
+}
 
 /// Null Capability Patterns
 
