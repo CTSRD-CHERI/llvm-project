@@ -1838,6 +1838,10 @@ bool RISCVTargetLowering::shouldSinkOperands(
                              m_Undef(), m_ZeroMask())))
       continue;
 
+    // Don't sink i1 splats.
+    if (cast<VectorType>(Op->getType())->getElementType()->isIntegerTy(1))
+      continue;
+
     // All uses of the shuffle should be sunk to avoid duplicating it across gpr
     // and vector registers
     for (Use &U : Op->uses()) {
