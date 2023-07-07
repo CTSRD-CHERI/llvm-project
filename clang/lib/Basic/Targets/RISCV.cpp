@@ -240,6 +240,11 @@ void RISCVTargetInfo::getTargetDefines(const LangOptions &Opts,
     // for the capability-mode JALR with immediate). Remove after the next
     // CHERI-LLVM "release".
     Builder.defineMacro("__riscv_xcheri_mode_dependent_jumps");
+    // Temporary defines to allow software to detect a new ISAv9 compiler.
+    if (HasCheriISAv9Semantics) {
+      Builder.defineMacro("__riscv_xcheri_tag_clear");
+      Builder.defineMacro("__riscv_xcheri_no_relocation");
+    }
   }
 
   if (ISAInfo->hasExtension("zve32x") || ISAInfo->hasExtension("v"))
@@ -336,6 +341,8 @@ bool RISCVTargetInfo::handleTargetFeatures(std::vector<std::string> &Features,
   if (ISAInfo->hasExtension("xcheri")) {
     HasCheri = true;
     CapSize = XLen * 2;
+    HasCheriISAv9Semantics =
+        llvm::is_contained(Features, "+xcheri-v9-semantics");
   }
   if (ABI.empty())
     ABI = llvm::RISCV::computeDefaultABIFromArch(*ISAInfo).str();
