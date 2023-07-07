@@ -90,6 +90,7 @@ extern "C" LLVM_EXTERNAL_VISIBILITY void LLVMInitializeRISCVTarget() {
   initializeRISCVDAGToDAGISelPass(*PR);
   initializeRISCVInitUndefPass(*PR);
   initializeRISCVMoveMergePass(*PR);
+  initializeRISCVPushPopOptPass(*PR);
 }
 
 static std::string computeDataLayout(const Triple &TT, StringRef FS,
@@ -381,8 +382,12 @@ void RISCVPassConfig::addPreEmitPass() {
 }
 
 void RISCVPassConfig::addPreEmitPass2() {
-  if (TM->getOptLevel() != CodeGenOpt::None)
+  if (TM->getOptLevel() != CodeGenOpt::None) {
     addPass(createRISCVMoveMergePass());
+    // Schedule PushPop Optimization before expansion of Pseudo instruction,
+    // ensuring return instruction is detected correctly.
+    addPass(createRISCVPushPopOptimizationPass());
+  }
   addPass(createRISCVExpandPseudoPass());
 
   // Schedule the expansion of AMOs at the last possible moment, avoiding the
