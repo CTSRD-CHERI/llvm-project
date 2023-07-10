@@ -285,6 +285,7 @@ DEFAULT_PARAMETERS = [
         if experimental
         else [
             AddFeature("libcpp-has-no-incomplete-pstl"),
+            AddFeature("libcpp-has-no-experimental-stop_token"),
         ],
     ),
     Parameter(
