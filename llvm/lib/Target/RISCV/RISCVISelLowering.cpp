@@ -16429,7 +16429,7 @@ RISCVTargetLowering::getRegForInlineAsmConstraint(const TargetRegisterInfo *TRI,
       // TODO: Support fixed vectors up to XLen for P extension?
       if (VT.isVector())
         break;
-      return std::make_pair(0U, &RISCV::GPRRegClass);
+      return std::make_pair(0U, &RISCV::GPRNoX0RegClass);
     case 'C':
       if (Subtarget.hasCheri() && VT == Subtarget.typeForCapabilities())
         return std::make_pair(0U, &RISCV::GPCRRegClass);
