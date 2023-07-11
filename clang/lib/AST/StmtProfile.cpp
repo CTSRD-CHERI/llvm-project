@@ -1660,7 +1660,8 @@ void StmtProfiler::VisitRequiresExpr(const RequiresExpr *S) {
 
 static Stmt::StmtClass DecodeOperatorCall(const CXXOperatorCallExpr *S,
                                           UnaryOperatorKind &UnaryOp,
-                                          BinaryOperatorKind &BinaryOp) {
+                                          BinaryOperatorKind &BinaryOp,
+                                          unsigned &NumArgs) {
   switch (S->getOperator()) {
   case OO_None:
   case OO_New:
@@ -1673,7 +1674,7 @@ static Stmt::StmtClass DecodeOperatorCall(const CXXOperatorCallExpr *S,
     llvm_unreachable("Invalid operator call kind");
 
   case OO_Plus:
-    if (S->getNumArgs() == 1) {
+    if (NumArgs == 1) {
       UnaryOp = UO_Plus;
       return Stmt::UnaryOperatorClass;
     }
@@ -1682,7 +1683,7 @@ static Stmt::StmtClass DecodeOperatorCall(const CXXOperatorCallExpr *S,
     return Stmt::BinaryOperatorClass;
 
   case OO_Minus:
-    if (S->getNumArgs() == 1) {
+    if (NumArgs == 1) {
       UnaryOp = UO_Minus;
       return Stmt::UnaryOperatorClass;
     }
@@ -1691,7 +1692,7 @@ static Stmt::StmtClass DecodeOperatorCall(const CXXOperatorCallExpr *S,
     return Stmt::BinaryOperatorClass;
 
   case OO_Star:
-    if (S->getNumArgs() == 1) {
+    if (NumArgs == 1) {
       UnaryOp = UO_Deref;
       return Stmt::UnaryOperatorClass;
     }
@@ -1712,7 +1713,7 @@ static Stmt::StmtClass DecodeOperatorCall(const CXXOperatorCallExpr *S,
     return Stmt::BinaryOperatorClass;
 
   case OO_Amp:
-    if (S->getNumArgs() == 1) {
+    if (NumArgs == 1) {
       UnaryOp = UO_AddrOf;
       return Stmt::UnaryOperatorClass;
     }
@@ -1821,13 +1822,13 @@ static Stmt::StmtClass DecodeOperatorCall(const CXXOperatorCallExpr *S,
     return Stmt::BinaryOperatorClass;
 
   case OO_PlusPlus:
-    UnaryOp = S->getNumArgs() == 1? UO_PreInc
-                                  : UO_PostInc;
+    UnaryOp = NumArgs == 1 ? UO_PreInc : UO_PostInc;
+    NumArgs = 1;
     return Stmt::UnaryOperatorClass;
 
   case OO_MinusMinus:
-    UnaryOp = S->getNumArgs() == 1? UO_PreDec
-                                  : UO_PostDec;
+    UnaryOp = NumArgs == 1 ? UO_PreDec : UO_PostDec;
+    NumArgs = 1;
     return Stmt::UnaryOperatorClass;
 
   case OO_Comma:
@@ -1873,10 +1874,11 @@ void StmtProfiler::VisitCXXOperatorCallExpr(const CXXOperatorCallExpr *S) {
 
     UnaryOperatorKind UnaryOp = UO_Extension;
     BinaryOperatorKind BinaryOp = BO_Comma;
-    Stmt::StmtClass SC = DecodeOperatorCall(S, UnaryOp, BinaryOp);
+    unsigned NumArgs = S->getNumArgs();
+    Stmt::StmtClass SC = DecodeOperatorCall(S, UnaryOp, BinaryOp, NumArgs);
 
     ID.AddInteger(SC);
-    for (unsigned I = 0, N = S->getNumArgs(); I != N; ++I)
+    for (unsigned I = 0; I != NumArgs; ++I)
       Visit(S->getArg(I));
     if (SC == Stmt::UnaryOperatorClass)
       ID.AddInteger(UnaryOp);
