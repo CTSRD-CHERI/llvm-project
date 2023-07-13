@@ -179,6 +179,12 @@ static bool isRISCVBareMetal(const llvm::Triple &Triple) {
   return Triple.getEnvironmentName() == "elf";
 }
 
+/// Is the triple powerpc[64][le]-*-none-eabi?
+static bool isPPCBareMetal(const llvm::Triple &Triple) {
+  return Triple.isPPC() && Triple.getOS() == llvm::Triple::UnknownOS &&
+         Triple.getEnvironment() == llvm::Triple::EABI;
+}
+
 static void findMultilibsFromYAML(const ToolChain &TC, const Driver &D,
                                   StringRef MultilibPath, const ArgList &Args,
                                   DetectedMultilibs &Result) {
@@ -244,7 +250,8 @@ void BareMetal::findMultilibs(const Driver &D, const llvm::Triple &Triple,
 
 bool BareMetal::handlesTarget(const llvm::Triple &Triple) {
   return isARMBareMetal(Triple) || isAArch64BareMetal(Triple) ||
-         isRISCVBareMetal(Triple) || isMIPSBareMetal(Triple);
+         isRISCVBareMetal(Triple) || isMIPSBareMetal(Triple) ||
+         isPPCBareMetal(Triple);
 }
 
 Tool *BareMetal::buildLinker() const {
