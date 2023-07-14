@@ -189,8 +189,8 @@ CHERITagState getTagState(SVal Val, CheckerContext &C,
   return CHERITagState::getUnknown();
 }
 
-unsigned getCapabilityTypeSize(ASTContext &ASTCtx) {
-  return ASTCtx.getTypeSize(ASTCtx.VoidPtrTy);
+CharUnits getCapabilityTypeSize(ASTContext &ASTCtx) {
+  return ASTCtx.getTypeSizeInChars(ASTCtx.VoidPtrTy);
 }
 
 CharUnits getCapabilityTypeAlign(ASTContext &ASTCtx) {
@@ -272,13 +272,9 @@ auto whileConditionMatcher() {
   return stmt(anyOf(U, BO));
 }
 
-bool isInsideSmallConstantBoundLoop(const Stmt *S, CheckerContext &C,
-                                    unsigned BlockSize) {
-  ASTContext &ASTCtx = C.getASTContext();
+bool isInsideSmallConstantBoundLoop(const Stmt *S, CheckerContext &C, long N) {
   SValBuilder &SVB = C.getSValBuilder();
-  const unsigned CapSize = getCapabilityTypeSize(ASTCtx);
-  const unsigned IterNum4CapCopy = CapSize / BlockSize;
-  const NonLoc &ItVal = SVB.makeIntVal(IterNum4CapCopy, true);
+  const NonLoc &ItVal = SVB.makeIntVal(N, true);
 
   auto BoundVarList = C.getState()->get<WhileBoundVar>();
   for (auto &&V : BoundVarList) {
@@ -301,6 +297,41 @@ bool isInsideSmallConstantBoundLoop(const Stmt *S, CheckerContext &C,
   }
 
   return false;
+}
+
+CharUnits getNonCapShift(SVal V) {
+  if (SymbolRef Sym = V.getAsSymbol())
+    if (const MemRegion *MR = Sym->getOriginRegion())
+      if (const auto *ER = dyn_cast<ElementRegion>(MR)) {
+        const RegionRawOffset &Offset = ER->getAsArrayOffset();
+        if (Offset.getRegion())
+          return Offset.getOffset();
+      }
+
+  return CharUnits::Zero();
+}
+
+bool isPartOfCopyingSequence(const QualType &CopyTy, SVal V, const Stmt *S,
+                             CheckerContext &C) {
+  ASTContext &ASTCtx = C.getASTContext();
+  const CharUnits CopySize = ASTCtx.getTypeSizeInChars(CopyTy);
+  const CharUnits CapSize = getCapabilityTypeSize(ASTCtx);
+
+  /* False if loop bound is not big enough to copy capability */
+  const long N = CapSize.alignTo(CopySize) / CopySize;
+  if (isInsideSmallConstantBoundLoop(S, C, N))
+    return false;
+
+  /* True if copy is in loop */
+  using namespace clang::ast_matchers;
+  auto L = anyOf(forStmt(), whileStmt(), doStmt());
+  auto LB = expr(hasAncestor(stmt(L)));
+  if (!match(LB, *S, C.getASTContext()).empty())
+    return true;
+
+  /* Sequence of individual assignments */
+  CharUnits Shift = getNonCapShift(V);
+  return (Shift + CopySize) >= CapSize;
 }
 
 bool isAssignmentInCondition(const Stmt *S, CheckerContext &C) {
@@ -390,9 +421,7 @@ void CapabilityCopyChecker::checkBind(SVal L, SVal V, const Stmt *S,
   if (!isCapabilityStorage(C, MR))
     return;
 
-  // Skip if loop bound is not big enough to copy capability
-  const unsigned BlockSize = ASTCtx.getTypeSize(PointeeTy);
-  if (isInsideSmallConstantBoundLoop(S, C, BlockSize))
+  if (ValTag.mayBeTagged() && !isPartOfCopyingSequence(PointeeTy, V, S, C))
     return;
 
   // Suppress for `while ((*dst++=src++));`
