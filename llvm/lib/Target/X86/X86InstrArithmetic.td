@@ -1413,10 +1413,18 @@ def GCTYPErm : I<0x7A, MRMSrcMem, (outs GR64:$dst),
                   "gctype\t{$src1, $dst|$dst, $src1}",
                   [(set GR64:$dst, (int_cheri_cap_type_get addr:$src1))]>,
                   PD;
+
+let Constraints = "$src1 = $dst", Defs = [EFLAGS] in
+def SCADDRrr : I<0x16, MRMDestReg, (outs GRC:$dst),
+                     (ins GRC:$src1, GR64:$src2),
+                     "scaddr\t{$src2, $dst|$dst, $src2}",
+                     [(set GRC:$dst, (int_cheri_cap_address_set GRC:$src1, GR64:$src2))]>;
+
+def SCADDRmr : I<0x16, MRMDestMem, (outs),
+                    (ins XiC.MemOperand:$dst, GR64:$src1),
+                    "scaddr\t{$src1, $dst|$dst, $src1}",
+                    [(store (iFATPTR128 (int_cheri_cap_address_set (loadcap addr:$dst), GR64:$src1)), addr:$dst)]>;
 }
-//def : Pat<(store (X86cram GR64:$src, (loadi64 addr:$dst), EFLAGS),
-//                 addr:$dst),
-//          (CRAM64mr addr:$dst, GR64:$src)>;
 
 defm AND : ArithBinOp_CF<0x20, 0x22, 0x24, "and", MRM4r, MRM4m,
                          X86ptrand_flag, ptrand, 0>;
