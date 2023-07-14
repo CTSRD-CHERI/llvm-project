@@ -44,6 +44,8 @@ void copy_intptr(int **ppy) {
   *ppy = *v; // no-warning: copy as int*
 }
 
+// =====   Pointer to capability passed as void*   ====
+
 static void swapfunc(void *a, void *b, int n) {
   long i = n;
   char *pi = (char *)(a);
@@ -53,18 +55,6 @@ static void swapfunc(void *a, void *b, int n) {
     *pi++ = *pj; // expected-warning{{Tag-stripping store of a capability}}
     *pj++ = t; // expected-warning{{Tag-stripping store of a capability}}
   } while (--i > 0);
-}
-
-void *realloc_impl(void *ptr, size_t size) {
-  void *dst = malloc(size);
-  if (size <= sizeof(size)) {
-    size_t *mcsrc = (size_t *)(ptr);
-    size_t *mcdst = (size_t *)(dst);
-    *mcdst = *mcsrc; // expected-warning{{Tag-stripping store of a capability}}
-  } else
-    memmove(dst, ptr, size);
-  free(ptr);
-  return dst;
 }
 
 void memcpy_impl_good(void* src0, void *dst0, size_t len) {
@@ -94,8 +84,44 @@ void memcpy_impl_bad(void* src0, void *dst0, size_t len) {
       *dst++ = *src++; // expected-warning{{Tag-stripping store of a capability}}
 }
 
-void charptr(char* src, char *dst) {
-  *dst++ = *src++; // expected-warning{{Tag-stripping store of a capability}}
+struct S {
+  int x;
+  int fill[100];
+  int *p;
+};
+
+void struct_field(void *p) {
+  struct S *ps = p;
+  ps->p = malloc(10*sizeof(int));
+  int x = ps->x;
+  *ps->p = x; // no warning
+}
+
+char fp_malloc() {
+  void *q = malloc(100);
+  char *s = (char*)q; // no warning
+  return *s;
+}
+
+char fp_init_str(void) {
+  char s[] = "String literal"; // no warning
+  return s[3];
+}
+
+void copyAsLong(void* src0, void *dst0, size_t len) {
+  if (len == 16) {
+    long *src = src0;
+    long *dst = dst0;
+    *dst++ = *src++;
+    *dst = *src; // expected-warning{{Tag-stripping store of a capability}}
+  }
+}
+
+// =====   Pointer to capability passed as char*   ====
+
+void char_ptr(char* src, char *dst, size_t len) {
+  while (--len)
+    *dst++ = *src++; // expected-warning{{Tag-stripping store of a capability}}
 }
 
 #define EOL 10
@@ -115,38 +141,6 @@ void c_string(char* src1, char* src2, char* src3, char *src4, char *dst) {
   while (EOL != (*dst++ = *src4++)); // no warning
 }
 
-struct S {
-  int x;
-  int *p;
-};
-
-void struct_field(void *p) {
-  struct S *ps = p;
-  ps->p = malloc(10*sizeof(int));
-  int x = ps->x;
-  *ps->p = x; // no warning
-}
-
-char voidptr_arg_load1(void *q) {
-  char *s = (char*)q; 
-  return *s; 
-}
-
-void voidptr_arg_store1(void *q) {
-  char *s = (char*)q; 
-  *s = 42;
-}
-
-char fp_malloc() {
-  void *q = malloc(100);
-  char *s = (char*)q; // no warning
-  return *s;
-}
-
-char fp_init_str(void) {
-  char s[] = "String literal"; // no warning
-  return s[3];
-}
 
 extern size_t strlen(const char *s);
 void strcpy_impl(char* src, char *dst) {
