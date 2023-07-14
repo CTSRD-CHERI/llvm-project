@@ -243,15 +243,26 @@ void CapabilityCopyChecker::checkLocation(SVal l, bool isLoad, const Stmt *S,
   // If argument has value from caller, CharTy will not be used
   const SVal ArgValDeref = State->getSVal(ArgValAsRegion, ASTCtx.CharTy);
 
-  const NoteTag *Tag;
+  bool T;
   if (const auto *ArgValDerefAsRegion = ArgValDeref.getAsRegion()) {
-    Tag = C.getNoteTag("void* argument points to capability");
     State = State->add<VoidPtrArgDeref>(ArgValDerefAsRegion);
+    T = true;
   } else if (ArgValDeref.getAsSymbol()) {
-    Tag = C.getNoteTag("void* argument may be a pointer to capability");
+    T = false;
   } else
     return;
 
+  const NoteTag *Tag =
+      C.getNoteTag([T, ArgValTy](PathSensitiveBugReport &BR) -> std::string {
+        SmallString<80> Msg;
+        llvm::raw_svector_ostream OS(Msg);
+        OS << ArgValTy.getAsString();
+        if (T)
+          OS << " argument points to capability";
+        else
+          OS << " argument may be a pointer to capability";
+        return std::string(OS.str());
+      });
   C.addTransition(State, C.getPredecessor(), Tag);
 }
 
