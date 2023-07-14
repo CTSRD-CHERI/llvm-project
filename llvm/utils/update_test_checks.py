@@ -79,10 +79,7 @@ def main():
     )
     parser.add_argument(
         "--check-globals",
-        nargs="?",
-        const="all",
-        default="default",
-        choices=["none", "smart", "all"],
+        action="store_true",
         help="Check global entries (global variables, metadata, attribute sets, ...) for functions",
     )
     parser.add_argument("tests", nargs="+")
@@ -208,7 +205,7 @@ def main():
             common.dump_input_lines(output_lines, ti, prefix_set, ";")
 
             args = ti.args
-            if args.check_globals != 'none':
+            if args.check_globals:
                 generated_prefixes.extend(
                     common.add_global_checks(
                         builder.global_var_dict(),
@@ -218,7 +215,6 @@ def main():
                         global_vars_seen_dict,
                         args.preserve_names,
                         True,
-                        args.check_globals,
                     )
                 )
 
@@ -286,7 +282,6 @@ def main():
                                 global_vars_seen_dict,
                                 args.preserve_names,
                                 True,
-                                args.check_globals,
                             )
                         )
                     has_checked_pre_function_globals = True
@@ -316,7 +311,7 @@ def main():
                     continue
                 is_in_function = is_in_function_start = True
 
-        if args.check_globals != 'none':
+        if args.check_globals:
             generated_prefixes.extend(
                 common.add_global_checks(
                     builder.global_var_dict(),
@@ -326,7 +321,6 @@ def main():
                     global_vars_seen_dict,
                     args.preserve_names,
                     False,
-                    args.check_globals,
                 )
             )
         if ti.args.gen_unused_prefix_body:
