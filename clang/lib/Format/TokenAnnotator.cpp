@@ -3178,7 +3178,7 @@ static bool isFunctionDeclarationName(bool IsCpp, const FormatToken &Current,
         !Previous->isOneOf(tok::kw_return, tok::kw_co_return)) {
       return true;
     }
-    if (!Previous->isOneOf(tok::star, tok::amp, tok::ampamp))
+    if (!Previous->isOneOf(tok::star, tok::amp, tok::ampamp, TT_TemplateCloser))
       return false;
     Next = skipOperatorName(Next);
   } else {
