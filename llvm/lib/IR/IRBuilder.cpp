@@ -62,15 +62,6 @@ Type *IRBuilderBase::getCurrentFunctionReturnType() const {
   return BB->getParent()->getReturnType();
 }
 
-Value *IRBuilderBase::getCastedInt8PtrValue(Value *Ptr) {
-  auto *PT = cast<PointerType>(Ptr->getType());
-  if (PT->isOpaqueOrPointeeTypeMatches(getInt8Ty()))
-    return Ptr;
-
-  // Otherwise, we need to insert a bitcast.
-  return CreateBitCast(Ptr, getInt8PtrTy(PT->getAddressSpace()));
-}
-
 DebugLoc IRBuilderBase::getCurrentDebugLocation() const {
   for (auto &KV : MetadataToCopy)
     if (KV.first == LLVMContext::MD_dbg)
@@ -149,7 +140,6 @@ CallInst *IRBuilderBase::CreateMemSet(Value *Ptr, Value *Val, Value *Size,
                                       MaybeAlign Align, bool isVolatile,
                                       MDNode *TBAATag, MDNode *ScopeTag,
                                       MDNode *NoAliasTag) {
-  Ptr = getCastedInt8PtrValue(Ptr);
   Value *Ops[] = {Ptr, Val, Size, getInt1(isVolatile)};
   Type *Tys[] = { Ptr->getType(), Size->getType() };
   Module *M = BB->getParent()->getParent();
@@ -178,7 +168,6 @@ CallInst *IRBuilderBase::CreateMemSetInline(Value *Dst, MaybeAlign DstAlign,
                                             bool IsVolatile, MDNode *TBAATag,
                                             MDNode *ScopeTag,
                                             MDNode *NoAliasTag) {
-  Dst = getCastedInt8PtrValue(Dst);
   Value *Ops[] = {Dst, Val, Size, getInt1(IsVolatile)};
   Type *Tys[] = {Dst->getType(), Size->getType()};
   Module *M = BB->getParent()->getParent();
@@ -206,7 +195,6 @@ CallInst *IRBuilderBase::CreateElementUnorderedAtomicMemSet(
     Value *Ptr, Value *Val, Value *Size, Align Alignment, uint32_t ElementSize,
     MDNode *TBAATag, MDNode *ScopeTag, MDNode *NoAliasTag) {
 
-  Ptr = getCastedInt8PtrValue(Ptr);
   Value *Ops[] = {Ptr, Val, Size, getInt32(ElementSize)};
   Type *Tys[] = {Ptr->getType(), Size->getType()};
   Module *M = BB->getParent()->getParent();
@@ -235,9 +223,6 @@ CallInst *IRBuilderBase::CreateMemTransferInst(
     MaybeAlign SrcAlign, Value *Size, PreserveCheriTags PreserveTags,
     bool isVolatile, MDNode *TBAATag, MDNode *TBAAStructTag, MDNode *ScopeTag,
     MDNode *NoAliasTag) {
-  Dst = getCastedInt8PtrValue(Dst);
-  Src = getCastedInt8PtrValue(Src);
-
   Value *Ops[] = {Dst, Src, Size, getInt1(isVolatile)};
   Type *Tys[] = { Dst->getType(), Src->getType(), Size->getType() };
   Module *M = BB->getParent()->getParent();
@@ -279,9 +264,6 @@ CallInst *IRBuilderBase::CreateMemCpyInline(
     Value *Size, PreserveCheriTags PreserveTags, bool IsVolatile,
     MDNode *TBAATag, MDNode *TBAAStructTag, MDNode *ScopeTag,
     MDNode *NoAliasTag) {
-  Dst = getCastedInt8PtrValue(Dst);
-  Src = getCastedInt8PtrValue(Src);
-
   Value *Ops[] = {Dst, Src, Size, getInt1(IsVolatile)};
   Type *Tys[] = {Dst->getType(), Src->getType(), Size->getType()};
   Function *F = BB->getParent();
@@ -323,9 +305,6 @@ CallInst *IRBuilderBase::CreateElementUnorderedAtomicMemCpy(
          "Pointer alignment must be at least element size");
   assert(SrcAlign >= ElementSize &&
          "Pointer alignment must be at least element size");
-  Dst = getCastedInt8PtrValue(Dst);
-  Src = getCastedInt8PtrValue(Src);
-
   Value *Ops[] = {Dst, Src, Size, getInt32(ElementSize)};
   Type *Tys[] = {Dst->getType(), Src->getType(), Size->getType()};
   Module *M = BB->getParent()->getParent();
@@ -364,9 +343,6 @@ CallInst *IRBuilderBase::CreateMemMove(Value *Dst, MaybeAlign DstAlign,
                                        PreserveCheriTags PreserveTags,
                                        bool isVolatile, MDNode *TBAATag,
                                        MDNode *ScopeTag, MDNode *NoAliasTag) {
-  Dst = getCastedInt8PtrValue(Dst);
-  Src = getCastedInt8PtrValue(Src);
-
   Value *Ops[] = {Dst, Src, Size, getInt1(isVolatile)};
   Type *Tys[] = { Dst->getType(), Src->getType(), Size->getType() };
   Module *M = BB->getParent()->getParent();
@@ -407,9 +383,6 @@ CallInst *IRBuilderBase::CreateElementUnorderedAtomicMemMove(
          "Pointer alignment must be at least element size");
   assert(SrcAlign >= ElementSize &&
          "Pointer alignment must be at least element size");
-  Dst = getCastedInt8PtrValue(Dst);
-  Src = getCastedInt8PtrValue(Src);
-
   Value *Ops[] = {Dst, Src, Size, getInt32(ElementSize)};
   Type *Tys[] = {Dst->getType(), Src->getType(), Size->getType()};
   Module *M = BB->getParent()->getParent();
@@ -517,7 +490,6 @@ CallInst *IRBuilderBase::CreateFPMinimumReduce(Value *Src) {
 CallInst *IRBuilderBase::CreateLifetimeStart(Value *Ptr, ConstantInt *Size) {
   assert(isa<PointerType>(Ptr->getType()) &&
          "lifetime.start only applies to pointers.");
-  Ptr = getCastedInt8PtrValue(Ptr);
   if (!Size)
     Size = getInt64(-1);
   else
@@ -533,7 +505,6 @@ CallInst *IRBuilderBase::CreateLifetimeStart(Value *Ptr, ConstantInt *Size) {
 CallInst *IRBuilderBase::CreateLifetimeEnd(Value *Ptr, ConstantInt *Size) {
   assert(isa<PointerType>(Ptr->getType()) &&
          "lifetime.end only applies to pointers.");
-  Ptr = getCastedInt8PtrValue(Ptr);
   if (!Size)
     Size = getInt64(-1);
   else
@@ -550,7 +521,6 @@ CallInst *IRBuilderBase::CreateInvariantStart(Value *Ptr, ConstantInt *Size) {
 
   assert(isa<PointerType>(Ptr->getType()) &&
          "invariant.start only applies to pointers.");
-  Ptr = getCastedInt8PtrValue(Ptr);
   if (!Size)
     Size = getInt64(-1);
   else
@@ -630,7 +600,6 @@ CallInst *IRBuilderBase::CreateMaskedLoad(Type *Ty, Value *Ptr, Align Alignment,
                                           const Twine &Name) {
   auto *PtrTy = cast<PointerType>(Ptr->getType());
   assert(Ty->isVectorTy() && "Type should be vector");
-  assert(PtrTy->isOpaqueOrPointeeTypeMatches(Ty) && "Wrong element type");
   assert(Mask && "Mask should not be all-ones (null)");
   if (!PassThru)
     PassThru = PoisonValue::get(Ty);
@@ -651,7 +620,6 @@ CallInst *IRBuilderBase::CreateMaskedStore(Value *Val, Value *Ptr,
   auto *PtrTy = cast<PointerType>(Ptr->getType());
   Type *DataTy = Val->getType();
   assert(DataTy->isVectorTy() && "Val should be a vector");
-  assert(PtrTy->isOpaqueOrPointeeTypeMatches(DataTy) && "Wrong element type");
   assert(Mask && "Mask should not be all-ones (null)");
   Type *OverloadedTypes[] = { DataTy, PtrTy };
   Value *Ops[] = {Val, Ptr, getInt32(Alignment.value()), Mask};
@@ -686,10 +654,6 @@ CallInst *IRBuilderBase::CreateMaskedGather(Type *Ty, Value *Ptrs,
   auto *VecTy = cast<VectorType>(Ty);
   ElementCount NumElts = VecTy->getElementCount();
   auto *PtrsTy = cast<VectorType>(Ptrs->getType());
-  assert(cast<PointerType>(PtrsTy->getElementType())
-             ->isOpaqueOrPointeeTypeMatches(
-                 cast<VectorType>(Ty)->getElementType()) &&
-         "Element type mismatch");
   assert(NumElts == PtrsTy->getElementCount() && "Element count mismatch");
 
   if (!Mask)
@@ -720,13 +684,6 @@ CallInst *IRBuilderBase::CreateMaskedScatter(Value *Data, Value *Ptrs,
   auto *DataTy = cast<VectorType>(Data->getType());
   ElementCount NumElts = PtrsTy->getElementCount();
 
-#ifndef NDEBUG
-  auto *PtrTy = cast<PointerType>(PtrsTy->getElementType());
-  assert(NumElts == DataTy->getElementCount() &&
-         PtrTy->isOpaqueOrPointeeTypeMatches(DataTy->getElementType()) &&
-         "Incompatible pointer and data types");
-#endif
-
   if (!Mask)
     Mask = getAllOnesMask(NumElts);
 
@@ -749,12 +706,7 @@ CallInst *IRBuilderBase::CreateMaskedScatter(Value *Data, Value *Ptrs,
 CallInst *IRBuilderBase::CreateMaskedExpandLoad(Type *Ty, Value *Ptr,
                                                 Value *Mask, Value *PassThru,
                                                 const Twine &Name) {
-  auto *PtrTy = cast<PointerType>(Ptr->getType());
   assert(Ty->isVectorTy() && "Type should be vector");
-  assert(PtrTy->isOpaqueOrPointeeTypeMatches(
-             cast<FixedVectorType>(Ty)->getElementType()) &&
-         "Wrong element type");
-  (void)PtrTy;
   assert(Mask && "Mask should not be all-ones (null)");
   if (!PassThru)
     PassThru = PoisonValue::get(Ty);
@@ -771,13 +723,8 @@ CallInst *IRBuilderBase::CreateMaskedExpandLoad(Type *Ty, Value *Ptr,
 ///                be accessed in memory
 CallInst *IRBuilderBase::CreateMaskedCompressStore(Value *Val, Value *Ptr,
                                                    Value *Mask) {
-  auto *PtrTy = cast<PointerType>(Ptr->getType());
   Type *DataTy = Val->getType();
   assert(DataTy->isVectorTy() && "Val should be a vector");
-  assert(PtrTy->isOpaqueOrPointeeTypeMatches(
-             cast<FixedVectorType>(DataTy)->getElementType()) &&
-         "Wrong element type");
-  (void)PtrTy;
   assert(Mask && "Mask should not be all-ones (null)");
   Type *OverloadedTypes[] = {DataTy};
   Value *Ops[] = {Val, Ptr, Mask};
@@ -1198,9 +1145,6 @@ Value *IRBuilderBase::CreatePtrDiff(Type *ElemTy, Value *LHS, Value *RHS,
                                     const Twine &Name) {
   assert(LHS->getType() == RHS->getType() &&
          "Pointer subtraction operand types must match!");
-  assert(cast<PointerType>(LHS->getType())
-             ->isOpaqueOrPointeeTypeMatches(ElemTy) &&
-         "Pointer type must match element type");
   Value *LHS_int = CreatePtrToInt(LHS, Type::getInt64Ty(Context));
   Value *RHS_int = CreatePtrToInt(RHS, Type::getInt64Ty(Context));
   Value *Difference = CreateSub(LHS_int, RHS_int);
@@ -1211,50 +1155,34 @@ Value *IRBuilderBase::CreatePtrDiff(Type *ElemTy, Value *LHS, Value *RHS,
 Value *IRBuilderBase::CreateLaunderInvariantGroup(Value *Ptr) {
   assert(isa<PointerType>(Ptr->getType()) &&
          "launder.invariant.group only applies to pointers.");
-  // FIXME: we could potentially avoid casts to/from i8*.
   auto *PtrType = Ptr->getType();
-  auto *Int8PtrTy = getInt8PtrTy(PtrType->getPointerAddressSpace());
-  if (PtrType != Int8PtrTy)
-    Ptr = CreateBitCast(Ptr, Int8PtrTy);
   Module *M = BB->getParent()->getParent();
   Function *FnLaunderInvariantGroup = Intrinsic::getDeclaration(
-      M, Intrinsic::launder_invariant_group, {Int8PtrTy});
+      M, Intrinsic::launder_invariant_group, {PtrType});
 
-  assert(FnLaunderInvariantGroup->getReturnType() == Int8PtrTy &&
+  assert(FnLaunderInvariantGroup->getReturnType() == PtrType &&
          FnLaunderInvariantGroup->getFunctionType()->getParamType(0) ==
-             Int8PtrTy &&
+             PtrType &&
          "LaunderInvariantGroup should take and return the same type");
 
-  CallInst *Fn = CreateCall(FnLaunderInvariantGroup, {Ptr});
-
-  if (PtrType != Int8PtrTy)
-    return CreateBitCast(Fn, PtrType);
-  return Fn;
+  return CreateCall(FnLaunderInvariantGroup, {Ptr});
 }
 
 Value *IRBuilderBase::CreateStripInvariantGroup(Value *Ptr) {
   assert(isa<PointerType>(Ptr->getType()) &&
          "strip.invariant.group only applies to pointers.");
 
-  // FIXME: we could potentially avoid casts to/from i8*.
   auto *PtrType = Ptr->getType();
-  auto *Int8PtrTy = getInt8PtrTy(PtrType->getPointerAddressSpace());
-  if (PtrType != Int8PtrTy)
-    Ptr = CreateBitCast(Ptr, Int8PtrTy);
   Module *M = BB->getParent()->getParent();
   Function *FnStripInvariantGroup = Intrinsic::getDeclaration(
-      M, Intrinsic::strip_invariant_group, {Int8PtrTy});
+      M, Intrinsic::strip_invariant_group, {PtrType});
 
-  assert(FnStripInvariantGroup->getReturnType() == Int8PtrTy &&
+  assert(FnStripInvariantGroup->getReturnType() == PtrType &&
          FnStripInvariantGroup->getFunctionType()->getParamType(0) ==
-             Int8PtrTy &&
+             PtrType &&
          "StripInvariantGroup should take and return the same type");
 
-  CallInst *Fn = CreateCall(FnStripInvariantGroup, {Ptr});
-
-  if (PtrType != Int8PtrTy)
-    return CreateBitCast(Fn, PtrType);
-  return Fn;
+  return CreateCall(FnStripInvariantGroup, {Ptr});
 }
 
 Value *IRBuilderBase::CreateVectorReverse(Value *V, const Twine &Name) {
@@ -1350,8 +1278,6 @@ Value *IRBuilderBase::CreatePreserveArrayAccessIndex(
   auto *BaseType = Base->getType();
   assert(isa<PointerType>(BaseType) &&
          "Invalid Base ptr type for preserve.array.access.index.");
-  assert(cast<PointerType>(BaseType)->isOpaqueOrPointeeTypeMatches(ElTy) &&
-         "Pointer element type mismatch");
 
   Value *LastIndexV = getInt32(LastIndex);
   Constant *Zero = ConstantInt::get(Type::getInt32Ty(Context), 0);
@@ -1401,8 +1327,6 @@ Value *IRBuilderBase::CreatePreserveStructAccessIndex(
   auto *BaseType = Base->getType();
   assert(isa<PointerType>(BaseType) &&
          "Invalid Base ptr type for preserve.struct.access.index.");
-  assert(cast<PointerType>(BaseType)->isOpaqueOrPointeeTypeMatches(ElTy) &&
-         "Pointer element type mismatch");
 
   Value *GEPIndex = getInt32(Index);
   Constant *Zero = ConstantInt::get(Type::getInt32Ty(Context), 0);
