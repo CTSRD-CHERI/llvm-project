@@ -6541,6 +6541,7 @@ Driver::getIncludeExcludeOptionFlagMasks(bool IsClCompatMode) const {
   if (IsClCompatMode) {
     // Include CL and Core options.
     IncludedFlagsBitmask |= options::CLOption;
+    IncludedFlagsBitmask |= options::CLDXCOption;
     IncludedFlagsBitmask |= options::CoreOption;
   } else {
     ExcludedFlagsBitmask |= options::CLOption;
@@ -6548,10 +6549,13 @@ Driver::getIncludeExcludeOptionFlagMasks(bool IsClCompatMode) const {
   if (IsDXCMode()) {
     // Include DXC and Core options.
     IncludedFlagsBitmask |= options::DXCOption;
+    IncludedFlagsBitmask |= options::CLDXCOption;
     IncludedFlagsBitmask |= options::CoreOption;
   } else {
     ExcludedFlagsBitmask |= options::DXCOption;
   }
+  if (!IsClCompatMode && !IsDXCMode())
+    ExcludedFlagsBitmask |= options::CLDXCOption;
 
   return std::make_pair(IncludedFlagsBitmask, ExcludedFlagsBitmask);
 }
