@@ -1252,6 +1252,8 @@ def zexti32 : ComplexPattern<i64, 1, "selectZExtBits<32>">;
 def zexti16 : ComplexPattern<XLenVT, 1, "selectZExtBits<16>">;
 def zexti8 : ComplexPattern<XLenVT, 1, "selectZExtBits<8>">;
 
+def ext : PatFrags<(ops node:$A), [(sext node:$A), (zext node:$A)]>;
+
 class binop_oneuse<SDPatternOperator operator>
     : PatFrag<(ops node:$A, node:$B),
               (operator node:$A, node:$B), [{
@@ -1277,6 +1279,7 @@ class unop_oneuse<SDPatternOperator operator>
 def sext_oneuse   : unop_oneuse<sext>;
 def zext_oneuse   : unop_oneuse<zext>;
 def anyext_oneuse : unop_oneuse<anyext>;
+def ext_oneuse    : unop_oneuse<ext>;
 def fpext_oneuse  : unop_oneuse<any_fpextend>;
 
 /// Simple arithmetic operations
