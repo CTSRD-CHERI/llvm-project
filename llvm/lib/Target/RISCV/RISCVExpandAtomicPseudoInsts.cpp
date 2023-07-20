@@ -74,7 +74,7 @@ private:
 char RISCVExpandAtomicPseudo::ID = 0;
 
 bool RISCVExpandAtomicPseudo::runOnMachineFunction(MachineFunction &MF) {
-  TII = static_cast<const RISCVInstrInfo *>(MF.getSubtarget().getInstrInfo());
+  TII = MF.getSubtarget<RISCVSubtarget>().getInstrInfo();
 
 #ifndef NDEBUG
   const unsigned OldSize = getInstSizeInBytes(MF);
