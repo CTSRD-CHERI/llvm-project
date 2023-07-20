@@ -129,8 +129,7 @@ private:
   void inferMachineType();
   void link(llvm::opt::InputArgList &args);
   template <class ELFT> void compileBitcodeFiles(bool skipLinkedOutput);
-  bool tryAddFatLTOFile(MemoryBufferRef mb, StringRef archiveName,
-                        uint64_t offsetInArchive, bool lazy);
+
   // True if we are in --whole-archive and --no-whole-archive.
   bool inWholeArchive = false;
 
@@ -212,7 +211,6 @@ struct Config {
   bool cmseImplib = false;
   bool allowMultipleDefinition;
   bool allowUndefinedCapRelocs = false;
-  bool fatLTOObjects;
   bool androidPackDynRelocs = false;
   bool armHasBlx = false;
   bool armHasMovtMovw = false;
