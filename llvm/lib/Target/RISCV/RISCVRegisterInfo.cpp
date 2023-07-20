@@ -132,6 +132,10 @@ BitVector RISCVRegisterInfo::getReservedRegs(const MachineFunction &MF) const {
 
   markSuperRegs(Reserved, RISCV::DDC);
 
+  // Additionally reserve dummy register used to form the register pair
+  // beginning with 'x0' for instructions that take register pairs.
+  markSuperRegs(Reserved, RISCV::DUMMY_REG_PAIR_WITH_X0);
+
   // V registers for code generation. We handle them manually.
   markSuperRegs(Reserved, RISCV::VL);
   markSuperRegs(Reserved, RISCV::VTYPE);
