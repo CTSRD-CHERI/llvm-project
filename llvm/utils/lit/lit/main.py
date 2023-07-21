@@ -42,7 +42,6 @@ def main(builtin_params={}):
         shardNumber=opts.runShard,
         config_prefix=opts.configPrefix,
         echo_all_commands=opts.echoAllCommands,
-        per_test_coverage=opts.per_test_coverage,
     )
 
     lit_config.cheri_test_mode = opts.cheri_tests_filter
