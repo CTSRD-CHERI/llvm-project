@@ -2989,12 +2989,13 @@ bool isKnownNonZero(const Value *V, const APInt &DemandedElts, unsigned Depth,
     }
   }
 
+  if (const auto *I = dyn_cast<Operator>(V))
+    if (isKnownNonZeroFromOperator(I, DemandedElts, Depth, Q))
+      return true;
+
   if (!isa<Constant>(V) &&
       isKnownNonNullFromDominatingCondition(V, Q.CxtI, Q.DT))
     return true;
-
-  if (const auto *I = dyn_cast<Operator>(V))
-    return isKnownNonZeroFromOperator(I, DemandedElts, Depth, Q);
 
   return false;
 }
