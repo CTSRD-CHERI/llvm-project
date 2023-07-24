@@ -155,6 +155,10 @@ bool MprotectReadOnly(uptr addr, usize size) {
   return 0 == internal_mprotect((void *)addr, size, PROT_READ);
 }
 
+bool MprotectReadWrite(uptr addr, uptr size) {
+  return 0 == internal_mprotect((void *)addr, size, PROT_READ | PROT_WRITE);
+}
+
 #if !SANITIZER_APPLE
 void MprotectMallocZones(void *addr, int prot) {}
 #endif
