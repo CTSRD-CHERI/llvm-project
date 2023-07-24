@@ -17894,7 +17894,7 @@ bool RISCVTargetLowering::allowsMisalignedMemoryAccesses(
     unsigned *Fast) const {
   if (!VT.isVector()) {
     if (Fast)
-      *Fast = 0;
+      *Fast = Subtarget.enableUnalignedScalarMem();
     return Subtarget.enableUnalignedScalarMem();
   }
 
@@ -17911,7 +17911,7 @@ bool RISCVTargetLowering::allowsMisalignedMemoryAccesses(
   // misaligned accesses.  TODO: Work through the codegen implications of
   // allowing such accesses to be formed, and considered fast.
   if (Fast)
-    *Fast = 0;
+    *Fast = Subtarget.enableUnalignedVectorMem();
   return Subtarget.enableUnalignedVectorMem();
 }
 
