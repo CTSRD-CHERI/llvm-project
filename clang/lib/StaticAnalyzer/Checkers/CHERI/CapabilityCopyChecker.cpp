@@ -11,6 +11,7 @@
 //
 //===----------------------------------------------------------------------===//
 
+#include "CHERIUtils.h"
 #include "clang/ASTMatchers/ASTMatchFinder.h"
 #include "clang/ASTMatchers/ASTMatchers.h"
 #include "clang/StaticAnalyzer/Checkers/BuiltinCheckerRegistration.h"
@@ -23,6 +24,7 @@
 
 using namespace clang;
 using namespace ento;
+using namespace cheri;
 
 namespace {
 
@@ -104,15 +106,6 @@ CapabilityCopyChecker::CapabilityCopyChecker() {
 }
 
 namespace {
-bool isPureCapMode(const ASTContext &C) {
-  return C.getTargetInfo().areAllPointersCapabilities();
-}
-
-bool isPointerToCapTy(const QualType Type, ASTContext &Ctx) {
-  if (!Type->isPointerType())
-    return false;
-  return Type->getPointeeType()->isCHERICapabilityType(Ctx, true);
-}
 
 bool isNonCapScalarType(QualType T, ASTContext &C) {
   if (!T->isScalarType())

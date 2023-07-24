@@ -11,6 +11,7 @@
 //
 //===----------------------------------------------------------------------===//
 
+#include "CHERIUtils.h"
 #include "clang/StaticAnalyzer/Checkers/BuiltinCheckerRegistration.h"
 #include <clang/StaticAnalyzer/Core/BugReporter/BugReporter.h>
 #include "clang/StaticAnalyzer/Core/Checker.h"
@@ -19,6 +20,7 @@
 
 using namespace clang;
 using namespace ento;
+using namespace cheri;
 
 namespace {
 class ProvenanceSourceChecker : public Checker<check::PostStmt<CastExpr>,
@@ -134,6 +136,9 @@ static bool isPointerToIntCapCast(const CastExpr *CE) {
 
 void ProvenanceSourceChecker::checkPostStmt(const CastExpr *CE,
                                             CheckerContext &C) const {
+  if (!isPureCapMode(C.getASTContext()))
+    return;
+
   if (isIntegerToIntCapCast(CE)) {
     SymbolRef IntCapSym = C.getSVal(CE).getAsSymbol();
     if (!IntCapSym)
@@ -206,6 +211,9 @@ static bool isIntToVoidPtrCast(const CastExpr *CE) {
 // Report intcap with ambiguous or NULL-derived provenance cast to pointer
 void ProvenanceSourceChecker::checkPreStmt(const CastExpr *CE,
                                            CheckerContext &C) const {
+  if (!isPureCapMode(C.getASTContext()))
+    return;
+
   if (CE->getCastKind() != clang::CK_IntegralToPointer)
     return;
 
@@ -366,6 +374,9 @@ void ProvenanceSourceChecker::propagateProvenanceInfoForBinOp(
 // store them to report again if used as pointer
 void ProvenanceSourceChecker::checkPostStmt(const BinaryOperator *BO,
                                             CheckerContext &C) const {
+  if (!isPureCapMode(C.getASTContext()))
+    return;
+
   BinaryOperatorKind const OpCode = BO->getOpcode();
   if (!(BinaryOperator::isAdditiveOp(OpCode)
         || BinaryOperator::isMultiplicativeOp(OpCode)
@@ -421,6 +432,9 @@ void ProvenanceSourceChecker::checkPostStmt(const BinaryOperator *BO,
 
 void ProvenanceSourceChecker::checkDeadSymbols(SymbolReaper &SymReaper,
                                                CheckerContext &C) const {
+  if (!isPureCapMode(C.getASTContext()))
+    return;
+
   ProgramStateRef State = C.getState();
 
   bool Removed = false;
