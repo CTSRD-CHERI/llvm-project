@@ -6152,10 +6152,6 @@ static SDValue foldAndOrOfSETCC(SDNode *LogicOp, SelectionDAG &DAG) {
       TLI.isOperationLegal(ISD::SMAX, OpVT) &&
       TLI.isOperationLegal(ISD::UMIN, OpVT) &&
       TLI.isOperationLegal(ISD::SMIN, OpVT)) {
-    SDValue CommonValue;
-    SDValue Operand1;
-    SDValue Operand2;
-    ISD::CondCode CC = ISD::SETCC_INVALID;
     if (LHS->getOpcode() == ISD::SETCC && RHS->getOpcode() == ISD::SETCC &&
         LHS->hasOneUse() && RHS->hasOneUse() &&
         // The two comparisons should have either the same predicate or the
@@ -6163,6 +6159,8 @@ static SDValue foldAndOrOfSETCC(SDNode *LogicOp, SelectionDAG &DAG) {
         (CCL == CCR || CCL == ISD::getSetCCSwappedOperands(CCR)) &&
         // The optimization does not work for `==` or `!=` .
         !ISD::isIntEqualitySetCC(CCL) && !ISD::isIntEqualitySetCC(CCR)) {
+      SDValue CommonValue, Operand1, Operand2;
+      ISD::CondCode CC = ISD::SETCC_INVALID;
       if (CCL == CCR) {
         if (LHS0 == RHS0) {
           CommonValue = LHS0;
@@ -6175,7 +6173,8 @@ static SDValue foldAndOrOfSETCC(SDNode *LogicOp, SelectionDAG &DAG) {
           Operand2 = RHS0;
           CC = CCL;
         }
-      } else if (CCL == ISD::getSetCCSwappedOperands(CCR)) {
+      } else {
+        assert(CCL == ISD::getSetCCSwappedOperands(CCR) && "Unexpected CC");
         if (LHS0 == RHS1) {
           CommonValue = LHS0;
           Operand1 = LHS1;
