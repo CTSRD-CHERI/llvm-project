@@ -113,7 +113,16 @@ enum RelExpr {
   R_MIPS_CHERI_CAPTAB_TLSGD,
   R_MIPS_CHERI_CAPTAB_TLSLD,
   R_MIPS_CHERI_CAPTAB_TPREL,
-  R_CHERI_CAPABILITY
+  R_CHERI_CAPABILITY,
+  // Same as R_PC but with page-aligned semantics.
+  R_LOONGARCH_PAGE_PC,
+  // Same as R_PLT_PC but with page-aligned semantics.
+  R_LOONGARCH_PLT_PAGE_PC,
+  // In addition to having page-aligned semantics, LoongArch GOT relocs are
+  // also reused for TLS, making the semantics differ from other architectures.
+  R_LOONGARCH_GOT,
+  R_LOONGARCH_GOT_PAGE_PC,
+  R_LOONGARCH_TLSGD_PAGE_PC,
 };
 
 // Architecture-neutral representation of relocation.
