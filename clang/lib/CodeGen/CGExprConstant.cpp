@@ -1133,6 +1133,11 @@ public:
     case CK_ConstructorConversion:
       return Visit(subExpr, destType);
 
+    case CK_ArrayToPointerDecay:
+      if (const auto *S = dyn_cast<StringLiteral>(subExpr))
+        return CGM.GetAddrOfConstantStringFromLiteral(S).getPointer();
+      return nullptr;
+
     case CK_IntToOCLSampler:
       llvm_unreachable("global sampler variables are not generated");
 
@@ -1170,7 +1175,6 @@ public:
     case CK_CPointerToObjCPointerCast:
     case CK_BlockPointerToObjCPointerCast:
     case CK_AnyPointerToBlockPointerCast:
-    case CK_ArrayToPointerDecay:
     case CK_FunctionToPointerDecay:
     case CK_BaseToDerived:
     case CK_DerivedToBase:
