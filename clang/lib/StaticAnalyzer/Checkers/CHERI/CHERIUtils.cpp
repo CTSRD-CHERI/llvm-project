@@ -22,6 +22,19 @@ bool isPointerToCapTy(const QualType Type, ASTContext &Ctx) {
   return Type->getPointeeType()->isCHERICapabilityType(Ctx, true);
 }
 
+CharUnits getCapabilityTypeSize(ASTContext &ASTCtx) {
+  return ASTCtx.getTypeSizeInChars(ASTCtx.VoidPtrTy);
+}
+
+CharUnits getCapabilityTypeAlign(ASTContext &ASTCtx) {
+  return ASTCtx.getTypeAlignInChars(ASTCtx.VoidPtrTy);
+}
+
+bool isGenericPointerType(const QualType T) {
+  return T->isVoidPointerType() ||
+         (T->isPointerType() && T->getPointeeType()->isCharType());
+}
+
 } // end of namespace: cheri
 } // end of namespace: ento
 } // end of namespace: clang
