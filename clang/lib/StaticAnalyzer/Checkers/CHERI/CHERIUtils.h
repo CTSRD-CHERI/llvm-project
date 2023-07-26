@@ -19,6 +19,12 @@ bool isPureCapMode(const ASTContext &C);
 
 bool isPointerToCapTy(const QualType Type, ASTContext &Ctx);
 
+CharUnits getCapabilityTypeSize(ASTContext &ASTCtx);
+
+CharUnits getCapabilityTypeAlign(ASTContext &ASTCtx);
+
+bool isGenericPointerType(const QualType T);
+
 } // end of namespace: cheri
 } // end of namespace: ento
 } // end of namespace: clang
