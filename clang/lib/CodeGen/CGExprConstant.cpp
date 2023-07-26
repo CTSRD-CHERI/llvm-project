@@ -1137,6 +1137,10 @@ public:
       if (const auto *S = dyn_cast<StringLiteral>(subExpr))
         return CGM.GetAddrOfConstantStringFromLiteral(S).getPointer();
       return nullptr;
+    case CK_NullToPointer:
+      if (llvm::Constant *C = Visit(subExpr, destType))
+        return CGM.EmitNullConstant(destType);
+      return nullptr;
 
     case CK_IntToOCLSampler:
       llvm_unreachable("global sampler variables are not generated");
@@ -1193,7 +1197,6 @@ public:
     case CK_IntegralComplexToFloatingComplex:
     case CK_PointerToIntegral:
     case CK_PointerToBoolean:
-    case CK_NullToPointer:
     case CK_IntegralCast:
     case CK_BooleanToSignedIntegral:
     case CK_IntegralToPointer:
