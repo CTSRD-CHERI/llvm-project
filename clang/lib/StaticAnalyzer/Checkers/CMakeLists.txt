@@ -27,6 +27,7 @@ add_clang_library(clangStaticAnalyzerCheckers
   CHERI/CHERIUtils.cpp
   CHERI/ProvenanceSourceChecker.cpp
   CHERI/CapabilityCopyChecker.cpp
+  CHERI/CapabilityAlignmentChecker.cpp
   ChrootChecker.cpp
   CloneChecker.cpp
   ContainerModeling.cpp
