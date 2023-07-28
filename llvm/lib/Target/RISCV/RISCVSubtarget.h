@@ -125,8 +125,7 @@ public:
     return hasStdExtZfhOrZfhmin() || hasStdExtZhinxOrZhinxmin();
   }
   bool hasHalfFPLoadStoreMove() const {
-    return HasStdExtZfh || HasStdExtZfhmin || HasStdExtZfbfmin ||
-           HasStdExtZvfbfwma;
+    return HasStdExtZfh || HasStdExtZfhmin || HasStdExtZfbfmin;
   }
   bool is64Bit() const { return IsRV64; }
   MVT getXLenVT() const { return XLenVT; }
