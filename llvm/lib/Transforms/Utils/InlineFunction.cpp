@@ -2454,19 +2454,9 @@ llvm::InlineResult llvm::InlineFunction(CallBase &CB, InlineFunctionInfo &IFI,
   // If the inlined code contained dynamic alloca instructions, wrap the inlined
   // code with llvm.stacksave/llvm.stackrestore intrinsics.
   if (InlinedFunctionInfo.ContainsDynamicAllocas) {
-    Module *M = Caller->getParent();
-    unsigned AllocaAS = M->getDataLayout().getAllocaAddrSpace();
-    // Get the two intrinsics we care about.
-    Function *StackSave = Intrinsic::getDeclaration(
-        M, Intrinsic::stacksave,
-        {Type::getInt8PtrTy(Caller->getContext(), AllocaAS)});
-    Function *StackRestore = Intrinsic::getDeclaration(
-        M, Intrinsic::stackrestore,
-        {Type::getInt8PtrTy(Caller->getContext(), AllocaAS)});
-
     // Insert the llvm.stacksave.
     CallInst *SavedPtr = IRBuilder<>(&*FirstNewBlock, FirstNewBlock->begin())
-                             .CreateCall(StackSave, {}, "savedstack");
+                             .CreateStackSave("savedstack");
 
     // Insert a call to llvm.stackrestore before any return instructions in the
     // inlined function.
@@ -2477,7 +2467,7 @@ llvm::InlineResult llvm::InlineFunction(CallBase &CB, InlineFunctionInfo &IFI,
         continue;
       if (InlinedDeoptimizeCalls && RI->getParent()->getTerminatingDeoptimizeCall())
         continue;
-      IRBuilder<>(RI).CreateCall(StackRestore, SavedPtr);
+      IRBuilder<>(RI).CreateStackRestore(SavedPtr);
     }
   }
 

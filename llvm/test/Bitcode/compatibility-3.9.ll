@@ -1386,7 +1386,7 @@ define void @intrinsics.codegen() {
 
   %stack = call i8* @llvm.stacksave()
   ; CHECK: %stack = call ptr @llvm.stacksave.p0()
-  call void @llvm.stackrestore.p0i8(i8* %stack)
+  call void @llvm.stackrestore(i8* %stack)
   ; CHECK: call void @llvm.stackrestore.p0(ptr %stack)
 
   call void @llvm.prefetch(i8* %stack, i32 0, i32 3, i32 0)

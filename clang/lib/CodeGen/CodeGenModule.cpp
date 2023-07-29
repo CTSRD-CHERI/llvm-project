@@ -5294,8 +5294,6 @@ void CodeGenModule::EmitGlobalVarDefinition(const VarDecl *D,
                           InitDecl->getFlexibleArrayInitChars(getContext());
       CharUnits CstSize = CharUnits::fromQuantity(
           getDataLayout().getTypeAllocSize(Init->getType()));
-      llvm::errs() << "VarSize = " << VarSize.getQuantity() << "\n";
-      llvm::errs() << "CstSize" << CstSize.getQuantity() << "\n";
       assert(VarSize == CstSize && "Emitted constant has unexpected size");
 #endif
     }

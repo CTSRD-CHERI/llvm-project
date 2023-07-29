@@ -280,6 +280,10 @@ public:
   /// Sets the address space used for allocas
   void setAllocaAS(unsigned AS) { AllocaAddrSpace = AS; }
 
+  PointerType *getAllocaPtrType(LLVMContext &Ctx) const {
+    return PointerType::get(Ctx, AllocaAddrSpace);
+  }
+
   /// Returns the alignment of function pointers, which may or may not be
   /// related to the alignment of functions.
   /// \see getFunctionPtrAlignType
