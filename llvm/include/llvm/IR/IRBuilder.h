@@ -671,7 +671,11 @@ public:
                      PreserveCheriTags PreserveTags = PreserveCheriTags::TODO,
                      bool IsVolatile = false, MDNode *TBAATag = nullptr,
                      MDNode *TBAAStructTag = nullptr,
-                     MDNode *ScopeTag = nullptr, MDNode *NoAliasTag = nullptr);
+                     MDNode *ScopeTag = nullptr, MDNode *NoAliasTag = nullptr) {
+    return CreateMemTransferInst(Intrinsic::memcpy_inline, Dst, DstAlign, Src,
+                                 SrcAlign, Size, PreserveTags, IsVolatile,
+                                 TBAATag, TBAAStructTag, ScopeTag, NoAliasTag);
+  }
 
   /// Create and insert an element unordered-atomic memcpy between the
   /// specified pointers.
@@ -704,7 +708,12 @@ public:
                 MaybeAlign SrcAlign, Value *Size,
                 PreserveCheriTags PreserveTags = PreserveCheriTags::TODO,
                 bool isVolatile = false, MDNode *TBAATag = nullptr,
-                MDNode *ScopeTag = nullptr, MDNode *NoAliasTag = nullptr);
+                MDNode *ScopeTag = nullptr, MDNode *NoAliasTag = nullptr) {
+    return CreateMemTransferInst(
+        Intrinsic::memmove, Dst, DstAlign, Src, SrcAlign, Size, PreserveTags,
+        isVolatile, TBAATag,
+        /*TBAAStructTag=*/nullptr, ScopeTag, NoAliasTag);
+  }
 
   /// \brief Create and insert an element unordered-atomic memmove between the
   /// specified pointers.

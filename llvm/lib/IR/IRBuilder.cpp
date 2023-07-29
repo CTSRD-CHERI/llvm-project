@@ -223,6 +223,9 @@ CallInst *IRBuilderBase::CreateMemTransferInst(
     MaybeAlign SrcAlign, Value *Size, PreserveCheriTags PreserveTags,
     bool isVolatile, MDNode *TBAATag, MDNode *TBAAStructTag, MDNode *ScopeTag,
     MDNode *NoAliasTag) {
+  assert((IntrID == Intrinsic::memcpy || IntrID == Intrinsic::memcpy_inline ||
+          IntrID == Intrinsic::memmove) &&
+         "Unexpected intrinsic ID");
   Value *Ops[] = {Dst, Src, Size, getInt1(isVolatile)};
   Type *Tys[] = { Dst->getType(), Src->getType(), Size->getType() };
   Module *M = BB->getParent()->getParent();
@@ -259,44 +262,6 @@ CallInst *IRBuilderBase::CreateMemTransferInst(
   return CI;
 }
 
-CallInst *IRBuilderBase::CreateMemCpyInline(
-    Value *Dst, MaybeAlign DstAlign, Value *Src, MaybeAlign SrcAlign,
-    Value *Size, PreserveCheriTags PreserveTags, bool IsVolatile,
-    MDNode *TBAATag, MDNode *TBAAStructTag, MDNode *ScopeTag,
-    MDNode *NoAliasTag) {
-  Value *Ops[] = {Dst, Src, Size, getInt1(IsVolatile)};
-  Type *Tys[] = {Dst->getType(), Src->getType(), Size->getType()};
-  Function *F = BB->getParent();
-  Module *M = F->getParent();
-  Function *TheFn = Intrinsic::getDeclaration(M, Intrinsic::memcpy_inline, Tys);
-
-  CallInst *CI = CreateCall(TheFn, Ops);
-
-  auto *MCI = cast<MemCpyInlineInst>(CI);
-  if (M->getDataLayout().hasCheriCapabilities())
-    MCI->setPreserveCheriTags(PreserveTags, M->getDataLayout());
-  if (DstAlign)
-    MCI->setDestAlignment(*DstAlign);
-  if (SrcAlign)
-    MCI->setSourceAlignment(*SrcAlign);
-
-  // Set the TBAA info if present.
-  if (TBAATag)
-    MCI->setMetadata(LLVMContext::MD_tbaa, TBAATag);
-
-  // Set the TBAA Struct info if present.
-  if (TBAAStructTag)
-    MCI->setMetadata(LLVMContext::MD_tbaa_struct, TBAAStructTag);
-
-  if (ScopeTag)
-    MCI->setMetadata(LLVMContext::MD_alias_scope, ScopeTag);
-
-  if (NoAliasTag)
-    MCI->setMetadata(LLVMContext::MD_noalias, NoAliasTag);
-
-  return CI;
-}
-
 CallInst *IRBuilderBase::CreateElementUnorderedAtomicMemCpy(
     Value *Dst, Align DstAlign, Value *Src, Align SrcAlign, Value *Size,
     uint32_t ElementSize, PreserveCheriTags PreserveTags, MDNode *TBAATag,
@@ -327,44 +292,6 @@ CallInst *IRBuilderBase::CreateElementUnorderedAtomicMemCpy(
   // Set the TBAA Struct info if present.
   if (TBAAStructTag)
     CI->setMetadata(LLVMContext::MD_tbaa_struct, TBAAStructTag);
-
-  if (ScopeTag)
-    CI->setMetadata(LLVMContext::MD_alias_scope, ScopeTag);
-
-  if (NoAliasTag)
-    CI->setMetadata(LLVMContext::MD_noalias, NoAliasTag);
-
-  return CI;
-}
-
-CallInst *IRBuilderBase::CreateMemMove(Value *Dst, MaybeAlign DstAlign,
-                                       Value *Src, MaybeAlign SrcAlign,
-                                       Value *Size,
-                                       PreserveCheriTags PreserveTags,
-                                       bool isVolatile, MDNode *TBAATag,
-                                       MDNode *ScopeTag, MDNode *NoAliasTag) {
-  Value *Ops[] = {Dst, Src, Size, getInt1(isVolatile)};
-  Type *Tys[] = { Dst->getType(), Src->getType(), Size->getType() };
-  Module *M = BB->getParent()->getParent();
-  Function *TheFn = Intrinsic::getDeclaration(M, Intrinsic::memmove, Tys);
-  if (Tys[2]->getIntegerBitWidth() > 64) {
-    report_fatal_error("Created MemTransfer with size type > i64: " +
-                       TheFn->getName());
-  }
-
-  CallInst *CI = CreateCall(TheFn, Ops);
-
-  auto *MMI = cast<MemMoveInst>(CI);
-  if (M->getDataLayout().hasCheriCapabilities())
-    MMI->setPreserveCheriTags(PreserveTags, M->getDataLayout());
-  if (DstAlign)
-    MMI->setDestAlignment(*DstAlign);
-  if (SrcAlign)
-    MMI->setSourceAlignment(*SrcAlign);
-
-  // Set the TBAA info if present.
-  if (TBAATag)
-    CI->setMetadata(LLVMContext::MD_tbaa, TBAATag);
 
   if (ScopeTag)
     CI->setMetadata(LLVMContext::MD_alias_scope, ScopeTag);
