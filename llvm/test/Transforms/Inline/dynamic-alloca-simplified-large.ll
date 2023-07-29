@@ -187,7 +187,7 @@ define ptr @test_stack_allocate_always(i32 %size) {
 ; CHECK-LABEL: define {{[^@]+}}@test_stack_allocate_always
 ; CHECK-SAME: (i32 [[SIZE:%.*]]) {
 ; CHECK-NEXT:  entry:
-; CHECK-NEXT:    [[SAVEDSTACK:%.*]] = call ptr @llvm.stacksave().p0
+; CHECK-NEXT:    [[SAVEDSTACK:%.*]] = call ptr @llvm.stacksave.p0()
 ; CHECK-NEXT:    [[CMP_I:%.*]] = icmp ult i32 [[SIZE]], 100
 ; CHECK-NEXT:    [[CONV_I:%.*]] = zext i32 [[SIZE]] to i64
 ; CHECK-NEXT:    br i1 [[CMP_I]], label [[IF_THEN_I:%.*]], label [[IF_END_I:%.*]]
