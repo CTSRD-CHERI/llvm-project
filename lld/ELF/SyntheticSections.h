@@ -25,6 +25,7 @@
 #include "Symbols.h"
 #include "llvm/ADT/DenseSet.h"
 #include "llvm/ADT/MapVector.h"
+#include "llvm/BinaryFormat/ELF.h"
 #include "llvm/MC/StringTableBuilder.h"
 #include "llvm/Support/Compiler.h"
 #include "llvm/Support/Endian.h"
@@ -1253,6 +1254,32 @@ public:
   size_t getSize() const override;
 };
 
+class MemtagDescriptors final : public SyntheticSection {
+public:
+  MemtagDescriptors()
+      : SyntheticSection(llvm::ELF::SHF_ALLOC,
+                         llvm::ELF::SHT_AARCH64_MEMTAG_GLOBALS_DYNAMIC,
+                         /*alignment=*/4, ".memtag.globals.dynamic") {}
+  void writeTo(uint8_t *buf) override;
+  // The size of the section is non-computable until all addresses are
+  // synthetized, because the section's contents contain a sorted
+  // varint-compressed list of pointers to global variables. We only know the
+  // final size after `finalizeAddressDependentContent()`.
+  size_t getSize() const override;
+  bool updateAllocSize() override;
+
+  void addSymbol(const Symbol &sym) {
+    symbols.push_back(&sym);
+  }
+
+  bool isNeeded() const override {
+    return !symbols.empty();
+  }
+
+private:
+  SmallVector<const Symbol *, 0> symbols;
+};
+
 InputSection *createInterpSection();
 MergeInputSection *createCommentSection();
 template <class ELFT> void splitSections();
@@ -1285,6 +1312,7 @@ struct Partition {
   std::unique_ptr<GnuHashTableSection> gnuHashTab;
   std::unique_ptr<HashTableSection> hashTab;
   std::unique_ptr<MemtagAndroidNote> memtagAndroidNote;
+  std::unique_ptr<MemtagDescriptors> memtagDescriptors;
   std::unique_ptr<PackageMetadataNote> packageMetadataNote;
   std::unique_ptr<RelocationBaseSection> relaDyn;
   std::unique_ptr<RelrBaseSection> relrDyn;
