@@ -113,7 +113,7 @@ TEST(TBAAMetadataTest, BasicTypes) {
 
   I = matchNext(I,
       MInstruction(Instruction::Store,
-        MValType(Type::getInt8PtrTy(Compiler.Context, 0)),
+        MValType(PointerType::getUnqual(Compiler.Context)),
         MMTuple(
           MMTuple(
             MMString("any pointer"),
@@ -125,7 +125,7 @@ TEST(TBAAMetadataTest, BasicTypes) {
 
   I = matchNext(I,
       MInstruction(Instruction::Store,
-        MValType(Type::getInt32PtrTy(Compiler.Context, 0)),
+        MValType(PointerType::getUnqual(Compiler.Context)),
         MMTuple(
           MMTuple(
             MMString("any pointer"),

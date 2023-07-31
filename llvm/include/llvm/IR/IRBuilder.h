@@ -559,7 +559,7 @@ public:
 
   /// Fetch the type representing a pointer to an 8-bit integer value.
   PointerType *getInt8PtrTy(LLVM_DEFAULT_AS_PARAM(AddrSpace)) {
-    return Type::getInt8PtrTy(Context, AddrSpace);
+    return getPtrTy(AddrSpace);
   }
 
   /// Fetch the type of an integer with size at least as big as that of a

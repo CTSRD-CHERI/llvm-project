@@ -664,8 +664,9 @@ void CGRecordLowering::accumulateVPtrs() {
         llvm::FunctionType::get(getIntNType(32), /*isVarArg=*/true)->
             getPointerTo(AS)->getPointerTo(AS)));
   if (Layout.hasOwnVBPtr())
-    Members.push_back(MemberInfo(Layout.getVBPtrOffset(), MemberInfo::VBPtr,
-        llvm::Type::getInt32PtrTy(Types.getLLVMContext(), AS)));
+    Members.push_back(
+        MemberInfo(Layout.getVBPtrOffset(), MemberInfo::VBPtr,
+                   llvm::PointerType::get(Types.getLLVMContext(), AS)));
 }
 
 void CGRecordLowering::accumulateVBases() {

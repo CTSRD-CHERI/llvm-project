@@ -4162,9 +4162,9 @@ llvm::GlobalVariable *CGObjCGNU::ObjCIvarOffsetVariable(
   llvm::GlobalVariable *IvarOffsetPointer = TheModule.getNamedGlobal(Name);
   unsigned AS = CGM.getTargetCodeGenInfo().getDefaultAS();
   if (!IvarOffsetPointer)
-    IvarOffsetPointer = new llvm::GlobalVariable(TheModule,
-            llvm::Type::getInt32PtrTy(VMContext, AS), false,
-            llvm::GlobalValue::ExternalLinkage, nullptr, Name);
+    IvarOffsetPointer = new llvm::GlobalVariable(
+        TheModule, llvm::PointerType::get(VMContext, AS), false,
+        llvm::GlobalValue::ExternalLinkage, nullptr, Name);
   return IvarOffsetPointer;
 }
 
@@ -4208,10 +4208,11 @@ llvm::Value *CGObjCGNU::EmitIvarOffset(CodeGenFunction &CGF,
         CGF.CGM.getTarget().getTriple().isKnownWindowsMSVCEnvironment())
       return CGF.Builder.CreateZExtOrBitCast(
           CGF.Builder.CreateAlignedLoad(
-              Int32Ty, CGF.Builder.CreateAlignedLoad(
-                           llvm::Type::getInt32PtrTy(VMContext, AS),
-                           ObjCIvarOffsetVariable(Interface, Ivar),
-                           CGF.getPointerAlign(), "ivar"),
+              Int32Ty,
+              CGF.Builder.CreateAlignedLoad(
+                  llvm::PointerType::get(VMContext, AS),
+                  ObjCIvarOffsetVariable(Interface, Ivar),
+                  CGF.getPointerAlign(), "ivar"),
               CharUnits::fromQuantity(4)),
           PtrDiffTy);
     std::string name = "__objc_ivar_offset_value_" +

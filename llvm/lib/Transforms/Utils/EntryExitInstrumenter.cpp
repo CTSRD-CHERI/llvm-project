@@ -35,7 +35,7 @@ static void insertCall(Function &CurFn, StringRef Func,
     Triple TargetTriple(M.getTargetTriple());
     if (TargetTriple.isOSAIX() && Func == "__mcount") {
       Type *SizeTy = M.getDataLayout().getIntPtrType(C, M.getDataLayout().getProgramAddressSpace());
-      Type *SizePtrTy = SizeTy->getPointerTo();
+      Type *SizePtrTy = PointerType::get(C, M.getDataLayout().getProgramAddressSpace());
       GlobalVariable *GV = new GlobalVariable(M, SizeTy, /*isConstant=*/false,
                                               GlobalValue::InternalLinkage,
                                               ConstantInt::get(SizeTy, 0));
