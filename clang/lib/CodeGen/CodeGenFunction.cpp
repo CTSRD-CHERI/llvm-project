@@ -2090,9 +2090,7 @@ CodeGenFunction::EmitNullInitialization(Address DestPtr, QualType Ty) {
                                NullConstant, Twine());
     CharUnits NullAlign = DestPtr.getAlignment();
     NullVariable->setAlignment(NullAlign.getAsAlign());
-    Address SrcPtr(Builder.CreatePointerBitCastOrAddrSpaceCast(NullVariable,
-                                                               CGM.Int8PtrTy),
-                   Builder.getInt8Ty(), NullAlign);
+    Address SrcPtr(NullVariable, Builder.getInt8Ty(), NullAlign);
 
     if (vla) return emitNonZeroVLAInit(*this, Ty, DestPtr, SrcPtr, SizeVal);
 
