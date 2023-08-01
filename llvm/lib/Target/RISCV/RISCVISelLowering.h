@@ -679,9 +679,6 @@ public:
   Register getRegisterByName(const char *RegName, LLT VT,
                              const MachineFunction &MF) const override;
 
-  EVT getOptimalMemOpType(const MemOp &Op,
-                          const AttributeList &FuncAttributes) const override;
-
   // Lower incoming arguments, copy physregs into vregs
   SDValue LowerFormalArguments(SDValue Chain, CallingConv::ID CallConv,
                                bool IsVarArg,
@@ -735,6 +732,9 @@ public:
       EVT VT, unsigned AddrSpace = 0, Align Alignment = Align(1),
       MachineMemOperand::Flags Flags = MachineMemOperand::MONone,
       unsigned *Fast = nullptr) const override;
+
+  EVT getOptimalMemOpType(const MemOp &Op,
+                          const AttributeList &FuncAttributes) const override;
 
   bool splitValueIntoRegisterParts(
       SelectionDAG & DAG, const SDLoc &DL, SDValue Val, SDValue *Parts,
