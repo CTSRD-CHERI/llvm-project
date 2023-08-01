@@ -263,9 +263,7 @@ private:
   FunctionCallee SanCovTraceGepFunction;
   FunctionCallee SanCovTraceSwitchFunction;
   GlobalVariable *SanCovLowestStack;
-  Type *IntptrTy, *PcAddrTy, *Int64Ty, *GlobalsInt128PtrTy, *GlobalsInt64PtrTy,
-      *Int32Ty, *GlobalsInt32PtrTy, *Int16Ty, *GlobalsInt16PtrTy, *Int8Ty,
-      *GlobalsInt8PtrTy, *Int1Ty, *GlobalsInt1PtrTy;
+  Type *PtrTy, *IntptrTy, *PcAddrTy, *Int64Ty, *Int32Ty, *Int16Ty, *Int8Ty, *Int1Ty;
   Module *CurModule;
   std::string CurModuleUniqueId;
   Triple TargetTriple;
@@ -333,14 +331,10 @@ ModuleSanitizerCoverage::CreateSecStartEnd(Module &M, const char *Section,
 
   // Account for the fact that on windows-msvc __start_* symbols actually
   // point to a uint64_t before the start of the array.
-  auto SecStartI8Ptr = IRB.CreatePointerCast(SecStart, GlobalsInt8PtrTy);
+  auto SecStartI8Ptr = IRB.CreatePointerCast(SecStart, PtrTy);
   auto GEP = IRB.CreateGEP(Int8Ty, SecStartI8Ptr,
                            ConstantInt::get(IntptrTy, sizeof(uint64_t)));
-  return std::make_pair(
-      IRB.CreatePointerCast(
-          GEP, PointerType::get(
-                   Ty, M.getDataLayout().getDefaultGlobalsAddressSpace())),
-      SecEnd);
+  return std::make_pair(GEP, SecEnd);
 }
 
 Function *ModuleSanitizerCoverage::CreateInitCallsForSections(
@@ -350,8 +344,6 @@ Function *ModuleSanitizerCoverage::CreateInitCallsForSections(
   auto SecStart = SecStartEnd.first;
   auto SecEnd = SecStartEnd.second;
   Function *CtorFunc;
-  Type *PtrTy =
-      PointerType::get(Ty, M.getDataLayout().getDefaultGlobalsAddressSpace());
   std::tie(CtorFunc, std::ignore) = createSanitizerCtorAndInitFunctions(
       M, CtorName, InitFunctionName, {PtrTy, PtrTy}, {SecStart, SecEnd});
   assert(CtorFunc->getName() == CtorName);
@@ -396,20 +388,14 @@ bool ModuleSanitizerCoverage::instrumentModule(
   FunctionBoolArray = nullptr;
   FunctionPCsArray = nullptr;
   FunctionCFsArray = nullptr;
-  // XXXAR: assuming Address space zero pointer -> range of any pointer
+  //// XXXAR: assuming Address space zero pointer -> range of any pointer
   IntptrTy = Type::getIntNTy(*C, DL->getPointerSizeInBits(0));
 
   PcAddrTy = Type::getIntNTy(*C, DL->getIndexSizeInBits(DL->getProgramAddressSpace()));
   unsigned GlobalAS = DL->getDefaultGlobalsAddressSpace();
-  Type *PcAddrPtrTy = PcAddrTy->getPointerTo(GlobalAS);
+  PtrTy = PointerType::get(*C, GlobalAS);
   Type *VoidTy = Type::getVoidTy(*C);
   IRBuilder<> IRB(*C);
-  GlobalsInt128PtrTy = PointerType::get(IRB.getInt128Ty(), GlobalAS);
-  GlobalsInt64PtrTy = PointerType::get(IRB.getInt64Ty(), GlobalAS);
-  GlobalsInt32PtrTy = PointerType::get(IRB.getInt32Ty(), GlobalAS);
-  GlobalsInt16PtrTy = PointerType::get(IRB.getInt16Ty(), GlobalAS);
-  GlobalsInt8PtrTy = PointerType::get(IRB.getInt8Ty(), GlobalAS);
-  GlobalsInt1PtrTy = PointerType::get(IRB.getInt1Ty(), GlobalAS);
   Int64Ty = IRB.getInt64Ty();
   Int32Ty = IRB.getInt32Ty();
   Int16Ty = IRB.getInt16Ty();
@@ -448,26 +434,26 @@ bool ModuleSanitizerCoverage::instrumentModule(
       M.getOrInsertFunction(SanCovTraceConstCmp8, VoidTy, Int64Ty, Int64Ty);
 
   // Loads.
-  SanCovLoadFunction[0] = M.getOrInsertFunction(SanCovLoad1, VoidTy, GlobalsInt8PtrTy);
+  SanCovLoadFunction[0] = M.getOrInsertFunction(SanCovLoad1, VoidTy, PtrTy);
   SanCovLoadFunction[1] =
-      M.getOrInsertFunction(SanCovLoad2, VoidTy, GlobalsInt16PtrTy);
+      M.getOrInsertFunction(SanCovLoad2, VoidTy, PtrTy);
   SanCovLoadFunction[2] =
-      M.getOrInsertFunction(SanCovLoad4, VoidTy, GlobalsInt32PtrTy);
+      M.getOrInsertFunction(SanCovLoad4, VoidTy, PtrTy);
   SanCovLoadFunction[3] =
-      M.getOrInsertFunction(SanCovLoad8, VoidTy, GlobalsInt64PtrTy);
+      M.getOrInsertFunction(SanCovLoad8, VoidTy, PtrTy);
   SanCovLoadFunction[4] =
-      M.getOrInsertFunction(SanCovLoad16, VoidTy, GlobalsInt128PtrTy);
+      M.getOrInsertFunction(SanCovLoad16, VoidTy, PtrTy);
   // Stores.
   SanCovStoreFunction[0] =
-      M.getOrInsertFunction(SanCovStore1, VoidTy, GlobalsInt8PtrTy);
+      M.getOrInsertFunction(SanCovStore1, VoidTy, PtrTy);
   SanCovStoreFunction[1] =
-      M.getOrInsertFunction(SanCovStore2, VoidTy, GlobalsInt16PtrTy);
+      M.getOrInsertFunction(SanCovStore2, VoidTy, PtrTy);
   SanCovStoreFunction[2] =
-      M.getOrInsertFunction(SanCovStore4, VoidTy, GlobalsInt32PtrTy);
+      M.getOrInsertFunction(SanCovStore4, VoidTy, PtrTy);
   SanCovStoreFunction[3] =
-      M.getOrInsertFunction(SanCovStore8, VoidTy, GlobalsInt64PtrTy);
+      M.getOrInsertFunction(SanCovStore8, VoidTy, PtrTy);
   SanCovStoreFunction[4] =
-      M.getOrInsertFunction(SanCovStore16, VoidTy, GlobalsInt128PtrTy);
+      M.getOrInsertFunction(SanCovStore16, VoidTy, PtrTy);
 
   {
     AttributeList AL;
@@ -479,8 +465,8 @@ bool ModuleSanitizerCoverage::instrumentModule(
       M.getOrInsertFunction(SanCovTraceDiv8, VoidTy, Int64Ty);
   SanCovTraceGepFunction =
       M.getOrInsertFunction(SanCovTraceGep, VoidTy, IntptrTy);
-  SanCovTraceSwitchFunction = M.getOrInsertFunction(
-      SanCovTraceSwitchName, VoidTy, Int64Ty, GlobalsInt64PtrTy);
+  SanCovTraceSwitchFunction =
+      M.getOrInsertFunction(SanCovTraceSwitchName, VoidTy, Int64Ty, PtrTy);
 
   Constant *SanCovLowestStackConstant =
       M.getOrInsertGlobal(SanCovLowestStackName, IntptrTy);
@@ -497,7 +483,7 @@ bool ModuleSanitizerCoverage::instrumentModule(
 
   SanCovTracePC = M.getOrInsertFunction(SanCovTracePCName, VoidTy);
   SanCovTracePCGuard =
-      M.getOrInsertFunction(SanCovTracePCGuardName, VoidTy, GlobalsInt32PtrTy);
+      M.getOrInsertFunction(SanCovTracePCGuardName, VoidTy, PtrTy);
 
   for (auto &F : M)
     instrumentFunction(F, DTCallback, PDTCallback);
@@ -520,15 +506,15 @@ bool ModuleSanitizerCoverage::instrumentModule(
   if (Ctor && Options.PCTable) {
     auto SecStartEnd = CreateSecStartEnd(M, SanCovPCsSectionName, PcAddrTy);
     FunctionCallee InitFunction = declareSanitizerInitFunction(
-        M, SanCovPCsInitName, {PcAddrPtrTy, PcAddrPtrTy});
+        M, SanCovPCsInitName, {PtrTy, PtrTy});
     IRBuilder<> IRBCtor(Ctor->getEntryBlock().getTerminator());
     IRBCtor.CreateCall(InitFunction, {SecStartEnd.first, SecStartEnd.second});
   }
 
   if (Ctor && Options.CollectControlFlow) {
-    auto SecStartEnd = CreateSecStartEnd(M, SanCovCFsSectionName, PcAddrPtrTy);
+    auto SecStartEnd = CreateSecStartEnd(M, SanCovCFsSectionName, PtrTy);
     FunctionCallee InitFunction = declareSanitizerInitFunction(
-        M, SanCovCFsInitName, {PcAddrPtrTy, PcAddrPtrTy});
+        M, SanCovCFsInitName, {PtrTy, PtrTy});
     IRBuilder<> IRBCtor(Ctor->getEntryBlock().getTerminator());
     IRBCtor.CreateCall(InitFunction, {SecStartEnd.first, SecStartEnd.second});
   }
@@ -859,7 +845,7 @@ void ModuleSanitizerCoverage::InjectTraceForSwitch(
           ConstantArray::get(ArrayOfInt64Ty, Initializers),
           "__sancov_gen_cov_switch_values");
       IRB.CreateCall(SanCovTraceSwitchFunction,
-                     {Cond, IRB.CreatePointerCast(GV, GlobalsInt64PtrTy)});
+                     {Cond, IRB.CreatePointerCast(GV, PtrTy)});
     }
   }
 }
@@ -904,17 +890,13 @@ void ModuleSanitizerCoverage::InjectTraceForLoadsAndStores(
            : TypeSize == 128 ? 4
                              : -1;
   };
-  Type *PointerType[5] = {GlobalsInt8PtrTy, GlobalsInt16PtrTy,
-                          GlobalsInt32PtrTy, GlobalsInt64PtrTy,
-                          GlobalsInt128PtrTy};
   for (auto *LI : Loads) {
     InstrumentationIRBuilder IRB(LI);
     auto Ptr = LI->getPointerOperand();
     int Idx = CallbackIdx(LI->getType());
     if (Idx < 0)
       continue;
-    IRB.CreateCall(SanCovLoadFunction[Idx],
-                   IRB.CreatePointerCast(Ptr, PointerType[Idx]));
+    IRB.CreateCall(SanCovLoadFunction[Idx], Ptr);
   }
   for (auto *SI : Stores) {
     InstrumentationIRBuilder IRB(SI);
@@ -922,8 +904,7 @@ void ModuleSanitizerCoverage::InjectTraceForLoadsAndStores(
     int Idx = CallbackIdx(SI->getValueOperand()->getType());
     if (Idx < 0)
       continue;
-    IRB.CreateCall(SanCovStoreFunction[Idx],
-                   IRB.CreatePointerCast(Ptr, PointerType[Idx]));
+    IRB.CreateCall(SanCovStoreFunction[Idx], Ptr);
   }
 }
 
@@ -989,7 +970,7 @@ void ModuleSanitizerCoverage::InjectCoverageAtBlock(Function &F, BasicBlock &BB,
     auto GuardPtr = IRB.CreateIntToPtr(
         IRB.CreateAdd(IRB.CreatePointerCast(FunctionGuardArray, IntptrTy),
                       ConstantInt::get(IntptrTy, Idx * 4)),
-        GlobalsInt32PtrTy);
+        PtrTy);
 #else
     auto GuardPtr = IRB.CreateGEP(
         FunctionGuardArray->getValueType(), FunctionGuardArray,
@@ -1024,7 +1005,7 @@ void ModuleSanitizerCoverage::InjectCoverageAtBlock(Function &F, BasicBlock &BB,
     Module *M = F.getParent();
     Function *GetFrameAddr = Intrinsic::getDeclaration(
         M, Intrinsic::frameaddress,
-        IRB.getInt8PtrTy(M->getDataLayout().getAllocaAddrSpace()));
+        IRB.getPtrTy(M->getDataLayout().getAllocaAddrSpace()));
     auto FrameAddrPtr =
         IRB.CreateCall(GetFrameAddr, {Constant::getNullValue(Int32Ty)});
     auto FrameAddrInt = IRB.CreatePtrToInt(FrameAddrPtr, IntptrTy);
@@ -1071,46 +1052,44 @@ ModuleSanitizerCoverage::getSectionEnd(const std::string &Section) const {
 void ModuleSanitizerCoverage::createFunctionControlFlow(Function &F) {
   SmallVector<Constant *, 32> CFs;
   IRBuilder<> IRB(&*F.getEntryBlock().getFirstInsertionPt());
-  Type *PcAddrPtrTy =
-      PcAddrTy->getPointerTo(DL->getDefaultGlobalsAddressSpace());
 
   for (auto &BB : F) {
     // blockaddress can not be used on function's entry block.
     if (&BB == &F.getEntryBlock())
-      CFs.push_back((Constant *)IRB.CreatePointerCast(&F, PcAddrPtrTy));
+      CFs.push_back((Constant *)IRB.CreatePointerCast(&F, PtrTy));
     else
       CFs.push_back((Constant *)IRB.CreatePointerCast(BlockAddress::get(&BB),
-                                                      PcAddrPtrTy));
+                                                      PtrTy));
 
     for (auto SuccBB : successors(&BB)) {
       assert(SuccBB != &F.getEntryBlock());
       CFs.push_back((Constant *)IRB.CreatePointerCast(BlockAddress::get(SuccBB),
-                                                      PcAddrPtrTy));
+                                                      PtrTy));
     }
 
-    CFs.push_back((Constant *)Constant::getNullValue(PcAddrPtrTy));
+    CFs.push_back((Constant *)Constant::getNullValue(PtrTy));
 
     for (auto &Inst : BB) {
       if (CallBase *CB = dyn_cast<CallBase>(&Inst)) {
         if (CB->isIndirectCall()) {
           // TODO(navidem): handle indirect calls, for now mark its existence.
           CFs.push_back((Constant *)IRB.CreateIntToPtr(
-              ConstantInt::get(IntptrTy, -1), PcAddrPtrTy));
+              ConstantInt::get(IntptrTy, -1), PtrTy));
         } else {
           auto CalledF = CB->getCalledFunction();
           if (CalledF && !CalledF->isIntrinsic())
             CFs.push_back(
-                (Constant *)IRB.CreatePointerCast(CalledF, PcAddrPtrTy));
+                (Constant *)IRB.CreatePointerCast(CalledF, PtrTy));
         }
       }
     }
 
-    CFs.push_back((Constant *)Constant::getNullValue(PcAddrPtrTy));
+    CFs.push_back((Constant *)Constant::getNullValue(PtrTy));
   }
 
   FunctionCFsArray = CreateFunctionLocalArrayInSection(
-      CFs.size(), F, PcAddrPtrTy, SanCovCFsSectionName);
+      CFs.size(), F, PtrTy, SanCovCFsSectionName);
   FunctionCFsArray->setInitializer(
-      ConstantArray::get(ArrayType::get(PcAddrPtrTy, CFs.size()), CFs));
+      ConstantArray::get(ArrayType::get(PtrTy, CFs.size()), CFs));
   FunctionCFsArray->setConstant(true);
 }

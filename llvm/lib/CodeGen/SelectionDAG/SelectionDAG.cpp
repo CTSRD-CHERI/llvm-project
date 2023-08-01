@@ -1297,9 +1297,8 @@ SDNode *SelectionDAG::FindModifiedNodeSlot(SDNode *N, ArrayRef<SDValue> Ops,
 }
 
 Align SelectionDAG::getEVTAlign(EVT VT) const {
-  Type *Ty = VT == MVT::iPTR ?
-                   PointerType::get(Type::getInt8Ty(*getContext()), 0) :
-                   VT.getTypeForEVT(*getContext());
+  Type *Ty = VT == MVT::iPTR ? PointerType::get(*getContext(), 0)
+                             : VT.getTypeForEVT(*getContext());
 
   return getDataLayout().getABITypeAlign(Ty);
 }
@@ -8045,7 +8044,7 @@ SDValue SelectionDAG::getMemmove(SDValue Chain, const SDLoc &dl, SDValue Dst,
   // Emit a library call.
   TargetLowering::ArgListTy Args;
   TargetLowering::ArgListEntry Entry;
-  Entry.Ty = Dst.getValueType().getTypeForEVT(*getContext());
+  Entry.Ty = PointerType::getUnqual(*getContext());
   Entry.Node = Dst; Args.push_back(Entry);
   Entry.Ty = Src.getValueType().getTypeForEVT(*getContext());
   Entry.Node = Src; Args.push_back(Entry);
