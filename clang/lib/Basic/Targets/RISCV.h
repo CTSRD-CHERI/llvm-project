@@ -65,6 +65,9 @@ protected:
 public:
   RISCVTargetInfo(const llvm::Triple &Triple, const TargetOptions &)
       : TargetInfo(Triple) {
+    BFloat16Width = 16;
+    BFloat16Align = 16;
+    BFloat16Format = &llvm::APFloat::BFloat();
     LongDoubleWidth = 128;
     LongDoubleAlign = 128;
     LongDoubleFormat = &llvm::APFloat::IEEEquad();
@@ -156,6 +159,8 @@ public:
   bool validateTarget(DiagnosticsEngine &Diags) const override;
 
   bool hasBitIntType() const override { return true; }
+
+  bool hasBFloat16Type() const override { return true; }
 
   bool useFP16ConversionIntrinsics() const override {
     return false;
