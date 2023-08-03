@@ -948,7 +948,7 @@ static void addPltEntry(PltSection &plt, GotPltSection &gotPlt,
                 sym, 0, R_ABS});
 }
 
-static void addGotEntry(Symbol &sym) {
+void elf::addGotEntry(Symbol &sym) {
   in.got->addEntry(sym);
   uint64_t off = sym.getGotOffset();
   RelExpr expr = config->isCheriAbi ? R_ABS_CAP : R_ABS;
@@ -1118,6 +1118,10 @@ void RelocationScanner::processAux(RelExpr expr, RelType type, uint64_t offset,
     } else if (!isAbsoluteValue(sym)) {
       expr =
           target->adjustGotPcExpr(type, addend, sec->content().data() + offset);
+      // If the target adjusted the expression to R_RELAX_GOT_PC, we may end up
+      // needing the GOT if we can't relax everything.
+      if (expr == R_RELAX_GOT_PC)
+        in.got->hasGotOffRel.store(true, std::memory_order_relaxed);
     }
   }
 
