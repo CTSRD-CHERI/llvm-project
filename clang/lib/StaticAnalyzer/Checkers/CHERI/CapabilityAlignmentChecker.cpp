@@ -71,6 +71,21 @@ int getTrailingZerosCount(SymbolRef Sym, CheckerContext &C) {
   const int *Align = C.getState()->get<TrailingZerosMap>(Sym);
   if (Align)
     return *Align;
+
+  // Is function argument or global?
+  if (const MemRegion *BaseRegOrigin = Sym->getOriginRegion())
+    if (BaseRegOrigin->getMemorySpace()->hasGlobalsOrParametersStorage()) {
+      const QualType &SymTy = Sym->getType();
+      if (SymTy->isPointerType() && !isGenericPointerType(SymTy)) {
+        ASTContext &ASTCtx = C.getASTContext();
+        const QualType &PT = SymTy->getPointeeType();
+        if (!PT->isIncompleteType()) {
+          unsigned A = ASTCtx.getTypeAlignInChars(PT).getQuantity();
+          return llvm::APSInt::getUnsigned(A).countTrailingZeros();
+        }
+      }
+  }
+
   return -1;
 }
 
@@ -97,7 +112,9 @@ int getTrailingZerosCount(const MemRegion *R, CheckerContext &C) {
     return -1;
 
   ASTContext &ASTCtx = C.getASTContext();
-  const QualType &PT = TR->getDesugaredValueType(ASTCtx);
+  const QualType PT = TR->getDesugaredValueType(ASTCtx);
+  if (PT->isIncompleteType())
+    return -1;
   unsigned A = ASTCtx.getTypeAlignInChars(PT).getQuantity();
   return llvm::APSInt::getUnsigned(A).countTrailingZeros();
 }
@@ -143,15 +160,21 @@ void CapabilityAlignmentChecker::checkPreStmt(const CastExpr *CE,
   const QualType &DstType = CE->getType();
   if (!Src->getType()->isPointerType() || !DstType->isPointerType())
     return;
+  const QualType &DstPointeeTy = DstType->getPointeeType();
+  if (DstPointeeTy->isIncompleteType())
+    return;
 
-  ASTContext &ASTCtx = C.getASTContext();
-  int SrcTZC = getTrailingZerosCount(CE->getSubExpr(), C);
+  const SVal &SrcVal = C.getSVal(CE->getSubExpr());
+  if (SrcVal.isConstant())
+    return; // special value
+  int SrcTZC = getTrailingZerosCount(SrcVal, C);
   if (SrcTZC < 0)
     return;
   if ((unsigned)SrcTZC >= sizeof(unsigned int)*8)
     return; // Too aligned, probably a Zero
   unsigned SrcAlign = (1U << SrcTZC);
-  const QualType &DstPointeeTy = DstType->getPointeeType();
+
+  ASTContext &ASTCtx = C.getASTContext();
   unsigned DstReqAlign = ASTCtx.getTypeAlignInChars(DstPointeeTy).getQuantity();
   if (SrcAlign < DstReqAlign) {
     if (ExplodedNode *ErrNode = C.generateNonFatalErrorNode()) {
@@ -183,7 +206,7 @@ void CapabilityAlignmentChecker::checkPostStmt(const CastExpr *CE,
                                             CheckerContext &C) const {
   CastKind CK = CE->getCastKind();
   if (CK != CastKind::CK_BitCast && CK != CK_PointerToIntegral &&
-      CK != CK_IntegralToPointer && CK != CK_LValueToRValue)
+      CK != CK_IntegralToPointer)
     return;
 
   int DstTZC = getTrailingZerosCount(CE, C);
