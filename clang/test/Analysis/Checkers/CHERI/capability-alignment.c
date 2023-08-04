@@ -8,17 +8,21 @@ double a[2048], *next = a;
 #define	roundup2(x, y)	(((x)+((y)-1))&(~((y)-1)))
 
 #define NULL (void*)0
+#define MINUS_ONE (void*)-1
 uintptr_t *u;
 
-void foo(void *v) {
+void foo(void *v, int *pi, void *pv) {
   char *p0 = (char*)a;
   *(void**)p0 = v; // expected-warning{{Cast increases required alignment: 8 -> 16}}
   char *p1 = (char*)roundup2((uintptr_t)p0, sizeof(void*));
-  *(void**)p1 = v; // no warn
+  *(void**)p1 = v; // no warning
   char *p2 = p1 + 5*sizeof(double);
   *(void**)p2 = v; // expected-warning{{Cast increases required alignment: 8 -> 16}}
 
-  if (u == NULL)
-    return; // no warning
-}
+  *(void**)pi = v; // expected-warning{{Cast increases required alignment: 4 -> 16}}
+  *(void**)pv = v; // no warning
+  *(void**)next = v; // expected-warning{{Cast increases required alignment: 8 -> 16}}
 
+  if (u == NULL || u == MINUS_ONE) // no warning
+    return;
+}
