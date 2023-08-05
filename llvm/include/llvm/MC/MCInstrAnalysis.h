@@ -18,6 +18,7 @@
 #include "llvm/MC/MCInst.h"
 #include "llvm/MC/MCInstrDesc.h"
 #include "llvm/MC/MCInstrInfo.h"
+#include "llvm/MC/MCRegisterInfo.h"
 #include <cstdint>
 #include <vector>
 
@@ -68,6 +69,17 @@ public:
     return false;
   }
 
+  virtual bool mayAffectControlFlow(const MCInst &Inst,
+                                    const MCRegisterInfo &MCRI) const {
+    if (isBranch(Inst) || isCall(Inst) || isReturn(Inst) ||
+        isIndirectBranch(Inst))
+      return true;
+    unsigned PC = MCRI.getProgramCounter();
+    if (PC == 0)
+      return false;
+    return Info->get(Inst.getOpcode()).hasDefOfPhysReg(Inst, PC, MCRI);
+  }
+
   /// Returns true if at least one of the register writes performed by
   /// \param Inst implicitly clears the upper portion of all super-registers.
   ///
@@ -100,14 +112,14 @@ public:
   /// broken. Each bit of the mask is associated with a specific input operand.
   /// Bits associated with explicit input operands are laid out first in the
   /// mask; implicit operands come after explicit operands.
-  /// 
+  ///
   /// Dependencies are broken only for operands that have their corresponding bit
   /// set. Operands that have their bit cleared, or that don't have a
   /// corresponding bit in the mask don't have their dependency broken.  Note
   /// that Mask may not be big enough to describe all operands.  The assumption
   /// for operands that don't have a correspondent bit in the mask is that those
   /// are still data dependent.
-  /// 
+  ///
   /// The only exception to the rule is for when Mask has all zeroes.
   /// A zero mask means: dependencies are broken for all explicit register
   /// operands.
