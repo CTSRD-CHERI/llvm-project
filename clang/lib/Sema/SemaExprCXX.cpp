@@ -4017,10 +4017,6 @@ ExprResult Sema::CheckConditionVariable(VarDecl *ConditionVar,
       ConditionVar, ConditionVar->getType().getNonReferenceType(), VK_LValue,
       ConditionVar->getLocation());
 
-  // Ensure that `-Wunused-variable` will be emitted for condition variables
-  // that are not referenced later. e.g.: if (int var = init());
-  ConditionVar->setReferenced(/*R=*/false);
-
   switch (CK) {
   case ConditionKind::Boolean:
     return CheckBooleanCondition(StmtLoc, Condition.get());
