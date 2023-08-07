@@ -11,14 +11,12 @@ define void @a(ptr addrspace(200) %a1, ptr addrspace(200) %a2, i64 %foo, i64 %ba
 ; CHECK-NEXT:    sd $gp, 8($sp) # 8-byte Folded Spill
 ; CHECK-NEXT:    move $fp, $sp
 ; CHECK-NEXT:    move $1, $5
-  ; Move the argument registers into the ccall registers
 ; CHECK-NEXT:    cmove $c2, $c4
 ; CHECK-NEXT:    cmove $c1, $c3
 ; CHECK-NEXT:    lui $2, %hi(%neg(%gp_rel(a)))
 ; CHECK-NEXT:    daddu $2, $2, $25
 ; CHECK-NEXT:    daddiu $gp, $2, %lo(%neg(%gp_rel(a)))
 ; CHECK-NEXT:    ld $25, %call16(b)($gp)
-; Clear integer registers
 ; CHECK-NEXT:    daddiu $5, $zero, 0
 ; CHECK-NEXT:    daddiu $6, $zero, 0
 ; CHECK-NEXT:    daddiu $7, $zero, 0
@@ -26,11 +24,8 @@ define void @a(ptr addrspace(200) %a1, ptr addrspace(200) %a2, i64 %foo, i64 %ba
 ; CHECK-NEXT:    daddiu $9, $zero, 0
 ; CHECK-NEXT:    daddiu $10, $zero, 0
 ; CHECK-NEXT:    daddiu $11, $zero, 0
-; Move argument 0 from a0 to v0, arg 1 from a1 to a0.
-; Then do the function call
 ; CHECK-NEXT:    move $2, $4
 ; CHECK-NEXT:    move $4, $1
-; Clear cap registers
 ; CHECK-NEXT:    cgetnull $c3
 ; CHECK-NEXT:    cgetnull $c4
 ; CHECK-NEXT:    cgetnull $c5
@@ -48,6 +43,11 @@ define void @a(ptr addrspace(200) %a1, ptr addrspace(200) %a2, i64 %foo, i64 %ba
 ; CHECK-NEXT:    ld $ra, 24($sp) # 8-byte Folded Reload
 ; CHECK-NEXT:    jr $ra
 ; CHECK-NEXT:    daddiu $sp, $sp, 32
+  ; Move the argument registers into the ccall registers
+; Clear integer registers
+; Move argument 0 from a0 to v0, arg 1 from a1 to a0.
+; Then do the function call
+; Clear cap registers
   tail call chericcallcc void @b(ptr addrspace(200) %a1, ptr addrspace(200) %a2, i64 %foo, i64 %bar) #2
   ret void
 }

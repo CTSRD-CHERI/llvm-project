@@ -19,32 +19,44 @@
 define ptr addrspace(200) @load_unaligned(ptr addrspace(200) %unaligned) local_unnamed_addr addrspace(200) nounwind {
 ; CHECK-LABEL: load_unaligned:
 ; CHECK:       # %bb.0: # %entry
-; CHECK-NEXT:    cincoffset $c11, $c11, -[[STACKFRAME_SIZE:32|64]]
-; CHECK-NEXT:    .cfi_def_cfa_offset [[STACKFRAME_SIZE]]
-; CHECK-NEXT:    csc $c17, $zero, [[#CAP_SIZE * 1]]($c11)
-; CHECK-NEXT:    .cfi_offset 89, -[[#CAP_SIZE * 1]]
+; CHECK-NEXT:    cincoffset $c11, $c11, -32
+; CHECK-NEXT:    .cfi_def_cfa_offset 32
+; CHECK-NEXT:    csc $c17, $zero, 16($c11) # 16-byte Folded Spill
+; CHECK-NEXT:    .cfi_offset 89, -16
 ; CHECK-NEXT:    lui $1, %pcrel_hi(_CHERI_CAPABILITY_TABLE_-8)
 ; CHECK-NEXT:    daddiu $1, $1, %pcrel_lo(_CHERI_CAPABILITY_TABLE_-4)
 ; CHECK-NEXT:    cgetpccincoffset $c1, $1
-; CHECK-NEXT:    csetbounds $c4, $c3, [[#CAP_SIZE]]
+; CHECK-NEXT:    csetbounds $c4, $c3, 16
 ; CHECK-NEXT:    clcbi $c12, %capcall20(memcpy)($c1)
-; stack offset is zero so no need for cincoffset
-; CHECK-NEXT:    csetbounds $c3, $c11, [[#CAP_SIZE]]
+; CHECK-NEXT:    csetbounds $c3, $c11, 16
 ; CHECK-NEXT:    cjalr $c12, $c17
-; CHECK-NEXT:    daddiu $4, $zero, [[#CAP_SIZE]]
+; CHECK-NEXT:    daddiu $4, $zero, 16
 ; CHECK-NEXT:    clc $c3, $zero, 0($c11)
-; CHECK-NEXT:    clc $c17, $zero, [[#CAP_SIZE * 1]]($c11)
+; CHECK-NEXT:    clc $c17, $zero, 16($c11) # 16-byte Folded Reload
 ; CHECK-NEXT:    cjr $c17
-; CHECK-NEXT:    cincoffset $c11, $c11, [[STACKFRAME_SIZE]]
-
+; CHECK-NEXT:    cincoffset $c11, $c11, 32
+;
 ; HYBRID-LABEL: load_unaligned:
-; HYBRID:      daddiu	$16, $sp, 0
-; HYBRID-NEXT: cfromddc	$c1, $16
-; HYBRID-NEXT: csetbounds	$c4, $c3, [[#CAP_SIZE]]
-; HYBRID-NEXT: daddiu	$4, $zero, [[#CAP_SIZE]]
-; HYBRID-NEXT: jal	memcpy_c
-; HYBRID-NEXT: cmove $c3, $c1
-; HYBRID-NEXT: clc	$c3, $16, 0($ddc)
+; HYBRID:       # %bb.0: # %entry
+; HYBRID-NEXT:    daddiu $sp, $sp, -32
+; HYBRID-NEXT:    .cfi_def_cfa_offset 32
+; HYBRID-NEXT:    sd $ra, 24($sp) # 8-byte Folded Spill
+; HYBRID-NEXT:    sd $16, 16($sp) # 8-byte Folded Spill
+; HYBRID-NEXT:    .cfi_offset 31, -8
+; HYBRID-NEXT:    .cfi_offset 16, -16
+; HYBRID-NEXT:    daddiu $16, $sp, 0
+; HYBRID-NEXT:    cfromddc $c1, $16
+; HYBRID-NEXT:    csetbounds $c4, $c3, 16
+; HYBRID-NEXT:    daddiu $4, $zero, 16
+; HYBRID-NEXT:    jal memcpy_c
+; HYBRID-NEXT:    cmove $c3, $c1
+; HYBRID-NEXT:    clc $c3, $16, 0($ddc)
+; HYBRID-NEXT:    ld $16, 16($sp) # 8-byte Folded Reload
+; HYBRID-NEXT:    ld $ra, 24($sp) # 8-byte Folded Reload
+; HYBRID-NEXT:    jr $ra
+; HYBRID-NEXT:    daddiu $sp, $sp, 32
+; stack offset is zero so no need for cincoffset
+
 
 entry:
   %r.0..sroa_cast = bitcast ptr addrspace(200) %unaligned to ptr addrspace(200)
@@ -55,31 +67,40 @@ entry:
 define void @store_unaligned(ptr addrspace(200) %unused, ptr addrspace(200) %unaligned, ptr addrspace(200) %value) local_unnamed_addr addrspace(200) nounwind {
 ; CHECK-LABEL: store_unaligned:
 ; CHECK:       # %bb.0: # %entry
-; CHECK-NEXT:    cincoffset $c11, $c11, -[[STACKFRAME_SIZE:32|64]]
-; CHECK-NEXT:    .cfi_def_cfa_offset [[STACKFRAME_SIZE]]
-; CHECK-NEXT:    csc $c17, $zero, [[#CAP_SIZE * 1]]($c11)
-; CHECK-NEXT:    .cfi_offset 89, -[[#CAP_SIZE * 1]]
+; CHECK-NEXT:    cincoffset $c11, $c11, -32
+; CHECK-NEXT:    .cfi_def_cfa_offset 32
+; CHECK-NEXT:    csc $c17, $zero, 16($c11) # 16-byte Folded Spill
+; CHECK-NEXT:    .cfi_offset 89, -16
 ; CHECK-NEXT:    lui $1, %pcrel_hi(_CHERI_CAPABILITY_TABLE_-8)
 ; CHECK-NEXT:    daddiu $1, $1, %pcrel_lo(_CHERI_CAPABILITY_TABLE_-4)
 ; CHECK-NEXT:    cgetpccincoffset $c1, $1
 ; CHECK-NEXT:    csc $c5, $zero, 0($c11)
-; CHECK-NEXT:    csetbounds $c3, $c4, [[#CAP_SIZE]]
+; CHECK-NEXT:    csetbounds $c3, $c4, 16
 ; CHECK-NEXT:    clcbi $c12, %capcall20(memcpy)($c1)
-; stack offset is zero so no need for cincoffset
-; CHECK-NEXT:    csetbounds $c4, $c11, [[#CAP_SIZE]]
+; CHECK-NEXT:    csetbounds $c4, $c11, 16
 ; CHECK-NEXT:    cjalr $c12, $c17
-; CHECK-NEXT:    daddiu $4, $zero, [[#CAP_SIZE]]
-; CHECK-NEXT:    clc $c17, $zero, [[#CAP_SIZE * 1]]($c11)
+; CHECK-NEXT:    daddiu $4, $zero, 16
+; CHECK-NEXT:    clc $c17, $zero, 16($c11) # 16-byte Folded Reload
 ; CHECK-NEXT:    cjr $c17
-; CHECK-NEXT:    cincoffset $c11, $c11, [[STACKFRAME_SIZE]]
-
+; CHECK-NEXT:    cincoffset $c11, $c11, 32
+;
 ; HYBRID-LABEL: store_unaligned:
-; HYBRID:      daddiu	$1, $sp, 0
-; HYBRID-NEXT: csc	$c5, $1, 0($ddc)
-; HYBRID-NEXT: csetbounds	$c3, $c4, [[#CAP_SIZE]]
-; HYBRID-NEXT: cfromddc	$c4, $1
-; HYBRID-NEXT: jal	memcpy_c
-; HYBRID-NEXT: daddiu	$4, $zero, [[#CAP_SIZE]]
+; HYBRID:       # %bb.0: # %entry
+; HYBRID-NEXT:    daddiu $sp, $sp, -32
+; HYBRID-NEXT:    .cfi_def_cfa_offset 32
+; HYBRID-NEXT:    sd $ra, 24($sp) # 8-byte Folded Spill
+; HYBRID-NEXT:    .cfi_offset 31, -8
+; HYBRID-NEXT:    daddiu $1, $sp, 0
+; HYBRID-NEXT:    csc $c5, $1, 0($ddc)
+; HYBRID-NEXT:    csetbounds $c3, $c4, 16
+; HYBRID-NEXT:    cfromddc $c4, $1
+; HYBRID-NEXT:    jal memcpy_c
+; HYBRID-NEXT:    daddiu $4, $zero, 16
+; HYBRID-NEXT:    ld $ra, 24($sp) # 8-byte Folded Reload
+; HYBRID-NEXT:    jr $ra
+; HYBRID-NEXT:    daddiu $sp, $sp, 32
+; stack offset is zero so no need for cincoffset
+
 
 entry:
   %r.0..sroa_cast = bitcast ptr addrspace(200) %unaligned to ptr addrspace(200)
@@ -91,33 +112,42 @@ entry:
 define void @store_of_unaligned_load(ptr addrspace(200) %src, ptr addrspace(200) %dest, ptr addrspace(200) %value) local_unnamed_addr addrspace(200) nounwind {
 ; CHECK-LABEL: store_of_unaligned_load:
 ; CHECK:       # %bb.0: # %entry
-; CHECK-NEXT:    cincoffset $c11, $c11, -[[STACKFRAME_SIZE:16|32]]
-; CHECK-NEXT:    .cfi_def_cfa_offset [[STACKFRAME_SIZE]]
-; CHECK-NEXT:    csc $c17, $zero, 0($c11)
-; CHECK-NEXT:    .cfi_offset 89,
+; CHECK-NEXT:    cincoffset $c11, $c11, -16
+; CHECK-NEXT:    .cfi_def_cfa_offset 16
+; CHECK-NEXT:    csc $c17, $zero, 0($c11) # 16-byte Folded Spill
+; CHECK-NEXT:    .cfi_offset 89, -16
 ; CHECK-NEXT:    lui $1, %pcrel_hi(_CHERI_CAPABILITY_TABLE_-8)
 ; CHECK-NEXT:    daddiu $1, $1, %pcrel_lo(_CHERI_CAPABILITY_TABLE_-4)
 ; CHECK-NEXT:    cgetpccincoffset $c2, $1
+; CHECK-NEXT:    csetbounds $c1, $c4, 16
+; CHECK-NEXT:    clcbi $c12, %capcall20(memmove)($c2)
+; CHECK-NEXT:    csetbounds $c4, $c3, 16
+; CHECK-NEXT:    daddiu $4, $zero, 16
+; CHECK-NEXT:    cjalr $c12, $c17
+; CHECK-NEXT:    cmove $c3, $c1
+; CHECK-NEXT:    clc $c17, $zero, 0($c11) # 16-byte Folded Reload
+; CHECK-NEXT:    cjr $c17
+; CHECK-NEXT:    cincoffset $c11, $c11, 16
+;
+; HYBRID-LABEL: store_of_unaligned_load:
+; HYBRID:       # %bb.0: # %entry
+; HYBRID-NEXT:    daddiu $sp, $sp, -16
+; HYBRID-NEXT:    .cfi_def_cfa_offset 16
+; HYBRID-NEXT:    sd $ra, 8($sp) # 8-byte Folded Spill
+; HYBRID-NEXT:    .cfi_offset 31, -8
+; HYBRID-NEXT:    csetbounds $c1, $c4, 16
+; HYBRID-NEXT:    csetbounds $c4, $c3, 16
+; HYBRID-NEXT:    daddiu $4, $zero, 16
+; HYBRID-NEXT:    jal memmove_c
+; HYBRID-NEXT:    cmove $c3, $c1
+; HYBRID-NEXT:    ld $ra, 8($sp) # 8-byte Folded Reload
+; HYBRID-NEXT:    jr $ra
+; HYBRID-NEXT:    daddiu $sp, $sp, 16
 ; Bound source abd dest for memmove call:
 ; dest
-; CHECK-NEXT:    csetbounds $c1, $c4, [[#CAP_SIZE]]
 ; src
-; CHECK-NEXT:    clcbi $c12, %capcall20(memmove)($c2)
-; CHECK-NEXT:    csetbounds $c4, $c3, [[#CAP_SIZE]]
-; CHECK-NEXT:    daddiu $4, $zero, [[#CAP_SIZE]]
-; CHECK-NEXT:    cjalr $c12, $c17
 ; Move bounded dest to src (not sure why it is wasting another register here)
-; CHECK-NEXT:    cmove $c3, $c1
-; CHECK-NEXT:    clc $c17, $zero, 0($c11)
-; CHECK-NEXT:    cjr $c17
-; CHECK-NEXT:    cincoffset $c11, $c11, [[STACKFRAME_SIZE]]
 
-; HYBRID-LABEL: store_of_unaligned_load:
-; HYBRID:      csetbounds	$c1, $c4, [[#CAP_SIZE]]
-; HYBRID-NEXT: csetbounds	$c4, $c3, [[#CAP_SIZE]]
-; HYBRID-NEXT: daddiu $4, $zero, [[#CAP_SIZE]]
-; HYBRID-NEXT: jal	memmove_c
-; HYBRID-NEXT: cmove	$c3,  $c1
 
 entry:
   %src_cast = bitcast ptr addrspace(200) %src to ptr addrspace(200)

@@ -1061,10 +1061,10 @@ bool MipsSEInstrInfo::isReallyTriviallyReMaterializable(
       if (Flags == MipsII::MO_CAPTABLE_OFF_HI) {
          return true;
       }
-      return false;
+      return TargetInstrInfo::isReallyTriviallyReMaterializable(MI);
     }
   default:
-    return false;
+    return TargetInstrInfo::isReallyTriviallyReMaterializable(MI);
   }
 }
 
