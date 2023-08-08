@@ -594,7 +594,7 @@ static void emitBodyAndFallthrough(CodeGenFunction &CGF,
 }
 
 void CodeGenFunction::EmitCoroutineBody(const CoroutineBodyStmt &S) {
-  auto *NullPtr = llvm::ConstantPointerNull::get(CGM.Int8PtrTy);
+  auto *NullPtr = llvm::ConstantPointerNull::get(Builder.getPtrTy(0));
   auto &TI = CGM.getContext().getTargetInfo();
   unsigned NewAlign = TI.getNewAlign() / TI.getCharWidth();
 
@@ -784,7 +784,7 @@ RValue CodeGenFunction::EmitCoroutineIntrinsic(const CallExpr *E,
     CGM.Error(E->getBeginLoc(), "this builtin expect that __builtin_coro_begin "
                                 "has been used earlier in this function");
     unsigned AS = CGM.getTargetCodeGenInfo().getDefaultAS();
-    auto *NullPtr = llvm::ConstantPointerNull::get(Builder.getInt8PtrTy(AS));
+    auto *NullPtr = llvm::ConstantPointerNull::get(Builder.getPtrTy(AS));
     return RValue::get(NullPtr);
   }
   case llvm::Intrinsic::coro_size: {
