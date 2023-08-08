@@ -9728,7 +9728,7 @@ SDValue TargetLowering::LowerToTLSEmulatedModel(const GlobalAddressSDNode *GA,
   //   __emutls_get_address( address of global variable named "__emutls_v.xyz" )
   EVT DataPtrVT = getPointerTy(
       DAG.getDataLayout(), DAG.getDataLayout().getDefaultGlobalsAddressSpace());
-  PointerType *VoidPtrType = Type::getInt8PtrTy(*DAG.getContext());
+  PointerType *VoidPtrType = PointerType::get(*DAG.getContext(), 0);
   SDLoc dl(GA);
 
   ArgListTy Args;

@@ -806,8 +806,7 @@ void Verifier::visitGlobalVariable(const GlobalVariable &GV) {
       // For initializers/destructors the code pointer is in the program address space
       auto CtorPointerAS = DL.getProgramAddressSpace();
       PointerType *FuncPtrTy =
-          FunctionType::get(Type::getVoidTy(Context), false)
-              ->getPointerTo(CtorPointerAS);
+          PointerType::get(Context, DL.getProgramAddressSpace());
       Check(STy && (STy->getNumElements() == 2 || STy->getNumElements() == 3) &&
                 STy->getTypeAtIndex(0u)->isIntegerTy(32),
             "wrong type for intrinsic global variable", &GV);
