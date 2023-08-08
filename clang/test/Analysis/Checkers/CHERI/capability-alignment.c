@@ -2,6 +2,7 @@
 // RUN:   -analyzer-checker=core,alpha.cheri.CapabilityAlignmentChecker
 
 typedef __uintcap_t uintptr_t;
+typedef __typeof__(sizeof(int)) size_t;
 
 double a[2048], *next = a;
 
@@ -25,4 +26,15 @@ void foo(void *v, int *pi, void *pv) {
 
   if (u == NULL || u == MINUS_ONE) // no warning
     return;
+}
+
+#define align_offset(A) \
+  ((((uintptr_t)(A)&7) == 0) \
+       ? 0              \
+       : ((8 - ((uintptr_t)(A)&7)) & 7))
+
+uintptr_t* bar(uintptr_t *p) {
+  uintptr_t offset = align_offset((char*)(p) + 2 *sizeof(size_t));
+  p = (uintptr_t*)((char*)p + offset); // no warning
+  return p;
 }
