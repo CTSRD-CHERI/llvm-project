@@ -2,6 +2,7 @@
 // RUN:   -analyzer-checker=core,alpha.cheri.CapabilityAlignmentChecker
 
 typedef __uintcap_t uintptr_t;
+typedef __intcap_t intptr_t;
 typedef __typeof__(sizeof(int)) size_t;
 
 double a[2048], *next = a;
@@ -37,4 +38,14 @@ uintptr_t* bar(uintptr_t *p) {
   uintptr_t offset = align_offset((char*)(p) + 2 *sizeof(size_t));
   p = (uintptr_t*)((char*)p + offset); // no warning
   return p;
+}
+
+struct S {
+  intptr_t u[10];
+  int i[10];
+};
+int baz(struct S *s) {
+  uintptr_t* p1 = (uintptr_t*)&s->u[3];  // no warning
+  uintptr_t* p2 = (uintptr_t*)&s->i[6];  // expected-warning{{Cast increases required alignment: 8 -> 16}}
+  return p2 - p1;
 }

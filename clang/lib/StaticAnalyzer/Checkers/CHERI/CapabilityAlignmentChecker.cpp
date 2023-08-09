@@ -92,16 +92,24 @@ int getTrailingZerosCount(SymbolRef Sym, CheckerContext &C) {
 int getTrailingZerosCount(const MemRegion *R, CheckerContext &C) {
   R = R->StripCasts();
 
+  ASTContext &ASTCtx = C.getASTContext();
   if (const ElementRegion *ER = R->getAs<ElementRegion>()) {
-    const MemRegion *Base = ER->getBaseRegion();
+    const MemRegion *Base = ER->getSuperRegion();
     int BaseTZC = -1;
     if (const SymbolicRegion *SymbBase = Base->getSymbolicBase())
       BaseTZC = getTrailingZerosCount(SymbBase->getSymbol(), C);
     else
       BaseTZC = getTrailingZerosCount(Base, C);
     int IdxTZC = getTrailingZerosCount(ER->getIndex(), C);
-    if (BaseTZC >=0 && IdxTZC >= 0)
-      return std::min(BaseTZC, IdxTZC);
+    if (BaseTZC >=0) {
+      const QualType ElemTy = ER->getElementType();
+      unsigned ElAlign = ASTCtx.getTypeAlignInChars(ElemTy).getQuantity();
+      if (IdxTZC < 0 && ElAlign == 1)
+          return -1;
+      int ElemTyTZC = llvm::APSInt::getUnsigned(ElAlign).countTrailingZeros();
+      return std::min(BaseTZC, std::max(IdxTZC, 0) + ElemTyTZC);
+    }
+    return -1;
   }
 
   if (R->getSymbolicBase())
@@ -111,7 +119,6 @@ int getTrailingZerosCount(const MemRegion *R, CheckerContext &C) {
   if (!TR)
     return -1;
 
-  ASTContext &ASTCtx = C.getASTContext();
   const QualType PT = TR->getDesugaredValueType(ASTCtx);
   if (PT->isIncompleteType())
     return -1;
