@@ -24,7 +24,6 @@ enum MCFixupKind {
   FK_Data_2,      ///< A two-byte fixup.
   FK_Data_4,      ///< A four-byte fixup.
   FK_Data_8,      ///< A eight-byte fixup.
-  FK_Data_6b,     ///< A six-bits fixup.
   FK_PCRel_1,     ///< A one-byte pc relative fixup.
   FK_PCRel_2,     ///< A two-byte pc relative fixup.
   FK_PCRel_4,     ///< A four-byte pc relative fixup.
@@ -128,37 +127,6 @@ public:
       assert(IsCap && "Invalid integer fixup size!");
       return FK_Cap_16;
     case 32:
-      assert(IsCap && "Invalid integer fixup size!");
-      return FK_Cap_32;
-    }
-  }
-
-  /// Return the generic fixup kind for a value with the given size in bits.
-  /// It is an error to pass an unsupported size.
-  static MCFixupKind getKindForSizeInBits(unsigned Size, bool IsPCRel,
-                                          bool IsCap) {
-    assert((!IsPCRel || !IsCap) && "Invalid pc-relative caapbility fixup!");
-    switch (Size) {
-    default:
-      llvm_unreachable("Invalid generic fixup size!");
-    case 6:
-      assert(!IsPCRel && "Invalid pc-relative fixup size!");
-      return FK_Data_6b;
-    case 8:
-      assert(!IsCap && "Invalid cap fixup size!");
-      return IsPCRel ? FK_PCRel_1 : FK_Data_1;
-    case 16:
-      assert(!IsCap && "Invalid cap fixup size!");
-      return IsPCRel ? FK_PCRel_2 : FK_Data_2;
-    case 32:
-      assert(!IsCap && "Invalid cap fixup size!");
-      return IsPCRel ? FK_PCRel_4 : FK_Data_4;
-    case 64:
-      return IsCap ? FK_Cap_8 : IsPCRel ? FK_PCRel_8 : FK_Data_8;
-    case 128:
-      assert(IsCap && "Invalid integer fixup size!");
-      return FK_Cap_16;
-    case 256:
       assert(IsCap && "Invalid integer fixup size!");
       return FK_Cap_32;
     }
