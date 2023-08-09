@@ -71,6 +71,7 @@
 #include "llvm/Support/FileSystem.h"
 #include "llvm/Support/YAMLParser.h"
 #include "llvm/Support/TimeProfiler.h"
+#include "llvm/Support/raw_ostream.h"
 #include "llvm/Transforms/Utils/CheriSetBounds.h"
 #include "llvm/Support/xxhash.h"
 #include "llvm/TargetParser/Triple.h"
@@ -5293,6 +5294,8 @@ void CodeGenModule::EmitGlobalVarDefinition(const VarDecl *D,
                           InitDecl->getFlexibleArrayInitChars(getContext());
       CharUnits CstSize = CharUnits::fromQuantity(
           getDataLayout().getTypeAllocSize(Init->getType()));
+      llvm::errs() << "VarSize = " << VarSize.getQuantity() << "\n";
+      llvm::errs() << "CstSize" << CstSize.getQuantity() << "\n";
       assert(VarSize == CstSize && "Emitted constant has unexpected size");
 #endif
     }
