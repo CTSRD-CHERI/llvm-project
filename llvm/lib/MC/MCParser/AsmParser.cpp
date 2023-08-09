@@ -811,7 +811,7 @@ AsmParser::AsmParser(SourceMgr &SM, MCContext &Ctx, MCStreamer &Out,
     PlatformParser.reset(createXCOFFAsmParser());
     break;
   case MCContext::IsDXContainer:
-    llvm_unreachable("DXContainer is not supported yet");
+    report_fatal_error("DXContainer is not supported yet");
     break;
   }
 
