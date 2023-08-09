@@ -593,7 +593,7 @@ MCSectionELF *MCContext::getELFSection(const Twine &Section, unsigned Type,
                .StartsWith(".llvm.linkonce.td.", SectionKind::getThreadData())
                .StartsWith(".debug_", SectionKind::getMetadata())
                .StartsWith(".gcc_except_table", SectionKind::getReadOnly())
-               .Default(SectionKind::getText());
+               .Default(SectionKind::getReadOnly());
 
   MCSectionELF *Result =
       createELFSectionImpl(CachedName, Type, Flags, Kind, EntrySize, GroupSym,
