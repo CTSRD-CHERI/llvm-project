@@ -505,9 +505,8 @@ typedef __UINTMAX_TYPE__ uintmax_t;
 # define INT64_MAX           INT64_C( 9223372036854775807)
 # define INT64_MIN         (-INT64_C( 9223372036854775807)-1)
 # define UINT64_MAX         UINT64_C(18446744073709551615)
-/* FIXME: This is using the placeholder dates Clang produces for these macros
-   in C2x mode; switch to the correct values once they've been published. */
-#if defined(__STDC_VERSION__) && __STDC_VERSION__ >= 202000L
+
+#if defined(__STDC_VERSION__) && __STDC_VERSION__ >= 202311L
 # define UINT64_WIDTH         64
 # define INT64_WIDTH          UINT64_WIDTH
 
@@ -551,9 +550,7 @@ typedef __UINTMAX_TYPE__ uintmax_t;
 # define INT_FAST64_MAX    __INT_LEAST64_MAX
 # define UINT_FAST64_MAX  __UINT_LEAST64_MAX
 
-/* FIXME: This is using the placeholder dates Clang produces for these macros
-   in C2x mode; switch to the correct values once they've been published. */
-#if defined(__STDC_VERSION__) &&  __STDC_VERSION__ >= 202000L
+#if defined(__STDC_VERSION__) &&  __STDC_VERSION__ >= 202311L
 # define UINT_LEAST64_WIDTH __UINT_LEAST64_WIDTH
 # define INT_LEAST64_WIDTH  UINT_LEAST64_WIDTH
 # define UINT_FAST64_WIDTH  __UINT_LEAST64_WIDTH
@@ -592,9 +589,7 @@ typedef __UINTMAX_TYPE__ uintmax_t;
 # undef __UINT_LEAST8_MAX
 # define __UINT_LEAST8_MAX  UINT56_MAX
 
-/* FIXME: This is using the placeholder dates Clang produces for these macros
-   in C2x mode; switch to the correct values once they've been published. */
-#if defined(__STDC_VERSION__) && __STDC_VERSION__ >= 202000L
+#if defined(__STDC_VERSION__) && __STDC_VERSION__ >= 202311L
 # define UINT56_WIDTH         56
 # define INT56_WIDTH          UINT56_WIDTH
 # define UINT_LEAST56_WIDTH   UINT56_WIDTH
@@ -641,9 +636,7 @@ typedef __UINTMAX_TYPE__ uintmax_t;
 # undef __UINT_LEAST8_MAX
 # define __UINT_LEAST8_MAX  UINT48_MAX
 
-/* FIXME: This is using the placeholder dates Clang produces for these macros
-   in C2x mode; switch to the correct values once they've been published. */
-#if defined(__STDC_VERSION__) && __STDC_VERSION__ >= 202000L
+#if defined(__STDC_VERSION__) && __STDC_VERSION__ >= 202311L
 #define UINT48_WIDTH         48
 #define INT48_WIDTH          UINT48_WIDTH
 #define UINT_LEAST48_WIDTH   UINT48_WIDTH
@@ -690,9 +683,7 @@ typedef __UINTMAX_TYPE__ uintmax_t;
 # undef __UINT_LEAST8_MAX
 # define __UINT_LEAST8_MAX  UINT40_MAX
 
-/* FIXME: This is using the placeholder dates Clang produces for these macros
-   in C2x mode; switch to the correct values once they've been published. */
-#if defined(__STDC_VERSION__) && __STDC_VERSION__ >= 202000L
+#if defined(__STDC_VERSION__) && __STDC_VERSION__ >= 202311L
 # define UINT40_WIDTH         40
 # define INT40_WIDTH          UINT40_WIDTH
 # define UINT_LEAST40_WIDTH   UINT40_WIDTH
@@ -733,9 +724,7 @@ typedef __UINTMAX_TYPE__ uintmax_t;
 # undef __UINT_LEAST8_MAX
 # define __UINT_LEAST8_MAX  UINT32_MAX
 
-/* FIXME: This is using the placeholder dates Clang produces for these macros
-   in C2x mode; switch to the correct values once they've been published. */
-#if defined(__STDC_VERSION__) && __STDC_VERSION__ >= 202000L
+#if defined(__STDC_VERSION__) && __STDC_VERSION__ >= 202311L
 # define UINT32_WIDTH         32
 # define INT32_WIDTH          UINT32_WIDTH
 # undef __UINT_LEAST32_WIDTH
@@ -755,9 +744,7 @@ typedef __UINTMAX_TYPE__ uintmax_t;
 # define INT_FAST32_MAX    __INT_LEAST32_MAX
 # define UINT_FAST32_MAX  __UINT_LEAST32_MAX
 
-/* FIXME: This is using the placeholder dates Clang produces for these macros
-   in C2x mode; switch to the correct values once they've been published. */
-#if defined(__STDC_VERSION__) && __STDC_VERSION__ >= 202000L
+#if defined(__STDC_VERSION__) && __STDC_VERSION__ >= 202311L
 # define UINT_LEAST32_WIDTH __UINT_LEAST32_WIDTH
 # define INT_LEAST32_WIDTH  UINT_LEAST32_WIDTH
 # define UINT_FAST32_WIDTH  __UINT_LEAST32_WIDTH
@@ -790,9 +777,7 @@ typedef __UINTMAX_TYPE__ uintmax_t;
 # undef __UINT_LEAST8_MAX
 # define __UINT_LEAST8_MAX  UINT24_MAX
 
-/* FIXME: This is using the placeholder dates Clang produces for these macros
-   in C2x mode; switch to the correct values once they've been published. */
-#if defined(__STDC_VERSION__) && __STDC_VERSION__ >= 202000L
+#if defined(__STDC_VERSION__) && __STDC_VERSION__ >= 202311L
 # define UINT24_WIDTH         24
 # define INT24_WIDTH          UINT24_WIDTH
 # define UINT_LEAST24_WIDTH   UINT24_WIDTH
@@ -825,9 +810,7 @@ typedef __UINTMAX_TYPE__ uintmax_t;
 # undef __UINT_LEAST8_MAX
 # define __UINT_LEAST8_MAX  UINT16_MAX
 
-/* FIXME: This is using the placeholder dates Clang produces for these macros
-   in C2x mode; switch to the correct values once they've been published. */
-#if defined(__STDC_VERSION__) && __STDC_VERSION__ >= 202000L
+#if defined(__STDC_VERSION__) && __STDC_VERSION__ >= 202311L
 # define UINT16_WIDTH         16
 # define INT16_WIDTH          UINT16_WIDTH
 # undef __UINT_LEAST16_WIDTH
@@ -845,9 +828,7 @@ typedef __UINTMAX_TYPE__ uintmax_t;
 # define INT_FAST16_MAX    __INT_LEAST16_MAX
 # define UINT_FAST16_MAX  __UINT_LEAST16_MAX
 
-/* FIXME: This is using the placeholder dates Clang produces for these macros
-   in C2x mode; switch to the correct values once they've been published. */
-#if defined(__STDC_VERSION__) && __STDC_VERSION__ >= 202000L
+#if defined(__STDC_VERSION__) && __STDC_VERSION__ >= 202311L
 # define UINT_LEAST16_WIDTH __UINT_LEAST16_WIDTH
 # define INT_LEAST16_WIDTH  UINT_LEAST16_WIDTH
 # define UINT_FAST16_WIDTH  __UINT_LEAST16_WIDTH
@@ -868,9 +849,7 @@ typedef __UINTMAX_TYPE__ uintmax_t;
 # undef __UINT_LEAST8_MAX
 # define __UINT_LEAST8_MAX  UINT8_MAX
 
-/* FIXME: This is using the placeholder dates Clang produces for these macros
-   in C2x mode; switch to the correct values once they've been published. */
-#if defined(__STDC_VERSION__) && __STDC_VERSION__ >= 202000L
+#if defined(__STDC_VERSION__) && __STDC_VERSION__ >= 202311L
 # define UINT8_WIDTH         8
 # define INT8_WIDTH          UINT8_WIDTH
 # undef __UINT_LEAST8_WIDTH
@@ -886,9 +865,7 @@ typedef __UINTMAX_TYPE__ uintmax_t;
 # define INT_FAST8_MAX    __INT_LEAST8_MAX
 # define UINT_FAST8_MAX  __UINT_LEAST8_MAX
 
-/* FIXME: This is using the placeholder dates Clang produces for these macros
-   in C2x mode; switch to the correct values once they've been published. */
-#if defined(__STDC_VERSION__) && __STDC_VERSION__ >= 202000L
+#if defined(__STDC_VERSION__) && __STDC_VERSION__ >= 202311L
 # define UINT_LEAST8_WIDTH __UINT_LEAST8_WIDTH
 # define INT_LEAST8_WIDTH  UINT_LEAST8_WIDTH
 # define UINT_FAST8_WIDTH  __UINT_LEAST8_WIDTH
@@ -914,9 +891,7 @@ typedef __UINTMAX_TYPE__ uintmax_t;
 #define    SIZE_MAX      __SIZE_MAX__
 
 /* C2x 7.20.2.4 Width of integer types capable of holding object pointers. */
-/* FIXME: This is using the placeholder dates Clang produces for these macros
-   in C2x mode; switch to the correct values once they've been published. */
-#if defined(__STDC_VERSION__) && __STDC_VERSION__ >= 202000L
+#if defined(__STDC_VERSION__) && __STDC_VERSION__ >= 202311L
 /* NB: The C standard requires that these be the same value, but the compiler
    exposes separate internal width macros. */
 #define INTPTR_WIDTH  __INTPTR_WIDTH__
@@ -935,9 +910,7 @@ typedef __UINTMAX_TYPE__ uintmax_t;
 #define UINTMAX_MAX  __UINTMAX_MAX__
 
 /* C2x 7.20.2.5 Width of greatest-width integer types. */
-/* FIXME: This is using the placeholder dates Clang produces for these macros
-   in C2x mode; switch to the correct values once they've been published. */
-#if defined(__STDC_VERSION__) && __STDC_VERSION__ >= 202000L
+#if defined(__STDC_VERSION__) && __STDC_VERSION__ >= 202311L
 /* NB: The C standard requires that these be the same value, but the compiler
    exposes separate internal width macros. */
 #define INTMAX_WIDTH __INTMAX_WIDTH__
@@ -971,9 +944,7 @@ typedef __UINTMAX_TYPE__ uintmax_t;
 #define UINTMAX_C(v) __int_c(v, __UINTMAX_C_SUFFIX__)
 
 /* C2x 7.20.3.x Width of other integer types. */
-/* FIXME: This is using the placeholder dates Clang produces for these macros
-   in C2x mode; switch to the correct values once they've been published. */
-#if defined(__STDC_VERSION__) && __STDC_VERSION__ >= 202000L
+#if defined(__STDC_VERSION__) && __STDC_VERSION__ >= 202311L
 #define PTRDIFF_WIDTH    __PTRDIFF_WIDTH__
 #define SIG_ATOMIC_WIDTH __SIG_ATOMIC_WIDTH__
 #define SIZE_WIDTH       __SIZE_WIDTH__
