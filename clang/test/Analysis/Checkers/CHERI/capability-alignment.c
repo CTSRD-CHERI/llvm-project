@@ -43,9 +43,27 @@ uintptr_t* bar(uintptr_t *p) {
 struct S {
   intptr_t u[10];
   int i[10];
+  int i_aligned[10] __attribute__((aligned(16)));
 };
-int baz(struct S *s) {
+uintptr_t* struct_field(struct S *s) {
   uintptr_t* p1 = (uintptr_t*)&s->u[3];  // no warning
   uintptr_t* p2 = (uintptr_t*)&s->i[6];  // expected-warning{{Cast increases required alignment: 8 -> 16}}
-  return p2 - p1;
+  uintptr_t* p3 = (uintptr_t*)&s->i_aligned[6];  // FIXME: expected-warning{{Cast increases required alignment: 8 -> 16}}
+  return p3 + (p2 - p1);
+}
+
+void local_var(void) {
+  char buf[4];
+  char buf_underaligned[4] __attribute__((aligned(2)));
+  char buf_aligned[4] __attribute__((aligned(4)));
+  *(int*)buf = 42; // expected-warning{{Cast increases required alignment: 1 -> 4}}
+  *(int*)buf_underaligned = 42; // expected-warning{{Cast increases required alignment: 2 -> 4}}
+  *(int*)buf_aligned = 42; // no warning
+}
+
+char st_buf[4];
+char st_buf_aligned[4] __attribute__((aligned(_Alignof(int*))));
+void static_var(void) {
+  *(int*)st_buf = 42; // expected-warning{{Cast increases required alignment: 1 -> 4}}
+  *(int*)st_buf_aligned = 42; // no warning
 }

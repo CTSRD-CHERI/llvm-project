@@ -118,11 +118,20 @@ int getTrailingZerosCount(const MemRegion *R, CheckerContext &C) {
   const TypedValueRegion *TR = R->getAs<TypedValueRegion>();
   if (!TR)
     return -1;
-
   const QualType PT = TR->getDesugaredValueType(ASTCtx);
   if (PT->isIncompleteType())
     return -1;
-  unsigned A = ASTCtx.getTypeAlignInChars(PT).getQuantity();
+  unsigned NaturalAlign = ASTCtx.getTypeAlignInChars(PT).getQuantity();
+
+  unsigned AlignAttrVal = 0;
+  if (auto DR = R->getAs<DeclRegion>()) {
+    if (auto AA = DR->getDecl()->getAttr<AlignedAttr>()) {
+      if (!AA->isAlignmentDependent())
+        AlignAttrVal = AA->getAlignment(ASTCtx) / ASTCtx.getCharWidth();
+    }
+  }
+
+  unsigned A = std::max(NaturalAlign, AlignAttrVal);
   return llvm::APSInt::getUnsigned(A).countTrailingZeros();
 }
 
