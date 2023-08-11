@@ -89,7 +89,15 @@ public:
   uint8_t type;    // symbol type
   uint8_t stOther; // st_other field value
 
-  uint8_t symbolKind;
+  uint8_t symbolKind : 6;
+  // True if a symbol is referenced by a dynamic relocation and therefore needs
+  // to be included in the dynamic symbol table.
+  uint8_t usedByDynReloc : 1;
+
+  // True if the linker should set the size of this symbol to be the size of the
+  // section it references. For compatibility reason this is only used when
+  // building for CHERI
+  uint8_t isSectionStartSymbol : 1;
 
   // The partition whose dynamic symbol table contains this symbol's definition.
   uint8_t partition = 1;
@@ -244,13 +252,13 @@ protected:
          uint8_t stOther, uint8_t type)
       : file(file), nameData(name.data()), nameSize(name.size()),
         binding(binding), type(type), stOther(stOther), symbolKind(k),
+        usedByDynReloc(false), isSectionStartSymbol(false),
         visibility(stOther & 3), isPreemptible(false),
         isUsedInRegularObj(!file || file->kind() == InputFile::ObjKind),
         used(false), exportDynamic(false), inDynamicList(false),
         referenced(false), traced(false), hasVersionSuffix(false),
         isInIplt(false), gotInIgot(false), folded(false),
         needsTocRestore(false), scriptDefined(false), needsCopy(false),
-        usedByDynReloc(false), isSectionStartSymbol(false),
         needsGot(false), needsPlt(false), needsTlsDesc(false),
         needsTlsGd(false), needsTlsGdToIe(false), needsGotDtprel(false),
         needsTlsIe(false), hasDirectReloc(false) {}
@@ -280,15 +288,6 @@ public:
   // True if this symbol needs a canonical PLT entry, or (during
   // postScanRelocations) a copy relocation.
   uint8_t needsCopy : 1;
-
-  // True if a symbol is referenced by a dynamic relocation and therefore needs
-  // to be included in the dynamic symbol table.
-  unsigned usedByDynReloc : 1;
-
-  // True if the linker should set the size of this symbol to be the size of the
-  // section it references. For compatibility reason this is only used when
-  // building for CHERI
-  unsigned isSectionStartSymbol : 1;
 
   // Temporary flags used to communicate which symbol entries need PLT and GOT
   // entries during postScanRelocations();
