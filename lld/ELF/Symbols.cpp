@@ -16,9 +16,6 @@
 #include "Writer.h"
 #include "lld/Common/ErrorHandler.h"
 #include "lld/Common/Strings.h"
-#include "llvm/ADT/STLExtras.h"
-#include "llvm/Support/FileSystem.h"
-#include "llvm/Support/Path.h"
 #include <cstring>
 
 using namespace llvm;

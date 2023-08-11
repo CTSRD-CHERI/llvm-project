@@ -14,9 +14,7 @@
 
 #include "SymbolTable.h"
 #include "Config.h"
-#include "LinkerScript.h"
 #include "Symbols.h"
-#include "SyntheticSections.h"
 #include "lld/Common/CommonLinkerContext.h"
 #include "lld/Common/ErrorHandler.h"
 #include "lld/Common/Memory.h"
