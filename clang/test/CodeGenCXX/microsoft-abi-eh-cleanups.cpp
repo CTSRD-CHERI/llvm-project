@@ -41,11 +41,11 @@ void HasEHCleanupNoexcept() noexcept {
 
 // With exceptions, we need to clean up at least one of these temporaries.
 // WIN32-LABEL: define dso_local void @"?HasEHCleanupNoexcept@@YAXXZ"() {{.*}} {
-// WIN32:   %[[base:.*]] = call i8* @llvm.stacksave()
+// WIN32:   %[[base:.*]] = call i8* @llvm.stacksave.p0i8()
 // WIN32:   invoke void @"?getA@@YA?AUA@@XZ"(%struct.A* sret(%struct.A) align 4 %{{.*}})
 // WIN32:   invoke void @"?getA@@YA?AUA@@XZ"(%struct.A* sret(%struct.A) align 4 %{{.*}})
 // WIN32:   invoke noundef i32 @"?TakesTwo@@YAHUA@@0@Z"
-// WIN32:   call void @llvm.stackrestore
+// WIN32:   call void @llvm.stackrestore.p0i8(
 // WIN32:   ret void
 //
 //    Since all the calls terminate, there should be no dtors on the unwind
