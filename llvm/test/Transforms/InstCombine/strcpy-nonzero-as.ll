@@ -2,7 +2,7 @@
 ; Test that the strcpy library call simplifier also works when the string
 ; libcall arguments are in a non-zero address space.
 ; RUN: opt < %s -passes=instcombine -S | FileCheck %s
-target datalayout = "e-m:e-p200:128:128:128:64-p:64:64-A200-P200-G200"
+target datalayout = "e-m:e-pf200:128:128:128:64-p:64:64-A200-P200-G200"
 
 @str = private unnamed_addr addrspace(200) constant [17 x i8] c"exactly 16 chars\00", align 1
 
