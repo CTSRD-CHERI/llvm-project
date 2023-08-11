@@ -2454,7 +2454,7 @@ def CHERIMethodClass : DeclOrTypeAttr { // InheritableAttr {
 def CHERINoSubobjectBounds : DeclOrTypeAttr {
   let Spellings = [GNU<"cheri_no_subobject_bounds">,
                    CXX11<"cheri","no_subobject_bounds">,
-                   C2x<"cheri", "no_subobject_bounds">];
+                   C23<"cheri", "no_subobject_bounds">];
   let Documentation = [Undocumented];
 }
 
@@ -2463,7 +2463,7 @@ def CHERINoSubobjectBounds : DeclOrTypeAttr {
 def CHERISubobjectBoundsUseRemainingSize : InheritableAttr {
   let Spellings = [GNU<"cheri_subobject_bounds_use_remaining_size">,
                    CXX11<"cheri","subobject_bounds_use_remaining_size">,
-                   C2x<"cheri", "subobject_bounds_use_remaining_size">];
+                   C23<"cheri", "subobject_bounds_use_remaining_size">];
   // TODO: allow this to be a reference to another field in the structure
   let Args = [UnsignedArgument<"MaxSize", /*Optional=*/1>];
   let Subjects = SubjectList<[Field, Record /* TODO:, TypedefName*/]>;
@@ -2476,7 +2476,7 @@ def CHERISubobjectBoundsUseRemainingSize : InheritableAttr {
 def CHERINoProvenance : TypeAttr {
   let Spellings = [GNU<"cheri_no_provenance">,
                    CXX11<"cheri","no_provenance">,
-                   C2x<"cheri", "no_provenance">];
+                   C23<"cheri", "no_provenance">];
   let Documentation = [Undocumented]; // FIXME
 }
 
