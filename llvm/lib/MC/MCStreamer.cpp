@@ -233,6 +233,16 @@ void MCStreamer::EmitCheriCapabilityImpl(const MCSymbol *Value,
   report_fatal_error("EmitCheriCapability is not implemented for this target!");
 }
 
+void MCStreamer::EmitCheriCapability(const MCSymbol *Value, int64_t Addend,
+                                     unsigned CapSize, SMLoc Loc) {
+  EmitCheriCapability(Value, MCConstantExpr::create(Addend, Context), CapSize,
+                      Loc);
+}
+
+void MCStreamer::emitCheriIntcap(int64_t Value, unsigned CapSize, SMLoc Loc) {
+  emitCheriIntcap(MCConstantExpr::create(Value, Context), CapSize, Loc);
+}
+
 void MCStreamer::emitCheriIntcap(const MCExpr *Expr, unsigned CapSize,
                                  SMLoc Loc) {
   report_fatal_error(

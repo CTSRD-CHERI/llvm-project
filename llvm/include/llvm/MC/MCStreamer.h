@@ -807,18 +807,13 @@ public:
 
   // Emit the expression \p Value into the output as a CHERI capability
   void EmitCheriCapability(const MCSymbol *Value, int64_t Addend,
-                           unsigned CapSize, SMLoc Loc = SMLoc()) {
-    EmitCheriCapability(Value, MCConstantExpr::create(Addend, Context), CapSize,
-                        Loc);
-  }
+                           unsigned CapSize, SMLoc Loc = SMLoc());
   void EmitCheriCapability(const MCSymbol *Value, const MCExpr *Addend,
                            unsigned CapSize, SMLoc Loc = SMLoc());
 
   // Emit \p Value as an untagged capability-size value
   virtual void emitCheriIntcap(int64_t Value, unsigned CapSize,
-                               SMLoc Loc = SMLoc()) {
-    emitCheriIntcap(MCConstantExpr::create(Value, Context), CapSize, Loc);
-  }
+                               SMLoc Loc = SMLoc());
   // Emit \p Expr as an untagged capability-size value
   virtual void emitCheriIntcap(const MCExpr *Expr, unsigned CapSize,
                                SMLoc Loc = SMLoc());
