@@ -169,7 +169,7 @@ static void RenderLocation(InternalScopedString *Buffer, Location Loc) {
       RenderModuleLocation(Buffer, Info.module, Info.module_offset,
                            Info.module_arch, common_flags()->strip_path_prefix);
     else
-      Buffer->append("%p", reinterpret_cast<void *>(Info.address));
+      Buffer->append("%p", reinterpret_cast<void *>((uptr)Info.address));
     return;
   }
   case Location::LK_Null:

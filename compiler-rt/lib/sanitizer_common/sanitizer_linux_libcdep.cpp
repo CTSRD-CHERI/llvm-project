@@ -312,7 +312,8 @@ static usize TlsPreTcbSize() {
 #if !SANITIZER_GO
 namespace {
 struct TlsBlock {
-  uptr begin, end, align;
+  uptr begin, end;
+  size_t align;
   size_t tls_modid;
   bool operator<(const TlsBlock &rhs) const { return begin < rhs.begin; }
 };
@@ -366,16 +367,16 @@ static int CollectStaticTlsBlocks(struct dl_phdr_info *info, size_t size,
   return 0;
 }
 
-__attribute__((unused)) static void GetStaticTlsBoundary(uptr *addr, uptr *size,
-                                                         uptr *align) {
+__attribute__((unused)) static void GetStaticTlsBoundary(uptr *addr, usize *size,
+                                                         usize *align) {
   InternalMmapVector<TlsBlock> ranges;
   dl_iterate_phdr(CollectStaticTlsBlocks, &ranges);
-  uptr len = ranges.size();
+  usize len = ranges.size();
   Sort(ranges.begin(), len);
   // Find the range with tls_modid=1. For glibc, because libc.so uses PT_TLS,
   // this module is guaranteed to exist and is one of the initially loaded
   // modules.
-  uptr one = 0;
+  usize one = 0;
   while (one != len && ranges[one].tls_modid != 1) ++one;
   if (one == len) {
     // This may happen with musl if no module uses PT_TLS.
@@ -387,11 +388,11 @@ __attribute__((unused)) static void GetStaticTlsBoundary(uptr *addr, uptr *size,
   // Find the maximum consecutive ranges. We consider two modules consecutive if
   // the gap is smaller than the alignment. The dynamic loader places static TLS
   // blocks this way not to waste space.
-  uptr l = one;
+  usize l = one;
   *align = ranges[l].align;
   while (l != 0 && ranges[l].begin < ranges[l - 1].end + ranges[l - 1].align)
     *align = Max(*align, ranges[--l].align);
-  uptr r = one + 1;
+  usize r = one + 1;
   while (r != len && ranges[r].begin < ranges[r - 1].end + ranges[r - 1].align)
     *align = Max(*align, ranges[r++].align);
   *addr = ranges[l].begin;
@@ -468,7 +469,7 @@ static void GetTls(uptr *addr, usize *size) {
   *addr = tp - pre_tcb_size;
   *size = g_tls_size + pre_tcb_size;
 #elif SANITIZER_FREEBSD || SANITIZER_LINUX
-  uptr align;
+  usize align;
   GetStaticTlsBoundary(addr, size, &align);
 #if defined(__x86_64__) || defined(__i386__) || defined(__s390__) || \
     defined(__sparc__)

@@ -78,7 +78,7 @@ class StackTraceTextPrinter {
 };
 
 static void CopyStringToBuffer(const InternalScopedString &str, char *out_buf,
-                               uptr out_buf_size) {
+                               usize out_buf_size) {
   if (!out_buf_size)
     return;
 
@@ -167,7 +167,7 @@ void BufferedStackTrace::Unwind(u32 max_depth, uptr pc, uptr bp, void *context,
 }
 
 int GetModuleAndOffsetForPc(uptr pc, char *module_name, uptr module_name_len,
-                            uptr *pc_offset) {
+                            usize *pc_offset) {
   const char *found_module_name = nullptr;
   bool ok = Symbolizer::GetOrInit()->GetModuleNameAndOffsetForPC(
       (vaddr)(void*)pc, &found_module_name, pc_offset);
@@ -216,11 +216,10 @@ void __sanitizer_symbolize_global(uptr data_addr, const char *fmt,
 }
 
 SANITIZER_INTERFACE_ATTRIBUTE
-int __sanitizer_get_module_and_offset_for_pc(void *pc, char *module_name,
-                                             uptr module_name_len,
-                                             void **pc_offset) {
-  return __sanitizer::GetModuleAndOffsetForPc(
-      reinterpret_cast<uptr>(pc), module_name, module_name_len,
-      reinterpret_cast<uptr *>(pc_offset));
+int __sanitizer_get_module_and_offset_for_pc(uptr pc, char *module_name,
+                                             usize module_name_len,
+                                             usize *pc_offset) {
+  return __sanitizer::GetModuleAndOffsetForPc(pc, module_name, module_name_len,
+                                              pc_offset);
 }
 }  // extern "C"

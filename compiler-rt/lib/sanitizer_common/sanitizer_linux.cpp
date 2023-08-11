@@ -437,7 +437,7 @@ usize internal_readlink(const char *path, char *buf, usize bufsize) {
 #endif
 }
 
-uptr internal_unlink(const char *path) {
+usize internal_unlink(const char *path) {
 #if SANITIZER_USES_CANONICAL_LINUX_SYSCALLS
   return internal_syscall(SYSCALL(unlinkat), AT_FDCWD, (uptr)path, 0);
 #else
@@ -1912,7 +1912,11 @@ SignalContext::WriteFlag SignalContext::GetWriteFlag() const {
   return (instr >> 21) & 1 ? WRITE: READ;
 #elif defined(__riscv)
 #if SANITIZER_FREEBSD
-  unsigned long pc = ucontext->uc_mcontext.mc_gpregs.gp_sepc;
+#ifdef __CHERI_PURE_CAPABILITY__
+  uptr pc = ucontext->uc_mcontext.mc_capregs.cp_sepcc;
+#else
+  uptr pc = ucontext->uc_mcontext.mc_gpregs.gp_sepc;
+#endif
 #else
   unsigned long pc = ucontext->uc_mcontext.__gregs[REG_PC];
 #endif
@@ -2142,9 +2146,15 @@ static void GetPcSpBp(void *context, uptr *pc, uptr *sp, uptr *bp) {
 #elif defined(__riscv)
   ucontext_t *ucontext = (ucontext_t*)context;
 #    if SANITIZER_FREEBSD
+#      ifdef __CHERI_PURE_CAPABILITY__
+  *pc = ucontext->uc_mcontext.mc_capregs.cp_sepcc;
+  *bp = ucontext->uc_mcontext.mc_capregs.cp_cs[0];
+  *sp = ucontext->uc_mcontext.mc_capregs.cp_csp;
+#      else
   *pc = ucontext->uc_mcontext.mc_gpregs.gp_sepc;
   *bp = ucontext->uc_mcontext.mc_gpregs.gp_s[0];
   *sp = ucontext->uc_mcontext.mc_gpregs.gp_sp;
+#      endif
 #    else
   *pc = ucontext->uc_mcontext.__gregs[REG_PC];
   *bp = ucontext->uc_mcontext.__gregs[REG_S0];

@@ -109,7 +109,7 @@ class ThreadLister {
 };
 
 // Exposed for testing.
-uptr ThreadDescriptorSize();
+usize ThreadDescriptorSize();
 uptr ThreadSelf();
 
 // Matches a library's file name against a base name (stripping path and version

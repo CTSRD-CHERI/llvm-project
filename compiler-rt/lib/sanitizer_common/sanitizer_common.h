@@ -397,10 +397,13 @@ inline usize MostSignificantSetBitIndex(usize x) {
   return up;
 }
 #ifdef __CHERI_PURE_CAPABILITY__
-usize MostSignificantSetBitIndex(uptr x) = delete;
-INLINE usize MostSignificantSetBitIndex(u64 x) {
+inline usize MostSignificantSetBitIndex(u64 x) {
   return MostSignificantSetBitIndex((usize)x);
 }
+inline usize MostSignificantSetBitIndex(u32 x) {
+  return MostSignificantSetBitIndex((usize)x);
+}
+usize MostSignificantSetBitIndex(uptr x) = delete;
 #endif
 
 inline usize LeastSignificantSetBitIndex(usize x) {
@@ -421,18 +424,12 @@ inline usize LeastSignificantSetBitIndex(usize x) {
 }
 #ifdef __CHERI_PURE_CAPABILITY__
 usize LeastSignificantSetBitIndex(uptr x) = delete;
-INLINE usize LeastSignificantSetBitIndex(u64 x) {
+inline u64 LeastSignificantSetBitIndex(u64 x) {
   return LeastSignificantSetBitIndex((usize)x);
 }
 #endif
 
 inline constexpr bool IsPowerOfTwo(u64 x) { return (x & (x - 1)) == 0; }
-#ifdef __CHERI_PURE_CAPABILITY__
-bool IsPowerOfTwo(uptr x) = delete;
-inline constexpr bool IsPowerOfTwo(usize x) {
-  return IsPowerOfTwo((u64)x);
-}
-#endif
 
 inline u64 RoundUpToPowerOfTwo(u64 size) {
   CHECK(size);
@@ -445,12 +442,15 @@ inline u64 RoundUpToPowerOfTwo(u64 size) {
 }
 #ifdef __CHERI_PURE_CAPABILITY__
 uptr RoundUpToPowerOfTwo(uptr size) = delete;
-INLINE usize RoundUpToPowerOfTwo(usize x) {
+inline u32 RoundUpToPowerOfTwo(u32 x) {
+  return (u32)RoundUpToPowerOfTwo((u64)x);
+}
+inline usize RoundUpToPowerOfTwo(usize x) {
   return (usize)RoundUpToPowerOfTwo((u64)x);
 }
 #endif
 
-inline constexpr uptr RoundUpTo(uptr p, uptr boundary) {
+inline constexpr uptr RoundUpTo(uptr p, usize boundary) {
   RAW_CHECK(IsPowerOfTwo(boundary));
 #if __has_builtin(__builtin_align_up)
   return __builtin_align_up(p, boundary);
@@ -501,12 +501,6 @@ inline u64 Log2(u64 x) {
   CHECK(IsPowerOfTwo(x));
   return LeastSignificantSetBitIndex(x);
 }
-#ifdef __CHERI_PURE_CAPABILITY__
-uptr Log2(uptr x) = delete;
-inline constexpr usize Log2(usize x) {
-  return (usize)Log2((u64)x);
-}
-#endif
 
 // Don't use std::min, std::max or std::swap, to minimize dependency
 // on libstdc++.
@@ -804,7 +798,7 @@ bool ReadFileToBuffer(const char *file_name, char **buff, usize *buff_size,
                       error_t *errno_p = nullptr);
 
 int GetModuleAndOffsetForPc(uptr pc, char *module_name, uptr module_name_len,
-                            uptr *pc_offset);
+                            usize *pc_offset);
 
 // When adding a new architecture, don't forget to also update
 // script/asan_symbolize.py and sanitizer_symbolizer_libcdep.cpp.
@@ -1011,7 +1005,11 @@ static inline void SanitizerBreakOptimization(void *arg) {
 #if defined(_MSC_VER) && !defined(__clang__)
   _ReadWriteBarrier();
 #else
+#ifdef __CHERI_PURE_CAPABILITY__
+  __asm__ __volatile__("" : : "C" (arg) : "memory");
+#else
   __asm__ __volatile__("" : : "r" (arg) : "memory");
+#endif
 #endif
 }
 

@@ -70,7 +70,7 @@ void StackDepotHandle::inc_use_count_unsafe() {
   atomic_fetch_add(&useCounts[id_], 1, memory_order_relaxed);
 }
 
-uptr StackDepotNode::allocated() {
+usize StackDepotNode::allocated() {
   return stackStore.Allocated() + useCounts.MemoryUsage();
 }
 
