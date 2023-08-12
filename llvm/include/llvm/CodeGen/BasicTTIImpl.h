@@ -1798,6 +1798,9 @@ public:
     case Intrinsic::exp2:
       ISD = ISD::FEXP2;
       break;
+    case Intrinsic::exp10:
+      ISD = ISD::FEXP10;
+      break;
     case Intrinsic::log:
       ISD = ISD::FLOG;
       break;
