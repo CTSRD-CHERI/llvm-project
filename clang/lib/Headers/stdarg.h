@@ -7,52 +7,76 @@
  *===-----------------------------------------------------------------------===
  */
 
-#ifndef __STDARG_H
+#if !defined(__STDARG_H) || defined(__need___va_list) ||                       \
+    defined(__need_va_list) || defined(__need_va_arg) ||                       \
+    defined(__need___va_copy) || defined(__need_va_copy)
 
+#if !defined(__need___va_list) && !defined(__need_va_list) &&                  \
+    !defined(__need_va_arg) && !defined(__need___va_copy) &&                   \
+    !defined(__need_va_copy)
+#define __STDARG_H
+#define __need___va_list
+#define __need_va_list
+#define __need_va_arg
+#define __need___va_copy
+/* GCC always defines __va_copy, but does not define va_copy unless in c99 mode
+ * or -ansi is not specified, since it was not part of C90.
+ */
+#if (defined(__STDC_VERSION__) && __STDC_VERSION__ >= 199901L) ||              \
+    (defined(__cplusplus) && __cplusplus >= 201103L) ||                        \
+    !defined(__STRICT_ANSI__)
+#define __need_va_copy
+#endif
+#endif
+
+#ifdef __need___va_list
 #ifndef __GNUC_VA_LIST
 #define __GNUC_VA_LIST
 typedef __builtin_va_list __gnuc_va_list;
 #endif
-
-#ifdef __need___va_list
 #undef __need___va_list
-#else
-#define __STDARG_H
+#endif /* defined(__need___va_list) */
+
+#ifdef __need_va_list
 #if !defined(_VA_LIST) && !defined(_VA_LIST_DECLARED)
 typedef __builtin_va_list va_list;
 #define _VA_LIST
 #define _VA_LIST_DECLARED /* FreeBSD */
 #endif
+#undef __need_va_list
+#endif /* defined(__need_va_list) */
 
+#ifdef __need_va_arg
+#ifndef va_start
 #if defined(__STDC_VERSION__) && __STDC_VERSION__ >= 202311L
 /* C23 does not require the second parameter for va_start. */
 #define va_start(ap, ...) __builtin_va_start(ap, 0)
 #else
-#ifndef va_start
 /* Versions before C23 do require the second parameter. */
 #define va_start(ap, param) __builtin_va_start(ap, param)
 #endif
-#endif
+#endif // va_start
 #ifndef va_end
-#define va_end(ap)          __builtin_va_end(ap)
-#endif
+#define va_end(ap) __builtin_va_end(ap)
+#endif // va_end
 #ifndef va_arg
-#define va_arg(ap, type)    __builtin_va_arg(ap, type)
-#endif
+#define va_arg(ap, type) __builtin_va_arg(ap, type)
+#endif // va_arg
+#undef __need_va_arg
+#endif /* defined(__need_va_arg) */
 
-/* GCC always defines __va_copy, but does not define va_copy unless in c99 mode
- * or -ansi is not specified, since it was not part of C90.
- */
-#define __va_copy(d,s) __builtin_va_copy(d,s)
+#ifdef __need___va_copy
+#ifndef __va_copy
+#define __va_copy(d, s) __builtin_va_copy(d, s)
+#endif // __va_copy
+#undef __need___va_copy
+#endif /* defined(__need___va_copy) */
 
-#if (defined(__STDC_VERSION__) && __STDC_VERSION__ >= 199901L) ||              \
-    (defined(__cplusplus) && __cplusplus >= 201103L) ||                        \
-    !defined(__STRICT_ANSI__)
+#ifdef __need_va_copy
 #ifndef va_copy
-#define va_copy(dest, src)  __builtin_va_copy(dest, src)
-#endif
-#endif
+#define va_copy(dest, src) __builtin_va_copy(dest, src)
+#endif // va_copy
+#undef __need_va_copy
+#endif /* defined(__need_va_copy) */
 
-#endif /* __STDARG_H */
-
-#endif /* not __STDARG_H */
+#endif
