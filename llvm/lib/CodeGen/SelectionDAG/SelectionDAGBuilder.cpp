@@ -6411,7 +6411,7 @@ void SelectionDAGBuilder::visitIntrinsicCall(const CallInst &I,
     Result = DAG.getNode(
         ISD::FPTRUNC_ROUND, sdl, VT, getValue(I.getArgOperand(0)),
         DAG.getTargetConstant((int)RoundMode.getValue(), sdl,
-                              TLI.getPointerTy(DAG.getDataLayout())));
+                              TLI.getPointerRangeTy(DAG.getDataLayout())));
     setValue(&I, Result);
 
     return;
