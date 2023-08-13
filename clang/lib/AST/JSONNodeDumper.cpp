@@ -563,6 +563,10 @@ void JSONNodeDumper::VisitVisibilityAttr(const VisibilityAttr *VA) {
                                   VA->getVisibility()));
 }
 
+void JSONNodeDumper::VisitTLSModelAttr(const TLSModelAttr *TA) {
+  JOS.attribute("tls_model", TA->getModel());
+}
+
 void JSONNodeDumper::VisitTypedefType(const TypedefType *TT) {
   JOS.attribute("decl", createBareDeclRef(TT->getDecl()));
   if (!TT->typeMatchesDecl())
