@@ -686,9 +686,9 @@ def cheri_int_to_cap_EQ : Joined<["-"], "cheri-int-to-cap=">, Flags<[CC1Option]>
 // TODO: it would be nice if BoolOption allowed custom spelling of the positive and negative flags
 defm cheri_exact_equality : BoolOption<"", "cheri-exact-equality",
   LangOpts<"CheriCompareExact">, DefaultFalse,
-  PosFlag<SetTrue, [], "Equality comparisons between capabilities compare all capability fields">,
-  NegFlag<SetFalse, [], "Equality comparisons between capabilities only compare the address (default)">,
-  BothFlags<[NoXarchOption,CC1Option], "">>, Group<cheri_Group>;
+  PosFlag<SetTrue, [], [], "Equality comparisons between capabilities compare all capability fields">,
+  NegFlag<SetFalse, [], [], "Equality comparisons between capabilities only compare the address (default)">,
+  BothFlags<[NoXarchOption,CC1Option], [], "">>, Group<cheri_Group>;
 def : Flag<["-"], "cheri-comparison=address">, Flags<[NoXarchOption,CC1Option]>, Group<cheri_Group>,
   HelpText<no_cheri_exact_equality.HelpText>, Alias<no_cheri_exact_equality>;
 def : Flag<["-"], "cheri-comparison=exact">, Flags<[NoXarchOption,CC1Option]>, Group<cheri_Group>,
