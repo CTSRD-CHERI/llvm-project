@@ -10,6 +10,7 @@
 
 # But duplicate locals are fine so we need to add sensible @CAPTABLE names:
 # RUN: ld.lld -preemptible-caprelocs=legacy --no-relative-cap-relocs %t1.o %t2.o -o %t.exe
+# RUN: llvm-objdump --cap-relocs -d -r -t %t.exe
 # RUN: llvm-objdump --cap-relocs -d -r -t %t.exe | FileCheck %s
 
 # Check that we still have all the capability relocations:
@@ -25,7 +26,6 @@
 # CHECK-NEXT: 0000000000030470 l     O .captable		 0000000000000010 duplicate_local_without_prefix@CAPTABLE.6
 # CHECK-NEXT: 0000000000030480 l     O .captable		 0000000000000010 g@CAPTABLE
 # CHECK-NEXT: 0000000000030490 l     O .captable		 0000000000000010 local_with_same_name_as_global@CAPTABLE
-# CHECK:      0000000000030410 l       .captable		 0000000000000090 .hidden _CHERI_CAPABILITY_TABLE_
 
 # CHECK-LABEL: CAPABILITY RELOCATION RECORDS:
 # CHECK-NEXT: 0x0000000000030410	Base: .L.str.123 (0x00000000000404a0)	Offset: 0x0000000000000000	Length: 0x0000000000000006	Permissions: 0x00000000

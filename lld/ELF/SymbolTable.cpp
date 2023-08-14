@@ -59,6 +59,7 @@ Defined *SymbolTable::ensureSymbolWillBeInDynsym(Symbol* original) {
   newSym->visibility = llvm::ELF::STV_HIDDEN;
   newSym->versionId = VER_NDX_GLOBAL;
   newSym->usedByDynReloc = true;
+  newSym->isUsedInRegularObj = true;
   newSym->isPreemptible = false;
   assert(newSym->computeBinding() == llvm::ELF::STB_GLOBAL);
 

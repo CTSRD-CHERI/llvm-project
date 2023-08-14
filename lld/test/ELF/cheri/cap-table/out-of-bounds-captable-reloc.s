@@ -13,7 +13,7 @@
 # CHECK-NEXT: out-of-bounds-captable-reloc.s.tmp.o:(.text+0x{{.+}}): relocation R_MIPS_CHERI_CAPTAB_CLC11 out of range: 1025 is not in [-1024, 1023]
 # CHECK-NEXT: >>> defined in
 # CHECK-EMPTY:
-# CHECK:      error: too many errors emitted, stopping now (use -error-limit=0 to see all errors)
+# CHECK:      error: too many errors emitted, stopping now (use --error-limit=0 to see all errors)
 
 .macro generate_values
   .irp i, 0, 1

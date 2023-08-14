@@ -5,7 +5,7 @@
 # RUN: FileCheck -check-prefix=LIMITED %s
 # LIMITED: warning: undefined symbol: undef
 # LIMITED: warning: undefined symbol: undef2
-# LIMITED: warning: too many warnings emitted, stopping now (use -warning-limit=0 to see all warnings)
+# LIMITED: warning: too many warnings emitted, stopping now (use --warning-limit=0 to see all warnings)
 
 # RUN: ld.lld %t1.o -o %t5 --warn-unresolved-symbols -warning-limit=0 2>&1 | \
 # RUN: FileCheck -check-prefix=UNLIMITED %s
