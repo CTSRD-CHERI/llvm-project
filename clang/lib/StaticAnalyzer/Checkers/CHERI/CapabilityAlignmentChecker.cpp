@@ -52,6 +52,24 @@ public:
   void checkPostStmt(const BinaryOperator *BO, CheckerContext &C) const;
   void checkPostStmt(const CastExpr *BO, CheckerContext &C) const;
   void checkPreStmt(const CastExpr *BO, CheckerContext &C) const;
+
+private:
+  class AlignmentBugVisitor : public BugReporterVisitor {
+  public:
+    AlignmentBugVisitor(SymbolRef SR) : Sym(SR) {}
+
+    void Profile(llvm::FoldingSetNodeID &ID) const override {
+      static int X = 0;
+      ID.AddPointer(&X);
+      ID.AddPointer(Sym);
+    }
+
+    PathDiagnosticPieceRef VisitNode(const ExplodedNode *N,
+                                     BugReporterContext &BRC,
+                                     PathSensitiveBugReport &BR) override;
+  private:
+    SymbolRef Sym;
+  };
 };
 
 } // namespace
@@ -65,10 +83,12 @@ CapabilityAlignmentChecker::CapabilityAlignmentChecker() {
 
 namespace {
 
-int getTrailingZerosCount(const SVal &V, CheckerContext &C);
+int getTrailingZerosCount(const SVal &V, ProgramStateRef State,
+                          ASTContext &ASTCtx);
 
-int getTrailingZerosCount(SymbolRef Sym, CheckerContext &C) {
-  const int *Align = C.getState()->get<TrailingZerosMap>(Sym);
+int getTrailingZerosCount(SymbolRef Sym, ProgramStateRef State,
+                          ASTContext &ASTCtx) {
+  const int *Align = State->get<TrailingZerosMap>(Sym);
   if (Align)
     return *Align;
 
@@ -77,7 +97,6 @@ int getTrailingZerosCount(SymbolRef Sym, CheckerContext &C) {
     if (BaseRegOrigin->getMemorySpace()->hasGlobalsOrParametersStorage()) {
       const QualType &SymTy = Sym->getType();
       if (SymTy->isPointerType() && !isGenericPointerType(SymTy)) {
-        ASTContext &ASTCtx = C.getASTContext();
         const QualType &PT = SymTy->getPointeeType();
         if (!PT->isIncompleteType()) {
           unsigned A = ASTCtx.getTypeAlignInChars(PT).getQuantity();
@@ -89,18 +108,18 @@ int getTrailingZerosCount(SymbolRef Sym, CheckerContext &C) {
   return -1;
 }
 
-int getTrailingZerosCount(const MemRegion *R, CheckerContext &C) {
+int getTrailingZerosCount(const MemRegion *R, ProgramStateRef State,
+                          ASTContext &ASTCtx) {
   R = R->StripCasts();
 
-  ASTContext &ASTCtx = C.getASTContext();
   if (const ElementRegion *ER = R->getAs<ElementRegion>()) {
     const MemRegion *Base = ER->getSuperRegion();
     int BaseTZC = -1;
     if (const SymbolicRegion *SymbBase = Base->getSymbolicBase())
-      BaseTZC = getTrailingZerosCount(SymbBase->getSymbol(), C);
+      BaseTZC = getTrailingZerosCount(SymbBase->getSymbol(), State, ASTCtx);
     else
-      BaseTZC = getTrailingZerosCount(Base, C);
-    int IdxTZC = getTrailingZerosCount(ER->getIndex(), C);
+      BaseTZC = getTrailingZerosCount(Base, State, ASTCtx);
+    int IdxTZC = getTrailingZerosCount(ER->getIndex(), State, ASTCtx);
     if (BaseTZC >=0) {
       const QualType ElemTy = ER->getElementType();
       unsigned ElAlign = ASTCtx.getTypeAlignInChars(ElemTy).getQuantity();
@@ -135,7 +154,8 @@ int getTrailingZerosCount(const MemRegion *R, CheckerContext &C) {
   return llvm::APSInt::getUnsigned(A).countTrailingZeros();
 }
 
-int getTrailingZerosCount(const SVal &V, CheckerContext &C) {
+int getTrailingZerosCount(const SVal &V, ProgramStateRef State,
+                          ASTContext &ASTCtx) {
   if (V.isUnknownOrUndef())
     return -1;
 
@@ -148,13 +168,13 @@ int getTrailingZerosCount(const SVal &V, CheckerContext &C) {
   }
 
   if (SymbolRef Sym = V.getAsSymbol()) {
-    int Res = getTrailingZerosCount(Sym, C);
+    int Res = getTrailingZerosCount(Sym, State, ASTCtx);
     if (Res >=0)
         return Res;
   }
 
   if (const MemRegion *R = V.getAsRegion()) {
-    return getTrailingZerosCount(R, C);
+    return getTrailingZerosCount(R, State, ASTCtx);
   }
 
   return -1;
@@ -162,7 +182,7 @@ int getTrailingZerosCount(const SVal &V, CheckerContext &C) {
 
 int getTrailingZerosCount(const Expr *E, CheckerContext &C) {
   const SVal &V = C.getSVal(E);
-  return getTrailingZerosCount(V, C);
+  return getTrailingZerosCount(V, C.getState(), C.getASTContext());
 }
 
 } // namespace
@@ -183,7 +203,7 @@ void CapabilityAlignmentChecker::checkPreStmt(const CastExpr *CE,
   const SVal &SrcVal = C.getSVal(CE->getSubExpr());
   if (SrcVal.isConstant())
     return; // special value
-  int SrcTZC = getTrailingZerosCount(SrcVal, C);
+  int SrcTZC = getTrailingZerosCount(SrcVal, C.getState(), C.getASTContext());
   if (SrcTZC < 0)
     return;
   if ((unsigned)SrcTZC >= sizeof(unsigned int)*8)
@@ -204,6 +224,9 @@ void CapabilityAlignmentChecker::checkPreStmt(const CastExpr *CE,
         auto W = std::make_unique<PathSensitiveBugReport>(
             *CastAlignBug, ErrorMessage, ErrNode);
         W->addRange(CE->getSourceRange());
+        if (SymbolRef S = SrcVal.getAsSymbol())
+          W->addVisitor(std::make_unique<AlignmentBugVisitor>(S));
+        W->markInteresting(SrcVal);
         C.emitReport(std::move(W));
     }
   }
@@ -239,15 +262,7 @@ void CapabilityAlignmentChecker::checkPostStmt(const CastExpr *CE,
     }
     if (SymbolRef Sym = DstVal.getAsSymbol()) {
         State = State->set<TrailingZerosMap>(Sym, SrcTZC);
-        const NoteTag *Tag =
-            C.getNoteTag([SrcTZC](PathSensitiveBugReport &BR) -> std::string {
-              SmallString<80> Msg;
-              llvm::raw_svector_ostream OS(Msg);
-              OS << "Alignment: ";
-              printAlign(OS, SrcTZC);
-              return std::string(OS.str());
-            });
-        C.addTransition(State, C.getPredecessor(), Tag);
+        C.addTransition(State);
     }
   }
 }
@@ -353,20 +368,61 @@ void CapabilityAlignmentChecker::checkPostStmt(const BinaryOperator *BO,
     State = State->BindExpr(BO, LCtx, ResVal);
   }
   State = State->set<TrailingZerosMap>(ResVal.getAsSymbol(), Res);
-  const NoteTag *Tag =
-      C.getNoteTag([LeftTZ, RightTZ, Res, OpCode]
-                   (PathSensitiveBugReport &BR) -> std::string {
-        SmallString<80> Msg;
-        llvm::raw_svector_ostream OS(Msg);
-        OS << "Alignment: ";
-        printAlign(OS, LeftTZ);
+  C.addTransition(State);
+}
+
+PathDiagnosticPieceRef
+CapabilityAlignmentChecker::AlignmentBugVisitor::VisitNode(
+    const ExplodedNode *N, BugReporterContext &BRC,
+    PathSensitiveBugReport &BR) {
+
+  const Stmt *S = N->getStmtForDiagnostics();
+  if (!S)
+    return nullptr;
+  const Expr *E = dyn_cast<Expr>(S);
+  if (!E)
+    return nullptr;
+
+  SmallString<256> Buf;
+  llvm::raw_svector_ostream OS(Buf);
+
+  ProgramStateRef State = N->getState();
+  const int *NewAlign = State->get<TrailingZerosMap>(N->getSVal(E).getAsSymbol());
+  if (!NewAlign)
+    return nullptr;
+
+  if (const CastExpr *CE = dyn_cast<CastExpr>(E)) {
+    if (Sym != N->getSVal(S).getAsSymbol())
+      return nullptr;
+    if (SymbolRef SrcSym = N->getSVal(CE->getSubExpr()).getAsSymbol())
+      if (const int *OldAlign = State->get<TrailingZerosMap>(SrcSym))
+        if (*OldAlign == *NewAlign)
+          return nullptr;
+
+    OS << "Alignment: ";
+    printAlign(OS, *NewAlign);
+  } else if (const BinaryOperator *BO = dyn_cast<BinaryOperator>(E)) {
+    BinaryOperatorKind const OpCode = BO->getOpcode();
+    OS << "Alignment: ";
+    if (!BO->isShiftOp() && !BO->isShiftAssignOp()) {
+      ASTContext &ASTCtx = N->getCodeDecl().getASTContext();
+      int LTZ = getTrailingZerosCount(N->getSVal(BO->getLHS()), State, ASTCtx);
+      int RTZ = getTrailingZerosCount(N->getSVal(BO->getRHS()), State, ASTCtx);
+      if (LTZ >= 0 && RTZ >= 0) {
+        printAlign(OS, LTZ);
         OS << " " << BinaryOperator::getOpcodeStr(OpCode) << " ";
-        printAlign(OS, RightTZ);
+        printAlign(OS, RTZ);
         OS << " => ";
-        printAlign(OS, Res);
-        return std::string(OS.str());
-      });
-  C.addTransition(State, C.getPredecessor(), Tag);
+      }
+    }
+    printAlign(OS, *NewAlign);
+  } else
+    return nullptr;
+
+  // Generate the extra diagnostic.
+  PathDiagnosticLocation const Pos(S, BRC.getSourceManager(),
+                                   N->getLocationContext());
+  return std::make_shared<PathDiagnosticEventPiece>(Pos, OS.str(), true);
 }
 
 void ento::registerCapabilityAlignmentChecker(CheckerManager &mgr) {
