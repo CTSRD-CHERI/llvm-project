@@ -5280,7 +5280,7 @@ Address CGObjCMac::EmitSelectorAddr(Selector Sel) {
     Entry->setExternallyInitialized(true);
   }
 
-  return Address(Entry, Align);
+  return Address::deprecated(Entry, Align);
 }
 
 llvm::Constant *CGObjCCommonMac::GetClassName(StringRef RuntimeName) {
@@ -7359,7 +7359,7 @@ CGObjCNonFragileABIMac::EmitVTableMessageSend(CodeGenFunction &CGF,
 
   Address mref =
     Address(CGF.Builder.CreateBitCast(messageRef, ObjCTypes.MessageRefPtrTy),
-            CGF.getPointerAlign());
+            ObjCTypes.MessageRefTy, CGF.getPointerAlign());
 
   // Update the message ref argument.
   args[1].setRValue(RValue::get(mref.getPointer()));
@@ -7655,7 +7655,7 @@ Address CGObjCNonFragileABIMac::EmitSelectorAddr(Selector Sel) {
     CGM.addCompilerUsedGlobal(Entry);
   }
 
-  return Address(Entry, Align);
+  return Address::deprecated(Entry, Align);
 }
 
 /// EmitObjCIvarAssign - Code gen for assigning to a __strong object.

@@ -103,16 +103,16 @@ bool isAtomicStoreOp(AtomicExpr::AtomicOp Op) {
             lvalue.getAlignment();
         VoidPtrAddr = CGF.Builder.CreateConstGEP1_64(
             CGF.Int8Ty, VoidPtrAddr, OffsetInChars.getQuantity());
+        llvm::Type *IntTy = CGF.Builder.getIntNTy(AtomicSizeInBits);
         auto Addr = CGF.Builder.CreatePointerBitCastOrAddrSpaceCast(
             VoidPtrAddr,
-            CGF.Builder.getIntNTy(AtomicSizeInBits)->getPointerTo(
-              CGF.CGM.getTargetCodeGenInfo().getDefaultAS()),
+            IntTy->getPointerTo(CGF.CGM.getTargetCodeGenInfo().getDefaultAS()),
             "atomic_bitfield_base");
         BFI = OrigBFI;
         BFI.Offset = Offset;
         BFI.StorageSize = AtomicSizeInBits;
         BFI.StorageOffset += OffsetInChars;
-        LVal = LValue::MakeBitfield(Address(Addr, lvalue.getAlignment()),
+        LVal = LValue::MakeBitfield(Address(Addr, IntTy, lvalue.getAlignment()),
                                     BFI, lvalue.getType(), lvalue.getBaseInfo(),
                                     lvalue.getTBAAInfo());
         AtomicTy = C.getIntTypeForBitwidth(AtomicSizeInBits, OrigBFI.IsSigned);
@@ -814,23 +814,21 @@ AddDirectArgument(CodeGenFunction &CGF, CallArgList &Args,
     // Load value and pass it to the function directly.
     CharUnits Align = CGF.getContext().getTypeAlignInChars(ValTy);
     int64_t SizeInBits = CGF.getContext().toBits(SizeInChars);
-    llvm::Type *ValLLVMTy;
+    llvm::Type *ITy;
     if (ValTy->isCHERICapabilityType(CGF.getContext())) {
-      ValTy =
-          CGF.getContext().getPointerType(CGF.getContext().VoidTy,
-                                          PIK_Capability);
-      ValLLVMTy = CGF.Int8CheriCapTy;
+      ValTy = CGF.getContext().getPointerType(CGF.getContext().VoidTy,
+                                              PIK_Capability);
+      ITy = CGF.Int8CheriCapTy;
     } else {
       ValTy =
           CGF.getContext().getIntTypeForBitwidth(SizeInBits, /*Signed=*/false);
-      ValLLVMTy = llvm::IntegerType::get(CGF.getLLVMContext(), SizeInBits);
+      ITy = llvm::IntegerType::get(CGF.getLLVMContext(), SizeInBits);
     }
     llvm::Type *IPtrTy =
-        ValLLVMTy->getPointerTo(CGF.CGM.getTargetCodeGenInfo().getDefaultAS());
-    Address Ptr = Address(CGF.Builder.CreateBitCast(Val, IPtrTy), Align);
+        ITy->getPointerTo(CGF.CGM.getTargetCodeGenInfo().getDefaultAS());
+    Address Ptr = Address(CGF.Builder.CreateBitCast(Val, IPtrTy), ITy, Align);
     Val = CGF.EmitLoadOfScalar(Ptr, false,
-                               CGF.getContext().getPointerType(ValTy),
-                               Loc);
+                               CGF.getContext().getPointerType(ValTy), Loc);
     // Coerce the value into an appropriately sized integer or into a
     // void/i8 capability type.
     Args.add(RValue::get(Val), ValTy);

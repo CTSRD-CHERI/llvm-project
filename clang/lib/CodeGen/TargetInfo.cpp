@@ -328,19 +328,21 @@ static Address emitVoidPtrDirectVAArg(CodeGenFunction &CGF,
     if (CGF.getTarget().SupportsCapabilities() &&
         CGF.CGM.getDataLayout().isFatPointer(Ptr->getType())) {
       PtrAsInt = CGF.getPointerAddress(PtrAsInt);
-      PtrAsInt = CGF.Builder.CreateAdd(PtrAsInt,
-            llvm::ConstantInt::get(CGF.IntPtrTy, DirectAlign.getQuantity() - 1));
-      PtrAsInt = CGF.Builder.CreateAnd(PtrAsInt,
-               llvm::ConstantInt::get(CGF.IntPtrTy, -DirectAlign.getQuantity()));
+      PtrAsInt = CGF.Builder.CreateAdd(
+          PtrAsInt,
+          llvm::ConstantInt::get(CGF.IntPtrTy, DirectAlign.getQuantity() - 1));
+      PtrAsInt = CGF.Builder.CreateAnd(
+          PtrAsInt,
+          llvm::ConstantInt::get(CGF.IntPtrTy, -DirectAlign.getQuantity()));
       Addr =
           Address(CGF.getTargetHooks().setPointerAddress(
                       CGF, Ptr, PtrAsInt, "", CGF.CurCodeDecl->getLocation()),
                   DirectAlign);
     } else
-      Addr = Address(emitRoundPointerUpToAlignment(CGF, Ptr, DirectAlign),
-                                                 DirectAlign);
+      Addr = Address::deprecated(
+          emitRoundPointerUpToAlignment(CGF, Ptr, DirectAlign), DirectAlign);
   } else {
-    Addr = Address(Ptr, SlotSize);
+    Addr = Address::deprecated(Ptr, SlotSize);
   }
 
   // Advance the pointer past the argument, then store that back.
@@ -395,17 +397,15 @@ static Address emitVoidPtrVAArg(CodeGenFunction &CGF, Address VAListAddr,
     DirectTy = DirectTy->getPointerTo(AllocaAS);
   }
 
-  Address Addr = emitVoidPtrDirectVAArg(CGF, VAListAddr, DirectTy,
-                                        DirectSize, DirectAlign,
-                                        SlotSizeAndAlign,
-                                        AllowHigherAlign);
+  Address Addr =
+      emitVoidPtrDirectVAArg(CGF, VAListAddr, DirectTy, DirectSize, DirectAlign,
+                             SlotSizeAndAlign, AllowHigherAlign);
 
   if (IsIndirect) {
-    Addr = Address(CGF.Builder.CreateLoad(Addr), ValueInfo.Align);
+    Addr = Address::deprecated(CGF.Builder.CreateLoad(Addr), ValueInfo.Align);
   }
 
   return Addr;
-
 }
 
 static Address complexTempStructure(CodeGenFunction &CGF, Address VAListAddr,
@@ -717,7 +717,7 @@ Address EmitVAArgInstr(CodeGenFunction &CGF, Address VAListAddr, QualType Ty,
         CGF.CGM.getPointerInDefaultAS(CGF.ConvertTypeForMem(Ty));
     llvm::Value *Addr =
         CGF.Builder.CreateVAArg(VAListAddr.getPointer(), BaseTy);
-    return Address(Addr, TyAlignForABI);
+    return Address::deprecated(Addr, TyAlignForABI);
   } else {
     assert((AI.isDirect() || AI.isExtend()) &&
            "Unexpected ArgInfo Kind in generic VAArg emitter!");
@@ -4975,8 +4975,8 @@ Address PPC32_SVR4_ABIInfo::EmitVAArg(CodeGenFunction &CGF, Address VAList,
     CGF.EmitBlock(UsingRegs);
 
     Address RegSaveAreaPtr = Builder.CreateStructGEP(VAList, 4);
-    RegAddr = Address(Builder.CreateLoad(RegSaveAreaPtr),
-                      CharUnits::fromQuantity(8));
+    RegAddr = Address::deprecated(Builder.CreateLoad(RegSaveAreaPtr),
+                                  CharUnits::fromQuantity(8));
     assert(RegAddr.getElementType() == CGF.Int8Ty);
 
     // Floating-point registers start after the general-purpose registers.
@@ -4989,10 +4989,10 @@ Address PPC32_SVR4_ABIInfo::EmitVAArg(CodeGenFunction &CGF, Address VAList,
     // registers we've used by the number of
     CharUnits RegSize = CharUnits::fromQuantity((isInt || IsSoftFloatABI) ? 4 : 8);
     llvm::Value *RegOffset =
-      Builder.CreateMul(NumRegs, Builder.getInt8(RegSize.getQuantity()));
-    RegAddr = Address(Builder.CreateInBoundsGEP(CGF.Int8Ty,
-                                            RegAddr.getPointer(), RegOffset),
-                      RegAddr.getAlignment().alignmentOfArrayElement(RegSize));
+        Builder.CreateMul(NumRegs, Builder.getInt8(RegSize.getQuantity()));
+    RegAddr = Address(
+        Builder.CreateInBoundsGEP(CGF.Int8Ty, RegAddr.getPointer(), RegOffset),
+        CGF.Int8Ty, RegAddr.getAlignment().alignmentOfArrayElement(RegSize));
     RegAddr = Builder.CreateElementBitCast(RegAddr, DirectTy);
 
     // Increase the used-register count.
@@ -5023,14 +5023,14 @@ Address PPC32_SVR4_ABIInfo::EmitVAArg(CodeGenFunction &CGF, Address VAList,
     }
 
     Address OverflowAreaAddr = Builder.CreateStructGEP(VAList, 3);
-    Address OverflowArea(Builder.CreateLoad(OverflowAreaAddr, "argp.cur"),
-                         OverflowAreaAlign);
+    Address OverflowArea = Address::deprecated(
+        Builder.CreateLoad(OverflowAreaAddr, "argp.cur"), OverflowAreaAlign);
     // Round up address of argument to alignment
     CharUnits Align = CGF.getContext().getTypeAlignInChars(Ty);
     if (Align > OverflowAreaAlign) {
       llvm::Value *Ptr = OverflowArea.getPointer();
-      OverflowArea = Address(emitRoundPointerUpToAlignment(CGF, Ptr, Align),
-                                                           Align);
+      OverflowArea = Address::deprecated(
+          emitRoundPointerUpToAlignment(CGF, Ptr, Align), Align);
     }
 
     MemAddr = Builder.CreateElementBitCast(OverflowArea, DirectTy);
@@ -5049,8 +5049,8 @@ Address PPC32_SVR4_ABIInfo::EmitVAArg(CodeGenFunction &CGF, Address VAList,
 
   // Load the pointer if the argument was passed indirectly.
   if (isIndirect) {
-    Result = Address(Builder.CreateLoad(Result, "aggr"),
-                     getContext().getTypeAlignInChars(Ty));
+    Result = Address::deprecated(Builder.CreateLoad(Result, "aggr"),
+                                 getContext().getTypeAlignInChars(Ty));
   }
 
   return Result;
@@ -6198,7 +6198,7 @@ Address AArch64ABIInfo::EmitAAPCSVAArg(Address VAListAddr, QualType Ty,
       CGF.Builder.CreateStructGEP(VAListAddr, reg_top_index, "reg_top_p");
   reg_top = CGF.Builder.CreateLoad(reg_top_p, "reg_top");
   Address BaseAddr(CGF.Builder.CreateInBoundsGEP(CGF.Int8Ty, reg_top, reg_offs),
-                   CharUnits::fromQuantity(IsFPR ? 16 : 8));
+                   CGF.Int8Ty, CharUnits::fromQuantity(IsFPR ? 16 : 8));
   Address RegAddr = Address::invalid();
   llvm::Type *MemTy = CGF.ConvertTypeForMem(Ty);
 
@@ -6283,8 +6283,8 @@ Address AArch64ABIInfo::EmitAAPCSVAArg(Address VAListAddr, QualType Ty,
 
     OnStackPtr = CGF.Builder.CreateIntToPtr(OnStackPtr, CGF.Int8PtrTy);
   }
-  Address OnStackAddr(OnStackPtr,
-                      std::max(CharUnits::fromQuantity(8), TyAlign));
+  Address OnStackAddr = Address::deprecated(
+      OnStackPtr, std::max(CharUnits::fromQuantity(8), TyAlign));
 
   // All stack slots are multiples of 8 bytes.
   CharUnits StackSlotSize = CharUnits::fromQuantity(8);
@@ -6316,12 +6316,12 @@ Address AArch64ABIInfo::EmitAAPCSVAArg(Address VAListAddr, QualType Ty,
   //=======================================
   CGF.EmitBlock(ContBlock);
 
-  Address ResAddr = emitMergePHI(CGF, RegAddr, InRegBlock,
-                                 OnStackAddr, OnStackBlock, "vaargs.addr");
+  Address ResAddr = emitMergePHI(CGF, RegAddr, InRegBlock, OnStackAddr,
+                                 OnStackBlock, "vaargs.addr");
 
   if (IsIndirect)
-    return Address(CGF.Builder.CreateLoad(ResAddr, "vaarg.addr"),
-                   TyAlign);
+    return Address::deprecated(CGF.Builder.CreateLoad(ResAddr, "vaarg.addr"),
+                               TyAlign);
 
   return ResAddr;
 }
@@ -6339,7 +6339,8 @@ Address AArch64ABIInfo::EmitDarwinVAArg(Address VAListAddr, QualType Ty,
 
   // Empty records are ignored for parameter passing purposes.
   if (isEmptyRecord(getContext(), Ty, true)) {
-    Address Addr(CGF.Builder.CreateLoad(VAListAddr, "ap.cur"), SlotSize);
+    Address Addr = Address::deprecated(
+        CGF.Builder.CreateLoad(VAListAddr, "ap.cur"), SlotSize);
     Addr = CGF.Builder.CreateElementBitCast(Addr, CGF.ConvertTypeForMem(Ty));
     return Addr;
   }
@@ -7127,7 +7128,8 @@ Address ARMABIInfo::EmitVAArg(CodeGenFunction &CGF, Address VAListAddr,
 
   // Empty records are ignored for parameter passing purposes.
   if (isEmptyRecord(getContext(), Ty, true)) {
-    Address Addr(CGF.Builder.CreateLoad(VAListAddr), SlotSize);
+    Address Addr =
+        Address::deprecated(CGF.Builder.CreateLoad(VAListAddr), SlotSize);
     Addr = CGF.Builder.CreateElementBitCast(Addr, CGF.ConvertTypeForMem(Ty));
     return Addr;
   }
@@ -7700,17 +7702,16 @@ Address SystemZABIInfo::EmitVAArg(CodeGenFunction &CGF, Address VAListAddr,
     // single (8 byte) or double (16 byte) stack slot.
     Address OverflowArgAreaPtr =
         CGF.Builder.CreateStructGEP(VAListAddr, 2, "overflow_arg_area_ptr");
-    Address OverflowArgArea =
-      Address(CGF.Builder.CreateLoad(OverflowArgAreaPtr, "overflow_arg_area"),
-              TyInfo.Align);
+    Address OverflowArgArea = Address::deprecated(
+        CGF.Builder.CreateLoad(OverflowArgAreaPtr, "overflow_arg_area"),
+        TyInfo.Align);
     Address MemAddr =
-      CGF.Builder.CreateElementBitCast(OverflowArgArea, DirectTy, "mem_addr");
+        CGF.Builder.CreateElementBitCast(OverflowArgArea, DirectTy, "mem_addr");
 
     // Update overflow_arg_area_ptr pointer
-    llvm::Value *NewOverflowArgArea =
-      CGF.Builder.CreateGEP(OverflowArgArea.getElementType(),
-                            OverflowArgArea.getPointer(), PaddedSizeV,
-                            "overflow_arg_area");
+    llvm::Value *NewOverflowArgArea = CGF.Builder.CreateGEP(
+        OverflowArgArea.getElementType(), OverflowArgArea.getPointer(),
+        PaddedSizeV, "overflow_arg_area");
     CGF.Builder.CreateStore(NewOverflowArgArea, OverflowArgAreaPtr);
 
     return MemAddr;
@@ -7758,12 +7759,12 @@ Address SystemZABIInfo::EmitVAArg(CodeGenFunction &CGF, Address VAListAddr,
   Address RegSaveAreaPtr =
       CGF.Builder.CreateStructGEP(VAListAddr, 3, "reg_save_area_ptr");
   llvm::Value *RegSaveArea =
-    CGF.Builder.CreateLoad(RegSaveAreaPtr, "reg_save_area");
-  Address RawRegAddr(CGF.Builder.CreateGEP(CGF.Int8Ty, RegSaveArea, RegOffset,
-                                           "raw_reg_addr"),
-                     PaddedSize);
+      CGF.Builder.CreateLoad(RegSaveAreaPtr, "reg_save_area");
+  Address RawRegAddr(
+      CGF.Builder.CreateGEP(CGF.Int8Ty, RegSaveArea, RegOffset, "raw_reg_addr"),
+      CGF.Int8Ty, PaddedSize);
   Address RegAddr =
-    CGF.Builder.CreateElementBitCast(RawRegAddr, DirectTy, "reg_addr");
+      CGF.Builder.CreateElementBitCast(RawRegAddr, DirectTy, "reg_addr");
 
   // Update the register count
   llvm::Value *One = llvm::ConstantInt::get(IndexTy, 1);
@@ -7778,11 +7779,11 @@ Address SystemZABIInfo::EmitVAArg(CodeGenFunction &CGF, Address VAListAddr,
   // Work out the address of a stack argument.
   Address OverflowArgAreaPtr =
       CGF.Builder.CreateStructGEP(VAListAddr, 2, "overflow_arg_area_ptr");
-  Address OverflowArgArea =
-    Address(CGF.Builder.CreateLoad(OverflowArgAreaPtr, "overflow_arg_area"),
-            PaddedSize);
+  Address OverflowArgArea = Address::deprecated(
+      CGF.Builder.CreateLoad(OverflowArgAreaPtr, "overflow_arg_area"),
+      PaddedSize);
   Address RawMemAddr =
-    CGF.Builder.CreateConstByteGEP(OverflowArgArea, Padding, "raw_mem_addr");
+      CGF.Builder.CreateConstByteGEP(OverflowArgArea, Padding, "raw_mem_addr");
   Address MemAddr =
     CGF.Builder.CreateElementBitCast(RawMemAddr, DirectTy, "mem_addr");
 
@@ -7796,12 +7797,12 @@ Address SystemZABIInfo::EmitVAArg(CodeGenFunction &CGF, Address VAListAddr,
 
   // Return the appropriate result.
   CGF.EmitBlock(ContBlock);
-  Address ResAddr = emitMergePHI(CGF, RegAddr, InRegBlock,
-                                 MemAddr, InMemBlock, "va_arg.addr");
+  Address ResAddr = emitMergePHI(CGF, RegAddr, InRegBlock, MemAddr, InMemBlock,
+                                 "va_arg.addr");
 
   if (IsIndirect)
-    ResAddr = Address(CGF.Builder.CreateLoad(ResAddr, "indirect_arg"),
-                      TyInfo.Align);
+    ResAddr = Address::deprecated(
+        CGF.Builder.CreateLoad(ResAddr, "indirect_arg"), TyInfo.Align);
 
   return ResAddr;
 }
@@ -9003,7 +9004,9 @@ Address HexagonABIInfo::EmitVAArgFromMemory(CodeGenFunction &CGF,
   // overflow area pointer to the argument type.
   llvm::Type *PTy = CGF.ConvertTypeForMem(Ty);
   Address AddrTyped = CGF.Builder.CreateElementBitCast(
-      Address(__overflow_area_pointer, CharUnits::fromQuantity(Align)), PTy);
+      Address::deprecated(__overflow_area_pointer,
+                          CharUnits::fromQuantity(Align)),
+      PTy);
 
   // Round up to the minimum stack alignment for varargs which is 4 bytes.
   uint64_t Offset = llvm::alignTo(CGF.getContext().getTypeSize(Ty) / 8, 4);
@@ -9035,7 +9038,8 @@ Address HexagonABIInfo::EmitVAArgForHexagon(CodeGenFunction &CGF,
     Addr = Builder.CreateIntToPtr(AddrAsInt, BP);
   }
   Address AddrTyped = Builder.CreateElementBitCast(
-      Address(Addr, CharUnits::fromQuantity(TyAlign)), CGF.ConvertType(Ty));
+      Address::deprecated(Addr, CharUnits::fromQuantity(TyAlign)),
+      CGF.ConvertType(Ty));
 
   uint64_t Offset = llvm::alignTo(CGF.getContext().getTypeSize(Ty) / 8, 4);
   llvm::Value *NextAddr = Builder.CreateGEP(
@@ -9191,13 +9195,13 @@ Address HexagonABIInfo::EmitVAArgForHexagonLinux(CodeGenFunction &CGF,
   // Implement the ContBlock
   CGF.EmitBlock(ContBlock);
 
-  llvm::Type *MemPTy =
-      llvm::PointerType::get(CGF.ConvertTypeForMem(Ty), AllocaAS);
+  llvm::Type *MemTy = CGF.ConvertTypeForMem(Ty);
+  llvm::Type *MemPTy = llvm::PointerType::get(MemTy, AllocaAS);
   llvm::PHINode *ArgAddr = CGF.Builder.CreatePHI(MemPTy, 2, "vaarg.addr");
   ArgAddr->addIncoming(__saved_reg_area_p, InRegBlock);
   ArgAddr->addIncoming(__overflow_area_p, OnStackBlock);
 
-  return Address(ArgAddr, CharUnits::fromQuantity(ArgAlign));
+  return Address(ArgAddr, MemTy, CharUnits::fromQuantity(ArgAlign));
 }
 
 Address HexagonABIInfo::EmitVAArg(CodeGenFunction &CGF, Address VAListAddr,
@@ -10110,7 +10114,8 @@ Address SparcV9ABIInfo::EmitVAArg(CodeGenFunction &CGF, Address VAListAddr,
   CharUnits SlotSize = CharUnits::fromQuantity(8);
 
   CGBuilderTy &Builder = CGF.Builder;
-  Address Addr(Builder.CreateLoad(VAListAddr, "ap.cur"), SlotSize);
+  Address Addr =
+      Address::deprecated(Builder.CreateLoad(VAListAddr, "ap.cur"), SlotSize);
   llvm::Type *ArgPtrTy = CGF.CGM.getPointerInDefaultAS(ArgTy);
 
   auto TypeInfo = getContext().getTypeInfoInChars(Ty);
@@ -10141,12 +10146,12 @@ Address SparcV9ABIInfo::EmitVAArg(CodeGenFunction &CGF, Address VAListAddr,
   case ABIArgInfo::IndirectAliased:
     Stride = SlotSize;
     ArgAddr = Builder.CreateElementBitCast(Addr, ArgPtrTy, "indirect");
-    ArgAddr = Address(Builder.CreateLoad(ArgAddr, "indirect.arg"),
-                      TypeInfo.Align);
+    ArgAddr = Address::deprecated(Builder.CreateLoad(ArgAddr, "indirect.arg"),
+                                  TypeInfo.Align);
     break;
 
   case ABIArgInfo::Ignore:
-    return Address(llvm::UndefValue::get(ArgPtrTy), TypeInfo.Align);
+    return Address(llvm::UndefValue::get(ArgPtrTy), ArgTy, TypeInfo.Align);
   }
 
   // Update VAList.
@@ -10487,7 +10492,7 @@ Address XCoreABIInfo::EmitVAArg(CodeGenFunction &CGF, Address VAListAddr,
 
   // Get the VAList.
   CharUnits SlotSize = CharUnits::fromQuantity(4);
-  Address AP(Builder.CreateLoad(VAListAddr), SlotSize);
+  Address AP = Address::deprecated(Builder.CreateLoad(VAListAddr), SlotSize);
 
   // Handle the argument.
   ABIArgInfo AI = classifyArgumentType(Ty);
@@ -10505,7 +10510,7 @@ Address XCoreABIInfo::EmitVAArg(CodeGenFunction &CGF, Address VAListAddr,
   case ABIArgInfo::InAlloca:
     llvm_unreachable("Unsupported ABI kind for va_arg");
   case ABIArgInfo::Ignore:
-    Val = Address(llvm::UndefValue::get(ArgPtrTy), TypeAlign);
+    Val = Address(llvm::UndefValue::get(ArgPtrTy), ArgTy, TypeAlign);
     ArgSize = CharUnits::Zero();
     break;
   case ABIArgInfo::Extend:
@@ -10518,7 +10523,7 @@ Address XCoreABIInfo::EmitVAArg(CodeGenFunction &CGF, Address VAListAddr,
   case ABIArgInfo::Indirect:
   case ABIArgInfo::IndirectAliased:
     Val = Builder.CreateElementBitCast(AP, ArgPtrTy);
-    Val = Address(Builder.CreateLoad(Val), TypeAlign);
+    Val = Address::deprecated(Builder.CreateLoad(Val), TypeAlign);
     ArgSize = SlotSize;
     break;
   }
@@ -11558,7 +11563,8 @@ Address RISCVABIInfo::EmitVAArg(CodeGenFunction &CGF, Address VAListAddr,
 
   // Empty records are ignored for parameter passing purposes.
   if (isEmptyRecord(getContext(), Ty, true)) {
-    Address Addr(CGF.Builder.CreateLoad(VAListAddr), SlotSize);
+    Address Addr =
+        Address::deprecated(CGF.Builder.CreateLoad(VAListAddr), SlotSize);
     Addr = CGF.Builder.CreateElementBitCast(Addr, CGF.ConvertTypeForMem(Ty));
     return Addr;
   }
