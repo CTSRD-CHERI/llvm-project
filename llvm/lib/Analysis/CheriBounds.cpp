@@ -1,4 +1,5 @@
 #include "llvm/Analysis/CheriBounds.h"
+#include "llvm/IR/Constants.h"
 #include "llvm/IR/Intrinsics.h"
 #include "llvm/Support/Debug.h"
 #include "llvm/Support/Format.h"

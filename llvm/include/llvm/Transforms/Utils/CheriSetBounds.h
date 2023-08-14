@@ -9,6 +9,7 @@
 #ifndef LLVM_TRANSFORMS_UTILS_CHERISETBOUNDS_H
 #define LLVM_TRANSFORMS_UTILS_CHERISETBOUNDS_H
 
+#include "llvm/IR/Constants.h"
 #include "llvm/IR/Instructions.h"
 #include "llvm/Support/CheriSetBounds.h"
 #include "llvm/Transforms/Utils.h"
