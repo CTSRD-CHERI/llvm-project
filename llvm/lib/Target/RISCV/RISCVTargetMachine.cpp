@@ -305,6 +305,7 @@ public:
   void addPreRegAlloc() override;
   void addPostRegAlloc() override;
   void addOptimizedRegAlloc() override;
+  void addFastRegAlloc() override;
 };
 } // namespace
 
@@ -427,11 +428,16 @@ void RISCVPassConfig::addPreRegAlloc() {
 }
 
 void RISCVPassConfig::addOptimizedRegAlloc() {
-  if (getOptimizeRegAlloc())
-    insertPass(&DetectDeadLanesID, &RISCVInitUndefID);
+  insertPass(&DetectDeadLanesID, &RISCVInitUndefID);
 
   TargetPassConfig::addOptimizedRegAlloc();
 }
+
+void RISCVPassConfig::addFastRegAlloc() {
+  addPass(createRISCVInitUndefPass());
+  TargetPassConfig::addFastRegAlloc();
+}
+
 
 void RISCVPassConfig::addPostRegAlloc() {
   if (TM->getOptLevel() != CodeGenOpt::None && EnableRedundantCopyElimination)
