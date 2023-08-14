@@ -335,15 +335,15 @@ static Address emitVoidPtrDirectVAArg(CodeGenFunction &CGF,
       PtrAsInt = CGF.Builder.CreateAnd(
           PtrAsInt,
           llvm::ConstantInt::get(CGF.IntPtrTy, -DirectAlign.getQuantity()));
-      Addr = Address::deprecated(
-          CGF.getTargetHooks().setPointerAddress(
-              CGF, Ptr, PtrAsInt, "", CGF.CurCodeDecl->getLocation()),
-          DirectAlign);
+      Addr =
+          Address(CGF.getTargetHooks().setPointerAddress(
+                      CGF, Ptr, PtrAsInt, "", CGF.CurCodeDecl->getLocation()),
+                  CGF.Int8Ty, DirectAlign);
     } else
-      Addr = Address::deprecated(
-          emitRoundPointerUpToAlignment(CGF, Ptr, DirectAlign), DirectAlign);
+    Addr = Address(emitRoundPointerUpToAlignment(CGF, Ptr, DirectAlign),
+                   CGF.Int8Ty, DirectAlign);
   } else {
-    Addr = Address::deprecated(Ptr, SlotSize);
+    Addr = Address(Ptr, CGF.Int8Ty, SlotSize);
   }
 
   // Advance the pointer past the argument, then store that back.
