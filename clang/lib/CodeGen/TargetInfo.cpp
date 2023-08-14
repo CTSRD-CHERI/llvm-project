@@ -327,6 +327,7 @@ static Address emitVoidPtrDirectVAArg(CodeGenFunction &CGF,
     llvm::Value *PtrAsInt = Ptr;
     if (CGF.getTarget().SupportsCapabilities() &&
         CGF.CGM.getDataLayout().isFatPointer(Ptr->getType())) {
+      // FIXME: can this diff be dropped???
       PtrAsInt = CGF.getPointerAddress(PtrAsInt);
       PtrAsInt = CGF.Builder.CreateAdd(
           PtrAsInt,
@@ -334,10 +335,10 @@ static Address emitVoidPtrDirectVAArg(CodeGenFunction &CGF,
       PtrAsInt = CGF.Builder.CreateAnd(
           PtrAsInt,
           llvm::ConstantInt::get(CGF.IntPtrTy, -DirectAlign.getQuantity()));
-      Addr =
-          Address(CGF.getTargetHooks().setPointerAddress(
-                      CGF, Ptr, PtrAsInt, "", CGF.CurCodeDecl->getLocation()),
-                  DirectAlign);
+      Addr = Address::deprecated(
+          CGF.getTargetHooks().setPointerAddress(
+              CGF, Ptr, PtrAsInt, "", CGF.CurCodeDecl->getLocation()),
+          DirectAlign);
     } else
       Addr = Address::deprecated(
           emitRoundPointerUpToAlignment(CGF, Ptr, DirectAlign), DirectAlign);

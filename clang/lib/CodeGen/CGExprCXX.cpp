@@ -1606,7 +1606,7 @@ llvm::Value *CodeGenFunction::EmitCXXNewExpr(const CXXNewExpr *E) {
                            /*isSubObject=*/false,
                            "for type " + allocType.getAsString(),
                            allocation.getAlignment().getAsAlign()),
-          allocation.getAlignment());
+          allocation.getElementType(), allocation.getAlignment());
     }
 
     // The pointer expression will, in many cases, be an opaque void*.

@@ -4510,7 +4510,7 @@ Address CodeGenFunction::EmitArrayToPointerDecay(const Expr *E,
   if (getLangOpts().getCheriBounds() >= LangOptions::CBM_SubObjectsSafe) {
     auto BoundedResult = setCHERIBoundsOnArrayDecay(Addr.getPointer(), E);
     assert(BoundedResult->getType() == Addr.getType());
-    Addr = Address(BoundedResult, Addr.getAlignment());
+    Addr = Address(BoundedResult, Addr.getElementType(), Addr.getAlignment());
   }
   return Addr;
 }
@@ -6310,7 +6310,8 @@ RValue CodeGenFunction::EmitCall(QualType CalleeType, const CGCallee &OrigCallee
     // Load the global and use it in the call
     // FIXME: EmitSandboxRequiredMethod should return an Address so that we
     // don't have to know the alignment here.
-    auto *MethodNum = Builder.CreateLoad(Address(MethodNumVar, CharUnits::fromQuantity(8)));
+    auto *MethodNum = Builder.CreateLoad(
+        Address::deprecated(MethodNumVar, CharUnits::fromQuantity(8)));
     MethodNum->setMetadata(CGM.getModule().getMDKindID("invariant.load"),
         llvm::MDNode::get(getLLVMContext(), None));
     CallArg MethodNumArg(RValue::get(MethodNum), NumTy);
@@ -6434,7 +6435,8 @@ RValue CodeGenFunction::EmitCall(QualType CalleeType, const CGCallee &OrigCallee
       CHERIErrno->setThreadLocal(true);
     }
     // FIXME: Don't hard code 4-byte alignment for int!
-    auto *ErrVal = Builder.CreateLoad(Address(CHERIErrno, CharUnits::fromQuantity(4)));
+    auto *ErrVal = Builder.CreateLoad(
+        Address::deprecated(CHERIErrno, CharUnits::fromQuantity(4)));
     auto *IsZero = Builder.CreateICmpEQ(ErrVal,
         llvm::Constant::getNullValue(ErrVal->getType()));
     auto *Continue = createBasicBlock("cheri_invoke_continue");

@@ -5052,7 +5052,7 @@ RValue CodeGenFunction::EmitBuiltinExpr(const GlobalDecl GD, unsigned BuiltinID,
     // Load the global and use it in the call
     // FIXME: EmitSandboxRequiredMethod should return an Address so that we
     // don't have to know the alignment here.
-    auto *MethodNum = Builder.CreateLoad(Address(MethodNumVar,
+    auto *MethodNum = Builder.CreateLoad(Address::deprecated(MethodNumVar,
           CharUnits::fromQuantity(8)));
 
     auto MethNoTy = llvm::Type::getInt64Ty(getLLVMContext());

@@ -1547,7 +1547,7 @@ Address AtomicInfo::convertToAtomicIntPointer(Address Addr) const {
         CGF.getNullDerivedCapability(AtomicLLVMTy,
                                      CGF.Builder.CreateLoad(Addr)),
         Tmp, AlignChars.getAsAlign());
-    return Address(Tmp, AlignChars);
+    return Address(Tmp, AtomicLLVMTy, AlignChars);
   }
   uint64_t SourceSizeInBits = CGF.CGM.getDataLayout().getTypeSizeInBits(Ty);
   if (SourceSizeInBits != AtomicSizeInBits) {

@@ -102,10 +102,6 @@ std::string lld::verboseToString(const Symbol *b, uint64_t symOffset) {
   return msg;
 }
 
-std::string lld::toELFString(const Archive::Symbol &b) {
-  return demangle(b.getName(), config->demangle);
-}
-
 Defined *ElfSym::bss;
 Defined *ElfSym::etext1;
 Defined *ElfSym::etext2;

@@ -1308,7 +1308,7 @@ void CodeGenFunction::EmitReturnStmt(const ReturnStmt &S) {
           llvm::Type *RetTy = RetV->getType();
           llvm::Value *KeyV = CGM.GetAddrOfGlobalVar(Key);
           CharUnits Alignment = getContext().getDeclAlign(Key);
-          Address Addr(KeyV, Alignment);
+          Address Addr(KeyV, ConvertTypeForMem(Key->getType()), Alignment);
           KeyV = Builder.CreateLoad(Addr);
           // If this is CHERI, enforce this in hardware
           if (Ty->isCHERICapabilityType(getContext())) {

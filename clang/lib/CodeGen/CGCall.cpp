@@ -1403,7 +1403,8 @@ static void CreateCoercedStore(llvm::Value *Src,
           unsigned CapAS = CGF.CGM.getTargetCodeGenInfo().getCHERICapabilityAS();
           if (PTy->getAddressSpace() == CapAS) {
             Src = CGF.Builder.CreateBitCast(Src, DstTy->getPointerTo(CapAS));
-            Src = CGF.Builder.CreateLoad(Address(Src, Dst.getAlignment()));
+            Src =
+                CGF.Builder.CreateLoad(Address(Src, DstTy, Dst.getAlignment()));
             CGF.Builder.CreateStore(Src, Dst, DstIsVolatile);
             return;
           }
@@ -5599,7 +5600,7 @@ RValue CodeGenFunction::EmitCall(const CGFunctionInfo &CallInfo,
                 if (Key) {
                   llvm::Value *KeyV = CGM.GetAddrOfGlobalVar(Key);
                   CharUnits Alignment = getContext().getDeclAlign(Key);
-                  Address Addr(V, Alignment);
+                  Address Addr(V, ConvertTypeForMem(Key->getType()), Alignment);
                   KeyV = Builder.CreateLoad(Addr);
                   // If this is CHERI, enforce this in hardware
                   if (RetTy->isCHERICapabilityType(CGM.getContext())) {
