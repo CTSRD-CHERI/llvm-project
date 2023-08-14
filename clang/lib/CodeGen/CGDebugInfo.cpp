@@ -4668,7 +4668,7 @@ llvm::DILocalVariable *CGDebugInfo::EmitDeclare(const BindingDecl *BD,
     return nullptr;
 
   auto Align = getDeclAlignIfRequired(BD, CGM.getContext());
-  unsigned AddressSpace = CGM.getContext().getTargetAddressSpace(BD->getType());
+  unsigned AddressSpace = CGM.getAddressSpaceForType(BD->getType());
 
   SmallVector<uint64_t, 3> Expr;
   AppendAddressSpaceXDeref(AddressSpace, Expr);

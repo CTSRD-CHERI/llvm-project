@@ -101,7 +101,6 @@ def FLD : FPLoad_r<0b011, "fld", FPR64, WriteFLD64>;
 def FSD : FPStore_r<0b011, "fsd", FPR64, WriteFST64>;
 } // Predicates = [HasStdExtD, NotCapMode]
 
-let Predicates = [HasStdExtD] in {
 let SchedRW = [WriteFMA64, ReadFMA64, ReadFMA64, ReadFMA64] in {
 defm FMADD_D  : FPFMA_rrr_frm_m<OPC_MADD,  0b01, "fmadd.d",  DINX>;
 defm FMSUB_D  : FPFMA_rrr_frm_m<OPC_MSUB,  0b01, "fmsub.d",  DINX>;

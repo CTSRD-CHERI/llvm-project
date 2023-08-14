@@ -292,7 +292,6 @@ def FLW : FPLoad_r<0b010, "flw", FPR32, WriteFLD32>;
 def FSW : FPStore_r<0b010, "fsw", FPR32, WriteFST32>;
 } // Predicates = [HasStdExtF, NotCapMode]
 
-let Predicates = [HasStdExtF] in {
 let SchedRW = [WriteFMA32, ReadFMA32, ReadFMA32, ReadFMA32] in {
 defm FMADD_S  : FPFMA_rrr_frm_m<OPC_MADD,  0b00, "fmadd.s",  FINX>;
 defm FMSUB_S  : FPFMA_rrr_frm_m<OPC_MSUB,  0b00, "fmsub.s",  FINX>;
