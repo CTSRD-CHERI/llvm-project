@@ -4923,11 +4923,11 @@ void CGObjCMac::EmitThrowStmt(CodeGen::CodeGenFunction &CGF,
 llvm::Value * CGObjCMac::EmitObjCWeakRead(CodeGen::CodeGenFunction &CGF,
                                           Address AddrWeakObj) {
   llvm::Type* DestTy = AddrWeakObj.getElementType();
-  AddrWeakObj = CGF.Builder.CreateBitCast(AddrWeakObj,
-                                          ObjCTypes.PtrObjectPtrTy);
+  llvm::Value *AddrWeakObjVal = CGF.Builder.CreateBitCast(
+      AddrWeakObj.getPointer(), ObjCTypes.PtrObjectPtrTy);
   llvm::Value *read_weak =
     CGF.EmitNounwindRuntimeCall(ObjCTypes.getGcReadWeakFn(),
-                                AddrWeakObj.getPointer(), "weakread");
+                                AddrWeakObjVal, "weakread");
   read_weak = CGF.Builder.CreateBitCast(read_weak, DestTy);
   return read_weak;
 }
@@ -4946,8 +4946,9 @@ void CGObjCMac::EmitObjCWeakAssign(CodeGen::CodeGenFunction &CGF,
     src = CGF.Builder.CreateIntToPtr(src, ObjCTypes.Int8PtrTy);
   }
   src = CGF.Builder.CreateBitCast(src, ObjCTypes.ObjectPtrTy);
-  dst = CGF.Builder.CreateBitCast(dst, ObjCTypes.PtrObjectPtrTy);
-  llvm::Value *args[] = { src, dst.getPointer() };
+  llvm::Value *dstVal =
+      CGF.Builder.CreateBitCast(dst.getPointer(), ObjCTypes.PtrObjectPtrTy);
+  llvm::Value *args[] = { src, dstVal };
   CGF.EmitNounwindRuntimeCall(ObjCTypes.getGcAssignWeakFn(),
                               args, "weakassign");
 }
@@ -4967,8 +4968,9 @@ void CGObjCMac::EmitObjCGlobalAssign(CodeGen::CodeGenFunction &CGF,
     src = CGF.Builder.CreateIntToPtr(src, ObjCTypes.Int8PtrTy);
   }
   src = CGF.Builder.CreateBitCast(src, ObjCTypes.ObjectPtrTy);
-  dst = CGF.Builder.CreateBitCast(dst, ObjCTypes.PtrObjectPtrTy);
-  llvm::Value *args[] = { src, dst.getPointer() };
+  llvm::Value *dstVal =
+      CGF.Builder.CreateBitCast(dst.getPointer(), ObjCTypes.PtrObjectPtrTy);
+  llvm::Value *args[] = {src, dstVal};
   if (!threadlocal)
     CGF.EmitNounwindRuntimeCall(ObjCTypes.getGcAssignGlobalFn(),
                                 args, "globalassign");
@@ -4993,8 +4995,9 @@ void CGObjCMac::EmitObjCIvarAssign(CodeGen::CodeGenFunction &CGF,
     src = CGF.Builder.CreateIntToPtr(src, ObjCTypes.Int8PtrTy);
   }
   src = CGF.Builder.CreateBitCast(src, ObjCTypes.ObjectPtrTy);
-  dst = CGF.Builder.CreateBitCast(dst, ObjCTypes.PtrObjectPtrTy);
-  llvm::Value *args[] = { src, dst.getPointer(), ivarOffset };
+  llvm::Value *dstVal =
+      CGF.Builder.CreateBitCast(dst.getPointer(), ObjCTypes.PtrObjectPtrTy);
+  llvm::Value *args[] = {src, dstVal, ivarOffset};
   CGF.EmitNounwindRuntimeCall(ObjCTypes.getGcAssignIvarFn(), args);
 }
 
@@ -5012,8 +5015,9 @@ void CGObjCMac::EmitObjCStrongCastAssign(CodeGen::CodeGenFunction &CGF,
     src = CGF.Builder.CreateIntToPtr(src, ObjCTypes.Int8PtrTy);
   }
   src = CGF.Builder.CreateBitCast(src, ObjCTypes.ObjectPtrTy);
-  dst = CGF.Builder.CreateBitCast(dst, ObjCTypes.PtrObjectPtrTy);
-  llvm::Value *args[] = { src, dst.getPointer() };
+  llvm::Value *dstVal =
+      CGF.Builder.CreateBitCast(dst.getPointer(), ObjCTypes.PtrObjectPtrTy);
+  llvm::Value *args[] = {src, dstVal};
   CGF.EmitNounwindRuntimeCall(ObjCTypes.getGcAssignStrongCastFn(),
                               args, "strongassign");
 }
@@ -5022,8 +5026,8 @@ void CGObjCMac::EmitGCMemmoveCollectable(CodeGen::CodeGenFunction &CGF,
                                          Address DestPtr,
                                          Address SrcPtr,
                                          llvm::Value *size) {
-  SrcPtr = CGF.Builder.CreateBitCast(SrcPtr, ObjCTypes.Int8PtrTy);
-  DestPtr = CGF.Builder.CreateBitCast(DestPtr, ObjCTypes.Int8PtrTy);
+  SrcPtr = CGF.Builder.CreateElementBitCast(SrcPtr, CGF.Int8Ty);
+  DestPtr = CGF.Builder.CreateElementBitCast(DestPtr, CGF.Int8Ty);
   llvm::Value *args[] = { DestPtr.getPointer(), SrcPtr.getPointer(), size };
   CGF.EmitNounwindRuntimeCall(ObjCTypes.GcMemmoveCollectableFn(), args);
 }
@@ -7670,8 +7674,9 @@ void CGObjCNonFragileABIMac::EmitObjCIvarAssign(CodeGen::CodeGenFunction &CGF,
     src = CGF.Builder.CreateIntToPtr(src, ObjCTypes.Int8PtrTy);
   }
   src = CGF.Builder.CreateBitCast(src, ObjCTypes.ObjectPtrTy);
-  dst = CGF.Builder.CreateBitCast(dst, ObjCTypes.PtrObjectPtrTy);
-  llvm::Value *args[] = { src, dst.getPointer(), ivarOffset };
+  llvm::Value *dstVal =
+      CGF.Builder.CreateBitCast(dst.getPointer(), ObjCTypes.PtrObjectPtrTy);
+  llvm::Value *args[] = {src, dstVal, ivarOffset};
   CGF.EmitNounwindRuntimeCall(ObjCTypes.getGcAssignIvarFn(), args);
 }
 
@@ -7690,8 +7695,9 @@ void CGObjCNonFragileABIMac::EmitObjCStrongCastAssign(
     src = CGF.Builder.CreateIntToPtr(src, ObjCTypes.Int8PtrTy);
   }
   src = CGF.Builder.CreateBitCast(src, ObjCTypes.ObjectPtrTy);
-  dst = CGF.Builder.CreateBitCast(dst, ObjCTypes.PtrObjectPtrTy);
-  llvm::Value *args[] = { src, dst.getPointer() };
+  llvm::Value *dstVal =
+      CGF.Builder.CreateBitCast(dst.getPointer(), ObjCTypes.PtrObjectPtrTy);
+  llvm::Value *args[] = {src, dstVal};
   CGF.EmitNounwindRuntimeCall(ObjCTypes.getGcAssignStrongCastFn(),
                               args, "weakassign");
 }
@@ -7701,8 +7707,8 @@ void CGObjCNonFragileABIMac::EmitGCMemmoveCollectable(
   Address DestPtr,
   Address SrcPtr,
   llvm::Value *Size) {
-  SrcPtr = CGF.Builder.CreateBitCast(SrcPtr, ObjCTypes.Int8PtrTy);
-  DestPtr = CGF.Builder.CreateBitCast(DestPtr, ObjCTypes.Int8PtrTy);
+  SrcPtr = CGF.Builder.CreateElementBitCast(SrcPtr, CGF.Int8Ty);
+  DestPtr = CGF.Builder.CreateElementBitCast(DestPtr, CGF.Int8Ty);
   llvm::Value *args[] = { DestPtr.getPointer(), SrcPtr.getPointer(), Size };
   CGF.EmitNounwindRuntimeCall(ObjCTypes.GcMemmoveCollectableFn(), args);
 }
@@ -7714,10 +7720,11 @@ llvm::Value * CGObjCNonFragileABIMac::EmitObjCWeakRead(
   CodeGen::CodeGenFunction &CGF,
   Address AddrWeakObj) {
   llvm::Type *DestTy = AddrWeakObj.getElementType();
-  AddrWeakObj = CGF.Builder.CreateBitCast(AddrWeakObj, ObjCTypes.PtrObjectPtrTy);
+  llvm::Value *AddrWeakObjVal = CGF.Builder.CreateBitCast(
+      AddrWeakObj.getPointer(), ObjCTypes.PtrObjectPtrTy);
   llvm::Value *read_weak =
     CGF.EmitNounwindRuntimeCall(ObjCTypes.getGcReadWeakFn(),
-                                AddrWeakObj.getPointer(), "weakread");
+                                AddrWeakObjVal, "weakread");
   read_weak = CGF.Builder.CreateBitCast(read_weak, DestTy);
   return read_weak;
 }
@@ -7736,8 +7743,9 @@ void CGObjCNonFragileABIMac::EmitObjCWeakAssign(CodeGen::CodeGenFunction &CGF,
     src = CGF.Builder.CreateIntToPtr(src, ObjCTypes.Int8PtrTy);
   }
   src = CGF.Builder.CreateBitCast(src, ObjCTypes.ObjectPtrTy);
-  dst = CGF.Builder.CreateBitCast(dst, ObjCTypes.PtrObjectPtrTy);
-  llvm::Value *args[] = { src, dst.getPointer() };
+  llvm::Value *dstVal =
+      CGF.Builder.CreateBitCast(dst.getPointer(), ObjCTypes.PtrObjectPtrTy);
+  llvm::Value *args[] = {src, dstVal};
   CGF.EmitNounwindRuntimeCall(ObjCTypes.getGcAssignWeakFn(),
                               args, "weakassign");
 }
@@ -7757,8 +7765,9 @@ void CGObjCNonFragileABIMac::EmitObjCGlobalAssign(CodeGen::CodeGenFunction &CGF,
     src = CGF.Builder.CreateIntToPtr(src, ObjCTypes.Int8PtrTy);
   }
   src = CGF.Builder.CreateBitCast(src, ObjCTypes.ObjectPtrTy);
-  dst = CGF.Builder.CreateBitCast(dst, ObjCTypes.PtrObjectPtrTy);
-  llvm::Value *args[] = { src, dst.getPointer() };
+  llvm::Value *dstVal =
+      CGF.Builder.CreateBitCast(dst.getPointer(), ObjCTypes.PtrObjectPtrTy);
+  llvm::Value *args[] = {src, dstVal};
   if (!threadlocal)
     CGF.EmitNounwindRuntimeCall(ObjCTypes.getGcAssignGlobalFn(),
                                 args, "globalassign");

@@ -1489,8 +1489,8 @@ void X86_32TargetCodeGenInfo::addReturnRegisterOutputs(
   ResultTruncRegTypes.push_back(CoerceTy);
 
   // Coerce the integer by bitcasting the return slot pointer.
-  ReturnSlot.setAddress(CGF.Builder.CreateBitCast(
-      ReturnSlot.getAddress(CGF), CoerceTy->getPointerTo(getDefaultAS())));
+  ReturnSlot.setAddress(
+      CGF.Builder.CreateElementBitCast(ReturnSlot.getAddress(CGF), CoerceTy));
   ResultRegDests.push_back(ReturnSlot);
 
   rewriteInputConstraintReferences(NumOutputs, 1, AsmString);
@@ -9002,9 +9002,8 @@ Address HexagonABIInfo::EmitVAArgFromMemory(CodeGenFunction &CGF,
   // Get the type of the argument from memory and bitcast
   // overflow area pointer to the argument type.
   llvm::Type *PTy = CGF.ConvertTypeForMem(Ty);
-  Address AddrTyped = CGF.Builder.CreateBitCast(
-      Address(__overflow_area_pointer, CharUnits::fromQuantity(Align)),
-      llvm::PointerType::get(PTy, CGF.CGM.getDataLayout().getAllocaAddrSpace()));
+  Address AddrTyped = CGF.Builder.CreateElementBitCast(
+      Address(__overflow_area_pointer, CharUnits::fromQuantity(Align)), PTy);
 
   // Round up to the minimum stack alignment for varargs which is 4 bytes.
   uint64_t Offset = llvm::alignTo(CGF.getContext().getTypeSize(Ty) / 8, 4);
@@ -9023,9 +9022,8 @@ Address HexagonABIInfo::EmitVAArgForHexagon(CodeGenFunction &CGF,
                                             QualType Ty) const {
   // FIXME: Need to handle alignment
   llvm::Type *BP = CGF.Int8PtrTy;
-  llvm::Type *BPP = CGF.Int8PtrPtrTy;
   CGBuilderTy &Builder = CGF.Builder;
-  Address VAListAddrAsBPP = Builder.CreateBitCast(VAListAddr, BPP, "ap");
+  Address VAListAddrAsBPP = Builder.CreateElementBitCast(VAListAddr, BP, "ap");
   llvm::Value *Addr = Builder.CreateLoad(VAListAddrAsBPP, "ap.cur");
   // Handle address alignment for type alignment > 32 bits
   uint64_t TyAlign = CGF.getContext().getTypeAlign(Ty) / 8;
@@ -9036,10 +9034,8 @@ Address HexagonABIInfo::EmitVAArgForHexagon(CodeGenFunction &CGF,
     AddrAsInt = Builder.CreateAnd(AddrAsInt, Builder.getInt32(~(TyAlign - 1)));
     Addr = Builder.CreateIntToPtr(AddrAsInt, BP);
   }
-  llvm::Type *PTy = llvm::PointerType::get(
-      CGF.ConvertType(Ty), CGF.CGM.getDataLayout().getAllocaAddrSpace());
-  Address AddrTyped = Builder.CreateBitCast(
-      Address(Addr, CharUnits::fromQuantity(TyAlign)), PTy);
+  Address AddrTyped = Builder.CreateElementBitCast(
+      Address(Addr, CharUnits::fromQuantity(TyAlign)), CGF.ConvertType(Ty));
 
   uint64_t Offset = llvm::alignTo(CGF.getContext().getTypeSize(Ty) / 8, 4);
   llvm::Value *NextAddr = Builder.CreateGEP(
@@ -10157,7 +10153,7 @@ Address SparcV9ABIInfo::EmitVAArg(CodeGenFunction &CGF, Address VAListAddr,
   Address NextPtr = Builder.CreateConstInBoundsByteGEP(Addr, Stride, "ap.next");
   Builder.CreateStore(NextPtr.getPointer(), VAListAddr);
 
-  return Builder.CreateBitCast(ArgAddr, ArgPtrTy, "arg.addr");
+  return Builder.CreateElementBitCast(ArgAddr, ArgTy, "arg.addr");
 }
 
 void SparcV9ABIInfo::computeInfo(CGFunctionInfo &FI) const {
@@ -10514,9 +10510,9 @@ Address XCoreABIInfo::EmitVAArg(CodeGenFunction &CGF, Address VAListAddr,
     break;
   case ABIArgInfo::Extend:
   case ABIArgInfo::Direct:
-    Val = Builder.CreateBitCast(AP, ArgPtrTy);
+    Val = Builder.CreateElementBitCast(AP, ArgTy);
     ArgSize = CharUnits::fromQuantity(
-                       getDataLayout().getTypeAllocSize(AI.getCoerceToType()));
+        getDataLayout().getTypeAllocSize(AI.getCoerceToType()));
     ArgSize = ArgSize.alignTo(SlotSize);
     break;
   case ABIArgInfo::Indirect:

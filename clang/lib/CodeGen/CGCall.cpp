@@ -1282,8 +1282,7 @@ static llvm::Value *CreateCoercedLoad(Address Src, llvm::Type *Ty,
       if (!structContainsExactlyOneFieldThatIsACapability(SrcSTy, CGF)) {
         if (llvm::PointerType* PTy = dyn_cast<llvm::PointerType>(Ty)) {
           if (PTy->getAddressSpace() == CGF.CGM.getTargetCodeGenInfo().getCHERICapabilityAS()) {
-            Src = CGF.Builder.CreateBitCast(Src, Ty);
-            return Src.getPointer();
+            return CGF.Builder.CreateBitCast(Src.getPointer(), Ty);
           }
         }
       }
@@ -4901,13 +4900,10 @@ RValue CodeGenFunction::EmitCall(const CGFunctionInfo &CallInfo,
         // Store the RValue into the argument struct.
         Address Addr =
             Builder.CreateStructGEP(ArgMemory, ArgInfo.getInAllocaFieldIndex());
-        unsigned AS = Addr.getType()->getPointerAddressSpace();
-        llvm::Type *MemType = ConvertTypeForMem(I->Ty)->getPointerTo(AS);
         // There are some cases where a trivial bitcast is not avoidable.  The
         // definition of a type later in a translation unit may change it's type
         // from {}* to (%struct.foo*)*.
-        if (Addr.getType() != MemType)
-          Addr = Builder.CreateBitCast(Addr, MemType);
+        Addr = Builder.CreateElementBitCast(Addr, ConvertTypeForMem(I->Ty));
         I->copyInto(*this, Addr);
       }
       break;

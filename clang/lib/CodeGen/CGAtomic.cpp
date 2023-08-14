@@ -1528,7 +1528,8 @@ Address AtomicInfo::emitCastToAtomicIntPointer(Address addr) const {
     // use the generic libcalls (with mutex+memcpy) adds unncessary complexity.
     if (!UseLibcall) {
       // If we aren't using a libcall there is no need to cast to i8*
-      return CGF.Builder.CreateBitCast(addr, getAtomicPointer()->getType());
+      return CGF.Builder.CreateElementBitCast(
+          addr, getAtomicAddress().getElementType());
     }
     ty = CGF.CGM.Int8CheriCapTy;
   } else {
