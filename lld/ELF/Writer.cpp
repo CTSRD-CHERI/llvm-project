@@ -177,6 +177,7 @@ static Defined *addOptionalRegular(StringRef name, SectionBase *sec,
 
   s->resolve(Defined{nullptr, StringRef(), STB_GLOBAL, stOther, STT_NOTYPE, val,
                      /*size=*/0, sec});
+  s->isUsedInRegularObj = true;
   // If Val == 0 assume this symbol references the start of a section.
   // When targetting CHERI we set the size of that symbol since otherwise
   // an expression like foo = &_DYNAMIC will create a zero-length capability
@@ -194,6 +195,7 @@ static Defined *addOptionalRegular(StringRef name, SectionBase *sec,
 static Defined *addAbsolute(StringRef name) {
   Symbol *sym = symtab->addSymbol(Defined{nullptr, name, STB_GLOBAL, STV_HIDDEN,
                                           STT_NOTYPE, 0, 0, nullptr});
+  sym->isUsedInRegularObj = true;
   return cast<Defined>(sym);
 }
 
@@ -1877,10 +1879,10 @@ template <class ELFT> void Writer<ELFT>::finalizeSections() {
     // --export-dynamic is passed to a static executable. Some programs check
     // if they are dynamically linked using `if (&_DYNAMIC != 0)` so we should
     // keep this check working.
-
     auto *s = symtab->addSymbol(
         Defined{/*file=*/nullptr, "_DYNAMIC", STB_WEAK, STV_HIDDEN, STT_NOTYPE,
                 /*value=*/0, /*size=*/0, mainPart->dynamic.get()});
+    s->isUsedInRegularObj = true;
     // In CheriABI we want sensible bounds if we do &_DYNAMIC in C code
     s->isSectionStartSymbol = true;
   }
