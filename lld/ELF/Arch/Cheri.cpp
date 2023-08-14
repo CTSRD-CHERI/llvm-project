@@ -1,4 +1,5 @@
 #include "Cheri.h"
+#include "../InputFiles.h"
 #include "../OutputSections.h"
 #include "../SymbolTable.h"
 #include "../SyntheticSections.h"
