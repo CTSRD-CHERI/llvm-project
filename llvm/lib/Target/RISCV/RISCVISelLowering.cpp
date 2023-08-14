@@ -8345,63 +8345,6 @@ SDValue RISCVTargetLowering::PerformDAGCombine(SDNode *N,
   switch (N->getOpcode()) {
   default:
     break;
-  case ISD::INTRINSIC_WO_CHAIN: {
-    SDLoc DL(N);
-    unsigned IID = cast<ConstantSDNode>(N->getOperand(0))->getZExtValue();
-    EVT XLenVT = Subtarget.getXLenVT();
-
-    switch (IID) {
-    // Lower to our custom node, but with a truncate back to i1 so we can
-    // replace its uses.
-    case Intrinsic::cheri_cap_tag_get: {
-      SDValue IntRes = DAG.getNode(RISCVISD::CAP_TAG_GET, DL, XLenVT,
-                                   N->getOperand(1));
-      IntRes = DAG.getNode(ISD::AssertZext, DL, XLenVT, IntRes,
-                           DAG.getValueType(MVT::i1));
-      return DAG.getSetCC(DL, MVT::i1, IntRes,
-                          DAG.getConstant(0, DL, XLenVT), ISD::SETNE);
-    }
-    case Intrinsic::cheri_cap_sealed_get: {
-      SDValue IntRes = DAG.getNode(RISCVISD::CAP_SEALED_GET, DL, XLenVT,
-                                   N->getOperand(1));
-      IntRes = DAG.getNode(ISD::AssertZext, DL, XLenVT, IntRes,
-                           DAG.getValueType(MVT::i1));
-      return DAG.getSetCC(DL, MVT::i1, IntRes,
-                          DAG.getConstant(0, DL, XLenVT), ISD::SETNE);
-    }
-    case Intrinsic::cheri_cap_subset_test: {
-      SDValue IntRes = DAG.getNode(RISCVISD::CAP_SUBSET_TEST, DL, XLenVT,
-                                   N->getOperand(1), N->getOperand(2));
-      IntRes = DAG.getNode(ISD::AssertZext, DL, XLenVT, IntRes,
-                           DAG.getValueType(MVT::i1));
-      return DAG.getSetCC(DL, MVT::i1, IntRes,
-                          DAG.getConstant(0, DL, XLenVT), ISD::SETNE);
-    }
-    case Intrinsic::cheri_cap_equal_exact: {
-      SDValue IntRes = DAG.getNode(RISCVISD::CAP_EQUAL_EXACT, DL, XLenVT,
-                                   N->getOperand(1), N->getOperand(2));
-      IntRes = DAG.getNode(ISD::AssertZext, DL, XLenVT, IntRes,
-                           DAG.getValueType(MVT::i1));
-      return DAG.getSetCC(DL, MVT::i1, IntRes,
-                          DAG.getConstant(0, DL, XLenVT), ISD::SETNE);
-    }
-    // Constant fold CRRL/CRAM when possible
-    case Intrinsic::cheri_round_representable_length: {
-      KnownBits Known = DAG.computeKnownBits(SDValue(N, 0));
-      if (Known.isConstant())
-        return DAG.getConstant(Known.One, DL, N->getValueType(0));
-      break;
-    }
-    case Intrinsic::cheri_representable_alignment_mask: {
-      KnownBits Known = DAG.computeKnownBits(SDValue(N, 0));
-      if (Known.isConstant())
-        return DAG.getConstant(Known.One, DL, N->getValueType(0));
-      break;
-    }
-    }
-
-    break;
-  }
   case RISCVISD::SplitF64: {
     SDValue Op0 = N->getOperand(0);
     // If the input to SplitF64 is just BuildPairF64 then the operation is
@@ -8926,10 +8869,59 @@ SDValue RISCVTargetLowering::PerformDAGCombine(SDNode *N,
   }
   case ISD::INTRINSIC_WO_CHAIN: {
     unsigned IntNo = N->getConstantOperandVal(0);
+    SDLoc DL(N);
+    EVT XLenVT = Subtarget.getXLenVT();
     switch (IntNo) {
       // By default we do not combine any intrinsic.
     default:
       return SDValue();
+    // Lower to our custom node, but with a truncate back to i1 so we can
+    // replace its uses.
+    case Intrinsic::cheri_cap_tag_get: {
+      SDValue IntRes =
+          DAG.getNode(RISCVISD::CAP_TAG_GET, DL, XLenVT, N->getOperand(1));
+      IntRes = DAG.getNode(ISD::AssertZext, DL, XLenVT, IntRes,
+                           DAG.getValueType(MVT::i1));
+      return DAG.getSetCC(DL, MVT::i1, IntRes, DAG.getConstant(0, DL, XLenVT),
+                          ISD::SETNE);
+    }
+    case Intrinsic::cheri_cap_sealed_get: {
+      SDValue IntRes =
+          DAG.getNode(RISCVISD::CAP_SEALED_GET, DL, XLenVT, N->getOperand(1));
+      IntRes = DAG.getNode(ISD::AssertZext, DL, XLenVT, IntRes,
+                           DAG.getValueType(MVT::i1));
+      return DAG.getSetCC(DL, MVT::i1, IntRes, DAG.getConstant(0, DL, XLenVT),
+                          ISD::SETNE);
+    }
+    case Intrinsic::cheri_cap_subset_test: {
+      SDValue IntRes = DAG.getNode(RISCVISD::CAP_SUBSET_TEST, DL, XLenVT,
+                                   N->getOperand(1), N->getOperand(2));
+      IntRes = DAG.getNode(ISD::AssertZext, DL, XLenVT, IntRes,
+                           DAG.getValueType(MVT::i1));
+      return DAG.getSetCC(DL, MVT::i1, IntRes, DAG.getConstant(0, DL, XLenVT),
+                          ISD::SETNE);
+    }
+    case Intrinsic::cheri_cap_equal_exact: {
+      SDValue IntRes = DAG.getNode(RISCVISD::CAP_EQUAL_EXACT, DL, XLenVT,
+                                   N->getOperand(1), N->getOperand(2));
+      IntRes = DAG.getNode(ISD::AssertZext, DL, XLenVT, IntRes,
+                           DAG.getValueType(MVT::i1));
+      return DAG.getSetCC(DL, MVT::i1, IntRes, DAG.getConstant(0, DL, XLenVT),
+                          ISD::SETNE);
+    }
+    // Constant fold CRRL/CRAM when possible
+    case Intrinsic::cheri_round_representable_length: {
+      KnownBits Known = DAG.computeKnownBits(SDValue(N, 0));
+      if (Known.isConstant())
+        return DAG.getConstant(Known.One, DL, N->getValueType(0));
+      break;
+    }
+    case Intrinsic::cheri_representable_alignment_mask: {
+      KnownBits Known = DAG.computeKnownBits(SDValue(N, 0));
+      if (Known.isConstant())
+        return DAG.getConstant(Known.One, DL, N->getValueType(0));
+      break;
+    }
     case Intrinsic::riscv_vcpop:
     case Intrinsic::riscv_vcpop_mask:
     case Intrinsic::riscv_vfirst:
@@ -8941,7 +8933,6 @@ SDValue RISCVTargetLowering::PerformDAGCombine(SDNode *N,
       if (!isNullConstant(VL))
         return SDValue();
       // If VL is 0, vcpop -> li 0, vfirst -> li -1.
-      SDLoc DL(N);
       EVT VT = N->getValueType(0);
       if (IntNo == Intrinsic::riscv_vfirst ||
           IntNo == Intrinsic::riscv_vfirst_mask)

@@ -75,16 +75,16 @@ def tprel_cincoffset_symbol : Operand<XLenVT> {
   let ParserMatchClass = TPRelCIncOffsetSymbol;
 }
 
-def CheriAtomicMemOpOperand : AsmOperandClass {
-  let Name = "CheriAtomicMemOpOperand";
+def CheriZeroOffsetMemOpOperand : AsmOperandClass {
+  let Name = "CheriZeroOffsetMemOpOperand";
   let RenderMethod = "addRegOperands";
   let PredicateMethod = "isGPCR";
-  let ParserMethod = "parseAtomicMemOp";
+  let ParserMethod = "parseZeroOffsetMemOp";
 }
 
 def GPCRMemZeroOffset : RegisterOperand<GPCR> {
-  let ParserMatchClass = CheriAtomicMemOpOperand;
-  let PrintMethod = "printAtomicMemOp";
+  let ParserMatchClass = CheriZeroOffsetMemOpOperand;
+  let PrintMethod = "printZeroOffsetMemOp";
 }
 
 // A 9-bit unsigned immediate where the least significant four bits are zero.
