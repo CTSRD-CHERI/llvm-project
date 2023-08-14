@@ -1246,7 +1246,7 @@ public:
 
   /// Emit the metadata for a required method in a CHERI sandbox.
   /// The return value is the address of the method number.
-  llvm::Value *EmitSandboxRequiredMethod(StringRef, StringRef);
+  Address EmitSandboxRequiredMethod(StringRef, StringRef);
 
   struct PointerCastLocations {
     SmallVector<std::pair<SourceRange, bool>, 8> PointerToInt;

@@ -6304,14 +6304,10 @@ RValue CodeGenFunction::EmitCall(QualType CalleeType, const CGCallee &OrigCallee
     StringRef FunctionBaseName = cast<NamedDecl>(TargetDecl)->getName();
     FunctionBaseName = FunctionBaseName.substr(0, FunctionBaseName.size() -
         Suffix.size());
-    auto *MethodNumVar =
-        CGM.EmitSandboxRequiredMethod(ClsAttr->getDefaultClass()->getName(),
-                                      FunctionBaseName);
+    auto MethodNumVar = CGM.EmitSandboxRequiredMethod(
+        ClsAttr->getDefaultClass()->getName(), FunctionBaseName);
     // Load the global and use it in the call
-    // FIXME: EmitSandboxRequiredMethod should return an Address so that we
-    // don't have to know the alignment here.
-    auto *MethodNum = Builder.CreateLoad(
-        Address::deprecated(MethodNumVar, CharUnits::fromQuantity(8)));
+    auto *MethodNum = Builder.CreateLoad(MethodNumVar);
     MethodNum->setMetadata(CGM.getModule().getMDKindID("invariant.load"),
         llvm::MDNode::get(getLLVMContext(), None));
     CallArg MethodNumArg(RValue::get(MethodNum), NumTy);

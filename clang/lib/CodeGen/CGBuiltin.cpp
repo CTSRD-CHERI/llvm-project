@@ -5048,12 +5048,9 @@ RValue CodeGenFunction::EmitBuiltinExpr(const GlobalDecl GD, unsigned BuiltinID,
         cast<StringLiteral>(E->getArg(0))->getString().str();
     auto Fn = cast<DeclRefExpr>(E->getArg(2));
     std::string FunctionName = cast<NamedDecl>(Fn->getDecl())->getName().str();
-    auto *MethodNumVar = CGM.EmitSandboxRequiredMethod(ClassName, FunctionName);
+    auto MethodNumVar = CGM.EmitSandboxRequiredMethod(ClassName, FunctionName);
     // Load the global and use it in the call
-    // FIXME: EmitSandboxRequiredMethod should return an Address so that we
-    // don't have to know the alignment here.
-    auto *MethodNum = Builder.CreateLoad(Address::deprecated(MethodNumVar,
-          CharUnits::fromQuantity(8)));
+    auto *MethodNum = Builder.CreateLoad(MethodNumVar);
 
     auto MethNoTy = llvm::Type::getInt64Ty(getLLVMContext());
     auto ClsTy = ConvertType(CGM.getContext().getCHERIClassType());

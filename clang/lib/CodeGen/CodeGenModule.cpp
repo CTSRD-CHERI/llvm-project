@@ -6674,8 +6674,7 @@ GenerateAS0StringLiteral(CodeGenModule &CGM, StringRef Str) {
   return GV;
 }
 
-llvm::Value *CodeGenModule::EmitSandboxRequiredMethod(StringRef Cls,
-    StringRef Fn) {
+Address CodeGenModule::EmitSandboxRequiredMethod(StringRef Cls, StringRef Fn) {
   // We're going to emit a structure of the following form:
   // struct sandbox_required_method {
   //   int64_t   flags;
@@ -6729,7 +6728,9 @@ llvm::Value *CodeGenModule::EmitSandboxRequiredMethod(StringRef Cls,
     addUsedGlobal(MetadataGV);
   }
 
-  return MethodNumVar;
+  return Address(
+      MethodNumVar, MethodNumVar->getValueType(),
+      Context.toCharUnitsFromBits(Target.getTypeAlign(Target.getInt64Type())));
 }
 
 void CodeGenModule::EmitSandboxDefinedMethod(StringRef Cls, StringRef
