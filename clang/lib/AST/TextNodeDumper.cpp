@@ -751,6 +751,26 @@ void TextNodeDumper::dumpCleanupObject(
     llvm_unreachable("unexpected cleanup type");
 }
 
+void clang::TextNodeDumper::dumpTemplateSpecializationKind(
+    TemplateSpecializationKind TSK) {
+  switch (TSK) {
+  case TSK_Undeclared:
+    break;
+  case TSK_ImplicitInstantiation:
+    OS << " implicit_instantiation";
+    break;
+  case TSK_ExplicitSpecialization:
+    OS << " explicit_specialization";
+    break;
+  case TSK_ExplicitInstantiationDeclaration:
+    OS << " explicit_instantiation_declaration";
+    break;
+  case TSK_ExplicitInstantiationDefinition:
+    OS << " explicit_instantiation_definition";
+    break;
+  }
+}
+
 void TextNodeDumper::dumpDeclRef(const Decl *D, StringRef Label) {
   if (!D)
     return;
@@ -1761,6 +1781,7 @@ void TextNodeDumper::VisitIndirectFieldDecl(const IndirectFieldDecl *D) {
 void TextNodeDumper::VisitFunctionDecl(const FunctionDecl *D) {
   dumpName(D);
   dumpType(D->getType());
+  dumpTemplateSpecializationKind(D->getTemplateSpecializationKind());
 
   StorageClass SC = D->getStorageClass();
   if (SC != SC_None)
@@ -1857,6 +1878,7 @@ void TextNodeDumper::VisitFieldDecl(const FieldDecl *D) {
 void TextNodeDumper::VisitVarDecl(const VarDecl *D) {
   dumpName(D);
   dumpType(D->getType());
+  dumpTemplateSpecializationKind(D->getTemplateSpecializationKind());
   StorageClass SC = D->getStorageClass();
   if (SC != SC_None)
     OS << ' ' << VarDecl::getStorageClassSpecifierString(SC);
@@ -2045,6 +2067,9 @@ void TextNodeDumper::VisitTypeAliasTemplateDecl(
 
 void TextNodeDumper::VisitCXXRecordDecl(const CXXRecordDecl *D) {
   VisitRecordDecl(D);
+  if (const auto *CTSD = dyn_cast<ClassTemplateSpecializationDecl>(D))
+    dumpTemplateSpecializationKind(CTSD->getSpecializationKind());
+
   if (!D->isCompleteDefinition())
     return;
 
