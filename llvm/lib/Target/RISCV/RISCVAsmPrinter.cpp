@@ -195,19 +195,6 @@ void RISCVAsmPrinter::emitEndOfAsmFile(Module &M) {
     RTS.finishAttributeSection();
 }
 
-void RISCVAsmPrinter::emitFunctionEntryLabel() {
-  AsmPrinter::emitFunctionEntryLabel();
-
-  auto &Subtarget = MF->getSubtarget<RISCVSubtarget>();
-  const MachineJumpTableInfo *MJTI = MF->getJumpTableInfo();
-  if (RISCVABI::isCheriPureCapABI(Subtarget.getTargetABI()) &&
-      MJTI && !MJTI->isEmpty()) {
-    MCSymbol *Sym = getSymbolWithGlobalValueBase(&MF->getFunction(),
-                                                 "$jump_table_base");
-    OutStreamer->emitLabel(Sym);
-  }
-}
-
 void RISCVAsmPrinter::emitAttributes() {
   RISCVTargetStreamer &RTS =
       static_cast<RISCVTargetStreamer &>(*OutStreamer->getTargetStreamer());
@@ -219,6 +206,15 @@ void RISCVAsmPrinter::emitFunctionEntryLabel() {
   RISCVTargetStreamer &RTS =
       static_cast<RISCVTargetStreamer &>(*OutStreamer->getTargetStreamer());
   RTS.setTargetABI(STI->getTargetABI());
+
+  auto &Subtarget = MF->getSubtarget<RISCVSubtarget>();
+  const MachineJumpTableInfo *MJTI = MF->getJumpTableInfo();
+  if (RISCVABI::isCheriPureCapABI(Subtarget.getTargetABI()) &&
+      MJTI && !MJTI->isEmpty()) {
+    MCSymbol *Sym = getSymbolWithGlobalValueBase(&MF->getFunction(),
+                                                 "$jump_table_base");
+    OutStreamer->emitLabel(Sym);
+  }
 }
 
 // Force static initialization.

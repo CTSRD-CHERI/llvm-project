@@ -3947,13 +3947,17 @@ SDValue RISCVTargetLowering::getAddr(NodeTy *N, EVT Ty, SelectionDAG &DAG,
 }
 
 template SDValue RISCVTargetLowering::getAddr<GlobalAddressSDNode>(
-    GlobalAddressSDNode *N, SelectionDAG &DAG, bool IsLocal) const;
+    GlobalAddressSDNode *N, EVT Ty, SelectionDAG &DAG, bool IsLocal,
+    bool CanDeriveFromPcc) const;
 template SDValue RISCVTargetLowering::getAddr<BlockAddressSDNode>(
-    BlockAddressSDNode *N, SelectionDAG &DAG, bool IsLocal) const;
+    BlockAddressSDNode *N, EVT Ty, SelectionDAG &DAG, bool IsLocal,
+    bool CanDeriveFromPcc) const;
 template SDValue RISCVTargetLowering::getAddr<ConstantPoolSDNode>(
-    ConstantPoolSDNode *N, SelectionDAG &DAG, bool IsLocal) const;
+    ConstantPoolSDNode *N, EVT Ty, SelectionDAG &DAG, bool IsLocal,
+    bool CanDeriveFromPcc) const;
 template SDValue RISCVTargetLowering::getAddr<JumpTableSDNode>(
-    JumpTableSDNode *N, SelectionDAG &DAG, bool IsLocal) const;
+    JumpTableSDNode *N, EVT Ty, SelectionDAG &DAG, bool IsLocal,
+    bool CanDeriveFromPcc) const;
 
 SDValue RISCVTargetLowering::lowerGlobalAddress(SDValue Op,
                                                 SelectionDAG &DAG) const {

@@ -6472,9 +6472,8 @@ RValue CodeGenFunction::EmitCall(QualType CalleeType, const CGCallee &OrigCallee
           CGM.getTargetCodeGenInfo().getTlsAddressSpace());
       CHERIErrno->setThreadLocal(true);
     }
-    // FIXME: Don't hard code 4-byte alignment for int!
     auto *ErrVal = Builder.CreateLoad(
-        Address::deprecated(CHERIErrno, CharUnits::fromQuantity(4)));
+        Address(CHERIErrno, CHERIErrno->getValueType(), getIntAlign()));
     auto *IsZero = Builder.CreateICmpEQ(ErrVal,
         llvm::Constant::getNullValue(ErrVal->getType()));
     auto *Continue = createBasicBlock("cheri_invoke_continue");
