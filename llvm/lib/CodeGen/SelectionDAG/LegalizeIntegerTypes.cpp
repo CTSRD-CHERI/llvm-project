@@ -3958,7 +3958,7 @@ static SDValue ExpandExtIntRes_DIVREM(const TargetLowering &TLI,
 
   SDValue Output = DAG.CreateStackTemporary(ArgVT);
   Entry.Node = Output;
-  Entry.Ty = ArgTy->getPointerTo();
+  Entry.Ty = ArgTy->getPointerTo(DAG.getDataLayout().getAllocaAddrSpace());
   Entry.IsSExt = false;
   Entry.IsZExt = false;
   Args.push_back(Entry);
@@ -3977,14 +3977,16 @@ static SDValue ExpandExtIntRes_DIVREM(const TargetLowering &TLI,
                  .getValueType()
                  .getTypeForEVT(*DAG.getContext())
                  ->getIntegerBitWidth();
-  Entry.Node = DAG.getConstant(Bits, DL, TLI.getPointerTy(DAG.getDataLayout()));
+  Entry.Node = DAG.getConstant(
+      Bits, DL,
+      TLI.getPointerTy(DAG.getDataLayout(),
+                       DAG.getDataLayout().getAllocaAddrSpace()));
   Entry.Ty = Type::getInt32Ty(*DAG.getContext());
   Entry.IsSExt = false;
   Entry.IsZExt = true;
   Args.push_back(Entry);
 
-  SDValue Callee = DAG.getExternalSymbol(TLI.getLibcallName(LC),
-                                         TLI.getPointerTy(DAG.getDataLayout()));
+  SDValue Callee = DAG.getExternalFunctionSymbol(TLI.getLibcallName(LC));
 
   TargetLowering::CallLoweringInfo CLI(DAG);
   CLI.setDebugLoc(DL)
