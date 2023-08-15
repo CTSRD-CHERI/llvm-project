@@ -797,7 +797,6 @@ define void @instructions.binops(i8 %op1, i8 %op2) {
   ; CHECK: sdiv exact i8 %op1, %op2
 
   ; none
-  ; none
   urem i8 %op1, %op2
   ; CHECK: urem i8 %op1, %op2
   srem i8 %op1, %op2
@@ -1243,12 +1242,12 @@ define void @misc.metadata() {
 ; CHECK: attributes #29 = { "thunk" }
 ; CHECK: attributes #30 = { uwtable }
 ; CHECK: attributes #31 = { "cpu"="cortex-a8" }
-; CHECK: attributes #32 = { nofree nosync nounwind readnone willreturn }
+; CHECK: attributes #32 = { nocallback nofree nosync nounwind readnone willreturn }
 ; CHECK: attributes #33 = { argmemonly nounwind readonly }
 ; CHECK: attributes #34 = { argmemonly nounwind }
 ; CHECK: attributes #35 = { nounwind readonly }
-; CHECK: attributes #36 = { nofree nosync nounwind willreturn }
-; CHECK: attributes #37 = { inaccessiblemem_or_argmemonly nofree nosync nounwind willreturn }
+; CHECK: attributes #36 = { nocallback nofree nosync nounwind willreturn }
+; CHECK: attributes #37 = { inaccessiblemem_or_argmemonly nocallback nofree nosync nounwind willreturn }
 ; CHECK: attributes #38 = { builtin }
 
 ;; Metadata
