@@ -31,9 +31,10 @@
 #include "CHERIUtils.h"
 #include "clang/ASTMatchers/ASTMatchers.h"
 #include "clang/StaticAnalyzer/Checkers/BuiltinCheckerRegistration.h"
+#include "clang/StaticAnalyzer/Core/PathSensitive/CheckerContext.h"
+#include <clang/ASTMatchers/ASTMatchFinder.h>
 #include <clang/StaticAnalyzer/Core/BugReporter/BugType.h>
 #include <clang/StaticAnalyzer/Core/PathSensitive/CallEvent.h>
-#include "clang/StaticAnalyzer/Core/PathSensitive/CheckerContext.h"
 
 using namespace clang;
 using namespace ento;
@@ -185,16 +186,29 @@ int getTrailingZerosCount(const Expr *E, CheckerContext &C) {
   return getTrailingZerosCount(V, C.getState(), C.getASTContext());
 }
 
+/* Introduced by clang, not in C standard */
+bool isImplicitConversionFromVoidPtr(const Stmt *S, CheckerContext &C) {
+  using namespace clang::ast_matchers;
+  auto CmpM = binaryOperation(isComparisonOperator());
+  auto VoidPtr = expr(hasType(pointerType(pointee(voidType()))));
+  auto CastM = implicitCastExpr(has(VoidPtr), hasType(pointerType()),
+                                hasCastKind(CK_BitCast), hasParent(CmpM));
+  auto M = match(expr(CastM), *S, C.getASTContext());
+  return !M.empty();
+}
+
 } // namespace
 
 void CapabilityAlignmentChecker::checkPreStmt(const CastExpr *CE,
                                                CheckerContext &C) const {
-  if (CE->getCastKind() != CastKind::CK_BitCast)
+  CastKind CK = CE->getCastKind();
+  if (CK != CastKind::CK_BitCast && CK != CK_IntegralToPointer)
+    return;
+  if (isImplicitConversionFromVoidPtr(CE, C))
     return;
 
-  const Expr *Src = CE->getSubExpr();
   const QualType &DstType = CE->getType();
-  if (!Src->getType()->isPointerType() || !DstType->isPointerType())
+  if (!DstType->isPointerType())
     return;
   const QualType &DstPointeeTy = DstType->getPointeeType();
   if (DstPointeeTy->isIncompleteType())
