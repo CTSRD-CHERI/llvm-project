@@ -67,3 +67,12 @@ void static_var(void) {
   *(int*)st_buf = 42; // expected-warning{{Cast increases required alignment: 1 -> 4}}
   *(int*)st_buf_aligned = 42; // no warning
 }
+
+int voidptr_cast(int *ip1, int *ip2) {
+  intptr_t w = (intptr_t)(ip2) | 1;
+  int b1 = (ip1 == (int*)w);  // expected-warning{{Cast increases required alignment: 1 -> 4}}
+  int b2 = (ip1 == (void*)w); // no-warn
+  return b1 || b2;
+}
+
+
