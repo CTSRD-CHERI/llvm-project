@@ -640,9 +640,9 @@ static void forEachUser(const Value *User,
 }
 
 void Verifier::visitVAArgInst(VAArgInst &VAA) {
-  Assert(VAA.getPointerOperand()->getType()->getPointerAddressSpace() ==
-             DL.getAllocaAddrSpace(),
-         "va_arg not in alloca AS?", &VAA);
+  Check(VAA.getPointerOperand()->getType()->getPointerAddressSpace() ==
+            DL.getAllocaAddrSpace(),
+        "va_arg not in alloca AS?", &VAA);
   visitInstruction(VAA);
 }
 
@@ -5295,12 +5295,11 @@ void Verifier::visitIntrinsicCall(Intrinsic::ID ID, CallBase &Call) {
   case Intrinsic::vastart:
   case Intrinsic::vacopy:
   case Intrinsic::vaend: {
-    Assert(isa<CallInst>(Call),
-           "variadic argument intrinsics cannot be invoked", Call);
+    Check(isa<CallInst>(Call), "variadic argument intrinsics cannot be invoked",
+          Call);
     Value *Val = Call.getArgOperand(0);
-    Assert(Val->getType()->getPointerAddressSpace() == DL.getAllocaAddrSpace(),
-           "variadic argument intrinsics must be in alloca address space",
-           Call);
+    Check(Val->getType()->getPointerAddressSpace() == DL.getAllocaAddrSpace(),
+          "variadic argument intrinsics must be in alloca address space", Call);
     break;
   }
 
