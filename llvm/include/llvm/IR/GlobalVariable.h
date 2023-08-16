@@ -49,11 +49,11 @@ class GlobalVariable : public GlobalObject, public ilist_node<GlobalVariable> {
 public:
   /// GlobalVariable ctor - If a parent module is specified, the global is
   /// automatically inserted into the end of the specified modules global list.
-  LLVM_ATTRIBUTE_DEPRECATED(
-      GlobalVariable(Type *Ty, bool isConstant, LinkageTypes Linkage,
-                     Constant *Initializer = nullptr, const Twine &Name = "",
-                     ThreadLocalMode TLMode = NotThreadLocal),
-      "use the overload with a Module& or an explicit address space")
+  [[deprecated("use the overload with a Module& or an explicit address "
+               "space")]] GlobalVariable(
+      Type *Ty, bool isConstant, LinkageTypes Linkage,
+      Constant *Initializer = nullptr, const Twine &Name = "",
+      ThreadLocalMode TLMode = NotThreadLocal)
       : GlobalVariable(Ty, isConstant, Linkage, Initializer, Name, TLMode, 0,
                        false) {}
 
