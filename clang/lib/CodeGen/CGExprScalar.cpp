@@ -2018,7 +2018,7 @@ Value *ScalarExprEmitter::VisitArraySubscriptExpr(ArraySubscriptExpr *E) {
   // careful, because the base of a vector subscript is occasionally an rvalue,
   // so we can't get it as an lvalue.
   if (!E->getBase()->getType()->isVectorType() &&
-      !E->getBase()->getType()->isVLSTBuiltinType()) {
+      !E->getBase()->getType()->isSveVLSBuiltinType()) {
     // Note: this eventually calls EmitArraySubscriptExpression which will set
     // CHERI sub-object bounds on the array.
     return EmitLoadOfLValue(E);
@@ -5401,7 +5401,7 @@ VisitAbstractConditionalOperator(const AbstractConditionalOperator *E) {
   }
 
   if (condExpr->getType()->isVectorType() ||
-      condExpr->getType()->isVLSTBuiltinType()) {
+      condExpr->getType()->isSveVLSBuiltinType()) {
     CGF.incrementProfileCounter(E);
 
     llvm::Value *CondV = CGF.EmitScalarExpr(condExpr);
