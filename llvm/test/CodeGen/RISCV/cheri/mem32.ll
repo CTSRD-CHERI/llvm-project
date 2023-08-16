@@ -439,3 +439,69 @@ define void @cap_sc(i8 addrspace(200) *addrspace(200) *%cap, i8 addrspace(200) *
   store i8 addrspace(200) *%val, i8 addrspace(200) *addrspace(200) *%1
   ret void
 }
+
+define i32 addrspace(200)* @lc_far_local(i32 addrspace(200)* addrspace(200)* %a)  {
+; CHECK-ILP32-LABEL: lc_far_local:
+; CHECK-ILP32:       # %bb.0:
+; CHECK-ILP32-NEXT:    lui a1, 8
+; CHECK-ILP32-NEXT:    addi a1, a1, -8
+; CHECK-ILP32-NEXT:    cincoffset ca0, ca0, a1
+; CHECK-ILP32-NEXT:    lc.cap ca0, (ca0)
+; CHECK-ILP32-NEXT:    ret
+;
+; CHECK-IL32PC64-LABEL: lc_far_local:
+; CHECK-IL32PC64:       # %bb.0:
+; CHECK-IL32PC64-NEXT:    lui a1, 8
+; CHECK-IL32PC64-NEXT:    addi a1, a1, -8
+; CHECK-IL32PC64-NEXT:    cincoffset ca0, ca0, a1
+; CHECK-IL32PC64-NEXT:    clc ca0, 0(ca0)
+; CHECK-IL32PC64-NEXT:    cret
+  %1 = getelementptr inbounds i32 addrspace(200)*, i32 addrspace(200)* addrspace(200)* %a, i64 4095
+  %2 = load volatile i32 addrspace(200)*, i32 addrspace(200)* addrspace(200)* %1
+  ret i32 addrspace(200)* %2
+}
+
+define void @sc_far_local(i32 addrspace(200)* addrspace(200)* %a, i32 addrspace(200)* %b)  {
+; CHECK-ILP32-LABEL: sc_far_local:
+; CHECK-ILP32:       # %bb.0:
+; CHECK-ILP32-NEXT:    lui a2, 8
+; CHECK-ILP32-NEXT:    addi a2, a2, -8
+; CHECK-ILP32-NEXT:    cincoffset ca0, ca0, a2
+; CHECK-ILP32-NEXT:    sc.cap ca1, (ca0)
+; CHECK-ILP32-NEXT:    ret
+;
+; CHECK-IL32PC64-LABEL: sc_far_local:
+; CHECK-IL32PC64:       # %bb.0:
+; CHECK-IL32PC64-NEXT:    lui a2, 8
+; CHECK-IL32PC64-NEXT:    addi a2, a2, -8
+; CHECK-IL32PC64-NEXT:    cincoffset ca0, ca0, a2
+; CHECK-IL32PC64-NEXT:    csc ca1, 0(ca0)
+; CHECK-IL32PC64-NEXT:    cret
+  %1 = getelementptr inbounds i32 addrspace(200)*, i32 addrspace(200)* addrspace(200)* %a, i64 4095
+  store i32 addrspace(200)* %b, i32 addrspace(200)* addrspace(200)* %1
+  ret void
+}
+
+define i32 addrspace(200)* @lc_sc_far_local(i32 addrspace(200)* addrspace(200)* %a, i32 addrspace(200)* %b)  {
+; CHECK-ILP32-LABEL: lc_sc_far_local:
+; CHECK-ILP32:       # %bb.0:
+; CHECK-ILP32-NEXT:    lui a2, 8
+; CHECK-ILP32-NEXT:    addi a2, a2, -8
+; CHECK-ILP32-NEXT:    cincoffset ca2, ca0, a2
+; CHECK-ILP32-NEXT:    lc.cap ca0, (ca2)
+; CHECK-ILP32-NEXT:    sc.cap ca1, (ca2)
+; CHECK-ILP32-NEXT:    ret
+;
+; CHECK-IL32PC64-LABEL: lc_sc_far_local:
+; CHECK-IL32PC64:       # %bb.0:
+; CHECK-IL32PC64-NEXT:    lui a2, 8
+; CHECK-IL32PC64-NEXT:    addi a2, a2, -8
+; CHECK-IL32PC64-NEXT:    cincoffset ca2, ca0, a2
+; CHECK-IL32PC64-NEXT:    clc ca0, 0(ca2)
+; CHECK-IL32PC64-NEXT:    csc ca1, 0(ca2)
+; CHECK-IL32PC64-NEXT:    cret
+  %1 = getelementptr inbounds i32 addrspace(200)*, i32 addrspace(200)* addrspace(200)* %a, i64 4095
+  %2 = load volatile i32 addrspace(200)*, i32 addrspace(200)* addrspace(200)* %1
+  store i32 addrspace(200)* %b, i32 addrspace(200)* addrspace(200)* %1
+  ret i32 addrspace(200)* %2
+}

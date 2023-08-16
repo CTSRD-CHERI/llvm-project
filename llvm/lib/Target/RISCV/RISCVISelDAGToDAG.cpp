@@ -2071,15 +2071,19 @@ bool RISCVDAGToDAGISel::selectRVVSimm5(SDValue N, unsigned Width,
   return false;
 }
 
-// Merge an ADDI or CIncOffsetImm into the offset of a load/store instruction
-// where possible.
-// (load (op base, off1), off2) -> (load base, off1+off2)
-// (store val, (op base, off1), off2) -> (store val, base, off1+off2)
+// Merge an ADDI or CIncOffsetImm into the offset of a load/store instruction where possible.
+// (load (opimm base, off1), off2) -> (load base, off1+off2)
+// (store val, (opimm base, off1), off2) -> (store val, base, off1+off2)
+// (load (op base, (opimm src, off1)), off2)
+//    -> (load (op base, src), off1+off2)
+// (store val, (op base, (opimm src, off1)), off2)
+//    -> (store val, (op base, src), off1+off2)
 // This is possible when off1+off2 fits a 12-bit immediate.
 bool RISCVDAGToDAGISel::doPeepholeLoadStoreOffset(SDNode *N) {
   int OffsetOpIdx;
   int BaseOpIdx;
-  unsigned OffsettingOpcode;
+  unsigned OffsettingOpcodeImm;
+  unsigned OffsettingOpcodeReg;
 
   // Only attempt this optimisation for I-type loads and S-type stores.
   switch (N->getMachineOpcode()) {
@@ -2099,7 +2103,8 @@ bool RISCVDAGToDAGISel::doPeepholeLoadStoreOffset(SDNode *N) {
   case RISCV::FLD:
     BaseOpIdx = 0;
     OffsetOpIdx = 1;
-    OffsettingOpcode = RISCV::ADDI;
+    OffsettingOpcodeImm = RISCV::ADDI;
+    OffsettingOpcodeReg = RISCV::ADD;
     break;
   case RISCV::CLB:
   case RISCV::CLH:
@@ -2114,7 +2119,8 @@ bool RISCVDAGToDAGISel::doPeepholeLoadStoreOffset(SDNode *N) {
   case RISCV::CFLD:
     BaseOpIdx = 0;
     OffsetOpIdx = 1;
-    OffsettingOpcode = RISCV::CIncOffsetImm;
+    OffsettingOpcodeImm = RISCV::CIncOffsetImm;
+    OffsettingOpcodeReg = RISCV::CIncOffset;
     break;
   case RISCV::SB:
   case RISCV::SH:
@@ -2127,7 +2133,8 @@ bool RISCVDAGToDAGISel::doPeepholeLoadStoreOffset(SDNode *N) {
   case RISCV::FSD:
     BaseOpIdx = 1;
     OffsetOpIdx = 2;
-    OffsettingOpcode = RISCV::ADDI;
+    OffsettingOpcodeImm = RISCV::ADDI;
+    OffsettingOpcodeReg = RISCV::ADD;
     break;
   case RISCV::CSB:
   case RISCV::CSH:
@@ -2139,7 +2146,8 @@ bool RISCVDAGToDAGISel::doPeepholeLoadStoreOffset(SDNode *N) {
   case RISCV::CFSD:
     BaseOpIdx = 1;
     OffsetOpIdx = 2;
-    OffsettingOpcode = RISCV::CIncOffsetImm;
+    OffsettingOpcodeImm = RISCV::CIncOffsetImm;
+    OffsettingOpcodeReg = RISCV::CIncOffset;
     break;
   }
 
@@ -2148,9 +2156,36 @@ bool RISCVDAGToDAGISel::doPeepholeLoadStoreOffset(SDNode *N) {
 
   SDValue Base = N->getOperand(BaseOpIdx);
 
+  if (!Base.isMachineOpcode())
+    return false;
+
+  CurDAG->dump();
+  // There is a ADD between ADDI and load/store.
+  SDValue Add;
+  int AddBaseIdx;
+  if (Base.getMachineOpcode() == OffsettingOpcodeReg) {
+    if (!Base.hasOneUse())
+      return false;
+    Add = Base;
+    SDValue Op0 = Base.getOperand(0);
+    SDValue Op1 = Base.getOperand(1);
+    if (Op0.isMachineOpcode() && Op0.getMachineOpcode() == OffsettingOpcodeImm &&
+        isa<ConstantSDNode>(Op0.getOperand(1)) &&
+        cast<ConstantSDNode>(Op0.getOperand(1))->getSExtValue() != 0) {
+      AddBaseIdx = 1;
+      Base = Op0;
+    } else if (Op1.isMachineOpcode() && Op1.getMachineOpcode() == OffsettingOpcodeImm &&
+               isa<ConstantSDNode>(Op1.getOperand(1)) &&
+               cast<ConstantSDNode>(Op1.getOperand(1))->getSExtValue() != 0) {
+      AddBaseIdx = 0;
+      Base = Op1;
+    } else
+      return false;
+  }
+
   // If the base is the right instruction (either ADDI or CIncOffsetImm), we
   // can merge it in to the load/store.
-  if (!Base.isMachineOpcode() || Base.getMachineOpcode() != OffsettingOpcode)
+  if (Base.getMachineOpcode() != OffsettingOpcodeImm)
     return false;
 
   SDValue ImmOperand = Base.getOperand(1);
@@ -2197,13 +2232,27 @@ bool RISCVDAGToDAGISel::doPeepholeLoadStoreOffset(SDNode *N) {
   LLVM_DEBUG(N->dump(CurDAG));
   LLVM_DEBUG(dbgs() << "\n");
 
+  if (Add)
+    Add = SDValue(CurDAG->UpdateNodeOperands(Add.getNode(),
+                                             Add.getOperand(AddBaseIdx),
+                                             Base.getOperand(0)),
+                  0);
+
   // Modify the offset operand of the load/store.
-  if (BaseOpIdx == 0) // Load
-    CurDAG->UpdateNodeOperands(N, Base.getOperand(0), ImmOperand,
-                               N->getOperand(2));
-  else // Store
-    CurDAG->UpdateNodeOperands(N, N->getOperand(0), Base.getOperand(0),
-                               ImmOperand, N->getOperand(3));
+  if (BaseOpIdx == 0) { // Load
+    if (Add)
+      N = CurDAG->UpdateNodeOperands(N, Add, ImmOperand, N->getOperand(2));
+    else
+      N = CurDAG->UpdateNodeOperands(N, Base.getOperand(0), ImmOperand,
+                                     N->getOperand(2));
+  } else { // Store
+    if (Add)
+      N = CurDAG->UpdateNodeOperands(N, N->getOperand(0), Add, ImmOperand,
+                                     N->getOperand(3));
+    else
+      N = CurDAG->UpdateNodeOperands(N, N->getOperand(0), Base.getOperand(0),
+                                     ImmOperand, N->getOperand(3));
+  }
 
   return true;
 }

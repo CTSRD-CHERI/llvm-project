@@ -8,7 +8,7 @@ declare i64 @llvm.cheri.cap.diff(i8 addrspace(200) *, i8 addrspace(200) *)
 
 ; DDC-relative loads
 
-define i64 @ddc_lb(i8 *%ptr) nounwind {
+define dso_local i64 @ddc_lb(i8 *%ptr) nounwind {
 ; CHECK-LP64-LABEL: ddc_lb:
 ; CHECK-LP64:       # %bb.0:
 ; CHECK-LP64-NEXT:    lb a1, 0(a0)
@@ -31,7 +31,7 @@ define i64 @ddc_lb(i8 *%ptr) nounwind {
   ret i64 %2
 }
 
-define i64 @ddc_lh(i16 *%ptr) nounwind {
+define dso_local i64 @ddc_lh(i16 *%ptr) nounwind {
 ; CHECK-LP64-LABEL: ddc_lh:
 ; CHECK-LP64:       # %bb.0:
 ; CHECK-LP64-NEXT:    lh a1, 0(a0)
@@ -54,7 +54,7 @@ define i64 @ddc_lh(i16 *%ptr) nounwind {
   ret i64 %2
 }
 
-define i64 @ddc_lw(i32 *%ptr) nounwind {
+define dso_local i64 @ddc_lw(i32 *%ptr) nounwind {
 ; CHECK-LP64-LABEL: ddc_lw:
 ; CHECK-LP64:       # %bb.0:
 ; CHECK-LP64-NEXT:    lw a1, 0(a0)
@@ -77,7 +77,7 @@ define i64 @ddc_lw(i32 *%ptr) nounwind {
   ret i64 %2
 }
 
-define i64 @ddc_ld(i64 *%ptr) nounwind {
+define dso_local i64 @ddc_ld(i64 *%ptr) nounwind {
 ; CHECK-LP64-LABEL: ddc_ld:
 ; CHECK-LP64:       # %bb.0:
 ; CHECK-LP64-NEXT:    ld a1, 0(a0)
@@ -98,7 +98,7 @@ define i64 @ddc_ld(i64 *%ptr) nounwind {
   ret i64 %1
 }
 
-define i64 @ddc_lbu(i8 *%ptr) nounwind {
+define dso_local i64 @ddc_lbu(i8 *%ptr) nounwind {
 ; CHECK-LP64-LABEL: ddc_lbu:
 ; CHECK-LP64:       # %bb.0:
 ; CHECK-LP64-NEXT:    lbu a1, 0(a0)
@@ -122,7 +122,7 @@ define i64 @ddc_lbu(i8 *%ptr) nounwind {
   ret i64 %6
 }
 
-define i64 @ddc_lhu(i16 *%ptr) nounwind {
+define dso_local i64 @ddc_lhu(i16 *%ptr) nounwind {
 ; CHECK-LP64-LABEL: ddc_lhu:
 ; CHECK-LP64:       # %bb.0:
 ; CHECK-LP64-NEXT:    lhu a1, 0(a0)
@@ -146,7 +146,7 @@ define i64 @ddc_lhu(i16 *%ptr) nounwind {
   ret i64 %6
 }
 
-define i64 @ddc_lwu(i32 *%ptr) nounwind {
+define dso_local i64 @ddc_lwu(i32 *%ptr) nounwind {
 ; CHECK-LP64-LABEL: ddc_lwu:
 ; CHECK-LP64:       # %bb.0:
 ; CHECK-LP64-NEXT:    lwu a1, 0(a0)
@@ -170,7 +170,7 @@ define i64 @ddc_lwu(i32 *%ptr) nounwind {
   ret i64 %6
 }
 
-define i64 @ddc_lc(i8 addrspace(200) **%ptr) nounwind {
+define dso_local i64 @ddc_lc(i8 addrspace(200) **%ptr) nounwind {
 ; CHECK-LP64-LABEL: ddc_lc:
 ; CHECK-LP64:       # %bb.0:
 ; CHECK-LP64-NEXT:    lc ca1, 0(a0)
@@ -291,7 +291,7 @@ define void @ddc_sc(i8 addrspace(200) **%ptr, i8 addrspace(200) *%val) nounwind 
 
 ; Capability-relative loads
 
-define i64 @cap_lb(i8 addrspace(200) *%cap) nounwind {
+define dso_local i64 @cap_lb(i8 addrspace(200) *%cap) nounwind {
 ; CHECK-LP64-LABEL: cap_lb:
 ; CHECK-LP64:       # %bb.0:
 ; CHECK-LP64-NEXT:    lb.cap a1, (ca0)
@@ -314,7 +314,7 @@ define i64 @cap_lb(i8 addrspace(200) *%cap) nounwind {
   ret i64 %2
 }
 
-define i64 @cap_lh(i16 addrspace(200) *%cap) nounwind {
+define dso_local i64 @cap_lh(i16 addrspace(200) *%cap) nounwind {
 ; CHECK-LP64-LABEL: cap_lh:
 ; CHECK-LP64:       # %bb.0:
 ; CHECK-LP64-NEXT:    lh.cap a1, (ca0)
@@ -337,7 +337,7 @@ define i64 @cap_lh(i16 addrspace(200) *%cap) nounwind {
   ret i64 %2
 }
 
-define i64 @cap_lw(i32 addrspace(200) *%cap) nounwind {
+define dso_local i64 @cap_lw(i32 addrspace(200) *%cap) nounwind {
 ; CHECK-LP64-LABEL: cap_lw:
 ; CHECK-LP64:       # %bb.0:
 ; CHECK-LP64-NEXT:    lw.cap a1, (ca0)
@@ -360,7 +360,7 @@ define i64 @cap_lw(i32 addrspace(200) *%cap) nounwind {
   ret i64 %2
 }
 
-define i64 @cap_ld(i64 addrspace(200) *%cap) nounwind {
+define dso_local i64 @cap_ld(i64 addrspace(200) *%cap) nounwind {
 ; CHECK-LP64-LABEL: cap_ld:
 ; CHECK-LP64:       # %bb.0:
 ; CHECK-LP64-NEXT:    ld.cap a1, (ca0)
@@ -381,7 +381,7 @@ define i64 @cap_ld(i64 addrspace(200) *%cap) nounwind {
   ret i64 %1
 }
 
-define i64 @cap_lbu(i8 addrspace(200) *%cap) nounwind {
+define dso_local i64 @cap_lbu(i8 addrspace(200) *%cap) nounwind {
 ; CHECK-LP64-LABEL: cap_lbu:
 ; CHECK-LP64:       # %bb.0:
 ; CHECK-LP64-NEXT:    lbu.cap a1, (ca0)
@@ -405,7 +405,7 @@ define i64 @cap_lbu(i8 addrspace(200) *%cap) nounwind {
   ret i64 %6
 }
 
-define i64 @cap_lhu(i16 addrspace(200) *%cap) nounwind {
+define dso_local i64 @cap_lhu(i16 addrspace(200) *%cap) nounwind {
 ; CHECK-LP64-LABEL: cap_lhu:
 ; CHECK-LP64:       # %bb.0:
 ; CHECK-LP64-NEXT:    lhu.cap a1, (ca0)
@@ -429,7 +429,7 @@ define i64 @cap_lhu(i16 addrspace(200) *%cap) nounwind {
   ret i64 %6
 }
 
-define i64 @cap_lwu(i32 addrspace(200) *%cap) nounwind {
+define dso_local i64 @cap_lwu(i32 addrspace(200) *%cap) nounwind {
 ; CHECK-LP64-LABEL: cap_lwu:
 ; CHECK-LP64:       # %bb.0:
 ; CHECK-LP64-NEXT:    lwu.cap a1, (ca0)
@@ -453,7 +453,7 @@ define i64 @cap_lwu(i32 addrspace(200) *%cap) nounwind {
   ret i64 %6
 }
 
-define i64 @cap_lc(i8 addrspace(200) *addrspace(200) *%cap) nounwind {
+define dso_local i64 @cap_lc(i8 addrspace(200) *addrspace(200) *%cap) nounwind {
 ; CHECK-LP64-LABEL: cap_lc:
 ; CHECK-LP64:       # %bb.0:
 ; CHECK-LP64-NEXT:    lc.cap ca1, (ca0)
@@ -570,4 +570,70 @@ define void @cap_sc(i8 addrspace(200) *addrspace(200) *%cap, i8 addrspace(200) *
   %1 = getelementptr i8 addrspace(200) *, i8 addrspace(200) *addrspace(200) *%cap, i32 26
   store i8 addrspace(200) *%val, i8 addrspace(200) *addrspace(200) *%1
   ret void
+}
+
+define i64 @lw_far_local(i64 addrspace(200)* %a)  {
+; CHECK-LP64-LABEL: lw_far_local:
+; CHECK-LP64:       # %bb.0:
+; CHECK-LP64-NEXT:    lui a1, 8
+; CHECK-LP64-NEXT:    addiw a1, a1, -8
+; CHECK-LP64-NEXT:    cincoffset ca0, ca0, a1
+; CHECK-LP64-NEXT:    ld.cap a0, (ca0)
+; CHECK-LP64-NEXT:    ret
+;
+; CHECK-L64PC128-LABEL: lw_far_local:
+; CHECK-L64PC128:       # %bb.0:
+; CHECK-L64PC128-NEXT:    lui a1, 8
+; CHECK-L64PC128-NEXT:    addiw a1, a1, -8
+; CHECK-L64PC128-NEXT:    cincoffset ca0, ca0, a1
+; CHECK-L64PC128-NEXT:    cld a0, 0(ca0)
+; CHECK-L64PC128-NEXT:    cret
+  %1 = getelementptr inbounds i64, i64 addrspace(200)* %a, i64 4095
+  %2 = load volatile i64, i64 addrspace(200)* %1
+  ret i64 %2
+}
+
+define void @st_far_local(i64 addrspace(200)* %a, i64 %b)  {
+; CHECK-LP64-LABEL: st_far_local:
+; CHECK-LP64:       # %bb.0:
+; CHECK-LP64-NEXT:    lui a2, 8
+; CHECK-LP64-NEXT:    addiw a2, a2, -8
+; CHECK-LP64-NEXT:    cincoffset ca0, ca0, a2
+; CHECK-LP64-NEXT:    sd.cap a1, (ca0)
+; CHECK-LP64-NEXT:    ret
+;
+; CHECK-L64PC128-LABEL: st_far_local:
+; CHECK-L64PC128:       # %bb.0:
+; CHECK-L64PC128-NEXT:    lui a2, 8
+; CHECK-L64PC128-NEXT:    addiw a2, a2, -8
+; CHECK-L64PC128-NEXT:    cincoffset ca0, ca0, a2
+; CHECK-L64PC128-NEXT:    csd a1, 0(ca0)
+; CHECK-L64PC128-NEXT:    cret
+  %1 = getelementptr inbounds i64, i64 addrspace(200)* %a, i64 4095
+  store i64 %b, i64 addrspace(200)* %1
+  ret void
+}
+
+define i64 @lw_sw_far_local(i64 addrspace(200)* %a, i64 %b)  {
+; CHECK-LP64-LABEL: lw_sw_far_local:
+; CHECK-LP64:       # %bb.0:
+; CHECK-LP64-NEXT:    lui a2, 8
+; CHECK-LP64-NEXT:    addiw a2, a2, -8
+; CHECK-LP64-NEXT:    cincoffset ca2, ca0, a2
+; CHECK-LP64-NEXT:    ld.cap a0, (ca2)
+; CHECK-LP64-NEXT:    sd.cap a1, (ca2)
+; CHECK-LP64-NEXT:    ret
+;
+; CHECK-L64PC128-LABEL: lw_sw_far_local:
+; CHECK-L64PC128:       # %bb.0:
+; CHECK-L64PC128-NEXT:    lui a2, 8
+; CHECK-L64PC128-NEXT:    addiw a2, a2, -8
+; CHECK-L64PC128-NEXT:    cincoffset ca2, ca0, a2
+; CHECK-L64PC128-NEXT:    cld a0, 0(ca2)
+; CHECK-L64PC128-NEXT:    csd a1, 0(ca2)
+; CHECK-L64PC128-NEXT:    cret
+  %1 = getelementptr inbounds i64, i64 addrspace(200)* %a, i64 4095
+  %2 = load volatile i64, i64 addrspace(200)* %1
+  store i64 %b, i64 addrspace(200)* %1
+  ret i64 %2
 }
