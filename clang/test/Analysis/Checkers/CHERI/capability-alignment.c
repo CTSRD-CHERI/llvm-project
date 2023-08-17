@@ -41,15 +41,16 @@ uintptr_t* bar(uintptr_t *p) {
 }
 
 struct S {
-  intptr_t u[10];
-  int i[10];
-  int i_aligned[10] __attribute__((aligned(16)));
+  intptr_t u[40];
+  int i[40];
+  int i_aligned[40] __attribute__((aligned(16)));
 };
-uintptr_t* struct_field(struct S *s) {
+int struct_field(struct S *s) {
   uintptr_t* p1 = (uintptr_t*)&s->u[3];  // no warning
-  uintptr_t* p2 = (uintptr_t*)&s->i[6];  // expected-warning{{Cast increases required alignment: 8 -> 16}}
-  uintptr_t* p3 = (uintptr_t*)&s->i_aligned[6];  // FIXME: expected-warning{{Cast increases required alignment: 8 -> 16}}
-  return p3 + (p2 - p1);
+  uintptr_t* p2 = (uintptr_t*)&s->i[8];  // expected-warning{{Cast increases required alignment: 4 -> 16}}
+  uintptr_t* p3 = (uintptr_t*)&s->i_aligned[6];  // expected-warning{{Cast increases required alignment: 8 -> 16}}
+  uintptr_t* p4 = (uintptr_t*)&s->i_aligned[4];  // no warning
+  return (p4 - p3) + (p2 - p1);
 }
 
 void local_var(void) {
