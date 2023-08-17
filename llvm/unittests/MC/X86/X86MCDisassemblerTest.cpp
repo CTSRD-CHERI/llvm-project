@@ -40,9 +40,9 @@ struct Context {
     const Target *TheTarget = TargetRegistry::lookupTarget(TripleName, Error);
     if (!TheTarget)
       return;
-
-    MRI.reset(TheTarget->createMCRegInfo(TripleName));
-    MAI.reset(TheTarget->createMCAsmInfo(*MRI, TripleName, MCTargetOptions()));
+    MCTargetOptions Options;
+    MRI.reset(TheTarget->createMCRegInfo(TripleName, Options));
+    MAI.reset(TheTarget->createMCAsmInfo(*MRI, TripleName, Options));
     STI.reset(TheTarget->createMCSubtargetInfo(TripleName, "", ""));
     Ctx = std::make_unique<MCContext>(Triple(TripleName), MAI.get(), MRI.get(),
                                       STI.get());
