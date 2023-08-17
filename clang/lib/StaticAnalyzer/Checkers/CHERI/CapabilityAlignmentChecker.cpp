@@ -192,6 +192,14 @@ bool isImplicitConversionFromVoidPtr(const Stmt *S, CheckerContext &C) {
   return !M.empty();
 }
 
+const ValueDecl *getAllocationDecl(const MemRegion *MR) {
+    if (const DeclRegion *DR = MR->getAs<DeclRegion>())
+        return DR->getDecl();
+    if (const ElementRegion *ER = MR->getAs<ElementRegion>())
+        return getAllocationDecl(ER->getSuperRegion());
+    return nullptr;
+}
+
 } // namespace
 
 void CapabilityAlignmentChecker::checkPreStmt(const CastExpr *CE,
@@ -236,6 +244,12 @@ void CapabilityAlignmentChecker::checkPreStmt(const CastExpr *CE,
         if (SymbolRef S = SrcVal.getAsSymbol())
           W->addVisitor(std::make_unique<AlignmentBugVisitor>(S));
         W->markInteresting(SrcVal);
+        if (const MemRegion *MR = SrcVal.getAsRegion()) {
+          if (const ValueDecl *SrcDecl= getAllocationDecl(MR)) {
+            W->addNote("Original allocation", PathDiagnosticLocation::create(
+                                                SrcDecl, C.getSourceManager()));
+          }
+        }
         C.emitReport(std::move(W));
     }
   }
