@@ -113,46 +113,41 @@ int getTrailingZerosCount(const MemRegion *R, ProgramStateRef State,
                           ASTContext &ASTCtx) {
   R = R->StripCasts();
 
-  if (const ElementRegion *ER = R->getAs<ElementRegion>()) {
-    const MemRegion *Base = ER->getSuperRegion();
-    int BaseTZC = -1;
-    if (const SymbolicRegion *SymbBase = Base->getSymbolicBase())
-      BaseTZC = getTrailingZerosCount(SymbBase->getSymbol(), State, ASTCtx);
-    else
-      BaseTZC = getTrailingZerosCount(Base, State, ASTCtx);
-    int IdxTZC = getTrailingZerosCount(ER->getIndex(), State, ASTCtx);
-    if (BaseTZC >=0) {
-      const QualType ElemTy = ER->getElementType();
-      unsigned ElAlign = ASTCtx.getTypeAlignInChars(ElemTy).getQuantity();
-      if (IdxTZC < 0 && ElAlign == 1)
+  if (const SymbolicRegion *SR = R->getAs<SymbolicRegion>())
+    return getTrailingZerosCount(SR->getSymbol(), State, ASTCtx);
+
+  if (const TypedValueRegion *TR = R->getAs<TypedValueRegion>()) {
+    const QualType PT = TR->getDesugaredValueType(ASTCtx);
+    if (PT->isIncompleteType())
+      return -1;
+    unsigned NaturalAlign = ASTCtx.getTypeAlignInChars(PT).getQuantity();
+
+    if (const ElementRegion *ER = R->getAs<ElementRegion>()) {
+      const MemRegion *Base = ER->getSuperRegion();
+      int BaseTZC = getTrailingZerosCount(Base, State, ASTCtx);
+      int IdxTZC = getTrailingZerosCount(ER->getIndex(), State, ASTCtx);
+      if (BaseTZC >= 0) {
+        if (IdxTZC < 0 && NaturalAlign == 1)
           return -1;
-      int ElemTyTZC = llvm::APSInt::getUnsigned(ElAlign).countTrailingZeros();
-      return std::min(BaseTZC, std::max(IdxTZC, 0) + ElemTyTZC);
+        int ElemTyTZC =
+            llvm::APSInt::getUnsigned(NaturalAlign).countTrailingZeros();
+        return std::min(BaseTZC, std::max(IdxTZC, 0) + ElemTyTZC);
+      }
+      return -1;
     }
-    return -1;
-  }
 
-  if (R->getSymbolicBase())
-    return -1;
-
-  const TypedValueRegion *TR = R->getAs<TypedValueRegion>();
-  if (!TR)
-    return -1;
-  const QualType PT = TR->getDesugaredValueType(ASTCtx);
-  if (PT->isIncompleteType())
-    return -1;
-  unsigned NaturalAlign = ASTCtx.getTypeAlignInChars(PT).getQuantity();
-
-  unsigned AlignAttrVal = 0;
-  if (auto DR = R->getAs<DeclRegion>()) {
-    if (auto AA = DR->getDecl()->getAttr<AlignedAttr>()) {
-      if (!AA->isAlignmentDependent())
-        AlignAttrVal = AA->getAlignment(ASTCtx) / ASTCtx.getCharWidth();
+    unsigned AlignAttrVal = 0;
+    if (auto DR = R->getAs<DeclRegion>()) {
+      if (auto AA = DR->getDecl()->getAttr<AlignedAttr>()) {
+        if (!AA->isAlignmentDependent())
+          AlignAttrVal = AA->getAlignment(ASTCtx) / ASTCtx.getCharWidth();
+      }
     }
-  }
 
-  unsigned A = std::max(NaturalAlign, AlignAttrVal);
-  return llvm::APSInt::getUnsigned(A).countTrailingZeros();
+    unsigned A = std::max(NaturalAlign, AlignAttrVal);
+    return llvm::APSInt::getUnsigned(A).countTrailingZeros();
+  }
+  return -1;
 }
 
 int getTrailingZerosCount(const SVal &V, ProgramStateRef State,
