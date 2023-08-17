@@ -2374,7 +2374,7 @@ SDValue DAGCombiner::visitPTRADD(SDNode *N) {
   // concern, though we might still want to detect code not using the builtins
   // and canonicalise it to a PTRMASK.
   if (N0.getOpcode() == ISD::PTRADD &&
-      !reassociationCanBreakAddressingModePattern(ISD::PTRADD, DL, N0, N1)) {
+      !reassociationCanBreakAddressingModePattern(ISD::PTRADD, DL, N, N0, N1)) {
     SDValue X = N0.getOperand(0);
     SDValue Y = N0.getOperand(1);
     SDValue Z = N1;
