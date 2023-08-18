@@ -286,7 +286,7 @@ bool AtomicExpand::runOnFunction(Function &F) {
         MadeChange = true;
       } else {
         AtomicRMWInst::BinOp Op = RMWI->getOperation();
-        if (TLI->shouldCastAtomicRMWIInIR(RMWI) ==
+        if (TLI->shouldCastAtomicRMWIInIR(RMWI, DL) ==
             TargetLoweringBase::AtomicExpansionKind::CastToInteger) {
           // TODO: add a TLI hook to control this so that each target can
           // convert to lowering the original type one at a time.

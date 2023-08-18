@@ -2149,10 +2149,11 @@ public:
   /// Returns how the given atomic atomicrmw should be cast by the IR-level
   /// AtomicExpand pass.
   virtual AtomicExpansionKind
-  shouldCastAtomicRMWIInIR(AtomicRMWInst *RMWI) const {
+  shouldCastAtomicRMWIInIR(AtomicRMWInst *RMWI, const DataLayout& DL) const {
+    Type* ValueTy = RMWI->getValOperand()->getType();
     if (RMWI->getOperation() == AtomicRMWInst::Xchg &&
-        (RMWI->getValOperand()->getType()->isFloatingPointTy() ||
-         RMWI->getValOperand()->getType()->isPointerTy()))
+        (ValueTy->isFloatingPointTy() ||
+         (ValueTy->isPointerTy() && !DL.isFatPointer(ValueTy))))
       return AtomicExpansionKind::CastToInteger;
 
     return AtomicExpansionKind::None;
