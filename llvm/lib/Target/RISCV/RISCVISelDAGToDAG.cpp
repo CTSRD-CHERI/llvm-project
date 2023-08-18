@@ -735,6 +735,7 @@ void RISCVDAGToDAGISel::Select(SDNode *Node) {
     ReplaceNode(Node, CurDAG->getMachineNode(Opc, DL, VT, TFI, Imm));
     return;
   }
+  case ISD::PTRADD:
   case ISD::ADD: {
     // Try to select ADD + immediate used as memory addresses to
     // (ADDI (ADD X, Imm-Lo12), Lo12) if it will allow the ADDI to be removed by
@@ -791,11 +792,13 @@ void RISCVDAGToDAGISel::Select(SDNode *Node) {
 
     // Emit (ADDI (ADD X, Hi), Lo)
     SDNode *Imm = selectImm(CurDAG, DL, VT, Offset, *Subtarget);
-    SDNode *ADD = CurDAG->getMachineNode(RISCV::ADD, DL, VT,
-                                         Node->getOperand(0), SDValue(Imm, 0));
-    SDNode *ADDI =
-        CurDAG->getMachineNode(RISCV::ADDI, DL, VT, SDValue(ADD, 0),
-                               CurDAG->getTargetConstant(Lo12, DL, VT));
+    SDNode *ADD = CurDAG->getMachineNode(
+        VT.isFatPointer() ? RISCV::CIncOffset : RISCV::ADD, DL, VT,
+        Node->getOperand(0), SDValue(Imm, 0));
+    SDNode *ADDI = CurDAG->getMachineNode(
+        VT.isFatPointer() ? RISCV::CIncOffsetImm : RISCV::ADDI, DL, VT,
+        SDValue(ADD, 0),
+        CurDAG->getTargetConstant(Lo12, DL, Imm->getValueType(0)));
     ReplaceNode(Node, ADDI);
     return;
   }

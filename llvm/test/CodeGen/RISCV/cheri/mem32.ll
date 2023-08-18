@@ -452,9 +452,8 @@ define i32 addrspace(200)* @lc_far_local(i32 addrspace(200)* addrspace(200)* %a)
 ; CHECK-IL32PC64-LABEL: lc_far_local:
 ; CHECK-IL32PC64:       # %bb.0:
 ; CHECK-IL32PC64-NEXT:    lui a1, 8
-; CHECK-IL32PC64-NEXT:    addi a1, a1, -8
 ; CHECK-IL32PC64-NEXT:    cincoffset ca0, ca0, a1
-; CHECK-IL32PC64-NEXT:    clc ca0, 0(ca0)
+; CHECK-IL32PC64-NEXT:    clc ca0, -8(ca0)
 ; CHECK-IL32PC64-NEXT:    cret
   %1 = getelementptr inbounds i32 addrspace(200)*, i32 addrspace(200)* addrspace(200)* %a, i64 4095
   %2 = load volatile i32 addrspace(200)*, i32 addrspace(200)* addrspace(200)* %1
@@ -473,9 +472,8 @@ define void @sc_far_local(i32 addrspace(200)* addrspace(200)* %a, i32 addrspace(
 ; CHECK-IL32PC64-LABEL: sc_far_local:
 ; CHECK-IL32PC64:       # %bb.0:
 ; CHECK-IL32PC64-NEXT:    lui a2, 8
-; CHECK-IL32PC64-NEXT:    addi a2, a2, -8
 ; CHECK-IL32PC64-NEXT:    cincoffset ca0, ca0, a2
-; CHECK-IL32PC64-NEXT:    csc ca1, 0(ca0)
+; CHECK-IL32PC64-NEXT:    csc ca1, -8(ca0)
 ; CHECK-IL32PC64-NEXT:    cret
   %1 = getelementptr inbounds i32 addrspace(200)*, i32 addrspace(200)* addrspace(200)* %a, i64 4095
   store i32 addrspace(200)* %b, i32 addrspace(200)* addrspace(200)* %1
@@ -495,10 +493,9 @@ define i32 addrspace(200)* @lc_sc_far_local(i32 addrspace(200)* addrspace(200)* 
 ; CHECK-IL32PC64-LABEL: lc_sc_far_local:
 ; CHECK-IL32PC64:       # %bb.0:
 ; CHECK-IL32PC64-NEXT:    lui a2, 8
-; CHECK-IL32PC64-NEXT:    addi a2, a2, -8
 ; CHECK-IL32PC64-NEXT:    cincoffset ca2, ca0, a2
-; CHECK-IL32PC64-NEXT:    clc ca0, 0(ca2)
-; CHECK-IL32PC64-NEXT:    csc ca1, 0(ca2)
+; CHECK-IL32PC64-NEXT:    clc ca0, -8(ca2)
+; CHECK-IL32PC64-NEXT:    csc ca1, -8(ca2)
 ; CHECK-IL32PC64-NEXT:    cret
   %1 = getelementptr inbounds i32 addrspace(200)*, i32 addrspace(200)* addrspace(200)* %a, i64 4095
   %2 = load volatile i32 addrspace(200)*, i32 addrspace(200)* addrspace(200)* %1
