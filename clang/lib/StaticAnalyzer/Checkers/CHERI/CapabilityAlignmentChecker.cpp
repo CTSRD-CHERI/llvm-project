@@ -29,12 +29,12 @@
 //===----------------------------------------------------------------------===//
 
 #include "CHERIUtils.h"
+#include <clang/ASTMatchers/ASTMatchFinder.h>
 #include "clang/ASTMatchers/ASTMatchers.h"
 #include "clang/StaticAnalyzer/Checkers/BuiltinCheckerRegistration.h"
-#include "clang/StaticAnalyzer/Core/PathSensitive/CheckerContext.h"
-#include <clang/ASTMatchers/ASTMatchFinder.h>
 #include <clang/StaticAnalyzer/Core/BugReporter/BugType.h>
 #include <clang/StaticAnalyzer/Core/PathSensitive/CallEvent.h>
+#include "clang/StaticAnalyzer/Core/PathSensitive/CheckerContext.h"
 
 using namespace clang;
 using namespace ento;
@@ -45,6 +45,7 @@ class CapabilityAlignmentChecker
     : public Checker<check::PreStmt<CastExpr>, check::PostStmt<CastExpr>,
                      check::PostStmt<BinaryOperator>> {
   std::unique_ptr<BugType> CastAlignBug;
+  std::unique_ptr<BugType> CapCastAlignBug;
 
 
 public:
@@ -55,6 +56,10 @@ public:
   void checkPreStmt(const CastExpr *BO, CheckerContext &C) const;
 
 private:
+  ExplodedNode *emitCastAlignWarn(CheckerContext &C, unsigned SrcAlign,
+                                  unsigned DstReqAlign,
+                                  const CastExpr *CE) const;
+
   class AlignmentBugVisitor : public BugReporterVisitor {
   public:
     AlignmentBugVisitor(SymbolRef SR) : Sym(SR) {}
@@ -78,8 +83,12 @@ private:
 REGISTER_MAP_WITH_PROGRAMSTATE(TrailingZerosMap, SymbolRef, int)
 
 CapabilityAlignmentChecker::CapabilityAlignmentChecker() {
-  CastAlignBug.reset(
-      new BugType(this, "Cast increases required alignment", "CHERI portability"));
+  CastAlignBug.reset(new BugType(this,
+      "Cast increases required alignment",
+      "Type Error"));
+  CapCastAlignBug.reset(new BugType(this,
+      "Cast increases required alignment to capability alignment",
+      "CHERI portability"));
 }
 
 namespace {
@@ -192,14 +201,6 @@ bool isImplicitConversionFromVoidPtr(const Stmt *S, CheckerContext &C) {
   return !M.empty();
 }
 
-const ValueDecl *getAllocationDecl(const MemRegion *MR) {
-    if (const DeclRegion *DR = MR->getAs<DeclRegion>())
-        return DR->getDecl();
-    if (const ElementRegion *ER = MR->getAs<ElementRegion>())
-        return getAllocationDecl(ER->getSuperRegion());
-    return nullptr;
-}
-
 } // namespace
 
 void CapabilityAlignmentChecker::checkPreStmt(const CastExpr *CE,
@@ -230,38 +231,8 @@ void CapabilityAlignmentChecker::checkPreStmt(const CastExpr *CE,
   ASTContext &ASTCtx = C.getASTContext();
   unsigned DstReqAlign = ASTCtx.getTypeAlignInChars(DstPointeeTy).getQuantity();
   if (SrcAlign < DstReqAlign) {
-    if (ExplodedNode *ErrNode = C.generateNonFatalErrorNode()) {
-        SmallString<350> ErrorMessage;
-        llvm::raw_svector_ostream OS(ErrorMessage);
-        OS << "Cast increases required alignment: ";
-        OS << SrcAlign;
-        OS << " -> ";
-        OS << DstReqAlign;
-        OS << ")";
-        auto W = std::make_unique<PathSensitiveBugReport>(
-            *CastAlignBug, ErrorMessage, ErrNode);
-        W->addRange(CE->getSourceRange());
-        if (SymbolRef S = SrcVal.getAsSymbol())
-          W->addVisitor(std::make_unique<AlignmentBugVisitor>(S));
-        W->markInteresting(SrcVal);
-        if (const MemRegion *MR = SrcVal.getAsRegion()) {
-          if (const ValueDecl *SrcDecl= getAllocationDecl(MR)) {
-            W->addNote("Original allocation", PathDiagnosticLocation::create(
-                                                SrcDecl, C.getSourceManager()));
-          }
-        }
-        C.emitReport(std::move(W));
-    }
+    emitCastAlignWarn(C, SrcAlign, DstReqAlign, CE);
   }
-}
-
-void printAlign(raw_ostream &OS, unsigned TZC) {
-  OS << "aligned(";
-  if (TZC < sizeof(unsigned long)*8)
-    OS << (1LU << TZC);
-  else
-    OS << "2^(" << TZC << ")";
-  OS << ")";
 }
 
 void CapabilityAlignmentChecker::checkPostStmt(const CastExpr *CE,
@@ -393,6 +364,90 @@ void CapabilityAlignmentChecker::checkPostStmt(const BinaryOperator *BO,
   State = State->set<TrailingZerosMap>(ResVal.getAsSymbol(), Res);
   C.addTransition(State);
 }
+namespace {
+
+bool hasCapability(const QualType OrigTy, ASTContext &Ctx) {
+  QualType Ty = OrigTy.getCanonicalType();
+  if (Ty->isCHERICapabilityType(Ctx, true))
+    return true;
+  if (const auto *Record = dyn_cast<RecordType>(Ty)) {
+    for (const auto *Field : Record->getDecl()->fields()) {
+      if (hasCapability(Field->getType(), Ctx))
+        return true;
+    }
+    return false;
+  }
+  if (const auto *Array = dyn_cast<ArrayType>(Ty)) {
+    return hasCapability(Array->getElementType(), Ctx);
+  }
+  return false;
+}
+
+void printAlign(raw_ostream &OS, unsigned TZC) {
+  OS << "aligned(";
+  if (TZC < sizeof(unsigned long)*8)
+    OS << (1LU << TZC);
+  else
+    OS << "2^(" << TZC << ")";
+  OS << ")";
+}
+
+void describeOriginalAllocation(const MemRegion *MR, PathSensitiveBugReport &W,
+                                const SourceManager &SM,
+                                ASTContext &ASTCtx) {
+  if (const DeclRegion *DR = MR->getAs<DeclRegion>()) {
+    const ValueDecl *SrcDecl = DR->getDecl();
+    SmallString<350> Note;
+    llvm::raw_svector_ostream OS2(Note);
+    const QualType &AllocType = SrcDecl->getType().getCanonicalType();
+    OS2 << "Original allocation of type ";
+    OS2 << "'" << AllocType.getAsString() << "'";
+    OS2 << " which has an alignment requirement ";
+    OS2 << ASTCtx.getTypeAlignInChars(AllocType).getQuantity();
+    OS2 << " bytes";
+    W.addNote(Note, PathDiagnosticLocation::create(SrcDecl, SM));
+  } else if (const ElementRegion *ER = MR->getAs<ElementRegion>())
+    describeOriginalAllocation(ER->getSuperRegion(), W, SM, ASTCtx);
+}
+
+} // namespace
+
+ExplodedNode *CapabilityAlignmentChecker::emitCastAlignWarn(
+    CheckerContext &C, unsigned SrcAlign, unsigned DstReqAlign,
+    const CastExpr *CE) const {
+  ExplodedNode *ErrNode = C.generateNonFatalErrorNode();
+  if (!ErrNode)
+    return nullptr;
+
+  ASTContext &ASTCtx = C.getASTContext();
+  const QualType &DstTy = CE->getType();
+  bool DstAlignIsCap = hasCapability(DstTy->getPointeeType(), ASTCtx);
+
+  SmallString<350> ErrorMessage;
+  llvm::raw_svector_ostream OS(ErrorMessage);
+  OS << "Pointer value aligned to a " << SrcAlign << " byte boundary";
+  OS << " cast to type '" << DstTy.getAsString() << "'";
+  OS << " with required";
+  if (DstAlignIsCap)
+    OS << " capability";
+  OS << " alignment " << DstReqAlign;
+  OS << " bytes";
+
+  auto W = std::make_unique<PathSensitiveBugReport>(
+      DstAlignIsCap ? *CapCastAlignBug : *CastAlignBug, ErrorMessage, ErrNode);
+  W->addRange(CE->getSourceRange());
+
+  const SVal &SrcVal = C.getSVal(CE->getSubExpr());
+  W->markInteresting(SrcVal);
+  if (SymbolRef S = SrcVal.getAsSymbol())
+    W->addVisitor(std::make_unique<AlignmentBugVisitor>(S));
+  else if (const MemRegion *MR = SrcVal.getAsRegion()) {
+    describeOriginalAllocation(MR, *W, C.getSourceManager(), C.getASTContext());
+  }
+
+  C.emitReport(std::move(W));
+  return ErrNode;
+}
 
 PathDiagnosticPieceRef
 CapabilityAlignmentChecker::AlignmentBugVisitor::VisitNode(
@@ -409,24 +464,26 @@ CapabilityAlignmentChecker::AlignmentBugVisitor::VisitNode(
   SmallString<256> Buf;
   llvm::raw_svector_ostream OS(Buf);
 
+  if (Sym != N->getSVal(S).getAsSymbol())
+    return nullptr;
+
   ProgramStateRef State = N->getState();
-  const int *NewAlign = State->get<TrailingZerosMap>(N->getSVal(E).getAsSymbol());
-  if (!NewAlign)
+  ProgramStateRef Pred = N->getFirstPred()->getState();
+  const int *NewAlign = State->get<TrailingZerosMap>(Sym);
+  const int *OldAlign = Pred->get<TrailingZerosMap>(Sym);
+  if (!NewAlign || (OldAlign && *NewAlign == *OldAlign))
     return nullptr;
 
   if (const CastExpr *CE = dyn_cast<CastExpr>(E)) {
-    if (Sym != N->getSVal(S).getAsSymbol())
-      return nullptr;
     if (SymbolRef SrcSym = N->getSVal(CE->getSubExpr()).getAsSymbol())
-      if (const int *OldAlign = State->get<TrailingZerosMap>(SrcSym))
-        if (*OldAlign == *NewAlign)
+      if (const int *SrcAlign = State->get<TrailingZerosMap>(SrcSym))
+        if (*SrcAlign == *NewAlign)
           return nullptr;
+  }
 
-    OS << "Alignment: ";
-    printAlign(OS, *NewAlign);
-  } else if (const BinaryOperator *BO = dyn_cast<BinaryOperator>(E)) {
+  OS << "Alignment: ";
+  if (const BinaryOperator *BO = dyn_cast<BinaryOperator>(E)) {
     BinaryOperatorKind const OpCode = BO->getOpcode();
-    OS << "Alignment: ";
     if (!BO->isShiftOp() && !BO->isShiftAssignOp()) {
       ASTContext &ASTCtx = N->getCodeDecl().getASTContext();
       int LTZ = getTrailingZerosCount(N->getSVal(BO->getLHS()), State, ASTCtx);
@@ -438,9 +495,8 @@ CapabilityAlignmentChecker::AlignmentBugVisitor::VisitNode(
         OS << " => ";
       }
     }
-    printAlign(OS, *NewAlign);
-  } else
-    return nullptr;
+  }
+  printAlign(OS, *NewAlign);
 
   // Generate the extra diagnostic.
   PathDiagnosticLocation const Pos(S, BRC.getSourceManager(),
