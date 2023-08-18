@@ -702,7 +702,7 @@ Object SymbolGraphSerializer::serialize() {
 void SymbolGraphSerializer::serialize(raw_ostream &os) {
   Object root = serialize();
   if (Options.Compact)
-    os << formatv("{0}", Value(std::move(root))) << "\n";
+    os << formatv("{0}", json::Value(std::move(root))) << "\n";
   else
-    os << formatv("{0:2}", Value(std::move(root))) << "\n";
+    os << formatv("{0:2}", json::Value(std::move(root))) << "\n";
 }

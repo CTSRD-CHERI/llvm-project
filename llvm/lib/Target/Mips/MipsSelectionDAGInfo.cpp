@@ -114,7 +114,7 @@ SDValue MipsSelectionDAGInfo::EmitTargetCodeForMemmove(
 
 SDValue MipsSelectionDAGInfo::EmitTargetCodeForMemset(
     SelectionDAG &DAG, const SDLoc &dl, SDValue Chain, SDValue Dst, SDValue Src,
-    SDValue Size, Align Alignment, bool isVolatile,
+    SDValue Size, Align Alignment, bool isVolatile, bool AlwaysInline,
     MachinePointerInfo DstPtrInfo) const {
   // If we're setting via an AS0 pointer, do the normal thing.
   unsigned DstAS = DstPtrInfo.getAddrSpace();

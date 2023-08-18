@@ -6895,7 +6895,8 @@ SDValue RISCVTargetLowering::lowerEH_DWARF_CFA(SDValue Op,
   MachineFunction &MF = DAG.getMachineFunction();
 
   bool isRISCV64 = Subtarget.is64Bit();
-  EVT PtrVT = getPointerTy(DAG.getDataLayout());
+  EVT PtrVT = getPointerTy(DAG.getDataLayout(),
+                           DAG.getDataLayout().getAllocaAddrSpace());
 
   int FI = MF.getFrameInfo().CreateFixedObject(isRISCV64 ? 8 : 4, 0, false);
   return DAG.getFrameIndex(FI, PtrVT);
