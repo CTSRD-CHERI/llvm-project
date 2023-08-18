@@ -152,13 +152,15 @@ body:             |
 
 # We should not fill the delay slot with a store of $c17 since it will be clobbered before the delay slot executes
 # CHECK:      bb.0.entry:
+# CHECK-NEXT: liveins:
+# CHECK-NEXT: {{  $}}
 # CHECK-NEXT:   $c11 = CIncOffsetImm $c11, -256
 # CHECK-NEXT:   $c24 = frame-setup CIncOffset $c11, $zero_64
 # CHECK-NEXT:   STORECAP killed renamable $c17, $zero_64, 0, $c24 :: (store (s128) into %stack.0)
 # CHECK-NEXT:   CapJumpLinkPseudo $c12, csr_cheri_purecap, implicit-def dead $c17, implicit-def $c11 {
-# CHECK-NEXT:     NOP
+# CHECK-NEXT:     $zero = SLL $zero, 0
 # CHECK-NEXT:   }
 # CHECK-NEXT:   renamable $c17 = LOADCAP $zero_64, 0, $c24 :: (load (s128) from %stack.0)
 # CHECK-NEXT:   PseudoReturnCap $c17 {
-# CHECK-NEXT:     NOP
+# CHECK-NEXT:     $zero = SLL $zero, 0
 # CHECK-NEXT:   }

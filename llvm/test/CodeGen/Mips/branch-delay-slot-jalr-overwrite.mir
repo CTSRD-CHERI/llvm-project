@@ -82,7 +82,7 @@ body:             |
 ...
 # Since the store uses $ra we can't place it in the JAL delay slot:
 # CHECK:      JAL @bar, csr_n64, implicit-def dead $ra, implicit $a0_64, implicit-def $sp, implicit-def dead $v0 {
-# CHECK-NEXT:   NOP
+# CHECK-NEXT:   $zero = SLL $zero, 0
 # CHECK-NEXT: }
 # But this one can go in the delay slot:
 # CHECK:      JAL @bar, csr_n64, implicit-def dead $ra, implicit $a0_64, implicit-def $sp, implicit-def dead $v0 {
