@@ -71,6 +71,6 @@ void test_pointers(char *ptr, __intcap intcap, ptrdiff_t ptrdiff) {
   ptr -= ptrdiff;
 }
 
-__intcap test_unary() {
+__intcap test_unary(void) {
   return -1;
 }
