@@ -1,10 +1,6 @@
 // RUN: rm -f %t.csv
 // Use -emit-llvm here to ignore all bounds added in the backend
-// RUN: %cheri_purecap_cc1 -O1 -fexperimental-new-pass-manager %s -std=c++2a -cheri-bounds=aggressive \
-// RUN:   -mllvm -collect-csetbounds-stats=csv -mllvm -collect-csetbounds-output=%t.csv -emit-llvm -o /dev/null
-// RUN: FileCheck -input-file %t.csv %s -check-prefixes CSV
-// RUN: rm -f %t.csv
-// RUN: %cheri_purecap_cc1 -O1 -fno-experimental-new-pass-manager %s -std=c++2a -cheri-bounds=aggressive \
+// RUN: %cheri_purecap_cc1 -O1 %s -std=c++2a -cheri-bounds=aggressive \
 // RUN:   -mllvm -collect-csetbounds-stats=csv -mllvm -collect-csetbounds-output=%t.csv -emit-llvm -o /dev/null
 // RUN: FileCheck -input-file %t.csv %s -check-prefixes CSV
 

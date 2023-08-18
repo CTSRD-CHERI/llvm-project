@@ -4,12 +4,12 @@
 /// - RISC-V uses a single [2 x i32] / [2 x i64] argument, purecap currently passes the struct indirectly
 /// FIXME: purecap RISC-V should pass the struct directly
 /// See https://github.com/CTSRD-CHERI/llvm-project/issues/573
-// RUN: %cheri_cc1 %s -emit-llvm -O2 -fexperimental-new-pass-manager  -o - | FileCheck %s --check-prefix MIPS
-// RUN: %cheri_purecap_cc1 %s -emit-llvm -O2 -fexperimental-new-pass-manager  -o - | FileCheck %s --check-prefix MIPS-PURECAP
-// RUN: %riscv64_cheri_cc1 %s -emit-llvm -O2 -fexperimental-new-pass-manager -o - | FileCheck %s --check-prefix RISCV64
-// RUN: %riscv64_cheri_purecap_cc1 %s -emit-llvm -O2 -fexperimental-new-pass-manager -o - | FileCheck %s --check-prefix RISCV64-PURECAP
-// RUN: %riscv32_cheri_cc1 %s -emit-llvm -O2 -fexperimental-new-pass-manager -o - | FileCheck %s --check-prefix RISCV32
-// RUN: %riscv32_cheri_purecap_cc1 %s -emit-llvm -O2 -fexperimental-new-pass-manager -o - | FileCheck %s --check-prefix RISCV32-PURECAP
+// RUN: %cheri_cc1 %s -emit-llvm -O2 -o - | FileCheck %s --check-prefix MIPS
+// RUN: %cheri_purecap_cc1 %s -emit-llvm -O2 -o - | FileCheck %s --check-prefix MIPS-PURECAP
+// RUN: %riscv64_cheri_cc1 %s -emit-llvm -O2 -o - | FileCheck %s --check-prefix RISCV64
+// RUN: %riscv64_cheri_purecap_cc1 %s -emit-llvm -O2 -o - | FileCheck %s --check-prefix RISCV64-PURECAP
+// RUN: %riscv32_cheri_cc1 %s -emit-llvm -O2 -o - | FileCheck %s --check-prefix RISCV32
+// RUN: %riscv32_cheri_purecap_cc1 %s -emit-llvm -O2 -o - | FileCheck %s --check-prefix RISCV32-PURECAP
 
 struct A {
   virtual long vf1() { return 1; }

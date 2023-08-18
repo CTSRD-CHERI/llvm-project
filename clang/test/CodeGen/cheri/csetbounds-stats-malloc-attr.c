@@ -1,7 +1,4 @@
-// RUN: %cheri_purecap_cc1 -fexperimental-new-pass-manager -emit-llvm -o /dev/null %s -O3 \
-// RUN:    -mllvm -collect-csetbounds-stats=csv -mllvm -collect-csetbounds-output=/dev/stderr \
-// RUN:  -debug-info-kind=standalone -gno-column-info 2>&1 | FileCheck %s
-// RUN: %cheri_purecap_cc1 -fno-experimental-new-pass-manager -emit-llvm -o /dev/null %s -O3 \
+// RUN: %cheri_purecap_cc1 -emit-llvm -o /dev/null %s -O3 \
 // RUN:    -mllvm -collect-csetbounds-stats=csv -mllvm -collect-csetbounds-output=/dev/stderr \
 // RUN:  -debug-info-kind=standalone -gno-column-info 2>&1 | FileCheck %s
 
