@@ -567,12 +567,12 @@ class LLVMConfig(object):
             self.config.available_features.add('clang')
             builtin_include_dir = self.get_clang_builtin_include_dir(self.config.clang)
             # FIXME: remove the -no-opaque-pointers flag once all tests have been ported
-            clang_cc1_args = ['-cc1', '-no-opaque-pointers', '-internal-isystem', builtin_include_dir, '-nostdsysteminc']
-            cheri128_cc1_args = clang_cc1_args + ['-triple', 'mips64-unknown-freebsd',
+            clang_cc1_args = ['-cc1', '-internal-isystem', builtin_include_dir, '-nostdsysteminc']
+            cheri128_cc1_args = clang_cc1_args + ['-no-opaque-pointers', '-triple', 'mips64-unknown-freebsd',
                     '-target-cpu', 'cheri128', '-cheri-size', '128', '-mllvm', '-verify-machineinstrs']
-            riscv32_cheri_cc1_args = clang_cc1_args + ['-triple', 'riscv32-unknown-freebsd',
+            riscv32_cheri_cc1_args = clang_cc1_args + ['-no-opaque-pointers', '-triple', 'riscv32-unknown-freebsd',
                     '-target-feature', '+xcheri', '-mllvm', '-verify-machineinstrs']
-            riscv64_cheri_cc1_args = clang_cc1_args + ['-triple', 'riscv64-unknown-freebsd',
+            riscv64_cheri_cc1_args = clang_cc1_args + ['-no-opaque-pointers', '-triple', 'riscv64-unknown-freebsd',
                     '-target-feature', '+xcheri', '-mllvm', '-verify-machineinstrs']
 
             cheri_cc1_args = cheri128_cc1_args
