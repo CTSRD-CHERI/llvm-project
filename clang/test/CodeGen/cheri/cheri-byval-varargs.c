@@ -1,8 +1,8 @@
 // REQUIRES: mips-registered-target
 /// This used to result in a crash when emitting byval arguments.
 /// FIXME: checking for non-crashing behaviour is not a good test
-// RUN: %cheri_purecap_cc1 -O2 %s -o /dev/null -emit-llvm -verify
-// RUN: %cheri_purecap_cc1 -O2 %s -o /dev/null -S -verify
+// RUN: %cheri_purecap_cc1 -O2 %s -o /dev/null -emit-llvm -Wno-error=implicit-function-declaration -verify
+// RUN: %cheri_purecap_cc1 -O2 %s -o /dev/null -Wno-error=implicit-function-declaration -S
 
 void other_func(void* x);
 
@@ -40,7 +40,8 @@ int main() {
   val_fn(a);
   varargs_fn(a); // expected-warning{{call to function 'varargs_fn' with no prototype may lead to run-time stack corruption}}
   // expected-note@-1{{Calling functions without prototypes is dangerous}}
-  undefined_fn(a); // expected-warning{{implicit declaration of function 'undefined_fn' is invalid in C99}}
+  // expected-warning@-2{{passing arguments to 'varargs_fn' without a prototype is deprecated in all versions of C and is not supported in C2x}}
+  undefined_fn(a); // expected-warning{{call to undeclared function 'undefined_fn'; ISO C99 and later do not support implicit function declarations}}
   // expected-warning@-1{{call to function 'undefined_fn' with no prototype may lead to run-time stack corruption}}
   // expected-note@-2{{Calling functions without prototypes is dangerous}}
   // expected-note@-3{{candidate function declaration needs parameter types}}
