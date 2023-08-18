@@ -23,6 +23,8 @@
 ; CHECK-NEXT:       Dominator Tree Construction
 ; CHECK-NEXT:       Natural Loop Information
 ; CHECK-NEXT:       RISCV gather/scatter lowering
+; CHECK-NEXT:    CHERI bound stack allocations
+; CHECK-NEXT:    FunctionPass Manager
 ; CHECK-NEXT:       Module Verifier
 ; CHECK-NEXT:       Lower Garbage Collection Instructions
 ; CHECK-NEXT:       Shadow Stack GC Lowering
