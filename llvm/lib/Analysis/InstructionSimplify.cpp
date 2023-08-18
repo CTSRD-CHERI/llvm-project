@@ -6139,8 +6139,8 @@ static Value *simplifyBinaryIntrinsic(Function *F, Value *Op0, Value *Op1,
       if (auto *ConstOp1 = dyn_cast<Constant>(Op1)) {
         if (ConstOp1->isZeroValue())
           return Null; // simplify setoffset(NULL, 0) -> null
-        return ConstantExpr::getGetElementPtr(
-            F->getReturnType()->getPointerElementType(), Null, ConstOp1);
+        return ConstantExpr::getGetElementPtr(Type::getInt8Ty(F->getContext()),
+                                              Null, ConstOp1);
       }
     }
     // setaddr(arg, getaddr(arg)) -> arg

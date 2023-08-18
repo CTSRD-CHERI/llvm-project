@@ -1600,7 +1600,7 @@ RValue AtomicInfo::ConvertIntToValueOrAtomic(llvm::Value *IntVal,
                                              bool AsValue) const {
   if (AtomicTy->isCHERICapabilityType(CGF.getContext())) {
     auto *ValTy = AsValue ? CGF.ConvertTypeForMem(ValueTy)
-                      : getAtomicAddress().getType()->getPointerElementType();
+                      : getAtomicAddress().getElementType();
     assert(ValTy->isPointerTy());
     return RValue::get(CGF.Builder.CreateBitCast(IntVal, ValTy));
   }

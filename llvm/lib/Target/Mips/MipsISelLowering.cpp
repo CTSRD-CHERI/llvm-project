@@ -2772,8 +2772,8 @@ SDValue MipsTargetLowering::lowerGlobalAddress(SDValue Op,
     // FIXME: shouldn't functions have a R_MIPS_CHERI_CAPCALL relocation?
     bool CanUseCapTable = GVTy->isFunctionTy() || DAG.getDataLayout().isFatPointer(GVTy);
     EVT GlobalTy = Ty.isFatPointer() ? Ty : CapType;
-    bool IsFnPtr =
-      GVTy->isPointerTy() && GVTy->getPointerElementType()->isFunctionTy();
+    bool IsFnPtr = GVTy->isPointerTy() && !GVTy->isOpaquePointerTy() &&
+                   GVTy->getNonOpaquePointerElementType()->isFunctionTy();
 
     if (IsFnPtr) {
       // FIXME: in the future it would be good to inline local function pointers

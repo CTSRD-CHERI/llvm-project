@@ -879,11 +879,11 @@ Instruction *foldSetOffsetOrAddress(InstCombiner *IC, IntrinsicInst *II) {
       if (ConstOp1->isZeroValue())
         return IC->replaceInstUsesWith(*II, Null);
       return IC->replaceInstUsesWith(
-          *II, ConstantExpr::getGetElementPtr(
-                   II->getType()->getPointerElementType(), Null, ConstOp1));
+          *II, ConstantExpr::getGetElementPtr(Type::getInt8Ty(II->getContext()),
+                                              Null, ConstOp1));
     } else {
-      return GetElementPtrInst::Create(II->getType()->getPointerElementType(),
-                                       Null, Op1);
+      return GetElementPtrInst::Create(Type::getInt8Ty(II->getContext()), Null,
+                                       Op1);
     }
   }
 
@@ -986,8 +986,8 @@ Instruction *foldSetOffsetOrAddress(InstCombiner *IC, IntrinsicInst *II) {
       Add = LHS;
     if (Add) {
       // TODO: BinaryOperator::Create()
-      return GetElementPtrInst::Create(II->getType()->getPointerElementType(),
-                                       Base, Add);
+      return GetElementPtrInst::Create(Type::getInt8Ty(II->getContext()), Base,
+                                       Add);
     }
   }
   return nullptr;
