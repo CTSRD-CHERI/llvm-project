@@ -1,6 +1,6 @@
 // RUN: %cheri_purecap_cc1 -emit-llvm -o - %s -Wall -verify | FileCheck %s
-// expected-no-diagnostics
-void asctime_r(buf)
+
+void asctime_r(buf) // expected-warning{{a function definition without a prototype is deprecated in all versions}}
 char * buf;
 {
 }
