@@ -10994,7 +10994,10 @@ QualType ASTContext::getNonProvenanceCarryingType(QualType T) const {
   // if (!Target->SupportsCapabilities())
   //  return T; // XXX: should probably assert instead?
   assert(Target->SupportsCapabilities());
-  // Must be called with either intcap_t or uintcap_t
+  // Must be called with either intcap_t or uintcap_t (or atomic variants
+  // thereof)
+  if (const AtomicType *AT = dyn_cast<AtomicType>(T.getCanonicalType()))
+    return getAtomicType(getNonProvenanceCarryingType(AT->getValueType()));
   if (const BuiltinType *BT = dyn_cast<BuiltinType>(T.getCanonicalType())) {
     if (BT->getKind() == BuiltinType::IntCap)
       return NoProvenanceIntCapTy;
