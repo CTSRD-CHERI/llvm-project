@@ -16,10 +16,7 @@ static __capability typeof(global_intptr) global_intcap = 0;
 _Static_assert(__builtin_types_compatible_p(typeof(global_intptr), int *), "");
 _Static_assert(__builtin_types_compatible_p(typeof(global_intcap), int *__capability), "");
 
-/// Crash reproducer for https://github.com/CTSRD-CHERI/llvm-project/issues/710
-// RUN: not --crash %cheri_cc1 %s -fsyntax-only -verify -DCRASH
-// REQUIRES: asserts
-#ifdef CRASH
+/// The following used to crash (https://github.com/CTSRD-CHERI/llvm-project/issues/710)
 struct s {
   int i;
 };
@@ -27,4 +24,3 @@ static struct s *global_sptr = 0;
 static __capability typeof(global_sptr) global_scap = 0;
 _Static_assert(__builtin_types_compatible_p(typeof(global_sptr), struct s *), "");
 _Static_assert(__builtin_types_compatible_p(typeof(global_scap), struct s *__capability), "");
-#endif
