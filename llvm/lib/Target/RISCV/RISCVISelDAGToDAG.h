@@ -45,10 +45,16 @@ public:
   bool SelectInlineAsmMemoryOperand(const SDValue &Op, unsigned ConstraintID,
                                     std::vector<SDValue> &OutOps) override;
 
+  bool SelectFrameRegImmCommon(SDValue Addr, SDValue &Base, SDValue &Offset,
+                               EVT PtrVT);
   bool SelectFrameAddrRegImm(SDValue Addr, SDValue &Base, SDValue &Offset);
-  bool SelectCapFI(SDValue Cap, SDValue &Base);
+  bool SelectCapFrameAddrRegImm(SDValue Cap, SDValue &Base, SDValue &Offset);
+  bool SelectBase(SDValue Addr, SDValue &Base, EVT PtrVT);
   bool SelectBaseAddr(SDValue Addr, SDValue &Base);
+  bool SelectRegImmCommon(SDValue Addr, SDValue &Base, SDValue &Offset,
+                          EVT PtrVT);
   bool SelectAddrRegImm(SDValue Addr, SDValue &Base, SDValue &Offset);
+  bool SelectCapRegImm(SDValue Addr, SDValue &Base, SDValue &Offset);
 
   bool selectShiftMask(SDValue N, unsigned ShiftWidth, SDValue &ShAmt);
   bool selectShiftMaskXLen(SDValue N, SDValue &ShAmt) {

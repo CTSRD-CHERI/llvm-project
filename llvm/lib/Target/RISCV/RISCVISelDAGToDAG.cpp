@@ -716,9 +716,9 @@ void RISCVDAGToDAGISel::Select(SDNode *Node) {
   }
   case ISD::PTRADD:
   case ISD::ADD: {
-    // Try to select ADD + immediate used as memory addresses to
-    // (ADDI (ADD X, Imm-Lo12), Lo12) if it will allow the ADDI to be removed by
-    // doPeepholeLoadStoreADDI.
+    // Try to select ADD/CIncOffset + immediate used as memory addresses to
+    // (OpI (Op X, Imm-Lo12), Lo12) if it will allow the ADDI/CIncOffsetImm
+    // to be removed by doPeepholeLoadStoreADDI.
 
     // LHS should be an immediate.
     auto *N1C = dyn_cast<ConstantSDNode>(Node->getOperand(1));
@@ -1861,10 +1861,10 @@ bool RISCVDAGToDAGISel::SelectInlineAsmMemoryOperand(
 }
 
 // Select a frame index and an optional immediate offset from an ADD or OR.
-bool RISCVDAGToDAGISel::SelectFrameAddrRegImm(SDValue Addr, SDValue &Base,
-                                              SDValue &Offset) {
+bool RISCVDAGToDAGISel::SelectFrameRegImmCommon(SDValue Addr, SDValue &Base,
+                                              SDValue &Offset, EVT PtrVT) {
   if (auto *FIN = dyn_cast<FrameIndexSDNode>(Addr)) {
-    Base = CurDAG->getTargetFrameIndex(FIN->getIndex(), Subtarget->getXLenVT());
+    Base = CurDAG->getTargetFrameIndex(FIN->getIndex(), PtrVT);
     Offset = CurDAG->getTargetConstant(0, SDLoc(Addr), Subtarget->getXLenVT());
     return true;
   }
@@ -1876,7 +1876,7 @@ bool RISCVDAGToDAGISel::SelectFrameAddrRegImm(SDValue Addr, SDValue &Base,
     auto *CN = cast<ConstantSDNode>(Addr.getOperand(1));
     if (isInt<12>(CN->getSExtValue())) {
       Base = CurDAG->getTargetFrameIndex(FIN->getIndex(),
-                                         Subtarget->getXLenVT());
+                                         PtrVT);
       Offset = CurDAG->getTargetConstant(CN->getSExtValue(), SDLoc(Addr),
                                          Subtarget->getXLenVT());
       return true;
@@ -1886,44 +1886,62 @@ bool RISCVDAGToDAGISel::SelectFrameAddrRegImm(SDValue Addr, SDValue &Base,
   return false;
 }
 
-bool RISCVDAGToDAGISel::SelectCapFI(SDValue Cap, SDValue &Base) {
-  if (auto FIN = dyn_cast<FrameIndexSDNode>(Cap)) {
-    if (Cap.getValueType().isFatPointer()) {
-      Base = CurDAG->getTargetFrameIndex(FIN->getIndex(),
-                                         Subtarget->typeForCapabilities());
-      return true;
-    }
-  }
-
-  return false;
+bool RISCVDAGToDAGISel::SelectFrameAddrRegImm(SDValue Addr, SDValue &Base,
+                                              SDValue &Offset) {
+  return SelectFrameRegImmCommon(Addr, Base, Offset, Subtarget->getXLenVT());
+}
+bool RISCVDAGToDAGISel::SelectCapFrameAddrRegImm(SDValue Cap, SDValue &Base,
+                                                 SDValue &Offset) {
+  return SelectFrameRegImmCommon(Cap, Base, Offset,
+                                 Subtarget->typeForCapabilities());
 }
 
-bool RISCVDAGToDAGISel::SelectBaseAddr(SDValue Addr, SDValue &Base) {
+bool RISCVDAGToDAGISel::SelectBase(SDValue Addr, SDValue &Base, EVT PtrVT) {
   // If this is FrameIndex, select it directly. Otherwise just let it get
   // selected to a register independently.
-  if (Addr.getValueType().isFatPointer())
-    return false;
-  assert(Addr.getValueType().isInteger() || Addr.getValueType() == MVT::iPTR);
+  if (PtrVT.isFatPointer()) {
+    if (!Addr.getValueType().isFatPointer())
+      return false;
+  } else {
+    if (Addr.getValueType().isFatPointer())
+      return false;
+    assert(Addr.getValueType().isInteger() || Addr.getValueType() == MVT::iPTR);
+  }
   if (auto *FIN = dyn_cast<FrameIndexSDNode>(Addr))
-    Base = CurDAG->getTargetFrameIndex(FIN->getIndex(), Subtarget->getXLenVT());
+    Base = CurDAG->getTargetFrameIndex(FIN->getIndex(), PtrVT);
   else
     Base = Addr;
   return true;
 }
 
-bool RISCVDAGToDAGISel::SelectAddrRegImm(SDValue Addr, SDValue &Base,
-                                         SDValue &Offset) {
+bool RISCVDAGToDAGISel::SelectBaseAddr(SDValue Addr, SDValue &Base) {
+  return SelectBase(Addr, Base, Subtarget->getXLenVT());
+}
+
+bool RISCVDAGToDAGISel::SelectRegImmCommon(SDValue Addr, SDValue &Base,
+                                           SDValue &Offset, EVT PtrVT) {
   if (CurDAG->isBaseWithConstantOffset(Addr)) {
     auto *CN = cast<ConstantSDNode>(Addr.getOperand(1));
     if (isInt<12>(CN->getSExtValue())) {
       Offset = CurDAG->getTargetConstant(CN->getSExtValue(), SDLoc(Addr),
                                          Subtarget->getXLenVT());
-      return SelectBaseAddr(Addr.getOperand(0), Base);
+      return SelectBase(Addr.getOperand(0), Base, PtrVT);
     }
   }
 
   Offset = CurDAG->getTargetConstant(0, SDLoc(Addr), Subtarget->getXLenVT());
-  return SelectBaseAddr(Addr, Base);
+  return SelectBase(Addr, Base, PtrVT);
+}
+
+bool RISCVDAGToDAGISel::SelectAddrRegImm(SDValue Cap, SDValue &Base,
+                                         SDValue &Offset) {
+  return SelectRegImmCommon(Cap, Base, Offset, Subtarget->getXLenVT());
+}
+
+bool RISCVDAGToDAGISel::SelectCapRegImm(SDValue Cap, SDValue &Base,
+                                        SDValue &Offset) {
+  return SelectRegImmCommon(Cap, Base, Offset,
+                            Subtarget->typeForCapabilities());
 }
 
 bool RISCVDAGToDAGISel::selectShiftMask(SDValue N, unsigned ShiftWidth,

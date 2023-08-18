@@ -115,8 +115,14 @@ def uimm10_lsb0000 : Operand<XLenVT>,
   }];
 }
 
-def CapFI64  : ComplexPattern<iFATPTR64,  1, "SelectCapFI", [frameindex], []>;
-def CapFI128 : ComplexPattern<iFATPTR128, 1, "SelectCapFI", [frameindex], []>;
+def CapFrameAddrRegImm64 : ComplexPattern<iFATPTR64, 2,
+                                          "SelectCapFrameAddrRegImm",
+                                          [frameindex, ptradd]>;
+def CapFrameAddrRegImm128 : ComplexPattern<iFATPTR128, 2,
+                                           "SelectCapFrameAddrRegImm",
+                                           [frameindex, ptradd]>;
+def CapRegImm64 : ComplexPattern<iFATPTR64, 2, "SelectCapRegImm">;
+def CapRegImm128 : ComplexPattern<iFATPTR128, 2, "SelectCapRegImm">;
 
 //===----------------------------------------------------------------------===//
 // Instruction Formats
@@ -1204,10 +1210,10 @@ def : PatGpcrUimm12<int_cheri_bounded_stack_cap, CSetBoundsImm>;
 def : PatGpcrGpr<int_cheri_bounded_stack_cap_dynamic, CSetBounds>;
 def : PatGpcrUimm12<int_cheri_bounded_stack_cap_dynamic, CSetBoundsImm>;
 
-def : Pat<(ptradd CapFI64:$rs1, simm12:$imm12),
-          (CIncOffsetImm CapFI64:$rs1, simm12:$imm12)>;
-def : Pat<(ptradd CapFI128:$rs1, simm12:$imm12),
-          (CIncOffsetImm CapFI128:$rs1, simm12:$imm12)>;
+def : Pat<(CapFrameAddrRegImm64 GPCR:$rs1, simm12:$imm12),
+          (CIncOffsetImm GPCR:$rs1, simm12:$imm12)>;
+def : Pat<(CapFrameAddrRegImm128 GPCR:$rs1, simm12:$imm12),
+          (CIncOffsetImm GPCR:$rs1, simm12:$imm12)>;
 
 /// Pointer-Arithmetic Instructions
 
@@ -1608,27 +1614,17 @@ defm : PseudoCmpXchgPat<"atomic_cmp_swap_cap", PseudoCmpXchgCap, GPCR>;
 /// Capability Mode Instructions
 
 multiclass CheriLdPat<PatFrag LoadOp, RVInst Inst> {
-  def : Pat<(LoadOp GPCR:$rs1), (Inst GPCR:$rs1, 0)>;
-  def : Pat<(LoadOp CapFI64:$rs1), (Inst CapFI64:$rs1, 0)>;
-  def : Pat<(LoadOp CapFI128:$rs1), (Inst CapFI128:$rs1, 0)>;
-  def : Pat<(LoadOp (ptradd GPCR:$rs1, simm12:$imm12)),
+  def : Pat<(LoadOp (CapRegImm64 GPCR:$rs1, simm12:$imm12)),
             (Inst GPCR:$rs1, simm12:$imm12)>;
-  def : Pat<(LoadOp (ptradd CapFI64:$rs1, simm12:$imm12)),
-            (Inst CapFI64:$rs1, simm12:$imm12)>;
-  def : Pat<(LoadOp (ptradd CapFI128:$rs1, simm12:$imm12)),
-            (Inst CapFI128:$rs1, simm12:$imm12)>;
+  def : Pat<(LoadOp (CapRegImm128 GPCR:$rs1, simm12:$imm12)),
+            (Inst GPCR:$rs1, simm12:$imm12)>;
 }
 
 multiclass CheriStPat<PatFrag StoreOp, RVInst Inst, RegisterClass StTy> {
-  def : Pat<(StoreOp StTy:$rs2, GPCR:$rs1), (Inst StTy:$rs2, GPCR:$rs1, 0)>;
-  def : Pat<(StoreOp StTy:$rs2, CapFI64:$rs1), (Inst StTy:$rs2, CapFI64:$rs1, 0)>;
-  def : Pat<(StoreOp StTy:$rs2, CapFI128:$rs1), (Inst StTy:$rs2, CapFI128:$rs1, 0)>;
-  def : Pat<(StoreOp StTy:$rs2, (ptradd GPCR:$rs1, simm12:$imm12)),
+  def : Pat<(StoreOp StTy:$rs2, (CapRegImm64 GPCR:$rs1, simm12:$imm12)),
             (Inst StTy:$rs2, GPCR:$rs1, simm12:$imm12)>;
-  def : Pat<(StoreOp StTy:$rs2, (ptradd CapFI64:$rs1, simm12:$imm12)),
-            (Inst StTy:$rs2, CapFI64:$rs1, simm12:$imm12)>;
-  def : Pat<(StoreOp StTy:$rs2, (ptradd CapFI128:$rs1, simm12:$imm12)),
-            (Inst StTy:$rs2, CapFI128:$rs1, simm12:$imm12)>;
+  def : Pat<(StoreOp StTy:$rs2, (CapRegImm128 GPCR:$rs1, simm12:$imm12)),
+            (Inst StTy:$rs2, GPCR:$rs1, simm12:$imm12)>;
 }
 
 multiclass CheriAtomicStPat<PatFrag StoreOp, RVInst Inst, RegisterClass StTy>
