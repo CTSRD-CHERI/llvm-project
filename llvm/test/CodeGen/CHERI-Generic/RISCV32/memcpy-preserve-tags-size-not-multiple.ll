@@ -11,22 +11,22 @@ define void @test_string_memmove(i8 addrspace(200)* %dst, i8 addrspace(200)* %sr
   ; Note: has must_preserve_cheri_tags, but this memmove can still be inlined since it's aligned
 ; CHECK-LABEL: test_string_memmove:
 ; CHECK:       # %bb.0:
-; CHECK-NEXT:    cmove ca6, ca1
+; CHECK-NEXT:    cmove ca7, ca1
 ; CHECK-NEXT:    cmove ca1, ca0
-; CHECK-NEXT:    clw a0, 40(ca6)
-; CHECK-NEXT:    clb a2, 44(ca6)
-; CHECK-NEXT:    clc ca3, 32(ca6)
-; CHECK-NEXT:    clc ca5, 16(ca6)
-; CHECK-NEXT:    clc ca4, 0(ca6)
-; CHECK-NEXT:    csc ca4, 0(ca1)
-; CHECK-NEXT:    clc ca4, 24(ca6)
-; CHECK-NEXT:    clc ca6, 8(ca6)
-; CHECK-NEXT:    csc ca6, 8(ca1)
-; CHECK-NEXT:    csc ca5, 16(ca1)
+; CHECK-NEXT:    clc ca0, 0(ca7)
+; CHECK-NEXT:    clc ca2, 8(ca7)
+; CHECK-NEXT:    clc ca3, 16(ca7)
+; CHECK-NEXT:    clc ca4, 24(ca7)
+; CHECK-NEXT:    clc ca5, 32(ca7)
+; CHECK-NEXT:    clw a6, 40(ca7)
+; CHECK-NEXT:    clb a7, 44(ca7)
+; CHECK-NEXT:    csb a7, 44(ca1)
+; CHECK-NEXT:    csw a6, 40(ca1)
+; CHECK-NEXT:    csc ca5, 32(ca1)
 ; CHECK-NEXT:    csc ca4, 24(ca1)
-; CHECK-NEXT:    csc ca3, 32(ca1)
-; CHECK-NEXT:    csb a2, 44(ca1)
-; CHECK-NEXT:    csw a0, 40(ca1)
+; CHECK-NEXT:    csc ca3, 16(ca1)
+; CHECK-NEXT:    csc ca2, 8(ca1)
+; CHECK-NEXT:    csc ca0, 0(ca1)
 ; CHECK-NEXT:    cret
   call void @llvm.memmove.p200i8.p200i8.i64(i8 addrspace(200)* align 16 %dst, i8 addrspace(200)* align 16 %src, i64 45, i1 false) must_preserve_cheri_tags
   ret void
