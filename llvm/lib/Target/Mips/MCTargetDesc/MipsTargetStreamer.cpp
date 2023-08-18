@@ -939,7 +939,7 @@ void MipsTargetELFStreamer::finish() {
 
       unsigned Alignment = Section.getAlignment();
       if (Alignment) {
-        OS.SwitchSection(&Section);
+        OS.switchSection(&Section);
         if (Section.useCodeAlign())
           OS.emitCodeAlignment(Alignment, &STI, Alignment);
         else
@@ -1056,7 +1056,7 @@ void MipsTargetELFStreamer::emitDirectiveEnd(StringRef Name) {
 
   OS.pushSection();
 
-  OS.SwitchSection(Sec);
+  OS.switchSection(Sec);
 
   OS.emitValueImpl(ExprRef, 4);
 
@@ -1354,7 +1354,7 @@ void MipsTargetELFStreamer::emitMipsAbiFlags() {
       ".MIPS.abiflags", ELF::SHT_MIPS_ABIFLAGS, ELF::SHF_ALLOC, 24);
   MCA.registerSection(*Sec);
   Sec->setAlignment(Align(8));
-  OS.SwitchSection(Sec);
+  OS.switchSection(Sec);
 
   OS << ABIFlagsSection;
 }
