@@ -1,4 +1,3 @@
-; RUN: llc -mtriple=riscv32 -O3 -debug-pass=Structure < %s -o /dev/null 2>&1
 ; RUN: llc -mtriple=riscv32 -O3 -debug-pass=Structure < %s -o /dev/null 2>&1 | \
 ; RUN:   grep -v "Verify generated machine code" | \
 ; RUN:   FileCheck %s --check-prefixes=CHECK
@@ -30,7 +29,9 @@
 ; CHECK-NEXT:    CHERI bound stack allocations
 ; CHECK-NEXT:    FunctionPass Manager
 ; CHECK-NEXT:       Module Verifier
+; CHECK-NEXT:       Dominator Tree Construction
 ; CHECK-NEXT:       Basic Alias Analysis (stateless AA impl)
+; CHECK-NEXT:       Natural Loop Information
 ; CHECK-NEXT:       Canonicalize natural loops
 ; CHECK-NEXT:       Scalar Evolution Analysis
 ; CHECK-NEXT:       Loop Pass Manager
@@ -100,6 +101,7 @@
 ; RV64-NEXT:        RISCV sext.w Removal
 ; CHECK-NEXT:       RISCV Merge Base Offset
 ; CHECK-NEXT:       RISCV Insert VSETVLI pass
+; CHECK-NEXT:       Cheri Get Address Elimination
 ; CHECK-NEXT:       Detect Dead Lanes
 ; CHECK-NEXT:       Process Implicit Definitions
 ; CHECK-NEXT:       Remove unreachable machine basic blocks
