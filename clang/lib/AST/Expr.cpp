@@ -2102,16 +2102,8 @@ QualType CastExpr::checkProvenanceImpl(QualType Ty, const ASTContext &C,
                                  NPC_ValueDependentIsNotNull))
     ExprCanCarryProvenance = false;
 
-  if (!ExprCanCarryProvenance) {
-    // FIXME: allowing __uintcap_t as the underlying type for enums is not
-    // ideal, as this means we need a const_cast here.
-    if (Ty->isEnumeralType()) {
-      return const_cast<ASTContext &>(C).getAttributedType(
-          attr::CHERINoProvenance, Ty, Ty);
-    } else {
-      return C.getNonProvenanceCarryingType(Ty);
-    }
-  }
+  if (!ExprCanCarryProvenance)
+    return C.getNonProvenanceCarryingType(Ty);
   return Ty;
 }
 

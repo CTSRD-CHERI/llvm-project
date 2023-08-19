@@ -1334,12 +1334,6 @@ void ASTContext::InitBuiltinTypes(const TargetInfo &Target,
 
   InitBuiltinType(IntCapTy,            BuiltinType::IntCap);
   InitBuiltinType(UnsignedIntCapTy,    BuiltinType::UIntCap);
-  if (Target.SupportsCapabilities()) {
-    NoProvenanceIntCapTy =
-        getAttributedType(attr::CHERINoProvenance, IntCapTy, IntCapTy);
-    NoProvenanceUnsignedIntCapTy = getAttributedType(
-        attr::CHERINoProvenance, UnsignedIntCapTy, UnsignedIntCapTy);
-  }
 
   // GNU extension, __float128 for IEEE quadruple precision
   InitBuiltinType(Float128Ty,          BuiltinType::Float128);
@@ -10996,16 +10990,18 @@ QualType ASTContext::getNonProvenanceCarryingType(QualType T) const {
   assert(Target->SupportsCapabilities());
   // Must be called with either intcap_t or uintcap_t (or atomic variants
   // thereof)
-  if (const AtomicType *AT = dyn_cast<AtomicType>(T.getCanonicalType()))
-    return getAtomicType(getNonProvenanceCarryingType(AT->getValueType()));
-  if (const BuiltinType *BT = dyn_cast<BuiltinType>(T.getCanonicalType())) {
-    if (BT->getKind() == BuiltinType::IntCap)
-      return NoProvenanceIntCapTy;
-    if (BT->getKind() == BuiltinType::UIntCap)
-      return NoProvenanceUnsignedIntCapTy;
+  assert(T->isIntCapType() &&
+         "Invalid type passed to getNonProvenanceCarryingType");
+  if (const AtomicType *AT = dyn_cast<AtomicType>(T.getDesugaredType(*this))) {
+    QualType VT = AT->getValueType();
+    if (VT->hasAttr(attr::CHERINoProvenance))
+      return T;
+    return getAtomicType(getNonProvenanceCarryingType(VT));
   }
-  llvm_unreachable("Invalid type passed to getNonProvenanceCarryingType");
-  return T;
+  if (T->hasAttr(attr::CHERINoProvenance))
+    return T;
+  return const_cast<ASTContext *>(this)->getAttributedType(
+      attr::CHERINoProvenance, T, T);
 }
 
 QualType ASTContext::getCorrespondingUnsignedType(QualType T) const {
