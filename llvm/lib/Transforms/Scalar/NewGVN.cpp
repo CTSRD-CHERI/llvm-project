@@ -2651,7 +2651,6 @@ bool NewGVN::OpIsSafeForPHIOfOps(Value *V, const BasicBlock *PHIBlock,
         // Add potential clobber of the original access.
         MemAccessWorkList.push_back(MSSAWalker->getClobberingMemoryAccess(
             cast<MemoryUseOrDef>(MemAccess)));
-        continue;
       }
     }
 
