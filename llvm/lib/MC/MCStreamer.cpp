@@ -1087,7 +1087,7 @@ void MCStreamer::finish(SMLoc EndLoc) {
         RelocSection = DefaultRelocSection;
       }
 
-      SwitchSection(RelocSection);
+      switchSection(RelocSection);
 
       emitValue(MCSymbolRefExpr::create(Sym, Context), 8);
       if (const MCSymbolRefExpr *Sym = dyn_cast<MCSymbolRefExpr>(Value)) {

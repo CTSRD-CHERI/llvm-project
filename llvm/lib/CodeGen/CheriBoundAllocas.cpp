@@ -204,7 +204,8 @@ public:
           ForcedAlignment = TLI->getAlignmentForPreciseBounds(AllocaSize);
         }
       }
-      AI->setAlignment(max(MaybeAlign(AI->getAlignment()), ForcedAlignment));
+      if (ForcedAlignment > AI->getAlign())
+        AI->setAlignment(ForcedAlignment);
       // Only set bounds for allocas that escape this function
       bool NeedBounds = true;
       // Always set bounds if the function has the optnone attribute
