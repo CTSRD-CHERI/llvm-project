@@ -17,6 +17,10 @@ def SDT_RISCVCheriBoolUnary : SDTypeProfile<1, 1, [
   SDTCisInt<0>, SDTCisVT<1, CLenVT>
 ]>;
 
+def SDT_RISCVCheriAddr : SDTypeProfile<1, 1, [
+  SDTCisVT<0, CLenVT>, SDTCisPtrTy<1>
+]>;
+
 def SDT_RISCVCheriBoolBinary : SDTypeProfile<1, 2, [
   SDTCisInt<0>, SDTCisVT<1, CLenVT>, SDTCisVT<2, CLenVT>
 ]>;
@@ -36,6 +40,12 @@ def riscv_cap_subset_test : SDNode<"RISCVISD::CAP_SUBSET_TEST",
                                    SDT_RISCVCheriBoolBinary>;
 def riscv_cap_equal_exact : SDNode<"RISCVISD::CAP_EQUAL_EXACT",
                                    SDT_RISCVCheriBoolBinary>;
+def riscv_cllc            : SDNode<"RISCVISD::CLLC", SDT_RISCVCheriAddr>;
+def riscv_clgc            : SDNode<"RISCVISD::CLGC", SDTLoad,
+                                   [SDNPHasChain, SDNPMayLoad, SDNPMemOperand]>;
+def riscv_cla_tls_ie      : SDNode<"RISCVISD::CLA_TLS_IE", SDTLoad,
+                                   [SDNPHasChain, SDNPMayLoad, SDNPMemOperand]>;
+def riscv_clc_tls_gd      : SDNode<"RISCVISD::CLC_TLS_GD", SDT_RISCVCheriAddr>;
 
 //===----------------------------------------------------------------------===//
 // Operand and SDNode transformation definitions.
@@ -1110,10 +1120,17 @@ let hasSideEffects = 0, mayLoad = 0, mayStore = 0, isCodeGenOnly = 0,
 def PseudoCLLC : Pseudo<(outs GPCR:$dst), (ins bare_symbol:$src), [],
                         "cllc", "$dst, $src">;
 
+def : Pat<(riscv_cllc tglobaladdr:$in), (PseudoCLLC tglobaladdr:$in)>;
+def : Pat<(riscv_cllc tblockaddress:$in), (PseudoCLLC tblockaddress:$in)>;
+def : Pat<(riscv_cllc tjumptable:$in), (PseudoCLLC tjumptable:$in)>;
+def : Pat<(riscv_cllc tconstpool:$in), (PseudoCLLC tconstpool:$in)>;
+
 let hasSideEffects = 0, mayLoad = 1, mayStore = 0, isCodeGenOnly = 0,
     isAsmParserOnly = 1, Size = 8 in
 def PseudoCLGC : Pseudo<(outs GPCR:$dst), (ins bare_symbol:$src), [],
                         "clgc", "$dst, $src">;
+
+def : Pat<(riscv_clgc tglobaladdr:$in), (PseudoCLGC tglobaladdr:$in)>;
 
 let hasSideEffects = 0, mayLoad = 1, mayStore = 0, isCodeGenOnly = 0,
     isAsmParserOnly = 1, Size = 8 in
@@ -1121,10 +1138,16 @@ def PseudoCLA_TLS_IE : Pseudo<(outs GPR:$dst, GPCR:$tmp),
                               (ins bare_symbol:$src), [],
                               "cla.tls.ie", "$dst, $src, $tmp">;
 
+def : Pat<(riscv_cla_tls_ie tglobaltlsaddr:$in),
+          (PseudoCLA_TLS_IE  tglobaltlsaddr:$in)>;
+
 let hasSideEffects = 0, mayLoad = 0, mayStore = 0, isCodeGenOnly = 0,
     isAsmParserOnly = 1, Size = 8 in
 def PseudoCLC_TLS_GD : Pseudo<(outs GPCR:$dst), (ins bare_symbol:$src), [],
                               "clc.tls.gd", "$dst, $src">;
+
+def : Pat<(riscv_clc_tls_gd tglobaltlsaddr:$in),
+          (PseudoCLC_TLS_GD  tglobaltlsaddr:$in)>;
 
 let hasSideEffects = 0, mayLoad = 0, mayStore = 0, isCodeGenOnly = 0 in
 def PseudoCIncOffsetTPRel : Pseudo<(outs GPCR:$rd),

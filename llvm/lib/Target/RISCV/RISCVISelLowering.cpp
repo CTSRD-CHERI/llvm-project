@@ -3763,20 +3763,20 @@ SDValue RISCVTargetLowering::getAddr(NodeTy *N, EVT Ty, SelectionDAG &DAG,
       // In general, we can only do this for local functions+block addresses.
       // However, $pcc also allows for read access so we can avoid a GOT access
       // for read-only constants (e.g. floating-point constant-pools).
-      return SDValue(DAG.getMachineNode(RISCV::PseudoCLLC, DL, Ty, Addr), 0);
+      return DAG.getNode(RISCVISD::CLLC, DL, Ty, Addr);
     }
     // Generate a sequence to load a capability from the captable. This
     // generates the pattern (PseudoCLGC sym), which expands to
     // (clc (auipcc %captab_pcrel_hi(sym)) %pcrel_lo(auipc)).
-    SDValue Load =
-        SDValue(DAG.getMachineNode(RISCV::PseudoCLGC, DL, Ty, Addr), 0);
     MachineFunction &MF = DAG.getMachineFunction();
     MachineMemOperand *MemOp = MF.getMachineMemOperand(
         MachinePointerInfo::getGOT(MF),
         MachineMemOperand::MOLoad | MachineMemOperand::MODereferenceable |
             MachineMemOperand::MOInvariant,
         LLT(Ty.getSimpleVT()), Align(Ty.getFixedSizeInBits() / 8));
-    DAG.setNodeMemRefs(cast<MachineSDNode>(Load.getNode()), {MemOp});
+    SDValue Load = DAG.getMemIntrinsicNode(
+        RISCVISD::CLGC, DL, DAG.getVTList(Ty, MVT::Other),
+        {DAG.getEntryNode(), Addr}, Ty, MemOp);
     return Load;
   }
 
@@ -3882,15 +3882,15 @@ SDValue RISCVTargetLowering::getStaticTLSAddr(GlobalAddressSDNode *N,
       // This generates the pattern (PseudoCLA_TLS_IE sym), which expands to
       // (cld (auipcc %tls_ie_captab_pcrel_hi(sym)) %pcrel_lo(auipc)).
       SDValue Addr = DAG.getTargetGlobalAddress(GV, DL, Ty, 0, 0);
-      SDValue Load = SDValue(
-          DAG.getMachineNode(RISCV::PseudoCLA_TLS_IE, DL, XLenVT, Ty, Addr), 0);
       MachineFunction &MF = DAG.getMachineFunction();
       MachineMemOperand *MemOp = MF.getMachineMemOperand(
           MachinePointerInfo::getGOT(MF),
           MachineMemOperand::MOLoad | MachineMemOperand::MODereferenceable |
               MachineMemOperand::MOInvariant,
           LLT(Ty.getSimpleVT()), Align(Ty.getFixedSizeInBits() / 8));
-      DAG.setNodeMemRefs(cast<MachineSDNode>(Load.getNode()), {MemOp});
+      SDValue Load = DAG.getMemIntrinsicNode(
+          RISCVISD::CLA_TLS_IE, DL, DAG.getVTList(XLenVT, MVT::Other),
+          {DAG.getEntryNode(), Addr}, Ty, MemOp);
 
       // Add the thread pointer.
       SDValue TPReg = DAG.getRegister(RISCV::C4, Ty);
@@ -3976,12 +3976,11 @@ SDValue RISCVTargetLowering::getDynamicTLSAddr(GlobalAddressSDNode *N,
   // For pure capability TLS, this generates the pattern (PseudoCLC_TLS_GD sym),
   // which expands to
   // (cincoffset (auipcc %tls_gd_captab_pcrel_hi(sym)) %pcrel_lo(auipc)).
+  unsigned Opcode = RISCVABI::isCheriPureCapABI(Subtarget.getTargetABI())
+                        ? RISCVISD::CLC_TLS_GD
+                        : RISCVISD::LA_TLS_GD;
   SDValue Addr = DAG.getTargetGlobalAddress(GV, DL, Ty, 0, 0);
-  SDValue Load =
-      RISCVABI::isCheriPureCapABI(Subtarget.getTargetABI())
-          ? SDValue(DAG.getMachineNode(RISCV::PseudoCLC_TLS_GD, DL, Ty, Addr),
-                    0)
-          : DAG.getNode(RISCVISD::LA_TLS_GD, DL, Ty, Addr);
+  SDValue Load = DAG.getNode(Opcode, DL, Ty, Addr);
 
   // Prepare argument list to generate call.
   ArgListTy Args;
@@ -11754,10 +11753,14 @@ const char *RISCVTargetLowering::getTargetNodeName(unsigned Opcode) const {
   NODE_NAME_CASE(ADD_LO)
   NODE_NAME_CASE(HI)
   NODE_NAME_CASE(LLA)
+  NODE_NAME_CASE(CLLC)
   NODE_NAME_CASE(ADD_TPREL)
   NODE_NAME_CASE(LA)
+  NODE_NAME_CASE(CLGC)
   NODE_NAME_CASE(LA_TLS_IE)
+  NODE_NAME_CASE(CLA_TLS_IE)
   NODE_NAME_CASE(LA_TLS_GD)
+  NODE_NAME_CASE(CLC_TLS_GD)
   NODE_NAME_CASE(MULHSU)
   NODE_NAME_CASE(SLLW)
   NODE_NAME_CASE(SRAW)
@@ -12529,7 +12532,7 @@ RISCVTargetLowering::getPICJumpTableRelocBase(SDValue Table,
   MVT CLenVT = Subtarget.typeForCapabilities();
   SDValue Addr = DAG.getTargetGlobalAddress(Function, DL, CLenVT, 0,
                                             RISCVII::MO_JUMP_TABLE_BASE);
-  return SDValue(DAG.getMachineNode(RISCV::PseudoCLLC, DL, CLenVT, Addr), 0);
+  return DAG.getNode(RISCVISD::CLLC, DL, CLenVT, Addr);
 }
 
 const MCExpr *

@@ -49,12 +49,15 @@ enum NodeType : unsigned {
 
   // Represents an AUIPC+ADDI pair. Selected to PseudoLLA.
   LLA,
+  // Represents an AUIPCC+CIncOffset pair. Selected to PseudoCLLC.
+  CLLC,
 
   // Selected as PseudoAddTPRel. Used to emit a TP-relative relocation.
   ADD_TPREL,
 
   // Load address.
   LA_TLS_GD,
+  CLC_TLS_GD,
 
   // Multiply high for signedxunsigned.
   MULHSU,
@@ -342,7 +345,9 @@ enum NodeType : unsigned {
 
   // Load address.
   LA = ISD::FIRST_TARGET_MEMORY_OPCODE,
+  CLGC,
   LA_TLS_IE,
+  CLA_TLS_IE,
 };
 } // namespace RISCVISD
 
