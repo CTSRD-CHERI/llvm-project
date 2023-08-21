@@ -9363,13 +9363,13 @@ SDValue RISCVTargetLowering::PerformDAGCombine(SDNode *N,
       KnownBits Known = DAG.computeKnownBits(SDValue(N, 0));
       if (Known.isConstant())
         return DAG.getConstant(Known.One, DL, N->getValueType(0));
-      break;
+      return SDValue();
     }
     case Intrinsic::cheri_representable_alignment_mask: {
       KnownBits Known = DAG.computeKnownBits(SDValue(N, 0));
       if (Known.isConstant())
         return DAG.getConstant(Known.One, DL, N->getValueType(0));
-      break;
+      return SDValue();
     }
     case Intrinsic::riscv_vcpop:
     case Intrinsic::riscv_vcpop_mask:
@@ -9659,15 +9659,6 @@ void RISCVTargetLowering::computeKnownBitsForTargetNode(const SDValue Op,
     default:
       // We can't do anything for most intrinsics.
       break;
-    case Intrinsic::riscv_vsetvli:
-    case Intrinsic::riscv_vsetvlimax:
-    case Intrinsic::riscv_vsetvli_opt:
-    case Intrinsic::riscv_vsetvlimax_opt:
-      // Assume that VL output is positive and would fit in an int32_t.
-      // TODO: VLEN might be capped at 16 bits in a future V spec update.
-      if (BitWidth >= 32)
-        Known.Zero.setBitsFrom(31);
-      break;
     case Intrinsic::cheri_round_representable_length: {
       KnownBits KnownLengthBits = DAG.computeKnownBits(Op.getOperand(1));
       uint64_t MinLength = KnownLengthBits.One.getZExtValue();
@@ -9734,7 +9725,17 @@ void RISCVTargetLowering::computeKnownBitsForTargetNode(const SDValue Op,
       Known.One |= RISCVCompressedCap::getAlignmentMask(MaxLength, IsRV64);
       break;
     }
+    case Intrinsic::riscv_vsetvli:
+    case Intrinsic::riscv_vsetvlimax:
+    case Intrinsic::riscv_vsetvli_opt:
+    case Intrinsic::riscv_vsetvlimax_opt:
+      // Assume that VL output is positive and would fit in an int32_t.
+      // TODO: VLEN might be capped at 16 bits in a future V spec update.
+      if (BitWidth >= 32)
+        Known.Zero.setBitsFrom(31);
+      break;
     }
+    break;
   }
   }
 }
