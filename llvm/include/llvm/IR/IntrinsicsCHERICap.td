@@ -58,39 +58,39 @@ def int_cheri_cap_type_get :
             [llvm_fatptr_ty],
             [IntrNoMem, IntrWillReturn]>;
 def int_cheri_cap_tag_get  :
-  ClangBuiltin"__builtin_cheri_tag_get">,
+  ClangBuiltin<"__builtin_cheri_tag_get">,
   Intrinsic<[llvm_i1_ty],
             [llvm_fatptr_ty],
             [IntrNoMem, IntrWillReturn]>;
 def int_cheri_cap_sealed_get  :
-  ClangBuiltin"__builtin_cheri_sealed_get">,
+  ClangBuiltin<"__builtin_cheri_sealed_get">,
   Intrinsic<[llvm_i1_ty],
             [llvm_fatptr_ty],
             [IntrNoMem, IntrWillReturn]>;
 
 def int_cheri_cap_tag_clear  :
-  ClangBuiltin"__builtin_cheri_tag_clear">,
+  ClangBuiltin<"__builtin_cheri_tag_clear">,
   Intrinsic<[llvm_fatptr_ty],
             [llvm_fatptr_ty],
             [IntrNoMem, IntrWillReturn]>;
 
 def int_cheri_cap_seal :
-  ClangBuiltin"__builtin_cheri_seal">,
+  ClangBuiltin<"__builtin_cheri_seal">,
   Intrinsic<[llvm_fatptr_ty],
             [llvm_fatptr_ty, llvm_fatptr_ty],
             [IntrNoMem, IntrWillReturn]>;
 def int_cheri_cap_conditional_seal :
-  ClangBuiltin"__builtin_cheri_conditional_seal">,
+  ClangBuiltin<"__builtin_cheri_conditional_seal">,
   Intrinsic<[llvm_fatptr_ty],
             [llvm_fatptr_ty, llvm_fatptr_ty],
             [IntrNoMem, IntrWillReturn]>;
 def int_cheri_cap_unseal  :
-  ClangBuiltin"__builtin_cheri_unseal">,
+  ClangBuiltin<"__builtin_cheri_unseal">,
   Intrinsic<[llvm_fatptr_ty],
             [llvm_fatptr_ty, llvm_fatptr_ty],
             [IntrNoMem, IntrWillReturn]>;
  def int_cheri_cap_seal_entry:
-   ClangBuiltin"__builtin_cheri_seal_entry">,
+   ClangBuiltin<"__builtin_cheri_seal_entry">,
    Intrinsic<[llvm_fatptr_ty], [llvm_fatptr_ty],
     [IntrNoMem, IntrWillReturn]>;
 
@@ -98,24 +98,24 @@ def int_cheri_cap_perms_check :
   Intrinsic<[], [llvm_fatptr_ty, llvm_anyint_ty],
             [IntrNoMem, IntrHasSideEffects, IntrWillReturn]>;
 def int_cheri_cap_type_check :
-  ClangBuiltin"__builtin_cheri_type_check">,
+  ClangBuiltin<"__builtin_cheri_type_check">,
   Intrinsic<[], [llvm_fatptr_ty, llvm_fatptr_ty],
             [IntrNoMem, IntrHasSideEffects, IntrWillReturn]>;
 def int_cheri_cap_subset_test:
-  ClangBuiltin"__builtin_cheri_subset_test">,
+  ClangBuiltin<"__builtin_cheri_subset_test">,
   Intrinsic<[llvm_i1_ty], [llvm_fatptr_ty, llvm_fatptr_ty], [IntrNoMem, IntrWillReturn]>;
 def int_cheri_cap_equal_exact:
-  ClangBuiltin"__builtin_cheri_equal_exact">,
+  ClangBuiltin<"__builtin_cheri_equal_exact">,
   Intrinsic<[llvm_i1_ty], [llvm_fatptr_ty, llvm_fatptr_ty], [IntrNoMem, IntrWillReturn]>;
 
 def int_cheri_stack_cap_get :
-  ClangBuiltin"__builtin_cheri_stack_get">,
+  ClangBuiltin<"__builtin_cheri_stack_get">,
   Intrinsic<[llvm_fatptr_ty], [], [IntrNoMem, IntrWillReturn]>;
 def int_cheri_ddc_get :
-  ClangBuiltin"__builtin_cheri_global_data_get">,
+  ClangBuiltin<"__builtin_cheri_global_data_get">,
   Intrinsic<[llvm_fatptr_ty], [], [IntrNoMem, IntrWillReturn]>;
 def int_cheri_pcc_get :
-  ClangBuiltin"__builtin_cheri_program_counter_get">,
+  ClangBuiltin<"__builtin_cheri_program_counter_get">,
   Intrinsic<[llvm_fatptr_ty], [], [IntrNoMem, IntrWillReturn]>;
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -147,10 +147,10 @@ def int_cheri_cap_from_pointer:
 // Building capabilities from untagged data
 ////////////////////////////////////////////////////////////////////////////////
 def int_cheri_cap_build:
-  ClangBuiltin"__builtin_cheri_cap_build">,
+  ClangBuiltin<"__builtin_cheri_cap_build">,
   Intrinsic<[llvm_fatptr_ty], [llvm_fatptr_ty, llvm_fatptr_ty], [IntrNoMem, IntrWillReturn]>;
 def int_cheri_cap_type_copy:
-  ClangBuiltin"__builtin_cheri_cap_type_copy">,
+  ClangBuiltin<"__builtin_cheri_cap_type_copy">,
   Intrinsic<[llvm_fatptr_ty], [llvm_fatptr_ty, llvm_fatptr_ty], [IntrNoMem, IntrWillReturn]>;
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -161,10 +161,10 @@ def int_cheri_cap_load_tags:
 
 /// Round length to compressed capability precision:
 def int_cheri_round_representable_length :
-   ClangBuiltin"__builtin_cheri_round_representable_length">,
+   ClangBuiltin<"__builtin_cheri_round_representable_length">,
    Intrinsic<[llvm_anyint_ty], [LLVMMatchType<0>], [IntrNoMem, IntrWillReturn]>;
 def int_cheri_representable_alignment_mask :
-   ClangBuiltin"__builtin_cheri_representable_alignment_mask">,
+   ClangBuiltin<"__builtin_cheri_representable_alignment_mask">,
    Intrinsic<[llvm_anyint_ty], [LLVMMatchType<0>], [IntrNoMem, IntrWillReturn]>;
 
 

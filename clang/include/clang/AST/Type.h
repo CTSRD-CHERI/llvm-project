@@ -3234,8 +3234,8 @@ public:
     ID.AddPointer(ET.getAsOpaquePtr());
     ID.AddInteger(SizeMod);
     ID.AddInteger(TypeQuals);
-    ID.AddBoolean(PIK.hasValue());
-    if (PIK.hasValue())
+    ID.AddBoolean(PIK.has_value());
+    if (PIK.has_value())
       ID.AddInteger(*PIK);
   }
 };

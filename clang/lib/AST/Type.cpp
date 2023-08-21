@@ -139,8 +139,8 @@ ArrayType::ArrayType(TypeClass tc, QualType et, QualType can,
       ElementType(et) {
   ArrayTypeBits.IndexTypeQuals = tq;
   ArrayTypeBits.SizeModifier = sm;
-  ArrayTypeBits.HasPIK = PIK.hasValue();
-  if (PIK.hasValue())
+  ArrayTypeBits.HasPIK = PIK.has_value();
+  if (PIK.has_value())
     ArrayTypeBits.PIK = *PIK;
 }
 
@@ -204,8 +204,8 @@ void ConstantArrayType::Profile(llvm::FoldingSetNodeID &ID,
   ID.AddBoolean(SizeExpr != nullptr);
   if (SizeExpr)
     SizeExpr->Profile(ID, Context, true);
-  ID.AddBoolean(PIK.hasValue());
-  if (PIK.hasValue())
+  ID.AddBoolean(PIK.has_value());
+  if (PIK.has_value())
     ID.AddInteger(*PIK);
 }
 
@@ -229,8 +229,8 @@ void DependentSizedArrayType::Profile(llvm::FoldingSetNodeID &ID,
   ID.AddInteger(SizeMod);
   ID.AddInteger(TypeQuals);
   E->Profile(ID, Context, true);
-  ID.AddBoolean(PIK.hasValue());
-  if (PIK.hasValue())
+  ID.AddBoolean(PIK.has_value());
+  if (PIK.has_value())
     ID.AddInteger(*PIK);
 }
 

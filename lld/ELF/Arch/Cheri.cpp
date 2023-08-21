@@ -675,32 +675,32 @@ uint32_t CheriCapTableSection::getIndex(const Symbol &sym,
   // will always be zero.
 #if defined(DEBUG_CAP_TABLE)
   message("captable index for " + toString(Sym) + " is " +
-          Twine(it->second.Index.getValue()) + " - " +
+          Twine(*it->second.Index) + " - " +
           Twine(Entries.FirstIndex) + ": " +
-          Twine(it->second.Index.getValue() - Entries.FirstIndex));
+          Twine(*it->second.Index - Entries.FirstIndex));
 #endif
-  return it->second.index.getValue() - entries.firstIndex;
+  return *it->second.index - entries.firstIndex;
 }
 
 uint32_t CheriCapTableSection::getDynTlsOffset(const Symbol &sym) const {
   assert(valuesAssigned && "getDynTlsOffset called before index assignment");
   auto it = dynTlsEntries.map.find(const_cast<Symbol *>(&sym));
   assert(it != dynTlsEntries.map.end());
-  return it->second.index.getValue() * config->wordsize;
+  return *it->second.index * config->wordsize;
 }
 
 uint32_t CheriCapTableSection::getTlsIndexOffset() const {
   assert(valuesAssigned && "getTlsIndexOffset called before index assignment");
   auto it = dynTlsEntries.map.find(nullptr);
   assert(it != dynTlsEntries.map.end());
-  return it->second.index.getValue() * config->wordsize;
+  return *it->second.index * config->wordsize;
 }
 
 uint32_t CheriCapTableSection::getTlsOffset(const Symbol &sym) const {
   assert(valuesAssigned && "getTlsOffset called before index assignment");
   auto it = tlsEntries.map.find(const_cast<Symbol *>(&sym));
   assert(it != tlsEntries.map.end());
-  return it->second.index.getValue() * config->wordsize;
+  return *it->second.index * config->wordsize;
 }
 
 template <class ELFT>
@@ -859,7 +859,7 @@ void CheriCapTableSection::assignValuesAndAddCapTableSymbols() {
     cti.index = tlsBaseIndex + assignedTlsIndexes;
     assignedTlsIndexes += 2;
     Symbol *s = it.first;
-    uint64_t offset = cti.index.getValue() * config->wordsize;
+    uint64_t offset = *cti.index * config->wordsize;
     if (s == nullptr) {
       if (!config->shared)
         this->relocations.push_back(
@@ -896,7 +896,7 @@ void CheriCapTableSection::assignValuesAndAddCapTableSymbols() {
     assert(!cti.needsSmallImm);
     cti.index = tlsBaseIndex + assignedTlsIndexes++;
     Symbol *s = it.first;
-    uint64_t offset = cti.index.getValue() * config->wordsize;
+    uint64_t offset = *cti.index * config->wordsize;
     // When building a shared library we still need a dynamic relocation
     // for the TP-relative offset as we don't know how much other data will
     // be allocated before us in the static TLS block.

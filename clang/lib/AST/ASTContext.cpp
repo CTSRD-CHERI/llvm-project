@@ -6931,7 +6931,7 @@ QualType ASTContext::getArrayDecayedType(
   llvm::Optional<PointerInterpretationKind> PIKFromType =
       PrettyArrayType->getPointerInterpretation();
 
-  assert((!PIKFromType.hasValue() || !PIKFromBase.hasValue()) &&
+  assert((!PIKFromType.has_value() || !PIKFromBase.has_value()) &&
          "Cannot have both a qualifier and an interpretation from a base");
 
   PointerInterpretationKind PIK =

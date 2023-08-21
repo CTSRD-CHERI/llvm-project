@@ -37,10 +37,10 @@ void MCATestBase::SetUp() {
   ASSERT_TRUE(STI);
   ASSERT_TRUE(STI->isCPUStringValid(CPUName));
 
-  MRI.reset(TheTarget->createMCRegInfo(TripleName));
+  auto MCOptions = getMCTargetOptions();
+  MRI.reset(TheTarget->createMCRegInfo(TripleName, MCOptions));
   ASSERT_TRUE(MRI);
 
-  auto MCOptions = getMCTargetOptions();
   MAI.reset(TheTarget->createMCAsmInfo(*MRI, TripleName, MCOptions));
   ASSERT_TRUE(MAI);
 
