@@ -220,11 +220,8 @@ static bool hasMemOffset(SDNode *N, unsigned &BaseOpIdx,
   return false;
 }
 
-static SDNode *selectImm(SelectionDAG *CurDAG, const SDLoc &DL, const MVT VT,
-                         int64_t Imm, const RISCVSubtarget &Subtarget) {
-  RISCVMatInt::InstSeq Seq =
-      RISCVMatInt::generateInstSeq(Imm, Subtarget.getFeatureBits());
-
+static SDNode *selectImmSeq(SelectionDAG *CurDAG, const SDLoc &DL, const MVT VT,
+                            RISCVMatInt::InstSeq &Seq) {
   SDNode *Result = nullptr;
   SDValue SrcReg = CurDAG->getRegister(RISCV::X0, VT);
   for (RISCVMatInt::Inst &Inst : Seq) {
@@ -250,6 +247,14 @@ static SDNode *selectImm(SelectionDAG *CurDAG, const SDLoc &DL, const MVT VT,
   }
 
   return Result;
+}
+
+static SDNode *selectImm(SelectionDAG *CurDAG, const SDLoc &DL, const MVT VT,
+                         int64_t Imm, const RISCVSubtarget &Subtarget) {
+  RISCVMatInt::InstSeq Seq =
+      RISCVMatInt::generateInstSeq(Imm, Subtarget.getFeatureBits());
+
+  return selectImmSeq(CurDAG, DL, VT, Seq);
 }
 
 static SDValue createTuple(SelectionDAG &CurDAG, ArrayRef<SDValue> Regs,
@@ -701,6 +706,24 @@ void RISCVDAGToDAGISel::Select(SDNode *Node) {
     if (isInt<12>(Offset / 2) && isInt<12>(Offset - Offset / 2))
       break;
 
+    RISCVMatInt::InstSeq Seq =
+        RISCVMatInt::generateInstSeq(Offset, Subtarget->getFeatureBits());
+
+    Offset -= Lo12;
+    // Restore sign bits for RV32.
+    if (!Subtarget->is64Bit())
+      Offset = SignExtend64<32>(Offset);
+
+    // We can fold if the last operation is an ADDI or its an ADDIW that could
+    // be treated as an ADDI.
+    if (Seq.back().Opc != RISCV::ADDI &&
+        !(Seq.back().Opc == RISCV::ADDIW && isInt<32>(Offset)))
+      break;
+    assert(Seq.back().Imm == Lo12 && "Expected immediate to match Lo12");
+    // Drop the last operation.
+    Seq.pop_back();
+    assert(!Seq.empty() && "Expected more instructions in sequence");
+
     bool AllPointerUses = true;
     for (auto UI = Node->use_begin(), UE = Node->use_end(); UI != UE; ++UI) {
       SDNode *User = *UI;
@@ -729,13 +752,8 @@ void RISCVDAGToDAGISel::Select(SDNode *Node) {
     if (!AllPointerUses)
       break;
 
-    Offset -= Lo12;
-    // Restore sign bits for RV32.
-    if (!Subtarget->is64Bit())
-      Offset = SignExtend64<32>(Offset);
-
     // Emit (ADDI (ADD X, Hi), Lo)
-    SDNode *Imm = selectImm(CurDAG, DL, VT, Offset, *Subtarget);
+    SDNode *Imm = selectImmSeq(CurDAG, DL, VT, Seq);
     SDNode *ADD = CurDAG->getMachineNode(
         VT.isFatPointer() ? RISCV::CIncOffset : RISCV::ADD, DL, VT,
         Node->getOperand(0), SDValue(Imm, 0));
