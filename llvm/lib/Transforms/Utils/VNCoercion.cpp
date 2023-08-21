@@ -454,8 +454,8 @@ static Value *getStoreValueForLoadHelper(Value *SrcVal, unsigned Offset,
 
   if ((LoadSize == StoreSize) && Offset == 0 &&
        SrcVal->getType()->isPointerTy() && LoadTy->isPointerTy())
-    return coerceAvailableValueToLoadTypeHelper(
-        Helper.CreateBitCast(SrcVal, LoadTy), LoadTy, Helper, DL);
+    return coerceAvailableValueToLoadType(
+        Builder.CreateBitCast(SrcVal, LoadTy), LoadTy, Builder, DL);
 
   // Compute which bits of the stored value are being used by the load.  Convert
   // to an integer type to start with.
