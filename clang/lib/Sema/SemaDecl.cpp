@@ -15372,11 +15372,10 @@ Sema::CheckForFunctionRedefinition(FunctionDecl *FD,
   FD->setInvalidDecl();
 }
 
-static void RebuildLambdaScopeInfo(CXXMethodDecl *CallOperator,
-                                   Sema &S) {
-  CXXRecordDecl *const LambdaClass = CallOperator->getParent();
+LambdaScopeInfo *Sema::RebuildLambdaScopeInfo(CXXMethodDecl *CallOperator) {
+  CXXRecordDecl *LambdaClass = CallOperator->getParent();
 
-  LambdaScopeInfo *LSI = S.PushLambdaScope();
+  LambdaScopeInfo *LSI = PushLambdaScope();
   LSI->CallOperator = CallOperator;
   LSI->Lambda = LambdaClass;
   LSI->ReturnType = CallOperator->getReturnType();
@@ -15400,7 +15399,7 @@ static void RebuildLambdaScopeInfo(CXXMethodDecl *CallOperator,
     if (C.capturesVariable()) {
       ValueDecl *VD = C.getCapturedVar();
       if (VD->isInitCapture())
-        S.CurrentInstantiationScope->InstantiatedLocal(VD, VD);
+        CurrentInstantiationScope->InstantiatedLocal(VD, VD);
       const bool ByRef = C.getCaptureKind() == LCK_ByRef;
       LSI->addCapture(VD, /*IsBlock*/false, ByRef,
           /*RefersToEnclosingVariableOrCapture*/true, C.getLocation(),
@@ -15417,6 +15416,7 @@ static void RebuildLambdaScopeInfo(CXXMethodDecl *CallOperator,
     }
     ++I;
   }
+  return LSI;
 }
 
 Decl *Sema::ActOnStartOfFunctionDef(Scope *FnBodyScope, Decl *D,
@@ -15520,7 +15520,7 @@ Decl *Sema::ActOnStartOfFunctionDef(Scope *FnBodyScope, Decl *D,
     assert(inTemplateInstantiation() &&
            "There should be an active template instantiation on the stack "
            "when instantiating a generic lambda!");
-    RebuildLambdaScopeInfo(cast<CXXMethodDecl>(D), *this);
+    RebuildLambdaScopeInfo(cast<CXXMethodDecl>(D));
   } else {
     // Enter a new function scope
     PushFunctionScope();
