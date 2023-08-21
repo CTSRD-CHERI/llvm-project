@@ -1940,7 +1940,8 @@ bool RISCVDAGToDAGISel::SelectRegImmCommon(SDValue Addr, SDValue &Base,
   }
 
   // Handle ADD with large immediates.
-  if (Addr.getOpcode() == ISD::ADD && isa<ConstantSDNode>(Addr.getOperand(1))) {
+  if ((Addr.getOpcode() == ISD::ADD || Addr.getOpcode() == ISD::PTRADD) &&
+      isa<ConstantSDNode>(Addr.getOperand(1))) {
     int64_t CVal = cast<ConstantSDNode>(Addr.getOperand(1))->getSExtValue();
     assert(!isInt<12>(CVal) && "simm12 not already handled?");
 
@@ -1948,10 +1949,12 @@ bool RISCVDAGToDAGISel::SelectRegImmCommon(SDValue Addr, SDValue &Base,
       // We can use an ADDI for part of the offset and fold the rest into the
       // load/store. This mirrors the AddiPair PatFrag in RISCVInstrInfo.td.
       int64_t Adj = CVal < 0 ? -2048 : 2047;
-      Base = SDValue(
-          CurDAG->getMachineNode(RISCV::ADDI, DL, VT, Addr.getOperand(0),
-                                 CurDAG->getTargetConstant(Adj, DL, VT)),
-          0);
+      Base =
+          SDValue(CurDAG->getMachineNode(
+                      PtrVT.isFatPointer() ? RISCV::CIncOffsetImm : RISCV::ADDI,
+                      DL, PtrVT, Addr.getOperand(0),
+                      CurDAG->getTargetConstant(Adj, DL, XLenVT)),
+                  0);
       Offset = CurDAG->getTargetConstant(CVal - Adj, DL, XLenVT);
       return true;
     }
