@@ -4392,7 +4392,8 @@ static SDValue lowerBitreverseShuffle(ShuffleVectorSDNode *SVN,
 
   assert(VT.getVectorElementType() == MVT::i1);
 
-  if (!ShuffleVectorInst::isReverseMask(SVN->getMask()) ||
+  if (!ShuffleVectorInst::isReverseMask(SVN->getMask(),
+                                        SVN->getMask().size()) ||
       !SVN->getOperand(1).isUndef())
     return SDValue();
 
