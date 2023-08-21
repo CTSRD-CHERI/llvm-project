@@ -1925,14 +1925,16 @@ bool RISCVDAGToDAGISel::SelectRegImmCommon(SDValue Addr, SDValue &Base,
   if (SelectFrameIndexCommon(Addr, Base, Offset, PtrVT))
     return true;
 
+  SDLoc DL(Addr);
+  MVT XLenVT = Subtarget->getXLenVT();
+
   if (CurDAG->isBaseWithConstantOffset(Addr)) {
     int64_t CVal = cast<ConstantSDNode>(Addr.getOperand(1))->getSExtValue();
     if (isInt<12>(CVal)) {
       Base = Addr.getOperand(0);
       if (auto *FIN = dyn_cast<FrameIndexSDNode>(Base))
         Base = CurDAG->getTargetFrameIndex(FIN->getIndex(), PtrVT);
-      Offset = CurDAG->getTargetConstant(CVal, SDLoc(Addr),
-                                         Subtarget->getXLenVT());
+      Offset = CurDAG->getTargetConstant(CVal, DL, XLenVT);
       return true;
     }
   }
@@ -1946,19 +1948,17 @@ bool RISCVDAGToDAGISel::SelectRegImmCommon(SDValue Addr, SDValue &Base,
       // We can use an ADDI for part of the offset and fold the rest into the
       // load/store. This mirrors the AddiPair PatFrag in RISCVInstrInfo.td.
       int64_t Adj = CVal < 0 ? -2048 : 2047;
-      SDLoc DL(Addr);
-      MVT VT = Addr.getSimpleValueType();
       Base = SDValue(
           CurDAG->getMachineNode(RISCV::ADDI, DL, VT, Addr.getOperand(0),
                                  CurDAG->getTargetConstant(Adj, DL, VT)),
           0);
-      Offset = CurDAG->getTargetConstant(CVal - Adj, DL, VT);
+      Offset = CurDAG->getTargetConstant(CVal - Adj, DL, XLenVT);
       return true;
     }
   }
 
   Base = Addr;
-  Offset = CurDAG->getTargetConstant(0, SDLoc(Addr), Subtarget->getXLenVT());
+  Offset = CurDAG->getTargetConstant(0, DL, XLenVT);
   return true;
 }
 
