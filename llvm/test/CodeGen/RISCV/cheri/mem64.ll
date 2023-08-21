@@ -583,10 +583,8 @@ define i64 @lw_near_local(i64 addrspace(200)* %a)  {
 ;
 ; CHECK-L64PC128-LABEL: lw_near_local:
 ; CHECK-L64PC128:       # %bb.0:
-; CHECK-L64PC128-NEXT:    lui a1, 1
-; CHECK-L64PC128-NEXT:    addiw a1, a1, -2040
-; CHECK-L64PC128-NEXT:    cincoffset ca0, ca0, a1
-; CHECK-L64PC128-NEXT:    cld a0, 0(ca0)
+; CHECK-L64PC128-NEXT:    cincoffset ca0, ca0, 2047
+; CHECK-L64PC128-NEXT:    cld a0, 9(ca0)
 ; CHECK-L64PC128-NEXT:    cret
   %1 = getelementptr inbounds i64, i64 addrspace(200)* %a, i64 257
   %2 = load volatile i64, i64 addrspace(200)* %1
@@ -604,10 +602,8 @@ define void @st_near_local(i64 addrspace(200)* %a, i64 %b)  {
 ;
 ; CHECK-L64PC128-LABEL: st_near_local:
 ; CHECK-L64PC128:       # %bb.0:
-; CHECK-L64PC128-NEXT:    lui a2, 1
-; CHECK-L64PC128-NEXT:    addiw a2, a2, -2040
-; CHECK-L64PC128-NEXT:    cincoffset ca0, ca0, a2
-; CHECK-L64PC128-NEXT:    csd a1, 0(ca0)
+; CHECK-L64PC128-NEXT:    cincoffset ca0, ca0, 2047
+; CHECK-L64PC128-NEXT:    csd a1, 9(ca0)
 ; CHECK-L64PC128-NEXT:    cret
   %1 = getelementptr inbounds i64, i64 addrspace(200)* %a, i64 257
   store i64 %b, i64 addrspace(200)* %1
@@ -626,11 +622,9 @@ define i64 @lw_sw_near_local(i64 addrspace(200)* %a, i64 %b)  {
 ;
 ; CHECK-L64PC128-LABEL: lw_sw_near_local:
 ; CHECK-L64PC128:       # %bb.0:
-; CHECK-L64PC128-NEXT:    lui a2, 1
-; CHECK-L64PC128-NEXT:    addiw a2, a2, -2040
-; CHECK-L64PC128-NEXT:    cincoffset ca2, ca0, a2
-; CHECK-L64PC128-NEXT:    cld a0, 0(ca2)
-; CHECK-L64PC128-NEXT:    csd a1, 0(ca2)
+; CHECK-L64PC128-NEXT:    cincoffset ca2, ca0, 2047
+; CHECK-L64PC128-NEXT:    cld a0, 9(ca2)
+; CHECK-L64PC128-NEXT:    csd a1, 9(ca2)
 ; CHECK-L64PC128-NEXT:    cret
   %1 = getelementptr inbounds i64, i64 addrspace(200)* %a, i64 257
   %2 = load volatile i64, i64 addrspace(200)* %1
@@ -650,8 +644,9 @@ define i64 @lw_far_local(i64 addrspace(200)* %a)  {
 ; CHECK-L64PC128-LABEL: lw_far_local:
 ; CHECK-L64PC128:       # %bb.0:
 ; CHECK-L64PC128-NEXT:    lui a1, 8
+; CHECK-L64PC128-NEXT:    addiw a1, a1, -8
 ; CHECK-L64PC128-NEXT:    cincoffset ca0, ca0, a1
-; CHECK-L64PC128-NEXT:    cld a0, -8(ca0)
+; CHECK-L64PC128-NEXT:    cld a0, 0(ca0)
 ; CHECK-L64PC128-NEXT:    cret
   %1 = getelementptr inbounds i64, i64 addrspace(200)* %a, i64 4095
   %2 = load volatile i64, i64 addrspace(200)* %1
@@ -670,8 +665,9 @@ define void @st_far_local(i64 addrspace(200)* %a, i64 %b)  {
 ; CHECK-L64PC128-LABEL: st_far_local:
 ; CHECK-L64PC128:       # %bb.0:
 ; CHECK-L64PC128-NEXT:    lui a2, 8
+; CHECK-L64PC128-NEXT:    addiw a2, a2, -8
 ; CHECK-L64PC128-NEXT:    cincoffset ca0, ca0, a2
-; CHECK-L64PC128-NEXT:    csd a1, -8(ca0)
+; CHECK-L64PC128-NEXT:    csd a1, 0(ca0)
 ; CHECK-L64PC128-NEXT:    cret
   %1 = getelementptr inbounds i64, i64 addrspace(200)* %a, i64 4095
   store i64 %b, i64 addrspace(200)* %1
@@ -691,9 +687,10 @@ define i64 @lw_sw_far_local(i64 addrspace(200)* %a, i64 %b)  {
 ; CHECK-L64PC128-LABEL: lw_sw_far_local:
 ; CHECK-L64PC128:       # %bb.0:
 ; CHECK-L64PC128-NEXT:    lui a2, 8
+; CHECK-L64PC128-NEXT:    addiw a2, a2, -8
 ; CHECK-L64PC128-NEXT:    cincoffset ca2, ca0, a2
-; CHECK-L64PC128-NEXT:    cld a0, -8(ca2)
-; CHECK-L64PC128-NEXT:    csd a1, -8(ca2)
+; CHECK-L64PC128-NEXT:    cld a0, 0(ca2)
+; CHECK-L64PC128-NEXT:    csd a1, 0(ca2)
 ; CHECK-L64PC128-NEXT:    cret
   %1 = getelementptr inbounds i64, i64 addrspace(200)* %a, i64 4095
   %2 = load volatile i64, i64 addrspace(200)* %1
@@ -750,6 +747,15 @@ define void @st_really_far_local(i64 addrspace(200)* %a, i64 %b)  {
 ; Make sure we don't fold the addiw into the load/store offset. The sign extend
 ; of the addiw is required.
 define i64 @lw_sw_really_far_local(i64 addrspace(200)* %a, i64 %b)  {
+; CHECK-LP64-LABEL: lw_sw_really_far_local:
+; CHECK-LP64:       # %bb.0:
+; CHECK-LP64-NEXT:    lui a2, 524288
+; CHECK-LP64-NEXT:    addiw a2, a2, -2048
+; CHECK-LP64-NEXT:    cincoffset ca2, ca0, a2
+; CHECK-LP64-NEXT:    ld.cap a0, (ca2)
+; CHECK-LP64-NEXT:    sd.cap a1, (ca2)
+; CHECK-LP64-NEXT:    ret
+;
 ; CHECK-L64PC128-LABEL: lw_sw_really_far_local:
 ; CHECK-L64PC128:       # %bb.0:
 ; CHECK-L64PC128-NEXT:    lui a2, 524288
