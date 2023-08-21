@@ -1826,14 +1826,25 @@ bool RISCVDAGToDAGISel::SelectInlineAsmMemoryOperand(
   return true;
 }
 
-// Select a frame index and an optional immediate offset from an ADD or OR.
-bool RISCVDAGToDAGISel::SelectFrameRegImmCommon(SDValue Addr, SDValue &Base,
-                                              SDValue &Offset, EVT PtrVT) {
+bool RISCVDAGToDAGISel::SelectFrameIndexCommon(SDValue Addr, SDValue &Base,
+                                               SDValue &Offset, EVT PtrVT) {
+  assert(Addr.getValueType().isFatPointer() == PtrVT.isFatPointer());
   if (auto *FIN = dyn_cast<FrameIndexSDNode>(Addr)) {
     Base = CurDAG->getTargetFrameIndex(FIN->getIndex(), PtrVT);
     Offset = CurDAG->getTargetConstant(0, SDLoc(Addr), Subtarget->getXLenVT());
     return true;
   }
+
+  return false;
+}
+
+bool RISCVDAGToDAGISel::SelectFrameRegImmCommon(SDValue Addr, SDValue &Base,
+                                                SDValue &Offset, EVT PtrVT) {
+  if (Addr.getValueType().isFatPointer() != PtrVT.isFatPointer())
+    return false;
+
+  if (SelectFrameIndexCommon(Addr, Base, Offset, PtrVT))
+    return true;
 
   if (!CurDAG->isBaseWithConstantOffset(Addr))
     return false;
@@ -1841,8 +1852,7 @@ bool RISCVDAGToDAGISel::SelectFrameRegImmCommon(SDValue Addr, SDValue &Base,
   if (auto *FIN = dyn_cast<FrameIndexSDNode>(Addr.getOperand(0))) {
     auto *CN = cast<ConstantSDNode>(Addr.getOperand(1));
     if (isInt<12>(CN->getSExtValue())) {
-      Base = CurDAG->getTargetFrameIndex(FIN->getIndex(),
-                                         PtrVT);
+      Base = CurDAG->getTargetFrameIndex(FIN->getIndex(), PtrVT);
       Offset = CurDAG->getTargetConstant(CN->getSExtValue(), SDLoc(Addr),
                                          Subtarget->getXLenVT());
       return true;
@@ -1862,41 +1872,42 @@ bool RISCVDAGToDAGISel::SelectCapFrameAddrRegImm(SDValue Cap, SDValue &Base,
                                  Subtarget->typeForCapabilities());
 }
 
-bool RISCVDAGToDAGISel::SelectBase(SDValue Addr, SDValue &Base, EVT PtrVT) {
+bool RISCVDAGToDAGISel::SelectBaseAddr(SDValue Addr, SDValue &Base) {
   // If this is FrameIndex, select it directly. Otherwise just let it get
   // selected to a register independently.
-  if (PtrVT.isFatPointer()) {
-    if (!Addr.getValueType().isFatPointer())
-      return false;
-  } else {
-    if (Addr.getValueType().isFatPointer())
-      return false;
-    assert(Addr.getValueType().isInteger() || Addr.getValueType() == MVT::iPTR);
-  }
+  if (Addr.getValueType().isFatPointer())
+    return false;
+  assert(Addr.getValueType().isInteger() || Addr.getValueType() == MVT::iPTR);
+
   if (auto *FIN = dyn_cast<FrameIndexSDNode>(Addr))
-    Base = CurDAG->getTargetFrameIndex(FIN->getIndex(), PtrVT);
+    Base = CurDAG->getTargetFrameIndex(FIN->getIndex(), Subtarget->getXLenVT());
   else
     Base = Addr;
   return true;
 }
 
-bool RISCVDAGToDAGISel::SelectBaseAddr(SDValue Addr, SDValue &Base) {
-  return SelectBase(Addr, Base, Subtarget->getXLenVT());
-}
-
 bool RISCVDAGToDAGISel::SelectRegImmCommon(SDValue Addr, SDValue &Base,
                                            SDValue &Offset, EVT PtrVT) {
+  if (Addr.getValueType().isFatPointer() != PtrVT.isFatPointer())
+    return false;
+  if (SelectFrameIndexCommon(Addr, Base, Offset, PtrVT))
+    return true;
+
   if (CurDAG->isBaseWithConstantOffset(Addr)) {
     auto *CN = cast<ConstantSDNode>(Addr.getOperand(1));
     if (isInt<12>(CN->getSExtValue())) {
+      Base = Addr.getOperand(0);
+      if (auto *FIN = dyn_cast<FrameIndexSDNode>(Base))
+        Base = CurDAG->getTargetFrameIndex(FIN->getIndex(), PtrVT);
       Offset = CurDAG->getTargetConstant(CN->getSExtValue(), SDLoc(Addr),
                                          Subtarget->getXLenVT());
-      return SelectBase(Addr.getOperand(0), Base, PtrVT);
+      return true;
     }
   }
 
+  Base = Addr;
   Offset = CurDAG->getTargetConstant(0, SDLoc(Addr), Subtarget->getXLenVT());
-  return SelectBase(Addr, Base, PtrVT);
+  return true;
 }
 
 bool RISCVDAGToDAGISel::SelectAddrRegImm(SDValue Cap, SDValue &Base,

@@ -5160,7 +5160,7 @@ define void @umin_v16i16(<16 x i16>* %x, <16 x i16>* %y) {
 ; LMULMAX1-RV32-NEXT:    addi a3, a1, 16
 ; LMULMAX1-RV32-NEXT:    vle16.v v10, (a3)
 ; LMULMAX1-RV32-NEXT:    vle16.v v11, (a1)
-; LMULMAX1-RV32-NEXT:    vminu.vv v9, v9, v10
+; LMULMAX1-RV32-NEXT:    vminu.vv v9, v9, v10zZZZ
 ; LMULMAX1-RV32-NEXT:    vminu.vv v8, v8, v11
 ; LMULMAX1-RV32-NEXT:    vse16.v v8, (a0)
 ; LMULMAX1-RV32-NEXT:    vse16.v v9, (a2)

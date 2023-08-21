@@ -45,6 +45,8 @@ public:
   bool SelectInlineAsmMemoryOperand(const SDValue &Op, unsigned ConstraintID,
                                     std::vector<SDValue> &OutOps) override;
 
+  bool SelectFrameIndexCommon(SDValue Addr, SDValue &Base, SDValue &Offset,
+                              EVT PtrVT);
   bool SelectFrameRegImmCommon(SDValue Addr, SDValue &Base, SDValue &Offset,
                                EVT PtrVT);
   bool SelectFrameAddrRegImm(SDValue Addr, SDValue &Base, SDValue &Offset);
