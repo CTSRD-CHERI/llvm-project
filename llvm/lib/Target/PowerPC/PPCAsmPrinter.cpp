@@ -2459,7 +2459,8 @@ void PPCAIXAsmPrinter::emitGlobalVariableHelper(const GlobalVariable *GV) {
 
   // No alias to emit.
   if (!GOAliasMap[GV].size()) {
-    emitGlobalConstant(GV->getParent()->getDataLayout(), GV->getInitializer());
+    emitGlobalConstant(GV->getParent()->getDataLayout(), GV->getInitializer(),
+                       0);
     return;
   }
 
