@@ -46,8 +46,8 @@ static inline bool isVector(MVT VT) {
 static inline bool isScalar(MVT VT) {
   return !VT.isVector();
 }
-static inline bool isScalarInteger(MVT VT) {
-  return VT.isScalarInteger();
+static inline bool isScalarIntegerOrFatPtr(MVT VT) {
+  return VT.isScalarInteger() || VT.isFatPointer();
 }
 
 template <typename Predicate>
@@ -315,7 +315,7 @@ bool TypeSetByHwMode::intersect(SetType &Out, const SetType &In) {
       // This means that Out \subset In, so no change to Out.
       return false;
     }
-    unsigned NumI = llvm::count_if(OutOnly, isScalarInteger);
+    unsigned NumI = llvm::count_if(OutOnly, isScalarIntegerOrFatPtr);
     if (NumI == 1 && OutOnly.size() == 1) {
       // There is only one element in Out', and it happens to be a scalar
       // integer that should be kept as a match for iPTR in In.
@@ -324,7 +324,7 @@ bool TypeSetByHwMode::intersect(SetType &Out, const SetType &In) {
     berase_if(Out, CompIn);
     if (NumI == 1) {
       // Replace the iPTR with the leftover scalar integer.
-      Out.insert(*llvm::find_if(OutOnly, isScalarInteger));
+      Out.insert(*llvm::find_if(OutOnly, isScalarIntegerOrFatPtr));
     } else if (NumI > 1) {
       Out.insert(MVT::iPTR);
     }
@@ -335,14 +335,14 @@ bool TypeSetByHwMode::intersect(SetType &Out, const SetType &In) {
   SetType InOnly = subtract(In, Out);
   unsigned SizeOut = Out.size();
   berase_if(Out, CompIn);   // This will remove at least the iPTR.
-  unsigned NumI = llvm::count_if(InOnly, isScalarInteger);
+  unsigned NumI = llvm::count_if(InOnly, isScalarIntegerOrFatPtr);
   if (NumI == 0) {
     // iPTR deleted from Out.
     return true;
   }
   if (NumI == 1) {
     // Replace the iPTR with the leftover scalar integer.
-    Out.insert(*llvm::find_if(InOnly, isScalarInteger));
+    Out.insert(*llvm::find_if(InOnly, isScalarIntegerOrFatPtr));
     return true;
   }
 
