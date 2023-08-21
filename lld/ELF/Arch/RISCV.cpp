@@ -605,7 +605,7 @@ static void initSymbolAnchors() {
         if (sec->flags & SHF_EXECINSTR && sec->relaxAux) {
           // If sec is discarded, relaxAux will be nullptr.
           sec->relaxAux->anchors.push_back({d->value, d, false});
-          sec->relaxAux->anchors.push_back({d->value + d->size, d, true});
+          sec->relaxAux->anchors.push_back({d->value + d->getSize(), d, true});
         }
     }
   // Sort anchors by offset so that we can find the closest relocation
@@ -702,7 +702,7 @@ static bool relax(InputSection &sec) {
     if (remove) {
       for (; sa.size() && sa[0].offset <= r.offset; sa = sa.slice(1)) {
         if (sa[0].end)
-          sa[0].d->size = sa[0].offset - delta - sa[0].d->value;
+          sa[0].d->setSize(sa[0].offset - delta - sa[0].d->value);
         else
           sa[0].d->value -= delta;
       }
@@ -716,7 +716,7 @@ static bool relax(InputSection &sec) {
 
   for (const SymbolAnchor &a : sa) {
     if (a.end)
-      a.d->size = a.offset - delta - a.d->value;
+      a.d->setSize(a.offset - delta - a.d->value);
     else
       a.d->value -= delta;
   }

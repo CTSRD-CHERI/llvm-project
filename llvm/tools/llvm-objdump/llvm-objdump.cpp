@@ -1647,7 +1647,7 @@ static void disassembleObject(const Target *TheTarget, const ObjectFile &Obj,
             // In .o files we can just use -r to get useful results
             if (MIA && CheriCapTableAddress &&
                 MIA->isCapTableLoad(Inst, CapTableOffset) &&
-                !Obj->isRelocatableObject()) {
+                !Obj.isRelocatableObject()) {
 
               uint64_t Target = *CheriCapTableAddress + CapTableOffset;
               // TODO: share this code:
@@ -1660,7 +1660,7 @@ static void disassembleObject(const Target *TheTarget, const ObjectFile &Obj,
               //
               // N.B. We don't walk the relocations in the relocatable case yet.
               auto *TargetSectionSymbols = &Symbols;
-              if (!Obj->isRelocatableObject()) {
+              if (!Obj.isRelocatableObject()) {
                 auto SectionAddress = std::upper_bound(
                     SectionAddresses.begin(), SectionAddresses.end(), Target,
                     [](uint64_t LHS,
