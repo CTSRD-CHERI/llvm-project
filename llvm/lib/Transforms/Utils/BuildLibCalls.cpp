@@ -1556,8 +1556,9 @@ Value *llvm::emitMemRChr(Value *Ptr, Value *Val, Value *Len, IRBuilderBase &B,
                         const DataLayout &DL, const TargetLibraryInfo *TLI) {
   LLVMContext &Context = B.GetInsertBlock()->getContext();
   return emitLibCall(
-      LibFunc_memrchr, B.getInt8PtrTy(),
-      {B.getInt8PtrTy(), B.getInt32Ty(), DL.getIntPtrType(Context)},
+      LibFunc_memrchr, getInt8PtrTy(Ptr),
+      {getInt8PtrTy(Ptr), B.getInt32Ty(),
+       DL.getIntPtrType(Context, Ptr->getType()->getPointerAddressSpace())},
       {castToCStr(Ptr, B), Val, Len}, B, TLI);
 }
 

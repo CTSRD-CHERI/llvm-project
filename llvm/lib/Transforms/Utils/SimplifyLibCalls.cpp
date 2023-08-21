@@ -369,7 +369,7 @@ Value *LibCallSimplifier::optimizeStrRChr(CallInst *CI, IRBuilderBase &B) {
   // Try to expand strrchr to the memrchr nonstandard extension if it's
   // available, or simply fail otherwise.
   uint64_t NBytes = Str.size() + 1;   // Include the terminating nul.
-  Type *IntPtrType = DL.getIntPtrType(CI->getContext());
+  Type *IntPtrType = DL.getIntPtrType(SrcStr->getType());
   Value *Size = ConstantInt::get(IntPtrType, NBytes);
   return copyFlags(*CI, emitMemRChr(SrcStr, CharVal, Size, B, DL, TLI));
 }
