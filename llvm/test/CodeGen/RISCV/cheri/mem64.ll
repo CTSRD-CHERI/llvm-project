@@ -572,6 +572,72 @@ define void @cap_sc(i8 addrspace(200) *addrspace(200) *%cap, i8 addrspace(200) *
   ret void
 }
 
+define i64 @lw_near_local(i64 addrspace(200)* %a)  {
+; CHECK-LP64-LABEL: lw_near_local:
+; CHECK-LP64:       # %bb.0:
+; CHECK-LP64-NEXT:    lui a1, 1
+; CHECK-LP64-NEXT:    addiw a1, a1, -2040
+; CHECK-LP64-NEXT:    cincoffset ca0, ca0, a1
+; CHECK-LP64-NEXT:    ld.cap a0, (ca0)
+; CHECK-LP64-NEXT:    ret
+;
+; CHECK-L64PC128-LABEL: lw_near_local:
+; CHECK-L64PC128:       # %bb.0:
+; CHECK-L64PC128-NEXT:    lui a1, 1
+; CHECK-L64PC128-NEXT:    addiw a1, a1, -2040
+; CHECK-L64PC128-NEXT:    cincoffset ca0, ca0, a1
+; CHECK-L64PC128-NEXT:    cld a0, 0(ca0)
+; CHECK-L64PC128-NEXT:    cret
+  %1 = getelementptr inbounds i64, i64 addrspace(200)* %a, i64 257
+  %2 = load volatile i64, i64 addrspace(200)* %1
+  ret i64 %2
+}
+
+define void @st_near_local(i64 addrspace(200)* %a, i64 %b)  {
+; CHECK-LP64-LABEL: st_near_local:
+; CHECK-LP64:       # %bb.0:
+; CHECK-LP64-NEXT:    lui a2, 1
+; CHECK-LP64-NEXT:    addiw a2, a2, -2040
+; CHECK-LP64-NEXT:    cincoffset ca0, ca0, a2
+; CHECK-LP64-NEXT:    sd.cap a1, (ca0)
+; CHECK-LP64-NEXT:    ret
+;
+; CHECK-L64PC128-LABEL: st_near_local:
+; CHECK-L64PC128:       # %bb.0:
+; CHECK-L64PC128-NEXT:    lui a2, 1
+; CHECK-L64PC128-NEXT:    addiw a2, a2, -2040
+; CHECK-L64PC128-NEXT:    cincoffset ca0, ca0, a2
+; CHECK-L64PC128-NEXT:    csd a1, 0(ca0)
+; CHECK-L64PC128-NEXT:    cret
+  %1 = getelementptr inbounds i64, i64 addrspace(200)* %a, i64 257
+  store i64 %b, i64 addrspace(200)* %1
+  ret void
+}
+
+define i64 @lw_sw_near_local(i64 addrspace(200)* %a, i64 %b)  {
+; CHECK-LP64-LABEL: lw_sw_near_local:
+; CHECK-LP64:       # %bb.0:
+; CHECK-LP64-NEXT:    lui a2, 1
+; CHECK-LP64-NEXT:    addiw a2, a2, -2040
+; CHECK-LP64-NEXT:    cincoffset ca2, ca0, a2
+; CHECK-LP64-NEXT:    ld.cap a0, (ca2)
+; CHECK-LP64-NEXT:    sd.cap a1, (ca2)
+; CHECK-LP64-NEXT:    ret
+;
+; CHECK-L64PC128-LABEL: lw_sw_near_local:
+; CHECK-L64PC128:       # %bb.0:
+; CHECK-L64PC128-NEXT:    lui a2, 1
+; CHECK-L64PC128-NEXT:    addiw a2, a2, -2040
+; CHECK-L64PC128-NEXT:    cincoffset ca2, ca0, a2
+; CHECK-L64PC128-NEXT:    cld a0, 0(ca2)
+; CHECK-L64PC128-NEXT:    csd a1, 0(ca2)
+; CHECK-L64PC128-NEXT:    cret
+  %1 = getelementptr inbounds i64, i64 addrspace(200)* %a, i64 257
+  %2 = load volatile i64, i64 addrspace(200)* %1
+  store i64 %b, i64 addrspace(200)* %1
+  ret i64 %2
+}
+
 define i64 @lw_far_local(i64 addrspace(200)* %a)  {
 ; CHECK-LP64-LABEL: lw_far_local:
 ; CHECK-LP64:       # %bb.0:
@@ -630,6 +696,69 @@ define i64 @lw_sw_far_local(i64 addrspace(200)* %a, i64 %b)  {
 ; CHECK-L64PC128-NEXT:    csd a1, -8(ca2)
 ; CHECK-L64PC128-NEXT:    cret
   %1 = getelementptr inbounds i64, i64 addrspace(200)* %a, i64 4095
+  %2 = load volatile i64, i64 addrspace(200)* %1
+  store i64 %b, i64 addrspace(200)* %1
+  ret i64 %2
+}
+
+; Make sure we don't fold the addiw into the load offset. The sign extend of the
+; addiw is required.
+define i64 @lw_really_far_local(i64 addrspace(200)* %a)  {
+; CHECK-LP64-LABEL: lw_really_far_local:
+; CHECK-LP64:       # %bb.0:
+; CHECK-LP64-NEXT:    lui a1, 524288
+; CHECK-LP64-NEXT:    addiw a1, a1, -2048
+; CHECK-LP64-NEXT:    cincoffset ca0, ca0, a1
+; CHECK-LP64-NEXT:    ld.cap a0, (ca0)
+; CHECK-LP64-NEXT:    ret
+;
+; CHECK-L64PC128-LABEL: lw_really_far_local:
+; CHECK-L64PC128:       # %bb.0:
+; CHECK-L64PC128-NEXT:    lui a1, 524288
+; CHECK-L64PC128-NEXT:    addiw a1, a1, -2048
+; CHECK-L64PC128-NEXT:    cincoffset ca0, ca0, a1
+; CHECK-L64PC128-NEXT:    cld a0, 0(ca0)
+; CHECK-L64PC128-NEXT:    cret
+  %1 = getelementptr inbounds i64, i64 addrspace(200)* %a, i64 268435200
+  %2 = load volatile i64, i64 addrspace(200)* %1
+  ret i64 %2
+}
+
+; Make sure we don't fold the addiw into the store offset. The sign extend of
+; the addiw is required.
+define void @st_really_far_local(i64 addrspace(200)* %a, i64 %b)  {
+; CHECK-LP64-LABEL: st_really_far_local:
+; CHECK-LP64:       # %bb.0:
+; CHECK-LP64-NEXT:    lui a2, 524288
+; CHECK-LP64-NEXT:    addiw a2, a2, -2048
+; CHECK-LP64-NEXT:    cincoffset ca0, ca0, a2
+; CHECK-LP64-NEXT:    sd.cap a1, (ca0)
+; CHECK-LP64-NEXT:    ret
+;
+; CHECK-L64PC128-LABEL: st_really_far_local:
+; CHECK-L64PC128:       # %bb.0:
+; CHECK-L64PC128-NEXT:    lui a2, 524288
+; CHECK-L64PC128-NEXT:    addiw a2, a2, -2048
+; CHECK-L64PC128-NEXT:    cincoffset ca0, ca0, a2
+; CHECK-L64PC128-NEXT:    csd a1, 0(ca0)
+; CHECK-L64PC128-NEXT:    cret
+  %1 = getelementptr inbounds i64, i64 addrspace(200)* %a, i64 268435200
+  store i64 %b, i64 addrspace(200)* %1
+  ret void
+}
+
+; Make sure we don't fold the addiw into the load/store offset. The sign extend
+; of the addiw is required.
+define i64 @lw_sw_really_far_local(i64 addrspace(200)* %a, i64 %b)  {
+; CHECK-L64PC128-LABEL: lw_sw_really_far_local:
+; CHECK-L64PC128:       # %bb.0:
+; CHECK-L64PC128-NEXT:    lui a2, 524288
+; CHECK-L64PC128-NEXT:    addiw a2, a2, -2048
+; CHECK-L64PC128-NEXT:    cincoffset ca2, ca0, a2
+; CHECK-L64PC128-NEXT:    cld a0, 0(ca2)
+; CHECK-L64PC128-NEXT:    csd a1, 0(ca2)
+; CHECK-L64PC128-NEXT:    cret
+  %1 = getelementptr inbounds i64, i64 addrspace(200)* %a, i64 268435200
   %2 = load volatile i64, i64 addrspace(200)* %1
   store i64 %b, i64 addrspace(200)* %1
   ret i64 %2

@@ -753,7 +753,7 @@ void RISCVDAGToDAGISel::Select(SDNode *Node) {
       break;
 
     // Emit (ADDI (ADD X, Hi), Lo)
-    SDNode *Imm = selectImmSeq(CurDAG, DL, VT, Seq);
+    SDNode *Imm = selectImmSeq(CurDAG, DL, XLenVT, Seq);
     SDNode *ADD = CurDAG->getMachineNode(
         VT.isFatPointer() ? RISCV::CIncOffset : RISCV::ADD, DL, VT,
         Node->getOperand(0), SDValue(Imm, 0));
