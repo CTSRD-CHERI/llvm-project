@@ -1180,12 +1180,12 @@ private:
   Value *getConstrainedFPRounding(Optional<RoundingMode> Rounding) {
     RoundingMode UseRounding = DefaultConstrainedRounding;
 
-    if (Rounding.hasValue())
-      UseRounding = Rounding.getValue();
+    if (Rounding)
+      UseRounding = *Rounding;
 
     Optional<StringRef> RoundingStr = convertRoundingModeToStr(UseRounding);
-    assert(RoundingStr.hasValue() && "Garbage strict rounding mode!");
-    auto *RoundingMDS = MDString::get(Context, RoundingStr.getValue());
+    assert(RoundingStr && "Garbage strict rounding mode!");
+    auto *RoundingMDS = MDString::get(Context, *RoundingStr);
 
     return MetadataAsValue::get(Context, RoundingMDS);
   }
@@ -1193,12 +1193,12 @@ private:
   Value *getConstrainedFPExcept(Optional<fp::ExceptionBehavior> Except) {
     fp::ExceptionBehavior UseExcept = DefaultConstrainedExcept;
 
-    if (Except.hasValue())
-      UseExcept = Except.getValue();
+    if (Except)
+      UseExcept = *Except;
 
     Optional<StringRef> ExceptStr = convertExceptionBehaviorToStr(UseExcept);
-    assert(ExceptStr.hasValue() && "Garbage strict exception behavior!");
-    auto *ExceptMDS = MDString::get(Context, ExceptStr.getValue());
+    assert(ExceptStr && "Garbage strict exception behavior!");
+    auto *ExceptMDS = MDString::get(Context, *ExceptStr);
 
     return MetadataAsValue::get(Context, ExceptMDS);
   }
