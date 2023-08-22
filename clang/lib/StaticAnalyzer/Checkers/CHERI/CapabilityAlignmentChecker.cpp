@@ -43,7 +43,7 @@ using namespace cheri;
 namespace {
 class CapabilityAlignmentChecker
     : public Checker<check::PreStmt<CastExpr>, check::PostStmt<CastExpr>,
-                     check::PostStmt<BinaryOperator>> {
+                     check::PostStmt<BinaryOperator>, check::DeadSymbols> {
   std::unique_ptr<BugType> CastAlignBug;
   std::unique_ptr<BugType> CapCastAlignBug;
 
@@ -54,6 +54,8 @@ public:
   void checkPostStmt(const BinaryOperator *BO, CheckerContext &C) const;
   void checkPostStmt(const CastExpr *BO, CheckerContext &C) const;
   void checkPreStmt(const CastExpr *BO, CheckerContext &C) const;
+  void checkDeadSymbols(SymbolReaper &SymReaper, CheckerContext &C) const;
+
 
 private:
   ExplodedNode *emitCastAlignWarn(CheckerContext &C, unsigned SrcAlign,
@@ -338,7 +340,7 @@ void CapabilityAlignmentChecker::checkPostStmt(const BinaryOperator *BO,
   case clang::BO_Shr:
   case clang::BO_ShrAssign:
     if (RHSVal.isConstant()) {
-      if (Optional<nonloc::ConcreteInt> NV = RHSVal.getAs<nonloc::ConcreteInt>())
+      if (auto NV = RHSVal.getAs<nonloc::ConcreteInt>())
         RHSConst = NV.getValue().getValue().getExtValue();
     }
     if (BO->getOpcode() == BO_Shl || BO->getOpcode() == BO_ShlAssign)
@@ -364,6 +366,23 @@ void CapabilityAlignmentChecker::checkPostStmt(const BinaryOperator *BO,
   State = State->set<TrailingZerosMap>(ResVal.getAsSymbol(), Res);
   C.addTransition(State);
 }
+
+void CapabilityAlignmentChecker::checkDeadSymbols(SymbolReaper &SymReaper,
+                                                  CheckerContext &C) const {
+  ProgramStateRef State = C.getState();
+  TrailingZerosMapTy TZMap = State->get<TrailingZerosMap>();
+  bool Updated = false;
+  for (TrailingZerosMapTy::iterator I = TZMap.begin(),
+                                    E = TZMap.end(); I != E; ++I) {
+    if (SymReaper.isDead(I->first)) {
+      State = State->remove<TrailingZerosMap>(I->first);
+      Updated = true;
+    }
+  }
+  if (Updated)
+    C.addTransition(State);
+}
+
 namespace {
 
 bool hasCapability(const QualType OrigTy, ASTContext &Ctx) {
