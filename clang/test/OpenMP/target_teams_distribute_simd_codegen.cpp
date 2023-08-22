@@ -338,7 +338,7 @@ int bar(int n){
 // CHECK1-NEXT:    store i16 0, i16* [[AA]], align 2
 // CHECK1-NEXT:    [[TMP1:%.*]] = load i32, i32* [[N_ADDR]], align 4
 // CHECK1-NEXT:    [[TMP2:%.*]] = zext i32 [[TMP1]] to i64
-// CHECK1-NEXT:    [[TMP3:%.*]] = call i8* @llvm.stacksave()
+// CHECK1-NEXT:    [[TMP3:%.*]] = call i8* @llvm.stacksave.p0i8()
 // CHECK1-NEXT:    store i8* [[TMP3]], i8** [[SAVED_STACK]], align 8
 // CHECK1-NEXT:    [[VLA:%.*]] = alloca float, i64 [[TMP2]], align 4
 // CHECK1-NEXT:    store i64 [[TMP2]], i64* [[__VLA_EXPR0]], align 8
@@ -653,7 +653,7 @@ int bar(int n){
 // CHECK1:       omp_if.end35:
 // CHECK1-NEXT:    [[TMP175:%.*]] = load i32, i32* [[A]], align 4
 // CHECK1-NEXT:    [[TMP176:%.*]] = load i8*, i8** [[SAVED_STACK]], align 8
-// CHECK1-NEXT:    call void @llvm.stackrestore(i8* [[TMP176]])
+// CHECK1-NEXT:    call void @llvm.stackrestore.p0i8(i8* [[TMP176]])
 // CHECK1-NEXT:    ret i32 [[TMP175]]
 //
 //
@@ -1384,7 +1384,7 @@ int bar(int n){
 // CHECK1-NEXT:    store i32 [[ADD]], i32* [[B]], align 4
 // CHECK1-NEXT:    [[TMP1:%.*]] = load i32, i32* [[N_ADDR]], align 4
 // CHECK1-NEXT:    [[TMP2:%.*]] = zext i32 [[TMP1]] to i64
-// CHECK1-NEXT:    [[TMP3:%.*]] = call i8* @llvm.stacksave()
+// CHECK1-NEXT:    [[TMP3:%.*]] = call i8* @llvm.stacksave.p0i8()
 // CHECK1-NEXT:    store i8* [[TMP3]], i8** [[SAVED_STACK]], align 8
 // CHECK1-NEXT:    [[TMP4:%.*]] = mul nuw i64 2, [[TMP2]]
 // CHECK1-NEXT:    [[VLA:%.*]] = alloca i16, i64 [[TMP4]], align 2
@@ -1486,7 +1486,7 @@ int bar(int n){
 // CHECK1-NEXT:    [[TMP53:%.*]] = load i32, i32* [[B]], align 4
 // CHECK1-NEXT:    [[ADD4:%.*]] = add nsw i32 [[CONV3]], [[TMP53]]
 // CHECK1-NEXT:    [[TMP54:%.*]] = load i8*, i8** [[SAVED_STACK]], align 8
-// CHECK1-NEXT:    call void @llvm.stackrestore(i8* [[TMP54]])
+// CHECK1-NEXT:    call void @llvm.stackrestore.p0i8(i8* [[TMP54]])
 // CHECK1-NEXT:    ret i32 [[ADD4]]
 //
 //
@@ -2184,7 +2184,7 @@ int bar(int n){
 // CHECK3-NEXT:    store i32 0, i32* [[A]], align 4
 // CHECK3-NEXT:    store i16 0, i16* [[AA]], align 2
 // CHECK3-NEXT:    [[TMP1:%.*]] = load i32, i32* [[N_ADDR]], align 4
-// CHECK3-NEXT:    [[TMP2:%.*]] = call i8* @llvm.stacksave()
+// CHECK3-NEXT:    [[TMP2:%.*]] = call i8* @llvm.stacksave.p0i8()
 // CHECK3-NEXT:    store i8* [[TMP2]], i8** [[SAVED_STACK]], align 4
 // CHECK3-NEXT:    [[VLA:%.*]] = alloca float, i32 [[TMP1]], align 4
 // CHECK3-NEXT:    store i32 [[TMP1]], i32* [[__VLA_EXPR0]], align 4
@@ -2495,7 +2495,7 @@ int bar(int n){
 // CHECK3:       omp_if.end30:
 // CHECK3-NEXT:    [[TMP175:%.*]] = load i32, i32* [[A]], align 4
 // CHECK3-NEXT:    [[TMP176:%.*]] = load i8*, i8** [[SAVED_STACK]], align 4
-// CHECK3-NEXT:    call void @llvm.stackrestore(i8* [[TMP176]])
+// CHECK3-NEXT:    call void @llvm.stackrestore.p0i8(i8* [[TMP176]])
 // CHECK3-NEXT:    ret i32 [[TMP175]]
 //
 //
@@ -3212,7 +3212,7 @@ int bar(int n){
 // CHECK3-NEXT:    [[ADD:%.*]] = add nsw i32 [[TMP0]], 1
 // CHECK3-NEXT:    store i32 [[ADD]], i32* [[B]], align 4
 // CHECK3-NEXT:    [[TMP1:%.*]] = load i32, i32* [[N_ADDR]], align 4
-// CHECK3-NEXT:    [[TMP2:%.*]] = call i8* @llvm.stacksave()
+// CHECK3-NEXT:    [[TMP2:%.*]] = call i8* @llvm.stacksave.p0i8()
 // CHECK3-NEXT:    store i8* [[TMP2]], i8** [[SAVED_STACK]], align 4
 // CHECK3-NEXT:    [[TMP3:%.*]] = mul nuw i32 2, [[TMP1]]
 // CHECK3-NEXT:    [[VLA:%.*]] = alloca i16, i32 [[TMP3]], align 2
@@ -3314,7 +3314,7 @@ int bar(int n){
 // CHECK3-NEXT:    [[TMP53:%.*]] = load i32, i32* [[B]], align 4
 // CHECK3-NEXT:    [[ADD3:%.*]] = add nsw i32 [[CONV]], [[TMP53]]
 // CHECK3-NEXT:    [[TMP54:%.*]] = load i8*, i8** [[SAVED_STACK]], align 4
-// CHECK3-NEXT:    call void @llvm.stackrestore(i8* [[TMP54]])
+// CHECK3-NEXT:    call void @llvm.stackrestore.p0i8(i8* [[TMP54]])
 // CHECK3-NEXT:    ret i32 [[ADD3]]
 //
 //
@@ -3998,7 +3998,7 @@ int bar(int n){
 // CHECK5-NEXT:    store i16 0, i16* [[AA]], align 2
 // CHECK5-NEXT:    [[TMP1:%.*]] = load i32, i32* [[N_ADDR]], align 4
 // CHECK5-NEXT:    [[TMP2:%.*]] = zext i32 [[TMP1]] to i64
-// CHECK5-NEXT:    [[TMP3:%.*]] = call i8* @llvm.stacksave()
+// CHECK5-NEXT:    [[TMP3:%.*]] = call i8* @llvm.stacksave.p0i8()
 // CHECK5-NEXT:    store i8* [[TMP3]], i8** [[SAVED_STACK]], align 8
 // CHECK5-NEXT:    [[VLA:%.*]] = alloca float, i64 [[TMP2]], align 4
 // CHECK5-NEXT:    store i64 [[TMP2]], i64* [[__VLA_EXPR0]], align 8
@@ -4313,7 +4313,7 @@ int bar(int n){
 // CHECK5:       omp_if.end35:
 // CHECK5-NEXT:    [[TMP175:%.*]] = load i32, i32* [[A]], align 4
 // CHECK5-NEXT:    [[TMP176:%.*]] = load i8*, i8** [[SAVED_STACK]], align 8
-// CHECK5-NEXT:    call void @llvm.stackrestore(i8* [[TMP176]])
+// CHECK5-NEXT:    call void @llvm.stackrestore.p0i8(i8* [[TMP176]])
 // CHECK5-NEXT:    ret i32 [[TMP175]]
 //
 //
@@ -5046,7 +5046,7 @@ int bar(int n){
 // CHECK5-NEXT:    store i32 [[ADD]], i32* [[B]], align 4
 // CHECK5-NEXT:    [[TMP1:%.*]] = load i32, i32* [[N_ADDR]], align 4
 // CHECK5-NEXT:    [[TMP2:%.*]] = zext i32 [[TMP1]] to i64
-// CHECK5-NEXT:    [[TMP3:%.*]] = call i8* @llvm.stacksave()
+// CHECK5-NEXT:    [[TMP3:%.*]] = call i8* @llvm.stacksave.p0i8()
 // CHECK5-NEXT:    store i8* [[TMP3]], i8** [[SAVED_STACK]], align 8
 // CHECK5-NEXT:    [[TMP4:%.*]] = mul nuw i64 2, [[TMP2]]
 // CHECK5-NEXT:    [[VLA:%.*]] = alloca i16, i64 [[TMP4]], align 2
@@ -5166,7 +5166,7 @@ int bar(int n){
 // CHECK5-NEXT:    [[TMP61:%.*]] = load i32, i32* [[B]], align 4
 // CHECK5-NEXT:    [[ADD7:%.*]] = add nsw i32 [[CONV6]], [[TMP61]]
 // CHECK5-NEXT:    [[TMP62:%.*]] = load i8*, i8** [[SAVED_STACK]], align 8
-// CHECK5-NEXT:    call void @llvm.stackrestore(i8* [[TMP62]])
+// CHECK5-NEXT:    call void @llvm.stackrestore.p0i8(i8* [[TMP62]])
 // CHECK5-NEXT:    ret i32 [[ADD7]]
 //
 //
@@ -5919,7 +5919,7 @@ int bar(int n){
 // CHECK7-NEXT:    store i32 0, i32* [[A]], align 4
 // CHECK7-NEXT:    store i16 0, i16* [[AA]], align 2
 // CHECK7-NEXT:    [[TMP1:%.*]] = load i32, i32* [[N_ADDR]], align 4
-// CHECK7-NEXT:    [[TMP2:%.*]] = call i8* @llvm.stacksave()
+// CHECK7-NEXT:    [[TMP2:%.*]] = call i8* @llvm.stacksave.p0i8()
 // CHECK7-NEXT:    store i8* [[TMP2]], i8** [[SAVED_STACK]], align 4
 // CHECK7-NEXT:    [[VLA:%.*]] = alloca float, i32 [[TMP1]], align 4
 // CHECK7-NEXT:    store i32 [[TMP1]], i32* [[__VLA_EXPR0]], align 4
@@ -6230,7 +6230,7 @@ int bar(int n){
 // CHECK7:       omp_if.end30:
 // CHECK7-NEXT:    [[TMP175:%.*]] = load i32, i32* [[A]], align 4
 // CHECK7-NEXT:    [[TMP176:%.*]] = load i8*, i8** [[SAVED_STACK]], align 4
-// CHECK7-NEXT:    call void @llvm.stackrestore(i8* [[TMP176]])
+// CHECK7-NEXT:    call void @llvm.stackrestore.p0i8(i8* [[TMP176]])
 // CHECK7-NEXT:    ret i32 [[TMP175]]
 //
 //
@@ -6949,7 +6949,7 @@ int bar(int n){
 // CHECK7-NEXT:    [[ADD:%.*]] = add nsw i32 [[TMP0]], 1
 // CHECK7-NEXT:    store i32 [[ADD]], i32* [[B]], align 4
 // CHECK7-NEXT:    [[TMP1:%.*]] = load i32, i32* [[N_ADDR]], align 4
-// CHECK7-NEXT:    [[TMP2:%.*]] = call i8* @llvm.stacksave()
+// CHECK7-NEXT:    [[TMP2:%.*]] = call i8* @llvm.stacksave.p0i8()
 // CHECK7-NEXT:    store i8* [[TMP2]], i8** [[SAVED_STACK]], align 4
 // CHECK7-NEXT:    [[TMP3:%.*]] = mul nuw i32 2, [[TMP1]]
 // CHECK7-NEXT:    [[VLA:%.*]] = alloca i16, i32 [[TMP3]], align 2
@@ -7069,7 +7069,7 @@ int bar(int n){
 // CHECK7-NEXT:    [[TMP61:%.*]] = load i32, i32* [[B]], align 4
 // CHECK7-NEXT:    [[ADD6:%.*]] = add nsw i32 [[CONV5]], [[TMP61]]
 // CHECK7-NEXT:    [[TMP62:%.*]] = load i8*, i8** [[SAVED_STACK]], align 4
-// CHECK7-NEXT:    call void @llvm.stackrestore(i8* [[TMP62]])
+// CHECK7-NEXT:    call void @llvm.stackrestore.p0i8(i8* [[TMP62]])
 // CHECK7-NEXT:    ret i32 [[ADD6]]
 //
 //
@@ -7809,7 +7809,7 @@ int bar(int n){
 // CHECK9-NEXT:    store i16 0, i16* [[AA]], align 2
 // CHECK9-NEXT:    [[TMP0:%.*]] = load i32, i32* [[N_ADDR]], align 4
 // CHECK9-NEXT:    [[TMP1:%.*]] = zext i32 [[TMP0]] to i64
-// CHECK9-NEXT:    [[TMP2:%.*]] = call i8* @llvm.stacksave()
+// CHECK9-NEXT:    [[TMP2:%.*]] = call i8* @llvm.stacksave.p0i8()
 // CHECK9-NEXT:    store i8* [[TMP2]], i8** [[SAVED_STACK]], align 8
 // CHECK9-NEXT:    [[VLA:%.*]] = alloca float, i64 [[TMP1]], align 4
 // CHECK9-NEXT:    store i64 [[TMP1]], i64* [[__VLA_EXPR0]], align 8
@@ -8005,7 +8005,7 @@ int bar(int n){
 // CHECK9-NEXT:    store i32 10, i32* [[I58]], align 4
 // CHECK9-NEXT:    [[TMP46:%.*]] = load i32, i32* [[A]], align 4
 // CHECK9-NEXT:    [[TMP47:%.*]] = load i8*, i8** [[SAVED_STACK]], align 8
-// CHECK9-NEXT:    call void @llvm.stackrestore(i8* [[TMP47]])
+// CHECK9-NEXT:    call void @llvm.stackrestore.p0i8(i8* [[TMP47]])
 // CHECK9-NEXT:    ret i32 [[TMP46]]
 //
 //
@@ -8062,7 +8062,7 @@ int bar(int n){
 // CHECK9-NEXT:    store i32 [[ADD]], i32* [[B]], align 4
 // CHECK9-NEXT:    [[TMP1:%.*]] = load i32, i32* [[N_ADDR]], align 4
 // CHECK9-NEXT:    [[TMP2:%.*]] = zext i32 [[TMP1]] to i64
-// CHECK9-NEXT:    [[TMP3:%.*]] = call i8* @llvm.stacksave()
+// CHECK9-NEXT:    [[TMP3:%.*]] = call i8* @llvm.stacksave.p0i8()
 // CHECK9-NEXT:    store i8* [[TMP3]], i8** [[SAVED_STACK]], align 8
 // CHECK9-NEXT:    [[TMP4:%.*]] = mul nuw i64 2, [[TMP2]]
 // CHECK9-NEXT:    [[VLA:%.*]] = alloca i16, i64 [[TMP4]], align 2
@@ -8114,7 +8114,7 @@ int bar(int n){
 // CHECK9-NEXT:    [[TMP15:%.*]] = load i32, i32* [[B]], align 4
 // CHECK9-NEXT:    [[ADD11:%.*]] = add nsw i32 [[CONV10]], [[TMP15]]
 // CHECK9-NEXT:    [[TMP16:%.*]] = load i8*, i8** [[SAVED_STACK]], align 8
-// CHECK9-NEXT:    call void @llvm.stackrestore(i8* [[TMP16]])
+// CHECK9-NEXT:    call void @llvm.stackrestore.p0i8(i8* [[TMP16]])
 // CHECK9-NEXT:    ret i32 [[ADD11]]
 //
 //
@@ -8319,7 +8319,7 @@ int bar(int n){
 // CHECK11-NEXT:    store i32 0, i32* [[A]], align 4
 // CHECK11-NEXT:    store i16 0, i16* [[AA]], align 2
 // CHECK11-NEXT:    [[TMP0:%.*]] = load i32, i32* [[N_ADDR]], align 4
-// CHECK11-NEXT:    [[TMP1:%.*]] = call i8* @llvm.stacksave()
+// CHECK11-NEXT:    [[TMP1:%.*]] = call i8* @llvm.stacksave.p0i8()
 // CHECK11-NEXT:    store i8* [[TMP1]], i8** [[SAVED_STACK]], align 4
 // CHECK11-NEXT:    [[VLA:%.*]] = alloca float, i32 [[TMP0]], align 4
 // CHECK11-NEXT:    store i32 [[TMP0]], i32* [[__VLA_EXPR0]], align 4
@@ -8514,7 +8514,7 @@ int bar(int n){
 // CHECK11-NEXT:    store i32 10, i32* [[I58]], align 4
 // CHECK11-NEXT:    [[TMP44:%.*]] = load i32, i32* [[A]], align 4
 // CHECK11-NEXT:    [[TMP45:%.*]] = load i8*, i8** [[SAVED_STACK]], align 4
-// CHECK11-NEXT:    call void @llvm.stackrestore(i8* [[TMP45]])
+// CHECK11-NEXT:    call void @llvm.stackrestore.p0i8(i8* [[TMP45]])
 // CHECK11-NEXT:    ret i32 [[TMP44]]
 //
 //
@@ -8570,7 +8570,7 @@ int bar(int n){
 // CHECK11-NEXT:    [[ADD:%.*]] = add nsw i32 [[TMP0]], 1
 // CHECK11-NEXT:    store i32 [[ADD]], i32* [[B]], align 4
 // CHECK11-NEXT:    [[TMP1:%.*]] = load i32, i32* [[N_ADDR]], align 4
-// CHECK11-NEXT:    [[TMP2:%.*]] = call i8* @llvm.stacksave()
+// CHECK11-NEXT:    [[TMP2:%.*]] = call i8* @llvm.stacksave.p0i8()
 // CHECK11-NEXT:    store i8* [[TMP2]], i8** [[SAVED_STACK]], align 4
 // CHECK11-NEXT:    [[TMP3:%.*]] = mul nuw i32 2, [[TMP1]]
 // CHECK11-NEXT:    [[VLA:%.*]] = alloca i16, i32 [[TMP3]], align 2
@@ -8622,7 +8622,7 @@ int bar(int n){
 // CHECK11-NEXT:    [[TMP14:%.*]] = load i32, i32* [[B]], align 4
 // CHECK11-NEXT:    [[ADD11:%.*]] = add nsw i32 [[CONV10]], [[TMP14]]
 // CHECK11-NEXT:    [[TMP15:%.*]] = load i8*, i8** [[SAVED_STACK]], align 4
-// CHECK11-NEXT:    call void @llvm.stackrestore(i8* [[TMP15]])
+// CHECK11-NEXT:    call void @llvm.stackrestore.p0i8(i8* [[TMP15]])
 // CHECK11-NEXT:    ret i32 [[ADD11]]
 //
 //
@@ -8828,7 +8828,7 @@ int bar(int n){
 // CHECK13-NEXT:    store i16 0, i16* [[AA]], align 2
 // CHECK13-NEXT:    [[TMP0:%.*]] = load i32, i32* [[N_ADDR]], align 4
 // CHECK13-NEXT:    [[TMP1:%.*]] = zext i32 [[TMP0]] to i64
-// CHECK13-NEXT:    [[TMP2:%.*]] = call i8* @llvm.stacksave()
+// CHECK13-NEXT:    [[TMP2:%.*]] = call i8* @llvm.stacksave.p0i8()
 // CHECK13-NEXT:    store i8* [[TMP2]], i8** [[SAVED_STACK]], align 8
 // CHECK13-NEXT:    [[VLA:%.*]] = alloca float, i64 [[TMP1]], align 4
 // CHECK13-NEXT:    store i64 [[TMP1]], i64* [[__VLA_EXPR0]], align 8
@@ -9024,7 +9024,7 @@ int bar(int n){
 // CHECK13-NEXT:    store i32 10, i32* [[I58]], align 4
 // CHECK13-NEXT:    [[TMP46:%.*]] = load i32, i32* [[A]], align 4
 // CHECK13-NEXT:    [[TMP47:%.*]] = load i8*, i8** [[SAVED_STACK]], align 8
-// CHECK13-NEXT:    call void @llvm.stackrestore(i8* [[TMP47]])
+// CHECK13-NEXT:    call void @llvm.stackrestore.p0i8(i8* [[TMP47]])
 // CHECK13-NEXT:    ret i32 [[TMP46]]
 //
 //
@@ -9082,7 +9082,7 @@ int bar(int n){
 // CHECK13-NEXT:    store i32 [[ADD]], i32* [[B]], align 4
 // CHECK13-NEXT:    [[TMP1:%.*]] = load i32, i32* [[N_ADDR]], align 4
 // CHECK13-NEXT:    [[TMP2:%.*]] = zext i32 [[TMP1]] to i64
-// CHECK13-NEXT:    [[TMP3:%.*]] = call i8* @llvm.stacksave()
+// CHECK13-NEXT:    [[TMP3:%.*]] = call i8* @llvm.stacksave.p0i8()
 // CHECK13-NEXT:    store i8* [[TMP3]], i8** [[SAVED_STACK]], align 8
 // CHECK13-NEXT:    [[TMP4:%.*]] = mul nuw i64 2, [[TMP2]]
 // CHECK13-NEXT:    [[VLA:%.*]] = alloca i16, i64 [[TMP4]], align 2
@@ -9180,7 +9180,7 @@ int bar(int n){
 // CHECK13-NEXT:    [[TMP24:%.*]] = load i32, i32* [[B]], align 4
 // CHECK13-NEXT:    [[ADD29:%.*]] = add nsw i32 [[CONV28]], [[TMP24]]
 // CHECK13-NEXT:    [[TMP25:%.*]] = load i8*, i8** [[SAVED_STACK]], align 8
-// CHECK13-NEXT:    call void @llvm.stackrestore(i8* [[TMP25]])
+// CHECK13-NEXT:    call void @llvm.stackrestore.p0i8(i8* [[TMP25]])
 // CHECK13-NEXT:    ret i32 [[ADD29]]
 //
 //
@@ -9385,7 +9385,7 @@ int bar(int n){
 // CHECK15-NEXT:    store i32 0, i32* [[A]], align 4
 // CHECK15-NEXT:    store i16 0, i16* [[AA]], align 2
 // CHECK15-NEXT:    [[TMP0:%.*]] = load i32, i32* [[N_ADDR]], align 4
-// CHECK15-NEXT:    [[TMP1:%.*]] = call i8* @llvm.stacksave()
+// CHECK15-NEXT:    [[TMP1:%.*]] = call i8* @llvm.stacksave.p0i8()
 // CHECK15-NEXT:    store i8* [[TMP1]], i8** [[SAVED_STACK]], align 4
 // CHECK15-NEXT:    [[VLA:%.*]] = alloca float, i32 [[TMP0]], align 4
 // CHECK15-NEXT:    store i32 [[TMP0]], i32* [[__VLA_EXPR0]], align 4
@@ -9580,7 +9580,7 @@ int bar(int n){
 // CHECK15-NEXT:    store i32 10, i32* [[I58]], align 4
 // CHECK15-NEXT:    [[TMP44:%.*]] = load i32, i32* [[A]], align 4
 // CHECK15-NEXT:    [[TMP45:%.*]] = load i8*, i8** [[SAVED_STACK]], align 4
-// CHECK15-NEXT:    call void @llvm.stackrestore(i8* [[TMP45]])
+// CHECK15-NEXT:    call void @llvm.stackrestore.p0i8(i8* [[TMP45]])
 // CHECK15-NEXT:    ret i32 [[TMP44]]
 //
 //
@@ -9637,7 +9637,7 @@ int bar(int n){
 // CHECK15-NEXT:    [[ADD:%.*]] = add nsw i32 [[TMP0]], 1
 // CHECK15-NEXT:    store i32 [[ADD]], i32* [[B]], align 4
 // CHECK15-NEXT:    [[TMP1:%.*]] = load i32, i32* [[N_ADDR]], align 4
-// CHECK15-NEXT:    [[TMP2:%.*]] = call i8* @llvm.stacksave()
+// CHECK15-NEXT:    [[TMP2:%.*]] = call i8* @llvm.stacksave.p0i8()
 // CHECK15-NEXT:    store i8* [[TMP2]], i8** [[SAVED_STACK]], align 4
 // CHECK15-NEXT:    [[TMP3:%.*]] = mul nuw i32 2, [[TMP1]]
 // CHECK15-NEXT:    [[VLA:%.*]] = alloca i16, i32 [[TMP3]], align 2
@@ -9735,7 +9735,7 @@ int bar(int n){
 // CHECK15-NEXT:    [[TMP23:%.*]] = load i32, i32* [[B]], align 4
 // CHECK15-NEXT:    [[ADD29:%.*]] = add nsw i32 [[CONV28]], [[TMP23]]
 // CHECK15-NEXT:    [[TMP24:%.*]] = load i8*, i8** [[SAVED_STACK]], align 4
-// CHECK15-NEXT:    call void @llvm.stackrestore(i8* [[TMP24]])
+// CHECK15-NEXT:    call void @llvm.stackrestore.p0i8(i8* [[TMP24]])
 // CHECK15-NEXT:    ret i32 [[ADD29]]
 //
 //
