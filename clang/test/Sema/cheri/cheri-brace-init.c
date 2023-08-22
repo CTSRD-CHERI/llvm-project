@@ -52,7 +52,7 @@ void test_union(void* __capability a) {
   union foo_union u = {a}; // expected-error {{converting capability type 'void * __capability' to non-capability type 'void *' without an explicit cast; if this is intended use __cheri_fromcap}}
   u = (union foo_union){a}; // expected-error {{converting capability type 'void * __capability' to non-capability type 'void *' without an explicit cast; if this is intended use __cheri_fromcap}}
   union foo_union u2 = {.ptr = a}; // expected-error {{converting capability type 'void * __capability' to non-capability type 'void *' without an explicit cast; if this is intended use __cheri_fromcap}}
-  union foo_union u3 = {.l = a}; // expected-warning {{incompatible pointer to integer conversion initializing 'long' with an expression of type 'void * __capability'}}
+  union foo_union u3 = {.l = a}; // expected-error {{incompatible pointer to integer conversion initializing 'long' with an expression of type 'void * __capability'}}
 }
 
 #else /* __CHERI_PURE_CAPABILITY__ */

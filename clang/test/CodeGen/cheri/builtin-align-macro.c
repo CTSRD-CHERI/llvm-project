@@ -2,6 +2,10 @@
 // RUN: %cheri_purecap_cc1 -DCODEGEN -Wno-tautological-compare -o - -O2 -emit-llvm %s -cheri-uintcap=offset | FileCheck %s -check-prefix=PURECAP
 // RUN: %cheri_cc1 -DCODEGEN -Wno-tautological-compare -o - -O2 -emit-llvm %s -cheri-uintcap=offset | FileCheck %s -check-prefix=HYBRID
 
+// RUN: %cheri_purecap_cc1 -fsyntax-only %s -cheri-uintcap=offset -verify
+// RUN: %cheri_cc1 -fsyntax-only %s -cheri-uintcap=offset -verify
+
+
 typedef long ptraddr_t;
 typedef __UINTPTR_TYPE__ uintptr_t;
 
@@ -392,9 +396,9 @@ int align_down_builtin_const() {
 #ifndef CODEGEN
 void bad_align_macro(int *ptr) {
   (void)__macro_is_aligned_array(ptr, 7); // expected-error {{'__check_align_is_power_of_two' declared as an array with a negative size}}
-  (void)__macro_is_aligned(ptr, 7);       // expected-error {{static_assert failed due to requirement '(7 & (7 - 1)) == 0' "Alignment must be a power-of-two"}}
-  (void)__macro_align_up(ptr, 7);         // expected-error {{static_assert failed due to requirement '(7 & (7 - 1)) == 0' "Alignment must be a power-of-two"}}
-  (void)__macro_align_down(ptr, 7);       // expected-error {{static_assert failed due to requirement '(7 & (7 - 1)) == 0' "Alignment must be a power-of-two"}}
+  (void)__macro_is_aligned(ptr, 7);       // expected-error {{static assertion failed due to requirement '(7 & (7 - 1)) == 0': Alignment must be a power-of-two}}
+  (void)__macro_align_up(ptr, 7);         // expected-error {{static assertion failed due to requirement '(7 & (7 - 1)) == 0': Alignment must be a power-of-two}}
+  (void)__macro_align_down(ptr, 7);       // expected-error {{static assertion failed due to requirement '(7 & (7 - 1)) == 0': Alignment must be a power-of-two}}
 }
 
 _Bool bad_align_builtin(int *ptr) {

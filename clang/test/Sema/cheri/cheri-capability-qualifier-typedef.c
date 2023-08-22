@@ -48,11 +48,11 @@ CHECK_TYPE(__capability scap *, struct s *__capability *);
 CHECK_TYPE(scap __capability *, struct s *__capability *);
 
 CHECK_TYPE(__capability s **, struct s *__capability *); // expected-error 2{{use of __capability is ambiguous}}
-// c-error@-1 3{{static_assert failed due to requirement '__builtin_types_compatible_p(struct s ***, struct s * __capability **)'}}
-// cxx-error@-2 3{{static_assert failed due to requirement '__is_same(s ***, s * __capability **)'}}
+// c-error@-1 3{{static assertion failed due to requirement '__builtin_types_compatible_p(struct s ***, struct s * __capability **)'}}
+// cxx-error@-2 3{{static assertion failed due to requirement '__is_same(s ***, s * __capability **)'}}
 CHECK_TYPE(s __capability **, struct s *__capability *); // expected-error 2{{use of __capability is ambiguous}}
-// c-error@-1 3{{static_assert failed due to requirement '__builtin_types_compatible_p(struct s ***, struct s * __capability **)'}}
-// cxx-error@-2 3{{static_assert failed due to requirement '__is_same(s ***, s * __capability **)'}}
+// c-error@-1 3{{static assertion failed due to requirement '__builtin_types_compatible_p(struct s ***, struct s * __capability **)'}}
+// cxx-error@-2 3{{static assertion failed due to requirement '__is_same(s ***, s * __capability **)'}}
 CHECK_TYPE(__capability s *__capability *, struct s *__capability *__capability); // expected-error 2 {{use of __capability is ambiguous}}
-// c-error@-1 3{{static_assert failed due to requirement '__builtin_types_compatible_p(struct s * __capability **, struct s * __capability * __capability *)'}}
-// cxx-error@-2 3{{static_assert failed due to requirement '__is_same(s * __capability **, s * __capability * __capability *)'}}
+// c-error@-1 3{{static assertion failed due to requirement '__builtin_types_compatible_p(struct s * __capability **, struct s * __capability * __capability *)'}}
+// cxx-error@-2 3{{static assertion failed due to requirement '__is_same(s * __capability **, s * __capability * __capability *)'}}

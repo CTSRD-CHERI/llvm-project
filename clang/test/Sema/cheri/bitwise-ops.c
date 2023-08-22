@@ -203,8 +203,8 @@ void check_bad_macro_values(void *mtx) {
   // getting or clearing too many bits should warn:
   unsigned long value;
   value = cheri_low_bits_get(u, 32);
-  // expected-error@-1{{static_assert failed due to requirement '32 < (31 + 1)' "Using too many low pointer bits"}}
-  // expected-error@-2{{static_assert failed due to requirement '(32 & (32 + 1)) == 0' "Mask must be all ones"}}
+  // expected-error@-1{{static assertion failed due to requirement '32 < (31 + 1)': Using too many low pointer bits}}
+  // expected-error@-2{{static assertion failed due to requirement '(32 & (32 + 1)) == 0': Mask must be all ones}}
   value = cheri_low_bits_get(u, 31); // This is fine
 
   // Check that the other macros also work in if statements

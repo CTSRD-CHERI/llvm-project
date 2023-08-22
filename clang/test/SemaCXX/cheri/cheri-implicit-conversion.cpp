@@ -67,10 +67,10 @@ int foo(int *__capability cap_arg_int, void *__capability cap_arg_void, int *ptr
   // expected-error@-6 {{cannot initialize a variable of type 'unsigned __intcap' with an lvalue of type 'int *'}}
   // expected-error@-6 {{cannot initialize a variable of type 'unsigned __intcap' with an lvalue of type 'void *'}}
 #else
-  // expected-warning@-11 {{incompatible pointer to integer conversion initializing 'unsigned __intcap' with an expression of type 'int * __capability'}}
-  // expected-warning@-11 {{incompatible pointer to integer conversion initializing 'unsigned __intcap' with an expression of type 'void * __capability'}}
-  // expected-warning@-11 {{incompatible pointer to integer conversion initializing 'unsigned __intcap' with an expression of type 'int *'}}
-  // expected-warning@-11 {{incompatible pointer to integer conversion initializing 'unsigned __intcap' with an expression of type 'void *'}}
+  // expected-error@-11 {{incompatible pointer to integer conversion initializing 'unsigned __intcap' with an expression of type 'int * __capability'}}
+  // expected-error@-11 {{incompatible pointer to integer conversion initializing 'unsigned __intcap' with an expression of type 'void * __capability'}}
+  // expected-error@-11 {{incompatible pointer to integer conversion initializing 'unsigned __intcap' with an expression of type 'int *'}}
+  // expected-error@-11 {{incompatible pointer to integer conversion initializing 'unsigned __intcap' with an expression of type 'void *'}}
 #endif
 
   struct test_struct s;

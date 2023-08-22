@@ -18,14 +18,14 @@ void *cast_long_to_intptr_implicit(unsigned long l) {
   return l;
   // cxx-error@-1{{cannot initialize return object of type 'void *' with an lvalue of type 'unsigned long'}}
   // C allows this behaviour, but warns by default
-  // c-warning@-3{{incompatible integer to pointer conversion returning 'unsigned long' from a function with result type 'void *'}}
+  // c-error@-3{{incompatible integer to pointer conversion returning 'unsigned long' from a function with result type 'void *'}}
 }
 
 void *__capability cast_long_to_capptr_implicit(unsigned long l) {
   return l;
   // cxx-error-re@-1{{cannot initialize return object of type 'void *{{( __capability)?}}' with an lvalue of type 'unsigned long'}}
   // C allows this behaviour, but warns by default
-  // c-warning-re@-3{{incompatible integer to pointer conversion returning 'unsigned long' from a function with result type 'void *{{( __capability)?}}'}}
+  // c-error-re@-3{{incompatible integer to pointer conversion returning 'unsigned long' from a function with result type 'void *{{( __capability)?}}'}}
   // FIXME: should warn in purecap mode about lack of provenance
 }
 
@@ -33,14 +33,14 @@ void *cast_uintcap_to_intptr_implicit(uintcap_t cap) {
   return cap;
   // cxx-error@-1{{cannot initialize return object of type 'void *' with an lvalue of type 'uintcap_t'}}
   // C allows this behaviour, but warns by default
-  // c-warning-re@-3{{incompatible integer to pointer conversion returning 'uintcap_t' (aka 'unsigned {{(long|__intcap)}}') from a function with result type 'void *'}}
+  // c-error-re@-3{{incompatible integer to pointer conversion returning 'uintcap_t' (aka 'unsigned {{(long|__intcap)}}') from a function with result type 'void *'}}
 }
 
 void *__capability cast_uintcap_to_capptr_implicit(uintcap_t cap) {
   return cap;
   // cxx-error-re@-1{{cannot initialize return object of type 'void *{{( __capability)?}}' with an lvalue of type 'uintcap_t'}}
   // C allows this behaviour, but warns by default
-  // c-warning-re@-3{{incompatible integer to pointer conversion returning 'uintcap_t' (aka 'unsigned {{(long|__intcap)}}') from a function with result type 'void *{{( __capability)?}}'}}
+  // c-error-re@-3{{incompatible integer to pointer conversion returning 'uintcap_t' (aka 'unsigned {{(long|__intcap)}}') from a function with result type 'void *{{( __capability)?}}'}}
 }
 
 void *cast_capptr_to_intptr_implicit(void *__capability cap) {

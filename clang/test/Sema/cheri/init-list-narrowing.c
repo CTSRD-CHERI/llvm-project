@@ -13,41 +13,41 @@ struct {
   int x;
 } ints[] = {
   {(void *)0},
-  // hybrid-c-warning@-1 {{incompatible pointer to integer conversion initializing 'int' with an expression of type 'void *'}}
-  // purecap-c-warning@-2 {{incompatible pointer to integer conversion initializing 'int' with an expression of type 'void * __attribute__((cheri_no_provenance))'}}
+  // hybrid-c-error@-1 {{incompatible pointer to integer conversion initializing 'int' with an expression of type 'void *'}}
+  // purecap-c-error@-2 {{incompatible pointer to integer conversion initializing 'int' with an expression of type 'void * __attribute__((cheri_no_provenance))'}}
   // expected-cxx-error@-3 {{cannot initialize a member subobject of type 'int' with an rvalue of type 'void *'}}
   {(void *)42},
-  // hybrid-c-warning@-1 {{incompatible pointer to integer conversion initializing 'int' with an expression of type 'void *'}}
-  // purecap-c-warning@-2 {{incompatible pointer to integer conversion initializing 'int' with an expression of type 'void * __attribute__((cheri_no_provenance))'}}
+  // hybrid-c-error@-1 {{incompatible pointer to integer conversion initializing 'int' with an expression of type 'void *'}}
+  // purecap-c-error@-2 {{incompatible pointer to integer conversion initializing 'int' with an expression of type 'void * __attribute__((cheri_no_provenance))'}}
   // hybrid-cxx-error@-3 {{cannot initialize a member subobject of type 'int' with an rvalue of type 'void *'}}
   // purecap-cxx-error@-4 {{cannot initialize a member subobject of type 'int' with an rvalue of type 'void * __attribute__((cheri_no_provenance))'}}
   {(void *)((long)__INT_MAX__ + 1)},
-  // hybrid-c-warning@-1 {{incompatible pointer to integer conversion initializing 'int' with an expression of type 'void *'}}
-  // purecap-c-warning@-2 {{incompatible pointer to integer conversion initializing 'int' with an expression of type 'void * __attribute__((cheri_no_provenance))'}}
+  // hybrid-c-error@-1 {{incompatible pointer to integer conversion initializing 'int' with an expression of type 'void *'}}
+  // purecap-c-error@-2 {{incompatible pointer to integer conversion initializing 'int' with an expression of type 'void * __attribute__((cheri_no_provenance))'}}
   // hybrid-cxx-error@-3 {{cannot initialize a member subobject of type 'int' with an rvalue of type 'void *'}}
   // purecap-cxx-error@-4 {{cannot initialize a member subobject of type 'int' with an rvalue of type 'void * __attribute__((cheri_no_provenance))'}}
   {(void *)foo},
-  // expected-c-warning@-1 {{incompatible pointer to integer conversion initializing 'int' with an expression of type 'void *'}}
+  // expected-c-error@-1 {{incompatible pointer to integer conversion initializing 'int' with an expression of type 'void *'}}
   // expected-c-error@-2 {{initializer element is not a compile-time constant}}
   // expected-cxx-error@-3 {{cannot initialize a member subobject of type 'int' with an rvalue of type 'void *'}}
   {(void * __capability)0},
-  // hybrid-c-warning@-1 {{incompatible pointer to integer conversion initializing 'int' with an expression of type 'void * __capability __attribute__((cheri_no_provenance))'}}
-  // purecap-c-warning@-2 {{incompatible pointer to integer conversion initializing 'int' with an expression of type 'void * __attribute__((cheri_no_provenance))'}}
+  // hybrid-c-error@-1 {{incompatible pointer to integer conversion initializing 'int' with an expression of type 'void * __capability __attribute__((cheri_no_provenance))'}}
+  // purecap-c-error@-2 {{incompatible pointer to integer conversion initializing 'int' with an expression of type 'void * __attribute__((cheri_no_provenance))'}}
   // hybrid-cxx-error@-3 {{cannot initialize a member subobject of type 'int' with an rvalue of type 'void * __capability'}}
   // purecap-cxx-error@-4 {{cannot initialize a member subobject of type 'int' with an rvalue of type 'void *'}}
   {(void * __capability)42},
-  // hybrid-c-warning@-1 {{incompatible pointer to integer conversion initializing 'int' with an expression of type 'void * __capability __attribute__((cheri_no_provenance))'}}
-  // purecap-c-warning@-2 {{incompatible pointer to integer conversion initializing 'int' with an expression of type 'void * __attribute__((cheri_no_provenance))'}}
+  // hybrid-c-error@-1 {{incompatible pointer to integer conversion initializing 'int' with an expression of type 'void * __capability __attribute__((cheri_no_provenance))'}}
+  // purecap-c-error@-2 {{incompatible pointer to integer conversion initializing 'int' with an expression of type 'void * __attribute__((cheri_no_provenance))'}}
   // hybrid-cxx-error@-3 {{cannot initialize a member subobject of type 'int' with an rvalue of type 'void * __capability __attribute__((cheri_no_provenance))'}}
   // purecap-cxx-error@-4 {{cannot initialize a member subobject of type 'int' with an rvalue of type 'void * __attribute__((cheri_no_provenance))'}}
   {(void * __capability)((long)__INT_MAX__ + 1)},
-  // hybrid-c-warning@-1 {{incompatible pointer to integer conversion initializing 'int' with an expression of type 'void * __capability __attribute__((cheri_no_provenance))'}}
-  // purecap-c-warning@-2 {{incompatible pointer to integer conversion initializing 'int' with an expression of type 'void * __attribute__((cheri_no_provenance))'}}
+  // hybrid-c-error@-1 {{incompatible pointer to integer conversion initializing 'int' with an expression of type 'void * __capability __attribute__((cheri_no_provenance))'}}
+  // purecap-c-error@-2 {{incompatible pointer to integer conversion initializing 'int' with an expression of type 'void * __attribute__((cheri_no_provenance))'}}
   // hybrid-cxx-error@-3 {{cannot initialize a member subobject of type 'int' with an rvalue of type 'void * __capability __attribute__((cheri_no_provenance))'}}
   // purecap-cxx-error@-4 {{cannot initialize a member subobject of type 'int' with an rvalue of type 'void * __attribute__((cheri_no_provenance))'}}
   {(void * __capability)foo},
-  // hybrid-c-warning@-1 {{incompatible pointer to integer conversion initializing 'int' with an expression of type 'void * __capability'}}
-  // purecap-c-warning@-2 {{incompatible pointer to integer conversion initializing 'int' with an expression of type 'void *'}}
+  // hybrid-c-error@-1 {{incompatible pointer to integer conversion initializing 'int' with an expression of type 'void * __capability'}}
+  // purecap-c-error@-2 {{incompatible pointer to integer conversion initializing 'int' with an expression of type 'void *'}}
   // hybrid-cxx-error@-3 {{cannot initialize a member subobject of type 'int' with an rvalue of type 'void * __capability'}}
   // purecap-cxx-error@-4 {{cannot initialize a member subobject of type 'int' with an rvalue of type 'void *'}}
   {(__intcap)0},
@@ -83,10 +83,10 @@ struct {
   // expected-c-warning@-1 {{expression which evaluates to zero treated as a null pointer constant of type 'void *'}}
   // expected-cxx-error@-2 {{cannot initialize a member subobject of type 'void *' with an rvalue of type '__intcap __attribute__((cheri_no_provenance))'}}
   {(__intcap)42},
-  // expected-c-warning@-1 {{incompatible integer to pointer conversion initializing 'void *' with an expression of type '__intcap __attribute__((cheri_no_provenance))'}}
+  // expected-c-error@-1 {{incompatible integer to pointer conversion initializing 'void *' with an expression of type '__intcap __attribute__((cheri_no_provenance))'}}
   // expected-cxx-error@-2 {{cannot initialize a member subobject of type 'void *' with an rvalue of type '__intcap __attribute__((cheri_no_provenance))'}}
   {(__intcap)((long)__INT_MAX__ + 1)},
-  // expected-c-warning@-1 {{incompatible integer to pointer conversion initializing 'void *' with an expression of type '__intcap __attribute__((cheri_no_provenance))'}}
+  // expected-c-error@-1 {{incompatible integer to pointer conversion initializing 'void *' with an expression of type '__intcap __attribute__((cheri_no_provenance))'}}
   // expected-cxx-error@-2 {{cannot initialize a member subobject of type 'void *' with an rvalue of type '__intcap __attribute__((cheri_no_provenance))'}}
 #ifdef __cplusplus
   {__null},
@@ -116,13 +116,13 @@ struct {
   // hybrid-cxx-error@-3 {{cannot initialize a member subobject of type 'void * __capability' with an rvalue of type '__intcap __attribute__((cheri_no_provenance))'}}
   // purecap-cxx-error@-4 {{cannot initialize a member subobject of type 'void *' with an rvalue of type '__intcap __attribute__((cheri_no_provenance))'}}
   {(__intcap)42},
-  // hybrid-c-warning@-1 {{incompatible integer to pointer conversion initializing 'void * __capability' with an expression of type '__intcap __attribute__((cheri_no_provenance))'}}
-  // purecap-c-warning@-2 {{incompatible integer to pointer conversion initializing 'void *' with an expression of type '__intcap __attribute__((cheri_no_provenance))'}}
+  // hybrid-c-error@-1 {{incompatible integer to pointer conversion initializing 'void * __capability' with an expression of type '__intcap __attribute__((cheri_no_provenance))'}}
+  // purecap-c-error@-2 {{incompatible integer to pointer conversion initializing 'void *' with an expression of type '__intcap __attribute__((cheri_no_provenance))'}}
   // hybrid-cxx-error@-3 {{cannot initialize a member subobject of type 'void * __capability' with an rvalue of type '__intcap __attribute__((cheri_no_provenance))'}}
   // purecap-cxx-error@-4 {{cannot initialize a member subobject of type 'void *' with an rvalue of type '__intcap __attribute__((cheri_no_provenance))'}}
   {(__intcap)((long)__INT_MAX__ + 1)},
-  // hybrid-c-warning@-1 {{incompatible integer to pointer conversion initializing 'void * __capability' with an expression of type '__intcap __attribute__((cheri_no_provenance))'}}
-  // purecap-c-warning@-2 {{incompatible integer to pointer conversion initializing 'void *' with an expression of type '__intcap __attribute__((cheri_no_provenance))'}}
+  // hybrid-c-error@-1 {{incompatible integer to pointer conversion initializing 'void * __capability' with an expression of type '__intcap __attribute__((cheri_no_provenance))'}}
+  // purecap-c-error@-2 {{incompatible integer to pointer conversion initializing 'void *' with an expression of type '__intcap __attribute__((cheri_no_provenance))'}}
   // hybrid-cxx-error@-3 {{cannot initialize a member subobject of type 'void * __capability' with an rvalue of type '__intcap __attribute__((cheri_no_provenance))'}}
   // purecap-cxx-error@-4 {{cannot initialize a member subobject of type 'void *' with an rvalue of type '__intcap __attribute__((cheri_no_provenance))'}}
 #ifdef __cplusplus
