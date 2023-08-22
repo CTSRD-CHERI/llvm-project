@@ -13,7 +13,7 @@
 define void @foo(i32* %a) {
 ; CHECK-LABEL: define {{[^@]+}}@foo
 ; CHECK-SAME: (ptr [[A:%.*]]) comdat {
-; CHECK-NEXT:    call void @__sanitizer_cov_trace_pc_guard(ptr getelementptr inbounds ([1 x i32], ptr @__sancov_gen_, i32 0, i64 0))
+; CHECK-NEXT:    call void @__sanitizer_cov_trace_pc_guard(ptr @__sancov_gen_)
 ; CHECK-NEXT:    ret void
 ;
   ret void
