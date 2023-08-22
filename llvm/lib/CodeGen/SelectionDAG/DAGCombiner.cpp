@@ -19075,6 +19075,7 @@ SDValue DAGCombiner::replaceStoreOfFPConstant(StoreSDNode *ST) {
 static SDValue convertUnalignedStoreOfLoadToMemmove(SDNode *N,
                                                     SelectionDAG &DAG,
                                                     bool IsBeforeLegalize,
+                                                    AAResults *AA,
                                                     const TargetLowering &TLI) {
   StoreSDNode *ST = dyn_cast<StoreSDNode>(N);
   if (!ST)
@@ -19138,7 +19139,7 @@ static SDValue convertUnalignedStoreOfLoadToMemmove(SDNode *N,
       return DAG.getMemmove(
           Chain, dl, Dest, Src, DAG.getConstant(StoreBytes, dl, MVT::i32),
           Align(Alignment), false, isTail, PreserveTags, ST->getPointerInfo(),
-          LD->getPointerInfo(), AAMDNodes(), "!!<CHERI-NODIAG>!!");
+          LD->getPointerInfo(), AAMDNodes(), AA, "!!<CHERI-NODIAG>!!");
     }
   }
   return SDValue();
@@ -19327,7 +19328,8 @@ SDValue DAGCombiner::visitSTORE(SDNode *N) {
     }
   }
 
-  if (SDValue Memmove = convertUnalignedStoreOfLoadToMemmove(N, DAG, !LegalTypes, TLI)) {
+  if (SDValue Memmove =
+          convertUnalignedStoreOfLoadToMemmove(N, DAG, !LegalTypes, AA, TLI)) {
     return Memmove;
   }
 

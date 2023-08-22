@@ -3210,7 +3210,8 @@ bool IRTranslator::emitSPDescriptorParent(StackProtectorDescriptor &SPD,
   const TargetLowering &TLI = *MF->getSubtarget().getTargetLowering();
   Type *PtrIRTy = Type::getInt8PtrTy(MF->getFunction().getContext());
   const LLT PtrTy = getLLTForType(*PtrIRTy, *DL);
-  LLT PtrMemTy = getLLTForMVT(TLI.getPointerMemTy(*DL));
+  LLT PtrMemTy =
+      getLLTForMVT(TLI.getPointerMemTy(*DL, PtrIRTy->getPointerAddressSpace()));
 
   MachineFrameInfo &MFI = ParentBB->getParent()->getFrameInfo();
   int FI = MFI.getStackProtectorIndex();
