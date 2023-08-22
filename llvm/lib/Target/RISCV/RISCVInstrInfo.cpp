@@ -747,30 +747,31 @@ MachineInstr *RISCVInstrInfo::foldMemoryOperandImpl(
    return nullptr;
 
   unsigned LoadOpc;
+  bool Purecap = RISCVABI::isCheriPureCapABI(STI.getTargetABI());
   switch (MI.getOpcode()) {
   default:
     if (RISCV::isSEXT_W(MI)) {
-      LoadOpc = RISCV::LW;
+      LoadOpc = Purecap ? RISCV::CLW : RISCV::LW;
       break;
     }
     if (RISCV::isZEXT_W(MI)) {
-      LoadOpc = RISCV::LWU;
+      LoadOpc = Purecap ? RISCV::CLWU : RISCV::LWU;
       break;
     }
     if (RISCV::isZEXT_B(MI)) {
-      LoadOpc = RISCV::LBU;
+      LoadOpc = Purecap ? RISCV::CLBU : RISCV::LBU;
       break;
     }
     return nullptr;
   case RISCV::SEXT_H:
-    LoadOpc = RISCV::LH;
+    LoadOpc = Purecap ? RISCV::CLH : RISCV::LH;
     break;
   case RISCV::SEXT_B:
-    LoadOpc = RISCV::LB;
+    LoadOpc = Purecap ? RISCV::CLB : RISCV::LB;
     break;
   case RISCV::ZEXT_H_RV32:
   case RISCV::ZEXT_H_RV64:
-    LoadOpc = RISCV::LHU;
+    LoadOpc = Purecap ? RISCV::CLHU : RISCV::LHU;
     break;
   }
 
