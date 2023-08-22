@@ -4751,7 +4751,7 @@ define void @mulhu_v4i64(<4 x i64>* %x) {
 ; LMULMAX1-RV64-NEXT:    vadd.vi v12, v10, 2
 ; LMULMAX1-RV64-NEXT:    vsrl.vv v9, v9, v12
 ; LMULMAX1-RV64-NEXT:    vsetvli zero, zero, e64, m1, tu, mu
-; LMULMAX1-RV64-NEXT:    vmv.s.x v11, a3
+; LMULMAX1-RV64-NEXT:    vmv.s.x v11, a2
 ; LMULMAX1-RV64-NEXT:    vsetvli zero, zero, e64, m1, ta, mu
 ; LMULMAX1-RV64-NEXT:    vmulhu.vv v8, v8, v11
 ; LMULMAX1-RV64-NEXT:    vadd.vi v10, v10, 1
@@ -5556,7 +5556,7 @@ define void @umin_v16i16(<16 x i16>* %x, <16 x i16>* %y) {
 ; LMULMAX1-RV32-NEXT:    addi a3, a1, 16
 ; LMULMAX1-RV32-NEXT:    vle16.v v10, (a3)
 ; LMULMAX1-RV32-NEXT:    vle16.v v11, (a1)
-; LMULMAX1-RV32-NEXT:    vminu.vv v9, v9, v10zZZZ
+; LMULMAX1-RV32-NEXT:    vminu.vv v9, v9, v10
 ; LMULMAX1-RV32-NEXT:    vminu.vv v8, v8, v11
 ; LMULMAX1-RV32-NEXT:    vse16.v v8, (a0)
 ; LMULMAX1-RV32-NEXT:    vse16.v v9, (a2)
