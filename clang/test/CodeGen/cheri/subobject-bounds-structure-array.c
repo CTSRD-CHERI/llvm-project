@@ -182,7 +182,7 @@ int test_fake_vla2(struct_fake_vla2 *s, long index) {
 // CHECK-NEXT:    [[CUR_LEN:%.*]] = call i64 @llvm.cheri.cap.length.get.i64(i8 addrspace(200)* nonnull [[TMP1]])
 // CHECK-NEXT:    [[REMAINING_BYTES:%.*]] = sub i64 [[CUR_LEN]], [[CUR_OFFSET]]
 // CHECK-NEXT:    [[TMP2:%.*]] = call i8 addrspace(200)* @llvm.cheri.cap.bounds.set.i64(i8 addrspace(200)* nonnull [[TMP1]], i64 [[REMAINING_BYTES]])
-// CHECK-NEXT:    call void @use_buf(i8 addrspace(200)* noundef [[TMP2]]) #[[ATTR11:[0-9]+]]
+// CHECK-NEXT:    call void @use_buf(i8 addrspace(200)* noundef [[TMP2]]) #[[ATTR12:[0-9]+]]
 // CHECK-NEXT:    [[CUR_OFFSET4:%.*]] = call i64 @llvm.cheri.cap.offset.get.i64(i8 addrspace(200)* [[TMP2]])
 // CHECK-NEXT:    [[CUR_LEN5:%.*]] = call i64 @llvm.cheri.cap.length.get.i64(i8 addrspace(200)* [[TMP2]])
 // CHECK-NEXT:    [[REMAINING_BYTES6:%.*]] = sub i64 [[CUR_LEN5]], [[CUR_OFFSET4]]
@@ -522,14 +522,14 @@ typedef struct {
 // CHECK-NEXT:  entry:
 // CHECK-NEXT:    [[ARRAY23:%.*]] = alloca [100 x i8], align 1, addrspace(200)
 // CHECK-NEXT:    [[ARRAY23_SUB:%.*]] = getelementptr inbounds [100 x i8], [100 x i8] addrspace(200)* [[ARRAY23]], i64 0, i64 0
-// CHECK-NEXT:    call void @llvm.lifetime.start.p200i8(i64 100, i8 addrspace(200)* nonnull [[ARRAY23_SUB]]) #[[ATTR11]]
+// CHECK-NEXT:    call void @llvm.lifetime.start.p200i8(i64 100, i8 addrspace(200)* nonnull [[ARRAY23_SUB]]) #[[ATTR12]]
 // CHECK-NEXT:    [[TMP0:%.*]] = call i8 addrspace(200)* @llvm.cheri.cap.bounds.set.i64(i8 addrspace(200)* nonnull [[ARRAY23_SUB]], i64 100)
 // CHECK-NEXT:    [[ARRAYIDX:%.*]] = getelementptr inbounds [100 x i8], [100 x i8] addrspace(200)* [[ARRAY23]], i64 0, i64 80
 // CHECK-NEXT:    [[TMP1:%.*]] = call i8 addrspace(200)* @llvm.cheri.cap.bounds.set.i64(i8 addrspace(200)* nonnull [[ARRAYIDX]], i64 10)
 // CHECK-NEXT:    [[ARRAYIDX2:%.*]] = getelementptr inbounds i8, i8 addrspace(200)* [[TMP1]], i64 [[INDEX]]
 // CHECK-NEXT:    store i8 65, i8 addrspace(200)* [[ARRAYIDX2]], align 1, !tbaa [[TBAA9]]
-// CHECK-NEXT:    call void @use_buf(i8 addrspace(200)* noundef [[TMP0]]) #[[ATTR11]]
-// CHECK-NEXT:    call void @llvm.lifetime.end.p200i8(i64 100, i8 addrspace(200)* nonnull [[ARRAY23_SUB]]) #[[ATTR11]]
+// CHECK-NEXT:    call void @use_buf(i8 addrspace(200)* noundef [[TMP0]]) #[[ATTR12]]
+// CHECK-NEXT:    call void @llvm.lifetime.end.p200i8(i64 100, i8 addrspace(200)* nonnull [[ARRAY23_SUB]]) #[[ATTR12]]
 // CHECK-NEXT:    ret i32 0
 //
 int test28a(long index) {
@@ -542,7 +542,7 @@ int test28a(long index) {
 }
 
 // CHECK-LABEL: define {{[^@]+}}@test28b
-// CHECK-SAME: ([[STRUCT_MY_STRUCT28:%.*]] addrspace(200)* addrspace(200)* nocapture noundef readonly [[ARRAY1:%.*]], i64 noundef signext [[INDEX:%.*]]) local_unnamed_addr addrspace(200) #[[ATTR2]] {
+// CHECK-SAME: ([[STRUCT_MY_STRUCT28:%.*]] addrspace(200)* addrspace(200)* nocapture noundef readonly [[ARRAY1:%.*]], i64 noundef signext [[INDEX:%.*]]) local_unnamed_addr addrspace(200) #[[ATTR11:[0-9]+]] {
 // CHECK-NEXT:  entry:
 // CHECK-NEXT:    [[ARRAYIDX:%.*]] = getelementptr inbounds [[STRUCT_MY_STRUCT28]] addrspace(200)*, [[STRUCT_MY_STRUCT28]] addrspace(200)* addrspace(200)* [[ARRAY1]], i64 4
 // CHECK-NEXT:    [[TMP0:%.*]] = load [[STRUCT_MY_STRUCT28]] addrspace(200)*, [[STRUCT_MY_STRUCT28]] addrspace(200)* addrspace(200)* [[ARRAYIDX]], align 16, !tbaa [[TBAA14:![0-9]+]]
@@ -563,15 +563,15 @@ int test28b(my_struct28 **array1, long index) {
 // CHECK-NEXT:  entry:
 // CHECK-NEXT:    [[ARRAY23:%.*]] = alloca [100 x i8], align 1, addrspace(200)
 // CHECK-NEXT:    [[ARRAY23_SUB:%.*]] = getelementptr inbounds [100 x i8], [100 x i8] addrspace(200)* [[ARRAY23]], i64 0, i64 0
-// CHECK-NEXT:    call void @llvm.lifetime.start.p200i8(i64 100, i8 addrspace(200)* nonnull [[ARRAY23_SUB]]) #[[ATTR11]]
+// CHECK-NEXT:    call void @llvm.lifetime.start.p200i8(i64 100, i8 addrspace(200)* nonnull [[ARRAY23_SUB]]) #[[ATTR12]]
 // CHECK-NEXT:    [[TMP0:%.*]] = call i8 addrspace(200)* @llvm.cheri.cap.bounds.set.i64(i8 addrspace(200)* nonnull [[ARRAY23_SUB]], i64 100)
 // CHECK-NEXT:    [[SUBSCRIPT_WITH_BOUNDS:%.*]] = bitcast i8 addrspace(200)* [[TMP0]] to [5 x %struct.my_struct28] addrspace(200)*
 // CHECK-NEXT:    [[TMP1:%.*]] = getelementptr inbounds [5 x %struct.my_struct28], [5 x %struct.my_struct28] addrspace(200)* [[SUBSCRIPT_WITH_BOUNDS]], i64 0, i64 [[INDEX1]], i32 0, i64 0
 // CHECK-NEXT:    [[TMP2:%.*]] = call i8 addrspace(200)* @llvm.cheri.cap.bounds.set.i64(i8 addrspace(200)* [[TMP1]], i64 10)
 // CHECK-NEXT:    [[ARRAYIDX2:%.*]] = getelementptr inbounds i8, i8 addrspace(200)* [[TMP2]], i64 [[INDEX2]]
 // CHECK-NEXT:    store i8 65, i8 addrspace(200)* [[ARRAYIDX2]], align 1, !tbaa [[TBAA9]]
-// CHECK-NEXT:    call void @use_buf(i8 addrspace(200)* noundef [[TMP0]]) #[[ATTR11]]
-// CHECK-NEXT:    call void @llvm.lifetime.end.p200i8(i64 100, i8 addrspace(200)* nonnull [[ARRAY23_SUB]]) #[[ATTR11]]
+// CHECK-NEXT:    call void @use_buf(i8 addrspace(200)* noundef [[TMP0]]) #[[ATTR12]]
+// CHECK-NEXT:    call void @llvm.lifetime.end.p200i8(i64 100, i8 addrspace(200)* nonnull [[ARRAY23_SUB]]) #[[ATTR12]]
 // CHECK-NEXT:    ret i32 0
 //
 int test28c(long index1, long index2) {
@@ -584,7 +584,7 @@ int test28c(long index1, long index2) {
 }
 
 // CHECK-LABEL: define {{[^@]+}}@test28d
-// CHECK-SAME: ([[STRUCT_MY_STRUCT28:%.*]] addrspace(200)* addrspace(200)* nocapture noundef readonly [[ARRAY1:%.*]], i64 noundef signext [[INDEX1:%.*]], i64 noundef signext [[INDEX2:%.*]]) local_unnamed_addr addrspace(200) #[[ATTR2]] {
+// CHECK-SAME: ([[STRUCT_MY_STRUCT28:%.*]] addrspace(200)* addrspace(200)* nocapture noundef readonly [[ARRAY1:%.*]], i64 noundef signext [[INDEX1:%.*]], i64 noundef signext [[INDEX2:%.*]]) local_unnamed_addr addrspace(200) #[[ATTR11]] {
 // CHECK-NEXT:  entry:
 // CHECK-NEXT:    [[ARRAYIDX:%.*]] = getelementptr inbounds [[STRUCT_MY_STRUCT28]] addrspace(200)*, [[STRUCT_MY_STRUCT28]] addrspace(200)* addrspace(200)* [[ARRAY1]], i64 [[INDEX1]]
 // CHECK-NEXT:    [[TMP0:%.*]] = load [[STRUCT_MY_STRUCT28]] addrspace(200)*, [[STRUCT_MY_STRUCT28]] addrspace(200)* addrspace(200)* [[ARRAYIDX]], align 16, !tbaa [[TBAA14]]

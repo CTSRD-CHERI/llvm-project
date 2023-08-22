@@ -82,10 +82,9 @@ void *test_remaining_size_not_array(void *data, long index) {
 // CHECK-NEXT:    [[CUR_OFFSET:%.*]] = tail call i64 @llvm.cheri.cap.offset.get.i64(i8 addrspace(200)* nonnull [[DATA1]])
 // CHECK-NEXT:    [[CUR_LEN:%.*]] = tail call i64 @llvm.cheri.cap.length.get.i64(i8 addrspace(200)* nonnull [[DATA1]])
 // CHECK-NEXT:    [[REMAINING_BYTES:%.*]] = sub i64 [[CUR_LEN]], [[CUR_OFFSET]]
-// CHECK-NEXT:    [[LESS_THAN_MAX_SIZE:%.*]] = icmp ult i64 [[REMAINING_BYTES]], 16
-// CHECK-NEXT:    [[BOUNDED_REMAINING_SIZE:%.*]] = select i1 [[LESS_THAN_MAX_SIZE]], i64 [[REMAINING_BYTES]], i64 16
-// CHECK-NEXT:    [[TMP0:%.*]] = tail call i8 addrspace(200)* @llvm.cheri.cap.bounds.set.i64(i8 addrspace(200)* nonnull [[DATA1]], i64 [[BOUNDED_REMAINING_SIZE]])
-// CHECK-NEXT:    ret i8 addrspace(200)* [[TMP0]]
+// CHECK-NEXT:    [[TMP0:%.*]] = tail call i64 @llvm.umin.i64(i64 [[REMAINING_BYTES]], i64 16)
+// CHECK-NEXT:    [[TMP1:%.*]] = tail call i8 addrspace(200)* @llvm.cheri.cap.bounds.set.i64(i8 addrspace(200)* nonnull [[DATA1]], i64 [[TMP0]])
+// CHECK-NEXT:    ret i8 addrspace(200)* [[TMP1]]
 //
 void *test_remaining_size_on_type(void *data, long index) {
   struct UseRemaining {
@@ -128,10 +127,9 @@ void *test_remaining_size_ignored_on_typedef(void *data, long index) {
 // CHECK-NEXT:    [[CUR_OFFSET:%.*]] = tail call i64 @llvm.cheri.cap.offset.get.i64(i8 addrspace(200)* nonnull [[DATA1]])
 // CHECK-NEXT:    [[CUR_LEN:%.*]] = tail call i64 @llvm.cheri.cap.length.get.i64(i8 addrspace(200)* nonnull [[DATA1]])
 // CHECK-NEXT:    [[REMAINING_BYTES:%.*]] = sub i64 [[CUR_LEN]], [[CUR_OFFSET]]
-// CHECK-NEXT:    [[LESS_THAN_MAX_SIZE:%.*]] = icmp ult i64 [[REMAINING_BYTES]], 127
-// CHECK-NEXT:    [[BOUNDED_REMAINING_SIZE:%.*]] = select i1 [[LESS_THAN_MAX_SIZE]], i64 [[REMAINING_BYTES]], i64 127
-// CHECK-NEXT:    [[TMP0:%.*]] = tail call i8 addrspace(200)* @llvm.cheri.cap.bounds.set.i64(i8 addrspace(200)* nonnull [[DATA1]], i64 [[BOUNDED_REMAINING_SIZE]])
-// CHECK-NEXT:    ret i8 addrspace(200)* [[TMP0]]
+// CHECK-NEXT:    [[TMP0:%.*]] = tail call i64 @llvm.umin.i64(i64 [[REMAINING_BYTES]], i64 127)
+// CHECK-NEXT:    [[TMP1:%.*]] = tail call i8 addrspace(200)* @llvm.cheri.cap.bounds.set.i64(i8 addrspace(200)* nonnull [[DATA1]], i64 [[TMP0]])
+// CHECK-NEXT:    ret i8 addrspace(200)* [[TMP1]]
 //
 void *test_remaining_size_maximum(void *data, long index) {
   struct LikeStructDirentRemainingSizeWithMax {
