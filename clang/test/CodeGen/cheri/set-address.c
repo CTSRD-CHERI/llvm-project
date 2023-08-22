@@ -27,7 +27,7 @@ cheri_setaddress(const void *__capability dst, ptraddr_t addr) {
 // HYBRID-NEXT:    [[TMP2:%.*]] = load i8 addrspace(200)*, i8 addrspace(200)** [[DST_ADDR_I]], align 16
 // HYBRID-NEXT:    [[TMP3:%.*]] = load i64, i64* [[ADDR_ADDR_I]], align 8
 // HYBRID-NEXT:    [[TMP4:%.*]] = load i8 addrspace(200)*, i8 addrspace(200)** [[DST_ADDR_I]], align 16
-// HYBRID-NEXT:    [[TMP5:%.*]] = call i64 @llvm.cheri.cap.address.get.i64(i8 addrspace(200)* [[TMP4]]) #[[ATTR2:[0-9]+]]
+// HYBRID-NEXT:    [[TMP5:%.*]] = call i64 @llvm.cheri.cap.address.get.i64(i8 addrspace(200)* [[TMP4]])
 // HYBRID-NEXT:    [[SUB_I:%.*]] = sub i64 [[TMP3]], [[TMP5]]
 // HYBRID-NEXT:    [[__BUILTIN_CHERI_OFFSET_INCREMENT_I:%.*]] = getelementptr i8, i8 addrspace(200)* [[TMP2]], i64 [[SUB_I]]
 // HYBRID-NEXT:    ret i8 addrspace(200)* [[__BUILTIN_CHERI_OFFSET_INCREMENT_I]]
@@ -48,7 +48,7 @@ cheri_setaddress(const void *__capability dst, ptraddr_t addr) {
 // PURECAP-NEXT:    [[TMP2:%.*]] = load i8 addrspace(200)*, i8 addrspace(200)* addrspace(200)* [[DST_ADDR_I]], align 16
 // PURECAP-NEXT:    [[TMP3:%.*]] = load i64, i64 addrspace(200)* [[ADDR_ADDR_I]], align 8
 // PURECAP-NEXT:    [[TMP4:%.*]] = load i8 addrspace(200)*, i8 addrspace(200)* addrspace(200)* [[DST_ADDR_I]], align 16
-// PURECAP-NEXT:    [[TMP5:%.*]] = call i64 @llvm.cheri.cap.address.get.i64(i8 addrspace(200)* [[TMP4]]) #[[ATTR2:[0-9]+]]
+// PURECAP-NEXT:    [[TMP5:%.*]] = call i64 @llvm.cheri.cap.address.get.i64(i8 addrspace(200)* [[TMP4]])
 // PURECAP-NEXT:    [[SUB_I:%.*]] = sub i64 [[TMP3]], [[TMP5]]
 // PURECAP-NEXT:    [[__BUILTIN_CHERI_OFFSET_INCREMENT_I:%.*]] = getelementptr i8, i8 addrspace(200)* [[TMP2]], i64 [[SUB_I]]
 // PURECAP-NEXT:    ret i8 addrspace(200)* [[__BUILTIN_CHERI_OFFSET_INCREMENT_I]]

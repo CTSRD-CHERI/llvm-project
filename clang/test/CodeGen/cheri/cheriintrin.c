@@ -14,77 +14,77 @@ void test(void *__capability cap, char *__capability cap2, __SIZE_TYPE__ i);
 
 // CHECK-LABEL: @test(
 // CHECK-NEXT:  entry:
-// CHECK-NEXT:    [[TMP0:%.*]] = call i64 @llvm.cheri.cap.address.get.i64(i8 addrspace(200)* [[CAP:%.*]])
+// CHECK-NEXT:    [[TMP0:%.*]] = tail call i64 @llvm.cheri.cap.address.get.i64(i8 addrspace(200)* [[CAP:%.*]])
 // CHECK-NEXT:    call void @use_size_t(i64 noundef zeroext [[TMP0]]) #[[ATTR5:[0-9]+]]
-// CHECK-NEXT:    [[TMP1:%.*]] = call i8 addrspace(200)* @llvm.cheri.cap.address.set.i64(i8 addrspace(200)* [[CAP]], i64 [[I:%.*]])
+// CHECK-NEXT:    [[TMP1:%.*]] = tail call i8 addrspace(200)* @llvm.cheri.cap.address.set.i64(i8 addrspace(200)* [[CAP]], i64 [[I:%.*]])
 // CHECK-NEXT:    call void @use_cap(i8 addrspace(200)* noundef [[TMP1]]) #[[ATTR5]]
-// CHECK-NEXT:    [[TMP2:%.*]] = call i64 @llvm.cheri.cap.base.get.i64(i8 addrspace(200)* [[CAP]])
+// CHECK-NEXT:    [[TMP2:%.*]] = tail call i64 @llvm.cheri.cap.base.get.i64(i8 addrspace(200)* [[CAP]])
 // CHECK-NEXT:    call void @use_size_t(i64 noundef zeroext [[TMP2]]) #[[ATTR5]]
-// CHECK-NEXT:    [[TMP3:%.*]] = call i64 @llvm.cheri.cap.length.get.i64(i8 addrspace(200)* [[CAP]])
+// CHECK-NEXT:    [[TMP3:%.*]] = tail call i64 @llvm.cheri.cap.length.get.i64(i8 addrspace(200)* [[CAP]])
 // CHECK-NEXT:    call void @use_size_t(i64 noundef zeroext [[TMP3]]) #[[ATTR5]]
-// CHECK-NEXT:    [[TMP4:%.*]] = call i64 @llvm.cheri.cap.offset.get.i64(i8 addrspace(200)* [[CAP]])
+// CHECK-NEXT:    [[TMP4:%.*]] = tail call i64 @llvm.cheri.cap.offset.get.i64(i8 addrspace(200)* [[CAP]])
 // CHECK-NEXT:    call void @use_size_t(i64 noundef zeroext [[TMP4]]) #[[ATTR5]]
-// CHECK-NEXT:    [[TMP5:%.*]] = call i8 addrspace(200)* @llvm.cheri.cap.offset.set.i64(i8 addrspace(200)* [[CAP]], i64 [[I]])
+// CHECK-NEXT:    [[TMP5:%.*]] = tail call i8 addrspace(200)* @llvm.cheri.cap.offset.set.i64(i8 addrspace(200)* [[CAP]], i64 [[I]])
 // CHECK-NEXT:    call void @use_cap(i8 addrspace(200)* noundef [[TMP5]]) #[[ATTR5]]
-// CHECK-NEXT:    [[TMP6:%.*]] = call i8 addrspace(200)* @llvm.cheri.cap.tag.clear(i8 addrspace(200)* [[CAP]])
+// CHECK-NEXT:    [[TMP6:%.*]] = tail call i8 addrspace(200)* @llvm.cheri.cap.tag.clear(i8 addrspace(200)* [[CAP]])
 // CHECK-NEXT:    call void @use_cap(i8 addrspace(200)* noundef [[TMP6]]) #[[ATTR5]]
-// CHECK-NEXT:    [[TMP7:%.*]] = call i1 @llvm.cheri.cap.tag.get(i8 addrspace(200)* [[CAP]])
+// CHECK-NEXT:    [[TMP7:%.*]] = tail call i1 @llvm.cheri.cap.tag.get(i8 addrspace(200)* [[CAP]])
 // CHECK-NEXT:    call void @use_bool(i1 noundef zeroext [[TMP7]]) #[[ATTR5]]
 // CHECK-NEXT:    call void @use_bool(i1 noundef zeroext [[TMP7]]) #[[ATTR5]]
 // CHECK-NEXT:    [[LNOT:%.*]] = xor i1 [[TMP7]], true
 // CHECK-NEXT:    call void @use_bool(i1 noundef zeroext [[LNOT]]) #[[ATTR5]]
-// CHECK-NEXT:    [[TMP8:%.*]] = call i1 @llvm.cheri.cap.equal.exact(i8 addrspace(200)* [[CAP]], i8 addrspace(200)* [[CAP2:%.*]])
+// CHECK-NEXT:    [[TMP8:%.*]] = tail call i1 @llvm.cheri.cap.equal.exact(i8 addrspace(200)* [[CAP]], i8 addrspace(200)* [[CAP2:%.*]])
 // CHECK-NEXT:    call void @use_bool(i1 noundef zeroext [[TMP8]]) #[[ATTR5]]
-// CHECK-NEXT:    [[TMP9:%.*]] = call i1 @llvm.cheri.cap.subset.test(i8 addrspace(200)* [[CAP]], i8 addrspace(200)* [[CAP2]])
+// CHECK-NEXT:    [[TMP9:%.*]] = tail call i1 @llvm.cheri.cap.subset.test(i8 addrspace(200)* [[CAP]], i8 addrspace(200)* [[CAP2]])
 // CHECK-NEXT:    call void @use_bool(i1 noundef zeroext [[TMP9]]) #[[ATTR5]]
-// CHECK-NEXT:    [[TMP10:%.*]] = call i64 @llvm.cheri.round.representable.length.i64(i64 [[I]])
+// CHECK-NEXT:    [[TMP10:%.*]] = tail call i64 @llvm.cheri.round.representable.length.i64(i64 [[I]])
 // CHECK-NEXT:    call void @use_size_t(i64 noundef zeroext [[TMP10]]) #[[ATTR5]]
-// CHECK-NEXT:    [[TMP11:%.*]] = call i64 @llvm.cheri.representable.alignment.mask.i64(i64 [[I]])
+// CHECK-NEXT:    [[TMP11:%.*]] = tail call i64 @llvm.cheri.representable.alignment.mask.i64(i64 [[I]])
 // CHECK-NEXT:    call void @use_size_t(i64 noundef zeroext [[TMP11]]) #[[ATTR5]]
-// CHECK-NEXT:    [[TMP12:%.*]] = call i8 addrspace(200)* @llvm.cheri.cap.bounds.set.i64(i8 addrspace(200)* [[CAP]], i64 [[I]])
+// CHECK-NEXT:    [[TMP12:%.*]] = tail call i8 addrspace(200)* @llvm.cheri.cap.bounds.set.i64(i8 addrspace(200)* [[CAP]], i64 [[I]])
 // CHECK-NEXT:    call void @use_cap(i8 addrspace(200)* noundef [[TMP12]]) #[[ATTR5]]
-// CHECK-NEXT:    [[TMP13:%.*]] = call i8 addrspace(200)* @llvm.cheri.cap.bounds.set.exact.i64(i8 addrspace(200)* [[CAP]], i64 [[I]])
+// CHECK-NEXT:    [[TMP13:%.*]] = tail call i8 addrspace(200)* @llvm.cheri.cap.bounds.set.exact.i64(i8 addrspace(200)* [[CAP]], i64 [[I]])
 // CHECK-NEXT:    call void @use_cap(i8 addrspace(200)* noundef [[TMP13]]) #[[ATTR5]]
-// CHECK-NEXT:    [[TMP14:%.*]] = call i64 @llvm.cheri.cap.type.get.i64(i8 addrspace(200)* [[CAP]])
+// CHECK-NEXT:    [[TMP14:%.*]] = tail call i64 @llvm.cheri.cap.type.get.i64(i8 addrspace(200)* [[CAP]])
 // CHECK-NEXT:    call void @use_size_t(i64 noundef zeroext [[TMP14]]) #[[ATTR5]]
-// CHECK-NEXT:    [[TMP15:%.*]] = call i1 @llvm.cheri.cap.sealed.get(i8 addrspace(200)* [[CAP]])
+// CHECK-NEXT:    [[TMP15:%.*]] = tail call i1 @llvm.cheri.cap.sealed.get(i8 addrspace(200)* [[CAP]])
 // CHECK-NEXT:    call void @use_bool(i1 noundef zeroext [[TMP15]]) #[[ATTR5]]
 // CHECK-NEXT:    [[LNOT1:%.*]] = xor i1 [[TMP15]], true
 // CHECK-NEXT:    call void @use_bool(i1 noundef zeroext [[LNOT1]]) #[[ATTR5]]
 // CHECK-NEXT:    [[CMP:%.*]] = icmp eq i64 [[TMP14]], -2
 // CHECK-NEXT:    call void @use_bool(i1 noundef zeroext [[CMP]]) #[[ATTR5]]
-// CHECK-NEXT:    [[TMP16:%.*]] = call i8 addrspace(200)* @llvm.cheri.cap.seal.entry(i8 addrspace(200)* [[CAP]])
+// CHECK-NEXT:    [[TMP16:%.*]] = tail call i8 addrspace(200)* @llvm.cheri.cap.seal.entry(i8 addrspace(200)* [[CAP]])
 // CHECK-NEXT:    call void @use_cap(i8 addrspace(200)* noundef [[TMP16]]) #[[ATTR5]]
-// CHECK-NEXT:    [[TMP17:%.*]] = call i8 addrspace(200)* @llvm.cheri.cap.seal(i8 addrspace(200)* [[CAP]], i8 addrspace(200)* [[CAP2]])
+// CHECK-NEXT:    [[TMP17:%.*]] = tail call i8 addrspace(200)* @llvm.cheri.cap.seal(i8 addrspace(200)* [[CAP]], i8 addrspace(200)* [[CAP2]])
 // CHECK-NEXT:    call void @use_cap(i8 addrspace(200)* noundef [[TMP17]]) #[[ATTR5]]
-// CHECK-NEXT:    [[TMP18:%.*]] = call i8 addrspace(200)* @llvm.cheri.cap.unseal(i8 addrspace(200)* [[CAP]], i8 addrspace(200)* [[CAP2]])
+// CHECK-NEXT:    [[TMP18:%.*]] = tail call i8 addrspace(200)* @llvm.cheri.cap.unseal(i8 addrspace(200)* [[CAP]], i8 addrspace(200)* [[CAP2]])
 // CHECK-NEXT:    call void @use_cap(i8 addrspace(200)* noundef [[TMP18]]) #[[ATTR5]]
-// CHECK-NEXT:    [[TMP19:%.*]] = call i8 addrspace(200)* @llvm.cheri.cap.build(i8 addrspace(200)* [[CAP]], i8 addrspace(200)* [[CAP2]])
+// CHECK-NEXT:    [[TMP19:%.*]] = tail call i8 addrspace(200)* @llvm.cheri.cap.build(i8 addrspace(200)* [[CAP]], i8 addrspace(200)* [[CAP2]])
 // CHECK-NEXT:    call void @use_cap(i8 addrspace(200)* noundef [[TMP19]]) #[[ATTR5]]
-// CHECK-NEXT:    [[TMP20:%.*]] = call i8 addrspace(200)* @llvm.cheri.cap.conditional.seal(i8 addrspace(200)* [[CAP]], i8 addrspace(200)* [[CAP2]])
+// CHECK-NEXT:    [[TMP20:%.*]] = tail call i8 addrspace(200)* @llvm.cheri.cap.conditional.seal(i8 addrspace(200)* [[CAP]], i8 addrspace(200)* [[CAP2]])
 // CHECK-NEXT:    call void @use_cap(i8 addrspace(200)* noundef [[TMP20]]) #[[ATTR5]]
-// CHECK-NEXT:    [[TMP21:%.*]] = call i8 addrspace(200)* @llvm.cheri.cap.type.copy(i8 addrspace(200)* [[CAP]], i8 addrspace(200)* [[CAP2]])
+// CHECK-NEXT:    [[TMP21:%.*]] = tail call i8 addrspace(200)* @llvm.cheri.cap.type.copy(i8 addrspace(200)* [[CAP]], i8 addrspace(200)* [[CAP2]])
 // CHECK-NEXT:    call void @use_cap(i8 addrspace(200)* noundef [[TMP21]]) #[[ATTR5]]
-// CHECK-NEXT:    [[TMP22:%.*]] = call i64 @llvm.cheri.cap.perms.get.i64(i8 addrspace(200)* [[CAP]])
+// CHECK-NEXT:    [[TMP22:%.*]] = tail call i64 @llvm.cheri.cap.perms.get.i64(i8 addrspace(200)* [[CAP]])
 // CHECK-NEXT:    [[CONV2:%.*]] = and i64 [[TMP22]], 4294967295
 // CHECK-NEXT:    call void @use_size_t(i64 noundef zeroext [[CONV2]]) #[[ATTR5]]
-// CHECK-NEXT:    [[TMP23:%.*]] = call i8 addrspace(200)* @llvm.cheri.cap.perms.and.i64(i8 addrspace(200)* [[CAP]], i64 4)
+// CHECK-NEXT:    [[TMP23:%.*]] = tail call i8 addrspace(200)* @llvm.cheri.cap.perms.and.i64(i8 addrspace(200)* [[CAP]], i64 4)
 // CHECK-NEXT:    call void @use_cap(i8 addrspace(200)* noundef [[TMP23]]) #[[ATTR5]]
-// CHECK-NEXT:    [[TMP24:%.*]] = call i8 addrspace(200)* @llvm.cheri.cap.perms.and.i64(i8 addrspace(200)* [[CAP]], i64 -3)
+// CHECK-NEXT:    [[TMP24:%.*]] = tail call i8 addrspace(200)* @llvm.cheri.cap.perms.and.i64(i8 addrspace(200)* [[CAP]], i64 -3)
 // CHECK-NEXT:    call void @use_cap(i8 addrspace(200)* noundef [[TMP24]]) #[[ATTR5]]
-// CHECK-NEXT:    [[TMP25:%.*]] = call i8 addrspace(200)* @llvm.cheri.ddc.get()
+// CHECK-NEXT:    [[TMP25:%.*]] = tail call i8 addrspace(200)* @llvm.cheri.ddc.get()
 // CHECK-NEXT:    call void @use_cap(i8 addrspace(200)* noundef [[TMP25]]) #[[ATTR5]]
-// CHECK-NEXT:    [[TMP26:%.*]] = call i8 addrspace(200)* @llvm.cheri.pcc.get()
+// CHECK-NEXT:    [[TMP26:%.*]] = tail call i8 addrspace(200)* @llvm.cheri.pcc.get()
 // CHECK-NEXT:    call void @use_cap(i8 addrspace(200)* noundef [[TMP26]]) #[[ATTR5]]
-// CHECK-NEXT:    [[TMP27:%.*]] = call i64 @llvm.cheri.cap.flags.get.i64(i8 addrspace(200)* [[CAP]])
+// CHECK-NEXT:    [[TMP27:%.*]] = tail call i64 @llvm.cheri.cap.flags.get.i64(i8 addrspace(200)* [[CAP]])
 // CHECK-NEXT:    call void @use_size_t(i64 noundef zeroext [[TMP27]]) #[[ATTR5]]
-// CHECK-NEXT:    [[TMP28:%.*]] = call i8 addrspace(200)* @llvm.cheri.cap.flags.set.i64(i8 addrspace(200)* [[CAP]], i64 [[I]])
+// CHECK-NEXT:    [[TMP28:%.*]] = tail call i8 addrspace(200)* @llvm.cheri.cap.flags.set.i64(i8 addrspace(200)* [[CAP]], i64 [[I]])
 // CHECK-NEXT:    call void @use_cap(i8 addrspace(200)* noundef [[TMP28]]) #[[ATTR5]]
-// CHECK-NEXT:    [[TMP29:%.*]] = call i64 @llvm.cheri.cap.high.get.i64(i8 addrspace(200)* [[CAP]])
+// CHECK-NEXT:    [[TMP29:%.*]] = tail call i64 @llvm.cheri.cap.high.get.i64(i8 addrspace(200)* [[CAP]])
 // CHECK-NEXT:    call void @use_size_t(i64 noundef zeroext [[TMP29]]) #[[ATTR5]]
-// CHECK-NEXT:    [[TMP30:%.*]] = call i8 addrspace(200)* @llvm.cheri.cap.high.set.i64(i8 addrspace(200)* [[CAP]], i64 [[I]])
+// CHECK-NEXT:    [[TMP30:%.*]] = tail call i8 addrspace(200)* @llvm.cheri.cap.high.set.i64(i8 addrspace(200)* [[CAP]], i64 [[I]])
 // CHECK-NEXT:    call void @use_cap(i8 addrspace(200)* noundef [[TMP30]]) #[[ATTR5]]
-// CHECK-NEXT:    [[TMP31:%.*]] = call i64 @llvm.cheri.cap.load.tags.i64(i8 addrspace(200)* [[CAP]])
+// CHECK-NEXT:    [[TMP31:%.*]] = tail call i64 @llvm.cheri.cap.load.tags.i64(i8 addrspace(200)* [[CAP]])
 // CHECK-NEXT:    call void @use_size_t(i64 noundef zeroext [[TMP31]]) #[[ATTR5]]
 // CHECK-NEXT:    ret void
 //
@@ -169,7 +169,7 @@ void test_alignment_builtins(void *__capability cap, __SIZE_TYPE__ align);
 // CHECK-LABEL: @test_alignment_builtins(
 // CHECK-NEXT:  entry:
 // CHECK-NEXT:    [[MASK:%.*]] = add i64 [[ALIGN:%.*]], -1
-// CHECK-NEXT:    [[PTRADDR:%.*]] = call i64 @llvm.cheri.cap.address.get.i64(i8 addrspace(200)* [[CAP:%.*]])
+// CHECK-NEXT:    [[PTRADDR:%.*]] = tail call i64 @llvm.cheri.cap.address.get.i64(i8 addrspace(200)* [[CAP:%.*]])
 // CHECK-NEXT:    [[OVER_BOUNDARY:%.*]] = add i64 [[PTRADDR]], [[MASK]]
 // CHECK-NEXT:    [[INVERTED_MASK:%.*]] = sub i64 0, [[ALIGN]]
 // CHECK-NEXT:    [[ALIGNED_INTPTR:%.*]] = and i64 [[OVER_BOUNDARY]], [[INVERTED_MASK]]
