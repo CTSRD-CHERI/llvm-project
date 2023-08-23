@@ -9974,7 +9974,7 @@ Value *CodeGenFunction::EmitTileslice(Value *Offset, Value *Base) {
   return Builder.CreateAdd(Base, CastOffset, "tileslice");
 }
 
-Value *CodeGenFunction::EmitSMELd1St1(SVETypeFlags TypeFlags,
+Value *CodeGenFunction::EmitSMELd1St1(const SVETypeFlags &TypeFlags,
                                       SmallVectorImpl<Value *> &Ops,
                                       unsigned IntID) {
   Ops[3] = EmitSVEPredicateCast(
@@ -10004,7 +10004,7 @@ Value *CodeGenFunction::EmitSMELd1St1(SVETypeFlags TypeFlags,
   return Builder.CreateCall(F, NewOps);
 }
 
-Value *CodeGenFunction::EmitSMEReadWrite(SVETypeFlags TypeFlags,
+Value *CodeGenFunction::EmitSMEReadWrite(const SVETypeFlags &TypeFlags,
                                          SmallVectorImpl<Value *> &Ops,
                                          unsigned IntID) {
   auto *VecTy = getSVEType(TypeFlags);
@@ -10021,7 +10021,7 @@ Value *CodeGenFunction::EmitSMEReadWrite(SVETypeFlags TypeFlags,
   return Builder.CreateCall(F, Ops);
 }
 
-Value *CodeGenFunction::EmitSMEZero(SVETypeFlags TypeFlags,
+Value *CodeGenFunction::EmitSMEZero(const SVETypeFlags &TypeFlags,
                                     SmallVectorImpl<Value *> &Ops,
                                     unsigned IntID) {
   // svzero_za() intrinsic zeros the entire za tile and has no paramters.
@@ -10031,7 +10031,7 @@ Value *CodeGenFunction::EmitSMEZero(SVETypeFlags TypeFlags,
   return Builder.CreateCall(F, Ops);
 }
 
-Value *CodeGenFunction::EmitSMELdrStr(SVETypeFlags TypeFlags,
+Value *CodeGenFunction::EmitSMELdrStr(const SVETypeFlags &TypeFlags,
                                       SmallVectorImpl<Value *> &Ops,
                                       unsigned IntID) {
   Function *Cntsb = CGM.getIntrinsic(Intrinsic::aarch64_sme_cntsb);
