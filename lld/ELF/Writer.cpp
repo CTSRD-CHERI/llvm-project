@@ -2291,9 +2291,9 @@ template <class ELFT> void Writer<ELFT>::finalizeSections() {
         reg->type = STT_NOTYPE;
         reg->section = nullptr;
         reg->value = 0;
-        reg->setSize(0);
-        /* Avoid crashes when calling getSize() */
+        // Avoid crashes when calling getSize()/setSize().
         reg->isSectionStartSymbol = false;
+        reg->setSize(0);
       }
   }
 }
