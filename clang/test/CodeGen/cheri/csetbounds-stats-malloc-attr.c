@@ -23,37 +23,37 @@ void *no_alloc_attr(int size) __malloc_like __result_use_check;
 // CHECK-LABEL: alignment_bits,size,kind,source_loc,compiler_pass,details
 void *test_malloc(int n) {
   return malloc(n);
-  // CHECK: 4,<unknown>,h,"{{.+}}csetbounds-stats-malloc-attr.c:[[@LINE-1]]","function with alloc_size","call to malloc"
+  // CHECK: 0,<unknown>,h,"{{.+}}csetbounds-stats-malloc-attr.c:[[@LINE-1]]","function with alloc_size","call to malloc"
 }
 
 void *test_malloc2(void) {
   return malloc(16);
-  // CHECK: 4,16,h,"{{.+}}csetbounds-stats-malloc-attr.c:[[@LINE-1]]","function with alloc_size","call to malloc"
+  // CHECK: 0,16,h,"{{.+}}csetbounds-stats-malloc-attr.c:[[@LINE-1]]","function with alloc_size","call to malloc"
 }
 
 void *test_calloc(int n) {
   return calloc(8, n);
-  // CHECK: 4,<unknown multiple of 8>,h,"{{.+}}csetbounds-stats-malloc-attr.c:[[@LINE-1]]","function with alloc_size","call to calloc"
+  // CHECK: 0,<unknown multiple of 8>,h,"{{.+}}csetbounds-stats-malloc-attr.c:[[@LINE-1]]","function with alloc_size","call to calloc"
 }
 
 void *test_calloc2(void) {
   return calloc(16, 8);
-  // CHECK-NEXT: 4,128,h,"{{.+}}csetbounds-stats-malloc-attr.c:[[@LINE-1]]","function with alloc_size","call to calloc"
+  // CHECK-NEXT: 0,128,h,"{{.+}}csetbounds-stats-malloc-attr.c:[[@LINE-1]]","function with alloc_size","call to calloc"
 }
 
 void *test_calloc3(int n) {
   return calloc(n, 9);
-  // CHECK-NEXT: 4,<unknown multiple of 9>,h,"{{.+}}csetbounds-stats-malloc-attr.c:[[@LINE-1]]","function with alloc_size","call to calloc"
+  // CHECK-NEXT: 0,<unknown multiple of 9>,h,"{{.+}}csetbounds-stats-malloc-attr.c:[[@LINE-1]]","function with alloc_size","call to calloc"
 }
 
 void *test_realloc(void *ptr, int n) {
   return realloc(ptr, n);
-  // CHECK-NEXT: 4,<unknown>,h,"{{.+}}csetbounds-stats-malloc-attr.c:[[@LINE-1]]","function with alloc_size","call to realloc"
+  // CHECK-NEXT: 0,<unknown>,h,"{{.+}}csetbounds-stats-malloc-attr.c:[[@LINE-1]]","function with alloc_size","call to realloc"
 }
 
 void *test_realloc2(void *ptr) {
   return realloc(ptr, 55);
-  // CHECK-NEXT: 4,55,h,"{{.+}}csetbounds-stats-malloc-attr.c:[[@LINE-1]]","function with alloc_size","call to realloc"
+  // CHECK-NEXT: 0,55,h,"{{.+}}csetbounds-stats-malloc-attr.c:[[@LINE-1]]","function with alloc_size","call to realloc"
 }
 
 void *test_my_alloc(int n) {
