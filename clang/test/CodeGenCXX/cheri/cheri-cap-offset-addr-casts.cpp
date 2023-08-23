@@ -31,8 +31,8 @@ void funcref_bad(void (&f)(void)) {
 // CHECK-SAME: ([[CLASS_A:%.*]] addrspace(200)* noundef nonnull align 1 dereferenceable(1) [[A:%.*]]) local_unnamed_addr addrspace(200) #[[ATTR1:[0-9]+]] {
 // CHECK-NEXT:  entry:
 // CHECK-NEXT:    [[TMP0:%.*]] = getelementptr inbounds [[CLASS_A]], [[CLASS_A]] addrspace(200)* [[A]], i64 0, i32 0
-// CHECK-NEXT:    [[TMP1:%.*]] = call i64 @llvm.cheri.cap.offset.get.i64(i8 addrspace(200)* nonnull [[TMP0]])
-// CHECK-NEXT:    [[TMP2:%.*]] = call i64 @llvm.cheri.cap.address.get.i64(i8 addrspace(200)* nonnull [[TMP0]])
+// CHECK-NEXT:    [[TMP1:%.*]] = tail call i64 @llvm.cheri.cap.offset.get.i64(i8 addrspace(200)* nonnull [[TMP0]])
+// CHECK-NEXT:    [[TMP2:%.*]] = tail call i64 @llvm.cheri.cap.address.get.i64(i8 addrspace(200)* nonnull [[TMP0]])
 // CHECK-NEXT:    [[ADD:%.*]] = add nsw i64 [[TMP2]], [[TMP1]]
 // CHECK-NEXT:    ret i64 [[ADD]]
 //
@@ -47,8 +47,8 @@ long objrefs_addrof(A& a) {
 // CHECK-SAME: (void () addrspace(200)* noundef nonnull [[F:%.*]]) local_unnamed_addr addrspace(200) #[[ATTR1]] {
 // CHECK-NEXT:  entry:
 // CHECK-NEXT:    [[TMP0:%.*]] = bitcast void () addrspace(200)* [[F]] to i8 addrspace(200)*
-// CHECK-NEXT:    [[TMP1:%.*]] = call i64 @llvm.cheri.cap.offset.get.i64(i8 addrspace(200)* nonnull [[TMP0]])
-// CHECK-NEXT:    [[TMP2:%.*]] = call i64 @llvm.cheri.cap.address.get.i64(i8 addrspace(200)* nonnull [[TMP0]])
+// CHECK-NEXT:    [[TMP1:%.*]] = tail call i64 @llvm.cheri.cap.offset.get.i64(i8 addrspace(200)* nonnull [[TMP0]])
+// CHECK-NEXT:    [[TMP2:%.*]] = tail call i64 @llvm.cheri.cap.address.get.i64(i8 addrspace(200)* nonnull [[TMP0]])
 // CHECK-NEXT:    [[ADD:%.*]] = add nsw i64 [[TMP2]], [[TMP1]]
 // CHECK-NEXT:    ret i64 [[ADD]]
 //

@@ -22,8 +22,8 @@ struct foo {
 // CHECK-LABEL: define {{[^@]+}}@_Z17call_good_uintcapu11__uintcap_t
 // CHECK-SAME: (i8 addrspace(200)* noundef [[CAP:%.*]]) local_unnamed_addr #[[ATTR0:[0-9]+]] {
 // CHECK-NEXT:  entry:
-// CHECK-NEXT:    [[TMP0:%.*]] = tail call i64 @llvm.cheri.cap.address.get.i64(i8 addrspace(200)* [[CAP]]) #[[ATTR3:[0-9]+]]
-// CHECK-NEXT:    [[TMP1:%.*]] = tail call i64 @llvm.cheri.cap.offset.get.i64(i8 addrspace(200)* [[CAP]]) #[[ATTR3]]
+// CHECK-NEXT:    [[TMP0:%.*]] = tail call i64 @llvm.cheri.cap.address.get.i64(i8 addrspace(200)* [[CAP]])
+// CHECK-NEXT:    [[TMP1:%.*]] = tail call i64 @llvm.cheri.cap.offset.get.i64(i8 addrspace(200)* [[CAP]])
 // CHECK-NEXT:    [[ADD:%.*]] = add nsw i64 [[TMP1]], [[TMP0]]
 // CHECK-NEXT:    ret i64 [[ADD]]
 //
@@ -34,8 +34,8 @@ long call_good_uintcap(__uintcap_t cap) {
 // CHECK-LABEL: define {{[^@]+}}@_Z13call_good_ptrU12__capabilityPv
 // CHECK-SAME: (i8 addrspace(200)* noundef [[CAP:%.*]]) local_unnamed_addr #[[ATTR0]] {
 // CHECK-NEXT:  entry:
-// CHECK-NEXT:    [[TMP0:%.*]] = tail call i64 @llvm.cheri.cap.address.get.i64(i8 addrspace(200)* [[CAP]]) #[[ATTR3]]
-// CHECK-NEXT:    [[TMP1:%.*]] = tail call i64 @llvm.cheri.cap.offset.get.i64(i8 addrspace(200)* [[CAP]]) #[[ATTR3]]
+// CHECK-NEXT:    [[TMP0:%.*]] = tail call i64 @llvm.cheri.cap.address.get.i64(i8 addrspace(200)* [[CAP]])
+// CHECK-NEXT:    [[TMP1:%.*]] = tail call i64 @llvm.cheri.cap.offset.get.i64(i8 addrspace(200)* [[CAP]])
 // CHECK-NEXT:    [[ADD:%.*]] = add nsw i64 [[TMP1]], [[TMP0]]
 // CHECK-NEXT:    ret i64 [[ADD]]
 //

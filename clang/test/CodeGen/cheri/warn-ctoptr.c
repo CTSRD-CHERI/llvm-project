@@ -4,6 +4,7 @@
 
 // Check all the warnings:
 // TODO: Check the IR instead of assembly
+// REQUIRES: mips-registered-target
 // RUN: %cheri_cc1 -Wcheri-pointer-conversion -DCHECK_BAD_CODE %s -emit-llvm -o /dev/null -verify -cheri-uintcap=offset
 // RUN: %cheri_purecap_cc1 -Wcheri-pointer-conversion -DCHECK_BAD_CODE -S %s -o - -O0 -cheri-uintcap=offset -verify=purecap
 // RUN: %cheri_cc1 -Wcheri-pointer-conversion -S %s -o - -O1 -verify | FileCheck %s -implicit-check-not ctoptr  --check-prefixes CHECK,HYBRID
@@ -168,14 +169,14 @@ void *cast_capptr_to_intptr_explicit(void *__capability cap) {
 
 void *cast_uintcap_to_intptr_implicit(unsigned __intcap cap) {
   // Should also warn about ctoptr
-  return cap; // expected-warning{{incompatible integer to pointer conversion returning 'unsigned __intcap' from a function with result type 'void *'}}
-  // purecap-warning@-1{{incompatible integer to pointer conversion returning 'unsigned __intcap' from a function with result type 'void *'}}
+  return cap; // expected-error{{incompatible integer to pointer conversion returning 'unsigned __intcap' from a function with result type 'void *'}}
+  // purecap-error@-1{{incompatible integer to pointer conversion returning 'unsigned __intcap' from a function with result type 'void *'}}
 }
 
 void *__capability cast_uintcap_to_cap_ptr_implicit(unsigned __intcap cap) {
   // Should also warn about ctoptr
-  return cap; // expected-warning{{incompatible integer to pointer conversion returning 'unsigned __intcap' from a function with result type 'void * __capability'}}
-  // purecap-warning@-1{{incompatible integer to pointer conversion returning 'unsigned __intcap' from a function with result type 'void *'}}
+  return cap; // expected-error{{incompatible integer to pointer conversion returning 'unsigned __intcap' from a function with result type 'void * __capability'}}
+  // purecap-error@-1{{incompatible integer to pointer conversion returning 'unsigned __intcap' from a function with result type 'void *'}}
 }
 
 void *cast_uintcap_to_intptr_explicit(unsigned __intcap cap) {
