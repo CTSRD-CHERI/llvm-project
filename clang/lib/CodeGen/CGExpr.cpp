@@ -691,14 +691,7 @@ tightenCHERIBounds(CodeGenFunction &CGF, SubObjectBoundsKind Kind,
         GEP = cast<llvm::GetElementPtrInst>(CE->getAsInstruction());
         CGF.Builder.Insert(GEP);
         ValueToBound = GEP->getPointerOperand();
-      } else {
-        assert(CE->isCast() && "expected GEP or cast");
       }
-    } else if (auto I = dyn_cast<llvm::Instruction>(Value)) {
-      // Other case where we use container size is unions -> must be a cast
-      assert(I->isCast() && "expected GEP or cast");
-    } else {
-      llvm_unreachable("Container type is not GEP or cast");
     }
   }
   llvm::Type *BoundedTy = ValueToBound->getType();
