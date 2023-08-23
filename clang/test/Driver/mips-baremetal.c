@@ -21,7 +21,7 @@
 // SYSROOT-SAME:   "-L[[SYSROOT]]/lib"
 // NOSYSROOT-SAME: "-L[[RESOURCE_DIR]]/lib"
 // CHERIABI-SAME: "-L[[RESOURCE_DIR]]/libcheri"
-// CXX-SAME: "-lc++" "-lcxxrt" "-lunwind"
+// CXX-SAME: "-lc++" "-lc++abi" "-lunwind"
 // CHECK-SAME: "-lc" "-lm"
 // CHERIABI-SAME: "-lclang_rt.builtins-cheri"
 // N64-SAME: "-lclang_rt.builtins-mips64"
