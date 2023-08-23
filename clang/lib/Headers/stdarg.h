@@ -30,52 +30,27 @@
 #endif
 
 #ifdef __need___va_list
-#ifndef __GNUC_VA_LIST
-#define __GNUC_VA_LIST
-typedef __builtin_va_list __gnuc_va_list;
-#endif
+#include <__stdarg___gnuc_va_list.h>
 #undef __need___va_list
 #endif /* defined(__need___va_list) */
 
 #ifdef __need_va_list
-#if !defined(_VA_LIST) && !defined(_VA_LIST_DECLARED)
-typedef __builtin_va_list va_list;
-#define _VA_LIST
-#define _VA_LIST_DECLARED /* FreeBSD */
-#endif
+#include <__stdarg_va_list.h>
 #undef __need_va_list
 #endif /* defined(__need_va_list) */
 
 #ifdef __need_va_arg
-#ifndef va_start
-#if defined(__STDC_VERSION__) && __STDC_VERSION__ >= 202311L
-/* C23 does not require the second parameter for va_start. */
-#define va_start(ap, ...) __builtin_va_start(ap, 0)
-#else
-/* Versions before C23 do require the second parameter. */
-#define va_start(ap, param) __builtin_va_start(ap, param)
-#endif
-#endif // va_start
-#ifndef va_end
-#define va_end(ap) __builtin_va_end(ap)
-#endif // va_end
-#ifndef va_arg
-#define va_arg(ap, type) __builtin_va_arg(ap, type)
-#endif // va_arg
+#include <__stdarg_va_arg.h>
 #undef __need_va_arg
 #endif /* defined(__need_va_arg) */
 
 #ifdef __need___va_copy
-#ifndef __va_copy
-#define __va_copy(d, s) __builtin_va_copy(d, s)
-#endif // __va_copy
+#include <__stdarg___va_copy.h>
 #undef __need___va_copy
 #endif /* defined(__need___va_copy) */
 
 #ifdef __need_va_copy
-#ifndef va_copy
-#define va_copy(dest, src) __builtin_va_copy(dest, src)
-#endif // va_copy
+#include <__stdarg_va_copy.h>
 #undef __need_va_copy
 #endif /* defined(__need_va_copy) */
 
