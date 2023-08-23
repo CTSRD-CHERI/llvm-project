@@ -2980,6 +2980,7 @@ enum CXCallingConv {
   CXCallingConv_AArch64VectorCall = 16,
   CXCallingConv_SwiftAsync = 17,
   CXCallingConv_AArch64SVEPCS = 18,
+  CXCallingConv_M68kRTD = 19,
 
   CXCallingConv_CHERICCall = 80,
   CXCallingConv_CHERICCallee = 81,
