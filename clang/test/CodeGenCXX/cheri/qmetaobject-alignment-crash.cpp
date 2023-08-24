@@ -10,12 +10,10 @@ const int *j = &i;
 // CHECK-LABEL: define {{[^@]+}}@_Z1bv
 // CHECK-SAME: () addrspace(200) #[[ATTR0:[0-9]+]] {
 // CHECK-NEXT:  entry:
-// CHECK-NEXT:    [[EXCEPTION:%.*]] = call i8 addrspace(200)* @__cxa_allocate_exception(i64 16) #[[ATTR4:[0-9]+]]
-// CHECK-NEXT:    [[TMP0:%.*]] = bitcast i8 addrspace(200)* [[EXCEPTION]] to [[CLASS_A:%.*]] addrspace(200)*
-// CHECK-NEXT:    [[TMP1:%.*]] = bitcast [[CLASS_A]] addrspace(200)* [[TMP0]] to i8 addrspace(200)*
-// CHECK-NEXT:    call void @llvm.memset.p200i8.i64(i8 addrspace(200)* align 16 [[TMP1]], i8 0, i64 16, i1 false)
-// CHECK-NEXT:    call void @_ZN1aC1Ev([[CLASS_A]] addrspace(200)* noundef nonnull align 16 dereferenceable(16) [[TMP0]]) #[[ATTR4]]
-// CHECK-NEXT:    call void @__cxa_throw(i8 addrspace(200)* [[EXCEPTION]], i8 addrspace(200)* bitcast (i8 addrspace(200)* addrspace(200)* @_ZTI1a to i8 addrspace(200)*), i8 addrspace(200)* bitcast (void ([[CLASS_A]] addrspace(200)*) addrspace(200)* @_ZN1aD1Ev to i8 addrspace(200)*)) #[[ATTR5:[0-9]+]]
+// CHECK-NEXT:    [[EXCEPTION:%.*]] = call ptr addrspace(200) @__cxa_allocate_exception(i64 16) #[[ATTR4:[0-9]+]]
+// CHECK-NEXT:    call void @llvm.memset.p200.i64(ptr addrspace(200) align 16 [[EXCEPTION]], i8 0, i64 16, i1 false)
+// CHECK-NEXT:    call void @_ZN1aC1Ev(ptr addrspace(200) noundef nonnull align 16 dereferenceable(16) [[EXCEPTION]]) #[[ATTR4]]
+// CHECK-NEXT:    call void @__cxa_throw(ptr addrspace(200) [[EXCEPTION]], ptr addrspace(200) @_ZTI1a, ptr addrspace(200) @_ZN1aD1Ev) #[[ATTR5:[0-9]+]]
 // CHECK-NEXT:    unreachable
 //
 void b() {

@@ -22,22 +22,22 @@ typedef int A::* AMemberDataPtr;
 // MIPS-PURECAP-LABEL: define {{[^@]+}}@_Z10return_p2fv
 // MIPS-PURECAP-SAME: () local_unnamed_addr addrspace(200) #[[ATTR0:[0-9]+]] {
 // MIPS-PURECAP-NEXT:  entry:
-// MIPS-PURECAP-NEXT:    ret { i8 addrspace(200)*, i64 } { i8 addrspace(200)* bitcast (i32 ([[CLASS_A:%.*]] addrspace(200)*) addrspace(200)* @_ZN1A3fooEv to i8 addrspace(200)*), i64 0 }
+// MIPS-PURECAP-NEXT:    ret { ptr addrspace(200), i64 } { ptr addrspace(200) @_ZN1A3fooEv, i64 0 }
 //
 // MIPS-NOCHERI-LABEL: define {{[^@]+}}@_Z10return_p2fv
 // MIPS-NOCHERI-SAME: () local_unnamed_addr #[[ATTR0:[0-9]+]] {
 // MIPS-NOCHERI-NEXT:  entry:
-// MIPS-NOCHERI-NEXT:    ret { i64, i64 } { i64 ptrtoint (i32 (%class.A*)* @_ZN1A3fooEv to i64), i64 0 }
+// MIPS-NOCHERI-NEXT:    ret { i64, i64 } { i64 ptrtoint (ptr @_ZN1A3fooEv to i64), i64 0 }
 //
 // RISCV64-NOCHERI-LABEL: define {{[^@]+}}@_Z10return_p2fv
 // RISCV64-NOCHERI-SAME: () local_unnamed_addr #[[ATTR0:[0-9]+]] {
 // RISCV64-NOCHERI-NEXT:  entry:
-// RISCV64-NOCHERI-NEXT:    ret [2 x i64] [i64 ptrtoint (i32 (%class.A*)* @_ZN1A3fooEv to i64), i64 0]
+// RISCV64-NOCHERI-NEXT:    ret [2 x i64] [i64 ptrtoint (ptr @_ZN1A3fooEv to i64), i64 0]
 //
 // RISCV64-PURECAP-LABEL: define {{[^@]+}}@_Z10return_p2fv
-// RISCV64-PURECAP-SAME: ({ i8 addrspace(200)*, i64 } addrspace(200)* noalias nocapture writeonly sret({ i8 addrspace(200)*, i64 }) align 16 [[AGG_RESULT:%.*]]) local_unnamed_addr addrspace(200) #[[ATTR0:[0-9]+]] {
+// RISCV64-PURECAP-SAME: (ptr addrspace(200) noalias nocapture writeonly sret({ ptr addrspace(200), i64 }) align 16 [[AGG_RESULT:%.*]]) local_unnamed_addr addrspace(200) #[[ATTR0:[0-9]+]] {
 // RISCV64-PURECAP-NEXT:  entry:
-// RISCV64-PURECAP-NEXT:    store { i8 addrspace(200)*, i64 } { i8 addrspace(200)* bitcast (i32 ([[CLASS_A:%.*]] addrspace(200)*) addrspace(200)* @_ZN1A3fooEv to i8 addrspace(200)*), i64 0 }, { i8 addrspace(200)*, i64 } addrspace(200)* [[AGG_RESULT]], align 16, !tbaa [[TBAA4:![0-9]+]]
+// RISCV64-PURECAP-NEXT:    store { ptr addrspace(200), i64 } { ptr addrspace(200) @_ZN1A3fooEv, i64 0 }, ptr addrspace(200) [[AGG_RESULT]], align 16, !tbaa [[TBAA4:![0-9]+]]
 // RISCV64-PURECAP-NEXT:    ret void
 //
 AMemberFuncPtr return_p2f() {
@@ -47,7 +47,7 @@ AMemberFuncPtr return_p2f() {
 // MIPS-PURECAP-LABEL: define {{[^@]+}}@_Z15return_p2f_nullv
 // MIPS-PURECAP-SAME: () local_unnamed_addr addrspace(200) #[[ATTR0]] {
 // MIPS-PURECAP-NEXT:  entry:
-// MIPS-PURECAP-NEXT:    ret { i8 addrspace(200)*, i64 } zeroinitializer
+// MIPS-PURECAP-NEXT:    ret { ptr addrspace(200), i64 } zeroinitializer
 //
 // MIPS-NOCHERI-LABEL: define {{[^@]+}}@_Z15return_p2f_nullv
 // MIPS-NOCHERI-SAME: () local_unnamed_addr #[[ATTR0]] {
@@ -60,10 +60,9 @@ AMemberFuncPtr return_p2f() {
 // RISCV64-NOCHERI-NEXT:    ret [2 x i64] zeroinitializer
 //
 // RISCV64-PURECAP-LABEL: define {{[^@]+}}@_Z15return_p2f_nullv
-// RISCV64-PURECAP-SAME: ({ i8 addrspace(200)*, i64 } addrspace(200)* noalias nocapture writeonly sret({ i8 addrspace(200)*, i64 }) align 16 [[AGG_RESULT:%.*]]) local_unnamed_addr addrspace(200) #[[ATTR0]] {
+// RISCV64-PURECAP-SAME: (ptr addrspace(200) noalias nocapture writeonly sret({ ptr addrspace(200), i64 }) align 16 [[AGG_RESULT:%.*]]) local_unnamed_addr addrspace(200) #[[ATTR0]] {
 // RISCV64-PURECAP-NEXT:  entry:
-// RISCV64-PURECAP-NEXT:    [[TMP0:%.*]] = bitcast { i8 addrspace(200)*, i64 } addrspace(200)* [[AGG_RESULT]] to i8 addrspace(200)*
-// RISCV64-PURECAP-NEXT:    call void @llvm.memset.p200i8.i64(i8 addrspace(200)* noundef nonnull align 16 dereferenceable(32) [[TMP0]], i8 0, i64 32, i1 false)
+// RISCV64-PURECAP-NEXT:    tail call void @llvm.memset.p200.i64(ptr addrspace(200) noundef nonnull align 16 dereferenceable(32) [[AGG_RESULT]], i8 0, i64 32, i1 false)
 // RISCV64-PURECAP-NEXT:    ret void
 //
 AMemberFuncPtr return_p2f_null() {
@@ -71,11 +70,11 @@ AMemberFuncPtr return_p2f_null() {
 }
 
 // MIPS-PURECAP-LABEL: define {{[^@]+}}@_Z15passthrough_p2fM1AFivE
-// MIPS-PURECAP-SAME: (i8 addrspace(200)* inreg [[P2F_COERCE0:%.*]], i64 inreg [[P2F_COERCE1:%.*]]) local_unnamed_addr addrspace(200) #[[ATTR0]] {
+// MIPS-PURECAP-SAME: (ptr addrspace(200) inreg [[P2F_COERCE0:%.*]], i64 inreg [[P2F_COERCE1:%.*]]) local_unnamed_addr addrspace(200) #[[ATTR0]] {
 // MIPS-PURECAP-NEXT:  entry:
-// MIPS-PURECAP-NEXT:    [[P2F1_FCA_0_INSERT:%.*]] = insertvalue { i8 addrspace(200)*, i64 } poison, i8 addrspace(200)* [[P2F_COERCE0]], 0
-// MIPS-PURECAP-NEXT:    [[P2F1_FCA_1_INSERT:%.*]] = insertvalue { i8 addrspace(200)*, i64 } [[P2F1_FCA_0_INSERT]], i64 [[P2F_COERCE1]], 1
-// MIPS-PURECAP-NEXT:    ret { i8 addrspace(200)*, i64 } [[P2F1_FCA_1_INSERT]]
+// MIPS-PURECAP-NEXT:    [[P2F1_FCA_0_INSERT:%.*]] = insertvalue { ptr addrspace(200), i64 } poison, ptr addrspace(200) [[P2F_COERCE0]], 0
+// MIPS-PURECAP-NEXT:    [[P2F1_FCA_1_INSERT:%.*]] = insertvalue { ptr addrspace(200), i64 } [[P2F1_FCA_0_INSERT]], i64 [[P2F_COERCE1]], 1
+// MIPS-PURECAP-NEXT:    ret { ptr addrspace(200), i64 } [[P2F1_FCA_1_INSERT]]
 //
 // MIPS-NOCHERI-LABEL: define {{[^@]+}}@_Z15passthrough_p2fM1AFivE
 // MIPS-NOCHERI-SAME: (i64 inreg [[P2F_COERCE0:%.*]], i64 inreg [[P2F_COERCE1:%.*]]) local_unnamed_addr #[[ATTR0]] {
@@ -90,11 +89,9 @@ AMemberFuncPtr return_p2f_null() {
 // RISCV64-NOCHERI-NEXT:    ret [2 x i64] [[P2F_COERCE]]
 //
 // RISCV64-PURECAP-LABEL: define {{[^@]+}}@_Z15passthrough_p2fM1AFivE
-// RISCV64-PURECAP-SAME: ({ i8 addrspace(200)*, i64 } addrspace(200)* noalias nocapture writeonly sret({ i8 addrspace(200)*, i64 }) align 16 [[AGG_RESULT:%.*]], { i8 addrspace(200)*, i64 } addrspace(200)* nocapture noundef readonly [[TMP0:%.*]]) local_unnamed_addr addrspace(200) #[[ATTR2:[0-9]+]] {
+// RISCV64-PURECAP-SAME: (ptr addrspace(200) noalias nocapture writeonly sret({ ptr addrspace(200), i64 }) align 16 [[AGG_RESULT:%.*]], ptr addrspace(200) nocapture noundef readonly [[TMP0:%.*]]) local_unnamed_addr addrspace(200) #[[ATTR2:[0-9]+]] {
 // RISCV64-PURECAP-NEXT:  entry:
-// RISCV64-PURECAP-NEXT:    [[TMP1:%.*]] = bitcast { i8 addrspace(200)*, i64 } addrspace(200)* [[AGG_RESULT]] to i8 addrspace(200)*
-// RISCV64-PURECAP-NEXT:    [[TMP2:%.*]] = bitcast { i8 addrspace(200)*, i64 } addrspace(200)* [[TMP0]] to i8 addrspace(200)*
-// RISCV64-PURECAP-NEXT:    call void @llvm.memcpy.p200i8.p200i8.i64(i8 addrspace(200)* noundef nonnull align 16 dereferenceable(32) [[TMP1]], i8 addrspace(200)* noundef nonnull align 16 dereferenceable(32) [[TMP2]], i64 32, i1 false)
+// RISCV64-PURECAP-NEXT:    tail call void @llvm.memcpy.p200.p200.i64(ptr addrspace(200) noundef nonnull align 16 dereferenceable(32) [[AGG_RESULT]], ptr addrspace(200) noundef nonnull align 16 dereferenceable(32) [[TMP0]], i64 32, i1 false)
 // RISCV64-PURECAP-NEXT:    ret void
 //
 AMemberFuncPtr passthrough_p2f(AMemberFuncPtr p2f) {

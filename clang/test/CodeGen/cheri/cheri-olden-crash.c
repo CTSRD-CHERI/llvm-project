@@ -3,16 +3,16 @@
 // This previously crashed during code generation
 
 typedef struct a { struct a * __capability b; } * c;
-// CHECK-LABEL: define {{[^@]+}}@d() #0
+// CHECK-LABEL: @d(
 // CHECK-NEXT:  entry:
-// CHECK-NEXT:    [[E:%.*]] = alloca [[STRUCT_A:%.*]] addrspace(200)**, align 8
-// CHECK-NEXT:    [[TMP0:%.*]] = load [[STRUCT_A]] addrspace(200)**, [[STRUCT_A]] addrspace(200)*** [[E]], align 8
-// CHECK-NEXT:    [[TMP1:%.*]] = load [[STRUCT_A]] addrspace(200)*, [[STRUCT_A]] addrspace(200)** [[TMP0]], align 16
-// CHECK-NEXT:    [[B:%.*]] = getelementptr inbounds [[STRUCT_A]], [[STRUCT_A]] addrspace(200)* [[TMP1]], i32 0, i32 0
-// CHECK-NEXT:    [[B_ASCAST:%.*]] = addrspacecast [[STRUCT_A]] addrspace(200)* addrspace(200)* [[B]] to [[STRUCT_A]] addrspace(200)**
-// CHECK-NEXT:    store [[STRUCT_A]] addrspace(200)** [[B_ASCAST]], [[STRUCT_A]] addrspace(200)*** [[E]], align 8
-// CHECK-NEXT:    [[TMP2:%.*]] = load [[STRUCT_A]] addrspace(200)**, [[STRUCT_A]] addrspace(200)*** [[E]], align 8
-// CHECK-NEXT:    ret [[STRUCT_A]] addrspace(200)** [[TMP2]]
+// CHECK-NEXT:    [[E:%.*]] = alloca ptr, align 8
+// CHECK-NEXT:    [[TMP0:%.*]] = load ptr, ptr [[E]], align 8
+// CHECK-NEXT:    [[TMP1:%.*]] = load ptr addrspace(200), ptr [[TMP0]], align 16
+// CHECK-NEXT:    [[B:%.*]] = getelementptr inbounds [[STRUCT_A:%.*]], ptr addrspace(200) [[TMP1]], i32 0, i32 0
+// CHECK-NEXT:    [[B_ASCAST:%.*]] = addrspacecast ptr addrspace(200) [[B]] to ptr
+// CHECK-NEXT:    store ptr [[B_ASCAST]], ptr [[E]], align 8
+// CHECK-NEXT:    [[TMP2:%.*]] = load ptr, ptr [[E]], align 8
+// CHECK-NEXT:    ret ptr [[TMP2]]
 //
 c __capability * d(void) {
   c __capability *e;

@@ -11,10 +11,10 @@ __attribute__((cheri_ccall)) __attribute__((cheri_method_class(c))) int
 // CHECK-LABEL: define {{[^@]+}}@d
 // CHECK-SAME: () local_unnamed_addr addrspace(200) #[[ATTR0:[0-9]+]] {
 // CHECK-NEXT:  entry:
-// CHECK-NEXT:    [[TMP0:%.*]] = load i64, i64 addrspace(200)* @__cheri_method.c.d, align 8, !invariant.load !2
-// CHECK-NEXT:    [[TMP1:%.*]] = load i8 addrspace(200)*, i8 addrspace(200)* addrspace(200)* getelementptr inbounds ([[STRUCT_ANON:%.*]], [[STRUCT_ANON]] addrspace(200)* @c, i64 0, i32 0), align 16
-// CHECK-NEXT:    [[TMP2:%.*]] = load i8 addrspace(200)*, i8 addrspace(200)* addrspace(200)* getelementptr inbounds ([[STRUCT_ANON]], [[STRUCT_ANON]] addrspace(200)* @c, i64 0, i32 1), align 16
-// CHECK-NEXT:    [[CALL:%.*]] = tail call chericcallcc signext i32 @cheri_invoke(i8 addrspace(200)* noundef [[TMP1]], i8 addrspace(200)* noundef [[TMP2]], i64 noundef zeroext [[TMP0]]) #[[ATTR1:[0-9]+]]
+// CHECK-NEXT:    [[TMP0:%.*]] = load i64, ptr addrspace(200) @__cheri_method.c.d, align 8, !invariant.load !2
+// CHECK-NEXT:    [[TMP1:%.*]] = load ptr addrspace(200), ptr addrspace(200) @c, align 16
+// CHECK-NEXT:    [[TMP2:%.*]] = load ptr addrspace(200), ptr addrspace(200) getelementptr inbounds ([[STRUCT_ANON:%.*]], ptr addrspace(200) @c, i64 0, i32 1), align 16
+// CHECK-NEXT:    [[CALL:%.*]] = tail call chericcallcc signext i32 @cheri_invoke(ptr addrspace(200) noundef [[TMP1]], ptr addrspace(200) noundef [[TMP2]], i64 noundef zeroext [[TMP0]]) #[[ATTR1:[0-9]+]]
 // CHECK-NEXT:    ret i32 0
 //
 d(void) {

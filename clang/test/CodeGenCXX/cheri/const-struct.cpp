@@ -16,17 +16,17 @@ const __intcap_t const_var = 1;
 // CHECK-LABEL: define {{[^@]+}}@test_const_var
 // CHECK-SAME: () #[[ATTR0:[0-9]+]] {
 // CHECK-NEXT:  entry:
-// CHECK-NEXT:    ret i8 addrspace(200)* getelementptr (i8, i8 addrspace(200)* null, i64 1)
+// CHECK-NEXT:    ret ptr addrspace(200) getelementptr (i8, ptr addrspace(200) null, i64 1)
 //
 __intcap_t test_const_var() { return const_var; }
 // CHECK-LABEL: define {{[^@]+}}@test_const_var_binop
 // CHECK-SAME: () #[[ATTR0]] {
 // CHECK-NEXT:  entry:
-// CHECK-NEXT:    [[TMP0:%.*]] = call i64 @llvm.cheri.cap.address.get.i64(i8 addrspace(200)* getelementptr (i8, i8 addrspace(200)* null, i64 1))
-// CHECK-NEXT:    [[TMP1:%.*]] = call i64 @llvm.cheri.cap.address.get.i64(i8 addrspace(200)* getelementptr (i8, i8 addrspace(200)* null, i64 1))
+// CHECK-NEXT:    [[TMP0:%.*]] = call i64 @llvm.cheri.cap.address.get.i64(ptr addrspace(200) getelementptr (i8, ptr addrspace(200) null, i64 1))
+// CHECK-NEXT:    [[TMP1:%.*]] = call i64 @llvm.cheri.cap.address.get.i64(ptr addrspace(200) getelementptr (i8, ptr addrspace(200) null, i64 1))
 // CHECK-NEXT:    [[ADD:%.*]] = add nsw i64 [[TMP0]], [[TMP1]]
-// CHECK-NEXT:    [[TMP2:%.*]] = call i8 addrspace(200)* @llvm.cheri.cap.address.set.i64(i8 addrspace(200)* getelementptr (i8, i8 addrspace(200)* null, i64 1), i64 [[ADD]])
-// CHECK-NEXT:    ret i8 addrspace(200)* [[TMP2]]
+// CHECK-NEXT:    [[TMP2:%.*]] = call ptr addrspace(200) @llvm.cheri.cap.address.set.i64(ptr addrspace(200) getelementptr (i8, ptr addrspace(200) null, i64 1), i64 [[ADD]])
+// CHECK-NEXT:    ret ptr addrspace(200) [[TMP2]]
 //
 __intcap_t test_const_var_binop() { return const_var + 1; }
 
@@ -36,34 +36,34 @@ const struct {
 // CHECK-C-LABEL: define {{[^@]+}}@test_const_struct
 // CHECK-C-SAME: () #[[ATTR0]] {
 // CHECK-C-NEXT:  entry:
-// CHECK-C-NEXT:    [[TMP0:%.*]] = load i8 addrspace(200)*, i8 addrspace(200)** getelementptr inbounds ([[STRUCT_ANON:%.*]], %struct.anon* @const_struct, i32 0, i32 0), align 16
-// CHECK-C-NEXT:    ret i8 addrspace(200)* [[TMP0]]
+// CHECK-C-NEXT:    [[TMP0:%.*]] = load ptr addrspace(200), ptr @const_struct, align 16
+// CHECK-C-NEXT:    ret ptr addrspace(200) [[TMP0]]
 //
 // CHECK-CXX-LABEL: define {{[^@]+}}@test_const_struct
 // CHECK-CXX-SAME: () #[[ATTR0]] {
 // CHECK-CXX-NEXT:  entry:
-// CHECK-CXX-NEXT:    ret i8 addrspace(200)* getelementptr (i8, i8 addrspace(200)* null, i64 1)
+// CHECK-CXX-NEXT:    ret ptr addrspace(200) getelementptr (i8, ptr addrspace(200) null, i64 1)
 //
 __intcap_t test_const_struct() { return const_struct.value; }
 
 // CHECK-C-LABEL: define {{[^@]+}}@test_const_struct_binop
 // CHECK-C-SAME: () #[[ATTR0]] {
 // CHECK-C-NEXT:  entry:
-// CHECK-C-NEXT:    [[TMP0:%.*]] = load i8 addrspace(200)*, i8 addrspace(200)** getelementptr inbounds ([[STRUCT_ANON:%.*]], %struct.anon* @const_struct, i32 0, i32 0), align 16
-// CHECK-C-NEXT:    [[TMP1:%.*]] = call i64 @llvm.cheri.cap.address.get.i64(i8 addrspace(200)* [[TMP0]])
-// CHECK-C-NEXT:    [[TMP2:%.*]] = call i64 @llvm.cheri.cap.address.get.i64(i8 addrspace(200)* getelementptr (i8, i8 addrspace(200)* null, i64 1))
+// CHECK-C-NEXT:    [[TMP0:%.*]] = load ptr addrspace(200), ptr @const_struct, align 16
+// CHECK-C-NEXT:    [[TMP1:%.*]] = call i64 @llvm.cheri.cap.address.get.i64(ptr addrspace(200) [[TMP0]])
+// CHECK-C-NEXT:    [[TMP2:%.*]] = call i64 @llvm.cheri.cap.address.get.i64(ptr addrspace(200) getelementptr (i8, ptr addrspace(200) null, i64 1))
 // CHECK-C-NEXT:    [[ADD:%.*]] = add nsw i64 [[TMP1]], [[TMP2]]
-// CHECK-C-NEXT:    [[TMP3:%.*]] = call i8 addrspace(200)* @llvm.cheri.cap.address.set.i64(i8 addrspace(200)* [[TMP0]], i64 [[ADD]])
-// CHECK-C-NEXT:    ret i8 addrspace(200)* [[TMP3]]
+// CHECK-C-NEXT:    [[TMP3:%.*]] = call ptr addrspace(200) @llvm.cheri.cap.address.set.i64(ptr addrspace(200) [[TMP0]], i64 [[ADD]])
+// CHECK-C-NEXT:    ret ptr addrspace(200) [[TMP3]]
 //
 // CHECK-CXX-LABEL: define {{[^@]+}}@test_const_struct_binop
 // CHECK-CXX-SAME: () #[[ATTR0]] {
 // CHECK-CXX-NEXT:  entry:
-// CHECK-CXX-NEXT:    [[TMP0:%.*]] = call i64 @llvm.cheri.cap.address.get.i64(i8 addrspace(200)* getelementptr (i8, i8 addrspace(200)* null, i64 1))
-// CHECK-CXX-NEXT:    [[TMP1:%.*]] = call i64 @llvm.cheri.cap.address.get.i64(i8 addrspace(200)* getelementptr (i8, i8 addrspace(200)* null, i64 1))
+// CHECK-CXX-NEXT:    [[TMP0:%.*]] = call i64 @llvm.cheri.cap.address.get.i64(ptr addrspace(200) getelementptr (i8, ptr addrspace(200) null, i64 1))
+// CHECK-CXX-NEXT:    [[TMP1:%.*]] = call i64 @llvm.cheri.cap.address.get.i64(ptr addrspace(200) getelementptr (i8, ptr addrspace(200) null, i64 1))
 // CHECK-CXX-NEXT:    [[ADD:%.*]] = add nsw i64 [[TMP0]], [[TMP1]]
-// CHECK-CXX-NEXT:    [[TMP2:%.*]] = call i8 addrspace(200)* @llvm.cheri.cap.address.set.i64(i8 addrspace(200)* getelementptr (i8, i8 addrspace(200)* null, i64 1), i64 [[ADD]])
-// CHECK-CXX-NEXT:    ret i8 addrspace(200)* [[TMP2]]
+// CHECK-CXX-NEXT:    [[TMP2:%.*]] = call ptr addrspace(200) @llvm.cheri.cap.address.set.i64(ptr addrspace(200) getelementptr (i8, ptr addrspace(200) null, i64 1), i64 [[ADD]])
+// CHECK-CXX-NEXT:    ret ptr addrspace(200) [[TMP2]]
 //
 __intcap_t test_const_struct_binop() { return const_struct.value + 1; }
 

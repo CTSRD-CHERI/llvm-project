@@ -8,14 +8,13 @@ int global_int;
 // CLEAR-PERM2-LABEL: define {{[^@]+}}@return_global_int
 // CLEAR-PERM2-SAME: () local_unnamed_addr addrspace(200) #[[ATTR0:[0-9]+]] {
 // CLEAR-PERM2-NEXT:  entry:
-// CLEAR-PERM2-NEXT:    [[TMP0:%.*]] = tail call i8 addrspace(200)* @llvm.cheri.cap.bounds.set.i64(i8 addrspace(200)* bitcast (i32 addrspace(200)* @global_int to i8 addrspace(200)*), i64 4)
-// CLEAR-PERM2-NEXT:    [[CUR_LEN:%.*]] = tail call i64 @llvm.cheri.cap.length.get.i64(i8 addrspace(200)* bitcast (i32 addrspace(200)* @global_int to i8 addrspace(200)*))
-// CLEAR-PERM2-NEXT:    [[NEW_LEN:%.*]] = tail call i64 @llvm.cheri.cap.length.get.i64(i8 addrspace(200)* [[TMP0]])
-// CLEAR-PERM2-NEXT:    [[NEW_LEN1:%.*]] = tail call i8 addrspace(200)* @llvm.cheri.cap.perms.and.i64(i8 addrspace(200)* [[TMP0]], i64 -131073)
+// CLEAR-PERM2-NEXT:    [[TMP0:%.*]] = tail call ptr addrspace(200) @llvm.cheri.cap.bounds.set.i64(ptr addrspace(200) nonnull @global_int, i64 4)
+// CLEAR-PERM2-NEXT:    [[CUR_LEN:%.*]] = tail call i64 @llvm.cheri.cap.length.get.i64(ptr addrspace(200) nonnull @global_int)
+// CLEAR-PERM2-NEXT:    [[NEW_LEN:%.*]] = tail call i64 @llvm.cheri.cap.length.get.i64(ptr addrspace(200) [[TMP0]])
+// CLEAR-PERM2-NEXT:    [[NEW_LEN1:%.*]] = tail call ptr addrspace(200) @llvm.cheri.cap.perms.and.i64(ptr addrspace(200) [[TMP0]], i64 -131073)
 // CLEAR-PERM2-NEXT:    [[NEW_BOUNDS_LESS:%.*]] = icmp ult i64 [[NEW_LEN]], [[CUR_LEN]]
-// CLEAR-PERM2-NEXT:    [[RESULT:%.*]] = select i1 [[NEW_BOUNDS_LESS]], i8 addrspace(200)* [[NEW_LEN1]], i8 addrspace(200)* [[TMP0]]
-// CLEAR-PERM2-NEXT:    [[TMP1:%.*]] = bitcast i8 addrspace(200)* [[RESULT]] to i32 addrspace(200)*
-// CLEAR-PERM2-NEXT:    ret i32 addrspace(200)* [[TMP1]]
+// CLEAR-PERM2-NEXT:    [[RESULT:%.*]] = select i1 [[NEW_BOUNDS_LESS]], ptr addrspace(200) [[NEW_LEN1]], ptr addrspace(200) [[TMP0]]
+// CLEAR-PERM2-NEXT:    ret ptr addrspace(200) [[RESULT]]
 //
 int *return_global_int() {
   return &global_int; // expected-remark{{setting bounds for pointer to 'int' to 4 bytes}}
@@ -29,14 +28,13 @@ struct foo {
 // CLEAR-PERM2-LABEL: define {{[^@]+}}@return_global_subobject
 // CLEAR-PERM2-SAME: () local_unnamed_addr addrspace(200) #[[ATTR0]] {
 // CLEAR-PERM2-NEXT:  entry:
-// CLEAR-PERM2-NEXT:    [[TMP0:%.*]] = tail call i8 addrspace(200)* @llvm.cheri.cap.bounds.set.i64(i8 addrspace(200)* bitcast ([[STRUCT_FOO:%.*]] addrspace(200)* @global_foo to i8 addrspace(200)*), i64 4)
-// CLEAR-PERM2-NEXT:    [[CUR_LEN:%.*]] = tail call i64 @llvm.cheri.cap.length.get.i64(i8 addrspace(200)* bitcast ([[STRUCT_FOO]] addrspace(200)* @global_foo to i8 addrspace(200)*))
-// CLEAR-PERM2-NEXT:    [[NEW_LEN:%.*]] = tail call i64 @llvm.cheri.cap.length.get.i64(i8 addrspace(200)* [[TMP0]])
-// CLEAR-PERM2-NEXT:    [[NEW_LEN1:%.*]] = tail call i8 addrspace(200)* @llvm.cheri.cap.perms.and.i64(i8 addrspace(200)* [[TMP0]], i64 -131073)
+// CLEAR-PERM2-NEXT:    [[TMP0:%.*]] = tail call ptr addrspace(200) @llvm.cheri.cap.bounds.set.i64(ptr addrspace(200) nonnull @global_foo, i64 4)
+// CLEAR-PERM2-NEXT:    [[CUR_LEN:%.*]] = tail call i64 @llvm.cheri.cap.length.get.i64(ptr addrspace(200) nonnull @global_foo)
+// CLEAR-PERM2-NEXT:    [[NEW_LEN:%.*]] = tail call i64 @llvm.cheri.cap.length.get.i64(ptr addrspace(200) [[TMP0]])
+// CLEAR-PERM2-NEXT:    [[NEW_LEN1:%.*]] = tail call ptr addrspace(200) @llvm.cheri.cap.perms.and.i64(ptr addrspace(200) [[TMP0]], i64 -131073)
 // CLEAR-PERM2-NEXT:    [[NEW_BOUNDS_LESS:%.*]] = icmp ult i64 [[NEW_LEN]], [[CUR_LEN]]
-// CLEAR-PERM2-NEXT:    [[RESULT:%.*]] = select i1 [[NEW_BOUNDS_LESS]], i8 addrspace(200)* [[NEW_LEN1]], i8 addrspace(200)* [[TMP0]]
-// CLEAR-PERM2-NEXT:    [[TMP1:%.*]] = bitcast i8 addrspace(200)* [[RESULT]] to i32 addrspace(200)*
-// CLEAR-PERM2-NEXT:    ret i32 addrspace(200)* [[TMP1]]
+// CLEAR-PERM2-NEXT:    [[RESULT:%.*]] = select i1 [[NEW_BOUNDS_LESS]], ptr addrspace(200) [[NEW_LEN1]], ptr addrspace(200) [[TMP0]]
+// CLEAR-PERM2-NEXT:    ret ptr addrspace(200) [[RESULT]]
 //
 int *return_global_subobject() {
   return &global_foo.a; // expected-remark{{setting sub-object bounds for field 'a' (pointer to 'int') to 4 bytes}}
@@ -45,41 +43,40 @@ int *return_global_subobject() {
 extern int printf(const char*, ...);
 
 // CLEAR-PERM2-LABEL: define {{[^@]+}}@main
-// CLEAR-PERM2-SAME: (i32 noundef signext [[ARGC:%.*]], i8 addrspace(200)* addrspace(200)* nocapture noundef readnone [[ARGV:%.*]]) local_unnamed_addr addrspace(200) #[[ATTR2:[0-9]+]] {
+// CLEAR-PERM2-SAME: (i32 noundef signext [[ARGC:%.*]], ptr addrspace(200) nocapture noundef readnone [[ARGV:%.*]]) local_unnamed_addr addrspace(200) #[[ATTR2:[0-9]+]] {
 // CLEAR-PERM2-NEXT:  entry:
-// CLEAR-PERM2-NEXT:    [[F:%.*]] = alloca i16, align 4, addrspace(200)
-// CLEAR-PERM2-NEXT:    [[TMP0:%.*]] = bitcast i16 addrspace(200)* [[F]] to i8 addrspace(200)*
-// CLEAR-PERM2-NEXT:    call void @llvm.lifetime.start.p200i8(i64 2, i8 addrspace(200)* nonnull [[TMP0]]) #[[ATTR5:[0-9]+]]
-// CLEAR-PERM2-NEXT:    store i16 24930, i16 addrspace(200)* [[F]], align 4
-// CLEAR-PERM2-NEXT:    [[TMP1:%.*]] = call i8 addrspace(200)* @llvm.cheri.cap.bounds.set.i64(i8 addrspace(200)* nonnull [[TMP0]], i64 1)
-// CLEAR-PERM2-NEXT:    [[CUR_LEN:%.*]] = call i64 @llvm.cheri.cap.length.get.i64(i8 addrspace(200)* nonnull [[TMP0]])
-// CLEAR-PERM2-NEXT:    [[NEW_LEN:%.*]] = call i64 @llvm.cheri.cap.length.get.i64(i8 addrspace(200)* [[TMP1]])
-// CLEAR-PERM2-NEXT:    [[NEW_LEN1:%.*]] = call i8 addrspace(200)* @llvm.cheri.cap.perms.and.i64(i8 addrspace(200)* [[TMP1]], i64 -131073)
+// CLEAR-PERM2-NEXT:    [[F:%.*]] = alloca [[STRUCT_FOO_0:%.*]], align 4, addrspace(200)
+// CLEAR-PERM2-NEXT:    call void @llvm.lifetime.start.p200(i64 2, ptr addrspace(200) nonnull [[F]]) #[[ATTR5:[0-9]+]]
+// CLEAR-PERM2-NEXT:    store i16 24930, ptr addrspace(200) [[F]], align 4
+// CLEAR-PERM2-NEXT:    [[TMP0:%.*]] = call ptr addrspace(200) @llvm.cheri.cap.bounds.set.i64(ptr addrspace(200) nonnull [[F]], i64 1)
+// CLEAR-PERM2-NEXT:    [[CUR_LEN:%.*]] = call i64 @llvm.cheri.cap.length.get.i64(ptr addrspace(200) nonnull [[F]])
+// CLEAR-PERM2-NEXT:    [[NEW_LEN:%.*]] = call i64 @llvm.cheri.cap.length.get.i64(ptr addrspace(200) [[TMP0]])
+// CLEAR-PERM2-NEXT:    [[NEW_LEN1:%.*]] = call ptr addrspace(200) @llvm.cheri.cap.perms.and.i64(ptr addrspace(200) [[TMP0]], i64 -131073)
 // CLEAR-PERM2-NEXT:    [[NEW_BOUNDS_LESS:%.*]] = icmp ult i64 [[NEW_LEN]], [[CUR_LEN]]
-// CLEAR-PERM2-NEXT:    [[RESULT:%.*]] = select i1 [[NEW_BOUNDS_LESS]], i8 addrspace(200)* [[NEW_LEN1]], i8 addrspace(200)* [[TMP1]]
+// CLEAR-PERM2-NEXT:    [[RESULT:%.*]] = select i1 [[NEW_BOUNDS_LESS]], ptr addrspace(200) [[NEW_LEN1]], ptr addrspace(200) [[TMP0]]
 // CLEAR-PERM2-NEXT:    [[SUB:%.*]] = add nsw i32 [[ARGC]], -1
 // CLEAR-PERM2-NEXT:    [[IDX_EXT:%.*]] = sext i32 [[SUB]] to i64
-// CLEAR-PERM2-NEXT:    [[ADD_PTR:%.*]] = getelementptr inbounds i8, i8 addrspace(200)* [[RESULT]], i64 [[IDX_EXT]]
-// CLEAR-PERM2-NEXT:    [[TMP2:%.*]] = call i8 addrspace(200)* @llvm.cheri.cap.bounds.set.i64(i8 addrspace(200)* nonnull [[TMP0]], i64 2)
-// CLEAR-PERM2-NEXT:    [[NEW_LEN3:%.*]] = call i64 @llvm.cheri.cap.length.get.i64(i8 addrspace(200)* [[TMP2]])
-// CLEAR-PERM2-NEXT:    [[NEW_LEN4:%.*]] = call i8 addrspace(200)* @llvm.cheri.cap.perms.and.i64(i8 addrspace(200)* [[TMP2]], i64 -131073)
+// CLEAR-PERM2-NEXT:    [[ADD_PTR:%.*]] = getelementptr inbounds i8, ptr addrspace(200) [[RESULT]], i64 [[IDX_EXT]]
+// CLEAR-PERM2-NEXT:    [[TMP1:%.*]] = call ptr addrspace(200) @llvm.cheri.cap.bounds.set.i64(ptr addrspace(200) nonnull [[F]], i64 2)
+// CLEAR-PERM2-NEXT:    [[NEW_LEN3:%.*]] = call i64 @llvm.cheri.cap.length.get.i64(ptr addrspace(200) [[TMP1]])
+// CLEAR-PERM2-NEXT:    [[NEW_LEN4:%.*]] = call ptr addrspace(200) @llvm.cheri.cap.perms.and.i64(ptr addrspace(200) [[TMP1]], i64 -131073)
 // CLEAR-PERM2-NEXT:    [[NEW_BOUNDS_LESS5:%.*]] = icmp ult i64 [[NEW_LEN3]], [[CUR_LEN]]
-// CLEAR-PERM2-NEXT:    [[RESULT6:%.*]] = select i1 [[NEW_BOUNDS_LESS5]], i8 addrspace(200)* [[NEW_LEN4]], i8 addrspace(200)* [[TMP2]]
-// CLEAR-PERM2-NEXT:    [[TMP3:%.*]] = call i8 addrspace(200)* @llvm.cheri.cap.bounds.set.i64(i8 addrspace(200)* getelementptr inbounds ([20 x i8], [20 x i8] addrspace(200)* @.str, i64 0, i64 0), i64 20)
-// CLEAR-PERM2-NEXT:    [[CUR_LEN7:%.*]] = call i64 @llvm.cheri.cap.length.get.i64(i8 addrspace(200)* getelementptr inbounds ([20 x i8], [20 x i8] addrspace(200)* @.str, i64 0, i64 0))
-// CLEAR-PERM2-NEXT:    [[NEW_LEN8:%.*]] = call i64 @llvm.cheri.cap.length.get.i64(i8 addrspace(200)* [[TMP3]])
-// CLEAR-PERM2-NEXT:    [[NEW_LEN9:%.*]] = call i8 addrspace(200)* @llvm.cheri.cap.perms.and.i64(i8 addrspace(200)* [[TMP3]], i64 -131073)
+// CLEAR-PERM2-NEXT:    [[RESULT6:%.*]] = select i1 [[NEW_BOUNDS_LESS5]], ptr addrspace(200) [[NEW_LEN4]], ptr addrspace(200) [[TMP1]]
+// CLEAR-PERM2-NEXT:    [[TMP2:%.*]] = call ptr addrspace(200) @llvm.cheri.cap.bounds.set.i64(ptr addrspace(200) nonnull @.str, i64 20)
+// CLEAR-PERM2-NEXT:    [[CUR_LEN7:%.*]] = call i64 @llvm.cheri.cap.length.get.i64(ptr addrspace(200) nonnull @.str)
+// CLEAR-PERM2-NEXT:    [[NEW_LEN8:%.*]] = call i64 @llvm.cheri.cap.length.get.i64(ptr addrspace(200) [[TMP2]])
+// CLEAR-PERM2-NEXT:    [[NEW_LEN9:%.*]] = call ptr addrspace(200) @llvm.cheri.cap.perms.and.i64(ptr addrspace(200) [[TMP2]], i64 -131073)
 // CLEAR-PERM2-NEXT:    [[NEW_BOUNDS_LESS10:%.*]] = icmp ult i64 [[NEW_LEN8]], [[CUR_LEN7]]
-// CLEAR-PERM2-NEXT:    [[RESULT11:%.*]] = select i1 [[NEW_BOUNDS_LESS10]], i8 addrspace(200)* [[NEW_LEN9]], i8 addrspace(200)* [[TMP3]]
-// CLEAR-PERM2-NEXT:    [[CALL:%.*]] = call signext i32 (i8 addrspace(200)*, ...) @printf(i8 addrspace(200)* noundef nonnull dereferenceable(1) [[RESULT11]], i8 addrspace(200)* noundef [[ADD_PTR]])
-// CLEAR-PERM2-NEXT:    [[TMP4:%.*]] = call i8 addrspace(200)* @llvm.cheri.cap.bounds.set.i64(i8 addrspace(200)* getelementptr inbounds ([22 x i8], [22 x i8] addrspace(200)* @.str.1, i64 0, i64 0), i64 22)
-// CLEAR-PERM2-NEXT:    [[CUR_LEN12:%.*]] = call i64 @llvm.cheri.cap.length.get.i64(i8 addrspace(200)* getelementptr inbounds ([22 x i8], [22 x i8] addrspace(200)* @.str.1, i64 0, i64 0))
-// CLEAR-PERM2-NEXT:    [[NEW_LEN13:%.*]] = call i64 @llvm.cheri.cap.length.get.i64(i8 addrspace(200)* [[TMP4]])
-// CLEAR-PERM2-NEXT:    [[NEW_LEN14:%.*]] = call i8 addrspace(200)* @llvm.cheri.cap.perms.and.i64(i8 addrspace(200)* [[TMP4]], i64 -131073)
+// CLEAR-PERM2-NEXT:    [[RESULT11:%.*]] = select i1 [[NEW_BOUNDS_LESS10]], ptr addrspace(200) [[NEW_LEN9]], ptr addrspace(200) [[TMP2]]
+// CLEAR-PERM2-NEXT:    [[CALL:%.*]] = call signext i32 (ptr addrspace(200), ...) @printf(ptr addrspace(200) noundef nonnull dereferenceable(1) [[RESULT11]], ptr addrspace(200) noundef [[ADD_PTR]])
+// CLEAR-PERM2-NEXT:    [[TMP3:%.*]] = call ptr addrspace(200) @llvm.cheri.cap.bounds.set.i64(ptr addrspace(200) nonnull @.str.1, i64 22)
+// CLEAR-PERM2-NEXT:    [[CUR_LEN12:%.*]] = call i64 @llvm.cheri.cap.length.get.i64(ptr addrspace(200) nonnull @.str.1)
+// CLEAR-PERM2-NEXT:    [[NEW_LEN13:%.*]] = call i64 @llvm.cheri.cap.length.get.i64(ptr addrspace(200) [[TMP3]])
+// CLEAR-PERM2-NEXT:    [[NEW_LEN14:%.*]] = call ptr addrspace(200) @llvm.cheri.cap.perms.and.i64(ptr addrspace(200) [[TMP3]], i64 -131073)
 // CLEAR-PERM2-NEXT:    [[NEW_BOUNDS_LESS15:%.*]] = icmp ult i64 [[NEW_LEN13]], [[CUR_LEN12]]
-// CLEAR-PERM2-NEXT:    [[RESULT16:%.*]] = select i1 [[NEW_BOUNDS_LESS15]], i8 addrspace(200)* [[NEW_LEN14]], i8 addrspace(200)* [[TMP4]]
-// CLEAR-PERM2-NEXT:    [[CALL17:%.*]] = call signext i32 (i8 addrspace(200)*, ...) @printf(i8 addrspace(200)* noundef nonnull dereferenceable(1) [[RESULT16]], i8 addrspace(200)* noundef [[RESULT6]])
-// CLEAR-PERM2-NEXT:    call void @llvm.lifetime.end.p200i8(i64 2, i8 addrspace(200)* nonnull [[TMP0]]) #[[ATTR5]]
+// CLEAR-PERM2-NEXT:    [[RESULT16:%.*]] = select i1 [[NEW_BOUNDS_LESS15]], ptr addrspace(200) [[NEW_LEN14]], ptr addrspace(200) [[TMP3]]
+// CLEAR-PERM2-NEXT:    [[CALL17:%.*]] = call signext i32 (ptr addrspace(200), ...) @printf(ptr addrspace(200) noundef nonnull dereferenceable(1) [[RESULT16]], ptr addrspace(200) noundef [[RESULT6]])
+// CLEAR-PERM2-NEXT:    call void @llvm.lifetime.end.p200(i64 2, ptr addrspace(200) nonnull [[F]]) #[[ATTR5]]
 // CLEAR-PERM2-NEXT:    ret i32 0
 //
 int main(int argc, char **argv) {

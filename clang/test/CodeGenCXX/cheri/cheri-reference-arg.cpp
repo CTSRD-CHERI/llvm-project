@@ -3,13 +3,13 @@
 extern void bar(int &a);
 
 // CHECK-LABEL: define {{[^@]+}}@_Z3fooU12__capabilityPi
-// CHECK-SAME: (i32 addrspace(200)* noundef [[P:%.*]]) #[[ATTR0:[0-9]+]] {
+// CHECK-SAME: (ptr addrspace(200) noundef [[P:%.*]]) #[[ATTR0:[0-9]+]] {
 // CHECK-NEXT:  entry:
-// CHECK-NEXT:    [[P_ADDR:%.*]] = alloca i32 addrspace(200)*, align 16
-// CHECK-NEXT:    store i32 addrspace(200)* [[P]], i32 addrspace(200)** [[P_ADDR]], align 16
-// CHECK-NEXT:    [[TMP0:%.*]] = load i32 addrspace(200)*, i32 addrspace(200)** [[P_ADDR]], align 16
-// CHECK-NEXT:    [[TMP1:%.*]] = addrspacecast i32 addrspace(200)* [[TMP0]] to i32*
-// CHECK-NEXT:    call void @_Z3barRi(i32* noundef nonnull align 4 dereferenceable(4) [[TMP1]])
+// CHECK-NEXT:    [[P_ADDR:%.*]] = alloca ptr addrspace(200), align 16
+// CHECK-NEXT:    store ptr addrspace(200) [[P]], ptr [[P_ADDR]], align 16
+// CHECK-NEXT:    [[TMP0:%.*]] = load ptr addrspace(200), ptr [[P_ADDR]], align 16
+// CHECK-NEXT:    [[TMP1:%.*]] = addrspacecast ptr addrspace(200) [[TMP0]] to ptr
+// CHECK-NEXT:    call void @_Z3barRi(ptr noundef nonnull align 4 dereferenceable(4) [[TMP1]])
 // CHECK-NEXT:    ret void
 //
 void foo(int *__capability p) {

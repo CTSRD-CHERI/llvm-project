@@ -47,139 +47,121 @@ extern union int_or_cap int_or_cap;
 // MIPS-LABEL: define {{[^@]+}}@caller
 // MIPS-SAME: () #[[ATTR0:[0-9]+]] {
 // MIPS-NEXT:  entry:
-// MIPS-NEXT:    [[NULL_CAP:%.*]] = alloca i8 addrspace(200)*, align 16
-// MIPS-NEXT:    [[NULL_UINTCAP:%.*]] = alloca i8 addrspace(200)*, align 16
-// MIPS-NEXT:    [[INDIRECT_ARG_TEMP:%.*]] = alloca i8 addrspace(200)*, align 16
-// MIPS-NEXT:    [[INDIRECT_ARG_TEMP1:%.*]] = alloca i8 addrspace(200)*, align 16
-// MIPS-NEXT:    [[INDIRECT_ARG_TEMP2:%.*]] = alloca i8 addrspace(200)*, align 16
-// MIPS-NEXT:    [[INDIRECT_ARG_TEMP3:%.*]] = alloca i8 addrspace(200)*, align 16
+// MIPS-NEXT:    [[NULL_CAP:%.*]] = alloca ptr addrspace(200), align 16
+// MIPS-NEXT:    [[NULL_UINTCAP:%.*]] = alloca ptr addrspace(200), align 16
+// MIPS-NEXT:    [[INDIRECT_ARG_TEMP:%.*]] = alloca ptr addrspace(200), align 16
+// MIPS-NEXT:    [[INDIRECT_ARG_TEMP1:%.*]] = alloca ptr addrspace(200), align 16
+// MIPS-NEXT:    [[INDIRECT_ARG_TEMP2:%.*]] = alloca ptr addrspace(200), align 16
+// MIPS-NEXT:    [[INDIRECT_ARG_TEMP3:%.*]] = alloca ptr addrspace(200), align 16
 // MIPS-NEXT:    [[BYVAL_TEMP:%.*]] = alloca [[STRUCT_SINGLE_CAP:%.*]], align 16
 // MIPS-NEXT:    [[BYVAL_TEMP4:%.*]] = alloca [[STRUCT_DOUBLE_CAP:%.*]], align 16
 // MIPS-NEXT:    [[BYVAL_TEMP5:%.*]] = alloca [[STRUCT_SINGLE_CAP_ARRAY:%.*]], align 16
 // MIPS-NEXT:    [[BYVAL_TEMP6:%.*]] = alloca [[STRUCT_DOUBLE_CAP_ARRAY:%.*]], align 16
 // MIPS-NEXT:    [[BYVAL_TEMP7:%.*]] = alloca [[STRUCT_MIXED:%.*]], align 16
 // MIPS-NEXT:    [[BYVAL_TEMP8:%.*]] = alloca [[UNION_INT_OR_CAP:%.*]], align 16
-// MIPS-NEXT:    store i8 addrspace(200)* null, i8 addrspace(200)** [[NULL_CAP]], align 16
-// MIPS-NEXT:    store i8 addrspace(200)* null, i8 addrspace(200)** [[NULL_UINTCAP]], align 16
-// MIPS-NEXT:    [[TMP0:%.*]] = load i8 addrspace(200)*, i8 addrspace(200)** [[NULL_CAP]], align 16
-// MIPS-NEXT:    [[TMP1:%.*]] = load i8 addrspace(200)*, i8 addrspace(200)** [[NULL_UINTCAP]], align 16
-// MIPS-NEXT:    [[TMP2:%.*]] = load i8 addrspace(200)*, i8 addrspace(200)** @cap, align 16
-// MIPS-NEXT:    [[TMP3:%.*]] = load i8 addrspace(200)*, i8 addrspace(200)** @uintcap, align 16
-// MIPS-NEXT:    store i8 addrspace(200)* [[TMP0]], i8 addrspace(200)** [[INDIRECT_ARG_TEMP]], align 16
-// MIPS-NEXT:    store i8 addrspace(200)* [[TMP1]], i8 addrspace(200)** [[INDIRECT_ARG_TEMP1]], align 16
-// MIPS-NEXT:    store i8 addrspace(200)* [[TMP2]], i8 addrspace(200)** [[INDIRECT_ARG_TEMP2]], align 16
-// MIPS-NEXT:    store i8 addrspace(200)* [[TMP3]], i8 addrspace(200)** [[INDIRECT_ARG_TEMP3]], align 16
-// MIPS-NEXT:    call void (i64, ...) @callee(i64 noundef signext 0, i8 addrspace(200)** noundef [[INDIRECT_ARG_TEMP]], i8 addrspace(200)** noundef [[INDIRECT_ARG_TEMP1]], i8 addrspace(200)** noundef [[INDIRECT_ARG_TEMP2]], i8 addrspace(200)** noundef [[INDIRECT_ARG_TEMP3]])
-// MIPS-NEXT:    [[TMP4:%.*]] = bitcast %struct.single_cap* [[BYVAL_TEMP]] to i8*
-// MIPS-NEXT:    call void @llvm.memcpy.p0i8.p0i8.i64(i8* align 16 [[TMP4]], i8* align 16 bitcast (%struct.single_cap* @single_cap to i8*), i64 16, i1 false)
-// MIPS-NEXT:    call void (i64, ...) @callee(i64 noundef signext 1, %struct.single_cap* noundef [[BYVAL_TEMP]])
-// MIPS-NEXT:    [[TMP5:%.*]] = bitcast %struct.double_cap* [[BYVAL_TEMP4]] to i8*
-// MIPS-NEXT:    call void @llvm.memcpy.p0i8.p0i8.i64(i8* align 16 [[TMP5]], i8* align 16 bitcast (%struct.double_cap* @double_cap to i8*), i64 32, i1 false)
-// MIPS-NEXT:    call void (i64, ...) @callee(i64 noundef signext 2, %struct.double_cap* noundef [[BYVAL_TEMP4]])
-// MIPS-NEXT:    [[TMP6:%.*]] = bitcast %struct.single_cap_array* [[BYVAL_TEMP5]] to i8*
-// MIPS-NEXT:    call void @llvm.memcpy.p0i8.p0i8.i64(i8* align 16 [[TMP6]], i8* align 16 bitcast (%struct.single_cap_array* @single_cap_array to i8*), i64 16, i1 false)
-// MIPS-NEXT:    call void (i64, ...) @callee(i64 noundef signext 3, %struct.single_cap_array* noundef [[BYVAL_TEMP5]])
-// MIPS-NEXT:    [[TMP7:%.*]] = bitcast %struct.double_cap_array* [[BYVAL_TEMP6]] to i8*
-// MIPS-NEXT:    call void @llvm.memcpy.p0i8.p0i8.i64(i8* align 16 [[TMP7]], i8* align 16 bitcast (%struct.double_cap_array* @double_cap_array to i8*), i64 32, i1 false)
-// MIPS-NEXT:    call void (i64, ...) @callee(i64 noundef signext 4, %struct.double_cap_array* noundef [[BYVAL_TEMP6]])
-// MIPS-NEXT:    [[TMP8:%.*]] = bitcast %struct.mixed* [[BYVAL_TEMP7]] to i8*
-// MIPS-NEXT:    call void @llvm.memcpy.p0i8.p0i8.i64(i8* align 16 [[TMP8]], i8* align 16 bitcast (%struct.mixed* @mixed to i8*), i64 32, i1 false)
-// MIPS-NEXT:    call void (i64, ...) @callee(i64 noundef signext 5, %struct.mixed* noundef [[BYVAL_TEMP7]])
-// MIPS-NEXT:    [[TMP9:%.*]] = bitcast %union.int_or_cap* [[BYVAL_TEMP8]] to i8*
-// MIPS-NEXT:    call void @llvm.memcpy.p0i8.p0i8.i64(i8* align 16 [[TMP9]], i8* align 16 bitcast (%union.int_or_cap* @int_or_cap to i8*), i64 16, i1 false)
-// MIPS-NEXT:    call void (i64, ...) @callee(i64 noundef signext 6, %union.int_or_cap* noundef [[BYVAL_TEMP8]])
+// MIPS-NEXT:    store ptr addrspace(200) null, ptr [[NULL_CAP]], align 16
+// MIPS-NEXT:    store ptr addrspace(200) null, ptr [[NULL_UINTCAP]], align 16
+// MIPS-NEXT:    [[TMP0:%.*]] = load ptr addrspace(200), ptr [[NULL_CAP]], align 16
+// MIPS-NEXT:    [[TMP1:%.*]] = load ptr addrspace(200), ptr [[NULL_UINTCAP]], align 16
+// MIPS-NEXT:    [[TMP2:%.*]] = load ptr addrspace(200), ptr @cap, align 16
+// MIPS-NEXT:    [[TMP3:%.*]] = load ptr addrspace(200), ptr @uintcap, align 16
+// MIPS-NEXT:    store ptr addrspace(200) [[TMP0]], ptr [[INDIRECT_ARG_TEMP]], align 16
+// MIPS-NEXT:    store ptr addrspace(200) [[TMP1]], ptr [[INDIRECT_ARG_TEMP1]], align 16
+// MIPS-NEXT:    store ptr addrspace(200) [[TMP2]], ptr [[INDIRECT_ARG_TEMP2]], align 16
+// MIPS-NEXT:    store ptr addrspace(200) [[TMP3]], ptr [[INDIRECT_ARG_TEMP3]], align 16
+// MIPS-NEXT:    call void (i64, ...) @callee(i64 noundef signext 0, ptr noundef [[INDIRECT_ARG_TEMP]], ptr noundef [[INDIRECT_ARG_TEMP1]], ptr noundef [[INDIRECT_ARG_TEMP2]], ptr noundef [[INDIRECT_ARG_TEMP3]])
+// MIPS-NEXT:    call void @llvm.memcpy.p0.p0.i64(ptr align 16 [[BYVAL_TEMP]], ptr align 16 @single_cap, i64 16, i1 false)
+// MIPS-NEXT:    call void (i64, ...) @callee(i64 noundef signext 1, ptr noundef [[BYVAL_TEMP]])
+// MIPS-NEXT:    call void @llvm.memcpy.p0.p0.i64(ptr align 16 [[BYVAL_TEMP4]], ptr align 16 @double_cap, i64 32, i1 false)
+// MIPS-NEXT:    call void (i64, ...) @callee(i64 noundef signext 2, ptr noundef [[BYVAL_TEMP4]])
+// MIPS-NEXT:    call void @llvm.memcpy.p0.p0.i64(ptr align 16 [[BYVAL_TEMP5]], ptr align 16 @single_cap_array, i64 16, i1 false)
+// MIPS-NEXT:    call void (i64, ...) @callee(i64 noundef signext 3, ptr noundef [[BYVAL_TEMP5]])
+// MIPS-NEXT:    call void @llvm.memcpy.p0.p0.i64(ptr align 16 [[BYVAL_TEMP6]], ptr align 16 @double_cap_array, i64 32, i1 false)
+// MIPS-NEXT:    call void (i64, ...) @callee(i64 noundef signext 4, ptr noundef [[BYVAL_TEMP6]])
+// MIPS-NEXT:    call void @llvm.memcpy.p0.p0.i64(ptr align 16 [[BYVAL_TEMP7]], ptr align 16 @mixed, i64 32, i1 false)
+// MIPS-NEXT:    call void (i64, ...) @callee(i64 noundef signext 5, ptr noundef [[BYVAL_TEMP7]])
+// MIPS-NEXT:    call void @llvm.memcpy.p0.p0.i64(ptr align 16 [[BYVAL_TEMP8]], ptr align 16 @int_or_cap, i64 16, i1 false)
+// MIPS-NEXT:    call void (i64, ...) @callee(i64 noundef signext 6, ptr noundef [[BYVAL_TEMP8]])
 // MIPS-NEXT:    ret void
 //
 // RV32IXCHERI-LABEL: define {{[^@]+}}@caller
 // RV32IXCHERI-SAME: () #[[ATTR0:[0-9]+]] {
 // RV32IXCHERI-NEXT:  entry:
-// RV32IXCHERI-NEXT:    [[NULL_CAP:%.*]] = alloca i8 addrspace(200)*, align 8
-// RV32IXCHERI-NEXT:    [[NULL_UINTCAP:%.*]] = alloca i8 addrspace(200)*, align 8
-// RV32IXCHERI-NEXT:    [[INDIRECT_ARG_TEMP:%.*]] = alloca i8 addrspace(200)*, align 8
-// RV32IXCHERI-NEXT:    [[INDIRECT_ARG_TEMP1:%.*]] = alloca i8 addrspace(200)*, align 8
-// RV32IXCHERI-NEXT:    [[INDIRECT_ARG_TEMP2:%.*]] = alloca i8 addrspace(200)*, align 8
-// RV32IXCHERI-NEXT:    [[INDIRECT_ARG_TEMP3:%.*]] = alloca i8 addrspace(200)*, align 8
+// RV32IXCHERI-NEXT:    [[NULL_CAP:%.*]] = alloca ptr addrspace(200), align 8
+// RV32IXCHERI-NEXT:    [[NULL_UINTCAP:%.*]] = alloca ptr addrspace(200), align 8
+// RV32IXCHERI-NEXT:    [[INDIRECT_ARG_TEMP:%.*]] = alloca ptr addrspace(200), align 8
+// RV32IXCHERI-NEXT:    [[INDIRECT_ARG_TEMP1:%.*]] = alloca ptr addrspace(200), align 8
+// RV32IXCHERI-NEXT:    [[INDIRECT_ARG_TEMP2:%.*]] = alloca ptr addrspace(200), align 8
+// RV32IXCHERI-NEXT:    [[INDIRECT_ARG_TEMP3:%.*]] = alloca ptr addrspace(200), align 8
 // RV32IXCHERI-NEXT:    [[BYVAL_TEMP:%.*]] = alloca [[STRUCT_SINGLE_CAP:%.*]], align 8
 // RV32IXCHERI-NEXT:    [[BYVAL_TEMP4:%.*]] = alloca [[STRUCT_DOUBLE_CAP:%.*]], align 8
 // RV32IXCHERI-NEXT:    [[BYVAL_TEMP5:%.*]] = alloca [[STRUCT_SINGLE_CAP_ARRAY:%.*]], align 8
 // RV32IXCHERI-NEXT:    [[BYVAL_TEMP6:%.*]] = alloca [[STRUCT_DOUBLE_CAP_ARRAY:%.*]], align 8
 // RV32IXCHERI-NEXT:    [[BYVAL_TEMP7:%.*]] = alloca [[STRUCT_MIXED:%.*]], align 8
 // RV32IXCHERI-NEXT:    [[BYVAL_TEMP8:%.*]] = alloca [[UNION_INT_OR_CAP:%.*]], align 8
-// RV32IXCHERI-NEXT:    store i8 addrspace(200)* null, i8 addrspace(200)** [[NULL_CAP]], align 8
-// RV32IXCHERI-NEXT:    store i8 addrspace(200)* null, i8 addrspace(200)** [[NULL_UINTCAP]], align 8
-// RV32IXCHERI-NEXT:    [[TMP0:%.*]] = load i8 addrspace(200)*, i8 addrspace(200)** [[NULL_CAP]], align 8
-// RV32IXCHERI-NEXT:    [[TMP1:%.*]] = load i8 addrspace(200)*, i8 addrspace(200)** [[NULL_UINTCAP]], align 8
-// RV32IXCHERI-NEXT:    [[TMP2:%.*]] = load i8 addrspace(200)*, i8 addrspace(200)** @cap, align 8
-// RV32IXCHERI-NEXT:    [[TMP3:%.*]] = load i8 addrspace(200)*, i8 addrspace(200)** @uintcap, align 8
-// RV32IXCHERI-NEXT:    store i8 addrspace(200)* [[TMP0]], i8 addrspace(200)** [[INDIRECT_ARG_TEMP]], align 8
-// RV32IXCHERI-NEXT:    store i8 addrspace(200)* [[TMP1]], i8 addrspace(200)** [[INDIRECT_ARG_TEMP1]], align 8
-// RV32IXCHERI-NEXT:    store i8 addrspace(200)* [[TMP2]], i8 addrspace(200)** [[INDIRECT_ARG_TEMP2]], align 8
-// RV32IXCHERI-NEXT:    store i8 addrspace(200)* [[TMP3]], i8 addrspace(200)** [[INDIRECT_ARG_TEMP3]], align 8
-// RV32IXCHERI-NEXT:    call void (i32, ...) @callee(i32 noundef 0, i8 addrspace(200)** noundef [[INDIRECT_ARG_TEMP]], i8 addrspace(200)** noundef [[INDIRECT_ARG_TEMP1]], i8 addrspace(200)** noundef [[INDIRECT_ARG_TEMP2]], i8 addrspace(200)** noundef [[INDIRECT_ARG_TEMP3]])
-// RV32IXCHERI-NEXT:    [[TMP4:%.*]] = bitcast %struct.single_cap* [[BYVAL_TEMP]] to i8*
-// RV32IXCHERI-NEXT:    call void @llvm.memcpy.p0i8.p0i8.i32(i8* align 8 [[TMP4]], i8* align 8 bitcast (%struct.single_cap* @single_cap to i8*), i32 8, i1 false)
-// RV32IXCHERI-NEXT:    call void (i32, ...) @callee(i32 noundef 1, %struct.single_cap* noundef [[BYVAL_TEMP]])
-// RV32IXCHERI-NEXT:    [[TMP5:%.*]] = bitcast %struct.double_cap* [[BYVAL_TEMP4]] to i8*
-// RV32IXCHERI-NEXT:    call void @llvm.memcpy.p0i8.p0i8.i32(i8* align 8 [[TMP5]], i8* align 8 bitcast (%struct.double_cap* @double_cap to i8*), i32 16, i1 false)
-// RV32IXCHERI-NEXT:    call void (i32, ...) @callee(i32 noundef 2, %struct.double_cap* noundef [[BYVAL_TEMP4]])
-// RV32IXCHERI-NEXT:    [[TMP6:%.*]] = bitcast %struct.single_cap_array* [[BYVAL_TEMP5]] to i8*
-// RV32IXCHERI-NEXT:    call void @llvm.memcpy.p0i8.p0i8.i32(i8* align 8 [[TMP6]], i8* align 8 bitcast (%struct.single_cap_array* @single_cap_array to i8*), i32 8, i1 false)
-// RV32IXCHERI-NEXT:    call void (i32, ...) @callee(i32 noundef 3, %struct.single_cap_array* noundef [[BYVAL_TEMP5]])
-// RV32IXCHERI-NEXT:    [[TMP7:%.*]] = bitcast %struct.double_cap_array* [[BYVAL_TEMP6]] to i8*
-// RV32IXCHERI-NEXT:    call void @llvm.memcpy.p0i8.p0i8.i32(i8* align 8 [[TMP7]], i8* align 8 bitcast (%struct.double_cap_array* @double_cap_array to i8*), i32 16, i1 false)
-// RV32IXCHERI-NEXT:    call void (i32, ...) @callee(i32 noundef 4, %struct.double_cap_array* noundef [[BYVAL_TEMP6]])
-// RV32IXCHERI-NEXT:    [[TMP8:%.*]] = bitcast %struct.mixed* [[BYVAL_TEMP7]] to i8*
-// RV32IXCHERI-NEXT:    call void @llvm.memcpy.p0i8.p0i8.i32(i8* align 8 [[TMP8]], i8* align 8 bitcast (%struct.mixed* @mixed to i8*), i32 16, i1 false)
-// RV32IXCHERI-NEXT:    call void (i32, ...) @callee(i32 noundef 5, %struct.mixed* noundef [[BYVAL_TEMP7]])
-// RV32IXCHERI-NEXT:    [[TMP9:%.*]] = bitcast %union.int_or_cap* [[BYVAL_TEMP8]] to i8*
-// RV32IXCHERI-NEXT:    call void @llvm.memcpy.p0i8.p0i8.i32(i8* align 8 [[TMP9]], i8* align 8 bitcast (%union.int_or_cap* @int_or_cap to i8*), i32 8, i1 false)
-// RV32IXCHERI-NEXT:    call void (i32, ...) @callee(i32 noundef 6, %union.int_or_cap* noundef [[BYVAL_TEMP8]])
+// RV32IXCHERI-NEXT:    store ptr addrspace(200) null, ptr [[NULL_CAP]], align 8
+// RV32IXCHERI-NEXT:    store ptr addrspace(200) null, ptr [[NULL_UINTCAP]], align 8
+// RV32IXCHERI-NEXT:    [[TMP0:%.*]] = load ptr addrspace(200), ptr [[NULL_CAP]], align 8
+// RV32IXCHERI-NEXT:    [[TMP1:%.*]] = load ptr addrspace(200), ptr [[NULL_UINTCAP]], align 8
+// RV32IXCHERI-NEXT:    [[TMP2:%.*]] = load ptr addrspace(200), ptr @cap, align 8
+// RV32IXCHERI-NEXT:    [[TMP3:%.*]] = load ptr addrspace(200), ptr @uintcap, align 8
+// RV32IXCHERI-NEXT:    store ptr addrspace(200) [[TMP0]], ptr [[INDIRECT_ARG_TEMP]], align 8
+// RV32IXCHERI-NEXT:    store ptr addrspace(200) [[TMP1]], ptr [[INDIRECT_ARG_TEMP1]], align 8
+// RV32IXCHERI-NEXT:    store ptr addrspace(200) [[TMP2]], ptr [[INDIRECT_ARG_TEMP2]], align 8
+// RV32IXCHERI-NEXT:    store ptr addrspace(200) [[TMP3]], ptr [[INDIRECT_ARG_TEMP3]], align 8
+// RV32IXCHERI-NEXT:    call void (i32, ...) @callee(i32 noundef 0, ptr noundef [[INDIRECT_ARG_TEMP]], ptr noundef [[INDIRECT_ARG_TEMP1]], ptr noundef [[INDIRECT_ARG_TEMP2]], ptr noundef [[INDIRECT_ARG_TEMP3]])
+// RV32IXCHERI-NEXT:    call void @llvm.memcpy.p0.p0.i32(ptr align 8 [[BYVAL_TEMP]], ptr align 8 @single_cap, i32 8, i1 false)
+// RV32IXCHERI-NEXT:    call void (i32, ...) @callee(i32 noundef 1, ptr noundef [[BYVAL_TEMP]])
+// RV32IXCHERI-NEXT:    call void @llvm.memcpy.p0.p0.i32(ptr align 8 [[BYVAL_TEMP4]], ptr align 8 @double_cap, i32 16, i1 false)
+// RV32IXCHERI-NEXT:    call void (i32, ...) @callee(i32 noundef 2, ptr noundef [[BYVAL_TEMP4]])
+// RV32IXCHERI-NEXT:    call void @llvm.memcpy.p0.p0.i32(ptr align 8 [[BYVAL_TEMP5]], ptr align 8 @single_cap_array, i32 8, i1 false)
+// RV32IXCHERI-NEXT:    call void (i32, ...) @callee(i32 noundef 3, ptr noundef [[BYVAL_TEMP5]])
+// RV32IXCHERI-NEXT:    call void @llvm.memcpy.p0.p0.i32(ptr align 8 [[BYVAL_TEMP6]], ptr align 8 @double_cap_array, i32 16, i1 false)
+// RV32IXCHERI-NEXT:    call void (i32, ...) @callee(i32 noundef 4, ptr noundef [[BYVAL_TEMP6]])
+// RV32IXCHERI-NEXT:    call void @llvm.memcpy.p0.p0.i32(ptr align 8 [[BYVAL_TEMP7]], ptr align 8 @mixed, i32 16, i1 false)
+// RV32IXCHERI-NEXT:    call void (i32, ...) @callee(i32 noundef 5, ptr noundef [[BYVAL_TEMP7]])
+// RV32IXCHERI-NEXT:    call void @llvm.memcpy.p0.p0.i32(ptr align 8 [[BYVAL_TEMP8]], ptr align 8 @int_or_cap, i32 8, i1 false)
+// RV32IXCHERI-NEXT:    call void (i32, ...) @callee(i32 noundef 6, ptr noundef [[BYVAL_TEMP8]])
 // RV32IXCHERI-NEXT:    ret void
 //
 // RV64IXCHERI-LABEL: define {{[^@]+}}@caller
 // RV64IXCHERI-SAME: () #[[ATTR0:[0-9]+]] {
 // RV64IXCHERI-NEXT:  entry:
-// RV64IXCHERI-NEXT:    [[NULL_CAP:%.*]] = alloca i8 addrspace(200)*, align 16
-// RV64IXCHERI-NEXT:    [[NULL_UINTCAP:%.*]] = alloca i8 addrspace(200)*, align 16
-// RV64IXCHERI-NEXT:    [[INDIRECT_ARG_TEMP:%.*]] = alloca i8 addrspace(200)*, align 16
-// RV64IXCHERI-NEXT:    [[INDIRECT_ARG_TEMP1:%.*]] = alloca i8 addrspace(200)*, align 16
-// RV64IXCHERI-NEXT:    [[INDIRECT_ARG_TEMP2:%.*]] = alloca i8 addrspace(200)*, align 16
-// RV64IXCHERI-NEXT:    [[INDIRECT_ARG_TEMP3:%.*]] = alloca i8 addrspace(200)*, align 16
+// RV64IXCHERI-NEXT:    [[NULL_CAP:%.*]] = alloca ptr addrspace(200), align 16
+// RV64IXCHERI-NEXT:    [[NULL_UINTCAP:%.*]] = alloca ptr addrspace(200), align 16
+// RV64IXCHERI-NEXT:    [[INDIRECT_ARG_TEMP:%.*]] = alloca ptr addrspace(200), align 16
+// RV64IXCHERI-NEXT:    [[INDIRECT_ARG_TEMP1:%.*]] = alloca ptr addrspace(200), align 16
+// RV64IXCHERI-NEXT:    [[INDIRECT_ARG_TEMP2:%.*]] = alloca ptr addrspace(200), align 16
+// RV64IXCHERI-NEXT:    [[INDIRECT_ARG_TEMP3:%.*]] = alloca ptr addrspace(200), align 16
 // RV64IXCHERI-NEXT:    [[BYVAL_TEMP:%.*]] = alloca [[STRUCT_SINGLE_CAP:%.*]], align 16
 // RV64IXCHERI-NEXT:    [[BYVAL_TEMP4:%.*]] = alloca [[STRUCT_DOUBLE_CAP:%.*]], align 16
 // RV64IXCHERI-NEXT:    [[BYVAL_TEMP5:%.*]] = alloca [[STRUCT_SINGLE_CAP_ARRAY:%.*]], align 16
 // RV64IXCHERI-NEXT:    [[BYVAL_TEMP6:%.*]] = alloca [[STRUCT_DOUBLE_CAP_ARRAY:%.*]], align 16
 // RV64IXCHERI-NEXT:    [[BYVAL_TEMP7:%.*]] = alloca [[STRUCT_MIXED:%.*]], align 16
 // RV64IXCHERI-NEXT:    [[BYVAL_TEMP8:%.*]] = alloca [[UNION_INT_OR_CAP:%.*]], align 16
-// RV64IXCHERI-NEXT:    store i8 addrspace(200)* null, i8 addrspace(200)** [[NULL_CAP]], align 16
-// RV64IXCHERI-NEXT:    store i8 addrspace(200)* null, i8 addrspace(200)** [[NULL_UINTCAP]], align 16
-// RV64IXCHERI-NEXT:    [[TMP0:%.*]] = load i8 addrspace(200)*, i8 addrspace(200)** [[NULL_CAP]], align 16
-// RV64IXCHERI-NEXT:    [[TMP1:%.*]] = load i8 addrspace(200)*, i8 addrspace(200)** [[NULL_UINTCAP]], align 16
-// RV64IXCHERI-NEXT:    [[TMP2:%.*]] = load i8 addrspace(200)*, i8 addrspace(200)** @cap, align 16
-// RV64IXCHERI-NEXT:    [[TMP3:%.*]] = load i8 addrspace(200)*, i8 addrspace(200)** @uintcap, align 16
-// RV64IXCHERI-NEXT:    store i8 addrspace(200)* [[TMP0]], i8 addrspace(200)** [[INDIRECT_ARG_TEMP]], align 16
-// RV64IXCHERI-NEXT:    store i8 addrspace(200)* [[TMP1]], i8 addrspace(200)** [[INDIRECT_ARG_TEMP1]], align 16
-// RV64IXCHERI-NEXT:    store i8 addrspace(200)* [[TMP2]], i8 addrspace(200)** [[INDIRECT_ARG_TEMP2]], align 16
-// RV64IXCHERI-NEXT:    store i8 addrspace(200)* [[TMP3]], i8 addrspace(200)** [[INDIRECT_ARG_TEMP3]], align 16
-// RV64IXCHERI-NEXT:    call void (i64, ...) @callee(i64 noundef 0, i8 addrspace(200)** noundef [[INDIRECT_ARG_TEMP]], i8 addrspace(200)** noundef [[INDIRECT_ARG_TEMP1]], i8 addrspace(200)** noundef [[INDIRECT_ARG_TEMP2]], i8 addrspace(200)** noundef [[INDIRECT_ARG_TEMP3]])
-// RV64IXCHERI-NEXT:    [[TMP4:%.*]] = bitcast %struct.single_cap* [[BYVAL_TEMP]] to i8*
-// RV64IXCHERI-NEXT:    call void @llvm.memcpy.p0i8.p0i8.i64(i8* align 16 [[TMP4]], i8* align 16 bitcast (%struct.single_cap* @single_cap to i8*), i64 16, i1 false)
-// RV64IXCHERI-NEXT:    call void (i64, ...) @callee(i64 noundef 1, %struct.single_cap* noundef [[BYVAL_TEMP]])
-// RV64IXCHERI-NEXT:    [[TMP5:%.*]] = bitcast %struct.double_cap* [[BYVAL_TEMP4]] to i8*
-// RV64IXCHERI-NEXT:    call void @llvm.memcpy.p0i8.p0i8.i64(i8* align 16 [[TMP5]], i8* align 16 bitcast (%struct.double_cap* @double_cap to i8*), i64 32, i1 false)
-// RV64IXCHERI-NEXT:    call void (i64, ...) @callee(i64 noundef 2, %struct.double_cap* noundef [[BYVAL_TEMP4]])
-// RV64IXCHERI-NEXT:    [[TMP6:%.*]] = bitcast %struct.single_cap_array* [[BYVAL_TEMP5]] to i8*
-// RV64IXCHERI-NEXT:    call void @llvm.memcpy.p0i8.p0i8.i64(i8* align 16 [[TMP6]], i8* align 16 bitcast (%struct.single_cap_array* @single_cap_array to i8*), i64 16, i1 false)
-// RV64IXCHERI-NEXT:    call void (i64, ...) @callee(i64 noundef 3, %struct.single_cap_array* noundef [[BYVAL_TEMP5]])
-// RV64IXCHERI-NEXT:    [[TMP7:%.*]] = bitcast %struct.double_cap_array* [[BYVAL_TEMP6]] to i8*
-// RV64IXCHERI-NEXT:    call void @llvm.memcpy.p0i8.p0i8.i64(i8* align 16 [[TMP7]], i8* align 16 bitcast (%struct.double_cap_array* @double_cap_array to i8*), i64 32, i1 false)
-// RV64IXCHERI-NEXT:    call void (i64, ...) @callee(i64 noundef 4, %struct.double_cap_array* noundef [[BYVAL_TEMP6]])
-// RV64IXCHERI-NEXT:    [[TMP8:%.*]] = bitcast %struct.mixed* [[BYVAL_TEMP7]] to i8*
-// RV64IXCHERI-NEXT:    call void @llvm.memcpy.p0i8.p0i8.i64(i8* align 16 [[TMP8]], i8* align 16 bitcast (%struct.mixed* @mixed to i8*), i64 32, i1 false)
-// RV64IXCHERI-NEXT:    call void (i64, ...) @callee(i64 noundef 5, %struct.mixed* noundef [[BYVAL_TEMP7]])
-// RV64IXCHERI-NEXT:    [[TMP9:%.*]] = bitcast %union.int_or_cap* [[BYVAL_TEMP8]] to i8*
-// RV64IXCHERI-NEXT:    call void @llvm.memcpy.p0i8.p0i8.i64(i8* align 16 [[TMP9]], i8* align 16 bitcast (%union.int_or_cap* @int_or_cap to i8*), i64 16, i1 false)
-// RV64IXCHERI-NEXT:    call void (i64, ...) @callee(i64 noundef 6, %union.int_or_cap* noundef [[BYVAL_TEMP8]])
+// RV64IXCHERI-NEXT:    store ptr addrspace(200) null, ptr [[NULL_CAP]], align 16
+// RV64IXCHERI-NEXT:    store ptr addrspace(200) null, ptr [[NULL_UINTCAP]], align 16
+// RV64IXCHERI-NEXT:    [[TMP0:%.*]] = load ptr addrspace(200), ptr [[NULL_CAP]], align 16
+// RV64IXCHERI-NEXT:    [[TMP1:%.*]] = load ptr addrspace(200), ptr [[NULL_UINTCAP]], align 16
+// RV64IXCHERI-NEXT:    [[TMP2:%.*]] = load ptr addrspace(200), ptr @cap, align 16
+// RV64IXCHERI-NEXT:    [[TMP3:%.*]] = load ptr addrspace(200), ptr @uintcap, align 16
+// RV64IXCHERI-NEXT:    store ptr addrspace(200) [[TMP0]], ptr [[INDIRECT_ARG_TEMP]], align 16
+// RV64IXCHERI-NEXT:    store ptr addrspace(200) [[TMP1]], ptr [[INDIRECT_ARG_TEMP1]], align 16
+// RV64IXCHERI-NEXT:    store ptr addrspace(200) [[TMP2]], ptr [[INDIRECT_ARG_TEMP2]], align 16
+// RV64IXCHERI-NEXT:    store ptr addrspace(200) [[TMP3]], ptr [[INDIRECT_ARG_TEMP3]], align 16
+// RV64IXCHERI-NEXT:    call void (i64, ...) @callee(i64 noundef 0, ptr noundef [[INDIRECT_ARG_TEMP]], ptr noundef [[INDIRECT_ARG_TEMP1]], ptr noundef [[INDIRECT_ARG_TEMP2]], ptr noundef [[INDIRECT_ARG_TEMP3]])
+// RV64IXCHERI-NEXT:    call void @llvm.memcpy.p0.p0.i64(ptr align 16 [[BYVAL_TEMP]], ptr align 16 @single_cap, i64 16, i1 false)
+// RV64IXCHERI-NEXT:    call void (i64, ...) @callee(i64 noundef 1, ptr noundef [[BYVAL_TEMP]])
+// RV64IXCHERI-NEXT:    call void @llvm.memcpy.p0.p0.i64(ptr align 16 [[BYVAL_TEMP4]], ptr align 16 @double_cap, i64 32, i1 false)
+// RV64IXCHERI-NEXT:    call void (i64, ...) @callee(i64 noundef 2, ptr noundef [[BYVAL_TEMP4]])
+// RV64IXCHERI-NEXT:    call void @llvm.memcpy.p0.p0.i64(ptr align 16 [[BYVAL_TEMP5]], ptr align 16 @single_cap_array, i64 16, i1 false)
+// RV64IXCHERI-NEXT:    call void (i64, ...) @callee(i64 noundef 3, ptr noundef [[BYVAL_TEMP5]])
+// RV64IXCHERI-NEXT:    call void @llvm.memcpy.p0.p0.i64(ptr align 16 [[BYVAL_TEMP6]], ptr align 16 @double_cap_array, i64 32, i1 false)
+// RV64IXCHERI-NEXT:    call void (i64, ...) @callee(i64 noundef 4, ptr noundef [[BYVAL_TEMP6]])
+// RV64IXCHERI-NEXT:    call void @llvm.memcpy.p0.p0.i64(ptr align 16 [[BYVAL_TEMP7]], ptr align 16 @mixed, i64 32, i1 false)
+// RV64IXCHERI-NEXT:    call void (i64, ...) @callee(i64 noundef 5, ptr noundef [[BYVAL_TEMP7]])
+// RV64IXCHERI-NEXT:    call void @llvm.memcpy.p0.p0.i64(ptr align 16 [[BYVAL_TEMP8]], ptr align 16 @int_or_cap, i64 16, i1 false)
+// RV64IXCHERI-NEXT:    call void (i64, ...) @callee(i64 noundef 6, ptr noundef [[BYVAL_TEMP8]])
 // RV64IXCHERI-NEXT:    ret void
 //
 void caller(void) {
@@ -199,369 +181,297 @@ void caller(void) {
 // MIPS-SAME: (i64 noundef signext [[SEL:%.*]], ...) #[[ATTR0]] {
 // MIPS-NEXT:  entry:
 // MIPS-NEXT:    [[SEL_ADDR:%.*]] = alloca i64, align 8
-// MIPS-NEXT:    [[NULL_CAP:%.*]] = alloca i8 addrspace(200)*, align 16
-// MIPS-NEXT:    [[NULL_UINTCAP:%.*]] = alloca i8 addrspace(200)*, align 16
-// MIPS-NEXT:    [[CAP:%.*]] = alloca i8 addrspace(200)*, align 16
-// MIPS-NEXT:    [[UINTCAP:%.*]] = alloca i8 addrspace(200)*, align 16
+// MIPS-NEXT:    [[NULL_CAP:%.*]] = alloca ptr addrspace(200), align 16
+// MIPS-NEXT:    [[NULL_UINTCAP:%.*]] = alloca ptr addrspace(200), align 16
+// MIPS-NEXT:    [[CAP:%.*]] = alloca ptr addrspace(200), align 16
+// MIPS-NEXT:    [[UINTCAP:%.*]] = alloca ptr addrspace(200), align 16
 // MIPS-NEXT:    [[SINGLE_CAP:%.*]] = alloca [[STRUCT_SINGLE_CAP:%.*]], align 16
 // MIPS-NEXT:    [[DOUBLE_CAP:%.*]] = alloca [[STRUCT_DOUBLE_CAP:%.*]], align 16
 // MIPS-NEXT:    [[SINGLE_CAP_ARRAY:%.*]] = alloca [[STRUCT_SINGLE_CAP_ARRAY:%.*]], align 16
 // MIPS-NEXT:    [[DOUBLE_CAP_ARRAY:%.*]] = alloca [[STRUCT_DOUBLE_CAP_ARRAY:%.*]], align 16
 // MIPS-NEXT:    [[MIXED:%.*]] = alloca [[STRUCT_MIXED:%.*]], align 16
 // MIPS-NEXT:    [[INT_OR_CAP:%.*]] = alloca [[UNION_INT_OR_CAP:%.*]], align 16
-// MIPS-NEXT:    [[AP:%.*]] = alloca i8*, align 8
-// MIPS-NEXT:    store i64 [[SEL]], i64* [[SEL_ADDR]], align 8
-// MIPS-NEXT:    [[AP1:%.*]] = bitcast i8** [[AP]] to i8*
-// MIPS-NEXT:    call void @llvm.va_start.p0i8(i8* [[AP1]])
-// MIPS-NEXT:    [[TMP0:%.*]] = load i64, i64* [[SEL_ADDR]], align 8
+// MIPS-NEXT:    [[AP:%.*]] = alloca ptr, align 8
+// MIPS-NEXT:    store i64 [[SEL]], ptr [[SEL_ADDR]], align 8
+// MIPS-NEXT:    call void @llvm.va_start.p0(ptr [[AP]])
+// MIPS-NEXT:    [[TMP0:%.*]] = load i64, ptr [[SEL_ADDR]], align 8
 // MIPS-NEXT:    switch i64 [[TMP0]], label [[SW_EPILOG:%.*]] [
 // MIPS-NEXT:    i64 0, label [[SW_BB:%.*]]
-// MIPS-NEXT:    i64 1, label [[SW_BB8:%.*]]
-// MIPS-NEXT:    i64 2, label [[SW_BB11:%.*]]
-// MIPS-NEXT:    i64 3, label [[SW_BB14:%.*]]
-// MIPS-NEXT:    i64 4, label [[SW_BB17:%.*]]
-// MIPS-NEXT:    i64 5, label [[SW_BB20:%.*]]
-// MIPS-NEXT:    i64 6, label [[SW_BB23:%.*]]
+// MIPS-NEXT:    i64 1, label [[SW_BB7:%.*]]
+// MIPS-NEXT:    i64 2, label [[SW_BB10:%.*]]
+// MIPS-NEXT:    i64 3, label [[SW_BB13:%.*]]
+// MIPS-NEXT:    i64 4, label [[SW_BB16:%.*]]
+// MIPS-NEXT:    i64 5, label [[SW_BB19:%.*]]
+// MIPS-NEXT:    i64 6, label [[SW_BB22:%.*]]
 // MIPS-NEXT:    ]
 // MIPS:       sw.bb:
-// MIPS-NEXT:    [[ARGP_CUR:%.*]] = load i8*, i8** [[AP]], align 8
-// MIPS-NEXT:    [[ARGP_NEXT:%.*]] = getelementptr inbounds i8, i8* [[ARGP_CUR]], i64 8
-// MIPS-NEXT:    store i8* [[ARGP_NEXT]], i8** [[AP]], align 8
-// MIPS-NEXT:    [[TMP1:%.*]] = bitcast i8* [[ARGP_CUR]] to i8 addrspace(200)***
-// MIPS-NEXT:    [[TMP2:%.*]] = load i8 addrspace(200)**, i8 addrspace(200)*** [[TMP1]], align 8
-// MIPS-NEXT:    [[TMP3:%.*]] = load i8 addrspace(200)*, i8 addrspace(200)** [[TMP2]], align 16
-// MIPS-NEXT:    store volatile i8 addrspace(200)* [[TMP3]], i8 addrspace(200)** [[NULL_CAP]], align 16
-// MIPS-NEXT:    [[ARGP_CUR2:%.*]] = load i8*, i8** [[AP]], align 8
-// MIPS-NEXT:    [[ARGP_NEXT3:%.*]] = getelementptr inbounds i8, i8* [[ARGP_CUR2]], i64 8
-// MIPS-NEXT:    store i8* [[ARGP_NEXT3]], i8** [[AP]], align 8
-// MIPS-NEXT:    [[TMP4:%.*]] = bitcast i8* [[ARGP_CUR2]] to i8 addrspace(200)***
-// MIPS-NEXT:    [[TMP5:%.*]] = load i8 addrspace(200)**, i8 addrspace(200)*** [[TMP4]], align 8
-// MIPS-NEXT:    [[TMP6:%.*]] = load i8 addrspace(200)*, i8 addrspace(200)** [[TMP5]], align 16
-// MIPS-NEXT:    store volatile i8 addrspace(200)* [[TMP6]], i8 addrspace(200)** [[NULL_UINTCAP]], align 16
-// MIPS-NEXT:    [[ARGP_CUR4:%.*]] = load i8*, i8** [[AP]], align 8
-// MIPS-NEXT:    [[ARGP_NEXT5:%.*]] = getelementptr inbounds i8, i8* [[ARGP_CUR4]], i64 8
-// MIPS-NEXT:    store i8* [[ARGP_NEXT5]], i8** [[AP]], align 8
-// MIPS-NEXT:    [[TMP7:%.*]] = bitcast i8* [[ARGP_CUR4]] to i8 addrspace(200)***
-// MIPS-NEXT:    [[TMP8:%.*]] = load i8 addrspace(200)**, i8 addrspace(200)*** [[TMP7]], align 8
-// MIPS-NEXT:    [[TMP9:%.*]] = load i8 addrspace(200)*, i8 addrspace(200)** [[TMP8]], align 16
-// MIPS-NEXT:    store volatile i8 addrspace(200)* [[TMP9]], i8 addrspace(200)** [[CAP]], align 16
-// MIPS-NEXT:    [[ARGP_CUR6:%.*]] = load i8*, i8** [[AP]], align 8
-// MIPS-NEXT:    [[ARGP_NEXT7:%.*]] = getelementptr inbounds i8, i8* [[ARGP_CUR6]], i64 8
-// MIPS-NEXT:    store i8* [[ARGP_NEXT7]], i8** [[AP]], align 8
-// MIPS-NEXT:    [[TMP10:%.*]] = bitcast i8* [[ARGP_CUR6]] to i8 addrspace(200)***
-// MIPS-NEXT:    [[TMP11:%.*]] = load i8 addrspace(200)**, i8 addrspace(200)*** [[TMP10]], align 8
-// MIPS-NEXT:    [[TMP12:%.*]] = load i8 addrspace(200)*, i8 addrspace(200)** [[TMP11]], align 16
-// MIPS-NEXT:    store volatile i8 addrspace(200)* [[TMP12]], i8 addrspace(200)** [[UINTCAP]], align 16
+// MIPS-NEXT:    [[ARGP_CUR:%.*]] = load ptr, ptr [[AP]], align 8
+// MIPS-NEXT:    [[ARGP_NEXT:%.*]] = getelementptr inbounds i8, ptr [[ARGP_CUR]], i64 8
+// MIPS-NEXT:    store ptr [[ARGP_NEXT]], ptr [[AP]], align 8
+// MIPS-NEXT:    [[TMP1:%.*]] = load ptr, ptr [[ARGP_CUR]], align 8
+// MIPS-NEXT:    [[TMP2:%.*]] = load ptr addrspace(200), ptr [[TMP1]], align 16
+// MIPS-NEXT:    store volatile ptr addrspace(200) [[TMP2]], ptr [[NULL_CAP]], align 16
+// MIPS-NEXT:    [[ARGP_CUR1:%.*]] = load ptr, ptr [[AP]], align 8
+// MIPS-NEXT:    [[ARGP_NEXT2:%.*]] = getelementptr inbounds i8, ptr [[ARGP_CUR1]], i64 8
+// MIPS-NEXT:    store ptr [[ARGP_NEXT2]], ptr [[AP]], align 8
+// MIPS-NEXT:    [[TMP3:%.*]] = load ptr, ptr [[ARGP_CUR1]], align 8
+// MIPS-NEXT:    [[TMP4:%.*]] = load ptr addrspace(200), ptr [[TMP3]], align 16
+// MIPS-NEXT:    store volatile ptr addrspace(200) [[TMP4]], ptr [[NULL_UINTCAP]], align 16
+// MIPS-NEXT:    [[ARGP_CUR3:%.*]] = load ptr, ptr [[AP]], align 8
+// MIPS-NEXT:    [[ARGP_NEXT4:%.*]] = getelementptr inbounds i8, ptr [[ARGP_CUR3]], i64 8
+// MIPS-NEXT:    store ptr [[ARGP_NEXT4]], ptr [[AP]], align 8
+// MIPS-NEXT:    [[TMP5:%.*]] = load ptr, ptr [[ARGP_CUR3]], align 8
+// MIPS-NEXT:    [[TMP6:%.*]] = load ptr addrspace(200), ptr [[TMP5]], align 16
+// MIPS-NEXT:    store volatile ptr addrspace(200) [[TMP6]], ptr [[CAP]], align 16
+// MIPS-NEXT:    [[ARGP_CUR5:%.*]] = load ptr, ptr [[AP]], align 8
+// MIPS-NEXT:    [[ARGP_NEXT6:%.*]] = getelementptr inbounds i8, ptr [[ARGP_CUR5]], i64 8
+// MIPS-NEXT:    store ptr [[ARGP_NEXT6]], ptr [[AP]], align 8
+// MIPS-NEXT:    [[TMP7:%.*]] = load ptr, ptr [[ARGP_CUR5]], align 8
+// MIPS-NEXT:    [[TMP8:%.*]] = load ptr addrspace(200), ptr [[TMP7]], align 16
+// MIPS-NEXT:    store volatile ptr addrspace(200) [[TMP8]], ptr [[UINTCAP]], align 16
 // MIPS-NEXT:    br label [[SW_EPILOG]]
-// MIPS:       sw.bb8:
-// MIPS-NEXT:    [[ARGP_CUR9:%.*]] = load i8*, i8** [[AP]], align 8
-// MIPS-NEXT:    [[ARGP_NEXT10:%.*]] = getelementptr inbounds i8, i8* [[ARGP_CUR9]], i64 8
-// MIPS-NEXT:    store i8* [[ARGP_NEXT10]], i8** [[AP]], align 8
-// MIPS-NEXT:    [[TMP13:%.*]] = bitcast i8* [[ARGP_CUR9]] to %struct.single_cap**
-// MIPS-NEXT:    [[TMP14:%.*]] = load %struct.single_cap*, %struct.single_cap** [[TMP13]], align 8
-// MIPS-NEXT:    [[TMP15:%.*]] = bitcast %struct.single_cap* [[SINGLE_CAP]] to i8*
-// MIPS-NEXT:    [[TMP16:%.*]] = bitcast %struct.single_cap* [[TMP14]] to i8*
-// MIPS-NEXT:    call void @llvm.memcpy.p0i8.p0i8.i64(i8* align 16 [[TMP15]], i8* align 16 [[TMP16]], i64 16, i1 true)
+// MIPS:       sw.bb7:
+// MIPS-NEXT:    [[ARGP_CUR8:%.*]] = load ptr, ptr [[AP]], align 8
+// MIPS-NEXT:    [[ARGP_NEXT9:%.*]] = getelementptr inbounds i8, ptr [[ARGP_CUR8]], i64 8
+// MIPS-NEXT:    store ptr [[ARGP_NEXT9]], ptr [[AP]], align 8
+// MIPS-NEXT:    [[TMP9:%.*]] = load ptr, ptr [[ARGP_CUR8]], align 8
+// MIPS-NEXT:    call void @llvm.memcpy.p0.p0.i64(ptr align 16 [[SINGLE_CAP]], ptr align 16 [[TMP9]], i64 16, i1 true)
 // MIPS-NEXT:    br label [[SW_EPILOG]]
-// MIPS:       sw.bb11:
-// MIPS-NEXT:    [[ARGP_CUR12:%.*]] = load i8*, i8** [[AP]], align 8
-// MIPS-NEXT:    [[ARGP_NEXT13:%.*]] = getelementptr inbounds i8, i8* [[ARGP_CUR12]], i64 8
-// MIPS-NEXT:    store i8* [[ARGP_NEXT13]], i8** [[AP]], align 8
-// MIPS-NEXT:    [[TMP17:%.*]] = bitcast i8* [[ARGP_CUR12]] to %struct.double_cap**
-// MIPS-NEXT:    [[TMP18:%.*]] = load %struct.double_cap*, %struct.double_cap** [[TMP17]], align 8
-// MIPS-NEXT:    [[TMP19:%.*]] = bitcast %struct.double_cap* [[DOUBLE_CAP]] to i8*
-// MIPS-NEXT:    [[TMP20:%.*]] = bitcast %struct.double_cap* [[TMP18]] to i8*
-// MIPS-NEXT:    call void @llvm.memcpy.p0i8.p0i8.i64(i8* align 16 [[TMP19]], i8* align 16 [[TMP20]], i64 32, i1 true)
+// MIPS:       sw.bb10:
+// MIPS-NEXT:    [[ARGP_CUR11:%.*]] = load ptr, ptr [[AP]], align 8
+// MIPS-NEXT:    [[ARGP_NEXT12:%.*]] = getelementptr inbounds i8, ptr [[ARGP_CUR11]], i64 8
+// MIPS-NEXT:    store ptr [[ARGP_NEXT12]], ptr [[AP]], align 8
+// MIPS-NEXT:    [[TMP10:%.*]] = load ptr, ptr [[ARGP_CUR11]], align 8
+// MIPS-NEXT:    call void @llvm.memcpy.p0.p0.i64(ptr align 16 [[DOUBLE_CAP]], ptr align 16 [[TMP10]], i64 32, i1 true)
 // MIPS-NEXT:    br label [[SW_EPILOG]]
-// MIPS:       sw.bb14:
-// MIPS-NEXT:    [[ARGP_CUR15:%.*]] = load i8*, i8** [[AP]], align 8
-// MIPS-NEXT:    [[ARGP_NEXT16:%.*]] = getelementptr inbounds i8, i8* [[ARGP_CUR15]], i64 8
-// MIPS-NEXT:    store i8* [[ARGP_NEXT16]], i8** [[AP]], align 8
-// MIPS-NEXT:    [[TMP21:%.*]] = bitcast i8* [[ARGP_CUR15]] to %struct.single_cap_array**
-// MIPS-NEXT:    [[TMP22:%.*]] = load %struct.single_cap_array*, %struct.single_cap_array** [[TMP21]], align 8
-// MIPS-NEXT:    [[TMP23:%.*]] = bitcast %struct.single_cap_array* [[SINGLE_CAP_ARRAY]] to i8*
-// MIPS-NEXT:    [[TMP24:%.*]] = bitcast %struct.single_cap_array* [[TMP22]] to i8*
-// MIPS-NEXT:    call void @llvm.memcpy.p0i8.p0i8.i64(i8* align 16 [[TMP23]], i8* align 16 [[TMP24]], i64 16, i1 true)
+// MIPS:       sw.bb13:
+// MIPS-NEXT:    [[ARGP_CUR14:%.*]] = load ptr, ptr [[AP]], align 8
+// MIPS-NEXT:    [[ARGP_NEXT15:%.*]] = getelementptr inbounds i8, ptr [[ARGP_CUR14]], i64 8
+// MIPS-NEXT:    store ptr [[ARGP_NEXT15]], ptr [[AP]], align 8
+// MIPS-NEXT:    [[TMP11:%.*]] = load ptr, ptr [[ARGP_CUR14]], align 8
+// MIPS-NEXT:    call void @llvm.memcpy.p0.p0.i64(ptr align 16 [[SINGLE_CAP_ARRAY]], ptr align 16 [[TMP11]], i64 16, i1 true)
 // MIPS-NEXT:    br label [[SW_EPILOG]]
-// MIPS:       sw.bb17:
-// MIPS-NEXT:    [[ARGP_CUR18:%.*]] = load i8*, i8** [[AP]], align 8
-// MIPS-NEXT:    [[ARGP_NEXT19:%.*]] = getelementptr inbounds i8, i8* [[ARGP_CUR18]], i64 8
-// MIPS-NEXT:    store i8* [[ARGP_NEXT19]], i8** [[AP]], align 8
-// MIPS-NEXT:    [[TMP25:%.*]] = bitcast i8* [[ARGP_CUR18]] to %struct.double_cap_array**
-// MIPS-NEXT:    [[TMP26:%.*]] = load %struct.double_cap_array*, %struct.double_cap_array** [[TMP25]], align 8
-// MIPS-NEXT:    [[TMP27:%.*]] = bitcast %struct.double_cap_array* [[DOUBLE_CAP_ARRAY]] to i8*
-// MIPS-NEXT:    [[TMP28:%.*]] = bitcast %struct.double_cap_array* [[TMP26]] to i8*
-// MIPS-NEXT:    call void @llvm.memcpy.p0i8.p0i8.i64(i8* align 16 [[TMP27]], i8* align 16 [[TMP28]], i64 32, i1 true)
+// MIPS:       sw.bb16:
+// MIPS-NEXT:    [[ARGP_CUR17:%.*]] = load ptr, ptr [[AP]], align 8
+// MIPS-NEXT:    [[ARGP_NEXT18:%.*]] = getelementptr inbounds i8, ptr [[ARGP_CUR17]], i64 8
+// MIPS-NEXT:    store ptr [[ARGP_NEXT18]], ptr [[AP]], align 8
+// MIPS-NEXT:    [[TMP12:%.*]] = load ptr, ptr [[ARGP_CUR17]], align 8
+// MIPS-NEXT:    call void @llvm.memcpy.p0.p0.i64(ptr align 16 [[DOUBLE_CAP_ARRAY]], ptr align 16 [[TMP12]], i64 32, i1 true)
 // MIPS-NEXT:    br label [[SW_EPILOG]]
-// MIPS:       sw.bb20:
-// MIPS-NEXT:    [[ARGP_CUR21:%.*]] = load i8*, i8** [[AP]], align 8
-// MIPS-NEXT:    [[ARGP_NEXT22:%.*]] = getelementptr inbounds i8, i8* [[ARGP_CUR21]], i64 8
-// MIPS-NEXT:    store i8* [[ARGP_NEXT22]], i8** [[AP]], align 8
-// MIPS-NEXT:    [[TMP29:%.*]] = bitcast i8* [[ARGP_CUR21]] to %struct.mixed**
-// MIPS-NEXT:    [[TMP30:%.*]] = load %struct.mixed*, %struct.mixed** [[TMP29]], align 8
-// MIPS-NEXT:    [[TMP31:%.*]] = bitcast %struct.mixed* [[MIXED]] to i8*
-// MIPS-NEXT:    [[TMP32:%.*]] = bitcast %struct.mixed* [[TMP30]] to i8*
-// MIPS-NEXT:    call void @llvm.memcpy.p0i8.p0i8.i64(i8* align 16 [[TMP31]], i8* align 16 [[TMP32]], i64 32, i1 true)
+// MIPS:       sw.bb19:
+// MIPS-NEXT:    [[ARGP_CUR20:%.*]] = load ptr, ptr [[AP]], align 8
+// MIPS-NEXT:    [[ARGP_NEXT21:%.*]] = getelementptr inbounds i8, ptr [[ARGP_CUR20]], i64 8
+// MIPS-NEXT:    store ptr [[ARGP_NEXT21]], ptr [[AP]], align 8
+// MIPS-NEXT:    [[TMP13:%.*]] = load ptr, ptr [[ARGP_CUR20]], align 8
+// MIPS-NEXT:    call void @llvm.memcpy.p0.p0.i64(ptr align 16 [[MIXED]], ptr align 16 [[TMP13]], i64 32, i1 true)
 // MIPS-NEXT:    br label [[SW_EPILOG]]
-// MIPS:       sw.bb23:
-// MIPS-NEXT:    [[ARGP_CUR24:%.*]] = load i8*, i8** [[AP]], align 8
-// MIPS-NEXT:    [[ARGP_NEXT25:%.*]] = getelementptr inbounds i8, i8* [[ARGP_CUR24]], i64 8
-// MIPS-NEXT:    store i8* [[ARGP_NEXT25]], i8** [[AP]], align 8
-// MIPS-NEXT:    [[TMP33:%.*]] = bitcast i8* [[ARGP_CUR24]] to %union.int_or_cap**
-// MIPS-NEXT:    [[TMP34:%.*]] = load %union.int_or_cap*, %union.int_or_cap** [[TMP33]], align 8
-// MIPS-NEXT:    [[TMP35:%.*]] = bitcast %union.int_or_cap* [[INT_OR_CAP]] to i8*
-// MIPS-NEXT:    [[TMP36:%.*]] = bitcast %union.int_or_cap* [[TMP34]] to i8*
-// MIPS-NEXT:    call void @llvm.memcpy.p0i8.p0i8.i64(i8* align 16 [[TMP35]], i8* align 16 [[TMP36]], i64 16, i1 true)
+// MIPS:       sw.bb22:
+// MIPS-NEXT:    [[ARGP_CUR23:%.*]] = load ptr, ptr [[AP]], align 8
+// MIPS-NEXT:    [[ARGP_NEXT24:%.*]] = getelementptr inbounds i8, ptr [[ARGP_CUR23]], i64 8
+// MIPS-NEXT:    store ptr [[ARGP_NEXT24]], ptr [[AP]], align 8
+// MIPS-NEXT:    [[TMP14:%.*]] = load ptr, ptr [[ARGP_CUR23]], align 8
+// MIPS-NEXT:    call void @llvm.memcpy.p0.p0.i64(ptr align 16 [[INT_OR_CAP]], ptr align 16 [[TMP14]], i64 16, i1 true)
 // MIPS-NEXT:    br label [[SW_EPILOG]]
 // MIPS:       sw.epilog:
-// MIPS-NEXT:    [[AP26:%.*]] = bitcast i8** [[AP]] to i8*
-// MIPS-NEXT:    call void @llvm.va_end.p0i8(i8* [[AP26]])
+// MIPS-NEXT:    call void @llvm.va_end.p0(ptr [[AP]])
 // MIPS-NEXT:    ret void
 //
 // RV32IXCHERI-LABEL: define {{[^@]+}}@callee
 // RV32IXCHERI-SAME: (i32 noundef [[SEL:%.*]], ...) #[[ATTR0]] {
 // RV32IXCHERI-NEXT:  entry:
 // RV32IXCHERI-NEXT:    [[SEL_ADDR:%.*]] = alloca i32, align 4
-// RV32IXCHERI-NEXT:    [[NULL_CAP:%.*]] = alloca i8 addrspace(200)*, align 8
-// RV32IXCHERI-NEXT:    [[NULL_UINTCAP:%.*]] = alloca i8 addrspace(200)*, align 8
-// RV32IXCHERI-NEXT:    [[CAP:%.*]] = alloca i8 addrspace(200)*, align 8
-// RV32IXCHERI-NEXT:    [[UINTCAP:%.*]] = alloca i8 addrspace(200)*, align 8
+// RV32IXCHERI-NEXT:    [[NULL_CAP:%.*]] = alloca ptr addrspace(200), align 8
+// RV32IXCHERI-NEXT:    [[NULL_UINTCAP:%.*]] = alloca ptr addrspace(200), align 8
+// RV32IXCHERI-NEXT:    [[CAP:%.*]] = alloca ptr addrspace(200), align 8
+// RV32IXCHERI-NEXT:    [[UINTCAP:%.*]] = alloca ptr addrspace(200), align 8
 // RV32IXCHERI-NEXT:    [[SINGLE_CAP:%.*]] = alloca [[STRUCT_SINGLE_CAP:%.*]], align 8
 // RV32IXCHERI-NEXT:    [[DOUBLE_CAP:%.*]] = alloca [[STRUCT_DOUBLE_CAP:%.*]], align 8
 // RV32IXCHERI-NEXT:    [[SINGLE_CAP_ARRAY:%.*]] = alloca [[STRUCT_SINGLE_CAP_ARRAY:%.*]], align 8
 // RV32IXCHERI-NEXT:    [[DOUBLE_CAP_ARRAY:%.*]] = alloca [[STRUCT_DOUBLE_CAP_ARRAY:%.*]], align 8
 // RV32IXCHERI-NEXT:    [[MIXED:%.*]] = alloca [[STRUCT_MIXED:%.*]], align 8
 // RV32IXCHERI-NEXT:    [[INT_OR_CAP:%.*]] = alloca [[UNION_INT_OR_CAP:%.*]], align 8
-// RV32IXCHERI-NEXT:    [[AP:%.*]] = alloca i8*, align 4
-// RV32IXCHERI-NEXT:    store i32 [[SEL]], i32* [[SEL_ADDR]], align 4
-// RV32IXCHERI-NEXT:    [[AP1:%.*]] = bitcast i8** [[AP]] to i8*
-// RV32IXCHERI-NEXT:    call void @llvm.va_start.p0i8(i8* [[AP1]])
-// RV32IXCHERI-NEXT:    [[TMP0:%.*]] = load i32, i32* [[SEL_ADDR]], align 4
+// RV32IXCHERI-NEXT:    [[AP:%.*]] = alloca ptr, align 4
+// RV32IXCHERI-NEXT:    store i32 [[SEL]], ptr [[SEL_ADDR]], align 4
+// RV32IXCHERI-NEXT:    call void @llvm.va_start.p0(ptr [[AP]])
+// RV32IXCHERI-NEXT:    [[TMP0:%.*]] = load i32, ptr [[SEL_ADDR]], align 4
 // RV32IXCHERI-NEXT:    switch i32 [[TMP0]], label [[SW_EPILOG:%.*]] [
 // RV32IXCHERI-NEXT:    i32 0, label [[SW_BB:%.*]]
-// RV32IXCHERI-NEXT:    i32 1, label [[SW_BB8:%.*]]
-// RV32IXCHERI-NEXT:    i32 2, label [[SW_BB11:%.*]]
-// RV32IXCHERI-NEXT:    i32 3, label [[SW_BB14:%.*]]
-// RV32IXCHERI-NEXT:    i32 4, label [[SW_BB17:%.*]]
-// RV32IXCHERI-NEXT:    i32 5, label [[SW_BB20:%.*]]
-// RV32IXCHERI-NEXT:    i32 6, label [[SW_BB23:%.*]]
+// RV32IXCHERI-NEXT:    i32 1, label [[SW_BB7:%.*]]
+// RV32IXCHERI-NEXT:    i32 2, label [[SW_BB10:%.*]]
+// RV32IXCHERI-NEXT:    i32 3, label [[SW_BB13:%.*]]
+// RV32IXCHERI-NEXT:    i32 4, label [[SW_BB16:%.*]]
+// RV32IXCHERI-NEXT:    i32 5, label [[SW_BB19:%.*]]
+// RV32IXCHERI-NEXT:    i32 6, label [[SW_BB22:%.*]]
 // RV32IXCHERI-NEXT:    ]
 // RV32IXCHERI:       sw.bb:
-// RV32IXCHERI-NEXT:    [[ARGP_CUR:%.*]] = load i8*, i8** [[AP]], align 4
-// RV32IXCHERI-NEXT:    [[ARGP_NEXT:%.*]] = getelementptr inbounds i8, i8* [[ARGP_CUR]], i32 4
-// RV32IXCHERI-NEXT:    store i8* [[ARGP_NEXT]], i8** [[AP]], align 4
-// RV32IXCHERI-NEXT:    [[TMP1:%.*]] = bitcast i8* [[ARGP_CUR]] to i8 addrspace(200)***
-// RV32IXCHERI-NEXT:    [[TMP2:%.*]] = load i8 addrspace(200)**, i8 addrspace(200)*** [[TMP1]], align 4
-// RV32IXCHERI-NEXT:    [[TMP3:%.*]] = load i8 addrspace(200)*, i8 addrspace(200)** [[TMP2]], align 8
-// RV32IXCHERI-NEXT:    store volatile i8 addrspace(200)* [[TMP3]], i8 addrspace(200)** [[NULL_CAP]], align 8
-// RV32IXCHERI-NEXT:    [[ARGP_CUR2:%.*]] = load i8*, i8** [[AP]], align 4
-// RV32IXCHERI-NEXT:    [[ARGP_NEXT3:%.*]] = getelementptr inbounds i8, i8* [[ARGP_CUR2]], i32 4
-// RV32IXCHERI-NEXT:    store i8* [[ARGP_NEXT3]], i8** [[AP]], align 4
-// RV32IXCHERI-NEXT:    [[TMP4:%.*]] = bitcast i8* [[ARGP_CUR2]] to i8 addrspace(200)***
-// RV32IXCHERI-NEXT:    [[TMP5:%.*]] = load i8 addrspace(200)**, i8 addrspace(200)*** [[TMP4]], align 4
-// RV32IXCHERI-NEXT:    [[TMP6:%.*]] = load i8 addrspace(200)*, i8 addrspace(200)** [[TMP5]], align 8
-// RV32IXCHERI-NEXT:    store volatile i8 addrspace(200)* [[TMP6]], i8 addrspace(200)** [[NULL_UINTCAP]], align 8
-// RV32IXCHERI-NEXT:    [[ARGP_CUR4:%.*]] = load i8*, i8** [[AP]], align 4
-// RV32IXCHERI-NEXT:    [[ARGP_NEXT5:%.*]] = getelementptr inbounds i8, i8* [[ARGP_CUR4]], i32 4
-// RV32IXCHERI-NEXT:    store i8* [[ARGP_NEXT5]], i8** [[AP]], align 4
-// RV32IXCHERI-NEXT:    [[TMP7:%.*]] = bitcast i8* [[ARGP_CUR4]] to i8 addrspace(200)***
-// RV32IXCHERI-NEXT:    [[TMP8:%.*]] = load i8 addrspace(200)**, i8 addrspace(200)*** [[TMP7]], align 4
-// RV32IXCHERI-NEXT:    [[TMP9:%.*]] = load i8 addrspace(200)*, i8 addrspace(200)** [[TMP8]], align 8
-// RV32IXCHERI-NEXT:    store volatile i8 addrspace(200)* [[TMP9]], i8 addrspace(200)** [[CAP]], align 8
-// RV32IXCHERI-NEXT:    [[ARGP_CUR6:%.*]] = load i8*, i8** [[AP]], align 4
-// RV32IXCHERI-NEXT:    [[ARGP_NEXT7:%.*]] = getelementptr inbounds i8, i8* [[ARGP_CUR6]], i32 4
-// RV32IXCHERI-NEXT:    store i8* [[ARGP_NEXT7]], i8** [[AP]], align 4
-// RV32IXCHERI-NEXT:    [[TMP10:%.*]] = bitcast i8* [[ARGP_CUR6]] to i8 addrspace(200)***
-// RV32IXCHERI-NEXT:    [[TMP11:%.*]] = load i8 addrspace(200)**, i8 addrspace(200)*** [[TMP10]], align 4
-// RV32IXCHERI-NEXT:    [[TMP12:%.*]] = load i8 addrspace(200)*, i8 addrspace(200)** [[TMP11]], align 8
-// RV32IXCHERI-NEXT:    store volatile i8 addrspace(200)* [[TMP12]], i8 addrspace(200)** [[UINTCAP]], align 8
+// RV32IXCHERI-NEXT:    [[ARGP_CUR:%.*]] = load ptr, ptr [[AP]], align 4
+// RV32IXCHERI-NEXT:    [[ARGP_NEXT:%.*]] = getelementptr inbounds i8, ptr [[ARGP_CUR]], i32 4
+// RV32IXCHERI-NEXT:    store ptr [[ARGP_NEXT]], ptr [[AP]], align 4
+// RV32IXCHERI-NEXT:    [[TMP1:%.*]] = load ptr, ptr [[ARGP_CUR]], align 4
+// RV32IXCHERI-NEXT:    [[TMP2:%.*]] = load ptr addrspace(200), ptr [[TMP1]], align 8
+// RV32IXCHERI-NEXT:    store volatile ptr addrspace(200) [[TMP2]], ptr [[NULL_CAP]], align 8
+// RV32IXCHERI-NEXT:    [[ARGP_CUR1:%.*]] = load ptr, ptr [[AP]], align 4
+// RV32IXCHERI-NEXT:    [[ARGP_NEXT2:%.*]] = getelementptr inbounds i8, ptr [[ARGP_CUR1]], i32 4
+// RV32IXCHERI-NEXT:    store ptr [[ARGP_NEXT2]], ptr [[AP]], align 4
+// RV32IXCHERI-NEXT:    [[TMP3:%.*]] = load ptr, ptr [[ARGP_CUR1]], align 4
+// RV32IXCHERI-NEXT:    [[TMP4:%.*]] = load ptr addrspace(200), ptr [[TMP3]], align 8
+// RV32IXCHERI-NEXT:    store volatile ptr addrspace(200) [[TMP4]], ptr [[NULL_UINTCAP]], align 8
+// RV32IXCHERI-NEXT:    [[ARGP_CUR3:%.*]] = load ptr, ptr [[AP]], align 4
+// RV32IXCHERI-NEXT:    [[ARGP_NEXT4:%.*]] = getelementptr inbounds i8, ptr [[ARGP_CUR3]], i32 4
+// RV32IXCHERI-NEXT:    store ptr [[ARGP_NEXT4]], ptr [[AP]], align 4
+// RV32IXCHERI-NEXT:    [[TMP5:%.*]] = load ptr, ptr [[ARGP_CUR3]], align 4
+// RV32IXCHERI-NEXT:    [[TMP6:%.*]] = load ptr addrspace(200), ptr [[TMP5]], align 8
+// RV32IXCHERI-NEXT:    store volatile ptr addrspace(200) [[TMP6]], ptr [[CAP]], align 8
+// RV32IXCHERI-NEXT:    [[ARGP_CUR5:%.*]] = load ptr, ptr [[AP]], align 4
+// RV32IXCHERI-NEXT:    [[ARGP_NEXT6:%.*]] = getelementptr inbounds i8, ptr [[ARGP_CUR5]], i32 4
+// RV32IXCHERI-NEXT:    store ptr [[ARGP_NEXT6]], ptr [[AP]], align 4
+// RV32IXCHERI-NEXT:    [[TMP7:%.*]] = load ptr, ptr [[ARGP_CUR5]], align 4
+// RV32IXCHERI-NEXT:    [[TMP8:%.*]] = load ptr addrspace(200), ptr [[TMP7]], align 8
+// RV32IXCHERI-NEXT:    store volatile ptr addrspace(200) [[TMP8]], ptr [[UINTCAP]], align 8
 // RV32IXCHERI-NEXT:    br label [[SW_EPILOG]]
-// RV32IXCHERI:       sw.bb8:
-// RV32IXCHERI-NEXT:    [[ARGP_CUR9:%.*]] = load i8*, i8** [[AP]], align 4
-// RV32IXCHERI-NEXT:    [[ARGP_NEXT10:%.*]] = getelementptr inbounds i8, i8* [[ARGP_CUR9]], i32 4
-// RV32IXCHERI-NEXT:    store i8* [[ARGP_NEXT10]], i8** [[AP]], align 4
-// RV32IXCHERI-NEXT:    [[TMP13:%.*]] = bitcast i8* [[ARGP_CUR9]] to %struct.single_cap**
-// RV32IXCHERI-NEXT:    [[TMP14:%.*]] = load %struct.single_cap*, %struct.single_cap** [[TMP13]], align 4
-// RV32IXCHERI-NEXT:    [[TMP15:%.*]] = bitcast %struct.single_cap* [[SINGLE_CAP]] to i8*
-// RV32IXCHERI-NEXT:    [[TMP16:%.*]] = bitcast %struct.single_cap* [[TMP14]] to i8*
-// RV32IXCHERI-NEXT:    call void @llvm.memcpy.p0i8.p0i8.i32(i8* align 8 [[TMP15]], i8* align 8 [[TMP16]], i32 8, i1 true)
+// RV32IXCHERI:       sw.bb7:
+// RV32IXCHERI-NEXT:    [[ARGP_CUR8:%.*]] = load ptr, ptr [[AP]], align 4
+// RV32IXCHERI-NEXT:    [[ARGP_NEXT9:%.*]] = getelementptr inbounds i8, ptr [[ARGP_CUR8]], i32 4
+// RV32IXCHERI-NEXT:    store ptr [[ARGP_NEXT9]], ptr [[AP]], align 4
+// RV32IXCHERI-NEXT:    [[TMP9:%.*]] = load ptr, ptr [[ARGP_CUR8]], align 4
+// RV32IXCHERI-NEXT:    call void @llvm.memcpy.p0.p0.i32(ptr align 8 [[SINGLE_CAP]], ptr align 8 [[TMP9]], i32 8, i1 true)
 // RV32IXCHERI-NEXT:    br label [[SW_EPILOG]]
-// RV32IXCHERI:       sw.bb11:
-// RV32IXCHERI-NEXT:    [[ARGP_CUR12:%.*]] = load i8*, i8** [[AP]], align 4
-// RV32IXCHERI-NEXT:    [[ARGP_NEXT13:%.*]] = getelementptr inbounds i8, i8* [[ARGP_CUR12]], i32 4
-// RV32IXCHERI-NEXT:    store i8* [[ARGP_NEXT13]], i8** [[AP]], align 4
-// RV32IXCHERI-NEXT:    [[TMP17:%.*]] = bitcast i8* [[ARGP_CUR12]] to %struct.double_cap**
-// RV32IXCHERI-NEXT:    [[TMP18:%.*]] = load %struct.double_cap*, %struct.double_cap** [[TMP17]], align 4
-// RV32IXCHERI-NEXT:    [[TMP19:%.*]] = bitcast %struct.double_cap* [[DOUBLE_CAP]] to i8*
-// RV32IXCHERI-NEXT:    [[TMP20:%.*]] = bitcast %struct.double_cap* [[TMP18]] to i8*
-// RV32IXCHERI-NEXT:    call void @llvm.memcpy.p0i8.p0i8.i32(i8* align 8 [[TMP19]], i8* align 8 [[TMP20]], i32 16, i1 true)
+// RV32IXCHERI:       sw.bb10:
+// RV32IXCHERI-NEXT:    [[ARGP_CUR11:%.*]] = load ptr, ptr [[AP]], align 4
+// RV32IXCHERI-NEXT:    [[ARGP_NEXT12:%.*]] = getelementptr inbounds i8, ptr [[ARGP_CUR11]], i32 4
+// RV32IXCHERI-NEXT:    store ptr [[ARGP_NEXT12]], ptr [[AP]], align 4
+// RV32IXCHERI-NEXT:    [[TMP10:%.*]] = load ptr, ptr [[ARGP_CUR11]], align 4
+// RV32IXCHERI-NEXT:    call void @llvm.memcpy.p0.p0.i32(ptr align 8 [[DOUBLE_CAP]], ptr align 8 [[TMP10]], i32 16, i1 true)
 // RV32IXCHERI-NEXT:    br label [[SW_EPILOG]]
-// RV32IXCHERI:       sw.bb14:
-// RV32IXCHERI-NEXT:    [[ARGP_CUR15:%.*]] = load i8*, i8** [[AP]], align 4
-// RV32IXCHERI-NEXT:    [[ARGP_NEXT16:%.*]] = getelementptr inbounds i8, i8* [[ARGP_CUR15]], i32 4
-// RV32IXCHERI-NEXT:    store i8* [[ARGP_NEXT16]], i8** [[AP]], align 4
-// RV32IXCHERI-NEXT:    [[TMP21:%.*]] = bitcast i8* [[ARGP_CUR15]] to %struct.single_cap_array**
-// RV32IXCHERI-NEXT:    [[TMP22:%.*]] = load %struct.single_cap_array*, %struct.single_cap_array** [[TMP21]], align 4
-// RV32IXCHERI-NEXT:    [[TMP23:%.*]] = bitcast %struct.single_cap_array* [[SINGLE_CAP_ARRAY]] to i8*
-// RV32IXCHERI-NEXT:    [[TMP24:%.*]] = bitcast %struct.single_cap_array* [[TMP22]] to i8*
-// RV32IXCHERI-NEXT:    call void @llvm.memcpy.p0i8.p0i8.i32(i8* align 8 [[TMP23]], i8* align 8 [[TMP24]], i32 8, i1 true)
+// RV32IXCHERI:       sw.bb13:
+// RV32IXCHERI-NEXT:    [[ARGP_CUR14:%.*]] = load ptr, ptr [[AP]], align 4
+// RV32IXCHERI-NEXT:    [[ARGP_NEXT15:%.*]] = getelementptr inbounds i8, ptr [[ARGP_CUR14]], i32 4
+// RV32IXCHERI-NEXT:    store ptr [[ARGP_NEXT15]], ptr [[AP]], align 4
+// RV32IXCHERI-NEXT:    [[TMP11:%.*]] = load ptr, ptr [[ARGP_CUR14]], align 4
+// RV32IXCHERI-NEXT:    call void @llvm.memcpy.p0.p0.i32(ptr align 8 [[SINGLE_CAP_ARRAY]], ptr align 8 [[TMP11]], i32 8, i1 true)
 // RV32IXCHERI-NEXT:    br label [[SW_EPILOG]]
-// RV32IXCHERI:       sw.bb17:
-// RV32IXCHERI-NEXT:    [[ARGP_CUR18:%.*]] = load i8*, i8** [[AP]], align 4
-// RV32IXCHERI-NEXT:    [[ARGP_NEXT19:%.*]] = getelementptr inbounds i8, i8* [[ARGP_CUR18]], i32 4
-// RV32IXCHERI-NEXT:    store i8* [[ARGP_NEXT19]], i8** [[AP]], align 4
-// RV32IXCHERI-NEXT:    [[TMP25:%.*]] = bitcast i8* [[ARGP_CUR18]] to %struct.double_cap_array**
-// RV32IXCHERI-NEXT:    [[TMP26:%.*]] = load %struct.double_cap_array*, %struct.double_cap_array** [[TMP25]], align 4
-// RV32IXCHERI-NEXT:    [[TMP27:%.*]] = bitcast %struct.double_cap_array* [[DOUBLE_CAP_ARRAY]] to i8*
-// RV32IXCHERI-NEXT:    [[TMP28:%.*]] = bitcast %struct.double_cap_array* [[TMP26]] to i8*
-// RV32IXCHERI-NEXT:    call void @llvm.memcpy.p0i8.p0i8.i32(i8* align 8 [[TMP27]], i8* align 8 [[TMP28]], i32 16, i1 true)
+// RV32IXCHERI:       sw.bb16:
+// RV32IXCHERI-NEXT:    [[ARGP_CUR17:%.*]] = load ptr, ptr [[AP]], align 4
+// RV32IXCHERI-NEXT:    [[ARGP_NEXT18:%.*]] = getelementptr inbounds i8, ptr [[ARGP_CUR17]], i32 4
+// RV32IXCHERI-NEXT:    store ptr [[ARGP_NEXT18]], ptr [[AP]], align 4
+// RV32IXCHERI-NEXT:    [[TMP12:%.*]] = load ptr, ptr [[ARGP_CUR17]], align 4
+// RV32IXCHERI-NEXT:    call void @llvm.memcpy.p0.p0.i32(ptr align 8 [[DOUBLE_CAP_ARRAY]], ptr align 8 [[TMP12]], i32 16, i1 true)
 // RV32IXCHERI-NEXT:    br label [[SW_EPILOG]]
-// RV32IXCHERI:       sw.bb20:
-// RV32IXCHERI-NEXT:    [[ARGP_CUR21:%.*]] = load i8*, i8** [[AP]], align 4
-// RV32IXCHERI-NEXT:    [[ARGP_NEXT22:%.*]] = getelementptr inbounds i8, i8* [[ARGP_CUR21]], i32 4
-// RV32IXCHERI-NEXT:    store i8* [[ARGP_NEXT22]], i8** [[AP]], align 4
-// RV32IXCHERI-NEXT:    [[TMP29:%.*]] = bitcast i8* [[ARGP_CUR21]] to %struct.mixed**
-// RV32IXCHERI-NEXT:    [[TMP30:%.*]] = load %struct.mixed*, %struct.mixed** [[TMP29]], align 4
-// RV32IXCHERI-NEXT:    [[TMP31:%.*]] = bitcast %struct.mixed* [[MIXED]] to i8*
-// RV32IXCHERI-NEXT:    [[TMP32:%.*]] = bitcast %struct.mixed* [[TMP30]] to i8*
-// RV32IXCHERI-NEXT:    call void @llvm.memcpy.p0i8.p0i8.i32(i8* align 8 [[TMP31]], i8* align 8 [[TMP32]], i32 16, i1 true)
+// RV32IXCHERI:       sw.bb19:
+// RV32IXCHERI-NEXT:    [[ARGP_CUR20:%.*]] = load ptr, ptr [[AP]], align 4
+// RV32IXCHERI-NEXT:    [[ARGP_NEXT21:%.*]] = getelementptr inbounds i8, ptr [[ARGP_CUR20]], i32 4
+// RV32IXCHERI-NEXT:    store ptr [[ARGP_NEXT21]], ptr [[AP]], align 4
+// RV32IXCHERI-NEXT:    [[TMP13:%.*]] = load ptr, ptr [[ARGP_CUR20]], align 4
+// RV32IXCHERI-NEXT:    call void @llvm.memcpy.p0.p0.i32(ptr align 8 [[MIXED]], ptr align 8 [[TMP13]], i32 16, i1 true)
 // RV32IXCHERI-NEXT:    br label [[SW_EPILOG]]
-// RV32IXCHERI:       sw.bb23:
-// RV32IXCHERI-NEXT:    [[ARGP_CUR24:%.*]] = load i8*, i8** [[AP]], align 4
-// RV32IXCHERI-NEXT:    [[ARGP_NEXT25:%.*]] = getelementptr inbounds i8, i8* [[ARGP_CUR24]], i32 4
-// RV32IXCHERI-NEXT:    store i8* [[ARGP_NEXT25]], i8** [[AP]], align 4
-// RV32IXCHERI-NEXT:    [[TMP33:%.*]] = bitcast i8* [[ARGP_CUR24]] to %union.int_or_cap**
-// RV32IXCHERI-NEXT:    [[TMP34:%.*]] = load %union.int_or_cap*, %union.int_or_cap** [[TMP33]], align 4
-// RV32IXCHERI-NEXT:    [[TMP35:%.*]] = bitcast %union.int_or_cap* [[INT_OR_CAP]] to i8*
-// RV32IXCHERI-NEXT:    [[TMP36:%.*]] = bitcast %union.int_or_cap* [[TMP34]] to i8*
-// RV32IXCHERI-NEXT:    call void @llvm.memcpy.p0i8.p0i8.i32(i8* align 8 [[TMP35]], i8* align 8 [[TMP36]], i32 8, i1 true)
+// RV32IXCHERI:       sw.bb22:
+// RV32IXCHERI-NEXT:    [[ARGP_CUR23:%.*]] = load ptr, ptr [[AP]], align 4
+// RV32IXCHERI-NEXT:    [[ARGP_NEXT24:%.*]] = getelementptr inbounds i8, ptr [[ARGP_CUR23]], i32 4
+// RV32IXCHERI-NEXT:    store ptr [[ARGP_NEXT24]], ptr [[AP]], align 4
+// RV32IXCHERI-NEXT:    [[TMP14:%.*]] = load ptr, ptr [[ARGP_CUR23]], align 4
+// RV32IXCHERI-NEXT:    call void @llvm.memcpy.p0.p0.i32(ptr align 8 [[INT_OR_CAP]], ptr align 8 [[TMP14]], i32 8, i1 true)
 // RV32IXCHERI-NEXT:    br label [[SW_EPILOG]]
 // RV32IXCHERI:       sw.epilog:
-// RV32IXCHERI-NEXT:    [[AP26:%.*]] = bitcast i8** [[AP]] to i8*
-// RV32IXCHERI-NEXT:    call void @llvm.va_end.p0i8(i8* [[AP26]])
+// RV32IXCHERI-NEXT:    call void @llvm.va_end.p0(ptr [[AP]])
 // RV32IXCHERI-NEXT:    ret void
 //
 // RV64IXCHERI-LABEL: define {{[^@]+}}@callee
 // RV64IXCHERI-SAME: (i64 noundef [[SEL:%.*]], ...) #[[ATTR0]] {
 // RV64IXCHERI-NEXT:  entry:
 // RV64IXCHERI-NEXT:    [[SEL_ADDR:%.*]] = alloca i64, align 8
-// RV64IXCHERI-NEXT:    [[NULL_CAP:%.*]] = alloca i8 addrspace(200)*, align 16
-// RV64IXCHERI-NEXT:    [[NULL_UINTCAP:%.*]] = alloca i8 addrspace(200)*, align 16
-// RV64IXCHERI-NEXT:    [[CAP:%.*]] = alloca i8 addrspace(200)*, align 16
-// RV64IXCHERI-NEXT:    [[UINTCAP:%.*]] = alloca i8 addrspace(200)*, align 16
+// RV64IXCHERI-NEXT:    [[NULL_CAP:%.*]] = alloca ptr addrspace(200), align 16
+// RV64IXCHERI-NEXT:    [[NULL_UINTCAP:%.*]] = alloca ptr addrspace(200), align 16
+// RV64IXCHERI-NEXT:    [[CAP:%.*]] = alloca ptr addrspace(200), align 16
+// RV64IXCHERI-NEXT:    [[UINTCAP:%.*]] = alloca ptr addrspace(200), align 16
 // RV64IXCHERI-NEXT:    [[SINGLE_CAP:%.*]] = alloca [[STRUCT_SINGLE_CAP:%.*]], align 16
 // RV64IXCHERI-NEXT:    [[DOUBLE_CAP:%.*]] = alloca [[STRUCT_DOUBLE_CAP:%.*]], align 16
 // RV64IXCHERI-NEXT:    [[SINGLE_CAP_ARRAY:%.*]] = alloca [[STRUCT_SINGLE_CAP_ARRAY:%.*]], align 16
 // RV64IXCHERI-NEXT:    [[DOUBLE_CAP_ARRAY:%.*]] = alloca [[STRUCT_DOUBLE_CAP_ARRAY:%.*]], align 16
 // RV64IXCHERI-NEXT:    [[MIXED:%.*]] = alloca [[STRUCT_MIXED:%.*]], align 16
 // RV64IXCHERI-NEXT:    [[INT_OR_CAP:%.*]] = alloca [[UNION_INT_OR_CAP:%.*]], align 16
-// RV64IXCHERI-NEXT:    [[AP:%.*]] = alloca i8*, align 8
-// RV64IXCHERI-NEXT:    store i64 [[SEL]], i64* [[SEL_ADDR]], align 8
-// RV64IXCHERI-NEXT:    [[AP1:%.*]] = bitcast i8** [[AP]] to i8*
-// RV64IXCHERI-NEXT:    call void @llvm.va_start.p0i8(i8* [[AP1]])
-// RV64IXCHERI-NEXT:    [[TMP0:%.*]] = load i64, i64* [[SEL_ADDR]], align 8
+// RV64IXCHERI-NEXT:    [[AP:%.*]] = alloca ptr, align 8
+// RV64IXCHERI-NEXT:    store i64 [[SEL]], ptr [[SEL_ADDR]], align 8
+// RV64IXCHERI-NEXT:    call void @llvm.va_start.p0(ptr [[AP]])
+// RV64IXCHERI-NEXT:    [[TMP0:%.*]] = load i64, ptr [[SEL_ADDR]], align 8
 // RV64IXCHERI-NEXT:    switch i64 [[TMP0]], label [[SW_EPILOG:%.*]] [
 // RV64IXCHERI-NEXT:    i64 0, label [[SW_BB:%.*]]
-// RV64IXCHERI-NEXT:    i64 1, label [[SW_BB8:%.*]]
-// RV64IXCHERI-NEXT:    i64 2, label [[SW_BB11:%.*]]
-// RV64IXCHERI-NEXT:    i64 3, label [[SW_BB14:%.*]]
-// RV64IXCHERI-NEXT:    i64 4, label [[SW_BB17:%.*]]
-// RV64IXCHERI-NEXT:    i64 5, label [[SW_BB20:%.*]]
-// RV64IXCHERI-NEXT:    i64 6, label [[SW_BB23:%.*]]
+// RV64IXCHERI-NEXT:    i64 1, label [[SW_BB7:%.*]]
+// RV64IXCHERI-NEXT:    i64 2, label [[SW_BB10:%.*]]
+// RV64IXCHERI-NEXT:    i64 3, label [[SW_BB13:%.*]]
+// RV64IXCHERI-NEXT:    i64 4, label [[SW_BB16:%.*]]
+// RV64IXCHERI-NEXT:    i64 5, label [[SW_BB19:%.*]]
+// RV64IXCHERI-NEXT:    i64 6, label [[SW_BB22:%.*]]
 // RV64IXCHERI-NEXT:    ]
 // RV64IXCHERI:       sw.bb:
-// RV64IXCHERI-NEXT:    [[ARGP_CUR:%.*]] = load i8*, i8** [[AP]], align 8
-// RV64IXCHERI-NEXT:    [[ARGP_NEXT:%.*]] = getelementptr inbounds i8, i8* [[ARGP_CUR]], i64 8
-// RV64IXCHERI-NEXT:    store i8* [[ARGP_NEXT]], i8** [[AP]], align 8
-// RV64IXCHERI-NEXT:    [[TMP1:%.*]] = bitcast i8* [[ARGP_CUR]] to i8 addrspace(200)***
-// RV64IXCHERI-NEXT:    [[TMP2:%.*]] = load i8 addrspace(200)**, i8 addrspace(200)*** [[TMP1]], align 8
-// RV64IXCHERI-NEXT:    [[TMP3:%.*]] = load i8 addrspace(200)*, i8 addrspace(200)** [[TMP2]], align 16
-// RV64IXCHERI-NEXT:    store volatile i8 addrspace(200)* [[TMP3]], i8 addrspace(200)** [[NULL_CAP]], align 16
-// RV64IXCHERI-NEXT:    [[ARGP_CUR2:%.*]] = load i8*, i8** [[AP]], align 8
-// RV64IXCHERI-NEXT:    [[ARGP_NEXT3:%.*]] = getelementptr inbounds i8, i8* [[ARGP_CUR2]], i64 8
-// RV64IXCHERI-NEXT:    store i8* [[ARGP_NEXT3]], i8** [[AP]], align 8
-// RV64IXCHERI-NEXT:    [[TMP4:%.*]] = bitcast i8* [[ARGP_CUR2]] to i8 addrspace(200)***
-// RV64IXCHERI-NEXT:    [[TMP5:%.*]] = load i8 addrspace(200)**, i8 addrspace(200)*** [[TMP4]], align 8
-// RV64IXCHERI-NEXT:    [[TMP6:%.*]] = load i8 addrspace(200)*, i8 addrspace(200)** [[TMP5]], align 16
-// RV64IXCHERI-NEXT:    store volatile i8 addrspace(200)* [[TMP6]], i8 addrspace(200)** [[NULL_UINTCAP]], align 16
-// RV64IXCHERI-NEXT:    [[ARGP_CUR4:%.*]] = load i8*, i8** [[AP]], align 8
-// RV64IXCHERI-NEXT:    [[ARGP_NEXT5:%.*]] = getelementptr inbounds i8, i8* [[ARGP_CUR4]], i64 8
-// RV64IXCHERI-NEXT:    store i8* [[ARGP_NEXT5]], i8** [[AP]], align 8
-// RV64IXCHERI-NEXT:    [[TMP7:%.*]] = bitcast i8* [[ARGP_CUR4]] to i8 addrspace(200)***
-// RV64IXCHERI-NEXT:    [[TMP8:%.*]] = load i8 addrspace(200)**, i8 addrspace(200)*** [[TMP7]], align 8
-// RV64IXCHERI-NEXT:    [[TMP9:%.*]] = load i8 addrspace(200)*, i8 addrspace(200)** [[TMP8]], align 16
-// RV64IXCHERI-NEXT:    store volatile i8 addrspace(200)* [[TMP9]], i8 addrspace(200)** [[CAP]], align 16
-// RV64IXCHERI-NEXT:    [[ARGP_CUR6:%.*]] = load i8*, i8** [[AP]], align 8
-// RV64IXCHERI-NEXT:    [[ARGP_NEXT7:%.*]] = getelementptr inbounds i8, i8* [[ARGP_CUR6]], i64 8
-// RV64IXCHERI-NEXT:    store i8* [[ARGP_NEXT7]], i8** [[AP]], align 8
-// RV64IXCHERI-NEXT:    [[TMP10:%.*]] = bitcast i8* [[ARGP_CUR6]] to i8 addrspace(200)***
-// RV64IXCHERI-NEXT:    [[TMP11:%.*]] = load i8 addrspace(200)**, i8 addrspace(200)*** [[TMP10]], align 8
-// RV64IXCHERI-NEXT:    [[TMP12:%.*]] = load i8 addrspace(200)*, i8 addrspace(200)** [[TMP11]], align 16
-// RV64IXCHERI-NEXT:    store volatile i8 addrspace(200)* [[TMP12]], i8 addrspace(200)** [[UINTCAP]], align 16
+// RV64IXCHERI-NEXT:    [[ARGP_CUR:%.*]] = load ptr, ptr [[AP]], align 8
+// RV64IXCHERI-NEXT:    [[ARGP_NEXT:%.*]] = getelementptr inbounds i8, ptr [[ARGP_CUR]], i64 8
+// RV64IXCHERI-NEXT:    store ptr [[ARGP_NEXT]], ptr [[AP]], align 8
+// RV64IXCHERI-NEXT:    [[TMP1:%.*]] = load ptr, ptr [[ARGP_CUR]], align 8
+// RV64IXCHERI-NEXT:    [[TMP2:%.*]] = load ptr addrspace(200), ptr [[TMP1]], align 16
+// RV64IXCHERI-NEXT:    store volatile ptr addrspace(200) [[TMP2]], ptr [[NULL_CAP]], align 16
+// RV64IXCHERI-NEXT:    [[ARGP_CUR1:%.*]] = load ptr, ptr [[AP]], align 8
+// RV64IXCHERI-NEXT:    [[ARGP_NEXT2:%.*]] = getelementptr inbounds i8, ptr [[ARGP_CUR1]], i64 8
+// RV64IXCHERI-NEXT:    store ptr [[ARGP_NEXT2]], ptr [[AP]], align 8
+// RV64IXCHERI-NEXT:    [[TMP3:%.*]] = load ptr, ptr [[ARGP_CUR1]], align 8
+// RV64IXCHERI-NEXT:    [[TMP4:%.*]] = load ptr addrspace(200), ptr [[TMP3]], align 16
+// RV64IXCHERI-NEXT:    store volatile ptr addrspace(200) [[TMP4]], ptr [[NULL_UINTCAP]], align 16
+// RV64IXCHERI-NEXT:    [[ARGP_CUR3:%.*]] = load ptr, ptr [[AP]], align 8
+// RV64IXCHERI-NEXT:    [[ARGP_NEXT4:%.*]] = getelementptr inbounds i8, ptr [[ARGP_CUR3]], i64 8
+// RV64IXCHERI-NEXT:    store ptr [[ARGP_NEXT4]], ptr [[AP]], align 8
+// RV64IXCHERI-NEXT:    [[TMP5:%.*]] = load ptr, ptr [[ARGP_CUR3]], align 8
+// RV64IXCHERI-NEXT:    [[TMP6:%.*]] = load ptr addrspace(200), ptr [[TMP5]], align 16
+// RV64IXCHERI-NEXT:    store volatile ptr addrspace(200) [[TMP6]], ptr [[CAP]], align 16
+// RV64IXCHERI-NEXT:    [[ARGP_CUR5:%.*]] = load ptr, ptr [[AP]], align 8
+// RV64IXCHERI-NEXT:    [[ARGP_NEXT6:%.*]] = getelementptr inbounds i8, ptr [[ARGP_CUR5]], i64 8
+// RV64IXCHERI-NEXT:    store ptr [[ARGP_NEXT6]], ptr [[AP]], align 8
+// RV64IXCHERI-NEXT:    [[TMP7:%.*]] = load ptr, ptr [[ARGP_CUR5]], align 8
+// RV64IXCHERI-NEXT:    [[TMP8:%.*]] = load ptr addrspace(200), ptr [[TMP7]], align 16
+// RV64IXCHERI-NEXT:    store volatile ptr addrspace(200) [[TMP8]], ptr [[UINTCAP]], align 16
 // RV64IXCHERI-NEXT:    br label [[SW_EPILOG]]
-// RV64IXCHERI:       sw.bb8:
-// RV64IXCHERI-NEXT:    [[ARGP_CUR9:%.*]] = load i8*, i8** [[AP]], align 8
-// RV64IXCHERI-NEXT:    [[ARGP_NEXT10:%.*]] = getelementptr inbounds i8, i8* [[ARGP_CUR9]], i64 8
-// RV64IXCHERI-NEXT:    store i8* [[ARGP_NEXT10]], i8** [[AP]], align 8
-// RV64IXCHERI-NEXT:    [[TMP13:%.*]] = bitcast i8* [[ARGP_CUR9]] to %struct.single_cap**
-// RV64IXCHERI-NEXT:    [[TMP14:%.*]] = load %struct.single_cap*, %struct.single_cap** [[TMP13]], align 8
-// RV64IXCHERI-NEXT:    [[TMP15:%.*]] = bitcast %struct.single_cap* [[SINGLE_CAP]] to i8*
-// RV64IXCHERI-NEXT:    [[TMP16:%.*]] = bitcast %struct.single_cap* [[TMP14]] to i8*
-// RV64IXCHERI-NEXT:    call void @llvm.memcpy.p0i8.p0i8.i64(i8* align 16 [[TMP15]], i8* align 16 [[TMP16]], i64 16, i1 true)
+// RV64IXCHERI:       sw.bb7:
+// RV64IXCHERI-NEXT:    [[ARGP_CUR8:%.*]] = load ptr, ptr [[AP]], align 8
+// RV64IXCHERI-NEXT:    [[ARGP_NEXT9:%.*]] = getelementptr inbounds i8, ptr [[ARGP_CUR8]], i64 8
+// RV64IXCHERI-NEXT:    store ptr [[ARGP_NEXT9]], ptr [[AP]], align 8
+// RV64IXCHERI-NEXT:    [[TMP9:%.*]] = load ptr, ptr [[ARGP_CUR8]], align 8
+// RV64IXCHERI-NEXT:    call void @llvm.memcpy.p0.p0.i64(ptr align 16 [[SINGLE_CAP]], ptr align 16 [[TMP9]], i64 16, i1 true)
 // RV64IXCHERI-NEXT:    br label [[SW_EPILOG]]
-// RV64IXCHERI:       sw.bb11:
-// RV64IXCHERI-NEXT:    [[ARGP_CUR12:%.*]] = load i8*, i8** [[AP]], align 8
-// RV64IXCHERI-NEXT:    [[ARGP_NEXT13:%.*]] = getelementptr inbounds i8, i8* [[ARGP_CUR12]], i64 8
-// RV64IXCHERI-NEXT:    store i8* [[ARGP_NEXT13]], i8** [[AP]], align 8
-// RV64IXCHERI-NEXT:    [[TMP17:%.*]] = bitcast i8* [[ARGP_CUR12]] to %struct.double_cap**
-// RV64IXCHERI-NEXT:    [[TMP18:%.*]] = load %struct.double_cap*, %struct.double_cap** [[TMP17]], align 8
-// RV64IXCHERI-NEXT:    [[TMP19:%.*]] = bitcast %struct.double_cap* [[DOUBLE_CAP]] to i8*
-// RV64IXCHERI-NEXT:    [[TMP20:%.*]] = bitcast %struct.double_cap* [[TMP18]] to i8*
-// RV64IXCHERI-NEXT:    call void @llvm.memcpy.p0i8.p0i8.i64(i8* align 16 [[TMP19]], i8* align 16 [[TMP20]], i64 32, i1 true)
+// RV64IXCHERI:       sw.bb10:
+// RV64IXCHERI-NEXT:    [[ARGP_CUR11:%.*]] = load ptr, ptr [[AP]], align 8
+// RV64IXCHERI-NEXT:    [[ARGP_NEXT12:%.*]] = getelementptr inbounds i8, ptr [[ARGP_CUR11]], i64 8
+// RV64IXCHERI-NEXT:    store ptr [[ARGP_NEXT12]], ptr [[AP]], align 8
+// RV64IXCHERI-NEXT:    [[TMP10:%.*]] = load ptr, ptr [[ARGP_CUR11]], align 8
+// RV64IXCHERI-NEXT:    call void @llvm.memcpy.p0.p0.i64(ptr align 16 [[DOUBLE_CAP]], ptr align 16 [[TMP10]], i64 32, i1 true)
 // RV64IXCHERI-NEXT:    br label [[SW_EPILOG]]
-// RV64IXCHERI:       sw.bb14:
-// RV64IXCHERI-NEXT:    [[ARGP_CUR15:%.*]] = load i8*, i8** [[AP]], align 8
-// RV64IXCHERI-NEXT:    [[ARGP_NEXT16:%.*]] = getelementptr inbounds i8, i8* [[ARGP_CUR15]], i64 8
-// RV64IXCHERI-NEXT:    store i8* [[ARGP_NEXT16]], i8** [[AP]], align 8
-// RV64IXCHERI-NEXT:    [[TMP21:%.*]] = bitcast i8* [[ARGP_CUR15]] to %struct.single_cap_array**
-// RV64IXCHERI-NEXT:    [[TMP22:%.*]] = load %struct.single_cap_array*, %struct.single_cap_array** [[TMP21]], align 8
-// RV64IXCHERI-NEXT:    [[TMP23:%.*]] = bitcast %struct.single_cap_array* [[SINGLE_CAP_ARRAY]] to i8*
-// RV64IXCHERI-NEXT:    [[TMP24:%.*]] = bitcast %struct.single_cap_array* [[TMP22]] to i8*
-// RV64IXCHERI-NEXT:    call void @llvm.memcpy.p0i8.p0i8.i64(i8* align 16 [[TMP23]], i8* align 16 [[TMP24]], i64 16, i1 true)
+// RV64IXCHERI:       sw.bb13:
+// RV64IXCHERI-NEXT:    [[ARGP_CUR14:%.*]] = load ptr, ptr [[AP]], align 8
+// RV64IXCHERI-NEXT:    [[ARGP_NEXT15:%.*]] = getelementptr inbounds i8, ptr [[ARGP_CUR14]], i64 8
+// RV64IXCHERI-NEXT:    store ptr [[ARGP_NEXT15]], ptr [[AP]], align 8
+// RV64IXCHERI-NEXT:    [[TMP11:%.*]] = load ptr, ptr [[ARGP_CUR14]], align 8
+// RV64IXCHERI-NEXT:    call void @llvm.memcpy.p0.p0.i64(ptr align 16 [[SINGLE_CAP_ARRAY]], ptr align 16 [[TMP11]], i64 16, i1 true)
 // RV64IXCHERI-NEXT:    br label [[SW_EPILOG]]
-// RV64IXCHERI:       sw.bb17:
-// RV64IXCHERI-NEXT:    [[ARGP_CUR18:%.*]] = load i8*, i8** [[AP]], align 8
-// RV64IXCHERI-NEXT:    [[ARGP_NEXT19:%.*]] = getelementptr inbounds i8, i8* [[ARGP_CUR18]], i64 8
-// RV64IXCHERI-NEXT:    store i8* [[ARGP_NEXT19]], i8** [[AP]], align 8
-// RV64IXCHERI-NEXT:    [[TMP25:%.*]] = bitcast i8* [[ARGP_CUR18]] to %struct.double_cap_array**
-// RV64IXCHERI-NEXT:    [[TMP26:%.*]] = load %struct.double_cap_array*, %struct.double_cap_array** [[TMP25]], align 8
-// RV64IXCHERI-NEXT:    [[TMP27:%.*]] = bitcast %struct.double_cap_array* [[DOUBLE_CAP_ARRAY]] to i8*
-// RV64IXCHERI-NEXT:    [[TMP28:%.*]] = bitcast %struct.double_cap_array* [[TMP26]] to i8*
-// RV64IXCHERI-NEXT:    call void @llvm.memcpy.p0i8.p0i8.i64(i8* align 16 [[TMP27]], i8* align 16 [[TMP28]], i64 32, i1 true)
+// RV64IXCHERI:       sw.bb16:
+// RV64IXCHERI-NEXT:    [[ARGP_CUR17:%.*]] = load ptr, ptr [[AP]], align 8
+// RV64IXCHERI-NEXT:    [[ARGP_NEXT18:%.*]] = getelementptr inbounds i8, ptr [[ARGP_CUR17]], i64 8
+// RV64IXCHERI-NEXT:    store ptr [[ARGP_NEXT18]], ptr [[AP]], align 8
+// RV64IXCHERI-NEXT:    [[TMP12:%.*]] = load ptr, ptr [[ARGP_CUR17]], align 8
+// RV64IXCHERI-NEXT:    call void @llvm.memcpy.p0.p0.i64(ptr align 16 [[DOUBLE_CAP_ARRAY]], ptr align 16 [[TMP12]], i64 32, i1 true)
 // RV64IXCHERI-NEXT:    br label [[SW_EPILOG]]
-// RV64IXCHERI:       sw.bb20:
-// RV64IXCHERI-NEXT:    [[ARGP_CUR21:%.*]] = load i8*, i8** [[AP]], align 8
-// RV64IXCHERI-NEXT:    [[ARGP_NEXT22:%.*]] = getelementptr inbounds i8, i8* [[ARGP_CUR21]], i64 8
-// RV64IXCHERI-NEXT:    store i8* [[ARGP_NEXT22]], i8** [[AP]], align 8
-// RV64IXCHERI-NEXT:    [[TMP29:%.*]] = bitcast i8* [[ARGP_CUR21]] to %struct.mixed**
-// RV64IXCHERI-NEXT:    [[TMP30:%.*]] = load %struct.mixed*, %struct.mixed** [[TMP29]], align 8
-// RV64IXCHERI-NEXT:    [[TMP31:%.*]] = bitcast %struct.mixed* [[MIXED]] to i8*
-// RV64IXCHERI-NEXT:    [[TMP32:%.*]] = bitcast %struct.mixed* [[TMP30]] to i8*
-// RV64IXCHERI-NEXT:    call void @llvm.memcpy.p0i8.p0i8.i64(i8* align 16 [[TMP31]], i8* align 16 [[TMP32]], i64 32, i1 true)
+// RV64IXCHERI:       sw.bb19:
+// RV64IXCHERI-NEXT:    [[ARGP_CUR20:%.*]] = load ptr, ptr [[AP]], align 8
+// RV64IXCHERI-NEXT:    [[ARGP_NEXT21:%.*]] = getelementptr inbounds i8, ptr [[ARGP_CUR20]], i64 8
+// RV64IXCHERI-NEXT:    store ptr [[ARGP_NEXT21]], ptr [[AP]], align 8
+// RV64IXCHERI-NEXT:    [[TMP13:%.*]] = load ptr, ptr [[ARGP_CUR20]], align 8
+// RV64IXCHERI-NEXT:    call void @llvm.memcpy.p0.p0.i64(ptr align 16 [[MIXED]], ptr align 16 [[TMP13]], i64 32, i1 true)
 // RV64IXCHERI-NEXT:    br label [[SW_EPILOG]]
-// RV64IXCHERI:       sw.bb23:
-// RV64IXCHERI-NEXT:    [[ARGP_CUR24:%.*]] = load i8*, i8** [[AP]], align 8
-// RV64IXCHERI-NEXT:    [[ARGP_NEXT25:%.*]] = getelementptr inbounds i8, i8* [[ARGP_CUR24]], i64 8
-// RV64IXCHERI-NEXT:    store i8* [[ARGP_NEXT25]], i8** [[AP]], align 8
-// RV64IXCHERI-NEXT:    [[TMP33:%.*]] = bitcast i8* [[ARGP_CUR24]] to %union.int_or_cap**
-// RV64IXCHERI-NEXT:    [[TMP34:%.*]] = load %union.int_or_cap*, %union.int_or_cap** [[TMP33]], align 8
-// RV64IXCHERI-NEXT:    [[TMP35:%.*]] = bitcast %union.int_or_cap* [[INT_OR_CAP]] to i8*
-// RV64IXCHERI-NEXT:    [[TMP36:%.*]] = bitcast %union.int_or_cap* [[TMP34]] to i8*
-// RV64IXCHERI-NEXT:    call void @llvm.memcpy.p0i8.p0i8.i64(i8* align 16 [[TMP35]], i8* align 16 [[TMP36]], i64 16, i1 true)
+// RV64IXCHERI:       sw.bb22:
+// RV64IXCHERI-NEXT:    [[ARGP_CUR23:%.*]] = load ptr, ptr [[AP]], align 8
+// RV64IXCHERI-NEXT:    [[ARGP_NEXT24:%.*]] = getelementptr inbounds i8, ptr [[ARGP_CUR23]], i64 8
+// RV64IXCHERI-NEXT:    store ptr [[ARGP_NEXT24]], ptr [[AP]], align 8
+// RV64IXCHERI-NEXT:    [[TMP14:%.*]] = load ptr, ptr [[ARGP_CUR23]], align 8
+// RV64IXCHERI-NEXT:    call void @llvm.memcpy.p0.p0.i64(ptr align 16 [[INT_OR_CAP]], ptr align 16 [[TMP14]], i64 16, i1 true)
 // RV64IXCHERI-NEXT:    br label [[SW_EPILOG]]
 // RV64IXCHERI:       sw.epilog:
-// RV64IXCHERI-NEXT:    [[AP26:%.*]] = bitcast i8** [[AP]] to i8*
-// RV64IXCHERI-NEXT:    call void @llvm.va_end.p0i8(i8* [[AP26]])
+// RV64IXCHERI-NEXT:    call void @llvm.va_end.p0(ptr [[AP]])
 // RV64IXCHERI-NEXT:    ret void
 //
 void callee(long sel, ...) {

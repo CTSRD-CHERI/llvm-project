@@ -15,35 +15,34 @@ void do_stuff(ns_dtab *tab);
 
 // PCREL-LABEL: @test(
 // PCREL-NEXT:  entry:
-// PCREL-NEXT:    [[MDATA_ADDR:%.*]] = alloca i8 addrspace(200)*, align 16, addrspace(200)
+// PCREL-NEXT:    [[MDATA_ADDR:%.*]] = alloca ptr addrspace(200), align 16, addrspace(200)
 // PCREL-NEXT:    [[DTAB:%.*]] = alloca [2 x %struct._ns_dtab], align 16, addrspace(200)
 // PCREL-NEXT:    [[I:%.*]] = alloca i32, align 4, addrspace(200)
-// PCREL-NEXT:    store i8 addrspace(200)* [[MDATA:%.*]], i8 addrspace(200)* addrspace(200)* [[MDATA_ADDR]], align 16
-// PCREL-NEXT:    [[TMP0:%.*]] = bitcast [2 x %struct._ns_dtab] addrspace(200)* [[DTAB]] to i8 addrspace(200)*
-// PCREL-NEXT:    call void @llvm.memcpy.p200i8.p200i8.i64(i8 addrspace(200)* align 16 [[TMP0]], i8 addrspace(200)* align 16 bitcast ([2 x %struct._ns_dtab] addrspace(200)* @__const.test.dtab to i8 addrspace(200)*), i64 96, i1 false)
-// PCREL-NEXT:    store i32 0, i32 addrspace(200)* [[I]], align 4
+// PCREL-NEXT:    store ptr addrspace(200) [[MDATA:%.*]], ptr addrspace(200) [[MDATA_ADDR]], align 16
+// PCREL-NEXT:    call void @llvm.memcpy.p200.p200.i64(ptr addrspace(200) align 16 [[DTAB]], ptr addrspace(200) align 16 @__const.test.dtab, i64 96, i1 false)
+// PCREL-NEXT:    store i32 0, ptr addrspace(200) [[I]], align 4
 // PCREL-NEXT:    br label [[FOR_COND:%.*]]
 // PCREL:       for.cond:
-// PCREL-NEXT:    [[TMP1:%.*]] = load i32, i32 addrspace(200)* [[I]], align 4
-// PCREL-NEXT:    [[CONV:%.*]] = sext i32 [[TMP1]] to i64
+// PCREL-NEXT:    [[TMP0:%.*]] = load i32, ptr addrspace(200) [[I]], align 4
+// PCREL-NEXT:    [[CONV:%.*]] = sext i32 [[TMP0]] to i64
 // PCREL-NEXT:    [[CMP:%.*]] = icmp ult i64 [[CONV]], 1
 // PCREL-NEXT:    br i1 [[CMP]], label [[FOR_BODY:%.*]], label [[FOR_END:%.*]]
 // PCREL:       for.body:
-// PCREL-NEXT:    [[TMP2:%.*]] = load i8 addrspace(200)*, i8 addrspace(200)* addrspace(200)* [[MDATA_ADDR]], align 16
-// PCREL-NEXT:    [[TMP3:%.*]] = load i32, i32 addrspace(200)* [[I]], align 4
-// PCREL-NEXT:    [[IDXPROM:%.*]] = sext i32 [[TMP3]] to i64
-// PCREL-NEXT:    [[ARRAYIDX:%.*]] = getelementptr inbounds [2 x %struct._ns_dtab], [2 x %struct._ns_dtab] addrspace(200)* [[DTAB]], i64 0, i64 [[IDXPROM]]
-// PCREL-NEXT:    [[MDATA2:%.*]] = getelementptr inbounds [[STRUCT__NS_DTAB:%.*]], [[STRUCT__NS_DTAB]] addrspace(200)* [[ARRAYIDX]], i32 0, i32 2
-// PCREL-NEXT:    store i8 addrspace(200)* [[TMP2]], i8 addrspace(200)* addrspace(200)* [[MDATA2]], align 16
+// PCREL-NEXT:    [[TMP1:%.*]] = load ptr addrspace(200), ptr addrspace(200) [[MDATA_ADDR]], align 16
+// PCREL-NEXT:    [[TMP2:%.*]] = load i32, ptr addrspace(200) [[I]], align 4
+// PCREL-NEXT:    [[IDXPROM:%.*]] = sext i32 [[TMP2]] to i64
+// PCREL-NEXT:    [[ARRAYIDX:%.*]] = getelementptr inbounds [2 x %struct._ns_dtab], ptr addrspace(200) [[DTAB]], i64 0, i64 [[IDXPROM]]
+// PCREL-NEXT:    [[MDATA2:%.*]] = getelementptr inbounds [[STRUCT__NS_DTAB:%.*]], ptr addrspace(200) [[ARRAYIDX]], i32 0, i32 2
+// PCREL-NEXT:    store ptr addrspace(200) [[TMP1]], ptr addrspace(200) [[MDATA2]], align 16
 // PCREL-NEXT:    br label [[FOR_INC:%.*]]
 // PCREL:       for.inc:
-// PCREL-NEXT:    [[TMP4:%.*]] = load i32, i32 addrspace(200)* [[I]], align 4
-// PCREL-NEXT:    [[INC:%.*]] = add nsw i32 [[TMP4]], 1
-// PCREL-NEXT:    store i32 [[INC]], i32 addrspace(200)* [[I]], align 4
+// PCREL-NEXT:    [[TMP3:%.*]] = load i32, ptr addrspace(200) [[I]], align 4
+// PCREL-NEXT:    [[INC:%.*]] = add nsw i32 [[TMP3]], 1
+// PCREL-NEXT:    store i32 [[INC]], ptr addrspace(200) [[I]], align 4
 // PCREL-NEXT:    br label [[FOR_COND]], !llvm.loop [[LOOP2:![0-9]+]]
 // PCREL:       for.end:
-// PCREL-NEXT:    [[ARRAYDECAY:%.*]] = getelementptr inbounds [2 x %struct._ns_dtab], [2 x %struct._ns_dtab] addrspace(200)* [[DTAB]], i64 0, i64 0
-// PCREL-NEXT:    call void @do_stuff([[STRUCT__NS_DTAB]] addrspace(200)* noundef [[ARRAYDECAY]])
+// PCREL-NEXT:    [[ARRAYDECAY:%.*]] = getelementptr inbounds [2 x %struct._ns_dtab], ptr addrspace(200) [[DTAB]], i64 0, i64 0
+// PCREL-NEXT:    call void @do_stuff(ptr addrspace(200) noundef [[ARRAYDECAY]])
 // PCREL-NEXT:    ret void
 //
 void test(void *mdata) {

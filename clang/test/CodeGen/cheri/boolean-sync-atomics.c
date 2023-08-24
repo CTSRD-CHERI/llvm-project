@@ -11,16 +11,16 @@ atomic_b_t value;
 // N64-NEXT:    [[EXPECTED_ADDR:%.*]] = alloca i8, align 1
 // N64-NEXT:    [[DESIRED_ADDR:%.*]] = alloca i8, align 1
 // N64-NEXT:    [[FROMBOOL:%.*]] = zext i1 [[EXPECTED:%.*]] to i8
-// N64-NEXT:    store i8 [[FROMBOOL]], i8* [[EXPECTED_ADDR]], align 1
+// N64-NEXT:    store i8 [[FROMBOOL]], ptr [[EXPECTED_ADDR]], align 1
 // N64-NEXT:    [[FROMBOOL1:%.*]] = zext i1 [[DESIRED:%.*]] to i8
-// N64-NEXT:    store i8 [[FROMBOOL1]], i8* [[DESIRED_ADDR]], align 1
-// N64-NEXT:    [[TMP0:%.*]] = load i8, i8* [[EXPECTED_ADDR]], align 1
+// N64-NEXT:    store i8 [[FROMBOOL1]], ptr [[DESIRED_ADDR]], align 1
+// N64-NEXT:    [[TMP0:%.*]] = load i8, ptr [[EXPECTED_ADDR]], align 1
 // N64-NEXT:    [[TOBOOL:%.*]] = trunc i8 [[TMP0]] to i1
-// N64-NEXT:    [[TMP1:%.*]] = load i8, i8* [[DESIRED_ADDR]], align 1
+// N64-NEXT:    [[TMP1:%.*]] = load i8, ptr [[DESIRED_ADDR]], align 1
 // N64-NEXT:    [[TOBOOL2:%.*]] = trunc i8 [[TMP1]] to i1
 // N64-NEXT:    [[FROMBOOL3:%.*]] = zext i1 [[TOBOOL]] to i8
 // N64-NEXT:    [[FROMBOOL4:%.*]] = zext i1 [[TOBOOL2]] to i8
-// N64-NEXT:    [[TMP2:%.*]] = cmpxchg i8* getelementptr inbounds ([[STRUCT_ATOMIC_B_T:%.*]], %struct.atomic_b_t* @value, i32 0, i32 0), i8 [[FROMBOOL3]], i8 [[FROMBOOL4]] seq_cst seq_cst, align 1
+// N64-NEXT:    [[TMP2:%.*]] = cmpxchg ptr @value, i8 [[FROMBOOL3]], i8 [[FROMBOOL4]] seq_cst seq_cst, align 1
 // N64-NEXT:    [[TMP3:%.*]] = extractvalue { i8, i1 } [[TMP2]], 0
 // N64-NEXT:    [[TOBOOL5:%.*]] = trunc i8 [[TMP3]] to i1
 // N64-NEXT:    ret i1 [[TOBOOL5]]
@@ -30,16 +30,16 @@ atomic_b_t value;
 // PURECAP-NEXT:    [[EXPECTED_ADDR:%.*]] = alloca i8, align 1, addrspace(200)
 // PURECAP-NEXT:    [[DESIRED_ADDR:%.*]] = alloca i8, align 1, addrspace(200)
 // PURECAP-NEXT:    [[FROMBOOL:%.*]] = zext i1 [[EXPECTED:%.*]] to i8
-// PURECAP-NEXT:    store i8 [[FROMBOOL]], i8 addrspace(200)* [[EXPECTED_ADDR]], align 1
+// PURECAP-NEXT:    store i8 [[FROMBOOL]], ptr addrspace(200) [[EXPECTED_ADDR]], align 1
 // PURECAP-NEXT:    [[FROMBOOL1:%.*]] = zext i1 [[DESIRED:%.*]] to i8
-// PURECAP-NEXT:    store i8 [[FROMBOOL1]], i8 addrspace(200)* [[DESIRED_ADDR]], align 1
-// PURECAP-NEXT:    [[TMP0:%.*]] = load i8, i8 addrspace(200)* [[EXPECTED_ADDR]], align 1
+// PURECAP-NEXT:    store i8 [[FROMBOOL1]], ptr addrspace(200) [[DESIRED_ADDR]], align 1
+// PURECAP-NEXT:    [[TMP0:%.*]] = load i8, ptr addrspace(200) [[EXPECTED_ADDR]], align 1
 // PURECAP-NEXT:    [[TOBOOL:%.*]] = trunc i8 [[TMP0]] to i1
-// PURECAP-NEXT:    [[TMP1:%.*]] = load i8, i8 addrspace(200)* [[DESIRED_ADDR]], align 1
+// PURECAP-NEXT:    [[TMP1:%.*]] = load i8, ptr addrspace(200) [[DESIRED_ADDR]], align 1
 // PURECAP-NEXT:    [[TOBOOL2:%.*]] = trunc i8 [[TMP1]] to i1
 // PURECAP-NEXT:    [[FROMBOOL3:%.*]] = zext i1 [[TOBOOL]] to i8
 // PURECAP-NEXT:    [[FROMBOOL4:%.*]] = zext i1 [[TOBOOL2]] to i8
-// PURECAP-NEXT:    [[TMP2:%.*]] = cmpxchg i8 addrspace(200)* getelementptr inbounds ([[STRUCT_ATOMIC_B_T:%.*]], [[STRUCT_ATOMIC_B_T]] addrspace(200)* @value, i32 0, i32 0), i8 [[FROMBOOL3]], i8 [[FROMBOOL4]] seq_cst seq_cst, align 1
+// PURECAP-NEXT:    [[TMP2:%.*]] = cmpxchg ptr addrspace(200) @value, i8 [[FROMBOOL3]], i8 [[FROMBOOL4]] seq_cst seq_cst, align 1
 // PURECAP-NEXT:    [[TMP3:%.*]] = extractvalue { i8, i1 } [[TMP2]], 0
 // PURECAP-NEXT:    [[TOBOOL5:%.*]] = trunc i8 [[TMP3]] to i1
 // PURECAP-NEXT:    ret i1 [[TOBOOL5]]
@@ -52,11 +52,11 @@ _Bool atomic_compare_exchange_weak_b(_Bool expected, _Bool desired) {
 // N64-NEXT:  entry:
 // N64-NEXT:    [[DESIRED_ADDR:%.*]] = alloca i8, align 1
 // N64-NEXT:    [[FROMBOOL:%.*]] = zext i1 [[DESIRED:%.*]] to i8
-// N64-NEXT:    store i8 [[FROMBOOL]], i8* [[DESIRED_ADDR]], align 1
-// N64-NEXT:    [[TMP0:%.*]] = load i8, i8* [[DESIRED_ADDR]], align 1
+// N64-NEXT:    store i8 [[FROMBOOL]], ptr [[DESIRED_ADDR]], align 1
+// N64-NEXT:    [[TMP0:%.*]] = load i8, ptr [[DESIRED_ADDR]], align 1
 // N64-NEXT:    [[TOBOOL:%.*]] = trunc i8 [[TMP0]] to i1
 // N64-NEXT:    [[FROMBOOL1:%.*]] = zext i1 [[TOBOOL]] to i8
-// N64-NEXT:    [[TMP1:%.*]] = atomicrmw xchg i8* getelementptr inbounds ([[STRUCT_ATOMIC_B_T:%.*]], %struct.atomic_b_t* @value, i32 0, i32 0), i8 [[FROMBOOL1]] seq_cst, align 1
+// N64-NEXT:    [[TMP1:%.*]] = atomicrmw xchg ptr @value, i8 [[FROMBOOL1]] seq_cst, align 1
 // N64-NEXT:    [[TOBOOL2:%.*]] = trunc i8 [[TMP1]] to i1
 // N64-NEXT:    ret i1 [[TOBOOL2]]
 //
@@ -64,11 +64,11 @@ _Bool atomic_compare_exchange_weak_b(_Bool expected, _Bool desired) {
 // PURECAP-NEXT:  entry:
 // PURECAP-NEXT:    [[DESIRED_ADDR:%.*]] = alloca i8, align 1, addrspace(200)
 // PURECAP-NEXT:    [[FROMBOOL:%.*]] = zext i1 [[DESIRED:%.*]] to i8
-// PURECAP-NEXT:    store i8 [[FROMBOOL]], i8 addrspace(200)* [[DESIRED_ADDR]], align 1
-// PURECAP-NEXT:    [[TMP0:%.*]] = load i8, i8 addrspace(200)* [[DESIRED_ADDR]], align 1
+// PURECAP-NEXT:    store i8 [[FROMBOOL]], ptr addrspace(200) [[DESIRED_ADDR]], align 1
+// PURECAP-NEXT:    [[TMP0:%.*]] = load i8, ptr addrspace(200) [[DESIRED_ADDR]], align 1
 // PURECAP-NEXT:    [[TOBOOL:%.*]] = trunc i8 [[TMP0]] to i1
 // PURECAP-NEXT:    [[FROMBOOL1:%.*]] = zext i1 [[TOBOOL]] to i8
-// PURECAP-NEXT:    [[TMP1:%.*]] = atomicrmw xchg i8 addrspace(200)* getelementptr inbounds ([[STRUCT_ATOMIC_B_T:%.*]], [[STRUCT_ATOMIC_B_T]] addrspace(200)* @value, i32 0, i32 0), i8 [[FROMBOOL1]] seq_cst, align 1
+// PURECAP-NEXT:    [[TMP1:%.*]] = atomicrmw xchg ptr addrspace(200) @value, i8 [[FROMBOOL1]] seq_cst, align 1
 // PURECAP-NEXT:    [[TOBOOL2:%.*]] = trunc i8 [[TMP1]] to i1
 // PURECAP-NEXT:    ret i1 [[TOBOOL2]]
 //

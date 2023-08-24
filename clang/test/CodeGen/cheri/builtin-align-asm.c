@@ -5,10 +5,10 @@
 // RUN: %cheri_cc1 -o - -O2 -S %s | FileCheck %s -check-prefixes=ASM,MIPS-ASM
 
 // CHECK-LABEL: define {{[^@]+}}@is_aligned
-// CHECK-SAME: (i8 addrspace(200)* noundef [[PTR:%.*]], i64 noundef signext [[ALIGN:%.*]]) local_unnamed_addr addrspace(200) #[[ATTR0:[0-9]+]] {
+// CHECK-SAME: (ptr addrspace(200) noundef [[PTR:%.*]], i64 noundef signext [[ALIGN:%.*]]) local_unnamed_addr addrspace(200) #[[ATTR0:[0-9]+]] {
 // CHECK-NEXT:  entry:
 // CHECK-NEXT:    [[MASK:%.*]] = add i64 [[ALIGN]], -1
-// CHECK-NEXT:    [[PTRADDR:%.*]] = tail call i64 @llvm.cheri.cap.address.get.i64(i8 addrspace(200)* [[PTR]])
+// CHECK-NEXT:    [[PTRADDR:%.*]] = tail call i64 @llvm.cheri.cap.address.get.i64(ptr addrspace(200) [[PTR]])
 // CHECK-NEXT:    [[SET_BITS:%.*]] = and i64 [[PTRADDR]], [[MASK]]
 // CHECK-NEXT:    [[IS_ALIGNED:%.*]] = icmp eq i64 [[SET_BITS]], 0
 // CHECK-NEXT:    ret i1 [[IS_ALIGNED]]
@@ -27,17 +27,17 @@ _Bool is_aligned(void *ptr, long align) {
 }
 
 // CHECK-LABEL: define {{[^@]+}}@align_up
-// CHECK-SAME: (i8 addrspace(200)* noundef [[PTR:%.*]], i64 noundef signext [[ALIGN:%.*]]) local_unnamed_addr addrspace(200) #[[ATTR2:[0-9]+]] {
+// CHECK-SAME: (ptr addrspace(200) noundef [[PTR:%.*]], i64 noundef signext [[ALIGN:%.*]]) local_unnamed_addr addrspace(200) #[[ATTR2:[0-9]+]] {
 // CHECK-NEXT:  entry:
 // CHECK-NEXT:    [[MASK:%.*]] = add i64 [[ALIGN]], -1
-// CHECK-NEXT:    [[PTRADDR:%.*]] = tail call i64 @llvm.cheri.cap.address.get.i64(i8 addrspace(200)* [[PTR]])
+// CHECK-NEXT:    [[PTRADDR:%.*]] = tail call i64 @llvm.cheri.cap.address.get.i64(ptr addrspace(200) [[PTR]])
 // CHECK-NEXT:    [[OVER_BOUNDARY:%.*]] = add i64 [[MASK]], [[PTRADDR]]
 // CHECK-NEXT:    [[INVERTED_MASK:%.*]] = sub i64 0, [[ALIGN]]
 // CHECK-NEXT:    [[ALIGNED_INTPTR:%.*]] = and i64 [[OVER_BOUNDARY]], [[INVERTED_MASK]]
 // CHECK-NEXT:    [[DIFF:%.*]] = sub i64 [[ALIGNED_INTPTR]], [[PTRADDR]]
-// CHECK-NEXT:    [[ALIGNED_RESULT:%.*]] = getelementptr inbounds i8, i8 addrspace(200)* [[PTR]], i64 [[DIFF]]
-// CHECK-NEXT:    call void @llvm.assume(i1 true) [ "align"(i8 addrspace(200)* [[ALIGNED_RESULT]], i64 [[ALIGN]]) ]
-// CHECK-NEXT:    ret i8 addrspace(200)* [[ALIGNED_RESULT]]
+// CHECK-NEXT:    [[ALIGNED_RESULT:%.*]] = getelementptr inbounds i8, ptr addrspace(200) [[PTR]], i64 [[DIFF]]
+// CHECK-NEXT:    call void @llvm.assume(i1 true) [ "align"(ptr addrspace(200) [[ALIGNED_RESULT]], i64 [[ALIGN]]) ]
+// CHECK-NEXT:    ret ptr addrspace(200) [[ALIGNED_RESULT]]
 //
 void* align_up(void *ptr, long align) {
   // ASM-LABEL: align_up:
@@ -57,15 +57,15 @@ void* align_up(void *ptr, long align) {
 }
 
 // CHECK-LABEL: define {{[^@]+}}@align_down
-// CHECK-SAME: (i8 addrspace(200)* noundef [[PTR:%.*]], i64 noundef signext [[ALIGN:%.*]]) local_unnamed_addr addrspace(200) #[[ATTR2]] {
+// CHECK-SAME: (ptr addrspace(200) noundef [[PTR:%.*]], i64 noundef signext [[ALIGN:%.*]]) local_unnamed_addr addrspace(200) #[[ATTR2]] {
 // CHECK-NEXT:  entry:
-// CHECK-NEXT:    [[PTRADDR:%.*]] = tail call i64 @llvm.cheri.cap.address.get.i64(i8 addrspace(200)* [[PTR]])
+// CHECK-NEXT:    [[PTRADDR:%.*]] = tail call i64 @llvm.cheri.cap.address.get.i64(ptr addrspace(200) [[PTR]])
 // CHECK-NEXT:    [[TMP0:%.*]] = add i64 [[ALIGN]], -1
 // CHECK-NEXT:    [[TMP1:%.*]] = and i64 [[PTRADDR]], [[TMP0]]
 // CHECK-NEXT:    [[DIFF:%.*]] = sub i64 0, [[TMP1]]
-// CHECK-NEXT:    [[ALIGNED_RESULT:%.*]] = getelementptr inbounds i8, i8 addrspace(200)* [[PTR]], i64 [[DIFF]]
-// CHECK-NEXT:    call void @llvm.assume(i1 true) [ "align"(i8 addrspace(200)* [[ALIGNED_RESULT]], i64 [[ALIGN]]) ]
-// CHECK-NEXT:    ret i8 addrspace(200)* [[ALIGNED_RESULT]]
+// CHECK-NEXT:    [[ALIGNED_RESULT:%.*]] = getelementptr inbounds i8, ptr addrspace(200) [[PTR]], i64 [[DIFF]]
+// CHECK-NEXT:    call void @llvm.assume(i1 true) [ "align"(ptr addrspace(200) [[ALIGNED_RESULT]], i64 [[ALIGN]]) ]
+// CHECK-NEXT:    ret ptr addrspace(200) [[ALIGNED_RESULT]]
 //
 void* align_down(void *ptr, long align) {
   // ASM-LABEL: align_down:

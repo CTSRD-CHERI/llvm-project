@@ -23,13 +23,13 @@ struct S {
 // CHECK-LABEL: @sub(
 // CHECK-NEXT:  entry:
 // CHECK-NEXT:    [[S:%.*]] = alloca [[STRUCT_S:%.*]], align 16
-// CHECK-NEXT:    [[COERCE_DIVE:%.*]] = getelementptr inbounds [[STRUCT_S]], %struct.S* [[S]], i32 0, i32 0
-// CHECK-NEXT:    store i8 addrspace(200)* [[S_COERCE:%.*]], i8 addrspace(200)** [[COERCE_DIVE]], align 16
-// CHECK-NEXT:    [[P:%.*]] = getelementptr inbounds [[STRUCT_S]], %struct.S* [[S]], i32 0, i32 0
-// CHECK-NEXT:    [[TMP0:%.*]] = load i8 addrspace(200)*, i8 addrspace(200)** [[P]], align 16
-// CHECK-NEXT:    [[ARRAYIDX:%.*]] = getelementptr inbounds i8, i8 addrspace(200)* [[TMP0]], i64 0
-// CHECK-NEXT:    [[ARRAYIDX_ASCAST:%.*]] = addrspacecast i8 addrspace(200)* [[ARRAYIDX]] to i8*
-// CHECK-NEXT:    ret i8* [[ARRAYIDX_ASCAST]]
+// CHECK-NEXT:    [[COERCE_DIVE:%.*]] = getelementptr inbounds [[STRUCT_S]], ptr [[S]], i32 0, i32 0
+// CHECK-NEXT:    store ptr addrspace(200) [[S_COERCE:%.*]], ptr [[COERCE_DIVE]], align 16
+// CHECK-NEXT:    [[P:%.*]] = getelementptr inbounds [[STRUCT_S]], ptr [[S]], i32 0, i32 0
+// CHECK-NEXT:    [[TMP0:%.*]] = load ptr addrspace(200), ptr [[P]], align 16
+// CHECK-NEXT:    [[ARRAYIDX:%.*]] = getelementptr inbounds i8, ptr addrspace(200) [[TMP0]], i64 0
+// CHECK-NEXT:    [[ARRAYIDX_ASCAST:%.*]] = addrspacecast ptr addrspace(200) [[ARRAYIDX]] to ptr
+// CHECK-NEXT:    ret ptr [[ARRAYIDX_ASCAST]]
 //
 char *sub(struct S s) {
   return (char *)&s.p[0];

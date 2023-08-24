@@ -16,9 +16,9 @@ int external_global;
 // CHECK-LABEL: define {{[^@]+}}@global_fn_to_cap
 // CHECK-SAME: () #[[ATTR0:[0-9]+]] {
 // CHECK-NEXT:  entry:
-// CHECK-NEXT:    [[TMP0:%.*]] = call i8 addrspace(200)* @llvm.cheri.pcc.get()
-// CHECK-NEXT:    [[TMP1:%.*]] = call i8 addrspace(200)* @llvm.cheri.cap.from.pointer.i64(i8 addrspace(200)* [[TMP0]], i64 ptrtoint (void ()* @external_fn to i64))
-// CHECK-NEXT:    ret i8 addrspace(200)* [[TMP1]]
+// CHECK-NEXT:    [[TMP0:%.*]] = call ptr addrspace(200) @llvm.cheri.pcc.get()
+// CHECK-NEXT:    [[TMP1:%.*]] = call ptr addrspace(200) @llvm.cheri.cap.from.pointer.i64(ptr addrspace(200) [[TMP0]], i64 ptrtoint (ptr @external_fn to i64))
+// CHECK-NEXT:    ret ptr addrspace(200) [[TMP1]]
 //
 void *__capability global_fn_to_cap(void) {
   // ASM-LABEL: global_fn_to_cap:
@@ -35,7 +35,7 @@ void *__capability global_fn_to_cap(void) {
 // CHECK-LABEL: define {{[^@]+}}@global_data_to_cap
 // CHECK-SAME: () #[[ATTR0]] {
 // CHECK-NEXT:  entry:
-// CHECK-NEXT:    ret i8 addrspace(200)* addrspacecast (i8* bitcast (i32* @external_global to i8*) to i8 addrspace(200)*)
+// CHECK-NEXT:    ret ptr addrspace(200) addrspacecast (ptr @external_global to ptr addrspace(200))
 //
 void *__capability global_data_to_cap(void) {
   // ASM-LABEL: global_data_to_cap:
@@ -52,16 +52,15 @@ void *__capability global_data_to_cap(void) {
 }
 
 // CHECK-LABEL: define {{[^@]+}}@fn_ptr_to_cap
-// CHECK-SAME: (void ()* noundef [[FN_PTR:%.*]]) #[[ATTR0]] {
+// CHECK-SAME: (ptr noundef [[FN_PTR:%.*]]) #[[ATTR0]] {
 // CHECK-NEXT:  entry:
-// CHECK-NEXT:    [[FN_PTR_ADDR:%.*]] = alloca void ()*, align 8
-// CHECK-NEXT:    store void ()* [[FN_PTR]], void ()** [[FN_PTR_ADDR]], align 8
-// CHECK-NEXT:    [[TMP0:%.*]] = load void ()*, void ()** [[FN_PTR_ADDR]], align 8
-// CHECK-NEXT:    [[TMP1:%.*]] = bitcast void ()* [[TMP0]] to i8*
-// CHECK-NEXT:    [[TMP2:%.*]] = call i8 addrspace(200)* @llvm.cheri.pcc.get()
-// CHECK-NEXT:    [[TMP3:%.*]] = ptrtoint i8* [[TMP1]] to i64
-// CHECK-NEXT:    [[TMP4:%.*]] = call i8 addrspace(200)* @llvm.cheri.cap.from.pointer.i64(i8 addrspace(200)* [[TMP2]], i64 [[TMP3]])
-// CHECK-NEXT:    ret i8 addrspace(200)* [[TMP4]]
+// CHECK-NEXT:    [[FN_PTR_ADDR:%.*]] = alloca ptr, align 8
+// CHECK-NEXT:    store ptr [[FN_PTR]], ptr [[FN_PTR_ADDR]], align 8
+// CHECK-NEXT:    [[TMP0:%.*]] = load ptr, ptr [[FN_PTR_ADDR]], align 8
+// CHECK-NEXT:    [[TMP1:%.*]] = call ptr addrspace(200) @llvm.cheri.pcc.get()
+// CHECK-NEXT:    [[TMP2:%.*]] = ptrtoint ptr [[TMP0]] to i64
+// CHECK-NEXT:    [[TMP3:%.*]] = call ptr addrspace(200) @llvm.cheri.cap.from.pointer.i64(ptr addrspace(200) [[TMP1]], i64 [[TMP2]])
+// CHECK-NEXT:    ret ptr addrspace(200) [[TMP3]]
 //
 void *__capability fn_ptr_to_cap(void (*fn_ptr)(void)) {
   // ASM-LABEL: fn_ptr_to_cap:
@@ -73,17 +72,16 @@ void *__capability fn_ptr_to_cap(void (*fn_ptr)(void)) {
 }
 
 // CHECK-LABEL: define {{[^@]+}}@fn_ptr_to_cap_not_smart_enough
-// CHECK-SAME: (void ()* noundef [[FN_PTR:%.*]]) #[[ATTR0]] {
+// CHECK-SAME: (ptr noundef [[FN_PTR:%.*]]) #[[ATTR0]] {
 // CHECK-NEXT:  entry:
-// CHECK-NEXT:    [[FN_PTR_ADDR:%.*]] = alloca void ()*, align 8
-// CHECK-NEXT:    [[TMP:%.*]] = alloca i8*, align 8
-// CHECK-NEXT:    store void ()* [[FN_PTR]], void ()** [[FN_PTR_ADDR]], align 8
-// CHECK-NEXT:    [[TMP0:%.*]] = load void ()*, void ()** [[FN_PTR_ADDR]], align 8
-// CHECK-NEXT:    [[TMP1:%.*]] = bitcast void ()* [[TMP0]] to i8*
-// CHECK-NEXT:    store i8* [[TMP1]], i8** [[TMP]], align 8
-// CHECK-NEXT:    [[TMP2:%.*]] = load i8*, i8** [[TMP]], align 8
-// CHECK-NEXT:    [[TMP3:%.*]] = addrspacecast i8* [[TMP2]] to i8 addrspace(200)*
-// CHECK-NEXT:    ret i8 addrspace(200)* [[TMP3]]
+// CHECK-NEXT:    [[FN_PTR_ADDR:%.*]] = alloca ptr, align 8
+// CHECK-NEXT:    [[TMP:%.*]] = alloca ptr, align 8
+// CHECK-NEXT:    store ptr [[FN_PTR]], ptr [[FN_PTR_ADDR]], align 8
+// CHECK-NEXT:    [[TMP0:%.*]] = load ptr, ptr [[FN_PTR_ADDR]], align 8
+// CHECK-NEXT:    store ptr [[TMP0]], ptr [[TMP]], align 8
+// CHECK-NEXT:    [[TMP1:%.*]] = load ptr, ptr [[TMP]], align 8
+// CHECK-NEXT:    [[TMP2:%.*]] = addrspacecast ptr [[TMP1]] to ptr addrspace(200)
+// CHECK-NEXT:    ret ptr addrspace(200) [[TMP2]]
 //
 void *__capability fn_ptr_to_cap_not_smart_enough(void (*fn_ptr)(void)) {
   // ASM-LABEL: fn_ptr_to_cap_not_smart_enough:
@@ -96,14 +94,13 @@ void *__capability fn_ptr_to_cap_not_smart_enough(void (*fn_ptr)(void)) {
 }
 
 // CHECK-LABEL: define {{[^@]+}}@data_ptr_to_cap
-// CHECK-SAME: (i32* noundef [[DATA_PTR:%.*]]) #[[ATTR0]] {
+// CHECK-SAME: (ptr noundef [[DATA_PTR:%.*]]) #[[ATTR0]] {
 // CHECK-NEXT:  entry:
-// CHECK-NEXT:    [[DATA_PTR_ADDR:%.*]] = alloca i32*, align 8
-// CHECK-NEXT:    store i32* [[DATA_PTR]], i32** [[DATA_PTR_ADDR]], align 8
-// CHECK-NEXT:    [[TMP0:%.*]] = load i32*, i32** [[DATA_PTR_ADDR]], align 8
-// CHECK-NEXT:    [[TMP1:%.*]] = bitcast i32* [[TMP0]] to i8*
-// CHECK-NEXT:    [[TMP2:%.*]] = addrspacecast i8* [[TMP1]] to i8 addrspace(200)*
-// CHECK-NEXT:    ret i8 addrspace(200)* [[TMP2]]
+// CHECK-NEXT:    [[DATA_PTR_ADDR:%.*]] = alloca ptr, align 8
+// CHECK-NEXT:    store ptr [[DATA_PTR]], ptr [[DATA_PTR_ADDR]], align 8
+// CHECK-NEXT:    [[TMP0:%.*]] = load ptr, ptr [[DATA_PTR_ADDR]], align 8
+// CHECK-NEXT:    [[TMP1:%.*]] = addrspacecast ptr [[TMP0]] to ptr addrspace(200)
+// CHECK-NEXT:    ret ptr addrspace(200) [[TMP1]]
 //
 void *__capability data_ptr_to_cap(int *data_ptr) {
   // Note: For data pointers we derive from DDC:

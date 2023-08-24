@@ -6,8 +6,8 @@ typedef __SIZE_TYPE__ size_t;
 
 // CHECK-LABEL: @decay_incomplete(
 // CHECK-NEXT:  entry:
-// CHECK-NEXT:    [[ADD_PTR:%.*]] = getelementptr inbounds i8, i8 addrspace(200)* [[P:%.*]], i64 1
-// CHECK-NEXT:    ret i8 addrspace(200)* [[ADD_PTR]]
+// CHECK-NEXT:    [[ADD_PTR:%.*]] = getelementptr inbounds i8, ptr addrspace(200) [[P:%.*]], i64 1
+// CHECK-NEXT:    ret ptr addrspace(200) [[ADD_PTR]]
 //
 char * __capability decay_incomplete(char p[__capability]) {
   return p + 1;
@@ -15,8 +15,8 @@ char * __capability decay_incomplete(char p[__capability]) {
 
 // CHECK-LABEL: @member_incomplete(
 // CHECK-NEXT:  entry:
-// CHECK-NEXT:    [[ARRAYIDX:%.*]] = getelementptr inbounds i8, i8 addrspace(200)* [[P:%.*]], i64 1
-// CHECK-NEXT:    ret i8 addrspace(200)* [[ARRAYIDX]]
+// CHECK-NEXT:    [[ARRAYIDX:%.*]] = getelementptr inbounds i8, ptr addrspace(200) [[P:%.*]], i64 1
+// CHECK-NEXT:    ret ptr addrspace(200) [[ARRAYIDX]]
 //
 char * __capability member_incomplete(char p[__capability]) {
   return &p[1];
@@ -24,8 +24,8 @@ char * __capability member_incomplete(char p[__capability]) {
 
 // CHECK-LABEL: @sub_incomplete(
 // CHECK-NEXT:  entry:
-// CHECK-NEXT:    [[ARRAYIDX:%.*]] = getelementptr inbounds i8, i8 addrspace(200)* [[P:%.*]], i64 1
-// CHECK-NEXT:    [[TMP0:%.*]] = load i8, i8 addrspace(200)* [[ARRAYIDX]], align 1
+// CHECK-NEXT:    [[ARRAYIDX:%.*]] = getelementptr inbounds i8, ptr addrspace(200) [[P:%.*]], i64 1
+// CHECK-NEXT:    [[TMP0:%.*]] = load i8, ptr addrspace(200) [[ARRAYIDX]], align 1
 // CHECK-NEXT:    ret i8 [[TMP0]]
 //
 char sub_incomplete(char p[__capability]) {
@@ -34,8 +34,8 @@ char sub_incomplete(char p[__capability]) {
 
 // CHECK-LABEL: @decay_constant(
 // CHECK-NEXT:  entry:
-// CHECK-NEXT:    [[ADD_PTR:%.*]] = getelementptr inbounds i8, i8 addrspace(200)* [[P:%.*]], i64 1
-// CHECK-NEXT:    ret i8 addrspace(200)* [[ADD_PTR]]
+// CHECK-NEXT:    [[ADD_PTR:%.*]] = getelementptr inbounds i8, ptr addrspace(200) [[P:%.*]], i64 1
+// CHECK-NEXT:    ret ptr addrspace(200) [[ADD_PTR]]
 //
 char * __capability decay_constant(char p[__capability 2]) {
   return p + 1;
@@ -43,8 +43,8 @@ char * __capability decay_constant(char p[__capability 2]) {
 
 // CHECK-LABEL: @member_constant(
 // CHECK-NEXT:  entry:
-// CHECK-NEXT:    [[ARRAYIDX:%.*]] = getelementptr inbounds i8, i8 addrspace(200)* [[P:%.*]], i64 1
-// CHECK-NEXT:    ret i8 addrspace(200)* [[ARRAYIDX]]
+// CHECK-NEXT:    [[ARRAYIDX:%.*]] = getelementptr inbounds i8, ptr addrspace(200) [[P:%.*]], i64 1
+// CHECK-NEXT:    ret ptr addrspace(200) [[ARRAYIDX]]
 //
 char * __capability member_constant(char p[__capability 2]) {
   return &p[1];
@@ -52,8 +52,8 @@ char * __capability member_constant(char p[__capability 2]) {
 
 // CHECK-LABEL: @sub_constant(
 // CHECK-NEXT:  entry:
-// CHECK-NEXT:    [[ARRAYIDX:%.*]] = getelementptr inbounds i8, i8 addrspace(200)* [[P:%.*]], i64 1
-// CHECK-NEXT:    [[TMP0:%.*]] = load i8, i8 addrspace(200)* [[ARRAYIDX]], align 1
+// CHECK-NEXT:    [[ARRAYIDX:%.*]] = getelementptr inbounds i8, ptr addrspace(200) [[P:%.*]], i64 1
+// CHECK-NEXT:    [[TMP0:%.*]] = load i8, ptr addrspace(200) [[ARRAYIDX]], align 1
 // CHECK-NEXT:    ret i8 [[TMP0]]
 //
 char sub_constant(char p[__capability 2]) {
@@ -62,8 +62,8 @@ char sub_constant(char p[__capability 2]) {
 
 // CHECK-LABEL: @decay_constant_static(
 // CHECK-NEXT:  entry:
-// CHECK-NEXT:    [[ADD_PTR:%.*]] = getelementptr inbounds i8, i8 addrspace(200)* [[P:%.*]], i64 1
-// CHECK-NEXT:    ret i8 addrspace(200)* [[ADD_PTR]]
+// CHECK-NEXT:    [[ADD_PTR:%.*]] = getelementptr inbounds i8, ptr addrspace(200) [[P:%.*]], i64 1
+// CHECK-NEXT:    ret ptr addrspace(200) [[ADD_PTR]]
 //
 char * __capability decay_constant_static(char p[__capability static 2]) {
   return p + 1;
@@ -71,8 +71,8 @@ char * __capability decay_constant_static(char p[__capability static 2]) {
 
 // CHECK-LABEL: @member_constant_static(
 // CHECK-NEXT:  entry:
-// CHECK-NEXT:    [[ARRAYIDX:%.*]] = getelementptr inbounds i8, i8 addrspace(200)* [[P:%.*]], i64 1
-// CHECK-NEXT:    ret i8 addrspace(200)* [[ARRAYIDX]]
+// CHECK-NEXT:    [[ARRAYIDX:%.*]] = getelementptr inbounds i8, ptr addrspace(200) [[P:%.*]], i64 1
+// CHECK-NEXT:    ret ptr addrspace(200) [[ARRAYIDX]]
 //
 char * __capability member_constant_static(char p[__capability static 2]) {
   return &p[1];
@@ -80,8 +80,8 @@ char * __capability member_constant_static(char p[__capability static 2]) {
 
 // CHECK-LABEL: @sub_constant_static(
 // CHECK-NEXT:  entry:
-// CHECK-NEXT:    [[ARRAYIDX:%.*]] = getelementptr inbounds i8, i8 addrspace(200)* [[P:%.*]], i64 1
-// CHECK-NEXT:    [[TMP0:%.*]] = load i8, i8 addrspace(200)* [[ARRAYIDX]], align 1
+// CHECK-NEXT:    [[ARRAYIDX:%.*]] = getelementptr inbounds i8, ptr addrspace(200) [[P:%.*]], i64 1
+// CHECK-NEXT:    [[TMP0:%.*]] = load i8, ptr addrspace(200) [[ARRAYIDX]], align 1
 // CHECK-NEXT:    ret i8 [[TMP0]]
 //
 char sub_constant_static(char p[__capability static 2]) {
@@ -90,8 +90,8 @@ char sub_constant_static(char p[__capability static 2]) {
 
 // CHECK-LABEL: @decay_variable(
 // CHECK-NEXT:  entry:
-// CHECK-NEXT:    [[ADD_PTR:%.*]] = getelementptr inbounds i8, i8 addrspace(200)* [[P:%.*]], i64 1
-// CHECK-NEXT:    ret i8 addrspace(200)* [[ADD_PTR]]
+// CHECK-NEXT:    [[ADD_PTR:%.*]] = getelementptr inbounds i8, ptr addrspace(200) [[P:%.*]], i64 1
+// CHECK-NEXT:    ret ptr addrspace(200) [[ADD_PTR]]
 //
 char * __capability decay_variable(size_t n, char p[__capability n]) {
   return p + 1;
@@ -99,8 +99,8 @@ char * __capability decay_variable(size_t n, char p[__capability n]) {
 
 // CHECK-LABEL: @member_variable(
 // CHECK-NEXT:  entry:
-// CHECK-NEXT:    [[ARRAYIDX:%.*]] = getelementptr inbounds i8, i8 addrspace(200)* [[P:%.*]], i64 1
-// CHECK-NEXT:    ret i8 addrspace(200)* [[ARRAYIDX]]
+// CHECK-NEXT:    [[ARRAYIDX:%.*]] = getelementptr inbounds i8, ptr addrspace(200) [[P:%.*]], i64 1
+// CHECK-NEXT:    ret ptr addrspace(200) [[ARRAYIDX]]
 //
 char * __capability member_variable(size_t n, char p[__capability n]) {
   return &p[1];
@@ -108,8 +108,8 @@ char * __capability member_variable(size_t n, char p[__capability n]) {
 
 // CHECK-LABEL: @sub_variable(
 // CHECK-NEXT:  entry:
-// CHECK-NEXT:    [[ARRAYIDX:%.*]] = getelementptr inbounds i8, i8 addrspace(200)* [[P:%.*]], i64 1
-// CHECK-NEXT:    [[TMP0:%.*]] = load i8, i8 addrspace(200)* [[ARRAYIDX]], align 1
+// CHECK-NEXT:    [[ARRAYIDX:%.*]] = getelementptr inbounds i8, ptr addrspace(200) [[P:%.*]], i64 1
+// CHECK-NEXT:    [[TMP0:%.*]] = load i8, ptr addrspace(200) [[ARRAYIDX]], align 1
 // CHECK-NEXT:    ret i8 [[TMP0]]
 //
 char sub_variable(size_t n, char p[__capability n]) {

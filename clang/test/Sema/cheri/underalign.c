@@ -4,7 +4,7 @@
 // On a variable declaration __attribute__((aligned(4))) sets the alignment to 4
 __attribute__((aligned(4))) void *data; // expected-warning-re{{alignment (4) of 'void *' is less than the required capability alignment ({{8|16|32}})}}
 // expected-note@-1{{If you are certain that this is correct you can silence the warning by adding __attribute__((annotate("underaligned_capability")))}}
-// IR: @data = addrspace(200) global i8 addrspace(200)* null, align 4
+// IR: @data = addrspace(200) global ptr addrspace(200) null, align 4
 
 // If __attribute__((aligned(2))) is applied to typedefs it sets the alignment to 4
 __attribute__((aligned(2)))

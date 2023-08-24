@@ -9,27 +9,27 @@
 // RUN:   | opt -S -mem2reg | FileCheck --check-prefix=PURECAP %s
 
 // HYBRID-LIBCALLS-LABEL: define {{[^@]+}}@test_init
-// HYBRID-LIBCALLS-SAME: (i8 addrspace(200)** noundef [[F:%.*]], i8 addrspace(200)* noundef [[VALUE:%.*]]) #[[ATTR0:[0-9]+]] {
+// HYBRID-LIBCALLS-SAME: (ptr noundef [[F:%.*]], ptr addrspace(200) noundef [[VALUE:%.*]]) #[[ATTR0:[0-9]+]] {
 // HYBRID-LIBCALLS-NEXT:  entry:
-// HYBRID-LIBCALLS-NEXT:    store i8 addrspace(200)* [[VALUE]], i8 addrspace(200)** [[F]], align 16
+// HYBRID-LIBCALLS-NEXT:    store ptr addrspace(200) [[VALUE]], ptr [[F]], align 16
 // HYBRID-LIBCALLS-NEXT:    ret void
 //
 // PURECAP-LIBCALLS-LABEL: define {{[^@]+}}@test_init
-// PURECAP-LIBCALLS-SAME: (i8 addrspace(200)* addrspace(200)* noundef [[F:%.*]], i8 addrspace(200)* noundef [[VALUE:%.*]]) addrspace(200) #[[ATTR0:[0-9]+]] {
+// PURECAP-LIBCALLS-SAME: (ptr addrspace(200) noundef [[F:%.*]], ptr addrspace(200) noundef [[VALUE:%.*]]) addrspace(200) #[[ATTR0:[0-9]+]] {
 // PURECAP-LIBCALLS-NEXT:  entry:
-// PURECAP-LIBCALLS-NEXT:    store i8 addrspace(200)* [[VALUE]], i8 addrspace(200)* addrspace(200)* [[F]], align 16
+// PURECAP-LIBCALLS-NEXT:    store ptr addrspace(200) [[VALUE]], ptr addrspace(200) [[F]], align 16
 // PURECAP-LIBCALLS-NEXT:    ret void
 //
 // HYBRID-LABEL: define {{[^@]+}}@test_init
-// HYBRID-SAME: (i8 addrspace(200)** noundef [[F:%.*]], i8 addrspace(200)* noundef [[VALUE:%.*]]) #[[ATTR0:[0-9]+]] {
+// HYBRID-SAME: (ptr noundef [[F:%.*]], ptr addrspace(200) noundef [[VALUE:%.*]]) #[[ATTR0:[0-9]+]] {
 // HYBRID-NEXT:  entry:
-// HYBRID-NEXT:    store i8 addrspace(200)* [[VALUE]], i8 addrspace(200)** [[F]], align 16
+// HYBRID-NEXT:    store ptr addrspace(200) [[VALUE]], ptr [[F]], align 16
 // HYBRID-NEXT:    ret void
 //
 // PURECAP-LABEL: define {{[^@]+}}@test_init
-// PURECAP-SAME: (i8 addrspace(200)* addrspace(200)* noundef [[F:%.*]], i8 addrspace(200)* noundef [[VALUE:%.*]]) addrspace(200) #[[ATTR0:[0-9]+]] {
+// PURECAP-SAME: (ptr addrspace(200) noundef [[F:%.*]], ptr addrspace(200) noundef [[VALUE:%.*]]) addrspace(200) #[[ATTR0:[0-9]+]] {
 // PURECAP-NEXT:  entry:
-// PURECAP-NEXT:    store i8 addrspace(200)* [[VALUE]], i8 addrspace(200)* addrspace(200)* [[F]], align 16
+// PURECAP-NEXT:    store ptr addrspace(200) [[VALUE]], ptr addrspace(200) [[F]], align 16
 // PURECAP-NEXT:    ret void
 //
 void test_init(_Atomic(__uintcap_t) *f, __uintcap_t value) {
@@ -37,59 +37,55 @@ void test_init(_Atomic(__uintcap_t) *f, __uintcap_t value) {
 }
 
 // HYBRID-LIBCALLS-LABEL: define {{[^@]+}}@test_load
-// HYBRID-LIBCALLS-SAME: (i8 addrspace(200)** noundef [[F:%.*]]) #[[ATTR0]] {
+// HYBRID-LIBCALLS-SAME: (ptr noundef [[F:%.*]]) #[[ATTR0]] {
 // HYBRID-LIBCALLS-NEXT:  entry:
-// HYBRID-LIBCALLS-NEXT:    [[TMP0:%.*]] = bitcast i8 addrspace(200)** [[F]] to i8*
-// HYBRID-LIBCALLS-NEXT:    [[CALL:%.*]] = call i8 addrspace(200)* @__atomic_load_cap(i8* noundef [[TMP0]], i32 noundef signext 5)
-// HYBRID-LIBCALLS-NEXT:    ret i8 addrspace(200)* [[CALL]]
+// HYBRID-LIBCALLS-NEXT:    [[CALL:%.*]] = call ptr addrspace(200) @__atomic_load_cap(ptr noundef [[F]], i32 noundef signext 5)
+// HYBRID-LIBCALLS-NEXT:    ret ptr addrspace(200) [[CALL]]
 //
 // PURECAP-LIBCALLS-LABEL: define {{[^@]+}}@test_load
-// PURECAP-LIBCALLS-SAME: (i8 addrspace(200)* addrspace(200)* noundef [[F:%.*]]) addrspace(200) #[[ATTR0]] {
+// PURECAP-LIBCALLS-SAME: (ptr addrspace(200) noundef [[F:%.*]]) addrspace(200) #[[ATTR0]] {
 // PURECAP-LIBCALLS-NEXT:  entry:
-// PURECAP-LIBCALLS-NEXT:    [[TMP0:%.*]] = bitcast i8 addrspace(200)* addrspace(200)* [[F]] to i8 addrspace(200)*
-// PURECAP-LIBCALLS-NEXT:    [[CALL:%.*]] = call i8 addrspace(200)* @__atomic_load_cap(i8 addrspace(200)* noundef [[TMP0]], i32 noundef signext 5)
-// PURECAP-LIBCALLS-NEXT:    ret i8 addrspace(200)* [[CALL]]
+// PURECAP-LIBCALLS-NEXT:    [[CALL:%.*]] = call ptr addrspace(200) @__atomic_load_cap(ptr addrspace(200) noundef [[F]], i32 noundef signext 5)
+// PURECAP-LIBCALLS-NEXT:    ret ptr addrspace(200) [[CALL]]
 //
 // HYBRID-LABEL: define {{[^@]+}}@test_load
-// HYBRID-SAME: (i8 addrspace(200)** noundef [[F:%.*]]) #[[ATTR0]] {
+// HYBRID-SAME: (ptr noundef [[F:%.*]]) #[[ATTR0]] {
 // HYBRID-NEXT:  entry:
-// HYBRID-NEXT:    [[TMP0:%.*]] = load atomic i8 addrspace(200)*, i8 addrspace(200)** [[F]] seq_cst, align 16
-// HYBRID-NEXT:    ret i8 addrspace(200)* [[TMP0]]
+// HYBRID-NEXT:    [[TMP0:%.*]] = load atomic ptr addrspace(200), ptr [[F]] seq_cst, align 16
+// HYBRID-NEXT:    ret ptr addrspace(200) [[TMP0]]
 //
 // PURECAP-LABEL: define {{[^@]+}}@test_load
-// PURECAP-SAME: (i8 addrspace(200)* addrspace(200)* noundef [[F:%.*]]) addrspace(200) #[[ATTR0]] {
+// PURECAP-SAME: (ptr addrspace(200) noundef [[F:%.*]]) addrspace(200) #[[ATTR0]] {
 // PURECAP-NEXT:  entry:
-// PURECAP-NEXT:    [[TMP0:%.*]] = load atomic i8 addrspace(200)*, i8 addrspace(200)* addrspace(200)* [[F]] seq_cst, align 16
-// PURECAP-NEXT:    ret i8 addrspace(200)* [[TMP0]]
+// PURECAP-NEXT:    [[TMP0:%.*]] = load atomic ptr addrspace(200), ptr addrspace(200) [[F]] seq_cst, align 16
+// PURECAP-NEXT:    ret ptr addrspace(200) [[TMP0]]
 //
 __uintcap_t test_load(_Atomic(__uintcap_t) *f) {
   return __c11_atomic_load(f, __ATOMIC_SEQ_CST);
 }
 
 // HYBRID-LIBCALLS-LABEL: define {{[^@]+}}@test_store
-// HYBRID-LIBCALLS-SAME: (i8 addrspace(200)** noundef [[F:%.*]], i8 addrspace(200)* noundef [[VALUE:%.*]]) #[[ATTR0]] {
+// HYBRID-LIBCALLS-SAME: (ptr noundef [[F:%.*]], ptr addrspace(200) noundef [[VALUE:%.*]]) #[[ATTR0]] {
 // HYBRID-LIBCALLS-NEXT:  entry:
-// HYBRID-LIBCALLS-NEXT:    [[TMP0:%.*]] = bitcast i8 addrspace(200)** [[F]] to i8*
-// HYBRID-LIBCALLS-NEXT:    call void @__atomic_store_cap(i8* noundef [[TMP0]], i8 addrspace(200)* noundef [[VALUE]], i32 noundef signext 5)
+// HYBRID-LIBCALLS-NEXT:    call void @__atomic_store_cap(ptr noundef [[F]], ptr addrspace(200) noundef [[VALUE]], i32 noundef signext 5)
 // HYBRID-LIBCALLS-NEXT:    ret void
 //
 // PURECAP-LIBCALLS-LABEL: define {{[^@]+}}@test_store
-// PURECAP-LIBCALLS-SAME: (i8 addrspace(200)* addrspace(200)* noundef [[F:%.*]], i8 addrspace(200)* noundef [[VALUE:%.*]]) addrspace(200) #[[ATTR0]] {
+// PURECAP-LIBCALLS-SAME: (ptr addrspace(200) noundef [[F:%.*]], ptr addrspace(200) noundef [[VALUE:%.*]]) addrspace(200) #[[ATTR0]] {
 // PURECAP-LIBCALLS-NEXT:  entry:
-// PURECAP-LIBCALLS-NEXT:    [[TMP0:%.*]] = bitcast i8 addrspace(200)* addrspace(200)* [[F]] to i8 addrspace(200)*
-// PURECAP-LIBCALLS-NEXT:    call void @__atomic_store_cap(i8 addrspace(200)* noundef [[TMP0]], i8 addrspace(200)* noundef [[VALUE]], i32 noundef signext 5)
+// PURECAP-LIBCALLS-NEXT:    call void @__atomic_store_cap(ptr addrspace(200) noundef [[F]], ptr addrspace(200) noundef [[VALUE]], i32 noundef signext 5)
 // PURECAP-LIBCALLS-NEXT:    ret void
 //
 // HYBRID-LABEL: define {{[^@]+}}@test_store
-// HYBRID-SAME: (i8 addrspace(200)** noundef [[F:%.*]], i8 addrspace(200)* noundef [[VALUE:%.*]]) #[[ATTR0]] {
+// HYBRID-SAME: (ptr noundef [[F:%.*]], ptr addrspace(200) noundef [[VALUE:%.*]]) #[[ATTR0]] {
 // HYBRID-NEXT:  entry:
-// HYBRID-NEXT:    store atomic i8 addrspace(200)* [[VALUE]], i8 addrspace(200)** [[F]] seq_cst, align 16
+// HYBRID-NEXT:    store atomic ptr addrspace(200) [[VALUE]], ptr [[F]] seq_cst, align 16
 // HYBRID-NEXT:    ret void
 //
 // PURECAP-LABEL: define {{[^@]+}}@test_store
-// PURECAP-SAME: (i8 addrspace(200)* addrspace(200)* noundef [[F:%.*]], i8 addrspace(200)* noundef [[VALUE:%.*]]) addrspace(200) #[[ATTR0]] {
+// PURECAP-SAME: (ptr addrspace(200) noundef [[F:%.*]], ptr addrspace(200) noundef [[VALUE:%.*]]) addrspace(200) #[[ATTR0]] {
 // PURECAP-NEXT:  entry:
-// PURECAP-NEXT:    store atomic i8 addrspace(200)* [[VALUE]], i8 addrspace(200)* addrspace(200)* [[F]] seq_cst, align 16
+// PURECAP-NEXT:    store atomic ptr addrspace(200) [[VALUE]], ptr addrspace(200) [[F]] seq_cst, align 16
 // PURECAP-NEXT:    ret void
 //
 void test_store(_Atomic(__uintcap_t) *f, __uintcap_t value) {
@@ -97,111 +93,83 @@ void test_store(_Atomic(__uintcap_t) *f, __uintcap_t value) {
 }
 
 // HYBRID-LIBCALLS-LABEL: define {{[^@]+}}@test_xchg
-// HYBRID-LIBCALLS-SAME: (i8 addrspace(200)** noundef [[F:%.*]], i8 addrspace(200)* noundef [[VALUE:%.*]]) #[[ATTR0]] {
+// HYBRID-LIBCALLS-SAME: (ptr noundef [[F:%.*]], ptr addrspace(200) noundef [[VALUE:%.*]]) #[[ATTR0]] {
 // HYBRID-LIBCALLS-NEXT:  entry:
-// HYBRID-LIBCALLS-NEXT:    [[TMP0:%.*]] = bitcast i8 addrspace(200)** [[F]] to i8*
-// HYBRID-LIBCALLS-NEXT:    [[CALL:%.*]] = call i8 addrspace(200)* @__atomic_exchange_cap(i8* noundef [[TMP0]], i8 addrspace(200)* noundef [[VALUE]], i32 noundef signext 5)
-// HYBRID-LIBCALLS-NEXT:    ret i8 addrspace(200)* [[CALL]]
+// HYBRID-LIBCALLS-NEXT:    [[CALL:%.*]] = call ptr addrspace(200) @__atomic_exchange_cap(ptr noundef [[F]], ptr addrspace(200) noundef [[VALUE]], i32 noundef signext 5)
+// HYBRID-LIBCALLS-NEXT:    ret ptr addrspace(200) [[CALL]]
 //
 // PURECAP-LIBCALLS-LABEL: define {{[^@]+}}@test_xchg
-// PURECAP-LIBCALLS-SAME: (i8 addrspace(200)* addrspace(200)* noundef [[F:%.*]], i8 addrspace(200)* noundef [[VALUE:%.*]]) addrspace(200) #[[ATTR0]] {
+// PURECAP-LIBCALLS-SAME: (ptr addrspace(200) noundef [[F:%.*]], ptr addrspace(200) noundef [[VALUE:%.*]]) addrspace(200) #[[ATTR0]] {
 // PURECAP-LIBCALLS-NEXT:  entry:
-// PURECAP-LIBCALLS-NEXT:    [[TMP0:%.*]] = bitcast i8 addrspace(200)* addrspace(200)* [[F]] to i8 addrspace(200)*
-// PURECAP-LIBCALLS-NEXT:    [[CALL:%.*]] = call i8 addrspace(200)* @__atomic_exchange_cap(i8 addrspace(200)* noundef [[TMP0]], i8 addrspace(200)* noundef [[VALUE]], i32 noundef signext 5)
-// PURECAP-LIBCALLS-NEXT:    ret i8 addrspace(200)* [[CALL]]
+// PURECAP-LIBCALLS-NEXT:    [[CALL:%.*]] = call ptr addrspace(200) @__atomic_exchange_cap(ptr addrspace(200) noundef [[F]], ptr addrspace(200) noundef [[VALUE]], i32 noundef signext 5)
+// PURECAP-LIBCALLS-NEXT:    ret ptr addrspace(200) [[CALL]]
 //
 // HYBRID-LABEL: define {{[^@]+}}@test_xchg
-// HYBRID-SAME: (i8 addrspace(200)** noundef [[F:%.*]], i8 addrspace(200)* noundef [[VALUE:%.*]]) #[[ATTR0]] {
+// HYBRID-SAME: (ptr noundef [[F:%.*]], ptr addrspace(200) noundef [[VALUE:%.*]]) #[[ATTR0]] {
 // HYBRID-NEXT:  entry:
-// HYBRID-NEXT:    [[TMP0:%.*]] = atomicrmw xchg i8 addrspace(200)** [[F]], i8 addrspace(200)* [[VALUE]] seq_cst, align 16
-// HYBRID-NEXT:    ret i8 addrspace(200)* [[TMP0]]
+// HYBRID-NEXT:    [[TMP0:%.*]] = atomicrmw xchg ptr [[F]], ptr addrspace(200) [[VALUE]] seq_cst, align 16
+// HYBRID-NEXT:    ret ptr addrspace(200) [[TMP0]]
 //
 // PURECAP-LABEL: define {{[^@]+}}@test_xchg
-// PURECAP-SAME: (i8 addrspace(200)* addrspace(200)* noundef [[F:%.*]], i8 addrspace(200)* noundef [[VALUE:%.*]]) addrspace(200) #[[ATTR0]] {
+// PURECAP-SAME: (ptr addrspace(200) noundef [[F:%.*]], ptr addrspace(200) noundef [[VALUE:%.*]]) addrspace(200) #[[ATTR0]] {
 // PURECAP-NEXT:  entry:
-// PURECAP-NEXT:    [[TMP0:%.*]] = atomicrmw xchg i8 addrspace(200)* addrspace(200)* [[F]], i8 addrspace(200)* [[VALUE]] seq_cst, align 16
-// PURECAP-NEXT:    ret i8 addrspace(200)* [[TMP0]]
+// PURECAP-NEXT:    [[TMP0:%.*]] = atomicrmw xchg ptr addrspace(200) [[F]], ptr addrspace(200) [[VALUE]] seq_cst, align 16
+// PURECAP-NEXT:    ret ptr addrspace(200) [[TMP0]]
 //
 __uintcap_t test_xchg(_Atomic(__uintcap_t) *f, __uintcap_t value) {
   return __c11_atomic_exchange(f, value, __ATOMIC_SEQ_CST);
 }
 
 // HYBRID-LIBCALLS-LABEL: define {{[^@]+}}@test_xchg_long_ptr
-// HYBRID-LIBCALLS-SAME: (i64 addrspace(200)** noundef [[F:%.*]], i64 addrspace(200)* noundef [[VALUE:%.*]]) #[[ATTR0]] {
+// HYBRID-LIBCALLS-SAME: (ptr noundef [[F:%.*]], ptr addrspace(200) noundef [[VALUE:%.*]]) #[[ATTR0]] {
 // HYBRID-LIBCALLS-NEXT:  entry:
-// HYBRID-LIBCALLS-NEXT:    [[DOTATOMICTMP:%.*]] = alloca i64 addrspace(200)*, align 16
-// HYBRID-LIBCALLS-NEXT:    [[ATOMIC_TEMP:%.*]] = alloca i64 addrspace(200)*, align 16
-// HYBRID-LIBCALLS-NEXT:    store i64 addrspace(200)* [[VALUE]], i64 addrspace(200)** [[DOTATOMICTMP]], align 16
-// HYBRID-LIBCALLS-NEXT:    [[TMP0:%.*]] = bitcast i64 addrspace(200)** [[F]] to i8 addrspace(200)**
-// HYBRID-LIBCALLS-NEXT:    [[TMP1:%.*]] = bitcast i64 addrspace(200)** [[DOTATOMICTMP]] to i8 addrspace(200)**
-// HYBRID-LIBCALLS-NEXT:    [[TMP2:%.*]] = bitcast i64 addrspace(200)** [[ATOMIC_TEMP]] to i8 addrspace(200)**
-// HYBRID-LIBCALLS-NEXT:    [[TMP3:%.*]] = bitcast i8 addrspace(200)** [[TMP0]] to i8*
-// HYBRID-LIBCALLS-NEXT:    [[TMP4:%.*]] = load i8 addrspace(200)*, i8 addrspace(200)** [[TMP1]], align 16
-// HYBRID-LIBCALLS-NEXT:    [[CALL:%.*]] = call i8 addrspace(200)* @__atomic_exchange_cap(i8* noundef [[TMP3]], i8 addrspace(200)* noundef [[TMP4]], i32 noundef signext 5)
-// HYBRID-LIBCALLS-NEXT:    store i8 addrspace(200)* [[CALL]], i8 addrspace(200)** [[TMP2]], align 16
-// HYBRID-LIBCALLS-NEXT:    [[TMP5:%.*]] = bitcast i8 addrspace(200)** [[TMP2]] to i64 addrspace(200)**
-// HYBRID-LIBCALLS-NEXT:    [[TMP6:%.*]] = load i64 addrspace(200)*, i64 addrspace(200)** [[TMP5]], align 16
-// HYBRID-LIBCALLS-NEXT:    ret i64 addrspace(200)* [[TMP6]]
+// HYBRID-LIBCALLS-NEXT:    [[CALL:%.*]] = call ptr addrspace(200) @__atomic_exchange_cap(ptr noundef [[F]], ptr addrspace(200) noundef [[VALUE]], i32 noundef signext 5)
+// HYBRID-LIBCALLS-NEXT:    ret ptr addrspace(200) [[CALL]]
 //
 // PURECAP-LIBCALLS-LABEL: define {{[^@]+}}@test_xchg_long_ptr
-// PURECAP-LIBCALLS-SAME: (i64 addrspace(200)* addrspace(200)* noundef [[F:%.*]], i64 addrspace(200)* noundef [[VALUE:%.*]]) addrspace(200) #[[ATTR0]] {
+// PURECAP-LIBCALLS-SAME: (ptr addrspace(200) noundef [[F:%.*]], ptr addrspace(200) noundef [[VALUE:%.*]]) addrspace(200) #[[ATTR0]] {
 // PURECAP-LIBCALLS-NEXT:  entry:
-// PURECAP-LIBCALLS-NEXT:    [[DOTATOMICTMP:%.*]] = alloca i64 addrspace(200)*, align 16, addrspace(200)
-// PURECAP-LIBCALLS-NEXT:    [[ATOMIC_TEMP:%.*]] = alloca i64 addrspace(200)*, align 16, addrspace(200)
-// PURECAP-LIBCALLS-NEXT:    store i64 addrspace(200)* [[VALUE]], i64 addrspace(200)* addrspace(200)* [[DOTATOMICTMP]], align 16
-// PURECAP-LIBCALLS-NEXT:    [[TMP0:%.*]] = bitcast i64 addrspace(200)* addrspace(200)* [[F]] to i8 addrspace(200)* addrspace(200)*
-// PURECAP-LIBCALLS-NEXT:    [[TMP1:%.*]] = bitcast i64 addrspace(200)* addrspace(200)* [[DOTATOMICTMP]] to i8 addrspace(200)* addrspace(200)*
-// PURECAP-LIBCALLS-NEXT:    [[TMP2:%.*]] = bitcast i64 addrspace(200)* addrspace(200)* [[ATOMIC_TEMP]] to i8 addrspace(200)* addrspace(200)*
-// PURECAP-LIBCALLS-NEXT:    [[TMP3:%.*]] = bitcast i8 addrspace(200)* addrspace(200)* [[TMP0]] to i8 addrspace(200)*
-// PURECAP-LIBCALLS-NEXT:    [[TMP4:%.*]] = load i8 addrspace(200)*, i8 addrspace(200)* addrspace(200)* [[TMP1]], align 16
-// PURECAP-LIBCALLS-NEXT:    [[CALL:%.*]] = call i8 addrspace(200)* @__atomic_exchange_cap(i8 addrspace(200)* noundef [[TMP3]], i8 addrspace(200)* noundef [[TMP4]], i32 noundef signext 5)
-// PURECAP-LIBCALLS-NEXT:    store i8 addrspace(200)* [[CALL]], i8 addrspace(200)* addrspace(200)* [[TMP2]], align 16
-// PURECAP-LIBCALLS-NEXT:    [[TMP5:%.*]] = bitcast i8 addrspace(200)* addrspace(200)* [[TMP2]] to i64 addrspace(200)* addrspace(200)*
-// PURECAP-LIBCALLS-NEXT:    [[TMP6:%.*]] = load i64 addrspace(200)*, i64 addrspace(200)* addrspace(200)* [[TMP5]], align 16
-// PURECAP-LIBCALLS-NEXT:    ret i64 addrspace(200)* [[TMP6]]
+// PURECAP-LIBCALLS-NEXT:    [[CALL:%.*]] = call ptr addrspace(200) @__atomic_exchange_cap(ptr addrspace(200) noundef [[F]], ptr addrspace(200) noundef [[VALUE]], i32 noundef signext 5)
+// PURECAP-LIBCALLS-NEXT:    ret ptr addrspace(200) [[CALL]]
 //
 // HYBRID-LABEL: define {{[^@]+}}@test_xchg_long_ptr
-// HYBRID-SAME: (i64 addrspace(200)** noundef [[F:%.*]], i64 addrspace(200)* noundef [[VALUE:%.*]]) #[[ATTR0]] {
+// HYBRID-SAME: (ptr noundef [[F:%.*]], ptr addrspace(200) noundef [[VALUE:%.*]]) #[[ATTR0]] {
 // HYBRID-NEXT:  entry:
-// HYBRID-NEXT:    [[TMP0:%.*]] = atomicrmw xchg i64 addrspace(200)** [[F]], i64 addrspace(200)* [[VALUE]] seq_cst, align 16
-// HYBRID-NEXT:    ret i64 addrspace(200)* [[TMP0]]
+// HYBRID-NEXT:    [[TMP0:%.*]] = atomicrmw xchg ptr [[F]], ptr addrspace(200) [[VALUE]] seq_cst, align 16
+// HYBRID-NEXT:    ret ptr addrspace(200) [[TMP0]]
 //
 // PURECAP-LABEL: define {{[^@]+}}@test_xchg_long_ptr
-// PURECAP-SAME: (i64 addrspace(200)* addrspace(200)* noundef [[F:%.*]], i64 addrspace(200)* noundef [[VALUE:%.*]]) addrspace(200) #[[ATTR0]] {
+// PURECAP-SAME: (ptr addrspace(200) noundef [[F:%.*]], ptr addrspace(200) noundef [[VALUE:%.*]]) addrspace(200) #[[ATTR0]] {
 // PURECAP-NEXT:  entry:
-// PURECAP-NEXT:    [[TMP0:%.*]] = atomicrmw xchg i64 addrspace(200)* addrspace(200)* [[F]], i64 addrspace(200)* [[VALUE]] seq_cst, align 16
-// PURECAP-NEXT:    ret i64 addrspace(200)* [[TMP0]]
+// PURECAP-NEXT:    [[TMP0:%.*]] = atomicrmw xchg ptr addrspace(200) [[F]], ptr addrspace(200) [[VALUE]] seq_cst, align 16
+// PURECAP-NEXT:    ret ptr addrspace(200) [[TMP0]]
 //
 long *__capability test_xchg_long_ptr(_Atomic(long *__capability) *f, long *__capability value) {
   return __c11_atomic_exchange(f, value, __ATOMIC_SEQ_CST);
 }
 
 // HYBRID-LIBCALLS-LABEL: define {{[^@]+}}@test_cmpxchg_weak
-// HYBRID-LIBCALLS-SAME: (i8 addrspace(200)** noundef [[F:%.*]], i8 addrspace(200)** noundef [[EXP:%.*]], i8 addrspace(200)* noundef [[NEW:%.*]]) #[[ATTR0]] {
+// HYBRID-LIBCALLS-SAME: (ptr noundef [[F:%.*]], ptr noundef [[EXP:%.*]], ptr addrspace(200) noundef [[NEW:%.*]]) #[[ATTR0]] {
 // HYBRID-LIBCALLS-NEXT:  entry:
-// HYBRID-LIBCALLS-NEXT:    [[TMP0:%.*]] = bitcast i8 addrspace(200)** [[F]] to i8*
-// HYBRID-LIBCALLS-NEXT:    [[TMP1:%.*]] = bitcast i8 addrspace(200)** [[EXP]] to i8*
-// HYBRID-LIBCALLS-NEXT:    [[CALL:%.*]] = call zeroext i1 @__atomic_compare_exchange_cap(i8* noundef [[TMP0]], i8* noundef [[TMP1]], i8 addrspace(200)* noundef [[NEW]], i32 noundef signext 0, i32 noundef signext 0)
+// HYBRID-LIBCALLS-NEXT:    [[CALL:%.*]] = call zeroext i1 @__atomic_compare_exchange_cap(ptr noundef [[F]], ptr noundef [[EXP]], ptr addrspace(200) noundef [[NEW]], i32 noundef signext 0, i32 noundef signext 0)
 // HYBRID-LIBCALLS-NEXT:    ret i1 [[CALL]]
 //
 // PURECAP-LIBCALLS-LABEL: define {{[^@]+}}@test_cmpxchg_weak
-// PURECAP-LIBCALLS-SAME: (i8 addrspace(200)* addrspace(200)* noundef [[F:%.*]], i8 addrspace(200)* addrspace(200)* noundef [[EXP:%.*]], i8 addrspace(200)* noundef [[NEW:%.*]]) addrspace(200) #[[ATTR0]] {
+// PURECAP-LIBCALLS-SAME: (ptr addrspace(200) noundef [[F:%.*]], ptr addrspace(200) noundef [[EXP:%.*]], ptr addrspace(200) noundef [[NEW:%.*]]) addrspace(200) #[[ATTR0]] {
 // PURECAP-LIBCALLS-NEXT:  entry:
-// PURECAP-LIBCALLS-NEXT:    [[TMP0:%.*]] = bitcast i8 addrspace(200)* addrspace(200)* [[F]] to i8 addrspace(200)*
-// PURECAP-LIBCALLS-NEXT:    [[TMP1:%.*]] = bitcast i8 addrspace(200)* addrspace(200)* [[EXP]] to i8 addrspace(200)*
-// PURECAP-LIBCALLS-NEXT:    [[CALL:%.*]] = call zeroext i1 @__atomic_compare_exchange_cap(i8 addrspace(200)* noundef [[TMP0]], i8 addrspace(200)* noundef [[TMP1]], i8 addrspace(200)* noundef [[NEW]], i32 noundef signext 0, i32 noundef signext 0)
+// PURECAP-LIBCALLS-NEXT:    [[CALL:%.*]] = call zeroext i1 @__atomic_compare_exchange_cap(ptr addrspace(200) noundef [[F]], ptr addrspace(200) noundef [[EXP]], ptr addrspace(200) noundef [[NEW]], i32 noundef signext 0, i32 noundef signext 0)
 // PURECAP-LIBCALLS-NEXT:    ret i1 [[CALL]]
 //
 // HYBRID-LABEL: define {{[^@]+}}@test_cmpxchg_weak
-// HYBRID-SAME: (i8 addrspace(200)** noundef [[F:%.*]], i8 addrspace(200)** noundef [[EXP:%.*]], i8 addrspace(200)* noundef [[NEW:%.*]]) #[[ATTR0]] {
+// HYBRID-SAME: (ptr noundef [[F:%.*]], ptr noundef [[EXP:%.*]], ptr addrspace(200) noundef [[NEW:%.*]]) #[[ATTR0]] {
 // HYBRID-NEXT:  entry:
-// HYBRID-NEXT:    [[TMP0:%.*]] = load i8 addrspace(200)*, i8 addrspace(200)** [[EXP]], align 16
-// HYBRID-NEXT:    [[TMP1:%.*]] = cmpxchg weak i8 addrspace(200)** [[F]], i8 addrspace(200)* [[TMP0]], i8 addrspace(200)* [[NEW]] monotonic monotonic, align 16
-// HYBRID-NEXT:    [[TMP2:%.*]] = extractvalue { i8 addrspace(200)*, i1 } [[TMP1]], 0
-// HYBRID-NEXT:    [[TMP3:%.*]] = extractvalue { i8 addrspace(200)*, i1 } [[TMP1]], 1
+// HYBRID-NEXT:    [[TMP0:%.*]] = load ptr addrspace(200), ptr [[EXP]], align 16
+// HYBRID-NEXT:    [[TMP1:%.*]] = cmpxchg weak ptr [[F]], ptr addrspace(200) [[TMP0]], ptr addrspace(200) [[NEW]] monotonic monotonic, align 16
+// HYBRID-NEXT:    [[TMP2:%.*]] = extractvalue { ptr addrspace(200), i1 } [[TMP1]], 0
+// HYBRID-NEXT:    [[TMP3:%.*]] = extractvalue { ptr addrspace(200), i1 } [[TMP1]], 1
 // HYBRID-NEXT:    br i1 [[TMP3]], label [[CMPXCHG_CONTINUE:%.*]], label [[CMPXCHG_STORE_EXPECTED:%.*]]
 // HYBRID:       cmpxchg.store_expected:
-// HYBRID-NEXT:    store i8 addrspace(200)* [[TMP2]], i8 addrspace(200)** [[EXP]], align 16
+// HYBRID-NEXT:    store ptr addrspace(200) [[TMP2]], ptr [[EXP]], align 16
 // HYBRID-NEXT:    br label [[CMPXCHG_CONTINUE]]
 // HYBRID:       cmpxchg.continue:
 // HYBRID-NEXT:    [[FROMBOOL:%.*]] = zext i1 [[TMP3]] to i8
@@ -209,15 +177,15 @@ long *__capability test_xchg_long_ptr(_Atomic(long *__capability) *f, long *__ca
 // HYBRID-NEXT:    ret i1 [[TOBOOL]]
 //
 // PURECAP-LABEL: define {{[^@]+}}@test_cmpxchg_weak
-// PURECAP-SAME: (i8 addrspace(200)* addrspace(200)* noundef [[F:%.*]], i8 addrspace(200)* addrspace(200)* noundef [[EXP:%.*]], i8 addrspace(200)* noundef [[NEW:%.*]]) addrspace(200) #[[ATTR0]] {
+// PURECAP-SAME: (ptr addrspace(200) noundef [[F:%.*]], ptr addrspace(200) noundef [[EXP:%.*]], ptr addrspace(200) noundef [[NEW:%.*]]) addrspace(200) #[[ATTR0]] {
 // PURECAP-NEXT:  entry:
-// PURECAP-NEXT:    [[TMP0:%.*]] = load i8 addrspace(200)*, i8 addrspace(200)* addrspace(200)* [[EXP]], align 16
-// PURECAP-NEXT:    [[TMP1:%.*]] = cmpxchg weak i8 addrspace(200)* addrspace(200)* [[F]], i8 addrspace(200)* [[TMP0]], i8 addrspace(200)* [[NEW]] monotonic monotonic, align 16
-// PURECAP-NEXT:    [[TMP2:%.*]] = extractvalue { i8 addrspace(200)*, i1 } [[TMP1]], 0
-// PURECAP-NEXT:    [[TMP3:%.*]] = extractvalue { i8 addrspace(200)*, i1 } [[TMP1]], 1
+// PURECAP-NEXT:    [[TMP0:%.*]] = load ptr addrspace(200), ptr addrspace(200) [[EXP]], align 16
+// PURECAP-NEXT:    [[TMP1:%.*]] = cmpxchg weak ptr addrspace(200) [[F]], ptr addrspace(200) [[TMP0]], ptr addrspace(200) [[NEW]] monotonic monotonic, align 16
+// PURECAP-NEXT:    [[TMP2:%.*]] = extractvalue { ptr addrspace(200), i1 } [[TMP1]], 0
+// PURECAP-NEXT:    [[TMP3:%.*]] = extractvalue { ptr addrspace(200), i1 } [[TMP1]], 1
 // PURECAP-NEXT:    br i1 [[TMP3]], label [[CMPXCHG_CONTINUE:%.*]], label [[CMPXCHG_STORE_EXPECTED:%.*]]
 // PURECAP:       cmpxchg.store_expected:
-// PURECAP-NEXT:    store i8 addrspace(200)* [[TMP2]], i8 addrspace(200)* addrspace(200)* [[EXP]], align 16
+// PURECAP-NEXT:    store ptr addrspace(200) [[TMP2]], ptr addrspace(200) [[EXP]], align 16
 // PURECAP-NEXT:    br label [[CMPXCHG_CONTINUE]]
 // PURECAP:       cmpxchg.continue:
 // PURECAP-NEXT:    [[FROMBOOL:%.*]] = zext i1 [[TMP3]] to i8
@@ -229,31 +197,27 @@ _Bool test_cmpxchg_weak(_Atomic(__uintcap_t) *f, __uintcap_t *exp, __uintcap_t n
 }
 
 // HYBRID-LIBCALLS-LABEL: define {{[^@]+}}@test_cmpxchg_strong
-// HYBRID-LIBCALLS-SAME: (i8 addrspace(200)** noundef [[F:%.*]], i8 addrspace(200)** noundef [[EXP:%.*]], i8 addrspace(200)* noundef [[NEW:%.*]]) #[[ATTR0]] {
+// HYBRID-LIBCALLS-SAME: (ptr noundef [[F:%.*]], ptr noundef [[EXP:%.*]], ptr addrspace(200) noundef [[NEW:%.*]]) #[[ATTR0]] {
 // HYBRID-LIBCALLS-NEXT:  entry:
-// HYBRID-LIBCALLS-NEXT:    [[TMP0:%.*]] = bitcast i8 addrspace(200)** [[F]] to i8*
-// HYBRID-LIBCALLS-NEXT:    [[TMP1:%.*]] = bitcast i8 addrspace(200)** [[EXP]] to i8*
-// HYBRID-LIBCALLS-NEXT:    [[CALL:%.*]] = call zeroext i1 @__atomic_compare_exchange_cap(i8* noundef [[TMP0]], i8* noundef [[TMP1]], i8 addrspace(200)* noundef [[NEW]], i32 noundef signext 0, i32 noundef signext 0)
+// HYBRID-LIBCALLS-NEXT:    [[CALL:%.*]] = call zeroext i1 @__atomic_compare_exchange_cap(ptr noundef [[F]], ptr noundef [[EXP]], ptr addrspace(200) noundef [[NEW]], i32 noundef signext 0, i32 noundef signext 0)
 // HYBRID-LIBCALLS-NEXT:    ret i1 [[CALL]]
 //
 // PURECAP-LIBCALLS-LABEL: define {{[^@]+}}@test_cmpxchg_strong
-// PURECAP-LIBCALLS-SAME: (i8 addrspace(200)* addrspace(200)* noundef [[F:%.*]], i8 addrspace(200)* addrspace(200)* noundef [[EXP:%.*]], i8 addrspace(200)* noundef [[NEW:%.*]]) addrspace(200) #[[ATTR0]] {
+// PURECAP-LIBCALLS-SAME: (ptr addrspace(200) noundef [[F:%.*]], ptr addrspace(200) noundef [[EXP:%.*]], ptr addrspace(200) noundef [[NEW:%.*]]) addrspace(200) #[[ATTR0]] {
 // PURECAP-LIBCALLS-NEXT:  entry:
-// PURECAP-LIBCALLS-NEXT:    [[TMP0:%.*]] = bitcast i8 addrspace(200)* addrspace(200)* [[F]] to i8 addrspace(200)*
-// PURECAP-LIBCALLS-NEXT:    [[TMP1:%.*]] = bitcast i8 addrspace(200)* addrspace(200)* [[EXP]] to i8 addrspace(200)*
-// PURECAP-LIBCALLS-NEXT:    [[CALL:%.*]] = call zeroext i1 @__atomic_compare_exchange_cap(i8 addrspace(200)* noundef [[TMP0]], i8 addrspace(200)* noundef [[TMP1]], i8 addrspace(200)* noundef [[NEW]], i32 noundef signext 0, i32 noundef signext 0)
+// PURECAP-LIBCALLS-NEXT:    [[CALL:%.*]] = call zeroext i1 @__atomic_compare_exchange_cap(ptr addrspace(200) noundef [[F]], ptr addrspace(200) noundef [[EXP]], ptr addrspace(200) noundef [[NEW]], i32 noundef signext 0, i32 noundef signext 0)
 // PURECAP-LIBCALLS-NEXT:    ret i1 [[CALL]]
 //
 // HYBRID-LABEL: define {{[^@]+}}@test_cmpxchg_strong
-// HYBRID-SAME: (i8 addrspace(200)** noundef [[F:%.*]], i8 addrspace(200)** noundef [[EXP:%.*]], i8 addrspace(200)* noundef [[NEW:%.*]]) #[[ATTR0]] {
+// HYBRID-SAME: (ptr noundef [[F:%.*]], ptr noundef [[EXP:%.*]], ptr addrspace(200) noundef [[NEW:%.*]]) #[[ATTR0]] {
 // HYBRID-NEXT:  entry:
-// HYBRID-NEXT:    [[TMP0:%.*]] = load i8 addrspace(200)*, i8 addrspace(200)** [[EXP]], align 16
-// HYBRID-NEXT:    [[TMP1:%.*]] = cmpxchg i8 addrspace(200)** [[F]], i8 addrspace(200)* [[TMP0]], i8 addrspace(200)* [[NEW]] monotonic monotonic, align 16
-// HYBRID-NEXT:    [[TMP2:%.*]] = extractvalue { i8 addrspace(200)*, i1 } [[TMP1]], 0
-// HYBRID-NEXT:    [[TMP3:%.*]] = extractvalue { i8 addrspace(200)*, i1 } [[TMP1]], 1
+// HYBRID-NEXT:    [[TMP0:%.*]] = load ptr addrspace(200), ptr [[EXP]], align 16
+// HYBRID-NEXT:    [[TMP1:%.*]] = cmpxchg ptr [[F]], ptr addrspace(200) [[TMP0]], ptr addrspace(200) [[NEW]] monotonic monotonic, align 16
+// HYBRID-NEXT:    [[TMP2:%.*]] = extractvalue { ptr addrspace(200), i1 } [[TMP1]], 0
+// HYBRID-NEXT:    [[TMP3:%.*]] = extractvalue { ptr addrspace(200), i1 } [[TMP1]], 1
 // HYBRID-NEXT:    br i1 [[TMP3]], label [[CMPXCHG_CONTINUE:%.*]], label [[CMPXCHG_STORE_EXPECTED:%.*]]
 // HYBRID:       cmpxchg.store_expected:
-// HYBRID-NEXT:    store i8 addrspace(200)* [[TMP2]], i8 addrspace(200)** [[EXP]], align 16
+// HYBRID-NEXT:    store ptr addrspace(200) [[TMP2]], ptr [[EXP]], align 16
 // HYBRID-NEXT:    br label [[CMPXCHG_CONTINUE]]
 // HYBRID:       cmpxchg.continue:
 // HYBRID-NEXT:    [[FROMBOOL:%.*]] = zext i1 [[TMP3]] to i8
@@ -261,15 +225,15 @@ _Bool test_cmpxchg_weak(_Atomic(__uintcap_t) *f, __uintcap_t *exp, __uintcap_t n
 // HYBRID-NEXT:    ret i1 [[TOBOOL]]
 //
 // PURECAP-LABEL: define {{[^@]+}}@test_cmpxchg_strong
-// PURECAP-SAME: (i8 addrspace(200)* addrspace(200)* noundef [[F:%.*]], i8 addrspace(200)* addrspace(200)* noundef [[EXP:%.*]], i8 addrspace(200)* noundef [[NEW:%.*]]) addrspace(200) #[[ATTR0]] {
+// PURECAP-SAME: (ptr addrspace(200) noundef [[F:%.*]], ptr addrspace(200) noundef [[EXP:%.*]], ptr addrspace(200) noundef [[NEW:%.*]]) addrspace(200) #[[ATTR0]] {
 // PURECAP-NEXT:  entry:
-// PURECAP-NEXT:    [[TMP0:%.*]] = load i8 addrspace(200)*, i8 addrspace(200)* addrspace(200)* [[EXP]], align 16
-// PURECAP-NEXT:    [[TMP1:%.*]] = cmpxchg i8 addrspace(200)* addrspace(200)* [[F]], i8 addrspace(200)* [[TMP0]], i8 addrspace(200)* [[NEW]] monotonic monotonic, align 16
-// PURECAP-NEXT:    [[TMP2:%.*]] = extractvalue { i8 addrspace(200)*, i1 } [[TMP1]], 0
-// PURECAP-NEXT:    [[TMP3:%.*]] = extractvalue { i8 addrspace(200)*, i1 } [[TMP1]], 1
+// PURECAP-NEXT:    [[TMP0:%.*]] = load ptr addrspace(200), ptr addrspace(200) [[EXP]], align 16
+// PURECAP-NEXT:    [[TMP1:%.*]] = cmpxchg ptr addrspace(200) [[F]], ptr addrspace(200) [[TMP0]], ptr addrspace(200) [[NEW]] monotonic monotonic, align 16
+// PURECAP-NEXT:    [[TMP2:%.*]] = extractvalue { ptr addrspace(200), i1 } [[TMP1]], 0
+// PURECAP-NEXT:    [[TMP3:%.*]] = extractvalue { ptr addrspace(200), i1 } [[TMP1]], 1
 // PURECAP-NEXT:    br i1 [[TMP3]], label [[CMPXCHG_CONTINUE:%.*]], label [[CMPXCHG_STORE_EXPECTED:%.*]]
 // PURECAP:       cmpxchg.store_expected:
-// PURECAP-NEXT:    store i8 addrspace(200)* [[TMP2]], i8 addrspace(200)* addrspace(200)* [[EXP]], align 16
+// PURECAP-NEXT:    store ptr addrspace(200) [[TMP2]], ptr addrspace(200) [[EXP]], align 16
 // PURECAP-NEXT:    br label [[CMPXCHG_CONTINUE]]
 // PURECAP:       cmpxchg.continue:
 // PURECAP-NEXT:    [[FROMBOOL:%.*]] = zext i1 [[TMP3]] to i8
@@ -284,642 +248,516 @@ _Bool test_cmpxchg_strong(_Atomic(__uintcap_t) *f, __uintcap_t *exp, __uintcap_t
 // with pointer types (and multiply the increment by the size of the pointee)
 
 // HYBRID-LIBCALLS-LABEL: define {{[^@]+}}@test_fetch_add_uintcap
-// HYBRID-LIBCALLS-SAME: (i8 addrspace(200)** noundef [[PTR:%.*]], i8 addrspace(200)* noundef [[VALUE:%.*]]) #[[ATTR0]] {
+// HYBRID-LIBCALLS-SAME: (ptr noundef [[PTR:%.*]], ptr addrspace(200) noundef [[VALUE:%.*]]) #[[ATTR0]] {
 // HYBRID-LIBCALLS-NEXT:  entry:
-// HYBRID-LIBCALLS-NEXT:    [[TMP0:%.*]] = bitcast i8 addrspace(200)** [[PTR]] to i8*
-// HYBRID-LIBCALLS-NEXT:    [[CALL:%.*]] = call i8 addrspace(200)* @__atomic_fetch_add_cap(i8* noundef [[TMP0]], i8 addrspace(200)* noundef [[VALUE]], i32 noundef signext 5)
-// HYBRID-LIBCALLS-NEXT:    ret i8 addrspace(200)* [[CALL]]
+// HYBRID-LIBCALLS-NEXT:    [[CALL:%.*]] = call ptr addrspace(200) @__atomic_fetch_add_cap(ptr noundef [[PTR]], ptr addrspace(200) noundef [[VALUE]], i32 noundef signext 5)
+// HYBRID-LIBCALLS-NEXT:    ret ptr addrspace(200) [[CALL]]
 //
 // PURECAP-LIBCALLS-LABEL: define {{[^@]+}}@test_fetch_add_uintcap
-// PURECAP-LIBCALLS-SAME: (i8 addrspace(200)* addrspace(200)* noundef [[PTR:%.*]], i8 addrspace(200)* noundef [[VALUE:%.*]]) addrspace(200) #[[ATTR0]] {
+// PURECAP-LIBCALLS-SAME: (ptr addrspace(200) noundef [[PTR:%.*]], ptr addrspace(200) noundef [[VALUE:%.*]]) addrspace(200) #[[ATTR0]] {
 // PURECAP-LIBCALLS-NEXT:  entry:
-// PURECAP-LIBCALLS-NEXT:    [[TMP0:%.*]] = bitcast i8 addrspace(200)* addrspace(200)* [[PTR]] to i8 addrspace(200)*
-// PURECAP-LIBCALLS-NEXT:    [[CALL:%.*]] = call i8 addrspace(200)* @__atomic_fetch_add_cap(i8 addrspace(200)* noundef [[TMP0]], i8 addrspace(200)* noundef [[VALUE]], i32 noundef signext 5)
-// PURECAP-LIBCALLS-NEXT:    ret i8 addrspace(200)* [[CALL]]
+// PURECAP-LIBCALLS-NEXT:    [[CALL:%.*]] = call ptr addrspace(200) @__atomic_fetch_add_cap(ptr addrspace(200) noundef [[PTR]], ptr addrspace(200) noundef [[VALUE]], i32 noundef signext 5)
+// PURECAP-LIBCALLS-NEXT:    ret ptr addrspace(200) [[CALL]]
 //
 // HYBRID-LABEL: define {{[^@]+}}@test_fetch_add_uintcap
-// HYBRID-SAME: (i8 addrspace(200)** noundef [[PTR:%.*]], i8 addrspace(200)* noundef [[VALUE:%.*]]) #[[ATTR0]] {
+// HYBRID-SAME: (ptr noundef [[PTR:%.*]], ptr addrspace(200) noundef [[VALUE:%.*]]) #[[ATTR0]] {
 // HYBRID-NEXT:  entry:
-// HYBRID-NEXT:    [[TMP0:%.*]] = atomicrmw add i8 addrspace(200)** [[PTR]], i8 addrspace(200)* [[VALUE]] seq_cst, align 16
-// HYBRID-NEXT:    ret i8 addrspace(200)* [[TMP0]]
+// HYBRID-NEXT:    [[TMP0:%.*]] = atomicrmw add ptr [[PTR]], ptr addrspace(200) [[VALUE]] seq_cst, align 16
+// HYBRID-NEXT:    ret ptr addrspace(200) [[TMP0]]
 //
 // PURECAP-LABEL: define {{[^@]+}}@test_fetch_add_uintcap
-// PURECAP-SAME: (i8 addrspace(200)* addrspace(200)* noundef [[PTR:%.*]], i8 addrspace(200)* noundef [[VALUE:%.*]]) addrspace(200) #[[ATTR0]] {
+// PURECAP-SAME: (ptr addrspace(200) noundef [[PTR:%.*]], ptr addrspace(200) noundef [[VALUE:%.*]]) addrspace(200) #[[ATTR0]] {
 // PURECAP-NEXT:  entry:
-// PURECAP-NEXT:    [[TMP0:%.*]] = atomicrmw add i8 addrspace(200)* addrspace(200)* [[PTR]], i8 addrspace(200)* [[VALUE]] seq_cst, align 16
-// PURECAP-NEXT:    ret i8 addrspace(200)* [[TMP0]]
+// PURECAP-NEXT:    [[TMP0:%.*]] = atomicrmw add ptr addrspace(200) [[PTR]], ptr addrspace(200) [[VALUE]] seq_cst, align 16
+// PURECAP-NEXT:    ret ptr addrspace(200) [[TMP0]]
 //
 __uintcap_t test_fetch_add_uintcap(_Atomic(__uintcap_t) *ptr, __uintcap_t value) {
   return __c11_atomic_fetch_add(ptr, value, __ATOMIC_SEQ_CST);
 }
 
 // HYBRID-LIBCALLS-LABEL: define {{[^@]+}}@test_fetch_add_longptr
-// HYBRID-LIBCALLS-SAME: (i64 addrspace(200)** noundef [[PTR:%.*]], i8 addrspace(200)* noundef [[VALUE:%.*]]) #[[ATTR0]] {
+// HYBRID-LIBCALLS-SAME: (ptr noundef [[PTR:%.*]], ptr addrspace(200) noundef [[VALUE:%.*]]) #[[ATTR0]] {
 // HYBRID-LIBCALLS-NEXT:  entry:
-// HYBRID-LIBCALLS-NEXT:    [[ATOMIC_INTCAP_ARG:%.*]] = alloca i64 addrspace(200)*, align 16
-// HYBRID-LIBCALLS-NEXT:    [[ATOMIC_TEMP:%.*]] = alloca i64 addrspace(200)*, align 16
-// HYBRID-LIBCALLS-NEXT:    [[TMP0:%.*]] = call i64 @llvm.cheri.cap.address.get.i64(i8 addrspace(200)* [[VALUE]])
+// HYBRID-LIBCALLS-NEXT:    [[TMP0:%.*]] = call i64 @llvm.cheri.cap.address.get.i64(ptr addrspace(200) [[VALUE]])
 // HYBRID-LIBCALLS-NEXT:    [[TMP1:%.*]] = mul i64 [[TMP0]], 8
-// HYBRID-LIBCALLS-NEXT:    [[TMP2:%.*]] = bitcast i64 addrspace(200)** [[PTR]] to i8 addrspace(200)**
-// HYBRID-LIBCALLS-NEXT:    [[TMP3:%.*]] = getelementptr i8, i8 addrspace(200)* null, i64 [[TMP1]]
-// HYBRID-LIBCALLS-NEXT:    [[TMP4:%.*]] = bitcast i8 addrspace(200)* [[TMP3]] to i64 addrspace(200)*
-// HYBRID-LIBCALLS-NEXT:    store i64 addrspace(200)* [[TMP4]], i64 addrspace(200)** [[ATOMIC_INTCAP_ARG]], align 16
-// HYBRID-LIBCALLS-NEXT:    [[TMP5:%.*]] = bitcast i64 addrspace(200)** [[ATOMIC_TEMP]] to i8 addrspace(200)**
-// HYBRID-LIBCALLS-NEXT:    [[TMP6:%.*]] = bitcast i8 addrspace(200)** [[TMP2]] to i8*
-// HYBRID-LIBCALLS-NEXT:    [[TMP7:%.*]] = bitcast i64 addrspace(200)** [[ATOMIC_INTCAP_ARG]] to i8 addrspace(200)**
-// HYBRID-LIBCALLS-NEXT:    [[TMP8:%.*]] = load i8 addrspace(200)*, i8 addrspace(200)** [[TMP7]], align 16
-// HYBRID-LIBCALLS-NEXT:    [[CALL:%.*]] = call i8 addrspace(200)* @__atomic_fetch_add_cap(i8* noundef [[TMP6]], i8 addrspace(200)* noundef [[TMP8]], i32 noundef signext 5)
-// HYBRID-LIBCALLS-NEXT:    store i8 addrspace(200)* [[CALL]], i8 addrspace(200)** [[TMP5]], align 16
-// HYBRID-LIBCALLS-NEXT:    [[TMP9:%.*]] = bitcast i8 addrspace(200)** [[TMP5]] to i64 addrspace(200)**
-// HYBRID-LIBCALLS-NEXT:    [[TMP10:%.*]] = load i64 addrspace(200)*, i64 addrspace(200)** [[TMP9]], align 16
-// HYBRID-LIBCALLS-NEXT:    ret i64 addrspace(200)* [[TMP10]]
+// HYBRID-LIBCALLS-NEXT:    [[TMP2:%.*]] = getelementptr i8, ptr addrspace(200) null, i64 [[TMP1]]
+// HYBRID-LIBCALLS-NEXT:    [[CALL:%.*]] = call ptr addrspace(200) @__atomic_fetch_add_cap(ptr noundef [[PTR]], ptr addrspace(200) noundef [[TMP2]], i32 noundef signext 5)
+// HYBRID-LIBCALLS-NEXT:    ret ptr addrspace(200) [[CALL]]
 //
 // PURECAP-LIBCALLS-LABEL: define {{[^@]+}}@test_fetch_add_longptr
-// PURECAP-LIBCALLS-SAME: (i64 addrspace(200)* addrspace(200)* noundef [[PTR:%.*]], i8 addrspace(200)* noundef [[VALUE:%.*]]) addrspace(200) #[[ATTR0]] {
+// PURECAP-LIBCALLS-SAME: (ptr addrspace(200) noundef [[PTR:%.*]], ptr addrspace(200) noundef [[VALUE:%.*]]) addrspace(200) #[[ATTR0]] {
 // PURECAP-LIBCALLS-NEXT:  entry:
-// PURECAP-LIBCALLS-NEXT:    [[ATOMIC_INTCAP_ARG:%.*]] = alloca i64 addrspace(200)*, align 16, addrspace(200)
-// PURECAP-LIBCALLS-NEXT:    [[ATOMIC_TEMP:%.*]] = alloca i64 addrspace(200)*, align 16, addrspace(200)
-// PURECAP-LIBCALLS-NEXT:    [[TMP0:%.*]] = call i64 @llvm.cheri.cap.address.get.i64(i8 addrspace(200)* [[VALUE]])
+// PURECAP-LIBCALLS-NEXT:    [[TMP0:%.*]] = call i64 @llvm.cheri.cap.address.get.i64(ptr addrspace(200) [[VALUE]])
 // PURECAP-LIBCALLS-NEXT:    [[TMP1:%.*]] = mul i64 [[TMP0]], 8
-// PURECAP-LIBCALLS-NEXT:    [[TMP2:%.*]] = bitcast i64 addrspace(200)* addrspace(200)* [[PTR]] to i8 addrspace(200)* addrspace(200)*
-// PURECAP-LIBCALLS-NEXT:    [[TMP3:%.*]] = getelementptr i8, i8 addrspace(200)* null, i64 [[TMP1]]
-// PURECAP-LIBCALLS-NEXT:    [[TMP4:%.*]] = bitcast i8 addrspace(200)* [[TMP3]] to i64 addrspace(200)*
-// PURECAP-LIBCALLS-NEXT:    store i64 addrspace(200)* [[TMP4]], i64 addrspace(200)* addrspace(200)* [[ATOMIC_INTCAP_ARG]], align 16
-// PURECAP-LIBCALLS-NEXT:    [[TMP5:%.*]] = bitcast i64 addrspace(200)* addrspace(200)* [[ATOMIC_TEMP]] to i8 addrspace(200)* addrspace(200)*
-// PURECAP-LIBCALLS-NEXT:    [[TMP6:%.*]] = bitcast i8 addrspace(200)* addrspace(200)* [[TMP2]] to i8 addrspace(200)*
-// PURECAP-LIBCALLS-NEXT:    [[TMP7:%.*]] = bitcast i64 addrspace(200)* addrspace(200)* [[ATOMIC_INTCAP_ARG]] to i8 addrspace(200)* addrspace(200)*
-// PURECAP-LIBCALLS-NEXT:    [[TMP8:%.*]] = load i8 addrspace(200)*, i8 addrspace(200)* addrspace(200)* [[TMP7]], align 16
-// PURECAP-LIBCALLS-NEXT:    [[CALL:%.*]] = call i8 addrspace(200)* @__atomic_fetch_add_cap(i8 addrspace(200)* noundef [[TMP6]], i8 addrspace(200)* noundef [[TMP8]], i32 noundef signext 5)
-// PURECAP-LIBCALLS-NEXT:    store i8 addrspace(200)* [[CALL]], i8 addrspace(200)* addrspace(200)* [[TMP5]], align 16
-// PURECAP-LIBCALLS-NEXT:    [[TMP9:%.*]] = bitcast i8 addrspace(200)* addrspace(200)* [[TMP5]] to i64 addrspace(200)* addrspace(200)*
-// PURECAP-LIBCALLS-NEXT:    [[TMP10:%.*]] = load i64 addrspace(200)*, i64 addrspace(200)* addrspace(200)* [[TMP9]], align 16
-// PURECAP-LIBCALLS-NEXT:    ret i64 addrspace(200)* [[TMP10]]
+// PURECAP-LIBCALLS-NEXT:    [[TMP2:%.*]] = getelementptr i8, ptr addrspace(200) null, i64 [[TMP1]]
+// PURECAP-LIBCALLS-NEXT:    [[CALL:%.*]] = call ptr addrspace(200) @__atomic_fetch_add_cap(ptr addrspace(200) noundef [[PTR]], ptr addrspace(200) noundef [[TMP2]], i32 noundef signext 5)
+// PURECAP-LIBCALLS-NEXT:    ret ptr addrspace(200) [[CALL]]
 //
 // HYBRID-LABEL: define {{[^@]+}}@test_fetch_add_longptr
-// HYBRID-SAME: (i64 addrspace(200)** noundef [[PTR:%.*]], i8 addrspace(200)* noundef [[VALUE:%.*]]) #[[ATTR0]] {
+// HYBRID-SAME: (ptr noundef [[PTR:%.*]], ptr addrspace(200) noundef [[VALUE:%.*]]) #[[ATTR0]] {
 // HYBRID-NEXT:  entry:
-// HYBRID-NEXT:    [[TMP0:%.*]] = call i64 @llvm.cheri.cap.address.get.i64(i8 addrspace(200)* [[VALUE]])
+// HYBRID-NEXT:    [[TMP0:%.*]] = call i64 @llvm.cheri.cap.address.get.i64(ptr addrspace(200) [[VALUE]])
 // HYBRID-NEXT:    [[TMP1:%.*]] = mul i64 [[TMP0]], 8
-// HYBRID-NEXT:    [[TMP2:%.*]] = getelementptr i8, i8 addrspace(200)* null, i64 [[TMP1]]
-// HYBRID-NEXT:    [[TMP3:%.*]] = bitcast i8 addrspace(200)* [[TMP2]] to i64 addrspace(200)*
-// HYBRID-NEXT:    [[TMP4:%.*]] = atomicrmw add i64 addrspace(200)** [[PTR]], i64 addrspace(200)* [[TMP3]] seq_cst, align 16
-// HYBRID-NEXT:    ret i64 addrspace(200)* [[TMP4]]
+// HYBRID-NEXT:    [[TMP2:%.*]] = getelementptr i8, ptr addrspace(200) null, i64 [[TMP1]]
+// HYBRID-NEXT:    [[TMP3:%.*]] = atomicrmw add ptr [[PTR]], ptr addrspace(200) [[TMP2]] seq_cst, align 16
+// HYBRID-NEXT:    ret ptr addrspace(200) [[TMP3]]
 //
 // PURECAP-LABEL: define {{[^@]+}}@test_fetch_add_longptr
-// PURECAP-SAME: (i64 addrspace(200)* addrspace(200)* noundef [[PTR:%.*]], i8 addrspace(200)* noundef [[VALUE:%.*]]) addrspace(200) #[[ATTR0]] {
+// PURECAP-SAME: (ptr addrspace(200) noundef [[PTR:%.*]], ptr addrspace(200) noundef [[VALUE:%.*]]) addrspace(200) #[[ATTR0]] {
 // PURECAP-NEXT:  entry:
-// PURECAP-NEXT:    [[TMP0:%.*]] = call i64 @llvm.cheri.cap.address.get.i64(i8 addrspace(200)* [[VALUE]])
+// PURECAP-NEXT:    [[TMP0:%.*]] = call i64 @llvm.cheri.cap.address.get.i64(ptr addrspace(200) [[VALUE]])
 // PURECAP-NEXT:    [[TMP1:%.*]] = mul i64 [[TMP0]], 8
-// PURECAP-NEXT:    [[TMP2:%.*]] = getelementptr i8, i8 addrspace(200)* null, i64 [[TMP1]]
-// PURECAP-NEXT:    [[TMP3:%.*]] = bitcast i8 addrspace(200)* [[TMP2]] to i64 addrspace(200)*
-// PURECAP-NEXT:    [[TMP4:%.*]] = atomicrmw add i64 addrspace(200)* addrspace(200)* [[PTR]], i64 addrspace(200)* [[TMP3]] seq_cst, align 16
-// PURECAP-NEXT:    ret i64 addrspace(200)* [[TMP4]]
+// PURECAP-NEXT:    [[TMP2:%.*]] = getelementptr i8, ptr addrspace(200) null, i64 [[TMP1]]
+// PURECAP-NEXT:    [[TMP3:%.*]] = atomicrmw add ptr addrspace(200) [[PTR]], ptr addrspace(200) [[TMP2]] seq_cst, align 16
+// PURECAP-NEXT:    ret ptr addrspace(200) [[TMP3]]
 //
 long *__capability test_fetch_add_longptr(_Atomic(long *__capability) *ptr, __uintcap_t value) {
   return __c11_atomic_fetch_add(ptr, value, __ATOMIC_SEQ_CST);
 }
 
 // HYBRID-LIBCALLS-LABEL: define {{[^@]+}}@test_fetch_add_longptr_and_short
-// HYBRID-LIBCALLS-SAME: (i64 addrspace(200)** noundef [[PTR:%.*]], i16 noundef signext [[VALUE:%.*]]) #[[ATTR0]] {
+// HYBRID-LIBCALLS-SAME: (ptr noundef [[PTR:%.*]], i16 noundef signext [[VALUE:%.*]]) #[[ATTR0]] {
 // HYBRID-LIBCALLS-NEXT:  entry:
-// HYBRID-LIBCALLS-NEXT:    [[ATOMIC_INTCAP_ARG:%.*]] = alloca i64 addrspace(200)*, align 16
-// HYBRID-LIBCALLS-NEXT:    [[ATOMIC_TEMP:%.*]] = alloca i64 addrspace(200)*, align 16
 // HYBRID-LIBCALLS-NEXT:    [[CONV:%.*]] = sext i16 [[VALUE]] to i64
 // HYBRID-LIBCALLS-NEXT:    [[TMP0:%.*]] = mul i64 [[CONV]], 8
-// HYBRID-LIBCALLS-NEXT:    [[TMP1:%.*]] = bitcast i64 addrspace(200)** [[PTR]] to i8 addrspace(200)**
-// HYBRID-LIBCALLS-NEXT:    [[TMP2:%.*]] = getelementptr i8, i8 addrspace(200)* null, i64 [[TMP0]]
-// HYBRID-LIBCALLS-NEXT:    [[TMP3:%.*]] = bitcast i8 addrspace(200)* [[TMP2]] to i64 addrspace(200)*
-// HYBRID-LIBCALLS-NEXT:    store i64 addrspace(200)* [[TMP3]], i64 addrspace(200)** [[ATOMIC_INTCAP_ARG]], align 16
-// HYBRID-LIBCALLS-NEXT:    [[TMP4:%.*]] = bitcast i64 addrspace(200)** [[ATOMIC_TEMP]] to i8 addrspace(200)**
-// HYBRID-LIBCALLS-NEXT:    [[TMP5:%.*]] = bitcast i8 addrspace(200)** [[TMP1]] to i8*
-// HYBRID-LIBCALLS-NEXT:    [[TMP6:%.*]] = bitcast i64 addrspace(200)** [[ATOMIC_INTCAP_ARG]] to i8 addrspace(200)**
-// HYBRID-LIBCALLS-NEXT:    [[TMP7:%.*]] = load i8 addrspace(200)*, i8 addrspace(200)** [[TMP6]], align 16
-// HYBRID-LIBCALLS-NEXT:    [[CALL:%.*]] = call i8 addrspace(200)* @__atomic_fetch_add_cap(i8* noundef [[TMP5]], i8 addrspace(200)* noundef [[TMP7]], i32 noundef signext 5)
-// HYBRID-LIBCALLS-NEXT:    store i8 addrspace(200)* [[CALL]], i8 addrspace(200)** [[TMP4]], align 16
-// HYBRID-LIBCALLS-NEXT:    [[TMP8:%.*]] = bitcast i8 addrspace(200)** [[TMP4]] to i64 addrspace(200)**
-// HYBRID-LIBCALLS-NEXT:    [[TMP9:%.*]] = load i64 addrspace(200)*, i64 addrspace(200)** [[TMP8]], align 16
-// HYBRID-LIBCALLS-NEXT:    ret i64 addrspace(200)* [[TMP9]]
+// HYBRID-LIBCALLS-NEXT:    [[TMP1:%.*]] = getelementptr i8, ptr addrspace(200) null, i64 [[TMP0]]
+// HYBRID-LIBCALLS-NEXT:    [[CALL:%.*]] = call ptr addrspace(200) @__atomic_fetch_add_cap(ptr noundef [[PTR]], ptr addrspace(200) noundef [[TMP1]], i32 noundef signext 5)
+// HYBRID-LIBCALLS-NEXT:    ret ptr addrspace(200) [[CALL]]
 //
 // PURECAP-LIBCALLS-LABEL: define {{[^@]+}}@test_fetch_add_longptr_and_short
-// PURECAP-LIBCALLS-SAME: (i64 addrspace(200)* addrspace(200)* noundef [[PTR:%.*]], i16 noundef signext [[VALUE:%.*]]) addrspace(200) #[[ATTR0]] {
+// PURECAP-LIBCALLS-SAME: (ptr addrspace(200) noundef [[PTR:%.*]], i16 noundef signext [[VALUE:%.*]]) addrspace(200) #[[ATTR0]] {
 // PURECAP-LIBCALLS-NEXT:  entry:
-// PURECAP-LIBCALLS-NEXT:    [[ATOMIC_INTCAP_ARG:%.*]] = alloca i64 addrspace(200)*, align 16, addrspace(200)
-// PURECAP-LIBCALLS-NEXT:    [[ATOMIC_TEMP:%.*]] = alloca i64 addrspace(200)*, align 16, addrspace(200)
 // PURECAP-LIBCALLS-NEXT:    [[CONV:%.*]] = sext i16 [[VALUE]] to i64
 // PURECAP-LIBCALLS-NEXT:    [[TMP0:%.*]] = mul i64 [[CONV]], 8
-// PURECAP-LIBCALLS-NEXT:    [[TMP1:%.*]] = bitcast i64 addrspace(200)* addrspace(200)* [[PTR]] to i8 addrspace(200)* addrspace(200)*
-// PURECAP-LIBCALLS-NEXT:    [[TMP2:%.*]] = getelementptr i8, i8 addrspace(200)* null, i64 [[TMP0]]
-// PURECAP-LIBCALLS-NEXT:    [[TMP3:%.*]] = bitcast i8 addrspace(200)* [[TMP2]] to i64 addrspace(200)*
-// PURECAP-LIBCALLS-NEXT:    store i64 addrspace(200)* [[TMP3]], i64 addrspace(200)* addrspace(200)* [[ATOMIC_INTCAP_ARG]], align 16
-// PURECAP-LIBCALLS-NEXT:    [[TMP4:%.*]] = bitcast i64 addrspace(200)* addrspace(200)* [[ATOMIC_TEMP]] to i8 addrspace(200)* addrspace(200)*
-// PURECAP-LIBCALLS-NEXT:    [[TMP5:%.*]] = bitcast i8 addrspace(200)* addrspace(200)* [[TMP1]] to i8 addrspace(200)*
-// PURECAP-LIBCALLS-NEXT:    [[TMP6:%.*]] = bitcast i64 addrspace(200)* addrspace(200)* [[ATOMIC_INTCAP_ARG]] to i8 addrspace(200)* addrspace(200)*
-// PURECAP-LIBCALLS-NEXT:    [[TMP7:%.*]] = load i8 addrspace(200)*, i8 addrspace(200)* addrspace(200)* [[TMP6]], align 16
-// PURECAP-LIBCALLS-NEXT:    [[CALL:%.*]] = call i8 addrspace(200)* @__atomic_fetch_add_cap(i8 addrspace(200)* noundef [[TMP5]], i8 addrspace(200)* noundef [[TMP7]], i32 noundef signext 5)
-// PURECAP-LIBCALLS-NEXT:    store i8 addrspace(200)* [[CALL]], i8 addrspace(200)* addrspace(200)* [[TMP4]], align 16
-// PURECAP-LIBCALLS-NEXT:    [[TMP8:%.*]] = bitcast i8 addrspace(200)* addrspace(200)* [[TMP4]] to i64 addrspace(200)* addrspace(200)*
-// PURECAP-LIBCALLS-NEXT:    [[TMP9:%.*]] = load i64 addrspace(200)*, i64 addrspace(200)* addrspace(200)* [[TMP8]], align 16
-// PURECAP-LIBCALLS-NEXT:    ret i64 addrspace(200)* [[TMP9]]
+// PURECAP-LIBCALLS-NEXT:    [[TMP1:%.*]] = getelementptr i8, ptr addrspace(200) null, i64 [[TMP0]]
+// PURECAP-LIBCALLS-NEXT:    [[CALL:%.*]] = call ptr addrspace(200) @__atomic_fetch_add_cap(ptr addrspace(200) noundef [[PTR]], ptr addrspace(200) noundef [[TMP1]], i32 noundef signext 5)
+// PURECAP-LIBCALLS-NEXT:    ret ptr addrspace(200) [[CALL]]
 //
 // HYBRID-LABEL: define {{[^@]+}}@test_fetch_add_longptr_and_short
-// HYBRID-SAME: (i64 addrspace(200)** noundef [[PTR:%.*]], i16 noundef signext [[VALUE:%.*]]) #[[ATTR0]] {
+// HYBRID-SAME: (ptr noundef [[PTR:%.*]], i16 noundef signext [[VALUE:%.*]]) #[[ATTR0]] {
 // HYBRID-NEXT:  entry:
 // HYBRID-NEXT:    [[CONV:%.*]] = sext i16 [[VALUE]] to i64
 // HYBRID-NEXT:    [[TMP0:%.*]] = mul i64 [[CONV]], 8
-// HYBRID-NEXT:    [[TMP1:%.*]] = getelementptr i8, i8 addrspace(200)* null, i64 [[TMP0]]
-// HYBRID-NEXT:    [[TMP2:%.*]] = bitcast i8 addrspace(200)* [[TMP1]] to i64 addrspace(200)*
-// HYBRID-NEXT:    [[TMP3:%.*]] = atomicrmw add i64 addrspace(200)** [[PTR]], i64 addrspace(200)* [[TMP2]] seq_cst, align 16
-// HYBRID-NEXT:    ret i64 addrspace(200)* [[TMP3]]
+// HYBRID-NEXT:    [[TMP1:%.*]] = getelementptr i8, ptr addrspace(200) null, i64 [[TMP0]]
+// HYBRID-NEXT:    [[TMP2:%.*]] = atomicrmw add ptr [[PTR]], ptr addrspace(200) [[TMP1]] seq_cst, align 16
+// HYBRID-NEXT:    ret ptr addrspace(200) [[TMP2]]
 //
 // PURECAP-LABEL: define {{[^@]+}}@test_fetch_add_longptr_and_short
-// PURECAP-SAME: (i64 addrspace(200)* addrspace(200)* noundef [[PTR:%.*]], i16 noundef signext [[VALUE:%.*]]) addrspace(200) #[[ATTR0]] {
+// PURECAP-SAME: (ptr addrspace(200) noundef [[PTR:%.*]], i16 noundef signext [[VALUE:%.*]]) addrspace(200) #[[ATTR0]] {
 // PURECAP-NEXT:  entry:
 // PURECAP-NEXT:    [[CONV:%.*]] = sext i16 [[VALUE]] to i64
 // PURECAP-NEXT:    [[TMP0:%.*]] = mul i64 [[CONV]], 8
-// PURECAP-NEXT:    [[TMP1:%.*]] = getelementptr i8, i8 addrspace(200)* null, i64 [[TMP0]]
-// PURECAP-NEXT:    [[TMP2:%.*]] = bitcast i8 addrspace(200)* [[TMP1]] to i64 addrspace(200)*
-// PURECAP-NEXT:    [[TMP3:%.*]] = atomicrmw add i64 addrspace(200)* addrspace(200)* [[PTR]], i64 addrspace(200)* [[TMP2]] seq_cst, align 16
-// PURECAP-NEXT:    ret i64 addrspace(200)* [[TMP3]]
+// PURECAP-NEXT:    [[TMP1:%.*]] = getelementptr i8, ptr addrspace(200) null, i64 [[TMP0]]
+// PURECAP-NEXT:    [[TMP2:%.*]] = atomicrmw add ptr addrspace(200) [[PTR]], ptr addrspace(200) [[TMP1]] seq_cst, align 16
+// PURECAP-NEXT:    ret ptr addrspace(200) [[TMP2]]
 //
 long *__capability test_fetch_add_longptr_and_short(_Atomic(long *__capability) *ptr, short value) {
   return __c11_atomic_fetch_add(ptr, value, __ATOMIC_SEQ_CST);
 }
 
 // HYBRID-LIBCALLS-LABEL: define {{[^@]+}}@test_fetch_add_charptr
-// HYBRID-LIBCALLS-SAME: (i8 addrspace(200)** noundef [[PTR:%.*]], i8 addrspace(200)* noundef [[VALUE:%.*]]) #[[ATTR0]] {
+// HYBRID-LIBCALLS-SAME: (ptr noundef [[PTR:%.*]], ptr addrspace(200) noundef [[VALUE:%.*]]) #[[ATTR0]] {
 // HYBRID-LIBCALLS-NEXT:  entry:
-// HYBRID-LIBCALLS-NEXT:    [[TMP0:%.*]] = call i64 @llvm.cheri.cap.address.get.i64(i8 addrspace(200)* [[VALUE]])
+// HYBRID-LIBCALLS-NEXT:    [[TMP0:%.*]] = call i64 @llvm.cheri.cap.address.get.i64(ptr addrspace(200) [[VALUE]])
 // HYBRID-LIBCALLS-NEXT:    [[TMP1:%.*]] = mul i64 [[TMP0]], 1
-// HYBRID-LIBCALLS-NEXT:    [[TMP2:%.*]] = getelementptr i8, i8 addrspace(200)* null, i64 [[TMP1]]
-// HYBRID-LIBCALLS-NEXT:    [[TMP3:%.*]] = bitcast i8 addrspace(200)** [[PTR]] to i8*
-// HYBRID-LIBCALLS-NEXT:    [[CALL:%.*]] = call i8 addrspace(200)* @__atomic_fetch_add_cap(i8* noundef [[TMP3]], i8 addrspace(200)* noundef [[TMP2]], i32 noundef signext 5)
-// HYBRID-LIBCALLS-NEXT:    ret i8 addrspace(200)* [[CALL]]
+// HYBRID-LIBCALLS-NEXT:    [[TMP2:%.*]] = getelementptr i8, ptr addrspace(200) null, i64 [[TMP1]]
+// HYBRID-LIBCALLS-NEXT:    [[CALL:%.*]] = call ptr addrspace(200) @__atomic_fetch_add_cap(ptr noundef [[PTR]], ptr addrspace(200) noundef [[TMP2]], i32 noundef signext 5)
+// HYBRID-LIBCALLS-NEXT:    ret ptr addrspace(200) [[CALL]]
 //
 // PURECAP-LIBCALLS-LABEL: define {{[^@]+}}@test_fetch_add_charptr
-// PURECAP-LIBCALLS-SAME: (i8 addrspace(200)* addrspace(200)* noundef [[PTR:%.*]], i8 addrspace(200)* noundef [[VALUE:%.*]]) addrspace(200) #[[ATTR0]] {
+// PURECAP-LIBCALLS-SAME: (ptr addrspace(200) noundef [[PTR:%.*]], ptr addrspace(200) noundef [[VALUE:%.*]]) addrspace(200) #[[ATTR0]] {
 // PURECAP-LIBCALLS-NEXT:  entry:
-// PURECAP-LIBCALLS-NEXT:    [[TMP0:%.*]] = call i64 @llvm.cheri.cap.address.get.i64(i8 addrspace(200)* [[VALUE]])
+// PURECAP-LIBCALLS-NEXT:    [[TMP0:%.*]] = call i64 @llvm.cheri.cap.address.get.i64(ptr addrspace(200) [[VALUE]])
 // PURECAP-LIBCALLS-NEXT:    [[TMP1:%.*]] = mul i64 [[TMP0]], 1
-// PURECAP-LIBCALLS-NEXT:    [[TMP2:%.*]] = getelementptr i8, i8 addrspace(200)* null, i64 [[TMP1]]
-// PURECAP-LIBCALLS-NEXT:    [[TMP3:%.*]] = bitcast i8 addrspace(200)* addrspace(200)* [[PTR]] to i8 addrspace(200)*
-// PURECAP-LIBCALLS-NEXT:    [[CALL:%.*]] = call i8 addrspace(200)* @__atomic_fetch_add_cap(i8 addrspace(200)* noundef [[TMP3]], i8 addrspace(200)* noundef [[TMP2]], i32 noundef signext 5)
-// PURECAP-LIBCALLS-NEXT:    ret i8 addrspace(200)* [[CALL]]
+// PURECAP-LIBCALLS-NEXT:    [[TMP2:%.*]] = getelementptr i8, ptr addrspace(200) null, i64 [[TMP1]]
+// PURECAP-LIBCALLS-NEXT:    [[CALL:%.*]] = call ptr addrspace(200) @__atomic_fetch_add_cap(ptr addrspace(200) noundef [[PTR]], ptr addrspace(200) noundef [[TMP2]], i32 noundef signext 5)
+// PURECAP-LIBCALLS-NEXT:    ret ptr addrspace(200) [[CALL]]
 //
 // HYBRID-LABEL: define {{[^@]+}}@test_fetch_add_charptr
-// HYBRID-SAME: (i8 addrspace(200)** noundef [[PTR:%.*]], i8 addrspace(200)* noundef [[VALUE:%.*]]) #[[ATTR0]] {
+// HYBRID-SAME: (ptr noundef [[PTR:%.*]], ptr addrspace(200) noundef [[VALUE:%.*]]) #[[ATTR0]] {
 // HYBRID-NEXT:  entry:
-// HYBRID-NEXT:    [[TMP0:%.*]] = call i64 @llvm.cheri.cap.address.get.i64(i8 addrspace(200)* [[VALUE]])
+// HYBRID-NEXT:    [[TMP0:%.*]] = call i64 @llvm.cheri.cap.address.get.i64(ptr addrspace(200) [[VALUE]])
 // HYBRID-NEXT:    [[TMP1:%.*]] = mul i64 [[TMP0]], 1
-// HYBRID-NEXT:    [[TMP2:%.*]] = getelementptr i8, i8 addrspace(200)* null, i64 [[TMP1]]
-// HYBRID-NEXT:    [[TMP3:%.*]] = atomicrmw add i8 addrspace(200)** [[PTR]], i8 addrspace(200)* [[TMP2]] seq_cst, align 16
-// HYBRID-NEXT:    ret i8 addrspace(200)* [[TMP3]]
+// HYBRID-NEXT:    [[TMP2:%.*]] = getelementptr i8, ptr addrspace(200) null, i64 [[TMP1]]
+// HYBRID-NEXT:    [[TMP3:%.*]] = atomicrmw add ptr [[PTR]], ptr addrspace(200) [[TMP2]] seq_cst, align 16
+// HYBRID-NEXT:    ret ptr addrspace(200) [[TMP3]]
 //
 // PURECAP-LABEL: define {{[^@]+}}@test_fetch_add_charptr
-// PURECAP-SAME: (i8 addrspace(200)* addrspace(200)* noundef [[PTR:%.*]], i8 addrspace(200)* noundef [[VALUE:%.*]]) addrspace(200) #[[ATTR0]] {
+// PURECAP-SAME: (ptr addrspace(200) noundef [[PTR:%.*]], ptr addrspace(200) noundef [[VALUE:%.*]]) addrspace(200) #[[ATTR0]] {
 // PURECAP-NEXT:  entry:
-// PURECAP-NEXT:    [[TMP0:%.*]] = call i64 @llvm.cheri.cap.address.get.i64(i8 addrspace(200)* [[VALUE]])
+// PURECAP-NEXT:    [[TMP0:%.*]] = call i64 @llvm.cheri.cap.address.get.i64(ptr addrspace(200) [[VALUE]])
 // PURECAP-NEXT:    [[TMP1:%.*]] = mul i64 [[TMP0]], 1
-// PURECAP-NEXT:    [[TMP2:%.*]] = getelementptr i8, i8 addrspace(200)* null, i64 [[TMP1]]
-// PURECAP-NEXT:    [[TMP3:%.*]] = atomicrmw add i8 addrspace(200)* addrspace(200)* [[PTR]], i8 addrspace(200)* [[TMP2]] seq_cst, align 16
-// PURECAP-NEXT:    ret i8 addrspace(200)* [[TMP3]]
+// PURECAP-NEXT:    [[TMP2:%.*]] = getelementptr i8, ptr addrspace(200) null, i64 [[TMP1]]
+// PURECAP-NEXT:    [[TMP3:%.*]] = atomicrmw add ptr addrspace(200) [[PTR]], ptr addrspace(200) [[TMP2]] seq_cst, align 16
+// PURECAP-NEXT:    ret ptr addrspace(200) [[TMP3]]
 //
 char *__capability test_fetch_add_charptr(_Atomic(char *__capability) *ptr, __uintcap_t value) {
   return __c11_atomic_fetch_add(ptr, value, __ATOMIC_SEQ_CST);
 }
 
 // HYBRID-LIBCALLS-LABEL: define {{[^@]+}}@test_fetch_add_charptr_and_short
-// HYBRID-LIBCALLS-SAME: (i8 addrspace(200)** noundef [[PTR:%.*]], i16 noundef signext [[VALUE:%.*]]) #[[ATTR0]] {
+// HYBRID-LIBCALLS-SAME: (ptr noundef [[PTR:%.*]], i16 noundef signext [[VALUE:%.*]]) #[[ATTR0]] {
 // HYBRID-LIBCALLS-NEXT:  entry:
 // HYBRID-LIBCALLS-NEXT:    [[CONV:%.*]] = sext i16 [[VALUE]] to i64
 // HYBRID-LIBCALLS-NEXT:    [[TMP0:%.*]] = mul i64 [[CONV]], 1
-// HYBRID-LIBCALLS-NEXT:    [[TMP1:%.*]] = getelementptr i8, i8 addrspace(200)* null, i64 [[TMP0]]
-// HYBRID-LIBCALLS-NEXT:    [[TMP2:%.*]] = bitcast i8 addrspace(200)** [[PTR]] to i8*
-// HYBRID-LIBCALLS-NEXT:    [[CALL:%.*]] = call i8 addrspace(200)* @__atomic_fetch_add_cap(i8* noundef [[TMP2]], i8 addrspace(200)* noundef [[TMP1]], i32 noundef signext 5)
-// HYBRID-LIBCALLS-NEXT:    ret i8 addrspace(200)* [[CALL]]
+// HYBRID-LIBCALLS-NEXT:    [[TMP1:%.*]] = getelementptr i8, ptr addrspace(200) null, i64 [[TMP0]]
+// HYBRID-LIBCALLS-NEXT:    [[CALL:%.*]] = call ptr addrspace(200) @__atomic_fetch_add_cap(ptr noundef [[PTR]], ptr addrspace(200) noundef [[TMP1]], i32 noundef signext 5)
+// HYBRID-LIBCALLS-NEXT:    ret ptr addrspace(200) [[CALL]]
 //
 // PURECAP-LIBCALLS-LABEL: define {{[^@]+}}@test_fetch_add_charptr_and_short
-// PURECAP-LIBCALLS-SAME: (i8 addrspace(200)* addrspace(200)* noundef [[PTR:%.*]], i16 noundef signext [[VALUE:%.*]]) addrspace(200) #[[ATTR0]] {
+// PURECAP-LIBCALLS-SAME: (ptr addrspace(200) noundef [[PTR:%.*]], i16 noundef signext [[VALUE:%.*]]) addrspace(200) #[[ATTR0]] {
 // PURECAP-LIBCALLS-NEXT:  entry:
 // PURECAP-LIBCALLS-NEXT:    [[CONV:%.*]] = sext i16 [[VALUE]] to i64
 // PURECAP-LIBCALLS-NEXT:    [[TMP0:%.*]] = mul i64 [[CONV]], 1
-// PURECAP-LIBCALLS-NEXT:    [[TMP1:%.*]] = getelementptr i8, i8 addrspace(200)* null, i64 [[TMP0]]
-// PURECAP-LIBCALLS-NEXT:    [[TMP2:%.*]] = bitcast i8 addrspace(200)* addrspace(200)* [[PTR]] to i8 addrspace(200)*
-// PURECAP-LIBCALLS-NEXT:    [[CALL:%.*]] = call i8 addrspace(200)* @__atomic_fetch_add_cap(i8 addrspace(200)* noundef [[TMP2]], i8 addrspace(200)* noundef [[TMP1]], i32 noundef signext 5)
-// PURECAP-LIBCALLS-NEXT:    ret i8 addrspace(200)* [[CALL]]
+// PURECAP-LIBCALLS-NEXT:    [[TMP1:%.*]] = getelementptr i8, ptr addrspace(200) null, i64 [[TMP0]]
+// PURECAP-LIBCALLS-NEXT:    [[CALL:%.*]] = call ptr addrspace(200) @__atomic_fetch_add_cap(ptr addrspace(200) noundef [[PTR]], ptr addrspace(200) noundef [[TMP1]], i32 noundef signext 5)
+// PURECAP-LIBCALLS-NEXT:    ret ptr addrspace(200) [[CALL]]
 //
 // HYBRID-LABEL: define {{[^@]+}}@test_fetch_add_charptr_and_short
-// HYBRID-SAME: (i8 addrspace(200)** noundef [[PTR:%.*]], i16 noundef signext [[VALUE:%.*]]) #[[ATTR0]] {
+// HYBRID-SAME: (ptr noundef [[PTR:%.*]], i16 noundef signext [[VALUE:%.*]]) #[[ATTR0]] {
 // HYBRID-NEXT:  entry:
 // HYBRID-NEXT:    [[CONV:%.*]] = sext i16 [[VALUE]] to i64
 // HYBRID-NEXT:    [[TMP0:%.*]] = mul i64 [[CONV]], 1
-// HYBRID-NEXT:    [[TMP1:%.*]] = getelementptr i8, i8 addrspace(200)* null, i64 [[TMP0]]
-// HYBRID-NEXT:    [[TMP2:%.*]] = atomicrmw add i8 addrspace(200)** [[PTR]], i8 addrspace(200)* [[TMP1]] seq_cst, align 16
-// HYBRID-NEXT:    ret i8 addrspace(200)* [[TMP2]]
+// HYBRID-NEXT:    [[TMP1:%.*]] = getelementptr i8, ptr addrspace(200) null, i64 [[TMP0]]
+// HYBRID-NEXT:    [[TMP2:%.*]] = atomicrmw add ptr [[PTR]], ptr addrspace(200) [[TMP1]] seq_cst, align 16
+// HYBRID-NEXT:    ret ptr addrspace(200) [[TMP2]]
 //
 // PURECAP-LABEL: define {{[^@]+}}@test_fetch_add_charptr_and_short
-// PURECAP-SAME: (i8 addrspace(200)* addrspace(200)* noundef [[PTR:%.*]], i16 noundef signext [[VALUE:%.*]]) addrspace(200) #[[ATTR0]] {
+// PURECAP-SAME: (ptr addrspace(200) noundef [[PTR:%.*]], i16 noundef signext [[VALUE:%.*]]) addrspace(200) #[[ATTR0]] {
 // PURECAP-NEXT:  entry:
 // PURECAP-NEXT:    [[CONV:%.*]] = sext i16 [[VALUE]] to i64
 // PURECAP-NEXT:    [[TMP0:%.*]] = mul i64 [[CONV]], 1
-// PURECAP-NEXT:    [[TMP1:%.*]] = getelementptr i8, i8 addrspace(200)* null, i64 [[TMP0]]
-// PURECAP-NEXT:    [[TMP2:%.*]] = atomicrmw add i8 addrspace(200)* addrspace(200)* [[PTR]], i8 addrspace(200)* [[TMP1]] seq_cst, align 16
-// PURECAP-NEXT:    ret i8 addrspace(200)* [[TMP2]]
+// PURECAP-NEXT:    [[TMP1:%.*]] = getelementptr i8, ptr addrspace(200) null, i64 [[TMP0]]
+// PURECAP-NEXT:    [[TMP2:%.*]] = atomicrmw add ptr addrspace(200) [[PTR]], ptr addrspace(200) [[TMP1]] seq_cst, align 16
+// PURECAP-NEXT:    ret ptr addrspace(200) [[TMP2]]
 //
 char *__capability test_fetch_add_charptr_and_short(_Atomic(char *__capability) *ptr, short value) {
   return __c11_atomic_fetch_add(ptr, value, __ATOMIC_SEQ_CST);
 }
 
 // HYBRID-LIBCALLS-LABEL: define {{[^@]+}}@test_fetch_sub_uintcap
-// HYBRID-LIBCALLS-SAME: (i8 addrspace(200)** noundef [[PTR:%.*]], i8 addrspace(200)* noundef [[VALUE:%.*]]) #[[ATTR0]] {
+// HYBRID-LIBCALLS-SAME: (ptr noundef [[PTR:%.*]], ptr addrspace(200) noundef [[VALUE:%.*]]) #[[ATTR0]] {
 // HYBRID-LIBCALLS-NEXT:  entry:
-// HYBRID-LIBCALLS-NEXT:    [[TMP0:%.*]] = bitcast i8 addrspace(200)** [[PTR]] to i8*
-// HYBRID-LIBCALLS-NEXT:    [[CALL:%.*]] = call i8 addrspace(200)* @__atomic_fetch_sub_cap(i8* noundef [[TMP0]], i8 addrspace(200)* noundef [[VALUE]], i32 noundef signext 5)
-// HYBRID-LIBCALLS-NEXT:    ret i8 addrspace(200)* [[CALL]]
+// HYBRID-LIBCALLS-NEXT:    [[CALL:%.*]] = call ptr addrspace(200) @__atomic_fetch_sub_cap(ptr noundef [[PTR]], ptr addrspace(200) noundef [[VALUE]], i32 noundef signext 5)
+// HYBRID-LIBCALLS-NEXT:    ret ptr addrspace(200) [[CALL]]
 //
 // PURECAP-LIBCALLS-LABEL: define {{[^@]+}}@test_fetch_sub_uintcap
-// PURECAP-LIBCALLS-SAME: (i8 addrspace(200)* addrspace(200)* noundef [[PTR:%.*]], i8 addrspace(200)* noundef [[VALUE:%.*]]) addrspace(200) #[[ATTR0]] {
+// PURECAP-LIBCALLS-SAME: (ptr addrspace(200) noundef [[PTR:%.*]], ptr addrspace(200) noundef [[VALUE:%.*]]) addrspace(200) #[[ATTR0]] {
 // PURECAP-LIBCALLS-NEXT:  entry:
-// PURECAP-LIBCALLS-NEXT:    [[TMP0:%.*]] = bitcast i8 addrspace(200)* addrspace(200)* [[PTR]] to i8 addrspace(200)*
-// PURECAP-LIBCALLS-NEXT:    [[CALL:%.*]] = call i8 addrspace(200)* @__atomic_fetch_sub_cap(i8 addrspace(200)* noundef [[TMP0]], i8 addrspace(200)* noundef [[VALUE]], i32 noundef signext 5)
-// PURECAP-LIBCALLS-NEXT:    ret i8 addrspace(200)* [[CALL]]
+// PURECAP-LIBCALLS-NEXT:    [[CALL:%.*]] = call ptr addrspace(200) @__atomic_fetch_sub_cap(ptr addrspace(200) noundef [[PTR]], ptr addrspace(200) noundef [[VALUE]], i32 noundef signext 5)
+// PURECAP-LIBCALLS-NEXT:    ret ptr addrspace(200) [[CALL]]
 //
 // HYBRID-LABEL: define {{[^@]+}}@test_fetch_sub_uintcap
-// HYBRID-SAME: (i8 addrspace(200)** noundef [[PTR:%.*]], i8 addrspace(200)* noundef [[VALUE:%.*]]) #[[ATTR0]] {
+// HYBRID-SAME: (ptr noundef [[PTR:%.*]], ptr addrspace(200) noundef [[VALUE:%.*]]) #[[ATTR0]] {
 // HYBRID-NEXT:  entry:
-// HYBRID-NEXT:    [[TMP0:%.*]] = atomicrmw sub i8 addrspace(200)** [[PTR]], i8 addrspace(200)* [[VALUE]] seq_cst, align 16
-// HYBRID-NEXT:    ret i8 addrspace(200)* [[TMP0]]
+// HYBRID-NEXT:    [[TMP0:%.*]] = atomicrmw sub ptr [[PTR]], ptr addrspace(200) [[VALUE]] seq_cst, align 16
+// HYBRID-NEXT:    ret ptr addrspace(200) [[TMP0]]
 //
 // PURECAP-LABEL: define {{[^@]+}}@test_fetch_sub_uintcap
-// PURECAP-SAME: (i8 addrspace(200)* addrspace(200)* noundef [[PTR:%.*]], i8 addrspace(200)* noundef [[VALUE:%.*]]) addrspace(200) #[[ATTR0]] {
+// PURECAP-SAME: (ptr addrspace(200) noundef [[PTR:%.*]], ptr addrspace(200) noundef [[VALUE:%.*]]) addrspace(200) #[[ATTR0]] {
 // PURECAP-NEXT:  entry:
-// PURECAP-NEXT:    [[TMP0:%.*]] = atomicrmw sub i8 addrspace(200)* addrspace(200)* [[PTR]], i8 addrspace(200)* [[VALUE]] seq_cst, align 16
-// PURECAP-NEXT:    ret i8 addrspace(200)* [[TMP0]]
+// PURECAP-NEXT:    [[TMP0:%.*]] = atomicrmw sub ptr addrspace(200) [[PTR]], ptr addrspace(200) [[VALUE]] seq_cst, align 16
+// PURECAP-NEXT:    ret ptr addrspace(200) [[TMP0]]
 //
 __uintcap_t test_fetch_sub_uintcap(_Atomic(__uintcap_t) *ptr, __uintcap_t value) {
   return __c11_atomic_fetch_sub(ptr, value, __ATOMIC_SEQ_CST);
 }
 
 // HYBRID-LIBCALLS-LABEL: define {{[^@]+}}@test_fetch_sub_longptr
-// HYBRID-LIBCALLS-SAME: (i64 addrspace(200)** noundef [[PTR:%.*]], i8 addrspace(200)* noundef [[VALUE:%.*]]) #[[ATTR0]] {
+// HYBRID-LIBCALLS-SAME: (ptr noundef [[PTR:%.*]], ptr addrspace(200) noundef [[VALUE:%.*]]) #[[ATTR0]] {
 // HYBRID-LIBCALLS-NEXT:  entry:
-// HYBRID-LIBCALLS-NEXT:    [[ATOMIC_INTCAP_ARG:%.*]] = alloca i64 addrspace(200)*, align 16
-// HYBRID-LIBCALLS-NEXT:    [[ATOMIC_TEMP:%.*]] = alloca i64 addrspace(200)*, align 16
-// HYBRID-LIBCALLS-NEXT:    [[TMP0:%.*]] = call i64 @llvm.cheri.cap.address.get.i64(i8 addrspace(200)* [[VALUE]])
+// HYBRID-LIBCALLS-NEXT:    [[TMP0:%.*]] = call i64 @llvm.cheri.cap.address.get.i64(ptr addrspace(200) [[VALUE]])
 // HYBRID-LIBCALLS-NEXT:    [[TMP1:%.*]] = mul i64 [[TMP0]], 8
-// HYBRID-LIBCALLS-NEXT:    [[TMP2:%.*]] = bitcast i64 addrspace(200)** [[PTR]] to i8 addrspace(200)**
-// HYBRID-LIBCALLS-NEXT:    [[TMP3:%.*]] = getelementptr i8, i8 addrspace(200)* null, i64 [[TMP1]]
-// HYBRID-LIBCALLS-NEXT:    [[TMP4:%.*]] = bitcast i8 addrspace(200)* [[TMP3]] to i64 addrspace(200)*
-// HYBRID-LIBCALLS-NEXT:    store i64 addrspace(200)* [[TMP4]], i64 addrspace(200)** [[ATOMIC_INTCAP_ARG]], align 16
-// HYBRID-LIBCALLS-NEXT:    [[TMP5:%.*]] = bitcast i64 addrspace(200)** [[ATOMIC_TEMP]] to i8 addrspace(200)**
-// HYBRID-LIBCALLS-NEXT:    [[TMP6:%.*]] = bitcast i8 addrspace(200)** [[TMP2]] to i8*
-// HYBRID-LIBCALLS-NEXT:    [[TMP7:%.*]] = bitcast i64 addrspace(200)** [[ATOMIC_INTCAP_ARG]] to i8 addrspace(200)**
-// HYBRID-LIBCALLS-NEXT:    [[TMP8:%.*]] = load i8 addrspace(200)*, i8 addrspace(200)** [[TMP7]], align 16
-// HYBRID-LIBCALLS-NEXT:    [[CALL:%.*]] = call i8 addrspace(200)* @__atomic_fetch_sub_cap(i8* noundef [[TMP6]], i8 addrspace(200)* noundef [[TMP8]], i32 noundef signext 5)
-// HYBRID-LIBCALLS-NEXT:    store i8 addrspace(200)* [[CALL]], i8 addrspace(200)** [[TMP5]], align 16
-// HYBRID-LIBCALLS-NEXT:    [[TMP9:%.*]] = bitcast i8 addrspace(200)** [[TMP5]] to i64 addrspace(200)**
-// HYBRID-LIBCALLS-NEXT:    [[TMP10:%.*]] = load i64 addrspace(200)*, i64 addrspace(200)** [[TMP9]], align 16
-// HYBRID-LIBCALLS-NEXT:    ret i64 addrspace(200)* [[TMP10]]
+// HYBRID-LIBCALLS-NEXT:    [[TMP2:%.*]] = getelementptr i8, ptr addrspace(200) null, i64 [[TMP1]]
+// HYBRID-LIBCALLS-NEXT:    [[CALL:%.*]] = call ptr addrspace(200) @__atomic_fetch_sub_cap(ptr noundef [[PTR]], ptr addrspace(200) noundef [[TMP2]], i32 noundef signext 5)
+// HYBRID-LIBCALLS-NEXT:    ret ptr addrspace(200) [[CALL]]
 //
 // PURECAP-LIBCALLS-LABEL: define {{[^@]+}}@test_fetch_sub_longptr
-// PURECAP-LIBCALLS-SAME: (i64 addrspace(200)* addrspace(200)* noundef [[PTR:%.*]], i8 addrspace(200)* noundef [[VALUE:%.*]]) addrspace(200) #[[ATTR0]] {
+// PURECAP-LIBCALLS-SAME: (ptr addrspace(200) noundef [[PTR:%.*]], ptr addrspace(200) noundef [[VALUE:%.*]]) addrspace(200) #[[ATTR0]] {
 // PURECAP-LIBCALLS-NEXT:  entry:
-// PURECAP-LIBCALLS-NEXT:    [[ATOMIC_INTCAP_ARG:%.*]] = alloca i64 addrspace(200)*, align 16, addrspace(200)
-// PURECAP-LIBCALLS-NEXT:    [[ATOMIC_TEMP:%.*]] = alloca i64 addrspace(200)*, align 16, addrspace(200)
-// PURECAP-LIBCALLS-NEXT:    [[TMP0:%.*]] = call i64 @llvm.cheri.cap.address.get.i64(i8 addrspace(200)* [[VALUE]])
+// PURECAP-LIBCALLS-NEXT:    [[TMP0:%.*]] = call i64 @llvm.cheri.cap.address.get.i64(ptr addrspace(200) [[VALUE]])
 // PURECAP-LIBCALLS-NEXT:    [[TMP1:%.*]] = mul i64 [[TMP0]], 8
-// PURECAP-LIBCALLS-NEXT:    [[TMP2:%.*]] = bitcast i64 addrspace(200)* addrspace(200)* [[PTR]] to i8 addrspace(200)* addrspace(200)*
-// PURECAP-LIBCALLS-NEXT:    [[TMP3:%.*]] = getelementptr i8, i8 addrspace(200)* null, i64 [[TMP1]]
-// PURECAP-LIBCALLS-NEXT:    [[TMP4:%.*]] = bitcast i8 addrspace(200)* [[TMP3]] to i64 addrspace(200)*
-// PURECAP-LIBCALLS-NEXT:    store i64 addrspace(200)* [[TMP4]], i64 addrspace(200)* addrspace(200)* [[ATOMIC_INTCAP_ARG]], align 16
-// PURECAP-LIBCALLS-NEXT:    [[TMP5:%.*]] = bitcast i64 addrspace(200)* addrspace(200)* [[ATOMIC_TEMP]] to i8 addrspace(200)* addrspace(200)*
-// PURECAP-LIBCALLS-NEXT:    [[TMP6:%.*]] = bitcast i8 addrspace(200)* addrspace(200)* [[TMP2]] to i8 addrspace(200)*
-// PURECAP-LIBCALLS-NEXT:    [[TMP7:%.*]] = bitcast i64 addrspace(200)* addrspace(200)* [[ATOMIC_INTCAP_ARG]] to i8 addrspace(200)* addrspace(200)*
-// PURECAP-LIBCALLS-NEXT:    [[TMP8:%.*]] = load i8 addrspace(200)*, i8 addrspace(200)* addrspace(200)* [[TMP7]], align 16
-// PURECAP-LIBCALLS-NEXT:    [[CALL:%.*]] = call i8 addrspace(200)* @__atomic_fetch_sub_cap(i8 addrspace(200)* noundef [[TMP6]], i8 addrspace(200)* noundef [[TMP8]], i32 noundef signext 5)
-// PURECAP-LIBCALLS-NEXT:    store i8 addrspace(200)* [[CALL]], i8 addrspace(200)* addrspace(200)* [[TMP5]], align 16
-// PURECAP-LIBCALLS-NEXT:    [[TMP9:%.*]] = bitcast i8 addrspace(200)* addrspace(200)* [[TMP5]] to i64 addrspace(200)* addrspace(200)*
-// PURECAP-LIBCALLS-NEXT:    [[TMP10:%.*]] = load i64 addrspace(200)*, i64 addrspace(200)* addrspace(200)* [[TMP9]], align 16
-// PURECAP-LIBCALLS-NEXT:    ret i64 addrspace(200)* [[TMP10]]
+// PURECAP-LIBCALLS-NEXT:    [[TMP2:%.*]] = getelementptr i8, ptr addrspace(200) null, i64 [[TMP1]]
+// PURECAP-LIBCALLS-NEXT:    [[CALL:%.*]] = call ptr addrspace(200) @__atomic_fetch_sub_cap(ptr addrspace(200) noundef [[PTR]], ptr addrspace(200) noundef [[TMP2]], i32 noundef signext 5)
+// PURECAP-LIBCALLS-NEXT:    ret ptr addrspace(200) [[CALL]]
 //
 // HYBRID-LABEL: define {{[^@]+}}@test_fetch_sub_longptr
-// HYBRID-SAME: (i64 addrspace(200)** noundef [[PTR:%.*]], i8 addrspace(200)* noundef [[VALUE:%.*]]) #[[ATTR0]] {
+// HYBRID-SAME: (ptr noundef [[PTR:%.*]], ptr addrspace(200) noundef [[VALUE:%.*]]) #[[ATTR0]] {
 // HYBRID-NEXT:  entry:
-// HYBRID-NEXT:    [[TMP0:%.*]] = call i64 @llvm.cheri.cap.address.get.i64(i8 addrspace(200)* [[VALUE]])
+// HYBRID-NEXT:    [[TMP0:%.*]] = call i64 @llvm.cheri.cap.address.get.i64(ptr addrspace(200) [[VALUE]])
 // HYBRID-NEXT:    [[TMP1:%.*]] = mul i64 [[TMP0]], 8
-// HYBRID-NEXT:    [[TMP2:%.*]] = getelementptr i8, i8 addrspace(200)* null, i64 [[TMP1]]
-// HYBRID-NEXT:    [[TMP3:%.*]] = bitcast i8 addrspace(200)* [[TMP2]] to i64 addrspace(200)*
-// HYBRID-NEXT:    [[TMP4:%.*]] = atomicrmw sub i64 addrspace(200)** [[PTR]], i64 addrspace(200)* [[TMP3]] seq_cst, align 16
-// HYBRID-NEXT:    ret i64 addrspace(200)* [[TMP4]]
+// HYBRID-NEXT:    [[TMP2:%.*]] = getelementptr i8, ptr addrspace(200) null, i64 [[TMP1]]
+// HYBRID-NEXT:    [[TMP3:%.*]] = atomicrmw sub ptr [[PTR]], ptr addrspace(200) [[TMP2]] seq_cst, align 16
+// HYBRID-NEXT:    ret ptr addrspace(200) [[TMP3]]
 //
 // PURECAP-LABEL: define {{[^@]+}}@test_fetch_sub_longptr
-// PURECAP-SAME: (i64 addrspace(200)* addrspace(200)* noundef [[PTR:%.*]], i8 addrspace(200)* noundef [[VALUE:%.*]]) addrspace(200) #[[ATTR0]] {
+// PURECAP-SAME: (ptr addrspace(200) noundef [[PTR:%.*]], ptr addrspace(200) noundef [[VALUE:%.*]]) addrspace(200) #[[ATTR0]] {
 // PURECAP-NEXT:  entry:
-// PURECAP-NEXT:    [[TMP0:%.*]] = call i64 @llvm.cheri.cap.address.get.i64(i8 addrspace(200)* [[VALUE]])
+// PURECAP-NEXT:    [[TMP0:%.*]] = call i64 @llvm.cheri.cap.address.get.i64(ptr addrspace(200) [[VALUE]])
 // PURECAP-NEXT:    [[TMP1:%.*]] = mul i64 [[TMP0]], 8
-// PURECAP-NEXT:    [[TMP2:%.*]] = getelementptr i8, i8 addrspace(200)* null, i64 [[TMP1]]
-// PURECAP-NEXT:    [[TMP3:%.*]] = bitcast i8 addrspace(200)* [[TMP2]] to i64 addrspace(200)*
-// PURECAP-NEXT:    [[TMP4:%.*]] = atomicrmw sub i64 addrspace(200)* addrspace(200)* [[PTR]], i64 addrspace(200)* [[TMP3]] seq_cst, align 16
-// PURECAP-NEXT:    ret i64 addrspace(200)* [[TMP4]]
+// PURECAP-NEXT:    [[TMP2:%.*]] = getelementptr i8, ptr addrspace(200) null, i64 [[TMP1]]
+// PURECAP-NEXT:    [[TMP3:%.*]] = atomicrmw sub ptr addrspace(200) [[PTR]], ptr addrspace(200) [[TMP2]] seq_cst, align 16
+// PURECAP-NEXT:    ret ptr addrspace(200) [[TMP3]]
 //
 long *__capability test_fetch_sub_longptr(_Atomic(long *__capability) *ptr, __uintcap_t value) {
   return __c11_atomic_fetch_sub(ptr, value, __ATOMIC_SEQ_CST);
 }
 
 // HYBRID-LIBCALLS-LABEL: define {{[^@]+}}@test_fetch_sub_longptr_and_short
-// HYBRID-LIBCALLS-SAME: (i64 addrspace(200)** noundef [[PTR:%.*]], i16 noundef signext [[VALUE:%.*]]) #[[ATTR0]] {
+// HYBRID-LIBCALLS-SAME: (ptr noundef [[PTR:%.*]], i16 noundef signext [[VALUE:%.*]]) #[[ATTR0]] {
 // HYBRID-LIBCALLS-NEXT:  entry:
-// HYBRID-LIBCALLS-NEXT:    [[ATOMIC_INTCAP_ARG:%.*]] = alloca i64 addrspace(200)*, align 16
-// HYBRID-LIBCALLS-NEXT:    [[ATOMIC_TEMP:%.*]] = alloca i64 addrspace(200)*, align 16
 // HYBRID-LIBCALLS-NEXT:    [[CONV:%.*]] = sext i16 [[VALUE]] to i64
 // HYBRID-LIBCALLS-NEXT:    [[TMP0:%.*]] = mul i64 [[CONV]], 8
-// HYBRID-LIBCALLS-NEXT:    [[TMP1:%.*]] = bitcast i64 addrspace(200)** [[PTR]] to i8 addrspace(200)**
-// HYBRID-LIBCALLS-NEXT:    [[TMP2:%.*]] = getelementptr i8, i8 addrspace(200)* null, i64 [[TMP0]]
-// HYBRID-LIBCALLS-NEXT:    [[TMP3:%.*]] = bitcast i8 addrspace(200)* [[TMP2]] to i64 addrspace(200)*
-// HYBRID-LIBCALLS-NEXT:    store i64 addrspace(200)* [[TMP3]], i64 addrspace(200)** [[ATOMIC_INTCAP_ARG]], align 16
-// HYBRID-LIBCALLS-NEXT:    [[TMP4:%.*]] = bitcast i64 addrspace(200)** [[ATOMIC_TEMP]] to i8 addrspace(200)**
-// HYBRID-LIBCALLS-NEXT:    [[TMP5:%.*]] = bitcast i8 addrspace(200)** [[TMP1]] to i8*
-// HYBRID-LIBCALLS-NEXT:    [[TMP6:%.*]] = bitcast i64 addrspace(200)** [[ATOMIC_INTCAP_ARG]] to i8 addrspace(200)**
-// HYBRID-LIBCALLS-NEXT:    [[TMP7:%.*]] = load i8 addrspace(200)*, i8 addrspace(200)** [[TMP6]], align 16
-// HYBRID-LIBCALLS-NEXT:    [[CALL:%.*]] = call i8 addrspace(200)* @__atomic_fetch_sub_cap(i8* noundef [[TMP5]], i8 addrspace(200)* noundef [[TMP7]], i32 noundef signext 5)
-// HYBRID-LIBCALLS-NEXT:    store i8 addrspace(200)* [[CALL]], i8 addrspace(200)** [[TMP4]], align 16
-// HYBRID-LIBCALLS-NEXT:    [[TMP8:%.*]] = bitcast i8 addrspace(200)** [[TMP4]] to i64 addrspace(200)**
-// HYBRID-LIBCALLS-NEXT:    [[TMP9:%.*]] = load i64 addrspace(200)*, i64 addrspace(200)** [[TMP8]], align 16
-// HYBRID-LIBCALLS-NEXT:    ret i64 addrspace(200)* [[TMP9]]
+// HYBRID-LIBCALLS-NEXT:    [[TMP1:%.*]] = getelementptr i8, ptr addrspace(200) null, i64 [[TMP0]]
+// HYBRID-LIBCALLS-NEXT:    [[CALL:%.*]] = call ptr addrspace(200) @__atomic_fetch_sub_cap(ptr noundef [[PTR]], ptr addrspace(200) noundef [[TMP1]], i32 noundef signext 5)
+// HYBRID-LIBCALLS-NEXT:    ret ptr addrspace(200) [[CALL]]
 //
 // PURECAP-LIBCALLS-LABEL: define {{[^@]+}}@test_fetch_sub_longptr_and_short
-// PURECAP-LIBCALLS-SAME: (i64 addrspace(200)* addrspace(200)* noundef [[PTR:%.*]], i16 noundef signext [[VALUE:%.*]]) addrspace(200) #[[ATTR0]] {
+// PURECAP-LIBCALLS-SAME: (ptr addrspace(200) noundef [[PTR:%.*]], i16 noundef signext [[VALUE:%.*]]) addrspace(200) #[[ATTR0]] {
 // PURECAP-LIBCALLS-NEXT:  entry:
-// PURECAP-LIBCALLS-NEXT:    [[ATOMIC_INTCAP_ARG:%.*]] = alloca i64 addrspace(200)*, align 16, addrspace(200)
-// PURECAP-LIBCALLS-NEXT:    [[ATOMIC_TEMP:%.*]] = alloca i64 addrspace(200)*, align 16, addrspace(200)
 // PURECAP-LIBCALLS-NEXT:    [[CONV:%.*]] = sext i16 [[VALUE]] to i64
 // PURECAP-LIBCALLS-NEXT:    [[TMP0:%.*]] = mul i64 [[CONV]], 8
-// PURECAP-LIBCALLS-NEXT:    [[TMP1:%.*]] = bitcast i64 addrspace(200)* addrspace(200)* [[PTR]] to i8 addrspace(200)* addrspace(200)*
-// PURECAP-LIBCALLS-NEXT:    [[TMP2:%.*]] = getelementptr i8, i8 addrspace(200)* null, i64 [[TMP0]]
-// PURECAP-LIBCALLS-NEXT:    [[TMP3:%.*]] = bitcast i8 addrspace(200)* [[TMP2]] to i64 addrspace(200)*
-// PURECAP-LIBCALLS-NEXT:    store i64 addrspace(200)* [[TMP3]], i64 addrspace(200)* addrspace(200)* [[ATOMIC_INTCAP_ARG]], align 16
-// PURECAP-LIBCALLS-NEXT:    [[TMP4:%.*]] = bitcast i64 addrspace(200)* addrspace(200)* [[ATOMIC_TEMP]] to i8 addrspace(200)* addrspace(200)*
-// PURECAP-LIBCALLS-NEXT:    [[TMP5:%.*]] = bitcast i8 addrspace(200)* addrspace(200)* [[TMP1]] to i8 addrspace(200)*
-// PURECAP-LIBCALLS-NEXT:    [[TMP6:%.*]] = bitcast i64 addrspace(200)* addrspace(200)* [[ATOMIC_INTCAP_ARG]] to i8 addrspace(200)* addrspace(200)*
-// PURECAP-LIBCALLS-NEXT:    [[TMP7:%.*]] = load i8 addrspace(200)*, i8 addrspace(200)* addrspace(200)* [[TMP6]], align 16
-// PURECAP-LIBCALLS-NEXT:    [[CALL:%.*]] = call i8 addrspace(200)* @__atomic_fetch_sub_cap(i8 addrspace(200)* noundef [[TMP5]], i8 addrspace(200)* noundef [[TMP7]], i32 noundef signext 5)
-// PURECAP-LIBCALLS-NEXT:    store i8 addrspace(200)* [[CALL]], i8 addrspace(200)* addrspace(200)* [[TMP4]], align 16
-// PURECAP-LIBCALLS-NEXT:    [[TMP8:%.*]] = bitcast i8 addrspace(200)* addrspace(200)* [[TMP4]] to i64 addrspace(200)* addrspace(200)*
-// PURECAP-LIBCALLS-NEXT:    [[TMP9:%.*]] = load i64 addrspace(200)*, i64 addrspace(200)* addrspace(200)* [[TMP8]], align 16
-// PURECAP-LIBCALLS-NEXT:    ret i64 addrspace(200)* [[TMP9]]
+// PURECAP-LIBCALLS-NEXT:    [[TMP1:%.*]] = getelementptr i8, ptr addrspace(200) null, i64 [[TMP0]]
+// PURECAP-LIBCALLS-NEXT:    [[CALL:%.*]] = call ptr addrspace(200) @__atomic_fetch_sub_cap(ptr addrspace(200) noundef [[PTR]], ptr addrspace(200) noundef [[TMP1]], i32 noundef signext 5)
+// PURECAP-LIBCALLS-NEXT:    ret ptr addrspace(200) [[CALL]]
 //
 // HYBRID-LABEL: define {{[^@]+}}@test_fetch_sub_longptr_and_short
-// HYBRID-SAME: (i64 addrspace(200)** noundef [[PTR:%.*]], i16 noundef signext [[VALUE:%.*]]) #[[ATTR0]] {
+// HYBRID-SAME: (ptr noundef [[PTR:%.*]], i16 noundef signext [[VALUE:%.*]]) #[[ATTR0]] {
 // HYBRID-NEXT:  entry:
 // HYBRID-NEXT:    [[CONV:%.*]] = sext i16 [[VALUE]] to i64
 // HYBRID-NEXT:    [[TMP0:%.*]] = mul i64 [[CONV]], 8
-// HYBRID-NEXT:    [[TMP1:%.*]] = getelementptr i8, i8 addrspace(200)* null, i64 [[TMP0]]
-// HYBRID-NEXT:    [[TMP2:%.*]] = bitcast i8 addrspace(200)* [[TMP1]] to i64 addrspace(200)*
-// HYBRID-NEXT:    [[TMP3:%.*]] = atomicrmw sub i64 addrspace(200)** [[PTR]], i64 addrspace(200)* [[TMP2]] seq_cst, align 16
-// HYBRID-NEXT:    ret i64 addrspace(200)* [[TMP3]]
+// HYBRID-NEXT:    [[TMP1:%.*]] = getelementptr i8, ptr addrspace(200) null, i64 [[TMP0]]
+// HYBRID-NEXT:    [[TMP2:%.*]] = atomicrmw sub ptr [[PTR]], ptr addrspace(200) [[TMP1]] seq_cst, align 16
+// HYBRID-NEXT:    ret ptr addrspace(200) [[TMP2]]
 //
 // PURECAP-LABEL: define {{[^@]+}}@test_fetch_sub_longptr_and_short
-// PURECAP-SAME: (i64 addrspace(200)* addrspace(200)* noundef [[PTR:%.*]], i16 noundef signext [[VALUE:%.*]]) addrspace(200) #[[ATTR0]] {
+// PURECAP-SAME: (ptr addrspace(200) noundef [[PTR:%.*]], i16 noundef signext [[VALUE:%.*]]) addrspace(200) #[[ATTR0]] {
 // PURECAP-NEXT:  entry:
 // PURECAP-NEXT:    [[CONV:%.*]] = sext i16 [[VALUE]] to i64
 // PURECAP-NEXT:    [[TMP0:%.*]] = mul i64 [[CONV]], 8
-// PURECAP-NEXT:    [[TMP1:%.*]] = getelementptr i8, i8 addrspace(200)* null, i64 [[TMP0]]
-// PURECAP-NEXT:    [[TMP2:%.*]] = bitcast i8 addrspace(200)* [[TMP1]] to i64 addrspace(200)*
-// PURECAP-NEXT:    [[TMP3:%.*]] = atomicrmw sub i64 addrspace(200)* addrspace(200)* [[PTR]], i64 addrspace(200)* [[TMP2]] seq_cst, align 16
-// PURECAP-NEXT:    ret i64 addrspace(200)* [[TMP3]]
+// PURECAP-NEXT:    [[TMP1:%.*]] = getelementptr i8, ptr addrspace(200) null, i64 [[TMP0]]
+// PURECAP-NEXT:    [[TMP2:%.*]] = atomicrmw sub ptr addrspace(200) [[PTR]], ptr addrspace(200) [[TMP1]] seq_cst, align 16
+// PURECAP-NEXT:    ret ptr addrspace(200) [[TMP2]]
 //
 long *__capability test_fetch_sub_longptr_and_short(_Atomic(long *__capability) *ptr, short value) {
   return __c11_atomic_fetch_sub(ptr, value, __ATOMIC_SEQ_CST);
 }
 
 // HYBRID-LIBCALLS-LABEL: define {{[^@]+}}@test_fetch_sub_charptr
-// HYBRID-LIBCALLS-SAME: (i8 addrspace(200)** noundef [[PTR:%.*]], i8 addrspace(200)* noundef [[VALUE:%.*]]) #[[ATTR0]] {
+// HYBRID-LIBCALLS-SAME: (ptr noundef [[PTR:%.*]], ptr addrspace(200) noundef [[VALUE:%.*]]) #[[ATTR0]] {
 // HYBRID-LIBCALLS-NEXT:  entry:
-// HYBRID-LIBCALLS-NEXT:    [[TMP0:%.*]] = call i64 @llvm.cheri.cap.address.get.i64(i8 addrspace(200)* [[VALUE]])
+// HYBRID-LIBCALLS-NEXT:    [[TMP0:%.*]] = call i64 @llvm.cheri.cap.address.get.i64(ptr addrspace(200) [[VALUE]])
 // HYBRID-LIBCALLS-NEXT:    [[TMP1:%.*]] = mul i64 [[TMP0]], 1
-// HYBRID-LIBCALLS-NEXT:    [[TMP2:%.*]] = getelementptr i8, i8 addrspace(200)* null, i64 [[TMP1]]
-// HYBRID-LIBCALLS-NEXT:    [[TMP3:%.*]] = bitcast i8 addrspace(200)** [[PTR]] to i8*
-// HYBRID-LIBCALLS-NEXT:    [[CALL:%.*]] = call i8 addrspace(200)* @__atomic_fetch_sub_cap(i8* noundef [[TMP3]], i8 addrspace(200)* noundef [[TMP2]], i32 noundef signext 5)
-// HYBRID-LIBCALLS-NEXT:    ret i8 addrspace(200)* [[CALL]]
+// HYBRID-LIBCALLS-NEXT:    [[TMP2:%.*]] = getelementptr i8, ptr addrspace(200) null, i64 [[TMP1]]
+// HYBRID-LIBCALLS-NEXT:    [[CALL:%.*]] = call ptr addrspace(200) @__atomic_fetch_sub_cap(ptr noundef [[PTR]], ptr addrspace(200) noundef [[TMP2]], i32 noundef signext 5)
+// HYBRID-LIBCALLS-NEXT:    ret ptr addrspace(200) [[CALL]]
 //
 // PURECAP-LIBCALLS-LABEL: define {{[^@]+}}@test_fetch_sub_charptr
-// PURECAP-LIBCALLS-SAME: (i8 addrspace(200)* addrspace(200)* noundef [[PTR:%.*]], i8 addrspace(200)* noundef [[VALUE:%.*]]) addrspace(200) #[[ATTR0]] {
+// PURECAP-LIBCALLS-SAME: (ptr addrspace(200) noundef [[PTR:%.*]], ptr addrspace(200) noundef [[VALUE:%.*]]) addrspace(200) #[[ATTR0]] {
 // PURECAP-LIBCALLS-NEXT:  entry:
-// PURECAP-LIBCALLS-NEXT:    [[TMP0:%.*]] = call i64 @llvm.cheri.cap.address.get.i64(i8 addrspace(200)* [[VALUE]])
+// PURECAP-LIBCALLS-NEXT:    [[TMP0:%.*]] = call i64 @llvm.cheri.cap.address.get.i64(ptr addrspace(200) [[VALUE]])
 // PURECAP-LIBCALLS-NEXT:    [[TMP1:%.*]] = mul i64 [[TMP0]], 1
-// PURECAP-LIBCALLS-NEXT:    [[TMP2:%.*]] = getelementptr i8, i8 addrspace(200)* null, i64 [[TMP1]]
-// PURECAP-LIBCALLS-NEXT:    [[TMP3:%.*]] = bitcast i8 addrspace(200)* addrspace(200)* [[PTR]] to i8 addrspace(200)*
-// PURECAP-LIBCALLS-NEXT:    [[CALL:%.*]] = call i8 addrspace(200)* @__atomic_fetch_sub_cap(i8 addrspace(200)* noundef [[TMP3]], i8 addrspace(200)* noundef [[TMP2]], i32 noundef signext 5)
-// PURECAP-LIBCALLS-NEXT:    ret i8 addrspace(200)* [[CALL]]
+// PURECAP-LIBCALLS-NEXT:    [[TMP2:%.*]] = getelementptr i8, ptr addrspace(200) null, i64 [[TMP1]]
+// PURECAP-LIBCALLS-NEXT:    [[CALL:%.*]] = call ptr addrspace(200) @__atomic_fetch_sub_cap(ptr addrspace(200) noundef [[PTR]], ptr addrspace(200) noundef [[TMP2]], i32 noundef signext 5)
+// PURECAP-LIBCALLS-NEXT:    ret ptr addrspace(200) [[CALL]]
 //
 // HYBRID-LABEL: define {{[^@]+}}@test_fetch_sub_charptr
-// HYBRID-SAME: (i8 addrspace(200)** noundef [[PTR:%.*]], i8 addrspace(200)* noundef [[VALUE:%.*]]) #[[ATTR0]] {
+// HYBRID-SAME: (ptr noundef [[PTR:%.*]], ptr addrspace(200) noundef [[VALUE:%.*]]) #[[ATTR0]] {
 // HYBRID-NEXT:  entry:
-// HYBRID-NEXT:    [[TMP0:%.*]] = call i64 @llvm.cheri.cap.address.get.i64(i8 addrspace(200)* [[VALUE]])
+// HYBRID-NEXT:    [[TMP0:%.*]] = call i64 @llvm.cheri.cap.address.get.i64(ptr addrspace(200) [[VALUE]])
 // HYBRID-NEXT:    [[TMP1:%.*]] = mul i64 [[TMP0]], 1
-// HYBRID-NEXT:    [[TMP2:%.*]] = getelementptr i8, i8 addrspace(200)* null, i64 [[TMP1]]
-// HYBRID-NEXT:    [[TMP3:%.*]] = atomicrmw sub i8 addrspace(200)** [[PTR]], i8 addrspace(200)* [[TMP2]] seq_cst, align 16
-// HYBRID-NEXT:    ret i8 addrspace(200)* [[TMP3]]
+// HYBRID-NEXT:    [[TMP2:%.*]] = getelementptr i8, ptr addrspace(200) null, i64 [[TMP1]]
+// HYBRID-NEXT:    [[TMP3:%.*]] = atomicrmw sub ptr [[PTR]], ptr addrspace(200) [[TMP2]] seq_cst, align 16
+// HYBRID-NEXT:    ret ptr addrspace(200) [[TMP3]]
 //
 // PURECAP-LABEL: define {{[^@]+}}@test_fetch_sub_charptr
-// PURECAP-SAME: (i8 addrspace(200)* addrspace(200)* noundef [[PTR:%.*]], i8 addrspace(200)* noundef [[VALUE:%.*]]) addrspace(200) #[[ATTR0]] {
+// PURECAP-SAME: (ptr addrspace(200) noundef [[PTR:%.*]], ptr addrspace(200) noundef [[VALUE:%.*]]) addrspace(200) #[[ATTR0]] {
 // PURECAP-NEXT:  entry:
-// PURECAP-NEXT:    [[TMP0:%.*]] = call i64 @llvm.cheri.cap.address.get.i64(i8 addrspace(200)* [[VALUE]])
+// PURECAP-NEXT:    [[TMP0:%.*]] = call i64 @llvm.cheri.cap.address.get.i64(ptr addrspace(200) [[VALUE]])
 // PURECAP-NEXT:    [[TMP1:%.*]] = mul i64 [[TMP0]], 1
-// PURECAP-NEXT:    [[TMP2:%.*]] = getelementptr i8, i8 addrspace(200)* null, i64 [[TMP1]]
-// PURECAP-NEXT:    [[TMP3:%.*]] = atomicrmw sub i8 addrspace(200)* addrspace(200)* [[PTR]], i8 addrspace(200)* [[TMP2]] seq_cst, align 16
-// PURECAP-NEXT:    ret i8 addrspace(200)* [[TMP3]]
+// PURECAP-NEXT:    [[TMP2:%.*]] = getelementptr i8, ptr addrspace(200) null, i64 [[TMP1]]
+// PURECAP-NEXT:    [[TMP3:%.*]] = atomicrmw sub ptr addrspace(200) [[PTR]], ptr addrspace(200) [[TMP2]] seq_cst, align 16
+// PURECAP-NEXT:    ret ptr addrspace(200) [[TMP3]]
 //
 char *__capability test_fetch_sub_charptr(_Atomic(char *__capability) *ptr, __uintcap_t value) {
   return __c11_atomic_fetch_sub(ptr, value, __ATOMIC_SEQ_CST);
 }
 
 // HYBRID-LIBCALLS-LABEL: define {{[^@]+}}@test_fetch_sub_charptr_and_short
-// HYBRID-LIBCALLS-SAME: (i8 addrspace(200)** noundef [[PTR:%.*]], i16 noundef signext [[VALUE:%.*]]) #[[ATTR0]] {
+// HYBRID-LIBCALLS-SAME: (ptr noundef [[PTR:%.*]], i16 noundef signext [[VALUE:%.*]]) #[[ATTR0]] {
 // HYBRID-LIBCALLS-NEXT:  entry:
 // HYBRID-LIBCALLS-NEXT:    [[CONV:%.*]] = sext i16 [[VALUE]] to i64
 // HYBRID-LIBCALLS-NEXT:    [[TMP0:%.*]] = mul i64 [[CONV]], 1
-// HYBRID-LIBCALLS-NEXT:    [[TMP1:%.*]] = getelementptr i8, i8 addrspace(200)* null, i64 [[TMP0]]
-// HYBRID-LIBCALLS-NEXT:    [[TMP2:%.*]] = bitcast i8 addrspace(200)** [[PTR]] to i8*
-// HYBRID-LIBCALLS-NEXT:    [[CALL:%.*]] = call i8 addrspace(200)* @__atomic_fetch_sub_cap(i8* noundef [[TMP2]], i8 addrspace(200)* noundef [[TMP1]], i32 noundef signext 5)
-// HYBRID-LIBCALLS-NEXT:    ret i8 addrspace(200)* [[CALL]]
+// HYBRID-LIBCALLS-NEXT:    [[TMP1:%.*]] = getelementptr i8, ptr addrspace(200) null, i64 [[TMP0]]
+// HYBRID-LIBCALLS-NEXT:    [[CALL:%.*]] = call ptr addrspace(200) @__atomic_fetch_sub_cap(ptr noundef [[PTR]], ptr addrspace(200) noundef [[TMP1]], i32 noundef signext 5)
+// HYBRID-LIBCALLS-NEXT:    ret ptr addrspace(200) [[CALL]]
 //
 // PURECAP-LIBCALLS-LABEL: define {{[^@]+}}@test_fetch_sub_charptr_and_short
-// PURECAP-LIBCALLS-SAME: (i8 addrspace(200)* addrspace(200)* noundef [[PTR:%.*]], i16 noundef signext [[VALUE:%.*]]) addrspace(200) #[[ATTR0]] {
+// PURECAP-LIBCALLS-SAME: (ptr addrspace(200) noundef [[PTR:%.*]], i16 noundef signext [[VALUE:%.*]]) addrspace(200) #[[ATTR0]] {
 // PURECAP-LIBCALLS-NEXT:  entry:
 // PURECAP-LIBCALLS-NEXT:    [[CONV:%.*]] = sext i16 [[VALUE]] to i64
 // PURECAP-LIBCALLS-NEXT:    [[TMP0:%.*]] = mul i64 [[CONV]], 1
-// PURECAP-LIBCALLS-NEXT:    [[TMP1:%.*]] = getelementptr i8, i8 addrspace(200)* null, i64 [[TMP0]]
-// PURECAP-LIBCALLS-NEXT:    [[TMP2:%.*]] = bitcast i8 addrspace(200)* addrspace(200)* [[PTR]] to i8 addrspace(200)*
-// PURECAP-LIBCALLS-NEXT:    [[CALL:%.*]] = call i8 addrspace(200)* @__atomic_fetch_sub_cap(i8 addrspace(200)* noundef [[TMP2]], i8 addrspace(200)* noundef [[TMP1]], i32 noundef signext 5)
-// PURECAP-LIBCALLS-NEXT:    ret i8 addrspace(200)* [[CALL]]
+// PURECAP-LIBCALLS-NEXT:    [[TMP1:%.*]] = getelementptr i8, ptr addrspace(200) null, i64 [[TMP0]]
+// PURECAP-LIBCALLS-NEXT:    [[CALL:%.*]] = call ptr addrspace(200) @__atomic_fetch_sub_cap(ptr addrspace(200) noundef [[PTR]], ptr addrspace(200) noundef [[TMP1]], i32 noundef signext 5)
+// PURECAP-LIBCALLS-NEXT:    ret ptr addrspace(200) [[CALL]]
 //
 // HYBRID-LABEL: define {{[^@]+}}@test_fetch_sub_charptr_and_short
-// HYBRID-SAME: (i8 addrspace(200)** noundef [[PTR:%.*]], i16 noundef signext [[VALUE:%.*]]) #[[ATTR0]] {
+// HYBRID-SAME: (ptr noundef [[PTR:%.*]], i16 noundef signext [[VALUE:%.*]]) #[[ATTR0]] {
 // HYBRID-NEXT:  entry:
 // HYBRID-NEXT:    [[CONV:%.*]] = sext i16 [[VALUE]] to i64
 // HYBRID-NEXT:    [[TMP0:%.*]] = mul i64 [[CONV]], 1
-// HYBRID-NEXT:    [[TMP1:%.*]] = getelementptr i8, i8 addrspace(200)* null, i64 [[TMP0]]
-// HYBRID-NEXT:    [[TMP2:%.*]] = atomicrmw sub i8 addrspace(200)** [[PTR]], i8 addrspace(200)* [[TMP1]] seq_cst, align 16
-// HYBRID-NEXT:    ret i8 addrspace(200)* [[TMP2]]
+// HYBRID-NEXT:    [[TMP1:%.*]] = getelementptr i8, ptr addrspace(200) null, i64 [[TMP0]]
+// HYBRID-NEXT:    [[TMP2:%.*]] = atomicrmw sub ptr [[PTR]], ptr addrspace(200) [[TMP1]] seq_cst, align 16
+// HYBRID-NEXT:    ret ptr addrspace(200) [[TMP2]]
 //
 // PURECAP-LABEL: define {{[^@]+}}@test_fetch_sub_charptr_and_short
-// PURECAP-SAME: (i8 addrspace(200)* addrspace(200)* noundef [[PTR:%.*]], i16 noundef signext [[VALUE:%.*]]) addrspace(200) #[[ATTR0]] {
+// PURECAP-SAME: (ptr addrspace(200) noundef [[PTR:%.*]], i16 noundef signext [[VALUE:%.*]]) addrspace(200) #[[ATTR0]] {
 // PURECAP-NEXT:  entry:
 // PURECAP-NEXT:    [[CONV:%.*]] = sext i16 [[VALUE]] to i64
 // PURECAP-NEXT:    [[TMP0:%.*]] = mul i64 [[CONV]], 1
-// PURECAP-NEXT:    [[TMP1:%.*]] = getelementptr i8, i8 addrspace(200)* null, i64 [[TMP0]]
-// PURECAP-NEXT:    [[TMP2:%.*]] = atomicrmw sub i8 addrspace(200)* addrspace(200)* [[PTR]], i8 addrspace(200)* [[TMP1]] seq_cst, align 16
-// PURECAP-NEXT:    ret i8 addrspace(200)* [[TMP2]]
+// PURECAP-NEXT:    [[TMP1:%.*]] = getelementptr i8, ptr addrspace(200) null, i64 [[TMP0]]
+// PURECAP-NEXT:    [[TMP2:%.*]] = atomicrmw sub ptr addrspace(200) [[PTR]], ptr addrspace(200) [[TMP1]] seq_cst, align 16
+// PURECAP-NEXT:    ret ptr addrspace(200) [[TMP2]]
 //
 char *__capability test_fetch_sub_charptr_and_short(_Atomic(char *__capability) *ptr, short value) {
   return __c11_atomic_fetch_sub(ptr, value, __ATOMIC_SEQ_CST);
 }
 
 // HYBRID-LIBCALLS-LABEL: define {{[^@]+}}@test_fetch_and_uintcap
-// HYBRID-LIBCALLS-SAME: (i8 addrspace(200)** noundef [[PTR:%.*]], i8 addrspace(200)* noundef [[VALUE:%.*]]) #[[ATTR0]] {
+// HYBRID-LIBCALLS-SAME: (ptr noundef [[PTR:%.*]], ptr addrspace(200) noundef [[VALUE:%.*]]) #[[ATTR0]] {
 // HYBRID-LIBCALLS-NEXT:  entry:
-// HYBRID-LIBCALLS-NEXT:    [[TMP0:%.*]] = bitcast i8 addrspace(200)** [[PTR]] to i8*
-// HYBRID-LIBCALLS-NEXT:    [[CALL:%.*]] = call i8 addrspace(200)* @__atomic_fetch_and_cap(i8* noundef [[TMP0]], i8 addrspace(200)* noundef [[VALUE]], i32 noundef signext 5)
-// HYBRID-LIBCALLS-NEXT:    ret i8 addrspace(200)* [[CALL]]
+// HYBRID-LIBCALLS-NEXT:    [[CALL:%.*]] = call ptr addrspace(200) @__atomic_fetch_and_cap(ptr noundef [[PTR]], ptr addrspace(200) noundef [[VALUE]], i32 noundef signext 5)
+// HYBRID-LIBCALLS-NEXT:    ret ptr addrspace(200) [[CALL]]
 //
 // PURECAP-LIBCALLS-LABEL: define {{[^@]+}}@test_fetch_and_uintcap
-// PURECAP-LIBCALLS-SAME: (i8 addrspace(200)* addrspace(200)* noundef [[PTR:%.*]], i8 addrspace(200)* noundef [[VALUE:%.*]]) addrspace(200) #[[ATTR0]] {
+// PURECAP-LIBCALLS-SAME: (ptr addrspace(200) noundef [[PTR:%.*]], ptr addrspace(200) noundef [[VALUE:%.*]]) addrspace(200) #[[ATTR0]] {
 // PURECAP-LIBCALLS-NEXT:  entry:
-// PURECAP-LIBCALLS-NEXT:    [[TMP0:%.*]] = bitcast i8 addrspace(200)* addrspace(200)* [[PTR]] to i8 addrspace(200)*
-// PURECAP-LIBCALLS-NEXT:    [[CALL:%.*]] = call i8 addrspace(200)* @__atomic_fetch_and_cap(i8 addrspace(200)* noundef [[TMP0]], i8 addrspace(200)* noundef [[VALUE]], i32 noundef signext 5)
-// PURECAP-LIBCALLS-NEXT:    ret i8 addrspace(200)* [[CALL]]
+// PURECAP-LIBCALLS-NEXT:    [[CALL:%.*]] = call ptr addrspace(200) @__atomic_fetch_and_cap(ptr addrspace(200) noundef [[PTR]], ptr addrspace(200) noundef [[VALUE]], i32 noundef signext 5)
+// PURECAP-LIBCALLS-NEXT:    ret ptr addrspace(200) [[CALL]]
 //
 // HYBRID-LABEL: define {{[^@]+}}@test_fetch_and_uintcap
-// HYBRID-SAME: (i8 addrspace(200)** noundef [[PTR:%.*]], i8 addrspace(200)* noundef [[VALUE:%.*]]) #[[ATTR0]] {
+// HYBRID-SAME: (ptr noundef [[PTR:%.*]], ptr addrspace(200) noundef [[VALUE:%.*]]) #[[ATTR0]] {
 // HYBRID-NEXT:  entry:
-// HYBRID-NEXT:    [[TMP0:%.*]] = atomicrmw and i8 addrspace(200)** [[PTR]], i8 addrspace(200)* [[VALUE]] seq_cst, align 16
-// HYBRID-NEXT:    ret i8 addrspace(200)* [[TMP0]]
+// HYBRID-NEXT:    [[TMP0:%.*]] = atomicrmw and ptr [[PTR]], ptr addrspace(200) [[VALUE]] seq_cst, align 16
+// HYBRID-NEXT:    ret ptr addrspace(200) [[TMP0]]
 //
 // PURECAP-LABEL: define {{[^@]+}}@test_fetch_and_uintcap
-// PURECAP-SAME: (i8 addrspace(200)* addrspace(200)* noundef [[PTR:%.*]], i8 addrspace(200)* noundef [[VALUE:%.*]]) addrspace(200) #[[ATTR0]] {
+// PURECAP-SAME: (ptr addrspace(200) noundef [[PTR:%.*]], ptr addrspace(200) noundef [[VALUE:%.*]]) addrspace(200) #[[ATTR0]] {
 // PURECAP-NEXT:  entry:
-// PURECAP-NEXT:    [[TMP0:%.*]] = atomicrmw and i8 addrspace(200)* addrspace(200)* [[PTR]], i8 addrspace(200)* [[VALUE]] seq_cst, align 16
-// PURECAP-NEXT:    ret i8 addrspace(200)* [[TMP0]]
+// PURECAP-NEXT:    [[TMP0:%.*]] = atomicrmw and ptr addrspace(200) [[PTR]], ptr addrspace(200) [[VALUE]] seq_cst, align 16
+// PURECAP-NEXT:    ret ptr addrspace(200) [[TMP0]]
 //
 __uintcap_t test_fetch_and_uintcap(_Atomic(__uintcap_t) *ptr, __uintcap_t value) {
   return __c11_atomic_fetch_and(ptr, value, __ATOMIC_SEQ_CST);
 }
 
 // HYBRID-LIBCALLS-LABEL: define {{[^@]+}}@test_fetch_or_uintcap
-// HYBRID-LIBCALLS-SAME: (i8 addrspace(200)** noundef [[PTR:%.*]], i8 addrspace(200)* noundef [[VALUE:%.*]]) #[[ATTR0]] {
+// HYBRID-LIBCALLS-SAME: (ptr noundef [[PTR:%.*]], ptr addrspace(200) noundef [[VALUE:%.*]]) #[[ATTR0]] {
 // HYBRID-LIBCALLS-NEXT:  entry:
-// HYBRID-LIBCALLS-NEXT:    [[TMP0:%.*]] = bitcast i8 addrspace(200)** [[PTR]] to i8*
-// HYBRID-LIBCALLS-NEXT:    [[CALL:%.*]] = call i8 addrspace(200)* @__atomic_fetch_or_cap(i8* noundef [[TMP0]], i8 addrspace(200)* noundef [[VALUE]], i32 noundef signext 5)
-// HYBRID-LIBCALLS-NEXT:    ret i8 addrspace(200)* [[CALL]]
+// HYBRID-LIBCALLS-NEXT:    [[CALL:%.*]] = call ptr addrspace(200) @__atomic_fetch_or_cap(ptr noundef [[PTR]], ptr addrspace(200) noundef [[VALUE]], i32 noundef signext 5)
+// HYBRID-LIBCALLS-NEXT:    ret ptr addrspace(200) [[CALL]]
 //
 // PURECAP-LIBCALLS-LABEL: define {{[^@]+}}@test_fetch_or_uintcap
-// PURECAP-LIBCALLS-SAME: (i8 addrspace(200)* addrspace(200)* noundef [[PTR:%.*]], i8 addrspace(200)* noundef [[VALUE:%.*]]) addrspace(200) #[[ATTR0]] {
+// PURECAP-LIBCALLS-SAME: (ptr addrspace(200) noundef [[PTR:%.*]], ptr addrspace(200) noundef [[VALUE:%.*]]) addrspace(200) #[[ATTR0]] {
 // PURECAP-LIBCALLS-NEXT:  entry:
-// PURECAP-LIBCALLS-NEXT:    [[TMP0:%.*]] = bitcast i8 addrspace(200)* addrspace(200)* [[PTR]] to i8 addrspace(200)*
-// PURECAP-LIBCALLS-NEXT:    [[CALL:%.*]] = call i8 addrspace(200)* @__atomic_fetch_or_cap(i8 addrspace(200)* noundef [[TMP0]], i8 addrspace(200)* noundef [[VALUE]], i32 noundef signext 5)
-// PURECAP-LIBCALLS-NEXT:    ret i8 addrspace(200)* [[CALL]]
+// PURECAP-LIBCALLS-NEXT:    [[CALL:%.*]] = call ptr addrspace(200) @__atomic_fetch_or_cap(ptr addrspace(200) noundef [[PTR]], ptr addrspace(200) noundef [[VALUE]], i32 noundef signext 5)
+// PURECAP-LIBCALLS-NEXT:    ret ptr addrspace(200) [[CALL]]
 //
 // HYBRID-LABEL: define {{[^@]+}}@test_fetch_or_uintcap
-// HYBRID-SAME: (i8 addrspace(200)** noundef [[PTR:%.*]], i8 addrspace(200)* noundef [[VALUE:%.*]]) #[[ATTR0]] {
+// HYBRID-SAME: (ptr noundef [[PTR:%.*]], ptr addrspace(200) noundef [[VALUE:%.*]]) #[[ATTR0]] {
 // HYBRID-NEXT:  entry:
-// HYBRID-NEXT:    [[TMP0:%.*]] = atomicrmw or i8 addrspace(200)** [[PTR]], i8 addrspace(200)* [[VALUE]] seq_cst, align 16
-// HYBRID-NEXT:    ret i8 addrspace(200)* [[TMP0]]
+// HYBRID-NEXT:    [[TMP0:%.*]] = atomicrmw or ptr [[PTR]], ptr addrspace(200) [[VALUE]] seq_cst, align 16
+// HYBRID-NEXT:    ret ptr addrspace(200) [[TMP0]]
 //
 // PURECAP-LABEL: define {{[^@]+}}@test_fetch_or_uintcap
-// PURECAP-SAME: (i8 addrspace(200)* addrspace(200)* noundef [[PTR:%.*]], i8 addrspace(200)* noundef [[VALUE:%.*]]) addrspace(200) #[[ATTR0]] {
+// PURECAP-SAME: (ptr addrspace(200) noundef [[PTR:%.*]], ptr addrspace(200) noundef [[VALUE:%.*]]) addrspace(200) #[[ATTR0]] {
 // PURECAP-NEXT:  entry:
-// PURECAP-NEXT:    [[TMP0:%.*]] = atomicrmw or i8 addrspace(200)* addrspace(200)* [[PTR]], i8 addrspace(200)* [[VALUE]] seq_cst, align 16
-// PURECAP-NEXT:    ret i8 addrspace(200)* [[TMP0]]
+// PURECAP-NEXT:    [[TMP0:%.*]] = atomicrmw or ptr addrspace(200) [[PTR]], ptr addrspace(200) [[VALUE]] seq_cst, align 16
+// PURECAP-NEXT:    ret ptr addrspace(200) [[TMP0]]
 //
 __uintcap_t test_fetch_or_uintcap(_Atomic(__uintcap_t) *ptr, __uintcap_t value) {
   return __c11_atomic_fetch_or(ptr, value, __ATOMIC_SEQ_CST);
 }
 
 // HYBRID-LIBCALLS-LABEL: define {{[^@]+}}@test_fetch_xor_uintcap
-// HYBRID-LIBCALLS-SAME: (i8 addrspace(200)** noundef [[PTR:%.*]], i8 addrspace(200)* noundef [[VALUE:%.*]]) #[[ATTR0]] {
+// HYBRID-LIBCALLS-SAME: (ptr noundef [[PTR:%.*]], ptr addrspace(200) noundef [[VALUE:%.*]]) #[[ATTR0]] {
 // HYBRID-LIBCALLS-NEXT:  entry:
-// HYBRID-LIBCALLS-NEXT:    [[TMP0:%.*]] = bitcast i8 addrspace(200)** [[PTR]] to i8*
-// HYBRID-LIBCALLS-NEXT:    [[CALL:%.*]] = call i8 addrspace(200)* @__atomic_fetch_xor_cap(i8* noundef [[TMP0]], i8 addrspace(200)* noundef [[VALUE]], i32 noundef signext 5)
-// HYBRID-LIBCALLS-NEXT:    ret i8 addrspace(200)* [[CALL]]
+// HYBRID-LIBCALLS-NEXT:    [[CALL:%.*]] = call ptr addrspace(200) @__atomic_fetch_xor_cap(ptr noundef [[PTR]], ptr addrspace(200) noundef [[VALUE]], i32 noundef signext 5)
+// HYBRID-LIBCALLS-NEXT:    ret ptr addrspace(200) [[CALL]]
 //
 // PURECAP-LIBCALLS-LABEL: define {{[^@]+}}@test_fetch_xor_uintcap
-// PURECAP-LIBCALLS-SAME: (i8 addrspace(200)* addrspace(200)* noundef [[PTR:%.*]], i8 addrspace(200)* noundef [[VALUE:%.*]]) addrspace(200) #[[ATTR0]] {
+// PURECAP-LIBCALLS-SAME: (ptr addrspace(200) noundef [[PTR:%.*]], ptr addrspace(200) noundef [[VALUE:%.*]]) addrspace(200) #[[ATTR0]] {
 // PURECAP-LIBCALLS-NEXT:  entry:
-// PURECAP-LIBCALLS-NEXT:    [[TMP0:%.*]] = bitcast i8 addrspace(200)* addrspace(200)* [[PTR]] to i8 addrspace(200)*
-// PURECAP-LIBCALLS-NEXT:    [[CALL:%.*]] = call i8 addrspace(200)* @__atomic_fetch_xor_cap(i8 addrspace(200)* noundef [[TMP0]], i8 addrspace(200)* noundef [[VALUE]], i32 noundef signext 5)
-// PURECAP-LIBCALLS-NEXT:    ret i8 addrspace(200)* [[CALL]]
+// PURECAP-LIBCALLS-NEXT:    [[CALL:%.*]] = call ptr addrspace(200) @__atomic_fetch_xor_cap(ptr addrspace(200) noundef [[PTR]], ptr addrspace(200) noundef [[VALUE]], i32 noundef signext 5)
+// PURECAP-LIBCALLS-NEXT:    ret ptr addrspace(200) [[CALL]]
 //
 // HYBRID-LABEL: define {{[^@]+}}@test_fetch_xor_uintcap
-// HYBRID-SAME: (i8 addrspace(200)** noundef [[PTR:%.*]], i8 addrspace(200)* noundef [[VALUE:%.*]]) #[[ATTR0]] {
+// HYBRID-SAME: (ptr noundef [[PTR:%.*]], ptr addrspace(200) noundef [[VALUE:%.*]]) #[[ATTR0]] {
 // HYBRID-NEXT:  entry:
-// HYBRID-NEXT:    [[TMP0:%.*]] = atomicrmw xor i8 addrspace(200)** [[PTR]], i8 addrspace(200)* [[VALUE]] seq_cst, align 16
-// HYBRID-NEXT:    ret i8 addrspace(200)* [[TMP0]]
+// HYBRID-NEXT:    [[TMP0:%.*]] = atomicrmw xor ptr [[PTR]], ptr addrspace(200) [[VALUE]] seq_cst, align 16
+// HYBRID-NEXT:    ret ptr addrspace(200) [[TMP0]]
 //
 // PURECAP-LABEL: define {{[^@]+}}@test_fetch_xor_uintcap
-// PURECAP-SAME: (i8 addrspace(200)* addrspace(200)* noundef [[PTR:%.*]], i8 addrspace(200)* noundef [[VALUE:%.*]]) addrspace(200) #[[ATTR0]] {
+// PURECAP-SAME: (ptr addrspace(200) noundef [[PTR:%.*]], ptr addrspace(200) noundef [[VALUE:%.*]]) addrspace(200) #[[ATTR0]] {
 // PURECAP-NEXT:  entry:
-// PURECAP-NEXT:    [[TMP0:%.*]] = atomicrmw xor i8 addrspace(200)* addrspace(200)* [[PTR]], i8 addrspace(200)* [[VALUE]] seq_cst, align 16
-// PURECAP-NEXT:    ret i8 addrspace(200)* [[TMP0]]
+// PURECAP-NEXT:    [[TMP0:%.*]] = atomicrmw xor ptr addrspace(200) [[PTR]], ptr addrspace(200) [[VALUE]] seq_cst, align 16
+// PURECAP-NEXT:    ret ptr addrspace(200) [[TMP0]]
 //
 __uintcap_t test_fetch_xor_uintcap(_Atomic(__uintcap_t) *ptr, __uintcap_t value) {
   return __c11_atomic_fetch_xor(ptr, value, __ATOMIC_SEQ_CST);
 }
 
 // HYBRID-LIBCALLS-LABEL: define {{[^@]+}}@test_fetch_max_uintcap
-// HYBRID-LIBCALLS-SAME: (i8 addrspace(200)** noundef [[PTR:%.*]], i8 addrspace(200)* noundef [[VALUE:%.*]]) #[[ATTR0]] {
+// HYBRID-LIBCALLS-SAME: (ptr noundef [[PTR:%.*]], ptr addrspace(200) noundef [[VALUE:%.*]]) #[[ATTR0]] {
 // HYBRID-LIBCALLS-NEXT:  entry:
-// HYBRID-LIBCALLS-NEXT:    [[TMP0:%.*]] = bitcast i8 addrspace(200)** [[PTR]] to i8*
-// HYBRID-LIBCALLS-NEXT:    [[CALL:%.*]] = call i8 addrspace(200)* @__atomic_fetch_umax_cap(i8* noundef [[TMP0]], i8 addrspace(200)* noundef [[VALUE]], i32 noundef signext 5)
-// HYBRID-LIBCALLS-NEXT:    ret i8 addrspace(200)* [[CALL]]
+// HYBRID-LIBCALLS-NEXT:    [[CALL:%.*]] = call ptr addrspace(200) @__atomic_fetch_umax_cap(ptr noundef [[PTR]], ptr addrspace(200) noundef [[VALUE]], i32 noundef signext 5)
+// HYBRID-LIBCALLS-NEXT:    ret ptr addrspace(200) [[CALL]]
 //
 // PURECAP-LIBCALLS-LABEL: define {{[^@]+}}@test_fetch_max_uintcap
-// PURECAP-LIBCALLS-SAME: (i8 addrspace(200)* addrspace(200)* noundef [[PTR:%.*]], i8 addrspace(200)* noundef [[VALUE:%.*]]) addrspace(200) #[[ATTR0]] {
+// PURECAP-LIBCALLS-SAME: (ptr addrspace(200) noundef [[PTR:%.*]], ptr addrspace(200) noundef [[VALUE:%.*]]) addrspace(200) #[[ATTR0]] {
 // PURECAP-LIBCALLS-NEXT:  entry:
-// PURECAP-LIBCALLS-NEXT:    [[TMP0:%.*]] = bitcast i8 addrspace(200)* addrspace(200)* [[PTR]] to i8 addrspace(200)*
-// PURECAP-LIBCALLS-NEXT:    [[CALL:%.*]] = call i8 addrspace(200)* @__atomic_fetch_umax_cap(i8 addrspace(200)* noundef [[TMP0]], i8 addrspace(200)* noundef [[VALUE]], i32 noundef signext 5)
-// PURECAP-LIBCALLS-NEXT:    ret i8 addrspace(200)* [[CALL]]
+// PURECAP-LIBCALLS-NEXT:    [[CALL:%.*]] = call ptr addrspace(200) @__atomic_fetch_umax_cap(ptr addrspace(200) noundef [[PTR]], ptr addrspace(200) noundef [[VALUE]], i32 noundef signext 5)
+// PURECAP-LIBCALLS-NEXT:    ret ptr addrspace(200) [[CALL]]
 //
 // HYBRID-LABEL: define {{[^@]+}}@test_fetch_max_uintcap
-// HYBRID-SAME: (i8 addrspace(200)** noundef [[PTR:%.*]], i8 addrspace(200)* noundef [[VALUE:%.*]]) #[[ATTR0]] {
+// HYBRID-SAME: (ptr noundef [[PTR:%.*]], ptr addrspace(200) noundef [[VALUE:%.*]]) #[[ATTR0]] {
 // HYBRID-NEXT:  entry:
-// HYBRID-NEXT:    [[TMP0:%.*]] = atomicrmw umax i8 addrspace(200)** [[PTR]], i8 addrspace(200)* [[VALUE]] seq_cst, align 16
-// HYBRID-NEXT:    ret i8 addrspace(200)* [[TMP0]]
+// HYBRID-NEXT:    [[TMP0:%.*]] = atomicrmw umax ptr [[PTR]], ptr addrspace(200) [[VALUE]] seq_cst, align 16
+// HYBRID-NEXT:    ret ptr addrspace(200) [[TMP0]]
 //
 // PURECAP-LABEL: define {{[^@]+}}@test_fetch_max_uintcap
-// PURECAP-SAME: (i8 addrspace(200)* addrspace(200)* noundef [[PTR:%.*]], i8 addrspace(200)* noundef [[VALUE:%.*]]) addrspace(200) #[[ATTR0]] {
+// PURECAP-SAME: (ptr addrspace(200) noundef [[PTR:%.*]], ptr addrspace(200) noundef [[VALUE:%.*]]) addrspace(200) #[[ATTR0]] {
 // PURECAP-NEXT:  entry:
-// PURECAP-NEXT:    [[TMP0:%.*]] = atomicrmw umax i8 addrspace(200)* addrspace(200)* [[PTR]], i8 addrspace(200)* [[VALUE]] seq_cst, align 16
-// PURECAP-NEXT:    ret i8 addrspace(200)* [[TMP0]]
+// PURECAP-NEXT:    [[TMP0:%.*]] = atomicrmw umax ptr addrspace(200) [[PTR]], ptr addrspace(200) [[VALUE]] seq_cst, align 16
+// PURECAP-NEXT:    ret ptr addrspace(200) [[TMP0]]
 //
 __uintcap_t test_fetch_max_uintcap(_Atomic(__uintcap_t) *ptr, __uintcap_t value) {
   return __c11_atomic_fetch_max(ptr, value, __ATOMIC_SEQ_CST);
 }
 
 // HYBRID-LIBCALLS-LABEL: define {{[^@]+}}@test_fetch_min_uintcap
-// HYBRID-LIBCALLS-SAME: (i8 addrspace(200)** noundef [[PTR:%.*]], i8 addrspace(200)* noundef [[VALUE:%.*]]) #[[ATTR0]] {
+// HYBRID-LIBCALLS-SAME: (ptr noundef [[PTR:%.*]], ptr addrspace(200) noundef [[VALUE:%.*]]) #[[ATTR0]] {
 // HYBRID-LIBCALLS-NEXT:  entry:
-// HYBRID-LIBCALLS-NEXT:    [[TMP0:%.*]] = bitcast i8 addrspace(200)** [[PTR]] to i8*
-// HYBRID-LIBCALLS-NEXT:    [[CALL:%.*]] = call i8 addrspace(200)* @__atomic_fetch_umin_cap(i8* noundef [[TMP0]], i8 addrspace(200)* noundef [[VALUE]], i32 noundef signext 5)
-// HYBRID-LIBCALLS-NEXT:    ret i8 addrspace(200)* [[CALL]]
+// HYBRID-LIBCALLS-NEXT:    [[CALL:%.*]] = call ptr addrspace(200) @__atomic_fetch_umin_cap(ptr noundef [[PTR]], ptr addrspace(200) noundef [[VALUE]], i32 noundef signext 5)
+// HYBRID-LIBCALLS-NEXT:    ret ptr addrspace(200) [[CALL]]
 //
 // PURECAP-LIBCALLS-LABEL: define {{[^@]+}}@test_fetch_min_uintcap
-// PURECAP-LIBCALLS-SAME: (i8 addrspace(200)* addrspace(200)* noundef [[PTR:%.*]], i8 addrspace(200)* noundef [[VALUE:%.*]]) addrspace(200) #[[ATTR0]] {
+// PURECAP-LIBCALLS-SAME: (ptr addrspace(200) noundef [[PTR:%.*]], ptr addrspace(200) noundef [[VALUE:%.*]]) addrspace(200) #[[ATTR0]] {
 // PURECAP-LIBCALLS-NEXT:  entry:
-// PURECAP-LIBCALLS-NEXT:    [[TMP0:%.*]] = bitcast i8 addrspace(200)* addrspace(200)* [[PTR]] to i8 addrspace(200)*
-// PURECAP-LIBCALLS-NEXT:    [[CALL:%.*]] = call i8 addrspace(200)* @__atomic_fetch_umin_cap(i8 addrspace(200)* noundef [[TMP0]], i8 addrspace(200)* noundef [[VALUE]], i32 noundef signext 5)
-// PURECAP-LIBCALLS-NEXT:    ret i8 addrspace(200)* [[CALL]]
+// PURECAP-LIBCALLS-NEXT:    [[CALL:%.*]] = call ptr addrspace(200) @__atomic_fetch_umin_cap(ptr addrspace(200) noundef [[PTR]], ptr addrspace(200) noundef [[VALUE]], i32 noundef signext 5)
+// PURECAP-LIBCALLS-NEXT:    ret ptr addrspace(200) [[CALL]]
 //
 // HYBRID-LABEL: define {{[^@]+}}@test_fetch_min_uintcap
-// HYBRID-SAME: (i8 addrspace(200)** noundef [[PTR:%.*]], i8 addrspace(200)* noundef [[VALUE:%.*]]) #[[ATTR0]] {
+// HYBRID-SAME: (ptr noundef [[PTR:%.*]], ptr addrspace(200) noundef [[VALUE:%.*]]) #[[ATTR0]] {
 // HYBRID-NEXT:  entry:
-// HYBRID-NEXT:    [[TMP0:%.*]] = atomicrmw umin i8 addrspace(200)** [[PTR]], i8 addrspace(200)* [[VALUE]] seq_cst, align 16
-// HYBRID-NEXT:    ret i8 addrspace(200)* [[TMP0]]
+// HYBRID-NEXT:    [[TMP0:%.*]] = atomicrmw umin ptr [[PTR]], ptr addrspace(200) [[VALUE]] seq_cst, align 16
+// HYBRID-NEXT:    ret ptr addrspace(200) [[TMP0]]
 //
 // PURECAP-LABEL: define {{[^@]+}}@test_fetch_min_uintcap
-// PURECAP-SAME: (i8 addrspace(200)* addrspace(200)* noundef [[PTR:%.*]], i8 addrspace(200)* noundef [[VALUE:%.*]]) addrspace(200) #[[ATTR0]] {
+// PURECAP-SAME: (ptr addrspace(200) noundef [[PTR:%.*]], ptr addrspace(200) noundef [[VALUE:%.*]]) addrspace(200) #[[ATTR0]] {
 // PURECAP-NEXT:  entry:
-// PURECAP-NEXT:    [[TMP0:%.*]] = atomicrmw umin i8 addrspace(200)* addrspace(200)* [[PTR]], i8 addrspace(200)* [[VALUE]] seq_cst, align 16
-// PURECAP-NEXT:    ret i8 addrspace(200)* [[TMP0]]
+// PURECAP-NEXT:    [[TMP0:%.*]] = atomicrmw umin ptr addrspace(200) [[PTR]], ptr addrspace(200) [[VALUE]] seq_cst, align 16
+// PURECAP-NEXT:    ret ptr addrspace(200) [[TMP0]]
 //
 __uintcap_t test_fetch_min_uintcap(_Atomic(__uintcap_t) *ptr, __uintcap_t value) {
   return __c11_atomic_fetch_min(ptr, value, __ATOMIC_SEQ_CST);

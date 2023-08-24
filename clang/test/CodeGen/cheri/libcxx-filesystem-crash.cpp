@@ -26,18 +26,16 @@ public:
 // IR: [[CLASS_DURATION_0:%class.duration.0]] = type { i128 }
 
 // N64-CHERI128-IR-LABEL: define {{[^@]+}}@test1
-// N64-CHERI128-IR-SAME: (%class.duration* nocapture noundef nonnull readonly align 4 dereferenceable(4) [[E:%.*]]) local_unnamed_addr #[[ATTR0:[0-9]+]] {
+// N64-CHERI128-IR-SAME: (ptr nocapture noundef nonnull readonly align 4 dereferenceable(4) [[E:%.*]]) local_unnamed_addr #[[ATTR0:[0-9]+]] {
 // N64-CHERI128-IR-NEXT:  entry:
-// N64-CHERI128-IR-NEXT:    [[TMP0:%.*]] = getelementptr inbounds [[CLASS_DURATION:%.*]], %class.duration* [[E]], i64 0, i32 0
-// N64-CHERI128-IR-NEXT:    [[TMP1:%.*]] = load i32, i32* [[TMP0]], align 4, !tbaa [[TBAA2:![0-9]+]]
-// N64-CHERI128-IR-NEXT:    ret i32 [[TMP1]]
+// N64-CHERI128-IR-NEXT:    [[TMP0:%.*]] = load i32, ptr [[E]], align 4, !tbaa [[TBAA2:![0-9]+]]
+// N64-CHERI128-IR-NEXT:    ret i32 [[TMP0]]
 //
 // PURECAP-CHERI128-IR-LABEL: define {{[^@]+}}@test1
-// PURECAP-CHERI128-IR-SAME: ([[CLASS_DURATION:%.*]] addrspace(200)* nocapture noundef nonnull readonly align 4 dereferenceable(4) [[E:%.*]]) local_unnamed_addr addrspace(200) #[[ATTR0:[0-9]+]] {
+// PURECAP-CHERI128-IR-SAME: (ptr addrspace(200) nocapture noundef nonnull readonly align 4 dereferenceable(4) [[E:%.*]]) local_unnamed_addr addrspace(200) #[[ATTR0:[0-9]+]] {
 // PURECAP-CHERI128-IR-NEXT:  entry:
-// PURECAP-CHERI128-IR-NEXT:    [[TMP0:%.*]] = getelementptr inbounds [[CLASS_DURATION]], [[CLASS_DURATION]] addrspace(200)* [[E]], i64 0, i32 0
-// PURECAP-CHERI128-IR-NEXT:    [[TMP1:%.*]] = load i32, i32 addrspace(200)* [[TMP0]], align 4, !tbaa [[TBAA2:![0-9]+]]
-// PURECAP-CHERI128-IR-NEXT:    ret i32 [[TMP1]]
+// PURECAP-CHERI128-IR-NEXT:    [[TMP0:%.*]] = load i32, ptr addrspace(200) [[E]], align 4, !tbaa [[TBAA2:![0-9]+]]
+// PURECAP-CHERI128-IR-NEXT:    ret i32 [[TMP0]]
 //
 extern "C" int test1(duration<int> &e) {
   return duration<int>(e).f();
@@ -55,32 +53,26 @@ extern "C" int test1(duration<int> &e) {
 // While this often can make sense, it causes errors here.
 
 // N64-CHERI128-IR-LABEL: define {{[^@]+}}@test2
-// N64-CHERI128-IR-SAME: (%class.duration.0* nocapture noundef nonnull readonly align 16 dereferenceable(16) [[E:%.*]]) local_unnamed_addr #[[ATTR0]] {
+// N64-CHERI128-IR-SAME: (ptr nocapture noundef nonnull readonly align 16 dereferenceable(16) [[E:%.*]]) local_unnamed_addr #[[ATTR0]] {
 // N64-CHERI128-IR-NEXT:  entry:
-// N64-CHERI128-IR-NEXT:    [[REF_TMP:%.*]] = alloca i8 addrspace(200)*, align 16
-// N64-CHERI128-IR-NEXT:    [[REF_TMP_0_REF_TMP_0__SROA_CAST:%.*]] = bitcast i8 addrspace(200)** [[REF_TMP]] to i8*
-// N64-CHERI128-IR-NEXT:    call void @llvm.lifetime.start.p0i8(i64 16, i8* nonnull [[REF_TMP_0_REF_TMP_0__SROA_CAST]])
-// N64-CHERI128-IR-NEXT:    [[TMP0:%.*]] = bitcast %class.duration.0* [[E]] to i8 addrspace(200)**
-// N64-CHERI128-IR-NEXT:    [[TMP1:%.*]] = load i8 addrspace(200)*, i8 addrspace(200)** [[TMP0]], align 16, !tbaa [[TBAA6:![0-9]+]]
-// N64-CHERI128-IR-NEXT:    store i8 addrspace(200)* [[TMP1]], i8 addrspace(200)** [[REF_TMP]], align 16, !tbaa [[TBAA6]]
-// N64-CHERI128-IR-NEXT:    [[REF_TMP_0_REF_TMP_0_AS_I_SROA_CAST:%.*]] = bitcast i8 addrspace(200)** [[REF_TMP]] to i128*
-// N64-CHERI128-IR-NEXT:    [[REF_TMP_0_REF_TMP_0_:%.*]] = load i128, i128* [[REF_TMP_0_REF_TMP_0_AS_I_SROA_CAST]], align 16, !tbaa [[TBAA8:![0-9]+]]
-// N64-CHERI128-IR-NEXT:    call void @llvm.lifetime.end.p0i8(i64 16, i8* nonnull [[REF_TMP_0_REF_TMP_0__SROA_CAST]])
-// N64-CHERI128-IR-NEXT:    ret i128 [[REF_TMP_0_REF_TMP_0_]]
+// N64-CHERI128-IR-NEXT:    [[REF_TMP_SROA_0:%.*]] = alloca i128, align 16
+// N64-CHERI128-IR-NEXT:    call void @llvm.lifetime.start.p0(i64 16, ptr nonnull [[REF_TMP_SROA_0]])
+// N64-CHERI128-IR-NEXT:    [[TMP0:%.*]] = load ptr addrspace(200), ptr [[E]], align 16, !tbaa [[TBAA6:![0-9]+]]
+// N64-CHERI128-IR-NEXT:    store ptr addrspace(200) [[TMP0]], ptr [[REF_TMP_SROA_0]], align 16, !tbaa [[TBAA6]]
+// N64-CHERI128-IR-NEXT:    [[REF_TMP_SROA_0_0_REF_TMP_SROA_0_0_REF_TMP_SROA_0_0_:%.*]] = load i128, ptr [[REF_TMP_SROA_0]], align 16, !tbaa [[TBAA8:![0-9]+]]
+// N64-CHERI128-IR-NEXT:    call void @llvm.lifetime.end.p0(i64 16, ptr nonnull [[REF_TMP_SROA_0]])
+// N64-CHERI128-IR-NEXT:    ret i128 [[REF_TMP_SROA_0_0_REF_TMP_SROA_0_0_REF_TMP_SROA_0_0_]]
 //
 // PURECAP-CHERI128-IR-LABEL: define {{[^@]+}}@test2
-// PURECAP-CHERI128-IR-SAME: ([[CLASS_DURATION_0:%.*]] addrspace(200)* nocapture noundef nonnull readonly align 16 dereferenceable(16) [[E:%.*]]) local_unnamed_addr addrspace(200) #[[ATTR0]] {
+// PURECAP-CHERI128-IR-SAME: (ptr addrspace(200) nocapture noundef nonnull readonly align 16 dereferenceable(16) [[E:%.*]]) local_unnamed_addr addrspace(200) #[[ATTR0]] {
 // PURECAP-CHERI128-IR-NEXT:  entry:
-// PURECAP-CHERI128-IR-NEXT:    [[REF_TMP:%.*]] = alloca i8 addrspace(200)*, align 16, addrspace(200)
-// PURECAP-CHERI128-IR-NEXT:    [[REF_TMP_0_REF_TMP_0__SROA_CAST:%.*]] = bitcast i8 addrspace(200)* addrspace(200)* [[REF_TMP]] to i8 addrspace(200)*
-// PURECAP-CHERI128-IR-NEXT:    call void @llvm.lifetime.start.p200i8(i64 16, i8 addrspace(200)* nonnull [[REF_TMP_0_REF_TMP_0__SROA_CAST]])
-// PURECAP-CHERI128-IR-NEXT:    [[TMP0:%.*]] = bitcast [[CLASS_DURATION_0]] addrspace(200)* [[E]] to i8 addrspace(200)* addrspace(200)*
-// PURECAP-CHERI128-IR-NEXT:    [[TMP1:%.*]] = load i8 addrspace(200)*, i8 addrspace(200)* addrspace(200)* [[TMP0]], align 16, !tbaa [[TBAA6:![0-9]+]]
-// PURECAP-CHERI128-IR-NEXT:    store i8 addrspace(200)* [[TMP1]], i8 addrspace(200)* addrspace(200)* [[REF_TMP]], align 16, !tbaa [[TBAA6]]
-// PURECAP-CHERI128-IR-NEXT:    [[REF_TMP_0_REF_TMP_0_AS_I_SROA_CAST:%.*]] = bitcast i8 addrspace(200)* addrspace(200)* [[REF_TMP]] to i128 addrspace(200)*
-// PURECAP-CHERI128-IR-NEXT:    [[REF_TMP_0_REF_TMP_0_:%.*]] = load i128, i128 addrspace(200)* [[REF_TMP_0_REF_TMP_0_AS_I_SROA_CAST]], align 16, !tbaa [[TBAA8:![0-9]+]]
-// PURECAP-CHERI128-IR-NEXT:    call void @llvm.lifetime.end.p200i8(i64 16, i8 addrspace(200)* nonnull [[REF_TMP_0_REF_TMP_0__SROA_CAST]])
-// PURECAP-CHERI128-IR-NEXT:    ret i128 [[REF_TMP_0_REF_TMP_0_]]
+// PURECAP-CHERI128-IR-NEXT:    [[REF_TMP_SROA_0:%.*]] = alloca i128, align 16, addrspace(200)
+// PURECAP-CHERI128-IR-NEXT:    call void @llvm.lifetime.start.p200(i64 16, ptr addrspace(200) nonnull [[REF_TMP_SROA_0]])
+// PURECAP-CHERI128-IR-NEXT:    [[TMP0:%.*]] = load ptr addrspace(200), ptr addrspace(200) [[E]], align 16, !tbaa [[TBAA6:![0-9]+]]
+// PURECAP-CHERI128-IR-NEXT:    store ptr addrspace(200) [[TMP0]], ptr addrspace(200) [[REF_TMP_SROA_0]], align 16, !tbaa [[TBAA6]]
+// PURECAP-CHERI128-IR-NEXT:    [[REF_TMP_SROA_0_0_REF_TMP_SROA_0_0_REF_TMP_SROA_0_0_:%.*]] = load i128, ptr addrspace(200) [[REF_TMP_SROA_0]], align 16, !tbaa [[TBAA8:![0-9]+]]
+// PURECAP-CHERI128-IR-NEXT:    call void @llvm.lifetime.end.p200(i64 16, ptr addrspace(200) nonnull [[REF_TMP_SROA_0]])
+// PURECAP-CHERI128-IR-NEXT:    ret i128 [[REF_TMP_SROA_0_0_REF_TMP_SROA_0_0_REF_TMP_SROA_0_0_]]
 //
 extern "C" __int128 test2(duration<__int128_t> &e) {
   return duration<__int128_t>(e).f();

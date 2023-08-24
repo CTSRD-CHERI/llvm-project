@@ -566,21 +566,20 @@ class LLVMConfig(object):
         if self.config.clang:
             self.config.available_features.add('clang')
             builtin_include_dir = self.get_clang_builtin_include_dir(self.config.clang)
-            # FIXME: remove the -no-opaque-pointers flag once all tests have been ported
             clang_cc1_args = ['-cc1', '-internal-isystem', builtin_include_dir, '-nostdsysteminc']
-            cheri128_cc1_args = clang_cc1_args + ['-no-opaque-pointers', '-triple', 'mips64-unknown-freebsd',
+            cheri128_cc1_args = clang_cc1_args + ['-triple', 'mips64-unknown-freebsd',
                     '-target-cpu', 'cheri128', '-cheri-size', '128', '-mllvm', '-verify-machineinstrs']
-            riscv32_cheri_cc1_args = clang_cc1_args + ['-no-opaque-pointers', '-triple', 'riscv32-unknown-freebsd',
+            riscv32_cheri_cc1_args = clang_cc1_args + [ '-triple', 'riscv32-unknown-freebsd',
                     '-target-feature', '+xcheri', '-mllvm', '-verify-machineinstrs']
-            riscv64_cheri_cc1_args = clang_cc1_args + ['-no-opaque-pointers', '-triple', 'riscv64-unknown-freebsd',
+            riscv64_cheri_cc1_args = clang_cc1_args + [ '-triple', 'riscv64-unknown-freebsd',
                     '-target-feature', '+xcheri', '-mllvm', '-verify-machineinstrs']
 
             cheri_cc1_args = cheri128_cc1_args
             default_cheri_cpu = 'cheri128'
-            cheri_clang_args = ['-Xclang', '-no-opaque-pointers', '-target', 'mips64-unknown-freebsd', '-nostdinc',
+            cheri_clang_args = ['-target', 'mips64-unknown-freebsd', '-nostdinc',
                                 '-mcpu=' + default_cheri_cpu, '-msoft-float']
-            riscv32_cheri_clang_args = ['-Xclang', '-no-opaque-pointers', '-target', 'riscv32-unknown-freebsd', '-nostdinc', '-march=rv32imafdcxcheri']
-            riscv64_cheri_clang_args = ['-Xclang', '-no-opaque-pointers', '-target', 'riscv64-unknown-freebsd', '-nostdinc', '-march=rv64imafdcxcheri']
+            riscv32_cheri_clang_args = ['-target', 'riscv32-unknown-freebsd', '-nostdinc', '-march=rv32imafdcxcheri']
+            riscv64_cheri_clang_args = ['-target', 'riscv64-unknown-freebsd', '-nostdinc', '-march=rv64imafdcxcheri']
 
             tool_substitutions = [
                 # CHERI substitutions (order is important due to repeated substitutions!)

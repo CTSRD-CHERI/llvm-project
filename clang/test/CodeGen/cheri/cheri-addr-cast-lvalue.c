@@ -7,12 +7,12 @@
 
 // CHECK-LABEL: @test_ptr(
 // CHECK-NEXT:  entry:
-// CHECK-NEXT:    [[PTR_ADDR:%.*]] = alloca i8*, align 8
-// CHECK-NEXT:    store i8* [[PTR:%.*]], i8** [[PTR_ADDR]], align 8
-// CHECK-NEXT:    [[TMP0:%.*]] = load i8*, i8** [[PTR_ADDR]], align 8
-// CHECK-NEXT:    [[TMP1:%.*]] = ptrtoint i8* [[TMP0]] to i64
-// CHECK-NEXT:    [[TMP2:%.*]] = inttoptr i64 [[TMP1]] to i8*
-// CHECK-NEXT:    ret i8* [[TMP2]]
+// CHECK-NEXT:    [[PTR_ADDR:%.*]] = alloca ptr, align 8
+// CHECK-NEXT:    store ptr [[PTR:%.*]], ptr [[PTR_ADDR]], align 8
+// CHECK-NEXT:    [[TMP0:%.*]] = load ptr, ptr [[PTR_ADDR]], align 8
+// CHECK-NEXT:    [[TMP1:%.*]] = ptrtoint ptr [[TMP0]] to i64
+// CHECK-NEXT:    [[TMP2:%.*]] = inttoptr i64 [[TMP1]] to ptr
+// CHECK-NEXT:    ret ptr [[TMP2]]
 //
 char* test_ptr(void * ptr) {
   return (char *)(long)ptr;
@@ -20,12 +20,12 @@ char* test_ptr(void * ptr) {
 
 // CHECK-LABEL: @test_cap_addr(
 // CHECK-NEXT:  entry:
-// CHECK-NEXT:    [[CAP_ADDR:%.*]] = alloca i8 addrspace(200)*, align 16
-// CHECK-NEXT:    store i8 addrspace(200)* [[CAP:%.*]], i8 addrspace(200)** [[CAP_ADDR]], align 16
-// CHECK-NEXT:    [[TMP0:%.*]] = load i8 addrspace(200)*, i8 addrspace(200)** [[CAP_ADDR]], align 16
-// CHECK-NEXT:    [[TMP1:%.*]] = call i64 @llvm.cheri.cap.address.get.i64(i8 addrspace(200)* [[TMP0]])
-// CHECK-NEXT:    [[TMP2:%.*]] = inttoptr i64 [[TMP1]] to i8*
-// CHECK-NEXT:    ret i8* [[TMP2]]
+// CHECK-NEXT:    [[CAP_ADDR:%.*]] = alloca ptr addrspace(200), align 16
+// CHECK-NEXT:    store ptr addrspace(200) [[CAP:%.*]], ptr [[CAP_ADDR]], align 16
+// CHECK-NEXT:    [[TMP0:%.*]] = load ptr addrspace(200), ptr [[CAP_ADDR]], align 16
+// CHECK-NEXT:    [[TMP1:%.*]] = call i64 @llvm.cheri.cap.address.get.i64(ptr addrspace(200) [[TMP0]])
+// CHECK-NEXT:    [[TMP2:%.*]] = inttoptr i64 [[TMP1]] to ptr
+// CHECK-NEXT:    ret ptr [[TMP2]]
 //
 char* test_cap_addr(void *__capability cap) {
   return (char *)(__cheri_addr long)cap;
@@ -33,12 +33,12 @@ char* test_cap_addr(void *__capability cap) {
 
 // CHECK-LABEL: @test_cap_offset(
 // CHECK-NEXT:  entry:
-// CHECK-NEXT:    [[CAP_ADDR:%.*]] = alloca i8 addrspace(200)*, align 16
-// CHECK-NEXT:    store i8 addrspace(200)* [[CAP:%.*]], i8 addrspace(200)** [[CAP_ADDR]], align 16
-// CHECK-NEXT:    [[TMP0:%.*]] = load i8 addrspace(200)*, i8 addrspace(200)** [[CAP_ADDR]], align 16
-// CHECK-NEXT:    [[TMP1:%.*]] = call i64 @llvm.cheri.cap.offset.get.i64(i8 addrspace(200)* [[TMP0]])
-// CHECK-NEXT:    [[TMP2:%.*]] = inttoptr i64 [[TMP1]] to i8*
-// CHECK-NEXT:    ret i8* [[TMP2]]
+// CHECK-NEXT:    [[CAP_ADDR:%.*]] = alloca ptr addrspace(200), align 16
+// CHECK-NEXT:    store ptr addrspace(200) [[CAP:%.*]], ptr [[CAP_ADDR]], align 16
+// CHECK-NEXT:    [[TMP0:%.*]] = load ptr addrspace(200), ptr [[CAP_ADDR]], align 16
+// CHECK-NEXT:    [[TMP1:%.*]] = call i64 @llvm.cheri.cap.offset.get.i64(ptr addrspace(200) [[TMP0]])
+// CHECK-NEXT:    [[TMP2:%.*]] = inttoptr i64 [[TMP1]] to ptr
+// CHECK-NEXT:    ret ptr [[TMP2]]
 //
 char* test_cap_offset(void *__capability cap) {
   return (char *)(__cheri_offset long)cap;

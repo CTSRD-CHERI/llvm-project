@@ -24,7 +24,7 @@
 
 // CHECK-LABEL: *** Dumping IRgen Record Layout
 // CHECK: LLVMType:%class.A = type { i8 }
-// CHECK: LLVMType:%class.Foo = type { %class.A addrspace(200)* }
+// CHECK: LLVMType:%class.Foo = type { ptr addrspace(200) }
 // CHECK: LLVMType:%class.Bar = type <{ %class.Foo, i32, {{\[}}[[#CAP_SIZE - 4]] x i8] }>
 
 class A {};

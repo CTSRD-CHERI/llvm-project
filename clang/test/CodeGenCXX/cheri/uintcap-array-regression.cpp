@@ -6,8 +6,7 @@ enum { a };
 // CHECK-LABEL: define {{[^@]+}}@_Z1bv
 // CHECK-SAME: () addrspace(200) #[[ATTR0:[0-9]+]] {
 // CHECK-NEXT:  entry:
-// CHECK-NEXT:    [[CALL:%.*]] = call noalias noundef nonnull i8 addrspace(200)* @_Znam(i64 noundef zeroext 0) #[[ATTR2:[0-9]+]]
-// CHECK-NEXT:    [[TMP0:%.*]] = bitcast i8 addrspace(200)* [[CALL]] to i32 addrspace(200)*
+// CHECK-NEXT:    [[CALL:%.*]] = call noalias noundef nonnull ptr addrspace(200) @_Znam(i64 noundef zeroext 0) #[[ATTR2:[0-9]+]]
 // CHECK-NEXT:    ret void
 //
 void b() { new int[a]; }

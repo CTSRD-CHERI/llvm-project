@@ -1,9 +1,7 @@
-// RUN: %cheri_purecap_cc1 -O2 -std=c++11 -fcxx-exceptions -fexceptions -mllvm -cheri-cap-table-abi=pcrel -o -  %s -emit-llvm | FileCheck %s
-// Check that this doesn't crash during codegen
-// RUN: %cheri_purecap_cc1 -O2 -std=c++11 -fcxx-exceptions -fexceptions -mllvm -cheri-cap-table-abi=pcrel -o /dev/null  %s -S
-
-// __tls_guard was being emitted in AS200 which caused selection failures later
-// See https://github.com/CTSRD-CHERI/llvm/issues/269
+// RUN: %cheri_purecap_cc1 -O2 -std=c++11 -fcxx-exceptions -fexceptions -o -  %s -emit-llvm | FileCheck %s
+/// Check that __tls_guard is emitted in AS200. This previously caused selection
+/// failures (see https://github.com/CTSRD-CHERI/llvm/issues/269) but was fixed
+/// by adding real TLS support, so keep checking that we emit it in AS200.
 
 struct m {};
 struct n {
@@ -18,6 +16,6 @@ thread_local n h;
 
 void r() {
   // CHECK-LABEL: define dso_local void @_Z1rv()
-  // CHECK: load i1, i1 addrspace(200)* @__tls_guard, align 1
+  // CHECK: load i1, ptr addrspace(200) @__tls_guard, align 1
   (void)f;
 }

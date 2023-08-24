@@ -5,10 +5,10 @@
 // RUN: %riscv64_cheri_purecap_cc1 -std=c++11 -fcxx-exceptions -fexceptions -o - -O0 -S %s | FileCheck %s -check-prefixes ASM
 /// Check that the __gxx_personality_v0 reference and DWARF stub symbols use capabilities and not an addresses
 
-// CHECK: @_ZTIi = external addrspace(200) constant i8 addrspace(200)*
+// CHECK: @_ZTIi = external addrspace(200) constant ptr addrspace(200)
 extern void fn2(int);
 
-// CHECK: define dso_local void @_Z3fn1v() {{.+}} personality i8 addrspace(200)* bitcast (i32 (...) addrspace(200)* @__gxx_personality_v0 to i8 addrspace(200)*)
+// CHECK: define dso_local void @_Z3fn1v() {{.+}} personality ptr addrspace(200) @__gxx_personality_v0 {
 void fn1() {
   try {
     throw 4;

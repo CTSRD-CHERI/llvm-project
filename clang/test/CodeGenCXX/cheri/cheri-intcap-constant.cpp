@@ -12,10 +12,10 @@ class A {
 // CHECK-LABEL: @_Z1fv(
 // CHECK-NEXT:  entry:
 // CHECK-NEXT:    [[A:%.*]] = alloca [[CLASS_A:%.*]], align 1
-// CHECK-NEXT:    [[X:%.*]] = alloca i8 addrspace(200)*, align 16
-// CHECK-NEXT:    store i8 addrspace(200)* getelementptr (i8, i8 addrspace(200)* null, i64 1), i8 addrspace(200)** [[X]], align 16
-// CHECK-NEXT:    store i8 addrspace(200)* getelementptr (i8, i8 addrspace(200)* null, i64 2), i8 addrspace(200)** [[X]], align 16
-// CHECK-NEXT:    store i8 addrspace(200)* getelementptr (i8, i8 addrspace(200)* null, i64 3), i8 addrspace(200)** [[X]], align 16
+// CHECK-NEXT:    [[X:%.*]] = alloca ptr addrspace(200), align 16
+// CHECK-NEXT:    store ptr addrspace(200) getelementptr (i8, ptr addrspace(200) null, i64 1), ptr [[X]], align 16
+// CHECK-NEXT:    store ptr addrspace(200) getelementptr (i8, ptr addrspace(200) null, i64 2), ptr [[X]], align 16
+// CHECK-NEXT:    store ptr addrspace(200) getelementptr (i8, ptr addrspace(200) null, i64 3), ptr [[X]], align 16
 // CHECK-NEXT:    ret void
 //
 void f() {

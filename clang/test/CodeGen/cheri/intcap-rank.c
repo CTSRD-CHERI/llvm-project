@@ -13,21 +13,21 @@
 
 // CHECK32-LABEL: @test_sl(
 // CHECK32-NEXT:  entry:
-// CHECK32-NEXT:    [[TMP0:%.*]] = getelementptr i8, i8 addrspace(200)* null, i32 [[Y:%.*]]
-// CHECK32-NEXT:    [[TMP1:%.*]] = call i32 @llvm.cheri.cap.address.get.i32(i8 addrspace(200)* [[X:%.*]])
-// CHECK32-NEXT:    [[TMP2:%.*]] = call i32 @llvm.cheri.cap.address.get.i32(i8 addrspace(200)* [[TMP0]])
+// CHECK32-NEXT:    [[TMP0:%.*]] = getelementptr i8, ptr addrspace(200) null, i32 [[Y:%.*]]
+// CHECK32-NEXT:    [[TMP1:%.*]] = call i32 @llvm.cheri.cap.address.get.i32(ptr addrspace(200) [[X:%.*]])
+// CHECK32-NEXT:    [[TMP2:%.*]] = call i32 @llvm.cheri.cap.address.get.i32(ptr addrspace(200) [[TMP0]])
 // CHECK32-NEXT:    [[ADD:%.*]] = add nsw i32 [[TMP1]], [[TMP2]]
-// CHECK32-NEXT:    [[TMP3:%.*]] = call i8 addrspace(200)* @llvm.cheri.cap.address.set.i32(i8 addrspace(200)* [[X]], i32 [[ADD]])
-// CHECK32-NEXT:    ret i8 addrspace(200)* [[TMP3]]
+// CHECK32-NEXT:    [[TMP3:%.*]] = call ptr addrspace(200) @llvm.cheri.cap.address.set.i32(ptr addrspace(200) [[X]], i32 [[ADD]])
+// CHECK32-NEXT:    ret ptr addrspace(200) [[TMP3]]
 //
 // CHECK64-LABEL: @test_sl(
 // CHECK64-NEXT:  entry:
-// CHECK64-NEXT:    [[TMP0:%.*]] = getelementptr i8, i8 addrspace(200)* null, i64 [[Y:%.*]]
-// CHECK64-NEXT:    [[TMP1:%.*]] = call i64 @llvm.cheri.cap.address.get.i64(i8 addrspace(200)* [[X:%.*]])
-// CHECK64-NEXT:    [[TMP2:%.*]] = call i64 @llvm.cheri.cap.address.get.i64(i8 addrspace(200)* [[TMP0]])
+// CHECK64-NEXT:    [[TMP0:%.*]] = getelementptr i8, ptr addrspace(200) null, i64 [[Y:%.*]]
+// CHECK64-NEXT:    [[TMP1:%.*]] = call i64 @llvm.cheri.cap.address.get.i64(ptr addrspace(200) [[X:%.*]])
+// CHECK64-NEXT:    [[TMP2:%.*]] = call i64 @llvm.cheri.cap.address.get.i64(ptr addrspace(200) [[TMP0]])
 // CHECK64-NEXT:    [[ADD:%.*]] = add nsw i64 [[TMP1]], [[TMP2]]
-// CHECK64-NEXT:    [[TMP3:%.*]] = call i8 addrspace(200)* @llvm.cheri.cap.address.set.i64(i8 addrspace(200)* [[X]], i64 [[ADD]])
-// CHECK64-NEXT:    ret i8 addrspace(200)* [[TMP3]]
+// CHECK64-NEXT:    [[TMP3:%.*]] = call ptr addrspace(200) @llvm.cheri.cap.address.set.i64(ptr addrspace(200) [[X]], i64 [[ADD]])
+// CHECK64-NEXT:    ret ptr addrspace(200) [[TMP3]]
 //
 __intcap_t test_sl(__intcap_t x, long y) {
   return x + y;
@@ -35,21 +35,21 @@ __intcap_t test_sl(__intcap_t x, long y) {
 
 // CHECK32-LABEL: @test_ul(
 // CHECK32-NEXT:  entry:
-// CHECK32-NEXT:    [[TMP0:%.*]] = getelementptr i8, i8 addrspace(200)* null, i32 [[Y:%.*]]
-// CHECK32-NEXT:    [[TMP1:%.*]] = call i32 @llvm.cheri.cap.address.get.i32(i8 addrspace(200)* [[X:%.*]])
-// CHECK32-NEXT:    [[TMP2:%.*]] = call i32 @llvm.cheri.cap.address.get.i32(i8 addrspace(200)* [[TMP0]])
+// CHECK32-NEXT:    [[TMP0:%.*]] = getelementptr i8, ptr addrspace(200) null, i32 [[Y:%.*]]
+// CHECK32-NEXT:    [[TMP1:%.*]] = call i32 @llvm.cheri.cap.address.get.i32(ptr addrspace(200) [[X:%.*]])
+// CHECK32-NEXT:    [[TMP2:%.*]] = call i32 @llvm.cheri.cap.address.get.i32(ptr addrspace(200) [[TMP0]])
 // CHECK32-NEXT:    [[ADD:%.*]] = add i32 [[TMP1]], [[TMP2]]
-// CHECK32-NEXT:    [[TMP3:%.*]] = call i8 addrspace(200)* @llvm.cheri.cap.address.set.i32(i8 addrspace(200)* [[X]], i32 [[ADD]])
-// CHECK32-NEXT:    ret i8 addrspace(200)* [[TMP3]]
+// CHECK32-NEXT:    [[TMP3:%.*]] = call ptr addrspace(200) @llvm.cheri.cap.address.set.i32(ptr addrspace(200) [[X]], i32 [[ADD]])
+// CHECK32-NEXT:    ret ptr addrspace(200) [[TMP3]]
 //
 // CHECK64-LABEL: @test_ul(
 // CHECK64-NEXT:  entry:
-// CHECK64-NEXT:    [[TMP0:%.*]] = getelementptr i8, i8 addrspace(200)* null, i64 [[Y:%.*]]
-// CHECK64-NEXT:    [[TMP1:%.*]] = call i64 @llvm.cheri.cap.address.get.i64(i8 addrspace(200)* [[X:%.*]])
-// CHECK64-NEXT:    [[TMP2:%.*]] = call i64 @llvm.cheri.cap.address.get.i64(i8 addrspace(200)* [[TMP0]])
+// CHECK64-NEXT:    [[TMP0:%.*]] = getelementptr i8, ptr addrspace(200) null, i64 [[Y:%.*]]
+// CHECK64-NEXT:    [[TMP1:%.*]] = call i64 @llvm.cheri.cap.address.get.i64(ptr addrspace(200) [[X:%.*]])
+// CHECK64-NEXT:    [[TMP2:%.*]] = call i64 @llvm.cheri.cap.address.get.i64(ptr addrspace(200) [[TMP0]])
 // CHECK64-NEXT:    [[ADD:%.*]] = add i64 [[TMP1]], [[TMP2]]
-// CHECK64-NEXT:    [[TMP3:%.*]] = call i8 addrspace(200)* @llvm.cheri.cap.address.set.i64(i8 addrspace(200)* [[X]], i64 [[ADD]])
-// CHECK64-NEXT:    ret i8 addrspace(200)* [[TMP3]]
+// CHECK64-NEXT:    [[TMP3:%.*]] = call ptr addrspace(200) @llvm.cheri.cap.address.set.i64(ptr addrspace(200) [[X]], i64 [[ADD]])
+// CHECK64-NEXT:    ret ptr addrspace(200) [[TMP3]]
 //
 __intcap_t test_ul(__intcap_t x, unsigned long y) {
   return x + y;
@@ -58,21 +58,21 @@ __intcap_t test_ul(__intcap_t x, unsigned long y) {
 // CHECK32-LABEL: @test_sll(
 // CHECK32-NEXT:  entry:
 // CHECK32-NEXT:    [[CONV:%.*]] = trunc i64 [[Y:%.*]] to i32
-// CHECK32-NEXT:    [[TMP0:%.*]] = getelementptr i8, i8 addrspace(200)* null, i32 [[CONV]]
-// CHECK32-NEXT:    [[TMP1:%.*]] = call i32 @llvm.cheri.cap.address.get.i32(i8 addrspace(200)* [[X:%.*]])
-// CHECK32-NEXT:    [[TMP2:%.*]] = call i32 @llvm.cheri.cap.address.get.i32(i8 addrspace(200)* [[TMP0]])
+// CHECK32-NEXT:    [[TMP0:%.*]] = getelementptr i8, ptr addrspace(200) null, i32 [[CONV]]
+// CHECK32-NEXT:    [[TMP1:%.*]] = call i32 @llvm.cheri.cap.address.get.i32(ptr addrspace(200) [[X:%.*]])
+// CHECK32-NEXT:    [[TMP2:%.*]] = call i32 @llvm.cheri.cap.address.get.i32(ptr addrspace(200) [[TMP0]])
 // CHECK32-NEXT:    [[ADD:%.*]] = add nsw i32 [[TMP1]], [[TMP2]]
-// CHECK32-NEXT:    [[TMP3:%.*]] = call i8 addrspace(200)* @llvm.cheri.cap.address.set.i32(i8 addrspace(200)* [[X]], i32 [[ADD]])
-// CHECK32-NEXT:    ret i8 addrspace(200)* [[TMP3]]
+// CHECK32-NEXT:    [[TMP3:%.*]] = call ptr addrspace(200) @llvm.cheri.cap.address.set.i32(ptr addrspace(200) [[X]], i32 [[ADD]])
+// CHECK32-NEXT:    ret ptr addrspace(200) [[TMP3]]
 //
 // CHECK64-LABEL: @test_sll(
 // CHECK64-NEXT:  entry:
-// CHECK64-NEXT:    [[TMP0:%.*]] = getelementptr i8, i8 addrspace(200)* null, i64 [[Y:%.*]]
-// CHECK64-NEXT:    [[TMP1:%.*]] = call i64 @llvm.cheri.cap.address.get.i64(i8 addrspace(200)* [[X:%.*]])
-// CHECK64-NEXT:    [[TMP2:%.*]] = call i64 @llvm.cheri.cap.address.get.i64(i8 addrspace(200)* [[TMP0]])
+// CHECK64-NEXT:    [[TMP0:%.*]] = getelementptr i8, ptr addrspace(200) null, i64 [[Y:%.*]]
+// CHECK64-NEXT:    [[TMP1:%.*]] = call i64 @llvm.cheri.cap.address.get.i64(ptr addrspace(200) [[X:%.*]])
+// CHECK64-NEXT:    [[TMP2:%.*]] = call i64 @llvm.cheri.cap.address.get.i64(ptr addrspace(200) [[TMP0]])
 // CHECK64-NEXT:    [[ADD:%.*]] = add nsw i64 [[TMP1]], [[TMP2]]
-// CHECK64-NEXT:    [[TMP3:%.*]] = call i8 addrspace(200)* @llvm.cheri.cap.address.set.i64(i8 addrspace(200)* [[X]], i64 [[ADD]])
-// CHECK64-NEXT:    ret i8 addrspace(200)* [[TMP3]]
+// CHECK64-NEXT:    [[TMP3:%.*]] = call ptr addrspace(200) @llvm.cheri.cap.address.set.i64(ptr addrspace(200) [[X]], i64 [[ADD]])
+// CHECK64-NEXT:    ret ptr addrspace(200) [[TMP3]]
 //
 __intcap_t test_sll(__intcap_t x, long long y) {
   return x + y;
@@ -81,21 +81,21 @@ __intcap_t test_sll(__intcap_t x, long long y) {
 // CHECK32-LABEL: @test_ull(
 // CHECK32-NEXT:  entry:
 // CHECK32-NEXT:    [[CONV:%.*]] = trunc i64 [[Y:%.*]] to i32
-// CHECK32-NEXT:    [[TMP0:%.*]] = getelementptr i8, i8 addrspace(200)* null, i32 [[CONV]]
-// CHECK32-NEXT:    [[TMP1:%.*]] = call i32 @llvm.cheri.cap.address.get.i32(i8 addrspace(200)* [[X:%.*]])
-// CHECK32-NEXT:    [[TMP2:%.*]] = call i32 @llvm.cheri.cap.address.get.i32(i8 addrspace(200)* [[TMP0]])
+// CHECK32-NEXT:    [[TMP0:%.*]] = getelementptr i8, ptr addrspace(200) null, i32 [[CONV]]
+// CHECK32-NEXT:    [[TMP1:%.*]] = call i32 @llvm.cheri.cap.address.get.i32(ptr addrspace(200) [[X:%.*]])
+// CHECK32-NEXT:    [[TMP2:%.*]] = call i32 @llvm.cheri.cap.address.get.i32(ptr addrspace(200) [[TMP0]])
 // CHECK32-NEXT:    [[ADD:%.*]] = add nsw i32 [[TMP1]], [[TMP2]]
-// CHECK32-NEXT:    [[TMP3:%.*]] = call i8 addrspace(200)* @llvm.cheri.cap.address.set.i32(i8 addrspace(200)* [[X]], i32 [[ADD]])
-// CHECK32-NEXT:    ret i8 addrspace(200)* [[TMP3]]
+// CHECK32-NEXT:    [[TMP3:%.*]] = call ptr addrspace(200) @llvm.cheri.cap.address.set.i32(ptr addrspace(200) [[X]], i32 [[ADD]])
+// CHECK32-NEXT:    ret ptr addrspace(200) [[TMP3]]
 //
 // CHECK64-LABEL: @test_ull(
 // CHECK64-NEXT:  entry:
-// CHECK64-NEXT:    [[TMP0:%.*]] = getelementptr i8, i8 addrspace(200)* null, i64 [[Y:%.*]]
-// CHECK64-NEXT:    [[TMP1:%.*]] = call i64 @llvm.cheri.cap.address.get.i64(i8 addrspace(200)* [[X:%.*]])
-// CHECK64-NEXT:    [[TMP2:%.*]] = call i64 @llvm.cheri.cap.address.get.i64(i8 addrspace(200)* [[TMP0]])
+// CHECK64-NEXT:    [[TMP0:%.*]] = getelementptr i8, ptr addrspace(200) null, i64 [[Y:%.*]]
+// CHECK64-NEXT:    [[TMP1:%.*]] = call i64 @llvm.cheri.cap.address.get.i64(ptr addrspace(200) [[X:%.*]])
+// CHECK64-NEXT:    [[TMP2:%.*]] = call i64 @llvm.cheri.cap.address.get.i64(ptr addrspace(200) [[TMP0]])
 // CHECK64-NEXT:    [[ADD:%.*]] = add i64 [[TMP1]], [[TMP2]]
-// CHECK64-NEXT:    [[TMP3:%.*]] = call i8 addrspace(200)* @llvm.cheri.cap.address.set.i64(i8 addrspace(200)* [[X]], i64 [[ADD]])
-// CHECK64-NEXT:    ret i8 addrspace(200)* [[TMP3]]
+// CHECK64-NEXT:    [[TMP3:%.*]] = call ptr addrspace(200) @llvm.cheri.cap.address.set.i64(ptr addrspace(200) [[X]], i64 [[ADD]])
+// CHECK64-NEXT:    ret ptr addrspace(200) [[TMP3]]
 //
 __intcap_t test_ull(__intcap_t x, unsigned long long y) {
   return x + y;
@@ -105,12 +105,12 @@ __intcap_t test_ull(__intcap_t x, unsigned long long y) {
 // CHECK64-LABEL: @test_s128(
 // CHECK64-NEXT:  entry:
 // CHECK64-NEXT:    [[CONV:%.*]] = trunc i128 [[Y:%.*]] to i64
-// CHECK64-NEXT:    [[TMP0:%.*]] = getelementptr i8, i8 addrspace(200)* null, i64 [[CONV]]
-// CHECK64-NEXT:    [[TMP1:%.*]] = call i64 @llvm.cheri.cap.address.get.i64(i8 addrspace(200)* [[X:%.*]])
-// CHECK64-NEXT:    [[TMP2:%.*]] = call i64 @llvm.cheri.cap.address.get.i64(i8 addrspace(200)* [[TMP0]])
+// CHECK64-NEXT:    [[TMP0:%.*]] = getelementptr i8, ptr addrspace(200) null, i64 [[CONV]]
+// CHECK64-NEXT:    [[TMP1:%.*]] = call i64 @llvm.cheri.cap.address.get.i64(ptr addrspace(200) [[X:%.*]])
+// CHECK64-NEXT:    [[TMP2:%.*]] = call i64 @llvm.cheri.cap.address.get.i64(ptr addrspace(200) [[TMP0]])
 // CHECK64-NEXT:    [[ADD:%.*]] = add nsw i64 [[TMP1]], [[TMP2]]
-// CHECK64-NEXT:    [[TMP3:%.*]] = call i8 addrspace(200)* @llvm.cheri.cap.address.set.i64(i8 addrspace(200)* [[X]], i64 [[ADD]])
-// CHECK64-NEXT:    ret i8 addrspace(200)* [[TMP3]]
+// CHECK64-NEXT:    [[TMP3:%.*]] = call ptr addrspace(200) @llvm.cheri.cap.address.set.i64(ptr addrspace(200) [[X]], i64 [[ADD]])
+// CHECK64-NEXT:    ret ptr addrspace(200) [[TMP3]]
 //
 __intcap_t test_s128(__intcap_t x, __int128 y) {
   return x + y;
@@ -119,12 +119,12 @@ __intcap_t test_s128(__intcap_t x, __int128 y) {
 // CHECK64-LABEL: @test_u128(
 // CHECK64-NEXT:  entry:
 // CHECK64-NEXT:    [[CONV:%.*]] = trunc i128 [[Y:%.*]] to i64
-// CHECK64-NEXT:    [[TMP0:%.*]] = getelementptr i8, i8 addrspace(200)* null, i64 [[CONV]]
-// CHECK64-NEXT:    [[TMP1:%.*]] = call i64 @llvm.cheri.cap.address.get.i64(i8 addrspace(200)* [[X:%.*]])
-// CHECK64-NEXT:    [[TMP2:%.*]] = call i64 @llvm.cheri.cap.address.get.i64(i8 addrspace(200)* [[TMP0]])
+// CHECK64-NEXT:    [[TMP0:%.*]] = getelementptr i8, ptr addrspace(200) null, i64 [[CONV]]
+// CHECK64-NEXT:    [[TMP1:%.*]] = call i64 @llvm.cheri.cap.address.get.i64(ptr addrspace(200) [[X:%.*]])
+// CHECK64-NEXT:    [[TMP2:%.*]] = call i64 @llvm.cheri.cap.address.get.i64(ptr addrspace(200) [[TMP0]])
 // CHECK64-NEXT:    [[ADD:%.*]] = add nsw i64 [[TMP1]], [[TMP2]]
-// CHECK64-NEXT:    [[TMP3:%.*]] = call i8 addrspace(200)* @llvm.cheri.cap.address.set.i64(i8 addrspace(200)* [[X]], i64 [[ADD]])
-// CHECK64-NEXT:    ret i8 addrspace(200)* [[TMP3]]
+// CHECK64-NEXT:    [[TMP3:%.*]] = call ptr addrspace(200) @llvm.cheri.cap.address.set.i64(ptr addrspace(200) [[X]], i64 [[ADD]])
+// CHECK64-NEXT:    ret ptr addrspace(200) [[TMP3]]
 //
 __intcap_t test_u128(__intcap_t x, unsigned __int128 y) {
   return x + y;

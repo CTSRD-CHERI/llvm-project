@@ -12,164 +12,148 @@
 // RUN:   | opt -S -mem2reg | FileCheck %s --check-prefixes=PURECAP,PURECAP-TRAP
 
 // HYBRID-RUNTIME-LABEL: define {{[^@]+}}@maybe_unrepresentable
-// HYBRID-RUNTIME-SAME: (i32 addrspace(200)* noundef [[INPUT:%.*]], i64 noundef [[INDEX:%.*]]) #[[ATTR0:[0-9]+]] {
+// HYBRID-RUNTIME-SAME: (ptr addrspace(200) noundef [[INPUT:%.*]], i64 noundef [[INDEX:%.*]]) #[[ATTR0:[0-9]+]] {
 // HYBRID-RUNTIME-NEXT:  entry:
-// HYBRID-RUNTIME-NEXT:    [[ADD_PTR:%.*]] = getelementptr inbounds i32, i32 addrspace(200)* [[INPUT]], i64 [[INDEX]]
-// HYBRID-RUNTIME-NEXT:    [[TMP0:%.*]] = bitcast i32 addrspace(200)* [[INPUT]] to i8 addrspace(200)*, !nosanitize !4
-// HYBRID-RUNTIME-NEXT:    [[TAG_PRE:%.*]] = call i1 @llvm.cheri.cap.tag.get(i8 addrspace(200)* [[TMP0]]), !nosanitize !4
-// HYBRID-RUNTIME-NEXT:    [[TMP1:%.*]] = bitcast i32 addrspace(200)* [[ADD_PTR]] to i8 addrspace(200)*, !nosanitize !4
-// HYBRID-RUNTIME-NEXT:    [[TAG_POST:%.*]] = call i1 @llvm.cheri.cap.tag.get(i8 addrspace(200)* [[TMP1]]), !nosanitize !4
-// HYBRID-RUNTIME-NEXT:    [[TMP2:%.*]] = icmp eq i1 [[TAG_PRE]], [[TAG_POST]], !nosanitize !4
-// HYBRID-RUNTIME-NEXT:    br i1 [[TMP2]], label [[CONT:%.*]], label [[HANDLER_POINTER_OVERFLOW:%.*]], !prof [[PROF5:![0-9]+]], !nosanitize !4
+// HYBRID-RUNTIME-NEXT:    [[ADD_PTR:%.*]] = getelementptr inbounds i32, ptr addrspace(200) [[INPUT]], i64 [[INDEX]]
+// HYBRID-RUNTIME-NEXT:    [[TAG_PRE:%.*]] = call i1 @llvm.cheri.cap.tag.get(ptr addrspace(200) [[INPUT]]), !nosanitize !4
+// HYBRID-RUNTIME-NEXT:    [[TAG_POST:%.*]] = call i1 @llvm.cheri.cap.tag.get(ptr addrspace(200) [[ADD_PTR]]), !nosanitize !4
+// HYBRID-RUNTIME-NEXT:    [[TMP0:%.*]] = icmp eq i1 [[TAG_PRE]], [[TAG_POST]], !nosanitize !4
+// HYBRID-RUNTIME-NEXT:    br i1 [[TMP0]], label [[CONT:%.*]], label [[HANDLER_POINTER_OVERFLOW:%.*]], !prof [[PROF5:![0-9]+]], !nosanitize !4
 // HYBRID-RUNTIME:       handler.pointer_overflow:
-// HYBRID-RUNTIME-NEXT:    [[TMP3:%.*]] = ptrtoint i32 addrspace(200)* [[INPUT]] to i64, !nosanitize !4
-// HYBRID-RUNTIME-NEXT:    [[TMP4:%.*]] = ptrtoint i32 addrspace(200)* [[ADD_PTR]] to i64, !nosanitize !4
-// HYBRID-RUNTIME-NEXT:    call void @__ubsan_handle_pointer_overflow_abort(i8* bitcast ({ { [28 x i8]*, i32, i32 } }* @[[GLOB0:[0-9]+]] to i8*), i64 [[TMP3]], i64 [[TMP4]]) #[[ATTR3:[0-9]+]], !nosanitize !4
+// HYBRID-RUNTIME-NEXT:    [[TMP1:%.*]] = ptrtoint ptr addrspace(200) [[INPUT]] to i64, !nosanitize !4
+// HYBRID-RUNTIME-NEXT:    [[TMP2:%.*]] = ptrtoint ptr addrspace(200) [[ADD_PTR]] to i64, !nosanitize !4
+// HYBRID-RUNTIME-NEXT:    call void @__ubsan_handle_pointer_overflow_abort(ptr @[[GLOB0:[0-9]+]], i64 [[TMP1]], i64 [[TMP2]]) #[[ATTR3:[0-9]+]], !nosanitize !4
 // HYBRID-RUNTIME-NEXT:    unreachable, !nosanitize !4
 // HYBRID-RUNTIME:       cont:
-// HYBRID-RUNTIME-NEXT:    ret i32 addrspace(200)* [[ADD_PTR]]
+// HYBRID-RUNTIME-NEXT:    ret ptr addrspace(200) [[ADD_PTR]]
 //
 // HYBRID-TRAP-LABEL: define {{[^@]+}}@maybe_unrepresentable
-// HYBRID-TRAP-SAME: (i32 addrspace(200)* noundef [[INPUT:%.*]], i64 noundef [[INDEX:%.*]]) #[[ATTR0:[0-9]+]] {
+// HYBRID-TRAP-SAME: (ptr addrspace(200) noundef [[INPUT:%.*]], i64 noundef [[INDEX:%.*]]) #[[ATTR0:[0-9]+]] {
 // HYBRID-TRAP-NEXT:  entry:
-// HYBRID-TRAP-NEXT:    [[ADD_PTR:%.*]] = getelementptr inbounds i32, i32 addrspace(200)* [[INPUT]], i64 [[INDEX]]
-// HYBRID-TRAP-NEXT:    [[TMP0:%.*]] = bitcast i32 addrspace(200)* [[INPUT]] to i8 addrspace(200)*, !nosanitize !4
-// HYBRID-TRAP-NEXT:    [[TAG_PRE:%.*]] = call i1 @llvm.cheri.cap.tag.get(i8 addrspace(200)* [[TMP0]]), !nosanitize !4
-// HYBRID-TRAP-NEXT:    [[TMP1:%.*]] = bitcast i32 addrspace(200)* [[ADD_PTR]] to i8 addrspace(200)*, !nosanitize !4
-// HYBRID-TRAP-NEXT:    [[TAG_POST:%.*]] = call i1 @llvm.cheri.cap.tag.get(i8 addrspace(200)* [[TMP1]]), !nosanitize !4
-// HYBRID-TRAP-NEXT:    [[TMP2:%.*]] = icmp eq i1 [[TAG_PRE]], [[TAG_POST]], !nosanitize !4
-// HYBRID-TRAP-NEXT:    br i1 [[TMP2]], label [[CONT:%.*]], label [[TRAP:%.*]], !nosanitize !4
+// HYBRID-TRAP-NEXT:    [[ADD_PTR:%.*]] = getelementptr inbounds i32, ptr addrspace(200) [[INPUT]], i64 [[INDEX]]
+// HYBRID-TRAP-NEXT:    [[TAG_PRE:%.*]] = call i1 @llvm.cheri.cap.tag.get(ptr addrspace(200) [[INPUT]]), !nosanitize !4
+// HYBRID-TRAP-NEXT:    [[TAG_POST:%.*]] = call i1 @llvm.cheri.cap.tag.get(ptr addrspace(200) [[ADD_PTR]]), !nosanitize !4
+// HYBRID-TRAP-NEXT:    [[TMP0:%.*]] = icmp eq i1 [[TAG_PRE]], [[TAG_POST]], !nosanitize !4
+// HYBRID-TRAP-NEXT:    br i1 [[TMP0]], label [[CONT:%.*]], label [[TRAP:%.*]], !nosanitize !4
 // HYBRID-TRAP:       trap:
 // HYBRID-TRAP-NEXT:    call void @llvm.ubsantrap(i8 19) #[[ATTR3:[0-9]+]], !nosanitize !4
 // HYBRID-TRAP-NEXT:    unreachable, !nosanitize !4
 // HYBRID-TRAP:       cont:
-// HYBRID-TRAP-NEXT:    ret i32 addrspace(200)* [[ADD_PTR]]
+// HYBRID-TRAP-NEXT:    ret ptr addrspace(200) [[ADD_PTR]]
 //
 // PURECAP-RUNTIME-LABEL: define {{[^@]+}}@maybe_unrepresentable
-// PURECAP-RUNTIME-SAME: (i32 addrspace(200)* noundef [[INPUT:%.*]], i64 noundef [[INDEX:%.*]]) addrspace(200) #[[ATTR0:[0-9]+]] {
+// PURECAP-RUNTIME-SAME: (ptr addrspace(200) noundef [[INPUT:%.*]], i64 noundef [[INDEX:%.*]]) addrspace(200) #[[ATTR0:[0-9]+]] {
 // PURECAP-RUNTIME-NEXT:  entry:
-// PURECAP-RUNTIME-NEXT:    [[ADD_PTR:%.*]] = getelementptr inbounds i32, i32 addrspace(200)* [[INPUT]], i64 [[INDEX]]
-// PURECAP-RUNTIME-NEXT:    [[TMP0:%.*]] = bitcast i32 addrspace(200)* [[INPUT]] to i8 addrspace(200)*, !nosanitize !4
-// PURECAP-RUNTIME-NEXT:    [[TAG_PRE:%.*]] = call i1 @llvm.cheri.cap.tag.get(i8 addrspace(200)* [[TMP0]]), !nosanitize !4
-// PURECAP-RUNTIME-NEXT:    [[TMP1:%.*]] = bitcast i32 addrspace(200)* [[ADD_PTR]] to i8 addrspace(200)*, !nosanitize !4
-// PURECAP-RUNTIME-NEXT:    [[TAG_POST:%.*]] = call i1 @llvm.cheri.cap.tag.get(i8 addrspace(200)* [[TMP1]]), !nosanitize !4
-// PURECAP-RUNTIME-NEXT:    [[TMP2:%.*]] = icmp eq i1 [[TAG_PRE]], [[TAG_POST]], !nosanitize !4
-// PURECAP-RUNTIME-NEXT:    br i1 [[TMP2]], label [[CONT:%.*]], label [[HANDLER_POINTER_OVERFLOW:%.*]], !prof [[PROF5:![0-9]+]], !nosanitize !4
+// PURECAP-RUNTIME-NEXT:    [[ADD_PTR:%.*]] = getelementptr inbounds i32, ptr addrspace(200) [[INPUT]], i64 [[INDEX]]
+// PURECAP-RUNTIME-NEXT:    [[TAG_PRE:%.*]] = call i1 @llvm.cheri.cap.tag.get(ptr addrspace(200) [[INPUT]]), !nosanitize !4
+// PURECAP-RUNTIME-NEXT:    [[TAG_POST:%.*]] = call i1 @llvm.cheri.cap.tag.get(ptr addrspace(200) [[ADD_PTR]]), !nosanitize !4
+// PURECAP-RUNTIME-NEXT:    [[TMP0:%.*]] = icmp eq i1 [[TAG_PRE]], [[TAG_POST]], !nosanitize !4
+// PURECAP-RUNTIME-NEXT:    br i1 [[TMP0]], label [[CONT:%.*]], label [[HANDLER_POINTER_OVERFLOW:%.*]], !prof [[PROF5:![0-9]+]], !nosanitize !4
 // PURECAP-RUNTIME:       handler.pointer_overflow:
-// PURECAP-RUNTIME-NEXT:    [[TMP3:%.*]] = ptrtoint i32 addrspace(200)* [[INPUT]] to i64, !nosanitize !4
-// PURECAP-RUNTIME-NEXT:    [[TMP4:%.*]] = ptrtoint i32 addrspace(200)* [[ADD_PTR]] to i64, !nosanitize !4
-// PURECAP-RUNTIME-NEXT:    call void @__ubsan_handle_pointer_overflow_abort(i8 addrspace(200)* bitcast ({ { [28 x i8] addrspace(200)*, i32, i32 } } addrspace(200)* @[[GLOB0:[0-9]+]] to i8 addrspace(200)*), i64 [[TMP3]], i64 [[TMP4]]) #[[ATTR3:[0-9]+]], !nosanitize !4
+// PURECAP-RUNTIME-NEXT:    [[TMP1:%.*]] = ptrtoint ptr addrspace(200) [[INPUT]] to i64, !nosanitize !4
+// PURECAP-RUNTIME-NEXT:    [[TMP2:%.*]] = ptrtoint ptr addrspace(200) [[ADD_PTR]] to i64, !nosanitize !4
+// PURECAP-RUNTIME-NEXT:    call void @__ubsan_handle_pointer_overflow_abort(ptr addrspace(200) @[[GLOB0:[0-9]+]], i64 [[TMP1]], i64 [[TMP2]]) #[[ATTR3:[0-9]+]], !nosanitize !4
 // PURECAP-RUNTIME-NEXT:    unreachable, !nosanitize !4
 // PURECAP-RUNTIME:       cont:
-// PURECAP-RUNTIME-NEXT:    ret i32 addrspace(200)* [[ADD_PTR]]
+// PURECAP-RUNTIME-NEXT:    ret ptr addrspace(200) [[ADD_PTR]]
 //
 // PURECAP-TRAP-LABEL: define {{[^@]+}}@maybe_unrepresentable
-// PURECAP-TRAP-SAME: (i32 addrspace(200)* noundef [[INPUT:%.*]], i64 noundef [[INDEX:%.*]]) addrspace(200) #[[ATTR0:[0-9]+]] {
+// PURECAP-TRAP-SAME: (ptr addrspace(200) noundef [[INPUT:%.*]], i64 noundef [[INDEX:%.*]]) addrspace(200) #[[ATTR0:[0-9]+]] {
 // PURECAP-TRAP-NEXT:  entry:
-// PURECAP-TRAP-NEXT:    [[ADD_PTR:%.*]] = getelementptr inbounds i32, i32 addrspace(200)* [[INPUT]], i64 [[INDEX]]
-// PURECAP-TRAP-NEXT:    [[TMP0:%.*]] = bitcast i32 addrspace(200)* [[INPUT]] to i8 addrspace(200)*, !nosanitize !4
-// PURECAP-TRAP-NEXT:    [[TAG_PRE:%.*]] = call i1 @llvm.cheri.cap.tag.get(i8 addrspace(200)* [[TMP0]]), !nosanitize !4
-// PURECAP-TRAP-NEXT:    [[TMP1:%.*]] = bitcast i32 addrspace(200)* [[ADD_PTR]] to i8 addrspace(200)*, !nosanitize !4
-// PURECAP-TRAP-NEXT:    [[TAG_POST:%.*]] = call i1 @llvm.cheri.cap.tag.get(i8 addrspace(200)* [[TMP1]]), !nosanitize !4
-// PURECAP-TRAP-NEXT:    [[TMP2:%.*]] = icmp eq i1 [[TAG_PRE]], [[TAG_POST]], !nosanitize !4
-// PURECAP-TRAP-NEXT:    br i1 [[TMP2]], label [[CONT:%.*]], label [[TRAP:%.*]], !nosanitize !4
+// PURECAP-TRAP-NEXT:    [[ADD_PTR:%.*]] = getelementptr inbounds i32, ptr addrspace(200) [[INPUT]], i64 [[INDEX]]
+// PURECAP-TRAP-NEXT:    [[TAG_PRE:%.*]] = call i1 @llvm.cheri.cap.tag.get(ptr addrspace(200) [[INPUT]]), !nosanitize !4
+// PURECAP-TRAP-NEXT:    [[TAG_POST:%.*]] = call i1 @llvm.cheri.cap.tag.get(ptr addrspace(200) [[ADD_PTR]]), !nosanitize !4
+// PURECAP-TRAP-NEXT:    [[TMP0:%.*]] = icmp eq i1 [[TAG_PRE]], [[TAG_POST]], !nosanitize !4
+// PURECAP-TRAP-NEXT:    br i1 [[TMP0]], label [[CONT:%.*]], label [[TRAP:%.*]], !nosanitize !4
 // PURECAP-TRAP:       trap:
 // PURECAP-TRAP-NEXT:    call void @llvm.ubsantrap(i8 19) #[[ATTR3:[0-9]+]], !nosanitize !4
 // PURECAP-TRAP-NEXT:    unreachable, !nosanitize !4
 // PURECAP-TRAP:       cont:
-// PURECAP-TRAP-NEXT:    ret i32 addrspace(200)* [[ADD_PTR]]
+// PURECAP-TRAP-NEXT:    ret ptr addrspace(200) [[ADD_PTR]]
 //
 int *__capability maybe_unrepresentable(int *__capability input, long index) {
   return input + index;
 }
 
 // HYBRID-RUNTIME-LABEL: define {{[^@]+}}@maybe_unrepresentable_intcap
-// HYBRID-RUNTIME-SAME: (i32 addrspace(200)* noundef [[INPUT:%.*]], i64 noundef [[INDEX:%.*]]) #[[ATTR0]] {
+// HYBRID-RUNTIME-SAME: (ptr addrspace(200) noundef [[INPUT:%.*]], i64 noundef [[INDEX:%.*]]) #[[ATTR0]] {
 // HYBRID-RUNTIME-NEXT:  entry:
-// HYBRID-RUNTIME-NEXT:    [[TMP0:%.*]] = bitcast i32 addrspace(200)* [[INPUT]] to i8 addrspace(200)*
 // HYBRID-RUNTIME-NEXT:    [[MUL:%.*]] = mul i64 [[INDEX]], 8
-// HYBRID-RUNTIME-NEXT:    [[TMP1:%.*]] = getelementptr i8, i8 addrspace(200)* null, i64 [[MUL]]
-// HYBRID-RUNTIME-NEXT:    [[TMP2:%.*]] = call i64 @llvm.cheri.cap.address.get.i64(i8 addrspace(200)* [[TMP0]])
-// HYBRID-RUNTIME-NEXT:    [[TMP3:%.*]] = call i64 @llvm.cheri.cap.address.get.i64(i8 addrspace(200)* [[TMP1]])
-// HYBRID-RUNTIME-NEXT:    [[ADD:%.*]] = add i64 [[TMP2]], [[TMP3]]
-// HYBRID-RUNTIME-NEXT:    [[TMP4:%.*]] = call i8 addrspace(200)* @llvm.cheri.cap.address.set.i64(i8 addrspace(200)* [[TMP0]], i64 [[ADD]])
-// HYBRID-RUNTIME-NEXT:    [[TAG_PRE:%.*]] = call i1 @llvm.cheri.cap.tag.get(i8 addrspace(200)* [[TMP0]]), !nosanitize !4
-// HYBRID-RUNTIME-NEXT:    [[TAG_POST:%.*]] = call i1 @llvm.cheri.cap.tag.get(i8 addrspace(200)* [[TMP4]]), !nosanitize !4
-// HYBRID-RUNTIME-NEXT:    [[TMP5:%.*]] = icmp eq i1 [[TAG_PRE]], [[TAG_POST]], !nosanitize !4
-// HYBRID-RUNTIME-NEXT:    br i1 [[TMP5]], label [[CONT:%.*]], label [[HANDLER_POINTER_OVERFLOW:%.*]], !prof [[PROF5]], !nosanitize !4
+// HYBRID-RUNTIME-NEXT:    [[TMP0:%.*]] = getelementptr i8, ptr addrspace(200) null, i64 [[MUL]]
+// HYBRID-RUNTIME-NEXT:    [[TMP1:%.*]] = call i64 @llvm.cheri.cap.address.get.i64(ptr addrspace(200) [[INPUT]])
+// HYBRID-RUNTIME-NEXT:    [[TMP2:%.*]] = call i64 @llvm.cheri.cap.address.get.i64(ptr addrspace(200) [[TMP0]])
+// HYBRID-RUNTIME-NEXT:    [[ADD:%.*]] = add i64 [[TMP1]], [[TMP2]]
+// HYBRID-RUNTIME-NEXT:    [[TMP3:%.*]] = call ptr addrspace(200) @llvm.cheri.cap.address.set.i64(ptr addrspace(200) [[INPUT]], i64 [[ADD]])
+// HYBRID-RUNTIME-NEXT:    [[TAG_PRE:%.*]] = call i1 @llvm.cheri.cap.tag.get(ptr addrspace(200) [[INPUT]]), !nosanitize !4
+// HYBRID-RUNTIME-NEXT:    [[TAG_POST:%.*]] = call i1 @llvm.cheri.cap.tag.get(ptr addrspace(200) [[TMP3]]), !nosanitize !4
+// HYBRID-RUNTIME-NEXT:    [[TMP4:%.*]] = icmp eq i1 [[TAG_PRE]], [[TAG_POST]], !nosanitize !4
+// HYBRID-RUNTIME-NEXT:    br i1 [[TMP4]], label [[CONT:%.*]], label [[HANDLER_POINTER_OVERFLOW:%.*]], !prof [[PROF5]], !nosanitize !4
 // HYBRID-RUNTIME:       handler.pointer_overflow:
-// HYBRID-RUNTIME-NEXT:    [[TMP6:%.*]] = ptrtoint i8 addrspace(200)* [[TMP0]] to i64, !nosanitize !4
-// HYBRID-RUNTIME-NEXT:    [[TMP7:%.*]] = ptrtoint i8 addrspace(200)* [[TMP4]] to i64, !nosanitize !4
-// HYBRID-RUNTIME-NEXT:    call void @__ubsan_handle_pointer_overflow_abort(i8* bitcast ({ { [28 x i8]*, i32, i32 } }* @[[GLOB1:[0-9]+]] to i8*), i64 [[TMP6]], i64 [[TMP7]]) #[[ATTR3]], !nosanitize !4
+// HYBRID-RUNTIME-NEXT:    [[TMP5:%.*]] = ptrtoint ptr addrspace(200) [[INPUT]] to i64, !nosanitize !4
+// HYBRID-RUNTIME-NEXT:    [[TMP6:%.*]] = ptrtoint ptr addrspace(200) [[TMP3]] to i64, !nosanitize !4
+// HYBRID-RUNTIME-NEXT:    call void @__ubsan_handle_pointer_overflow_abort(ptr @[[GLOB1:[0-9]+]], i64 [[TMP5]], i64 [[TMP6]]) #[[ATTR3]], !nosanitize !4
 // HYBRID-RUNTIME-NEXT:    unreachable, !nosanitize !4
 // HYBRID-RUNTIME:       cont:
-// HYBRID-RUNTIME-NEXT:    [[TMP8:%.*]] = bitcast i8 addrspace(200)* [[TMP4]] to i32 addrspace(200)*
-// HYBRID-RUNTIME-NEXT:    ret i32 addrspace(200)* [[TMP8]]
+// HYBRID-RUNTIME-NEXT:    ret ptr addrspace(200) [[TMP3]]
 //
 // HYBRID-TRAP-LABEL: define {{[^@]+}}@maybe_unrepresentable_intcap
-// HYBRID-TRAP-SAME: (i32 addrspace(200)* noundef [[INPUT:%.*]], i64 noundef [[INDEX:%.*]]) #[[ATTR0]] {
+// HYBRID-TRAP-SAME: (ptr addrspace(200) noundef [[INPUT:%.*]], i64 noundef [[INDEX:%.*]]) #[[ATTR0]] {
 // HYBRID-TRAP-NEXT:  entry:
-// HYBRID-TRAP-NEXT:    [[TMP0:%.*]] = bitcast i32 addrspace(200)* [[INPUT]] to i8 addrspace(200)*
 // HYBRID-TRAP-NEXT:    [[MUL:%.*]] = mul i64 [[INDEX]], 8
-// HYBRID-TRAP-NEXT:    [[TMP1:%.*]] = getelementptr i8, i8 addrspace(200)* null, i64 [[MUL]]
-// HYBRID-TRAP-NEXT:    [[TMP2:%.*]] = call i64 @llvm.cheri.cap.address.get.i64(i8 addrspace(200)* [[TMP0]])
-// HYBRID-TRAP-NEXT:    [[TMP3:%.*]] = call i64 @llvm.cheri.cap.address.get.i64(i8 addrspace(200)* [[TMP1]])
-// HYBRID-TRAP-NEXT:    [[ADD:%.*]] = add i64 [[TMP2]], [[TMP3]]
-// HYBRID-TRAP-NEXT:    [[TMP4:%.*]] = call i8 addrspace(200)* @llvm.cheri.cap.address.set.i64(i8 addrspace(200)* [[TMP0]], i64 [[ADD]])
-// HYBRID-TRAP-NEXT:    [[TAG_PRE:%.*]] = call i1 @llvm.cheri.cap.tag.get(i8 addrspace(200)* [[TMP0]]), !nosanitize !4
-// HYBRID-TRAP-NEXT:    [[TAG_POST:%.*]] = call i1 @llvm.cheri.cap.tag.get(i8 addrspace(200)* [[TMP4]]), !nosanitize !4
-// HYBRID-TRAP-NEXT:    [[TMP5:%.*]] = icmp eq i1 [[TAG_PRE]], [[TAG_POST]], !nosanitize !4
-// HYBRID-TRAP-NEXT:    br i1 [[TMP5]], label [[CONT:%.*]], label [[TRAP:%.*]], !nosanitize !4
+// HYBRID-TRAP-NEXT:    [[TMP0:%.*]] = getelementptr i8, ptr addrspace(200) null, i64 [[MUL]]
+// HYBRID-TRAP-NEXT:    [[TMP1:%.*]] = call i64 @llvm.cheri.cap.address.get.i64(ptr addrspace(200) [[INPUT]])
+// HYBRID-TRAP-NEXT:    [[TMP2:%.*]] = call i64 @llvm.cheri.cap.address.get.i64(ptr addrspace(200) [[TMP0]])
+// HYBRID-TRAP-NEXT:    [[ADD:%.*]] = add i64 [[TMP1]], [[TMP2]]
+// HYBRID-TRAP-NEXT:    [[TMP3:%.*]] = call ptr addrspace(200) @llvm.cheri.cap.address.set.i64(ptr addrspace(200) [[INPUT]], i64 [[ADD]])
+// HYBRID-TRAP-NEXT:    [[TAG_PRE:%.*]] = call i1 @llvm.cheri.cap.tag.get(ptr addrspace(200) [[INPUT]]), !nosanitize !4
+// HYBRID-TRAP-NEXT:    [[TAG_POST:%.*]] = call i1 @llvm.cheri.cap.tag.get(ptr addrspace(200) [[TMP3]]), !nosanitize !4
+// HYBRID-TRAP-NEXT:    [[TMP4:%.*]] = icmp eq i1 [[TAG_PRE]], [[TAG_POST]], !nosanitize !4
+// HYBRID-TRAP-NEXT:    br i1 [[TMP4]], label [[CONT:%.*]], label [[TRAP:%.*]], !nosanitize !4
 // HYBRID-TRAP:       trap:
 // HYBRID-TRAP-NEXT:    call void @llvm.ubsantrap(i8 19) #[[ATTR3]], !nosanitize !4
 // HYBRID-TRAP-NEXT:    unreachable, !nosanitize !4
 // HYBRID-TRAP:       cont:
-// HYBRID-TRAP-NEXT:    [[TMP6:%.*]] = bitcast i8 addrspace(200)* [[TMP4]] to i32 addrspace(200)*
-// HYBRID-TRAP-NEXT:    ret i32 addrspace(200)* [[TMP6]]
+// HYBRID-TRAP-NEXT:    ret ptr addrspace(200) [[TMP3]]
 //
 // PURECAP-RUNTIME-LABEL: define {{[^@]+}}@maybe_unrepresentable_intcap
-// PURECAP-RUNTIME-SAME: (i32 addrspace(200)* noundef [[INPUT:%.*]], i64 noundef [[INDEX:%.*]]) addrspace(200) #[[ATTR0]] {
+// PURECAP-RUNTIME-SAME: (ptr addrspace(200) noundef [[INPUT:%.*]], i64 noundef [[INDEX:%.*]]) addrspace(200) #[[ATTR0]] {
 // PURECAP-RUNTIME-NEXT:  entry:
-// PURECAP-RUNTIME-NEXT:    [[TMP0:%.*]] = bitcast i32 addrspace(200)* [[INPUT]] to i8 addrspace(200)*
 // PURECAP-RUNTIME-NEXT:    [[MUL:%.*]] = mul i64 [[INDEX]], 8
-// PURECAP-RUNTIME-NEXT:    [[TMP1:%.*]] = getelementptr i8, i8 addrspace(200)* null, i64 [[MUL]]
-// PURECAP-RUNTIME-NEXT:    [[TMP2:%.*]] = call i64 @llvm.cheri.cap.address.get.i64(i8 addrspace(200)* [[TMP0]])
-// PURECAP-RUNTIME-NEXT:    [[TMP3:%.*]] = call i64 @llvm.cheri.cap.address.get.i64(i8 addrspace(200)* [[TMP1]])
-// PURECAP-RUNTIME-NEXT:    [[ADD:%.*]] = add i64 [[TMP2]], [[TMP3]]
-// PURECAP-RUNTIME-NEXT:    [[TMP4:%.*]] = call i8 addrspace(200)* @llvm.cheri.cap.address.set.i64(i8 addrspace(200)* [[TMP0]], i64 [[ADD]])
-// PURECAP-RUNTIME-NEXT:    [[TAG_PRE:%.*]] = call i1 @llvm.cheri.cap.tag.get(i8 addrspace(200)* [[TMP0]]), !nosanitize !4
-// PURECAP-RUNTIME-NEXT:    [[TAG_POST:%.*]] = call i1 @llvm.cheri.cap.tag.get(i8 addrspace(200)* [[TMP4]]), !nosanitize !4
-// PURECAP-RUNTIME-NEXT:    [[TMP5:%.*]] = icmp eq i1 [[TAG_PRE]], [[TAG_POST]], !nosanitize !4
-// PURECAP-RUNTIME-NEXT:    br i1 [[TMP5]], label [[CONT:%.*]], label [[HANDLER_POINTER_OVERFLOW:%.*]], !prof [[PROF5]], !nosanitize !4
+// PURECAP-RUNTIME-NEXT:    [[TMP0:%.*]] = getelementptr i8, ptr addrspace(200) null, i64 [[MUL]]
+// PURECAP-RUNTIME-NEXT:    [[TMP1:%.*]] = call i64 @llvm.cheri.cap.address.get.i64(ptr addrspace(200) [[INPUT]])
+// PURECAP-RUNTIME-NEXT:    [[TMP2:%.*]] = call i64 @llvm.cheri.cap.address.get.i64(ptr addrspace(200) [[TMP0]])
+// PURECAP-RUNTIME-NEXT:    [[ADD:%.*]] = add i64 [[TMP1]], [[TMP2]]
+// PURECAP-RUNTIME-NEXT:    [[TMP3:%.*]] = call ptr addrspace(200) @llvm.cheri.cap.address.set.i64(ptr addrspace(200) [[INPUT]], i64 [[ADD]])
+// PURECAP-RUNTIME-NEXT:    [[TAG_PRE:%.*]] = call i1 @llvm.cheri.cap.tag.get(ptr addrspace(200) [[INPUT]]), !nosanitize !4
+// PURECAP-RUNTIME-NEXT:    [[TAG_POST:%.*]] = call i1 @llvm.cheri.cap.tag.get(ptr addrspace(200) [[TMP3]]), !nosanitize !4
+// PURECAP-RUNTIME-NEXT:    [[TMP4:%.*]] = icmp eq i1 [[TAG_PRE]], [[TAG_POST]], !nosanitize !4
+// PURECAP-RUNTIME-NEXT:    br i1 [[TMP4]], label [[CONT:%.*]], label [[HANDLER_POINTER_OVERFLOW:%.*]], !prof [[PROF5]], !nosanitize !4
 // PURECAP-RUNTIME:       handler.pointer_overflow:
-// PURECAP-RUNTIME-NEXT:    [[TMP6:%.*]] = ptrtoint i8 addrspace(200)* [[TMP0]] to i64, !nosanitize !4
-// PURECAP-RUNTIME-NEXT:    [[TMP7:%.*]] = ptrtoint i8 addrspace(200)* [[TMP4]] to i64, !nosanitize !4
-// PURECAP-RUNTIME-NEXT:    call void @__ubsan_handle_pointer_overflow_abort(i8 addrspace(200)* bitcast ({ { [28 x i8] addrspace(200)*, i32, i32 } } addrspace(200)* @[[GLOB1:[0-9]+]] to i8 addrspace(200)*), i64 [[TMP6]], i64 [[TMP7]]) #[[ATTR3]], !nosanitize !4
+// PURECAP-RUNTIME-NEXT:    [[TMP5:%.*]] = ptrtoint ptr addrspace(200) [[INPUT]] to i64, !nosanitize !4
+// PURECAP-RUNTIME-NEXT:    [[TMP6:%.*]] = ptrtoint ptr addrspace(200) [[TMP3]] to i64, !nosanitize !4
+// PURECAP-RUNTIME-NEXT:    call void @__ubsan_handle_pointer_overflow_abort(ptr addrspace(200) @[[GLOB1:[0-9]+]], i64 [[TMP5]], i64 [[TMP6]]) #[[ATTR3]], !nosanitize !4
 // PURECAP-RUNTIME-NEXT:    unreachable, !nosanitize !4
 // PURECAP-RUNTIME:       cont:
-// PURECAP-RUNTIME-NEXT:    [[TMP8:%.*]] = bitcast i8 addrspace(200)* [[TMP4]] to i32 addrspace(200)*
-// PURECAP-RUNTIME-NEXT:    ret i32 addrspace(200)* [[TMP8]]
+// PURECAP-RUNTIME-NEXT:    ret ptr addrspace(200) [[TMP3]]
 //
 // PURECAP-TRAP-LABEL: define {{[^@]+}}@maybe_unrepresentable_intcap
-// PURECAP-TRAP-SAME: (i32 addrspace(200)* noundef [[INPUT:%.*]], i64 noundef [[INDEX:%.*]]) addrspace(200) #[[ATTR0]] {
+// PURECAP-TRAP-SAME: (ptr addrspace(200) noundef [[INPUT:%.*]], i64 noundef [[INDEX:%.*]]) addrspace(200) #[[ATTR0]] {
 // PURECAP-TRAP-NEXT:  entry:
-// PURECAP-TRAP-NEXT:    [[TMP0:%.*]] = bitcast i32 addrspace(200)* [[INPUT]] to i8 addrspace(200)*
 // PURECAP-TRAP-NEXT:    [[MUL:%.*]] = mul i64 [[INDEX]], 8
-// PURECAP-TRAP-NEXT:    [[TMP1:%.*]] = getelementptr i8, i8 addrspace(200)* null, i64 [[MUL]]
-// PURECAP-TRAP-NEXT:    [[TMP2:%.*]] = call i64 @llvm.cheri.cap.address.get.i64(i8 addrspace(200)* [[TMP0]])
-// PURECAP-TRAP-NEXT:    [[TMP3:%.*]] = call i64 @llvm.cheri.cap.address.get.i64(i8 addrspace(200)* [[TMP1]])
-// PURECAP-TRAP-NEXT:    [[ADD:%.*]] = add i64 [[TMP2]], [[TMP3]]
-// PURECAP-TRAP-NEXT:    [[TMP4:%.*]] = call i8 addrspace(200)* @llvm.cheri.cap.address.set.i64(i8 addrspace(200)* [[TMP0]], i64 [[ADD]])
-// PURECAP-TRAP-NEXT:    [[TAG_PRE:%.*]] = call i1 @llvm.cheri.cap.tag.get(i8 addrspace(200)* [[TMP0]]), !nosanitize !4
-// PURECAP-TRAP-NEXT:    [[TAG_POST:%.*]] = call i1 @llvm.cheri.cap.tag.get(i8 addrspace(200)* [[TMP4]]), !nosanitize !4
-// PURECAP-TRAP-NEXT:    [[TMP5:%.*]] = icmp eq i1 [[TAG_PRE]], [[TAG_POST]], !nosanitize !4
-// PURECAP-TRAP-NEXT:    br i1 [[TMP5]], label [[CONT:%.*]], label [[TRAP:%.*]], !nosanitize !4
+// PURECAP-TRAP-NEXT:    [[TMP0:%.*]] = getelementptr i8, ptr addrspace(200) null, i64 [[MUL]]
+// PURECAP-TRAP-NEXT:    [[TMP1:%.*]] = call i64 @llvm.cheri.cap.address.get.i64(ptr addrspace(200) [[INPUT]])
+// PURECAP-TRAP-NEXT:    [[TMP2:%.*]] = call i64 @llvm.cheri.cap.address.get.i64(ptr addrspace(200) [[TMP0]])
+// PURECAP-TRAP-NEXT:    [[ADD:%.*]] = add i64 [[TMP1]], [[TMP2]]
+// PURECAP-TRAP-NEXT:    [[TMP3:%.*]] = call ptr addrspace(200) @llvm.cheri.cap.address.set.i64(ptr addrspace(200) [[INPUT]], i64 [[ADD]])
+// PURECAP-TRAP-NEXT:    [[TAG_PRE:%.*]] = call i1 @llvm.cheri.cap.tag.get(ptr addrspace(200) [[INPUT]]), !nosanitize !4
+// PURECAP-TRAP-NEXT:    [[TAG_POST:%.*]] = call i1 @llvm.cheri.cap.tag.get(ptr addrspace(200) [[TMP3]]), !nosanitize !4
+// PURECAP-TRAP-NEXT:    [[TMP4:%.*]] = icmp eq i1 [[TAG_PRE]], [[TAG_POST]], !nosanitize !4
+// PURECAP-TRAP-NEXT:    br i1 [[TMP4]], label [[CONT:%.*]], label [[TRAP:%.*]], !nosanitize !4
 // PURECAP-TRAP:       trap:
 // PURECAP-TRAP-NEXT:    call void @llvm.ubsantrap(i8 19) #[[ATTR3]], !nosanitize !4
 // PURECAP-TRAP-NEXT:    unreachable, !nosanitize !4
 // PURECAP-TRAP:       cont:
-// PURECAP-TRAP-NEXT:    [[TMP6:%.*]] = bitcast i8 addrspace(200)* [[TMP4]] to i32 addrspace(200)*
-// PURECAP-TRAP-NEXT:    ret i32 addrspace(200)* [[TMP6]]
+// PURECAP-TRAP-NEXT:    ret ptr addrspace(200) [[TMP3]]
 //
 int *__capability maybe_unrepresentable_intcap(int *__capability input, long index) {
   // No checks generated here since arithmetic on __intcap_t is not required to be inbounds.
@@ -178,88 +162,80 @@ int *__capability maybe_unrepresentable_intcap(int *__capability input, long ind
 }
 
 // HYBRID-RUNTIME-LABEL: define {{[^@]+}}@bitwise_and_update_address
-// HYBRID-RUNTIME-SAME: (i32 addrspace(200)* noundef [[INPUT:%.*]], i64 noundef [[MASK:%.*]]) #[[ATTR0]] {
+// HYBRID-RUNTIME-SAME: (ptr addrspace(200) noundef [[INPUT:%.*]], i64 noundef [[MASK:%.*]]) #[[ATTR0]] {
 // HYBRID-RUNTIME-NEXT:  entry:
-// HYBRID-RUNTIME-NEXT:    [[TMP0:%.*]] = bitcast i32 addrspace(200)* [[INPUT]] to i8 addrspace(200)*
-// HYBRID-RUNTIME-NEXT:    [[TMP1:%.*]] = getelementptr i8, i8 addrspace(200)* null, i64 [[MASK]]
-// HYBRID-RUNTIME-NEXT:    [[TMP2:%.*]] = call i64 @llvm.cheri.cap.address.get.i64(i8 addrspace(200)* [[TMP0]])
-// HYBRID-RUNTIME-NEXT:    [[TMP3:%.*]] = call i64 @llvm.cheri.cap.address.get.i64(i8 addrspace(200)* [[TMP1]])
-// HYBRID-RUNTIME-NEXT:    [[AND:%.*]] = and i64 [[TMP2]], [[TMP3]]
-// HYBRID-RUNTIME-NEXT:    [[TMP4:%.*]] = call i8 addrspace(200)* @llvm.cheri.cap.address.set.i64(i8 addrspace(200)* [[TMP0]], i64 [[AND]])
-// HYBRID-RUNTIME-NEXT:    [[TAG_PRE:%.*]] = call i1 @llvm.cheri.cap.tag.get(i8 addrspace(200)* [[TMP0]]), !nosanitize !4
-// HYBRID-RUNTIME-NEXT:    [[TAG_POST:%.*]] = call i1 @llvm.cheri.cap.tag.get(i8 addrspace(200)* [[TMP4]]), !nosanitize !4
-// HYBRID-RUNTIME-NEXT:    [[TMP5:%.*]] = icmp eq i1 [[TAG_PRE]], [[TAG_POST]], !nosanitize !4
-// HYBRID-RUNTIME-NEXT:    br i1 [[TMP5]], label [[CONT:%.*]], label [[HANDLER_POINTER_OVERFLOW:%.*]], !prof [[PROF5]], !nosanitize !4
+// HYBRID-RUNTIME-NEXT:    [[TMP0:%.*]] = getelementptr i8, ptr addrspace(200) null, i64 [[MASK]]
+// HYBRID-RUNTIME-NEXT:    [[TMP1:%.*]] = call i64 @llvm.cheri.cap.address.get.i64(ptr addrspace(200) [[INPUT]])
+// HYBRID-RUNTIME-NEXT:    [[TMP2:%.*]] = call i64 @llvm.cheri.cap.address.get.i64(ptr addrspace(200) [[TMP0]])
+// HYBRID-RUNTIME-NEXT:    [[AND:%.*]] = and i64 [[TMP1]], [[TMP2]]
+// HYBRID-RUNTIME-NEXT:    [[TMP3:%.*]] = call ptr addrspace(200) @llvm.cheri.cap.address.set.i64(ptr addrspace(200) [[INPUT]], i64 [[AND]])
+// HYBRID-RUNTIME-NEXT:    [[TAG_PRE:%.*]] = call i1 @llvm.cheri.cap.tag.get(ptr addrspace(200) [[INPUT]]), !nosanitize !4
+// HYBRID-RUNTIME-NEXT:    [[TAG_POST:%.*]] = call i1 @llvm.cheri.cap.tag.get(ptr addrspace(200) [[TMP3]]), !nosanitize !4
+// HYBRID-RUNTIME-NEXT:    [[TMP4:%.*]] = icmp eq i1 [[TAG_PRE]], [[TAG_POST]], !nosanitize !4
+// HYBRID-RUNTIME-NEXT:    br i1 [[TMP4]], label [[CONT:%.*]], label [[HANDLER_POINTER_OVERFLOW:%.*]], !prof [[PROF5]], !nosanitize !4
 // HYBRID-RUNTIME:       handler.pointer_overflow:
-// HYBRID-RUNTIME-NEXT:    [[TMP6:%.*]] = ptrtoint i8 addrspace(200)* [[TMP0]] to i64, !nosanitize !4
-// HYBRID-RUNTIME-NEXT:    [[TMP7:%.*]] = ptrtoint i8 addrspace(200)* [[TMP4]] to i64, !nosanitize !4
-// HYBRID-RUNTIME-NEXT:    call void @__ubsan_handle_pointer_overflow_abort(i8* bitcast ({ { [28 x i8]*, i32, i32 } }* @[[GLOB2:[0-9]+]] to i8*), i64 [[TMP6]], i64 [[TMP7]]) #[[ATTR3]], !nosanitize !4
+// HYBRID-RUNTIME-NEXT:    [[TMP5:%.*]] = ptrtoint ptr addrspace(200) [[INPUT]] to i64, !nosanitize !4
+// HYBRID-RUNTIME-NEXT:    [[TMP6:%.*]] = ptrtoint ptr addrspace(200) [[TMP3]] to i64, !nosanitize !4
+// HYBRID-RUNTIME-NEXT:    call void @__ubsan_handle_pointer_overflow_abort(ptr @[[GLOB2:[0-9]+]], i64 [[TMP5]], i64 [[TMP6]]) #[[ATTR3]], !nosanitize !4
 // HYBRID-RUNTIME-NEXT:    unreachable, !nosanitize !4
 // HYBRID-RUNTIME:       cont:
-// HYBRID-RUNTIME-NEXT:    [[TMP8:%.*]] = bitcast i8 addrspace(200)* [[TMP4]] to i32 addrspace(200)*
-// HYBRID-RUNTIME-NEXT:    ret i32 addrspace(200)* [[TMP8]]
+// HYBRID-RUNTIME-NEXT:    ret ptr addrspace(200) [[TMP3]]
 //
 // HYBRID-TRAP-LABEL: define {{[^@]+}}@bitwise_and_update_address
-// HYBRID-TRAP-SAME: (i32 addrspace(200)* noundef [[INPUT:%.*]], i64 noundef [[MASK:%.*]]) #[[ATTR0]] {
+// HYBRID-TRAP-SAME: (ptr addrspace(200) noundef [[INPUT:%.*]], i64 noundef [[MASK:%.*]]) #[[ATTR0]] {
 // HYBRID-TRAP-NEXT:  entry:
-// HYBRID-TRAP-NEXT:    [[TMP0:%.*]] = bitcast i32 addrspace(200)* [[INPUT]] to i8 addrspace(200)*
-// HYBRID-TRAP-NEXT:    [[TMP1:%.*]] = getelementptr i8, i8 addrspace(200)* null, i64 [[MASK]]
-// HYBRID-TRAP-NEXT:    [[TMP2:%.*]] = call i64 @llvm.cheri.cap.address.get.i64(i8 addrspace(200)* [[TMP0]])
-// HYBRID-TRAP-NEXT:    [[TMP3:%.*]] = call i64 @llvm.cheri.cap.address.get.i64(i8 addrspace(200)* [[TMP1]])
-// HYBRID-TRAP-NEXT:    [[AND:%.*]] = and i64 [[TMP2]], [[TMP3]]
-// HYBRID-TRAP-NEXT:    [[TMP4:%.*]] = call i8 addrspace(200)* @llvm.cheri.cap.address.set.i64(i8 addrspace(200)* [[TMP0]], i64 [[AND]])
-// HYBRID-TRAP-NEXT:    [[TAG_PRE:%.*]] = call i1 @llvm.cheri.cap.tag.get(i8 addrspace(200)* [[TMP0]]), !nosanitize !4
-// HYBRID-TRAP-NEXT:    [[TAG_POST:%.*]] = call i1 @llvm.cheri.cap.tag.get(i8 addrspace(200)* [[TMP4]]), !nosanitize !4
-// HYBRID-TRAP-NEXT:    [[TMP5:%.*]] = icmp eq i1 [[TAG_PRE]], [[TAG_POST]], !nosanitize !4
-// HYBRID-TRAP-NEXT:    br i1 [[TMP5]], label [[CONT:%.*]], label [[TRAP:%.*]], !nosanitize !4
+// HYBRID-TRAP-NEXT:    [[TMP0:%.*]] = getelementptr i8, ptr addrspace(200) null, i64 [[MASK]]
+// HYBRID-TRAP-NEXT:    [[TMP1:%.*]] = call i64 @llvm.cheri.cap.address.get.i64(ptr addrspace(200) [[INPUT]])
+// HYBRID-TRAP-NEXT:    [[TMP2:%.*]] = call i64 @llvm.cheri.cap.address.get.i64(ptr addrspace(200) [[TMP0]])
+// HYBRID-TRAP-NEXT:    [[AND:%.*]] = and i64 [[TMP1]], [[TMP2]]
+// HYBRID-TRAP-NEXT:    [[TMP3:%.*]] = call ptr addrspace(200) @llvm.cheri.cap.address.set.i64(ptr addrspace(200) [[INPUT]], i64 [[AND]])
+// HYBRID-TRAP-NEXT:    [[TAG_PRE:%.*]] = call i1 @llvm.cheri.cap.tag.get(ptr addrspace(200) [[INPUT]]), !nosanitize !4
+// HYBRID-TRAP-NEXT:    [[TAG_POST:%.*]] = call i1 @llvm.cheri.cap.tag.get(ptr addrspace(200) [[TMP3]]), !nosanitize !4
+// HYBRID-TRAP-NEXT:    [[TMP4:%.*]] = icmp eq i1 [[TAG_PRE]], [[TAG_POST]], !nosanitize !4
+// HYBRID-TRAP-NEXT:    br i1 [[TMP4]], label [[CONT:%.*]], label [[TRAP:%.*]], !nosanitize !4
 // HYBRID-TRAP:       trap:
 // HYBRID-TRAP-NEXT:    call void @llvm.ubsantrap(i8 19) #[[ATTR3]], !nosanitize !4
 // HYBRID-TRAP-NEXT:    unreachable, !nosanitize !4
 // HYBRID-TRAP:       cont:
-// HYBRID-TRAP-NEXT:    [[TMP6:%.*]] = bitcast i8 addrspace(200)* [[TMP4]] to i32 addrspace(200)*
-// HYBRID-TRAP-NEXT:    ret i32 addrspace(200)* [[TMP6]]
+// HYBRID-TRAP-NEXT:    ret ptr addrspace(200) [[TMP3]]
 //
 // PURECAP-RUNTIME-LABEL: define {{[^@]+}}@bitwise_and_update_address
-// PURECAP-RUNTIME-SAME: (i32 addrspace(200)* noundef [[INPUT:%.*]], i64 noundef [[MASK:%.*]]) addrspace(200) #[[ATTR0]] {
+// PURECAP-RUNTIME-SAME: (ptr addrspace(200) noundef [[INPUT:%.*]], i64 noundef [[MASK:%.*]]) addrspace(200) #[[ATTR0]] {
 // PURECAP-RUNTIME-NEXT:  entry:
-// PURECAP-RUNTIME-NEXT:    [[TMP0:%.*]] = bitcast i32 addrspace(200)* [[INPUT]] to i8 addrspace(200)*
-// PURECAP-RUNTIME-NEXT:    [[TMP1:%.*]] = getelementptr i8, i8 addrspace(200)* null, i64 [[MASK]]
-// PURECAP-RUNTIME-NEXT:    [[TMP2:%.*]] = call i64 @llvm.cheri.cap.address.get.i64(i8 addrspace(200)* [[TMP0]])
-// PURECAP-RUNTIME-NEXT:    [[TMP3:%.*]] = call i64 @llvm.cheri.cap.address.get.i64(i8 addrspace(200)* [[TMP1]])
-// PURECAP-RUNTIME-NEXT:    [[AND:%.*]] = and i64 [[TMP2]], [[TMP3]]
-// PURECAP-RUNTIME-NEXT:    [[TMP4:%.*]] = call i8 addrspace(200)* @llvm.cheri.cap.address.set.i64(i8 addrspace(200)* [[TMP0]], i64 [[AND]])
-// PURECAP-RUNTIME-NEXT:    [[TAG_PRE:%.*]] = call i1 @llvm.cheri.cap.tag.get(i8 addrspace(200)* [[TMP0]]), !nosanitize !4
-// PURECAP-RUNTIME-NEXT:    [[TAG_POST:%.*]] = call i1 @llvm.cheri.cap.tag.get(i8 addrspace(200)* [[TMP4]]), !nosanitize !4
-// PURECAP-RUNTIME-NEXT:    [[TMP5:%.*]] = icmp eq i1 [[TAG_PRE]], [[TAG_POST]], !nosanitize !4
-// PURECAP-RUNTIME-NEXT:    br i1 [[TMP5]], label [[CONT:%.*]], label [[HANDLER_POINTER_OVERFLOW:%.*]], !prof [[PROF5]], !nosanitize !4
+// PURECAP-RUNTIME-NEXT:    [[TMP0:%.*]] = getelementptr i8, ptr addrspace(200) null, i64 [[MASK]]
+// PURECAP-RUNTIME-NEXT:    [[TMP1:%.*]] = call i64 @llvm.cheri.cap.address.get.i64(ptr addrspace(200) [[INPUT]])
+// PURECAP-RUNTIME-NEXT:    [[TMP2:%.*]] = call i64 @llvm.cheri.cap.address.get.i64(ptr addrspace(200) [[TMP0]])
+// PURECAP-RUNTIME-NEXT:    [[AND:%.*]] = and i64 [[TMP1]], [[TMP2]]
+// PURECAP-RUNTIME-NEXT:    [[TMP3:%.*]] = call ptr addrspace(200) @llvm.cheri.cap.address.set.i64(ptr addrspace(200) [[INPUT]], i64 [[AND]])
+// PURECAP-RUNTIME-NEXT:    [[TAG_PRE:%.*]] = call i1 @llvm.cheri.cap.tag.get(ptr addrspace(200) [[INPUT]]), !nosanitize !4
+// PURECAP-RUNTIME-NEXT:    [[TAG_POST:%.*]] = call i1 @llvm.cheri.cap.tag.get(ptr addrspace(200) [[TMP3]]), !nosanitize !4
+// PURECAP-RUNTIME-NEXT:    [[TMP4:%.*]] = icmp eq i1 [[TAG_PRE]], [[TAG_POST]], !nosanitize !4
+// PURECAP-RUNTIME-NEXT:    br i1 [[TMP4]], label [[CONT:%.*]], label [[HANDLER_POINTER_OVERFLOW:%.*]], !prof [[PROF5]], !nosanitize !4
 // PURECAP-RUNTIME:       handler.pointer_overflow:
-// PURECAP-RUNTIME-NEXT:    [[TMP6:%.*]] = ptrtoint i8 addrspace(200)* [[TMP0]] to i64, !nosanitize !4
-// PURECAP-RUNTIME-NEXT:    [[TMP7:%.*]] = ptrtoint i8 addrspace(200)* [[TMP4]] to i64, !nosanitize !4
-// PURECAP-RUNTIME-NEXT:    call void @__ubsan_handle_pointer_overflow_abort(i8 addrspace(200)* bitcast ({ { [28 x i8] addrspace(200)*, i32, i32 } } addrspace(200)* @[[GLOB2:[0-9]+]] to i8 addrspace(200)*), i64 [[TMP6]], i64 [[TMP7]]) #[[ATTR3]], !nosanitize !4
+// PURECAP-RUNTIME-NEXT:    [[TMP5:%.*]] = ptrtoint ptr addrspace(200) [[INPUT]] to i64, !nosanitize !4
+// PURECAP-RUNTIME-NEXT:    [[TMP6:%.*]] = ptrtoint ptr addrspace(200) [[TMP3]] to i64, !nosanitize !4
+// PURECAP-RUNTIME-NEXT:    call void @__ubsan_handle_pointer_overflow_abort(ptr addrspace(200) @[[GLOB2:[0-9]+]], i64 [[TMP5]], i64 [[TMP6]]) #[[ATTR3]], !nosanitize !4
 // PURECAP-RUNTIME-NEXT:    unreachable, !nosanitize !4
 // PURECAP-RUNTIME:       cont:
-// PURECAP-RUNTIME-NEXT:    [[TMP8:%.*]] = bitcast i8 addrspace(200)* [[TMP4]] to i32 addrspace(200)*
-// PURECAP-RUNTIME-NEXT:    ret i32 addrspace(200)* [[TMP8]]
+// PURECAP-RUNTIME-NEXT:    ret ptr addrspace(200) [[TMP3]]
 //
 // PURECAP-TRAP-LABEL: define {{[^@]+}}@bitwise_and_update_address
-// PURECAP-TRAP-SAME: (i32 addrspace(200)* noundef [[INPUT:%.*]], i64 noundef [[MASK:%.*]]) addrspace(200) #[[ATTR0]] {
+// PURECAP-TRAP-SAME: (ptr addrspace(200) noundef [[INPUT:%.*]], i64 noundef [[MASK:%.*]]) addrspace(200) #[[ATTR0]] {
 // PURECAP-TRAP-NEXT:  entry:
-// PURECAP-TRAP-NEXT:    [[TMP0:%.*]] = bitcast i32 addrspace(200)* [[INPUT]] to i8 addrspace(200)*
-// PURECAP-TRAP-NEXT:    [[TMP1:%.*]] = getelementptr i8, i8 addrspace(200)* null, i64 [[MASK]]
-// PURECAP-TRAP-NEXT:    [[TMP2:%.*]] = call i64 @llvm.cheri.cap.address.get.i64(i8 addrspace(200)* [[TMP0]])
-// PURECAP-TRAP-NEXT:    [[TMP3:%.*]] = call i64 @llvm.cheri.cap.address.get.i64(i8 addrspace(200)* [[TMP1]])
-// PURECAP-TRAP-NEXT:    [[AND:%.*]] = and i64 [[TMP2]], [[TMP3]]
-// PURECAP-TRAP-NEXT:    [[TMP4:%.*]] = call i8 addrspace(200)* @llvm.cheri.cap.address.set.i64(i8 addrspace(200)* [[TMP0]], i64 [[AND]])
-// PURECAP-TRAP-NEXT:    [[TAG_PRE:%.*]] = call i1 @llvm.cheri.cap.tag.get(i8 addrspace(200)* [[TMP0]]), !nosanitize !4
-// PURECAP-TRAP-NEXT:    [[TAG_POST:%.*]] = call i1 @llvm.cheri.cap.tag.get(i8 addrspace(200)* [[TMP4]]), !nosanitize !4
-// PURECAP-TRAP-NEXT:    [[TMP5:%.*]] = icmp eq i1 [[TAG_PRE]], [[TAG_POST]], !nosanitize !4
-// PURECAP-TRAP-NEXT:    br i1 [[TMP5]], label [[CONT:%.*]], label [[TRAP:%.*]], !nosanitize !4
+// PURECAP-TRAP-NEXT:    [[TMP0:%.*]] = getelementptr i8, ptr addrspace(200) null, i64 [[MASK]]
+// PURECAP-TRAP-NEXT:    [[TMP1:%.*]] = call i64 @llvm.cheri.cap.address.get.i64(ptr addrspace(200) [[INPUT]])
+// PURECAP-TRAP-NEXT:    [[TMP2:%.*]] = call i64 @llvm.cheri.cap.address.get.i64(ptr addrspace(200) [[TMP0]])
+// PURECAP-TRAP-NEXT:    [[AND:%.*]] = and i64 [[TMP1]], [[TMP2]]
+// PURECAP-TRAP-NEXT:    [[TMP3:%.*]] = call ptr addrspace(200) @llvm.cheri.cap.address.set.i64(ptr addrspace(200) [[INPUT]], i64 [[AND]])
+// PURECAP-TRAP-NEXT:    [[TAG_PRE:%.*]] = call i1 @llvm.cheri.cap.tag.get(ptr addrspace(200) [[INPUT]]), !nosanitize !4
+// PURECAP-TRAP-NEXT:    [[TAG_POST:%.*]] = call i1 @llvm.cheri.cap.tag.get(ptr addrspace(200) [[TMP3]]), !nosanitize !4
+// PURECAP-TRAP-NEXT:    [[TMP4:%.*]] = icmp eq i1 [[TAG_PRE]], [[TAG_POST]], !nosanitize !4
+// PURECAP-TRAP-NEXT:    br i1 [[TMP4]], label [[CONT:%.*]], label [[TRAP:%.*]], !nosanitize !4
 // PURECAP-TRAP:       trap:
 // PURECAP-TRAP-NEXT:    call void @llvm.ubsantrap(i8 19) #[[ATTR3]], !nosanitize !4
 // PURECAP-TRAP-NEXT:    unreachable, !nosanitize !4
 // PURECAP-TRAP:       cont:
-// PURECAP-TRAP-NEXT:    [[TMP6:%.*]] = bitcast i8 addrspace(200)* [[TMP4]] to i32 addrspace(200)*
-// PURECAP-TRAP-NEXT:    ret i32 addrspace(200)* [[TMP6]]
+// PURECAP-TRAP-NEXT:    ret ptr addrspace(200) [[TMP3]]
 //
 int *__capability bitwise_and_update_address(int *__capability input, long mask) {
   // TODO: generate checks here
@@ -267,88 +243,80 @@ int *__capability bitwise_and_update_address(int *__capability input, long mask)
 }
 
 // HYBRID-RUNTIME-LABEL: define {{[^@]+}}@bitwise_or_update_address
-// HYBRID-RUNTIME-SAME: (i32 addrspace(200)* noundef [[INPUT:%.*]], i64 noundef [[BITS:%.*]]) #[[ATTR0]] {
+// HYBRID-RUNTIME-SAME: (ptr addrspace(200) noundef [[INPUT:%.*]], i64 noundef [[BITS:%.*]]) #[[ATTR0]] {
 // HYBRID-RUNTIME-NEXT:  entry:
-// HYBRID-RUNTIME-NEXT:    [[TMP0:%.*]] = bitcast i32 addrspace(200)* [[INPUT]] to i8 addrspace(200)*
-// HYBRID-RUNTIME-NEXT:    [[TMP1:%.*]] = getelementptr i8, i8 addrspace(200)* null, i64 [[BITS]]
-// HYBRID-RUNTIME-NEXT:    [[TMP2:%.*]] = call i64 @llvm.cheri.cap.address.get.i64(i8 addrspace(200)* [[TMP0]])
-// HYBRID-RUNTIME-NEXT:    [[TMP3:%.*]] = call i64 @llvm.cheri.cap.address.get.i64(i8 addrspace(200)* [[TMP1]])
-// HYBRID-RUNTIME-NEXT:    [[OR:%.*]] = or i64 [[TMP2]], [[TMP3]]
-// HYBRID-RUNTIME-NEXT:    [[TMP4:%.*]] = call i8 addrspace(200)* @llvm.cheri.cap.address.set.i64(i8 addrspace(200)* [[TMP0]], i64 [[OR]])
-// HYBRID-RUNTIME-NEXT:    [[TAG_PRE:%.*]] = call i1 @llvm.cheri.cap.tag.get(i8 addrspace(200)* [[TMP0]]), !nosanitize !4
-// HYBRID-RUNTIME-NEXT:    [[TAG_POST:%.*]] = call i1 @llvm.cheri.cap.tag.get(i8 addrspace(200)* [[TMP4]]), !nosanitize !4
-// HYBRID-RUNTIME-NEXT:    [[TMP5:%.*]] = icmp eq i1 [[TAG_PRE]], [[TAG_POST]], !nosanitize !4
-// HYBRID-RUNTIME-NEXT:    br i1 [[TMP5]], label [[CONT:%.*]], label [[HANDLER_POINTER_OVERFLOW:%.*]], !prof [[PROF5]], !nosanitize !4
+// HYBRID-RUNTIME-NEXT:    [[TMP0:%.*]] = getelementptr i8, ptr addrspace(200) null, i64 [[BITS]]
+// HYBRID-RUNTIME-NEXT:    [[TMP1:%.*]] = call i64 @llvm.cheri.cap.address.get.i64(ptr addrspace(200) [[INPUT]])
+// HYBRID-RUNTIME-NEXT:    [[TMP2:%.*]] = call i64 @llvm.cheri.cap.address.get.i64(ptr addrspace(200) [[TMP0]])
+// HYBRID-RUNTIME-NEXT:    [[OR:%.*]] = or i64 [[TMP1]], [[TMP2]]
+// HYBRID-RUNTIME-NEXT:    [[TMP3:%.*]] = call ptr addrspace(200) @llvm.cheri.cap.address.set.i64(ptr addrspace(200) [[INPUT]], i64 [[OR]])
+// HYBRID-RUNTIME-NEXT:    [[TAG_PRE:%.*]] = call i1 @llvm.cheri.cap.tag.get(ptr addrspace(200) [[INPUT]]), !nosanitize !4
+// HYBRID-RUNTIME-NEXT:    [[TAG_POST:%.*]] = call i1 @llvm.cheri.cap.tag.get(ptr addrspace(200) [[TMP3]]), !nosanitize !4
+// HYBRID-RUNTIME-NEXT:    [[TMP4:%.*]] = icmp eq i1 [[TAG_PRE]], [[TAG_POST]], !nosanitize !4
+// HYBRID-RUNTIME-NEXT:    br i1 [[TMP4]], label [[CONT:%.*]], label [[HANDLER_POINTER_OVERFLOW:%.*]], !prof [[PROF5]], !nosanitize !4
 // HYBRID-RUNTIME:       handler.pointer_overflow:
-// HYBRID-RUNTIME-NEXT:    [[TMP6:%.*]] = ptrtoint i8 addrspace(200)* [[TMP0]] to i64, !nosanitize !4
-// HYBRID-RUNTIME-NEXT:    [[TMP7:%.*]] = ptrtoint i8 addrspace(200)* [[TMP4]] to i64, !nosanitize !4
-// HYBRID-RUNTIME-NEXT:    call void @__ubsan_handle_pointer_overflow_abort(i8* bitcast ({ { [28 x i8]*, i32, i32 } }* @[[GLOB3:[0-9]+]] to i8*), i64 [[TMP6]], i64 [[TMP7]]) #[[ATTR3]], !nosanitize !4
+// HYBRID-RUNTIME-NEXT:    [[TMP5:%.*]] = ptrtoint ptr addrspace(200) [[INPUT]] to i64, !nosanitize !4
+// HYBRID-RUNTIME-NEXT:    [[TMP6:%.*]] = ptrtoint ptr addrspace(200) [[TMP3]] to i64, !nosanitize !4
+// HYBRID-RUNTIME-NEXT:    call void @__ubsan_handle_pointer_overflow_abort(ptr @[[GLOB3:[0-9]+]], i64 [[TMP5]], i64 [[TMP6]]) #[[ATTR3]], !nosanitize !4
 // HYBRID-RUNTIME-NEXT:    unreachable, !nosanitize !4
 // HYBRID-RUNTIME:       cont:
-// HYBRID-RUNTIME-NEXT:    [[TMP8:%.*]] = bitcast i8 addrspace(200)* [[TMP4]] to i32 addrspace(200)*
-// HYBRID-RUNTIME-NEXT:    ret i32 addrspace(200)* [[TMP8]]
+// HYBRID-RUNTIME-NEXT:    ret ptr addrspace(200) [[TMP3]]
 //
 // HYBRID-TRAP-LABEL: define {{[^@]+}}@bitwise_or_update_address
-// HYBRID-TRAP-SAME: (i32 addrspace(200)* noundef [[INPUT:%.*]], i64 noundef [[BITS:%.*]]) #[[ATTR0]] {
+// HYBRID-TRAP-SAME: (ptr addrspace(200) noundef [[INPUT:%.*]], i64 noundef [[BITS:%.*]]) #[[ATTR0]] {
 // HYBRID-TRAP-NEXT:  entry:
-// HYBRID-TRAP-NEXT:    [[TMP0:%.*]] = bitcast i32 addrspace(200)* [[INPUT]] to i8 addrspace(200)*
-// HYBRID-TRAP-NEXT:    [[TMP1:%.*]] = getelementptr i8, i8 addrspace(200)* null, i64 [[BITS]]
-// HYBRID-TRAP-NEXT:    [[TMP2:%.*]] = call i64 @llvm.cheri.cap.address.get.i64(i8 addrspace(200)* [[TMP0]])
-// HYBRID-TRAP-NEXT:    [[TMP3:%.*]] = call i64 @llvm.cheri.cap.address.get.i64(i8 addrspace(200)* [[TMP1]])
-// HYBRID-TRAP-NEXT:    [[OR:%.*]] = or i64 [[TMP2]], [[TMP3]]
-// HYBRID-TRAP-NEXT:    [[TMP4:%.*]] = call i8 addrspace(200)* @llvm.cheri.cap.address.set.i64(i8 addrspace(200)* [[TMP0]], i64 [[OR]])
-// HYBRID-TRAP-NEXT:    [[TAG_PRE:%.*]] = call i1 @llvm.cheri.cap.tag.get(i8 addrspace(200)* [[TMP0]]), !nosanitize !4
-// HYBRID-TRAP-NEXT:    [[TAG_POST:%.*]] = call i1 @llvm.cheri.cap.tag.get(i8 addrspace(200)* [[TMP4]]), !nosanitize !4
-// HYBRID-TRAP-NEXT:    [[TMP5:%.*]] = icmp eq i1 [[TAG_PRE]], [[TAG_POST]], !nosanitize !4
-// HYBRID-TRAP-NEXT:    br i1 [[TMP5]], label [[CONT:%.*]], label [[TRAP:%.*]], !nosanitize !4
+// HYBRID-TRAP-NEXT:    [[TMP0:%.*]] = getelementptr i8, ptr addrspace(200) null, i64 [[BITS]]
+// HYBRID-TRAP-NEXT:    [[TMP1:%.*]] = call i64 @llvm.cheri.cap.address.get.i64(ptr addrspace(200) [[INPUT]])
+// HYBRID-TRAP-NEXT:    [[TMP2:%.*]] = call i64 @llvm.cheri.cap.address.get.i64(ptr addrspace(200) [[TMP0]])
+// HYBRID-TRAP-NEXT:    [[OR:%.*]] = or i64 [[TMP1]], [[TMP2]]
+// HYBRID-TRAP-NEXT:    [[TMP3:%.*]] = call ptr addrspace(200) @llvm.cheri.cap.address.set.i64(ptr addrspace(200) [[INPUT]], i64 [[OR]])
+// HYBRID-TRAP-NEXT:    [[TAG_PRE:%.*]] = call i1 @llvm.cheri.cap.tag.get(ptr addrspace(200) [[INPUT]]), !nosanitize !4
+// HYBRID-TRAP-NEXT:    [[TAG_POST:%.*]] = call i1 @llvm.cheri.cap.tag.get(ptr addrspace(200) [[TMP3]]), !nosanitize !4
+// HYBRID-TRAP-NEXT:    [[TMP4:%.*]] = icmp eq i1 [[TAG_PRE]], [[TAG_POST]], !nosanitize !4
+// HYBRID-TRAP-NEXT:    br i1 [[TMP4]], label [[CONT:%.*]], label [[TRAP:%.*]], !nosanitize !4
 // HYBRID-TRAP:       trap:
 // HYBRID-TRAP-NEXT:    call void @llvm.ubsantrap(i8 19) #[[ATTR3]], !nosanitize !4
 // HYBRID-TRAP-NEXT:    unreachable, !nosanitize !4
 // HYBRID-TRAP:       cont:
-// HYBRID-TRAP-NEXT:    [[TMP6:%.*]] = bitcast i8 addrspace(200)* [[TMP4]] to i32 addrspace(200)*
-// HYBRID-TRAP-NEXT:    ret i32 addrspace(200)* [[TMP6]]
+// HYBRID-TRAP-NEXT:    ret ptr addrspace(200) [[TMP3]]
 //
 // PURECAP-RUNTIME-LABEL: define {{[^@]+}}@bitwise_or_update_address
-// PURECAP-RUNTIME-SAME: (i32 addrspace(200)* noundef [[INPUT:%.*]], i64 noundef [[BITS:%.*]]) addrspace(200) #[[ATTR0]] {
+// PURECAP-RUNTIME-SAME: (ptr addrspace(200) noundef [[INPUT:%.*]], i64 noundef [[BITS:%.*]]) addrspace(200) #[[ATTR0]] {
 // PURECAP-RUNTIME-NEXT:  entry:
-// PURECAP-RUNTIME-NEXT:    [[TMP0:%.*]] = bitcast i32 addrspace(200)* [[INPUT]] to i8 addrspace(200)*
-// PURECAP-RUNTIME-NEXT:    [[TMP1:%.*]] = getelementptr i8, i8 addrspace(200)* null, i64 [[BITS]]
-// PURECAP-RUNTIME-NEXT:    [[TMP2:%.*]] = call i64 @llvm.cheri.cap.address.get.i64(i8 addrspace(200)* [[TMP0]])
-// PURECAP-RUNTIME-NEXT:    [[TMP3:%.*]] = call i64 @llvm.cheri.cap.address.get.i64(i8 addrspace(200)* [[TMP1]])
-// PURECAP-RUNTIME-NEXT:    [[OR:%.*]] = or i64 [[TMP2]], [[TMP3]]
-// PURECAP-RUNTIME-NEXT:    [[TMP4:%.*]] = call i8 addrspace(200)* @llvm.cheri.cap.address.set.i64(i8 addrspace(200)* [[TMP0]], i64 [[OR]])
-// PURECAP-RUNTIME-NEXT:    [[TAG_PRE:%.*]] = call i1 @llvm.cheri.cap.tag.get(i8 addrspace(200)* [[TMP0]]), !nosanitize !4
-// PURECAP-RUNTIME-NEXT:    [[TAG_POST:%.*]] = call i1 @llvm.cheri.cap.tag.get(i8 addrspace(200)* [[TMP4]]), !nosanitize !4
-// PURECAP-RUNTIME-NEXT:    [[TMP5:%.*]] = icmp eq i1 [[TAG_PRE]], [[TAG_POST]], !nosanitize !4
-// PURECAP-RUNTIME-NEXT:    br i1 [[TMP5]], label [[CONT:%.*]], label [[HANDLER_POINTER_OVERFLOW:%.*]], !prof [[PROF5]], !nosanitize !4
+// PURECAP-RUNTIME-NEXT:    [[TMP0:%.*]] = getelementptr i8, ptr addrspace(200) null, i64 [[BITS]]
+// PURECAP-RUNTIME-NEXT:    [[TMP1:%.*]] = call i64 @llvm.cheri.cap.address.get.i64(ptr addrspace(200) [[INPUT]])
+// PURECAP-RUNTIME-NEXT:    [[TMP2:%.*]] = call i64 @llvm.cheri.cap.address.get.i64(ptr addrspace(200) [[TMP0]])
+// PURECAP-RUNTIME-NEXT:    [[OR:%.*]] = or i64 [[TMP1]], [[TMP2]]
+// PURECAP-RUNTIME-NEXT:    [[TMP3:%.*]] = call ptr addrspace(200) @llvm.cheri.cap.address.set.i64(ptr addrspace(200) [[INPUT]], i64 [[OR]])
+// PURECAP-RUNTIME-NEXT:    [[TAG_PRE:%.*]] = call i1 @llvm.cheri.cap.tag.get(ptr addrspace(200) [[INPUT]]), !nosanitize !4
+// PURECAP-RUNTIME-NEXT:    [[TAG_POST:%.*]] = call i1 @llvm.cheri.cap.tag.get(ptr addrspace(200) [[TMP3]]), !nosanitize !4
+// PURECAP-RUNTIME-NEXT:    [[TMP4:%.*]] = icmp eq i1 [[TAG_PRE]], [[TAG_POST]], !nosanitize !4
+// PURECAP-RUNTIME-NEXT:    br i1 [[TMP4]], label [[CONT:%.*]], label [[HANDLER_POINTER_OVERFLOW:%.*]], !prof [[PROF5]], !nosanitize !4
 // PURECAP-RUNTIME:       handler.pointer_overflow:
-// PURECAP-RUNTIME-NEXT:    [[TMP6:%.*]] = ptrtoint i8 addrspace(200)* [[TMP0]] to i64, !nosanitize !4
-// PURECAP-RUNTIME-NEXT:    [[TMP7:%.*]] = ptrtoint i8 addrspace(200)* [[TMP4]] to i64, !nosanitize !4
-// PURECAP-RUNTIME-NEXT:    call void @__ubsan_handle_pointer_overflow_abort(i8 addrspace(200)* bitcast ({ { [28 x i8] addrspace(200)*, i32, i32 } } addrspace(200)* @[[GLOB3:[0-9]+]] to i8 addrspace(200)*), i64 [[TMP6]], i64 [[TMP7]]) #[[ATTR3]], !nosanitize !4
+// PURECAP-RUNTIME-NEXT:    [[TMP5:%.*]] = ptrtoint ptr addrspace(200) [[INPUT]] to i64, !nosanitize !4
+// PURECAP-RUNTIME-NEXT:    [[TMP6:%.*]] = ptrtoint ptr addrspace(200) [[TMP3]] to i64, !nosanitize !4
+// PURECAP-RUNTIME-NEXT:    call void @__ubsan_handle_pointer_overflow_abort(ptr addrspace(200) @[[GLOB3:[0-9]+]], i64 [[TMP5]], i64 [[TMP6]]) #[[ATTR3]], !nosanitize !4
 // PURECAP-RUNTIME-NEXT:    unreachable, !nosanitize !4
 // PURECAP-RUNTIME:       cont:
-// PURECAP-RUNTIME-NEXT:    [[TMP8:%.*]] = bitcast i8 addrspace(200)* [[TMP4]] to i32 addrspace(200)*
-// PURECAP-RUNTIME-NEXT:    ret i32 addrspace(200)* [[TMP8]]
+// PURECAP-RUNTIME-NEXT:    ret ptr addrspace(200) [[TMP3]]
 //
 // PURECAP-TRAP-LABEL: define {{[^@]+}}@bitwise_or_update_address
-// PURECAP-TRAP-SAME: (i32 addrspace(200)* noundef [[INPUT:%.*]], i64 noundef [[BITS:%.*]]) addrspace(200) #[[ATTR0]] {
+// PURECAP-TRAP-SAME: (ptr addrspace(200) noundef [[INPUT:%.*]], i64 noundef [[BITS:%.*]]) addrspace(200) #[[ATTR0]] {
 // PURECAP-TRAP-NEXT:  entry:
-// PURECAP-TRAP-NEXT:    [[TMP0:%.*]] = bitcast i32 addrspace(200)* [[INPUT]] to i8 addrspace(200)*
-// PURECAP-TRAP-NEXT:    [[TMP1:%.*]] = getelementptr i8, i8 addrspace(200)* null, i64 [[BITS]]
-// PURECAP-TRAP-NEXT:    [[TMP2:%.*]] = call i64 @llvm.cheri.cap.address.get.i64(i8 addrspace(200)* [[TMP0]])
-// PURECAP-TRAP-NEXT:    [[TMP3:%.*]] = call i64 @llvm.cheri.cap.address.get.i64(i8 addrspace(200)* [[TMP1]])
-// PURECAP-TRAP-NEXT:    [[OR:%.*]] = or i64 [[TMP2]], [[TMP3]]
-// PURECAP-TRAP-NEXT:    [[TMP4:%.*]] = call i8 addrspace(200)* @llvm.cheri.cap.address.set.i64(i8 addrspace(200)* [[TMP0]], i64 [[OR]])
-// PURECAP-TRAP-NEXT:    [[TAG_PRE:%.*]] = call i1 @llvm.cheri.cap.tag.get(i8 addrspace(200)* [[TMP0]]), !nosanitize !4
-// PURECAP-TRAP-NEXT:    [[TAG_POST:%.*]] = call i1 @llvm.cheri.cap.tag.get(i8 addrspace(200)* [[TMP4]]), !nosanitize !4
-// PURECAP-TRAP-NEXT:    [[TMP5:%.*]] = icmp eq i1 [[TAG_PRE]], [[TAG_POST]], !nosanitize !4
-// PURECAP-TRAP-NEXT:    br i1 [[TMP5]], label [[CONT:%.*]], label [[TRAP:%.*]], !nosanitize !4
+// PURECAP-TRAP-NEXT:    [[TMP0:%.*]] = getelementptr i8, ptr addrspace(200) null, i64 [[BITS]]
+// PURECAP-TRAP-NEXT:    [[TMP1:%.*]] = call i64 @llvm.cheri.cap.address.get.i64(ptr addrspace(200) [[INPUT]])
+// PURECAP-TRAP-NEXT:    [[TMP2:%.*]] = call i64 @llvm.cheri.cap.address.get.i64(ptr addrspace(200) [[TMP0]])
+// PURECAP-TRAP-NEXT:    [[OR:%.*]] = or i64 [[TMP1]], [[TMP2]]
+// PURECAP-TRAP-NEXT:    [[TMP3:%.*]] = call ptr addrspace(200) @llvm.cheri.cap.address.set.i64(ptr addrspace(200) [[INPUT]], i64 [[OR]])
+// PURECAP-TRAP-NEXT:    [[TAG_PRE:%.*]] = call i1 @llvm.cheri.cap.tag.get(ptr addrspace(200) [[INPUT]]), !nosanitize !4
+// PURECAP-TRAP-NEXT:    [[TAG_POST:%.*]] = call i1 @llvm.cheri.cap.tag.get(ptr addrspace(200) [[TMP3]]), !nosanitize !4
+// PURECAP-TRAP-NEXT:    [[TMP4:%.*]] = icmp eq i1 [[TAG_PRE]], [[TAG_POST]], !nosanitize !4
+// PURECAP-TRAP-NEXT:    br i1 [[TMP4]], label [[CONT:%.*]], label [[TRAP:%.*]], !nosanitize !4
 // PURECAP-TRAP:       trap:
 // PURECAP-TRAP-NEXT:    call void @llvm.ubsantrap(i8 19) #[[ATTR3]], !nosanitize !4
 // PURECAP-TRAP-NEXT:    unreachable, !nosanitize !4
 // PURECAP-TRAP:       cont:
-// PURECAP-TRAP-NEXT:    [[TMP6:%.*]] = bitcast i8 addrspace(200)* [[TMP4]] to i32 addrspace(200)*
-// PURECAP-TRAP-NEXT:    ret i32 addrspace(200)* [[TMP6]]
+// PURECAP-TRAP-NEXT:    ret ptr addrspace(200) [[TMP3]]
 //
 int *__capability bitwise_or_update_address(int *__capability input, long bits) {
   // TODO: generate checks here
@@ -356,184 +324,160 @@ int *__capability bitwise_or_update_address(int *__capability input, long bits) 
 }
 
 // HYBRID-RUNTIME-LABEL: define {{[^@]+}}@update_address_intrinsic
-// HYBRID-RUNTIME-SAME: (i32 addrspace(200)* noundef [[INPUT:%.*]], i64 noundef [[ADDR:%.*]]) #[[ATTR0]] {
+// HYBRID-RUNTIME-SAME: (ptr addrspace(200) noundef [[INPUT:%.*]], i64 noundef [[ADDR:%.*]]) #[[ATTR0]] {
 // HYBRID-RUNTIME-NEXT:  entry:
-// HYBRID-RUNTIME-NEXT:    [[TMP0:%.*]] = bitcast i32 addrspace(200)* [[INPUT]] to i8 addrspace(200)*
-// HYBRID-RUNTIME-NEXT:    [[TMP1:%.*]] = call i8 addrspace(200)* @llvm.cheri.cap.address.set.i64(i8 addrspace(200)* [[TMP0]], i64 [[ADDR]])
-// HYBRID-RUNTIME-NEXT:    [[TAG_PRE:%.*]] = call i1 @llvm.cheri.cap.tag.get(i8 addrspace(200)* [[TMP0]]), !nosanitize !4
-// HYBRID-RUNTIME-NEXT:    [[TAG_POST:%.*]] = call i1 @llvm.cheri.cap.tag.get(i8 addrspace(200)* [[TMP1]]), !nosanitize !4
-// HYBRID-RUNTIME-NEXT:    [[TMP2:%.*]] = icmp eq i1 [[TAG_PRE]], [[TAG_POST]], !nosanitize !4
-// HYBRID-RUNTIME-NEXT:    br i1 [[TMP2]], label [[CONT:%.*]], label [[HANDLER_POINTER_OVERFLOW:%.*]], !prof [[PROF5]], !nosanitize !4
+// HYBRID-RUNTIME-NEXT:    [[TMP0:%.*]] = call ptr addrspace(200) @llvm.cheri.cap.address.set.i64(ptr addrspace(200) [[INPUT]], i64 [[ADDR]])
+// HYBRID-RUNTIME-NEXT:    [[TAG_PRE:%.*]] = call i1 @llvm.cheri.cap.tag.get(ptr addrspace(200) [[INPUT]]), !nosanitize !4
+// HYBRID-RUNTIME-NEXT:    [[TAG_POST:%.*]] = call i1 @llvm.cheri.cap.tag.get(ptr addrspace(200) [[TMP0]]), !nosanitize !4
+// HYBRID-RUNTIME-NEXT:    [[TMP1:%.*]] = icmp eq i1 [[TAG_PRE]], [[TAG_POST]], !nosanitize !4
+// HYBRID-RUNTIME-NEXT:    br i1 [[TMP1]], label [[CONT:%.*]], label [[HANDLER_POINTER_OVERFLOW:%.*]], !prof [[PROF5]], !nosanitize !4
 // HYBRID-RUNTIME:       handler.pointer_overflow:
-// HYBRID-RUNTIME-NEXT:    [[TMP3:%.*]] = ptrtoint i8 addrspace(200)* [[TMP0]] to i64, !nosanitize !4
-// HYBRID-RUNTIME-NEXT:    [[TMP4:%.*]] = ptrtoint i8 addrspace(200)* [[TMP1]] to i64, !nosanitize !4
-// HYBRID-RUNTIME-NEXT:    call void @__ubsan_handle_pointer_overflow_abort(i8* bitcast ({ { [28 x i8]*, i32, i32 } }* @[[GLOB4:[0-9]+]] to i8*), i64 [[TMP3]], i64 [[TMP4]]) #[[ATTR3]], !nosanitize !4
+// HYBRID-RUNTIME-NEXT:    [[TMP2:%.*]] = ptrtoint ptr addrspace(200) [[INPUT]] to i64, !nosanitize !4
+// HYBRID-RUNTIME-NEXT:    [[TMP3:%.*]] = ptrtoint ptr addrspace(200) [[TMP0]] to i64, !nosanitize !4
+// HYBRID-RUNTIME-NEXT:    call void @__ubsan_handle_pointer_overflow_abort(ptr @[[GLOB4:[0-9]+]], i64 [[TMP2]], i64 [[TMP3]]) #[[ATTR3]], !nosanitize !4
 // HYBRID-RUNTIME-NEXT:    unreachable, !nosanitize !4
 // HYBRID-RUNTIME:       cont:
-// HYBRID-RUNTIME-NEXT:    [[TMP5:%.*]] = bitcast i8 addrspace(200)* [[TMP1]] to i32 addrspace(200)*
-// HYBRID-RUNTIME-NEXT:    ret i32 addrspace(200)* [[TMP5]]
+// HYBRID-RUNTIME-NEXT:    ret ptr addrspace(200) [[TMP0]]
 //
 // HYBRID-TRAP-LABEL: define {{[^@]+}}@update_address_intrinsic
-// HYBRID-TRAP-SAME: (i32 addrspace(200)* noundef [[INPUT:%.*]], i64 noundef [[ADDR:%.*]]) #[[ATTR0]] {
+// HYBRID-TRAP-SAME: (ptr addrspace(200) noundef [[INPUT:%.*]], i64 noundef [[ADDR:%.*]]) #[[ATTR0]] {
 // HYBRID-TRAP-NEXT:  entry:
-// HYBRID-TRAP-NEXT:    [[TMP0:%.*]] = bitcast i32 addrspace(200)* [[INPUT]] to i8 addrspace(200)*
-// HYBRID-TRAP-NEXT:    [[TMP1:%.*]] = call i8 addrspace(200)* @llvm.cheri.cap.address.set.i64(i8 addrspace(200)* [[TMP0]], i64 [[ADDR]])
-// HYBRID-TRAP-NEXT:    [[TAG_PRE:%.*]] = call i1 @llvm.cheri.cap.tag.get(i8 addrspace(200)* [[TMP0]]), !nosanitize !4
-// HYBRID-TRAP-NEXT:    [[TAG_POST:%.*]] = call i1 @llvm.cheri.cap.tag.get(i8 addrspace(200)* [[TMP1]]), !nosanitize !4
-// HYBRID-TRAP-NEXT:    [[TMP2:%.*]] = icmp eq i1 [[TAG_PRE]], [[TAG_POST]], !nosanitize !4
-// HYBRID-TRAP-NEXT:    br i1 [[TMP2]], label [[CONT:%.*]], label [[TRAP:%.*]], !nosanitize !4
+// HYBRID-TRAP-NEXT:    [[TMP0:%.*]] = call ptr addrspace(200) @llvm.cheri.cap.address.set.i64(ptr addrspace(200) [[INPUT]], i64 [[ADDR]])
+// HYBRID-TRAP-NEXT:    [[TAG_PRE:%.*]] = call i1 @llvm.cheri.cap.tag.get(ptr addrspace(200) [[INPUT]]), !nosanitize !4
+// HYBRID-TRAP-NEXT:    [[TAG_POST:%.*]] = call i1 @llvm.cheri.cap.tag.get(ptr addrspace(200) [[TMP0]]), !nosanitize !4
+// HYBRID-TRAP-NEXT:    [[TMP1:%.*]] = icmp eq i1 [[TAG_PRE]], [[TAG_POST]], !nosanitize !4
+// HYBRID-TRAP-NEXT:    br i1 [[TMP1]], label [[CONT:%.*]], label [[TRAP:%.*]], !nosanitize !4
 // HYBRID-TRAP:       trap:
 // HYBRID-TRAP-NEXT:    call void @llvm.ubsantrap(i8 19) #[[ATTR3]], !nosanitize !4
 // HYBRID-TRAP-NEXT:    unreachable, !nosanitize !4
 // HYBRID-TRAP:       cont:
-// HYBRID-TRAP-NEXT:    [[TMP3:%.*]] = bitcast i8 addrspace(200)* [[TMP1]] to i32 addrspace(200)*
-// HYBRID-TRAP-NEXT:    ret i32 addrspace(200)* [[TMP3]]
+// HYBRID-TRAP-NEXT:    ret ptr addrspace(200) [[TMP0]]
 //
 // PURECAP-RUNTIME-LABEL: define {{[^@]+}}@update_address_intrinsic
-// PURECAP-RUNTIME-SAME: (i32 addrspace(200)* noundef [[INPUT:%.*]], i64 noundef [[ADDR:%.*]]) addrspace(200) #[[ATTR0]] {
+// PURECAP-RUNTIME-SAME: (ptr addrspace(200) noundef [[INPUT:%.*]], i64 noundef [[ADDR:%.*]]) addrspace(200) #[[ATTR0]] {
 // PURECAP-RUNTIME-NEXT:  entry:
-// PURECAP-RUNTIME-NEXT:    [[TMP0:%.*]] = bitcast i32 addrspace(200)* [[INPUT]] to i8 addrspace(200)*
-// PURECAP-RUNTIME-NEXT:    [[TMP1:%.*]] = call i8 addrspace(200)* @llvm.cheri.cap.address.set.i64(i8 addrspace(200)* [[TMP0]], i64 [[ADDR]])
-// PURECAP-RUNTIME-NEXT:    [[TAG_PRE:%.*]] = call i1 @llvm.cheri.cap.tag.get(i8 addrspace(200)* [[TMP0]]), !nosanitize !4
-// PURECAP-RUNTIME-NEXT:    [[TAG_POST:%.*]] = call i1 @llvm.cheri.cap.tag.get(i8 addrspace(200)* [[TMP1]]), !nosanitize !4
-// PURECAP-RUNTIME-NEXT:    [[TMP2:%.*]] = icmp eq i1 [[TAG_PRE]], [[TAG_POST]], !nosanitize !4
-// PURECAP-RUNTIME-NEXT:    br i1 [[TMP2]], label [[CONT:%.*]], label [[HANDLER_POINTER_OVERFLOW:%.*]], !prof [[PROF5]], !nosanitize !4
+// PURECAP-RUNTIME-NEXT:    [[TMP0:%.*]] = call ptr addrspace(200) @llvm.cheri.cap.address.set.i64(ptr addrspace(200) [[INPUT]], i64 [[ADDR]])
+// PURECAP-RUNTIME-NEXT:    [[TAG_PRE:%.*]] = call i1 @llvm.cheri.cap.tag.get(ptr addrspace(200) [[INPUT]]), !nosanitize !4
+// PURECAP-RUNTIME-NEXT:    [[TAG_POST:%.*]] = call i1 @llvm.cheri.cap.tag.get(ptr addrspace(200) [[TMP0]]), !nosanitize !4
+// PURECAP-RUNTIME-NEXT:    [[TMP1:%.*]] = icmp eq i1 [[TAG_PRE]], [[TAG_POST]], !nosanitize !4
+// PURECAP-RUNTIME-NEXT:    br i1 [[TMP1]], label [[CONT:%.*]], label [[HANDLER_POINTER_OVERFLOW:%.*]], !prof [[PROF5]], !nosanitize !4
 // PURECAP-RUNTIME:       handler.pointer_overflow:
-// PURECAP-RUNTIME-NEXT:    [[TMP3:%.*]] = ptrtoint i8 addrspace(200)* [[TMP0]] to i64, !nosanitize !4
-// PURECAP-RUNTIME-NEXT:    [[TMP4:%.*]] = ptrtoint i8 addrspace(200)* [[TMP1]] to i64, !nosanitize !4
-// PURECAP-RUNTIME-NEXT:    call void @__ubsan_handle_pointer_overflow_abort(i8 addrspace(200)* bitcast ({ { [28 x i8] addrspace(200)*, i32, i32 } } addrspace(200)* @[[GLOB4:[0-9]+]] to i8 addrspace(200)*), i64 [[TMP3]], i64 [[TMP4]]) #[[ATTR3]], !nosanitize !4
+// PURECAP-RUNTIME-NEXT:    [[TMP2:%.*]] = ptrtoint ptr addrspace(200) [[INPUT]] to i64, !nosanitize !4
+// PURECAP-RUNTIME-NEXT:    [[TMP3:%.*]] = ptrtoint ptr addrspace(200) [[TMP0]] to i64, !nosanitize !4
+// PURECAP-RUNTIME-NEXT:    call void @__ubsan_handle_pointer_overflow_abort(ptr addrspace(200) @[[GLOB4:[0-9]+]], i64 [[TMP2]], i64 [[TMP3]]) #[[ATTR3]], !nosanitize !4
 // PURECAP-RUNTIME-NEXT:    unreachable, !nosanitize !4
 // PURECAP-RUNTIME:       cont:
-// PURECAP-RUNTIME-NEXT:    [[TMP5:%.*]] = bitcast i8 addrspace(200)* [[TMP1]] to i32 addrspace(200)*
-// PURECAP-RUNTIME-NEXT:    ret i32 addrspace(200)* [[TMP5]]
+// PURECAP-RUNTIME-NEXT:    ret ptr addrspace(200) [[TMP0]]
 //
 // PURECAP-TRAP-LABEL: define {{[^@]+}}@update_address_intrinsic
-// PURECAP-TRAP-SAME: (i32 addrspace(200)* noundef [[INPUT:%.*]], i64 noundef [[ADDR:%.*]]) addrspace(200) #[[ATTR0]] {
+// PURECAP-TRAP-SAME: (ptr addrspace(200) noundef [[INPUT:%.*]], i64 noundef [[ADDR:%.*]]) addrspace(200) #[[ATTR0]] {
 // PURECAP-TRAP-NEXT:  entry:
-// PURECAP-TRAP-NEXT:    [[TMP0:%.*]] = bitcast i32 addrspace(200)* [[INPUT]] to i8 addrspace(200)*
-// PURECAP-TRAP-NEXT:    [[TMP1:%.*]] = call i8 addrspace(200)* @llvm.cheri.cap.address.set.i64(i8 addrspace(200)* [[TMP0]], i64 [[ADDR]])
-// PURECAP-TRAP-NEXT:    [[TAG_PRE:%.*]] = call i1 @llvm.cheri.cap.tag.get(i8 addrspace(200)* [[TMP0]]), !nosanitize !4
-// PURECAP-TRAP-NEXT:    [[TAG_POST:%.*]] = call i1 @llvm.cheri.cap.tag.get(i8 addrspace(200)* [[TMP1]]), !nosanitize !4
-// PURECAP-TRAP-NEXT:    [[TMP2:%.*]] = icmp eq i1 [[TAG_PRE]], [[TAG_POST]], !nosanitize !4
-// PURECAP-TRAP-NEXT:    br i1 [[TMP2]], label [[CONT:%.*]], label [[TRAP:%.*]], !nosanitize !4
+// PURECAP-TRAP-NEXT:    [[TMP0:%.*]] = call ptr addrspace(200) @llvm.cheri.cap.address.set.i64(ptr addrspace(200) [[INPUT]], i64 [[ADDR]])
+// PURECAP-TRAP-NEXT:    [[TAG_PRE:%.*]] = call i1 @llvm.cheri.cap.tag.get(ptr addrspace(200) [[INPUT]]), !nosanitize !4
+// PURECAP-TRAP-NEXT:    [[TAG_POST:%.*]] = call i1 @llvm.cheri.cap.tag.get(ptr addrspace(200) [[TMP0]]), !nosanitize !4
+// PURECAP-TRAP-NEXT:    [[TMP1:%.*]] = icmp eq i1 [[TAG_PRE]], [[TAG_POST]], !nosanitize !4
+// PURECAP-TRAP-NEXT:    br i1 [[TMP1]], label [[CONT:%.*]], label [[TRAP:%.*]], !nosanitize !4
 // PURECAP-TRAP:       trap:
 // PURECAP-TRAP-NEXT:    call void @llvm.ubsantrap(i8 19) #[[ATTR3]], !nosanitize !4
 // PURECAP-TRAP-NEXT:    unreachable, !nosanitize !4
 // PURECAP-TRAP:       cont:
-// PURECAP-TRAP-NEXT:    [[TMP3:%.*]] = bitcast i8 addrspace(200)* [[TMP1]] to i32 addrspace(200)*
-// PURECAP-TRAP-NEXT:    ret i32 addrspace(200)* [[TMP3]]
+// PURECAP-TRAP-NEXT:    ret ptr addrspace(200) [[TMP0]]
 //
 int *__capability update_address_intrinsic(int *__capability input, long addr) {
   return __builtin_cheri_address_set(input, addr);
 }
 
 // HYBRID-RUNTIME-LABEL: define {{[^@]+}}@update_offset_intrinsic
-// HYBRID-RUNTIME-SAME: (i32 addrspace(200)* noundef [[INPUT:%.*]], i64 noundef [[OFFSET:%.*]]) #[[ATTR0]] {
+// HYBRID-RUNTIME-SAME: (ptr addrspace(200) noundef [[INPUT:%.*]], i64 noundef [[OFFSET:%.*]]) #[[ATTR0]] {
 // HYBRID-RUNTIME-NEXT:  entry:
-// HYBRID-RUNTIME-NEXT:    [[TMP0:%.*]] = bitcast i32 addrspace(200)* [[INPUT]] to i8 addrspace(200)*
-// HYBRID-RUNTIME-NEXT:    [[TMP1:%.*]] = call i8 addrspace(200)* @llvm.cheri.cap.offset.set.i64(i8 addrspace(200)* [[TMP0]], i64 [[OFFSET]])
-// HYBRID-RUNTIME-NEXT:    [[TAG_PRE:%.*]] = call i1 @llvm.cheri.cap.tag.get(i8 addrspace(200)* [[TMP0]]), !nosanitize !4
-// HYBRID-RUNTIME-NEXT:    [[TAG_POST:%.*]] = call i1 @llvm.cheri.cap.tag.get(i8 addrspace(200)* [[TMP1]]), !nosanitize !4
-// HYBRID-RUNTIME-NEXT:    [[TMP2:%.*]] = icmp eq i1 [[TAG_PRE]], [[TAG_POST]], !nosanitize !4
-// HYBRID-RUNTIME-NEXT:    br i1 [[TMP2]], label [[CONT:%.*]], label [[HANDLER_POINTER_OVERFLOW:%.*]], !prof [[PROF5]], !nosanitize !4
+// HYBRID-RUNTIME-NEXT:    [[TMP0:%.*]] = call ptr addrspace(200) @llvm.cheri.cap.offset.set.i64(ptr addrspace(200) [[INPUT]], i64 [[OFFSET]])
+// HYBRID-RUNTIME-NEXT:    [[TAG_PRE:%.*]] = call i1 @llvm.cheri.cap.tag.get(ptr addrspace(200) [[INPUT]]), !nosanitize !4
+// HYBRID-RUNTIME-NEXT:    [[TAG_POST:%.*]] = call i1 @llvm.cheri.cap.tag.get(ptr addrspace(200) [[TMP0]]), !nosanitize !4
+// HYBRID-RUNTIME-NEXT:    [[TMP1:%.*]] = icmp eq i1 [[TAG_PRE]], [[TAG_POST]], !nosanitize !4
+// HYBRID-RUNTIME-NEXT:    br i1 [[TMP1]], label [[CONT:%.*]], label [[HANDLER_POINTER_OVERFLOW:%.*]], !prof [[PROF5]], !nosanitize !4
 // HYBRID-RUNTIME:       handler.pointer_overflow:
-// HYBRID-RUNTIME-NEXT:    [[TMP3:%.*]] = ptrtoint i8 addrspace(200)* [[TMP0]] to i64, !nosanitize !4
-// HYBRID-RUNTIME-NEXT:    [[TMP4:%.*]] = ptrtoint i8 addrspace(200)* [[TMP1]] to i64, !nosanitize !4
-// HYBRID-RUNTIME-NEXT:    call void @__ubsan_handle_pointer_overflow_abort(i8* bitcast ({ { [28 x i8]*, i32, i32 } }* @[[GLOB5:[0-9]+]] to i8*), i64 [[TMP3]], i64 [[TMP4]]) #[[ATTR3]], !nosanitize !4
+// HYBRID-RUNTIME-NEXT:    [[TMP2:%.*]] = ptrtoint ptr addrspace(200) [[INPUT]] to i64, !nosanitize !4
+// HYBRID-RUNTIME-NEXT:    [[TMP3:%.*]] = ptrtoint ptr addrspace(200) [[TMP0]] to i64, !nosanitize !4
+// HYBRID-RUNTIME-NEXT:    call void @__ubsan_handle_pointer_overflow_abort(ptr @[[GLOB5:[0-9]+]], i64 [[TMP2]], i64 [[TMP3]]) #[[ATTR3]], !nosanitize !4
 // HYBRID-RUNTIME-NEXT:    unreachable, !nosanitize !4
 // HYBRID-RUNTIME:       cont:
-// HYBRID-RUNTIME-NEXT:    [[TMP5:%.*]] = bitcast i8 addrspace(200)* [[TMP1]] to i32 addrspace(200)*
-// HYBRID-RUNTIME-NEXT:    ret i32 addrspace(200)* [[TMP5]]
+// HYBRID-RUNTIME-NEXT:    ret ptr addrspace(200) [[TMP0]]
 //
 // HYBRID-TRAP-LABEL: define {{[^@]+}}@update_offset_intrinsic
-// HYBRID-TRAP-SAME: (i32 addrspace(200)* noundef [[INPUT:%.*]], i64 noundef [[OFFSET:%.*]]) #[[ATTR0]] {
+// HYBRID-TRAP-SAME: (ptr addrspace(200) noundef [[INPUT:%.*]], i64 noundef [[OFFSET:%.*]]) #[[ATTR0]] {
 // HYBRID-TRAP-NEXT:  entry:
-// HYBRID-TRAP-NEXT:    [[TMP0:%.*]] = bitcast i32 addrspace(200)* [[INPUT]] to i8 addrspace(200)*
-// HYBRID-TRAP-NEXT:    [[TMP1:%.*]] = call i8 addrspace(200)* @llvm.cheri.cap.offset.set.i64(i8 addrspace(200)* [[TMP0]], i64 [[OFFSET]])
-// HYBRID-TRAP-NEXT:    [[TAG_PRE:%.*]] = call i1 @llvm.cheri.cap.tag.get(i8 addrspace(200)* [[TMP0]]), !nosanitize !4
-// HYBRID-TRAP-NEXT:    [[TAG_POST:%.*]] = call i1 @llvm.cheri.cap.tag.get(i8 addrspace(200)* [[TMP1]]), !nosanitize !4
-// HYBRID-TRAP-NEXT:    [[TMP2:%.*]] = icmp eq i1 [[TAG_PRE]], [[TAG_POST]], !nosanitize !4
-// HYBRID-TRAP-NEXT:    br i1 [[TMP2]], label [[CONT:%.*]], label [[TRAP:%.*]], !nosanitize !4
+// HYBRID-TRAP-NEXT:    [[TMP0:%.*]] = call ptr addrspace(200) @llvm.cheri.cap.offset.set.i64(ptr addrspace(200) [[INPUT]], i64 [[OFFSET]])
+// HYBRID-TRAP-NEXT:    [[TAG_PRE:%.*]] = call i1 @llvm.cheri.cap.tag.get(ptr addrspace(200) [[INPUT]]), !nosanitize !4
+// HYBRID-TRAP-NEXT:    [[TAG_POST:%.*]] = call i1 @llvm.cheri.cap.tag.get(ptr addrspace(200) [[TMP0]]), !nosanitize !4
+// HYBRID-TRAP-NEXT:    [[TMP1:%.*]] = icmp eq i1 [[TAG_PRE]], [[TAG_POST]], !nosanitize !4
+// HYBRID-TRAP-NEXT:    br i1 [[TMP1]], label [[CONT:%.*]], label [[TRAP:%.*]], !nosanitize !4
 // HYBRID-TRAP:       trap:
 // HYBRID-TRAP-NEXT:    call void @llvm.ubsantrap(i8 19) #[[ATTR3]], !nosanitize !4
 // HYBRID-TRAP-NEXT:    unreachable, !nosanitize !4
 // HYBRID-TRAP:       cont:
-// HYBRID-TRAP-NEXT:    [[TMP3:%.*]] = bitcast i8 addrspace(200)* [[TMP1]] to i32 addrspace(200)*
-// HYBRID-TRAP-NEXT:    ret i32 addrspace(200)* [[TMP3]]
+// HYBRID-TRAP-NEXT:    ret ptr addrspace(200) [[TMP0]]
 //
 // PURECAP-RUNTIME-LABEL: define {{[^@]+}}@update_offset_intrinsic
-// PURECAP-RUNTIME-SAME: (i32 addrspace(200)* noundef [[INPUT:%.*]], i64 noundef [[OFFSET:%.*]]) addrspace(200) #[[ATTR0]] {
+// PURECAP-RUNTIME-SAME: (ptr addrspace(200) noundef [[INPUT:%.*]], i64 noundef [[OFFSET:%.*]]) addrspace(200) #[[ATTR0]] {
 // PURECAP-RUNTIME-NEXT:  entry:
-// PURECAP-RUNTIME-NEXT:    [[TMP0:%.*]] = bitcast i32 addrspace(200)* [[INPUT]] to i8 addrspace(200)*
-// PURECAP-RUNTIME-NEXT:    [[TMP1:%.*]] = call i8 addrspace(200)* @llvm.cheri.cap.offset.set.i64(i8 addrspace(200)* [[TMP0]], i64 [[OFFSET]])
-// PURECAP-RUNTIME-NEXT:    [[TAG_PRE:%.*]] = call i1 @llvm.cheri.cap.tag.get(i8 addrspace(200)* [[TMP0]]), !nosanitize !4
-// PURECAP-RUNTIME-NEXT:    [[TAG_POST:%.*]] = call i1 @llvm.cheri.cap.tag.get(i8 addrspace(200)* [[TMP1]]), !nosanitize !4
-// PURECAP-RUNTIME-NEXT:    [[TMP2:%.*]] = icmp eq i1 [[TAG_PRE]], [[TAG_POST]], !nosanitize !4
-// PURECAP-RUNTIME-NEXT:    br i1 [[TMP2]], label [[CONT:%.*]], label [[HANDLER_POINTER_OVERFLOW:%.*]], !prof [[PROF5]], !nosanitize !4
+// PURECAP-RUNTIME-NEXT:    [[TMP0:%.*]] = call ptr addrspace(200) @llvm.cheri.cap.offset.set.i64(ptr addrspace(200) [[INPUT]], i64 [[OFFSET]])
+// PURECAP-RUNTIME-NEXT:    [[TAG_PRE:%.*]] = call i1 @llvm.cheri.cap.tag.get(ptr addrspace(200) [[INPUT]]), !nosanitize !4
+// PURECAP-RUNTIME-NEXT:    [[TAG_POST:%.*]] = call i1 @llvm.cheri.cap.tag.get(ptr addrspace(200) [[TMP0]]), !nosanitize !4
+// PURECAP-RUNTIME-NEXT:    [[TMP1:%.*]] = icmp eq i1 [[TAG_PRE]], [[TAG_POST]], !nosanitize !4
+// PURECAP-RUNTIME-NEXT:    br i1 [[TMP1]], label [[CONT:%.*]], label [[HANDLER_POINTER_OVERFLOW:%.*]], !prof [[PROF5]], !nosanitize !4
 // PURECAP-RUNTIME:       handler.pointer_overflow:
-// PURECAP-RUNTIME-NEXT:    [[TMP3:%.*]] = ptrtoint i8 addrspace(200)* [[TMP0]] to i64, !nosanitize !4
-// PURECAP-RUNTIME-NEXT:    [[TMP4:%.*]] = ptrtoint i8 addrspace(200)* [[TMP1]] to i64, !nosanitize !4
-// PURECAP-RUNTIME-NEXT:    call void @__ubsan_handle_pointer_overflow_abort(i8 addrspace(200)* bitcast ({ { [28 x i8] addrspace(200)*, i32, i32 } } addrspace(200)* @[[GLOB5:[0-9]+]] to i8 addrspace(200)*), i64 [[TMP3]], i64 [[TMP4]]) #[[ATTR3]], !nosanitize !4
+// PURECAP-RUNTIME-NEXT:    [[TMP2:%.*]] = ptrtoint ptr addrspace(200) [[INPUT]] to i64, !nosanitize !4
+// PURECAP-RUNTIME-NEXT:    [[TMP3:%.*]] = ptrtoint ptr addrspace(200) [[TMP0]] to i64, !nosanitize !4
+// PURECAP-RUNTIME-NEXT:    call void @__ubsan_handle_pointer_overflow_abort(ptr addrspace(200) @[[GLOB5:[0-9]+]], i64 [[TMP2]], i64 [[TMP3]]) #[[ATTR3]], !nosanitize !4
 // PURECAP-RUNTIME-NEXT:    unreachable, !nosanitize !4
 // PURECAP-RUNTIME:       cont:
-// PURECAP-RUNTIME-NEXT:    [[TMP5:%.*]] = bitcast i8 addrspace(200)* [[TMP1]] to i32 addrspace(200)*
-// PURECAP-RUNTIME-NEXT:    ret i32 addrspace(200)* [[TMP5]]
+// PURECAP-RUNTIME-NEXT:    ret ptr addrspace(200) [[TMP0]]
 //
 // PURECAP-TRAP-LABEL: define {{[^@]+}}@update_offset_intrinsic
-// PURECAP-TRAP-SAME: (i32 addrspace(200)* noundef [[INPUT:%.*]], i64 noundef [[OFFSET:%.*]]) addrspace(200) #[[ATTR0]] {
+// PURECAP-TRAP-SAME: (ptr addrspace(200) noundef [[INPUT:%.*]], i64 noundef [[OFFSET:%.*]]) addrspace(200) #[[ATTR0]] {
 // PURECAP-TRAP-NEXT:  entry:
-// PURECAP-TRAP-NEXT:    [[TMP0:%.*]] = bitcast i32 addrspace(200)* [[INPUT]] to i8 addrspace(200)*
-// PURECAP-TRAP-NEXT:    [[TMP1:%.*]] = call i8 addrspace(200)* @llvm.cheri.cap.offset.set.i64(i8 addrspace(200)* [[TMP0]], i64 [[OFFSET]])
-// PURECAP-TRAP-NEXT:    [[TAG_PRE:%.*]] = call i1 @llvm.cheri.cap.tag.get(i8 addrspace(200)* [[TMP0]]), !nosanitize !4
-// PURECAP-TRAP-NEXT:    [[TAG_POST:%.*]] = call i1 @llvm.cheri.cap.tag.get(i8 addrspace(200)* [[TMP1]]), !nosanitize !4
-// PURECAP-TRAP-NEXT:    [[TMP2:%.*]] = icmp eq i1 [[TAG_PRE]], [[TAG_POST]], !nosanitize !4
-// PURECAP-TRAP-NEXT:    br i1 [[TMP2]], label [[CONT:%.*]], label [[TRAP:%.*]], !nosanitize !4
+// PURECAP-TRAP-NEXT:    [[TMP0:%.*]] = call ptr addrspace(200) @llvm.cheri.cap.offset.set.i64(ptr addrspace(200) [[INPUT]], i64 [[OFFSET]])
+// PURECAP-TRAP-NEXT:    [[TAG_PRE:%.*]] = call i1 @llvm.cheri.cap.tag.get(ptr addrspace(200) [[INPUT]]), !nosanitize !4
+// PURECAP-TRAP-NEXT:    [[TAG_POST:%.*]] = call i1 @llvm.cheri.cap.tag.get(ptr addrspace(200) [[TMP0]]), !nosanitize !4
+// PURECAP-TRAP-NEXT:    [[TMP1:%.*]] = icmp eq i1 [[TAG_PRE]], [[TAG_POST]], !nosanitize !4
+// PURECAP-TRAP-NEXT:    br i1 [[TMP1]], label [[CONT:%.*]], label [[TRAP:%.*]], !nosanitize !4
 // PURECAP-TRAP:       trap:
 // PURECAP-TRAP-NEXT:    call void @llvm.ubsantrap(i8 19) #[[ATTR3]], !nosanitize !4
 // PURECAP-TRAP-NEXT:    unreachable, !nosanitize !4
 // PURECAP-TRAP:       cont:
-// PURECAP-TRAP-NEXT:    [[TMP3:%.*]] = bitcast i8 addrspace(200)* [[TMP1]] to i32 addrspace(200)*
-// PURECAP-TRAP-NEXT:    ret i32 addrspace(200)* [[TMP3]]
+// PURECAP-TRAP-NEXT:    ret ptr addrspace(200) [[TMP0]]
 //
 int *__capability update_offset_intrinsic(int *__capability input, long offset) {
   return __builtin_cheri_offset_set(input, offset);
 }
 
 // HYBRID-LABEL: define {{[^@]+}}@tag_stripping_cast
-// HYBRID-SAME: (i32 addrspace(200)* noundef [[INPUT:%.*]]) #[[ATTR0:[0-9]+]] {
+// HYBRID-SAME: (ptr addrspace(200) noundef [[INPUT:%.*]]) #[[ATTR0:[0-9]+]] {
 // HYBRID-NEXT:  entry:
-// HYBRID-NEXT:    [[TMP0:%.*]] = bitcast i32 addrspace(200)* [[INPUT]] to i8 addrspace(200)*
-// HYBRID-NEXT:    [[TMP1:%.*]] = call i64 @llvm.cheri.cap.address.get.i64(i8 addrspace(200)* [[TMP0]])
-// HYBRID-NEXT:    [[TMP2:%.*]] = getelementptr i8, i8 addrspace(200)* null, i64 [[TMP1]]
-// HYBRID-NEXT:    [[TMP3:%.*]] = bitcast i8 addrspace(200)* [[TMP2]] to i32 addrspace(200)*
-// HYBRID-NEXT:    ret i32 addrspace(200)* [[TMP3]]
+// HYBRID-NEXT:    [[TMP0:%.*]] = call i64 @llvm.cheri.cap.address.get.i64(ptr addrspace(200) [[INPUT]])
+// HYBRID-NEXT:    [[TMP1:%.*]] = getelementptr i8, ptr addrspace(200) null, i64 [[TMP0]]
+// HYBRID-NEXT:    ret ptr addrspace(200) [[TMP1]]
 //
 // PURECAP-LABEL: define {{[^@]+}}@tag_stripping_cast
-// PURECAP-SAME: (i32 addrspace(200)* noundef [[INPUT:%.*]]) addrspace(200) #[[ATTR0:[0-9]+]] {
+// PURECAP-SAME: (ptr addrspace(200) noundef [[INPUT:%.*]]) addrspace(200) #[[ATTR0:[0-9]+]] {
 // PURECAP-NEXT:  entry:
-// PURECAP-NEXT:    [[TMP0:%.*]] = bitcast i32 addrspace(200)* [[INPUT]] to i8 addrspace(200)*
-// PURECAP-NEXT:    [[TMP1:%.*]] = call i64 @llvm.cheri.cap.address.get.i64(i8 addrspace(200)* [[TMP0]])
-// PURECAP-NEXT:    [[TMP2:%.*]] = getelementptr i8, i8 addrspace(200)* null, i64 [[TMP1]]
-// PURECAP-NEXT:    [[TMP3:%.*]] = bitcast i8 addrspace(200)* [[TMP2]] to i32 addrspace(200)*
-// PURECAP-NEXT:    ret i32 addrspace(200)* [[TMP3]]
+// PURECAP-NEXT:    [[TMP0:%.*]] = call i64 @llvm.cheri.cap.address.get.i64(ptr addrspace(200) [[INPUT]])
+// PURECAP-NEXT:    [[TMP1:%.*]] = getelementptr i8, ptr addrspace(200) null, i64 [[TMP0]]
+// PURECAP-NEXT:    ret ptr addrspace(200) [[TMP1]]
 //
 int *__capability tag_stripping_cast(int *__capability input) {
   return (int *__capability)(__intcap_t)(__cheri_addr long)input; // Should not generate any UBSan checks
 }
 
 // HYBRID-LABEL: define {{[^@]+}}@tag_preserving_cast
-// HYBRID-SAME: (i32 addrspace(200)* noundef [[INPUT:%.*]]) #[[ATTR0]] {
+// HYBRID-SAME: (ptr addrspace(200) noundef [[INPUT:%.*]]) #[[ATTR0]] {
 // HYBRID-NEXT:  entry:
-// HYBRID-NEXT:    [[TMP0:%.*]] = bitcast i32 addrspace(200)* [[INPUT]] to i8 addrspace(200)*
-// HYBRID-NEXT:    [[TMP1:%.*]] = bitcast i8 addrspace(200)* [[TMP0]] to i32 addrspace(200)*
-// HYBRID-NEXT:    ret i32 addrspace(200)* [[TMP1]]
+// HYBRID-NEXT:    ret ptr addrspace(200) [[INPUT]]
 //
 // PURECAP-LABEL: define {{[^@]+}}@tag_preserving_cast
-// PURECAP-SAME: (i32 addrspace(200)* noundef [[INPUT:%.*]]) addrspace(200) #[[ATTR0]] {
+// PURECAP-SAME: (ptr addrspace(200) noundef [[INPUT:%.*]]) addrspace(200) #[[ATTR0]] {
 // PURECAP-NEXT:  entry:
-// PURECAP-NEXT:    [[TMP0:%.*]] = bitcast i32 addrspace(200)* [[INPUT]] to i8 addrspace(200)*
-// PURECAP-NEXT:    [[TMP1:%.*]] = bitcast i8 addrspace(200)* [[TMP0]] to i32 addrspace(200)*
-// PURECAP-NEXT:    ret i32 addrspace(200)* [[TMP1]]
+// PURECAP-NEXT:    ret ptr addrspace(200) [[INPUT]]
 //
 int *__capability tag_preserving_cast(int *__capability input) {
   return (int *__capability)(__intcap_t)input; // Should not generate any UBSan checks
@@ -542,7 +486,7 @@ int *__capability tag_preserving_cast(int *__capability input) {
 /// Check that we don't perform the check when conditional branches/ternary expressions are not used:
 
 // HYBRID-RUNTIME-LABEL: define {{[^@]+}}@conditional_add
-// HYBRID-RUNTIME-SAME: (i1 noundef zeroext [[COND:%.*]], i32 addrspace(200)* noundef [[INPUT:%.*]], i64 noundef [[INDEX:%.*]]) #[[ATTR0]] {
+// HYBRID-RUNTIME-SAME: (i1 noundef zeroext [[COND:%.*]], ptr addrspace(200) noundef [[INPUT:%.*]], i64 noundef [[INDEX:%.*]]) #[[ATTR0]] {
 // HYBRID-RUNTIME-NEXT:  entry:
 // HYBRID-RUNTIME-NEXT:    [[FROMBOOL:%.*]] = zext i1 [[COND]] to i8
 // HYBRID-RUNTIME-NEXT:    [[TOBOOL:%.*]] = trunc i8 [[FROMBOOL]] to i1
@@ -550,26 +494,24 @@ int *__capability tag_preserving_cast(int *__capability input) {
 // HYBRID-RUNTIME:       if.then:
 // HYBRID-RUNTIME-NEXT:    br label [[RETURN:%.*]]
 // HYBRID-RUNTIME:       if.else:
-// HYBRID-RUNTIME-NEXT:    [[ADD_PTR:%.*]] = getelementptr inbounds i32, i32 addrspace(200)* [[INPUT]], i64 [[INDEX]]
-// HYBRID-RUNTIME-NEXT:    [[TMP0:%.*]] = bitcast i32 addrspace(200)* [[INPUT]] to i8 addrspace(200)*, !nosanitize !4
-// HYBRID-RUNTIME-NEXT:    [[TAG_PRE:%.*]] = call i1 @llvm.cheri.cap.tag.get(i8 addrspace(200)* [[TMP0]]), !nosanitize !4
-// HYBRID-RUNTIME-NEXT:    [[TMP1:%.*]] = bitcast i32 addrspace(200)* [[ADD_PTR]] to i8 addrspace(200)*, !nosanitize !4
-// HYBRID-RUNTIME-NEXT:    [[TAG_POST:%.*]] = call i1 @llvm.cheri.cap.tag.get(i8 addrspace(200)* [[TMP1]]), !nosanitize !4
-// HYBRID-RUNTIME-NEXT:    [[TMP2:%.*]] = icmp eq i1 [[TAG_PRE]], [[TAG_POST]], !nosanitize !4
-// HYBRID-RUNTIME-NEXT:    br i1 [[TMP2]], label [[CONT:%.*]], label [[HANDLER_POINTER_OVERFLOW:%.*]], !prof [[PROF5]], !nosanitize !4
+// HYBRID-RUNTIME-NEXT:    [[ADD_PTR:%.*]] = getelementptr inbounds i32, ptr addrspace(200) [[INPUT]], i64 [[INDEX]]
+// HYBRID-RUNTIME-NEXT:    [[TAG_PRE:%.*]] = call i1 @llvm.cheri.cap.tag.get(ptr addrspace(200) [[INPUT]]), !nosanitize !4
+// HYBRID-RUNTIME-NEXT:    [[TAG_POST:%.*]] = call i1 @llvm.cheri.cap.tag.get(ptr addrspace(200) [[ADD_PTR]]), !nosanitize !4
+// HYBRID-RUNTIME-NEXT:    [[TMP0:%.*]] = icmp eq i1 [[TAG_PRE]], [[TAG_POST]], !nosanitize !4
+// HYBRID-RUNTIME-NEXT:    br i1 [[TMP0]], label [[CONT:%.*]], label [[HANDLER_POINTER_OVERFLOW:%.*]], !prof [[PROF5]], !nosanitize !4
 // HYBRID-RUNTIME:       handler.pointer_overflow:
-// HYBRID-RUNTIME-NEXT:    [[TMP3:%.*]] = ptrtoint i32 addrspace(200)* [[INPUT]] to i64, !nosanitize !4
-// HYBRID-RUNTIME-NEXT:    [[TMP4:%.*]] = ptrtoint i32 addrspace(200)* [[ADD_PTR]] to i64, !nosanitize !4
-// HYBRID-RUNTIME-NEXT:    call void @__ubsan_handle_pointer_overflow_abort(i8* bitcast ({ { [28 x i8]*, i32, i32 } }* @[[GLOB6:[0-9]+]] to i8*), i64 [[TMP3]], i64 [[TMP4]]) #[[ATTR3]], !nosanitize !4
+// HYBRID-RUNTIME-NEXT:    [[TMP1:%.*]] = ptrtoint ptr addrspace(200) [[INPUT]] to i64, !nosanitize !4
+// HYBRID-RUNTIME-NEXT:    [[TMP2:%.*]] = ptrtoint ptr addrspace(200) [[ADD_PTR]] to i64, !nosanitize !4
+// HYBRID-RUNTIME-NEXT:    call void @__ubsan_handle_pointer_overflow_abort(ptr @[[GLOB6:[0-9]+]], i64 [[TMP1]], i64 [[TMP2]]) #[[ATTR3]], !nosanitize !4
 // HYBRID-RUNTIME-NEXT:    unreachable, !nosanitize !4
 // HYBRID-RUNTIME:       cont:
 // HYBRID-RUNTIME-NEXT:    br label [[RETURN]]
 // HYBRID-RUNTIME:       return:
-// HYBRID-RUNTIME-NEXT:    [[RETVAL_0:%.*]] = phi i32 addrspace(200)* [ null, [[IF_THEN]] ], [ [[ADD_PTR]], [[CONT]] ]
-// HYBRID-RUNTIME-NEXT:    ret i32 addrspace(200)* [[RETVAL_0]]
+// HYBRID-RUNTIME-NEXT:    [[RETVAL_0:%.*]] = phi ptr addrspace(200) [ null, [[IF_THEN]] ], [ [[ADD_PTR]], [[CONT]] ]
+// HYBRID-RUNTIME-NEXT:    ret ptr addrspace(200) [[RETVAL_0]]
 //
 // HYBRID-TRAP-LABEL: define {{[^@]+}}@conditional_add
-// HYBRID-TRAP-SAME: (i1 noundef zeroext [[COND:%.*]], i32 addrspace(200)* noundef [[INPUT:%.*]], i64 noundef [[INDEX:%.*]]) #[[ATTR0]] {
+// HYBRID-TRAP-SAME: (i1 noundef zeroext [[COND:%.*]], ptr addrspace(200) noundef [[INPUT:%.*]], i64 noundef [[INDEX:%.*]]) #[[ATTR0]] {
 // HYBRID-TRAP-NEXT:  entry:
 // HYBRID-TRAP-NEXT:    [[FROMBOOL:%.*]] = zext i1 [[COND]] to i8
 // HYBRID-TRAP-NEXT:    [[TOBOOL:%.*]] = trunc i8 [[FROMBOOL]] to i1
@@ -577,24 +519,22 @@ int *__capability tag_preserving_cast(int *__capability input) {
 // HYBRID-TRAP:       if.then:
 // HYBRID-TRAP-NEXT:    br label [[RETURN:%.*]]
 // HYBRID-TRAP:       if.else:
-// HYBRID-TRAP-NEXT:    [[ADD_PTR:%.*]] = getelementptr inbounds i32, i32 addrspace(200)* [[INPUT]], i64 [[INDEX]]
-// HYBRID-TRAP-NEXT:    [[TMP0:%.*]] = bitcast i32 addrspace(200)* [[INPUT]] to i8 addrspace(200)*, !nosanitize !4
-// HYBRID-TRAP-NEXT:    [[TAG_PRE:%.*]] = call i1 @llvm.cheri.cap.tag.get(i8 addrspace(200)* [[TMP0]]), !nosanitize !4
-// HYBRID-TRAP-NEXT:    [[TMP1:%.*]] = bitcast i32 addrspace(200)* [[ADD_PTR]] to i8 addrspace(200)*, !nosanitize !4
-// HYBRID-TRAP-NEXT:    [[TAG_POST:%.*]] = call i1 @llvm.cheri.cap.tag.get(i8 addrspace(200)* [[TMP1]]), !nosanitize !4
-// HYBRID-TRAP-NEXT:    [[TMP2:%.*]] = icmp eq i1 [[TAG_PRE]], [[TAG_POST]], !nosanitize !4
-// HYBRID-TRAP-NEXT:    br i1 [[TMP2]], label [[CONT:%.*]], label [[TRAP:%.*]], !nosanitize !4
+// HYBRID-TRAP-NEXT:    [[ADD_PTR:%.*]] = getelementptr inbounds i32, ptr addrspace(200) [[INPUT]], i64 [[INDEX]]
+// HYBRID-TRAP-NEXT:    [[TAG_PRE:%.*]] = call i1 @llvm.cheri.cap.tag.get(ptr addrspace(200) [[INPUT]]), !nosanitize !4
+// HYBRID-TRAP-NEXT:    [[TAG_POST:%.*]] = call i1 @llvm.cheri.cap.tag.get(ptr addrspace(200) [[ADD_PTR]]), !nosanitize !4
+// HYBRID-TRAP-NEXT:    [[TMP0:%.*]] = icmp eq i1 [[TAG_PRE]], [[TAG_POST]], !nosanitize !4
+// HYBRID-TRAP-NEXT:    br i1 [[TMP0]], label [[CONT:%.*]], label [[TRAP:%.*]], !nosanitize !4
 // HYBRID-TRAP:       trap:
 // HYBRID-TRAP-NEXT:    call void @llvm.ubsantrap(i8 19) #[[ATTR3]], !nosanitize !4
 // HYBRID-TRAP-NEXT:    unreachable, !nosanitize !4
 // HYBRID-TRAP:       cont:
 // HYBRID-TRAP-NEXT:    br label [[RETURN]]
 // HYBRID-TRAP:       return:
-// HYBRID-TRAP-NEXT:    [[RETVAL_0:%.*]] = phi i32 addrspace(200)* [ null, [[IF_THEN]] ], [ [[ADD_PTR]], [[CONT]] ]
-// HYBRID-TRAP-NEXT:    ret i32 addrspace(200)* [[RETVAL_0]]
+// HYBRID-TRAP-NEXT:    [[RETVAL_0:%.*]] = phi ptr addrspace(200) [ null, [[IF_THEN]] ], [ [[ADD_PTR]], [[CONT]] ]
+// HYBRID-TRAP-NEXT:    ret ptr addrspace(200) [[RETVAL_0]]
 //
 // PURECAP-RUNTIME-LABEL: define {{[^@]+}}@conditional_add
-// PURECAP-RUNTIME-SAME: (i1 noundef zeroext [[COND:%.*]], i32 addrspace(200)* noundef [[INPUT:%.*]], i64 noundef [[INDEX:%.*]]) addrspace(200) #[[ATTR0]] {
+// PURECAP-RUNTIME-SAME: (i1 noundef zeroext [[COND:%.*]], ptr addrspace(200) noundef [[INPUT:%.*]], i64 noundef [[INDEX:%.*]]) addrspace(200) #[[ATTR0]] {
 // PURECAP-RUNTIME-NEXT:  entry:
 // PURECAP-RUNTIME-NEXT:    [[FROMBOOL:%.*]] = zext i1 [[COND]] to i8
 // PURECAP-RUNTIME-NEXT:    [[TOBOOL:%.*]] = trunc i8 [[FROMBOOL]] to i1
@@ -602,26 +542,24 @@ int *__capability tag_preserving_cast(int *__capability input) {
 // PURECAP-RUNTIME:       if.then:
 // PURECAP-RUNTIME-NEXT:    br label [[RETURN:%.*]]
 // PURECAP-RUNTIME:       if.else:
-// PURECAP-RUNTIME-NEXT:    [[ADD_PTR:%.*]] = getelementptr inbounds i32, i32 addrspace(200)* [[INPUT]], i64 [[INDEX]]
-// PURECAP-RUNTIME-NEXT:    [[TMP0:%.*]] = bitcast i32 addrspace(200)* [[INPUT]] to i8 addrspace(200)*, !nosanitize !4
-// PURECAP-RUNTIME-NEXT:    [[TAG_PRE:%.*]] = call i1 @llvm.cheri.cap.tag.get(i8 addrspace(200)* [[TMP0]]), !nosanitize !4
-// PURECAP-RUNTIME-NEXT:    [[TMP1:%.*]] = bitcast i32 addrspace(200)* [[ADD_PTR]] to i8 addrspace(200)*, !nosanitize !4
-// PURECAP-RUNTIME-NEXT:    [[TAG_POST:%.*]] = call i1 @llvm.cheri.cap.tag.get(i8 addrspace(200)* [[TMP1]]), !nosanitize !4
-// PURECAP-RUNTIME-NEXT:    [[TMP2:%.*]] = icmp eq i1 [[TAG_PRE]], [[TAG_POST]], !nosanitize !4
-// PURECAP-RUNTIME-NEXT:    br i1 [[TMP2]], label [[CONT:%.*]], label [[HANDLER_POINTER_OVERFLOW:%.*]], !prof [[PROF5]], !nosanitize !4
+// PURECAP-RUNTIME-NEXT:    [[ADD_PTR:%.*]] = getelementptr inbounds i32, ptr addrspace(200) [[INPUT]], i64 [[INDEX]]
+// PURECAP-RUNTIME-NEXT:    [[TAG_PRE:%.*]] = call i1 @llvm.cheri.cap.tag.get(ptr addrspace(200) [[INPUT]]), !nosanitize !4
+// PURECAP-RUNTIME-NEXT:    [[TAG_POST:%.*]] = call i1 @llvm.cheri.cap.tag.get(ptr addrspace(200) [[ADD_PTR]]), !nosanitize !4
+// PURECAP-RUNTIME-NEXT:    [[TMP0:%.*]] = icmp eq i1 [[TAG_PRE]], [[TAG_POST]], !nosanitize !4
+// PURECAP-RUNTIME-NEXT:    br i1 [[TMP0]], label [[CONT:%.*]], label [[HANDLER_POINTER_OVERFLOW:%.*]], !prof [[PROF5]], !nosanitize !4
 // PURECAP-RUNTIME:       handler.pointer_overflow:
-// PURECAP-RUNTIME-NEXT:    [[TMP3:%.*]] = ptrtoint i32 addrspace(200)* [[INPUT]] to i64, !nosanitize !4
-// PURECAP-RUNTIME-NEXT:    [[TMP4:%.*]] = ptrtoint i32 addrspace(200)* [[ADD_PTR]] to i64, !nosanitize !4
-// PURECAP-RUNTIME-NEXT:    call void @__ubsan_handle_pointer_overflow_abort(i8 addrspace(200)* bitcast ({ { [28 x i8] addrspace(200)*, i32, i32 } } addrspace(200)* @[[GLOB6:[0-9]+]] to i8 addrspace(200)*), i64 [[TMP3]], i64 [[TMP4]]) #[[ATTR3]], !nosanitize !4
+// PURECAP-RUNTIME-NEXT:    [[TMP1:%.*]] = ptrtoint ptr addrspace(200) [[INPUT]] to i64, !nosanitize !4
+// PURECAP-RUNTIME-NEXT:    [[TMP2:%.*]] = ptrtoint ptr addrspace(200) [[ADD_PTR]] to i64, !nosanitize !4
+// PURECAP-RUNTIME-NEXT:    call void @__ubsan_handle_pointer_overflow_abort(ptr addrspace(200) @[[GLOB6:[0-9]+]], i64 [[TMP1]], i64 [[TMP2]]) #[[ATTR3]], !nosanitize !4
 // PURECAP-RUNTIME-NEXT:    unreachable, !nosanitize !4
 // PURECAP-RUNTIME:       cont:
 // PURECAP-RUNTIME-NEXT:    br label [[RETURN]]
 // PURECAP-RUNTIME:       return:
-// PURECAP-RUNTIME-NEXT:    [[RETVAL_0:%.*]] = phi i32 addrspace(200)* [ null, [[IF_THEN]] ], [ [[ADD_PTR]], [[CONT]] ]
-// PURECAP-RUNTIME-NEXT:    ret i32 addrspace(200)* [[RETVAL_0]]
+// PURECAP-RUNTIME-NEXT:    [[RETVAL_0:%.*]] = phi ptr addrspace(200) [ null, [[IF_THEN]] ], [ [[ADD_PTR]], [[CONT]] ]
+// PURECAP-RUNTIME-NEXT:    ret ptr addrspace(200) [[RETVAL_0]]
 //
 // PURECAP-TRAP-LABEL: define {{[^@]+}}@conditional_add
-// PURECAP-TRAP-SAME: (i1 noundef zeroext [[COND:%.*]], i32 addrspace(200)* noundef [[INPUT:%.*]], i64 noundef [[INDEX:%.*]]) addrspace(200) #[[ATTR0]] {
+// PURECAP-TRAP-SAME: (i1 noundef zeroext [[COND:%.*]], ptr addrspace(200) noundef [[INPUT:%.*]], i64 noundef [[INDEX:%.*]]) addrspace(200) #[[ATTR0]] {
 // PURECAP-TRAP-NEXT:  entry:
 // PURECAP-TRAP-NEXT:    [[FROMBOOL:%.*]] = zext i1 [[COND]] to i8
 // PURECAP-TRAP-NEXT:    [[TOBOOL:%.*]] = trunc i8 [[FROMBOOL]] to i1
@@ -629,21 +567,19 @@ int *__capability tag_preserving_cast(int *__capability input) {
 // PURECAP-TRAP:       if.then:
 // PURECAP-TRAP-NEXT:    br label [[RETURN:%.*]]
 // PURECAP-TRAP:       if.else:
-// PURECAP-TRAP-NEXT:    [[ADD_PTR:%.*]] = getelementptr inbounds i32, i32 addrspace(200)* [[INPUT]], i64 [[INDEX]]
-// PURECAP-TRAP-NEXT:    [[TMP0:%.*]] = bitcast i32 addrspace(200)* [[INPUT]] to i8 addrspace(200)*, !nosanitize !4
-// PURECAP-TRAP-NEXT:    [[TAG_PRE:%.*]] = call i1 @llvm.cheri.cap.tag.get(i8 addrspace(200)* [[TMP0]]), !nosanitize !4
-// PURECAP-TRAP-NEXT:    [[TMP1:%.*]] = bitcast i32 addrspace(200)* [[ADD_PTR]] to i8 addrspace(200)*, !nosanitize !4
-// PURECAP-TRAP-NEXT:    [[TAG_POST:%.*]] = call i1 @llvm.cheri.cap.tag.get(i8 addrspace(200)* [[TMP1]]), !nosanitize !4
-// PURECAP-TRAP-NEXT:    [[TMP2:%.*]] = icmp eq i1 [[TAG_PRE]], [[TAG_POST]], !nosanitize !4
-// PURECAP-TRAP-NEXT:    br i1 [[TMP2]], label [[CONT:%.*]], label [[TRAP:%.*]], !nosanitize !4
+// PURECAP-TRAP-NEXT:    [[ADD_PTR:%.*]] = getelementptr inbounds i32, ptr addrspace(200) [[INPUT]], i64 [[INDEX]]
+// PURECAP-TRAP-NEXT:    [[TAG_PRE:%.*]] = call i1 @llvm.cheri.cap.tag.get(ptr addrspace(200) [[INPUT]]), !nosanitize !4
+// PURECAP-TRAP-NEXT:    [[TAG_POST:%.*]] = call i1 @llvm.cheri.cap.tag.get(ptr addrspace(200) [[ADD_PTR]]), !nosanitize !4
+// PURECAP-TRAP-NEXT:    [[TMP0:%.*]] = icmp eq i1 [[TAG_PRE]], [[TAG_POST]], !nosanitize !4
+// PURECAP-TRAP-NEXT:    br i1 [[TMP0]], label [[CONT:%.*]], label [[TRAP:%.*]], !nosanitize !4
 // PURECAP-TRAP:       trap:
 // PURECAP-TRAP-NEXT:    call void @llvm.ubsantrap(i8 19) #[[ATTR3]], !nosanitize !4
 // PURECAP-TRAP-NEXT:    unreachable, !nosanitize !4
 // PURECAP-TRAP:       cont:
 // PURECAP-TRAP-NEXT:    br label [[RETURN]]
 // PURECAP-TRAP:       return:
-// PURECAP-TRAP-NEXT:    [[RETVAL_0:%.*]] = phi i32 addrspace(200)* [ null, [[IF_THEN]] ], [ [[ADD_PTR]], [[CONT]] ]
-// PURECAP-TRAP-NEXT:    ret i32 addrspace(200)* [[RETVAL_0]]
+// PURECAP-TRAP-NEXT:    [[RETVAL_0:%.*]] = phi ptr addrspace(200) [ null, [[IF_THEN]] ], [ [[ADD_PTR]], [[CONT]] ]
+// PURECAP-TRAP-NEXT:    ret ptr addrspace(200) [[RETVAL_0]]
 //
 int *__capability conditional_add(_Bool cond, int *__capability input, long index) {
   if (cond) {
@@ -654,7 +590,7 @@ int *__capability conditional_add(_Bool cond, int *__capability input, long inde
 }
 
 // HYBRID-RUNTIME-LABEL: define {{[^@]+}}@ternery_add
-// HYBRID-RUNTIME-SAME: (i1 noundef zeroext [[COND:%.*]], i32 addrspace(200)* noundef [[INPUT:%.*]], i64 noundef [[INDEX:%.*]]) #[[ATTR0]] {
+// HYBRID-RUNTIME-SAME: (i1 noundef zeroext [[COND:%.*]], ptr addrspace(200) noundef [[INPUT:%.*]], i64 noundef [[INDEX:%.*]]) #[[ATTR0]] {
 // HYBRID-RUNTIME-NEXT:  entry:
 // HYBRID-RUNTIME-NEXT:    [[FROMBOOL:%.*]] = zext i1 [[COND]] to i8
 // HYBRID-RUNTIME-NEXT:    [[TOBOOL:%.*]] = trunc i8 [[FROMBOOL]] to i1
@@ -662,26 +598,24 @@ int *__capability conditional_add(_Bool cond, int *__capability input, long inde
 // HYBRID-RUNTIME:       cond.true:
 // HYBRID-RUNTIME-NEXT:    br label [[COND_END:%.*]]
 // HYBRID-RUNTIME:       cond.false:
-// HYBRID-RUNTIME-NEXT:    [[ADD_PTR:%.*]] = getelementptr inbounds i32, i32 addrspace(200)* [[INPUT]], i64 [[INDEX]]
-// HYBRID-RUNTIME-NEXT:    [[TMP0:%.*]] = bitcast i32 addrspace(200)* [[INPUT]] to i8 addrspace(200)*, !nosanitize !4
-// HYBRID-RUNTIME-NEXT:    [[TAG_PRE:%.*]] = call i1 @llvm.cheri.cap.tag.get(i8 addrspace(200)* [[TMP0]]), !nosanitize !4
-// HYBRID-RUNTIME-NEXT:    [[TMP1:%.*]] = bitcast i32 addrspace(200)* [[ADD_PTR]] to i8 addrspace(200)*, !nosanitize !4
-// HYBRID-RUNTIME-NEXT:    [[TAG_POST:%.*]] = call i1 @llvm.cheri.cap.tag.get(i8 addrspace(200)* [[TMP1]]), !nosanitize !4
-// HYBRID-RUNTIME-NEXT:    [[TMP2:%.*]] = icmp eq i1 [[TAG_PRE]], [[TAG_POST]], !nosanitize !4
-// HYBRID-RUNTIME-NEXT:    br i1 [[TMP2]], label [[CONT:%.*]], label [[HANDLER_POINTER_OVERFLOW:%.*]], !prof [[PROF5]], !nosanitize !4
+// HYBRID-RUNTIME-NEXT:    [[ADD_PTR:%.*]] = getelementptr inbounds i32, ptr addrspace(200) [[INPUT]], i64 [[INDEX]]
+// HYBRID-RUNTIME-NEXT:    [[TAG_PRE:%.*]] = call i1 @llvm.cheri.cap.tag.get(ptr addrspace(200) [[INPUT]]), !nosanitize !4
+// HYBRID-RUNTIME-NEXT:    [[TAG_POST:%.*]] = call i1 @llvm.cheri.cap.tag.get(ptr addrspace(200) [[ADD_PTR]]), !nosanitize !4
+// HYBRID-RUNTIME-NEXT:    [[TMP0:%.*]] = icmp eq i1 [[TAG_PRE]], [[TAG_POST]], !nosanitize !4
+// HYBRID-RUNTIME-NEXT:    br i1 [[TMP0]], label [[CONT:%.*]], label [[HANDLER_POINTER_OVERFLOW:%.*]], !prof [[PROF5]], !nosanitize !4
 // HYBRID-RUNTIME:       handler.pointer_overflow:
-// HYBRID-RUNTIME-NEXT:    [[TMP3:%.*]] = ptrtoint i32 addrspace(200)* [[INPUT]] to i64, !nosanitize !4
-// HYBRID-RUNTIME-NEXT:    [[TMP4:%.*]] = ptrtoint i32 addrspace(200)* [[ADD_PTR]] to i64, !nosanitize !4
-// HYBRID-RUNTIME-NEXT:    call void @__ubsan_handle_pointer_overflow_abort(i8* bitcast ({ { [28 x i8]*, i32, i32 } }* @[[GLOB7:[0-9]+]] to i8*), i64 [[TMP3]], i64 [[TMP4]]) #[[ATTR3]], !nosanitize !4
+// HYBRID-RUNTIME-NEXT:    [[TMP1:%.*]] = ptrtoint ptr addrspace(200) [[INPUT]] to i64, !nosanitize !4
+// HYBRID-RUNTIME-NEXT:    [[TMP2:%.*]] = ptrtoint ptr addrspace(200) [[ADD_PTR]] to i64, !nosanitize !4
+// HYBRID-RUNTIME-NEXT:    call void @__ubsan_handle_pointer_overflow_abort(ptr @[[GLOB7:[0-9]+]], i64 [[TMP1]], i64 [[TMP2]]) #[[ATTR3]], !nosanitize !4
 // HYBRID-RUNTIME-NEXT:    unreachable, !nosanitize !4
 // HYBRID-RUNTIME:       cont:
 // HYBRID-RUNTIME-NEXT:    br label [[COND_END]]
 // HYBRID-RUNTIME:       cond.end:
-// HYBRID-RUNTIME-NEXT:    [[COND1:%.*]] = phi i32 addrspace(200)* [ null, [[COND_TRUE]] ], [ [[ADD_PTR]], [[CONT]] ]
-// HYBRID-RUNTIME-NEXT:    ret i32 addrspace(200)* [[COND1]]
+// HYBRID-RUNTIME-NEXT:    [[COND1:%.*]] = phi ptr addrspace(200) [ null, [[COND_TRUE]] ], [ [[ADD_PTR]], [[CONT]] ]
+// HYBRID-RUNTIME-NEXT:    ret ptr addrspace(200) [[COND1]]
 //
 // HYBRID-TRAP-LABEL: define {{[^@]+}}@ternery_add
-// HYBRID-TRAP-SAME: (i1 noundef zeroext [[COND:%.*]], i32 addrspace(200)* noundef [[INPUT:%.*]], i64 noundef [[INDEX:%.*]]) #[[ATTR0]] {
+// HYBRID-TRAP-SAME: (i1 noundef zeroext [[COND:%.*]], ptr addrspace(200) noundef [[INPUT:%.*]], i64 noundef [[INDEX:%.*]]) #[[ATTR0]] {
 // HYBRID-TRAP-NEXT:  entry:
 // HYBRID-TRAP-NEXT:    [[FROMBOOL:%.*]] = zext i1 [[COND]] to i8
 // HYBRID-TRAP-NEXT:    [[TOBOOL:%.*]] = trunc i8 [[FROMBOOL]] to i1
@@ -689,24 +623,22 @@ int *__capability conditional_add(_Bool cond, int *__capability input, long inde
 // HYBRID-TRAP:       cond.true:
 // HYBRID-TRAP-NEXT:    br label [[COND_END:%.*]]
 // HYBRID-TRAP:       cond.false:
-// HYBRID-TRAP-NEXT:    [[ADD_PTR:%.*]] = getelementptr inbounds i32, i32 addrspace(200)* [[INPUT]], i64 [[INDEX]]
-// HYBRID-TRAP-NEXT:    [[TMP0:%.*]] = bitcast i32 addrspace(200)* [[INPUT]] to i8 addrspace(200)*, !nosanitize !4
-// HYBRID-TRAP-NEXT:    [[TAG_PRE:%.*]] = call i1 @llvm.cheri.cap.tag.get(i8 addrspace(200)* [[TMP0]]), !nosanitize !4
-// HYBRID-TRAP-NEXT:    [[TMP1:%.*]] = bitcast i32 addrspace(200)* [[ADD_PTR]] to i8 addrspace(200)*, !nosanitize !4
-// HYBRID-TRAP-NEXT:    [[TAG_POST:%.*]] = call i1 @llvm.cheri.cap.tag.get(i8 addrspace(200)* [[TMP1]]), !nosanitize !4
-// HYBRID-TRAP-NEXT:    [[TMP2:%.*]] = icmp eq i1 [[TAG_PRE]], [[TAG_POST]], !nosanitize !4
-// HYBRID-TRAP-NEXT:    br i1 [[TMP2]], label [[CONT:%.*]], label [[TRAP:%.*]], !nosanitize !4
+// HYBRID-TRAP-NEXT:    [[ADD_PTR:%.*]] = getelementptr inbounds i32, ptr addrspace(200) [[INPUT]], i64 [[INDEX]]
+// HYBRID-TRAP-NEXT:    [[TAG_PRE:%.*]] = call i1 @llvm.cheri.cap.tag.get(ptr addrspace(200) [[INPUT]]), !nosanitize !4
+// HYBRID-TRAP-NEXT:    [[TAG_POST:%.*]] = call i1 @llvm.cheri.cap.tag.get(ptr addrspace(200) [[ADD_PTR]]), !nosanitize !4
+// HYBRID-TRAP-NEXT:    [[TMP0:%.*]] = icmp eq i1 [[TAG_PRE]], [[TAG_POST]], !nosanitize !4
+// HYBRID-TRAP-NEXT:    br i1 [[TMP0]], label [[CONT:%.*]], label [[TRAP:%.*]], !nosanitize !4
 // HYBRID-TRAP:       trap:
 // HYBRID-TRAP-NEXT:    call void @llvm.ubsantrap(i8 19) #[[ATTR3]], !nosanitize !4
 // HYBRID-TRAP-NEXT:    unreachable, !nosanitize !4
 // HYBRID-TRAP:       cont:
 // HYBRID-TRAP-NEXT:    br label [[COND_END]]
 // HYBRID-TRAP:       cond.end:
-// HYBRID-TRAP-NEXT:    [[COND1:%.*]] = phi i32 addrspace(200)* [ null, [[COND_TRUE]] ], [ [[ADD_PTR]], [[CONT]] ]
-// HYBRID-TRAP-NEXT:    ret i32 addrspace(200)* [[COND1]]
+// HYBRID-TRAP-NEXT:    [[COND1:%.*]] = phi ptr addrspace(200) [ null, [[COND_TRUE]] ], [ [[ADD_PTR]], [[CONT]] ]
+// HYBRID-TRAP-NEXT:    ret ptr addrspace(200) [[COND1]]
 //
 // PURECAP-RUNTIME-LABEL: define {{[^@]+}}@ternery_add
-// PURECAP-RUNTIME-SAME: (i1 noundef zeroext [[COND:%.*]], i32 addrspace(200)* noundef [[INPUT:%.*]], i64 noundef [[INDEX:%.*]]) addrspace(200) #[[ATTR0]] {
+// PURECAP-RUNTIME-SAME: (i1 noundef zeroext [[COND:%.*]], ptr addrspace(200) noundef [[INPUT:%.*]], i64 noundef [[INDEX:%.*]]) addrspace(200) #[[ATTR0]] {
 // PURECAP-RUNTIME-NEXT:  entry:
 // PURECAP-RUNTIME-NEXT:    [[FROMBOOL:%.*]] = zext i1 [[COND]] to i8
 // PURECAP-RUNTIME-NEXT:    [[TOBOOL:%.*]] = trunc i8 [[FROMBOOL]] to i1
@@ -714,26 +646,24 @@ int *__capability conditional_add(_Bool cond, int *__capability input, long inde
 // PURECAP-RUNTIME:       cond.true:
 // PURECAP-RUNTIME-NEXT:    br label [[COND_END:%.*]]
 // PURECAP-RUNTIME:       cond.false:
-// PURECAP-RUNTIME-NEXT:    [[ADD_PTR:%.*]] = getelementptr inbounds i32, i32 addrspace(200)* [[INPUT]], i64 [[INDEX]]
-// PURECAP-RUNTIME-NEXT:    [[TMP0:%.*]] = bitcast i32 addrspace(200)* [[INPUT]] to i8 addrspace(200)*, !nosanitize !4
-// PURECAP-RUNTIME-NEXT:    [[TAG_PRE:%.*]] = call i1 @llvm.cheri.cap.tag.get(i8 addrspace(200)* [[TMP0]]), !nosanitize !4
-// PURECAP-RUNTIME-NEXT:    [[TMP1:%.*]] = bitcast i32 addrspace(200)* [[ADD_PTR]] to i8 addrspace(200)*, !nosanitize !4
-// PURECAP-RUNTIME-NEXT:    [[TAG_POST:%.*]] = call i1 @llvm.cheri.cap.tag.get(i8 addrspace(200)* [[TMP1]]), !nosanitize !4
-// PURECAP-RUNTIME-NEXT:    [[TMP2:%.*]] = icmp eq i1 [[TAG_PRE]], [[TAG_POST]], !nosanitize !4
-// PURECAP-RUNTIME-NEXT:    br i1 [[TMP2]], label [[CONT:%.*]], label [[HANDLER_POINTER_OVERFLOW:%.*]], !prof [[PROF5]], !nosanitize !4
+// PURECAP-RUNTIME-NEXT:    [[ADD_PTR:%.*]] = getelementptr inbounds i32, ptr addrspace(200) [[INPUT]], i64 [[INDEX]]
+// PURECAP-RUNTIME-NEXT:    [[TAG_PRE:%.*]] = call i1 @llvm.cheri.cap.tag.get(ptr addrspace(200) [[INPUT]]), !nosanitize !4
+// PURECAP-RUNTIME-NEXT:    [[TAG_POST:%.*]] = call i1 @llvm.cheri.cap.tag.get(ptr addrspace(200) [[ADD_PTR]]), !nosanitize !4
+// PURECAP-RUNTIME-NEXT:    [[TMP0:%.*]] = icmp eq i1 [[TAG_PRE]], [[TAG_POST]], !nosanitize !4
+// PURECAP-RUNTIME-NEXT:    br i1 [[TMP0]], label [[CONT:%.*]], label [[HANDLER_POINTER_OVERFLOW:%.*]], !prof [[PROF5]], !nosanitize !4
 // PURECAP-RUNTIME:       handler.pointer_overflow:
-// PURECAP-RUNTIME-NEXT:    [[TMP3:%.*]] = ptrtoint i32 addrspace(200)* [[INPUT]] to i64, !nosanitize !4
-// PURECAP-RUNTIME-NEXT:    [[TMP4:%.*]] = ptrtoint i32 addrspace(200)* [[ADD_PTR]] to i64, !nosanitize !4
-// PURECAP-RUNTIME-NEXT:    call void @__ubsan_handle_pointer_overflow_abort(i8 addrspace(200)* bitcast ({ { [28 x i8] addrspace(200)*, i32, i32 } } addrspace(200)* @[[GLOB7:[0-9]+]] to i8 addrspace(200)*), i64 [[TMP3]], i64 [[TMP4]]) #[[ATTR3]], !nosanitize !4
+// PURECAP-RUNTIME-NEXT:    [[TMP1:%.*]] = ptrtoint ptr addrspace(200) [[INPUT]] to i64, !nosanitize !4
+// PURECAP-RUNTIME-NEXT:    [[TMP2:%.*]] = ptrtoint ptr addrspace(200) [[ADD_PTR]] to i64, !nosanitize !4
+// PURECAP-RUNTIME-NEXT:    call void @__ubsan_handle_pointer_overflow_abort(ptr addrspace(200) @[[GLOB7:[0-9]+]], i64 [[TMP1]], i64 [[TMP2]]) #[[ATTR3]], !nosanitize !4
 // PURECAP-RUNTIME-NEXT:    unreachable, !nosanitize !4
 // PURECAP-RUNTIME:       cont:
 // PURECAP-RUNTIME-NEXT:    br label [[COND_END]]
 // PURECAP-RUNTIME:       cond.end:
-// PURECAP-RUNTIME-NEXT:    [[COND1:%.*]] = phi i32 addrspace(200)* [ null, [[COND_TRUE]] ], [ [[ADD_PTR]], [[CONT]] ]
-// PURECAP-RUNTIME-NEXT:    ret i32 addrspace(200)* [[COND1]]
+// PURECAP-RUNTIME-NEXT:    [[COND1:%.*]] = phi ptr addrspace(200) [ null, [[COND_TRUE]] ], [ [[ADD_PTR]], [[CONT]] ]
+// PURECAP-RUNTIME-NEXT:    ret ptr addrspace(200) [[COND1]]
 //
 // PURECAP-TRAP-LABEL: define {{[^@]+}}@ternery_add
-// PURECAP-TRAP-SAME: (i1 noundef zeroext [[COND:%.*]], i32 addrspace(200)* noundef [[INPUT:%.*]], i64 noundef [[INDEX:%.*]]) addrspace(200) #[[ATTR0]] {
+// PURECAP-TRAP-SAME: (i1 noundef zeroext [[COND:%.*]], ptr addrspace(200) noundef [[INPUT:%.*]], i64 noundef [[INDEX:%.*]]) addrspace(200) #[[ATTR0]] {
 // PURECAP-TRAP-NEXT:  entry:
 // PURECAP-TRAP-NEXT:    [[FROMBOOL:%.*]] = zext i1 [[COND]] to i8
 // PURECAP-TRAP-NEXT:    [[TOBOOL:%.*]] = trunc i8 [[FROMBOOL]] to i1
@@ -741,21 +671,19 @@ int *__capability conditional_add(_Bool cond, int *__capability input, long inde
 // PURECAP-TRAP:       cond.true:
 // PURECAP-TRAP-NEXT:    br label [[COND_END:%.*]]
 // PURECAP-TRAP:       cond.false:
-// PURECAP-TRAP-NEXT:    [[ADD_PTR:%.*]] = getelementptr inbounds i32, i32 addrspace(200)* [[INPUT]], i64 [[INDEX]]
-// PURECAP-TRAP-NEXT:    [[TMP0:%.*]] = bitcast i32 addrspace(200)* [[INPUT]] to i8 addrspace(200)*, !nosanitize !4
-// PURECAP-TRAP-NEXT:    [[TAG_PRE:%.*]] = call i1 @llvm.cheri.cap.tag.get(i8 addrspace(200)* [[TMP0]]), !nosanitize !4
-// PURECAP-TRAP-NEXT:    [[TMP1:%.*]] = bitcast i32 addrspace(200)* [[ADD_PTR]] to i8 addrspace(200)*, !nosanitize !4
-// PURECAP-TRAP-NEXT:    [[TAG_POST:%.*]] = call i1 @llvm.cheri.cap.tag.get(i8 addrspace(200)* [[TMP1]]), !nosanitize !4
-// PURECAP-TRAP-NEXT:    [[TMP2:%.*]] = icmp eq i1 [[TAG_PRE]], [[TAG_POST]], !nosanitize !4
-// PURECAP-TRAP-NEXT:    br i1 [[TMP2]], label [[CONT:%.*]], label [[TRAP:%.*]], !nosanitize !4
+// PURECAP-TRAP-NEXT:    [[ADD_PTR:%.*]] = getelementptr inbounds i32, ptr addrspace(200) [[INPUT]], i64 [[INDEX]]
+// PURECAP-TRAP-NEXT:    [[TAG_PRE:%.*]] = call i1 @llvm.cheri.cap.tag.get(ptr addrspace(200) [[INPUT]]), !nosanitize !4
+// PURECAP-TRAP-NEXT:    [[TAG_POST:%.*]] = call i1 @llvm.cheri.cap.tag.get(ptr addrspace(200) [[ADD_PTR]]), !nosanitize !4
+// PURECAP-TRAP-NEXT:    [[TMP0:%.*]] = icmp eq i1 [[TAG_PRE]], [[TAG_POST]], !nosanitize !4
+// PURECAP-TRAP-NEXT:    br i1 [[TMP0]], label [[CONT:%.*]], label [[TRAP:%.*]], !nosanitize !4
 // PURECAP-TRAP:       trap:
 // PURECAP-TRAP-NEXT:    call void @llvm.ubsantrap(i8 19) #[[ATTR3]], !nosanitize !4
 // PURECAP-TRAP-NEXT:    unreachable, !nosanitize !4
 // PURECAP-TRAP:       cont:
 // PURECAP-TRAP-NEXT:    br label [[COND_END]]
 // PURECAP-TRAP:       cond.end:
-// PURECAP-TRAP-NEXT:    [[COND1:%.*]] = phi i32 addrspace(200)* [ null, [[COND_TRUE]] ], [ [[ADD_PTR]], [[CONT]] ]
-// PURECAP-TRAP-NEXT:    ret i32 addrspace(200)* [[COND1]]
+// PURECAP-TRAP-NEXT:    [[COND1:%.*]] = phi ptr addrspace(200) [ null, [[COND_TRUE]] ], [ [[ADD_PTR]], [[CONT]] ]
+// PURECAP-TRAP-NEXT:    ret ptr addrspace(200) [[COND1]]
 //
 int *__capability ternery_add(_Bool cond, int *__capability input, long index) {
   return cond ? 0 : input + index;

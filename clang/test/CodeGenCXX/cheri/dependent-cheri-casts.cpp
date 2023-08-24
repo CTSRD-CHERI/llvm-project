@@ -20,10 +20,10 @@ struct foo {
 };
 
 // CHECK-LABEL: define {{[^@]+}}@_Z17call_good_uintcapu11__uintcap_t
-// CHECK-SAME: (i8 addrspace(200)* noundef [[CAP:%.*]]) local_unnamed_addr #[[ATTR0:[0-9]+]] {
+// CHECK-SAME: (ptr addrspace(200) noundef [[CAP:%.*]]) local_unnamed_addr #[[ATTR0:[0-9]+]] {
 // CHECK-NEXT:  entry:
-// CHECK-NEXT:    [[TMP0:%.*]] = tail call i64 @llvm.cheri.cap.address.get.i64(i8 addrspace(200)* [[CAP]])
-// CHECK-NEXT:    [[TMP1:%.*]] = tail call i64 @llvm.cheri.cap.offset.get.i64(i8 addrspace(200)* [[CAP]])
+// CHECK-NEXT:    [[TMP0:%.*]] = tail call i64 @llvm.cheri.cap.address.get.i64(ptr addrspace(200) [[CAP]])
+// CHECK-NEXT:    [[TMP1:%.*]] = tail call i64 @llvm.cheri.cap.offset.get.i64(ptr addrspace(200) [[CAP]])
 // CHECK-NEXT:    [[ADD:%.*]] = add nsw i64 [[TMP1]], [[TMP0]]
 // CHECK-NEXT:    ret i64 [[ADD]]
 //
@@ -32,10 +32,10 @@ long call_good_uintcap(__uintcap_t cap) {
     cheri_offset_dep(cap);
 }
 // CHECK-LABEL: define {{[^@]+}}@_Z13call_good_ptrU12__capabilityPv
-// CHECK-SAME: (i8 addrspace(200)* noundef [[CAP:%.*]]) local_unnamed_addr #[[ATTR0]] {
+// CHECK-SAME: (ptr addrspace(200) noundef [[CAP:%.*]]) local_unnamed_addr #[[ATTR0]] {
 // CHECK-NEXT:  entry:
-// CHECK-NEXT:    [[TMP0:%.*]] = tail call i64 @llvm.cheri.cap.address.get.i64(i8 addrspace(200)* [[CAP]])
-// CHECK-NEXT:    [[TMP1:%.*]] = tail call i64 @llvm.cheri.cap.offset.get.i64(i8 addrspace(200)* [[CAP]])
+// CHECK-NEXT:    [[TMP0:%.*]] = tail call i64 @llvm.cheri.cap.address.get.i64(ptr addrspace(200) [[CAP]])
+// CHECK-NEXT:    [[TMP1:%.*]] = tail call i64 @llvm.cheri.cap.offset.get.i64(ptr addrspace(200) [[CAP]])
 // CHECK-NEXT:    [[ADD:%.*]] = add nsw i64 [[TMP1]], [[TMP0]]
 // CHECK-NEXT:    ret i64 [[ADD]]
 //
@@ -73,20 +73,20 @@ template <typename srcty> int* __capability cheri_tocap_dep(srcty arg) {
 }
 
 // CHECK-LABEL: define {{[^@]+}}@_Z12fromcap_goodU12__capabilityPi
-// CHECK-SAME: (i32 addrspace(200)* noundef readnone [[CAP_PTR:%.*]]) local_unnamed_addr #[[ATTR1:[0-9]+]] {
+// CHECK-SAME: (ptr addrspace(200) noundef readnone [[CAP_PTR:%.*]]) local_unnamed_addr #[[ATTR1:[0-9]+]] {
 // CHECK-NEXT:  entry:
-// CHECK-NEXT:    [[TMP0:%.*]] = addrspacecast i32 addrspace(200)* [[CAP_PTR]] to i32*
-// CHECK-NEXT:    ret i32* [[TMP0]]
+// CHECK-NEXT:    [[TMP0:%.*]] = addrspacecast ptr addrspace(200) [[CAP_PTR]] to ptr
+// CHECK-NEXT:    ret ptr [[TMP0]]
 //
 int* fromcap_good(int* __capability cap_ptr) {
   return cheri_fromcap_dep(cap_ptr); // purecap-note{{in instantiation of function template specialization 'cheri_fromcap_dep<int *>' requested here}}
 }
 
 // CHECK-LABEL: define {{[^@]+}}@_Z10tocap_goodPi
-// CHECK-SAME: (i32* noundef readnone [[NOT_CAP_PTR:%.*]]) local_unnamed_addr #[[ATTR1]] {
+// CHECK-SAME: (ptr noundef readnone [[NOT_CAP_PTR:%.*]]) local_unnamed_addr #[[ATTR1]] {
 // CHECK-NEXT:  entry:
-// CHECK-NEXT:    [[TMP0:%.*]] = addrspacecast i32* [[NOT_CAP_PTR]] to i32 addrspace(200)*
-// CHECK-NEXT:    ret i32 addrspace(200)* [[TMP0]]
+// CHECK-NEXT:    [[TMP0:%.*]] = addrspacecast ptr [[NOT_CAP_PTR]] to ptr addrspace(200)
+// CHECK-NEXT:    ret ptr addrspace(200) [[TMP0]]
 //
 int* __capability tocap_good(int* not_cap_ptr) {
   return cheri_tocap_dep(not_cap_ptr); // purecap-note{{in instantiation of function template specialization 'cheri_tocap_dep<int *>' requested here}}

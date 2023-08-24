@@ -7,9 +7,17 @@ class Value {
 public:
 __int128 getSIntValue() const;
 };
+// CHECK-LABEL: @_ZNK5Value12getSIntValueEv(
+// CHECK-NEXT:  entry:
+// CHECK-NEXT:    [[THIS_ADDR:%.*]] = alloca ptr addrspace(200), align 16, addrspace(200)
+// CHECK-NEXT:    store ptr addrspace(200) [[THIS:%.*]], ptr addrspace(200) [[THIS_ADDR]], align 16
+// CHECK-NEXT:    [[THIS1:%.*]] = load ptr addrspace(200), ptr addrspace(200) [[THIS_ADDR]], align 16
+// CHECK-NEXT:    [[VAL:%.*]] = getelementptr inbounds [[CLASS_VALUE:%.*]], ptr addrspace(200) [[THIS1]], i32 0, i32 0
+// CHECK-NEXT:    [[TMP0:%.*]] = load ptr addrspace(200), ptr addrspace(200) [[VAL]], align 16
+// CHECK-NEXT:    [[TMP1:%.*]] = call i64 @llvm.cheri.cap.address.get.i64(ptr addrspace(200) [[TMP0]])
+// CHECK-NEXT:    [[CONV:%.*]] = zext i64 [[TMP1]] to i128
+// CHECK-NEXT:    ret i128 [[CONV]]
+//
 __int128 Value::getSIntValue() const {
   return __int128(Val);
-  // CHECK: [[VAL:%.+]] = call i64 @llvm.cheri.cap.address.get.i64(i8 addrspace(200)* %{{.+}})
-  // CHECK-NEXT: [[RESULT:%.+]] = zext i64 [[VAL]] to i128
-  // CHECK-NEXT: ret i128 [[RESULT]]
 }

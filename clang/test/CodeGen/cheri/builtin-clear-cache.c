@@ -6,16 +6,16 @@ char *start, *end;
 
 // HYBRID-LABEL: @clear_cache(
 // HYBRID-NEXT:  entry:
-// HYBRID-NEXT:    [[TMP0:%.*]] = load i8*, i8** @start, align 8
-// HYBRID-NEXT:    [[TMP1:%.*]] = load i8*, i8** @end, align 8
-// HYBRID-NEXT:    call void @llvm.clear_cache.p0i8(i8* [[TMP0]], i8* [[TMP1]])
+// HYBRID-NEXT:    [[TMP0:%.*]] = load ptr, ptr @start, align 8
+// HYBRID-NEXT:    [[TMP1:%.*]] = load ptr, ptr @end, align 8
+// HYBRID-NEXT:    call void @llvm.clear_cache.p0(ptr [[TMP0]], ptr [[TMP1]])
 // HYBRID-NEXT:    ret void
 //
 // PURECAP128-LABEL: @clear_cache(
 // PURECAP128-NEXT:  entry:
-// PURECAP128-NEXT:    [[TMP0:%.*]] = load i8 addrspace(200)*, i8 addrspace(200)* addrspace(200)* @start, align 16
-// PURECAP128-NEXT:    [[TMP1:%.*]] = load i8 addrspace(200)*, i8 addrspace(200)* addrspace(200)* @end, align 16
-// PURECAP128-NEXT:    call void @llvm.clear_cache.p200i8(i8 addrspace(200)* [[TMP0]], i8 addrspace(200)* [[TMP1]])
+// PURECAP128-NEXT:    [[TMP0:%.*]] = load ptr addrspace(200), ptr addrspace(200) @start, align 16
+// PURECAP128-NEXT:    [[TMP1:%.*]] = load ptr addrspace(200), ptr addrspace(200) @end, align 16
+// PURECAP128-NEXT:    call void @llvm.clear_cache.p200(ptr addrspace(200) [[TMP0]], ptr addrspace(200) [[TMP1]])
 // PURECAP128-NEXT:    ret void
 //
 void clear_cache(void) {

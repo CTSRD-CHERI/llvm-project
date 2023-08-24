@@ -12,17 +12,17 @@ extern int s32;
 
 // CHECK-LABEL: @_Z8zext_capv(
 // CHECK-NEXT:  entry:
-// CHECK-NEXT:    [[TMP0:%.*]] = load i32, i32* @u32, align 4
+// CHECK-NEXT:    [[TMP0:%.*]] = load i32, ptr @u32, align 4
 // CHECK-NEXT:    [[CONV:%.*]] = zext i32 [[TMP0]] to i64
-// CHECK-NEXT:    [[TMP1:%.*]] = getelementptr i8, i8 addrspace(200)* null, i64 [[CONV]]
-// CHECK-NEXT:    ret i8 addrspace(200)* [[TMP1]]
+// CHECK-NEXT:    [[TMP1:%.*]] = getelementptr i8, ptr addrspace(200) null, i64 [[CONV]]
+// CHECK-NEXT:    ret ptr addrspace(200) [[TMP1]]
 //
 __uintcap_t zext_cap() {
   return static_cast<__uintcap_t>(u32);
 }
 // CHECK-LABEL: @_Z7zext_64v(
 // CHECK-NEXT:  entry:
-// CHECK-NEXT:    [[TMP0:%.*]] = load i32, i32* @u32, align 4
+// CHECK-NEXT:    [[TMP0:%.*]] = load i32, ptr @u32, align 4
 // CHECK-NEXT:    [[CONV:%.*]] = zext i32 [[TMP0]] to i64
 // CHECK-NEXT:    ret i64 [[CONV]]
 //
@@ -34,17 +34,17 @@ unsigned long long zext_64() {
 
 // CHECK-LABEL: @_Z8sext_capv(
 // CHECK-NEXT:  entry:
-// CHECK-NEXT:    [[TMP0:%.*]] = load i32, i32* @s32, align 4
+// CHECK-NEXT:    [[TMP0:%.*]] = load i32, ptr @s32, align 4
 // CHECK-NEXT:    [[CONV:%.*]] = sext i32 [[TMP0]] to i64
-// CHECK-NEXT:    [[TMP1:%.*]] = getelementptr i8, i8 addrspace(200)* null, i64 [[CONV]]
-// CHECK-NEXT:    ret i8 addrspace(200)* [[TMP1]]
+// CHECK-NEXT:    [[TMP1:%.*]] = getelementptr i8, ptr addrspace(200) null, i64 [[CONV]]
+// CHECK-NEXT:    ret ptr addrspace(200) [[TMP1]]
 //
 __intcap_t sext_cap() {
   return static_cast<__intcap_t>(s32);
 }
 // CHECK-LABEL: @_Z7sext_64v(
 // CHECK-NEXT:  entry:
-// CHECK-NEXT:    [[TMP0:%.*]] = load i32, i32* @s32, align 4
+// CHECK-NEXT:    [[TMP0:%.*]] = load i32, ptr @s32, align 4
 // CHECK-NEXT:    [[CONV:%.*]] = sext i32 [[TMP0]] to i64
 // CHECK-NEXT:    ret i64 [[CONV]]
 //

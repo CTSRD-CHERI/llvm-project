@@ -30,16 +30,14 @@ void cap_pair_function(struct cheri_object, long, struct cap_pair);
 // HYBRID-SAME: () #[[ATTR0:[0-9]+]] {
 // HYBRID-NEXT:  entry:
 // HYBRID-NEXT:    [[DOTCOMPOUNDLITERAL:%.*]] = alloca [[STRUCT_CAP_PAIR:%.*]], align 16
-// HYBRID-NEXT:    [[TMP0:%.*]] = bitcast %struct.cap_pair* [[DOTCOMPOUNDLITERAL]] to i8*
-// HYBRID-NEXT:    call void @llvm.memset.p0i8.i64(i8* align 16 [[TMP0]], i8 0, i64 32, i1 false)
-// HYBRID-NEXT:    [[TMP1:%.*]] = load i8 addrspace(200)*, i8 addrspace(200)** getelementptr inbounds ({ i8 addrspace(200)*, i8 addrspace(200)* }, { i8 addrspace(200)*, i8 addrspace(200)* }* bitcast (%struct.cheri_object* @cls to { i8 addrspace(200)*, i8 addrspace(200)* }*), i32 0, i32 0), align 16
-// HYBRID-NEXT:    [[TMP2:%.*]] = load i8 addrspace(200)*, i8 addrspace(200)** getelementptr inbounds ({ i8 addrspace(200)*, i8 addrspace(200)* }, { i8 addrspace(200)*, i8 addrspace(200)* }* bitcast (%struct.cheri_object* @cls to { i8 addrspace(200)*, i8 addrspace(200)* }*), i32 0, i32 1), align 16
-// HYBRID-NEXT:    [[TMP3:%.*]] = bitcast %struct.cap_pair* [[DOTCOMPOUNDLITERAL]] to { i8 addrspace(200)*, i8 addrspace(200)* }*
-// HYBRID-NEXT:    [[TMP4:%.*]] = getelementptr inbounds { i8 addrspace(200)*, i8 addrspace(200)* }, { i8 addrspace(200)*, i8 addrspace(200)* }* [[TMP3]], i32 0, i32 0
-// HYBRID-NEXT:    [[TMP5:%.*]] = load i8 addrspace(200)*, i8 addrspace(200)** [[TMP4]], align 16
-// HYBRID-NEXT:    [[TMP6:%.*]] = getelementptr inbounds { i8 addrspace(200)*, i8 addrspace(200)* }, { i8 addrspace(200)*, i8 addrspace(200)* }* [[TMP3]], i32 0, i32 1
-// HYBRID-NEXT:    [[TMP7:%.*]] = load i8 addrspace(200)*, i8 addrspace(200)** [[TMP6]], align 16
-// HYBRID-NEXT:    call chericcallcc void @cap_pair_function(i8 addrspace(200)* inreg [[TMP1]], i8 addrspace(200)* inreg [[TMP2]], i64 noundef signext 0, i8 addrspace(200)* inreg [[TMP5]], i8 addrspace(200)* inreg [[TMP7]])
+// HYBRID-NEXT:    call void @llvm.memset.p0.i64(ptr align 16 [[DOTCOMPOUNDLITERAL]], i8 0, i64 32, i1 false)
+// HYBRID-NEXT:    [[TMP0:%.*]] = load ptr addrspace(200), ptr @cls, align 16
+// HYBRID-NEXT:    [[TMP1:%.*]] = load ptr addrspace(200), ptr getelementptr inbounds ({ ptr addrspace(200), ptr addrspace(200) }, ptr @cls, i32 0, i32 1), align 16
+// HYBRID-NEXT:    [[TMP2:%.*]] = getelementptr inbounds { ptr addrspace(200), ptr addrspace(200) }, ptr [[DOTCOMPOUNDLITERAL]], i32 0, i32 0
+// HYBRID-NEXT:    [[TMP3:%.*]] = load ptr addrspace(200), ptr [[TMP2]], align 16
+// HYBRID-NEXT:    [[TMP4:%.*]] = getelementptr inbounds { ptr addrspace(200), ptr addrspace(200) }, ptr [[DOTCOMPOUNDLITERAL]], i32 0, i32 1
+// HYBRID-NEXT:    [[TMP5:%.*]] = load ptr addrspace(200), ptr [[TMP4]], align 16
+// HYBRID-NEXT:    call chericcallcc void @cap_pair_function(ptr addrspace(200) inreg [[TMP0]], ptr addrspace(200) inreg [[TMP1]], i64 noundef signext 0, ptr addrspace(200) inreg [[TMP3]], ptr addrspace(200) inreg [[TMP5]])
 // HYBRID-NEXT:    ret void
 //
 void call_cap_pair_function(void) {
@@ -58,20 +56,18 @@ void i128_pair_function(struct cheri_object, long, struct i128_pair);
 // HYBRID-SAME: () #[[ATTR0]] {
 // HYBRID-NEXT:  entry:
 // HYBRID-NEXT:    [[DOTCOMPOUNDLITERAL:%.*]] = alloca [[STRUCT_I128_PAIR:%.*]], align 16
-// HYBRID-NEXT:    [[TMP0:%.*]] = bitcast %struct.i128_pair* [[DOTCOMPOUNDLITERAL]] to i8*
-// HYBRID-NEXT:    call void @llvm.memset.p0i8.i64(i8* align 16 [[TMP0]], i8 0, i64 32, i1 false)
-// HYBRID-NEXT:    [[TMP1:%.*]] = load i8 addrspace(200)*, i8 addrspace(200)** getelementptr inbounds ({ i8 addrspace(200)*, i8 addrspace(200)* }, { i8 addrspace(200)*, i8 addrspace(200)* }* bitcast (%struct.cheri_object* @cls to { i8 addrspace(200)*, i8 addrspace(200)* }*), i32 0, i32 0), align 16
-// HYBRID-NEXT:    [[TMP2:%.*]] = load i8 addrspace(200)*, i8 addrspace(200)** getelementptr inbounds ({ i8 addrspace(200)*, i8 addrspace(200)* }, { i8 addrspace(200)*, i8 addrspace(200)* }* bitcast (%struct.cheri_object* @cls to { i8 addrspace(200)*, i8 addrspace(200)* }*), i32 0, i32 1), align 16
-// HYBRID-NEXT:    [[TMP3:%.*]] = bitcast %struct.i128_pair* [[DOTCOMPOUNDLITERAL]] to { i64, i64, i64, i64 }*
-// HYBRID-NEXT:    [[TMP4:%.*]] = getelementptr inbounds { i64, i64, i64, i64 }, { i64, i64, i64, i64 }* [[TMP3]], i32 0, i32 0
-// HYBRID-NEXT:    [[TMP5:%.*]] = load i64, i64* [[TMP4]], align 16
-// HYBRID-NEXT:    [[TMP6:%.*]] = getelementptr inbounds { i64, i64, i64, i64 }, { i64, i64, i64, i64 }* [[TMP3]], i32 0, i32 1
-// HYBRID-NEXT:    [[TMP7:%.*]] = load i64, i64* [[TMP6]], align 8
-// HYBRID-NEXT:    [[TMP8:%.*]] = getelementptr inbounds { i64, i64, i64, i64 }, { i64, i64, i64, i64 }* [[TMP3]], i32 0, i32 2
-// HYBRID-NEXT:    [[TMP9:%.*]] = load i64, i64* [[TMP8]], align 16
-// HYBRID-NEXT:    [[TMP10:%.*]] = getelementptr inbounds { i64, i64, i64, i64 }, { i64, i64, i64, i64 }* [[TMP3]], i32 0, i32 3
-// HYBRID-NEXT:    [[TMP11:%.*]] = load i64, i64* [[TMP10]], align 8
-// HYBRID-NEXT:    call chericcallcc void @i128_pair_function(i8 addrspace(200)* inreg [[TMP1]], i8 addrspace(200)* inreg [[TMP2]], i64 noundef signext 0, i64 inreg [[TMP5]], i64 inreg [[TMP7]], i64 inreg [[TMP9]], i64 inreg [[TMP11]])
+// HYBRID-NEXT:    call void @llvm.memset.p0.i64(ptr align 16 [[DOTCOMPOUNDLITERAL]], i8 0, i64 32, i1 false)
+// HYBRID-NEXT:    [[TMP0:%.*]] = load ptr addrspace(200), ptr @cls, align 16
+// HYBRID-NEXT:    [[TMP1:%.*]] = load ptr addrspace(200), ptr getelementptr inbounds ({ ptr addrspace(200), ptr addrspace(200) }, ptr @cls, i32 0, i32 1), align 16
+// HYBRID-NEXT:    [[TMP2:%.*]] = getelementptr inbounds { i64, i64, i64, i64 }, ptr [[DOTCOMPOUNDLITERAL]], i32 0, i32 0
+// HYBRID-NEXT:    [[TMP3:%.*]] = load i64, ptr [[TMP2]], align 16
+// HYBRID-NEXT:    [[TMP4:%.*]] = getelementptr inbounds { i64, i64, i64, i64 }, ptr [[DOTCOMPOUNDLITERAL]], i32 0, i32 1
+// HYBRID-NEXT:    [[TMP5:%.*]] = load i64, ptr [[TMP4]], align 8
+// HYBRID-NEXT:    [[TMP6:%.*]] = getelementptr inbounds { i64, i64, i64, i64 }, ptr [[DOTCOMPOUNDLITERAL]], i32 0, i32 2
+// HYBRID-NEXT:    [[TMP7:%.*]] = load i64, ptr [[TMP6]], align 16
+// HYBRID-NEXT:    [[TMP8:%.*]] = getelementptr inbounds { i64, i64, i64, i64 }, ptr [[DOTCOMPOUNDLITERAL]], i32 0, i32 3
+// HYBRID-NEXT:    [[TMP9:%.*]] = load i64, ptr [[TMP8]], align 8
+// HYBRID-NEXT:    call chericcallcc void @i128_pair_function(ptr addrspace(200) inreg [[TMP0]], ptr addrspace(200) inreg [[TMP1]], i64 noundef signext 0, i64 inreg [[TMP3]], i64 inreg [[TMP5]], i64 inreg [[TMP7]], i64 inreg [[TMP9]])
 // HYBRID-NEXT:    ret void
 //
 void call_i128_pair_function(void) {

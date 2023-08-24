@@ -26,8 +26,8 @@ extern "C" {
 // CHECK-LABEL: define {{[^@]+}}@test_long_to_capptr
 // CHECK-SAME: (i64 noundef signext [[L:%.*]]) #[[ATTR0:[0-9]+]] {
 // CHECK-NEXT:  entry:
-// CHECK-NEXT:    [[TMP0:%.*]] = inttoptr i64 [[L]] to i8 addrspace(200)*
-// CHECK-NEXT:    ret i8 addrspace(200)* [[TMP0]]
+// CHECK-NEXT:    [[TMP0:%.*]] = inttoptr i64 [[L]] to ptr addrspace(200)
+// CHECK-NEXT:    ret ptr addrspace(200) [[TMP0]]
 //
 char *__capability test_long_to_capptr(long l) {
   return (char *__capability)l;
@@ -40,9 +40,9 @@ char *__capability test_long_to_capptr(long l) {
 }
 
 // CHECK-LABEL: define {{[^@]+}}@test_intcap_to_capptr
-// CHECK-SAME: (i8 addrspace(200)* noundef [[L:%.*]]) #[[ATTR0]] {
+// CHECK-SAME: (ptr addrspace(200) noundef [[L:%.*]]) #[[ATTR0]] {
 // CHECK-NEXT:  entry:
-// CHECK-NEXT:    ret i8 addrspace(200)* [[L]]
+// CHECK-NEXT:    ret ptr addrspace(200) [[L]]
 //
 char *__capability test_intcap_to_capptr(__intcap l) {
   return (char *__capability)l;
@@ -52,10 +52,10 @@ char *__capability test_intcap_to_capptr(__intcap l) {
 }
 
 // CHECK-LABEL: define {{[^@]+}}@test_ptr_to_capptr_default
-// CHECK-SAME: (i8* noundef [[P:%.*]]) #[[ATTR0]] {
+// CHECK-SAME: (ptr noundef [[P:%.*]]) #[[ATTR0]] {
 // CHECK-NEXT:  entry:
-// CHECK-NEXT:    [[TMP0:%.*]] = addrspacecast i8* [[P]] to i8 addrspace(200)*
-// CHECK-NEXT:    ret i8 addrspace(200)* [[TMP0]]
+// CHECK-NEXT:    [[TMP0:%.*]] = addrspacecast ptr [[P]] to ptr addrspace(200)
+// CHECK-NEXT:    ret ptr addrspace(200) [[TMP0]]
 //
 char *__capability test_ptr_to_capptr_default(char *p) {
   return (char *__capability)p;
@@ -69,7 +69,7 @@ char *__capability test_ptr_to_capptr_default(char *p) {
 // CHECK-LABEL: define {{[^@]+}}@test_signed_literal_to_capptr_default
 // CHECK-SAME: () #[[ATTR0]] {
 // CHECK-NEXT:  entry:
-// CHECK-NEXT:    ret i8 addrspace(200)* inttoptr (i64 1 to i8 addrspace(200)*)
+// CHECK-NEXT:    ret ptr addrspace(200) inttoptr (i64 1 to ptr addrspace(200))
 //
 char *__capability test_signed_literal_to_capptr_default(void) {
   return (char *__capability)1;
@@ -84,10 +84,10 @@ char *__capability test_signed_literal_to_capptr_default(void) {
 
 #ifdef __cplusplus
 // CXX-CHECK-LABEL: define {{[^@]+}}@test_ptr_to_capptr_reinterpret_cast
-// CXX-CHECK-SAME: (i8* noundef [[P:%.*]]) #[[ATTR0]] {
+// CXX-CHECK-SAME: (ptr noundef [[P:%.*]]) #[[ATTR0]] {
 // CXX-CHECK-NEXT:  entry:
-// CXX-CHECK-NEXT:    [[TMP0:%.*]] = addrspacecast i8* [[P]] to i8 addrspace(200)*
-// CXX-CHECK-NEXT:    ret i8 addrspace(200)* [[TMP0]]
+// CXX-CHECK-NEXT:    [[TMP0:%.*]] = addrspacecast ptr [[P]] to ptr addrspace(200)
+// CXX-CHECK-NEXT:    ret ptr addrspace(200) [[TMP0]]
 //
 char *__capability test_ptr_to_capptr_reinterpret_cast(char *p) {
   return reinterpret_cast<char * __capability>(p);
@@ -100,10 +100,10 @@ char *__capability test_ptr_to_capptr_reinterpret_cast(char *p) {
 #endif
 
 // CHECK-LABEL: define {{[^@]+}}@test_ptr_to_capptr_tocap
-// CHECK-SAME: (i8* noundef [[P:%.*]]) #[[ATTR0]] {
+// CHECK-SAME: (ptr noundef [[P:%.*]]) #[[ATTR0]] {
 // CHECK-NEXT:  entry:
-// CHECK-NEXT:    [[TMP0:%.*]] = addrspacecast i8* [[P]] to i8 addrspace(200)*
-// CHECK-NEXT:    ret i8 addrspace(200)* [[TMP0]]
+// CHECK-NEXT:    [[TMP0:%.*]] = addrspacecast ptr [[P]] to ptr addrspace(200)
+// CHECK-NEXT:    ret ptr addrspace(200) [[TMP0]]
 //
 char *__capability test_ptr_to_capptr_tocap(char *p) {
   return (__cheri_tocap char *__capability)p;
@@ -113,11 +113,11 @@ char *__capability test_ptr_to_capptr_tocap(char *p) {
 }
 
 // CHECK-LABEL: define {{[^@]+}}@test_ptr_to_intcap_default
-// CHECK-SAME: (i8* noundef [[P:%.*]]) #[[ATTR0]] {
+// CHECK-SAME: (ptr noundef [[P:%.*]]) #[[ATTR0]] {
 // CHECK-NEXT:  entry:
-// CHECK-NEXT:    [[TMP0:%.*]] = ptrtoint i8* [[P]] to i64
-// CHECK-NEXT:    [[TMP1:%.*]] = getelementptr i8, i8 addrspace(200)* null, i64 [[TMP0]]
-// CHECK-NEXT:    ret i8 addrspace(200)* [[TMP1]]
+// CHECK-NEXT:    [[TMP0:%.*]] = ptrtoint ptr [[P]] to i64
+// CHECK-NEXT:    [[TMP1:%.*]] = getelementptr i8, ptr addrspace(200) null, i64 [[TMP0]]
+// CHECK-NEXT:    ret ptr addrspace(200) [[TMP1]]
 //
 __intcap test_ptr_to_intcap_default(char *p) {
   return (__intcap)p;
@@ -127,10 +127,10 @@ __intcap test_ptr_to_intcap_default(char *p) {
 }
 
 // CHECK-LABEL: define {{[^@]+}}@test_ptr_to_intcap_tocap
-// CHECK-SAME: (i8* noundef [[P:%.*]]) #[[ATTR0]] {
+// CHECK-SAME: (ptr noundef [[P:%.*]]) #[[ATTR0]] {
 // CHECK-NEXT:  entry:
-// CHECK-NEXT:    [[TMP0:%.*]] = addrspacecast i8* [[P]] to i8 addrspace(200)*
-// CHECK-NEXT:    ret i8 addrspace(200)* [[TMP0]]
+// CHECK-NEXT:    [[TMP0:%.*]] = addrspacecast ptr [[P]] to ptr addrspace(200)
+// CHECK-NEXT:    ret ptr addrspace(200) [[TMP0]]
 //
 __intcap test_ptr_to_intcap_tocap(char *p) {
   return (__cheri_tocap __intcap)p;
@@ -149,7 +149,7 @@ __intcap test_ptr_to_intcap_tocap(char *p) {
 // CHECK-LABEL: define {{[^@]+}}@test_NULL
 // CHECK-SAME: () #[[ATTR0]] {
 // CHECK-NEXT:  entry:
-// CHECK-NEXT:    ret i8 addrspace(200)* null
+// CHECK-NEXT:    ret ptr addrspace(200) null
 //
 char *__capability test_NULL(void) {
   return (char *__capability)NULL;
@@ -166,7 +166,7 @@ char *__capability test_NULL(void) {
 // CHECK-LABEL: define {{[^@]+}}@test_zero_constant
 // CHECK-SAME: () #[[ATTR0]] {
 // CHECK-NEXT:  entry:
-// CHECK-NEXT:    ret i8 addrspace(200)* null
+// CHECK-NEXT:    ret ptr addrspace(200) null
 //
 char *__capability test_zero_constant(void) {
   return (char *__capability)0;
@@ -181,7 +181,7 @@ char *__capability test_zero_constant(void) {
 // CXX-CHECK-LABEL: define {{[^@]+}}@test_nullptr
 // CXX-CHECK-SAME: () #[[ATTR0]] {
 // CXX-CHECK-NEXT:  entry:
-// CXX-CHECK-NEXT:    ret i8 addrspace(200)* null
+// CXX-CHECK-NEXT:    ret ptr addrspace(200) null
 //
 char *__capability test_nullptr(void) {
   return (char *__capability)nullptr;

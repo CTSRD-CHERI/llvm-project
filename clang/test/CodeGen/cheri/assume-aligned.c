@@ -4,48 +4,44 @@
 // expected-no-diagnostics
 
 // CHECK-LABEL: define {{[^@]+}}@assume_aligned_ptr
-// CHECK-SAME: (i8* noundef [[PTR:%.*]]) #[[ATTR0:[0-9]+]] {
+// CHECK-SAME: (ptr noundef [[PTR:%.*]]) #[[ATTR0:[0-9]+]] {
 // CHECK-NEXT:  entry:
-// CHECK-NEXT:    [[PTR_ADDR:%.*]] = alloca i8*, align 8
-// CHECK-NEXT:    store i8* [[PTR]], i8** [[PTR_ADDR]], align 8
-// CHECK-NEXT:    [[TMP0:%.*]] = load i8*, i8** [[PTR_ADDR]], align 8
-// CHECK-NEXT:    call void @llvm.assume(i1 true) [ "align"(i8* [[TMP0]], i64 4) ]
-// CHECK-NEXT:    [[TMP1:%.*]] = bitcast i8* [[TMP0]] to i32*
-// CHECK-NEXT:    ret i32* [[TMP1]]
+// CHECK-NEXT:    [[PTR_ADDR:%.*]] = alloca ptr, align 8
+// CHECK-NEXT:    store ptr [[PTR]], ptr [[PTR_ADDR]], align 8
+// CHECK-NEXT:    [[TMP0:%.*]] = load ptr, ptr [[PTR_ADDR]], align 8
+// CHECK-NEXT:    call void @llvm.assume(i1 true) [ "align"(ptr [[TMP0]], i64 4) ]
+// CHECK-NEXT:    ret ptr [[TMP0]]
 //
 // PURECAP-LABEL: define {{[^@]+}}@assume_aligned_ptr
-// PURECAP-SAME: (i8 addrspace(200)* noundef [[PTR:%.*]]) addrspace(200) #[[ATTR0:[0-9]+]] {
+// PURECAP-SAME: (ptr addrspace(200) noundef [[PTR:%.*]]) addrspace(200) #[[ATTR0:[0-9]+]] {
 // PURECAP-NEXT:  entry:
-// PURECAP-NEXT:    [[PTR_ADDR:%.*]] = alloca i8 addrspace(200)*, align 16, addrspace(200)
-// PURECAP-NEXT:    store i8 addrspace(200)* [[PTR]], i8 addrspace(200)* addrspace(200)* [[PTR_ADDR]], align 16
-// PURECAP-NEXT:    [[TMP0:%.*]] = load i8 addrspace(200)*, i8 addrspace(200)* addrspace(200)* [[PTR_ADDR]], align 16
-// PURECAP-NEXT:    call void @llvm.assume(i1 true) [ "align"(i8 addrspace(200)* [[TMP0]], i64 4) ]
-// PURECAP-NEXT:    [[TMP1:%.*]] = bitcast i8 addrspace(200)* [[TMP0]] to i32 addrspace(200)*
-// PURECAP-NEXT:    ret i32 addrspace(200)* [[TMP1]]
+// PURECAP-NEXT:    [[PTR_ADDR:%.*]] = alloca ptr addrspace(200), align 16, addrspace(200)
+// PURECAP-NEXT:    store ptr addrspace(200) [[PTR]], ptr addrspace(200) [[PTR_ADDR]], align 16
+// PURECAP-NEXT:    [[TMP0:%.*]] = load ptr addrspace(200), ptr addrspace(200) [[PTR_ADDR]], align 16
+// PURECAP-NEXT:    call void @llvm.assume(i1 true) [ "align"(ptr addrspace(200) [[TMP0]], i64 4) ]
+// PURECAP-NEXT:    ret ptr addrspace(200) [[TMP0]]
 //
 int* assume_aligned_ptr(void* ptr) {
   return __builtin_assume_aligned(ptr, 4);
 }
 
 // CHECK-LABEL: define {{[^@]+}}@assume_aligned_cap
-// CHECK-SAME: (i8 addrspace(200)* noundef [[PTR:%.*]]) #[[ATTR0]] {
+// CHECK-SAME: (ptr addrspace(200) noundef [[PTR:%.*]]) #[[ATTR0]] {
 // CHECK-NEXT:  entry:
-// CHECK-NEXT:    [[PTR_ADDR:%.*]] = alloca i8 addrspace(200)*, align 16
-// CHECK-NEXT:    store i8 addrspace(200)* [[PTR]], i8 addrspace(200)** [[PTR_ADDR]], align 16
-// CHECK-NEXT:    [[TMP0:%.*]] = load i8 addrspace(200)*, i8 addrspace(200)** [[PTR_ADDR]], align 16
-// CHECK-NEXT:    call void @llvm.assume(i1 true) [ "align"(i8 addrspace(200)* [[TMP0]], i64 4) ]
-// CHECK-NEXT:    [[TMP1:%.*]] = bitcast i8 addrspace(200)* [[TMP0]] to i32 addrspace(200)*
-// CHECK-NEXT:    ret i32 addrspace(200)* [[TMP1]]
+// CHECK-NEXT:    [[PTR_ADDR:%.*]] = alloca ptr addrspace(200), align 16
+// CHECK-NEXT:    store ptr addrspace(200) [[PTR]], ptr [[PTR_ADDR]], align 16
+// CHECK-NEXT:    [[TMP0:%.*]] = load ptr addrspace(200), ptr [[PTR_ADDR]], align 16
+// CHECK-NEXT:    call void @llvm.assume(i1 true) [ "align"(ptr addrspace(200) [[TMP0]], i64 4) ]
+// CHECK-NEXT:    ret ptr addrspace(200) [[TMP0]]
 //
 // PURECAP-LABEL: define {{[^@]+}}@assume_aligned_cap
-// PURECAP-SAME: (i8 addrspace(200)* noundef [[PTR:%.*]]) addrspace(200) #[[ATTR0]] {
+// PURECAP-SAME: (ptr addrspace(200) noundef [[PTR:%.*]]) addrspace(200) #[[ATTR0]] {
 // PURECAP-NEXT:  entry:
-// PURECAP-NEXT:    [[PTR_ADDR:%.*]] = alloca i8 addrspace(200)*, align 16, addrspace(200)
-// PURECAP-NEXT:    store i8 addrspace(200)* [[PTR]], i8 addrspace(200)* addrspace(200)* [[PTR_ADDR]], align 16
-// PURECAP-NEXT:    [[TMP0:%.*]] = load i8 addrspace(200)*, i8 addrspace(200)* addrspace(200)* [[PTR_ADDR]], align 16
-// PURECAP-NEXT:    call void @llvm.assume(i1 true) [ "align"(i8 addrspace(200)* [[TMP0]], i64 4) ]
-// PURECAP-NEXT:    [[TMP1:%.*]] = bitcast i8 addrspace(200)* [[TMP0]] to i32 addrspace(200)*
-// PURECAP-NEXT:    ret i32 addrspace(200)* [[TMP1]]
+// PURECAP-NEXT:    [[PTR_ADDR:%.*]] = alloca ptr addrspace(200), align 16, addrspace(200)
+// PURECAP-NEXT:    store ptr addrspace(200) [[PTR]], ptr addrspace(200) [[PTR_ADDR]], align 16
+// PURECAP-NEXT:    [[TMP0:%.*]] = load ptr addrspace(200), ptr addrspace(200) [[PTR_ADDR]], align 16
+// PURECAP-NEXT:    call void @llvm.assume(i1 true) [ "align"(ptr addrspace(200) [[TMP0]], i64 4) ]
+// PURECAP-NEXT:    ret ptr addrspace(200) [[TMP0]]
 //
 int* __capability assume_aligned_cap(void* __capability ptr) {
   return __builtin_assume_aligned_cap(ptr, 4);

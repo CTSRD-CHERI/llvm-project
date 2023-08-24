@@ -4,28 +4,28 @@
 
 // CHECK-LABEL: @check_offset(
 // CHECK-NEXT:  entry:
-// CHECK-NEXT:    [[C_ADDR:%.*]] = alloca i8 addrspace(200)*, align 16, addrspace(200)
+// CHECK-NEXT:    [[C_ADDR:%.*]] = alloca ptr addrspace(200), align 16, addrspace(200)
 // CHECK-NEXT:    [[X1:%.*]] = alloca i64, align 8, addrspace(200)
 // CHECK-NEXT:    [[X2:%.*]] = alloca i16, align 2, addrspace(200)
 // CHECK-NEXT:    [[X3:%.*]] = alloca i64, align 8, addrspace(200)
 // CHECK-NEXT:    [[X4:%.*]] = alloca i128, align 16, addrspace(200)
-// CHECK-NEXT:    store i8 addrspace(200)* [[C:%.*]], i8 addrspace(200)* addrspace(200)* [[C_ADDR]], align 16
-// CHECK-NEXT:    [[TMP0:%.*]] = load i8 addrspace(200)*, i8 addrspace(200)* addrspace(200)* [[C_ADDR]], align 16
-// CHECK-NEXT:    [[TMP1:%.*]] = call i64 @llvm.cheri.cap.offset.get.i64(i8 addrspace(200)* [[TMP0]])
-// CHECK-NEXT:    store i64 [[TMP1]], i64 addrspace(200)* [[X1]], align 8
-// CHECK-NEXT:    [[TMP2:%.*]] = load i8 addrspace(200)*, i8 addrspace(200)* addrspace(200)* [[C_ADDR]], align 16
-// CHECK-NEXT:    [[TMP3:%.*]] = call i64 @llvm.cheri.cap.offset.get.i64(i8 addrspace(200)* [[TMP2]])
+// CHECK-NEXT:    store ptr addrspace(200) [[C:%.*]], ptr addrspace(200) [[C_ADDR]], align 16
+// CHECK-NEXT:    [[TMP0:%.*]] = load ptr addrspace(200), ptr addrspace(200) [[C_ADDR]], align 16
+// CHECK-NEXT:    [[TMP1:%.*]] = call i64 @llvm.cheri.cap.offset.get.i64(ptr addrspace(200) [[TMP0]])
+// CHECK-NEXT:    store i64 [[TMP1]], ptr addrspace(200) [[X1]], align 8
+// CHECK-NEXT:    [[TMP2:%.*]] = load ptr addrspace(200), ptr addrspace(200) [[C_ADDR]], align 16
+// CHECK-NEXT:    [[TMP3:%.*]] = call i64 @llvm.cheri.cap.offset.get.i64(ptr addrspace(200) [[TMP2]])
 // CHECK-NEXT:    [[CONV:%.*]] = trunc i64 [[TMP3]] to i16
-// CHECK-NEXT:    store i16 [[CONV]], i16 addrspace(200)* [[X2]], align 2
-// CHECK-NEXT:    [[TMP4:%.*]] = load i8 addrspace(200)*, i8 addrspace(200)* addrspace(200)* [[C_ADDR]], align 16
-// CHECK-NEXT:    [[TMP5:%.*]] = call i64 @llvm.cheri.cap.offset.get.i64(i8 addrspace(200)* [[TMP4]])
+// CHECK-NEXT:    store i16 [[CONV]], ptr addrspace(200) [[X2]], align 2
+// CHECK-NEXT:    [[TMP4:%.*]] = load ptr addrspace(200), ptr addrspace(200) [[C_ADDR]], align 16
+// CHECK-NEXT:    [[TMP5:%.*]] = call i64 @llvm.cheri.cap.offset.get.i64(ptr addrspace(200) [[TMP4]])
 // CHECK-NEXT:    [[CONV1:%.*]] = trunc i64 [[TMP5]] to i16
 // CHECK-NEXT:    [[CONV2:%.*]] = sext i16 [[CONV1]] to i64
-// CHECK-NEXT:    store i64 [[CONV2]], i64 addrspace(200)* [[X3]], align 8
-// CHECK-NEXT:    [[TMP6:%.*]] = load i8 addrspace(200)*, i8 addrspace(200)* addrspace(200)* [[C_ADDR]], align 16
-// CHECK-NEXT:    [[TMP7:%.*]] = call i64 @llvm.cheri.cap.offset.get.i64(i8 addrspace(200)* [[TMP6]])
+// CHECK-NEXT:    store i64 [[CONV2]], ptr addrspace(200) [[X3]], align 8
+// CHECK-NEXT:    [[TMP6:%.*]] = load ptr addrspace(200), ptr addrspace(200) [[C_ADDR]], align 16
+// CHECK-NEXT:    [[TMP7:%.*]] = call i64 @llvm.cheri.cap.offset.get.i64(ptr addrspace(200) [[TMP6]])
 // CHECK-NEXT:    [[CONV3:%.*]] = sext i64 [[TMP7]] to i128
-// CHECK-NEXT:    store i128 [[CONV3]], i128 addrspace(200)* [[X4]], align 16
+// CHECK-NEXT:    store i128 [[CONV3]], ptr addrspace(200) [[X4]], align 16
 // CHECK-NEXT:    ret void
 //
 void check_offset(char *c) {
@@ -37,28 +37,28 @@ void check_offset(char *c) {
 
 // CHECK-LABEL: @check_addr(
 // CHECK-NEXT:  entry:
-// CHECK-NEXT:    [[C_ADDR:%.*]] = alloca i8 addrspace(200)*, align 16, addrspace(200)
+// CHECK-NEXT:    [[C_ADDR:%.*]] = alloca ptr addrspace(200), align 16, addrspace(200)
 // CHECK-NEXT:    [[X1:%.*]] = alloca i64, align 8, addrspace(200)
 // CHECK-NEXT:    [[X2:%.*]] = alloca i16, align 2, addrspace(200)
 // CHECK-NEXT:    [[X3:%.*]] = alloca i64, align 8, addrspace(200)
 // CHECK-NEXT:    [[X4:%.*]] = alloca i128, align 16, addrspace(200)
-// CHECK-NEXT:    store i8 addrspace(200)* [[C:%.*]], i8 addrspace(200)* addrspace(200)* [[C_ADDR]], align 16
-// CHECK-NEXT:    [[TMP0:%.*]] = load i8 addrspace(200)*, i8 addrspace(200)* addrspace(200)* [[C_ADDR]], align 16
-// CHECK-NEXT:    [[TMP1:%.*]] = call i64 @llvm.cheri.cap.address.get.i64(i8 addrspace(200)* [[TMP0]])
-// CHECK-NEXT:    store i64 [[TMP1]], i64 addrspace(200)* [[X1]], align 8
-// CHECK-NEXT:    [[TMP2:%.*]] = load i8 addrspace(200)*, i8 addrspace(200)* addrspace(200)* [[C_ADDR]], align 16
-// CHECK-NEXT:    [[TMP3:%.*]] = call i64 @llvm.cheri.cap.address.get.i64(i8 addrspace(200)* [[TMP2]])
+// CHECK-NEXT:    store ptr addrspace(200) [[C:%.*]], ptr addrspace(200) [[C_ADDR]], align 16
+// CHECK-NEXT:    [[TMP0:%.*]] = load ptr addrspace(200), ptr addrspace(200) [[C_ADDR]], align 16
+// CHECK-NEXT:    [[TMP1:%.*]] = call i64 @llvm.cheri.cap.address.get.i64(ptr addrspace(200) [[TMP0]])
+// CHECK-NEXT:    store i64 [[TMP1]], ptr addrspace(200) [[X1]], align 8
+// CHECK-NEXT:    [[TMP2:%.*]] = load ptr addrspace(200), ptr addrspace(200) [[C_ADDR]], align 16
+// CHECK-NEXT:    [[TMP3:%.*]] = call i64 @llvm.cheri.cap.address.get.i64(ptr addrspace(200) [[TMP2]])
 // CHECK-NEXT:    [[CONV:%.*]] = trunc i64 [[TMP3]] to i16
-// CHECK-NEXT:    store i16 [[CONV]], i16 addrspace(200)* [[X2]], align 2
-// CHECK-NEXT:    [[TMP4:%.*]] = load i8 addrspace(200)*, i8 addrspace(200)* addrspace(200)* [[C_ADDR]], align 16
-// CHECK-NEXT:    [[TMP5:%.*]] = call i64 @llvm.cheri.cap.address.get.i64(i8 addrspace(200)* [[TMP4]])
+// CHECK-NEXT:    store i16 [[CONV]], ptr addrspace(200) [[X2]], align 2
+// CHECK-NEXT:    [[TMP4:%.*]] = load ptr addrspace(200), ptr addrspace(200) [[C_ADDR]], align 16
+// CHECK-NEXT:    [[TMP5:%.*]] = call i64 @llvm.cheri.cap.address.get.i64(ptr addrspace(200) [[TMP4]])
 // CHECK-NEXT:    [[CONV1:%.*]] = trunc i64 [[TMP5]] to i16
 // CHECK-NEXT:    [[CONV2:%.*]] = sext i16 [[CONV1]] to i64
-// CHECK-NEXT:    store i64 [[CONV2]], i64 addrspace(200)* [[X3]], align 8
-// CHECK-NEXT:    [[TMP6:%.*]] = load i8 addrspace(200)*, i8 addrspace(200)* addrspace(200)* [[C_ADDR]], align 16
-// CHECK-NEXT:    [[TMP7:%.*]] = call i64 @llvm.cheri.cap.address.get.i64(i8 addrspace(200)* [[TMP6]])
+// CHECK-NEXT:    store i64 [[CONV2]], ptr addrspace(200) [[X3]], align 8
+// CHECK-NEXT:    [[TMP6:%.*]] = load ptr addrspace(200), ptr addrspace(200) [[C_ADDR]], align 16
+// CHECK-NEXT:    [[TMP7:%.*]] = call i64 @llvm.cheri.cap.address.get.i64(ptr addrspace(200) [[TMP6]])
 // CHECK-NEXT:    [[CONV3:%.*]] = sext i64 [[TMP7]] to i128
-// CHECK-NEXT:    store i128 [[CONV3]], i128 addrspace(200)* [[X4]], align 16
+// CHECK-NEXT:    store i128 [[CONV3]], ptr addrspace(200) [[X4]], align 16
 // CHECK-NEXT:    ret void
 //
 void check_addr(char *c) {
@@ -72,10 +72,10 @@ void check_addr(char *c) {
 typedef int b;
 // CHECK-LABEL: @libunwind_crash(
 // CHECK-NEXT:  entry:
-// CHECK-NEXT:    [[CAP_ADDR:%.*]] = alloca i8 addrspace(200)*, align 16, addrspace(200)
-// CHECK-NEXT:    store i8 addrspace(200)* [[CAP:%.*]], i8 addrspace(200)* addrspace(200)* [[CAP_ADDR]], align 16
-// CHECK-NEXT:    [[TMP0:%.*]] = load i8 addrspace(200)*, i8 addrspace(200)* addrspace(200)* [[CAP_ADDR]], align 16
-// CHECK-NEXT:    [[TMP1:%.*]] = call i64 @llvm.cheri.cap.address.get.i64(i8 addrspace(200)* [[TMP0]])
+// CHECK-NEXT:    [[CAP_ADDR:%.*]] = alloca ptr addrspace(200), align 16, addrspace(200)
+// CHECK-NEXT:    store ptr addrspace(200) [[CAP:%.*]], ptr addrspace(200) [[CAP_ADDR]], align 16
+// CHECK-NEXT:    [[TMP0:%.*]] = load ptr addrspace(200), ptr addrspace(200) [[CAP_ADDR]], align 16
+// CHECK-NEXT:    [[TMP1:%.*]] = call i64 @llvm.cheri.cap.address.get.i64(ptr addrspace(200) [[TMP0]])
 // CHECK-NEXT:    [[CONV:%.*]] = trunc i64 [[TMP1]] to i32
 // CHECK-NEXT:    ret i32 [[CONV]]
 //
@@ -85,10 +85,10 @@ b libunwind_crash(__uintcap_t cap) {
 
 // CHECK-LABEL: @libunwind_crash2(
 // CHECK-NEXT:  entry:
-// CHECK-NEXT:    [[CAP_ADDR:%.*]] = alloca i8 addrspace(200)*, align 16, addrspace(200)
-// CHECK-NEXT:    store i8 addrspace(200)* [[CAP:%.*]], i8 addrspace(200)* addrspace(200)* [[CAP_ADDR]], align 16
-// CHECK-NEXT:    [[TMP0:%.*]] = load i8 addrspace(200)*, i8 addrspace(200)* addrspace(200)* [[CAP_ADDR]], align 16
-// CHECK-NEXT:    [[TMP1:%.*]] = call i64 @llvm.cheri.cap.offset.get.i64(i8 addrspace(200)* [[TMP0]])
+// CHECK-NEXT:    [[CAP_ADDR:%.*]] = alloca ptr addrspace(200), align 16, addrspace(200)
+// CHECK-NEXT:    store ptr addrspace(200) [[CAP:%.*]], ptr addrspace(200) [[CAP_ADDR]], align 16
+// CHECK-NEXT:    [[TMP0:%.*]] = load ptr addrspace(200), ptr addrspace(200) [[CAP_ADDR]], align 16
+// CHECK-NEXT:    [[TMP1:%.*]] = call i64 @llvm.cheri.cap.offset.get.i64(ptr addrspace(200) [[TMP0]])
 // CHECK-NEXT:    [[CONV:%.*]] = trunc i64 [[TMP1]] to i32
 // CHECK-NEXT:    ret i32 [[CONV]]
 //

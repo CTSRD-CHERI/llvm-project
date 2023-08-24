@@ -8,10 +8,10 @@ enum class E;
 enum E e;
 // CHECK-LABEL: @_Z3foov(
 // CHECK-NEXT:  entry:
-// CHECK-NEXT:    [[TMP0:%.*]] = load i32, i32 addrspace(200)* @e, align 4
+// CHECK-NEXT:    [[TMP0:%.*]] = load i32, ptr addrspace(200) @e, align 4
 // CHECK-NEXT:    [[CONV:%.*]] = sext i32 [[TMP0]] to i64
-// CHECK-NEXT:    [[TMP1:%.*]] = getelementptr i8, i8 addrspace(200)* null, i64 [[CONV]]
-// CHECK-NEXT:    ret i8 addrspace(200)* [[TMP1]]
+// CHECK-NEXT:    [[TMP1:%.*]] = getelementptr i8, ptr addrspace(200) null, i64 [[CONV]]
+// CHECK-NEXT:    ret ptr addrspace(200) [[TMP1]]
 //
 __intcap foo() {
   return static_cast<__intcap>(e);

@@ -29,10 +29,10 @@ enum class IntCapEnum : __intcap { Zero };
 
 void *intcapEnumToPtrConstant = (void *)IntCapEnum::Zero;
 void *test2() { return intcapEnumToPtrConstant; }
-// PURECAP: @intcapEnumToPtrConstant = addrspace(200) global i8 addrspace(200)* null, align 16
+// PURECAP: @intcapEnumToPtrConstant = addrspace(200) global ptr addrspace(200) null, align 16
 
 extern int x;
 void *ptrViaEnumCast = (void *)(IntCapEnum)(__intcap)&x;
 void *test3() { return ptrViaEnumCast; }
-// PURECAP: @ptrViaEnumCast = addrspace(200) global i8 addrspace(200)* bitcast (i32 addrspace(200)* @x to i8 addrspace(200)*), align 16
+// PURECAP: @ptrViaEnumCast = addrspace(200) global ptr addrspace(200) @x, align 16
 #endif

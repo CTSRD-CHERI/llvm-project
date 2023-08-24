@@ -10,36 +10,36 @@ long longvalue = (long)&x;
 __uintcap_t uintcapvalue = (__uintcap_t)&x;
 
 // CHECK: @x = addrspace(200) global i32 0, align 4
-// CHECK: @longvalue = local_unnamed_addr addrspace(200) global i64 ptrtoint (i32 addrspace(200)* @x to i64), align 8
-// CHECK: @uintcapvalue = local_unnamed_addr addrspace(200) global i8 addrspace(200)* bitcast (i32 addrspace(200)* @x to i8 addrspace(200)*), align [[#CAP_SIZE]]
+// CHECK: @longvalue = local_unnamed_addr addrspace(200) global i64 ptrtoint (ptr addrspace(200) @x to i64), align 8
+// CHECK: @uintcapvalue = local_unnamed_addr addrspace(200) global ptr addrspace(200) @x, align [[#CAP_SIZE]]
 
 __uintcap_t uintptr_constant_int = 1;
-// CHECK: @uintptr_constant_int = addrspace(200) global i8 addrspace(200)* getelementptr (i8, i8 addrspace(200)* null, i64 1), align [[#CAP_SIZE]]
+// CHECK: @uintptr_constant_int = addrspace(200) global ptr addrspace(200) getelementptr (i8, ptr addrspace(200) null, i64 1), align [[#CAP_SIZE]]
 __uintcap_t uintptr_constant_ptr = (__uintcap_t)&uintptr_constant_int;
-// CHECK: @uintptr_constant_ptr = local_unnamed_addr addrspace(200) global i8 addrspace(200)* bitcast (i8 addrspace(200)* addrspace(200)* @uintptr_constant_int to i8 addrspace(200)*), align [[#CAP_SIZE]]
+// CHECK: @uintptr_constant_ptr = local_unnamed_addr addrspace(200) global ptr addrspace(200) @uintptr_constant_int, align [[#CAP_SIZE]]
 
 // We were previously not emitting capability sized elements for this array:
 // All integer constant were emitted as i64 and only the pointer casted to uintcap ended up as addrspace(200) pointers
-// @uintptr_array = addrspace(200) global <{ i64, i64, i8 addrspace(200)*, i64 }> <{ i64 3, i64 5246977, i8 addrspace(200)* bitcast (i8 addrspace(200)* addrspace(200)* @one_uintptr to i8 addrspace(200)*), i64 0 }>, align 16
+// @uintptr_array = addrspace(200) global <{ i64, i64, ptr addrspace(200), i64 }> <{ i64 3, i64 5246977, ptr addrspace(200) @one_uintptr, i64 0 }>, align 16
 // This bug resulted in qhooks.cpp being miscompiled (and I'm sure lots of other stuff too)
 
 __uintcap_t uintptr_array[] = {
-    // CHECK: @uintptr_array = local_unnamed_addr addrspace(200) global [4 x i8 addrspace(200)*]
+    // CHECK: @uintptr_array = local_unnamed_addr addrspace(200) global [4 x ptr addrspace(200)]
     3,
-    // CHECK-SAME: [i8 addrspace(200)* getelementptr (i8, i8 addrspace(200)* null, i64 3),
+    // CHECK-SAME: [ptr addrspace(200) getelementptr (i8, ptr addrspace(200) null, i64 3),
     0x501001,
-    // CHECK-SAME:  i8 addrspace(200)* getelementptr (i8, i8 addrspace(200)* null, i64 5246977),
+    // CHECK-SAME:  ptr addrspace(200) getelementptr (i8, ptr addrspace(200) null, i64 5246977),
     (__uintcap_t)&uintptr_constant_int,
-    // CHECK-SAME:  i8 addrspace(200)* bitcast (i8 addrspace(200)* addrspace(200)* @uintptr_constant_int to i8 addrspace(200)*),
+    // CHECK-SAME:  ptr addrspace(200) @uintptr_constant_int,
     0
-    // CHECK-SAME: i8 addrspace(200)* null]
+    // CHECK-SAME: ptr addrspace(200) null]
 };
 
 // An array with a filler was also broken: @uintptr_array_2 = global <{ i64, i128, i128 }> <{ i64 1, i128 0, i128 0 }>, align 16
 __uintcap_t uintptr_array_2[3] = {1};
-// CHECK: @uintptr_array_2 = local_unnamed_addr addrspace(200) global [3 x i8 addrspace(200)*]
-// CHECK-SAME: [i8 addrspace(200)* getelementptr (i8, i8 addrspace(200)* null, i64 1),
-// CHECK-SAME: i8 addrspace(200)* null, i8 addrspace(200)* null]
+// CHECK: @uintptr_array_2 = local_unnamed_addr addrspace(200) global [3 x ptr addrspace(200)]
+// CHECK-SAME: [ptr addrspace(200) getelementptr (i8, ptr addrspace(200) null, i64 1),
+// CHECK-SAME: ptr addrspace(200) null, ptr addrspace(200) null]
 
 // Arrays of pointers should also just emit 4 .chericap directives
 void *ptr_array[] = {
@@ -47,27 +47,27 @@ void *ptr_array[] = {
     (void *)0x501001,
     &uintptr_constant_int,
     (void *)0};
-// CHECK: @ptr_array = local_unnamed_addr addrspace(200) global [4 x i8 addrspace(200)*] [i8 addrspace(200)* getelementptr (i8, i8 addrspace(200)* null, i64 3), i8 addrspace(200)* getelementptr (i8, i8 addrspace(200)* null, i64 5246977), i8 addrspace(200)* bitcast (i8 addrspace(200)* addrspace(200)* @uintptr_constant_int to i8 addrspace(200)*), i8 addrspace(200)* null]
+// CHECK: @ptr_array = local_unnamed_addr addrspace(200) global [4 x ptr addrspace(200)] [ptr addrspace(200) getelementptr (i8, ptr addrspace(200) null, i64 3), ptr addrspace(200) getelementptr (i8, ptr addrspace(200) null, i64 5246977), ptr addrspace(200) @uintptr_constant_int, ptr addrspace(200) null]
 
 // Using a struct with a single uintptr_t value happened to work correctly for ASM output
 // but the IR was quite broken:
-// @uintptr_struct_array = addrspace(200) global <{ { i64, [8 x i8] }, { i64, [8 x i8] }, %struct.uintptr_struct, { i64, [8 x i8] } }> <{ { i64, [8 x i8] } { i64 3, [8 x i8] undef }, { i64, [8 x i8] } { i64 5246977, [8 x i8] undef }, %struct.uintptr_struct { i8 addrspace(200)* bitcast (i8 addrspace(200)* addrspace(200)* @one_uintptr to i8 addrspace(200)*) }, { i64, [8 x i8] } { i64 0, [8 x i8] undef } }>, align 16
+// @uintptr_struct_array = addrspace(200) global <{ { i64, [8 x i8] }, { i64, [8 x i8] }, %struct.uintptr_struct, { i64, [8 x i8] } }> <{ { i64, [8 x i8] } { i64 3, [8 x i8] undef }, { i64, [8 x i8] } { i64 5246977, [8 x i8] undef }, %struct.uintptr_struct { ptr addrspace(200) @one_uintptr }, { i64, [8 x i8] } { i64 0, [8 x i8] undef } }>, align 16
 
 struct uintptr_struct {
   __uintcap_t value;
 };
 
 struct uintptr_struct one_uintptr_struct = {.value = 123};
-// CHECK: @one_uintptr_struct = local_unnamed_addr addrspace(200) global %struct.uintptr_struct { i8 addrspace(200)* getelementptr (i8, i8 addrspace(200)* null, i64 123) }
+// CHECK: @one_uintptr_struct = local_unnamed_addr addrspace(200) global %struct.uintptr_struct { ptr addrspace(200) getelementptr (i8, ptr addrspace(200) null, i64 123) }
 
 struct uintptr_struct uintptr_struct_array[] = {
     // CHECK: @uintptr_struct_array = local_unnamed_addr addrspace(200) global [4 x %struct.uintptr_struct]
     {3},
-    // CHECK-SAME: [%struct.uintptr_struct { i8 addrspace(200)* getelementptr (i8, i8 addrspace(200)* null, i64 3) },
+    // CHECK-SAME: [%struct.uintptr_struct { ptr addrspace(200) getelementptr (i8, ptr addrspace(200) null, i64 3) },
     {.value = 0x501001},
-    // CHECK-SAME:  %struct.uintptr_struct { i8 addrspace(200)* getelementptr (i8, i8 addrspace(200)* null, i64 5246977) },
+    // CHECK-SAME:  %struct.uintptr_struct { ptr addrspace(200) getelementptr (i8, ptr addrspace(200) null, i64 5246977) },
     {(__uintcap_t)&uintptr_constant_int},
-    // CHECK-SAME:  %struct.uintptr_struct { i8 addrspace(200)* bitcast (i8 addrspace(200)* addrspace(200)* @uintptr_constant_int to i8 addrspace(200)*) },
+    // CHECK-SAME:  %struct.uintptr_struct { ptr addrspace(200) @uintptr_constant_int },
     {0},
     // CHECK-SAME:  %struct.uintptr_struct zeroinitializer]
 };
@@ -79,17 +79,17 @@ void use_array(void *value);
 void func(void) {
   // This seems to emit a memcpy from a global so it had the same issues:
   // CHECK: @__const.func.uintptr_struct_array = private unnamed_addr addrspace(200) constant [2 x %struct.uintptr_struct]
-  // CHECK-SAME: [%struct.uintptr_struct { i8 addrspace(200)* getelementptr (i8, i8 addrspace(200)* null, i64 5246977) },
-  // CHECK-SAME:  %struct.uintptr_struct { i8 addrspace(200)* bitcast (i8 addrspace(200)* addrspace(200)* @uintptr_constant_int to i8 addrspace(200)*) }]
+  // CHECK-SAME: [%struct.uintptr_struct { ptr addrspace(200) getelementptr (i8, ptr addrspace(200) null, i64 5246977) },
+  // CHECK-SAME:  %struct.uintptr_struct { ptr addrspace(200) @uintptr_constant_int }]
   struct uintptr_struct uintptr_struct_array[] = {
       {.value = 0x501001},
       {(__uintcap_t)&uintptr_constant_int},
   };
   use_array(&uintptr_struct_array);
 
-  // CHECK: @__const.func.uintptr_array = private unnamed_addr addrspace(200) constant [2 x i8 addrspace(200)*]
-  // CHECK-SAME: [i8 addrspace(200)* getelementptr (i8, i8 addrspace(200)* null, i64 3),
-  // CHECK-SAME:  i8 addrspace(200)* bitcast (i8 addrspace(200)* addrspace(200)* @uintptr_constant_int to i8 addrspace(200)*)]
+  // CHECK: @__const.func.uintptr_array = private unnamed_addr addrspace(200) constant [2 x ptr addrspace(200)]
+  // CHECK-SAME: [ptr addrspace(200) getelementptr (i8, ptr addrspace(200) null, i64 3),
+  // CHECK-SAME:  ptr addrspace(200) @uintptr_constant_int]
   __uintcap_t uintptr_array[] = {
       3,
       (__uintcap_t)&uintptr_constant_int,
@@ -101,14 +101,14 @@ void func(void) {
 __uintcap_t uintptr_bss;
 __uintcap_t uintptr_array_bss[5];
 struct uintptr_struct uintptr_struct_bss;
-// CHECK: @uintptr_bss = local_unnamed_addr addrspace(200) global i8 addrspace(200)* null, align [[#CAP_SIZE]]
-// CHECK: @uintptr_array_bss = local_unnamed_addr addrspace(200) global [5 x i8 addrspace(200)*] zeroinitializer, align [[#CAP_SIZE]]
+// CHECK: @uintptr_bss = local_unnamed_addr addrspace(200) global ptr addrspace(200) null, align [[#CAP_SIZE]]
+// CHECK: @uintptr_array_bss = local_unnamed_addr addrspace(200) global [5 x ptr addrspace(200)] zeroinitializer, align [[#CAP_SIZE]]
 // CHECK: @uintptr_struct_bss = local_unnamed_addr addrspace(200) global %struct.uintptr_struct zeroinitializer, align [[#CAP_SIZE]]
 
 // CHECK-LABEL: define dso_local void @func()
 // test that the correct values are used
 // CHECK: alloca [2 x %struct.uintptr_struct], align [[#CAP_SIZE]], addrspace(200)
-// CHECK: alloca [2 x i8 addrspace(200)*], align [[#CAP_SIZE]], addrspace(200)
+// CHECK: alloca [2 x ptr addrspace(200)], align [[#CAP_SIZE]], addrspace(200)
 
 // TODO: all the ASM checks should move to LLVM, but checking it here is easier
 // ASM-LABEL: longvalue:

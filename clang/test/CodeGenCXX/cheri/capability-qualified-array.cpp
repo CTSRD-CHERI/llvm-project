@@ -44,50 +44,50 @@ struct dependent_type {
 };
 // CHECK-LABEL: @_ZN14dependent_typeIcE16decay_incompleteEU12__capabilityPc(
 // CHECK-NEXT:  entry:
-// CHECK-NEXT:    [[ADD_PTR:%.*]] = getelementptr inbounds i8, i8 addrspace(200)* [[P:%.*]], i64 1
-// CHECK-NEXT:    ret i8 addrspace(200)* [[ADD_PTR]]
+// CHECK-NEXT:    [[ADD_PTR:%.*]] = getelementptr inbounds i8, ptr addrspace(200) [[P:%.*]], i64 1
+// CHECK-NEXT:    ret ptr addrspace(200) [[ADD_PTR]]
 //
 // CHECK-LABEL: @_ZN14dependent_typeIcE17member_incompleteEU12__capabilityPc(
 // CHECK-NEXT:  entry:
-// CHECK-NEXT:    [[ARRAYIDX:%.*]] = getelementptr inbounds i8, i8 addrspace(200)* [[P:%.*]], i64 1
-// CHECK-NEXT:    ret i8 addrspace(200)* [[ARRAYIDX]]
+// CHECK-NEXT:    [[ARRAYIDX:%.*]] = getelementptr inbounds i8, ptr addrspace(200) [[P:%.*]], i64 1
+// CHECK-NEXT:    ret ptr addrspace(200) [[ARRAYIDX]]
 //
 // CHECK-LABEL: @_ZN14dependent_typeIcE14sub_incompleteEU12__capabilityPc(
 // CHECK-NEXT:  entry:
-// CHECK-NEXT:    [[ARRAYIDX:%.*]] = getelementptr inbounds i8, i8 addrspace(200)* [[P:%.*]], i64 1
-// CHECK-NEXT:    [[TMP0:%.*]] = load i8, i8 addrspace(200)* [[ARRAYIDX]], align 1
+// CHECK-NEXT:    [[ARRAYIDX:%.*]] = getelementptr inbounds i8, ptr addrspace(200) [[P:%.*]], i64 1
+// CHECK-NEXT:    [[TMP0:%.*]] = load i8, ptr addrspace(200) [[ARRAYIDX]], align 1
 // CHECK-NEXT:    ret i8 [[TMP0]]
 //
 // CHECK-LABEL: @_ZN14dependent_typeIcE14decay_constantEU12__capabilityPc(
 // CHECK-NEXT:  entry:
-// CHECK-NEXT:    [[ADD_PTR:%.*]] = getelementptr inbounds i8, i8 addrspace(200)* [[P:%.*]], i64 1
-// CHECK-NEXT:    ret i8 addrspace(200)* [[ADD_PTR]]
+// CHECK-NEXT:    [[ADD_PTR:%.*]] = getelementptr inbounds i8, ptr addrspace(200) [[P:%.*]], i64 1
+// CHECK-NEXT:    ret ptr addrspace(200) [[ADD_PTR]]
 //
 // CHECK-LABEL: @_ZN14dependent_typeIcE15member_constantEU12__capabilityPc(
 // CHECK-NEXT:  entry:
-// CHECK-NEXT:    [[ARRAYIDX:%.*]] = getelementptr inbounds i8, i8 addrspace(200)* [[P:%.*]], i64 1
-// CHECK-NEXT:    ret i8 addrspace(200)* [[ARRAYIDX]]
+// CHECK-NEXT:    [[ARRAYIDX:%.*]] = getelementptr inbounds i8, ptr addrspace(200) [[P:%.*]], i64 1
+// CHECK-NEXT:    ret ptr addrspace(200) [[ARRAYIDX]]
 //
 // CHECK-LABEL: @_ZN14dependent_typeIcE12sub_constantEU12__capabilityPc(
 // CHECK-NEXT:  entry:
-// CHECK-NEXT:    [[ARRAYIDX:%.*]] = getelementptr inbounds i8, i8 addrspace(200)* [[P:%.*]], i64 1
-// CHECK-NEXT:    [[TMP0:%.*]] = load i8, i8 addrspace(200)* [[ARRAYIDX]], align 1
+// CHECK-NEXT:    [[ARRAYIDX:%.*]] = getelementptr inbounds i8, ptr addrspace(200) [[P:%.*]], i64 1
+// CHECK-NEXT:    [[TMP0:%.*]] = load i8, ptr addrspace(200) [[ARRAYIDX]], align 1
 // CHECK-NEXT:    ret i8 [[TMP0]]
 //
 // CHECK-LABEL: @_ZN14dependent_typeIcE14decay_variableEmPc(
 // CHECK-NEXT:  entry:
-// CHECK-NEXT:    [[ADD_PTR:%.*]] = getelementptr inbounds i8, i8 addrspace(200)* [[P:%.*]], i64 1
-// CHECK-NEXT:    ret i8 addrspace(200)* [[ADD_PTR]]
+// CHECK-NEXT:    [[ADD_PTR:%.*]] = getelementptr inbounds i8, ptr addrspace(200) [[P:%.*]], i64 1
+// CHECK-NEXT:    ret ptr addrspace(200) [[ADD_PTR]]
 //
 // CHECK-LABEL: @_ZN14dependent_typeIcE15member_variableEmPc(
 // CHECK-NEXT:  entry:
-// CHECK-NEXT:    [[ARRAYIDX:%.*]] = getelementptr inbounds i8, i8 addrspace(200)* [[P:%.*]], i64 1
-// CHECK-NEXT:    ret i8 addrspace(200)* [[ARRAYIDX]]
+// CHECK-NEXT:    [[ARRAYIDX:%.*]] = getelementptr inbounds i8, ptr addrspace(200) [[P:%.*]], i64 1
+// CHECK-NEXT:    ret ptr addrspace(200) [[ARRAYIDX]]
 //
 // CHECK-LABEL: @_ZN14dependent_typeIcE12sub_variableEmPc(
 // CHECK-NEXT:  entry:
-// CHECK-NEXT:    [[ARRAYIDX:%.*]] = getelementptr inbounds i8, i8 addrspace(200)* [[P:%.*]], i64 1
-// CHECK-NEXT:    [[TMP0:%.*]] = load i8, i8 addrspace(200)* [[ARRAYIDX]], align 1
+// CHECK-NEXT:    [[ARRAYIDX:%.*]] = getelementptr inbounds i8, ptr addrspace(200) [[P:%.*]], i64 1
+// CHECK-NEXT:    [[TMP0:%.*]] = load i8, ptr addrspace(200) [[ARRAYIDX]], align 1
 // CHECK-NEXT:    ret i8 [[TMP0]]
 //
 template struct dependent_type<char>;
@@ -108,18 +108,18 @@ struct dependent_size {
 };
 // CHECK-LABEL: @_ZN14dependent_sizeILm2EE5decayEU12__capabilityPc(
 // CHECK-NEXT:  entry:
-// CHECK-NEXT:    [[ADD_PTR:%.*]] = getelementptr inbounds i8, i8 addrspace(200)* [[P:%.*]], i64 1
-// CHECK-NEXT:    ret i8 addrspace(200)* [[ADD_PTR]]
+// CHECK-NEXT:    [[ADD_PTR:%.*]] = getelementptr inbounds i8, ptr addrspace(200) [[P:%.*]], i64 1
+// CHECK-NEXT:    ret ptr addrspace(200) [[ADD_PTR]]
 //
 // CHECK-LABEL: @_ZN14dependent_sizeILm2EE6memberEU12__capabilityPc(
 // CHECK-NEXT:  entry:
-// CHECK-NEXT:    [[ARRAYIDX:%.*]] = getelementptr inbounds i8, i8 addrspace(200)* [[P:%.*]], i64 1
-// CHECK-NEXT:    ret i8 addrspace(200)* [[ARRAYIDX]]
+// CHECK-NEXT:    [[ARRAYIDX:%.*]] = getelementptr inbounds i8, ptr addrspace(200) [[P:%.*]], i64 1
+// CHECK-NEXT:    ret ptr addrspace(200) [[ARRAYIDX]]
 //
 // CHECK-LABEL: @_ZN14dependent_sizeILm2EE3subEU12__capabilityPc(
 // CHECK-NEXT:  entry:
-// CHECK-NEXT:    [[ARRAYIDX:%.*]] = getelementptr inbounds i8, i8 addrspace(200)* [[P:%.*]], i64 1
-// CHECK-NEXT:    [[TMP0:%.*]] = load i8, i8 addrspace(200)* [[ARRAYIDX]], align 1
+// CHECK-NEXT:    [[ARRAYIDX:%.*]] = getelementptr inbounds i8, ptr addrspace(200) [[P:%.*]], i64 1
+// CHECK-NEXT:    [[TMP0:%.*]] = load i8, ptr addrspace(200) [[ARRAYIDX]], align 1
 // CHECK-NEXT:    ret i8 [[TMP0]]
 //
 template struct dependent_size<2>;

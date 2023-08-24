@@ -11,8 +11,8 @@ extern "C" {
 
 // CHECK-LABEL: @addrof(
 // CHECK-NEXT:  entry:
-// CHECK-NEXT:    [[TMP0:%.*]] = addrspacecast i8 addrspace(200)* [[C:%.*]] to i8*
-// CHECK-NEXT:    ret i8* [[TMP0]]
+// CHECK-NEXT:    [[TMP0:%.*]] = addrspacecast ptr addrspace(200) [[C:%.*]] to ptr
+// CHECK-NEXT:    ret ptr [[TMP0]]
 //
 char *addrof(char & __capability c) {
   return (char *)&c;

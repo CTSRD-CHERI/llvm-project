@@ -14,13 +14,13 @@ extern "C" {
 
 // HYBRID-LABEL: @cap_to_long(
 // HYBRID-NEXT:  entry:
-// HYBRID-NEXT:    [[TMP0:%.*]] = call i8 addrspace(200)* @llvm.cheri.ddc.get()
-// HYBRID-NEXT:    [[TMP1:%.*]] = call i64 @llvm.cheri.cap.to.pointer.i64(i8 addrspace(200)* [[TMP0]], i8 addrspace(200)* [[C:%.*]])
+// HYBRID-NEXT:    [[TMP0:%.*]] = call ptr addrspace(200) @llvm.cheri.ddc.get()
+// HYBRID-NEXT:    [[TMP1:%.*]] = call i64 @llvm.cheri.cap.to.pointer.i64(ptr addrspace(200) [[TMP0]], ptr addrspace(200) [[C:%.*]])
 // HYBRID-NEXT:    ret i64 [[TMP1]]
 //
 // PURECAP-LABEL: @cap_to_long(
 // PURECAP-NEXT:  entry:
-// PURECAP-NEXT:    [[TMP0:%.*]] = call i64 @llvm.cheri.cap.address.get.i64(i8 addrspace(200)* [[C:%.*]])
+// PURECAP-NEXT:    [[TMP0:%.*]] = call i64 @llvm.cheri.cap.address.get.i64(ptr addrspace(200) [[C:%.*]])
 // PURECAP-NEXT:    ret i64 [[TMP0]]
 //
 unsigned long cap_to_long(void * __capability c) {
@@ -29,13 +29,13 @@ unsigned long cap_to_long(void * __capability c) {
 
 // HYBRID-LABEL: @long_to_cap(
 // HYBRID-NEXT:  entry:
-// HYBRID-NEXT:    [[TMP0:%.*]] = inttoptr i64 [[L:%.*]] to i8 addrspace(200)*
-// HYBRID-NEXT:    ret i8 addrspace(200)* [[TMP0]]
+// HYBRID-NEXT:    [[TMP0:%.*]] = inttoptr i64 [[L:%.*]] to ptr addrspace(200)
+// HYBRID-NEXT:    ret ptr addrspace(200) [[TMP0]]
 //
 // PURECAP-LABEL: @long_to_cap(
 // PURECAP-NEXT:  entry:
-// PURECAP-NEXT:    [[TMP0:%.*]] = getelementptr i8, i8 addrspace(200)* null, i64 [[L:%.*]]
-// PURECAP-NEXT:    ret i8 addrspace(200)* [[TMP0]]
+// PURECAP-NEXT:    [[TMP0:%.*]] = getelementptr i8, ptr addrspace(200) null, i64 [[L:%.*]]
+// PURECAP-NEXT:    ret ptr addrspace(200) [[TMP0]]
 //
 void * __capability long_to_cap(unsigned long l) {
   return (void * __capability)l;
@@ -43,12 +43,12 @@ void * __capability long_to_cap(unsigned long l) {
 
 // HYBRID-LABEL: @cap_to_ptr(
 // HYBRID-NEXT:  entry:
-// HYBRID-NEXT:    [[TMP0:%.*]] = addrspacecast i8 addrspace(200)* [[C:%.*]] to i8*
-// HYBRID-NEXT:    ret i8* [[TMP0]]
+// HYBRID-NEXT:    [[TMP0:%.*]] = addrspacecast ptr addrspace(200) [[C:%.*]] to ptr
+// HYBRID-NEXT:    ret ptr [[TMP0]]
 //
 // PURECAP-LABEL: @cap_to_ptr(
 // PURECAP-NEXT:  entry:
-// PURECAP-NEXT:    ret i8 addrspace(200)* [[C:%.*]]
+// PURECAP-NEXT:    ret ptr addrspace(200) [[C:%.*]]
 //
 void *cap_to_ptr(void * __capability c) {
   return (void *)c;
@@ -56,12 +56,12 @@ void *cap_to_ptr(void * __capability c) {
 
 // HYBRID-LABEL: @ptr_to_cap(
 // HYBRID-NEXT:  entry:
-// HYBRID-NEXT:    [[TMP0:%.*]] = addrspacecast i8* [[P:%.*]] to i8 addrspace(200)*
-// HYBRID-NEXT:    ret i8 addrspace(200)* [[TMP0]]
+// HYBRID-NEXT:    [[TMP0:%.*]] = addrspacecast ptr [[P:%.*]] to ptr addrspace(200)
+// HYBRID-NEXT:    ret ptr addrspace(200) [[TMP0]]
 //
 // PURECAP-LABEL: @ptr_to_cap(
 // PURECAP-NEXT:  entry:
-// PURECAP-NEXT:    ret i8 addrspace(200)* [[P:%.*]]
+// PURECAP-NEXT:    ret ptr addrspace(200) [[P:%.*]]
 //
 void * __capability ptr_to_cap(void *p) {
   return (void * __capability)p;
@@ -69,12 +69,12 @@ void * __capability ptr_to_cap(void *p) {
 
 // HYBRID-LABEL: @intcap_to_long(
 // HYBRID-NEXT:  entry:
-// HYBRID-NEXT:    [[TMP0:%.*]] = call i64 @llvm.cheri.cap.address.get.i64(i8 addrspace(200)* [[C:%.*]])
+// HYBRID-NEXT:    [[TMP0:%.*]] = call i64 @llvm.cheri.cap.address.get.i64(ptr addrspace(200) [[C:%.*]])
 // HYBRID-NEXT:    ret i64 [[TMP0]]
 //
 // PURECAP-LABEL: @intcap_to_long(
 // PURECAP-NEXT:  entry:
-// PURECAP-NEXT:    [[TMP0:%.*]] = call i64 @llvm.cheri.cap.address.get.i64(i8 addrspace(200)* [[C:%.*]])
+// PURECAP-NEXT:    [[TMP0:%.*]] = call i64 @llvm.cheri.cap.address.get.i64(ptr addrspace(200) [[C:%.*]])
 // PURECAP-NEXT:    ret i64 [[TMP0]]
 //
 unsigned long intcap_to_long(unsigned __intcap c) {
@@ -83,13 +83,13 @@ unsigned long intcap_to_long(unsigned __intcap c) {
 
 // HYBRID-LABEL: @long_to_intcap(
 // HYBRID-NEXT:  entry:
-// HYBRID-NEXT:    [[TMP0:%.*]] = getelementptr i8, i8 addrspace(200)* null, i64 [[L:%.*]]
-// HYBRID-NEXT:    ret i8 addrspace(200)* [[TMP0]]
+// HYBRID-NEXT:    [[TMP0:%.*]] = getelementptr i8, ptr addrspace(200) null, i64 [[L:%.*]]
+// HYBRID-NEXT:    ret ptr addrspace(200) [[TMP0]]
 //
 // PURECAP-LABEL: @long_to_intcap(
 // PURECAP-NEXT:  entry:
-// PURECAP-NEXT:    [[TMP0:%.*]] = getelementptr i8, i8 addrspace(200)* null, i64 [[L:%.*]]
-// PURECAP-NEXT:    ret i8 addrspace(200)* [[TMP0]]
+// PURECAP-NEXT:    [[TMP0:%.*]] = getelementptr i8, ptr addrspace(200) null, i64 [[L:%.*]]
+// PURECAP-NEXT:    ret ptr addrspace(200) [[TMP0]]
 //
 unsigned __intcap long_to_intcap(unsigned long l) {
   return (unsigned __intcap)l;
@@ -97,14 +97,14 @@ unsigned __intcap long_to_intcap(unsigned long l) {
 
 // HYBRID-LABEL: @intcap_to_ptr(
 // HYBRID-NEXT:  entry:
-// HYBRID-NEXT:    [[TMP0:%.*]] = call i8 addrspace(200)* @llvm.cheri.ddc.get()
-// HYBRID-NEXT:    [[TMP1:%.*]] = call i64 @llvm.cheri.cap.to.pointer.i64(i8 addrspace(200)* [[TMP0]], i8 addrspace(200)* [[C:%.*]])
-// HYBRID-NEXT:    [[TMP2:%.*]] = inttoptr i64 [[TMP1]] to i8*
-// HYBRID-NEXT:    ret i8* [[TMP2]]
+// HYBRID-NEXT:    [[TMP0:%.*]] = call ptr addrspace(200) @llvm.cheri.ddc.get()
+// HYBRID-NEXT:    [[TMP1:%.*]] = call i64 @llvm.cheri.cap.to.pointer.i64(ptr addrspace(200) [[TMP0]], ptr addrspace(200) [[C:%.*]])
+// HYBRID-NEXT:    [[TMP2:%.*]] = inttoptr i64 [[TMP1]] to ptr
+// HYBRID-NEXT:    ret ptr [[TMP2]]
 //
 // PURECAP-LABEL: @intcap_to_ptr(
 // PURECAP-NEXT:  entry:
-// PURECAP-NEXT:    ret i8 addrspace(200)* [[C:%.*]]
+// PURECAP-NEXT:    ret ptr addrspace(200) [[C:%.*]]
 //
 void *intcap_to_ptr(unsigned __intcap c) {
   return (void *)c;
@@ -112,13 +112,13 @@ void *intcap_to_ptr(unsigned __intcap c) {
 
 // HYBRID-LABEL: @ptr_to_intcap(
 // HYBRID-NEXT:  entry:
-// HYBRID-NEXT:    [[TMP0:%.*]] = ptrtoint i8* [[P:%.*]] to i64
-// HYBRID-NEXT:    [[TMP1:%.*]] = getelementptr i8, i8 addrspace(200)* null, i64 [[TMP0]]
-// HYBRID-NEXT:    ret i8 addrspace(200)* [[TMP1]]
+// HYBRID-NEXT:    [[TMP0:%.*]] = ptrtoint ptr [[P:%.*]] to i64
+// HYBRID-NEXT:    [[TMP1:%.*]] = getelementptr i8, ptr addrspace(200) null, i64 [[TMP0]]
+// HYBRID-NEXT:    ret ptr addrspace(200) [[TMP1]]
 //
 // PURECAP-LABEL: @ptr_to_intcap(
 // PURECAP-NEXT:  entry:
-// PURECAP-NEXT:    ret i8 addrspace(200)* [[P:%.*]]
+// PURECAP-NEXT:    ret ptr addrspace(200) [[P:%.*]]
 //
 unsigned __intcap ptr_to_intcap(void *p) {
   return (unsigned __intcap)p;

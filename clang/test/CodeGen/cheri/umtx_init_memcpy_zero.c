@@ -19,14 +19,14 @@ struct umutex {
 	__uint32_t		m_pad;
 	__uint32_t		m_spare[2];
 };
-// CHECK: %struct.umutex = type { i32, i32, [2 x i32], i8 addrspace(200)*, i32, [2 x i32] }
+// CHECK: %struct.umutex = type { i32, i32, [2 x i32], ptr addrspace(200), i32, [2 x i32] }
 
 // CHECK: @_thr_umutex_init.default_mtx = internal addrspace(200) constant %struct.umutex zeroinitializer, align 16
 
-// CHECK-LABEL: @_thr_umutex_init(
+// CHECK-LABEL: define {{[^@]+}}@_thr_umutex_init
+// CHECK-SAME: (ptr addrspace(200) noundef [[MTX:%.*]]) addrspace(200)
 // CHECK-NEXT:  entry:
-// CHECK-NEXT:    [[TMP0:%.*]] = bitcast [[STRUCT_UMUTEX:%.*]] addrspace(200)* [[MTX:%.*]] to i8 addrspace(200)*
-// CHECK-NEXT:    call void @llvm.memcpy.p200i8.p200i8.i64(i8 addrspace(200)* align 16 [[TMP0]], i8 addrspace(200)* align 16 bitcast ({{.+}} addrspace(200)* @_thr_umutex_init.default_mtx to i8 addrspace(200)*),
+// CHECK-NEXT:    call void @llvm.memcpy.p200.p200.i64(ptr addrspace(200) align 16 [[MTX]], ptr addrspace(200) align 16 @_thr_umutex_init.default_mtx,
 // Note: This should be a volatile memcpy because the struct contains a volatile member.
 // CHECK-SAME:     i64 48, i1 true)
 // CHECK-NEXT:    ret void

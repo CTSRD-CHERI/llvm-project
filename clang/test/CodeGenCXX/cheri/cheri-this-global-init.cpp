@@ -4,12 +4,12 @@
 class time_point {
 public:
 // CHECK-LABEL: define {{[^@]+}}@_ZN10time_pointC1Ev
-// CHECK-SAME: ([[CLASS_TIME_POINT:%.*]] addrspace(200)* noundef nonnull align 1 dereferenceable(1) [[THIS:%.*]]) unnamed_addr addrspace(200) #[[ATTR1:[0-9]+]] comdat align 2 {
+// CHECK-SAME: (ptr addrspace(200) noundef nonnull align 1 dereferenceable(1) [[THIS:%.*]]) unnamed_addr addrspace(200) #[[ATTR1:[0-9]+]] comdat align 2 {
 // CHECK-NEXT:  entry:
-// CHECK-NEXT:    [[THIS_ADDR:%.*]] = alloca [[CLASS_TIME_POINT]] addrspace(200)*, align 16, addrspace(200)
-// CHECK-NEXT:    store [[CLASS_TIME_POINT]] addrspace(200)* [[THIS]], [[CLASS_TIME_POINT]] addrspace(200)* addrspace(200)* [[THIS_ADDR]], align 16
-// CHECK-NEXT:    [[THIS1:%.*]] = load [[CLASS_TIME_POINT]] addrspace(200)*, [[CLASS_TIME_POINT]] addrspace(200)* addrspace(200)* [[THIS_ADDR]], align 16
-// CHECK-NEXT:    call void @_ZN10time_pointC2Ev([[CLASS_TIME_POINT]] addrspace(200)* noundef nonnull align 1 dereferenceable(1) [[THIS1]])
+// CHECK-NEXT:    [[THIS_ADDR:%.*]] = alloca ptr addrspace(200), align 16, addrspace(200)
+// CHECK-NEXT:    store ptr addrspace(200) [[THIS]], ptr addrspace(200) [[THIS_ADDR]], align 16
+// CHECK-NEXT:    [[THIS1:%.*]] = load ptr addrspace(200), ptr addrspace(200) [[THIS_ADDR]], align 16
+// CHECK-NEXT:    call void @_ZN10time_pointC2Ev(ptr addrspace(200) noundef nonnull align 1 dereferenceable(1) [[THIS1]])
 // CHECK-NEXT:    ret void
 //
   time_point() {}

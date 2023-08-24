@@ -9,79 +9,79 @@
 // RUN:   | opt -S -mem2reg | FileCheck --check-prefix=PURECAP %s
 
 // HYBRID-LABEL: define {{[^@]+}}@test_xchg
-// HYBRID-SAME: (i8 addrspace(200)** noundef [[F:%.*]], i8 addrspace(200)* noundef [[VALUE:%.*]]) #[[ATTR0:[0-9]+]] {
+// HYBRID-SAME: (ptr noundef [[F:%.*]], ptr addrspace(200) noundef [[VALUE:%.*]]) #[[ATTR0:[0-9]+]] {
 // HYBRID-NEXT:  entry:
-// HYBRID-NEXT:    [[TMP0:%.*]] = atomicrmw xchg i8 addrspace(200)** [[F]], i8 addrspace(200)* [[VALUE]] seq_cst, align 16
-// HYBRID-NEXT:    ret i8 addrspace(200)* [[TMP0]]
+// HYBRID-NEXT:    [[TMP0:%.*]] = atomicrmw xchg ptr [[F]], ptr addrspace(200) [[VALUE]] seq_cst, align 16
+// HYBRID-NEXT:    ret ptr addrspace(200) [[TMP0]]
 //
 // PURECAP-LABEL: define {{[^@]+}}@test_xchg
-// PURECAP-SAME: (i8 addrspace(200)* addrspace(200)* noundef [[F:%.*]], i8 addrspace(200)* noundef [[VALUE:%.*]]) addrspace(200) #[[ATTR0:[0-9]+]] {
+// PURECAP-SAME: (ptr addrspace(200) noundef [[F:%.*]], ptr addrspace(200) noundef [[VALUE:%.*]]) addrspace(200) #[[ATTR0:[0-9]+]] {
 // PURECAP-NEXT:  entry:
-// PURECAP-NEXT:    [[TMP0:%.*]] = atomicrmw xchg i8 addrspace(200)* addrspace(200)* [[F]], i8 addrspace(200)* [[VALUE]] seq_cst, align 16
-// PURECAP-NEXT:    ret i8 addrspace(200)* [[TMP0]]
+// PURECAP-NEXT:    [[TMP0:%.*]] = atomicrmw xchg ptr addrspace(200) [[F]], ptr addrspace(200) [[VALUE]] seq_cst, align 16
+// PURECAP-NEXT:    ret ptr addrspace(200) [[TMP0]]
 //
 __uintcap_t test_xchg(__uintcap_t *f, __uintcap_t value) {
   return __sync_swap(f, value);
 }
 
 // HYBRID-LABEL: define {{[^@]+}}@test_xchg_long_ptr
-// HYBRID-SAME: (i64 addrspace(200)** noundef [[F:%.*]], i64 addrspace(200)* noundef [[VALUE:%.*]]) #[[ATTR0]] {
+// HYBRID-SAME: (ptr noundef [[F:%.*]], ptr addrspace(200) noundef [[VALUE:%.*]]) #[[ATTR0]] {
 // HYBRID-NEXT:  entry:
-// HYBRID-NEXT:    [[TMP0:%.*]] = atomicrmw xchg i64 addrspace(200)** [[F]], i64 addrspace(200)* [[VALUE]] seq_cst, align 16
-// HYBRID-NEXT:    ret i64 addrspace(200)* [[TMP0]]
+// HYBRID-NEXT:    [[TMP0:%.*]] = atomicrmw xchg ptr [[F]], ptr addrspace(200) [[VALUE]] seq_cst, align 16
+// HYBRID-NEXT:    ret ptr addrspace(200) [[TMP0]]
 //
 // PURECAP-LABEL: define {{[^@]+}}@test_xchg_long_ptr
-// PURECAP-SAME: (i64 addrspace(200)* addrspace(200)* noundef [[F:%.*]], i64 addrspace(200)* noundef [[VALUE:%.*]]) addrspace(200) #[[ATTR0]] {
+// PURECAP-SAME: (ptr addrspace(200) noundef [[F:%.*]], ptr addrspace(200) noundef [[VALUE:%.*]]) addrspace(200) #[[ATTR0]] {
 // PURECAP-NEXT:  entry:
-// PURECAP-NEXT:    [[TMP0:%.*]] = atomicrmw xchg i64 addrspace(200)* addrspace(200)* [[F]], i64 addrspace(200)* [[VALUE]] seq_cst, align 16
-// PURECAP-NEXT:    ret i64 addrspace(200)* [[TMP0]]
+// PURECAP-NEXT:    [[TMP0:%.*]] = atomicrmw xchg ptr addrspace(200) [[F]], ptr addrspace(200) [[VALUE]] seq_cst, align 16
+// PURECAP-NEXT:    ret ptr addrspace(200) [[TMP0]]
 //
 long *__capability test_xchg_long_ptr(long *__capability *f, long *__capability value) {
   return __sync_swap(f, value);
 }
 
 // HYBRID-LABEL: define {{[^@]+}}@test_lock_test_and_set
-// HYBRID-SAME: (i8 addrspace(200)** noundef [[F:%.*]], i8 addrspace(200)* noundef [[VALUE:%.*]]) #[[ATTR0]] {
+// HYBRID-SAME: (ptr noundef [[F:%.*]], ptr addrspace(200) noundef [[VALUE:%.*]]) #[[ATTR0]] {
 // HYBRID-NEXT:  entry:
-// HYBRID-NEXT:    [[TMP0:%.*]] = atomicrmw xchg i8 addrspace(200)** [[F]], i8 addrspace(200)* [[VALUE]] seq_cst, align 16
-// HYBRID-NEXT:    ret i8 addrspace(200)* [[TMP0]]
+// HYBRID-NEXT:    [[TMP0:%.*]] = atomicrmw xchg ptr [[F]], ptr addrspace(200) [[VALUE]] seq_cst, align 16
+// HYBRID-NEXT:    ret ptr addrspace(200) [[TMP0]]
 //
 // PURECAP-LABEL: define {{[^@]+}}@test_lock_test_and_set
-// PURECAP-SAME: (i8 addrspace(200)* addrspace(200)* noundef [[F:%.*]], i8 addrspace(200)* noundef [[VALUE:%.*]]) addrspace(200) #[[ATTR0]] {
+// PURECAP-SAME: (ptr addrspace(200) noundef [[F:%.*]], ptr addrspace(200) noundef [[VALUE:%.*]]) addrspace(200) #[[ATTR0]] {
 // PURECAP-NEXT:  entry:
-// PURECAP-NEXT:    [[TMP0:%.*]] = atomicrmw xchg i8 addrspace(200)* addrspace(200)* [[F]], i8 addrspace(200)* [[VALUE]] seq_cst, align 16
-// PURECAP-NEXT:    ret i8 addrspace(200)* [[TMP0]]
+// PURECAP-NEXT:    [[TMP0:%.*]] = atomicrmw xchg ptr addrspace(200) [[F]], ptr addrspace(200) [[VALUE]] seq_cst, align 16
+// PURECAP-NEXT:    ret ptr addrspace(200) [[TMP0]]
 //
 __uintcap_t test_lock_test_and_set(__uintcap_t *f, __uintcap_t value) {
   return __sync_lock_test_and_set(f, value);
 }
 
 // HYBRID-LABEL: define {{[^@]+}}@test_lock_test_and_set_long_ptr
-// HYBRID-SAME: (i64 addrspace(200)** noundef [[F:%.*]], i64 addrspace(200)* noundef [[VALUE:%.*]]) #[[ATTR0]] {
+// HYBRID-SAME: (ptr noundef [[F:%.*]], ptr addrspace(200) noundef [[VALUE:%.*]]) #[[ATTR0]] {
 // HYBRID-NEXT:  entry:
-// HYBRID-NEXT:    [[TMP0:%.*]] = atomicrmw xchg i64 addrspace(200)** [[F]], i64 addrspace(200)* [[VALUE]] seq_cst, align 16
-// HYBRID-NEXT:    ret i64 addrspace(200)* [[TMP0]]
+// HYBRID-NEXT:    [[TMP0:%.*]] = atomicrmw xchg ptr [[F]], ptr addrspace(200) [[VALUE]] seq_cst, align 16
+// HYBRID-NEXT:    ret ptr addrspace(200) [[TMP0]]
 //
 // PURECAP-LABEL: define {{[^@]+}}@test_lock_test_and_set_long_ptr
-// PURECAP-SAME: (i64 addrspace(200)* addrspace(200)* noundef [[F:%.*]], i64 addrspace(200)* noundef [[VALUE:%.*]]) addrspace(200) #[[ATTR0]] {
+// PURECAP-SAME: (ptr addrspace(200) noundef [[F:%.*]], ptr addrspace(200) noundef [[VALUE:%.*]]) addrspace(200) #[[ATTR0]] {
 // PURECAP-NEXT:  entry:
-// PURECAP-NEXT:    [[TMP0:%.*]] = atomicrmw xchg i64 addrspace(200)* addrspace(200)* [[F]], i64 addrspace(200)* [[VALUE]] seq_cst, align 16
-// PURECAP-NEXT:    ret i64 addrspace(200)* [[TMP0]]
+// PURECAP-NEXT:    [[TMP0:%.*]] = atomicrmw xchg ptr addrspace(200) [[F]], ptr addrspace(200) [[VALUE]] seq_cst, align 16
+// PURECAP-NEXT:    ret ptr addrspace(200) [[TMP0]]
 //
 long *__capability test_lock_test_and_set_long_ptr(long *__capability *f, long *__capability value) {
   return __sync_lock_test_and_set(f, value);
 }
 
 // HYBRID-LABEL: define {{[^@]+}}@test_lock_release
-// HYBRID-SAME: (i8 addrspace(200)** noundef [[F:%.*]]) #[[ATTR0]] {
+// HYBRID-SAME: (ptr noundef [[F:%.*]]) #[[ATTR0]] {
 // HYBRID-NEXT:  entry:
-// HYBRID-NEXT:    store atomic i8 addrspace(200)* null, i8 addrspace(200)** [[F]] release, align 16
+// HYBRID-NEXT:    store atomic ptr addrspace(200) null, ptr [[F]] release, align 16
 // HYBRID-NEXT:    ret void
 //
 // PURECAP-LABEL: define {{[^@]+}}@test_lock_release
-// PURECAP-SAME: (i8 addrspace(200)* addrspace(200)* noundef [[F:%.*]]) addrspace(200) #[[ATTR0]] {
+// PURECAP-SAME: (ptr addrspace(200) noundef [[F:%.*]]) addrspace(200) #[[ATTR0]] {
 // PURECAP-NEXT:  entry:
-// PURECAP-NEXT:    store atomic i8 addrspace(200)* null, i8 addrspace(200)* addrspace(200)* [[F]] release, align 16
+// PURECAP-NEXT:    store atomic ptr addrspace(200) null, ptr addrspace(200) [[F]] release, align 16
 // PURECAP-NEXT:    ret void
 //
 void test_lock_release(__uintcap_t *f) {
@@ -89,15 +89,15 @@ void test_lock_release(__uintcap_t *f) {
 }
 
 // HYBRID-LABEL: define {{[^@]+}}@test_lock_release_long_ptr
-// HYBRID-SAME: (i64 addrspace(200)** noundef [[F:%.*]]) #[[ATTR0]] {
+// HYBRID-SAME: (ptr noundef [[F:%.*]]) #[[ATTR0]] {
 // HYBRID-NEXT:  entry:
-// HYBRID-NEXT:    store atomic i64 addrspace(200)* null, i64 addrspace(200)** [[F]] release, align 16
+// HYBRID-NEXT:    store atomic ptr addrspace(200) null, ptr [[F]] release, align 16
 // HYBRID-NEXT:    ret void
 //
 // PURECAP-LABEL: define {{[^@]+}}@test_lock_release_long_ptr
-// PURECAP-SAME: (i64 addrspace(200)* addrspace(200)* noundef [[F:%.*]]) addrspace(200) #[[ATTR0]] {
+// PURECAP-SAME: (ptr addrspace(200) noundef [[F:%.*]]) addrspace(200) #[[ATTR0]] {
 // PURECAP-NEXT:  entry:
-// PURECAP-NEXT:    store atomic i64 addrspace(200)* null, i64 addrspace(200)* addrspace(200)* [[F]] release, align 16
+// PURECAP-NEXT:    store atomic ptr addrspace(200) null, ptr addrspace(200) [[F]] release, align 16
 // PURECAP-NEXT:    ret void
 //
 void test_lock_release_long_ptr(long *__capability *f) {
@@ -105,17 +105,17 @@ void test_lock_release_long_ptr(long *__capability *f) {
 }
 
 // HYBRID-LABEL: define {{[^@]+}}@test_cmpxchg_bool
-// HYBRID-SAME: (i8 addrspace(200)** noundef [[F:%.*]], i8 addrspace(200)* noundef [[EXP:%.*]], i8 addrspace(200)* noundef [[NEW:%.*]]) #[[ATTR0]] {
+// HYBRID-SAME: (ptr noundef [[F:%.*]], ptr addrspace(200) noundef [[EXP:%.*]], ptr addrspace(200) noundef [[NEW:%.*]]) #[[ATTR0]] {
 // HYBRID-NEXT:  entry:
-// HYBRID-NEXT:    [[TMP0:%.*]] = cmpxchg i8 addrspace(200)** [[F]], i8 addrspace(200)* [[EXP]], i8 addrspace(200)* [[NEW]] seq_cst seq_cst, align 16
-// HYBRID-NEXT:    [[TMP1:%.*]] = extractvalue { i8 addrspace(200)*, i1 } [[TMP0]], 1
+// HYBRID-NEXT:    [[TMP0:%.*]] = cmpxchg ptr [[F]], ptr addrspace(200) [[EXP]], ptr addrspace(200) [[NEW]] seq_cst seq_cst, align 16
+// HYBRID-NEXT:    [[TMP1:%.*]] = extractvalue { ptr addrspace(200), i1 } [[TMP0]], 1
 // HYBRID-NEXT:    ret i1 [[TMP1]]
 //
 // PURECAP-LABEL: define {{[^@]+}}@test_cmpxchg_bool
-// PURECAP-SAME: (i8 addrspace(200)* addrspace(200)* noundef [[F:%.*]], i8 addrspace(200)* noundef [[EXP:%.*]], i8 addrspace(200)* noundef [[NEW:%.*]]) addrspace(200) #[[ATTR0]] {
+// PURECAP-SAME: (ptr addrspace(200) noundef [[F:%.*]], ptr addrspace(200) noundef [[EXP:%.*]], ptr addrspace(200) noundef [[NEW:%.*]]) addrspace(200) #[[ATTR0]] {
 // PURECAP-NEXT:  entry:
-// PURECAP-NEXT:    [[TMP0:%.*]] = cmpxchg i8 addrspace(200)* addrspace(200)* [[F]], i8 addrspace(200)* [[EXP]], i8 addrspace(200)* [[NEW]] seq_cst seq_cst, align 16
-// PURECAP-NEXT:    [[TMP1:%.*]] = extractvalue { i8 addrspace(200)*, i1 } [[TMP0]], 1
+// PURECAP-NEXT:    [[TMP0:%.*]] = cmpxchg ptr addrspace(200) [[F]], ptr addrspace(200) [[EXP]], ptr addrspace(200) [[NEW]] seq_cst seq_cst, align 16
+// PURECAP-NEXT:    [[TMP1:%.*]] = extractvalue { ptr addrspace(200), i1 } [[TMP0]], 1
 // PURECAP-NEXT:    ret i1 [[TMP1]]
 //
 _Bool test_cmpxchg_bool(__uintcap_t *f, __uintcap_t exp, __uintcap_t new) {
@@ -123,656 +123,612 @@ _Bool test_cmpxchg_bool(__uintcap_t *f, __uintcap_t exp, __uintcap_t new) {
 }
 
 // HYBRID-LABEL: define {{[^@]+}}@test_cmpxchg_val
-// HYBRID-SAME: (i8 addrspace(200)** noundef [[F:%.*]], i8 addrspace(200)* noundef [[EXP:%.*]], i8 addrspace(200)* noundef [[NEW:%.*]]) #[[ATTR0]] {
+// HYBRID-SAME: (ptr noundef [[F:%.*]], ptr addrspace(200) noundef [[EXP:%.*]], ptr addrspace(200) noundef [[NEW:%.*]]) #[[ATTR0]] {
 // HYBRID-NEXT:  entry:
-// HYBRID-NEXT:    [[TMP0:%.*]] = cmpxchg i8 addrspace(200)** [[F]], i8 addrspace(200)* [[EXP]], i8 addrspace(200)* [[NEW]] seq_cst seq_cst, align 16
-// HYBRID-NEXT:    [[TMP1:%.*]] = extractvalue { i8 addrspace(200)*, i1 } [[TMP0]], 0
-// HYBRID-NEXT:    ret i8 addrspace(200)* [[TMP1]]
+// HYBRID-NEXT:    [[TMP0:%.*]] = cmpxchg ptr [[F]], ptr addrspace(200) [[EXP]], ptr addrspace(200) [[NEW]] seq_cst seq_cst, align 16
+// HYBRID-NEXT:    [[TMP1:%.*]] = extractvalue { ptr addrspace(200), i1 } [[TMP0]], 0
+// HYBRID-NEXT:    ret ptr addrspace(200) [[TMP1]]
 //
 // PURECAP-LABEL: define {{[^@]+}}@test_cmpxchg_val
-// PURECAP-SAME: (i8 addrspace(200)* addrspace(200)* noundef [[F:%.*]], i8 addrspace(200)* noundef [[EXP:%.*]], i8 addrspace(200)* noundef [[NEW:%.*]]) addrspace(200) #[[ATTR0]] {
+// PURECAP-SAME: (ptr addrspace(200) noundef [[F:%.*]], ptr addrspace(200) noundef [[EXP:%.*]], ptr addrspace(200) noundef [[NEW:%.*]]) addrspace(200) #[[ATTR0]] {
 // PURECAP-NEXT:  entry:
-// PURECAP-NEXT:    [[TMP0:%.*]] = cmpxchg i8 addrspace(200)* addrspace(200)* [[F]], i8 addrspace(200)* [[EXP]], i8 addrspace(200)* [[NEW]] seq_cst seq_cst, align 16
-// PURECAP-NEXT:    [[TMP1:%.*]] = extractvalue { i8 addrspace(200)*, i1 } [[TMP0]], 0
-// PURECAP-NEXT:    ret i8 addrspace(200)* [[TMP1]]
+// PURECAP-NEXT:    [[TMP0:%.*]] = cmpxchg ptr addrspace(200) [[F]], ptr addrspace(200) [[EXP]], ptr addrspace(200) [[NEW]] seq_cst seq_cst, align 16
+// PURECAP-NEXT:    [[TMP1:%.*]] = extractvalue { ptr addrspace(200), i1 } [[TMP0]], 0
+// PURECAP-NEXT:    ret ptr addrspace(200) [[TMP1]]
 //
 __uintcap_t test_cmpxchg_val(__uintcap_t *f, __uintcap_t exp, __uintcap_t new) {
   return __sync_val_compare_and_swap(f, exp, new);
 }
 
 // HYBRID-LABEL: define {{[^@]+}}@test_fetch_add_uintcap
-// HYBRID-SAME: (i8 addrspace(200)** noundef [[PTR:%.*]], i8 addrspace(200)* noundef [[VALUE:%.*]]) #[[ATTR0]] {
+// HYBRID-SAME: (ptr noundef [[PTR:%.*]], ptr addrspace(200) noundef [[VALUE:%.*]]) #[[ATTR0]] {
 // HYBRID-NEXT:  entry:
-// HYBRID-NEXT:    [[TMP0:%.*]] = atomicrmw add i8 addrspace(200)** [[PTR]], i8 addrspace(200)* [[VALUE]] seq_cst, align 16
-// HYBRID-NEXT:    ret i8 addrspace(200)* [[TMP0]]
+// HYBRID-NEXT:    [[TMP0:%.*]] = atomicrmw add ptr [[PTR]], ptr addrspace(200) [[VALUE]] seq_cst, align 16
+// HYBRID-NEXT:    ret ptr addrspace(200) [[TMP0]]
 //
 // PURECAP-LABEL: define {{[^@]+}}@test_fetch_add_uintcap
-// PURECAP-SAME: (i8 addrspace(200)* addrspace(200)* noundef [[PTR:%.*]], i8 addrspace(200)* noundef [[VALUE:%.*]]) addrspace(200) #[[ATTR0]] {
+// PURECAP-SAME: (ptr addrspace(200) noundef [[PTR:%.*]], ptr addrspace(200) noundef [[VALUE:%.*]]) addrspace(200) #[[ATTR0]] {
 // PURECAP-NEXT:  entry:
-// PURECAP-NEXT:    [[TMP0:%.*]] = atomicrmw add i8 addrspace(200)* addrspace(200)* [[PTR]], i8 addrspace(200)* [[VALUE]] seq_cst, align 16
-// PURECAP-NEXT:    ret i8 addrspace(200)* [[TMP0]]
+// PURECAP-NEXT:    [[TMP0:%.*]] = atomicrmw add ptr addrspace(200) [[PTR]], ptr addrspace(200) [[VALUE]] seq_cst, align 16
+// PURECAP-NEXT:    ret ptr addrspace(200) [[TMP0]]
 //
 __uintcap_t test_fetch_add_uintcap(__uintcap_t *ptr, __uintcap_t value) {
   return __sync_fetch_and_add(ptr, value);
 }
 
 // HYBRID-LABEL: define {{[^@]+}}@test_fetch_add_longptr
-// HYBRID-SAME: (i64 addrspace(200)** noundef [[PTR:%.*]], i8 addrspace(200)* noundef [[VALUE:%.*]]) #[[ATTR0]] {
+// HYBRID-SAME: (ptr noundef [[PTR:%.*]], ptr addrspace(200) noundef [[VALUE:%.*]]) #[[ATTR0]] {
 // HYBRID-NEXT:  entry:
-// HYBRID-NEXT:    [[TMP0:%.*]] = bitcast i8 addrspace(200)* [[VALUE]] to i64 addrspace(200)*
-// HYBRID-NEXT:    [[TMP1:%.*]] = atomicrmw add i64 addrspace(200)** [[PTR]], i64 addrspace(200)* [[TMP0]] seq_cst, align 16
-// HYBRID-NEXT:    ret i64 addrspace(200)* [[TMP1]]
+// HYBRID-NEXT:    [[TMP0:%.*]] = atomicrmw add ptr [[PTR]], ptr addrspace(200) [[VALUE]] seq_cst, align 16
+// HYBRID-NEXT:    ret ptr addrspace(200) [[TMP0]]
 //
 // PURECAP-LABEL: define {{[^@]+}}@test_fetch_add_longptr
-// PURECAP-SAME: (i64 addrspace(200)* addrspace(200)* noundef [[PTR:%.*]], i8 addrspace(200)* noundef [[VALUE:%.*]]) addrspace(200) #[[ATTR0]] {
+// PURECAP-SAME: (ptr addrspace(200) noundef [[PTR:%.*]], ptr addrspace(200) noundef [[VALUE:%.*]]) addrspace(200) #[[ATTR0]] {
 // PURECAP-NEXT:  entry:
-// PURECAP-NEXT:    [[TMP0:%.*]] = bitcast i8 addrspace(200)* [[VALUE]] to i64 addrspace(200)*
-// PURECAP-NEXT:    [[TMP1:%.*]] = atomicrmw add i64 addrspace(200)* addrspace(200)* [[PTR]], i64 addrspace(200)* [[TMP0]] seq_cst, align 16
-// PURECAP-NEXT:    ret i64 addrspace(200)* [[TMP1]]
+// PURECAP-NEXT:    [[TMP0:%.*]] = atomicrmw add ptr addrspace(200) [[PTR]], ptr addrspace(200) [[VALUE]] seq_cst, align 16
+// PURECAP-NEXT:    ret ptr addrspace(200) [[TMP0]]
 //
 long *__capability test_fetch_add_longptr(long *__capability *ptr, __uintcap_t value) {
   return __sync_fetch_and_add(ptr, value);
 }
 
 // HYBRID-LABEL: define {{[^@]+}}@test_fetch_add_longptr_and_short
-// HYBRID-SAME: (i64 addrspace(200)** noundef [[PTR:%.*]], i16 noundef signext [[VALUE:%.*]]) #[[ATTR0]] {
+// HYBRID-SAME: (ptr noundef [[PTR:%.*]], i16 noundef signext [[VALUE:%.*]]) #[[ATTR0]] {
 // HYBRID-NEXT:  entry:
 // HYBRID-NEXT:    [[CONV:%.*]] = sext i16 [[VALUE]] to i64
-// HYBRID-NEXT:    [[TMP0:%.*]] = inttoptr i64 [[CONV]] to i64 addrspace(200)*
-// HYBRID-NEXT:    [[TMP1:%.*]] = atomicrmw add i64 addrspace(200)** [[PTR]], i64 addrspace(200)* [[TMP0]] seq_cst, align 16
-// HYBRID-NEXT:    ret i64 addrspace(200)* [[TMP1]]
+// HYBRID-NEXT:    [[TMP0:%.*]] = inttoptr i64 [[CONV]] to ptr addrspace(200)
+// HYBRID-NEXT:    [[TMP1:%.*]] = atomicrmw add ptr [[PTR]], ptr addrspace(200) [[TMP0]] seq_cst, align 16
+// HYBRID-NEXT:    ret ptr addrspace(200) [[TMP1]]
 //
 // PURECAP-LABEL: define {{[^@]+}}@test_fetch_add_longptr_and_short
-// PURECAP-SAME: (i64 addrspace(200)* addrspace(200)* noundef [[PTR:%.*]], i16 noundef signext [[VALUE:%.*]]) addrspace(200) #[[ATTR0]] {
+// PURECAP-SAME: (ptr addrspace(200) noundef [[PTR:%.*]], i16 noundef signext [[VALUE:%.*]]) addrspace(200) #[[ATTR0]] {
 // PURECAP-NEXT:  entry:
 // PURECAP-NEXT:    [[CONV:%.*]] = sext i16 [[VALUE]] to i64
-// PURECAP-NEXT:    [[TMP0:%.*]] = getelementptr i8, i8 addrspace(200)* null, i64 [[CONV]]
-// PURECAP-NEXT:    [[TMP1:%.*]] = bitcast i8 addrspace(200)* [[TMP0]] to i64 addrspace(200)*
-// PURECAP-NEXT:    [[TMP2:%.*]] = atomicrmw add i64 addrspace(200)* addrspace(200)* [[PTR]], i64 addrspace(200)* [[TMP1]] seq_cst, align 16
-// PURECAP-NEXT:    ret i64 addrspace(200)* [[TMP2]]
+// PURECAP-NEXT:    [[TMP0:%.*]] = getelementptr i8, ptr addrspace(200) null, i64 [[CONV]]
+// PURECAP-NEXT:    [[TMP1:%.*]] = atomicrmw add ptr addrspace(200) [[PTR]], ptr addrspace(200) [[TMP0]] seq_cst, align 16
+// PURECAP-NEXT:    ret ptr addrspace(200) [[TMP1]]
 //
 long *__capability test_fetch_add_longptr_and_short(long *__capability *ptr, short value) {
   return __sync_fetch_and_add(ptr, value);
 }
 
 // HYBRID-LABEL: define {{[^@]+}}@test_fetch_add_charptr
-// HYBRID-SAME: (i8 addrspace(200)** noundef [[PTR:%.*]], i8 addrspace(200)* noundef [[VALUE:%.*]]) #[[ATTR0]] {
+// HYBRID-SAME: (ptr noundef [[PTR:%.*]], ptr addrspace(200) noundef [[VALUE:%.*]]) #[[ATTR0]] {
 // HYBRID-NEXT:  entry:
-// HYBRID-NEXT:    [[TMP0:%.*]] = atomicrmw add i8 addrspace(200)** [[PTR]], i8 addrspace(200)* [[VALUE]] seq_cst, align 16
-// HYBRID-NEXT:    ret i8 addrspace(200)* [[TMP0]]
+// HYBRID-NEXT:    [[TMP0:%.*]] = atomicrmw add ptr [[PTR]], ptr addrspace(200) [[VALUE]] seq_cst, align 16
+// HYBRID-NEXT:    ret ptr addrspace(200) [[TMP0]]
 //
 // PURECAP-LABEL: define {{[^@]+}}@test_fetch_add_charptr
-// PURECAP-SAME: (i8 addrspace(200)* addrspace(200)* noundef [[PTR:%.*]], i8 addrspace(200)* noundef [[VALUE:%.*]]) addrspace(200) #[[ATTR0]] {
+// PURECAP-SAME: (ptr addrspace(200) noundef [[PTR:%.*]], ptr addrspace(200) noundef [[VALUE:%.*]]) addrspace(200) #[[ATTR0]] {
 // PURECAP-NEXT:  entry:
-// PURECAP-NEXT:    [[TMP0:%.*]] = atomicrmw add i8 addrspace(200)* addrspace(200)* [[PTR]], i8 addrspace(200)* [[VALUE]] seq_cst, align 16
-// PURECAP-NEXT:    ret i8 addrspace(200)* [[TMP0]]
+// PURECAP-NEXT:    [[TMP0:%.*]] = atomicrmw add ptr addrspace(200) [[PTR]], ptr addrspace(200) [[VALUE]] seq_cst, align 16
+// PURECAP-NEXT:    ret ptr addrspace(200) [[TMP0]]
 //
 char *__capability test_fetch_add_charptr(char *__capability *ptr, __uintcap_t value) {
   return __sync_fetch_and_add(ptr, value);
 }
 
 // HYBRID-LABEL: define {{[^@]+}}@test_fetch_add_charptr_and_short
-// HYBRID-SAME: (i8 addrspace(200)** noundef [[PTR:%.*]], i16 noundef signext [[VALUE:%.*]]) #[[ATTR0]] {
+// HYBRID-SAME: (ptr noundef [[PTR:%.*]], i16 noundef signext [[VALUE:%.*]]) #[[ATTR0]] {
 // HYBRID-NEXT:  entry:
 // HYBRID-NEXT:    [[CONV:%.*]] = sext i16 [[VALUE]] to i64
-// HYBRID-NEXT:    [[TMP0:%.*]] = inttoptr i64 [[CONV]] to i8 addrspace(200)*
-// HYBRID-NEXT:    [[TMP1:%.*]] = atomicrmw add i8 addrspace(200)** [[PTR]], i8 addrspace(200)* [[TMP0]] seq_cst, align 16
-// HYBRID-NEXT:    ret i8 addrspace(200)* [[TMP1]]
+// HYBRID-NEXT:    [[TMP0:%.*]] = inttoptr i64 [[CONV]] to ptr addrspace(200)
+// HYBRID-NEXT:    [[TMP1:%.*]] = atomicrmw add ptr [[PTR]], ptr addrspace(200) [[TMP0]] seq_cst, align 16
+// HYBRID-NEXT:    ret ptr addrspace(200) [[TMP1]]
 //
 // PURECAP-LABEL: define {{[^@]+}}@test_fetch_add_charptr_and_short
-// PURECAP-SAME: (i8 addrspace(200)* addrspace(200)* noundef [[PTR:%.*]], i16 noundef signext [[VALUE:%.*]]) addrspace(200) #[[ATTR0]] {
+// PURECAP-SAME: (ptr addrspace(200) noundef [[PTR:%.*]], i16 noundef signext [[VALUE:%.*]]) addrspace(200) #[[ATTR0]] {
 // PURECAP-NEXT:  entry:
 // PURECAP-NEXT:    [[CONV:%.*]] = sext i16 [[VALUE]] to i64
-// PURECAP-NEXT:    [[TMP0:%.*]] = getelementptr i8, i8 addrspace(200)* null, i64 [[CONV]]
-// PURECAP-NEXT:    [[TMP1:%.*]] = atomicrmw add i8 addrspace(200)* addrspace(200)* [[PTR]], i8 addrspace(200)* [[TMP0]] seq_cst, align 16
-// PURECAP-NEXT:    ret i8 addrspace(200)* [[TMP1]]
+// PURECAP-NEXT:    [[TMP0:%.*]] = getelementptr i8, ptr addrspace(200) null, i64 [[CONV]]
+// PURECAP-NEXT:    [[TMP1:%.*]] = atomicrmw add ptr addrspace(200) [[PTR]], ptr addrspace(200) [[TMP0]] seq_cst, align 16
+// PURECAP-NEXT:    ret ptr addrspace(200) [[TMP1]]
 //
 char *__capability test_fetch_add_charptr_and_short(char *__capability *ptr, short value) {
   return __sync_fetch_and_add(ptr, value);
 }
 
 // HYBRID-LABEL: define {{[^@]+}}@test_fetch_sub_uintcap
-// HYBRID-SAME: (i8 addrspace(200)** noundef [[PTR:%.*]], i8 addrspace(200)* noundef [[VALUE:%.*]]) #[[ATTR0]] {
+// HYBRID-SAME: (ptr noundef [[PTR:%.*]], ptr addrspace(200) noundef [[VALUE:%.*]]) #[[ATTR0]] {
 // HYBRID-NEXT:  entry:
-// HYBRID-NEXT:    [[TMP0:%.*]] = atomicrmw sub i8 addrspace(200)** [[PTR]], i8 addrspace(200)* [[VALUE]] seq_cst, align 16
-// HYBRID-NEXT:    ret i8 addrspace(200)* [[TMP0]]
+// HYBRID-NEXT:    [[TMP0:%.*]] = atomicrmw sub ptr [[PTR]], ptr addrspace(200) [[VALUE]] seq_cst, align 16
+// HYBRID-NEXT:    ret ptr addrspace(200) [[TMP0]]
 //
 // PURECAP-LABEL: define {{[^@]+}}@test_fetch_sub_uintcap
-// PURECAP-SAME: (i8 addrspace(200)* addrspace(200)* noundef [[PTR:%.*]], i8 addrspace(200)* noundef [[VALUE:%.*]]) addrspace(200) #[[ATTR0]] {
+// PURECAP-SAME: (ptr addrspace(200) noundef [[PTR:%.*]], ptr addrspace(200) noundef [[VALUE:%.*]]) addrspace(200) #[[ATTR0]] {
 // PURECAP-NEXT:  entry:
-// PURECAP-NEXT:    [[TMP0:%.*]] = atomicrmw sub i8 addrspace(200)* addrspace(200)* [[PTR]], i8 addrspace(200)* [[VALUE]] seq_cst, align 16
-// PURECAP-NEXT:    ret i8 addrspace(200)* [[TMP0]]
+// PURECAP-NEXT:    [[TMP0:%.*]] = atomicrmw sub ptr addrspace(200) [[PTR]], ptr addrspace(200) [[VALUE]] seq_cst, align 16
+// PURECAP-NEXT:    ret ptr addrspace(200) [[TMP0]]
 //
 __uintcap_t test_fetch_sub_uintcap(__uintcap_t *ptr, __uintcap_t value) {
   return __sync_fetch_and_sub(ptr, value);
 }
 
 // HYBRID-LABEL: define {{[^@]+}}@test_fetch_sub_longptr
-// HYBRID-SAME: (i64 addrspace(200)** noundef [[PTR:%.*]], i8 addrspace(200)* noundef [[VALUE:%.*]]) #[[ATTR0]] {
+// HYBRID-SAME: (ptr noundef [[PTR:%.*]], ptr addrspace(200) noundef [[VALUE:%.*]]) #[[ATTR0]] {
 // HYBRID-NEXT:  entry:
-// HYBRID-NEXT:    [[TMP0:%.*]] = bitcast i8 addrspace(200)* [[VALUE]] to i64 addrspace(200)*
-// HYBRID-NEXT:    [[TMP1:%.*]] = atomicrmw sub i64 addrspace(200)** [[PTR]], i64 addrspace(200)* [[TMP0]] seq_cst, align 16
-// HYBRID-NEXT:    ret i64 addrspace(200)* [[TMP1]]
+// HYBRID-NEXT:    [[TMP0:%.*]] = atomicrmw sub ptr [[PTR]], ptr addrspace(200) [[VALUE]] seq_cst, align 16
+// HYBRID-NEXT:    ret ptr addrspace(200) [[TMP0]]
 //
 // PURECAP-LABEL: define {{[^@]+}}@test_fetch_sub_longptr
-// PURECAP-SAME: (i64 addrspace(200)* addrspace(200)* noundef [[PTR:%.*]], i8 addrspace(200)* noundef [[VALUE:%.*]]) addrspace(200) #[[ATTR0]] {
+// PURECAP-SAME: (ptr addrspace(200) noundef [[PTR:%.*]], ptr addrspace(200) noundef [[VALUE:%.*]]) addrspace(200) #[[ATTR0]] {
 // PURECAP-NEXT:  entry:
-// PURECAP-NEXT:    [[TMP0:%.*]] = bitcast i8 addrspace(200)* [[VALUE]] to i64 addrspace(200)*
-// PURECAP-NEXT:    [[TMP1:%.*]] = atomicrmw sub i64 addrspace(200)* addrspace(200)* [[PTR]], i64 addrspace(200)* [[TMP0]] seq_cst, align 16
-// PURECAP-NEXT:    ret i64 addrspace(200)* [[TMP1]]
+// PURECAP-NEXT:    [[TMP0:%.*]] = atomicrmw sub ptr addrspace(200) [[PTR]], ptr addrspace(200) [[VALUE]] seq_cst, align 16
+// PURECAP-NEXT:    ret ptr addrspace(200) [[TMP0]]
 //
 long *__capability test_fetch_sub_longptr(long *__capability *ptr, __uintcap_t value) {
   return __sync_fetch_and_sub(ptr, value);
 }
 
 // HYBRID-LABEL: define {{[^@]+}}@test_fetch_sub_longptr_and_short
-// HYBRID-SAME: (i64 addrspace(200)** noundef [[PTR:%.*]], i16 noundef signext [[VALUE:%.*]]) #[[ATTR0]] {
+// HYBRID-SAME: (ptr noundef [[PTR:%.*]], i16 noundef signext [[VALUE:%.*]]) #[[ATTR0]] {
 // HYBRID-NEXT:  entry:
 // HYBRID-NEXT:    [[CONV:%.*]] = sext i16 [[VALUE]] to i64
-// HYBRID-NEXT:    [[TMP0:%.*]] = inttoptr i64 [[CONV]] to i64 addrspace(200)*
-// HYBRID-NEXT:    [[TMP1:%.*]] = atomicrmw sub i64 addrspace(200)** [[PTR]], i64 addrspace(200)* [[TMP0]] seq_cst, align 16
-// HYBRID-NEXT:    ret i64 addrspace(200)* [[TMP1]]
+// HYBRID-NEXT:    [[TMP0:%.*]] = inttoptr i64 [[CONV]] to ptr addrspace(200)
+// HYBRID-NEXT:    [[TMP1:%.*]] = atomicrmw sub ptr [[PTR]], ptr addrspace(200) [[TMP0]] seq_cst, align 16
+// HYBRID-NEXT:    ret ptr addrspace(200) [[TMP1]]
 //
 // PURECAP-LABEL: define {{[^@]+}}@test_fetch_sub_longptr_and_short
-// PURECAP-SAME: (i64 addrspace(200)* addrspace(200)* noundef [[PTR:%.*]], i16 noundef signext [[VALUE:%.*]]) addrspace(200) #[[ATTR0]] {
+// PURECAP-SAME: (ptr addrspace(200) noundef [[PTR:%.*]], i16 noundef signext [[VALUE:%.*]]) addrspace(200) #[[ATTR0]] {
 // PURECAP-NEXT:  entry:
 // PURECAP-NEXT:    [[CONV:%.*]] = sext i16 [[VALUE]] to i64
-// PURECAP-NEXT:    [[TMP0:%.*]] = getelementptr i8, i8 addrspace(200)* null, i64 [[CONV]]
-// PURECAP-NEXT:    [[TMP1:%.*]] = bitcast i8 addrspace(200)* [[TMP0]] to i64 addrspace(200)*
-// PURECAP-NEXT:    [[TMP2:%.*]] = atomicrmw sub i64 addrspace(200)* addrspace(200)* [[PTR]], i64 addrspace(200)* [[TMP1]] seq_cst, align 16
-// PURECAP-NEXT:    ret i64 addrspace(200)* [[TMP2]]
+// PURECAP-NEXT:    [[TMP0:%.*]] = getelementptr i8, ptr addrspace(200) null, i64 [[CONV]]
+// PURECAP-NEXT:    [[TMP1:%.*]] = atomicrmw sub ptr addrspace(200) [[PTR]], ptr addrspace(200) [[TMP0]] seq_cst, align 16
+// PURECAP-NEXT:    ret ptr addrspace(200) [[TMP1]]
 //
 long *__capability test_fetch_sub_longptr_and_short(long *__capability *ptr, short value) {
   return __sync_fetch_and_sub(ptr, value);
 }
 
 // HYBRID-LABEL: define {{[^@]+}}@test_fetch_sub_charptr
-// HYBRID-SAME: (i8 addrspace(200)** noundef [[PTR:%.*]], i8 addrspace(200)* noundef [[VALUE:%.*]]) #[[ATTR0]] {
+// HYBRID-SAME: (ptr noundef [[PTR:%.*]], ptr addrspace(200) noundef [[VALUE:%.*]]) #[[ATTR0]] {
 // HYBRID-NEXT:  entry:
-// HYBRID-NEXT:    [[TMP0:%.*]] = atomicrmw sub i8 addrspace(200)** [[PTR]], i8 addrspace(200)* [[VALUE]] seq_cst, align 16
-// HYBRID-NEXT:    ret i8 addrspace(200)* [[TMP0]]
+// HYBRID-NEXT:    [[TMP0:%.*]] = atomicrmw sub ptr [[PTR]], ptr addrspace(200) [[VALUE]] seq_cst, align 16
+// HYBRID-NEXT:    ret ptr addrspace(200) [[TMP0]]
 //
 // PURECAP-LABEL: define {{[^@]+}}@test_fetch_sub_charptr
-// PURECAP-SAME: (i8 addrspace(200)* addrspace(200)* noundef [[PTR:%.*]], i8 addrspace(200)* noundef [[VALUE:%.*]]) addrspace(200) #[[ATTR0]] {
+// PURECAP-SAME: (ptr addrspace(200) noundef [[PTR:%.*]], ptr addrspace(200) noundef [[VALUE:%.*]]) addrspace(200) #[[ATTR0]] {
 // PURECAP-NEXT:  entry:
-// PURECAP-NEXT:    [[TMP0:%.*]] = atomicrmw sub i8 addrspace(200)* addrspace(200)* [[PTR]], i8 addrspace(200)* [[VALUE]] seq_cst, align 16
-// PURECAP-NEXT:    ret i8 addrspace(200)* [[TMP0]]
+// PURECAP-NEXT:    [[TMP0:%.*]] = atomicrmw sub ptr addrspace(200) [[PTR]], ptr addrspace(200) [[VALUE]] seq_cst, align 16
+// PURECAP-NEXT:    ret ptr addrspace(200) [[TMP0]]
 //
 char *__capability test_fetch_sub_charptr(char *__capability *ptr, __uintcap_t value) {
   return __sync_fetch_and_sub(ptr, value);
 }
 
 // HYBRID-LABEL: define {{[^@]+}}@test_fetch_sub_charptr_and_short
-// HYBRID-SAME: (i8 addrspace(200)** noundef [[PTR:%.*]], i16 noundef signext [[VALUE:%.*]]) #[[ATTR0]] {
+// HYBRID-SAME: (ptr noundef [[PTR:%.*]], i16 noundef signext [[VALUE:%.*]]) #[[ATTR0]] {
 // HYBRID-NEXT:  entry:
 // HYBRID-NEXT:    [[CONV:%.*]] = sext i16 [[VALUE]] to i64
-// HYBRID-NEXT:    [[TMP0:%.*]] = inttoptr i64 [[CONV]] to i8 addrspace(200)*
-// HYBRID-NEXT:    [[TMP1:%.*]] = atomicrmw sub i8 addrspace(200)** [[PTR]], i8 addrspace(200)* [[TMP0]] seq_cst, align 16
-// HYBRID-NEXT:    ret i8 addrspace(200)* [[TMP1]]
+// HYBRID-NEXT:    [[TMP0:%.*]] = inttoptr i64 [[CONV]] to ptr addrspace(200)
+// HYBRID-NEXT:    [[TMP1:%.*]] = atomicrmw sub ptr [[PTR]], ptr addrspace(200) [[TMP0]] seq_cst, align 16
+// HYBRID-NEXT:    ret ptr addrspace(200) [[TMP1]]
 //
 // PURECAP-LABEL: define {{[^@]+}}@test_fetch_sub_charptr_and_short
-// PURECAP-SAME: (i8 addrspace(200)* addrspace(200)* noundef [[PTR:%.*]], i16 noundef signext [[VALUE:%.*]]) addrspace(200) #[[ATTR0]] {
+// PURECAP-SAME: (ptr addrspace(200) noundef [[PTR:%.*]], i16 noundef signext [[VALUE:%.*]]) addrspace(200) #[[ATTR0]] {
 // PURECAP-NEXT:  entry:
 // PURECAP-NEXT:    [[CONV:%.*]] = sext i16 [[VALUE]] to i64
-// PURECAP-NEXT:    [[TMP0:%.*]] = getelementptr i8, i8 addrspace(200)* null, i64 [[CONV]]
-// PURECAP-NEXT:    [[TMP1:%.*]] = atomicrmw sub i8 addrspace(200)* addrspace(200)* [[PTR]], i8 addrspace(200)* [[TMP0]] seq_cst, align 16
-// PURECAP-NEXT:    ret i8 addrspace(200)* [[TMP1]]
+// PURECAP-NEXT:    [[TMP0:%.*]] = getelementptr i8, ptr addrspace(200) null, i64 [[CONV]]
+// PURECAP-NEXT:    [[TMP1:%.*]] = atomicrmw sub ptr addrspace(200) [[PTR]], ptr addrspace(200) [[TMP0]] seq_cst, align 16
+// PURECAP-NEXT:    ret ptr addrspace(200) [[TMP1]]
 //
 char *__capability test_fetch_sub_charptr_and_short(char *__capability *ptr, short value) {
   return __sync_fetch_and_sub(ptr, value);
 }
 
 // HYBRID-LABEL: define {{[^@]+}}@test_fetch_and_uintcap
-// HYBRID-SAME: (i8 addrspace(200)** noundef [[PTR:%.*]], i8 addrspace(200)* noundef [[VALUE:%.*]]) #[[ATTR0]] {
+// HYBRID-SAME: (ptr noundef [[PTR:%.*]], ptr addrspace(200) noundef [[VALUE:%.*]]) #[[ATTR0]] {
 // HYBRID-NEXT:  entry:
-// HYBRID-NEXT:    [[TMP0:%.*]] = atomicrmw and i8 addrspace(200)** [[PTR]], i8 addrspace(200)* [[VALUE]] seq_cst, align 16
-// HYBRID-NEXT:    ret i8 addrspace(200)* [[TMP0]]
+// HYBRID-NEXT:    [[TMP0:%.*]] = atomicrmw and ptr [[PTR]], ptr addrspace(200) [[VALUE]] seq_cst, align 16
+// HYBRID-NEXT:    ret ptr addrspace(200) [[TMP0]]
 //
 // PURECAP-LABEL: define {{[^@]+}}@test_fetch_and_uintcap
-// PURECAP-SAME: (i8 addrspace(200)* addrspace(200)* noundef [[PTR:%.*]], i8 addrspace(200)* noundef [[VALUE:%.*]]) addrspace(200) #[[ATTR0]] {
+// PURECAP-SAME: (ptr addrspace(200) noundef [[PTR:%.*]], ptr addrspace(200) noundef [[VALUE:%.*]]) addrspace(200) #[[ATTR0]] {
 // PURECAP-NEXT:  entry:
-// PURECAP-NEXT:    [[TMP0:%.*]] = atomicrmw and i8 addrspace(200)* addrspace(200)* [[PTR]], i8 addrspace(200)* [[VALUE]] seq_cst, align 16
-// PURECAP-NEXT:    ret i8 addrspace(200)* [[TMP0]]
+// PURECAP-NEXT:    [[TMP0:%.*]] = atomicrmw and ptr addrspace(200) [[PTR]], ptr addrspace(200) [[VALUE]] seq_cst, align 16
+// PURECAP-NEXT:    ret ptr addrspace(200) [[TMP0]]
 //
 __uintcap_t test_fetch_and_uintcap(__uintcap_t *ptr, __uintcap_t value) {
   return __sync_fetch_and_and(ptr, value);
 }
 
 // HYBRID-LABEL: define {{[^@]+}}@test_fetch_or_uintcap
-// HYBRID-SAME: (i8 addrspace(200)** noundef [[PTR:%.*]], i8 addrspace(200)* noundef [[VALUE:%.*]]) #[[ATTR0]] {
+// HYBRID-SAME: (ptr noundef [[PTR:%.*]], ptr addrspace(200) noundef [[VALUE:%.*]]) #[[ATTR0]] {
 // HYBRID-NEXT:  entry:
-// HYBRID-NEXT:    [[TMP0:%.*]] = atomicrmw or i8 addrspace(200)** [[PTR]], i8 addrspace(200)* [[VALUE]] seq_cst, align 16
-// HYBRID-NEXT:    ret i8 addrspace(200)* [[TMP0]]
+// HYBRID-NEXT:    [[TMP0:%.*]] = atomicrmw or ptr [[PTR]], ptr addrspace(200) [[VALUE]] seq_cst, align 16
+// HYBRID-NEXT:    ret ptr addrspace(200) [[TMP0]]
 //
 // PURECAP-LABEL: define {{[^@]+}}@test_fetch_or_uintcap
-// PURECAP-SAME: (i8 addrspace(200)* addrspace(200)* noundef [[PTR:%.*]], i8 addrspace(200)* noundef [[VALUE:%.*]]) addrspace(200) #[[ATTR0]] {
+// PURECAP-SAME: (ptr addrspace(200) noundef [[PTR:%.*]], ptr addrspace(200) noundef [[VALUE:%.*]]) addrspace(200) #[[ATTR0]] {
 // PURECAP-NEXT:  entry:
-// PURECAP-NEXT:    [[TMP0:%.*]] = atomicrmw or i8 addrspace(200)* addrspace(200)* [[PTR]], i8 addrspace(200)* [[VALUE]] seq_cst, align 16
-// PURECAP-NEXT:    ret i8 addrspace(200)* [[TMP0]]
+// PURECAP-NEXT:    [[TMP0:%.*]] = atomicrmw or ptr addrspace(200) [[PTR]], ptr addrspace(200) [[VALUE]] seq_cst, align 16
+// PURECAP-NEXT:    ret ptr addrspace(200) [[TMP0]]
 //
 __uintcap_t test_fetch_or_uintcap(__uintcap_t *ptr, __uintcap_t value) {
   return __sync_fetch_and_or(ptr, value);
 }
 
 // HYBRID-LABEL: define {{[^@]+}}@test_fetch_xor_uintcap
-// HYBRID-SAME: (i8 addrspace(200)** noundef [[PTR:%.*]], i8 addrspace(200)* noundef [[VALUE:%.*]]) #[[ATTR0]] {
+// HYBRID-SAME: (ptr noundef [[PTR:%.*]], ptr addrspace(200) noundef [[VALUE:%.*]]) #[[ATTR0]] {
 // HYBRID-NEXT:  entry:
-// HYBRID-NEXT:    [[TMP0:%.*]] = atomicrmw xor i8 addrspace(200)** [[PTR]], i8 addrspace(200)* [[VALUE]] seq_cst, align 16
-// HYBRID-NEXT:    ret i8 addrspace(200)* [[TMP0]]
+// HYBRID-NEXT:    [[TMP0:%.*]] = atomicrmw xor ptr [[PTR]], ptr addrspace(200) [[VALUE]] seq_cst, align 16
+// HYBRID-NEXT:    ret ptr addrspace(200) [[TMP0]]
 //
 // PURECAP-LABEL: define {{[^@]+}}@test_fetch_xor_uintcap
-// PURECAP-SAME: (i8 addrspace(200)* addrspace(200)* noundef [[PTR:%.*]], i8 addrspace(200)* noundef [[VALUE:%.*]]) addrspace(200) #[[ATTR0]] {
+// PURECAP-SAME: (ptr addrspace(200) noundef [[PTR:%.*]], ptr addrspace(200) noundef [[VALUE:%.*]]) addrspace(200) #[[ATTR0]] {
 // PURECAP-NEXT:  entry:
-// PURECAP-NEXT:    [[TMP0:%.*]] = atomicrmw xor i8 addrspace(200)* addrspace(200)* [[PTR]], i8 addrspace(200)* [[VALUE]] seq_cst, align 16
-// PURECAP-NEXT:    ret i8 addrspace(200)* [[TMP0]]
+// PURECAP-NEXT:    [[TMP0:%.*]] = atomicrmw xor ptr addrspace(200) [[PTR]], ptr addrspace(200) [[VALUE]] seq_cst, align 16
+// PURECAP-NEXT:    ret ptr addrspace(200) [[TMP0]]
 //
 __uintcap_t test_fetch_xor_uintcap(__uintcap_t *ptr, __uintcap_t value) {
   return __sync_fetch_and_xor(ptr, value);
 }
 
 // HYBRID-LABEL: define {{[^@]+}}@test_fetch_nand_uintcap
-// HYBRID-SAME: (i8 addrspace(200)** noundef [[PTR:%.*]], i8 addrspace(200)* noundef [[VALUE:%.*]]) #[[ATTR0]] {
+// HYBRID-SAME: (ptr noundef [[PTR:%.*]], ptr addrspace(200) noundef [[VALUE:%.*]]) #[[ATTR0]] {
 // HYBRID-NEXT:  entry:
-// HYBRID-NEXT:    [[TMP0:%.*]] = atomicrmw nand i8 addrspace(200)** [[PTR]], i8 addrspace(200)* [[VALUE]] seq_cst, align 16
-// HYBRID-NEXT:    ret i8 addrspace(200)* [[TMP0]]
+// HYBRID-NEXT:    [[TMP0:%.*]] = atomicrmw nand ptr [[PTR]], ptr addrspace(200) [[VALUE]] seq_cst, align 16
+// HYBRID-NEXT:    ret ptr addrspace(200) [[TMP0]]
 //
 // PURECAP-LABEL: define {{[^@]+}}@test_fetch_nand_uintcap
-// PURECAP-SAME: (i8 addrspace(200)* addrspace(200)* noundef [[PTR:%.*]], i8 addrspace(200)* noundef [[VALUE:%.*]]) addrspace(200) #[[ATTR0]] {
+// PURECAP-SAME: (ptr addrspace(200) noundef [[PTR:%.*]], ptr addrspace(200) noundef [[VALUE:%.*]]) addrspace(200) #[[ATTR0]] {
 // PURECAP-NEXT:  entry:
-// PURECAP-NEXT:    [[TMP0:%.*]] = atomicrmw nand i8 addrspace(200)* addrspace(200)* [[PTR]], i8 addrspace(200)* [[VALUE]] seq_cst, align 16
-// PURECAP-NEXT:    ret i8 addrspace(200)* [[TMP0]]
+// PURECAP-NEXT:    [[TMP0:%.*]] = atomicrmw nand ptr addrspace(200) [[PTR]], ptr addrspace(200) [[VALUE]] seq_cst, align 16
+// PURECAP-NEXT:    ret ptr addrspace(200) [[TMP0]]
 //
 __uintcap_t test_fetch_nand_uintcap(__uintcap_t *ptr, __uintcap_t value) {
   return __sync_fetch_and_nand(ptr, value);
 }
 
 // HYBRID-LABEL: define {{[^@]+}}@test_add_fetch_uintcap
-// HYBRID-SAME: (i8 addrspace(200)** noundef [[PTR:%.*]], i8 addrspace(200)* noundef [[VALUE:%.*]]) #[[ATTR0]] {
+// HYBRID-SAME: (ptr noundef [[PTR:%.*]], ptr addrspace(200) noundef [[VALUE:%.*]]) #[[ATTR0]] {
 // HYBRID-NEXT:  entry:
-// HYBRID-NEXT:    [[TMP0:%.*]] = atomicrmw add i8 addrspace(200)** [[PTR]], i8 addrspace(200)* [[VALUE]] seq_cst, align 16
-// HYBRID-NEXT:    [[TMP1:%.*]] = call i64 @llvm.cheri.cap.address.get.i64(i8 addrspace(200)* [[TMP0]])
-// HYBRID-NEXT:    [[TMP2:%.*]] = call i64 @llvm.cheri.cap.address.get.i64(i8 addrspace(200)* [[VALUE]])
+// HYBRID-NEXT:    [[TMP0:%.*]] = atomicrmw add ptr [[PTR]], ptr addrspace(200) [[VALUE]] seq_cst, align 16
+// HYBRID-NEXT:    [[TMP1:%.*]] = call i64 @llvm.cheri.cap.address.get.i64(ptr addrspace(200) [[TMP0]])
+// HYBRID-NEXT:    [[TMP2:%.*]] = call i64 @llvm.cheri.cap.address.get.i64(ptr addrspace(200) [[VALUE]])
 // HYBRID-NEXT:    [[TMP3:%.*]] = add i64 [[TMP1]], [[TMP2]]
-// HYBRID-NEXT:    [[TMP4:%.*]] = call i8 addrspace(200)* @llvm.cheri.cap.address.set.i64(i8 addrspace(200)* [[TMP0]], i64 [[TMP3]])
-// HYBRID-NEXT:    ret i8 addrspace(200)* [[TMP4]]
+// HYBRID-NEXT:    [[TMP4:%.*]] = call ptr addrspace(200) @llvm.cheri.cap.address.set.i64(ptr addrspace(200) [[TMP0]], i64 [[TMP3]])
+// HYBRID-NEXT:    ret ptr addrspace(200) [[TMP4]]
 //
 // PURECAP-LABEL: define {{[^@]+}}@test_add_fetch_uintcap
-// PURECAP-SAME: (i8 addrspace(200)* addrspace(200)* noundef [[PTR:%.*]], i8 addrspace(200)* noundef [[VALUE:%.*]]) addrspace(200) #[[ATTR0]] {
+// PURECAP-SAME: (ptr addrspace(200) noundef [[PTR:%.*]], ptr addrspace(200) noundef [[VALUE:%.*]]) addrspace(200) #[[ATTR0]] {
 // PURECAP-NEXT:  entry:
-// PURECAP-NEXT:    [[TMP0:%.*]] = atomicrmw add i8 addrspace(200)* addrspace(200)* [[PTR]], i8 addrspace(200)* [[VALUE]] seq_cst, align 16
-// PURECAP-NEXT:    [[TMP1:%.*]] = call i64 @llvm.cheri.cap.address.get.i64(i8 addrspace(200)* [[TMP0]])
-// PURECAP-NEXT:    [[TMP2:%.*]] = call i64 @llvm.cheri.cap.address.get.i64(i8 addrspace(200)* [[VALUE]])
+// PURECAP-NEXT:    [[TMP0:%.*]] = atomicrmw add ptr addrspace(200) [[PTR]], ptr addrspace(200) [[VALUE]] seq_cst, align 16
+// PURECAP-NEXT:    [[TMP1:%.*]] = call i64 @llvm.cheri.cap.address.get.i64(ptr addrspace(200) [[TMP0]])
+// PURECAP-NEXT:    [[TMP2:%.*]] = call i64 @llvm.cheri.cap.address.get.i64(ptr addrspace(200) [[VALUE]])
 // PURECAP-NEXT:    [[TMP3:%.*]] = add i64 [[TMP1]], [[TMP2]]
-// PURECAP-NEXT:    [[TMP4:%.*]] = call i8 addrspace(200)* @llvm.cheri.cap.address.set.i64(i8 addrspace(200)* [[TMP0]], i64 [[TMP3]])
-// PURECAP-NEXT:    ret i8 addrspace(200)* [[TMP4]]
+// PURECAP-NEXT:    [[TMP4:%.*]] = call ptr addrspace(200) @llvm.cheri.cap.address.set.i64(ptr addrspace(200) [[TMP0]], i64 [[TMP3]])
+// PURECAP-NEXT:    ret ptr addrspace(200) [[TMP4]]
 //
 __uintcap_t test_add_fetch_uintcap(__uintcap_t *ptr, __uintcap_t value) {
   return __sync_add_and_fetch(ptr, value);
 }
 
 // HYBRID-LABEL: define {{[^@]+}}@test_add_fetch_longptr
-// HYBRID-SAME: (i64 addrspace(200)** noundef [[PTR:%.*]], i8 addrspace(200)* noundef [[VALUE:%.*]]) #[[ATTR0]] {
+// HYBRID-SAME: (ptr noundef [[PTR:%.*]], ptr addrspace(200) noundef [[VALUE:%.*]]) #[[ATTR0]] {
 // HYBRID-NEXT:  entry:
-// HYBRID-NEXT:    [[TMP0:%.*]] = bitcast i8 addrspace(200)* [[VALUE]] to i64 addrspace(200)*
-// HYBRID-NEXT:    [[TMP1:%.*]] = atomicrmw add i64 addrspace(200)** [[PTR]], i64 addrspace(200)* [[TMP0]] seq_cst, align 16
-// HYBRID-NEXT:    [[TMP2:%.*]] = bitcast i64 addrspace(200)* [[TMP1]] to i8 addrspace(200)*
-// HYBRID-NEXT:    [[TMP3:%.*]] = call i64 @llvm.cheri.cap.address.get.i64(i8 addrspace(200)* [[TMP2]])
-// HYBRID-NEXT:    [[TMP4:%.*]] = bitcast i64 addrspace(200)* [[TMP0]] to i8 addrspace(200)*
-// HYBRID-NEXT:    [[TMP5:%.*]] = call i64 @llvm.cheri.cap.address.get.i64(i8 addrspace(200)* [[TMP4]])
-// HYBRID-NEXT:    [[TMP6:%.*]] = add i64 [[TMP3]], [[TMP5]]
-// HYBRID-NEXT:    [[TMP7:%.*]] = bitcast i64 addrspace(200)* [[TMP1]] to i8 addrspace(200)*
-// HYBRID-NEXT:    [[TMP8:%.*]] = call i8 addrspace(200)* @llvm.cheri.cap.address.set.i64(i8 addrspace(200)* [[TMP7]], i64 [[TMP6]])
-// HYBRID-NEXT:    [[TMP9:%.*]] = bitcast i8 addrspace(200)* [[TMP8]] to i64 addrspace(200)*
-// HYBRID-NEXT:    ret i64 addrspace(200)* [[TMP9]]
+// HYBRID-NEXT:    [[TMP0:%.*]] = atomicrmw add ptr [[PTR]], ptr addrspace(200) [[VALUE]] seq_cst, align 16
+// HYBRID-NEXT:    [[TMP1:%.*]] = call i64 @llvm.cheri.cap.address.get.i64(ptr addrspace(200) [[TMP0]])
+// HYBRID-NEXT:    [[TMP2:%.*]] = call i64 @llvm.cheri.cap.address.get.i64(ptr addrspace(200) [[VALUE]])
+// HYBRID-NEXT:    [[TMP3:%.*]] = add i64 [[TMP1]], [[TMP2]]
+// HYBRID-NEXT:    [[TMP4:%.*]] = call ptr addrspace(200) @llvm.cheri.cap.address.set.i64(ptr addrspace(200) [[TMP0]], i64 [[TMP3]])
+// HYBRID-NEXT:    ret ptr addrspace(200) [[TMP4]]
 //
 // PURECAP-LABEL: define {{[^@]+}}@test_add_fetch_longptr
-// PURECAP-SAME: (i64 addrspace(200)* addrspace(200)* noundef [[PTR:%.*]], i8 addrspace(200)* noundef [[VALUE:%.*]]) addrspace(200) #[[ATTR0]] {
+// PURECAP-SAME: (ptr addrspace(200) noundef [[PTR:%.*]], ptr addrspace(200) noundef [[VALUE:%.*]]) addrspace(200) #[[ATTR0]] {
 // PURECAP-NEXT:  entry:
-// PURECAP-NEXT:    [[TMP0:%.*]] = bitcast i8 addrspace(200)* [[VALUE]] to i64 addrspace(200)*
-// PURECAP-NEXT:    [[TMP1:%.*]] = atomicrmw add i64 addrspace(200)* addrspace(200)* [[PTR]], i64 addrspace(200)* [[TMP0]] seq_cst, align 16
-// PURECAP-NEXT:    [[TMP2:%.*]] = bitcast i64 addrspace(200)* [[TMP1]] to i8 addrspace(200)*
-// PURECAP-NEXT:    [[TMP3:%.*]] = call i64 @llvm.cheri.cap.address.get.i64(i8 addrspace(200)* [[TMP2]])
-// PURECAP-NEXT:    [[TMP4:%.*]] = bitcast i64 addrspace(200)* [[TMP0]] to i8 addrspace(200)*
-// PURECAP-NEXT:    [[TMP5:%.*]] = call i64 @llvm.cheri.cap.address.get.i64(i8 addrspace(200)* [[TMP4]])
-// PURECAP-NEXT:    [[TMP6:%.*]] = add i64 [[TMP3]], [[TMP5]]
-// PURECAP-NEXT:    [[TMP7:%.*]] = bitcast i64 addrspace(200)* [[TMP1]] to i8 addrspace(200)*
-// PURECAP-NEXT:    [[TMP8:%.*]] = call i8 addrspace(200)* @llvm.cheri.cap.address.set.i64(i8 addrspace(200)* [[TMP7]], i64 [[TMP6]])
-// PURECAP-NEXT:    [[TMP9:%.*]] = bitcast i8 addrspace(200)* [[TMP8]] to i64 addrspace(200)*
-// PURECAP-NEXT:    ret i64 addrspace(200)* [[TMP9]]
+// PURECAP-NEXT:    [[TMP0:%.*]] = atomicrmw add ptr addrspace(200) [[PTR]], ptr addrspace(200) [[VALUE]] seq_cst, align 16
+// PURECAP-NEXT:    [[TMP1:%.*]] = call i64 @llvm.cheri.cap.address.get.i64(ptr addrspace(200) [[TMP0]])
+// PURECAP-NEXT:    [[TMP2:%.*]] = call i64 @llvm.cheri.cap.address.get.i64(ptr addrspace(200) [[VALUE]])
+// PURECAP-NEXT:    [[TMP3:%.*]] = add i64 [[TMP1]], [[TMP2]]
+// PURECAP-NEXT:    [[TMP4:%.*]] = call ptr addrspace(200) @llvm.cheri.cap.address.set.i64(ptr addrspace(200) [[TMP0]], i64 [[TMP3]])
+// PURECAP-NEXT:    ret ptr addrspace(200) [[TMP4]]
 //
 long *__capability test_add_fetch_longptr(long *__capability *ptr, __uintcap_t value) {
   return __sync_add_and_fetch(ptr, value);
 }
 
 // HYBRID-LABEL: define {{[^@]+}}@test_add_fetch_longptr_and_short
-// HYBRID-SAME: (i64 addrspace(200)** noundef [[PTR:%.*]], i16 noundef signext [[VALUE:%.*]]) #[[ATTR0]] {
+// HYBRID-SAME: (ptr noundef [[PTR:%.*]], i16 noundef signext [[VALUE:%.*]]) #[[ATTR0]] {
 // HYBRID-NEXT:  entry:
 // HYBRID-NEXT:    [[CONV:%.*]] = sext i16 [[VALUE]] to i64
-// HYBRID-NEXT:    [[TMP0:%.*]] = inttoptr i64 [[CONV]] to i64 addrspace(200)*
-// HYBRID-NEXT:    [[TMP1:%.*]] = atomicrmw add i64 addrspace(200)** [[PTR]], i64 addrspace(200)* [[TMP0]] seq_cst, align 16
-// HYBRID-NEXT:    [[TMP2:%.*]] = bitcast i64 addrspace(200)* [[TMP1]] to i8 addrspace(200)*
-// HYBRID-NEXT:    [[TMP3:%.*]] = call i64 @llvm.cheri.cap.address.get.i64(i8 addrspace(200)* [[TMP2]])
-// HYBRID-NEXT:    [[TMP4:%.*]] = bitcast i64 addrspace(200)* [[TMP0]] to i8 addrspace(200)*
-// HYBRID-NEXT:    [[TMP5:%.*]] = call i64 @llvm.cheri.cap.address.get.i64(i8 addrspace(200)* [[TMP4]])
-// HYBRID-NEXT:    [[TMP6:%.*]] = add i64 [[TMP3]], [[TMP5]]
-// HYBRID-NEXT:    [[TMP7:%.*]] = bitcast i64 addrspace(200)* [[TMP1]] to i8 addrspace(200)*
-// HYBRID-NEXT:    [[TMP8:%.*]] = call i8 addrspace(200)* @llvm.cheri.cap.address.set.i64(i8 addrspace(200)* [[TMP7]], i64 [[TMP6]])
-// HYBRID-NEXT:    [[TMP9:%.*]] = bitcast i8 addrspace(200)* [[TMP8]] to i64 addrspace(200)*
-// HYBRID-NEXT:    ret i64 addrspace(200)* [[TMP9]]
+// HYBRID-NEXT:    [[TMP0:%.*]] = inttoptr i64 [[CONV]] to ptr addrspace(200)
+// HYBRID-NEXT:    [[TMP1:%.*]] = atomicrmw add ptr [[PTR]], ptr addrspace(200) [[TMP0]] seq_cst, align 16
+// HYBRID-NEXT:    [[TMP2:%.*]] = call i64 @llvm.cheri.cap.address.get.i64(ptr addrspace(200) [[TMP1]])
+// HYBRID-NEXT:    [[TMP3:%.*]] = call i64 @llvm.cheri.cap.address.get.i64(ptr addrspace(200) [[TMP0]])
+// HYBRID-NEXT:    [[TMP4:%.*]] = add i64 [[TMP2]], [[TMP3]]
+// HYBRID-NEXT:    [[TMP5:%.*]] = call ptr addrspace(200) @llvm.cheri.cap.address.set.i64(ptr addrspace(200) [[TMP1]], i64 [[TMP4]])
+// HYBRID-NEXT:    ret ptr addrspace(200) [[TMP5]]
 //
 // PURECAP-LABEL: define {{[^@]+}}@test_add_fetch_longptr_and_short
-// PURECAP-SAME: (i64 addrspace(200)* addrspace(200)* noundef [[PTR:%.*]], i16 noundef signext [[VALUE:%.*]]) addrspace(200) #[[ATTR0]] {
+// PURECAP-SAME: (ptr addrspace(200) noundef [[PTR:%.*]], i16 noundef signext [[VALUE:%.*]]) addrspace(200) #[[ATTR0]] {
 // PURECAP-NEXT:  entry:
 // PURECAP-NEXT:    [[CONV:%.*]] = sext i16 [[VALUE]] to i64
-// PURECAP-NEXT:    [[TMP0:%.*]] = getelementptr i8, i8 addrspace(200)* null, i64 [[CONV]]
-// PURECAP-NEXT:    [[TMP1:%.*]] = bitcast i8 addrspace(200)* [[TMP0]] to i64 addrspace(200)*
-// PURECAP-NEXT:    [[TMP2:%.*]] = atomicrmw add i64 addrspace(200)* addrspace(200)* [[PTR]], i64 addrspace(200)* [[TMP1]] seq_cst, align 16
-// PURECAP-NEXT:    [[TMP3:%.*]] = bitcast i64 addrspace(200)* [[TMP2]] to i8 addrspace(200)*
-// PURECAP-NEXT:    [[TMP4:%.*]] = call i64 @llvm.cheri.cap.address.get.i64(i8 addrspace(200)* [[TMP3]])
-// PURECAP-NEXT:    [[TMP5:%.*]] = bitcast i64 addrspace(200)* [[TMP1]] to i8 addrspace(200)*
-// PURECAP-NEXT:    [[TMP6:%.*]] = call i64 @llvm.cheri.cap.address.get.i64(i8 addrspace(200)* [[TMP5]])
-// PURECAP-NEXT:    [[TMP7:%.*]] = add i64 [[TMP4]], [[TMP6]]
-// PURECAP-NEXT:    [[TMP8:%.*]] = bitcast i64 addrspace(200)* [[TMP2]] to i8 addrspace(200)*
-// PURECAP-NEXT:    [[TMP9:%.*]] = call i8 addrspace(200)* @llvm.cheri.cap.address.set.i64(i8 addrspace(200)* [[TMP8]], i64 [[TMP7]])
-// PURECAP-NEXT:    [[TMP10:%.*]] = bitcast i8 addrspace(200)* [[TMP9]] to i64 addrspace(200)*
-// PURECAP-NEXT:    ret i64 addrspace(200)* [[TMP10]]
+// PURECAP-NEXT:    [[TMP0:%.*]] = getelementptr i8, ptr addrspace(200) null, i64 [[CONV]]
+// PURECAP-NEXT:    [[TMP1:%.*]] = atomicrmw add ptr addrspace(200) [[PTR]], ptr addrspace(200) [[TMP0]] seq_cst, align 16
+// PURECAP-NEXT:    [[TMP2:%.*]] = call i64 @llvm.cheri.cap.address.get.i64(ptr addrspace(200) [[TMP1]])
+// PURECAP-NEXT:    [[TMP3:%.*]] = call i64 @llvm.cheri.cap.address.get.i64(ptr addrspace(200) [[TMP0]])
+// PURECAP-NEXT:    [[TMP4:%.*]] = add i64 [[TMP2]], [[TMP3]]
+// PURECAP-NEXT:    [[TMP5:%.*]] = call ptr addrspace(200) @llvm.cheri.cap.address.set.i64(ptr addrspace(200) [[TMP1]], i64 [[TMP4]])
+// PURECAP-NEXT:    ret ptr addrspace(200) [[TMP5]]
 //
 long *__capability test_add_fetch_longptr_and_short(long *__capability *ptr, short value) {
   return __sync_add_and_fetch(ptr, value);
 }
 
 // HYBRID-LABEL: define {{[^@]+}}@test_add_fetch_charptr
-// HYBRID-SAME: (i8 addrspace(200)** noundef [[PTR:%.*]], i8 addrspace(200)* noundef [[VALUE:%.*]]) #[[ATTR0]] {
+// HYBRID-SAME: (ptr noundef [[PTR:%.*]], ptr addrspace(200) noundef [[VALUE:%.*]]) #[[ATTR0]] {
 // HYBRID-NEXT:  entry:
-// HYBRID-NEXT:    [[TMP0:%.*]] = atomicrmw add i8 addrspace(200)** [[PTR]], i8 addrspace(200)* [[VALUE]] seq_cst, align 16
-// HYBRID-NEXT:    [[TMP1:%.*]] = call i64 @llvm.cheri.cap.address.get.i64(i8 addrspace(200)* [[TMP0]])
-// HYBRID-NEXT:    [[TMP2:%.*]] = call i64 @llvm.cheri.cap.address.get.i64(i8 addrspace(200)* [[VALUE]])
+// HYBRID-NEXT:    [[TMP0:%.*]] = atomicrmw add ptr [[PTR]], ptr addrspace(200) [[VALUE]] seq_cst, align 16
+// HYBRID-NEXT:    [[TMP1:%.*]] = call i64 @llvm.cheri.cap.address.get.i64(ptr addrspace(200) [[TMP0]])
+// HYBRID-NEXT:    [[TMP2:%.*]] = call i64 @llvm.cheri.cap.address.get.i64(ptr addrspace(200) [[VALUE]])
 // HYBRID-NEXT:    [[TMP3:%.*]] = add i64 [[TMP1]], [[TMP2]]
-// HYBRID-NEXT:    [[TMP4:%.*]] = call i8 addrspace(200)* @llvm.cheri.cap.address.set.i64(i8 addrspace(200)* [[TMP0]], i64 [[TMP3]])
-// HYBRID-NEXT:    ret i8 addrspace(200)* [[TMP4]]
+// HYBRID-NEXT:    [[TMP4:%.*]] = call ptr addrspace(200) @llvm.cheri.cap.address.set.i64(ptr addrspace(200) [[TMP0]], i64 [[TMP3]])
+// HYBRID-NEXT:    ret ptr addrspace(200) [[TMP4]]
 //
 // PURECAP-LABEL: define {{[^@]+}}@test_add_fetch_charptr
-// PURECAP-SAME: (i8 addrspace(200)* addrspace(200)* noundef [[PTR:%.*]], i8 addrspace(200)* noundef [[VALUE:%.*]]) addrspace(200) #[[ATTR0]] {
+// PURECAP-SAME: (ptr addrspace(200) noundef [[PTR:%.*]], ptr addrspace(200) noundef [[VALUE:%.*]]) addrspace(200) #[[ATTR0]] {
 // PURECAP-NEXT:  entry:
-// PURECAP-NEXT:    [[TMP0:%.*]] = atomicrmw add i8 addrspace(200)* addrspace(200)* [[PTR]], i8 addrspace(200)* [[VALUE]] seq_cst, align 16
-// PURECAP-NEXT:    [[TMP1:%.*]] = call i64 @llvm.cheri.cap.address.get.i64(i8 addrspace(200)* [[TMP0]])
-// PURECAP-NEXT:    [[TMP2:%.*]] = call i64 @llvm.cheri.cap.address.get.i64(i8 addrspace(200)* [[VALUE]])
+// PURECAP-NEXT:    [[TMP0:%.*]] = atomicrmw add ptr addrspace(200) [[PTR]], ptr addrspace(200) [[VALUE]] seq_cst, align 16
+// PURECAP-NEXT:    [[TMP1:%.*]] = call i64 @llvm.cheri.cap.address.get.i64(ptr addrspace(200) [[TMP0]])
+// PURECAP-NEXT:    [[TMP2:%.*]] = call i64 @llvm.cheri.cap.address.get.i64(ptr addrspace(200) [[VALUE]])
 // PURECAP-NEXT:    [[TMP3:%.*]] = add i64 [[TMP1]], [[TMP2]]
-// PURECAP-NEXT:    [[TMP4:%.*]] = call i8 addrspace(200)* @llvm.cheri.cap.address.set.i64(i8 addrspace(200)* [[TMP0]], i64 [[TMP3]])
-// PURECAP-NEXT:    ret i8 addrspace(200)* [[TMP4]]
+// PURECAP-NEXT:    [[TMP4:%.*]] = call ptr addrspace(200) @llvm.cheri.cap.address.set.i64(ptr addrspace(200) [[TMP0]], i64 [[TMP3]])
+// PURECAP-NEXT:    ret ptr addrspace(200) [[TMP4]]
 //
 char *__capability test_add_fetch_charptr(char *__capability *ptr, __uintcap_t value) {
   return __sync_add_and_fetch(ptr, value);
 }
 
 // HYBRID-LABEL: define {{[^@]+}}@test_add_fetch_charptr_and_short
-// HYBRID-SAME: (i8 addrspace(200)** noundef [[PTR:%.*]], i16 noundef signext [[VALUE:%.*]]) #[[ATTR0]] {
+// HYBRID-SAME: (ptr noundef [[PTR:%.*]], i16 noundef signext [[VALUE:%.*]]) #[[ATTR0]] {
 // HYBRID-NEXT:  entry:
 // HYBRID-NEXT:    [[CONV:%.*]] = sext i16 [[VALUE]] to i64
-// HYBRID-NEXT:    [[TMP0:%.*]] = inttoptr i64 [[CONV]] to i8 addrspace(200)*
-// HYBRID-NEXT:    [[TMP1:%.*]] = atomicrmw add i8 addrspace(200)** [[PTR]], i8 addrspace(200)* [[TMP0]] seq_cst, align 16
-// HYBRID-NEXT:    [[TMP2:%.*]] = call i64 @llvm.cheri.cap.address.get.i64(i8 addrspace(200)* [[TMP1]])
-// HYBRID-NEXT:    [[TMP3:%.*]] = call i64 @llvm.cheri.cap.address.get.i64(i8 addrspace(200)* [[TMP0]])
+// HYBRID-NEXT:    [[TMP0:%.*]] = inttoptr i64 [[CONV]] to ptr addrspace(200)
+// HYBRID-NEXT:    [[TMP1:%.*]] = atomicrmw add ptr [[PTR]], ptr addrspace(200) [[TMP0]] seq_cst, align 16
+// HYBRID-NEXT:    [[TMP2:%.*]] = call i64 @llvm.cheri.cap.address.get.i64(ptr addrspace(200) [[TMP1]])
+// HYBRID-NEXT:    [[TMP3:%.*]] = call i64 @llvm.cheri.cap.address.get.i64(ptr addrspace(200) [[TMP0]])
 // HYBRID-NEXT:    [[TMP4:%.*]] = add i64 [[TMP2]], [[TMP3]]
-// HYBRID-NEXT:    [[TMP5:%.*]] = call i8 addrspace(200)* @llvm.cheri.cap.address.set.i64(i8 addrspace(200)* [[TMP1]], i64 [[TMP4]])
-// HYBRID-NEXT:    ret i8 addrspace(200)* [[TMP5]]
+// HYBRID-NEXT:    [[TMP5:%.*]] = call ptr addrspace(200) @llvm.cheri.cap.address.set.i64(ptr addrspace(200) [[TMP1]], i64 [[TMP4]])
+// HYBRID-NEXT:    ret ptr addrspace(200) [[TMP5]]
 //
 // PURECAP-LABEL: define {{[^@]+}}@test_add_fetch_charptr_and_short
-// PURECAP-SAME: (i8 addrspace(200)* addrspace(200)* noundef [[PTR:%.*]], i16 noundef signext [[VALUE:%.*]]) addrspace(200) #[[ATTR0]] {
+// PURECAP-SAME: (ptr addrspace(200) noundef [[PTR:%.*]], i16 noundef signext [[VALUE:%.*]]) addrspace(200) #[[ATTR0]] {
 // PURECAP-NEXT:  entry:
 // PURECAP-NEXT:    [[CONV:%.*]] = sext i16 [[VALUE]] to i64
-// PURECAP-NEXT:    [[TMP0:%.*]] = getelementptr i8, i8 addrspace(200)* null, i64 [[CONV]]
-// PURECAP-NEXT:    [[TMP1:%.*]] = atomicrmw add i8 addrspace(200)* addrspace(200)* [[PTR]], i8 addrspace(200)* [[TMP0]] seq_cst, align 16
-// PURECAP-NEXT:    [[TMP2:%.*]] = call i64 @llvm.cheri.cap.address.get.i64(i8 addrspace(200)* [[TMP1]])
-// PURECAP-NEXT:    [[TMP3:%.*]] = call i64 @llvm.cheri.cap.address.get.i64(i8 addrspace(200)* [[TMP0]])
+// PURECAP-NEXT:    [[TMP0:%.*]] = getelementptr i8, ptr addrspace(200) null, i64 [[CONV]]
+// PURECAP-NEXT:    [[TMP1:%.*]] = atomicrmw add ptr addrspace(200) [[PTR]], ptr addrspace(200) [[TMP0]] seq_cst, align 16
+// PURECAP-NEXT:    [[TMP2:%.*]] = call i64 @llvm.cheri.cap.address.get.i64(ptr addrspace(200) [[TMP1]])
+// PURECAP-NEXT:    [[TMP3:%.*]] = call i64 @llvm.cheri.cap.address.get.i64(ptr addrspace(200) [[TMP0]])
 // PURECAP-NEXT:    [[TMP4:%.*]] = add i64 [[TMP2]], [[TMP3]]
-// PURECAP-NEXT:    [[TMP5:%.*]] = call i8 addrspace(200)* @llvm.cheri.cap.address.set.i64(i8 addrspace(200)* [[TMP1]], i64 [[TMP4]])
-// PURECAP-NEXT:    ret i8 addrspace(200)* [[TMP5]]
+// PURECAP-NEXT:    [[TMP5:%.*]] = call ptr addrspace(200) @llvm.cheri.cap.address.set.i64(ptr addrspace(200) [[TMP1]], i64 [[TMP4]])
+// PURECAP-NEXT:    ret ptr addrspace(200) [[TMP5]]
 //
 char *__capability test_add_fetch_charptr_and_short(char *__capability *ptr, short value) {
   return __sync_add_and_fetch(ptr, value);
 }
 
 // HYBRID-LABEL: define {{[^@]+}}@test_sub_fetch_uintcap
-// HYBRID-SAME: (i8 addrspace(200)** noundef [[PTR:%.*]], i8 addrspace(200)* noundef [[VALUE:%.*]]) #[[ATTR0]] {
+// HYBRID-SAME: (ptr noundef [[PTR:%.*]], ptr addrspace(200) noundef [[VALUE:%.*]]) #[[ATTR0]] {
 // HYBRID-NEXT:  entry:
-// HYBRID-NEXT:    [[TMP0:%.*]] = atomicrmw sub i8 addrspace(200)** [[PTR]], i8 addrspace(200)* [[VALUE]] seq_cst, align 16
-// HYBRID-NEXT:    [[TMP1:%.*]] = call i64 @llvm.cheri.cap.address.get.i64(i8 addrspace(200)* [[TMP0]])
-// HYBRID-NEXT:    [[TMP2:%.*]] = call i64 @llvm.cheri.cap.address.get.i64(i8 addrspace(200)* [[VALUE]])
+// HYBRID-NEXT:    [[TMP0:%.*]] = atomicrmw sub ptr [[PTR]], ptr addrspace(200) [[VALUE]] seq_cst, align 16
+// HYBRID-NEXT:    [[TMP1:%.*]] = call i64 @llvm.cheri.cap.address.get.i64(ptr addrspace(200) [[TMP0]])
+// HYBRID-NEXT:    [[TMP2:%.*]] = call i64 @llvm.cheri.cap.address.get.i64(ptr addrspace(200) [[VALUE]])
 // HYBRID-NEXT:    [[TMP3:%.*]] = sub i64 [[TMP1]], [[TMP2]]
-// HYBRID-NEXT:    [[TMP4:%.*]] = call i8 addrspace(200)* @llvm.cheri.cap.address.set.i64(i8 addrspace(200)* [[TMP0]], i64 [[TMP3]])
-// HYBRID-NEXT:    ret i8 addrspace(200)* [[TMP4]]
+// HYBRID-NEXT:    [[TMP4:%.*]] = call ptr addrspace(200) @llvm.cheri.cap.address.set.i64(ptr addrspace(200) [[TMP0]], i64 [[TMP3]])
+// HYBRID-NEXT:    ret ptr addrspace(200) [[TMP4]]
 //
 // PURECAP-LABEL: define {{[^@]+}}@test_sub_fetch_uintcap
-// PURECAP-SAME: (i8 addrspace(200)* addrspace(200)* noundef [[PTR:%.*]], i8 addrspace(200)* noundef [[VALUE:%.*]]) addrspace(200) #[[ATTR0]] {
+// PURECAP-SAME: (ptr addrspace(200) noundef [[PTR:%.*]], ptr addrspace(200) noundef [[VALUE:%.*]]) addrspace(200) #[[ATTR0]] {
 // PURECAP-NEXT:  entry:
-// PURECAP-NEXT:    [[TMP0:%.*]] = atomicrmw sub i8 addrspace(200)* addrspace(200)* [[PTR]], i8 addrspace(200)* [[VALUE]] seq_cst, align 16
-// PURECAP-NEXT:    [[TMP1:%.*]] = call i64 @llvm.cheri.cap.address.get.i64(i8 addrspace(200)* [[TMP0]])
-// PURECAP-NEXT:    [[TMP2:%.*]] = call i64 @llvm.cheri.cap.address.get.i64(i8 addrspace(200)* [[VALUE]])
+// PURECAP-NEXT:    [[TMP0:%.*]] = atomicrmw sub ptr addrspace(200) [[PTR]], ptr addrspace(200) [[VALUE]] seq_cst, align 16
+// PURECAP-NEXT:    [[TMP1:%.*]] = call i64 @llvm.cheri.cap.address.get.i64(ptr addrspace(200) [[TMP0]])
+// PURECAP-NEXT:    [[TMP2:%.*]] = call i64 @llvm.cheri.cap.address.get.i64(ptr addrspace(200) [[VALUE]])
 // PURECAP-NEXT:    [[TMP3:%.*]] = sub i64 [[TMP1]], [[TMP2]]
-// PURECAP-NEXT:    [[TMP4:%.*]] = call i8 addrspace(200)* @llvm.cheri.cap.address.set.i64(i8 addrspace(200)* [[TMP0]], i64 [[TMP3]])
-// PURECAP-NEXT:    ret i8 addrspace(200)* [[TMP4]]
+// PURECAP-NEXT:    [[TMP4:%.*]] = call ptr addrspace(200) @llvm.cheri.cap.address.set.i64(ptr addrspace(200) [[TMP0]], i64 [[TMP3]])
+// PURECAP-NEXT:    ret ptr addrspace(200) [[TMP4]]
 //
 __uintcap_t test_sub_fetch_uintcap(__uintcap_t *ptr, __uintcap_t value) {
   return __sync_sub_and_fetch(ptr, value);
 }
 
 // HYBRID-LABEL: define {{[^@]+}}@test_sub_fetch_longptr
-// HYBRID-SAME: (i64 addrspace(200)** noundef [[PTR:%.*]], i8 addrspace(200)* noundef [[VALUE:%.*]]) #[[ATTR0]] {
+// HYBRID-SAME: (ptr noundef [[PTR:%.*]], ptr addrspace(200) noundef [[VALUE:%.*]]) #[[ATTR0]] {
 // HYBRID-NEXT:  entry:
-// HYBRID-NEXT:    [[TMP0:%.*]] = bitcast i8 addrspace(200)* [[VALUE]] to i64 addrspace(200)*
-// HYBRID-NEXT:    [[TMP1:%.*]] = atomicrmw sub i64 addrspace(200)** [[PTR]], i64 addrspace(200)* [[TMP0]] seq_cst, align 16
-// HYBRID-NEXT:    [[TMP2:%.*]] = bitcast i64 addrspace(200)* [[TMP1]] to i8 addrspace(200)*
-// HYBRID-NEXT:    [[TMP3:%.*]] = call i64 @llvm.cheri.cap.address.get.i64(i8 addrspace(200)* [[TMP2]])
-// HYBRID-NEXT:    [[TMP4:%.*]] = bitcast i64 addrspace(200)* [[TMP0]] to i8 addrspace(200)*
-// HYBRID-NEXT:    [[TMP5:%.*]] = call i64 @llvm.cheri.cap.address.get.i64(i8 addrspace(200)* [[TMP4]])
-// HYBRID-NEXT:    [[TMP6:%.*]] = sub i64 [[TMP3]], [[TMP5]]
-// HYBRID-NEXT:    [[TMP7:%.*]] = bitcast i64 addrspace(200)* [[TMP1]] to i8 addrspace(200)*
-// HYBRID-NEXT:    [[TMP8:%.*]] = call i8 addrspace(200)* @llvm.cheri.cap.address.set.i64(i8 addrspace(200)* [[TMP7]], i64 [[TMP6]])
-// HYBRID-NEXT:    [[TMP9:%.*]] = bitcast i8 addrspace(200)* [[TMP8]] to i64 addrspace(200)*
-// HYBRID-NEXT:    ret i64 addrspace(200)* [[TMP9]]
+// HYBRID-NEXT:    [[TMP0:%.*]] = atomicrmw sub ptr [[PTR]], ptr addrspace(200) [[VALUE]] seq_cst, align 16
+// HYBRID-NEXT:    [[TMP1:%.*]] = call i64 @llvm.cheri.cap.address.get.i64(ptr addrspace(200) [[TMP0]])
+// HYBRID-NEXT:    [[TMP2:%.*]] = call i64 @llvm.cheri.cap.address.get.i64(ptr addrspace(200) [[VALUE]])
+// HYBRID-NEXT:    [[TMP3:%.*]] = sub i64 [[TMP1]], [[TMP2]]
+// HYBRID-NEXT:    [[TMP4:%.*]] = call ptr addrspace(200) @llvm.cheri.cap.address.set.i64(ptr addrspace(200) [[TMP0]], i64 [[TMP3]])
+// HYBRID-NEXT:    ret ptr addrspace(200) [[TMP4]]
 //
 // PURECAP-LABEL: define {{[^@]+}}@test_sub_fetch_longptr
-// PURECAP-SAME: (i64 addrspace(200)* addrspace(200)* noundef [[PTR:%.*]], i8 addrspace(200)* noundef [[VALUE:%.*]]) addrspace(200) #[[ATTR0]] {
+// PURECAP-SAME: (ptr addrspace(200) noundef [[PTR:%.*]], ptr addrspace(200) noundef [[VALUE:%.*]]) addrspace(200) #[[ATTR0]] {
 // PURECAP-NEXT:  entry:
-// PURECAP-NEXT:    [[TMP0:%.*]] = bitcast i8 addrspace(200)* [[VALUE]] to i64 addrspace(200)*
-// PURECAP-NEXT:    [[TMP1:%.*]] = atomicrmw sub i64 addrspace(200)* addrspace(200)* [[PTR]], i64 addrspace(200)* [[TMP0]] seq_cst, align 16
-// PURECAP-NEXT:    [[TMP2:%.*]] = bitcast i64 addrspace(200)* [[TMP1]] to i8 addrspace(200)*
-// PURECAP-NEXT:    [[TMP3:%.*]] = call i64 @llvm.cheri.cap.address.get.i64(i8 addrspace(200)* [[TMP2]])
-// PURECAP-NEXT:    [[TMP4:%.*]] = bitcast i64 addrspace(200)* [[TMP0]] to i8 addrspace(200)*
-// PURECAP-NEXT:    [[TMP5:%.*]] = call i64 @llvm.cheri.cap.address.get.i64(i8 addrspace(200)* [[TMP4]])
-// PURECAP-NEXT:    [[TMP6:%.*]] = sub i64 [[TMP3]], [[TMP5]]
-// PURECAP-NEXT:    [[TMP7:%.*]] = bitcast i64 addrspace(200)* [[TMP1]] to i8 addrspace(200)*
-// PURECAP-NEXT:    [[TMP8:%.*]] = call i8 addrspace(200)* @llvm.cheri.cap.address.set.i64(i8 addrspace(200)* [[TMP7]], i64 [[TMP6]])
-// PURECAP-NEXT:    [[TMP9:%.*]] = bitcast i8 addrspace(200)* [[TMP8]] to i64 addrspace(200)*
-// PURECAP-NEXT:    ret i64 addrspace(200)* [[TMP9]]
+// PURECAP-NEXT:    [[TMP0:%.*]] = atomicrmw sub ptr addrspace(200) [[PTR]], ptr addrspace(200) [[VALUE]] seq_cst, align 16
+// PURECAP-NEXT:    [[TMP1:%.*]] = call i64 @llvm.cheri.cap.address.get.i64(ptr addrspace(200) [[TMP0]])
+// PURECAP-NEXT:    [[TMP2:%.*]] = call i64 @llvm.cheri.cap.address.get.i64(ptr addrspace(200) [[VALUE]])
+// PURECAP-NEXT:    [[TMP3:%.*]] = sub i64 [[TMP1]], [[TMP2]]
+// PURECAP-NEXT:    [[TMP4:%.*]] = call ptr addrspace(200) @llvm.cheri.cap.address.set.i64(ptr addrspace(200) [[TMP0]], i64 [[TMP3]])
+// PURECAP-NEXT:    ret ptr addrspace(200) [[TMP4]]
 //
 long *__capability test_sub_fetch_longptr(long *__capability *ptr, __uintcap_t value) {
   return __sync_sub_and_fetch(ptr, value);
 }
 
 // HYBRID-LABEL: define {{[^@]+}}@test_sub_fetch_longptr_and_short
-// HYBRID-SAME: (i64 addrspace(200)** noundef [[PTR:%.*]], i16 noundef signext [[VALUE:%.*]]) #[[ATTR0]] {
+// HYBRID-SAME: (ptr noundef [[PTR:%.*]], i16 noundef signext [[VALUE:%.*]]) #[[ATTR0]] {
 // HYBRID-NEXT:  entry:
 // HYBRID-NEXT:    [[CONV:%.*]] = sext i16 [[VALUE]] to i64
-// HYBRID-NEXT:    [[TMP0:%.*]] = inttoptr i64 [[CONV]] to i64 addrspace(200)*
-// HYBRID-NEXT:    [[TMP1:%.*]] = atomicrmw sub i64 addrspace(200)** [[PTR]], i64 addrspace(200)* [[TMP0]] seq_cst, align 16
-// HYBRID-NEXT:    [[TMP2:%.*]] = bitcast i64 addrspace(200)* [[TMP1]] to i8 addrspace(200)*
-// HYBRID-NEXT:    [[TMP3:%.*]] = call i64 @llvm.cheri.cap.address.get.i64(i8 addrspace(200)* [[TMP2]])
-// HYBRID-NEXT:    [[TMP4:%.*]] = bitcast i64 addrspace(200)* [[TMP0]] to i8 addrspace(200)*
-// HYBRID-NEXT:    [[TMP5:%.*]] = call i64 @llvm.cheri.cap.address.get.i64(i8 addrspace(200)* [[TMP4]])
-// HYBRID-NEXT:    [[TMP6:%.*]] = sub i64 [[TMP3]], [[TMP5]]
-// HYBRID-NEXT:    [[TMP7:%.*]] = bitcast i64 addrspace(200)* [[TMP1]] to i8 addrspace(200)*
-// HYBRID-NEXT:    [[TMP8:%.*]] = call i8 addrspace(200)* @llvm.cheri.cap.address.set.i64(i8 addrspace(200)* [[TMP7]], i64 [[TMP6]])
-// HYBRID-NEXT:    [[TMP9:%.*]] = bitcast i8 addrspace(200)* [[TMP8]] to i64 addrspace(200)*
-// HYBRID-NEXT:    ret i64 addrspace(200)* [[TMP9]]
+// HYBRID-NEXT:    [[TMP0:%.*]] = inttoptr i64 [[CONV]] to ptr addrspace(200)
+// HYBRID-NEXT:    [[TMP1:%.*]] = atomicrmw sub ptr [[PTR]], ptr addrspace(200) [[TMP0]] seq_cst, align 16
+// HYBRID-NEXT:    [[TMP2:%.*]] = call i64 @llvm.cheri.cap.address.get.i64(ptr addrspace(200) [[TMP1]])
+// HYBRID-NEXT:    [[TMP3:%.*]] = call i64 @llvm.cheri.cap.address.get.i64(ptr addrspace(200) [[TMP0]])
+// HYBRID-NEXT:    [[TMP4:%.*]] = sub i64 [[TMP2]], [[TMP3]]
+// HYBRID-NEXT:    [[TMP5:%.*]] = call ptr addrspace(200) @llvm.cheri.cap.address.set.i64(ptr addrspace(200) [[TMP1]], i64 [[TMP4]])
+// HYBRID-NEXT:    ret ptr addrspace(200) [[TMP5]]
 //
 // PURECAP-LABEL: define {{[^@]+}}@test_sub_fetch_longptr_and_short
-// PURECAP-SAME: (i64 addrspace(200)* addrspace(200)* noundef [[PTR:%.*]], i16 noundef signext [[VALUE:%.*]]) addrspace(200) #[[ATTR0]] {
+// PURECAP-SAME: (ptr addrspace(200) noundef [[PTR:%.*]], i16 noundef signext [[VALUE:%.*]]) addrspace(200) #[[ATTR0]] {
 // PURECAP-NEXT:  entry:
 // PURECAP-NEXT:    [[CONV:%.*]] = sext i16 [[VALUE]] to i64
-// PURECAP-NEXT:    [[TMP0:%.*]] = getelementptr i8, i8 addrspace(200)* null, i64 [[CONV]]
-// PURECAP-NEXT:    [[TMP1:%.*]] = bitcast i8 addrspace(200)* [[TMP0]] to i64 addrspace(200)*
-// PURECAP-NEXT:    [[TMP2:%.*]] = atomicrmw sub i64 addrspace(200)* addrspace(200)* [[PTR]], i64 addrspace(200)* [[TMP1]] seq_cst, align 16
-// PURECAP-NEXT:    [[TMP3:%.*]] = bitcast i64 addrspace(200)* [[TMP2]] to i8 addrspace(200)*
-// PURECAP-NEXT:    [[TMP4:%.*]] = call i64 @llvm.cheri.cap.address.get.i64(i8 addrspace(200)* [[TMP3]])
-// PURECAP-NEXT:    [[TMP5:%.*]] = bitcast i64 addrspace(200)* [[TMP1]] to i8 addrspace(200)*
-// PURECAP-NEXT:    [[TMP6:%.*]] = call i64 @llvm.cheri.cap.address.get.i64(i8 addrspace(200)* [[TMP5]])
-// PURECAP-NEXT:    [[TMP7:%.*]] = sub i64 [[TMP4]], [[TMP6]]
-// PURECAP-NEXT:    [[TMP8:%.*]] = bitcast i64 addrspace(200)* [[TMP2]] to i8 addrspace(200)*
-// PURECAP-NEXT:    [[TMP9:%.*]] = call i8 addrspace(200)* @llvm.cheri.cap.address.set.i64(i8 addrspace(200)* [[TMP8]], i64 [[TMP7]])
-// PURECAP-NEXT:    [[TMP10:%.*]] = bitcast i8 addrspace(200)* [[TMP9]] to i64 addrspace(200)*
-// PURECAP-NEXT:    ret i64 addrspace(200)* [[TMP10]]
+// PURECAP-NEXT:    [[TMP0:%.*]] = getelementptr i8, ptr addrspace(200) null, i64 [[CONV]]
+// PURECAP-NEXT:    [[TMP1:%.*]] = atomicrmw sub ptr addrspace(200) [[PTR]], ptr addrspace(200) [[TMP0]] seq_cst, align 16
+// PURECAP-NEXT:    [[TMP2:%.*]] = call i64 @llvm.cheri.cap.address.get.i64(ptr addrspace(200) [[TMP1]])
+// PURECAP-NEXT:    [[TMP3:%.*]] = call i64 @llvm.cheri.cap.address.get.i64(ptr addrspace(200) [[TMP0]])
+// PURECAP-NEXT:    [[TMP4:%.*]] = sub i64 [[TMP2]], [[TMP3]]
+// PURECAP-NEXT:    [[TMP5:%.*]] = call ptr addrspace(200) @llvm.cheri.cap.address.set.i64(ptr addrspace(200) [[TMP1]], i64 [[TMP4]])
+// PURECAP-NEXT:    ret ptr addrspace(200) [[TMP5]]
 //
 long *__capability test_sub_fetch_longptr_and_short(long *__capability *ptr, short value) {
   return __sync_sub_and_fetch(ptr, value);
 }
 
 // HYBRID-LABEL: define {{[^@]+}}@test_sub_fetch_charptr
-// HYBRID-SAME: (i8 addrspace(200)** noundef [[PTR:%.*]], i8 addrspace(200)* noundef [[VALUE:%.*]]) #[[ATTR0]] {
+// HYBRID-SAME: (ptr noundef [[PTR:%.*]], ptr addrspace(200) noundef [[VALUE:%.*]]) #[[ATTR0]] {
 // HYBRID-NEXT:  entry:
-// HYBRID-NEXT:    [[TMP0:%.*]] = atomicrmw sub i8 addrspace(200)** [[PTR]], i8 addrspace(200)* [[VALUE]] seq_cst, align 16
-// HYBRID-NEXT:    [[TMP1:%.*]] = call i64 @llvm.cheri.cap.address.get.i64(i8 addrspace(200)* [[TMP0]])
-// HYBRID-NEXT:    [[TMP2:%.*]] = call i64 @llvm.cheri.cap.address.get.i64(i8 addrspace(200)* [[VALUE]])
+// HYBRID-NEXT:    [[TMP0:%.*]] = atomicrmw sub ptr [[PTR]], ptr addrspace(200) [[VALUE]] seq_cst, align 16
+// HYBRID-NEXT:    [[TMP1:%.*]] = call i64 @llvm.cheri.cap.address.get.i64(ptr addrspace(200) [[TMP0]])
+// HYBRID-NEXT:    [[TMP2:%.*]] = call i64 @llvm.cheri.cap.address.get.i64(ptr addrspace(200) [[VALUE]])
 // HYBRID-NEXT:    [[TMP3:%.*]] = sub i64 [[TMP1]], [[TMP2]]
-// HYBRID-NEXT:    [[TMP4:%.*]] = call i8 addrspace(200)* @llvm.cheri.cap.address.set.i64(i8 addrspace(200)* [[TMP0]], i64 [[TMP3]])
-// HYBRID-NEXT:    ret i8 addrspace(200)* [[TMP4]]
+// HYBRID-NEXT:    [[TMP4:%.*]] = call ptr addrspace(200) @llvm.cheri.cap.address.set.i64(ptr addrspace(200) [[TMP0]], i64 [[TMP3]])
+// HYBRID-NEXT:    ret ptr addrspace(200) [[TMP4]]
 //
 // PURECAP-LABEL: define {{[^@]+}}@test_sub_fetch_charptr
-// PURECAP-SAME: (i8 addrspace(200)* addrspace(200)* noundef [[PTR:%.*]], i8 addrspace(200)* noundef [[VALUE:%.*]]) addrspace(200) #[[ATTR0]] {
+// PURECAP-SAME: (ptr addrspace(200) noundef [[PTR:%.*]], ptr addrspace(200) noundef [[VALUE:%.*]]) addrspace(200) #[[ATTR0]] {
 // PURECAP-NEXT:  entry:
-// PURECAP-NEXT:    [[TMP0:%.*]] = atomicrmw sub i8 addrspace(200)* addrspace(200)* [[PTR]], i8 addrspace(200)* [[VALUE]] seq_cst, align 16
-// PURECAP-NEXT:    [[TMP1:%.*]] = call i64 @llvm.cheri.cap.address.get.i64(i8 addrspace(200)* [[TMP0]])
-// PURECAP-NEXT:    [[TMP2:%.*]] = call i64 @llvm.cheri.cap.address.get.i64(i8 addrspace(200)* [[VALUE]])
+// PURECAP-NEXT:    [[TMP0:%.*]] = atomicrmw sub ptr addrspace(200) [[PTR]], ptr addrspace(200) [[VALUE]] seq_cst, align 16
+// PURECAP-NEXT:    [[TMP1:%.*]] = call i64 @llvm.cheri.cap.address.get.i64(ptr addrspace(200) [[TMP0]])
+// PURECAP-NEXT:    [[TMP2:%.*]] = call i64 @llvm.cheri.cap.address.get.i64(ptr addrspace(200) [[VALUE]])
 // PURECAP-NEXT:    [[TMP3:%.*]] = sub i64 [[TMP1]], [[TMP2]]
-// PURECAP-NEXT:    [[TMP4:%.*]] = call i8 addrspace(200)* @llvm.cheri.cap.address.set.i64(i8 addrspace(200)* [[TMP0]], i64 [[TMP3]])
-// PURECAP-NEXT:    ret i8 addrspace(200)* [[TMP4]]
+// PURECAP-NEXT:    [[TMP4:%.*]] = call ptr addrspace(200) @llvm.cheri.cap.address.set.i64(ptr addrspace(200) [[TMP0]], i64 [[TMP3]])
+// PURECAP-NEXT:    ret ptr addrspace(200) [[TMP4]]
 //
 char *__capability test_sub_fetch_charptr(char *__capability *ptr, __uintcap_t value) {
   return __sync_sub_and_fetch(ptr, value);
 }
 
 // HYBRID-LABEL: define {{[^@]+}}@test_sub_fetch_charptr_and_short
-// HYBRID-SAME: (i8 addrspace(200)** noundef [[PTR:%.*]], i16 noundef signext [[VALUE:%.*]]) #[[ATTR0]] {
+// HYBRID-SAME: (ptr noundef [[PTR:%.*]], i16 noundef signext [[VALUE:%.*]]) #[[ATTR0]] {
 // HYBRID-NEXT:  entry:
 // HYBRID-NEXT:    [[CONV:%.*]] = sext i16 [[VALUE]] to i64
-// HYBRID-NEXT:    [[TMP0:%.*]] = inttoptr i64 [[CONV]] to i8 addrspace(200)*
-// HYBRID-NEXT:    [[TMP1:%.*]] = atomicrmw sub i8 addrspace(200)** [[PTR]], i8 addrspace(200)* [[TMP0]] seq_cst, align 16
-// HYBRID-NEXT:    [[TMP2:%.*]] = call i64 @llvm.cheri.cap.address.get.i64(i8 addrspace(200)* [[TMP1]])
-// HYBRID-NEXT:    [[TMP3:%.*]] = call i64 @llvm.cheri.cap.address.get.i64(i8 addrspace(200)* [[TMP0]])
+// HYBRID-NEXT:    [[TMP0:%.*]] = inttoptr i64 [[CONV]] to ptr addrspace(200)
+// HYBRID-NEXT:    [[TMP1:%.*]] = atomicrmw sub ptr [[PTR]], ptr addrspace(200) [[TMP0]] seq_cst, align 16
+// HYBRID-NEXT:    [[TMP2:%.*]] = call i64 @llvm.cheri.cap.address.get.i64(ptr addrspace(200) [[TMP1]])
+// HYBRID-NEXT:    [[TMP3:%.*]] = call i64 @llvm.cheri.cap.address.get.i64(ptr addrspace(200) [[TMP0]])
 // HYBRID-NEXT:    [[TMP4:%.*]] = sub i64 [[TMP2]], [[TMP3]]
-// HYBRID-NEXT:    [[TMP5:%.*]] = call i8 addrspace(200)* @llvm.cheri.cap.address.set.i64(i8 addrspace(200)* [[TMP1]], i64 [[TMP4]])
-// HYBRID-NEXT:    ret i8 addrspace(200)* [[TMP5]]
+// HYBRID-NEXT:    [[TMP5:%.*]] = call ptr addrspace(200) @llvm.cheri.cap.address.set.i64(ptr addrspace(200) [[TMP1]], i64 [[TMP4]])
+// HYBRID-NEXT:    ret ptr addrspace(200) [[TMP5]]
 //
 // PURECAP-LABEL: define {{[^@]+}}@test_sub_fetch_charptr_and_short
-// PURECAP-SAME: (i8 addrspace(200)* addrspace(200)* noundef [[PTR:%.*]], i16 noundef signext [[VALUE:%.*]]) addrspace(200) #[[ATTR0]] {
+// PURECAP-SAME: (ptr addrspace(200) noundef [[PTR:%.*]], i16 noundef signext [[VALUE:%.*]]) addrspace(200) #[[ATTR0]] {
 // PURECAP-NEXT:  entry:
 // PURECAP-NEXT:    [[CONV:%.*]] = sext i16 [[VALUE]] to i64
-// PURECAP-NEXT:    [[TMP0:%.*]] = getelementptr i8, i8 addrspace(200)* null, i64 [[CONV]]
-// PURECAP-NEXT:    [[TMP1:%.*]] = atomicrmw sub i8 addrspace(200)* addrspace(200)* [[PTR]], i8 addrspace(200)* [[TMP0]] seq_cst, align 16
-// PURECAP-NEXT:    [[TMP2:%.*]] = call i64 @llvm.cheri.cap.address.get.i64(i8 addrspace(200)* [[TMP1]])
-// PURECAP-NEXT:    [[TMP3:%.*]] = call i64 @llvm.cheri.cap.address.get.i64(i8 addrspace(200)* [[TMP0]])
+// PURECAP-NEXT:    [[TMP0:%.*]] = getelementptr i8, ptr addrspace(200) null, i64 [[CONV]]
+// PURECAP-NEXT:    [[TMP1:%.*]] = atomicrmw sub ptr addrspace(200) [[PTR]], ptr addrspace(200) [[TMP0]] seq_cst, align 16
+// PURECAP-NEXT:    [[TMP2:%.*]] = call i64 @llvm.cheri.cap.address.get.i64(ptr addrspace(200) [[TMP1]])
+// PURECAP-NEXT:    [[TMP3:%.*]] = call i64 @llvm.cheri.cap.address.get.i64(ptr addrspace(200) [[TMP0]])
 // PURECAP-NEXT:    [[TMP4:%.*]] = sub i64 [[TMP2]], [[TMP3]]
-// PURECAP-NEXT:    [[TMP5:%.*]] = call i8 addrspace(200)* @llvm.cheri.cap.address.set.i64(i8 addrspace(200)* [[TMP1]], i64 [[TMP4]])
-// PURECAP-NEXT:    ret i8 addrspace(200)* [[TMP5]]
+// PURECAP-NEXT:    [[TMP5:%.*]] = call ptr addrspace(200) @llvm.cheri.cap.address.set.i64(ptr addrspace(200) [[TMP1]], i64 [[TMP4]])
+// PURECAP-NEXT:    ret ptr addrspace(200) [[TMP5]]
 //
 char *__capability test_sub_fetch_charptr_and_short(char *__capability *ptr, short value) {
   return __sync_sub_and_fetch(ptr, value);
 }
 
 // HYBRID-LABEL: define {{[^@]+}}@test_and_fetch_uintcap
-// HYBRID-SAME: (i8 addrspace(200)** noundef [[PTR:%.*]], i8 addrspace(200)* noundef [[VALUE:%.*]]) #[[ATTR0]] {
+// HYBRID-SAME: (ptr noundef [[PTR:%.*]], ptr addrspace(200) noundef [[VALUE:%.*]]) #[[ATTR0]] {
 // HYBRID-NEXT:  entry:
-// HYBRID-NEXT:    [[TMP0:%.*]] = atomicrmw and i8 addrspace(200)** [[PTR]], i8 addrspace(200)* [[VALUE]] seq_cst, align 16
-// HYBRID-NEXT:    [[TMP1:%.*]] = call i64 @llvm.cheri.cap.address.get.i64(i8 addrspace(200)* [[TMP0]])
-// HYBRID-NEXT:    [[TMP2:%.*]] = call i64 @llvm.cheri.cap.address.get.i64(i8 addrspace(200)* [[VALUE]])
+// HYBRID-NEXT:    [[TMP0:%.*]] = atomicrmw and ptr [[PTR]], ptr addrspace(200) [[VALUE]] seq_cst, align 16
+// HYBRID-NEXT:    [[TMP1:%.*]] = call i64 @llvm.cheri.cap.address.get.i64(ptr addrspace(200) [[TMP0]])
+// HYBRID-NEXT:    [[TMP2:%.*]] = call i64 @llvm.cheri.cap.address.get.i64(ptr addrspace(200) [[VALUE]])
 // HYBRID-NEXT:    [[TMP3:%.*]] = and i64 [[TMP1]], [[TMP2]]
-// HYBRID-NEXT:    [[TMP4:%.*]] = call i8 addrspace(200)* @llvm.cheri.cap.address.set.i64(i8 addrspace(200)* [[TMP0]], i64 [[TMP3]])
-// HYBRID-NEXT:    ret i8 addrspace(200)* [[TMP4]]
+// HYBRID-NEXT:    [[TMP4:%.*]] = call ptr addrspace(200) @llvm.cheri.cap.address.set.i64(ptr addrspace(200) [[TMP0]], i64 [[TMP3]])
+// HYBRID-NEXT:    ret ptr addrspace(200) [[TMP4]]
 //
 // PURECAP-LABEL: define {{[^@]+}}@test_and_fetch_uintcap
-// PURECAP-SAME: (i8 addrspace(200)* addrspace(200)* noundef [[PTR:%.*]], i8 addrspace(200)* noundef [[VALUE:%.*]]) addrspace(200) #[[ATTR0]] {
+// PURECAP-SAME: (ptr addrspace(200) noundef [[PTR:%.*]], ptr addrspace(200) noundef [[VALUE:%.*]]) addrspace(200) #[[ATTR0]] {
 // PURECAP-NEXT:  entry:
-// PURECAP-NEXT:    [[TMP0:%.*]] = atomicrmw and i8 addrspace(200)* addrspace(200)* [[PTR]], i8 addrspace(200)* [[VALUE]] seq_cst, align 16
-// PURECAP-NEXT:    [[TMP1:%.*]] = call i64 @llvm.cheri.cap.address.get.i64(i8 addrspace(200)* [[TMP0]])
-// PURECAP-NEXT:    [[TMP2:%.*]] = call i64 @llvm.cheri.cap.address.get.i64(i8 addrspace(200)* [[VALUE]])
+// PURECAP-NEXT:    [[TMP0:%.*]] = atomicrmw and ptr addrspace(200) [[PTR]], ptr addrspace(200) [[VALUE]] seq_cst, align 16
+// PURECAP-NEXT:    [[TMP1:%.*]] = call i64 @llvm.cheri.cap.address.get.i64(ptr addrspace(200) [[TMP0]])
+// PURECAP-NEXT:    [[TMP2:%.*]] = call i64 @llvm.cheri.cap.address.get.i64(ptr addrspace(200) [[VALUE]])
 // PURECAP-NEXT:    [[TMP3:%.*]] = and i64 [[TMP1]], [[TMP2]]
-// PURECAP-NEXT:    [[TMP4:%.*]] = call i8 addrspace(200)* @llvm.cheri.cap.address.set.i64(i8 addrspace(200)* [[TMP0]], i64 [[TMP3]])
-// PURECAP-NEXT:    ret i8 addrspace(200)* [[TMP4]]
+// PURECAP-NEXT:    [[TMP4:%.*]] = call ptr addrspace(200) @llvm.cheri.cap.address.set.i64(ptr addrspace(200) [[TMP0]], i64 [[TMP3]])
+// PURECAP-NEXT:    ret ptr addrspace(200) [[TMP4]]
 //
 __uintcap_t test_and_fetch_uintcap(__uintcap_t *ptr, __uintcap_t value) {
   return __sync_and_and_fetch(ptr, value);
 }
 
 // HYBRID-LABEL: define {{[^@]+}}@test_or_fetch_uintcap
-// HYBRID-SAME: (i8 addrspace(200)** noundef [[PTR:%.*]], i8 addrspace(200)* noundef [[VALUE:%.*]]) #[[ATTR0]] {
+// HYBRID-SAME: (ptr noundef [[PTR:%.*]], ptr addrspace(200) noundef [[VALUE:%.*]]) #[[ATTR0]] {
 // HYBRID-NEXT:  entry:
-// HYBRID-NEXT:    [[TMP0:%.*]] = atomicrmw or i8 addrspace(200)** [[PTR]], i8 addrspace(200)* [[VALUE]] seq_cst, align 16
-// HYBRID-NEXT:    [[TMP1:%.*]] = call i64 @llvm.cheri.cap.address.get.i64(i8 addrspace(200)* [[TMP0]])
-// HYBRID-NEXT:    [[TMP2:%.*]] = call i64 @llvm.cheri.cap.address.get.i64(i8 addrspace(200)* [[VALUE]])
+// HYBRID-NEXT:    [[TMP0:%.*]] = atomicrmw or ptr [[PTR]], ptr addrspace(200) [[VALUE]] seq_cst, align 16
+// HYBRID-NEXT:    [[TMP1:%.*]] = call i64 @llvm.cheri.cap.address.get.i64(ptr addrspace(200) [[TMP0]])
+// HYBRID-NEXT:    [[TMP2:%.*]] = call i64 @llvm.cheri.cap.address.get.i64(ptr addrspace(200) [[VALUE]])
 // HYBRID-NEXT:    [[TMP3:%.*]] = or i64 [[TMP1]], [[TMP2]]
-// HYBRID-NEXT:    [[TMP4:%.*]] = call i8 addrspace(200)* @llvm.cheri.cap.address.set.i64(i8 addrspace(200)* [[TMP0]], i64 [[TMP3]])
-// HYBRID-NEXT:    ret i8 addrspace(200)* [[TMP4]]
+// HYBRID-NEXT:    [[TMP4:%.*]] = call ptr addrspace(200) @llvm.cheri.cap.address.set.i64(ptr addrspace(200) [[TMP0]], i64 [[TMP3]])
+// HYBRID-NEXT:    ret ptr addrspace(200) [[TMP4]]
 //
 // PURECAP-LABEL: define {{[^@]+}}@test_or_fetch_uintcap
-// PURECAP-SAME: (i8 addrspace(200)* addrspace(200)* noundef [[PTR:%.*]], i8 addrspace(200)* noundef [[VALUE:%.*]]) addrspace(200) #[[ATTR0]] {
+// PURECAP-SAME: (ptr addrspace(200) noundef [[PTR:%.*]], ptr addrspace(200) noundef [[VALUE:%.*]]) addrspace(200) #[[ATTR0]] {
 // PURECAP-NEXT:  entry:
-// PURECAP-NEXT:    [[TMP0:%.*]] = atomicrmw or i8 addrspace(200)* addrspace(200)* [[PTR]], i8 addrspace(200)* [[VALUE]] seq_cst, align 16
-// PURECAP-NEXT:    [[TMP1:%.*]] = call i64 @llvm.cheri.cap.address.get.i64(i8 addrspace(200)* [[TMP0]])
-// PURECAP-NEXT:    [[TMP2:%.*]] = call i64 @llvm.cheri.cap.address.get.i64(i8 addrspace(200)* [[VALUE]])
+// PURECAP-NEXT:    [[TMP0:%.*]] = atomicrmw or ptr addrspace(200) [[PTR]], ptr addrspace(200) [[VALUE]] seq_cst, align 16
+// PURECAP-NEXT:    [[TMP1:%.*]] = call i64 @llvm.cheri.cap.address.get.i64(ptr addrspace(200) [[TMP0]])
+// PURECAP-NEXT:    [[TMP2:%.*]] = call i64 @llvm.cheri.cap.address.get.i64(ptr addrspace(200) [[VALUE]])
 // PURECAP-NEXT:    [[TMP3:%.*]] = or i64 [[TMP1]], [[TMP2]]
-// PURECAP-NEXT:    [[TMP4:%.*]] = call i8 addrspace(200)* @llvm.cheri.cap.address.set.i64(i8 addrspace(200)* [[TMP0]], i64 [[TMP3]])
-// PURECAP-NEXT:    ret i8 addrspace(200)* [[TMP4]]
+// PURECAP-NEXT:    [[TMP4:%.*]] = call ptr addrspace(200) @llvm.cheri.cap.address.set.i64(ptr addrspace(200) [[TMP0]], i64 [[TMP3]])
+// PURECAP-NEXT:    ret ptr addrspace(200) [[TMP4]]
 //
 __uintcap_t test_or_fetch_uintcap(__uintcap_t *ptr, __uintcap_t value) {
   return __sync_or_and_fetch(ptr, value);
 }
 
 // HYBRID-LABEL: define {{[^@]+}}@test_xor_fetch_uintcap
-// HYBRID-SAME: (i8 addrspace(200)** noundef [[PTR:%.*]], i8 addrspace(200)* noundef [[VALUE:%.*]]) #[[ATTR0]] {
+// HYBRID-SAME: (ptr noundef [[PTR:%.*]], ptr addrspace(200) noundef [[VALUE:%.*]]) #[[ATTR0]] {
 // HYBRID-NEXT:  entry:
-// HYBRID-NEXT:    [[TMP0:%.*]] = atomicrmw xor i8 addrspace(200)** [[PTR]], i8 addrspace(200)* [[VALUE]] seq_cst, align 16
-// HYBRID-NEXT:    [[TMP1:%.*]] = call i64 @llvm.cheri.cap.address.get.i64(i8 addrspace(200)* [[TMP0]])
-// HYBRID-NEXT:    [[TMP2:%.*]] = call i64 @llvm.cheri.cap.address.get.i64(i8 addrspace(200)* [[VALUE]])
+// HYBRID-NEXT:    [[TMP0:%.*]] = atomicrmw xor ptr [[PTR]], ptr addrspace(200) [[VALUE]] seq_cst, align 16
+// HYBRID-NEXT:    [[TMP1:%.*]] = call i64 @llvm.cheri.cap.address.get.i64(ptr addrspace(200) [[TMP0]])
+// HYBRID-NEXT:    [[TMP2:%.*]] = call i64 @llvm.cheri.cap.address.get.i64(ptr addrspace(200) [[VALUE]])
 // HYBRID-NEXT:    [[TMP3:%.*]] = xor i64 [[TMP1]], [[TMP2]]
-// HYBRID-NEXT:    [[TMP4:%.*]] = call i8 addrspace(200)* @llvm.cheri.cap.address.set.i64(i8 addrspace(200)* [[TMP0]], i64 [[TMP3]])
-// HYBRID-NEXT:    ret i8 addrspace(200)* [[TMP4]]
+// HYBRID-NEXT:    [[TMP4:%.*]] = call ptr addrspace(200) @llvm.cheri.cap.address.set.i64(ptr addrspace(200) [[TMP0]], i64 [[TMP3]])
+// HYBRID-NEXT:    ret ptr addrspace(200) [[TMP4]]
 //
 // PURECAP-LABEL: define {{[^@]+}}@test_xor_fetch_uintcap
-// PURECAP-SAME: (i8 addrspace(200)* addrspace(200)* noundef [[PTR:%.*]], i8 addrspace(200)* noundef [[VALUE:%.*]]) addrspace(200) #[[ATTR0]] {
+// PURECAP-SAME: (ptr addrspace(200) noundef [[PTR:%.*]], ptr addrspace(200) noundef [[VALUE:%.*]]) addrspace(200) #[[ATTR0]] {
 // PURECAP-NEXT:  entry:
-// PURECAP-NEXT:    [[TMP0:%.*]] = atomicrmw xor i8 addrspace(200)* addrspace(200)* [[PTR]], i8 addrspace(200)* [[VALUE]] seq_cst, align 16
-// PURECAP-NEXT:    [[TMP1:%.*]] = call i64 @llvm.cheri.cap.address.get.i64(i8 addrspace(200)* [[TMP0]])
-// PURECAP-NEXT:    [[TMP2:%.*]] = call i64 @llvm.cheri.cap.address.get.i64(i8 addrspace(200)* [[VALUE]])
+// PURECAP-NEXT:    [[TMP0:%.*]] = atomicrmw xor ptr addrspace(200) [[PTR]], ptr addrspace(200) [[VALUE]] seq_cst, align 16
+// PURECAP-NEXT:    [[TMP1:%.*]] = call i64 @llvm.cheri.cap.address.get.i64(ptr addrspace(200) [[TMP0]])
+// PURECAP-NEXT:    [[TMP2:%.*]] = call i64 @llvm.cheri.cap.address.get.i64(ptr addrspace(200) [[VALUE]])
 // PURECAP-NEXT:    [[TMP3:%.*]] = xor i64 [[TMP1]], [[TMP2]]
-// PURECAP-NEXT:    [[TMP4:%.*]] = call i8 addrspace(200)* @llvm.cheri.cap.address.set.i64(i8 addrspace(200)* [[TMP0]], i64 [[TMP3]])
-// PURECAP-NEXT:    ret i8 addrspace(200)* [[TMP4]]
+// PURECAP-NEXT:    [[TMP4:%.*]] = call ptr addrspace(200) @llvm.cheri.cap.address.set.i64(ptr addrspace(200) [[TMP0]], i64 [[TMP3]])
+// PURECAP-NEXT:    ret ptr addrspace(200) [[TMP4]]
 //
 __uintcap_t test_xor_fetch_uintcap(__uintcap_t *ptr, __uintcap_t value) {
   return __sync_xor_and_fetch(ptr, value);
 }
 
 // HYBRID-LABEL: define {{[^@]+}}@test_nand_fetch_uintcap
-// HYBRID-SAME: (i8 addrspace(200)** noundef [[PTR:%.*]], i8 addrspace(200)* noundef [[VALUE:%.*]]) #[[ATTR0]] {
+// HYBRID-SAME: (ptr noundef [[PTR:%.*]], ptr addrspace(200) noundef [[VALUE:%.*]]) #[[ATTR0]] {
 // HYBRID-NEXT:  entry:
-// HYBRID-NEXT:    [[TMP0:%.*]] = atomicrmw nand i8 addrspace(200)** [[PTR]], i8 addrspace(200)* [[VALUE]] seq_cst, align 16
-// HYBRID-NEXT:    [[TMP1:%.*]] = call i64 @llvm.cheri.cap.address.get.i64(i8 addrspace(200)* [[TMP0]])
-// HYBRID-NEXT:    [[TMP2:%.*]] = call i64 @llvm.cheri.cap.address.get.i64(i8 addrspace(200)* [[VALUE]])
+// HYBRID-NEXT:    [[TMP0:%.*]] = atomicrmw nand ptr [[PTR]], ptr addrspace(200) [[VALUE]] seq_cst, align 16
+// HYBRID-NEXT:    [[TMP1:%.*]] = call i64 @llvm.cheri.cap.address.get.i64(ptr addrspace(200) [[TMP0]])
+// HYBRID-NEXT:    [[TMP2:%.*]] = call i64 @llvm.cheri.cap.address.get.i64(ptr addrspace(200) [[VALUE]])
 // HYBRID-NEXT:    [[TMP3:%.*]] = and i64 [[TMP1]], [[TMP2]]
 // HYBRID-NEXT:    [[TMP4:%.*]] = xor i64 [[TMP3]], -1
-// HYBRID-NEXT:    [[TMP5:%.*]] = call i8 addrspace(200)* @llvm.cheri.cap.address.set.i64(i8 addrspace(200)* [[TMP0]], i64 [[TMP4]])
-// HYBRID-NEXT:    ret i8 addrspace(200)* [[TMP5]]
+// HYBRID-NEXT:    [[TMP5:%.*]] = call ptr addrspace(200) @llvm.cheri.cap.address.set.i64(ptr addrspace(200) [[TMP0]], i64 [[TMP4]])
+// HYBRID-NEXT:    ret ptr addrspace(200) [[TMP5]]
 //
 // PURECAP-LABEL: define {{[^@]+}}@test_nand_fetch_uintcap
-// PURECAP-SAME: (i8 addrspace(200)* addrspace(200)* noundef [[PTR:%.*]], i8 addrspace(200)* noundef [[VALUE:%.*]]) addrspace(200) #[[ATTR0]] {
+// PURECAP-SAME: (ptr addrspace(200) noundef [[PTR:%.*]], ptr addrspace(200) noundef [[VALUE:%.*]]) addrspace(200) #[[ATTR0]] {
 // PURECAP-NEXT:  entry:
-// PURECAP-NEXT:    [[TMP0:%.*]] = atomicrmw nand i8 addrspace(200)* addrspace(200)* [[PTR]], i8 addrspace(200)* [[VALUE]] seq_cst, align 16
-// PURECAP-NEXT:    [[TMP1:%.*]] = call i64 @llvm.cheri.cap.address.get.i64(i8 addrspace(200)* [[TMP0]])
-// PURECAP-NEXT:    [[TMP2:%.*]] = call i64 @llvm.cheri.cap.address.get.i64(i8 addrspace(200)* [[VALUE]])
+// PURECAP-NEXT:    [[TMP0:%.*]] = atomicrmw nand ptr addrspace(200) [[PTR]], ptr addrspace(200) [[VALUE]] seq_cst, align 16
+// PURECAP-NEXT:    [[TMP1:%.*]] = call i64 @llvm.cheri.cap.address.get.i64(ptr addrspace(200) [[TMP0]])
+// PURECAP-NEXT:    [[TMP2:%.*]] = call i64 @llvm.cheri.cap.address.get.i64(ptr addrspace(200) [[VALUE]])
 // PURECAP-NEXT:    [[TMP3:%.*]] = and i64 [[TMP1]], [[TMP2]]
 // PURECAP-NEXT:    [[TMP4:%.*]] = xor i64 [[TMP3]], -1
-// PURECAP-NEXT:    [[TMP5:%.*]] = call i8 addrspace(200)* @llvm.cheri.cap.address.set.i64(i8 addrspace(200)* [[TMP0]], i64 [[TMP4]])
-// PURECAP-NEXT:    ret i8 addrspace(200)* [[TMP5]]
+// PURECAP-NEXT:    [[TMP5:%.*]] = call ptr addrspace(200) @llvm.cheri.cap.address.set.i64(ptr addrspace(200) [[TMP0]], i64 [[TMP4]])
+// PURECAP-NEXT:    ret ptr addrspace(200) [[TMP5]]
 //
 __uintcap_t test_nand_fetch_uintcap(__uintcap_t *ptr, __uintcap_t value) {
   return __sync_nand_and_fetch(ptr, value);

@@ -11,7 +11,7 @@ struct {
 
 char empty[2] = {};
 
-// CHECK: %struct.anon = type { i8 addrspace(200)* }
+// CHECK: %struct.anon = type { ptr addrspace(200) }
 // CHECK: @c = {{(addrspace\(200\) )?}}global %struct.anon zeroinitializer, align 16
 // CHECK: @empty = {{(addrspace\(200\) )?}}global [2 x i8] zeroinitializer, align 1
-// CHECK: @a = {{(addrspace\(200\) )?}}global i8 addrspace(200)* null, align 16
+// CHECK: @a = {{(addrspace\(200\) )?}}global ptr addrspace(200) null, align 16

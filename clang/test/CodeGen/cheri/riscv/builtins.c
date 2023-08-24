@@ -34,23 +34,23 @@ void standard(void * __capability cap) {
 
   void * __capability volatile z;
   z = __builtin_cheri_cap_from_pointer(cap, y);
-  // RV32IXCHERI: call i8 addrspace(200)* @llvm.cheri.cap.from.pointer.i32
-  // RV64IXCHERI: call i8 addrspace(200)* @llvm.cheri.cap.from.pointer.i64
+  // RV32IXCHERI: call ptr addrspace(200) @llvm.cheri.cap.from.pointer.i32
+  // RV64IXCHERI: call ptr addrspace(200) @llvm.cheri.cap.from.pointer.i64
   z = __builtin_cheri_perms_and(cap, 12);
-  // RV32IXCHERI: call i8 addrspace(200)* @llvm.cheri.cap.perms.and.i32
-  // RV64IXCHERI: call i8 addrspace(200)* @llvm.cheri.cap.perms.and.i64
+  // RV32IXCHERI: call ptr addrspace(200) @llvm.cheri.cap.perms.and.i32
+  // RV64IXCHERI: call ptr addrspace(200) @llvm.cheri.cap.perms.and.i64
   z = __builtin_cheri_seal(cap, cap);
-  // RV32IXCHERI: call i8 addrspace(200)* @llvm.cheri.cap.seal
-  // RV64IXCHERI: call i8 addrspace(200)* @llvm.cheri.cap.seal
+  // RV32IXCHERI: call ptr addrspace(200) @llvm.cheri.cap.seal
+  // RV64IXCHERI: call ptr addrspace(200) @llvm.cheri.cap.seal
   z = __builtin_cheri_unseal(cap, cap);
-  // RV32IXCHERI: call i8 addrspace(200)* @llvm.cheri.cap.unseal
-  // RV64IXCHERI: call i8 addrspace(200)* @llvm.cheri.cap.unseal
+  // RV32IXCHERI: call ptr addrspace(200) @llvm.cheri.cap.unseal
+  // RV64IXCHERI: call ptr addrspace(200) @llvm.cheri.cap.unseal
   z = __builtin_cheri_bounds_set(cap, 42);
-  // RV32IXCHERI: call i8 addrspace(200)* @llvm.cheri.cap.bounds.set.i32(i8 addrspace(200)* {{.+}}, i32 42)
-  // RV64IXCHERI: call i8 addrspace(200)* @llvm.cheri.cap.bounds.set.i64(i8 addrspace(200)* {{.+}}, i64 42)
+  // RV32IXCHERI: call ptr addrspace(200) @llvm.cheri.cap.bounds.set.i32(ptr addrspace(200) {{.+}}, i32 42)
+  // RV64IXCHERI: call ptr addrspace(200) @llvm.cheri.cap.bounds.set.i64(ptr addrspace(200) {{.+}}, i64 42)
   z = __builtin_cheri_bounds_set_exact(cap, 43);
-  // RV32IXCHERI: call i8 addrspace(200)* @llvm.cheri.cap.bounds.set.exact.i32(i8 addrspace(200)* {{.+}}, i32 43)
-  // RV64IXCHERI: call i8 addrspace(200)* @llvm.cheri.cap.bounds.set.exact.i64(i8 addrspace(200)* {{.+}}, i64 43)
+  // RV32IXCHERI: call ptr addrspace(200) @llvm.cheri.cap.bounds.set.exact.i32(ptr addrspace(200) {{.+}}, i32 43)
+  // RV64IXCHERI: call ptr addrspace(200) @llvm.cheri.cap.bounds.set.exact.i64(ptr addrspace(200) {{.+}}, i64 43)
 
   __builtin_cheri_perms_check(cap, 12);
   // RV32IXCHERI: call void @llvm.cheri.cap.perms.check.i32
@@ -64,14 +64,14 @@ void buildcap(void * __capability auth, void * __capability bits) {
   // RV32IXCHERI-LABEL: @buildcap(
   // RV64IXCHERI-LABEL: @buildcap(
   void * __capability volatile tagged = __builtin_cheri_cap_build(auth, (__uintcap_t)bits);
-  // RV32IXCHERI: call i8 addrspace(200)* @llvm.cheri.cap.build
-  // RV64IXCHERI: call i8 addrspace(200)* @llvm.cheri.cap.build
+  // RV32IXCHERI: call ptr addrspace(200) @llvm.cheri.cap.build
+  // RV64IXCHERI: call ptr addrspace(200) @llvm.cheri.cap.build
   void * __capability volatile unseal_auth = __builtin_cheri_cap_type_copy(auth, bits);
-  // RV32IXCHERI: call i8 addrspace(200)* @llvm.cheri.cap.type.copy
-  // RV64IXCHERI: call i8 addrspace(200)* @llvm.cheri.cap.type.copy
+  // RV32IXCHERI: call ptr addrspace(200) @llvm.cheri.cap.type.copy
+  // RV64IXCHERI: call ptr addrspace(200) @llvm.cheri.cap.type.copy
   void * __capability volatile condseal = __builtin_cheri_conditional_seal(tagged, unseal_auth);
-  // RV32IXCHERI: call i8 addrspace(200)* @llvm.cheri.cap.conditional.seal
-  // RV64IXCHERI: call i8 addrspace(200)* @llvm.cheri.cap.conditional.seal
+  // RV32IXCHERI: call ptr addrspace(200) @llvm.cheri.cap.conditional.seal
+  // RV64IXCHERI: call ptr addrspace(200) @llvm.cheri.cap.conditional.seal
 }
 
 __SIZE_TYPE__ crrl_cram(__SIZE_TYPE__ len) {

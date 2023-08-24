@@ -10,17 +10,16 @@ struct AlignedAsCap {
 };
 
 // CHECK-LABEL: define {{[^@]+}}@check_alignment_memcpy_inc_offset
-// CHECK-SAME: (i8 addrspace(200)* noundef [[TMPBUFFER:%.*]], [[STRUCT_ALIGNEDASCAP:%.*]] addrspace(200)* noundef [[A:%.*]]) addrspace(200) #[[ATTR0:[0-9]+]] {
+// CHECK-SAME: (ptr addrspace(200) noundef [[TMPBUFFER:%.*]], ptr addrspace(200) noundef [[A:%.*]]) addrspace(200) #[[ATTR0:[0-9]+]] {
 // CHECK-NEXT:  entry:
-// CHECK-NEXT:    [[TMPBUFFER_ADDR:%.*]] = alloca i8 addrspace(200)*, align 16, addrspace(200)
-// CHECK-NEXT:    [[A_ADDR:%.*]] = alloca [[STRUCT_ALIGNEDASCAP]] addrspace(200)*, align 16, addrspace(200)
-// CHECK-NEXT:    store i8 addrspace(200)* [[TMPBUFFER]], i8 addrspace(200)* addrspace(200)* [[TMPBUFFER_ADDR]], align 16
-// CHECK-NEXT:    store [[STRUCT_ALIGNEDASCAP]] addrspace(200)* [[A]], [[STRUCT_ALIGNEDASCAP]] addrspace(200)* addrspace(200)* [[A_ADDR]], align 16
-// CHECK-NEXT:    [[TMP0:%.*]] = load i8 addrspace(200)*, i8 addrspace(200)* addrspace(200)* [[TMPBUFFER_ADDR]], align 16
-// CHECK-NEXT:    [[TMP1:%.*]] = load [[STRUCT_ALIGNEDASCAP]] addrspace(200)*, [[STRUCT_ALIGNEDASCAP]] addrspace(200)* addrspace(200)* [[A_ADDR]], align 16
-// CHECK-NEXT:    [[TMP2:%.*]] = bitcast [[STRUCT_ALIGNEDASCAP]] addrspace(200)* [[TMP1]] to i8 addrspace(200)*
-// CHECK-NEXT:    [[__BUILTIN_CHERI_OFFSET_INCREMENT:%.*]] = getelementptr i8, i8 addrspace(200)* [[TMP2]], i64 4
-// CHECK-NEXT:    call void @llvm.memcpy.p200i8.p200i8.i64(i8 addrspace(200)* align 1 [[TMP0]], i8 addrspace(200)* align 1 [[__BUILTIN_CHERI_OFFSET_INCREMENT]], i64 16, i1 false)
+// CHECK-NEXT:    [[TMPBUFFER_ADDR:%.*]] = alloca ptr addrspace(200), align 16, addrspace(200)
+// CHECK-NEXT:    [[A_ADDR:%.*]] = alloca ptr addrspace(200), align 16, addrspace(200)
+// CHECK-NEXT:    store ptr addrspace(200) [[TMPBUFFER]], ptr addrspace(200) [[TMPBUFFER_ADDR]], align 16
+// CHECK-NEXT:    store ptr addrspace(200) [[A]], ptr addrspace(200) [[A_ADDR]], align 16
+// CHECK-NEXT:    [[TMP0:%.*]] = load ptr addrspace(200), ptr addrspace(200) [[TMPBUFFER_ADDR]], align 16
+// CHECK-NEXT:    [[TMP1:%.*]] = load ptr addrspace(200), ptr addrspace(200) [[A_ADDR]], align 16
+// CHECK-NEXT:    [[__BUILTIN_CHERI_OFFSET_INCREMENT:%.*]] = getelementptr i8, ptr addrspace(200) [[TMP1]], i64 4
+// CHECK-NEXT:    call void @llvm.memcpy.p200.p200.i64(ptr addrspace(200) align 1 [[TMP0]], ptr addrspace(200) align 1 [[__BUILTIN_CHERI_OFFSET_INCREMENT]], i64 16, i1 false)
 // CHECK-NEXT:    ret void
 //
 void check_alignment_memcpy_inc_offset(void *tmpbuffer, struct AlignedAsCap *a) {
@@ -28,20 +27,19 @@ void check_alignment_memcpy_inc_offset(void *tmpbuffer, struct AlignedAsCap *a) 
 }
 
 // CHECK-LABEL: define {{[^@]+}}@check_alignment_memcpy_set_offset
-// CHECK-SAME: (i8 addrspace(200)* noundef [[TMPBUFFER:%.*]], [[STRUCT_ALIGNEDASCAP:%.*]] addrspace(200)* noundef [[A:%.*]], i64 noundef signext [[NEW_OFFSET:%.*]]) addrspace(200) #[[ATTR0]] {
+// CHECK-SAME: (ptr addrspace(200) noundef [[TMPBUFFER:%.*]], ptr addrspace(200) noundef [[A:%.*]], i64 noundef signext [[NEW_OFFSET:%.*]]) addrspace(200) #[[ATTR0]] {
 // CHECK-NEXT:  entry:
-// CHECK-NEXT:    [[TMPBUFFER_ADDR:%.*]] = alloca i8 addrspace(200)*, align 16, addrspace(200)
-// CHECK-NEXT:    [[A_ADDR:%.*]] = alloca [[STRUCT_ALIGNEDASCAP]] addrspace(200)*, align 16, addrspace(200)
+// CHECK-NEXT:    [[TMPBUFFER_ADDR:%.*]] = alloca ptr addrspace(200), align 16, addrspace(200)
+// CHECK-NEXT:    [[A_ADDR:%.*]] = alloca ptr addrspace(200), align 16, addrspace(200)
 // CHECK-NEXT:    [[NEW_OFFSET_ADDR:%.*]] = alloca i64, align 8, addrspace(200)
-// CHECK-NEXT:    store i8 addrspace(200)* [[TMPBUFFER]], i8 addrspace(200)* addrspace(200)* [[TMPBUFFER_ADDR]], align 16
-// CHECK-NEXT:    store [[STRUCT_ALIGNEDASCAP]] addrspace(200)* [[A]], [[STRUCT_ALIGNEDASCAP]] addrspace(200)* addrspace(200)* [[A_ADDR]], align 16
-// CHECK-NEXT:    store i64 [[NEW_OFFSET]], i64 addrspace(200)* [[NEW_OFFSET_ADDR]], align 8
-// CHECK-NEXT:    [[TMP0:%.*]] = load i8 addrspace(200)*, i8 addrspace(200)* addrspace(200)* [[TMPBUFFER_ADDR]], align 16
-// CHECK-NEXT:    [[TMP1:%.*]] = load [[STRUCT_ALIGNEDASCAP]] addrspace(200)*, [[STRUCT_ALIGNEDASCAP]] addrspace(200)* addrspace(200)* [[A_ADDR]], align 16
-// CHECK-NEXT:    [[TMP2:%.*]] = load i64, i64 addrspace(200)* [[NEW_OFFSET_ADDR]], align 8
-// CHECK-NEXT:    [[TMP3:%.*]] = bitcast [[STRUCT_ALIGNEDASCAP]] addrspace(200)* [[TMP1]] to i8 addrspace(200)*
-// CHECK-NEXT:    [[TMP4:%.*]] = call i8 addrspace(200)* @llvm.cheri.cap.offset.set.i64(i8 addrspace(200)* [[TMP3]], i64 [[TMP2]])
-// CHECK-NEXT:    call void @llvm.memcpy.p200i8.p200i8.i64(i8 addrspace(200)* align 1 [[TMP0]], i8 addrspace(200)* align 1 [[TMP4]], i64 16, i1 false)
+// CHECK-NEXT:    store ptr addrspace(200) [[TMPBUFFER]], ptr addrspace(200) [[TMPBUFFER_ADDR]], align 16
+// CHECK-NEXT:    store ptr addrspace(200) [[A]], ptr addrspace(200) [[A_ADDR]], align 16
+// CHECK-NEXT:    store i64 [[NEW_OFFSET]], ptr addrspace(200) [[NEW_OFFSET_ADDR]], align 8
+// CHECK-NEXT:    [[TMP0:%.*]] = load ptr addrspace(200), ptr addrspace(200) [[TMPBUFFER_ADDR]], align 16
+// CHECK-NEXT:    [[TMP1:%.*]] = load ptr addrspace(200), ptr addrspace(200) [[A_ADDR]], align 16
+// CHECK-NEXT:    [[TMP2:%.*]] = load i64, ptr addrspace(200) [[NEW_OFFSET_ADDR]], align 8
+// CHECK-NEXT:    [[TMP3:%.*]] = call ptr addrspace(200) @llvm.cheri.cap.offset.set.i64(ptr addrspace(200) [[TMP1]], i64 [[TMP2]])
+// CHECK-NEXT:    call void @llvm.memcpy.p200.p200.i64(ptr addrspace(200) align 1 [[TMP0]], ptr addrspace(200) align 1 [[TMP3]], i64 16, i1 false)
 // CHECK-NEXT:    ret void
 //
 void check_alignment_memcpy_set_offset(void *tmpbuffer, struct AlignedAsCap *a, long new_offset) {
@@ -49,20 +47,19 @@ void check_alignment_memcpy_set_offset(void *tmpbuffer, struct AlignedAsCap *a, 
 }
 
 // CHECK-LABEL: define {{[^@]+}}@check_alignment_memcpy_set_address
-// CHECK-SAME: (i8 addrspace(200)* noundef [[TMPBUFFER:%.*]], [[STRUCT_ALIGNEDASCAP:%.*]] addrspace(200)* noundef [[A:%.*]], i64 noundef signext [[NEW_ADDR:%.*]]) addrspace(200) #[[ATTR0]] {
+// CHECK-SAME: (ptr addrspace(200) noundef [[TMPBUFFER:%.*]], ptr addrspace(200) noundef [[A:%.*]], i64 noundef signext [[NEW_ADDR:%.*]]) addrspace(200) #[[ATTR0]] {
 // CHECK-NEXT:  entry:
-// CHECK-NEXT:    [[TMPBUFFER_ADDR:%.*]] = alloca i8 addrspace(200)*, align 16, addrspace(200)
-// CHECK-NEXT:    [[A_ADDR:%.*]] = alloca [[STRUCT_ALIGNEDASCAP]] addrspace(200)*, align 16, addrspace(200)
+// CHECK-NEXT:    [[TMPBUFFER_ADDR:%.*]] = alloca ptr addrspace(200), align 16, addrspace(200)
+// CHECK-NEXT:    [[A_ADDR:%.*]] = alloca ptr addrspace(200), align 16, addrspace(200)
 // CHECK-NEXT:    [[NEW_ADDR_ADDR:%.*]] = alloca i64, align 8, addrspace(200)
-// CHECK-NEXT:    store i8 addrspace(200)* [[TMPBUFFER]], i8 addrspace(200)* addrspace(200)* [[TMPBUFFER_ADDR]], align 16
-// CHECK-NEXT:    store [[STRUCT_ALIGNEDASCAP]] addrspace(200)* [[A]], [[STRUCT_ALIGNEDASCAP]] addrspace(200)* addrspace(200)* [[A_ADDR]], align 16
-// CHECK-NEXT:    store i64 [[NEW_ADDR]], i64 addrspace(200)* [[NEW_ADDR_ADDR]], align 8
-// CHECK-NEXT:    [[TMP0:%.*]] = load i8 addrspace(200)*, i8 addrspace(200)* addrspace(200)* [[TMPBUFFER_ADDR]], align 16
-// CHECK-NEXT:    [[TMP1:%.*]] = load [[STRUCT_ALIGNEDASCAP]] addrspace(200)*, [[STRUCT_ALIGNEDASCAP]] addrspace(200)* addrspace(200)* [[A_ADDR]], align 16
-// CHECK-NEXT:    [[TMP2:%.*]] = load i64, i64 addrspace(200)* [[NEW_ADDR_ADDR]], align 8
-// CHECK-NEXT:    [[TMP3:%.*]] = bitcast [[STRUCT_ALIGNEDASCAP]] addrspace(200)* [[TMP1]] to i8 addrspace(200)*
-// CHECK-NEXT:    [[TMP4:%.*]] = call i8 addrspace(200)* @llvm.cheri.cap.address.set.i64(i8 addrspace(200)* [[TMP3]], i64 [[TMP2]])
-// CHECK-NEXT:    call void @llvm.memcpy.p200i8.p200i8.i64(i8 addrspace(200)* align 1 [[TMP0]], i8 addrspace(200)* align 1 [[TMP4]], i64 16, i1 false)
+// CHECK-NEXT:    store ptr addrspace(200) [[TMPBUFFER]], ptr addrspace(200) [[TMPBUFFER_ADDR]], align 16
+// CHECK-NEXT:    store ptr addrspace(200) [[A]], ptr addrspace(200) [[A_ADDR]], align 16
+// CHECK-NEXT:    store i64 [[NEW_ADDR]], ptr addrspace(200) [[NEW_ADDR_ADDR]], align 8
+// CHECK-NEXT:    [[TMP0:%.*]] = load ptr addrspace(200), ptr addrspace(200) [[TMPBUFFER_ADDR]], align 16
+// CHECK-NEXT:    [[TMP1:%.*]] = load ptr addrspace(200), ptr addrspace(200) [[A_ADDR]], align 16
+// CHECK-NEXT:    [[TMP2:%.*]] = load i64, ptr addrspace(200) [[NEW_ADDR_ADDR]], align 8
+// CHECK-NEXT:    [[TMP3:%.*]] = call ptr addrspace(200) @llvm.cheri.cap.address.set.i64(ptr addrspace(200) [[TMP1]], i64 [[TMP2]])
+// CHECK-NEXT:    call void @llvm.memcpy.p200.p200.i64(ptr addrspace(200) align 1 [[TMP0]], ptr addrspace(200) align 1 [[TMP3]], i64 16, i1 false)
 // CHECK-NEXT:    ret void
 //
 void check_alignment_memcpy_set_address(void *tmpbuffer, struct AlignedAsCap *a, long new_addr) {
@@ -73,48 +70,45 @@ void check_alignment_memcpy_set_address(void *tmpbuffer, struct AlignedAsCap *a,
 /// result (this would assert if we were to retain the type in codegen).
 
 // CHECK-LABEL: define {{[^@]+}}@check_return_inc_offset
-// CHECK-SAME: ([[STRUCT_ALIGNEDASCAP:%.*]] addrspace(200)* noundef [[A:%.*]]) addrspace(200) #[[ATTR0]] {
+// CHECK-SAME: (ptr addrspace(200) noundef [[A:%.*]]) addrspace(200) #[[ATTR0]] {
 // CHECK-NEXT:  entry:
-// CHECK-NEXT:    [[A_ADDR:%.*]] = alloca [[STRUCT_ALIGNEDASCAP]] addrspace(200)*, align 16, addrspace(200)
-// CHECK-NEXT:    store [[STRUCT_ALIGNEDASCAP]] addrspace(200)* [[A]], [[STRUCT_ALIGNEDASCAP]] addrspace(200)* addrspace(200)* [[A_ADDR]], align 16
-// CHECK-NEXT:    [[TMP0:%.*]] = load [[STRUCT_ALIGNEDASCAP]] addrspace(200)*, [[STRUCT_ALIGNEDASCAP]] addrspace(200)* addrspace(200)* [[A_ADDR]], align 16
-// CHECK-NEXT:    [[TMP1:%.*]] = bitcast [[STRUCT_ALIGNEDASCAP]] addrspace(200)* [[TMP0]] to i8 addrspace(200)*
-// CHECK-NEXT:    [[__BUILTIN_CHERI_OFFSET_INCREMENT:%.*]] = getelementptr i8, i8 addrspace(200)* [[TMP1]], i64 4
-// CHECK-NEXT:    ret i8 addrspace(200)* [[__BUILTIN_CHERI_OFFSET_INCREMENT]]
+// CHECK-NEXT:    [[A_ADDR:%.*]] = alloca ptr addrspace(200), align 16, addrspace(200)
+// CHECK-NEXT:    store ptr addrspace(200) [[A]], ptr addrspace(200) [[A_ADDR]], align 16
+// CHECK-NEXT:    [[TMP0:%.*]] = load ptr addrspace(200), ptr addrspace(200) [[A_ADDR]], align 16
+// CHECK-NEXT:    [[__BUILTIN_CHERI_OFFSET_INCREMENT:%.*]] = getelementptr i8, ptr addrspace(200) [[TMP0]], i64 4
+// CHECK-NEXT:    ret ptr addrspace(200) [[__BUILTIN_CHERI_OFFSET_INCREMENT]]
 //
 void *check_return_inc_offset(struct AlignedAsCap *a) {
   return __builtin_cheri_offset_increment(a, 4);
 }
 
 // CHECK-LABEL: define {{[^@]+}}@check_return_set_offset
-// CHECK-SAME: ([[STRUCT_ALIGNEDASCAP:%.*]] addrspace(200)* noundef [[A:%.*]], i64 noundef signext [[NEW_OFFSET:%.*]]) addrspace(200) #[[ATTR0]] {
+// CHECK-SAME: (ptr addrspace(200) noundef [[A:%.*]], i64 noundef signext [[NEW_OFFSET:%.*]]) addrspace(200) #[[ATTR0]] {
 // CHECK-NEXT:  entry:
-// CHECK-NEXT:    [[A_ADDR:%.*]] = alloca [[STRUCT_ALIGNEDASCAP]] addrspace(200)*, align 16, addrspace(200)
+// CHECK-NEXT:    [[A_ADDR:%.*]] = alloca ptr addrspace(200), align 16, addrspace(200)
 // CHECK-NEXT:    [[NEW_OFFSET_ADDR:%.*]] = alloca i64, align 8, addrspace(200)
-// CHECK-NEXT:    store [[STRUCT_ALIGNEDASCAP]] addrspace(200)* [[A]], [[STRUCT_ALIGNEDASCAP]] addrspace(200)* addrspace(200)* [[A_ADDR]], align 16
-// CHECK-NEXT:    store i64 [[NEW_OFFSET]], i64 addrspace(200)* [[NEW_OFFSET_ADDR]], align 8
-// CHECK-NEXT:    [[TMP0:%.*]] = load [[STRUCT_ALIGNEDASCAP]] addrspace(200)*, [[STRUCT_ALIGNEDASCAP]] addrspace(200)* addrspace(200)* [[A_ADDR]], align 16
-// CHECK-NEXT:    [[TMP1:%.*]] = load i64, i64 addrspace(200)* [[NEW_OFFSET_ADDR]], align 8
-// CHECK-NEXT:    [[TMP2:%.*]] = bitcast [[STRUCT_ALIGNEDASCAP]] addrspace(200)* [[TMP0]] to i8 addrspace(200)*
-// CHECK-NEXT:    [[TMP3:%.*]] = call i8 addrspace(200)* @llvm.cheri.cap.offset.set.i64(i8 addrspace(200)* [[TMP2]], i64 [[TMP1]])
-// CHECK-NEXT:    ret i8 addrspace(200)* [[TMP3]]
+// CHECK-NEXT:    store ptr addrspace(200) [[A]], ptr addrspace(200) [[A_ADDR]], align 16
+// CHECK-NEXT:    store i64 [[NEW_OFFSET]], ptr addrspace(200) [[NEW_OFFSET_ADDR]], align 8
+// CHECK-NEXT:    [[TMP0:%.*]] = load ptr addrspace(200), ptr addrspace(200) [[A_ADDR]], align 16
+// CHECK-NEXT:    [[TMP1:%.*]] = load i64, ptr addrspace(200) [[NEW_OFFSET_ADDR]], align 8
+// CHECK-NEXT:    [[TMP2:%.*]] = call ptr addrspace(200) @llvm.cheri.cap.offset.set.i64(ptr addrspace(200) [[TMP0]], i64 [[TMP1]])
+// CHECK-NEXT:    ret ptr addrspace(200) [[TMP2]]
 //
 void *check_return_set_offset(struct AlignedAsCap *a, long new_offset) {
   return __builtin_cheri_offset_set(a, new_offset);
 }
 
 // CHECK-LABEL: define {{[^@]+}}@check_return_set_addr
-// CHECK-SAME: ([[STRUCT_ALIGNEDASCAP:%.*]] addrspace(200)* noundef [[A:%.*]], i64 noundef signext [[NEW_ADDR:%.*]]) addrspace(200) #[[ATTR0]] {
+// CHECK-SAME: (ptr addrspace(200) noundef [[A:%.*]], i64 noundef signext [[NEW_ADDR:%.*]]) addrspace(200) #[[ATTR0]] {
 // CHECK-NEXT:  entry:
-// CHECK-NEXT:    [[A_ADDR:%.*]] = alloca [[STRUCT_ALIGNEDASCAP]] addrspace(200)*, align 16, addrspace(200)
+// CHECK-NEXT:    [[A_ADDR:%.*]] = alloca ptr addrspace(200), align 16, addrspace(200)
 // CHECK-NEXT:    [[NEW_ADDR_ADDR:%.*]] = alloca i64, align 8, addrspace(200)
-// CHECK-NEXT:    store [[STRUCT_ALIGNEDASCAP]] addrspace(200)* [[A]], [[STRUCT_ALIGNEDASCAP]] addrspace(200)* addrspace(200)* [[A_ADDR]], align 16
-// CHECK-NEXT:    store i64 [[NEW_ADDR]], i64 addrspace(200)* [[NEW_ADDR_ADDR]], align 8
-// CHECK-NEXT:    [[TMP0:%.*]] = load [[STRUCT_ALIGNEDASCAP]] addrspace(200)*, [[STRUCT_ALIGNEDASCAP]] addrspace(200)* addrspace(200)* [[A_ADDR]], align 16
-// CHECK-NEXT:    [[TMP1:%.*]] = load i64, i64 addrspace(200)* [[NEW_ADDR_ADDR]], align 8
-// CHECK-NEXT:    [[TMP2:%.*]] = bitcast [[STRUCT_ALIGNEDASCAP]] addrspace(200)* [[TMP0]] to i8 addrspace(200)*
-// CHECK-NEXT:    [[TMP3:%.*]] = call i8 addrspace(200)* @llvm.cheri.cap.address.set.i64(i8 addrspace(200)* [[TMP2]], i64 [[TMP1]])
-// CHECK-NEXT:    ret i8 addrspace(200)* [[TMP3]]
+// CHECK-NEXT:    store ptr addrspace(200) [[A]], ptr addrspace(200) [[A_ADDR]], align 16
+// CHECK-NEXT:    store i64 [[NEW_ADDR]], ptr addrspace(200) [[NEW_ADDR_ADDR]], align 8
+// CHECK-NEXT:    [[TMP0:%.*]] = load ptr addrspace(200), ptr addrspace(200) [[A_ADDR]], align 16
+// CHECK-NEXT:    [[TMP1:%.*]] = load i64, ptr addrspace(200) [[NEW_ADDR_ADDR]], align 8
+// CHECK-NEXT:    [[TMP2:%.*]] = call ptr addrspace(200) @llvm.cheri.cap.address.set.i64(ptr addrspace(200) [[TMP0]], i64 [[TMP1]])
+// CHECK-NEXT:    ret ptr addrspace(200) [[TMP2]]
 //
 void *check_return_set_addr(struct AlignedAsCap *a, long new_addr) {
   return __builtin_cheri_address_set(a, new_addr);

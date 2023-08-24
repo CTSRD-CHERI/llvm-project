@@ -43,30 +43,30 @@ long long test(void* __capability foo)
   // CHECK: call i64 @llvm.cheri.cap.to.pointer.i64
   // ASM: ctoptr ${{[0-9]+}}, $c{{[0-9]+}}, $c{{[0-9]+}}
   results[0] = __builtin_cheri_cap_from_pointer(foo, bar);
-  // CHECK: call i8 addrspace(200)* @llvm.cheri.cap.from.pointer.i64
+  // CHECK: call ptr addrspace(200) @llvm.cheri.cap.from.pointer.i64
   // ASM: cfromptr $c{{[0-9]+}}, $c{{[0-9]+}}, ${{[0-9]+}}
   results[1] = __builtin_cheri_perms_and(foo, 12);
-  // CHECK: call i8 addrspace(200)* @llvm.cheri.cap.perms.and.i64
+  // CHECK: call ptr addrspace(200) @llvm.cheri.cap.perms.and.i64
   // ASM: candperm $c{{[0-9]+}}, $c{{[0-9]+}}, ${{[0-9]+}}
   results[4] = __builtin_cheri_seal(foo, foo);
-  // CHECK: call i8 addrspace(200)* @llvm.cheri.cap.seal
+  // CHECK: call ptr addrspace(200) @llvm.cheri.cap.seal
   // ASM: cseal $c{{[0-9]+}}, $c{{[0-9]+}}, $c{{[0-9]+}}
   results[5] = __builtin_cheri_unseal(foo, foo);
-  // CHECK: call i8 addrspace(200)* @llvm.cheri.cap.unseal
+  // CHECK: call ptr addrspace(200) @llvm.cheri.cap.unseal
   // ASM: cunseal $c{{[0-9]+}}, $c{{[0-9]+}}, $c{{[0-9]+}}
   results[6] = __builtin_cheri_bounds_set(foo, 42);
-  // CHECK: call i8 addrspace(200)* @llvm.cheri.cap.bounds.set.i64(i8 addrspace(200)* {{.+}}, i64 42)
+  // CHECK: call ptr addrspace(200) @llvm.cheri.cap.bounds.set.i64(ptr addrspace(200) {{.+}}, i64 42)
   // ASM: csetbounds $c{{[0-9]+}}, $c{{[0-9]+}}, 42
   results[6] = __builtin_cheri_bounds_set(foo, 16384); // too big for immediate csetbounds
-  // CHECK: call i8 addrspace(200)* @llvm.cheri.cap.bounds.set.i64(i8 addrspace(200)* {{.+}}, i64 16384)
+  // CHECK: call ptr addrspace(200) @llvm.cheri.cap.bounds.set.i64(ptr addrspace(200) {{.+}}, i64 16384)
   // ASM: daddiu [[INEXACT_SIZE:\$[0-9]+]], $zero, 16384
   // ASM: csetbounds $c{{[0-9]+}}, $c{{[0-9]+}}, [[INEXACT_SIZE]]
   results[7] = __builtin_cheri_bounds_set_exact(foo, 43);
-  // CHECK: call i8 addrspace(200)* @llvm.cheri.cap.bounds.set.exact.i64(i8 addrspace(200)* {{.+}}, i64 43)
+  // CHECK: call ptr addrspace(200) @llvm.cheri.cap.bounds.set.exact.i64(ptr addrspace(200) {{.+}}, i64 43)
   // ASM: daddiu [[EXACT_SIZE:\$[0-9]+]], $zero, 43
   // ASM: csetboundsexact $c{{[0-9]+}}, $c{{[0-9]+}}, [[EXACT_SIZE]]
   results[8] = __builtin_cheri_seal_entry(foo);
-  // CHECK: call i8 addrspace(200)* @llvm.cheri.cap.seal.entry(i8 addrspace(200)* {{.+}})
+  // CHECK: call ptr addrspace(200) @llvm.cheri.cap.seal.entry(ptr addrspace(200) {{.+}})
   // ASM: csealentry $c{{[0-9]+}}, $c{{[0-9]+}}
 
   __builtin_mips_cheri_cause_set(42);

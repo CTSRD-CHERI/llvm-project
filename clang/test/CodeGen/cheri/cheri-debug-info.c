@@ -17,12 +17,12 @@
 // Should be the same other than some ELF flags:
 // RUN: diff -u %t-mips.s %t-hybrid.s
 
-int foo(int* i) { // CHECK-IR:  call void @llvm.dbg.declare(metadata i32{{( addrspace\(200\)\* addrspace\(200\)\*)|(\*\*)}} %i.addr, metadata !14, metadata !DIExpression()), !dbg !15
+int foo(int* i) { // CHECK-IR:  call void @llvm.dbg.declare(metadata ptr{{( addrspace\(200\))?}} %i.addr, metadata !14, metadata !DIExpression()), !dbg !15
 	if (i) {
-		int j = 2; // CHECK-IR: call void @llvm.dbg.declare(metadata i32{{( addrspace\(200\))?}}* %j, metadata !19, metadata !DIExpression()), !dbg !21
+		int j = 2; // CHECK-IR: call void @llvm.dbg.declare(metadata ptr{{( addrspace\(200\))?}} %j, metadata !19, metadata !DIExpression()), !dbg !21
 	}
 	else {
-		int j = 3;  // CHECK-IR: call void @llvm.dbg.declare(metadata i32{{( addrspace\(200\))?}}* %j1, metadata !23, metadata !DIExpression()), !dbg !25
+		int j = 3;  // CHECK-IR: call void @llvm.dbg.declare(metadata ptr{{( addrspace\(200\))?}} %j1, metadata !23, metadata !DIExpression()), !dbg !25
 	}
 	return (int)i;
 // CHECK-IR: ret i32 %{{.+}}, !dbg !28

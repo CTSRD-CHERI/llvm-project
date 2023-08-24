@@ -33,16 +33,16 @@ struct test {
 extern "C" __uintcap_t test_zero() { return test<0>::x(); }
 // CHECK-LABEL: @test_zero(
 // CHECK-NEXT:  entry:
-// CHECK-NEXT:    ret i8 addrspace(200)* null
+// CHECK-NEXT:    ret ptr addrspace(200) null
 extern "C" __uintcap_t test_one() { return test<1>::x(); }
 // CHECK-LABEL: @test_one(
 // CHECK-NEXT:  entry:
-// CHECK-NEXT:    ret  i8 addrspace(200)* getelementptr (i8, i8 addrspace(200)* null, i64 1)
+// CHECK-NEXT:    ret  ptr addrspace(200) getelementptr (i8, ptr addrspace(200) null, i64 1)
 extern "C" __uintcap_t test_max() { return test<__UINT64_MAX__>::x(); }
 // CHECK-LABEL: @test_max(
 // CHECK-NEXT:  entry:
-// CHECK-NEXT:    ret i8 addrspace(200)* getelementptr (i8, i8 addrspace(200)* null, i64 -1)
+// CHECK-NEXT:    ret ptr addrspace(200) getelementptr (i8, ptr addrspace(200) null, i64 -1)
 extern "C" __uintcap_t test_max_plus_one() { return test<__UINT64_MAX__ + 1>::x(); }
 // CHECK-LABEL: @test_max_plus_one(
 // CHECK-NEXT:  entry:
-// CHECK-NEXT:    ret i8 addrspace(200)* null
+// CHECK-NEXT:    ret ptr addrspace(200) null

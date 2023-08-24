@@ -38,14 +38,14 @@ typedef unsigned long ulong;
 void check(uintptr_t arg);
 
 // CHECK-LABEL: define {{[^@]+}}@test_cg_prov_lhs
-// CHECK-SAME: (i8 addrspace(200)* noundef [[LHS:%.*]], i8 addrspace(200)* noundef [[RHS:%.*]]) local_unnamed_addr addrspace(200)
+// CHECK-SAME: (ptr addrspace(200) noundef [[LHS:%.*]], ptr addrspace(200) noundef [[RHS:%.*]]) local_unnamed_addr addrspace(200)
 // CHECK-NEXT:  entry:
-// NOTADD-NEXT:   [[LHS_ADDR:%.*]] = tail call i64 @llvm.cheri.cap.address.get.i64(i8 addrspace(200)* [[LHS]])
-// CHECK-NEXT:    [[RHS_ADDR:%.*]] = tail call i64 @llvm.cheri.cap.address.get.i64(i8 addrspace(200)* [[RHS]])
+// NOTADD-NEXT:   [[LHS_ADDR:%.*]] = tail call i64 @llvm.cheri.cap.address.get.i64(ptr addrspace(200) [[LHS]])
+// CHECK-NEXT:    [[RHS_ADDR:%.*]] = tail call i64 @llvm.cheri.cap.address.get.i64(ptr addrspace(200) [[RHS]])
 // NOTADD-NEXT:   [[ARITH_RESULT:%.*]] = [[$ARITH_OP]] i64 [[RHS_ADDR]], [[LHS_ADDR]]
-// ADD-NEXT:      [[RESULT:%.*]] = getelementptr i8, i8 addrspace(200)* [[LHS]], i64 [[RHS_ADDR]]
-// NOTADD-NEXT:   [[RESULT:%.*]] = tail call i8 addrspace(200)* @llvm.cheri.cap.address.set.i64(i8 addrspace(200)* [[LHS]], i64 [[ARITH_RESULT]])
-// CHECK-NEXT:    call void @check(i8 addrspace(200)* noundef [[RESULT]]) #4
+// ADD-NEXT:      [[RESULT:%.*]] = getelementptr i8, ptr addrspace(200) [[LHS]], i64 [[RHS_ADDR]]
+// NOTADD-NEXT:   [[RESULT:%.*]] = tail call ptr addrspace(200) @llvm.cheri.cap.address.set.i64(ptr addrspace(200) [[LHS]], i64 [[ARITH_RESULT]])
+// CHECK-NEXT:    call void @check(ptr addrspace(200) noundef [[RESULT]]) #4
 // CHECK-NEXT:    ret void
 //
 void test_cg_prov_lhs(uintptr_t lhs, uintptr_t rhs) {
@@ -54,14 +54,14 @@ void test_cg_prov_lhs(uintptr_t lhs, uintptr_t rhs) {
 }
 
 // CHECK-LABEL: define {{[^@]+}}@test_cg_prov_rhs
-// CHECK-SAME: (i8 addrspace(200)* noundef [[LHS:%.*]], i8 addrspace(200)* noundef [[RHS:%.*]]) local_unnamed_addr addrspace(200)
+// CHECK-SAME: (ptr addrspace(200) noundef [[LHS:%.*]], ptr addrspace(200) noundef [[RHS:%.*]]) local_unnamed_addr addrspace(200)
 // CHECK-NEXT:  entry:
-// CHECK-NEXT:    [[LHS_ADDR:%.*]] = tail call i64 @llvm.cheri.cap.address.get.i64(i8 addrspace(200)* [[LHS]])
-// NOTADD-NEXT:   [[RHS_ADDR:%.*]] = tail call i64 @llvm.cheri.cap.address.get.i64(i8 addrspace(200)* [[RHS]])
+// CHECK-NEXT:    [[LHS_ADDR:%.*]] = tail call i64 @llvm.cheri.cap.address.get.i64(ptr addrspace(200) [[LHS]])
+// NOTADD-NEXT:   [[RHS_ADDR:%.*]] = tail call i64 @llvm.cheri.cap.address.get.i64(ptr addrspace(200) [[RHS]])
 // NOTADD-NEXT:   [[ARITH_RESULT:%.*]] = [[$ARITH_OP]] i64 [[RHS_ADDR]], [[LHS_ADDR]]
-// ADD-NEXT:      [[RESULT:%.*]] = getelementptr i8, i8 addrspace(200)* [[RHS]], i64 [[LHS_ADDR]]
-// NOTADD-NEXT:   [[RESULT:%.*]] = tail call i8 addrspace(200)* @llvm.cheri.cap.address.set.i64(i8 addrspace(200)* [[RHS]], i64 [[ARITH_RESULT]])
-// CHECK-NEXT:    call void @check(i8 addrspace(200)* noundef [[RESULT]]) #4
+// ADD-NEXT:      [[RESULT:%.*]] = getelementptr i8, ptr addrspace(200) [[RHS]], i64 [[LHS_ADDR]]
+// NOTADD-NEXT:   [[RESULT:%.*]] = tail call ptr addrspace(200) @llvm.cheri.cap.address.set.i64(ptr addrspace(200) [[RHS]], i64 [[ARITH_RESULT]])
+// CHECK-NEXT:    call void @check(ptr addrspace(200) noundef [[RESULT]]) #4
 // CHECK-NEXT:    ret void
 //
 void test_cg_prov_rhs(uintptr_t lhs, uintptr_t rhs) {
@@ -70,14 +70,14 @@ void test_cg_prov_rhs(uintptr_t lhs, uintptr_t rhs) {
 }
 
 // CHECK-LABEL: define {{[^@]+}}@test_cg_prov_ambiguous
-// CHECK-SAME: (i8 addrspace(200)* noundef [[LHS:%.*]], i8 addrspace(200)* noundef [[RHS:%.*]]) local_unnamed_addr addrspace(200)
+// CHECK-SAME: (ptr addrspace(200) noundef [[LHS:%.*]], ptr addrspace(200) noundef [[RHS:%.*]]) local_unnamed_addr addrspace(200)
 // CHECK-NEXT:  entry:
-// NOTADD-NEXT:   [[LHS_ADDR:%.*]] = tail call i64 @llvm.cheri.cap.address.get.i64(i8 addrspace(200)* [[LHS]])
-// CHECK-NEXT:    [[RHS_ADDR:%.*]] = tail call i64 @llvm.cheri.cap.address.get.i64(i8 addrspace(200)* [[RHS]])
+// NOTADD-NEXT:   [[LHS_ADDR:%.*]] = tail call i64 @llvm.cheri.cap.address.get.i64(ptr addrspace(200) [[LHS]])
+// CHECK-NEXT:    [[RHS_ADDR:%.*]] = tail call i64 @llvm.cheri.cap.address.get.i64(ptr addrspace(200) [[RHS]])
 // NOTADD-NEXT:   [[ARITH_RESULT:%.*]] = [[$ARITH_OP]] i64 [[RHS_ADDR]], [[LHS_ADDR]]
-// ADD-NEXT:      [[RESULT:%.*]] = getelementptr i8, i8 addrspace(200)* [[LHS]], i64 [[RHS_ADDR]]
-// NOTADD-NEXT:   [[RESULT:%.*]] = tail call i8 addrspace(200)* @llvm.cheri.cap.address.set.i64(i8 addrspace(200)* [[LHS]], i64 [[ARITH_RESULT]])
-// CHECK-NEXT:    call void @check(i8 addrspace(200)* noundef [[RESULT]]) #4
+// ADD-NEXT:      [[RESULT:%.*]] = getelementptr i8, ptr addrspace(200) [[LHS]], i64 [[RHS_ADDR]]
+// NOTADD-NEXT:   [[RESULT:%.*]] = tail call ptr addrspace(200) @llvm.cheri.cap.address.set.i64(ptr addrspace(200) [[LHS]], i64 [[ARITH_RESULT]])
+// CHECK-NEXT:    call void @check(ptr addrspace(200) noundef [[RESULT]]) #4
 // CHECK-NEXT:    ret void
 //
 void test_cg_prov_ambiguous(uintptr_t lhs, uintptr_t rhs) {
@@ -87,14 +87,14 @@ void test_cg_prov_ambiguous(uintptr_t lhs, uintptr_t rhs) {
 
 /// Compound assignment should always use LHS provenance:
 // CHECK-LABEL: define {{[^@]+}}@test_cg_eq_op_ambiguous
-// CHECK-SAME: (i8 addrspace(200)* noundef{{( readnone)?}} [[LHS:%.*]], i8 addrspace(200)* noundef{{( readnone)?}} [[RHS:%.*]]) local_unnamed_addr addrspace(200)
+// CHECK-SAME: (ptr addrspace(200) noundef{{( readnone)?}} [[LHS:%.*]], ptr addrspace(200) noundef{{( readnone)?}} [[RHS:%.*]]) local_unnamed_addr addrspace(200)
 // CHECK-NEXT:  entry:
-// NOTADD-NEXT:   [[LHS_ADDR:%.*]] = tail call i64 @llvm.cheri.cap.address.get.i64(i8 addrspace(200)* [[LHS]])
-// CHECK-NEXT:    [[RHS_ADDR:%.*]] = tail call i64 @llvm.cheri.cap.address.get.i64(i8 addrspace(200)* [[RHS]])
+// NOTADD-NEXT:   [[LHS_ADDR:%.*]] = tail call i64 @llvm.cheri.cap.address.get.i64(ptr addrspace(200) [[LHS]])
+// CHECK-NEXT:    [[RHS_ADDR:%.*]] = tail call i64 @llvm.cheri.cap.address.get.i64(ptr addrspace(200) [[RHS]])
 // NOTADD-NEXT:   [[ARITH_RESULT:%.*]] = [[$ARITH_OP]] i64 [[RHS_ADDR]], [[LHS_ADDR]]
-// NOTADD-NEXT:   [[RESULT:%.*]] = tail call i8 addrspace(200)* @llvm.cheri.cap.address.set.i64(i8 addrspace(200)* [[LHS]], i64 [[ARITH_RESULT]])
-// ADD-NEXT:      [[RESULT:%.*]] = getelementptr i8, i8 addrspace(200)* [[LHS]], i64 [[RHS_ADDR]]
-// CHECK-NEXT:    ret i8 addrspace(200)* [[RESULT]]
+// NOTADD-NEXT:   [[RESULT:%.*]] = tail call ptr addrspace(200) @llvm.cheri.cap.address.set.i64(ptr addrspace(200) [[LHS]], i64 [[ARITH_RESULT]])
+// ADD-NEXT:      [[RESULT:%.*]] = getelementptr i8, ptr addrspace(200) [[LHS]], i64 [[RHS_ADDR]]
+// CHECK-NEXT:    ret ptr addrspace(200) [[RESULT]]
 //
 uintptr_t test_cg_eq_op_ambiguous(uintptr_t lhs, uintptr_t rhs) {
   // +=/|=, etc uses LHS (but should warn)
@@ -104,14 +104,14 @@ uintptr_t test_cg_eq_op_ambiguous(uintptr_t lhs, uintptr_t rhs) {
 
 /// Compound assignment should always use LHS provenance:
 // CHECK-LABEL: define {{[^@]+}}@test_cg_eq_op_lhs_noprov
-// CHECK-SAME: (i8 addrspace(200)* noundef{{( readnone)?}} [[LHS:%.*]], i8 addrspace(200)* noundef{{( readnone)?}} [[RHS:%.*]]) local_unnamed_addr addrspace(200)
+// CHECK-SAME: (ptr addrspace(200) noundef{{( readnone)?}} [[LHS:%.*]], ptr addrspace(200) noundef{{( readnone)?}} [[RHS:%.*]]) local_unnamed_addr addrspace(200)
 // CHECK-NEXT:  entry:
-// NOTADD-NEXT:   [[LHS_ADDR:%.*]] = tail call i64 @llvm.cheri.cap.address.get.i64(i8 addrspace(200)* [[LHS]])
-// CHECK-NEXT:    [[RHS_ADDR:%.*]] = tail call i64 @llvm.cheri.cap.address.get.i64(i8 addrspace(200)* [[RHS]])
+// NOTADD-NEXT:   [[LHS_ADDR:%.*]] = tail call i64 @llvm.cheri.cap.address.get.i64(ptr addrspace(200) [[LHS]])
+// CHECK-NEXT:    [[RHS_ADDR:%.*]] = tail call i64 @llvm.cheri.cap.address.get.i64(ptr addrspace(200) [[RHS]])
 // NOTADD-NEXT:   [[ARITH_RESULT:%.*]] = [[$ARITH_OP]] i64 [[RHS_ADDR]], [[LHS_ADDR]]
-// NOTADD-NEXT:   [[RESULT:%.*]] = tail call i8 addrspace(200)* @llvm.cheri.cap.address.set.i64(i8 addrspace(200)* [[LHS]], i64 [[ARITH_RESULT]])
-// ADD-NEXT:      [[RESULT:%.*]] = getelementptr i8, i8 addrspace(200)* [[LHS]], i64 [[RHS_ADDR]]
-// CHECK-NEXT:    ret i8 addrspace(200)* [[RESULT]]
+// NOTADD-NEXT:   [[RESULT:%.*]] = tail call ptr addrspace(200) @llvm.cheri.cap.address.set.i64(ptr addrspace(200) [[LHS]], i64 [[ARITH_RESULT]])
+// ADD-NEXT:      [[RESULT:%.*]] = getelementptr i8, ptr addrspace(200) [[LHS]], i64 [[RHS_ADDR]]
+// CHECK-NEXT:    ret ptr addrspace(200) [[RESULT]]
 //
 uintptr_t test_cg_eq_op_lhs_noprov(no_provenance_uintptr_t lhs, uintptr_t rhs) {
   lhs ARITH_EQ_OP rhs; // FIXME: this will strip provenance from rhs -> warn?
@@ -120,14 +120,14 @@ uintptr_t test_cg_eq_op_lhs_noprov(no_provenance_uintptr_t lhs, uintptr_t rhs) {
 
 /// Compound assignment should always use LHS provenance:
 // CHECK-LABEL: define {{[^@]+}}@test_cg_eq_op_rhs_noprov
-// CHECK-SAME: (i8 addrspace(200)* noundef{{( readnone)?}} [[LHS:%.*]], i8 addrspace(200)* noundef{{( readnone)?}} [[RHS:%.*]]) local_unnamed_addr addrspace(200)
+// CHECK-SAME: (ptr addrspace(200) noundef{{( readnone)?}} [[LHS:%.*]], ptr addrspace(200) noundef{{( readnone)?}} [[RHS:%.*]]) local_unnamed_addr addrspace(200)
 // CHECK-NEXT:  entry:
-// NOTADD-NEXT:   [[LHS_ADDR:%.*]] = tail call i64 @llvm.cheri.cap.address.get.i64(i8 addrspace(200)* [[LHS]])
-// CHECK-NEXT:    [[RHS_ADDR:%.*]] = tail call i64 @llvm.cheri.cap.address.get.i64(i8 addrspace(200)* [[RHS]])
+// NOTADD-NEXT:   [[LHS_ADDR:%.*]] = tail call i64 @llvm.cheri.cap.address.get.i64(ptr addrspace(200) [[LHS]])
+// CHECK-NEXT:    [[RHS_ADDR:%.*]] = tail call i64 @llvm.cheri.cap.address.get.i64(ptr addrspace(200) [[RHS]])
 // NOTADD-NEXT:   [[ARITH_RESULT:%.*]] = [[$ARITH_OP]] i64 [[RHS_ADDR]], [[LHS_ADDR]]
-// NOTADD-NEXT:   [[RESULT:%.*]] = tail call i8 addrspace(200)* @llvm.cheri.cap.address.set.i64(i8 addrspace(200)* [[LHS]], i64 [[ARITH_RESULT]])
-// ADD-NEXT:      [[RESULT:%.*]] = getelementptr i8, i8 addrspace(200)* [[LHS]], i64 [[RHS_ADDR]]
-// CHECK-NEXT:    ret i8 addrspace(200)* [[RESULT]]
+// NOTADD-NEXT:   [[RESULT:%.*]] = tail call ptr addrspace(200) @llvm.cheri.cap.address.set.i64(ptr addrspace(200) [[LHS]], i64 [[ARITH_RESULT]])
+// ADD-NEXT:      [[RESULT:%.*]] = getelementptr i8, ptr addrspace(200) [[LHS]], i64 [[RHS_ADDR]]
+// CHECK-NEXT:    ret ptr addrspace(200) [[RESULT]]
 //
 uintptr_t test_cg_eq_op_rhs_noprov(uintptr_t lhs, no_provenance_uintptr_t rhs) {
   lhs ARITH_EQ_OP rhs; // fine
@@ -135,17 +135,17 @@ uintptr_t test_cg_eq_op_rhs_noprov(uintptr_t lhs, no_provenance_uintptr_t rhs) {
 }
 
 // CHECK-LABEL: define {{[^@]+}}@test_cg_unary_minus
-// CHECK-SAME: (i8 addrspace(200)* noundef [[ARG:%.*]], i8 addrspace(200)* noundef [[ARG_PTR:%.*]]) local_unnamed_addr addrspace(200)
+// CHECK-SAME: (ptr addrspace(200) noundef [[ARG:%.*]], ptr addrspace(200) noundef [[ARG_PTR:%.*]]) local_unnamed_addr addrspace(200)
 // CHECK-NEXT:  entry:
-// CHECK-NEXT:    [[TMP0:%.*]] = tail call i64 @llvm.cheri.cap.address.get.i64(i8 addrspace(200)* [[ARG:%.*]])
+// CHECK-NEXT:    [[TMP0:%.*]] = tail call i64 @llvm.cheri.cap.address.get.i64(ptr addrspace(200) [[ARG:%.*]])
 // CHECK-NEXT:    [[SUB:%.*]] = sub i64 0, [[TMP0]]
-// CHECK-NEXT:    [[TMP1:%.*]] = tail call i8 addrspace(200)* @llvm.cheri.cap.address.set.i64(i8 addrspace(200)* [[ARG]], i64 [[SUB]])
-// CHECK-NEXT:    call void @check(i8 addrspace(200)* noundef [[TMP1]]) #4
-// CHECK-NEXT:    [[TMP2:%.*]] = tail call i64 @llvm.cheri.cap.address.get.i64(i8 addrspace(200)* [[ARG_PTR:%.*]])
+// CHECK-NEXT:    [[TMP1:%.*]] = tail call ptr addrspace(200) @llvm.cheri.cap.address.set.i64(ptr addrspace(200) [[ARG]], i64 [[SUB]])
+// CHECK-NEXT:    call void @check(ptr addrspace(200) noundef [[TMP1]]) #4
+// CHECK-NEXT:    [[TMP2:%.*]] = tail call i64 @llvm.cheri.cap.address.get.i64(ptr addrspace(200) [[ARG_PTR:%.*]])
 // CHECK-NEXT:    [[SUB1:%.*]] = sub i64 0, [[TMP2]]
-// CHECK-NEXT:    [[TMP3:%.*]] = tail call i8 addrspace(200)* @llvm.cheri.cap.address.set.i64(i8 addrspace(200)* [[ARG_PTR]], i64 [[SUB1]])
-// CHECK-NEXT:    call void @check(i8 addrspace(200)* noundef [[TMP3]]) #4
-// CHECK-NEXT:    call void @check(i8 addrspace(200)* noundef getelementptr (i8, i8 addrspace(200)* null, i64 -5)) #4
+// CHECK-NEXT:    [[TMP3:%.*]] = tail call ptr addrspace(200) @llvm.cheri.cap.address.set.i64(ptr addrspace(200) [[ARG_PTR]], i64 [[SUB1]])
+// CHECK-NEXT:    call void @check(ptr addrspace(200) noundef [[TMP3]]) #4
+// CHECK-NEXT:    call void @check(ptr addrspace(200) noundef getelementptr (i8, ptr addrspace(200) null, i64 -5)) #4
 // CHECK-NEXT:    ret void
 //
 void test_cg_unary_minus(uintptr_t arg, char *arg_ptr) {
@@ -156,16 +156,16 @@ void test_cg_unary_minus(uintptr_t arg, char *arg_ptr) {
 }
 
 // CHECK-LABEL: define {{[^@]+}}@test_cg_unary_not
-// CHECK-SAME: (i8 addrspace(200)* noundef [[ARG:%.*]], i8 addrspace(200)* noundef [[ARG_PTR:%.*]]) local_unnamed_addr addrspace(200)
+// CHECK-SAME: (ptr addrspace(200) noundef [[ARG:%.*]], ptr addrspace(200) noundef [[ARG_PTR:%.*]]) local_unnamed_addr addrspace(200)
 // CHECK-NEXT:  entry:
-// CHECK-NEXT:    [[TMP0:%.*]] = tail call i64 @llvm.cheri.cap.address.get.i64(i8 addrspace(200)* [[ARG:%.*]])
+// CHECK-NEXT:    [[TMP0:%.*]] = tail call i64 @llvm.cheri.cap.address.get.i64(ptr addrspace(200) [[ARG:%.*]])
 // CHECK-NEXT:    [[NEG:%.*]] = xor i64 [[TMP0]], -1
-// CHECK-NEXT:    [[TMP1:%.*]] = tail call i8 addrspace(200)* @llvm.cheri.cap.address.set.i64(i8 addrspace(200)* [[ARG]], i64 [[NEG]])
-// CHECK-NEXT:    call void @check(i8 addrspace(200)* noundef [[TMP1]]) #4
-// CHECK-NEXT:    [[TMP2:%.*]] = tail call i64 @llvm.cheri.cap.address.get.i64(i8 addrspace(200)* [[ARG_PTR:%.*]])
+// CHECK-NEXT:    [[TMP1:%.*]] = tail call ptr addrspace(200) @llvm.cheri.cap.address.set.i64(ptr addrspace(200) [[ARG]], i64 [[NEG]])
+// CHECK-NEXT:    call void @check(ptr addrspace(200) noundef [[TMP1]]) #4
+// CHECK-NEXT:    [[TMP2:%.*]] = tail call i64 @llvm.cheri.cap.address.get.i64(ptr addrspace(200) [[ARG_PTR:%.*]])
 // CHECK-NEXT:    [[NEG1:%.*]] = xor i64 [[TMP2]], -1
-// CHECK-NEXT:    [[TMP3:%.*]] = tail call i8 addrspace(200)* @llvm.cheri.cap.address.set.i64(i8 addrspace(200)* [[ARG_PTR]], i64 [[NEG1]])
-// CHECK-NEXT:    call void @check(i8 addrspace(200)* noundef [[TMP3]]) #4
+// CHECK-NEXT:    [[TMP3:%.*]] = tail call ptr addrspace(200) @llvm.cheri.cap.address.set.i64(ptr addrspace(200) [[ARG_PTR]], i64 [[NEG1]])
+// CHECK-NEXT:    call void @check(ptr addrspace(200) noundef [[TMP3]]) #4
 // CHECK-NEXT:    ret void
 //
 void test_cg_unary_not(uintptr_t arg, char *arg_ptr) {
@@ -174,16 +174,16 @@ void test_cg_unary_not(uintptr_t arg, char *arg_ptr) {
 }
 
 // CHECK-LABEL: define {{[^@]+}}@test_cg_unary_logical_not
-// CHECK-SAME: (i8 addrspace(200)* noundef readnone [[ARG:%.*]], i8 addrspace(200)* noundef readnone [[ARG_PTR:%.*]]) local_unnamed_addr addrspace(200)
+// CHECK-SAME: (ptr addrspace(200) noundef readnone [[ARG:%.*]], ptr addrspace(200) noundef readnone [[ARG_PTR:%.*]]) local_unnamed_addr addrspace(200)
 // CHECK-NEXT:  entry:
-// CHECK-NEXT:    [[TOBOOL:%.*]] = icmp eq i8 addrspace(200)* [[ARG:%.*]], null
+// CHECK-NEXT:    [[TOBOOL:%.*]] = icmp eq ptr addrspace(200) [[ARG:%.*]], null
 // CHECK-NEXT:    [[CONV:%.*]] = zext i1 [[TOBOOL]] to i64
-// CHECK-NEXT:    [[TMP0:%.*]] = getelementptr i8, i8 addrspace(200)* null, i64 [[CONV]]
-// CHECK-NEXT:    call void @check(i8 addrspace(200)* noundef [[TMP0]]) #4
-// CHECK-NEXT:    [[TOBOOL1:%.*]] = icmp eq i8 addrspace(200)* [[ARG_PTR:%.*]], null
+// CHECK-NEXT:    [[TMP0:%.*]] = getelementptr i8, ptr addrspace(200) null, i64 [[CONV]]
+// CHECK-NEXT:    call void @check(ptr addrspace(200) noundef [[TMP0]]) #4
+// CHECK-NEXT:    [[TOBOOL1:%.*]] = icmp eq ptr addrspace(200) [[ARG_PTR:%.*]], null
 // CHECK-NEXT:    [[CONV4:%.*]] = zext i1 [[TOBOOL1]] to i64
-// CHECK-NEXT:    [[TMP1:%.*]] = getelementptr i8, i8 addrspace(200)* null, i64 [[CONV4]]
-// CHECK-NEXT:    call void @check(i8 addrspace(200)* noundef [[TMP1]]) #4
+// CHECK-NEXT:    [[TMP1:%.*]] = getelementptr i8, ptr addrspace(200) null, i64 [[CONV4]]
+// CHECK-NEXT:    call void @check(ptr addrspace(200) noundef [[TMP1]]) #4
 // CHECK-NEXT:    ret void
 //
 void test_cg_unary_logical_not(uintptr_t arg, char *arg_ptr) {
@@ -192,10 +192,10 @@ void test_cg_unary_logical_not(uintptr_t arg, char *arg_ptr) {
 }
 
 // CHECK-LABEL: define {{[^@]+}}@test_cg_unary_plus
-// CHECK-SAME: (i8 addrspace(200)* noundef [[ARG:%.*]], i8 addrspace(200)* noundef [[ARG_PTR:%.*]]) local_unnamed_addr addrspace(200)
+// CHECK-SAME: (ptr addrspace(200) noundef [[ARG:%.*]], ptr addrspace(200) noundef [[ARG_PTR:%.*]]) local_unnamed_addr addrspace(200)
 // CHECK-NEXT:  entry:
-// CHECK-NEXT:    call void @check(i8 addrspace(200)* noundef [[ARG:%.*]]) #4
-// CHECK-NEXT:    call void @check(i8 addrspace(200)* noundef [[ARG_PTR:%.*]]) #4
+// CHECK-NEXT:    call void @check(ptr addrspace(200) noundef [[ARG:%.*]]) #4
+// CHECK-NEXT:    call void @check(ptr addrspace(200) noundef [[ARG_PTR:%.*]]) #4
 // CHECK-NEXT:    ret void
 //
 void test_cg_unary_plus(uintptr_t arg, char *arg_ptr) {
@@ -204,14 +204,14 @@ void test_cg_unary_plus(uintptr_t arg, char *arg_ptr) {
 }
 
 // CHECK-LABEL: define {{[^@]+}}@test_cg_preinc
-// CHECK-SAME: (i8 addrspace(200)* noundef [[ARG:%.*]], i8 addrspace(200)* noundef [[ARG_PTR:%.*]]) local_unnamed_addr addrspace(200)
+// CHECK-SAME: (ptr addrspace(200) noundef [[ARG:%.*]], ptr addrspace(200) noundef [[ARG_PTR:%.*]]) local_unnamed_addr addrspace(200)
 // CHECK-NEXT:  entry:
-// CHECK-NEXT:    [[TMP0:%.*]] = getelementptr i8, i8 addrspace(200)* [[ARG:%.*]], i64 1
-// CHECK-NEXT:    call void @check(i8 addrspace(200)* noundef [[TMP0]]) #4
-// CHECK-NEXT:    [[INCDEC_PTR:%.*]] = getelementptr inbounds i8, i8 addrspace(200)* [[ARG_PTR:%.*]], i64 1
-// CHECK-NEXT:    call void @check(i8 addrspace(200)* noundef nonnull [[INCDEC_PTR]]) #4
-// CHECK-NEXT:    call void @check(i8 addrspace(200)* noundef [[TMP0]]) #4
-// CHECK-NEXT:    call void @check(i8 addrspace(200)* noundef nonnull [[INCDEC_PTR]]) #4
+// CHECK-NEXT:    [[TMP0:%.*]] = getelementptr i8, ptr addrspace(200) [[ARG:%.*]], i64 1
+// CHECK-NEXT:    call void @check(ptr addrspace(200) noundef [[TMP0]]) #4
+// CHECK-NEXT:    [[INCDEC_PTR:%.*]] = getelementptr inbounds i8, ptr addrspace(200) [[ARG_PTR:%.*]], i64 1
+// CHECK-NEXT:    call void @check(ptr addrspace(200) noundef nonnull [[INCDEC_PTR]]) #4
+// CHECK-NEXT:    call void @check(ptr addrspace(200) noundef [[TMP0]]) #4
+// CHECK-NEXT:    call void @check(ptr addrspace(200) noundef nonnull [[INCDEC_PTR]]) #4
 // CHECK-NEXT:    ret void
 //
 void test_cg_preinc(uintptr_t arg, char *arg_ptr) {
@@ -222,14 +222,14 @@ void test_cg_preinc(uintptr_t arg, char *arg_ptr) {
 }
 
 // CHECK-LABEL: define {{[^@]+}}@test_cg_postinc
-// CHECK-SAME: (i8 addrspace(200)* noundef [[ARG:%.*]], i8 addrspace(200)* noundef [[ARG_PTR:%.*]]) local_unnamed_addr addrspace(200)
+// CHECK-SAME: (ptr addrspace(200) noundef [[ARG:%.*]], ptr addrspace(200) noundef [[ARG_PTR:%.*]]) local_unnamed_addr addrspace(200)
 // CHECK-NEXT:  entry:
-// CHECK-NEXT:    [[TMP0:%.*]] = getelementptr i8, i8 addrspace(200)* [[ARG:%.*]], i64 1
-// CHECK-NEXT:    call void @check(i8 addrspace(200)* noundef [[ARG]]) #4
-// CHECK-NEXT:    [[INCDEC_PTR:%.*]] = getelementptr inbounds i8, i8 addrspace(200)* [[ARG_PTR:%.*]], i64 1
-// CHECK-NEXT:    call void @check(i8 addrspace(200)* noundef [[ARG_PTR]]) #4
-// CHECK-NEXT:    call void @check(i8 addrspace(200)* noundef [[TMP0]]) #4
-// CHECK-NEXT:    call void @check(i8 addrspace(200)* noundef nonnull [[INCDEC_PTR]]) #4
+// CHECK-NEXT:    [[TMP0:%.*]] = getelementptr i8, ptr addrspace(200) [[ARG:%.*]], i64 1
+// CHECK-NEXT:    call void @check(ptr addrspace(200) noundef [[ARG]]) #4
+// CHECK-NEXT:    [[INCDEC_PTR:%.*]] = getelementptr inbounds i8, ptr addrspace(200) [[ARG_PTR:%.*]], i64 1
+// CHECK-NEXT:    call void @check(ptr addrspace(200) noundef [[ARG_PTR]]) #4
+// CHECK-NEXT:    call void @check(ptr addrspace(200) noundef [[TMP0]]) #4
+// CHECK-NEXT:    call void @check(ptr addrspace(200) noundef nonnull [[INCDEC_PTR]]) #4
 // CHECK-NEXT:    ret void
 //
 void test_cg_postinc(uintptr_t arg, char *arg_ptr) {
@@ -240,14 +240,14 @@ void test_cg_postinc(uintptr_t arg, char *arg_ptr) {
 }
 
 // CHECK-LABEL: define {{[^@]+}}@test_cg_predec
-// CHECK-SAME: (i8 addrspace(200)* noundef [[ARG:%.*]], i8 addrspace(200)* noundef [[ARG_PTR:%.*]]) local_unnamed_addr addrspace(200)
+// CHECK-SAME: (ptr addrspace(200) noundef [[ARG:%.*]], ptr addrspace(200) noundef [[ARG_PTR:%.*]]) local_unnamed_addr addrspace(200)
 // CHECK-NEXT:  entry:
-// CHECK-NEXT:    [[TMP0:%.*]] = getelementptr i8, i8 addrspace(200)* [[ARG:%.*]], i64 -1
-// CHECK-NEXT:    call void @check(i8 addrspace(200)* noundef [[TMP0]]) #4
-// CHECK-NEXT:    [[INCDEC_PTR:%.*]] = getelementptr inbounds i8, i8 addrspace(200)* [[ARG_PTR:%.*]], i64 -1
-// CHECK-NEXT:    call void @check(i8 addrspace(200)* noundef nonnull [[INCDEC_PTR]]) #4
-// CHECK-NEXT:    call void @check(i8 addrspace(200)* noundef [[TMP0]]) #4
-// CHECK-NEXT:    call void @check(i8 addrspace(200)* noundef nonnull [[INCDEC_PTR]]) #4
+// CHECK-NEXT:    [[TMP0:%.*]] = getelementptr i8, ptr addrspace(200) [[ARG:%.*]], i64 -1
+// CHECK-NEXT:    call void @check(ptr addrspace(200) noundef [[TMP0]]) #4
+// CHECK-NEXT:    [[INCDEC_PTR:%.*]] = getelementptr inbounds i8, ptr addrspace(200) [[ARG_PTR:%.*]], i64 -1
+// CHECK-NEXT:    call void @check(ptr addrspace(200) noundef nonnull [[INCDEC_PTR]]) #4
+// CHECK-NEXT:    call void @check(ptr addrspace(200) noundef [[TMP0]]) #4
+// CHECK-NEXT:    call void @check(ptr addrspace(200) noundef nonnull [[INCDEC_PTR]]) #4
 // CHECK-NEXT:    ret void
 //
 void test_cg_predec(uintptr_t arg, char *arg_ptr) {
@@ -258,14 +258,14 @@ void test_cg_predec(uintptr_t arg, char *arg_ptr) {
 }
 
 // CHECK-LABEL: define {{[^@]+}}@test_cg_postdec
-// CHECK-SAME: (i8 addrspace(200)* noundef [[ARG:%.*]], i8 addrspace(200)* noundef [[ARG_PTR:%.*]]) local_unnamed_addr addrspace(200)
+// CHECK-SAME: (ptr addrspace(200) noundef [[ARG:%.*]], ptr addrspace(200) noundef [[ARG_PTR:%.*]]) local_unnamed_addr addrspace(200)
 // CHECK-NEXT:  entry:
-// CHECK-NEXT:    [[TMP0:%.*]] = getelementptr i8, i8 addrspace(200)* [[ARG:%.*]], i64 -1
-// CHECK-NEXT:    call void @check(i8 addrspace(200)* noundef [[ARG]]) #4
-// CHECK-NEXT:    [[INCDEC_PTR:%.*]] = getelementptr inbounds i8, i8 addrspace(200)* [[ARG_PTR:%.*]], i64 -1
-// CHECK-NEXT:    call void @check(i8 addrspace(200)* noundef [[ARG_PTR]]) #4
-// CHECK-NEXT:    call void @check(i8 addrspace(200)* noundef [[TMP0]]) #4
-// CHECK-NEXT:    call void @check(i8 addrspace(200)* noundef nonnull [[INCDEC_PTR]]) #4
+// CHECK-NEXT:    [[TMP0:%.*]] = getelementptr i8, ptr addrspace(200) [[ARG:%.*]], i64 -1
+// CHECK-NEXT:    call void @check(ptr addrspace(200) noundef [[ARG]]) #4
+// CHECK-NEXT:    [[INCDEC_PTR:%.*]] = getelementptr inbounds i8, ptr addrspace(200) [[ARG_PTR:%.*]], i64 -1
+// CHECK-NEXT:    call void @check(ptr addrspace(200) noundef [[ARG_PTR]]) #4
+// CHECK-NEXT:    call void @check(ptr addrspace(200) noundef [[TMP0]]) #4
+// CHECK-NEXT:    call void @check(ptr addrspace(200) noundef nonnull [[INCDEC_PTR]]) #4
 // CHECK-NEXT:    ret void
 //
 void test_cg_postdec(uintptr_t arg, char *arg_ptr) {

@@ -3,16 +3,15 @@
 void (*__capability c)(void);
 typedef void (*fnptr)(void);
 // CHECK-LABEL: define {{[^@]+}}@cheri_codeptr
-// CHECK-SAME: (void ()* noundef [[PTR:%.*]]) #[[ATTR0:[0-9]+]] {
+// CHECK-SAME: (ptr noundef [[PTR:%.*]]) #[[ATTR0:[0-9]+]] {
 // CHECK-NEXT:  entry:
-// CHECK-NEXT:    [[PTR_ADDR:%.*]] = alloca void ()*, align 8
-// CHECK-NEXT:    store void ()* [[PTR]], void ()** [[PTR_ADDR]], align 8
-// CHECK-NEXT:    [[TMP0:%.*]] = load void ()*, void ()** [[PTR_ADDR]], align 8
-// CHECK-NEXT:    [[TMP1:%.*]] = call i8 addrspace(200)* @llvm.cheri.pcc.get()
-// CHECK-NEXT:    [[TMP2:%.*]] = ptrtoint void ()* [[TMP0]] to i64
-// CHECK-NEXT:    [[TMP3:%.*]] = call i8 addrspace(200)* @llvm.cheri.cap.from.pointer.i64(i8 addrspace(200)* [[TMP1]], i64 [[TMP2]])
-// CHECK-NEXT:    [[TMP4:%.*]] = bitcast i8 addrspace(200)* [[TMP3]] to void () addrspace(200)*
-// CHECK-NEXT:    store void () addrspace(200)* [[TMP4]], void () addrspace(200)** @c, align 16
+// CHECK-NEXT:    [[PTR_ADDR:%.*]] = alloca ptr, align 8
+// CHECK-NEXT:    store ptr [[PTR]], ptr [[PTR_ADDR]], align 8
+// CHECK-NEXT:    [[TMP0:%.*]] = load ptr, ptr [[PTR_ADDR]], align 8
+// CHECK-NEXT:    [[TMP1:%.*]] = call ptr addrspace(200) @llvm.cheri.pcc.get()
+// CHECK-NEXT:    [[TMP2:%.*]] = ptrtoint ptr [[TMP0]] to i64
+// CHECK-NEXT:    [[TMP3:%.*]] = call ptr addrspace(200) @llvm.cheri.cap.from.pointer.i64(ptr addrspace(200) [[TMP1]], i64 [[TMP2]])
+// CHECK-NEXT:    store ptr addrspace(200) [[TMP3]], ptr @c, align 16
 // CHECK-NEXT:    ret void
 //
 void cheri_codeptr(const fnptr ptr) {

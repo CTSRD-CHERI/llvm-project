@@ -9,7 +9,7 @@ class unique_lock {
     unique_lock(unique_lock const&) { }
 };
 
-// CHECK: define dso_local void @_Z25notify_all_at_thread_exit11unique_lock(%class.unique_lock addrspace(200)* noundef %lk)
+// CHECK: define dso_local void @_Z25notify_all_at_thread_exit11unique_lock(ptr addrspace(200) noundef %lk)
 void notify_all_at_thread_exit(unique_lock lk) { }
 
 int main(void) {

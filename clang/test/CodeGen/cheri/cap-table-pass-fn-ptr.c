@@ -9,7 +9,7 @@ extern int a(void (*fn)(void));
 // CHECK-LABEL: define {{[^@]+}}@snprintf_func
 // CHECK-SAME: () addrspace(200) #[[ATTR0:[0-9]+]] {
 // CHECK-NEXT:  entry:
-// CHECK-NEXT:    [[CALL:%.*]] = tail call signext i32 @a(void () addrspace(200)* noundef nonnull @snprintf_func) #[[ATTR2:[0-9]+]]
+// CHECK-NEXT:    [[CALL:%.*]] = tail call signext i32 @a(ptr addrspace(200) noundef nonnull @snprintf_func) #[[ATTR2:[0-9]+]]
 // CHECK-NEXT:    ret void
 //
 void snprintf_func(void) {

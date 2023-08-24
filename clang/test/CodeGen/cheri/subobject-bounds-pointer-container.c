@@ -29,15 +29,10 @@ struct TP {
 
 // CHECK-LABEL: @test_UA(
 // CHECK-NEXT:  entry:
-// CHECK-NEXT:    [[A:%.*]] = bitcast [[UNION_UA:%.*]] addrspace(200)* [[UA:%.*]] to [2 x i8] addrspace(200)*
-// CHECK-NEXT:    [[TMP0:%.*]] = bitcast [2 x i8] addrspace(200)* [[A]] to i8 addrspace(200)*
-// CHECK-NEXT:    [[TMP1:%.*]] = call i8 addrspace(200)* @llvm.cheri.cap.bounds.set.i64(i8 addrspace(200)* [[TMP0]], i64 2)
-// CHECK-NEXT:    [[SUBSCRIPT_WITH_BOUNDS:%.*]] = bitcast i8 addrspace(200)* [[TMP1]] to [2 x i8] addrspace(200)*
-// CHECK-NEXT:    [[TMP2:%.*]] = bitcast [2 x i8] addrspace(200)* [[SUBSCRIPT_WITH_BOUNDS]] to i8 addrspace(200)*
-// CHECK-NEXT:    [[TMP3:%.*]] = call i8 addrspace(200)* @llvm.cheri.cap.bounds.set.i64(i8 addrspace(200)* [[TMP2]], i64 2)
-// CHECK-NEXT:    [[ADDRESS_WITH_BOUNDS:%.*]] = bitcast i8 addrspace(200)* [[TMP3]] to [2 x i8] addrspace(200)*
-// CHECK-NEXT:    [[ARRAYIDX:%.*]] = getelementptr inbounds [2 x i8], [2 x i8] addrspace(200)* [[ADDRESS_WITH_BOUNDS]], i64 0, i64 1
-// CHECK-NEXT:    ret i8 addrspace(200)* [[ARRAYIDX]]
+// CHECK-NEXT:    [[TMP0:%.*]] = call ptr addrspace(200) @llvm.cheri.cap.bounds.set.i64(ptr addrspace(200) [[UA:%.*]], i64 2)
+// CHECK-NEXT:    [[TMP1:%.*]] = call ptr addrspace(200) @llvm.cheri.cap.bounds.set.i64(ptr addrspace(200) [[TMP0]], i64 2)
+// CHECK-NEXT:    [[ARRAYIDX:%.*]] = getelementptr inbounds [2 x i8], ptr addrspace(200) [[TMP1]], i64 0, i64 1
+// CHECK-NEXT:    ret ptr addrspace(200) [[ARRAYIDX]]
 //
 char *test_UA(union UA *ua) {
   return &ua->a[1];
@@ -48,15 +43,11 @@ char *test_UA(union UA *ua) {
 
 // CHECK-LABEL: @test_SA(
 // CHECK-NEXT:  entry:
-// CHECK-NEXT:    [[A:%.*]] = getelementptr inbounds [[STRUCT_SA:%.*]], [[STRUCT_SA]] addrspace(200)* [[SA:%.*]], i32 0, i32 0
-// CHECK-NEXT:    [[TMP0:%.*]] = bitcast [2 x i8] addrspace(200)* [[A]] to i8 addrspace(200)*
-// CHECK-NEXT:    [[TMP1:%.*]] = call i8 addrspace(200)* @llvm.cheri.cap.bounds.set.i64(i8 addrspace(200)* [[TMP0]], i64 2)
-// CHECK-NEXT:    [[SUBSCRIPT_WITH_BOUNDS:%.*]] = bitcast i8 addrspace(200)* [[TMP1]] to [2 x i8] addrspace(200)*
-// CHECK-NEXT:    [[TMP2:%.*]] = bitcast [2 x i8] addrspace(200)* [[SUBSCRIPT_WITH_BOUNDS]] to i8 addrspace(200)*
-// CHECK-NEXT:    [[TMP3:%.*]] = call i8 addrspace(200)* @llvm.cheri.cap.bounds.set.i64(i8 addrspace(200)* [[TMP2]], i64 2)
-// CHECK-NEXT:    [[ADDRESS_WITH_BOUNDS:%.*]] = bitcast i8 addrspace(200)* [[TMP3]] to [2 x i8] addrspace(200)*
-// CHECK-NEXT:    [[ARRAYIDX:%.*]] = getelementptr inbounds [2 x i8], [2 x i8] addrspace(200)* [[ADDRESS_WITH_BOUNDS]], i64 0, i64 1
-// CHECK-NEXT:    ret i8 addrspace(200)* [[ARRAYIDX]]
+// CHECK-NEXT:    [[A:%.*]] = getelementptr inbounds [[STRUCT_SA:%.*]], ptr addrspace(200) [[SA:%.*]], i32 0, i32 0
+// CHECK-NEXT:    [[TMP0:%.*]] = call ptr addrspace(200) @llvm.cheri.cap.bounds.set.i64(ptr addrspace(200) [[A]], i64 2)
+// CHECK-NEXT:    [[TMP1:%.*]] = call ptr addrspace(200) @llvm.cheri.cap.bounds.set.i64(ptr addrspace(200) [[TMP0]], i64 2)
+// CHECK-NEXT:    [[ARRAYIDX:%.*]] = getelementptr inbounds [2 x i8], ptr addrspace(200) [[TMP1]], i64 0, i64 1
+// CHECK-NEXT:    ret ptr addrspace(200) [[ARRAYIDX]]
 //
 char *test_SA(struct SA *sa) {
   return &sa->a[1];
@@ -67,20 +58,17 @@ char *test_SA(struct SA *sa) {
 
 // CHECK-LABEL: @test_TA(
 // CHECK-NEXT:  entry:
-// CHECK-NEXT:    [[A:%.*]] = getelementptr inbounds [[STRUCT_TA:%.*]], [[STRUCT_TA]] addrspace(200)* [[TA:%.*]], i32 0, i32 0
-// CHECK-NEXT:    [[TMP0:%.*]] = bitcast [2 x i8] addrspace(200)* [[A]] to i8 addrspace(200)*
-// CHECK-NEXT:    [[CUR_OFFSET:%.*]] = call i64 @llvm.cheri.cap.offset.get.i64(i8 addrspace(200)* [[TMP0]])
-// CHECK-NEXT:    [[CUR_LEN:%.*]] = call i64 @llvm.cheri.cap.length.get.i64(i8 addrspace(200)* [[TMP0]])
+// CHECK-NEXT:    [[A:%.*]] = getelementptr inbounds [[STRUCT_TA:%.*]], ptr addrspace(200) [[TA:%.*]], i32 0, i32 0
+// CHECK-NEXT:    [[CUR_OFFSET:%.*]] = call i64 @llvm.cheri.cap.offset.get.i64(ptr addrspace(200) [[A]])
+// CHECK-NEXT:    [[CUR_LEN:%.*]] = call i64 @llvm.cheri.cap.length.get.i64(ptr addrspace(200) [[A]])
 // CHECK-NEXT:    [[REMAINING_BYTES:%.*]] = sub i64 [[CUR_LEN]], [[CUR_OFFSET]]
-// CHECK-NEXT:    [[TMP1:%.*]] = bitcast [2 x i8] addrspace(200)* [[A]] to i8 addrspace(200)*
-// CHECK-NEXT:    [[TMP2:%.*]] = call i8 addrspace(200)* @llvm.cheri.cap.bounds.set.i64(i8 addrspace(200)* [[TMP1]], i64 [[REMAINING_BYTES]])
-// CHECK-NEXT:    [[SUBSCRIPT_WITH_BOUNDS:%.*]] = bitcast i8 addrspace(200)* [[TMP2]] to [2 x i8] addrspace(200)*
-// CHECK-NEXT:    [[ARRAYIDX:%.*]] = getelementptr inbounds [2 x i8], [2 x i8] addrspace(200)* [[SUBSCRIPT_WITH_BOUNDS]], i64 0, i64 1
-// CHECK-NEXT:    [[CUR_OFFSET1:%.*]] = call i64 @llvm.cheri.cap.offset.get.i64(i8 addrspace(200)* [[ARRAYIDX]])
-// CHECK-NEXT:    [[CUR_LEN2:%.*]] = call i64 @llvm.cheri.cap.length.get.i64(i8 addrspace(200)* [[ARRAYIDX]])
+// CHECK-NEXT:    [[TMP0:%.*]] = call ptr addrspace(200) @llvm.cheri.cap.bounds.set.i64(ptr addrspace(200) [[A]], i64 [[REMAINING_BYTES]])
+// CHECK-NEXT:    [[ARRAYIDX:%.*]] = getelementptr inbounds [2 x i8], ptr addrspace(200) [[TMP0]], i64 0, i64 1
+// CHECK-NEXT:    [[CUR_OFFSET1:%.*]] = call i64 @llvm.cheri.cap.offset.get.i64(ptr addrspace(200) [[ARRAYIDX]])
+// CHECK-NEXT:    [[CUR_LEN2:%.*]] = call i64 @llvm.cheri.cap.length.get.i64(ptr addrspace(200) [[ARRAYIDX]])
 // CHECK-NEXT:    [[REMAINING_BYTES3:%.*]] = sub i64 [[CUR_LEN2]], [[CUR_OFFSET1]]
-// CHECK-NEXT:    [[TMP3:%.*]] = call i8 addrspace(200)* @llvm.cheri.cap.bounds.set.i64(i8 addrspace(200)* [[ARRAYIDX]], i64 [[REMAINING_BYTES3]])
-// CHECK-NEXT:    ret i8 addrspace(200)* [[TMP3]]
+// CHECK-NEXT:    [[TMP1:%.*]] = call ptr addrspace(200) @llvm.cheri.cap.bounds.set.i64(ptr addrspace(200) [[ARRAYIDX]], i64 [[REMAINING_BYTES3]])
+// CHECK-NEXT:    ret ptr addrspace(200) [[TMP1]]
 //
 char *test_TA(struct TA *ta) {
   return &ta->a[1];
@@ -90,10 +78,9 @@ char *test_TA(struct TA *ta) {
 
 // CHECK-LABEL: @test_UP(
 // CHECK-NEXT:  entry:
-// CHECK-NEXT:    [[P:%.*]] = bitcast [[UNION_UP:%.*]] addrspace(200)* [[UP:%.*]] to i8 addrspace(200)* addrspace(200)*
-// CHECK-NEXT:    [[TMP0:%.*]] = load i8 addrspace(200)*, i8 addrspace(200)* addrspace(200)* [[P]], align 16
-// CHECK-NEXT:    [[ARRAYIDX:%.*]] = getelementptr inbounds i8, i8 addrspace(200)* [[TMP0]], i64 1
-// CHECK-NEXT:    ret i8 addrspace(200)* [[ARRAYIDX]]
+// CHECK-NEXT:    [[TMP0:%.*]] = load ptr addrspace(200), ptr addrspace(200) [[UP:%.*]], align 16
+// CHECK-NEXT:    [[ARRAYIDX:%.*]] = getelementptr inbounds i8, ptr addrspace(200) [[TMP0]], i64 1
+// CHECK-NEXT:    ret ptr addrspace(200) [[ARRAYIDX]]
 //
 char *test_UP(union UP *up) {
   return &up->p[1];
@@ -103,10 +90,10 @@ char *test_UP(union UP *up) {
 
 // CHECK-LABEL: @test_SP(
 // CHECK-NEXT:  entry:
-// CHECK-NEXT:    [[P:%.*]] = getelementptr inbounds [[STRUCT_SP:%.*]], [[STRUCT_SP]] addrspace(200)* [[SP:%.*]], i32 0, i32 0
-// CHECK-NEXT:    [[TMP0:%.*]] = load i8 addrspace(200)*, i8 addrspace(200)* addrspace(200)* [[P]], align 16
-// CHECK-NEXT:    [[ARRAYIDX:%.*]] = getelementptr inbounds i8, i8 addrspace(200)* [[TMP0]], i64 1
-// CHECK-NEXT:    ret i8 addrspace(200)* [[ARRAYIDX]]
+// CHECK-NEXT:    [[P:%.*]] = getelementptr inbounds [[STRUCT_SP:%.*]], ptr addrspace(200) [[SP:%.*]], i32 0, i32 0
+// CHECK-NEXT:    [[TMP0:%.*]] = load ptr addrspace(200), ptr addrspace(200) [[P]], align 16
+// CHECK-NEXT:    [[ARRAYIDX:%.*]] = getelementptr inbounds i8, ptr addrspace(200) [[TMP0]], i64 1
+// CHECK-NEXT:    ret ptr addrspace(200) [[ARRAYIDX]]
 //
 char *test_SP(struct SP *sp) {
   return &sp->p[1];
@@ -116,10 +103,10 @@ char *test_SP(struct SP *sp) {
 
 // CHECK-LABEL: @test_TP(
 // CHECK-NEXT:  entry:
-// CHECK-NEXT:    [[P:%.*]] = getelementptr inbounds [[STRUCT_TP:%.*]], [[STRUCT_TP]] addrspace(200)* [[TP:%.*]], i32 0, i32 0
-// CHECK-NEXT:    [[TMP0:%.*]] = load i8 addrspace(200)*, i8 addrspace(200)* addrspace(200)* [[P]], align 16
-// CHECK-NEXT:    [[ARRAYIDX:%.*]] = getelementptr inbounds i8, i8 addrspace(200)* [[TMP0]], i64 1
-// CHECK-NEXT:    ret i8 addrspace(200)* [[ARRAYIDX]]
+// CHECK-NEXT:    [[P:%.*]] = getelementptr inbounds [[STRUCT_TP:%.*]], ptr addrspace(200) [[TP:%.*]], i32 0, i32 0
+// CHECK-NEXT:    [[TMP0:%.*]] = load ptr addrspace(200), ptr addrspace(200) [[P]], align 16
+// CHECK-NEXT:    [[ARRAYIDX:%.*]] = getelementptr inbounds i8, ptr addrspace(200) [[TMP0]], i64 1
+// CHECK-NEXT:    ret ptr addrspace(200) [[ARRAYIDX]]
 //
 char *test_TP(struct TP *tp) {
   return &tp->p[1];

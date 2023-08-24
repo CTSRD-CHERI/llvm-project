@@ -43,40 +43,37 @@ struct ShortDataLong {
 };
 
 // CHECK-LABEL: define {{[^@]+}}@setMsecsLong
-// CHECK-SAME: ([[STRUCT_SHORTDATALONG:%.*]] addrspace(200)* noundef [[DATA:%.*]], i64 noundef signext [[F:%.*]]) addrspace(200) #[[ATTR0:[0-9]+]] {
+// CHECK-SAME: (ptr addrspace(200) noundef [[DATA:%.*]], i64 noundef signext [[F:%.*]]) addrspace(200) #[[ATTR0:[0-9]+]] {
 // CHECK-NEXT:  entry:
-// CHECK-NEXT:    [[DATA_ADDR:%.*]] = alloca [[STRUCT_SHORTDATALONG]] addrspace(200)*, align 16, addrspace(200)
+// CHECK-NEXT:    [[DATA_ADDR:%.*]] = alloca ptr addrspace(200), align 16, addrspace(200)
 // CHECK-NEXT:    [[F_ADDR:%.*]] = alloca i64, align 8, addrspace(200)
-// CHECK-NEXT:    store [[STRUCT_SHORTDATALONG]] addrspace(200)* [[DATA]], [[STRUCT_SHORTDATALONG]] addrspace(200)* addrspace(200)* [[DATA_ADDR]], align 16
-// CHECK-NEXT:    store i64 [[F]], i64 addrspace(200)* [[F_ADDR]], align 8
-// CHECK-NEXT:    [[TMP0:%.*]] = load i64, i64 addrspace(200)* [[F_ADDR]], align 8
-// CHECK-NEXT:    [[TMP1:%.*]] = load [[STRUCT_SHORTDATALONG]] addrspace(200)*, [[STRUCT_SHORTDATALONG]] addrspace(200)* addrspace(200)* [[DATA_ADDR]], align 16
-// CHECK-NEXT:    [[TMP2:%.*]] = bitcast [[STRUCT_SHORTDATALONG]] addrspace(200)* [[TMP1]] to i128 addrspace(200)*
-// CHECK-NEXT:    [[TMP3:%.*]] = zext i64 [[TMP0]] to i128
-// CHECK-NEXT:    [[BF_LOAD:%.*]] = load i128, i128 addrspace(200)* [[TMP2]], align 8
-// CHECK-NEXT:    [[BF_VALUE:%.*]] = and i128 [[TMP3]], 1329227995784915872903807060280344575
+// CHECK-NEXT:    store ptr addrspace(200) [[DATA]], ptr addrspace(200) [[DATA_ADDR]], align 16
+// CHECK-NEXT:    store i64 [[F]], ptr addrspace(200) [[F_ADDR]], align 8
+// CHECK-NEXT:    [[TMP0:%.*]] = load i64, ptr addrspace(200) [[F_ADDR]], align 8
+// CHECK-NEXT:    [[TMP1:%.*]] = load ptr addrspace(200), ptr addrspace(200) [[DATA_ADDR]], align 16
+// CHECK-NEXT:    [[TMP2:%.*]] = zext i64 [[TMP0]] to i128
+// CHECK-NEXT:    [[BF_LOAD:%.*]] = load i128, ptr addrspace(200) [[TMP1]], align 8
+// CHECK-NEXT:    [[BF_VALUE:%.*]] = and i128 [[TMP2]], 1329227995784915872903807060280344575
 // CHECK-NEXT:    [[BF_SHL:%.*]] = shl i128 [[BF_VALUE]], 8
 // CHECK-NEXT:    [[BF_CLEAR:%.*]] = and i128 [[BF_LOAD]], 255
 // CHECK-NEXT:    [[BF_SET:%.*]] = or i128 [[BF_CLEAR]], [[BF_SHL]]
-// CHECK-NEXT:    store i128 [[BF_SET]], i128 addrspace(200)* [[TMP2]], align 8
-// CHECK-NEXT:    [[TMP4:%.*]] = load i64, i64 addrspace(200)* [[F_ADDR]], align 8
-// CHECK-NEXT:    [[TMP5:%.*]] = getelementptr i8, i8 addrspace(200)* null, i64 [[TMP4]]
-// CHECK-NEXT:    [[TMP6:%.*]] = call i64 @llvm.cheri.cap.address.get.i64(i8 addrspace(200)* [[TMP5]])
-// CHECK-NEXT:    [[TMP7:%.*]] = load [[STRUCT_SHORTDATALONG]] addrspace(200)*, [[STRUCT_SHORTDATALONG]] addrspace(200)* addrspace(200)* [[DATA_ADDR]], align 16
-// CHECK-NEXT:    [[TMP8:%.*]] = bitcast [[STRUCT_SHORTDATALONG]] addrspace(200)* [[TMP7]] to i128 addrspace(200)*
-// CHECK-NEXT:    [[TMP9:%.*]] = zext i64 [[TMP6]] to i128
-// CHECK-NEXT:    [[BF_LOAD1:%.*]] = load i128, i128 addrspace(200)* [[TMP8]], align 8
-// CHECK-NEXT:    [[BF_VALUE2:%.*]] = and i128 [[TMP9]], 1329227995784915872903807060280344575
+// CHECK-NEXT:    store i128 [[BF_SET]], ptr addrspace(200) [[TMP1]], align 8
+// CHECK-NEXT:    [[TMP3:%.*]] = load i64, ptr addrspace(200) [[F_ADDR]], align 8
+// CHECK-NEXT:    [[TMP4:%.*]] = getelementptr i8, ptr addrspace(200) null, i64 [[TMP3]]
+// CHECK-NEXT:    [[TMP5:%.*]] = call i64 @llvm.cheri.cap.address.get.i64(ptr addrspace(200) [[TMP4]])
+// CHECK-NEXT:    [[TMP6:%.*]] = load ptr addrspace(200), ptr addrspace(200) [[DATA_ADDR]], align 16
+// CHECK-NEXT:    [[TMP7:%.*]] = zext i64 [[TMP5]] to i128
+// CHECK-NEXT:    [[BF_LOAD1:%.*]] = load i128, ptr addrspace(200) [[TMP6]], align 8
+// CHECK-NEXT:    [[BF_VALUE2:%.*]] = and i128 [[TMP7]], 1329227995784915872903807060280344575
 // CHECK-NEXT:    [[BF_SHL3:%.*]] = shl i128 [[BF_VALUE2]], 8
 // CHECK-NEXT:    [[BF_CLEAR4:%.*]] = and i128 [[BF_LOAD1]], 255
 // CHECK-NEXT:    [[BF_SET5:%.*]] = or i128 [[BF_CLEAR4]], [[BF_SHL3]]
-// CHECK-NEXT:    store i128 [[BF_SET5]], i128 addrspace(200)* [[TMP8]], align 8
-// CHECK-NEXT:    [[TMP10:%.*]] = load [[STRUCT_SHORTDATALONG]] addrspace(200)*, [[STRUCT_SHORTDATALONG]] addrspace(200)* addrspace(200)* [[DATA_ADDR]], align 16
-// CHECK-NEXT:    [[TMP11:%.*]] = bitcast [[STRUCT_SHORTDATALONG]] addrspace(200)* [[TMP10]] to i128 addrspace(200)*
-// CHECK-NEXT:    [[BF_LOAD6:%.*]] = load i128, i128 addrspace(200)* [[TMP11]], align 8
+// CHECK-NEXT:    store i128 [[BF_SET5]], ptr addrspace(200) [[TMP6]], align 8
+// CHECK-NEXT:    [[TMP8:%.*]] = load ptr addrspace(200), ptr addrspace(200) [[DATA_ADDR]], align 16
+// CHECK-NEXT:    [[BF_LOAD6:%.*]] = load i128, ptr addrspace(200) [[TMP8]], align 8
 // CHECK-NEXT:    [[BF_CLEAR7:%.*]] = and i128 [[BF_LOAD6]], -256
 // CHECK-NEXT:    [[BF_SET8:%.*]] = or i128 [[BF_CLEAR7]], 24
-// CHECK-NEXT:    store i128 [[BF_SET8]], i128 addrspace(200)* [[TMP11]], align 8
+// CHECK-NEXT:    store i128 [[BF_SET8]], ptr addrspace(200) [[TMP8]], align 8
 // CHECK-NEXT:    ret void
 //
 extern "C" void setMsecsLong(ShortDataLong *data, long f) {

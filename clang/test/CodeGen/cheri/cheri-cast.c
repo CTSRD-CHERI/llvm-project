@@ -21,14 +21,14 @@ extern void * __capability global_cap;
 
 // HYBRID-LABEL: @c_cast_add_cap(
 // HYBRID-NEXT:  entry:
-// HYBRID-NEXT:    [[TMP0:%.*]] = load i8*, i8** @global_ptr, align 8
-// HYBRID-NEXT:    [[TMP1:%.*]] = addrspacecast i8* [[TMP0]] to i8 addrspace(200)*
-// HYBRID-NEXT:    ret i8 addrspace(200)* [[TMP1]]
+// HYBRID-NEXT:    [[TMP0:%.*]] = load ptr, ptr @global_ptr, align 8
+// HYBRID-NEXT:    [[TMP1:%.*]] = addrspacecast ptr [[TMP0]] to ptr addrspace(200)
+// HYBRID-NEXT:    ret ptr addrspace(200) [[TMP1]]
 //
 // PURECAP-LABEL: @c_cast_add_cap(
 // PURECAP-NEXT:  entry:
-// PURECAP-NEXT:    [[TMP0:%.*]] = load i8 addrspace(200)*, i8 addrspace(200)* addrspace(200)* @global_ptr, align 16
-// PURECAP-NEXT:    ret i8 addrspace(200)* [[TMP0]]
+// PURECAP-NEXT:    [[TMP0:%.*]] = load ptr addrspace(200), ptr addrspace(200) @global_ptr, align 16
+// PURECAP-NEXT:    ret ptr addrspace(200) [[TMP0]]
 //
 void * __capability c_cast_add_cap(void) {
   void * __capability ptr2cap = (CHERI_TOCAP void * __capability)global_ptr;
@@ -37,14 +37,14 @@ void * __capability c_cast_add_cap(void) {
 
 // HYBRID-LABEL: @c_cast_remove_cap(
 // HYBRID-NEXT:  entry:
-// HYBRID-NEXT:    [[TMP0:%.*]] = load i8 addrspace(200)*, i8 addrspace(200)** @global_cap, align 16
-// HYBRID-NEXT:    [[TMP1:%.*]] = addrspacecast i8 addrspace(200)* [[TMP0]] to i8*
-// HYBRID-NEXT:    ret i8* [[TMP1]]
+// HYBRID-NEXT:    [[TMP0:%.*]] = load ptr addrspace(200), ptr @global_cap, align 16
+// HYBRID-NEXT:    [[TMP1:%.*]] = addrspacecast ptr addrspace(200) [[TMP0]] to ptr
+// HYBRID-NEXT:    ret ptr [[TMP1]]
 //
 // PURECAP-LABEL: @c_cast_remove_cap(
 // PURECAP-NEXT:  entry:
-// PURECAP-NEXT:    [[TMP0:%.*]] = load i8 addrspace(200)*, i8 addrspace(200)* addrspace(200)* @global_cap, align 16
-// PURECAP-NEXT:    ret i8 addrspace(200)* [[TMP0]]
+// PURECAP-NEXT:    [[TMP0:%.*]] = load ptr addrspace(200), ptr addrspace(200) @global_cap, align 16
+// PURECAP-NEXT:    ret ptr addrspace(200) [[TMP0]]
 //
 void *c_cast_remove_cap(void) {
   void *cap2ptr = (CHERI_FROMCAP void *)global_cap;

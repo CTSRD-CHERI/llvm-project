@@ -8,9 +8,9 @@ int& f(void);
 // CHECK-LABEL: define {{[^@]+}}@_Z1gv
 // CHECK-SAME: () addrspace(200) #[[ATTR0:[0-9]+]] {
 // CHECK-NEXT:  entry:
-// CHECK-NEXT:    [[FN:%.*]] = alloca i32 addrspace(200)* () addrspace(200)*, align 16, addrspace(200)
-// CHECK-NEXT:    store i32 addrspace(200)* () addrspace(200)* @_Z1fv, i32 addrspace(200)* () addrspace(200)* addrspace(200)* [[FN]], align 16
-// CHECK-NEXT:    call void @_Z6invokeIRFRivEEvOT_(i32 addrspace(200)* () addrspace(200)* noundef nonnull @_Z1fv)
+// CHECK-NEXT:    [[FN:%.*]] = alloca ptr addrspace(200), align 16, addrspace(200)
+// CHECK-NEXT:    store ptr addrspace(200) @_Z1fv, ptr addrspace(200) [[FN]], align 16
+// CHECK-NEXT:    call void @_Z6invokeIRFRivEEvOT_(ptr addrspace(200) noundef nonnull @_Z1fv)
 // CHECK-NEXT:    ret void
 //
 void g() {

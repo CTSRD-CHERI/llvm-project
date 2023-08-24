@@ -3,8 +3,8 @@
 // RUN: %cheri_cc1 %s -emit-llvm -o - -Wall -verify=expected,hybrid | FileCheck --check-prefix=CHECK-HYBRID %s
 
 void* __capability foo(void *__capability x){
-  // CHECK-HYBRID:  [[ADDR:%.+]] = call i64 @llvm.cheri.cap.to.pointer.i64(i8 addrspace(200)* %1, i8 addrspace(200)* %0)
-  // CHECK-PURECAP: [[ADDR:%.+]] = call i64 @llvm.cheri.cap.address.get.i64(i8 addrspace(200)* {{%.+}})
+  // CHECK-HYBRID:  [[ADDR:%.+]] = call i64 @llvm.cheri.cap.to.pointer.i64(ptr addrspace(200) %1, ptr addrspace(200) %0)
+  // CHECK-PURECAP: [[ADDR:%.+]] = call i64 @llvm.cheri.cap.address.get.i64(ptr addrspace(200) {{%.+}})
   // CHECK-PURECAP-NEXT: trunc i64 [[ADDR]] to i32
   int pi = (int)x; // pi contains the result of CToPtr x, which is probably null
   // hybrid-warning@-1{{the following conversion will result in a CToPtr operation}}
@@ -13,7 +13,7 @@ void* __capability foo(void *__capability x){
   // purecap-warning@-4{{cast to smaller integer type 'int' from 'void *'}}
   // CHECK-HYBRID: inttoptr
   // CHECK-PURECAP: [[CONV:%.+]] = sext i32 {{%.+}} to i64
-  // CHECK-PURECAP-NEXT: getelementptr i8, i8 addrspace(200)* null, i64 [[CONV]]
+  // CHECK-PURECAP-NEXT: getelementptr i8, ptr addrspace(200) null, i64 [[CONV]]
   return (void* __capability)pi;
   // purecap-warning@-1{{cast from provenance-free integer type to pointer type will give pointer that can not be dereferenced}}
   // hybrid-warning@-2{{cast to 'void * __capability' from smaller integer type 'int'}}

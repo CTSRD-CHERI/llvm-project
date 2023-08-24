@@ -9,20 +9,20 @@ int & __capability foo();
 // CHECK-ILP32-LABEL: define {{[^@]+}}@_Z3barv
 // CHECK-ILP32-SAME: () #[[ATTR0:[0-9]+]] {
 // CHECK-ILP32-NEXT:  entry:
-// CHECK-ILP32-NEXT:    [[REF:%.*]] = alloca i32 addrspace(200)*, align 8
-// CHECK-ILP32-NEXT:    [[CALL:%.*]] = call noundef nonnull align 4 dereferenceable(4) i32 addrspace(200)* @_Z3foov()
-// CHECK-ILP32-NEXT:    store i32 addrspace(200)* [[CALL]], i32 addrspace(200)** [[REF]], align 8
-// CHECK-ILP32-NEXT:    [[TMP0:%.*]] = load i32 addrspace(200)*, i32 addrspace(200)** [[REF]], align 8
-// CHECK-ILP32-NEXT:    ret i32 addrspace(200)* [[TMP0]]
+// CHECK-ILP32-NEXT:    [[REF:%.*]] = alloca ptr addrspace(200), align 8
+// CHECK-ILP32-NEXT:    [[CALL:%.*]] = call noundef nonnull align 4 dereferenceable(4) ptr addrspace(200) @_Z3foov()
+// CHECK-ILP32-NEXT:    store ptr addrspace(200) [[CALL]], ptr [[REF]], align 8
+// CHECK-ILP32-NEXT:    [[TMP0:%.*]] = load ptr addrspace(200), ptr [[REF]], align 8
+// CHECK-ILP32-NEXT:    ret ptr addrspace(200) [[TMP0]]
 //
 // CHECK-LP64-LABEL: define {{[^@]+}}@_Z3barv
 // CHECK-LP64-SAME: () #[[ATTR0:[0-9]+]] {
 // CHECK-LP64-NEXT:  entry:
-// CHECK-LP64-NEXT:    [[REF:%.*]] = alloca i32 addrspace(200)*, align 16
-// CHECK-LP64-NEXT:    [[CALL:%.*]] = call noundef nonnull align 4 dereferenceable(4) i32 addrspace(200)* @_Z3foov()
-// CHECK-LP64-NEXT:    store i32 addrspace(200)* [[CALL]], i32 addrspace(200)** [[REF]], align 16
-// CHECK-LP64-NEXT:    [[TMP0:%.*]] = load i32 addrspace(200)*, i32 addrspace(200)** [[REF]], align 16
-// CHECK-LP64-NEXT:    ret i32 addrspace(200)* [[TMP0]]
+// CHECK-LP64-NEXT:    [[REF:%.*]] = alloca ptr addrspace(200), align 16
+// CHECK-LP64-NEXT:    [[CALL:%.*]] = call noundef nonnull align 4 dereferenceable(4) ptr addrspace(200) @_Z3foov()
+// CHECK-LP64-NEXT:    store ptr addrspace(200) [[CALL]], ptr [[REF]], align 16
+// CHECK-LP64-NEXT:    [[TMP0:%.*]] = load ptr addrspace(200), ptr [[REF]], align 16
+// CHECK-LP64-NEXT:    ret ptr addrspace(200) [[TMP0]]
 //
 int & __capability bar() {
   int & __capability ref = foo();

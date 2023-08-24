@@ -14,12 +14,10 @@ extern "C" void call_ref(int &i);
 
 // CHECK-LABEL: @test(
 // CHECK-NEXT:  entry:
-// CHECK-NEXT:    [[BUFFER:%.*]] = getelementptr inbounds [[STRUCT_FOO:%.*]], [[STRUCT_FOO]] addrspace(200)* [[F:%.*]], i64 0, i32 1
-// CHECK-NEXT:    [[TMP0:%.*]] = bitcast [64 x i32] addrspace(200)* [[BUFFER]] to i8 addrspace(200)*
-// CHECK-NEXT:    [[TMP1:%.*]] = tail call i8 addrspace(200)* @llvm.cheri.cap.bounds.set.i64(i8 addrspace(200)* nonnull [[TMP0]], i64 256)
-// CHECK-NEXT:    [[ARRAYIDX:%.*]] = getelementptr inbounds i8, i8 addrspace(200)* [[TMP1]], i64 256
-// CHECK-NEXT:    [[TMP2:%.*]] = bitcast i8 addrspace(200)* [[ARRAYIDX]] to i32 addrspace(200)*
-// CHECK-NEXT:    tail call void @call(i32 addrspace(200)* noundef nonnull [[TMP2]]) #[[ATTR3:[0-9]+]]
+// CHECK-NEXT:    [[BUFFER:%.*]] = getelementptr inbounds [[STRUCT_FOO:%.*]], ptr addrspace(200) [[F:%.*]], i64 0, i32 1
+// CHECK-NEXT:    [[TMP0:%.*]] = tail call ptr addrspace(200) @llvm.cheri.cap.bounds.set.i64(ptr addrspace(200) nonnull [[BUFFER]], i64 256)
+// CHECK-NEXT:    [[ARRAYIDX:%.*]] = getelementptr inbounds [64 x i32], ptr addrspace(200) [[TMP0]], i64 0, i64 64
+// CHECK-NEXT:    tail call void @call(ptr addrspace(200) noundef nonnull [[ARRAYIDX]]) #[[ATTR3:[0-9]+]]
 // CHECK-NEXT:    ret void
 //
 extern "C" void test(struct Foo *f) {
@@ -29,13 +27,11 @@ extern "C" void test(struct Foo *f) {
 }
 // CHECK-LABEL: @test2(
 // CHECK-NEXT:  entry:
-// CHECK-NEXT:    [[BUFFER:%.*]] = getelementptr inbounds [[STRUCT_FOO:%.*]], [[STRUCT_FOO]] addrspace(200)* [[F:%.*]], i64 0, i32 1
-// CHECK-NEXT:    [[TMP0:%.*]] = bitcast [64 x i32] addrspace(200)* [[BUFFER]] to i8 addrspace(200)*
-// CHECK-NEXT:    [[TMP1:%.*]] = tail call i8 addrspace(200)* @llvm.cheri.cap.bounds.set.i64(i8 addrspace(200)* nonnull [[TMP0]], i64 256)
-// CHECK-NEXT:    [[ARRAYIDX:%.*]] = getelementptr inbounds i8, i8 addrspace(200)* [[TMP1]], i64 256
-// CHECK-NEXT:    [[TMP2:%.*]] = tail call i8 addrspace(200)* @llvm.cheri.cap.bounds.set.i64(i8 addrspace(200)* nonnull [[ARRAYIDX]], i64 4)
-// CHECK-NEXT:    [[REFERENCE_WITH_BOUNDS:%.*]] = bitcast i8 addrspace(200)* [[TMP2]] to i32 addrspace(200)*
-// CHECK-NEXT:    tail call void @call_ref(i32 addrspace(200)* noundef nonnull align 4 dereferenceable(4) [[REFERENCE_WITH_BOUNDS]]) #[[ATTR3]]
+// CHECK-NEXT:    [[BUFFER:%.*]] = getelementptr inbounds [[STRUCT_FOO:%.*]], ptr addrspace(200) [[F:%.*]], i64 0, i32 1
+// CHECK-NEXT:    [[TMP0:%.*]] = tail call ptr addrspace(200) @llvm.cheri.cap.bounds.set.i64(ptr addrspace(200) nonnull [[BUFFER]], i64 256)
+// CHECK-NEXT:    [[ARRAYIDX:%.*]] = getelementptr inbounds [64 x i32], ptr addrspace(200) [[TMP0]], i64 0, i64 64
+// CHECK-NEXT:    [[TMP1:%.*]] = tail call ptr addrspace(200) @llvm.cheri.cap.bounds.set.i64(ptr addrspace(200) nonnull [[ARRAYIDX]], i64 4)
+// CHECK-NEXT:    tail call void @call_ref(ptr addrspace(200) noundef nonnull align 4 dereferenceable(4) [[TMP1]]) #[[ATTR3]]
 // CHECK-NEXT:    ret void
 //
 extern "C" void test2(struct Foo *f) {
@@ -52,10 +48,8 @@ union U {
 
 // CHECK-LABEL: @test3(
 // CHECK-NEXT:  entry:
-// CHECK-NEXT:    [[TMP0:%.*]] = bitcast [[UNION_U:%.*]] addrspace(200)* [[U:%.*]] to i8 addrspace(200)*
-// CHECK-NEXT:    [[TMP1:%.*]] = tail call i8 addrspace(200)* @llvm.cheri.cap.bounds.set.i64(i8 addrspace(200)* [[TMP0]], i64 264)
-// CHECK-NEXT:    [[ADDRESS_WITH_BOUNDS:%.*]] = bitcast i8 addrspace(200)* [[TMP1]] to i32 addrspace(200)*
-// CHECK-NEXT:    tail call void @call(i32 addrspace(200)* noundef [[ADDRESS_WITH_BOUNDS]]) #[[ATTR3]]
+// CHECK-NEXT:    [[TMP0:%.*]] = tail call ptr addrspace(200) @llvm.cheri.cap.bounds.set.i64(ptr addrspace(200) [[U:%.*]], i64 264)
+// CHECK-NEXT:    tail call void @call(ptr addrspace(200) noundef [[TMP0]]) #[[ATTR3]]
 // CHECK-NEXT:    ret void
 //
 extern "C" void test3(union U *u) {
@@ -65,10 +59,8 @@ extern "C" void test3(union U *u) {
 
 // CHECK-LABEL: @test4(
 // CHECK-NEXT:  entry:
-// CHECK-NEXT:    [[TMP0:%.*]] = bitcast [[UNION_U:%.*]] addrspace(200)* [[U:%.*]] to i8 addrspace(200)*
-// CHECK-NEXT:    [[TMP1:%.*]] = tail call i8 addrspace(200)* @llvm.cheri.cap.bounds.set.i64(i8 addrspace(200)* [[TMP0]], i64 264)
-// CHECK-NEXT:    [[REFERENCE_WITH_BOUNDS:%.*]] = bitcast i8 addrspace(200)* [[TMP1]] to i32 addrspace(200)*
-// CHECK-NEXT:    tail call void @call_ref(i32 addrspace(200)* noundef nonnull align 4 dereferenceable(4) [[REFERENCE_WITH_BOUNDS]]) #[[ATTR3]]
+// CHECK-NEXT:    [[TMP0:%.*]] = tail call ptr addrspace(200) @llvm.cheri.cap.bounds.set.i64(ptr addrspace(200) [[U:%.*]], i64 264)
+// CHECK-NEXT:    tail call void @call_ref(ptr addrspace(200) noundef nonnull align 4 dereferenceable(4) [[TMP0]]) #[[ATTR3]]
 // CHECK-NEXT:    ret void
 //
 extern "C" void test4(union U *u) {
@@ -84,11 +76,9 @@ struct WithNestedUnion {
 
 // CHECK-LABEL: @test5(
 // CHECK-NEXT:  entry:
-// CHECK-NEXT:    [[U:%.*]] = getelementptr inbounds [[STRUCT_WITHNESTEDUNION:%.*]], [[STRUCT_WITHNESTEDUNION]] addrspace(200)* [[W:%.*]], i64 0, i32 2
-// CHECK-NEXT:    [[TMP0:%.*]] = bitcast [[UNION_U:%.*]] addrspace(200)* [[U]] to i8 addrspace(200)*
-// CHECK-NEXT:    [[TMP1:%.*]] = tail call i8 addrspace(200)* @llvm.cheri.cap.bounds.set.i64(i8 addrspace(200)* nonnull [[TMP0]], i64 264)
-// CHECK-NEXT:    [[ADDRESS_WITH_BOUNDS:%.*]] = bitcast i8 addrspace(200)* [[TMP1]] to i32 addrspace(200)*
-// CHECK-NEXT:    tail call void @call(i32 addrspace(200)* noundef [[ADDRESS_WITH_BOUNDS]]) #[[ATTR3]]
+// CHECK-NEXT:    [[TMP0:%.*]] = tail call ptr addrspace(200) @llvm.cheri.cap.bounds.set.i64(ptr addrspace(200) [[W:%.*]], i64 264)
+// CHECK-NEXT:    [[U:%.*]] = getelementptr inbounds [[STRUCT_WITHNESTEDUNION:%.*]], ptr addrspace(200) [[TMP0]], i64 0, i32 2
+// CHECK-NEXT:    tail call void @call(ptr addrspace(200) noundef nonnull [[U]]) #[[ATTR3]]
 // CHECK-NEXT:    ret void
 //
 extern "C" void test5(struct WithNestedUnion *w) {
@@ -98,11 +88,9 @@ extern "C" void test5(struct WithNestedUnion *w) {
 
 // CHECK-LABEL: @test6(
 // CHECK-NEXT:  entry:
-// CHECK-NEXT:    [[U:%.*]] = getelementptr inbounds [[STRUCT_WITHNESTEDUNION:%.*]], [[STRUCT_WITHNESTEDUNION]] addrspace(200)* [[W:%.*]], i64 0, i32 2
-// CHECK-NEXT:    [[TMP0:%.*]] = bitcast [[UNION_U:%.*]] addrspace(200)* [[U]] to i8 addrspace(200)*
-// CHECK-NEXT:    [[TMP1:%.*]] = tail call i8 addrspace(200)* @llvm.cheri.cap.bounds.set.i64(i8 addrspace(200)* nonnull [[TMP0]], i64 264)
-// CHECK-NEXT:    [[REFERENCE_WITH_BOUNDS:%.*]] = bitcast i8 addrspace(200)* [[TMP1]] to i32 addrspace(200)*
-// CHECK-NEXT:    tail call void @call_ref(i32 addrspace(200)* noundef nonnull align 4 dereferenceable(4) [[REFERENCE_WITH_BOUNDS]]) #[[ATTR3]]
+// CHECK-NEXT:    [[TMP0:%.*]] = tail call ptr addrspace(200) @llvm.cheri.cap.bounds.set.i64(ptr addrspace(200) [[W:%.*]], i64 264)
+// CHECK-NEXT:    [[U:%.*]] = getelementptr inbounds [[STRUCT_WITHNESTEDUNION:%.*]], ptr addrspace(200) [[TMP0]], i64 0, i32 2
+// CHECK-NEXT:    tail call void @call_ref(ptr addrspace(200) noundef nonnull align 4 dereferenceable(4) [[U]]) #[[ATTR3]]
 // CHECK-NEXT:    ret void
 //
 extern "C" void test6(struct WithNestedUnion *w) {
@@ -119,9 +107,9 @@ extern "C" void do_stuff(void *);
 
 // CHECK-LABEL: @clearcmentry(
 // CHECK-NEXT:  entry:
-// CHECK-NEXT:    [[TMP0:%.*]] = tail call i8 addrspace(200)* @llvm.cheri.cap.bounds.set.i64(i8 addrspace(200)* bitcast ([31 x [[STRUCT_TBLENTRY:%.*]] addrspace(200)*] addrspace(200)* @_ZL8cmdtable to i8 addrspace(200)*), i64 496)
-// CHECK-NEXT:    [[ARRAYIDX:%.*]] = getelementptr inbounds i8, i8 addrspace(200)* [[TMP0]], i64 496
-// CHECK-NEXT:    tail call void @do_stuff(i8 addrspace(200)* noundef nonnull [[ARRAYIDX]]) #[[ATTR3]]
+// CHECK-NEXT:    [[TMP0:%.*]] = tail call ptr addrspace(200) @llvm.cheri.cap.bounds.set.i64(ptr addrspace(200) nonnull @_ZL8cmdtable, i64 496)
+// CHECK-NEXT:    [[ARRAYIDX:%.*]] = getelementptr inbounds [31 x ptr addrspace(200)], ptr addrspace(200) [[TMP0]], i64 0, i64 31
+// CHECK-NEXT:    tail call void @do_stuff(ptr addrspace(200) noundef nonnull [[ARRAYIDX]]) #[[ATTR3]]
 // CHECK-NEXT:    ret void
 //
 extern "C" void clearcmentry() {
@@ -133,8 +121,8 @@ extern "C" void clearcmentry() {
 
 // CHECK-LABEL: @clearcmentry2(
 // CHECK-NEXT:  entry:
-// CHECK-NEXT:    [[TMP0:%.*]] = tail call i8 addrspace(200)* @llvm.cheri.cap.bounds.set.i64(i8 addrspace(200)* bitcast ([31 x [[STRUCT_TBLENTRY:%.*]] addrspace(200)*] addrspace(200)* @_ZL8cmdtable to i8 addrspace(200)*), i64 496)
-// CHECK-NEXT:    tail call void @do_stuff(i8 addrspace(200)* noundef [[TMP0]]) #[[ATTR3]]
+// CHECK-NEXT:    [[TMP0:%.*]] = tail call ptr addrspace(200) @llvm.cheri.cap.bounds.set.i64(ptr addrspace(200) nonnull @_ZL8cmdtable, i64 496)
+// CHECK-NEXT:    tail call void @do_stuff(ptr addrspace(200) noundef [[TMP0]]) #[[ATTR3]]
 // CHECK-NEXT:    ret void
 //
 extern "C" void clearcmentry2() {
@@ -146,9 +134,9 @@ extern "C" void clearcmentry2() {
 
 // CHECK-LABEL: @clearcmentry3(
 // CHECK-NEXT:  entry:
-// CHECK-NEXT:    [[TMP0:%.*]] = tail call i8 addrspace(200)* @llvm.cheri.cap.bounds.set.i64(i8 addrspace(200)* bitcast ([31 x [[STRUCT_TBLENTRY:%.*]] addrspace(200)*] addrspace(200)* @_ZL8cmdtable to i8 addrspace(200)*), i64 496)
-// CHECK-NEXT:    [[ARRAYIDX:%.*]] = getelementptr inbounds i8, i8 addrspace(200)* [[TMP0]], i64 16
-// CHECK-NEXT:    tail call void @do_stuff(i8 addrspace(200)* noundef nonnull [[ARRAYIDX]]) #[[ATTR3]]
+// CHECK-NEXT:    [[TMP0:%.*]] = tail call ptr addrspace(200) @llvm.cheri.cap.bounds.set.i64(ptr addrspace(200) nonnull @_ZL8cmdtable, i64 496)
+// CHECK-NEXT:    [[ARRAYIDX:%.*]] = getelementptr inbounds [31 x ptr addrspace(200)], ptr addrspace(200) [[TMP0]], i64 0, i64 1
+// CHECK-NEXT:    tail call void @do_stuff(ptr addrspace(200) noundef nonnull [[ARRAYIDX]]) #[[ATTR3]]
 // CHECK-NEXT:    ret void
 //
 extern "C" void clearcmentry3() {
@@ -162,9 +150,8 @@ union U global_u;
 
 // CHECK-LABEL: @same_with_union(
 // CHECK-NEXT:  entry:
-// CHECK-NEXT:    [[TMP0:%.*]] = tail call i8 addrspace(200)* @llvm.cheri.cap.bounds.set.i64(i8 addrspace(200)* bitcast ([[UNION_U:%.*]] addrspace(200)* @global_u to i8 addrspace(200)*), i64 264)
-// CHECK-NEXT:    [[ADDRESS_WITH_BOUNDS:%.*]] = bitcast i8 addrspace(200)* [[TMP0]] to i32 addrspace(200)*
-// CHECK-NEXT:    tail call void @call(i32 addrspace(200)* noundef [[ADDRESS_WITH_BOUNDS]]) #[[ATTR3]]
+// CHECK-NEXT:    [[TMP0:%.*]] = tail call ptr addrspace(200) @llvm.cheri.cap.bounds.set.i64(ptr addrspace(200) nonnull @global_u, i64 264)
+// CHECK-NEXT:    tail call void @call(ptr addrspace(200) noundef [[TMP0]]) #[[ATTR3]]
 // CHECK-NEXT:    ret void
 //
 extern "C" void same_with_union() {
@@ -175,9 +162,8 @@ extern "C" void same_with_union() {
 
 // CHECK-LABEL: @same_with_union_ref(
 // CHECK-NEXT:  entry:
-// CHECK-NEXT:    [[TMP0:%.*]] = tail call i8 addrspace(200)* @llvm.cheri.cap.bounds.set.i64(i8 addrspace(200)* bitcast ([[UNION_U:%.*]] addrspace(200)* @global_u to i8 addrspace(200)*), i64 264)
-// CHECK-NEXT:    [[REFERENCE_WITH_BOUNDS:%.*]] = bitcast i8 addrspace(200)* [[TMP0]] to i32 addrspace(200)*
-// CHECK-NEXT:    tail call void @call_ref(i32 addrspace(200)* noundef nonnull align 4 dereferenceable(4) [[REFERENCE_WITH_BOUNDS]]) #[[ATTR3]]
+// CHECK-NEXT:    [[TMP0:%.*]] = tail call ptr addrspace(200) @llvm.cheri.cap.bounds.set.i64(ptr addrspace(200) nonnull @global_u, i64 264)
+// CHECK-NEXT:    tail call void @call_ref(ptr addrspace(200) noundef nonnull align 4 dereferenceable(4) [[TMP0]]) #[[ATTR3]]
 // CHECK-NEXT:    ret void
 //
 extern "C" void same_with_union_ref() {

@@ -13,11 +13,10 @@ void fn2();
 // CHECK-SAME: () local_unnamed_addr addrspace(200) #[[ATTR0:[0-9]+]] {
 // CHECK-NEXT:  entry:
 // CHECK-NEXT:    [[BYVAL_TEMP:%.*]] = alloca [[STRUCT_DWARF_ERROR:%.*]], align 8, addrspace(200)
-// CHECK-NEXT:    [[TMP0:%.*]] = bitcast [[STRUCT_DWARF_ERROR]] addrspace(200)* [[BYVAL_TEMP]] to i8 addrspace(200)*
-// CHECK-NEXT:    call void @llvm.lifetime.start.p200i8(i64 4096, i8 addrspace(200)* nonnull [[TMP0]]) #[[ATTR4:[0-9]+]]
-// CHECK-NEXT:    call void @llvm.memcpy.p200i8.p200i8.i64(i8 addrspace(200)* noundef nonnull align 8 dereferenceable(4096) [[TMP0]], i8 addrspace(200)* noundef nonnull align 4 dereferenceable(4096) bitcast ([[STRUCT_DWARF_ERROR]] addrspace(200)* @a to i8 addrspace(200)*), i64 4096, i1 false), !tbaa.struct !2
-// CHECK-NEXT:    tail call void bitcast (void (...) addrspace(200)* @fn2 to void ([[STRUCT_DWARF_ERROR]] addrspace(200)*) addrspace(200)*)([[STRUCT_DWARF_ERROR]] addrspace(200)* noundef nonnull byval([[STRUCT_DWARF_ERROR]]) align 8 [[BYVAL_TEMP]]) #[[ATTR4]]
-// CHECK-NEXT:    call void @llvm.lifetime.end.p200i8(i64 4096, i8 addrspace(200)* nonnull [[TMP0]]) #[[ATTR4]]
+// CHECK-NEXT:    call void @llvm.lifetime.start.p200(i64 4096, ptr addrspace(200) nonnull [[BYVAL_TEMP]]) #[[ATTR4:[0-9]+]]
+// CHECK-NEXT:    call void @llvm.memcpy.p200.p200.i64(ptr addrspace(200) noundef nonnull align 8 dereferenceable(4096) [[BYVAL_TEMP]], ptr addrspace(200) noundef nonnull align 4 dereferenceable(4096) @a, i64 4096, i1 false), !tbaa.struct !2
+// CHECK-NEXT:    tail call void @fn2(ptr addrspace(200) noundef nonnull byval([[STRUCT_DWARF_ERROR]]) align 8 [[BYVAL_TEMP]]) #[[ATTR4]]
+// CHECK-NEXT:    call void @llvm.lifetime.end.p200(i64 4096, ptr addrspace(200) nonnull [[BYVAL_TEMP]]) #[[ATTR4]]
 // CHECK-NEXT:    ret void
 //
 void fn1() {
