@@ -3181,7 +3181,7 @@ SDValue DAGCombiner::visitADDSAT(SDNode *N) {
     return N0;
 
   // If it cannot overflow, transform into an add.
-  if (DAG.computeOverflowForAdd(IsSigned, N0, N1) == SelectionDAG::OFK_Never)
+  if (DAG.willNotOverflowAdd(IsSigned, N0, N1))
     return DAG.getNode(ISD::ADD, DL, VT, N0, N1);
 
   return SDValue();
@@ -3451,7 +3451,7 @@ SDValue DAGCombiner::visitADDO(SDNode *N) {
     return CombineTo(N, N0, DAG.getConstant(0, DL, CarryVT));
 
   // If it cannot overflow, transform into an add.
-  if (DAG.computeOverflowForAdd(IsSigned, N0, N1) == SelectionDAG::OFK_Never)
+  if (DAG.willNotOverflowAdd(IsSigned, N0, N1))
     return CombineTo(N, DAG.getNode(ISD::ADD, DL, VT, N0, N1),
                      DAG.getConstant(0, DL, CarryVT));
 
@@ -4311,7 +4311,7 @@ SDValue DAGCombiner::visitSUBSAT(SDNode *N) {
     return N0;
 
   // If it cannot overflow, transform into an sub.
-  if (DAG.computeOverflowForSub(IsSigned, N0, N1) == SelectionDAG::OFK_Never)
+  if (DAG.willNotOverflowSub(IsSigned, N0, N1))
     return DAG.getNode(ISD::SUB, DL, VT, N0, N1);
 
   return SDValue();
@@ -4377,7 +4377,7 @@ SDValue DAGCombiner::visitSUBO(SDNode *N) {
     return CombineTo(N, N0, DAG.getConstant(0, DL, CarryVT));
 
   // If it cannot overflow, transform into an sub.
-  if (DAG.computeOverflowForSub(IsSigned, N0, N1) == SelectionDAG::OFK_Never)
+  if (DAG.willNotOverflowSub(IsSigned, N0, N1))
     return CombineTo(N, DAG.getNode(ISD::SUB, DL, VT, N0, N1),
                      DAG.getConstant(0, DL, CarryVT));
 
