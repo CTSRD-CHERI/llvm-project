@@ -1363,6 +1363,8 @@ DEFINE_LIBUNWIND_FUNCTION(__unw_getcontext)
   cret          // jump to cra
 #else
   ret           // jump to ra
+#endif
+END_LIBUNWIND_FUNCTION(__unw_getcontext)
 
 #elif defined(__s390x__)
 
@@ -1405,9 +1407,6 @@ DEFINE_LIBUNWIND_FUNCTION(__unw_getcontext)
   // Return UNW_ESUCCESS
   lghi %r2, 0
   br %r14
-
-#endif
-END_LIBUNWIND_FUNCTION(__unw_getcontext)
 
 #endif
 
