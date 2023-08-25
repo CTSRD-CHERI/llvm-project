@@ -3954,6 +3954,7 @@ bool SelectionDAGLegalize::ExpandNode(SDNode *Node) {
     SDValue Table = Node->getOperand(1);
     SDValue Index = Node->getOperand(2);
     assert(Index.getValueType().isInteger());
+    int JTI = cast<JumpTableSDNode>(Table.getNode())->getIndex();
 
     const DataLayout &TD = DAG.getDataLayout();
     EVT PTy = TLI.getPointerRangeTy(TD);
@@ -3998,7 +3999,7 @@ bool SelectionDAGLegalize::ExpandNode(SDNode *Node) {
         Addr = DAG.getNode(ISD::ADD, dl, Base.getValueType(), Addr, Base);
     }
 
-    Tmp1 = TLI.expandIndirectJTBranch(dl, LD.getValue(1), Addr, DAG);
+    Tmp1 = TLI.expandIndirectJTBranch(dl, LD.getValue(1), Addr, JTI, DAG);
     Results.push_back(Tmp1);
     break;
   }
