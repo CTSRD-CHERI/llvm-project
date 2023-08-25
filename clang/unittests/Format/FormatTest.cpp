@@ -19,7 +19,7 @@ class FormatTest : public test::FormatTestBase {};
 
 TEST_F(FormatTest, MessUp) {
   EXPECT_EQ("1 2 3", messUp("1 2 3"));
-  EXPECT_EQ("1 2 3\n", messUp("1\n2\n3\n"));
+  EXPECT_EQ("1 2 3", messUp("1\n2\n3"));
   EXPECT_EQ("a\n//b\nc", messUp("a\n//b\nc"));
   EXPECT_EQ("a\n#b\nc", messUp("a\n#b\nc"));
   EXPECT_EQ("a\n#b c d\ne", messUp("a\n#b\\\nc\\\nd\ne"));
@@ -88,10 +88,10 @@ TEST_F(FormatTest, OnlyGeneratesNecessaryReplacements) {
   EXPECT_EQ(0, ReplacementCount);
   EXPECT_EQ("/*\r\n"
             "\r\n"
-            "*/\r\n",
+            "*/",
             format("/*\r\n"
                    "\r\n"
-                   "*/\r\n"));
+                   "*/"));
   EXPECT_EQ(0, ReplacementCount);
 }
 
@@ -229,7 +229,7 @@ TEST_F(FormatTest, RemovesEmptyLines) {
             "class AA {};\n"
             "\n"
             "} // namespace b\n"
-            "} // namespace a\n",
+            "} // namespace a",
             format("namespace a\n"
                    "{\n"
                    "namespace b\n"
@@ -240,7 +240,7 @@ TEST_F(FormatTest, RemovesEmptyLines) {
                    "\n"
                    "\n"
                    "}\n"
-                   "}\n",
+                   "}",
                    CustomStyle));
   EXPECT_EQ("namespace A /* comment */\n"
             "{\n"
@@ -594,7 +594,7 @@ TEST_F(FormatTest, FormatIfWithoutCompoundStatement) {
                AllowsMergedIf);
 
   verifyFormat("if (a) // Can't merge this\n"
-               "  f();\n",
+               "  f();",
                AllowsMergedIf);
   verifyFormat("if (a) /* still don't merge */\n"
                "  f();",
@@ -630,7 +630,7 @@ TEST_F(FormatTest, FormatIfWithoutCompoundStatement) {
                AllowsMergedIf);
 
   verifyFormat("MYIF (a) // Can't merge this\n"
-               "  f();\n",
+               "  f();",
                AllowsMergedIf);
   verifyFormat("MYIF (a) /* still don't merge */\n"
                "  f();",
@@ -780,7 +780,7 @@ TEST_F(FormatTest, FormatIfWithoutCompoundStatementButElseWith) {
   verifyFormat("if (a)\n"
                "  f();\n"
                "else\n"
-               "  g();\n",
+               "  g();",
                AllowsMergedIf);
 
   verifyFormat("if (a) g();", AllowsMergedIf);
@@ -864,7 +864,7 @@ TEST_F(FormatTest, FormatIfWithoutCompoundStatementButElseWith) {
   verifyFormat("MYIF (a)\n"
                "  f();\n"
                "else\n"
-               "  g();\n",
+               "  g();",
                AllowsMergedIf);
 
   verifyFormat("MYIF (a) g();", AllowsMergedIf);
@@ -1862,9 +1862,9 @@ TEST_F(FormatTest, UnderstandsMacros) {
                "  N                                                            "
                "                \\\n"
                "  {\n"
-               "#define BBB }\n",
+               "#define BBB }",
                Style);
-  // verifyFormat("#define AAA N { //\n", Style);
+  // verifyFormat("#define AAA N { //", Style);
 
   verifyFormat("MACRO(return)");
   verifyFormat("MACRO(co_await)");
@@ -2400,13 +2400,13 @@ TEST_F(FormatTest, ForEachLoops) {
   verifyFormat("#define foreach(x, y)\n"
                "#define Q_FOREACH(x, y)\n"
                "#define BOOST_FOREACH(x, y)\n"
-               "#define UNKNOWN_FOREACH(x, y)\n");
+               "#define UNKNOWN_FOREACH(x, y)");
 
   // Not as function-like macros.
   verifyFormat("#define foreach (x, y)\n"
                "#define Q_FOREACH (x, y)\n"
                "#define BOOST_FOREACH (x, y)\n"
-               "#define UNKNOWN_FOREACH (x, y)\n");
+               "#define UNKNOWN_FOREACH (x, y)");
 
   // handle microsoft non standard extension
   verifyFormat("for each (char c in x->MyStringProperty)");
@@ -2509,7 +2509,7 @@ TEST_F(FormatTest, FormatsSwitchStatement) {
                getLLVMStyleWithColumns(20));
   verifyFormat("#define OPERATION_CASE(name)           \\\n"
                "  case OP_name:                        \\\n"
-               "    return operations::Operation##name\n",
+               "    return operations::Operation##name",
                getLLVMStyleWithColumns(40));
   verifyFormat("switch (x) {\n"
                "case 1:;\n"
@@ -2540,7 +2540,7 @@ TEST_F(FormatTest, FormatsSwitchStatement) {
 
   verifyGoogleFormat("#define OPERATION_CASE(name) \\\n"
                      "  case OP_name:              \\\n"
-                     "    return operations::Operation##name\n");
+                     "    return operations::Operation##name");
   verifyGoogleFormat("Operation codeToOperation(OperationCode OpCode) {\n"
                      "  // Get the correction operation class.\n"
                      "  switch (OpCode) {\n"
@@ -3418,7 +3418,7 @@ TEST_F(FormatTest, UnderstandsAccessSpecifiers) {
   verifyFormat("std::vector<int> testVec = {private};");
   verifyFormat("private.p = 1;");
   verifyFormat("void function(private...){};");
-  verifyFormat("if (private && public)\n");
+  verifyFormat("if (private && public)");
   verifyFormat("private &= true;");
   verifyFormat("int x = private * public;");
   verifyFormat("public *= private;");
@@ -3431,16 +3431,16 @@ TEST_F(FormatTest, UnderstandsAccessSpecifiers) {
   verifyFormat("private--;");
   verifyFormat("--private;");
   verifyFormat("public -= 1;");
-  verifyFormat("if (!private && !public)\n");
+  verifyFormat("if (!private && !public)");
   verifyFormat("public != private;");
   verifyFormat("int x = public / private;");
   verifyFormat("public /= 2;");
   verifyFormat("public = public % 2;");
   verifyFormat("public %= 2;");
-  verifyFormat("if (public < private)\n");
+  verifyFormat("if (public < private)");
   verifyFormat("public << private;");
   verifyFormat("public <<= private;");
-  verifyFormat("if (public > private)\n");
+  verifyFormat("if (public > private)");
   verifyFormat("public >> private;");
   verifyFormat("public >>= private;");
   verifyFormat("public ^ private;");
@@ -3448,7 +3448,7 @@ TEST_F(FormatTest, UnderstandsAccessSpecifiers) {
   verifyFormat("public | private;");
   verifyFormat("public |= private;");
   verifyFormat("auto x = private ? 1 : 2;");
-  verifyFormat("if (public == private)\n");
+  verifyFormat("if (public == private)");
   verifyFormat("void foo(public, private)");
   verifyFormat("public::foo();");
 
@@ -4097,92 +4097,92 @@ TEST_F(FormatTest, FormatsNamespaces) {
                "  void f() {\n"
                "    return;\n"
                "  }\n"
-               "} // namespace\n",
+               "} // namespace",
                ShortInlineFunctions);
   verifyFormat("namespace { /* comment */\n"
                "  void f() {\n"
                "    return;\n"
                "  }\n"
-               "} // namespace\n",
+               "} // namespace",
                ShortInlineFunctions);
   verifyFormat("namespace { // comment\n"
                "  void f() {\n"
                "    return;\n"
                "  }\n"
-               "} // namespace\n",
+               "} // namespace",
                ShortInlineFunctions);
   verifyFormat("namespace {\n"
                "  int some_int;\n"
                "  void f() {\n"
                "    return;\n"
                "  }\n"
-               "} // namespace\n",
+               "} // namespace",
                ShortInlineFunctions);
   verifyFormat("namespace interface {\n"
                "  void f() {\n"
                "    return;\n"
                "  }\n"
-               "} // namespace interface\n",
+               "} // namespace interface",
                ShortInlineFunctions);
   verifyFormat("namespace {\n"
                "  class X {\n"
                "    void f() { return; }\n"
                "  };\n"
-               "} // namespace\n",
+               "} // namespace",
                ShortInlineFunctions);
   verifyFormat("namespace {\n"
                "  class X { /* comment */\n"
                "    void f() { return; }\n"
                "  };\n"
-               "} // namespace\n",
+               "} // namespace",
                ShortInlineFunctions);
   verifyFormat("namespace {\n"
                "  class X { // comment\n"
                "    void f() { return; }\n"
                "  };\n"
-               "} // namespace\n",
+               "} // namespace",
                ShortInlineFunctions);
   verifyFormat("namespace {\n"
                "  struct X {\n"
                "    void f() { return; }\n"
                "  };\n"
-               "} // namespace\n",
+               "} // namespace",
                ShortInlineFunctions);
   verifyFormat("namespace {\n"
                "  union X {\n"
                "    void f() { return; }\n"
                "  };\n"
-               "} // namespace\n",
+               "} // namespace",
                ShortInlineFunctions);
   verifyFormat("extern \"C\" {\n"
                "void f() {\n"
                "  return;\n"
                "}\n"
-               "} // namespace\n",
+               "} // namespace",
                ShortInlineFunctions);
   verifyFormat("namespace {\n"
                "  class X {\n"
                "    void f() { return; }\n"
                "  } x;\n"
-               "} // namespace\n",
+               "} // namespace",
                ShortInlineFunctions);
   verifyFormat("namespace {\n"
                "  [[nodiscard]] class X {\n"
                "    void f() { return; }\n"
                "  };\n"
-               "} // namespace\n",
+               "} // namespace",
                ShortInlineFunctions);
   verifyFormat("namespace {\n"
                "  static class X {\n"
                "    void f() { return; }\n"
                "  } x;\n"
-               "} // namespace\n",
+               "} // namespace",
                ShortInlineFunctions);
   verifyFormat("namespace {\n"
                "  constexpr class X {\n"
                "    void f() { return; }\n"
                "  } x;\n"
-               "} // namespace\n",
+               "} // namespace",
                ShortInlineFunctions);
 
   ShortInlineFunctions.IndentExternBlock = FormatStyle::IEBS_Indent;
@@ -4190,7 +4190,7 @@ TEST_F(FormatTest, FormatsNamespaces) {
                "  void f() {\n"
                "    return;\n"
                "  }\n"
-               "} // namespace\n",
+               "} // namespace",
                ShortInlineFunctions);
 
   Style.NamespaceIndentation = FormatStyle::NI_Inner;
@@ -4213,7 +4213,7 @@ TEST_F(FormatTest, FormatsNamespaces) {
                "concept a_concept = X<>;\n"
                "namespace B {\n"
                "struct b_struct {};\n"
-               "} // namespace B\n",
+               "} // namespace B",
                Style);
   verifyFormat("template <int I>\n"
                "constexpr void foo()\n"
@@ -4221,7 +4221,7 @@ TEST_F(FormatTest, FormatsNamespaces) {
                "{}\n"
                "namespace ns {\n"
                "void foo() {}\n"
-               "} // namespace ns\n",
+               "} // namespace ns",
                Style);
 }
 
@@ -4377,11 +4377,11 @@ TEST_F(FormatTest, FormatsCompactNamespaces) {
                    Style));
 
   EXPECT_EQ("namespace A { namespace B { namespace C {\n"
-            "}}} // namespace A::B::C\n",
+            "}}} // namespace A::B::C",
             format("namespace A { namespace B {\n"
                    "namespace C {\n"
                    "}} // namespace B::C\n"
-                   "} // namespace A\n",
+                   "} // namespace A",
                    Style));
 
   Style.ColumnLimit = 40;
@@ -4708,21 +4708,21 @@ TEST_F(FormatTest, FormatTryCatch) {
                "  } catch (...) {\n"
                "    throw;\n"
                "  }\n"
-               "};\n");
+               "};");
   verifyFormat("class A {\n"
                "  int a;\n"
                "  A() try : a(0), b{1} {\n"
                "  } catch (...) {\n"
                "    throw;\n"
                "  }\n"
-               "};\n");
+               "};");
   verifyFormat("class A {\n"
                "  int a;\n"
                "  A() try : a(0), b{1}, c{2} {\n"
                "  } catch (...) {\n"
                "    throw;\n"
                "  }\n"
-               "};\n");
+               "};");
   verifyFormat("class A {\n"
                "  int a;\n"
                "  A() try : a(0), b{1}, c{2} {\n"
@@ -4731,7 +4731,7 @@ TEST_F(FormatTest, FormatTryCatch) {
                "  } catch (...) {\n"
                "    throw;\n"
                "  }\n"
-               "};\n");
+               "};");
 
   // Incomplete try-catch blocks.
   verifyIncompleteFormat("try {} catch (");
@@ -4803,7 +4803,7 @@ TEST_F(FormatTest, FormatSEHTryCatch) {
                "  __try {\n"
                "  } __finally {\n"
                "  }\n"
-               "});\n");
+               "});");
 }
 
 TEST_F(FormatTest, IncompleteTryCatchBlocks) {
@@ -4963,32 +4963,32 @@ TEST_F(FormatTest, BracedInitializerIndentWidth) {
   verifyFormat("enum class {\n"
                "  One,\n"
                "  Two,\n"
-               "};\n",
+               "};",
                Style);
   verifyFormat("class Foo {\n"
                "  Foo() {}\n"
                "  void bar();\n"
-               "};\n",
+               "};",
                Style);
   verifyFormat("void foo() {\n"
                "  auto bar = baz;\n"
                "  return baz;\n"
-               "};\n",
+               "};",
                Style);
   verifyFormat("auto foo = [&] {\n"
                "  auto bar = baz;\n"
                "  return baz;\n"
-               "};\n",
+               "};",
                Style);
   verifyFormat("{\n"
                "  auto bar = baz;\n"
                "  return baz;\n"
-               "};\n",
+               "};",
                Style);
   // Non-brace initialization is unaffected by BracedInitializerIndentWidth.
   verifyFormat("SomeClass clazz(\n"
                "    \"xxxxxxxxxxxxxxxxxx\", \"yyyyyyyyyyyyyyyyyy\",\n"
-               "    \"zzzzzzzzzzzzzzzzzz\");\n",
+               "    \"zzzzzzzzzzzzzzzzzz\");",
                Style);
 
   // The following types of initialization are all affected by
@@ -4998,7 +4998,7 @@ TEST_F(FormatTest, BracedInitializerIndentWidth) {
                Style);
   verifyFormat("SomeStruct s{\n"
                "      \"xxxxxxxxxxxxxxxx\", \"yyyyyyyyyyyyyyyy\",\n"
-               "      \"zzzzzzzzzzzzzzzz\"};\n",
+               "      \"zzzzzzzzzzzzzzzz\"};",
                Style);
   // Designated initializers.
   verifyFormat("int LooooooooooooooooooooooooongVariable[2] = {\n"
@@ -5007,26 +5007,26 @@ TEST_F(FormatTest, BracedInitializerIndentWidth) {
   verifyFormat("SomeStruct s{\n"
                "      .foo = \"xxxxxxxxxxxxx\",\n"
                "      .bar = \"yyyyyyyyyyyyy\",\n"
-               "      .baz = \"zzzzzzzzzzzzz\"};\n",
+               "      .baz = \"zzzzzzzzzzzzz\"};",
                Style);
   // List initialization.
   verifyFormat("SomeStruct s{\n"
                "      \"xxxxxxxxxxxxx\",\n"
                "      \"yyyyyyyyyyyyy\",\n"
                "      \"zzzzzzzzzzzzz\",\n"
-               "};\n",
+               "};",
                Style);
   verifyFormat("SomeStruct{\n"
                "      \"xxxxxxxxxxxxx\",\n"
                "      \"yyyyyyyyyyyyy\",\n"
                "      \"zzzzzzzzzzzzz\",\n"
-               "};\n",
+               "};",
                Style);
   verifyFormat("new SomeStruct{\n"
                "      \"xxxxxxxxxxxxx\",\n"
                "      \"yyyyyyyyyyyyy\",\n"
                "      \"zzzzzzzzzzzzz\",\n"
-               "};\n",
+               "};",
                Style);
   // Member initializer.
   verifyFormat("class SomeClass {\n"
@@ -5035,61 +5035,61 @@ TEST_F(FormatTest, BracedInitializerIndentWidth) {
                "        \"yyyyyyyyyyyyy\",\n"
                "        \"zzzzzzzzzzzzz\",\n"
                "  };\n"
-               "};\n",
+               "};",
                Style);
   // Constructor member initializer.
   verifyFormat("SomeClass::SomeClass : strct{\n"
                "                             \"xxxxxxxxxxxxx\",\n"
                "                             \"yyyyyyyyyyyyy\",\n"
                "                             \"zzzzzzzzzzzzz\",\n"
-               "                       } {}\n",
+               "                       } {}",
                Style);
   // Copy initialization.
   verifyFormat("SomeStruct s = SomeStruct{\n"
                "      \"xxxxxxxxxxxxx\",\n"
                "      \"yyyyyyyyyyyyy\",\n"
                "      \"zzzzzzzzzzzzz\",\n"
-               "};\n",
+               "};",
                Style);
   // Copy list initialization.
   verifyFormat("SomeStruct s = {\n"
                "      \"xxxxxxxxxxxxx\",\n"
                "      \"yyyyyyyyyyyyy\",\n"
                "      \"zzzzzzzzzzzzz\",\n"
-               "};\n",
+               "};",
                Style);
   // Assignment operand initialization.
   verifyFormat("s = {\n"
                "      \"xxxxxxxxxxxxx\",\n"
                "      \"yyyyyyyyyyyyy\",\n"
                "      \"zzzzzzzzzzzzz\",\n"
-               "};\n",
+               "};",
                Style);
   // Returned object initialization.
   verifyFormat("return {\n"
                "      \"xxxxxxxxxxxxx\",\n"
                "      \"yyyyyyyyyyyyy\",\n"
                "      \"zzzzzzzzzzzzz\",\n"
-               "};\n",
+               "};",
                Style);
   // Initializer list.
   verifyFormat("auto initializerList = {\n"
                "      \"xxxxxxxxxxxxx\",\n"
                "      \"yyyyyyyyyyyyy\",\n"
                "      \"zzzzzzzzzzzzz\",\n"
-               "};\n",
+               "};",
                Style);
   // Function parameter initialization.
   verifyFormat("func({\n"
                "      \"xxxxxxxxxxxxx\",\n"
                "      \"yyyyyyyyyyyyy\",\n"
                "      \"zzzzzzzzzzzzz\",\n"
-               "});\n",
+               "});",
                Style);
   // Nested init lists.
   verifyFormat("SomeStruct s = {\n"
                "      {{init1, init2, init3, init4, init5},\n"
-               "       {init1, init2, init3, init4, init5}}};\n",
+               "       {init1, init2, init3, init4, init5}}};",
                Style);
   verifyFormat("SomeStruct s = {\n"
                "      {{\n"
@@ -5099,7 +5099,7 @@ TEST_F(FormatTest, BracedInitializerIndentWidth) {
                "             .init4 = 4,\n"
                "             .init5 = 5,\n"
                "       },\n"
-               "       {init1, init2, init3, init4, init5}}};\n",
+               "       {init1, init2, init3, init4, init5}}};",
                Style);
   verifyFormat("SomeArrayT a[3] = {\n"
                "      {\n"
@@ -5134,12 +5134,12 @@ TEST_F(FormatTest, BracedInitializerIndentWidth) {
   // Aligning after open braces unaffected by BracedInitializerIndentWidth.
   Style.AlignAfterOpenBracket = FormatStyle::BAS_Align;
   verifyFormat("SomeStruct s{\"xxxxxxxxxxxxx\", \"yyyyyyyyyyyyy\",\n"
-               "             \"zzzzzzzzzzzzz\"};\n",
+               "             \"zzzzzzzzzzzzz\"};",
                Style);
 }
 
 TEST_F(FormatTest, NestedStaticInitializers) {
-  verifyFormat("static A x = {{{}}};\n");
+  verifyFormat("static A x = {{{}}};");
   verifyFormat("static A x = {{{init1, init2, init3, init4},\n"
                "               {init1, init2, init3, init4}}};",
                getLLVMStyleWithColumns(50));
@@ -5234,10 +5234,10 @@ TEST_F(FormatTest, LayoutUnknownPPDirective) {
 }
 
 TEST_F(FormatTest, UnescapedEndOfLineEndsPPDirective) {
-  EXPECT_EQ("#line 42 \"test\"\n",
-            format("#  \\\n  line  \\\n  42  \\\n  \"test\"\n"));
-  EXPECT_EQ("#define A B\n", format("#  \\\n define  \\\n    A  \\\n       B\n",
-                                    getLLVMStyleWithColumns(12)));
+  EXPECT_EQ("#line 42 \"test\"",
+            format("#  \\\n  line  \\\n  42  \\\n  \"test\""));
+  EXPECT_EQ("#define A B", format("#  \\\n define  \\\n    A  \\\n       B",
+                                  getLLVMStyleWithColumns(12)));
 }
 
 TEST_F(FormatTest, EndOfFileEndsPPDirective) {
@@ -5278,7 +5278,7 @@ TEST_F(FormatTest, IndentsPPDirectiveWithPPIndentWidth) {
                "#endif\n"
                "void bar() {\n"
                "    int y = 0;\n"
-               "}\n",
+               "}",
                style);
 
   style.IndentPPDirectives = FormatStyle::PPDIS_AfterHash;
@@ -5290,7 +5290,7 @@ TEST_F(FormatTest, IndentsPPDirectiveWithPPIndentWidth) {
                "#endif\n"
                "void bar() {\n"
                "    int y = 0;\n"
-               "}\n",
+               "}",
                style);
 
   style.IndentPPDirectives = FormatStyle::PPDIS_BeforeHash;
@@ -5302,7 +5302,7 @@ TEST_F(FormatTest, IndentsPPDirectiveWithPPIndentWidth) {
                "#endif\n"
                "void bar() {\n"
                "    int y = 0;\n"
-               "}\n",
+               "}",
                style);
   verifyFormat("#if 1\n"
                " // some comments\n"
@@ -5552,13 +5552,13 @@ TEST_F(FormatTest, HandlePreprocessorDirectiveContext) {
             "#define A(  \\\n"
             "    A, B)\n"
             "#include \"b.h\"\n"
-            "// somecomment\n",
+            "// somecomment",
             format("  // somecomment\n"
                    "  #include \"a.h\"\n"
                    "#define A(A,\\\n"
                    "    B)\n"
                    "    #include \"b.h\"\n"
-                   " // somecomment\n",
+                   " // somecomment",
                    getLLVMStyleWithColumns(13)));
 }
 
@@ -5650,7 +5650,7 @@ TEST_F(FormatTest, MacroDefinitionsWithIncompleteCode) {
   verifyIncompleteFormat("#define A :");
   verifyFormat("#define SOMECASES  \\\n"
                "  case 1:          \\\n"
-               "  case 2\n",
+               "  case 2",
                getLLVMStyleWithColumns(20));
   verifyFormat("#define MACRO(a) \\\n"
                "  if (a)         \\\n"
@@ -5755,7 +5755,7 @@ TEST_F(FormatTest, MacrosWithoutTrailingSemicolon) {
                    "<< SomeThing;"));
 
   verifyFormat("VISIT_GL_CALL(GenBuffers, void, (GLsizei n, GLuint* buffers), "
-               "(n, buffers))\n",
+               "(n, buffers))",
                getChromiumStyle(FormatStyle::LK_Cpp));
 
   // See PR41483
@@ -5823,7 +5823,7 @@ TEST_F(FormatTest, MacroCallsWithoutTrailingSemicolon) {
             "  f(x)[y].z();\n"
             "  LOG(INFO) << x;\n"
             "  ifstream(x) >> x;\n"
-            "}\n",
+            "}",
             format("int q() {\n"
                    "  f(x)\n;\n"
                    "  f(x)\n {}\n"
@@ -5844,7 +5844,7 @@ TEST_F(FormatTest, MacroCallsWithoutTrailingSemicolon) {
                    "  f(x)\n[y].z();\n"
                    "  LOG(INFO)\n << x;\n"
                    "  ifstream(x)\n >> x;\n"
-                   "}\n"));
+                   "}"));
   EXPECT_EQ("int q() {\n"
             "  F(x)\n"
             "  if (1) {\n"
@@ -5859,7 +5859,7 @@ TEST_F(FormatTest, MacroCallsWithoutTrailingSemicolon) {
             "    Q();\n"
             "  } catch (...) {\n"
             "  }\n"
-            "}\n",
+            "}",
             format("int q() {\n"
                    "F(x)\n"
                    "if (1) {}\n"
@@ -5869,7 +5869,7 @@ TEST_F(FormatTest, MacroCallsWithoutTrailingSemicolon) {
                    "G(x);\n"
                    "F(x)\n"
                    "try { Q(); } catch (...) {}\n"
-                   "}\n"));
+                   "}"));
   EXPECT_EQ("class A {\n"
             "  A() : t(0) {}\n"
             "  A(int i) noexcept() : {}\n"
@@ -6056,7 +6056,7 @@ TEST_F(FormatTest, IndentPreprocessorDirectives) {
   verifyFormat("#ifndef HEADER_H\n"
                "#define HEADER_H\n"
                "code();\n"
-               "#endif\n",
+               "#endif",
                Style);
   // Include guards don't have #else.
   verifyFormat("#ifndef NOT_GUARD\n"
@@ -6074,7 +6074,7 @@ TEST_F(FormatTest, IndentPreprocessorDirectives) {
   // Non-identifier #define after potential include guard.
   verifyFormat("#ifndef FOO\n"
                "#  define 1\n"
-               "#endif\n",
+               "#endif",
                Style);
   // #if closes past last non-preprocessor line.
   verifyFormat("#ifndef FOO\n"
@@ -6083,7 +6083,7 @@ TEST_F(FormatTest, IndentPreprocessorDirectives) {
                "int i;\n"
                "#  define A 0\n"
                "#endif\n"
-               "#endif\n",
+               "#endif",
                Style);
   // Don't crash if there is an #elif directive without a condition.
   verifyFormat("#if 1\n"
@@ -6508,10 +6508,10 @@ TEST_F(FormatTest, EscapedNewlines) {
   AlignLeft.AlignEscapedNewlines = FormatStyle::ENAS_Left;
   EXPECT_EQ("#define MACRO(x) \\\n"
             "private:         \\\n"
-            "  int x(int a);\n",
+            "  int x(int a);",
             format("#define MACRO(x) \\\n"
                    "private:         \\\n"
-                   "  int x(int a);\n",
+                   "  int x(int a);",
                    AlignLeft));
 
   // CRLF line endings
@@ -6523,10 +6523,10 @@ TEST_F(FormatTest, EscapedNewlines) {
   verifyNoChange("<a\r\n\\\\\r\n>");
   EXPECT_EQ("#define MACRO(x) \\\r\n"
             "private:         \\\r\n"
-            "  int x(int a);\r\n",
+            "  int x(int a);",
             format("#define MACRO(x) \\\r\n"
                    "private:         \\\r\n"
-                   "  int x(int a);\r\n",
+                   "  int x(int a);",
                    AlignLeft));
 
   FormatStyle DontAlign = getLLVMStyle();
@@ -6570,13 +6570,13 @@ TEST_F(FormatTest, MixingPreprocessorDirectivesAndNormalCode) {
       "    aLoooooooooooooooooooooooongFuuuuuuuuuuuuuunctiooooooooo)\n"
       "\n"
       "AlooooooooooooooooooooooooooooooooooooooongCaaaaaaaaaal(\n"
-      "    aLooooooooooooooooooooooonPaaaaaaaaaaaaaaaaaaaaarmmmm);\n",
+      "    aLooooooooooooooooooooooonPaaaaaaaaaaaaaaaaaaaaarmmmm);",
       format("  #define   ALooooooooooooooooooooooooooooooooooooooongMacro("
              "\\\n"
              "aLoooooooooooooooooooooooongFuuuuuuuuuuuuuunctiooooooooo)\n"
              "  \n"
              "   AlooooooooooooooooooooooooooooooooooooooongCaaaaaaaaaal(\n"
-             "  aLooooooooooooooooooooooonPaaaaaaaaaaaaaaaaaaaaarmmmm);\n"));
+             "  aLooooooooooooooooooooooonPaaaaaaaaaaaaaaaaaaaaarmmmm);"));
 }
 
 TEST_F(FormatTest, LayoutStatementsAroundPreprocessorDirectives) {
@@ -6638,7 +6638,7 @@ TEST_F(FormatTest, LayoutStatementsAroundPreprocessorDirectives) {
                "#endif\n"
                "#if 1\n"
                "#else\n"
-               "#endif\n");
+               "#endif");
   verifyFormat("DEBUG({\n"
                "  return aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa +\n"
                "         aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa;\n"
@@ -7329,7 +7329,7 @@ TEST_F(FormatTest, NoOperandAlignment) {
                Style);
   verifyFormat("int a = aa\n"
                "    + bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\n"
-               "        * cccccccccccccccccccccccccccccccccccc;\n",
+               "        * cccccccccccccccccccccccccccccccccccc;",
                Style);
 
   Style.AlignAfterOpenBracket = FormatStyle::BAS_DontAlign;
@@ -8361,10 +8361,10 @@ TEST_F(FormatTest, DontBreakBeforeQualifiedOperator) {
 }
 
 TEST_F(FormatTest, TrailingReturnType) {
-  verifyFormat("auto foo() -> int;\n");
+  verifyFormat("auto foo() -> int;");
   // correct trailing return type spacing
-  verifyFormat("auto operator->() -> int;\n");
-  verifyFormat("auto operator++(int) -> int;\n");
+  verifyFormat("auto operator->() -> int;");
+  verifyFormat("auto operator++(int) -> int;");
 
   verifyFormat("struct S {\n"
                "  auto bar() const -> int;\n"
@@ -8748,7 +8748,7 @@ TEST_F(FormatTest, FormatsBuilderPattern) {
                "    .StartsWith(\".init\", ORDER_INIT)\n"
                "    .StartsWith(\".fini\", ORDER_FINI)\n"
                "    .StartsWith(\".hash\", ORDER_HASH)\n"
-               "    .Default(ORDER_TEXT);\n");
+               "    .Default(ORDER_TEXT);");
 
   verifyFormat("return aaaaaaaaaaaaaaaaa->aaaaa().aaaaaaaaaaaaa().aaaaaa() <\n"
                "       aaaaaaaaaaaaaaa->aaaaa().aaaaaaaaaaaaa().aaaaaa();");
@@ -8931,7 +8931,7 @@ TEST_F(FormatTest, BreaksAfterAssignments) {
   verifyFormat(
       "unsigned Cost =\n"
       "    TTI.getMemoryOpCost(I->getOpcode(), VectorTy, SI->getAlignment(),\n"
-      "                        SI->getPointerAddressSpaceee());\n");
+      "                        SI->getPointerAddressSpaceee());");
   verifyFormat(
       "CharSourceRange LineRange = CharSourceRange::getTokenRange(\n"
       "    Line.Tokens.front().Tok.getLo(), Line.Tokens.back().Tok.getLoc());");
@@ -9274,7 +9274,7 @@ TEST_F(FormatTest, BreaksConditionalExpressions) {
                "                     // comment\n"
                "                     ? a = b\n"
                "                     : a\n"
-               "           : a;\n");
+               "           : a;");
   verifyFormat("return a != b\n"
                "           // comment\n"
                "           ? a\n"
@@ -9343,7 +9343,7 @@ TEST_F(FormatTest, BreaksConditionalExpressions) {
       "return aaaaaaaaa        ? 1111111111111111\n"
       "       : bbbbbbbbbbbbbb ? 2222222222222222\n"
       "                        : a + (aaaaaaaaaaaaa ? bbbbbbbbbbbbbbbbbb\n"
-      "                                             : dddddddddddddddddd)\n",
+      "                                             : dddddddddddddddddd)",
       Style);
   verifyFormat(
       "return aaaaaaaaaaaaaaaa ? 1111111111111111\n"
@@ -9408,7 +9408,7 @@ TEST_F(FormatTest, BreaksConditionalExpressions) {
   // unnecessary.
   verifyFormat("int x = aaaaaaaaaaaaaaa ? aaaaaaaaaaaaaaaaaa :\n"
                "    bbbb                ? cccccccccccccccccc :\n"
-               "                          ddddd;\n",
+               "                          ddddd;",
                Style);
 
   EXPECT_EQ(
@@ -9597,7 +9597,7 @@ TEST_F(FormatTest, BreaksConditionalExpressionsAfterOperator) {
       "return aaaaaaaaa        ? 1111111111111111 :\n"
       "       bbbbbbbbbbbbbbbb ? 2222222222222222 :\n"
       "                          a + (aaaaaaaaaaaaa ? bbbbbbbbbbbbbbbbbb :\n"
-      "                                               dddddddddddddddddd)\n",
+      "                                               dddddddddddddddddd)",
       Style);
   verifyFormat(
       "return aaaaaaaaaaaaaaaa ? 1111111111111111 :\n"
@@ -9780,7 +9780,7 @@ TEST_F(FormatTest, ReturnTypeBreakingStyle) {
                "  int g();\n"
                "};\n"
                "int f() { return 1; }\n"
-               "int g();\n",
+               "int g();",
                Style);
 
   // All declarations and definitions should have the return type moved to its
@@ -9803,7 +9803,7 @@ TEST_F(FormatTest, ReturnTypeBreakingStyle) {
                "  return 1;\n"
                "}\n"
                "int\n"
-               "g();\n",
+               "g();",
                Style);
 
   // Top-level definitions, and no kinds of declarations should have the
@@ -9817,7 +9817,7 @@ TEST_F(FormatTest, ReturnTypeBreakingStyle) {
                "f() {\n"
                "  return 1;\n"
                "}\n"
-               "int g();\n",
+               "int g();",
                Style);
 
   // Top-level definitions and declarations should have the return type moved
@@ -9832,7 +9832,7 @@ TEST_F(FormatTest, ReturnTypeBreakingStyle) {
                "  return 1;\n"
                "}\n"
                "int\n"
-               "g();\n",
+               "g();",
                Style);
 
   // All definitions should have the return type moved to its own line, but no
@@ -9849,20 +9849,20 @@ TEST_F(FormatTest, ReturnTypeBreakingStyle) {
                "f() {\n"
                "  return 1;\n"
                "}\n"
-               "int g();\n",
+               "int g();",
                Style);
   verifyFormat("const char *\n"
                "f(void) {\n" // Break here.
                "  return \"\";\n"
                "}\n"
-               "const char *bar(void);\n", // No break here.
+               "const char *bar(void);", // No break here.
                Style);
   verifyFormat("template <class T>\n"
                "T *\n"
                "f(T &c) {\n" // Break here.
                "  return NULL;\n"
                "}\n"
-               "template <class T> T *f(T &c);\n", // No break here.
+               "template <class T> T *f(T &c);", // No break here.
                Style);
   verifyFormat("class C {\n"
                "  int\n"
@@ -9873,7 +9873,7 @@ TEST_F(FormatTest, ReturnTypeBreakingStyle) {
                "  operator()() {\n"
                "    return 1;\n"
                "  }\n"
-               "};\n",
+               "};",
                Style);
   verifyFormat("void\n"
                "A::operator()() {}\n"
@@ -9906,7 +9906,7 @@ TEST_F(FormatTest, ReturnTypeBreakingStyle) {
                "void\n"
                "A::operator<Foo> &() {}\n"
                "void\n"
-               "A::operator void **() {}\n",
+               "A::operator void **() {}",
                Style);
   verifyFormat("constexpr auto\n"
                "operator()() const -> reference {}\n"
@@ -9935,7 +9935,7 @@ TEST_F(FormatTest, ReturnTypeBreakingStyle) {
                "constexpr auto\n"
                "operator!() const -> reference {}\n"
                "constexpr auto\n"
-               "operator[]() const -> reference {}\n",
+               "operator[]() const -> reference {}",
                Style);
   verifyFormat("void *operator new(std::size_t s);", // No break here.
                Style);
@@ -9951,7 +9951,7 @@ TEST_F(FormatTest, ReturnTypeBreakingStyle) {
                "{\n"
                "  return \"\";\n"
                "}\n"
-               "const char *bar(void);\n", // No break here.
+               "const char *bar(void);", // No break here.
                Style);
   verifyFormat("template <class T>\n"
                "T *\n"     // Problem here: no line break
@@ -9959,43 +9959,43 @@ TEST_F(FormatTest, ReturnTypeBreakingStyle) {
                "{\n"
                "  return NULL;\n"
                "}\n"
-               "template <class T> T *f(T &c);\n", // No break here.
+               "template <class T> T *f(T &c);", // No break here.
                Style);
   verifyFormat("int\n"
                "foo(A<bool> a)\n"
                "{\n"
                "  return a;\n"
-               "}\n",
+               "}",
                Style);
   verifyFormat("int\n"
                "foo(A<8> a)\n"
                "{\n"
                "  return a;\n"
-               "}\n",
+               "}",
                Style);
   verifyFormat("int\n"
                "foo(A<B<bool>, 8> a)\n"
                "{\n"
                "  return a;\n"
-               "}\n",
+               "}",
                Style);
   verifyFormat("int\n"
                "foo(A<B<8>, bool> a)\n"
                "{\n"
                "  return a;\n"
-               "}\n",
+               "}",
                Style);
   verifyFormat("int\n"
                "foo(A<B<bool>, bool> a)\n"
                "{\n"
                "  return a;\n"
-               "}\n",
+               "}",
                Style);
   verifyFormat("int\n"
                "foo(A<B<8>, 8> a)\n"
                "{\n"
                "  return a;\n"
-               "}\n",
+               "}",
                Style);
 
   Style.BreakBeforeBraces = FormatStyle::BS_Custom;
@@ -10087,19 +10087,19 @@ TEST_F(FormatTest, ReturnTypeBreakingStyle) {
   verifyFormat("void\n"
                "foo (int a, /*abc*/ int b) // def\n"
                "{\n"
-               "}\n",
+               "}",
                Style);
 
   verifyFormat("void\n"
                "foo (int a, /* abc */ int b) /* def */\n"
                "{\n"
-               "}\n",
+               "}",
                Style);
 
   // Definitions that should not break after return type
-  verifyFormat("void foo (int a, int b); // def\n", Style);
-  verifyFormat("void foo (int a, int b); /* def */\n", Style);
-  verifyFormat("void foo (int a, int b);\n", Style);
+  verifyFormat("void foo (int a, int b); // def", Style);
+  verifyFormat("void foo (int a, int b); /* def */", Style);
+  verifyFormat("void foo (int a, int b);", Style);
 }
 
 TEST_F(FormatTest, AlwaysBreakBeforeMultilineStrings) {
@@ -10403,7 +10403,7 @@ TEST_F(FormatTest, WrapsAtFunctionCallsIfNecessary) {
   verifyFormat(
       "aaaaaaaaaaa->aaaaaaaaa(\n"
       "    aaaaaaaaaaaaaaaaaaaaaaaaa,\n"
-      "    aaaaaaaaaaaaaaaaaa->aaaaaaaaa(aaaaaaaaaaaaaaaaaaaaaaaaa));\n");
+      "    aaaaaaaaaaaaaaaaaa->aaaaaaaaa(aaaaaaaaaaaaaaaaaaaaaaaaa));");
 
   verifyFormat(
       "aaaaaaaaaaaaaaaaaaaaaaaaa(\n"
@@ -11251,9 +11251,9 @@ TEST_F(FormatTest, UnderstandsNewAndDelete) {
   verifyFormat("void operator delete(void *ptr) noexcept;");
 
   EXPECT_EQ("void new(link p);\n"
-            "void delete(link p);\n",
+            "void delete(link p);",
             format("void new (link p);\n"
-                   "void delete (link p);\n"));
+                   "void delete (link p);"));
 }
 
 TEST_F(FormatTest, UnderstandsUsesOfStarAndAmp) {
@@ -11712,7 +11712,7 @@ TEST_F(FormatTest, UnderstandsAttributes) {
   FormatStyle AfterType = getLLVMStyle();
   AfterType.AlwaysBreakAfterReturnType = FormatStyle::RTBS_All;
   verifyFormat("__attribute__((nodebug)) void\n"
-               "foo() {}\n",
+               "foo() {}",
                AfterType);
   verifyFormat("__unused void\n"
                "foo() {}",
@@ -11828,7 +11828,7 @@ TEST_F(FormatTest, UnderstandsSquareAttributes) {
 
   // Make sure we do not mistake attributes for array subscripts.
   verifyFormat("int a() {}\n"
-               "[[unused]] int b() {}\n");
+               "[[unused]] int b() {}");
   verifyFormat("NSArray *arr;\n"
                "arr[[Foo() bar]];");
 
@@ -11848,7 +11848,7 @@ TEST_F(FormatTest, UnderstandsSquareAttributes) {
   MultiLineFunctions.AllowShortFunctionsOnASingleLine = FormatStyle::SFS_None;
   verifyFormat("[[unused]] int b() {\n"
                "  return 42;\n"
-               "}\n",
+               "}",
                MultiLineFunctions);
 }
 
@@ -12314,7 +12314,7 @@ TEST_F(FormatTest, FormatsAccessModifiers) {
                "\n"
                "protected:\n"
                "  int j;\n"
-               "};\n",
+               "};",
                Style);
   verifyFormat("struct foo {\n"
                "private:\n"
@@ -12325,7 +12325,7 @@ TEST_F(FormatTest, FormatsAccessModifiers) {
                "\n"
                "protected:\n"
                "  int j;\n"
-               "};\n",
+               "};",
                "struct foo {\n"
                "private:\n"
                "  void f() {}\n"
@@ -12333,7 +12333,7 @@ TEST_F(FormatTest, FormatsAccessModifiers) {
                "  int i;\n"
                "protected:\n"
                "  int j;\n"
-               "};\n",
+               "};",
                Style);
   verifyFormat("struct foo { /* comment */\n"
                "private:\n"
@@ -12341,7 +12341,7 @@ TEST_F(FormatTest, FormatsAccessModifiers) {
                "  // comment\n"
                "private:\n"
                "  int j;\n"
-               "};\n",
+               "};",
                Style);
   verifyFormat("struct foo {\n"
                "#ifdef FOO\n"
@@ -12352,7 +12352,7 @@ TEST_F(FormatTest, FormatsAccessModifiers) {
                "private:\n"
                "#endif\n"
                "  int j;\n"
-               "};\n",
+               "};",
                Style);
   Style.EmptyLineBeforeAccessModifier = FormatStyle::ELBAMS_Never;
   verifyFormat("struct foo {\n"
@@ -12362,7 +12362,7 @@ TEST_F(FormatTest, FormatsAccessModifiers) {
                "  int i;\n"
                "protected:\n"
                "  int j;\n"
-               "};\n",
+               "};",
                Style);
   verifyFormat("struct foo {\n"
                "private:\n"
@@ -12371,7 +12371,7 @@ TEST_F(FormatTest, FormatsAccessModifiers) {
                "  int i;\n"
                "protected:\n"
                "  int j;\n"
-               "};\n",
+               "};",
                "struct foo {\n"
                "\n"
                "private:\n"
@@ -12382,7 +12382,7 @@ TEST_F(FormatTest, FormatsAccessModifiers) {
                "\n"
                "protected:\n"
                "  int j;\n"
-               "};\n",
+               "};",
                Style);
   verifyFormat("struct foo { /* comment */\n"
                "private:\n"
@@ -12390,7 +12390,7 @@ TEST_F(FormatTest, FormatsAccessModifiers) {
                "  // comment\n"
                "private:\n"
                "  int j;\n"
-               "};\n",
+               "};",
                "struct foo { /* comment */\n"
                "\n"
                "private:\n"
@@ -12399,7 +12399,7 @@ TEST_F(FormatTest, FormatsAccessModifiers) {
                "\n"
                "private:\n"
                "  int j;\n"
-               "};\n",
+               "};",
                Style);
   verifyFormat("struct foo {\n"
                "#ifdef FOO\n"
@@ -12410,7 +12410,7 @@ TEST_F(FormatTest, FormatsAccessModifiers) {
                "private:\n"
                "#endif\n"
                "  int j;\n"
-               "};\n",
+               "};",
                "struct foo {\n"
                "#ifdef FOO\n"
                "#endif\n"
@@ -12422,7 +12422,7 @@ TEST_F(FormatTest, FormatsAccessModifiers) {
                "private:\n"
                "#endif\n"
                "  int j;\n"
-               "};\n",
+               "};",
                Style);
   Style.EmptyLineBeforeAccessModifier = FormatStyle::ELBAMS_Always;
   verifyFormat("struct foo {\n"
@@ -12434,7 +12434,7 @@ TEST_F(FormatTest, FormatsAccessModifiers) {
                "\n"
                "protected:\n"
                "  int j;\n"
-               "};\n",
+               "};",
                Style);
   verifyFormat("struct foo {\n"
                "private:\n"
@@ -12445,7 +12445,7 @@ TEST_F(FormatTest, FormatsAccessModifiers) {
                "\n"
                "protected:\n"
                "  int j;\n"
-               "};\n",
+               "};",
                "struct foo {\n"
                "private:\n"
                "  void f() {}\n"
@@ -12453,7 +12453,7 @@ TEST_F(FormatTest, FormatsAccessModifiers) {
                "  int i;\n"
                "protected:\n"
                "  int j;\n"
-               "};\n",
+               "};",
                Style);
   verifyFormat("struct foo { /* comment */\n"
                "private:\n"
@@ -12462,7 +12462,7 @@ TEST_F(FormatTest, FormatsAccessModifiers) {
                "\n"
                "private:\n"
                "  int j;\n"
-               "};\n",
+               "};",
                Style);
   verifyFormat("struct foo {\n"
                "#ifdef FOO\n"
@@ -12475,7 +12475,7 @@ TEST_F(FormatTest, FormatsAccessModifiers) {
                "private:\n"
                "#endif\n"
                "  int j;\n"
-               "};\n",
+               "};",
                "struct foo {\n"
                "#ifdef FOO\n"
                "#endif\n"
@@ -12485,7 +12485,7 @@ TEST_F(FormatTest, FormatsAccessModifiers) {
                "private:\n"
                "#endif\n"
                "  int j;\n"
-               "};\n",
+               "};",
                Style);
   Style.EmptyLineBeforeAccessModifier = FormatStyle::ELBAMS_Leave;
   EXPECT_EQ("struct foo {\n"
@@ -12498,7 +12498,7 @@ TEST_F(FormatTest, FormatsAccessModifiers) {
             "\n"
             "protected:\n"
             "  int j;\n"
-            "};\n",
+            "};",
             format("struct foo {\n"
                    "\n"
                    "private:\n"
@@ -12509,7 +12509,7 @@ TEST_F(FormatTest, FormatsAccessModifiers) {
                    "\n"
                    "protected:\n"
                    "  int j;\n"
-                   "};\n",
+                   "};",
                    Style));
   verifyFormat("struct foo {\n"
                "private:\n"
@@ -12518,7 +12518,7 @@ TEST_F(FormatTest, FormatsAccessModifiers) {
                "  int i;\n"
                "protected:\n"
                "  int j;\n"
-               "};\n",
+               "};",
                Style);
   EXPECT_EQ("struct foo { /* comment */\n"
             "\n"
@@ -12528,7 +12528,7 @@ TEST_F(FormatTest, FormatsAccessModifiers) {
             "\n"
             "private:\n"
             "  int j;\n"
-            "};\n",
+            "};",
             format("struct foo { /* comment */\n"
                    "\n"
                    "private:\n"
@@ -12537,7 +12537,7 @@ TEST_F(FormatTest, FormatsAccessModifiers) {
                    "\n"
                    "private:\n"
                    "  int j;\n"
-                   "};\n",
+                   "};",
                    Style));
   verifyFormat("struct foo { /* comment */\n"
                "private:\n"
@@ -12545,7 +12545,7 @@ TEST_F(FormatTest, FormatsAccessModifiers) {
                "  // comment\n"
                "private:\n"
                "  int j;\n"
-               "};\n",
+               "};",
                Style);
   EXPECT_EQ("struct foo {\n"
             "#ifdef FOO\n"
@@ -12558,7 +12558,7 @@ TEST_F(FormatTest, FormatsAccessModifiers) {
             "private:\n"
             "#endif\n"
             "  int j;\n"
-            "};\n",
+            "};",
             format("struct foo {\n"
                    "#ifdef FOO\n"
                    "#endif\n"
@@ -12570,7 +12570,7 @@ TEST_F(FormatTest, FormatsAccessModifiers) {
                    "private:\n"
                    "#endif\n"
                    "  int j;\n"
-                   "};\n",
+                   "};",
                    Style));
   verifyFormat("struct foo {\n"
                "#ifdef FOO\n"
@@ -12581,7 +12581,7 @@ TEST_F(FormatTest, FormatsAccessModifiers) {
                "private:\n"
                "#endif\n"
                "  int j;\n"
-               "};\n",
+               "};",
                Style);
 
   FormatStyle NoEmptyLines = getLLVMStyle();
@@ -12596,7 +12596,7 @@ TEST_F(FormatTest, FormatsAccessModifiers) {
                "public:\n"
                "protected:\n"
                "  int j;\n"
-               "};\n",
+               "};",
                NoEmptyLines);
 
   NoEmptyLines.EmptyLineBeforeAccessModifier = FormatStyle::ELBAMS_Never;
@@ -12608,7 +12608,7 @@ TEST_F(FormatTest, FormatsAccessModifiers) {
                "public:\n"
                "protected:\n"
                "  int j;\n"
-               "};\n",
+               "};",
                NoEmptyLines);
 
   NoEmptyLines.EmptyLineBeforeAccessModifier = FormatStyle::ELBAMS_Always;
@@ -12623,7 +12623,7 @@ TEST_F(FormatTest, FormatsAccessModifiers) {
                "\n"
                "protected:\n"
                "  int j;\n"
-               "};\n",
+               "};",
                NoEmptyLines);
 }
 
@@ -12640,7 +12640,7 @@ TEST_F(FormatTest, FormatsAfterAccessModifiers) {
                "\n"
                "protected:\n"
                "  int j;\n"
-               "};\n",
+               "};",
                Style);
 
   // Check if lines are removed.
@@ -12653,7 +12653,7 @@ TEST_F(FormatTest, FormatsAfterAccessModifiers) {
                "\n"
                "protected:\n"
                "  int j;\n"
-               "};\n",
+               "};",
                "struct foo {\n"
                "private:\n"
                "\n"
@@ -12666,7 +12666,7 @@ TEST_F(FormatTest, FormatsAfterAccessModifiers) {
                "protected:\n"
                "\n"
                "  int j;\n"
-               "};\n",
+               "};",
                Style);
 
   Style.EmptyLineAfterAccessModifier = FormatStyle::ELAAMS_Always;
@@ -12682,7 +12682,7 @@ TEST_F(FormatTest, FormatsAfterAccessModifiers) {
                "protected:\n"
                "\n"
                "  int j;\n"
-               "};\n",
+               "};",
                Style);
 
   // Check if lines are added.
@@ -12698,7 +12698,7 @@ TEST_F(FormatTest, FormatsAfterAccessModifiers) {
                "protected:\n"
                "\n"
                "  int j;\n"
-               "};\n",
+               "};",
                "struct foo {\n"
                "private:\n"
                "  void f() {}\n"
@@ -12708,7 +12708,7 @@ TEST_F(FormatTest, FormatsAfterAccessModifiers) {
                "\n"
                "protected:\n"
                "  int j;\n"
-               "};\n",
+               "};",
                Style);
 
   // Leave tests rely on the code layout, test::messUp can not be used.
@@ -12723,7 +12723,7 @@ TEST_F(FormatTest, FormatsAfterAccessModifiers) {
                "\n"
                "protected:\n"
                "  int j;\n"
-               "};\n",
+               "};",
                Style);
 
   // Check if MaxEmptyLinesToKeep is respected.
@@ -12736,7 +12736,7 @@ TEST_F(FormatTest, FormatsAfterAccessModifiers) {
             "\n"
             "protected:\n"
             "  int j;\n"
-            "};\n",
+            "};",
             format("struct foo {\n"
                    "private:\n"
                    "\n\n\n"
@@ -12749,7 +12749,7 @@ TEST_F(FormatTest, FormatsAfterAccessModifiers) {
                    "protected:\n"
                    "\n\n\n"
                    "  int j;\n"
-                   "};\n",
+                   "};",
                    Style));
 
   Style.MaxEmptyLinesToKeep = 1u;
@@ -12765,7 +12765,7 @@ TEST_F(FormatTest, FormatsAfterAccessModifiers) {
             "protected:\n"
             "\n"
             "  int j;\n"
-            "};\n",
+            "};",
             format("struct foo {\n"
                    "private:\n"
                    "\n"
@@ -12778,7 +12778,7 @@ TEST_F(FormatTest, FormatsAfterAccessModifiers) {
                    "protected:\n"
                    "\n"
                    "  int j;\n"
-                   "};\n",
+                   "};",
                    Style));
   // Check if no lines are kept.
   EXPECT_EQ("struct foo {\n"
@@ -12790,7 +12790,7 @@ TEST_F(FormatTest, FormatsAfterAccessModifiers) {
             "\n"
             "protected:\n"
             "  int j;\n"
-            "};\n",
+            "};",
             format("struct foo {\n"
                    "private:\n"
                    "  void f() {}\n"
@@ -12800,7 +12800,7 @@ TEST_F(FormatTest, FormatsAfterAccessModifiers) {
                    "\n"
                    "protected:\n"
                    "  int j;\n"
-                   "};\n",
+                   "};",
                    Style));
   // Check if MaxEmptyLinesToKeep is respected.
   EXPECT_EQ("struct foo {\n"
@@ -12815,7 +12815,7 @@ TEST_F(FormatTest, FormatsAfterAccessModifiers) {
             "protected:\n"
             "\n"
             "  int j;\n"
-            "};\n",
+            "};",
             format("struct foo {\n"
                    "private:\n"
                    "\n\n\n"
@@ -12828,7 +12828,7 @@ TEST_F(FormatTest, FormatsAfterAccessModifiers) {
                    "protected:\n"
                    "\n\n\n"
                    "  int j;\n"
-                   "};\n",
+                   "};",
                    Style));
 
   Style.MaxEmptyLinesToKeep = 10u;
@@ -12844,7 +12844,7 @@ TEST_F(FormatTest, FormatsAfterAccessModifiers) {
             "protected:\n"
             "\n\n\n"
             "  int j;\n"
-            "};\n",
+            "};",
             format("struct foo {\n"
                    "private:\n"
                    "\n\n\n"
@@ -12857,7 +12857,7 @@ TEST_F(FormatTest, FormatsAfterAccessModifiers) {
                    "protected:\n"
                    "\n\n\n"
                    "  int j;\n"
-                   "};\n",
+                   "};",
                    Style));
 
   // Test with comments.
@@ -12869,7 +12869,7 @@ TEST_F(FormatTest, FormatsAfterAccessModifiers) {
                "\n"
                "private: /* comment */\n"
                "  int i;\n"
-               "};\n",
+               "};",
                Style);
   verifyFormat("struct foo {\n"
                "private:\n"
@@ -12878,7 +12878,7 @@ TEST_F(FormatTest, FormatsAfterAccessModifiers) {
                "\n"
                "private: /* comment */\n"
                "  int i;\n"
-               "};\n",
+               "};",
                "struct foo {\n"
                "private:\n"
                "\n"
@@ -12888,7 +12888,7 @@ TEST_F(FormatTest, FormatsAfterAccessModifiers) {
                "private: /* comment */\n"
                "\n"
                "  int i;\n"
-               "};\n",
+               "};",
                Style);
 
   Style.EmptyLineAfterAccessModifier = FormatStyle::ELAAMS_Always;
@@ -12901,7 +12901,7 @@ TEST_F(FormatTest, FormatsAfterAccessModifiers) {
                "private: /* comment */\n"
                "\n"
                "  int i;\n"
-               "};\n",
+               "};",
                "struct foo {\n"
                "private:\n"
                "  // comment\n"
@@ -12909,7 +12909,7 @@ TEST_F(FormatTest, FormatsAfterAccessModifiers) {
                "\n"
                "private: /* comment */\n"
                "  int i;\n"
-               "};\n",
+               "};",
                Style);
   verifyFormat("struct foo {\n"
                "private:\n"
@@ -12920,7 +12920,7 @@ TEST_F(FormatTest, FormatsAfterAccessModifiers) {
                "private: /* comment */\n"
                "\n"
                "  int i;\n"
-               "};\n",
+               "};",
                Style);
 
   // Test with preprocessor defines.
@@ -12930,21 +12930,21 @@ TEST_F(FormatTest, FormatsAfterAccessModifiers) {
                "#ifdef FOO\n"
                "#endif\n"
                "  void f() {}\n"
-               "};\n",
+               "};",
                Style);
   verifyFormat("struct foo {\n"
                "private:\n"
                "#ifdef FOO\n"
                "#endif\n"
                "  void f() {}\n"
-               "};\n",
+               "};",
                "struct foo {\n"
                "private:\n"
                "\n"
                "#ifdef FOO\n"
                "#endif\n"
                "  void f() {}\n"
-               "};\n",
+               "};",
                Style);
   verifyNoChange("struct foo {\n"
                  "#ifdef FOO\n"
@@ -13012,13 +13012,13 @@ TEST_F(FormatTest, FormatsAfterAccessModifiers) {
                "#ifdef FOO\n"
                "#endif\n"
                "  void f() {}\n"
-               "};\n",
+               "};",
                "struct foo {\n"
                "private:\n"
                "#ifdef FOO\n"
                "#endif\n"
                "  void f() {}\n"
-               "};\n",
+               "};",
                Style);
   verifyFormat("struct foo {\n"
                "private:\n"
@@ -13026,7 +13026,7 @@ TEST_F(FormatTest, FormatsAfterAccessModifiers) {
                "#ifdef FOO\n"
                "#endif\n"
                "  void f() {}\n"
-               "};\n",
+               "};",
                Style);
 }
 
@@ -13040,7 +13040,7 @@ TEST_F(FormatTest, FormatsAfterAndBeforeAccessModifiersInteraction) {
                "private:\n"
                "\n"
                "protected:\n"
-               "};\n",
+               "};",
                Style);
 
   Style.MaxEmptyLinesToKeep = 10u;
@@ -13050,12 +13050,12 @@ TEST_F(FormatTest, FormatsAfterAndBeforeAccessModifiersInteraction) {
   verifyFormat("struct foo {\n"
                "private:\n"
                "protected:\n"
-               "};\n",
+               "};",
                "struct foo {\n"
                "private:\n"
                "\n\n\n"
                "protected:\n"
-               "};\n",
+               "};",
                Style);
 
   // Leave tests rely on the code layout, test::messUp can not be used.
@@ -13066,36 +13066,36 @@ TEST_F(FormatTest, FormatsAfterAndBeforeAccessModifiersInteraction) {
             "private:\n"
             "\n\n\n"
             "protected:\n"
-            "};\n",
+            "};",
             format("struct foo {\n"
                    "private:\n"
                    "\n\n\n"
                    "protected:\n"
-                   "};\n",
+                   "};",
                    Style));
   Style.MaxEmptyLinesToKeep = 3u;
   EXPECT_EQ("struct foo {\n"
             "private:\n"
             "\n\n\n"
             "protected:\n"
-            "};\n",
+            "};",
             format("struct foo {\n"
                    "private:\n"
                    "\n\n\n"
                    "protected:\n"
-                   "};\n",
+                   "};",
                    Style));
   Style.MaxEmptyLinesToKeep = 1u;
   EXPECT_EQ("struct foo {\n"
             "private:\n"
             "\n\n\n"
             "protected:\n"
-            "};\n",
+            "};",
             format("struct foo {\n"
                    "private:\n"
                    "\n\n\n"
                    "protected:\n"
-                   "};\n",
+                   "};",
                    Style)); // Based on new lines in original document and not
                             // on the setting.
 
@@ -13108,12 +13108,12 @@ TEST_F(FormatTest, FormatsAfterAndBeforeAccessModifiersInteraction) {
             "private:\n"
             "\n\n\n"
             "protected:\n"
-            "};\n",
+            "};",
             format("struct foo {\n"
                    "private:\n"
                    "\n\n\n"
                    "protected:\n"
-                   "};\n",
+                   "};",
                    Style));
 
   Style.EmptyLineBeforeAccessModifier = FormatStyle::ELBAMS_Leave;
@@ -13123,12 +13123,12 @@ TEST_F(FormatTest, FormatsAfterAndBeforeAccessModifiersInteraction) {
             "private:\n"
             "\n\n\n"
             "protected:\n"
-            "};\n",
+            "};",
             format("struct foo {\n"
                    "private:\n"
                    "\n\n\n"
                    "protected:\n"
-                   "};\n",
+                   "};",
                    Style));
 
   Style.EmptyLineBeforeAccessModifier = FormatStyle::ELBAMS_Leave;
@@ -13137,12 +13137,12 @@ TEST_F(FormatTest, FormatsAfterAndBeforeAccessModifiersInteraction) {
             "private:\n"
             "\n\n\n"
             "protected:\n"
-            "};\n",
+            "};",
             format("struct foo {\n"
                    "private:\n"
                    "\n\n\n"
                    "protected:\n"
-                   "};\n",
+                   "};",
                    Style)); // test::messUp removes all new lines which changes
                             // the logic.
 
@@ -13151,12 +13151,12 @@ TEST_F(FormatTest, FormatsAfterAndBeforeAccessModifiersInteraction) {
   verifyFormat("struct foo {\n"
                "private:\n"
                "protected:\n"
-               "};\n",
+               "};",
                "struct foo {\n"
                "private:\n"
                "\n\n\n"
                "protected:\n"
-               "};\n",
+               "};",
                Style);
 
   Style.EmptyLineBeforeAccessModifier = FormatStyle::ELBAMS_Always;
@@ -13165,12 +13165,12 @@ TEST_F(FormatTest, FormatsAfterAndBeforeAccessModifiersInteraction) {
             "private:\n"
             "\n\n\n"
             "protected:\n"
-            "};\n",
+            "};",
             format("struct foo {\n"
                    "private:\n"
                    "\n\n\n"
                    "protected:\n"
-                   "};\n",
+                   "};",
                    Style)); // test::messUp removes all new lines which changes
                             // the logic.
 
@@ -13179,12 +13179,12 @@ TEST_F(FormatTest, FormatsAfterAndBeforeAccessModifiersInteraction) {
   verifyFormat("struct foo {\n"
                "private:\n"
                "protected:\n"
-               "};\n",
+               "};",
                "struct foo {\n"
                "private:\n"
                "\n\n\n"
                "protected:\n"
-               "};\n",
+               "};",
                Style);
 
   Style.EmptyLineBeforeAccessModifier = FormatStyle::ELBAMS_LogicalBlock;
@@ -13192,12 +13192,12 @@ TEST_F(FormatTest, FormatsAfterAndBeforeAccessModifiersInteraction) {
   verifyFormat("struct foo {\n"
                "private:\n"
                "protected:\n"
-               "};\n",
+               "};",
                "struct foo {\n"
                "private:\n"
                "\n\n\n"
                "protected:\n"
-               "};\n",
+               "};",
                Style);
 
   Style.EmptyLineBeforeAccessModifier = FormatStyle::ELBAMS_LogicalBlock;
@@ -13205,12 +13205,12 @@ TEST_F(FormatTest, FormatsAfterAndBeforeAccessModifiersInteraction) {
   verifyFormat("struct foo {\n"
                "private:\n"
                "protected:\n"
-               "};\n",
+               "};",
                "struct foo {\n"
                "private:\n"
                "\n\n\n"
                "protected:\n"
-               "};\n",
+               "};",
                Style);
 
   Style.EmptyLineBeforeAccessModifier = FormatStyle::ELBAMS_LogicalBlock;
@@ -13218,12 +13218,12 @@ TEST_F(FormatTest, FormatsAfterAndBeforeAccessModifiersInteraction) {
   verifyFormat("struct foo {\n"
                "private:\n"
                "protected:\n"
-               "};\n",
+               "};",
                "struct foo {\n"
                "private:\n"
                "\n\n\n"
                "protected:\n"
-               "};\n",
+               "};",
                Style);
 }
 
@@ -13279,7 +13279,7 @@ TEST_F(FormatTest, HandlesIncludeDirectives) {
                "#include \"abc.h\" // this is included for ABC\n"
                "#include \"some long include\" // with a comment\n"
                "#include \"some very long include path\"\n"
-               "#include <some/very/long/include/path>\n",
+               "#include <some/very/long/include/path>",
                getLLVMStyleWithColumns(35));
   EXPECT_EQ("#include \"a.h\"", format("#include  \"a.h\""));
   EXPECT_EQ("#include <a>", format("#include<a>"));
@@ -13372,7 +13372,7 @@ TEST_F(FormatTest, IndentationWithinColumnLimitNotPossible) {
                getLLVMStyleWithColumns(20));
   verifyFormat("function(\n"
                "    ShortArgument,\n"
-               "    LoooooooooooongArgument);\n",
+               "    LoooooooooooongArgument);",
                getLLVMStyleWithColumns(20));
 }
 
@@ -13438,20 +13438,20 @@ TEST_F(FormatTest, DoesNotTouchUnwrappedLinesWithErrors) {
 }
 
 TEST_F(FormatTest, IncorrectCodeErrorDetection) {
-  EXPECT_EQ("{\n  {}\n", format("{\n{\n}\n"));
-  EXPECT_EQ("{\n  {}\n", format("{\n  {\n}\n"));
-  EXPECT_EQ("{\n  {}\n", format("{\n  {\n  }\n"));
-  EXPECT_EQ("{\n  {}\n}\n}\n", format("{\n  {\n    }\n  }\n}\n"));
+  EXPECT_EQ("{\n  {}", format("{\n{\n}"));
+  EXPECT_EQ("{\n  {}", format("{\n  {\n}"));
+  EXPECT_EQ("{\n  {}", format("{\n  {\n  }"));
+  EXPECT_EQ("{\n  {}\n}\n}", format("{\n  {\n    }\n  }\n}"));
 
   EXPECT_EQ("{\n"
             "  {\n"
             "    breakme(\n"
             "        qwe);\n"
-            "  }\n",
+            "  }",
             format("{\n"
                    "    {\n"
                    " breakme(qwe);\n"
-                   "}\n",
+                   "}",
                    getLLVMStyleWithColumns(10)));
 }
 
@@ -14263,23 +14263,23 @@ TEST_F(FormatTest, SplitEmptyFunction) {
   Style.AllowShortFunctionsOnASingleLine = FormatStyle::SFS_Inline;
   verifyFormat("class Foo {\n"
                "  int f() {}\n"
-               "};\n",
+               "};",
                Style);
   verifyFormat("class Foo {\n"
                "  int f() { return 0; }\n"
-               "};\n",
+               "};",
                Style);
   verifyFormat("class Foo {\n"
                "  int aaaaaaaaaaaaaa(int bbbbbbbbbbbbbb)\n"
                "  {}\n"
-               "};\n",
+               "};",
                Style);
   verifyFormat("class Foo {\n"
                "  int aaaaaaaaaaaaaa(int bbbbbbbbbbbbbb)\n"
                "  {\n"
                "    return 0;\n"
                "  }\n"
-               "};\n",
+               "};",
                Style);
 
   Style.AllowShortFunctionsOnASingleLine = FormatStyle::SFS_All;
@@ -14648,17 +14648,16 @@ TEST_F(FormatTest, UnderstandContextOfRecordTypeKeywords) {
   verifyFormat("if (true)\n"
                "  class X x;\n"
                "else\n"
-               "  f();\n");
+               "  f();");
 
   // This is simply incomplete. Formatting is not important, but must not crash.
   verifyFormat("class A:");
 }
 
 TEST_F(FormatTest, DoNotInterfereWithErrorAndWarning) {
-  verifyNoChange("#error Leave     all         white!!!!! space* alone!\n");
-  EXPECT_EQ(
-      "#warning Leave     all         white!!!!! space* alone!\n",
-      format("#warning Leave     all         white!!!!! space* alone!\n"));
+  verifyNoChange("#error Leave     all         white!!!!! space* alone!");
+  EXPECT_EQ("#warning Leave     all         white!!!!! space* alone!",
+            format("#warning Leave     all         white!!!!! space* alone!"));
   EXPECT_EQ("#error 1", format("  #  error   1"));
   EXPECT_EQ("#warning 1", format("  #  warning 1"));
 }
@@ -14785,8 +14784,8 @@ TEST_F(FormatTest, SkipsDeeplyNestedLines) {
                    ", 1), 1), 1), 1), 1), 1), 1), 1), 1), 1)\n"
                    ", 1), 1), 1), 1), 1), 1), 1), 1), 1), 1);\n");
   // Deeply nested part is untouched, rest is formatted.
-  EXPECT_EQ(std::string("int i;\n") + Code + "int j;\n",
-            format(std::string("int    i;\n") + Code + "int    j;\n",
+  EXPECT_EQ(std::string("int i;") + Code + "int j;",
+            format(std::string("int    i;") + Code + "int    j;",
                    getLLVMStyle(), SC_ExpectIncomplete));
 }
 
@@ -15471,7 +15470,7 @@ TEST_F(FormatTest, ConfigurableUseOfTab) {
                "\t}",
                Tab);
   verifyFormat("int a;\t      // x\n"
-               "int bbbbbbbb; // x\n",
+               "int bbbbbbbb; // x",
                Tab);
 
   FormatStyle TabAlignment = Tab;
@@ -17013,7 +17012,7 @@ TEST_F(FormatTest, ConfigurableSpacesInSquareBrackets) {
   verifyFormat("int i = a[ a ][ a ]->f();", Spaces);
   verifyFormat("int i = (*b)[ a ]->f();", Spaces);
   // Lambdas.
-  verifyFormat("int c = []() -> int { return 2; }();\n", Spaces);
+  verifyFormat("int c = []() -> int { return 2; }();", Spaces);
   verifyFormat("return [ i, args... ] {};", Spaces);
   verifyFormat("int foo = [ &bar ]() {};", Spaces);
   verifyFormat("int foo = [ = ]() {};", Spaces);
@@ -17036,7 +17035,7 @@ TEST_F(FormatTest, ConfigurableSpaceBeforeBrackets) {
 
   FormatStyle Space = getLLVMStyle();
   Space.SpaceBeforeSquareBrackets = true;
-  verifyFormat("int c = []() -> int { return 2; }();\n", Space);
+  verifyFormat("int c = []() -> int { return 2; }();", Space);
   verifyFormat("return [i, args...] {};", Space);
 
   verifyFormat("int a [5];", Space);
@@ -17516,7 +17515,7 @@ TEST_F(FormatTest, AlignConsecutiveMacros) {
                "#define B          \\\n"
                "  \"QQQQQQQQQQQQQ\"  \\\n"
                "  \"FFFFFFFFFFFFF\"  \\\n"
-               "  \"LLLLLLLL\"\n",
+               "  \"LLLLLLLL\"",
                Style);
 
   Style.AlignConsecutiveMacros.Enabled = true;
@@ -17528,7 +17527,7 @@ TEST_F(FormatTest, AlignConsecutiveMacros) {
                "#define B          \\\n"
                "  \"QQQQQQQQQQQQQ\"  \\\n"
                "  \"FFFFFFFFFFFFF\"  \\\n"
-               "  \"LLLLLLLL\"\n",
+               "  \"LLLLLLLL\"",
                Style);
 
   // Test across comments
@@ -18001,7 +18000,7 @@ TEST_F(FormatTest, AlignConsecutiveAssignmentsAcrossEmptyLinesAndComments) {
                "something = 2000;",
                Alignment);
   verifyFormat("something = 2000;\n"
-               "int i = 1, j = 10;\n",
+               "int i = 1, j = 10;",
                Alignment);
   verifyFormat("something = 2000;\n"
                "another   = 911;\n"
@@ -18017,7 +18016,7 @@ TEST_F(FormatTest, AlignConsecutiveAssignmentsAcrossEmptyLinesAndComments) {
                Alignment);
   verifyFormat("int oneTwoThree = 123;\n"
                "int oneTwo      = 12;\n"
-               "method();\n",
+               "method();",
                Alignment);
   verifyFormat("int oneTwoThree = 123; // comment\n"
                "int oneTwo      = 12;  // comment",
@@ -18032,7 +18031,7 @@ TEST_F(FormatTest, AlignConsecutiveAssignmentsAcrossEmptyLinesAndComments) {
                  "#if B\n"
                  "#else\n"
                  "int a = 12;\n"
-                 "#endif\n",
+                 "#endif",
                  Alignment);
     verifyFormat("enum foo {\n"
                  "#if A\n"
@@ -18043,7 +18042,7 @@ TEST_F(FormatTest, AlignConsecutiveAssignmentsAcrossEmptyLinesAndComments) {
                  "#else\n"
                  "  a = 12;\n"
                  "#endif\n"
-                 "};\n",
+                 "};",
                  Alignment);
   */
 
@@ -18263,31 +18262,31 @@ TEST_F(FormatTest, AlignConsecutiveAssignmentsAcrossEmptyLinesAndComments) {
   verifyFormat("template <typename T, typename T_0 = very_long_type_name_0,\n"
                "          typename B   = very_long_type_name_1,\n"
                "          typename T_2 = very_long_type_name_2>\n"
-               "auto foo() {}\n",
+               "auto foo() {}",
                Alignment);
   verifyFormat("int a, b = 1;\n"
                "int c  = 2;\n"
-               "int dd = 3;\n",
+               "int dd = 3;",
                Alignment);
   verifyFormat("int aa       = ((1 > 2) ? 3 : 4);\n"
-               "float b[1][] = {{3.f}};\n",
+               "float b[1][] = {{3.f}};",
                Alignment);
   verifyFormat("for (int i = 0; i < 1; i++)\n"
-               "  int x = 1;\n",
+               "  int x = 1;",
                Alignment);
   verifyFormat("for (i = 0; i < 1; i++)\n"
                "  x = 1;\n"
-               "y = 1;\n",
+               "y = 1;",
                Alignment);
 
   Alignment.ReflowComments = true;
   Alignment.ColumnLimit = 50;
   EXPECT_EQ("int x   = 0;\n"
             "int yy  = 1; /// specificlennospace\n"
-            "int zzz = 2;\n",
+            "int zzz = 2;",
             format("int x   = 0;\n"
                    "int yy  = 1; ///specificlennospace\n"
-                   "int zzz = 2;\n",
+                   "int zzz = 2;",
                    Alignment));
 }
 
@@ -18343,78 +18342,78 @@ TEST_F(FormatTest, AlignCompoundAssignments) {
   EXPECT_EQ("a   += 5;\n"
             "one  = 1;\n"
             "\n"
-            "oneTwoThree = 123;\n",
+            "oneTwoThree = 123;",
             format("a += 5;\n"
                    "one = 1;\n"
                    "\n"
-                   "oneTwoThree = 123;\n",
+                   "oneTwoThree = 123;",
                    Alignment));
   EXPECT_EQ("a   += 5;\n"
             "one  = 1;\n"
             "//\n"
-            "oneTwoThree = 123;\n",
+            "oneTwoThree = 123;",
             format("a += 5;\n"
                    "one = 1;\n"
                    "//\n"
-                   "oneTwoThree = 123;\n",
+                   "oneTwoThree = 123;",
                    Alignment));
   Alignment.AlignConsecutiveAssignments.AcrossEmptyLines = true;
   EXPECT_EQ("a           += 5;\n"
             "one          = 1;\n"
             "\n"
-            "oneTwoThree  = 123;\n",
+            "oneTwoThree  = 123;",
             format("a += 5;\n"
                    "one = 1;\n"
                    "\n"
-                   "oneTwoThree = 123;\n",
+                   "oneTwoThree = 123;",
                    Alignment));
   EXPECT_EQ("a   += 5;\n"
             "one  = 1;\n"
             "//\n"
-            "oneTwoThree = 123;\n",
+            "oneTwoThree = 123;",
             format("a += 5;\n"
                    "one = 1;\n"
                    "//\n"
-                   "oneTwoThree = 123;\n",
+                   "oneTwoThree = 123;",
                    Alignment));
   Alignment.AlignConsecutiveAssignments.AcrossEmptyLines = false;
   Alignment.AlignConsecutiveAssignments.AcrossComments = true;
   EXPECT_EQ("a   += 5;\n"
             "one  = 1;\n"
             "\n"
-            "oneTwoThree = 123;\n",
+            "oneTwoThree = 123;",
             format("a += 5;\n"
                    "one = 1;\n"
                    "\n"
-                   "oneTwoThree = 123;\n",
+                   "oneTwoThree = 123;",
                    Alignment));
   EXPECT_EQ("a           += 5;\n"
             "one          = 1;\n"
             "//\n"
-            "oneTwoThree  = 123;\n",
+            "oneTwoThree  = 123;",
             format("a += 5;\n"
                    "one = 1;\n"
                    "//\n"
-                   "oneTwoThree = 123;\n",
+                   "oneTwoThree = 123;",
                    Alignment));
   Alignment.AlignConsecutiveAssignments.AcrossEmptyLines = true;
   EXPECT_EQ("a            += 5;\n"
             "one         >>= 1;\n"
             "\n"
-            "oneTwoThree   = 123;\n",
+            "oneTwoThree   = 123;",
             format("a += 5;\n"
                    "one >>= 1;\n"
                    "\n"
-                   "oneTwoThree = 123;\n",
+                   "oneTwoThree = 123;",
                    Alignment));
   EXPECT_EQ("a            += 5;\n"
             "one           = 1;\n"
             "//\n"
-            "oneTwoThree <<= 123;\n",
+            "oneTwoThree <<= 123;",
             format("a += 5;\n"
                    "one = 1;\n"
                    "//\n"
-                   "oneTwoThree <<= 123;\n",
+                   "oneTwoThree <<= 123;",
                    Alignment));
 }
 
@@ -18450,7 +18449,7 @@ TEST_F(FormatTest, AlignConsecutiveAssignments) {
                "something = 2000;",
                Alignment);
   verifyFormat("something = 2000;\n"
-               "int i = 1, j = 10;\n",
+               "int i = 1, j = 10;",
                Alignment);
   verifyFormat("something = 2000;\n"
                "another   = 911;\n"
@@ -18466,7 +18465,7 @@ TEST_F(FormatTest, AlignConsecutiveAssignments) {
                Alignment);
   verifyFormat("int oneTwoThree = 123;\n"
                "int oneTwo      = 12;\n"
-               "method();\n",
+               "method();",
                Alignment);
   verifyFormat("int oneTwoThree = 123; // comment\n"
                "int oneTwo      = 12;  // comment",
@@ -18515,7 +18514,7 @@ TEST_F(FormatTest, AlignConsecutiveAssignments) {
                "  void f() = delete;\n"
                "  SSSSSSSSSSSSSSSSSSSSSSSSSSSS &operator=(\n"
                "      const SSSSSSSSSSSSSSSSSSSSSSSSSSSS &other) = delete;\n"
-               "};\n",
+               "};",
                AlignmentWithPenalty);
 
   // Bug 25167
@@ -18527,7 +18526,7 @@ TEST_F(FormatTest, AlignConsecutiveAssignments) {
                  "#if B\n"
                  "#else\n"
                  "int a = 12;\n"
-                 "#endif\n",
+                 "#endif",
                  Alignment);
     verifyFormat("enum foo {\n"
                  "#if A\n"
@@ -18538,7 +18537,7 @@ TEST_F(FormatTest, AlignConsecutiveAssignments) {
                  "#else\n"
                  "  a = 12;\n"
                  "#endif\n"
-                 "};\n",
+                 "};",
                  Alignment);
   */
 
@@ -18661,31 +18660,31 @@ TEST_F(FormatTest, AlignConsecutiveAssignments) {
   verifyFormat("template <typename T, typename T_0 = very_long_type_name_0,\n"
                "          typename B   = very_long_type_name_1,\n"
                "          typename T_2 = very_long_type_name_2>\n"
-               "auto foo() {}\n",
+               "auto foo() {}",
                Alignment);
   verifyFormat("int a, b = 1;\n"
                "int c  = 2;\n"
-               "int dd = 3;\n",
+               "int dd = 3;",
                Alignment);
   verifyFormat("int aa       = ((1 > 2) ? 3 : 4);\n"
-               "float b[1][] = {{3.f}};\n",
+               "float b[1][] = {{3.f}};",
                Alignment);
   verifyFormat("for (int i = 0; i < 1; i++)\n"
-               "  int x = 1;\n",
+               "  int x = 1;",
                Alignment);
   verifyFormat("for (i = 0; i < 1; i++)\n"
                "  x = 1;\n"
-               "y = 1;\n",
+               "y = 1;",
                Alignment);
 
   EXPECT_EQ(Alignment.ReflowComments, true);
   Alignment.ColumnLimit = 50;
   EXPECT_EQ("int x   = 0;\n"
             "int yy  = 1; /// specificlennospace\n"
-            "int zzz = 2;\n",
+            "int zzz = 2;",
             format("int x   = 0;\n"
                    "int yy  = 1; ///specificlennospace\n"
-                   "int zzz = 2;\n",
+                   "int zzz = 2;",
                    Alignment));
 
   verifyFormat("auto aaaaaaaaaaaaaaaaaaaaa = {};\n"
@@ -18822,7 +18821,7 @@ TEST_F(FormatTest, AlignConsecutiveDeclarations) {
                "something = 2000;",
                Alignment);
   verifyFormat("something = 2000;\n"
-               "int i = 1, j = 10;\n",
+               "int i = 1, j = 10;",
                Alignment);
   verifyFormat("float      something = 2000;\n"
                "double     another = 911;\n"
@@ -18943,24 +18942,24 @@ TEST_F(FormatTest, AlignConsecutiveDeclarations) {
   // Make sure that scope is correctly tracked, in the absence of braces
   verifyFormat("for (int i = 0; i < n; i++)\n"
                "  j = i;\n"
-               "double x = 1;\n",
+               "double x = 1;",
                Alignment);
   verifyFormat("if (int i = 0)\n"
                "  j = i;\n"
-               "double x = 1;\n",
+               "double x = 1;",
                Alignment);
   // Ensure operator[] and operator() are comprehended
   verifyFormat("struct test {\n"
                "  long long int foo();\n"
                "  int           operator[](int a);\n"
                "  double        bar();\n"
-               "};\n",
+               "};",
                Alignment);
   verifyFormat("struct test {\n"
                "  long long int foo();\n"
                "  int           operator()(int a);\n"
                "  double        bar();\n"
-               "};\n",
+               "};",
                Alignment);
   // http://llvm.org/PR52914
   verifyFormat("char *a[]     = {\"a\", // comment\n"
@@ -19024,7 +19023,7 @@ TEST_F(FormatTest, AlignConsecutiveDeclarations) {
   verifyFormat("int   *a;\n"
                "int  **b;\n"
                "int ***c;\n"
-               "int    foobar;\n",
+               "int    foobar;",
                Alignment);
 
   // PAS_Left
@@ -19084,7 +19083,7 @@ TEST_F(FormatTest, AlignConsecutiveDeclarations) {
   verifyFormat("int*   a;\n"
                "int**  b;\n"
                "int*** c;\n"
-               "int    foobar;\n",
+               "int    foobar;",
                AlignmentLeft);
 
   // PAS_Middle
@@ -19144,7 +19143,7 @@ TEST_F(FormatTest, AlignConsecutiveDeclarations) {
   verifyFormat("int *   a;\n"
                "int *   b;\n"
                "int *** c;\n"
-               "int     foobar;\n",
+               "int     foobar;",
                AlignmentMiddle);
 
   Alignment.AlignConsecutiveAssignments.Enabled = false;
@@ -19258,22 +19257,22 @@ TEST_F(FormatTest, AlignConsecutiveDeclarations) {
   verifyFormat(
       "template <typename LongTemplate, typename VeryLongTemplateTypeName,\n"
       "          typename LongType, typename B>\n"
-      "auto foo() {}\n",
+      "auto foo() {}",
       Alignment);
   verifyFormat("float a, b = 1;\n"
                "int   c = 2;\n"
-               "int   dd = 3;\n",
+               "int   dd = 3;",
                Alignment);
   verifyFormat("int   aa = ((1 > 2) ? 3 : 4);\n"
-               "float b[1][] = {{3.f}};\n",
+               "float b[1][] = {{3.f}};",
                Alignment);
   Alignment.AlignConsecutiveAssignments.Enabled = true;
   verifyFormat("float a, b = 1;\n"
                "int   c  = 2;\n"
-               "int   dd = 3;\n",
+               "int   dd = 3;",
                Alignment);
   verifyFormat("int   aa     = ((1 > 2) ? 3 : 4);\n"
-               "float b[1][] = {{3.f}};\n",
+               "float b[1][] = {{3.f}};",
                Alignment);
   Alignment.AlignConsecutiveAssignments.Enabled = false;
 
@@ -19290,7 +19289,7 @@ TEST_F(FormatTest, AlignConsecutiveDeclarations) {
                "void bar(ino_t     a,\n"
                "         int       b,\n"
                "         uint32_t *c,\n"
-               "         bool      d) {}\n",
+               "         bool      d) {}",
                Alignment);
   Alignment.BinPackParameters = true;
   Alignment.ColumnLimit = 80;
@@ -19301,7 +19300,7 @@ TEST_F(FormatTest, AlignConsecutiveDeclarations) {
       "auto found = range::find_if(vsProducts, [&](auto * aProduct) {\n"
       "  static const Version verVs2017;\n"
       "  return true;\n"
-      "});\n",
+      "});",
       Alignment);
   Alignment.PointerAlignment = FormatStyle::PAS_Right;
 
@@ -19827,11 +19826,11 @@ TEST_F(FormatTest, LinuxBraceBreaking) {
                "struct B {\n"
                "  int x;\n"
                "};\n"
-               "} // namespace a\n",
+               "} // namespace a",
                LinuxBraceStyle);
   verifyFormat("enum X {\n"
                "  Y = 0,\n"
-               "}\n",
+               "}",
                LinuxBraceStyle);
   verifyFormat("struct S {\n"
                "  int Type;\n"
@@ -19843,7 +19842,7 @@ TEST_F(FormatTest, LinuxBraceBreaking) {
                "  {\n"
                "    MyFavoriteType Value;\n"
                "  } Class;\n"
-               "}\n",
+               "}",
                LinuxBraceStyle);
 }
 
@@ -19874,7 +19873,7 @@ TEST_F(FormatTest, MozillaBraceBreaking) {
                "{\n"
                "  int x;\n"
                "};\n"
-               "}\n",
+               "}",
                MozillaBraceStyle);
   verifyFormat("struct S\n"
                "{\n"
@@ -19888,7 +19887,7 @@ TEST_F(FormatTest, MozillaBraceBreaking) {
                "  {\n"
                "    MyFavoriteType Value;\n"
                "  } Class;\n"
-               "}\n",
+               "}",
                MozillaBraceStyle);
 }
 
@@ -19909,7 +19908,7 @@ TEST_F(FormatTest, StroustrupBraceBreaking) {
                "struct B {\n"
                "  int x;\n"
                "};\n"
-               "} // namespace a\n",
+               "} // namespace a",
                StroustrupBraceStyle);
 
   verifyFormat("void foo()\n"
@@ -19920,7 +19919,7 @@ TEST_F(FormatTest, StroustrupBraceBreaking) {
                "  else {\n"
                "    b();\n"
                "  }\n"
-               "}\n",
+               "}",
                StroustrupBraceStyle);
 
   verifyFormat("#ifdef _DEBUG\n"
@@ -19962,12 +19961,12 @@ TEST_F(FormatTest, AllmanBraceBreaking) {
             "{\n"
             "void f();\n"
             "void g();\n"
-            "} // namespace a\n",
+            "} // namespace a",
             format("namespace a\n"
                    "{\n"
                    "void f();\n"
                    "void g();\n"
-                   "}\n",
+                   "}",
                    AllmanBraceStyle));
 
   verifyFormat("namespace a\n"
@@ -20008,7 +20007,7 @@ TEST_F(FormatTest, AllmanBraceBreaking) {
                "  {\n"
                "    c();\n"
                "  }\n"
-               "}\n",
+               "}",
                AllmanBraceStyle);
 
   verifyFormat("void f()\n"
@@ -20025,7 +20024,7 @@ TEST_F(FormatTest, AllmanBraceBreaking) {
                "  {\n"
                "    c();\n"
                "  } while (false)\n"
-               "}\n",
+               "}",
                AllmanBraceStyle);
 
   verifyFormat("void f(int a)\n"
@@ -20045,18 +20044,18 @@ TEST_F(FormatTest, AllmanBraceBreaking) {
                "  default:\n"
                "    break;\n"
                "  }\n"
-               "}\n",
+               "}",
                AllmanBraceStyle);
 
   verifyFormat("enum X\n"
                "{\n"
                "  Y = 0,\n"
-               "}\n",
+               "}",
                AllmanBraceStyle);
   verifyFormat("enum X\n"
                "{\n"
                "  Y = 0\n"
-               "}\n",
+               "}",
                AllmanBraceStyle);
 
   verifyFormat("@interface BSApplicationController ()\n"
@@ -20064,7 +20063,7 @@ TEST_F(FormatTest, AllmanBraceBreaking) {
                "@private\n"
                "  id _extraIvar;\n"
                "}\n"
-               "@end\n",
+               "@end",
                AllmanBraceStyle);
 
   verifyFormat("#ifdef _DEBUG\n"
@@ -20199,7 +20198,7 @@ TEST_F(FormatTest, AllmanBraceBreaking) {
                "  {\n"
                "    return;\n"
                "  }\n"
-               "}\n",
+               "}",
                BreakBeforeBraceShortIfs);
   verifyFormat("void f(bool b)\n"
                "{\n"
@@ -20207,7 +20206,7 @@ TEST_F(FormatTest, AllmanBraceBreaking) {
                "  {\n"
                "    return;\n"
                "  }\n"
-               "}\n",
+               "}",
                BreakBeforeBraceShortIfs);
   verifyFormat("void f(bool b)\n"
                "{\n"
@@ -20215,22 +20214,22 @@ TEST_F(FormatTest, AllmanBraceBreaking) {
                "  {\n"
                "    return;\n"
                "  }\n"
-               "}\n",
+               "}",
                BreakBeforeBraceShortIfs);
   verifyFormat("void f(bool b)\n"
                "{\n"
                "  if (b) return;\n"
-               "}\n",
+               "}",
                BreakBeforeBraceShortIfs);
   verifyFormat("void f(bool b)\n"
                "{\n"
                "  if constexpr (b) return;\n"
-               "}\n",
+               "}",
                BreakBeforeBraceShortIfs);
   verifyFormat("void f(bool b)\n"
                "{\n"
                "  if CONSTEXPR (b) return;\n"
-               "}\n",
+               "}",
                BreakBeforeBraceShortIfs);
   verifyFormat("void f(bool b)\n"
                "{\n"
@@ -20238,7 +20237,7 @@ TEST_F(FormatTest, AllmanBraceBreaking) {
                "  {\n"
                "    return;\n"
                "  }\n"
-               "}\n",
+               "}",
                BreakBeforeBraceShortIfs);
 }
 
@@ -20271,7 +20270,7 @@ TEST_F(FormatTest, WhitesmithsBraceBreaking) {
                "    F\n"
                "    }\n"
                "  };\n"
-               "  } // namespace B\n",
+               "  } // namespace B",
                WhitesmithsBraceStyle);
   */
 
@@ -20397,7 +20396,7 @@ TEST_F(FormatTest, WhitesmithsBraceBreaking) {
                "    {\n"
                "    c();\n"
                "    }\n"
-               "  }\n",
+               "  }",
                WhitesmithsBraceStyle);
 
   verifyFormat("void f()\n"
@@ -20414,7 +20413,7 @@ TEST_F(FormatTest, WhitesmithsBraceBreaking) {
                "    {\n"
                "    c();\n"
                "    } while (false)\n"
-               "  }\n",
+               "  }",
                WhitesmithsBraceStyle);
 
   WhitesmithsBraceStyle.IndentCaseLabels = true;
@@ -20427,7 +20426,7 @@ TEST_F(FormatTest, WhitesmithsBraceBreaking) {
                "      }\n"
                "      break;\n"
                "    }\n"
-               "  }\n",
+               "  }",
                WhitesmithsBraceStyle);
 
   verifyFormat("void switchTest2(int a)\n"
@@ -20447,7 +20446,7 @@ TEST_F(FormatTest, WhitesmithsBraceBreaking) {
                "    default:\n"
                "      break;\n"
                "    }\n"
-               "  }\n",
+               "  }",
                WhitesmithsBraceStyle);
 
   verifyFormat("void switchTest3(int a)\n"
@@ -20465,7 +20464,7 @@ TEST_F(FormatTest, WhitesmithsBraceBreaking) {
                "      }\n"
                "      break;\n"
                "    }\n"
-               "  }\n",
+               "  }",
                WhitesmithsBraceStyle);
 
   WhitesmithsBraceStyle.IndentCaseLabels = false;
@@ -20479,7 +20478,7 @@ TEST_F(FormatTest, WhitesmithsBraceBreaking) {
                "    }\n"
                "    break;\n"
                "    }\n"
-               "  }\n",
+               "  }",
                WhitesmithsBraceStyle);
 
   verifyFormat("void switchTest5(int a)\n"
@@ -20500,7 +20499,7 @@ TEST_F(FormatTest, WhitesmithsBraceBreaking) {
                "  default:\n"
                "    break;\n"
                "    }\n"
-               "  }\n",
+               "  }",
                WhitesmithsBraceStyle);
 
   verifyFormat("void switchTest6(int a)\n"
@@ -20518,25 +20517,25 @@ TEST_F(FormatTest, WhitesmithsBraceBreaking) {
                "    }\n"
                "    break;\n"
                "    }\n"
-               "  }\n",
+               "  }",
                WhitesmithsBraceStyle);
 
   verifyFormat("enum X\n"
                "  {\n"
                "  Y = 0, // testing\n"
-               "  }\n",
+               "  }",
                WhitesmithsBraceStyle);
 
   verifyFormat("enum X\n"
                "  {\n"
                "  Y = 0\n"
-               "  }\n",
+               "  }",
                WhitesmithsBraceStyle);
   verifyFormat("enum X\n"
                "  {\n"
                "  Y = 0,\n"
                "  Z = 1\n"
-               "  };\n",
+               "  };",
                WhitesmithsBraceStyle);
 
   verifyFormat("@interface BSApplicationController ()\n"
@@ -20544,7 +20543,7 @@ TEST_F(FormatTest, WhitesmithsBraceBreaking) {
                "@private\n"
                "  id _extraIvar;\n"
                "  }\n"
-               "@end\n",
+               "@end",
                WhitesmithsBraceStyle);
 
   verifyFormat("#ifdef _DEBUG\n"
@@ -20617,12 +20616,12 @@ TEST_F(FormatTest, WhitesmithsBraceBreaking) {
                "    {\n"
                "    return;\n"
                "    }\n"
-               "  }\n",
+               "  }",
                BreakBeforeBraceShortIfs);
   verifyFormat("void f(bool b)\n"
                "  {\n"
                "  if (b) return;\n"
-               "  }\n",
+               "  }",
                BreakBeforeBraceShortIfs);
   verifyFormat("void f(bool b)\n"
                "  {\n"
@@ -20630,7 +20629,7 @@ TEST_F(FormatTest, WhitesmithsBraceBreaking) {
                "    {\n"
                "    return;\n"
                "    }\n"
-               "  }\n",
+               "  }",
                BreakBeforeBraceShortIfs);
 }
 
@@ -20672,7 +20671,7 @@ TEST_F(FormatTest, GNUBraceBreaking) {
                "    {\n"
                "      c();\n"
                "    }\n"
-               "}\n",
+               "}",
                GNUBraceStyle);
 
   verifyFormat("void f()\n"
@@ -20690,7 +20689,7 @@ TEST_F(FormatTest, GNUBraceBreaking) {
                "      c();\n"
                "    }\n"
                "  while (false);\n"
-               "}\n",
+               "}",
                GNUBraceStyle);
 
   verifyFormat("void f(int a)\n"
@@ -20710,13 +20709,13 @@ TEST_F(FormatTest, GNUBraceBreaking) {
                "    default:\n"
                "      break;\n"
                "    }\n"
-               "}\n",
+               "}",
                GNUBraceStyle);
 
   verifyFormat("enum X\n"
                "{\n"
                "  Y = 0,\n"
-               "}\n",
+               "}",
                GNUBraceStyle);
 
   verifyFormat("@interface BSApplicationController ()\n"
@@ -20724,7 +20723,7 @@ TEST_F(FormatTest, GNUBraceBreaking) {
                "@private\n"
                "  id _extraIvar;\n"
                "}\n"
-               "@end\n",
+               "@end",
                GNUBraceStyle);
 
   verifyFormat("#ifdef _DEBUG\n"
@@ -20782,7 +20781,7 @@ TEST_F(FormatTest, WebKitBraceBreaking) {
                "struct B {\n"
                "  int x;\n"
                "};\n"
-               "}\n",
+               "}",
                WebKitBraceStyle);
   verifyFormat("struct S {\n"
                "  int Type;\n"
@@ -20793,7 +20792,7 @@ TEST_F(FormatTest, WebKitBraceBreaking) {
                "  class C {\n"
                "    MyFavoriteType Value;\n"
                "  } Class;\n"
-               "};\n",
+               "};",
                WebKitBraceStyle);
 }
 
@@ -20802,7 +20801,7 @@ TEST_F(FormatTest, CatchExceptionReferenceBinding) {
                "  try {\n"
                "  } catch (const Exception &e) {\n"
                "  }\n"
-               "}\n");
+               "}");
 }
 
 TEST_F(FormatTest, CatchAlignArrayOfStructuresRightAlignment) {
@@ -20814,14 +20813,14 @@ TEST_F(FormatTest, CatchAlignArrayOfStructuresRightAlignment) {
                "    {56,    23, \"hello\"},\n"
                "    {-1, 93463, \"world\"},\n"
                "    { 7,     5,    \"!!\"}\n"
-               "};\n",
+               "};",
                Style);
 
   verifyFormat("struct test demo[] = {\n"
                "    {56,    23, \"hello\"}, // first line\n"
                "    {-1, 93463, \"world\"}, // second line\n"
                "    { 7,     5,    \"!!\"}  // third line\n"
-               "};\n",
+               "};",
                Style);
 
   verifyFormat("struct test demo[4] = {\n"
@@ -20829,42 +20828,42 @@ TEST_F(FormatTest, CatchAlignArrayOfStructuresRightAlignment) {
                "    { -1, 93463, 22,       \"my\"}, // second line\n"
                "    {  7,     5,  1, \"goodness\"}  // third line\n"
                "    {234,     5,  1, \"gracious\"}  // fourth line\n"
-               "};\n",
+               "};",
                Style);
 
   verifyFormat("struct test demo[3] = {\n"
                "    {56,    23, \"hello\"},\n"
                "    {-1, 93463, \"world\"},\n"
                "    { 7,     5,    \"!!\"}\n"
-               "};\n",
+               "};",
                Style);
 
   verifyFormat("struct test demo[3] = {\n"
                "    {int{56},    23, \"hello\"},\n"
                "    {int{-1}, 93463, \"world\"},\n"
                "    { int{7},     5,    \"!!\"}\n"
-               "};\n",
+               "};",
                Style);
 
   verifyFormat("struct test demo[] = {\n"
                "    {56,    23, \"hello\"},\n"
                "    {-1, 93463, \"world\"},\n"
                "    { 7,     5,    \"!!\"},\n"
-               "};\n",
+               "};",
                Style);
 
   verifyFormat("test demo[] = {\n"
                "    {56,    23, \"hello\"},\n"
                "    {-1, 93463, \"world\"},\n"
                "    { 7,     5,    \"!!\"},\n"
-               "};\n",
+               "};",
                Style);
 
   verifyFormat("demo = std::array<struct test, 3>{\n"
                "    test{56,    23, \"hello\"},\n"
                "    test{-1, 93463, \"world\"},\n"
                "    test{ 7,     5,    \"!!\"},\n"
-               "};\n",
+               "};",
                Style);
 
   verifyFormat("test demo[] = {\n"
@@ -20873,7 +20872,7 @@ TEST_F(FormatTest, CatchAlignArrayOfStructuresRightAlignment) {
                "    {-1, 93463, \"world\"},\n"
                "#endif\n"
                "    { 7,     5,    \"!!\"}\n"
-               "};\n",
+               "};",
                Style);
 
   verifyFormat(
@@ -20883,7 +20882,7 @@ TEST_F(FormatTest, CatchAlignArrayOfStructuresRightAlignment) {
       "     \"just world, ought to be split over multiple lines\"},\n"
       "    {-1, 93463,                                  \"world\"},\n"
       "    {56,     5,                                     \"!!\"}\n"
-      "};\n",
+      "};",
       Style);
 
   verifyFormat("return GradForUnaryCwise(g, {\n"
@@ -20891,7 +20890,7 @@ TEST_F(FormatTest, CatchAlignArrayOfStructuresRightAlignment) {
                "  {\"x\", \"dy\"}},\n"
                "                                {  {\"dx\"},  \"Mul\", {\"dy\""
                ", \"sign\"}},\n"
-               "});\n",
+               "});",
                Style);
 
   Style.ColumnLimit = 0;
@@ -20914,21 +20913,21 @@ TEST_F(FormatTest, CatchAlignArrayOfStructuresRightAlignment) {
                "    {56,    23, /* a comment */ \"hello\"},\n"
                "    {-1, 93463,                 \"world\"},\n"
                "    { 7,     5,                    \"!!\"}\n"
-               "};\n",
+               "};",
                Style);
 
   verifyFormat("test demo[] = {\n"
                "    {56,    23,                    \"hello\"},\n"
                "    {-1, 93463, \"world\" /* comment here */},\n"
                "    { 7,     5,                       \"!!\"}\n"
-               "};\n",
+               "};",
                Style);
 
   verifyFormat("test demo[] = {\n"
                "    {56, /* a comment */ 23, \"hello\"},\n"
                "    {-1,              93463, \"world\"},\n"
                "    { 7,                  5,    \"!!\"}\n"
-               "};\n",
+               "};",
                Style);
 
   Style.ColumnLimit = 20;
@@ -21017,7 +21016,7 @@ TEST_F(FormatTest, CatchAlignArrayOfStructuresRightAlignment) {
                "    { -1, 93463, 22,       \"my\"}, // second line\n"
                "    {  7,     5,  1, \"goodness\"}  // third line\n"
                "    {234,     5,  1, \"gracious\"}  // fourth line\n"
-               "};\n",
+               "};",
                Style);
   EXPECT_EQ(
       "test demo[] = {\n"
@@ -21041,64 +21040,64 @@ TEST_F(FormatTest, CatchAlignArrayOfStructuresLeftAlignment) {
   verifyFormat("auto foo = Items{\n"
                "    Section{0, bar(), },\n"
                "    Section{1, boo()  }\n"
-               "};\n",
+               "};",
                Style);
   */
   verifyFormat("auto foo = Items{\n"
                "    Section{\n"
                "            0, bar(),\n"
                "            }\n"
-               "};\n",
+               "};",
                Style);
   verifyFormat("struct test demo[] = {\n"
                "    {56, 23,    \"hello\"},\n"
                "    {-1, 93463, \"world\"},\n"
                "    {7,  5,     \"!!\"   }\n"
-               "};\n",
+               "};",
                Style);
   verifyFormat("struct test demo[] = {\n"
                "    {56, 23,    \"hello\"}, // first line\n"
                "    {-1, 93463, \"world\"}, // second line\n"
                "    {7,  5,     \"!!\"   }  // third line\n"
-               "};\n",
+               "};",
                Style);
   verifyFormat("struct test demo[4] = {\n"
                "    {56,  23,    21, \"oh\"      }, // first line\n"
                "    {-1,  93463, 22, \"my\"      }, // second line\n"
                "    {7,   5,     1,  \"goodness\"}  // third line\n"
                "    {234, 5,     1,  \"gracious\"}  // fourth line\n"
-               "};\n",
+               "};",
                Style);
   verifyFormat("struct test demo[3] = {\n"
                "    {56, 23,    \"hello\"},\n"
                "    {-1, 93463, \"world\"},\n"
                "    {7,  5,     \"!!\"   }\n"
-               "};\n",
+               "};",
                Style);
 
   verifyFormat("struct test demo[3] = {\n"
                "    {int{56}, 23,    \"hello\"},\n"
                "    {int{-1}, 93463, \"world\"},\n"
                "    {int{7},  5,     \"!!\"   }\n"
-               "};\n",
+               "};",
                Style);
   verifyFormat("struct test demo[] = {\n"
                "    {56, 23,    \"hello\"},\n"
                "    {-1, 93463, \"world\"},\n"
                "    {7,  5,     \"!!\"   },\n"
-               "};\n",
+               "};",
                Style);
   verifyFormat("test demo[] = {\n"
                "    {56, 23,    \"hello\"},\n"
                "    {-1, 93463, \"world\"},\n"
                "    {7,  5,     \"!!\"   },\n"
-               "};\n",
+               "};",
                Style);
   verifyFormat("demo = std::array<struct test, 3>{\n"
                "    test{56, 23,    \"hello\"},\n"
                "    test{-1, 93463, \"world\"},\n"
                "    test{7,  5,     \"!!\"   },\n"
-               "};\n",
+               "};",
                Style);
   verifyFormat("test demo[] = {\n"
                "    {56, 23,    \"hello\"},\n"
@@ -21106,7 +21105,7 @@ TEST_F(FormatTest, CatchAlignArrayOfStructuresLeftAlignment) {
                "    {-1, 93463, \"world\"},\n"
                "#endif\n"
                "    {7,  5,     \"!!\"   }\n"
-               "};\n",
+               "};",
                Style);
   verifyFormat(
       "test demo[] = {\n"
@@ -21115,7 +21114,7 @@ TEST_F(FormatTest, CatchAlignArrayOfStructuresLeftAlignment) {
       "     \"just world, ought to be split over multiple lines\"},\n"
       "    {-1, 93463, \"world\"                                 },\n"
       "    {56, 5,     \"!!\"                                    }\n"
-      "};\n",
+      "};",
       Style);
 
   verifyFormat("return GradForUnaryCwise(g, {\n"
@@ -21123,7 +21122,7 @@ TEST_F(FormatTest, CatchAlignArrayOfStructuresLeftAlignment) {
                "\"dy\"}   },\n"
                "                                {{\"dx\"},   \"Mul\",  "
                "{\"dy\", \"sign\"}},\n"
-               "});\n",
+               "});",
                Style);
 
   Style.ColumnLimit = 0;
@@ -21146,21 +21145,21 @@ TEST_F(FormatTest, CatchAlignArrayOfStructuresLeftAlignment) {
                "    {56, 23,    /* a comment */ \"hello\"},\n"
                "    {-1, 93463, \"world\"                },\n"
                "    {7,  5,     \"!!\"                   }\n"
-               "};\n",
+               "};",
                Style);
 
   verifyFormat("test demo[] = {\n"
                "    {56, 23,    \"hello\"                   },\n"
                "    {-1, 93463, \"world\" /* comment here */},\n"
                "    {7,  5,     \"!!\"                      }\n"
-               "};\n",
+               "};",
                Style);
 
   verifyFormat("test demo[] = {\n"
                "    {56, /* a comment */ 23, \"hello\"},\n"
                "    {-1, 93463,              \"world\"},\n"
                "    {7,  5,                  \"!!\"   }\n"
-               "};\n",
+               "};",
                Style);
 
   Style.ColumnLimit = 20;
@@ -21352,38 +21351,38 @@ TEST_F(FormatTest, OptimizeBreakPenaltyVsExcess) {
                    Style));
 
   EXPECT_EQ("// foo bar baz bazfoo\n"
-            "// foo bar foo bar\n",
+            "// foo bar foo bar",
             format("// foo bar baz bazfoo\n"
-                   "// foo bar foo           bar\n",
+                   "// foo bar foo           bar",
                    Style));
   EXPECT_EQ("// foo bar baz bazfoo\n"
-            "// foo bar foo bar\n",
+            "// foo bar foo bar",
             format("// foo bar baz      bazfoo\n"
-                   "// foo            bar foo bar\n",
+                   "// foo            bar foo bar",
                    Style));
 
   // FIXME: Optimally, we'd keep bazfoo on the first line and reflow bar to the
   // next one.
   EXPECT_EQ("// foo bar baz bazfoo\n"
-            "// bar foo bar\n",
+            "// bar foo bar",
             format("// foo bar baz      bazfoo bar\n"
-                   "// foo            bar\n",
+                   "// foo            bar",
                    Style));
 
   EXPECT_EQ("// foo bar baz bazfoo\n"
             "// foo bar baz bazfoo\n"
-            "// bar foo bar\n",
+            "// bar foo bar",
             format("// foo bar baz      bazfoo\n"
                    "// foo bar baz      bazfoo bar\n"
-                   "// foo bar\n",
+                   "// foo bar",
                    Style));
 
   EXPECT_EQ("// foo bar baz bazfoo\n"
             "// foo bar baz bazfoo\n"
-            "// bar foo bar\n",
+            "// bar foo bar",
             format("// foo bar baz      bazfoo\n"
                    "// foo bar baz      bazfoo bar\n"
-                   "// foo           bar\n",
+                   "// foo           bar",
                    Style));
 
   // Make sure we do not keep protruding characters if strict mode reflow is
@@ -21392,8 +21391,8 @@ TEST_F(FormatTest, OptimizeBreakPenaltyVsExcess) {
   EXPECT_EQ(
       "// foo foo foo foo\n"
       "// foo foo foo foo\n"
-      "// foo foo foo foo\n",
-      format("// foo foo foo foo foo foo foo foo foo foo foo foo\n", Style));
+      "// foo foo foo foo",
+      format("// foo foo foo foo foo foo foo foo foo foo foo foo", Style));
 
   EXPECT_EQ("int a = /* long block\n"
             "           comment */\n"
@@ -21687,7 +21686,7 @@ TEST_F(FormatTest, BreakConstructorInitializersBeforeComma) {
   Style.ConstructorInitializerIndentWidth = 4;
   verifyFormat("SomeClass::Constructor() : aaaaaaaa(aaaaaaaa) {}", Style);
   verifyFormat(
-      "SomeClass::Constructor() : aaaaa(aaaaa), aaaaa(aaaaa), aaaaa(aaaaa)\n",
+      "SomeClass::Constructor() : aaaaa(aaaaa), aaaaa(aaaaa), aaaaa(aaaaa)",
       Style);
   verifyFormat(
       "SomeClass::Constructor()\n"
@@ -21698,7 +21697,7 @@ TEST_F(FormatTest, BreakConstructorInitializersBeforeComma) {
                "    : aaaaaaaa(aaaaaaaa) {}",
                Style);
   verifyFormat("SomeClass::Constructor()\n"
-               "    : aaaaa(aaaaa), aaaaa(aaaaa), aaaaa(aaaaa)\n",
+               "    : aaaaa(aaaaa), aaaaa(aaaaa), aaaaa(aaaaa)",
                Style);
   verifyFormat(
       "SomeClass::Constructor()\n"
@@ -21966,31 +21965,31 @@ TEST_F(FormatTest, FormatsWithWebKitStyle) {
 }
 
 TEST_F(FormatTest, FormatsLambdas) {
-  verifyFormat("int c = [b]() mutable { return [&b] { return b++; }(); }();\n");
+  verifyFormat("int c = [b]() mutable { return [&b] { return b++; }(); }();");
   verifyFormat(
-      "int c = [b]() mutable noexcept { return [&b] { return b++; }(); }();\n");
-  verifyFormat("int c = [&] { [=] { return b++; }(); }();\n");
-  verifyFormat("int c = [&, &a, a] { [=, c, &d] { return b++; }(); }();\n");
-  verifyFormat("int c = [&a, &a, a] { [=, a, b, &c] { return b++; }(); }();\n");
-  verifyFormat("auto c = {[&a, &a, a] { [=, a, b, &c] { return b++; }(); }}\n");
-  verifyFormat("auto c = {[&a, &a, a] { [=, a, b, &c] {}(); }}\n");
-  verifyFormat("auto c = [a = [b = 42] {}] {};\n");
-  verifyFormat("auto c = [a = &i + 10, b = [] {}] {};\n");
+      "int c = [b]() mutable noexcept { return [&b] { return b++; }(); }();");
+  verifyFormat("int c = [&] { [=] { return b++; }(); }();");
+  verifyFormat("int c = [&, &a, a] { [=, c, &d] { return b++; }(); }();");
+  verifyFormat("int c = [&a, &a, a] { [=, a, b, &c] { return b++; }(); }();");
+  verifyFormat("auto c = {[&a, &a, a] { [=, a, b, &c] { return b++; }(); }}");
+  verifyFormat("auto c = {[&a, &a, a] { [=, a, b, &c] {}(); }}");
+  verifyFormat("auto c = [a = [b = 42] {}] {};");
+  verifyFormat("auto c = [a = &i + 10, b = [] {}] {};");
   verifyFormat("int x = f(*+[] {});");
   verifyFormat("void f() {\n"
                "  other(x.begin(), x.end(), [&](int, int) { return 1; });\n"
-               "}\n");
+               "}");
   verifyFormat("void f() {\n"
                "  other(x.begin(), //\n"
                "        x.end(),   //\n"
                "        [&](int, int) { return 1; });\n"
-               "}\n");
+               "}");
   verifyFormat("void f() {\n"
                "  other.other.other.other.other(\n"
                "      x.begin(), x.end(),\n"
                "      [something, rather](int, int, int, int, int, int, int) { "
                "return 1; });\n"
-               "}\n");
+               "}");
   verifyFormat(
       "void f() {\n"
       "  other.other.other.other.other(\n"
@@ -21998,7 +21997,7 @@ TEST_F(FormatTest, FormatsLambdas) {
       "      [something, rather](int, int, int, int, int, int, int) {\n"
       "        //\n"
       "      });\n"
-      "}\n");
+      "}");
   verifyFormat("SomeFunction([]() { // A cool function...\n"
                "  return 43;\n"
                "});");
@@ -22060,9 +22059,9 @@ TEST_F(FormatTest, FormatsLambdas) {
       "    aaaaa aaaaaaaaa);");
 
   // Lambdas with return types.
-  verifyFormat("int c = []() -> int { return 2; }();\n");
-  verifyFormat("int c = []() -> int * { return 2; }();\n");
-  verifyFormat("int c = []() -> vector<int> { return {2}; }();\n");
+  verifyFormat("int c = []() -> int { return 2; }();");
+  verifyFormat("int c = []() -> int * { return 2; }();");
+  verifyFormat("int c = []() -> vector<int> { return {2}; }();");
   verifyFormat("Foo([]() -> std::vector<int> { return {2}; }());");
   verifyFormat("foo([]() noexcept -> int {});");
   verifyGoogleFormat("auto a = [&b, c](D* d) -> D* {};");
@@ -22199,37 +22198,37 @@ TEST_F(FormatTest, FormatsLambdas) {
 
   // Lambdas with explicit template argument lists.
   verifyFormat(
-      "auto L = []<template <typename> class T, class U>(T<U> &&a) {};\n");
+      "auto L = []<template <typename> class T, class U>(T<U> &&a) {};");
   verifyFormat("auto L = []<class T>(T) {\n"
                "  {\n"
                "    f();\n"
                "    g();\n"
                "  }\n"
-               "};\n");
+               "};");
   verifyFormat("auto L = []<class... T>(T...) {\n"
                "  {\n"
                "    f();\n"
                "    g();\n"
                "  }\n"
-               "};\n");
+               "};");
   verifyFormat("auto L = []<typename... T>(T...) {\n"
                "  {\n"
                "    f();\n"
                "    g();\n"
                "  }\n"
-               "};\n");
+               "};");
   verifyFormat("auto L = []<template <typename...> class T>(T...) {\n"
                "  {\n"
                "    f();\n"
                "    g();\n"
                "  }\n"
-               "};\n");
+               "};");
   verifyFormat("auto L = []</*comment*/ class... T>(T...) {\n"
                "  {\n"
                "    f();\n"
                "    g();\n"
                "  }\n"
-               "};\n");
+               "};");
   verifyFormat("auto L = []<int... T>(T...) {\n"
                "  {\n"
                "    f();\n"
@@ -22275,7 +22274,7 @@ TEST_F(FormatTest, FormatsLambdas) {
                "    [this] {\n"
                "      //\n"
                "    },\n"
-               "    1);\n");
+               "    1);");
 
   // A multi-line lambda passed as arg1 forces arg0 to be pushed out, just like
   // the arg0 case above.
@@ -22286,14 +22285,14 @@ TEST_F(FormatTest, FormatsLambdas) {
                "    [this] {\n"
                "      //\n"
                "    },\n"
-               "    b);\n",
+               "    b);",
                Style);
   verifyFormat("SomeFunction(\n"
                "    a,\n"
                "    [this] {\n"
                "      //\n"
                "    },\n"
-               "    b);\n");
+               "    b);");
 
   // A lambda with a very long line forces arg0 to be pushed out irrespective of
   // the BinPackArguments value (as long as the code is wide enough).
@@ -22304,22 +22303,22 @@ TEST_F(FormatTest, FormatsLambdas) {
       "      "
       "D0000000000000000000000000000000000000000000000000000000000001();\n"
       "    },\n"
-      "    b);\n");
+      "    b);");
 
   // A multi-line lambda is pulled up as long as the introducer fits on the
   // previous line and there are no further args.
   verifyFormat("function(1, [this, that] {\n"
                "  //\n"
-               "});\n");
+               "});");
   verifyFormat("function([this, that] {\n"
                "  //\n"
-               "});\n");
+               "});");
   // FIXME: this format is not ideal and we should consider forcing the first
   // arg onto its own line.
   verifyFormat("function(a, b, c, //\n"
                "         d, [this, that] {\n"
                "           //\n"
-               "         });\n");
+               "         });");
 
   // Multiple lambdas are treated correctly even when there is a short arg0.
   verifyFormat("SomeFunction(\n"
@@ -22330,7 +22329,7 @@ TEST_F(FormatTest, FormatsLambdas) {
                "    [this] {\n"
                "      //\n"
                "    },\n"
-               "    1);\n");
+               "    1);");
 
   // More complex introducers.
   verifyFormat("return [i, args...] {};");
@@ -22666,19 +22665,19 @@ TEST_F(FormatTest, FormatsLambdas) {
   verifyFormat("auto select = [this]() -> const Library::Object *\n"
                "{\n"
                "  return MyAssignment::SelectFromList(this);\n"
-               "};\n",
+               "};",
                LLVMWithBeforeLambdaBody);
 
   verifyFormat("auto select = [this]() -> const Library::Object &\n"
                "{\n"
                "  return MyAssignment::SelectFromList(this);\n"
-               "};\n",
+               "};",
                LLVMWithBeforeLambdaBody);
 
   verifyFormat("auto select = [this]() -> std::unique_ptr<Object>\n"
                "{\n"
                "  return MyAssignment::SelectFromList(this);\n"
-               "};\n",
+               "};",
                LLVMWithBeforeLambdaBody);
 
   verifyFormat("namespace test {\n"
@@ -22699,7 +22698,7 @@ TEST_F(FormatTest, FormatsLambdas) {
                "              result.processMore();\n"
                "            });\n"
                "      });\n"
-               "}\n",
+               "}",
                Style);
   Style.LambdaBodyIndentation = FormatStyle::LBI_OuterScope;
   verifyFormat("Result doSomething(Promise promise) {\n"
@@ -22710,7 +22709,7 @@ TEST_F(FormatTest, FormatsLambdas) {
                "      result.processMore();\n"
                "    });\n"
                "  });\n"
-               "}\n",
+               "}",
                Style);
   verifyFormat("Result doSomething(Promise promise) {\n"
                "  return promise.then([this, obj = std::move(s)] {\n"
@@ -22719,7 +22718,7 @@ TEST_F(FormatTest, FormatsLambdas) {
                "      result.processMore();\n"
                "    });\n"
                "  });\n"
-               "}\n",
+               "}",
                Style);
   verifyFormat("void test() {\n"
                "  ([]() -> auto {\n"
@@ -22738,7 +22737,7 @@ TEST_F(FormatTest, FormatsLambdas) {
   verifyFormat("std::sort(v.begin(), v.end(),\n"
                "          [](const auto &foo, const auto &bar) {\n"
                "  return foo.baz < bar.baz;\n"
-               "});\n",
+               "});",
                Style);
   verifyFormat("void test() {\n"
                "  (\n"
@@ -22948,7 +22947,7 @@ TEST_F(FormatTest, FormatsBlocks) {
                "    }];");
   verifyFormat("void (^largeBlock)(void) = ^{\n"
                "  // ...\n"
-               "};\n",
+               "};",
                getLLVMStyleWithColumns(40));
   verifyFormat("[[SessionService sharedService]\n"
                "    loadWindowWithCompletionBlock: //\n"
@@ -23069,10 +23068,10 @@ TEST_F(FormatTest, FormatsBlocksWithZeroColumnWidth) {
 TEST_F(FormatTest, SupportsCRLF) {
   EXPECT_EQ("int a;\r\n"
             "int b;\r\n"
-            "int c;\r\n",
+            "int c;",
             format("int a;\r\n"
                    "  int b;\r\n"
-                   "    int c;\r\n"));
+                   "    int c;"));
   EXPECT_EQ("int a;\r\n"
             "int b;\r\n"
             "int c;\r\n",
@@ -23081,32 +23080,32 @@ TEST_F(FormatTest, SupportsCRLF) {
                    "    int c;\r\n"));
   EXPECT_EQ("int a;\n"
             "int b;\n"
-            "int c;\n",
+            "int c;",
             format("int a;\r\n"
                    "  int b;\n"
-                   "    int c;\n"));
+                   "    int c;"));
   EXPECT_EQ("\"aaaaaaa \"\r\n"
             "\"bbbbbbb\";\r\n",
             format("\"aaaaaaa bbbbbbb\";\r\n", getLLVMStyleWithColumns(10)));
   EXPECT_EQ("#define A \\\r\n"
             "  b;      \\\r\n"
             "  c;      \\\r\n"
-            "  d;\r\n",
+            "  d;",
             format("#define A \\\r\n"
                    "  b; \\\r\n"
-                   "  c; d; \r\n",
+                   "  c; d; ",
                    getGoogleStyle()));
 
   EXPECT_EQ("/*\r\n"
             "multi line block comments\r\n"
             "should not introduce\r\n"
             "an extra carriage return\r\n"
-            "*/\r\n",
+            "*/",
             format("/*\r\n"
                    "multi line block comments\r\n"
                    "should not introduce\r\n"
                    "an extra carriage return\r\n"
-                   "*/\r\n"));
+                   "*/"));
   EXPECT_EQ("/*\r\n"
             "\r\n"
             "*/",
@@ -23305,11 +23304,11 @@ TEST_F(FormatTest, SpacesInAngles) {
   Spaces.SpacesInAngles = FormatStyle::SIAS_Always;
   verifyFormat("// clang-format off\n"
                "foo<<<1, 1>>>();\n"
-               "// clang-format on\n",
+               "// clang-format on",
                Spaces);
   verifyFormat("// clang-format off\n"
                "foo< < <1, 1> > >();\n"
-               "// clang-format on\n",
+               "// clang-format on",
                Spaces);
 }
 
@@ -23369,7 +23368,7 @@ TEST_F(FormatTest, HandleConflictMarkers) {
             "======= text by the vcs\n"
             "              parameter2, parameter3),\n"
             ">>>>>>> text by the vcs\n"
-            "         otherparameter);\n",
+            "         otherparameter);",
             format("int a;\n"
                    "void f() {\n"
                    "  callme(some(parameter1,\n"
@@ -23382,7 +23381,7 @@ TEST_F(FormatTest, HandleConflictMarkers) {
                    "  parameter2,\n"
                    "  parameter3),\n"
                    ">>>>>>> text by the vcs\n"
-                   "  otherparameter);\n"));
+                   "  otherparameter);"));
 
   // Perforce markers.
   EXPECT_EQ("void f() {\n"
@@ -23394,7 +23393,7 @@ TEST_F(FormatTest, HandleConflictMarkers) {
             "==== text by the vcs\n"
             "      parameter,\n"
             "<<<< text by the vcs\n"
-            "      parameter);\n",
+            "      parameter);",
             format("void f() {\n"
                    "  function(\n"
                    ">>>> text by the vcs\n"
@@ -23404,7 +23403,7 @@ TEST_F(FormatTest, HandleConflictMarkers) {
                    "==== text by the vcs\n"
                    "  parameter,\n"
                    "<<<< text by the vcs\n"
-                   "  parameter);\n"));
+                   "  parameter);"));
 
   EXPECT_EQ("<<<<<<<\n"
             "|||||||\n"
@@ -23435,7 +23434,7 @@ TEST_F(FormatTest, HandleConflictMarkers) {
             "=======\n"
             "Other \\\n"
             ">>>>>>>\n"
-            "    End int i;\n",
+            "    End int i;",
             format("#define Macro \\\n"
                    "<<<<<<<\n"
                    "  Something \\\n"
@@ -23445,7 +23444,7 @@ TEST_F(FormatTest, HandleConflictMarkers) {
                    "  Other \\\n"
                    ">>>>>>>\n"
                    "  End\n"
-                   "int i;\n"));
+                   "int i;"));
 
   verifyFormat(R"(====
 #ifdef A
@@ -23487,14 +23486,14 @@ TEST_F(FormatTest, DisableRegions) {
             " * line */\n"
             "int i;\n"
             "/* clang-format off */\n"
-            "/* long long long long long long line */\n",
+            "/* long long long long long long line */",
             format("// clang-format off\n"
                    "// long long long long long long line\n"
                    "/* clang-format on */\n"
                    "/* long long long long long long line */\n"
                    "int i;\n"
                    "/* clang-format off */\n"
-                   "/* long long long long long long line */\n",
+                   "/* long long long long long long line */",
                    getLLVMStyleWithColumns(20)));
 
   verifyFormat("int *i;\n"
@@ -23664,7 +23663,7 @@ TEST_F(FormatTest, FileAndCode) {
   EXPECT_EQ(FormatStyle::LK_ObjC, guessLanguage("foo.mm", ""));
   EXPECT_EQ(FormatStyle::LK_Cpp, guessLanguage("foo.h", ""));
   EXPECT_EQ(FormatStyle::LK_ObjC,
-            guessLanguage("foo.h", "@interface Foo\n@end\n"));
+            guessLanguage("foo.h", "@interface Foo\n@end"));
   EXPECT_EQ(
       FormatStyle::LK_ObjC,
       guessLanguage("foo.h", "#define TRY(x, y) @try { x; } @finally { y; }"));
@@ -23672,14 +23671,12 @@ TEST_F(FormatTest, FileAndCode) {
             guessLanguage("foo.h", "#define AVAIL(x) @available(x, *))"));
   EXPECT_EQ(FormatStyle::LK_ObjC, guessLanguage("foo.h", "@class Foo;"));
   EXPECT_EQ(FormatStyle::LK_Cpp, guessLanguage("foo", ""));
+  EXPECT_EQ(FormatStyle::LK_ObjC, guessLanguage("foo", "@interface Foo\n@end"));
   EXPECT_EQ(FormatStyle::LK_ObjC,
-            guessLanguage("foo", "@interface Foo\n@end\n"));
+            guessLanguage("foo.h", "int DoStuff(CGRect rect);"));
   EXPECT_EQ(FormatStyle::LK_ObjC,
-            guessLanguage("foo.h", "int DoStuff(CGRect rect);\n"));
-  EXPECT_EQ(
-      FormatStyle::LK_ObjC,
-      guessLanguage("foo.h",
-                    "#define MY_POINT_MAKE(x, y) CGPointMake((x), (y));\n"));
+            guessLanguage(
+                "foo.h", "#define MY_POINT_MAKE(x, y) CGPointMake((x), (y));"));
   EXPECT_EQ(
       FormatStyle::LK_Cpp,
       guessLanguage("foo.h", "#define FOO(...) auto bar = [] __VA_ARGS__;"));
@@ -23689,7 +23686,7 @@ TEST_F(FormatTest, FileAndCode) {
                                    "#define B() C\n"
                                    "#else\n"
                                    "#define B() [NSString a:@\"\"]\n"
-                                   "#endif\n"));
+                                   "#endif"));
 }
 
 TEST_F(FormatTest, GuessLanguageWithCpp11AttributeSpecifiers) {
@@ -24202,8 +24199,8 @@ TEST_F(FormatTest, WhitespaceSensitiveMacros) {
   Style.WhitespaceSensitiveMacros.push_back("FOO");
 
   // Newlines are important here.
-  verifyFormat("FOO(1+2 )\n", Style);
-  verifyFormat("FOO(a:b:c)\n", Style);
+  verifyNoChange("FOO(1+2 )\n", Style);
+  verifyNoChange("FOO(a:b:c)\n", Style);
 
   // Don't use the helpers here, since 'mess up' will change the whitespace
   // and these are all whitespace sensitive by definition
@@ -24312,7 +24309,7 @@ TEST_F(FormatTest, LikelyUnlikely) {
                "  return 29;\n"
                "} else [[likely]] {\n"
                "  return 42;\n"
-               "}\n",
+               "}",
                Style);
 
   verifyFormat("if (argc > 5) [[unlikely]] {\n"
@@ -24321,7 +24318,7 @@ TEST_F(FormatTest, LikelyUnlikely) {
                "  return 99;\n"
                "} else {\n"
                "  return 42;\n"
-               "}\n",
+               "}",
                Style);
 
   verifyFormat("if (argc > 5) [[gnu::unused]] {\n"
@@ -24330,10 +24327,10 @@ TEST_F(FormatTest, LikelyUnlikely) {
                Style);
 
   verifyFormat("if (argc > 5) [[unlikely]]\n"
-               "  return 29;\n",
+               "  return 29;",
                Style);
   verifyFormat("if (argc > 5) [[likely]]\n"
-               "  return 29;\n",
+               "  return 29;",
                Style);
 
   verifyFormat("while (limit > 0) [[unlikely]] {\n"
@@ -24355,7 +24352,7 @@ TEST_F(FormatTest, LikelyUnlikely) {
   Style.AttributeMacros.push_back("UNLIKELY");
   Style.AttributeMacros.push_back("LIKELY");
   verifyFormat("if (argc > 5) UNLIKELY\n"
-               "  return 29;\n",
+               "  return 29;",
                Style);
 
   verifyFormat("if (argc > 5) UNLIKELY {\n"
@@ -24366,19 +24363,19 @@ TEST_F(FormatTest, LikelyUnlikely) {
                "  return 29;\n"
                "} else [[likely]] {\n"
                "  return 42;\n"
-               "}\n",
+               "}",
                Style);
   verifyFormat("if (argc > 5) UNLIKELY {\n"
                "  return 29;\n"
                "} else LIKELY {\n"
                "  return 42;\n"
-               "}\n",
+               "}",
                Style);
   verifyFormat("if (argc > 5) [[unlikely]] {\n"
                "  return 29;\n"
                "} else LIKELY {\n"
                "  return 42;\n"
-               "}\n",
+               "}",
                Style);
 
   verifyFormat("for (auto &limit : limits) UNLIKELY {\n"
@@ -25376,18 +25373,18 @@ TEST_F(FormatTest, IndentAccessModifiers) {
   // Style.IndentWidth == 2, thus yielding a 4 spaces wide indentation.
   verifyFormat("class C {\n"
                "    int i;\n"
-               "};\n",
+               "};",
                Style);
   verifyFormat("union C {\n"
                "    int i;\n"
                "    unsigned u;\n"
-               "};\n",
+               "};",
                Style);
   // Access modifiers should be indented one level below the record.
   verifyFormat("class C {\n"
                "  public:\n"
                "    int i;\n"
-               "};\n",
+               "};",
                Style);
   verifyFormat("class C {\n"
                "  public /* comment */:\n"
@@ -25405,14 +25402,14 @@ TEST_F(FormatTest, IndentAccessModifiers) {
                "\n"
                "  public:\n"
                "    int i;\n"
-               "};\n",
+               "};",
                Style);
   // Enumerations are not records and should be unaffected.
   Style.AllowShortEnumsOnASingleLine = false;
   verifyFormat("enum class E {\n"
                "  A,\n"
                "  B\n"
-               "};\n",
+               "};",
                Style);
   // Test with a different indentation width;
   // also proves that the result is Style.AccessModifierOffset agnostic.
@@ -25420,7 +25417,7 @@ TEST_F(FormatTest, IndentAccessModifiers) {
   verifyFormat("class C {\n"
                "   public:\n"
                "      int i;\n"
-               "};\n",
+               "};",
                Style);
   verifyFormat("class C {\n"
                "   public /**/:\n"
@@ -25615,20 +25612,20 @@ TEST_F(FormatTest, EmptyShortBlock) {
                "  doA();\n"
                "} catch (Exception &e) {\n"
                "  e.printStackTrace();\n"
-               "}\n",
+               "}",
                Style);
 
   verifyFormat("try {\n"
                "  doA();\n"
-               "} catch (Exception &e) {}\n",
+               "} catch (Exception &e) {}",
                Style);
 }
 
 TEST_F(FormatTest, ShortTemplatedArgumentLists) {
   auto Style = getLLVMStyle();
 
-  verifyFormat("template <> struct S : Template<int (*)[]> {};\n", Style);
-  verifyFormat("template <> struct S : Template<int (*)[10]> {};\n", Style);
+  verifyFormat("template <> struct S : Template<int (*)[]> {};", Style);
+  verifyFormat("template <> struct S : Template<int (*)[10]> {};", Style);
   verifyFormat("struct Y : X<[] { return 0; }> {};", Style);
   verifyFormat("struct Y<[] { return 0; }> {};", Style);
 
@@ -26374,7 +26371,7 @@ TEST_F(FormatTest, InsertNewlineAtEOF) {
   FormatStyle Style = getLLVMStyle();
   Style.InsertNewlineAtEOF = true;
 
-  verifyFormat("int i;\n", Style);
+  verifyNoChange("int i;\n", Style);
   verifyFormat("int i;\n", "int i;", Style);
 }
 
@@ -26402,12 +26399,12 @@ TEST_F(FormatTest, InterfaceAsClassMemberName) {
 TEST_F(FormatTest, PreprocessorOverlappingRegions) {
   verifyFormat("#ifdef\n\n"
                "#else\n"
-               "#endif\n",
+               "#endif",
                "#ifdef \n"
                "    \n"
                "\n"
                "#else \n"
-               "#endif \n",
+               "#endif ",
                getGoogleStyle());
 }
 
