@@ -461,12 +461,37 @@ let Defs = [RCX,RDI], isCodeGenOnly = 1 in {
                       "{rep;stosl %eax, %es:(%rdi)|rep stosd es:[rdi], eax}",
                        [(X86rep_stos i32)]>, REP, AdSize64, OpSize32,
                        Requires<[IsLP64]>;
-
   let Uses = [RAX,RCX,RDI] in
   def REP_STOSQ_64 : RI<0xAB, RawFrm, (outs), (ins),
                         "{rep;stosq %rax, %es:(%rdi)|rep stosq es:[rdi], rax}",
                         [(X86rep_stos i64)]>, REP, AdSize64,
                         Requires<[IsLP64]>;
+  let Uses = [RAX,RCX,RDI] in
+  def REP_STOSC_64 : RI<0xAB, RawFrm, (outs), (ins),
+                        "{rep;stosq %rax, %es:(%rdi)|rep stosq es:[rdi], rax}",
+                        [(X86rep_stos iFATPTR128)]>, REP, AdSize64;
+}
+
+let Defs = [RCX,RDI,RSI], Uses = [RCX,RDI,RSI], isCodeGenOnly = 1 in {
+def REP_STOSB_C : I<0xAA, RawFrm, (outs), (ins),
+                    "{rep;stosb (%csi), %es:(%cdi)|rep stosb es:[cdi], [csi]}",
+                    [(X86rep_stos i8)]>, REP, AdSizeCap,
+                   Requires<[IsLP64]>;
+def REP_STOSW_C : I<0xAB, RawFrm, (outs), (ins),
+                    "{rep;stosw (%csi), %es:(%cdi)|rep stosw es:[cdi], [csi]}",
+                    [(X86rep_stos i16)]>, REP, AdSizeCap, OpSize16,
+                   Requires<[IsLP64]>;
+def REP_STOSD_C : I<0xAB, RawFrm, (outs), (ins),
+                    "{rep;stosl (%csi), %es:(%cdi)|rep stosdi es:[cdi], [csi]}",
+                    [(X86rep_stos i32)]>, REP, AdSizeCap, OpSize32,
+                   Requires<[IsLP64]>;
+def REP_STOSQ_C : RI<0xAB, RawFrm, (outs), (ins),
+                    "{rep;stosq (%csi), %es:(%cdi)|rep stosq es:[cdi], [csi]}",
+                    [(X86rep_stos i64)]>, REP, AdSizeCap,
+                   Requires<[IsLP64]>;
+def REP_STOSC_C : CI<0xAB, RawFrm, (outs), (ins),
+                   "{rep;stosc (%csi), %es:(%cdi)|rep stosc es:[cdi], [csi]}",
+                   [(X86rep_stos iFATPTR128)]>, REP, AdSizeCap;
 }
 } // SchedRW
 

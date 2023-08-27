@@ -3491,17 +3491,17 @@ def : InstAlias<"stosb\t$dst", (STOSB dstidx8:$dst),  0>;
 def : InstAlias<"stosw\t$dst", (STOSW dstidx16:$dst), 0>;
 def : InstAlias<"stos{l|d}\t$dst", (STOSL dstidx32:$dst), 0>;
 def : InstAlias<"stosq\t$dst", (STOSQ dstidx64:$dst), 0>, Requires<[In64BitMode]>;
-def : InstAlias<"stosc\t$dst", (STOSC dstidxC:$dst), 0>, Requires<[In64BitMode]>;
+def : InstAlias<"stosc\t$dst", (STOSC dstidxC:$dst), 0>;
 def : InstAlias<"stos\t{%al, $dst|$dst, al}", (STOSB dstidx8:$dst),  0>;
 def : InstAlias<"stos\t{%ax, $dst|$dst, ax}", (STOSW dstidx16:$dst), 0>;
 def : InstAlias<"stos\t{%eax, $dst|$dst, eax}", (STOSL dstidx32:$dst), 0>;
 def : InstAlias<"stos\t{%rax, $dst|$dst, rax}", (STOSQ dstidx64:$dst), 0>, Requires<[In64BitMode]>;
-def : InstAlias<"stos\t{%cax, $dst|$dst, cax}", (STOSC dstidxC:$dst), 0>, Requires<[In64BitMode]>;
+def : InstAlias<"stos\t{%cax, $dst|$dst, cax}", (STOSC dstidxC:$dst), 0>;
 def : InstAlias<"stos\t$dst", (STOSB dstidx8:$dst),  0, "intel">;
 def : InstAlias<"stos\t$dst", (STOSW dstidx16:$dst), 0, "intel">;
 def : InstAlias<"stos\t$dst", (STOSL dstidx32:$dst), 0, "intel">;
 def : InstAlias<"stos\t$dst", (STOSQ dstidx64:$dst), 0, "intel">, Requires<[In64BitMode]>;
-def : InstAlias<"stos\t$dst", (STOSC dstidxC:$dst), 0, "intel">, Requires<[In64BitMode]>;
+def : InstAlias<"stos\t$dst", (STOSC dstidxC:$dst), 0, "intel">;
 
 
 // scas aliases. Accept the destination being omitted because it's implicit
