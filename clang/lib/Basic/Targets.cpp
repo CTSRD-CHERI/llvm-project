@@ -545,8 +545,6 @@ std::unique_ptr<TargetInfo> AllocateTarget(const llvm::Triple &Triple,
       return std::make_unique<DarwinI386TargetInfo>(Triple, Opts);
 
     switch (os) {
-    case llvm::Triple::Ananas:
-      return std::make_unique<AnanasTargetInfo<X86_32TargetInfo>>(Triple, Opts);
     case llvm::Triple::CloudABI:
       return std::make_unique<CloudABITargetInfo<X86_32TargetInfo>>(Triple,
                                                                     Opts);
@@ -609,8 +607,6 @@ std::unique_ptr<TargetInfo> AllocateTarget(const llvm::Triple &Triple,
       return std::make_unique<DarwinX86_64TargetInfo>(Triple, Opts);
 
     switch (os) {
-    case llvm::Triple::Ananas:
-      return std::make_unique<AnanasTargetInfo<X86_64TargetInfo>>(Triple, Opts);
     case llvm::Triple::CloudABI:
       return std::make_unique<CloudABITargetInfo<X86_64TargetInfo>>(Triple,
                                                                     Opts);

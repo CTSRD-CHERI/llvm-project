@@ -187,7 +187,6 @@ public:
   enum OSType {
     UnknownOS,
 
-    Ananas,
     CloudABI,
     Darwin,
     DragonFly,
