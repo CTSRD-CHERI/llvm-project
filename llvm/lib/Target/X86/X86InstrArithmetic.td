@@ -1443,6 +1443,27 @@ def SCBNDmi : Ii32S<0x37, MRM0m, (outs),
                     (ins XiC.MemOperand:$dst, i64i32imm:$src1),
                     "scbnd\t{$src1, $dst|$dst, $src1}",
                     [(store (iFATPTR128 (int_cheri_cap_bounds_set (loadcap addr:$dst), i64immSExt32:$src1)), addr:$dst)]>;
+
+let Constraints = "$src1 = $dst", Defs = [EFLAGS] in
+def SCBNDErr : I<0x27, MRMDestReg, (outs GRC:$dst),
+                     (ins GRC:$src1, GR64:$src2),
+                     "scbnde\t{$src2, $dst|$dst, $src2}",
+                     [(set GRC:$dst, (int_cheri_cap_bounds_set GRC:$src1, GR64:$src2))]>;
+
+def SCBNDEmr : I<0x27, MRMDestMem, (outs),
+                    (ins XiC.MemOperand:$dst, GR64:$src1),
+                    "scbnde\t{$src1, $dst|$dst, $src1}",
+                    [(store (iFATPTR128 (int_cheri_cap_bounds_set (loadcap addr:$dst), GR64:$src1)), addr:$dst)]>;
+
+let Constraints = "$dst = $src1" in
+def SCBNDEri : Ii32S<0x37, MRM1r, (outs GRC:$dst), (ins GRC:$src1, i64i32imm:$src2),
+                    "scbnde\t{$src2, $dst|$dst, $src2}",
+                    [(set GRC:$dst, (int_cheri_cap_bounds_set GRC:$src1, i64immSExt32:$src2))]>;
+
+def SCBNDEmi : Ii32S<0x37, MRM1m, (outs),
+                    (ins XiC.MemOperand:$dst, i64i32imm:$src1),
+                    "scbnde\t{$src1, $dst|$dst, $src1}",
+                    [(store (iFATPTR128 (int_cheri_cap_bounds_set (loadcap addr:$dst), i64immSExt32:$src1)), addr:$dst)]>;
 }
 
 defm AND : ArithBinOp_CF<0x20, 0x22, 0x24, "and", MRM4r, MRM4m,
