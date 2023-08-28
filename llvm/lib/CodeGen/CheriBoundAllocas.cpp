@@ -192,7 +192,6 @@ public:
       PointerType *AllocaPtrTy = AI->getType();
       Value *ArraySize = B.CreateZExtOrTrunc(AI->getArraySize(), SizeTy);
 
-      // Create a new (AS 0) alloca
       // For imprecise capabilities, we need to increase the alignment for
       // on-stack allocations to ensure that we can create precise bounds.
       if (!TLI->cheriCapabilityTypeHasPreciseBounds()) {
