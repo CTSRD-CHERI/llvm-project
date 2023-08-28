@@ -1499,10 +1499,8 @@ llvm::Value *ItaniumCXXABI::EmitTypeid(CodeGenFunction &CGF,
                                        llvm::Type *StdTypeInfoPtrTy) {
   auto *ClassDecl =
       cast<CXXRecordDecl>(SrcRecordTy->castAs<RecordType>()->getDecl());
-  unsigned DefaultAS = CGM.getTargetCodeGenInfo().getDefaultAS();
-  llvm::Value *Value = CGF.GetVTablePtr(
-      ThisPtr, llvm::PointerType::get(CGF.getLLVMContext(), DefaultAS),
-      ClassDecl);
+  llvm::Value *Value = CGF.GetVTablePtr(ThisPtr, CGM.GlobalsInt8PtrTy,
+                                        ClassDecl);
 
   if (CGM.getItaniumVTableContext().isRelativeLayout()) {
     // Load the type info.
