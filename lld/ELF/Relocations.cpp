@@ -1083,8 +1083,8 @@ void RelocationScanner::processAux(RelExpr expr, RelType type, uint64_t offset,
 
   if (expr == R_CHERI_CAPABILITY) {
     static auto getRelocTargetLocation = [&]() -> std::string {
-      auto relocTarget = SymbolAndOffset::fromSectionWithOffset(&sec, offset);
-      return "\n>>> referenced by " + relocTarget.verboseToString();
+      return "\n>>> referenced by " +
+             SymbolAndOffset(&sec, offset).verboseToString();
     };
     if (!canWrite) {
       readOnlyCapRelocsError(sym, getRelocTargetLocation());

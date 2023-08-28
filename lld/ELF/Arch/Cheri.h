@@ -18,34 +18,37 @@ public:
   SymbolAndOffset(Symbol *s, int64_t o) : symOrSec(s), offset(o) {
     assert(s && "Should not be null");
   }
+  SymbolAndOffset(InputSectionBase *isec, int64_t o) : symOrSec(isec), offset(o) {
+    assert(isec && "Should not be null");
+  }
   SymbolAndOffset(const SymbolAndOffset &) = default;
   SymbolAndOffset &operator=(const SymbolAndOffset &) = default;
 
+  inline std::string verboseToString() const {
+    assert(!symOrSec.isNull());
+    SymbolAndOffset resolved = findRealSymbol();
+    if (resolved.symOrSec.is<Symbol *>())
+      return lld::verboseToString(resolved.symOrSec.get<Symbol *>(), offset);
+    return resolved.symOrSec.get<InputSectionBase *>()->getObjMsg(offset);
+  }
   // for __cap_relocs against local symbols clang emits section+offset instead
   // of the local symbol so that it still works even if the local symbol table
   // is stripped. This function tries to find the local symbol to a better match
   SymbolAndOffset findRealSymbol() const;
-
-  static SymbolAndOffset
-  fromSectionWithOffset(InputSectionBase *isec, int64_t offset,
-                        const SymbolAndOffset *Default = nullptr);
-
-  inline std::string verboseToString() const {
-    assert(!symOrSec.isNull());
-    if (symOrSec.is<Symbol *>())
-      return lld::verboseToString(symOrSec.get<Symbol *>(), offset);
-    assert(symOrSec.is<InputSectionBase *>());
-    InputSectionBase *isec = symOrSec.get<InputSectionBase *>();
-    return isec->getObjMsg(offset);
+  Symbol *sym() const {
+    assert(symOrSec.is<Symbol *>());
+    return symOrSec.get<Symbol *>();
   }
-  Symbol *sym() const { return symOrSec.get<Symbol *>(); }
+  bool operator==(const SymbolAndOffset &other) const {
+    return symOrSec == other.symOrSec && offset == other.offset;
+  }
 
   llvm::PointerUnion<Symbol *, InputSectionBase *> symOrSec = nullptr;
   int64_t offset = 0;
 private:
-  SymbolAndOffset(InputSectionBase *isec, int64_t o) : symOrSec(isec), offset(o) {
-    assert(isec && "Should not be null");
-  }
+  static SymbolAndOffset
+  fromSectionWithOffset(InputSectionBase *isec, int64_t offset,
+                        const SymbolAndOffset *Default = nullptr);
 };
 
 struct CheriCapRelocLocation {
@@ -64,8 +67,7 @@ struct CheriCapReloc {
   int64_t capabilityOffset;
   bool needsDynReloc;
   bool operator==(const CheriCapReloc &other) const {
-    return target.symOrSec == other.target.symOrSec &&
-           target.offset == other.target.offset &&
+    return target == other.target &&
            capabilityOffset == other.capabilityOffset &&
            needsDynReloc == other.needsDynReloc;
   }
