@@ -139,14 +139,20 @@ void InternalAllocatorUnlock() SANITIZER_NO_THREAD_SAFETY_ANALYSIS {
 
 // LowLevelAllocator
 constexpr usize kLowLevelAllocatorDefaultAlignment = InternalDefaultAlign;
+constexpr usize kMinNumPagesRounded = 16;
+constexpr usize kMinRoundedSize = 65536;
 static usize low_level_alloc_min_alignment = kLowLevelAllocatorDefaultAlignment;
 static LowLevelAllocateCallback low_level_alloc_callback;
+
+static LowLevelAllocator Alloc;
+LowLevelAllocator &GetGlobalLowLevelAllocator() { return Alloc; }
 
 void *LowLevelAllocator::Allocate(usize size) {
   // Align allocation size.
   size = RoundUpTo(size, low_level_alloc_min_alignment);
   if (allocated_end_ - allocated_current_ < (sptr)size) {
-    usize size_to_allocate = RoundUpTo(size, GetPageSizeCached());
+    usize size_to_allocate = RoundUpTo(
+        size, Min(GetPageSizeCached() * kMinNumPagesRounded, kMinRoundedSize));
     allocated_current_ = (char *)MmapOrDie(size_to_allocate, __func__);
     allocated_end_ = allocated_current_ + size_to_allocate;
     if (low_level_alloc_callback) {
