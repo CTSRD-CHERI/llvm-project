@@ -67,8 +67,7 @@ bool CheriNeedBoundsChecker::useNeedsBounds(const Use &U,
   switch (I->getOpcode()) {
   case Instruction::Call:
   case Instruction::Invoke: {
-    auto CI = cast<CallBase>(I);
-    switch (CI->getIntrinsicID()) {
+    switch (cast<CallBase>(I)->getIntrinsicID()) {
     case Intrinsic::not_intrinsic:
       // not an intrinsic call -> always need bounds:
       DBG_INDENTED("Adding stack bounds since it is passed to call: ";
@@ -272,7 +271,7 @@ bool CheriNeedBoundsChecker::canLoadStoreBeOutOfBounds(
   assert(MinSizeInBytes && "dynamic size alloca should have been checked earlier");
   Type *LoadStoreType = nullptr;
   if (auto CmpXchg = dyn_cast<AtomicCmpXchgInst>(I)) {
-    if (U.get() != CmpXchg->getPointerOperand()) {
+    if (U.getOperandNo() != CmpXchg->getPointerOperandIndex()) {
       DBG_INDENTED(
           "Stack slot used as value and not pointer -> must set bounds\n";);
       return true;
@@ -280,20 +279,20 @@ bool CheriNeedBoundsChecker::canLoadStoreBeOutOfBounds(
     LoadStoreType = CmpXchg->getNewValOperand()->getType();
   } else if (auto RMW = dyn_cast<AtomicRMWInst>(I)) {
     LoadStoreType = RMW->getValOperand()->getType();
-    if (U.get() != RMW->getPointerOperand()) {
+    if (U.getOperandNo() != RMW->getPointerOperandIndex()) {
       DBG_INDENTED(
           "Stack slot used as value and not pointer -> must set bounds\n";);
       return true;
     }
   } else if (const auto *Store = dyn_cast<StoreInst>(I)) {
-    if (U.get() != Store->getPointerOperand()) {
+    if (U.getOperandNo() != Store->getPointerOperandIndex()) {
       DBG_INDENTED(
           "Stack slot used as value and not pointer -> must set bounds\n";);
       return true;
     }
     LoadStoreType = Store->getValueOperand()->getType();
   } else if (const auto *Load = dyn_cast<LoadInst>(I)) {
-    assert(U.get() == Load->getPointerOperand() && "Invalid load?");
+    assert(U.getOperandNo() == Load->getPointerOperandIndex() && "Invalid load?");
     LoadStoreType = Load->getType();
   } else {
     llvm_unreachable("Invalid load/store type");

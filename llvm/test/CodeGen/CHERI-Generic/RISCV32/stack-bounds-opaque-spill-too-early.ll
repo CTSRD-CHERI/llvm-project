@@ -14,15 +14,14 @@ target datalayout = "e-m:e-pf200:64:64:64:32-p:32:32-i64:64-n32-S128-A200-P200-G
 ; DBG-NEXT: cheri-bound-allocas:   -Load/store is in bounds -> can reuse $csp for   %0 = load ptr addrspace(200), ptr addrspace(200) %cap, align 8
 ; DBG-NEXT: cheri-bound-allocas:  -Adding stack bounds since it is passed to call:   %call = call ptr addrspace(200) @cheribsdtest_dynamic_identity_cap(ptr addrspace(200) noundef nonnull %cap)
 ; DBG-NEXT: cheri-bound-allocas: Found alloca use that needs bounds:   %call = call ptr addrspace(200) @cheribsdtest_dynamic_identity_cap(ptr addrspace(200) noundef nonnull %cap)
-; FIXME: The load with the %cap argument as the stored value should need bounds!
 ; DBG-NEXT: cheri-bound-allocas:  -Checking if load/store needs bounds (GEP offset is 0):   store ptr addrspace(200) %cap, ptr addrspace(200) %cap, align 8
 ; DBG-NEXT: cheri-bound-allocas:   -Load/store size=8, alloca size=8, current GEP offset=0 for ptr addrspace(200)
 ; DBG-NEXT: cheri-bound-allocas:   -Load/store is in bounds -> can reuse $csp for   store ptr addrspace(200) %cap, ptr addrspace(200) %cap, align 8
 ; DBG-NEXT: cheri-bound-allocas:  -Checking if load/store needs bounds (GEP offset is 0):   store ptr addrspace(200) %cap, ptr addrspace(200) %cap, align 8
-; DBG-NEXT: cheri-bound-allocas:   -Load/store size=8, alloca size=8, current GEP offset=0 for ptr addrspace(200)
-; DBG-NEXT: cheri-bound-allocas:   -Load/store is in bounds -> can reuse $csp for   store ptr addrspace(200) %cap, ptr addrspace(200) %cap, align 8
+; DBG-NEXT: cheri-bound-allocas:   -Stack slot used as value and not pointer -> must set bounds
+; DBG-NEXT: cheri-bound-allocas: Found alloca use that needs bounds: store ptr addrspace(200) %cap, ptr addrspace(200) %cap, align 8
 ; DBG-NEXT: cheri-bound-allocas:  -No need for stack bounds for lifetime_{start,end}:   call void @llvm.lifetime.start.p200(i64 8, ptr addrspace(200) nonnull %cap)
-; DBG-NEXT: cheri-bound-allocas: lazy_bind_args: 1 of 5 users need bounds for   %cap = alloca ptr addrspace(200), align 8, addrspace(200)
+; DBG-NEXT: cheri-bound-allocas: lazy_bind_args: 2 of 5 users need bounds for   %cap = alloca ptr addrspace(200), align 8, addrspace(200)
 ; DBG-NEXT: lazy_bind_args: setting bounds on stack alloca to 8  %cap = alloca ptr addrspace(200), align 8, addrspace(200)
 
 declare void @llvm.lifetime.start.p200(i64 immarg, ptr addrspace(200) nocapture) addrspace(200)
@@ -37,8 +36,8 @@ define dso_local void @lazy_bind_args() addrspace(200) nounwind {
 ; ASM-NEXT:    cincoffset csp, csp, -16
 ; ASM-NEXT:    csc cra, 8(csp) # 8-byte Folded Spill
 ; ASM-NEXT:    cincoffset ca0, csp, 0
-; ASM-NEXT:    csc ca0, 0(csp)
 ; ASM-NEXT:    csetbounds ca0, ca0, 8
+; ASM-NEXT:    csc ca0, 0(csp)
 ; ASM-NEXT:    ccall cheribsdtest_dynamic_identity_cap
 ; ASM-NEXT:    clc ca1, 0(csp)
 ; ASM-NEXT:    cmove ca2, ca0
@@ -53,11 +52,12 @@ define dso_local void @lazy_bind_args() addrspace(200) nounwind {
 ; CHECK-NEXT:  entry:
 ; CHECK-NEXT:    [[CAP:%.*]] = alloca ptr addrspace(200), align 8, addrspace(200)
 ; CHECK-NEXT:    call void @llvm.lifetime.start.p200(i64 8, ptr addrspace(200) nonnull [[CAP]])
-; CHECK-NEXT:    store ptr addrspace(200) [[CAP]], ptr addrspace(200) [[CAP]], align 8
 ; CHECK-NEXT:    [[TMP0:%.*]] = call ptr addrspace(200) @llvm.cheri.bounded.stack.cap.i32(ptr addrspace(200) [[CAP]], i32 8)
-; CHECK-NEXT:    [[CALL:%.*]] = call ptr addrspace(200) @cheribsdtest_dynamic_identity_cap(ptr addrspace(200) noundef nonnull [[TMP0]])
-; CHECK-NEXT:    [[TMP1:%.*]] = load ptr addrspace(200), ptr addrspace(200) [[CAP]], align 8
-; CHECK-NEXT:    call void @cheribsdtest_check_cap_eq(ptr addrspace(200) noundef [[TMP1]], ptr addrspace(200) noundef [[CALL]])
+; CHECK-NEXT:    store ptr addrspace(200) [[TMP0]], ptr addrspace(200) [[CAP]], align 8
+; CHECK-NEXT:    [[TMP1:%.*]] = call ptr addrspace(200) @llvm.cheri.bounded.stack.cap.i32(ptr addrspace(200) [[CAP]], i32 8)
+; CHECK-NEXT:    [[CALL:%.*]] = call ptr addrspace(200) @cheribsdtest_dynamic_identity_cap(ptr addrspace(200) noundef nonnull [[TMP1]])
+; CHECK-NEXT:    [[TMP2:%.*]] = load ptr addrspace(200), ptr addrspace(200) [[CAP]], align 8
+; CHECK-NEXT:    call void @cheribsdtest_check_cap_eq(ptr addrspace(200) noundef [[TMP2]], ptr addrspace(200) noundef [[CALL]])
 ; CHECK-NEXT:    ret void
 ;
 entry:

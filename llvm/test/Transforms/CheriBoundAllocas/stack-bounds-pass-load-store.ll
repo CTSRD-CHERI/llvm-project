@@ -190,7 +190,6 @@ entry:
 
 
 ; This is a regression test for opaque pointers breaking the "is value being stored" analysis
-; FIXME: this is currently being miscompiled!
 define i8 addrspace(200)* @store_stack_to_self() addrspace(200) nounwind {
 ; CHECK-LABEL: @store_stack_to_self(
 ; CHECK-NEXT:  entry:
@@ -206,7 +205,8 @@ define i8 addrspace(200)* @store_stack_to_self() addrspace(200) nounwind {
 ; OPAQUE-LABEL: @store_stack_to_self(
 ; OPAQUE-NEXT:  entry:
 ; OPAQUE-NEXT:    [[SLOT_SELF:%.*]] = alloca ptr addrspace(200), align 16, addrspace(200)
-; OPAQUE-NEXT:    store ptr addrspace(200) [[SLOT_SELF]], ptr addrspace(200) [[SLOT_SELF]], align 16
+; OPAQUE-NEXT:    [[TMP0:%.*]] = call ptr addrspace(200) @llvm.cheri.bounded.stack.cap.i64(ptr addrspace(200) [[SLOT_SELF]], i64 16)
+; OPAQUE-NEXT:    store ptr addrspace(200) [[TMP0]], ptr addrspace(200) [[SLOT_SELF]], align 16
 ; OPAQUE-NEXT:    [[LEAKED_VALUE:%.*]] = load ptr addrspace(200), ptr addrspace(200) [[SLOT_SELF]], align 16
 ; OPAQUE-NEXT:    ret ptr addrspace(200) [[LEAKED_VALUE]]
 ;
@@ -231,15 +231,13 @@ entry:
 ; DBG-TYPED-NEXT: cheri-bound-allocas:  -Adding stack bounds since bitcast user needs bounds:   store i8 addrspace(200)* %leak, i8 addrspace(200)* addrspace(200)* %slot_self, align 16
 ; DBG-TYPED-NEXT: cheri-bound-allocas: Found alloca use that needs bounds: %leak = bitcast i8 addrspace(200)* addrspace(200)* %slot_self to i8 addrspace(200)*
 ; DBG-OPAQUE-NEXT: cheri-bound-allocas:  -Checking if load/store needs bounds (GEP offset is 0):   store ptr addrspace(200) %slot_self, ptr addrspace(200) %slot_self, align 16
-; DBG-OPAQUE-NEXT: cheri-bound-allocas:   -Load/store size=16, alloca size=16, current GEP offset=0 for ptr addrspace(200)
-; DBG-OPAQUE-NEXT: cheri-bound-allocas:   -Load/store is in bounds -> can reuse $csp for   store ptr addrspace(200) %slot_self, ptr addrspace(200) %slot_self, align 16
+; DBG-OPAQUE-NEXT: cheri-bound-allocas:   -Stack slot used as value and not pointer -> must set bounds
+; DBG-OPAQUE-NEXT: cheri-bound-allocas: Found alloca use that needs bounds:   store ptr addrspace(200) %slot_self, ptr addrspace(200) %slot_self, align 16
 ; DBG-OPAQUE-NEXT: cheri-bound-allocas:  -Checking if load/store needs bounds (GEP offset is 0):   %leaked_value = load ptr addrspace(200), ptr addrspace(200) %slot_self, align 16
 ; DBG-OPAQUE-NEXT: cheri-bound-allocas:   -Load/store size=16, alloca size=16, current GEP offset=0 for ptr addrspace(200)
 ; DBG-OPAQUE-NEXT: cheri-bound-allocas:   -Load/store is in bounds -> can reuse $csp for   %leaked_value = load ptr addrspace(200), ptr addrspace(200) %slot_self, align 16
 ; DBG-OPAQUE-NEXT: cheri-bound-allocas:  -Checking if load/store needs bounds (GEP offset is 0):   store ptr addrspace(200) %slot_self, ptr addrspace(200) %slot_self, align 16
 ; DBG-OPAQUE-NEXT: cheri-bound-allocas:   -Load/store size=16, alloca size=16, current GEP offset=0 for ptr addrspace(200)
 ; DBG-OPAQUE-NEXT: cheri-bound-allocas:   -Load/store is in bounds -> can reuse $csp for   store ptr addrspace(200) %slot_self, ptr addrspace(200) %slot_self, align 16
-; FIXME: this is a miscompilation!
-; DBG-OPAQUE-NEXT: cheri-bound-allocas: store_stack_to_self: 0 of 3 users need bounds for   %slot_self = alloca ptr addrspace(200), align 16, addrspace(200)
-; DBG-TYPED-NEXT: cheri-bound-allocas: store_stack_to_self: 1 of 3 users need bounds for   %slot_self = alloca {{.+}}, align 16, addrspace(200)
-; DBG-TYPED-NEXT: store_stack_to_self: setting bounds on stack alloca to 16  %slot_self = alloca {{.+}}, align 16, addrspace(200)
+; DBG-NEXT: cheri-bound-allocas: store_stack_to_self: 1 of 3 users need bounds for   %slot_self = alloca {{.+}}, align 16, addrspace(200)
+; DBG-NEXT: store_stack_to_self: setting bounds on stack alloca to 16  %slot_self = alloca {{.+}}, align 16, addrspace(200)
