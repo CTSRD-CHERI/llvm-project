@@ -1,17 +1,17 @@
-// RUN: %cheri_cc1 -fno-rtti -std=c++14 -target-abi purecap -fsyntax-only -fdump-record-layouts %s -emit-llvm -o /dev/null | %cheri_FileCheck %s
+// RUN: %cheri_cc1 -fno-rtti -std=c++14 -target-abi purecap -fsyntax-only -fdump-record-layouts %s -emit-llvm -o /dev/null | FileCheck %s
 // CHECK:      *** Dumping AST Record Layout
 // CHECK-NEXT:         0 | class error_category
 // CHECK-NEXT:         0 |   (error_category vtable pointer)
-// CHECK-NEXT:           | [sizeof=[[#CAP_SIZE]],
-// CHECK-SAME:              dsize=[[#CAP_SIZE]], align=[[#CAP_SIZE]],
-// CHECK-NEXT:           |  nvsize=[[#CAP_SIZE]], nvalign=[[#CAP_SIZE]]]
+// CHECK-NEXT:           | [sizeof=16,
+// CHECK-SAME:              dsize=16, align=16,
+// CHECK-NEXT:           |  nvsize=16, nvalign=16]
 
 // CHECK:      *** Dumping AST Record Layout
 // CHECK-NEXT:          0 | class __do_message
 // CHECK-NEXT:          0 |   class error_category (primary base)
 // CHECK-NEXT:          0 |     (error_category vtable pointer)
-// CHECK-NEXT:            | [sizeof=[[#CAP_SIZE]], dsize=[[#CAP_SIZE]], align=[[#CAP_SIZE]],
-// CHECK-NEXT:            |  nvsize=[[#CAP_SIZE]], nvalign=[[#CAP_SIZE]]]
+// CHECK-NEXT:            | [sizeof=16, dsize=16, align=16,
+// CHECK-NEXT:            |  nvsize=16, nvalign=16]
 
 
 // CHECK:      *** Dumping AST Record Layout
@@ -19,8 +19,8 @@
 // CHECK-NEXT:          0 |   class __do_message (primary base)
 // CHECK-NEXT:          0 |     class error_category (primary base)
 // CHECK-NEXT:          0 |       (error_category vtable pointer)
-// CHECK-NEXT:            | [sizeof=[[#CAP_SIZE]], dsize=[[#CAP_SIZE]], align=[[#CAP_SIZE]],
-// CHECK-NEXT:            |  nvsize=[[#CAP_SIZE]], nvalign=[[#CAP_SIZE]]]
+// CHECK-NEXT:            | [sizeof=16, dsize=16, align=16,
+// CHECK-NEXT:            |  nvsize=16, nvalign=16]
 
 
 #define _LIBCPP_ALWAYS_INLINE     __attribute__ ((__always_inline__))

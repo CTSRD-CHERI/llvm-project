@@ -3,8 +3,8 @@
 // RUNNOT: %clang_cc1 -O0 -triple=x86_64-unknown-linux -fcolor-diagnostics %s -o - -fsanitize=address -emit-llvm -mllvm -debug
 // RUNNOT: %clang_cc1 -O0 -triple=x86_64-unknown-linux -fcolor-diagnostics %s -o - -fsanitize=local-bounds,array-bounds,object-size -emit-llvm -mllvm -debug
 // RUNNOT: %clang_cc1 -O2 -triple=x86_64-unknown-linux -fcolor-diagnostics %s -o - -fsanitize=local-bounds,array-bounds,object-size -emit-llvm
-// RUN: %cheri_purecap_cc1 -cheri-bounds=references-only -O2 -std=c++17 -emit-llvm %s -o - -mllvm -debug-only=cheri-bounds 2>%t.dbg -print-stats | %cheri_FileCheck %s
-// RUN: %cheri_FileCheck %s -check-prefix DEBUG-MSG -input-file=%t.dbg
+// RUN: %cheri_purecap_cc1 -cheri-bounds=references-only -O2 -std=c++17 -emit-llvm %s -o - -mllvm -debug-only=cheri-bounds 2>%t.dbg -print-stats | FileCheck %s
+// RUN: FileCheck %s -check-prefix DEBUG-MSG -input-file=%t.dbg
 
 class Foo {
 public:
@@ -87,10 +87,10 @@ TEST_PTR_TO_REF(double)
 
 // Or void*
 TEST_PTR_TO_REF(void *)
-// DEBUG-MSG-NEXT: Found scalar type -> setting bounds for 'void * __capability' reference to [[#CAP_SIZE]]
+// DEBUG-MSG-NEXT: Found scalar type -> setting bounds for 'void * __capability' reference to 16
 // CHECK-LABEL: define dso_local void @_Z10test_derefPPv(ptr addrspace(200)
 // CHECK: call ptr addrspace(200) @llvm.cheri.cap.bounds.set.i64(ptr addrspace(200) %{{.+}},
-// CHECK-SAME: i64 [[#CAP_SIZE]])
+// CHECK-SAME: i64 16)
 
 enum Enum1 { E1 };
 // Enum size is known -> set bounds

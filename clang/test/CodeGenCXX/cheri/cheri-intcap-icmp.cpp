@@ -1,4 +1,4 @@
-// RUN: %cheri_purecap_cc1 -x c++ -std=c++11 -emit-llvm -o - %s | %cheri_FileCheck %s
+// RUN: %cheri_purecap_cc1 -x c++ -std=c++11 -emit-llvm -o - %s | FileCheck %s
 // Check that the boolean result of integer comparisions are zero extended and not sign extended, to be consistent with non-CHERI C++ behaviour
 
 void foo() {

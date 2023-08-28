@@ -1,4 +1,4 @@
-// RUN: %cheri_purecap_cc1 %s -fno-rtti -std=c++11 -o - -emit-llvm | %cheri_FileCheck %s
+// RUN: %cheri_purecap_cc1 %s -fno-rtti -std=c++11 -o - -emit-llvm | FileCheck %s
 
 union tt {
   void * tt[1];

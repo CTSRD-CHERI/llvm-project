@@ -1,4 +1,4 @@
-// RUN: %cheri_purecap_cc1 -fno-rtti -std=c++11 -emit-llvm -o - %s | %cheri_FileCheck %s -check-prefixes CHECK
+// RUN: %cheri_purecap_cc1 -fno-rtti -std=c++11 -emit-llvm -o - %s | FileCheck %s
 // RUN: %cheri_purecap_cc1 -fno-rtti -std=c++11 -emit-llvm -o /dev/null \
 // RUN:   -fdump-vtable-layouts -fdump-record-layouts %s 2>&1 | %cheri_FileCheck -check-prefix=CHECK-VTABLE-LAYOUT %s
 
@@ -26,15 +26,15 @@
 // CHECK-VTABLE-LAYOUT:      *** Dumping AST Record Layout
 // CHECK-VTABLE-LAYOUT-NEXT:          0 | class A
 // CHECK-VTABLE-LAYOUT-NEXT:          0 |   (A vtable pointer)
-// CHECK-VTABLE-LAYOUT-NEXT:            | [sizeof=[[#CAP_SIZE]],
-// CHECK-VTABLE-LAYOUT-SAME:               dsize=[[#CAP_SIZE]], align=[[#CAP_SIZE]],
-// CHECK-VTABLE-LAYOUT-NEXT:            |  nvsize=[[#CAP_SIZE]], nvalign=[[#CAP_SIZE]]]
+// CHECK-VTABLE-LAYOUT-NEXT:            | [sizeof=16,
+// CHECK-VTABLE-LAYOUT-SAME:               dsize=16, align=16,
+// CHECK-VTABLE-LAYOUT-NEXT:            |  nvsize=16, nvalign=16]
 // CHECK-VTABLE-LAYOUT:      *** Dumping AST Record Layout
 // CHECK-VTABLE-LAYOUT-NEXT:          0 | class B
 // CHECK-VTABLE-LAYOUT-NEXT:          0 |   class A (primary base)
 // CHECK-VTABLE-LAYOUT-NEXT:          0 |     (A vtable pointer)
-// CHECK-VTABLE-LAYOUT-NEXT:            | [sizeof=[[#CAP_SIZE]], dsize=[[#CAP_SIZE]], align=[[#CAP_SIZE]],
-// CHECK-VTABLE-LAYOUT-NEXT:            |  nvsize=[[#CAP_SIZE]], nvalign=[[#CAP_SIZE]]]
+// CHECK-VTABLE-LAYOUT-NEXT:            | [sizeof=16, dsize=16, align=16,
+// CHECK-VTABLE-LAYOUT-NEXT:            |  nvsize=16, nvalign=16]
 // CHECK-VTABLE-LAYOUT:      Layout: <CGRecordLayout
 // CHECK-VTABLE-LAYOUT-NEXT:   LLVMType:%class.A = type { ptr addrspace(200) }
 // CHECK-VTABLE-LAYOUT-NEXT:   NonVirtualBaseLLVMType:%class.A = type { ptr addrspace(200) }

@@ -1,13 +1,13 @@
 // RUN: %cheri_purecap_cc1 -emit-llvm \
-// RUN:  -fdump-record-layouts -verify %s -o /dev/null 2>&1 | %cheri_FileCheck %s
+// RUN:  -fdump-record-layouts -verify %s -o /dev/null 2>&1 | FileCheck %s
 // expected-no-diagnostics
 
 // CHECK-LABEL: *** Dumping AST Record Layout
 // CHECK-NEXT:  0 | class Foo
 // CHECK-NEXT:  0 |   class A & __capability _a
-// CHECK-NEXT:    | [sizeof=[[#CAP_SIZE]],
-// CHECK-SAME:       dsize=[[#CAP_SIZE]], align=[[#CAP_SIZE]],
-// CHECK-NEXT:    |  nvsize=[[#CAP_SIZE]], nvalign=[[#CAP_SIZE]]]
+// CHECK-NEXT:    | [sizeof=16,
+// CHECK-SAME:       dsize=16, align=16,
+// CHECK-NEXT:    |  nvsize=16, nvalign=16]
 
 // CHECK-LABEL: *** Dumping AST Record Layout
 // CHECK-NEXT:  0 | class A (empty)
@@ -18,14 +18,14 @@
 // CHECK-NEXT:     0 | class Bar
 // CHECK-NEXT:     0 |   class Foo (base)
 // CHECK-NEXT:     0 |     class A & __capability _a
-// CHECK-NEXT:    [[#CAP_SIZE]] |   int x
-// CHECK-NEXT:       | [sizeof=[[#CAP_SIZE * 2]], dsize=[[#CAP_SIZE + 4]], align=[[#CAP_SIZE]],
-// CHECK-NEXT:       |  nvsize=[[#CAP_SIZE + 4]], nvalign=[[#CAP_SIZE]]]
+// CHECK-NEXT:    16 |   int x
+// CHECK-NEXT:       | [sizeof=32, dsize=20, align=16,
+// CHECK-NEXT:       |  nvsize=20, nvalign=16]
 
 // CHECK-LABEL: *** Dumping IRgen Record Layout
 // CHECK: LLVMType:%class.A = type { i8 }
 // CHECK: LLVMType:%class.Foo = type { ptr addrspace(200) }
-// CHECK: LLVMType:%class.Bar = type <{ %class.Foo, i32, {{\[}}[[#CAP_SIZE - 4]] x i8] }>
+// CHECK: LLVMType:%class.Bar = type <{ %class.Foo, i32, [12 x i8] }>
 
 class A {};
 
