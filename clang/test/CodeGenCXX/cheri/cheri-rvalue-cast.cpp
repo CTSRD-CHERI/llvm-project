@@ -1,6 +1,6 @@
 // taken from temporaries.cpp (which crashed when run with target cheri)
 // RUN: %cheri_cc1 -fno-rtti -target-abi purecap -std=c++11 -DCHECK_ERROR -fsyntax-only -verify %s
-// RUN: %cheri_cc1 -fno-rtti -mllvm -cheri-cap-table-abi=pcrel -emit-llvm %s -o -  -target-abi purecap -std=c++11 | %cheri_FileCheck %s -check-prefixes CHECK
+// RUN: %cheri_cc1 -fno-rtti -mllvm -cheri-cap-table-abi=pcrel -emit-llvm %s -o -  -target-abi purecap -std=c++11 | FileCheck %s
 
 namespace PR20227 {
 struct A {
@@ -12,7 +12,7 @@ struct B {
 struct C : B {};
 
 A &&a = dynamic_cast<A &&>(A{}); // this is valid even with -fno-rtti as it only does lifetime extension
-// CHECK: @_ZN7PR202271aE = addrspace(200) global %"struct.PR20227::A" addrspace(200)* null, align [[#CAP_SIZE]]
+// CHECK: @_ZN7PR202271aE = addrspace(200) global ptr addrspace(200) null, align 16
 // CHECK: @_ZGRN7PR202271aE_ = internal addrspace(200) global %"struct.PR20227::A" zeroinitializer, align 1
 
 #ifdef CHECK_ERROR
@@ -21,24 +21,22 @@ B &&b = dynamic_cast<C &&>(dynamic_cast<B &&>(C{})); // expected-error {{use of 
 #endif
 
 B &&c = static_cast<C &&>(static_cast<B &&>(C{}));
-// CHECK: @_ZN7PR202271cE = addrspace(200) global %"struct.PR20227::B" addrspace(200)* null, align [[#CAP_SIZE]]
-// CHECK: @_ZGRN7PR202271cE_ = internal addrspace(200) global %"struct.PR20227::C" zeroinitializer, align [[#CAP_SIZE]]
+// CHECK: @_ZN7PR202271cE = addrspace(200) global ptr addrspace(200) null, align 16
+// CHECK: @_ZGRN7PR202271cE_ = internal addrspace(200) global %"struct.PR20227::C" zeroinitializer, align 16
 } // namespace PR20227
 
 // CHECK-LABEL: define internal void @__cxx_global_var_init()
-// CHECK: call i32 @__cxa_atexit(void (i8 addrspace(200)*) addrspace(200)*
-// CHECK-SAME: bitcast (void (%"struct.PR20227::A" addrspace(200)*) addrspace(200)* @_ZN7PR202271AD1Ev to void (i8 addrspace(200)*) addrspace(200)*),
-// CHECK-SAME:  i8 addrspace(200)* getelementptr inbounds (%"struct.PR20227::A", %"struct.PR20227::A" addrspace(200)* @_ZGRN7PR202271aE_, i32 0, i32 0), i8 addrspace(200)* @__dso_handle) #2
-// CHECK:   store %"struct.PR20227::A" addrspace(200)* @_ZGRN7PR202271aE_, %"struct.PR20227::A" addrspace(200)* addrspace(200)* @_ZN7PR202271aE, align [[#CAP_SIZE]]
+// CHECK: call i32 @__cxa_atexit(ptr addrspace(200) @_ZN7PR202271AD1Ev,
+// CHECK-SAME:  ptr addrspace(200) @_ZGRN7PR202271aE_, ptr addrspace(200) @__dso_handle) #2
+// CHECK:   store ptr addrspace(200) @_ZGRN7PR202271aE_, ptr addrspace(200) @_ZN7PR202271aE, align 16
 // CHECK:   ret void
 
-// CHECK: declare i32 @__cxa_atexit(void (i8 addrspace(200)*) addrspace(200)*, i8 addrspace(200)*, i8 addrspace(200)*)
+// CHECK: declare i32 @__cxa_atexit(ptr addrspace(200), ptr addrspace(200), ptr addrspace(200))
 
 // CHECK-LABEL: define internal void @__cxx_global_var_init.1()
-// CHECK:    call void @llvm.memset.p200i8.i64(i8 addrspace(200)* align [[#CAP_SIZE]] bitcast (%"struct.PR20227::C" addrspace(200)* @_ZGRN7PR202271cE_ to i8 addrspace(200)*), i8 0, i64 [[#CAP_SIZE]], i1 false)
-// CHECK:    call void @_ZN7PR202271CC1Ev(%"struct.PR20227::C" addrspace(200)* noundef nonnull align 16 dereferenceable(16) @_ZGRN7PR202271cE_) #2
-// CHECK:    call i32 @__cxa_atexit(void (i8 addrspace(200)*) addrspace(200)*
-// CHECK-SAME: bitcast (void (%"struct.PR20227::C" addrspace(200)*) addrspace(200)* @_ZN7PR202271CD1Ev to void (i8 addrspace(200)*) addrspace(200)*),
-// CHECK-SAME:  i8 addrspace(200)* bitcast (%"struct.PR20227::C" addrspace(200)* @_ZGRN7PR202271cE_ to i8 addrspace(200)*), i8 addrspace(200)* @__dso_handle) #2
-// CHECK:    store %"struct.PR20227::B" addrspace(200)* getelementptr inbounds (%"struct.PR20227::C", %"struct.PR20227::C" addrspace(200)* @_ZGRN7PR202271cE_, i32 0, i32 0), %"struct.PR20227::B" addrspace(200)* addrspace(200)* @_ZN7PR202271cE, align [[#CAP_SIZE]]
+// CHECK:    call void @llvm.memset.p200.i64(ptr addrspace(200) align 16 @_ZGRN7PR202271cE_, i8 0, i64 16, i1 false)
+// CHECK:    call void @_ZN7PR202271CC1Ev(ptr addrspace(200) noundef nonnull align 16 dereferenceable(16) @_ZGRN7PR202271cE_)
+// CHECK:    call i32 @__cxa_atexit(ptr addrspace(200) @_ZN7PR202271CD1Ev,
+// CHECK-SAME:  ptr addrspace(200) @_ZGRN7PR202271cE_, ptr addrspace(200) @__dso_handle) #2
+// CHECK:    store ptr addrspace(200) @_ZGRN7PR202271cE_, ptr addrspace(200) @_ZN7PR202271cE, align 16
 // CHECK:    ret void
