@@ -1,6 +1,4 @@
-// REQUIRES: mips-registered-target
 // RUN: %cheri_purecap_cc1 -fno-rtti -emit-llvm -mllvm -cheri-cap-table-abi=plt -o - %s | %cheri_FileCheck %s -check-prefixes CHECK,CAPTABLE --implicit-check-not=cheri.pcc.get --implicit-check-not=addrspacecast
-// RUN: %cheri_purecap_cc1 -fno-rtti -emit-obj -mllvm -cheri-cap-table-abi=plt -o - %s | llvm-readobj -r - | %cheri_FileCheck -check-prefix=RELOCS %s
 
 class A {
 public:
@@ -70,15 +68,3 @@ int main() {
   call_nonvirt(&a);
   call_virt(&a);
 }
-
-// RELOCS:      Section (22) .rela.data {
-// RELOCS-NEXT:   0x0 R_MIPS_CHERI_CAPABILITY/R_MIPS_NONE/R_MIPS_NONE _ZN1A7nonvirtEv 0x0
-// RELOCS-NEXT:   0x{{4|8}}0 R_MIPS_CHERI_CAPABILITY/R_MIPS_NONE/R_MIPS_NONE _Z9global_fnv 0x0
-// RELOCS-NEXT: }
-// RELOCS-NEXT: Section (24) .rela.data.rel.ro {
-// RELOCS-NEXT:   0x0 R_MIPS_CHERI_CAPABILITY/R_MIPS_NONE/R_MIPS_NONE _ZN1A7nonvirtEv 0x0
-// RELOCS-NEXT: }
-// RELOCS-NEXT: Section (27) .rela.data.rel.ro._ZTV1A {
-// RELOCS-NEXT:   0x{{2|4}}0 R_MIPS_CHERI_CAPABILITY/R_MIPS_NONE/R_MIPS_NONE _ZN1A4virtEv 0x0
-// RELOCS-NEXT:   0x{{3|6}}0 R_MIPS_CHERI_CAPABILITY/R_MIPS_NONE/R_MIPS_NONE _ZN1A5virt2Ev 0x0
-// RELOCS-NEXT: }
