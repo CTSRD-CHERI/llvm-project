@@ -241,3 +241,56 @@ void test3(union WithVLA1 *un1, union WithVLA2 *un2, union WithVLA3 *un3) {
   // aggressive-remark@-1{{setting sub-object bounds for field 'f' (pointer to 'float') to remaining bytes (containing union includes a variable length array)}}
   // very-aggressive-remark@-2{{setting sub-object bounds for field 'f' (pointer to 'float') to 4 bytes}}
 }
+
+/// Regression test for a miscompilation post-LLVM-15 merge: we were setting bounds prior to the GEP in
+/// This happened when calling``sx_init_flags(&rm->rm_lock_sx,` which is a
+/// macro that expands to setting bounds on a nested union.
+struct StructWithNestedUnion {
+  char prefix[80];
+  union nested {
+    struct first { int contents[8]; } first;
+    struct second { int contents[4]; } second;
+  } nested;
+  long other_field;
+};
+
+// CHECK-LABEL: define {{[^@]+}}@rmlock_regression
+// CHECK-SAME: (ptr addrspace(200) noundef [[S:%.*]]) local_unnamed_addr addrspace(200) #[[ATTR0]] {
+// CHECK-NEXT:  entry:
+/// FIXME: This is a miscompilation, we should be setting bounds after the GEP! (typed pointers work as expected)
+// CHECK-NEXT:    [[TMP0:%.*]] = tail call ptr addrspace(200) @llvm.cheri.cap.bounds.set.i64(ptr addrspace(200) [[S]], i64 32)
+// CHECK-NEXT:    [[NESTED:%.*]] = getelementptr inbounds [[STRUCT_STRUCTWITHNESTEDUNION:%.*]], ptr addrspace(200) [[TMP0]], i64 0, i32 1
+// CHECK-NEXT:    tail call void @call(ptr addrspace(200) noundef nonnull [[NESTED]]) #[[ATTR3]]
+// CHECK-NEXT:    tail call void @call(ptr addrspace(200) noundef nonnull [[NESTED]]) #[[ATTR3]]
+// CHECK-NEXT:    ret void
+//
+// TYPED-LABEL: define {{[^@]+}}@rmlock_regression
+// TYPED-SAME: ([[STRUCT_STRUCTWITHNESTEDUNION:%.*]] addrspace(200)* noundef [[S:%.*]]) local_unnamed_addr addrspace(200) #[[ATTR0]] {
+// TYPED-NEXT:  entry:
+// TYPED-NEXT:    [[NESTED:%.*]] = getelementptr inbounds [[STRUCT_STRUCTWITHNESTEDUNION]], [[STRUCT_STRUCTWITHNESTEDUNION]] addrspace(200)* [[S]], i64 0, i32 1
+// TYPED-NEXT:    [[TMP0:%.*]] = bitcast [[UNION_NESTED:%.*]] addrspace(200)* [[NESTED]] to i8 addrspace(200)*
+// TYPED-NEXT:    [[TMP1:%.*]] = tail call i8 addrspace(200)* @llvm.cheri.cap.bounds.set.i64(i8 addrspace(200)* nonnull [[TMP0]], i64 32)
+// TYPED-NEXT:    tail call void @call(i8 addrspace(200)* noundef [[TMP1]]) #[[ATTR3]]
+// TYPED-NEXT:    tail call void @call(i8 addrspace(200)* noundef [[TMP1]]) #[[ATTR3]]
+// TYPED-NEXT:    ret void
+//
+// VERY-AGGRESSIVE-LABEL: define {{[^@]+}}@rmlock_regression
+// VERY-AGGRESSIVE-SAME: (ptr addrspace(200) noundef [[S:%.*]]) local_unnamed_addr addrspace(200) #[[ATTR0]] {
+// VERY-AGGRESSIVE-NEXT:  entry:
+// VERY-AGGRESSIVE-NEXT:    [[NESTED:%.*]] = getelementptr inbounds [[STRUCT_STRUCTWITHNESTEDUNION:%.*]], ptr addrspace(200) [[S]], i64 0, i32 1
+// VERY-AGGRESSIVE-NEXT:    [[TMP0:%.*]] = tail call ptr addrspace(200) @llvm.cheri.cap.bounds.set.i64(ptr addrspace(200) nonnull [[NESTED]], i64 32)
+// VERY-AGGRESSIVE-NEXT:    tail call void @call(ptr addrspace(200) noundef [[TMP0]]) #[[ATTR3]]
+// VERY-AGGRESSIVE-NEXT:    [[TMP1:%.*]] = tail call ptr addrspace(200) @llvm.cheri.cap.bounds.set.i64(ptr addrspace(200) nonnull [[NESTED]], i64 16)
+// VERY-AGGRESSIVE-NEXT:    tail call void @call(ptr addrspace(200) noundef [[TMP1]]) #[[ATTR3]]
+// VERY-AGGRESSIVE-NEXT:    ret void
+//
+void rmlock_regression(struct StructWithNestedUnion *s) {
+  call(&s->nested.first);
+  // aggressive-remark@-1{{using size of containing type 'union nested' instead of object type 'struct first' for subobject bounds on union member}}
+  // aggressive-remark@-2{{setting sub-object bounds for pointer to 'struct first' to 32 bytes}}
+  // very-aggressive-remark@-3{{setting sub-object bounds for field 'first' (pointer to 'struct first') to 32 bytes}}
+  call(&s->nested.second);
+  // aggressive-remark@-1{{using size of containing type 'union nested' instead of object type 'struct second' for subobject bounds on union member}}
+  // aggressive-remark@-2{{setting sub-object bounds for pointer to 'struct second' to 32 bytes}}
+  // very-aggressive-remark@-3{{setting sub-object bounds for field 'second' (pointer to 'struct second') to 16 bytes}}
+}
