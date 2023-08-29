@@ -627,22 +627,15 @@ public:
   llvm::Value *EmitScalarPrePostIncDec(const UnaryOperator *E, LValue LV,
                                        bool isInc, bool isPre);
 
-
   Value *VisitUnaryAddrOf(const UnaryOperator *E) {
     if (isa<MemberPointerType>(E->getType())) // never sugared
       return CGF.CGM.getMemberPointerConstant(E);
 
-    llvm::Value *Addr = EmitLValue(E->getSubExpr()).getPointer(CGF);
+    llvm::Value *Addr = CGF.emitAddrOf(E->getSubExpr(), E);
     auto &TI = CGF.getContext().getTargetInfo();
     if (TI.areAllPointersCapabilities()) {
       assert(Addr->getType()->getPointerAddressSpace() ==
              CGF.CGM.getTargetCodeGenInfo().getCHERICapabilityAS());
-    }
-    if (CGF.getLangOpts().getCheriBounds() >= LangOptions::CBM_SubObjectsSafe) {
-      auto BoundedAddr = CGF.setCHERIBoundsOnAddrOf(
-          Addr, E->getSubExpr()->getType(), E->getSubExpr(), E);
-      assert(BoundedAddr->getType() == Addr->getType());
-      Addr = BoundedAddr;
     }
     return Addr;
   }

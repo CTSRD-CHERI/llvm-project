@@ -4653,13 +4653,7 @@ RValue CodeGenFunction::EmitBuiltinExpr(const GlobalDecl GD, unsigned BuiltinID,
   case Builtin::BIaddressof:
   case Builtin::BI__addressof:
   case Builtin::BI__builtin_addressof: {
-    Value *Addr = EmitLValue(E->getArg(0)).getPointer(*this);
-    if (getLangOpts().getCheriBounds() >= LangOptions::CBM_SubObjectsSafe) {
-      auto BoundedAddr = setCHERIBoundsOnAddrOf(Addr, E->getArg(0)->getType(),
-                                                E->getArg(0), E);
-      assert(BoundedAddr->getType() == Addr->getType());
-      Addr = BoundedAddr;
-    }
+    Value *Addr = emitAddrOf(E->getArg(0), E);
     return RValue::get(Addr);
   }
   case Builtin::BI__builtin_function_start:

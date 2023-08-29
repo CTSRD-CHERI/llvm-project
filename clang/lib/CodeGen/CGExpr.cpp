@@ -813,14 +813,17 @@ llvm::Value *CodeGenFunction::setCHERIBoundsOnReference(llvm::Value *Value,
   return Value;
 }
 
-llvm::Value *CodeGenFunction::setCHERIBoundsOnAddrOf(llvm::Value *Value,
-                                                     clang::QualType Ty,
-                                                     const Expr *E,
-                                                     const Expr *LocExpr) {
-  assert(getLangOpts().getCheriBounds() >= LangOptions::CBM_SubObjectsSafe);
+llvm::Value *CodeGenFunction::emitAddrOf(const Expr *E, const Expr *OuterExpr) {
+  // If subobject bounds are disabled (or non-CHERI codegen) emit the address.
+  llvm::Value *Value = EmitLValue(E).getPointer(*this);
+  if (getLangOpts().getCheriBounds() < LangOptions::CBM_SubObjectsSafe) {
+    return Value;
+  }
+  assert(getTarget().areAllPointersCapabilities() &&
+         "subobject bounds only work with purecap CHERI");
   // CHERI_BOUNDS_DBG(<< "Trying to set CHERI bounds on addrof operator ";
   //                  E->dump(llvm::dbgs()));
-
+  QualType Ty = E->getType();
   NumAddrOfCheckedForBoundsTightening++;
   constexpr auto Kind = SubObjectBoundsKind::AddrOf;
   if (auto TBR = canTightenCheriBounds(Value, Ty, E, Kind)) {
@@ -831,7 +834,7 @@ llvm::Value *CodeGenFunction::setCHERIBoundsOnAddrOf(llvm::Value *Value,
     } else {
       NumTightBoundsSetOnAddrOf++;
     }
-    return tightenCHERIBounds(*this, Kind, Value, LocExpr, Ty, *TBR);
+    return tightenCHERIBounds(*this, Kind, Value, OuterExpr, Ty, *TBR);
   }
   return Value;
 }
