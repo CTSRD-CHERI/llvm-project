@@ -4394,10 +4394,8 @@ public:
     std::string DiagMessage;
     ValueDecl* TargetField = nullptr;
   };
-  Optional<TightenBoundsResult> canTightenCheriBounds(llvm::Value *Ptr,
-                                                      QualType Ty,
-                                                      const Expr *E,
-                                                      SubObjectBoundsKind Kind);
+  Optional<TightenBoundsResult>
+  canTightenCheriBounds(QualType Ty, const Expr *E, SubObjectBoundsKind Kind);
 
   //===--------------------------------------------------------------------===//
   //                           Expression Emission

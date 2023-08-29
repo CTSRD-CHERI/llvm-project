@@ -800,7 +800,7 @@ llvm::Value *CodeGenFunction::setCHERIBoundsOnReference(llvm::Value *Value,
 
   NumReferencesCheckedForBoundsTightening++;
   constexpr auto Kind = SubObjectBoundsKind::Reference;
-  if (auto TBR = canTightenCheriBounds(Value, Ty, E, Kind)) {
+  if (auto TBR = canTightenCheriBounds(Ty, E, Kind)) {
     if (TBR->IsContainerSize) {
       NumContainerBoundsSetOnReferences++;
     } else if (TBR->UseRemainingSize) {
@@ -826,7 +826,7 @@ llvm::Value *CodeGenFunction::emitAddrOf(const Expr *E, const Expr *OuterExpr) {
   QualType Ty = E->getType();
   NumAddrOfCheckedForBoundsTightening++;
   constexpr auto Kind = SubObjectBoundsKind::AddrOf;
-  if (auto TBR = canTightenCheriBounds(Value, Ty, E, Kind)) {
+  if (auto TBR = canTightenCheriBounds(Ty, E, Kind)) {
     if (TBR->IsContainerSize) {
       NumContainerBoundsSetOnAddrOf++;
     } else if (TBR->UseRemainingSize) {
@@ -852,7 +852,7 @@ CodeGenFunction::setCHERIBoundsOnArraySubscript(llvm::Value *Value,
   QualType Ty = Base->getType();
   NumArraySubscriptCheckedForBoundsTightening++;
   constexpr auto Kind = SubObjectBoundsKind::ArraySubscript;
-  if (auto TBR = canTightenCheriBounds(Value, Ty, Base, Kind)) {
+  if (auto TBR = canTightenCheriBounds(Ty, Base, Kind)) {
     assert(!TBR->IsContainerSize && "Container size should not be use for array subscript bounds");
     if (TBR->UseRemainingSize) {
       NumRemainingSizeBoundsSetOnArraySubscript++;
@@ -878,7 +878,7 @@ CodeGenFunction::setCHERIBoundsOnArrayDecay(llvm::Value *Value, const Expr *E) {
   assert(Ty->isArrayType());
   NumArrayDecayCheckedForBoundsTightening++;
   constexpr auto Kind = SubObjectBoundsKind::ArrayDecay;
-  if (auto TBR = canTightenCheriBounds(Value, Ty, Base, Kind)) {
+  if (auto TBR = canTightenCheriBounds(Ty, Base, Kind)) {
     assert(!TBR->IsContainerSize && "Container size should not be use for array decay bounds");
     if (TBR->UseRemainingSize) {
       NumRemainingSizeBoundsSetOnArrayDecay++;
@@ -1100,19 +1100,12 @@ static bool containsVariableLengthArray(LangOptions::CheriBoundsMode BoundsMode,
 }
 
 Optional<CodeGenFunction::TightenBoundsResult>
-CodeGenFunction::canTightenCheriBounds(llvm::Value *Value, QualType Ty,
-                                       const Expr *E,
+CodeGenFunction::canTightenCheriBounds(QualType Ty, const Expr *E,
                                        SubObjectBoundsKind Kind) {
   const auto BoundsMode = getLangOpts().getCheriBounds();
   assert(BoundsMode > LangOptions::CBM_Conservative);
   CHERI_BOUNDS_DBG(<< boundsKindStr(Kind) << " '" << Ty.getAsString()
                    << "' subobj bounds check: ");
-  if (!CGM.getDataLayout().isFatPointer(Value->getType())) {
-    CHERI_BOUNDS_DBG(<< "Cannot set bounds on non-capability IR type ";
-                     Value->getType()->print(llvm::dbgs(), true);
-                     llvm::dbgs() << "\n");
-    return None;
-  }
 
   if (Ty->isIncompleteType() && !Ty->isIncompleteArrayType()) {
     return cannotSetBounds(*this, E, Ty, Kind, "incomplete type");
@@ -1128,7 +1121,6 @@ CodeGenFunction::canTightenCheriBounds(llvm::Value *Value, QualType Ty,
                                ? "reference to function"
                                : "address of function");
   }
-  assert(CGM.getDataLayout().isFatPointer(Value->getType()));
 
   E = E->IgnoreParenImpCastsExceptForNoChangeBounds();
   // ignore array-to-pointer decay, etc. And we also neede to ignore ParenExprs
