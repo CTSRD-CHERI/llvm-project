@@ -76,9 +76,9 @@ struct WithNestedUnion {
 
 // CHECK-LABEL: @test5(
 // CHECK-NEXT:  entry:
-// CHECK-NEXT:    [[TMP0:%.*]] = tail call ptr addrspace(200) @llvm.cheri.cap.bounds.set.i64(ptr addrspace(200) [[W:%.*]], i64 264)
-// CHECK-NEXT:    [[U:%.*]] = getelementptr inbounds [[STRUCT_WITHNESTEDUNION:%.*]], ptr addrspace(200) [[TMP0]], i64 0, i32 2
-// CHECK-NEXT:    tail call void @call(ptr addrspace(200) noundef nonnull [[U]]) #[[ATTR3]]
+// CHECK-NEXT:    [[U:%.*]] = getelementptr inbounds [[STRUCT_WITHNESTEDUNION:%.*]], ptr addrspace(200) [[W:%.*]], i64 0, i32 2
+// CHECK-NEXT:    [[TMP0:%.*]] = tail call ptr addrspace(200) @llvm.cheri.cap.bounds.set.i64(ptr addrspace(200) nonnull [[U]], i64 264)
+// CHECK-NEXT:    tail call void @call(ptr addrspace(200) noundef [[TMP0]]) #[[ATTR3]]
 // CHECK-NEXT:    ret void
 //
 extern "C" void test5(struct WithNestedUnion *w) {
@@ -88,9 +88,9 @@ extern "C" void test5(struct WithNestedUnion *w) {
 
 // CHECK-LABEL: @test6(
 // CHECK-NEXT:  entry:
-// CHECK-NEXT:    [[TMP0:%.*]] = tail call ptr addrspace(200) @llvm.cheri.cap.bounds.set.i64(ptr addrspace(200) [[W:%.*]], i64 264)
-// CHECK-NEXT:    [[U:%.*]] = getelementptr inbounds [[STRUCT_WITHNESTEDUNION:%.*]], ptr addrspace(200) [[TMP0]], i64 0, i32 2
-// CHECK-NEXT:    tail call void @call_ref(ptr addrspace(200) noundef nonnull align 4 dereferenceable(4) [[U]]) #[[ATTR3]]
+// CHECK-NEXT:    [[U:%.*]] = getelementptr inbounds [[STRUCT_WITHNESTEDUNION:%.*]], ptr addrspace(200) [[W:%.*]], i64 0, i32 2
+// CHECK-NEXT:    [[TMP0:%.*]] = tail call ptr addrspace(200) @llvm.cheri.cap.bounds.set.i64(ptr addrspace(200) nonnull [[U]], i64 264)
+// CHECK-NEXT:    tail call void @call_ref(ptr addrspace(200) noundef nonnull align 4 dereferenceable(4) [[TMP0]]) #[[ATTR3]]
 // CHECK-NEXT:    ret void
 //
 extern "C" void test6(struct WithNestedUnion *w) {

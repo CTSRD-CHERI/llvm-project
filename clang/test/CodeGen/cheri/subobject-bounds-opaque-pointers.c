@@ -22,11 +22,11 @@ union union_two_chararrays {
 // TYPED-NEXT:    [[TWOARRAYS_ADDR:%.*]] = alloca [[UNION_UNION_TWO_CHARARRAYS:%.*]] addrspace(200)*, align 16, addrspace(200)
 // TYPED-NEXT:    store [[UNION_UNION_TWO_CHARARRAYS]] addrspace(200)* [[TWOARRAYS:%.*]], [[UNION_UNION_TWO_CHARARRAYS]] addrspace(200)* addrspace(200)* [[TWOARRAYS_ADDR]], align 16
 // TYPED-NEXT:    [[TMP0:%.*]] = load [[UNION_UNION_TWO_CHARARRAYS]] addrspace(200)*, [[UNION_UNION_TWO_CHARARRAYS]] addrspace(200)* addrspace(200)* [[TWOARRAYS_ADDR]], align 16
-// TYPED-NEXT:    [[CHARARRAY16:%.*]] = bitcast [[UNION_UNION_TWO_CHARARRAYS]] addrspace(200)* [[TMP0]] to [16 x i8] addrspace(200)*
-// TYPED-NEXT:    [[TMP1:%.*]] = bitcast [16 x i8] addrspace(200)* [[CHARARRAY16]] to i8 addrspace(200)*
+// TYPED-NEXT:    [[TMP1:%.*]] = bitcast [[UNION_UNION_TWO_CHARARRAYS]] addrspace(200)* [[TMP0]] to i8 addrspace(200)*
 // TYPED-NEXT:    [[TMP2:%.*]] = call i8 addrspace(200)* @llvm.cheri.cap.bounds.set.i64(i8 addrspace(200)* [[TMP1]], i64 32)
-// TYPED-NEXT:    [[ADDRESS_WITH_BOUNDS:%.*]] = bitcast i8 addrspace(200)* [[TMP2]] to [16 x i8] addrspace(200)*
-// TYPED-NEXT:    [[TMP3:%.*]] = bitcast [16 x i8] addrspace(200)* [[ADDRESS_WITH_BOUNDS]] to i8 addrspace(200)*
+// TYPED-NEXT:    [[ADDRESS_WITH_BOUNDS:%.*]] = bitcast i8 addrspace(200)* [[TMP2]] to [[UNION_UNION_TWO_CHARARRAYS]] addrspace(200)*
+// TYPED-NEXT:    [[CHARARRAY16:%.*]] = bitcast [[UNION_UNION_TWO_CHARARRAYS]] addrspace(200)* [[ADDRESS_WITH_BOUNDS]] to [16 x i8] addrspace(200)*
+// TYPED-NEXT:    [[TMP3:%.*]] = bitcast [16 x i8] addrspace(200)* [[CHARARRAY16]] to i8 addrspace(200)*
 // TYPED-NEXT:    ret i8 addrspace(200)* [[TMP3]]
 //
 void *bounds_subobject_union_two_chararrays(union union_two_chararrays *twoarrays) {

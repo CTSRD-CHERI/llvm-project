@@ -257,11 +257,10 @@ struct StructWithNestedUnion {
 // CHECK-LABEL: define {{[^@]+}}@rmlock_regression
 // CHECK-SAME: (ptr addrspace(200) noundef [[S:%.*]]) local_unnamed_addr addrspace(200) #[[ATTR0]] {
 // CHECK-NEXT:  entry:
-/// FIXME: This is a miscompilation, we should be setting bounds after the GEP! (typed pointers work as expected)
-// CHECK-NEXT:    [[TMP0:%.*]] = tail call ptr addrspace(200) @llvm.cheri.cap.bounds.set.i64(ptr addrspace(200) [[S]], i64 32)
-// CHECK-NEXT:    [[NESTED:%.*]] = getelementptr inbounds [[STRUCT_STRUCTWITHNESTEDUNION:%.*]], ptr addrspace(200) [[TMP0]], i64 0, i32 1
-// CHECK-NEXT:    tail call void @call(ptr addrspace(200) noundef nonnull [[NESTED]]) #[[ATTR3]]
-// CHECK-NEXT:    tail call void @call(ptr addrspace(200) noundef nonnull [[NESTED]]) #[[ATTR3]]
+// CHECK-NEXT:    [[NESTED:%.*]] = getelementptr inbounds [[STRUCT_STRUCTWITHNESTEDUNION:%.*]], ptr addrspace(200) [[S]], i64 0, i32 1
+// CHECK-NEXT:    [[TMP0:%.*]] = tail call ptr addrspace(200) @llvm.cheri.cap.bounds.set.i64(ptr addrspace(200) nonnull [[NESTED]], i64 32)
+// CHECK-NEXT:    tail call void @call(ptr addrspace(200) noundef [[TMP0]]) #[[ATTR3]]
+// CHECK-NEXT:    tail call void @call(ptr addrspace(200) noundef [[TMP0]]) #[[ATTR3]]
 // CHECK-NEXT:    ret void
 //
 // TYPED-LABEL: define {{[^@]+}}@rmlock_regression

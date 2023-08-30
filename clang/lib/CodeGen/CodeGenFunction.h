@@ -555,6 +555,26 @@ public:
   /// True if the current statement has nomerge attribute.
   bool InNoMergeAttributedStmt = false;
 
+  bool InCheriContainerBoundsEmission = false;
+  struct TightenBoundsResult {
+    // either a fixed size or when UseRemainingSize is set the maximum size
+    Optional<uint64_t> Size;
+    bool IsSubObject = false;
+    bool IsContainerSize = false;
+    bool UseRemainingSize = false;
+    std::string DebugMessage;
+    std::string DiagMessage;
+    ValueDecl *TargetField = nullptr;
+    const Expr *ContainerAccessExpr = nullptr;
+  };
+  struct CheriContainerBoundsInfo {
+    const Expr *LocationExpr = nullptr;
+    const TightenBoundsResult *TBR = nullptr;
+    QualType Ty;
+    SubObjectBoundsKind Kind = SubObjectBoundsKind::AddrOf;
+    bool BoundsAdded = false;
+  } AddCheriContainerBoundsInfo;
+
   /// True if the current statement has noinline attribute.
   bool InNoInlineAttributedStmt = false;
 
@@ -4373,28 +4393,21 @@ public:
 
   /// Emits a reference binding to the passed in expression.
   RValue EmitReferenceBindingToExpr(const Expr *E);
-
-  llvm::Value *setCHERIBoundsOnReference(llvm::Value *Ptr, QualType Ty,
-                                         const Expr *E);
   /// Emits an address of expression (potentially with CHERI subobject bounds).
   /// @p OuterExpr is the expression being bounded (i.e. __builtin_addressof() or
   /// '&') and @p E is the subexpression that should have bounds set (e.g. the
   /// argument of __builtin_addressof)
   llvm::Value *emitAddrOf(const Expr *E, const Expr *OuterExpr);
+  /// Emit C++ reference binding (porentially CHERI with subobject bounds).
+  LValue emitLValueForReferenceBinding(const Expr *E);
+  LValue emitLValueWithCheriSubobjectBounds(const Expr *E,
+                                            const Expr *OuterExpr, QualType Ty,
+                                            SubObjectBoundsKind Kind,
+                                            const TightenBoundsResult &TBR);
   llvm::Value *setCHERIBoundsOnArraySubscript(llvm::Value *Ptr,
                                               const ArraySubscriptExpr *E);
   llvm::Value *setCHERIBoundsOnArrayDecay(llvm::Value *Ptr, const Expr *E);
 
-  struct TightenBoundsResult {
-    // either a fixed size or when UseRemainingSize is set the maximum size
-    Optional<uint64_t> Size;
-    bool IsSubObject = false;
-    bool IsContainerSize = false;
-    bool UseRemainingSize = false;
-    std::string DiagMessage;
-    std::string DebugMessage;
-    ValueDecl* TargetField = nullptr;
-  };
   Optional<TightenBoundsResult>
   canTightenCheriBounds(QualType Ty, const Expr *E, SubObjectBoundsKind Kind);
 

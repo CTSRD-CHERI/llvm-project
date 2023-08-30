@@ -671,29 +671,13 @@ static llvm::cl::opt<unsigned> SubobjectBoundsSWPerm(
     llvm::cl::desc("Clear the given software permission whenever "
                    "subobject-bounds narrowed the bounds"));
 
-// If we are setting bounds on the full container size, the csetbounds must
-// be done before the cincoffset!
 static llvm::Value *
 tightenCHERIBounds(CodeGenFunction &CGF, SubObjectBoundsKind Kind,
                    llvm::Value *Value, const Expr *LocExpr, QualType Ty,
                    const CodeGenFunction::TightenBoundsResult &TBR) {
   llvm::Value *ValueToBound = Value;
-  llvm::GetElementPtrInst *GEP = nullptr;
   StringRef KindStr = boundsKindStr(Kind);
-  if (TBR.IsContainerSize) {
-    if ((GEP = dyn_cast<llvm::GetElementPtrInst>(Value))) {
-      ValueToBound = GEP->getPointerOperand();
-    } else if (auto CE = dyn_cast<llvm::ConstantExpr>(Value)) {
-      // If the source Value is not a GEP instruction but a GEP constantexp
-      // (e.g. bounds on a global &array[index]) we need to convert it to an
-      // instruction so that it can work with the result of a CSetBounds Inst
-      if (CE->getOpcode() == llvm::Instruction::GetElementPtr) {
-        GEP = cast<llvm::GetElementPtrInst>(CE->getAsInstruction());
-        CGF.Builder.Insert(GEP);
-        ValueToBound = GEP->getPointerOperand();
-      }
-    }
-  }
+  assert(!TBR.IsContainerSize && "not handled by this function");
   llvm::Type *BoundedTy = ValueToBound->getType();
 
   SourceLocation Loc = LocExpr->getExprLoc();
@@ -782,24 +766,68 @@ tightenCHERIBounds(CodeGenFunction &CGF, SubObjectBoundsKind Kind,
   }
 
   Result = CGF.Builder.CreatePointerBitCastOrAddrSpaceCast(Result, BoundedTy);
-  if (GEP) {
-    // Replace the GEP source with the new bounded source
-    GEP->setOperand(0, Result);
-    GEP->moveAfter(cast<llvm::Instruction>(Result));
-    Result = GEP;
-  }
   return Result;
 }
 
-llvm::Value *CodeGenFunction::setCHERIBoundsOnReference(llvm::Value *Value,
-                                                        QualType Ty,
-                                                        const Expr *E) {
-  if (getLangOpts().getCheriBounds() < LangOptions::CBM_References)
-    return Value; // Not enabled
+static llvm::Value *tightenCHERIBoundsForContainer(
+    CodeGenFunction &CGF, llvm::Value *Unbounded,
+    CodeGenFunction::CheriContainerBoundsInfo &Info) {
+  CodeGenFunction::TightenBoundsResult TBR = *Info.TBR;
+  TBR.IsContainerSize = false; // Avoid asserting inside tightenCHERIBounds()
+  llvm::Value *Bounded = tightenCHERIBounds(CGF, Info.Kind, Unbounded,
+                                            Info.LocationExpr, Info.Ty, TBR);
+  assert(Bounded != Unbounded);
+  Info.BoundsAdded = true;
+  return Bounded;
+}
+
+LValue CodeGenFunction::emitLValueWithCheriSubobjectBounds(
+    const Expr *E, const Expr *OuterExpr, QualType Ty, SubObjectBoundsKind Kind,
+    const TightenBoundsResult &TBR) {
+  assert(getTarget().SupportsCapabilities() &&
+         "subobject bounds only work with CHERI");
+  assert((Kind == SubObjectBoundsKind::Reference &&
+          getTarget().areAllPointersCapabilities()) ||
+         OuterExpr->getType()->isCapabilityPointerType());
+  // When setting bounds to the container size we have to set a flag in CGF
+  // to indicate which MemberExpr base object needs bounds. For
+  // exact/remaining size results we can call setbounds on the result instead.
+  bool OldInContainerBounds = InCheriContainerBoundsEmission;
+  auto OldBoundsInfo = AddCheriContainerBoundsInfo;
+  InCheriContainerBoundsEmission = TBR.IsContainerSize;
+  AddCheriContainerBoundsInfo = {OuterExpr, &TBR, Ty, Kind, false};
+  LValue Result = EmitLValue(E);
+  if (!TBR.IsContainerSize) {
+    Address Unbounded = Result.getAddress(*this);
+    Result.setAddress(Unbounded.withPointer(tightenCHERIBounds(
+        *this, Kind, Unbounded.getPointer(), OuterExpr, Ty, TBR)));
+  } else if (!this->AddCheriContainerBoundsInfo.BoundsAdded) {
+    std::string Err;
+    llvm::raw_string_ostream OS(Err);
+    OS << "Failed to set container bounds on '";
+    TBR.ContainerAccessExpr->printPretty(
+        OS, nullptr, PrintingPolicy(this->getContext().getLangOpts()));
+    OS << "': ";
+    TBR.ContainerAccessExpr->dump(OS, this->getContext());
+    llvm::report_fatal_error(StringRef(OS.str()));
+  }
+  InCheriContainerBoundsEmission = OldInContainerBounds;
+  AddCheriContainerBoundsInfo = OldBoundsInfo;
+  return Result;
+}
+
+LValue CodeGenFunction::emitLValueForReferenceBinding(const Expr *E) {
+  // For CHERI we want to insert bounds on references (at least for simple
+  // types) unless they are references to functions
+  // TODO: we should probably check if references are capabilities instead since
+  // there could be a mode where references are capabilities but pointers aren't
+  QualType Ty = E->getType();
+  if (getLangOpts().getCheriBounds() < LangOptions::CBM_References ||
+      !CGM.getTarget().areAllPointersCapabilities() || Ty->isFunctionType())
+    return EmitLValue(E);
 
   // CHERI_BOUNDS_DBG(<< "Trying to set CHERI bounds on reference ";
   //                  E->dump(llvm::dbgs()));
-
   NumReferencesCheckedForBoundsTightening++;
   constexpr auto Kind = SubObjectBoundsKind::Reference;
   if (auto TBR = canTightenCheriBounds(Ty, E, Kind)) {
@@ -810,19 +838,17 @@ llvm::Value *CodeGenFunction::setCHERIBoundsOnReference(llvm::Value *Value,
     } else {
       NumTightBoundsSetOnReferences++;
     }
-    return tightenCHERIBounds(*this, Kind, Value, E, Ty, *TBR);
+    return emitLValueWithCheriSubobjectBounds(E, E, Ty, Kind, *TBR);
   }
-  return Value;
+  return EmitLValue(E);
 }
 
 llvm::Value *CodeGenFunction::emitAddrOf(const Expr *E, const Expr *OuterExpr) {
   // If subobject bounds are disabled (or non-CHERI codegen) emit the address.
-  llvm::Value *Value = EmitLValue(E).getPointer(*this);
-  if (getLangOpts().getCheriBounds() < LangOptions::CBM_SubObjectsSafe) {
-    return Value;
+  if (getLangOpts().getCheriBounds() < LangOptions::CBM_SubObjectsSafe ||
+      !OuterExpr->getType()->isCapabilityPointerType()) {
+    return EmitLValue(E).getPointer(*this);
   }
-  assert(getTarget().areAllPointersCapabilities() &&
-         "subobject bounds only work with purecap CHERI");
   // CHERI_BOUNDS_DBG(<< "Trying to set CHERI bounds on addrof operator ";
   //                  E->dump(llvm::dbgs()));
   QualType Ty = E->getType();
@@ -836,9 +862,10 @@ llvm::Value *CodeGenFunction::emitAddrOf(const Expr *E, const Expr *OuterExpr) {
     } else {
       NumTightBoundsSetOnAddrOf++;
     }
-    return tightenCHERIBounds(*this, Kind, Value, OuterExpr, Ty, *TBR);
+    return emitLValueWithCheriSubobjectBounds(E, OuterExpr, Ty, Kind, *TBR)
+        .getPointer(*this);
   }
-  return Value;
+  return EmitLValue(E).getPointer(*this);
 }
 
 llvm::Value *
@@ -1154,10 +1181,12 @@ CodeGenFunction::canTightenCheriBounds(QualType Ty, const Expr *E,
   // bounds (even in everywhere-unsafe mode!)
   int64_t TypeSize = getContext().getTypeSizeInChars(Ty).getQuantity();
 
-  const auto BoundsOnContainer = [this, IsSubObject, Kind,
-                                  &Result](QualType Container) {
+  const auto BoundsOnContainer = [this, IsSubObject, Kind, &Result](
+                                     QualType Container, const Expr *BaseExpr) {
     Result.IsSubObject = IsSubObject;
     Result.IsContainerSize = true;
+    assert(isa<ArraySubscriptExpr>(BaseExpr) || isa<MemberExpr>(BaseExpr));
+    Result.ContainerAccessExpr = BaseExpr;
     Result.Size = getContext().getTypeSizeInChars(Container).getQuantity();
     assert(Kind != SubObjectBoundsKind::ArraySubscript);
     return Result;
@@ -1165,7 +1194,6 @@ CodeGenFunction::canTightenCheriBounds(QualType Ty, const Expr *E,
   ValueDecl* TargetField = nullptr;
   const auto ExactBounds = [IsSubObject, &TargetField, &Result](int64_t Size) {
     Result.IsSubObject = IsSubObject;
-    Result.IsContainerSize = false;
     Result.TargetField = TargetField;
     Result.Size = Size;
     return Result;
@@ -1331,7 +1359,7 @@ CodeGenFunction::canTightenCheriBounds(QualType Ty, const Expr *E,
             "containing union includes a variable length array");
 
       remarkUsingContainerSize(*this, DbgOS, E, BaseTy, Ty, "union member");
-      return BoundsOnContainer(BaseTy);
+      return BoundsOnContainer(BaseTy, ME);
     }
     *ReturnValueValid = false;
     return None;
@@ -1389,7 +1417,7 @@ CodeGenFunction::canTightenCheriBounds(QualType Ty, const Expr *E,
             *this, DbgOS, E, Ty, Kind,
             "__builtin_no_change_bounds() used for array base");
       } else if (Base->getType()->isConstantArrayType()) {
-        return BoundsOnContainer(Base->getType());
+        return BoundsOnContainer(Base->getType(), ASE);
       } else if (Base->getType()->isArrayType()) {
         UseRemainingSize("bounds on full array but size not known", 0, true);
       }
@@ -1515,12 +1543,12 @@ CodeGenFunction::canTightenCheriBounds(QualType Ty, const Expr *E,
 
 RValue
 CodeGenFunction::EmitReferenceBindingToExpr(const Expr *E) {
-  // Emit the expression as an lvalue.
-  LValue LV = EmitLValue(E);
+  // Emit the expression as an lvalue (potentially with CHERI subobject bounds).
+  LValue LV = emitLValueForReferenceBinding(E);
   assert(LV.isSimple());
   llvm::Value *Value = LV.getPointer(*this);
-  QualType Ty = E->getType();
-  if (sanitizePerformTypeCheck() && !Ty->isFunctionType()) {
+
+  if (sanitizePerformTypeCheck() && !E->getType()->isFunctionType()) {
     // C++11 [dcl.ref]p5 (as amended by core issue 453):
     //   If a glvalue to which a reference is directly bound designates neither
     //   an existing object or function of an appropriate type nor a region of
@@ -1529,12 +1557,6 @@ CodeGenFunction::EmitReferenceBindingToExpr(const Expr *E) {
     QualType Ty = E->getType();
     EmitTypeCheck(TCK_ReferenceBinding, E->getExprLoc(), Value, Ty);
   }
-  // For CHERI we want to insert bounds on references (at least for simple
-  // types) unless they are references to functions
-  // TODO: we should probably check if references are capabilities instead since
-  // there could be a mode where references are capabilities but pointers aren't
-  if (CGM.getTarget().areAllPointersCapabilities() && !Ty->isFunctionType())
-    Value = setCHERIBoundsOnReference(Value, Ty, E);
   return RValue::get(Value, LV.getAlignment().getQuantity());
 }
 
@@ -4615,6 +4637,11 @@ emitArraySubscriptGEP(CodeGenFunction &CGF, llvm::Type *elemType,
                       llvm::Value *ptr, ArrayRef<llvm::Value *> indices,
                       bool inbounds, bool signedIndices, const Expr *E,
                       const llvm::Twine &name = "arrayidx") {
+  if (CGF.InCheriContainerBoundsEmission &&
+      CGF.AddCheriContainerBoundsInfo.TBR->ContainerAccessExpr == E) {
+    ptr = tightenCHERIBoundsForContainer(CGF, ptr,
+                                         CGF.AddCheriContainerBoundsInfo);
+  }
   if (auto *ASE = dyn_cast<ArraySubscriptExpr>(E)) {
     if (CGF.getLangOpts().getCheriBounds() >= LangOptions::CBM_SubObjectsSafe) {
       // CSetBounds must be done before the GEP otherwise we set the base before
@@ -5206,6 +5233,13 @@ LValue CodeGenFunction::EmitMemberExpr(const MemberExpr *E) {
     BaseLV = MakeAddrLValue(Addr, PtrTy, BaseInfo, TBAAInfo);
   } else
     BaseLV = EmitCheckedLValue(BaseExpr, TCK_MemberAccess);
+
+  if (InCheriContainerBoundsEmission &&
+      AddCheriContainerBoundsInfo.TBR->ContainerAccessExpr == E) {
+    Address Unbounded = BaseLV.getAddress(*this);
+    BaseLV.setAddress(Unbounded.withPointer(tightenCHERIBoundsForContainer(
+        *this, Unbounded.getPointer(), AddCheriContainerBoundsInfo)));
+  }
 
   NamedDecl *ND = E->getMemberDecl();
   if (auto *Field = dyn_cast<FieldDecl>(ND)) {
