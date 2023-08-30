@@ -615,7 +615,7 @@ EmitMaterializeTemporaryExpr(const MaterializeTemporaryExpr *M) {
   return MakeAddrLValue(Object, M->getType(), AlignmentSource::Decl);
 }
 
-#define CHERI_BOUNDS_DBG(x) DEBUG_WITH_TYPE("cheri-bounds", llvm::dbgs() x)
+#define CHERI_BOUNDS_DBG(x) DEBUG_WITH_TYPE("cheri-bounds", DbgOS x)
 #define DEBUG_TYPE "cheri-bounds"
 STATISTIC(NumReferencesCheckedForBoundsTightening,
           "Number of references checked for tightening bounds");
@@ -735,8 +735,10 @@ tightenCHERIBounds(CodeGenFunction &CGF, SubObjectBoundsKind Kind,
     SizeStr = llvm::utostr(*TBR.Size);
     SetBoundsSize = llvm::ConstantInt::get(CGF.PtrDiffTy, *TBR.Size);
   }
-  CHERI_BOUNDS_DBG(<< "setting bounds for '" << Ty.getAsString() << "' "
-                   << KindStr << " to " << SizeStr << "\n");
+  DEBUG_WITH_TYPE("cheri-bounds",
+                  llvm::dbgs() << TBR.DebugMessage << "setting bounds for '"
+                               << Ty.getAsString() << "' " << KindStr << " to "
+                               << SizeStr << "\n");
   if (TBR.TargetField) {
     assert(TBR.IsSubObject);
     CGF.CGM.getDiags().Report(Loc,
@@ -891,29 +893,33 @@ CodeGenFunction::setCHERIBoundsOnArrayDecay(llvm::Value *Value, const Expr *E) {
 }
 
 static Optional<CodeGenFunction::TightenBoundsResult>
-cannotSetBounds(const CodeGenFunction &CGF, const Expr *E, QualType Type,
-                SubObjectBoundsKind Kind, const Twine &Reason) {
+cannotSetBounds(const CodeGenFunction &CGF, llvm::raw_string_ostream &DbgOS,
+                const Expr *E, QualType Type, SubObjectBoundsKind Kind,
+                const Twine &Reason) {
   CGF.CGM.getDiags().Report(E->getExprLoc(),
                             diag::remark_no_cheri_subobject_bounds)
       << (int)Kind << Type << Reason.str() << E->getSourceRange();
-  CHERI_BOUNDS_DBG(<< Reason << " -> not setting bounds\n");
+  DEBUG_WITH_TYPE("cheri-bounds", llvm::dbgs() << DbgOS.str() << Reason
+                                               << " -> not setting bounds\n");
   return None;
 }
 
-static bool hasBoundsOptOutAnnotation(const CodeGenFunction &CGF, const Expr *E,
-                                      QualType Ty, SubObjectBoundsKind Kind,
+static bool hasBoundsOptOutAnnotation(const CodeGenFunction &CGF,
+                                      llvm::raw_string_ostream &DbgOS,
+                                      const Expr *E, QualType Ty,
+                                      SubObjectBoundsKind Kind,
                                       const Twine &Msg) {
   if (Ty.isNull())
     return false; // unknown type
   if (Ty->hasAttr(attr::CHERINoSubobjectBounds)) {
     CHERI_BOUNDS_DBG(<< "opt-out: ");
-    cannotSetBounds(CGF, E, Ty, Kind, Msg + " has opt-out attribute");
+    cannotSetBounds(CGF, DbgOS, E, Ty, Kind, Msg + " has opt-out attribute");
     return true;
   }
   if (RecordDecl *RD = Ty->getAsRecordDecl()) {
     if (RD->hasAttr<CHERINoSubobjectBoundsAttr>()) {
       CHERI_BOUNDS_DBG(<< "opt-out: ");
-      cannotSetBounds(CGF, E, QualType(RD->getTypeForDecl(), 0), Kind,
+      cannotSetBounds(CGF, DbgOS, E, QualType(RD->getTypeForDecl(), 0), Kind,
                       Msg + " declaration has opt-out attribute");
       return true;
     }
@@ -921,8 +927,10 @@ static bool hasBoundsOptOutAnnotation(const CodeGenFunction &CGF, const Expr *E,
   return false;
 }
 
-static bool hasBoundsOptOutAnnotation(const CodeGenFunction &CGF, const Expr *E,
-                                      const Decl *D, SubObjectBoundsKind Kind,
+static bool hasBoundsOptOutAnnotation(const CodeGenFunction &CGF,
+                                      llvm::raw_string_ostream &DbgOS,
+                                      const Expr *E, const Decl *D,
+                                      SubObjectBoundsKind Kind,
                                       const StringRef Msg) {
   if (D->hasAttr<CHERINoSubobjectBoundsAttr>()) {
     StringRef Name = "<anonymous>";
@@ -931,18 +939,20 @@ static bool hasBoundsOptOutAnnotation(const CodeGenFunction &CGF, const Expr *E,
     CHERI_BOUNDS_DBG(<< "opt-out: ");
     std::string DiagStr = (Msg + " has opt-out attribute").str();
     if (auto TD = dyn_cast<TypeDecl>(D)) {
-      cannotSetBounds(CGF, E, QualType(TD->getTypeForDecl(), 0), Kind, DiagStr);
+      cannotSetBounds(CGF, DbgOS, E, QualType(TD->getTypeForDecl(), 0), Kind, DiagStr);
     } else {
       CGF.CGM.getDiags().Report(E->getExprLoc(),
                                 diag::remark_no_cheri_subobject_bounds)
           << (int)Kind << ("field '" + Name + "'").str() << DiagStr
           << E->getSourceRange();
-      CHERI_BOUNDS_DBG(<< DiagStr << " -> not setting bounds\n");
+      DEBUG_WITH_TYPE("cheri-bounds", llvm::dbgs()
+                                          << DbgOS.str() << DiagStr
+                                          << " -> not setting bounds\n");
     }
     return true;
   }
   if (auto VD = dyn_cast<ValueDecl>(D)) {
-    return hasBoundsOptOutAnnotation(CGF, E, VD->getType(), Kind,
+    return hasBoundsOptOutAnnotation(CGF, DbgOS, E, VD->getType(), Kind,
                                      Msg + " type");
   }
   return false;
@@ -950,9 +960,10 @@ static bool hasBoundsOptOutAnnotation(const CodeGenFunction &CGF, const Expr *E,
 
 // FIXME: should not tighten bounds on addresses of globals!
 
-static void remarkUsingContainerSize(const CodeGenFunction &CGF, const Expr *E,
-                                     QualType BaseTy, QualType Ty,
-                                     const char *Msg) {
+static void remarkUsingContainerSize(const CodeGenFunction &CGF,
+                                     llvm::raw_string_ostream &DbgOS,
+                                     const Expr *E, QualType BaseTy,
+                                     QualType Ty, const char *Msg) {
   CHERI_BOUNDS_DBG(<< Msg << " -> using container size -> ");
   CGF.CGM.getDiags().Report(E->getExprLoc(),
                             diag::remark_subobject_using_container_size)
@@ -967,18 +978,19 @@ enum class ArrayBoundsResult {
 };
 
 static ArrayBoundsResult canSetBoundsOnArraySubscript(
-    const Expr *E, const ArraySubscriptExpr *ASE, SubObjectBoundsKind Kind,
+    const Expr *E, llvm::raw_string_ostream &DbgOS,
+    const ArraySubscriptExpr *ASE, SubObjectBoundsKind Kind,
     LangOptions::CheriBoundsMode BoundsMode, const CodeGenFunction &CGF) {
   // TODO: should we opt-out even for references?
   // TODO: I guess cheri_no_bounds should have a argument that identifies
   // which kinds of narrowing are fine
-  if (hasBoundsOptOutAnnotation(CGF, E, ASE->getType(), Kind, "array type"))
+  if (hasBoundsOptOutAnnotation(CGF, DbgOS, E, ASE->getType(), Kind, "array type"))
     return ArrayBoundsResult::Never;
   // FIXME: handle use-remaining here....
   const Expr *Base =
       ASE->getBase()->IgnoreParenImpCastsExceptForNoChangeBounds();
   const QualType BaseTy = Base->getType();
-  if (hasBoundsOptOutAnnotation(CGF, E, BaseTy, Kind, "array base type"))
+  if (hasBoundsOptOutAnnotation(CGF, DbgOS, E, BaseTy, Kind, "array base type"))
     return ArrayBoundsResult::Never;
 
   if (Kind == SubObjectBoundsKind::Reference &&
@@ -999,7 +1011,7 @@ static ArrayBoundsResult canSetBoundsOnArraySubscript(
     // uses &foo[n] to get an unbounded member access instead of foo + n
     if (BoundsMode <= LangOptions::CBM_SubObjectsSafe) {
       if (BaseTy->isConstantArrayType())
-        remarkUsingContainerSize(CGF, E, BaseTy, ASE->getType(), "&array[n]");
+        remarkUsingContainerSize(CGF,DbgOS,  E, BaseTy, ASE->getType(), "&array[n]");
       return ArrayBoundsResult::UseFullArray;
     }
     return ArrayBoundsResult::DependsOnType;
@@ -1017,14 +1029,14 @@ static ArrayBoundsResult canSetBoundsOnArraySubscript(
   // `for_each_elem(&array[0], &array[last_index]);
   if (ConstLength == 0) {
     if (BaseTy->isConstantArrayType())
-      remarkUsingContainerSize(CGF, E, BaseTy, ASE->getType(), "&array[0]");
+      remarkUsingContainerSize(CGF,DbgOS, E, BaseTy, ASE->getType(), "&array[0]");
     return ArrayBoundsResult::UseFullArray;
   }
 
   if (BoundsMode < LangOptions::CBM_Aggressive) {
     // don't set bounds on array[constant] for subobject-safe
     if (BaseTy->isConstantArrayType())
-      remarkUsingContainerSize(CGF, E, BaseTy, ASE->getType(),
+      remarkUsingContainerSize(CGF, DbgOS, E, BaseTy, ASE->getType(),
                                "&array[<CONSTANT>]");
     return ArrayBoundsResult::UseFullArray;
   }
@@ -1034,7 +1046,7 @@ static ArrayBoundsResult canSetBoundsOnArraySubscript(
   if (const ConstantArrayType *CAT = dyn_cast<ConstantArrayType>(BaseTy)) {
     auto ArraySizeMinusOne = llvm::APSInt(CAT->getSize() - 1, false);
     if (llvm::APSInt::compareValues(ConstLength, ArraySizeMinusOne) >= 0) {
-      remarkUsingContainerSize(CGF, E, BaseTy, ASE->getType(),
+      remarkUsingContainerSize(CGF, DbgOS, E, BaseTy, ASE->getType(),
                                "bounds on &array[<last index>]");
       return ArrayBoundsResult::UseFullArray;
     }
@@ -1082,6 +1094,7 @@ static FieldDecl* findPossibleVLA(const RecordDecl *RD) {
 }
 
 static bool containsVariableLengthArray(LangOptions::CheriBoundsMode BoundsMode,
+                                        llvm::raw_string_ostream &DbgOS,
                                         QualType Ty) {
   auto RD = Ty->getAsRecordDecl();
   if (!RD)
@@ -1104,19 +1117,21 @@ CodeGenFunction::canTightenCheriBounds(QualType Ty, const Expr *E,
                                        SubObjectBoundsKind Kind) {
   const auto BoundsMode = getLangOpts().getCheriBounds();
   assert(BoundsMode > LangOptions::CBM_Conservative);
+  CodeGenFunction::TightenBoundsResult Result;
+  llvm::raw_string_ostream DbgOS(Result.DebugMessage);
   CHERI_BOUNDS_DBG(<< boundsKindStr(Kind) << " '" << Ty.getAsString()
                    << "' subobj bounds check: ");
 
   if (Ty->isIncompleteType() && !Ty->isIncompleteArrayType()) {
-    return cannotSetBounds(*this, E, Ty, Kind, "incomplete type");
+    return cannotSetBounds(*this, DbgOS, E, Ty, Kind, "incomplete type");
   }
 
   if (Ty->isDependentType()) {
-    return cannotSetBounds(*this, E, Ty, Kind, "dependent type");
+    return cannotSetBounds(*this, DbgOS, E, Ty, Kind, "dependent type");
   }
 
   if (Ty->isFunctionType()) {
-    return cannotSetBounds(*this, E, Ty, Kind,
+    return cannotSetBounds(*this, DbgOS, E, Ty, Kind,
                            Kind == SubObjectBoundsKind::Reference
                                ? "reference to function"
                                : "address of function");
@@ -1127,7 +1142,7 @@ CodeGenFunction::canTightenCheriBounds(QualType Ty, const Expr *E,
   // since oterwise we get a ParenExpr instead of ArraySubscriptExpr/MemberExpr!
   // Important: We must not ignore NoChangeBoundsExprs
   if (isa<NoChangeBoundsExpr>(E)) {
-    return cannotSetBounds(*this, E, Ty, Kind,
+    return cannotSetBounds(*this, DbgOS, E, Ty, Kind,
                            "__builtin_no_change_bounds() expression");
   }
 
@@ -1139,8 +1154,8 @@ CodeGenFunction::canTightenCheriBounds(QualType Ty, const Expr *E,
   // bounds (even in everywhere-unsafe mode!)
   int64_t TypeSize = getContext().getTypeSizeInChars(Ty).getQuantity();
 
-  const auto BoundsOnContainer = [this, IsSubObject, Kind](QualType Container) {
-    CodeGenFunction::TightenBoundsResult Result;
+  const auto BoundsOnContainer = [this, IsSubObject, Kind,
+                                  &Result](QualType Container) {
     Result.IsSubObject = IsSubObject;
     Result.IsContainerSize = true;
     Result.Size = getContext().getTypeSizeInChars(Container).getQuantity();
@@ -1148,18 +1163,16 @@ CodeGenFunction::canTightenCheriBounds(QualType Ty, const Expr *E,
     return Result;
   };
   ValueDecl* TargetField = nullptr;
-  const auto ExactBounds = [IsSubObject, &TargetField](int64_t Size) {
-    CodeGenFunction::TightenBoundsResult Result;
+  const auto ExactBounds = [IsSubObject, &TargetField, &Result](int64_t Size) {
     Result.IsSubObject = IsSubObject;
     Result.IsContainerSize = false;
     Result.TargetField = TargetField;
     Result.Size = Size;
     return Result;
   };
-  const auto UseRemainingSize = [IsSubObject,
+  const auto UseRemainingSize = [IsSubObject, &DbgOS, &Result,
                                  &TargetField](Twine Msg, uint64_t MaxSize = 0,
                                                bool IsContainerSize = false) {
-    CodeGenFunction::TightenBoundsResult Result;
     Result.IsSubObject = IsSubObject;
     Result.IsContainerSize = IsContainerSize;
     Result.UseRemainingSize = true;
@@ -1231,7 +1244,7 @@ CodeGenFunction::canTightenCheriBounds(QualType Ty, const Expr *E,
               ->isReferenceType();
     }
     if (IsReference)
-      return cannotSetBounds(*this, E, Ty, Kind,
+      return cannotSetBounds(*this, DbgOS, E, Ty, Kind,
                              "source is a C++ reference and therefore should "
                              "already have sub-object bounds");
   }
@@ -1249,7 +1262,7 @@ CodeGenFunction::canTightenCheriBounds(QualType Ty, const Expr *E,
     auto ValDecl = dyn_cast<ValueDecl>(Found);
     if ((ValDecl && ValDecl->isWeak()) || Found->hasAttr<WeakAttr>()) {
       return cannotSetBounds(
-          *this, E, Ty, Kind,
+          *this, DbgOS, E, Ty, Kind,
           "referenced value is a weak symbol and could therefore be NULL");
     }
   }
@@ -1260,12 +1273,12 @@ CodeGenFunction::canTightenCheriBounds(QualType Ty, const Expr *E,
     // annotated with no bounds should that apply to d?
     auto BaseTy = ME->getBase()->getType();
     if (ME->isArrow() && !BaseTy->getPointeeType().isNull()) {
-      if (hasBoundsOptOutAnnotation(*this, E, BaseTy, Kind,
+      if (hasBoundsOptOutAnnotation(*this, DbgOS, E, BaseTy, Kind,
                                     "base pointer type"))
         return None;
       BaseTy = BaseTy->getPointeeType();
     }
-    if (hasBoundsOptOutAnnotation(*this, E, BaseTy, Kind, "base type"))
+    if (hasBoundsOptOutAnnotation(*this, DbgOS, E, BaseTy, Kind, "base type"))
       return None;
 
     // When subscripting, attributes on the field only make sense for arrays,
@@ -1276,7 +1289,7 @@ CodeGenFunction::canTightenCheriBounds(QualType Ty, const Expr *E,
       return None;
     }
 
-    if (hasBoundsOptOutAnnotation(*this, E, ME->getMemberDecl(), Kind, "field"))
+    if (hasBoundsOptOutAnnotation(*this, DbgOS, E, ME->getMemberDecl(), Kind, "field"))
       return None;
 
     // Check whether the field or the field type has a "use-remaining-size" attr
@@ -1311,13 +1324,13 @@ CodeGenFunction::canTightenCheriBounds(QualType Ty, const Expr *E,
       // FIXME: we should set bounds to the whole union rather than not setting bounds at all
       // FIXME: should we set bounds for references?
       if (BoundsMode < LangOptions::CBM_References)
-        return cannotSetBounds(*this, E, Ty, Kind, "container is union");
+        return cannotSetBounds(*this, DbgOS, E, Ty, Kind, "container is union");
 
-      if (containsVariableLengthArray(BoundsMode, BaseTy))
+      if (containsVariableLengthArray(BoundsMode, DbgOS, BaseTy))
         return UseRemainingSize(
             "containing union includes a variable length array");
 
-      remarkUsingContainerSize(*this, E, BaseTy, Ty, "union member");
+      remarkUsingContainerSize(*this, DbgOS, E, BaseTy, Ty, "union member");
       return BoundsOnContainer(BaseTy);
     }
     *ReturnValueValid = false;
@@ -1343,7 +1356,7 @@ CodeGenFunction::canTightenCheriBounds(QualType Ty, const Expr *E,
     // i.e. ((char*)buf)[10] if buf is an array of different type
     StringRef KindStr = boundsKindStr(Kind);
     if (!Ty->isArrayType()) {
-      return cannotSetBounds(*this, E, Ty, Kind,
+      return cannotSetBounds(*this, DbgOS, E, Ty, Kind,
                              "array " + KindStr + " on non-array type");
     } else if (Ty->isIncompleteArrayType() || !Ty->isConstantSizeType()) {
       return UseRemainingSize("array " + KindStr + " on variable size type");
@@ -1365,7 +1378,7 @@ CodeGenFunction::canTightenCheriBounds(QualType Ty, const Expr *E,
       }
     }
     CHERI_BOUNDS_DBG(<< "Found array subscript -> ");
-    switch (canSetBoundsOnArraySubscript(E, ASE, Kind, BoundsMode, *this)) {
+    switch (canSetBoundsOnArraySubscript(E, DbgOS, ASE, Kind, BoundsMode, *this)) {
     case ArrayBoundsResult::Never:
       return None;
     case ArrayBoundsResult::Always:
@@ -1373,7 +1386,7 @@ CodeGenFunction::canTightenCheriBounds(QualType Ty, const Expr *E,
     case ArrayBoundsResult::UseFullArray: {
       if (isa<NoChangeBoundsExpr>(E)) {
         return cannotSetBounds(
-            *this, E, Ty, Kind,
+            *this, DbgOS, E, Ty, Kind,
             "__builtin_no_change_bounds() used for array base");
       } else if (Base->getType()->isConstantArrayType()) {
         return BoundsOnContainer(Base->getType());
@@ -1383,7 +1396,7 @@ CodeGenFunction::canTightenCheriBounds(QualType Ty, const Expr *E,
       // Otherwise we have a non-constant array type -> don't set bounds to
       // avoid crashes at runtime
       return cannotSetBounds(
-          *this, E, Ty, Kind,
+          *this, DbgOS, E, Ty, Kind,
           "should set bounds on full array but size is not known");
     }
     case ArrayBoundsResult::DependsOnType:
@@ -1392,7 +1405,7 @@ CodeGenFunction::canTightenCheriBounds(QualType Ty, const Expr *E,
   }
 
   // General opt-out based on the type of the expression
-  if (hasBoundsOptOutAnnotation(*this, E, Ty, Kind, "expression"))
+  if (hasBoundsOptOutAnnotation(*this, DbgOS, E, Ty, Kind, "expression"))
     return None;
 
   // if (Ty->isArrayType()) {
@@ -1408,7 +1421,7 @@ CodeGenFunction::canTightenCheriBounds(QualType Ty, const Expr *E,
       return UseRemainingSize("incomplete array type");
     } else if (isa<DependentSizedArrayType>(AT)) {
       llvm_unreachable("Should not get dependent types in subobject codegen");
-      return cannotSetBounds(*this, E, Ty, Kind, "dependent size array type");
+      return cannotSetBounds(*this, DbgOS, E, Ty, Kind, "dependent size array type");
     } else {
       llvm_unreachable("Unhandled array type");
     }
@@ -1447,7 +1460,7 @@ CodeGenFunction::canTightenCheriBounds(QualType Ty, const Expr *E,
   // I guess final classes would work
   if (Ty->isRecordType()) {
     CHERI_BOUNDS_DBG(<< "Found record type '" << Ty.getAsString() << "' -> ");
-    if (containsVariableLengthArray(BoundsMode, Ty)) {
+    if (containsVariableLengthArray(BoundsMode, DbgOS, Ty)) {
       return UseRemainingSize("record has flexible array member");
     }
     // FIXME: some of this is too conservative and we could actually set bounds
@@ -1463,7 +1476,7 @@ CodeGenFunction::canTightenCheriBounds(QualType Ty, const Expr *E,
       // TODO: isCLike() -> safe to set bounds? hopefully not inherited from?
       if (!IsFinalClass && BoundsMode <= LangOptions::CBM_SubObjectsSafe) {
         return cannotSetBounds(
-            *this, E, Ty, Kind,
+            *this, DbgOS, E, Ty, Kind,
             "non-final class and using sub-object-safe mode");
       }
       // No bounds on classes with vtables
@@ -1475,7 +1488,7 @@ CodeGenFunction::canTightenCheriBounds(QualType Ty, const Expr *E,
       // TODO: check there are no flexible array members
       if (!CRD->isLiteral()) {
         return cannotSetBounds(
-            *this, E, Ty, Kind,
+            *this, DbgOS, E, Ty, Kind,
             "final but not a literal type -> size might by dynamic");
       } else {
         assert(CRD->getNumVBases() == 0);
@@ -1483,7 +1496,7 @@ CodeGenFunction::canTightenCheriBounds(QualType Ty, const Expr *E,
         return ExactBounds(TypeSize);
       }
     }
-    return cannotSetBounds(*this, E, Ty, Kind, "not a struct/class");
+    return cannotSetBounds(*this, DbgOS, E, Ty, Kind, "not a struct/class");
   }
   // Otherwise this type is unhandled, let's print a message:
   CGM.getDiags().Report(E->getExprLoc(),

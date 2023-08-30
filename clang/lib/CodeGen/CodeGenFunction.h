@@ -4392,6 +4392,7 @@ public:
     bool IsContainerSize = false;
     bool UseRemainingSize = false;
     std::string DiagMessage;
+    std::string DebugMessage;
     ValueDecl* TargetField = nullptr;
   };
   Optional<TightenBoundsResult>
