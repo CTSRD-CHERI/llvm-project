@@ -8,10 +8,10 @@
 ; RUN: %cheri_purecap_opt -opaque-pointers=0 -cheri-bound-allocas %s -o - -S -cheri-stack-bounds-single-intrinsic-threshold=0 -cheri-stack-bounds=if-needed | FileCheck %s -check-prefix IF-NEEDED-SINGLE
 ; RUN: %cheri_purecap_opt -opaque-pointers=0 -cheri-bound-allocas %s -o - -S -cheri-stack-bounds-single-intrinsic-threshold=10 -cheri-stack-bounds=if-needed | FileCheck %s -check-prefix IF-NEEDED-PER-USE
 ; RUN: %cheri_purecap_opt -opaque-pointers=0 -cheri-bound-allocas %s -o - -S -cheri-stack-bounds-single-intrinsic-threshold=10 -cheri-stack-bounds=all-or-none | FileCheck %s -check-prefix ALL-OR-NONE-PER-USE
-; RUN: %cheri_purecap_opt -opaque-pointers=1 -cheri-bound-allocas %s -o - -S | FileCheck %s -check-prefix DEFAULT-OPAQUE
-; RUN: %cheri_purecap_opt -opaque-pointers=1 -cheri-bound-allocas %s -o - -S -cheri-stack-bounds-single-intrinsic-threshold=0 -cheri-stack-bounds=if-needed | FileCheck %s -check-prefix IF-NEEDED-SINGLE-OPAQUE
-; RUN: %cheri_purecap_opt -opaque-pointers=1 -cheri-bound-allocas %s -o - -S -cheri-stack-bounds-single-intrinsic-threshold=10 -cheri-stack-bounds=if-needed | FileCheck %s -check-prefix IF-NEEDED-PER-USE-OPAQUE
-; RUN: %cheri_purecap_opt -opaque-pointers=1 -cheri-bound-allocas %s -o - -S -cheri-stack-bounds-single-intrinsic-threshold=10 -cheri-stack-bounds=all-or-none | FileCheck %s -check-prefix ALL-OR-NONE-PER-USE-OPAQUE
+; RUN: %cheri_purecap_opt -opaque-pointers=1 -instsimplify -cheri-bound-allocas %s -o - -S | FileCheck %s -check-prefix DEFAULT-OPAQUE
+; RUN: %cheri_purecap_opt -opaque-pointers=1 -instsimplify -cheri-bound-allocas %s -o - -S -cheri-stack-bounds-single-intrinsic-threshold=0 -cheri-stack-bounds=if-needed | FileCheck %s -check-prefix IF-NEEDED-SINGLE-OPAQUE
+; RUN: %cheri_purecap_opt -opaque-pointers=1 -instsimplify -cheri-bound-allocas %s -o - -S -cheri-stack-bounds-single-intrinsic-threshold=10 -cheri-stack-bounds=if-needed | FileCheck %s -check-prefix IF-NEEDED-PER-USE-OPAQUE
+; RUN: %cheri_purecap_opt -opaque-pointers=1 -instsimplify -cheri-bound-allocas %s -o - -S -cheri-stack-bounds-single-intrinsic-threshold=10 -cheri-stack-bounds=all-or-none | FileCheck %s -check-prefix ALL-OR-NONE-PER-USE-OPAQUE
 
 target datalayout = "Eme-pf200:128:128:128:64-A200-P200-G200"
 
@@ -456,29 +456,25 @@ define i8 addrspace(200)* @return_alloca() addrspace(200) nounwind {
 ; DEFAULT-OPAQUE-NEXT:  entry:
 ; DEFAULT-OPAQUE-NEXT:    [[X:%.*]] = alloca i32, align 4, addrspace(200)
 ; DEFAULT-OPAQUE-NEXT:    [[TMP0:%.*]] = call ptr addrspace(200) @llvm.cheri.bounded.stack.cap.i64(ptr addrspace(200) [[X]], i64 4)
-; DEFAULT-OPAQUE-NEXT:    [[I8:%.*]] = bitcast ptr addrspace(200) [[TMP0]] to ptr addrspace(200)
-; DEFAULT-OPAQUE-NEXT:    ret ptr addrspace(200) [[I8]]
+; DEFAULT-OPAQUE-NEXT:    ret ptr addrspace(200) [[TMP0]]
 ;
 ; IF-NEEDED-SINGLE-OPAQUE-LABEL: @return_alloca(
 ; IF-NEEDED-SINGLE-OPAQUE-NEXT:  entry:
 ; IF-NEEDED-SINGLE-OPAQUE-NEXT:    [[X:%.*]] = alloca i32, align 4, addrspace(200)
 ; IF-NEEDED-SINGLE-OPAQUE-NEXT:    [[TMP0:%.*]] = call ptr addrspace(200) @llvm.cheri.bounded.stack.cap.i64(ptr addrspace(200) [[X]], i64 4)
-; IF-NEEDED-SINGLE-OPAQUE-NEXT:    [[I8:%.*]] = bitcast ptr addrspace(200) [[TMP0]] to ptr addrspace(200)
-; IF-NEEDED-SINGLE-OPAQUE-NEXT:    ret ptr addrspace(200) [[I8]]
+; IF-NEEDED-SINGLE-OPAQUE-NEXT:    ret ptr addrspace(200) [[TMP0]]
 ;
 ; IF-NEEDED-PER-USE-OPAQUE-LABEL: @return_alloca(
 ; IF-NEEDED-PER-USE-OPAQUE-NEXT:  entry:
 ; IF-NEEDED-PER-USE-OPAQUE-NEXT:    [[X:%.*]] = alloca i32, align 4, addrspace(200)
 ; IF-NEEDED-PER-USE-OPAQUE-NEXT:    [[TMP0:%.*]] = call ptr addrspace(200) @llvm.cheri.bounded.stack.cap.i64(ptr addrspace(200) [[X]], i64 4)
-; IF-NEEDED-PER-USE-OPAQUE-NEXT:    [[I8:%.*]] = bitcast ptr addrspace(200) [[TMP0]] to ptr addrspace(200)
-; IF-NEEDED-PER-USE-OPAQUE-NEXT:    ret ptr addrspace(200) [[I8]]
+; IF-NEEDED-PER-USE-OPAQUE-NEXT:    ret ptr addrspace(200) [[TMP0]]
 ;
 ; ALL-OR-NONE-PER-USE-OPAQUE-LABEL: @return_alloca(
 ; ALL-OR-NONE-PER-USE-OPAQUE-NEXT:  entry:
 ; ALL-OR-NONE-PER-USE-OPAQUE-NEXT:    [[X:%.*]] = alloca i32, align 4, addrspace(200)
 ; ALL-OR-NONE-PER-USE-OPAQUE-NEXT:    [[TMP0:%.*]] = call ptr addrspace(200) @llvm.cheri.bounded.stack.cap.i64(ptr addrspace(200) [[X]], i64 4)
-; ALL-OR-NONE-PER-USE-OPAQUE-NEXT:    [[I8:%.*]] = bitcast ptr addrspace(200) [[TMP0]] to ptr addrspace(200)
-; ALL-OR-NONE-PER-USE-OPAQUE-NEXT:    ret ptr addrspace(200) [[I8]]
+; ALL-OR-NONE-PER-USE-OPAQUE-NEXT:    ret ptr addrspace(200) [[TMP0]]
 ;
 entry:
   %x = alloca i32, align 4, addrspace(200)

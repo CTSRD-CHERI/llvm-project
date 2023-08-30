@@ -3,7 +3,7 @@
 ; in the CheriBoundAllocas pass. We now ensure that multiple uses within the same instruction
 ; reuse the same intrinsic call to avoid this problem.
 ; RUN: opt -opaque-pointers=0 -cheri-bound-allocas -S < %s | FileCheck %s
-; RUN: opt -opaque-pointers=1 -cheri-bound-allocas -S < %s | FileCheck %s --check-prefix=OPAQUE
+; RUN: opt -opaque-pointers=1 -instsimplify -cheri-bound-allocas -S < %s | FileCheck %s --check-prefix=OPAQUE
 target datalayout = "e-m:e-pf200:128:128:128:64-p:64:64-i64:64-i128:128-n64-S128-A200-P200-G200"
 target triple = "riscv64-unknown-freebsd13"
 
