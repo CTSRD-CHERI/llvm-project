@@ -1,7 +1,5 @@
-; RUN: %cheri_purecap_opt -enable-new-pm=1 -cheri-bound-allocas %s -o - -S | FileCheck %s
-; RUN: %cheri_purecap_opt -enable-new-pm=0 -cheri-bound-allocas %s -o - -S | FileCheck %s
-; RUN: %riscv64_cheri_purecap_opt -enable-new-pm=1 -cheri-bound-allocas %s -o - -S | FileCheck %s
-; RUN: %riscv64_cheri_purecap_opt -enable-new-pm=0 -cheri-bound-allocas %s -o - -S | FileCheck %s
+; RUN: %riscv64_cheri_purecap_opt -opaque-pointers=0 -cheri-bound-allocas %s -o - -S | FileCheck %s
+; RUN: %riscv64_cheri_purecap_opt -opaque-pointers=1 -cheri-bound-allocas %s -o - -S | FileCheck %s
 target datalayout = "E-m:m-pf200:128:128:128:64-i8:8:32-i16:16:32-i64:64-n32:64-S128-A200-P200-G200"
 declare i32 @use32(i32 addrspace(200)*) #1
 declare i32 @use8(i8 addrspace(200)*) #1
