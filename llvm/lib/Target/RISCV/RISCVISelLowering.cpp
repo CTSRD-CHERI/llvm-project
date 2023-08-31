@@ -177,7 +177,7 @@ RISCVTargetLowering::RISCVTargetLowering(const TargetMachine &TM,
     auto addRegClassForRVV = [this](MVT VT) {
       // Disable the smallest fractional LMUL types if ELEN is less than
       // RVVBitsPerBlock.
-      unsigned MinElts = RISCV::RVVBitsPerBlock / Subtarget.getELEN();
+      unsigned MinElts = RISCV::RVVBitsPerBlock / Subtarget.getELen();
       if (VT.getVectorMinNumElements() < MinElts)
         return;
 
@@ -1388,7 +1388,7 @@ bool RISCVTargetLowering::shouldExpandGetVectorLength(EVT TripCountVT,
     return true;
 
   // Don't allow VF=1 if those types are't legal.
-  if (VF < RISCV::RVVBitsPerBlock / Subtarget.getELEN())
+  if (VF < RISCV::RVVBitsPerBlock / Subtarget.getELen())
     return true;
 
   // VLEN=32 support is incomplete.
@@ -2396,7 +2396,7 @@ static bool useRVVForFixedLengthVectorVT(MVT VT,
   }
 
   // Reject elements larger than ELEN.
-  if (EltVT.getSizeInBits() > Subtarget.getELEN())
+  if (EltVT.getSizeInBits() > Subtarget.getELen())
     return false;
 
   unsigned LMul = divideCeil(VT.getSizeInBits(), MinVLen);
@@ -2425,7 +2425,7 @@ static MVT getContainerForFixedLengthVector(const TargetLowering &TLI, MVT VT,
          "Expected legal fixed length vector!");
 
   unsigned MinVLen = Subtarget.getRealMinVLen();
-  unsigned MaxELen = Subtarget.getELEN();
+  unsigned MaxELen = Subtarget.getELen();
 
   MVT EltVT = VT.getVectorElementType();
   switch (EltVT.SimpleTy) {
@@ -3277,7 +3277,7 @@ static SDValue lowerBuildVectorOfConstants(SDValue Op, SelectionDAG &DAG,
     // XLenVT if we're producing a v8i1. This results in more consistent
     // codegen across RV32 and RV64.
     unsigned NumViaIntegerBits = std::clamp(NumElts, 8u, Subtarget.getXLen());
-    NumViaIntegerBits = std::min(NumViaIntegerBits, Subtarget.getELEN());
+    NumViaIntegerBits = std::min(NumViaIntegerBits, Subtarget.getELen());
     // If we have to use more than one INSERT_VECTOR_ELT then this
     // optimization is likely to increase code size; avoid peforming it in
     // such a case. We can use a load from a constant pool in this case.
@@ -3777,7 +3777,7 @@ static bool isDeinterleaveShuffle(MVT VT, MVT ContainerVT, SDValue V1,
                                   SDValue V2, ArrayRef<int> Mask,
                                   const RISCVSubtarget &Subtarget) {
   // Need to be able to widen the vector.
-  if (VT.getScalarSizeInBits() >= Subtarget.getELEN())
+  if (VT.getScalarSizeInBits() >= Subtarget.getELen())
     return false;
 
   // Both input must be extracts.
@@ -3821,7 +3821,7 @@ static bool isDeinterleaveShuffle(MVT VT, MVT ContainerVT, SDValue V1,
 static bool isInterleaveShuffle(ArrayRef<int> Mask, MVT VT, int &EvenSrc,
                                 int &OddSrc, const RISCVSubtarget &Subtarget) {
   // We need to be able to widen elements to the next larger integer type.
-  if (VT.getScalarSizeInBits() >= Subtarget.getELEN())
+  if (VT.getScalarSizeInBits() >= Subtarget.getELen())
     return false;
 
   int Size = Mask.size();
@@ -4172,7 +4172,7 @@ static SDValue getWideningInterleave(SDValue EvenV, SDValue OddV,
     OddV = convertToScalableVector(VecContainerVT, OddV, DAG, Subtarget);
   }
 
-  assert(VecVT.getScalarSizeInBits() < Subtarget.getELEN());
+  assert(VecVT.getScalarSizeInBits() < Subtarget.getELen());
 
   // We're working with a vector of the same size as the resulting
   // interleaved vector, but with half the number of elements and
@@ -7643,7 +7643,7 @@ SDValue RISCVTargetLowering::lowerEXTRACT_VECTOR_ELT(SDValue Op,
         unsigned WidenVecLen;
         SDValue ExtractElementIdx;
         SDValue ExtractBitIdx;
-        unsigned MaxEEW = Subtarget.getELEN();
+        unsigned MaxEEW = Subtarget.getELen();
         MVT LargestEltVT = MVT::getIntegerVT(
             std::min(MaxEEW, unsigned(XLenVT.getSizeInBits())));
         if (NumElts <= LargestEltVT.getSizeInBits()) {
@@ -7944,7 +7944,7 @@ static SDValue lowerGetVectorLength(SDNode *N, SelectionDAG &DAG,
   // Determine the VF that corresponds to LMUL 1 for ElementWidth.
   unsigned LMul1VF = RISCV::RVVBitsPerBlock / ElementWidth;
   // We don't support VF==1 with ELEN==32.
-  unsigned MinVF = RISCV::RVVBitsPerBlock / Subtarget.getELEN();
+  unsigned MinVF = RISCV::RVVBitsPerBlock / Subtarget.getELen();
 
   unsigned VF = N->getConstantOperandVal(2);
   assert(VF >= MinVF && VF <= (LMul1VF * 8) && isPowerOf2_32(VF) &&
@@ -9041,7 +9041,7 @@ SDValue RISCVTargetLowering::lowerVECTOR_DEINTERLEAVE(SDValue Op,
 
   // We can deinterleave through vnsrl.wi if the element type is smaller than
   // ELEN
-  if (VecVT.getScalarSizeInBits() < Subtarget.getELEN()) {
+  if (VecVT.getScalarSizeInBits() < Subtarget.getELen()) {
     SDValue Even =
         getDeinterleaveViaVNSRL(DL, VecVT, Concat, true, Subtarget, DAG);
     SDValue Odd =
@@ -9110,7 +9110,7 @@ SDValue RISCVTargetLowering::lowerVECTOR_INTERLEAVE(SDValue Op,
 
   // If the element type is smaller than ELEN, then we can interleave with
   // vwaddu.vv and vwmaccu.vx
-  if (VecVT.getScalarSizeInBits() < Subtarget.getELEN()) {
+  if (VecVT.getScalarSizeInBits() < Subtarget.getELen()) {
     Interleaved = getWideningInterleave(Op.getOperand(0), Op.getOperand(1), DL,
                                         DAG, Subtarget);
   } else {
@@ -18517,7 +18517,7 @@ EVT RISCVTargetLowering::getOptimalMemOpType(const MemOp &Op,
   // a large scalar constant and instead use vmv.v.x/i to do the
   // broadcast.  For everything else, prefer ELenVT to minimize VL and thus
   // maximize the chance we can encode the size in the vsetvli.
-  MVT ELenVT = MVT::getIntegerVT(Subtarget.getELEN());
+  MVT ELenVT = MVT::getIntegerVT(Subtarget.getELen());
   MVT PreferredVT = (Op.isMemset() && !Op.isZeroMemset()) ? MVT::i8 : ELenVT;
 
   // Do we have sufficient alignment for our preferred VT?  If not, revert
