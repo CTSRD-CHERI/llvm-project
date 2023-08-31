@@ -1,5 +1,4 @@
 set(LLVM_LINK_COMPONENTS
-  Option
   Support
   # FIXME: only needed for MCTargetOptions::cheriCapabilityTableABI
   MC
