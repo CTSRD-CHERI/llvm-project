@@ -56,8 +56,10 @@
 # CHECK-LABEL: Relocation section '.rel.dyn'
 # CHECK-SAME:  at offset 0x{{.+}} contains 1 entries:
 # CHECK-NEXT:    Offset             Info             Type               Symbol's Value  Symbol's Name
-# FIXME: relocation offset appears to be changed to 203dc instead of 203d8
-# which means we read the addend from the wrong offset and report the error.
+## NOTE: The relocation offset was to be changed to 203dc instead of 203d8
+## which means we read the addend from the wrong offset and report the error.
+## This was changed in commit 6faba31e0d88ce71e87567ddb51d2444524b8a81 (https://reviews.llvm.org/D122459)
+## This fixed more common use-cases but now generates incorrect outputs for MIPS non-PIC object -> shared lib.
 # CHECK-NEXT: 00000000000203dc  0000000000001203 R_MIPS_REL32/R_MIPS_64/R_MIPS_NONE
 
 
