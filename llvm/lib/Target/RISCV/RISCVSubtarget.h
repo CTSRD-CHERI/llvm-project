@@ -49,7 +49,6 @@ private:
   bool ATTRIBUTE = DEFAULT;
 #include "RISCVGenSubtargetInfo.inc"
 
-  unsigned XLen = 32;
   unsigned ZvlLen = 0;
   unsigned RVVVectorBitsMin;
   unsigned RVVVectorBitsMax;
@@ -128,12 +127,10 @@ public:
   }
   bool is64Bit() const { return IsRV64; }
   MVT getXLenVT() const {
-    return MVT::getIntegerVT(getXLen());
+    return is64Bit() ? MVT::i64 : MVT::i32;
   }
   unsigned getXLen() const {
-    assert((XLen == 32 || XLen == 64) &&
-           "unexpected xlen");
-    return XLen;
+    return is64Bit() ? 64 : 32;
   }
   unsigned getFLen() const {
     if (HasStdExtD)
