@@ -1198,11 +1198,10 @@ CodeGenFunction::canTightenCheriBounds(QualType Ty, const Expr *E,
     Result.Size = Size;
     return Result;
   };
-  const auto UseRemainingSize = [IsSubObject, &DbgOS, &Result,
-                                 &TargetField](Twine Msg, uint64_t MaxSize = 0,
-                                               bool IsContainerSize = false) {
+  const auto UseRemainingSize = [IsSubObject, &DbgOS, &Result, &TargetField](
+                                    Twine Msg, uint64_t MaxSize = 0) {
     Result.IsSubObject = IsSubObject;
-    Result.IsContainerSize = IsContainerSize;
+    Result.IsContainerSize = false;
     Result.UseRemainingSize = true;
     if (MaxSize != 0) {
       Result.Size = MaxSize;
@@ -1419,7 +1418,7 @@ CodeGenFunction::canTightenCheriBounds(QualType Ty, const Expr *E,
       } else if (Base->getType()->isConstantArrayType()) {
         return BoundsOnContainer(Base->getType(), ASE);
       } else if (Base->getType()->isArrayType()) {
-        UseRemainingSize("bounds on full array but size not known", 0, true);
+        return UseRemainingSize("bounds on full array but size not known", 0);
       }
       // Otherwise we have a non-constant array type -> don't set bounds to
       // avoid crashes at runtime

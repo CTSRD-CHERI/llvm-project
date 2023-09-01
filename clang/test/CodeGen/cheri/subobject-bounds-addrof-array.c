@@ -441,7 +441,11 @@ extern int bhnd_sprom_layouts[];
 // AGGRESSIVE-OR-LESS-NEXT:    [[REMAINING_BYTES:%.*]] = sub i64 [[CUR_LEN]], [[CUR_OFFSET]]
 // AGGRESSIVE-OR-LESS-NEXT:    [[TMP0:%.*]] = call ptr addrspace(200) @llvm.cheri.cap.bounds.set.i64(ptr addrspace(200) @bhnd_sprom_layouts, i64 [[REMAINING_BYTES]])
 // AGGRESSIVE-OR-LESS-NEXT:    [[ARRAYIDX:%.*]] = getelementptr inbounds [0 x i32], ptr addrspace(200) [[TMP0]], i64 0, i64 0
-// AGGRESSIVE-OR-LESS-NEXT:    call void @do_stuff_untyped(ptr addrspace(200) noundef [[ARRAYIDX]])
+// AGGRESSIVE-OR-LESS-NEXT:    [[CUR_OFFSET1:%.*]] = call i64 @llvm.cheri.cap.offset.get.i64(ptr addrspace(200) [[ARRAYIDX]])
+// AGGRESSIVE-OR-LESS-NEXT:    [[CUR_LEN2:%.*]] = call i64 @llvm.cheri.cap.length.get.i64(ptr addrspace(200) [[ARRAYIDX]])
+// AGGRESSIVE-OR-LESS-NEXT:    [[REMAINING_BYTES3:%.*]] = sub i64 [[CUR_LEN2]], [[CUR_OFFSET1]]
+// AGGRESSIVE-OR-LESS-NEXT:    [[TMP1:%.*]] = call ptr addrspace(200) @llvm.cheri.cap.bounds.set.i64(ptr addrspace(200) [[ARRAYIDX]], i64 [[REMAINING_BYTES3]])
+// AGGRESSIVE-OR-LESS-NEXT:    call void @do_stuff_untyped(ptr addrspace(200) noundef [[TMP1]])
 // AGGRESSIVE-OR-LESS-NEXT:    ret void
 //
 // VERY-AGGRESSIVE-LABEL: @test_unsized_global_array(
@@ -457,14 +461,14 @@ extern int bhnd_sprom_layouts[];
 //
 void test_unsized_global_array(void) {
   do_stuff_untyped(&bhnd_sprom_layouts[0]);
-  // aggressive-or-less-remark@-1{{not setting bounds for pointer to 'int' (should set bounds on full array but size is not known)}}
+  // aggressive-or-less-remark@-1{{setting sub-object bounds for pointer to 'int' to remaining bytes (bounds on full array but size not known)}}
   // very-aggressive-remark@-2{{setting sub-object bounds for pointer to 'int' to 4 bytes}}
   // common-remark@-3{{setting bounds for array subscript on 'int[]' to remaining bytes (array subscript on variable size type)}}
 
-  // DBG-SUBOBJECT-SAFE-NEXT: address 'int' subobj bounds check: Found array subscript -> index is a constant -> bounds on full array but size not known -> should set bounds on full array but size is not known -> not setting bounds
-  // DBG-AGGRESSIVE-NEXT: address 'int' subobj bounds check: Found array subscript -> index is a constant -> bounds on full array but size not known -> should set bounds on full array but size is not known -> not setting bounds
   // DBG-NEXT: subscript 'int[]' subobj bounds check: array subscript on variable size type -> setting bounds for 'int[]' subscript to remaining
   // DBG-VERY-AGGRESSIVE-NEXT: address 'int' subobj bounds check: Found array subscript -> index is a constant -> bounds-mode is very-aggressive -> bounds on array[CONST] are fine -> Found scalar type -> setting bounds for 'int' address to 4
+  // DBG-SUBOBJECT-SAFE-NEXT: address 'int' subobj bounds check: Found array subscript -> index is a constant -> bounds on full array but size not known -> setting bounds for 'int' address to remaining
+  // DBG-AGGRESSIVE-NEXT: address 'int' subobj bounds check: Found array subscript -> index is a constant -> bounds on full array but size not known -> setting bounds for 'int' address to remaining
 }
 
 #ifdef NOTYET
@@ -485,11 +489,11 @@ void test_multidim_array(struct with_2d_array* s, int index) {
 // DBG-NOT: cheri-bounds
 // DBG-AGGRESSIVE-NEXT:      4 cheri-bounds     - Number of & operators where container bounds were used
 // DBG-SUBOBJECT-SAFE-NEXT:  6 cheri-bounds     - Number of & operators where container bounds were used
+// DBG-SUBOBJECT-SAFE-NEXT:  1 cheri-bounds     - Number of & operators where remaining allocation size was used
+// DBG-AGGRESSIVE-NEXT:      1 cheri-bounds     - Number of & operators where remaining allocation size was used
 // DBG-NEXT:                 1 cheri-bounds     - Number of [] operators where remaining allocation size was used
 // DBG-VERY-AGGRESSIVE-NEXT:10 cheri-bounds     - Number of & operators where bounds were tightened
 // DBG-SUBOBJECT-SAFE-NEXT:  1 cheri-bounds     - Number of & operators where bounds were tightened
 // DBG-AGGRESSIVE-NEXT:      3 cheri-bounds     - Number of & operators where bounds were tightened
-
-// DBG-NOT: cheri-bounds
-// DBG: 6 cheri-bounds - Number of [] operators where bounds were tightened
+// DBG-NEXT:                 6 cheri-bounds - Number of [] operators where bounds were tightened
 // DBG-NOT: cheri-bounds
