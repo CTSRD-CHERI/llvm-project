@@ -29,12 +29,12 @@
 // CHECK-IL32PC64-NEXT:    [[TMP1:%.*]] = call i32 @llvm.cheri.cap.address.get.i32(ptr addrspace(200) [[ARGP_CUR1]])
 // CHECK-IL32PC64-NEXT:    [[TMP2:%.*]] = add i32 [[TMP1]], 7
 // CHECK-IL32PC64-NEXT:    [[TMP3:%.*]] = and i32 [[TMP2]], -8
-// CHECK-IL32PC64-NEXT:    [[TMP4:%.*]] = call ptr addrspace(200) @llvm.cheri.cap.address.set.i32(ptr addrspace(200) [[ARGP_CUR1]], i32 [[TMP3]])
-// CHECK-IL32PC64-NEXT:    [[ARGP_NEXT2:%.*]] = getelementptr inbounds i8, ptr addrspace(200) [[TMP4]], i32 8
+// CHECK-IL32PC64-NEXT:    [[ARGP_CUR1_ALIGNED:%.*]] = call ptr addrspace(200) @llvm.cheri.cap.address.set.i32(ptr addrspace(200) [[ARGP_CUR1]], i32 [[TMP3]])
+// CHECK-IL32PC64-NEXT:    [[ARGP_NEXT2:%.*]] = getelementptr inbounds i8, ptr addrspace(200) [[ARGP_CUR1_ALIGNED]], i32 8
 // CHECK-IL32PC64-NEXT:    store ptr addrspace(200) [[ARGP_NEXT2]], ptr addrspace(200) [[AP]], align 8
-// CHECK-IL32PC64-NEXT:    [[TMP5:%.*]] = load ptr addrspace(200), ptr addrspace(200) [[TMP4]], align 8
+// CHECK-IL32PC64-NEXT:    [[TMP4:%.*]] = load ptr addrspace(200), ptr addrspace(200) [[ARGP_CUR1_ALIGNED]], align 8
 // CHECK-IL32PC64-NEXT:    call void @llvm.va_end.p200(ptr addrspace(200) [[AP]])
-// CHECK-IL32PC64-NEXT:    ret ptr addrspace(200) [[TMP5]]
+// CHECK-IL32PC64-NEXT:    ret ptr addrspace(200) [[TMP4]]
 //
 // CHECK-L64PC128-LABEL: define {{[^@]+}}@callee
 // CHECK-L64PC128-SAME: (i32 noundef signext [[N:%.*]], ...) addrspace(200) #[[ATTR0:[0-9]+]] {
@@ -60,12 +60,12 @@
 // CHECK-L64PC128-NEXT:    [[TMP1:%.*]] = call i64 @llvm.cheri.cap.address.get.i64(ptr addrspace(200) [[ARGP_CUR1]])
 // CHECK-L64PC128-NEXT:    [[TMP2:%.*]] = add i64 [[TMP1]], 15
 // CHECK-L64PC128-NEXT:    [[TMP3:%.*]] = and i64 [[TMP2]], -16
-// CHECK-L64PC128-NEXT:    [[TMP4:%.*]] = call ptr addrspace(200) @llvm.cheri.cap.address.set.i64(ptr addrspace(200) [[ARGP_CUR1]], i64 [[TMP3]])
-// CHECK-L64PC128-NEXT:    [[ARGP_NEXT2:%.*]] = getelementptr inbounds i8, ptr addrspace(200) [[TMP4]], i64 16
+// CHECK-L64PC128-NEXT:    [[ARGP_CUR1_ALIGNED:%.*]] = call ptr addrspace(200) @llvm.cheri.cap.address.set.i64(ptr addrspace(200) [[ARGP_CUR1]], i64 [[TMP3]])
+// CHECK-L64PC128-NEXT:    [[ARGP_NEXT2:%.*]] = getelementptr inbounds i8, ptr addrspace(200) [[ARGP_CUR1_ALIGNED]], i64 16
 // CHECK-L64PC128-NEXT:    store ptr addrspace(200) [[ARGP_NEXT2]], ptr addrspace(200) [[AP]], align 16
-// CHECK-L64PC128-NEXT:    [[TMP5:%.*]] = load ptr addrspace(200), ptr addrspace(200) [[TMP4]], align 16
+// CHECK-L64PC128-NEXT:    [[TMP4:%.*]] = load ptr addrspace(200), ptr addrspace(200) [[ARGP_CUR1_ALIGNED]], align 16
 // CHECK-L64PC128-NEXT:    call void @llvm.va_end.p200(ptr addrspace(200) [[AP]])
-// CHECK-L64PC128-NEXT:    ret ptr addrspace(200) [[TMP5]]
+// CHECK-L64PC128-NEXT:    ret ptr addrspace(200) [[TMP4]]
 //
 void *callee(int n, ...) {
   __builtin_va_list ap;
@@ -128,11 +128,11 @@ struct S {
 // CHECK-IL32PC64-NEXT:    [[TMP1:%.*]] = call i32 @llvm.cheri.cap.address.get.i32(ptr addrspace(200) [[ARGP_CUR1]])
 // CHECK-IL32PC64-NEXT:    [[TMP2:%.*]] = add i32 [[TMP1]], 7
 // CHECK-IL32PC64-NEXT:    [[TMP3:%.*]] = and i32 [[TMP2]], -8
-// CHECK-IL32PC64-NEXT:    [[TMP4:%.*]] = call ptr addrspace(200) @llvm.cheri.cap.address.set.i32(ptr addrspace(200) [[ARGP_CUR1]], i32 [[TMP3]])
-// CHECK-IL32PC64-NEXT:    [[ARGP_NEXT2:%.*]] = getelementptr inbounds i8, ptr addrspace(200) [[TMP4]], i32 8
+// CHECK-IL32PC64-NEXT:    [[ARGP_CUR1_ALIGNED:%.*]] = call ptr addrspace(200) @llvm.cheri.cap.address.set.i32(ptr addrspace(200) [[ARGP_CUR1]], i32 [[TMP3]])
+// CHECK-IL32PC64-NEXT:    [[ARGP_NEXT2:%.*]] = getelementptr inbounds i8, ptr addrspace(200) [[ARGP_CUR1_ALIGNED]], i32 8
 // CHECK-IL32PC64-NEXT:    store ptr addrspace(200) [[ARGP_NEXT2]], ptr addrspace(200) [[AP]], align 8
-// CHECK-IL32PC64-NEXT:    [[TMP5:%.*]] = load ptr addrspace(200), ptr addrspace(200) [[TMP4]], align 8
-// CHECK-IL32PC64-NEXT:    call void @llvm.memcpy.p200.p200.i32(ptr addrspace(200) align 1 [[AGG_RESULT]], ptr addrspace(200) align 1 [[TMP5]], i32 64, i1 false)
+// CHECK-IL32PC64-NEXT:    [[TMP4:%.*]] = load ptr addrspace(200), ptr addrspace(200) [[ARGP_CUR1_ALIGNED]], align 8
+// CHECK-IL32PC64-NEXT:    call void @llvm.memcpy.p200.p200.i32(ptr addrspace(200) align 1 [[AGG_RESULT]], ptr addrspace(200) align 1 [[TMP4]], i32 64, i1 false)
 // CHECK-IL32PC64-NEXT:    ret void
 //
 // CHECK-L64PC128-LABEL: define {{[^@]+}}@callee_S
@@ -159,11 +159,11 @@ struct S {
 // CHECK-L64PC128-NEXT:    [[TMP1:%.*]] = call i64 @llvm.cheri.cap.address.get.i64(ptr addrspace(200) [[ARGP_CUR1]])
 // CHECK-L64PC128-NEXT:    [[TMP2:%.*]] = add i64 [[TMP1]], 15
 // CHECK-L64PC128-NEXT:    [[TMP3:%.*]] = and i64 [[TMP2]], -16
-// CHECK-L64PC128-NEXT:    [[TMP4:%.*]] = call ptr addrspace(200) @llvm.cheri.cap.address.set.i64(ptr addrspace(200) [[ARGP_CUR1]], i64 [[TMP3]])
-// CHECK-L64PC128-NEXT:    [[ARGP_NEXT2:%.*]] = getelementptr inbounds i8, ptr addrspace(200) [[TMP4]], i64 16
+// CHECK-L64PC128-NEXT:    [[ARGP_CUR1_ALIGNED:%.*]] = call ptr addrspace(200) @llvm.cheri.cap.address.set.i64(ptr addrspace(200) [[ARGP_CUR1]], i64 [[TMP3]])
+// CHECK-L64PC128-NEXT:    [[ARGP_NEXT2:%.*]] = getelementptr inbounds i8, ptr addrspace(200) [[ARGP_CUR1_ALIGNED]], i64 16
 // CHECK-L64PC128-NEXT:    store ptr addrspace(200) [[ARGP_NEXT2]], ptr addrspace(200) [[AP]], align 16
-// CHECK-L64PC128-NEXT:    [[TMP5:%.*]] = load ptr addrspace(200), ptr addrspace(200) [[TMP4]], align 16
-// CHECK-L64PC128-NEXT:    call void @llvm.memcpy.p200.p200.i64(ptr addrspace(200) align 1 [[AGG_RESULT]], ptr addrspace(200) align 1 [[TMP5]], i64 64, i1 false)
+// CHECK-L64PC128-NEXT:    [[TMP4:%.*]] = load ptr addrspace(200), ptr addrspace(200) [[ARGP_CUR1_ALIGNED]], align 16
+// CHECK-L64PC128-NEXT:    call void @llvm.memcpy.p200.p200.i64(ptr addrspace(200) align 1 [[AGG_RESULT]], ptr addrspace(200) align 1 [[TMP4]], i64 64, i1 false)
 // CHECK-L64PC128-NEXT:    ret void
 //
 struct S callee_S(int n, ...) {

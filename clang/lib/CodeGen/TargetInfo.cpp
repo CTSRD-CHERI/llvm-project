@@ -293,14 +293,19 @@ static llvm::Value *emitRoundPointerUpToAlignment(CodeGenFunction &CGF,
                                                   CharUnits Align) {
   llvm::Value *PtrAsInt = Ptr;
   // OverflowArgArea = (OverflowArgArea + Align - 1) & -Align;
-  PtrAsInt = CGF.Builder.CreatePtrToInt(PtrAsInt, CGF.IntPtrTy);
+  PtrAsInt = CGF.getPointerAddress(PtrAsInt);
   PtrAsInt = CGF.Builder.CreateAdd(PtrAsInt,
         llvm::ConstantInt::get(CGF.IntPtrTy, Align.getQuantity() - 1));
   PtrAsInt = CGF.Builder.CreateAnd(PtrAsInt,
            llvm::ConstantInt::get(CGF.IntPtrTy, -Align.getQuantity()));
-  PtrAsInt = CGF.Builder.CreateIntToPtr(PtrAsInt,
-                                        Ptr->getType(),
-                                        Ptr->getName() + ".aligned");
+  if (CGF.CGM.getDataLayout().isFatPointer(Ptr->getType())) {
+    PtrAsInt = CGF.getTargetHooks().setPointerAddress(
+        CGF, Ptr, PtrAsInt, Ptr->getName() + ".aligned",
+        CGF.CurCodeDecl->getLocation());
+  } else {
+    PtrAsInt = CGF.Builder.CreateIntToPtr(PtrAsInt, Ptr->getType(),
+                                          Ptr->getName() + ".aligned");
+  }
   return PtrAsInt;
 }
 
@@ -335,22 +340,6 @@ static Address emitVoidPtrDirectVAArg(CodeGenFunction &CGF,
   // If the CC aligns values higher than the slot size, do so if needed.
   Address Addr = Address::invalid();
   if (AllowHigherAlign && DirectAlign > SlotSize) {
-    llvm::Value *PtrAsInt = Ptr;
-    if (CGF.getTarget().SupportsCapabilities() &&
-        CGF.CGM.getDataLayout().isFatPointer(Ptr->getType())) {
-      // FIXME: can this diff be dropped???
-      PtrAsInt = CGF.getPointerAddress(PtrAsInt);
-      PtrAsInt = CGF.Builder.CreateAdd(
-          PtrAsInt,
-          llvm::ConstantInt::get(CGF.IntPtrTy, DirectAlign.getQuantity() - 1));
-      PtrAsInt = CGF.Builder.CreateAnd(
-          PtrAsInt,
-          llvm::ConstantInt::get(CGF.IntPtrTy, -DirectAlign.getQuantity()));
-      Addr =
-          Address(CGF.getTargetHooks().setPointerAddress(
-                      CGF, Ptr, PtrAsInt, "", CGF.CurCodeDecl->getLocation()),
-                  CGF.Int8Ty, DirectAlign);
-    } else
     Addr = Address(emitRoundPointerUpToAlignment(CGF, Ptr, DirectAlign),
                    CGF.Int8Ty, DirectAlign);
   } else {
