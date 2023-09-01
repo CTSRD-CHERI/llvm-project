@@ -1627,13 +1627,13 @@ def : StPat<store, SC_128, GPCR, c128>;
 
 let Predicates = [HasCheri, HasStdExtA, IsRV32, NotCapMode] in {
 def : LdPat<atomic_load_cap, LC_64, c64>;
-def : AtomicStPat<atomic_store_cap, SC_64, GPCR, c64>;
+def : StPat<atomic_store_cap, SC_64, GPCR, c64>;
 defm : AMOCapPat<"64", "atomic_swap_cap", "AMOSWAP_C">;
 } // Predicates = [HasCheri, HasStdExtA, IsRV32, NotCapMode]
 
 let Predicates = [HasCheri, HasStdExtA, IsRV64, NotCapMode] in {
 def : LdPat<atomic_load_cap, LC_128, c128>;
-def : AtomicStPat<atomic_store_cap, SC_128, GPCR, c128>;
+def : StPat<atomic_store_cap, SC_128, GPCR, c128>;
 defm : AMOCapPat<"128", "atomic_swap_cap", "AMOSWAP_C">;
 } // Predicates = [HasCheri, HasStdExtA, IsRV64, NotCapMode]
 
