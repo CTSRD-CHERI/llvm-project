@@ -9,13 +9,13 @@ void test_static_cast(int x, long y) {
 
   cap = static_cast<void * __capability>(x);
   // hybrid-error@-1 {{cannot cast from type 'int' to pointer type 'void * __capability'}}
-  // purecap-error@-2 {{cannot cast from type 'int' to pointer type 'void *'}}
+  // purecap-error@-2 {{cannot cast from type 'int' to pointer type 'void * __capability' (aka 'void *')}}
   ptr = static_cast<void *>(x);
   // expected-error@-1 {{cannot cast from type 'int' to pointer type 'void *'}}
 
   cap = static_cast<void * __capability>(y);
   // hybrid-error@-1 {{cannot cast from type 'long' to pointer type 'void * __capability'}}
-  // purecap-error@-2 {{cannot cast from type 'long' to pointer type 'void *'}}
+  // purecap-error@-2 {{cannot cast from type 'long' to pointer type 'void * __capability' (aka 'void *')}}
 }
 
 void test_reinterpret_cast(int x, long y) {
@@ -40,13 +40,13 @@ void test_dynamic_cast(int x, long y) {
 
   cap = dynamic_cast<void * __capability>(x);
   // hybrid-error@-1 {{cannot use dynamic_cast to convert from 'int' to 'void * __capability'}}
-  // purecap-error@-2 {{cannot use dynamic_cast to convert from 'int' to 'void *'}}
+  // purecap-error@-2 {{cannot use dynamic_cast to convert from 'int' to 'void * __capability' (aka 'void *')}}
   ptr = dynamic_cast<void *>(x);
   // expected-error@-1 {{cannot use dynamic_cast to convert from 'int' to 'void *'}}
 
   cap = dynamic_cast<void * __capability>(y);
   // hybrid-error@-1 {{cannot use dynamic_cast to convert from 'long' to 'void * __capability'}}
-  // purecap-error@-2 {{cannot use dynamic_cast to convert from 'long' to 'void *'}}
+  // purecap-error@-2 {{cannot use dynamic_cast to convert from 'long' to 'void * __capability' (aka 'void *')}}
 }
 
 template <typename S, typename T>
@@ -94,9 +94,9 @@ class TestQualified {
     // static_cast isn't valid for integer to pointer casts.
     return static_cast<T __capability>(s);
     // hybrid-error@-1 {{cannot cast from type 'int' to pointer type 'void * __capability'}}
-    // purecap-error@-2 {{cannot cast from type 'int' to pointer type 'void *'}}
+    // purecap-error@-2 {{cannot cast from type 'int' to pointer type 'void * __capability' (aka 'void *')}}
     // hybrid-error@-3 {{cannot cast from type 'long' to pointer type 'void * __capability'}}
-    // purecap-error@-4 {{cannot cast from type 'long' to pointer type 'void *'}}
+    // purecap-error@-4 {{cannot cast from type 'long' to pointer type 'void * __capability' (aka 'void *')}}
   }
 
   T __capability test_reinterpret_cast(S s) {
@@ -109,9 +109,9 @@ class TestQualified {
     // dynamic_cast isn't valid for integer to pointer casts.
     return dynamic_cast<T __capability>(s);
     // hybrid-error@-1 {{cannot use dynamic_cast to convert from 'int' to 'void * __capability'}}
-    // purecap-error@-2 {{cannot use dynamic_cast to convert from 'int' to 'void *'}}
+    // purecap-error@-2 {{cannot use dynamic_cast to convert from 'int' to 'void * __capability' (aka 'void *')}}
     // hybrid-error@-3 {{cannot use dynamic_cast to convert from 'long' to 'void * __capability'}}
-    // purecap-error@-4 {{cannot use dynamic_cast to convert from 'long' to 'void *'}}
+    // purecap-error@-4 {{cannot use dynamic_cast to convert from 'long' to 'void * __capability' (aka 'void *')}}
   }
 };
 

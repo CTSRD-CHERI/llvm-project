@@ -181,6 +181,7 @@ public:
   ///   QualifiedTypeLoc
   ///   AtomicTypeLoc
   ///   AttributedTypeLoc, for those type attributes that behave as qualifiers
+  ///   PointerInterpretationTypeLoc
   TypeLoc findExplicitQualifierLoc() const;
 
   /// Get the typeloc of an AutoType whose type will be deduced for a variable
@@ -1787,6 +1788,41 @@ public:
 
   void initializeLocal(ASTContext &Context, SourceLocation Loc) {
     setQualifierLoc(Loc);
+  }
+};
+
+struct PointerInterpretationLocInfo {
+  SourceRange QualifierRange;
+};
+
+class PointerInterpretationTypeLoc
+    : public ConcreteTypeLoc<UnqualTypeLoc, PointerInterpretationTypeLoc,
+                             PointerInterpretationType,
+                             PointerInterpretationLocInfo> {
+public:
+  /// The location of the pointer qualifier, i.e.
+  ///    T __capability
+  ///      ^~~~~~~~~~~~
+  SourceRange getQualifierRange() const {
+    return getLocalData()->QualifierRange;
+  }
+  void setQualifierRange(SourceRange Range) {
+    getLocalData()->QualifierRange = Range;
+  }
+
+  SourceRange getLocalSourceRange() const { return this->getQualifierRange(); }
+
+  /// The type before the pointer qualifier, i.e.
+  ///   T __capability
+  ///   ^
+  QualType getInnerType() const {
+    return this->getTypePtr()->getModifiedType();
+  }
+
+  TypeLoc getModifiedLoc() const { return this->getInnerTypeLoc(); }
+
+  void initializeLocal(ASTContext &Context, SourceRange Range) {
+    setQualifierRange(Range);
   }
 };
 

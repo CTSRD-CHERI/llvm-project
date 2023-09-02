@@ -20,15 +20,15 @@ void test_long_pointer(void * __capability p) {
   printf("%#.4lp", p);
   printf("%lp", &p);
   // hybrid-warning@-1{{format specifies type 'void * __capability' but the argument has type 'void * __capability *'}}
-  // purecap-pedantic-warning@-2{{format specifies type 'void *' but the argument has type 'void **'}}
+  // purecap-pedantic-warning@-2{{format specifies type 'void * __capability' (aka 'void *') but the argument has type 'void * __capability *' (aka 'void **')}}
   printf("%lp", (void *)0);
   // hybrid-warning@-1{{format specifies type 'void * __capability' but the argument has type 'void *'}}
   printf("%lp", (void **)(void *)0);
   // hybrid-warning@-1{{format specifies type 'void * __capability' but the argument has type 'void **'}}
-  // purecap-pedantic-warning@-2{{format specifies type 'void *' but the argument has type 'void ** __attribute__((cheri_no_provenance))'}}
+  // purecap-pedantic-warning@-2{{format specifies type 'void * __capability' (aka 'void *') but the argument has type 'void ** __attribute__((cheri_no_provenance))'}}
   printf("%lp", (int *)(void *)0);
   // hybrid-warning@-1{{format specifies type 'void * __capability' but the argument has type 'int *'}}
-  // purecap-pedantic-warning@-2{{format specifies type 'void *' but the argument has type 'int * __attribute__((cheri_no_provenance))'}}
+  // purecap-pedantic-warning@-2{{format specifies type 'void * __capability' (aka 'void *') but the argument has type 'int * __attribute__((cheri_no_provenance))'}}
 }
 
 void test_invalid_length_modifiers(void *p) {

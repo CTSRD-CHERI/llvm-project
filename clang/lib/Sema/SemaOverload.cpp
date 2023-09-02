@@ -2294,8 +2294,9 @@ BuildSimilarlyQualifiedPointerType(const Type *FromPtr,
   if (ToType->isObjCIdType() || ToType->isObjCQualifiedIdType())
     return ToType.getUnqualifiedType();
 
-  const bool FromIsCap = FromPtr->isCHERICapabilityType(Context);
-  PointerInterpretationKind PIK = FromIsCap ? PIK_Capability : PIK_Integer;
+  llvm::Optional<PointerInterpretationKindExplicit> FromPIKE =
+      FromPtr->getPointerInterpretationExplicitOrNone(Context);
+  assert(FromPIKE && "Pointer must have an interpretation");
   QualType CanonFromPointee
     = Context.getCanonicalType(FromPtr->getPointeeType());
   QualType CanonToPointee = Context.getCanonicalType(ToPointee);
@@ -2308,14 +2309,15 @@ BuildSimilarlyQualifiedPointerType(const Type *FromPtr,
   if (CanonToPointee.getLocalQualifiers() == Quals) {
     // ToType is exactly what we need. Return it.
     // XXXAR: but only if the memory capability qualifier matches
-    if (ToType->isCHERICapabilityType(Context) == FromIsCap && !ToType.isNull())
+    if (!ToType.isNull() &&
+        ToType->getPointerInterpretationExplicitOrNone(Context) == *FromPIKE)
       return ToType.getUnqualifiedType();
 
     // Build a pointer to ToPointee. It has the right qualifiers
     // already.
     if (isa<ObjCObjectPointerType>(ToType))
       return Context.getObjCObjectPointerType(ToPointee);
-    return Context.getPointerType(ToPointee, PIK);
+    return Context.getPointerType(ToPointee, *FromPIKE);
   }
 
   // Just build a canonical type that has the right qualifiers.
@@ -2324,7 +2326,7 @@ BuildSimilarlyQualifiedPointerType(const Type *FromPtr,
 
   if (isa<ObjCObjectPointerType>(ToType))
     return Context.getObjCObjectPointerType(QualifiedCanonToPointee);
-  return Context.getPointerType(QualifiedCanonToPointee, PIK);
+  return Context.getPointerType(QualifiedCanonToPointee, *FromPIKE);
 }
 
 static bool isNullPointerConstantForConversion(Expr *Expr,

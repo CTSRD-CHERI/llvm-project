@@ -3799,10 +3799,9 @@ bool Sema::CheckCHERIAssignCompatible(QualType LHS, QualType RHS,
       if (InsertBitCast) {
         // Insert a CK_BitCast to ensure we don't crash during codegen (see
         // https://github.com/CTSRD-CHERI/clang/issues/178)
-        bool RHSIsCap = RHS->isCHERICapabilityType(Context, false);
         QualType BitCastTy = Context.getPointerType(
             LHS->getAs<PointerType>()->getPointeeType(),
-            RHSIsCap ? PIK_Capability : PIK_Integer);
+            RHS->getAs<PointerType>()->getPointerInterpretationExplicit());
         RHSExpr = ImplicitCastExpr::Create(Context, BitCastTy, CK_BitCast,
                                            RHSExpr, nullptr, VK_PRValue,
                                            CurFPFeatureOverrides());

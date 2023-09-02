@@ -344,6 +344,9 @@ namespace clang {
     ExpectedType VisitVariableArrayType(const VariableArrayType *T);
     ExpectedType VisitDependentSizedArrayType(const DependentSizedArrayType *T);
     // FIXME: DependentSizedExtVectorType
+    ExpectedType VisitDependentPointerType(const DependentPointerType *T);
+    ExpectedType
+    VisitPointerInterpretationType(const PointerInterpretationType *T);
     ExpectedType VisitVectorType(const VectorType *T);
     ExpectedType VisitExtVectorType(const ExtVectorType *T);
     ExpectedType VisitFunctionNoProtoType(const FunctionNoProtoType *T);
@@ -1119,7 +1122,8 @@ ExpectedType ASTNodeImporter::VisitPointerType(const PointerType *T) {
   if (!ToPointeeTypeOrErr)
     return ToPointeeTypeOrErr.takeError();
 
-  return Importer.getToContext().getPointerType(*ToPointeeTypeOrErr, T->getPointerInterpretation());
+  return Importer.getToContext().getPointerType(
+      *ToPointeeTypeOrErr, T->getPointerInterpretationExplicit());
 }
 
 ExpectedType ASTNodeImporter::VisitBlockPointerType(const BlockPointerType *T) {
@@ -1138,7 +1142,9 @@ ASTNodeImporter::VisitLValueReferenceType(const LValueReferenceType *T) {
   if (!ToPointeeTypeOrErr)
     return ToPointeeTypeOrErr.takeError();
 
-  return Importer.getToContext().getLValueReferenceType(*ToPointeeTypeOrErr, T->isSpelledAsLValue(), T->getPointerInterpretation());
+  return Importer.getToContext().getLValueReferenceType(
+      *ToPointeeTypeOrErr, T->isSpelledAsLValue(),
+      T->getPointerInterpretationExplicit());
 }
 
 ExpectedType
@@ -1148,7 +1154,8 @@ ASTNodeImporter::VisitRValueReferenceType(const RValueReferenceType *T) {
   if (!ToPointeeTypeOrErr)
     return ToPointeeTypeOrErr.takeError();
 
-  return Importer.getToContext().getRValueReferenceType(*ToPointeeTypeOrErr, T->getPointerInterpretation());
+  return Importer.getToContext().getRValueReferenceType(
+      *ToPointeeTypeOrErr, T->getPointerInterpretationExplicit());
 }
 
 ExpectedType
@@ -1217,6 +1224,38 @@ ExpectedType ASTNodeImporter::VisitDependentSizedArrayType(
   return Importer.getToContext().getDependentSizedArrayType(
       ToElementType, ToSizeExpr, T->getSizeModifier(),
       T->getIndexTypeCVRQualifiers(), ToBracketsRange);
+}
+
+ExpectedType
+ASTNodeImporter::VisitDependentPointerType(const DependentPointerType *T) {
+  ExpectedType ToPointerTypeOrErr = import(T->getPointerType());
+  if (!ToPointerTypeOrErr)
+    return ToPointerTypeOrErr.takeError();
+  Expected<SourceLocation> ToQualifierLocOrErr =
+      Importer.Import(T->getQualifierLoc());
+  if (!ToQualifierLocOrErr)
+    return ToQualifierLocOrErr.takeError();
+
+  return Importer.getToContext().getDependentPointerType(
+      *ToPointerTypeOrErr, T->getPointerInterpretation(), *ToQualifierLocOrErr);
+}
+
+ExpectedType ASTNodeImporter::VisitPointerInterpretationType(
+    const PointerInterpretationType *T) {
+  ExpectedType ToModifiedTypeOrErr = import(T->getModifiedType());
+  if (!ToModifiedTypeOrErr)
+    return ToModifiedTypeOrErr.takeError();
+  ExpectedType ToEquivalentTypeOrErr = import(T->getEquivalentType());
+  if (!ToEquivalentTypeOrErr)
+    return ToEquivalentTypeOrErr.takeError();
+  Expected<SourceRange> ToQualifierRangeOrErr =
+      Importer.Import(T->getQualifierRange());
+  if (!ToQualifierRangeOrErr)
+    return ToQualifierRangeOrErr.takeError();
+
+  return Importer.getToContext().getPointerInterpretationType(
+      T->getPointerInterpretation(), *ToQualifierRangeOrErr,
+      *ToModifiedTypeOrErr, *ToEquivalentTypeOrErr);
 }
 
 ExpectedType ASTNodeImporter::VisitVectorType(const VectorType *T) {

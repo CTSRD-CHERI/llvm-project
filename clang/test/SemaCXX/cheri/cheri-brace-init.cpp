@@ -14,55 +14,55 @@ struct test {
 void test_capptr_to_int(void* __capability a) {
   ptraddr_t v{a};
   // hybrid-error@-1 {{cannot initialize a variable of type 'ptraddr_t' (aka 'unsigned long') with an lvalue of type 'void * __capability'}}
-  // purecap-error@-2 {{cannot initialize a variable of type 'ptraddr_t' (aka 'unsigned long') with an lvalue of type 'void *'}}
+  // purecap-error@-2 {{cannot initialize a variable of type 'ptraddr_t' (aka 'unsigned long') with an lvalue of type 'void * __capability' (aka 'void *')}}
   v = ptraddr_t{a};
   // hybrid-error@-1 {{cannot initialize a value of type 'ptraddr_t' (aka 'unsigned long') with an lvalue of type 'void * __capability'}}
-  // purecap-error@-2 {{cannot initialize a value of type 'ptraddr_t' (aka 'unsigned long') with an lvalue of type 'void *'}}
+  // purecap-error@-2 {{cannot initialize a value of type 'ptraddr_t' (aka 'unsigned long') with an lvalue of type 'void * __capability' (aka 'void *')}}
   ptraddr_t v2 = 0; v2 = {a};
   // hybrid-error@-1 {{cannot initialize a value of type 'ptraddr_t' (aka 'unsigned long') with an lvalue of type 'void * __capability'}}
-  // purecap-error@-2 {{cannot initialize a value of type 'ptraddr_t' (aka 'unsigned long') with an lvalue of type 'void *'}}
+  // purecap-error@-2 {{cannot initialize a value of type 'ptraddr_t' (aka 'unsigned long') with an lvalue of type 'void * __capability' (aka 'void *')}}
 
   // NB: Compound literals are a GNU C++ extension so we need a single word alias
   using __uintcap = unsigned __intcap;
   __uintcap uc{a};
   // hybrid-error@-1 {{cannot initialize a variable of type '__uintcap' (aka 'unsigned __intcap') with an lvalue of type 'void * __capability'}}
-  // purecap-error@-2 {{cannot initialize a variable of type '__uintcap' (aka 'unsigned __intcap') with an lvalue of type 'void *'}}
+  // purecap-error@-2 {{cannot initialize a variable of type '__uintcap' (aka 'unsigned __intcap') with an lvalue of type 'void * __capability' (aka 'void *')}}
   uc = __uintcap{a};
   // hybrid-error@-1 {{cannot initialize a value of type '__uintcap' (aka 'unsigned __intcap') with an lvalue of type 'void * __capability'}}
-  // purecap-error@-2 {{cannot initialize a value of type '__uintcap' (aka 'unsigned __intcap') with an lvalue of type 'void *'}}
+  // purecap-error@-2 {{cannot initialize a value of type '__uintcap' (aka 'unsigned __intcap') with an lvalue of type 'void * __capability' (aka 'void *')}}
   __uintcap uc2 = 0; uc2 = {a};
   // hybrid-error@-1 {{cannot initialize a value of type '__uintcap' (aka 'unsigned __intcap') with an lvalue of type 'void * __capability'}}
-  // purecap-error@-2 {{cannot initialize a value of type '__uintcap' (aka 'unsigned __intcap') with an lvalue of type 'void *'}}
+  // purecap-error@-2 {{cannot initialize a value of type '__uintcap' (aka 'unsigned __intcap') with an lvalue of type 'void * __capability' (aka 'void *')}}
 
   __intcap ic{a};
   // hybrid-error@-1 {{cannot initialize a variable of type '__intcap' with an lvalue of type 'void * __capability'}}
-  // purecap-error@-2 {{cannot initialize a variable of type '__intcap' with an lvalue of type 'void *'}}
+  // purecap-error@-2 {{cannot initialize a variable of type '__intcap' with an lvalue of type 'void * __capability' (aka 'void *')}}
   ic = __intcap{a};
   // hybrid-error@-1 {{cannot initialize a value of type '__intcap' with an lvalue of type 'void * __capability'}}
-  // purecap-error@-2 {{cannot initialize a value of type '__intcap' with an lvalue of type 'void *'}}
+  // purecap-error@-2 {{cannot initialize a value of type '__intcap' with an lvalue of type 'void * __capability' (aka 'void *')}}
   __intcap ic2 = 0; ic2 = {a};
   // hybrid-error@-1 {{cannot initialize a value of type '__intcap' with an lvalue of type 'void * __capability'}}
-  // purecap-error@-2 {{cannot initialize a value of type '__intcap' with an lvalue of type 'void *'}}
+  // purecap-error@-2 {{cannot initialize a value of type '__intcap' with an lvalue of type 'void * __capability' (aka 'void *')}}
 
   long l{a};
   // hybrid-error@-1 {{cannot initialize a variable of type 'long' with an lvalue of type 'void * __capability'}}
-  // purecap-error@-2 {{cannot initialize a variable of type 'long' with an lvalue of type 'void *'}}
+  // purecap-error@-2 {{cannot initialize a variable of type 'long' with an lvalue of type 'void * __capability' (aka 'void *')}}
   l = long{a};
   // hybrid-error@-1 {{cannot initialize a value of type 'long' with an lvalue of type 'void * __capability'}}
-  // purecap-error@-2 {{cannot initialize a value of type 'long' with an lvalue of type 'void *'}}
+  // purecap-error@-2 {{cannot initialize a value of type 'long' with an lvalue of type 'void * __capability' (aka 'void *')}}
   long l2 = 0; l2 = {a};
   // hybrid-error@-1 {{cannot initialize a value of type 'long' with an lvalue of type 'void * __capability'}}
-  // purecap-error@-2 {{cannot initialize a value of type 'long' with an lvalue of type 'void *'}}
+  // purecap-error@-2 {{cannot initialize a value of type 'long' with an lvalue of type 'void * __capability' (aka 'void *')}}
 
   int i{a};
   // hybrid-error@-1 {{cannot initialize a variable of type 'int' with an lvalue of type 'void * __capability'}}
-  // purecap-error@-2 {{cannot initialize a variable of type 'int' with an lvalue of type 'void *'}}
+  // purecap-error@-2 {{cannot initialize a variable of type 'int' with an lvalue of type 'void * __capability' (aka 'void *')}}
   i = int{a};
   // hybrid-error@-1 {{cannot initialize a value of type 'int' with an lvalue of type 'void * __capability'}}
-  // purecap-error@-2 {{cannot initialize a value of type 'int' with an lvalue of type 'void *'}}
+  // purecap-error@-2 {{cannot initialize a value of type 'int' with an lvalue of type 'void * __capability' (aka 'void *')}}
   int i2 = 0; i2 = {a};
   // hybrid-error@-1 {{cannot initialize a value of type 'int' with an lvalue of type 'void * __capability'}}
-  // purecap-error@-2 {{cannot initialize a value of type 'int' with an lvalue of type 'void *'}}
+  // purecap-error@-2 {{cannot initialize a value of type 'int' with an lvalue of type 'void * __capability' (aka 'void *')}}
 }
 
 void test_uintcap_to_int(unsigned __intcap a) {

@@ -171,6 +171,20 @@ QualType clang::desugarForDiagnostic(ASTContext &Context, QualType QT,
         QualType(Ty, 0) == Context.getBuiltinMSVaListType())
       break;
 
+    // Print an a.k.a. clause for a PointerInterpretationType if it's for the
+    // default pointer interpretation or doesn't modify the interpretation of
+    // the modified type.
+    if (const PointerInterpretationType *PIT =
+            dyn_cast<PointerInterpretationType>(Ty)) {
+      if (PIT->getPointerInterpretation() ==
+              Context.getDefaultPointerInterpretation() ||
+          PIT->getModifiedType().getCanonicalType() ==
+              PIT->getEquivalentType().getCanonicalType())
+        ShouldAKA = true;
+      QT = PIT->desugar();
+      continue;
+    }
+
     // Otherwise, do a single-step desugar.
     QualType Underlying;
     bool IsSugar = false;
@@ -208,23 +222,32 @@ break; \
     QT = Underlying;
   }
 
+  auto DesugarPIKE = [&Context](PointerInterpretationKindExplicit PIKE,
+                                bool &ShouldAKA) {
+    PointerInterpretationKindExplicit CanonPIKE =
+        Context.getCanonicalPointerInterpretationExplicit(PIKE);
+    if (PIKE != CanonPIKE)
+      ShouldAKA = true;
+    return CanonPIKE;
+  };
+
   // If we have a pointer-like type, desugar the pointee as well.
   // FIXME: Handle other pointer-like types.
   if (const PointerType *Ty = QT->getAs<PointerType>()) {
     QT = Context.getPointerType(
         desugarForDiagnostic(Context, Ty->getPointeeType(), ShouldAKA),
-        Ty->getPointerInterpretation());
+        DesugarPIKE(Ty->getPointerInterpretationExplicit(), ShouldAKA));
   } else if (const auto *Ty = QT->getAs<ObjCObjectPointerType>()) {
     QT = Context.getObjCObjectPointerType(
         desugarForDiagnostic(Context, Ty->getPointeeType(), ShouldAKA));
   } else if (const LValueReferenceType *Ty = QT->getAs<LValueReferenceType>()) {
     QT = Context.getLValueReferenceType(
         desugarForDiagnostic(Context, Ty->getPointeeType(), ShouldAKA), true,
-        Ty->getPointerInterpretation());
+        DesugarPIKE(Ty->getPointerInterpretationExplicit(), ShouldAKA));
   } else if (const RValueReferenceType *Ty = QT->getAs<RValueReferenceType>()) {
     QT = Context.getRValueReferenceType(
         desugarForDiagnostic(Context, Ty->getPointeeType(), ShouldAKA),
-        Ty->getPointerInterpretation());
+        DesugarPIKE(Ty->getPointerInterpretationExplicit(), ShouldAKA));
   } else if (const auto *Ty = QT->getAs<ObjCObjectType>()) {
     if (Ty->getBaseType().getTypePtr() != Ty && !ShouldAKA) {
       QualType BaseType =

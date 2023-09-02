@@ -12,6 +12,7 @@
 //===----------------------------------------------------------------------===//
 
 #include "FormatStringParsing.h"
+#include "clang/AST/ASTDiagnostic.h"
 #include "clang/Basic/LangOptions.h"
 #include "clang/Basic/TargetInfo.h"
 #include "llvm/Support/ConvertUTF.h"
@@ -562,7 +563,9 @@ QualType ArgType::getRepresentativeType(ASTContext &C) const {
       Res = C.VoidPtrTy;
       break;
     case CCapabilityTy:
-      Res = C.getPointerType(C.VoidTy, PIK_Capability);
+      Res =
+          C.getPointerType(C.VoidTy, PointerInterpretationKindExplicit(
+                                         PIK_Capability, /*IsExplicit=*/true));
       break;
     case WIntTy: {
       Res = C.getWIntType();
@@ -576,23 +579,32 @@ QualType ArgType::getRepresentativeType(ASTContext &C) const {
 }
 
 std::string ArgType::getRepresentativeTypeName(ASTContext &C) const {
-  std::string S = getRepresentativeType(C).getAsString(C.getPrintingPolicy());
+  QualType RepTy = getRepresentativeType(C);
 
-  std::string Alias;
+  bool ForceAKA = false;
+  std::string S = RepTy.getAsString(C.getPrintingPolicy());
   if (Name) {
+    std::string Alias;
     // Use a specific name for this type, e.g. "size_t".
     Alias = Name;
     if (Ptr) {
       // If ArgType is actually a pointer to T, append an asterisk.
       Alias += (Alias[Alias.size()-1] == '*') ? "*" : " *";
     }
-    // If Alias is the same as the underlying type, e.g. wchar_t, then drop it.
-    if (S == Alias)
-      Alias.clear();
+    // If Alias is the same as the underlying type, e.g. wchar_t, then drop it
+    if (S != Alias) {
+      S = Alias;
+      ForceAKA = true;
+    }
   }
 
-  if (!Alias.empty())
-    return std::string("'") + Alias + "' (aka '" + S + "')";
+  bool ShouldAKA = false;
+  QualType DesugaredRepTy = desugarForDiagnostic(C, RepTy, ShouldAKA);
+  if (ShouldAKA || ForceAKA) {
+    std::string akaStr = DesugaredRepTy.getAsString(C.getPrintingPolicy());
+    if (akaStr != S)
+      return std::string("'") + S + "' (aka '" + akaStr + "')";
+  }
   return std::string("'") + S + "'";
 }
 

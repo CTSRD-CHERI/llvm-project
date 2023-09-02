@@ -139,8 +139,8 @@ static bool hasAnyExplicitStorageClass(const FunctionDecl *D) {
   return false;
 }
 
-PointerInterpretationKind
-Sema::PointerInterpretationForBaseExpr(const Expr *Base) const {
+PointerInterpretationKindExplicit
+Sema::PointerInterpretationExplicitForBaseExpr(const Expr *Base) const {
   QualType DerefType;
 
   while (Base) {
@@ -175,13 +175,12 @@ Sema::PointerInterpretationForBaseExpr(const Expr *Base) const {
   // following should be an error in the hybrid ABI:
   // void * __capability b;
   // void *__capability *__capability c = &b;
-  if (!DerefType.getTypePtrOrNull())
-    return Context.getDefaultPointerInterpretation();
-  // If the basetype is __uintcap_t we don't want to treat the result as a
-  // capability (such as in uintcap_t foo; return &foo;)
-  if (DerefType->isCHERICapabilityType(Context, /*IncludeIntCap=*/false))
-    return PIK_Capability;
-  return Context.getDefaultPointerInterpretation();
+  if (DerefType.isNull())
+    return Context.getDefaultPointerInterpretationExplicit();
+  llvm::Optional<PointerInterpretationKindExplicit> PIKE =
+      DerefType->getPointerInterpretationExplicitOrNone(Context);
+  assert(PIKE && "Dereferenced type must have a pointer interpretation");
+  return *PIKE;
 }
 
 /// Check whether we're in an extern inline function and referring to a
@@ -572,9 +571,10 @@ ExprResult Sema::DefaultFunctionArrayConversion(Expr *E, bool Diagnose) {
     // T" can be converted to an rvalue of type "pointer to T".
     //
     if (getLangOpts().C99 || getLangOpts().CPlusPlus || E->isLValue()) {
-      PointerInterpretationKind PIK = PointerInterpretationForBaseExpr(E);
+      PointerInterpretationKindExplicit PIKE =
+          PointerInterpretationExplicitForBaseExpr(E);
       ExprResult Res = ImpCastExprToType(
-          E, Context.getArrayDecayedType(Ty, PIK), CK_ArrayToPointerDecay);
+          E, Context.getArrayDecayedType(Ty, PIKE), CK_ArrayToPointerDecay);
       if (Res.isInvalid())
         return ExprError();
       E = Res.get();
@@ -2999,8 +2999,8 @@ Sema::PerformObjectMemberConversion(Expr *From,
                             : FromType.getAddressSpace());
 
     if (FromPtrType) {
-      DestType = Context.getPointerType(DestRecordType,
-                                        FromPtrType->getPointerInterpretation());
+      DestType = Context.getPointerType(
+          DestRecordType, FromPtrType->getPointerInterpretationExplicit());
       FromRecordType = FromPtrType->getPointeeType();
       PointerConversions = true;
     } else {
@@ -3085,10 +3085,11 @@ Sema::PerformObjectMemberConversion(Expr *From,
                                        FromLoc, FromRange, &BasePath))
         return ExprError();
 
-      if (PointerConversions)
-        QType = Context.getPointerType(QType,
-                                       FromType->isCHERICapabilityType(Context)
-                                           ? PIK_Capability : PIK_Integer);
+      if (PointerConversions) {
+        PointerInterpretationKindExplicit PIKE =
+            FromType->getAs<PointerType>()->getPointerInterpretationExplicit();
+        QType = Context.getPointerType(QType, PIKE);
+      }
       From = ImpCastExprToType(From, QType, CK_UncheckedDerivedToBase,
                                VK, &BasePath).get();
 
@@ -4491,6 +4492,7 @@ static void captureVariablyModifiedType(ASTContext &Context, QualType T,
     case Type::TypeOf:
     case Type::UnaryTransform:
     case Type::Attributed:
+    case Type::PointerInterpretation:
     case Type::SubstTemplateTypeParm:
     case Type::MacroQualified:
       // Keep walking after single level desugaring.
@@ -8053,10 +8055,17 @@ static QualType checkConditionalPointerCompatibility(Sema &S, ExprResult &LHS,
   }
 
   // Get the pointer interpretation.
-  PointerInterpretationKind PIK = S.Context.getDefaultPointerInterpretation();
-  if (LHSTy->isCHERICapabilityType(S.Context, false) ||
-      RHSTy->isCHERICapabilityType(S.Context, false))
-    PIK = PIK_Capability;
+  llvm::Optional<PointerInterpretationKindExplicit> LHSPIKE =
+      LHSTy->getPointerInterpretationExplicitOrNone(S.Context);
+  llvm::Optional<PointerInterpretationKindExplicit> RHSPIKE =
+      RHSTy->getPointerInterpretationExplicitOrNone(S.Context);
+  assert(LHSPIKE && "LHS pointer must have an interpretation");
+  assert(RHSPIKE && "RHS pointer must have an interpretation");
+  PointerInterpretationKindExplicit PIKE = *LHSPIKE;
+  // Prefer capability to integer, explicit to implicit
+  if (RHSPIKE->PIK == PIK_Capability &&
+      (LHSPIKE->PIK == PIK_Integer || !LHSPIKE->IsExplicit))
+    PIKE = *RHSPIKE;
 
   // C99 6.5.15p6: If both operands are pointers to compatible types or to
   // differently qualified versions of compatible types, the result type is
@@ -8120,7 +8129,8 @@ static QualType checkConditionalPointerCompatibility(Sema &S, ExprResult &LHS,
     // to get a consistent AST.
     QualType incompatTy;
     incompatTy = S.Context.getPointerType(
-        S.Context.getAddrSpaceQualType(S.Context.VoidTy, ResultAddrSpace), PIK);
+        S.Context.getAddrSpaceQualType(S.Context.VoidTy, ResultAddrSpace),
+        PIKE);
     LHS = S.ImpCastExprToType(LHS.get(), incompatTy, LHSCastKind);
     RHS = S.ImpCastExprToType(RHS.get(), incompatTy, RHSCastKind);
 
@@ -8159,7 +8169,7 @@ static QualType checkConditionalPointerCompatibility(Sema &S, ExprResult &LHS,
   if (IsBlockPointer)
     ResultTy = S.Context.getBlockPointerType(ResultTy);
   else
-    ResultTy = S.Context.getPointerType(ResultTy, PIK);
+    ResultTy = S.Context.getPointerType(ResultTy, PIKE);
 
   LHS = S.ImpCastExprToType(LHS.get(), ResultTy, LHSCastKind);
   RHS = S.ImpCastExprToType(RHS.get(), ResultTy, RHSCastKind);
@@ -8210,7 +8220,8 @@ checkConditionalObjectPointersCompatibility(Sema &S, ExprResult &LHS,
     QualType destPointee
       = S.Context.getQualifiedType(lhptee, rhptee.getQualifiers());
     QualType destType = S.Context.getPointerType(
-        destPointee, RHSTy->castAs<PointerType>()->getPointerInterpretation());
+        destPointee,
+        RHSTy->castAs<PointerType>()->getPointerInterpretationExplicit());
     // Add qualifiers if necessary.
     LHS = S.ImpCastExprToType(LHS.get(), destType, CK_NoOp);
     // Promote to void*.
@@ -8221,7 +8232,8 @@ checkConditionalObjectPointersCompatibility(Sema &S, ExprResult &LHS,
     QualType destPointee
       = S.Context.getQualifiedType(rhptee, lhptee.getQualifiers());
     QualType destType = S.Context.getPointerType(
-        destPointee, LHSTy->castAs<PointerType>()->getPointerInterpretation());
+        destPointee,
+        LHSTy->castAs<PointerType>()->getPointerInterpretationExplicit());
     // Add qualifiers if necessary.
     RHS = S.ImpCastExprToType(RHS.get(), destType, CK_NoOp);
     // Promote to void*.
@@ -14086,8 +14098,9 @@ QualType Sema::CheckAddressOfOperand(ExprResult &OrigOp, SourceLocation OpLoc) {
 
   CheckAddressOfPackedMember(op);
 
-  PointerInterpretationKind PIK = PointerInterpretationForBaseExpr(op);
-  return Context.getPointerType(op->getType(), PIK);
+  PointerInterpretationKindExplicit PIKE =
+      PointerInterpretationExplicitForBaseExpr(op);
+  return Context.getPointerType(op->getType(), PIKE);
 }
 
 static void RecordModifiableNonNullParam(Sema &S, const Expr *Exp) {

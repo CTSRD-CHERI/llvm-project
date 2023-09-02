@@ -227,6 +227,8 @@ class ASTContext : public RefCountedBase<ASTContext> {
   mutable llvm::FoldingSet<DependentAddressSpaceType>
       DependentAddressSpaceTypes;
   mutable llvm::FoldingSet<DependentPointerType> DependentPointerTypes;
+  mutable llvm::FoldingSet<PointerInterpretationType>
+      PointerInterpretationTypes;
   mutable llvm::FoldingSet<VectorType> VectorTypes;
   mutable llvm::FoldingSet<DependentVectorType> DependentVectorTypes;
   mutable llvm::FoldingSet<ConstantMatrixType> MatrixTypes;
@@ -1340,19 +1342,42 @@ public:
 
   /// Get the default pointer interpretation in use.
   PointerInterpretationKind getDefaultPointerInterpretation() const;
+  PointerInterpretationKindExplicit
+  getDefaultPointerInterpretationExplicit() const {
+    return PointerInterpretationKindExplicit(getDefaultPointerInterpretation(),
+                                             /*IsExplicit=*/false);
+  }
+
+  /// Canonicalise a PointerInterpretationKindExplicit, i.e. turn an explicit
+  /// default interpretation into an implicit one.  Do not use when an explicit
+  /// default interpretation is meaningful.
+  PointerInterpretationKindExplicit getCanonicalPointerInterpretationExplicit(
+      PointerInterpretationKindExplicit PIKE) const {
+    if (PIKE.IsExplicit) {
+      if (PIKE.PIK == getDefaultPointerInterpretation())
+        return PointerInterpretationKindExplicit(PIKE.PIK,
+                                                 /*IsExplicit=*/false);
+    } else {
+      assert(PIKE.PIK == getDefaultPointerInterpretation() &&
+             "Invalid implicit non-default pointer interpretation");
+    }
+    return PIKE;
+  }
 
   /// Return the uniqued reference to the type for a pointer to
   /// the specified type.
+  QualType getPointerType(QualType T,
+                          PointerInterpretationKindExplicit PIKE) const;
   QualType getPointerType(QualType T) const {
-    return getPointerType(T, getDefaultPointerInterpretation());
+    return getPointerType(T, getDefaultPointerInterpretationExplicit());
   }
-  QualType getPointerType(QualType T, PointerInterpretationKind PIK) const;
+  // NB: PointerInterpretationKindExplicit-taking variant not present since the
+  // PIKE may not be canonical, and CanPointerInterpretationKindExplicit
+  // doesn't exist to ensure the right function is chosen between this and the
+  // plain QualType version (otherwise this will always be used in preference
+  // to the QualType one for a CanQualType).
   CanQualType getPointerType(CanQualType T) const {
-    return getPointerType(T, getDefaultPointerInterpretation());
-  }
-  CanQualType getPointerType(CanQualType T,
-                             PointerInterpretationKind PIK) const {
-    return CanQualType::CreateUnsafe(getPointerType((QualType) T, PIK));
+    return CanQualType::CreateUnsafe(getPointerType((QualType)T));
   }
 
   /// Return the uniqued reference to a type adjusted from the original
@@ -1436,18 +1461,18 @@ public:
   QualType getLValueReferenceType(QualType T,
                                   bool SpelledAsLValue = true) const {
     return getLValueReferenceType(T, SpelledAsLValue,
-                                  getDefaultPointerInterpretation());
+                                  getDefaultPointerInterpretationExplicit());
   }
   QualType getLValueReferenceType(QualType T, bool SpelledAsLValue,
-                                  PointerInterpretationKind PIK) const;
+                                  PointerInterpretationKindExplicit PIKE) const;
 
   /// Return the uniqued reference to the type for an rvalue reference
   /// to the specified type.
   QualType getRValueReferenceType(QualType T) const {
-    return getRValueReferenceType(T, getDefaultPointerInterpretation());
+    return getRValueReferenceType(T, getDefaultPointerInterpretationExplicit());
   }
   QualType getRValueReferenceType(QualType T,
-                                  PointerInterpretationKind PIK) const;
+                                  PointerInterpretationKindExplicit PIKE) const;
 
   /// Return the uniqued reference to the type for a member pointer to
   /// the specified type in the specified class.
@@ -1457,42 +1482,39 @@ public:
 
   /// Return a non-unique reference to the type for a variable array of
   /// the specified element type.
-  QualType getVariableArrayType(QualType EltTy, Expr *NumElts,
-                                ArrayType::ArraySizeModifier ASM,
-                                unsigned IndexTypeQuals,
-                                SourceRange Brackets,
-                                llvm::Optional<PointerInterpretationKind>
-                                PIK = llvm::None) const;
+  QualType
+  getVariableArrayType(QualType EltTy, Expr *NumElts,
+                       ArrayType::ArraySizeModifier ASM,
+                       unsigned IndexTypeQuals, SourceRange Brackets,
+                       llvm::Optional<PointerInterpretationKindExplicit> PIKE =
+                           llvm::None) const;
 
   /// Return a non-unique reference to the type for a dependently-sized
   /// array of the specified element type.
   ///
   /// FIXME: We will need these to be uniqued, or at least comparable, at some
   /// point.
-  QualType getDependentSizedArrayType(QualType EltTy, Expr *NumElts,
-                                      ArrayType::ArraySizeModifier ASM,
-                                      unsigned IndexTypeQuals,
-                                      SourceRange Brackets,
-                                      llvm::Optional<PointerInterpretationKind>
-                                      PIK = llvm::None) const;
+  QualType getDependentSizedArrayType(
+      QualType EltTy, Expr *NumElts, ArrayType::ArraySizeModifier ASM,
+      unsigned IndexTypeQuals, SourceRange Brackets,
+      llvm::Optional<PointerInterpretationKindExplicit> PIKE =
+          llvm::None) const;
 
   /// Return a unique reference to the type for an incomplete array of
   /// the specified element type.
-  QualType getIncompleteArrayType(QualType EltTy,
-                                  ArrayType::ArraySizeModifier ASM,
-                                  unsigned IndexTypeQuals,
-                                  llvm::Optional<PointerInterpretationKind>
-                                  PIK = llvm::None) const;
-
+  QualType getIncompleteArrayType(
+      QualType EltTy, ArrayType::ArraySizeModifier ASM, unsigned IndexTypeQuals,
+      llvm::Optional<PointerInterpretationKindExplicit> PIKE =
+          llvm::None) const;
 
   /// Return the unique reference to the type for a constant array of
   /// the specified element type.
-  QualType getConstantArrayType(QualType EltTy, const llvm::APInt &ArySize,
-                                const Expr *SizeExpr,
-                                ArrayType::ArraySizeModifier ASM,
-                                unsigned IndexTypeQuals,
-                                llvm::Optional<PointerInterpretationKind>
-                                PIK = llvm::None) const;
+  QualType
+  getConstantArrayType(QualType EltTy, const llvm::APInt &ArySize,
+                       const Expr *SizeExpr, ArrayType::ArraySizeModifier ASM,
+                       unsigned IndexTypeQuals,
+                       llvm::Optional<PointerInterpretationKindExplicit> PIKE =
+                           llvm::None) const;
 
   /// Return a type for a constant array for a string literal of the
   /// specified element type and length.
@@ -1570,6 +1592,11 @@ public:
   QualType getDependentPointerType(QualType PointerType,
                                    PointerInterpretationKind PIK,
                                    SourceLocation QualifierLoc) const;
+
+  QualType getPointerInterpretationType(PointerInterpretationKind PIK,
+                                        SourceRange QualifierRange,
+                                        QualType ModifiedType,
+                                        QualType EquivalentType) const;
 
   /// Return a K&R style C function type like 'int()'.
   QualType getFunctionNoProtoType(QualType ResultTy,
@@ -2783,8 +2810,8 @@ public:
   ///
   /// See C99 6.7.5.3p7 and C99 6.3.2.1p3.
   QualType getArrayDecayedType(QualType T,
-                               llvm::Optional<PointerInterpretationKind>
-                               PIKFromBase = llvm::None) const;
+                               llvm::Optional<PointerInterpretationKindExplicit>
+                                   PIKEFromBase = llvm::None) const;
 
   /// Return the type that \p PromotableType will promote to: C99
   /// 6.3.1.1p2, assuming that \p PromotableType is a promotable integer type.

@@ -366,6 +366,12 @@ public:
     Visit(T->getElementType());
     Visit(T->getSizeExpr());
   }
+  void VisitDependentPointerType(const DependentPointerType *T) {
+    Visit(T->getPointerType());
+  }
+  void VisitPointerInterpretationType(const PointerInterpretationType *T) {
+    Visit(T->getModifiedType());
+  }
   void VisitVectorType(const VectorType *T) { Visit(T->getElementType()); }
   void VisitFunctionType(const FunctionType *T) { Visit(T->getReturnType()); }
   void VisitFunctionProtoType(const FunctionProtoType *T) {

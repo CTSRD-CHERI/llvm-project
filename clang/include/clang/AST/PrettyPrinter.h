@@ -65,7 +65,6 @@ struct PrintingPolicy {
         SuppressInlineNamespace(true), SuppressInitializers(false),
         ConstantArraySizeAsWritten(false), AnonymousTagLocations(true),
         SuppressStrongLifetime(false), SuppressLifetimeQualifiers(false),
-        SuppressCapabilityQualifier(TI && TI->areAllPointersCapabilities()),
         SuppressTemplateArgsInCXXConstructors(false),
         SuppressDefaultTemplateArgs(true), Bool(LO.Bool),
         Nullptr(LO.CPlusPlus11), Restrict(LO.C99), Alignof(LO.CPlusPlus11),
@@ -181,9 +180,6 @@ struct PrintingPolicy {
 
   /// When true, suppress printing of lifetime qualifier in ARC.
   unsigned SuppressLifetimeQualifiers : 1;
-
-  /// When true, suppress printing of the __capability qualifier.
-  unsigned SuppressCapabilityQualifier : 1;
 
   /// When true, suppresses printing template arguments in names of C++
   /// constructors.

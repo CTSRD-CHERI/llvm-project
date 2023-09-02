@@ -6571,6 +6571,11 @@ void TypeLocReader::VisitDependentPointerTypeLoc(
   TL.setQualifierLoc(readSourceLocation());
 }
 
+void TypeLocReader::VisitPointerInterpretationTypeLoc(
+    PointerInterpretationTypeLoc TL) {
+  TL.setQualifierRange(Reader.readSourceRange());
+}
+
 void TypeLocReader::VisitDependentSizedExtVectorTypeLoc(
                                         DependentSizedExtVectorTypeLoc TL) {
   TL.setNameLoc(readSourceLocation());

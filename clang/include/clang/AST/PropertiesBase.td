@@ -127,6 +127,7 @@ def NestedNameSpecifierKind :
   EnumPropertyType<"NestedNameSpecifier::SpecifierKind">;
 def OverloadedOperatorKind : EnumPropertyType;
 def PointerInterpretationKind : EnumPropertyType;
+def PointerInterpretationKindExplicit : PropertyType;
 def Qualifiers : PropertyType;
 def QualType : DefaultValuePropertyType;
 def RefQualifierKind : EnumPropertyType;

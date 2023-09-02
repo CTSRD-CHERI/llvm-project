@@ -3560,19 +3560,23 @@ void PragmaPointerInterpretation::HandlePragma(Preprocessor &PP,
   else if (Interpretation->getName() == "pop")
     Actions.ActOnPragmaPointerInterpretationPop();
   else {
-    PointerInterpretationKind PIK =
-      llvm::StringSwitch<PointerInterpretationKind>(Interpretation->getName())
-        .Case("capability", PointerInterpretationKind::PIK_Capability)
-        .Case("integer", PointerInterpretationKind::PIK_Integer)
-        .Case("default", Actions.Context.getDefaultPointerInterpretation())
-        .Default((PointerInterpretationKind)-1);
-    if (PIK == (PointerInterpretationKind)-1) {
+    llvm::Optional<PointerInterpretationKindExplicit> PIKE =
+        llvm::StringSwitch<llvm::Optional<PointerInterpretationKindExplicit>>(
+            Interpretation->getName())
+            .Case("capability", PointerInterpretationKindExplicit(
+                                    PIK_Capability, /*IsExplicit=*/true))
+            .Case("integer", PointerInterpretationKindExplicit(
+                                 PIK_Integer, /*IsExplicit=*/true))
+            .Case("default",
+                  Actions.Context.getDefaultPointerInterpretationExplicit())
+            .Default(llvm::None);
+    if (!PIKE) {
       PP.Diag(Tok.getLocation(),
               diag::err_pragma_pointer_interpretation_invalid_argument)
           << PP.getSpelling(Tok);
       return;
     }
-    Actions.ActOnPragmaPointerInterpretation(PIK);
+    Actions.ActOnPragmaPointerInterpretation(*PIKE);
   }
 
   PP.Lex(Tok);

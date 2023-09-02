@@ -8,8 +8,8 @@
 // AST-NEXT:   `-ReturnStmt
 // AST-NEXT:    `-MemberExpr {{.+}} 'const long' lvalue ->size
 // AST-NEXT:     `-ImplicitCastExpr {{.+}} 's1 * __capability' <UncheckedDerivedToBase (s1)>
-// AST-NEXT:      `-ImplicitCastExpr {{.+}} 'const s2 * __capability' <LValueToRValue>
-// AST-NEXT:       `-DeclRefExpr {{.+}} 'const s2 * __capability' lvalue Var {{.+}} 'c_s2' 'const s2 * __capability'
+// AST-NEXT:      `-ImplicitCastExpr {{.+}} 'const s2 * __capability':'const s2 * __capability' <LValueToRValue>
+// AST-NEXT:       `-DeclRefExpr {{.+}} 'const s2 * __capability':'const s2 * __capability' lvalue Var {{.+}} 'c_s2' 'const s2 * __capability':'const s2 * __capability'
 
 struct s1 {
   long size;

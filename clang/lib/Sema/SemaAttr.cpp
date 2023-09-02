@@ -384,10 +384,6 @@ void Sema::ActOnPragmaPack(SourceLocation PragmaLoc, PragmaMsStackAction Action,
   AlignPackStack.Act(PragmaLoc, Action, SlotLabel, Info);
 }
 
-void Sema::ActOnPragmaPointerInterpretation(PointerInterpretationKind K) {
-  PointerInterpretation = K;
-}
-
 void Sema::DiagnoseNonDefaultPragmaAlignPack(PragmaAlignPackDiagnoseKind Kind,
                                              SourceLocation IncludeLoc) {
   if (Kind == PragmaAlignPackDiagnoseKind::NonDefaultStateAtInclude) {

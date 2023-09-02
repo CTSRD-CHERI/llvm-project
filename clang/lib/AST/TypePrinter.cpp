@@ -99,11 +99,29 @@ namespace {
     }
   };
 
+  class PointerInterpretationRAII {
+    SmallVectorImpl<PointerInterpretationKind> &PointerInterpretations;
+
+  public:
+    explicit PointerInterpretationRAII(
+        SmallVectorImpl<PointerInterpretationKind> &PointerInterpretations,
+        PointerInterpretationKind PointerInterpretation)
+        : PointerInterpretations(PointerInterpretations) {
+      PointerInterpretations.push_back(PointerInterpretation);
+    }
+
+    ~PointerInterpretationRAII() {
+      assert(PointerInterpretations.empty() &&
+             "Unhandled pointer interpretations");
+    }
+  };
+
   class TypePrinter {
     PrintingPolicy Policy;
     unsigned Indentation;
     bool HasEmptyPlaceHolder = false;
     bool InsideCCAttribute = false;
+    SmallVector<PointerInterpretationKind, 1> PointerInterpretations;
 
   public:
     explicit TypePrinter(const PrintingPolicy &Policy, unsigned Indentation = 0)
@@ -263,6 +281,7 @@ bool TypePrinter::canPrefixQualifiers(const Type *T,
     case Type::MemberPointer:
     case Type::DependentAddressSpace:
     case Type::DependentPointer:
+    case Type::PointerInterpretation:
     case Type::DependentVector:
     case Type::DependentSizedExtVector:
     case Type::Vector:
@@ -304,6 +323,10 @@ void TypePrinter::printBefore(QualType T, raw_ostream &OS) {
 /// Prints the part of the type string before an identifier, e.g. for
 /// "int foo[10]" it prints "int ".
 void TypePrinter::printBefore(const Type *T,Qualifiers Quals, raw_ostream &OS) {
+  SmallVector<PointerInterpretationKind, 1> ThisPointerInterpretations =
+      PointerInterpretations;
+  PointerInterpretations.clear();
+
   if (Policy.SuppressSpecifiers && T->isSpecifierType())
     return;
 
@@ -340,22 +363,29 @@ void TypePrinter::printBefore(const Type *T,Qualifiers Quals, raw_ostream &OS) {
   }
 
   // Print __capability
-  if (!Policy.SuppressCapabilityQualifier) {
-    if (const PointerType *PTy = dyn_cast<PointerType>(T)) {
-      if (PTy->getPointerInterpretation() == PIK_Capability) {
-        OS << " __capability";
-        if (hasAfterQuals || !PrevPHIsEmpty.get())
-          OS << " ";
-      }
+  llvm::Optional<PointerInterpretationKindExplicit> PIKE;
+  if (const PointerType *PTy = dyn_cast<PointerType>(T))
+    PIKE = PTy->getPointerInterpretationExplicit();
+  else if (const ReferenceType *RTy = dyn_cast<ReferenceType>(T))
+    PIKE = RTy->getPointerInterpretationExplicit();
+
+  if (PIKE && PIKE->IsExplicit)
+    ThisPointerInterpretations.push_back(PIKE->PIK);
+
+  bool appendSpaceAfterPIKs = false;
+  for (const auto PIK : llvm::reverse(ThisPointerInterpretations)) {
+    switch (PIK) {
+    case PIK_Capability:
+      OS << " __capability";
+      break;
+    default:
+      llvm_unreachable("Unsupported pointer interpretation");
     }
-    else if (const ReferenceType *RTy = dyn_cast<ReferenceType>(T)) {
-      if (RTy->getPointerInterpretation() == PIK_Capability) {
-        OS << " __capability";
-        if (hasAfterQuals || !PrevPHIsEmpty.get())
-          OS << " ";
-      }
-    }
+    if (hasAfterQuals || !PrevPHIsEmpty.get())
+      appendSpaceAfterPIKs = true;
   }
+  if (appendSpaceAfterPIKs)
+    OS << " ";
 
   if (hasAfterQuals) {
     if (NeedARCStrongQualifier) {
@@ -633,17 +663,26 @@ void TypePrinter::printDependentAddressSpaceAfter(
 
 void TypePrinter::printDependentPointerBefore(
     const DependentPointerType *T, raw_ostream &OS) {
+  PointerInterpretationRAII PI(PointerInterpretations,
+                               T->getPointerInterpretation());
   printBefore(T->getPointerType(), OS);
 }
 
 void TypePrinter::printDependentPointerAfter(
     const DependentPointerType *T, raw_ostream &OS) {
-  if (!Policy.SuppressCapabilityQualifier) {
-    if (T->getPointerInterpretation() == PIK_Capability) {
-      OS << " __capability";
-    }
-  }
   printAfter(T->getPointerType(), OS);
+}
+
+void TypePrinter::printPointerInterpretationBefore(
+    const PointerInterpretationType *T, raw_ostream &OS) {
+  PointerInterpretationRAII PI(PointerInterpretations,
+                               T->getPointerInterpretation());
+  printBefore(T->getModifiedType(), OS);
+}
+
+void TypePrinter::printPointerInterpretationAfter(
+    const PointerInterpretationType *T, raw_ostream &OS) {
+  printAfter(T->getModifiedType(), OS);
 }
 
 void TypePrinter::printDependentSizedExtVectorBefore(

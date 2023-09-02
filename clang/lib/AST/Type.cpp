@@ -118,7 +118,7 @@ bool QualType::isConstant(QualType T, const ASTContext &Ctx) {
 //       value-dependent,
 ArrayType::ArrayType(TypeClass tc, QualType et, QualType can,
                      ArraySizeModifier sm, unsigned tq,
-                     llvm::Optional<PointerInterpretationKind> PIK,
+                     llvm::Optional<PointerInterpretationKindExplicit> PIKE,
                      const Expr *sz)
     // Note, we need to check for DependentSizedArrayType explicitly here
     // because we use a DependentSizedArrayType with no size expression as the
@@ -139,9 +139,9 @@ ArrayType::ArrayType(TypeClass tc, QualType et, QualType can,
       ElementType(et) {
   ArrayTypeBits.IndexTypeQuals = tq;
   ArrayTypeBits.SizeModifier = sm;
-  ArrayTypeBits.HasPIK = PIK.hasValue();
-  if (PIK.hasValue())
-    ArrayTypeBits.PIK = *PIK;
+  ArrayTypeBits.HasPIKE = PIKE.hasValue();
+  if (PIKE.hasValue())
+    ArrayTypeBits.PIKE = PIKE->pack();
 }
 
 unsigned ConstantArrayType::getNumAddressingBits(const ASTContext &Context,
@@ -191,12 +191,11 @@ unsigned ConstantArrayType::getMaxSizeBits(const ASTContext &Context) {
   return Bits;
 }
 
-void ConstantArrayType::Profile(llvm::FoldingSetNodeID &ID,
-                                const ASTContext &Context, QualType ET,
-                                const llvm::APInt &ArraySize,
-                                const Expr *SizeExpr, ArraySizeModifier SizeMod,
-                                unsigned TypeQuals,
-                                llvm::Optional<PointerInterpretationKind> PIK) {
+void ConstantArrayType::Profile(
+    llvm::FoldingSetNodeID &ID, const ASTContext &Context, QualType ET,
+    const llvm::APInt &ArraySize, const Expr *SizeExpr,
+    ArraySizeModifier SizeMod, unsigned TypeQuals,
+    llvm::Optional<PointerInterpretationKindExplicit> PIKE) {
   ID.AddPointer(ET.getAsOpaquePtr());
   ID.AddInteger(ArraySize.getZExtValue());
   ID.AddInteger(SizeMod);
@@ -204,34 +203,29 @@ void ConstantArrayType::Profile(llvm::FoldingSetNodeID &ID,
   ID.AddBoolean(SizeExpr != nullptr);
   if (SizeExpr)
     SizeExpr->Profile(ID, Context, true);
-  ID.AddBoolean(PIK.hasValue());
-  if (PIK.hasValue())
-    ID.AddInteger(*PIK);
+  ID.AddBoolean(PIKE.hasValue());
+  if (PIKE.hasValue())
+    PIKE->Profile(ID);
 }
 
-DependentSizedArrayType::DependentSizedArrayType(const ASTContext &Context,
-                                                 QualType et, QualType can,
-                                                 Expr *e, ArraySizeModifier sm,
-                                                 unsigned tq,
-                                                 SourceRange brackets,
-                                                 llvm::Optional<PointerInterpretationKind> PIK)
-    : ArrayType(DependentSizedArray, et, can, sm, tq, PIK, e),
-      Context(Context), SizeExpr((Stmt*) e), Brackets(brackets) {}
+DependentSizedArrayType::DependentSizedArrayType(
+    const ASTContext &Context, QualType et, QualType can, Expr *e,
+    ArraySizeModifier sm, unsigned tq, SourceRange brackets,
+    llvm::Optional<PointerInterpretationKindExplicit> PIKE)
+    : ArrayType(DependentSizedArray, et, can, sm, tq, PIKE, e),
+      Context(Context), SizeExpr((Stmt *)e), Brackets(brackets) {}
 
-void DependentSizedArrayType::Profile(llvm::FoldingSetNodeID &ID,
-                                      const ASTContext &Context,
-                                      QualType ET,
-                                      ArraySizeModifier SizeMod,
-                                      unsigned TypeQuals,
-                                      Expr *E,
-                                      llvm::Optional<PointerInterpretationKind> PIK) {
+void DependentSizedArrayType::Profile(
+    llvm::FoldingSetNodeID &ID, const ASTContext &Context, QualType ET,
+    ArraySizeModifier SizeMod, unsigned TypeQuals, Expr *E,
+    llvm::Optional<PointerInterpretationKindExplicit> PIKE) {
   ID.AddPointer(ET.getAsOpaquePtr());
   ID.AddInteger(SizeMod);
   ID.AddInteger(TypeQuals);
   E->Profile(ID, Context, true);
-  ID.AddBoolean(PIK.hasValue());
-  if (PIK.hasValue())
-    ID.AddInteger(*PIK);
+  ID.AddBoolean(PIKE.hasValue());
+  if (PIKE.hasValue())
+    PIKE->Profile(ID);
 }
 
 DependentVectorType::DependentVectorType(const ASTContext &Context,
@@ -621,32 +615,46 @@ bool Type::isStructureOrClassType() const {
   return false;
 }
 
-bool Type::isCHERICapabilityType(const ASTContext &Context,
-                                 bool IncludeIntCap) const {
+llvm::Optional<PointerInterpretationKindExplicit>
+Type::getPointerInterpretationExplicitOrNone(const ASTContext &Context) const {
+  // NB: PointerInterpretationType must come first as it's sugar that getAs
+  // will otherwise strip, forgetting IsExplicit.
+  if (const PointerInterpretationType *PIT = getAs<PointerInterpretationType>())
+    return PIT->getPointerInterpretationExplicit();
+
   if (const PointerType *PT = getAs<PointerType>())
-    return PT->isCHERICapability();
-  else if (const ReferenceType *RT = getAs<ReferenceType>())
-    return RT->isCHERICapability();
-  else if (isObjCObjectPointerType() || isBlockPointerType())
-    return Context.getTargetInfo().areAllPointersCapabilities();
-  else if (const EnumType *ET = getAs<EnumType>()) {
-    QualType Ty = ET->getDecl()->getIntegerType();
-    return Ty.isNull() ? false
-                       : Ty->isCHERICapabilityType(Context, IncludeIntCap);
-  } else if (const BuiltinType *BT = getAs<BuiltinType>()) {
-    auto Kind = BT->getKind();
-    if (Kind == BuiltinType::IntCap ||
-        Kind == BuiltinType::UIntCap)
-      return IncludeIntCap;
-    if (Kind == BuiltinType::ObjCId || Kind == BuiltinType::NullPtr)
-      return Context.getTargetInfo().areAllPointersCapabilities();
-  } else if (const AtomicType *AT = getAs<AtomicType>())
-    return AT->getValueType()->isCHERICapabilityType(Context, IncludeIntCap);
-  else if (const MemberPointerType *MPT = getAs<MemberPointerType>())
+    return PT->getPointerInterpretationExplicit();
+  if (const ReferenceType *RT = getAs<ReferenceType>())
+    return RT->getPointerInterpretationExplicit();
+  if (isObjCObjectPointerType() || isBlockPointerType())
+    return Context.getDefaultPointerInterpretationExplicit();
+  if (const ArrayType *AT = getAsArrayTypeUnsafe())
+    return AT->getPointerInterpretationExplicit();
+  if (const DependentPointerType *DPT = getAs<DependentPointerType>())
+    return DPT->getPointerInterpretationExplicit();
+  if (const AtomicType *AT = getAs<AtomicType>())
+    return AT->getValueType()->getPointerInterpretationExplicitOrNone(Context);
+  if (const BuiltinType *BT = getAs<BuiltinType>()) {
+    if (BT->getKind() == BuiltinType::ObjCId ||
+        BT->getKind() == BuiltinType::NullPtr)
+      return Context.getDefaultPointerInterpretationExplicit();
+  }
+  if (const MemberPointerType *MPT = getAs<MemberPointerType>()) {
     // XXXAR: Currently member function pointers contain capabities, but
     // pointers to member data don't
-    return Context.getTargetInfo().areAllPointersCapabilities() && MPT->isMemberFunctionPointer();
-  return false;
+    if (MPT->isMemberFunctionPointer())
+      return Context.getDefaultPointerInterpretationExplicit();
+  }
+  return llvm::None;
+}
+
+bool Type::isCHERICapabilityType(const ASTContext &Context,
+                                 bool IncludeIntCap) const {
+  llvm::Optional<PointerInterpretationKindExplicit> PIKE =
+      getPointerInterpretationExplicitOrNone(Context);
+  if (PIKE)
+    return PIKE->PIK == PIK_Capability;
+  return IncludeIntCap && isIntCapType();
 }
 
 bool Type::isIntCapType() const {
@@ -1015,7 +1023,8 @@ public:
     if (pointeeType.getAsOpaquePtr() == T->getPointeeType().getAsOpaquePtr())
       return QualType(T, 0);
 
-    return Ctx.getPointerType(pointeeType, T->getPointerInterpretation());
+    return Ctx.getPointerType(pointeeType,
+                              T->getPointerInterpretationExplicit());
   }
 
   QualType VisitBlockPointerType(const BlockPointerType *T) {
@@ -1039,7 +1048,7 @@ public:
       return QualType(T, 0);
 
     return Ctx.getLValueReferenceType(pointeeType, T->isSpelledAsLValue(),
-                                      T->getPointerInterpretation());
+                                      T->getPointerInterpretationExplicit());
   }
 
   QualType VisitRValueReferenceType(const RValueReferenceType *T) {
@@ -1052,7 +1061,7 @@ public:
       return QualType(T, 0);
 
     return Ctx.getRValueReferenceType(pointeeType,
-                                      T->getPointerInterpretation());
+                                      T->getPointerInterpretationExplicit());
   }
 
   QualType VisitMemberPointerType(const MemberPointerType *T) {
@@ -1251,6 +1260,26 @@ public:
 
   // FIXME: Non-trivial to implement, but important for C++
   SUGARED_TYPE_CLASS(Elaborated)
+
+  QualType VisitPointerInterpretationType(const PointerInterpretationType *T) {
+    QualType modifiedType = recurse(T->getModifiedType());
+    if (modifiedType.isNull())
+      return {};
+
+    QualType equivalentType = recurse(T->getEquivalentType());
+    if (equivalentType.isNull())
+      return {};
+
+    if (modifiedType.getAsOpaquePtr() ==
+            T->getModifiedType().getAsOpaquePtr() &&
+        equivalentType.getAsOpaquePtr() ==
+            T->getEquivalentType().getAsOpaquePtr())
+      return QualType(T, 0);
+
+    return Ctx.getPointerInterpretationType(T->getPointerInterpretation(),
+                                            T->getQualifierRange(),
+                                            modifiedType, equivalentType);
+  }
 
   QualType VisitAttributedType(const AttributedType *T) {
     QualType modifiedType = recurse(T->getModifiedType());
@@ -1981,6 +2010,10 @@ namespace {
     }
 
     Type *VisitAttributedType(const AttributedType *T) {
+      return Visit(T->getModifiedType());
+    }
+
+    Type *VisitPointerInterpretationType(const PointerInterpretationType *T) {
       return Visit(T->getModifiedType());
     }
 

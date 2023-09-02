@@ -807,9 +807,9 @@ AddDirectArgument(CodeGenFunction &CGF, CallArgList &Args,
     int64_t SizeInBits = CGF.getContext().toBits(SizeInChars);
     llvm::Type *ValLLVMTy;
     if (ValTy->isCHERICapabilityType(CGF.getContext())) {
-      ValTy =
-          CGF.getContext().getPointerType(CGF.getContext().VoidTy,
-                                          PIK_Capability);
+      PointerInterpretationKindExplicit PIKE(PIK_Capability,
+                                             /*IsExplicit=*/true);
+      ValTy = CGF.getContext().getPointerType(CGF.getContext().VoidTy, PIKE);
       ValLLVMTy = CGF.Int8CheriCapTy;
     } else {
       ValTy =

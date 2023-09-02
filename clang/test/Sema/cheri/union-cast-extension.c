@@ -35,7 +35,7 @@ CapIntUnion cap_conversion2(void *b) {
 
 InvalidUnion bad_conversion1(void *__capability b) {
   return (InvalidUnion)b;
-  // purecap-error@-1{{cast to union type from type 'void *' not present in union}}
+  // purecap-error@-1{{cast to union type from type 'void * __capability' (aka 'void *') not present in union}}
   // hybrid-error@-2{{cast to union type from type 'void * __capability' not present in union}}
 }
 InvalidUnion bad_conversion2(void *b) {

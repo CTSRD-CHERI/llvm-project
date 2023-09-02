@@ -2292,6 +2292,11 @@ namespace {
       return Visit(T->getModifiedType());
     }
 
+    TemplateTypeParmDecl *
+    VisitPointerInterpretationType(const PointerInterpretationType *T) {
+      return Visit(T->getModifiedType());
+    }
+
     TemplateTypeParmDecl *VisitMacroQualifiedType(const MacroQualifiedType *T) {
       return Visit(T->getUnderlyingType());
     }

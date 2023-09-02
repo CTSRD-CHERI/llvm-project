@@ -34,12 +34,12 @@ void cast_vaddr() {
   ptraddr_t v = reinterpret_cast<ptraddr_t>(a);
   v = static_cast<ptraddr_t>(a);
   // hybrid-error@-1 {{static_cast from 'void * __capability' to 'ptraddr_t' (aka 'unsigned long') is not allowed}}
-  // purecap-error@-2 {{static_cast from 'void *' to 'ptraddr_t' (aka 'unsigned long') is not allowed}}
+  // purecap-error@-2 {{static_cast from 'void * __capability' (aka 'void *') to 'ptraddr_t' (aka 'unsigned long') is not allowed}}
   v = (ptraddr_t)a;
   v = ptraddr_t(a);
   v = ptraddr_t{a};
   // hybrid-error@-1 {{cannot initialize a value of type 'ptraddr_t' (aka 'unsigned long') with an lvalue of type 'void * __capability'}}
-  // purecap-error@-2 {{cannot initialize a value of type 'ptraddr_t' (aka 'unsigned long') with an lvalue of type 'void *'}}
+  // purecap-error@-2 {{cannot initialize a value of type 'ptraddr_t' (aka 'unsigned long') with an lvalue of type 'void * __capability' (aka 'void *')}}
 }
 
 void cast_vaddr2() {
@@ -47,7 +47,7 @@ void cast_vaddr2() {
   long __attribute__((memory_address)) v = reinterpret_cast<long __attribute__((memory_address))>(a);
   v = static_cast<long __attribute__((memory_address))>(a);
   // hybrid-error@-1 {{static_cast from 'void * __capability' to 'long __attribute__((memory_address))' is not allowed}}
-  // purecap-error@-2 {{static_cast from 'void *' to 'long __attribute__((memory_address))' is not allowed}}
+  // purecap-error@-2 {{static_cast from 'void * __capability' (aka 'void *') to 'long __attribute__((memory_address))' is not allowed}}
   v = (long __attribute__((memory_address)))a;
   // these won't work, need single token for functional/brace-init:
   // v = long __attribute__((memory_address))(a);
@@ -56,26 +56,26 @@ void cast_vaddr2() {
   __attribute__((memory_address)) long v2 = reinterpret_cast<__attribute__((memory_address)) long>(a);
   v2 = static_cast<__attribute__((memory_address)) long>(a);
   // hybrid-error@-1 {{static_cast from 'void * __capability' to 'long __attribute__((memory_address))' is not allowed}}
-  // purecap-error@-2 {{static_cast from 'void *' to 'long __attribute__((memory_address))' is not allowed}}
+  // purecap-error@-2 {{static_cast from 'void * __capability' (aka 'void *') to 'long __attribute__((memory_address))' is not allowed}}
   v2 = (__attribute__((memory_address)) long)a;
 }
 
 void cast_long() {
   long v = reinterpret_cast<long>(a);
   // hybrid-warning@-1 {{cast from capability type 'void * __capability' to non-capability, non-address type 'long' is most likely an error}}
-  // purecap-warning@-2 {{cast from capability type 'void *' to non-capability, non-address type 'long' is most likely an error}}
+  // purecap-warning@-2 {{cast from capability type 'void * __capability' (aka 'void *') to non-capability, non-address type 'long' is most likely an error}}
   v = static_cast<long>(a);
   // hybrid-error@-1 {{static_cast from 'void * __capability' to 'long' is not allowed}}
-  // purecap-error@-2 {{static_cast from 'void *' to 'long' is not allowed}}
+  // purecap-error@-2 {{static_cast from 'void * __capability' (aka 'void *') to 'long' is not allowed}}
   v = (long)a;
   // hybrid-warning@-1 {{cast from capability type 'void * __capability' to non-capability, non-address type 'long' is most likely an error}}
-  // purecap-warning@-2 {{cast from capability type 'void *' to non-capability, non-address type 'long' is most likely an error}}
+  // purecap-warning@-2 {{cast from capability type 'void * __capability' (aka 'void *') to non-capability, non-address type 'long' is most likely an error}}
   v = long(a);
   // hybrid-warning@-1 {{cast from capability type 'void * __capability' to non-capability, non-address type 'long' is most likely an error}}
-  // purecap-warning@-2 {{cast from capability type 'void *' to non-capability, non-address type 'long' is most likely an error}}
+  // purecap-warning@-2 {{cast from capability type 'void * __capability' (aka 'void *') to non-capability, non-address type 'long' is most likely an error}}
   v = long{a};
   // hybrid-error@-1 {{cannot initialize a value of type 'long' with an lvalue of type 'void * __capability'}}
-  // purecap-error@-2 {{cannot initialize a value of type 'long' with an lvalue of type 'void *'}}
+  // purecap-error@-2 {{cannot initialize a value of type 'long' with an lvalue of type 'void * __capability' (aka 'void *')}}
 }
 
 // Should cause narrowing errors
@@ -83,34 +83,34 @@ void cast_int() {
   int v = reinterpret_cast<int>(a); // expected-error {{cast from capability to smaller type 'int' loses information}}
   v = static_cast<int>(a);
   // hybrid-error@-1 {{static_cast from 'void * __capability' to 'int' is not allowed}}
-  // purecap-error@-2 {{static_cast from 'void *' to 'int' is not allowed}}
+  // purecap-error@-2 {{static_cast from 'void * __capability' (aka 'void *') to 'int' is not allowed}}
   v = (int)a; // expected-error {{cast from capability to smaller type 'int' loses information}}
   v = int(a); // expected-error {{cast from capability to smaller type 'int' loses information}}
   v = int{a};
   // hybrid-error@-1 {{cannot initialize a value of type 'int' with an lvalue of type 'void * __capability'}}
-  // purecap-error@-2 {{cannot initialize a value of type 'int' with an lvalue of type 'void *'}}
+  // purecap-error@-2 {{cannot initialize a value of type 'int' with an lvalue of type 'void * __capability' (aka 'void *')}}
 }
 
 void cast_uintcap() {
   // AST-LABEL: FunctionDecl {{.+}} cast_uintcap 'void ()'
   unsigned __intcap v = reinterpret_cast<unsigned __intcap>(a);
   // AST: CXXReinterpretCastExpr {{.*}} {{.*}} 'unsigned __intcap' reinterpret_cast<unsigned __intcap> <PointerToIntegral>
-  // HYBRID-AST-NEXT: ImplicitCastExpr {{.+}} 'void * __capability' <LValueToRValue>
-  // HYBRID-AST-NEXT: DeclRefExpr {{.+}} 'a' 'void * __capability'
-  // PURECAP-AST-NEXT: ImplicitCastExpr {{.+}} 'void *' <LValueToRValue>
-  // PURECAP-AST-NEXT: DeclRefExpr {{.+}} 'a' 'void *'
+  // HYBRID-AST-NEXT: ImplicitCastExpr {{.+}} 'void * __capability':'void * __capability' <LValueToRValue>
+  // HYBRID-AST-NEXT: DeclRefExpr {{.+}} 'a' 'void * __capability':'void * __capability'
+  // PURECAP-AST-NEXT: ImplicitCastExpr {{.+}} 'void * __capability':'void *' <LValueToRValue>
+  // PURECAP-AST-NEXT: DeclRefExpr {{.+}} 'a' 'void * __capability':'void *'
   v = reinterpret_cast<unsigned __intcap>(nullptr);
   // AST: CXXReinterpretCastExpr {{.*}} {{.*}} 'unsigned __intcap __attribute__((cheri_no_provenance))':'unsigned __intcap' reinterpret_cast<unsigned __intcap> <PointerToIntegral>
   // AST-NEXT: CXXNullPtrLiteralExpr {{.+}} 'std::nullptr_t'
   v = static_cast<unsigned __intcap>(a);
   // hybrid-error@-1 {{static_cast from 'void * __capability' to 'unsigned __intcap' is not allowed}}
-  // purecap-error@-2 {{static_cast from 'void *' to 'unsigned __intcap' is not allowed}}
+  // purecap-error@-2 {{static_cast from 'void * __capability' (aka 'void *') to 'unsigned __intcap' is not allowed}}
   v = (unsigned __intcap)a;
   // AST: CStyleCastExpr {{.*}} {{.*}} 'unsigned __intcap' <PointerToIntegral>
-  // HYBRID-AST-NEXT: ImplicitCastExpr {{.+}} 'void * __capability' <LValueToRValue>
-  // HYBRID-AST-NEXT: DeclRefExpr {{.+}} 'a' 'void * __capability'
-  // PURECAP-AST-NEXT: ImplicitCastExpr {{.+}} 'void *' <LValueToRValue>
-  // PURECAP-AST-NEXT: DeclRefExpr {{.+}} 'a' 'void *'
+  // HYBRID-AST-NEXT: ImplicitCastExpr {{.+}} 'void * __capability':'void * __capability' <LValueToRValue>
+  // HYBRID-AST-NEXT: DeclRefExpr {{.+}} 'a' 'void * __capability':'void * __capability'
+  // PURECAP-AST-NEXT: ImplicitCastExpr {{.+}} 'void * __capability':'void *' <LValueToRValue>
+  // PURECAP-AST-NEXT: DeclRefExpr {{.+}} 'a' 'void * __capability':'void *'
   // NB: C++ only supports a single word type name for functional casts and
   // direct list initialisers (GNU C++ supports compound literals for the
   // latter) so we need to introduce a single word alias for testing (we could
@@ -119,44 +119,44 @@ void cast_uintcap() {
   using __uintcap = unsigned __intcap;
   v = __uintcap(a);
   // AST: CXXFunctionalCastExpr {{.*}} {{.*}} '__uintcap':'unsigned __intcap' functional cast to __uintcap <PointerToIntegral>
-  // HYBRID-AST-NEXT: ImplicitCastExpr {{.+}} 'void * __capability' <LValueToRValue>
-  // HYBRID-AST-NEXT: DeclRefExpr {{.+}} 'a' 'void * __capability'
-  // PURECAP-AST-NEXT: ImplicitCastExpr {{.+}} 'void *' <LValueToRValue>
-  // PURECAP-AST-NEXT: DeclRefExpr {{.+}} 'a' 'void *'
+  // HYBRID-AST-NEXT: ImplicitCastExpr {{.+}} 'void * __capability':'void * __capability' <LValueToRValue>
+  // HYBRID-AST-NEXT: DeclRefExpr {{.+}} 'a' 'void * __capability':'void * __capability'
+  // PURECAP-AST-NEXT: ImplicitCastExpr {{.+}} 'void * __capability':'void *' <LValueToRValue>
+  // PURECAP-AST-NEXT: DeclRefExpr {{.+}} 'a' 'void * __capability':'void *'
   v = __uintcap{a};
   // hybrid-error@-1 {{cannot initialize a value of type '__uintcap' (aka 'unsigned __intcap') with an lvalue of type 'void * __capability'}}
-  // purecap-error@-2 {{cannot initialize a value of type '__uintcap' (aka 'unsigned __intcap') with an lvalue of type 'void *'}}
+  // purecap-error@-2 {{cannot initialize a value of type '__uintcap' (aka 'unsigned __intcap') with an lvalue of type 'void * __capability' (aka 'void *')}}
 }
 
 void cast_intcap() {
   // AST-LABEL: FunctionDecl {{.+}} cast_intcap 'void ()'
   __intcap v = reinterpret_cast<__intcap>(a);
   // AST: CXXReinterpretCastExpr {{.*}} {{.*}} '__intcap' reinterpret_cast<__intcap> <PointerToIntegral>
-  // HYBRID-AST-NEXT: ImplicitCastExpr {{.+}} 'void * __capability' <LValueToRValue>
-  // HYBRID-AST-NEXT: DeclRefExpr {{.+}} 'a' 'void * __capability'
-  // PURECAP-AST-NEXT: ImplicitCastExpr {{.+}} 'void *' <LValueToRValue>
-  // PURECAP-AST-NEXT: DeclRefExpr {{.+}} 'a' 'void *'
+  // HYBRID-AST-NEXT: ImplicitCastExpr {{.+}} 'void * __capability':'void * __capability' <LValueToRValue>
+  // HYBRID-AST-NEXT: DeclRefExpr {{.+}} 'a' 'void * __capability':'void * __capability'
+  // PURECAP-AST-NEXT: ImplicitCastExpr {{.+}} 'void * __capability':'void *' <LValueToRValue>
+  // PURECAP-AST-NEXT: DeclRefExpr {{.+}} 'a' 'void * __capability':'void *'
   v = reinterpret_cast<__intcap>(nullptr);
   // AST: CXXReinterpretCastExpr {{.*}} {{.*}} '__intcap __attribute__((cheri_no_provenance))':'__intcap' reinterpret_cast<__intcap> <PointerToIntegral>
   // AST-NEXT: CXXNullPtrLiteralExpr {{.+}} 'std::nullptr_t'
   v = static_cast<__intcap>(a);
   // hybrid-error@-1 {{static_cast from 'void * __capability' to '__intcap' is not allowed}}
-  // purecap-error@-2 {{static_cast from 'void *' to '__intcap' is not allowed}}
+  // purecap-error@-2 {{static_cast from 'void * __capability' (aka 'void *') to '__intcap' is not allowed}}
   v = (__intcap)a;
   // AST: CStyleCastExpr {{.*}} {{.*}} '__intcap' <PointerToIntegral>
-  // HYBRID-AST-NEXT: ImplicitCastExpr {{.+}} 'void * __capability' <LValueToRValue>
-  // HYBRID-AST-NEXT: DeclRefExpr {{.+}} 'a' 'void * __capability'
-  // PURECAP-AST-NEXT: ImplicitCastExpr {{.+}} 'void *' <LValueToRValue>
-  // PURECAP-AST-NEXT: DeclRefExpr {{.+}} 'a' 'void *'
+  // HYBRID-AST-NEXT: ImplicitCastExpr {{.+}} 'void * __capability':'void * __capability' <LValueToRValue>
+  // HYBRID-AST-NEXT: DeclRefExpr {{.+}} 'a' 'void * __capability':'void * __capability'
+  // PURECAP-AST-NEXT: ImplicitCastExpr {{.+}} 'void * __capability':'void *' <LValueToRValue>
+  // PURECAP-AST-NEXT: DeclRefExpr {{.+}} 'a' 'void * __capability':'void *'
   v = __intcap(a);
   // AST: CXXFunctionalCastExpr {{.*}} {{.*}} '__intcap' functional cast to __intcap <PointerToIntegral>
-  // HYBRID-AST-NEXT: ImplicitCastExpr {{.+}} 'void * __capability' <LValueToRValue>
-  // HYBRID-AST-NEXT: DeclRefExpr {{.+}} 'a' 'void * __capability'
-  // PURECAP-AST-NEXT: ImplicitCastExpr {{.+}} 'void *' <LValueToRValue>
-  // PURECAP-AST-NEXT: DeclRefExpr {{.+}} 'a' 'void *'
+  // HYBRID-AST-NEXT: ImplicitCastExpr {{.+}} 'void * __capability':'void * __capability' <LValueToRValue>
+  // HYBRID-AST-NEXT: DeclRefExpr {{.+}} 'a' 'void * __capability':'void * __capability'
+  // PURECAP-AST-NEXT: ImplicitCastExpr {{.+}} 'void * __capability':'void *' <LValueToRValue>
+  // PURECAP-AST-NEXT: DeclRefExpr {{.+}} 'a' 'void * __capability':'void *'
   v = __intcap{a};
   // hybrid-error@-1 {{cannot initialize a value of type '__intcap' with an lvalue of type 'void * __capability'}}
-  // purecap-error@-2 {{cannot initialize a value of type '__intcap' with an lvalue of type 'void *'}}
+  // purecap-error@-2 {{cannot initialize a value of type '__intcap' with an lvalue of type 'void * __capability' (aka 'void *')}}
 }
 
 void cast_to_cap(void) {
@@ -224,8 +224,8 @@ void cast_ptr() {
   // hybrid-error@-1 3 {{cast from capability type 'void * __capability' to non-capability type 'wordp' (aka 'unsigned __intcap *') is most likely an error}}
   // hybrid-error@-2 {{cannot implicitly or explicitly convert non-capability type 'void * __capability' to unrelated capability type 'wordp' (aka 'unsigned __intcap *')}}
   // hybrid-error@-3 {{const_cast from 'void * __capability' to 'wordp' (aka 'unsigned __intcap *') is not allowed}}
-  // purecap-error@-4 {{const_cast from 'void *' to 'wordp' (aka 'unsigned __intcap *') is not allowed}}
-  // purecap-error@-5 {{cannot initialize a value of type 'wordp' (aka 'unsigned __intcap *') with an lvalue of type 'void *'}}
+  // purecap-error@-4 {{const_cast from 'void * __capability' (aka 'void *') to 'wordp' (aka 'unsigned __intcap *') is not allowed}}
+  // purecap-error@-5 {{cannot initialize a value of type 'wordp' (aka 'unsigned __intcap *') with an lvalue of type 'void * __capability' (aka 'void *')}}
   // expected-error@-6 {{'unsigned __intcap' is not a class}}
   // hybrid-error@-7 {{static_cast from 'void * __capability' to 'wordp' (aka 'unsigned __intcap *') changes capability qualifier}}
 

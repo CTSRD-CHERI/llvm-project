@@ -4966,7 +4966,8 @@ QualType OMPArraySectionExpr::getBaseOriginalType(const Expr *Base) {
   return OriginalTy;
 }
 
-bool Expr::hasUnderlyingCapability() const {
+llvm::Optional<PointerInterpretationKindExplicit>
+Expr::getUnderlyingPointerInterpretationExplicitOrNone() const {
   // This is heavy and the information should instead be recorded on the AST
   // itself. However this would require large changes and might not be easy to
   // maintain downstream. We should also try to pass at some point an AST
@@ -4981,14 +4982,14 @@ bool Expr::hasUnderlyingCapability() const {
   }
 
   if (E->getValueKind() == VK_PRValue)
-    return false;
+    return llvm::None;
 
   if (const DeclRefExpr *DRE = dyn_cast<const DeclRefExpr>(E)) {
     // XXXAR: or should this be getFoundDecl instead of getDecl?
     if (const ValueDecl *V =
             dyn_cast_or_null<const ValueDecl>(DRE->getDecl())) {
       if (const ReferenceType *RTy = V->getType()->getAs<ReferenceType>()) {
-        return RTy->isCHERICapability();
+        return RTy->getPointerInterpretationExplicit();
       }
     }
   }
@@ -4998,21 +4999,22 @@ bool Expr::hasUnderlyingCapability() const {
     NamedDecl *Member = SrcMemb->getMemberDecl();
     if (const auto *Value = dyn_cast<ValueDecl>(Member))
       if (auto *Ty = Value->getType()->getAs<ReferenceType>())
-        return Ty->isCHERICapability();
+        return Ty->getPointerInterpretationExplicit();
 
     if (isa<VarDecl>(Member) && Member->getDeclContext()->isRecord())
-      return false;
+      return llvm::None;
 
     if (isa<FieldDecl>(Member)) {
       if (SrcMemb->isArrow()) {
         auto *Base = SrcMemb->getBase()->IgnoreParens();
         if (auto *Ty = Base->getType()->getAs<PointerType>())
-          return Ty->isCHERICapability();
-        return false;
+          return Ty->getPointerInterpretationExplicit();
+        return llvm::None;
       }
-      return SrcMemb->getBase()->hasUnderlyingCapability();
+      return SrcMemb->getBase()
+          ->getUnderlyingPointerInterpretationExplicitOrNone();
     }
-    return false;
+    return llvm::None;
   }
 
   // Handle unary operator.
@@ -5020,56 +5022,58 @@ bool Expr::hasUnderlyingCapability() const {
     if (UO->getOpcode() == UO_Deref) {
       auto *SubExpr = UO->getSubExpr()->IgnoreParens();
       if (auto *Ty = SubExpr->getType()->getAs<PointerType>())
-        return Ty->isCHERICapability();
-      return false;
+        return Ty->getPointerInterpretationExplicit();
+      return llvm::None;
     }
     if (UO->getOpcode() == UO_AddrOf || UO->getOpcode() == UO_PreInc ||
         UO->getOpcode() == UO_PreDec) {
-      return UO->getSubExpr()->hasUnderlyingCapability();
+      return UO->getSubExpr()
+          ->getUnderlyingPointerInterpretationExplicitOrNone();
     }
-    return false;
+    return llvm::None;
   }
 
   // Handle array subscript.
   if (auto SE = dyn_cast<ArraySubscriptExpr>(E)) {
     auto *Base = SE->getBase()->IgnoreParens();
     if (auto *Ty = Base->getType()->getAs<PointerType>())
-      return Ty->isCHERICapability();
-    return Base->hasUnderlyingCapability();
+      return Ty->getPointerInterpretationExplicit();
+    return Base->getUnderlyingPointerInterpretationExplicitOrNone();
   }
 
   // Handle casts.
   if (auto CE = dyn_cast<CastExpr>(E)) {
     if (CE->getCastKind() == CK_LValueBitCast)
-      return CE->getSubExpr()->hasUnderlyingCapability();
-    return false;
+      return CE->getSubExpr()
+          ->getUnderlyingPointerInterpretationExplicitOrNone();
+    return llvm::None;
   }
 
   // Handle binary operators.
   if (const BinaryOperator *BO = dyn_cast<const BinaryOperator>(E)) {
     if (BO->isAssignmentOp())
-      return BO->getLHS()->hasUnderlyingCapability();
+      return BO->getLHS()->getUnderlyingPointerInterpretationExplicitOrNone();
 
     if (BO->getOpcode() == BO_Comma)
-      return BO->getRHS()->hasUnderlyingCapability();
+      return BO->getRHS()->getUnderlyingPointerInterpretationExplicitOrNone();
 
     if (BO->getOpcode() == BO_PtrMemD) {
       if (BO->getType()->isFunctionType() ||
           BO->hasPlaceholderType(BuiltinType::BoundMember))
-        return false;
-      return BO->getLHS()->hasUnderlyingCapability();
+        return llvm::None;
+      return BO->getLHS()->getUnderlyingPointerInterpretationExplicitOrNone();
     }
 
     if (BO->getOpcode() == BO_PtrMemI) {
       if (BO->getType()->isFunctionType() ||
           BO->hasPlaceholderType(BuiltinType::BoundMember))
-        return false;
+        return llvm::None;
       auto *LHS = BO->getLHS()->IgnoreParens();
       if (auto *Ty = LHS->getType()->getAs<PointerType>())
-        return Ty->isCHERICapability();
+        return Ty->getPointerInterpretationExplicit();
     }
 
-    return false;
+    return llvm::None;
   }
 
   // Handle conditional operators.
@@ -5077,12 +5081,12 @@ bool Expr::hasUnderlyingCapability() const {
     auto *True = CO->getTrueExpr()->IgnoreParens();
     auto *False = CO->getFalseExpr()->IgnoreParens();
     if (True->getType()->isVoidType() || False->getType()->isVoidType())
-      return false;
-    bool CTrue = True->hasUnderlyingCapability();
-    bool CFalse = False->hasUnderlyingCapability();
-    if (CTrue == CFalse)
-      return CTrue;
-    return false;
+      return llvm::None;
+    auto CTrue = True->getUnderlyingPointerInterpretationExplicitOrNone();
+    auto CFalse = False->getUnderlyingPointerInterpretationExplicitOrNone();
+    if (CTrue && CFalse && CTrue->PIK == CFalse->PIK)
+      return CFalse->IsExplicit ? CFalse : CTrue;
+    return llvm::None;
   }
 
   if (const CallExpr *CE = dyn_cast<const CallExpr>(E)) {
@@ -5094,7 +5098,7 @@ bool Expr::hasUnderlyingCapability() const {
       CalleeType = BPT->getPointeeType();
     } else if (CalleeType->isSpecificPlaceholderType(BuiltinType::BoundMember)) {
       if (isa<CXXPseudoDestructorExpr>(Callee->IgnoreParens()))
-        return false;
+        return llvm::None;
 
       // This should never be overloaded and so should never return null.
       CalleeType = Expr::findBoundMemberType(Callee);
@@ -5102,12 +5106,12 @@ bool Expr::hasUnderlyingCapability() const {
 
     const FunctionType *FnType = CalleeType->castAs<FunctionType>();
     if (auto *Ret = FnType->getReturnType()->getAs<ReferenceType>()) {
-      return Ret->isCHERICapability();
+      return Ret->getPointerInterpretationExplicit();
     }
-    return false;
+    return llvm::None;
   }
 
-  return false;
+  return llvm::None;
 }
 
 QualType Expr::getRealReferenceType(ASTContext &Ctx,
@@ -5150,10 +5154,10 @@ QualType Expr::getRealReferenceType(ASTContext &Ctx,
        isa<UnaryOperator>(E) || isa<BinaryOperator>(E) || isa<DeclRefExpr>(E) ||
        isa<ArraySubscriptExpr>(E) || isa<ArraySubscriptExpr>(E))) {
 #endif
-    bool HasCap = Ctx.getTargetInfo().areAllPointersCapabilities() ||
-                  E->hasUnderlyingCapability();
-    return Ctx.getLValueReferenceType(E->getType(), true,
-                                      HasCap ? PIK_Capability : PIK_Integer);
+    PointerInterpretationKindExplicit PIKE =
+        E->getUnderlyingPointerInterpretationExplicitOrNone().getValueOr(
+            Ctx.getDefaultPointerInterpretationExplicit());
+    return Ctx.getLValueReferenceType(E->getType(), true, PIKE);
   }
   return E->getType();
 }
