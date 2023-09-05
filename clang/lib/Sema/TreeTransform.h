@@ -6929,6 +6929,7 @@ QualType TreeTransform<Derived>::TransformAutoType(TypeLocBuilder &TLB,
   AutoTypeLoc NewTL = TLB.push<AutoTypeLoc>(Result);
   NewTL.setNameLoc(TL.getNameLoc());
   NewTL.setRParenLoc(TL.getRParenLoc());
+  NewTL.setConceptReference(nullptr);
 
   if (T->isConstrained()) {
     DeclarationNameInfo DNI = DeclarationNameInfo(
