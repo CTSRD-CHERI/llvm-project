@@ -127,6 +127,10 @@ else()
   serialize_lit_param(target_triple "\"${LLVM_DEFAULT_TARGET_TRIPLE}\"")
 endif()
 
+if (LIBUNWIND_TEST_TARGET_FLAGS)
+  serialize_lit_param(target_flags "\"${LIBUNWIND_TEST_TARGET_FLAGS}\"")
+endif()
+
 if (NOT LIBUNWIND_TEST_ENABLE_EXCEPTIONS)
   serialize_lit_param(enable_exceptions False)
 endif()
