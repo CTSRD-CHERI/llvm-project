@@ -46,7 +46,7 @@ public:
 private:
   static bool decodeTableEntry(A &addressSpace, pint_t &tableEntry,
                                pint_t ehHdrStart, pint_t ehHdrEnd,
-                               uint8_t tableEnc, pc_t pc,
+                               uint8_t tableEnc,
                                typename CFI_Parser<A>::FDE_Info *fdeInfo,
                                typename CFI_Parser<A>::CIE_Info *cieInfo);
   static size_t getTableEntrySize(uint8_t tableEnc);
@@ -82,7 +82,7 @@ bool EHHeaderParser<A>::decodeEHHdr(A &addressSpace, pint_t ehHdrStart,
 template <typename A>
 bool EHHeaderParser<A>::decodeTableEntry(
     A &addressSpace, pint_t &tableEntry, pint_t ehHdrStart, pint_t ehHdrEnd,
-    uint8_t tableEnc, pc_t pc, typename CFI_Parser<A>::FDE_Info *fdeInfo,
+    uint8_t tableEnc, typename CFI_Parser<A>::FDE_Info *fdeInfo,
     typename CFI_Parser<A>::CIE_Info *cieInfo) {
   // Have to decode the whole FDE for the PC range anyway, so just throw away
   // the PC start.
@@ -137,7 +137,7 @@ bool EHHeaderParser<A>::findFDE(A &addressSpace, pc_t pc, pint_t ehHdrStart,
 
   tableEntry = hdrInfo.table + low * tableEntrySize;
   if (decodeTableEntry(addressSpace, tableEntry, ehHdrStart, ehHdrEnd,
-                       hdrInfo.table_enc, pc, fdeInfo, cieInfo)) {
+                       hdrInfo.table_enc, fdeInfo, cieInfo)) {
     if (pc.address() >= fdeInfo->pcStart && pc.address() < fdeInfo->pcEnd)
       return true;
   }
