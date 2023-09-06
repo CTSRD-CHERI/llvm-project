@@ -6235,8 +6235,8 @@ bool MasmParser::parseDirectiveIfdef(SMLoc DirectiveLoc, bool expect_defined) {
     bool is_defined = false;
     MCRegister Reg;
     SMLoc StartLoc, EndLoc;
-    is_defined = (getTargetParser().tryParseRegister(Reg, StartLoc, EndLoc) ==
-                  MatchOperand_Success);
+    is_defined =
+        getTargetParser().tryParseRegister(Reg, StartLoc, EndLoc).isSuccess();
     if (!is_defined) {
       StringRef Name;
       if (check(parseIdentifier(Name), "expected identifier after 'ifdef'") ||
@@ -6355,8 +6355,8 @@ bool MasmParser::parseDirectiveElseIfdef(SMLoc DirectiveLoc,
     bool is_defined = false;
     MCRegister Reg;
     SMLoc StartLoc, EndLoc;
-    is_defined = (getTargetParser().tryParseRegister(Reg, StartLoc, EndLoc) ==
-                  MatchOperand_Success);
+    is_defined =
+        getTargetParser().tryParseRegister(Reg, StartLoc, EndLoc).isSuccess();
     if (!is_defined) {
       StringRef Name;
       if (check(parseIdentifier(Name),
@@ -6527,8 +6527,8 @@ bool MasmParser::parseDirectiveErrorIfdef(SMLoc DirectiveLoc,
   bool IsDefined = false;
   MCRegister Reg;
   SMLoc StartLoc, EndLoc;
-  IsDefined = (getTargetParser().tryParseRegister(Reg, StartLoc, EndLoc) ==
-               MatchOperand_Success);
+  IsDefined =
+      getTargetParser().tryParseRegister(Reg, StartLoc, EndLoc).isSuccess();
   if (!IsDefined) {
     StringRef Name;
     if (check(parseIdentifier(Name), "expected identifier after '.errdef'"))
