@@ -1,5 +1,5 @@
 // RUN: %cheri_purecap_cc1 -analyze -verify %s \
-// RUN:   -analyzer-checker=core,alpha.cheri.CapabilityAlignmentChecker
+// RUN:   -analyzer-checker=core,cheri.CapabilityAlignmentChecker
 
 typedef __uintcap_t uintptr_t;
 typedef __intcap_t intptr_t;

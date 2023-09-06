@@ -1,6 +1,7 @@
-// RUN: %cheri_cc1 -analyze -analyzer-checker=core,alpha.cheri.CapabilityCopyChecker -verify %s
+// RUN: %cheri_cc1 -analyze -verify %s \
+// RUN:   -analyzer-checker=core,cheri.CapabilityCopy
 
-// Don't emit anywarnings fot hybrid mode
+// Don't emit any warnings in hybrid mode
 // expected-no-diagnostics
 
 #define BLOCK_TYPE long
