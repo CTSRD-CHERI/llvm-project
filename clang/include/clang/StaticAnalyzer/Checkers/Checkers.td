@@ -1744,20 +1744,20 @@ def UncountedLocalVarsChecker : Checker<"UncountedLocalVarsChecker">,
 
 let ParentPackage = CHERI in {
 
-} // end cheri
-
-let ParentPackage = CHERIAlpha in {
-
-def ProvenanceSourceChecker : Checker<"ProvenanceSourceChecker">,
+def ProvenanceSourceChecker : Checker<"ProvenanceSource">,
   HelpText<"Check expressions with ambiguous provenance source.">,
   Documentation<NotDocumented>;
 
-def CapabilityCopyChecker : Checker<"CapabilityCopyChecker">,
+def CapabilityCopyChecker : Checker<"CapabilityCopy">,
   HelpText<"Check tag-stripping memory copy.">,
   Documentation<NotDocumented>;
 
 def CapabilityAlignmentChecker : Checker<"CapabilityAlignmentChecker">,
   HelpText<"Check underaligned pointers.">,
   Documentation<NotDocumented>;
+
+} // end cheri
+
+let ParentPackage = CHERIAlpha in {
 
 } // end alpha.cheri

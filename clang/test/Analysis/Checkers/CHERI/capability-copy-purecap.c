@@ -1,4 +1,5 @@
-// RUN: %cheri_purecap_cc1 -analyze -analyzer-checker=core,alpha.cheri.CapabilityCopyChecker -verify %s
+// RUN: %cheri_purecap_cc1 -analyze -verify %s \
+// RUN:   -analyzer-checker=core,cheri.CapabilityCopy
 
 typedef __intcap_t intptr_t;
 typedef __uintcap_t uintptr_t;
