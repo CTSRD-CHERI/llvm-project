@@ -7,12 +7,9 @@
  *===-----------------------------------------------------------------------===
  */
 
-#if !(defined(_PTRADDR_T) || defined(_PTRADDR_T_DECLARED)) ||                  \
-    __has_feature(modules)
-/* Always define ptraddr_t when modules are available. */
-#if !__has_feature(modules)
+#if !(defined(_PTRADDR_T) || defined(_PTRADDR_T_DECLARED))
 #define _PTRADDR_T
 #define _PTRADDR_T_DECLARED /* FreeBSD */
-#endif
+
 typedef __PTRADDR_TYPE__ ptraddr_t;
 #endif

@@ -8,15 +8,16 @@
  */
 
 #if !defined(__cplusplus) || (defined(_MSC_VER) && !_NATIVE_WCHAR_T_DEFINED)
-/* Always define wchar_t when modules are available. */
-#if !(defined(_WCHAR_T) || defined(_WCHAR_T_DECLARED)) || __has_feature(modules)
-#if !__has_feature(modules)
+#if !(defined(_WCHAR_T) || defined(_WCHAR_T_DECLARED))
 #define _WCHAR_T
 #define _WCHAR_T_DECLARED /* FreeBSD */
-#if defined(_MSC_EXTENSIONS)
+
+#ifdef _MSC_EXTENSIONS
 #define _WCHAR_T_DEFINED
 #endif
-#endif
+
 typedef __WCHAR_TYPE__ wchar_t;
+
 #endif
+
 #endif
