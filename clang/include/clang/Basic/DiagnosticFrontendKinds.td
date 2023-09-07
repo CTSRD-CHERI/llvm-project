@@ -320,6 +320,11 @@ def note_uintcap_subtract: Note<"in order to perform pointer arithmetic, "
   "cast the right-hand operand to an integer type; if you intended to compute "
   "the difference between the addresses cast both operands to char*">;
 
+def warn_eagerly_load_for_standard_cplusplus_modules : Warning<
+  "the form '-fmodule-file=<BMI-path>' is deprecated for standard C++ named modules;"
+  "consider to use '-fmodule-file=<module-name>=<BMI-path>' instead">,
+  InGroup<DiagGroup<"eager-load-cxx-named-modules">>;
+
 def err_missing_vfs_overlay_file : Error<
   "virtual filesystem overlay file '%0' not found">, DefaultFatal;
 def err_invalid_vfs_overlay : Error<
