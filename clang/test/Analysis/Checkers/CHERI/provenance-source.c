@@ -4,6 +4,7 @@
 typedef __intcap_t intptr_t;
 typedef __uintcap_t uintptr_t;
 typedef long int ptrdiff_t;
+typedef __typeof__(sizeof(int)) size_t;
 
 char left_prov(int d, char *p) {
   intptr_t a = d;
@@ -97,6 +98,13 @@ uintptr_t fn1(char *str, int f) {
     return ((intptr_t)str & x);
     // expected-warning@-1{{Result of '&' on capability type '__intcap'; it is unclear which side should be used as the source of provenance; consider indicating the provenance-carrying argument explicitly by casting the other argument to 'ptrdiff_t'. Note: along this path, LHS was derived from pointer, RHS was derived from NULL}}
     // expected-warning@-2{{binary expression on capability types 'intptr_t' (aka '__intcap') and 'intptr_t'; it is not clear which should be used as the source of provenance; currently provenance is inherited from the left-hand side}}
+}
+
+uintptr_t align_down(void *p, size_t alignment) {
+    uintptr_t sz = (uintptr_t)p;
+    uintptr_t mask = alignment - 1;
+    return (sz & ~mask); // expected-warning{{Result of '&' on capability type 'unsigned __intcap'; it is unclear which side should be used as the source of provenance; consider indicating the provenance-carrying argument explicitly by casting the other argument to 'size_t'. Note: along this path, LHS was derived from pointer, RHS was derived from NULL}}
+    // expected-warning@-1{{binary expression on capability types 'uintptr_t' (aka 'unsigned __intcap') and 'uintptr_t'; it is not clear which should be used as the source of provenance; currently provenance is inherited from the left-hand side}}
 }
 
 char* ptr_diff(char *s1, char *s2) {

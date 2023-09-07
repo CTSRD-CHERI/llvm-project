@@ -26,6 +26,7 @@ namespace {
 class ProvenanceSourceChecker : public Checker<check::PostStmt<CastExpr>,
                                                check::PreStmt<CastExpr>,
                                                check::PostStmt<BinaryOperator>,
+                                               check::PostStmt<UnaryOperator>,
                                                check::DeadSymbols> {
   std::unique_ptr<BugType> AmbiguousProvenanceBinOpBugType;
   std::unique_ptr<BugType> AmbiguousProvenancePtrBugType;
@@ -73,6 +74,7 @@ public:
   void checkPostStmt(const CastExpr *CE, CheckerContext &C) const;
   void checkPreStmt(const CastExpr *CE, CheckerContext &C) const;
   void checkPostStmt(const BinaryOperator *BO, CheckerContext &C) const;
+  void checkPostStmt(const UnaryOperator *BO, CheckerContext &C) const;
   void checkDeadSymbols(SymbolReaper &SymReaper, CheckerContext &C) const;
 
 private:
@@ -86,10 +88,11 @@ private:
   ExplodedNode *emitPtrdiffAsIntCapWarn(const BinaryOperator *BO,
                                         CheckerContext &C) const;
 
-  static void propagateProvenanceInfoForBinOp(ExplodedNode *N,
-                                              const BinaryOperator *BO,
+  static void propagateProvenanceInfo(ExplodedNode *N,
+                                              const Expr *E,
                                               CheckerContext &C,
-                                              bool IsInvalidCap);
+                                              bool IsInvalidCap,
+                                              const NoteTag* Tag);
 };
 } // namespace
 
@@ -342,17 +345,17 @@ ExplodedNode *ProvenanceSourceChecker::emitAmbiguousProvenanceWarn(
   return ErrNode;
 }
 
-void ProvenanceSourceChecker::propagateProvenanceInfoForBinOp(
-    ExplodedNode *N, const BinaryOperator *BO, CheckerContext &C,
-    bool IsInvalidCap) {
+void ProvenanceSourceChecker::propagateProvenanceInfo(
+    ExplodedNode *N, const Expr *E, CheckerContext &C,
+    bool IsInvalidCap, const NoteTag* Tag) {
 
   ProgramStateRef State = N->getState();
-  SVal ResVal = C.getSVal(BO);
+  SVal ResVal = C.getSVal(E);
   if (ResVal.isUnknown()) {
     const LocationContext *LCtx = C.getLocationContext();
     ResVal = C.getSValBuilder().conjureSymbolVal(
-        nullptr, BO, LCtx, BO->getType(), C.blockCount());
-    State = State->BindExpr(BO, LCtx, ResVal);
+        nullptr, E, LCtx, E->getType(), C.blockCount());
+    State = State->BindExpr(E, LCtx, ResVal);
   }
 
   if (SymbolRef ResSym = ResVal.getAsSymbol())
@@ -363,11 +366,7 @@ void ProvenanceSourceChecker::propagateProvenanceInfoForBinOp(
   else
     return; // no result to propagate to
 
-  const NoteTag *BinOpTag =
-      IsInvalidCap ? nullptr // note will be added in BugVisitor
-                   : C.getNoteTag("Binary operator has ambiguous provenance");
-
-  C.addTransition(State, N, BinOpTag);
+  C.addTransition(State, N, Tag);
 }
 
 // Report intcap binary expressions with ambiguous provenance,
@@ -427,7 +426,29 @@ void ProvenanceSourceChecker::checkPostStmt(const BinaryOperator *BO,
     return;
 
   // Propagate info for result
-  propagateProvenanceInfoForBinOp(N, BO, C, InvalidCap);
+  const NoteTag *BinOpTag =
+      InvalidCap ? nullptr // note will be added in BugVisitor
+                   : C.getNoteTag("Binary operator has ambiguous provenance");
+  propagateProvenanceInfo(N, BO, C, InvalidCap, BinOpTag);
+}
+
+void ProvenanceSourceChecker::checkPostStmt(const UnaryOperator *UO,
+                                            CheckerContext &C) const {
+  if (!isPureCapMode(C.getASTContext()))
+    return;
+
+  if (!UO->isArithmeticOp() && !UO->isIncrementDecrementOp())
+    return;
+
+  Expr *Op = UO->getSubExpr();
+  if (!Op->getType()->isIntCapType())
+    return;
+
+  ProgramStateRef State = C.getState();
+  const SVal &Val = C.getSVal(UO);
+  const SVal &SrcVal = C.getSVal(Op);
+  if (hasNoProvenance(State, SrcVal) && !hasNoProvenance(State, Val))
+    propagateProvenanceInfo(C.getPredecessor(), UO, C, true, nullptr);
 }
 
 void ProvenanceSourceChecker::checkDeadSymbols(SymbolReaper &SymReaper,
