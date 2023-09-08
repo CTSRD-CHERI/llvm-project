@@ -1637,13 +1637,17 @@ void RISCVInstrInfo::buildOutlinedFrame(
     }
   }
 
-  MBB.addLiveIn(RISCV::X5);
+  bool IsPurecap = RISCVABI::isCheriPureCapABI(
+      MF.getSubtarget<RISCVSubtarget>().getTargetABI());
+  MBB.addLiveIn(IsPurecap ? RISCV::C5 : RISCV::X5);
 
   // Add in a return instruction to the end of the outlined frame.
-  MBB.insert(MBB.end(), BuildMI(MF, DebugLoc(), get(RISCV::JALR))
-      .addReg(RISCV::X0, RegState::Define)
-      .addReg(RISCV::X5)
-      .addImm(0));
+  MBB.insert(
+      MBB.end(),
+      BuildMI(MF, DebugLoc(), get(IsPurecap ? RISCV::CJALR : RISCV::JALR))
+          .addReg(IsPurecap ? RISCV::C0 : RISCV::X0, RegState::Define)
+          .addReg(IsPurecap ? RISCV::C5 : RISCV::X5)
+          .addImm(0));
 }
 
 MachineBasicBlock::iterator RISCVInstrInfo::insertOutlinedCall(
@@ -1651,10 +1655,15 @@ MachineBasicBlock::iterator RISCVInstrInfo::insertOutlinedCall(
     MachineFunction &MF, outliner::Candidate &C) const {
 
   // Add in a call instruction to the outlined function at the given location.
-  It = MBB.insert(It,
-                  BuildMI(MF, DebugLoc(), get(RISCV::PseudoCALLReg), RISCV::X5)
-                      .addGlobalAddress(M.getNamedValue(MF.getName()), 0,
-                                        RISCVII::MO_CALL));
+  bool IsPurecap = RISCVABI::isCheriPureCapABI(
+      MF.getSubtarget<RISCVSubtarget>().getTargetABI());
+  It = MBB.insert(
+      It,
+      BuildMI(MF, DebugLoc(),
+              get(IsPurecap ? RISCV::PseudoCCALLReg : RISCV::PseudoCALLReg),
+              IsPurecap ? RISCV::C5 : RISCV::X5)
+          .addGlobalAddress(M.getNamedValue(MF.getName()), 0,
+                            IsPurecap ? RISCVII::MO_CCALL : RISCVII::MO_CALL));
   return It;
 }
 
