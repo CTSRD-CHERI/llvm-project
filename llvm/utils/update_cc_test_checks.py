@@ -382,7 +382,7 @@ def main():
 
       # Now generate all the checks.
       def check_generator(my_output_lines, prefixes, func):
-        if '-emit-llvm' in clang_args:
+        if '-emit-llvm' in pipeline.commands[0].args:
           return common.add_ir_checks(my_output_lines, '//',
                                       prefixes,
                                       func_dict, func, False,
