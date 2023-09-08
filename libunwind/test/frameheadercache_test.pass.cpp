@@ -62,7 +62,7 @@ int main(int, char**) {
     abort();
 
   FHC.add(&UIS);
-  CBData.targetAddr = pc_t(kBaseAddr - 1);
+  CBData.targetAddr = pc_t((uintptr_t)kBaseAddr - 1);
   // Shouldn't find something outside of the addresses.
   if (FHC.find(&PInfo, 0, &CBData))
     abort();
@@ -71,7 +71,7 @@ int main(int, char**) {
     UIS.dso_base = kBaseAddr + (kTextSegmentLength * i);
     FHC.add(&UIS);
   }
-  CBData.targetAddr = pc_t(kBaseAddr);
+  CBData.targetAddr = pc_t((uintptr_t)kBaseAddr);
   // Should have been evicted.
   if (FHC.find(&PInfo, 0, &CBData))
     abort();
