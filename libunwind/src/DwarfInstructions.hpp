@@ -70,24 +70,27 @@ private:
   static pint_t getCFA(A &addressSpace, const PrologInfo &prolog, pc_t pc,
                        const R &registers, bool *success) {
     *success = true;
+    pint_t result = (pint_t)-1;
     if (prolog.cfaRegister != 0) {
-      }
-      return (pint_t)((sint_t)registers.getRegister((int)prolog.cfaRegister) +
-             prolog.cfaRegisterOffset);
+      result =
+          (pint_t)((sint_t)registers.getRegister((int)prolog.cfaRegister) +
+                   prolog.cfaRegisterOffset);
+    } else  if (prolog.cfaExpression != 0) {
+      result = evaluateExpression((pint_t)prolog.cfaExpression,
+                                         addressSpace, registers, 0);
+    } else {
+      _LIBUNWIND_LOG("got broken prolog for pc " _LIBUNWIND_FMT_PTR "\n",
+                     (void *)pc.get());
+      *success = false;
+      return (pint_t)-1;
     }
-    if (prolog.cfaExpression != 0)
-      return evaluateExpression((pint_t)prolog.cfaExpression, addressSpace, 
-                                registers, 0);
-    fprintf(stderr,
-            "WARNING: libunwind got broken prolog for pc " _LIBUNWIND_FMT_PTR
-            "\n",
-            (void *)pc.get());
-    *success = false;
-#if 0
-    assert(0 && "getCFA(): unknown location");
-    __builtin_unreachable();
-#endif
-    return (pint_t)-1;
+    if (!is_pointer_in_bounds(result)) {
+      _LIBUNWIND_LOG("evaluated out-of-bounds/invalid CFA "
+                     "expression for pc %#tx: " _LIBUNWIND_FMT_PTR "\n",
+                     (ptrdiff_t)pc.address(), (void *)result);
+      *success = false;
+    }
+    return result;
   }
 #if defined(_LIBUNWIND_TARGET_AARCH64)
   static bool getRA_SIGN_STATE(A &addressSpace, R registers, pint_t cfa,
