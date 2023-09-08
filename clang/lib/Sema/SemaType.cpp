@@ -370,12 +370,14 @@ enum TypeAttrLocation {
   TAL_DeclName
 };
 
-static void processTypeAttrs(TypeProcessingState &state, QualType &type,
-                             TypeAttrLocation TAL,
-                             const ParsedAttributesView &attrs);
+static void
+processTypeAttrs(TypeProcessingState &state, QualType &type,
+                 TypeAttrLocation TAL, const ParsedAttributesView &attrs,
+                 Sema::CUDAFunctionTarget CFT = Sema::CFT_HostDevice);
 
 static bool handleFunctionTypeAttr(TypeProcessingState &state, ParsedAttr &attr,
-                                   QualType &type);
+                                   QualType &type,
+                                   Sema::CUDAFunctionTarget CFT);
 
 static bool handleMSPointerTypeQualifierAttr(TypeProcessingState &state,
                                              ParsedAttr &attr, QualType &type);
@@ -621,7 +623,8 @@ static void distributeFunctionTypeAttr(TypeProcessingState &state,
 /// distributed, false if no location was found.
 static bool distributeFunctionTypeAttrToInnermost(
     TypeProcessingState &state, ParsedAttr &attr,
-    ParsedAttributesView &attrList, QualType &declSpecType) {
+    ParsedAttributesView &attrList, QualType &declSpecType,
+    Sema::CUDAFunctionTarget CFT) {
   Declarator &declarator = state.getDeclarator();
 
   // Put it on the innermost function chunk, if there is one.
@@ -633,19 +636,20 @@ static bool distributeFunctionTypeAttrToInnermost(
     return true;
   }
 
-  return handleFunctionTypeAttr(state, attr, declSpecType);
+  return handleFunctionTypeAttr(state, attr, declSpecType, CFT);
 }
 
 /// A function type attribute was written in the decl spec.  Try to
 /// apply it somewhere.
-static void distributeFunctionTypeAttrFromDeclSpec(TypeProcessingState &state,
-                                                   ParsedAttr &attr,
-                                                   QualType &declSpecType) {
+static void
+distributeFunctionTypeAttrFromDeclSpec(TypeProcessingState &state,
+                                       ParsedAttr &attr, QualType &declSpecType,
+                                       Sema::CUDAFunctionTarget CFT) {
   state.saveDeclSpecAttrs();
 
   // Try to distribute to the innermost.
   if (distributeFunctionTypeAttrToInnermost(
-          state, attr, state.getCurrentAttributes(), declSpecType))
+          state, attr, state.getCurrentAttributes(), declSpecType, CFT))
     return;
 
   // If that failed, diagnose the bad attribute when the declarator is
@@ -657,14 +661,14 @@ static void distributeFunctionTypeAttrFromDeclSpec(TypeProcessingState &state,
 /// Try to apply it somewhere.
 /// `Attrs` is the attribute list containing the declaration (either of the
 /// declarator or the declaration).
-static void distributeFunctionTypeAttrFromDeclarator(TypeProcessingState &state,
-                                                     ParsedAttr &attr,
-                                                     QualType &declSpecType) {
+static void distributeFunctionTypeAttrFromDeclarator(
+    TypeProcessingState &state, ParsedAttr &attr, QualType &declSpecType,
+    Sema::CUDAFunctionTarget CFT) {
   Declarator &declarator = state.getDeclarator();
 
   // Try to distribute to the innermost.
   if (distributeFunctionTypeAttrToInnermost(
-          state, attr, declarator.getAttributes(), declSpecType))
+          state, attr, declarator.getAttributes(), declSpecType, CFT))
     return;
 
   // If that failed, diagnose the bad attribute when the declarator is
@@ -686,7 +690,8 @@ static void distributeFunctionTypeAttrFromDeclarator(TypeProcessingState &state,
 /// `Attrs` is the attribute list containing the declaration (either of the
 /// declarator or the declaration).
 static void distributeTypeAttrsFromDeclarator(TypeProcessingState &state,
-                                              QualType &declSpecType) {
+                                              QualType &declSpecType,
+                                              Sema::CUDAFunctionTarget CFT) {
   // The called functions in this loop actually remove things from the current
   // list, so iterating over the existing list isn't possible.  Instead, make a
   // non-owning copy and iterate over that.
@@ -703,7 +708,7 @@ static void distributeTypeAttrsFromDeclarator(TypeProcessingState &state,
       break;
 
     FUNCTION_TYPE_ATTRS_CASELIST:
-      distributeFunctionTypeAttrFromDeclarator(state, attr, declSpecType);
+      distributeFunctionTypeAttrFromDeclarator(state, attr, declSpecType, CFT);
       break;
 
     MS_TYPE_ATTRS_CASELIST:
@@ -3596,7 +3601,8 @@ static QualType GetDeclSpecTypeForDeclarator(TypeProcessingState &state,
   // Note: We don't need to distribute declaration attributes (i.e.
   // D.getDeclarationAttributes()) because those are always C++11 attributes,
   // and those don't get distributed.
-  distributeTypeAttrsFromDeclarator(state, T);
+  distributeTypeAttrsFromDeclarator(
+      state, T, SemaRef.IdentifyCUDATarget(D.getAttributes()));
 
   // Find the deduced type in this type. Look in the trailing return type if we
   // have one, otherwise in the DeclSpec type.
@@ -4107,7 +4113,8 @@ static CallingConv getCCForDeclaratorChunk(
       // function type.  We'll diagnose the failure to apply them in
       // handleFunctionTypeAttr.
       CallingConv CC;
-      if (!S.CheckCallingConvAttr(AL, CC) &&
+      if (!S.CheckCallingConvAttr(AL, CC, /*FunctionDecl=*/nullptr,
+                                  S.IdentifyCUDATarget(D.getAttributes())) &&
           (!FTI.isVariadic || supportsVariadicCall(CC))) {
         return CC;
       }
@@ -5793,7 +5800,8 @@ static TypeSourceInfo *GetFullTypeForDeclarator(TypeProcessingState &state,
     }
 
     // See if there are any attributes on this declarator chunk.
-    processTypeAttrs(state, T, TAL_DeclChunk, DeclType.getAttrs());
+    processTypeAttrs(state, T, TAL_DeclChunk, DeclType.getAttrs(),
+                     S.IdentifyCUDATarget(D.getAttributes()));
 
     if (DeclType.Kind != DeclaratorChunk::Paren) {
       if (ExpectNoDerefChunk && !IsNoDerefableChunk(DeclType))
@@ -7896,7 +7904,8 @@ static bool checkMutualExclusion(TypeProcessingState &state,
 /// Process an individual function attribute.  Returns true to
 /// indicate that the attribute was handled, false if it wasn't.
 static bool handleFunctionTypeAttr(TypeProcessingState &state, ParsedAttr &attr,
-                                   QualType &type) {
+                                   QualType &type,
+                                   Sema::CUDAFunctionTarget CFT) {
   Sema &S = state.getSema();
 
   FunctionTypeUnwrapper unwrapped(S, type);
@@ -8127,7 +8136,7 @@ static bool handleFunctionTypeAttr(TypeProcessingState &state, ParsedAttr &attr,
 
   // Otherwise, a calling convention.
   CallingConv CC;
-  if (S.CheckCallingConvAttr(attr, CC))
+  if (S.CheckCallingConvAttr(attr, CC, /*FunctionDecl=*/nullptr, CFT))
     return true;
 
   const FunctionType *fn = unwrapped.get();
@@ -8896,7 +8905,8 @@ static void HandleLifetimeBoundAttr(TypeProcessingState &State,
 
 static void processTypeAttrs(TypeProcessingState &state, QualType &type,
                              TypeAttrLocation TAL,
-                             const ParsedAttributesView &attrs) {
+                             const ParsedAttributesView &attrs,
+                             Sema::CUDAFunctionTarget CFT) {
 
   state.setParsedNoDeref(false);
   if (attrs.empty())
@@ -9138,7 +9148,7 @@ static void processTypeAttrs(TypeProcessingState &state, QualType &type,
       // appertain to and hence should not use the "distribution" logic below.
       if (attr.isStandardAttributeSyntax() ||
           attr.isRegularKeywordAttribute()) {
-        if (!handleFunctionTypeAttr(state, attr, type)) {
+        if (!handleFunctionTypeAttr(state, attr, type, CFT)) {
           diagnoseBadTypeAttribute(state.getSema(), attr, type);
           attr.setInvalid();
         }
@@ -9148,10 +9158,10 @@ static void processTypeAttrs(TypeProcessingState &state, QualType &type,
       // Never process function type attributes as part of the
       // declaration-specifiers.
       if (TAL == TAL_DeclSpec)
-        distributeFunctionTypeAttrFromDeclSpec(state, attr, type);
+        distributeFunctionTypeAttrFromDeclSpec(state, attr, type, CFT);
 
       // Otherwise, handle the possible delays.
-      else if (!handleFunctionTypeAttr(state, attr, type))
+      else if (!handleFunctionTypeAttr(state, attr, type, CFT))
         distributeFunctionTypeAttr(state, attr, type);
       break;
 
