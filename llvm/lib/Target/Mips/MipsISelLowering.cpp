@@ -2775,44 +2775,16 @@ SDValue MipsTargetLowering::lowerGlobalAddress(SDValue Op,
       report_fatal_error("Found global " + GV->getName() +
                          "in address space 0. Please fix the input IR");
     }
-    // FIXME: shouldn't functions have a R_MIPS_CHERI_CAPCALL relocation?
-    bool CanUseCapTable = GVTy->isFunctionTy() || DAG.getDataLayout().isFatPointer(GVTy);
     EVT GlobalTy = Ty.isFatPointer() ? Ty : CapType;
-    bool IsFnPtr = GVTy->isPointerTy() && !GVTy->isOpaquePointerTy() &&
-                   GVTy->getNonOpaquePointerElementType()->isFunctionTy();
-
-    if (IsFnPtr) {
-      // FIXME: in the future it would be good to inline local function pointers
-      // into the capability table directly (right now the value is a
-      // void () addrspace(200)* addrspace(200)* instead of a
-      // void () addrspace(200)*
-      // llvm::errs() << "is fn ptr: " << IsFnPtr << "\n";
-
-      if (!CanUseCapTable) {
-        // Functions didn't have address spaces yet which is why this hack was
-        // needed. See https://reviews.llvm.org/D37054
-        // Should no longer be the case now so lets report and error
-        report_fatal_error("Found function " + GV->getName() +
-                           " not in AS200. Compiling old IR?");
-        CanUseCapTable = true;
-      }
-    }
-    if (CanUseCapTable) {
-      // FIXME: or should this be something else? like in lowerCall?
-      auto PtrInfo = MachinePointerInfo::getCapTable(DAG.getMachineFunction());
-      auto Addr = getDataFromCapTable(N, SDLoc(N), GlobalTy, DAG,
-                                      DAG.getEntryNode(), PtrInfo);
-      // Also handle the case where a ptrtoint is used on a global:
-      if (Ty.isFatPointer())
-        return Addr;
-      assert(GlobalTy == CapType && Ty == MVT::i64 && "Should only have a ptrtoint node here");
-      return DAG.getNode(ISD::PTRTOINT, SDLoc(N), Ty, Addr);
-    } else {
-#if !defined(NDEBUG) || defined(LLVM_ENABLE_DUMP)
-      GV->dump();
-#endif
-      llvm_unreachable("SHOULD HAVE USED CAP TABLE");
-    }
+    auto PtrInfo = MachinePointerInfo::getCapTable(DAG.getMachineFunction());
+    auto Addr = getDataFromCapTable(N, SDLoc(N), GlobalTy, DAG,
+                                    DAG.getEntryNode(), PtrInfo);
+    // Also handle the case where a ptrtoint is used on a global:
+    if (Ty.isFatPointer())
+      return Addr;
+    assert(GlobalTy == CapType && Ty == MVT::i64 &&
+           "Should only have a ptrtoint node here");
+    return DAG.getNode(ISD::PTRTOINT, SDLoc(N), Ty, Addr);
   }
 
   assert(!ABI.IsCheriPureCap());
