@@ -3237,6 +3237,14 @@ static void RenderAnalyzerOptions(const ArgList &Args, ArgStringList &CmdArgs,
       CmdArgs.push_back("-analyzer-checker=security.insecureAPI.vfork");
     }
 
+    if (Triple.getEnvironment() == llvm::Triple::CheriPurecap ||
+        // FIXME: checks below should eventually become unreachable when
+        // Triple is updated to purecap in ToolChain constructor
+        (Triple.isMIPS() && tools::mips::hasMipsAbiArg(Args, "purecap")) ||
+        (Triple.isRISCV() && tools::riscv::isCheriPurecap(Args, Triple))) {
+      CmdArgs.push_back("-analyzer-checker=cheri");
+    }
+
     // Default nullability checks.
     CmdArgs.push_back("-analyzer-checker=nullability.NullPassedToNonnull");
     CmdArgs.push_back("-analyzer-checker=nullability.NullReturnedFromNonnull");
