@@ -542,7 +542,7 @@ struct _LIBCPP_TEMPLATE_VIS hash<__uint128_t>
 #if __has_feature(capabilities)
 template <>
 struct _LIBCPP_TEMPLATE_VIS hash<__intcap_t>
-    : public unary_function<__intcap_t, size_t>
+    : public __unary_function<__intcap_t, size_t>
 {
   _LIBCPP_INLINE_VISIBILITY
   size_t operator()(__intcap_t x) const _NOEXCEPT {
@@ -552,7 +552,7 @@ struct _LIBCPP_TEMPLATE_VIS hash<__intcap_t>
 
 template <>
 struct _LIBCPP_TEMPLATE_VIS hash<__uintcap_t>
-    : public unary_function<__uintcap_t, size_t>
+    : public __unary_function<__uintcap_t, size_t>
 {
   _LIBCPP_INLINE_VISIBILITY
   size_t operator()(__uintcap_t x) const _NOEXCEPT {

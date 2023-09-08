@@ -69,8 +69,8 @@ template <> struct __make_unsigned<__int128_t,         true> {typedef __uint128_
 template <> struct __make_unsigned<__uint128_t,        true> {typedef __uint128_t        type;};
 #endif
 #if __has_feature(capabilities)
-template <> struct __make_unsigned<  signed __intcap,  true> {typedef __uintcap type;};
-template <> struct __make_unsigned<unsigned __intcap,  true> {typedef __uintcap type;};
+template <> struct __make_unsigned<  signed __intcap,  true> {typedef unsigned __intcap type;};
+template <> struct __make_unsigned<unsigned __intcap,  true> {typedef unsigned __intcap type;};
 #endif
 
 template <class _Tp>
