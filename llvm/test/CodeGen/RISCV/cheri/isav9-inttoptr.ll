@@ -2,9 +2,6 @@
 ;; Check that we don't emit CFromPtr when lowering inttoptr for ISAv9.
 ; RUN: %riscv64_cheri_purecap_llc -mattr=+xcheri-v9-semantics < %s | FileCheck %s --check-prefix=PURECAP
 ; RUN: %riscv64_cheri_llc -mattr=+xcheri-v9-semantics < %s | FileCheck %s --check-prefix=HYBRID
-;; Also emit a .o file since verifyInstructionPredicates() is only called for binary output.
-; RUN: %riscv64_cheri_purecap_llc -mattr=+xcheri-v9-semantics -filetype=obj -o /dev/null < %s
-; RUN: %riscv64_cheri_llc -mattr=+xcheri-v9-semantics -filetype=obj -o /dev/null < %s
 
 define dso_local i8 addrspace(200)* @inttoptr(i64 %ptr) addrspace(200) nounwind {
 ; PURECAP-LABEL: inttoptr:

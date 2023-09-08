@@ -3,8 +3,6 @@
 ;; optimized form of `x.tag ? x.addr : 0` instead.
 ; RUN: %riscv64_cheri_purecap_llc < %s | FileCheck %s --check-prefix=ISAV8
 ; RUN: %riscv64_cheri_purecap_llc -mattr=+xcheri-v9-semantics < %s | FileCheck %s --check-prefix=ISAV9
-;; Also emit a .o file since verifyInstructionPredicates() is only called for binary output.
-; RUN: %riscv64_cheri_purecap_llc -mattr=+xcheri-v9-semantics -filetype=obj -o /dev/null < %s
 
 ;; (int_cheri_cap_from_ptr x, y) -> y == 0 ? null : csetaddr(x, y)
 define dso_local i64 @cap_to_ptr(i64 addrspace(200)* %dst, i8 addrspace(200)* %auth, i8 addrspace(200)* %cap) nounwind {

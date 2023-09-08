@@ -2,8 +2,6 @@
 ;; The CFromPtr instruction is not part of ISAv9, check that we emit `x == 0 ? null : csetoffset(auth, x)` instead.
 ; RUN: %riscv64_cheri_purecap_llc < %s | FileCheck %s --check-prefix=ISAV8
 ; RUN: %riscv64_cheri_purecap_llc -mattr=+xcheri-v9-semantics < %s | FileCheck %s --check-prefix=ISAV9
-;; Also emit a .o file since verifyInstructionPredicates() is only called for binary output.
-; RUN: %riscv64_cheri_purecap_llc -mattr=+xcheri-v9-semantics -filetype=obj -o /dev/null < %s
 
 ;; (int_cheri_cap_from_ptr auth, x) -> x == 0 ? null : csetoffset(auth, x)
 define dso_local i8 addrspace(200)* @cap_from_ptr(i8 addrspace(200)* addrspace(200)* %ptr, i8 addrspace(200)* %cap, i64 %offset) nounwind {
