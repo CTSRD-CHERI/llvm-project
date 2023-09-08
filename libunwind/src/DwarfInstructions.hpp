@@ -71,15 +71,7 @@ private:
                        const R &registers, bool *success) {
     *success = true;
     if (prolog.cfaRegister != 0) {
-#if defined(__mips__) && defined(__CHERI_PURE_CAPABILITY__)
-      // Ugly hack for old binaries that report SP instead of C11
-      if (prolog.cfaRegister == UNW_MIPS_R29) {
-        fprintf(stderr,
-                "LIBUNWIND HACK FOR OLD BINARY with $sp as CFA register!\n");
-        return (pint_t)((sint_t)registers.getRegister(UNW_MIPS_C11) +
-                        prolog.cfaRegisterOffset);
       }
-#endif
       return (pint_t)((sint_t)registers.getRegister((int)prolog.cfaRegister) +
              prolog.cfaRegisterOffset);
     }
