@@ -1746,6 +1746,13 @@ let ParentPackage = CHERI in {
 
 def ProvenanceSourceChecker : Checker<"ProvenanceSource">,
   HelpText<"Check expressions with ambiguous provenance source.">,
+  CheckerOptions<[
+    CmdLineOption<Boolean,
+                  "ShowFixIts",
+                  "Enable fix-it hints for this checker",
+                  "false",
+                  InAlpha>
+  ]>,
   Documentation<NotDocumented>;
 
 def CapabilityCopyChecker : Checker<"CapabilityCopy">,
