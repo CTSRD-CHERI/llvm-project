@@ -209,7 +209,10 @@ static inline uintptr_t assert_pointer_in_bounds(uintptr_t value) {
   return value;
 }
 #else
-static inline bool is_pointer_in_bounds(uintptr_t value) { return true; }
+static inline bool is_pointer_in_bounds(uintptr_t value) {
+  (void)value;
+  return true;
+}
 static inline uintptr_t assert_pointer_in_bounds(uintptr_t value) {
   return value;
 }
