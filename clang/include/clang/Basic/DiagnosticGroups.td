@@ -152,7 +152,7 @@ def CHERIPointerConversion : DiagGroup<"cheri-pointer-conversion", [CHERIImplici
 def CHERIPrototypes: DiagGroup<"cheri-prototypes">;
 def CHERIPrototypesStrict: DiagGroup<"cheri-prototypes-strict">;
 // Remarks about setting/not setting subobject bounds
-def CheriSubobjectBoundsSuspicous : DiagGroup<"cheri-subobject-bounds-suspicous">;
+def CheriSubobjectBoundsSuspicous : DiagGroup<"cheri-subobject-bounds-suspicious">;
 def CheriSubobjectBoundsRemarks : DiagGroup<"cheri-subobject-bounds">;
 
 def CheriAll : DiagGroup<"cheri",
