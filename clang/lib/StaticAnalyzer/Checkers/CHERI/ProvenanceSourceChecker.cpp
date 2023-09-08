@@ -77,6 +77,8 @@ public:
   void checkPostStmt(const UnaryOperator *BO, CheckerContext &C) const;
   void checkDeadSymbols(SymbolReaper &SymReaper, CheckerContext &C) const;
 
+  bool ShowFixIts = false;
+
 private:
   // Utility
   ExplodedNode *emitAmbiguousProvenanceWarn(const BinaryOperator *BO,
@@ -284,6 +286,23 @@ ExplodedNode *ProvenanceSourceChecker::emitPtrdiffAsIntCapWarn(
   return ErrNode;
 }
 
+namespace {
+
+FixItHint addFixIt(const Expr *NDOp, CheckerContext &C, bool IsUnsigned) {
+  const SourceRange &SrcRange = NDOp->getSourceRange();
+  bool InValidStr = true;
+  const StringRef &OpStr =
+      Lexer::getSourceText(CharSourceRange::getTokenRange(SrcRange),
+                           C.getSourceManager(), C.getLangOpts(), &InValidStr);
+  if (!InValidStr) {
+    return FixItHint::CreateReplacement(SrcRange,
+        (IsUnsigned ? "(size_t)(" : "(ptrdiff_t)(") + OpStr.str() + ")");
+  }
+  return {};
+}
+
+} // namespace
+
 ExplodedNode *ProvenanceSourceChecker::emitAmbiguousProvenanceWarn(
     const BinaryOperator *BO, CheckerContext &C,
     bool LHSIsAddr, bool LHSIsNullDerived,
@@ -326,6 +345,15 @@ ExplodedNode *ProvenanceSourceChecker::emitAmbiguousProvenanceWarn(
   auto R = std::make_unique<PathSensitiveBugReport>(
       *AmbiguousProvenanceBinOpBugType, ErrorMessage, ErrNode);
   R->addRange(BO->getSourceRange());
+
+  if (ShowFixIts) {
+    if ((LHSIsAddr && RHSIsNullDerived) || (LHSIsNullDerived && RHSIsAddr)) {
+        const Expr *NDOp = LHSIsNullDerived ? BO->getLHS() : BO->getRHS();
+        const FixItHint &Fixit = addFixIt(NDOp, C, IsUnsigned);
+        if (!Fixit.isNull())
+          R->addFixItHint(Fixit);
+      }
+  }
 
   const SVal &LHSVal = C.getSVal(BO->getLHS());
   R->markInteresting(LHSVal);
@@ -570,7 +598,9 @@ ProvenanceSourceChecker::Ptr2IntBugVisitor::VisitNode(
 }
 
 void ento::registerProvenanceSourceChecker(CheckerManager &mgr) {
-  mgr.registerChecker<ProvenanceSourceChecker>();
+  auto *Checker = mgr.registerChecker<ProvenanceSourceChecker>();
+  Checker->ShowFixIts = mgr.getAnalyzerOptions().getCheckerBooleanOption(
+      Checker, "ShowFixIts");
 }
 
 bool ento::shouldRegisterProvenanceSourceChecker(const CheckerManager &Mgr) {
