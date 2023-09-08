@@ -112,6 +112,12 @@ DEFAULT_PARAMETERS = [
               AddFeature('no-rtti'),
               AddCompileFlag('-fno-rtti')
             ]),
+    Parameter(name='executor', type=str, default="",
+            help="Custom executor to use instead of the configured default.",
+            actions=lambda executor: [] if not executor else [
+              AddSubstitution('%{executor}', executor)
+            ]),
+
 
   Parameter(name='stdlib', choices=['llvm-libc++', 'apple-libc++', 'libstdc++', 'msvc'], type=str, default='llvm-libc++',
             help="""The C++ Standard Library implementation being tested.
