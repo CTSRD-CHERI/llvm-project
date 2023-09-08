@@ -74,14 +74,14 @@ DEFAULT_PARAMETERS = [
               AddFlagIfSupported('--target={}'.format(triple)),
               AddSubstitution('%{triple}', triple)
             ])),
-    Parameter(name='target_flags', type=str, default=None,
+    Parameter(name='target_flags', type=str, default="",
             help="Additional compile flags (e.g. -mabi=/-march=) to use when "
                  "compiling the test suite. This must be compatible with the "
                  "target that the tests will be run on.",
-            actions=lambda target_flags: filter(None, [
-              AddFlag(target_flags) if target_flags else None,
-              AddSubstitution('%{target_flags}', target_flags) if target_flags else None,
-            ])),
+            actions=lambda target_flags: [] if not target_flags else [
+              AddFlag(target_flags),
+              AddSubstitution('%{target_flags}', target_flags),
+            ]),
 
   Parameter(name='std', choices=_allStandards, type=str,
             help="The version of the standard to compile the test suite with.",
