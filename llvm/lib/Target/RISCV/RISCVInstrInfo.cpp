@@ -562,9 +562,6 @@ void RISCVInstrInfo::storeRegToStackSlot(MachineBasicBlock &MBB,
                                          const TargetRegisterInfo *TRI,
                                          Register VReg) const {
   const RISCVSubtarget &ST = MBB.getParent()->getSubtarget<RISCVSubtarget>();
-  DebugLoc DL;
-  if (I != MBB.end())
-    DL = I->getDebugLoc();
 
   MachineFunction *MF = MBB.getParent();
   MachineFrameInfo &MFI = MF->getFrameInfo();
@@ -651,7 +648,7 @@ void RISCVInstrInfo::storeRegToStackSlot(MachineBasicBlock &MBB,
         MemoryLocation::UnknownSize, MFI.getObjectAlign(FI));
 
     MFI.setStackID(FI, TargetStackID::ScalableVector);
-    BuildMI(MBB, I, DL, get(Opcode))
+    BuildMI(MBB, I, DebugLoc(), get(Opcode))
         .addReg(SrcReg, getKillRegState(IsKill))
         .addFrameIndex(FI)
         .addMemOperand(MMO);
@@ -660,7 +657,7 @@ void RISCVInstrInfo::storeRegToStackSlot(MachineBasicBlock &MBB,
         MachinePointerInfo::getFixedStack(*MF, FI), MachineMemOperand::MOStore,
         MFI.getObjectSize(FI), MFI.getObjectAlign(FI));
 
-    BuildMI(MBB, I, DL, get(Opcode))
+    BuildMI(MBB, I, DebugLoc(), get(Opcode))
         .addReg(SrcReg, getKillRegState(IsKill))
         .addFrameIndex(FI)
         .addImm(0)
@@ -675,9 +672,6 @@ void RISCVInstrInfo::loadRegFromStackSlot(MachineBasicBlock &MBB,
                                           const TargetRegisterInfo *TRI,
                                           Register VReg) const {
   const RISCVSubtarget &ST = MBB.getParent()->getSubtarget<RISCVSubtarget>();
-  DebugLoc DL;
-  if (I != MBB.end())
-    DL = I->getDebugLoc();
 
   MachineFunction *MF = MBB.getParent();
   MachineFrameInfo &MFI = MF->getFrameInfo();
@@ -764,7 +758,7 @@ void RISCVInstrInfo::loadRegFromStackSlot(MachineBasicBlock &MBB,
         MemoryLocation::UnknownSize, MFI.getObjectAlign(FI));
 
     MFI.setStackID(FI, TargetStackID::ScalableVector);
-    BuildMI(MBB, I, DL, get(Opcode), DstReg)
+    BuildMI(MBB, I, DebugLoc(), get(Opcode), DstReg)
         .addFrameIndex(FI)
         .addMemOperand(MMO);
   } else {
@@ -772,7 +766,7 @@ void RISCVInstrInfo::loadRegFromStackSlot(MachineBasicBlock &MBB,
         MachinePointerInfo::getFixedStack(*MF, FI), MachineMemOperand::MOLoad,
         MFI.getObjectSize(FI), MFI.getObjectAlign(FI));
 
-    BuildMI(MBB, I, DL, get(Opcode), DstReg)
+    BuildMI(MBB, I, DebugLoc(), get(Opcode), DstReg)
         .addFrameIndex(FI)
         .addImm(0)
         .addMemOperand(MMO);
