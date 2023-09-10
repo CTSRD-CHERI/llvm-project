@@ -25,7 +25,7 @@
 // RUN: %cheri_purecap_clang -### -no-canonical-prefixes %s 2>&1 -shared | FileCheck -check-prefix PURECAP-SHARED %s
 // PURECAP-SHARED: "{{.+}}/ld"
 // PURECAP-SHARED-NOT: "-pie"
-// PURECAP-SHARED: "-Bshareable"
+// PURECAP-SHARED: "-shared"
 // PURECAP-SHARED-NOT: "-pie"
 // PURECAP-SHARED: "-o" "a.out" "{{[^"]*}}crtbeginS.o"
 // PURECAP-SHARED-NOT: "-pie"
