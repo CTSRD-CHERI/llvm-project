@@ -6444,7 +6444,15 @@ void Clang::ConstructJob(Compilation &C, const JobAction &JA,
   if (Args.hasFlag(options::OPT_fcoroutines_ts, options::OPT_fno_coroutines_ts,
                    false) &&
       types::isCXX(InputType)) {
-    CmdArgs.push_back("-fcoroutines-ts");
+    if (TC.isCheriPurecap()) {
+      // C++ Coroutines are not yet supported for purecap.
+      // https://github.com/CTSRD-CHERI/llvm-project/issues/717
+      D.Diag(diag::err_drv_unsupported_opt_for_target)
+          << "-fcoroutines-ts"
+          << "purecap " + TC.getTriple().str();
+    } else {
+      CmdArgs.push_back("-fcoroutines-ts");
+    }
   }
 
   Args.AddLastArg(CmdArgs, options::OPT_fdouble_square_bracket_attributes,
