@@ -391,6 +391,12 @@ void TargetInfo::adjust(DiagnosticsEngine &Diags, LangOptions &Opts) {
     LongDoubleAlign = 64;
   }
 
+  if (areAllPointersCapabilities()) {
+    // C++20 coroutines are not yet supported for purecap:
+    // https://github.com/CTSRD-CHERI/llvm-project/issues/717
+    Opts.Coroutines = false;
+  }
+
   if (Opts.OpenCL) {
     // OpenCL C requires specific widths for types, irrespective of
     // what these normally are for the target.
