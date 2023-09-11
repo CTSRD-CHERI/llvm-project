@@ -6,6 +6,9 @@
 //
 //===----------------------------------------------------------------------===//
 
+// This test is too slow to run in CI (times out regularly). It wil be rewritten by D152008.
+// REQUIRES: D152008
+
 // Test that we don't remove transitive includes of public C++ headers in the library accidentally.
 // When we remove a transitive public include, clients tend to break because they don't always
 // properly include what they use. Note that we don't check which system (C) headers are
