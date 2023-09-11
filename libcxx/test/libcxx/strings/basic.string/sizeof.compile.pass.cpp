@@ -49,22 +49,29 @@ template <class CharT>
 using small_string = std::basic_string<CharT, std::char_traits<CharT>, small_iter_allocator<CharT> >;
 
 #if __SIZE_WIDTH__ == 64
-
-static_assert(sizeof(std::string) == 24, "");
-static_assert(sizeof(min_string<char>) == 24, "");
-static_assert(sizeof(test_string<char>) == 32, "");
+constexpr size_t expected_string_size = sizeof(void*) + 2 * sizeof(size_t);
+#ifdef __CHERI_PURE_CAPABILITY__
+// The current layout is inefficient (https://github.com/CTSRD-CHERI/llvm-project/issues/718)
+// until _LIBCPP_ABI_ALTERNATE_STRING_LAYOUT becomes the default.
+constexpr size_t expected_test_string_size = 64;
+#else
+constexpr size_t expected_test_string_size = 32;
+#endif
+static_assert(sizeof(std::string) == expected_string_size, "");
+static_assert(sizeof(min_string<char>) == expected_string_size, "");
+static_assert(sizeof(test_string<char>) == expected_test_string_size, "");
 static_assert(sizeof(small_string<char>) == 6, "");
 
 #  ifndef TEST_HAS_NO_WIDE_CHARACTERS
 #    if __WCHAR_WIDTH__ == 32
-static_assert(sizeof(std::wstring) == 24, "");
-static_assert(sizeof(min_string<wchar_t>) == 24, "");
-static_assert(sizeof(test_string<wchar_t>) == 32, "");
+static_assert(sizeof(std::wstring) == expected_string_size, "");
+static_assert(sizeof(min_string<wchar_t>) == expected_string_size, "");
+static_assert(sizeof(test_string<wchar_t>) == expected_test_string_size, "");
 static_assert(sizeof(small_string<wchar_t>) == 12, "");
 #    elif __WCHAR_WIDTH__ == 16
-static_assert(sizeof(std::wstring) == 24, "");
-static_assert(sizeof(min_string<wchar_t>) == 24, "");
-static_assert(sizeof(test_string<wchar_t>) == 32, "");
+static_assert(sizeof(std::wstring) == expected_string_size, "");
+static_assert(sizeof(min_string<wchar_t>) == expected_string_size, "");
+static_assert(sizeof(test_string<wchar_t>) == expected_test_string_size, "");
 static_assert(sizeof(small_string<wchar_t>) == 6, "");
 #    else
 #      error "Unexpected wchar_t width"
@@ -72,19 +79,19 @@ static_assert(sizeof(small_string<wchar_t>) == 6, "");
 #  endif
 
 #  ifndef TEST_HAS_NO_CHAR8_T
-static_assert(sizeof(std::u8string) == 24, "");
-static_assert(sizeof(min_string<char8_t>) == 24, "");
-static_assert(sizeof(test_string<char8_t>) == 32, "");
+static_assert(sizeof(std::u8string) == expected_string_size, "");
+static_assert(sizeof(min_string<char8_t>) == expected_string_size, "");
+static_assert(sizeof(test_string<char8_t>) == expected_test_string_size, "");
 static_assert(sizeof(small_string<char8_t>) == 6, "");
 #  endif
 
 #  ifndef TEST_HAS_NO_UNICODE_CHARS
-static_assert(sizeof(std::u16string) == 24, "");
-static_assert(sizeof(std::u32string) == 24, "");
-static_assert(sizeof(min_string<char16_t>) == 24, "");
-static_assert(sizeof(min_string<char32_t>) == 24, "");
-static_assert(sizeof(test_string<char16_t>) == 32, "");
-static_assert(sizeof(test_string<char32_t>) == 32, "");
+static_assert(sizeof(std::u16string) == expected_string_size, "");
+static_assert(sizeof(std::u32string) == expected_string_size, "");
+static_assert(sizeof(min_string<char16_t>) == expected_string_size, "");
+static_assert(sizeof(min_string<char32_t>) == expected_string_size, "");
+static_assert(sizeof(test_string<char16_t>) == expected_test_string_size, "");
+static_assert(sizeof(test_string<char32_t>) == expected_test_string_size, "");
 static_assert(sizeof(small_string<char16_t>) == 6, "");
 static_assert(sizeof(small_string<char32_t>) == 12, "");
 #  endif
