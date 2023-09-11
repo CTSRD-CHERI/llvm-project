@@ -1,4 +1,4 @@
-//=== CapabilityAlignmentChecker.cpp - Capability Alignment Checker -*- C++ ==//
+//=== PointerAlignmentChecker.cpp - Capability Alignment Checker -*- C++ ==//
 //
 // Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
 // See https://llvm.org/LICENSE.txt for license information.
@@ -28,20 +28,20 @@
 //
 //===----------------------------------------------------------------------===//
 
-#include "CHERIUtils.h"
-#include <clang/ASTMatchers/ASTMatchFinder.h>
+#include "CHERI/CHERIUtils.h"
 #include "clang/ASTMatchers/ASTMatchers.h"
 #include "clang/StaticAnalyzer/Checkers/BuiltinCheckerRegistration.h"
+#include "clang/StaticAnalyzer/Core/PathSensitive/CheckerContext.h"
+#include <clang/ASTMatchers/ASTMatchFinder.h>
 #include <clang/StaticAnalyzer/Core/BugReporter/BugType.h>
 #include <clang/StaticAnalyzer/Core/PathSensitive/CallEvent.h>
-#include "clang/StaticAnalyzer/Core/PathSensitive/CheckerContext.h"
 
 using namespace clang;
 using namespace ento;
 using namespace cheri;
 
 namespace {
-class CapabilityAlignmentChecker
+class PointerAlignmentChecker
     : public Checker<check::PreStmt<CastExpr>, check::PostStmt<CastExpr>,
                      check::PostStmt<BinaryOperator>, check::DeadSymbols> {
   std::unique_ptr<BugType> CastAlignBug;
@@ -49,7 +49,7 @@ class CapabilityAlignmentChecker
 
 
 public:
-  CapabilityAlignmentChecker();
+  PointerAlignmentChecker();
 
   void checkPostStmt(const BinaryOperator *BO, CheckerContext &C) const;
   void checkPostStmt(const CastExpr *BO, CheckerContext &C) const;
@@ -84,7 +84,7 @@ private:
 
 REGISTER_MAP_WITH_PROGRAMSTATE(TrailingZerosMap, SymbolRef, int)
 
-CapabilityAlignmentChecker::CapabilityAlignmentChecker() {
+PointerAlignmentChecker::PointerAlignmentChecker() {
   CastAlignBug.reset(new BugType(this,
       "Cast increases required alignment",
       "Type Error"));
@@ -205,7 +205,7 @@ bool isImplicitConversionFromVoidPtr(const Stmt *S, CheckerContext &C) {
 
 } // namespace
 
-void CapabilityAlignmentChecker::checkPreStmt(const CastExpr *CE,
+void PointerAlignmentChecker::checkPreStmt(const CastExpr *CE,
                                                CheckerContext &C) const {
   CastKind CK = CE->getCastKind();
   if (CK != CastKind::CK_BitCast && CK != CK_IntegralToPointer)
@@ -237,7 +237,7 @@ void CapabilityAlignmentChecker::checkPreStmt(const CastExpr *CE,
   }
 }
 
-void CapabilityAlignmentChecker::checkPostStmt(const CastExpr *CE,
+void PointerAlignmentChecker::checkPostStmt(const CastExpr *CE,
                                             CheckerContext &C) const {
   CastKind CK = CE->getCastKind();
   if (CK != CastKind::CK_BitCast && CK != CK_PointerToIntegral &&
@@ -275,7 +275,7 @@ bool valueIsLTPow2(const Expr *E, unsigned P, CheckerContext &C) {
   return !State->assume(LT.castAs<DefinedOrUnknownSVal>(), false);
 }
 
-void CapabilityAlignmentChecker::checkPostStmt(const BinaryOperator *BO,
+void PointerAlignmentChecker::checkPostStmt(const BinaryOperator *BO,
                                                CheckerContext &C) const {
   int LeftTZ = getTrailingZerosCount(BO->getLHS(), C);
   if (LeftTZ < 0)
@@ -367,7 +367,7 @@ void CapabilityAlignmentChecker::checkPostStmt(const BinaryOperator *BO,
   C.addTransition(State);
 }
 
-void CapabilityAlignmentChecker::checkDeadSymbols(SymbolReaper &SymReaper,
+void PointerAlignmentChecker::checkDeadSymbols(SymbolReaper &SymReaper,
                                                   CheckerContext &C) const {
   ProgramStateRef State = C.getState();
   TrailingZerosMapTy TZMap = State->get<TrailingZerosMap>();
@@ -431,7 +431,8 @@ void describeOriginalAllocation(const MemRegion *MR, PathSensitiveBugReport &W,
 
 } // namespace
 
-ExplodedNode *CapabilityAlignmentChecker::emitCastAlignWarn(
+ExplodedNode *
+PointerAlignmentChecker::emitCastAlignWarn(
     CheckerContext &C, unsigned SrcAlign, unsigned DstReqAlign,
     const CastExpr *CE) const {
   ExplodedNode *ErrNode = C.generateNonFatalErrorNode();
@@ -468,8 +469,7 @@ ExplodedNode *CapabilityAlignmentChecker::emitCastAlignWarn(
   return ErrNode;
 }
 
-PathDiagnosticPieceRef
-CapabilityAlignmentChecker::AlignmentBugVisitor::VisitNode(
+PathDiagnosticPieceRef PointerAlignmentChecker::AlignmentBugVisitor::VisitNode(
     const ExplodedNode *N, BugReporterContext &BRC,
     PathSensitiveBugReport &BR) {
 
@@ -523,10 +523,10 @@ CapabilityAlignmentChecker::AlignmentBugVisitor::VisitNode(
   return std::make_shared<PathDiagnosticEventPiece>(Pos, OS.str(), true);
 }
 
-void ento::registerCapabilityAlignmentChecker(CheckerManager &mgr) {
-  mgr.registerChecker<CapabilityAlignmentChecker>();
+void ento::registerPointerAlignmentChecker(CheckerManager &mgr) {
+  mgr.registerChecker<PointerAlignmentChecker>();
 }
 
-bool ento::shouldRegisterCapabilityAlignmentChecker(const CheckerManager &Mgr) {
+bool ento::shouldRegisterPointerAlignmentChecker(const CheckerManager &Mgr) {
   return true;
 }
