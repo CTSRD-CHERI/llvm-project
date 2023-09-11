@@ -93,6 +93,7 @@ void test_P0645() {
   assert_is_formattable<signed int, CharT>();
   assert_is_formattable<signed long, CharT>();
   assert_is_formattable<signed long long, CharT>();
+  assert_is_formattable<intptr_t, CharT>();
 #ifndef TEST_HAS_NO_INT128
   assert_is_formattable<__int128_t, CharT>();
 #endif
@@ -102,6 +103,7 @@ void test_P0645() {
   assert_is_formattable<unsigned int, CharT>();
   assert_is_formattable<unsigned long, CharT>();
   assert_is_formattable<unsigned long long, CharT>();
+  assert_is_formattable<uintptr_t, CharT>();
 #ifndef TEST_HAS_NO_INT128
   assert_is_formattable<__uint128_t, CharT>();
 #endif

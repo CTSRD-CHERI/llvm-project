@@ -59,6 +59,14 @@ constexpr void test() {
       std::is_same_v<typename std::basic_format_context<OutIt, CharT>::
                          template formatter_type<unsigned long long>,
                      std::formatter<unsigned long long, CharT>>);
+  static_assert(
+      std::is_same_v<typename std::basic_format_context<
+                         OutIt, CharT>::template formatter_type<intptr_t>,
+                     std::formatter<intptr_t, CharT>>);
+  static_assert(
+      std::is_same_v<typename std::basic_format_context<
+                         OutIt, CharT>::template formatter_type<uintptr_t>,
+                     std::formatter<uintptr_t, CharT>>);
 #ifndef TEST_HAS_NO_INT128
   static_assert(
       std::is_same_v<typename std::basic_format_context<

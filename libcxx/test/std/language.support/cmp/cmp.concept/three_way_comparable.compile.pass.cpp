@@ -39,6 +39,8 @@ static_assert(std::three_way_comparable<unsigned char&&>);
 static_assert(std::three_way_comparable<unsigned short const&&>);
 static_assert(std::three_way_comparable<unsigned int volatile&&>);
 static_assert(std::three_way_comparable<unsigned long const volatile&&>);
+static_assert(std::three_way_comparable<intptr_t const&>);
+static_assert(std::three_way_comparable<uintptr_t const&>);
 
 // with explicit ordering
 static_assert(std::three_way_comparable<int, std::strong_ordering>);

@@ -60,6 +60,8 @@ int main(int, char**)
     test_make_unsigned<const Enum, std::conditional<sizeof(Enum) == sizeof(int), const unsigned int, const unsigned char>::type >();
     test_make_unsigned<BigEnum,
                    std::conditional<sizeof(long) == 4, unsigned long long, unsigned long>::type> ();
+    test_make_unsigned<intptr_t, uintptr_t>();
+    test_make_unsigned<uintptr_t, uintptr_t>();
 #ifndef TEST_HAS_NO_INT128
     test_make_unsigned<__int128_t, __uint128_t>();
     test_make_unsigned<__uint128_t, __uint128_t>();

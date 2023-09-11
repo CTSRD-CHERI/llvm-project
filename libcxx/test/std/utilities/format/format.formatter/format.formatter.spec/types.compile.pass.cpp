@@ -144,6 +144,7 @@ void test_P0645() {
   assert_formatter_is_enabled<unsigned int, CharT>();
   assert_formatter_is_enabled<unsigned long, CharT>();
   assert_formatter_is_enabled<unsigned long long, CharT>();
+  assert_formatter_is_enabled<uintptr_t, CharT>();
 #ifndef TEST_HAS_NO_INT128
   assert_formatter_is_enabled<__uint128_t, CharT>();
 #endif

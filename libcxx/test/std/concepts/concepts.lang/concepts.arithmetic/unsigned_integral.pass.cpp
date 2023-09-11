@@ -52,6 +52,7 @@ static_assert(CheckUnsignedIntegralQualifiers<unsigned short>());
 static_assert(CheckUnsignedIntegralQualifiers<unsigned int>());
 static_assert(CheckUnsignedIntegralQualifiers<unsigned long>());
 static_assert(CheckUnsignedIntegralQualifiers<unsigned long long>());
+static_assert(CheckUnsignedIntegralQualifiers<uintptr_t>());
 
 // Whether bool and character types are signed or unsigned is impl-defined
 static_assert(CheckUnsignedIntegralQualifiers<wchar_t>() ==
@@ -79,6 +80,7 @@ static_assert(!CheckUnsignedIntegralQualifiers<short>());
 static_assert(!CheckUnsignedIntegralQualifiers<int>());
 static_assert(!CheckUnsignedIntegralQualifiers<long>());
 static_assert(!CheckUnsignedIntegralQualifiers<long long>());
+static_assert(!CheckUnsignedIntegralQualifiers<intptr_t>());
 
 static_assert(!std::unsigned_integral<void>);
 static_assert(!CheckUnsignedIntegralQualifiers<float>());
