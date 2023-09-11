@@ -51,17 +51,18 @@ template <class CharT>
 using small_string = std::basic_string<CharT, std::char_traits<CharT>, small_iter_allocator<CharT>>;
 
 #if __SIZE_WIDTH__ == 64
+constexpr size_t string_align = std::max(sizeof(void *), (size_t)8);
 
-static_assert(alignof(std::string) == 8, "");
-static_assert(alignof(min_string<char>) == 8, "");
-static_assert(alignof(test_string<char>) == 8, "");
+static_assert(alignof(std::string) == string_align, "");
+static_assert(alignof(min_string<char>) == string_align, "");
+static_assert(alignof(test_string<char>) == string_align, "");
 static_assert(alignof(small_string<char>) == 2, "");
 
 #  ifndef TEST_HAS_NO_WIDE_CHARACTERS
 #    if __WCHAR_WIDTH__ == 32
-static_assert(alignof(std::wstring) == 8, "");
-static_assert(alignof(min_string<wchar_t>) == 8, "");
-static_assert(alignof(test_string<wchar_t>) == 8, "");
+static_assert(alignof(std::wstring) == string_align, "");
+static_assert(alignof(min_string<wchar_t>) == string_align, "");
+static_assert(alignof(test_string<wchar_t>) == string_align, "");
 static_assert(alignof(small_string<wchar_t>) == 4, "");
 #    elif __WCHAR_WIDTH__ == 16
 static_assert(alignof(std::wstring) == 8, "");
@@ -74,19 +75,19 @@ static_assert(alignof(small_string<wchar_t>) == 2, "");
 #  endif
 
 #  ifndef TEST_HAS_NO_CHAR8_T
-static_assert(alignof(std::u8string) == 8, "");
-static_assert(alignof(min_string<char8_t>) == 8, "");
-static_assert(alignof(test_string<char8_t>) == 8, "");
+static_assert(alignof(std::u8string) == string_align, "");
+static_assert(alignof(min_string<char8_t>) == string_align, "");
+static_assert(alignof(test_string<char8_t>) == string_align, "");
 static_assert(alignof(small_string<char8_t>) == 2, "");
 #  endif
 
 #  ifndef TEST_HAS_NO_UNICODE_CHARS
-static_assert(alignof(std::u16string) == 8, "");
-static_assert(alignof(std::u32string) == 8, "");
-static_assert(alignof(min_string<char16_t>) == 8, "");
-static_assert(alignof(min_string<char32_t>) == 8, "");
-static_assert(alignof(test_string<char16_t>) == 8, "");
-static_assert(alignof(test_string<char32_t>) == 8, "");
+static_assert(alignof(std::u16string) == string_align, "");
+static_assert(alignof(std::u32string) == string_align, "");
+static_assert(alignof(min_string<char16_t>) == string_align, "");
+static_assert(alignof(min_string<char32_t>) == string_align, "");
+static_assert(alignof(test_string<char16_t>) == string_align, "");
+static_assert(alignof(test_string<char32_t>) == string_align, "");
 static_assert(alignof(small_string<char16_t>) == 2, "");
 static_assert(alignof(small_string<char32_t>) == 4, "");
 #  endif
