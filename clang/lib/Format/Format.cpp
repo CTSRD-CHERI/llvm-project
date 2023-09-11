@@ -3421,6 +3421,9 @@ LangOptions getFormattingLangOpts(const FormatStyle &Style) {
   LangOpts.CPlusPlus17 = LexingStd >= FormatStyle::LS_Cpp17;
   LangOpts.CPlusPlus20 = LexingStd >= FormatStyle::LS_Cpp20;
   LangOpts.Char8 = LexingStd >= FormatStyle::LS_Cpp20;
+  // CHERI-TODO: COROUTINES_KEYWORD is not included in CXX20_KEYWORD until
+  // https://github.com/CTSRD-CHERI/llvm-project/issues/717 has been fixed.
+  LangOpts.Coroutines = LexingStd >= FormatStyle::LS_Cpp20;
   // Turning on digraphs in standards before C++0x is error-prone, because e.g.
   // the sequence "<::" will be unconditionally treated as "[:".
   // Cf. Lexer::LexTokenInternal.

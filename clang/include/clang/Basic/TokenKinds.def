@@ -33,7 +33,9 @@
 #define CONCEPTS_KEYWORD(X) CXX20_KEYWORD(X,KEYCONCEPTS)
 #endif
 #ifndef COROUTINES_KEYWORD
-#define COROUTINES_KEYWORD(X) CXX20_KEYWORD(X,KEYCOROUTINES)
+// Not a CXX20_KEYWORD() since we disable LangOpts.Coroutines for purecap.
+// See https://github.com/CTSRD-CHERI/llvm-project/issues/717
+#define COROUTINES_KEYWORD(X) KEYWORD(X,KEYCOROUTINES)
 #endif
 #ifndef MODULES_KEYWORD
 #define MODULES_KEYWORD(X) KEYWORD(X,KEYMODULES)
@@ -959,6 +961,7 @@ ANNOTATION(header_unit)
 #undef TYPE_TRAIT_2
 #undef TYPE_TRAIT_1
 #undef TYPE_TRAIT
+#undef COROUTINES_KEYWORD
 #undef CONCEPTS_KEYWORD
 #undef CXX20_KEYWORD
 #undef CXX11_KEYWORD
