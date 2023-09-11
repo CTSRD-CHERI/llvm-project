@@ -923,7 +923,7 @@ Instruction *foldSetOffsetOrAddress(InstCombiner *IC, IntrinsicInst *II) {
             IC->replaceInstUsesWith(*GEP, II);
           } else {
             auto *NewI = new BitCastInst(II, GEP->getType());
-            IC->InsertNewInstWith(NewI, *GEP);
+            IC->InsertNewInstWith(NewI, GEP->getIterator());
             NewI->takeName(GEP);
             IC->replaceInstUsesWith(*GEP, NewI);
           }
@@ -4296,7 +4296,7 @@ bool InstCombinerImpl::transformConstExprCastCall(CallBase &Call) {
 
       Instruction *InsertPt = NewCall->getInsertionPointAfterDef();
       assert(InsertPt && "No place to insert cast");
-      InsertNewInstBefore(NC, *InsertPt);
+      InsertNewInstBefore(NC, InsertPt->getIterator());
       Worklist.pushUsersToWorkList(*Caller);
     } else {
       NV = PoisonValue::get(Caller->getType());
