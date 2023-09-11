@@ -288,6 +288,9 @@ auto all_signed = type_list<
     ,
     __int128_t
 #endif
+#if __has_feature(capabilities)
+    , __intcap
+#endif
     >();
 auto all_unsigned = type_list<
     unsigned char,
@@ -298,6 +301,9 @@ auto all_unsigned = type_list<
 #ifndef TEST_HAS_NO_INT128
     ,
     __uint128_t
+#endif
+#if __has_feature(capabilities)
+    , unsigned __intcap
 #endif
     >();
 auto integrals = concat(all_signed, all_unsigned);
