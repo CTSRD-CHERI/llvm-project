@@ -2612,6 +2612,9 @@ void Dumper::printSymbol(const SymbolRef &Symbol,
     return;
   }
   uint64_t Address = *AddrOrErr;
+  section_iterator SecI = unwrapOrError(Symbol.getSection(), FileName);
+  if (SecI != O.section_end() && shouldAdjustVA(*SecI))
+    Address += AdjustVMA;
   if ((Address < StartAddress) || (Address > StopAddress))
     return;
   SymbolRef::Type Type =
