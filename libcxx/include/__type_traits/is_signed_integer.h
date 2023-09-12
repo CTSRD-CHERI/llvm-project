@@ -27,6 +27,9 @@ template <> struct __libcpp_is_signed_integer<signed long long> : public true_ty
 #ifndef _LIBCPP_HAS_NO_INT128
 template <> struct __libcpp_is_signed_integer<__int128_t>       : public true_type {};
 #endif
+#if __has_feature(capabilities)
+template <> struct __libcpp_is_signed_integer<__intcap>         : public true_type {};
+#endif
 
 _LIBCPP_END_NAMESPACE_STD
 

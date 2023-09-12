@@ -27,6 +27,9 @@ template <> struct __libcpp_is_unsigned_integer<unsigned long long> : public tru
 #ifndef _LIBCPP_HAS_NO_INT128
 template <> struct __libcpp_is_unsigned_integer<__uint128_t>        : public true_type {};
 #endif
+#if __has_feature(capabilities)
+template <> struct __libcpp_is_unsigned_integer<unsigned __intcap>  : public true_type {};
+#endif
 
 _LIBCPP_END_NAMESPACE_STD
 

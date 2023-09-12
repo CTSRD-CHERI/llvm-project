@@ -99,6 +99,15 @@ _Tp __rotr(_Tp __t, unsigned int __cnt) _NOEXCEPT
     return (__t >> (__cnt % __dig)) | (__t << (__dig - (__cnt % __dig)));
 }
 
+#if __has_feature(capabilities)
+template<>
+_LIBCPP_HIDE_FROM_ABI _LIBCPP_CONSTEXPR_AFTER_CXX11
+unsigned __intcap __rotr(unsigned __intcap __t, unsigned int __cnt) _NOEXCEPT {
+    // __builtin_cheri_address_set cannot be used in a constant expression (yet), so we return a null-derived integer.
+    return std::__rotr(static_cast<ptraddr_t>(__t), __cnt);
+}
+#endif
+
 template<class _Tp>
 _LIBCPP_HIDE_FROM_ABI _LIBCPP_CONSTEXPR_AFTER_CXX11
 int __countl_zero(_Tp __t) _NOEXCEPT
@@ -131,6 +140,14 @@ int __countl_zero(_Tp __t) _NOEXCEPT
     }
 }
 
+#if __has_feature(capabilities)
+template<>
+_LIBCPP_HIDE_FROM_ABI _LIBCPP_CONSTEXPR_AFTER_CXX11
+int __countl_zero(unsigned __intcap __t) _NOEXCEPT {
+    return std::__countl_zero(static_cast<ptraddr_t>(__t));
+}
+#endif
+
 #if _LIBCPP_STD_VER > 17
 
 template <__libcpp_unsigned_integer _Tp>
@@ -140,6 +157,14 @@ _LIBCPP_HIDE_FROM_ABI constexpr _Tp rotl(_Tp __t, unsigned int __cnt) noexcept {
     return __t;
   return (__t << (__cnt % __dig)) | (__t >> (__dig - (__cnt % __dig)));
 }
+
+#if __has_feature(capabilities)
+template<>
+_LIBCPP_HIDE_FROM_ABI constexpr unsigned __intcap rotl(unsigned __intcap __t, unsigned int __cnt) noexcept {
+    // __builtin_cheri_address_set cannot be used in a constant expression (yet), so we return a null-derived integer.
+    return std::rotl(static_cast<ptraddr_t>(__t), __cnt);
+}
+#endif
 
 template <__libcpp_unsigned_integer _Tp>
 _LIBCPP_HIDE_FROM_ABI constexpr _Tp rotr(_Tp __t, unsigned int __cnt) noexcept {
@@ -178,6 +203,13 @@ _LIBCPP_HIDE_FROM_ABI constexpr int countr_zero(_Tp __t) noexcept {
   }
 }
 
+#if __has_feature(capabilities)
+template<>
+_LIBCPP_HIDE_FROM_ABI constexpr int countr_zero(unsigned __intcap __t) noexcept {
+    return std::countr_zero(static_cast<ptraddr_t>(__t));
+}
+#endif
+
 template <__libcpp_unsigned_integer _Tp>
 _LIBCPP_HIDE_FROM_ABI constexpr int countr_one(_Tp __t) noexcept {
   return __t != numeric_limits<_Tp>::max() ? std::countr_zero(static_cast<_Tp>(~__t)) : numeric_limits<_Tp>::digits;
@@ -201,10 +233,24 @@ _LIBCPP_HIDE_FROM_ABI constexpr int popcount(_Tp __t) noexcept {
   }
 }
 
+#if __has_feature(capabilities)
+template<>
+_LIBCPP_HIDE_FROM_ABI constexpr int popcount(unsigned __intcap __t) noexcept {
+    return std::popcount(static_cast<ptraddr_t>(__t));
+}
+#endif
+
 template <__libcpp_unsigned_integer _Tp>
 _LIBCPP_HIDE_FROM_ABI constexpr bool has_single_bit(_Tp __t) noexcept {
   return __t != 0 && (((__t & (__t - 1)) == 0));
 }
+
+#if __has_feature(capabilities)
+template<>
+_LIBCPP_HIDE_FROM_ABI constexpr bool has_single_bit(unsigned __intcap __t) noexcept {
+    return std::has_single_bit(static_cast<ptraddr_t>(__t));
+}
+#endif
 
 // integral log base 2
 template <__libcpp_unsigned_integer _Tp>
