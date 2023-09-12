@@ -61,7 +61,9 @@ enum class _LIBCPP_ENUM_VIS __arg_t : uint8_t {
   __const_char_type_ptr,
   __string_view,
   __ptr,
-  __handle
+  __handle,
+  __signed_intcap,
+  __unsigned_intcap,
 };
 
 inline constexpr unsigned __packed_arg_t_bits = 5;
@@ -105,6 +107,12 @@ _LIBCPP_HIDE_FROM_ABI _LIBCPP_AVAILABILITY_FORMAT decltype(auto) visit_format_ar
 #  else
     __libcpp_unreachable();
 #  endif
+  case __format::__arg_t::__signed_intcap:
+#  if __has_feature(capabilities)
+    return _VSTD::invoke(_VSTD::forward<_Visitor>(__vis), __arg.__value_.__intcap_);
+#  else
+    __libcpp_unreachable();
+#  endif
   case __format::__arg_t::__unsigned:
     return _VSTD::invoke(_VSTD::forward<_Visitor>(__vis), __arg.__value_.__unsigned_);
   case __format::__arg_t::__unsigned_long_long:
@@ -112,6 +120,12 @@ _LIBCPP_HIDE_FROM_ABI _LIBCPP_AVAILABILITY_FORMAT decltype(auto) visit_format_ar
   case __format::__arg_t::__u128:
 #  ifndef _LIBCPP_HAS_NO_INT128
     return _VSTD::invoke(_VSTD::forward<_Visitor>(__vis), __arg.__value_.__u128_);
+#  else
+    __libcpp_unreachable();
+#  endif
+  case __format::__arg_t::__unsigned_intcap:
+#  if __has_feature(capabilities)
+    return _VSTD::invoke(_VSTD::forward<_Visitor>(__vis), __arg.__value_.__uintcap_);
 #  else
     __libcpp_unreachable();
 #  endif
@@ -179,6 +193,10 @@ public:
     __int128_t __i128_;
     __uint128_t __u128_;
 #  endif
+#if __has_feature(capabilities)
+    __intcap __intcap_;
+    unsigned __intcap __uintcap_;
+#endif
     float __float_;
     double __double_;
     long double __long_double_;
@@ -210,6 +228,10 @@ public:
   _LIBCPP_HIDE_FROM_ABI __basic_format_arg_value(basic_string_view<_CharT> __value) noexcept
       : __string_view_(__value) {}
   _LIBCPP_HIDE_FROM_ABI __basic_format_arg_value(const void* __value) noexcept : __ptr_(__value) {}
+#if __has_feature(capabilities)
+  _LIBCPP_HIDE_FROM_ABI __basic_format_arg_value(__intcap __value) noexcept : __intcap_(__value) {}
+  _LIBCPP_HIDE_FROM_ABI __basic_format_arg_value(unsigned __intcap __value) noexcept : __uintcap_(__value) {}
+#endif
   _LIBCPP_HIDE_FROM_ABI __basic_format_arg_value(__handle __value) noexcept
       // TODO FMT Investigate why it doesn't work without the forward.
       : __handle_(std::forward<__handle>(__value)) {}

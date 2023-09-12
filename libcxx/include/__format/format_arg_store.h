@@ -60,6 +60,10 @@ template <class, __libcpp_signed_integer _Tp>
 consteval __arg_t __determine_arg_t() {
   if constexpr (sizeof(_Tp) <= sizeof(int))
     return __arg_t::__int;
+#if __has_feature(capabilities)
+  else if constexpr (is_same_v<_Tp, __intcap>)
+    return __arg_t::__signed_intcap;
+#endif
   else if constexpr (sizeof(_Tp) <= sizeof(long long))
     return __arg_t::__long_long;
 #  ifndef _LIBCPP_HAS_NO_INT128
@@ -75,6 +79,10 @@ template <class, __libcpp_unsigned_integer _Tp>
 consteval __arg_t __determine_arg_t() {
   if constexpr (sizeof(_Tp) <= sizeof(unsigned))
     return __arg_t::__unsigned;
+#if __has_feature(capabilities)
+  else if constexpr (is_same_v<_Tp, unsigned __intcap>)
+    return __arg_t::__unsigned_intcap;
+#endif
   else if constexpr (sizeof(_Tp) <= sizeof(unsigned long long))
     return __arg_t::__unsigned_long_long;
 #  ifndef _LIBCPP_HAS_NO_INT128
@@ -184,6 +192,12 @@ _LIBCPP_HIDE_FROM_ABI basic_format_arg<_Context> __create_format_arg(_Tp&& __val
           __arg, basic_string_view<typename _Context::char_type>{__value.data(), __value.size()}};
   else if constexpr (__arg == __arg_t::__ptr)
     return basic_format_arg<_Context>{__arg, static_cast<const void*>(__value)};
+#if __has_feature(capabilities)
+  else if constexpr (__arg == __arg_t::__signed_intcap)
+    return basic_format_arg<_Context>{__arg, static_cast<__intcap>(__value)};
+  else if constexpr (__arg == __arg_t::__unsigned_intcap)
+    return basic_format_arg<_Context>{__arg, static_cast<unsigned __intcap>(__value)};
+#endif
   else if constexpr (__arg == __arg_t::__handle)
     return basic_format_arg<_Context>{
         __arg, typename __basic_format_arg_value<_Context>::__handle{_VSTD::forward<_Tp>(__value)}};

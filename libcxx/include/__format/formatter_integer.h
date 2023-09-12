@@ -77,6 +77,11 @@ template <__formatter::__char_type _CharT>
 struct _LIBCPP_TEMPLATE_VIS _LIBCPP_AVAILABILITY_FORMAT formatter<__int128_t, _CharT>
     : public __formatter_integer<_CharT> {};
 #  endif
+#  if __has_feature(capabilities)
+template <__formatter::__char_type _CharT>
+struct _LIBCPP_TEMPLATE_VIS _LIBCPP_AVAILABILITY_FORMAT formatter<__intcap, _CharT>
+    : public __formatter_integer<_CharT> {};
+#  endif
 
 // Unsigned integral types.
 template <__formatter::__char_type _CharT>
@@ -97,6 +102,11 @@ struct _LIBCPP_TEMPLATE_VIS _LIBCPP_AVAILABILITY_FORMAT formatter<unsigned long 
 #  ifndef _LIBCPP_HAS_NO_INT128
 template <__formatter::__char_type _CharT>
 struct _LIBCPP_TEMPLATE_VIS _LIBCPP_AVAILABILITY_FORMAT formatter<__uint128_t, _CharT>
+    : public __formatter_integer<_CharT> {};
+#  endif
+#  if __has_feature(capabilities)
+template <__formatter::__char_type _CharT>
+struct _LIBCPP_TEMPLATE_VIS _LIBCPP_AVAILABILITY_FORMAT formatter<unsigned __intcap, _CharT>
     : public __formatter_integer<_CharT> {};
 #  endif
 
