@@ -44,11 +44,16 @@ unsigned __intcap __rotr(unsigned __intcap __t, int __cnt) _NOEXCEPT {
 }
 #endif
 
+template <class _Tp>
+_LIBCPP_HIDE_FROM_ABI _LIBCPP_CONSTEXPR_SINCE_CXX14 _Tp __rotl(_Tp __t, int __cnt) _NOEXCEPT {
+  return std::__rotr(__t, -__cnt);
+}
+
 #if _LIBCPP_STD_VER >= 20
 
 template <__libcpp_unsigned_integer _Tp>
 [[nodiscard]] _LIBCPP_HIDE_FROM_ABI constexpr _Tp rotl(_Tp __t, int __cnt) noexcept {
-  return std::__rotr(__t, -__cnt);
+  return std::__rotl(__t, __cnt);
 }
 
 #if __has_feature(capabilities)
