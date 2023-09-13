@@ -237,7 +237,8 @@ bool DwarfInstructions<A, R>::getRA_SIGN_STATE(A &addressSpace, R registers,
   if (regloc.location == CFI_Parser<A>::kRegisterUnused)
     raSignState = static_cast<pint_t>(regloc.value);
   else
-    raSignState = getSavedRegister(addressSpace, registers, cfa, regloc);
+    raSignState = getSavedRegister(UNW_AARCH64_RA_SIGN_STATE, addressSpace,
+                                   registers, cfa, regloc);
 
   // Only bit[0] is meaningful.
   return raSignState & 0x01;
