@@ -45,38 +45,40 @@
 #endif
 
 static const char* otype_suffix(uint32_t otype) {
+    // clang-format off
     switch (otype) {
 #define OTYPE_CASE(Name, ...)                                                                                          \
-    case CC128_##Name: return " (CC128_" #Name ")";
-    LS_SPECIAL_OTYPES(OTYPE_CASE, )
+    case CC128M_##Name: return " (CC128M_" #Name ")";
+    CC128M_LS_SPECIAL_OTYPES(OTYPE_CASE, )
     default: return "";
     }
+    // clang-format on
 }
 
-static void dump_cap_fields(const cc128_cap_t* result) {
-    fprintf(stderr, "Permissions: 0x%" PRIx32 "\n", cc128_get_perms(result)); // TODO: decode perms
-    fprintf(stderr, "User Perms:  0x%" PRIx32 "\n", cc128_get_uperms(result));
+static void dump_cap_fields(const cc128m_cap_t* result) {
+    fprintf(stderr, "Permissions: 0x%" PRIx32 "\n", cc128m_get_perms(result)); // TODO: decode perms
+    fprintf(stderr, "User Perms:  0x%" PRIx32 "\n", cc128m_get_uperms(result));
     fprintf(stderr, "Base:        0x%016" PRIx64 "\n", result->cr_base);
     fprintf(stderr, "Offset:      0x%016" PRIx64 "\n", result->_cr_cursor - result->cr_base);
     fprintf(stderr, "Cursor:      0x%016" PRIx64 "\n", result->_cr_cursor);
-    cc128_length_t length = result->_cr_top - result->cr_base;
+    cc128m_length_t length = result->_cr_top - result->cr_base;
     fprintf(stderr, "Length:     0x%" PRIx64 "%016" PRIx64 " %s\n", (uint64_t)(length >> 64), (uint64_t)length,
             length > UINT64_MAX ? " (greater than UINT64_MAX)" : "");
-    cc128_length_t top_full = result->_cr_top;
+    cc128m_length_t top_full = result->_cr_top;
     fprintf(stderr, "Top:        0x%" PRIx64 "%016" PRIx64 " %s\n", (uint64_t)(top_full >> 64), (uint64_t)top_full,
             top_full > UINT64_MAX ? " (greater than UINT64_MAX)" : "");
-    fprintf(stderr, "Sealed:      %d\n", cc128_is_cap_sealed(result) ? 1 : 0);
-    uint32_t otype = cc128_get_otype(result);
+    fprintf(stderr, "Sealed:      %d\n", cc128m_is_cap_sealed(result) ? 1 : 0);
+    uint32_t otype = cc128m_get_otype(result);
     fprintf(stderr, "OType:       0x%" PRIx32 "%s\n", otype, otype_suffix(otype));
-    fprintf(stderr, "Flags:       0x%" PRIx8 "\n", cc128_get_flags(result));
-    fprintf(stderr, "Reserved:    0x%" PRIx8 "\n", cc128_get_reserved(result));
+    fprintf(stderr, "Flags:       0x%" PRIx8 "\n", cc128m_get_flags(result));
+    fprintf(stderr, "Reserved:    0x%" PRIx8 "\n", cc128m_get_reserved(result));
     fprintf(stderr, "Valid decompress: %s", result->cr_bounds_valid ? "yes" : "no");
     fprintf(stderr, "\n");
 }
 
 int main(int argc, char** argv) {
-    //fprintf(stderr, "CC128_NULL_XOR_MASK=0x%llx\n", (long long)CC128_NULL_XOR_MASK);
-    //fprintf(stderr, "CC128_NULL_PESBT   =0x%llx\n", (long long)CC128_NULL_PESBT);
+    // fprintf(stderr, "CC128M_NULL_XOR_MASK=0x%llx\n", (long long)CC128M_NULL_XOR_MASK);
+    // fprintf(stderr, "CC128M_NULL_PESBT   =0x%llx\n", (long long)CC128M_NULL_PESBT);
     if (argc < 3) {
         fprintf(stderr, "Usage: %s PESBT CURSOR\n", argv[0]);
         return EXIT_FAILURE;
@@ -91,19 +93,19 @@ int main(int argc, char** argv) {
     if (errno != 0 || !end || *end != '\0') {
         err(EX_DATAERR, "cursor not a valid hex number: %s", argv[2]);
     }
-    cc128_cap_t result;
-    memset(&result, 0, sizeof(result));
     printf("Decompressing pesbt = %016" PRIx64 ", cursor = %016" PRIx64 "\n", pesbt, cursor);
 #ifdef DECOMPRESS_WITH_SAIL_GENERATED_CODE
-    sail_decode_128_mem(pesbt, cursor, false, &result);
+    cc128m_cap_t result = sail_decode_128m_mem(pesbt, cursor, false);
 #else
-    cc128_decompress_mem(pesbt, cursor, false, &result);
+    cc128m_cap_t result;
+    memset(&result, 0, sizeof(result));
+    cc128m_decompress_mem(pesbt, cursor, false, &result);
 #endif
     dump_cap_fields(&result);
 #ifdef DECOMPRESS_WITH_SAIL_GENERATED_CODE
-    uint64_t rt_pesbt = sail_compress_128_mem(&result);
+    uint64_t rt_pesbt = sail_compress_128m_mem(&result);
 #else
-    uint64_t rt_pesbt = cc128_compress_mem(&result);
+    uint64_t rt_pesbt = cc128m_compress_mem(&result);
 #endif
     printf("Re-compressed pesbt = %016" PRIx64 "%s\n", rt_pesbt, pesbt == rt_pesbt ? "" : " - WAS DESTRUCTIVE");
     return EXIT_SUCCESS;

@@ -43,6 +43,18 @@
 #endif
 #endif
 
+#if !defined(NDEBUG) && defined(__cplusplus) && defined(__EXCEPTIONS)
+#include <stdexcept>
+#define _cc_api_requirement(cond, msg)                                                                                 \
+    do {                                                                                                               \
+        if (!(cond)) {                                                                                                 \
+            throw std::invalid_argument(msg);                                                                          \
+        }                                                                                                              \
+    } while (false)
+#else
+#define _cc_api_requirement(cond, msg) _cc_debug_assert((cond) && msg)
+#endif
+
 #ifndef _CC_CONCAT
 #define _CC_CONCAT1(x, y) x##y
 #define _CC_CONCAT(x, y) _CC_CONCAT1(x, y)
@@ -56,8 +68,8 @@
 #define _CC_STATIC_ASSERT(cond, msg) _Static_assert(cond, msg)
 #endif
 
-#define _cc_N(name) _CC_CONCAT(_CC_CONCAT(_CC_CONCAT(cc, CC_BITS), _), name)
-#define _CC_N(name) _CC_CONCAT(_CC_CONCAT(_CC_CONCAT(CC, CC_BITS), _), name)
+#define _cc_N(name) _CC_CONCAT(_CC_CONCAT(_CC_CONCAT(cc, CC_FORMAT_LOWER), _), name)
+#define _CC_N(name) _CC_CONCAT(_CC_CONCAT(_CC_CONCAT(CC, CC_FORMAT_UPPER), _), name)
 
 #define _CC_BITMASK64(nbits) ((UINT64_C(1) << (nbits)) - UINT64_C(1))
 
@@ -83,13 +95,8 @@
 #define _CC_ENCODE_EBT_FIELD(value, name)                                                                              \
     ((uint64_t)((value)&_CC_N(FIELD_##name##_MAX_VALUE)) << (_CC_N(FIELD_##name##_START) + _CC_N(FIELD_EBT_START)))
 
-#ifdef CC_IS_MORELLO
-// Morello does not negate this field
-#define _CC_SPECIAL_OTYPE(name, val) _CC_N(name) = val, _CC_N(name##_SIGNED) = val
-#else
-#define _CC_SPECIAL_OTYPE(name, subtract)                                                                              \
-    _CC_N(name) = (_CC_N(MAX_REPRESENTABLE_OTYPE) - subtract##u), _CC_N(name##_SIGNED) = (((int64_t)-1) - subtract##u)
-#endif
+#define _CC_SPECIAL_OTYPE(name, val)                                                                                   \
+    _CC_N(name) = (_CC_N(SPECIAL_OTYPE_VAL)(val)), _CC_N(name##_SIGNED) = (_CC_N(SPECIAL_OTYPE_VAL_SIGNED)(val))
 
 #ifdef __cplusplus
 template <size_t a, size_t b> static constexpr bool check_same() {

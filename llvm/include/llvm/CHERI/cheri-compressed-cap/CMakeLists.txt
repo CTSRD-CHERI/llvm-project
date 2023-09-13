@@ -1,24 +1,55 @@
 cmake_minimum_required(VERSION 3.10)
 project(cheri_compressed_cap C CXX)
-set(CMAKE_C_STANDARD 11)
-set(CMAKE_CXX_STANDARD 14)
+set(CMAKE_C_STANDARD_REQUIRED 11)
+set(CMAKE_CXX_STANDARD_REQUIRED 14)
 if(APPLE AND NOT (CMAKE_CXX_COMPILER_ID STREQUAL "AppleClang"))
     # XXX: ugly hack, would be nice if llvm could find this
     include_directories(SYSTEM /Library/Developer/CommandLineTools/usr/include/c++/v1)
 endif()
 
+include(CMakePushCheckState)
+include(CheckCCompilerFlag)
 include(CheckCXXCompilerFlag)
-# CMAKE_REQUIRED_LINK_OPTIONS needs cmake 3.13
-set(CMAKE_REQUIRED_LIBRARIES -fsanitize=undefined)
-check_cxx_compiler_flag(-fsanitize=undefined HAVE_UBSAN)
-set(CMAKE_REQUIRED_LIBRARIES -fsanitize=address)
-check_cxx_compiler_flag(-fsanitize=address HAVE_ASAN)
-set(CMAKE_REQUIRED_LIBRARIES -fsanitize=memory)
-check_cxx_compiler_flag(-fsanitize=memory HAVE_MSAN)
+
+macro(check_sanitizer_flag _flag _var)
+    cmake_push_check_state()
+    set(CMAKE_REQUIRED_LIBRARIES ${_flag})
+    # CMAKE_REQUIRED_LINK_OPTIONS needs cmake 3.13
+    set(CMAKE_REQUIRED_LINK_OPTIONS ${_flag})
+    set(CMAKE_REQUIRED_DEFINITIONS ${_flag})
+    set(CMAKE_REQUIRED_FLAGS ${_flag})
+    check_cxx_compiler_flag(${_flag} ${_var})
+    cmake_pop_check_state()
+endmacro()
+
+cmake_push_check_state()
+check_sanitizer_flag(-fsanitize=undefined HAVE_UBSAN)
+check_sanitizer_flag(-fsanitize=address HAVE_ASAN)
+check_sanitizer_flag(-fsanitize=memory HAVE_MSAN)
 # XXX: needs instrumented system libraries
 set(HAVE_MSAN FALSE)
+# Check for libfuzzer compiler support and runtime libraries.
+cmake_push_check_state()
 set(CMAKE_REQUIRED_LIBRARIES -fsanitize=fuzzer)
-check_cxx_compiler_flag(-fsanitize=fuzzer HAVE_LIBFUZZER)
+set(CMAKE_REQUIRED_DEFINITIONS -fsanitize=fuzzer)
+set(CMAKE_REQUIRED_LINK_OPTIONS -fsanitize=fuzzer)
+set(CMAKE_REQUIRED_FLAGS -fsanitize=fuzzer)
+check_cxx_source_compiles([=[
+#include <stddef.h>
+#include <stdint.h>
+
+extern "C" int LLVMFuzzerTestOneInput(const uint8_t *Data, size_t Size) {
+  (void)Data;
+  (void)Size;
+  return 0;
+}
+]=] HAVE_LIBFUZZER)
+cmake_pop_check_state()
+
+check_c_compiler_flag(-Wunused-but-set-variable HAVE_UNUSED_BUT_SET_VARIABLE)
+if (HAVE_UNUSED_BUT_SET_VARIABLE)
+    add_compile_options(-DHAVE_UNUSED_BUT_SET_VARIABLE)
+endif()
 
 if (HAVE_UBSAN)
     add_compile_options(-fsanitize=undefined)
@@ -29,22 +60,29 @@ if (HAVE_UBSAN)
     endif()
 endif()
 
-add_compile_options(-Wno-gnu-statement-expression)
 add_compile_options(-fno-common)
+add_compile_options(-Wall -Wextra -Wno-c11-extensions -Wno-padded -Wno-gnu-statement-expression)
+add_compile_options($<$<COMPILE_LANGUAGE:CXX>:-Wno-old-style-cast>
+                    $<$<COMPILE_LANGUAGE:CXX>:-Wno-c++98-compat-pedantic>
+                    $<$<COMPILE_LANGUAGE:CXX>:-Wno-c++98-c++11-compat-binary-literal>)
 
-add_compile_options(-pedantic -Wall -Wextra -Wno-old-style-cast -Wno-c++98-compat-pedantic -Wno-c++98-c++11-compat-binary-literal -Wno-c11-extensions -Wno-padded)
+# Cannot use -Wpedantic with GCC since that flags use of __int128, so only add it for Clang
+if(${CMAKE_CXX_COMPILER_ID} MATCHES "Clang")
+    add_compile_options(-Wpedantic)
+endif()
+
 # TODO: -Weverything
 add_library(cheri_compressed_cap14 cheri_compressed_cap.c cheri_compressed_cap.h)
 
-add_executable(decompress_c128_cap decompress_c128_cap.c)
-include(GNUInstallDirs)
-install(TARGETS decompress_c128_cap RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
+function(add_decompress_cap _format)
+    add_executable(decompress_cap_${_format} decompress_cap_${_format}.c)
+    include(GNUInstallDirs)
+    install(TARGETS decompress_cap_${_format} RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
+endfunction()
 
-add_executable(decompress_c128_cap_morello decompress_c128_cap.c)
-include(GNUInstallDirs)
-target_compile_options(decompress_c128_cap_morello PRIVATE -DCC_IS_MORELLO=1)
-install(TARGETS decompress_c128_cap_morello RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
-
+# TODO: add_decompress_cap(64)
+add_decompress_cap(128)
+add_decompress_cap(128m)
 
 # Test against sail generated C code:
 # This needs GMP (and CMake doesn't include a find module)
@@ -70,97 +108,122 @@ set_target_properties(GMP::GMP PROPERTIES
   INTERFACE_INCLUDE_DIRECTORIES "${GMP_INCLUDE_DIR}"
 )
 
-
-function(add_sail_wrapper _suffix _sanitizer_flags)
-    if(NOT(_suffix MATCHES "^_morello$"))
-        set(64BIT_FILE test/sail_wrapper_64.c)
-    endif()
-    add_library(sail_wrapper128${_suffix} STATIC test/sail_wrapper_128.c ${64BIT_FILE} test/sail.c test/rts.c test/sail_failure.c)
+function(add_sail_wrapper _format _suffix _sanitizer_flags)
+    add_library(sail_wrapper_${_format}${_suffix} STATIC test/sail_wrapper_${_format}.c test/contrib/sail.c test/contrib/sail_failure.c)
     if (_sanitizer_flags)
-        target_compile_options(sail_wrapper128${_suffix} PRIVATE "${_sanitizer_flags}")
-        target_link_libraries(sail_wrapper128${_suffix} PRIVATE "${_sanitizer_flags}")
+        target_compile_options(sail_wrapper_${_format}${_suffix} PRIVATE "${_sanitizer_flags}")
+        target_link_libraries(sail_wrapper_${_format}${_suffix} PRIVATE "${_sanitizer_flags}")
     endif()
-    target_link_libraries(sail_wrapper128${_suffix} PUBLIC GMP::GMP)  # needs GMP, should propagate to all users
-    target_compile_options(sail_wrapper128${_suffix} PRIVATE -Wno-unused-function -Wno-unused-parameter -Wno-sign-compare -Wno-unused-label -Wno-extra-semi -Wno-gnu-binary-literal)
-    if(_suffix MATCHES "^_morello$")
-        target_compile_options(sail_wrapper128${_suffix} PRIVATE -DCC_IS_MORELLO=1)
+    target_link_libraries(sail_wrapper_${_format}${_suffix} PUBLIC GMP::GMP)  # needs GMP, should propagate to all users
+    target_compile_options(sail_wrapper_${_format}${_suffix} PRIVATE -Wno-unused-function -Wno-unused-parameter -Wno-sign-compare -Wno-unused-label -Wno-gnu-binary-literal)
+endfunction()
+
+function(add_sail_wrappers _format)
+    add_sail_wrapper(${_format} "" "")
+    if (HAVE_ASAN)
+        add_sail_wrapper(${_format} "-asan-ubsan" "-fsanitize=undefined,address")
+    endif()
+    if (HAVE_MSAN)
+        add_sail_wrapper(${_format} "-msan-ubsan" "-fsanitize=undefined,memory")
     endif()
 endfunction()
 
-add_sail_wrapper("" "")
-add_sail_wrapper(_morello "")
-if (HAVE_ASAN)
-    add_sail_wrapper("-asan-ubsan" "-fsanitize=undefined,address")
-    add_sail_wrapper("_morello-asan-ubsan" "-fsanitize=undefined,address")
-endif()
-if (HAVE_MSAN)
-    add_sail_wrapper("-msan-ubsan" "-fsanitize=undefined,memory")
-    add_sail_wrapper("_morello-asan-ubsan" "-fsanitize=undefined,address")
-endif()
+add_sail_wrappers(64)
+add_sail_wrappers(128)
+add_sail_wrappers(128m)
 
-# Add a test exe for sail generated code
-add_executable(test_sail_wrapper128 decompress_c128_cap.c)
-target_compile_definitions(test_sail_wrapper128 PRIVATE DECOMPRESS_WITH_SAIL_GENERATED_CODE=1)
-target_link_libraries(test_sail_wrapper128 PRIVATE sail_wrapper128)
+# Add test exes for sail generated code
 
-# For Morello too
-add_executable(test_morello_sail_wrapper128 decompress_c128_cap.c)
-target_compile_definitions(test_morello_sail_wrapper128 PRIVATE DECOMPRESS_WITH_SAIL_GENERATED_CODE=1 CC_IS_MORELLO=1)
-target_link_libraries(test_morello_sail_wrapper128 PRIVATE sail_wrapper128_morello)
+function(add_test_sail_wrapper _format)
+    add_executable(test_sail_wrapper_${_format} decompress_cap_${_format}.c)
+    target_compile_definitions(test_sail_wrapper_${_format} PRIVATE DECOMPRESS_WITH_SAIL_GENERATED_CODE=1)
+    target_link_libraries(test_sail_wrapper_${_format} PRIVATE sail_wrapper_${_format})
+endfunction()
+
+# TODO: add_test_sail_wrapper(64)
+add_test_sail_wrapper(128)
+add_test_sail_wrapper(128m)
 
 enable_testing()
 
-function(add_cc_test _tgt _src)
-    if(_tgt MATCHES "^_morello$")
-        set(M_SUFFIX "_morello")
-        set(M_OPTS "-DCC_IS_MORELLO=1")
+# See https://github.com/catchorg/Catch2/blob/devel/docs/cmake-integration.md
+Include(FetchContent)
+FetchContent_Declare(Catch2
+  GIT_REPOSITORY https://github.com/catchorg/Catch2.git
+  GIT_TAG        v3.4.0
+)
+FetchContent_MakeAvailable(Catch2)
+list(APPEND CMAKE_MODULE_PATH ${Catch2_SOURCE_DIR}/extras)
+include(CTest)
+include(Catch)
+
+function(add_format_test_definions _target _format)
+    target_compile_definitions(${_target} PRIVATE "TEST_CC_FORMAT_LOWER=${_format}")
+    target_compile_definitions(${_target} PRIVATE "TEST_CC_FORMAT_UPPER=$<UPPER_CASE:${_format}>")
+    if (_format STREQUAL "128m")
+        target_compile_definitions(${_target} PRIVATE "TEST_CC_IS_MORELLO")
     endif()
-    if (HAVE_ASAN)
-        add_executable(${_tgt}-asan-ubsan ${_src})
-        target_compile_options(${_tgt}-asan-ubsan PRIVATE -fsanitize=undefined,address ${M_OPTS})
-        target_link_libraries(${_tgt}-asan-ubsan PRIVATE -fsanitize=undefined,address)
-        target_link_libraries(${_tgt}-asan-ubsan PRIVATE sail_wrapper128${M_SUFFIX}-asan-ubsan)
-        add_test(NAME test-${_tgt}-asan-ubsan COMMAND ${_tgt}-asan-ubsan)
-    endif()
-    if (HAVE_MSAN)
-        add_executable(${_tgt}-msan-ubsan ${_src})
-        target_compile_options(${_tgt}-msan-ubsan PRIVATE -fsanitize=undefined,memory ${M_OPTS})
-        target_link_libraries(${_tgt}-msan-ubsan PRIVATE -fsanitize=undefined,memory)
-        target_link_libraries(${_tgt}-msan-ubsan PRIVATE sail_wrapper128${M_SUFFIX}-msan-ubsan)
-        add_test(NAME test-${_tgt}-msan-ubsan COMMAND ${_tgt}-msan-ubsan)
-    endif()
-    # UBSan will be added if available -> no suffix
-    add_executable(${_tgt} ${_src})
-    add_test(NAME test-${_tgt} COMMAND ${_tgt})
-    target_compile_options(${_tgt} PRIVATE ${M_OPTS})
-    target_link_libraries(${_tgt} PRIVATE sail_wrapper128${M_SUFFIX})
 endfunction()
 
-add_cc_test(simple_test test/simple_test.cpp)
+function(add_cc_test _format _target _suffix _sanitizer_flags)
+    add_executable(${_target}_${_format}${_suffix} test/${_target}_${_format}.cpp)
+    if (_sanitizer_flags)
+        target_compile_options(${_target}_${_format}${_suffix} PRIVATE "${_sanitizer_flags}")
+        target_link_libraries(${_target}_${_format}${_suffix} PRIVATE "${_sanitizer_flags}")
+    endif()
+    if (NOT _format STREQUAL "256")
+        target_link_libraries(${_target}_${_format}${_suffix} PRIVATE sail_wrapper_${_format}${_suffix})
+    endif()
+    target_link_libraries(${_target}_${_format}${_suffix} PRIVATE Catch2::Catch2WithMain)
+    catch_discover_tests(${_target}_${_format}${_suffix})
+    add_test(NAME test-${_target}_${_format}${_suffix} COMMAND ${_target}_${_format}${_suffix})
+endfunction()
 
-add_cc_test(setbounds_test test/setbounds_test.cpp)
-
-add_cc_test(random_inputs_test test/random_inputs_test.cpp)
-
-add_cc_test(simple_test_morello test/simple_test.cpp)
-
-add_cc_test(setbounds_test_morello test/setbounds_test.cpp)
-
-add_cc_test(random_inputs_test_morello test/random_inputs_test.cpp)
-
-if (HAVE_LIBFUZZER)
+function(add_cc_tests_target _format _target)
+    add_cc_test(${_format} ${_target} "" "")
     if (HAVE_ASAN)
-        add_sail_wrapper("-fuzzer-asan-ubsan" "-fsanitize=undefined,address,fuzzer")
-        add_executable(fuzz_decompress_asan test/fuzz-decompress.cpp)
-        target_compile_options(fuzz_decompress_asan PRIVATE -fsanitize=undefined,address,fuzzer)
-        target_link_libraries(fuzz_decompress_asan PRIVATE -fsanitize=undefined,address,fuzzer)
-        target_link_libraries(fuzz_decompress_asan PRIVATE sail_wrapper128-fuzzer-asan-ubsan)
+        add_cc_test(${_format} ${_target} "-asan-ubsan" "-fsanitize=undefined,address;-fno-sanitize-recover=undefined")
     endif()
     if (HAVE_MSAN)
-        add_sail_wrapper("-fuzzer-msan-ubsan" "-fsanitize=undefined,memory,fuzzer")
-        add_executable(fuzz_decompress_msan test/fuzz-decompress.cpp)
-        target_compile_options(fuzz_decompress_msan PRIVATE -fsanitize=undefined,memory,fuzzer)
-        target_link_libraries(fuzz_decompress_msan PRIVATE -fsanitize=undefined,memory,fuzzer)
-        target_link_libraries(fuzz_decompress_msan PRIVATE sail_wrapper128-fuzzer-msan-ubsan)
+        add_cc_test(${_format} ${_target} "-msan-ubsan" "-fsanitize=undefined,memory;-fno-sanitize-recover=undefined")
     endif()
-endif()
+endfunction()
+
+function(add_cc_tests _format)
+    add_cc_tests_target(${_format} simple_test)
+    if (NOT _format STREQUAL "256")
+        add_cc_tests_target(${_format} setbounds_test)
+        add_cc_tests_target(${_format} random_inputs_test)
+    endif()
+endfunction()
+
+add_cc_tests(64)
+add_cc_tests(128)
+add_cc_tests(128m)
+add_cc_tests(256)
+
+function(add_fuzz_tests _format)
+    if (HAVE_LIBFUZZER)
+        if (HAVE_ASAN)
+            add_sail_wrapper(${_format} "-fuzzer-asan-ubsan" "-fsanitize=undefined,address,fuzzer;-fno-sanitize-recover=undefined")
+            add_executable(fuzz_decompress_${_format}-asan test/fuzz_decompress.cpp)
+            add_format_test_definions(fuzz_decompress_${_format}-asan ${_format})
+            target_compile_options(fuzz_decompress_${_format}-asan PRIVATE -UNDEBUG)
+            target_compile_options(fuzz_decompress_${_format}-asan PRIVATE -fsanitize=undefined,address,fuzzer -fno-sanitize-recover=undefined)
+            target_link_libraries(fuzz_decompress_${_format}-asan PRIVATE -fsanitize=undefined,address,fuzzer -fno-sanitize-recover=undefined)
+            target_link_libraries(fuzz_decompress_${_format}-asan PRIVATE sail_wrapper_${_format}-fuzzer-asan-ubsan)
+        endif()
+        if (HAVE_MSAN)
+            add_sail_wrapper(${_format} "-fuzzer-msan-ubsan" "-fsanitize=undefined,memory,fuzzer")
+            add_executable(fuzz_decompress_${_format}-msan test/fuzz_decompress.cpp)
+            add_format_test_definions(fuzz_decompress_${_format}-msan ${_format})
+            target_compile_options(fuzz_decompress_${_format}-msan PRIVATE -fsanitize=undefined,memory,fuzzer -fno-sanitize-recover=undefined)
+            target_link_libraries(fuzz_decompress_${_format}-msan PRIVATE -fsanitize=undefined,memory,fuzzer -fno-sanitize-recover=undefined)
+            target_link_libraries(fuzz_decompress_${_format}-msan PRIVATE sail_wrapper_${_format}-fuzzer-msan-ubsan)
+        endif()
+    endif()
+endfunction()
+
+add_fuzz_tests(64)
+add_fuzz_tests(128)
+add_fuzz_tests(128m)

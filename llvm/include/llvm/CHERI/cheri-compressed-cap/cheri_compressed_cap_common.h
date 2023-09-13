@@ -76,6 +76,7 @@ enum {
 #define _cc_length_t _cc_N(length_t)
 #define _cc_offset_t _cc_N(offset_t)
 #define _cc_addr_t _cc_N(addr_t)
+#define _cc_saddr_t _cc_N(saddr_t)
 
 #define _CC_MANTISSA_WIDTH _CC_N(MANTISSA_WIDTH)
 #define _CC_MAX_EXPONENT _CC_N(MAX_EXPONENT)
@@ -102,13 +103,21 @@ _CC_STATIC_ASSERT_SAME(_CC_N(FIELD_INTERNAL_EXPONENT_SIZE) + _CC_N(FIELD_EXP_NON
                            _CC_N(FIELD_EXPONENT_LOW_PART_SIZE),
                        _CC_N(FIELD_EBT_SIZE));
 
+// Sanity-check the min/max otype macros:
+_CC_STATIC_ASSERT(_CC_N(MIN_RESERVED_OTYPE) >= 0, "MIN_RESERVED_OTYPE is signed?");
+_CC_STATIC_ASSERT(_CC_N(MIN_RESERVED_OTYPE) < _CC_N(MAX_RESERVED_OTYPE),
+                  "MIN_RESERVED_OTYPE greater than MAX_RESERVED_OTYPE?");
+_CC_STATIC_ASSERT(_CC_N(MIN_RESERVED_OTYPE) <= _CC_N(MAX_REPRESENTABLE_OTYPE), "MIN_RESERVED_OTYPE out of range?");
+_CC_STATIC_ASSERT(_CC_N(MAX_RESERVED_OTYPE) <= _CC_N(MAX_REPRESENTABLE_OTYPE), "MAX_RESERVED_OTYPE out of range?");
+
 // Forward-declare the accessors since we use them inside the struct body:
-struct _cc_N(cap);
-static inline uint8_t _cc_N(get_flags)(const struct _cc_N(cap)* cap);
-static inline uint32_t _cc_N(get_otype)(const struct _cc_N(cap)* cap);
-static inline uint32_t _cc_N(get_perms)(const struct _cc_N(cap)* cap);
-static inline uint8_t _cc_N(get_reserved)(const struct _cc_N(cap)* cap);
-static inline uint32_t _cc_N(get_uperms)(const struct _cc_N(cap)* cap);
+typedef struct _cc_N(cap) _cc_N(cap_t);
+#define _cc_cap_t _cc_N(cap_t)
+static inline uint8_t _cc_N(get_flags)(const _cc_cap_t* cap);
+static inline uint32_t _cc_N(get_otype)(const _cc_cap_t* cap);
+static inline uint32_t _cc_N(get_perms)(const _cc_cap_t* cap);
+static inline uint8_t _cc_N(get_reserved)(const _cc_cap_t* cap);
+static inline uint32_t _cc_N(get_uperms)(const _cc_cap_t* cap);
 
 // In order to allow vector loads and store from memory we can optionally reverse the first two fields.
 struct _cc_N(cap) {
@@ -122,11 +131,12 @@ struct _cc_N(cap) {
     _cc_addr_t _cr_cursor;
     _cc_addr_t cr_pesbt;
 #endif
-    _cc_length_t _cr_top;  /* Capability top */
-    _cc_addr_t cr_base;    /* Capability base addr */
-    uint8_t cr_tag;      /* Tag */
+    _cc_length_t _cr_top;    /* Capability top */
+    _cc_addr_t cr_base;      /* Capability base addr */
+    uint8_t cr_tag;          /* Tag */
     uint8_t cr_bounds_valid; /* Set if bounds decode was given an invalid cap */
     uint8_t cr_exp;          /* Exponent */
+    uint8_t cr_extra;        /* Additional data stored by the caller */
 #ifdef __cplusplus
     inline _cc_addr_t base() const { return cr_base; }
     inline _cc_addr_t address() const { return _cr_cursor; }
@@ -150,11 +160,15 @@ struct _cc_N(cap) {
     inline bool operator==(const _cc_N(cap) & other) const;
 #endif
 };
-typedef struct _cc_N(cap) _cc_N(cap_t);
-#define _cc_cap_t _cc_N(cap_t)
 
 static inline bool _cc_N(exactly_equal)(const _cc_cap_t* a, const _cc_cap_t* b) {
     return a->cr_tag == b->cr_tag && a->_cr_cursor == b->_cr_cursor && a->cr_pesbt == b->cr_pesbt;
+}
+
+static inline bool _cc_N(raw_equal)(const _cc_cap_t* a, const _cc_cap_t* b) {
+    return a->_cr_cursor == b->_cr_cursor && a->cr_pesbt == b->cr_pesbt && a->_cr_top == b->_cr_top &&
+           a->cr_base == b->cr_base && a->cr_tag == b->cr_tag && a->cr_bounds_valid == b->cr_bounds_valid &&
+           a->cr_exp == b->cr_exp && a->cr_extra == b->cr_extra;
 }
 
 /* Returns the index of the most significant bit set in x */
@@ -207,6 +221,7 @@ static inline uint64_t _cc_N(getbits)(uint64_t src, uint32_t start, uint32_t siz
 }
 
 // truncates `value`, keeping only the _least_ significant `n` bits.
+static inline uint64_t _cc_N(truncate_addr)(_cc_addr_t value, size_t n) { return value & (((_cc_addr_t)1 << n) - 1); }
 static inline uint64_t _cc_N(truncate64)(uint64_t value, size_t n) { return value & ((UINT64_C(1) << n) - 1); }
 
 // truncates `value`, keeping only the _most_ significant `n` bits.
@@ -234,6 +249,7 @@ struct _cc_N(bounds_bits) {
     static inline _cc_addr_t _cc_N(cap_pesbt_extract_##FN)(_cc_addr_t pesbt) { return _CC_EXTRACT_FIELD(pesbt, X); }   \
     static inline _cc_addr_t _cc_N(cap_pesbt_encode_##FN)(type value) { return _CC_ENCODE_FIELD(value, X); }           \
     static inline _cc_addr_t _cc_N(cap_pesbt_deposit_##FN)(_cc_addr_t pesbt, type value) {                             \
+        _cc_debug_assert(value <= _CC_N(FIELD_##X##_MAX_VALUE));                                                       \
         return (pesbt & ~_CC_N(FIELD_##X##_MASK64)) | _CC_ENCODE_FIELD(value, X);                                      \
     }                                                                                                                  \
     static inline type _cc_N(get_##FN)(const _cc_cap_t* cap) { return _cc_N(cap_pesbt_extract_##FN)(cap->cr_pesbt); }  \
@@ -267,14 +283,6 @@ static inline _cc_bounds_bits _cc_N(extract_bounds_bits)(_cc_addr_t pesbt) {
         // Do not offset by 1! We also need to encode E=0 even with IE
         // Also allow nonsense values over 64 - BWidth + 2: this is expected by sail-generated tests
         // E = MIN(64 - BWidth + 2, E);
-#ifdef CC_IS_MORELLO
-        if (result.E == CC128_MAX_ENCODABLE_EXPONENT) {
-            result.B = 0;
-            // This isn't top, its T. We just special case again when top is calculated.
-            result.T = 0;
-            return result;
-        }
-#endif
         result.B = (uint16_t)_CC_EXTRACT_FIELD(pesbt, EXP_NONZERO_BOTTOM) << _CC_N(FIELD_EXPONENT_LOW_PART_SIZE);
         result.T = (uint16_t)_CC_EXTRACT_FIELD(pesbt, EXP_NONZERO_TOP) << _CC_N(FIELD_EXPONENT_HIGH_PART_SIZE);
         L_msb = 1;
@@ -317,22 +325,28 @@ static inline bool _cc_N(bounds_bits_valid)(_cc_bounds_bits bounds) {
     }
 }
 
+/// Returns the address with Morello flags (high address bits) removed and sign extended.
+/// This is currently an no-op for non-Morello but that may change in the future.
+static inline _cc_addr_t _cc_N(cap_bounds_address)(_cc_addr_t addr) {
+    // Remove flags bits
+    _cc_addr_t cursor = addr & _CC_CURSOR_MASK;
+    // Sign extend
+    if (cursor & ((_CC_CURSOR_MASK >> 1) + 1))
+        cursor |= ~_CC_CURSOR_MASK;
+    return cursor;
+}
+
 static inline bool _cc_N(compute_base_top)(_cc_bounds_bits bounds, _cc_addr_t cursor, _cc_addr_t* base_out,
                                            _cc_length_t* top_out) {
 #ifdef CC_IS_MORELLO
     if (bounds.E > _CC_MAX_EXPONENT) {
-        bool valid = bounds.E == CC128_MAX_ENCODABLE_EXPONENT;
+        bool valid = bounds.E == _CC_N(MAX_ENCODABLE_EXPONENT);
         *base_out = 0;
-        *top_out = CC128_MAX_TOP;
+        *top_out = _CC_N(MAX_TOP);
         return valid;
     }
-
-    // Remove flags bits
-    cursor = cursor & _CC_CURSOR_MASK;
-    // Sign extend
-    if (cursor & ((_CC_CURSOR_MASK >> 1) + 1))
-        cursor |= ~_CC_CURSOR_MASK;
 #endif
+    cursor = _cc_N(cap_bounds_address)(cursor);
 
     // For the remaining computations we have to clamp E to max_E
     //  let E = min(maxE, unsigned(c.E)) in
@@ -410,7 +424,10 @@ static inline bool _cc_N(compute_base_top)(_cc_bounds_bits bounds, _cc_addr_t cu
     return true;
 }
 
-static inline void _cc_N(decompress_raw)(_cc_addr_t pesbt, _cc_addr_t cursor, bool tag, _cc_cap_t* cdp) {
+/// Expand a PESBT+address+tag input to a _cc_cap_t, but don't check that the tagged value is derivable.
+/// This is an internal helper and should not not be used outside of this header.
+static inline void _cc_N(unsafe_decompress_raw)(_cc_addr_t pesbt, _cc_addr_t cursor, bool tag, _cc_cap_t* cdp) {
+    memset(cdp, 0, sizeof(*cdp));
     cdp->cr_tag = tag;
     cdp->_cr_cursor = cursor;
     cdp->cr_pesbt = pesbt;
@@ -419,6 +436,10 @@ static inline void _cc_N(decompress_raw)(_cc_addr_t pesbt, _cc_addr_t cursor, bo
     bool valid = _cc_N(compute_base_top)(bounds, cursor, &cdp->cr_base, &cdp->_cr_top);
     cdp->cr_bounds_valid = valid;
     cdp->cr_exp = bounds.E;
+}
+
+static inline void _cc_N(decompress_raw)(_cc_addr_t pesbt, _cc_addr_t cursor, bool tag, _cc_cap_t* cdp) {
+    _cc_N(unsafe_decompress_raw)(pesbt, cursor, tag, cdp);
     if (tag) {
         _cc_debug_assert(cdp->cr_base <= _CC_N(MAX_ADDR));
 #ifndef CC_IS_MORELLO
@@ -439,9 +460,22 @@ static inline void _cc_N(decompress_mem)(uint64_t pesbt, uint64_t cursor, bool t
 
 static inline bool _cc_N(is_cap_sealed)(const _cc_cap_t* cp) { return _cc_N(get_otype)(cp) != _CC_N(OTYPE_UNSEALED); }
 
+/// Check that the expanded bounds match the compressed cr_pesbt value.
+static inline bool _cc_N(pesbt_is_correct)(const _cc_cap_t* csp) {
+    _cc_cap_t tmp;
+    // NB: We use the unsafe decompression function here to handle non-derivable caps without asserting.
+    _cc_N(unsafe_decompress_raw)(csp->cr_pesbt, csp->_cr_cursor, csp->cr_tag, &tmp);
+    tmp.cr_extra = csp->cr_extra; // raw_equal also compares, cr_extra but we don't care about that here.
+    if (!_cc_N(raw_equal)(&tmp, csp)) {
+        return false;
+    }
+    return true;
+}
+
 // Update ebt bits in pesbt
 static inline void _cc_N(update_ebt)(_cc_cap_t* csp, _cc_addr_t new_ebt) {
     csp->cr_pesbt = (csp->cr_pesbt & ~_CC_N(FIELD_EBT_MASK64)) | new_ebt;
+    csp->cr_exp = _cc_N(extract_bounds_bits)(new_ebt).E;
 }
 
 /*
@@ -452,6 +486,7 @@ static inline void _cc_N(update_ebt)(_cc_cap_t* csp, _cc_addr_t new_ebt) {
 static inline _cc_addr_t _cc_N(compress_raw)(const _cc_cap_t* csp) {
     _cc_debug_assert((!csp->cr_tag || _cc_N(get_reserved)(csp) == 0) &&
                      "Unknown reserved bits set it tagged capability");
+    _cc_debug_assert(_cc_N(pesbt_is_correct)(csp) && "capability bounds were modified without updating pesbt");
     return csp->cr_pesbt;
 }
 
@@ -459,44 +494,14 @@ static inline _cc_addr_t _cc_N(compress_mem)(const _cc_cap_t* csp) {
     return _cc_N(compress_raw)(csp) ^ _CC_N(NULL_XOR_MASK);
 }
 
-/*
- * Define the following to do the is_representable() check by simply
- * compressing and decompressing the capability and checking to
- * see if it is the same.
- */
-// #define SIMPLE_REPRESENT_CHECK
-
-#ifndef SIMPLE_REPRESENT_CHECK
-static inline bool _cc_N(all_ones)(uint64_t offset, uint32_t e, uint32_t bwidth) {
-    uint64_t Itop;
-    uint32_t shift = e + bwidth;
-
-    if (shift >= 63)
-        return false;
-    Itop = offset >> shift;
-    return Itop == (0xfffffffffffffffful >> shift);
-}
-
-static inline bool _cc_N(all_zeroes)(uint64_t offset, uint32_t e, uint32_t bwidth) {
-    uint32_t shift = e + bwidth;
-    uint64_t Itop;
-
-    if (shift >= 63)
-        Itop = 0ul;
-    else
-        Itop = offset >> shift;
-    return Itop == 0ul;
-}
-#endif /* ! SIMPLE_REPRESENT_CHECK */
-
-static bool _cc_N(fast_is_representable_new_addr)(bool sealed, _cc_addr_t base, _cc_length_t length, _cc_addr_t cursor,
-                                                  _cc_addr_t new_cursor);
+static bool _cc_N(fast_is_representable_new_addr)(const _cc_cap_t* cap, _cc_addr_t new_addr);
 
 /// Check that a capability is representable by compressing and recompressing
 static inline bool _cc_N(is_representable_cap_exact)(const _cc_cap_t* cap) {
     _cc_addr_t pesbt = _cc_N(compress_raw)(cap);
     _cc_cap_t decompressed_cap;
-    _cc_N(decompress_raw)(pesbt, cap->_cr_cursor, cap->cr_tag, &decompressed_cap);
+    // NB: We use the unsafe decompression function here to handle non-derivable caps without asserting.
+    _cc_N(unsafe_decompress_raw)(pesbt, cap->_cr_cursor, cap->cr_tag, &decompressed_cap);
     // These fields must not change:
     _cc_debug_assert(decompressed_cap._cr_cursor == cap->_cr_cursor);
     _cc_debug_assert(decompressed_cap.cr_pesbt == cap->cr_pesbt);
@@ -510,11 +515,11 @@ static inline bool _cc_N(is_representable_cap_exact)(const _cc_cap_t* cap) {
 static inline uint32_t _cc_N(compute_ebt)(_cc_addr_t req_base, _cc_length_t req_top, _cc_addr_t* alignment_mask,
                                           bool* exact) {
 #ifdef CC_IS_MORELLO
-    if (req_base == 0 && req_top == CC128_MAX_TOP) {
+    if (req_base == 0 && req_top == _CC_N(MAX_TOP)) {
         *exact = true;
         if (alignment_mask)
             *alignment_mask = _CC_MAX_ADDR;
-        return CC128_RESET_EBT;
+        return _CC_N(RESET_EBT);
     }
 #else
     _cc_debug_assert(req_base <= req_top && "Cannot invert base and top");
@@ -643,78 +648,25 @@ static inline uint32_t _cc_N(compute_ebt)(_cc_addr_t req_base, _cc_length_t req_
            _CC_ENCODE_EBT_FIELD(Be, BOTTOM_ENCODED);
 }
 
-/*
- * Check to see if a memory region is representable by a compressed
- * capability. It is representable if:
- *
- *   representable = (inRange && inLimits) || (E >= 44)
- *
- * where:
- *
- *   E = compression exponent (see _cc_N(compute_e)() above)
- *
- *   inRange = -s < i < s  where i is the increment (or offset)
- *   (In other words, all the bits of i<63, E+20> are the same.)
- *
- *   inLimits = (i < 0) ? (Imid >= (R - Amid)) && (R != Amid) : (R - Amid - 1)
- *   where Imid = i<E+19, E>, Amid = a<E+19, E>, R = B - 2^12 and a =
- *   base + offset.
- */
-static inline bool _cc_N(is_representable_new_addr)(bool sealed, _cc_addr_t base, _cc_length_t length,
-                                                    _cc_addr_t cursor, _cc_addr_t new_cursor) {
-    _cc_length_t top = (_cc_length_t)base + length;
-
-    cursor &= _CC_CURSOR_MASK;
-    new_cursor &= _CC_CURSOR_MASK;
-
-    // in-bounds capabilities are always representable
-    if (__builtin_expect(new_cursor >= base && new_cursor < top, true)) {
-        return true;
-    }
-
-#if defined(_CC_USE_FAST_REP_CHECK)
-    const bool slow_representable_check = false;
-#else
-    const bool slow_representable_check = true;
-#endif
-
-    if (slow_representable_check) {
-        /* Simply compress and uncompress to check. */
-        _cc_cap_t c;
-        memset(&c, 0, sizeof(c));
-        c.cr_base = base;
-        c._cr_top = top;
-        c._cr_cursor = cursor;
-        // important to set as compress assumes this is in bounds
-        c.cr_pesbt = _CC_ENCODE_FIELD(_CC_N(UPERMS_ALL), UPERMS) | _CC_ENCODE_FIELD(_CC_N(PERMS_ALL), HWPERMS) |
-                     _CC_ENCODE_FIELD(sealed ? 42 : _CC_N(OTYPE_UNSEALED), OTYPE);
-        /* Get an EBT */
-        bool exact_input = false;
-        _cc_N(update_ebt)(&c, _cc_N(compute_ebt)(base, top, NULL, &exact_input));
-        // Looks like this assert gets hit by negative length capabilities. Probably the "exact input" return is wrong.
-        if (top > (_cc_length_t)base)
-            _cc_debug_assert(exact_input &&
-                             "Input capability bounds not representable? They should have been rounded before!");
-        /* Check with new cursor */
-        c._cr_cursor = new_cursor;
-        return _cc_N(is_representable_cap_exact)(&c);
-    } else {
-        return _cc_N(fast_is_representable_new_addr)(sealed, base, length, cursor, new_cursor);
-    }
+static inline bool _cc_N(precise_is_representable_new_addr)(const _cc_cap_t* oldcap, _cc_addr_t new_cursor) {
+    // If the decoded bounds are the same with an updated cursor then the capability is representable.
+    _cc_cap_t newcap = *oldcap;
+    newcap._cr_cursor = new_cursor;
+    _cc_bounds_bits old_bounds_bits = _cc_N(extract_bounds_bits)(_cc_N(compress_raw)(oldcap));
+    newcap.cr_bounds_valid = _cc_N(compute_base_top)(old_bounds_bits, new_cursor, &newcap.cr_base, &newcap._cr_top);
+    return newcap.cr_base == oldcap->cr_base && newcap._cr_top == oldcap->_cr_top && newcap.cr_bounds_valid &&
+           oldcap->cr_bounds_valid;
 }
 
-static inline _cc_addr_t _cc_N(cap_bounds_address)(const _cc_cap_t* cap) {
-    // Remove flags bits
-    _cc_addr_t cursor = cap->_cr_cursor & _CC_CURSOR_MASK;
-    // Sign extend
-    if (cursor & ((_CC_CURSOR_MASK >> 1) + 1))
-        cursor |= ~_CC_CURSOR_MASK;
-    return cursor;
+static inline bool _cc_N(cap_bounds_uses_value_for_exp)(uint8_t exponent) {
+    return exponent < (sizeof(_cc_addr_t) * 8) - _CC_N(FIELD_BOTTOM_ENCODED_SIZE);
 }
 
-// This should only be used on decompressed caps, as it relies on the exp field
+/// Returns whether the capability bounds depend on any of the cursor bits or if they can be fully derived from E/B/T.
 static inline bool _cc_N(cap_bounds_uses_value)(const _cc_cap_t* cap) {
-    return cap->cr_exp < (sizeof(_cc_addr_t) * 8) - _CC_N(FIELD_BOTTOM_ENCODED_SIZE);
+    // This should only be used on decompressed caps, as it relies on the exp field
+    _cc_debug_assert(_cc_N(pesbt_is_correct)(cap));
+    return _cc_N(cap_bounds_uses_value_for_exp)(cap->cr_exp);
 }
 
 static inline bool _cc_N(cap_sign_change)(_cc_addr_t addr1, _cc_addr_t addr2) {
@@ -732,115 +684,121 @@ static inline bool _cc_N(cap_sign_change_causes_unrepresentability)(const _cc_ca
     return _cc_N(cap_sign_change)(addr1, addr2) && _cc_N(cap_bounds_uses_value)(cap);
 }
 
-static inline bool _cc_N(is_representable_with_addr)(const _cc_cap_t* cap, _cc_addr_t new_addr) {
-    new_addr &= _CC_CURSOR_MASK;
+static inline bool _cc_N(is_representable_with_addr)(const _cc_cap_t* cap, _cc_addr_t new_addr,
+                                                     bool precise_representable_check) {
 #ifdef CC_IS_MORELLO
     // If the top bit is changed on morello this can change bounds
-    if (_cc_N(cap_sign_change_causes_unrepresentability)(cap, new_addr, cap->_cr_cursor)) {
+    if (__builtin_expect(_cc_N(cap_sign_change_causes_unrepresentability)(cap, new_addr, cap->_cr_cursor), false)) {
         return false;
     }
-    if (!cap->cr_bounds_valid)
+    // If the exponent is out-of-range (i.e. E>50 && E!=63), all capability address changes will detag.
+    // This can happen for underivable capabilities that were created with the settag instruction.
+    if (__builtin_expect(!cap->cr_bounds_valid, false)) {
         return false;
+    }
 #endif
-    // in-bounds capabilities are otherwise always representable
-    if (__builtin_expect(new_addr >= cap->cr_base && new_addr < cap->_cr_top, true)) {
+    _cc_addr_t extended_cursor = _cc_N(cap_bounds_address)(new_addr);
+    // In-bounds capabilities are always representable.
+    if (__builtin_expect(extended_cursor >= cap->cr_base && extended_cursor < cap->_cr_top, true)) {
         return true;
     }
-    const _cc_length_t length = cap->_cr_top - cap->cr_base;
-    return _cc_N(is_representable_new_addr)(_cc_N(is_cap_sealed)(cap), cap->cr_base, length, cap->_cr_cursor, new_addr);
+    if (precise_representable_check) {
+        return _cc_N(precise_is_representable_new_addr)(cap, new_addr);
+    } else {
+        return _cc_N(fast_is_representable_new_addr)(cap, new_addr);
+    }
 }
 
-static bool _cc_N(fast_is_representable_new_addr)(bool sealed, _cc_addr_t base, _cc_length_t length, _cc_addr_t cursor,
-                                                  _cc_addr_t new_cursor) {
-    (void)sealed;
-    uint32_t bwidth = _CC_MANTISSA_WIDTH;
+/// Updates the address of a capability using semantics that match the hardware (i.e. using a fast approximate
+/// representability check rather than a precise one).
+static inline void _cc_N(set_addr)(_cc_cap_t* cap, _cc_addr_t new_addr) {
+    if (cap->cr_tag && _cc_N(is_cap_sealed)(cap)) {
+        cap->cr_tag = false;
+    }
+    if (!_cc_N(is_representable_with_addr)(cap, new_addr, /*precise_representable_check=*/false)) {
+        // Detag and recompute the new bounds if the capability became unrepresentable.
+        cap->cr_tag = false;
+        _cc_N(decompress_raw)(cap->cr_pesbt, new_addr, false, cap);
+    } else {
+        cap->_cr_cursor = new_addr;
+    }
+}
 
-    cursor &= _CC_CURSOR_MASK;
-    new_cursor &= _CC_CURSOR_MASK;
-
-    uint32_t highest_exp = (_CC_ADDR_WIDTH - bwidth + 2);
-
-    _cc_length_t top = base + length;
-
-    if (top == _CC_MAX_TOP && base == 0) {
+static bool _cc_N(fast_is_representable_new_addr)(const _cc_cap_t* cap, _cc_addr_t new_addr) {
+    if (cap->_cr_top == _CC_MAX_TOP && cap->cr_base == 0) {
         return true; // 1 << 65 is always representable
     }
-    if (length == 0) {
-        return true; // length 0 is always representable
+
+    _cc_bounds_bits bounds = _cc_N(extract_bounds_bits)(cap->cr_pesbt);
+    // For Morello this computation uses the sig-extended bounds value.
+    _cc_addr_t inc = _cc_N(cap_bounds_address)(new_addr - cap->_cr_cursor);
+    _cc_addr_t cursor = _cc_N(cap_bounds_address)(cap->_cr_cursor);
+
+    // i_top uses an arithmetic shift, i_mid and a_mid use logic shifts.
+    size_t i_top_shift = bounds.E + _CC_MANTISSA_WIDTH;
+    if (i_top_shift >= _CC_ADDR_WIDTH) {
+        i_top_shift = _CC_ADDR_WIDTH - 1; // Avoid UBSan errors for shifts > signed bitwidth.
     }
-
-    uint32_t e = _cc_N(get_exponent)(length);
-
-    int64_t b, r, Imid, Amid;
-    bool inRange, inLimits;
-    int64_t inc = (int64_t)(new_cursor - cursor);
-
-#define MOD_MASK ((UINT64_C(1) << bwidth) - UINT64_C(1))
-
-    /* Check for the boundary cases. */
-
-    b = (int64_t)((base >> e) & MOD_MASK);
-    Imid = (int64_t)((uint64_t)(inc >> e) & MOD_MASK);
-    Amid = (int64_t)(((cursor) >> e) & MOD_MASK);
-
-    r = (int64_t)(((uint64_t)((b >> (bwidth - 3)) - 1) << (bwidth - 3)) & MOD_MASK);
-
-    /* inRange, test if bits are all the same */
-    inRange = _cc_N(all_ones)((uint64_t)inc, e, bwidth) || _cc_N(all_zeroes)((uint64_t)inc, e, bwidth);
-
-    /* inLimits */
-    if (inc >= 0) {
-        inLimits = ((uint64_t)Imid < (((uint64_t)(r - Amid - 1l)) & MOD_MASK));
+    size_t e_shift = bounds.E >= _CC_ADDR_WIDTH ? _CC_ADDR_WIDTH - 1 : bounds.E;
+    _cc_saddr_t i_top = (_cc_saddr_t)inc >> i_top_shift;
+    _cc_addr_t i_mid = _cc_N(truncate_addr)((_cc_addr_t)inc >> e_shift, _CC_MANTISSA_WIDTH);
+    _cc_addr_t a_mid = _cc_N(truncate_addr)((_cc_addr_t)cursor >> e_shift, _CC_MANTISSA_WIDTH);
+    _cc_addr_t B3 = (_cc_addr_t)_cc_truncateLSB(_CC_MANTISSA_WIDTH)(bounds.B, 3);
+    _cc_addr_t R3 = _cc_N(truncate_addr)(B3 - 1, 3);
+    _cc_addr_t R = _cc_N(truncate_addr)(R3 << (_CC_MANTISSA_WIDTH - 3), _CC_MANTISSA_WIDTH);
+    _cc_addr_t diff = _cc_N(truncate_addr)(R - a_mid, _CC_MANTISSA_WIDTH);
+    _cc_addr_t diff1 = _cc_N(truncate_addr)(diff - 1, _CC_MANTISSA_WIDTH);
+    // i_top determines: (1) whether the increment is inRange i.e. less than the size of the representable region
+    // (2**(E+MW)) (2) whether it is positive or negative. To satisfy (1) all top bits must be the same so we are
+    // interested in the cases where i_top is 0 or -1.
+    bool inLimits;
+    if (i_top == 0) {
+        inLimits = i_mid < diff1;
+    } else if (i_top == (_cc_saddr_t)-1) {
+        inLimits = i_mid >= diff && R != a_mid;
     } else {
-        inLimits = ((uint64_t)Imid >= (((uint64_t)(r - Amid)) & MOD_MASK)) && (r != Amid);
+        inLimits = false;
     }
-#undef MOD_MASK
-
-    return ((inRange && inLimits) || (e >= highest_exp - 2));
+    return inLimits || bounds.E >= _CC_MAX_EXPONENT - 2;
 }
 
 /* @return whether the operation was able to set precise bounds precise or not */
-static inline bool _cc_N(setbounds_impl)(_cc_cap_t* cap, _cc_addr_t req_base, _cc_length_t req_top,
-                                         _cc_addr_t* alignment_mask) {
+static inline bool _cc_N(setbounds_impl)(_cc_cap_t* cap, _cc_length_t req_len, _cc_addr_t* alignment_mask) {
+    uint64_t req_base = cap->_cr_cursor;
+    if (_cc_N(is_cap_sealed)(cap)) {
+        cap->cr_tag = 0; // Detag sealed inputs to maintain invariants
+    }
 #ifdef CC_IS_MORELLO
     if (!cap->cr_bounds_valid) {
         cap->cr_tag = 0;
     }
     bool from_large = !_cc_N(cap_bounds_uses_value)(cap);
-#else
-    // Morello allows setbounds to do weird things and will just result in untagged results
-    _cc_debug_assert((cap->cr_tag) && "Cannot be used on untagged capabilities");
-    _cc_debug_assert((!_cc_N(is_cap_sealed)(cap)) && "Cannot be used on sealed capabilities");
+    if (!from_large) {
+        // Mask and sign-extend if any of the address bits are used for bounds.
+        // Note: Not doing the masking for large (E>50) capabilities means that some bounds with flag bits set that
+        // could be representable end up being detagged, but we have to match the taped-out chip here.
+        req_base = _cc_N(cap_bounds_address)(req_base);
+    }
 #endif
+    _cc_length_t req_top = (_cc_length_t)req_base + req_len;
     _cc_debug_assert(req_base <= req_top && "Cannot invert base and top");
+    // Clear the tag if the requested base or top are outside the bounds of the input capability.
+    if (req_base < cap->cr_base || req_top > cap->_cr_top) {
+        cap->cr_tag = 0;
+    }
     /*
      * With compressed capabilities we may need to increase the range of
      * memory addresses to be wider than requested so it is
      * representable.
      */
-    const _cc_addr_t cursor = cap->_cr_cursor;
-#ifndef CC_IS_MORELLO
-    _cc_debug_assert(((cap->_cr_top - cap->cr_base) >> _CC_ADDR_WIDTH) <= 1 && "Length must be smaller than 1 << 65");
-    _cc_debug_assert((req_top >> _CC_ADDR_WIDTH) <= 1 && "New top must be smaller than 1 << 65");
-    _cc_debug_assert(req_base >= cap->cr_base && "Cannot decrease base");
-    _cc_debug_assert(req_top <= cap->_cr_top && "Cannot increase top");
-    assert((cursor < cap->_cr_top || (cursor == cap->_cr_top && req_base == cap->_cr_top && req_base == req_top)) &&
-           "Must be used on inbounds caps or request zero-length cap at top");
-    assert((cursor >= cap->cr_base) && "Must be used on inbounds caps");
-#endif
     _CC_STATIC_ASSERT(_CC_EXP_LOW_WIDTH == 3, "expected 3 bits to be used by");  // expected 3 bits to
     _CC_STATIC_ASSERT(_CC_EXP_HIGH_WIDTH == 3, "expected 3 bits to be used by"); // expected 3 bits to
     bool exact = false;
     uint32_t new_ebt = _cc_N(compute_ebt)(req_base, req_top, alignment_mask, &exact);
-
-    // TODO: find a faster way to compute top and bot:
-    const _cc_addr_t pesbt = _CC_ENCODE_FIELD(0, UPERMS) | _CC_ENCODE_FIELD(0, HWPERMS) |
-                             _CC_ENCODE_FIELD(_CC_N(OTYPE_UNSEALED), OTYPE) | _CC_ENCODE_FIELD(new_ebt, EBT);
-    _cc_cap_t new_cap;
-    _cc_N(decompress_raw)(pesbt, cursor, cap->cr_tag, &new_cap);
-    _cc_addr_t new_base = new_cap.cr_base;
-    _cc_length_t new_top = new_cap._cr_top;
-
+    _cc_addr_t new_base;
+    _cc_length_t new_top;
+    bool new_bounds_valid = _cc_N(compute_base_top)(_cc_N(extract_bounds_bits)(_CC_ENCODE_FIELD(new_ebt, EBT)),
+                                                    cap->_cr_cursor, &new_base, &new_top);
     if (exact) {
 #ifndef CC_IS_MORELLO
         // Morello considers a setbounds that takes a capability from "large" (non-sign extended bounds) to "small"
@@ -853,52 +811,78 @@ static inline bool _cc_N(setbounds_impl)(_cc_cap_t* cap, _cc_addr_t req_base, _c
         _cc_debug_assert((new_base != req_base || new_top != req_top) &&
                          "Was inexact, but neither base nor top different?");
     }
-
-    _cc_debug_assert(new_top >= new_base);
-    _cc_debug_assert((!cap->cr_tag || _cc_N(get_reserved)(cap) == 0) &&
-                     "Unknown reserved bits set in tagged capability");
-    cap->cr_base = new_base;
-    cap->_cr_top = new_top;
-    cap->cr_exp = new_cap.cr_exp;
-    _cc_N(update_ebt)(cap, new_ebt);
 #ifdef CC_IS_MORELLO
-    cap->cr_bounds_valid = new_cap.cr_bounds_valid;
-    bool to_small = _cc_N(cap_bounds_uses_value)(cap);
+    bool to_small = _cc_N(cap_bounds_uses_value_for_exp)(_cc_N(extract_bounds_bits)(new_ebt).E);
     // On morello we may end up with a length that could have been exact, but has changed the flag bits.
-    if ((from_large && to_small) && ((new_base ^ req_base) >> (64 - MORELLO_FLAG_BITS))) {
+    if ((from_large && to_small) && _cc_N(cap_bounds_address)(cap->_cr_cursor) != cap->_cr_cursor) {
         cap->cr_tag = 0;
     }
 #endif
-
-    //  let newCap = {cap with address=base, E=to_bits(6, if incE then e + 1 else e), B=Bbits, T=Tbits, internal_e=ie};
-    //  (exact, newCap)
+    if (cap->cr_tag) {
+        // For invalid inputs, new_top could have been larger than max_top and if it is sufficiently larger, it
+        // will be truncated to zero, so we can only assert that we get top > base for tagged, valid inputs.
+        // See https://github.com/CTSRD-CHERI/sail-cheri-riscv/pull/36 for a decoding change that guarantees
+        // this invariant for any input.
+        _cc_debug_assert(new_top >= new_base);
+        _cc_debug_assert(_cc_N(get_reserved)(cap) == 0 && "Unknown reserved bits set in tagged capability");
+        _cc_debug_assert(new_base >= cap->cr_base && "Cannot reduce base on tagged capabilities");
+        _cc_debug_assert(new_top <= cap->_cr_top && "Cannot increase top on tagged capabilities");
+    }
+    cap->cr_base = new_base;
+    cap->_cr_top = new_top;
+    _cc_N(update_ebt)(cap, new_ebt);
+    cap->cr_bounds_valid = new_bounds_valid;
     return exact;
 }
 
 /* @return whether the operation was able to set precise bounds precise or not */
-static inline bool _cc_N(setbounds)(_cc_cap_t* cap, _cc_addr_t req_base, _cc_length_t req_top) {
-    return _cc_N(setbounds_impl)(cap, req_base, req_top, NULL);
+static inline bool _cc_N(setbounds)(_cc_cap_t* cap, _cc_length_t req_len) {
+    __attribute__((unused)) _cc_addr_t old_base = cap->cr_base;
+    __attribute__((unused)) _cc_length_t old_top = cap->_cr_top;
+    __attribute__((unused)) _cc_addr_t req_base =
+        _cc_N(cap_bounds_uses_value)(cap) ? _cc_N(cap_bounds_address)(cap->_cr_cursor) : cap->_cr_cursor;
+    __attribute__((unused)) _cc_length_t req_top = req_len + req_base;
+    bool exact = _cc_N(setbounds_impl)(cap, req_len, NULL);
+    if (cap->cr_tag) {
+        // Assertions to check that we didn't break any invariants.
+        _cc_debug_assert(!_cc_N(is_cap_sealed)(cap) && "result cannot be sealed and tagged");
+        _cc_debug_assert(((cap->_cr_top - cap->cr_base) >> _CC_ADDR_WIDTH) <= 1 &&
+                         "length must be smaller than 1 << 65");
+        _cc_debug_assert(cap->cr_base >= old_base && "cannot remain tagged if base was decreased");
+        _cc_debug_assert(cap->_cr_top <= old_top && "cannot remain tagged if top was increased");
+        // For compatibility with hardware, we keep the tag valid if the input was an underivable tagged capability,
+        // but in all other cases it should be impossible to end up with a new top greater than MAX_TOP.
+        _cc_debug_assert((cap->_cr_top <= _CC_MAX_TOP || old_top > _CC_MAX_TOP) &&
+                         "cannot remain tagged if new top greater 1 << 65");
+    }
+    // For Morello, we have to compare the sign-extended base and top as the exact check does not cover sign change.
+    if (exact) {
+        _cc_debug_assert(_cc_N(cap_bounds_address)(cap->cr_base) == _cc_N(cap_bounds_address)(req_base) &&
+                         "base changed but still reported exact");
+        _cc_debug_assert(_cc_N(cap_bounds_address)(cap->_cr_top) == _cc_N(cap_bounds_address)(req_top) &&
+                         "top changed but still reported exact");
+    } else {
+        _cc_debug_assert((cap->_cr_top != req_top || cap->cr_base != req_base) &&
+                         "result is exact but reported inexact");
+    }
+    return exact;
 }
 
-/* @return the mask that needs to be applied to base in order to get a precisely representable capability */
-static inline _cc_addr_t _cc_N(get_alignment_mask)(_cc_addr_t req_length) {
-    if (req_length == 0) {
-        // With a lenght of zero we know it is precise so we can just return an
-        // all ones mask.
-        // This avoids undefined behaviour when counting most significant bit later.
-        return _CC_MAX_ADDR;
+/** Like setbounds, but also asserts that the operation is strictly monotonic. */
+static inline bool _cc_N(checked_setbounds)(_cc_cap_t* cap, _cc_length_t req_len) {
+    __attribute__((unused)) _cc_addr_t req_base =
+        _cc_N(cap_bounds_uses_value)(cap) ? _cc_N(cap_bounds_address)(cap->_cr_cursor) : cap->_cr_cursor;
+    __attribute__((unused)) _cc_length_t req_top = req_len + req_base;
+    if (cap->cr_tag) {
+        // Assertions to detect API misuse - those checks should have been performed before calling setbounds.
+        _cc_api_requirement(!_cc_N(is_cap_sealed)(cap), "cannot be used on tagged sealed capabilities");
+        _cc_api_requirement(req_base >= cap->cr_base, "cannot decrease base on tagged capabilities");
+        _cc_api_requirement(req_top <= cap->_cr_top, "cannot increase top on tagged capabilities");
+        _cc_api_requirement(req_len < _CC_MAX_TOP, "requested length must be smaller than max length");
+        _cc_api_requirement(req_top < _CC_MAX_TOP, "new top must be smaller than max length");
+        _cc_api_requirement(cap->_cr_top <= _CC_MAX_TOP, "input capability top must be less than max top");
     }
-    // To compute the mask we set bounds on a maximum permissions capability and
-    // return the mask that was used to adjust the length
-    _cc_cap_t tmpcap;
-    memset(&tmpcap, 0, sizeof(tmpcap));
-    tmpcap.cr_tag = 1;
-    tmpcap._cr_top = _CC_MAX_TOP;
-    _cc_N(update_otype)(&tmpcap, _CC_N(OTYPE_UNSEALED));
-    _cc_N(update_ebt)(&tmpcap, _CC_N(RESET_EBT));
-    _cc_addr_t mask = 0;
-    _cc_N(setbounds_impl)(&tmpcap, 0, req_length, &mask);
-    return mask;
+    return _cc_N(setbounds)(cap, req_len);
 }
 
 static inline _cc_cap_t _cc_N(make_max_perms_cap)(_cc_addr_t base, _cc_addr_t cursor, _cc_length_t top) {
@@ -912,11 +896,39 @@ static inline _cc_cap_t _cc_N(make_max_perms_cap)(_cc_addr_t base, _cc_addr_t cu
     creg.cr_pesbt = _CC_ENCODE_FIELD(_CC_N(UPERMS_ALL), UPERMS) | _CC_ENCODE_FIELD(_CC_N(PERMS_ALL), HWPERMS) |
                     _CC_ENCODE_FIELD(_CC_N(OTYPE_UNSEALED), OTYPE);
     creg.cr_tag = true;
-    creg.cr_exp = _CC_N(NULL_EXP);
+    creg.cr_exp = _CC_N(RESET_EXP);
     bool exact_input = false;
     _cc_N(update_ebt)(&creg, _cc_N(compute_ebt)(creg.cr_base, creg._cr_top, NULL, &exact_input));
     assert(exact_input && "Invalid arguments");
     assert(_cc_N(is_representable_cap_exact)(&creg));
+    return creg;
+}
+
+/* @return the mask that needs to be applied to base in order to get a precisely representable capability */
+static inline _cc_addr_t _cc_N(get_alignment_mask)(_cc_addr_t req_length) {
+    if (req_length == 0) {
+        // With a length of zero we know it is precise so we can just return an
+        // all ones mask.
+        // This avoids undefined behaviour when counting most significant bit later.
+        return _CC_MAX_ADDR;
+    }
+    // To compute the mask we set bounds on a maximum permissions capability and
+    // return the mask that was used to adjust the length
+    _cc_cap_t tmpcap = _cc_N(make_max_perms_cap(0, 0, _CC_MAX_TOP));
+    _cc_addr_t mask = 0;
+    _cc_N(setbounds_impl)(&tmpcap, req_length, &mask);
+    return mask;
+}
+
+static inline _cc_cap_t _cc_N(make_null_derived_cap)(_cc_addr_t addr) {
+    _cc_cap_t creg;
+    memset(&creg, 0, sizeof(creg));
+    creg._cr_cursor = addr;
+    creg._cr_top = _CC_N(MAX_TOP);
+    creg.cr_pesbt = _CC_N(NULL_PESBT);
+    creg.cr_bounds_valid = 1;
+    creg.cr_exp = _CC_N(NULL_EXP);
+    _cc_debug_assert(_cc_N(is_representable_cap_exact)(&creg));
     return creg;
 }
 
@@ -934,9 +946,9 @@ static inline _cc_addr_t _cc_N(get_representable_length)(_cc_addr_t req_length) 
 /// Provide a C++ class with the same function names
 /// to simplify writing code that handles both 128 and 64-bit capabilities
 #ifdef __cplusplus
-inline bool _cc_N(cap)::operator==(const _cc_N(cap) & other) const { return _cc_N(exactly_equal)(this, &other); }
+inline bool _cc_N(cap)::operator==(const _cc_N(cap) & other) const { return _cc_N(raw_equal)(this, &other); }
 
-class _CC_CONCAT(CompressedCap, CC_BITS) {
+class _CC_CONCAT(CompressedCap, CC_FORMAT_LOWER) {
 public:
     using length_t = _cc_length_t;
     using offset_t = _cc_offset_t;
@@ -944,23 +956,33 @@ public:
     using cap_t = _cc_cap_t;
     using bounds_bits = _cc_bounds_bits;
 
-    static inline addr_t compress_raw(const cap_t* csp) { return _cc_N(compress_raw)(csp); }
-    static inline void decompress_raw(addr_t pesbt, addr_t cursor, bool tag, cap_t* cdp) {
-        _cc_N(decompress_raw)(pesbt, cursor, tag, cdp);
+    static inline addr_t compress_raw(const cap_t& csp) { return _cc_N(compress_raw)(&csp); }
+    static inline cap_t decompress_raw(addr_t pesbt, addr_t cursor, bool tag) {
+        cap_t result;
+        _cc_N(decompress_raw)(pesbt, cursor, tag, &result);
+        return result;
     }
-    static inline addr_t compress_mem(const cap_t* csp) { return _cc_N(compress_mem)(csp); }
-    static inline void decompress_mem(addr_t pesbt, addr_t cursor, bool tag, cap_t* cdp) {
-        _cc_N(decompress_mem)(pesbt, cursor, tag, cdp);
+    static inline addr_t compress_mem(const cap_t& csp) { return _cc_N(compress_mem)(&csp); }
+    static inline cap_t decompress_mem(addr_t pesbt, addr_t cursor, bool tag) {
+        cap_t result;
+        _cc_N(decompress_mem)(pesbt, cursor, tag, &result);
+        return result;
     }
     static inline bounds_bits extract_bounds_bits(addr_t pesbt) { return _cc_N(extract_bounds_bits)(pesbt); }
-    static inline bool setbounds(cap_t* cap, addr_t req_base, length_t req_top) {
-        return _cc_N(setbounds)(cap, req_base, req_top);
-    }
-    static inline bool is_representable_cap_exact(const cap_t* cap) { return _cc_N(is_representable_cap_exact)(cap); }
+    static inline bool setbounds(cap_t* cap, length_t req_len) { return _cc_N(setbounds)(cap, req_len); }
+    static inline bool is_representable_cap_exact(const cap_t& cap) { return _cc_N(is_representable_cap_exact)(&cap); }
     static inline cap_t make_max_perms_cap(addr_t base, addr_t cursor, length_t top) {
         return _cc_N(make_max_perms_cap)(base, cursor, top);
     }
+    static inline cap_t make_null_derived_cap(addr_t addr) { return _cc_N(make_null_derived_cap)(addr); }
     static inline addr_t representable_length(addr_t len) { return _cc_N(get_representable_length)(len); }
     static inline addr_t representable_mask(addr_t len) { return _cc_N(get_alignment_mask)(len); }
+    static inline bool fast_is_representable_new_addr(const cap_t& cap, addr_t new_addr) {
+        return _cc_N(fast_is_representable_new_addr)(&cap, new_addr);
+    }
+    static inline bool precise_is_representable_new_addr(const cap_t& cap, addr_t new_addr) {
+        return _cc_N(precise_is_representable_new_addr)(&cap, new_addr);
+    }
 };
+#define CompressedCapCC _CC_CONCAT(CompressedCap, CC_FORMAT_LOWER)
 #endif

@@ -29,13 +29,16 @@
  * OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF
  * SUCH DAMAGE.
  */
-#include "sail.h"
+
+#include "contrib/sail.h"
 
 /* Provide the 64-specific APIs for sail_wrapper_common.c */
-#define SAIL_COMPRESSION_GENERATED_C_FILE "sail_compression_64.c"
+#define SAIL_COMPRESSION_GENERATED_C_FILE "contrib/sail_compression_64.c"
 // Would be nice to have a stable name for this tuple:
 #define sail_bounds_tuple ztuple_z8z5bv32zCz0z5bv33z9
-#define SAIL_WRAPPER_CC_BITS 64
+
+#define SAIL_WRAPPER_CC_FORMAT_LOWER 64
+#define SAIL_WRAPPER_CC_FORMAT_UPPER 64
 
 /* CHERI-64 uses uint64_t, CHERI-128 uses lbits */
 typedef uint64_t sail_cap_bits;
@@ -58,12 +61,6 @@ static inline void set_top_base_from_sail(const struct zCapability* sail, _cc_ca
 }
 
 /* Exported API */
-void sail_decode_64_mem(cc64_addr_t mem_pesbt, cc64_addr_t mem_cursor, bool tag, cc64_cap_t* cdp) {
-    sail_decode_common_mem(mem_pesbt, mem_cursor, tag, cdp);
-}
-void sail_decode_64_raw(cc64_addr_t mem_pesbt, cc64_addr_t mem_cursor, bool tag, cc64_cap_t* cdp) {
-    sail_decode_common_raw(mem_pesbt, mem_cursor, tag, cdp);
-}
 struct cc64_bounds_bits sail_extract_bounds_bits_64(cc64_addr_t pesbt) {
     return sail_extract_bounds_bits_common(pesbt);
 }

@@ -36,8 +36,8 @@
  */
 
 // The following macros are expected to be defined
-#undef CC_BITS
-#define CC_BITS 64
+#define CC_FORMAT_LOWER 64
+#define CC_FORMAT_UPPER 64
 /* These should match the definitions in sail! */
 #define CC64_CAP_SIZE 8
 #define CC64_CAP_BITS 64
@@ -53,11 +53,15 @@
 #define CC64_MAX_LENGTH CC64_MAX_ADDRESS_PLUS_ONE
 #define CC64_MAX_TOP CC64_MAX_ADDRESS_PLUS_ONE
 #define CC64_MAX_ADDR UINT32_MAX
+/* Special otypes are allocated downwards from -1 */
+#define CC64_SPECIAL_OTYPE_VAL(subtract) (CC64_MAX_REPRESENTABLE_OTYPE - subtract##u)
+#define CC64_SPECIAL_OTYPE_VAL_SIGNED(subtract) (((int64_t)-1) - subtract##u)
 
 /* Use uint64_t to represent 33 bit length */
 typedef uint64_t cc64_length_t;
 typedef int64_t cc64_offset_t;
 typedef uint32_t cc64_addr_t;
+typedef int32_t cc64_saddr_t;
 #include "cheri_compressed_cap_macros.h"
 
 /* ignore ISO C restricts enumerator values to range of 'int' */
@@ -83,7 +87,7 @@ enum {
     _CC_FIELD(EXP_NONZERO_BOTTOM, 39, 35),
     _CC_FIELD(EXPONENT_LOW_PART, 34, 32),
     _CC_FIELD(RESERVED, 31, 32), /* No reserved bits */
-    _CC_FIELD(UPERMS, 31, 32), /* No uperms */
+    _CC_FIELD(UPERMS, 31, 32),   /* No uperms */
 };
 #pragma GCC diagnostic pop
 _CC_STATIC_ASSERT_SAME(CC64_FIELD_UPERMS_SIZE, 0);
@@ -109,22 +113,24 @@ _CC_STATIC_ASSERT_SAME(CC64_FIELD_RESERVED_SIZE, 0);
 _CC_STATIC_ASSERT(CC64_PERM_SETCID < CC64_FIELD_HWPERMS_MAX_VALUE, "permissions not representable?");
 
 #define CC64_PERMS_ALL (0xfff) /* [0...11] */
-#define CC64_UPERMS_ALL (0)  /* [15...18] */
+#define CC64_UPERMS_ALL (0)    /* [15...18] */
 #define CC64_UPERMS_SHFT (15)
 #define CC64_MAX_UPERM (0)
 
 // We reserve 16 otypes
 enum _CC_N(OTypes) {
-    CC64_FIRST_NONRESERVED_OTYPE = 0,
     CC64_MAX_REPRESENTABLE_OTYPE = ((1u << CC64_OTYPE_BITS) - 1u),
-    _CC_SPECIAL_OTYPE(FIRST_SPECIAL_OTYPE, 0),
     _CC_SPECIAL_OTYPE(OTYPE_UNSEALED, 0),
     _CC_SPECIAL_OTYPE(OTYPE_SENTRY, 1),
     _CC_SPECIAL_OTYPE(OTYPE_RESERVED2, 2),
     _CC_SPECIAL_OTYPE(OTYPE_RESERVED3, 3),
-    _CC_SPECIAL_OTYPE(LAST_SPECIAL_OTYPE, 3),
-    _CC_SPECIAL_OTYPE(LAST_NONRESERVED_OTYPE, 3),
+    _CC_N(MIN_RESERVED_OTYPE) = _CC_N(OTYPE_RESERVED3),
+    _CC_N(MAX_RESERVED_OTYPE) = _CC_N(OTYPE_UNSEALED),
 };
+
+#define CC64_LS_SPECIAL_OTYPES(ITEM, ...)                                                                              \
+    ITEM(OTYPE_UNSEALED, __VA_ARGS__)                                                                                  \
+    ITEM(OTYPE_SENTRY, __VA_ARGS__)
 
 _CC_STATIC_ASSERT_SAME(CC64_MANTISSA_WIDTH, CC64_FIELD_EXP_ZERO_BOTTOM_SIZE);
 
@@ -137,3 +143,6 @@ _CC_STATIC_ASSERT_SAME(CC64_NULL_XOR_MASK, UINT32_C(0x7c302));
 #define CC64_ENCODE_FIELD(value, name) _CC_ENCODE_FIELD(value, name)
 #define CC64_EXTRACT_FIELD(value, name) _CC_EXTRACT_FIELD(value, name)
 #define CC64_ENCODE_EBT_FIELD(value, name) _CC_ENCODE_EBT_FIELD(value, name)
+
+#undef CC_FORMAT_LOWER
+#undef CC_FORMAT_UPPER

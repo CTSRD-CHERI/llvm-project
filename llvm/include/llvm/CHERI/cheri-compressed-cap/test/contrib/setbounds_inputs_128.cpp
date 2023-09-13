@@ -3,8 +3,10 @@
 struct setbounds_input {
     uint64_t base1;
     uint64_t top1;
+    uint64_t len1() const { return top1 - base1; }
     uint64_t base2;
     uint64_t top2;
+    uint64_t len2() const { return top2 - base2; }
     uint64_t sail_cc_base1;
     uint64_t sail_cc_top1;
     uint64_t sail_cc_base2;

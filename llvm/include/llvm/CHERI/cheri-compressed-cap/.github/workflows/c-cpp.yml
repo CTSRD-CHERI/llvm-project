@@ -8,15 +8,18 @@ on:
 
 jobs:
   build:
-
+    strategy:
+      matrix:
+        build_type: [Debug, Release]
     runs-on: ubuntu-latest
-
     steps:
-    - uses: actions/checkout@v2
+    - uses: actions/checkout@v3
+    - name: Ensure pre-commit checks pass
+      run: pip install pre-commit && pre-commit run --all-files --show-diff-on-failure --color=always
     - name: 'Run CMake and build'
       run: |
         mkdir -p build
-        cd build && cmake ..
+        cd build && cmake -DCMAKE_BUILD_TYPE=${{ matrix.build_type }} ..
         make -j`nproc`
     - name: Run tests
       run: cd build && ctest -V -j`nproc`

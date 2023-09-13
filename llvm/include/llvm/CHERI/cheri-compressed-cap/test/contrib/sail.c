@@ -1,3 +1,70 @@
+/****************************************************************************/
+/*     Sail                                                                 */
+/*                                                                          */
+/*  Sail and the Sail architecture models here, comprising all files and    */
+/*  directories except the ASL-derived Sail code in the aarch64 directory,  */
+/*  are subject to the BSD two-clause licence below.                        */
+/*                                                                          */
+/*  The ASL derived parts of the ARMv8.3 specification in                   */
+/*  aarch64/no_vector and aarch64/full are copyright ARM Ltd.               */
+/*                                                                          */
+/*  Copyright (c) 2013-2021                                                 */
+/*    Kathyrn Gray                                                          */
+/*    Shaked Flur                                                           */
+/*    Stephen Kell                                                          */
+/*    Gabriel Kerneis                                                       */
+/*    Robert Norton-Wright                                                  */
+/*    Christopher Pulte                                                     */
+/*    Peter Sewell                                                          */
+/*    Alasdair Armstrong                                                    */
+/*    Brian Campbell                                                        */
+/*    Thomas Bauereiss                                                      */
+/*    Anthony Fox                                                           */
+/*    Jon French                                                            */
+/*    Dominic Mulligan                                                      */
+/*    Stephen Kell                                                          */
+/*    Mark Wassell                                                          */
+/*    Alastair Reid (Arm Ltd)                                               */
+/*                                                                          */
+/*  All rights reserved.                                                    */
+/*                                                                          */
+/*  This work was partially supported by EPSRC grant EP/K008528/1 <a        */
+/*  href="http://www.cl.cam.ac.uk/users/pes20/rems">REMS: Rigorous          */
+/*  Engineering for Mainstream Systems</a>, an ARM iCASE award, EPSRC IAA   */
+/*  KTF funding, and donations from Arm.  This project has received         */
+/*  funding from the European Research Council (ERC) under the European     */
+/*  Union’s Horizon 2020 research and innovation programme (grant           */
+/*  agreement No 789108, ELVER).                                            */
+/*                                                                          */
+/*  This software was developed by SRI International and the University of  */
+/*  Cambridge Computer Laboratory (Department of Computer Science and       */
+/*  Technology) under DARPA/AFRL contracts FA8650-18-C-7809 ("CIFV")        */
+/*  and FA8750-10-C-0237 ("CTSRD").                                         */
+/*                                                                          */
+/*  Redistribution and use in source and binary forms, with or without      */
+/*  modification, are permitted provided that the following conditions      */
+/*  are met:                                                                */
+/*  1. Redistributions of source code must retain the above copyright       */
+/*     notice, this list of conditions and the following disclaimer.        */
+/*  2. Redistributions in binary form must reproduce the above copyright    */
+/*     notice, this list of conditions and the following disclaimer in      */
+/*     the documentation and/or other materials provided with the           */
+/*     distribution.                                                        */
+/*                                                                          */
+/*  THIS SOFTWARE IS PROVIDED BY THE AUTHOR AND CONTRIBUTORS ``AS IS''      */
+/*  AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED       */
+/*  TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A         */
+/*  PARTICULAR PURPOSE ARE DISCLAIMED.  IN NO EVENT SHALL THE AUTHOR OR     */
+/*  CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL,            */
+/*  SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT        */
+/*  LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF        */
+/*  USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND     */
+/*  ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,      */
+/*  OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT      */
+/*  OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF      */
+/*  SUCH DAMAGE.                                                            */
+/****************************************************************************/
+
 #define _GNU_SOURCE
 #include<assert.h>
 #include<inttypes.h>
@@ -7,9 +74,13 @@
 #include<string.h>
 #include<time.h>
 
-#include <x86intrin.h>
-
 #include"sail.h"
+
+// zero bits from high index, same semantics as bzhi intrinsic
+uint64_t bzhi_u64(uint64_t bits, uint64_t len)
+{
+  return bits & (UINT64_MAX >> (64 - len));
+}
 
 /*
  * Temporary mpzs for use in functions below. To avoid conflicts, only
@@ -115,6 +186,12 @@ void hex_str(sail_string *str, const mpz_t n)
   gmp_asprintf(str, "0x%Zx", n);
 }
 
+void hex_str_upper(sail_string *str, const mpz_t n)
+{
+  sail_free(*str);
+  gmp_asprintf(str, "0x%ZX", n);
+}
+
 bool eq_string(const sail_string str1, const sail_string str2)
 {
   return strcmp(str1, str2) == 0;
@@ -171,7 +248,7 @@ void string_take(sail_string *dst, sail_string s, sail_int ns)
   }
   *dst = realloc(*dst, to_copy + 1);
   memcpy(*dst, s, to_copy);
-  *dst[to_copy] = '\0';
+  (*dst)[to_copy] = '\0';
 }
 
 /* ***** Sail integers ***** */
@@ -461,6 +538,11 @@ bool EQUAL(fbits)(const fbits op1, const fbits op2)
   return op1 == op2;
 }
 
+bool EQUAL(ref_fbits)(const fbits *op1, const fbits *op2)
+{
+  return *op1 == *op2;
+}
+
 void CREATE(lbits)(lbits *rop)
 {
   rop->bits = sail_malloc(sizeof(mpz_t));
@@ -711,12 +793,6 @@ void zero_extend(lbits *rop, const lbits op, const sail_int len)
   mpz_set(*rop->bits, *op.bits);
 }
 
-__attribute__((target ("bmi2")))
-fbits pdep_fbits(const fbits op, const uint64_t selector)
-{
-  return _pdep_u64(op, selector);
-}
-
 fbits fast_zero_extend(const sbits op, const uint64_t n)
 {
   return op.bits;
@@ -789,6 +865,11 @@ bool eq_bits(const lbits op1, const lbits op2)
 bool EQUAL(lbits)(const lbits op1, const lbits op2)
 {
   return eq_bits(op1, op2);
+}
+
+bool EQUAL(ref_lbits)(const lbits *op1, const lbits *op2)
+{
+  return eq_bits(*op1, *op2);
 }
 
 bool neq_bits(const lbits op1, const lbits op2)
@@ -1052,11 +1133,10 @@ void slice(lbits *rop, const lbits op, const sail_int start_mpz, const sail_int 
   }
 }
 
-__attribute__((target ("bmi2")))
 sbits sslice(const fbits op, const mach_int start, const mach_int len)
 {
   sbits rop;
-  rop.bits = _bzhi_u64(op >> start, len);
+  rop.bits = bzhi_u64(op >> start, len);
   rop.len = len;
   return rop;
 }
@@ -1181,11 +1261,10 @@ bool neq_sbits(const sbits op1, const sbits op2)
   return op1.bits != op2.bits;
 }
 
-__attribute__((target ("bmi2")))
 sbits not_sbits(const sbits op)
 {
   sbits rop;
-  rop.bits = (~op.bits) & _bzhi_u64(UINT64_MAX, op.len);
+  rop.bits = (~op.bits) & bzhi_u64(UINT64_MAX, op.len);
   rop.len = op.len;
   return rop;
 }
@@ -1214,20 +1293,18 @@ sbits and_sbits(const sbits op1, const sbits op2)
   return rop;
 }
 
-__attribute__((target ("bmi2")))
 sbits add_sbits(const sbits op1, const sbits op2)
 {
   sbits rop;
-  rop.bits = (op1.bits + op2.bits) & _bzhi_u64(UINT64_MAX, op1.len);
+  rop.bits = (op1.bits + op2.bits) & bzhi_u64(UINT64_MAX, op1.len);
   rop.len = op1.len;
   return rop;
 }
 
-__attribute__((target ("bmi2")))
 sbits sub_sbits(const sbits op1, const sbits op2)
 {
   sbits rop;
-  rop.bits = (op1.bits - op2.bits) & _bzhi_u64(UINT64_MAX, op1.len);
+  rop.bits = (op1.bits - op2.bits) & bzhi_u64(UINT64_MAX, op1.len);
   rop.len = op1.len;
   return rop;
 }
@@ -1529,6 +1606,43 @@ void decimal_string_of_lbits(sail_string *str, const lbits op)
 {
   sail_free(*str);
   gmp_asprintf(str, "%Z", *op.bits);
+}
+
+void parse_hex_bits(lbits *res, const mpz_t n, const sail_string hex)
+{
+  if (strncmp(hex, "0x", 2) != 0) {
+    goto failure;
+  }
+
+  mpz_t value;
+  mpz_init(value);
+  if (mpz_set_str(value, hex + 2, 16) == 0) {
+    res->len = mpz_get_ui(n);
+    mpz_set(*res->bits, value);
+    mpz_clear(value);
+    return;
+  }
+  mpz_clear(value);
+
+  // On failure, we return a zero bitvector of the correct width
+failure:
+  res->len = mpz_get_ui(n);
+  mpz_set_ui(*res->bits, 0);
+}
+
+bool valid_hex_bits(const mpz_t n, const sail_string hex) {
+  if (strncmp(hex, "0x", 2) != 0) {
+    return false;
+  }
+
+  for (int i = 2; i < strlen(hex); i++) {
+    char c = hex[i];
+    if (!((c >= '0' && c <= '9') || (c >= 'a' && c <= 'f') || (c >= 'A' && c <= 'F'))) {
+      return false;
+    }
+  }
+
+  return true;
 }
 
 void fprint_bits(const sail_string pre,

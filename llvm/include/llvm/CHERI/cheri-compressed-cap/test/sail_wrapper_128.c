@@ -30,28 +30,19 @@
  * SUCH DAMAGE.
  */
 
-#include "sail.h"
+#include "contrib/sail.h"
 
 /* Provide the 128-specific APIs for sail_wrapper_common.c */
 
-#ifdef CC_IS_MORELLO
-
-#define MORELLO_SAIL_PREFIX sailgen_
-#define SAIL_COMPRESSION_GENERATED_C_FILE "sail_compression_morello.c"
-// Two 65-bit bounds and a bool (for exactness)
-#define sail_bounds_tuple ztuple_z8z5bvzCz0z5bvzCz0z5boolz9
-
-#else
-
-#define SAIL_COMPRESSION_GENERATED_C_FILE "sail_compression_128.c"
+#define SAIL_COMPRESSION_GENERATED_C_FILE "contrib/sail_compression_128.c"
 #define sail_bounds_tuple ztuple_z8z5bv64zCz0z5bvz9
 
-#endif
-
-#define SAIL_WRAPPER_CC_BITS 128
+#define SAIL_WRAPPER_CC_FORMAT_LOWER 128
+#define SAIL_WRAPPER_CC_FORMAT_UPPER 128
 
 /* CHERI-64 uses uint64_t, CHERI-128 uses lbits */
 typedef lbits sail_cap_bits;
+#define SAIL_COMPRESSION_INDIRECT_BITS
 static void create_sail_cap_bits(sail_cap_bits* bits) { create_lbits(bits); }
 static void kill_sail_cap_bits(sail_cap_bits* bits) { kill_lbits(bits); }
 static void pesbt_and_addr_to_sail_cap_bits(sail_cap_bits* out, uint64_t pesbt, uint64_t cursor) {
@@ -81,8 +72,6 @@ static inline uint64_t extract_sail_cap_bits(sail_cap_bits* bits, uint64_t start
 
 #include "sail_wrapper_common.c"
 
-#ifndef CC_IS_MORELLO
-
 static inline void set_top_base_from_sail(const struct zCapability* sail, _cc_cap_t* c) {
     // Would be nice to have a stable name for this tuple:
     struct sail_bounds_tuple base_top;
@@ -100,22 +89,10 @@ static inline void set_top_base_from_sail(const struct zCapability* sail, _cc_ca
     _CC_CONCAT(kill_, sail_bounds_tuple)(&base_top);
 }
 
-#endif
-
 /* Exported API */
-void sail_decode_128_mem(uint64_t mem_pesbt, uint64_t mem_cursor, bool tag, cc128_cap_t* cdp) {
-    sail_decode_common_mem(mem_pesbt, mem_cursor, tag, cdp);
-}
-void sail_decode_128_raw(uint64_t mem_pesbt, uint64_t mem_cursor, bool tag, cc128_cap_t* cdp) {
-    sail_decode_common_raw(mem_pesbt, mem_cursor, tag, cdp);
-}
-struct cc128_bounds_bits sail_extract_bounds_bits_128(uint64_t pesbt) {
-    return sail_extract_bounds_bits_common(pesbt);
-}
+struct cc128_bounds_bits sail_extract_bounds_bits_128(uint64_t pesbt) { return sail_extract_bounds_bits_common(pesbt); }
 uint64_t sail_compress_128_raw(const cc128_cap_t* csp) { return sail_compress_common_raw(csp); }
 uint64_t sail_compress_128_mem(const cc128_cap_t* csp) { return sail_compress_common_mem(csp); }
 
-#ifndef CC_IS_MORELLO
 cc128_addr_t sail_representable_mask_128(cc128_addr_t len) { return sailgen_getRepresentableAlignmentMask(len); }
 cc128_addr_t sail_representable_length_128(cc128_addr_t len) { return sailgen_getRepresentableLength(len); }
-#endif

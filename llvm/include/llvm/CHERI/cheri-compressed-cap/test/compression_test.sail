@@ -14,6 +14,17 @@ register TestCap : Capability
 register TestAddr : CapAddrBits
 register TestLen : CapLenBits
 
+/* like execute(CSetBoundsExact(...)) but without the global accesses. */
+function doCSetBounds(input: Capability, req_len: CapLenBits) -> (bool, Capability) = {
+  let newBase = input.address;
+  let newTop : CapLenBits = EXTZ(newBase) + req_len;
+  let inBounds = inCapBounds(input, newBase, unsigned(req_len));
+
+  let inCap = clearTagIfSealed(input);
+  let (exact, newCap) = setCapBounds(inCap, newBase, newTop);
+  (exact, clearTagIf(newCap, not(inBounds)))
+}
+
 function main () : unit -> unit = {
   TestCap = null_cap;
   /* while (true) do { */
@@ -22,8 +33,9 @@ function main () : unit -> unit = {
       cap1 = capBitsToCapability(TestCap.tag, bits1);
       cap2 = memBitsToCapability(TestCap.tag, bits2);
       rep = fastRepCheck(TestCap, TestAddr);
-      (exact, cap) = setCapBounds(TestCap, TestAddr, TestLen);
-      (base, top) = getCapBounds(TestCap);
+      let (exact, cap) = doCSetBounds(TestCap, TestLen);
+      let (representable, cap) = setCapAddr(TestCap, TestAddr);
+      let (base, top) = getCapBounds(TestCap);
       flags = getCapFlags(TestCap);
       new_cap = setCapPerms(TestCap, ones()); /* rt_val[30..0] */
       cap_str = capToString(TestCap);
