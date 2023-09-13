@@ -18,7 +18,6 @@
 #include "MipsMCTargetDesc.h"
 #include "MipsTargetObjectFile.h"
 #include "llvm/BinaryFormat/ELF.h"
-#include "llvm/CHERI/cheri-compressed-cap/cheri_compressed_cap.h"
 #include "llvm/MC/MCAssembler.h"
 #include "llvm/MC/MCContext.h"
 #include "llvm/MC/MCSectionELF.h"
