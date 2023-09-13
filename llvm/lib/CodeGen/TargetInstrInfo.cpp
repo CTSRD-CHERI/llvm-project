@@ -1681,7 +1681,7 @@ std::string TargetInstrInfo::createMIROperandComment(
   }
 
   if (F.isMemKind()) {
-    InlineAsm::ConstraintCode MCID = F.getMemoryConstraintID();
+    const unsigned MCID = F.getMemoryConstraintID();
     OS << ":" << InlineAsm::getMemConstraintName(MCID);
   }
 
