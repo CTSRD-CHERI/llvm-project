@@ -18326,7 +18326,7 @@ bool RISCVTargetLowering::supportsAtomicOperation(const DataLayout &DL,
                                                  Alignment);
 }
 
-bool RISCVTargetLowering::shouldRemoveExtendFromGSIndex(EVT IndexVT,
+bool RISCVTargetLowering::shouldRemoveExtendFromGSIndex(SDValue Extend,
                                                         EVT DataVT) const {
   return false;
 }
