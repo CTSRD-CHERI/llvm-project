@@ -101,7 +101,7 @@ _Tp __rotr(_Tp __t, unsigned int __cnt) _NOEXCEPT
 
 #if __has_feature(capabilities)
 template<>
-_LIBCPP_HIDE_FROM_ABI _LIBCPP_CONSTEXPR_AFTER_CXX11
+_LIBCPP_HIDE_FROM_ABI _LIBCPP_CONSTEXPR_AFTER_CXX11 inline
 unsigned __intcap __rotr(unsigned __intcap __t, unsigned int __cnt) _NOEXCEPT {
     // __builtin_cheri_address_set cannot be used in a constant expression (yet), so we return a null-derived integer.
     return std::__rotr(static_cast<ptraddr_t>(__t), __cnt);
@@ -142,7 +142,7 @@ int __countl_zero(_Tp __t) _NOEXCEPT
 
 #if __has_feature(capabilities)
 template<>
-_LIBCPP_HIDE_FROM_ABI _LIBCPP_CONSTEXPR_AFTER_CXX11
+_LIBCPP_HIDE_FROM_ABI _LIBCPP_CONSTEXPR_AFTER_CXX11 inline
 int __countl_zero(unsigned __intcap __t) _NOEXCEPT {
     return std::__countl_zero(static_cast<ptraddr_t>(__t));
 }
@@ -160,7 +160,7 @@ _LIBCPP_HIDE_FROM_ABI constexpr _Tp rotl(_Tp __t, unsigned int __cnt) noexcept {
 
 #if __has_feature(capabilities)
 template<>
-_LIBCPP_HIDE_FROM_ABI constexpr unsigned __intcap rotl(unsigned __intcap __t, unsigned int __cnt) noexcept {
+_LIBCPP_HIDE_FROM_ABI constexpr inline unsigned __intcap rotl(unsigned __intcap __t, unsigned int __cnt) noexcept {
     // __builtin_cheri_address_set cannot be used in a constant expression (yet), so we return a null-derived integer.
     return std::rotl(static_cast<ptraddr_t>(__t), __cnt);
 }
@@ -205,7 +205,7 @@ _LIBCPP_HIDE_FROM_ABI constexpr int countr_zero(_Tp __t) noexcept {
 
 #if __has_feature(capabilities)
 template<>
-_LIBCPP_HIDE_FROM_ABI constexpr int countr_zero(unsigned __intcap __t) noexcept {
+_LIBCPP_HIDE_FROM_ABI constexpr inline int countr_zero(unsigned __intcap __t) noexcept {
     return std::countr_zero(static_cast<ptraddr_t>(__t));
 }
 #endif
@@ -235,7 +235,7 @@ _LIBCPP_HIDE_FROM_ABI constexpr int popcount(_Tp __t) noexcept {
 
 #if __has_feature(capabilities)
 template<>
-_LIBCPP_HIDE_FROM_ABI constexpr int popcount(unsigned __intcap __t) noexcept {
+_LIBCPP_HIDE_FROM_ABI constexpr inline int popcount(unsigned __intcap __t) noexcept {
     return std::popcount(static_cast<ptraddr_t>(__t));
 }
 #endif
@@ -247,7 +247,7 @@ _LIBCPP_HIDE_FROM_ABI constexpr bool has_single_bit(_Tp __t) noexcept {
 
 #if __has_feature(capabilities)
 template<>
-_LIBCPP_HIDE_FROM_ABI constexpr bool has_single_bit(unsigned __intcap __t) noexcept {
+_LIBCPP_HIDE_FROM_ABI constexpr inline bool has_single_bit(unsigned __intcap __t) noexcept {
     return std::has_single_bit(static_cast<ptraddr_t>(__t));
 }
 #endif
