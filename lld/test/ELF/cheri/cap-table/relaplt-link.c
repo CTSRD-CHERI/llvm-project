@@ -18,7 +18,7 @@
 // RUN: ld.lld -shared -o %t-amd64.so %t-amd64.o
 // RUN: llvm-readobj --dynamic-table -r --sections --file-headers %t-amd64.so | FileCheck --check-prefix AMD64-SHLIB %s
 
-// AMD64-SHLIB:      SectionHeaderCount: 16
+// AMD64-SHLIB:      SectionHeaderCount: 17
 // AMD64-SHLIB:  Section {
 // AMD64-SHLIB:      Index: [[DYNSYM_INDEX:1]]
 // AMD64-SHLIB-NEXT: Name: .dynsym
@@ -52,7 +52,7 @@
 // AMD64-SHLIB-NEXT:    Size: 24
 // This also links to .dynsym
 // AMD64-SHLIB-NEXT:    Link: [[DYNSYM_INDEX]]
-// AMD64-SHLIB-NEXT:    Info: [[GOTPLT_INDEX:11]]
+// AMD64-SHLIB-NEXT:    Info: [[GOTPLT_INDEX:12]]
 // AMD64-SHLIB-NEXT:    AddressAlignment: 8
 // AMD64-SHLIB-NEXT:    EntrySize: 24
 // AMD64-SHLIB-NEXT:  }
@@ -80,7 +80,7 @@
 // AMD64-SHLIB-NEXT: }
 
 // RUN: llvm-strip -o - %t-amd64.so | llvm-readobj --file-headers - | FileCheck %s --check-prefix AMD64-STRIPPED
-// AMD64-STRIPPED: SectionHeaderCount: 13
+// AMD64-STRIPPED: SectionHeaderCount: 14
 
 
 // Check that purecap also has the same link value and can be stripped
