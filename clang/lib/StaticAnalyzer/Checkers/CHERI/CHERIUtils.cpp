@@ -30,9 +30,9 @@ CharUnits getCapabilityTypeAlign(ASTContext &ASTCtx) {
   return ASTCtx.getTypeAlignInChars(ASTCtx.VoidPtrTy);
 }
 
-bool isGenericPointerType(const QualType T) {
-  return T->isVoidPointerType() ||
-         (T->isPointerType() && T->getPointeeType()->isCharType());
+bool isGenericPointerType(const QualType T, bool AcceptCharPtr) {
+  return T->isVoidPointerType() || (AcceptCharPtr && T->isPointerType() &&
+                                    T->getPointeeType()->isCharType());
 }
 
 } // end of namespace: cheri
