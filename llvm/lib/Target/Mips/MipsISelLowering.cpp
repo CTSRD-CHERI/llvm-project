@@ -1245,8 +1245,8 @@ static SDValue performSHLCombine(SDNode *N, SelectionDAG &DAG,
 }
 
 static inline bool isOptNone(const MachineFunction &MF) {
-    return MF.getFunction().hasFnAttribute(Attribute::OptimizeNone) ||
-           MF.getTarget().getOptLevel() == CodeGenOpt::None;
+  return MF.getFunction().hasFnAttribute(Attribute::OptimizeNone) ||
+         MF.getTarget().getOptLevel() == CodeGenOptLevel::None;
 }
 
 static SDValue

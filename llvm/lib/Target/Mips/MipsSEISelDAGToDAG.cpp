@@ -1607,6 +1607,6 @@ bool MipsSEDAGToDAGISel::SelectInlineAsmMemoryOperand(
 }
 
 FunctionPass *llvm::createMipsSEISelDag(MipsTargetMachine &TM,
-                                        CodeGenOpt::Level OptLevel) {
+                                        CodeGenOptLevel OptLevel) {
   return new MipsSEDAGToDAGISel(TM, OptLevel);
 }

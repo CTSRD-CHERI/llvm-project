@@ -1304,9 +1304,9 @@ Align SelectionDAG::getEVTAlign(EVT VT) const {
 }
 
 // EntryNode could meaningfully have debug info if we can find it...
-SelectionDAG::SelectionDAG(const TargetMachine &tm, CodeGenOpt::Level OL)
-    : TM(tm), OptLevel(OL),
-      EntryNode(ISD::EntryToken, 0, DebugLoc(), getVTList(MVT::Other, MVT::Glue)),
+SelectionDAG::SelectionDAG(const TargetMachine &tm, CodeGenOptLevel OL)
+    : TM(tm), OptLevel(OL), EntryNode(ISD::EntryToken, 0, DebugLoc(),
+                                      getVTList(MVT::Other, MVT::Glue)),
       Root(getEntryNode()) {
   InsertNode(&EntryNode);
   DbgInfo = new SDDbgInfo();
@@ -7491,12 +7491,12 @@ static void chainLoadsAndStoresForMemcpy(SelectionDAG &DAG, const SDLoc &dl,
 
 static void
 diagnoseInefficientCheriMemOp(SelectionDAG &DAG, const DiagnosticLocation &Loc,
-                              const Twine &MemOp, CodeGenOpt::Level OptLevel,
+                              const Twine &MemOp, CodeGenOptLevel OptLevel,
                               StringRef Type, unsigned Align, uint64_t Size,
                               uint64_t CapSize) {
   assert(Align < CapSize);
   assert(Size >= CapSize);
-  if (OptLevel == CodeGenOpt::None)
+  if (OptLevel == CodeGenOptLevel::None)
     return; // Don't bother warning about inefficient code at -O0
   // Skip the memcpy/memmove diag if we have already diagnosed something else
   if (Type == "!!<CHERI-NODIAG>!!")
@@ -7516,7 +7516,7 @@ static SDValue getMemcpyLoadsAndStores(
     uint64_t Size, Align Alignment, bool isVol, bool AlwaysInline,
     PreserveCheriTags PreserveTags, MachinePointerInfo DstPtrInfo,
     MachinePointerInfo SrcPtrInfo, const AAMDNodes &AAInfo, AAResults *AA,
-    StringRef CopyTy, CodeGenOpt::Level OptLevel) {
+    StringRef CopyTy, CodeGenOptLevel OptLevel) {
   // Turn a memcpy of undef to nop.
   // FIXME: We need to honor volatile even is Src is undef.
   if (Src.isUndef())
@@ -7756,7 +7756,7 @@ static SDValue getMemmoveLoadsAndStores(
     uint64_t Size, Align Alignment, bool isVol, bool AlwaysInline,
     PreserveCheriTags PreserveTags, MachinePointerInfo DstPtrInfo,
     MachinePointerInfo SrcPtrInfo, const AAMDNodes &AAInfo, StringRef MoveTy,
-    CodeGenOpt::Level OptLevel) {
+    CodeGenOptLevel OptLevel) {
   // Turn a memmove of undef to nop.
   // FIXME: We need to honor volatile even is Src is undef.
   if (Src.isUndef())
@@ -10506,7 +10506,7 @@ SDNode *SelectionDAG::SelectNodeTo(SDNode *N, unsigned MachineOpc,
 /// For IROrder, we keep the smaller of the two
 SDNode *SelectionDAG::UpdateSDLocOnMergeSDNode(SDNode *N, const SDLoc &OLoc) {
   DebugLoc NLoc = N->getDebugLoc();
-  if (NLoc && OptLevel == CodeGenOpt::None && OLoc.getDebugLoc() != NLoc) {
+  if (NLoc && OptLevel == CodeGenOptLevel::None && OLoc.getDebugLoc() != NLoc) {
     N->setDebugLoc(DebugLoc());
   }
   unsigned Order = std::min(N->getIROrder(), OLoc.getIROrder());

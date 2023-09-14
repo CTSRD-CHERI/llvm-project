@@ -148,7 +148,7 @@ MipsTargetMachine::MipsTargetMachine(const Target &T, const Triple &TT,
                                      const TargetOptions &Options,
                                      std::optional<Reloc::Model> RM,
                                      std::optional<CodeModel::Model> CM,
-                                     CodeGenOpt::Level OL, bool JIT,
+                                     CodeGenOptLevel OL, bool JIT,
                                      bool isLittle)
     : LLVMTargetMachine(T, computeDataLayout(TT, CPU, Options, FS, isLittle), TT,
                         CPU, FS, Options, getEffectiveRelocModel(JIT, RM),
@@ -183,7 +183,7 @@ MipsebTargetMachine::MipsebTargetMachine(const Target &T, const Triple &TT,
                                          const TargetOptions &Options,
                                          std::optional<Reloc::Model> RM,
                                          std::optional<CodeModel::Model> CM,
-                                         CodeGenOpt::Level OL, bool JIT)
+                                         CodeGenOptLevel OL, bool JIT)
     : MipsTargetMachine(T, TT, CPU, FS, Options, RM, CM, OL, JIT, false) {}
 
 void MipselTargetMachine::anchor() {}
@@ -193,7 +193,7 @@ MipselTargetMachine::MipselTargetMachine(const Target &T, const Triple &TT,
                                          const TargetOptions &Options,
                                          std::optional<Reloc::Model> RM,
                                          std::optional<CodeModel::Model> CM,
-                                         CodeGenOpt::Level OL, bool JIT)
+                                         CodeGenOptLevel OL, bool JIT)
     : MipsTargetMachine(T, TT, CPU, FS, Options, RM, CM, OL, JIT, true) {}
 
 const MipsSubtarget *
@@ -326,7 +326,7 @@ void MipsPassConfig::addPreRegAlloc() {
     addPass(createCheriAddressingModeFolder());
     // The CheriAddressingModeFolder can sometimes produce new dead instructions
     // be sure to clean them up:
-    if (getOptLevel() != CodeGenOpt::Level::None)
+    if (getOptLevel() != CodeGenOptLevel::None)
       addPass(&DeadMachineInstructionElimID);
     addPass(createCheri128FailHardPass());
   }
@@ -397,7 +397,7 @@ bool MipsPassConfig::addLegalizeMachineIR() {
 }
 
 void MipsPassConfig::addPreRegBankSelect() {
-  bool IsOptNone = getOptLevel() == CodeGenOpt::None;
+  bool IsOptNone = getOptLevel() == CodeGenOptLevel::None;
   addPass(createMipsPostLegalizeCombiner(IsOptNone));
 }
 

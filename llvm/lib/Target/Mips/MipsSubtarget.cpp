@@ -239,8 +239,8 @@ void MipsSubtarget::getCriticalPathRCs(RegClassVector &CriticalPathRCs) const {
     CriticalPathRCs.push_back(&Mips::CheriGPROrCNullRegClass);
 }
 
-CodeGenOpt::Level MipsSubtarget::getOptLevelToEnablePostRAScheduler() const {
-  return CodeGenOpt::Aggressive;
+CodeGenOptLevel MipsSubtarget::getOptLevelToEnablePostRAScheduler() const {
+  return CodeGenOptLevel::Aggressive;
 }
 
 MipsSubtarget &
