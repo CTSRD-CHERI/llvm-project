@@ -7,7 +7,7 @@ def find_lldb_root():
     lldb_root = os.path.dirname(inspect.getfile(inspect.currentframe()))
     while True:
         parent = os.path.dirname(lldb_root)
-        if parent == lldb_root: # dirname('/') == '/'
+        if parent == lldb_root:  # dirname('/') == '/'
             raise Exception("use_lldb_suite_root.py not found")
         lldb_root = parent
 
