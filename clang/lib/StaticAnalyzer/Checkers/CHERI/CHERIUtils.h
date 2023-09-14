@@ -23,7 +23,7 @@ CharUnits getCapabilityTypeSize(ASTContext &ASTCtx);
 
 CharUnits getCapabilityTypeAlign(ASTContext &ASTCtx);
 
-bool isGenericPointerType(const QualType T);
+bool isGenericPointerType(const QualType T, bool AcceptCharPtr = true);
 
 } // end of namespace: cheri
 } // end of namespace: ento
