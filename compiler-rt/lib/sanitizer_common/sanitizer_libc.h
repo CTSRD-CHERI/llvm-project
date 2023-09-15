@@ -71,7 +71,8 @@ int internal_snprintf(char *buffer, usize length, const char *format, ...)
     FORMAT(3, 4);
 usize internal_wcslen(const wchar_t *s);
 usize internal_wcsnlen(const wchar_t *s, usize maxlen);
-
+wchar_t *internal_wcscpy(wchar_t *dst, const wchar_t *src);
+wchar_t *internal_wcsncpy(wchar_t *dst, const wchar_t *src, uptr maxlen);
 // Return true if all bytes in [mem, mem+size) are zero.
 // Optimized for the case when the result is true.
 bool mem_is_zero(const char *mem, usize size);
