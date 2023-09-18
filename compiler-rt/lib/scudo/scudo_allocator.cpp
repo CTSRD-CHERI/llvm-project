@@ -808,7 +808,7 @@ uptr __sanitizer_get_allocated_size(const void *Ptr) {
 
 #if !SANITIZER_SUPPORTS_WEAK_HOOKS
 SANITIZER_INTERFACE_WEAK_DEF(void, __sanitizer_malloc_hook,
-                             void *Ptr, uptr Size) {
+                             void *Ptr, usize Size) {
   (void)Ptr;
   (void)Size;
 }

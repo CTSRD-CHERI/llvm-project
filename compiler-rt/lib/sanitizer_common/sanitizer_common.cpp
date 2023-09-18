@@ -389,7 +389,7 @@ int __sanitizer_install_malloc_and_free_hooks(void (*malloc_hook)(const void *,
 
 // Provide default (no-op) implementation of malloc hooks.
 SANITIZER_INTERFACE_WEAK_DEF(void, __sanitizer_malloc_hook, void *ptr,
-                             uptr size) {
+                             usize size) {
   (void)ptr;
   (void)size;
 }
