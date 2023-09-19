@@ -12,7 +12,7 @@ define dso_local i64 @ddc_lb(i8 *%ptr) nounwind {
 ; CHECK-LP64-LABEL: ddc_lb:
 ; CHECK-LP64:       # %bb.0:
 ; CHECK-LP64-NEXT:    lb a1, 0(a0)
-; CHECK-LP64-NEXT:    lbu a0, 1(a0)
+; CHECK-LP64-NEXT:    lbu zero, 1(a0)
 ; CHECK-LP64-NEXT:    mv a0, a1
 ; CHECK-LP64-NEXT:    ret
 ;
@@ -20,7 +20,7 @@ define dso_local i64 @ddc_lb(i8 *%ptr) nounwind {
 ; CHECK-L64PC128:       # %bb.0:
 ; CHECK-L64PC128-NEXT:    lb.ddc a1, (a0)
 ; CHECK-L64PC128-NEXT:    addi a0, a0, 1
-; CHECK-L64PC128-NEXT:    lb.ddc a0, (a0)
+; CHECK-L64PC128-NEXT:    lb.ddc zero, (a0)
 ; CHECK-L64PC128-NEXT:    mv a0, a1
 ; CHECK-L64PC128-NEXT:    ret
   %1 = load i8, i8 *%ptr
@@ -35,7 +35,7 @@ define dso_local i64 @ddc_lh(i16 *%ptr) nounwind {
 ; CHECK-LP64-LABEL: ddc_lh:
 ; CHECK-LP64:       # %bb.0:
 ; CHECK-LP64-NEXT:    lh a1, 0(a0)
-; CHECK-LP64-NEXT:    lh a0, 4(a0)
+; CHECK-LP64-NEXT:    lh zero, 4(a0)
 ; CHECK-LP64-NEXT:    mv a0, a1
 ; CHECK-LP64-NEXT:    ret
 ;
@@ -43,7 +43,7 @@ define dso_local i64 @ddc_lh(i16 *%ptr) nounwind {
 ; CHECK-L64PC128:       # %bb.0:
 ; CHECK-L64PC128-NEXT:    lh.ddc a1, (a0)
 ; CHECK-L64PC128-NEXT:    addi a0, a0, 4
-; CHECK-L64PC128-NEXT:    lh.ddc a0, (a0)
+; CHECK-L64PC128-NEXT:    lh.ddc zero, (a0)
 ; CHECK-L64PC128-NEXT:    mv a0, a1
 ; CHECK-L64PC128-NEXT:    ret
   %1 = load i16, i16 *%ptr
@@ -58,7 +58,7 @@ define dso_local i64 @ddc_lw(i32 *%ptr) nounwind {
 ; CHECK-LP64-LABEL: ddc_lw:
 ; CHECK-LP64:       # %bb.0:
 ; CHECK-LP64-NEXT:    lw a1, 0(a0)
-; CHECK-LP64-NEXT:    lw a0, 12(a0)
+; CHECK-LP64-NEXT:    lw zero, 12(a0)
 ; CHECK-LP64-NEXT:    mv a0, a1
 ; CHECK-LP64-NEXT:    ret
 ;
@@ -66,7 +66,7 @@ define dso_local i64 @ddc_lw(i32 *%ptr) nounwind {
 ; CHECK-L64PC128:       # %bb.0:
 ; CHECK-L64PC128-NEXT:    lw.ddc a1, (a0)
 ; CHECK-L64PC128-NEXT:    addi a0, a0, 12
-; CHECK-L64PC128-NEXT:    lw.ddc a0, (a0)
+; CHECK-L64PC128-NEXT:    lw.ddc zero, (a0)
 ; CHECK-L64PC128-NEXT:    mv a0, a1
 ; CHECK-L64PC128-NEXT:    ret
   %1 = load i32, i32 *%ptr
@@ -81,7 +81,7 @@ define dso_local i64 @ddc_ld(i64 *%ptr) nounwind {
 ; CHECK-LP64-LABEL: ddc_ld:
 ; CHECK-LP64:       # %bb.0:
 ; CHECK-LP64-NEXT:    ld a1, 0(a0)
-; CHECK-LP64-NEXT:    ld a0, 32(a0)
+; CHECK-LP64-NEXT:    ld zero, 32(a0)
 ; CHECK-LP64-NEXT:    mv a0, a1
 ; CHECK-LP64-NEXT:    ret
 ;
@@ -89,7 +89,7 @@ define dso_local i64 @ddc_ld(i64 *%ptr) nounwind {
 ; CHECK-L64PC128:       # %bb.0:
 ; CHECK-L64PC128-NEXT:    ld.ddc a1, (a0)
 ; CHECK-L64PC128-NEXT:    addi a0, a0, 32
-; CHECK-L64PC128-NEXT:    ld.ddc a0, (a0)
+; CHECK-L64PC128-NEXT:    ld.ddc zero, (a0)
 ; CHECK-L64PC128-NEXT:    mv a0, a1
 ; CHECK-L64PC128-NEXT:    ret
   %1 = load i64, i64 *%ptr
@@ -296,14 +296,14 @@ define dso_local i64 @cap_lb(i8 addrspace(200) *%cap) nounwind {
 ; CHECK-LP64:       # %bb.0:
 ; CHECK-LP64-NEXT:    lb.cap a1, (ca0)
 ; CHECK-LP64-NEXT:    cincoffset ca0, ca0, 14
-; CHECK-LP64-NEXT:    lb.cap a0, (ca0)
+; CHECK-LP64-NEXT:    lb.cap zero, (ca0)
 ; CHECK-LP64-NEXT:    mv a0, a1
 ; CHECK-LP64-NEXT:    ret
 ;
 ; CHECK-L64PC128-LABEL: cap_lb:
 ; CHECK-L64PC128:       # %bb.0:
 ; CHECK-L64PC128-NEXT:    lb a1, 0(ca0)
-; CHECK-L64PC128-NEXT:    lb a0, 14(ca0)
+; CHECK-L64PC128-NEXT:    lb zero, 14(ca0)
 ; CHECK-L64PC128-NEXT:    mv a0, a1
 ; CHECK-L64PC128-NEXT:    ret
   %1 = load i8, i8 addrspace(200) *%cap
@@ -319,14 +319,14 @@ define dso_local i64 @cap_lh(i16 addrspace(200) *%cap) nounwind {
 ; CHECK-LP64:       # %bb.0:
 ; CHECK-LP64-NEXT:    lh.cap a1, (ca0)
 ; CHECK-LP64-NEXT:    cincoffset ca0, ca0, 30
-; CHECK-LP64-NEXT:    lh.cap a0, (ca0)
+; CHECK-LP64-NEXT:    lh.cap zero, (ca0)
 ; CHECK-LP64-NEXT:    mv a0, a1
 ; CHECK-LP64-NEXT:    ret
 ;
 ; CHECK-L64PC128-LABEL: cap_lh:
 ; CHECK-L64PC128:       # %bb.0:
 ; CHECK-L64PC128-NEXT:    lh a1, 0(ca0)
-; CHECK-L64PC128-NEXT:    lh a0, 30(ca0)
+; CHECK-L64PC128-NEXT:    lh zero, 30(ca0)
 ; CHECK-L64PC128-NEXT:    mv a0, a1
 ; CHECK-L64PC128-NEXT:    ret
   %1 = load i16, i16 addrspace(200) *%cap
@@ -342,14 +342,14 @@ define dso_local i64 @cap_lw(i32 addrspace(200) *%cap) nounwind {
 ; CHECK-LP64:       # %bb.0:
 ; CHECK-LP64-NEXT:    lw.cap a1, (ca0)
 ; CHECK-LP64-NEXT:    cincoffset ca0, ca0, 64
-; CHECK-LP64-NEXT:    lw.cap a0, (ca0)
+; CHECK-LP64-NEXT:    lw.cap zero, (ca0)
 ; CHECK-LP64-NEXT:    mv a0, a1
 ; CHECK-LP64-NEXT:    ret
 ;
 ; CHECK-L64PC128-LABEL: cap_lw:
 ; CHECK-L64PC128:       # %bb.0:
 ; CHECK-L64PC128-NEXT:    lw a1, 0(ca0)
-; CHECK-L64PC128-NEXT:    lw a0, 64(ca0)
+; CHECK-L64PC128-NEXT:    lw zero, 64(ca0)
 ; CHECK-L64PC128-NEXT:    mv a0, a1
 ; CHECK-L64PC128-NEXT:    ret
   %1 = load i32, i32 addrspace(200) *%cap
@@ -365,14 +365,14 @@ define dso_local i64 @cap_ld(i64 addrspace(200) *%cap) nounwind {
 ; CHECK-LP64:       # %bb.0:
 ; CHECK-LP64-NEXT:    ld.cap a1, (ca0)
 ; CHECK-LP64-NEXT:    cincoffset ca0, ca0, 136
-; CHECK-LP64-NEXT:    ld.cap a0, (ca0)
+; CHECK-LP64-NEXT:    ld.cap zero, (ca0)
 ; CHECK-LP64-NEXT:    mv a0, a1
 ; CHECK-LP64-NEXT:    ret
 ;
 ; CHECK-L64PC128-LABEL: cap_ld:
 ; CHECK-L64PC128:       # %bb.0:
 ; CHECK-L64PC128-NEXT:    ld a1, 0(ca0)
-; CHECK-L64PC128-NEXT:    ld a0, 136(ca0)
+; CHECK-L64PC128-NEXT:    ld zero, 136(ca0)
 ; CHECK-L64PC128-NEXT:    mv a0, a1
 ; CHECK-L64PC128-NEXT:    ret
   %1 = load i64, i64 addrspace(200) *%cap

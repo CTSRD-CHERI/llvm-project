@@ -12,7 +12,7 @@ define i32 @ddc_lb(i8 *%ptr) nounwind {
 ; CHECK-ILP32-LABEL: ddc_lb:
 ; CHECK-ILP32:       # %bb.0:
 ; CHECK-ILP32-NEXT:    lb a1, 0(a0)
-; CHECK-ILP32-NEXT:    lbu a0, 1(a0)
+; CHECK-ILP32-NEXT:    lbu zero, 1(a0)
 ; CHECK-ILP32-NEXT:    mv a0, a1
 ; CHECK-ILP32-NEXT:    ret
 ;
@@ -20,7 +20,7 @@ define i32 @ddc_lb(i8 *%ptr) nounwind {
 ; CHECK-IL32PC64:       # %bb.0:
 ; CHECK-IL32PC64-NEXT:    lb.ddc a1, (a0)
 ; CHECK-IL32PC64-NEXT:    addi a0, a0, 1
-; CHECK-IL32PC64-NEXT:    lb.ddc a0, (a0)
+; CHECK-IL32PC64-NEXT:    lb.ddc zero, (a0)
 ; CHECK-IL32PC64-NEXT:    mv a0, a1
 ; CHECK-IL32PC64-NEXT:    ret
   %1 = load i8, i8 *%ptr
@@ -35,7 +35,7 @@ define i32 @ddc_lh(i16 *%ptr) nounwind {
 ; CHECK-ILP32-LABEL: ddc_lh:
 ; CHECK-ILP32:       # %bb.0:
 ; CHECK-ILP32-NEXT:    lh a1, 0(a0)
-; CHECK-ILP32-NEXT:    lh a0, 4(a0)
+; CHECK-ILP32-NEXT:    lh zero, 4(a0)
 ; CHECK-ILP32-NEXT:    mv a0, a1
 ; CHECK-ILP32-NEXT:    ret
 ;
@@ -43,7 +43,7 @@ define i32 @ddc_lh(i16 *%ptr) nounwind {
 ; CHECK-IL32PC64:       # %bb.0:
 ; CHECK-IL32PC64-NEXT:    lh.ddc a1, (a0)
 ; CHECK-IL32PC64-NEXT:    addi a0, a0, 4
-; CHECK-IL32PC64-NEXT:    lh.ddc a0, (a0)
+; CHECK-IL32PC64-NEXT:    lh.ddc zero, (a0)
 ; CHECK-IL32PC64-NEXT:    mv a0, a1
 ; CHECK-IL32PC64-NEXT:    ret
   %1 = load i16, i16 *%ptr
@@ -58,7 +58,7 @@ define i32 @ddc_lw(i32 *%ptr) nounwind {
 ; CHECK-ILP32-LABEL: ddc_lw:
 ; CHECK-ILP32:       # %bb.0:
 ; CHECK-ILP32-NEXT:    lw a1, 0(a0)
-; CHECK-ILP32-NEXT:    lw a0, 12(a0)
+; CHECK-ILP32-NEXT:    lw zero, 12(a0)
 ; CHECK-ILP32-NEXT:    mv a0, a1
 ; CHECK-ILP32-NEXT:    ret
 ;
@@ -66,7 +66,7 @@ define i32 @ddc_lw(i32 *%ptr) nounwind {
 ; CHECK-IL32PC64:       # %bb.0:
 ; CHECK-IL32PC64-NEXT:    lw.ddc a1, (a0)
 ; CHECK-IL32PC64-NEXT:    addi a0, a0, 12
-; CHECK-IL32PC64-NEXT:    lw.ddc a0, (a0)
+; CHECK-IL32PC64-NEXT:    lw.ddc zero, (a0)
 ; CHECK-IL32PC64-NEXT:    mv a0, a1
 ; CHECK-IL32PC64-NEXT:    ret
   %1 = load i32, i32 *%ptr
@@ -230,14 +230,14 @@ define i32 @cap_lb(i8 addrspace(200) *%cap) nounwind {
 ; CHECK-ILP32:       # %bb.0:
 ; CHECK-ILP32-NEXT:    lb.cap a1, (ca0)
 ; CHECK-ILP32-NEXT:    cincoffset ca0, ca0, 11
-; CHECK-ILP32-NEXT:    lb.cap a0, (ca0)
+; CHECK-ILP32-NEXT:    lb.cap zero, (ca0)
 ; CHECK-ILP32-NEXT:    mv a0, a1
 ; CHECK-ILP32-NEXT:    ret
 ;
 ; CHECK-IL32PC64-LABEL: cap_lb:
 ; CHECK-IL32PC64:       # %bb.0:
 ; CHECK-IL32PC64-NEXT:    lb a1, 0(ca0)
-; CHECK-IL32PC64-NEXT:    lb a0, 11(ca0)
+; CHECK-IL32PC64-NEXT:    lb zero, 11(ca0)
 ; CHECK-IL32PC64-NEXT:    mv a0, a1
 ; CHECK-IL32PC64-NEXT:    ret
   %1 = load i8, i8 addrspace(200) *%cap
@@ -253,14 +253,14 @@ define i32 @cap_lh(i16 addrspace(200) *%cap) nounwind {
 ; CHECK-ILP32:       # %bb.0:
 ; CHECK-ILP32-NEXT:    lh.cap a1, (ca0)
 ; CHECK-ILP32-NEXT:    cincoffset ca0, ca0, 24
-; CHECK-ILP32-NEXT:    lh.cap a0, (ca0)
+; CHECK-ILP32-NEXT:    lh.cap zero, (ca0)
 ; CHECK-ILP32-NEXT:    mv a0, a1
 ; CHECK-ILP32-NEXT:    ret
 ;
 ; CHECK-IL32PC64-LABEL: cap_lh:
 ; CHECK-IL32PC64:       # %bb.0:
 ; CHECK-IL32PC64-NEXT:    lh a1, 0(ca0)
-; CHECK-IL32PC64-NEXT:    lh a0, 24(ca0)
+; CHECK-IL32PC64-NEXT:    lh zero, 24(ca0)
 ; CHECK-IL32PC64-NEXT:    mv a0, a1
 ; CHECK-IL32PC64-NEXT:    ret
   %1 = load i16, i16 addrspace(200) *%cap
@@ -276,14 +276,14 @@ define i32 @cap_lw(i32 addrspace(200) *%cap) nounwind {
 ; CHECK-ILP32:       # %bb.0:
 ; CHECK-ILP32-NEXT:    lw.cap a1, (ca0)
 ; CHECK-ILP32-NEXT:    cincoffset ca0, ca0, 52
-; CHECK-ILP32-NEXT:    lw.cap a0, (ca0)
+; CHECK-ILP32-NEXT:    lw.cap zero, (ca0)
 ; CHECK-ILP32-NEXT:    mv a0, a1
 ; CHECK-ILP32-NEXT:    ret
 ;
 ; CHECK-IL32PC64-LABEL: cap_lw:
 ; CHECK-IL32PC64:       # %bb.0:
 ; CHECK-IL32PC64-NEXT:    lw a1, 0(ca0)
-; CHECK-IL32PC64-NEXT:    lw a0, 52(ca0)
+; CHECK-IL32PC64-NEXT:    lw zero, 52(ca0)
 ; CHECK-IL32PC64-NEXT:    mv a0, a1
 ; CHECK-IL32PC64-NEXT:    ret
   %1 = load i32, i32 addrspace(200) *%cap

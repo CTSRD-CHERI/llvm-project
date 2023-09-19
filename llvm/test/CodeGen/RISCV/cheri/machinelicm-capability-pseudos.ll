@@ -19,7 +19,7 @@ define void @test_clgc(i32 signext %n) {
 ; RV32I-NEXT:    li a2, 0
 ; RV32I-NEXT:  .LBB0_1: # %loop
 ; RV32I-NEXT:    # =>This Inner Loop Header: Depth=1
-; RV32I-NEXT:    lw a3, 0(ca1)
+; RV32I-NEXT:    lw zero, 0(ca1)
 ; RV32I-NEXT:    addi a2, a2, 1
 ; RV32I-NEXT:    blt a2, a0, .LBB0_1
 ; RV32I-NEXT:  # %bb.2: # %ret
@@ -34,7 +34,7 @@ define void @test_clgc(i32 signext %n) {
 ; RV64I-NEXT:    li a2, 0
 ; RV64I-NEXT:  .LBB0_1: # %loop
 ; RV64I-NEXT:    # =>This Inner Loop Header: Depth=1
-; RV64I-NEXT:    lw a3, 0(ca1)
+; RV64I-NEXT:    lw zero, 0(ca1)
 ; RV64I-NEXT:    addiw a2, a2, 1
 ; RV64I-NEXT:    blt a2, a0, .LBB0_1
 ; RV64I-NEXT:  # %bb.2: # %ret
@@ -66,7 +66,7 @@ define void @test_cla_tls_ie(i32 signext %n) {
 ; RV32I-NEXT:    cincoffset ca2, ctp, a2
 ; RV32I-NEXT:  .LBB1_1: # %loop
 ; RV32I-NEXT:    # =>This Inner Loop Header: Depth=1
-; RV32I-NEXT:    lw a3, 0(ca2)
+; RV32I-NEXT:    lw zero, 0(ca2)
 ; RV32I-NEXT:    addi a1, a1, 1
 ; RV32I-NEXT:    blt a1, a0, .LBB1_1
 ; RV32I-NEXT:  # %bb.2: # %ret
@@ -82,7 +82,7 @@ define void @test_cla_tls_ie(i32 signext %n) {
 ; RV64I-NEXT:    cincoffset ca2, ctp, a2
 ; RV64I-NEXT:  .LBB1_1: # %loop
 ; RV64I-NEXT:    # =>This Inner Loop Header: Depth=1
-; RV64I-NEXT:    lw a3, 0(ca2)
+; RV64I-NEXT:    lw zero, 0(ca2)
 ; RV64I-NEXT:    addiw a1, a1, 1
 ; RV64I-NEXT:    blt a1, a0, .LBB1_1
 ; RV64I-NEXT:  # %bb.2: # %ret
@@ -121,7 +121,7 @@ define void @test_clc_tls_gd(i32 signext %n) nounwind {
 ; RV32I-NEXT:    # =>This Inner Loop Header: Depth=1
 ; RV32I-NEXT:    cmove ca0, cs1
 ; RV32I-NEXT:    ccall __tls_get_addr
-; RV32I-NEXT:    lw a0, 0(ca0)
+; RV32I-NEXT:    lw zero, 0(ca0)
 ; RV32I-NEXT:    addi s2, s2, 1
 ; RV32I-NEXT:    blt s2, s0, .LBB2_1
 ; RV32I-NEXT:  # %bb.2: # %ret
@@ -149,7 +149,7 @@ define void @test_clc_tls_gd(i32 signext %n) nounwind {
 ; RV64I-NEXT:    # =>This Inner Loop Header: Depth=1
 ; RV64I-NEXT:    cmove ca0, cs1
 ; RV64I-NEXT:    ccall __tls_get_addr
-; RV64I-NEXT:    lw a0, 0(ca0)
+; RV64I-NEXT:    lw zero, 0(ca0)
 ; RV64I-NEXT:    addiw s2, s2, 1
 ; RV64I-NEXT:    blt s2, s0, .LBB2_1
 ; RV64I-NEXT:  # %bb.2: # %ret
