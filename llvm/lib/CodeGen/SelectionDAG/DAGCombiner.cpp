@@ -543,6 +543,7 @@ namespace {
     SDValue visitVPGATHER(SDNode *N);
     SDValue visitVPSCATTER(SDNode *N);
     SDValue visitVP_STRIDED_LOAD(SDNode *N);
+    SDValue visitVP_STRIDED_STORE(SDNode *N);
     SDValue visitFP_TO_FP16(SDNode *N);
     SDValue visitFP16_TO_FP(SDNode *N);
     SDValue visitFP_TO_BF16(SDNode *N);
@@ -12011,6 +12012,21 @@ SDValue DAGCombiner::visitMSTORE(SDNode *N) {
                               /*IsTruncating=*/true);
   }
 
+  return SDValue();
+}
+
+SDValue DAGCombiner::visitVP_STRIDED_STORE(SDNode *N) {
+  auto *SST = cast<VPStridedStoreSDNode>(N);
+  EVT EltVT = SST->getValue().getValueType().getVectorElementType();
+  // Combine strided stores with unit-stride to a regular VP store.
+  if (auto *CStride = dyn_cast<ConstantSDNode>(SST->getStride());
+      CStride && CStride->getZExtValue() == EltVT.getStoreSize()) {
+    return DAG.getStoreVP(SST->getChain(), SDLoc(N), SST->getValue(),
+                          SST->getBasePtr(), SST->getOffset(), SST->getMask(),
+                          SST->getVectorLength(), SST->getMemoryVT(),
+                          SST->getMemOperand(), SST->getAddressingMode(),
+                          SST->isTruncatingStore(), SST->isCompressingStore());
+  }
   return SDValue();
 }
 
@@ -26216,6 +26232,10 @@ SDValue DAGCombiner::visitVPOp(SDNode *N) {
 
   if (N->getOpcode() == ISD::EXPERIMENTAL_VP_STRIDED_LOAD)
     if (SDValue SD = visitVP_STRIDED_LOAD(N))
+      return SD;
+
+  if (N->getOpcode() == ISD::EXPERIMENTAL_VP_STRIDED_STORE)
+    if (SDValue SD = visitVP_STRIDED_STORE(N))
       return SD;
 
   // VP operations in which all vector elements are disabled - either by
