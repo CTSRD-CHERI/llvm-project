@@ -2466,7 +2466,7 @@ ConstString ScriptInterpreterPythonImpl::GetSyntheticTypeName(
     return {};
 
   PythonString type_name(PyRefType::Borrowed, py_return.get());
-  return ConstString(py_string.GetString());
+  return ConstString(type_name.GetString());
 }
 
 bool ScriptInterpreterPythonImpl::RunScriptFormatKeyword(
