@@ -2305,7 +2305,7 @@ template <class ELFT> void Writer<ELFT>::finalizeSections() {
       }
   }
 
-  script->checkMemoryRegions();
+  script->checkFinalScriptConditions();
 
   if (config->emachine == EM_ARM && !config->isLE && config->armBe8) {
     addArmInputSectionMappingSymbols();
