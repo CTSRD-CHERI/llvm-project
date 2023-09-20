@@ -3963,6 +3963,9 @@ void Verifier::visitAtomicCmpXchgInst(AtomicCmpXchgInst &CXI) {
   Check(ElTy->isIntOrPtrTy(),
         "cmpxchg operand must have integer or pointer type", ElTy, &CXI);
   checkAtomicMemAccessSize(ElTy, &CXI);
+  if (CXI.isExactCompare())
+    Check(DL.isFatPointer(CXI.getNewValOperand()->getType()),
+          "exact flag on cmpxchg is only valid for capability types", &CXI);
   visitInstruction(CXI);
 }
 

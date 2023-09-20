@@ -478,6 +478,8 @@ static bool haveSameSpecialState(const Instruction *I1, const Instruction *I2,
   if (const AtomicCmpXchgInst *CXI = dyn_cast<AtomicCmpXchgInst>(I1))
     return CXI->isVolatile() == cast<AtomicCmpXchgInst>(I2)->isVolatile() &&
            CXI->isWeak() == cast<AtomicCmpXchgInst>(I2)->isWeak() &&
+           CXI->isExactCompare() ==
+               cast<AtomicCmpXchgInst>(I2)->isExactCompare() &&
            CXI->getSuccessOrdering() ==
                cast<AtomicCmpXchgInst>(I2)->getSuccessOrdering() &&
            CXI->getFailureOrdering() ==
