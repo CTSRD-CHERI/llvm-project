@@ -79,6 +79,7 @@ private:
   bool expandAtomicLoadToLL(LoadInst *LI);
   bool expandAtomicLoadToCmpXchg(LoadInst *LI);
   StoreInst *convertAtomicStoreToIntegerType(StoreInst *SI);
+  StoreInst *convertAtomicStoreToCapabilityType(StoreInst *SI);
   bool tryExpandAtomicStore(StoreInst *SI);
   void expandAtomicStore(StoreInst *SI);
   bool tryExpandAtomicRMW(AtomicRMWInst *AI);
@@ -440,6 +441,9 @@ bool AtomicExpand::tryExpandAtomicStore(StoreInst *SI) {
   case TargetLoweringBase::AtomicExpansionKind::NotAtomic:
     SI->setAtomic(AtomicOrdering::NotAtomic);
     return true;
+  case TargetLoweringBase::AtomicExpansionKind::CheriCapability:
+    convertAtomicStoreToCapabilityType(SI);
+    return true;
   default:
     llvm_unreachable("Unhandled case in tryExpandAtomicStore");
   }
@@ -511,6 +515,22 @@ StoreInst *AtomicExpand::convertAtomicStoreToIntegerType(StoreInst *SI) {
 }
 
 /// Convert a capability to an integer with the same bitwidth.
+/// For a 128-bit integer return get a capability from the raw bits.
+static Value *integerToSameSizeCapability(Value *Int, IRBuilderBase &Builder,
+                                          Type *CapTy, const DataLayout &DL) {
+  unsigned CapRange = DL.getIndexSizeInBits(CapTy->getPointerAddressSpace());
+  auto *CapRangeTy = DL.getIndexType(CapTy);
+  assert(Int->getType()->isIntegerTy(DL.getTypeSizeInBits(CapTy)));
+  auto CapWithLowBits = Builder.CreateGEP(
+      Builder.getInt8Ty(), ConstantPointerNull::get(cast<PointerType>(CapTy)),
+      {Int});
+  auto HighBits = Builder.CreateLShr(Int, CapRange);
+  return Builder.CreateIntrinsic(
+      Intrinsic::cheri_cap_high_set, {CapRangeTy},
+      {CapWithLowBits, Builder.CreateTrunc(HighBits, CapRangeTy)}, nullptr);
+}
+
+/// Convert a capability to an integer with the same bitwidth.
 /// For a 129-bit capability return get an i128 value with the raw bits.
 static Value *integerFromSameSizeCapability(Value *Cap, IRBuilderBase &Builder,
                                             const DataLayout &DL) {
@@ -527,20 +547,26 @@ static Value *integerFromSameSizeCapability(Value *Cap, IRBuilderBase &Builder,
       Builder.CreateShl(Builder.CreateZExt(HighBits, IntTy), CapRange));
 }
 
+static Value *getCapAddr(Value *Addr, Type **CapTy, IRBuilderBase &Builder,
+                         const TargetLowering *TLI) {
+  // If the old address was an opaque pointer, we can reuse that as the pointer
+  // value and return and opaque pointer in the capability AS.
+  unsigned CapAS = TLI->cheriCapabilityAddressSpace();
+  if (Addr->getType()->isOpaquePointerTy()) {
+    *CapTy = Builder.getPtrTy(CapAS);
+    return Addr;
+  } else {
+    *CapTy = Builder.getInt8PtrTy(CapAS);
+    return Builder.CreateBitCast(
+        Addr,
+        PointerType::get(*CapTy, Addr->getType()->getPointerAddressSpace()));
+  }
+}
+
 LoadInst *AtomicExpand::convertAtomicLoadToCapabilityType(LoadInst *LI) {
   IRBuilder<> Builder(LI);
-  unsigned CapAS = TLI->cheriCapabilityAddressSpace();
-  Value *Addr = LI->getPointerOperand();
-  auto CapTy = Addr->getType()->isOpaquePointerTy()
-                   ? Builder.getPtrTy(CapAS)
-                   : Builder.getInt8PtrTy(CapAS);
-  Value *NewAddr =
-      Addr->getType()->isOpaquePointerTy()
-          ? Addr
-          : Builder.CreateBitCast(
-                Addr, PointerType::get(
-                          CapTy, Addr->getType()->getPointerAddressSpace()));
-
+  Type *CapTy;
+  Value *NewAddr = getCapAddr(LI->getPointerOperand(), &CapTy, Builder, TLI);
   auto *NewLI = Builder.CreateLoad(CapTy, NewAddr, LI->isVolatile());
   NewLI->setAlignment(LI->getAlign());
   NewLI->setAtomic(LI->getOrdering(), LI->getSyncScopeID());
@@ -551,6 +577,22 @@ LoadInst *AtomicExpand::convertAtomicLoadToCapabilityType(LoadInst *LI) {
   LI->replaceAllUsesWith(NewVal);
   LI->eraseFromParent();
   return NewLI;
+}
+
+StoreInst *
+AtomicExpand::convertAtomicStoreToCapabilityType(llvm::StoreInst *SI) {
+  IRBuilder<> Builder(SI);
+  Type *CapTy;
+  Value *NewAddr = getCapAddr(SI->getPointerOperand(), &CapTy, Builder, TLI);
+  Value *NewVal = integerToSameSizeCapability(
+      SI->getValueOperand(), Builder, CapTy, SI->getModule()->getDataLayout());
+  StoreInst *NewSI = Builder.CreateStore(NewVal, NewAddr, SI->isVolatile());
+  NewSI->setAlignment(SI->getAlign());
+  NewSI->setAtomic(SI->getOrdering(), SI->getSyncScopeID());
+  LLVM_DEBUG(dbgs() << "Replaced " << *SI << " with " << *NewSI << "\n"
+                    << *NewVal << "\n");
+  SI->eraseFromParent();
+  return NewSI;
 }
 
 void AtomicExpand::expandAtomicStore(StoreInst *SI) {

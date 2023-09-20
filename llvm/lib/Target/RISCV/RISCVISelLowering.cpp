@@ -12740,6 +12740,16 @@ RISCVTargetLowering::shouldExpandAtomicLoadInIR(llvm::LoadInst *LI) const {
 }
 
 TargetLowering::AtomicExpansionKind
+RISCVTargetLowering::shouldExpandAtomicStoreInIR(llvm::StoreInst *SI) const {
+  if (Subtarget.hasCheri() &&
+      SI->getValueOperand()->getType()->isIntegerTy(
+          Subtarget.typeForCapabilities().getSizeInBits())) {
+    return AtomicExpansionKind::CheriCapability;
+  }
+  return AtomicExpansionKind::None;
+}
+
+TargetLowering::AtomicExpansionKind
 RISCVTargetLowering::shouldExpandAtomicRMWInIR(AtomicRMWInst *AI) const {
   // atomicrmw {fadd,fsub} must be expanded to use compare-exchange, as floating
   // point operations can't be used in an lr/sc sequence without breaking the
@@ -12890,17 +12900,17 @@ bool RISCVTargetLowering::supportsAtomicOperation(const DataLayout &DL,
   // FIXME: we current have to expand CMPXCHG/RMW to libcalls since we are
   // missing the SelectionDAG nodes+expansions to use the explicit addressing
   // mode instructions.
-  if (DL.isFatPointer(PointerTy) &&
-      !RISCVABI::isCheriPureCapABI(Subtarget.getTargetABI()) &&
+  bool IsPureCapABI = RISCVABI::isCheriPureCapABI(Subtarget.getTargetABI());
+  if (DL.isFatPointer(PointerTy) && !IsPureCapABI &&
       (isa<AtomicRMWInst>(AI) || isa<AtomicCmpXchgInst>(AI)))
     return false;
-  // For CHERI i128/i64 loads can be expanded with capability operations.
+  // For CHERI i128/i64 loads/stores can be expanded with capability operations.
   // Using capability pointers in hybrid mode is not yet supported for this
   // as we are missing some required patterns.
-  if (Subtarget.hasStdExtA() && Subtarget.hasCheri() && isa<LoadInst>(AI) &&
+  if (Subtarget.hasStdExtA() && Subtarget.hasCheri() &&
+      (isa<LoadInst>(AI) || isa<StoreInst>(AI)) &&
       ValueTy->isIntegerTy(Subtarget.typeForCapabilities().getSizeInBits()) &&
-      DL.isFatPointer(PointerTy) ==
-          RISCVABI::isCheriPureCapABI(Subtarget.getTargetABI()))
+      DL.isFatPointer(PointerTy) == IsPureCapABI)
     return true;
   return TargetLowering::supportsAtomicOperation(DL, AI, ValueTy, PointerTy,
                                                  Alignment);

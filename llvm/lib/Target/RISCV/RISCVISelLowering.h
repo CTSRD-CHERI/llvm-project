@@ -570,6 +570,8 @@ public:
   shouldExpandAtomicRMWInIR(AtomicRMWInst *AI) const override;
   AtomicExpansionKind
   shouldExpandAtomicLoadInIR(llvm::LoadInst *LI) const override;
+  AtomicExpansionKind
+  shouldExpandAtomicStoreInIR(llvm::StoreInst *SI) const override;
   Value *emitMaskedAtomicRMWIntrinsic(IRBuilderBase &Builder, AtomicRMWInst *AI,
                                       Value *AlignedAddr, Value *Incr,
                                       Value *Mask, Value *ShiftAmt,
