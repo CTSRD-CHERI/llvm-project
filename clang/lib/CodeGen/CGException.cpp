@@ -1141,6 +1141,8 @@ static void emitCatchDispatchBlock(CodeGenFunction &CGF,
   // Select the right handler.
   llvm::Function *llvm_eh_typeid_for =
     CGF.CGM.getIntrinsic(llvm::Intrinsic::eh_typeid_for);
+  llvm::Type *argTy = llvm_eh_typeid_for->getArg(0)->getType();
+  LangAS globAS = CGF.CGM.GetGlobalVarAddressSpace(nullptr);
 
   // Load the selector value.
   llvm::Value *selector = CGF.getSelectorFromSlot();
@@ -1154,11 +1156,11 @@ static void emitCatchDispatchBlock(CodeGenFunction &CGF,
     assert(handler.Type.Flags == 0 &&
            "landingpads do not support catch handler flags");
     assert(typeValue && "fell into catch-all case!");
-    // The backend extracts a constant address from the cast, so it doesn't
-    // actually matter which AS it's in. Use AS0 here to avoid having to
-    // overloading the intrinsic.
-    typeValue = CGF.Builder.CreatePointerBitCastOrAddrSpaceCast(typeValue,
-            CGF.Int8Ty->getPointerTo(0));
+    // With opaque ptrs, only the address space can be a mismatch.
+    if (typeValue->getType() != argTy)
+      typeValue =
+        CGF.getTargetHooks().performAddrSpaceCast(CGF, typeValue, globAS,
+                                                  LangAS::Default, argTy);
 
     // Figure out the next block.
     bool nextIsEnd;
