@@ -253,9 +253,11 @@ public:
   /// support for these atomic instructions, and also have different options
   /// w.r.t. what they should expand to.
   enum class AtomicExpansionKind {
-    None,    // Don't expand the instruction.
-    CastToInteger,    // Cast the atomic instruction to another type, e.g. from
-                      // floating-point to integer type.
+    None,            // Don't expand the instruction.
+    CastToInteger,   // Cast the atomic instruction to another type, e.g. from
+                     // floating-point to integer type.
+    CheriCapability, // Perform the operation using a CHERI capability. This
+                     // is only support for capability-size integers.
     LLSC,    // Expand the instruction into loadlinked/storeconditional; used
              // by ARM/AArch64.
     LLOnly,  // Expand the (load) instruction into just a load-linked, which has
@@ -3124,6 +3126,10 @@ public:
     return SDValue();
   }
   virtual bool hasCapabilitySetAddress() const { return false; }
+  virtual unsigned cheriCapabilityAddressSpace() const {
+    llvm_unreachable("Not implemented for this target");
+    return ~0u;
+  }
   MVT cheriCapabilityType() const { return CapType; }
   bool cheriCapabilityTypeHasPreciseBounds() const {
     return CapTypeHasPreciseBounds;

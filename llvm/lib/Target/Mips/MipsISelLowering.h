@@ -407,6 +407,7 @@ extern bool LargeCapTable;
     SDValue getCapabilityEqualExact(const SDLoc &DL, SDValue LHS, SDValue RHS,
                                     SelectionDAG &DAG) const override;
     bool hasCapabilitySetAddress() const override { return true; }
+    unsigned cheriCapabilityAddressSpace() const override { return 200; }
 
     TailPaddingAmount
     getTailPaddingForPreciseBounds(uint64_t Size) const override;

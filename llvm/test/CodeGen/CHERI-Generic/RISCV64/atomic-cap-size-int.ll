@@ -81,25 +81,43 @@ define i128 @store(ptr addrspace(200) %ptr, i128 %val) nounwind {
 }
 
 define i128 @load(ptr addrspace(200) %ptr) nounwind {
-; PURECAP-LABEL: load:
-; PURECAP:       # %bb.0:
-; PURECAP-NEXT:    cincoffset csp, csp, -16
-; PURECAP-NEXT:    csc cra, 0(csp) # 16-byte Folded Spill
-; PURECAP-NEXT:    li a1, 5
-; PURECAP-NEXT:    ccall __atomic_load_16
-; PURECAP-NEXT:    clc cra, 0(csp) # 16-byte Folded Reload
-; PURECAP-NEXT:    cincoffset csp, csp, 16
-; PURECAP-NEXT:    cret
+; PURECAP-ATOMICS-LABEL: load:
+; PURECAP-ATOMICS:       # %bb.0:
+; PURECAP-ATOMICS-NEXT:    fence rw, rw
+; PURECAP-ATOMICS-NEXT:    clc ca1, 0(ca0)
+; PURECAP-ATOMICS-NEXT:    mv a0, a1
+; PURECAP-ATOMICS-NEXT:    cgethigh a1, ca1
+; PURECAP-ATOMICS-NEXT:    fence r, rw
+; PURECAP-ATOMICS-NEXT:    cret
 ;
-; HYBRID-LABEL: load:
-; HYBRID:       # %bb.0:
-; HYBRID-NEXT:    addi sp, sp, -16
-; HYBRID-NEXT:    sd ra, 8(sp) # 8-byte Folded Spill
-; HYBRID-NEXT:    li a1, 5
-; HYBRID-NEXT:    call __atomic_load_16@plt
-; HYBRID-NEXT:    ld ra, 8(sp) # 8-byte Folded Reload
-; HYBRID-NEXT:    addi sp, sp, 16
-; HYBRID-NEXT:    ret
+; PURECAP-LIBCALLS-LABEL: load:
+; PURECAP-LIBCALLS:       # %bb.0:
+; PURECAP-LIBCALLS-NEXT:    cincoffset csp, csp, -16
+; PURECAP-LIBCALLS-NEXT:    csc cra, 0(csp) # 16-byte Folded Spill
+; PURECAP-LIBCALLS-NEXT:    li a1, 5
+; PURECAP-LIBCALLS-NEXT:    ccall __atomic_load_16
+; PURECAP-LIBCALLS-NEXT:    clc cra, 0(csp) # 16-byte Folded Reload
+; PURECAP-LIBCALLS-NEXT:    cincoffset csp, csp, 16
+; PURECAP-LIBCALLS-NEXT:    cret
+;
+; HYBRID-ATOMICS-LABEL: load:
+; HYBRID-ATOMICS:       # %bb.0:
+; HYBRID-ATOMICS-NEXT:    fence rw, rw
+; HYBRID-ATOMICS-NEXT:    lc ca1, 0(a0)
+; HYBRID-ATOMICS-NEXT:    mv a0, a1
+; HYBRID-ATOMICS-NEXT:    cgethigh a1, ca1
+; HYBRID-ATOMICS-NEXT:    fence r, rw
+; HYBRID-ATOMICS-NEXT:    ret
+;
+; HYBRID-LIBCALLS-LABEL: load:
+; HYBRID-LIBCALLS:       # %bb.0:
+; HYBRID-LIBCALLS-NEXT:    addi sp, sp, -16
+; HYBRID-LIBCALLS-NEXT:    sd ra, 8(sp) # 8-byte Folded Spill
+; HYBRID-LIBCALLS-NEXT:    li a1, 5
+; HYBRID-LIBCALLS-NEXT:    call __atomic_load_16@plt
+; HYBRID-LIBCALLS-NEXT:    ld ra, 8(sp) # 8-byte Folded Reload
+; HYBRID-LIBCALLS-NEXT:    addi sp, sp, 16
+; HYBRID-LIBCALLS-NEXT:    ret
 ;
 ; HYBRID-CAP-PTR-LABEL: load:
 ; HYBRID-CAP-PTR:       # %bb.0:
@@ -112,8 +130,16 @@ define i128 @load(ptr addrspace(200) %ptr) nounwind {
 ; HYBRID-CAP-PTR-NEXT:    ret
 ; PURECAP-IR-LABEL: define {{[^@]+}}@load
 ; PURECAP-IR-SAME: (ptr addrspace(200) [[PTR:%.*]]) addrspace(200) #[[ATTR0]] {
-; PURECAP-IR-NEXT:    [[TMP1:%.*]] = call i128 @__atomic_load_16(ptr addrspace(200) [[PTR]], i32 5)
-; PURECAP-IR-NEXT:    ret i128 [[TMP1]]
+; PURECAP-IR-NEXT:    fence seq_cst
+; PURECAP-IR-NEXT:    [[TMP1:%.*]] = load atomic ptr addrspace(200), ptr addrspace(200) [[PTR]] monotonic, align 16
+; PURECAP-IR-NEXT:    [[TMP2:%.*]] = call i64 @llvm.cheri.cap.address.get.i64(ptr addrspace(200) [[TMP1]])
+; PURECAP-IR-NEXT:    [[TMP3:%.*]] = call i64 @llvm.cheri.cap.high.get.i64(ptr addrspace(200) [[TMP1]])
+; PURECAP-IR-NEXT:    [[TMP4:%.*]] = zext i64 [[TMP2]] to i128
+; PURECAP-IR-NEXT:    [[TMP5:%.*]] = zext i64 [[TMP3]] to i128
+; PURECAP-IR-NEXT:    [[TMP6:%.*]] = shl i128 [[TMP5]], 64
+; PURECAP-IR-NEXT:    [[TMP7:%.*]] = or i128 [[TMP4]], [[TMP6]]
+; PURECAP-IR-NEXT:    fence acquire
+; PURECAP-IR-NEXT:    ret i128 [[TMP7]]
 ;
 ; HYBRID-IR-LABEL: define {{[^@]+}}@load
 ; HYBRID-IR-SAME: (ptr addrspace(200) [[PTR:%.*]]) #[[ATTR0]] {

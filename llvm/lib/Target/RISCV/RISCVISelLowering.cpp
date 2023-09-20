@@ -12730,6 +12730,16 @@ EVT RISCVTargetLowering::getOptimalMemOpType(
 }
 
 TargetLowering::AtomicExpansionKind
+RISCVTargetLowering::shouldExpandAtomicLoadInIR(llvm::LoadInst *LI) const {
+  if (Subtarget.hasCheri() &&
+      LI->getType()->isIntegerTy(
+          Subtarget.typeForCapabilities().getSizeInBits())) {
+    return AtomicExpansionKind::CheriCapability;
+  }
+  return AtomicExpansionKind::None;
+}
+
+TargetLowering::AtomicExpansionKind
 RISCVTargetLowering::shouldExpandAtomicRMWInIR(AtomicRMWInst *AI) const {
   // atomicrmw {fadd,fsub} must be expanded to use compare-exchange, as floating
   // point operations can't be used in an lr/sc sequence without breaking the
@@ -12884,6 +12894,14 @@ bool RISCVTargetLowering::supportsAtomicOperation(const DataLayout &DL,
       !RISCVABI::isCheriPureCapABI(Subtarget.getTargetABI()) &&
       (isa<AtomicRMWInst>(AI) || isa<AtomicCmpXchgInst>(AI)))
     return false;
+  // For CHERI i128/i64 loads can be expanded with capability operations.
+  // Using capability pointers in hybrid mode is not yet supported for this
+  // as we are missing some required patterns.
+  if (Subtarget.hasStdExtA() && Subtarget.hasCheri() && isa<LoadInst>(AI) &&
+      ValueTy->isIntegerTy(Subtarget.typeForCapabilities().getSizeInBits()) &&
+      DL.isFatPointer(PointerTy) ==
+          RISCVABI::isCheriPureCapABI(Subtarget.getTargetABI()))
+    return true;
   return TargetLowering::supportsAtomicOperation(DL, AI, ValueTy, PointerTy,
                                                  Alignment);
 }

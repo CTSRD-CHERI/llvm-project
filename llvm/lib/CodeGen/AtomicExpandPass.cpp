@@ -74,6 +74,7 @@ private:
   bool bracketInstWithFences(Instruction *I, AtomicOrdering Order);
   IntegerType *getCorrespondingIntegerType(Type *T, const DataLayout &DL);
   LoadInst *convertAtomicLoadToIntegerType(LoadInst *LI);
+  LoadInst *convertAtomicLoadToCapabilityType(LoadInst *LI);
   bool tryExpandAtomicLoad(LoadInst *LI);
   bool expandAtomicLoadToLL(LoadInst *LI);
   bool expandAtomicLoadToCmpXchg(LoadInst *LI);
@@ -421,6 +422,9 @@ bool AtomicExpand::tryExpandAtomicLoad(LoadInst *LI) {
   case TargetLoweringBase::AtomicExpansionKind::NotAtomic:
     LI->setAtomic(AtomicOrdering::NotAtomic);
     return true;
+  case TargetLoweringBase::AtomicExpansionKind::CheriCapability:
+    convertAtomicLoadToCapabilityType(LI);
+    return true;
   default:
     llvm_unreachable("Unhandled case in tryExpandAtomicLoad");
   }
@@ -504,6 +508,49 @@ StoreInst *AtomicExpand::convertAtomicStoreToIntegerType(StoreInst *SI) {
   LLVM_DEBUG(dbgs() << "Replaced " << *SI << " with " << *NewSI << "\n");
   SI->eraseFromParent();
   return NewSI;
+}
+
+/// Convert a capability to an integer with the same bitwidth.
+/// For a 129-bit capability return get an i128 value with the raw bits.
+static Value *integerFromSameSizeCapability(Value *Cap, IRBuilderBase &Builder,
+                                            const DataLayout &DL) {
+  auto *IntTy = Builder.getIntNTy(DL.getTypeSizeInBits(Cap->getType()));
+  auto *CapRangeTy = DL.getIndexType(Cap->getType());
+  auto *LowBits = Builder.CreateIntrinsic(Intrinsic::cheri_cap_address_get,
+                                          {CapRangeTy}, {Cap});
+  auto *HighBits = Builder.CreateIntrinsic(Intrinsic::cheri_cap_high_get,
+                                           {CapRangeTy}, {Cap});
+  unsigned CapRange =
+      DL.getIndexSizeInBits(Cap->getType()->getPointerAddressSpace());
+  return Builder.CreateOr(
+      Builder.CreateZExt(LowBits, IntTy),
+      Builder.CreateShl(Builder.CreateZExt(HighBits, IntTy), CapRange));
+}
+
+LoadInst *AtomicExpand::convertAtomicLoadToCapabilityType(LoadInst *LI) {
+  IRBuilder<> Builder(LI);
+  unsigned CapAS = TLI->cheriCapabilityAddressSpace();
+  Value *Addr = LI->getPointerOperand();
+  auto CapTy = Addr->getType()->isOpaquePointerTy()
+                   ? Builder.getPtrTy(CapAS)
+                   : Builder.getInt8PtrTy(CapAS);
+  Value *NewAddr =
+      Addr->getType()->isOpaquePointerTy()
+          ? Addr
+          : Builder.CreateBitCast(
+                Addr, PointerType::get(
+                          CapTy, Addr->getType()->getPointerAddressSpace()));
+
+  auto *NewLI = Builder.CreateLoad(CapTy, NewAddr, LI->isVolatile());
+  NewLI->setAlignment(LI->getAlign());
+  NewLI->setAtomic(LI->getOrdering(), LI->getSyncScopeID());
+  Value *NewVal = integerFromSameSizeCapability(
+      NewLI, Builder, LI->getModule()->getDataLayout());
+  LLVM_DEBUG(dbgs() << "Replaced " << *LI << " with " << *NewLI << "\n"
+                    << *NewVal);
+  LI->replaceAllUsesWith(NewVal);
+  LI->eraseFromParent();
+  return NewLI;
 }
 
 void AtomicExpand::expandAtomicStore(StoreInst *SI) {
