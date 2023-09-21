@@ -326,6 +326,13 @@ bool AtomicExpand::runOnFunction(Function &F) {
       MadeChange |= tryExpandAtomicCmpXchg(CASI);
     }
   }
+  if (MadeChange) {
+    // If we expanded an instruction, we might need to expand that one too.
+    // This can happen when expanding a RMW to a cmxchg that also needs
+    // expanding.
+    // TODO: assert that we don't recurse more than once or use a worklist?
+    runOnFunction(F);
+  }
   return MadeChange;
 }
 

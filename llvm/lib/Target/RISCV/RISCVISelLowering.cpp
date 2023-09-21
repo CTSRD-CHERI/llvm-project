@@ -12761,6 +12761,10 @@ RISCVTargetLowering::shouldExpandAtomicRMWInIR(AtomicRMWInst *AI) const {
   if ((Size == 8 || Size == 16) &&
       !RISCVABI::isCheriPureCapABI(Subtarget.getTargetABI()))
     return AtomicExpansionKind::MaskedIntrinsic;
+  if (Subtarget.hasCheri() &&
+      Size == Subtarget.typeForCapabilities().getSizeInBits()) {
+    return AtomicExpansionKind::CmpXChg;
+  }
   return AtomicExpansionKind::None;
 }
 
@@ -12913,7 +12917,6 @@ bool RISCVTargetLowering::supportsAtomicOperation(const DataLayout &DL,
   // Using capability pointers in hybrid mode is not yet supported for this
   // as we are missing some required patterns.
   if (Subtarget.hasStdExtA() && Subtarget.hasCheri() &&
-      (isa<LoadInst>(AI) || isa<StoreInst>(AI) || isa<AtomicCmpXchgInst>(AI)) &&
       ValueTy->isIntegerTy(Subtarget.typeForCapabilities().getSizeInBits()) &&
       DL.isFatPointer(PointerTy) == IsPureCapABI)
     return true;
