@@ -226,21 +226,62 @@ define { ptr addrspace(200) , i1 } @test_cmpxchg_strong_cap(ptr addrspace(200) %
   ret { ptr addrspace(200) , i1 } %1
 }
 
+; TODO: this should use an exact equals comparison for the LL/SC
+define { ptr addrspace(200) , i1 } @test_cmpxchg_strong_cap_exact(ptr addrspace(200) %ptr, ptr addrspace(200) %exp, ptr addrspace(200) %new) nounwind {
+; PURECAP-LABEL: test_cmpxchg_strong_cap_exact:
+; PURECAP:       # %bb.0:
+; PURECAP-NEXT:    sync
+; PURECAP-NEXT:  .LBB5_1: # =>This Inner Loop Header: Depth=1
+; PURECAP-NEXT:    cllc $c1, $c3
+; PURECAP-NEXT:    ceq $1, $c1, $c4
+; PURECAP-NEXT:    beqz $1, .LBB5_3
+; PURECAP-NEXT:    nop
+; PURECAP-NEXT:  # %bb.2: # in Loop: Header=BB5_1 Depth=1
+; PURECAP-NEXT:    cscc $1, $c5, $c3
+; PURECAP-NEXT:    beqz $1, .LBB5_1
+; PURECAP-NEXT:    nop
+; PURECAP-NEXT:  .LBB5_3:
+; PURECAP-NEXT:    ceq $2, $c1, $c4
+; PURECAP-NEXT:    sync
+; PURECAP-NEXT:    cjr $c17
+; PURECAP-NEXT:    cmove $c3, $c1
+;
+; HYBRID-LABEL: test_cmpxchg_strong_cap_exact:
+; HYBRID:       # %bb.0:
+; HYBRID-NEXT:    sync
+; HYBRID-NEXT:  .LBB5_1: # =>This Inner Loop Header: Depth=1
+; HYBRID-NEXT:    cllc $c1, $c3
+; HYBRID-NEXT:    ceq $1, $c1, $c4
+; HYBRID-NEXT:    beqz $1, .LBB5_3
+; HYBRID-NEXT:    nop
+; HYBRID-NEXT:  # %bb.2: # in Loop: Header=BB5_1 Depth=1
+; HYBRID-NEXT:    cscc $1, $c5, $c3
+; HYBRID-NEXT:    beqz $1, .LBB5_1
+; HYBRID-NEXT:    nop
+; HYBRID-NEXT:  .LBB5_3:
+; HYBRID-NEXT:    ceq $2, $c1, $c4
+; HYBRID-NEXT:    sync
+; HYBRID-NEXT:    jr $ra
+; HYBRID-NEXT:    cmove $c3, $c1
+  %1 = cmpxchg exact ptr addrspace(200) %ptr, ptr addrspace(200) %exp, ptr addrspace(200) %new acq_rel acquire
+  ret { ptr addrspace(200) , i1 } %1
+}
+
 define { i8, i1 } @test_cmpxchg_weak_i8(ptr addrspace(200) %ptr, i8 %exp, i8 %new) nounwind {
 ; PURECAP-LABEL: test_cmpxchg_weak_i8:
 ; PURECAP:       # %bb.0:
 ; PURECAP-NEXT:    sll $1, $5, 0
 ; PURECAP-NEXT:    sll $3, $4, 0
 ; PURECAP-NEXT:    sync
-; PURECAP-NEXT:  .LBB5_1: # =>This Inner Loop Header: Depth=1
+; PURECAP-NEXT:  .LBB6_1: # =>This Inner Loop Header: Depth=1
 ; PURECAP-NEXT:    cllb $2, $c3
-; PURECAP-NEXT:    bne $2, $3, .LBB5_3
+; PURECAP-NEXT:    bne $2, $3, .LBB6_3
 ; PURECAP-NEXT:    nop
-; PURECAP-NEXT:  # %bb.2: # in Loop: Header=BB5_1 Depth=1
+; PURECAP-NEXT:  # %bb.2: # in Loop: Header=BB6_1 Depth=1
 ; PURECAP-NEXT:    cscb $4, $1, $c3
-; PURECAP-NEXT:    beqz $4, .LBB5_1
+; PURECAP-NEXT:    beqz $4, .LBB6_1
 ; PURECAP-NEXT:    nop
-; PURECAP-NEXT:  .LBB5_3:
+; PURECAP-NEXT:  .LBB6_3:
 ; PURECAP-NEXT:    sll $1, $3, 24
 ; PURECAP-NEXT:    sra $1, $1, 24
 ; PURECAP-NEXT:    xor $1, $2, $1
@@ -254,15 +295,15 @@ define { i8, i1 } @test_cmpxchg_weak_i8(ptr addrspace(200) %ptr, i8 %exp, i8 %ne
 ; HYBRID-NEXT:    sll $1, $5, 0
 ; HYBRID-NEXT:    sll $3, $4, 0
 ; HYBRID-NEXT:    sync
-; HYBRID-NEXT:  .LBB5_1: # =>This Inner Loop Header: Depth=1
+; HYBRID-NEXT:  .LBB6_1: # =>This Inner Loop Header: Depth=1
 ; HYBRID-NEXT:    cllb $2, $c3
-; HYBRID-NEXT:    bne $2, $3, .LBB5_3
+; HYBRID-NEXT:    bne $2, $3, .LBB6_3
 ; HYBRID-NEXT:    nop
-; HYBRID-NEXT:  # %bb.2: # in Loop: Header=BB5_1 Depth=1
+; HYBRID-NEXT:  # %bb.2: # in Loop: Header=BB6_1 Depth=1
 ; HYBRID-NEXT:    cscb $4, $1, $c3
-; HYBRID-NEXT:    beqz $4, .LBB5_1
+; HYBRID-NEXT:    beqz $4, .LBB6_1
 ; HYBRID-NEXT:    nop
-; HYBRID-NEXT:  .LBB5_3:
+; HYBRID-NEXT:  .LBB6_3:
 ; HYBRID-NEXT:    sll $1, $3, 24
 ; HYBRID-NEXT:    sra $1, $1, 24
 ; HYBRID-NEXT:    xor $1, $2, $1
@@ -280,15 +321,15 @@ define { i16, i1 } @test_cmpxchg_weak_i16(ptr addrspace(200) %ptr, i16 %exp, i16
 ; PURECAP-NEXT:    sll $1, $5, 0
 ; PURECAP-NEXT:    sll $3, $4, 0
 ; PURECAP-NEXT:    sync
-; PURECAP-NEXT:  .LBB6_1: # =>This Inner Loop Header: Depth=1
+; PURECAP-NEXT:  .LBB7_1: # =>This Inner Loop Header: Depth=1
 ; PURECAP-NEXT:    cllh $2, $c3
-; PURECAP-NEXT:    bne $2, $3, .LBB6_3
+; PURECAP-NEXT:    bne $2, $3, .LBB7_3
 ; PURECAP-NEXT:    nop
-; PURECAP-NEXT:  # %bb.2: # in Loop: Header=BB6_1 Depth=1
+; PURECAP-NEXT:  # %bb.2: # in Loop: Header=BB7_1 Depth=1
 ; PURECAP-NEXT:    csch $4, $1, $c3
-; PURECAP-NEXT:    beqz $4, .LBB6_1
+; PURECAP-NEXT:    beqz $4, .LBB7_1
 ; PURECAP-NEXT:    nop
-; PURECAP-NEXT:  .LBB6_3:
+; PURECAP-NEXT:  .LBB7_3:
 ; PURECAP-NEXT:    sll $1, $3, 16
 ; PURECAP-NEXT:    sra $1, $1, 16
 ; PURECAP-NEXT:    xor $1, $2, $1
@@ -302,15 +343,15 @@ define { i16, i1 } @test_cmpxchg_weak_i16(ptr addrspace(200) %ptr, i16 %exp, i16
 ; HYBRID-NEXT:    sll $1, $5, 0
 ; HYBRID-NEXT:    sll $3, $4, 0
 ; HYBRID-NEXT:    sync
-; HYBRID-NEXT:  .LBB6_1: # =>This Inner Loop Header: Depth=1
+; HYBRID-NEXT:  .LBB7_1: # =>This Inner Loop Header: Depth=1
 ; HYBRID-NEXT:    cllh $2, $c3
-; HYBRID-NEXT:    bne $2, $3, .LBB6_3
+; HYBRID-NEXT:    bne $2, $3, .LBB7_3
 ; HYBRID-NEXT:    nop
-; HYBRID-NEXT:  # %bb.2: # in Loop: Header=BB6_1 Depth=1
+; HYBRID-NEXT:  # %bb.2: # in Loop: Header=BB7_1 Depth=1
 ; HYBRID-NEXT:    csch $4, $1, $c3
-; HYBRID-NEXT:    beqz $4, .LBB6_1
+; HYBRID-NEXT:    beqz $4, .LBB7_1
 ; HYBRID-NEXT:    nop
-; HYBRID-NEXT:  .LBB6_3:
+; HYBRID-NEXT:  .LBB7_3:
 ; HYBRID-NEXT:    sll $1, $3, 16
 ; HYBRID-NEXT:    sra $1, $1, 16
 ; HYBRID-NEXT:    xor $1, $2, $1
@@ -328,15 +369,15 @@ define { i32, i1 } @test_cmpxchg_weak_i32(ptr addrspace(200) %ptr, i32 %exp, i32
 ; PURECAP-NEXT:    sll $1, $5, 0
 ; PURECAP-NEXT:    sll $3, $4, 0
 ; PURECAP-NEXT:    sync
-; PURECAP-NEXT:  .LBB7_1: # =>This Inner Loop Header: Depth=1
+; PURECAP-NEXT:  .LBB8_1: # =>This Inner Loop Header: Depth=1
 ; PURECAP-NEXT:    cllw $2, $c3
-; PURECAP-NEXT:    bne $2, $3, .LBB7_3
+; PURECAP-NEXT:    bne $2, $3, .LBB8_3
 ; PURECAP-NEXT:    nop
-; PURECAP-NEXT:  # %bb.2: # in Loop: Header=BB7_1 Depth=1
+; PURECAP-NEXT:  # %bb.2: # in Loop: Header=BB8_1 Depth=1
 ; PURECAP-NEXT:    cscw $4, $1, $c3
-; PURECAP-NEXT:    beqz $4, .LBB7_1
+; PURECAP-NEXT:    beqz $4, .LBB8_1
 ; PURECAP-NEXT:    nop
-; PURECAP-NEXT:  .LBB7_3:
+; PURECAP-NEXT:  .LBB8_3:
 ; PURECAP-NEXT:    xor $1, $2, $3
 ; PURECAP-NEXT:    sltiu $3, $1, 1
 ; PURECAP-NEXT:    sync
@@ -348,15 +389,15 @@ define { i32, i1 } @test_cmpxchg_weak_i32(ptr addrspace(200) %ptr, i32 %exp, i32
 ; HYBRID-NEXT:    sll $1, $5, 0
 ; HYBRID-NEXT:    sll $3, $4, 0
 ; HYBRID-NEXT:    sync
-; HYBRID-NEXT:  .LBB7_1: # =>This Inner Loop Header: Depth=1
+; HYBRID-NEXT:  .LBB8_1: # =>This Inner Loop Header: Depth=1
 ; HYBRID-NEXT:    cllw $2, $c3
-; HYBRID-NEXT:    bne $2, $3, .LBB7_3
+; HYBRID-NEXT:    bne $2, $3, .LBB8_3
 ; HYBRID-NEXT:    nop
-; HYBRID-NEXT:  # %bb.2: # in Loop: Header=BB7_1 Depth=1
+; HYBRID-NEXT:  # %bb.2: # in Loop: Header=BB8_1 Depth=1
 ; HYBRID-NEXT:    cscw $4, $1, $c3
-; HYBRID-NEXT:    beqz $4, .LBB7_1
+; HYBRID-NEXT:    beqz $4, .LBB8_1
 ; HYBRID-NEXT:    nop
-; HYBRID-NEXT:  .LBB7_3:
+; HYBRID-NEXT:  .LBB8_3:
 ; HYBRID-NEXT:    xor $1, $2, $3
 ; HYBRID-NEXT:    sltiu $3, $1, 1
 ; HYBRID-NEXT:    sync
@@ -370,15 +411,15 @@ define { i64, i1 } @test_cmpxchg_weak_i64(ptr addrspace(200) %ptr, i64 %exp, i64
 ; PURECAP-LABEL: test_cmpxchg_weak_i64:
 ; PURECAP:       # %bb.0:
 ; PURECAP-NEXT:    sync
-; PURECAP-NEXT:  .LBB8_1: # =>This Inner Loop Header: Depth=1
+; PURECAP-NEXT:  .LBB9_1: # =>This Inner Loop Header: Depth=1
 ; PURECAP-NEXT:    clld $2, $c3
-; PURECAP-NEXT:    bne $2, $4, .LBB8_3
+; PURECAP-NEXT:    bne $2, $4, .LBB9_3
 ; PURECAP-NEXT:    nop
-; PURECAP-NEXT:  # %bb.2: # in Loop: Header=BB8_1 Depth=1
+; PURECAP-NEXT:  # %bb.2: # in Loop: Header=BB9_1 Depth=1
 ; PURECAP-NEXT:    cscd $1, $5, $c3
-; PURECAP-NEXT:    beqz $1, .LBB8_1
+; PURECAP-NEXT:    beqz $1, .LBB9_1
 ; PURECAP-NEXT:    nop
-; PURECAP-NEXT:  .LBB8_3:
+; PURECAP-NEXT:  .LBB9_3:
 ; PURECAP-NEXT:    xor $1, $2, $4
 ; PURECAP-NEXT:    sltiu $3, $1, 1
 ; PURECAP-NEXT:    sync
@@ -388,15 +429,15 @@ define { i64, i1 } @test_cmpxchg_weak_i64(ptr addrspace(200) %ptr, i64 %exp, i64
 ; HYBRID-LABEL: test_cmpxchg_weak_i64:
 ; HYBRID:       # %bb.0:
 ; HYBRID-NEXT:    sync
-; HYBRID-NEXT:  .LBB8_1: # =>This Inner Loop Header: Depth=1
+; HYBRID-NEXT:  .LBB9_1: # =>This Inner Loop Header: Depth=1
 ; HYBRID-NEXT:    clld $2, $c3
-; HYBRID-NEXT:    bne $2, $4, .LBB8_3
+; HYBRID-NEXT:    bne $2, $4, .LBB9_3
 ; HYBRID-NEXT:    nop
-; HYBRID-NEXT:  # %bb.2: # in Loop: Header=BB8_1 Depth=1
+; HYBRID-NEXT:  # %bb.2: # in Loop: Header=BB9_1 Depth=1
 ; HYBRID-NEXT:    cscd $1, $5, $c3
-; HYBRID-NEXT:    beqz $1, .LBB8_1
+; HYBRID-NEXT:    beqz $1, .LBB9_1
 ; HYBRID-NEXT:    nop
-; HYBRID-NEXT:  .LBB8_3:
+; HYBRID-NEXT:  .LBB9_3:
 ; HYBRID-NEXT:    xor $1, $2, $4
 ; HYBRID-NEXT:    sltiu $3, $1, 1
 ; HYBRID-NEXT:    sync
@@ -410,16 +451,16 @@ define { ptr addrspace(200) , i1 } @test_cmpxchg_weak_cap(ptr addrspace(200) %pt
 ; PURECAP-LABEL: test_cmpxchg_weak_cap:
 ; PURECAP:       # %bb.0:
 ; PURECAP-NEXT:    sync
-; PURECAP-NEXT:  .LBB9_1: # =>This Inner Loop Header: Depth=1
+; PURECAP-NEXT:  .LBB10_1: # =>This Inner Loop Header: Depth=1
 ; PURECAP-NEXT:    cllc $c1, $c3
 ; PURECAP-NEXT:    ceq $1, $c1, $c4
-; PURECAP-NEXT:    beqz $1, .LBB9_3
+; PURECAP-NEXT:    beqz $1, .LBB10_3
 ; PURECAP-NEXT:    nop
-; PURECAP-NEXT:  # %bb.2: # in Loop: Header=BB9_1 Depth=1
+; PURECAP-NEXT:  # %bb.2: # in Loop: Header=BB10_1 Depth=1
 ; PURECAP-NEXT:    cscc $1, $c5, $c3
-; PURECAP-NEXT:    beqz $1, .LBB9_1
+; PURECAP-NEXT:    beqz $1, .LBB10_1
 ; PURECAP-NEXT:    nop
-; PURECAP-NEXT:  .LBB9_3:
+; PURECAP-NEXT:  .LBB10_3:
 ; PURECAP-NEXT:    ceq $2, $c1, $c4
 ; PURECAP-NEXT:    sync
 ; PURECAP-NEXT:    cjr $c17
@@ -428,21 +469,62 @@ define { ptr addrspace(200) , i1 } @test_cmpxchg_weak_cap(ptr addrspace(200) %pt
 ; HYBRID-LABEL: test_cmpxchg_weak_cap:
 ; HYBRID:       # %bb.0:
 ; HYBRID-NEXT:    sync
-; HYBRID-NEXT:  .LBB9_1: # =>This Inner Loop Header: Depth=1
+; HYBRID-NEXT:  .LBB10_1: # =>This Inner Loop Header: Depth=1
 ; HYBRID-NEXT:    cllc $c1, $c3
 ; HYBRID-NEXT:    ceq $1, $c1, $c4
-; HYBRID-NEXT:    beqz $1, .LBB9_3
+; HYBRID-NEXT:    beqz $1, .LBB10_3
 ; HYBRID-NEXT:    nop
-; HYBRID-NEXT:  # %bb.2: # in Loop: Header=BB9_1 Depth=1
+; HYBRID-NEXT:  # %bb.2: # in Loop: Header=BB10_1 Depth=1
 ; HYBRID-NEXT:    cscc $1, $c5, $c3
-; HYBRID-NEXT:    beqz $1, .LBB9_1
+; HYBRID-NEXT:    beqz $1, .LBB10_1
 ; HYBRID-NEXT:    nop
-; HYBRID-NEXT:  .LBB9_3:
+; HYBRID-NEXT:  .LBB10_3:
 ; HYBRID-NEXT:    ceq $2, $c1, $c4
 ; HYBRID-NEXT:    sync
 ; HYBRID-NEXT:    jr $ra
 ; HYBRID-NEXT:    cmove $c3, $c1
   %1 = cmpxchg weak ptr addrspace(200) %ptr, ptr addrspace(200) %exp, ptr addrspace(200) %new acq_rel acquire
+  ret { ptr addrspace(200) , i1 } %1
+}
+
+; TODO: this should use an exact equals comparison for the LL/SC
+define { ptr addrspace(200) , i1 } @test_cmpxchg_weak_cap_exact(ptr addrspace(200) %ptr, ptr addrspace(200) %exp, ptr addrspace(200) %new) nounwind {
+; PURECAP-LABEL: test_cmpxchg_weak_cap_exact:
+; PURECAP:       # %bb.0:
+; PURECAP-NEXT:    sync
+; PURECAP-NEXT:  .LBB11_1: # =>This Inner Loop Header: Depth=1
+; PURECAP-NEXT:    cllc $c1, $c3
+; PURECAP-NEXT:    ceq $1, $c1, $c4
+; PURECAP-NEXT:    beqz $1, .LBB11_3
+; PURECAP-NEXT:    nop
+; PURECAP-NEXT:  # %bb.2: # in Loop: Header=BB11_1 Depth=1
+; PURECAP-NEXT:    cscc $1, $c5, $c3
+; PURECAP-NEXT:    beqz $1, .LBB11_1
+; PURECAP-NEXT:    nop
+; PURECAP-NEXT:  .LBB11_3:
+; PURECAP-NEXT:    ceq $2, $c1, $c4
+; PURECAP-NEXT:    sync
+; PURECAP-NEXT:    cjr $c17
+; PURECAP-NEXT:    cmove $c3, $c1
+;
+; HYBRID-LABEL: test_cmpxchg_weak_cap_exact:
+; HYBRID:       # %bb.0:
+; HYBRID-NEXT:    sync
+; HYBRID-NEXT:  .LBB11_1: # =>This Inner Loop Header: Depth=1
+; HYBRID-NEXT:    cllc $c1, $c3
+; HYBRID-NEXT:    ceq $1, $c1, $c4
+; HYBRID-NEXT:    beqz $1, .LBB11_3
+; HYBRID-NEXT:    nop
+; HYBRID-NEXT:  # %bb.2: # in Loop: Header=BB11_1 Depth=1
+; HYBRID-NEXT:    cscc $1, $c5, $c3
+; HYBRID-NEXT:    beqz $1, .LBB11_1
+; HYBRID-NEXT:    nop
+; HYBRID-NEXT:  .LBB11_3:
+; HYBRID-NEXT:    ceq $2, $c1, $c4
+; HYBRID-NEXT:    sync
+; HYBRID-NEXT:    jr $ra
+; HYBRID-NEXT:    cmove $c3, $c1
+  %1 = cmpxchg weak exact ptr addrspace(200) %ptr, ptr addrspace(200) %exp, ptr addrspace(200) %new acq_rel acquire
   ret { ptr addrspace(200) , i1 } %1
 }
 
