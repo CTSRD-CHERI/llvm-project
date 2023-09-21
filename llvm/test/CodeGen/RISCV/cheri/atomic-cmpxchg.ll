@@ -1779,20 +1779,18 @@ define void @cmpxchg_i64_monotonic_monotonic(i64 addrspace(200)* %ptr, i64 %cmp,
 ;
 ; RV32IAXCHERI-LABEL: cmpxchg_i64_monotonic_monotonic:
 ; RV32IAXCHERI:       # %bb.0:
-; RV32IAXCHERI-NEXT:    cincoffset csp, csp, -16
-; RV32IAXCHERI-NEXT:    csc cra, 8(csp) # 8-byte Folded Spill
-; RV32IAXCHERI-NEXT:    cincoffset ca5, csp, 0
-; RV32IAXCHERI-NEXT:    csetbounds ca5, ca5, 8
-; RV32IAXCHERI-NEXT:    csw a2, 4(csp)
-; RV32IAXCHERI-NEXT:    csw a1, 0(csp)
-; RV32IAXCHERI-NEXT:    cmove ca1, ca5
-; RV32IAXCHERI-NEXT:    mv a2, a3
-; RV32IAXCHERI-NEXT:    mv a3, a4
-; RV32IAXCHERI-NEXT:    li a4, 0
-; RV32IAXCHERI-NEXT:    li a5, 0
-; RV32IAXCHERI-NEXT:    ccall __atomic_compare_exchange_8
-; RV32IAXCHERI-NEXT:    clc cra, 8(csp) # 8-byte Folded Reload
-; RV32IAXCHERI-NEXT:    cincoffset csp, csp, 16
+; RV32IAXCHERI-NEXT:    cincoffset ca1, cnull, a1
+; RV32IAXCHERI-NEXT:    csethigh ca1, ca1, a2
+; RV32IAXCHERI-NEXT:    cincoffset ca2, cnull, a3
+; RV32IAXCHERI-NEXT:    csethigh ca2, ca2, a4
+; RV32IAXCHERI-NEXT:  .LBB30_1: # =>This Inner Loop Header: Depth=1
+; RV32IAXCHERI-NEXT:    clr.c ca3, (ca0)
+; RV32IAXCHERI-NEXT:    cseqx a4, ca3, ca1
+; RV32IAXCHERI-NEXT:    beqz a4, .LBB30_3
+; RV32IAXCHERI-NEXT:  # %bb.2: # in Loop: Header=BB30_1 Depth=1
+; RV32IAXCHERI-NEXT:    csc.c a4, ca2, (ca0)
+; RV32IAXCHERI-NEXT:    bnez a4, .LBB30_1
+; RV32IAXCHERI-NEXT:  .LBB30_3:
 ; RV32IAXCHERI-NEXT:    cret
 ;
 ; RV64IXCHERI-LABEL: cmpxchg_i64_monotonic_monotonic:
@@ -1846,21 +1844,18 @@ define void @cmpxchg_i64_acquire_monotonic(i64 addrspace(200)* %ptr, i64 %cmp, i
 ;
 ; RV32IAXCHERI-LABEL: cmpxchg_i64_acquire_monotonic:
 ; RV32IAXCHERI:       # %bb.0:
-; RV32IAXCHERI-NEXT:    cincoffset csp, csp, -16
-; RV32IAXCHERI-NEXT:    csc cra, 8(csp) # 8-byte Folded Spill
-; RV32IAXCHERI-NEXT:    mv a6, a4
-; RV32IAXCHERI-NEXT:    cincoffset ca4, csp, 0
-; RV32IAXCHERI-NEXT:    csetbounds ca5, ca4, 8
-; RV32IAXCHERI-NEXT:    csw a2, 4(csp)
-; RV32IAXCHERI-NEXT:    csw a1, 0(csp)
-; RV32IAXCHERI-NEXT:    li a4, 2
-; RV32IAXCHERI-NEXT:    cmove ca1, ca5
-; RV32IAXCHERI-NEXT:    mv a2, a3
-; RV32IAXCHERI-NEXT:    mv a3, a6
-; RV32IAXCHERI-NEXT:    li a5, 0
-; RV32IAXCHERI-NEXT:    ccall __atomic_compare_exchange_8
-; RV32IAXCHERI-NEXT:    clc cra, 8(csp) # 8-byte Folded Reload
-; RV32IAXCHERI-NEXT:    cincoffset csp, csp, 16
+; RV32IAXCHERI-NEXT:    cincoffset ca1, cnull, a1
+; RV32IAXCHERI-NEXT:    csethigh ca1, ca1, a2
+; RV32IAXCHERI-NEXT:    cincoffset ca2, cnull, a3
+; RV32IAXCHERI-NEXT:    csethigh ca2, ca2, a4
+; RV32IAXCHERI-NEXT:  .LBB31_1: # =>This Inner Loop Header: Depth=1
+; RV32IAXCHERI-NEXT:    clr.c.aq ca3, (ca0)
+; RV32IAXCHERI-NEXT:    cseqx a4, ca3, ca1
+; RV32IAXCHERI-NEXT:    beqz a4, .LBB31_3
+; RV32IAXCHERI-NEXT:  # %bb.2: # in Loop: Header=BB31_1 Depth=1
+; RV32IAXCHERI-NEXT:    csc.c.aq a4, ca2, (ca0)
+; RV32IAXCHERI-NEXT:    bnez a4, .LBB31_1
+; RV32IAXCHERI-NEXT:  .LBB31_3:
 ; RV32IAXCHERI-NEXT:    cret
 ;
 ; RV64IXCHERI-LABEL: cmpxchg_i64_acquire_monotonic:
@@ -1915,22 +1910,18 @@ define void @cmpxchg_i64_acquire_acquire(i64 addrspace(200)* %ptr, i64 %cmp, i64
 ;
 ; RV32IAXCHERI-LABEL: cmpxchg_i64_acquire_acquire:
 ; RV32IAXCHERI:       # %bb.0:
-; RV32IAXCHERI-NEXT:    cincoffset csp, csp, -16
-; RV32IAXCHERI-NEXT:    csc cra, 8(csp) # 8-byte Folded Spill
-; RV32IAXCHERI-NEXT:    mv a6, a4
-; RV32IAXCHERI-NEXT:    mv a7, a3
-; RV32IAXCHERI-NEXT:    cincoffset ca3, csp, 0
-; RV32IAXCHERI-NEXT:    csetbounds ca3, ca3, 8
-; RV32IAXCHERI-NEXT:    csw a2, 4(csp)
-; RV32IAXCHERI-NEXT:    csw a1, 0(csp)
-; RV32IAXCHERI-NEXT:    li a4, 2
-; RV32IAXCHERI-NEXT:    li a5, 2
-; RV32IAXCHERI-NEXT:    cmove ca1, ca3
-; RV32IAXCHERI-NEXT:    mv a2, a7
-; RV32IAXCHERI-NEXT:    mv a3, a6
-; RV32IAXCHERI-NEXT:    ccall __atomic_compare_exchange_8
-; RV32IAXCHERI-NEXT:    clc cra, 8(csp) # 8-byte Folded Reload
-; RV32IAXCHERI-NEXT:    cincoffset csp, csp, 16
+; RV32IAXCHERI-NEXT:    cincoffset ca1, cnull, a1
+; RV32IAXCHERI-NEXT:    csethigh ca1, ca1, a2
+; RV32IAXCHERI-NEXT:    cincoffset ca2, cnull, a3
+; RV32IAXCHERI-NEXT:    csethigh ca2, ca2, a4
+; RV32IAXCHERI-NEXT:  .LBB32_1: # =>This Inner Loop Header: Depth=1
+; RV32IAXCHERI-NEXT:    clr.c.aq ca3, (ca0)
+; RV32IAXCHERI-NEXT:    cseqx a4, ca3, ca1
+; RV32IAXCHERI-NEXT:    beqz a4, .LBB32_3
+; RV32IAXCHERI-NEXT:  # %bb.2: # in Loop: Header=BB32_1 Depth=1
+; RV32IAXCHERI-NEXT:    csc.c.aq a4, ca2, (ca0)
+; RV32IAXCHERI-NEXT:    bnez a4, .LBB32_1
+; RV32IAXCHERI-NEXT:  .LBB32_3:
 ; RV32IAXCHERI-NEXT:    cret
 ;
 ; RV64IXCHERI-LABEL: cmpxchg_i64_acquire_acquire:
@@ -1984,21 +1975,18 @@ define void @cmpxchg_i64_release_monotonic(i64 addrspace(200)* %ptr, i64 %cmp, i
 ;
 ; RV32IAXCHERI-LABEL: cmpxchg_i64_release_monotonic:
 ; RV32IAXCHERI:       # %bb.0:
-; RV32IAXCHERI-NEXT:    cincoffset csp, csp, -16
-; RV32IAXCHERI-NEXT:    csc cra, 8(csp) # 8-byte Folded Spill
-; RV32IAXCHERI-NEXT:    mv a6, a4
-; RV32IAXCHERI-NEXT:    cincoffset ca4, csp, 0
-; RV32IAXCHERI-NEXT:    csetbounds ca5, ca4, 8
-; RV32IAXCHERI-NEXT:    csw a2, 4(csp)
-; RV32IAXCHERI-NEXT:    csw a1, 0(csp)
-; RV32IAXCHERI-NEXT:    li a4, 3
-; RV32IAXCHERI-NEXT:    cmove ca1, ca5
-; RV32IAXCHERI-NEXT:    mv a2, a3
-; RV32IAXCHERI-NEXT:    mv a3, a6
-; RV32IAXCHERI-NEXT:    li a5, 0
-; RV32IAXCHERI-NEXT:    ccall __atomic_compare_exchange_8
-; RV32IAXCHERI-NEXT:    clc cra, 8(csp) # 8-byte Folded Reload
-; RV32IAXCHERI-NEXT:    cincoffset csp, csp, 16
+; RV32IAXCHERI-NEXT:    cincoffset ca1, cnull, a1
+; RV32IAXCHERI-NEXT:    csethigh ca1, ca1, a2
+; RV32IAXCHERI-NEXT:    cincoffset ca2, cnull, a3
+; RV32IAXCHERI-NEXT:    csethigh ca2, ca2, a4
+; RV32IAXCHERI-NEXT:  .LBB33_1: # =>This Inner Loop Header: Depth=1
+; RV32IAXCHERI-NEXT:    clr.c.rl ca3, (ca0)
+; RV32IAXCHERI-NEXT:    cseqx a4, ca3, ca1
+; RV32IAXCHERI-NEXT:    beqz a4, .LBB33_3
+; RV32IAXCHERI-NEXT:  # %bb.2: # in Loop: Header=BB33_1 Depth=1
+; RV32IAXCHERI-NEXT:    csc.c a4, ca2, (ca0)
+; RV32IAXCHERI-NEXT:    bnez a4, .LBB33_1
+; RV32IAXCHERI-NEXT:  .LBB33_3:
 ; RV32IAXCHERI-NEXT:    cret
 ;
 ; RV64IXCHERI-LABEL: cmpxchg_i64_release_monotonic:
@@ -2053,22 +2041,18 @@ define void @cmpxchg_i64_release_acquire(i64 addrspace(200)* %ptr, i64 %cmp, i64
 ;
 ; RV32IAXCHERI-LABEL: cmpxchg_i64_release_acquire:
 ; RV32IAXCHERI:       # %bb.0:
-; RV32IAXCHERI-NEXT:    cincoffset csp, csp, -16
-; RV32IAXCHERI-NEXT:    csc cra, 8(csp) # 8-byte Folded Spill
-; RV32IAXCHERI-NEXT:    mv a6, a4
-; RV32IAXCHERI-NEXT:    mv a7, a3
-; RV32IAXCHERI-NEXT:    cincoffset ca3, csp, 0
-; RV32IAXCHERI-NEXT:    csetbounds ca3, ca3, 8
-; RV32IAXCHERI-NEXT:    csw a2, 4(csp)
-; RV32IAXCHERI-NEXT:    csw a1, 0(csp)
-; RV32IAXCHERI-NEXT:    li a4, 3
-; RV32IAXCHERI-NEXT:    li a5, 2
-; RV32IAXCHERI-NEXT:    cmove ca1, ca3
-; RV32IAXCHERI-NEXT:    mv a2, a7
-; RV32IAXCHERI-NEXT:    mv a3, a6
-; RV32IAXCHERI-NEXT:    ccall __atomic_compare_exchange_8
-; RV32IAXCHERI-NEXT:    clc cra, 8(csp) # 8-byte Folded Reload
-; RV32IAXCHERI-NEXT:    cincoffset csp, csp, 16
+; RV32IAXCHERI-NEXT:    cincoffset ca1, cnull, a1
+; RV32IAXCHERI-NEXT:    csethigh ca1, ca1, a2
+; RV32IAXCHERI-NEXT:    cincoffset ca2, cnull, a3
+; RV32IAXCHERI-NEXT:    csethigh ca2, ca2, a4
+; RV32IAXCHERI-NEXT:  .LBB34_1: # =>This Inner Loop Header: Depth=1
+; RV32IAXCHERI-NEXT:    clr.c.aq ca3, (ca0)
+; RV32IAXCHERI-NEXT:    cseqx a4, ca3, ca1
+; RV32IAXCHERI-NEXT:    beqz a4, .LBB34_3
+; RV32IAXCHERI-NEXT:  # %bb.2: # in Loop: Header=BB34_1 Depth=1
+; RV32IAXCHERI-NEXT:    csc.c.aq a4, ca2, (ca0)
+; RV32IAXCHERI-NEXT:    bnez a4, .LBB34_1
+; RV32IAXCHERI-NEXT:  .LBB34_3:
 ; RV32IAXCHERI-NEXT:    cret
 ;
 ; RV64IXCHERI-LABEL: cmpxchg_i64_release_acquire:
@@ -2122,21 +2106,18 @@ define void @cmpxchg_i64_acq_rel_monotonic(i64 addrspace(200)* %ptr, i64 %cmp, i
 ;
 ; RV32IAXCHERI-LABEL: cmpxchg_i64_acq_rel_monotonic:
 ; RV32IAXCHERI:       # %bb.0:
-; RV32IAXCHERI-NEXT:    cincoffset csp, csp, -16
-; RV32IAXCHERI-NEXT:    csc cra, 8(csp) # 8-byte Folded Spill
-; RV32IAXCHERI-NEXT:    mv a6, a4
-; RV32IAXCHERI-NEXT:    cincoffset ca4, csp, 0
-; RV32IAXCHERI-NEXT:    csetbounds ca5, ca4, 8
-; RV32IAXCHERI-NEXT:    csw a2, 4(csp)
-; RV32IAXCHERI-NEXT:    csw a1, 0(csp)
-; RV32IAXCHERI-NEXT:    li a4, 4
-; RV32IAXCHERI-NEXT:    cmove ca1, ca5
-; RV32IAXCHERI-NEXT:    mv a2, a3
-; RV32IAXCHERI-NEXT:    mv a3, a6
-; RV32IAXCHERI-NEXT:    li a5, 0
-; RV32IAXCHERI-NEXT:    ccall __atomic_compare_exchange_8
-; RV32IAXCHERI-NEXT:    clc cra, 8(csp) # 8-byte Folded Reload
-; RV32IAXCHERI-NEXT:    cincoffset csp, csp, 16
+; RV32IAXCHERI-NEXT:    cincoffset ca1, cnull, a1
+; RV32IAXCHERI-NEXT:    csethigh ca1, ca1, a2
+; RV32IAXCHERI-NEXT:    cincoffset ca2, cnull, a3
+; RV32IAXCHERI-NEXT:    csethigh ca2, ca2, a4
+; RV32IAXCHERI-NEXT:  .LBB35_1: # =>This Inner Loop Header: Depth=1
+; RV32IAXCHERI-NEXT:    clr.c.aq ca3, (ca0)
+; RV32IAXCHERI-NEXT:    cseqx a4, ca3, ca1
+; RV32IAXCHERI-NEXT:    beqz a4, .LBB35_3
+; RV32IAXCHERI-NEXT:  # %bb.2: # in Loop: Header=BB35_1 Depth=1
+; RV32IAXCHERI-NEXT:    csc.c.aq a4, ca2, (ca0)
+; RV32IAXCHERI-NEXT:    bnez a4, .LBB35_1
+; RV32IAXCHERI-NEXT:  .LBB35_3:
 ; RV32IAXCHERI-NEXT:    cret
 ;
 ; RV64IXCHERI-LABEL: cmpxchg_i64_acq_rel_monotonic:
@@ -2191,22 +2172,18 @@ define void @cmpxchg_i64_acq_rel_acquire(i64 addrspace(200)* %ptr, i64 %cmp, i64
 ;
 ; RV32IAXCHERI-LABEL: cmpxchg_i64_acq_rel_acquire:
 ; RV32IAXCHERI:       # %bb.0:
-; RV32IAXCHERI-NEXT:    cincoffset csp, csp, -16
-; RV32IAXCHERI-NEXT:    csc cra, 8(csp) # 8-byte Folded Spill
-; RV32IAXCHERI-NEXT:    mv a6, a4
-; RV32IAXCHERI-NEXT:    mv a7, a3
-; RV32IAXCHERI-NEXT:    cincoffset ca3, csp, 0
-; RV32IAXCHERI-NEXT:    csetbounds ca3, ca3, 8
-; RV32IAXCHERI-NEXT:    csw a2, 4(csp)
-; RV32IAXCHERI-NEXT:    csw a1, 0(csp)
-; RV32IAXCHERI-NEXT:    li a4, 4
-; RV32IAXCHERI-NEXT:    li a5, 2
-; RV32IAXCHERI-NEXT:    cmove ca1, ca3
-; RV32IAXCHERI-NEXT:    mv a2, a7
-; RV32IAXCHERI-NEXT:    mv a3, a6
-; RV32IAXCHERI-NEXT:    ccall __atomic_compare_exchange_8
-; RV32IAXCHERI-NEXT:    clc cra, 8(csp) # 8-byte Folded Reload
-; RV32IAXCHERI-NEXT:    cincoffset csp, csp, 16
+; RV32IAXCHERI-NEXT:    cincoffset ca1, cnull, a1
+; RV32IAXCHERI-NEXT:    csethigh ca1, ca1, a2
+; RV32IAXCHERI-NEXT:    cincoffset ca2, cnull, a3
+; RV32IAXCHERI-NEXT:    csethigh ca2, ca2, a4
+; RV32IAXCHERI-NEXT:  .LBB36_1: # =>This Inner Loop Header: Depth=1
+; RV32IAXCHERI-NEXT:    clr.c.aq ca3, (ca0)
+; RV32IAXCHERI-NEXT:    cseqx a4, ca3, ca1
+; RV32IAXCHERI-NEXT:    beqz a4, .LBB36_3
+; RV32IAXCHERI-NEXT:  # %bb.2: # in Loop: Header=BB36_1 Depth=1
+; RV32IAXCHERI-NEXT:    csc.c.aq a4, ca2, (ca0)
+; RV32IAXCHERI-NEXT:    bnez a4, .LBB36_1
+; RV32IAXCHERI-NEXT:  .LBB36_3:
 ; RV32IAXCHERI-NEXT:    cret
 ;
 ; RV64IXCHERI-LABEL: cmpxchg_i64_acq_rel_acquire:
@@ -2260,21 +2237,18 @@ define void @cmpxchg_i64_seq_cst_monotonic(i64 addrspace(200)* %ptr, i64 %cmp, i
 ;
 ; RV32IAXCHERI-LABEL: cmpxchg_i64_seq_cst_monotonic:
 ; RV32IAXCHERI:       # %bb.0:
-; RV32IAXCHERI-NEXT:    cincoffset csp, csp, -16
-; RV32IAXCHERI-NEXT:    csc cra, 8(csp) # 8-byte Folded Spill
-; RV32IAXCHERI-NEXT:    mv a6, a4
-; RV32IAXCHERI-NEXT:    cincoffset ca4, csp, 0
-; RV32IAXCHERI-NEXT:    csetbounds ca5, ca4, 8
-; RV32IAXCHERI-NEXT:    csw a2, 4(csp)
-; RV32IAXCHERI-NEXT:    csw a1, 0(csp)
-; RV32IAXCHERI-NEXT:    li a4, 5
-; RV32IAXCHERI-NEXT:    cmove ca1, ca5
-; RV32IAXCHERI-NEXT:    mv a2, a3
-; RV32IAXCHERI-NEXT:    mv a3, a6
-; RV32IAXCHERI-NEXT:    li a5, 0
-; RV32IAXCHERI-NEXT:    ccall __atomic_compare_exchange_8
-; RV32IAXCHERI-NEXT:    clc cra, 8(csp) # 8-byte Folded Reload
-; RV32IAXCHERI-NEXT:    cincoffset csp, csp, 16
+; RV32IAXCHERI-NEXT:    cincoffset ca1, cnull, a1
+; RV32IAXCHERI-NEXT:    csethigh ca1, ca1, a2
+; RV32IAXCHERI-NEXT:    cincoffset ca2, cnull, a3
+; RV32IAXCHERI-NEXT:    csethigh ca2, ca2, a4
+; RV32IAXCHERI-NEXT:  .LBB37_1: # =>This Inner Loop Header: Depth=1
+; RV32IAXCHERI-NEXT:    clr.c.aqrl ca3, (ca0)
+; RV32IAXCHERI-NEXT:    cseqx a4, ca3, ca1
+; RV32IAXCHERI-NEXT:    beqz a4, .LBB37_3
+; RV32IAXCHERI-NEXT:  # %bb.2: # in Loop: Header=BB37_1 Depth=1
+; RV32IAXCHERI-NEXT:    csc.c.aqrl a4, ca2, (ca0)
+; RV32IAXCHERI-NEXT:    bnez a4, .LBB37_1
+; RV32IAXCHERI-NEXT:  .LBB37_3:
 ; RV32IAXCHERI-NEXT:    cret
 ;
 ; RV64IXCHERI-LABEL: cmpxchg_i64_seq_cst_monotonic:
@@ -2329,22 +2303,18 @@ define void @cmpxchg_i64_seq_cst_acquire(i64 addrspace(200)* %ptr, i64 %cmp, i64
 ;
 ; RV32IAXCHERI-LABEL: cmpxchg_i64_seq_cst_acquire:
 ; RV32IAXCHERI:       # %bb.0:
-; RV32IAXCHERI-NEXT:    cincoffset csp, csp, -16
-; RV32IAXCHERI-NEXT:    csc cra, 8(csp) # 8-byte Folded Spill
-; RV32IAXCHERI-NEXT:    mv a6, a4
-; RV32IAXCHERI-NEXT:    mv a7, a3
-; RV32IAXCHERI-NEXT:    cincoffset ca3, csp, 0
-; RV32IAXCHERI-NEXT:    csetbounds ca3, ca3, 8
-; RV32IAXCHERI-NEXT:    csw a2, 4(csp)
-; RV32IAXCHERI-NEXT:    csw a1, 0(csp)
-; RV32IAXCHERI-NEXT:    li a4, 5
-; RV32IAXCHERI-NEXT:    li a5, 2
-; RV32IAXCHERI-NEXT:    cmove ca1, ca3
-; RV32IAXCHERI-NEXT:    mv a2, a7
-; RV32IAXCHERI-NEXT:    mv a3, a6
-; RV32IAXCHERI-NEXT:    ccall __atomic_compare_exchange_8
-; RV32IAXCHERI-NEXT:    clc cra, 8(csp) # 8-byte Folded Reload
-; RV32IAXCHERI-NEXT:    cincoffset csp, csp, 16
+; RV32IAXCHERI-NEXT:    cincoffset ca1, cnull, a1
+; RV32IAXCHERI-NEXT:    csethigh ca1, ca1, a2
+; RV32IAXCHERI-NEXT:    cincoffset ca2, cnull, a3
+; RV32IAXCHERI-NEXT:    csethigh ca2, ca2, a4
+; RV32IAXCHERI-NEXT:  .LBB38_1: # =>This Inner Loop Header: Depth=1
+; RV32IAXCHERI-NEXT:    clr.c.aqrl ca3, (ca0)
+; RV32IAXCHERI-NEXT:    cseqx a4, ca3, ca1
+; RV32IAXCHERI-NEXT:    beqz a4, .LBB38_3
+; RV32IAXCHERI-NEXT:  # %bb.2: # in Loop: Header=BB38_1 Depth=1
+; RV32IAXCHERI-NEXT:    csc.c.aqrl a4, ca2, (ca0)
+; RV32IAXCHERI-NEXT:    bnez a4, .LBB38_1
+; RV32IAXCHERI-NEXT:  .LBB38_3:
 ; RV32IAXCHERI-NEXT:    cret
 ;
 ; RV64IXCHERI-LABEL: cmpxchg_i64_seq_cst_acquire:
@@ -2399,22 +2369,18 @@ define void @cmpxchg_i64_seq_cst_seq_cst(i64 addrspace(200)* %ptr, i64 %cmp, i64
 ;
 ; RV32IAXCHERI-LABEL: cmpxchg_i64_seq_cst_seq_cst:
 ; RV32IAXCHERI:       # %bb.0:
-; RV32IAXCHERI-NEXT:    cincoffset csp, csp, -16
-; RV32IAXCHERI-NEXT:    csc cra, 8(csp) # 8-byte Folded Spill
-; RV32IAXCHERI-NEXT:    mv a6, a4
-; RV32IAXCHERI-NEXT:    mv a7, a3
-; RV32IAXCHERI-NEXT:    cincoffset ca3, csp, 0
-; RV32IAXCHERI-NEXT:    csetbounds ca3, ca3, 8
-; RV32IAXCHERI-NEXT:    csw a2, 4(csp)
-; RV32IAXCHERI-NEXT:    csw a1, 0(csp)
-; RV32IAXCHERI-NEXT:    li a4, 5
-; RV32IAXCHERI-NEXT:    li a5, 5
-; RV32IAXCHERI-NEXT:    cmove ca1, ca3
-; RV32IAXCHERI-NEXT:    mv a2, a7
-; RV32IAXCHERI-NEXT:    mv a3, a6
-; RV32IAXCHERI-NEXT:    ccall __atomic_compare_exchange_8
-; RV32IAXCHERI-NEXT:    clc cra, 8(csp) # 8-byte Folded Reload
-; RV32IAXCHERI-NEXT:    cincoffset csp, csp, 16
+; RV32IAXCHERI-NEXT:    cincoffset ca1, cnull, a1
+; RV32IAXCHERI-NEXT:    csethigh ca1, ca1, a2
+; RV32IAXCHERI-NEXT:    cincoffset ca2, cnull, a3
+; RV32IAXCHERI-NEXT:    csethigh ca2, ca2, a4
+; RV32IAXCHERI-NEXT:  .LBB39_1: # =>This Inner Loop Header: Depth=1
+; RV32IAXCHERI-NEXT:    clr.c.aqrl ca3, (ca0)
+; RV32IAXCHERI-NEXT:    cseqx a4, ca3, ca1
+; RV32IAXCHERI-NEXT:    beqz a4, .LBB39_3
+; RV32IAXCHERI-NEXT:  # %bb.2: # in Loop: Header=BB39_1 Depth=1
+; RV32IAXCHERI-NEXT:    csc.c.aqrl a4, ca2, (ca0)
+; RV32IAXCHERI-NEXT:    bnez a4, .LBB39_1
+; RV32IAXCHERI-NEXT:  .LBB39_3:
 ; RV32IAXCHERI-NEXT:    cret
 ;
 ; RV64IXCHERI-LABEL: cmpxchg_i64_seq_cst_seq_cst:

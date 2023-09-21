@@ -100,6 +100,7 @@ private:
   void expandAtomicCmpXchgToMaskedIntrinsic(AtomicCmpXchgInst *CI);
 
   AtomicCmpXchgInst *convertCmpXchgToIntegerType(AtomicCmpXchgInst *CI);
+  AtomicCmpXchgInst *convertCmpXchgToCapabilityType(AtomicCmpXchgInst *CI);
   static Value *
   insertRMWCmpXchgLoop(IRBuilder<> &Builder, Type *ResultType, Value *Addr,
                        Align AddrAlign, AtomicOrdering MemOpOrder,
@@ -593,6 +594,39 @@ AtomicExpand::convertAtomicStoreToCapabilityType(llvm::StoreInst *SI) {
                     << *NewVal << "\n");
   SI->eraseFromParent();
   return NewSI;
+}
+
+AtomicCmpXchgInst *
+AtomicExpand::convertCmpXchgToCapabilityType(llvm::AtomicCmpXchgInst *CI) {
+  IRBuilder<> Builder(CI);
+  Type *CapTy;
+  Value *NewAddr = getCapAddr(CI->getPointerOperand(), &CapTy, Builder, TLI);
+  const DataLayout &DL = CI->getModule()->getDataLayout();
+  Value *NewCmp =
+      integerToSameSizeCapability(CI->getCompareOperand(), Builder, CapTy, DL);
+  Value *NewNewVal =
+      integerToSameSizeCapability(CI->getNewValOperand(), Builder, CapTy, DL);
+
+  auto *NewCI = Builder.CreateAtomicCmpXchg(
+      NewAddr, NewCmp, NewNewVal, CI->getAlign(), CI->getSuccessOrdering(),
+      CI->getFailureOrdering(), CI->getSyncScopeID());
+  NewCI->setVolatile(CI->isVolatile());
+  NewCI->setWeak(CI->isWeak());
+  // We need to compare all 64/128 bits not just the address.
+  NewCI->setExactCompare(true);
+  LLVM_DEBUG(dbgs() << "Replaced " << *CI << " with " << *NewCI << "\n");
+
+  Value *OldVal = Builder.CreateExtractValue(NewCI, 0);
+  Value *Succ = Builder.CreateExtractValue(NewCI, 1);
+  OldVal = integerFromSameSizeCapability(OldVal, Builder, DL);
+
+  Value *Res = UndefValue::get(CI->getType());
+  Res = Builder.CreateInsertValue(Res, OldVal, 0);
+  Res = Builder.CreateInsertValue(Res, Succ, 1);
+
+  CI->replaceAllUsesWith(Res);
+  CI->eraseFromParent();
+  return NewCI;
 }
 
 void AtomicExpand::expandAtomicStore(StoreInst *SI) {
@@ -1606,6 +1640,9 @@ bool AtomicExpand::tryExpandAtomicCmpXchg(AtomicCmpXchgInst *CI) {
   }
   case TargetLoweringBase::AtomicExpansionKind::MaskedIntrinsic:
     expandAtomicCmpXchgToMaskedIntrinsic(CI);
+    return true;
+  case TargetLoweringBase::AtomicExpansionKind::CheriCapability:
+    convertCmpXchgToCapabilityType(CI);
     return true;
   case TargetLoweringBase::AtomicExpansionKind::NotAtomic:
     return lowerAtomicCmpXchgInst(CI);
