@@ -12763,6 +12763,8 @@ RISCVTargetLowering::shouldExpandAtomicRMWInIR(AtomicRMWInst *AI) const {
     return AtomicExpansionKind::MaskedIntrinsic;
   if (Subtarget.hasCheri() &&
       Size == Subtarget.typeForCapabilities().getSizeInBits()) {
+    if (AI->getOperation() == AtomicRMWInst::Xchg)
+      return AtomicExpansionKind::CheriCapability;
     return AtomicExpansionKind::CmpXChg;
   }
   return AtomicExpansionKind::None;

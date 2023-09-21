@@ -95,6 +95,7 @@ private:
   void expandPartwordAtomicRMW(
       AtomicRMWInst *I, TargetLoweringBase::AtomicExpansionKind ExpansionKind);
   AtomicRMWInst *widenPartwordAtomicRMW(AtomicRMWInst *AI);
+  AtomicRMWInst *convertAtomicXchgToCapabilityType(AtomicRMWInst *SI);
   bool expandPartwordCmpXchg(AtomicCmpXchgInst *I);
   void expandAtomicRMWToMaskedIntrinsic(AtomicRMWInst *AI);
   void expandAtomicCmpXchgToMaskedIntrinsic(AtomicCmpXchgInst *CI);
@@ -603,6 +604,28 @@ AtomicExpand::convertAtomicStoreToCapabilityType(llvm::StoreInst *SI) {
   return NewSI;
 }
 
+AtomicRMWInst *
+AtomicExpand::convertAtomicXchgToCapabilityType(llvm::AtomicRMWInst *AI) {
+  IRBuilder<> Builder(AI);
+  assert(AI->getOperation() == AtomicRMWInst::Xchg);
+  Type *CapTy;
+  Value *NewAddr = getCapAddr(AI->getPointerOperand(), &CapTy, Builder, TLI);
+  const DataLayout &DL = AI->getModule()->getDataLayout();
+  Value *NewNewVal =
+      integerToSameSizeCapability(AI->getValOperand(), Builder, CapTy, DL);
+
+  auto *NewAI = Builder.CreateAtomicRMW(AI->getOperation(), NewAddr, NewNewVal,
+                                        AI->getAlign(), AI->getOrdering(),
+                                        AI->getSyncScopeID());
+  NewAI->setVolatile(AI->isVolatile());
+  LLVM_DEBUG(dbgs() << "Replaced " << *AI << " with " << *NewAI << "\n");
+
+  Value *Result = integerFromSameSizeCapability(NewAI, Builder, DL);
+  AI->replaceAllUsesWith(Result);
+  AI->eraseFromParent();
+  return NewAI;
+}
+
 AtomicCmpXchgInst *
 AtomicExpand::convertCmpXchgToCapabilityType(llvm::AtomicCmpXchgInst *CI) {
   IRBuilder<> Builder(CI);
@@ -742,6 +765,9 @@ bool AtomicExpand::tryExpandAtomicRMW(AtomicRMWInst *AI) {
     TLI->emitBitTestAtomicRMWIntrinsic(AI);
     return true;
   }
+  case TargetLoweringBase::AtomicExpansionKind::CheriCapability:
+    convertAtomicXchgToCapabilityType(AI);
+    return true;
   case TargetLoweringBase::AtomicExpansionKind::NotAtomic:
     return lowerAtomicRMWInst(AI);
   default:

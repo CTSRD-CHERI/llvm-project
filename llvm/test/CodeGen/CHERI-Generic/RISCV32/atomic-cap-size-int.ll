@@ -178,34 +178,11 @@ define i64 @load(ptr addrspace(200) %ptr) nounwind {
 define i64 @atomic_xchg(ptr addrspace(200) %ptr, i64 %val) nounwind {
 ; PURECAP-ATOMICS-LABEL: atomic_xchg:
 ; PURECAP-ATOMICS:       # %bb.0:
-; PURECAP-ATOMICS-NEXT:    clw a3, 4(ca0)
-; PURECAP-ATOMICS-NEXT:    clw a4, 0(ca0)
-; PURECAP-ATOMICS-NEXT:  .LBB2_1: # %atomicrmw.start
-; PURECAP-ATOMICS-NEXT:    # =>This Loop Header: Depth=1
-; PURECAP-ATOMICS-NEXT:    # Child Loop BB2_3 Depth 2
-; PURECAP-ATOMICS-NEXT:    cincoffset ca4, cnull, a4
-; PURECAP-ATOMICS-NEXT:    csethigh ca3, ca4, a3
-; PURECAP-ATOMICS-NEXT:    cincoffset ca4, cnull, a1
-; PURECAP-ATOMICS-NEXT:    csethigh ca4, ca4, a2
-; PURECAP-ATOMICS-NEXT:  .LBB2_3: # %atomicrmw.start
-; PURECAP-ATOMICS-NEXT:    # Parent Loop BB2_1 Depth=1
-; PURECAP-ATOMICS-NEXT:    # => This Inner Loop Header: Depth=2
-; PURECAP-ATOMICS-NEXT:    clr.c.aqrl ca5, (ca0)
-; PURECAP-ATOMICS-NEXT:    cseqx a6, ca5, ca3
-; PURECAP-ATOMICS-NEXT:    beqz a6, .LBB2_5
-; PURECAP-ATOMICS-NEXT:  # %bb.4: # %atomicrmw.start
-; PURECAP-ATOMICS-NEXT:    # in Loop: Header=BB2_3 Depth=2
-; PURECAP-ATOMICS-NEXT:    csc.c.aqrl a6, ca4, (ca0)
-; PURECAP-ATOMICS-NEXT:    bnez a6, .LBB2_3
-; PURECAP-ATOMICS-NEXT:  .LBB2_5: # %atomicrmw.start
-; PURECAP-ATOMICS-NEXT:    # in Loop: Header=BB2_1 Depth=1
-; PURECAP-ATOMICS-NEXT:    cseqx a6, ca5, ca3
-; PURECAP-ATOMICS-NEXT:    mv a4, a5
-; PURECAP-ATOMICS-NEXT:    cgethigh a3, ca5
-; PURECAP-ATOMICS-NEXT:    beqz a6, .LBB2_1
-; PURECAP-ATOMICS-NEXT:  # %bb.2: # %atomicrmw.end
-; PURECAP-ATOMICS-NEXT:    mv a0, a4
-; PURECAP-ATOMICS-NEXT:    mv a1, a3
+; PURECAP-ATOMICS-NEXT:    cincoffset ca1, cnull, a1
+; PURECAP-ATOMICS-NEXT:    csethigh ca1, ca1, a2
+; PURECAP-ATOMICS-NEXT:    camoswap.c.aqrl ca1, ca1, (ca0)
+; PURECAP-ATOMICS-NEXT:    mv a0, a1
+; PURECAP-ATOMICS-NEXT:    cgethigh a1, ca1
 ; PURECAP-ATOMICS-NEXT:    cret
 ;
 ; PURECAP-LIBCALLS-LABEL: atomic_xchg:
@@ -220,34 +197,11 @@ define i64 @atomic_xchg(ptr addrspace(200) %ptr, i64 %val) nounwind {
 ;
 ; HYBRID-ATOMICS-LABEL: atomic_xchg:
 ; HYBRID-ATOMICS:       # %bb.0:
-; HYBRID-ATOMICS-NEXT:    lw a3, 4(a0)
-; HYBRID-ATOMICS-NEXT:    lw a4, 0(a0)
-; HYBRID-ATOMICS-NEXT:  .LBB2_1: # %atomicrmw.start
-; HYBRID-ATOMICS-NEXT:    # =>This Loop Header: Depth=1
-; HYBRID-ATOMICS-NEXT:    # Child Loop BB2_3 Depth 2
-; HYBRID-ATOMICS-NEXT:    cincoffset ca4, cnull, a4
-; HYBRID-ATOMICS-NEXT:    csethigh ca3, ca4, a3
-; HYBRID-ATOMICS-NEXT:    cincoffset ca4, cnull, a1
-; HYBRID-ATOMICS-NEXT:    csethigh ca4, ca4, a2
-; HYBRID-ATOMICS-NEXT:  .LBB2_3: # %atomicrmw.start
-; HYBRID-ATOMICS-NEXT:    # Parent Loop BB2_1 Depth=1
-; HYBRID-ATOMICS-NEXT:    # => This Inner Loop Header: Depth=2
-; HYBRID-ATOMICS-NEXT:    lr.c.aqrl ca5, (a0)
-; HYBRID-ATOMICS-NEXT:    cseqx a6, ca5, ca3
-; HYBRID-ATOMICS-NEXT:    beqz a6, .LBB2_5
-; HYBRID-ATOMICS-NEXT:  # %bb.4: # %atomicrmw.start
-; HYBRID-ATOMICS-NEXT:    # in Loop: Header=BB2_3 Depth=2
-; HYBRID-ATOMICS-NEXT:    sc.c.aqrl a6, ca4, (a0)
-; HYBRID-ATOMICS-NEXT:    bnez a6, .LBB2_3
-; HYBRID-ATOMICS-NEXT:  .LBB2_5: # %atomicrmw.start
-; HYBRID-ATOMICS-NEXT:    # in Loop: Header=BB2_1 Depth=1
-; HYBRID-ATOMICS-NEXT:    cseqx a6, ca5, ca3
-; HYBRID-ATOMICS-NEXT:    mv a4, a5
-; HYBRID-ATOMICS-NEXT:    cgethigh a3, ca5
-; HYBRID-ATOMICS-NEXT:    beqz a6, .LBB2_1
-; HYBRID-ATOMICS-NEXT:  # %bb.2: # %atomicrmw.end
-; HYBRID-ATOMICS-NEXT:    mv a0, a4
-; HYBRID-ATOMICS-NEXT:    mv a1, a3
+; HYBRID-ATOMICS-NEXT:    cincoffset ca1, cnull, a1
+; HYBRID-ATOMICS-NEXT:    csethigh ca1, ca1, a2
+; HYBRID-ATOMICS-NEXT:    amoswap.c.aqrl ca1, ca1, (a0)
+; HYBRID-ATOMICS-NEXT:    mv a0, a1
+; HYBRID-ATOMICS-NEXT:    cgethigh a1, ca1
 ; HYBRID-ATOMICS-NEXT:    ret
 ;
 ; HYBRID-LIBCALLS-LABEL: atomic_xchg:
@@ -271,34 +225,18 @@ define i64 @atomic_xchg(ptr addrspace(200) %ptr, i64 %val) nounwind {
 ; HYBRID-CAP-PTR-NEXT:    ret
 ; PURECAP-IR-LABEL: define {{[^@]+}}@atomic_xchg
 ; PURECAP-IR-SAME: (ptr addrspace(200) [[PTR:%.*]], i64 [[VAL:%.*]]) addrspace(200) #[[ATTR0]] {
-; PURECAP-IR-NEXT:    [[TMP1:%.*]] = load i64, ptr addrspace(200) [[PTR]], align 8
-; PURECAP-IR-NEXT:    br label [[ATOMICRMW_START:%.*]]
-; PURECAP-IR:       atomicrmw.start:
-; PURECAP-IR-NEXT:    [[LOADED:%.*]] = phi i64 [ [[TMP1]], [[TMP0:%.*]] ], [ [[NEWLOADED:%.*]], [[ATOMICRMW_START]] ]
-; PURECAP-IR-NEXT:    [[TMP2:%.*]] = getelementptr i8, ptr addrspace(200) null, i64 [[LOADED]]
-; PURECAP-IR-NEXT:    [[TMP3:%.*]] = lshr i64 [[LOADED]], 32
-; PURECAP-IR-NEXT:    [[TMP4:%.*]] = trunc i64 [[TMP3]] to i32
-; PURECAP-IR-NEXT:    [[TMP5:%.*]] = call ptr addrspace(200) @llvm.cheri.cap.high.set.i32(ptr addrspace(200) [[TMP2]], i32 [[TMP4]])
-; PURECAP-IR-NEXT:    [[TMP6:%.*]] = getelementptr i8, ptr addrspace(200) null, i64 [[VAL]]
-; PURECAP-IR-NEXT:    [[TMP7:%.*]] = lshr i64 [[VAL]], 32
-; PURECAP-IR-NEXT:    [[TMP8:%.*]] = trunc i64 [[TMP7]] to i32
-; PURECAP-IR-NEXT:    [[TMP9:%.*]] = call ptr addrspace(200) @llvm.cheri.cap.high.set.i32(ptr addrspace(200) [[TMP6]], i32 [[TMP8]])
-; PURECAP-IR-NEXT:    [[TMP10:%.*]] = cmpxchg exact ptr addrspace(200) [[PTR]], ptr addrspace(200) [[TMP5]], ptr addrspace(200) [[TMP9]] seq_cst seq_cst, align 8
-; PURECAP-IR-NEXT:    [[TMP11:%.*]] = extractvalue { ptr addrspace(200), i1 } [[TMP10]], 0
-; PURECAP-IR-NEXT:    [[TMP12:%.*]] = extractvalue { ptr addrspace(200), i1 } [[TMP10]], 1
-; PURECAP-IR-NEXT:    [[TMP13:%.*]] = call i32 @llvm.cheri.cap.address.get.i32(ptr addrspace(200) [[TMP11]])
-; PURECAP-IR-NEXT:    [[TMP14:%.*]] = call i32 @llvm.cheri.cap.high.get.i32(ptr addrspace(200) [[TMP11]])
-; PURECAP-IR-NEXT:    [[TMP15:%.*]] = zext i32 [[TMP13]] to i64
-; PURECAP-IR-NEXT:    [[TMP16:%.*]] = zext i32 [[TMP14]] to i64
-; PURECAP-IR-NEXT:    [[TMP17:%.*]] = shl i64 [[TMP16]], 32
-; PURECAP-IR-NEXT:    [[TMP18:%.*]] = or i64 [[TMP15]], [[TMP17]]
-; PURECAP-IR-NEXT:    [[TMP19:%.*]] = insertvalue { i64, i1 } undef, i64 [[TMP18]], 0
-; PURECAP-IR-NEXT:    [[TMP20:%.*]] = insertvalue { i64, i1 } [[TMP19]], i1 [[TMP12]], 1
-; PURECAP-IR-NEXT:    [[SUCCESS:%.*]] = extractvalue { i64, i1 } [[TMP20]], 1
-; PURECAP-IR-NEXT:    [[NEWLOADED]] = extractvalue { i64, i1 } [[TMP20]], 0
-; PURECAP-IR-NEXT:    br i1 [[SUCCESS]], label [[ATOMICRMW_END:%.*]], label [[ATOMICRMW_START]]
-; PURECAP-IR:       atomicrmw.end:
-; PURECAP-IR-NEXT:    ret i64 [[NEWLOADED]]
+; PURECAP-IR-NEXT:    [[TMP1:%.*]] = getelementptr i8, ptr addrspace(200) null, i64 [[VAL]]
+; PURECAP-IR-NEXT:    [[TMP2:%.*]] = lshr i64 [[VAL]], 32
+; PURECAP-IR-NEXT:    [[TMP3:%.*]] = trunc i64 [[TMP2]] to i32
+; PURECAP-IR-NEXT:    [[TMP4:%.*]] = call ptr addrspace(200) @llvm.cheri.cap.high.set.i32(ptr addrspace(200) [[TMP1]], i32 [[TMP3]])
+; PURECAP-IR-NEXT:    [[TMP5:%.*]] = atomicrmw xchg ptr addrspace(200) [[PTR]], ptr addrspace(200) [[TMP4]] seq_cst, align 8
+; PURECAP-IR-NEXT:    [[TMP6:%.*]] = call i32 @llvm.cheri.cap.address.get.i32(ptr addrspace(200) [[TMP5]])
+; PURECAP-IR-NEXT:    [[TMP7:%.*]] = call i32 @llvm.cheri.cap.high.get.i32(ptr addrspace(200) [[TMP5]])
+; PURECAP-IR-NEXT:    [[TMP8:%.*]] = zext i32 [[TMP6]] to i64
+; PURECAP-IR-NEXT:    [[TMP9:%.*]] = zext i32 [[TMP7]] to i64
+; PURECAP-IR-NEXT:    [[TMP10:%.*]] = shl i64 [[TMP9]], 32
+; PURECAP-IR-NEXT:    [[TMP11:%.*]] = or i64 [[TMP8]], [[TMP10]]
+; PURECAP-IR-NEXT:    ret i64 [[TMP11]]
 ;
 ; HYBRID-IR-LABEL: define {{[^@]+}}@atomic_xchg
 ; HYBRID-IR-SAME: (ptr addrspace(200) [[PTR:%.*]], i64 [[VAL:%.*]]) #[[ATTR0]] {
