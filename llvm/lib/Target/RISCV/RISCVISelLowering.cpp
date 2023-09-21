@@ -12919,8 +12919,7 @@ bool RISCVTargetLowering::supportsAtomicOperation(const DataLayout &DL,
   // Using capability pointers in hybrid mode is not yet supported for this
   // as we are missing some required patterns.
   if (Subtarget.hasStdExtA() && Subtarget.hasCheri() &&
-      ValueTy->isIntegerTy(Subtarget.typeForCapabilities().getSizeInBits()) &&
-      DL.isFatPointer(PointerTy) == IsPureCapABI)
+      ValueTy->isIntegerTy(Subtarget.typeForCapabilities().getSizeInBits()))
     return true;
   return TargetLowering::supportsAtomicOperation(DL, AI, ValueTy, PointerTy,
                                                  Alignment);

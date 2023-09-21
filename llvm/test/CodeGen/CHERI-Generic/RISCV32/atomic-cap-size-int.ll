@@ -69,23 +69,33 @@ define i64 @store(ptr addrspace(200) %ptr, i64 %val) nounwind {
 ; HYBRID-LIBCALLS-NEXT:    addi sp, sp, 16
 ; HYBRID-LIBCALLS-NEXT:    ret
 ;
-; HYBRID-CAP-PTR-LABEL: store:
-; HYBRID-CAP-PTR:       # %bb.0:
-; HYBRID-CAP-PTR-NEXT:    addi sp, sp, -16
-; HYBRID-CAP-PTR-NEXT:    sw ra, 12(sp) # 4-byte Folded Spill
-; HYBRID-CAP-PTR-NEXT:    sw s0, 8(sp) # 4-byte Folded Spill
-; HYBRID-CAP-PTR-NEXT:    sw s1, 4(sp) # 4-byte Folded Spill
-; HYBRID-CAP-PTR-NEXT:    mv s0, a2
-; HYBRID-CAP-PTR-NEXT:    mv s1, a1
-; HYBRID-CAP-PTR-NEXT:    li a3, 5
-; HYBRID-CAP-PTR-NEXT:    call __atomic_store_8_c@plt
-; HYBRID-CAP-PTR-NEXT:    mv a0, s1
-; HYBRID-CAP-PTR-NEXT:    mv a1, s0
-; HYBRID-CAP-PTR-NEXT:    lw ra, 12(sp) # 4-byte Folded Reload
-; HYBRID-CAP-PTR-NEXT:    lw s0, 8(sp) # 4-byte Folded Reload
-; HYBRID-CAP-PTR-NEXT:    lw s1, 4(sp) # 4-byte Folded Reload
-; HYBRID-CAP-PTR-NEXT:    addi sp, sp, 16
-; HYBRID-CAP-PTR-NEXT:    ret
+; HYBRID-CAP-PTR-ATOMICS-LABEL: store:
+; HYBRID-CAP-PTR-ATOMICS:       # %bb.0:
+; HYBRID-CAP-PTR-ATOMICS-NEXT:    fence rw, w
+; HYBRID-CAP-PTR-ATOMICS-NEXT:    cincoffset ca3, cnull, a1
+; HYBRID-CAP-PTR-ATOMICS-NEXT:    csethigh ca3, ca3, a2
+; HYBRID-CAP-PTR-ATOMICS-NEXT:    sc.cap ca3, (ca0)
+; HYBRID-CAP-PTR-ATOMICS-NEXT:    mv a0, a1
+; HYBRID-CAP-PTR-ATOMICS-NEXT:    mv a1, a2
+; HYBRID-CAP-PTR-ATOMICS-NEXT:    ret
+;
+; HYBRID-CAP-PTR-LIBCALLS-LABEL: store:
+; HYBRID-CAP-PTR-LIBCALLS:       # %bb.0:
+; HYBRID-CAP-PTR-LIBCALLS-NEXT:    addi sp, sp, -16
+; HYBRID-CAP-PTR-LIBCALLS-NEXT:    sw ra, 12(sp) # 4-byte Folded Spill
+; HYBRID-CAP-PTR-LIBCALLS-NEXT:    sw s0, 8(sp) # 4-byte Folded Spill
+; HYBRID-CAP-PTR-LIBCALLS-NEXT:    sw s1, 4(sp) # 4-byte Folded Spill
+; HYBRID-CAP-PTR-LIBCALLS-NEXT:    mv s0, a2
+; HYBRID-CAP-PTR-LIBCALLS-NEXT:    mv s1, a1
+; HYBRID-CAP-PTR-LIBCALLS-NEXT:    li a3, 5
+; HYBRID-CAP-PTR-LIBCALLS-NEXT:    call __atomic_store_8_c@plt
+; HYBRID-CAP-PTR-LIBCALLS-NEXT:    mv a0, s1
+; HYBRID-CAP-PTR-LIBCALLS-NEXT:    mv a1, s0
+; HYBRID-CAP-PTR-LIBCALLS-NEXT:    lw ra, 12(sp) # 4-byte Folded Reload
+; HYBRID-CAP-PTR-LIBCALLS-NEXT:    lw s0, 8(sp) # 4-byte Folded Reload
+; HYBRID-CAP-PTR-LIBCALLS-NEXT:    lw s1, 4(sp) # 4-byte Folded Reload
+; HYBRID-CAP-PTR-LIBCALLS-NEXT:    addi sp, sp, 16
+; HYBRID-CAP-PTR-LIBCALLS-NEXT:    ret
 ; PURECAP-IR-LABEL: define {{[^@]+}}@store
 ; PURECAP-IR-SAME: (ptr addrspace(200) [[PTR:%.*]], i64 [[VAL:%.*]]) addrspace(200) #[[ATTR0:[0-9]+]] {
 ; PURECAP-IR-NEXT:    fence release
@@ -98,7 +108,12 @@ define i64 @store(ptr addrspace(200) %ptr, i64 %val) nounwind {
 ;
 ; HYBRID-IR-LABEL: define {{[^@]+}}@store
 ; HYBRID-IR-SAME: (ptr addrspace(200) [[PTR:%.*]], i64 [[VAL:%.*]]) #[[ATTR0:[0-9]+]] {
-; HYBRID-IR-NEXT:    call void @__atomic_store_8_c(ptr addrspace(200) [[PTR]], i64 [[VAL]], i32 5)
+; HYBRID-IR-NEXT:    fence release
+; HYBRID-IR-NEXT:    [[TMP1:%.*]] = getelementptr i8, ptr addrspace(200) null, i64 [[VAL]]
+; HYBRID-IR-NEXT:    [[TMP2:%.*]] = lshr i64 [[VAL]], 32
+; HYBRID-IR-NEXT:    [[TMP3:%.*]] = trunc i64 [[TMP2]] to i32
+; HYBRID-IR-NEXT:    [[TMP4:%.*]] = call ptr addrspace(200) @llvm.cheri.cap.high.set.i32(ptr addrspace(200) [[TMP1]], i32 [[TMP3]])
+; HYBRID-IR-NEXT:    store atomic ptr addrspace(200) [[TMP4]], ptr addrspace(200) [[PTR]] monotonic, align 8
 ; HYBRID-IR-NEXT:    ret i64 [[VAL]]
 ;
   store atomic i64 %val, ptr addrspace(200) %ptr seq_cst, align 8
@@ -144,15 +159,24 @@ define i64 @load(ptr addrspace(200) %ptr) nounwind {
 ; HYBRID-LIBCALLS-NEXT:    addi sp, sp, 16
 ; HYBRID-LIBCALLS-NEXT:    ret
 ;
-; HYBRID-CAP-PTR-LABEL: load:
-; HYBRID-CAP-PTR:       # %bb.0:
-; HYBRID-CAP-PTR-NEXT:    addi sp, sp, -16
-; HYBRID-CAP-PTR-NEXT:    sw ra, 12(sp) # 4-byte Folded Spill
-; HYBRID-CAP-PTR-NEXT:    li a1, 5
-; HYBRID-CAP-PTR-NEXT:    call __atomic_load_8_c@plt
-; HYBRID-CAP-PTR-NEXT:    lw ra, 12(sp) # 4-byte Folded Reload
-; HYBRID-CAP-PTR-NEXT:    addi sp, sp, 16
-; HYBRID-CAP-PTR-NEXT:    ret
+; HYBRID-CAP-PTR-ATOMICS-LABEL: load:
+; HYBRID-CAP-PTR-ATOMICS:       # %bb.0:
+; HYBRID-CAP-PTR-ATOMICS-NEXT:    fence rw, rw
+; HYBRID-CAP-PTR-ATOMICS-NEXT:    lc.cap ca1, (ca0)
+; HYBRID-CAP-PTR-ATOMICS-NEXT:    mv a0, a1
+; HYBRID-CAP-PTR-ATOMICS-NEXT:    cgethigh a1, ca1
+; HYBRID-CAP-PTR-ATOMICS-NEXT:    fence r, rw
+; HYBRID-CAP-PTR-ATOMICS-NEXT:    ret
+;
+; HYBRID-CAP-PTR-LIBCALLS-LABEL: load:
+; HYBRID-CAP-PTR-LIBCALLS:       # %bb.0:
+; HYBRID-CAP-PTR-LIBCALLS-NEXT:    addi sp, sp, -16
+; HYBRID-CAP-PTR-LIBCALLS-NEXT:    sw ra, 12(sp) # 4-byte Folded Spill
+; HYBRID-CAP-PTR-LIBCALLS-NEXT:    li a1, 5
+; HYBRID-CAP-PTR-LIBCALLS-NEXT:    call __atomic_load_8_c@plt
+; HYBRID-CAP-PTR-LIBCALLS-NEXT:    lw ra, 12(sp) # 4-byte Folded Reload
+; HYBRID-CAP-PTR-LIBCALLS-NEXT:    addi sp, sp, 16
+; HYBRID-CAP-PTR-LIBCALLS-NEXT:    ret
 ; PURECAP-IR-LABEL: define {{[^@]+}}@load
 ; PURECAP-IR-SAME: (ptr addrspace(200) [[PTR:%.*]]) addrspace(200) #[[ATTR0]] {
 ; PURECAP-IR-NEXT:    fence seq_cst
@@ -168,8 +192,16 @@ define i64 @load(ptr addrspace(200) %ptr) nounwind {
 ;
 ; HYBRID-IR-LABEL: define {{[^@]+}}@load
 ; HYBRID-IR-SAME: (ptr addrspace(200) [[PTR:%.*]]) #[[ATTR0]] {
-; HYBRID-IR-NEXT:    [[TMP1:%.*]] = call i64 @__atomic_load_8_c(ptr addrspace(200) [[PTR]], i32 5)
-; HYBRID-IR-NEXT:    ret i64 [[TMP1]]
+; HYBRID-IR-NEXT:    fence seq_cst
+; HYBRID-IR-NEXT:    [[TMP1:%.*]] = load atomic ptr addrspace(200), ptr addrspace(200) [[PTR]] monotonic, align 8
+; HYBRID-IR-NEXT:    [[TMP2:%.*]] = call i32 @llvm.cheri.cap.address.get.i32(ptr addrspace(200) [[TMP1]])
+; HYBRID-IR-NEXT:    [[TMP3:%.*]] = call i32 @llvm.cheri.cap.high.get.i32(ptr addrspace(200) [[TMP1]])
+; HYBRID-IR-NEXT:    [[TMP4:%.*]] = zext i32 [[TMP2]] to i64
+; HYBRID-IR-NEXT:    [[TMP5:%.*]] = zext i32 [[TMP3]] to i64
+; HYBRID-IR-NEXT:    [[TMP6:%.*]] = shl i64 [[TMP5]], 32
+; HYBRID-IR-NEXT:    [[TMP7:%.*]] = or i64 [[TMP4]], [[TMP6]]
+; HYBRID-IR-NEXT:    fence acquire
+; HYBRID-IR-NEXT:    ret i64 [[TMP7]]
 ;
   %val = load atomic i64, ptr addrspace(200) %ptr seq_cst, align 8
   ret i64 %val
