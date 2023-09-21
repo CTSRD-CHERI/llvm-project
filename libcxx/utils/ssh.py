@@ -25,68 +25,10 @@ import sys
 import tarfile
 import tempfile
 
-from shlex import quote as cmd_quote
-
-
-def ssh(args, command):
-    cmd = ["ssh", "-oBatchMode=yes"]
-    if args.extra_ssh_args is not None:
-        cmd.extend(shlex.split(args.extra_ssh_args))
-    return cmd + [args.host, command]
-
-
-def scp(args, src, dst):
-    cmd = ["scp", "-q", "-oBatchMode=yes"]
-    if args.extra_scp_args is not None:
-        cmd.extend(shlex.split(args.extra_scp_args))
-    return cmd + [src, "{}:{}".format(args.host, dst)]
-
-def runCommand(command, *args, **kwargs):
-    return subprocess.run(command, *args, **kwargs)
 
 def debug(cmdlineArgs, *args, **kwargs):
     if cmdlineArgs.debug:
         print(*args, file=sys.stderr, **kwargs)
-
-
-def createTempdir(args):
-    if args.shared_mount_local_path:
-        localTmp = tempfile.mkdtemp(prefix="libcxx.", dir=args.shared_mount_local_path)
-        remoteTmp = os.path.join(args.shared_mount_remote_path, os.path.basename(localTmp))
-        debug(args, "Created local tmp dir:", localTmp)
-        debug(args, "Assuming remote path is:", remoteTmp)
-        return localTmp, remoteTmp
-    remoteTmp = subprocess.check_output(ssh(args, 'mktemp -d {}/libcxx.XXXXXXXXXX'.format(args.tempdir)),
-                                        universal_newlines=True).strip()
-    debug(args, "Create remote tmp dir:", remoteTmp)
-    return None, remoteTmp
-
-
-def cleanupTempdir(args, localTmp, remoteTmp):
-    if localTmp is not None:
-        # If we have a shared mount we can simply delete the local directory.
-        assert args.shared_mount_local_path is not None
-        debug(args, "Deleting local tmp dir:", localTmp)
-        shutil.rmtree(localTmp)
-    else:
-        debug(args, "Deleting remote tmp dir:", remoteTmp)
-        subprocess.check_call(ssh(args, 'rm -r {}'.format(remoteTmp)))
-
-
-def uploadTarball(args, src, dst):
-    if args.shared_mount_local_path:
-        # TODO: when using a shared mount we should probably just copy all files
-        # and skip creating the tarball.
-        remoteRelPath = os.path.relpath(dst, args.shared_mount_remote_path)
-        # The remote path should be inside the shared directory:
-        assert not remoteRelPath.startswith('..'), remoteRelPath
-        localPath = os.path.join(args.shared_mount_local_path, remoteRelPath)
-        debug(args, "Copying", src, "->", localPath)
-        shutil.copy2(src, localPath)
-    else:
-        debug(args, "Uploading", src, "->", dst, "using scp")
-        subprocess.check_call(scp(args, src, dst))
-    return dst
 
 
 def main():
@@ -118,9 +60,55 @@ def main():
         if not args.shared_mount_remote_path:
             sys.exit("ERROR: missing --shared-mount-remote-path argument.")
 
-    # Create a temporary directory where the test will be run.
-    # That is effectively the value of %T on the remote host.
-    localTmp, remoteTmp = createTempdir(args)
+    def ssh(command):
+        cmd = ["ssh", "-oBatchMode=yes"]
+        if args.extra_ssh_args is not None:
+            cmd.extend(shlex.split(args.extra_ssh_args))
+        return cmd + [args.host, command]
+
+    def scp(src, dst):
+        cmd = ["scp", "-q", "-oBatchMode=yes"]
+        if args.extra_scp_args is not None:
+            cmd.extend(shlex.split(args.extra_scp_args))
+        return cmd + [src, "{}:{}".format(args.host, dst)]
+
+    def createTempdir():
+        if args.shared_mount_local_path:
+            localTmp = tempfile.mkdtemp(prefix="libcxx.", dir=args.shared_mount_local_path)
+            remoteTmp = os.path.join(args.shared_mount_remote_path, os.path.basename(localTmp))
+            debug(args, "Created local tmp dir:", localTmp)
+            debug(args, "Assuming remote path is:", remoteTmp)
+            return localTmp, remoteTmp
+        remoteTmp = subprocess.check_output(ssh('mktemp -d {}/libcxx.XXXXXXXXXX'.format(args.tempdir)),
+                                            universal_newlines=True).strip()
+        debug(args, "Create remote tmp dir:", remoteTmp)
+        return None, remoteTmp
+
+    def cleanupTempdir(localTmp, remoteTmp):
+        if localTmp is not None:
+            # If we have a shared mount we can simply delete the local directory.
+            assert args.shared_mount_local_path is not None
+            debug(args, "Deleting local tmp dir:", localTmp)
+            shutil.rmtree(localTmp)
+        else:
+            debug(args, "Deleting remote tmp dir:", remoteTmp)
+            subprocess.check_call(ssh('rm -r {}'.format(remoteTmp)))
+
+
+    def uploadTarball(src, dst):
+        if args.shared_mount_local_path:
+            # TODO: when using a shared mount we should probably just copy all files
+            # and skip creating the tarball.
+            remoteRelPath = os.path.relpath(dst, args.shared_mount_remote_path)
+            # The remote path should be inside the shared directory:
+            assert not remoteRelPath.startswith('..'), remoteRelPath
+            localPath = os.path.join(args.shared_mount_local_path, remoteRelPath)
+            debug(args, "Copying", src, "->", localPath)
+            shutil.copy2(src, localPath)
+        else:
+            debug(args, "Uploading", src, "->", dst, "using scp")
+            subprocess.check_call(scp(src, dst))
+        return dst
 
     def runCommand(command, *args_, **kwargs):
         if args.verbose:
@@ -129,12 +117,7 @@ def main():
 
     # Create a temporary directory where the test will be run.
     # That is effectively the value of %T on the remote host.
-    tmp = runCommand(
-        ssh(args, "mktemp -d {}/libcxx.XXXXXXXXXX".format(args.tempdir)),
-        universal_newlines=True,
-        check=True,
-        capture_output=True
-    ).stdout.strip()
+    localTmp, remoteTmp = createTempdir()
 
     # HACK:
     # If an argument is a file that ends in `.tmp.exe`, assume it is the name
@@ -163,7 +146,7 @@ def main():
             # Make sure we close the file before we scp it, because accessing
             # the temporary file while still open doesn't work on Windows.
             tmpTar.close()
-            remoteTarball = uploadTarball(args, tmpTar.name, pathOnRemote(tmpTar.name))
+            remoteTarball = uploadTarball(tmpTar.name, pathOnRemote(tmpTar.name))
         finally:
             # Make sure we close the file in case an exception happens before
             # we've closed it above -- otherwise close() is idempotent.
@@ -195,17 +178,17 @@ def main():
             args.env.extend(args.prepend_env)
 
         if args.env:
-            env = list(map(cmd_quote, args.env))
+            env = list(map(shlex.quote, args.env))
             remoteCommands.append("export {}".format(" ".join(args.env)))
         remoteCommands.append(subprocess.list2cmdline(commandLine))
 
         # Finally, SSH to the remote host and execute all the commands.
-        rc = runCommand(ssh(args, " && ".join(remoteCommands))).returncode
+        rc = runCommand(ssh(" && ".join(remoteCommands))).returncode
         return rc
 
     finally:
         # Make sure the temporary directory is removed when we're done.
-        cleanupTempdir(args, localTmp, remoteTmp)
+        cleanupTempdir(localTmp, remoteTmp)
 
 
 if __name__ == "__main__":
