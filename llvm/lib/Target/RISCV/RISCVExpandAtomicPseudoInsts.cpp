@@ -1020,10 +1020,21 @@ bool RISCVExpandAtomicPseudo::expandAtomicCmpXchg(
     BuildMI(LoopHeadMBB, DL, TII->get(getLRForRMW(PtrIsCap, Ordering, VT)),
             DestReg)
         .addReg(AddrReg);
-    BuildMI(LoopHeadMBB, DL, TII->get(RISCV::BNE))
-        .addReg(DestIntReg, 0)
-        .addReg(CmpValIntReg, 0)
-        .addMBB(DoneMBB);
+    assert(MI.hasOneMemOperand());
+    if (VT.isFatPointer() && MI.memoperands()[0]->isExactCompare()) {
+      BuildMI(LoopHeadMBB, DL, TII->get(RISCV::CSEQX), ScratchReg)
+          .addReg(DestReg, 0)
+          .addReg(CmpValReg, 0);
+      BuildMI(LoopHeadMBB, DL, TII->get(RISCV::BEQ))
+          .addReg(ScratchReg, 0)
+          .addReg(RISCV::X0, 0)
+          .addMBB(DoneMBB);
+    } else {
+      BuildMI(LoopHeadMBB, DL, TII->get(RISCV::BNE))
+          .addReg(DestIntReg, 0)
+          .addReg(CmpValIntReg, 0)
+          .addMBB(DoneMBB);
+    }
     // .looptail:
     //   sc.[w|d] scratch, newval, (addr)
     //   bnez scratch, loophead

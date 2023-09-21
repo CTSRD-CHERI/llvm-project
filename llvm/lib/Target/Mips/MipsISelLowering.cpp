@@ -1639,6 +1639,15 @@ void MipsTargetLowering::computeKnownBitsForTargetNode(
   }
 }
 
+SDValue
+MipsTargetLowering::getCapabilityEqualExact(const SDLoc &DL, llvm::SDValue LHS,
+                                            llvm::SDValue RHS,
+                                            llvm::SelectionDAG &DAG) const {
+  SDValue Res = DAG.getNode(MipsISD::CapEqualExact, DL, MVT::i64, LHS, RHS);
+  return DAG.getNode(ISD::AssertZext, DL, MVT::i64, Res,
+                     DAG.getValueType(MVT::i1));
+}
+
 TailPaddingAmount
 MipsTargetLowering::getTailPaddingForPreciseBounds(uint64_t Size) const {
   if (!Subtarget.isCheri())

@@ -10121,6 +10121,15 @@ unsigned RISCVTargetLowering::ComputeNumSignBitsForTargetNode(
   return 1;
 }
 
+SDValue
+RISCVTargetLowering::getCapabilityEqualExact(const SDLoc &DL, llvm::SDValue LHS,
+                                             llvm::SDValue RHS,
+                                             llvm::SelectionDAG &DAG) const {
+  MVT VT = Subtarget.getXLenVT();
+  SDValue Res = DAG.getNode(RISCVISD::CAP_EQUAL_EXACT, DL, VT, LHS, RHS);
+  return DAG.getNode(ISD::AssertZext, DL, VT, Res, DAG.getValueType(MVT::i1));
+}
+
 TailPaddingAmount
 RISCVTargetLowering::getTailPaddingForPreciseBounds(uint64_t Size) const {
   if (!RISCVABI::isCheriPureCapABI(Subtarget.getTargetABI()))

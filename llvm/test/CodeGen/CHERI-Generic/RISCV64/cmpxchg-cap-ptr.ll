@@ -278,19 +278,18 @@ define { ptr addrspace(200) , i1 } @test_cmpxchg_strong_cap(ptr addrspace(200) %
   ret { ptr addrspace(200) , i1 } %1
 }
 
-; TODO: this should use an exact equals comparison for the LL/SC
 define { ptr addrspace(200) , i1 } @test_cmpxchg_strong_cap_exact(ptr addrspace(200) %ptr, ptr addrspace(200) %exp, ptr addrspace(200) %new) nounwind {
 ; PURECAP-ATOMICS-LABEL: test_cmpxchg_strong_cap_exact:
 ; PURECAP-ATOMICS:       # %bb.0:
 ; PURECAP-ATOMICS-NEXT:  .LBB5_1: # =>This Inner Loop Header: Depth=1
 ; PURECAP-ATOMICS-NEXT:    clr.c.aq ca3, (ca0)
-; PURECAP-ATOMICS-NEXT:    bne a3, a1, .LBB5_3
+; PURECAP-ATOMICS-NEXT:    cseqx a4, ca3, ca1
+; PURECAP-ATOMICS-NEXT:    beqz a4, .LBB5_3
 ; PURECAP-ATOMICS-NEXT:  # %bb.2: # in Loop: Header=BB5_1 Depth=1
 ; PURECAP-ATOMICS-NEXT:    csc.c.aq a4, ca2, (ca0)
 ; PURECAP-ATOMICS-NEXT:    bnez a4, .LBB5_1
 ; PURECAP-ATOMICS-NEXT:  .LBB5_3:
-; PURECAP-ATOMICS-NEXT:    xor a0, a3, a1
-; PURECAP-ATOMICS-NEXT:    seqz a1, a0
+; PURECAP-ATOMICS-NEXT:    cseqx a1, ca3, ca1
 ; PURECAP-ATOMICS-NEXT:    cmove ca0, ca3
 ; PURECAP-ATOMICS-NEXT:    cret
 ;
@@ -602,19 +601,18 @@ define { ptr addrspace(200) , i1 } @test_cmpxchg_weak_cap(ptr addrspace(200) %pt
   ret { ptr addrspace(200) , i1 } %1
 }
 
-; TODO: this should use an exact equals comparison for the LL/SC
 define { ptr addrspace(200) , i1 } @test_cmpxchg_weak_cap_exact(ptr addrspace(200) %ptr, ptr addrspace(200) %exp, ptr addrspace(200) %new) nounwind {
 ; PURECAP-ATOMICS-LABEL: test_cmpxchg_weak_cap_exact:
 ; PURECAP-ATOMICS:       # %bb.0:
 ; PURECAP-ATOMICS-NEXT:  .LBB11_1: # =>This Inner Loop Header: Depth=1
 ; PURECAP-ATOMICS-NEXT:    clr.c.aq ca3, (ca0)
-; PURECAP-ATOMICS-NEXT:    bne a3, a1, .LBB11_3
+; PURECAP-ATOMICS-NEXT:    cseqx a4, ca3, ca1
+; PURECAP-ATOMICS-NEXT:    beqz a4, .LBB11_3
 ; PURECAP-ATOMICS-NEXT:  # %bb.2: # in Loop: Header=BB11_1 Depth=1
 ; PURECAP-ATOMICS-NEXT:    csc.c.aq a4, ca2, (ca0)
 ; PURECAP-ATOMICS-NEXT:    bnez a4, .LBB11_1
 ; PURECAP-ATOMICS-NEXT:  .LBB11_3:
-; PURECAP-ATOMICS-NEXT:    xor a0, a3, a1
-; PURECAP-ATOMICS-NEXT:    seqz a1, a0
+; PURECAP-ATOMICS-NEXT:    cseqx a1, ca3, ca1
 ; PURECAP-ATOMICS-NEXT:    cmove ca0, ca3
 ; PURECAP-ATOMICS-NEXT:    cret
 ;

@@ -3117,6 +3117,12 @@ public:
   }
 
   // Return true if the target has a capability set address instruction.
+  virtual SDValue getCapabilityEqualExact(const SDLoc &DL, SDValue LHS,
+                                          SDValue RHS,
+                                          SelectionDAG &DAG) const {
+    llvm_unreachable("Not implemented for this target");
+    return SDValue();
+  }
   virtual bool hasCapabilitySetAddress() const { return false; }
   MVT cheriCapabilityType() const { return CapType; }
   bool cheriCapabilityTypeHasPreciseBounds() const {

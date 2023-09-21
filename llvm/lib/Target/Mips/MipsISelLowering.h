@@ -404,6 +404,8 @@ extern bool LargeCapTable;
 
     // Although we don't currently have a CSetAddr, our CheriExpandIntrinsics
     // pass handles the intrinsic so we want to keep the intrinsic as-is.
+    SDValue getCapabilityEqualExact(const SDLoc &DL, SDValue LHS, SDValue RHS,
+                                    SelectionDAG &DAG) const override;
     bool hasCapabilitySetAddress() const override { return true; }
 
     TailPaddingAmount

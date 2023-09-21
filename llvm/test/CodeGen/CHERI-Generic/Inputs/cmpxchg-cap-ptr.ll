@@ -33,7 +33,6 @@ define { ptr addrspace(200) , i1 } @test_cmpxchg_strong_cap(ptr addrspace(200) %
   ret { ptr addrspace(200) , i1 } %1
 }
 
-; TODO: this should use an exact equals comparison for the LL/SC
 define { ptr addrspace(200) , i1 } @test_cmpxchg_strong_cap_exact(ptr addrspace(200) %ptr, ptr addrspace(200) %exp, ptr addrspace(200) %new) nounwind {
   %1 = cmpxchg exact ptr addrspace(200) %ptr, ptr addrspace(200) %exp, ptr addrspace(200) %new acq_rel acquire
   ret { ptr addrspace(200) , i1 } %1
@@ -64,7 +63,6 @@ define { ptr addrspace(200) , i1 } @test_cmpxchg_weak_cap(ptr addrspace(200) %pt
   ret { ptr addrspace(200) , i1 } %1
 }
 
-; TODO: this should use an exact equals comparison for the LL/SC
 define { ptr addrspace(200) , i1 } @test_cmpxchg_weak_cap_exact(ptr addrspace(200) %ptr, ptr addrspace(200) %exp, ptr addrspace(200) %new) nounwind {
   %1 = cmpxchg weak exact ptr addrspace(200) %ptr, ptr addrspace(200) %exp, ptr addrspace(200) %new acq_rel acquire
   ret { ptr addrspace(200) , i1 } %1

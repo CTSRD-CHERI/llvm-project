@@ -327,7 +327,10 @@ bool MipsExpandPseudo::expandAtomicCmpSwap(MachineBasicBlock &BB,
   if (!IsCapOp)
     LLOp.addImm(0);
   if (IsCapCmpXchg) {
-    unsigned CapCmp = STI->useCheriExactEquals() ? Mips::CEXEQ : Mips::CEQ;
+    assert(I->hasOneMemOperand());
+    bool UseExactEquals =
+        STI->useCheriExactEquals() || I->memoperands()[0]->isExactCompare();
+    unsigned CapCmp = UseExactEquals ? Mips::CEXEQ : Mips::CEQ;
     // load, compare, and exit if not equal
     //   cllc dest, ptr
     //   ceq scratch, dest, oldval,

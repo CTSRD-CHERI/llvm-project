@@ -226,14 +226,13 @@ define { ptr addrspace(200) , i1 } @test_cmpxchg_strong_cap(ptr addrspace(200) %
   ret { ptr addrspace(200) , i1 } %1
 }
 
-; TODO: this should use an exact equals comparison for the LL/SC
 define { ptr addrspace(200) , i1 } @test_cmpxchg_strong_cap_exact(ptr addrspace(200) %ptr, ptr addrspace(200) %exp, ptr addrspace(200) %new) nounwind {
 ; PURECAP-LABEL: test_cmpxchg_strong_cap_exact:
 ; PURECAP:       # %bb.0:
 ; PURECAP-NEXT:    sync
 ; PURECAP-NEXT:  .LBB5_1: # =>This Inner Loop Header: Depth=1
 ; PURECAP-NEXT:    cllc $c1, $c3
-; PURECAP-NEXT:    ceq $1, $c1, $c4
+; PURECAP-NEXT:    cexeq $1, $c1, $c4
 ; PURECAP-NEXT:    beqz $1, .LBB5_3
 ; PURECAP-NEXT:    nop
 ; PURECAP-NEXT:  # %bb.2: # in Loop: Header=BB5_1 Depth=1
@@ -241,7 +240,7 @@ define { ptr addrspace(200) , i1 } @test_cmpxchg_strong_cap_exact(ptr addrspace(
 ; PURECAP-NEXT:    beqz $1, .LBB5_1
 ; PURECAP-NEXT:    nop
 ; PURECAP-NEXT:  .LBB5_3:
-; PURECAP-NEXT:    ceq $2, $c1, $c4
+; PURECAP-NEXT:    cexeq $2, $c1, $c4
 ; PURECAP-NEXT:    sync
 ; PURECAP-NEXT:    cjr $c17
 ; PURECAP-NEXT:    cmove $c3, $c1
@@ -251,7 +250,7 @@ define { ptr addrspace(200) , i1 } @test_cmpxchg_strong_cap_exact(ptr addrspace(
 ; HYBRID-NEXT:    sync
 ; HYBRID-NEXT:  .LBB5_1: # =>This Inner Loop Header: Depth=1
 ; HYBRID-NEXT:    cllc $c1, $c3
-; HYBRID-NEXT:    ceq $1, $c1, $c4
+; HYBRID-NEXT:    cexeq $1, $c1, $c4
 ; HYBRID-NEXT:    beqz $1, .LBB5_3
 ; HYBRID-NEXT:    nop
 ; HYBRID-NEXT:  # %bb.2: # in Loop: Header=BB5_1 Depth=1
@@ -259,7 +258,7 @@ define { ptr addrspace(200) , i1 } @test_cmpxchg_strong_cap_exact(ptr addrspace(
 ; HYBRID-NEXT:    beqz $1, .LBB5_1
 ; HYBRID-NEXT:    nop
 ; HYBRID-NEXT:  .LBB5_3:
-; HYBRID-NEXT:    ceq $2, $c1, $c4
+; HYBRID-NEXT:    cexeq $2, $c1, $c4
 ; HYBRID-NEXT:    sync
 ; HYBRID-NEXT:    jr $ra
 ; HYBRID-NEXT:    cmove $c3, $c1
@@ -487,14 +486,13 @@ define { ptr addrspace(200) , i1 } @test_cmpxchg_weak_cap(ptr addrspace(200) %pt
   ret { ptr addrspace(200) , i1 } %1
 }
 
-; TODO: this should use an exact equals comparison for the LL/SC
 define { ptr addrspace(200) , i1 } @test_cmpxchg_weak_cap_exact(ptr addrspace(200) %ptr, ptr addrspace(200) %exp, ptr addrspace(200) %new) nounwind {
 ; PURECAP-LABEL: test_cmpxchg_weak_cap_exact:
 ; PURECAP:       # %bb.0:
 ; PURECAP-NEXT:    sync
 ; PURECAP-NEXT:  .LBB11_1: # =>This Inner Loop Header: Depth=1
 ; PURECAP-NEXT:    cllc $c1, $c3
-; PURECAP-NEXT:    ceq $1, $c1, $c4
+; PURECAP-NEXT:    cexeq $1, $c1, $c4
 ; PURECAP-NEXT:    beqz $1, .LBB11_3
 ; PURECAP-NEXT:    nop
 ; PURECAP-NEXT:  # %bb.2: # in Loop: Header=BB11_1 Depth=1
@@ -502,7 +500,7 @@ define { ptr addrspace(200) , i1 } @test_cmpxchg_weak_cap_exact(ptr addrspace(20
 ; PURECAP-NEXT:    beqz $1, .LBB11_1
 ; PURECAP-NEXT:    nop
 ; PURECAP-NEXT:  .LBB11_3:
-; PURECAP-NEXT:    ceq $2, $c1, $c4
+; PURECAP-NEXT:    cexeq $2, $c1, $c4
 ; PURECAP-NEXT:    sync
 ; PURECAP-NEXT:    cjr $c17
 ; PURECAP-NEXT:    cmove $c3, $c1
@@ -512,7 +510,7 @@ define { ptr addrspace(200) , i1 } @test_cmpxchg_weak_cap_exact(ptr addrspace(20
 ; HYBRID-NEXT:    sync
 ; HYBRID-NEXT:  .LBB11_1: # =>This Inner Loop Header: Depth=1
 ; HYBRID-NEXT:    cllc $c1, $c3
-; HYBRID-NEXT:    ceq $1, $c1, $c4
+; HYBRID-NEXT:    cexeq $1, $c1, $c4
 ; HYBRID-NEXT:    beqz $1, .LBB11_3
 ; HYBRID-NEXT:    nop
 ; HYBRID-NEXT:  # %bb.2: # in Loop: Header=BB11_1 Depth=1
@@ -520,7 +518,7 @@ define { ptr addrspace(200) , i1 } @test_cmpxchg_weak_cap_exact(ptr addrspace(20
 ; HYBRID-NEXT:    beqz $1, .LBB11_1
 ; HYBRID-NEXT:    nop
 ; HYBRID-NEXT:  .LBB11_3:
-; HYBRID-NEXT:    ceq $2, $c1, $c4
+; HYBRID-NEXT:    cexeq $2, $c1, $c4
 ; HYBRID-NEXT:    sync
 ; HYBRID-NEXT:    jr $ra
 ; HYBRID-NEXT:    cmove $c3, $c1

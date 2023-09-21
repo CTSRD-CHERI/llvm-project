@@ -730,6 +730,8 @@ private:
   SDValue expandUnalignedRVVLoad(SDValue Op, SelectionDAG &DAG) const;
   SDValue expandUnalignedRVVStore(SDValue Op, SelectionDAG &DAG) const;
 
+  SDValue getCapabilityEqualExact(const SDLoc &DL, SDValue LHS, SDValue RHS,
+                                  SelectionDAG &DAG) const override;
   bool hasCapabilitySetAddress() const override { return true; }
 
   TailPaddingAmount

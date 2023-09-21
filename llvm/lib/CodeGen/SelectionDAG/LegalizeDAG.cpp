@@ -2876,8 +2876,15 @@ bool SelectionDAGLegalize::ExpandNode(SDNode *Node) {
     }
     }
 
-    SDValue Success =
-        DAG.getSetCC(dl, Node->getValueType(1), LHS, RHS, ISD::SETEQ);
+    SDValue Success;
+    if (OuterType.isFatPointer() &&
+        cast<AtomicSDNode>(Node)->getMemOperand()->isExactCompare()) {
+      Success = TLI.getCapabilityEqualExact(dl, LHS, RHS, DAG);
+      if (Success.getValueType() != Node->getValueType(1))
+        Success = DAG.getZExtOrTrunc(Success, dl, Node->getValueType(1));
+    } else {
+      Success = DAG.getSetCC(dl, Node->getValueType(1), LHS, RHS, ISD::SETEQ);
+    }
 
     Results.push_back(ExtRes.getValue(0));
     Results.push_back(Success);
