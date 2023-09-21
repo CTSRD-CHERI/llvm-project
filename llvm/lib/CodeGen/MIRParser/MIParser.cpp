@@ -3242,6 +3242,8 @@ bool MIParser::parseMachineMemoryOperand(MachineMemOperand *&Dest) {
   if (parseOptionalAtomicOrdering(FailureOrder))
     return true;
 
+  const bool ExactCompare = consumeIfPresent(MIToken::kw_exact);
+
   LLT MemoryType;
   if (Token.isNot(MIToken::IntegerLiteral) &&
       Token.isNot(MIToken::kw_unknown_size) &&
@@ -3344,7 +3346,8 @@ bool MIParser::parseMachineMemoryOperand(MachineMemOperand *&Dest) {
   if (expectAndConsume(MIToken::rparen))
     return true;
   Dest = MF.getMachineMemOperand(Ptr, Flags, MemoryType, Align(BaseAlignment),
-                                 AAInfo, Range, SSID, Order, FailureOrder);
+                                 AAInfo, Range, SSID, Order, ExactCompare,
+                                 FailureOrder);
   return false;
 }
 

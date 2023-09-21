@@ -454,37 +454,37 @@ void MachineFunction::deleteMachineBasicBlock(MachineBasicBlock *MBB) {
 MachineMemOperand *MachineFunction::getMachineMemOperand(
     MachinePointerInfo PtrInfo, MachineMemOperand::Flags f, uint64_t s,
     Align base_alignment, const AAMDNodes &AAInfo, const MDNode *Ranges,
-    SyncScope::ID SSID, AtomicOrdering Ordering,
+    SyncScope::ID SSID, AtomicOrdering Ordering, bool ExactCompare,
     AtomicOrdering FailureOrdering) {
   return new (Allocator)
-      MachineMemOperand(PtrInfo, f, s, base_alignment, AAInfo, Ranges,
-                        SSID, Ordering, FailureOrdering);
+      MachineMemOperand(PtrInfo, f, s, base_alignment, AAInfo, Ranges, SSID,
+                        Ordering, ExactCompare, FailureOrdering);
 }
 
 MachineMemOperand *MachineFunction::getMachineMemOperand(
     MachinePointerInfo PtrInfo, MachineMemOperand::Flags f, LLT MemTy,
     Align base_alignment, const AAMDNodes &AAInfo, const MDNode *Ranges,
-    SyncScope::ID SSID, AtomicOrdering Ordering,
+    SyncScope::ID SSID, AtomicOrdering Ordering, bool ExactCompare,
     AtomicOrdering FailureOrdering) {
   return new (Allocator)
       MachineMemOperand(PtrInfo, f, MemTy, base_alignment, AAInfo, Ranges, SSID,
-                        Ordering, FailureOrdering);
+                        Ordering, ExactCompare, FailureOrdering);
 }
 
 MachineMemOperand *MachineFunction::getMachineMemOperand(
     const MachineMemOperand *MMO, const MachinePointerInfo &PtrInfo, uint64_t Size) {
-  return new (Allocator)
-      MachineMemOperand(PtrInfo, MMO->getFlags(), Size, MMO->getBaseAlign(),
-                        AAMDNodes(), nullptr, MMO->getSyncScopeID(),
-                        MMO->getSuccessOrdering(), MMO->getFailureOrdering());
+  return new (Allocator) MachineMemOperand(
+      PtrInfo, MMO->getFlags(), Size, MMO->getBaseAlign(), AAMDNodes(), nullptr,
+      MMO->getSyncScopeID(), MMO->getSuccessOrdering(), MMO->isExactCompare(),
+      MMO->getFailureOrdering());
 }
 
 MachineMemOperand *MachineFunction::getMachineMemOperand(
     const MachineMemOperand *MMO, const MachinePointerInfo &PtrInfo, LLT Ty) {
-  return new (Allocator)
-      MachineMemOperand(PtrInfo, MMO->getFlags(), Ty, MMO->getBaseAlign(),
-                        AAMDNodes(), nullptr, MMO->getSyncScopeID(),
-                        MMO->getSuccessOrdering(), MMO->getFailureOrdering());
+  return new (Allocator) MachineMemOperand(
+      PtrInfo, MMO->getFlags(), Ty, MMO->getBaseAlign(), AAMDNodes(), nullptr,
+      MMO->getSyncScopeID(), MMO->getSuccessOrdering(), MMO->isExactCompare(),
+      MMO->getFailureOrdering());
 }
 
 MachineMemOperand *
@@ -500,10 +500,11 @@ MachineFunction::getMachineMemOperand(const MachineMemOperand *MMO,
 
   // Do not preserve ranges, since we don't necessarily know what the high bits
   // are anymore.
-  return new (Allocator) MachineMemOperand(
-      PtrInfo.getWithOffset(Offset), MMO->getFlags(), Ty, Alignment,
-      MMO->getAAInfo(), nullptr, MMO->getSyncScopeID(),
-      MMO->getSuccessOrdering(), MMO->getFailureOrdering());
+  return new (Allocator)
+      MachineMemOperand(PtrInfo.getWithOffset(Offset), MMO->getFlags(), Ty,
+                        Alignment, MMO->getAAInfo(), nullptr,
+                        MMO->getSyncScopeID(), MMO->getSuccessOrdering(),
+                        MMO->isExactCompare(), MMO->getFailureOrdering());
 }
 
 MachineMemOperand *
@@ -516,16 +517,17 @@ MachineFunction::getMachineMemOperand(const MachineMemOperand *MMO,
   return new (Allocator) MachineMemOperand(
       MPI, MMO->getFlags(), MMO->getSize(), MMO->getBaseAlign(), AAInfo,
       MMO->getRanges(), MMO->getSyncScopeID(), MMO->getSuccessOrdering(),
-      MMO->getFailureOrdering());
+      MMO->isExactCompare(), MMO->getFailureOrdering());
 }
 
 MachineMemOperand *
 MachineFunction::getMachineMemOperand(const MachineMemOperand *MMO,
                                       MachineMemOperand::Flags Flags) {
-  return new (Allocator) MachineMemOperand(
-      MMO->getPointerInfo(), Flags, MMO->getSize(), MMO->getBaseAlign(),
-      MMO->getAAInfo(), MMO->getRanges(), MMO->getSyncScopeID(),
-      MMO->getSuccessOrdering(), MMO->getFailureOrdering());
+  return new (Allocator)
+      MachineMemOperand(MMO->getPointerInfo(), Flags, MMO->getSize(),
+                        MMO->getBaseAlign(), MMO->getAAInfo(), MMO->getRanges(),
+                        MMO->getSyncScopeID(), MMO->getSuccessOrdering(),
+                        MMO->isExactCompare(), MMO->getFailureOrdering());
 }
 
 MachineInstr::ExtraInfo *MachineFunction::createMIExtraInfo(

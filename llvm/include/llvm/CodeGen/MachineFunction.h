@@ -960,6 +960,7 @@ public:
       Align base_alignment, const AAMDNodes &AAInfo = AAMDNodes(),
       const MDNode *Ranges = nullptr, SyncScope::ID SSID = SyncScope::System,
       AtomicOrdering Ordering = AtomicOrdering::NotAtomic,
+      bool ExactCompare = false,
       AtomicOrdering FailureOrdering = AtomicOrdering::NotAtomic);
 
   MachineMemOperand *getMachineMemOperand(
@@ -967,6 +968,7 @@ public:
       Align base_alignment, const AAMDNodes &AAInfo = AAMDNodes(),
       const MDNode *Ranges = nullptr, SyncScope::ID SSID = SyncScope::System,
       AtomicOrdering Ordering = AtomicOrdering::NotAtomic,
+      bool ExactCompare = false,
       AtomicOrdering FailureOrdering = AtomicOrdering::NotAtomic);
 
   /// getMachineMemOperand - Allocate a new MachineMemOperand by copying
