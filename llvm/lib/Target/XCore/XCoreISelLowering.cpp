@@ -934,7 +934,7 @@ LowerATOMIC_LOAD(SDValue Op, SelectionDAG &DAG) const {
   assert(N->getOpcode() == ISD::ATOMIC_LOAD && "Bad Atomic OP");
   assert((N->getSuccessOrdering() == AtomicOrdering::Unordered ||
           N->getSuccessOrdering() == AtomicOrdering::Monotonic) &&
-         "setInsertFencesForAtomic(true) expects unordered / monotonic");
+         "shouldInsertFencesForAtomic(true) expects unordered / monotonic");
   if (N->getMemoryVT() == MVT::i32) {
     if (N->getAlign() < Align(4))
       report_fatal_error("atomic load must be aligned");
@@ -965,7 +965,7 @@ LowerATOMIC_STORE(SDValue Op, SelectionDAG &DAG) const {
   assert(N->getOpcode() == ISD::ATOMIC_STORE && "Bad Atomic OP");
   assert((N->getSuccessOrdering() == AtomicOrdering::Unordered ||
           N->getSuccessOrdering() == AtomicOrdering::Monotonic) &&
-         "setInsertFencesForAtomic(true) expects unordered / monotonic");
+         "shouldInsertFencesForAtomic(true) expects unordered / monotonic");
   if (N->getMemoryVT() == MVT::i32) {
     if (N->getAlign() < Align(4))
       report_fatal_error("atomic store must be aligned");
