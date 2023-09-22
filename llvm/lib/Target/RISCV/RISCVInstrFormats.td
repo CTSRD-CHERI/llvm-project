@@ -243,8 +243,8 @@ class PseudoQuietFCMP<DAGOperand Ty>
 }
 
 // Pseudo load instructions.
-class PseudoLoad<string opcodestr, RegisterClass rdty = GPR>
-    : Pseudo<(outs rdty:$rd), (ins bare_symbol:$addr), [], opcodestr, "$rd, $addr"> {
+class PseudoLoad<string opcodestr>
+    : Pseudo<(outs GPR:$rd), (ins bare_symbol:$addr), [], opcodestr, "$rd, $addr"> {
   let hasSideEffects = 0;
   let mayLoad = 1;
   let mayStore = 0;
@@ -252,7 +252,7 @@ class PseudoLoad<string opcodestr, RegisterClass rdty = GPR>
   let isAsmParserOnly = 1;
 }
 
-class PseudoFloatLoad<string opcodestr, RegisterClass rdty = GPR>
+class PseudoFloatLoad<string opcodestr, RegisterClass rdty>
     : Pseudo<(outs GPR:$tmp, rdty:$rd), (ins bare_symbol:$addr), [], opcodestr, "$rd, $addr, $tmp"> {
   let hasSideEffects = 0;
   let mayLoad = 1;
