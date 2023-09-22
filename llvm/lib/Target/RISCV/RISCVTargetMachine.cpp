@@ -86,6 +86,7 @@ extern "C" LLVM_EXTERNAL_VISIBILITY void LLVMInitializeRISCVTarget() {
   initializeGlobalISel(*PR);
   initializeRISCVO0PreLegalizerCombinerPass(*PR);
   initializeRISCVPreLegalizerCombinerPass(*PR);
+  initializeRISCVPostLegalizerCombinerPass(*PR);
   initializeKCFIPass(*PR);
   initializeRISCVDeadRegisterDefinitionsPass(*PR);
   initializeRISCVMakeCompressibleOptPass(*PR);
@@ -307,6 +308,7 @@ public:
   bool addIRTranslator() override;
   void addPreLegalizeMachineIR() override;
   bool addLegalizeMachineIR() override;
+  void addPreRegBankSelect() override;
   bool addRegBankSelect() override;
   bool addGlobalInstructionSelect() override;
   void addPreEmitPass() override;
@@ -376,6 +378,11 @@ void RISCVPassConfig::addPreLegalizeMachineIR() {
 bool RISCVPassConfig::addLegalizeMachineIR() {
   addPass(new Legalizer());
   return false;
+}
+
+void RISCVPassConfig::addPreRegBankSelect() {
+  if (getOptLevel() != CodeGenOptLevel::None)
+    addPass(createRISCVPostLegalizerCombiner());
 }
 
 bool RISCVPassConfig::addRegBankSelect() {
