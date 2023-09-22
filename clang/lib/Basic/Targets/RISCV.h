@@ -190,8 +190,15 @@ public:
   void setMaxAtomicWidth() override {
     MaxAtomicPromoteWidth = 128;
 
-    if (ISAInfo->hasExtension("a"))
+    if (ISAInfo->hasExtension("a")) {
       MaxAtomicInlineWidth = 32;
+      // With CHERI we support capability-size integer atomic operations without
+      // a libcall. Currently this is limited to purecap since in hybrid mode
+      // RMW/CMPXCHG with a capability pointer does not work yet.
+      // See https://github.com/CTSRD-CHERI/llvm-project/pull/490
+      if (CapabilityABI)
+        MaxAtomicInlineWidth = 64;
+    }
   }
 
   uint64_t getPointerRangeForCHERICapability() const override { return 32; }
@@ -226,8 +233,15 @@ public:
   void setMaxAtomicWidth() override {
     MaxAtomicPromoteWidth = 128;
 
-    if (ISAInfo->hasExtension("a"))
+    if (ISAInfo->hasExtension("a")) {
       MaxAtomicInlineWidth = 64;
+      // With CHERI we support capability-size integer atomic operations without
+      // a libcall. Currently this is limited to purecap since in hybrid mode
+      // RMW/CMPXCHG with a capability pointer does not work yet.
+      // See https://github.com/CTSRD-CHERI/llvm-project/pull/490
+      if (CapabilityABI)
+        MaxAtomicInlineWidth = 128;
+    }
   }
 
   uint64_t getPointerRangeForCHERICapability() const override { return 64; }

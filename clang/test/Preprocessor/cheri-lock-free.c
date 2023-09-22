@@ -1,9 +1,9 @@
 /// Check that we report pointers as being always lock-free, otherwise <atomic>
 /// ends up using locks with -ffreestanding.
 // RUN: %riscv32_cheri_cc1 -fgnuc-version=4.2.1 -target-feature +a -E -dM %s \
-// RUN:    | FileCheck %s --check-prefixes=CHECK,CHECK-32 --implicit-check-not=_LOCK_FREE
+// RUN:    | FileCheck %s --check-prefixes=CHECK,CHECK-32-HYBRID --implicit-check-not=_LOCK_FREE
 // RUN: %riscv32_cheri_purecap_cc1 -fgnuc-version=4.2.1 -target-feature +a -E -dM %s \
-// RUN:    | FileCheck %s --check-prefixes=CHECK,CHECK-32 --implicit-check-not=_LOCK_FREE
+// RUN:    | FileCheck %s --check-prefixes=CHECK,CHECK-32-PURECAP  --implicit-check-not=_LOCK_FREE
 // RUN: %riscv64_cheri_cc1 -fgnuc-version=4.2.1 -target-feature +a -E -dM %s \
 // RUN:    | FileCheck %s --check-prefixes=CHECK,CHECK-64 --implicit-check-not=_LOCK_FREE
 // RUN: %riscv64_cheri_purecap_cc1 -fgnuc-version=4.2.1 -target-feature +a -E -dM %s \
@@ -15,7 +15,9 @@
 // CHECK: #define __CLANG_ATOMIC_CHAR_LOCK_FREE 2
 // CHECK: #define __CLANG_ATOMIC_INT_LOCK_FREE 2
 // CHECK-64: #define __CLANG_ATOMIC_LLONG_LOCK_FREE 2
-// CHECK-32: #define __CLANG_ATOMIC_LLONG_LOCK_FREE 1
+// NB: LLONG is always lockfree for RV32 purecap since we use capability atomics.
+// CHECK-32-HYBRID: #define __CLANG_ATOMIC_LLONG_LOCK_FREE 1
+// CHECK-32-PURECAP: #define __CLANG_ATOMIC_LLONG_LOCK_FREE 2
 // CHECK: #define __CLANG_ATOMIC_LONG_LOCK_FREE 2
 // CHECK: #define __CLANG_ATOMIC_POINTER_LOCK_FREE 2
 // CHECK: #define __CLANG_ATOMIC_SHORT_LOCK_FREE 2
@@ -26,7 +28,9 @@
 // CHECK: #define __GCC_ATOMIC_CHAR_LOCK_FREE 2
 // CHECK: #define __GCC_ATOMIC_INT_LOCK_FREE 2
 // CHECK-64: #define __GCC_ATOMIC_LLONG_LOCK_FREE 2
-// CHECK-32: #define __GCC_ATOMIC_LLONG_LOCK_FREE 1
+// NB: LLONG is always lockfree for RV32 purecap since we use capability atomics.
+// CHECK-32-HYBRID: #define __GCC_ATOMIC_LLONG_LOCK_FREE 1
+// CHECK-32-PURECAP: #define __GCC_ATOMIC_LLONG_LOCK_FREE 2
 // CHECK: #define __GCC_ATOMIC_LONG_LOCK_FREE 2
 // CHECK: #define __GCC_ATOMIC_POINTER_LOCK_FREE 2
 // CHECK: #define __GCC_ATOMIC_SHORT_LOCK_FREE 2

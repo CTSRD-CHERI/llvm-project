@@ -8,18 +8,15 @@
 // RUN: %riscv64_cheri_cc1 -target-feature +a %s -fsyntax-only -verify=hybrid
 // RUN: %riscv32_cheri_purecap_cc1 -target-feature +a %s -fsyntax-only -verify=purecap
 // RUN: %riscv32_cheri_cc1 -target-feature +a %s -fsyntax-only -verify=hybrid
+// purecap-no-diagnostics
 
 _Static_assert(__atomic_always_lock_free(sizeof(char), 0), "");
 _Static_assert(__atomic_always_lock_free(sizeof(short), 0), "");
 _Static_assert(__atomic_always_lock_free(sizeof(int), 0), "");
 _Static_assert(__atomic_always_lock_free(sizeof(__INTPTR_TYPE__), 0), "");
-// FIXME: purecap-error@-1{{static assertion failed due to requirement '__atomic_always_lock_free(sizeof(__intcap), 0)'}}
 _Static_assert(__atomic_always_lock_free(sizeof(__UINTPTR_TYPE__), 0), "");
-// FIXME: purecap-error@-1{{static assertion failed due to requirement '__atomic_always_lock_free(sizeof(unsigned __intcap), 0)'}}
 _Static_assert(__atomic_always_lock_free(sizeof(void *), 0), "");
-// FIXME: purecap-error@-1{{static assertion failed due to requirement '__atomic_always_lock_free(sizeof(void *), 0)'}}
 /// TODO: it would be nice if hybrid mode also allowed lock-free sizeof(void * __capability)
 /// but this is not currently true since atomic RMW/CMPXCHG with capability
 /// pointers are not supported.
 _Static_assert(__atomic_always_lock_free(sizeof(void * __capability), 0), "");  // hybrid-error{{static assertion failed due to requirement '__atomic_always_lock_free(sizeof(void * __capability), 0)'}}
-// FIXME: purecap-error@-1{{static assertion failed due to requirement '__atomic_always_lock_free(sizeof(void *), 0)'}}
