@@ -79,8 +79,13 @@ def main():
             debug(args, "Created local tmp dir:", localTmp)
             debug(args, "Assuming remote path is:", remoteTmp)
             return localTmp, remoteTmp
-        remoteTmp = subprocess.check_output(ssh('mktemp -d {}/libcxx.XXXXXXXXXX'.format(args.tempdir)),
-                                            universal_newlines=True).strip()
+        remoteTmp = runCommand(
+          ssh("mktemp -d {}/libcxx.XXXXXXXXXX".format(args.tempdir)),
+          universal_newlines=True,
+          check=True,
+          capture_output=True,
+          stdin=subprocess.DEVNULL
+        ).stdout.strip()
         debug(args, "Create remote tmp dir:", remoteTmp)
         return None, remoteTmp
 
@@ -107,7 +112,7 @@ def main():
             shutil.copy2(src, localPath)
         else:
             debug(args, "Uploading", src, "->", dst, "using scp")
-            subprocess.check_call(scp(src, dst))
+            runCommand(scp(tmpTar.name, remoteTarball), check=True, stdin=subprocess.DEVNULL)
         return dst
 
     def runCommand(command, *args_, **kwargs):
@@ -134,7 +139,7 @@ def main():
         if args.codesign_identity:
             for exe in filter(isTestExe, commandLine):
                 codesign = ["codesign", "-f", "-s", args.codesign_identity, exe]
-                runCommand(codesign, env={}, check=True)
+                runCommand(codesign, env={}, check=True, stdin=subprocess.DEVNULL)
 
         # tar up the execution directory (which contains everything that's needed
         # to run the test), and copy the tarball over to the remote host.
@@ -183,6 +188,8 @@ def main():
         remoteCommands.append(subprocess.list2cmdline(commandLine))
 
         # Finally, SSH to the remote host and execute all the commands.
+        # Make sure to forward stdin to the process so that the test suite
+        # can pipe stuff into the executor.
         rc = runCommand(ssh(" && ".join(remoteCommands))).returncode
         return rc
 
