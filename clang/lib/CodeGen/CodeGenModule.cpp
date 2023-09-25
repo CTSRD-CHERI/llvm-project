@@ -372,22 +372,24 @@ CodeGenModule::CodeGenModule(ASTContext &C,
   IntTy = llvm::IntegerType::get(LLVMContext, C.getTargetInfo().getIntWidth());
   // XXXAR: it seems like the codegen uses this type as an integer which can fit
   // the pointer range and not as an integer with the same width as a pointer
-  IntPtrTy = llvm::IntegerType::get(LLVMContext, Target.getMaxPointerRange());
-  Int8PtrTy = Int8Ty->getPointerTo(getTargetCodeGenInfo().getDefaultAS());
+  IntPtrTy = llvm::IntegerType::get(LLVMContext,
+    C.getTargetInfo().getMaxPointerRange());
+  Int8PtrTy = getPointerInDefaultAS(Int8Ty);
   if (Target.SupportsCapabilities()) {
     Int8CheriCapTy =
         Int8Ty->getPointerTo(getTargetCodeGenInfo().getCHERICapabilityAS());
   } else {
     Int8CheriCapTy = nullptr;
   }
-  Int8PtrPtrTy = Int8PtrTy->getPointerTo(getTargetCodeGenInfo().getDefaultAS());
   const llvm::DataLayout &DL = M.getDataLayout();
-  AllocaInt8PtrTy = Int8Ty->getPointerTo(DL.getAllocaAddrSpace());
-  GlobalsInt8PtrTy = Int8Ty->getPointerTo(DL.getDefaultGlobalsAddressSpace());
-  ProgramInt8PtrTy = Int8Ty->getPointerTo(DL.getProgramAddressSpace());
-  ConstGlobalsPtrTy = Int8Ty->getPointerTo(
-      C.getTargetAddressSpace(GetGlobalConstantAddressSpace()));
+  AllocaInt8PtrTy =
+      llvm::PointerType::get(LLVMContext, DL.getAllocaAddrSpace());
+  GlobalsInt8PtrTy =
+      llvm::PointerType::get(LLVMContext, DL.getDefaultGlobalsAddressSpace());
+  ConstGlobalsPtrTy = llvm::PointerType::get(
+      LLVMContext, C.getTargetAddressSpace(GetGlobalConstantAddressSpace()));
   ASTAllocaAddressSpace = getTargetCodeGenInfo().getASTAllocaAddressSpace();
+  ProgramInt8PtrTy = llvm::PointerType::get(LLVMContext, DL.getProgramAddressSpace());
 
   // Build C++20 Module initializers.
   // TODO: Add Microsoft here once we know the mangling required for the
