@@ -265,11 +265,10 @@ void freebsd::Linker::ConstructJob(Compilation &C, const JobAction &JA,
   if (IsCHERIPureCapABI)
     CmdArgs.push_back(Args.MakeArgString("--no-warn-mismatch"));
 
+  assert((Output.isFilename() || Output.isNothing()) && "Invalid output.");
   if (Output.isFilename()) {
     CmdArgs.push_back("-o");
     CmdArgs.push_back(Output.getFilename());
-  } else {
-    assert(Output.isNothing() && "Invalid output.");
   }
 
   if (!Args.hasArg(options::OPT_nostdlib, options::OPT_nostartfiles,
