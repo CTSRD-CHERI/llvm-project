@@ -134,17 +134,18 @@ int getTrailingZerosCount(const MemRegion *R, ProgramStateRef State,
     unsigned NaturalAlign = ASTCtx.getTypeAlignInChars(PT).getQuantity();
 
     if (const ElementRegion *ER = R->getAs<ElementRegion>()) {
+      int ElTyTZ = llvm::APSInt::getUnsigned(NaturalAlign).countTrailingZeros();
+
       const MemRegion *Base = ER->getSuperRegion();
       int BaseTZC = getTrailingZerosCount(Base, State, ASTCtx);
+      if (BaseTZC < 0)
+        return ElTyTZ > 0 ? ElTyTZ : -1;
+
       int IdxTZC = getTrailingZerosCount(ER->getIndex(), State, ASTCtx);
-      if (BaseTZC >= 0) {
-        if (IdxTZC < 0 && NaturalAlign == 1)
-          return -1;
-        int ElemTyTZC =
-            llvm::APSInt::getUnsigned(NaturalAlign).countTrailingZeros();
-        return std::min(BaseTZC, std::max(IdxTZC, 0) + ElemTyTZC);
-      }
-      return -1;
+      if (IdxTZC < 0 && NaturalAlign == 1)
+        return -1;
+
+      return std::min(BaseTZC, std::max(IdxTZC, 0) + ElTyTZ);
     }
 
     unsigned AlignAttrVal = 0;
@@ -247,7 +248,20 @@ void PointerAlignmentChecker::checkPostStmt(const CastExpr *CE,
   int DstTZC = getTrailingZerosCount(CE, C);
   int SrcTZC = getTrailingZerosCount(CE->getSubExpr(), C);
 
-  if (DstTZC < SrcTZC) {
+  ASTContext &ASTCtx = C.getASTContext();
+  int DstReqTZC = -1;
+  if (CE->getType()->isPointerType()) {
+    if (!isGenericPointerType(CE->getType(), true)) {
+      const QualType &DstPTy = CE->getType()->getPointeeType();
+      if (!DstPTy->isIncompleteType()) {
+        unsigned ReqAl = ASTCtx.getTypeAlignInChars(DstPTy).getQuantity();
+        DstReqTZC = llvm::APSInt::getUnsigned(ReqAl).countTrailingZeros();
+      }
+    }
+  }
+
+  int NewAlign = std::max(SrcTZC, DstReqTZC);
+  if (DstTZC < NewAlign) {
     SVal DstVal = C.getSVal(CE);
     ProgramStateRef State = C.getState();
     if (DstVal.isUnknown()) {
@@ -257,7 +271,7 @@ void PointerAlignmentChecker::checkPostStmt(const CastExpr *CE,
         State = State->BindExpr(CE, LCtx, DstVal);
     }
     if (SymbolRef Sym = DstVal.getAsSymbol()) {
-        State = State->set<TrailingZerosMap>(Sym, SrcTZC);
+        State = State->set<TrailingZerosMap>(Sym, NewAlign);
         C.addTransition(State);
     }
   }

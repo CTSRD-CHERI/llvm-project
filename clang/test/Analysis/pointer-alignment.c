@@ -4,6 +4,7 @@
 typedef __uintcap_t uintptr_t;
 typedef __intcap_t intptr_t;
 typedef __typeof__(sizeof(int)) size_t;
+extern void * malloc(size_t);
 
 double a[2048], // expected-note{{Original allocation of type 'double[2048]'}}
     *next = a;
@@ -75,6 +76,23 @@ int voidptr_cast(int *ip1, int *ip2) {
   int b1 = (ip1 == (int*)w);  // expected-warning{{Pointer value aligned to a 1 byte boundary cast to type 'int * __capability' with required alignment 4 bytes}}
   int b2 = (ip1 == (void*)w); // no-warn
   return b1 || b2;
+}
+
+typedef struct B {
+  long *ptr;
+  long flex[1]; // expected-note{{Original allocation}}
+} B;
+
+B* blob(size_t n) {
+  size_t s = sizeof(B) + n * sizeof(long) + n * sizeof(B);
+  B *p = malloc(s);
+  p->ptr = (long*)&p[1];
+  return (B*)(&p->ptr[n]); // expected-warning{{Pointer value aligned to a 8 byte boundary cast to type 'B * __capability' with required capability alignment 16 bytes}}
+}
+B* flex(size_t n) {
+  size_t s = sizeof(B) + (n-1) * sizeof(long) + n * sizeof(B);
+  B *p = malloc(s);
+  return (B*)(&p->flex[n]); // expected-warning{{Pointer value aligned to a 8 byte boundary cast to type 'B * __capability' with required capability alignment 16 bytes}}
 }
 
 
