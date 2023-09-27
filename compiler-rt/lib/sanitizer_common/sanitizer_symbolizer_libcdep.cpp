@@ -117,7 +117,7 @@ bool Symbolizer::SymbolizeData(vaddr addr, DataInfo *info) {
       return true;
     }
   }
-  return true;
+  return false;
 }
 
 bool Symbolizer::SymbolizeFrame(vaddr addr, FrameInfo *info) {
@@ -133,7 +133,7 @@ bool Symbolizer::SymbolizeFrame(vaddr addr, FrameInfo *info) {
       return true;
     }
   }
-  return true;
+  return false;
 }
 
 bool Symbolizer::GetModuleNameAndOffsetForPC(vaddr pc, const char **module_name,
