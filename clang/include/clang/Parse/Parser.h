@@ -2895,7 +2895,7 @@ private:
     return false;
   }
 
-  void ParseOpenMPAttributeArgs(IdentifierInfo *AttrName,
+  void ParseOpenMPAttributeArgs(const IdentifierInfo *AttrName,
                                 CachedTokens &OpenMPTokens);
 
   void ParseCXX11AttributeSpecifierInternal(ParsedAttributes &Attrs,
