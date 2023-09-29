@@ -94,6 +94,11 @@ MCStreamer *createELFStreamer(MCContext &Ctx,
                               std::unique_ptr<MCObjectWriter> &&OW,
                               std::unique_ptr<MCCodeEmitter> &&CE,
                               bool RelaxAll);
+MCStreamer *createGOFFStreamer(MCContext &Ctx,
+                               std::unique_ptr<MCAsmBackend> &&TAB,
+                               std::unique_ptr<MCObjectWriter> &&OW,
+                               std::unique_ptr<MCCodeEmitter> &&CE,
+                               bool RelaxAll);
 MCStreamer *createMachOStreamer(MCContext &Ctx,
                                 std::unique_ptr<MCAsmBackend> &&TAB,
                                 std::unique_ptr<MCObjectWriter> &&OW,
@@ -194,6 +199,10 @@ public:
   using ELFStreamerCtorTy =
       MCStreamer *(*)(const Triple &T, MCContext &Ctx,
                       std::unique_ptr<MCAsmBackend> &&TAB,
+                      std::unique_ptr<MCObjectWriter> &&OW,
+                      std::unique_ptr<MCCodeEmitter> &&Emitter, bool RelaxAll);
+  using GOFFStreamerCtorTy =
+      MCStreamer *(*)(MCContext &Ctx, std::unique_ptr<MCAsmBackend> &&TAB,
                       std::unique_ptr<MCObjectWriter> &&OW,
                       std::unique_ptr<MCCodeEmitter> &&Emitter, bool RelaxAll);
   using MachOStreamerCtorTy =
@@ -328,6 +337,7 @@ private:
 
   // Construction functions for the various object formats, if registered.
   COFFStreamerCtorTy COFFStreamerCtorFn = nullptr;
+  GOFFStreamerCtorTy GOFFStreamerCtorFn = nullptr;
   MachOStreamerCtorTy MachOStreamerCtorFn = nullptr;
   ELFStreamerCtorTy ELFStreamerCtorFn = nullptr;
   WasmStreamerCtorTy WasmStreamerCtorFn = nullptr;
@@ -599,7 +609,13 @@ public:
                                std::move(Emitter), RelaxAll);
       break;
     case Triple::GOFF:
-      report_fatal_error("GOFF MCObjectStreamer not implemented yet");
+      if (GOFFStreamerCtorFn)
+        S = GOFFStreamerCtorFn(Ctx, std::move(TAB), std::move(OW),
+                               std::move(Emitter), RelaxAll);
+      else
+        S = createGOFFStreamer(Ctx, std::move(TAB), std::move(OW),
+                               std::move(Emitter), RelaxAll);
+      break;
     case Triple::XCOFF:
       if (XCOFFStreamerCtorFn)
         S = XCOFFStreamerCtorFn(T, Ctx, std::move(TAB), std::move(OW),
@@ -1004,6 +1020,10 @@ struct TargetRegistry {
 
   static void RegisterCOFFStreamer(Target &T, Target::COFFStreamerCtorTy Fn) {
     T.COFFStreamerCtorFn = Fn;
+  }
+
+  static void RegisterGOFFStreamer(Target &T, Target::GOFFStreamerCtorTy Fn) {
+    T.GOFFStreamerCtorFn = Fn;
   }
 
   static void RegisterMachOStreamer(Target &T, Target::MachOStreamerCtorTy Fn) {
