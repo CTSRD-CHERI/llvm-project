@@ -15637,7 +15637,7 @@ SDValue DAGCombiner::visitFADDForFMACombine(SDNode *N) {
         DAG.ReplaceAllUsesOfValueWith(FMul, CDE);
         // Replacing the inner FMul could cause the outer FMA to be simplified
         // away.
-        return FMA.getOpcode() == ISD::DELETED_NODE ? SDValue() : FMA;
+        return FMA.getOpcode() == ISD::DELETED_NODE ? SDValue(N, 0) : FMA;
       }
 
       TmpFMA = TmpFMA->getOperand(2);
@@ -16195,7 +16195,8 @@ SDValue DAGCombiner::visitVP_FADD(SDNode *N) {
 
   // FADD -> FMA combines:
   if (SDValue Fused = visitFADDForFMACombine<VPMatchContext>(N)) {
-    AddToWorklist(Fused.getNode());
+    if (Fused.getOpcode() != ISD::DELETED_NODE)
+      AddToWorklist(Fused.getNode());
     return Fused;
   }
   return SDValue();
@@ -16387,7 +16388,8 @@ SDValue DAGCombiner::visitFADD(SDNode *N) {
 
   // FADD -> FMA combines:
   if (SDValue Fused = visitFADDForFMACombine<EmptyMatchContext>(N)) {
-    AddToWorklist(Fused.getNode());
+    if (Fused.getOpcode() != ISD::DELETED_NODE)
+      AddToWorklist(Fused.getNode());
     return Fused;
   }
   return SDValue();
