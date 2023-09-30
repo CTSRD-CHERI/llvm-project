@@ -660,9 +660,9 @@ void CGRecordLowering::computeVolatileBitfields() {
 void CGRecordLowering::accumulateVPtrs() {
   unsigned AS = Types.getCGM().getTargetCodeGenInfo().getDefaultAS();
   if (Layout.hasOwnVFPtr())
-    Members.push_back(MemberInfo(CharUnits::Zero(), MemberInfo::VFPtr,
-        llvm::FunctionType::get(getIntNType(32), /*isVarArg=*/true)->
-            getPointerTo(AS)->getPointerTo(AS)));
+    Members.push_back(
+        MemberInfo(CharUnits::Zero(), MemberInfo::VFPtr,
+                   llvm::PointerType::get(Types.getLLVMContext(), AS)));
   if (Layout.hasOwnVBPtr())
     Members.push_back(
         MemberInfo(Layout.getVBPtrOffset(), MemberInfo::VBPtr,
