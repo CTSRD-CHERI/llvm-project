@@ -1508,6 +1508,33 @@ def PUSHA16  : I<0x60, RawFrm, (outs), (ins), "pushaw", []>,
                OpSize16, Requires<[Not64BitMode]>;
 }
 
+let Defs = [RSP], Uses = [RSP], hasSideEffects=0 in {
+let mayLoad = 1, SchedRW = [WriteLoad] in {
+//def POPCr   : CI<0x58, AddRegFrm, (outs GRC:$reg), (ins), "pop{c}\t$reg", []>;
+// Long form for the disassembler.
+let isCodeGenOnly = 1, ForceDisassemble = 1 in {
+def POPCrmr : CI<0x8F, MRM0r, (outs GRC:$reg), (ins), "pop{c}\t$reg", []>,
+                NotMemoryFoldable;
+} // isCodeGenOnly = 1, ForceDisassemble = 1
+} // mayLoad, SchedRW
+let mayLoad = 1, mayStore = 1, SchedRW = [WriteCopy] in
+def POPCrmm: CI<0x8F, MRM0m, (outs), (ins capmem:$dst), "pop{q}\t$dst", []>;
+
+let mayStore = 1, SchedRW = [WriteStore] in {
+//def PUSHCr  : CI<0x50, AddRegFrm, (outs), (ins GRC:$reg), "push{c}\t$reg", []>;
+// Long form for the disassembler.
+let isCodeGenOnly = 1, ForceDisassemble = 1 in {
+def PUSHCrmr: CI<0xFF, MRM6r, (outs), (ins GRC:$reg), "push{c}\t$reg", []>,
+                 NotMemoryFoldable;
+} // isCodeGenOnly = 1, ForceDisassemble = 1
+} // mayStore, SchedRW
+/*
+let mayLoad = 1, mayStore = 1, SchedRW = [WriteCopy] in {
+def PUSHCrmm: CI<0xFF, MRM6m, (outs), (ins capmem:$src), "push{c}\t$src", []>,
+                 OpSize32;
+} // mayLoad, mayStore, SchedRW*/
+}
+
 let Constraints = "$src = $dst", SchedRW = [WriteBSWAP32] in {
 // This instruction is a consequence of BSWAP32r observing operand size. The
 // encoding is valid, but the behavior is undefined.
