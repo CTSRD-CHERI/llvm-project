@@ -1329,6 +1329,14 @@ bool FastISel::selectIntrinsicCall(const IntrinsicInst *II) {
                         << *DI << "\n");
       return true;
     }
+    if (auto SI = FuncInfo.StaticAllocaMap.find(dyn_cast<AllocaInst>(V));
+        SI != FuncInfo.StaticAllocaMap.end()) {
+      MachineOperand FrameIndexOp = MachineOperand::CreateFI(SI->second);
+      bool IsIndirect = false;
+      BuildMI(*FuncInfo.MBB, FuncInfo.InsertPt, MIMD.getDL(), II, IsIndirect,
+              FrameIndexOp, Var, Expr);
+      return true;
+    }
     if (Register Reg = lookUpRegForValue(V)) {
       // FIXME: This does not handle register-indirect values at offset 0.
       if (!FuncInfo.MF->useDebugInstrRef()) {
