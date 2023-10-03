@@ -168,7 +168,7 @@ static const RISCVSupportedExtension SupportedExperimentalExtensions[] = {
 
     {"zacas", RISCVExtensionVersion{1, 0}},
 
-    {"zfa", RISCVExtensionVersion{0, 2}},
+    {"zfa", RISCVExtensionVersion{1, 0}},
     {"zfbfmin", RISCVExtensionVersion{0, 8}},
 
     {"zicfilp", RISCVExtensionVersion{0, 2}},
