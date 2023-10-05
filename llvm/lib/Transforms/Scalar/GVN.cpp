@@ -1520,7 +1520,7 @@ void GVNPass::eliminatePartiallyRedundantLoad(
   if (V == Load)
     return;
   // ConstructSSAForLoadSet is responsible for combining metadata.
-  ICF->replaceUsersOf(Load);
+  ICF->removeUsersOf(Load);
   Load->replaceAllUsesWith(V);
   if (isa<PHINode>(V))
     V->takeName(Load);
