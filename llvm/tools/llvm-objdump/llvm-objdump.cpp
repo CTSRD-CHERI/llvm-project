@@ -784,12 +784,12 @@ public:
       OS << "\t<unknown>";
   }
 
-  void setInstructionEndianness(llvm::support::endianness Endianness) {
+  void setInstructionEndianness(llvm::endianness Endianness) {
     InstructionEndianness = Endianness;
   }
 
 private:
-  llvm::support::endianness InstructionEndianness = llvm::support::little;
+  llvm::endianness InstructionEndianness = llvm::support::little;
 };
 ARMPrettyPrinter ARMPrettyPrinterInst;
 
