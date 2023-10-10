@@ -65,6 +65,7 @@ bool isMicroMips();
 bool isMipsR6();
 
 bool hasDynamicLinker();
+bool canHaveMemtagGlobals();
 } // namespace lld::elf
 
 #endif
