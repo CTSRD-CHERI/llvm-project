@@ -29,12 +29,12 @@
 //===----------------------------------------------------------------------===//
 
 #include "CHERI/CHERIUtils.h"
+#include <clang/ASTMatchers/ASTMatchFinder.h>
 #include "clang/ASTMatchers/ASTMatchers.h"
 #include "clang/StaticAnalyzer/Checkers/BuiltinCheckerRegistration.h"
-#include "clang/StaticAnalyzer/Core/PathSensitive/CheckerContext.h"
-#include <clang/ASTMatchers/ASTMatchFinder.h>
 #include <clang/StaticAnalyzer/Core/BugReporter/BugType.h>
 #include <clang/StaticAnalyzer/Core/PathSensitive/CallEvent.h>
+#include "clang/StaticAnalyzer/Core/PathSensitive/CheckerContext.h"
 
 using namespace clang;
 using namespace ento;
@@ -425,11 +425,18 @@ void printAlign(raw_ostream &OS, unsigned TZC) {
   OS << ")";
 }
 
-void describeOriginalAllocation(const MemRegion *MR, PathSensitiveBugReport &W,
-                                const SourceManager &SM,
+const DeclRegion *getOriginalAllocation(const MemRegion *MR) {
+  if (const DeclRegion *DR = MR->getAs<DeclRegion>())
+    return DR;
+  if (const ElementRegion *ER = MR->getAs<ElementRegion>())
+    return getOriginalAllocation(ER->getSuperRegion());
+  return nullptr;
+}
+
+void describeOriginalAllocation(const ValueDecl *SrcDecl,
+                                PathDiagnosticLocation SrcLoc,
+                                PathSensitiveBugReport &W,
                                 ASTContext &ASTCtx) {
-  if (const DeclRegion *DR = MR->getAs<DeclRegion>()) {
-    const ValueDecl *SrcDecl = DR->getDecl();
     SmallString<350> Note;
     llvm::raw_svector_ostream OS2(Note);
     const QualType &AllocType = SrcDecl->getType().getCanonicalType();
@@ -438,9 +445,7 @@ void describeOriginalAllocation(const MemRegion *MR, PathSensitiveBugReport &W,
     OS2 << " which has an alignment requirement ";
     OS2 << ASTCtx.getTypeAlignInChars(AllocType).getQuantity();
     OS2 << " bytes";
-    W.addNote(Note, PathDiagnosticLocation::create(SrcDecl, SM));
-  } else if (const ElementRegion *ER = MR->getAs<ElementRegion>())
-    describeOriginalAllocation(ER->getSuperRegion(), W, SM, ASTCtx);
+    W.addNote(Note, SrcLoc);
 }
 
 } // namespace
@@ -467,16 +472,27 @@ PointerAlignmentChecker::emitCastAlignWarn(
   OS << " alignment " << DstReqAlign;
   OS << " bytes";
 
-  auto W = std::make_unique<PathSensitiveBugReport>(
-      DstAlignIsCap ? *CapCastAlignBug : *CastAlignBug, ErrorMessage, ErrNode);
-  W->addRange(CE->getSourceRange());
-
   const SVal &SrcVal = C.getSVal(CE->getSubExpr());
+  const ValueDecl *MRDecl = nullptr;
+  PathDiagnosticLocation MRDeclLoc;
+  if (const MemRegion *MR = SrcVal.getAsRegion()) {
+    if (const DeclRegion *OriginalAlloc = getOriginalAllocation(MR)) {
+      MRDecl = OriginalAlloc->getDecl();
+      MRDeclLoc = PathDiagnosticLocation::create(MRDecl, C.getSourceManager());
+    }
+  }
+
+  auto W = std::make_unique<PathSensitiveBugReport>(
+      DstAlignIsCap ? *CapCastAlignBug : *CastAlignBug,
+      ErrorMessage, ErrNode,
+      MRDeclLoc, MRDecl);
+
   W->markInteresting(SrcVal);
   if (SymbolRef S = SrcVal.getAsSymbol())
     W->addVisitor(std::make_unique<AlignmentBugVisitor>(S));
-  else if (const MemRegion *MR = SrcVal.getAsRegion()) {
-    describeOriginalAllocation(MR, *W, C.getSourceManager(), C.getASTContext());
+
+  if (MRDecl) {
+    describeOriginalAllocation(MRDecl, MRDeclLoc, *W, C.getASTContext());
   }
 
   C.emitReport(std::move(W));
