@@ -2918,6 +2918,27 @@ RValue CodeGenFunction::EmitBuiltinExpr(const GlobalDecl GD, unsigned BuiltinID,
     }
   }
 
+  // Check NonnullAttribute/NullabilityArg and Alignment.
+  auto EmitArgCheck = [&](TypeCheckKind Kind, Address A, const Expr *Arg,
+                          unsigned ParmNum) {
+    Value *Val = A.getPointer();
+    EmitNonNullArgCheck(RValue::get(Val), Arg->getType(), Arg->getExprLoc(), FD,
+                        ParmNum);
+
+    if (SanOpts.has(SanitizerKind::Alignment)) {
+      SanitizerSet SkippedChecks;
+      SkippedChecks.set(SanitizerKind::All);
+      SkippedChecks.clear(SanitizerKind::Alignment);
+      SourceLocation Loc = Arg->getExprLoc();
+      // Strip an implicit cast.
+      if (auto *CE = dyn_cast<ImplicitCastExpr>(Arg))
+        if (CE->getCastKind() == CK_BitCast)
+          Arg = CE->getSubExpr();
+      EmitTypeCheck(Kind, Loc, Val, Arg->getType(), A.getAlignment(),
+                    SkippedChecks);
+    }
+  };
+
   switch (BuiltinIDIfNoAsmLabel) {
   default: break;
   case Builtin::BI__builtin___CFStringMakeConstantString:
@@ -3916,12 +3937,10 @@ RValue CodeGenFunction::EmitBuiltinExpr(const GlobalDecl GD, unsigned BuiltinID,
     Address Dest = EmitPointerWithAlignment(E->getArg(0));
     Address Src = EmitPointerWithAlignment(E->getArg(1));
     Value *SizeVal = EmitScalarExpr(E->getArg(2));
-    EmitNonNullArgCheck(RValue::get(Dest.getPointer()), E->getArg(0)->getType(),
-                        E->getArg(0)->getExprLoc(), FD, 0);
-    EmitNonNullArgCheck(RValue::get(Src.getPointer()), E->getArg(1)->getType(),
-                        E->getArg(1)->getExprLoc(), FD, 1);
-    auto CI = Builder.CreateMemCpy(Dest, Src, SizeVal,
-                                   llvm::PreserveCheriTags::TODO, false);
+    EmitArgCheck(TCK_Store, Dest, E->getArg(0), 0);
+    EmitArgCheck(TCK_Load, Src, E->getArg(1), 1);
+    auto *CI = Builder.CreateMemCpy(Dest, Src, SizeVal,
+                                    llvm::PreserveCheriTags::TODO, false);
     diagnoseMisalignedCapabiliyCopyDest(*this, "memcpy", E->getArg(1), CI);
     if (BuiltinID == Builtin::BImempcpy ||
         BuiltinID == Builtin::BI__builtin_mempcpy)
@@ -3937,10 +3956,8 @@ RValue CodeGenFunction::EmitBuiltinExpr(const GlobalDecl GD, unsigned BuiltinID,
     Address Src = EmitPointerWithAlignment(E->getArg(1));
     uint64_t Size =
         E->getArg(2)->EvaluateKnownConstInt(getContext()).getZExtValue();
-    EmitNonNullArgCheck(RValue::get(Dest.getPointer()), E->getArg(0)->getType(),
-                        E->getArg(0)->getExprLoc(), FD, 0);
-    EmitNonNullArgCheck(RValue::get(Src.getPointer()), E->getArg(1)->getType(),
-                        E->getArg(1)->getExprLoc(), FD, 1);
+    EmitArgCheck(TCK_Store, Dest, E->getArg(0), 0);
+    EmitArgCheck(TCK_Load, Src, E->getArg(1), 1);
     Builder.CreateMemCpyInline(Dest, Src, Size);
     return RValue::get(nullptr);
   }
@@ -4014,14 +4031,13 @@ RValue CodeGenFunction::EmitBuiltinExpr(const GlobalDecl GD, unsigned BuiltinID,
     Address Dest = EmitPointerWithAlignment(E->getArg(0));
     Address Src = EmitPointerWithAlignment(E->getArg(1));
     Value *SizeVal = EmitScalarExpr(E->getArg(2));
-    EmitNonNullArgCheck(RValue::get(Dest.getPointer()), E->getArg(0)->getType(),
-                        E->getArg(0)->getExprLoc(), FD, 0);
-    EmitNonNullArgCheck(RValue::get(Src.getPointer()), E->getArg(1)->getType(),
-                        E->getArg(1)->getExprLoc(), FD, 1);
-    auto CI = Builder.CreateMemMove(Dest, Src, SizeVal,
-                                    llvm::PreserveCheriTags::TODO, false);
-    diagnoseMisalignedCapabiliyCopyDest(*this, "memmove", E->getArg(1), CI);
-    return RValue::get(Dest.getPointer(), Dest.getAlignment().getQuantity());
+    EmitArgCheck(TCK_Store, Dest, E->getArg(0), 0);
+    EmitArgCheck(TCK_Load, Src, E->getArg(1), 1);
+    auto *CI = Builder.CreateMemMove(Dest, Src, SizeVal,
+                                     llvm::PreserveCheriTags::TODO, false);
+    diagnoseMisalignedCapabiliyCopyDest(*this, "memmove", E->getArg(1),
+                                        CI);
+    return RValue::get(Dest.getPointer());
   }
   case Builtin::BImemset:
   case Builtin::BI__builtin_memset: {
