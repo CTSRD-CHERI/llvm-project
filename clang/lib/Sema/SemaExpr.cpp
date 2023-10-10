@@ -18778,6 +18778,8 @@ static void EvaluateAndDiagnoseImmediateInvocation(
 
     assert(FD && FD->isImmediateFunction() &&
            "could not find an immediate function in this expression");
+    if (FD->isInvalidDecl())
+      return;
     SemaRef.Diag(CE->getBeginLoc(), diag::err_invalid_consteval_call)
         << FD << FD->isConsteval();
     if (auto Context =
