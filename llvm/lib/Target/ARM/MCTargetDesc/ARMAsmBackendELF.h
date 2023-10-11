@@ -19,7 +19,7 @@ namespace {
 class ARMAsmBackendELF : public ARMAsmBackend {
 public:
   uint8_t OSABI;
-  ARMAsmBackendELF(const Target &T, uint8_t OSABI, support::endianness Endian)
+  ARMAsmBackendELF(const Target &T, uint8_t OSABI, llvm::endianness Endian)
       : ARMAsmBackend(T, Endian), OSABI(OSABI) {}
 
   std::unique_ptr<MCObjectTargetWriter>

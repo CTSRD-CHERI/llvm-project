@@ -19,7 +19,7 @@ namespace llvm {
 
 class ARMAsmBackend : public MCAsmBackend {
 public:
-  ARMAsmBackend(const Target &T, support::endianness Endian)
+  ARMAsmBackend(const Target &T, llvm::endianness Endian)
       : MCAsmBackend(Endian) {}
 
   unsigned getNumFixupKinds() const override {

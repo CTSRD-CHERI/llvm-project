@@ -374,7 +374,7 @@ protected:
   }
 
   void printAttributes(unsigned, std::unique_ptr<ELFAttributeParser>,
-                       support::endianness);
+                       llvm::endianness);
   void printMipsReginfo();
   void printMipsOptions();
 
@@ -2947,7 +2947,7 @@ template <class ELFT> void ELFDumper<ELFT>::printArchSpecificInfo() {
 template <class ELFT>
 void ELFDumper<ELFT>::printAttributes(
     unsigned AttrShType, std::unique_ptr<ELFAttributeParser> AttrParser,
-    support::endianness Endianness) {
+    llvm::endianness Endianness) {
   assert((AttrShType != ELF::SHT_NULL) && AttrParser &&
          "Incomplete ELF attribute implementation");
   DictScope BA(W, "BuildAttributes");
