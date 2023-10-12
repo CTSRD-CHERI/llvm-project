@@ -172,7 +172,7 @@ class RISCVSImmOp<int bitsNum> : RISCVOp {
   let OperandType = "OPERAND_SIMM" # bitsNum;
 }
 
-class RISCVSImmLeafOp<int bitsNum > :
+class RISCVSImmLeafOp<int bitsNum> :
   RISCVSImmOp<bitsNum>, ImmLeaf<XLenVT, "return isInt<" # bitsNum # ">(Imm);">;
 
 def FenceArg : AsmOperandClass {
