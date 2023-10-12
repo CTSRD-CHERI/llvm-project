@@ -11983,6 +11983,8 @@ bool ARMAsmParser::parseDirectiveInst(SMLoc Loc, char Suffix) {
     }
 
     getTargetStreamer().emitInst(Value->getValue(), CurSuffix);
+    forwardITPosition();
+    forwardVPTPosition();
     return false;
   };
 
