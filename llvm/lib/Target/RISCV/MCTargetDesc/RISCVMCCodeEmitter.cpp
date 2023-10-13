@@ -164,7 +164,7 @@ void RISCVMCCodeEmitter::expandFunctionCall(const MCInst &MI,
                 .addReg(Ra)
                 .addExpr(CallExpr);
   Binary = getBinaryCodeForInstr(TmpInst, Fixups, STI);
-  support::endian::write(CB, Binary, support::little);
+  support::endian::write(CB, Binary, llvm::endianness::little);
 
   if (MI.getOpcode() == RISCV::PseudoTAIL ||
       MI.getOpcode() == RISCV::PseudoJump ||
@@ -182,7 +182,7 @@ void RISCVMCCodeEmitter::expandFunctionCall(const MCInst &MI,
                   .addReg(Ra)
                   .addImm(0);
   Binary = getBinaryCodeForInstr(TmpInst, Fixups, STI);
-  support::endian::write(CB, Binary, support::little);
+  support::endian::write(CB, Binary, llvm::endianness::little);
 }
 
 // Expand PseudoAddTPRel to a simple ADD with the correct relocation.
@@ -221,7 +221,7 @@ void RISCVMCCodeEmitter::expandAddTPRel(const MCInst &MI,
                        .addOperand(SrcReg)
                        .addOperand(TPReg);
   uint32_t Binary = getBinaryCodeForInstr(TmpInst, Fixups, STI);
-  support::endian::write(CB, Binary, support::little);
+  support::endian::write(CB, Binary, llvm::endianness::little);
 }
 
 // Expand PseudoCIncOffsetTPRel to a simple CIncOffset with the correct
@@ -314,14 +314,14 @@ void RISCVMCCodeEmitter::expandLongCondBr(const MCInst &MI,
         Opcode == RISCV::PseudoLongBNE ? RISCV::C_BEQZ : RISCV::C_BNEZ;
     MCInst TmpInst = MCInstBuilder(InvOpc).addReg(SrcReg1).addImm(6);
     uint16_t Binary = getBinaryCodeForInstr(TmpInst, Fixups, STI);
-    support::endian::write<uint16_t>(CB, Binary, support::little);
+    support::endian::write<uint16_t>(CB, Binary, llvm::endianness::little);
     Offset = 2;
   } else {
     unsigned InvOpc = getInvertedBranchOp(Opcode);
     MCInst TmpInst =
         MCInstBuilder(InvOpc).addReg(SrcReg1).addReg(SrcReg2).addImm(8);
     uint32_t Binary = getBinaryCodeForInstr(TmpInst, Fixups, STI);
-    support::endian::write(CB, Binary, support::little);
+    support::endian::write(CB, Binary, llvm::endianness::little);
     Offset = 4;
   }
 
@@ -329,7 +329,7 @@ void RISCVMCCodeEmitter::expandLongCondBr(const MCInst &MI,
   MCInst TmpInst =
       MCInstBuilder(RISCV::JAL).addReg(RISCV::X0).addOperand(SrcSymbol);
   uint32_t Binary = getBinaryCodeForInstr(TmpInst, Fixups, STI);
-  support::endian::write(CB, Binary, support::little);
+  support::endian::write(CB, Binary, llvm::endianness::little);
 
   Fixups.clear();
   if (SrcSymbol.isExpr()) {
@@ -389,12 +389,12 @@ void RISCVMCCodeEmitter::encodeInstruction(const MCInst &MI,
     llvm_unreachable("Unhandled encodeInstruction length!");
   case 2: {
     uint16_t Bits = getBinaryCodeForInstr(MI, Fixups, STI);
-    support::endian::write<uint16_t>(CB, Bits, support::little);
+    support::endian::write<uint16_t>(CB, Bits, llvm::endianness::little);
     break;
   }
   case 4: {
     uint32_t Bits = getBinaryCodeForInstr(MI, Fixups, STI);
-    support::endian::write(CB, Bits, support::little);
+    support::endian::write(CB, Bits, llvm::endianness::little);
     break;
   }
   }
