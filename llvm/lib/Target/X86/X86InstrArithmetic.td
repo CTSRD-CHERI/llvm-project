@@ -1322,6 +1322,7 @@ defm SUB : ArithBinOp_RF<0x28, 0x2A, 0x2C, "sub", MRM5r, MRM5m,
 //def CRAM : BinOpMR_RMW<0x1F, "cram", Xi64, cram>;
 
 let hasNoSchedulingInfo = 1, Predicates = [HasCHERI,In64BitMode] in {
+
 def CRAMrr : I<0x1F, MRMSrcReg, (outs GR64:$dst),
                                  (ins GR64:$src1),
                   "cram\t{$src1, $dst|$dst, $src1}",
@@ -1422,6 +1423,19 @@ def SCADDRmr : I<0x16, MRMDestMem, (outs),
                     (ins XiC.MemOperand:$dst, GR64:$src1),
                     "scaddr\t{$src1, $dst|$dst, $src1}",
                     [(store (iFATPTR128 (int_cheri_cap_address_set (loadcap addr:$dst), GR64:$src1)), addr:$dst)]>;
+
+let Constraints = "$src1 = $dst", Defs = [EFLAGS] in
+def ANDCPERMrr : I<0x0C, MRMDestReg, (outs GRC:$dst),
+                  (ins GRC:$src1, GR64:$src2),
+                  "andcperm\t{$src1, $dst|$dst, $src1}",
+                  [(set GRC:$dst, (int_cheri_cap_perms_and GRC:$src1, GR64:$src2))]>,
+                  TB;
+
+def ANDCPERMmr : I<0x0C, MRMDestMem, (outs),
+                  (ins XiC.MemOperand:$dst, GR64:$src1),
+                  "andcperm\t{$src1, $dst|$dst, $src1}",
+                  [(store (iFATPTR128 (int_cheri_cap_perms_and (loadcap addr:$dst), GR64:$src1)), addr:$dst)]>,
+                  TB;
 
 let Constraints = "$src1 = $dst", Defs = [EFLAGS] in
 def SCBNDrr : I<0x17, MRMDestReg, (outs GRC:$dst),
