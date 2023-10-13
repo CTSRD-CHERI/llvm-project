@@ -1437,6 +1437,16 @@ def ANDCPERMmr : I<0x0C, MRMDestMem, (outs),
                   [(store (iFATPTR128 (int_cheri_cap_perms_and (loadcap addr:$dst), GR64:$src1)), addr:$dst)]>,
                   TB;
 
+let Constraints = "$dst = $src1" in
+def ANDCPERMri : Ii32S<0x37, MRM2r, (outs GRC:$dst), (ins GRC:$src1, i64i32imm:$src2),
+                    "andcperm\t{$src2, $dst|$dst, $src2}",
+                    [(set GRC:$dst, (int_cheri_cap_perms_and GRC:$src1, i64immSExt32:$src2))]>;
+
+def ANDCPERMmi : Ii32S<0x37, MRM2m, (outs),
+                    (ins XiC.MemOperand:$dst, i64i32imm:$src1),
+                    "andcperm\t{$src1, $dst|$dst, $src1}",
+                    [(store (iFATPTR128 (int_cheri_cap_perms_and (loadcap addr:$dst), i64immSExt32:$src1)), addr:$dst)]>;
+
 let Constraints = "$src1 = $dst", Defs = [EFLAGS] in
 def SCBNDrr : I<0x17, MRMDestReg, (outs GRC:$dst),
                      (ins GRC:$src1, GR64:$src2),
