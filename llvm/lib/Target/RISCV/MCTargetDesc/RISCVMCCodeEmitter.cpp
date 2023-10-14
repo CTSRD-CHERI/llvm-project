@@ -15,6 +15,7 @@
 #include "MCTargetDesc/RISCVMCExpr.h"
 #include "MCTargetDesc/RISCVMCTargetDesc.h"
 #include "llvm/ADT/Statistic.h"
+#include "llvm/ADT/bit.h"
 #include "llvm/MC/MCAsmInfo.h"
 #include "llvm/MC/MCCodeEmitter.h"
 #include "llvm/MC/MCContext.h"
@@ -260,7 +261,7 @@ void RISCVMCCodeEmitter::expandCIncOffsetTPRel(
                        .addOperand(TPReg)
                        .addOperand(SrcReg);
   uint32_t Binary = getBinaryCodeForInstr(TmpInst, Fixups, STI);
-  support::endian::write(CB, Binary, support::little);
+  support::endian::write(CB, Binary, llvm::endianness::little);
 }
 
 static unsigned getInvertedBranchOp(unsigned BrOp) {
