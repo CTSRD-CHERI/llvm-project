@@ -12362,9 +12362,7 @@ MaybeAlign SelectionDAG::InferPtrAlign(SDValue Ptr) const {
   const GlobalValue *GV = nullptr;
   int64_t GVOffset = 0;
   if (TLI->isGAPlusOffset(Ptr.getNode(), GV, GVOffset)) {
-    unsigned PtrWidth = getDataLayout().getIndexTypeSizeInBits(GV->getType());
-    KnownBits Known(PtrWidth);
-    llvm::computeKnownBits(GV, Known, getDataLayout());
+    KnownBits Known = llvm::computeKnownBits(GV, getDataLayout());
     unsigned AlignBits = Known.countMinTrailingZeros();
     if (AlignBits)
       return commonAlignment(Align(1ull << std::min(31U, AlignBits)), GVOffset);
