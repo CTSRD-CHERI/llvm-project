@@ -228,6 +228,7 @@ set(x86_files
   tmmintrin.h
   tsxldtrkintrin.h
   uintrintrin.h
+  usermsrintrin.h
   vaesintrin.h
   vpclmulqdqintrin.h
   waitpkgintrin.h
