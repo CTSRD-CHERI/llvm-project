@@ -56918,7 +56918,15 @@ X86TargetLowering::getRegForInlineAsmConstraint(const TargetRegisterInfo *TRI,
       case MVT::v8f16:
         if (!Subtarget.hasFP16())
           break;
-        [[fallthrough]];
+        if (VConstraint)
+          return std::make_pair(0U, &X86::VR128XRegClass);
+        return std::make_pair(0U, &X86::VR128RegClass);
+      case MVT::v8bf16:
+        if (!Subtarget.hasBF16() || !Subtarget.hasVLX())
+          break;
+        if (VConstraint)
+          return std::make_pair(0U, &X86::VR128XRegClass);
+        return std::make_pair(0U, &X86::VR128RegClass);
       case MVT::f128:
       case MVT::v16i8:
       case MVT::v8i16:
@@ -56933,7 +56941,15 @@ X86TargetLowering::getRegForInlineAsmConstraint(const TargetRegisterInfo *TRI,
       case MVT::v16f16:
         if (!Subtarget.hasFP16())
           break;
-        [[fallthrough]];
+        if (VConstraint)
+          return std::make_pair(0U, &X86::VR256XRegClass);
+        return std::make_pair(0U, &X86::VR256RegClass);
+      case MVT::v16bf16:
+        if (!Subtarget.hasBF16() || !Subtarget.hasVLX())
+          break;
+        if (VConstraint)
+          return std::make_pair(0U, &X86::VR256XRegClass);
+        return std::make_pair(0U, &X86::VR256RegClass);
       case MVT::v32i8:
       case MVT::v16i16:
       case MVT::v8i32:
@@ -56948,7 +56964,15 @@ X86TargetLowering::getRegForInlineAsmConstraint(const TargetRegisterInfo *TRI,
       case MVT::v32f16:
         if (!Subtarget.hasFP16())
           break;
-        [[fallthrough]];
+        if (VConstraint)
+          return std::make_pair(0U, &X86::VR512RegClass);
+        return std::make_pair(0U, &X86::VR512_0_15RegClass);
+      case MVT::v32bf16:
+        if (!Subtarget.hasBF16())
+          break;
+        if (VConstraint)
+          return std::make_pair(0U, &X86::VR512RegClass);
+        return std::make_pair(0U, &X86::VR512_0_15RegClass);
       case MVT::v64i8:
       case MVT::v32i16:
       case MVT::v8f64:
@@ -56991,7 +57015,11 @@ X86TargetLowering::getRegForInlineAsmConstraint(const TargetRegisterInfo *TRI,
       case MVT::v8f16:
         if (!Subtarget.hasFP16())
           break;
-        [[fallthrough]];
+        return std::make_pair(X86::XMM0, &X86::VR128RegClass);
+      case MVT::v8bf16:
+        if (!Subtarget.hasBF16() || !Subtarget.hasVLX())
+          break;
+        return std::make_pair(X86::XMM0, &X86::VR128RegClass);
       case MVT::f128:
       case MVT::v16i8:
       case MVT::v8i16:
@@ -57004,7 +57032,11 @@ X86TargetLowering::getRegForInlineAsmConstraint(const TargetRegisterInfo *TRI,
       case MVT::v16f16:
         if (!Subtarget.hasFP16())
           break;
-        [[fallthrough]];
+        return std::make_pair(X86::YMM0, &X86::VR256RegClass);
+      case MVT::v16bf16:
+        if (!Subtarget.hasBF16() || !Subtarget.hasVLX())
+          break;
+        return std::make_pair(X86::YMM0, &X86::VR256RegClass);
       case MVT::v32i8:
       case MVT::v16i16:
       case MVT::v8i32:
@@ -57017,7 +57049,11 @@ X86TargetLowering::getRegForInlineAsmConstraint(const TargetRegisterInfo *TRI,
       case MVT::v32f16:
         if (!Subtarget.hasFP16())
           break;
-        [[fallthrough]];
+        return std::make_pair(X86::ZMM0, &X86::VR512_0_15RegClass);
+      case MVT::v32bf16:
+        if (!Subtarget.hasBF16())
+          break;
+        return std::make_pair(X86::ZMM0, &X86::VR512_0_15RegClass);
       case MVT::v64i8:
       case MVT::v32i16:
       case MVT::v8f64:
