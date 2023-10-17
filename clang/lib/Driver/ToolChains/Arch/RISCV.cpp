@@ -352,7 +352,7 @@ StringRef riscv::getRISCVArch(const llvm::opt::ArgList &Args,
       return "rv32imafdc";
     else if (MABI.starts_with_insensitive("lp64")) {
       if (Triple.isAndroid())
-        return "rv64imafdc_zba_zbb_zbs";
+        return "rv64imafdcv_zba_zbb_zbs";
 
       return "rv64imafdc";
     }
@@ -372,7 +372,7 @@ StringRef riscv::getRISCVArch(const llvm::opt::ArgList &Args,
     if (Triple.getOS() == llvm::Triple::UnknownOS)
       return "rv64imac";
     else if (Triple.isAndroid())
-      return "rv64imafdc_zba_zbb_zbs";
+      return "rv64imafdcv_zba_zbb_zbs";
     else
       return "rv64imafdc";
   }
