@@ -42,7 +42,7 @@ def main(builtin_params={}):
         shardNumber=opts.runShard,
         config_prefix=opts.configPrefix,
         per_test_coverage=opts.per_test_coverage,
-        disableGTestSharding=opts.disableGTestSharding,
+        gtest_sharding=opts.gtest_sharding,
     )
 
     lit_config.cheri_test_mode = opts.cheri_tests_filter
