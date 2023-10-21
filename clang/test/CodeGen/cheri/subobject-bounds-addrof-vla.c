@@ -1,8 +1,8 @@
 // Check that we only set bounds on variable length array member expressions in very-aggressive mode
 // RUN: %cheri_purecap_cc1 -cheri-bounds=aggressive -O2 -std=c11 -emit-llvm -xc %s -o /dev/null \
-// RUN:   -Rcheri-subobject-bounds -verify=expected,aggressive
+// RUN:   -Rcheri-subobject-bounds -verify=expected,aggressive,c11
 // RUN: %cheri_purecap_cc1 -cheri-bounds=aggressive -O2 -std=c++11 -emit-llvm -xc++ %s -o /dev/null \
-// RUN:   -Rcheri-subobject-bounds -verify=expected,aggressive
+// RUN:   -Rcheri-subobject-bounds -verify=expected,aggressive,cxx11
 
 struct WithVLA {
   float x;
@@ -94,7 +94,9 @@ void test2(void* ptr) {
 }
 
 int test_local_vla(int len, int index) {
-  int buf[len];
+  int buf[len]; // cxx11-warning{{variable length arrays in C++ are a Clang extension}}
+  // cxx11-note@-1{{function parameter 'len' with unknown value cannot be used in a constant expression}}
+  // cxx11-note@-3 {{declared here}}
   do_stuff_untyped(&buf); // expected-remark{{setting bounds for pointer to 'int[len]' to remaining bytes (variable length array type)}}
   return buf[index];      // expected-remark{{setting bounds for array decay on 'int[len]' to remaining bytes (array decay on variable size type)}}
   // expected-remark@-1{{setting bounds for array subscript on 'int[len]' to remaining bytes (array subscript on variable size type)}}
