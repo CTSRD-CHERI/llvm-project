@@ -481,12 +481,6 @@ bool ProfiledBinary::dissassembleSymbol(std::size_t SI, ArrayRef<uint8_t> Bytes,
   if (ShowDisassembly)
     outs() << '<' << SymbolName << ">:\n";
 
-  auto WarnInvalidInsts = [](uint64_t Start, uint64_t End) {
-    WithColor::warning() << "Invalid instructions at "
-                         << format("%8" PRIx64, Start) << " - "
-                         << format("%8" PRIx64, End) << "\n";
-  };
-
   uint64_t Address = StartAddress;
   // Size of a consecutive invalid instruction range starting from Address -1
   // backwards.
@@ -579,7 +573,8 @@ bool ProfiledBinary::dissassembleSymbol(std::size_t SI, ArrayRef<uint8_t> Bytes,
       }
 
       if (InvalidInstLength) {
-        WarnInvalidInsts(Address - InvalidInstLength, Address - 1);
+        AddrsWithInvalidInstruction.insert(
+            {Address - InvalidInstLength, Address - 1});
         InvalidInstLength = 0;
       }
     } else {
@@ -590,7 +585,8 @@ bool ProfiledBinary::dissassembleSymbol(std::size_t SI, ArrayRef<uint8_t> Bytes,
   }
 
   if (InvalidInstLength)
-    WarnInvalidInsts(Address - InvalidInstLength, Address - 1);
+    AddrsWithInvalidInstruction.insert(
+        {Address - InvalidInstLength, Address - 1});
 
   if (ShowDisassembly)
     outs() << "\n";
@@ -709,6 +705,19 @@ void ProfiledBinary::disassemble(const ELFObjectFileBase *Obj) {
     }
   }
 
+  if (!AddrsWithInvalidInstruction.empty()) {
+    if (ShowDetailedWarning) {
+      for (auto &Addr : AddrsWithInvalidInstruction) {
+        WithColor::warning()
+            << "Invalid instructions at " << format("%8" PRIx64, Addr.first)
+            << " - " << format("%8" PRIx64, Addr.second) << "\n";
+      }
+    }
+    WithColor::warning() << "Found " << AddrsWithInvalidInstruction.size()
+                         << " invalid instructions\n";
+    AddrsWithInvalidInstruction.clear();
+  }
+
   // Dissassemble rodata section to check if FS discriminator symbol exists.
   checkUseFSDiscriminator(Obj, AllSymbols);
 }
@@ -793,10 +802,12 @@ void ProfiledBinary::loadSymbolsFromDWARFUnit(DWARFUnit &CompilationUnit) {
         FRange.StartAddress = StartAddress;
         FRange.EndAddress = EndAddress;
       } else {
-        WithColor::warning()
-            << "Duplicated symbol start address at "
-            << format("%8" PRIx64, StartAddress) << " "
-            << R.first->second.getFuncName() << " and " << Name << "\n";
+        AddrsWithMultipleSymbols.insert(StartAddress);
+        if (ShowDetailedWarning)
+          WithColor::warning()
+              << "Duplicated symbol start address at "
+              << format("%8" PRIx64, StartAddress) << " "
+              << R.first->second.getFuncName() << " and " << Name << "\n";
       }
     }
   }
@@ -840,13 +851,17 @@ void ProfiledBinary::loadSymbolsFromDWARF(ObjectFile &Obj) {
   if (BinaryFunctions.empty())
     WithColor::warning() << "Loading of DWARF info completed, but no binary "
                             "functions have been retrieved.\n";
-
-
   // Populate the hash binary function map for MD5 function name lookup. This
   // is done after BinaryFunctions are finalized.
   for (auto &BinaryFunction : BinaryFunctions) {
     HashBinaryFunctions[MD5Hash(StringRef(BinaryFunction.first))] =
         &BinaryFunction.second;
+  }
+
+  if (!AddrsWithMultipleSymbols.empty()) {
+    WithColor::warning() << "Found " << AddrsWithMultipleSymbols.size()
+                         << " start addresses with multiple symbols\n";
+    AddrsWithMultipleSymbols.clear();
   }
 }
 
@@ -882,7 +897,8 @@ SampleContextFrameVector ProfiledBinary::symbolize(const InstructionPointer &IP,
   SampleContextFrameVector CallStack;
   for (int32_t I = InlineStack.getNumberOfFrames() - 1; I >= 0; I--) {
     const auto &CallerFrame = InlineStack.getFrame(I);
-    if (CallerFrame.FunctionName.empty() || (CallerFrame.FunctionName == "<invalid>"))
+    if (CallerFrame.FunctionName.empty() ||
+        (CallerFrame.FunctionName == "<invalid>"))
       break;
 
     StringRef FunctionName(CallerFrame.FunctionName);
