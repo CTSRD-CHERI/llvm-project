@@ -3435,7 +3435,14 @@ Sema::TemplateDeductionResult Sema::SubstituteExplicitTemplateArguments(
     SmallVector<QualType, 4> ExceptionStorage;
     if (getLangOpts().CPlusPlus17 &&
         SubstExceptionSpec(Function->getLocation(), EPI.ExceptionSpec,
-                           ExceptionStorage, MLTAL))
+                           ExceptionStorage,
+                           getTemplateInstantiationArgs(
+                               FunctionTemplate, nullptr, /*Final=*/true,
+                               /*Innermost=*/SugaredExplicitArgumentList,
+                               /*RelativeToPrimary=*/false,
+                               /*Pattern=*/nullptr,
+                               /*ForConstraintInstantiation=*/false,
+                               /*SkipForSpecialization=*/true)))
       return TDK_SubstitutionFailure;
 
     *FunctionType = BuildFunctionType(ResultType, ParamTypes,
