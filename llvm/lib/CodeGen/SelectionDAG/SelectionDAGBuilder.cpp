@@ -7481,7 +7481,7 @@ void SelectionDAGBuilder::visitIntrinsicCall(const CallInst &I,
   }
   case Intrinsic::ptrmask: {
     SDValue Ptr = getValue(I.getOperand(0));
-    SDValue Const = getValue(I.getOperand(1));
+    SDValue Mask = getValue(I.getOperand(1));
 
     EVT PtrVT = Ptr.getValueType();
     const bool IsCapability = PtrVT.isFatPointer();
@@ -7498,7 +7498,7 @@ void SelectionDAGBuilder::visitIntrinsicCall(const CallInst &I,
           DAG.getConstant(Intrinsic::cheri_cap_address_get, sdl, AddrVT), Ptr);
     }
     Result = DAG.getNode(ISD::AND, sdl, AddrVT, Result,
-                         DAG.getZExtOrTrunc(Const, sdl, AddrVT));
+                         DAG.getZExtOrTrunc(Mask, sdl, AddrVT));
     if (IsCapability)
       Result = DAG.getNode(
           ISD::INTRINSIC_WO_CHAIN, sdl, PtrVT,
