@@ -58,7 +58,6 @@ enum NodeType : unsigned {
   ADD_TPREL,
 
   // Load address.
-  LA_TLS_GD,
   CLC_TLS_GD,
 
   // Multiply high for signedxunsigned.
@@ -433,10 +432,8 @@ enum NodeType : unsigned {
   // opcodes will be thought as target memory ops!
 
   // Represents an AUIPC+L[WD] pair. Selected to PseudoLGA.
-  LGA = ISD::FIRST_TARGET_MEMORY_OPCODE,
-  CLGC,
+  CLGC = ISD::FIRST_TARGET_MEMORY_OPCODE,
   // Load initial exec thread-local address.
-  LA_TLS_IE,
   CLA_TLS_IE,
 
   TH_LWD,

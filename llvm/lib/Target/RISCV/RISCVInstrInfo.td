@@ -87,17 +87,11 @@ def riscv_read_cycle_wide : SDNode<"RISCVISD::READ_CYCLE_WIDE",
 def riscv_add_lo : SDNode<"RISCVISD::ADD_LO", SDTIntBinOp>;
 def riscv_hi : SDNode<"RISCVISD::HI", SDTIntUnaryOp>;
 def riscv_lla : SDNode<"RISCVISD::LLA", SDTIntUnaryOp>;
-def riscv_lga : SDNode<"RISCVISD::LGA", SDT_RISCVSymLoad,
-                       [SDNPHasChain, SDNPMayLoad, SDNPMemOperand]>;
 def riscv_add_tprel : SDNode<"RISCVISD::ADD_TPREL",
                              SDTypeProfile<1, 3, [SDTCisSameAs<0, 1>,
                                                   SDTCisSameAs<0, 2>,
                                                   SDTCisSameAs<0, 3>,
                                                   SDTCisInt<0>]>>;
-
-def riscv_la_tls_ie : SDNode<"RISCVISD::LA_TLS_IE", SDT_RISCVSymLoad,
-                             [SDNPHasChain, SDNPMayLoad, SDNPMemOperand]>;
-def riscv_la_tls_gd : SDNode<"RISCVISD::LA_TLS_GD", SDTIntUnaryOp>;
 
 //===----------------------------------------------------------------------===//
 // Operand and SDNode transformation definitions.
@@ -1721,8 +1715,6 @@ let hasSideEffects = 0, mayLoad = 1, mayStore = 0, Size = 8, isCodeGenOnly = 0,
 def PseudoLGA : Pseudo<(outs GPR:$dst), (ins bare_symbol:$src), [],
                        "lga", "$dst, $src">;
 
-def : Pat<(iPTR (riscv_lga tglobaladdr:$in)), (PseudoLGA tglobaladdr:$in)>;
-
 let hasSideEffects = 0, mayLoad = 1, mayStore = 0, Size = 8, isCodeGenOnly = 0,
     isAsmParserOnly = 1 in
 def PseudoLA : Pseudo<(outs GPR:$dst), (ins bare_symbol:$src), [],
@@ -1739,17 +1731,12 @@ let hasSideEffects = 0, mayLoad = 1, mayStore = 0, Size = 8, isCodeGenOnly = 0,
 def PseudoLA_TLS_IE : Pseudo<(outs GPR:$dst), (ins bare_symbol:$src), [],
                              "la.tls.ie", "$dst, $src">;
 
-def : Pat<(iPTR (riscv_la_tls_ie tglobaltlsaddr:$in)),
-          (PseudoLA_TLS_IE  tglobaltlsaddr:$in)>;
-
 let hasSideEffects = 0, mayLoad = 0, mayStore = 0, Size = 8, isCodeGenOnly = 0,
     isAsmParserOnly = 1 in
 def PseudoLA_TLS_GD : Pseudo<(outs GPR:$dst), (ins bare_symbol:$src), [],
                              "la.tls.gd", "$dst, $src">;
 } // Predicates = [NotCapMode]
 
-def : Pat<(riscv_la_tls_gd tglobaltlsaddr:$in),
-          (PseudoLA_TLS_GD  tglobaltlsaddr:$in)>;
 
 /// Sign/Zero Extends
 
