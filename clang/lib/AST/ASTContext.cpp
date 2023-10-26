@@ -9717,9 +9717,7 @@ bool ASTContext::areLaxCompatibleRVVTypes(QualType FirstType,
       return false;
 
     const auto *VecTy = SecondType->getAs<VectorType>();
-    if (VecTy &&
-        (VecTy->getVectorKind() == VectorType::RVVFixedLengthDataVector ||
-         VecTy->getVectorKind() == VectorType::GenericVector)) {
+    if (VecTy && VecTy->getVectorKind() == VectorType::GenericVector) {
       const LangOptions::LaxVectorConversionKind LVCKind =
           getLangOpts().getLaxVectorConversions();
 
