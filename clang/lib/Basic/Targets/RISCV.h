@@ -62,6 +62,9 @@ protected:
     IntPtrType = TargetInfo::SignedIntCap;
   }
 
+private:
+  bool FastUnalignedAccess;
+
 public:
   RISCVTargetInfo(const llvm::Triple &Triple, const TargetOptions &)
       : TargetInfo(Triple) {
