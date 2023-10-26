@@ -56,7 +56,7 @@ namespace PR38987 {
 struct A { A(); };
 template <class T> void f() { T{}; }
 template void f<A>();
-// CHECK: CXXTemporaryObjectExpr {{.*}} <col:31, col:33> 'PR38987::A':'PR38987::A'
+// CHECK: CXXTemporaryObjectExpr {{.*}} <col:31, col:33> 'PR38987::A'
 }
 
 void abort() __attribute__((noreturn));

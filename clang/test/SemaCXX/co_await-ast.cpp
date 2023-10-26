@@ -75,8 +75,8 @@ awaitable foo() {
 // CHECK:   |     |   |         |-MemberExpr {{.*}} '<bound member function type>' .await_transform {{.*}}
 // CHECK:   |     |   |         | `-DeclRefExpr {{.*}} 'std::coroutine_traits<awaitable>::promise_type':'awaitable_frame' lvalue Var {{.*}} '__promise' 'std::coroutine_traits<awaitable>::promise_type':'awaitable_frame'
 // CHECK:   |     |   |         `-CXXTemporaryObjectExpr {{.*}} 'executor' 'void (){{.*}} noexcept' zeroing
-// CHECK:   |     |   `-ImplicitCastExpr {{.*}} 'std::coroutine_handle<void>':'std::coroutine_handle<void>' <ConstructorConversion>
-// CHECK:   |     |     `-CXXConstructExpr {{.*}} 'std::coroutine_handle<void>':'std::coroutine_handle<void>' 'void (coroutine_handle<awaitable_frame> &&){{.*}} noexcept'
+// CHECK:   |     |   `-ImplicitCastExpr {{.*}} 'std::coroutine_handle<void>' <ConstructorConversion>
+// CHECK:   |     |     `-CXXConstructExpr {{.*}} 'std::coroutine_handle<void>' 'void (coroutine_handle<awaitable_frame> &&){{.*}} noexcept'
 // CHECK:   |     |       `-MaterializeTemporaryExpr {{.*}} 'std::coroutine_handle<awaitable_frame>' xvalue
 // CHECK:   |     |         `-CallExpr {{.*}} 'std::coroutine_handle<awaitable_frame>'
 // CHECK:   |     |           |-ImplicitCastExpr {{.*}} 'std::coroutine_handle<awaitable_frame> (*)(void *) noexcept' <FunctionToPointerDecay>
