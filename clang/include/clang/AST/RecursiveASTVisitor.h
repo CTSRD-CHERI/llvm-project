@@ -2111,7 +2111,7 @@ DEF_TRAVERSE_DECL(FieldDecl, {
   TRY_TO(TraverseDeclaratorHelper(D));
   if (D->isBitField())
     TRY_TO(TraverseStmt(D->getBitWidth()));
-  else if (D->hasInClassInitializer())
+  if (D->hasInClassInitializer())
     TRY_TO(TraverseStmt(D->getInClassInitializer()));
 })
 
