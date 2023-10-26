@@ -5,6 +5,6 @@ template<typename P >
 void as_string(P sprintf_like) { }
 
 void to_string() {
-  // CHECK: ParmVarDecl {{.*}} {{.*}} {{.*}} sprintf_like 'void (*)(char *)':'void (*)(char *)'
+  // CHECK: ParmVarDecl {{.*}} {{.*}} {{.*}} sprintf_like 'void (*)(char *)'
   as_string(snprintf);
 }
