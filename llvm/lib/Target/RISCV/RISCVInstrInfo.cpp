@@ -335,11 +335,6 @@ void RISCVInstrInfo::copyPhysReg(MachineBasicBlock &MBB,
                                  MachineInstr::MIFlag Flag) const {
   const TargetRegisterInfo *TRI = STI.getRegisterInfo();
 
-  if (RISCV::GPRPF64RegClass.contains(DstReg))
-    DstReg = TRI->getSubReg(DstReg, RISCV::sub_32);
-  if (RISCV::GPRPF64RegClass.contains(SrcReg))
-    SrcReg = TRI->getSubReg(SrcReg, RISCV::sub_32);
-
   if (RISCV::GPRRegClass.contains(DstReg, SrcReg)) {
     BuildMI(MBB, MBBI, DL, get(RISCV::ADDI), DstReg)
         .addReg(SrcReg, getKillRegState(KillSrc))
@@ -350,6 +345,20 @@ void RISCVInstrInfo::copyPhysReg(MachineBasicBlock &MBB,
     BuildMI(MBB, MBBI, DL, get(RISCV::CMove), DstReg)
         .addReg(SrcReg, getKillRegState(KillSrc))
         .setMIFlag(Flag);
+    return;
+  }
+
+  if (RISCV::GPRPF64RegClass.contains(DstReg, SrcReg)) {
+    // Emit an ADDI for both parts of GPRPF64.
+    BuildMI(MBB, MBBI, DL, get(RISCV::ADDI),
+            TRI->getSubReg(DstReg, RISCV::sub_32))
+        .addReg(TRI->getSubReg(SrcReg, RISCV::sub_32), getKillRegState(KillSrc))
+        .addImm(0);
+    BuildMI(MBB, MBBI, DL, get(RISCV::ADDI),
+            TRI->getSubReg(DstReg, RISCV::sub_32_hi))
+        .addReg(TRI->getSubReg(SrcReg, RISCV::sub_32_hi),
+                getKillRegState(KillSrc))
+        .addImm(0);
     return;
   }
 
