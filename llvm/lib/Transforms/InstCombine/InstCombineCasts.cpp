@@ -1932,7 +1932,7 @@ Instruction *InstCombinerImpl::visitPtrToInt(PtrToIntInst &CI) {
   unsigned AS = CI.getPointerAddressSpace();
 
   if (DL.isFatPointer(AS))
-    return commonPointerCastTransforms(CI);
+    return commonCastTransforms(CI);
 
   unsigned TySize = Ty->getScalarSizeInBits();
   unsigned PtrSize = DL.getPointerSizeInBits(AS);

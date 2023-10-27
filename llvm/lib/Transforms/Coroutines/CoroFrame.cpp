@@ -2422,7 +2422,6 @@ static void lowerLocalAllocas(ArrayRef<CoroAllocaAllocInst*> LocalAllocas,
 
     // Save the stack depth.  Try to avoid doing this if the stackrestore
     // is going to immediately precede a return or something.
-    Type *AllocaASPtrTy = nullptr;
     Value *StackSave = nullptr;
     if (localAllocaNeedsStackSave(AI))
       StackSave = Builder.CreateStackSave();
