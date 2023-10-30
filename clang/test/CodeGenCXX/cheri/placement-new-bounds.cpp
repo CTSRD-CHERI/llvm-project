@@ -50,7 +50,7 @@ Foo *test_foo_not_aligned_array() { return new Foo[2]; }
 
 // AGGRESSIVE-LABEL: @_Z35test_foo_not_aligned_array_nonconsti(
 // AGGRESSIVE-NEXT:  entry:
-// AGGRESSIVE-NEXT:    [[TMP0:%.*]] = zext i32 [[N:%.*]] to i64
+// AGGRESSIVE-NEXT:    [[TMP0:%.*]] = zext nneg i32 [[N:%.*]] to i64
 // AGGRESSIVE-NEXT:    [[TMP1:%.*]] = icmp slt i32 [[N]], 0
 // AGGRESSIVE-NEXT:    [[TMP2:%.*]] = shl nuw nsw i64 [[TMP0]], 2
 // AGGRESSIVE-NEXT:    [[TMP3:%.*]] = select i1 [[TMP1]], i64 -1, i64 [[TMP2]]
@@ -59,7 +59,7 @@ Foo *test_foo_not_aligned_array() { return new Foo[2]; }
 //
 // CONSERVATIVE-LABEL: @_Z35test_foo_not_aligned_array_nonconsti(
 // CONSERVATIVE-NEXT:  entry:
-// CONSERVATIVE-NEXT:    [[TMP0:%.*]] = zext i32 [[N:%.*]] to i64
+// CONSERVATIVE-NEXT:    [[TMP0:%.*]] = zext nneg i32 [[N:%.*]] to i64
 // CONSERVATIVE-NEXT:    [[TMP1:%.*]] = icmp slt i32 [[N]], 0
 // CONSERVATIVE-NEXT:    [[TMP2:%.*]] = shl nuw nsw i64 [[TMP0]], 2
 // CONSERVATIVE-NEXT:    [[TMP3:%.*]] = select i1 [[TMP1]], i64 -1, i64 [[TMP2]]
@@ -97,7 +97,7 @@ Foo *test_foo_nonalloc_array(void* buffer) { return new (buffer) Foo[2]; }
 
 // AGGRESSIVE-LABEL: @_Z32test_foo_nonalloc_array_nonconstPvi(
 // AGGRESSIVE-NEXT:  entry:
-// AGGRESSIVE-NEXT:    [[TMP0:%.*]] = zext i32 [[N:%.*]] to i64
+// AGGRESSIVE-NEXT:    [[TMP0:%.*]] = zext nneg i32 [[N:%.*]] to i64
 // AGGRESSIVE-NEXT:    [[TMP1:%.*]] = icmp slt i32 [[N]], 0
 // AGGRESSIVE-NEXT:    [[TMP2:%.*]] = shl nuw nsw i64 [[TMP0]], 2
 // AGGRESSIVE-NEXT:    [[TMP3:%.*]] = select i1 [[TMP1]], i64 -1, i64 [[TMP2]]

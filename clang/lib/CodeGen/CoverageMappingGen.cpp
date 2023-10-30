@@ -1732,8 +1732,7 @@ void CoverageMappingModuleGen::addFunctionMappingRecord(
   FunctionRecords.push_back({NameHash, FuncHash, CoverageMapping, IsUsed});
 
   if (!IsUsed)
-    FunctionNames.push_back(
-        llvm::ConstantExpr::getBitCast(NamePtr, CGM.Int8PtrTy));
+    FunctionNames.push_back(NamePtr);
 
   if (CGM.getCodeGenOpts().DumpCoverageMapping) {
     // Dump the coverage mapping data for this function by decoding the
