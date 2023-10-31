@@ -1587,6 +1587,11 @@ enum PointerInterpretationKind {
   /// The pointer should always be interpreted as an integer.
   PIK_Integer,
 };
+/// Capture whether this is a normal array (e.g. int X[4])
+/// an array with a static size (e.g. int X[static 4]), or an array
+/// with a star size (e.g. int X[*]).
+/// 'static' is only allowed on function parameters.
+enum class ArraySizeModifier { Normal, Static, Star };
 
 /// The base class of the type hierarchy.
 ///
@@ -1679,7 +1684,7 @@ protected:
 
     /// Storage class qualifiers from declarations like
     /// 'int X[static restrict 4]'. For function parameters only.
-    /// Actually an ArrayType::ArraySizeModifier.
+    /// Actually an ArraySizeModifier.
     unsigned SizeModifier : 3;
 
     /// The interpretation (PointerInterpretationKind) to use for this array.
@@ -3223,15 +3228,6 @@ class ArrayType : public Type,
                   public llvm::FoldingSetNode {
   friend class OptionalPointerInterpretationTrait<ArrayType>;
 
-public:
-  /// Capture whether this is a normal array (e.g. int X[4])
-  /// an array with a static size (e.g. int X[static 4]), or an array
-  /// with a star size (e.g. int X[*]).
-  /// 'static' is only allowed on function parameters.
-  enum ArraySizeModifier {
-    Normal, Static, Star
-  };
-
 private:
   /// The element type of the array.
   QualType ElementType;
@@ -3367,7 +3363,7 @@ public:
                       ArraySizeModifier SizeMod, unsigned TypeQuals,
                       std::optional<PointerInterpretationKind> PIK) {
     ID.AddPointer(ET.getAsOpaquePtr());
-    ID.AddInteger(SizeMod);
+    ID.AddInteger(llvm::to_underlying(SizeMod));
     ID.AddInteger(TypeQuals);
     ID.AddBoolean(PIK.has_value());
     if (PIK.has_value())

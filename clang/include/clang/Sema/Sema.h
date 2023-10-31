@@ -2081,8 +2081,8 @@ public:
                             bool* ValidPointer);
   QualType BuildReferenceType(QualType T, bool LValueRef,
                               SourceLocation Loc, DeclarationName Entity);
-  QualType BuildArrayType(QualType T, ArrayType::ArraySizeModifier ASM,
-                          Expr *ArraySize, unsigned Quals, SourceRange Brackets,
+  QualType BuildArrayType(QualType T, ArraySizeModifier ASM, Expr *ArraySize,
+                          unsigned Quals, SourceRange Brackets,
                           DeclarationName Entity,
                           std::optional<PointerInterpretationKind> PIK);
   QualType BuildVectorType(QualType T, Expr *VecSize, SourceLocation AttrLoc);

@@ -159,7 +159,7 @@ ArrayType::ArrayType(TypeClass tc, QualType et, QualType can,
                     : TypeDependence::None)),
       ElementType(et) {
   ArrayTypeBits.IndexTypeQuals = tq;
-  ArrayTypeBits.SizeModifier = sm;
+  ArrayTypeBits.SizeModifier = llvm::to_underlying(sm);
   ArrayTypeBits.HasPIK = PIK.has_value();
   if (PIK.has_value())
     ArrayTypeBits.PIK = *PIK;
@@ -225,7 +225,7 @@ void ConstantArrayType::Profile(llvm::FoldingSetNodeID &ID,
                                 std::optional<PointerInterpretationKind> PIK) {
   ID.AddPointer(ET.getAsOpaquePtr());
   ID.AddInteger(ArraySize.getZExtValue());
-  ID.AddInteger(SizeMod);
+  ID.AddInteger(llvm::to_underlying(SizeMod));
   ID.AddInteger(TypeQuals);
   ID.AddBoolean(SizeExpr != nullptr);
   if (SizeExpr)
@@ -246,7 +246,7 @@ void DependentSizedArrayType::Profile(
     ArraySizeModifier SizeMod, unsigned TypeQuals, Expr *E,
     std::optional<PointerInterpretationKind> PIK) {
   ID.AddPointer(ET.getAsOpaquePtr());
-  ID.AddInteger(SizeMod);
+  ID.AddInteger(llvm::to_underlying(SizeMod));
   ID.AddInteger(TypeQuals);
   E->Profile(ID, Context, true);
   ID.AddBoolean(PIK.has_value());
