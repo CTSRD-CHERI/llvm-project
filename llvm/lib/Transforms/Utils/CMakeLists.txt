@@ -40,6 +40,7 @@ add_llvm_component_library(LLVMTransformUtils
   LCSSA.cpp
   LibCallsShrinkWrap.cpp
   Local.cpp
+  LoopConstrainer.cpp
   LoopPeel.cpp
   LoopRotationUtils.cpp
   LoopSimplify.cpp
