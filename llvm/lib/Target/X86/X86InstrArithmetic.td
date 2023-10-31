@@ -1501,6 +1501,16 @@ defm ADD : ArithBinOp_CF<0x00, 0x02, 0x04, "add", MRM0r, MRM0m,
 let isCompare = 1 in {
 defm SUB : ArithBinOp_CF<0x28, 0x2A, 0x2C, "sub", MRM5r, MRM5m,
                          X86ptrsub_flag, ptrsub, 1>;
+
+def BUILDCAPrr : I<0x0E, MRMSrcReg, (outs GRC:$dst), (ins GRC:$src1, GRC:$src2),
+                 "buildcap\t{$src1, $src2, $dst|$dst, $src1, $src2}",
+                 [(set GRC:$dst, (int_cheri_cap_build GRC:$src1, GRC:$src2))]>,
+                 T8XD, VEX_4V, Sched<[]>;
+
+def BUILDCAPmr : I<0x0E, MRMSrcMem, (outs GRC:$dst), (ins GRC:$src1, XiC.MemOperand:$src2),
+                 "buildcap\t{$src1, $src2, $dst|$dst, $src1, $src2}",
+                 [(set GRC:$dst, (int_cheri_cap_build GRC:$src1, (loadcap addr:$src2)))]>,
+                 T8XD, VEX_4V, Sched<[]>;
 }
 
 // Version of XOR8rr_NOREX that use GR8_NOREX. This is used by the handling of
