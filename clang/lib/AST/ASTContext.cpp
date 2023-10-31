@@ -5221,7 +5221,8 @@ ASTContext::getDependentTemplateSpecializationType(
   NestedNameSpecifier *CanonNNS = getCanonicalNestedNameSpecifier(NNS);
 
   ElaboratedTypeKeyword CanonKeyword = Keyword;
-  if (Keyword == ETK_None) CanonKeyword = ETK_Typename;
+  if (Keyword == ElaboratedTypeKeyword::None)
+    CanonKeyword = ElaboratedTypeKeyword::Typename;
 
   bool AnyNonCanonArgs = false;
   auto CanonArgs =
@@ -12784,7 +12785,7 @@ static auto getCommonTemplateArguments(ASTContext &Ctx,
 template <class T>
 static ElaboratedTypeKeyword getCommonTypeKeyword(const T *X, const T *Y) {
   return X->getKeyword() == Y->getKeyword() ? X->getKeyword()
-                                            : ElaboratedTypeKeyword::ETK_None;
+                                            : ElaboratedTypeKeyword::None;
 }
 
 template <class T>
