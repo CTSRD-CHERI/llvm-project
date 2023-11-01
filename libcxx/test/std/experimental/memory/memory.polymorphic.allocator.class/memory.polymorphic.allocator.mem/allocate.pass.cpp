@@ -12,8 +12,6 @@
 // test_memory_resource requires RTTI for dynamic_cast
 // UNSUPPORTED: no-rtti
 
-// XFAIL: availability-aligned_allocation-missing
-
 // <experimental/memory_resource>
 
 // template <class T> class polymorphic_allocator

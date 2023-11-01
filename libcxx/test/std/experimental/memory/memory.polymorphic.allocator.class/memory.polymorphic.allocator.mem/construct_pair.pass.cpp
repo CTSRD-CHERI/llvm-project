@@ -8,8 +8,6 @@
 
 // UNSUPPORTED: c++03, libcpp-no-rtti
 
-// XFAIL: availability-aligned_allocation-missing
-
 // <experimental/memory_resource>
 
 // template <class T> class polymorphic_allocator

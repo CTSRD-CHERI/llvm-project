@@ -8,8 +8,6 @@
 
 // UNSUPPORTED: c++03, c++11, c++14, libcpp-no-rtti
 
-// XFAIL: availability-bad_any_cast-missing && !no-exceptions
-
 // <any>
 
 // any& operator=(any &&);
