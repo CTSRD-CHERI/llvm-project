@@ -1967,9 +1967,8 @@ ConstantLValueEmitter::tryEmitAbsolute(llvm::Type *destTy) {
   // FIXME: signedness depends on the original integer type.
   auto intptrTy = CGM.getDataLayout().getIntPtrType(destPtrTy);
   llvm::Constant *C;
-  C = llvm::ConstantExpr::getIntegerCast(getOffset(), intptrTy,
-                                         /*isSigned*/ false);
-
+  C = llvm::ConstantFoldIntegerCast(getOffset(), intptrTy, /*isSigned*/ false,
+                                    CGM.getDataLayout());
   if (Value.mustBeNullDerivedCap() &&
       DestType->isCHERICapabilityType(CGM.getContext())) {
     // For capability constant expressions (derived from an absolute integer
@@ -1978,6 +1977,7 @@ ConstantLValueEmitter::tryEmitAbsolute(llvm::Type *destTy) {
   }
   assert(!CGM.getTarget().areAllPointersCapabilities() &&
          "Should only emit inttoptr global intcap_t in hybrid mode");
+  assert(C && "Must have folded, as Offset is a ConstantInt");
   C = llvm::ConstantExpr::getIntToPtr(C, destPtrTy);
   return C;
 }
