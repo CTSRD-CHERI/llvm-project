@@ -454,9 +454,7 @@ EmitMaterializeTemporaryExpr(const MaterializeTemporaryExpr *M) {
     Address Object = createReferenceTemporary(*this, M, E);
     if (auto *Var = dyn_cast<llvm::GlobalVariable>(Object.getPointer())) {
       llvm::Type *Ty = ConvertTypeForMem(E->getType());
-      Object = Address(llvm::ConstantExpr::getBitCast(
-                           Var, Ty->getPointerTo(Object.getAddressSpace())),
-                       Ty, Object.getAlignment());
+      Object = Object.withElementType(Ty);
 
       // createReferenceTemporary will promote the temporary to a global with a
       // constant initializer if it can.  It can only do this to a value of
@@ -511,13 +509,8 @@ EmitMaterializeTemporaryExpr(const MaterializeTemporaryExpr *M) {
   Address Object = createReferenceTemporary(*this, M, E, &Alloca);
   if (auto *Var = dyn_cast<llvm::GlobalVariable>(
           Object.getPointer()->stripPointerCasts())) {
-    unsigned AS = CGM.getTargetCodeGenInfo().getDefaultAS();
     llvm::Type *TemporaryType = ConvertTypeForMem(E->getType());
-    Object = Address(llvm::ConstantExpr::getPointerBitCastOrAddrSpaceCast(
-                         cast<llvm::Constant>(Object.getPointer()),
-                         TemporaryType->getPointerTo(AS)),
-                     TemporaryType,
-                     Object.getAlignment());
+    Object = Object.withElementType(TemporaryType);
     // If the temporary is a global and has a constant initializer or is a
     // constant temporary that we promoted to a global, we may have already
     // initialized it.
@@ -3633,19 +3626,6 @@ static llvm::Constant *EmitFunctionDeclPointer(CodeGenModule &CGM,
            CGM.getTargetCodeGenInfo().getCHERICapabilityAS());
   }
 
-  if (!FD->hasPrototype()) {
-    if (const FunctionProtoType *Proto =
-            FD->getType()->getAs<FunctionProtoType>()) {
-      // Ugly case: for a K&R-style definition, the type of the definition
-      // isn't the same as the type of a use.  Correct for this with a
-      // bitcast.
-      QualType NoProtoType =
-          CGM.getContext().getFunctionNoProtoType(Proto->getReturnType());
-      NoProtoType = CGM.getContext().getPointerType(NoProtoType);
-      V = llvm::ConstantExpr::getBitCast(V,
-                                      CGM.getTypes().ConvertType(NoProtoType));
-    }
-  }
   return V;
 }
 
