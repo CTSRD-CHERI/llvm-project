@@ -35,6 +35,7 @@
 #include "llvm/IR/Cheri.h"
 #include "llvm/IR/CheriIntrinsics.h"
 #include "llvm/IR/ConstantRange.h"
+#include "llvm/IR/Constants.h"
 #include "llvm/IR/DataLayout.h"
 #include "llvm/IR/Dominators.h"
 #include "llvm/IR/InstrTypes.h"
@@ -6838,7 +6839,7 @@ static Value *simplifyBinaryIntrinsic(Function *F, Value *Op0, Value *Op1,
     break;
   case Intrinsic::cheri_cap_diff:
     if (Constant *Result = computePointerDifference(Q.DL, Op0, Op1))
-      return ConstantExpr::getIntegerCast(Result, ReturnType, true);
+      return ConstantFoldIntegerCast(Result, ReturnType, true, Q.DL);
     break;
   case Intrinsic::cheri_cap_from_pointer:
     // (cheri_cap_from_pointer x, 0) -> null

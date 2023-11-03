@@ -242,23 +242,18 @@ InputSection *InputSectionBase::getLinkOrderDep() const {
   return cast<InputSection>(file->getSections()[link]);
 }
 
-// Find a function symbol that encloses a given location.
-template <unsigned SymbolType>
-Defined *InputSectionBase::getEnclosingSymbol(uint64_t offset) const {
+// Find a symbol that encloses a given location.
+Defined *InputSectionBase::getEnclosingSymbol(uint64_t offset, uint8_t type) const {
   for (Symbol *b : file->getSymbols())
     if (Defined *d = dyn_cast<Defined>(b))
-      if (d->section == this && d->type == SymbolType && d->value <= offset &&
-          offset < d->value + d->getSize())
+      if (d->section == this && d->value <= offset &&
+          offset < d->value + d->getSize() && (type == 0 || type == d->type))
         return d;
   return nullptr;
 }
 
-Defined *InputSectionBase::getEnclosingFunction(uint64_t offset) const {
-  return getEnclosingSymbol<STT_FUNC>(offset);
-}
-
 Defined *InputSectionBase::getEnclosingObject(uint64_t offset) const {
-  return getEnclosingSymbol<STT_OBJECT>(offset);
+  return getEnclosingSymbol(offset, STT_OBJECT);
 }
 
 // Returns an object file location string. Used to construct an error message.
@@ -314,10 +309,8 @@ std::string InputSectionBase::getObjMsg(uint64_t off) const {
   // Find a symbol that encloses a given location. getObjMsg may be called
   // before ObjFile::initSectionsAndLocalSyms where local symbols are
   // initialized.
-  for (Symbol *b : file->getSymbols())
-    if (auto *d = dyn_cast_or_null<Defined>(b))
-      if (d->section == this && d->value <= off && off < d->value + d->getSize())
-        return filename + ":(" + toString(*d) + ")" + archive;
+  if (Defined *d = getEnclosingSymbol(off))
+    return filename + ":(" + toString(*d) + ")" + archive;
 
   // If there's no symbol, print out the offset in the section.
   return (filename + ":(" + name + "+0x" + utohexstr(off) + ")" + archive)

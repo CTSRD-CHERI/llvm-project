@@ -189,12 +189,13 @@ public:
 
   InputSection *getLinkOrderDep() const;
 
-  // Get the function symbol that encloses this offset from within the
-  // section.
-  Defined *getEnclosingFunction(uint64_t offset) const;
+  // Get a symbol that encloses this offset from within the section. If type is
+  // not zero, return a symbol with the specified type.
+  Defined *getEnclosingSymbol(uint64_t offset, uint8_t type = 0) const;
+  Defined *getEnclosingFunction(uint64_t offset) const {
+    return getEnclosingSymbol(offset, llvm::ELF::STT_FUNC);
+  }
   Defined *getEnclosingObject(uint64_t offset) const;
-  template <unsigned SymbolType>
-  Defined *getEnclosingSymbol(uint64_t offset) const;
 
   // Returns a source location string. Used to construct an error message.
   std::string getLocation(uint64_t offset) const;
