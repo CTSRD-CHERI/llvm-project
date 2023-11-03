@@ -2142,7 +2142,7 @@ Instruction *InstCombinerImpl::visitCallInst(CallInst &CI) {
     break;
   }
   case Intrinsic::ptrmask: {
-    unsigned BitWidth = DL.getPointerTypeSizeInBits(II->getType());
+    unsigned BitWidth = DL.getPointerAddrSizeInBits(II->getType());
     KnownBits Known(BitWidth);
     if (SimplifyDemandedInstructionBits(*II, Known))
       return II;

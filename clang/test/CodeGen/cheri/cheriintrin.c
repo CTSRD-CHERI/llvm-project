@@ -167,21 +167,20 @@ void test(void *__capability cap, char *__capability cap2, __SIZE_TYPE__ i) {
 void test_alignment_builtins(void *__capability cap, __SIZE_TYPE__ align);
 
 // CHECK-LABEL: @test_alignment_builtins(
+// CHECK-SAME:  ptr addrspace(200) noundef [[CAP:%.*]],
 // CHECK-NEXT:  entry:
 // CHECK-NEXT:    [[MASK:%.*]] = add i64 [[ALIGN:%.*]], -1
-// CHECK-NEXT:    [[PTRADDR:%.*]] = tail call i64 @llvm.cheri.cap.address.get.i64(ptr addrspace(200) [[CAP:%.*]])
-// CHECK-NEXT:    [[OVER_BOUNDARY:%.*]] = add i64 [[PTRADDR]], [[MASK]]
+// CHECK-NEXT:    [[OVER_BOUNDARY:%.*]] = getelementptr inbounds i8, ptr addrspace(200) %cap, i64 %mask
 // CHECK-NEXT:    [[INVERTED_MASK:%.*]] = sub i64 0, [[ALIGN]]
-// CHECK-NEXT:    [[ALIGNED_INTPTR:%.*]] = and i64 [[OVER_BOUNDARY]], [[INVERTED_MASK]]
-// CHECK-NEXT:    [[DIFF:%.*]] = sub i64 [[ALIGNED_INTPTR]], [[PTRADDR]]
-// CHECK-NEXT:    [[ALIGNED_RESULT:%.*]] = getelementptr inbounds i8, ptr addrspace(200) [[CAP]], i64 [[DIFF]]
+// CHECK-NEXT:    [[ALIGNED_RESULT:%.*]] = tail call ptr addrspace(200) @llvm.ptrmask.p200.i64(ptr addrspace(200) [[OVER_BOUNDARY]], i64 [[INVERTED_MASK]])
 // CHECK-NEXT:    call void @llvm.assume(i1 true) [ "align"(ptr addrspace(200) [[ALIGNED_RESULT]], i64 [[ALIGN]]) ]
 // CHECK-NEXT:    tail call void @use_cap(ptr addrspace(200) noundef [[ALIGNED_RESULT]]) #[[ATTR5]]
-// CHECK-NEXT:    [[ALIGNED_INTPTR5:%.*]] = and i64 [[PTRADDR]], [[INVERTED_MASK]]
-// CHECK-NEXT:    [[DIFF6:%.*]] = sub i64 [[ALIGNED_INTPTR5]], [[PTRADDR]]
-// CHECK-NEXT:    [[ALIGNED_RESULT7:%.*]] = getelementptr inbounds i8, ptr addrspace(200) [[CAP]], i64 [[DIFF6]]
-// CHECK-NEXT:    call void @llvm.assume(i1 true) [ "align"(ptr addrspace(200) [[ALIGNED_RESULT7]], i64 [[ALIGN]]) ]
-// CHECK-NEXT:    tail call void @use_cap(ptr addrspace(200) noundef [[ALIGNED_RESULT7]]) #[[ATTR5]]
+//
+// CHECK-NEXT:    [[ALIGNED_RESULT3:%.*]] = tail call ptr addrspace(200) @llvm.ptrmask.p200.i64(ptr addrspace(200) [[CAP]], i64 [[INVERTED_MASK]])
+// CHECK-NEXT:    call void @llvm.assume(i1 true) [ "align"(ptr addrspace(200) [[ALIGNED_RESULT3]], i64 [[ALIGN]]) ]
+// CHECK-NEXT:    tail call void @use_cap(ptr addrspace(200) noundef [[ALIGNED_RESULT3]]) #[[ATTR5]]
+//
+// CHECK-NEXT:    [[PTRADDR:%.*]] = tail call i64 @llvm.cheri.cap.address.get.i64(ptr addrspace(200) [[CAP]])
 // CHECK-NEXT:    [[SET_BITS:%.*]] = and i64 [[PTRADDR]], [[MASK]]
 // CHECK-NEXT:    [[IS_ALIGNED:%.*]] = icmp eq i64 [[SET_BITS]], 0
 // CHECK-NEXT:    tail call void @use_bool(i1 noundef zeroext [[IS_ALIGNED]]) #[[ATTR5]]

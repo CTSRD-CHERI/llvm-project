@@ -9,11 +9,8 @@ extern int test_ptr(char *c);
 // PURECAP-NEXT:  entry:
 // PURECAP-NEXT:    [[BUF:%.*]] = alloca [1024 x i8], align 1, addrspace(200)
 // PURECAP-NEXT:    [[ARRAYDECAY:%.*]] = getelementptr inbounds [1024 x i8], ptr addrspace(200) [[BUF]], i64 0, i64 0
-// PURECAP-NEXT:    [[PTRADDR:%.*]] = call i64 @llvm.cheri.cap.address.get.i64(ptr addrspace(200) [[ARRAYDECAY]])
-// PURECAP-NEXT:    [[OVER_BOUNDARY:%.*]] = add i64 [[PTRADDR]], 15
-// PURECAP-NEXT:    [[ALIGNED_INTPTR:%.*]] = and i64 [[OVER_BOUNDARY]], -16
-// PURECAP-NEXT:    [[DIFF:%.*]] = sub i64 [[ALIGNED_INTPTR]], [[PTRADDR]]
-// PURECAP-NEXT:    [[ALIGNED_RESULT:%.*]] = getelementptr inbounds i8, ptr addrspace(200) [[ARRAYDECAY]], i64 [[DIFF]]
+// PURECAP-NEXT:    [[OVER_BOUNDARY:%.*]] = getelementptr inbounds i8, ptr addrspace(200) [[ARRAYDECAY]], i64 15
+// PURECAP-NEXT:    [[ALIGNED_RESULT:%.*]] = call ptr addrspace(200) @llvm.ptrmask.p200.i64(ptr addrspace(200) [[OVER_BOUNDARY]], i64 -16)
 // PURECAP-NEXT:    call void @llvm.assume(i1 true) [ "align"(ptr addrspace(200) [[ALIGNED_RESULT]], i64 16) ]
 // PURECAP-NEXT:    [[CALL:%.*]] = call signext i32 @test_ptr(ptr addrspace(200) noundef [[ALIGNED_RESULT]])
 // PURECAP-NEXT:    ret i32 [[CALL]]
@@ -23,11 +20,8 @@ extern int test_ptr(char *c);
 // N64-NEXT:  entry:
 // N64-NEXT:    [[BUF:%.*]] = alloca [1024 x i8], align 1
 // N64-NEXT:    [[ARRAYDECAY:%.*]] = getelementptr inbounds [1024 x i8], ptr [[BUF]], i64 0, i64 0
-// N64-NEXT:    [[INTPTR:%.*]] = ptrtoint ptr [[ARRAYDECAY]] to i64
-// N64-NEXT:    [[OVER_BOUNDARY:%.*]] = add i64 [[INTPTR]], 15
-// N64-NEXT:    [[ALIGNED_INTPTR:%.*]] = and i64 [[OVER_BOUNDARY]], -16
-// N64-NEXT:    [[DIFF:%.*]] = sub i64 [[ALIGNED_INTPTR]], [[INTPTR]]
-// N64-NEXT:    [[ALIGNED_RESULT:%.*]] = getelementptr inbounds i8, ptr [[ARRAYDECAY]], i64 [[DIFF]]
+// N64-NEXT:    [[OVER_BOUNDARY:%.*]] = getelementptr inbounds i8, ptr [[ARRAYDECAY]], i64 15
+// N64-NEXT:    [[ALIGNED_RESULT:%.*]] = call ptr @llvm.ptrmask.p0.i64(ptr [[OVER_BOUNDARY]], i64 -16)
 // N64-NEXT:    call void @llvm.assume(i1 true) [ "align"(ptr [[ALIGNED_RESULT]], i64 16) ]
 // N64-NEXT:    [[CALL:%.*]] = call signext i32 @test_ptr(ptr noundef [[ALIGNED_RESULT]])
 // N64-NEXT:    ret i32 [[CALL]]
