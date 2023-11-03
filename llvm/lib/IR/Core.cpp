@@ -1746,16 +1746,6 @@ LLVMValueRef LLVMConstTrunc(LLVMValueRef ConstantVal, LLVMTypeRef ToType) {
                                      unwrap(ToType)));
 }
 
-LLVMValueRef LLVMConstSExt(LLVMValueRef ConstantVal, LLVMTypeRef ToType) {
-  return wrap(ConstantExpr::getSExt(unwrap<Constant>(ConstantVal),
-                                    unwrap(ToType)));
-}
-
-LLVMValueRef LLVMConstZExt(LLVMValueRef ConstantVal, LLVMTypeRef ToType) {
-  return wrap(ConstantExpr::getZExt(unwrap<Constant>(ConstantVal),
-                                    unwrap(ToType)));
-}
-
 LLVMValueRef LLVMConstFPTrunc(LLVMValueRef ConstantVal, LLVMTypeRef ToType) {
   return wrap(ConstantExpr::getFPTrunc(unwrap<Constant>(ConstantVal),
                                        unwrap(ToType)));
@@ -1807,18 +1797,6 @@ LLVMValueRef LLVMConstAddrSpaceCast(LLVMValueRef ConstantVal,
                                              unwrap(ToType)));
 }
 
-LLVMValueRef LLVMConstZExtOrBitCast(LLVMValueRef ConstantVal,
-                                    LLVMTypeRef ToType) {
-  return wrap(ConstantExpr::getZExtOrBitCast(unwrap<Constant>(ConstantVal),
-                                             unwrap(ToType)));
-}
-
-LLVMValueRef LLVMConstSExtOrBitCast(LLVMValueRef ConstantVal,
-                                    LLVMTypeRef ToType) {
-  return wrap(ConstantExpr::getSExtOrBitCast(unwrap<Constant>(ConstantVal),
-                                             unwrap(ToType)));
-}
-
 LLVMValueRef LLVMConstTruncOrBitCast(LLVMValueRef ConstantVal,
                                      LLVMTypeRef ToType) {
   return wrap(ConstantExpr::getTruncOrBitCast(unwrap<Constant>(ConstantVal),
@@ -1829,12 +1807,6 @@ LLVMValueRef LLVMConstPointerCast(LLVMValueRef ConstantVal,
                                   LLVMTypeRef ToType) {
   return wrap(ConstantExpr::getPointerCast(unwrap<Constant>(ConstantVal),
                                            unwrap(ToType)));
-}
-
-LLVMValueRef LLVMConstIntCast(LLVMValueRef ConstantVal, LLVMTypeRef ToType,
-                              LLVMBool isSigned) {
-  return wrap(ConstantExpr::getIntegerCast(unwrap<Constant>(ConstantVal),
-                                           unwrap(ToType), isSigned));
 }
 
 LLVMValueRef LLVMConstFPCast(LLVMValueRef ConstantVal, LLVMTypeRef ToType) {
