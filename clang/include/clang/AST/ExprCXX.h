@@ -1733,10 +1733,12 @@ private:
   SourceLocation Loc;
 
   /// Whether this is the construction of a virtual base.
+  LLVM_PREFERRED_TYPE(bool)
   unsigned ConstructsVirtualBase : 1;
 
   /// Whether the constructor is inherited from a virtual base class of the
   /// class that we construct.
+  LLVM_PREFERRED_TYPE(bool)
   unsigned InheritedFromVirtualBase : 1;
 
 public:
@@ -2617,6 +2619,7 @@ class CXXPseudoDestructorExpr : public Expr {
 
   /// Whether the operator was an arrow ('->'); otherwise, it was a
   /// period ('.').
+  LLVM_PREFERRED_TYPE(bool)
   bool IsArrow : 1;
 
   /// The location of the '.' or '->' operator.
@@ -2846,6 +2849,7 @@ public:
 /// \endcode
 class ArrayTypeTraitExpr : public Expr {
   /// The trait. An ArrayTypeTrait enum in MSVC compat unsigned.
+  LLVM_PREFERRED_TYPE(ArrayTypeTrait)
   unsigned ATT : 2;
 
   /// The value of the type trait. Unspecified if dependent.
@@ -2916,9 +2920,11 @@ public:
 /// \endcode
 class ExpressionTraitExpr : public Expr {
   /// The trait. A ExpressionTrait enum in MSVC compatible unsigned.
+  LLVM_PREFERRED_TYPE(ExpressionTrait)
   unsigned ET : 31;
 
   /// The value of the type trait. Unspecified if dependent.
+  LLVM_PREFERRED_TYPE(bool)
   unsigned Value : 1;
 
   /// The location of the type trait keyword.
