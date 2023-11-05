@@ -1805,6 +1805,15 @@ public:
   }
 };
 
+enum class StringLiteralKind {
+  Ordinary,
+  Wide,
+  UTF8,
+  UTF16,
+  UTF32,
+  Unevaluated
+};
+
 /// StringLiteral - This represents a string literal expression, e.g. "foo"
 /// or L"bar" (wide strings). The actual string data can be obtained with
 /// getBytes() and is NOT null-terminated. The length of the string data is
@@ -1844,7 +1853,7 @@ class StringLiteral final
   /// * An array of getByteLength() char used to store the string data.
 
 public:
-  enum StringKind { Ordinary, Wide, UTF8, UTF16, UTF32, Unevaluated };
+  // enum StringKind { Ordinary, Wide, UTF8, UTF16, UTF32, Unevaluated };
 
 private:
   unsigned numTrailingObjects(OverloadToken<unsigned>) const { return 1; }
@@ -1868,7 +1877,7 @@ private:
   }
 
   /// Build a string literal.
-  StringLiteral(const ASTContext &Ctx, StringRef Str, StringKind Kind,
+  StringLiteral(const ASTContext &Ctx, StringRef Str, StringLiteralKind Kind,
                 bool Pascal, QualType Ty, const SourceLocation *Loc,
                 unsigned NumConcatenated);
 
@@ -1877,7 +1886,8 @@ private:
                 unsigned CharByteWidth);
 
   /// Map a target and string kind to the appropriate character width.
-  static unsigned mapCharByteWidth(TargetInfo const &Target, StringKind SK);
+  static unsigned mapCharByteWidth(TargetInfo const &Target,
+                                   StringLiteralKind SK);
 
   /// Set one of the string literal token.
   void setStrTokenLoc(unsigned TokNum, SourceLocation L) {
@@ -1889,13 +1899,13 @@ public:
   /// This is the "fully general" constructor that allows representation of
   /// strings formed from multiple concatenated tokens.
   static StringLiteral *Create(const ASTContext &Ctx, StringRef Str,
-                               StringKind Kind, bool Pascal, QualType Ty,
+                               StringLiteralKind Kind, bool Pascal, QualType Ty,
                                const SourceLocation *Loc,
                                unsigned NumConcatenated);
 
   /// Simple constructor for string literals made from one token.
   static StringLiteral *Create(const ASTContext &Ctx, StringRef Str,
-                               StringKind Kind, bool Pascal, QualType Ty,
+                               StringLiteralKind Kind, bool Pascal, QualType Ty,
                                SourceLocation Loc) {
     return Create(Ctx, Str, Kind, Pascal, Ty, &Loc, 1);
   }
@@ -1937,16 +1947,16 @@ public:
   unsigned getLength() const { return *getTrailingObjects<unsigned>(); }
   unsigned getCharByteWidth() const { return StringLiteralBits.CharByteWidth; }
 
-  StringKind getKind() const {
-    return static_cast<StringKind>(StringLiteralBits.Kind);
+  StringLiteralKind getKind() const {
+    return static_cast<StringLiteralKind>(StringLiteralBits.Kind);
   }
 
-  bool isOrdinary() const { return getKind() == Ordinary; }
-  bool isWide() const { return getKind() == Wide; }
-  bool isUTF8() const { return getKind() == UTF8; }
-  bool isUTF16() const { return getKind() == UTF16; }
-  bool isUTF32() const { return getKind() == UTF32; }
-  bool isUnevaluated() const { return getKind() == Unevaluated; }
+  bool isOrdinary() const { return getKind() == StringLiteralKind::Ordinary; }
+  bool isWide() const { return getKind() == StringLiteralKind::Wide; }
+  bool isUTF8() const { return getKind() == StringLiteralKind::UTF8; }
+  bool isUTF16() const { return getKind() == StringLiteralKind::UTF16; }
+  bool isUTF32() const { return getKind() == StringLiteralKind::UTF32; }
+  bool isUnevaluated() const { return getKind() == StringLiteralKind::Unevaluated; }
   bool isPascal() const { return StringLiteralBits.IsPascal; }
 
   bool containsNonAscii() const {
