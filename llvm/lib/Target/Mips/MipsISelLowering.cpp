@@ -2909,8 +2909,8 @@ lowerGlobalTLSAddress(SDValue Op, SelectionDAG &DAG) const
           addGlobalsCSetBoundsStats(GV, DAG, "set bounds on tls_index",
                                     DL.getDebugLoc());
         Argument = setBounds(DAG, Argument, 16, /*CSetBoundsStatsLogged=*/true);
-        Type *CapTy = Type::getInt8PtrTy(*DAG.getContext(),
-                                         GVTy->getPointerAddressSpace());
+        Type *CapTy =
+            PointerType::get(*DAG.getContext(), GVTy->getPointerAddressSpace());
 
         SDValue TlsGetAddr = DAG.getExternalFunctionSymbol("__tls_get_addr");
 

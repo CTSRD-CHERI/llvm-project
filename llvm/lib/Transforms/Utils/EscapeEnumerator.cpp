@@ -71,7 +71,7 @@ IRBuilder<> *EscapeEnumerator::Next() {
   LLVMContext &C = F.getContext();
   BasicBlock *CleanupBB = BasicBlock::Create(C, CleanupBBName, &F);
   Type *ExnTy = StructType::get(
-      Type::getInt8PtrTy(
+      PointerType::get(
           C, F.getParent()->getDataLayout().getDefaultGlobalsAddressSpace()),
       Type::getInt32Ty(C));
   if (!F.hasPersonalityFn()) {

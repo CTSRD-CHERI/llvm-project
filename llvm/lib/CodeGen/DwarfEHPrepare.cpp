@@ -229,8 +229,7 @@ bool DwarfEHPrepare::InsertUnwindResumeCalls() {
     DoesRewindFunctionNeedExceptionObject = false;
   } else {
     RewindName = TLI.getLibcallName(RTLIB::UNWIND_RESUME);
-    FTy =
-        FunctionType::get(Type::getVoidTy(Ctx), ExTy, false);
+    FTy = FunctionType::get(Type::getVoidTy(Ctx), ExTy, false);
     RewindFunctionCallingConv = TLI.getLibcallCallingConv(RTLIB::UNWIND_RESUME);
     DoesRewindFunctionNeedExceptionObject = true;
   }

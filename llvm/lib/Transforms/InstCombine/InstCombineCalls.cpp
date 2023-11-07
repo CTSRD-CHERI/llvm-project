@@ -171,7 +171,7 @@ Instruction *InstCombinerImpl::SimplifyAnyMemTransfer(AnyMemTransferInst *MI) {
     Align PtrCpyAlign = DL.getPointerPrefAlignment(200);
     if (CopyDstAlign && *CopyDstAlign >= PtrCpyAlign &&
         CopySrcAlign && *CopySrcAlign >= PtrCpyAlign)
-      CpyTy = Type::getInt8PtrTy(MI->getContext(), 200);
+      CpyTy = PointerType::get(MI->getContext(), 200);
     else
       return nullptr;
   }

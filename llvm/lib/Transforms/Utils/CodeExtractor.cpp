@@ -568,8 +568,7 @@ void CodeExtractor::findAllocas(const CodeExtractorAnalysisCache &CEAC,
     for (Instruction *I : LifetimeBitcastUsers) {
       Module *M = AIFunc->getParent();
       LLVMContext &Ctx = M->getContext();
-      auto *Int8PtrTy =
-          Type::getInt8PtrTy(Ctx, AI->getType()->getPointerAddressSpace());
+      auto *Int8PtrTy = PointerType::get(Ctx, AI->getType()->getPointerAddressSpace());
       CastInst *CastI =
           CastInst::CreatePointerCast(AI, Int8PtrTy, "lt.cast", I);
       I->replaceUsesOfWith(I->getOperand(1), CastI);

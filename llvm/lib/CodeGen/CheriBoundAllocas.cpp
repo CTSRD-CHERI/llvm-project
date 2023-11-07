@@ -119,7 +119,7 @@ public:
       return false;
 
     LLVMContext &C = M->getContext();
-    I8CapTy = Type::getInt8PtrTy(C, AllocaAS);
+    I8CapTy = PointerType::get(C, AllocaAS);
     SizeTy = Type::getIntNTy(C, DL.getIndexSizeInBits(AllocaAS));
 
     bool Modified = false;

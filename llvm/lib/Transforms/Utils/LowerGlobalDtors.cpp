@@ -129,7 +129,7 @@ static bool runImpl(Module &M) {
   // extern "C" int __cxa_atexit(void (*f)(void *), void *p, void *d);
   LLVMContext &C = M.getContext();
   PointerType *VoidStar =
-      Type::getInt8PtrTy(C, M.getDataLayout().getDefaultGlobalsAddressSpace());
+      PointerType::get(C, M.getDataLayout().getDefaultGlobalsAddressSpace());
   Type *AtExitFuncArgs[] = {VoidStar};
   FunctionType *AtExitFuncTy =
       FunctionType::get(Type::getVoidTy(C), AtExitFuncArgs,

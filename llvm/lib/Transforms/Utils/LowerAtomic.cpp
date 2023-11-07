@@ -55,7 +55,7 @@ Value *llvm::buildAtomicRMWValue(AtomicRMWInst::BinOp Op,
     case AtomicRMWInst::Xor: {
       LLVMContext &C = M->getContext();
       unsigned AS = Loaded->getType()->getPointerAddressSpace();
-      Type *I8CapTy = Type::getInt8PtrTy(C, AS);
+      Type *I8CapTy = PointerType::get(C, AS);
       Type *SizeTy = Type::getIntNTy(C, DL.getIndexSizeInBits(AS));
       Function *GetAddress = Intrinsic::getDeclaration(
           M, Intrinsic::cheri_cap_address_get, SizeTy);

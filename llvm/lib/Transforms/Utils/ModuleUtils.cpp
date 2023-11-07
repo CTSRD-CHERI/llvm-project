@@ -101,7 +101,7 @@ static void appendToUsedList(Module &M, StringRef Name, ArrayRef<GlobalValue *> 
   if (GV)
     GV->eraseFromParent();
 
-  Type *ArrayEltTy = llvm::Type::getInt8PtrTy(M.getContext(), 0);
+  Type *ArrayEltTy = llvm::PointerType::get(M.getContext(), 0);
   for (auto *V : Values)
     Init.insert(ConstantExpr::getPointerBitCastOrAddrSpaceCast(V, ArrayEltTy));
 

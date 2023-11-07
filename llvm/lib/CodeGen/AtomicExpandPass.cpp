@@ -1772,7 +1772,7 @@ bool AtomicExpand::expandAtomicOpToLibcall(
   Type *SizedIntTy = nullptr;
   Type *I8CapTy = nullptr;
   if (ValueOperandIsCap) {
-    I8CapTy = Type::getInt8PtrTy(Ctx, ValTy->getPointerAddressSpace());
+    I8CapTy = PointerType::get(Ctx, ValTy->getPointerAddressSpace());
   } else {
     SizedIntTy = Type::getIntNTy(Ctx, Size * 8);
   }

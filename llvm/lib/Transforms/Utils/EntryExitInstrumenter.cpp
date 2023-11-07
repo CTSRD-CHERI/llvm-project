@@ -54,8 +54,8 @@ static void insertCall(Function &CurFn, StringRef Func,
   }
 
   if (Func == "__cyg_profile_func_enter" || Func == "__cyg_profile_func_exit") {
-    auto ProgASPtr =
-        Type::getInt8PtrTy(C, M.getDataLayout().getProgramAddressSpace());
+    Type *ProgASPtr =
+        PointerType::get(C, M.getDataLayout().getProgramAddressSpace());
     Type *ArgTypes[] = {ProgASPtr, ProgASPtr};
 
     FunctionCallee Fn = M.getOrInsertFunction(

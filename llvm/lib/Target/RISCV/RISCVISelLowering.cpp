@@ -6940,7 +6940,7 @@ SDValue RISCVTargetLowering::getDynamicTLSAddr(GlobalAddressSDNode *N,
                                                EVT Ty,
                                                SelectionDAG &DAG) const {
   SDLoc DL(N);
-  Type *CallTy = Type::getInt8PtrTy(
+  Type *CallTy = PointerType::get(
       *DAG.getContext(), DAG.getDataLayout().getDefaultGlobalsAddressSpace());
   const GlobalValue *GV = N->getGlobal();
 

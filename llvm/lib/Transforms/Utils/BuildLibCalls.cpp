@@ -1428,7 +1428,7 @@ StringRef llvm::getFloatFn(const Module *M, const TargetLibraryInfo *TLI,
 static PointerType *getInt8PtrTy(Value *V) {
   auto Ty = V->getType();
   auto AS = Ty->getPointerAddressSpace();
-  return llvm::Type::getInt8PtrTy(Ty->getContext(), AS);
+  return llvm::PointerType::get(Ty->getContext(), AS);
 }
 
 static IntegerType *getIntTy(IRBuilderBase &B, const TargetLibraryInfo *TLI) {
