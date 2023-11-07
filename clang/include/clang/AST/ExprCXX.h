@@ -2404,6 +2404,7 @@ public:
     case CXXNewInitializationStyle::List:
       return true;
     }
+    llvm_unreachable("Unknown initializer");
   }
 
   /// The kind of initializer this new-expression has.
