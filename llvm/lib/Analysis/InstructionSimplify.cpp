@@ -6890,7 +6890,8 @@ static Value *simplifyBinaryIntrinsic(Function *F, Value *Op0, Value *Op1,
     // float, if the ninf flag is set.
     const APFloat *C;
     if (match(Op1, m_APFloat(C)) &&
-        (C->isInfinity() || (Q.CxtI->hasNoInfs() && C->isLargest()))) {
+        (C->isInfinity() || (isa<FPMathOperator>(Q.CxtI) &&
+                             Q.CxtI->hasNoInfs() && C->isLargest()))) {
       // minnum(X, -inf) -> -inf
       // maxnum(X, +inf) -> +inf
       // minimum(X, -inf) -> -inf if nnan
