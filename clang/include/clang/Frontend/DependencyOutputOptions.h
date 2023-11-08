@@ -36,9 +36,6 @@ public:
   LLVM_PREFERRED_TYPE(bool)
   unsigned IncludeSystemHeaders : 1; ///< Include system header dependencies.
   LLVM_PREFERRED_TYPE(bool)
-  unsigned
-      CanonicalSystemHeaders : 1; ///< canonicalize system header dependencies.
-  LLVM_PREFERRED_TYPE(bool)
   unsigned ShowHeaderIncludes : 1;   ///< Show header inclusions (-H).
   LLVM_PREFERRED_TYPE(bool)
   unsigned UsePhonyTargets : 1;      ///< Include phony targets for each
