@@ -21,8 +21,8 @@ S A;
 
 #endif
 //.
-// CHECK: @llvm.global_ctors = appending global [1 x { i32, ptr, ptr }] [{ i32, ptr, ptr } { i32 65535, ptr @_GLOBAL__sub_I_amdgcn_target_global_constructor.cpp, ptr null }]
-// CHECK: @llvm.global_dtors = appending global [1 x { i32, ptr, ptr }] [{ i32, ptr, ptr } { i32 65535, ptr @__dtor_A, ptr null }]
+// CHECK: @__omp_rtl_debug_kind = weak_odr hidden addrspace(1) constant i32 0
+// CHECK: @__omp_rtl_assume_teams_oversubscription = weak_odr hidden addrspace(1) constant i32 0
 //.
 // CHECK-LABEL: define {{[^@]+}}@__cxx_global_var_init
 // CHECK-SAME: () #[[ATTR0:[0-9]+]] {
