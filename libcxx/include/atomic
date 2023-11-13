@@ -1408,6 +1408,13 @@ _Tp __cxx_atomic_fetch_xor(__cxx_atomic_lock_impl<_Tp>* __a,
 
 template<typename _Tp> struct __cxx_is_always_lock_free {
     enum { __value = __atomic_always_lock_free(sizeof(_Tp), 0) }; };
+#ifdef __CHERI_PURE_CAPABILITY__
+// FIXME: can be removed after https://github.com/CTSRD-CHERI/llvm-project/pull/721 lands
+template<typename _Tp> struct __cxx_is_always_lock_free<_Tp*> { enum { __value = 2 == ATOMIC_POINTER_LOCK_FREE }; };
+template<> struct __cxx_is_always_lock_free<intptr_t> { enum { __value = 2 == ATOMIC_POINTER_LOCK_FREE }; };
+template<> struct __cxx_is_always_lock_free<uintptr_t> { enum { __value = 2 == ATOMIC_POINTER_LOCK_FREE }; };
+template<> struct __cxx_is_always_lock_free<std::nullptr_t> { enum { __value = 2 == ATOMIC_POINTER_LOCK_FREE }; };
+#endif
 
 #else
 
