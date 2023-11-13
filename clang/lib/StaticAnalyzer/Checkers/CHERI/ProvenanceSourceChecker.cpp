@@ -28,8 +28,11 @@ class ProvenanceSourceChecker : public Checker<check::PostStmt<CastExpr>,
                                                check::PostStmt<BinaryOperator>,
                                                check::PostStmt<UnaryOperator>,
                                                check::DeadSymbols> {
-  std::unique_ptr<BugType> AmbiguousProvenanceBinOpBugType;
-  std::unique_ptr<BugType> AmbiguousProvenancePtrBugType;
+  std::unique_ptr<BugType> AmbigProvAddrArithBugType;
+  std::unique_ptr<BugType> AmbigProvWrongOrderBugType;
+  std::unique_ptr<BugType> AmbigProvBinOpBugType;
+
+  std::unique_ptr<BugType> AmbigProvAsPtrBugType;
   std::unique_ptr<BugType> InvalidCapPtrBugType;
   std::unique_ptr<BugType> PtrdiffAsIntCapBugType;
 
@@ -81,6 +84,11 @@ public:
 
 private:
   // Utility
+  const BugType &explainWarning(const BinaryOperator *BO, CheckerContext &C,
+                                bool LHSIsAddr, bool LHSIsNullDerived,
+                                bool RHSIsAddr, bool RHSIsNullDerived,
+                                raw_ostream &OS) const;
+
   ExplodedNode *emitAmbiguousProvenanceWarn(const BinaryOperator *BO,
                                             CheckerContext &C, bool LHSIsAddr,
                                             bool LHSIsNullDerived,
@@ -104,11 +112,20 @@ REGISTER_SET_WITH_PROGRAMSTATE(AmbiguousProvenanceReg, const MemRegion *)
 REGISTER_TRAIT_WITH_PROGRAMSTATE(Ptr2IntCapId, unsigned)
 
 ProvenanceSourceChecker::ProvenanceSourceChecker() {
-  AmbiguousProvenanceBinOpBugType.reset(
+  AmbigProvBinOpBugType.reset(
       new BugType(this,
                   "Binary operation with ambiguous provenance",
                   "CHERI portability"));
-  AmbiguousProvenancePtrBugType.reset(
+  AmbigProvAddrArithBugType.reset(
+      new BugType(this,
+                  "CHERI-incompatible pointer arithmetic",
+                  "CHERI portability"));
+  AmbigProvWrongOrderBugType.reset(
+      new BugType(this,
+                  "Capability derived from wrong argument",
+                  "CHERI portability"));
+
+  AmbigProvAsPtrBugType.reset(
       new BugType(this,
                   "Capability with ambiguous provenance used as pointer",
                   "CHERI portability"));
@@ -231,7 +248,7 @@ void ProvenanceSourceChecker::checkPreStmt(const CastExpr *CE,
     if (!ErrNode)
       return;
     R = std::make_unique<PathSensitiveBugReport>(
-        *AmbiguousProvenancePtrBugType,
+        *AmbigProvAsPtrBugType,
         "Capability with ambiguous provenance is used as pointer", ErrNode);
   } else if (hasNoProvenance(State, SrcVal) && !SrcVal.isConstant()
              && !isIntToVoidPtrCast(CE)) {
@@ -303,47 +320,78 @@ FixItHint addFixIt(const Expr *NDOp, CheckerContext &C, bool IsUnsigned) {
 
 } // namespace
 
-ExplodedNode *ProvenanceSourceChecker::emitAmbiguousProvenanceWarn(
-    const BinaryOperator *BO, CheckerContext &C,
-    bool LHSIsAddr, bool LHSIsNullDerived,
-    bool RHSIsAddr, bool RHSIsNullDerived) const {
-  SmallString<350> ErrorMessage;
-  llvm::raw_svector_ostream OS(ErrorMessage);
-
-  const QualType &T = BO->getType();
-  bool const IsUnsigned = T->isUnsignedIntegerType();
-
+const BugType &ProvenanceSourceChecker::explainWarning(
+    const BinaryOperator *BO, CheckerContext &C, bool LHSIsAddr,
+    bool LHSIsNullDerived, bool RHSIsAddr, bool RHSIsNullDerived,
+    raw_ostream &OS) const {
   OS << "Result of '"<< BO->getOpcodeStr() << "' on capability type '";
-  T.print(OS, PrintingPolicy(C.getASTContext().getLangOpts()));
-  OS << "'; it is unclear which side should be used as the source "
-        "of provenance; consider indicating the provenance-carrying argument "
-        "explicitly by casting the other argument to '"
-     << (IsUnsigned ? "size_t" : "ptrdiff_t") << "'. ";
+  BO->getType().print(OS, PrintingPolicy(C.getASTContext().getLangOpts()));
+  OS << "'; it is unclear which side should be used as the source of "
+        "provenance";
 
-  OS << "Note: along this path, ";
-  if (LHSIsAddr && RHSIsAddr)
-    OS << "LHS and RHS were derived from pointers";
-  else if (LHSIsNullDerived && RHSIsNullDerived) {
+  if (RHSIsAddr) {
+    OS << ". Note: along this path, ";
+    if (LHSIsAddr) {
+      OS << "LHS and RHS were derived from pointers."
+            " Result capability will be derived from LHS by default."
+            " This code may need to be rewritten for CHERI.";
+      return *AmbigProvAddrArithBugType;
+    }
+
+    if (LHSIsNullDerived) {
+      OS << "LHS was derived from NULL, RHS was derived from pointer."
+            " Currently, provenance is inherited from LHS,"
+            " therefore result capability will be invalid.";
+    } else { // unknown LHS provenance
+      OS << "RHS was derived from pointer."
+            " Currently, provenance is inherited from LHS."
+            " Consider indicating the provenance-carrying argument "
+            " explicitly by casting the other argument to '"
+         << (BO->getType()->isUnsignedIntegerType() ? "size_t" : "ptrdiff_t")
+         << "'. ";
+    }
+    return *AmbigProvWrongOrderBugType;
+  }
+
+  OS << "; consider indicating the provenance-carrying argument "
+        "explicitly by casting the other argument to '"
+     << (BO->getType()->isUnsignedIntegerType() ? "size_t" : "ptrdiff_t")
+     << "'. Note: along this path, ";
+
+  if (LHSIsNullDerived && RHSIsNullDerived) {
     OS << "LHS and RHS were derived from NULL";
   } else {
     if (LHSIsAddr)
       OS << "LHS was derived from pointer";
     if (LHSIsNullDerived)
       OS << "LHS was derived from NULL";
-    if ((LHSIsAddr || LHSIsNullDerived) && (RHSIsAddr || RHSIsNullDerived))
-      OS << ", ";
-    if (RHSIsAddr)
-      OS << "RHS was derived from pointer";
-    if (RHSIsNullDerived)
+    if (RHSIsNullDerived) {
+      if (LHSIsAddr || LHSIsNullDerived)
+        OS << ", ";
       OS << "RHS was derived from NULL";
+    }
   }
+
+  return *AmbigProvBinOpBugType;
+}
+
+ExplodedNode *ProvenanceSourceChecker::emitAmbiguousProvenanceWarn(
+    const BinaryOperator *BO, CheckerContext &C,
+    bool LHSIsAddr, bool LHSIsNullDerived,
+    bool RHSIsAddr, bool RHSIsNullDerived) const {
+  bool const IsUnsigned = BO->getType()->isUnsignedIntegerType();
+
+  SmallString<350> ErrorMessage;
+  llvm::raw_svector_ostream OS(ErrorMessage);
+
+  const BugType &BT = explainWarning(BO, C, LHSIsAddr, LHSIsNullDerived,
+                                     RHSIsAddr, RHSIsNullDerived, OS);
 
   // Generate the report.
   ExplodedNode *ErrNode = C.generateNonFatalErrorNode();
   if (!ErrNode)
     return nullptr;
-  auto R = std::make_unique<PathSensitiveBugReport>(
-      *AmbiguousProvenanceBinOpBugType, ErrorMessage, ErrNode);
+  auto R = std::make_unique<PathSensitiveBugReport>(BT, ErrorMessage, ErrNode);
   R->addRange(BO->getSourceRange());
 
   if (ShowFixIts) {
