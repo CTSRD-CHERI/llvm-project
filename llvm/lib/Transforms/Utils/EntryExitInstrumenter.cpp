@@ -67,8 +67,7 @@ static void insertCall(Function &CurFn, StringRef Func,
         InsertionPt);
     RetAddr->setDebugLoc(DL);
 
-    Value *Args[] = {ConstantExpr::getBitCast(&CurFn, ProgASPtr), RetAddr};
-
+    Value *Args[] = {&CurFn, RetAddr};
     CallInst *Call =
         CallInst::Create(Fn, ArrayRef<Value *>(Args), "", InsertionPt);
     Call->setDebugLoc(DL);
