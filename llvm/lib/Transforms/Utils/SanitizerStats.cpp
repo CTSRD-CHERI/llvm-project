@@ -71,7 +71,7 @@ void SanitizerStatReport::create(IRBuilder<> &B, SanitizerStatKind SK) {
           ConstantInt::get(IntPtrTy, 0), ConstantInt::get(B.getInt32Ty(), 2),
           ConstantInt::get(IntPtrTy, Inits.size() - 1),
       });
-  B.CreateCall(StatReport, ConstantExpr::getBitCast(InitAddr, Int8PtrTy));
+  B.CreateCall(StatReport, InitAddr);
 }
 
 void SanitizerStatReport::finish() {
@@ -93,8 +93,7 @@ void SanitizerStatReport::finish() {
           {Constant::getNullValue(Int8PtrTy),
            ConstantInt::get(Int32Ty, Inits.size()),
            ConstantArray::get(makeModuleStatsArrayTy(), Inits)}));
-  ModuleStatsGV->replaceAllUsesWith(
-      ConstantExpr::getBitCast(NewModuleStatsGV, ModuleStatsGV->getType()));
+  ModuleStatsGV->replaceAllUsesWith(NewModuleStatsGV);
   ModuleStatsGV->eraseFromParent();
 
   // Create a global constructor to register NewModuleStatsGV.
@@ -107,7 +106,7 @@ void SanitizerStatReport::finish() {
   FunctionCallee StatInit =
       M->getOrInsertFunction("__sanitizer_stat_init", StatInitTy);
 
-  B.CreateCall(StatInit, ConstantExpr::getBitCast(NewModuleStatsGV, Int8PtrTy));
+  B.CreateCall(StatInit, NewModuleStatsGV);
   B.CreateRetVoid();
 
   appendToGlobalCtors(*M, F, 0);
