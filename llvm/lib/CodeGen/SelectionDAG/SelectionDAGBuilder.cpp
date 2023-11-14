@@ -4164,8 +4164,8 @@ void SelectionDAGBuilder::visitAlloca(const AllocaInst &I) {
 
   SDValue AllocSize = getValue(I.getArraySize());
 
-  EVT IntPtr = TLI.getPointerRangeTy(DAG.getDataLayout(), I.getAddressSpace());
-  EVT PtrTy = TLI.getPointerTy(DAG.getDataLayout(), I.getAddressSpace());
+  EVT IntPtr = TLI.getPointerRangeTy(DL, I.getAddressSpace());
+  EVT PtrTy = TLI.getPointerTy(DL, I.getAddressSpace());
   if (AllocSize.getValueType() != IntPtr)
     AllocSize = DAG.getZExtOrTrunc(AllocSize, dl, IntPtr);
 
@@ -4174,10 +4174,12 @@ void SelectionDAGBuilder::visitAlloca(const AllocaInst &I) {
                             DAG.getVScale(dl, IntPtr,
                                           APInt(IntPtr.getScalarSizeInBits(),
                                                 TySize.getKnownMinValue())));
-  else
-    AllocSize =
-        DAG.getNode(ISD::MUL, dl, IntPtr, AllocSize,
-                    DAG.getConstant(TySize.getFixedValue(), dl, IntPtr));
+  else {
+    SDValue TySizeValue =
+        DAG.getConstant(TySize.getFixedValue(), dl, MVT::getIntegerVT(64));
+    AllocSize = DAG.getNode(ISD::MUL, dl, IntPtr, AllocSize,
+                            DAG.getZExtOrTrunc(TySizeValue, dl, IntPtr));
+  }
 
   // Handle alignment.  If the requested alignment is less than or equal to
   // the stack alignment, ignore it.  If the size is greater than or equal to
