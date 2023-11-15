@@ -1755,7 +1755,14 @@ def ProvenanceSourceChecker : Checker<"ProvenanceSource">,
                   "ShowFixIts",
                   "Enable fix-it hints for this checker",
                   "false",
-                  InAlpha>
+                  InAlpha>,
+    CmdLineOption<Boolean,
+                  "ReportForAmbiguousProvenance",
+                  "Report for binary operations with ambiguous provenance "
+                  "for which the default capability derivation from LHS is fine. "
+                  "Disabled if [-Wcheri-provenance] is disabled.",
+                  "true",
+                  Released>
   ]>,
   Documentation<NotDocumented>;
 

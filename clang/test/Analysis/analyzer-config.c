@@ -34,6 +34,7 @@
 // CHECK-NEXT: cfg-scopes = false
 // CHECK-NEXT: cfg-temporary-dtors = true
 // CHECK-NEXT: cheri.CapabilityCopy:ReportForCharPtr = true
+// CHECK-NEXT: cheri.ProvenanceSource:ReportForAmbiguousProvenance = true
 // CHECK-NEXT: cheri.ProvenanceSource:ShowFixIts = false
 // CHECK-NEXT: consider-single-element-arrays-as-flexible-array-members = false
 // CHECK-NEXT: core.CallAndMessage:ArgInitializedness = true
