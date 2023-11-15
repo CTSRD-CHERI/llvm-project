@@ -13,10 +13,11 @@
 
 #include "CHERIUtils.h"
 #include "clang/StaticAnalyzer/Checkers/BuiltinCheckerRegistration.h"
-#include <clang/StaticAnalyzer/Core/BugReporter/BugReporter.h>
 #include "clang/StaticAnalyzer/Core/Checker.h"
 #include "clang/StaticAnalyzer/Core/CheckerManager.h"
 #include "clang/StaticAnalyzer/Core/PathSensitive/CheckerContext.h"
+#include <clang/Basic/DiagnosticSema.h>
+#include <clang/StaticAnalyzer/Core/BugReporter/BugReporter.h>
 
 using namespace clang;
 using namespace ento;
@@ -81,6 +82,7 @@ public:
   void checkDeadSymbols(SymbolReaper &SymReaper, CheckerContext &C) const;
 
   bool ShowFixIts = false;
+  bool ReportForAmbiguousProvenance = true;
 
 private:
   // Utility
@@ -379,8 +381,8 @@ ExplodedNode *ProvenanceSourceChecker::emitAmbiguousProvenanceWarn(
     const BinaryOperator *BO, CheckerContext &C,
     bool LHSIsAddr, bool LHSIsNullDerived,
     bool RHSIsAddr, bool RHSIsNullDerived) const {
-  bool const IsUnsigned = BO->getType()->isUnsignedIntegerType();
 
+  bool const IsUnsigned = BO->getType()->isUnsignedIntegerType();
   SmallString<350> ErrorMessage;
   llvm::raw_svector_ostream OS(ErrorMessage);
 
@@ -485,6 +487,14 @@ void ProvenanceSourceChecker::checkPostStmt(const BinaryOperator *BO,
   ExplodedNode *N;
   bool InvalidCap;
   if (LHSActiveProv && RHSActiveProv && !IsSub) {
+    if (!RHSIsAddr && !this->ReportForAmbiguousProvenance) {
+        // No strong evidence of a real bug here. This code will probably
+        // be fine with the default choice of LHS for capability derivation.
+        // Don't report if [-Wcheri-provenance] compiler warning is disabled
+        // and don't propagate ambiguous provenance flag further
+        return;
+    }
+
     N = emitAmbiguousProvenanceWarn(BO, C, LHSIsAddr, LHSIsNullDerived,
                                       RHSIsAddr, RHSIsNullDerived);
     if (!N)
@@ -649,6 +659,9 @@ void ento::registerProvenanceSourceChecker(CheckerManager &mgr) {
   auto *Checker = mgr.registerChecker<ProvenanceSourceChecker>();
   Checker->ShowFixIts = mgr.getAnalyzerOptions().getCheckerBooleanOption(
       Checker, "ShowFixIts");
+  Checker->ReportForAmbiguousProvenance =
+      mgr.getAnalyzerOptions().getCheckerBooleanOption(
+          Checker, "ReportForAmbiguousProvenance");
 }
 
 bool ento::shouldRegisterProvenanceSourceChecker(const CheckerManager &Mgr) {
