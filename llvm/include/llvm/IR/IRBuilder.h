@@ -553,7 +553,7 @@ public:
   }
 
   /// Fetch the type representing a pointer.
-  PointerType *getPtrTy(unsigned AddrSpace = 0) {
+  PointerType *getPtrTy(LLVM_DEFAULT_AS_PARAM(AddrSpace)) {
     return PointerType::get(Context, AddrSpace);
   }
 
