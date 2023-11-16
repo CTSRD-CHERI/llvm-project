@@ -1555,7 +1555,7 @@ template <class ELFT> void SharedFile::parse() {
           SharedSymbol{*this, name, sym.getBinding(), sym.st_other,
                        sym.getType(), sym.st_value, sym.st_size, alignment});
       if (s->file == this)
-        s->versionId = ver;
+        s->verdefIndex = ver;
     }
 
     // Also add the symbol with the versioned name to handle undefined symbols
@@ -1572,7 +1572,7 @@ template <class ELFT> void SharedFile::parse() {
         SharedSymbol{*this, saver().save(name), sym.getBinding(), sym.st_other,
                      sym.getType(), sym.st_value, sym.st_size, alignment});
     if (s->file == this)
-      s->versionId = idx;
+      s->verdefIndex = idx;
   }
 }
 
