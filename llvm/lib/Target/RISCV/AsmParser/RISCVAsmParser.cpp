@@ -238,6 +238,7 @@ class RISCVAsmParser : public MCTargetAsmParser {
   ParseStatus parseFRMArg(OperandVector &Operands);
   ParseStatus parseFenceArg(OperandVector &Operands);
   ParseStatus parseReglist(OperandVector &Operands);
+  ParseStatus parseRegReg(OperandVector &Operands);
   ParseStatus parseRetval(OperandVector &Operands);
   ParseStatus parseZcmpSpimm(OperandVector &Operands);
 
@@ -363,6 +364,7 @@ struct RISCVOperand final : public MCParsedAsmOperand {
     Fence,
     Rlist,
     Spimm,
+    RegReg,
   } Kind;
 
   struct RegOp {
@@ -413,6 +415,11 @@ struct RISCVOperand final : public MCParsedAsmOperand {
     unsigned Val;
   };
 
+  struct RegRegOp {
+    MCRegister Reg1;
+    MCRegister Reg2;
+  };
+
   SMLoc StartLoc, EndLoc;
   union {
     StringRef Tok;
@@ -426,6 +433,7 @@ struct RISCVOperand final : public MCParsedAsmOperand {
     struct FenceOp Fence;
     struct RlistOp Rlist;
     struct SpimmOp Spimm;
+    struct RegRegOp RegReg;
   };
 
   RISCVOperand(KindTy K) : Kind(K) {}
@@ -469,6 +477,9 @@ public:
     case KindTy::Spimm:
       Spimm = o.Spimm;
       break;
+    case KindTy::RegReg:
+      RegReg = o.RegReg;
+      break;
     }
   }
 
@@ -494,6 +505,7 @@ public:
   bool isMem() const override { return false; }
   bool isSystemRegister() const { return Kind == KindTy::SystemRegister; }
   bool isSpecialCapRegister() const { return Kind == KindTy::SpecialCapRegister; }
+  bool isRegReg() const { return Kind == KindTy::RegReg; }
   bool isRlist() const { return Kind == KindTy::Rlist; }
   bool isSpimm() const { return Kind == KindTy::Spimm; }
 
@@ -1117,6 +1129,10 @@ public:
       RISCVZC::printSpimm(Spimm.Val, OS);
       OS << '>';
       break;
+    case KindTy::RegReg:
+      OS << "<RegReg:  Reg1 " << RegName(RegReg.Reg1);
+      OS << " Reg2 " << RegName(RegReg.Reg2);
+      break;
     }
   }
 
@@ -1210,6 +1226,16 @@ public:
     return Op;
   }
 
+  static std::unique_ptr<RISCVOperand> createRegReg(unsigned Reg1No,
+                                                    unsigned Reg2No, SMLoc S) {
+    auto Op = std::make_unique<RISCVOperand>(KindTy::RegReg);
+    Op->RegReg.Reg1 = Reg1No;
+    Op->RegReg.Reg2 = Reg2No;
+    Op->StartLoc = S;
+    Op->EndLoc = S;
+    return Op;
+  }
+
   static std::unique_ptr<RISCVOperand> createSpimm(unsigned Spimm, SMLoc S) {
     auto Op = std::make_unique<RISCVOperand>(KindTy::Spimm);
     Op->Spimm.Val = Spimm;
@@ -1288,6 +1314,12 @@ public:
   void addRlistOperands(MCInst &Inst, unsigned N) const {
     assert(N == 1 && "Invalid number of operands!");
     Inst.addOperand(MCOperand::createImm(Rlist.Val));
+  }
+
+  void addRegRegOperands(MCInst &Inst, unsigned N) const {
+    assert(N == 1 && "Invalid number of operands!");
+    Inst.addOperand(MCOperand::createReg(RegReg.Reg1));
+    Inst.addOperand(MCOperand::createReg(RegReg.Reg2));
   }
 
   void addSpimmOperands(MCInst &Inst, unsigned N) const {
@@ -1676,6 +1708,10 @@ bool RISCVAsmParser::MatchAndEmitInstruction(SMLoc IDLoc, unsigned &Opcode,
   }
   case Match_InvalidRnumArg: {
     return generateImmOutOfRangeError(Operands, ErrorInfo, 0, 10);
+  }
+  case Match_InvalidRegReg: {
+    SMLoc ErrorLoc = ((RISCVOperand &)*Operands[ErrorInfo]).getStartLoc();
+    return Error(ErrorLoc, "operands must be register and register");
   }
   }
 
@@ -2578,6 +2614,37 @@ ParseStatus RISCVAsmParser::parseZeroOffsetMemOp(OperandVector &Operands) {
     return Error(
         OptionalImmOp->getStartLoc(), "optional integer offset must be 0",
         SMRange(OptionalImmOp->getStartLoc(), OptionalImmOp->getEndLoc()));
+
+  return ParseStatus::Success;
+}
+
+ParseStatus RISCVAsmParser::parseRegReg(OperandVector &Operands) {
+  // RR : a2(a1)
+  if (getLexer().getKind() != AsmToken::Identifier)
+    return ParseStatus::NoMatch;
+
+  StringRef RegName = getLexer().getTok().getIdentifier();
+  MCRegister Reg = matchRegisterNameHelper(isRVE(), RegName);
+  if (!Reg)
+    return Error(getLoc(), "invalid register");
+  getLexer().Lex();
+
+  if (parseToken(AsmToken::LParen, "expected '(' or invalid operand"))
+    return ParseStatus::Failure;
+
+  if (getLexer().getKind() != AsmToken::Identifier)
+    return Error(getLoc(), "expected register");
+
+  StringRef Reg2Name = getLexer().getTok().getIdentifier();
+  MCRegister Reg2 = matchRegisterNameHelper(isRVE(), Reg2Name);
+  if (!Reg2)
+    return Error(getLoc(), "invalid register");
+  getLexer().Lex();
+
+  if (parseToken(AsmToken::RParen, "expected ')'"))
+    return ParseStatus::Failure;
+
+  Operands.push_back(RISCVOperand::createRegReg(Reg, Reg2, getLoc()));
 
   return ParseStatus::Success;
 }
