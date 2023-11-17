@@ -243,7 +243,8 @@ InputSection *InputSectionBase::getLinkOrderDep() const {
 }
 
 // Find a symbol that encloses a given location.
-Defined *InputSectionBase::getEnclosingSymbol(uint64_t offset, uint8_t type) const {
+Defined *InputSectionBase::getEnclosingSymbol(uint64_t offset,
+                                              uint8_t type) const {
   for (Symbol *b : file->getSymbols())
     if (Defined *d = dyn_cast<Defined>(b))
       if (d->section == this && d->value <= offset &&
@@ -280,7 +281,8 @@ std::string InputSectionBase::getLocation(uint64_t offset) const {
 //   foo.c:42 (/home/alice/possibly/very/long/path/foo.c:42)
 //
 //  Returns an empty string if there's no way to get line info.
-std::string InputSectionBase::getSrcMsg(const Symbol &sym, uint64_t offset) const {
+std::string InputSectionBase::getSrcMsg(const Symbol &sym,
+                                        uint64_t offset) const {
   // Synthetic sections don't have input files.
   if (!file)
     return "";

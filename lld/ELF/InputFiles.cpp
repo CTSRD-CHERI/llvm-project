@@ -479,8 +479,8 @@ ObjFile<ELFT>::getVariableLoc(StringRef name) {
 // Returns source line information for a given offset
 // using DWARF debug info.
 template <class ELFT>
-std::optional<DILineInfo> ObjFile<ELFT>::getDILineInfo(const InputSectionBase *s,
-                                                       uint64_t offset) {
+std::optional<DILineInfo>
+ObjFile<ELFT>::getDILineInfo(const InputSectionBase *s, uint64_t offset) {
   // Detect SectionIndex for specified section.
   uint64_t sectionIndex = object::SectionedAddress::UndefSection;
   ArrayRef<InputSectionBase *> sections = s->file->getSections();
@@ -1831,7 +1831,7 @@ template <class ELFT> void ObjFile<ELFT>::parseLazy() {
   }
 }
 
-bool InputFile::shouldExtractForCommon(StringRef name) {
+bool InputFile::shouldExtractForCommon(StringRef name) const {
   if (isa<BitcodeFile>(this))
     return isBitcodeNonCommonDef(mb, name, archiveName);
 
