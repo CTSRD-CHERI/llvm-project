@@ -2447,7 +2447,7 @@ static Constant *ConstantFoldScalarCall1(StringRef Name,
         if (!(Val & 0xF))
           continue;
 
-        QuadMask |= (1 << I);
+        QuadMask |= (1ULL << I);
       }
       return ConstantInt::get(Ty, QuadMask);
     }
