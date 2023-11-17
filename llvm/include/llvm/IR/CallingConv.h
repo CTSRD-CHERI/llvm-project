@@ -248,6 +248,9 @@ namespace CallingConv {
     /// Used for M68k rtd-based CC (similar to X86's stdcall).
     M68k_RTD = 106,
 
+    /// Used by GraalVM. Two additional registers are reserved.
+    GRAAL = 107,
+
     /// CHERI_CCall - Calling convention used for CHERI when crossing a
     /// protection boundary.
     CHERI_CCall = 107,
