@@ -69,11 +69,6 @@ set(LIBUNWIND_CXX_ABI "default" CACHE STRING "Name of the C++ ABI library to use
 set_property(CACHE LIBUNWIND_CXX_ABI PROPERTY STRINGS ;${CXXABIS})
 set(LIBUNWIND_USE_VERSION_SCRIPT "" CACHE PATH "version script to use when linking libunwind.so.")
 
-# TODO: Remove this after branching for LLVM 15
-if(LIBUNWIND_SYSROOT OR LIBUNWIND_TARGET_TRIPLE OR LIBUNWIND_GCC_TOOLCHAIN)
-  message(WARNING "LIBUNWIND_SYSROOT, LIBUNWIND_TARGET_TRIPLE and LIBUNWIND_GCC_TOOLCHAIN are not supported anymore, please use the native CMake equivalents instead")
-endif()
-
 if(MINGW)
   set(LIBUNWIND_DEFAULT_TEST_CONFIG "llvm-libunwind-mingw.cfg.in")
 elseif (LIBUNWIND_ENABLE_SHARED)
