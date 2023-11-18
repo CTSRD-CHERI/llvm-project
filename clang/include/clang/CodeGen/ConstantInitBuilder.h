@@ -203,11 +203,6 @@ public:
     add(llvm::ConstantPointerNull::get(ptrTy));
   }
 
-  /// Add a bitcast of a value to a specific type.
-  void addBitCast(llvm::Constant *value, llvm::Type *type) {
-    add(llvm::ConstantExpr::getBitCast(value, type));
-  }
-
   void addPointerdBitCastOrAddrSpaceCast(llvm::Constant *value, llvm::Type *type) {
     add(llvm::ConstantExpr::getPointerBitCastOrAddrSpaceCast(value, type));
   }
