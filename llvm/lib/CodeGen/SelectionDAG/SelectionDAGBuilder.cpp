@@ -2675,15 +2675,16 @@ void SelectionDAGBuilder::visitSwitchCase(CaseBlock &CB,
 /// visitJumpTable - Emit JumpTable node in the current MBB
 void SelectionDAGBuilder::visitJumpTable(SwitchCG::JumpTable &JT) {
   // Emit the code for the jump table
+  assert(JT.SL && "Should set SDLoc for SelectionDAG!");
   assert(JT.Reg != -1U && "Should lower JT Header first!");
   const DataLayout &TD = DAG.getDataLayout();
   const auto &TLI = DAG.getTargetLoweringInfo();
   EVT PTy = TLI.getPointerTy(TD, TD.getDefaultGlobalsAddressSpace());
   EVT IndexTy = TLI.getPointerRangeTy(TD , TD.getProgramAddressSpace());
   SDValue Index =
-      DAG.getCopyFromReg(getControlRoot(), getCurSDLoc(), JT.Reg, IndexTy);
+      DAG.getCopyFromReg(getControlRoot(), *JT.SL, JT.Reg, IndexTy);
   SDValue Table = DAG.getJumpTable(JT.JTI, PTy);
-  SDValue BrJumpTable = DAG.getNode(ISD::BR_JT, getCurSDLoc(), MVT::Other,
+  SDValue BrJumpTable = DAG.getNode(ISD::BR_JT, *JT.SL, MVT::Other,
                                     Index.getValue(1), Table, Index);
   assert(BrJumpTable->getOperand(2).getValueType().isInteger());
   DAG.setRoot(BrJumpTable);
@@ -2694,7 +2695,8 @@ void SelectionDAGBuilder::visitJumpTable(SwitchCG::JumpTable &JT) {
 void SelectionDAGBuilder::visitJumpTableHeader(SwitchCG::JumpTable &JT,
                                                JumpTableHeader &JTH,
                                                MachineBasicBlock *SwitchBB) {
-  SDLoc dl = getCurSDLoc();
+  assert(JT.SL && "Should set SDLoc for SelectionDAG!");
+  const SDLoc &dl = *JT.SL;
 
   // Subtract the lowest switch case value from the value being switched on.
   SDValue SwitchOp = getValue(JTH.SValue);
@@ -11988,7 +11990,8 @@ void SelectionDAGBuilder::visitSwitch(const SwitchInst &SI) {
     return;
   }
 
-  SL->findJumpTables(Clusters, &SI, DefaultMBB, DAG.getPSI(), DAG.getBFI());
+  SL->findJumpTables(Clusters, &SI, getCurSDLoc(), DefaultMBB, DAG.getPSI(),
+                     DAG.getBFI());
   SL->findBitTestClusters(Clusters, &SI);
 
   LLVM_DEBUG({
