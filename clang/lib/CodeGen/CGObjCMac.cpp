@@ -2020,7 +2020,7 @@ CGObjCCommonMac::GenerateConstantNSString(const StringLiteral *Literal) {
   // Don't enforce the target's minimum global alignment, since the only use
   // of the string is via this class initializer.
   GV->setAlignment(llvm::Align(1));
-  Fields.addBitCast(GV, CGM.Int8PtrTy);
+  Fields.add(GV);
 
   // String length.
   Fields.addInt(CGM.IntTy, StringLength);
@@ -3563,8 +3563,7 @@ void CGObjCMac::GenerateClass(const ObjCImplementationDecl *ID) {
     // Record a reference to the super class.
     LazySymbols.insert(Super->getIdentifier());
 
-    values.addBitCast(GetClassName(Super->getObjCRuntimeNameAsString()),
-                      ObjCTypes.ClassPtrTy);
+    values.add(GetClassName(Super->getObjCRuntimeNameAsString()));
   } else {
     values.addNullPointer(ObjCTypes.ClassPtrTy);
   }
@@ -3618,14 +3617,12 @@ llvm::Constant *CGObjCMac::EmitMetaClass(const ObjCImplementationDecl *ID,
   const ObjCInterfaceDecl *Root = ID->getClassInterface();
   while (const ObjCInterfaceDecl *Super = Root->getSuperClass())
     Root = Super;
-  values.addBitCast(GetClassName(Root->getObjCRuntimeNameAsString()),
-                    ObjCTypes.ClassPtrTy);
+  values.add(GetClassName(Root->getObjCRuntimeNameAsString()));
   // The super class for the metaclass is emitted as the name of the
   // super class. The runtime fixes this up to point to the
   // *metaclass* for the super class.
   if (ObjCInterfaceDecl *Super = ID->getClassInterface()->getSuperClass()) {
-    values.addBitCast(GetClassName(Super->getObjCRuntimeNameAsString()),
-                      ObjCTypes.ClassPtrTy);
+    values.add(GetClassName(Super->getObjCRuntimeNameAsString()));
   } else {
     values.addNullPointer(ObjCTypes.ClassPtrTy);
   }
@@ -3821,8 +3818,7 @@ llvm::Constant *CGObjCMac::EmitIvarList(const ObjCImplementationDecl *ID,
 void CGObjCMac::emitMethodDescriptionConstant(ConstantArrayBuilder &builder,
                                               const ObjCMethodDecl *MD) {
   auto description = builder.beginStruct(ObjCTypes.MethodDescriptionTy);
-  description.addBitCast(GetMethodVarName(MD->getSelector()),
-                         ObjCTypes.SelectorPtrTy);
+  description.add(GetMethodVarName(MD->getSelector()));
   description.add(GetMethodVarType(MD));
   description.finishAndAddTo(builder);
 }
@@ -3840,10 +3836,9 @@ void CGObjCMac::emitMethodConstant(ConstantArrayBuilder &builder,
   assert(fn && "no definition registered for method");
 
   auto method = builder.beginStruct(ObjCTypes.MethodTy);
-  method.addBitCast(GetMethodVarName(MD->getSelector()),
-                    ObjCTypes.SelectorPtrTy);
+  method.add(GetMethodVarName(MD->getSelector()));
   method.add(GetMethodVarType(MD));
-  method.addBitCast(fn, ObjCTypes.Int8PtrTy);
+  method.add(fn);
   method.finishAndAddTo(builder);
 }
 
@@ -5197,10 +5192,10 @@ llvm::Constant *CGObjCMac::EmitModuleSymbols() {
       if (ID->isWeakImported() && !IMP->isWeakImported())
         DefinedClasses[i]->setLinkage(llvm::GlobalVariable::ExternalLinkage);
 
-    array.addBitCast(DefinedClasses[i], ObjCTypes.Int8PtrTy);
+    array.add(DefinedClasses[i]);
   }
   for (unsigned i=0; i<NumCategories; i++)
-    array.addBitCast(DefinedCategories[i], ObjCTypes.Int8PtrTy);
+    array.add(DefinedCategories[i]);
 
   array.finishAndAddTo(values);
 
@@ -6743,8 +6738,7 @@ void CGObjCNonFragileABIMac::emitMethodConstant(ConstantArrayBuilder &builder,
                                                 const ObjCMethodDecl *MD,
                                                 bool forProtocol) {
   auto method = builder.beginStruct(ObjCTypes.MethodTy);
-  method.addBitCast(GetMethodVarName(MD->getSelector()),
-                    ObjCTypes.SelectorPtrTy);
+  method.add(GetMethodVarName(MD->getSelector()));
   method.add(GetMethodVarType(MD));
 
   if (forProtocol) {
@@ -6753,7 +6747,7 @@ void CGObjCNonFragileABIMac::emitMethodConstant(ConstantArrayBuilder &builder,
   } else {
     llvm::Function *fn = GetMethodDefinition(MD);
     assert(fn && "no definition for method?");
-    method.addBitCast(fn, ObjCTypes.Int8PtrProgramASTy);
+    method.add(fn);
   }
 
   method.finishAndAddTo(builder);
