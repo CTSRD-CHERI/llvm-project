@@ -3705,11 +3705,9 @@ llvm::Function *CGObjCGNU::ModuleInitFunction() {
   unsigned AS = CGM.getTargetCodeGenInfo().getDefaultAS();
 
   llvm::StructType *selStructTy = dyn_cast<llvm::StructType>(SelectorElemTy);
-  llvm::Type *selStructPtrTy = SelectorTy;
   if (!selStructTy) {
     selStructTy = llvm::StructType::get(CGM.getLLVMContext(),
                                         { PtrToInt8Ty, PtrToInt8Ty });
-    selStructPtrTy = llvm::PointerType::get(selStructTy, AS);
   }
 
   // Generate statics list:
