@@ -356,6 +356,8 @@ RelExpr RISCV::getRelExpr(const RelType type, const Symbol &s,
   case R_RISCV_CHERI_TPREL_CINCOFFSET:
   case R_RISCV_RELAX:
     return config->relax ? R_RELAX_HINT : R_NONE;
+  case R_RISCV_SET_ULEB128:
+    return R_RISCV_LEB128;
   case R_RISCV_CHERI_CAPABILITY:
   case R_RISCV_CHERI_CAPABILITY_CODE:
     return R_ABS_CAP;
