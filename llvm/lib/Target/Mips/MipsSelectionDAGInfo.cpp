@@ -139,7 +139,7 @@ SDValue MipsSelectionDAGInfo::EmitTargetCodeForMemset(
             uint64_t DstOff = i * CapSize;
             SDValue Store = DAG.getStore(
                 Chain, dl, ZeroCap,
-                DAG.getMemBasePlusOffset(Dst, TypeSize::Fixed(DstOff), dl),
+                DAG.getMemBasePlusOffset(Dst, TypeSize::getFixed(DstOff), dl),
                 DstPtrInfo.getWithOffset(DstOff), Alignment,
                 isVolatile ? MachineMemOperand::MOVolatile
                            : MachineMemOperand::MONone);
@@ -152,7 +152,7 @@ SDValue MipsSelectionDAGInfo::EmitTargetCodeForMemset(
           while (Remainder >= 8) {
             SDValue Store = DAG.getStore(
                 Chain, dl, Zero64,
-                DAG.getMemBasePlusOffset(Dst, TypeSize::Fixed(Done), dl),
+                DAG.getMemBasePlusOffset(Dst, TypeSize::getFixed(Done), dl),
                 DstPtrInfo.getWithOffset(Done), Alignment,
                 isVolatile ? MachineMemOperand::MOVolatile
                            : MachineMemOperand::MONone);
@@ -194,7 +194,7 @@ SDValue MipsSelectionDAGInfo::EmitTargetCodeForMemset(
             }
             SDValue Store = DAG.getStore(
                 Chain, dl, Zero,
-                DAG.getMemBasePlusOffset(Dst, TypeSize::Fixed(DstOff), dl),
+                DAG.getMemBasePlusOffset(Dst, TypeSize::getFixed(DstOff), dl),
                 DstPtrInfo.getWithOffset(DstOff), Alignment,
                 isVolatile ? MachineMemOperand::MOVolatile
                            : MachineMemOperand::MONone);

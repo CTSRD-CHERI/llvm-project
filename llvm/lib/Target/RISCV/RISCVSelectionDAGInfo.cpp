@@ -136,7 +136,7 @@ SDValue RISCVSelectionDAGInfo::EmitTargetCodeForMemset(
             uint64_t DstOff = i * CLenInBytes;
             SDValue Store = DAG.getStore(
                 Chain, dl, ZeroCap,
-                DAG.getMemBasePlusOffset(Dst, TypeSize::Fixed(DstOff), dl),
+                DAG.getMemBasePlusOffset(Dst, TypeSize::getFixed(DstOff), dl),
                 DstPtrInfo.getWithOffset(DstOff), Alignment,
                 isVolatile ? MachineMemOperand::MOVolatile
                            : MachineMemOperand::MONone);
@@ -151,7 +151,7 @@ SDValue RISCVSelectionDAGInfo::EmitTargetCodeForMemset(
           while (Remainder >= XLenInBytes) {
             SDValue Store = DAG.getStore(
                 Chain, dl, ZeroXLen,
-                DAG.getMemBasePlusOffset(Dst, TypeSize::Fixed(Done), dl),
+                DAG.getMemBasePlusOffset(Dst, TypeSize::getFixed(Done), dl),
                 DstPtrInfo.getWithOffset(Done), Alignment,
                 isVolatile ? MachineMemOperand::MOVolatile
                            : MachineMemOperand::MONone);
@@ -196,7 +196,7 @@ SDValue RISCVSelectionDAGInfo::EmitTargetCodeForMemset(
             }
             SDValue Store = DAG.getStore(
                 Chain, dl, Zero,
-                DAG.getMemBasePlusOffset(Dst, TypeSize::Fixed(DstOff), dl),
+                DAG.getMemBasePlusOffset(Dst, TypeSize::getFixed(DstOff), dl),
                 DstPtrInfo.getWithOffset(DstOff), Alignment,
                 isVolatile ? MachineMemOperand::MOVolatile
                            : MachineMemOperand::MONone);
