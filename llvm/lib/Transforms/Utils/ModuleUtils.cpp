@@ -49,17 +49,17 @@ static void appendToGlobalArray(StringRef ArrayName, Module &M, Function *F,
     }
     GVCtor->eraseFromParent();
   } else {
-    EltTy = StructType::get(
-        IRB.getInt32Ty(), PointerType::get(FnTy, F->getAddressSpace()),
-        IRB.getInt8PtrTy(M.getDataLayout().getDefaultGlobalsAddressSpace()));
+    EltTy = StructType::get(IRB.getInt32Ty(),
+                            PointerType::get(FnTy, F->getAddressSpace()),
+                            IRB.getPtrTy(M.getDataLayout().getDefaultGlobalsAddressSpace()));
   }
 
   // Build a 3 field global_ctor entry.  We don't take a comdat key.
   Constant *CSVals[3];
   CSVals[0] = IRB.getInt32(Priority);
-  CSVals[1] = ConstantExpr::getPointerBitCastOrAddrSpaceCast(F, CtorPFTy);
-  CSVals[2] = Data ? ConstantExpr::getPointerCast(Data, ArgTy)
-                   : Constant::getNullValue(ArgTy);
+  CSVals[1] = F;
+  CSVals[2] = Data ? ConstantExpr::getPointerCast(Data, IRB.getPtrTy(ArgTy->getPointerAddressSpace()))
+                   : Constant::getNullValue(IRB.getPtrTy(ArgTy->getPointerAddressSpace()));
   Constant *RuntimeCtorInit =
       ConstantStruct::get(EltTy, ArrayRef(CSVals, EltTy->getNumElements()));
 
