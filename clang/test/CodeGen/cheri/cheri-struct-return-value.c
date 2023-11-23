@@ -2,7 +2,7 @@
 // REQUIRES: mips-registered-target
 
 // RUN: %cheri_purecap_cc1 -std=c11 -O2 -emit-llvm -o - %s | %cheri_FileCheck %s
-// RUN: %cheri_purecap_cc1 -mllvm -cheri-cap-table-abi=pcrel -std=c11 -O2 -S -o - %s | %cheri_FileCheck -check-prefixes=ASM,CHERI128-ASM %s
+// RUN: %cheri_purecap_cc1 -mllvm -cheri-cap-table-abi=pcrel -std=c11 -O2 -S -o - %s | %cheri_FileCheck -check-prefix=ASM %s
 int global;
 
 
@@ -79,7 +79,7 @@ typedef union {
 _Static_assert(sizeof(GreaterThanIntCapSizeUnion) > sizeof(void*), "");
 
 // CHECK-LABEL: define {{[^@]+}}@greater_than_intcap_size_union
-// CHECK-SAME: (ptr addrspace(200) noalias nocapture writeonly sret([[UNION_GREATERTHANINTCAPSIZEUNION:%.*]]) align 16 [[AGG_RESULT:%.*]]) local_unnamed_addr addrspace(200) #[[ATTR2:[0-9]+]] {
+// CHECK-SAME: (ptr addrspace(200) noalias nocapture writeonly sret([[UNION_GREATERTHANINTCAPSIZEUNION:%.*]]) align 16 [[AGG_RESULT:%.*]]) local_unnamed_addr addrspace(200) #[[ATTR1:[0-9]+]] {
 // CHECK-NEXT:  entry:
 // CHECK-NEXT:    store ptr addrspace(200) @global, ptr addrspace(200) [[AGG_RESULT]], align 16, !tbaa [[TBAA2:![0-9]+]]
 // CHECK-NEXT:    ret void
@@ -137,20 +137,26 @@ typedef struct {
 } ThreeLongs;
 
 // CHECK-LABEL: define {{[^@]+}}@three_longs
-// CHECK-SAME: (ptr addrspace(200) noalias nocapture writeonly sret([[STRUCT_THREELONGS:%.*]]) align 8 [[AGG_RESULT:%.*]]) local_unnamed_addr addrspace(200) #[[ATTR3:[0-9]+]] {
+// CHECK-SAME: (ptr addrspace(200) noalias nocapture writeonly sret([[STRUCT_THREELONGS:%.*]]) align 8 [[AGG_RESULT:%.*]]) local_unnamed_addr addrspace(200) #[[ATTR1]] {
 // CHECK-NEXT:  entry:
-// CHECK-NEXT:    tail call void @llvm.memcpy.p200.p200.i64(ptr addrspace(200) noundef nonnull align 8 dereferenceable(24) [[AGG_RESULT]], ptr addrspace(200) noundef nonnull align 8 dereferenceable(24) @__const.three_longs.t, i64 24, i1 false)
+// CHECK-NEXT:    store i64 1, ptr addrspace(200) [[AGG_RESULT]], align 8
+// CHECK-NEXT:    [[TMP0:%.*]] = getelementptr inbounds i8, ptr addrspace(200) [[AGG_RESULT]], i64 8
+// CHECK-NEXT:    store i64 2, ptr addrspace(200) [[TMP0]], align 8
+// CHECK-NEXT:    [[TMP1:%.*]] = getelementptr inbounds i8, ptr addrspace(200) [[AGG_RESULT]], i64 16
+// CHECK-NEXT:    store i64 3, ptr addrspace(200) [[TMP1]], align 8
 // CHECK-NEXT:    ret void
 //
 ThreeLongs three_longs() {
   ThreeLongs t = { 1, 2, 3 };
   return t;
   // ASM-LABEL: three_longs
-  // Clang uses a memcpy from a global for cheri128.
-  // For cheri256 it inlined the memcpy from a global (since it is smaller than 1 cap)
-  // CHERI128-ASM: clcbi $c4, %captab20(.L__const.three_longs.t)($c{{.+}})
-  // CHERI128-ASM: clcbi   $c12, %capcall20(memcpy)($c{{.+}})
-
+  // ASM:       daddiu  $1, $zero, 1
+  // ASM-NEXT:  csd     $1, $zero, 0($c3)
+  // ASM-NEXT:  daddiu  $1, $zero, 2
+  // ASM-NEXT:  csd     $1, $zero, 8($c3)
+  // ASM-NEXT:  daddiu  $1, $zero, 3
+  // ASM-NEXT:  cjr     $c17
+  // ASM-NEXT:  csd     $1, $zero, 16($c3)
 }
 
 typedef struct {
@@ -189,9 +195,9 @@ IntAndLong int_and_long() {
 extern IntAndLong extern_int_and_long();
 
 // CHECK-LABEL: define {{[^@]+}}@read_int_and_long_1
-// CHECK-SAME: () local_unnamed_addr addrspace(200) #[[ATTR4:[0-9]+]] {
+// CHECK-SAME: () local_unnamed_addr addrspace(200) #[[ATTR2:[0-9]+]] {
 // CHECK-NEXT:  entry:
-// CHECK-NEXT:    [[CALL:%.*]] = tail call inreg { i64, i64 } @extern_int_and_long() #[[ATTR6:[0-9]+]]
+// CHECK-NEXT:    [[CALL:%.*]] = tail call inreg { i64, i64 } @extern_int_and_long() #[[ATTR4:[0-9]+]]
 // CHECK-NEXT:    [[TMP0:%.*]] = extractvalue { i64, i64 } [[CALL]], 0
 // CHECK-NEXT:    [[COERCE_SROA_0_0_EXTRACT_SHIFT:%.*]] = lshr i64 [[TMP0]], 32
 // CHECK-NEXT:    [[COERCE_SROA_0_0_EXTRACT_TRUNC:%.*]] = trunc i64 [[COERCE_SROA_0_0_EXTRACT_SHIFT]] to i32
@@ -213,9 +219,9 @@ int read_int_and_long_1() {
 }
 
 // CHECK-LABEL: define {{[^@]+}}@read_int_and_long_2
-// CHECK-SAME: () local_unnamed_addr addrspace(200) #[[ATTR4]] {
+// CHECK-SAME: () local_unnamed_addr addrspace(200) #[[ATTR2]] {
 // CHECK-NEXT:  entry:
-// CHECK-NEXT:    [[CALL:%.*]] = tail call inreg { i64, i64 } @extern_int_and_long() #[[ATTR6]]
+// CHECK-NEXT:    [[CALL:%.*]] = tail call inreg { i64, i64 } @extern_int_and_long() #[[ATTR4]]
 // CHECK-NEXT:    [[TMP0:%.*]] = extractvalue { i64, i64 } [[CALL]], 1
 // CHECK-NEXT:    ret i64 [[TMP0]]
 //
@@ -282,7 +288,7 @@ typedef struct {
 } ThreeCapsStruct;
 
 // CHECK-LABEL: define {{[^@]+}}@three_caps_struct
-// CHECK-SAME: (ptr addrspace(200) noalias nocapture writeonly sret([[STRUCT_THREECAPSSTRUCT:%.*]]) align 16 [[AGG_RESULT:%.*]], i64 [[TMP0:%.*]], ptr addrspace(200) inreg [[IN_COERCE0:%.*]], ptr addrspace(200) inreg [[IN_COERCE1:%.*]], ptr addrspace(200) inreg [[IN_COERCE2:%.*]]) local_unnamed_addr addrspace(200) #[[ATTR2]] {
+// CHECK-SAME: (ptr addrspace(200) noalias nocapture writeonly sret([[STRUCT_THREECAPSSTRUCT:%.*]]) align 16 [[AGG_RESULT:%.*]], i64 [[TMP0:%.*]], ptr addrspace(200) inreg [[IN_COERCE0:%.*]], ptr addrspace(200) inreg [[IN_COERCE1:%.*]], ptr addrspace(200) inreg [[IN_COERCE2:%.*]]) local_unnamed_addr addrspace(200) #[[ATTR1]] {
 // CHECK-NEXT:  entry:
 // CHECK-NEXT:    [[TMP1:%.*]] = getelementptr i8, ptr addrspace(200) [[IN_COERCE0]], i64 1
 // CHECK-NEXT:    store ptr addrspace(200) [[TMP1]], ptr addrspace(200) [[AGG_RESULT]], align 16, !tbaa [[TBAA5:![0-9]+]]
@@ -365,7 +371,7 @@ typedef struct {
   long i;
 } CapCapInt;
 // CHECK-LABEL: define {{[^@]+}}@cap_cap_int
-// CHECK-SAME: (ptr addrspace(200) noalias nocapture writeonly sret([[STRUCT_CAPCAPINT:%.*]]) align 16 [[AGG_RESULT:%.*]], i64 [[TMP0:%.*]], ptr addrspace(200) inreg [[IN_COERCE0:%.*]], ptr addrspace(200) inreg [[IN_COERCE1:%.*]], i64 inreg [[IN_COERCE2:%.*]], i64 inreg [[IN_COERCE3:%.*]]) local_unnamed_addr addrspace(200) #[[ATTR2]] {
+// CHECK-SAME: (ptr addrspace(200) noalias nocapture writeonly sret([[STRUCT_CAPCAPINT:%.*]]) align 16 [[AGG_RESULT:%.*]], i64 [[TMP0:%.*]], ptr addrspace(200) inreg [[IN_COERCE0:%.*]], ptr addrspace(200) inreg [[IN_COERCE1:%.*]], i64 inreg [[IN_COERCE2:%.*]], i64 inreg [[IN_COERCE3:%.*]]) local_unnamed_addr addrspace(200) #[[ATTR1]] {
 // CHECK-NEXT:  entry:
 // CHECK-NEXT:    [[TMP1:%.*]] = getelementptr i8, ptr addrspace(200) [[IN_COERCE0]], i64 2
 // CHECK-NEXT:    store ptr addrspace(200) [[TMP1]], ptr addrspace(200) [[AGG_RESULT]], align 16, !tbaa [[TBAA10:![0-9]+]]
@@ -397,7 +403,7 @@ typedef struct {
   __uintcap_t c2;
 } IntCapCap;
 // CHECK-LABEL: define {{[^@]+}}@int_cap_cap
-// CHECK-SAME: (ptr addrspace(200) noalias nocapture writeonly sret([[STRUCT_INTCAPCAP:%.*]]) align 16 [[AGG_RESULT:%.*]], i64 [[TMP0:%.*]], i64 inreg [[IN_COERCE0:%.*]], i64 inreg [[IN_COERCE1:%.*]], ptr addrspace(200) inreg [[IN_COERCE2:%.*]], ptr addrspace(200) inreg [[IN_COERCE3:%.*]]) local_unnamed_addr addrspace(200) #[[ATTR2]] {
+// CHECK-SAME: (ptr addrspace(200) noalias nocapture writeonly sret([[STRUCT_INTCAPCAP:%.*]]) align 16 [[AGG_RESULT:%.*]], i64 [[TMP0:%.*]], i64 inreg [[IN_COERCE0:%.*]], i64 inreg [[IN_COERCE1:%.*]], ptr addrspace(200) inreg [[IN_COERCE2:%.*]], ptr addrspace(200) inreg [[IN_COERCE3:%.*]]) local_unnamed_addr addrspace(200) #[[ATTR1]] {
 // CHECK-NEXT:  entry:
 // CHECK-NEXT:    [[ADD:%.*]] = add nsw i64 [[IN_COERCE0]], 1
 // CHECK-NEXT:    store i64 [[ADD]], ptr addrspace(200) [[AGG_RESULT]], align 16, !tbaa [[TBAA15:![0-9]+]]
@@ -475,7 +481,7 @@ typedef struct {
 } TwoCapArrayAndInt;
 
 // CHECK-LABEL: define {{[^@]+}}@two_cap_array_and_int
-// CHECK-SAME: (ptr addrspace(200) noalias nocapture writeonly sret([[STRUCT_TWOCAPARRAYANDINT:%.*]]) align 16 [[AGG_RESULT:%.*]], i64 [[TMP0:%.*]], ptr addrspace(200) inreg [[IN_COERCE0:%.*]], ptr addrspace(200) inreg [[IN_COERCE1:%.*]], i64 inreg [[IN_COERCE2:%.*]], i64 inreg [[IN_COERCE3:%.*]]) local_unnamed_addr addrspace(200) #[[ATTR2]] {
+// CHECK-SAME: (ptr addrspace(200) noalias nocapture writeonly sret([[STRUCT_TWOCAPARRAYANDINT:%.*]]) align 16 [[AGG_RESULT:%.*]], i64 [[TMP0:%.*]], ptr addrspace(200) inreg [[IN_COERCE0:%.*]], ptr addrspace(200) inreg [[IN_COERCE1:%.*]], i64 inreg [[IN_COERCE2:%.*]], i64 inreg [[IN_COERCE3:%.*]]) local_unnamed_addr addrspace(200) #[[ATTR1]] {
 // CHECK-NEXT:  entry:
 // CHECK-NEXT:    [[TMP1:%.*]] = getelementptr i8, ptr addrspace(200) [[IN_COERCE0]], i64 1
 // CHECK-NEXT:    store ptr addrspace(200) [[TMP1]], ptr addrspace(200) [[AGG_RESULT]], align 16, !tbaa [[TBAA19:![0-9]+]]
@@ -507,7 +513,7 @@ typedef struct {
 } TwoIntArrayAndCap;
 
 // CHECK-LABEL: define {{[^@]+}}@two_int_array_and_cap
-// CHECK-SAME: (ptr addrspace(200) noalias nocapture writeonly sret([[STRUCT_TWOINTARRAYANDCAP:%.*]]) align 16 [[AGG_RESULT:%.*]], i64 [[TMP0:%.*]], i64 inreg [[IN_COERCE0:%.*]], i64 inreg [[IN_COERCE1:%.*]], ptr addrspace(200) inreg [[IN_COERCE2:%.*]]) local_unnamed_addr addrspace(200) #[[ATTR2]] {
+// CHECK-SAME: (ptr addrspace(200) noalias nocapture writeonly sret([[STRUCT_TWOINTARRAYANDCAP:%.*]]) align 16 [[AGG_RESULT:%.*]], i64 [[TMP0:%.*]], i64 inreg [[IN_COERCE0:%.*]], i64 inreg [[IN_COERCE1:%.*]], ptr addrspace(200) inreg [[IN_COERCE2:%.*]]) local_unnamed_addr addrspace(200) #[[ATTR1]] {
 // CHECK-NEXT:  entry:
 // CHECK-NEXT:    [[ADD:%.*]] = add nsw i64 [[IN_COERCE0]], 1
 // CHECK-NEXT:    store i64 [[ADD]], ptr addrspace(200) [[AGG_RESULT]], align 16, !tbaa [[TBAA22:![0-9]+]]
@@ -570,7 +576,7 @@ typedef struct {
 } Int128AndCap;
 
 // CHECK-LABEL: define {{[^@]+}}@int128_and_cap
-// CHECK-SAME: (ptr addrspace(200) noalias nocapture writeonly sret([[STRUCT_INT128ANDCAP:%.*]]) align 16 [[AGG_RESULT:%.*]], i64 [[TMP0:%.*]], i64 inreg [[IN_COERCE0:%.*]], i64 inreg [[IN_COERCE1:%.*]], ptr addrspace(200) inreg [[IN_COERCE2:%.*]]) local_unnamed_addr addrspace(200) #[[ATTR2]] {
+// CHECK-SAME: (ptr addrspace(200) noalias nocapture writeonly sret([[STRUCT_INT128ANDCAP:%.*]]) align 16 [[AGG_RESULT:%.*]], i64 [[TMP0:%.*]], i64 inreg [[IN_COERCE0:%.*]], i64 inreg [[IN_COERCE1:%.*]], ptr addrspace(200) inreg [[IN_COERCE2:%.*]]) local_unnamed_addr addrspace(200) #[[ATTR1]] {
 // CHECK-NEXT:  entry:
 // CHECK-NEXT:    [[IN_SROA_2_0_INSERT_EXT:%.*]] = zext i64 [[IN_COERCE1]] to i128
 // CHECK-NEXT:    [[IN_SROA_0_0_INSERT_EXT:%.*]] = zext i64 [[IN_COERCE0]] to i128

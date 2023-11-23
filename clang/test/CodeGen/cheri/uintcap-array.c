@@ -77,20 +77,26 @@ struct uintptr_struct uintptr_struct_array[] = {
 void use_array(void *value);
 
 void func(void) {
-  // This seems to emit a memcpy from a global so it had the same issues:
-  // CHECK: @__const.func.uintptr_struct_array = private unnamed_addr addrspace(200) constant [2 x %struct.uintptr_struct]
+  // This seems to emit a memcpy from a global so it had the same issues (padded to ensure it exceeds any inlining threshold):
+  // CHECK: @__const.func.uintptr_struct_array = private unnamed_addr addrspace(200) constant [5 x %struct.uintptr_struct]
   // CHECK-SAME: [%struct.uintptr_struct { ptr addrspace(200) getelementptr (i8, ptr addrspace(200) null, i64 5246977) },
-  // CHECK-SAME:  %struct.uintptr_struct { ptr addrspace(200) @uintptr_constant_int }]
-  struct uintptr_struct uintptr_struct_array[] = {
+  // CHECK-SAME:  %struct.uintptr_struct { ptr addrspace(200) @uintptr_constant_int },
+  // CHECK-SAME:  %struct.uintptr_struct zeroinitializer,
+  // CHECK-SAME:  %struct.uintptr_struct zeroinitializer,
+  // CHECK-SAME:  %struct.uintptr_struct zeroinitializer]
+  struct uintptr_struct uintptr_struct_array[5] = {
       {.value = 0x501001},
       {(__uintcap_t)&uintptr_constant_int},
   };
   use_array(&uintptr_struct_array);
 
-  // CHECK: @__const.func.uintptr_array = private unnamed_addr addrspace(200) constant [2 x ptr addrspace(200)]
+  // CHECK: @__const.func.uintptr_array = private unnamed_addr addrspace(200) constant [5 x ptr addrspace(200)]
   // CHECK-SAME: [ptr addrspace(200) getelementptr (i8, ptr addrspace(200) null, i64 3),
-  // CHECK-SAME:  ptr addrspace(200) @uintptr_constant_int]
-  __uintcap_t uintptr_array[] = {
+  // CHECK-SAME:  ptr addrspace(200) @uintptr_constant_int,
+  // CHECK-SAME:  ptr addrspace(200) null,
+  // CHECK-SAME:  ptr addrspace(200) null,
+  // CHECK-SAME:  ptr addrspace(200) null]
+  __uintcap_t uintptr_array[5] = {
       3,
       (__uintcap_t)&uintptr_constant_int,
   };
@@ -107,8 +113,8 @@ struct uintptr_struct uintptr_struct_bss;
 
 // CHECK-LABEL: define dso_local void @func()
 // test that the correct values are used
-// CHECK: alloca [2 x %struct.uintptr_struct], align [[#CAP_SIZE]], addrspace(200)
-// CHECK: alloca [2 x ptr addrspace(200)], align [[#CAP_SIZE]], addrspace(200)
+// CHECK: alloca [5 x %struct.uintptr_struct], align [[#CAP_SIZE]], addrspace(200)
+// CHECK: alloca [5 x ptr addrspace(200)], align [[#CAP_SIZE]], addrspace(200)
 
 // TODO: all the ASM checks should move to LLVM, but checking it here is easier
 // ASM-LABEL: longvalue:
@@ -158,12 +164,18 @@ struct uintptr_struct uintptr_struct_bss;
 // ASM-LABEL: .L__const.func.uintptr_struct_array:
 // ASM-NEXT: 	.chericap	5246977
 // ASM-NEXT: 	.chericap	uintptr_constant_int
-// ASM-NEXT: 	.size	.L__const.func.uintptr_struct_array, [[#CAP_SIZE * 2]]
+// ASM-NEXT: 	.space	[[#CAP_SIZE]]
+// ASM-NEXT: 	.space	[[#CAP_SIZE]]
+// ASM-NEXT: 	.space	[[#CAP_SIZE]]
+// ASM-NEXT: 	.size	.L__const.func.uintptr_struct_array, [[#CAP_SIZE * 5]]
 
 // ASM-LABEL: .L__const.func.uintptr_array:
 // ASM-NEXT: 	.chericap	3
 // ASM-NEXT: 	.chericap	uintptr_constant_int
-// ASM-NEXT: 	.size	.L__const.func.uintptr_array, [[#CAP_SIZE * 2]]
+// ASM-NEXT: 	.chericap	0
+// ASM-NEXT: 	.chericap	0
+// ASM-NEXT: 	.chericap	0
+// ASM-NEXT: 	.size	.L__const.func.uintptr_array, [[#CAP_SIZE * 5]]
 
 // ASM-LABEL: .type	uintptr_bss,@object
 // ASM-NEXT: .comm	uintptr_bss,[[#CAP_SIZE]],[[#CAP_SIZE]]
