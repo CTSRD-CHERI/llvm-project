@@ -3,6 +3,7 @@ set(LLVM_LINK_COMPONENTS
   # FIXME: only needed for MCTargetOptions::cheriCapabilityTableABI
   MC
   TargetParser
+  FrontendOpenMP
   )
 
 # In a standard Clang+LLVM build, we need to generate intrinsics before
