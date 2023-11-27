@@ -29,12 +29,13 @@
 //===----------------------------------------------------------------------===//
 
 #include "CHERI/CHERIUtils.h"
-#include <clang/ASTMatchers/ASTMatchFinder.h>
 #include "clang/ASTMatchers/ASTMatchers.h"
 #include "clang/StaticAnalyzer/Checkers/BuiltinCheckerRegistration.h"
-#include <clang/StaticAnalyzer/Core/BugReporter/BugType.h>
-#include <clang/StaticAnalyzer/Core/PathSensitive/CallEvent.h>
 #include "clang/StaticAnalyzer/Core/PathSensitive/CheckerContext.h"
+#include <clang/ASTMatchers/ASTMatchFinder.h>
+#include <clang/StaticAnalyzer/Core/BugReporter/BugType.h>
+#include <clang/StaticAnalyzer/Core/PathSensitive/CallDescription.h>
+#include <clang/StaticAnalyzer/Core/PathSensitive/CallEvent.h>
 
 using namespace clang;
 using namespace ento;
@@ -43,10 +44,19 @@ using namespace cheri;
 namespace {
 class PointerAlignmentChecker
     : public Checker<check::PreStmt<CastExpr>, check::PostStmt<CastExpr>,
-                     check::PostStmt<BinaryOperator>, check::DeadSymbols> {
+                     check::PostStmt<BinaryOperator>, check::Bind,
+                     check::PreCall, check::DeadSymbols> {
   std::unique_ptr<BugType> CastAlignBug;
   std::unique_ptr<BugType> CapCastAlignBug;
+  std::unique_ptr<BugType> GenPtrEscapeAlignBug;
+  std::unique_ptr<BugType> MemcpyAlignBug;
 
+
+  const CallDescriptionMap<std::pair<int, int>> MemCpyFn {
+    {{"memcpy", 3}, {0, 1}},
+    {{"mempcpy", 3}, {0, 1}},
+    {{"memmove", 3}, {0, 1}},
+  };
 
 public:
   PointerAlignmentChecker();
@@ -54,13 +64,16 @@ public:
   void checkPostStmt(const BinaryOperator *BO, CheckerContext &C) const;
   void checkPostStmt(const CastExpr *BO, CheckerContext &C) const;
   void checkPreStmt(const CastExpr *BO, CheckerContext &C) const;
+  void checkBind(SVal L, SVal V, const Stmt *S, CheckerContext &C) const;
+  void checkPreCall(const CallEvent &Call, CheckerContext &C) const;
   void checkDeadSymbols(SymbolReaper &SymReaper, CheckerContext &C) const;
 
 
 private:
-  ExplodedNode *emitCastAlignWarn(CheckerContext &C, unsigned SrcAlign,
-                                  unsigned DstReqAlign,
-                                  const CastExpr *CE) const;
+  ExplodedNode *emitAlignmentWarning(CheckerContext &C, const SVal &UnderalignedPtrVal,
+                                  const BugType &BT,
+                                  StringRef ErrorMessage,
+                                  const ValueDecl *CapSrcDecl = nullptr) const;
 
   class AlignmentBugVisitor : public BugReporterVisitor {
   public:
@@ -83,6 +96,7 @@ private:
 } // namespace
 
 REGISTER_MAP_WITH_PROGRAMSTATE(TrailingZerosMap, SymbolRef, int)
+REGISTER_SET_WITH_PROGRAMSTATE(CapStorageSet, const MemRegion*)
 
 PointerAlignmentChecker::PointerAlignmentChecker() {
   CastAlignBug.reset(new BugType(this,
@@ -91,9 +105,34 @@ PointerAlignmentChecker::PointerAlignmentChecker() {
   CapCastAlignBug.reset(new BugType(this,
       "Cast increases required alignment to capability alignment",
       "CHERI portability"));
+  GenPtrEscapeAlignBug.reset(new BugType(this,
+      "Not capability-aligned pointer stored as 'void*'",
+      "CHERI portability"));
+  MemcpyAlignBug.reset(new BugType(this,
+      "Copying capabilities through underaligned memory",
+      "CHERI portability"));
 }
 
 namespace {
+
+Optional<QualType> globalOrParamPointeeType(SymbolRef Sym) {
+  const MemRegion *BaseRegOrigin = Sym->getOriginRegion();
+  if (!BaseRegOrigin)
+    return llvm::None;
+
+  if (!BaseRegOrigin->getMemorySpace()->hasGlobalsOrParametersStorage())
+    return llvm::None;
+
+  const QualType &SymTy = Sym->getType();
+  if (SymTy->isPointerType()) {
+    const QualType &PT = SymTy->getPointeeType();
+    if (!PT->isIncompleteType()) {
+      return PT;
+    }
+  }
+
+  return llvm::None;
+}
 
 int getTrailingZerosCount(const SVal &V, ProgramStateRef State,
                           ASTContext &ASTCtx);
@@ -105,16 +144,11 @@ int getTrailingZerosCount(SymbolRef Sym, ProgramStateRef State,
     return *Align;
 
   // Is function argument or global?
-  if (const MemRegion *BaseRegOrigin = Sym->getOriginRegion())
-    if (BaseRegOrigin->getMemorySpace()->hasGlobalsOrParametersStorage()) {
-      const QualType &SymTy = Sym->getType();
-      if (SymTy->isPointerType() && !isGenericPointerType(SymTy)) {
-        const QualType &PT = SymTy->getPointeeType();
-        if (!PT->isIncompleteType()) {
-          unsigned A = ASTCtx.getTypeAlignInChars(PT).getQuantity();
-          return llvm::APSInt::getUnsigned(A).countTrailingZeros();
-        }
-      }
+  Optional<QualType> GlobalPointeeTy = globalOrParamPointeeType(Sym);
+  if (GlobalPointeeTy.hasValue()) {
+    QualType &PT = GlobalPointeeTy.getValue();
+    unsigned A = ASTCtx.getTypeAlignInChars(PT).getQuantity();
+    return llvm::APSInt::getUnsigned(A).countTrailingZeros();
   }
 
   return -1;
@@ -193,6 +227,69 @@ int getTrailingZerosCount(const Expr *E, CheckerContext &C) {
   return getTrailingZerosCount(V, C.getState(), C.getASTContext());
 }
 
+bool isCapabilityStorage(SymbolRef Sym, ASTContext &ASTCtx) {
+  const Optional<QualType> GlobalPointeeTy = globalOrParamPointeeType(Sym);
+  if (GlobalPointeeTy.hasValue())
+    return hasCapability(GlobalPointeeTy.getValue(), ASTCtx);
+  return false;
+}
+
+bool isCapabilityStorage(const MemRegion *R, ProgramStateRef State,
+                         ASTContext &ASTCtx) {
+  R = R->StripCasts();
+
+  if (State->contains<CapStorageSet>(R))
+    return true;
+
+  if (const SymbolicRegion *SR = R->getAs<SymbolicRegion>())
+    return isCapabilityStorage(SR->getSymbol(), ASTCtx);
+
+  if (const TypedValueRegion *TR = R->getAs<TypedValueRegion>()) {
+    const QualType PT = TR->getDesugaredValueType(ASTCtx);
+    return hasCapability(PT, ASTCtx);
+  }
+
+  return false;
+}
+
+bool isCapabilityStorage(const SVal &V, ProgramStateRef State,
+                         ASTContext &ASTCtx) {
+  if (const MemRegion *MR = V.getAsRegion()) {
+    return isCapabilityStorage(MR, State, ASTCtx);
+  }
+  if (SymbolRef Sym = V.getAsSymbol()) {
+    return isCapabilityStorage(Sym, ASTCtx);
+  }
+  return false;
+}
+
+Optional<unsigned> getActualAlignment(CheckerContext &C, const SVal &SrcVal) {
+  if (SrcVal.isConstant()) // special value
+    return llvm::None;
+
+  ASTContext &ASTCtx = C.getASTContext();
+  int SrcTZC = getTrailingZerosCount(SrcVal, C.getState(), ASTCtx);
+  if (SrcTZC < 0)
+    return llvm::None;
+
+  if ((unsigned)SrcTZC >= sizeof(unsigned int) * 8)
+    return llvm::None; // Too aligned, probably zero
+  return (1U << SrcTZC);
+}
+
+Optional<unsigned> getRequiredAlignment(ASTContext &ASTCtx,
+                                        const QualType &PtrTy,
+                                        bool AssumeCapAlignForVoidPtr) {
+  if (!PtrTy->isPointerType())
+    return llvm::None;
+  const QualType &PointeeTy = PtrTy->getPointeeType();
+  if (!PointeeTy->isIncompleteType())
+    return ASTCtx.getTypeAlignInChars(PointeeTy).getQuantity();
+  else if (AssumeCapAlignForVoidPtr && isGenericPointerType(PtrTy, false))
+    return getCapabilityTypeAlign(ASTCtx).getQuantity();
+  return llvm::None;
+}
+
 /* Introduced by clang, not in C standard */
 bool isImplicitConversionFromVoidPtr(const Stmt *S, CheckerContext &C) {
   using namespace clang::ast_matchers;
@@ -202,6 +299,51 @@ bool isImplicitConversionFromVoidPtr(const Stmt *S, CheckerContext &C) {
                                 hasCastKind(CK_BitCast), hasParent(CmpM));
   auto M = match(expr(CastM), *S, C.getASTContext());
   return !M.empty();
+}
+
+bool isGenericStorage(CheckerContext &C, const SVal &V) {
+  if (SymbolRef Sym = V.getAsSymbol()) {
+    if (!isGenericPointerType(Sym->getType(), false))
+      return false;
+    if (const MemRegion *R = Sym->getOriginRegion()) {
+      const MemSpaceRegion *MS = R->getMemorySpace();
+      if (isa<GlobalsSpaceRegion>(MS))
+        return true; // global variable
+      if (auto SR = dyn_cast<StackArgumentsSpaceRegion>(MS))
+        return SR->getStackFrame()->inTopFrame(); // top-level argument
+
+      if (isa<FieldRegion>(R))
+        return true; // struct field
+    }
+  }
+  return false;
+}
+
+bool isGenericStorage(CheckerContext &C, const Expr *E) {
+  if (!isGenericPointerType(E->IgnoreImpCasts()->getType(), false))
+    return false;
+  return isGenericStorage(C, C.getSVal(E));
+}
+
+static void describeObjectType(raw_ostream &OS, const QualType &Ty,
+                         const LangOptions &LangOpts) {
+  if (Ty->isPointerType()) {
+    OS << " pointed by '";
+    Ty.print(OS, PrintingPolicy(LangOpts));
+    OS << "' pointer";
+  } else {
+    OS << " of type '";
+    Ty.print(OS, PrintingPolicy(LangOpts));
+    OS << "'";
+  }
+}
+
+const DeclRegion *getOriginalAllocation(const MemRegion *MR) {
+  if (const DeclRegion *DR = MR->getAs<DeclRegion>())
+    return DR;
+  if (const ElementRegion *ER = MR->getAs<ElementRegion>())
+    return getOriginalAllocation(ER->getSuperRegion());
+  return nullptr;
 }
 
 } // namespace
@@ -214,27 +356,218 @@ void PointerAlignmentChecker::checkPreStmt(const CastExpr *CE,
   if (isImplicitConversionFromVoidPtr(CE, C))
     return;
 
-  const QualType &DstType = CE->getType();
-  if (!DstType->isPointerType())
-    return;
-  const QualType &DstPointeeTy = DstType->getPointeeType();
-  if (DstPointeeTy->isIncompleteType())
-    return;
-
-  const SVal &SrcVal = C.getSVal(CE->getSubExpr());
-  if (SrcVal.isConstant())
-    return; // special value
-  int SrcTZC = getTrailingZerosCount(SrcVal, C.getState(), C.getASTContext());
-  if (SrcTZC < 0)
-    return;
-  if ((unsigned)SrcTZC >= sizeof(unsigned int)*8)
-    return; // Too aligned, probably a Zero
-  unsigned SrcAlign = (1U << SrcTZC);
-
   ASTContext &ASTCtx = C.getASTContext();
-  unsigned DstReqAlign = ASTCtx.getTypeAlignInChars(DstPointeeTy).getQuantity();
-  if (SrcAlign < DstReqAlign) {
-    emitCastAlignWarn(C, SrcAlign, DstReqAlign, CE);
+
+  /* Calculate required alignment */
+  const Optional<unsigned int> &DstReqAlign =
+      getRequiredAlignment(ASTCtx, CE->getType(), false);
+  if (!DstReqAlign.hasValue())
+    return;
+
+  /* Calculate actual alignment */
+  const SVal &SrcVal = C.getSVal(CE->getSubExpr());
+  const Optional<unsigned int> &SrcAlign = getActualAlignment(C, SrcVal);
+  if (!SrcAlign.hasValue())
+    return;
+
+  if (SrcAlign >= DstReqAlign) // OK
+    return;
+
+  /* Emit warning */
+  const QualType &DstTy = CE->getType();
+  bool DstAlignIsCap = hasCapability(DstTy->getPointeeType(), ASTCtx);
+  const BugType &BT= DstAlignIsCap ? *CapCastAlignBug : *CastAlignBug;
+
+  SmallString<350> ErrorMessage;
+  llvm::raw_svector_ostream OS(ErrorMessage);
+  OS << "Pointer value aligned to a " << SrcAlign << " byte boundary"
+     << " cast to type '" << DstTy.getAsString() << "'"
+     << " with " << DstReqAlign << "-byte";
+  if (DstAlignIsCap)
+    OS << " capability";
+  OS << " alignment";
+
+  emitAlignmentWarning(C, SrcVal, BT, ErrorMessage);
+}
+
+void PointerAlignmentChecker::checkBind(SVal L, SVal V, const Stmt *S,
+                                        CheckerContext &C) const {
+  ASTContext &ASTCtx = C.getASTContext();
+  if (!isPureCapMode(ASTCtx))
+    return;
+
+  const BinaryOperator *BO = dyn_cast<BinaryOperator>(S);
+  if (!BO || !BO->isAssignmentOp())
+    return;
+
+  const QualType &DstTy = BO->getLHS()->getType();
+  if (!DstTy->isCHERICapabilityType(ASTCtx, true))
+    return;
+  
+  bool DstIsCapStorage = false, DstIsGenericStorage = false;
+
+  if (DstTy->isPointerType() && hasCapability(DstTy->getPointeeType(), ASTCtx))
+    DstIsCapStorage = true;
+
+  if (const MemRegion *MR = L.getAsRegion()) {
+    if (const TypedValueRegion *TR = MR->getAs<TypedValueRegion>()) {
+      const QualType &Ty = TR->getValueType();
+      DstIsCapStorage |= Ty->isPointerType() && hasCapability(Ty->getPointeeType(), ASTCtx);
+      DstIsGenericStorage |= isGenericPointerType(Ty, false) &&
+                             (isa<GlobalsSpaceRegion>(TR->getMemorySpace()) || isa<FieldRegion>(TR->StripCasts()));
+    }
+  }
+
+  if (SymbolRef Sym = L.getAsSymbol()) {
+    const QualType &SymTy = Sym->getType();
+    if (SymTy->isPointerType()) {
+      const QualType &CopyTy = SymTy->getPointeeType();
+      DstIsCapStorage |= CopyTy->isPointerType() && hasCapability(CopyTy->getPointeeType(), ASTCtx);
+      if (const MemRegion *R = Sym->getOriginRegion()) {
+        const MemSpaceRegion *MS = R->getMemorySpace();
+        bool TopLevelArg = false;
+        if (auto SS = dyn_cast<StackArgumentsSpaceRegion>(MS))
+          TopLevelArg = SS->getStackFrame()->inTopFrame();
+        DstIsGenericStorage |= isGenericPointerType(CopyTy, false) &&
+                               (TopLevelArg || isa<GlobalsSpaceRegion>(MS) || isa<FieldRegion>(R->StripCasts()));
+      }
+    }
+  }
+
+  if (!DstIsCapStorage && !DstIsGenericStorage)
+    return;
+
+  /* Calculate actual alignment */
+  unsigned CapAlign = getCapabilityTypeAlign(ASTCtx).getQuantity();
+  const Optional<unsigned int> &SrcAlign = getActualAlignment(C, V);
+  if (!SrcAlign.hasValue() || SrcAlign >= CapAlign)
+    return;
+
+  /* Emit warning */
+  SmallString<350> ErrorMessage;
+  llvm::raw_svector_ostream OS(ErrorMessage);
+  OS << "Pointer value aligned to a " << SrcAlign << " byte boundary";
+  OS << " stored as type '" << BO->getLHS()->getType().getAsString() << "'";
+  OS << ". Memory pointed by it";
+  if (DstIsCapStorage)
+    OS << " is supposed to";
+  else
+    OS << " may be used to";
+  OS << " hold capabilities, for which " << CapAlign
+     << "-byte capability alignment will be required";
+
+  const ValueDecl *CapDstDecl = nullptr;
+  if (const MemRegion *SR = L.getAsRegion()) {
+    if (const DeclRegion *D = getOriginalAllocation(SR))
+      CapDstDecl = D->getDecl();
+  }
+
+  emitAlignmentWarning(C, V, *GenPtrEscapeAlignBug, ErrorMessage, CapDstDecl);
+}
+
+void PointerAlignmentChecker::checkPreCall(const CallEvent &Call,
+                                         CheckerContext &C) const {
+  ASTContext &ASTCtx = C.getASTContext();
+  if (!isPureCapMode(ASTCtx))
+    return;
+
+  if (!Call.isGlobalCFunction())
+    return;
+
+  const std::pair<int, int> *MemCpyParamPair = MemCpyFn.lookup(Call);
+  if (!MemCpyParamPair)
+    return;
+
+  unsigned CapAlign = getCapabilityTypeAlign(ASTCtx).getQuantity();
+
+  /* Destination alignment */
+  const Expr *DstExpr = Call.getArgExpr(MemCpyParamPair->first);
+  const QualType &DstTy = DstExpr->IgnoreImplicit()->getType();
+  const SVal &DstVal = C.getSVal(DstExpr);
+  const Optional<unsigned> &DstCurAlign = getActualAlignment(C, DstVal);
+  bool DstIsCapStorage = isCapabilityStorage(DstVal, C.getState(), ASTCtx);
+  bool DstIsGenStorage = isGenericStorage(C, DstExpr);
+
+  /* Source alignment */
+  const Expr *SrcExpr = Call.getArgExpr(MemCpyParamPair->second);
+  const QualType &SrcTy = SrcExpr->IgnoreImplicit()->getType();
+  const SVal &SrcVal = C.getSVal(SrcExpr);
+  const Optional<unsigned> &SrcCurAlign = getActualAlignment(C, SrcVal);
+  bool SrcIsCapStorage = isCapabilityStorage(SrcVal, C.getState(), ASTCtx);
+  bool SrcIsGenStorage = isGenericStorage(C, SrcExpr);
+
+  if ((SrcIsCapStorage || SrcIsGenStorage)
+      && DstCurAlign.hasValue() && DstCurAlign < CapAlign) {
+    SmallString<350> ErrorMessage;
+    llvm::raw_svector_ostream OS(ErrorMessage);
+    OS << "Copied memory object";
+    describeObjectType(OS, SrcTy, ASTCtx.getLangOpts());
+    if (!SrcIsCapStorage)
+        OS << " may contain";
+    else
+        OS << " contains";
+    OS << " capabilities that require "
+       << CapAlign << "-byte capability alignment.";
+    OS << " Destination address alignment is " << DstCurAlign << "."
+       << " Storing a capability at an underaligned address"
+          " leads to tag stripping.";
+
+    const ValueDecl *CapSrcDecl = nullptr;
+    if (const MemRegion *SR = SrcVal.getAsRegion()) {
+        if (const DeclRegion *D = getOriginalAllocation(SR))
+          CapSrcDecl = D->getDecl();
+    }
+
+    emitAlignmentWarning(C, DstVal, *MemcpyAlignBug, ErrorMessage, CapSrcDecl);
+    return;
+  }
+  
+  if ((DstIsCapStorage  || DstIsGenStorage)
+      && SrcCurAlign.hasValue() && SrcCurAlign < CapAlign) {
+    SmallString<350> ErrorMessage;
+    llvm::raw_svector_ostream OS(ErrorMessage);
+    OS << "Destination memory object";
+    describeObjectType(OS, DstTy, ASTCtx.getLangOpts());
+    if (!DstIsCapStorage)
+        OS << " may";
+    else
+        OS << " is supposed to";
+    OS << " contain capabilities that require "
+       << CapAlign << "-byte capability alignment.";
+    OS << " Source address alignment is " << SrcCurAlign << ", which means"
+        " that copied object may have its capabilities tags"
+        " stripped earlier due to underaligned storage.";
+
+
+    const ValueDecl *CapSrcDecl = nullptr;
+    if (const MemRegion *SR = DstVal.getAsRegion()) {
+        if (const DeclRegion *D = getOriginalAllocation(SR))
+          CapSrcDecl = D->getDecl();
+    }
+
+    emitAlignmentWarning(C, SrcVal, *MemcpyAlignBug, ErrorMessage, CapSrcDecl);
+    return;
+  }
+
+  /* Propagate CapStorage flag */
+  if (SrcIsCapStorage && !DstIsCapStorage) {
+    if (const MemRegion *R = DstVal.getAsRegion()) {
+        const ProgramStateRef State =
+            C.getState()->add<CapStorageSet>(R->StripCasts());
+        const NoteTag *Tag =
+            C.getNoteTag("Copied memory object contains capabilities");
+        C.addTransition(State, C.getPredecessor(), Tag);
+    }
+  }
+
+  if (!SrcIsCapStorage && DstIsCapStorage) {
+    if (const MemRegion *R = SrcVal.getAsRegion()) {
+        const ProgramStateRef State =
+            C.getState()->add<CapStorageSet>(R->StripCasts());
+        const NoteTag *Tag =
+            C.getNoteTag("Copied memory object should contain capabilities");
+        C.addTransition(State, C.getPredecessor(), Tag);
+    }
   }
 }
 
@@ -250,20 +583,26 @@ void PointerAlignmentChecker::checkPostStmt(const CastExpr *CE,
 
   ASTContext &ASTCtx = C.getASTContext();
   int DstReqTZC = -1;
+  bool DstIsCapStorage = false;
   if (CE->getType()->isPointerType()) {
     if (!isGenericPointerType(CE->getType(), true)) {
       const QualType &DstPTy = CE->getType()->getPointeeType();
       if (!DstPTy->isIncompleteType()) {
         unsigned ReqAl = ASTCtx.getTypeAlignInChars(DstPTy).getQuantity();
         DstReqTZC = llvm::APSInt::getUnsigned(ReqAl).countTrailingZeros();
+        DstIsCapStorage = hasCapability(DstPTy, ASTCtx);
       }
     }
   }
 
+  SVal DstVal = C.getSVal(CE);
+  SVal SrcVal = C.getSVal(CE->getSubExpr());
+  ProgramStateRef State = C.getState();
+  bool Updated = false;
+
+  /* Update TrailingZerosMap */
   int NewAlign = std::max(SrcTZC, DstReqTZC);
   if (DstTZC < NewAlign) {
-    SVal DstVal = C.getSVal(CE);
-    ProgramStateRef State = C.getState();
     if (DstVal.isUnknown()) {
         const LocationContext *LCtx = C.getLocationContext();
         DstVal = C.getSValBuilder().conjureSymbolVal(
@@ -272,9 +611,24 @@ void PointerAlignmentChecker::checkPostStmt(const CastExpr *CE,
     }
     if (SymbolRef Sym = DstVal.getAsSymbol()) {
         State = State->set<TrailingZerosMap>(Sym, NewAlign);
-        C.addTransition(State);
+        Updated = true;
     }
   }
+
+  /* Update CapStorageSet */
+  const ProgramPointTag *Tag = nullptr;
+  if ((isCapabilityStorage(SrcVal, State, ASTCtx) || DstIsCapStorage)
+      && !isCapabilityStorage(DstVal, State, ASTCtx)) {
+    if (const MemRegion *R = DstVal.getAsRegion()) {
+        State = State->add<CapStorageSet>(R->StripCasts());
+        Updated = true;
+        if (DstIsCapStorage)
+          Tag = C.getNoteTag("Cast to capability-containing type");
+    }
+  }
+
+  if (Updated)
+    C.addTransition(State, Tag);
 }
 
 bool valueIsLTPow2(const Expr *E, unsigned P, CheckerContext &C) {
@@ -383,38 +737,23 @@ void PointerAlignmentChecker::checkPostStmt(const BinaryOperator *BO,
 
 void PointerAlignmentChecker::checkDeadSymbols(SymbolReaper &SymReaper,
                                                   CheckerContext &C) const {
-  ProgramStateRef State = C.getState();
-  TrailingZerosMapTy TZMap = State->get<TrailingZerosMap>();
   bool Updated = false;
-  for (TrailingZerosMapTy::iterator I = TZMap.begin(),
-                                    E = TZMap.end(); I != E; ++I) {
+  ProgramStateRef State = C.getState();
+
+  TrailingZerosMapTy TZMap = State->get<TrailingZerosMap>();
+  for (TrailingZerosMapTy::iterator I = TZMap.begin(), E = TZMap.end();
+                                    I != E; ++I) {
     if (SymReaper.isDead(I->first)) {
       State = State->remove<TrailingZerosMap>(I->first);
       Updated = true;
     }
   }
+
   if (Updated)
     C.addTransition(State);
 }
 
 namespace {
-
-bool hasCapability(const QualType OrigTy, ASTContext &Ctx) {
-  QualType Ty = OrigTy.getCanonicalType();
-  if (Ty->isCHERICapabilityType(Ctx, true))
-    return true;
-  if (const auto *Record = dyn_cast<RecordType>(Ty)) {
-    for (const auto *Field : Record->getDecl()->fields()) {
-      if (hasCapability(Field->getType(), Ctx))
-        return true;
-    }
-    return false;
-  }
-  if (const auto *Array = dyn_cast<ArrayType>(Ty)) {
-    return hasCapability(Array->getElementType(), Ctx);
-  }
-  return false;
-}
 
 void printAlign(raw_ostream &OS, unsigned TZC) {
   OS << "aligned(";
@@ -423,14 +762,6 @@ void printAlign(raw_ostream &OS, unsigned TZC) {
   else
     OS << "2^(" << TZC << ")";
   OS << ")";
-}
-
-const DeclRegion *getOriginalAllocation(const MemRegion *MR) {
-  if (const DeclRegion *DR = MR->getAs<DeclRegion>())
-    return DR;
-  if (const ElementRegion *ER = MR->getAs<ElementRegion>())
-    return getOriginalAllocation(ER->getSuperRegion());
-  return nullptr;
 }
 
 void describeOriginalAllocation(const ValueDecl *SrcDecl,
@@ -448,51 +779,55 @@ void describeOriginalAllocation(const ValueDecl *SrcDecl,
     W.addNote(Note, SrcLoc);
 }
 
+void describeCapabilityStorage(const ValueDecl *CapDecl,
+                                PathDiagnosticLocation SrcLoc,
+                                PathSensitiveBugReport &W,
+                                ASTContext &ASTCtx) {
+    SmallString<350> Note;
+    llvm::raw_svector_ostream OS2(Note);
+    const QualType &AllocType = CapDecl->getType().getCanonicalType();
+    OS2 << "Capabilities stored in ";
+    OS2 << "'" << AllocType.getAsString() << "'";
+    W.addNote(Note, SrcLoc);
+}
+
 } // namespace
 
 ExplodedNode *
-PointerAlignmentChecker::emitCastAlignWarn(
-    CheckerContext &C, unsigned SrcAlign, unsigned DstReqAlign,
-    const CastExpr *CE) const {
+PointerAlignmentChecker::emitAlignmentWarning(
+    CheckerContext &C,
+    const SVal &UnderalignedPtrVal,
+    const BugType &BT,
+    StringRef ErrorMessage,
+    const ValueDecl *CapSrcDecl) const {
   ExplodedNode *ErrNode = C.generateNonFatalErrorNode();
   if (!ErrNode)
     return nullptr;
 
-  ASTContext &ASTCtx = C.getASTContext();
-  const QualType &DstTy = CE->getType();
-  bool DstAlignIsCap = hasCapability(DstTy->getPointeeType(), ASTCtx);
-
-  SmallString<350> ErrorMessage;
-  llvm::raw_svector_ostream OS(ErrorMessage);
-  OS << "Pointer value aligned to a " << SrcAlign << " byte boundary";
-  OS << " cast to type '" << DstTy.getAsString() << "'";
-  OS << " with required";
-  if (DstAlignIsCap)
-    OS << " capability";
-  OS << " alignment " << DstReqAlign;
-  OS << " bytes";
-
-  const SVal &SrcVal = C.getSVal(CE->getSubExpr());
   const ValueDecl *MRDecl = nullptr;
   PathDiagnosticLocation MRDeclLoc;
-  if (const MemRegion *MR = SrcVal.getAsRegion()) {
+  if (const MemRegion *MR = UnderalignedPtrVal.getAsRegion()) {
     if (const DeclRegion *OriginalAlloc = getOriginalAllocation(MR)) {
       MRDecl = OriginalAlloc->getDecl();
       MRDeclLoc = PathDiagnosticLocation::create(MRDecl, C.getSourceManager());
     }
   }
 
-  auto W = std::make_unique<PathSensitiveBugReport>(
-      DstAlignIsCap ? *CapCastAlignBug : *CastAlignBug,
-      ErrorMessage, ErrNode,
-      MRDeclLoc, MRDecl);
+  auto W = std::make_unique<PathSensitiveBugReport>(BT, ErrorMessage, ErrNode,
+                                                    MRDeclLoc, MRDecl);
 
-  W->markInteresting(SrcVal);
-  if (SymbolRef S = SrcVal.getAsSymbol())
+  W->markInteresting(UnderalignedPtrVal);
+  if (SymbolRef S = UnderalignedPtrVal.getAsSymbol())
     W->addVisitor(std::make_unique<AlignmentBugVisitor>(S));
 
   if (MRDecl) {
     describeOriginalAllocation(MRDecl, MRDeclLoc, *W, C.getASTContext());
+  }
+
+  if (CapSrcDecl) {
+    auto CapSrcDeclLoc =
+        PathDiagnosticLocation::create(CapSrcDecl, C.getSourceManager());
+    describeCapabilityStorage(CapSrcDecl, CapSrcDeclLoc, *W, C.getASTContext());
   }
 
   C.emitReport(std::move(W));

@@ -35,6 +35,23 @@ bool isGenericPointerType(const QualType T, bool AcceptCharPtr) {
                                     T->getPointeeType()->isCharType());
 }
 
+bool hasCapability(const QualType OrigTy, ASTContext &Ctx) {
+  QualType Ty = OrigTy.getCanonicalType();
+  if (Ty->isCHERICapabilityType(Ctx, true))
+    return true;
+  if (const auto *Record = dyn_cast<RecordType>(Ty)) {
+    for (const auto *Field : Record->getDecl()->fields()) {
+      if (hasCapability(Field->getType(), Ctx))
+        return true;
+    }
+    return false;
+  }
+  if (const auto *Array = dyn_cast<ArrayType>(Ty)) {
+    return hasCapability(Array->getElementType(), Ctx);
+  }
+  return false;
+}
+
 } // end of namespace: cheri
 } // end of namespace: ento
 } // end of namespace: clang
