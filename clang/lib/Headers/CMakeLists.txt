@@ -169,6 +169,7 @@ set(x86_files
   cheri.h
   cheriintrin.h
   cheri_init_globals.h
+  cheri_init_globals_bw.h
   cldemoteintrin.h
   clflushoptintrin.h
   clwbintrin.h

@@ -44,17 +44,17 @@
 # DIS:      <_start>:
 ## Direct call
 ## foo - . = 0x11020-0x11000 = 32
-# DIS-NEXT:   11000: auipcc cra, 0
-# DIS-NEXT:          cjalr 32(cra)
+# DIS-NEXT:   11000: auipc cra, 0
+# DIS-NEXT:          jalr 32(cra)
 ## bar@plt - . = 0x11050-0x11008 = 72
-# DIS-NEXT:   11008: auipcc cra, 0
-# DIS-NEXT:          cjalr 72(cra)
+# DIS-NEXT:   11008: auipc cra, 0
+# DIS-NEXT:          jalr 72(cra)
 ## bar@plt - . = 0x11050-0x11010 = 64
-# DIS-NEXT:   11010: auipcc cra, 0
-# DIS-NEXT:          cjalr 64(cra)
+# DIS-NEXT:   11010: auipc cra, 0
+# DIS-NEXT:          jalr 64(cra)
 ## weak@plt - . = 0x11060-0x11018 = 72
-# DIS-NEXT:   11018: auipcc cra, 0
-# DIS-NEXT:          cjalr 72(cra)
+# DIS-NEXT:   11018: auipc cra, 0
+# DIS-NEXT:          jalr 72(cra)
 # DIS:      <foo>:
 # DIS-NEXT:   11020:
 
@@ -63,17 +63,17 @@
 # DIS-NEXT:     ...
 
 ## 32-bit: &.captable[bar]-. = 0x12000-0x11050 = 4096*1-80
-# DIS:        11050: auipcc ct3, 1
-# DIS32-NEXT:   clc ct3, -80(ct3)
-# DIS64-NEXT:   clc ct3, -80(ct3)
-# DIS-NEXT:     cjalr ct1, ct3
+# DIS:        11050: auipc ct3, 1
+# DIS32-NEXT:   lc ct3, -80(ct3)
+# DIS64-NEXT:   lc ct3, -80(ct3)
+# DIS-NEXT:     jalr ct1, ct3
 # DIS-NEXT:     nop
 
 ## 32-bit: &.captable[weak]-. = 0x12008-0x11060 = 4096*1-88
-# DIS:        11060: auipcc ct3, 1
-# DIS32-NEXT:   clc ct3, -88(ct3)
-# DIS64-NEXT:   clc ct3, -80(ct3)
-# DIS-NEXT:     cjalr ct1, ct3
+# DIS:        11060: auipc ct3, 1
+# DIS32-NEXT:   lc ct3, -88(ct3)
+# DIS64-NEXT:   lc ct3, -80(ct3)
+# DIS-NEXT:     jalr ct1, ct3
 # DIS-NEXT:     nop
 
 .global _start, foo, bar
@@ -81,14 +81,14 @@
 
 .type _start, @function
 _start:
-  ccall foo
-  ccall bar
-  ccall bar@plt
-  ccall weak
+  call foo
+  call bar
+  call bar@plt
+  call weak
 .size _start, . - _start
 
 ## foo is local and non-preemptale, no PLT is generated.
 .type foo, @function
 foo:
-  cret
+  ret
 .size foo, . - foo

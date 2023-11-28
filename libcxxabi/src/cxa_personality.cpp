@@ -303,12 +303,14 @@ readEncodedPointer(const uint8_t** data, uint8_t encoding, uintptr_t base = 0)
         break;
     case DW_EH_PE_pcrel:
         if (result)
-            result += (uintptr_t)(*data);
+            // For purecap, the value in result must be added as an offset
+            // to the pointer in *data
+            result = (uintptr_t)(*data + (int64_t)result);
         break;
     case DW_EH_PE_datarel:
         assert((base != 0) && "DW_EH_PE_datarel is invalid with a base of 0");
         if (result)
-            result += base;
+            result = (uintptr_t)((uint8_t*)base + (int64_t)result);
         break;
     case DW_EH_PE_textrel:
     case DW_EH_PE_funcrel:
@@ -686,6 +688,7 @@ static void scan_eh_tab(scan_results &results, _Unwind_Action actions,
     const uint8_t* callSitePtr = callSiteTableStart;
     while (callSitePtr < callSiteTableEnd)
     {
+        bool SealedLandingPad = false;
         // There is one entry per call site.
 #ifndef __USING_SJLJ_EXCEPTIONS__
         // The call sites are non-overlapping in [start, start+length)
@@ -693,6 +696,19 @@ static void scan_eh_tab(scan_results &results, _Unwind_Action actions,
         uintptr_t start = readEncodedPointer(&callSitePtr, callSiteEncoding);
         uintptr_t length = readEncodedPointer(&callSitePtr, callSiteEncoding);
         uintptr_t landingPad = readEncodedPointer(&callSitePtr, callSiteEncoding);
+#ifdef __CHERI_PURE_CAPABILITY__
+        // In the pure-capability ABI, non-NULL landing pads are not offsets
+        // from the start of the function but rather a valid capability.
+        // A following capability is indicated by the magic value 0xc for landing_pad.
+        if (landingPad != 0)
+        {
+            assert(landingPad == 0xc && "Unexpected capability marker");
+            callSitePtr = __builtin_align_up(callSitePtr, alignof(uintptr_t*));
+            landingPad = *((const uintptr_t*)callSitePtr);
+            callSitePtr += sizeof(uintptr_t);
+            SealedLandingPad = true;
+        }
+#endif
         uintptr_t actionEntry = readULEB128(&callSitePtr);
         if ((start <= ipOffset) && (ipOffset < (start + length)))
 #else  // __USING_SJLJ_EXCEPTIONS__
@@ -710,7 +726,8 @@ static void scan_eh_tab(scan_results &results, _Unwind_Action actions,
                 results.reason = _URC_CONTINUE_UNWIND;
                 return;
             }
-            landingPad = (uintptr_t)lpStart + landingPad;
+            if (!SealedLandingPad)
+                landingPad = (uintptr_t)lpStart + landingPad;
 #else  // __USING_SJLJ_EXCEPTIONS__
             ++landingPad;
 #endif // __USING_SJLJ_EXCEPTIONS__

@@ -719,6 +719,8 @@ static uint64_t getAttrKindEncoding(Attribute::AttrKind Kind) {
     return bitc::ATTR_KIND_DEREFERENCEABLE;
   case Attribute::DereferenceableOrNull:
     return bitc::ATTR_KIND_DEREFERENCEABLE_OR_NULL;
+  case Attribute::NoCapRelocs:
+    return bitc::ATTR_KIND_NO_CAP_RELOCS;
   case Attribute::NoPreserveCheriTags:
     return bitc::ATTR_KIND_NO_PRESERVE_CHERI_TAGS;
   case Attribute::NoRedZone:

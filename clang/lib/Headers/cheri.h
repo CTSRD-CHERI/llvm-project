@@ -106,6 +106,17 @@ void * __capability cheri_unseal(void * __capability __cap,
   return __IF_CAPS(__builtin_cheri_unseal(__cap, __type), (void*)__cap);
 }
 
+static inline
+__SIZE_TYPE__ cheri_copy_from_high(void *__capability __cap) {
+  return __IF_CAPS(__builtin_cheri_copy_from_high(__cap), __SIZE_MAX__);
+}
+
+static inline
+void * __capability
+cheri_copy_to_high(const void *__capability __cap, __SIZE_TYPE__ __high) {
+  return __IF_CAPS(__builtin_cheri_copy_to_high(__cap, __high), (void*)__cap);
+}
+
 #ifndef __CHERI_PURE_CAPABILITY__
 static inline
 void * __capability

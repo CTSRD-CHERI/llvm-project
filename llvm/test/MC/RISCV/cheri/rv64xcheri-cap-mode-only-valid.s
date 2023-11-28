@@ -14,38 +14,38 @@
 
 # Capability load/store uses different encodings for RV32 vs RV64
 
-# CHECK-ASM-AND-OBJ: clc ca2, 17(ca0)
-# CHECK-ASM-SAME: encoding: [0x0f,0x26,0x15,0x01]
+# CHECK-ASM-AND-OBJ: lc ca2, 17(ca0)
+# CHECK-ASM-SAME: encoding: [0x0f,0x46,0x15,0x01]
 clc ca2, 17(ca0)
-# CHECK-ASM-AND-OBJ: csc ca5, 25(ca3)
+# CHECK-ASM-AND-OBJ: sc ca5, 25(ca3)
 # CHECK-ASM-SAME: encoding: [0xa3,0xcc,0xf6,0x00]
 csc ca5, 25(ca3)
 
-# CHECK-ASM-AND-OBJ: cld a2, 17(ca0)
+# CHECK-ASM-AND-OBJ: ld a2, 17(ca0)
 # CHECK-ASM-SAME: encoding: [0x03,0x36,0x15,0x01]
 cld a2, 17(ca0)
-# CHECK-ASM-AND-OBJ: csd a5, 25(ca3)
+# CHECK-ASM-AND-OBJ: sd a5, 25(ca3)
 # CHECK-ASM-SAME: encoding: [0xa3,0xbc,0xf6,0x00]
 csd a5, 25(ca3)
 
-# CHECK-ASM-AND-OBJ: clwu a2, 17(ca0)
+# CHECK-ASM-AND-OBJ: lwu a2, 17(ca0)
 # CHECK-ASM-SAME: encoding: [0x03,0x66,0x15,0x01]
 clwu a2, 17(ca0)
 
-# CHECK-ASM-AND-OBJ: clc ca2, 0(ca0)
-# CHECK-ASM-SAME: encoding: [0x0f,0x26,0x05,0x00]
+# CHECK-ASM-AND-OBJ: lc ca2, 0(ca0)
+# CHECK-ASM-SAME: encoding: [0x0f,0x46,0x05,0x00]
 clc ca2, (ca0)
-# CHECK-ASM-AND-OBJ: csc ca5, 0(ca3)
+# CHECK-ASM-AND-OBJ: sc ca5, 0(ca3)
 # CHECK-ASM-SAME: encoding: [0x23,0xc0,0xf6,0x00]
 csc ca5, (ca3)
 
-# CHECK-ASM-AND-OBJ: cld a2, 0(ca0)
+# CHECK-ASM-AND-OBJ: ld a2, 0(ca0)
 # CHECK-ASM-SAME: encoding: [0x03,0x36,0x05,0x00]
 cld a2, (ca0)
-# CHECK-ASM-AND-OBJ: csd a5, 0(ca3)
+# CHECK-ASM-AND-OBJ: sd a5, 0(ca3)
 # CHECK-ASM-SAME: encoding: [0x23,0xb0,0xf6,0x00]
 csd a5, (ca3)
 
-# CHECK-ASM-AND-OBJ: clwu a2, 0(ca0)
+# CHECK-ASM-AND-OBJ: lwu a2, 0(ca0)
 # CHECK-ASM-SAME: encoding: [0x03,0x66,0x05,0x00]
 clwu a2, (ca0)

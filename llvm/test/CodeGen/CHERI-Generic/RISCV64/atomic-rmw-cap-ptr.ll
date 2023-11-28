@@ -583,7 +583,7 @@ define float @atomic_cap_ptr_fadd(float addrspace(200)* %ptr, float %val) nounwi
 ; PURECAP-LIBCALLS-NEXT:    csc cra, 48(csp) # 16-byte Folded Spill
 ; PURECAP-LIBCALLS-NEXT:    csc cs0, 32(csp) # 16-byte Folded Spill
 ; PURECAP-LIBCALLS-NEXT:    csc cs1, 16(csp) # 16-byte Folded Spill
-; PURECAP-LIBCALLS-NEXT:    cfsd fs0, 8(csp) # 8-byte Folded Spill
+; PURECAP-LIBCALLS-NEXT:    fsd fs0, 8(csp) # 8-byte Folded Spill
 ; PURECAP-LIBCALLS-NEXT:    cmove cs0, ca0
 ; PURECAP-LIBCALLS-NEXT:    cflw fa5, 0(ca0)
 ; PURECAP-LIBCALLS-NEXT:    fmv.s fs0, fa0
@@ -673,7 +673,7 @@ define float @atomic_cap_ptr_fsub(float addrspace(200)* %ptr, float %val) nounwi
 ; PURECAP-LIBCALLS-NEXT:    csc cra, 48(csp) # 16-byte Folded Spill
 ; PURECAP-LIBCALLS-NEXT:    csc cs0, 32(csp) # 16-byte Folded Spill
 ; PURECAP-LIBCALLS-NEXT:    csc cs1, 16(csp) # 16-byte Folded Spill
-; PURECAP-LIBCALLS-NEXT:    cfsd fs0, 8(csp) # 8-byte Folded Spill
+; PURECAP-LIBCALLS-NEXT:    fsd fs0, 8(csp) # 8-byte Folded Spill
 ; PURECAP-LIBCALLS-NEXT:    cmove cs0, ca0
 ; PURECAP-LIBCALLS-NEXT:    cflw fa5, 0(ca0)
 ; PURECAP-LIBCALLS-NEXT:    fmv.s fs0, fa0

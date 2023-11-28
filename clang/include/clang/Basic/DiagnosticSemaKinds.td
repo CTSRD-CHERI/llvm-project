@@ -12107,4 +12107,8 @@ def err_wasm_builtin_arg_must_match_table_element_type : Error <
   "%ordinal0 argument must match the element type of the WebAssembly table in the %ordinal1 argument">;
 def err_wasm_builtin_arg_must_be_integer_type : Error <
   "%ordinal0 argument must be an integer">;
+
+// Bakewell
+def err_bakewell_unsupported_builtin : Error<
+  "builtin unsupported when using bakewell : %0">;
 } // end of sema component.

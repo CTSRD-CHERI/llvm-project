@@ -37,7 +37,7 @@ define i64 @add_constant(i64 %arg) nounwind {
 ; CHECK-IL32PC64-NEXT:    add a1, a1, a3
 ; CHECK-IL32PC64-NEXT:    add a1, a1, a0
 ; CHECK-IL32PC64-NEXT:    mv a0, a2
-; CHECK-IL32PC64-NEXT:    cret
+; CHECK-IL32PC64-NEXT:    ret
 ;
 ; CHECK-LP64-LABEL: add_constant:
 ; CHECK-LP64:       # %bb.0:
@@ -49,11 +49,11 @@ define i64 @add_constant(i64 %arg) nounwind {
 ; CHECK-L64PC128-LABEL: add_constant:
 ; CHECK-L64PC128:       # %bb.0:
 ; CHECK-L64PC128-NEXT:  .LBB0_1: # Label of block must be emitted
-; CHECK-L64PC128-NEXT:    auipcc ca1, %pcrel_hi(.LCPI0_0)
+; CHECK-L64PC128-NEXT:    auipc ca1, %pcrel_hi(.LCPI0_0)
 ; CHECK-L64PC128-NEXT:    cincoffset ca1, ca1, %pcrel_lo(.LBB0_1)
-; CHECK-L64PC128-NEXT:    cld a1, 0(ca1)
+; CHECK-L64PC128-NEXT:    ld a1, 0(ca1)
 ; CHECK-L64PC128-NEXT:    add a0, a0, a1
-; CHECK-L64PC128-NEXT:    cret
+; CHECK-L64PC128-NEXT:    ret
   %add = add i64 %arg, 1311768467139281697
   ret i64 %add
 }

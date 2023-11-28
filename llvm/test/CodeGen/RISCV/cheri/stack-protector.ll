@@ -13,72 +13,72 @@ define void @caller() addrspace(200) nounwind sspstrong {
 ; IL32PC64-DEFAULT-LABEL: caller:
 ; IL32PC64-DEFAULT:       # %bb.0:
 ; IL32PC64-DEFAULT-NEXT:    cincoffset csp, csp, -16
-; IL32PC64-DEFAULT-NEXT:    csc cra, 8(csp) # 8-byte Folded Spill
+; IL32PC64-DEFAULT-NEXT:    sc cra, 8(csp) # 8-byte Folded Spill
 ; IL32PC64-DEFAULT-NEXT:    cincoffset ca0, csp, 7
 ; IL32PC64-DEFAULT-NEXT:    csetbounds ca0, ca0, 1
-; IL32PC64-DEFAULT-NEXT:    ccall callee
-; IL32PC64-DEFAULT-NEXT:    clc cra, 8(csp) # 8-byte Folded Reload
+; IL32PC64-DEFAULT-NEXT:    call callee
+; IL32PC64-DEFAULT-NEXT:    lc cra, 8(csp) # 8-byte Folded Reload
 ; IL32PC64-DEFAULT-NEXT:    cincoffset csp, csp, 16
-; IL32PC64-DEFAULT-NEXT:    cret
+; IL32PC64-DEFAULT-NEXT:    ret
 ;
 ; L64PC128-DEFAULT-LABEL: caller:
 ; L64PC128-DEFAULT:       # %bb.0:
 ; L64PC128-DEFAULT-NEXT:    cincoffset csp, csp, -32
-; L64PC128-DEFAULT-NEXT:    csc cra, 16(csp) # 16-byte Folded Spill
+; L64PC128-DEFAULT-NEXT:    sc cra, 16(csp) # 16-byte Folded Spill
 ; L64PC128-DEFAULT-NEXT:    cincoffset ca0, csp, 15
 ; L64PC128-DEFAULT-NEXT:    csetbounds ca0, ca0, 1
-; L64PC128-DEFAULT-NEXT:    ccall callee
-; L64PC128-DEFAULT-NEXT:    clc cra, 16(csp) # 16-byte Folded Reload
+; L64PC128-DEFAULT-NEXT:    call callee
+; L64PC128-DEFAULT-NEXT:    lc cra, 16(csp) # 16-byte Folded Reload
 ; L64PC128-DEFAULT-NEXT:    cincoffset csp, csp, 32
-; L64PC128-DEFAULT-NEXT:    cret
+; L64PC128-DEFAULT-NEXT:    ret
 ;
 ; IL32PC64-LABEL: caller:
 ; IL32PC64:       # %bb.0:
 ; IL32PC64-NEXT:    cincoffset csp, csp, -32
-; IL32PC64-NEXT:    csc cra, 24(csp) # 8-byte Folded Spill
-; IL32PC64-NEXT:    csc cs0, 16(csp) # 8-byte Folded Spill
+; IL32PC64-NEXT:    sc cra, 24(csp) # 8-byte Folded Spill
+; IL32PC64-NEXT:    sc cs0, 16(csp) # 8-byte Folded Spill
 ; IL32PC64-NEXT:  .LBB0_3: # Label of block must be emitted
-; IL32PC64-NEXT:    auipcc cs0, %captab_pcrel_hi(__stack_chk_guard)
-; IL32PC64-NEXT:    clc cs0, %pcrel_lo(.LBB0_3)(cs0)
-; IL32PC64-NEXT:    clw a0, 0(cs0)
-; IL32PC64-NEXT:    csw a0, 12(csp)
+; IL32PC64-NEXT:    auipc cs0, %captab_pcrel_hi(__stack_chk_guard)
+; IL32PC64-NEXT:    lc cs0, %pcrel_lo(.LBB0_3)(cs0)
+; IL32PC64-NEXT:    lw a0, 0(cs0)
+; IL32PC64-NEXT:    sw a0, 12(csp)
 ; IL32PC64-NEXT:    cincoffset ca0, csp, 11
 ; IL32PC64-NEXT:    csetbounds ca0, ca0, 1
-; IL32PC64-NEXT:    ccall callee
-; IL32PC64-NEXT:    clw a0, 0(cs0)
-; IL32PC64-NEXT:    clw a1, 12(csp)
+; IL32PC64-NEXT:    call callee
+; IL32PC64-NEXT:    lw a0, 0(cs0)
+; IL32PC64-NEXT:    lw a1, 12(csp)
 ; IL32PC64-NEXT:    bne a0, a1, .LBB0_2
 ; IL32PC64-NEXT:  # %bb.1:
-; IL32PC64-NEXT:    clc cra, 24(csp) # 8-byte Folded Reload
-; IL32PC64-NEXT:    clc cs0, 16(csp) # 8-byte Folded Reload
+; IL32PC64-NEXT:    lc cra, 24(csp) # 8-byte Folded Reload
+; IL32PC64-NEXT:    lc cs0, 16(csp) # 8-byte Folded Reload
 ; IL32PC64-NEXT:    cincoffset csp, csp, 32
-; IL32PC64-NEXT:    cret
+; IL32PC64-NEXT:    ret
 ; IL32PC64-NEXT:  .LBB0_2:
-; IL32PC64-NEXT:    ccall __stack_chk_fail
+; IL32PC64-NEXT:    call __stack_chk_fail
 ;
 ; L64PC128-LABEL: caller:
 ; L64PC128:       # %bb.0:
 ; L64PC128-NEXT:    cincoffset csp, csp, -48
-; L64PC128-NEXT:    csc cra, 32(csp) # 16-byte Folded Spill
-; L64PC128-NEXT:    csc cs0, 16(csp) # 16-byte Folded Spill
+; L64PC128-NEXT:    sc cra, 32(csp) # 16-byte Folded Spill
+; L64PC128-NEXT:    sc cs0, 16(csp) # 16-byte Folded Spill
 ; L64PC128-NEXT:  .LBB0_3: # Label of block must be emitted
-; L64PC128-NEXT:    auipcc cs0, %captab_pcrel_hi(__stack_chk_guard)
-; L64PC128-NEXT:    clc cs0, %pcrel_lo(.LBB0_3)(cs0)
-; L64PC128-NEXT:    cld a0, 0(cs0)
-; L64PC128-NEXT:    csd a0, 8(csp)
+; L64PC128-NEXT:    auipc cs0, %captab_pcrel_hi(__stack_chk_guard)
+; L64PC128-NEXT:    lc cs0, %pcrel_lo(.LBB0_3)(cs0)
+; L64PC128-NEXT:    ld a0, 0(cs0)
+; L64PC128-NEXT:    sd a0, 8(csp)
 ; L64PC128-NEXT:    cincoffset ca0, csp, 7
 ; L64PC128-NEXT:    csetbounds ca0, ca0, 1
-; L64PC128-NEXT:    ccall callee
-; L64PC128-NEXT:    cld a0, 0(cs0)
-; L64PC128-NEXT:    cld a1, 8(csp)
+; L64PC128-NEXT:    call callee
+; L64PC128-NEXT:    ld a0, 0(cs0)
+; L64PC128-NEXT:    ld a1, 8(csp)
 ; L64PC128-NEXT:    bne a0, a1, .LBB0_2
 ; L64PC128-NEXT:  # %bb.1:
-; L64PC128-NEXT:    clc cra, 32(csp) # 16-byte Folded Reload
-; L64PC128-NEXT:    clc cs0, 16(csp) # 16-byte Folded Reload
+; L64PC128-NEXT:    lc cra, 32(csp) # 16-byte Folded Reload
+; L64PC128-NEXT:    lc cs0, 16(csp) # 16-byte Folded Reload
 ; L64PC128-NEXT:    cincoffset csp, csp, 48
-; L64PC128-NEXT:    cret
+; L64PC128-NEXT:    ret
 ; L64PC128-NEXT:  .LBB0_2:
-; L64PC128-NEXT:    ccall __stack_chk_fail
+; L64PC128-NEXT:    call __stack_chk_fail
   %ptr = alloca i8, addrspace(200)
   call void @callee(i8 addrspace(200)* %ptr)
   ret void

@@ -17,13 +17,13 @@ define void @callee_cap_int(i8 addrspace(200)* %cap, i8 %int) nounwind {
 ;
 ; CHECK-IL32PC64-LABEL: callee_cap_int:
 ; CHECK-IL32PC64:       # %bb.0:
-; CHECK-IL32PC64-NEXT:    csb a1, 0(ca0)
-; CHECK-IL32PC64-NEXT:    cret
+; CHECK-IL32PC64-NEXT:    sb a1, 0(ca0)
+; CHECK-IL32PC64-NEXT:    ret
 ;
 ; CHECK-L64PC128-LABEL: callee_cap_int:
 ; CHECK-L64PC128:       # %bb.0:
-; CHECK-L64PC128-NEXT:    csb a1, 0(ca0)
-; CHECK-L64PC128-NEXT:    cret
+; CHECK-L64PC128-NEXT:    sb a1, 0(ca0)
+; CHECK-L64PC128-NEXT:    ret
   store i8 %int, i8 addrspace(200)* %cap
   ret void
 }
@@ -41,13 +41,13 @@ define void @callee_int_cap(i8 %int, i8 addrspace(200)* %cap) nounwind {
 ;
 ; CHECK-IL32PC64-LABEL: callee_int_cap:
 ; CHECK-IL32PC64:       # %bb.0:
-; CHECK-IL32PC64-NEXT:    csb a0, 0(ca1)
-; CHECK-IL32PC64-NEXT:    cret
+; CHECK-IL32PC64-NEXT:    sb a0, 0(ca1)
+; CHECK-IL32PC64-NEXT:    ret
 ;
 ; CHECK-L64PC128-LABEL: callee_int_cap:
 ; CHECK-L64PC128:       # %bb.0:
-; CHECK-L64PC128-NEXT:    csb a0, 0(ca1)
-; CHECK-L64PC128-NEXT:    cret
+; CHECK-L64PC128-NEXT:    sb a0, 0(ca1)
+; CHECK-L64PC128-NEXT:    ret
   store i8 %int, i8 addrspace(200)* %cap
   ret void
 }
@@ -72,18 +72,18 @@ define void @callee_cap_cap_int(i8 addrspace(200)* %dst, i8 addrspace(200)* %src
 ; CHECK-IL32PC64-LABEL: callee_cap_cap_int:
 ; CHECK-IL32PC64:       # %bb.0:
 ; CHECK-IL32PC64-NEXT:    cincoffset ca1, ca1, a2
-; CHECK-IL32PC64-NEXT:    clb a1, 0(ca1)
+; CHECK-IL32PC64-NEXT:    lb a1, 0(ca1)
 ; CHECK-IL32PC64-NEXT:    cincoffset ca0, ca0, a2
-; CHECK-IL32PC64-NEXT:    csb a1, 0(ca0)
-; CHECK-IL32PC64-NEXT:    cret
+; CHECK-IL32PC64-NEXT:    sb a1, 0(ca0)
+; CHECK-IL32PC64-NEXT:    ret
 ;
 ; CHECK-L64PC128-LABEL: callee_cap_cap_int:
 ; CHECK-L64PC128:       # %bb.0:
 ; CHECK-L64PC128-NEXT:    cincoffset ca1, ca1, a2
-; CHECK-L64PC128-NEXT:    clb a1, 0(ca1)
+; CHECK-L64PC128-NEXT:    lb a1, 0(ca1)
 ; CHECK-L64PC128-NEXT:    cincoffset ca0, ca0, a2
-; CHECK-L64PC128-NEXT:    csb a1, 0(ca0)
-; CHECK-L64PC128-NEXT:    cret
+; CHECK-L64PC128-NEXT:    sb a1, 0(ca0)
+; CHECK-L64PC128-NEXT:    ret
   %srcoff = getelementptr inbounds i8, i8 addrspace(200)* %src, i32 %offset
   %val = load i8, i8 addrspace(200)* %srcoff
   %dstoff = getelementptr inbounds i8, i8 addrspace(200)* %dst, i32 %offset

@@ -106,6 +106,10 @@ def main():
               llc_cmd = llc_cmd.replace("%riscv64_cheri_purecap_llc", "llc -mtriple=riscv64-unknown-freebsd -target-abi l64pc128d -mattr=+xcheri,+cap-mode")
               llc_cmd = llc_cmd.replace("%riscv32_cheri_llc", "llc -mtriple=riscv32-unknown-freebsd -mattr=+xcheri")
               llc_cmd = llc_cmd.replace("%riscv64_cheri_llc", "llc -mtriple=riscv64-unknown-freebsd -mattr=+xcheri")
+              llc_cmd = llc_cmd.replace("%riscv32_bakewell_purecap_llc", "llc -mtriple=riscv32-unknown-freebsd -target-abi il32pc64d -mattr=+zcheripurecap,+cap-mode")
+              llc_cmd = llc_cmd.replace("%riscv64_bakewell_purecap_llc", "llc -mtriple=riscv64-unknown-freebsd -target-abi l64pc128d -mattr=+zcheripurecap,+cap-mode")
+              llc_cmd = llc_cmd.replace("%riscv32_bakewell_hybrid_llc", "llc -mtriple=riscv32-unknown-freebsd -mattr=+zcheripurecap,+zcherihybrid")
+              llc_cmd = llc_cmd.replace("%riscv64_bakewell_hybrid_llc", "llc -mtriple=riscv64-unknown-freebsd -mattr=+zcheripurecap,+zcherihybrid")
             filecheck_cmd = commands[-1]
             if filecheck_cmd.startswith("%cheri64_FileCheck"):
                 filecheck_cmd = filecheck_cmd.replace("%cheri64_FileCheck", "FileCheck '-D#CAP_SIZE=8'")

@@ -4568,8 +4568,8 @@ inline Registers_riscv::Registers_riscv(const void *registers) {
                 "riscv registers do not fit into unw_context_t");
   memcpy(&_registers, registers, sizeof(_registers));
 # ifdef __CHERI_PURE_CAPABILITY__
-  static_assert(sizeof(_registers) == 0x200,
-                "expected float registers to be at offset 512");
+  static_assert(sizeof(_registers) == (__SIZEOF_CHERI_CAPABILITY__ * 32),
+                "expected float registers to be immediately after capability registers");
 # elif __riscv_xlen == 32
   static_assert(sizeof(_registers) == 0x80,
                 "expected float registers to be at offset 128");

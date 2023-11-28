@@ -219,8 +219,8 @@ cheri_init_globals_3(void *__capability data_cap,
           "lla %1, __stop___cap_relocs\n\t"
           : "=r"(start_addr), "=r"(stop_addr));
 #else
-  __asm__("cllc %0, __start___cap_relocs\n\t"
-          "cllc %1, __stop___cap_relocs\n\t"
+  __asm__("llc %0, __start___cap_relocs\n\t"
+          "llc %1, __stop___cap_relocs\n\t"
           : "=C"(start_relocs), "=C"(stop_relocs));
   start_addr = cheri_address_or_offset_get(start_relocs);
   stop_addr = cheri_address_or_offset_get(stop_relocs);

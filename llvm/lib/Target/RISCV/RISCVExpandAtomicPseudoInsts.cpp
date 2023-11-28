@@ -13,6 +13,7 @@
 //
 //===----------------------------------------------------------------------===//
 
+#include "MCTargetDesc/RISCVMCTargetDesc.h"
 #include "RISCV.h"
 #include "RISCVInstrInfo.h"
 #include "RISCVTargetMachine.h"
@@ -111,7 +112,9 @@ bool RISCVExpandAtomicPseudo::expandMI(MachineBasicBlock &MBB,
   // expanded instructions for each pseudo is correct in the Size field of the
   // tablegen definition for the pseudo.
   const auto &Subtarget = MBB.getParent()->getSubtarget<RISCVSubtarget>();
-  MVT CLenVT = Subtarget.hasCheri() ? Subtarget.typeForCapabilities() : MVT();
+  MVT CLenVT = Subtarget.hasStdExtZCheriPureCapOrCheri()
+                   ? Subtarget.typeForCapabilities()
+                   : MVT();
   switch (MBBI->getOpcode()) {
   case RISCV::PseudoAtomicLoadNand32:
     return expandAtomicBinOp(MBB, MBBI, AtomicRMWInst::Nand, false, MVT::i32,
@@ -550,12 +553,13 @@ static void doAtomicBinOpExpansion(const RISCVInstrInfo *TII, MachineInstr &MI,
   Register IncrReg = MI.getOperand(3).getReg();
   AtomicOrdering Ordering =
       static_cast<AtomicOrdering>(MI.getOperand(4).getImm());
+  const RISCVSubtarget &ST =
+      ThisMBB->getParent()->getSubtarget<RISCVSubtarget>();
 
   Register ScratchIntReg;
   Register DestIntReg;
   if (VT.isFatPointer()) {
-    MachineFunction *MF = ThisMBB->getParent();
-    const TargetRegisterInfo *TRI = MF->getSubtarget().getRegisterInfo();
+    const TargetRegisterInfo *TRI = ST.getRegisterInfo();
     IncrReg = TRI->getSubReg(IncrReg, RISCV::sub_cap_addr);
     ScratchIntReg = TRI->getSubReg(ScratchReg, RISCV::sub_cap_addr);
     DestIntReg = TRI->getSubReg(DestReg, RISCV::sub_cap_addr);
@@ -582,7 +586,11 @@ static void doAtomicBinOpExpansion(const RISCVInstrInfo *TII, MachineInstr &MI,
     break;
   case AtomicRMWInst::Add:
     if (VT.isFatPointer()) {
-      BuildMI(LoopMBB, DL, TII->get(RISCV::CIncOffset), ScratchReg)
+      const bool HasZCheriPurecap =
+          ST.hasFeature(RISCV::FeatureStdExtZCheriPureCap);
+      BuildMI(LoopMBB, DL,
+              TII->get(HasZCheriPurecap ? RISCV::CADD : RISCV::CIncOffset),
+              ScratchReg)
           .addReg(DestReg)
           .addReg(IncrReg);
       break;
@@ -624,8 +632,10 @@ static void doAtomicBinOpExpansion(const RISCVInstrInfo *TII, MachineInstr &MI,
         .addImm(-1);
     break;
   }
+  const bool IsStdCheri = ST.hasFeature(RISCV::FeatureStdExtZCheriPureCap);
   if (VT.isFatPointer() && BinOp != AtomicRMWInst::Add)
-    BuildMI(LoopMBB, DL, TII->get(RISCV::CSetAddr), ScratchReg)
+    BuildMI(LoopMBB, DL, TII->get(IsStdCheri ? RISCV::SCADDR : RISCV::CSetAddr),
+            ScratchReg)
         .addReg(DestReg)
         .addReg(ScratchIntReg);
   BuildMI(LoopMBB, DL, TII->get(getSCForRMW(PtrIsCap, Ordering, VT)),
@@ -915,8 +925,12 @@ bool RISCVExpandAtomicPseudo::expandAtomicMinMaxOp(
     BuildMI(LoopHeadMBB, DL, TII->get(getLRForRMW(PtrIsCap, Ordering, VT)),
             DestReg)
         .addReg(AddrReg);
+    const bool HasZCheriPurecap =
+        MF->getSubtarget().hasFeature(RISCV::FeatureStdExtZCheriPureCap);
     if (VT.isFatPointer())
-      BuildMI(LoopHeadMBB, DL, TII->get(RISCV::CMove), ScratchReg)
+      BuildMI(LoopHeadMBB, DL,
+              TII->get(HasZCheriPurecap ? RISCV::CMV : RISCV::CMove),
+              ScratchReg)
           .addReg(DestReg);
     else
       BuildMI(LoopHeadMBB, DL, TII->get(RISCV::ADDI), ScratchReg)
@@ -957,7 +971,9 @@ bool RISCVExpandAtomicPseudo::expandAtomicMinMaxOp(
     // .loopifbody:
     //   mv scratch, incr
     if (VT.isFatPointer())
-      BuildMI(LoopIfBodyMBB, DL, TII->get(RISCV::CMove), ScratchReg)
+      BuildMI(LoopIfBodyMBB, DL,
+              TII->get(HasZCheriPurecap ? RISCV::CMV : RISCV::CMove),
+              ScratchReg)
           .addReg(DestReg);
     else
       BuildMI(LoopIfBodyMBB, DL, TII->get(RISCV::ADDI), ScratchReg)

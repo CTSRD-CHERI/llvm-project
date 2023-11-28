@@ -65,13 +65,16 @@ RISCVRegisterInfo::getCalleeSavedRegs(const MachineFunction *MF) const {
     return CSR_NoRegs_SaveList;
   if (MF->getFunction().hasFnAttribute("interrupt")) {
     if (Subtarget.hasStdExtD())
-      return Subtarget.hasCheri() ? CSR_XLEN_CLEN_F64_Interrupt_SaveList
-                                  : CSR_XLEN_F64_Interrupt_SaveList;
+      return Subtarget.hasStdExtZCheriPureCapOrCheri()
+                 ? CSR_XLEN_CLEN_F64_Interrupt_SaveList
+                 : CSR_XLEN_F64_Interrupt_SaveList;
     if (Subtarget.hasStdExtF())
-      return Subtarget.hasCheri() ? CSR_XLEN_CLEN_F32_Interrupt_SaveList
-                                  : CSR_XLEN_F32_Interrupt_SaveList;
-    return Subtarget.hasCheri() ? CSR_XLEN_CLEN_Interrupt_SaveList
-                                : CSR_Interrupt_SaveList;
+      return Subtarget.hasStdExtZCheriPureCapOrCheri()
+                 ? CSR_XLEN_CLEN_F32_Interrupt_SaveList
+                 : CSR_XLEN_F32_Interrupt_SaveList;
+    return Subtarget.hasStdExtZCheriPureCapOrCheri()
+               ? CSR_XLEN_CLEN_Interrupt_SaveList
+               : CSR_Interrupt_SaveList;
   }
 
   switch (Subtarget.getTargetABI()) {
@@ -214,9 +217,11 @@ void RISCVRegisterInfo::adjustReg(MachineBasicBlock &MBB,
   unsigned Opc;
   unsigned OpcImm;
   const bool IsPureCapABI = RISCVABI::isCheriPureCapABI(ST.getTargetABI());
+  const bool HasZCheriPurecap =
+      ST.hasFeature(RISCV::FeatureStdExtZCheriPureCap);
   if (IsPureCapABI) {
-    Opc = RISCV::CIncOffset;
-    OpcImm = RISCV::CIncOffsetImm;
+    Opc = HasZCheriPurecap ? RISCV::CADD : RISCV::CIncOffset;
+    OpcImm = HasZCheriPurecap ? RISCV::CADDI : RISCV::CIncOffsetImm;
   } else {
     Opc = RISCV::ADD;
     OpcImm = RISCV::ADDI;
@@ -482,7 +487,9 @@ bool RISCVRegisterInfo::eliminateFrameIndex(MachineBasicBlock::iterator II,
 
   if (Offset.getScalable() || Offset.getFixed()) {
     Register DestReg;
-    if (MI.getOpcode() == RISCV::ADDI || MI.getOpcode() == RISCV::CIncOffsetImm)
+    if (MI.getOpcode() == RISCV::ADDI ||
+        MI.getOpcode() == RISCV::CIncOffsetImm ||
+        MI.getOpcode() == RISCV::CADDI)
       DestReg = MI.getOperand(0).getReg();
     else if (RISCVABI::isCheriPureCapABI(ST.getTargetABI()))
       DestReg = MRI.createVirtualRegister(&RISCV::GPCRRegClass);
@@ -633,8 +640,10 @@ Register RISCVRegisterInfo::materializeFrameBaseRegister(MachineBasicBlock *MBB,
 
   unsigned Opc;
   Register BaseReg;
+  const bool HasZCheriPurecap =
+      ST.hasFeature(RISCV::FeatureStdExtZCheriPureCap);
   if (RISCVABI::isCheriPureCapABI(ST.getTargetABI())) {
-    Opc = RISCV::CIncOffsetImm;
+    Opc = HasZCheriPurecap ? RISCV::CADDI : RISCV::CIncOffsetImm;
     BaseReg = MFI.createVirtualRegister(&RISCV::GPCRRegClass);
   } else {
     Opc = RISCV::ADDI;

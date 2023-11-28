@@ -97,33 +97,33 @@ define signext i32 @test_alloca() local_unnamed_addr addrspace(200) nounwind {
 ; PURECAP-RV64-LABEL: test_alloca:
 ; PURECAP-RV64:       # %bb.0: # %entry
 ; PURECAP-RV64-NEXT:    cincoffset csp, csp, -2032
-; PURECAP-RV64-NEXT:    csc cra, 2016(csp) # 16-byte Folded Spill
-; PURECAP-RV64-NEXT:    csc cs0, 2000(csp) # 16-byte Folded Spill
-; PURECAP-RV64-NEXT:    csc cs1, 1984(csp) # 16-byte Folded Spill
+; PURECAP-RV64-NEXT:    sc cra, 2016(csp) # 16-byte Folded Spill
+; PURECAP-RV64-NEXT:    sc cs0, 2000(csp) # 16-byte Folded Spill
+; PURECAP-RV64-NEXT:    sc cs1, 1984(csp) # 16-byte Folded Spill
 ; PURECAP-RV64-NEXT:    cincoffset csp, csp, -96
 ; PURECAP-RV64-NEXT:    cincoffset ca0, csp, 1056
 ; PURECAP-RV64-NEXT:    csetbounds cs0, ca0, 1024
 ; PURECAP-RV64-NEXT:    li a2, 1024
 ; PURECAP-RV64-NEXT:    cmove ca0, cs0
 ; PURECAP-RV64-NEXT:    li a1, 0
-; PURECAP-RV64-NEXT:    ccall memset
+; PURECAP-RV64-NEXT:    call memset
 ; PURECAP-RV64-NEXT:    cmove ca0, cs0
-; PURECAP-RV64-NEXT:    ccall byref
+; PURECAP-RV64-NEXT:    call byref
 ; PURECAP-RV64-NEXT:    cincoffset ca0, csp, 32
 ; PURECAP-RV64-NEXT:    csetbounds cs1, ca0, 1024
 ; PURECAP-RV64-NEXT:    li a2, 1024
 ; PURECAP-RV64-NEXT:    cmove ca0, cs1
 ; PURECAP-RV64-NEXT:    cmove ca1, cs0
-; PURECAP-RV64-NEXT:    ccall memcpy
+; PURECAP-RV64-NEXT:    call memcpy
 ; PURECAP-RV64-NEXT:    li a0, 1024
-; PURECAP-RV64-NEXT:    csc cs1, 0(csp)
-; PURECAP-RV64-NEXT:    ccall varargs
+; PURECAP-RV64-NEXT:    sc cs1, 0(csp)
+; PURECAP-RV64-NEXT:    call varargs
 ; PURECAP-RV64-NEXT:    cincoffset csp, csp, 96
-; PURECAP-RV64-NEXT:    clc cra, 2016(csp) # 16-byte Folded Reload
-; PURECAP-RV64-NEXT:    clc cs0, 2000(csp) # 16-byte Folded Reload
-; PURECAP-RV64-NEXT:    clc cs1, 1984(csp) # 16-byte Folded Reload
+; PURECAP-RV64-NEXT:    lc cra, 2016(csp) # 16-byte Folded Reload
+; PURECAP-RV64-NEXT:    lc cs0, 2000(csp) # 16-byte Folded Reload
+; PURECAP-RV64-NEXT:    lc cs1, 1984(csp) # 16-byte Folded Reload
 ; PURECAP-RV64-NEXT:    cincoffset csp, csp, 2032
-; PURECAP-RV64-NEXT:    cret
+; PURECAP-RV64-NEXT:    ret
 ;
 ; PURECAP-MIPS-LABEL: test_alloca:
 ; PURECAP-MIPS:       # %bb.0: # %entry
@@ -136,7 +136,6 @@ define signext i32 @test_alloca() local_unnamed_addr addrspace(200) nounwind {
 ; PURECAP-MIPS-NEXT:    daddiu $1, $1, %pcrel_lo(_CHERI_CAPABILITY_TABLE_-4)
 ; PURECAP-MIPS-NEXT:    cgetpccincoffset $c18, $1
 ; PURECAP-MIPS-NEXT:    clcbi $c12, %capcall20(memset)($c18)
-; Note: we rematerialize the bounded var here to avoid spilling to the stack:
 ; PURECAP-MIPS-NEXT:    daddiu $1, $zero, 1056
 ; PURECAP-MIPS-NEXT:    cincoffset $c3, $c11, $1
 ; PURECAP-MIPS-NEXT:    csetbounds $c3, $c3, 1024
@@ -144,7 +143,6 @@ define signext i32 @test_alloca() local_unnamed_addr addrspace(200) nounwind {
 ; PURECAP-MIPS-NEXT:    cjalr $c12, $c17
 ; PURECAP-MIPS-NEXT:    daddiu $5, $zero, 1024
 ; PURECAP-MIPS-NEXT:    clcbi $c12, %capcall20(byref)($c18)
-; Note: we rematerialize the bounded var here to avoid spilling to the stack:
 ; PURECAP-MIPS-NEXT:    daddiu $1, $zero, 1056
 ; PURECAP-MIPS-NEXT:    cincoffset $c3, $c11, $1
 ; PURECAP-MIPS-NEXT:    cjalr $c12, $c17
@@ -159,8 +157,6 @@ define signext i32 @test_alloca() local_unnamed_addr addrspace(200) nounwind {
 ; PURECAP-MIPS-NEXT:    csetbounds $c4, $c4, 1024
 ; PURECAP-MIPS-NEXT:    cjalr $c12, $c17
 ; PURECAP-MIPS-NEXT:    daddiu $4, $zero, 1024
-; Save bounded byval copy to the stack and indirectly pass a bounded cap in $c13:
-; Note: could probably rematerialize here instead of spilling the bounded cap in $c19
 ; PURECAP-MIPS-NEXT:    csc $c19, $zero, 0($c11)
 ; PURECAP-MIPS-NEXT:    csetbounds $c1, $c11, 16
 ; PURECAP-MIPS-NEXT:    ori $1, $zero, 65495
@@ -175,6 +171,10 @@ define signext i32 @test_alloca() local_unnamed_addr addrspace(200) nounwind {
 ; PURECAP-MIPS-NEXT:    daddiu $1, $zero, 2128
 ; PURECAP-MIPS-NEXT:    cjr $c17
 ; PURECAP-MIPS-NEXT:    cincoffset $c11, $c11, $1
+; Note: we rematerialize the bounded var here to avoid spilling to the stack:
+; Note: we rematerialize the bounded var here to avoid spilling to the stack:
+; Save bounded byval copy to the stack and indirectly pass a bounded cap in $c13:
+; Note: could probably rematerialize here instead of spilling the bounded cap in $c19
 
 entry:
   %f = alloca %struct.Foo, align 1, addrspace(200)
@@ -208,7 +208,6 @@ define signext i32 @test_byval() local_unnamed_addr addrspace(200) nounwind {
 ; RV64-NEXT:    addi a0, sp, 8
 ; RV64-NEXT:    addi a1, sp, 1032
 ; RV64-NEXT:    li a2, 1024
-; Call memcpy for local alloca: dst=sp+8, src=sp+1032, size=1024
 ; RV64-NEXT:    call memcpy@plt
 ; RV64-NEXT:    li a0, 1024
 ; RV64-NEXT:    addi a1, sp, 8
@@ -219,8 +218,6 @@ define signext i32 @test_byval() local_unnamed_addr addrspace(200) nounwind {
 ; RV64-NEXT:    ret
 ;
 ; MIPS-LABEL: test_byval:
-; Note: MIPS n64 passes up to the first 64 bytes of byval arguments in registers:
-; Stack frame size should be just under 2048:
 ; MIPS:       # %bb.0: # %entry
 ; MIPS-NEXT:    daddiu $sp, $sp, -2032
 ; MIPS-NEXT:    sd $ra, 2024($sp) # 8-byte Folded Spill
@@ -243,14 +240,11 @@ define signext i32 @test_byval() local_unnamed_addr addrspace(200) nounwind {
 ; MIPS-NEXT:    jalr $25
 ; MIPS-NEXT:    move $4, $16
 ; MIPS-NEXT:    daddiu $5, $16, 56
-; memcpy for local alloca: dst=BYVAL_COPY[56..1024]=$sp, src=LOCAL_VAR+56, size=1024-56=968
 ; MIPS-NEXT:    ld $25, %call16(memcpy)($gp)
 ; MIPS-NEXT:    move $4, $sp
 ; MIPS-NEXT:    .reloc .Ltmp6, R_MIPS_JALR, memcpy
 ; MIPS-NEXT:  .Ltmp6:
 ; MIPS-NEXT:    jalr $25
-; varargs() should use the byval copy:
-; Note: rest of arguments on stack
 ; MIPS-NEXT:    daddiu $6, $zero, 968
 ; MIPS-NEXT:    ld $11, 1032($sp)
 ; MIPS-NEXT:    ld $10, 1024($sp)
@@ -272,40 +266,36 @@ define signext i32 @test_byval() local_unnamed_addr addrspace(200) nounwind {
 ; MIPS-NEXT:    daddiu $sp, $sp, 2032
 ;
 ; PURECAP-RV64-LABEL: test_byval:
-; Stack frame size should be > 2048 (split into two instructions)
 ; PURECAP-RV64:       # %bb.0: # %entry
 ; PURECAP-RV64-NEXT:    cincoffset csp, csp, -2032
-; PURECAP-RV64-NEXT:    csc cra, 2016(csp) # 16-byte Folded Spill
-; PURECAP-RV64-NEXT:    csc cs0, 2000(csp) # 16-byte Folded Spill
-; PURECAP-RV64-NEXT:    csc cs1, 1984(csp) # 16-byte Folded Spill
+; PURECAP-RV64-NEXT:    sc cra, 2016(csp) # 16-byte Folded Spill
+; PURECAP-RV64-NEXT:    sc cs0, 2000(csp) # 16-byte Folded Spill
+; PURECAP-RV64-NEXT:    sc cs1, 1984(csp) # 16-byte Folded Spill
 ; PURECAP-RV64-NEXT:    cincoffset csp, csp, -96
 ; PURECAP-RV64-NEXT:    cincoffset ca0, csp, 1056
 ; PURECAP-RV64-NEXT:    csetbounds cs0, ca0, 1024
 ; PURECAP-RV64-NEXT:    li a2, 1024
 ; PURECAP-RV64-NEXT:    cmove ca0, cs0
 ; PURECAP-RV64-NEXT:    li a1, 0
-; PURECAP-RV64-NEXT:    ccall memset
+; PURECAP-RV64-NEXT:    call memset
 ; PURECAP-RV64-NEXT:    cmove ca0, cs0
-; PURECAP-RV64-NEXT:    ccall byref
+; PURECAP-RV64-NEXT:    call byref
 ; PURECAP-RV64-NEXT:    cincoffset ca0, csp, 32
 ; PURECAP-RV64-NEXT:    li a2, 1024
 ; PURECAP-RV64-NEXT:    cincoffset cs1, csp, 32
 ; PURECAP-RV64-NEXT:    cmove ca1, cs0
-; Note: no bounds for implicit byval arg memcpy()
-; TODO: should we add the csetbounds here? Not really necessary if we trust memcpy().
-; PURECAP-RV64-NEXT:    ccall memcpy
+; PURECAP-RV64-NEXT:    call memcpy
 ; PURECAP-RV64-NEXT:    li a0, 1024
-; PURECAP-RV64-NEXT:    csc cs1, 0(csp)
-; PURECAP-RV64-NEXT:    ccall varargs
+; PURECAP-RV64-NEXT:    sc cs1, 0(csp)
+; PURECAP-RV64-NEXT:    call varargs
 ; PURECAP-RV64-NEXT:    cincoffset csp, csp, 96
-; PURECAP-RV64-NEXT:    clc cra, 2016(csp) # 16-byte Folded Reload
-; PURECAP-RV64-NEXT:    clc cs0, 2000(csp) # 16-byte Folded Reload
-; PURECAP-RV64-NEXT:    clc cs1, 1984(csp) # 16-byte Folded Reload
+; PURECAP-RV64-NEXT:    lc cra, 2016(csp) # 16-byte Folded Reload
+; PURECAP-RV64-NEXT:    lc cs0, 2000(csp) # 16-byte Folded Reload
+; PURECAP-RV64-NEXT:    lc cs1, 1984(csp) # 16-byte Folded Reload
 ; PURECAP-RV64-NEXT:    cincoffset csp, csp, 2032
-; PURECAP-RV64-NEXT:    cret
+; PURECAP-RV64-NEXT:    ret
 ;
 ; PURECAP-MIPS-LABEL: test_byval:
-; Stack frame size should be > 2048:
 ; PURECAP-MIPS:       # %bb.0: # %entry
 ; PURECAP-MIPS-NEXT:    daddiu $1, $zero, -2112
 ; PURECAP-MIPS-NEXT:    cincoffset $c11, $c11, $1
@@ -316,7 +306,6 @@ define signext i32 @test_byval() local_unnamed_addr addrspace(200) nounwind {
 ; PURECAP-MIPS-NEXT:    daddiu $1, $1, %pcrel_lo(_CHERI_CAPABILITY_TABLE_-4)
 ; PURECAP-MIPS-NEXT:    cgetpccincoffset $c19, $1
 ; PURECAP-MIPS-NEXT:    clcbi $c12, %capcall20(memset)($c19)
-; Note: we rematerialize the bounded var here to avoid spilling to the stack:
 ; PURECAP-MIPS-NEXT:    daddiu $1, $zero, 1040
 ; PURECAP-MIPS-NEXT:    cincoffset $c3, $c11, $1
 ; PURECAP-MIPS-NEXT:    csetbounds $c3, $c3, 1024
@@ -324,7 +313,6 @@ define signext i32 @test_byval() local_unnamed_addr addrspace(200) nounwind {
 ; PURECAP-MIPS-NEXT:    cjalr $c12, $c17
 ; PURECAP-MIPS-NEXT:    daddiu $5, $zero, 1024
 ; PURECAP-MIPS-NEXT:    clcbi $c12, %capcall20(byref)($c19)
-; Note: we rematerialize the bounded var here to avoid spilling to the stack:
 ; PURECAP-MIPS-NEXT:    daddiu $1, $zero, 1040
 ; PURECAP-MIPS-NEXT:    cincoffset $c3, $c11, $1
 ; PURECAP-MIPS-NEXT:    cjalr $c12, $c17
@@ -337,7 +325,6 @@ define signext i32 @test_byval() local_unnamed_addr addrspace(200) nounwind {
 ; PURECAP-MIPS-NEXT:    cmove $c18, $c11
 ; PURECAP-MIPS-NEXT:    cjalr $c12, $c17
 ; PURECAP-MIPS-NEXT:    cmove $c3, $c18
-; Pass a bounded cap (1024 bytes) in $c13:
 ; PURECAP-MIPS-NEXT:    csetbounds $c1, $c18, 1024
 ; PURECAP-MIPS-NEXT:    ori $1, $zero, 65495
 ; PURECAP-MIPS-NEXT:    clcbi $c12, %capcall20(varargs)($c19)
@@ -351,6 +338,19 @@ define signext i32 @test_byval() local_unnamed_addr addrspace(200) nounwind {
 ; PURECAP-MIPS-NEXT:    daddiu $1, $zero, 2112
 ; PURECAP-MIPS-NEXT:    cjr $c17
 ; PURECAP-MIPS-NEXT:    cincoffset $c11, $c11, $1
+; Call memcpy for local alloca: dst=sp+8, src=sp+1032, size=1024
+; Note: MIPS n64 passes up to the first 64 bytes of byval arguments in registers:
+; Stack frame size should be just under 2048:
+; memcpy for local alloca: dst=BYVAL_COPY[56..1024]=$sp, src=LOCAL_VAR+56, size=1024-56=968
+; varargs() should use the byval copy:
+; Note: rest of arguments on stack
+; Stack frame size should be > 2048 (split into two instructions)
+; Note: no bounds for implicit byval arg memcpy()
+; TODO: should we add the csetbounds here? Not really necessary if we trust memcpy().
+; Stack frame size should be > 2048:
+; Note: we rematerialize the bounded var here to avoid spilling to the stack:
+; Note: we rematerialize the bounded var here to avoid spilling to the stack:
+; Pass a bounded cap (1024 bytes) in $c13:
 
 entry:
   %f = alloca %struct.Foo, align 8, addrspace(200)

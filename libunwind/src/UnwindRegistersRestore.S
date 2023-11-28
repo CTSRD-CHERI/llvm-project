@@ -191,7 +191,7 @@ DEFINE_LIBUNWIND_FUNCTION(_ZN9libunwind20Registers_mips_cheri6jumptoEv)
 #endif
   CIncOffset $c3, $c3, _LIBUNWIND_CAPREG_START*8
 
-#define RESTORE_CAP_REG(reg, idx) clc $c ## reg, $zero, ((idx)*(__SIZEOF_UINTCAP__))($c3)
+#define RESTORE_CAP_REG(reg, idx) lc $c ## reg, $zero, ((idx)*(__SIZEOF_UINTCAP__))($c3)
 #define RESTORE_CAP(x) RESTORE_CAP_REG(x, x)
   // Use $c17 as the temporary when restoring $ddc since it is loaded last
   RESTORE_CAP_REG(17, 0)
@@ -1308,7 +1308,7 @@ DEFINE_LIBUNWIND_FUNCTION(_ZN9libunwind15Registers_sparc6jumptoEv)
 
 .macro restore_fpr num, ctxreg
 #ifdef __CHERI_PURE_CAPABILITY__
-  cfld   f\num, (RISCV_FOFFSET + RISCV_FSIZE * \num)(c\ctxreg)
+  FLOAD   f\num, (__SIZEOF_CHERI_CAPABILITY__ * 32 + RISCV_FSIZE * \num)(c\ctxreg)
 #else
   FLOAD  f\num, (RISCV_FOFFSET + RISCV_FSIZE * \num)(\ctxreg)
 #endif
@@ -1338,7 +1338,7 @@ DEFINE_LIBUNWIND_FUNCTION(_ZN9libunwind15Registers_riscv6jumptoEv)
 
   // x0 is zero
 #ifdef __CHERI_PURE_CAPABILITY__
-  clc   c1, (__SIZEOF_CHERI_CAPABILITY__ * 0)(ca0) // restore pc into ra
+  lc   c1, (__SIZEOF_CHERI_CAPABILITY__ * 0)(ca0) // restore pc into ra
 #else
   ILOAD    x1, (RISCV_ISIZE * 0)(a0) // restore pc into ra
 #endif
@@ -1351,11 +1351,7 @@ DEFINE_LIBUNWIND_FUNCTION(_ZN9libunwind15Registers_riscv6jumptoEv)
   .endr
   restore_gpr 10, a0  // restore a0
 
-#ifdef __CHERI_PURE_CAPABILITY__
-  cret          // jump to cra
-#else
-  ret           // jump to ra
-#endif
+  ret           // jump to ra/cra
 END_LIBUNWIND_FUNCTION(_ZN9libunwind15Registers_riscv6jumptoEv)
 
 #elif defined(__s390x__)

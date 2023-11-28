@@ -12,6 +12,7 @@
 //===----------------------------------------------------------------------===//
 
 #include "RISCVISelLowering.h"
+#include "MCTargetDesc/RISCVMCTargetDesc.h"
 #include "MCTargetDesc/RISCVMatInt.h"
 #include "MCTargetDesc/RISCVCompressedCap.h"
 #include "RISCV.h"
@@ -80,6 +81,11 @@ static cl::opt<int>
                        "use for creating a floating-point immediate value"),
               cl::init(2));
 
+static cl::opt<bool>
+    NoCapTableRelocs("no-cap-table-relocs",
+		     cl::desc("Do not use the cap table for relocations"),
+		     cl::init(false));
+
 RISCVTargetLowering::RISCVTargetLowering(const TargetMachine &TM,
                                          const RISCVSubtarget &STI)
     : TargetLowering(TM), Subtarget(STI) {
@@ -146,7 +152,7 @@ RISCVTargetLowering::RISCVTargetLowering(const TargetMachine &TM,
       addRegisterClass(MVT::f64, &RISCV::GPRPF64RegClass);
   }
 
-  if (Subtarget.hasCheri()) {
+  if (Subtarget.hasStdExtZCheriPureCapOrCheri()) {
     CapType = Subtarget.typeForCapabilities();
     NullCapabilityRegister = RISCV::C0;
     addRegisterClass(CapType, &RISCV::GPCRRegClass);
@@ -247,7 +253,7 @@ RISCVTargetLowering::RISCVTargetLowering(const TargetMachine &TM,
 
   // TODO: add all necessary setOperationAction calls.
   setOperationAction(ISD::DYNAMIC_STACKALLOC, XLenVT, Expand);
-  if (Subtarget.hasCheri())
+  if (Subtarget.hasStdExtZCheriPureCapOrCheri())
     setOperationAction(ISD::DYNAMIC_STACKALLOC, CapType, Expand);
 
   setOperationAction(ISD::BR_JT, MVT::Other, Expand);
@@ -541,7 +547,7 @@ RISCVTargetLowering::RISCVTargetLowering(const TargetMachine &TM,
   if (Subtarget.is64Bit())
     setOperationAction(ISD::Constant, MVT::i64, Custom);
 
-  if (Subtarget.hasCheri()) {
+  if (Subtarget.hasStdExtZCheriPureCapOrCheri()) {
     MVT CLenVT = Subtarget.typeForCapabilities();
     setOperationAction(ISD::BR_CC, CLenVT, Expand);
     setOperationAction(ISD::SELECT, CLenVT, Custom);
@@ -572,7 +578,7 @@ RISCVTargetLowering::RISCVTargetLowering(const TargetMachine &TM,
   // Some CHERI intrinsics return i1, which isn't legal, so we have to custom
   // lower them in the DAG combine phase before the first type legalization
   // pass.
-  if (Subtarget.hasCheri())
+  if (Subtarget.hasStdExtZCheriPureCapOrCheri())
     setTargetDAGCombine(ISD::INTRINSIC_WO_CHAIN);
 
   if (Subtarget.hasStdExtZicbop()) {
@@ -586,7 +592,7 @@ RISCVTargetLowering::RISCVTargetLowering(const TargetMachine &TM,
     else
       setMinCmpXchgSizeInBits(32);
 
-    if (Subtarget.hasCheri())
+    if (Subtarget.hasStdExtZCheriPureCapOrCheri())
       SupportsAtomicCapabilityOperations = true;
   } else if (Subtarget.hasForcedAtomics()) {
     setMaxAtomicSizeInBitsSupported(Subtarget.getXLen());
@@ -5765,7 +5771,9 @@ SDValue RISCVTargetLowering::getAddr(NodeTy *N, EVT Ty, SelectionDAG &DAG,
 
   if (RISCVABI::isCheriPureCapABI(Subtarget.getTargetABI())) {
     SDValue Addr = getTargetNode(N, DL, Ty, DAG, 0);
-    if (IsLocal && CanDeriveFromPcc) {
+    MachineFunction &MF = DAG.getMachineFunction();
+    bool nocaprelocs = MF.getFunction().hasFnAttribute(Attribute::NoCapRelocs);
+    if (NoCapTableRelocs || nocaprelocs || (IsLocal && CanDeriveFromPcc)) {
       // Use PC-relative addressing to access the symbol. This generates the
       // pattern (PseudoCLLC sym), which expands to
       // (cincoffsetimm (auipcc %pcrel_hi(sym)) %pcrel_lo(auipc)).
@@ -5778,7 +5786,6 @@ SDValue RISCVTargetLowering::getAddr(NodeTy *N, EVT Ty, SelectionDAG &DAG,
     // Generate a sequence to load a capability from the captable. This
     // generates the pattern (PseudoCLGC sym), which expands to
     // (clc (auipcc %captab_pcrel_hi(sym)) %pcrel_lo(auipc)).
-    MachineFunction &MF = DAG.getMachineFunction();
     MachineMemOperand *MemOp = MF.getMachineMemOperand(
         MachinePointerInfo::getGOT(MF),
         MachineMemOperand::MOLoad | MachineMemOperand::MODereferenceable |
@@ -5931,7 +5938,7 @@ SDValue RISCVTargetLowering::getStaticTLSAddr(GlobalAddressSDNode *N,
     // Generate a sequence for accessing the address relative to the thread
     // pointer, with the appropriate adjustment for the thread pointer offset.
     // This generates the pattern
-    // (cincoffset (cincoffset_tprel (lui %tprel_hi(sym))
+    // (cadd (cincoffset_tprel (lui %tprel_hi(sym))
     //                               ctp %tprel_cincoffset(sym))
     //             %tprel_lo(sym))
     SDValue AddrHi =
@@ -5948,9 +5955,12 @@ SDValue RISCVTargetLowering::getStaticTLSAddr(GlobalAddressSDNode *N,
         DAG.getMachineNode(RISCV::PseudoCIncOffsetTPRel, DL, Ty, TPReg, MNHi,
                            AddrCIncOffset),
         0);
-    return SDValue(
-        DAG.getMachineNode(RISCV::CIncOffsetImm, DL, Ty, MNAdd, AddrLo),
-        0);
+    const bool HasZCheriPurecap =
+        Subtarget.hasFeature(RISCV::FeatureStdExtZCheriPureCap);
+    return SDValue(DAG.getMachineNode(HasZCheriPurecap ? RISCV::CADDI
+                                                       : RISCV::CIncOffsetImm,
+                                      DL, Ty, MNAdd, AddrLo),
+                   0);
   }
 
   if (NotLocal) {
@@ -6006,7 +6016,7 @@ SDValue RISCVTargetLowering::getDynamicTLSAddr(GlobalAddressSDNode *N,
   //
   // For pure capability TLS, this generates the pattern (PseudoCLC_TLS_GD sym),
   // which expands to
-  // (cincoffset (auipcc %tls_gd_captab_pcrel_hi(sym)) %pcrel_lo(auipc)).
+  // (cadd (auipcc %tls_gd_captab_pcrel_hi(sym)) %pcrel_lo(auipc)).
   unsigned Opcode = RISCVABI::isCheriPureCapABI(Subtarget.getTargetABI())
                         ? RISCVISD::CLC_TLS_GD
                         : RISCVISD::LA_TLS_GD;
@@ -14283,8 +14293,10 @@ static MachineBasicBlock *emitSplitF64Pseudo(MachineInstr &MI,
       StoreOpcode = RISCV::SW_DDC;
       AddOpcode = RISCV::ADDI;
     } else {
+      const bool HasZCheriPurecap =
+          MF.getSubtarget().hasFeature(RISCV::FeatureStdExtZCheriPureCap);
       StoreOpcode = RISCV::SW_CAP;
-      AddOpcode = RISCV::CIncOffsetImm;
+      AddOpcode = HasZCheriPurecap ? RISCV::CADDI : RISCV::CIncOffsetImm;
     }
 
     Register TmpReg = MI.getOperand(2).getReg();
@@ -15165,8 +15177,9 @@ bool RISCV::CC_RISCV(const DataLayout &DL, RISCVABI::ABI ABI, unsigned ValNo,
   unsigned XLen = DL.getLargestLegalIntTypeSizeInBits();
   assert(XLen == 32 || XLen == 64);
   MVT XLenVT = XLen == 32 ? MVT::i32 : MVT::i64;
-  MVT CLenVT = Subtarget.hasCheri() ? Subtarget.typeForCapabilities()
-                                    : MVT();
+  MVT CLenVT = Subtarget.hasStdExtZCheriPureCapOrCheri()
+                   ? Subtarget.typeForCapabilities()
+                   : MVT();
   MVT PtrVT = DL.isFatPointer(DL.getAllocaAddrSpace()) ? CLenVT : XLenVT;
   bool IsPureCapVarArgs = !IsFixed && RISCVABI::isCheriPureCapABI(ABI);
 
@@ -16568,11 +16581,11 @@ bool RISCVTargetLowering::isUsedByReturnOnly(SDNode *N, SDValue &Chain) const {
     return false;
 
   SDNode *Copy = *N->use_begin();
-  
+
   if (Copy->getOpcode() == ISD::BITCAST) {
     return isUsedByReturnOnly(Copy, Chain);
   }
-  
+
   // TODO: Handle additional opcodes in order to support tail-calling libcalls
   // with soft float ABIs.
   if (Copy->getOpcode() != ISD::CopyToReg) {
@@ -16879,14 +16892,14 @@ RISCVTargetLowering::getRegForInlineAsmConstraint(const TargetRegisterInfo *TRI,
     case 'r':
       // Don't try to split/combine capabilities in order to use a GPR; give a
       // friendlier error message instead.
-      if (Subtarget.hasCheri() && VT == Subtarget.typeForCapabilities())
+      if (Subtarget.hasStdExtZCheriPureCapOrCheri() && VT == Subtarget.typeForCapabilities())
         break;
       // TODO: Support fixed vectors up to XLen for P extension?
       if (VT.isVector())
         break;
       return std::make_pair(0U, &RISCV::GPRNoX0RegClass);
     case 'C':
-      if (Subtarget.hasCheri() && VT == Subtarget.typeForCapabilities())
+      if (Subtarget.hasStdExtZCheriPureCapOrCheri() && VT == Subtarget.typeForCapabilities())
         return std::make_pair(0U, &RISCV::GPCRRegClass);
       break;
     case 'f':
@@ -16953,7 +16966,7 @@ RISCVTargetLowering::getRegForInlineAsmConstraint(const TargetRegisterInfo *TRI,
     return std::make_pair(XRegFromAlias, &RISCV::GPRRegClass);
 
   // Similarly, allow capability register ABI names to be used in constraint.
-  if (Subtarget.hasCheri()) {
+  if (Subtarget.hasStdExtZCheriPureCapOrCheri()) {
     Register CRegFromAlias = StringSwitch<Register>(Constraint.lower())
                                  .Case("{cnull}", RISCV::C0)
                                  .Case("{cra}", RISCV::C1)
@@ -17213,7 +17226,7 @@ EVT RISCVTargetLowering::getOptimalMemOpType(
   // capability loads/stores or by making a runtime library call.
   // We can't use capability stores as an optimisation for memset unless zeroing.
   bool IsNonZeroMemset = Op.isMemset() && !Op.isZeroMemset();
-  if (Subtarget.hasCheri() && !IsNonZeroMemset) {
+  if (Subtarget.hasStdExtZCheriPureCapOrCheri() && !IsNonZeroMemset) {
     unsigned CapSize = Subtarget.typeForCapabilities().getSizeInBits() / 8;
     if (Op.size() >= CapSize) {
       Align CapAlign(CapSize);
@@ -17854,8 +17867,8 @@ bool RISCVTargetLowering::preferScalarizeSplat(SDNode *N) const {
 
 static Value *useTpOffset(IRBuilderBase &IRB, unsigned Offset) {
   Module *M = IRB.GetInsertBlock()->getParent()->getParent();
-  Function *ThreadPointerFunc =
-      Intrinsic::getDeclaration(M, Intrinsic::thread_pointer);
+  Function *ThreadPointerFunc = Intrinsic::getDeclaration(
+      M, Intrinsic::thread_pointer, IRB.getInt8PtrTy());
   return IRB.CreatePointerCast(
       IRB.CreateConstGEP1_32(IRB.getInt8Ty(),
                              IRB.CreateCall(ThreadPointerFunc), Offset),

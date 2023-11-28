@@ -785,7 +785,8 @@ static bool UpgradeIntrinsicFunction1(Function *F, Function *&NewFn) {
       return true;
     }
     if (Name == "aarch64.thread.pointer" || Name == "arm.thread.pointer") {
-      NewFn = Intrinsic::getDeclaration(F->getParent(), Intrinsic::thread_pointer);
+      NewFn = Intrinsic::getDeclaration(F->getParent(), Intrinsic::thread_pointer,
+                                        F->getReturnType());
       return true;
     }
     if (Name.startswith("arm.neon.vqadds.")) {
@@ -1329,6 +1330,14 @@ static bool UpgradeIntrinsicFunction1(Function *F, Function *&NewFn) {
       auto *ArgTy = F->arg_begin()->getType();
       NewFn = Intrinsic::getDeclaration(F->getParent(), Intrinsic::stackrestore,
                                         ArgTy);
+      return true;
+    }
+    break;
+
+  case 't':
+    if (Name == "thread.pointer") {
+      NewFn = Intrinsic::getDeclaration(F->getParent(), Intrinsic::thread_pointer,
+                                        F->getReturnType());
       return true;
     }
     break;

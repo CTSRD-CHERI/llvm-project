@@ -780,3 +780,16 @@
 // RUN: -march=rv64i_zacas1p0 -x c -E -dM %s \
 // RUN: -o - | FileCheck --check-prefix=CHECK-ZACAS-EXT %s
 // CHECK-ZACAS-EXT: __riscv_zacas 1000000{{$}}
+
+// RUN: %clang -target riscv64-unknown-freebsd \
+// RUN: -march=rv64imafdc_zcheripurecap -mabi=l64pc128d \
+// RUN: -x c -E -dM %s -o - \
+// RUN: | FileCheck --check-prefix=CHECK-ZCHERIPURECAP %s
+// CHECK-ZCHERIPURECAP: __riscv_zcheripurecap 0
+
+// RUN: %clang -target riscv64-unknown-freebsd \
+// RUN: -march=rv64imafdc_zcherihybrid -mabi=l64pc128d \
+// RUN: -x c -E -dM %s -o - \
+// RUN: | FileCheck --check-prefix=CHECK-ZCHERIHYBRID %s
+// CHECK-ZCHERIHYBRID: __riscv_zcherihybrid 0
+// CHECK-ZCHERIHYBRID: __riscv_zcheripurecap 0

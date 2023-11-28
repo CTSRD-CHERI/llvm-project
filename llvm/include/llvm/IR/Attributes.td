@@ -178,6 +178,9 @@ def NoRedZone : EnumAttr<"noredzone", [FnAttr]>;
 /// Mark the function as not returning.
 def NoReturn : EnumAttr<"noreturn", [FnAttr]>;
 
+/// Disable use of CAP relocs in this function. Only affects CHERI
+def NoCapRelocs : EnumAttr<"nocaprelocs", [FnAttr]>;
+
 /// Function does not synchronize.
 def NoSync : EnumAttr<"nosync", [FnAttr]>;
 

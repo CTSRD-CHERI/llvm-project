@@ -20,6 +20,14 @@ def int_cheri_cap_base_get :
   Intrinsic<[llvm_anyint_ty],
             [llvm_cap_ty],
             [IntrNoMem, IntrWillReturn]>;
+def int_cheri_cap_copy_from_high :
+  Intrinsic<[llvm_anyint_ty],
+            [llvm_cap_ty],
+            [IntrNoMem, IntrWillReturn]>;
+def int_cheri_cap_copy_to_high :
+  Intrinsic<[llvm_cap_ty],
+            [llvm_cap_ty, llvm_anyint_ty],
+            [IntrNoMem, IntrWillReturn]>;
 
 def int_cheri_cap_perms_and :
   Intrinsic<[llvm_cap_ty],

@@ -524,7 +524,7 @@ bool CFI_Parser<A>::parseFDEInstructions(A &addressSpace,
       {cieInfo.cieInstructions, cieInfo.cieStart + cieInfo.cieLength,
        (size_t)(-1)},
       {fdeInfo.fdeInstructions, fdeInfo.fdeStart + fdeInfo.fdeLength,
-       upToPC - fdeInfo.pcStart}};
+       size_t(upToPC - fdeInfo.pcStart)}};
 
   for (const auto &info : parseInfoArray) {
     pint_t p = info.instructions;

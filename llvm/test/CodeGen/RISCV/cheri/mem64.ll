@@ -22,7 +22,7 @@ define dso_local i64 @ddc_lb(i8 *%ptr) nounwind {
 ; CHECK-L64PC128-NEXT:    addi a0, a0, 1
 ; CHECK-L64PC128-NEXT:    lb.ddc a0, (a0)
 ; CHECK-L64PC128-NEXT:    mv a0, a1
-; CHECK-L64PC128-NEXT:    cret
+; CHECK-L64PC128-NEXT:    ret
   %1 = load i8, i8 *%ptr
   %2 = sext i8 %1 to i64
   %3 = getelementptr i8, i8 *%ptr, i32 1
@@ -45,7 +45,7 @@ define dso_local i64 @ddc_lh(i16 *%ptr) nounwind {
 ; CHECK-L64PC128-NEXT:    addi a0, a0, 4
 ; CHECK-L64PC128-NEXT:    lh.ddc a0, (a0)
 ; CHECK-L64PC128-NEXT:    mv a0, a1
-; CHECK-L64PC128-NEXT:    cret
+; CHECK-L64PC128-NEXT:    ret
   %1 = load i16, i16 *%ptr
   %2 = sext i16 %1 to i64
   %3 = getelementptr i16, i16 *%ptr, i32 2
@@ -68,7 +68,7 @@ define dso_local i64 @ddc_lw(i32 *%ptr) nounwind {
 ; CHECK-L64PC128-NEXT:    addi a0, a0, 12
 ; CHECK-L64PC128-NEXT:    lw.ddc a0, (a0)
 ; CHECK-L64PC128-NEXT:    mv a0, a1
-; CHECK-L64PC128-NEXT:    cret
+; CHECK-L64PC128-NEXT:    ret
   %1 = load i32, i32 *%ptr
   %2 = sext i32 %1 to i64
   %3 = getelementptr i32, i32 *%ptr, i32 3
@@ -91,7 +91,7 @@ define dso_local i64 @ddc_ld(i64 *%ptr) nounwind {
 ; CHECK-L64PC128-NEXT:    addi a0, a0, 32
 ; CHECK-L64PC128-NEXT:    ld.ddc a0, (a0)
 ; CHECK-L64PC128-NEXT:    mv a0, a1
-; CHECK-L64PC128-NEXT:    cret
+; CHECK-L64PC128-NEXT:    ret
   %1 = load i64, i64 *%ptr
   %2 = getelementptr i64, i64 *%ptr, i32 4
   %3 = load volatile i64, i64 *%2
@@ -112,7 +112,7 @@ define dso_local i64 @ddc_lbu(i8 *%ptr) nounwind {
 ; CHECK-L64PC128-NEXT:    addi a0, a0, 5
 ; CHECK-L64PC128-NEXT:    lbu.ddc a0, (a0)
 ; CHECK-L64PC128-NEXT:    add a0, a1, a0
-; CHECK-L64PC128-NEXT:    cret
+; CHECK-L64PC128-NEXT:    ret
   %1 = load i8, i8 *%ptr
   %2 = zext i8 %1 to i64
   %3 = getelementptr i8, i8 *%ptr, i32 5
@@ -136,7 +136,7 @@ define dso_local i64 @ddc_lhu(i16 *%ptr) nounwind {
 ; CHECK-L64PC128-NEXT:    addi a0, a0, 12
 ; CHECK-L64PC128-NEXT:    lhu.ddc a0, (a0)
 ; CHECK-L64PC128-NEXT:    add a0, a1, a0
-; CHECK-L64PC128-NEXT:    cret
+; CHECK-L64PC128-NEXT:    ret
   %1 = load i16, i16 *%ptr
   %2 = zext i16 %1 to i64
   %3 = getelementptr i16, i16 *%ptr, i32 6
@@ -160,7 +160,7 @@ define dso_local i64 @ddc_lwu(i32 *%ptr) nounwind {
 ; CHECK-L64PC128-NEXT:    addi a0, a0, 28
 ; CHECK-L64PC128-NEXT:    lwu.ddc a0, (a0)
 ; CHECK-L64PC128-NEXT:    add a0, a1, a0
-; CHECK-L64PC128-NEXT:    cret
+; CHECK-L64PC128-NEXT:    ret
   %1 = load i32, i32 *%ptr
   %2 = zext i32 %1 to i64
   %3 = getelementptr i32, i32 *%ptr, i32 7
@@ -184,7 +184,7 @@ define dso_local i64 @ddc_lc(i8 addrspace(200) **%ptr) nounwind {
 ; CHECK-L64PC128-NEXT:    addi a0, a0, 128
 ; CHECK-L64PC128-NEXT:    lc.ddc ca0, (a0)
 ; CHECK-L64PC128-NEXT:    sub a0, a1, a0
-; CHECK-L64PC128-NEXT:    cret
+; CHECK-L64PC128-NEXT:    ret
   %1 = load i8 addrspace(200) *, i8 addrspace(200) **%ptr
   %2 = getelementptr i8 addrspace(200) *, i8 addrspace(200) **%ptr, i32 8
   %3 = load i8 addrspace(200) *, i8 addrspace(200) **%2
@@ -206,7 +206,7 @@ define void @ddc_sb(i8 *%ptr, i8 %val) nounwind {
 ; CHECK-L64PC128-NEXT:    sb.ddc a1, (a0)
 ; CHECK-L64PC128-NEXT:    addi a0, a0, 9
 ; CHECK-L64PC128-NEXT:    sb.ddc a1, (a0)
-; CHECK-L64PC128-NEXT:    cret
+; CHECK-L64PC128-NEXT:    ret
   store i8 %val, i8 *%ptr
   %1 = getelementptr i8, i8 *%ptr, i32 9
   store i8 %val, i8 *%1
@@ -225,7 +225,7 @@ define void @ddc_sh(i16 *%ptr, i16 %val) nounwind {
 ; CHECK-L64PC128-NEXT:    sh.ddc a1, (a0)
 ; CHECK-L64PC128-NEXT:    addi a0, a0, 20
 ; CHECK-L64PC128-NEXT:    sh.ddc a1, (a0)
-; CHECK-L64PC128-NEXT:    cret
+; CHECK-L64PC128-NEXT:    ret
   store i16 %val, i16 *%ptr
   %1 = getelementptr i16, i16 *%ptr, i32 10
   store i16 %val, i16 *%1
@@ -244,7 +244,7 @@ define void @ddc_sw(i32 *%ptr, i32 %val) nounwind {
 ; CHECK-L64PC128-NEXT:    sw.ddc a1, (a0)
 ; CHECK-L64PC128-NEXT:    addi a0, a0, 44
 ; CHECK-L64PC128-NEXT:    sw.ddc a1, (a0)
-; CHECK-L64PC128-NEXT:    cret
+; CHECK-L64PC128-NEXT:    ret
   store i32 %val, i32 *%ptr
   %1 = getelementptr i32, i32 *%ptr, i32 11
   store i32 %val, i32 *%1
@@ -263,7 +263,7 @@ define void @ddc_sd(i64 *%ptr, i64 %val) nounwind {
 ; CHECK-L64PC128-NEXT:    sd.ddc a1, (a0)
 ; CHECK-L64PC128-NEXT:    addi a0, a0, 96
 ; CHECK-L64PC128-NEXT:    sd.ddc a1, (a0)
-; CHECK-L64PC128-NEXT:    cret
+; CHECK-L64PC128-NEXT:    ret
   store i64 %val, i64 *%ptr
   %1 = getelementptr i64, i64 *%ptr, i32 12
   store i64 %val, i64 *%1
@@ -282,7 +282,7 @@ define void @ddc_sc(i8 addrspace(200) **%ptr, i8 addrspace(200) *%val) nounwind 
 ; CHECK-L64PC128-NEXT:    sc.ddc ca1, (a0)
 ; CHECK-L64PC128-NEXT:    addi a0, a0, 208
 ; CHECK-L64PC128-NEXT:    sc.ddc ca1, (a0)
-; CHECK-L64PC128-NEXT:    cret
+; CHECK-L64PC128-NEXT:    ret
   store i8 addrspace(200) *%val, i8 addrspace(200) **%ptr
   %1 = getelementptr i8 addrspace(200) *, i8 addrspace(200) **%ptr, i32 13
   store i8 addrspace(200) *%val, i8 addrspace(200) **%1
@@ -302,10 +302,10 @@ define dso_local i64 @cap_lb(i8 addrspace(200) *%cap) nounwind {
 ;
 ; CHECK-L64PC128-LABEL: cap_lb:
 ; CHECK-L64PC128:       # %bb.0:
-; CHECK-L64PC128-NEXT:    clb a1, 0(ca0)
-; CHECK-L64PC128-NEXT:    clb a0, 14(ca0)
+; CHECK-L64PC128-NEXT:    lb a1, 0(ca0)
+; CHECK-L64PC128-NEXT:    lb a0, 14(ca0)
 ; CHECK-L64PC128-NEXT:    mv a0, a1
-; CHECK-L64PC128-NEXT:    cret
+; CHECK-L64PC128-NEXT:    ret
   %1 = load i8, i8 addrspace(200) *%cap
   %2 = sext i8 %1 to i64
   %3 = getelementptr i8, i8 addrspace(200) *%cap, i32 14
@@ -325,10 +325,10 @@ define dso_local i64 @cap_lh(i16 addrspace(200) *%cap) nounwind {
 ;
 ; CHECK-L64PC128-LABEL: cap_lh:
 ; CHECK-L64PC128:       # %bb.0:
-; CHECK-L64PC128-NEXT:    clh a1, 0(ca0)
-; CHECK-L64PC128-NEXT:    clh a0, 30(ca0)
+; CHECK-L64PC128-NEXT:    lh a1, 0(ca0)
+; CHECK-L64PC128-NEXT:    lh a0, 30(ca0)
 ; CHECK-L64PC128-NEXT:    mv a0, a1
-; CHECK-L64PC128-NEXT:    cret
+; CHECK-L64PC128-NEXT:    ret
   %1 = load i16, i16 addrspace(200) *%cap
   %2 = sext i16 %1 to i64
   %3 = getelementptr i16, i16 addrspace(200) *%cap, i32 15
@@ -348,10 +348,10 @@ define dso_local i64 @cap_lw(i32 addrspace(200) *%cap) nounwind {
 ;
 ; CHECK-L64PC128-LABEL: cap_lw:
 ; CHECK-L64PC128:       # %bb.0:
-; CHECK-L64PC128-NEXT:    clw a1, 0(ca0)
-; CHECK-L64PC128-NEXT:    clw a0, 64(ca0)
+; CHECK-L64PC128-NEXT:    lw a1, 0(ca0)
+; CHECK-L64PC128-NEXT:    lw a0, 64(ca0)
 ; CHECK-L64PC128-NEXT:    mv a0, a1
-; CHECK-L64PC128-NEXT:    cret
+; CHECK-L64PC128-NEXT:    ret
   %1 = load i32, i32 addrspace(200) *%cap
   %2 = sext i32 %1 to i64
   %3 = getelementptr i32, i32 addrspace(200) *%cap, i32 16
@@ -371,10 +371,10 @@ define dso_local i64 @cap_ld(i64 addrspace(200) *%cap) nounwind {
 ;
 ; CHECK-L64PC128-LABEL: cap_ld:
 ; CHECK-L64PC128:       # %bb.0:
-; CHECK-L64PC128-NEXT:    cld a1, 0(ca0)
-; CHECK-L64PC128-NEXT:    cld a0, 136(ca0)
+; CHECK-L64PC128-NEXT:    ld a1, 0(ca0)
+; CHECK-L64PC128-NEXT:    ld a0, 136(ca0)
 ; CHECK-L64PC128-NEXT:    mv a0, a1
-; CHECK-L64PC128-NEXT:    cret
+; CHECK-L64PC128-NEXT:    ret
   %1 = load i64, i64 addrspace(200) *%cap
   %2 = getelementptr i64, i64 addrspace(200) *%cap, i32 17
   %3 = load volatile i64, i64 addrspace(200) *%2
@@ -392,10 +392,10 @@ define dso_local i64 @cap_lbu(i8 addrspace(200) *%cap) nounwind {
 ;
 ; CHECK-L64PC128-LABEL: cap_lbu:
 ; CHECK-L64PC128:       # %bb.0:
-; CHECK-L64PC128-NEXT:    clbu a1, 0(ca0)
-; CHECK-L64PC128-NEXT:    clbu a0, 18(ca0)
+; CHECK-L64PC128-NEXT:    lbu a1, 0(ca0)
+; CHECK-L64PC128-NEXT:    lbu a0, 18(ca0)
 ; CHECK-L64PC128-NEXT:    add a0, a1, a0
-; CHECK-L64PC128-NEXT:    cret
+; CHECK-L64PC128-NEXT:    ret
   %1 = load i8, i8 addrspace(200) *%cap
   %2 = zext i8 %1 to i64
   %3 = getelementptr i8, i8 addrspace(200) *%cap, i32 18
@@ -416,10 +416,10 @@ define dso_local i64 @cap_lhu(i16 addrspace(200) *%cap) nounwind {
 ;
 ; CHECK-L64PC128-LABEL: cap_lhu:
 ; CHECK-L64PC128:       # %bb.0:
-; CHECK-L64PC128-NEXT:    clhu a1, 0(ca0)
-; CHECK-L64PC128-NEXT:    clhu a0, 38(ca0)
+; CHECK-L64PC128-NEXT:    lhu a1, 0(ca0)
+; CHECK-L64PC128-NEXT:    lhu a0, 38(ca0)
 ; CHECK-L64PC128-NEXT:    add a0, a1, a0
-; CHECK-L64PC128-NEXT:    cret
+; CHECK-L64PC128-NEXT:    ret
   %1 = load i16, i16 addrspace(200) *%cap
   %2 = zext i16 %1 to i64
   %3 = getelementptr i16, i16 addrspace(200) *%cap, i32 19
@@ -440,10 +440,10 @@ define dso_local i64 @cap_lwu(i32 addrspace(200) *%cap) nounwind {
 ;
 ; CHECK-L64PC128-LABEL: cap_lwu:
 ; CHECK-L64PC128:       # %bb.0:
-; CHECK-L64PC128-NEXT:    clwu a1, 0(ca0)
-; CHECK-L64PC128-NEXT:    clwu a0, 80(ca0)
+; CHECK-L64PC128-NEXT:    lwu a1, 0(ca0)
+; CHECK-L64PC128-NEXT:    lwu a0, 80(ca0)
 ; CHECK-L64PC128-NEXT:    add a0, a1, a0
-; CHECK-L64PC128-NEXT:    cret
+; CHECK-L64PC128-NEXT:    ret
   %1 = load i32, i32 addrspace(200) *%cap
   %2 = zext i32 %1 to i64
   %3 = getelementptr i32, i32 addrspace(200) *%cap, i32 20
@@ -464,10 +464,10 @@ define dso_local i64 @cap_lc(i8 addrspace(200) *addrspace(200) *%cap) nounwind {
 ;
 ; CHECK-L64PC128-LABEL: cap_lc:
 ; CHECK-L64PC128:       # %bb.0:
-; CHECK-L64PC128-NEXT:    clc ca1, 0(ca0)
-; CHECK-L64PC128-NEXT:    clc ca0, 336(ca0)
+; CHECK-L64PC128-NEXT:    lc ca1, 0(ca0)
+; CHECK-L64PC128-NEXT:    lc ca0, 336(ca0)
 ; CHECK-L64PC128-NEXT:    sub a0, a1, a0
-; CHECK-L64PC128-NEXT:    cret
+; CHECK-L64PC128-NEXT:    ret
   %1 = load i8 addrspace(200) *, i8 addrspace(200) *addrspace(200) *%cap
   %2 = getelementptr i8 addrspace(200) *, i8 addrspace(200) *addrspace(200) *%cap, i32 21
   %3 = load i8 addrspace(200) *, i8 addrspace(200) *addrspace(200) *%2
@@ -487,9 +487,9 @@ define void @cap_sb(i8 addrspace(200) *%cap, i8 %val) nounwind {
 ;
 ; CHECK-L64PC128-LABEL: cap_sb:
 ; CHECK-L64PC128:       # %bb.0:
-; CHECK-L64PC128-NEXT:    csb a1, 0(ca0)
-; CHECK-L64PC128-NEXT:    csb a1, 22(ca0)
-; CHECK-L64PC128-NEXT:    cret
+; CHECK-L64PC128-NEXT:    sb a1, 0(ca0)
+; CHECK-L64PC128-NEXT:    sb a1, 22(ca0)
+; CHECK-L64PC128-NEXT:    ret
   store i8 %val, i8 addrspace(200) *%cap
   %1 = getelementptr i8, i8 addrspace(200) *%cap, i32 22
   store i8 %val, i8 addrspace(200) *%1
@@ -506,9 +506,9 @@ define void @cap_sh(i16 addrspace(200) *%cap, i16 %val) nounwind {
 ;
 ; CHECK-L64PC128-LABEL: cap_sh:
 ; CHECK-L64PC128:       # %bb.0:
-; CHECK-L64PC128-NEXT:    csh a1, 0(ca0)
-; CHECK-L64PC128-NEXT:    csh a1, 46(ca0)
-; CHECK-L64PC128-NEXT:    cret
+; CHECK-L64PC128-NEXT:    sh a1, 0(ca0)
+; CHECK-L64PC128-NEXT:    sh a1, 46(ca0)
+; CHECK-L64PC128-NEXT:    ret
   store i16 %val, i16 addrspace(200) *%cap
   %1 = getelementptr i16, i16 addrspace(200) *%cap, i32 23
   store i16 %val, i16 addrspace(200) *%1
@@ -525,9 +525,9 @@ define void @cap_sw(i32 addrspace(200) *%cap, i32 %val) nounwind {
 ;
 ; CHECK-L64PC128-LABEL: cap_sw:
 ; CHECK-L64PC128:       # %bb.0:
-; CHECK-L64PC128-NEXT:    csw a1, 0(ca0)
-; CHECK-L64PC128-NEXT:    csw a1, 96(ca0)
-; CHECK-L64PC128-NEXT:    cret
+; CHECK-L64PC128-NEXT:    sw a1, 0(ca0)
+; CHECK-L64PC128-NEXT:    sw a1, 96(ca0)
+; CHECK-L64PC128-NEXT:    ret
   store i32 %val, i32 addrspace(200) *%cap
   %1 = getelementptr i32, i32 addrspace(200) *%cap, i32 24
   store i32 %val, i32 addrspace(200) *%1
@@ -544,9 +544,9 @@ define void @cap_sd(i64 addrspace(200) *%cap, i64 %val) nounwind {
 ;
 ; CHECK-L64PC128-LABEL: cap_sd:
 ; CHECK-L64PC128:       # %bb.0:
-; CHECK-L64PC128-NEXT:    csd a1, 0(ca0)
-; CHECK-L64PC128-NEXT:    csd a1, 200(ca0)
-; CHECK-L64PC128-NEXT:    cret
+; CHECK-L64PC128-NEXT:    sd a1, 0(ca0)
+; CHECK-L64PC128-NEXT:    sd a1, 200(ca0)
+; CHECK-L64PC128-NEXT:    ret
   store i64 %val, i64 addrspace(200) *%cap
   %1 = getelementptr i64, i64 addrspace(200) *%cap, i32 25
   store i64 %val, i64 addrspace(200) *%1
@@ -563,9 +563,9 @@ define void @cap_sc(i8 addrspace(200) *addrspace(200) *%cap, i8 addrspace(200) *
 ;
 ; CHECK-L64PC128-LABEL: cap_sc:
 ; CHECK-L64PC128:       # %bb.0:
-; CHECK-L64PC128-NEXT:    csc ca1, 0(ca0)
-; CHECK-L64PC128-NEXT:    csc ca1, 416(ca0)
-; CHECK-L64PC128-NEXT:    cret
+; CHECK-L64PC128-NEXT:    sc ca1, 0(ca0)
+; CHECK-L64PC128-NEXT:    sc ca1, 416(ca0)
+; CHECK-L64PC128-NEXT:    ret
   store i8 addrspace(200) *%val, i8 addrspace(200) *addrspace(200) *%cap
   %1 = getelementptr i8 addrspace(200) *, i8 addrspace(200) *addrspace(200) *%cap, i32 26
   store i8 addrspace(200) *%val, i8 addrspace(200) *addrspace(200) *%1
@@ -584,8 +584,8 @@ define i64 @lw_near_local(i64 addrspace(200)* %a)  {
 ; CHECK-L64PC128-LABEL: lw_near_local:
 ; CHECK-L64PC128:       # %bb.0:
 ; CHECK-L64PC128-NEXT:    cincoffset ca0, ca0, 2047
-; CHECK-L64PC128-NEXT:    cld a0, 9(ca0)
-; CHECK-L64PC128-NEXT:    cret
+; CHECK-L64PC128-NEXT:    ld a0, 9(ca0)
+; CHECK-L64PC128-NEXT:    ret
   %1 = getelementptr inbounds i64, i64 addrspace(200)* %a, i64 257
   %2 = load volatile i64, i64 addrspace(200)* %1
   ret i64 %2
@@ -603,8 +603,8 @@ define void @st_near_local(i64 addrspace(200)* %a, i64 %b)  {
 ; CHECK-L64PC128-LABEL: st_near_local:
 ; CHECK-L64PC128:       # %bb.0:
 ; CHECK-L64PC128-NEXT:    cincoffset ca0, ca0, 2047
-; CHECK-L64PC128-NEXT:    csd a1, 9(ca0)
-; CHECK-L64PC128-NEXT:    cret
+; CHECK-L64PC128-NEXT:    sd a1, 9(ca0)
+; CHECK-L64PC128-NEXT:    ret
   %1 = getelementptr inbounds i64, i64 addrspace(200)* %a, i64 257
   store i64 %b, i64 addrspace(200)* %1
   ret void
@@ -623,9 +623,9 @@ define i64 @lw_sw_near_local(i64 addrspace(200)* %a, i64 %b)  {
 ; CHECK-L64PC128-LABEL: lw_sw_near_local:
 ; CHECK-L64PC128:       # %bb.0:
 ; CHECK-L64PC128-NEXT:    cincoffset ca2, ca0, 2047
-; CHECK-L64PC128-NEXT:    cld a0, 9(ca2)
-; CHECK-L64PC128-NEXT:    csd a1, 9(ca2)
-; CHECK-L64PC128-NEXT:    cret
+; CHECK-L64PC128-NEXT:    ld a0, 9(ca2)
+; CHECK-L64PC128-NEXT:    sd a1, 9(ca2)
+; CHECK-L64PC128-NEXT:    ret
   %1 = getelementptr inbounds i64, i64 addrspace(200)* %a, i64 257
   %2 = load volatile i64, i64 addrspace(200)* %1
   store i64 %b, i64 addrspace(200)* %1
@@ -646,8 +646,8 @@ define i64 @lw_far_local(i64 addrspace(200)* %a)  {
 ; CHECK-L64PC128-NEXT:    lui a1, 8
 ; CHECK-L64PC128-NEXT:    addiw a1, a1, -8
 ; CHECK-L64PC128-NEXT:    cincoffset ca0, ca0, a1
-; CHECK-L64PC128-NEXT:    cld a0, 0(ca0)
-; CHECK-L64PC128-NEXT:    cret
+; CHECK-L64PC128-NEXT:    ld a0, 0(ca0)
+; CHECK-L64PC128-NEXT:    ret
   %1 = getelementptr inbounds i64, i64 addrspace(200)* %a, i64 4095
   %2 = load volatile i64, i64 addrspace(200)* %1
   ret i64 %2
@@ -667,8 +667,8 @@ define void @st_far_local(i64 addrspace(200)* %a, i64 %b)  {
 ; CHECK-L64PC128-NEXT:    lui a2, 8
 ; CHECK-L64PC128-NEXT:    addiw a2, a2, -8
 ; CHECK-L64PC128-NEXT:    cincoffset ca0, ca0, a2
-; CHECK-L64PC128-NEXT:    csd a1, 0(ca0)
-; CHECK-L64PC128-NEXT:    cret
+; CHECK-L64PC128-NEXT:    sd a1, 0(ca0)
+; CHECK-L64PC128-NEXT:    ret
   %1 = getelementptr inbounds i64, i64 addrspace(200)* %a, i64 4095
   store i64 %b, i64 addrspace(200)* %1
   ret void
@@ -689,9 +689,9 @@ define i64 @lw_sw_far_local(i64 addrspace(200)* %a, i64 %b)  {
 ; CHECK-L64PC128-NEXT:    lui a2, 8
 ; CHECK-L64PC128-NEXT:    addiw a2, a2, -8
 ; CHECK-L64PC128-NEXT:    cincoffset ca2, ca0, a2
-; CHECK-L64PC128-NEXT:    cld a0, 0(ca2)
-; CHECK-L64PC128-NEXT:    csd a1, 0(ca2)
-; CHECK-L64PC128-NEXT:    cret
+; CHECK-L64PC128-NEXT:    ld a0, 0(ca2)
+; CHECK-L64PC128-NEXT:    sd a1, 0(ca2)
+; CHECK-L64PC128-NEXT:    ret
   %1 = getelementptr inbounds i64, i64 addrspace(200)* %a, i64 4095
   %2 = load volatile i64, i64 addrspace(200)* %1
   store i64 %b, i64 addrspace(200)* %1
@@ -714,8 +714,8 @@ define i64 @lw_really_far_local(i64 addrspace(200)* %a)  {
 ; CHECK-L64PC128-NEXT:    lui a1, 524288
 ; CHECK-L64PC128-NEXT:    addiw a1, a1, -2048
 ; CHECK-L64PC128-NEXT:    cincoffset ca0, ca0, a1
-; CHECK-L64PC128-NEXT:    cld a0, 0(ca0)
-; CHECK-L64PC128-NEXT:    cret
+; CHECK-L64PC128-NEXT:    ld a0, 0(ca0)
+; CHECK-L64PC128-NEXT:    ret
   %1 = getelementptr inbounds i64, i64 addrspace(200)* %a, i64 268435200
   %2 = load volatile i64, i64 addrspace(200)* %1
   ret i64 %2
@@ -737,8 +737,8 @@ define void @st_really_far_local(i64 addrspace(200)* %a, i64 %b)  {
 ; CHECK-L64PC128-NEXT:    lui a2, 524288
 ; CHECK-L64PC128-NEXT:    addiw a2, a2, -2048
 ; CHECK-L64PC128-NEXT:    cincoffset ca0, ca0, a2
-; CHECK-L64PC128-NEXT:    csd a1, 0(ca0)
-; CHECK-L64PC128-NEXT:    cret
+; CHECK-L64PC128-NEXT:    sd a1, 0(ca0)
+; CHECK-L64PC128-NEXT:    ret
   %1 = getelementptr inbounds i64, i64 addrspace(200)* %a, i64 268435200
   store i64 %b, i64 addrspace(200)* %1
   ret void
@@ -761,9 +761,9 @@ define i64 @lw_sw_really_far_local(i64 addrspace(200)* %a, i64 %b)  {
 ; CHECK-L64PC128-NEXT:    lui a2, 524288
 ; CHECK-L64PC128-NEXT:    addiw a2, a2, -2048
 ; CHECK-L64PC128-NEXT:    cincoffset ca2, ca0, a2
-; CHECK-L64PC128-NEXT:    cld a0, 0(ca2)
-; CHECK-L64PC128-NEXT:    csd a1, 0(ca2)
-; CHECK-L64PC128-NEXT:    cret
+; CHECK-L64PC128-NEXT:    ld a0, 0(ca2)
+; CHECK-L64PC128-NEXT:    sd a1, 0(ca2)
+; CHECK-L64PC128-NEXT:    ret
   %1 = getelementptr inbounds i64, i64 addrspace(200)* %a, i64 268435200
   %2 = load volatile i64, i64 addrspace(200)* %1
   store i64 %b, i64 addrspace(200)* %1

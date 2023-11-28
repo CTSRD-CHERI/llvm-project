@@ -143,11 +143,11 @@ body:             |
 # ASM-NEXT:    andi a1, a1, 1
 # ASM-NEXT:    beqz a1, .LBB0_2
 # ASM-NEXT:  .LBB0_1:
-# ASM-NEXT:    ccall ct0, OUTLINED_FUNCTION_0
+# ASM-NEXT:    call ct0, OUTLINED_FUNCTION_0
 # ASM-NEXT:    andi a4, a4, 1
 # ASM-NEXT:    beqz a4, .LBB0_3
 # ASM-NEXT:  .LBB0_2:
-# ASM-NEXT:    ccall ct0, OUTLINED_FUNCTION_0
+# ASM-NEXT:    call ct0, OUTLINED_FUNCTION_0
 # ASM-NEXT:    andi a5, a4, 1
 # ASM-NEXT:    cmove ca4, cnull
 # ASM-NEXT:  .LBB0_3:
@@ -157,10 +157,10 @@ body:             |
 #
 # ASM-LABEL: OUTLINED_FUNCTION_0:
 # ASM:       # %bb.0:
-# ASM-NEXT:    clhu a4, 0(ca0)
+# ASM-NEXT:    lhu a4, 0(ca0)
 # ASM-NEXT:    srli a5, a4, 3
 # ASM-NEXT:    cincoffset ca5, ca2, a5
-# ASM-NEXT:    clbu a5, 0(ca5)
+# ASM-NEXT:    lbu a5, 0(ca5)
 # ASM-NEXT:    andi a4, a4, 7
 # ASM-NEXT:    srlw a4, a5, a4
-# ASM-NEXT:    cjr ct0
+# ASM-NEXT:    jr ct0

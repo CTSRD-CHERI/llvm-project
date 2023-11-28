@@ -33,8 +33,8 @@ define i8 addrspace(200)* @eggs(i1 %cond) local_unnamed_addr addrspace(200) #0 {
 ; PURECAP-LABEL: eggs:
 ; PURECAP:       # %bb.0: # %bb
 ; PURECAP-NEXT:    cincoffset csp, csp, -32
-; PURECAP-NEXT:    csc cra, 16(csp) # 16-byte Folded Spill
-; PURECAP-NEXT:    csc cs0, 0(csp) # 16-byte Folded Spill
+; PURECAP-NEXT:    sc cra, 16(csp) # 16-byte Folded Spill
+; PURECAP-NEXT:    sc cs0, 0(csp) # 16-byte Folded Spill
 ; PURECAP-NEXT:    andi a0, a0, 1
 ; PURECAP-NEXT:    cmove cs0, cnull
 ; PURECAP-NEXT:    bnez a0, .LBB0_2
@@ -42,12 +42,12 @@ define i8 addrspace(200)* @eggs(i1 %cond) local_unnamed_addr addrspace(200) #0 {
 ; PURECAP-NEXT:    cincoffset cs0, cnull, 32
 ; PURECAP-NEXT:  .LBB0_2: # %bb
 ; PURECAP-NEXT:    cmove ca0, cnull
-; PURECAP-NEXT:    ccall barney
+; PURECAP-NEXT:    call barney
 ; PURECAP-NEXT:    cmove ca0, cs0
-; PURECAP-NEXT:    clc cra, 16(csp) # 16-byte Folded Reload
-; PURECAP-NEXT:    clc cs0, 0(csp) # 16-byte Folded Reload
+; PURECAP-NEXT:    lc cra, 16(csp) # 16-byte Folded Reload
+; PURECAP-NEXT:    lc cs0, 0(csp) # 16-byte Folded Reload
 ; PURECAP-NEXT:    cincoffset csp, csp, 32
-; PURECAP-NEXT:    cret
+; PURECAP-NEXT:    ret
 bb:
   %tmp1.0 = select i1 %cond, i8 addrspace(200)* null, i8 addrspace(200)* inttoptr (i64 32 to i8 addrspace(200)*)
   tail call void @barney(i8 addrspace(200)* null)

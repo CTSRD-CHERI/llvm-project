@@ -66,9 +66,9 @@ enum Op {
   SRLI = 0x5013,
   SUB = 0x40000033,
 
-  CIncOffsetImm = 0x105b,
+  CIncOffsetImm = 0x201B,
   CLC_64 = 0x3003,
-  CLC_128 = 0x200f,
+  CLC_128 = 0x400F,
   CSub = 0x2800005b,
 };
 
@@ -262,7 +262,7 @@ void RISCV::writePltHeader(uint8_t *buf) const {
   // (c)sub t1, (c)t1, (c)t3
   // l[wdc] (c)t3, %pcrel_lo(1b)((c)t2); (c)t3 = _dl_runtime_resolve
   // addi t1, t1, -pltHeaderSize-12; t1 = &.plt[i] - &.plt[0]
-  // addi/cincoffset (c)t0, (c)t2, %pcrel_lo(1b)
+  // addi/caddi (c)t0, (c)t2, %pcrel_lo(1b)
   // (if shift != 0): srli t1, t1, shift; t1 = &.got.plt[i] - &.got.plt[0]
   // l[wdc] (c)t0, Ptrsize((c)t0); (c)t0 = link_map
   // (c)jr (c)t3

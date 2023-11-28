@@ -378,6 +378,9 @@ Changes to the LLVM tools
 * Made significant changes to JSON output format of `llvm-readobj`/`llvm-readelf`
   to improve correctness and clarity.
 
+* llvm-objcopy now supports ``--gap-fill`` and ``--pad-to`` options, for
+  ELF input and binary output files only.
+
 Changes to LLDB
 ---------------------------------
 

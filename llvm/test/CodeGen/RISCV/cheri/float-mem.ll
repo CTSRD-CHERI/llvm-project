@@ -43,7 +43,7 @@ define dso_local float @ddc_flw(float* %a) nounwind {
 ; CHECK-IL32PC64-NEXT:    fmv.w.x fa4, a0
 ; CHECK-IL32PC64-NEXT:    fadd.s fa5, fa5, fa4
 ; CHECK-IL32PC64-NEXT:    fmv.x.w a0, fa5
-; CHECK-IL32PC64-NEXT:    cret
+; CHECK-IL32PC64-NEXT:    ret
 ;
 ; CHECK-IL32PC64F-LABEL: ddc_flw:
 ; CHECK-IL32PC64F:       # %bb.0:
@@ -53,7 +53,7 @@ define dso_local float @ddc_flw(float* %a) nounwind {
 ; CHECK-IL32PC64F-NEXT:    fmv.w.x fa5, a1
 ; CHECK-IL32PC64F-NEXT:    fmv.w.x fa4, a0
 ; CHECK-IL32PC64F-NEXT:    fadd.s fa0, fa5, fa4
-; CHECK-IL32PC64F-NEXT:    cret
+; CHECK-IL32PC64F-NEXT:    ret
 ;
 ; CHECK-LP64-LABEL: ddc_flw:
 ; CHECK-LP64:       # %bb.0:
@@ -79,7 +79,7 @@ define dso_local float @ddc_flw(float* %a) nounwind {
 ; CHECK-L64PC128-NEXT:    fmv.w.x fa4, a0
 ; CHECK-L64PC128-NEXT:    fadd.s fa5, fa5, fa4
 ; CHECK-L64PC128-NEXT:    fmv.x.w a0, fa5
-; CHECK-L64PC128-NEXT:    cret
+; CHECK-L64PC128-NEXT:    ret
 ;
 ; CHECK-L64PC128F-LABEL: ddc_flw:
 ; CHECK-L64PC128F:       # %bb.0:
@@ -89,7 +89,7 @@ define dso_local float @ddc_flw(float* %a) nounwind {
 ; CHECK-L64PC128F-NEXT:    fmv.w.x fa5, a1
 ; CHECK-L64PC128F-NEXT:    fmv.w.x fa4, a0
 ; CHECK-L64PC128F-NEXT:    fadd.s fa0, fa5, fa4
-; CHECK-L64PC128F-NEXT:    cret
+; CHECK-L64PC128F-NEXT:    ret
   %1 = load float, float* %a
   %2 = getelementptr float, float* %a, i32 3
   %3 = load float, float* %2
@@ -125,7 +125,7 @@ define dso_local void @ddc_fsw(float* %a, float %b, float %c) nounwind {
 ; CHECK-IL32PC64-NEXT:    sw.ddc a1, (a0)
 ; CHECK-IL32PC64-NEXT:    addi a0, a0, 32
 ; CHECK-IL32PC64-NEXT:    sw.ddc a1, (a0)
-; CHECK-IL32PC64-NEXT:    cret
+; CHECK-IL32PC64-NEXT:    ret
 ;
 ; CHECK-IL32PC64F-LABEL: ddc_fsw:
 ; CHECK-IL32PC64F:       # %bb.0:
@@ -134,7 +134,7 @@ define dso_local void @ddc_fsw(float* %a, float %b, float %c) nounwind {
 ; CHECK-IL32PC64F-NEXT:    sw.ddc a1, (a0)
 ; CHECK-IL32PC64F-NEXT:    addi a0, a0, 32
 ; CHECK-IL32PC64F-NEXT:    sw.ddc a1, (a0)
-; CHECK-IL32PC64F-NEXT:    cret
+; CHECK-IL32PC64F-NEXT:    ret
 ;
 ; CHECK-LP64-LABEL: ddc_fsw:
 ; CHECK-LP64:       # %bb.0:
@@ -161,7 +161,7 @@ define dso_local void @ddc_fsw(float* %a, float %b, float %c) nounwind {
 ; CHECK-L64PC128-NEXT:    sw.ddc a1, (a0)
 ; CHECK-L64PC128-NEXT:    addi a0, a0, 32
 ; CHECK-L64PC128-NEXT:    sw.ddc a1, (a0)
-; CHECK-L64PC128-NEXT:    cret
+; CHECK-L64PC128-NEXT:    ret
 ;
 ; CHECK-L64PC128F-LABEL: ddc_fsw:
 ; CHECK-L64PC128F:       # %bb.0:
@@ -170,7 +170,7 @@ define dso_local void @ddc_fsw(float* %a, float %b, float %c) nounwind {
 ; CHECK-L64PC128F-NEXT:    sw.ddc a1, (a0)
 ; CHECK-L64PC128F-NEXT:    addi a0, a0, 32
 ; CHECK-L64PC128F-NEXT:    sw.ddc a1, (a0)
-; CHECK-L64PC128F-NEXT:    cret
+; CHECK-L64PC128F-NEXT:    ret
   %1 = fadd float %b, %c
   store float %1, float* %a
   %2 = getelementptr float, float* %a, i32 8
@@ -178,7 +178,7 @@ define dso_local void @ddc_fsw(float* %a, float %b, float %c) nounwind {
   ret void
 }
 
-; Uses both loaded values in an FP op to ensure a cflw is used, even for the
+; Uses both loaded values in an FP op to ensure a flw is used, even for the
 ; soft float ABI
 define dso_local float @cap_flw(float addrspace(200)* %a) nounwind {
 ; CHECK-ILP32-LABEL: cap_flw:
@@ -204,18 +204,18 @@ define dso_local float @cap_flw(float addrspace(200)* %a) nounwind {
 ;
 ; CHECK-IL32PC64-LABEL: cap_flw:
 ; CHECK-IL32PC64:       # %bb.0:
-; CHECK-IL32PC64-NEXT:    cflw fa5, 0(ca0)
-; CHECK-IL32PC64-NEXT:    cflw fa4, 12(ca0)
+; CHECK-IL32PC64-NEXT:    flw fa5, 0(ca0)
+; CHECK-IL32PC64-NEXT:    flw fa4, 12(ca0)
 ; CHECK-IL32PC64-NEXT:    fadd.s fa5, fa5, fa4
 ; CHECK-IL32PC64-NEXT:    fmv.x.w a0, fa5
-; CHECK-IL32PC64-NEXT:    cret
+; CHECK-IL32PC64-NEXT:    ret
 ;
 ; CHECK-IL32PC64F-LABEL: cap_flw:
 ; CHECK-IL32PC64F:       # %bb.0:
-; CHECK-IL32PC64F-NEXT:    cflw fa5, 0(ca0)
-; CHECK-IL32PC64F-NEXT:    cflw fa4, 12(ca0)
+; CHECK-IL32PC64F-NEXT:    flw fa5, 0(ca0)
+; CHECK-IL32PC64F-NEXT:    flw fa4, 12(ca0)
 ; CHECK-IL32PC64F-NEXT:    fadd.s fa0, fa5, fa4
-; CHECK-IL32PC64F-NEXT:    cret
+; CHECK-IL32PC64F-NEXT:    ret
 ;
 ; CHECK-LP64-LABEL: cap_flw:
 ; CHECK-LP64:       # %bb.0:
@@ -240,18 +240,18 @@ define dso_local float @cap_flw(float addrspace(200)* %a) nounwind {
 ;
 ; CHECK-L64PC128-LABEL: cap_flw:
 ; CHECK-L64PC128:       # %bb.0:
-; CHECK-L64PC128-NEXT:    cflw fa5, 0(ca0)
-; CHECK-L64PC128-NEXT:    cflw fa4, 12(ca0)
+; CHECK-L64PC128-NEXT:    flw fa5, 0(ca0)
+; CHECK-L64PC128-NEXT:    flw fa4, 12(ca0)
 ; CHECK-L64PC128-NEXT:    fadd.s fa5, fa5, fa4
 ; CHECK-L64PC128-NEXT:    fmv.x.w a0, fa5
-; CHECK-L64PC128-NEXT:    cret
+; CHECK-L64PC128-NEXT:    ret
 ;
 ; CHECK-L64PC128F-LABEL: cap_flw:
 ; CHECK-L64PC128F:       # %bb.0:
-; CHECK-L64PC128F-NEXT:    cflw fa5, 0(ca0)
-; CHECK-L64PC128F-NEXT:    cflw fa4, 12(ca0)
+; CHECK-L64PC128F-NEXT:    flw fa5, 0(ca0)
+; CHECK-L64PC128F-NEXT:    flw fa4, 12(ca0)
 ; CHECK-L64PC128F-NEXT:    fadd.s fa0, fa5, fa4
-; CHECK-L64PC128F-NEXT:    cret
+; CHECK-L64PC128F-NEXT:    ret
   %1 = load float, float addrspace(200)* %a
   %2 = getelementptr float, float addrspace(200)* %a, i32 3
   %3 = load float, float addrspace(200)* %2
@@ -287,16 +287,16 @@ define dso_local void @cap_fsw(float addrspace(200)* %a, float %b, float %c) nou
 ; CHECK-IL32PC64-NEXT:    fmv.w.x fa5, a2
 ; CHECK-IL32PC64-NEXT:    fmv.w.x fa4, a1
 ; CHECK-IL32PC64-NEXT:    fadd.s fa5, fa4, fa5
-; CHECK-IL32PC64-NEXT:    cfsw fa5, 0(ca0)
-; CHECK-IL32PC64-NEXT:    cfsw fa5, 32(ca0)
-; CHECK-IL32PC64-NEXT:    cret
+; CHECK-IL32PC64-NEXT:    fsw fa5, 0(ca0)
+; CHECK-IL32PC64-NEXT:    fsw fa5, 32(ca0)
+; CHECK-IL32PC64-NEXT:    ret
 ;
 ; CHECK-IL32PC64F-LABEL: cap_fsw:
 ; CHECK-IL32PC64F:       # %bb.0:
 ; CHECK-IL32PC64F-NEXT:    fadd.s fa5, fa0, fa1
-; CHECK-IL32PC64F-NEXT:    cfsw fa5, 0(ca0)
-; CHECK-IL32PC64F-NEXT:    cfsw fa5, 32(ca0)
-; CHECK-IL32PC64F-NEXT:    cret
+; CHECK-IL32PC64F-NEXT:    fsw fa5, 0(ca0)
+; CHECK-IL32PC64F-NEXT:    fsw fa5, 32(ca0)
+; CHECK-IL32PC64F-NEXT:    ret
 ;
 ; CHECK-LP64-LABEL: cap_fsw:
 ; CHECK-LP64:       # %bb.0:
@@ -323,16 +323,16 @@ define dso_local void @cap_fsw(float addrspace(200)* %a, float %b, float %c) nou
 ; CHECK-L64PC128-NEXT:    fmv.w.x fa5, a2
 ; CHECK-L64PC128-NEXT:    fmv.w.x fa4, a1
 ; CHECK-L64PC128-NEXT:    fadd.s fa5, fa4, fa5
-; CHECK-L64PC128-NEXT:    cfsw fa5, 0(ca0)
-; CHECK-L64PC128-NEXT:    cfsw fa5, 32(ca0)
-; CHECK-L64PC128-NEXT:    cret
+; CHECK-L64PC128-NEXT:    fsw fa5, 0(ca0)
+; CHECK-L64PC128-NEXT:    fsw fa5, 32(ca0)
+; CHECK-L64PC128-NEXT:    ret
 ;
 ; CHECK-L64PC128F-LABEL: cap_fsw:
 ; CHECK-L64PC128F:       # %bb.0:
 ; CHECK-L64PC128F-NEXT:    fadd.s fa5, fa0, fa1
-; CHECK-L64PC128F-NEXT:    cfsw fa5, 0(ca0)
-; CHECK-L64PC128F-NEXT:    cfsw fa5, 32(ca0)
-; CHECK-L64PC128F-NEXT:    cret
+; CHECK-L64PC128F-NEXT:    fsw fa5, 0(ca0)
+; CHECK-L64PC128F-NEXT:    fsw fa5, 32(ca0)
+; CHECK-L64PC128F-NEXT:    ret
   %1 = fadd float %b, %c
   store float %1, float addrspace(200)* %a
   %2 = getelementptr float, float addrspace(200)* %a, i32 8

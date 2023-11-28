@@ -482,6 +482,10 @@ class LLVMConfig(object):
         riscv64_cheri_args = [triple_opt + '=riscv64-unknown-freebsd', '-mattr=+xcheri'] + extra_args
         riscv32_cheri_purecap_args = ['-target-abi', 'il32pc64d', '-mattr=+cap-mode'] + riscv32_cheri_args
         riscv64_cheri_purecap_args = ['-target-abi', 'l64pc128d', '-mattr=+cap-mode'] + riscv64_cheri_args
+        riscv32_bakewell_purecap_args = [triple_opt + '=riscv32-unknown-freebsd', '-mattr=+zcheripurecap,+cap-mode', '-target-abi', 'il32pc64d']
+        riscv64_bakewell_purecap_args = [triple_opt + '=riscv64-unknown-freebsd', '-mattr=+zcheripurecap,+cap-mode', '-target-abi', 'l64pc128d']
+        riscv32_bakewell_hybrid_args = [triple_opt + '=riscv32-unknown-freebsd', '-mattr=+zcheripurecap,+zcherihybrid']
+        riscv64_bakewell_hybrid_args = [triple_opt + '=riscv64-unknown-freebsd', '-mattr=+zcheripurecap,+zcherihybrid']
 
         default_args = cheri128_args
         tool_patterns = [
@@ -495,6 +499,10 @@ class LLVMConfig(object):
             ToolSubst('%riscv64_cheri_' + tool, FindTool(tool), extra_args=riscv64_cheri_args),
             ToolSubst('%riscv32_cheri_purecap_' + tool, FindTool(tool), extra_args=riscv32_cheri_purecap_args),
             ToolSubst('%riscv64_cheri_purecap_' + tool, FindTool(tool), extra_args=riscv64_cheri_purecap_args),
+            ToolSubst('%riscv32_bakewell_purecap_' + tool, FindTool(tool), extra_args=riscv32_bakewell_purecap_args),
+            ToolSubst('%riscv64_bakewell_purecap_' + tool, FindTool(tool), extra_args=riscv64_bakewell_purecap_args),
+            ToolSubst('%riscv32_bakewell_hybrid_' + tool, FindTool(tool), extra_args=riscv32_bakewell_hybrid_args),
+            ToolSubst('%riscv64_bakewell_hybrid_' + tool, FindTool(tool), extra_args=riscv64_bakewell_hybrid_args),
         ]
         self.add_tool_substitutions(tool_patterns, [self.config.llvm_tools_dir])
 
@@ -651,6 +659,19 @@ class LLVMConfig(object):
                     '-target-feature', '+xcheri', '-mllvm', '-verify-machineinstrs']
             riscv64_cheri_cc1_args = clang_cc1_args + [ '-triple', 'riscv64-unknown-freebsd',
                     '-target-feature', '+xcheri', '-mllvm', '-verify-machineinstrs']
+            
+            riscv32_bakewell_purecap_cc1_args = clang_cc1_args + ['-triple', 'riscv32-unknown-freebsd',
+                    '-target-feature', '+zcheripurecap', '-mllvm', '-verify-machineinstrs']
+            riscv64_bakewell_purecap_cc1_args = clang_cc1_args + ['-triple', 'riscv64-unknown-freebsd',
+                    '-target-feature', '+zcheripurecap', '-mllvm', '-verify-machineinstrs']
+            riscv32_bakewell_hybrid_cc1_args = clang_cc1_args + ['-triple', 'riscv32-unknown-freebsd',
+                    '-target-feature', '+zcherihybrid', '-mllvm', '-verify-machineinstrs']
+            riscv64_bakewell_hybrid_cc1_args = clang_cc1_args + ['-triple', 'riscv64-unknown-freebsd',
+                    '-target-feature', '+zcherihybrid', '-mllvm', '-verify-machineinstrs']
+            riscv32_bakewell_pte_cc1_args = clang_cc1_args + ['-triple', 'riscv32-unknown-freebsd',
+                    '-target-feature', '+zcheri-pte', '-mllvm', '-verify-machineinstrs']
+            riscv64_bakewell_pte_cc1_args = clang_cc1_args + ['-triple', 'riscv64-unknown-freebsd',
+                    '-target-feature', '+zcheri-pte', '-mllvm', '-verify-machineinstrs']
 
             cheri_cc1_args = cheri128_cc1_args
             default_cheri_cpu = 'cheri128'
@@ -658,9 +679,17 @@ class LLVMConfig(object):
                                 '-mcpu=' + default_cheri_cpu, '-msoft-float']
             riscv32_cheri_clang_args = ['-target', 'riscv32-unknown-freebsd', '-nostdinc', '-march=rv32imafdcxcheri']
             riscv64_cheri_clang_args = ['-target', 'riscv64-unknown-freebsd', '-nostdinc', '-march=rv64imafdcxcheri']
+            riscv32_cheri_bakewell_clang_args = ['-target', 'riscv32-unknown-freebsd', '-nostdinc', '-march=rv32imafdcxcheri-bakewell']
+            riscv64_cheri_bakewell_clang_args = ['-target', 'riscv64-unknown-freebsd', '-nostdinc', '-march=rv64imafdcxcheri-bakewell']
 
             tool_substitutions = [
                 # CHERI substitutions (order is important due to repeated substitutions!)
+                ToolSubst('%riscv32_bakewell_purecap_cc1', command=self.config.clang, extra_args=riscv32_bakewell_purecap_cc1_args+additional_flags+['-target-abi', 'il32pc64', '-target-feature', '+cap-mode']),
+                ToolSubst('%riscv64_bakewell_purecap_cc1', command=self.config.clang, extra_args=riscv64_bakewell_purecap_cc1_args+additional_flags+['-target-abi', 'l64pc128', '-target-feature', '+cap-mode']),
+                ToolSubst('%riscv32_bakewell_hybrid_cc1', command=self.config.clang, extra_args=riscv32_bakewell_hybrid_cc1_args+additional_flags),
+                ToolSubst('%riscv64_bakewell_hybrid_cc1', command=self.config.clang, extra_args=riscv64_bakewell_hybrid_cc1_args+additional_flags),
+                ToolSubst('%riscv32_bakewell_pte_cc1', command=self.config.clang, extra_args=riscv32_bakewell_pte_cc1_args+additional_flags),
+                ToolSubst('%riscv64_bakewell_pte_cc1', command=self.config.clang, extra_args=riscv64_bakewell_pte_cc1_args+additional_flags),
                 ToolSubst('%cheri_purecap_cc1',    command='%cheri_cc1',    extra_args=['-target-abi', 'purecap']+additional_flags),
                 ToolSubst('%cheri128_purecap_cc1', command='%cheri128_cc1', extra_args=['-target-abi', 'purecap']+additional_flags),
                 ToolSubst('%cheri_cc1',    command=self.config.clang, extra_args=cheri_cc1_args+additional_flags),
@@ -668,6 +697,8 @@ class LLVMConfig(object):
                 ToolSubst('%cheri_clang', command=self.config.clang, extra_args=cheri_clang_args+additional_flags),
                 ToolSubst('%cheri_purecap_clang', command=self.config.clang,
                           extra_args=cheri_clang_args + ['-mabi=purecap']+additional_flags),
+                ToolSubst('%riscv32_cheri_bakewell_clang', command=self.config.clang, extra_args=riscv32_cheri_bakewell_clang_args+additional_flags),
+                ToolSubst('%riscv64_cheri_bakewell_clang', command=self.config.clang, extra_args=riscv64_cheri_bakewell_clang_args+additional_flags),
                 ToolSubst('%riscv32_cheri_purecap_cc1', command='%riscv32_cheri_cc1', extra_args=['-target-abi', 'il32pc64', '-target-feature', '+cap-mode']+additional_flags),
                 ToolSubst('%riscv64_cheri_purecap_cc1', command='%riscv64_cheri_cc1', extra_args=['-target-abi', 'l64pc128', '-target-feature', '+cap-mode']+additional_flags),
                 ToolSubst('%riscv32_cheri_purecap_clang', command='%riscv32_cheri_clang', extra_args=['-mabi=il32pc64']+additional_flags),

@@ -2113,6 +2113,11 @@ def NoReturn : InheritableAttr {
   let Documentation = [Undocumented];
 }
 
+def NoCapRelocs : InheritableAttr {
+  let Spellings = [GCC<"nocaprelocs">, Declspec<"nocaprelocs">];
+  let Documentation = [Undocumented];
+}
+
 def NoInstrumentFunction : InheritableAttr {
   let Spellings = [GCC<"no_instrument_function">];
   let Subjects = SubjectList<[Function, ObjCMethod]>;

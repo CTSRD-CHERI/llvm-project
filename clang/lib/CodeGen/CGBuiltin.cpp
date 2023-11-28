@@ -5105,6 +5105,14 @@ RValue CodeGenFunction::EmitBuiltinExpr(const GlobalDecl GD, unsigned BuiltinID,
     return RValue::get(Builder.CreateIntrinsic(
         llvm::Intrinsic::cheri_representable_alignment_mask, {SizeTy},
         {EmitScalarExpr(E->getArg(0))}));
+  case Builtin::BI__builtin_cheri_copy_from_high:
+    return RValue::get(Builder.CreateCall(
+        CGM.getIntrinsic(llvm::Intrinsic::cheri_cap_copy_from_high, {SizeTy}),
+        {EmitScalarExpr(E->getArg(0))}));
+  case Builtin::BI__builtin_cheri_copy_to_high:
+    return RValue::get(Builder.CreateCall(
+        CGM.getIntrinsic(llvm::Intrinsic::cheri_cap_copy_to_high, {SizeTy}),
+        {EmitScalarExpr(E->getArg(0)), EmitScalarExpr(E->getArg(1))}));
 
   case Builtin::BI__builtin_cheri_callback_create: {
     std::string ClassName =
@@ -5622,8 +5630,9 @@ RValue CodeGenFunction::EmitBuiltinExpr(const GlobalDecl GD, unsigned BuiltinID,
   case Builtin::BI__builtin_thread_pointer: {
     if (!getContext().getTargetInfo().isTLSSupported())
       CGM.ErrorUnsupported(E, "__builtin_thread_pointer");
-    // Fall through - it's already mapped to the intrinsic by ClangBuiltin.
-    break;
+
+    return RValue::get(Builder.CreateIntrinsic(
+        llvm::Intrinsic::thread_pointer, {Int8PtrTy}, {}));
   }
   case Builtin::BI__builtin_os_log_format:
     return emitBuiltinOSLogFormat(*E);

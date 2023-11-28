@@ -25,7 +25,9 @@
 #define cheri_length_get(x) __builtin_cheri_length_get(x)
 #define cheri_offset_get(x) __builtin_cheri_offset_get(x)
 #define cheri_offset_set(x, y) __builtin_cheri_offset_set((x), (y))
+#if !defined(__riscv_zcheripurecap)
 #define cheri_tag_clear(x) __builtin_cheri_tag_clear(x)
+#endif
 #define cheri_tag_get(x) __builtin_cheri_tag_get(x)
 #define cheri_is_valid(x) __builtin_cheri_tag_get(x)
 #define cheri_is_invalid(x) (!__builtin_cheri_tag_get(x))
@@ -59,17 +61,28 @@ typedef long cheri_otype_t;
 #define cheri_is_unsealed(x) (!__builtin_cheri_sealed_get(x))
 /* TODO: builtins for indirect sentries */
 #define cheri_sentry_create(x) __builtin_cheri_seal_entry(x)
+#if !defined(__riscv_zcheripurecap)
 #define cheri_seal(x, y) __builtin_cheri_seal((x), (y))
 #define cheri_unseal(x, y) __builtin_cheri_unseal((x), (y))
+#endif
 
 /* Reconstruct capabilities from raw data: */
 #define cheri_cap_build(x, y) __builtin_cheri_cap_build((x), (y))
+#if !defined(__riscv_zcheripurecap)
 #define cheri_seal_conditionally(x, y)                                         \
   __builtin_cheri_conditional_seal((x), (y))
 #define cheri_type_copy(x, y) __builtin_cheri_cap_type_copy((x), (y))
+#endif
 
 /* Capability permissions: */
 typedef enum __attribute__((flag_enum, enum_extensibility(open))) {
+#if defined(__riscv_zcheripurecap)
+  CHERI_BW_PERM_CAP = __CHERI_BW_CAP_PERMISSION_CAPABILITY__,
+  CHERI_BW_PERM_WRITE = __CHERI_BW_CAP_PERMISSION_WRITE__,
+  CHERI_BW_PERM_READ = __CHERI_BW_CAP_PERMISSION_READ__,
+  CHERI_BW_PERM_EXECUTE = __CHERI_BW_CAP_PERMISSION_EXECUTE__,
+  CHERI_BW_PERM_SYSTEM_REGS = __CHERI_BW_CAP_PERMISSION_ACCESS_SYSTEM_REGISTERS__,
+#else
   CHERI_PERM_GLOBAL = __CHERI_CAP_PERMISSION_GLOBAL__,
   CHERI_PERM_EXECUTE = __CHERI_CAP_PERMISSION_PERMIT_EXECUTE__,
   CHERI_PERM_LOAD = __CHERI_CAP_PERMISSION_PERMIT_LOAD__,
@@ -81,6 +94,7 @@ typedef enum __attribute__((flag_enum, enum_extensibility(open))) {
   CHERI_PERM_INVOKE = __CHERI_CAP_PERMISSION_PERMIT_INVOKE__,
   CHERI_PERM_UNSEAL = __CHERI_CAP_PERMISSION_PERMIT_UNSEAL__,
   CHERI_PERM_SYSTEM_REGS = __CHERI_CAP_PERMISSION_ACCESS_SYSTEM_REGISTERS__,
+#endif
   /* TODO: architecture-dependent permissions */
 } cheri_perms_t;
 #define cheri_perms_get(x) ((cheri_perms_t)(__builtin_cheri_perms_get(x)))
@@ -96,7 +110,9 @@ typedef enum __attribute__((flag_enum, enum_extensibility(open))) {
 /* Note: {get,set}flags does nothing for MIPS, but can still be used. */
 #define cheri_flags_get(x) __builtin_cheri_flags_get(x)
 #define cheri_flags_set(x, y) __builtin_cheri_flags_set((x), (y))
+#if !defined(__riscv_zcheripurecap)
 #define cheri_tags_load(x) __builtin_cheri_cap_load_tags(x)
+#endif
 
 /*
  * Alignment builtins: Not CHERI-specific, but motivated by CHERI.

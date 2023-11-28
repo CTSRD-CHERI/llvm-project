@@ -193,6 +193,17 @@ void __clear_cache(void *start, void *end) {
     __asm__ volatile("flush %0" : : "r"(dword));
 #elif defined(__riscv) && defined(__linux__)
   // See: arch/riscv/include/asm/cacheflush.h, arch/riscv/kernel/sys_riscv.c
+#ifdef __CHERI_PURE_CAPABILITY__
+  register void *start_reg __asm("ca0") = start;
+  const register void *end_reg __asm("ca1") = end;
+  // "0" means that we clear cache for all threads (SYS_RISCV_FLUSH_ICACHE_ALL)
+  const register long flags __asm("a2") = 0;
+  const register long syscall_nr __asm("a7") = __NR_riscv_flush_icache;
+  __asm __volatile("ecall"
+                   : "=C"(start_reg)
+                   : "C"(start_reg), "C"(end_reg), "r"(flags), "r"(syscall_nr));
+  assert(start_reg == 0 && "Cache flush syscall failed.");
+#else
   register void *start_reg __asm("a0") = start;
   const register void *end_reg __asm("a1") = end;
   // "0" means that we clear cache for all threads (SYS_RISCV_FLUSH_ICACHE_ALL)
@@ -202,6 +213,7 @@ void __clear_cache(void *start, void *end) {
                    : "=r"(start_reg)
                    : "r"(start_reg), "r"(end_reg), "r"(flags), "r"(syscall_nr));
   assert(start_reg == 0 && "Cache flush syscall failed.");
+#endif  
 #elif defined(__riscv) && defined(__OpenBSD__)
   struct riscv_sync_icache_args arg;
 

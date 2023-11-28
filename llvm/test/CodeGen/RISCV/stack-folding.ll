@@ -9,10 +9,8 @@
 define i1 @test_sext_w(i64 %x, i32 %y) nounwind {
 ; CHECK-LABEL: test_sext_w:
 ; CHECK:       # %bb.0:
-; CHECK-NEXT:    addi sp, sp, -144
-; CHECK-NEXT:    sd ra, 136(sp) # 8-byte Folded Spill
-; CHECK-NEXT:    sd gp, 128(sp) # 8-byte Folded Spill
-; CHECK-NEXT:    sd tp, 120(sp) # 8-byte Folded Spill
+; CHECK-NEXT:    addi sp, sp, -128
+; CHECK-NEXT:    sd ra, 120(sp) # 8-byte Folded Spill
 ; CHECK-NEXT:    sd s0, 112(sp) # 8-byte Folded Spill
 ; CHECK-NEXT:    sd s1, 104(sp) # 8-byte Folded Spill
 ; CHECK-NEXT:    sd s2, 96(sp) # 8-byte Folded Spill
@@ -38,9 +36,7 @@ define i1 @test_sext_w(i64 %x, i32 %y) nounwind {
 ; CHECK-NEXT:    lw a0, 8(sp) # 8-byte Folded Reload
 ; CHECK-NEXT:    slti a0, a0, 0
 ; CHECK-NEXT:  .LBB0_3: # %falsebb
-; CHECK-NEXT:    ld ra, 136(sp) # 8-byte Folded Reload
-; CHECK-NEXT:    ld gp, 128(sp) # 8-byte Folded Reload
-; CHECK-NEXT:    ld tp, 120(sp) # 8-byte Folded Reload
+; CHECK-NEXT:    ld ra, 120(sp) # 8-byte Folded Reload
 ; CHECK-NEXT:    ld s0, 112(sp) # 8-byte Folded Reload
 ; CHECK-NEXT:    ld s1, 104(sp) # 8-byte Folded Reload
 ; CHECK-NEXT:    ld s2, 96(sp) # 8-byte Folded Reload
@@ -53,57 +49,57 @@ define i1 @test_sext_w(i64 %x, i32 %y) nounwind {
 ; CHECK-NEXT:    ld s9, 40(sp) # 8-byte Folded Reload
 ; CHECK-NEXT:    ld s10, 32(sp) # 8-byte Folded Reload
 ; CHECK-NEXT:    ld s11, 24(sp) # 8-byte Folded Reload
-; CHECK-NEXT:    addi sp, sp, 144
+; CHECK-NEXT:    addi sp, sp, 128
 ; CHECK-NEXT:    ret
 ;
 ; RV64ZB-PURECAP-LABEL: test_sext_w:
 ; RV64ZB-PURECAP:       # %bb.0:
 ; RV64ZB-PURECAP-NEXT:    cincoffset csp, csp, -256
-; RV64ZB-PURECAP-NEXT:    csc cra, 240(csp) # 16-byte Folded Spill
-; RV64ZB-PURECAP-NEXT:    csc cgp, 224(csp) # 16-byte Folded Spill
-; RV64ZB-PURECAP-NEXT:    csc ctp, 208(csp) # 16-byte Folded Spill
-; RV64ZB-PURECAP-NEXT:    csc cs0, 192(csp) # 16-byte Folded Spill
-; RV64ZB-PURECAP-NEXT:    csc cs1, 176(csp) # 16-byte Folded Spill
-; RV64ZB-PURECAP-NEXT:    csc cs2, 160(csp) # 16-byte Folded Spill
-; RV64ZB-PURECAP-NEXT:    csc cs3, 144(csp) # 16-byte Folded Spill
-; RV64ZB-PURECAP-NEXT:    csc cs4, 128(csp) # 16-byte Folded Spill
-; RV64ZB-PURECAP-NEXT:    csc cs5, 112(csp) # 16-byte Folded Spill
-; RV64ZB-PURECAP-NEXT:    csc cs6, 96(csp) # 16-byte Folded Spill
-; RV64ZB-PURECAP-NEXT:    csc cs7, 80(csp) # 16-byte Folded Spill
-; RV64ZB-PURECAP-NEXT:    csc cs8, 64(csp) # 16-byte Folded Spill
-; RV64ZB-PURECAP-NEXT:    csc cs9, 48(csp) # 16-byte Folded Spill
-; RV64ZB-PURECAP-NEXT:    csc cs10, 32(csp) # 16-byte Folded Spill
-; RV64ZB-PURECAP-NEXT:    csc cs11, 16(csp) # 16-byte Folded Spill
-; RV64ZB-PURECAP-NEXT:    csd a1, 0(csp) # 8-byte Folded Spill
-; RV64ZB-PURECAP-NEXT:    csd a0, 8(csp) # 8-byte Folded Spill
+; RV64ZB-PURECAP-NEXT:    sc cra, 240(csp) # 16-byte Folded Spill
+; RV64ZB-PURECAP-NEXT:    sc cgp, 224(csp) # 16-byte Folded Spill
+; RV64ZB-PURECAP-NEXT:    sc ctp, 208(csp) # 16-byte Folded Spill
+; RV64ZB-PURECAP-NEXT:    sc cs0, 192(csp) # 16-byte Folded Spill
+; RV64ZB-PURECAP-NEXT:    sc cs1, 176(csp) # 16-byte Folded Spill
+; RV64ZB-PURECAP-NEXT:    sc cs2, 160(csp) # 16-byte Folded Spill
+; RV64ZB-PURECAP-NEXT:    sc cs3, 144(csp) # 16-byte Folded Spill
+; RV64ZB-PURECAP-NEXT:    sc cs4, 128(csp) # 16-byte Folded Spill
+; RV64ZB-PURECAP-NEXT:    sc cs5, 112(csp) # 16-byte Folded Spill
+; RV64ZB-PURECAP-NEXT:    sc cs6, 96(csp) # 16-byte Folded Spill
+; RV64ZB-PURECAP-NEXT:    sc cs7, 80(csp) # 16-byte Folded Spill
+; RV64ZB-PURECAP-NEXT:    sc cs8, 64(csp) # 16-byte Folded Spill
+; RV64ZB-PURECAP-NEXT:    sc cs9, 48(csp) # 16-byte Folded Spill
+; RV64ZB-PURECAP-NEXT:    sc cs10, 32(csp) # 16-byte Folded Spill
+; RV64ZB-PURECAP-NEXT:    sc cs11, 16(csp) # 16-byte Folded Spill
+; RV64ZB-PURECAP-NEXT:    sd a1, 0(csp) # 8-byte Folded Spill
+; RV64ZB-PURECAP-NEXT:    sd a0, 8(csp) # 8-byte Folded Spill
 ; RV64ZB-PURECAP-NEXT:    #APP
 ; RV64ZB-PURECAP-NEXT:    #NO_APP
-; RV64ZB-PURECAP-NEXT:    cld a0, 8(csp) # 8-byte Folded Reload
+; RV64ZB-PURECAP-NEXT:    ld a0, 8(csp) # 8-byte Folded Reload
 ; RV64ZB-PURECAP-NEXT:    beqz a0, .LBB0_2
 ; RV64ZB-PURECAP-NEXT:  # %bb.1: # %falsebb
 ; RV64ZB-PURECAP-NEXT:    li a0, 0
 ; RV64ZB-PURECAP-NEXT:    j .LBB0_3
 ; RV64ZB-PURECAP-NEXT:  .LBB0_2: # %truebb
-; RV64ZB-PURECAP-NEXT:    clw a0, 0(csp) # 8-byte Folded Reload
+; RV64ZB-PURECAP-NEXT:    lw a0, 0(csp) # 8-byte Folded Reload
 ; RV64ZB-PURECAP-NEXT:    slti a0, a0, 0
 ; RV64ZB-PURECAP-NEXT:  .LBB0_3: # %falsebb
-; RV64ZB-PURECAP-NEXT:    clc cra, 240(csp) # 16-byte Folded Reload
-; RV64ZB-PURECAP-NEXT:    clc cgp, 224(csp) # 16-byte Folded Reload
-; RV64ZB-PURECAP-NEXT:    clc ctp, 208(csp) # 16-byte Folded Reload
-; RV64ZB-PURECAP-NEXT:    clc cs0, 192(csp) # 16-byte Folded Reload
-; RV64ZB-PURECAP-NEXT:    clc cs1, 176(csp) # 16-byte Folded Reload
-; RV64ZB-PURECAP-NEXT:    clc cs2, 160(csp) # 16-byte Folded Reload
-; RV64ZB-PURECAP-NEXT:    clc cs3, 144(csp) # 16-byte Folded Reload
-; RV64ZB-PURECAP-NEXT:    clc cs4, 128(csp) # 16-byte Folded Reload
-; RV64ZB-PURECAP-NEXT:    clc cs5, 112(csp) # 16-byte Folded Reload
-; RV64ZB-PURECAP-NEXT:    clc cs6, 96(csp) # 16-byte Folded Reload
-; RV64ZB-PURECAP-NEXT:    clc cs7, 80(csp) # 16-byte Folded Reload
-; RV64ZB-PURECAP-NEXT:    clc cs8, 64(csp) # 16-byte Folded Reload
-; RV64ZB-PURECAP-NEXT:    clc cs9, 48(csp) # 16-byte Folded Reload
-; RV64ZB-PURECAP-NEXT:    clc cs10, 32(csp) # 16-byte Folded Reload
-; RV64ZB-PURECAP-NEXT:    clc cs11, 16(csp) # 16-byte Folded Reload
+; RV64ZB-PURECAP-NEXT:    lc cra, 240(csp) # 16-byte Folded Reload
+; RV64ZB-PURECAP-NEXT:    lc cgp, 224(csp) # 16-byte Folded Reload
+; RV64ZB-PURECAP-NEXT:    lc ctp, 208(csp) # 16-byte Folded Reload
+; RV64ZB-PURECAP-NEXT:    lc cs0, 192(csp) # 16-byte Folded Reload
+; RV64ZB-PURECAP-NEXT:    lc cs1, 176(csp) # 16-byte Folded Reload
+; RV64ZB-PURECAP-NEXT:    lc cs2, 160(csp) # 16-byte Folded Reload
+; RV64ZB-PURECAP-NEXT:    lc cs3, 144(csp) # 16-byte Folded Reload
+; RV64ZB-PURECAP-NEXT:    lc cs4, 128(csp) # 16-byte Folded Reload
+; RV64ZB-PURECAP-NEXT:    lc cs5, 112(csp) # 16-byte Folded Reload
+; RV64ZB-PURECAP-NEXT:    lc cs6, 96(csp) # 16-byte Folded Reload
+; RV64ZB-PURECAP-NEXT:    lc cs7, 80(csp) # 16-byte Folded Reload
+; RV64ZB-PURECAP-NEXT:    lc cs8, 64(csp) # 16-byte Folded Reload
+; RV64ZB-PURECAP-NEXT:    lc cs9, 48(csp) # 16-byte Folded Reload
+; RV64ZB-PURECAP-NEXT:    lc cs10, 32(csp) # 16-byte Folded Reload
+; RV64ZB-PURECAP-NEXT:    lc cs11, 16(csp) # 16-byte Folded Reload
 ; RV64ZB-PURECAP-NEXT:    cincoffset csp, csp, 256
-; RV64ZB-PURECAP-NEXT:    cret
+; RV64ZB-PURECAP-NEXT:    ret
   tail call void asm sideeffect "", "~{x1},~{x3},~{x4},~{x5},~{x6},~{x7},~{x8},~{x9},~{x10},~{x11},~{x12},~{x13},~{x14},~{x15},~{x16},~{x17},~{x18},~{x19},~{x20},~{x21},~{x22},~{x23},~{x24},~{x25},~{x26},~{x27},~{x28},~{x29},~{x30},~{x31}"()
   %a = icmp eq i64 %x, 0
   br i1 %a, label %truebb, label %falsebb
@@ -118,10 +114,8 @@ falsebb:
 define i64 @test_sext_b(i64 %x, i8 %y) nounwind {
 ; RV64I-LABEL: test_sext_b:
 ; RV64I:       # %bb.0:
-; RV64I-NEXT:    addi sp, sp, -144
-; RV64I-NEXT:    sd ra, 136(sp) # 8-byte Folded Spill
-; RV64I-NEXT:    sd gp, 128(sp) # 8-byte Folded Spill
-; RV64I-NEXT:    sd tp, 120(sp) # 8-byte Folded Spill
+; RV64I-NEXT:    addi sp, sp, -128
+; RV64I-NEXT:    sd ra, 120(sp) # 8-byte Folded Spill
 ; RV64I-NEXT:    sd s0, 112(sp) # 8-byte Folded Spill
 ; RV64I-NEXT:    sd s1, 104(sp) # 8-byte Folded Spill
 ; RV64I-NEXT:    sd s2, 96(sp) # 8-byte Folded Spill
@@ -148,9 +142,7 @@ define i64 @test_sext_b(i64 %x, i8 %y) nounwind {
 ; RV64I-NEXT:    slli a0, a0, 56
 ; RV64I-NEXT:    srai a0, a0, 56
 ; RV64I-NEXT:  .LBB1_3: # %falsebb
-; RV64I-NEXT:    ld ra, 136(sp) # 8-byte Folded Reload
-; RV64I-NEXT:    ld gp, 128(sp) # 8-byte Folded Reload
-; RV64I-NEXT:    ld tp, 120(sp) # 8-byte Folded Reload
+; RV64I-NEXT:    ld ra, 120(sp) # 8-byte Folded Reload
 ; RV64I-NEXT:    ld s0, 112(sp) # 8-byte Folded Reload
 ; RV64I-NEXT:    ld s1, 104(sp) # 8-byte Folded Reload
 ; RV64I-NEXT:    ld s2, 96(sp) # 8-byte Folded Reload
@@ -163,15 +155,13 @@ define i64 @test_sext_b(i64 %x, i8 %y) nounwind {
 ; RV64I-NEXT:    ld s9, 40(sp) # 8-byte Folded Reload
 ; RV64I-NEXT:    ld s10, 32(sp) # 8-byte Folded Reload
 ; RV64I-NEXT:    ld s11, 24(sp) # 8-byte Folded Reload
-; RV64I-NEXT:    addi sp, sp, 144
+; RV64I-NEXT:    addi sp, sp, 128
 ; RV64I-NEXT:    ret
 ;
 ; RV64ZB-LABEL: test_sext_b:
 ; RV64ZB:       # %bb.0:
-; RV64ZB-NEXT:    addi sp, sp, -144
-; RV64ZB-NEXT:    sd ra, 136(sp) # 8-byte Folded Spill
-; RV64ZB-NEXT:    sd gp, 128(sp) # 8-byte Folded Spill
-; RV64ZB-NEXT:    sd tp, 120(sp) # 8-byte Folded Spill
+; RV64ZB-NEXT:    addi sp, sp, -128
+; RV64ZB-NEXT:    sd ra, 120(sp) # 8-byte Folded Spill
 ; RV64ZB-NEXT:    sd s0, 112(sp) # 8-byte Folded Spill
 ; RV64ZB-NEXT:    sd s1, 104(sp) # 8-byte Folded Spill
 ; RV64ZB-NEXT:    sd s2, 96(sp) # 8-byte Folded Spill
@@ -196,9 +186,7 @@ define i64 @test_sext_b(i64 %x, i8 %y) nounwind {
 ; RV64ZB-NEXT:  .LBB1_2: # %truebb
 ; RV64ZB-NEXT:    lb a0, 8(sp) # 8-byte Folded Reload
 ; RV64ZB-NEXT:  .LBB1_3: # %falsebb
-; RV64ZB-NEXT:    ld ra, 136(sp) # 8-byte Folded Reload
-; RV64ZB-NEXT:    ld gp, 128(sp) # 8-byte Folded Reload
-; RV64ZB-NEXT:    ld tp, 120(sp) # 8-byte Folded Reload
+; RV64ZB-NEXT:    ld ra, 120(sp) # 8-byte Folded Reload
 ; RV64ZB-NEXT:    ld s0, 112(sp) # 8-byte Folded Reload
 ; RV64ZB-NEXT:    ld s1, 104(sp) # 8-byte Folded Reload
 ; RV64ZB-NEXT:    ld s2, 96(sp) # 8-byte Folded Reload
@@ -211,56 +199,56 @@ define i64 @test_sext_b(i64 %x, i8 %y) nounwind {
 ; RV64ZB-NEXT:    ld s9, 40(sp) # 8-byte Folded Reload
 ; RV64ZB-NEXT:    ld s10, 32(sp) # 8-byte Folded Reload
 ; RV64ZB-NEXT:    ld s11, 24(sp) # 8-byte Folded Reload
-; RV64ZB-NEXT:    addi sp, sp, 144
+; RV64ZB-NEXT:    addi sp, sp, 128
 ; RV64ZB-NEXT:    ret
 ;
 ; RV64ZB-PURECAP-LABEL: test_sext_b:
 ; RV64ZB-PURECAP:       # %bb.0:
 ; RV64ZB-PURECAP-NEXT:    cincoffset csp, csp, -256
-; RV64ZB-PURECAP-NEXT:    csc cra, 240(csp) # 16-byte Folded Spill
-; RV64ZB-PURECAP-NEXT:    csc cgp, 224(csp) # 16-byte Folded Spill
-; RV64ZB-PURECAP-NEXT:    csc ctp, 208(csp) # 16-byte Folded Spill
-; RV64ZB-PURECAP-NEXT:    csc cs0, 192(csp) # 16-byte Folded Spill
-; RV64ZB-PURECAP-NEXT:    csc cs1, 176(csp) # 16-byte Folded Spill
-; RV64ZB-PURECAP-NEXT:    csc cs2, 160(csp) # 16-byte Folded Spill
-; RV64ZB-PURECAP-NEXT:    csc cs3, 144(csp) # 16-byte Folded Spill
-; RV64ZB-PURECAP-NEXT:    csc cs4, 128(csp) # 16-byte Folded Spill
-; RV64ZB-PURECAP-NEXT:    csc cs5, 112(csp) # 16-byte Folded Spill
-; RV64ZB-PURECAP-NEXT:    csc cs6, 96(csp) # 16-byte Folded Spill
-; RV64ZB-PURECAP-NEXT:    csc cs7, 80(csp) # 16-byte Folded Spill
-; RV64ZB-PURECAP-NEXT:    csc cs8, 64(csp) # 16-byte Folded Spill
-; RV64ZB-PURECAP-NEXT:    csc cs9, 48(csp) # 16-byte Folded Spill
-; RV64ZB-PURECAP-NEXT:    csc cs10, 32(csp) # 16-byte Folded Spill
-; RV64ZB-PURECAP-NEXT:    csc cs11, 16(csp) # 16-byte Folded Spill
-; RV64ZB-PURECAP-NEXT:    csd a1, 0(csp) # 8-byte Folded Spill
-; RV64ZB-PURECAP-NEXT:    csd a0, 8(csp) # 8-byte Folded Spill
+; RV64ZB-PURECAP-NEXT:    sc cra, 240(csp) # 16-byte Folded Spill
+; RV64ZB-PURECAP-NEXT:    sc cgp, 224(csp) # 16-byte Folded Spill
+; RV64ZB-PURECAP-NEXT:    sc ctp, 208(csp) # 16-byte Folded Spill
+; RV64ZB-PURECAP-NEXT:    sc cs0, 192(csp) # 16-byte Folded Spill
+; RV64ZB-PURECAP-NEXT:    sc cs1, 176(csp) # 16-byte Folded Spill
+; RV64ZB-PURECAP-NEXT:    sc cs2, 160(csp) # 16-byte Folded Spill
+; RV64ZB-PURECAP-NEXT:    sc cs3, 144(csp) # 16-byte Folded Spill
+; RV64ZB-PURECAP-NEXT:    sc cs4, 128(csp) # 16-byte Folded Spill
+; RV64ZB-PURECAP-NEXT:    sc cs5, 112(csp) # 16-byte Folded Spill
+; RV64ZB-PURECAP-NEXT:    sc cs6, 96(csp) # 16-byte Folded Spill
+; RV64ZB-PURECAP-NEXT:    sc cs7, 80(csp) # 16-byte Folded Spill
+; RV64ZB-PURECAP-NEXT:    sc cs8, 64(csp) # 16-byte Folded Spill
+; RV64ZB-PURECAP-NEXT:    sc cs9, 48(csp) # 16-byte Folded Spill
+; RV64ZB-PURECAP-NEXT:    sc cs10, 32(csp) # 16-byte Folded Spill
+; RV64ZB-PURECAP-NEXT:    sc cs11, 16(csp) # 16-byte Folded Spill
+; RV64ZB-PURECAP-NEXT:    sd a1, 0(csp) # 8-byte Folded Spill
+; RV64ZB-PURECAP-NEXT:    sd a0, 8(csp) # 8-byte Folded Spill
 ; RV64ZB-PURECAP-NEXT:    #APP
 ; RV64ZB-PURECAP-NEXT:    #NO_APP
-; RV64ZB-PURECAP-NEXT:    cld a0, 8(csp) # 8-byte Folded Reload
+; RV64ZB-PURECAP-NEXT:    ld a0, 8(csp) # 8-byte Folded Reload
 ; RV64ZB-PURECAP-NEXT:    beqz a0, .LBB1_2
 ; RV64ZB-PURECAP-NEXT:  # %bb.1: # %falsebb
 ; RV64ZB-PURECAP-NEXT:    li a0, 0
 ; RV64ZB-PURECAP-NEXT:    j .LBB1_3
 ; RV64ZB-PURECAP-NEXT:  .LBB1_2: # %truebb
-; RV64ZB-PURECAP-NEXT:    clb a0, 0(csp) # 8-byte Folded Reload
+; RV64ZB-PURECAP-NEXT:    lb a0, 0(csp) # 8-byte Folded Reload
 ; RV64ZB-PURECAP-NEXT:  .LBB1_3: # %falsebb
-; RV64ZB-PURECAP-NEXT:    clc cra, 240(csp) # 16-byte Folded Reload
-; RV64ZB-PURECAP-NEXT:    clc cgp, 224(csp) # 16-byte Folded Reload
-; RV64ZB-PURECAP-NEXT:    clc ctp, 208(csp) # 16-byte Folded Reload
-; RV64ZB-PURECAP-NEXT:    clc cs0, 192(csp) # 16-byte Folded Reload
-; RV64ZB-PURECAP-NEXT:    clc cs1, 176(csp) # 16-byte Folded Reload
-; RV64ZB-PURECAP-NEXT:    clc cs2, 160(csp) # 16-byte Folded Reload
-; RV64ZB-PURECAP-NEXT:    clc cs3, 144(csp) # 16-byte Folded Reload
-; RV64ZB-PURECAP-NEXT:    clc cs4, 128(csp) # 16-byte Folded Reload
-; RV64ZB-PURECAP-NEXT:    clc cs5, 112(csp) # 16-byte Folded Reload
-; RV64ZB-PURECAP-NEXT:    clc cs6, 96(csp) # 16-byte Folded Reload
-; RV64ZB-PURECAP-NEXT:    clc cs7, 80(csp) # 16-byte Folded Reload
-; RV64ZB-PURECAP-NEXT:    clc cs8, 64(csp) # 16-byte Folded Reload
-; RV64ZB-PURECAP-NEXT:    clc cs9, 48(csp) # 16-byte Folded Reload
-; RV64ZB-PURECAP-NEXT:    clc cs10, 32(csp) # 16-byte Folded Reload
-; RV64ZB-PURECAP-NEXT:    clc cs11, 16(csp) # 16-byte Folded Reload
+; RV64ZB-PURECAP-NEXT:    lc cra, 240(csp) # 16-byte Folded Reload
+; RV64ZB-PURECAP-NEXT:    lc cgp, 224(csp) # 16-byte Folded Reload
+; RV64ZB-PURECAP-NEXT:    lc ctp, 208(csp) # 16-byte Folded Reload
+; RV64ZB-PURECAP-NEXT:    lc cs0, 192(csp) # 16-byte Folded Reload
+; RV64ZB-PURECAP-NEXT:    lc cs1, 176(csp) # 16-byte Folded Reload
+; RV64ZB-PURECAP-NEXT:    lc cs2, 160(csp) # 16-byte Folded Reload
+; RV64ZB-PURECAP-NEXT:    lc cs3, 144(csp) # 16-byte Folded Reload
+; RV64ZB-PURECAP-NEXT:    lc cs4, 128(csp) # 16-byte Folded Reload
+; RV64ZB-PURECAP-NEXT:    lc cs5, 112(csp) # 16-byte Folded Reload
+; RV64ZB-PURECAP-NEXT:    lc cs6, 96(csp) # 16-byte Folded Reload
+; RV64ZB-PURECAP-NEXT:    lc cs7, 80(csp) # 16-byte Folded Reload
+; RV64ZB-PURECAP-NEXT:    lc cs8, 64(csp) # 16-byte Folded Reload
+; RV64ZB-PURECAP-NEXT:    lc cs9, 48(csp) # 16-byte Folded Reload
+; RV64ZB-PURECAP-NEXT:    lc cs10, 32(csp) # 16-byte Folded Reload
+; RV64ZB-PURECAP-NEXT:    lc cs11, 16(csp) # 16-byte Folded Reload
 ; RV64ZB-PURECAP-NEXT:    cincoffset csp, csp, 256
-; RV64ZB-PURECAP-NEXT:    cret
+; RV64ZB-PURECAP-NEXT:    ret
   tail call void asm sideeffect "", "~{x1},~{x3},~{x4},~{x5},~{x6},~{x7},~{x8},~{x9},~{x10},~{x11},~{x12},~{x13},~{x14},~{x15},~{x16},~{x17},~{x18},~{x19},~{x20},~{x21},~{x22},~{x23},~{x24},~{x25},~{x26},~{x27},~{x28},~{x29},~{x30},~{x31}"()
   %a = icmp eq i64 %x, 0
   br i1 %a, label %truebb, label %falsebb
@@ -275,10 +263,8 @@ falsebb:
 define i64 @test_sext_h(i64 %x, i16 %y) nounwind {
 ; RV64I-LABEL: test_sext_h:
 ; RV64I:       # %bb.0:
-; RV64I-NEXT:    addi sp, sp, -144
-; RV64I-NEXT:    sd ra, 136(sp) # 8-byte Folded Spill
-; RV64I-NEXT:    sd gp, 128(sp) # 8-byte Folded Spill
-; RV64I-NEXT:    sd tp, 120(sp) # 8-byte Folded Spill
+; RV64I-NEXT:    addi sp, sp, -128
+; RV64I-NEXT:    sd ra, 120(sp) # 8-byte Folded Spill
 ; RV64I-NEXT:    sd s0, 112(sp) # 8-byte Folded Spill
 ; RV64I-NEXT:    sd s1, 104(sp) # 8-byte Folded Spill
 ; RV64I-NEXT:    sd s2, 96(sp) # 8-byte Folded Spill
@@ -305,9 +291,7 @@ define i64 @test_sext_h(i64 %x, i16 %y) nounwind {
 ; RV64I-NEXT:    slli a0, a0, 48
 ; RV64I-NEXT:    srai a0, a0, 48
 ; RV64I-NEXT:  .LBB2_3: # %falsebb
-; RV64I-NEXT:    ld ra, 136(sp) # 8-byte Folded Reload
-; RV64I-NEXT:    ld gp, 128(sp) # 8-byte Folded Reload
-; RV64I-NEXT:    ld tp, 120(sp) # 8-byte Folded Reload
+; RV64I-NEXT:    ld ra, 120(sp) # 8-byte Folded Reload
 ; RV64I-NEXT:    ld s0, 112(sp) # 8-byte Folded Reload
 ; RV64I-NEXT:    ld s1, 104(sp) # 8-byte Folded Reload
 ; RV64I-NEXT:    ld s2, 96(sp) # 8-byte Folded Reload
@@ -320,15 +304,13 @@ define i64 @test_sext_h(i64 %x, i16 %y) nounwind {
 ; RV64I-NEXT:    ld s9, 40(sp) # 8-byte Folded Reload
 ; RV64I-NEXT:    ld s10, 32(sp) # 8-byte Folded Reload
 ; RV64I-NEXT:    ld s11, 24(sp) # 8-byte Folded Reload
-; RV64I-NEXT:    addi sp, sp, 144
+; RV64I-NEXT:    addi sp, sp, 128
 ; RV64I-NEXT:    ret
 ;
 ; RV64ZB-LABEL: test_sext_h:
 ; RV64ZB:       # %bb.0:
-; RV64ZB-NEXT:    addi sp, sp, -144
-; RV64ZB-NEXT:    sd ra, 136(sp) # 8-byte Folded Spill
-; RV64ZB-NEXT:    sd gp, 128(sp) # 8-byte Folded Spill
-; RV64ZB-NEXT:    sd tp, 120(sp) # 8-byte Folded Spill
+; RV64ZB-NEXT:    addi sp, sp, -128
+; RV64ZB-NEXT:    sd ra, 120(sp) # 8-byte Folded Spill
 ; RV64ZB-NEXT:    sd s0, 112(sp) # 8-byte Folded Spill
 ; RV64ZB-NEXT:    sd s1, 104(sp) # 8-byte Folded Spill
 ; RV64ZB-NEXT:    sd s2, 96(sp) # 8-byte Folded Spill
@@ -353,9 +335,7 @@ define i64 @test_sext_h(i64 %x, i16 %y) nounwind {
 ; RV64ZB-NEXT:  .LBB2_2: # %truebb
 ; RV64ZB-NEXT:    lh a0, 8(sp) # 8-byte Folded Reload
 ; RV64ZB-NEXT:  .LBB2_3: # %falsebb
-; RV64ZB-NEXT:    ld ra, 136(sp) # 8-byte Folded Reload
-; RV64ZB-NEXT:    ld gp, 128(sp) # 8-byte Folded Reload
-; RV64ZB-NEXT:    ld tp, 120(sp) # 8-byte Folded Reload
+; RV64ZB-NEXT:    ld ra, 120(sp) # 8-byte Folded Reload
 ; RV64ZB-NEXT:    ld s0, 112(sp) # 8-byte Folded Reload
 ; RV64ZB-NEXT:    ld s1, 104(sp) # 8-byte Folded Reload
 ; RV64ZB-NEXT:    ld s2, 96(sp) # 8-byte Folded Reload
@@ -368,56 +348,56 @@ define i64 @test_sext_h(i64 %x, i16 %y) nounwind {
 ; RV64ZB-NEXT:    ld s9, 40(sp) # 8-byte Folded Reload
 ; RV64ZB-NEXT:    ld s10, 32(sp) # 8-byte Folded Reload
 ; RV64ZB-NEXT:    ld s11, 24(sp) # 8-byte Folded Reload
-; RV64ZB-NEXT:    addi sp, sp, 144
+; RV64ZB-NEXT:    addi sp, sp, 128
 ; RV64ZB-NEXT:    ret
 ;
 ; RV64ZB-PURECAP-LABEL: test_sext_h:
 ; RV64ZB-PURECAP:       # %bb.0:
 ; RV64ZB-PURECAP-NEXT:    cincoffset csp, csp, -256
-; RV64ZB-PURECAP-NEXT:    csc cra, 240(csp) # 16-byte Folded Spill
-; RV64ZB-PURECAP-NEXT:    csc cgp, 224(csp) # 16-byte Folded Spill
-; RV64ZB-PURECAP-NEXT:    csc ctp, 208(csp) # 16-byte Folded Spill
-; RV64ZB-PURECAP-NEXT:    csc cs0, 192(csp) # 16-byte Folded Spill
-; RV64ZB-PURECAP-NEXT:    csc cs1, 176(csp) # 16-byte Folded Spill
-; RV64ZB-PURECAP-NEXT:    csc cs2, 160(csp) # 16-byte Folded Spill
-; RV64ZB-PURECAP-NEXT:    csc cs3, 144(csp) # 16-byte Folded Spill
-; RV64ZB-PURECAP-NEXT:    csc cs4, 128(csp) # 16-byte Folded Spill
-; RV64ZB-PURECAP-NEXT:    csc cs5, 112(csp) # 16-byte Folded Spill
-; RV64ZB-PURECAP-NEXT:    csc cs6, 96(csp) # 16-byte Folded Spill
-; RV64ZB-PURECAP-NEXT:    csc cs7, 80(csp) # 16-byte Folded Spill
-; RV64ZB-PURECAP-NEXT:    csc cs8, 64(csp) # 16-byte Folded Spill
-; RV64ZB-PURECAP-NEXT:    csc cs9, 48(csp) # 16-byte Folded Spill
-; RV64ZB-PURECAP-NEXT:    csc cs10, 32(csp) # 16-byte Folded Spill
-; RV64ZB-PURECAP-NEXT:    csc cs11, 16(csp) # 16-byte Folded Spill
-; RV64ZB-PURECAP-NEXT:    csd a1, 0(csp) # 8-byte Folded Spill
-; RV64ZB-PURECAP-NEXT:    csd a0, 8(csp) # 8-byte Folded Spill
+; RV64ZB-PURECAP-NEXT:    sc cra, 240(csp) # 16-byte Folded Spill
+; RV64ZB-PURECAP-NEXT:    sc cgp, 224(csp) # 16-byte Folded Spill
+; RV64ZB-PURECAP-NEXT:    sc ctp, 208(csp) # 16-byte Folded Spill
+; RV64ZB-PURECAP-NEXT:    sc cs0, 192(csp) # 16-byte Folded Spill
+; RV64ZB-PURECAP-NEXT:    sc cs1, 176(csp) # 16-byte Folded Spill
+; RV64ZB-PURECAP-NEXT:    sc cs2, 160(csp) # 16-byte Folded Spill
+; RV64ZB-PURECAP-NEXT:    sc cs3, 144(csp) # 16-byte Folded Spill
+; RV64ZB-PURECAP-NEXT:    sc cs4, 128(csp) # 16-byte Folded Spill
+; RV64ZB-PURECAP-NEXT:    sc cs5, 112(csp) # 16-byte Folded Spill
+; RV64ZB-PURECAP-NEXT:    sc cs6, 96(csp) # 16-byte Folded Spill
+; RV64ZB-PURECAP-NEXT:    sc cs7, 80(csp) # 16-byte Folded Spill
+; RV64ZB-PURECAP-NEXT:    sc cs8, 64(csp) # 16-byte Folded Spill
+; RV64ZB-PURECAP-NEXT:    sc cs9, 48(csp) # 16-byte Folded Spill
+; RV64ZB-PURECAP-NEXT:    sc cs10, 32(csp) # 16-byte Folded Spill
+; RV64ZB-PURECAP-NEXT:    sc cs11, 16(csp) # 16-byte Folded Spill
+; RV64ZB-PURECAP-NEXT:    sd a1, 0(csp) # 8-byte Folded Spill
+; RV64ZB-PURECAP-NEXT:    sd a0, 8(csp) # 8-byte Folded Spill
 ; RV64ZB-PURECAP-NEXT:    #APP
 ; RV64ZB-PURECAP-NEXT:    #NO_APP
-; RV64ZB-PURECAP-NEXT:    cld a0, 8(csp) # 8-byte Folded Reload
+; RV64ZB-PURECAP-NEXT:    ld a0, 8(csp) # 8-byte Folded Reload
 ; RV64ZB-PURECAP-NEXT:    beqz a0, .LBB2_2
 ; RV64ZB-PURECAP-NEXT:  # %bb.1: # %falsebb
 ; RV64ZB-PURECAP-NEXT:    li a0, 0
 ; RV64ZB-PURECAP-NEXT:    j .LBB2_3
 ; RV64ZB-PURECAP-NEXT:  .LBB2_2: # %truebb
-; RV64ZB-PURECAP-NEXT:    clh a0, 0(csp) # 8-byte Folded Reload
+; RV64ZB-PURECAP-NEXT:    lh a0, 0(csp) # 8-byte Folded Reload
 ; RV64ZB-PURECAP-NEXT:  .LBB2_3: # %falsebb
-; RV64ZB-PURECAP-NEXT:    clc cra, 240(csp) # 16-byte Folded Reload
-; RV64ZB-PURECAP-NEXT:    clc cgp, 224(csp) # 16-byte Folded Reload
-; RV64ZB-PURECAP-NEXT:    clc ctp, 208(csp) # 16-byte Folded Reload
-; RV64ZB-PURECAP-NEXT:    clc cs0, 192(csp) # 16-byte Folded Reload
-; RV64ZB-PURECAP-NEXT:    clc cs1, 176(csp) # 16-byte Folded Reload
-; RV64ZB-PURECAP-NEXT:    clc cs2, 160(csp) # 16-byte Folded Reload
-; RV64ZB-PURECAP-NEXT:    clc cs3, 144(csp) # 16-byte Folded Reload
-; RV64ZB-PURECAP-NEXT:    clc cs4, 128(csp) # 16-byte Folded Reload
-; RV64ZB-PURECAP-NEXT:    clc cs5, 112(csp) # 16-byte Folded Reload
-; RV64ZB-PURECAP-NEXT:    clc cs6, 96(csp) # 16-byte Folded Reload
-; RV64ZB-PURECAP-NEXT:    clc cs7, 80(csp) # 16-byte Folded Reload
-; RV64ZB-PURECAP-NEXT:    clc cs8, 64(csp) # 16-byte Folded Reload
-; RV64ZB-PURECAP-NEXT:    clc cs9, 48(csp) # 16-byte Folded Reload
-; RV64ZB-PURECAP-NEXT:    clc cs10, 32(csp) # 16-byte Folded Reload
-; RV64ZB-PURECAP-NEXT:    clc cs11, 16(csp) # 16-byte Folded Reload
+; RV64ZB-PURECAP-NEXT:    lc cra, 240(csp) # 16-byte Folded Reload
+; RV64ZB-PURECAP-NEXT:    lc cgp, 224(csp) # 16-byte Folded Reload
+; RV64ZB-PURECAP-NEXT:    lc ctp, 208(csp) # 16-byte Folded Reload
+; RV64ZB-PURECAP-NEXT:    lc cs0, 192(csp) # 16-byte Folded Reload
+; RV64ZB-PURECAP-NEXT:    lc cs1, 176(csp) # 16-byte Folded Reload
+; RV64ZB-PURECAP-NEXT:    lc cs2, 160(csp) # 16-byte Folded Reload
+; RV64ZB-PURECAP-NEXT:    lc cs3, 144(csp) # 16-byte Folded Reload
+; RV64ZB-PURECAP-NEXT:    lc cs4, 128(csp) # 16-byte Folded Reload
+; RV64ZB-PURECAP-NEXT:    lc cs5, 112(csp) # 16-byte Folded Reload
+; RV64ZB-PURECAP-NEXT:    lc cs6, 96(csp) # 16-byte Folded Reload
+; RV64ZB-PURECAP-NEXT:    lc cs7, 80(csp) # 16-byte Folded Reload
+; RV64ZB-PURECAP-NEXT:    lc cs8, 64(csp) # 16-byte Folded Reload
+; RV64ZB-PURECAP-NEXT:    lc cs9, 48(csp) # 16-byte Folded Reload
+; RV64ZB-PURECAP-NEXT:    lc cs10, 32(csp) # 16-byte Folded Reload
+; RV64ZB-PURECAP-NEXT:    lc cs11, 16(csp) # 16-byte Folded Reload
 ; RV64ZB-PURECAP-NEXT:    cincoffset csp, csp, 256
-; RV64ZB-PURECAP-NEXT:    cret
+; RV64ZB-PURECAP-NEXT:    ret
   tail call void asm sideeffect "", "~{x1},~{x3},~{x4},~{x5},~{x6},~{x7},~{x8},~{x9},~{x10},~{x11},~{x12},~{x13},~{x14},~{x15},~{x16},~{x17},~{x18},~{x19},~{x20},~{x21},~{x22},~{x23},~{x24},~{x25},~{x26},~{x27},~{x28},~{x29},~{x30},~{x31}"()
   %a = icmp eq i64 %x, 0
   br i1 %a, label %truebb, label %falsebb
@@ -432,10 +412,8 @@ falsebb:
 define i64 @test_zext_b(i64 %x, i8 %y) nounwind {
 ; CHECK-LABEL: test_zext_b:
 ; CHECK:       # %bb.0:
-; CHECK-NEXT:    addi sp, sp, -144
-; CHECK-NEXT:    sd ra, 136(sp) # 8-byte Folded Spill
-; CHECK-NEXT:    sd gp, 128(sp) # 8-byte Folded Spill
-; CHECK-NEXT:    sd tp, 120(sp) # 8-byte Folded Spill
+; CHECK-NEXT:    addi sp, sp, -128
+; CHECK-NEXT:    sd ra, 120(sp) # 8-byte Folded Spill
 ; CHECK-NEXT:    sd s0, 112(sp) # 8-byte Folded Spill
 ; CHECK-NEXT:    sd s1, 104(sp) # 8-byte Folded Spill
 ; CHECK-NEXT:    sd s2, 96(sp) # 8-byte Folded Spill
@@ -460,9 +438,7 @@ define i64 @test_zext_b(i64 %x, i8 %y) nounwind {
 ; CHECK-NEXT:  .LBB3_2: # %truebb
 ; CHECK-NEXT:    lbu a0, 8(sp) # 8-byte Folded Reload
 ; CHECK-NEXT:  .LBB3_3: # %falsebb
-; CHECK-NEXT:    ld ra, 136(sp) # 8-byte Folded Reload
-; CHECK-NEXT:    ld gp, 128(sp) # 8-byte Folded Reload
-; CHECK-NEXT:    ld tp, 120(sp) # 8-byte Folded Reload
+; CHECK-NEXT:    ld ra, 120(sp) # 8-byte Folded Reload
 ; CHECK-NEXT:    ld s0, 112(sp) # 8-byte Folded Reload
 ; CHECK-NEXT:    ld s1, 104(sp) # 8-byte Folded Reload
 ; CHECK-NEXT:    ld s2, 96(sp) # 8-byte Folded Reload
@@ -475,56 +451,56 @@ define i64 @test_zext_b(i64 %x, i8 %y) nounwind {
 ; CHECK-NEXT:    ld s9, 40(sp) # 8-byte Folded Reload
 ; CHECK-NEXT:    ld s10, 32(sp) # 8-byte Folded Reload
 ; CHECK-NEXT:    ld s11, 24(sp) # 8-byte Folded Reload
-; CHECK-NEXT:    addi sp, sp, 144
+; CHECK-NEXT:    addi sp, sp, 128
 ; CHECK-NEXT:    ret
 ;
 ; RV64ZB-PURECAP-LABEL: test_zext_b:
 ; RV64ZB-PURECAP:       # %bb.0:
 ; RV64ZB-PURECAP-NEXT:    cincoffset csp, csp, -256
-; RV64ZB-PURECAP-NEXT:    csc cra, 240(csp) # 16-byte Folded Spill
-; RV64ZB-PURECAP-NEXT:    csc cgp, 224(csp) # 16-byte Folded Spill
-; RV64ZB-PURECAP-NEXT:    csc ctp, 208(csp) # 16-byte Folded Spill
-; RV64ZB-PURECAP-NEXT:    csc cs0, 192(csp) # 16-byte Folded Spill
-; RV64ZB-PURECAP-NEXT:    csc cs1, 176(csp) # 16-byte Folded Spill
-; RV64ZB-PURECAP-NEXT:    csc cs2, 160(csp) # 16-byte Folded Spill
-; RV64ZB-PURECAP-NEXT:    csc cs3, 144(csp) # 16-byte Folded Spill
-; RV64ZB-PURECAP-NEXT:    csc cs4, 128(csp) # 16-byte Folded Spill
-; RV64ZB-PURECAP-NEXT:    csc cs5, 112(csp) # 16-byte Folded Spill
-; RV64ZB-PURECAP-NEXT:    csc cs6, 96(csp) # 16-byte Folded Spill
-; RV64ZB-PURECAP-NEXT:    csc cs7, 80(csp) # 16-byte Folded Spill
-; RV64ZB-PURECAP-NEXT:    csc cs8, 64(csp) # 16-byte Folded Spill
-; RV64ZB-PURECAP-NEXT:    csc cs9, 48(csp) # 16-byte Folded Spill
-; RV64ZB-PURECAP-NEXT:    csc cs10, 32(csp) # 16-byte Folded Spill
-; RV64ZB-PURECAP-NEXT:    csc cs11, 16(csp) # 16-byte Folded Spill
-; RV64ZB-PURECAP-NEXT:    csd a1, 0(csp) # 8-byte Folded Spill
-; RV64ZB-PURECAP-NEXT:    csd a0, 8(csp) # 8-byte Folded Spill
+; RV64ZB-PURECAP-NEXT:    sc cra, 240(csp) # 16-byte Folded Spill
+; RV64ZB-PURECAP-NEXT:    sc cgp, 224(csp) # 16-byte Folded Spill
+; RV64ZB-PURECAP-NEXT:    sc ctp, 208(csp) # 16-byte Folded Spill
+; RV64ZB-PURECAP-NEXT:    sc cs0, 192(csp) # 16-byte Folded Spill
+; RV64ZB-PURECAP-NEXT:    sc cs1, 176(csp) # 16-byte Folded Spill
+; RV64ZB-PURECAP-NEXT:    sc cs2, 160(csp) # 16-byte Folded Spill
+; RV64ZB-PURECAP-NEXT:    sc cs3, 144(csp) # 16-byte Folded Spill
+; RV64ZB-PURECAP-NEXT:    sc cs4, 128(csp) # 16-byte Folded Spill
+; RV64ZB-PURECAP-NEXT:    sc cs5, 112(csp) # 16-byte Folded Spill
+; RV64ZB-PURECAP-NEXT:    sc cs6, 96(csp) # 16-byte Folded Spill
+; RV64ZB-PURECAP-NEXT:    sc cs7, 80(csp) # 16-byte Folded Spill
+; RV64ZB-PURECAP-NEXT:    sc cs8, 64(csp) # 16-byte Folded Spill
+; RV64ZB-PURECAP-NEXT:    sc cs9, 48(csp) # 16-byte Folded Spill
+; RV64ZB-PURECAP-NEXT:    sc cs10, 32(csp) # 16-byte Folded Spill
+; RV64ZB-PURECAP-NEXT:    sc cs11, 16(csp) # 16-byte Folded Spill
+; RV64ZB-PURECAP-NEXT:    sd a1, 0(csp) # 8-byte Folded Spill
+; RV64ZB-PURECAP-NEXT:    sd a0, 8(csp) # 8-byte Folded Spill
 ; RV64ZB-PURECAP-NEXT:    #APP
 ; RV64ZB-PURECAP-NEXT:    #NO_APP
-; RV64ZB-PURECAP-NEXT:    cld a0, 8(csp) # 8-byte Folded Reload
+; RV64ZB-PURECAP-NEXT:    ld a0, 8(csp) # 8-byte Folded Reload
 ; RV64ZB-PURECAP-NEXT:    beqz a0, .LBB3_2
 ; RV64ZB-PURECAP-NEXT:  # %bb.1: # %falsebb
 ; RV64ZB-PURECAP-NEXT:    li a0, 0
 ; RV64ZB-PURECAP-NEXT:    j .LBB3_3
 ; RV64ZB-PURECAP-NEXT:  .LBB3_2: # %truebb
-; RV64ZB-PURECAP-NEXT:    clbu a0, 0(csp) # 8-byte Folded Reload
+; RV64ZB-PURECAP-NEXT:    lbu a0, 0(csp) # 8-byte Folded Reload
 ; RV64ZB-PURECAP-NEXT:  .LBB3_3: # %falsebb
-; RV64ZB-PURECAP-NEXT:    clc cra, 240(csp) # 16-byte Folded Reload
-; RV64ZB-PURECAP-NEXT:    clc cgp, 224(csp) # 16-byte Folded Reload
-; RV64ZB-PURECAP-NEXT:    clc ctp, 208(csp) # 16-byte Folded Reload
-; RV64ZB-PURECAP-NEXT:    clc cs0, 192(csp) # 16-byte Folded Reload
-; RV64ZB-PURECAP-NEXT:    clc cs1, 176(csp) # 16-byte Folded Reload
-; RV64ZB-PURECAP-NEXT:    clc cs2, 160(csp) # 16-byte Folded Reload
-; RV64ZB-PURECAP-NEXT:    clc cs3, 144(csp) # 16-byte Folded Reload
-; RV64ZB-PURECAP-NEXT:    clc cs4, 128(csp) # 16-byte Folded Reload
-; RV64ZB-PURECAP-NEXT:    clc cs5, 112(csp) # 16-byte Folded Reload
-; RV64ZB-PURECAP-NEXT:    clc cs6, 96(csp) # 16-byte Folded Reload
-; RV64ZB-PURECAP-NEXT:    clc cs7, 80(csp) # 16-byte Folded Reload
-; RV64ZB-PURECAP-NEXT:    clc cs8, 64(csp) # 16-byte Folded Reload
-; RV64ZB-PURECAP-NEXT:    clc cs9, 48(csp) # 16-byte Folded Reload
-; RV64ZB-PURECAP-NEXT:    clc cs10, 32(csp) # 16-byte Folded Reload
-; RV64ZB-PURECAP-NEXT:    clc cs11, 16(csp) # 16-byte Folded Reload
+; RV64ZB-PURECAP-NEXT:    lc cra, 240(csp) # 16-byte Folded Reload
+; RV64ZB-PURECAP-NEXT:    lc cgp, 224(csp) # 16-byte Folded Reload
+; RV64ZB-PURECAP-NEXT:    lc ctp, 208(csp) # 16-byte Folded Reload
+; RV64ZB-PURECAP-NEXT:    lc cs0, 192(csp) # 16-byte Folded Reload
+; RV64ZB-PURECAP-NEXT:    lc cs1, 176(csp) # 16-byte Folded Reload
+; RV64ZB-PURECAP-NEXT:    lc cs2, 160(csp) # 16-byte Folded Reload
+; RV64ZB-PURECAP-NEXT:    lc cs3, 144(csp) # 16-byte Folded Reload
+; RV64ZB-PURECAP-NEXT:    lc cs4, 128(csp) # 16-byte Folded Reload
+; RV64ZB-PURECAP-NEXT:    lc cs5, 112(csp) # 16-byte Folded Reload
+; RV64ZB-PURECAP-NEXT:    lc cs6, 96(csp) # 16-byte Folded Reload
+; RV64ZB-PURECAP-NEXT:    lc cs7, 80(csp) # 16-byte Folded Reload
+; RV64ZB-PURECAP-NEXT:    lc cs8, 64(csp) # 16-byte Folded Reload
+; RV64ZB-PURECAP-NEXT:    lc cs9, 48(csp) # 16-byte Folded Reload
+; RV64ZB-PURECAP-NEXT:    lc cs10, 32(csp) # 16-byte Folded Reload
+; RV64ZB-PURECAP-NEXT:    lc cs11, 16(csp) # 16-byte Folded Reload
 ; RV64ZB-PURECAP-NEXT:    cincoffset csp, csp, 256
-; RV64ZB-PURECAP-NEXT:    cret
+; RV64ZB-PURECAP-NEXT:    ret
   tail call void asm sideeffect "", "~{x1},~{x3},~{x4},~{x5},~{x6},~{x7},~{x8},~{x9},~{x10},~{x11},~{x12},~{x13},~{x14},~{x15},~{x16},~{x17},~{x18},~{x19},~{x20},~{x21},~{x22},~{x23},~{x24},~{x25},~{x26},~{x27},~{x28},~{x29},~{x30},~{x31}"()
   %a = icmp eq i64 %x, 0
   br i1 %a, label %truebb, label %falsebb
@@ -539,10 +515,8 @@ falsebb:
 define i64 @test_zext_h(i64 %x, i16 %y) nounwind {
 ; RV64I-LABEL: test_zext_h:
 ; RV64I:       # %bb.0:
-; RV64I-NEXT:    addi sp, sp, -144
-; RV64I-NEXT:    sd ra, 136(sp) # 8-byte Folded Spill
-; RV64I-NEXT:    sd gp, 128(sp) # 8-byte Folded Spill
-; RV64I-NEXT:    sd tp, 120(sp) # 8-byte Folded Spill
+; RV64I-NEXT:    addi sp, sp, -128
+; RV64I-NEXT:    sd ra, 120(sp) # 8-byte Folded Spill
 ; RV64I-NEXT:    sd s0, 112(sp) # 8-byte Folded Spill
 ; RV64I-NEXT:    sd s1, 104(sp) # 8-byte Folded Spill
 ; RV64I-NEXT:    sd s2, 96(sp) # 8-byte Folded Spill
@@ -569,9 +543,7 @@ define i64 @test_zext_h(i64 %x, i16 %y) nounwind {
 ; RV64I-NEXT:    slli a0, a0, 48
 ; RV64I-NEXT:    srli a0, a0, 48
 ; RV64I-NEXT:  .LBB4_3: # %falsebb
-; RV64I-NEXT:    ld ra, 136(sp) # 8-byte Folded Reload
-; RV64I-NEXT:    ld gp, 128(sp) # 8-byte Folded Reload
-; RV64I-NEXT:    ld tp, 120(sp) # 8-byte Folded Reload
+; RV64I-NEXT:    ld ra, 120(sp) # 8-byte Folded Reload
 ; RV64I-NEXT:    ld s0, 112(sp) # 8-byte Folded Reload
 ; RV64I-NEXT:    ld s1, 104(sp) # 8-byte Folded Reload
 ; RV64I-NEXT:    ld s2, 96(sp) # 8-byte Folded Reload
@@ -584,15 +556,13 @@ define i64 @test_zext_h(i64 %x, i16 %y) nounwind {
 ; RV64I-NEXT:    ld s9, 40(sp) # 8-byte Folded Reload
 ; RV64I-NEXT:    ld s10, 32(sp) # 8-byte Folded Reload
 ; RV64I-NEXT:    ld s11, 24(sp) # 8-byte Folded Reload
-; RV64I-NEXT:    addi sp, sp, 144
+; RV64I-NEXT:    addi sp, sp, 128
 ; RV64I-NEXT:    ret
 ;
 ; RV64ZB-LABEL: test_zext_h:
 ; RV64ZB:       # %bb.0:
-; RV64ZB-NEXT:    addi sp, sp, -144
-; RV64ZB-NEXT:    sd ra, 136(sp) # 8-byte Folded Spill
-; RV64ZB-NEXT:    sd gp, 128(sp) # 8-byte Folded Spill
-; RV64ZB-NEXT:    sd tp, 120(sp) # 8-byte Folded Spill
+; RV64ZB-NEXT:    addi sp, sp, -128
+; RV64ZB-NEXT:    sd ra, 120(sp) # 8-byte Folded Spill
 ; RV64ZB-NEXT:    sd s0, 112(sp) # 8-byte Folded Spill
 ; RV64ZB-NEXT:    sd s1, 104(sp) # 8-byte Folded Spill
 ; RV64ZB-NEXT:    sd s2, 96(sp) # 8-byte Folded Spill
@@ -617,9 +587,7 @@ define i64 @test_zext_h(i64 %x, i16 %y) nounwind {
 ; RV64ZB-NEXT:  .LBB4_2: # %truebb
 ; RV64ZB-NEXT:    lhu a0, 8(sp) # 8-byte Folded Reload
 ; RV64ZB-NEXT:  .LBB4_3: # %falsebb
-; RV64ZB-NEXT:    ld ra, 136(sp) # 8-byte Folded Reload
-; RV64ZB-NEXT:    ld gp, 128(sp) # 8-byte Folded Reload
-; RV64ZB-NEXT:    ld tp, 120(sp) # 8-byte Folded Reload
+; RV64ZB-NEXT:    ld ra, 120(sp) # 8-byte Folded Reload
 ; RV64ZB-NEXT:    ld s0, 112(sp) # 8-byte Folded Reload
 ; RV64ZB-NEXT:    ld s1, 104(sp) # 8-byte Folded Reload
 ; RV64ZB-NEXT:    ld s2, 96(sp) # 8-byte Folded Reload
@@ -632,56 +600,56 @@ define i64 @test_zext_h(i64 %x, i16 %y) nounwind {
 ; RV64ZB-NEXT:    ld s9, 40(sp) # 8-byte Folded Reload
 ; RV64ZB-NEXT:    ld s10, 32(sp) # 8-byte Folded Reload
 ; RV64ZB-NEXT:    ld s11, 24(sp) # 8-byte Folded Reload
-; RV64ZB-NEXT:    addi sp, sp, 144
+; RV64ZB-NEXT:    addi sp, sp, 128
 ; RV64ZB-NEXT:    ret
 ;
 ; RV64ZB-PURECAP-LABEL: test_zext_h:
 ; RV64ZB-PURECAP:       # %bb.0:
 ; RV64ZB-PURECAP-NEXT:    cincoffset csp, csp, -256
-; RV64ZB-PURECAP-NEXT:    csc cra, 240(csp) # 16-byte Folded Spill
-; RV64ZB-PURECAP-NEXT:    csc cgp, 224(csp) # 16-byte Folded Spill
-; RV64ZB-PURECAP-NEXT:    csc ctp, 208(csp) # 16-byte Folded Spill
-; RV64ZB-PURECAP-NEXT:    csc cs0, 192(csp) # 16-byte Folded Spill
-; RV64ZB-PURECAP-NEXT:    csc cs1, 176(csp) # 16-byte Folded Spill
-; RV64ZB-PURECAP-NEXT:    csc cs2, 160(csp) # 16-byte Folded Spill
-; RV64ZB-PURECAP-NEXT:    csc cs3, 144(csp) # 16-byte Folded Spill
-; RV64ZB-PURECAP-NEXT:    csc cs4, 128(csp) # 16-byte Folded Spill
-; RV64ZB-PURECAP-NEXT:    csc cs5, 112(csp) # 16-byte Folded Spill
-; RV64ZB-PURECAP-NEXT:    csc cs6, 96(csp) # 16-byte Folded Spill
-; RV64ZB-PURECAP-NEXT:    csc cs7, 80(csp) # 16-byte Folded Spill
-; RV64ZB-PURECAP-NEXT:    csc cs8, 64(csp) # 16-byte Folded Spill
-; RV64ZB-PURECAP-NEXT:    csc cs9, 48(csp) # 16-byte Folded Spill
-; RV64ZB-PURECAP-NEXT:    csc cs10, 32(csp) # 16-byte Folded Spill
-; RV64ZB-PURECAP-NEXT:    csc cs11, 16(csp) # 16-byte Folded Spill
-; RV64ZB-PURECAP-NEXT:    csd a1, 0(csp) # 8-byte Folded Spill
-; RV64ZB-PURECAP-NEXT:    csd a0, 8(csp) # 8-byte Folded Spill
+; RV64ZB-PURECAP-NEXT:    sc cra, 240(csp) # 16-byte Folded Spill
+; RV64ZB-PURECAP-NEXT:    sc cgp, 224(csp) # 16-byte Folded Spill
+; RV64ZB-PURECAP-NEXT:    sc ctp, 208(csp) # 16-byte Folded Spill
+; RV64ZB-PURECAP-NEXT:    sc cs0, 192(csp) # 16-byte Folded Spill
+; RV64ZB-PURECAP-NEXT:    sc cs1, 176(csp) # 16-byte Folded Spill
+; RV64ZB-PURECAP-NEXT:    sc cs2, 160(csp) # 16-byte Folded Spill
+; RV64ZB-PURECAP-NEXT:    sc cs3, 144(csp) # 16-byte Folded Spill
+; RV64ZB-PURECAP-NEXT:    sc cs4, 128(csp) # 16-byte Folded Spill
+; RV64ZB-PURECAP-NEXT:    sc cs5, 112(csp) # 16-byte Folded Spill
+; RV64ZB-PURECAP-NEXT:    sc cs6, 96(csp) # 16-byte Folded Spill
+; RV64ZB-PURECAP-NEXT:    sc cs7, 80(csp) # 16-byte Folded Spill
+; RV64ZB-PURECAP-NEXT:    sc cs8, 64(csp) # 16-byte Folded Spill
+; RV64ZB-PURECAP-NEXT:    sc cs9, 48(csp) # 16-byte Folded Spill
+; RV64ZB-PURECAP-NEXT:    sc cs10, 32(csp) # 16-byte Folded Spill
+; RV64ZB-PURECAP-NEXT:    sc cs11, 16(csp) # 16-byte Folded Spill
+; RV64ZB-PURECAP-NEXT:    sd a1, 0(csp) # 8-byte Folded Spill
+; RV64ZB-PURECAP-NEXT:    sd a0, 8(csp) # 8-byte Folded Spill
 ; RV64ZB-PURECAP-NEXT:    #APP
 ; RV64ZB-PURECAP-NEXT:    #NO_APP
-; RV64ZB-PURECAP-NEXT:    cld a0, 8(csp) # 8-byte Folded Reload
+; RV64ZB-PURECAP-NEXT:    ld a0, 8(csp) # 8-byte Folded Reload
 ; RV64ZB-PURECAP-NEXT:    beqz a0, .LBB4_2
 ; RV64ZB-PURECAP-NEXT:  # %bb.1: # %falsebb
 ; RV64ZB-PURECAP-NEXT:    li a0, 0
 ; RV64ZB-PURECAP-NEXT:    j .LBB4_3
 ; RV64ZB-PURECAP-NEXT:  .LBB4_2: # %truebb
-; RV64ZB-PURECAP-NEXT:    clhu a0, 0(csp) # 8-byte Folded Reload
+; RV64ZB-PURECAP-NEXT:    lhu a0, 0(csp) # 8-byte Folded Reload
 ; RV64ZB-PURECAP-NEXT:  .LBB4_3: # %falsebb
-; RV64ZB-PURECAP-NEXT:    clc cra, 240(csp) # 16-byte Folded Reload
-; RV64ZB-PURECAP-NEXT:    clc cgp, 224(csp) # 16-byte Folded Reload
-; RV64ZB-PURECAP-NEXT:    clc ctp, 208(csp) # 16-byte Folded Reload
-; RV64ZB-PURECAP-NEXT:    clc cs0, 192(csp) # 16-byte Folded Reload
-; RV64ZB-PURECAP-NEXT:    clc cs1, 176(csp) # 16-byte Folded Reload
-; RV64ZB-PURECAP-NEXT:    clc cs2, 160(csp) # 16-byte Folded Reload
-; RV64ZB-PURECAP-NEXT:    clc cs3, 144(csp) # 16-byte Folded Reload
-; RV64ZB-PURECAP-NEXT:    clc cs4, 128(csp) # 16-byte Folded Reload
-; RV64ZB-PURECAP-NEXT:    clc cs5, 112(csp) # 16-byte Folded Reload
-; RV64ZB-PURECAP-NEXT:    clc cs6, 96(csp) # 16-byte Folded Reload
-; RV64ZB-PURECAP-NEXT:    clc cs7, 80(csp) # 16-byte Folded Reload
-; RV64ZB-PURECAP-NEXT:    clc cs8, 64(csp) # 16-byte Folded Reload
-; RV64ZB-PURECAP-NEXT:    clc cs9, 48(csp) # 16-byte Folded Reload
-; RV64ZB-PURECAP-NEXT:    clc cs10, 32(csp) # 16-byte Folded Reload
-; RV64ZB-PURECAP-NEXT:    clc cs11, 16(csp) # 16-byte Folded Reload
+; RV64ZB-PURECAP-NEXT:    lc cra, 240(csp) # 16-byte Folded Reload
+; RV64ZB-PURECAP-NEXT:    lc cgp, 224(csp) # 16-byte Folded Reload
+; RV64ZB-PURECAP-NEXT:    lc ctp, 208(csp) # 16-byte Folded Reload
+; RV64ZB-PURECAP-NEXT:    lc cs0, 192(csp) # 16-byte Folded Reload
+; RV64ZB-PURECAP-NEXT:    lc cs1, 176(csp) # 16-byte Folded Reload
+; RV64ZB-PURECAP-NEXT:    lc cs2, 160(csp) # 16-byte Folded Reload
+; RV64ZB-PURECAP-NEXT:    lc cs3, 144(csp) # 16-byte Folded Reload
+; RV64ZB-PURECAP-NEXT:    lc cs4, 128(csp) # 16-byte Folded Reload
+; RV64ZB-PURECAP-NEXT:    lc cs5, 112(csp) # 16-byte Folded Reload
+; RV64ZB-PURECAP-NEXT:    lc cs6, 96(csp) # 16-byte Folded Reload
+; RV64ZB-PURECAP-NEXT:    lc cs7, 80(csp) # 16-byte Folded Reload
+; RV64ZB-PURECAP-NEXT:    lc cs8, 64(csp) # 16-byte Folded Reload
+; RV64ZB-PURECAP-NEXT:    lc cs9, 48(csp) # 16-byte Folded Reload
+; RV64ZB-PURECAP-NEXT:    lc cs10, 32(csp) # 16-byte Folded Reload
+; RV64ZB-PURECAP-NEXT:    lc cs11, 16(csp) # 16-byte Folded Reload
 ; RV64ZB-PURECAP-NEXT:    cincoffset csp, csp, 256
-; RV64ZB-PURECAP-NEXT:    cret
+; RV64ZB-PURECAP-NEXT:    ret
   tail call void asm sideeffect "", "~{x1},~{x3},~{x4},~{x5},~{x6},~{x7},~{x8},~{x9},~{x10},~{x11},~{x12},~{x13},~{x14},~{x15},~{x16},~{x17},~{x18},~{x19},~{x20},~{x21},~{x22},~{x23},~{x24},~{x25},~{x26},~{x27},~{x28},~{x29},~{x30},~{x31}"()
   %a = icmp eq i64 %x, 0
   br i1 %a, label %truebb, label %falsebb
@@ -696,10 +664,8 @@ falsebb:
 define i64 @test_zext_w(i64 %x, i32 %y) nounwind {
 ; RV64I-LABEL: test_zext_w:
 ; RV64I:       # %bb.0:
-; RV64I-NEXT:    addi sp, sp, -144
-; RV64I-NEXT:    sd ra, 136(sp) # 8-byte Folded Spill
-; RV64I-NEXT:    sd gp, 128(sp) # 8-byte Folded Spill
-; RV64I-NEXT:    sd tp, 120(sp) # 8-byte Folded Spill
+; RV64I-NEXT:    addi sp, sp, -128
+; RV64I-NEXT:    sd ra, 120(sp) # 8-byte Folded Spill
 ; RV64I-NEXT:    sd s0, 112(sp) # 8-byte Folded Spill
 ; RV64I-NEXT:    sd s1, 104(sp) # 8-byte Folded Spill
 ; RV64I-NEXT:    sd s2, 96(sp) # 8-byte Folded Spill
@@ -726,9 +692,7 @@ define i64 @test_zext_w(i64 %x, i32 %y) nounwind {
 ; RV64I-NEXT:    slli a0, a0, 32
 ; RV64I-NEXT:    srli a0, a0, 32
 ; RV64I-NEXT:  .LBB5_3: # %falsebb
-; RV64I-NEXT:    ld ra, 136(sp) # 8-byte Folded Reload
-; RV64I-NEXT:    ld gp, 128(sp) # 8-byte Folded Reload
-; RV64I-NEXT:    ld tp, 120(sp) # 8-byte Folded Reload
+; RV64I-NEXT:    ld ra, 120(sp) # 8-byte Folded Reload
 ; RV64I-NEXT:    ld s0, 112(sp) # 8-byte Folded Reload
 ; RV64I-NEXT:    ld s1, 104(sp) # 8-byte Folded Reload
 ; RV64I-NEXT:    ld s2, 96(sp) # 8-byte Folded Reload
@@ -741,15 +705,13 @@ define i64 @test_zext_w(i64 %x, i32 %y) nounwind {
 ; RV64I-NEXT:    ld s9, 40(sp) # 8-byte Folded Reload
 ; RV64I-NEXT:    ld s10, 32(sp) # 8-byte Folded Reload
 ; RV64I-NEXT:    ld s11, 24(sp) # 8-byte Folded Reload
-; RV64I-NEXT:    addi sp, sp, 144
+; RV64I-NEXT:    addi sp, sp, 128
 ; RV64I-NEXT:    ret
 ;
 ; RV64ZB-LABEL: test_zext_w:
 ; RV64ZB:       # %bb.0:
-; RV64ZB-NEXT:    addi sp, sp, -144
-; RV64ZB-NEXT:    sd ra, 136(sp) # 8-byte Folded Spill
-; RV64ZB-NEXT:    sd gp, 128(sp) # 8-byte Folded Spill
-; RV64ZB-NEXT:    sd tp, 120(sp) # 8-byte Folded Spill
+; RV64ZB-NEXT:    addi sp, sp, -128
+; RV64ZB-NEXT:    sd ra, 120(sp) # 8-byte Folded Spill
 ; RV64ZB-NEXT:    sd s0, 112(sp) # 8-byte Folded Spill
 ; RV64ZB-NEXT:    sd s1, 104(sp) # 8-byte Folded Spill
 ; RV64ZB-NEXT:    sd s2, 96(sp) # 8-byte Folded Spill
@@ -774,9 +736,7 @@ define i64 @test_zext_w(i64 %x, i32 %y) nounwind {
 ; RV64ZB-NEXT:  .LBB5_2: # %truebb
 ; RV64ZB-NEXT:    lwu a0, 8(sp) # 8-byte Folded Reload
 ; RV64ZB-NEXT:  .LBB5_3: # %falsebb
-; RV64ZB-NEXT:    ld ra, 136(sp) # 8-byte Folded Reload
-; RV64ZB-NEXT:    ld gp, 128(sp) # 8-byte Folded Reload
-; RV64ZB-NEXT:    ld tp, 120(sp) # 8-byte Folded Reload
+; RV64ZB-NEXT:    ld ra, 120(sp) # 8-byte Folded Reload
 ; RV64ZB-NEXT:    ld s0, 112(sp) # 8-byte Folded Reload
 ; RV64ZB-NEXT:    ld s1, 104(sp) # 8-byte Folded Reload
 ; RV64ZB-NEXT:    ld s2, 96(sp) # 8-byte Folded Reload
@@ -789,56 +749,56 @@ define i64 @test_zext_w(i64 %x, i32 %y) nounwind {
 ; RV64ZB-NEXT:    ld s9, 40(sp) # 8-byte Folded Reload
 ; RV64ZB-NEXT:    ld s10, 32(sp) # 8-byte Folded Reload
 ; RV64ZB-NEXT:    ld s11, 24(sp) # 8-byte Folded Reload
-; RV64ZB-NEXT:    addi sp, sp, 144
+; RV64ZB-NEXT:    addi sp, sp, 128
 ; RV64ZB-NEXT:    ret
 ;
 ; RV64ZB-PURECAP-LABEL: test_zext_w:
 ; RV64ZB-PURECAP:       # %bb.0:
 ; RV64ZB-PURECAP-NEXT:    cincoffset csp, csp, -256
-; RV64ZB-PURECAP-NEXT:    csc cra, 240(csp) # 16-byte Folded Spill
-; RV64ZB-PURECAP-NEXT:    csc cgp, 224(csp) # 16-byte Folded Spill
-; RV64ZB-PURECAP-NEXT:    csc ctp, 208(csp) # 16-byte Folded Spill
-; RV64ZB-PURECAP-NEXT:    csc cs0, 192(csp) # 16-byte Folded Spill
-; RV64ZB-PURECAP-NEXT:    csc cs1, 176(csp) # 16-byte Folded Spill
-; RV64ZB-PURECAP-NEXT:    csc cs2, 160(csp) # 16-byte Folded Spill
-; RV64ZB-PURECAP-NEXT:    csc cs3, 144(csp) # 16-byte Folded Spill
-; RV64ZB-PURECAP-NEXT:    csc cs4, 128(csp) # 16-byte Folded Spill
-; RV64ZB-PURECAP-NEXT:    csc cs5, 112(csp) # 16-byte Folded Spill
-; RV64ZB-PURECAP-NEXT:    csc cs6, 96(csp) # 16-byte Folded Spill
-; RV64ZB-PURECAP-NEXT:    csc cs7, 80(csp) # 16-byte Folded Spill
-; RV64ZB-PURECAP-NEXT:    csc cs8, 64(csp) # 16-byte Folded Spill
-; RV64ZB-PURECAP-NEXT:    csc cs9, 48(csp) # 16-byte Folded Spill
-; RV64ZB-PURECAP-NEXT:    csc cs10, 32(csp) # 16-byte Folded Spill
-; RV64ZB-PURECAP-NEXT:    csc cs11, 16(csp) # 16-byte Folded Spill
-; RV64ZB-PURECAP-NEXT:    csd a1, 0(csp) # 8-byte Folded Spill
-; RV64ZB-PURECAP-NEXT:    csd a0, 8(csp) # 8-byte Folded Spill
+; RV64ZB-PURECAP-NEXT:    sc cra, 240(csp) # 16-byte Folded Spill
+; RV64ZB-PURECAP-NEXT:    sc cgp, 224(csp) # 16-byte Folded Spill
+; RV64ZB-PURECAP-NEXT:    sc ctp, 208(csp) # 16-byte Folded Spill
+; RV64ZB-PURECAP-NEXT:    sc cs0, 192(csp) # 16-byte Folded Spill
+; RV64ZB-PURECAP-NEXT:    sc cs1, 176(csp) # 16-byte Folded Spill
+; RV64ZB-PURECAP-NEXT:    sc cs2, 160(csp) # 16-byte Folded Spill
+; RV64ZB-PURECAP-NEXT:    sc cs3, 144(csp) # 16-byte Folded Spill
+; RV64ZB-PURECAP-NEXT:    sc cs4, 128(csp) # 16-byte Folded Spill
+; RV64ZB-PURECAP-NEXT:    sc cs5, 112(csp) # 16-byte Folded Spill
+; RV64ZB-PURECAP-NEXT:    sc cs6, 96(csp) # 16-byte Folded Spill
+; RV64ZB-PURECAP-NEXT:    sc cs7, 80(csp) # 16-byte Folded Spill
+; RV64ZB-PURECAP-NEXT:    sc cs8, 64(csp) # 16-byte Folded Spill
+; RV64ZB-PURECAP-NEXT:    sc cs9, 48(csp) # 16-byte Folded Spill
+; RV64ZB-PURECAP-NEXT:    sc cs10, 32(csp) # 16-byte Folded Spill
+; RV64ZB-PURECAP-NEXT:    sc cs11, 16(csp) # 16-byte Folded Spill
+; RV64ZB-PURECAP-NEXT:    sd a1, 0(csp) # 8-byte Folded Spill
+; RV64ZB-PURECAP-NEXT:    sd a0, 8(csp) # 8-byte Folded Spill
 ; RV64ZB-PURECAP-NEXT:    #APP
 ; RV64ZB-PURECAP-NEXT:    #NO_APP
-; RV64ZB-PURECAP-NEXT:    cld a0, 8(csp) # 8-byte Folded Reload
+; RV64ZB-PURECAP-NEXT:    ld a0, 8(csp) # 8-byte Folded Reload
 ; RV64ZB-PURECAP-NEXT:    beqz a0, .LBB5_2
 ; RV64ZB-PURECAP-NEXT:  # %bb.1: # %falsebb
 ; RV64ZB-PURECAP-NEXT:    li a0, 0
 ; RV64ZB-PURECAP-NEXT:    j .LBB5_3
 ; RV64ZB-PURECAP-NEXT:  .LBB5_2: # %truebb
-; RV64ZB-PURECAP-NEXT:    clwu a0, 0(csp) # 8-byte Folded Reload
+; RV64ZB-PURECAP-NEXT:    lwu a0, 0(csp) # 8-byte Folded Reload
 ; RV64ZB-PURECAP-NEXT:  .LBB5_3: # %falsebb
-; RV64ZB-PURECAP-NEXT:    clc cra, 240(csp) # 16-byte Folded Reload
-; RV64ZB-PURECAP-NEXT:    clc cgp, 224(csp) # 16-byte Folded Reload
-; RV64ZB-PURECAP-NEXT:    clc ctp, 208(csp) # 16-byte Folded Reload
-; RV64ZB-PURECAP-NEXT:    clc cs0, 192(csp) # 16-byte Folded Reload
-; RV64ZB-PURECAP-NEXT:    clc cs1, 176(csp) # 16-byte Folded Reload
-; RV64ZB-PURECAP-NEXT:    clc cs2, 160(csp) # 16-byte Folded Reload
-; RV64ZB-PURECAP-NEXT:    clc cs3, 144(csp) # 16-byte Folded Reload
-; RV64ZB-PURECAP-NEXT:    clc cs4, 128(csp) # 16-byte Folded Reload
-; RV64ZB-PURECAP-NEXT:    clc cs5, 112(csp) # 16-byte Folded Reload
-; RV64ZB-PURECAP-NEXT:    clc cs6, 96(csp) # 16-byte Folded Reload
-; RV64ZB-PURECAP-NEXT:    clc cs7, 80(csp) # 16-byte Folded Reload
-; RV64ZB-PURECAP-NEXT:    clc cs8, 64(csp) # 16-byte Folded Reload
-; RV64ZB-PURECAP-NEXT:    clc cs9, 48(csp) # 16-byte Folded Reload
-; RV64ZB-PURECAP-NEXT:    clc cs10, 32(csp) # 16-byte Folded Reload
-; RV64ZB-PURECAP-NEXT:    clc cs11, 16(csp) # 16-byte Folded Reload
+; RV64ZB-PURECAP-NEXT:    lc cra, 240(csp) # 16-byte Folded Reload
+; RV64ZB-PURECAP-NEXT:    lc cgp, 224(csp) # 16-byte Folded Reload
+; RV64ZB-PURECAP-NEXT:    lc ctp, 208(csp) # 16-byte Folded Reload
+; RV64ZB-PURECAP-NEXT:    lc cs0, 192(csp) # 16-byte Folded Reload
+; RV64ZB-PURECAP-NEXT:    lc cs1, 176(csp) # 16-byte Folded Reload
+; RV64ZB-PURECAP-NEXT:    lc cs2, 160(csp) # 16-byte Folded Reload
+; RV64ZB-PURECAP-NEXT:    lc cs3, 144(csp) # 16-byte Folded Reload
+; RV64ZB-PURECAP-NEXT:    lc cs4, 128(csp) # 16-byte Folded Reload
+; RV64ZB-PURECAP-NEXT:    lc cs5, 112(csp) # 16-byte Folded Reload
+; RV64ZB-PURECAP-NEXT:    lc cs6, 96(csp) # 16-byte Folded Reload
+; RV64ZB-PURECAP-NEXT:    lc cs7, 80(csp) # 16-byte Folded Reload
+; RV64ZB-PURECAP-NEXT:    lc cs8, 64(csp) # 16-byte Folded Reload
+; RV64ZB-PURECAP-NEXT:    lc cs9, 48(csp) # 16-byte Folded Reload
+; RV64ZB-PURECAP-NEXT:    lc cs10, 32(csp) # 16-byte Folded Reload
+; RV64ZB-PURECAP-NEXT:    lc cs11, 16(csp) # 16-byte Folded Reload
 ; RV64ZB-PURECAP-NEXT:    cincoffset csp, csp, 256
-; RV64ZB-PURECAP-NEXT:    cret
+; RV64ZB-PURECAP-NEXT:    ret
   tail call void asm sideeffect "", "~{x1},~{x3},~{x4},~{x5},~{x6},~{x7},~{x8},~{x9},~{x10},~{x11},~{x12},~{x13},~{x14},~{x15},~{x16},~{x17},~{x18},~{x19},~{x20},~{x21},~{x22},~{x23},~{x24},~{x25},~{x26},~{x27},~{x28},~{x29},~{x30},~{x31}"()
   %a = icmp eq i64 %x, 0
   br i1 %a, label %truebb, label %falsebb

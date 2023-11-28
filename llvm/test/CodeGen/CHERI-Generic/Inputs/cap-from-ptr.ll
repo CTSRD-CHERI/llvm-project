@@ -20,6 +20,7 @@ entry:
   ret ptr addrspace(200) %new
 }
 
+#if !(defined(RISCV32BAKEWELL) | defined(RISCV64BAKEWELL))
 ;; Check that (int_cheri_cap_from_ptr ddc, x) can use the DDC register directly
 define internal ptr addrspace(200) @cap_from_ptr_ddc(ptr addrspace(200) %ptr, iCAPRANGE %offset) nounwind {
 entry:
@@ -37,6 +38,7 @@ entry:
   store ptr addrspace(200) %new, ptr addrspace(200) %ptr, align 16
   ret ptr addrspace(200) %new
 }
+#endif
 
 ;; Check that (int_cheri_cap_from_ptr null, x) does not use register zero (since that is DDC)
 define internal ptr addrspace(200) @cap_from_ptr_null(ptr addrspace(200) %ptr, iCAPRANGE %offset) nounwind {

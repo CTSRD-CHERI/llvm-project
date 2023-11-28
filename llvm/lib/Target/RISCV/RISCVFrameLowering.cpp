@@ -11,6 +11,7 @@
 //===----------------------------------------------------------------------===//
 
 #include "RISCVFrameLowering.h"
+#include "MCTargetDesc/RISCVMCTargetDesc.h"
 #include "RISCVMachineFunctionInfo.h"
 #include "RISCVSubtarget.h"
 #include "llvm/BinaryFormat/Dwarf.h"
@@ -701,8 +702,10 @@ void RISCVFrameLowering::emitPrologue(MachineFunction &MF,
             .setMIFlag(MachineInstr::FrameSetup);
       }
 
+      const bool IsStdCheri = STI.hasFeature(RISCV::FeatureStdExtZCheriPureCap);
       if (RISCVABI::isCheriPureCapABI(STI.getTargetABI()))
-        BuildMI(MBB, MBBI, DL, TII->get(RISCV::CSetAddr), SPReg)
+        BuildMI(MBB, MBBI, DL,
+                TII->get(IsStdCheri ? RISCV::SCADDR : RISCV::CSetAddr), SPReg)
             .addReg(SPReg)
             .addReg(SPAddrDstReg);
 

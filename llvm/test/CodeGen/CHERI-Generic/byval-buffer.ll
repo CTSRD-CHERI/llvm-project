@@ -166,32 +166,32 @@ define dso_local void @clang_purecap_byval_args() local_unnamed_addr addrspace(2
 ; PURECAP-RV64-LABEL: clang_purecap_byval_args:
 ; PURECAP-RV64:       # %bb.0: # %entry
 ; PURECAP-RV64-NEXT:    cincoffset csp, csp, -1072
-; PURECAP-RV64-NEXT:    csc cra, 1056(csp) # 16-byte Folded Spill
-; PURECAP-RV64-NEXT:    csc cs0, 1040(csp) # 16-byte Folded Spill
+; PURECAP-RV64-NEXT:    sc cra, 1056(csp) # 16-byte Folded Spill
+; PURECAP-RV64-NEXT:    sc cs0, 1040(csp) # 16-byte Folded Spill
 ; PURECAP-RV64-NEXT:  .LBB0_1: # %entry
 ; PURECAP-RV64-NEXT:    # Label of block must be emitted
-; PURECAP-RV64-NEXT:    auipcc cs0, %captab_pcrel_hi(global_foo)
-; PURECAP-RV64-NEXT:    clc cs0, %pcrel_lo(.LBB0_1)(cs0)
+; PURECAP-RV64-NEXT:    auipc cs0, %captab_pcrel_hi(global_foo)
+; PURECAP-RV64-NEXT:    lc cs0, %pcrel_lo(.LBB0_1)(cs0)
 ; PURECAP-RV64-NEXT:    li a2, 1024
 ; PURECAP-RV64-NEXT:    cmove ca0, cs0
 ; PURECAP-RV64-NEXT:    li a1, 0
-; PURECAP-RV64-NEXT:    ccall memset
-; PURECAP-RV64-NEXT:    clb a0, 0(cs0)
+; PURECAP-RV64-NEXT:    call memset
+; PURECAP-RV64-NEXT:    lb a0, 0(cs0)
 ; PURECAP-RV64-NEXT:    li a1, 0
-; PURECAP-RV64-NEXT:    ccall assert_eq
+; PURECAP-RV64-NEXT:    call assert_eq
 ; PURECAP-RV64-NEXT:    cincoffset ca0, csp, 16
 ; PURECAP-RV64-NEXT:    li a2, 1024
 ; PURECAP-RV64-NEXT:    cmove ca1, cs0
-; PURECAP-RV64-NEXT:    ccall memcpy
+; PURECAP-RV64-NEXT:    call memcpy
 ; PURECAP-RV64-NEXT:    cincoffset ca0, csp, 16
-; PURECAP-RV64-NEXT:    ccall foo_byval
-; PURECAP-RV64-NEXT:    clb a0, 0(cs0)
+; PURECAP-RV64-NEXT:    call foo_byval
+; PURECAP-RV64-NEXT:    lb a0, 0(cs0)
 ; PURECAP-RV64-NEXT:    li a1, 0
-; PURECAP-RV64-NEXT:    ccall assert_eq
-; PURECAP-RV64-NEXT:    clc cra, 1056(csp) # 16-byte Folded Reload
-; PURECAP-RV64-NEXT:    clc cs0, 1040(csp) # 16-byte Folded Reload
+; PURECAP-RV64-NEXT:    call assert_eq
+; PURECAP-RV64-NEXT:    lc cra, 1056(csp) # 16-byte Folded Reload
+; PURECAP-RV64-NEXT:    lc cs0, 1040(csp) # 16-byte Folded Reload
 ; PURECAP-RV64-NEXT:    cincoffset csp, csp, 1072
-; PURECAP-RV64-NEXT:    cret
+; PURECAP-RV64-NEXT:    ret
 ;
 ; PURECAP-MIPS-LABEL: clang_purecap_byval_args:
 ; PURECAP-MIPS:       # %bb.0: # %entry

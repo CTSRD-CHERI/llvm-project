@@ -78,7 +78,7 @@ define dso_local i32 @standard_lifetime() local_unnamed_addr sanitize_hwaddress 
 ; X86-NOSCOPE-NEXT:    ret i32 0
 ;
 ; AARCH64-SCOPE-LABEL: @standard_lifetime(
-; AARCH64-SCOPE-NEXT:    [[TMP1:%.*]] = call ptr @llvm.thread.pointer()
+; AARCH64-SCOPE-NEXT:    [[TMP1:%.*]] = call ptr @llvm.thread.pointer.p0()
 ; AARCH64-SCOPE-NEXT:    [[TMP2:%.*]] = getelementptr i8, ptr [[TMP1]], i32 48
 ; AARCH64-SCOPE-NEXT:    [[TMP3:%.*]] = load i64, ptr [[TMP2]], align 4
 ; AARCH64-SCOPE-NEXT:    [[TMP4:%.*]] = ashr i64 [[TMP3]], 3
@@ -130,7 +130,7 @@ define dso_local i32 @standard_lifetime() local_unnamed_addr sanitize_hwaddress 
 ; AARCH64-SCOPE-NEXT:    ret i32 0
 ;
 ; AARCH64-NOSCOPE-LABEL: @standard_lifetime(
-; AARCH64-NOSCOPE-NEXT:    [[TMP1:%.*]] = call ptr @llvm.thread.pointer()
+; AARCH64-NOSCOPE-NEXT:    [[TMP1:%.*]] = call ptr @llvm.thread.pointer.p0()
 ; AARCH64-NOSCOPE-NEXT:    [[TMP2:%.*]] = getelementptr i8, ptr [[TMP1]], i32 48
 ; AARCH64-NOSCOPE-NEXT:    [[TMP3:%.*]] = load i64, ptr [[TMP2]], align 4
 ; AARCH64-NOSCOPE-NEXT:    [[TMP4:%.*]] = ashr i64 [[TMP3]], 3
@@ -180,7 +180,7 @@ define dso_local i32 @standard_lifetime() local_unnamed_addr sanitize_hwaddress 
 ; AARCH64-NOSCOPE-NEXT:    ret i32 0
 ;
 ; AARCH64-SHORT-SCOPE-LABEL: @standard_lifetime(
-; AARCH64-SHORT-SCOPE-NEXT:    [[TMP1:%.*]] = call ptr @llvm.thread.pointer()
+; AARCH64-SHORT-SCOPE-NEXT:    [[TMP1:%.*]] = call ptr @llvm.thread.pointer.p0()
 ; AARCH64-SHORT-SCOPE-NEXT:    [[TMP2:%.*]] = getelementptr i8, ptr [[TMP1]], i32 48
 ; AARCH64-SHORT-SCOPE-NEXT:    [[TMP3:%.*]] = load i64, ptr [[TMP2]], align 4
 ; AARCH64-SHORT-SCOPE-NEXT:    [[TMP4:%.*]] = ashr i64 [[TMP3]], 3
@@ -235,7 +235,7 @@ define dso_local i32 @standard_lifetime() local_unnamed_addr sanitize_hwaddress 
 ; AARCH64-SHORT-SCOPE-NEXT:    ret i32 0
 ;
 ; AARCH64-SHORT-NOSCOPE-LABEL: @standard_lifetime(
-; AARCH64-SHORT-NOSCOPE-NEXT:    [[TMP1:%.*]] = call ptr @llvm.thread.pointer()
+; AARCH64-SHORT-NOSCOPE-NEXT:    [[TMP1:%.*]] = call ptr @llvm.thread.pointer.p0()
 ; AARCH64-SHORT-NOSCOPE-NEXT:    [[TMP2:%.*]] = getelementptr i8, ptr [[TMP1]], i32 48
 ; AARCH64-SHORT-NOSCOPE-NEXT:    [[TMP3:%.*]] = load i64, ptr [[TMP2]], align 4
 ; AARCH64-SHORT-NOSCOPE-NEXT:    [[TMP4:%.*]] = ashr i64 [[TMP3]], 3
@@ -359,7 +359,7 @@ define dso_local i32 @standard_lifetime_optnone() local_unnamed_addr optnone noi
 ; X86-NOSCOPE-NEXT:    ret i32 0
 ;
 ; AARCH64-SCOPE-LABEL: @standard_lifetime_optnone(
-; AARCH64-SCOPE-NEXT:    [[TMP1:%.*]] = call ptr @llvm.thread.pointer()
+; AARCH64-SCOPE-NEXT:    [[TMP1:%.*]] = call ptr @llvm.thread.pointer.p0()
 ; AARCH64-SCOPE-NEXT:    [[TMP2:%.*]] = getelementptr i8, ptr [[TMP1]], i32 48
 ; AARCH64-SCOPE-NEXT:    [[TMP3:%.*]] = load i64, ptr [[TMP2]], align 4
 ; AARCH64-SCOPE-NEXT:    [[TMP4:%.*]] = ashr i64 [[TMP3]], 3
@@ -411,7 +411,7 @@ define dso_local i32 @standard_lifetime_optnone() local_unnamed_addr optnone noi
 ; AARCH64-SCOPE-NEXT:    ret i32 0
 ;
 ; AARCH64-NOSCOPE-LABEL: @standard_lifetime_optnone(
-; AARCH64-NOSCOPE-NEXT:    [[TMP1:%.*]] = call ptr @llvm.thread.pointer()
+; AARCH64-NOSCOPE-NEXT:    [[TMP1:%.*]] = call ptr @llvm.thread.pointer.p0()
 ; AARCH64-NOSCOPE-NEXT:    [[TMP2:%.*]] = getelementptr i8, ptr [[TMP1]], i32 48
 ; AARCH64-NOSCOPE-NEXT:    [[TMP3:%.*]] = load i64, ptr [[TMP2]], align 4
 ; AARCH64-NOSCOPE-NEXT:    [[TMP4:%.*]] = ashr i64 [[TMP3]], 3
@@ -461,7 +461,7 @@ define dso_local i32 @standard_lifetime_optnone() local_unnamed_addr optnone noi
 ; AARCH64-NOSCOPE-NEXT:    ret i32 0
 ;
 ; AARCH64-SHORT-SCOPE-LABEL: @standard_lifetime_optnone(
-; AARCH64-SHORT-SCOPE-NEXT:    [[TMP1:%.*]] = call ptr @llvm.thread.pointer()
+; AARCH64-SHORT-SCOPE-NEXT:    [[TMP1:%.*]] = call ptr @llvm.thread.pointer.p0()
 ; AARCH64-SHORT-SCOPE-NEXT:    [[TMP2:%.*]] = getelementptr i8, ptr [[TMP1]], i32 48
 ; AARCH64-SHORT-SCOPE-NEXT:    [[TMP3:%.*]] = load i64, ptr [[TMP2]], align 4
 ; AARCH64-SHORT-SCOPE-NEXT:    [[TMP4:%.*]] = ashr i64 [[TMP3]], 3
@@ -516,7 +516,7 @@ define dso_local i32 @standard_lifetime_optnone() local_unnamed_addr optnone noi
 ; AARCH64-SHORT-SCOPE-NEXT:    ret i32 0
 ;
 ; AARCH64-SHORT-NOSCOPE-LABEL: @standard_lifetime_optnone(
-; AARCH64-SHORT-NOSCOPE-NEXT:    [[TMP1:%.*]] = call ptr @llvm.thread.pointer()
+; AARCH64-SHORT-NOSCOPE-NEXT:    [[TMP1:%.*]] = call ptr @llvm.thread.pointer.p0()
 ; AARCH64-SHORT-NOSCOPE-NEXT:    [[TMP2:%.*]] = getelementptr i8, ptr [[TMP1]], i32 48
 ; AARCH64-SHORT-NOSCOPE-NEXT:    [[TMP3:%.*]] = load i64, ptr [[TMP2]], align 4
 ; AARCH64-SHORT-NOSCOPE-NEXT:    [[TMP4:%.*]] = ashr i64 [[TMP3]], 3
@@ -630,7 +630,7 @@ define dso_local i32 @multiple_lifetimes() local_unnamed_addr sanitize_hwaddress
 ; X86-NOSCOPE-NEXT:    ret i32 0
 ;
 ; AARCH64-SCOPE-LABEL: @multiple_lifetimes(
-; AARCH64-SCOPE-NEXT:    [[TMP1:%.*]] = call ptr @llvm.thread.pointer()
+; AARCH64-SCOPE-NEXT:    [[TMP1:%.*]] = call ptr @llvm.thread.pointer.p0()
 ; AARCH64-SCOPE-NEXT:    [[TMP2:%.*]] = getelementptr i8, ptr [[TMP1]], i32 48
 ; AARCH64-SCOPE-NEXT:    [[TMP3:%.*]] = load i64, ptr [[TMP2]], align 4
 ; AARCH64-SCOPE-NEXT:    [[TMP4:%.*]] = ashr i64 [[TMP3]], 3
@@ -676,7 +676,7 @@ define dso_local i32 @multiple_lifetimes() local_unnamed_addr sanitize_hwaddress
 ; AARCH64-SCOPE-NEXT:    ret i32 0
 ;
 ; AARCH64-NOSCOPE-LABEL: @multiple_lifetimes(
-; AARCH64-NOSCOPE-NEXT:    [[TMP1:%.*]] = call ptr @llvm.thread.pointer()
+; AARCH64-NOSCOPE-NEXT:    [[TMP1:%.*]] = call ptr @llvm.thread.pointer.p0()
 ; AARCH64-NOSCOPE-NEXT:    [[TMP2:%.*]] = getelementptr i8, ptr [[TMP1]], i32 48
 ; AARCH64-NOSCOPE-NEXT:    [[TMP3:%.*]] = load i64, ptr [[TMP2]], align 4
 ; AARCH64-NOSCOPE-NEXT:    [[TMP4:%.*]] = ashr i64 [[TMP3]], 3
@@ -722,7 +722,7 @@ define dso_local i32 @multiple_lifetimes() local_unnamed_addr sanitize_hwaddress
 ; AARCH64-NOSCOPE-NEXT:    ret i32 0
 ;
 ; AARCH64-SHORT-SCOPE-LABEL: @multiple_lifetimes(
-; AARCH64-SHORT-SCOPE-NEXT:    [[TMP1:%.*]] = call ptr @llvm.thread.pointer()
+; AARCH64-SHORT-SCOPE-NEXT:    [[TMP1:%.*]] = call ptr @llvm.thread.pointer.p0()
 ; AARCH64-SHORT-SCOPE-NEXT:    [[TMP2:%.*]] = getelementptr i8, ptr [[TMP1]], i32 48
 ; AARCH64-SHORT-SCOPE-NEXT:    [[TMP3:%.*]] = load i64, ptr [[TMP2]], align 4
 ; AARCH64-SHORT-SCOPE-NEXT:    [[TMP4:%.*]] = ashr i64 [[TMP3]], 3
@@ -771,7 +771,7 @@ define dso_local i32 @multiple_lifetimes() local_unnamed_addr sanitize_hwaddress
 ; AARCH64-SHORT-SCOPE-NEXT:    ret i32 0
 ;
 ; AARCH64-SHORT-NOSCOPE-LABEL: @multiple_lifetimes(
-; AARCH64-SHORT-NOSCOPE-NEXT:    [[TMP1:%.*]] = call ptr @llvm.thread.pointer()
+; AARCH64-SHORT-NOSCOPE-NEXT:    [[TMP1:%.*]] = call ptr @llvm.thread.pointer.p0()
 ; AARCH64-SHORT-NOSCOPE-NEXT:    [[TMP2:%.*]] = getelementptr i8, ptr [[TMP1]], i32 48
 ; AARCH64-SHORT-NOSCOPE-NEXT:    [[TMP3:%.*]] = load i64, ptr [[TMP2]], align 4
 ; AARCH64-SHORT-NOSCOPE-NEXT:    [[TMP4:%.*]] = ashr i64 [[TMP3]], 3
@@ -890,7 +890,7 @@ define dso_local i32 @unreachable_exit() local_unnamed_addr sanitize_hwaddress {
 ; X86-NOSCOPE-NEXT:    ret i32 0
 ;
 ; AARCH64-SCOPE-LABEL: @unreachable_exit(
-; AARCH64-SCOPE-NEXT:    [[TMP1:%.*]] = call ptr @llvm.thread.pointer()
+; AARCH64-SCOPE-NEXT:    [[TMP1:%.*]] = call ptr @llvm.thread.pointer.p0()
 ; AARCH64-SCOPE-NEXT:    [[TMP2:%.*]] = getelementptr i8, ptr [[TMP1]], i32 48
 ; AARCH64-SCOPE-NEXT:    [[TMP3:%.*]] = load i64, ptr [[TMP2]], align 4
 ; AARCH64-SCOPE-NEXT:    [[TMP4:%.*]] = ashr i64 [[TMP3]], 3
@@ -947,7 +947,7 @@ define dso_local i32 @unreachable_exit() local_unnamed_addr sanitize_hwaddress {
 ; AARCH64-SCOPE-NEXT:    ret i32 0
 ;
 ; AARCH64-NOSCOPE-LABEL: @unreachable_exit(
-; AARCH64-NOSCOPE-NEXT:    [[TMP1:%.*]] = call ptr @llvm.thread.pointer()
+; AARCH64-NOSCOPE-NEXT:    [[TMP1:%.*]] = call ptr @llvm.thread.pointer.p0()
 ; AARCH64-NOSCOPE-NEXT:    [[TMP2:%.*]] = getelementptr i8, ptr [[TMP1]], i32 48
 ; AARCH64-NOSCOPE-NEXT:    [[TMP3:%.*]] = load i64, ptr [[TMP2]], align 4
 ; AARCH64-NOSCOPE-NEXT:    [[TMP4:%.*]] = ashr i64 [[TMP3]], 3
@@ -1003,7 +1003,7 @@ define dso_local i32 @unreachable_exit() local_unnamed_addr sanitize_hwaddress {
 ; AARCH64-NOSCOPE-NEXT:    ret i32 0
 ;
 ; AARCH64-SHORT-SCOPE-LABEL: @unreachable_exit(
-; AARCH64-SHORT-SCOPE-NEXT:    [[TMP1:%.*]] = call ptr @llvm.thread.pointer()
+; AARCH64-SHORT-SCOPE-NEXT:    [[TMP1:%.*]] = call ptr @llvm.thread.pointer.p0()
 ; AARCH64-SHORT-SCOPE-NEXT:    [[TMP2:%.*]] = getelementptr i8, ptr [[TMP1]], i32 48
 ; AARCH64-SHORT-SCOPE-NEXT:    [[TMP3:%.*]] = load i64, ptr [[TMP2]], align 4
 ; AARCH64-SHORT-SCOPE-NEXT:    [[TMP4:%.*]] = ashr i64 [[TMP3]], 3
@@ -1063,7 +1063,7 @@ define dso_local i32 @unreachable_exit() local_unnamed_addr sanitize_hwaddress {
 ; AARCH64-SHORT-SCOPE-NEXT:    ret i32 0
 ;
 ; AARCH64-SHORT-NOSCOPE-LABEL: @unreachable_exit(
-; AARCH64-SHORT-NOSCOPE-NEXT:    [[TMP1:%.*]] = call ptr @llvm.thread.pointer()
+; AARCH64-SHORT-NOSCOPE-NEXT:    [[TMP1:%.*]] = call ptr @llvm.thread.pointer.p0()
 ; AARCH64-SHORT-NOSCOPE-NEXT:    [[TMP2:%.*]] = getelementptr i8, ptr [[TMP1]], i32 48
 ; AARCH64-SHORT-NOSCOPE-NEXT:    [[TMP3:%.*]] = load i64, ptr [[TMP2]], align 4
 ; AARCH64-SHORT-NOSCOPE-NEXT:    [[TMP4:%.*]] = ashr i64 [[TMP3]], 3
@@ -1198,7 +1198,7 @@ define dso_local i32 @diamond_lifetime() local_unnamed_addr sanitize_hwaddress {
 ; X86-NOSCOPE-NEXT:    ret i32 0
 ;
 ; AARCH64-SCOPE-LABEL: @diamond_lifetime(
-; AARCH64-SCOPE-NEXT:    [[TMP1:%.*]] = call ptr @llvm.thread.pointer()
+; AARCH64-SCOPE-NEXT:    [[TMP1:%.*]] = call ptr @llvm.thread.pointer.p0()
 ; AARCH64-SCOPE-NEXT:    [[TMP2:%.*]] = getelementptr i8, ptr [[TMP1]], i32 48
 ; AARCH64-SCOPE-NEXT:    [[TMP3:%.*]] = load i64, ptr [[TMP2]], align 4
 ; AARCH64-SCOPE-NEXT:    [[TMP4:%.*]] = ashr i64 [[TMP3]], 3
@@ -1259,7 +1259,7 @@ define dso_local i32 @diamond_lifetime() local_unnamed_addr sanitize_hwaddress {
 ; AARCH64-SCOPE-NEXT:    ret i32 0
 ;
 ; AARCH64-NOSCOPE-LABEL: @diamond_lifetime(
-; AARCH64-NOSCOPE-NEXT:    [[TMP1:%.*]] = call ptr @llvm.thread.pointer()
+; AARCH64-NOSCOPE-NEXT:    [[TMP1:%.*]] = call ptr @llvm.thread.pointer.p0()
 ; AARCH64-NOSCOPE-NEXT:    [[TMP2:%.*]] = getelementptr i8, ptr [[TMP1]], i32 48
 ; AARCH64-NOSCOPE-NEXT:    [[TMP3:%.*]] = load i64, ptr [[TMP2]], align 4
 ; AARCH64-NOSCOPE-NEXT:    [[TMP4:%.*]] = ashr i64 [[TMP3]], 3
@@ -1311,7 +1311,7 @@ define dso_local i32 @diamond_lifetime() local_unnamed_addr sanitize_hwaddress {
 ; AARCH64-NOSCOPE-NEXT:    ret i32 0
 ;
 ; AARCH64-SHORT-SCOPE-LABEL: @diamond_lifetime(
-; AARCH64-SHORT-SCOPE-NEXT:    [[TMP1:%.*]] = call ptr @llvm.thread.pointer()
+; AARCH64-SHORT-SCOPE-NEXT:    [[TMP1:%.*]] = call ptr @llvm.thread.pointer.p0()
 ; AARCH64-SHORT-SCOPE-NEXT:    [[TMP2:%.*]] = getelementptr i8, ptr [[TMP1]], i32 48
 ; AARCH64-SHORT-SCOPE-NEXT:    [[TMP3:%.*]] = load i64, ptr [[TMP2]], align 4
 ; AARCH64-SHORT-SCOPE-NEXT:    [[TMP4:%.*]] = ashr i64 [[TMP3]], 3
@@ -1375,7 +1375,7 @@ define dso_local i32 @diamond_lifetime() local_unnamed_addr sanitize_hwaddress {
 ; AARCH64-SHORT-SCOPE-NEXT:    ret i32 0
 ;
 ; AARCH64-SHORT-NOSCOPE-LABEL: @diamond_lifetime(
-; AARCH64-SHORT-NOSCOPE-NEXT:    [[TMP1:%.*]] = call ptr @llvm.thread.pointer()
+; AARCH64-SHORT-NOSCOPE-NEXT:    [[TMP1:%.*]] = call ptr @llvm.thread.pointer.p0()
 ; AARCH64-SHORT-NOSCOPE-NEXT:    [[TMP2:%.*]] = getelementptr i8, ptr [[TMP1]], i32 48
 ; AARCH64-SHORT-NOSCOPE-NEXT:    [[TMP3:%.*]] = load i64, ptr [[TMP2]], align 4
 ; AARCH64-SHORT-NOSCOPE-NEXT:    [[TMP4:%.*]] = ashr i64 [[TMP3]], 3

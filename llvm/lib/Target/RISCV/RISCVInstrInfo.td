@@ -2013,3 +2013,4 @@ include "RISCVInstrInfoXCV.td"
 //===----------------------------------------------------------------------===//
 
 include "RISCVInstrInfoXCheri.td"
+include "RISCVInstrInfoZCheriPurecap.td"

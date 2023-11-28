@@ -24,9 +24,9 @@
   .globl      __riscv_save_12
   .type       __riscv_save_12,@function
 __riscv_save_12:
-  cincoffset csp, csp, -112
+  caddi      csp, csp, -112
   mv         t1, zero
-  csc        cs11, 8(csp)
+  sc         cs11, 8(csp)
   j          .Lriscv_save_11_10
 
   .globl      __riscv_save_11
@@ -35,11 +35,11 @@ __riscv_save_12:
   .type       __riscv_save_10,@function
 __riscv_save_11:
 __riscv_save_10:
-  cincoffset csp, csp, -112
+  caddi      csp, csp, -112
   li         t1, 16
 .Lriscv_save_11_10:
-  csc        cs10, 16(csp)
-  csc        cs9,  24(csp)
+  sc         cs10, 16(csp)
+  sc         cs9,  24(csp)
   j          .Lriscv_save_9_8
 
   .globl      __riscv_save_9
@@ -48,11 +48,11 @@ __riscv_save_10:
   .type       __riscv_save_8,@function
 __riscv_save_9:
 __riscv_save_8:
-  cincoffset csp, csp, -112
+  caddi      csp, csp, -112
   li         t1, 32
 .Lriscv_save_9_8:
-  csc        cs8,  32(csp)
-  csc        cs7,  40(csp)
+  sc         cs8,  32(csp)
+  sc         cs7,  40(csp)
   j          .Lriscv_save_7_6
 
   .globl      __riscv_save_7
@@ -61,11 +61,11 @@ __riscv_save_8:
   .type       __riscv_save_6,@function
 __riscv_save_7:
 __riscv_save_6:
-  cincoffset csp, csp, -112
+  caddi      csp, csp, -112
   li         t1, 48
 .Lriscv_save_7_6:
-  csc        cs6,  48(csp)
-  csc        cs5,  56(csp)
+  sc         cs6,  48(csp)
+  sc         cs5,  56(csp)
   j          .Lriscv_save_5_4
 
   .globl      __riscv_save_5
@@ -74,11 +74,11 @@ __riscv_save_6:
   .type       __riscv_save_4,@function
 __riscv_save_5:
 __riscv_save_4:
-  cincoffset csp, csp, -112
+  caddi      csp, csp, -112
   li         t1, 64
 .Lriscv_save_5_4:
-  csc        cs4, 64(csp)
-  csc        cs3, 72(csp)
+  sc         cs4, 64(csp)
+  sc         cs3, 72(csp)
   j          .Lriscv_save_3_2
 
   .globl      __riscv_save_3
@@ -87,15 +87,15 @@ __riscv_save_4:
   .type       __riscv_save_2,@function
 __riscv_save_3:
 __riscv_save_2:
-  cincoffset csp, csp, -112
+  caddi      csp, csp, -112
   li         t1, 80
 .Lriscv_save_3_2:
-  csc        cs2, 80(csp)
-  csc        cs1, 88(csp)
-  csc        cs0, 96(csp)
-  csc        cra, 104(csp)
-  cincoffset csp, csp, t1
-  cjr        ct0
+  sc         cs2, 80(csp)
+  sc         cs1, 88(csp)
+  sc         cs0, 96(csp)
+  sc         cra, 104(csp)
+  cadd       csp, csp, t1
+  jr         ct0
 
   .globl      __riscv_save_1
   .type       __riscv_save_1,@function
@@ -103,10 +103,10 @@ __riscv_save_2:
   .type       __riscv_save_0,@function
 __riscv_save_1:
 __riscv_save_0:
-  cincoffset csp, csp, -16
-  csc        cs0, 0(csp)
-  csc        cra, 8(csp)
-  cjr        ct0
+  caddi      csp, csp, -16
+  sc         cs0, 0(csp)
+  sc         cra, 8(csp)
+  jr         ct0
 
 # else
 
@@ -193,118 +193,118 @@ __riscv_save_0:
   .globl      __riscv_save_12
   .type       __riscv_save_12,@function
 __riscv_save_12:
-  cincoffset csp, csp, -208
+  caddi      csp, csp, -208
   mv         t1, zero
-  csc        cs11, 0(csp)
+  sc         cs11, 0(csp)
   j          .Lriscv_save_11
 
   .globl      __riscv_save_11
   .type       __riscv_save_11,@function
 __riscv_save_11:
-  cincoffset csp, csp, -208
+  caddi      csp, csp, -208
   li         t1, 16
 .Lriscv_save_11:
-  csc        cs10, 16(csp)
+  sc         cs10, 16(csp)
   j          .Lriscv_save_10
 
   .globl      __riscv_save_10
   .type       __riscv_save_10,@function
 __riscv_save_10:
-  cincoffset csp, csp, -208
+  caddi      csp, csp, -208
   li         t1, 32
 .Lriscv_save_10:
-  csc        cs9,  32(csp)
+  sc         cs9,  32(csp)
   j          .Lriscv_save_9
 
   .globl      __riscv_save_9
   .type       __riscv_save_9,@function
 __riscv_save_9:
-  cincoffset csp, csp, -208
+  caddi      csp, csp, -208
   li         t1, 48
 .Lriscv_save_9:
-  csc        cs8,  48(csp)
+  sc         cs8,  48(csp)
   j          .Lriscv_save_8
 
   .globl      __riscv_save_8
   .type       __riscv_save_8,@function
 __riscv_save_8:
-  cincoffset csp, csp, -208
+  caddi      csp, csp, -208
   li         t1, 64
 .Lriscv_save_8:
-  csc        cs7,  64(csp)
+  sc         cs7,  64(csp)
   j          .Lriscv_save_7
 
   .globl      __riscv_save_7
   .type       __riscv_save_7,@function
 __riscv_save_7:
-  cincoffset csp, csp, -208
+  caddi      csp, csp, -208
   li         t1, 80
 .Lriscv_save_7:
-  csc        cs6,  80(csp)
+  sc         cs6,  80(csp)
   j          .Lriscv_save_6
 
   .globl      __riscv_save_6
   .type       __riscv_save_6,@function
 __riscv_save_6:
-  cincoffset csp, csp, -208
+  caddi      csp, csp, -208
   li         t1, 96
 .Lriscv_save_6:
-  csc        cs5,  96(csp)
+  sc         cs5,  96(csp)
   j          .Lriscv_save_5
 
   .globl      __riscv_save_5
   .type       __riscv_save_5,@function
 __riscv_save_5:
-  cincoffset csp, csp, -208
+  caddi      csp, csp, -208
   li         t1, 112
 .Lriscv_save_5:
-  csc        cs4, 112(csp)
+  sc         cs4, 112(csp)
   j          .Lriscv_save_4
 
   .globl      __riscv_save_4
   .type       __riscv_save_4,@function
 __riscv_save_4:
-  cincoffset csp, csp, -208
+  caddi      csp, csp, -208
   li         t1, 128
 .Lriscv_save_4:
-  csc        cs3, 128(csp)
+  sc         cs3, 128(csp)
   j          .Lriscv_save_3
 
   .globl      __riscv_save_3
   .type       __riscv_save_3,@function
 __riscv_save_3:
-  cincoffset csp, csp, -208
+  caddi      csp, csp, -208
   li         t1, 144
 .Lriscv_save_3:
-  csc        cs2, 144(csp)
+  sc         cs2, 144(csp)
   j          .Lriscv_save_2
 
   .globl      __riscv_save_2
   .type       __riscv_save_2,@function
 __riscv_save_2:
-  cincoffset csp, csp, -208
+  caddi      csp, csp, -208
   li         t1, 160
 .Lriscv_save_2:
-  csc        cs1, 160(csp)
+  sc         cs1, 160(csp)
   j          .Lriscv_save_1
 
   .globl      __riscv_save_1
   .type       __riscv_save_1,@function
 __riscv_save_1:
-  cincoffset csp, csp, -208
+  caddi      csp, csp, -208
   li         t1, 176
 .Lriscv_save_1:
-  csc        cs0, 176(csp)
-  csc        cra, 192(csp)
-  cincoffset csp, csp, t1
-  cjr        ct0
+  sc         cs0, 176(csp)
+  sc         cra, 192(csp)
+  cadd       csp, csp, t1
+  jr         ct0
 
   .globl      __riscv_save_0
   .type       __riscv_save_0,@function
 __riscv_save_0:
-  cincoffset csp, csp, -16
-  csc        cra, 0(csp)
-  cjr        ct0
+  caddi      csp, csp, -16
+  sc         cra, 0(csp)
+  jr         ct0
 
 # else
 

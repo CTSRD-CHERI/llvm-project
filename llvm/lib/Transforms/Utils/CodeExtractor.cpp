@@ -965,6 +965,7 @@ Function *CodeExtractor::constructFunction(const ValueSet &inputs,
       case Attribute::MustProgress:
       case Attribute::NoProfile:
       case Attribute::SkipProfile:
+      case Attribute::NoCapRelocs:
         break;
       // These attributes cannot be applied to functions.
       case Attribute::Alignment:

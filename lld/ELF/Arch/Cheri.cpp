@@ -394,6 +394,21 @@ static uint64_t getTargetSize(const CheriCapRelocLocation &location,
   auto targetSym = target.sym();
   if (targetSize == 0 && !targetSym->isPreemptible) {
     StringRef name = targetSym->getName();
+    auto esym = symtab.find(std::string("size$") + std::string(name));
+    if (esym) {
+      auto def = dyn_cast<Defined>(esym);
+      if (def && !def->section) {
+        targetSize = def->value;
+	/*
+	 * Symbol has explicitly given size zero but a zero size will
+	 * result in an allmighty cap. Increase size to 1 for lack of
+	 * a better short term solution.
+	 */
+	if (targetSize == 0)
+          targetSize = 1;
+        return targetSize;
+      }
+    }
     // Section end symbols like __preinit_array_end, etc. should actually be
     // zero size symbol since they are just markers for the end of a section
     // and not usable as a valid pointer

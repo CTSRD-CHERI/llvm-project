@@ -304,7 +304,7 @@ DEFINE_LIBUNWIND_FUNCTION(__unw_getcontext)
 #endif
   /* Add the offset of the start of the capability register set to $at */
   daddiu $1, $zero, _LIBUNWIND_CAPREG_START*8
-#define SAVE_CAP_REG(src, x) csc $c ## src, $1, (x * __SIZEOF_UINTCAP__)($c3)
+#define SAVE_CAP_REG(src, x) sc $c ## src, $1, (x * __SIZEOF_UINTCAP__)($c3)
 #define SAVE_CAP(x) SAVE_CAP_REG(x, x)
   SAVE_CAP(1)
   SAVE_CAP(2)
@@ -349,7 +349,7 @@ DEFINE_LIBUNWIND_FUNCTION(__unw_getcontext)
   # Store the return address where we expect the current PC
   daddiu $1, $1, 32*__SIZEOF_UINTCAP__
   cjr $c17
-  csc $c17, $1, 0($c3)
+  sc $c17, $1, 0($c3)
 END_LIBUNWIND_FUNCTION(__unw_getcontext)
 
 #elif defined(__mips64)
@@ -1237,7 +1237,7 @@ DEFINE_LIBUNWIND_FUNCTION(__unw_getcontext)
 
 .macro save_fpr num, ctxreg
 #ifdef __CHERI_PURE_CAPABILITY__
-  cfsd   f\num, (RISCV_FOFFSET + RISCV_FSIZE * \num)(c\ctxreg)
+  FSTORE f\num, (RISCV_FOFFSET + RISCV_FSIZE * \num)(c\ctxreg)
 #else
   FSTORE f\num, (RISCV_FOFFSET + RISCV_FSIZE * \num)(\ctxreg)
 #endif
@@ -1259,7 +1259,7 @@ DEFINE_LIBUNWIND_FUNCTION(__unw_getcontext)
 #
 DEFINE_LIBUNWIND_FUNCTION(__unw_getcontext)
 #ifdef __CHERI_PURE_CAPABILITY__
-  csc   c1, (__SIZEOF_CHERI_CAPABILITY__ * 0)(ca0) // store ra as pc
+  sc   c1, (__SIZEOF_CHERI_CAPABILITY__ * 0)(ca0) // store ra as pc
 #else
   ISTORE    x1, (RISCV_ISIZE * 0)(a0) // store ra as pc
 #endif
@@ -1274,11 +1274,7 @@ DEFINE_LIBUNWIND_FUNCTION(__unw_getcontext)
 # endif
 
   li     a0, 0  // return UNW_ESUCCESS
-#ifdef __CHERI_PURE_CAPABILITY__
-  cret          // jump to cra
-#else
-  ret           // jump to ra
-#endif
+  ret           // jump to ra/cra
 END_LIBUNWIND_FUNCTION(__unw_getcontext)
 
 #elif defined(__s390x__)

@@ -59,8 +59,24 @@ RISCV64Config = ArchSpecificValues(
     purecap_sf_args=["-target-abi", "l64pc128", "-mattr=+xcheri,+cap-mode,-f,-d"],
     purecap_hf_args=["-target-abi", "l64pc128d", "-mattr=+xcheri,+cap-mode,+f,+d"],
     datalayout=b"e-m:e-pf200:128:128:128:64-p:64:64-i64:64-i128:128-n64-S128")
+RISCV32BakewellConfig = ArchSpecificValues(
+    "RISCV32Bakewell", base_architecture="RISCV", cap_range=32, cap_width=64,
+    common_args=["-mtriple=riscv32", "--relocation-model=pic"],
+    hybrid_sf_args=["-target-abi", "ilp32", "-mattr=+zcheripurecap,+zcherihybrid,-f"],
+    hybrid_hf_args=["-target-abi", "ilp32f", "-mattr=+zcheripurecap,+zcherihybrid,+f"],
+    purecap_sf_args=["-target-abi", "il32pc64", "-mattr=+zcheripurecap,+cap-mode,-f"],
+    purecap_hf_args=["-target-abi", "il32pc64f", "-mattr=+zcheripurecap,+cap-mode,+f"],
+    datalayout=b"e-m:e-pf200:64:64:64:32-p:32:32-i64:64-n32-S128")
+RISCV64BakewellConfig = ArchSpecificValues(
+    "RISCV64Bakewell", base_architecture="RISCV", cap_range=64, cap_width=128,
+    common_args=["-mtriple=riscv64", "--relocation-model=pic"],
+    hybrid_sf_args=["-target-abi", "lp64", "-mattr=+zcheripurecap,+zcherihybrid,-f,-d"],
+    hybrid_hf_args=["-target-abi", "lp64d", "-mattr=+zcheripurecap,+zcherihybrid,+f,+d"],
+    purecap_sf_args=["-target-abi", "l64pc128", "-mattr=+zcheripurecap,+cap-mode,-f,-d"],
+    purecap_hf_args=["-target-abi", "l64pc128d", "-mattr=+zcheripurecap,+cap-mode,+f,+d"],
+    datalayout=b"e-m:e-pf200:128:128:128:64-p:64:64-i64:64-i128:128-n64-S128")
 
-ALL_ARCHITECTURES = [MIPSConfig, RISCV32Config, RISCV64Config]
+ALL_ARCHITECTURES = [MIPSConfig, RISCV32Config, RISCV64Config, RISCV32BakewellConfig, RISCV64BakewellConfig]
 ALL_ARCHITECTURE_IF_STRS = set([b"@IF-" + arch_def.name.encode() + b"@" for arch_def in ALL_ARCHITECTURES] + [
                             b"@IF-" + arch_def.base_name.encode() + b"@" for arch_def in ALL_ARCHITECTURES])
 ALL_ARCHITECTURE_IFNOT_STRS = set([b"@IFNOT-" + arch_def.name.encode() + b"@" for arch_def in ALL_ARCHITECTURES] + [
@@ -80,6 +96,7 @@ class CmdArgs(object):
     def __init__(self):
         parser = argparse.ArgumentParser()
         parser.add_argument("--llvm-bindir", type=Path, required=True)
+        parser.add_argument("--arch", default="all")
         parser.add_argument("--verbose", action="store_true")
         parser.add_argument("tests", default=[], nargs=argparse.ZERO_OR_MORE)
         self.args = parser.parse_args()
@@ -93,6 +110,10 @@ class CmdArgs(object):
         self.opt_cmd = (self.llvm_bindir / "opt")
         if not self.opt_cmd.exists():
             sys.exit("FATAL: Could not find opt in --llvm-bindir: " + str(self.opt_cmd))
+        self.clang_cmd = (self.llvm_bindir / "clang")
+        if not self.clang_cmd.exists():
+            sys.exit("FATAL: Count not find clang in --llvm-bindir: " + str(self.clang_cmd))
+        self.arch = self.args.arch
         self.verbose = self.args.verbose  # type: bool
 
 
@@ -121,6 +142,7 @@ def update_one_test(test_name: str, input_file: typing.BinaryIO,
                       "--force-update",
                       "--opt-binary", str(args.opt_cmd),
                       str(output_path)]
+    clang_preproc_cmd = [args.clang_cmd, "-x", "c", "-E", "-P", f"-D{arch_def.name.upper()}"]
     utc_cmds = {
         'llc': UtcCommand(llc_checks_cmd, []),
         'mir': UtcCommand(mir_checks_cmd, []),
@@ -131,7 +153,13 @@ def update_one_test(test_name: str, input_file: typing.BinaryIO,
     with output_path.open("wb") as output_file:
         output_file.write(b"; DO NOT EDIT -- This file was generated from " + str(
             Path(input_file.name).relative_to(LLVM_SRC_PATH)).encode("utf-8") + b"\n")
-        for line in input_file.readlines():
+        
+        # Run the clang-preprocessor
+        clang_preprocess = UtcCommand(clang_preproc_cmd, [input_file.name, "-o", "-"])
+        result = subprocess.run(clang_preprocess.command(), stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=True)
+        processed_output = result.stdout.decode('utf-8')
+
+        for line in [(l+'\n').encode() for l in processed_output.splitlines()]:
             if b"!DO NOT AUTOGEN!" in line:
                 manual_checks_only = True
                 continue
@@ -230,6 +258,8 @@ def update_one_test(test_name: str, input_file: typing.BinaryIO,
 def main():
     options = CmdArgs()
     architectures = ALL_ARCHITECTURES
+    if options.arch != "all":
+        architectures = [a for a in architectures if a.name == options.arch]
     # TODO: add command line flag to select subsets
     # TODO: add option to delete all files that don't exist in Inputs/ to handle renaming
     if options.args.tests:

@@ -32,28 +32,66 @@
 ; RUN: FileCheck --input-file=%t.dbg --check-prefix=MACHINELICM-DBG %s
 ; Check that MachineLICM hoists the CheriBoundedStackPseudoImm (MIPS) / IncOffset+SetBoundsImm (RISCV) instructions
 ; MACHINELICM-DBG-LABEL: ******** Pre-regalloc Machine LICM: hoist_alloca_uncond
+@IF-RISCV32Bakewell@; MACHINELICM-DBG: Hoisting [[IMM:%[0-9]+]]:gpr = ADDI $x0, 512
+@IF-RISCV32Bakewell@; MACHINELICM-DBG-NEXT: from %bb.2 to %bb.0
+@IF-RISCV64Bakewell@; MACHINELICM-DBG: Hoisting [[IMM:%[0-9]+]]:gpr = ADDI $x0, 492
+@IF-RISCV64Bakewell@; MACHINELICM-DBG-NEXT: from %bb.2 to %bb.0
 @IF-MIPS@; MACHINELICM-DBG: Hoisting %{{[0-9]+}}:cherigpr = CheriBoundedStackPseudoImm %stack.0.buf1, 0, 492
-@IF-RISCV@; MACHINELICM-DBG: Hoisting [[INC:%[0-9]+]]:gpcr = CIncOffsetImm %stack.0.buf1, 0
+@IF-RISCV32@; MACHINELICM-DBG: Hoisting [[INC:%[0-9]+]]:gpcr = CIncOffsetImm %stack.0.buf1, 0
+@IF-RISCV64@; MACHINELICM-DBG: Hoisting [[INC:%[0-9]+]]:gpcr = CIncOffsetImm %stack.0.buf1, 0
+@IF-RISCV32Bakewell@; MACHINELICM-DBG: Hoisting [[INC:%[0-9]+]]:gpcr = CADDI %stack.0.buf1, 0
+@IF-RISCV64Bakewell@; MACHINELICM-DBG: Hoisting [[INC:%[0-9]+]]:gpcr = CADDI %stack.0.buf1, 0
 ; MACHINELICM-DBG-NEXT:  from %bb.2 to %bb.0
 @IF-RISCV32@; MACHINELICM-DBG: Hoisting [[BOUNDS:%[0-9]+]]:gpcr = CSetBoundsImm [[INC]]:gpcr, 512
 @IF-RISCV64@; MACHINELICM-DBG: Hoisting [[BOUNDS:%[0-9]+]]:gpcr = CSetBoundsImm [[INC]]:gpcr, 492
+@IF-RISCV32Bakewell@; MACHINELICM-DBG: Hoisting [[BOUNDS:%[0-9]+]]:gpcr = SCBNDS [[INC]]:gpcr, [[IMM]]:gpr
+@IF-RISCV64Bakewell@; MACHINELICM-DBG: Hoisting [[BOUNDS:%[0-9]+]]:gpcr = SCBNDS [[INC]]:gpcr, [[IMM]]:gpr
 @IF-RISCV@; MACHINELICM-DBG-NEXT:  from %bb.2 to %bb.0
+@IF-RISCV32Bakewell@; MACHINELICM-DBG: Hoisting [[IMM:%[0-9]+]]:gpr = ADDI $x0, 88
+@IF-RISCV32Bakewell@; MACHINELICM-DBG-NEXT:  from %bb.2 to %bb.0
+@IF-RISCV64Bakewell@; MACHINELICM-DBG: Hoisting [[IMM:%[0-9]+]]:gpr = ADDI $x0, 88
+@IF-RISCV64Bakewell@; MACHINELICM-DBG-NEXT:  from %bb.2 to %bb.0
 @IF-MIPS@; MACHINELICM-DBG: Hoisting %{{[0-9]+}}:cherigpr = CheriBoundedStackPseudoImm %stack.1.buf2, 0, 88
-@IF-RISCV@; MACHINELICM-DBG: Hoisting [[INC:%[0-9]+]]:gpcr = CIncOffsetImm %stack.1.buf2, 0
+@IF-RISCV32@; MACHINELICM-DBG: Hoisting [[INC:%[0-9]+]]:gpcr = CIncOffsetImm %stack.1.buf2, 0
+@IF-RISCV64@; MACHINELICM-DBG: Hoisting [[INC:%[0-9]+]]:gpcr = CIncOffsetImm %stack.1.buf2, 0
+@IF-RISCV32Bakewell@; MACHINELICM-DBG: Hoisting [[INC:%[0-9]+]]:gpcr = CADDI %stack.1.buf2, 0
+@IF-RISCV64Bakewell@; MACHINELICM-DBG: Hoisting [[INC:%[0-9]+]]:gpcr = CADDI %stack.1.buf2, 0
 ; MACHINELICM-DBG-NEXT:  from %bb.2 to %bb.0
-@IF-RISCV@; MACHINELICM-DBG: Hoisting [[BOUNDS:%[0-9]+]]:gpcr = CSetBoundsImm [[INC]]:gpcr, 88
+@IF-RISCV64@; MACHINELICM-DBG: Hoisting [[BOUNDS:%[0-9]+]]:gpcr = CSetBoundsImm [[INC]]:gpcr, 88
+@IF-RISCV32@; MACHINELICM-DBG: Hoisting [[BOUNDS:%[0-9]+]]:gpcr = CSetBoundsImm [[INC]]:gpcr, 88
+@IF-RISCV32Bakewell@; MACHINELICM-DBG: Hoisting [[BOUNDS:%[0-9]+]]:gpcr = SCBNDS [[INC]]:gpcr, [[IMM]]:gpr
+@IF-RISCV64Bakewell@; MACHINELICM-DBG: Hoisting [[BOUNDS:%[0-9]+]]:gpcr = SCBNDS [[INC]]:gpcr, [[IMM]]:gpr
 @IF-RISCV@; MACHINELICM-DBG-NEXT:  from %bb.2 to %bb.0
 ; MACHINELICM-DBG-LABEL: ******** Pre-regalloc Machine LICM: hoist_alloca_cond
 @IF-MIPS@; MACHINELICM-DBG: Hoisting %{{[0-9]+}}:cherigpr = CheriBoundedStackPseudoImm %stack.0.buf1, 0, 492
-@IF-RISCV@; MACHINELICM-DBG: Hoisting [[INC:%[0-9]+]]:gpcr = CIncOffsetImm %stack.0.buf1, 0
+@IF-RISCV32Bakewell@; MACHINELICM-DBG: Hoisting [[IMM:%[0-9]+]]:gpr = ADDI $x0, 512
+@IF-RISCV32Bakewell@; from %bb.3 to %bb.0
+@IF-RISCV64Bakewell@; MACHINELICM-DBG: Hoisting [[IMM:%[0-9]+]]:gpr = ADDI $x0, 492
+@IF-RISCV64Bakewell@; from %bb.3 to %bb.0
+@IF-RISCV32@; MACHINELICM-DBG: Hoisting [[INC:%[0-9]+]]:gpcr = CIncOffsetImm %stack.0.buf1, 0
+@IF-RISCV64@; MACHINELICM-DBG: Hoisting [[INC:%[0-9]+]]:gpcr = CIncOffsetImm %stack.0.buf1, 0
+@IF-RISCV32Bakewell@; MACHINELICM-DBG: Hoisting [[INC:%[0-9]+]]:gpcr = CADDI %stack.0.buf1, 0
+@IF-RISCV64Bakewell@; MACHINELICM-DBG: Hoisting [[INC:%[0-9]+]]:gpcr = CADDI %stack.0.buf1, 0
 ; MACHINELICM-DBG-NEXT:  from %bb.3 to %bb.0
 @IF-RISCV32@; MACHINELICM-DBG: Hoisting [[BOUNDS:%[0-9]+]]:gpcr = CSetBoundsImm [[INC]]:gpcr, 512
 @IF-RISCV64@; MACHINELICM-DBG: Hoisting [[BOUNDS:%[0-9]+]]:gpcr = CSetBoundsImm [[INC]]:gpcr, 492
+@IF-RISCV32Bakewell@; MACHINELICM-DBG: Hoisting [[BOUNDS:%[0-9]+]]:gpcr = SCBNDS [[INC]]:gpcr, [[IMM]]:gpr
+@IF-RISCV64Bakewell@; MACHINELICM-DBG: Hoisting [[BOUNDS:%[0-9]+]]:gpcr = SCBNDS [[INC]]:gpcr, [[IMM]]:gpr
 @IF-RISCV@; MACHINELICM-DBG-NEXT:  from %bb.3 to %bb.0
+@IF-RISCV32Bakewell@; MACHINELICM-DBG: Hoisting [[IMM:%[0-9]+]]:gpr = ADDI $x0, 88
+@IF-RISCV32Bakewell@; MACHINELICM-DBG-NEXT: from %bb.3 to %bb.0
+@IF-RISCV64Bakewell@; MACHINELICM-DBG: Hoisting [[IMM:%[0-9]+]]:gpr = ADDI $x0, 88
+@IF-RISCV64Bakewell@; MACHINELICM-DBG-NEXT: from %bb.3 to %bb.0
 @IF-MIPS@; MACHINELICM-DBG: Hoisting %{{[0-9]+}}:cherigpr = CheriBoundedStackPseudoImm %stack.1.buf2, 0, 88
-@IF-RISCV@; MACHINELICM-DBG: Hoisting [[INC:%[0-9]+]]:gpcr = CIncOffsetImm %stack.1.buf2, 0
+@IF-RISCV32@; MACHINELICM-DBG: Hoisting [[INC:%[0-9]+]]:gpcr = CIncOffsetImm %stack.1.buf2, 0
+@IF-RISCV64@; MACHINELICM-DBG: Hoisting [[INC:%[0-9]+]]:gpcr = CIncOffsetImm %stack.1.buf2, 0
+@IF-RISCV32Bakewell@; MACHINELICM-DBG: Hoisting [[INC:%[0-9]+]]:gpcr = CADDI %stack.1.buf2, 0
+@IF-RISCV64Bakewell@; MACHINELICM-DBG: Hoisting [[INC:%[0-9]+]]:gpcr = CADDI %stack.1.buf2, 0
 ; MACHINELICM-DBG-NEXT:  from %bb.3 to %bb.0
-@IF-RISCV@; MACHINELICM-DBG: Hoisting [[BOUNDS:%[0-9]+]]:gpcr = CSetBoundsImm [[INC]]:gpcr, 88
+@IF-RISCV64@; MACHINELICM-DBG: Hoisting [[BOUNDS:%[0-9]+]]:gpcr = CSetBoundsImm [[INC]]:gpcr, 88
+@IF-RISCV32@; MACHINELICM-DBG: Hoisting [[BOUNDS:%[0-9]+]]:gpcr = CSetBoundsImm [[INC]]:gpcr, 88
+@IF-RISCV32Bakewell@; MACHINELICM-DBG: Hoisting [[BOUNDS:%[0-9]+]]:gpcr = SCBNDS [[INC]]:gpcr, [[IMM]]:gpr
+@IF-RISCV64Bakewell@; MACHINELICM-DBG: Hoisting [[BOUNDS:%[0-9]+]]:gpcr = SCBNDS [[INC]]:gpcr, [[IMM]]:gpr
 @IF-RISCV@; MACHINELICM-DBG-NEXT:  from %bb.3 to %bb.0
 
 ; RUN: llc @PURECAP_HARDFLOAT_ARGS@ -O1 -o - < %s | FileCheck %s

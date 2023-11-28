@@ -11,7 +11,7 @@ define i64 @get_tp() local_unnamed_addr #0 {
 ; CHECK-L64PC128-LABEL: get_tp:
 ; CHECK-L64PC128:       # %bb.0: # %entry
 ; CHECK-L64PC128-NEXT:    mv a0, tp
-; CHECK-L64PC128-NEXT:    cret
+; CHECK-L64PC128-NEXT:    ret
 ;
 ; CHECK-LP64-LABEL: get_tp:
 ; CHECK-LP64:       # %bb.0: # %entry
@@ -31,19 +31,15 @@ define void @set_tp(i64 %value) local_unnamed_addr #2 {
 ; CHECK-L64PC128-LABEL: set_tp:
 ; CHECK-L64PC128:       # %bb.0: # %entry
 ; CHECK-L64PC128-NEXT:    cincoffset csp, csp, -16
-; CHECK-L64PC128-NEXT:    csc ctp, 0(csp) # 16-byte Folded Spill
+; CHECK-L64PC128-NEXT:    sc ctp, 0(csp) # 16-byte Folded Spill
 ; CHECK-L64PC128-NEXT:    mv tp, a0
-; CHECK-L64PC128-NEXT:    clc ctp, 0(csp) # 16-byte Folded Reload
+; CHECK-L64PC128-NEXT:    lc ctp, 0(csp) # 16-byte Folded Reload
 ; CHECK-L64PC128-NEXT:    cincoffset csp, csp, 16
-; CHECK-L64PC128-NEXT:    cret
+; CHECK-L64PC128-NEXT:    ret
 ;
 ; CHECK-LP64-LABEL: set_tp:
 ; CHECK-LP64:       # %bb.0: # %entry
-; CHECK-LP64-NEXT:    addi sp, sp, -16
-; CHECK-LP64-NEXT:    sd tp, 8(sp) # 8-byte Folded Spill
 ; CHECK-LP64-NEXT:    mv tp, a0
-; CHECK-LP64-NEXT:    ld tp, 8(sp) # 8-byte Folded Reload
-; CHECK-LP64-NEXT:    addi sp, sp, 16
 ; CHECK-LP64-NEXT:    ret
 entry:
   tail call void @llvm.write_register.i64(metadata !0, i64 %value)
@@ -58,7 +54,7 @@ define i8 addrspace(200)* @get_ctp() local_unnamed_addr #0 {
 ; CHECK-L64PC128-LABEL: get_ctp:
 ; CHECK-L64PC128:       # %bb.0: # %entry
 ; CHECK-L64PC128-NEXT:    cmove ca0, ctp
-; CHECK-L64PC128-NEXT:    cret
+; CHECK-L64PC128-NEXT:    ret
 ;
 ; CHECK-LP64-LABEL: get_ctp:
 ; CHECK-LP64:       # %bb.0: # %entry
@@ -78,19 +74,15 @@ define void @set_ctp(i8 addrspace(200)* %value) local_unnamed_addr #2 {
 ; CHECK-L64PC128-LABEL: set_ctp:
 ; CHECK-L64PC128:       # %bb.0: # %entry
 ; CHECK-L64PC128-NEXT:    cincoffset csp, csp, -16
-; CHECK-L64PC128-NEXT:    csc ctp, 0(csp) # 16-byte Folded Spill
+; CHECK-L64PC128-NEXT:    sc ctp, 0(csp) # 16-byte Folded Spill
 ; CHECK-L64PC128-NEXT:    cmove ctp, ca0
-; CHECK-L64PC128-NEXT:    clc ctp, 0(csp) # 16-byte Folded Reload
+; CHECK-L64PC128-NEXT:    lc ctp, 0(csp) # 16-byte Folded Reload
 ; CHECK-L64PC128-NEXT:    cincoffset csp, csp, 16
-; CHECK-L64PC128-NEXT:    cret
+; CHECK-L64PC128-NEXT:    ret
 ;
 ; CHECK-LP64-LABEL: set_ctp:
 ; CHECK-LP64:       # %bb.0: # %entry
-; CHECK-LP64-NEXT:    addi sp, sp, -16
-; CHECK-LP64-NEXT:    sd tp, 8(sp) # 8-byte Folded Spill
 ; CHECK-LP64-NEXT:    cmove ctp, ca0
-; CHECK-LP64-NEXT:    ld tp, 8(sp) # 8-byte Folded Reload
-; CHECK-LP64-NEXT:    addi sp, sp, 16
 ; CHECK-LP64-NEXT:    ret
 entry:
   tail call void @llvm.write_register.p200i8(metadata !1, i8 addrspace(200)* %value)
@@ -105,7 +97,7 @@ define %struct.StackPtr addrspace(200)* @get_csp() local_unnamed_addr #0 {
 ; CHECK-L64PC128-LABEL: get_csp:
 ; CHECK-L64PC128:       # %bb.0: # %entry
 ; CHECK-L64PC128-NEXT:    cmove ca0, csp
-; CHECK-L64PC128-NEXT:    cret
+; CHECK-L64PC128-NEXT:    ret
 ;
 ; CHECK-LP64-LABEL: get_csp:
 ; CHECK-LP64:       # %bb.0: # %entry
@@ -122,7 +114,7 @@ define void @set_csp(%struct.StackPtr addrspace(200)* %value) local_unnamed_addr
 ; CHECK-L64PC128-LABEL: set_csp:
 ; CHECK-L64PC128:       # %bb.0: # %entry
 ; CHECK-L64PC128-NEXT:    cmove csp, ca0
-; CHECK-L64PC128-NEXT:    cret
+; CHECK-L64PC128-NEXT:    ret
 ;
 ; CHECK-LP64-LABEL: set_csp:
 ; CHECK-LP64:       # %bb.0: # %entry
@@ -139,7 +131,7 @@ define i64 @get_gp_addr() local_unnamed_addr #0 {
 ; CHECK-L64PC128-LABEL: get_gp_addr:
 ; CHECK-L64PC128:       # %bb.0: # %entry
 ; CHECK-L64PC128-NEXT:    mv a0, gp
-; CHECK-L64PC128-NEXT:    cret
+; CHECK-L64PC128-NEXT:    ret
 ;
 ; CHECK-LP64-LABEL: get_gp_addr:
 ; CHECK-LP64:       # %bb.0: # %entry
@@ -160,19 +152,15 @@ define void @set_gp_addr(i64 %value) local_unnamed_addr #2 {
 ; CHECK-L64PC128-LABEL: set_gp_addr:
 ; CHECK-L64PC128:       # %bb.0: # %entry
 ; CHECK-L64PC128-NEXT:    cincoffset csp, csp, -16
-; CHECK-L64PC128-NEXT:    csc cgp, 0(csp) # 16-byte Folded Spill
+; CHECK-L64PC128-NEXT:    sc cgp, 0(csp) # 16-byte Folded Spill
 ; CHECK-L64PC128-NEXT:    cincoffset cgp, cnull, a0
-; CHECK-L64PC128-NEXT:    clc cgp, 0(csp) # 16-byte Folded Reload
+; CHECK-L64PC128-NEXT:    lc cgp, 0(csp) # 16-byte Folded Reload
 ; CHECK-L64PC128-NEXT:    cincoffset csp, csp, 16
-; CHECK-L64PC128-NEXT:    cret
+; CHECK-L64PC128-NEXT:    ret
 ;
 ; CHECK-LP64-LABEL: set_gp_addr:
 ; CHECK-LP64:       # %bb.0: # %entry
-; CHECK-LP64-NEXT:    addi sp, sp, -16
-; CHECK-LP64-NEXT:    sd gp, 8(sp) # 8-byte Folded Spill
 ; CHECK-LP64-NEXT:    cincoffset cgp, cnull, a0
-; CHECK-LP64-NEXT:    ld gp, 8(sp) # 8-byte Folded Reload
-; CHECK-LP64-NEXT:    addi sp, sp, 16
 ; CHECK-LP64-NEXT:    ret
 entry:
   %0 = getelementptr i8, i8 addrspace(200)* null, i64 %value

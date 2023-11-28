@@ -829,6 +829,51 @@ def HasCheriRVC : Predicate<"Subtarget->enableCheriRVCInstrs()">,
                   AssemblerPredicate<(all_of (not FeatureCheriNoRVC)),
                                      "CHERI RVC Instructions">;
 
+// Bakewell Features //
+def FeatureStdExtZCheriPureCap
+    : SubtargetFeature<"zcheripurecap", "HasStdExtZCheriPureCap", "true",
+                       "Implements RISC-V CHERI purecap", []>;
+
+def HasZCheriPurecap
+    : Predicate<"Subtarget->hasStdExtZCheriPureCap()">,
+      AssemblerPredicate<(all_of FeatureStdExtZCheriPureCap),
+      "The zcheripurecap Extension is Enabled">;
+
+def HasZCheriPurecapOrCheri
+    : Predicate<"Subtarget->hasCheri() || Subtarget->hasStdExtZCheriPureCap()">,
+      AssemblerPredicate<(any_of FeatureCheri, FeatureStdExtZCheriPureCap),
+      "Has zcheripurecap or xcheri">;
+
+def NotHasZCheriPurecap
+    : Predicate<"!Subtarget->hasStdExtZCheriPureCap()">,
+      AssemblerPredicate<(all_of (not FeatureStdExtZCheriPureCap)),
+      "The zcheripurecap Extension is Disabled">;
+
+def FeatureStdExtZCheriHybrid
+    : SubtargetFeature<"zcherihybrid", "HasStdExtZCheriHybrid", "true",
+                       "Implements RISC-V CHERI hybrid extension",
+                       [FeatureStdExtZCheriPureCap]>;
+
+def HasZCheriHybrid
+    : Predicate<"Subtarget->hasStdExtZCheriHybrid()">,
+      AssemblerPredicate<(all_of FeatureStdExtZCheriHybrid),
+      "The zcherihybrid Extension is Enabled">;
+
+def NotHasZCheriHybrid
+    : Predicate<"!Subtarget->hasStdExtZCheriHybrid()">,
+      AssemblerPredicate<(all_of (not FeatureStdExtZCheriHybrid)),
+      "The zcherihybrid Extension is Disabled">;
+
+def FeatureStdExtZCheriPTE
+    : SubtargetFeature<"zcheri-pte", "HasStdExtZCheriPTE", "true",
+                       "Implements RISC-V CHERI PTE",
+                       [FeatureStdExtZCheriPureCap]>;
+
+def HasZCheriPTE
+    : Predicate<"Subtarget->hasStdExtZCheriPTE()">,
+      AssemblerPredicate<(all_of FeatureStdExtZCheriPTE),
+      "The zcheri-pte Extension is Enabled">;
+
 def FeatureCapMode
     : SubtargetFeature<"cap-mode", "IsCapMode", "true",
                        "Capability mode">;

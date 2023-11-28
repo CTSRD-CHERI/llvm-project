@@ -63,12 +63,12 @@ define ptr addrspace(200) @load_from_string_table(i64 %idx) addrspace(200) {
 ; PURECAP-ASM:       # %bb.0: # %bb
 ; PURECAP-ASM-NEXT:  .LBB0_1: # %bb
 ; PURECAP-ASM-NEXT:    # Label of block must be emitted
-; PURECAP-ASM-NEXT:    auipcc ca1, %captab_pcrel_hi(global)
-; PURECAP-ASM-NEXT:    clc ca1, %pcrel_lo(.LBB0_1)(ca1)
+; PURECAP-ASM-NEXT:    auipc ca1, %captab_pcrel_hi(global)
+; PURECAP-ASM-NEXT:    lc ca1, %pcrel_lo(.LBB0_1)(ca1)
 ; PURECAP-ASM-NEXT:    slli a0, a0, 4
 ; PURECAP-ASM-NEXT:    cincoffset ca0, ca1, a0
-; PURECAP-ASM-NEXT:    clc ca0, 0(ca0)
-; PURECAP-ASM-NEXT:    cret
+; PURECAP-ASM-NEXT:    lc ca0, 0(ca0)
+; PURECAP-ASM-NEXT:    ret
 bb:
   %ptr = getelementptr inbounds [6 x ptr addrspace(200)], ptr addrspace(200) @global, i64 0, i64 %idx
   %str = load ptr addrspace(200), ptr addrspace(200) %ptr, align 16

@@ -8,8 +8,8 @@ define i32 @get_ith_word(i32 signext %i, ...) addrspace(200) nounwind {
 ; CHECK-NEXT:    cincoffset ca1, csp, 8
 ; CHECK-NEXT:    csetbounds ca1, ca1, 8
 ; CHECK-NEXT:    cincoffset ca2, csp, 16
-; CHECK-NEXT:    csc ca2, 0(ca1)
-; CHECK-NEXT:    clc ca1, 8(csp)
+; CHECK-NEXT:    sc ca2, 0(ca1)
+; CHECK-NEXT:    lc ca1, 8(csp)
 ; CHECK-NEXT:    addi a0, a0, 1
 ; CHECK-NEXT:  .LBB0_1: # %while.cond
 ; CHECK-NEXT:    # =>This Inner Loop Header: Depth=1
@@ -18,10 +18,10 @@ define i32 @get_ith_word(i32 signext %i, ...) addrspace(200) nounwind {
 ; CHECK-NEXT:    cincoffset ca1, ca1, 4
 ; CHECK-NEXT:    bgtz a0, .LBB0_1
 ; CHECK-NEXT:  # %bb.2: # %while.end
-; CHECK-NEXT:    csc ca1, 8(csp)
-; CHECK-NEXT:    clw a0, 0(ca2)
+; CHECK-NEXT:    sc ca1, 8(csp)
+; CHECK-NEXT:    lw a0, 0(ca2)
 ; CHECK-NEXT:    cincoffset csp, csp, 16
-; CHECK-NEXT:    cret
+; CHECK-NEXT:    ret
 entry:
   %ap = alloca ptr addrspace(200), align 8, addrspace(200)
   %0 = bitcast ptr addrspace(200) %ap to ptr addrspace(200)
@@ -54,8 +54,8 @@ define ptr addrspace(200) @get_ith_cap(i32 signext %i, ...) addrspace(200) nounw
 ; CHECK-NEXT:    cincoffset ca1, csp, 8
 ; CHECK-NEXT:    csetbounds ca1, ca1, 8
 ; CHECK-NEXT:    cincoffset ca2, csp, 16
-; CHECK-NEXT:    csc ca2, 0(ca1)
-; CHECK-NEXT:    clc ca1, 8(csp)
+; CHECK-NEXT:    sc ca2, 0(ca1)
+; CHECK-NEXT:    lc ca1, 8(csp)
 ; CHECK-NEXT:    addi a0, a0, 1
 ; CHECK-NEXT:  .LBB1_1: # %while.cond
 ; CHECK-NEXT:    # =>This Inner Loop Header: Depth=1
@@ -66,10 +66,10 @@ define ptr addrspace(200) @get_ith_cap(i32 signext %i, ...) addrspace(200) nounw
 ; CHECK-NEXT:    cincoffset ca1, ca2, 8
 ; CHECK-NEXT:    bgtz a0, .LBB1_1
 ; CHECK-NEXT:  # %bb.2: # %while.end
-; CHECK-NEXT:    csc ca1, 8(csp)
-; CHECK-NEXT:    clc ca0, 0(ca2)
+; CHECK-NEXT:    sc ca1, 8(csp)
+; CHECK-NEXT:    lc ca0, 0(ca2)
 ; CHECK-NEXT:    cincoffset csp, csp, 16
-; CHECK-NEXT:    cret
+; CHECK-NEXT:    ret
 entry:
   %ap = alloca ptr addrspace(200), align 8, addrspace(200)
   %0 = bitcast ptr addrspace(200) %ap to ptr addrspace(200)
@@ -108,13 +108,13 @@ define void @test_varargs_odd_cap_reg() nounwind {
 ; CHECK-LABEL: test_varargs_odd_cap_reg:
 ; CHECK:       # %bb.0: # %entry
 ; CHECK-NEXT:    cincoffset csp, csp, -16
-; CHECK-NEXT:    csc cra, 8(csp) # 8-byte Folded Spill
+; CHECK-NEXT:    sc cra, 8(csp) # 8-byte Folded Spill
 ; CHECK-NEXT:    li a0, 1
-; CHECK-NEXT:    csc cnull, 0(csp)
-; CHECK-NEXT:    ccall varargs
-; CHECK-NEXT:    clc cra, 8(csp) # 8-byte Folded Reload
+; CHECK-NEXT:    sc cnull, 0(csp)
+; CHECK-NEXT:    call varargs
+; CHECK-NEXT:    lc cra, 8(csp) # 8-byte Folded Reload
 ; CHECK-NEXT:    cincoffset csp, csp, 16
-; CHECK-NEXT:    cret
+; CHECK-NEXT:    ret
 entry:
   tail call addrspace(200) void (i32, ...) @varargs(i32 1, ptr addrspace(200) null)
   ret void

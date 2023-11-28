@@ -20,7 +20,7 @@ define void @relax_bcc(i1 %a) nounwind {
 ; CHECK-NEXT:    .zero 4096
 ; CHECK-NEXT:    #NO_APP
 ; CHECK-NEXT:  .LBB0_2: # %tail
-; CHECK-NEXT:    cret
+; CHECK-NEXT:    ret
   br i1 %a, label %iftrue, label %tail
 
 iftrue:
@@ -38,7 +38,7 @@ define i32 @relax_cjal(i1 %a) nounwind {
 ; CHECK-NEXT:    andi a0, a0, 1
 ; CHECK-NEXT:    bnez a0, .LBB1_1
 ; CHECK-NEXT:  # %bb.4:
-; CHECK-NEXT:    cjump .LBB1_2, ca0
+; CHECK-NEXT:    jump .LBB1_2, ca0
 ; CHECK-NEXT:  .LBB1_1: # %iftrue
 ; CHECK-NEXT:    #APP
 ; CHECK-NEXT:    #NO_APP
@@ -52,7 +52,7 @@ define i32 @relax_cjal(i1 %a) nounwind {
 ; CHECK-NEXT:  .LBB1_3: # %tail
 ; CHECK-NEXT:    li a0, 1
 ; CHECK-NEXT:    cincoffset csp, csp, 16
-; CHECK-NEXT:    cret
+; CHECK-NEXT:    ret
   br i1 %a, label %iftrue, label %jmp
 
 jmp:

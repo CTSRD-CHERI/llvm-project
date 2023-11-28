@@ -177,6 +177,14 @@ void RISCVTargetInfo::getTargetDefines(const LangOptions &Opts,
     auto ExtName = Extension.first;
     auto ExtInfo = Extension.second;
 
+    // TODO - This should be addressed properly once extension naming is decided
+    auto IsValidMacroNameSymbol = [](char C) {
+      return isalpha(C) || isdigit(C) || C == '_';
+    };
+    ExtName.erase(
+        std::remove_if(ExtName.begin(), ExtName.end(),
+                       [&](char c) { return !IsValidMacroNameSymbol(c); }),
+        ExtName.end());
     Builder.defineMacro(
         Twine("__riscv_", ExtName),
         Twine(getVersionValue(ExtInfo.MajorVersion, ExtInfo.MinorVersion)));
@@ -222,22 +230,39 @@ void RISCVTargetInfo::getTargetDefines(const LangOptions &Opts,
                           Twine(((int)CapTableABI) + 1));
     }
 
-    // Macros for use with the set and get permissions builtins.
-    Builder.defineMacro("__CHERI_CAP_PERMISSION_GLOBAL__", Twine(1<<0));
-    Builder.defineMacro("__CHERI_CAP_PERMISSION_PERMIT_EXECUTE__",
-            Twine(1<<1));
-    Builder.defineMacro("__CHERI_CAP_PERMISSION_PERMIT_LOAD__", Twine(1<<2));
-    Builder.defineMacro("__CHERI_CAP_PERMISSION_PERMIT_STORE__", Twine(1<<3));
-    Builder.defineMacro("__CHERI_CAP_PERMISSION_PERMIT_LOAD_CAPABILITY__",
-            Twine(1<<4));
-    Builder.defineMacro("__CHERI_CAP_PERMISSION_PERMIT_STORE_CAPABILITY__",
-            Twine(1<<5));
-    Builder.defineMacro("__CHERI_CAP_PERMISSION_PERMIT_STORE_LOCAL__",
-            Twine(1<<6));
-    Builder.defineMacro("__CHERI_CAP_PERMISSION_PERMIT_SEAL__", Twine(1<<7));
-    Builder.defineMacro("__CHERI_CAP_PERMISSION_PERMIT_INVOKE__", Twine(1<<8));
-    Builder.defineMacro("__CHERI_CAP_PERMISSION_PERMIT_UNSEAL__", Twine(1<<9));
-    Builder.defineMacro("__CHERI_CAP_PERMISSION_ACCESS_SYSTEM_REGISTERS__", Twine(1<<10));
+    // Macros for use with the set and get permissions builtins for bakewell.
+    if (ISAInfo->hasExtension("zcheripurecap")) {
+      Builder.defineMacro("__CHERI_BW_CAP_PERMISSION_CAPABILITY__",
+                          Twine(1 << 0));
+      Builder.defineMacro("__CHERI_BW_CAP_PERMISSION_WRITE__", Twine(1 << 1));
+      Builder.defineMacro("__CHERI_BW_CAP_PERMISSION_READ__", Twine(1 << 2));
+      Builder.defineMacro("__CHERI_BW_CAP_PERMISSION_EXECUTE__", Twine(1 << 3));
+      Builder.defineMacro("__CHERI_BW_CAP_PERMISSION_ACCESS_SYSTEM_REGISTERS__",
+                          Twine(1 << 4));
+    } else {
+      // Macros for use with the set and get permissions builtins.
+      Builder.defineMacro("__CHERI_CAP_PERMISSION_GLOBAL__", Twine(1 << 0));
+      Builder.defineMacro("__CHERI_CAP_PERMISSION_PERMIT_EXECUTE__",
+                          Twine(1 << 1));
+      Builder.defineMacro("__CHERI_CAP_PERMISSION_PERMIT_LOAD__",
+                          Twine(1 << 2));
+      Builder.defineMacro("__CHERI_CAP_PERMISSION_PERMIT_STORE__",
+                          Twine(1 << 3));
+      Builder.defineMacro("__CHERI_CAP_PERMISSION_PERMIT_LOAD_CAPABILITY__",
+                          Twine(1 << 4));
+      Builder.defineMacro("__CHERI_CAP_PERMISSION_PERMIT_STORE_CAPABILITY__",
+                          Twine(1 << 5));
+      Builder.defineMacro("__CHERI_CAP_PERMISSION_PERMIT_STORE_LOCAL__",
+                          Twine(1 << 6));
+      Builder.defineMacro("__CHERI_CAP_PERMISSION_PERMIT_SEAL__",
+                          Twine(1 << 7));
+      Builder.defineMacro("__CHERI_CAP_PERMISSION_PERMIT_INVOKE__",
+                          Twine(1 << 8));
+      Builder.defineMacro("__CHERI_CAP_PERMISSION_PERMIT_UNSEAL__",
+                          Twine(1 << 9));
+      Builder.defineMacro("__CHERI_CAP_PERMISSION_ACCESS_SYSTEM_REGISTERS__",
+                          Twine(1 << 10));
+    }
 
     Builder.defineMacro("__riscv_clen", Twine(getCHERICapabilityWidth()));
     // TODO: _MIPS_CAP_ALIGN_MASK equivalent?
@@ -372,10 +397,14 @@ bool RISCVTargetInfo::handleTargetFeatures(std::vector<std::string> &Features,
   } else {
     ISAInfo = std::move(*ParseResult);
   }
-  if (ISAInfo->hasExtension("xcheri")) {
+  if (ISAInfo->hasExtension("xcheri") ||
+      ISAInfo->hasExtension("zcheripurecap") ||
+      ISAInfo->hasExtension("zcherihybrid") ||
+      ISAInfo->hasExtension("zcheri-pte")) {
     HasCheri = true;
     CapSize = XLen * 2;
   }
+
   if (ABI.empty())
     ABI = ISAInfo->computeDefaultABI().str();
 

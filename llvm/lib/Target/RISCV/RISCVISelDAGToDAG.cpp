@@ -2405,12 +2405,17 @@ bool RISCVDAGToDAGISel::SelectRegImmCommon(SDValue Addr, SDValue &Base,
     // This mirrors the AddiPair PatFrag in RISCVInstrInfo.td.
     if (isInt<12>(CVal / 2) && isInt<12>(CVal - CVal / 2)) {
       int64_t Adj = CVal < 0 ? -2048 : 2047;
-      Base =
-          SDValue(CurDAG->getMachineNode(
-                      PtrVT.isFatPointer() ? RISCV::CIncOffsetImm : RISCV::ADDI,
-                      DL, PtrVT, Addr.getOperand(0),
-                      CurDAG->getTargetConstant(Adj, DL, XLenVT)),
-                  0);
+      const bool HasZCheriPureCap =
+          Subtarget->hasFeature(RISCV::FeatureStdExtZCheriPureCap);
+      unsigned Opc;
+      if (PtrVT.isFatPointer())
+        Opc = HasZCheriPureCap ? RISCV::CADDI : RISCV::CIncOffsetImm;
+      else
+        Opc = RISCV::ADDI;
+      Base = SDValue(
+          CurDAG->getMachineNode(Opc, DL, PtrVT, Addr.getOperand(0),
+                                 CurDAG->getTargetConstant(Adj, DL, XLenVT)),
+          0);
       Offset = CurDAG->getTargetConstant(CVal - Adj, DL, XLenVT);
       return true;
     }
@@ -2450,6 +2455,25 @@ bool RISCVDAGToDAGISel::SelectCapRegImm(SDValue Cap, SDValue &Base,
                                         SDValue &Offset) {
   return SelectRegImmCommon(Cap, Base, Offset,
                             Subtarget->typeForCapabilities(), false);
+}
+
+bool RISCVDAGToDAGISel::SelectCSetBndImm(SDValue N, SDValue &Val) {
+  const ConstantSDNode *C = dyn_cast<const ConstantSDNode>(N);
+  if (!C)
+    return false;
+
+  uint64_t Imm = C->getZExtValue();
+  // The csetboundsimm has 5 bits which can optionally be shifted by 4.
+  if (Imm > 31) {
+    if (Imm % 16 != 0)
+      return false;
+    if (Imm / 16 > 31)
+      return false;
+  }
+
+  SDLoc dl(N);
+  Val = CurDAG->getTargetConstant(Imm, dl, MVT::i32);
+  return true;
 }
 
 bool RISCVDAGToDAGISel::selectShiftMask(SDValue N, unsigned ShiftWidth,

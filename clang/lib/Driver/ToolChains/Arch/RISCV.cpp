@@ -201,10 +201,11 @@ void riscv::getRISCVTargetFeatures(const Driver &D, const llvm::Triple &Triple,
         handleAllErrors(ISAInfo.takeError(), [&](llvm::StringError &ErrMsg) {
           D.Diag(diag::err_invalid_feature_combination) << ErrMsg.getMessage();
         });
-      } else if (!(*ISAInfo)->hasExtension("xcheri")) {
+      } else if (!(*ISAInfo)->hasExtension("xcheri") &&
+                 !(*ISAInfo)->hasExtension("zcheripurecap")) {
         D.Diag(diag::err_riscv_invalid_abi)
             << A->getValue()
-            << "pure capability ABI requires xcheri extension to be specified";
+            << "pure capability ABI requires CHERI extension to be specified";
         return;
       }
       Features.push_back("+cap-mode");

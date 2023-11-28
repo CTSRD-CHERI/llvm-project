@@ -1713,6 +1713,8 @@ BUILTIN(__builtin_cheri_cap_load_tags, "zvC*m", "n")
 
 BUILTIN(__builtin_cheri_round_representable_length, "zz", "nc")
 BUILTIN(__builtin_cheri_representable_alignment_mask, "zz", "nc")
+BUILTIN(__builtin_cheri_copy_from_high, "zvC*m", "nc")
+BUILTIN(__builtin_cheri_copy_to_high, "v*mvC*mz", "nc")
 
 BUILTIN(__builtin_cheri_global_data_get, "v*m", "nc")
 BUILTIN(__builtin_cheri_program_counter_get, "v*m", "nc")

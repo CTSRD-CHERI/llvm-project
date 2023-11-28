@@ -2191,6 +2191,17 @@ static void handleNoReturnAttr(Sema &S, Decl *D, const ParsedAttr &Attrs) {
   D->addAttr(::new (S.Context) NoReturnAttr(S.Context, Attrs));
 }
 
+static void handleNoCapRelocsAttr(Sema &S, Decl *D, const ParsedAttr &Attrs) {
+  const TargetInfo &TI = S.Context.getTargetInfo();
+  if (!TI.areAllPointersCapabilities()) {
+    S.Diag(Attrs.getLoc(), diag::warn_unknown_attribute_ignored)
+        << Attrs << Attrs.getRange();
+
+    return;
+  }
+  D->addAttr(::new (S.Context) NoCapRelocsAttr(S.Context, Attrs));
+}
+
 static void handleStandardNoReturnAttr(Sema &S, Decl *D, const ParsedAttr &A) {
   // The [[_Noreturn]] spelling is deprecated in C2x, so if that was used,
   // issue an appropriate diagnostic. However, don't issue a diagnostic if the
@@ -9197,6 +9208,9 @@ ProcessDeclAttribute(Sema &S, Scope *scope, Decl *D, const ParsedAttr &AL,
     break;
   case ParsedAttr::AT_NoReturn:
     handleNoReturnAttr(S, D, AL);
+    break;
+  case ParsedAttr::AT_NoCapRelocs:
+    handleNoCapRelocsAttr(S, D, AL);
     break;
   case ParsedAttr::AT_CXX11NoReturn:
     handleStandardNoReturnAttr(S, D, AL);

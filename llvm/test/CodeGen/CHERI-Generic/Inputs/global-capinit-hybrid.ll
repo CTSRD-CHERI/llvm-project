@@ -1,12 +1,18 @@
 ; !DO NOT AUTOGEN!
-; RUN: llc @HYBRID_HARDFLOAT_ARGS@ %s -o - | \
+; RUN: llc @HYBRID_HARDFLOAT_ARGS@ %s -o - | \\
+
 @IF-MIPS@; RUN:   FileCheck %s --check-prefix=ASM -DPTR_DIRECTIVE=.8byte
 @IF-RISCV64@; RUN:   FileCheck %s --check-prefix=ASM -DPTR_DIRECTIVE=.quad
 @IF-RISCV32@; RUN:   FileCheck %s --check-prefix=ASM -DPTR_DIRECTIVE=.word
-; RUN: llc @HYBRID_HARDFLOAT_ARGS@ %s -filetype=obj -o - | llvm-objdump -r -t - | \
+@IF-RISCV64Bakewell@; RUN:   FileCheck %s --check-prefix=ASM -DPTR_DIRECTIVE=.quad
+@IF-RISCV32Bakewell@; RUN:   FileCheck %s --check-prefix=ASM -DPTR_DIRECTIVE=.word
+; RUN: llc @HYBRID_HARDFLOAT_ARGS@ %s -filetype=obj -o - | llvm-objdump -r -t - | \\
+
 @IF-MIPS@; RUN:   FileCheck %s --check-prefix=RELOCS '-DINTEGER_RELOC=R_MIPS_64/R_MIPS_NONE/R_MIPS_NONE' '-DCAPABILITY_RELOC=R_MIPS_CHERI_CAPABILITY/R_MIPS_NONE/R_MIPS_NONE'
 @IF-RISCV64@; RUN:   FileCheck %s --check-prefix=RELOCS -DINTEGER_RELOC=R_RISCV_64 '-DCAPABILITY_RELOC=R_RISCV_CHERI_CAPABILITY'
 @IF-RISCV32@; RUN:   FileCheck %s --check-prefix=RELOCS -DINTEGER_RELOC=R_RISCV_32 '-DCAPABILITY_RELOC=R_RISCV_CHERI_CAPABILITY'
+@IF-RISCV64Bakewell@; RUN:   FileCheck %s --check-prefix=RELOCS -DINTEGER_RELOC=R_RISCV_64 '-DCAPABILITY_RELOC=R_RISCV_CHERI_CAPABILITY'
+@IF-RISCV32Bakewell@; RUN:   FileCheck %s --check-prefix=RELOCS -DINTEGER_RELOC=R_RISCV_32 '-DCAPABILITY_RELOC=R_RISCV_CHERI_CAPABILITY'
 target datalayout = "@HYBRID_DATALAYOUT@"
 
 declare void @extern_fn()
