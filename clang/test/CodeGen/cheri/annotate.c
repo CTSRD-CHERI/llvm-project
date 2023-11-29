@@ -9,25 +9,25 @@ void annotated_function(void) __attribute__((annotate("function"))) {}
 int annotated_global __attribute__((annotate("global"))) = 1;
 
 /// Check that globals annotations are emitted in AS200 for purecap:
-// CHECK:      @.str = private unnamed_addr addrspace(200) constant [9 x i8] c"function\00", section "llvm.metadata"
+// CHECK: @annotated_global = addrspace(200) global i32 1, align 4
+// CHECK-NEXT: @.str = private unnamed_addr addrspace(200) constant [7 x i8] c"global\00", section "llvm.metadata"
 // CHECK-NEXT: @.str.1 = private unnamed_addr addrspace(200) constant [[FILENAME_ARRAY:\[21 x i8\]]] c"/some/dir/annotate.c\00", section "llvm.metadata"
-// CHECK-NEXT: @annotated_global = addrspace(200) global i32 1, align 4
-// CHECK-NEXT: @.str.2 = private unnamed_addr addrspace(200) constant [7 x i8] c"global\00", section "llvm.metadata"
-// CHECK-NEXT: @.str.3 = private unnamed_addr addrspace(200) constant [4 x i8] c"foo\00", section "llvm.metadata"
-// CHECK-NEXT: @.str.4 = private unnamed_addr addrspace(200) constant [13 x i8] c"myannotation\00", section "llvm.metadata"
-// CHECK-NEXT: @.str.5 = private unnamed_addr addrspace(200) constant [13 x i8] c"annotation_a\00", section "llvm.metadata"
+// CHECK-NEXT: @.str.2 = private unnamed_addr addrspace(200) constant [4 x i8] c"foo\00", section "llvm.metadata"
+// CHECK-NEXT: @.str.3 = private unnamed_addr addrspace(200) constant [13 x i8] c"myannotation\00", section "llvm.metadata"
+// CHECK-NEXT: @.str.4 = private unnamed_addr addrspace(200) constant [13 x i8] c"annotation_a\00", section "llvm.metadata"
+// CHECK:      @.str.5 = private unnamed_addr addrspace(200) constant [9 x i8] c"function\00", section "llvm.metadata"
 // CHECK-NEXT: @llvm.global.annotations = appending addrspace(200) global [2 x { ptr addrspace(200), ptr addrspace(200), ptr addrspace(200), i32, ptr addrspace(200) }]
 // CHECK-SAME: [{ ptr addrspace(200), ptr addrspace(200), ptr addrspace(200), i32, ptr addrspace(200) }
-// CHECK-SAME: { ptr addrspace(200) @annotated_function, ptr addrspace(200) @.str, ptr addrspace(200) @.str.1
-// CHECK-SAME: i32 [[ANNOTATED_FUNC_LINE:7]], ptr addrspace(200) null },
-// CHECK-SAME: { ptr addrspace(200), ptr addrspace(200), ptr addrspace(200), i32, ptr addrspace(200) } { ptr addrspace(200) @annotated_global, ptr addrspace(200) @.str.2, ptr addrspace(200) @.str.1
-// CHECK-SAME: i32 [[ANNOTATED_GLOBAL_LINE:9]], ptr addrspace(200) null }], section "llvm.metadata"
+// CHECK-SAME: { ptr addrspace(200) @annotated_global, ptr addrspace(200) @.str, ptr addrspace(200) @.str.1, i32 [[ANNOTATED_GLOBAL_LINE:9]], ptr addrspace(200) null }
+// CHECK-SAME: { ptr addrspace(200), ptr addrspace(200), ptr addrspace(200), i32, ptr addrspace(200) }
+// CHECK-SAME: { ptr addrspace(200) @annotated_function, ptr addrspace(200) @.str.5, ptr addrspace(200) @.str.1, i32 [[ANNOTATED_FUNC_LINE:7]], ptr addrspace(200) null }],
+// CHECK-SAME: section "llvm.metadata"
 
 // CHECK-LABEL: define {{[^@]+}}@var_annotation
 // CHECK-SAME: () addrspace(200)
 // CHECK-NEXT:  entry:
 // CHECK-NEXT:    [[B:%.*]] = alloca i32, align 4, addrspace(200)
-// CHECK-NEXT:    call void @llvm.var.annotation.p200.p200(ptr addrspace(200) [[B]], ptr addrspace(200) @.str.3,
+// CHECK-NEXT:    call void @llvm.var.annotation.p200.p200(ptr addrspace(200) [[B]], ptr addrspace(200) @.str.2,
 // CHECK-SAME:  ptr addrspace(200) @.str.1
 // CHECK-SAME:  i32 [[@LINE+15]],
 // CHECK-SAME:  ptr addrspace(200) null)
@@ -37,7 +37,7 @@ int annotated_global __attribute__((annotate("global"))) = 1;
 // HYBRID-SAME: ()
 // HYBRID-NEXT:  entry:
 // HYBRID-NEXT:    [[B:%.*]] = alloca i32, align 4
-// HYBRID-NEXT:    call void @llvm.var.annotation.p0.p0(ptr [[B]], ptr @.str.3,
+// HYBRID-NEXT:    call void @llvm.var.annotation.p0.p0(ptr [[B]], ptr @.str.2,
 // HYBRID-SAME:  ptr @.str.1
 // HYBRID-SAME:  i32 [[@LINE+5]],
 // HYBRID-SAME:  ptr null)
@@ -59,7 +59,7 @@ void var_annotation(void) {
 // CHECK-NEXT:    store i32 0, ptr addrspace(200) [[U]], align 4
 // CHECK-NEXT:    [[V:%.*]] = getelementptr inbounds [[STRUCT_ANON]], ptr addrspace(200) [[VAR]], i32 0, i32 1
 // CHECK-NEXT:    [[TMP1:%.*]] = call ptr addrspace(200) @llvm.ptr.annotation.p200.p200(ptr addrspace(200) [[V]],
-// CHECK-SAME:      ptr addrspace(200) @.str.4,
+// CHECK-SAME:      ptr addrspace(200) @.str.3,
 // CHECK-SAME:      ptr addrspace(200) @.str.1,
 // CHECK-SAME:      i32 [[#@LINE+21]], ptr addrspace(200) null)
 // CHECK-NEXT:    store i32 0, ptr addrspace(200) [[TMP1]], align 4
@@ -73,7 +73,7 @@ void var_annotation(void) {
 // HYBRID-NEXT:    store i32 0, ptr [[U]], align 4
 // HYBRID-NEXT:    [[V:%.*]] = getelementptr inbounds [[STRUCT_ANON]], ptr [[VAR]], i32 0, i32 1
 // HYBRID-NEXT:    [[TMP1:%.*]] = call ptr @llvm.ptr.annotation.p0.p0(ptr [[V]],
-// HYBRID-SAME:      ptr @.str.4,
+// HYBRID-SAME:      ptr @.str.3,
 // HYBRID-SAME:      ptr @.str.1,
 // HYBRID-SAME:      i32 [[@LINE+7]], ptr null)
 // HYBRID-NEXT:    store i32 0, ptr [[TMP1]], align 4
@@ -100,7 +100,7 @@ int ptr_annotation(void) {
 // CHECK-NEXT:    [[Y:%.*]] = alloca i64, align 8, addrspace(200)
 // CHECK-NEXT:    store i64 [[X:%.*]], ptr addrspace(200) [[X_ADDR]], align 8
 // CHECK-NEXT:    [[TMP0:%.*]] = load i64, ptr addrspace(200) [[X_ADDR]], align 8
-// CHECK-NEXT:    [[TMP1:%.*]] = call i64 @llvm.annotation.i64.p200(i64 [[TMP0]], ptr addrspace(200) @.str.5,
+// CHECK-NEXT:    [[TMP1:%.*]] = call i64 @llvm.annotation.i64.p200(i64 [[TMP0]], ptr addrspace(200) @.str.4,
 // CHECK-SAME:      ptr addrspace(200) @.str.1,
 // CHECK-SAME:      i32 [[@LINE+26]])
 // CHECK-NEXT:    store i64 [[TMP1]], ptr addrspace(200) [[Y]], align 8
@@ -117,7 +117,7 @@ int ptr_annotation(void) {
 // HYBRID-NEXT:    [[Y:%.*]] = alloca i64, align 8
 // HYBRID-NEXT:    store i64 [[X]], ptr [[X_ADDR]], align 8
 // HYBRID-NEXT:    [[TMP0:%.*]] = load i64, ptr [[X_ADDR]], align 8
-// HYBRID-NEXT:    [[TMP1:%.*]] = call i64 @llvm.annotation.i64.p0(i64 [[TMP0]], ptr @.str.5,
+// HYBRID-NEXT:    [[TMP1:%.*]] = call i64 @llvm.annotation.i64.p0(i64 [[TMP0]], ptr @.str.4,
 // HYBRID-SAME:      ptr @.str.1,
 // HYBRID-SAME:      i32 [[@LINE+9]])
 // HYBRID-NEXT:    store i64 [[TMP1]], ptr [[Y]], align 8
@@ -146,21 +146,21 @@ void issue327(void) {
 }
 
 // CHECK: define {{[^@]+}}@issue327() addrspace(200)
-// CHECK: call ptr addrspace(200) @llvm.ptr.annotation.p200.p200(ptr addrspace(200) %{{.+}}, ptr addrspace(200) @.str.4,
+// CHECK: call ptr addrspace(200) @llvm.ptr.annotation.p200.p200(ptr addrspace(200) %{{.+}}, ptr addrspace(200) @.str.3,
 // CHECK-SAME: ptr addrspace(200) @.str.1
 // CHECK-SAME: i32 [[#MYANNOTATION_LINE:142]],
 // CHECK-SAME: ptr addrspace(200) null)
-// CHECK: call ptr addrspace(200) @llvm.ptr.annotation.p200.p200(ptr addrspace(200) %{{.+}}, ptr addrspace(200) @.str.4,
+// CHECK: call ptr addrspace(200) @llvm.ptr.annotation.p200.p200(ptr addrspace(200) %{{.+}}, ptr addrspace(200) @.str.3,
 // CHECK-SAME: ptr addrspace(200) @.str.1
 // CHECK-SAME: i32 [[#MYANNOTATION_LINE]],
 // CHECK-SAME: ptr addrspace(200) null)
 
 // HYBRID: define {{[^@]+}} @issue327()
-// HYBRID: call ptr addrspace(200) @llvm.ptr.annotation.p200.p0(ptr addrspace(200) %{{.+}}, ptr @.str.4,
+// HYBRID: call ptr addrspace(200) @llvm.ptr.annotation.p200.p0(ptr addrspace(200) %{{.+}}, ptr @.str.3,
 // HYBRID-SAME: ptr @.str.1,
 // HYBRID-SAME: i32 [[MYANNOTATION_LINE:142]],
 // HYBRID-SAME: ptr null)
-// HYBRID: call ptr addrspace(200) @llvm.ptr.annotation.p200.p0(ptr addrspace(200) %{{.+}}, ptr @.str.4,
+// HYBRID: call ptr addrspace(200) @llvm.ptr.annotation.p200.p0(ptr addrspace(200) %{{.+}}, ptr @.str.3,
 // HYBRID-SAME: ptr @.str.1,
 // HYBRID-SAME: i32 [[MYANNOTATION_LINE]],
 // HYBRID-SAME: ptr null)
