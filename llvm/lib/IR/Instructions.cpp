@@ -1471,6 +1471,9 @@ StoreInst::StoreInst(Value *val, Value *addr, Instruction *InsertBefore)
 StoreInst::StoreInst(Value *val, Value *addr, BasicBlock *InsertAtEnd)
     : StoreInst(val, addr, /*isVolatile=*/false, InsertAtEnd) {}
 
+StoreInst::StoreInst(Value *val, Value *addr, BasicBlock::iterator InsertBefore)
+    : StoreInst(val, addr, /*isVolatile=*/false, InsertBefore) {}
+
 StoreInst::StoreInst(Value *val, Value *addr, bool isVolatile,
                      Instruction *InsertBefore)
     : StoreInst(val, addr, isVolatile,
@@ -1483,6 +1486,12 @@ StoreInst::StoreInst(Value *val, Value *addr, bool isVolatile,
                 computeLoadStoreDefaultAlign(val->getType(), InsertAtEnd),
                 InsertAtEnd) {}
 
+StoreInst::StoreInst(Value *val, Value *addr, bool isVolatile,
+                     BasicBlock::iterator InsertBefore)
+    : StoreInst(val, addr, isVolatile,
+                computeLoadStoreDefaultAlign(val->getType(), &*InsertBefore),
+                InsertBefore) {}
+
 StoreInst::StoreInst(Value *val, Value *addr, bool isVolatile, Align Align,
                      Instruction *InsertBefore)
     : StoreInst(val, addr, isVolatile, Align, AtomicOrdering::NotAtomic,
@@ -1492,6 +1501,11 @@ StoreInst::StoreInst(Value *val, Value *addr, bool isVolatile, Align Align,
                      BasicBlock *InsertAtEnd)
     : StoreInst(val, addr, isVolatile, Align, AtomicOrdering::NotAtomic,
                 SyncScope::System, InsertAtEnd) {}
+
+StoreInst::StoreInst(Value *val, Value *addr, bool isVolatile, Align Align,
+                     BasicBlock::iterator InsertBefore)
+    : StoreInst(val, addr, isVolatile, Align, AtomicOrdering::NotAtomic,
+                SyncScope::System, InsertBefore) {}
 
 StoreInst::StoreInst(Value *val, Value *addr, bool isVolatile, Align Align,
                      AtomicOrdering Order, SyncScope::ID SSID,
@@ -1521,6 +1535,20 @@ StoreInst::StoreInst(Value *val, Value *addr, bool isVolatile, Align Align,
   AssertOK();
 }
 
+StoreInst::StoreInst(Value *val, Value *addr, bool isVolatile, Align Align,
+                     AtomicOrdering Order, SyncScope::ID SSID,
+                     BasicBlock::iterator InsertBefore)
+    : Instruction(Type::getVoidTy(val->getContext()), Store,
+                  OperandTraits<StoreInst>::op_begin(this),
+                  OperandTraits<StoreInst>::operands(this)) {
+  Op<0>() = val;
+  Op<1>() = addr;
+  setVolatile(isVolatile);
+  setAlignment(Align);
+  setAtomic(Order, SSID);
+  insertBefore(*InsertBefore->getParent(), InsertBefore);
+  AssertOK();
+}
 
 //===----------------------------------------------------------------------===//
 //                       AtomicCmpXchgInst Implementation
