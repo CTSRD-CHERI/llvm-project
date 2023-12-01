@@ -1929,7 +1929,7 @@ bool RISCVTargetLowering::shouldConvertConstantLoadToIntImm(const APInt &Imm,
   // replace. If we don't support unaligned scalar mem, prefer the constant
   // pool.
   // TODO: Can the caller pass down the alignment?
-  if (!Subtarget.enableUnalignedScalarMem())
+  if (!Subtarget.hasFastUnalignedAccess())
     return true;
 
   // Prefer to keep the load if it would require many instructions.
@@ -14964,7 +14964,7 @@ static bool matchIndexAsWiderOp(EVT VT, SDValue Index, SDValue Mask,
   if (WiderElementSize > ST.getELen()/8)
     return false;
 
-  if (!ST.enableUnalignedVectorMem() && BaseAlign < WiderElementSize)
+  if (!ST.hasFastUnalignedAccess() && BaseAlign < WiderElementSize)
     return false;
 
   for (unsigned i = 0; i < Index->getNumOperands(); i++) {
@@ -19967,8 +19967,8 @@ bool RISCVTargetLowering::allowsMisalignedMemoryAccesses(
     unsigned *Fast) const {
   if (!VT.isVector()) {
     if (Fast)
-      *Fast = Subtarget.enableUnalignedScalarMem();
-    return Subtarget.enableUnalignedScalarMem();
+      *Fast = Subtarget.hasFastUnalignedAccess();
+    return Subtarget.hasFastUnalignedAccess();
   }
 
   // All vector implementations must support element alignment
@@ -19984,8 +19984,8 @@ bool RISCVTargetLowering::allowsMisalignedMemoryAccesses(
   // misaligned accesses.  TODO: Work through the codegen implications of
   // allowing such accesses to be formed, and considered fast.
   if (Fast)
-    *Fast = Subtarget.enableUnalignedVectorMem();
-  return Subtarget.enableUnalignedVectorMem();
+    *Fast = Subtarget.hasFastUnalignedAccess();
+  return Subtarget.hasFastUnalignedAccess();
 }
 
 
@@ -20051,7 +20051,7 @@ EVT RISCVTargetLowering::getOptimalMemOpType(const MemOp &Op,
 
   // Do we have sufficient alignment for our preferred VT?  If not, revert
   // to largest size allowed by our alignment criteria.
-  if (PreferredVT != MVT::i8 && !Subtarget.enableUnalignedVectorMem()) {
+  if (PreferredVT != MVT::i8 && !Subtarget.hasFastUnalignedAccess()) {
     Align RequiredAlign(PreferredVT.getStoreSize());
     if (Op.isFixedDstAlign())
       RequiredAlign = std::min(RequiredAlign, Op.getDstAlign());
@@ -20247,7 +20247,7 @@ bool RISCVTargetLowering::isLegalStridedLoadStore(EVT DataType,
   if (!isLegalElementTypeForRVV(ScalarType))
     return false;
 
-  if (!Subtarget.enableUnalignedVectorMem() &&
+  if (!Subtarget.hasFastUnalignedAccess() &&
       Alignment < ScalarType.getStoreSize())
     return false;
 

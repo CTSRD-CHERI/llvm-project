@@ -38,19 +38,13 @@
 // XCHERI-NORVC: "-target-feature" "+xcheri-norvc"
 // XCHERI-NOT: "{{[+|-]}}xcheri-
 
-// RUN: %clang --target=riscv32-unknown-elf -### %s -munaligned-access 2>&1 | FileCheck %s -check-prefix=UNALIGNED-SCALAR-MEM
-// RUN: %clang --target=riscv32-unknown-elf -### %s -mno-unaligned-access 2>&1 | FileCheck %s -check-prefix=NO-UNALIGNED-SCALAR-MEM
-// RUN: %clang --target=riscv32-unknown-elf -### %s -mno-strict-align 2>&1 | FileCheck %s -check-prefix=UNALIGNED-SCALAR-MEM
-// RUN: %clang --target=riscv32-unknown-elf -### %s -mstrict-align 2>&1 | FileCheck %s -check-prefix=NO-UNALIGNED-SCALAR-MEM
-// RUN: %clang --target=riscv32-unknown-elf -### %s -march=rv32gv -munaligned-access 2>&1 | FileCheck %s -check-prefix=UNALIGNED-VECTOR-MEM
-// RUN: %clang --target=riscv32-unknown-elf -### %s -march=rv32gv -mno-unaligned-access 2>&1 | FileCheck %s -check-prefix=NO-UNALIGNED-VECTOR-MEM
-// RUN: %clang --target=riscv32-unknown-elf -### %s -march=rv32gv -mno-strict-align 2>&1 | FileCheck %s -check-prefix=UNALIGNED-VECTOR-MEM
-// RUN: %clang --target=riscv32-unknown-elf -### %s -march=rv32gv -mstrict-align 2>&1 | FileCheck %s -check-prefix=NO-UNALIGNED-VECTOR-MEM
+// RUN: %clang --target=riscv32-unknown-elf -### %s -munaligned-access 2>&1 | FileCheck %s -check-prefix=FAST-UNALIGNED-ACCESS
+// RUN: %clang --target=riscv32-unknown-elf -### %s -mno-unaligned-access 2>&1 | FileCheck %s -check-prefix=NO-FAST-UNALIGNED-ACCESS
+// RUN: %clang --target=riscv32-unknown-elf -### %s -mno-strict-align 2>&1 | FileCheck %s -check-prefix=FAST-UNALIGNED-ACCESS
+// RUN: %clang --target=riscv32-unknown-elf -### %s -mstrict-align 2>&1 | FileCheck %s -check-prefix=NO-FAST-UNALIGNED-ACCESS
 
-// UNALIGNED-SCALAR-MEM: "-target-feature" "+unaligned-scalar-mem"
-// NO-UNALIGNED-SCALAR-MEM: "-target-feature" "-unaligned-scalar-mem"
-// UNALIGNED-VECTOR-MEM: "-target-feature" "+unaligned-vector-mem"
-// NO-UNALIGNED-VECTOR-MEM: "-target-feature" "-unaligned-vector-mem"
+// FAST-UNALIGNED-ACCESS: "-target-feature" "+fast-unaligned-access"
+// NO-FAST-UNALIGNED-ACCESS: "-target-feature" "-fast-unaligned-access"
 
 // RUN: %clang --target=riscv32-linux -### %s -fsyntax-only 2>&1 \
 // RUN:   | FileCheck %s -check-prefix=DEFAULT-LINUX
