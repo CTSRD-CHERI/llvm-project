@@ -1017,14 +1017,14 @@ void RISCVFrameLowering::determineCalleeSaves(MachineFunction &MF,
       RISCV::X5, RISCV::X6, RISCV::X7,                  /* t0-t2 */
       RISCV::X10, RISCV::X11,                           /* a0-a1, a2-a7 */
       RISCV::X12, RISCV::X13, RISCV::X14, RISCV::X15, RISCV::X16, RISCV::X17,
-      RISCV::X28, RISCV::X29, RISCV::X30, RISCV::X31, 0 /* t3-t6 */
+      RISCV::X28, RISCV::X29, RISCV::X30, RISCV::X31 /* t3-t6 */
     };
 
     static const MCPhysReg CSGPCRs[] = { RISCV::C1,     /* cra */
       RISCV::C5, RISCV::C6, RISCV::C7,                  /* ct0-ct2 */
       RISCV::C10, RISCV::C11,                           /* ca0-ca1, ca2-ca7 */
       RISCV::C12, RISCV::C13, RISCV::C14, RISCV::C15, RISCV::C16, RISCV::C17,
-      RISCV::C28, RISCV::C29, RISCV::C30, RISCV::C31, 0 /* ct3-ct6 */
+      RISCV::C28, RISCV::C29, RISCV::C30, RISCV::C31 /* ct3-ct6 */
     };
 
     ArrayRef<MCPhysReg> CSRegs;
@@ -1033,8 +1033,8 @@ void RISCVFrameLowering::determineCalleeSaves(MachineFunction &MF,
     else
       CSRegs = CSGPRs;
 
-    for (unsigned i = 0; CSRegs[i]; ++i)
-      SavedRegs.set(CSRegs[i]);
+    for (auto Reg : CSRegs)
+      SavedRegs.set(Reg);
 
     if (MF.getSubtarget<RISCVSubtarget>().hasStdExtF()) {
 
