@@ -30,10 +30,7 @@ static void appendToGlobalArray(StringRef ArrayName, Module &M, Function *F,
   IRBuilder<> IRB(M.getContext());
   FunctionType *FnTy = FunctionType::get(IRB.getVoidTy(), false);
 
-  unsigned CtorPtrAS = M.getDataLayout().getProgramAddressSpace();
-  llvm::Type *CtorPFTy = llvm::PointerType::get(FnTy, CtorPtrAS);
-  llvm::Type *ArgTy =
-      IRB.getInt8PtrTy(M.getDataLayout().getDefaultGlobalsAddressSpace());
+  llvm::Type *ArgTy = IRB.getPtrTy(M.getDataLayout().getDefaultGlobalsAddressSpace());
 
   // Get the current set of static global constructors and add the new ctor
   // to the list.

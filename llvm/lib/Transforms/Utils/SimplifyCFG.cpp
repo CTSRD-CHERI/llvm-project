@@ -4918,7 +4918,7 @@ bool SimplifyCFGOpt::SimplifyBranchOnICmpChain(BranchInst *BI,
     if (isCheriPointer(CompVal->getType(), &DL)) {
       assert(cheri::isKnownUntaggedCapability(CompVal, &DL) && "This optimization should only be used with known untagged values");
       CompVal = Builder.CreateIntrinsic(Intrinsic::cheri_cap_address_get, DL.getIntPtrType(CompVal->getType()),
-        Builder.CreatePointerCast(CompVal, Builder.getInt8PtrTy(CompVal->getType()->getPointerAddressSpace())), nullptr, "magicptr");
+        Builder.CreatePointerCast(CompVal, Builder.getPtrTy(CompVal->getType()->getPointerAddressSpace())), nullptr, "magicptr");
     } else {
       CompVal = Builder.CreatePtrToInt(
         CompVal, DL.getIntPtrType(CompVal->getType()), "magicptr");
