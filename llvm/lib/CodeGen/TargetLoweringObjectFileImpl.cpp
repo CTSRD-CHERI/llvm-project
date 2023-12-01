@@ -621,7 +621,7 @@ static unsigned getEntrySizeForKind(SectionKind Kind) {
 /// DataSections.
 static StringRef getSectionPrefixForGlobal(SectionKind Kind, bool IsLarge) {
   if (Kind.isText())
-    return IsLarge ? ".ltext" : ".text";
+    return ".text";
   if (Kind.isReadOnly())
     return IsLarge ? ".lrodata" : ".rodata";
   if (Kind.isBSS())
@@ -655,7 +655,10 @@ getELFSectionNameForGlobal(const GlobalObject *GO, SectionKind Kind,
     Name = ".rodata.cst";
     Name += utostr(EntrySize);
   } else {
-    Name = getSectionPrefixForGlobal(Kind, TM.isLargeGlobalObject(GO));
+    bool IsLarge = false;
+    if (auto *GV = dyn_cast<GlobalVariable>(GO))
+      IsLarge = TM.isLargeData(GV);
+    Name = getSectionPrefixForGlobal(Kind, IsLarge);
   }
 
   bool HasPrefix = false;
@@ -775,8 +778,12 @@ getGlobalObjectInfo(const GlobalObject *GO, const TargetMachine &TM) {
     Group = C->getName();
     IsComdat = C->getSelectionKind() == Comdat::Any;
   }
-  if (TM.isLargeGlobalObject(GO))
-    Flags |= ELF::SHF_X86_64_LARGE;
+  if (auto *GV = dyn_cast<GlobalVariable>(GO)) {
+    if (TM.isLargeData(GV)) {
+      assert(TM.getTargetTriple().getArch() == Triple::x86_64);
+      Flags |= ELF::SHF_X86_64_LARGE;
+    }
+  }
   return {Group, IsComdat, Flags};
 }
 
