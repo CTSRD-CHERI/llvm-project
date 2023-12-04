@@ -192,8 +192,7 @@ static Value *EmitFromInt(CodeGenFunction &CGF, llvm::Value *V,
   return V;
 }
 
-static llvm::Value *CheckAtomicAlignment(CodeGenFunction &CGF,
-                                         const CallExpr *E) {
+static Address CheckAtomicAlignment(CodeGenFunction &CGF, const CallExpr *E) {
   ASTContext &Ctx = CGF.getContext();
   Address Ptr = CGF.EmitPointerWithAlignment(E->getArg(0));
   unsigned Bytes = Ptr.getElementType()->isPointerTy()
@@ -203,8 +202,10 @@ static llvm::Value *CheckAtomicAlignment(CodeGenFunction &CGF,
   if (Align % Bytes != 0) {
     DiagnosticsEngine &Diags = CGF.CGM.getDiags();
     Diags.Report(E->getBeginLoc(), diag::warn_sync_op_misaligned);
+    // Force address to be at least naturally-aligned.
+    return Ptr.withAlignment(CharUnits::fromQuantity(Bytes));
   }
-  return Ptr.getPointer();
+  return Ptr;
 }
 
 /// Utility to insert an atomic instruction based on Intrinsic::ID
@@ -219,17 +220,16 @@ static Value *MakeBinaryAtomicValue(
                                   E->getArg(0)->getType()->getPointeeType()));
   assert(CGF.getContext().hasSameUnqualifiedType(T, E->getArg(1)->getType()));
 
-  llvm::Value *DestPtr = CheckAtomicAlignment(CGF, E);
+  Address DestAddr = CheckAtomicAlignment(CGF, E);
 
-  llvm::Value *Args[2];
-  Args[0] = DestPtr;
-  Args[1] = CGF.EmitScalarExpr(E->getArg(1));
+  llvm::Value *Val = CGF.EmitScalarExpr(E->getArg(1));
+
   QualType ArgTy = E->getArg(1)->getType();
   if (ArgTy->isBooleanType())
-    Args[1] = CGF.EmitToMemory(Args[1], E->getArg(1)->getType());
+    Val = CGF.EmitToMemory(Val, E->getArg(1)->getType());
 
-  llvm::Value *Result = CGF.Builder.CreateAtomicRMW(
-      Kind, Args[0], Args[1], Ordering);
+  llvm::Value *Result =
+      CGF.Builder.CreateAtomicRMW(Kind, DestAddr, Val, Ordering);
   if (ArgTy->isBooleanType())
     Result = CGF.EmitFromMemory(Result, ArgTy);
   return Result;
@@ -274,29 +274,25 @@ static RValue EmitBinaryAtomicPost(CodeGenFunction &CGF,
                                   E->getArg(0)->getType()->getPointeeType()));
   assert(CGF.getContext().hasSameUnqualifiedType(T, E->getArg(1)->getType()));
 
-  llvm::Value *DestPtr = CheckAtomicAlignment(CGF, E);
+  Address DestAddr = CheckAtomicAlignment(CGF, E);
   bool IsCheriCap = T->isCHERICapabilityType(CGF.CGM.getContext());
 
   llvm::IntegerType *IntType = llvm::IntegerType::get(
       CGF.getLLVMContext(), CGF.getContext().getTypeSize(T));
 
-  llvm::Value *Args[2];
-  Args[0] = DestPtr;
-  Args[1] = CGF.EmitScalarExpr(E->getArg(1));
-  llvm::Type *ValueType = Args[1]->getType();
-  if (!IsCheriCap) {
-    Args[1] = EmitToInt(CGF, Args[1], T, IntType);
-    Args[0] = DestPtr;
-  }
+  llvm::Value *Val = CGF.EmitScalarExpr(E->getArg(1));
+  llvm::Type *ValueType = Val->getType();
+  if (!IsCheriCap)
+    Val = EmitToInt(CGF, Val, T, IntType);
 
   llvm::Value *RMWI = CGF.Builder.CreateAtomicRMW(
-      Kind, Args[0], Args[1], llvm::AtomicOrdering::SequentiallyConsistent);
+      Kind, DestAddr, Val, llvm::AtomicOrdering::SequentiallyConsistent);
   llvm::Value *Result = RMWI;
   if (IsCheriCap) {
     Result = CGF.getCapabilityIntegerValue(RMWI);
-    Args[1] = CGF.getCapabilityIntegerValue(Args[1]);
+    Val = CGF.getCapabilityIntegerValue(Val);
   }
-  Result = CGF.Builder.CreateBinOp(Op, Result, Args[1]);
+  Result = CGF.Builder.CreateBinOp(Op, Result, Val);
   if (Invert)
     Result = CGF.Builder.CreateNot(Result);
   if (IsCheriCap)
@@ -323,19 +319,17 @@ static RValue EmitBinaryAtomicPost(CodeGenFunction &CGF,
 static Value *MakeAtomicCmpXchgValue(CodeGenFunction &CGF, const CallExpr *E,
                                      bool ReturnBool) {
   QualType T = ReturnBool ? E->getArg(1)->getType() : E->getType();
-  llvm::Value *DestPtr = CheckAtomicAlignment(CGF, E);
+  Address DestAddr = CheckAtomicAlignment(CGF, E);
 
-  Value *Args[3];
-  Args[0] = DestPtr;
-  Args[1] = CGF.EmitScalarExpr(E->getArg(1));
-  Args[2] = CGF.EmitScalarExpr(E->getArg(2));
+  Value *Cmp = CGF.EmitScalarExpr(E->getArg(1));
+  Value *New = CGF.EmitScalarExpr(E->getArg(2));
   if (E->getArg(1)->getType()->isBooleanType())
-     Args[1] = CGF.EmitToMemory(Args[1], E->getArg(1)->getType());
+     Cmp = CGF.EmitToMemory(Cmp, E->getArg(1)->getType());
   if (E->getArg(2)->getType()->isBooleanType())
-     Args[2] = CGF.EmitToMemory(Args[2], E->getArg(2)->getType());
+     New = CGF.EmitToMemory(New, E->getArg(2)->getType());
 
   Value *Pair = CGF.Builder.CreateAtomicCmpXchg(
-      Args[0], Args[1], Args[2], llvm::AtomicOrdering::SequentiallyConsistent,
+      DestAddr, Cmp, New, llvm::AtomicOrdering::SequentiallyConsistent,
       llvm::AtomicOrdering::SequentiallyConsistent);
   if (ReturnBool)
     // Extract boolean success flag and zext it to int.
@@ -370,7 +364,8 @@ Value *EmitAtomicCmpXchgForMSIntrin(CodeGenFunction &CGF, const CallExpr *E,
   assert(CGF.getContext().hasSameUnqualifiedType(E->getType(),
                                                  E->getArg(2)->getType()));
 
-  auto *Destination = CGF.EmitScalarExpr(E->getArg(0));
+  Address DestAddr = CheckAtomicAlignment(CGF, E);
+
   auto *Comparand = CGF.EmitScalarExpr(E->getArg(2));
   auto *Exchange = CGF.EmitScalarExpr(E->getArg(1));
 
@@ -384,8 +379,7 @@ Value *EmitAtomicCmpXchgForMSIntrin(CodeGenFunction &CGF, const CallExpr *E,
   // _Interlocked* operations in the future, we will have to remove the volatile
   // marker.
   auto *Result = CGF.Builder.CreateAtomicCmpXchg(
-                   Destination, Comparand, Exchange,
-                   SuccessOrdering, FailureOrdering);
+      DestAddr, Comparand, Exchange, SuccessOrdering, FailureOrdering);
   Result->setVolatile(true);
   return CGF.Builder.CreateExtractValue(Result, 0);
 }
@@ -398,29 +392,34 @@ Value *EmitAtomicCmpXchgForMSIntrin(CodeGenFunction &CGF, const CallExpr *E,
 //     __int64 _ExchangeHigh,
 //     __int64 _ExchangeLow,
 //     __int64 * _ComparandResult);
+//
+// Note that Destination is assumed to be at least 16-byte aligned, despite
+// being typed int64.
+
 static Value *EmitAtomicCmpXchg128ForMSIntrin(CodeGenFunction &CGF,
                                               const CallExpr *E,
                                               AtomicOrdering SuccessOrdering) {
   assert(E->getNumArgs() == 4);
-  llvm::Value *Destination = CGF.EmitScalarExpr(E->getArg(0));
+  llvm::Value *DestPtr = CGF.EmitScalarExpr(E->getArg(0));
   llvm::Value *ExchangeHigh = CGF.EmitScalarExpr(E->getArg(1));
   llvm::Value *ExchangeLow = CGF.EmitScalarExpr(E->getArg(2));
-  llvm::Value *ComparandPtr = CGF.EmitScalarExpr(E->getArg(3));
+  Address ComparandAddr = CGF.EmitPointerWithAlignment(E->getArg(3));
 
-  assert(Destination->getType()->isPointerTy());
+  assert(DestPtr->getType()->isPointerTy());
   assert(!ExchangeHigh->getType()->isPointerTy());
   assert(!ExchangeLow->getType()->isPointerTy());
-  assert(ComparandPtr->getType()->isPointerTy());
 
   // For Release ordering, the failure ordering should be Monotonic.
   auto FailureOrdering = SuccessOrdering == AtomicOrdering::Release
                              ? AtomicOrdering::Monotonic
                              : SuccessOrdering;
 
-  // Convert to i128 pointers and values.
+  // Convert to i128 pointers and values. Alignment is also overridden for
+  // destination pointer.
   llvm::Type *Int128Ty = llvm::IntegerType::get(CGF.getLLVMContext(), 128);
-  Address ComparandResult(ComparandPtr, Int128Ty,
-                          CGF.getContext().toCharUnitsFromBits(128));
+  Address DestAddr(DestPtr, Int128Ty,
+                   CGF.getContext().toCharUnitsFromBits(128));
+  ComparandAddr = ComparandAddr.withElementType(Int128Ty);
 
   // (((i128)hi) << 64) | ((i128)lo)
   ExchangeHigh = CGF.Builder.CreateZExt(ExchangeHigh, Int128Ty);
@@ -430,9 +429,9 @@ static Value *EmitAtomicCmpXchg128ForMSIntrin(CodeGenFunction &CGF,
   llvm::Value *Exchange = CGF.Builder.CreateOr(ExchangeHigh, ExchangeLow);
 
   // Load the comparand for the instruction.
-  llvm::Value *Comparand = CGF.Builder.CreateLoad(ComparandResult);
+  llvm::Value *Comparand = CGF.Builder.CreateLoad(ComparandAddr);
 
-  auto *CXI = CGF.Builder.CreateAtomicCmpXchg(Destination, Comparand, Exchange,
+  auto *CXI = CGF.Builder.CreateAtomicCmpXchg(DestAddr, Comparand, Exchange,
                                               SuccessOrdering, FailureOrdering);
 
   // The atomic instruction is marked volatile for consistency with MSVC. This
@@ -443,7 +442,7 @@ static Value *EmitAtomicCmpXchg128ForMSIntrin(CodeGenFunction &CGF,
 
   // Store the result as an outparameter.
   CGF.Builder.CreateStore(CGF.Builder.CreateExtractValue(CXI, 0),
-                          ComparandResult);
+                          ComparandAddr);
 
   // Get the success boolean and zero extend it to i8.
   Value *Success = CGF.Builder.CreateExtractValue(CXI, 1);
@@ -455,24 +454,21 @@ static Value *EmitAtomicIncrementValue(CodeGenFunction &CGF, const CallExpr *E,
   assert(E->getArg(0)->getType()->isPointerType());
 
   auto *IntTy = CGF.ConvertType(E->getType());
+  Address DestAddr = CheckAtomicAlignment(CGF, E);
   auto *Result = CGF.Builder.CreateAtomicRMW(
-                   AtomicRMWInst::Add,
-                   CGF.EmitScalarExpr(E->getArg(0)),
-                   ConstantInt::get(IntTy, 1),
-                   Ordering);
+      AtomicRMWInst::Add, DestAddr, ConstantInt::get(IntTy, 1), Ordering);
   return CGF.Builder.CreateAdd(Result, ConstantInt::get(IntTy, 1));
 }
 
-static Value *EmitAtomicDecrementValue(CodeGenFunction &CGF, const CallExpr *E,
+static Value *EmitAtomicDecrementValue(
+    CodeGenFunction &CGF, const CallExpr *E,
     AtomicOrdering Ordering = AtomicOrdering::SequentiallyConsistent) {
   assert(E->getArg(0)->getType()->isPointerType());
 
   auto *IntTy = CGF.ConvertType(E->getType());
+  Address DestAddr = CheckAtomicAlignment(CGF, E);
   auto *Result = CGF.Builder.CreateAtomicRMW(
-                   AtomicRMWInst::Sub,
-                   CGF.EmitScalarExpr(E->getArg(0)),
-                   ConstantInt::get(IntTy, 1),
-                   Ordering);
+      AtomicRMWInst::Sub, DestAddr, ConstantInt::get(IntTy, 1), Ordering);
   return CGF.Builder.CreateSub(Result, ConstantInt::get(IntTy, 1));
 }
 
@@ -1227,8 +1223,7 @@ static llvm::Value *EmitBitTestIntrinsic(CodeGenFunction &CGF,
       Mask = CGF.Builder.CreateNot(Mask);
       RMWOp = llvm::AtomicRMWInst::And;
     }
-    OldByte = CGF.Builder.CreateAtomicRMW(RMWOp, ByteAddr.getPointer(), Mask,
-                                          Ordering);
+    OldByte = CGF.Builder.CreateAtomicRMW(RMWOp, ByteAddr, Mask, Ordering);
   } else {
     // Emit a plain load for the non-interlocked intrinsics.
     OldByte = CGF.Builder.CreateLoad(ByteAddr, "bittest.byte");
@@ -4699,19 +4694,17 @@ RValue CodeGenFunction::EmitBuiltinExpr(const GlobalDecl GD, unsigned BuiltinID,
   case Builtin::BI__sync_lock_release_8:
   case Builtin::BI__sync_lock_release_cap:
   case Builtin::BI__sync_lock_release_16: {
-    Value *Ptr = CheckAtomicAlignment(*this, E);
+    Address Ptr = CheckAtomicAlignment(*this, E);
     QualType ElTy = E->getArg(0)->getType()->getPointeeType();
-    CharUnits StoreSize = getContext().getTypeSizeInChars(ElTy);
     llvm::Type *ITy;
     if (ElTy->isCHERICapabilityType(getContext()))
       ITy = ConvertTypeForMem(ElTy);
     else {
       ITy = llvm::IntegerType::get(getLLVMContext(),
-                                   StoreSize.getQuantity() * 8);
+                                   getContext().getTypeSize(ElTy));
     }
     llvm::StoreInst *Store =
-      Builder.CreateAlignedStore(llvm::Constant::getNullValue(ITy), Ptr,
-                                 StoreSize);
+        Builder.CreateStore(llvm::Constant::getNullValue(ITy), Ptr);
     Store->setAtomic(llvm::AtomicOrdering::Release);
     return RValue::get(nullptr);
   }
@@ -4762,7 +4755,9 @@ RValue CodeGenFunction::EmitBuiltinExpr(const GlobalDecl GD, unsigned BuiltinID,
     bool Volatile =
         PtrTy->castAs<PointerType>()->getPointeeType().isVolatileQualified();
 
-    Value *Ptr = EmitScalarExpr(E->getArg(0));
+    Address Ptr =
+        EmitPointerWithAlignment(E->getArg(0)).withElementType(Int8Ty);
+
     Value *NewVal = Builder.getInt8(1);
     Value *Order = EmitScalarExpr(E->getArg(1));
     if (isa<llvm::ConstantInt>(Order)) {
@@ -5328,7 +5323,7 @@ RValue CodeGenFunction::EmitBuiltinExpr(const GlobalDecl GD, unsigned BuiltinID,
     llvm::IntegerType *IntType = IntegerType::get(
         getLLVMContext(), getContext().getTypeSize(E->getType()));
 
-    llvm::Value *Destination = EmitScalarExpr(E->getArg(0));
+    Address DestAddr = CheckAtomicAlignment(*this, E);
 
     llvm::Value *Exchange = EmitScalarExpr(E->getArg(1));
     RTy = Exchange->getType();
@@ -5341,7 +5336,7 @@ RValue CodeGenFunction::EmitBuiltinExpr(const GlobalDecl GD, unsigned BuiltinID,
       BuiltinID == Builtin::BI_InterlockedCompareExchangePointer_nf ?
       AtomicOrdering::Monotonic : AtomicOrdering::SequentiallyConsistent;
 
-    auto Result = Builder.CreateAtomicCmpXchg(Destination, Comparand, Exchange,
+    auto Result = Builder.CreateAtomicCmpXchg(DestAddr, Comparand, Exchange,
                                               Ordering, Ordering);
     Result->setVolatile(true);
 
@@ -12360,12 +12355,12 @@ Value *CodeGenFunction::EmitAArch64BuiltinExpr(unsigned BuiltinID,
   }
 
   case clang::AArch64::BI_InterlockedAdd: {
-    Value *Arg0 = EmitScalarExpr(E->getArg(0));
-    Value *Arg1 = EmitScalarExpr(E->getArg(1));
-    AtomicRMWInst *RMWI = Builder.CreateAtomicRMW(
-      AtomicRMWInst::Add, Arg0, Arg1,
-      llvm::AtomicOrdering::SequentiallyConsistent);
-    return Builder.CreateAdd(RMWI, Arg1);
+    Address DestAddr = CheckAtomicAlignment(*this, E);
+    Value *Val = EmitScalarExpr(E->getArg(1));
+    AtomicRMWInst *RMWI =
+        Builder.CreateAtomicRMW(AtomicRMWInst::Add, DestAddr, Val,
+                                llvm::AtomicOrdering::SequentiallyConsistent);
+    return Builder.CreateAdd(RMWI, Val);
   }
   }
 
@@ -18678,7 +18673,7 @@ Value *CodeGenFunction::EmitAMDGPUBuiltinExpr(unsigned BuiltinID,
       break;
     }
 
-    Value *Ptr = EmitScalarExpr(E->getArg(0));
+    Address Ptr = CheckAtomicAlignment(*this, E);
     Value *Val = EmitScalarExpr(E->getArg(1));
 
     ProcessOrderScopeAMDGCN(EmitScalarExpr(E->getArg(2)),
@@ -19567,9 +19562,10 @@ Value *CodeGenFunction::EmitNVPTXBuiltinExpr(unsigned BuiltinID,
 
   case NVPTX::BI__nvvm_atom_add_gen_f:
   case NVPTX::BI__nvvm_atom_add_gen_d: {
-    Value *Ptr = EmitScalarExpr(E->getArg(0));
+    Address DestAddr = EmitPointerWithAlignment(E->getArg(0));
     Value *Val = EmitScalarExpr(E->getArg(1));
-    return Builder.CreateAtomicRMW(llvm::AtomicRMWInst::FAdd, Ptr, Val,
+
+    return Builder.CreateAtomicRMW(llvm::AtomicRMWInst::FAdd, DestAddr, Val,
                                    AtomicOrdering::SequentiallyConsistent);
   }
 
@@ -20315,10 +20311,6 @@ RValue CodeGenFunction::EmitBuiltinIsAligned(const CallExpr *E) {
 /// llvm.ptrmask intrinsic (with a GEP before in the align_up case).
 RValue CodeGenFunction::EmitBuiltinAlignTo(const CallExpr *E, bool AlignUp) {
   BuiltinAlignArgs Args(E, *this);
-  //llvm::Value *SrcAddr = Args.Src;
-  //if (Args.Src->getType()->isPointerTy())
-  //  SrcAddr = getPtrAddr(Args, *this);
-  //llvm::Value *SrcForMask = SrcAddr;
   llvm::Value *SrcForMask = Args.Src;
   if (AlignUp) {
     // When aligning up we have to first add the mask to ensure we go over the
@@ -20342,34 +20334,6 @@ RValue CodeGenFunction::EmitBuiltinAlignTo(const CallExpr *E, bool AlignUp) {
   llvm::Value *InvertedMask = Builder.CreateNot(Args.Mask, "inverted_mask");
   llvm::Value *Result = nullptr;
   if (Args.Src->getType()->isPointerTy()) {
-//<<<<<<< HEAD
-//    /// TODO: Use ptrmask instead of ptrtoint+gep once it is optimized well.
-//    // Result = Builder.CreateIntrinsic(
-//    //  Intrinsic::ptrmask, {Args.SrcType, SrcForMask->getType(), Args.IntType},
-//    //  {SrcForMask, NegatedMask}, nullptr, "aligned_result");
-//    Result->setName("aligned_intptr");
-//    llvm::Value *Difference = Builder.CreateSub(Result, SrcAddr, "diff");
-//    if (E->getType()->isPointerType()) {
-//      // The result must point to the same underlying allocation. This means we
-//      // can use an inbounds GEP to enable better optimization.
-//      if (getLangOpts().isSignedOverflowDefined())
-//        Result =
-//            Builder.CreateGEP(Int8Ty, Args.Src, Difference, "aligned_result");
-//      else
-//        Result = EmitCheckedInBoundsGEP(Int8Ty, Args.Src, Difference,
-//                                        /*SignedIndices=*/true,
-//                                        /*isSubtraction=*/!AlignUp,
-//                                        E->getExprLoc(), "aligned_result");
-//    } else {
-//      // However, for when performing operations on __intcap_t (which is also
-//      // a pointer type in LLVM IR), we cannot set the inbounds flag as the
-//      // result could be either an arbitrary integer value or a valid pointer.
-//      // Setting the inbounds flag for the arbitrary integer case is not safe.
-//      assert(E->getType()->isIntCapType());
-//      Result = Builder.CreateGEP(Int8Ty, Args.Src, Difference,
-//                                 "aligned_result");
-//    }
-//=======
     Result = Builder.CreateIntrinsic(
         Intrinsic::ptrmask, {Args.SrcType, Args.IntType},
         {SrcForMask, InvertedMask}, nullptr, "aligned_result");
