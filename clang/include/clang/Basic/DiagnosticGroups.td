@@ -660,7 +660,7 @@ def Shorten64To32 : DiagGroup<"shorten-64-to-32">;
 def ShortenCapToInt : DiagGroup<"shorten-cap-to-int">;
 def : DiagGroup<"sign-promo">;
 def SignCompare : DiagGroup<"sign-compare">;
-def : DiagGroup<"switch-default">;
+def SwitchDefault  : DiagGroup<"switch-default">;
 def : DiagGroup<"synth">;
 def SizeofArrayArgument : DiagGroup<"sizeof-array-argument">;
 def SizeofArrayDecay : DiagGroup<"sizeof-array-decay">;
