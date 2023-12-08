@@ -571,6 +571,18 @@ void PointerAlignmentChecker::checkPreCall(const CallEvent &Call,
   }
 }
 
+namespace {
+
+bool isNonZeroShift(const SVal& V) {
+  if (const MemRegion *MR = V.getAsRegion())
+    if (auto *ER = MR->getAs<ElementRegion>())
+      if (!ER->getIndex().isZeroConstant())
+          return true;
+  return false;
+}
+
+} // namespace
+
 void PointerAlignmentChecker::checkPostStmt(const CastExpr *CE,
                                             CheckerContext &C) const {
   CastKind CK = CE->getCastKind();
@@ -617,13 +629,15 @@ void PointerAlignmentChecker::checkPostStmt(const CastExpr *CE,
 
   /* Update CapStorageSet */
   const ProgramPointTag *Tag = nullptr;
-  if ((isCapabilityStorage(SrcVal, State, ASTCtx) || DstIsCapStorage)
-      && !isCapabilityStorage(DstVal, State, ASTCtx)) {
-    if (const MemRegion *R = DstVal.getAsRegion()) {
+  if (!isCapabilityStorage(DstVal, State, ASTCtx)) {
+    if ((isCapabilityStorage(SrcVal, State, ASTCtx) && !isNonZeroShift(SrcVal))
+        || DstIsCapStorage) {
+        if (const MemRegion *R = DstVal.getAsRegion()) {
         State = State->add<CapStorageSet>(R->StripCasts());
         Updated = true;
         if (DstIsCapStorage)
           Tag = C.getNoteTag("Cast to capability-containing type");
+        }
     }
   }
 
