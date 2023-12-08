@@ -6545,7 +6545,7 @@ ConstantAddress CodeGenModule::GetAddrOfGlobalTemporary(
       VD, E->getManglingNumber(), Out);
 
   APValue *Value = nullptr;
-  if (E->getStorageDuration() == SD_Static && VD && VD->evaluateValue()) {
+  if (E->getStorageDuration() == SD_Static && VD->evaluateValue()) {
     // If the initializer of the extending declaration is a constant
     // initializer, we should have a cached constant initializer for this
     // temporary. Note that this might have a different value from the value
@@ -6560,8 +6560,7 @@ ConstantAddress CodeGenModule::GetAddrOfGlobalTemporary(
       !EvalResult.hasSideEffects())
     Value = &EvalResult.Val;
 
-  LangAS AddrSpace =
-      VD ? GetGlobalVarAddressSpace(VD) : MaterializedType.getAddressSpace();
+  LangAS AddrSpace = GetGlobalVarAddressSpace(VD);
 
   std::optional<ConstantEmitter> emitter;
   llvm::Constant *InitialValue = nullptr;
