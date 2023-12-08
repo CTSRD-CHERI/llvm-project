@@ -32,7 +32,6 @@
 #include "llvm/IR/Type.h"
 #include "llvm/Target/TargetMachine.h"
 #include <algorithm>
-#include <cassert>
 #include <deque>
 #include <utility>
 #include <vector>
