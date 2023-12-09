@@ -1053,7 +1053,7 @@ MCSection *TargetLoweringObjectFileELF::getSectionForMachineBasicBlock(
     } else {
       Name += FunctionSectionName;
       if (TM.getUniqueBasicBlockSectionNames()) {
-        if (!Name.endswith("."))
+        if (!Name.ends_with("."))
           Name += ".";
         Name += MBB.getSymbol()->getName();
       } else {
