@@ -26,6 +26,7 @@
 #include "llvm/CodeGen/TargetSubtargetInfo.h"
 #include "llvm/IR/DataLayout.h"
 #include "llvm/Target/TargetMachine.h"
+#include <bitset>
 
 #define GET_SUBTARGETINFO_HEADER
 #include "RISCVGenSubtargetInfo.inc"
