@@ -200,7 +200,10 @@ public:
     return is64Bit() ? MVT::c128 : MVT::c64;
   }
 
-  bool hasMacroFusion() const { return hasLUIADDIFusion(); }
+  bool hasMacroFusion() const {
+    return hasLUIADDIFusion() || hasAUIPCADDIFusion() ||
+           hasShiftedZExtFusion() || hasLDADDFusion();
+  }
 
   // Vector codegen related methods.
   bool hasVInstructions() const { return HasStdExtZve32x; }
