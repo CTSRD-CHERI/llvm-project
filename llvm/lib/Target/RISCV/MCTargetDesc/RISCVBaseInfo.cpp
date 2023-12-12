@@ -53,17 +53,17 @@ ABI computeTargetABI(const Triple &TT, const FeatureBitset &FeatureBits,
     errs()
         << "'" << ABIName
         << "' is not a recognized ABI for this target (ignoring target-abi)\n";
-  } else if ((ABIName.startswith("ilp32") || ABIName.startswith("il32")) &&
+  } else if ((ABIName.starts_with("ilp32") || ABIName.starts_with("il32")) &&
              IsRV64) {
     errs() << "32-bit ABIs are not supported for 64-bit targets (ignoring "
               "target-abi)\n";
     TargetABI = ABI_Unknown;
-  } else if ((ABIName.startswith("lp64") || ABIName.startswith("l64")) &&
+  } else if ((ABIName.starts_with("lp64") || ABIName.starts_with("l64")) &&
              !IsRV64) {
     errs() << "64-bit ABIs are not supported for 32-bit targets (ignoring "
               "target-abi)\n";
     TargetABI = ABI_Unknown;
-  } else if ((ABIName.startswith("il32pc") || ABIName.startswith("l64pc")) &&
+  } else if ((ABIName.starts_with("il32pc") || ABIName.starts_with("l64pc")) &&
              !FeatureBits[RISCV::FeatureCheri]) {
     errs() << "Pure-capability ABI can't be used for a target that "
               "doesn't support the XCheri instruction set extension (ignoring "

@@ -301,8 +301,8 @@ static Cursor maybeLexIdentifier(Cursor C, MIToken &Token) {
 
 static Cursor maybeLexMachineBasicBlock(Cursor C, MIToken &Token,
                                         ErrorCallbackType ErrorCallback) {
-  bool IsReference = C.remaining().startswith("%bb.");
-  if (!IsReference && !C.remaining().startswith("bb."))
+  bool IsReference = C.remaining().starts_with("%bb.");
+  if (!IsReference && !C.remaining().starts_with("bb."))
     return std::nullopt;
   auto Range = C;
   unsigned PrefixLength = IsReference ? 4 : 3;
@@ -336,7 +336,7 @@ static Cursor maybeLexMachineBasicBlock(Cursor C, MIToken &Token,
 
 static Cursor maybeLexIndex(Cursor C, MIToken &Token, StringRef Rule,
                             MIToken::TokenKind Kind) {
-  if (!C.remaining().startswith(Rule) || !isdigit(C.peek(Rule.size())))
+  if (!C.remaining().starts_with(Rule) || !isdigit(C.peek(Rule.size())))
     return std::nullopt;
   auto Range = C;
   C.advance(Rule.size());
@@ -349,7 +349,7 @@ static Cursor maybeLexIndex(Cursor C, MIToken &Token, StringRef Rule,
 
 static Cursor maybeLexIndexAndName(Cursor C, MIToken &Token, StringRef Rule,
                                    MIToken::TokenKind Kind) {
-  if (!C.remaining().startswith(Rule) || !isdigit(C.peek(Rule.size())))
+  if (!C.remaining().starts_with(Rule) || !isdigit(C.peek(Rule.size())))
     return std::nullopt;
   auto Range = C;
   C.advance(Rule.size());
@@ -389,7 +389,7 @@ static Cursor maybeLexConstantPoolItem(Cursor C, MIToken &Token) {
 static Cursor maybeLexSubRegisterIndex(Cursor C, MIToken &Token,
                                        ErrorCallbackType ErrorCallback) {
   const StringRef Rule = "%subreg.";
-  if (!C.remaining().startswith(Rule))
+  if (!C.remaining().starts_with(Rule))
     return std::nullopt;
   return lexName(C, Token, MIToken::SubRegisterIndex, Rule.size(),
                  ErrorCallback);
@@ -398,7 +398,7 @@ static Cursor maybeLexSubRegisterIndex(Cursor C, MIToken &Token,
 static Cursor maybeLexIRBlock(Cursor C, MIToken &Token,
                               ErrorCallbackType ErrorCallback) {
   const StringRef Rule = "%ir-block.";
-  if (!C.remaining().startswith(Rule))
+  if (!C.remaining().starts_with(Rule))
     return std::nullopt;
   if (isdigit(C.peek(Rule.size())))
     return maybeLexIndex(C, Token, Rule, MIToken::IRBlock);
@@ -408,7 +408,7 @@ static Cursor maybeLexIRBlock(Cursor C, MIToken &Token,
 static Cursor maybeLexIRValue(Cursor C, MIToken &Token,
                               ErrorCallbackType ErrorCallback) {
   const StringRef Rule = "%ir.";
-  if (!C.remaining().startswith(Rule))
+  if (!C.remaining().starts_with(Rule))
     return std::nullopt;
   if (isdigit(C.peek(Rule.size())))
     return maybeLexIndex(C, Token, Rule, MIToken::IRValue);
@@ -502,7 +502,7 @@ static Cursor maybeLexExternalSymbol(Cursor C, MIToken &Token,
 static Cursor maybeLexMCSymbol(Cursor C, MIToken &Token,
                                ErrorCallbackType ErrorCallback) {
   const StringRef Rule = "<mcsymbol ";
-  if (!C.remaining().startswith(Rule))
+  if (!C.remaining().starts_with(Rule))
     return std::nullopt;
   auto Start = C;
   C.advance(Rule.size());

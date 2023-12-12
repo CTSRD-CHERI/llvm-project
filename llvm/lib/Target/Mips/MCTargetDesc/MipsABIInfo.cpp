@@ -69,14 +69,13 @@ unsigned MipsABIInfo::GetCalleeAllocdArgSizeInBytes(CallingConv::ID CC) const {
 
 MipsABIInfo MipsABIInfo::computeTargetABI(const Triple &TT, StringRef CPU,
                                           const MCTargetOptions &Options) {
-  StringRef ABIName = Options.getABIName();
-  if (ABIName.startswith("o32"))
+  if (Options.getABIName().starts_with("o32"))
     return MipsABIInfo::O32();
-  if (ABIName.startswith("n32"))
+  if (Options.getABIName().starts_with("n32"))
     return MipsABIInfo::N32();
-  if (ABIName.startswith("n64"))
+  if (Options.getABIName().starts_with("n64"))
     return MipsABIInfo::N64();
-  if (ABIName.startswith("purecap"))
+  if (Options.getABIName().starts_with("purecap"))
     return MipsABIInfo::CheriPureCap();
   if (TT.getEnvironment() == llvm::Triple::GNUABIN32)
     return MipsABIInfo::N32();
