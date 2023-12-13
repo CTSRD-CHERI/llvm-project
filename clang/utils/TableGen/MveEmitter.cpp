@@ -883,7 +883,7 @@ public:
       } else if (V->varnameUsed()) {
         std::string Type = V->typeName();
         OS << V->typeName();
-        if (!StringRef(Type).endswith("*"))
+        if (!StringRef(Type).ends_with("*"))
           OS << " ";
         OS << V->varname() << " = ";
       }
@@ -1681,7 +1681,7 @@ void EmitterBase::EmitBuiltinCG(raw_ostream &OS) {
       for (size_t i = 0, e = MG.ParamTypes.size(); i < e; ++i) {
         StringRef Type = MG.ParamTypes[i];
         OS << "  " << Type;
-        if (!Type.endswith("*"))
+        if (!Type.ends_with("*"))
           OS << " ";
         OS << " Param" << utostr(i) << ";\n";
       }
@@ -1834,7 +1834,7 @@ void MveEmitter::EmitHeader(raw_ostream &OS) {
         // prototype.
 
         std::string RetTypeName = Int.returnType()->cName();
-        if (!StringRef(RetTypeName).endswith("*"))
+        if (!StringRef(RetTypeName).ends_with("*"))
           RetTypeName += " ";
 
         std::vector<std::string> ArgTypeNames;
@@ -2079,7 +2079,7 @@ void CdeEmitter::EmitHeader(raw_ostream &OS) {
       // Make strings for the types involved in the function's
       // prototype.
       std::string RetTypeName = Int.returnType()->cName();
-      if (!StringRef(RetTypeName).endswith("*"))
+      if (!StringRef(RetTypeName).ends_with("*"))
         RetTypeName += " ";
 
       std::vector<std::string> ArgTypeNames;
