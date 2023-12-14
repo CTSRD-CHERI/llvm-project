@@ -9665,16 +9665,17 @@ Sema::ActOnFunctionDeclarator(Scope *S, Declarator &D, DeclContext *DC,
     ArrayRef<QualType> OldParams = FPT->getParamTypes();
     llvm::SmallVector<QualType, 8> NewParams;
     for (QualType T : OldParams) {
-      if (const PointerType *PT = T->getAs<PointerType>())
-        NewParams.push_back(Context.getPointerType(PT->getPointeeType(),
-                                                   PIK_Capability));
-      else
-        NewParams.push_back(T);
+      QualType NewT;
+      if (T->isPointerType() || T->isReferenceType() || T->isArrayType())
+        NewT = BuildPointerInterpretationEquivalentType(T, PIK_Capability,
+                                                        SourceLocation());
+      NewParams.push_back(NewT);
     }
     QualType RetTy = FPT->getReturnType();
-    if (const PointerType *PT = RetTy->getAs<PointerType>())
-      RetTy = Context.getPointerType(PT->getPointeeType(),
-                                     PIK_Capability);
+    if (RetTy->isPointerType() || RetTy->isReferenceType() ||
+        RetTy->isArrayType())
+      RetTy = BuildPointerInterpretationEquivalentType(RetTy, PIK_Capability,
+                                                       SourceLocation());
     NewFD->setType(Context.getFunctionType(RetTy, NewParams,
           FPT->getExtProtoInfo()));
   }

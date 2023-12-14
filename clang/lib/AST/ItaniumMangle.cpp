@@ -2252,6 +2252,7 @@ bool CXXNameMangler::mangleUnresolvedTypeOrSimpleId(QualType Ty,
   case Type::DependentSizedArray:
   case Type::DependentAddressSpace:
   case Type::DependentPointer:
+  case Type::PointerInterpretation:
   case Type::DependentVector:
   case Type::DependentSizedExtVector:
   case Type::Vector:

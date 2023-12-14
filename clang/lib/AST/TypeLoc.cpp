@@ -685,6 +685,10 @@ namespace {
       return Visit(T.getModifiedLoc());
     }
 
+    TypeLoc VisitPointerInterpretationTypeLoc(PointerInterpretationTypeLoc T) {
+      return Visit(T.getModifiedLoc());
+    }
+
     TypeLoc VisitMacroQualifiedTypeLoc(MacroQualifiedTypeLoc T) {
       return Visit(T.getInnerLoc());
     }

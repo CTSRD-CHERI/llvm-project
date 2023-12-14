@@ -195,9 +195,9 @@ static bool checkCapArg(Sema &S, CallExpr *TheCall, unsigned ArgIndex,
   // Treat NULL/nullptr/__null/literal 0 as void * __capability.
   if (!SrcTy->isCapabilityPointerType() &&
       Source->isNullPointerConstant(Ctx, Expr::NPC_ValueDependentIsNull))
-    SrcTy = Ctx.getPointerType(SrcTy->isPointerType() ? SrcTy->getPointeeType()
-                                                      : Ctx.VoidTy,
-                               PIK_Capability);
+    SrcTy = Ctx.getPointerType(
+        SrcTy->isPointerType() ? SrcTy->getPointeeType() : Ctx.VoidTy,
+        PointerInterpretationKindExplicit(PIK_Capability, /*IsExplicit=*/true));
   if (ResultingSrcTy)
     *ResultingSrcTy = SrcTy;
   if (!SrcTy->isCapabilityPointerType() && !SrcTy->isIntCapType()) {
@@ -2228,8 +2228,12 @@ Sema::CheckBuiltinFunctionCall(FunctionDecl *FDecl, unsigned BuiltinID,
         ResultPointeeTy.addVolatile();
       if (SrcTy->getPointeeType().isConstQualified())
         ResultPointeeTy.addConst();
-      TheCall->setType(
-          Context.getPointerType(ResultPointeeTy, PIK_Capability));
+      llvm::Optional<PointerInterpretationKindExplicit> PIKE =
+          SrcTy->getPointerInterpretationExplicitOrNone(Context);
+      assert(PIKE && "Pointer must have interpretation");
+      assert(PIKE->PIK == PIK_Capability &&
+             "Capability must have capability interpretation");
+      TheCall->setType(Context.getPointerType(ResultPointeeTy, *PIKE));
     }
     break;
   }
@@ -2265,8 +2269,8 @@ Sema::CheckBuiltinFunctionCall(FunctionDecl *FDecl, unsigned BuiltinID,
       return ExprError();
     }
     // Result is always void * __capability
-    TheCall->setType(
-        Context.getPointerType(Context.VoidTy, PIK_Capability));
+    PointerInterpretationKindExplicit PIKE(PIK_Capability, /*IsExplicit=*/true);
+    TheCall->setType(Context.getPointerType(Context.VoidTy, PIKE));
     break;
   }
   case Builtin::BI__builtin_cheri_tag_clear:
@@ -2320,8 +2324,8 @@ Sema::CheckBuiltinFunctionCall(FunctionDecl *FDecl, unsigned BuiltinID,
         checkCapArg(*this, TheCall, 1, &SrcTy))
       return ExprError();
     if (SrcTy->isPointerType()) {
-      TheCall->setType(Context.getPointerType(SrcTy->getPointeeType(),
-                                              PIK_Integer));
+      PointerInterpretationKindExplicit PIKE(PIK_Integer, /*IsExplicit=*/true);
+      TheCall->setType(Context.getPointerType(SrcTy->getPointeeType(), PIKE));
     } else {
       assert(SrcTy->isIntCapType());
       TheCall->setType(SrcTy->isSignedIntegerType() ? Context.getIntPtrType()
@@ -2355,8 +2359,8 @@ Sema::CheckBuiltinFunctionCall(FunctionDecl *FDecl, unsigned BuiltinID,
         return ExprError();
       }
     }
-    TheCall->setType(
-        Context.getPointerType(ResultPointee, PIK_Capability));
+    PointerInterpretationKindExplicit PIKE(PIK_Capability, /*IsExplicit=*/true);
+    TheCall->setType(Context.getPointerType(ResultPointee, PIKE));
     break;
   }
   case Builtin::BI__builtin_cheri_perms_check:

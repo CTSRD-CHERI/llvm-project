@@ -47,7 +47,7 @@ char *__capability test_long_to_capptr(long l) {
 char *__capability test_intcap_to_capptr(__intcap l) {
   return (char *__capability)l;
   // AST-LABEL: FunctionDecl {{.+}} test_intcap_to_capptr
-  // AST:       CStyleCastExpr {{.+}} 'char * __capability' <IntegralToPointer>
+  // AST:       CStyleCastExpr {{.+}} 'char * __capability':'char * __capability' <IntegralToPointer>
   // AST-NEXT:  ImplicitCastExpr {{.+}} '__intcap' <LValueToRValue> part_of_explicit_cast
 }
 
@@ -62,7 +62,7 @@ char *__capability test_ptr_to_capptr_default(char *p) {
   // explicit-error@-1{{converting non-capability type 'char *' to capability type 'char * __capability' without an explicit cast}}
   // address-warning@-2{{cast from provenance-free integer type to pointer type will give pointer that can not be dereferenced}}
   // AST-LABEL: FunctionDecl {{.+}} test_ptr_to_capptr_default
-  // AST:       CStyleCastExpr {{.+}} 'char * __capability' <PointerToCHERICapability>
+  // AST:       CStyleCastExpr {{.+}} 'char * __capability':'char * __capability' <PointerToCHERICapability>
   // AST-NEXT:  ImplicitCastExpr {{.+}} 'char *' <LValueToRValue> part_of_explicit_cast
 }
 
@@ -94,7 +94,7 @@ char *__capability test_ptr_to_capptr_reinterpret_cast(char *p) {
   // explicit-error@-1{{converting non-capability type 'char *' to capability type 'char * __capability' without an explicit cast}}
   // address-warning@-2{{cast from provenance-free integer type to pointer type will give pointer that can not be dereferenced}}
   // CXX-AST-LABEL: FunctionDecl {{.+}} test_ptr_to_capptr_reinterpret_cast
-  // CXX-AST:       CXXReinterpretCastExpr {{.+}} 'char * __capability' reinterpret_cast<char * __capability> <PointerToCHERICapability>
+  // CXX-AST:       CXXReinterpretCastExpr {{.+}} 'char * __capability':'char * __capability' reinterpret_cast<char * __capability> <PointerToCHERICapability>
   // CXX-AST-NEXT:  ImplicitCastExpr {{.+}} 'char *' <LValueToRValue> part_of_explicit_cast
 }
 #endif
@@ -108,7 +108,7 @@ char *__capability test_ptr_to_capptr_reinterpret_cast(char *p) {
 char *__capability test_ptr_to_capptr_tocap(char *p) {
   return (__cheri_tocap char *__capability)p;
   // AST-LABEL: FunctionDecl {{.+}} test_ptr_to_capptr_tocap
-  // AST:       CStyleCastExpr {{.+}} 'char * __capability' <PointerToCHERICapability>
+  // AST:       CStyleCastExpr {{.+}} 'char * __capability':'char * __capability' <PointerToCHERICapability>
   // AST-NEXT:  ImplicitCastExpr {{.+}} 'char *' <LValueToRValue> part_of_explicit_cast
 }
 
@@ -154,12 +154,12 @@ __intcap test_ptr_to_intcap_tocap(char *p) {
 char *__capability test_NULL(void) {
   return (char *__capability)NULL;
   // AST-LABEL:    FunctionDecl {{.+}} test_NULL
-  // C-AST:        CStyleCastExpr {{.+}} 'char * __capability' <PointerToCHERICapability>
+  // C-AST:        CStyleCastExpr {{.+}} 'char * __capability':'char * __capability' <PointerToCHERICapability>
   // C-AST-NEXT:   ParenExpr {{.+}} 'void *'
   // C-AST-NEXT:   CStyleCastExpr {{.+}} 'void *' <NullToPointer>
   // C-AST-NEXT:   IntegerLiteral {{.+}} <col:23> 'int' 0
-  // CXX-AST:      CStyleCastExpr {{.+}} 'char * __capability' <NoOp>
-  // CXX-AST-NEXT: ImplicitCastExpr {{.+}} <col:14> 'char * __capability' <NullToPointer> part_of_explicit_cast
+  // CXX-AST:      CStyleCastExpr {{.+}} 'char * __capability':'char * __capability' <NoOp>
+  // CXX-AST-NEXT: ImplicitCastExpr {{.+}} <col:14> 'char * __capability':'char * __capability' <NullToPointer> part_of_explicit_cast
   // CXX-AST-NEXT: GNUNullExpr {{.+}} <col:14> 'long'
 }
 
@@ -172,8 +172,8 @@ char *__capability test_zero_constant(void) {
   return (char *__capability)0;
   // AST-LABEL:    FunctionDecl {{.+}} test_zero_constant
   // C-AST:        CStyleCastExpr {{.+}} 'char * __capability __attribute__((cheri_no_provenance))':'char * __capability' <NullToPointer>
-  // CXX-AST:      CStyleCastExpr {{.+}} <col:10, col:30> 'char * __capability' <NoOp>
-  // CXX-AST-NEXT: ImplicitCastExpr {{.+}} 'char * __capability' <NullToPointer> part_of_explicit_cast
+  // CXX-AST:      CStyleCastExpr {{.+}} <col:10, col:30> 'char * __capability':'char * __capability' <NoOp>
+  // CXX-AST-NEXT: ImplicitCastExpr {{.+}} 'char * __capability':'char * __capability' <NullToPointer> part_of_explicit_cast
   // AST-NEXT:     IntegerLiteral {{.+}} <col:30> 'int' 0
 }
 
@@ -186,8 +186,8 @@ char *__capability test_zero_constant(void) {
 char *__capability test_nullptr(void) {
   return (char *__capability)nullptr;
   // CXX-AST-LABEL: FunctionDecl {{.+}} test_nullptr
-  // CXX-AST:       CStyleCastExpr {{.+}} <col:10, col:30> 'char * __capability' <NoOp>
-  // CXX-AST:       ImplicitCastExpr {{.+}} <col:30> 'char * __capability' <NullToPointer> part_of_explicit_cast
+  // CXX-AST:       CStyleCastExpr {{.+}} <col:10, col:30> 'char * __capability':'char * __capability' <NoOp>
+  // CXX-AST:       ImplicitCastExpr {{.+}} <col:30> 'char * __capability':'char * __capability' <NullToPointer> part_of_explicit_cast
   // CXX-AST-NEXT:  CXXNullPtrLiteralExpr {{.+}} <col:30> 'std::nullptr_t'
 }
 #endif

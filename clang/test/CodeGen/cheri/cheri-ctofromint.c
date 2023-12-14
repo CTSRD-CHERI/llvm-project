@@ -10,12 +10,12 @@ void* __capability foo(void *__capability x){
   // hybrid-warning@-1{{the following conversion will result in a CToPtr operation}}
   // hybrid-note@-2{{if you really intended to use CToPtr use}}
   // hybrid-warning@-3{{cast to smaller integer type 'int' from 'void * __capability'}}
-  // purecap-warning@-4{{cast to smaller integer type 'int' from 'void *'}}
+  // purecap-warning@-4{{cast to smaller integer type 'int' from 'void * __capability' (aka 'void *')}}
   // CHECK-HYBRID: inttoptr
   // CHECK-PURECAP: [[CONV:%.+]] = sext i32 {{%.+}} to i64
   // CHECK-PURECAP-NEXT: getelementptr i8, i8 addrspace(200)* null, i64 [[CONV]]
   return (void* __capability)pi;
   // purecap-warning@-1{{cast from provenance-free integer type to pointer type will give pointer that can not be dereferenced}}
   // hybrid-warning@-2{{cast to 'void * __capability' from smaller integer type 'int'}}
-  // purecap-warning@-3{{cast to 'void *' from smaller integer type 'int'}}
+  // purecap-warning@-3{{cast to 'void * __capability' (aka 'void *') from smaller integer type 'int'}}
 }

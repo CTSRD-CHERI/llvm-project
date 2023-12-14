@@ -108,7 +108,7 @@ void test_buildcap(struct Incomplete *__capability authcap, unsigned __intcap ub
   static_assert(__is_same(__typeof__(__builtin_cheri_cap_build(authcap, ubits)), void *__capability), ""); // okay
   static_assert(__is_same(__typeof__(__builtin_cheri_cap_build(authcap, sbits)), void *__capability), ""); // okay
   static_assert(__is_same(__typeof__(__builtin_cheri_cap_build(authcap, charpbits)), void *__capability), "");
-  // purecap-error@-1{{used type 'char *' where integer is required}}
+  // purecap-error@-1{{used type 'char * __capability' (aka 'char *') where integer is required}}
   // hybrid-error@-2{{used type 'char * __capability' where integer is required}}
 }
 
@@ -210,7 +210,7 @@ void cap_from_pointer(struct Incomplete *__capability authcap, const int *intege
   static_assert(__is_same(__typeof__(__builtin_cheri_cap_from_pointer(authcap, integerptr)), const int *__capability), "");
   // purecap-error@-1{{used type 'const int *' where integer is required}}
   (void)__builtin_cheri_cap_from_pointer(authcap, capptr);
-  // purecap-error@-1{{used type 'const int *' where integer is required}}
+  // purecap-error@-1{{used type 'const int * __capability' (aka 'const int *') where integer is required}}
   // hybrid-error@-2{{operand of type 'const int * __capability' where arithmetic or pointer type is required}}
 
   // authorizing cap must be a capability:

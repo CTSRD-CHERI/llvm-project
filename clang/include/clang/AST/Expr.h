@@ -986,9 +986,18 @@ public:
     return skipRValueSubobjectAdjustments(CommaLHSs, Adjustments);
   }
 
+  /// Returns the PointerInterpretationKindExplicit for the underlying memory
+  /// access of this expression, if accessing memory.
+  llvm::Optional<PointerInterpretationKindExplicit>
+  getUnderlyingPointerInterpretationExplicitOrNone() const;
+
   /// Returns true if the underlying memory of this expression is
   /// accessed through a capability.
-  bool hasUnderlyingCapability() const;
+  bool hasUnderlyingCapability() const {
+    llvm::Optional<PointerInterpretationKindExplicit> PIKE =
+        getUnderlyingPointerInterpretationExplicitOrNone();
+    return PIKE && PIKE->PIK == PIK_Capability;
+  }
 
   /// XXXAR: Expr->getType() returns int for the initializers expression in
   /// `void x(int& __capability arg) { int& a = arg }`

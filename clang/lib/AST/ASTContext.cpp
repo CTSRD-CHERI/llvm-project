@@ -1300,8 +1300,6 @@ void ASTContext::InitBuiltinTypes(const TargetInfo &Target,
   ABI.reset(createCXXABI(Target));
   AddrSpaceMap = getAddressSpaceMap(Target, LangOpts);
   AddrSpaceMapMangling = isAddrSpaceMapManglingEnabled(Target, LangOpts);
-  PrintingPolicy.SuppressCapabilityQualifier =
-      Target.areAllPointersCapabilities();
 
   // C99 6.2.5p19.
   InitBuiltinType(VoidTy,              BuiltinType::Void);
@@ -1783,7 +1781,7 @@ CharUnits ASTContext::getDeclAlign(const Decl *D, bool ForAlignof) const {
         T = RT->getPointeeType();
       else
         T = getPointerType(RT->getPointeeType(),
-                           RT->getPointerInterpretation());
+                           RT->getPointerInterpretationExplicit());
     }
     QualType BaseT = getBaseElementType(T);
     if (T->isFunctionType())
@@ -2435,6 +2433,10 @@ TypeInfo ASTContext::getTypeInfoImpl(const Type *T) const {
   case Type::Attributed:
     return getTypeInfo(
                   cast<AttributedType>(T)->getEquivalentType().getTypePtr());
+
+  case Type::PointerInterpretation:
+    return getTypeInfo(
+        cast<PointerInterpretationType>(T)->getEquivalentType().getTypePtr());
 
   case Type::Atomic: {
     // Start with the base type information.
@@ -3321,27 +3323,33 @@ ASTContext::getDefaultPointerInterpretation() const {
 
 /// getPointerType - Return the uniqued reference to the type for a pointer to
 /// the specified type.
-QualType ASTContext::getPointerType(QualType T, PointerInterpretationKind PIK) const {
+QualType
+ASTContext::getPointerType(QualType T,
+                           PointerInterpretationKindExplicit PIKE) const {
   // Unique pointers, to guarantee there is only one pointer of a particular
   // structure.
   llvm::FoldingSetNodeID ID;
-  PointerType::Profile(ID, T, PIK);
+  PointerType::Profile(ID, T, PIKE);
 
   void *InsertPos = nullptr;
   if (PointerType *PT = PointerTypes.FindNodeOrInsertPos(ID, InsertPos))
     return QualType(PT, 0);
 
+  PointerInterpretationKindExplicit CanonicalPIKE =
+      getCanonicalPointerInterpretationExplicit(PIKE);
+
   // If the pointee type isn't canonical, this won't be a canonical type either,
-  // so fill in the canonical type field.
+  // so fill in the canonical type field. Ditto for the pointer interpretation.
   QualType Canonical;
-  if (!T.isCanonical()) {
-    Canonical = getPointerType(getCanonicalType(T), PIK);
+  if (!T.isCanonical() || PIKE != CanonicalPIKE) {
+    Canonical = getPointerType(getCanonicalType(T),
+                               getCanonicalPointerInterpretationExplicit(PIKE));
 
     // Get the new insert position for the node we care about.
     PointerType *NewIP = PointerTypes.FindNodeOrInsertPos(ID, InsertPos);
     assert(!NewIP && "Shouldn't be in the map!"); (void)NewIP;
   }
-  auto *New = new (*this, TypeAlignment) PointerType(T, Canonical, PIK);
+  auto *New = new (*this, TypeAlignment) PointerType(T, Canonical, PIKE);
   Types.push_back(New);
   PointerTypes.InsertNode(New, InsertPos);
   return QualType(New, 0);
@@ -3440,8 +3448,9 @@ QualType ASTContext::getBlockPointerType(QualType T) const {
 
 /// getLValueReferenceType - Return the uniqued reference to the type for an
 /// lvalue reference to the specified type.
-QualType
-ASTContext::getLValueReferenceType(QualType T, bool SpelledAsLValue, PointerInterpretationKind PIK) const {
+QualType ASTContext::getLValueReferenceType(
+    QualType T, bool SpelledAsLValue,
+    PointerInterpretationKindExplicit PIKE) const {
   assert((!T->isPlaceholderType() ||
           T->isSpecificPlaceholderType(BuiltinType::UnknownAny)) &&
          "Unresolved placeholder type");
@@ -3449,7 +3458,7 @@ ASTContext::getLValueReferenceType(QualType T, bool SpelledAsLValue, PointerInte
   // Unique pointers, to guarantee there is only one pointer of a particular
   // structure.
   llvm::FoldingSetNodeID ID;
-  ReferenceType::Profile(ID, T, SpelledAsLValue, PIK);
+  ReferenceType::Profile(ID, T, SpelledAsLValue, PIKE);
 
   void *InsertPos = nullptr;
   if (LValueReferenceType *RT =
@@ -3458,12 +3467,17 @@ ASTContext::getLValueReferenceType(QualType T, bool SpelledAsLValue, PointerInte
 
   const auto *InnerRef = T->getAs<ReferenceType>();
 
+  PointerInterpretationKindExplicit CanonicalPIKE =
+      getCanonicalPointerInterpretationExplicit(PIKE);
+
   // If the referencee type isn't canonical, this won't be a canonical type
   // either, so fill in the canonical type field.
   QualType Canonical;
-  if (!SpelledAsLValue || InnerRef || !T.isCanonical()) {
+  if (!SpelledAsLValue || InnerRef || !T.isCanonical() ||
+      PIKE != CanonicalPIKE) {
     QualType PointeeType = (InnerRef ? InnerRef->getPointeeType() : T);
-    Canonical = getLValueReferenceType(getCanonicalType(PointeeType), true, PIK);
+    Canonical = getLValueReferenceType(getCanonicalType(PointeeType), true,
+                                       CanonicalPIKE);
 
     // Get the new insert position for the node we care about.
     LValueReferenceType *NewIP =
@@ -3471,9 +3485,8 @@ ASTContext::getLValueReferenceType(QualType T, bool SpelledAsLValue, PointerInte
     assert(!NewIP && "Shouldn't be in the map!"); (void)NewIP;
   }
 
-  auto *New = new (*this, TypeAlignment) LValueReferenceType(T, Canonical,
-                                                             SpelledAsLValue,
-                                                             PIK);
+  auto *New = new (*this, TypeAlignment)
+      LValueReferenceType(T, Canonical, SpelledAsLValue, PIKE);
   Types.push_back(New);
   LValueReferenceTypes.InsertNode(New, InsertPos);
 
@@ -3482,7 +3495,8 @@ ASTContext::getLValueReferenceType(QualType T, bool SpelledAsLValue, PointerInte
 
 /// getRValueReferenceType - Return the uniqued reference to the type for an
 /// rvalue reference to the specified type.
-QualType ASTContext::getRValueReferenceType(QualType T, PointerInterpretationKind PIK) const {
+QualType ASTContext::getRValueReferenceType(
+    QualType T, PointerInterpretationKindExplicit PIKE) const {
   assert((!T->isPlaceholderType() ||
           T->isSpecificPlaceholderType(BuiltinType::UnknownAny)) &&
          "Unresolved placeholder type");
@@ -3490,7 +3504,7 @@ QualType ASTContext::getRValueReferenceType(QualType T, PointerInterpretationKin
   // Unique pointers, to guarantee there is only one pointer of a particular
   // structure.
   llvm::FoldingSetNodeID ID;
-  ReferenceType::Profile(ID, T, false, PIK);
+  ReferenceType::Profile(ID, T, false, PIKE);
 
   void *InsertPos = nullptr;
   if (RValueReferenceType *RT =
@@ -3499,12 +3513,16 @@ QualType ASTContext::getRValueReferenceType(QualType T, PointerInterpretationKin
 
   const auto *InnerRef = T->getAs<ReferenceType>();
 
+  PointerInterpretationKindExplicit CanonicalPIKE =
+      getCanonicalPointerInterpretationExplicit(PIKE);
+
   // If the referencee type isn't canonical, this won't be a canonical type
   // either, so fill in the canonical type field.
   QualType Canonical;
-  if (InnerRef || !T.isCanonical()) {
+  if (InnerRef || !T.isCanonical() || PIKE != CanonicalPIKE) {
     QualType PointeeType = (InnerRef ? InnerRef->getPointeeType() : T);
-    Canonical = getRValueReferenceType(getCanonicalType(PointeeType), PIK);
+    Canonical =
+        getRValueReferenceType(getCanonicalType(PointeeType), CanonicalPIKE);
 
     // Get the new insert position for the node we care about.
     RValueReferenceType *NewIP =
@@ -3512,8 +3530,8 @@ QualType ASTContext::getRValueReferenceType(QualType T, PointerInterpretationKin
     assert(!NewIP && "Shouldn't be in the map!"); (void)NewIP;
   }
 
-  auto *New = new (*this, TypeAlignment) RValueReferenceType(T, Canonical,
-                                                             PIK);
+  auto *New =
+      new (*this, TypeAlignment) RValueReferenceType(T, Canonical, PIKE);
   Types.push_back(New);
   RValueReferenceTypes.InsertNode(New, InsertPos);
   return QualType(New, 0);
@@ -3551,13 +3569,10 @@ QualType ASTContext::getMemberPointerType(QualType T, const Type *Cls) const {
 
 /// getConstantArrayType - Return the unique reference to the type for an
 /// array of the specified element type.
-QualType ASTContext::getConstantArrayType(QualType EltTy,
-                                          const llvm::APInt &ArySizeIn,
-                                          const Expr *SizeExpr,
-                                          ArrayType::ArraySizeModifier ASM,
-                                          unsigned IndexTypeQuals,
-                                          llvm::Optional<PointerInterpretationKind>
-                                          PIK) const {
+QualType ASTContext::getConstantArrayType(
+    QualType EltTy, const llvm::APInt &ArySizeIn, const Expr *SizeExpr,
+    ArrayType::ArraySizeModifier ASM, unsigned IndexTypeQuals,
+    llvm::Optional<PointerInterpretationKindExplicit> PIKE) const {
   assert((EltTy->isDependentType() ||
           EltTy->isIncompleteType() || EltTy->isConstantSizeType()) &&
          "Constant array of VLAs is illegal!");
@@ -3573,21 +3588,27 @@ QualType ASTContext::getConstantArrayType(QualType EltTy,
 
   llvm::FoldingSetNodeID ID;
   ConstantArrayType::Profile(ID, *this, EltTy, ArySize, SizeExpr, ASM,
-                             IndexTypeQuals, PIK);
+                             IndexTypeQuals, PIKE);
 
   void *InsertPos = nullptr;
   if (ConstantArrayType *ATP =
       ConstantArrayTypes.FindNodeOrInsertPos(ID, InsertPos))
     return QualType(ATP, 0);
 
+  llvm::Optional<PointerInterpretationKindExplicit> CanonicalPIKE =
+      PIKE.map([this](const auto &PIKE) {
+        return getCanonicalPointerInterpretationExplicit(PIKE);
+      });
+
   // If the element type isn't canonical or has qualifiers, or the array bound
   // is instantiation-dependent, this won't be a canonical type either, so fill
   // in the canonical type field.
   QualType Canon;
-  if (!EltTy.isCanonical() || EltTy.hasLocalQualifiers() || SizeExpr) {
+  if (!EltTy.isCanonical() || EltTy.hasLocalQualifiers() || SizeExpr ||
+      PIKE != CanonicalPIKE) {
     SplitQualType canonSplit = getCanonicalType(EltTy).split();
     Canon = getConstantArrayType(QualType(canonSplit.Ty, 0), ArySize, nullptr,
-                                 ASM, IndexTypeQuals, PIK);
+                                 ASM, IndexTypeQuals, CanonicalPIKE);
     Canon = getQualifiedType(Canon, canonSplit.Quals);
 
     // Get the new insert position for the node we care about.
@@ -3599,9 +3620,8 @@ QualType ASTContext::getConstantArrayType(QualType EltTy,
   void *Mem = Allocate(
       ConstantArrayType::totalSizeToAlloc<const Expr *>(SizeExpr ? 1 : 0),
       TypeAlignment);
-  auto *New = new (Mem)
-    ConstantArrayType(EltTy, Canon, ArySize, SizeExpr, ASM, IndexTypeQuals,
-                      PIK);
+  auto *New = new (Mem) ConstantArrayType(EltTy, Canon, ArySize, SizeExpr, ASM,
+                                          IndexTypeQuals, PIKE);
   ConstantArrayTypes.InsertNode(New, InsertPos);
   Types.push_back(New);
   return QualType(New, 0);
@@ -3751,28 +3771,30 @@ QualType ASTContext::getVariableArrayDecayedType(QualType type) const {
 
 /// getVariableArrayType - Returns a non-unique reference to the type for a
 /// variable array of the specified element type.
-QualType ASTContext::getVariableArrayType(QualType EltTy,
-                                          Expr *NumElts,
-                                          ArrayType::ArraySizeModifier ASM,
-                                          unsigned IndexTypeQuals,
-                                          SourceRange Brackets,
-                                          llvm::Optional<PointerInterpretationKind>
-                                          PIK) const {
+QualType ASTContext::getVariableArrayType(
+    QualType EltTy, Expr *NumElts, ArrayType::ArraySizeModifier ASM,
+    unsigned IndexTypeQuals, SourceRange Brackets,
+    llvm::Optional<PointerInterpretationKindExplicit> PIKE) const {
+  llvm::Optional<PointerInterpretationKindExplicit> CanonicalPIKE =
+      PIKE.map([this](const auto &PIKE) {
+        return getCanonicalPointerInterpretationExplicit(PIKE);
+      });
+
   // Since we don't unique expressions, it isn't possible to unique VLA's
   // that have an expression provided for their size.
   QualType Canon;
 
   // Be sure to pull qualifiers off the element type.
-  if (!EltTy.isCanonical() || EltTy.hasLocalQualifiers()) {
+  if (!EltTy.isCanonical() || EltTy.hasLocalQualifiers() ||
+      PIKE != CanonicalPIKE) {
     SplitQualType canonSplit = getCanonicalType(EltTy).split();
     Canon = getVariableArrayType(QualType(canonSplit.Ty, 0), NumElts, ASM,
-                                 IndexTypeQuals, Brackets, PIK);
+                                 IndexTypeQuals, Brackets, CanonicalPIKE);
     Canon = getQualifiedType(Canon, canonSplit.Quals);
   }
 
-  auto *New = new (*this, TypeAlignment)
-    VariableArrayType(EltTy, Canon, NumElts, ASM, IndexTypeQuals, Brackets,
-                      PIK);
+  auto *New = new (*this, TypeAlignment) VariableArrayType(
+      EltTy, Canon, NumElts, ASM, IndexTypeQuals, Brackets, PIKE);
 
   VariableArrayTypes.push_back(New);
   Types.push_back(New);
@@ -3782,13 +3804,10 @@ QualType ASTContext::getVariableArrayType(QualType EltTy,
 /// getDependentSizedArrayType - Returns a non-unique reference to
 /// the type for a dependently-sized array of the specified element
 /// type.
-QualType ASTContext::getDependentSizedArrayType(QualType elementType,
-                                                Expr *numElements,
-                                                ArrayType::ArraySizeModifier ASM,
-                                                unsigned elementTypeQuals,
-                                                SourceRange brackets,
-                                                llvm::Optional<PointerInterpretationKind>
-                                                PIK) const {
+QualType ASTContext::getDependentSizedArrayType(
+    QualType elementType, Expr *numElements, ArrayType::ArraySizeModifier ASM,
+    unsigned elementTypeQuals, SourceRange brackets,
+    llvm::Optional<PointerInterpretationKindExplicit> PIKE) const {
   assert((!numElements || numElements->isTypeDependent() ||
           numElements->isValueDependent()) &&
          "Size must be type- or value-dependent!");
@@ -3798,11 +3817,9 @@ QualType ASTContext::getDependentSizedArrayType(QualType elementType,
   // initializer.  We do no canonicalization here at all, which is okay
   // because they can't be used in most locations.
   if (!numElements) {
-    auto *newType
-      = new (*this, TypeAlignment)
-          DependentSizedArrayType(*this, elementType, QualType(),
-                                  numElements, ASM, elementTypeQuals,
-                                  brackets, PIK);
+    auto *newType = new (*this, TypeAlignment)
+        DependentSizedArrayType(*this, elementType, QualType(), numElements,
+                                ASM, elementTypeQuals, brackets, PIKE);
     Types.push_back(newType);
     return QualType(newType, 0);
   }
@@ -3811,12 +3828,16 @@ QualType ASTContext::getDependentSizedArrayType(QualType elementType,
   // also build a canonical type.
 
   SplitQualType canonElementType = getCanonicalType(elementType).split();
+  llvm::Optional<PointerInterpretationKindExplicit> CanonicalPIKE =
+      PIKE.map([this](const auto &PIKE) {
+        return getCanonicalPointerInterpretationExplicit(PIKE);
+      });
 
   void *insertPos = nullptr;
   llvm::FoldingSetNodeID ID;
-  DependentSizedArrayType::Profile(ID, *this,
-                                   QualType(canonElementType.Ty, 0),
-                                   ASM, elementTypeQuals, numElements, PIK);
+  DependentSizedArrayType::Profile(ID, *this, QualType(canonElementType.Ty, 0),
+                                   ASM, elementTypeQuals, numElements,
+                                   CanonicalPIKE);
 
   // Look for an existing type with these properties.
   DependentSizedArrayType *canonTy =
@@ -3824,10 +3845,9 @@ QualType ASTContext::getDependentSizedArrayType(QualType elementType,
 
   // If we don't have one, build one.
   if (!canonTy) {
-    canonTy = new (*this, TypeAlignment)
-      DependentSizedArrayType(*this, QualType(canonElementType.Ty, 0),
-                              QualType(), numElements, ASM, elementTypeQuals,
-                              brackets, PIK);
+    canonTy = new (*this, TypeAlignment) DependentSizedArrayType(
+        *this, QualType(canonElementType.Ty, 0), QualType(), numElements, ASM,
+        elementTypeQuals, brackets, CanonicalPIKE);
     DependentSizedArrayTypes.InsertNode(canonTy, insertPos);
     Types.push_back(canonTy);
   }
@@ -3839,41 +3859,45 @@ QualType ASTContext::getDependentSizedArrayType(QualType elementType,
   // If we didn't need extra canonicalization for the element type or the size
   // expression, then just use that as our result.
   if (QualType(canonElementType.Ty, 0) == elementType &&
-      canonTy->getSizeExpr() == numElements)
+      canonTy->getSizeExpr() == numElements && CanonicalPIKE == PIKE)
     return canon;
 
   // Otherwise, we need to build a type which follows the spelling
   // of the element type.
-  auto *sugaredType
-    = new (*this, TypeAlignment)
-        DependentSizedArrayType(*this, elementType, canon, numElements,
-                                ASM, elementTypeQuals, brackets, PIK);
+  auto *sugaredType = new (*this, TypeAlignment)
+      DependentSizedArrayType(*this, elementType, canon, numElements, ASM,
+                              elementTypeQuals, brackets, PIKE);
   Types.push_back(sugaredType);
   return QualType(sugaredType, 0);
 }
 
-QualType ASTContext::getIncompleteArrayType(QualType elementType,
-                                            ArrayType::ArraySizeModifier ASM,
-                                            unsigned elementTypeQuals,
-                                            llvm::Optional<PointerInterpretationKind>
-                                            PIK) const {
+QualType ASTContext::getIncompleteArrayType(
+    QualType elementType, ArrayType::ArraySizeModifier ASM,
+    unsigned elementTypeQuals,
+    llvm::Optional<PointerInterpretationKindExplicit> PIKE) const {
   llvm::FoldingSetNodeID ID;
-  IncompleteArrayType::Profile(ID, elementType, ASM, elementTypeQuals, PIK);
+  IncompleteArrayType::Profile(ID, elementType, ASM, elementTypeQuals, PIKE);
 
   void *insertPos = nullptr;
   if (IncompleteArrayType *iat =
        IncompleteArrayTypes.FindNodeOrInsertPos(ID, insertPos))
     return QualType(iat, 0);
 
+  llvm::Optional<PointerInterpretationKindExplicit> CanonicalPIKE =
+      PIKE.map([this](const auto &PIKE) {
+        return getCanonicalPointerInterpretationExplicit(PIKE);
+      });
+
   // If the element type isn't canonical, this won't be a canonical type
   // either, so fill in the canonical type field.  We also have to pull
   // qualifiers off the element type.
   QualType canon;
 
-  if (!elementType.isCanonical() || elementType.hasLocalQualifiers()) {
+  if (!elementType.isCanonical() || elementType.hasLocalQualifiers() ||
+      CanonicalPIKE != PIKE) {
     SplitQualType canonSplit = getCanonicalType(elementType).split();
-    canon = getIncompleteArrayType(QualType(canonSplit.Ty, 0),
-                                   ASM, elementTypeQuals, PIK);
+    canon = getIncompleteArrayType(QualType(canonSplit.Ty, 0), ASM,
+                                   elementTypeQuals, CanonicalPIKE);
     canon = getQualifiedType(canon, canonSplit.Quals);
 
     // Get the new insert position for the node we care about.
@@ -3883,7 +3907,7 @@ QualType ASTContext::getIncompleteArrayType(QualType elementType,
   }
 
   auto *newType = new (*this, TypeAlignment)
-    IncompleteArrayType(elementType, canon, ASM, elementTypeQuals, PIK);
+      IncompleteArrayType(elementType, canon, ASM, elementTypeQuals, PIKE);
 
   IncompleteArrayTypes.InsertNode(newType, insertPos);
   Types.push_back(newType);
@@ -4335,6 +4359,28 @@ QualType ASTContext::getDependentPointerType(QualType PointerType,
                            QualifierLoc);
   Types.push_back(New);
   return QualType(New, 0);
+}
+
+QualType ASTContext::getPointerInterpretationType(
+    PointerInterpretationKind PIK, SourceRange QualifierRange,
+    QualType ModifiedType, QualType EquivalentType) const {
+  void *InsertPos = nullptr;
+  llvm::FoldingSetNodeID ID;
+  PointerInterpretationType::Profile(ID, PIK, ModifiedType, EquivalentType);
+
+  PointerInterpretationType *Canon =
+      PointerInterpretationTypes.FindNodeOrInsertPos(ID, InsertPos);
+  if (Canon)
+    return QualType(Canon, 0);
+
+  QualType CanonEquivalentType = getCanonicalType(EquivalentType);
+  Canon = new (*this, TypeAlignment) PointerInterpretationType(
+      CanonEquivalentType, PIK, QualifierRange, ModifiedType, EquivalentType);
+
+  Types.push_back(Canon);
+  PointerInterpretationTypes.InsertNode(Canon, InsertPos);
+
+  return QualType(Canon, 0);
 }
 
 /// Determine whether \p T is canonical as the result type of a function.
@@ -6858,7 +6904,8 @@ QualType ASTContext::getExceptionObjectType(QualType T) const {
 ///
 /// See C99 6.7.5.3p7 and C99 6.3.2.1p3.
 QualType ASTContext::getArrayDecayedType(
-    QualType Ty, llvm::Optional<PointerInterpretationKind> PIKFromBase) const {
+    QualType Ty,
+    llvm::Optional<PointerInterpretationKindExplicit> PIKEFromBase) const {
   // Get the element type with 'getAsArrayType' so that we don't lose any
   // typedefs in the element type of the array.  This also handles propagation
   // of type qualifiers from the array type into the element type if present
@@ -6866,17 +6913,16 @@ QualType ASTContext::getArrayDecayedType(
   const ArrayType *PrettyArrayType = getAsArrayType(Ty);
   assert(PrettyArrayType && "Not an array type!");
 
-  llvm::Optional<PointerInterpretationKind> PIKFromType =
-      PrettyArrayType->getPointerInterpretation();
+  llvm::Optional<PointerInterpretationKindExplicit> PIKEFromType =
+      PrettyArrayType->getPointerInterpretationExplicit();
 
-  assert((!PIKFromType.hasValue() || !PIKFromBase.hasValue()) &&
+  assert((!PIKEFromType.hasValue() || !PIKEFromBase.hasValue()) &&
          "Cannot have both a qualifier and an interpretation from a base");
 
-  PointerInterpretationKind PIK =
-      PIKFromType.getValueOr(
-          PIKFromBase.getValueOr(getDefaultPointerInterpretation()));
+  PointerInterpretationKindExplicit PIKE = PIKEFromType.getValueOr(
+      PIKEFromBase.getValueOr(getDefaultPointerInterpretationExplicit()));
 
-  QualType PtrTy = getPointerType(PrettyArrayType->getElementType(), PIK);
+  QualType PtrTy = getPointerType(PrettyArrayType->getElementType(), PIKE);
 
   // int x[restrict 4] ->  int *restrict
   QualType Result = getQualifiedType(PtrTy,
@@ -8662,7 +8708,9 @@ RecordDecl *ASTContext::getCHERIClassDecl() const {
     RD = buildImplicitRecord("cheri_object");
     RD->startDefinition();
 
-    QualType CapTy = getPointerType(VoidTy, PIK_Capability);
+    QualType CapTy = getPointerType(
+        VoidTy,
+        PointerInterpretationKindExplicit(PIK_Capability, /*IsExplicit=*/true));
 
     QualType FieldTypes[] = { CapTy, CapTy };
     static const char *const FieldNames[] = { "co_codecap", "co_datacap" };
@@ -11393,11 +11441,14 @@ static QualType DecodeTypeFromStr(const char *&Str, const ASTContext &Context,
     case 'm': {
       Qualifiers Qs = Type.getQualifiers();
       if (const auto *PT = Type->getAs<PointerType>())
-        Type = Context.getPointerType(PT->getPointeeType(), PIK_Capability);
+        Type = Context.getPointerType(PT->getPointeeType(),
+                                      PointerInterpretationKindExplicit(
+                                          PIK_Capability, /*IsExplicit=*/true));
       else if (const auto *LRT = Type->getAs<LValueReferenceType>())
-        Type = Context.getLValueReferenceType(LRT->getPointeeTypeAsWritten(),
-                                              LRT->isSpelledAsLValue(),
-                                              PIK_Capability);
+        Type = Context.getLValueReferenceType(
+            LRT->getPointeeTypeAsWritten(), LRT->isSpelledAsLValue(),
+            PointerInterpretationKindExplicit(PIK_Capability,
+                                              /*IsExplicit=*/true));
       else {
         const auto *BT = Type->getAs<BuiltinType>();
         assert(BT &&

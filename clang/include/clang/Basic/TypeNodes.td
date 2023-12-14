@@ -67,6 +67,7 @@ def DependentSizedArrayType : TypeNode<ArrayType>, AlwaysDependent;
 def DependentSizedExtVectorType : TypeNode<Type>, AlwaysDependent;
 def DependentAddressSpaceType : TypeNode<Type>, AlwaysDependent;
 def DependentPointerType : TypeNode<Type>, AlwaysDependent;
+def PointerInterpretationType : TypeNode<Type>, NeverCanonical;
 def VectorType : TypeNode<Type>;
 def DependentVectorType : TypeNode<Type>, AlwaysDependent;
 def ExtVectorType : TypeNode<VectorType>;

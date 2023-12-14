@@ -750,7 +750,7 @@ public:
   /// By default, performs semantic analysis when building the pointer type.
   /// Subclasses may override this routine to provide different behavior.
   QualType RebuildPointerType(QualType PointeeType,
-                              PointerInterpretationKind PIK,
+                              PointerInterpretationKindExplicit PIKE,
                               SourceLocation Sigil);
 
   /// Build a new block pointer type given its pointee type.
@@ -813,61 +813,52 @@ public:
   /// By default, performs semantic analysis when building the array type.
   /// Subclasses may override this routine to provide different behavior.
   /// Also by default, all of the other Rebuild*Array
-  QualType RebuildArrayType(QualType ElementType,
-                            ArrayType::ArraySizeModifier SizeMod,
-                            const llvm::APInt *Size,
-                            Expr *SizeExpr,
-                            unsigned IndexTypeQuals,
-                            SourceRange BracketsRange,
-                            llvm::Optional<PointerInterpretationKind> PIK);
+  QualType
+  RebuildArrayType(QualType ElementType, ArrayType::ArraySizeModifier SizeMod,
+                   const llvm::APInt *Size, Expr *SizeExpr,
+                   unsigned IndexTypeQuals, SourceRange BracketsRange,
+                   llvm::Optional<PointerInterpretationKindExplicit> PIKE);
 
   /// Build a new constant array type given the element type, size
   /// modifier, (known) size of the array, and index type qualifiers.
   ///
   /// By default, performs semantic analysis when building the array type.
   /// Subclasses may override this routine to provide different behavior.
-  QualType RebuildConstantArrayType(QualType ElementType,
-                                    ArrayType::ArraySizeModifier SizeMod,
-                                    const llvm::APInt &Size,
-                                    Expr *SizeExpr,
-                                    unsigned IndexTypeQuals,
-                                    SourceRange BracketsRange,
-                                    llvm::Optional<PointerInterpretationKind> PIK);
+  QualType RebuildConstantArrayType(
+      QualType ElementType, ArrayType::ArraySizeModifier SizeMod,
+      const llvm::APInt &Size, Expr *SizeExpr, unsigned IndexTypeQuals,
+      SourceRange BracketsRange,
+      llvm::Optional<PointerInterpretationKindExplicit> PIKE);
 
   /// Build a new incomplete array type given the element type, size
   /// modifier, and index type qualifiers.
   ///
   /// By default, performs semantic analysis when building the array type.
   /// Subclasses may override this routine to provide different behavior.
-  QualType RebuildIncompleteArrayType(QualType ElementType,
-                                      ArrayType::ArraySizeModifier SizeMod,
-                                      unsigned IndexTypeQuals,
-                                      SourceRange BracketsRange,
-                                      llvm::Optional<PointerInterpretationKind> PIK);
+  QualType RebuildIncompleteArrayType(
+      QualType ElementType, ArrayType::ArraySizeModifier SizeMod,
+      unsigned IndexTypeQuals, SourceRange BracketsRange,
+      llvm::Optional<PointerInterpretationKindExplicit> PIKE);
 
   /// Build a new variable-length array type given the element type,
   /// size modifier, size expression, and index type qualifiers.
   ///
   /// By default, performs semantic analysis when building the array type.
   /// Subclasses may override this routine to provide different behavior.
-  QualType RebuildVariableArrayType(QualType ElementType,
-                                    ArrayType::ArraySizeModifier SizeMod,
-                                    Expr *SizeExpr,
-                                    unsigned IndexTypeQuals,
-                                    SourceRange BracketsRange,
-                                    llvm::Optional<PointerInterpretationKind> PIK);
+  QualType RebuildVariableArrayType(
+      QualType ElementType, ArrayType::ArraySizeModifier SizeMod,
+      Expr *SizeExpr, unsigned IndexTypeQuals, SourceRange BracketsRange,
+      llvm::Optional<PointerInterpretationKindExplicit> PIKE);
 
   /// Build a new dependent-sized array type given the element type,
   /// size modifier, size expression, and index type qualifiers.
   ///
   /// By default, performs semantic analysis when building the array type.
   /// Subclasses may override this routine to provide different behavior.
-  QualType RebuildDependentSizedArrayType(QualType ElementType,
-                                          ArrayType::ArraySizeModifier SizeMod,
-                                          Expr *SizeExpr,
-                                          unsigned IndexTypeQuals,
-                                          SourceRange BracketsRange,
-                                          llvm::Optional<PointerInterpretationKind> PIK);
+  QualType RebuildDependentSizedArrayType(
+      QualType ElementType, ArrayType::ArraySizeModifier SizeMod,
+      Expr *SizeExpr, unsigned IndexTypeQuals, SourceRange BracketsRange,
+      llvm::Optional<PointerInterpretationKindExplicit> PIKE);
 
   /// Build a new vector type given the element type and
   /// number of elements.
@@ -5040,7 +5031,7 @@ QualType TreeTransform<Derived>::TransformPointerType(TypeLocBuilder &TLB,
   if (getDerived().AlwaysRebuild() ||
       PointeeType != TL.getPointeeLoc().getType()) {
     Result = getDerived().RebuildPointerType(
-        PointeeType, T->getPointerInterpretation(), TL.getSigilLoc());
+        PointeeType, T->getPointerInterpretationExplicit(), TL.getSigilLoc());
     if (Result.isNull())
       return QualType();
   }
@@ -5209,12 +5200,10 @@ TreeTransform<Derived>::TransformConstantArrayType(TypeLocBuilder &TLB,
   if (getDerived().AlwaysRebuild() ||
       ElementType != T->getElementType() ||
       (T->getSizeExpr() && NewSize != OldSize)) {
-    Result = getDerived().RebuildConstantArrayType(ElementType,
-                                                   T->getSizeModifier(),
-                                                   T->getSize(), NewSize,
-                                             T->getIndexTypeCVRQualifiers(),
-                                                   TL.getBracketsRange(),
-                                             T->getPointerInterpretation());
+    Result = getDerived().RebuildConstantArrayType(
+        ElementType, T->getSizeModifier(), T->getSize(), NewSize,
+        T->getIndexTypeCVRQualifiers(), TL.getBracketsRange(),
+        T->getPointerInterpretationExplicit());
     if (Result.isNull())
       return QualType();
   }
@@ -5243,11 +5232,9 @@ QualType TreeTransform<Derived>::TransformIncompleteArrayType(
   QualType Result = TL.getType();
   if (getDerived().AlwaysRebuild() ||
       ElementType != T->getElementType()) {
-    Result = getDerived().RebuildIncompleteArrayType(ElementType,
-                                                     T->getSizeModifier(),
-                                           T->getIndexTypeCVRQualifiers(),
-                                                     TL.getBracketsRange(),
-                                             T->getPointerInterpretation());
+    Result = getDerived().RebuildIncompleteArrayType(
+        ElementType, T->getSizeModifier(), T->getIndexTypeCVRQualifiers(),
+        TL.getBracketsRange(), T->getPointerInterpretationExplicit());
     if (Result.isNull())
       return QualType();
   }
@@ -5288,12 +5275,9 @@ TreeTransform<Derived>::TransformVariableArrayType(TypeLocBuilder &TLB,
   if (getDerived().AlwaysRebuild() ||
       ElementType != T->getElementType() ||
       Size != T->getSizeExpr()) {
-    Result = getDerived().RebuildVariableArrayType(ElementType,
-                                                   T->getSizeModifier(),
-                                                   Size,
-                                             T->getIndexTypeCVRQualifiers(),
-                                                   TL.getBracketsRange(),
-                                             T->getPointerInterpretation());
+    Result = getDerived().RebuildVariableArrayType(
+        ElementType, T->getSizeModifier(), Size, T->getIndexTypeCVRQualifiers(),
+        TL.getBracketsRange(), T->getPointerInterpretationExplicit());
     if (Result.isNull())
       return QualType();
   }
@@ -5337,12 +5321,9 @@ TreeTransform<Derived>::TransformDependentSizedArrayType(TypeLocBuilder &TLB,
   if (getDerived().AlwaysRebuild() ||
       ElementType != T->getElementType() ||
       size != origSize) {
-    Result = getDerived().RebuildDependentSizedArrayType(ElementType,
-                                                         T->getSizeModifier(),
-                                                         size,
-                                                T->getIndexTypeCVRQualifiers(),
-                                                        TL.getBracketsRange(),
-                                                T->getPointerInterpretation());
+    Result = getDerived().RebuildDependentSizedArrayType(
+        ElementType, T->getSizeModifier(), size, T->getIndexTypeCVRQualifiers(),
+        TL.getBracketsRange(), T->getPointerInterpretationExplicit());
     if (Result.isNull())
       return QualType();
   }
@@ -5594,6 +5575,37 @@ QualType TreeTransform<Derived>::TransformDependentPointerType(
     TransformType(TLB, DI->getTypeLoc());
   }
 
+  return Result;
+}
+
+template <typename Derived>
+QualType TreeTransform<Derived>::TransformPointerInterpretationType(
+    TypeLocBuilder &TLB, PointerInterpretationTypeLoc TL) {
+  const PointerInterpretationType *T = TL.getTypePtr();
+
+  QualType ModifiedType = getDerived().TransformType(TLB, TL.getModifiedLoc());
+  if (ModifiedType.isNull())
+    return QualType();
+
+  QualType Result = TL.getType();
+
+  if (getDerived().AlwaysRebuild() || ModifiedType != T->getModifiedType()) {
+    // From TransformAttributedType:
+    // TODO: this is really lame; we should really be rebuilding the
+    // equivalent type from first principles.
+    QualType EquivalentType =
+        getDerived().TransformType(T->getEquivalentType());
+    if (EquivalentType.isNull())
+      return QualType();
+
+    Result = SemaRef.Context.getPointerInterpretationType(
+        T->getPointerInterpretation(), T->getQualifierRange(), ModifiedType,
+        EquivalentType);
+  }
+
+  PointerInterpretationTypeLoc NewTL =
+      TLB.push<PointerInterpretationTypeLoc>(Result);
+  NewTL.setQualifierRange(TL.getQualifierRange());
   return Result;
 }
 
@@ -14362,10 +14374,11 @@ TreeTransform<Derived>::TransformAtomicExpr(AtomicExpr *E) {
 // Type reconstruction
 //===----------------------------------------------------------------------===//
 
-template<typename Derived>
+template <typename Derived>
 QualType TreeTransform<Derived>::RebuildPointerType(
-    QualType PointeeType, PointerInterpretationKind PIK, SourceLocation Star) {
-  return SemaRef.BuildPointerType(PointeeType, PIK, Star,
+    QualType PointeeType, PointerInterpretationKindExplicit PIKE,
+    SourceLocation Star) {
+  return SemaRef.BuildPointerType(PointeeType, PIKE, Star,
                                   getDerived().getBaseEntity(), nullptr);
 }
 
@@ -14432,19 +14445,16 @@ QualType TreeTransform<Derived>::RebuildObjCObjectPointerType(
   return SemaRef.Context.getObjCObjectPointerType(PointeeType);
 }
 
-template<typename Derived>
-QualType
-TreeTransform<Derived>::RebuildArrayType(QualType ElementType,
-                                         ArrayType::ArraySizeModifier SizeMod,
-                                         const llvm::APInt *Size,
-                                         Expr *SizeExpr,
-                                         unsigned IndexTypeQuals,
-                                         SourceRange BracketsRange,
-                               llvm::Optional<PointerInterpretationKind> PIK) {
+template <typename Derived>
+QualType TreeTransform<Derived>::RebuildArrayType(
+    QualType ElementType, ArrayType::ArraySizeModifier SizeMod,
+    const llvm::APInt *Size, Expr *SizeExpr, unsigned IndexTypeQuals,
+    SourceRange BracketsRange,
+    llvm::Optional<PointerInterpretationKindExplicit> PIKE) {
   if (SizeExpr || !Size)
     return SemaRef.BuildArrayType(ElementType, SizeMod, SizeExpr,
                                   IndexTypeQuals, BracketsRange,
-                                  getDerived().getBaseEntity(), PIK);
+                                  getDerived().getBaseEntity(), PIKE);
 
   QualType Types[] = {
     SemaRef.Context.UnsignedCharTy, SemaRef.Context.UnsignedShortTy,
@@ -14464,59 +14474,46 @@ TreeTransform<Derived>::RebuildArrayType(QualType ElementType,
   IntegerLiteral *ArraySize
       = IntegerLiteral::Create(SemaRef.Context, *Size, SizeType,
                                /*FIXME*/BracketsRange.getBegin());
-  return SemaRef.BuildArrayType(ElementType, SizeMod, ArraySize,
-                                IndexTypeQuals, BracketsRange,
-                                getDerived().getBaseEntity(), PIK);
+  return SemaRef.BuildArrayType(ElementType, SizeMod, ArraySize, IndexTypeQuals,
+                                BracketsRange, getDerived().getBaseEntity(),
+                                PIKE);
 }
 
-template<typename Derived>
-QualType
-TreeTransform<Derived>::RebuildConstantArrayType(QualType ElementType,
-                                                 ArrayType::ArraySizeModifier SizeMod,
-                                                 const llvm::APInt &Size,
-                                                 Expr *SizeExpr,
-                                                 unsigned IndexTypeQuals,
-                                                 SourceRange BracketsRange,
-                               llvm::Optional<PointerInterpretationKind> PIK) {
+template <typename Derived>
+QualType TreeTransform<Derived>::RebuildConstantArrayType(
+    QualType ElementType, ArrayType::ArraySizeModifier SizeMod,
+    const llvm::APInt &Size, Expr *SizeExpr, unsigned IndexTypeQuals,
+    SourceRange BracketsRange,
+    llvm::Optional<PointerInterpretationKindExplicit> PIKE) {
   return getDerived().RebuildArrayType(ElementType, SizeMod, &Size, SizeExpr,
-                                        IndexTypeQuals, BracketsRange, PIK);
+                                       IndexTypeQuals, BracketsRange, PIKE);
 }
 
-template<typename Derived>
-QualType
-TreeTransform<Derived>::RebuildIncompleteArrayType(QualType ElementType,
-                                          ArrayType::ArraySizeModifier SizeMod,
-                                                 unsigned IndexTypeQuals,
-                                                   SourceRange BracketsRange,
-                               llvm::Optional<PointerInterpretationKind> PIK) {
+template <typename Derived>
+QualType TreeTransform<Derived>::RebuildIncompleteArrayType(
+    QualType ElementType, ArrayType::ArraySizeModifier SizeMod,
+    unsigned IndexTypeQuals, SourceRange BracketsRange,
+    llvm::Optional<PointerInterpretationKindExplicit> PIKE) {
   return getDerived().RebuildArrayType(ElementType, SizeMod, nullptr, nullptr,
-                                       IndexTypeQuals, BracketsRange, PIK);
+                                       IndexTypeQuals, BracketsRange, PIKE);
 }
 
-template<typename Derived>
-QualType
-TreeTransform<Derived>::RebuildVariableArrayType(QualType ElementType,
-                                          ArrayType::ArraySizeModifier SizeMod,
-                                                 Expr *SizeExpr,
-                                                 unsigned IndexTypeQuals,
-                                                 SourceRange BracketsRange,
-                               llvm::Optional<PointerInterpretationKind> PIK) {
-  return getDerived().RebuildArrayType(ElementType, SizeMod, nullptr,
-                                       SizeExpr,
-                                       IndexTypeQuals, BracketsRange, PIK);
+template <typename Derived>
+QualType TreeTransform<Derived>::RebuildVariableArrayType(
+    QualType ElementType, ArrayType::ArraySizeModifier SizeMod, Expr *SizeExpr,
+    unsigned IndexTypeQuals, SourceRange BracketsRange,
+    llvm::Optional<PointerInterpretationKindExplicit> PIKE) {
+  return getDerived().RebuildArrayType(ElementType, SizeMod, nullptr, SizeExpr,
+                                       IndexTypeQuals, BracketsRange, PIKE);
 }
 
-template<typename Derived>
-QualType
-TreeTransform<Derived>::RebuildDependentSizedArrayType(QualType ElementType,
-                                          ArrayType::ArraySizeModifier SizeMod,
-                                                       Expr *SizeExpr,
-                                                       unsigned IndexTypeQuals,
-                                                   SourceRange BracketsRange,
-                               llvm::Optional<PointerInterpretationKind> PIK) {
-  return getDerived().RebuildArrayType(ElementType, SizeMod, nullptr,
-                                       SizeExpr,
-                                       IndexTypeQuals, BracketsRange, PIK);
+template <typename Derived>
+QualType TreeTransform<Derived>::RebuildDependentSizedArrayType(
+    QualType ElementType, ArrayType::ArraySizeModifier SizeMod, Expr *SizeExpr,
+    unsigned IndexTypeQuals, SourceRange BracketsRange,
+    llvm::Optional<PointerInterpretationKindExplicit> PIKE) {
+  return getDerived().RebuildArrayType(ElementType, SizeMod, nullptr, SizeExpr,
+                                       IndexTypeQuals, BracketsRange, PIKE);
 }
 
 template <typename Derived>
@@ -14530,8 +14527,8 @@ template <typename Derived>
 QualType TreeTransform<Derived>::RebuildDependentPointerType(
     QualType PointerType, PointerInterpretationKind PIK,
     SourceLocation QualifierLoc) {
-  return SemaRef.BuildPointerInterpretationAttr(PointerType, PIK,
-                                                QualifierLoc);
+  return SemaRef.BuildPointerInterpretationEquivalentType(PointerType, PIK,
+                                                          QualifierLoc);
 }
 
 template <typename Derived>

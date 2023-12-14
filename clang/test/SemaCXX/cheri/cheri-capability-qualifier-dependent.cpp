@@ -41,9 +41,9 @@ T * __capability test_template4(T *p) {
   T __capability c = (__cheri_tocap T __capability)p;
   // expected-error@-1 2 {{__capability only applies to pointers; type here is 'void'}}
   // expected-error@-2 2 {{__capability only applies to pointers; type here is 'int'}}
-  // expected-error@-3 {{variable has incomplete type 'void'}}
-  // expected-error@-4 {{cast to incomplete type 'void'}}
-  // expected-error@-5 {{invalid target type 'int' for __cheri_tocap: target must be a capability}}
+  // expected-error@-3 {{variable has incomplete type 'void __capability' (aka 'void')}}
+  // expected-error@-4 {{cast to incomplete type 'void __capability' (aka 'void')}}
+  // expected-error@-5 {{invalid target type 'int __capability' (aka 'int') for __cheri_tocap: target must be a capability}}
   return c;
   // expected-error@-1 {{cannot initialize return object of type 'void ** __capability' with an lvalue of type 'void * __capability'}}
 }

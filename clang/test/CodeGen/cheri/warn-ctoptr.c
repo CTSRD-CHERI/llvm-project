@@ -175,7 +175,7 @@ void *cast_uintcap_to_intptr_implicit(unsigned __intcap cap) {
 void *__capability cast_uintcap_to_cap_ptr_implicit(unsigned __intcap cap) {
   // Should also warn about ctoptr
   return cap; // expected-warning{{incompatible integer to pointer conversion returning 'unsigned __intcap' from a function with result type 'void * __capability'}}
-  // purecap-warning@-1{{incompatible integer to pointer conversion returning 'unsigned __intcap' from a function with result type 'void *'}}
+  // purecap-warning@-1{{incompatible integer to pointer conversion returning 'unsigned __intcap' from a function with result type 'void * __capability' (aka 'void *')}}
 }
 
 void *cast_uintcap_to_intptr_explicit(unsigned __intcap cap) {

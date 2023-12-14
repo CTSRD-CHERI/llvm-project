@@ -66,5 +66,6 @@ TYPE_BIT_CODE(Using, USING, 54)
 
 // CHERI extension; leave room for new upstream IDs
 TYPE_BIT_CODE(DependentPointer, DEPENDENT_POINTER, 80) // 'P'
+TYPE_BIT_CODE(PointerInterpretation, POINTER_INTERPRETATION, 81)
 
 #undef TYPE_BIT_CODE

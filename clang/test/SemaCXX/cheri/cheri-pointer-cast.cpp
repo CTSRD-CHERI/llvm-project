@@ -26,15 +26,17 @@ int foo;
 int main() {
   void *CAP x = (int *CAP) & foo;
   DO_CASTS(ulong, x);
-  // nohybrid-error@-1 {{static_cast from 'void *' to 'ulong' (aka 'unsigned long') is not allowed}}
+  // nocheri-error@-1 {{static_cast from 'void *' to 'ulong' (aka 'unsigned long') is not allowed}}
   // hybrid-error@-2 {{static_cast from 'void * __capability' to 'ulong' (aka 'unsigned long') is not allowed}}
-  // hybrid-warning@-3 3 {{cast from capability type 'void * __capability' to non-capability, non-address type 'ulong' (aka 'unsigned long') is most likely an error}}
-  // purecap-warning@-4 3 {{cast from capability type 'void *' to non-capability, non-address type 'ulong' (aka 'unsigned long') is most likely an error}}
+  // purecap-error@-3 {{static_cast from 'void * __capability' (aka 'void *') to 'ulong' (aka 'unsigned long') is not allowed}}
+  // hybrid-warning@-4 3 {{cast from capability type 'void * __capability' to non-capability, non-address type 'ulong' (aka 'unsigned long') is most likely an error}}
+  // purecap-warning@-5 3 {{cast from capability type 'void * __capability' (aka 'void *') to non-capability, non-address type 'ulong' (aka 'unsigned long') is most likely an error}}
   DO_CASTS(uint, x);
   // nocheri-error@-1 3 {{cast from pointer to smaller type 'uint' (aka 'unsigned int') loses information}}
   // cheri-error@-2 3 {{cast from capability to smaller type 'uint' (aka 'unsigned int') loses information}}
-  // nohybrid-error@-3 {{static_cast from 'void *' to 'uint' (aka 'unsigned int') is not allowed}}
+  // nocheri-error@-3 {{static_cast from 'void *' to 'uint' (aka 'unsigned int') is not allowed}}
   // hybrid-error@-4 {{static_cast from 'void * __capability' to 'uint' (aka 'unsigned int') is not allowed}}
+  // purecap-error@-5 {{static_cast from 'void * __capability' (aka 'void *') to 'uint' (aka 'unsigned int') is not allowed}}
 
   void *nocap = &foo;
   DO_CASTS(ulong, nocap); // expected-error {{static_cast from 'void *' to 'ulong' (aka 'unsigned long') is not allowed}}
@@ -77,7 +79,7 @@ template <typename T>
 T offset_set(T x, long off) {
   return reinterpret_cast<T>(__builtin_cheri_offset_set(reinterpret_cast<void * __capability>(x), off));
   // hybrid-warning@-1 {{cast from capability type 'void * __capability' to non-capability, non-address type 'long'}}
-  // purecap-warning@-2 {{cast from capability type 'void *' to non-capability, non-address type 'long'}}
+  // purecap-warning@-2 {{cast from capability type 'void * __capability' (aka 'void *') to non-capability, non-address type 'long'}}
   // purecap-warning@-3 {{cast from provenance-free integer type to pointer type will give pointer that can not be dereferenced}}
   // hybrid-error@-4 {{cast from capability type 'void * __capability' to non-capability type 'x *'}}
 }

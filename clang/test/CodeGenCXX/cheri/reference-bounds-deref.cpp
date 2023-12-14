@@ -87,7 +87,7 @@ TEST_PTR_TO_REF(double)
 
 // Or void*
 TEST_PTR_TO_REF(void *)
-// DEBUG-MSG-NEXT: Found scalar type -> setting bounds for 'void * __capability' reference to [[#CAP_SIZE]]
+// DEBUG-MSG-NEXT: Found scalar type -> setting bounds for 'void *' reference to [[#CAP_SIZE]]
 // CHECK-LABEL: define dso_local void @_Z10test_derefPPv(i8 addrspace(200)* addrspace(200)*
 // CHECK: call i8 addrspace(200)* @llvm.cheri.cap.bounds.set.i64(i8 addrspace(200)* %{{.+}},
 // CHECK-SAME: i64 [[#CAP_SIZE]])

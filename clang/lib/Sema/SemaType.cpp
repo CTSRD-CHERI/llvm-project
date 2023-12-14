@@ -1,4 +1,4 @@
-//===--- SemaType.cpp - Semantic Analysis for Types -----------------------===//
+
 //
 // Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
 // See https://llvm.org/LICENSE.txt for license information.
@@ -2132,9 +2132,10 @@ static QualType deduceOpenCLPointeeAddrSpace(Sema &S, QualType PointeeType) {
 ///
 /// \returns A suitable pointer type, if there are no
 /// errors. Otherwise, returns a NULL type.
-QualType Sema::BuildPointerType(QualType T, PointerInterpretationKind PIK,
+QualType Sema::BuildPointerType(QualType T,
+                                PointerInterpretationKindExplicit PIKE,
                                 SourceLocation Loc, DeclarationName Entity,
-                                bool* ValidPointer) {
+                                bool *ValidPointer) {
   if (T->isReferenceType()) {
     // C++ 8.3.2p4: There shall be no ... pointers to references ...
     Diag(Loc, diag::err_illegal_decl_pointer_to_reference)
@@ -2163,8 +2164,9 @@ QualType Sema::BuildPointerType(QualType T, PointerInterpretationKind PIK,
 
   // If we are in purecap ABI turn pointers marked as using an integer
   // representation into a plain pointer-range-sized integer
-  if (PIK == PIK_Integer
-      && Context.getTargetInfo().areAllPointersCapabilities()) {
+  if (PIKE.PIK == PIK_Integer &&
+      Context.getTargetInfo().areAllPointersCapabilities()) {
+    assert(PIKE.IsExplicit && "Cannot have implicit PIK_Integer with purecap");
     // This is not a real pointer type in the purecap ABI
     // ptrdiff_t will be the same size as a plain mips pointer
     // FIXME: this ValidPointer approach is a HACK to ensure that we return
@@ -2176,7 +2178,7 @@ QualType Sema::BuildPointerType(QualType T, PointerInterpretationKind PIK,
   // Build the pointer type.
   if (ValidPointer)
     *ValidPointer = true;
-  return Context.getPointerType(T, PIK);
+  return Context.getPointerType(T, PIKE);
 }
 
 /// Build a reference type.
@@ -2389,10 +2391,11 @@ static ExprResult checkArraySize(Sema &S, Expr *&ArraySize,
 ///
 /// \returns A suitable array type, if there are no errors. Otherwise,
 /// returns a NULL type.
-QualType Sema::BuildArrayType(QualType T, ArrayType::ArraySizeModifier ASM,
-                              Expr *ArraySize, unsigned Quals,
-                              SourceRange Brackets, DeclarationName Entity,
-                              llvm::Optional<PointerInterpretationKind> PIK) {
+QualType
+Sema::BuildArrayType(QualType T, ArrayType::ArraySizeModifier ASM,
+                     Expr *ArraySize, unsigned Quals, SourceRange Brackets,
+                     DeclarationName Entity,
+                     llvm::Optional<PointerInterpretationKindExplicit> PIKE) {
 
   SourceLocation Loc = Brackets.getBegin();
   if (getLangOpts().CPlusPlus) {
@@ -2517,13 +2520,13 @@ QualType Sema::BuildArrayType(QualType T, ArrayType::ArraySizeModifier ASM,
       if (VLAIsError)
         return QualType();
 
-      T = Context.getVariableArrayType(T, nullptr, ASM, Quals, Brackets, PIK);
+      T = Context.getVariableArrayType(T, nullptr, ASM, Quals, Brackets, PIKE);
     } else {
-      T = Context.getIncompleteArrayType(T, ASM, Quals, PIK);
+      T = Context.getIncompleteArrayType(T, ASM, Quals, PIKE);
     }
   } else if (ArraySize->isTypeDependent() || ArraySize->isValueDependent()) {
     T = Context.getDependentSizedArrayType(T, ArraySize, ASM, Quals, Brackets,
-                                           PIK);
+                                           PIKE);
   } else {
     ExprResult R =
         checkArraySize(*this, ArraySize, ConstVal, VLADiag, VLAIsError);
@@ -2535,7 +2538,7 @@ QualType Sema::BuildArrayType(QualType T, ArrayType::ArraySizeModifier ASM,
       // that we can fold to a non-zero positive value as a non-VLA as an
       // extension.
       T = Context.getVariableArrayType(T, ArraySize, ASM, Quals, Brackets,
-                                       PIK);
+                                       PIKE);
     } else if (!T->isDependentType() && !T->isIncompleteType() &&
                !T->isConstantSizeType()) {
       // C99: an array with an element type that has a non-constant-size is a
@@ -2545,7 +2548,7 @@ QualType Sema::BuildArrayType(QualType T, ArrayType::ArraySizeModifier ASM,
       if (VLAIsError)
         return QualType();
       T = Context.getVariableArrayType(T, ArraySize, ASM, Quals, Brackets,
-                                       PIK);
+                                       PIKE);
     } else {
       // C99 6.7.5.2p1: If the expression is a constant expression, it shall
       // have a value greater than zero.
@@ -2583,7 +2586,7 @@ QualType Sema::BuildArrayType(QualType T, ArrayType::ArraySizeModifier ASM,
       }
 
       T = Context.getConstantArrayType(T, ConstVal, ArraySize, ASM, Quals,
-                                       PIK);
+                                       PIKE);
     }
   }
 
@@ -4944,7 +4947,7 @@ static TypeSourceInfo *GetFullTypeForDeclarator(TypeProcessingState &state,
         }
       }
       bool ValidPointer = false;
-      T = S.BuildPointerType(T, S.PointerInterpretation, DeclType.Loc, Name,
+      T = S.BuildPointerType(T, S.CurrentPIKE, DeclType.Loc, Name,
                              &ValidPointer);
       if (!ValidPointer) {
         IsIntegerPointerInPureCapABI = true;  // FIXME: is this correct?
@@ -5043,14 +5046,14 @@ static TypeSourceInfo *GetFullTypeForDeclarator(TypeProcessingState &state,
       // Array parameters have an interpretation based on the qualifiers
       // (deferred until attribute parsing) and default interpretation. All
       // other arrays are implicit based on their container (if any).
-      llvm::Optional<PointerInterpretationKind> PIK = llvm::None;
+      llvm::Optional<PointerInterpretationKindExplicit> PIKE = llvm::None;
       if (D.isPrototypeContext() &&
           !hasOuterPointerLikeChunk(D, chunkIndex))
-        PIK = Context.getDefaultPointerInterpretation();
+        PIKE = Context.getDefaultPointerInterpretationExplicit();
 
       T = S.BuildArrayType(T, ASM, ArraySize, ATI.TypeQuals,
                            SourceRange(DeclType.Loc, DeclType.EndLoc), Name,
-                           PIK);
+                           PIKE);
       break;
     }
     case DeclaratorChunk::Function: {
@@ -6375,6 +6378,19 @@ fillDependentPointerTypeLoc(DependentPointerTypeLoc DPTL,
   llvm_unreachable("no __capability qualifier found at the expected location!");
 }
 
+static void
+fillPointerInterpretationTypeLoc(PointerInterpretationTypeLoc PITL,
+                                 const ParsedAttributesView &Attrs) {
+  for (const ParsedAttr &AL : Attrs) {
+    if (AL.getKind() == ParsedAttr::AT_CHERICapability) {
+      PITL.setQualifierRange(AL.getRange());
+      return;
+    }
+  }
+
+  llvm_unreachable("no __capability qualifier found at the expected location!");
+}
+
 static void fillMatrixTypeLoc(MatrixTypeLoc MTL,
                               const ParsedAttributesView &Attrs) {
   for (const ParsedAttr &AL : Attrs) {
@@ -6429,6 +6445,12 @@ GetTypeSourceInfoForDeclarator(TypeProcessingState &State,
 
     while (AttributedTypeLoc TL = CurrTL.getAs<AttributedTypeLoc>()) {
       fillAttributedTypeLoc(TL, State);
+      CurrTL = TL.getNextTypeLoc().getUnqualifiedLoc();
+    }
+
+    while (PointerInterpretationTypeLoc TL =
+               CurrTL.getAs<PointerInterpretationTypeLoc>()) {
+      fillPointerInterpretationTypeLoc(TL, D.getTypeObject(i).getAttrs());
       CurrTL = TL.getNextTypeLoc().getUnqualifiedLoc();
     }
 
@@ -6979,6 +7001,7 @@ namespace {
     enum WrapKind {
       Desugar,
       Attributed,
+      PointerInterpretation,
       Parens,
       Array,
       Pointer,
@@ -7020,6 +7043,9 @@ namespace {
         } else if (isa<AttributedType>(Ty)) {
           T = cast<AttributedType>(Ty)->getEquivalentType();
           Stack.push_back(Attributed);
+        } else if (isa<PointerInterpretationType>(Ty)) {
+          T = cast<PointerInterpretationType>(Ty)->getEquivalentType();
+          Stack.push_back(PointerInterpretation);
         } else if (isa<MacroQualifiedType>(Ty)) {
           T = cast<MacroQualifiedType>(Ty)->getUnderlyingType();
           Stack.push_back(MacroQualified);
@@ -7073,6 +7099,10 @@ namespace {
 
       case Attributed:
         return wrap(C, cast<AttributedType>(Old)->getEquivalentType(), I);
+
+      case PointerInterpretation:
+        return wrap(
+            C, cast<PointerInterpretationType>(Old)->getEquivalentType(), I);
 
       case Parens: {
         QualType New = wrap(C, cast<ParenType>(Old)->getInnerType(), I);
@@ -8162,19 +8192,23 @@ static void HandleOpenCLAccessAttr(QualType &CurType, const ParsedAttr &Attr,
   }
 }
 
-QualType Sema::BuildPointerInterpretationAttr(QualType T,
-                                              PointerInterpretationKind PIK,
-                                              SourceLocation QualifierLoc) {
+QualType Sema::BuildPointerInterpretationEquivalentType(
+    QualType T, PointerInterpretationKind PIK, SourceLocation QualifierLoc) {
+  // Equivalent type always has a canonical PIKE
+  PointerInterpretationKindExplicit PIKE =
+      Context.getCanonicalPointerInterpretationExplicit(
+          PointerInterpretationKindExplicit(PIK, /*IsExplicit=*/true));
+
   if (T->isPointerType() || T->isReferenceType()) {
     // preserve existing qualifiers on T
     Qualifiers Qs = T.getQualifiers();
 
     if (const PointerType *PT = T->getAs<PointerType>())
-      T = Context.getPointerType(PT->getPointeeType(), PIK);
+      T = Context.getPointerType(PT->getPointeeType(), PIKE);
     else if (const LValueReferenceType *LRT = T->getAs<LValueReferenceType>())
-      T = Context.getLValueReferenceType(LRT->getPointeeType(), true, PIK);
+      T = Context.getLValueReferenceType(LRT->getPointeeType(), true, PIKE);
     else if (const RValueReferenceType *RRT = T->getAs<RValueReferenceType>())
-      T = Context.getRValueReferenceType(RRT->getPointeeType(), PIK);
+      T = Context.getRValueReferenceType(RRT->getPointeeType(), PIKE);
     else
       llvm_unreachable("Don't know how to set the interpretation for T");
 
@@ -8192,18 +8226,17 @@ QualType Sema::BuildPointerInterpretationAttr(QualType T,
 
     if (const auto *VAT = dyn_cast<VariableArrayType>(T))
       T = Context.getVariableArrayType(EltTy, VAT->getSizeExpr(), ASM,
-                                       IndexTypeQuals,
-                                       VAT->getBracketsRange(), PIK);
+                                       IndexTypeQuals, VAT->getBracketsRange(),
+                                       PIKE);
     else if (const auto *DSAT = dyn_cast<DependentSizedArrayType>(T))
       T = Context.getDependentSizedArrayType(EltTy, DSAT->getSizeExpr(), ASM,
                                              IndexTypeQuals,
-                                             DSAT->getBracketsRange(), PIK);
+                                             DSAT->getBracketsRange(), PIKE);
     else if (isa<IncompleteArrayType>(T))
-      T = Context.getIncompleteArrayType(EltTy, ASM, IndexTypeQuals, PIK);
+      T = Context.getIncompleteArrayType(EltTy, ASM, IndexTypeQuals, PIKE);
     else if (const auto *CAT = dyn_cast<ConstantArrayType>(T))
-      T = Context.getConstantArrayType(EltTy, CAT->getSize(),
-                                       CAT->getSizeExpr(), ASM,
-                                       IndexTypeQuals, PIK);
+      T = Context.getConstantArrayType(
+          EltTy, CAT->getSize(), CAT->getSizeExpr(), ASM, IndexTypeQuals, PIKE);
     else
       llvm_unreachable("Don't know how to set the interpretation for T");
 
@@ -8330,8 +8363,10 @@ static void HandleCHERICapabilityQualifier(QualType &CurType,
   }
 
   assert(S.Context.getTargetInfo().SupportsCapabilities());
-  CurType = S.BuildPointerInterpretationAttr(CurType, PIK_Capability,
-                                             attr.getLoc());
+  QualType EquivType = S.BuildPointerInterpretationEquivalentType(
+      CurType, PIK_Capability, attr.getLoc());
+  CurType = S.Context.getPointerInterpretationType(
+      PIK_Capability, attr.getRange(), CurType, EquivType);
 }
 
 static void handleCheriNoProvenanceAttr(QualType &T, TypeProcessingState &State,

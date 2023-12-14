@@ -66,10 +66,10 @@ template <typename srcty> int* cheri_fromcap_dep(srcty arg) {
 template <typename srcty> int* __capability cheri_tocap_dep(srcty arg) {
   return (__cheri_tocap int* __capability)arg;
   // hybrid-error@-1{{invalid __cheri_tocap from 'long *' to unrelated type 'int * __capability'}}
-  // purecap-error@-2{{invalid __cheri_tocap from 'long *' to unrelated type 'int *'}}
+  // purecap-error@-2{{invalid __cheri_tocap from 'long *' to unrelated type 'int * __capability' (aka 'int *')}}
   // expected-error@-3{{invalid source type 'int' for __cheri_tocap: source must be a pointer}}
   // hybrid-warning@-4{{__cheri_tocap from 'int * __capability' to 'int * __capability' is a no-op}}
-  // purecap-warning@-5{{__cheri_tocap from 'int *' to 'int *' is a no-op}}
+  // purecap-warning@-5{{__cheri_tocap from 'int *' to 'int * __capability' (aka 'int *') is a no-op}}
 }
 
 // CHECK-LABEL: define {{[^@]+}}@_Z12fromcap_goodU12__capabilityPi

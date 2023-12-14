@@ -342,6 +342,13 @@ void TypeLocWriter::VisitDependentPointerTypeLoc(
   Record.AddSourceLocation(TL.getQualifierLoc());
 }
 
+void TypeLocWriter::VisitPointerInterpretationTypeLoc(
+    PointerInterpretationTypeLoc TL) {
+  SourceRange range = TL.getQualifierRange();
+  Record.AddSourceLocation(range.getBegin());
+  Record.AddSourceLocation(range.getEnd());
+}
+
 void TypeLocWriter::VisitDependentSizedExtVectorTypeLoc(
                                         DependentSizedExtVectorTypeLoc TL) {
   Record.AddSourceLocation(TL.getNameLoc());

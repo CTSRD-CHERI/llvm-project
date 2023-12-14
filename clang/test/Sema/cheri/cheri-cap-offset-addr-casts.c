@@ -7,22 +7,21 @@
 //
 
 void checkAST(char * __capability c) {
-  // HYBRID-AST: |-FunctionDecl {{.+}} line:9:6 checkAST 'void (char * __capability)'
-  // PURECAP-AST: |-FunctionDecl {{.+}} line:9:6 checkAST 'void (char *)'
+  // AST: |-FunctionDecl {{.+}} line:9:6 checkAST 'void (char * __capability)'
   long x1 = (__cheri_offset long)c;
   // AST: CStyleCastExpr {{.*}} {{.*}} 'long' <CHERICapabilityToOffset>{{$}}
   // The part_of_explicit_cast was not being set previously
-  // HYBRID-AST-NEXT: ImplicitCastExpr {{.*}} <col:34> 'char * __capability' <LValueToRValue> part_of_explicit_cast{{$}}
-  // HYBRID-AST-NEXT: -DeclRefExpr {{.+}} 'char * __capability' lvalue ParmVar {{.+}} 'c' 'char * __capability'{{$}}
-  // PURECAP-AST-NEXT: ImplicitCastExpr {{.*}} <col:34> 'char *' <LValueToRValue> part_of_explicit_cast{{$}}
-  // PURECAP-AST-NEXT: -DeclRefExpr {{.+}} 'char *' lvalue ParmVar {{.+}} 'c' 'char *'{{$}}
+  // HYBRID-AST-NEXT: ImplicitCastExpr {{.*}} <col:34> 'char * __capability':'char * __capability' <LValueToRValue> part_of_explicit_cast{{$}}
+  // HYBRID-AST-NEXT: -DeclRefExpr {{.+}} 'char * __capability':'char * __capability' lvalue ParmVar {{.+}} 'c' 'char * __capability':'char * __capability'{{$}}
+  // PURECAP-AST-NEXT: ImplicitCastExpr {{.*}} <col:34> 'char * __capability':'char *' <LValueToRValue> part_of_explicit_cast{{$}}
+  // PURECAP-AST-NEXT: -DeclRefExpr {{.+}} 'char * __capability':'char *' lvalue ParmVar {{.+}} 'c' 'char * __capability':'char *'{{$}}
 
   long x2 = (__cheri_addr long)c;
   // AST: CStyleCastExpr {{.*}} {{.*}} 'long' <CHERICapabilityToAddress>{{$}}
-  // HYBRID-AST-NEXT: ImplicitCastExpr {{.*}} <col:32> 'char * __capability' <LValueToRValue> part_of_explicit_cast{{$}}
-  // HYBRID-AST-NEXT: -DeclRefExpr {{.+}} 'char * __capability' lvalue ParmVar {{.+}} 'c' 'char * __capability'{{$}}
-  // PURECAP-AST-NEXT: ImplicitCastExpr {{.*}} <col:32> 'char *' <LValueToRValue> part_of_explicit_cast{{$}}
-  // PURECAP-AST-NEXT: -DeclRefExpr {{.+}} 'char *' lvalue ParmVar {{.+}} 'c' 'char *'{{$}}
+  // HYBRID-AST-NEXT: ImplicitCastExpr {{.*}} <col:32> 'char * __capability':'char * __capability' <LValueToRValue> part_of_explicit_cast{{$}}
+  // HYBRID-AST-NEXT: -DeclRefExpr {{.+}} 'char * __capability':'char * __capability' lvalue ParmVar {{.+}} 'c' 'char * __capability':'char * __capability'{{$}}
+  // PURECAP-AST-NEXT: ImplicitCastExpr {{.*}} <col:32> 'char * __capability':'char *' <LValueToRValue> part_of_explicit_cast{{$}}
+  // PURECAP-AST-NEXT: -DeclRefExpr {{.+}} 'char * __capability':'char *' lvalue ParmVar {{.+}} 'c' 'char * __capability':'char *'{{$}}
 }
 
 void types_offset(char * __capability c) {
@@ -31,7 +30,7 @@ void types_offset(char * __capability c) {
   long x3 = (__cheri_offset long)c;
   char * __capability x4 = (__cheri_offset char * __capability)c;
   // hybrid-error@-1 {{invalid target type 'char * __capability' for __cheri_offset}}
-  // purecap-error@-2 {{invalid target type 'char *' for __cheri_offset}}
+  // purecap-error@-2 {{invalid target type 'char * __capability' (aka 'char *') for __cheri_offset}}
   long x5 = (__cheri_offset short)c; // expected-warning {{target type 'short' is smaller than the type 'long int' of the capability offset field}}
   short x6 = (__cheri_offset long)c;
   char *x7 = (__cheri_offset char*)c; // expected-error {{invalid target type 'char *' for __cheri_offset}}
@@ -44,7 +43,7 @@ void types_addr(char * __capability c) {
   long x3 = (__cheri_addr long)c;
   char * __capability x4 = (__cheri_addr char * __capability)c;
   // hybrid-error@-1 {{capability type 'char * __capability' is not a valid target type for __cheri_addr}}
-  // purecap-error@-2 {{capability type 'char *' is not a valid target type for __cheri_addr}}
+  // purecap-error@-2 {{capability type 'char * __capability' (aka 'char *') is not a valid target type for __cheri_addr}}
   long x5 = (__cheri_addr short)c; // expected-warning {{target type 'short' is smaller than the type 'long int' of the address}}
   short x6 = (__cheri_addr long)c;
   char *x7 = (__cheri_addr char *)c;

@@ -21,11 +21,17 @@ let Class = PointerType in {
   def : Property<"pointeeType", QualType> {
     let Read = [{ node->getPointeeType() }];
   }
-  def : Property<"pointerInterpretation", PointerInterpretationKind> {
-    let Read = [{ node->getPointerInterpretation() }];
+  def : Property<"pik", PointerInterpretationKind> {
+    let Read = [{ node->getPointerInterpretationExplicit().PIK }];
+  }
+  def : Property<"pikIsExplicit", Bool> {
+    let Read = [{ node->getPointerInterpretationExplicit().IsExplicit }];
   }
 
-  def : Creator<[{ return ctx.getPointerType(pointeeType, pointerInterpretation); }]>;
+  def : Creator<[{
+    return ctx.getPointerType(
+        pointeeType, PointerInterpretationKindExplicit(pik, pikIsExplicit));
+  }]>;
 }
 
 let Class = AdjustedType in {
@@ -61,8 +67,11 @@ let Class = ReferenceType in {
   def : Property<"pointeeTypeAsWritten", QualType> {
     let Read = [{ node->getPointeeTypeAsWritten() }];
   }
-  def : Property<"pointerInterpretation", PointerInterpretationKind> {
-    let Read = [{ node->getPointerInterpretation() }];
+  def : Property<"pik", PointerInterpretationKind> {
+    let Read = [{ node->getPointerInterpretationExplicit().PIK }];
+  }
+  def : Property<"pikIsExplicit", Bool> {
+    let Read = [{ node->getPointerInterpretationExplicit().IsExplicit }];
   }
 }
 
@@ -72,16 +81,17 @@ let Class = LValueReferenceType in {
   }
 
   def : Creator<[{
-    return ctx.getLValueReferenceType(pointeeTypeAsWritten,
-                                      isSpelledAsLValue,
-                                      pointerInterpretation);
+    return ctx.getLValueReferenceType(
+        pointeeTypeAsWritten, isSpelledAsLValue,
+        PointerInterpretationKindExplicit(pik, pikIsExplicit));
   }]>;
 }
 
 let Class = RValueReferenceType in {
   def : Creator<[{
-    return ctx.getRValueReferenceType(pointeeTypeAsWritten,
-                                      pointerInterpretation);
+    return ctx.getRValueReferenceType(
+        pointeeTypeAsWritten,
+        PointerInterpretationKindExplicit(pik, pikIsExplicit));
   }]>;
 }
 
@@ -648,7 +658,7 @@ let Class = DependentPointerType in {
   def : Property<"pointerType", QualType> {
     let Read = [{ node->getPointerType() }];
   }
-  def : Property<"pointerInterpretation", PointerInterpretationKind> {
+  def : Property<"pik", PointerInterpretationKind> {
     let Read = [{ node->getPointerInterpretation() }];
   }
   def : Property<"qualifierLoc", SourceLocation> {
@@ -656,8 +666,32 @@ let Class = DependentPointerType in {
   }
 
   def : Creator<[{
-    return ctx.getDependentPointerType(pointerType, pointerInterpretation,
-                                       qualifierLoc);
+    return ctx.getDependentPointerType(pointerType, pik, qualifierLoc);
+  }]>;
+}
+
+let Class = PointerInterpretationType in {
+  def : Property<"modifiedType", QualType> {
+    let Read = [{ node->getModifiedType() }];
+  }
+  def : Property<"equivalentType", QualType> {
+    let Read = [{ node->getEquivalentType() }];
+  }
+  def : Property<"pik", PointerInterpretationKind> {
+    let Read = [{ node->getPointerInterpretation() }];
+  }
+  def : Property<"qualifierBeginLoc", SourceLocation> {
+    let Read = [{ node->getQualifierRange().getBegin() }];
+  }
+  def : Property<"qualifierEndLoc", SourceLocation> {
+    let Read = [{ node->getQualifierRange().getEnd() }];
+  }
+
+  def : Creator<[{
+    return ctx.getPointerInterpretationType(pik,
+                                            SourceRange(qualifierBeginLoc,
+                                                        qualifierEndLoc),
+                                            modifiedType, equivalentType);
   }]>;
 }
 

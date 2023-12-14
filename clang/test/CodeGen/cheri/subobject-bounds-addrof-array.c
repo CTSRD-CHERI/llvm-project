@@ -188,7 +188,7 @@ void test2(int *array) {
   // VERY-AGGRESSIVE: call i8 addrspace(200)* @llvm.cheri.cap.bounds.set.i64(i8 addrspace(200)* %{{.+}}, i64 4)
   // CHECK: ret void
 
-  // DBG-NEXT: subscript 'int * __capability' subobj bounds check: array subscript on non-array type -> not setting bounds
+  // DBG-NEXT: subscript 'int *' subobj bounds check: array subscript on non-array type -> not setting bounds
   // DBG-SUBOBJECT-SAFE-NEXT: address 'int' subobj bounds check: Found array subscript -> index is a constant -> should set bounds on full array but size is not known -> not setting bounds
   // DBG-AGGRESSIVE-NEXT: address 'int' subobj bounds check: Found array subscript -> index is a constant -> should set bounds on full array but size is not known -> not setting bounds
   // DBG-VERY-AGGRESSIVE-NEXT: address 'int' subobj bounds check: Found array subscript -> index is a constant -> bounds-mode is very-aggressive -> bounds on array[CONST] are fine -> Found scalar type -> setting bounds for 'int' address to 4

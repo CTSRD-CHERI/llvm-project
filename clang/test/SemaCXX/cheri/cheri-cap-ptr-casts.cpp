@@ -9,12 +9,12 @@ void f() {
   char * __capability bufp;
   void (* __capability fp)();
   bufp = reinterpret_cast<char * __capability>(buf);
-  // HYBRID-AST: CXXReinterpretCastExpr {{.*}} {{.*}} 'char * __capability' reinterpret_cast<char * __capability> <PointerToCHERICapability>{{$}}
-  // PURECAP-AST: CXXReinterpretCastExpr {{.*}} {{.*}} 'char *' reinterpret_cast<char * __capability> <NoOp>{{$}}
+  // HYBRID-AST: CXXReinterpretCastExpr {{.*}} {{.*}} 'char * __capability':'char * __capability' reinterpret_cast<char * __capability> <PointerToCHERICapability>{{$}}
+  // PURECAP-AST: CXXReinterpretCastExpr {{.*}} {{.*}} 'char * __capability':'char *' reinterpret_cast<char * __capability> <NoOp>{{$}}
   // AST-NEXT: ImplicitCastExpr {{.*}} {{.*}} 'char *' <ArrayToPointerDecay> part_of_explicit_cast{{$}}
   fp = reinterpret_cast<void (* __capability)()>(f);
-  // HYBRID-AST: CXXReinterpretCastExpr {{.*}} {{.*}} 'void (* __capability)()' reinterpret_cast<void (* __capability)(void)> <PointerToCHERICapability>{{$}}
-  // PURECAP-AST: CXXReinterpretCastExpr {{.*}} {{.*}} 'void (*)()' reinterpret_cast<void (* __capability)(void)> <NoOp>{{$}}
+  // HYBRID-AST: CXXReinterpretCastExpr {{.*}} {{.*}} 'void (* __capability)()':'void (* __capability)()' reinterpret_cast<void (* __capability)(void)> <PointerToCHERICapability>{{$}}
+  // PURECAP-AST: CXXReinterpretCastExpr {{.*}} {{.*}} 'void (* __capability)()':'void (*)()' reinterpret_cast<void (* __capability)(void)> <NoOp>{{$}}
   // AST-NEXT: ImplicitCastExpr {{.*}} {{.*}} 'void (*)()' <FunctionToPointerDecay> part_of_explicit_cast{{$}}
   bufp = static_cast<char * __capability>(buf);
   // hybrid-error@-1 {{static_cast from 'char *' to 'char * __capability' changes capability qualifier}}

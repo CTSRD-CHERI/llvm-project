@@ -50,11 +50,11 @@ void test(struct WithBoundsPls* w, struct NoBoundsPls* n, struct HasMemberOfType
   do_stuff(n); // just passing on, no bounds
   do_stuff(&n[0]); // expected-remark-re{{not setting bounds for pointer to '{{(struct )?}}NoBoundsPls' (array type declaration has opt-out attribute)}}
   // expected-remark@-1{{not setting bounds for array subscript on 'struct NoBoundsPls *' (array subscript on non-array type)}}
-  // CHECK-NEXT: subscript 'struct NoBoundsPls * __capability' subobj bounds check: array subscript on non-array type -> not setting bounds
+  // CHECK-NEXT: subscript 'struct NoBoundsPls *' subobj bounds check: array subscript on non-array type -> not setting bounds
   // CHECK-NEXT: subobj bounds check: Found array subscript -> opt-out: array type declaration has opt-out attribute -> not setting bounds
   do_stuff(&n[2]); // expected-remark-re{{not setting bounds for pointer to '{{(struct )?}}NoBoundsPls' (array type declaration has opt-out attribute)}}
   // expected-remark@-1{{not setting bounds for array subscript on 'struct NoBoundsPls *' (array subscript on non-array type)}}
-  // CHECK-NEXT: subscript 'struct NoBoundsPls * __capability' subobj bounds check: array subscript on non-array type -> not setting bounds
+  // CHECK-NEXT: subscript 'struct NoBoundsPls *' subobj bounds check: array subscript on non-array type -> not setting bounds
   // CHECK-NEXT: subobj bounds check: Found array subscript -> opt-out: array type declaration has opt-out attribute -> not setting bounds
   do_stuff((struct WithBoundsPls*)n); // Setting bounds here
   do_stuff(&n2);                      // expected-remark-re{{not setting bounds for pointer to '{{(struct )?}}NoBoundsPls' (expression declaration has opt-out attribute)}}
@@ -99,13 +99,13 @@ void test_stringbuf(int next_free) {
   do_stuff(&stringbuf[next_free]); // TODO: maybe don't do this by default for char[]?
   // expected-remark@-1{{setting sub-object bounds for pointer to 'char' to 1 bytes}}
   // expected-remark@-2{{not setting bounds for array subscript on 'char *' (array subscript on non-array type)}}
-  // CHECK-NEXT: subscript 'char * __capability' subobj bounds check: array subscript on non-array type -> not setting bounds
+  // CHECK-NEXT: subscript 'char *' subobj bounds check: array subscript on non-array type -> not setting bounds
   // CHECK-NEXT: subobj bounds check: Found array subscript -> Index is not a constant (probably in a per-element loop) -> Bounds mode is everywhere-unsafe -> setting bounds for 'char' address to 1
 
   do_stuff(&stringbuf_opt_out[next_free]);
   // expected-remark@-1{{not setting bounds for pointer to 'char * __attribute__((cheri_no_subobject_bounds))' (array base type has opt-out attribute)}}
   // expected-remark@-2{{not setting bounds for array subscript on 'char * __attribute__((cheri_no_subobject_bounds))' (array subscript on non-array type)}}
-  // CHECK-NEXT: subscript 'char * __capability __attribute__((cheri_no_subobject_bounds))' subobj bounds check: array subscript on non-array type -> not setting bounds
+  // CHECK-NEXT: subscript 'char * __attribute__((cheri_no_subobject_bounds))' subobj bounds check: array subscript on non-array type -> not setting bounds
   // CHECK-NEXT: subobj bounds check: Found array subscript -> opt-out: array base type has opt-out attribute -> not setting bounds
 
   // Due to the parenthesized expression this was previous not parsed as an
@@ -114,7 +114,7 @@ void test_stringbuf(int next_free) {
   // expected-remark@-1{{not setting bounds for pointer to 'char * __attribute__((cheri_no_subobject_bounds))' (array base type has opt-out attribute)}}
   // expected-remark@-2{{not setting bounds for array subscript on 'char * __attribute__((cheri_no_subobject_bounds))' (array subscript on non-array type)}}
 
-  // CHECK-NEXT: subscript 'char * __capability __attribute__((cheri_no_subobject_bounds))' subobj bounds check: array subscript on non-array type -> not setting bounds
+  // CHECK-NEXT: subscript 'char * __attribute__((cheri_no_subobject_bounds))' subobj bounds check: array subscript on non-array type -> not setting bounds
   // CHECK-NEXT: subobj bounds check: Found array subscript -> opt-out: array base type has opt-out attribute -> not setting bounds
 }
 
@@ -271,11 +271,11 @@ struct fake_vla {
 
 void test_past_end_macro(struct fake_vla *fv) {
   do_stuff(fv->data[1]); // expected-remark-re{{setting sub-object bounds for field 'data' (array subscript on 'void *[1]') to {{16|32}} bytes}}
-  // CHECK-NEXT: subscript 'void * __capability[1]' subobj bounds check: got MemberExpr -> subscript on constant size array -> setting bounds for 'void * __capability[1]' subscript to {{16|32}}
+  // CHECK-NEXT: subscript 'void *[1]' subobj bounds check: got MemberExpr -> subscript on constant size array -> setting bounds for 'void *[1]' subscript to {{16|32}}
   do_stuff(__PAST_END(fv->data, 1)); // expected-remark{{not setting bounds for array subscript on 'typeof (*(fv->data)) *' (aka 'void **') (array subscript on non-array type)}}
   // expected-remark@-1 {{not setting bounds for array decay on 'void *[1]' (__builtin_no_change_bounds() expression)}}
-  // CHECK-NEXT: decay 'void * __capability[1]' subobj bounds check: __builtin_no_change_bounds() expression -> not setting bounds
-  // CHECK-NEXT: subscript 'typeof (*(fv->data)) * __capability' subobj bounds check: array subscript on non-array type -> not setting bounds
+  // CHECK-NEXT: decay 'void *[1]' subobj bounds check: __builtin_no_change_bounds() expression -> not setting bounds
+  // CHECK-NEXT: subscript 'typeof (*(fv->data)) *' subobj bounds check: array subscript on non-array type -> not setting bounds
 }
 
 #define cheri_unbounded_addressof(expr) (&__builtin_no_change_bounds(expr))

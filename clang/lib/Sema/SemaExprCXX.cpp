@@ -4237,8 +4237,9 @@ Sema::PerformImplicitConversion(Expr *From, QualType ToType,
   }
 
   case ICK_Array_To_Pointer: {
-    PointerInterpretationKind PIK = PointerInterpretationForBaseExpr(From);
-    FromType = Context.getArrayDecayedType(FromType, PIK);
+    PointerInterpretationKindExplicit PIKE =
+        PointerInterpretationExplicitForBaseExpr(From);
+    FromType = Context.getArrayDecayedType(FromType, PIKE);
     From = ImpCastExprToType(From, FromType, CK_ArrayToPointerDecay,
                              VK_PRValue, /*BasePath=*/nullptr, CCK).get();
     break;
@@ -6636,18 +6637,21 @@ QualType Sema::FindCompositePointerType(SourceLocation Loc,
     /// The class for a pointer-to-member; a constant array type with a bound
     /// (if any) for an array.
     const Type *ClassOrBound;
-    llvm::Optional<PointerInterpretationKind> PIK;
+    llvm::Optional<PointerInterpretationKindExplicit> PIKE;
 
     Step(Kind K, const Type *ClassOrBound = nullptr,
-         llvm::Optional<PointerInterpretationKind> PIK = llvm::None)
-        : K(K), ClassOrBound(ClassOrBound), PIK(PIK) {}
+         llvm::Optional<PointerInterpretationKindExplicit> PIKE = llvm::None)
+        : K(K), ClassOrBound(ClassOrBound), PIKE(PIKE) {}
+
+    Step(Kind K, PointerInterpretationKindExplicit PIKE)
+        : Step(K, nullptr, PIKE) {}
+
     QualType rebuild(ASTContext &Ctx, QualType T) const {
       T = Ctx.getQualifiedType(T, Quals);
-      PointerInterpretationKind DefaultPIK =
-          Ctx.getDefaultPointerInterpretation();
       switch (K) {
       case Pointer:
-        return Ctx.getPointerType(T, PIK.getValueOr(DefaultPIK));
+        assert(PIKE && "Pointer must have an interpretation");
+        return Ctx.getPointerType(T, *PIKE);
       case MemberPointer:
         return Ctx.getMemberPointerType(T, ClassOrBound);
       case ObjCPointer:
@@ -6775,10 +6779,14 @@ QualType Sema::FindCompositePointerType(SourceLocation Loc,
         (Ptr2 = Composite2->getAs<PointerType>())) {
       Composite1 = Ptr1->getPointeeType();
       Composite2 = Ptr2->getPointeeType();
-      if (Ptr1->getPointerInterpretation() != Ptr2->getPointerInterpretation())
+      PointerInterpretationKindExplicit PIKE1 =
+          Ptr1->getPointerInterpretationExplicit();
+      PointerInterpretationKindExplicit PIKE2 =
+          Ptr2->getPointerInterpretationExplicit();
+      if (PIKE1.PIK != PIKE2.PIK)
         return QualType();
-      Steps.emplace_back(Step::Pointer, nullptr,
-                         Ptr1->getPointerInterpretation());
+      PointerInterpretationKindExplicit PIKE = PIKE1.IsExplicit ? PIKE1 : PIKE2;
+      Steps.emplace_back(Step::Pointer, PIKE);
       continue;
     }
 
@@ -6829,7 +6837,8 @@ QualType Sema::FindCompositePointerType(SourceLocation Loc,
                            Composite2->isVoidPointerType()))) {
       Composite1 = Composite1->getPointeeType();
       Composite2 = Composite2->getPointeeType();
-      Steps.emplace_back(Step::Pointer);
+      Steps.emplace_back(Step::Pointer,
+                         Context.getDefaultPointerInterpretationExplicit());
       continue;
     }
 

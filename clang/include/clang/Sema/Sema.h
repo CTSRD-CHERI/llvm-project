@@ -1984,15 +1984,15 @@ public:
                               const DeclSpec *DS = nullptr);
   QualType BuildQualifiedType(QualType T, SourceLocation Loc, unsigned CVRA,
                               const DeclSpec *DS = nullptr);
-  QualType BuildPointerType(QualType T, PointerInterpretationKind PIK,
+  QualType BuildPointerType(QualType T, PointerInterpretationKindExplicit PIKE,
                             SourceLocation Loc, DeclarationName Entity,
-                            bool* ValidPointer);
+                            bool *ValidPointer);
   QualType BuildReferenceType(QualType T, bool LValueRef,
                               SourceLocation Loc, DeclarationName Entity);
-  QualType BuildArrayType(QualType T, ArrayType::ArraySizeModifier ASM,
-                          Expr *ArraySize, unsigned Quals,
-                          SourceRange Brackets, DeclarationName Entity,
-                          llvm::Optional<PointerInterpretationKind> PIK);
+  QualType
+  BuildArrayType(QualType T, ArrayType::ArraySizeModifier ASM, Expr *ArraySize,
+                 unsigned Quals, SourceRange Brackets, DeclarationName Entity,
+                 llvm::Optional<PointerInterpretationKindExplicit> PIKE);
   QualType BuildVectorType(QualType T, Expr *VecSize, SourceLocation AttrLoc);
   QualType BuildExtVectorType(QualType T, Expr *ArraySize,
                               SourceLocation AttrLoc);
@@ -2006,9 +2006,8 @@ public:
   QualType BuildAddressSpaceAttr(QualType &T, Expr *AddrSpace,
                                  SourceLocation AttrLoc);
 
-  QualType BuildPointerInterpretationAttr(QualType T,
-                                          PointerInterpretationKind PIK,
-                                          SourceLocation QualifierLoc);
+  QualType BuildPointerInterpretationEquivalentType(
+      QualType T, PointerInterpretationKind PIK, SourceLocation QualifierLoc);
 
   bool CheckQualifiedFunctionForTypeId(QualType T, SourceLocation Loc);
 
@@ -5052,8 +5051,8 @@ public:
   void DiagnoseSentinelCalls(NamedDecl *D, SourceLocation Loc,
                              ArrayRef<Expr *> Args);
 
-  PointerInterpretationKind
-  PointerInterpretationForBaseExpr(const Expr *Base) const;
+  PointerInterpretationKindExplicit
+  PointerInterpretationExplicitForBaseExpr(const Expr *Base) const;
 
   void PushExpressionEvaluationContext(
       ExpressionEvaluationContext NewContext, Decl *LambdaContextDecl = nullptr,
@@ -10069,20 +10068,23 @@ public:
   void ActOnPragmaOptionsAlign(PragmaOptionsAlignKind Kind,
                                SourceLocation PragmaLoc);
 
-  PointerInterpretationKind PointerInterpretation;
-  llvm::SmallVector<PointerInterpretationKind, 4> PointerInterpretationStack;
+  PointerInterpretationKindExplicit CurrentPIKE;
+  llvm::SmallVector<PointerInterpretationKindExplicit, 4> PIKEStack;
 
   /// ActOnPragmaPack - Called on well formed \#pragma pack(...).
   void ActOnPragmaPack(SourceLocation PragmaLoc, PragmaMsStackAction Action,
                        StringRef SlotLabel, Expr *Alignment);
 
-  void ActOnPragmaPointerInterpretation(PointerInterpretationKind K);
+  void
+  ActOnPragmaPointerInterpretation(PointerInterpretationKindExplicit PIKE) {
+    CurrentPIKE = PIKE;
+  }
   void ActOnPragmaPointerInterpretationPush() {
-    PointerInterpretationStack.push_back(PointerInterpretation);
+    PIKEStack.push_back(CurrentPIKE);
   }
   void ActOnPragmaPointerInterpretationPop() {
-    PointerInterpretation = PointerInterpretationStack.back();
-    PointerInterpretationStack.pop_back();
+    CurrentPIKE = PIKEStack.back();
+    PIKEStack.pop_back();
   }
 
   enum class PragmaAlignPackDiagnoseKind {

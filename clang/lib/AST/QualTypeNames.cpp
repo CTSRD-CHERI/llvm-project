@@ -377,12 +377,11 @@ QualType getFullyQualifiedType(QualType QT, const ASTContext &Ctx,
                                bool WithGlobalNsPrefix) {
   // In case of myType* we need to strip the pointer first, fully
   // qualify and attach the pointer once again.
-  if (isa<PointerType>(QT.getTypePtr())) {
+  if (auto *PT = dyn_cast<PointerType>(QT.getTypePtr())) {
     // Get the qualifiers.
     Qualifiers Quals = QT.getQualifiers();
     QT = getFullyQualifiedType(QT->getPointeeType(), Ctx, WithGlobalNsPrefix);
-    QT = Ctx.getPointerType(QT, QT->isCHERICapabilityType(Ctx)
-                                    ? PIK_Capability : PIK_Integer);
+    QT = Ctx.getPointerType(QT, PT->getPointerInterpretationExplicit());
     // Add back the qualifiers.
     QT = Ctx.getQualifiedType(QT, Quals);
     return QT;
@@ -403,17 +402,20 @@ QualType getFullyQualifiedType(QualType QT, const ASTContext &Ctx,
 
   // In case of myType& we need to strip the reference first, fully
   // qualify and attach the reference once again.
-  if (isa<ReferenceType>(QT.getTypePtr())) {
+  if (auto *RT = dyn_cast<ReferenceType>(QT.getTypePtr())) {
     // Get the qualifiers.
     bool IsLValueRefTy = isa<LValueReferenceType>(QT.getTypePtr());
     Qualifiers Quals = QT.getQualifiers();
     QT = getFullyQualifiedType(QT->getPointeeType(), Ctx, WithGlobalNsPrefix);
     // Add the r- or l-value reference type back to the fully
     // qualified one.
+    // XXX: Upstream doesn't propagate SpelledAsLValue; should it?
     if (IsLValueRefTy)
-      QT = Ctx.getLValueReferenceType(QT);
+      QT = Ctx.getLValueReferenceType(QT, /*SpelledAsLValue=*/true,
+                                      RT->getPointerInterpretationExplicit());
     else
-      QT = Ctx.getRValueReferenceType(QT);
+      QT = Ctx.getRValueReferenceType(QT,
+                                      RT->getPointerInterpretationExplicit());
     // Add back the qualifiers.
     QT = Ctx.getQualifiedType(QT, Quals);
     return QT;

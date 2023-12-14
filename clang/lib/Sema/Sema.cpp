@@ -211,8 +211,10 @@ Sema::Sema(Preprocessor &pp, ASTContext &ctxt, ASTConsumer &consumer,
       InNonInstantiationSFINAEContext(false), NonInstantiationEntries(0),
       ArgumentPackSubstitutionIndex(-1), CurrentInstantiationScope(nullptr),
       DisableTypoCorrection(false), TyposCorrected(0), AnalysisWarnings(*this),
-      ThreadSafetyDeclCache(nullptr), VarDataSharingAttributesStack(nullptr),
-      CurScope(nullptr), Ident_super(nullptr), Ident___float128(nullptr) {
+      ThreadSafetyDeclCache(nullptr),
+      CurrentPIKE(Context.getDefaultPointerInterpretationExplicit()),
+      VarDataSharingAttributesStack(nullptr), CurScope(nullptr),
+      Ident_super(nullptr), Ident___float128(nullptr) {
   assert(pp.TUKind == TUKind);
   TUScope = nullptr;
   isConstantEvaluatedOverride = false;
@@ -236,8 +238,6 @@ Sema::Sema(Preprocessor &pp, ASTContext &ctxt, ASTConsumer &consumer,
 
   // Initialization of data sharing attributes stack for OpenMP
   InitDataSharingAttributesStack();
-
-  PointerInterpretation = Context.getDefaultPointerInterpretation();
 
   std::unique_ptr<sema::SemaPPCallbacks> Callbacks =
       std::make_unique<sema::SemaPPCallbacks>();

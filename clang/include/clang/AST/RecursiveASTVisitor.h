@@ -940,6 +940,9 @@ DEF_TRAVERSE_TYPE(DependentPointerType, {
   TRY_TO(TraverseType(T->getPointerType()));
 })
 
+DEF_TRAVERSE_TYPE(PointerInterpretationType,
+                  { TRY_TO(TraverseType(T->getModifiedType())); })
+
 DEF_TRAVERSE_TYPE(DependentVectorType, {
   if (T->getSizeExpr())
     TRY_TO(TraverseStmt(T->getSizeExpr()));
@@ -1198,6 +1201,9 @@ DEF_TRAVERSE_TYPELOC(DependentAddressSpaceType, {
 DEF_TRAVERSE_TYPELOC(DependentPointerType, {
   TRY_TO(TraverseType(TL.getTypePtr()->getPointerType()));
 })
+
+DEF_TRAVERSE_TYPELOC(PointerInterpretationType,
+                     { TRY_TO(TraverseTypeLoc(TL.getModifiedLoc())); })
 
 // FIXME: order? why not size expr first?
 // FIXME: base VectorTypeLoc is unfinished

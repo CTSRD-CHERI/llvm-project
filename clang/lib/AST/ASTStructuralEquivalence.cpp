@@ -823,6 +823,18 @@ static bool IsStructurallyEquivalent(StructuralEquivalenceContext &Context,
     break;
   }
 
+  case Type::PointerInterpretation: {
+    const auto *PointerInterp1 = cast<PointerInterpretationType>(T1);
+    const auto *PointerInterp2 = cast<PointerInterpretationType>(T2);
+    if (!IsStructurallyEquivalent(Context, PointerInterp1->getModifiedType(),
+                                  PointerInterp2->getModifiedType()))
+      return false;
+    if (!IsStructurallyEquivalent(Context, PointerInterp1->getEquivalentType(),
+                                  PointerInterp2->getEquivalentType()))
+      return false;
+    break;
+  }
+
   case Type::DependentSizedExtVector: {
     const auto *Vec1 = cast<DependentSizedExtVectorType>(T1);
     const auto *Vec2 = cast<DependentSizedExtVectorType>(T2);
