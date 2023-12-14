@@ -640,7 +640,8 @@ SVal SValBuilder::evalCastKind(Loc V, QualType CastTy, QualType OriginalTy) {
   case loc::GotoLabelKind:
     return evalCastSubKind(V.castAs<loc::GotoLabel>(), CastTy, OriginalTy);
   case loc::MemRegionValKind:
-    return evalCastSubKind(V.castAs<loc::MemRegionVal>(), CastTy, OriginalTy);
+    return evalCastSubKind(V.castAs<loc::MemRegionVal>(), CastTy, OriginalTy,
+                           true);
   }
 
   llvm_unreachable("Unknown SVal kind");
@@ -699,7 +700,7 @@ SVal SValBuilder::evalCastSubKind(loc::GotoLabel V, QualType CastTy,
   // Pointer to integer.
   if (CastTy->isIntegralOrEnumerationType()) {
     const unsigned BitWidth = Context.getIntWidth(CastTy);
-    return makeLocAsInteger(V, BitWidth);
+    return makeLocAsInteger(V, BitWidth, CastTy->isIntCapType());
   }
 
   const bool IsUnknownOriginalType = OriginalTy.isNull();
@@ -724,7 +725,7 @@ static bool hasSameUnqualifiedPointeeType(QualType ty1, QualType ty2) {
 }
 
 SVal SValBuilder::evalCastSubKind(loc::MemRegionVal V, QualType CastTy,
-                                  QualType OriginalTy) {
+                                  QualType OriginalTy, bool SrcHasProv) {
   // Pointer to bool.
   if (CastTy->isBooleanType()) {
     const MemRegion *R = V.getRegion();
@@ -774,7 +775,8 @@ SVal SValBuilder::evalCastSubKind(loc::MemRegionVal V, QualType CastTy,
       //    QualType pointerTy = C.getPointerType(elemTy);
     }
     const unsigned BitWidth = Context.getIntWidth(CastTy);
-    return makeLocAsInteger(Val.castAs<Loc>(), BitWidth);
+    bool HasProvenance = SrcHasProv && CastTy->isIntCapType();
+    return makeLocAsInteger(Val.castAs<Loc>(), BitWidth, HasProvenance);
   }
 
   // Pointer to pointer.
@@ -923,7 +925,8 @@ SVal SValBuilder::evalCastSubKind(nonloc::LocAsInteger V, QualType CastTy,
   const MemRegion *R = L.getAsRegion();
   if (!IsUnknownOriginalType && R) {
     if (CastTy->isIntegralOrEnumerationType())
-      return evalCastSubKind(loc::MemRegionVal(R), CastTy, OriginalTy);
+      return evalCastSubKind(loc::MemRegionVal(R), CastTy, OriginalTy,
+                             V.hasProvenance());
 
     if (Loc::isLocType(CastTy)) {
       assert(Loc::isLocType(OriginalTy) || OriginalTy->isFunctionType() ||
@@ -937,7 +940,8 @@ SVal SValBuilder::evalCastSubKind(nonloc::LocAsInteger V, QualType CastTy,
   } else {
     if (Loc::isLocType(CastTy)) {
       if (IsUnknownOriginalType)
-        return evalCastSubKind(loc::MemRegionVal(R), CastTy, OriginalTy);
+        return evalCastSubKind(loc::MemRegionVal(R), CastTy, OriginalTy,
+                               V.hasProvenance());
       return L;
     }
 
@@ -955,7 +959,9 @@ SVal SValBuilder::evalCastSubKind(nonloc::LocAsInteger V, QualType CastTy,
       if (CastSize == V.getNumBits())
         return V;
 
-      return makeLocAsInteger(L, CastSize);
+      bool hasProvenance = V.hasProvenance()
+                           && CastTy->isCHERICapabilityType(Context, true);
+      return makeLocAsInteger(L, CastSize, hasProvenance);
     }
   }
 

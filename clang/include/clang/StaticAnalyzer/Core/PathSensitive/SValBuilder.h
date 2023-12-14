@@ -83,7 +83,7 @@ protected:
                        QualType OriginalTy);
   SVal evalCastSubKind(loc::GotoLabel V, QualType CastTy, QualType OriginalTy);
   SVal evalCastSubKind(loc::MemRegionVal V, QualType CastTy,
-                       QualType OriginalTy);
+                       QualType OriginalTy, bool SrcHasProv);
   SVal evalCastSubKind(nonloc::CompoundVal V, QualType CastTy,
                        QualType OriginalTy);
   SVal evalCastSubKind(nonloc::ConcreteInt V, QualType CastTy,
@@ -337,7 +337,10 @@ public:
         BasicVals.getIntWithPtrWidth(integer, isUnsigned));
   }
 
-  NonLoc makeLocAsInteger(Loc loc, unsigned bits) {
+  NonLoc makeLocAsInteger(Loc loc, unsigned bits, bool hasProvenance) {
+    assert((bits & ~255) == 0);
+    if (hasProvenance)
+      bits |= 256;
     return nonloc::LocAsInteger(BasicVals.getPersistentSValWithData(loc, bits));
   }
 

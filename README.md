@@ -1,112 +1,83 @@
-# The CHERI LLVM Compiler Infrastructure
+# CHERI CSA
 
-This directory and its sub-directories contain source code for LLVM,
-a toolkit for the construction of highly optimized compilers,
-optimizers, and run-time environments, extended to support
-[CHERI](http://cheri-cpu.org).
+This is the fork of [The CHERI LLVM Compiler Infrastructure](https://github.com/CTSRD-CHERI/llvm-project) for CHERI-related Clang Static Analyzer development.
 
-The README briefly describes how to get started with building LLVM.
-Please file issues and submit pull requests against the
-[GitHub project](https://github.com/CTSRD-CHERI/llvm-project).
+CSA performs inter-procedural path-sensitive analysis in the boundary of one translation unit (via inlining). Cross Translation Unit analysis exists, but I'm unsure about its status[^1].
 
-## Getting Started with the LLVM System (Recommended)
+[^1]:https://clang.llvm.org/docs/analyzer/user-docs/CrossTranslationUnit.html
 
-The recommended way to get started with LLVM is by using
-[cheribuild](https://github.com/CTSRD-CHERI/cheribuild), which will
-build a working toolchain with a single ``cheribuild.py llvm``.
 
-## Getting Started with the LLVM System (Manual)
+## CHERI-related checkers
 
-Taken from https://llvm.org/docs/GettingStarted.html.
+### ProvenanceSourceChecker
 
-### Overview
+* Tracks integers and pointers stored as `(u)intptr_t` type
+* Fires a warning for `(u)intptr_t` binary operations with ambiguous provenance source (same as clang) and tells which side carries (or not) the provenance along the path
+* Fires a warning when the `(u)intptr_t` value obtained from the ambiguous-provenance-operation is cast to pointer type
+* Fires a warning when `NULL`-derived `(u)intptr_t` capability is cast to pointer type
 
-Welcome to the LLVM project!
+### CapabilityCopyChecker
 
-The LLVM project has multiple components. The core of the project is
-itself called "LLVM". This contains all of the tools, libraries, and header
-files needed to process intermediate representations and convert them into
-object files.  Tools include an assembler, disassembler, bitcode analyzer, and
-bitcode optimizer.  It also contains basic regression tests.
+Detects tag-stripping loads and stores that may be used to copy or swap capabilities
 
-C-like languages use the [Clang](http://clang.llvm.org/) front end.  This
-component compiles C, C++, Objective-C, and Objective-C++ code into LLVM bitcode
--- and from there into object files, using LLVM.
+```c
+void memcpy_impl(void* src0, void *dst0, size_t len) {
+  char *src = src0;
+  char *dst = dst0;
 
-Other components include:
-the [libc++ C++ standard library](https://libcxx.llvm.org),
-the [LLD linker](https://lld.llvm.org), and more.
+  while (len--)
+    *dst++ = *src++; // Tag-stripping store of a capability
+}
+```
 
-### Getting the Source Code and Building LLVM
 
-The LLVM Getting Started documentation may be out of date.  The [Clang
-Getting Started](http://clang.llvm.org/get_started.html) page might have more
-accurate information.
+## Build
 
-This is an example work-flow and configuration to get and build the LLVM source:
+Use fork of [cheribuild](https://github.ckm/rems-project/cheribuild/commits/use-csa) to build from the source code:
 
-1. Checkout LLVM (including related sub-projects like Clang):
+```
+cheribuild.py cheri-csa
+```
 
-     * ``git clone https://github.com/llvm/llvm-project.git``
+## Usage
 
-     * Or, on windows, ``git clone --config core.autocrlf=false
-    https://github.com/llvm/llvm-project.git``
+### Single compilation
 
-2. Configure and build LLVM and Clang:
+1. Compile with clang from cheri-csa build
+2. Add ``--analyze -Xanalyzer -analyzer-checker=core,alpha.cheri.ProvenanceSourceChecker,alpha.cheri.CapabilityCopyChecker[,OTHER_CHECKERS]`` to clang options.
 
-     * ``cd llvm-project``
+### Analysing projects with scan-build
 
-     * ``cmake -S llvm -B build -G <generator> [options]``
+#### Using scan-build directly
 
-        Some common build system generators are:
+```
+$ ~/cheri/output/cheri-csa/bin/scan-build --keep-cc \
+    -enable-checker alpha.cheri.ProvenanceSourceChecker,alpha.cheri.CapabilityCopyChecker \
+    --use-cc ~/cheri/output/sdk/bin/clang \
+    --use-c++ ~/cheri/output/sdk/bin/clang++ \
+    BUILD_COMMAND
+$ ~/cheri/output/cheri-csa/bin/scan-view /tmp/scan-build-<timestamp>
+```
 
-        * ``Ninja`` --- for generating [Ninja](https://ninja-build.org)
-          build files. Most llvm developers use Ninja.
-        * ``Unix Makefiles`` --- for generating make-compatible parallel makefiles.
-        * ``Visual Studio`` --- for generating Visual Studio projects and
-          solutions.
-        * ``Xcode`` --- for generating Xcode projects.
+The idea is to trick the build system into calling the ccc-analyser wrapper instead of the original compiler. ccc-analyser, in turn, invokes the original compiler (provided by ``--use-cc``) and its own clang for static analysis, passing all the compiler options provided by the build system to both[^2].
 
-        Some common options:
+[^2]:https://clang-analyzer.llvm.org/scan-build.html
 
-        * ``-DLLVM_ENABLE_PROJECTS='...'`` --- semicolon-separated list of the LLVM
-          sub-projects you'd like to additionally build. Can include any of: clang,
-          clang-tools-extra, compiler-rt,cross-project-tests, flang, libc, libclc,
-          libcxx, libcxxabi, libunwind, lld, lldb, mlir, openmp, polly, or pstl.
+Therefore BUILD_COMMAND should either
+* use CC and CXX variables for obtaining the compiler path (scan-build will set CC and CXX to ccc-analyser and cxx-analyser, respectively),
+* or directly invoke ccc/cxx-analyser instead of cheri-clang.
+    
+#### Analysing with cheribuild
 
-          For example, to build LLVM, Clang, libcxx, and libcxxabi, use
-          ``-DLLVM_ENABLE_PROJECTS="clang;libcxx;libcxxabi"``.
+``use-csa`` flag was added to the fork of cheribuild [here](https://github.ckm/rems-project/cheribuild/commits/use-csa) to support analysing projects that can be built with cheribuild.
 
-        * ``-DCMAKE_INSTALL_PREFIX=directory`` --- Specify for *directory* the full
-          path name of where you want the LLVM tools and libraries to be installed
-          (default ``/usr/local``).
+```
+$ cheribuild.py <project>-riscv64-purecap --<project>/use-csa --skip-install --clean
+$ ~/cheri/output/cheri-csa/bin/scan-view /tmp/scan-build-<timestamp>
+```
 
-        * ``-DCMAKE_BUILD_TYPE=type`` --- Valid options for *type* are Debug,
-          Release, RelWithDebInfo, and MinSizeRel. Default is Debug.
 
-        * ``-DLLVM_ENABLE_ASSERTIONS=On`` --- Compile with assertion checks enabled
-          (default is Yes for Debug builds, No for all other build types).
+##### To add ``use-csa`` option to the project:
 
-      * ``cmake --build build [-- [options] <target>]`` or your build system specified above
-        directly.
-
-        * The default target (i.e. ``ninja`` or ``make``) will build all of LLVM.
-
-        * The ``check-all`` target (i.e. ``ninja check-all``) will run the
-          regression tests to ensure everything is in working order.
-
-        * CMake will generate targets for each tool and library, and most
-          LLVM sub-projects generate their own ``check-<project>`` target.
-
-        * Running a serial build will be **slow**.  To improve speed, try running a
-          parallel build.  That's done by default in Ninja; for ``make``, use the option
-          ``-j NNN``, where ``NNN`` is the number of parallel jobs, e.g. the number of
-          CPUs you have.
-
-      * For more information see [CMake](https://llvm.org/docs/CMake.html)
-
-Consult the
-[Getting Started with LLVM](https://llvm.org/docs/GettingStarted.html#getting-started-with-llvm)
-page for detailed information on configuring and compiling LLVM. You can visit
-[Directory Layout](https://llvm.org/docs/GettingStarted.html#directory-layout)
-to learn about the layout of the source code tree.
+1. Audit all usages of `self.CC` within the project file, and consider replacing them with `self.cc_wrapper` (see [above](#using-scan_build-directly)).
+2. Override the ``can_build_with_csa`` classmethod of the project class to return `True`.

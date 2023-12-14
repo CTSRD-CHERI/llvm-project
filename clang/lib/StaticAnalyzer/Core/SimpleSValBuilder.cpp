@@ -392,6 +392,19 @@ static Optional<NonLoc> tryRearrange(ProgramStateRef State,
   return doRearrangeUnchecked(State, Op, LSym, LInt, RSym, RInt);
 }
 
+static SVal evalAdditiveIntptrOp(ProgramStateRef State,
+                                 BinaryOperator::Opcode op, Loc LHS,
+                                 NonLoc RHS, QualType LocTy,
+                                 QualType ResultTy, SimpleSValBuilder &SVB) {
+  ASTContext &Context = SVB.getContext();
+  const CanQualType &CharPtrTy = Context.getPointerType(Context.CharTy);
+
+  const SVal &RawPtr = SVB.evalCast(LHS, CharPtrTy, LocTy);
+  const Loc &RawPtrLoc = RawPtr.castAs<Loc>();
+  const SVal &NewLoc = SVB.evalBinOpLN(State, op, RawPtrLoc, RHS, CharPtrTy);
+  return SVB.evalCast(NewLoc, ResultTy, CharPtrTy);
+}
+
 SVal SimpleSValBuilder::evalBinOpNN(ProgramStateRef state,
                                   BinaryOperator::Opcode op,
                                   NonLoc lhs, NonLoc rhs,
@@ -464,24 +477,43 @@ SVal SimpleSValBuilder::evalBinOpNN(ProgramStateRef state,
                              resultTy);
         case nonloc::ConcreteIntKind: {
           // FIXME: at the moment the implementation
-          // of modeling "pointers as integers" is not complete.
-          if (!BinaryOperator::isComparisonOp(op))
-            return UnknownVal();
-          // Transform the integer into a location and compare.
-          // FIXME: This only makes sense for comparisons. If we want to, say,
-          // add 1 to a LocAsInteger, we'd better unpack the Loc and add to it,
-          // then pack it back into a LocAsInteger.
+          //  of modeling "pointers as integers" is not complete.
           llvm::APSInt i = rhs.castAs<nonloc::ConcreteInt>().getValue();
-          // If the region has a symbolic base, pay attention to the type; it
-          // might be coming from a non-default address space. For non-symbolic
-          // regions it doesn't matter that much because such comparisons would
-          // most likely evaluate to concrete false anyway. FIXME: We might
-          // still need to handle the non-comparison case.
-          if (SymbolRef lSym = lhs.getAsLocSymbol(true))
-            BasicVals.getAPSIntType(lSym->getType()).apply(i);
-          else
-            BasicVals.getAPSIntType(Context.VoidPtrTy).apply(i);
-          return evalBinOpLL(state, op, lhsL, makeLoc(i), resultTy);
+
+          // FIXME: If the region has a symbolic base, pay attention to the
+          //  type; it might be coming from a non-default address space.
+          // For comparisons with non-symbolic regions it doesn't matter that
+          // much because such comparisons would most likely evaluate to
+          // concrete false anyway.
+          if (BinaryOperator::isComparisonOp(op)) {
+            // Transform the integer into a location and compare.
+            SymbolRef LSym = lhsL.getAsLocSymbol(true);
+            const QualType &symType = LSym ? LSym->getType() : Context.VoidPtrTy;
+            BasicVals.getAPSIntType(symType).apply(i);
+            return evalBinOpLL(state, op, lhsL, makeLoc(i), resultTy);
+          }
+
+          // If we want to, say, add 1 to a LocAsInteger, we'd better unpack
+          // the Loc and add to it, then pack it back into a LocAsInteger.
+          if (BinaryOperator::isAdditiveOp(op))
+            if (SymbolRef lSym = lhsL.getAsLocSymbol(false))
+              return evalAdditiveIntptrOp(state, op, lhsL, rhs, lSym->getType(),
+                                          resultTy, *this);
+
+          return UnknownVal();
+        }
+        case nonloc::SymbolValKind: {
+          if (BinaryOperator::isEqualityOp(op))
+            return makeTruthVal(op != BO_EQ, resultTy);
+
+          if (BinaryOperator::isAdditiveOp(op)) {
+            if (SymbolRef lSym = lhsL.getAsLocSymbol(false))
+              return evalAdditiveIntptrOp(state, op, lhsL, rhs, lSym->getType(),
+                                          resultTy, *this);
+          }
+
+          // This case also handles pointer arithmetic.
+          return makeSymExprValNN(op, InputLHS, InputRHS, resultTy);
         }
         default:
           switch (op) {
