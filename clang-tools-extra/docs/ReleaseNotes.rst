@@ -238,6 +238,12 @@ New checks
   Finds virtual classes whose destructor is neither public and virtual nor
   protected and non-virtual.
 
+- New :doc:`misc-cheri-representable-subobject
+  <clang-tidy/checks/misc-cheri-representable-subobject>` check.
+
+  Finds structure fields that may result in imprecise sub-object bounds. This occurs because the
+  offset of the field or its size are not representable by a CHERI capability.
+
 - New :doc:`misc-misleading-bidirectional <clang-tidy/checks/misc-misleading-bidirectional>` check.
 
   Inspects string literal and comments for unterminated bidirectional Unicode

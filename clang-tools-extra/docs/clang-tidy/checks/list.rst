@@ -211,6 +211,7 @@ Clang-Tidy Checks
    `llvmlibc-callee-namespace <llvmlibc-callee-namespace.html>`_,
    `llvmlibc-implementation-in-namespace <llvmlibc-implementation-in-namespace.html>`_,
    `llvmlibc-restrict-system-libc-headers <llvmlibc-restrict-system-libc-headers.html>`_, "Yes"
+   `misc-cheri-representable-subobject <misc-cheri-representable-subobject.html>`_, "Yes"
    `misc-definitions-in-headers <misc-definitions-in-headers.html>`_, "Yes"
    `misc-misleading-bidirectional <misc-misleading-bidirectional.html>`_,
    `misc-misleading-identifier <misc-misleading-identifier.html>`_,
