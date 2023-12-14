@@ -2926,6 +2926,10 @@ bool X86DAGToDAGISel::selectAddr(SDNode *Parent, SDValue N, SDValue &Base,
 }
 
 bool X86DAGToDAGISel::selectMOV64Imm32(SDValue N, SDValue &Imm) {
+  // Cannot use 32 bit constants to reference objects in kernel code model.
+  if (TM.getCodeModel() == CodeModel::Kernel)
+    return false;
+
   // In static codegen with small code model, we can get the address of a label
   // into a register with 'movl'
   if (N->getOpcode() != X86ISD::Wrapper)
@@ -2939,15 +2943,18 @@ bool X86DAGToDAGISel::selectMOV64Imm32(SDValue N, SDValue &Imm) {
     return false;
 
   Imm = N;
-  if (N->getOpcode() != ISD::TargetGlobalAddress)
-    return TM.getCodeModel() == CodeModel::Small;
+  // Small/medium code model can reference non-TargetGlobalAddress objects with
+  // 32 bit constants.
+  if (N->getOpcode() != ISD::TargetGlobalAddress) {
+    return TM.getCodeModel() == CodeModel::Small ||
+           TM.getCodeModel() == CodeModel::Medium;
+  }
 
-  std::optional<ConstantRange> CR =
-      cast<GlobalAddressSDNode>(N)->getGlobal()->getAbsoluteSymbolRange();
-  if (!CR)
-    return TM.getCodeModel() == CodeModel::Small;
+  const GlobalValue *GV = cast<GlobalAddressSDNode>(N)->getGlobal();
+  if (std::optional<ConstantRange> CR = GV->getAbsoluteSymbolRange())
+    return CR->getUnsignedMax().ult(1ull << 32);
 
-  return CR->getUnsignedMax().ult(1ull << 32);
+  return !TM.isLargeGlobalValue(GV);
 }
 
 bool X86DAGToDAGISel::selectLEA64_32Addr(SDValue N, SDValue &Base,
