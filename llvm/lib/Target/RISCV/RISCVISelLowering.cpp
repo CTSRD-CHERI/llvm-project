@@ -360,6 +360,8 @@ RISCVTargetLowering::RISCVTargetLowering(const TargetMachine &TM,
     if (Subtarget.is64Bit())
       setOperationAction({ISD::ROTL, ISD::ROTR}, MVT::i32, Custom);
     setOperationAction({ISD::ROTL, ISD::ROTR}, XLenVT, Custom);
+  } else if (Subtarget.hasVendorXCVbitmanip()) {
+    setOperationAction({ISD::ROTL}, XLenVT, Expand);
   } else {
     setOperationAction({ISD::ROTL, ISD::ROTR}, XLenVT, Expand);
     if (RV64LegalI32 && Subtarget.is64Bit())
@@ -380,9 +382,14 @@ RISCVTargetLowering::RISCVTargetLowering(const TargetMachine &TM,
                            ? Promote
                            : Expand);
 
-  // Zbkb can use rev8+brev8 to implement bitreverse.
-  setOperationAction(ISD::BITREVERSE, XLenVT,
-                     Subtarget.hasStdExtZbkb() ? Custom : Expand);
+
+  if (Subtarget.hasVendorXCVbitmanip()) {
+    setOperationAction(ISD::BITREVERSE, XLenVT, Legal);
+  } else {
+    // Zbkb can use rev8+brev8 to implement bitreverse.
+    setOperationAction(ISD::BITREVERSE, XLenVT,
+                       Subtarget.hasStdExtZbkb() ? Custom : Expand);
+  }
 
   if (Subtarget.hasStdExtZbb()) {
     setOperationAction({ISD::SMIN, ISD::SMAX, ISD::UMIN, ISD::UMAX}, XLenVT,
@@ -397,13 +404,14 @@ RISCVTargetLowering::RISCVTargetLowering(const TargetMachine &TM,
       else
         setOperationAction({ISD::CTTZ, ISD::CTTZ_ZERO_UNDEF}, MVT::i32, Custom);
     }
-  } else {
+  } else if (!Subtarget.hasVendorXCVbitmanip()) {
     setOperationAction({ISD::CTTZ, ISD::CTPOP}, XLenVT, Expand);
     if (RV64LegalI32 && Subtarget.is64Bit())
       setOperationAction({ISD::CTTZ, ISD::CTPOP}, MVT::i32, Expand);
   }
 
-  if (Subtarget.hasStdExtZbb() || Subtarget.hasVendorXTHeadBb()) {
+  if (Subtarget.hasStdExtZbb() || Subtarget.hasVendorXTHeadBb() ||
+      Subtarget.hasVendorXCVbitmanip()) {
     // We need the custom lowering to make sure that the resulting sequence
     // for the 32bit case is efficient on 64bit targets.
     if (Subtarget.is64Bit()) {
@@ -1851,11 +1859,12 @@ bool RISCVTargetLowering::signExtendConstant(const ConstantInt *CI) const {
 }
 
 bool RISCVTargetLowering::isCheapToSpeculateCttz(Type *Ty) const {
-  return Subtarget.hasStdExtZbb();
+  return Subtarget.hasStdExtZbb() || Subtarget.hasVendorXCVbitmanip();
 }
 
 bool RISCVTargetLowering::isCheapToSpeculateCtlz(Type *Ty) const {
-  return Subtarget.hasStdExtZbb() || Subtarget.hasVendorXTHeadBb();
+  return Subtarget.hasStdExtZbb() || Subtarget.hasVendorXTHeadBb() ||
+         Subtarget.hasVendorXCVbitmanip();
 }
 
 bool RISCVTargetLowering::isMaskAndCmp0FoldingBeneficial(
