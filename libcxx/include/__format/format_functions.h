@@ -41,7 +41,7 @@
 #include <string_view>
 
 #ifndef _LIBCPP_HAS_NO_LOCALIZATION
-#include <locale>
+#  include <locale>
 #endif
 
 #if !defined(_LIBCPP_HAS_NO_PRAGMA_SYSTEM_HEADER)
@@ -58,9 +58,9 @@ _LIBCPP_BEGIN_NAMESPACE_STD
 // to do this optimization now.
 
 using format_args = basic_format_args<format_context>;
-#ifndef _LIBCPP_HAS_NO_WIDE_CHARACTERS
+#  ifndef _LIBCPP_HAS_NO_WIDE_CHARACTERS
 using wformat_args = basic_format_args<wformat_context>;
-#endif
+#  endif
 
 template <class _Context = format_context, class... _Args>
 _LIBCPP_NODISCARD_EXT _LIBCPP_HIDE_FROM_ABI __format_arg_store<_Context, _Args...> make_format_args(_Args&... __args) {
@@ -188,9 +188,10 @@ _LIBCPP_HIDE_FROM_ABI constexpr void __compile_time_validate_argument(
 
 // This function is not user facing, so it can directly use the non-standard types of the "variant".
 template <class _CharT>
-_LIBCPP_HIDE_FROM_ABI constexpr void __compile_time_visit_format_arg(basic_format_parse_context<_CharT>& __parse_ctx,
-                                                                     __compile_time_basic_format_context<_CharT>& __ctx,
-                                                                     __arg_t __type) {
+_LIBCPP_HIDE_FROM_ABI constexpr void __compile_time_visit_format_arg(
+    basic_format_parse_context<_CharT>& __parse_ctx,
+    __compile_time_basic_format_context<_CharT>& __ctx,
+    __arg_t __type) {
   switch (__type) {
   case __arg_t::__none:
     std::__throw_format_error("Invalid argument");
@@ -203,11 +204,11 @@ _LIBCPP_HIDE_FROM_ABI constexpr void __compile_time_visit_format_arg(basic_forma
   case __arg_t::__long_long:
     return __format::__compile_time_validate_argument<_CharT, long long>(__parse_ctx, __ctx);
   case __arg_t::__i128:
-#      ifndef _LIBCPP_HAS_NO_INT128
+#  ifndef _LIBCPP_HAS_NO_INT128
     return __format::__compile_time_validate_argument<_CharT, __int128_t>(__parse_ctx, __ctx);
-#      else
+#  else
     std::__throw_format_error("Invalid argument");
-#      endif
+#  endif
     return;
   case __arg_t::__signed_intcap:
 #      if __has_feature(capabilities)
@@ -221,11 +222,11 @@ _LIBCPP_HIDE_FROM_ABI constexpr void __compile_time_visit_format_arg(basic_forma
   case __arg_t::__unsigned_long_long:
     return __format::__compile_time_validate_argument<_CharT, unsigned long long>(__parse_ctx, __ctx);
   case __arg_t::__u128:
-#      ifndef _LIBCPP_HAS_NO_INT128
+#  ifndef _LIBCPP_HAS_NO_INT128
     return __format::__compile_time_validate_argument<_CharT, __uint128_t>(__parse_ctx, __ctx);
-#      else
+#  else
     std::__throw_format_error("Invalid argument");
-#      endif
+#  endif
     return;
   case __arg_t::__unsigned_intcap:
 #      if __has_feature(capabilities)
@@ -254,9 +255,8 @@ _LIBCPP_HIDE_FROM_ABI constexpr void __compile_time_visit_format_arg(basic_forma
 
 template <contiguous_iterator _Iterator, class _ParseCtx, class _Ctx>
 _LIBCPP_HIDE_FROM_ABI constexpr _Iterator
-__handle_replacement_field(_Iterator __begin, _Iterator __end,
-                           _ParseCtx& __parse_ctx, _Ctx& __ctx) {
-  using _CharT = iter_value_t<_Iterator>;
+__handle_replacement_field(_Iterator __begin, _Iterator __end, _ParseCtx& __parse_ctx, _Ctx& __ctx) {
+  using _CharT                        = iter_value_t<_Iterator>;
   __format::__parse_number_result __r = __format::__parse_arg_id(__begin, __end, __parse_ctx);
 
   if (__r.__last == __end)
@@ -308,13 +308,12 @@ __handle_replacement_field(_Iterator __begin, _Iterator __end,
 }
 
 template <class _ParseCtx, class _Ctx>
-_LIBCPP_HIDE_FROM_ABI constexpr typename _Ctx::iterator
-__vformat_to(_ParseCtx&& __parse_ctx, _Ctx&& __ctx) {
+_LIBCPP_HIDE_FROM_ABI constexpr typename _Ctx::iterator __vformat_to(_ParseCtx&& __parse_ctx, _Ctx&& __ctx) {
   using _CharT = typename _ParseCtx::char_type;
   static_assert(same_as<typename _Ctx::char_type, _CharT>);
 
-  auto __begin = __parse_ctx.begin();
-  auto __end = __parse_ctx.end();
+  auto __begin                     = __parse_ctx.begin();
+  auto __end                       = __parse_ctx.end();
   typename _Ctx::iterator __out_it = __ctx.out();
   while (__begin != __end) {
     switch (*__begin) {
@@ -325,8 +324,7 @@ __vformat_to(_ParseCtx&& __parse_ctx, _Ctx&& __ctx) {
 
       if (*__begin != _CharT('{')) [[likely]] {
         __ctx.advance_to(std::move(__out_it));
-        __begin =
-            __format::__handle_replacement_field(__begin, __end, __parse_ctx, __ctx);
+        __begin  = __format::__handle_replacement_field(__begin, __end, __parse_ctx, __ctx);
         __out_it = __ctx.out();
 
         // The output is written and __begin points to the next character. So
@@ -385,9 +383,7 @@ struct _LIBCPP_TEMPLATE_VIS basic_format_string {
                            _Context{__types_.data(), __handles_.data(), sizeof...(_Args)});
   }
 
-  _LIBCPP_HIDE_FROM_ABI constexpr basic_string_view<_CharT> get() const noexcept {
-    return __str_;
-  }
+  _LIBCPP_HIDE_FROM_ABI constexpr basic_string_view<_CharT> get() const noexcept { return __str_; }
 #  if _LIBCPP_STD_VER >= 26
   _LIBCPP_HIDE_FROM_ABI basic_format_string(__runtime_format_string<_CharT> __s) noexcept : __str_(__s.__str_) {}
 #  endif
@@ -413,23 +409,23 @@ private:
 template <class... _Args>
 using format_string = basic_format_string<char, type_identity_t<_Args>...>;
 
-#ifndef _LIBCPP_HAS_NO_WIDE_CHARACTERS
+#  ifndef _LIBCPP_HAS_NO_WIDE_CHARACTERS
 template <class... _Args>
 using wformat_string = basic_format_string<wchar_t, type_identity_t<_Args>...>;
-#endif
+#  endif
 
 template <class _OutIt, class _CharT, class _FormatOutIt>
-requires(output_iterator<_OutIt, const _CharT&>) _LIBCPP_HIDE_FROM_ABI _OutIt
-    __vformat_to(
-        _OutIt __out_it, basic_string_view<_CharT> __fmt,
-        basic_format_args<basic_format_context<_FormatOutIt, _CharT>> __args) {
+  requires(output_iterator<_OutIt, const _CharT&>)
+_LIBCPP_HIDE_FROM_ABI _OutIt __vformat_to(_OutIt __out_it,
+                                          basic_string_view<_CharT> __fmt,
+                                          basic_format_args<basic_format_context<_FormatOutIt, _CharT>> __args) {
   if constexpr (same_as<_OutIt, _FormatOutIt>)
-    return std::__format::__vformat_to(basic_format_parse_context{__fmt, __args.__size()},
-                                         std::__format_context_create(std::move(__out_it), __args));
+    return std::__format::__vformat_to(
+        basic_format_parse_context{__fmt, __args.__size()}, std::__format_context_create(std::move(__out_it), __args));
   else {
     __format::__format_buffer<_OutIt, _CharT> __buffer{std::move(__out_it)};
     std::__format::__vformat_to(basic_format_parse_context{__fmt, __args.__size()},
-                                  std::__format_context_create(__buffer.__make_output_iterator(), __args));
+                                std::__format_context_create(__buffer.__make_output_iterator(), __args));
     return std::move(__buffer).__out_it();
   }
 }
@@ -438,34 +434,31 @@ requires(output_iterator<_OutIt, const _CharT&>) _LIBCPP_HIDE_FROM_ABI _OutIt
 // https://reviews.llvm.org/D110499#inline-1180704
 // TODO FMT Evaluate whether we want to file a Clang bug report regarding this.
 template <output_iterator<const char&> _OutIt>
-_LIBCPP_ALWAYS_INLINE _LIBCPP_HIDE_FROM_ABI _OutIt
-vformat_to(_OutIt __out_it, string_view __fmt, format_args __args) {
+_LIBCPP_ALWAYS_INLINE _LIBCPP_HIDE_FROM_ABI _OutIt vformat_to(_OutIt __out_it, string_view __fmt, format_args __args) {
   return std::__vformat_to(std::move(__out_it), __fmt, __args);
 }
 
-#ifndef _LIBCPP_HAS_NO_WIDE_CHARACTERS
+#  ifndef _LIBCPP_HAS_NO_WIDE_CHARACTERS
 template <output_iterator<const wchar_t&> _OutIt>
 _LIBCPP_ALWAYS_INLINE _LIBCPP_HIDE_FROM_ABI _OutIt
 vformat_to(_OutIt __out_it, wstring_view __fmt, wformat_args __args) {
   return std::__vformat_to(std::move(__out_it), __fmt, __args);
 }
-#endif
+#  endif
 
 template <output_iterator<const char&> _OutIt, class... _Args>
 _LIBCPP_ALWAYS_INLINE _LIBCPP_HIDE_FROM_ABI _OutIt
 format_to(_OutIt __out_it, format_string<_Args...> __fmt, _Args&&... __args) {
-  return std::vformat_to(std::move(__out_it), __fmt.get(),
-                           std::make_format_args(__args...));
+  return std::vformat_to(std::move(__out_it), __fmt.get(), std::make_format_args(__args...));
 }
 
-#ifndef _LIBCPP_HAS_NO_WIDE_CHARACTERS
+#  ifndef _LIBCPP_HAS_NO_WIDE_CHARACTERS
 template <output_iterator<const wchar_t&> _OutIt, class... _Args>
 _LIBCPP_ALWAYS_INLINE _LIBCPP_HIDE_FROM_ABI _OutIt
 format_to(_OutIt __out_it, wformat_string<_Args...> __fmt, _Args&&... __args) {
-  return std::vformat_to(std::move(__out_it), __fmt.get(),
-                           std::make_wformat_args(__args...));
+  return std::vformat_to(std::move(__out_it), __fmt.get(), std::make_wformat_args(__args...));
 }
-#endif
+#  endif
 
 // TODO FMT This needs to be a template or std::to_chars(floating-point) availability markup
 // fires too eagerly, see http://llvm.org/PR61563.
@@ -504,12 +497,14 @@ format(wformat_string<_Args...> __fmt, _Args&&... __args) {
 #  endif
 
 template <class _Context, class _OutIt, class _CharT>
-_LIBCPP_HIDE_FROM_ABI format_to_n_result<_OutIt> __vformat_to_n(_OutIt __out_it, iter_difference_t<_OutIt> __n,
-                                                                basic_string_view<_CharT> __fmt,
-                                                                basic_format_args<_Context> __args) {
+_LIBCPP_HIDE_FROM_ABI format_to_n_result<_OutIt>
+__vformat_to_n(_OutIt __out_it,
+               iter_difference_t<_OutIt> __n,
+               basic_string_view<_CharT> __fmt,
+               basic_format_args<_Context> __args) {
   __format::__format_to_n_buffer<_OutIt, _CharT> __buffer{std::move(__out_it), __n};
   std::__format::__vformat_to(basic_format_parse_context{__fmt, __args.__size()},
-                                std::__format_context_create(__buffer.__make_output_iterator(), __args));
+                              std::__format_context_create(__buffer.__make_output_iterator(), __args));
   return std::move(__buffer).__result();
 }
 
@@ -519,20 +514,19 @@ format_to_n(_OutIt __out_it, iter_difference_t<_OutIt> __n, format_string<_Args.
   return std::__vformat_to_n<format_context>(std::move(__out_it), __n, __fmt.get(), std::make_format_args(__args...));
 }
 
-#ifndef _LIBCPP_HAS_NO_WIDE_CHARACTERS
+#  ifndef _LIBCPP_HAS_NO_WIDE_CHARACTERS
 template <output_iterator<const wchar_t&> _OutIt, class... _Args>
 _LIBCPP_HIDE_FROM_ABI format_to_n_result<_OutIt>
-format_to_n(_OutIt __out_it, iter_difference_t<_OutIt> __n, wformat_string<_Args...> __fmt,
-            _Args&&... __args) {
+format_to_n(_OutIt __out_it, iter_difference_t<_OutIt> __n, wformat_string<_Args...> __fmt, _Args&&... __args) {
   return std::__vformat_to_n<wformat_context>(std::move(__out_it), __n, __fmt.get(), std::make_wformat_args(__args...));
 }
-#endif
+#  endif
 
 template <class _CharT>
 _LIBCPP_HIDE_FROM_ABI size_t __vformatted_size(basic_string_view<_CharT> __fmt, auto __args) {
   __format::__formatted_size_buffer<_CharT> __buffer;
   std::__format::__vformat_to(basic_format_parse_context{__fmt, __args.__size()},
-                                std::__format_context_create(__buffer.__make_output_iterator(), __args));
+                              std::__format_context_create(__buffer.__make_output_iterator(), __args));
   return std::move(__buffer).__result();
 }
 
@@ -553,14 +547,15 @@ formatted_size(wformat_string<_Args...> __fmt, _Args&&... __args) {
 #  ifndef _LIBCPP_HAS_NO_LOCALIZATION
 
 template <class _OutIt, class _CharT, class _FormatOutIt>
-requires(output_iterator<_OutIt, const _CharT&>) _LIBCPP_HIDE_FROM_ABI _OutIt
-    __vformat_to(
-        _OutIt __out_it, locale __loc, basic_string_view<_CharT> __fmt,
-        basic_format_args<basic_format_context<_FormatOutIt, _CharT>> __args) {
+  requires(output_iterator<_OutIt, const _CharT&>)
+_LIBCPP_HIDE_FROM_ABI _OutIt __vformat_to(
+    _OutIt __out_it,
+    locale __loc,
+    basic_string_view<_CharT> __fmt,
+    basic_format_args<basic_format_context<_FormatOutIt, _CharT>> __args) {
   if constexpr (same_as<_OutIt, _FormatOutIt>)
-    return std::__format::__vformat_to(
-        basic_format_parse_context{__fmt, __args.__size()},
-        std::__format_context_create(std::move(__out_it), __args, std::move(__loc)));
+    return std::__format::__vformat_to(basic_format_parse_context{__fmt, __args.__size()},
+                                       std::__format_context_create(std::move(__out_it), __args, std::move(__loc)));
   else {
     __format::__format_buffer<_OutIt, _CharT> __buffer{std::move(__out_it)};
     std::__format::__vformat_to(
@@ -571,36 +566,32 @@ requires(output_iterator<_OutIt, const _CharT&>) _LIBCPP_HIDE_FROM_ABI _OutIt
 }
 
 template <output_iterator<const char&> _OutIt>
-_LIBCPP_ALWAYS_INLINE _LIBCPP_HIDE_FROM_ABI _OutIt vformat_to(
-    _OutIt __out_it, locale __loc, string_view __fmt, format_args __args) {
-  return std::__vformat_to(std::move(__out_it), std::move(__loc), __fmt,
-                             __args);
+_LIBCPP_ALWAYS_INLINE _LIBCPP_HIDE_FROM_ABI _OutIt
+vformat_to(_OutIt __out_it, locale __loc, string_view __fmt, format_args __args) {
+  return std::__vformat_to(std::move(__out_it), std::move(__loc), __fmt, __args);
 }
 
-#ifndef _LIBCPP_HAS_NO_WIDE_CHARACTERS
+#    ifndef _LIBCPP_HAS_NO_WIDE_CHARACTERS
 template <output_iterator<const wchar_t&> _OutIt>
-_LIBCPP_ALWAYS_INLINE _LIBCPP_HIDE_FROM_ABI _OutIt vformat_to(
-    _OutIt __out_it, locale __loc, wstring_view __fmt, wformat_args __args) {
-  return std::__vformat_to(std::move(__out_it), std::move(__loc), __fmt,
-                             __args);
+_LIBCPP_ALWAYS_INLINE _LIBCPP_HIDE_FROM_ABI _OutIt
+vformat_to(_OutIt __out_it, locale __loc, wstring_view __fmt, wformat_args __args) {
+  return std::__vformat_to(std::move(__out_it), std::move(__loc), __fmt, __args);
 }
-#endif
+#    endif
 
 template <output_iterator<const char&> _OutIt, class... _Args>
 _LIBCPP_ALWAYS_INLINE _LIBCPP_HIDE_FROM_ABI _OutIt
 format_to(_OutIt __out_it, locale __loc, format_string<_Args...> __fmt, _Args&&... __args) {
-  return std::vformat_to(std::move(__out_it), std::move(__loc), __fmt.get(),
-                           std::make_format_args(__args...));
+  return std::vformat_to(std::move(__out_it), std::move(__loc), __fmt.get(), std::make_format_args(__args...));
 }
 
-#ifndef _LIBCPP_HAS_NO_WIDE_CHARACTERS
+#    ifndef _LIBCPP_HAS_NO_WIDE_CHARACTERS
 template <output_iterator<const wchar_t&> _OutIt, class... _Args>
 _LIBCPP_ALWAYS_INLINE _LIBCPP_HIDE_FROM_ABI _OutIt
 format_to(_OutIt __out_it, locale __loc, wformat_string<_Args...> __fmt, _Args&&... __args) {
-  return std::vformat_to(std::move(__out_it), std::move(__loc), __fmt.get(),
-                           std::make_wformat_args(__args...));
+  return std::vformat_to(std::move(__out_it), std::move(__loc), __fmt.get(), std::make_wformat_args(__args...));
 }
-#endif
+#    endif
 
 // TODO FMT This needs to be a template or std::to_chars(floating-point) availability markup
 // fires too eagerly, see http://llvm.org/PR61563.
@@ -608,8 +599,7 @@ template <class = void>
 _LIBCPP_NODISCARD_EXT _LIBCPP_ALWAYS_INLINE inline _LIBCPP_HIDE_FROM_ABI string
 vformat(locale __loc, string_view __fmt, format_args __args) {
   string __res;
-  std::vformat_to(std::back_inserter(__res), std::move(__loc), __fmt,
-                    __args);
+  std::vformat_to(std::back_inserter(__res), std::move(__loc), __fmt, __args);
   return __res;
 }
 
@@ -620,8 +610,7 @@ template <class = void>
 _LIBCPP_NODISCARD_EXT _LIBCPP_ALWAYS_INLINE inline _LIBCPP_HIDE_FROM_ABI wstring
 vformat(locale __loc, wstring_view __fmt, wformat_args __args) {
   wstring __res;
-  std::vformat_to(std::back_inserter(__res), std::move(__loc), __fmt,
-                    __args);
+  std::vformat_to(std::back_inserter(__res), std::move(__loc), __fmt, __args);
   return __res;
 }
 #    endif
@@ -629,23 +618,24 @@ vformat(locale __loc, wstring_view __fmt, wformat_args __args) {
 template <class... _Args>
 _LIBCPP_NODISCARD_EXT _LIBCPP_ALWAYS_INLINE _LIBCPP_HIDE_FROM_ABI string
 format(locale __loc, format_string<_Args...> __fmt, _Args&&... __args) {
-  return std::vformat(std::move(__loc), __fmt.get(),
-                        std::make_format_args(__args...));
+  return std::vformat(std::move(__loc), __fmt.get(), std::make_format_args(__args...));
 }
 
 #    ifndef _LIBCPP_HAS_NO_WIDE_CHARACTERS
 template <class... _Args>
 _LIBCPP_NODISCARD_EXT _LIBCPP_ALWAYS_INLINE _LIBCPP_HIDE_FROM_ABI wstring
 format(locale __loc, wformat_string<_Args...> __fmt, _Args&&... __args) {
-  return std::vformat(std::move(__loc), __fmt.get(),
-                        std::make_wformat_args(__args...));
+  return std::vformat(std::move(__loc), __fmt.get(), std::make_wformat_args(__args...));
 }
 #    endif
 
 template <class _Context, class _OutIt, class _CharT>
-_LIBCPP_HIDE_FROM_ABI format_to_n_result<_OutIt> __vformat_to_n(_OutIt __out_it, iter_difference_t<_OutIt> __n,
-                                                                locale __loc, basic_string_view<_CharT> __fmt,
-                                                                basic_format_args<_Context> __args) {
+_LIBCPP_HIDE_FROM_ABI format_to_n_result<_OutIt> __vformat_to_n(
+    _OutIt __out_it,
+    iter_difference_t<_OutIt> __n,
+    locale __loc,
+    basic_string_view<_CharT> __fmt,
+    basic_format_args<_Context> __args) {
   __format::__format_to_n_buffer<_OutIt, _CharT> __buffer{std::move(__out_it), __n};
   std::__format::__vformat_to(
       basic_format_parse_context{__fmt, __args.__size()},
@@ -654,22 +644,20 @@ _LIBCPP_HIDE_FROM_ABI format_to_n_result<_OutIt> __vformat_to_n(_OutIt __out_it,
 }
 
 template <output_iterator<const char&> _OutIt, class... _Args>
-_LIBCPP_ALWAYS_INLINE _LIBCPP_HIDE_FROM_ABI format_to_n_result<_OutIt>
-format_to_n(_OutIt __out_it, iter_difference_t<_OutIt> __n, locale __loc, format_string<_Args...> __fmt,
-            _Args&&... __args) {
-  return std::__vformat_to_n<format_context>(std::move(__out_it), __n, std::move(__loc), __fmt.get(),
-                                               std::make_format_args(__args...));
+_LIBCPP_ALWAYS_INLINE _LIBCPP_HIDE_FROM_ABI format_to_n_result<_OutIt> format_to_n(
+    _OutIt __out_it, iter_difference_t<_OutIt> __n, locale __loc, format_string<_Args...> __fmt, _Args&&... __args) {
+  return std::__vformat_to_n<format_context>(
+      std::move(__out_it), __n, std::move(__loc), __fmt.get(), std::make_format_args(__args...));
 }
 
-#ifndef _LIBCPP_HAS_NO_WIDE_CHARACTERS
+#    ifndef _LIBCPP_HAS_NO_WIDE_CHARACTERS
 template <output_iterator<const wchar_t&> _OutIt, class... _Args>
-_LIBCPP_ALWAYS_INLINE _LIBCPP_HIDE_FROM_ABI format_to_n_result<_OutIt>
-format_to_n(_OutIt __out_it, iter_difference_t<_OutIt> __n, locale __loc, wformat_string<_Args...> __fmt,
-            _Args&&... __args) {
-  return std::__vformat_to_n<wformat_context>(std::move(__out_it), __n, std::move(__loc), __fmt.get(),
-                                                std::make_wformat_args(__args...));
+_LIBCPP_ALWAYS_INLINE _LIBCPP_HIDE_FROM_ABI format_to_n_result<_OutIt> format_to_n(
+    _OutIt __out_it, iter_difference_t<_OutIt> __n, locale __loc, wformat_string<_Args...> __fmt, _Args&&... __args) {
+  return std::__vformat_to_n<wformat_context>(
+      std::move(__out_it), __n, std::move(__loc), __fmt.get(), std::make_wformat_args(__args...));
 }
-#endif
+#    endif
 
 template <class _CharT>
 _LIBCPP_HIDE_FROM_ABI size_t __vformatted_size(locale __loc, basic_string_view<_CharT> __fmt, auto __args) {
