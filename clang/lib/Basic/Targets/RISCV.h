@@ -64,6 +64,7 @@ protected:
 
 private:
   bool FastUnalignedAccess;
+  bool HasExperimental = false;
 
 public:
   RISCVTargetInfo(const llvm::Triple &Triple, const TargetOptions &)
