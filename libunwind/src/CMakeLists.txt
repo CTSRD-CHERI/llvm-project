@@ -180,7 +180,7 @@ target_link_libraries(unwind_shared_objects PUBLIC "${LIBUNWIND_ADDITIONAL_LIBRA
 set_target_properties(unwind_shared_objects
   PROPERTIES
     CXX_EXTENSIONS OFF
-    CXX_STANDARD 11
+    CXX_STANDARD 17
     CXX_STANDARD_REQUIRED ON
     COMPILE_FLAGS "${LIBUNWIND_COMPILE_FLAGS}"
 )
@@ -225,7 +225,7 @@ target_link_libraries(unwind_static_objects PUBLIC "${LIBUNWIND_ADDITIONAL_LIBRA
 set_target_properties(unwind_static_objects
   PROPERTIES
     CXX_EXTENSIONS OFF
-    CXX_STANDARD 11
+    CXX_STANDARD 17
     CXX_STANDARD_REQUIRED ON
     COMPILE_FLAGS "${LIBUNWIND_COMPILE_FLAGS}"
 )
