@@ -556,7 +556,7 @@ MCSubtargetInfo *Hexagon_MC::createHexagonMCSubtargetInfo(const Triple &TT,
   // Add qfloat subtarget feature by default to v68 and above
   // unless explicitely disabled
   if (checkFeature(X, Hexagon::ExtensionHVXV68) &&
-      ArchFS.find("-hvx-qfloat", 0) == std::string::npos) {
+      !ArchFS.contains("-hvx-qfloat")) {
     llvm::FeatureBitset Features = X->getFeatureBits();
     X->setFeatureBits(Features.set(Hexagon::ExtensionHVXQFloat));
   }
