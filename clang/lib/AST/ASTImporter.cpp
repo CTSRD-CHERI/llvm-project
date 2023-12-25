@@ -2781,9 +2781,11 @@ ASTNodeImporter::VisitTypeAliasTemplateDecl(TypeAliasTemplateDecl *D) {
     for (auto *FoundDecl : FoundDecls) {
       if (!FoundDecl->isInIdentifierNamespace(IDNS))
         continue;
-      if (auto *FoundAlias = dyn_cast<TypeAliasTemplateDecl>(FoundDecl))
-        return Importer.MapImported(D, FoundAlias);
-      ConflictingDecls.push_back(FoundDecl);
+      if (auto *FoundAlias = dyn_cast<TypeAliasTemplateDecl>(FoundDecl)) {
+        if (IsStructuralMatch(D, FoundAlias))
+          return Importer.MapImported(D, FoundAlias);
+        ConflictingDecls.push_back(FoundDecl);
+      }
     }
 
     if (!ConflictingDecls.empty()) {
@@ -9425,7 +9427,6 @@ Expected<Decl *> ASTImporter::Import(Decl *FromD) {
     setImportDeclError(FromD, *Error);
     return make_error<ASTImportError>(*Error);
   }
-
   // Make sure that ImportImpl registered the imported decl.
   assert(ImportedDecls.count(FromD) != 0 && "Missing call to MapImported?");
   if (auto Error = ImportAttrs(ToD, FromD))
