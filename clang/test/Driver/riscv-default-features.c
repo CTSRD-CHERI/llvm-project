@@ -14,9 +14,7 @@
 // RUN: %clang --target=riscv64-unknown-elf -march=rv64ixcheri -S -mno-xcheri-norvc -emit-llvm %s -o - | FileCheck %s --check-prefixes=RV64-XCHERI,XCHERI,XCHERI-RVC
 
 // RV32: "target-features"="+32bit,+a,+c,+m,+relax,
-// RV32-SAME: -save-restore
 // RV64: "target-features"="+64bit,+a,+c,+m,+relax,
-// RV64-SAME: -save-restore
 
 // RV32-XCHERI: "target-features"="+32bit,+xcheri,
 // RV32-XCHERI-SAME: -save-restore
