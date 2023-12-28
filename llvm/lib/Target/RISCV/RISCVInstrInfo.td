@@ -2156,6 +2156,7 @@ include "RISCVInstrInfoZicond.td"
 // Compressed
 include "RISCVInstrInfoC.td"
 include "RISCVInstrInfoZc.td"
+include "RISCVInstrInfoZcmop.td"
 
 //===----------------------------------------------------------------------===//
 // Vendor extensions
