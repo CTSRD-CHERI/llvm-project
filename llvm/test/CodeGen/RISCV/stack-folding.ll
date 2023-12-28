@@ -9,10 +9,8 @@
 define i1 @test_sext_w(i64 %x, i32 %y) nounwind {
 ; CHECK-LABEL: test_sext_w:
 ; CHECK:       # %bb.0:
-; CHECK-NEXT:    addi sp, sp, -144
-; CHECK-NEXT:    sd ra, 136(sp) # 8-byte Folded Spill
-; CHECK-NEXT:    sd gp, 128(sp) # 8-byte Folded Spill
-; CHECK-NEXT:    sd tp, 120(sp) # 8-byte Folded Spill
+; CHECK-NEXT:    addi sp, sp, -128
+; CHECK-NEXT:    sd ra, 120(sp) # 8-byte Folded Spill
 ; CHECK-NEXT:    sd s0, 112(sp) # 8-byte Folded Spill
 ; CHECK-NEXT:    sd s1, 104(sp) # 8-byte Folded Spill
 ; CHECK-NEXT:    sd s2, 96(sp) # 8-byte Folded Spill
@@ -38,9 +36,7 @@ define i1 @test_sext_w(i64 %x, i32 %y) nounwind {
 ; CHECK-NEXT:    lw a0, 8(sp) # 8-byte Folded Reload
 ; CHECK-NEXT:    slti a0, a0, 0
 ; CHECK-NEXT:  .LBB0_3: # %falsebb
-; CHECK-NEXT:    ld ra, 136(sp) # 8-byte Folded Reload
-; CHECK-NEXT:    ld gp, 128(sp) # 8-byte Folded Reload
-; CHECK-NEXT:    ld tp, 120(sp) # 8-byte Folded Reload
+; CHECK-NEXT:    ld ra, 120(sp) # 8-byte Folded Reload
 ; CHECK-NEXT:    ld s0, 112(sp) # 8-byte Folded Reload
 ; CHECK-NEXT:    ld s1, 104(sp) # 8-byte Folded Reload
 ; CHECK-NEXT:    ld s2, 96(sp) # 8-byte Folded Reload
@@ -53,7 +49,7 @@ define i1 @test_sext_w(i64 %x, i32 %y) nounwind {
 ; CHECK-NEXT:    ld s9, 40(sp) # 8-byte Folded Reload
 ; CHECK-NEXT:    ld s10, 32(sp) # 8-byte Folded Reload
 ; CHECK-NEXT:    ld s11, 24(sp) # 8-byte Folded Reload
-; CHECK-NEXT:    addi sp, sp, 144
+; CHECK-NEXT:    addi sp, sp, 128
 ; CHECK-NEXT:    ret
 ;
 ; RV64ZB-PURECAP-LABEL: test_sext_w:
@@ -118,10 +114,8 @@ falsebb:
 define i64 @test_sext_b(i64 %x, i8 %y) nounwind {
 ; RV64I-LABEL: test_sext_b:
 ; RV64I:       # %bb.0:
-; RV64I-NEXT:    addi sp, sp, -144
-; RV64I-NEXT:    sd ra, 136(sp) # 8-byte Folded Spill
-; RV64I-NEXT:    sd gp, 128(sp) # 8-byte Folded Spill
-; RV64I-NEXT:    sd tp, 120(sp) # 8-byte Folded Spill
+; RV64I-NEXT:    addi sp, sp, -128
+; RV64I-NEXT:    sd ra, 120(sp) # 8-byte Folded Spill
 ; RV64I-NEXT:    sd s0, 112(sp) # 8-byte Folded Spill
 ; RV64I-NEXT:    sd s1, 104(sp) # 8-byte Folded Spill
 ; RV64I-NEXT:    sd s2, 96(sp) # 8-byte Folded Spill
@@ -148,9 +142,7 @@ define i64 @test_sext_b(i64 %x, i8 %y) nounwind {
 ; RV64I-NEXT:    slli a0, a0, 56
 ; RV64I-NEXT:    srai a0, a0, 56
 ; RV64I-NEXT:  .LBB1_3: # %falsebb
-; RV64I-NEXT:    ld ra, 136(sp) # 8-byte Folded Reload
-; RV64I-NEXT:    ld gp, 128(sp) # 8-byte Folded Reload
-; RV64I-NEXT:    ld tp, 120(sp) # 8-byte Folded Reload
+; RV64I-NEXT:    ld ra, 120(sp) # 8-byte Folded Reload
 ; RV64I-NEXT:    ld s0, 112(sp) # 8-byte Folded Reload
 ; RV64I-NEXT:    ld s1, 104(sp) # 8-byte Folded Reload
 ; RV64I-NEXT:    ld s2, 96(sp) # 8-byte Folded Reload
@@ -163,15 +155,13 @@ define i64 @test_sext_b(i64 %x, i8 %y) nounwind {
 ; RV64I-NEXT:    ld s9, 40(sp) # 8-byte Folded Reload
 ; RV64I-NEXT:    ld s10, 32(sp) # 8-byte Folded Reload
 ; RV64I-NEXT:    ld s11, 24(sp) # 8-byte Folded Reload
-; RV64I-NEXT:    addi sp, sp, 144
+; RV64I-NEXT:    addi sp, sp, 128
 ; RV64I-NEXT:    ret
 ;
 ; RV64ZB-LABEL: test_sext_b:
 ; RV64ZB:       # %bb.0:
-; RV64ZB-NEXT:    addi sp, sp, -144
-; RV64ZB-NEXT:    sd ra, 136(sp) # 8-byte Folded Spill
-; RV64ZB-NEXT:    sd gp, 128(sp) # 8-byte Folded Spill
-; RV64ZB-NEXT:    sd tp, 120(sp) # 8-byte Folded Spill
+; RV64ZB-NEXT:    addi sp, sp, -128
+; RV64ZB-NEXT:    sd ra, 120(sp) # 8-byte Folded Spill
 ; RV64ZB-NEXT:    sd s0, 112(sp) # 8-byte Folded Spill
 ; RV64ZB-NEXT:    sd s1, 104(sp) # 8-byte Folded Spill
 ; RV64ZB-NEXT:    sd s2, 96(sp) # 8-byte Folded Spill
@@ -196,9 +186,7 @@ define i64 @test_sext_b(i64 %x, i8 %y) nounwind {
 ; RV64ZB-NEXT:  .LBB1_2: # %truebb
 ; RV64ZB-NEXT:    lb a0, 8(sp) # 8-byte Folded Reload
 ; RV64ZB-NEXT:  .LBB1_3: # %falsebb
-; RV64ZB-NEXT:    ld ra, 136(sp) # 8-byte Folded Reload
-; RV64ZB-NEXT:    ld gp, 128(sp) # 8-byte Folded Reload
-; RV64ZB-NEXT:    ld tp, 120(sp) # 8-byte Folded Reload
+; RV64ZB-NEXT:    ld ra, 120(sp) # 8-byte Folded Reload
 ; RV64ZB-NEXT:    ld s0, 112(sp) # 8-byte Folded Reload
 ; RV64ZB-NEXT:    ld s1, 104(sp) # 8-byte Folded Reload
 ; RV64ZB-NEXT:    ld s2, 96(sp) # 8-byte Folded Reload
@@ -211,7 +199,7 @@ define i64 @test_sext_b(i64 %x, i8 %y) nounwind {
 ; RV64ZB-NEXT:    ld s9, 40(sp) # 8-byte Folded Reload
 ; RV64ZB-NEXT:    ld s10, 32(sp) # 8-byte Folded Reload
 ; RV64ZB-NEXT:    ld s11, 24(sp) # 8-byte Folded Reload
-; RV64ZB-NEXT:    addi sp, sp, 144
+; RV64ZB-NEXT:    addi sp, sp, 128
 ; RV64ZB-NEXT:    ret
 ;
 ; RV64ZB-PURECAP-LABEL: test_sext_b:
@@ -275,10 +263,8 @@ falsebb:
 define i64 @test_sext_h(i64 %x, i16 %y) nounwind {
 ; RV64I-LABEL: test_sext_h:
 ; RV64I:       # %bb.0:
-; RV64I-NEXT:    addi sp, sp, -144
-; RV64I-NEXT:    sd ra, 136(sp) # 8-byte Folded Spill
-; RV64I-NEXT:    sd gp, 128(sp) # 8-byte Folded Spill
-; RV64I-NEXT:    sd tp, 120(sp) # 8-byte Folded Spill
+; RV64I-NEXT:    addi sp, sp, -128
+; RV64I-NEXT:    sd ra, 120(sp) # 8-byte Folded Spill
 ; RV64I-NEXT:    sd s0, 112(sp) # 8-byte Folded Spill
 ; RV64I-NEXT:    sd s1, 104(sp) # 8-byte Folded Spill
 ; RV64I-NEXT:    sd s2, 96(sp) # 8-byte Folded Spill
@@ -305,9 +291,7 @@ define i64 @test_sext_h(i64 %x, i16 %y) nounwind {
 ; RV64I-NEXT:    slli a0, a0, 48
 ; RV64I-NEXT:    srai a0, a0, 48
 ; RV64I-NEXT:  .LBB2_3: # %falsebb
-; RV64I-NEXT:    ld ra, 136(sp) # 8-byte Folded Reload
-; RV64I-NEXT:    ld gp, 128(sp) # 8-byte Folded Reload
-; RV64I-NEXT:    ld tp, 120(sp) # 8-byte Folded Reload
+; RV64I-NEXT:    ld ra, 120(sp) # 8-byte Folded Reload
 ; RV64I-NEXT:    ld s0, 112(sp) # 8-byte Folded Reload
 ; RV64I-NEXT:    ld s1, 104(sp) # 8-byte Folded Reload
 ; RV64I-NEXT:    ld s2, 96(sp) # 8-byte Folded Reload
@@ -320,15 +304,13 @@ define i64 @test_sext_h(i64 %x, i16 %y) nounwind {
 ; RV64I-NEXT:    ld s9, 40(sp) # 8-byte Folded Reload
 ; RV64I-NEXT:    ld s10, 32(sp) # 8-byte Folded Reload
 ; RV64I-NEXT:    ld s11, 24(sp) # 8-byte Folded Reload
-; RV64I-NEXT:    addi sp, sp, 144
+; RV64I-NEXT:    addi sp, sp, 128
 ; RV64I-NEXT:    ret
 ;
 ; RV64ZB-LABEL: test_sext_h:
 ; RV64ZB:       # %bb.0:
-; RV64ZB-NEXT:    addi sp, sp, -144
-; RV64ZB-NEXT:    sd ra, 136(sp) # 8-byte Folded Spill
-; RV64ZB-NEXT:    sd gp, 128(sp) # 8-byte Folded Spill
-; RV64ZB-NEXT:    sd tp, 120(sp) # 8-byte Folded Spill
+; RV64ZB-NEXT:    addi sp, sp, -128
+; RV64ZB-NEXT:    sd ra, 120(sp) # 8-byte Folded Spill
 ; RV64ZB-NEXT:    sd s0, 112(sp) # 8-byte Folded Spill
 ; RV64ZB-NEXT:    sd s1, 104(sp) # 8-byte Folded Spill
 ; RV64ZB-NEXT:    sd s2, 96(sp) # 8-byte Folded Spill
@@ -353,9 +335,7 @@ define i64 @test_sext_h(i64 %x, i16 %y) nounwind {
 ; RV64ZB-NEXT:  .LBB2_2: # %truebb
 ; RV64ZB-NEXT:    lh a0, 8(sp) # 8-byte Folded Reload
 ; RV64ZB-NEXT:  .LBB2_3: # %falsebb
-; RV64ZB-NEXT:    ld ra, 136(sp) # 8-byte Folded Reload
-; RV64ZB-NEXT:    ld gp, 128(sp) # 8-byte Folded Reload
-; RV64ZB-NEXT:    ld tp, 120(sp) # 8-byte Folded Reload
+; RV64ZB-NEXT:    ld ra, 120(sp) # 8-byte Folded Reload
 ; RV64ZB-NEXT:    ld s0, 112(sp) # 8-byte Folded Reload
 ; RV64ZB-NEXT:    ld s1, 104(sp) # 8-byte Folded Reload
 ; RV64ZB-NEXT:    ld s2, 96(sp) # 8-byte Folded Reload
@@ -368,7 +348,7 @@ define i64 @test_sext_h(i64 %x, i16 %y) nounwind {
 ; RV64ZB-NEXT:    ld s9, 40(sp) # 8-byte Folded Reload
 ; RV64ZB-NEXT:    ld s10, 32(sp) # 8-byte Folded Reload
 ; RV64ZB-NEXT:    ld s11, 24(sp) # 8-byte Folded Reload
-; RV64ZB-NEXT:    addi sp, sp, 144
+; RV64ZB-NEXT:    addi sp, sp, 128
 ; RV64ZB-NEXT:    ret
 ;
 ; RV64ZB-PURECAP-LABEL: test_sext_h:
@@ -432,10 +412,8 @@ falsebb:
 define i64 @test_zext_b(i64 %x, i8 %y) nounwind {
 ; CHECK-LABEL: test_zext_b:
 ; CHECK:       # %bb.0:
-; CHECK-NEXT:    addi sp, sp, -144
-; CHECK-NEXT:    sd ra, 136(sp) # 8-byte Folded Spill
-; CHECK-NEXT:    sd gp, 128(sp) # 8-byte Folded Spill
-; CHECK-NEXT:    sd tp, 120(sp) # 8-byte Folded Spill
+; CHECK-NEXT:    addi sp, sp, -128
+; CHECK-NEXT:    sd ra, 120(sp) # 8-byte Folded Spill
 ; CHECK-NEXT:    sd s0, 112(sp) # 8-byte Folded Spill
 ; CHECK-NEXT:    sd s1, 104(sp) # 8-byte Folded Spill
 ; CHECK-NEXT:    sd s2, 96(sp) # 8-byte Folded Spill
@@ -460,9 +438,7 @@ define i64 @test_zext_b(i64 %x, i8 %y) nounwind {
 ; CHECK-NEXT:  .LBB3_2: # %truebb
 ; CHECK-NEXT:    lbu a0, 8(sp) # 8-byte Folded Reload
 ; CHECK-NEXT:  .LBB3_3: # %falsebb
-; CHECK-NEXT:    ld ra, 136(sp) # 8-byte Folded Reload
-; CHECK-NEXT:    ld gp, 128(sp) # 8-byte Folded Reload
-; CHECK-NEXT:    ld tp, 120(sp) # 8-byte Folded Reload
+; CHECK-NEXT:    ld ra, 120(sp) # 8-byte Folded Reload
 ; CHECK-NEXT:    ld s0, 112(sp) # 8-byte Folded Reload
 ; CHECK-NEXT:    ld s1, 104(sp) # 8-byte Folded Reload
 ; CHECK-NEXT:    ld s2, 96(sp) # 8-byte Folded Reload
@@ -475,7 +451,7 @@ define i64 @test_zext_b(i64 %x, i8 %y) nounwind {
 ; CHECK-NEXT:    ld s9, 40(sp) # 8-byte Folded Reload
 ; CHECK-NEXT:    ld s10, 32(sp) # 8-byte Folded Reload
 ; CHECK-NEXT:    ld s11, 24(sp) # 8-byte Folded Reload
-; CHECK-NEXT:    addi sp, sp, 144
+; CHECK-NEXT:    addi sp, sp, 128
 ; CHECK-NEXT:    ret
 ;
 ; RV64ZB-PURECAP-LABEL: test_zext_b:
@@ -539,10 +515,8 @@ falsebb:
 define i64 @test_zext_h(i64 %x, i16 %y) nounwind {
 ; RV64I-LABEL: test_zext_h:
 ; RV64I:       # %bb.0:
-; RV64I-NEXT:    addi sp, sp, -144
-; RV64I-NEXT:    sd ra, 136(sp) # 8-byte Folded Spill
-; RV64I-NEXT:    sd gp, 128(sp) # 8-byte Folded Spill
-; RV64I-NEXT:    sd tp, 120(sp) # 8-byte Folded Spill
+; RV64I-NEXT:    addi sp, sp, -128
+; RV64I-NEXT:    sd ra, 120(sp) # 8-byte Folded Spill
 ; RV64I-NEXT:    sd s0, 112(sp) # 8-byte Folded Spill
 ; RV64I-NEXT:    sd s1, 104(sp) # 8-byte Folded Spill
 ; RV64I-NEXT:    sd s2, 96(sp) # 8-byte Folded Spill
@@ -569,9 +543,7 @@ define i64 @test_zext_h(i64 %x, i16 %y) nounwind {
 ; RV64I-NEXT:    slli a0, a0, 48
 ; RV64I-NEXT:    srli a0, a0, 48
 ; RV64I-NEXT:  .LBB4_3: # %falsebb
-; RV64I-NEXT:    ld ra, 136(sp) # 8-byte Folded Reload
-; RV64I-NEXT:    ld gp, 128(sp) # 8-byte Folded Reload
-; RV64I-NEXT:    ld tp, 120(sp) # 8-byte Folded Reload
+; RV64I-NEXT:    ld ra, 120(sp) # 8-byte Folded Reload
 ; RV64I-NEXT:    ld s0, 112(sp) # 8-byte Folded Reload
 ; RV64I-NEXT:    ld s1, 104(sp) # 8-byte Folded Reload
 ; RV64I-NEXT:    ld s2, 96(sp) # 8-byte Folded Reload
@@ -584,15 +556,13 @@ define i64 @test_zext_h(i64 %x, i16 %y) nounwind {
 ; RV64I-NEXT:    ld s9, 40(sp) # 8-byte Folded Reload
 ; RV64I-NEXT:    ld s10, 32(sp) # 8-byte Folded Reload
 ; RV64I-NEXT:    ld s11, 24(sp) # 8-byte Folded Reload
-; RV64I-NEXT:    addi sp, sp, 144
+; RV64I-NEXT:    addi sp, sp, 128
 ; RV64I-NEXT:    ret
 ;
 ; RV64ZB-LABEL: test_zext_h:
 ; RV64ZB:       # %bb.0:
-; RV64ZB-NEXT:    addi sp, sp, -144
-; RV64ZB-NEXT:    sd ra, 136(sp) # 8-byte Folded Spill
-; RV64ZB-NEXT:    sd gp, 128(sp) # 8-byte Folded Spill
-; RV64ZB-NEXT:    sd tp, 120(sp) # 8-byte Folded Spill
+; RV64ZB-NEXT:    addi sp, sp, -128
+; RV64ZB-NEXT:    sd ra, 120(sp) # 8-byte Folded Spill
 ; RV64ZB-NEXT:    sd s0, 112(sp) # 8-byte Folded Spill
 ; RV64ZB-NEXT:    sd s1, 104(sp) # 8-byte Folded Spill
 ; RV64ZB-NEXT:    sd s2, 96(sp) # 8-byte Folded Spill
@@ -617,9 +587,7 @@ define i64 @test_zext_h(i64 %x, i16 %y) nounwind {
 ; RV64ZB-NEXT:  .LBB4_2: # %truebb
 ; RV64ZB-NEXT:    lhu a0, 8(sp) # 8-byte Folded Reload
 ; RV64ZB-NEXT:  .LBB4_3: # %falsebb
-; RV64ZB-NEXT:    ld ra, 136(sp) # 8-byte Folded Reload
-; RV64ZB-NEXT:    ld gp, 128(sp) # 8-byte Folded Reload
-; RV64ZB-NEXT:    ld tp, 120(sp) # 8-byte Folded Reload
+; RV64ZB-NEXT:    ld ra, 120(sp) # 8-byte Folded Reload
 ; RV64ZB-NEXT:    ld s0, 112(sp) # 8-byte Folded Reload
 ; RV64ZB-NEXT:    ld s1, 104(sp) # 8-byte Folded Reload
 ; RV64ZB-NEXT:    ld s2, 96(sp) # 8-byte Folded Reload
@@ -632,7 +600,7 @@ define i64 @test_zext_h(i64 %x, i16 %y) nounwind {
 ; RV64ZB-NEXT:    ld s9, 40(sp) # 8-byte Folded Reload
 ; RV64ZB-NEXT:    ld s10, 32(sp) # 8-byte Folded Reload
 ; RV64ZB-NEXT:    ld s11, 24(sp) # 8-byte Folded Reload
-; RV64ZB-NEXT:    addi sp, sp, 144
+; RV64ZB-NEXT:    addi sp, sp, 128
 ; RV64ZB-NEXT:    ret
 ;
 ; RV64ZB-PURECAP-LABEL: test_zext_h:
@@ -696,10 +664,8 @@ falsebb:
 define i64 @test_zext_w(i64 %x, i32 %y) nounwind {
 ; RV64I-LABEL: test_zext_w:
 ; RV64I:       # %bb.0:
-; RV64I-NEXT:    addi sp, sp, -144
-; RV64I-NEXT:    sd ra, 136(sp) # 8-byte Folded Spill
-; RV64I-NEXT:    sd gp, 128(sp) # 8-byte Folded Spill
-; RV64I-NEXT:    sd tp, 120(sp) # 8-byte Folded Spill
+; RV64I-NEXT:    addi sp, sp, -128
+; RV64I-NEXT:    sd ra, 120(sp) # 8-byte Folded Spill
 ; RV64I-NEXT:    sd s0, 112(sp) # 8-byte Folded Spill
 ; RV64I-NEXT:    sd s1, 104(sp) # 8-byte Folded Spill
 ; RV64I-NEXT:    sd s2, 96(sp) # 8-byte Folded Spill
@@ -726,9 +692,7 @@ define i64 @test_zext_w(i64 %x, i32 %y) nounwind {
 ; RV64I-NEXT:    slli a0, a0, 32
 ; RV64I-NEXT:    srli a0, a0, 32
 ; RV64I-NEXT:  .LBB5_3: # %falsebb
-; RV64I-NEXT:    ld ra, 136(sp) # 8-byte Folded Reload
-; RV64I-NEXT:    ld gp, 128(sp) # 8-byte Folded Reload
-; RV64I-NEXT:    ld tp, 120(sp) # 8-byte Folded Reload
+; RV64I-NEXT:    ld ra, 120(sp) # 8-byte Folded Reload
 ; RV64I-NEXT:    ld s0, 112(sp) # 8-byte Folded Reload
 ; RV64I-NEXT:    ld s1, 104(sp) # 8-byte Folded Reload
 ; RV64I-NEXT:    ld s2, 96(sp) # 8-byte Folded Reload
@@ -741,15 +705,13 @@ define i64 @test_zext_w(i64 %x, i32 %y) nounwind {
 ; RV64I-NEXT:    ld s9, 40(sp) # 8-byte Folded Reload
 ; RV64I-NEXT:    ld s10, 32(sp) # 8-byte Folded Reload
 ; RV64I-NEXT:    ld s11, 24(sp) # 8-byte Folded Reload
-; RV64I-NEXT:    addi sp, sp, 144
+; RV64I-NEXT:    addi sp, sp, 128
 ; RV64I-NEXT:    ret
 ;
 ; RV64ZB-LABEL: test_zext_w:
 ; RV64ZB:       # %bb.0:
-; RV64ZB-NEXT:    addi sp, sp, -144
-; RV64ZB-NEXT:    sd ra, 136(sp) # 8-byte Folded Spill
-; RV64ZB-NEXT:    sd gp, 128(sp) # 8-byte Folded Spill
-; RV64ZB-NEXT:    sd tp, 120(sp) # 8-byte Folded Spill
+; RV64ZB-NEXT:    addi sp, sp, -128
+; RV64ZB-NEXT:    sd ra, 120(sp) # 8-byte Folded Spill
 ; RV64ZB-NEXT:    sd s0, 112(sp) # 8-byte Folded Spill
 ; RV64ZB-NEXT:    sd s1, 104(sp) # 8-byte Folded Spill
 ; RV64ZB-NEXT:    sd s2, 96(sp) # 8-byte Folded Spill
@@ -774,9 +736,7 @@ define i64 @test_zext_w(i64 %x, i32 %y) nounwind {
 ; RV64ZB-NEXT:  .LBB5_2: # %truebb
 ; RV64ZB-NEXT:    lwu a0, 8(sp) # 8-byte Folded Reload
 ; RV64ZB-NEXT:  .LBB5_3: # %falsebb
-; RV64ZB-NEXT:    ld ra, 136(sp) # 8-byte Folded Reload
-; RV64ZB-NEXT:    ld gp, 128(sp) # 8-byte Folded Reload
-; RV64ZB-NEXT:    ld tp, 120(sp) # 8-byte Folded Reload
+; RV64ZB-NEXT:    ld ra, 120(sp) # 8-byte Folded Reload
 ; RV64ZB-NEXT:    ld s0, 112(sp) # 8-byte Folded Reload
 ; RV64ZB-NEXT:    ld s1, 104(sp) # 8-byte Folded Reload
 ; RV64ZB-NEXT:    ld s2, 96(sp) # 8-byte Folded Reload
@@ -789,7 +749,7 @@ define i64 @test_zext_w(i64 %x, i32 %y) nounwind {
 ; RV64ZB-NEXT:    ld s9, 40(sp) # 8-byte Folded Reload
 ; RV64ZB-NEXT:    ld s10, 32(sp) # 8-byte Folded Reload
 ; RV64ZB-NEXT:    ld s11, 24(sp) # 8-byte Folded Reload
-; RV64ZB-NEXT:    addi sp, sp, 144
+; RV64ZB-NEXT:    addi sp, sp, 128
 ; RV64ZB-NEXT:    ret
 ;
 ; RV64ZB-PURECAP-LABEL: test_zext_w:
