@@ -7859,9 +7859,10 @@ ExpectedStmt ASTNodeImporter::VisitExplicitCastExpr(ExplicitCastExpr *E) {
     ExpectedSLoc ToRParenLocOrErr = import(BBC->getEndLoc());
     if (!ToRParenLocOrErr)
       return ToRParenLocOrErr.takeError();
-    return new (Importer.getToContext()) BuiltinBitCastExpr(
-        ToType, E->getValueKind(), E->getCastKind(), ToSubExpr,
-        ToTypeInfoAsWritten, *ToKWLocOrErr, *ToRParenLocOrErr);
+    return new (Importer.getToContext())
+        BuiltinBitCastExpr(ToType, E->getValueKind(), E->getCastKind(),
+                           ToSubExpr, ToTypeInfoAsWritten, *ToKWLocOrErr,
+                           *ToRParenLocOrErr, Importer.getToContext());
   }
   default:
     llvm_unreachable("Cast expression of unsupported type!");
