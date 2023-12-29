@@ -144,6 +144,7 @@ private:
   bool SelectInlineAsmMemoryOperand(const SDValue &Op,
                                     InlineAsm::ConstraintCode ConstraintID,
                                     std::vector<SDValue> &OutOps) override;
+  bool isUnneededShiftMask(SDNode *N, unsigned ShAmtBits) const;
 };
 }
 
