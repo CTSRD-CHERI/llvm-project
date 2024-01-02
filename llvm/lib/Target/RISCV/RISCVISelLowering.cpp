@@ -7496,7 +7496,7 @@ SDValue RISCVTargetLowering::lowerFRAMEADDR(SDValue Op,
   EVT VT = Op.getValueType();
   SDLoc DL(Op);
   SDValue FrameAddr = DAG.getCopyFromReg(DAG.getEntryNode(), DL, FrameReg, VT);
-  unsigned Depth = cast<ConstantSDNode>(Op.getOperand(0))->getZExtValue();
+  unsigned Depth = Op.getConstantOperandVal(0);
   while (Depth--) {
     int Offset = -(XLenInBytes * 2);
     SDValue Ptr = DAG.getPointerAdd(DL, FrameAddr, Offset);
@@ -7519,7 +7519,7 @@ SDValue RISCVTargetLowering::lowerRETURNADDR(SDValue Op,
 
   EVT VT = Op.getValueType();
   SDLoc DL(Op);
-  unsigned Depth = cast<ConstantSDNode>(Op.getOperand(0))->getZExtValue();
+  unsigned Depth = Op.getConstantOperandVal(0);
   if (Depth) {
     int Off = -XLenInBytes;
     SDValue FrameAddr = lowerFRAMEADDR(Op, DAG);
@@ -12005,7 +12005,7 @@ void RISCVTargetLowering::ReplaceNodeResults(SDNode *N,
     break;
   }
   case ISD::INTRINSIC_WO_CHAIN: {
-    unsigned IntNo = cast<ConstantSDNode>(N->getOperand(0))->getZExtValue();
+    unsigned IntNo = N->getConstantOperandVal(0);
     switch (IntNo) {
     default:
       llvm_unreachable(
@@ -14427,7 +14427,7 @@ static SDValue performSRACombine(SDNode *N, SelectionDAG &DAG,
     for (SDNode *U : N0->uses()) {
       if (U->getOpcode() != ISD::SRA ||
           !isa<ConstantSDNode>(U->getOperand(1)) ||
-          cast<ConstantSDNode>(U->getOperand(1))->getZExtValue() > 32)
+          U->getConstantOperandVal(1) > 32)
         return SDValue();
     }
 
