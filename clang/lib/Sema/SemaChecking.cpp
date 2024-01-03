@@ -17016,7 +17016,7 @@ class SequenceChecker : public ConstEvaluatedExprVisitor<SequenceChecker> {
     /// Have we issued a diagnostic for this object already?
     bool Diagnosed = false;
 
-    UsageInfo() = default;
+    UsageInfo();
   };
   using UsageInfoMap = llvm::SmallDenseMap<Object, UsageInfo, 16>;
 
@@ -17774,6 +17774,8 @@ public:
       Tree.merge(Elts[I]);
   }
 };
+
+SequenceChecker::UsageInfo::UsageInfo() = default;
 
 } // namespace
 
