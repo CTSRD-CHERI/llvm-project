@@ -5070,7 +5070,6 @@ bool SelectionDAG::canCreateUndefOrPoison(SDValue Op, const APInt &DemandedElts,
   case ISD::CONCAT_VECTORS:
   case ISD::INSERT_SUBVECTOR:
   case ISD::AND:
-  case ISD::OR:
   case ISD::XOR:
   case ISD::ROTL:
   case ISD::ROTR:
@@ -5109,6 +5108,10 @@ bool SelectionDAG::canCreateUndefOrPoison(SDValue Op, const APInt &DemandedElts,
     // Matches hasPoisonGeneratingFlags().
     return ConsiderFlags && (Op->getFlags().hasNoSignedWrap() ||
                              Op->getFlags().hasNoUnsignedWrap());
+
+  // Matches hasPoisonGeneratingFlags().
+  case ISD::OR:
+    return ConsiderFlags && Op->getFlags().hasDisjoint();
 
   case ISD::INSERT_VECTOR_ELT:{
     // Ensure that the element index is in bounds.
