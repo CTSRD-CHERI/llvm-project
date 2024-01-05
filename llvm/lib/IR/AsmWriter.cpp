@@ -865,6 +865,9 @@ private:
 
   /// Add all of the metadata from an instruction.
   void processInstructionMetadata(const Instruction &I);
+
+  /// Add all of the metadata from an instruction.
+  void processDPValueMetadata(const DPValue &DPV);
 };
 
 } // end namespace llvm
@@ -1132,9 +1135,17 @@ void SlotTracker::processGlobalObjectMetadata(const GlobalObject &GO) {
 void SlotTracker::processFunctionMetadata(const Function &F) {
   processGlobalObjectMetadata(F);
   for (auto &BB : F) {
-    for (auto &I : BB)
+    for (auto &I : BB) {
+      for (const DPValue &DPV : I.getDbgValueRange())
+        processDPValueMetadata(DPV);
       processInstructionMetadata(I);
+    }
   }
+}
+
+void SlotTracker::processDPValueMetadata(const DPValue &DPV) {
+  CreateMetadataSlot(DPV.getVariable());
+  CreateMetadataSlot(DPV.getDebugLoc());
 }
 
 void SlotTracker::processInstructionMetadata(const Instruction &I) {
