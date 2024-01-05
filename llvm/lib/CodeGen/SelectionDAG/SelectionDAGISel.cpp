@@ -1618,6 +1618,7 @@ void SelectionDAGISel::SelectAllBasicBlocks(const Function &Fn) {
         if (isFoldedOrDeadInstruction(Inst, *FuncInfo) ||
             ElidedArgCopyInstrs.count(Inst)) {
           --NumFastIselRemaining;
+          FastIS->handleDbgInfo(Inst);
           continue;
         }
 
@@ -1629,6 +1630,8 @@ void SelectionDAGISel::SelectAllBasicBlocks(const Function &Fn) {
         if (FastIS->selectInstruction(Inst)) {
           --NumFastIselRemaining;
           ++NumFastIselSuccess;
+
+          FastIS->handleDbgInfo(Inst);
           // If fast isel succeeded, skip over all the folded instructions, and
           // then see if there is a load right before the selected instructions.
           // Try to fold the load if so.
@@ -1644,6 +1647,7 @@ void SelectionDAGISel::SelectAllBasicBlocks(const Function &Fn) {
             // If we succeeded, don't re-select the load.
             LLVM_DEBUG(dbgs()
                        << "FastISel folded load: " << *BeforeInst << "\n");
+            FastIS->handleDbgInfo(BeforeInst);
             BI = std::next(BasicBlock::const_iterator(BeforeInst));
             --NumFastIselRemaining;
             ++NumFastIselSuccess;
