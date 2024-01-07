@@ -18746,28 +18746,13 @@ SDValue RISCVTargetLowering::LowerCall(CallLoweringInfo &CLI,
   // split it and then direct call can be matched by PseudoCALL.
   if (GlobalAddressSDNode *S = dyn_cast<GlobalAddressSDNode>(Callee)) {
     const GlobalValue *GV = S->getGlobal();
-
-    unsigned OpFlags = RISCVII::MO_CALL;
-    // See RISCVMCCodeEmitter::getImmOpValue
-    if (!RISCVABI::isCheriPureCapABI(Subtarget.getTargetABI()) &&
-        !getTargetMachine().shouldAssumeDSOLocal(*GV->getParent(), GV))
-      OpFlags = RISCVII::MO_PLT;
-
     if (RISCVABI::isCheriPureCapABI(Subtarget.getTargetABI()) &&
         UseLegacyIndirectPurecapCalls)
       Callee = getAddr(S, Callee.getValueType(), DAG, /*IsLocal=*/false,
                        /*CanDeriveFromPcc=*/true);
     else
-      Callee = DAG.getTargetGlobalAddress(GV, DL, PtrVT, 0, OpFlags);
+      Callee = DAG.getTargetGlobalAddress(GV, DL, PtrVT, 0, RISCVII::MO_CALL);
   } else if (ExternalSymbolSDNode *S = dyn_cast<ExternalSymbolSDNode>(Callee)) {
-    unsigned OpFlags = RISCVII::MO_CALL;
-
-    // See RISCVMCCodeEmitter::getImmOpValue
-    if (!RISCVABI::isCheriPureCapABI(Subtarget.getTargetABI()) &&
-        !getTargetMachine().shouldAssumeDSOLocal(*MF.getFunction().getParent(),
-                                                 nullptr))
-      OpFlags = RISCVII::MO_PLT;
-
     // Legacy behaviour always used indirect calls even for static functions.
     // This could be optimised, but shouldAssumeDSOLocal is too weak, since
     // extern functions are marked dso_local for position-dependent code.
@@ -18776,7 +18761,7 @@ SDValue RISCVTargetLowering::LowerCall(CallLoweringInfo &CLI,
       Callee = getAddr(S, Callee.getValueType(), DAG, /*IsLocal=*/false,
                        /*CanDeriveFromPcc=*/true);
     else
-      Callee = DAG.getTargetExternalFunctionSymbol(S->getSymbol(), OpFlags);
+      Callee = DAG.getTargetExternalSymbol(S->getSymbol(), PtrVT, RISCVII::MO_CALL);
   }
 
   // The first call operand is the chain and the second is the target address.
