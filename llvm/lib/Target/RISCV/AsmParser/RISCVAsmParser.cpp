@@ -2233,12 +2233,12 @@ ParseStatus RISCVAsmParser::parseCallSymbol(OperandVector &Operands) {
 
   SMLoc E = SMLoc::getFromPointer(S.getPointer() + Identifier.size());
 
-  RISCVMCExpr::VariantKind Kind = RISCVMCExpr::VK_RISCV_CALL;
+  RISCVMCExpr::VariantKind Kind = RISCVMCExpr::VK_RISCV_CALL_PLT;
+  (void)Identifier.consume_back("@plt");
   // CHERI-RISC-V always uses the fixed relocation but never prints the suffix.
   // However, we allow the redundant suffix to be provided anyway.
-  if (Identifier.consume_back("@plt") &&
-      !getSTI().hasFeature(RISCV::FeatureCapMode))
-    Kind = RISCVMCExpr::VK_RISCV_CALL_PLT;
+  if (getSTI().hasFeature(RISCV::FeatureCapMode))
+    Kind = RISCVMCExpr::VK_RISCV_CALL;
 
   MCSymbol *Sym = getContext().getOrCreateSymbol(Identifier);
   Res = MCSymbolRefExpr::create(Sym, MCSymbolRefExpr::VK_None, getContext());

@@ -23,7 +23,7 @@ define i8 addrspace(200)* @eggs(i1 %cond) local_unnamed_addr addrspace(200) #0 {
 ; RV64-NEXT:    addi a0, a0, -1
 ; RV64-NEXT:    andi s0, a0, 32
 ; RV64-NEXT:    li a0, 0
-; RV64-NEXT:    call barney@plt
+; RV64-NEXT:    call barney
 ; RV64-NEXT:    mv a0, s0
 ; RV64-NEXT:    ld ra, 8(sp) # 8-byte Folded Reload
 ; RV64-NEXT:    ld s0, 0(sp) # 8-byte Folded Reload

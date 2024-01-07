@@ -60,19 +60,19 @@ define dso_local void @clang_purecap_byval_args() local_unnamed_addr addrspace(2
 ; RV64-STATIC-NEXT:    li a2, 1024
 ; RV64-STATIC-NEXT:    mv a0, s0
 ; RV64-STATIC-NEXT:    li a1, 0
-; RV64-STATIC-NEXT:    call memset@plt
+; RV64-STATIC-NEXT:    call memset
 ; RV64-STATIC-NEXT:    lb a0, %lo(global_foo)(s1)
 ; RV64-STATIC-NEXT:    li a1, 0
-; RV64-STATIC-NEXT:    call assert_eq@plt
+; RV64-STATIC-NEXT:    call assert_eq
 ; RV64-STATIC-NEXT:    addi a0, sp, 8
 ; RV64-STATIC-NEXT:    li a2, 1024
 ; RV64-STATIC-NEXT:    mv a1, s0
-; RV64-STATIC-NEXT:    call memcpy@plt
+; RV64-STATIC-NEXT:    call memcpy
 ; RV64-STATIC-NEXT:    addi a0, sp, 8
 ; RV64-STATIC-NEXT:    call foo_byval
 ; RV64-STATIC-NEXT:    lb a0, %lo(global_foo)(s1)
 ; RV64-STATIC-NEXT:    li a1, 0
-; RV64-STATIC-NEXT:    call assert_eq@plt
+; RV64-STATIC-NEXT:    call assert_eq
 ; RV64-STATIC-NEXT:    ld ra, 1048(sp) # 8-byte Folded Reload
 ; RV64-STATIC-NEXT:    ld s0, 1040(sp) # 8-byte Folded Reload
 ; RV64-STATIC-NEXT:    ld s1, 1032(sp) # 8-byte Folded Reload
@@ -90,19 +90,19 @@ define dso_local void @clang_purecap_byval_args() local_unnamed_addr addrspace(2
 ; RV64-PIC-NEXT:    li a2, 1024
 ; RV64-PIC-NEXT:    mv a0, s0
 ; RV64-PIC-NEXT:    li a1, 0
-; RV64-PIC-NEXT:    call memset@plt
+; RV64-PIC-NEXT:    call memset
 ; RV64-PIC-NEXT:    lb a0, 0(s0)
 ; RV64-PIC-NEXT:    li a1, 0
-; RV64-PIC-NEXT:    call assert_eq@plt
+; RV64-PIC-NEXT:    call assert_eq
 ; RV64-PIC-NEXT:    addi a0, sp, 16
 ; RV64-PIC-NEXT:    li a2, 1024
 ; RV64-PIC-NEXT:    mv a1, s0
-; RV64-PIC-NEXT:    call memcpy@plt
+; RV64-PIC-NEXT:    call memcpy
 ; RV64-PIC-NEXT:    addi a0, sp, 16
 ; RV64-PIC-NEXT:    call foo_byval
 ; RV64-PIC-NEXT:    lb a0, 0(s0)
 ; RV64-PIC-NEXT:    li a1, 0
-; RV64-PIC-NEXT:    call assert_eq@plt
+; RV64-PIC-NEXT:    call assert_eq
 ; RV64-PIC-NEXT:    ld ra, 1048(sp) # 8-byte Folded Reload
 ; RV64-PIC-NEXT:    ld s0, 1040(sp) # 8-byte Folded Reload
 ; RV64-PIC-NEXT:    addi sp, sp, 1056

@@ -14,7 +14,7 @@ define i8 addrspace(200)* @atomicrmw_xchg_cap_monotonic(i8 addrspace(200)** %a, 
 ; RV32IXCHERI-NEXT:    addi sp, sp, -16
 ; RV32IXCHERI-NEXT:    sw ra, 12(sp) # 4-byte Folded Spill
 ; RV32IXCHERI-NEXT:    li a2, 0
-; RV32IXCHERI-NEXT:    call __atomic_exchange_cap@plt
+; RV32IXCHERI-NEXT:    call __atomic_exchange_cap
 ; RV32IXCHERI-NEXT:    lw ra, 12(sp) # 4-byte Folded Reload
 ; RV32IXCHERI-NEXT:    addi sp, sp, 16
 ; RV32IXCHERI-NEXT:    ret
@@ -29,7 +29,7 @@ define i8 addrspace(200)* @atomicrmw_xchg_cap_monotonic(i8 addrspace(200)** %a, 
 ; RV64IXCHERI-NEXT:    addi sp, sp, -16
 ; RV64IXCHERI-NEXT:    sd ra, 8(sp) # 8-byte Folded Spill
 ; RV64IXCHERI-NEXT:    li a2, 0
-; RV64IXCHERI-NEXT:    call __atomic_exchange_cap@plt
+; RV64IXCHERI-NEXT:    call __atomic_exchange_cap
 ; RV64IXCHERI-NEXT:    ld ra, 8(sp) # 8-byte Folded Reload
 ; RV64IXCHERI-NEXT:    addi sp, sp, 16
 ; RV64IXCHERI-NEXT:    ret
@@ -48,7 +48,7 @@ define i8 addrspace(200)* @atomicrmw_xchg_cap_acquire(i8 addrspace(200)** %a, i8
 ; RV32IXCHERI-NEXT:    addi sp, sp, -16
 ; RV32IXCHERI-NEXT:    sw ra, 12(sp) # 4-byte Folded Spill
 ; RV32IXCHERI-NEXT:    li a2, 2
-; RV32IXCHERI-NEXT:    call __atomic_exchange_cap@plt
+; RV32IXCHERI-NEXT:    call __atomic_exchange_cap
 ; RV32IXCHERI-NEXT:    lw ra, 12(sp) # 4-byte Folded Reload
 ; RV32IXCHERI-NEXT:    addi sp, sp, 16
 ; RV32IXCHERI-NEXT:    ret
@@ -63,7 +63,7 @@ define i8 addrspace(200)* @atomicrmw_xchg_cap_acquire(i8 addrspace(200)** %a, i8
 ; RV64IXCHERI-NEXT:    addi sp, sp, -16
 ; RV64IXCHERI-NEXT:    sd ra, 8(sp) # 8-byte Folded Spill
 ; RV64IXCHERI-NEXT:    li a2, 2
-; RV64IXCHERI-NEXT:    call __atomic_exchange_cap@plt
+; RV64IXCHERI-NEXT:    call __atomic_exchange_cap
 ; RV64IXCHERI-NEXT:    ld ra, 8(sp) # 8-byte Folded Reload
 ; RV64IXCHERI-NEXT:    addi sp, sp, 16
 ; RV64IXCHERI-NEXT:    ret
@@ -82,7 +82,7 @@ define i8 addrspace(200)* @atomicrmw_xchg_cap_release(i8 addrspace(200)** %a, i8
 ; RV32IXCHERI-NEXT:    addi sp, sp, -16
 ; RV32IXCHERI-NEXT:    sw ra, 12(sp) # 4-byte Folded Spill
 ; RV32IXCHERI-NEXT:    li a2, 3
-; RV32IXCHERI-NEXT:    call __atomic_exchange_cap@plt
+; RV32IXCHERI-NEXT:    call __atomic_exchange_cap
 ; RV32IXCHERI-NEXT:    lw ra, 12(sp) # 4-byte Folded Reload
 ; RV32IXCHERI-NEXT:    addi sp, sp, 16
 ; RV32IXCHERI-NEXT:    ret
@@ -97,7 +97,7 @@ define i8 addrspace(200)* @atomicrmw_xchg_cap_release(i8 addrspace(200)** %a, i8
 ; RV64IXCHERI-NEXT:    addi sp, sp, -16
 ; RV64IXCHERI-NEXT:    sd ra, 8(sp) # 8-byte Folded Spill
 ; RV64IXCHERI-NEXT:    li a2, 3
-; RV64IXCHERI-NEXT:    call __atomic_exchange_cap@plt
+; RV64IXCHERI-NEXT:    call __atomic_exchange_cap
 ; RV64IXCHERI-NEXT:    ld ra, 8(sp) # 8-byte Folded Reload
 ; RV64IXCHERI-NEXT:    addi sp, sp, 16
 ; RV64IXCHERI-NEXT:    ret
@@ -116,7 +116,7 @@ define i8 addrspace(200)* @atomicrmw_xchg_cap_acq_rel(i8 addrspace(200)** %a, i8
 ; RV32IXCHERI-NEXT:    addi sp, sp, -16
 ; RV32IXCHERI-NEXT:    sw ra, 12(sp) # 4-byte Folded Spill
 ; RV32IXCHERI-NEXT:    li a2, 4
-; RV32IXCHERI-NEXT:    call __atomic_exchange_cap@plt
+; RV32IXCHERI-NEXT:    call __atomic_exchange_cap
 ; RV32IXCHERI-NEXT:    lw ra, 12(sp) # 4-byte Folded Reload
 ; RV32IXCHERI-NEXT:    addi sp, sp, 16
 ; RV32IXCHERI-NEXT:    ret
@@ -131,7 +131,7 @@ define i8 addrspace(200)* @atomicrmw_xchg_cap_acq_rel(i8 addrspace(200)** %a, i8
 ; RV64IXCHERI-NEXT:    addi sp, sp, -16
 ; RV64IXCHERI-NEXT:    sd ra, 8(sp) # 8-byte Folded Spill
 ; RV64IXCHERI-NEXT:    li a2, 4
-; RV64IXCHERI-NEXT:    call __atomic_exchange_cap@plt
+; RV64IXCHERI-NEXT:    call __atomic_exchange_cap
 ; RV64IXCHERI-NEXT:    ld ra, 8(sp) # 8-byte Folded Reload
 ; RV64IXCHERI-NEXT:    addi sp, sp, 16
 ; RV64IXCHERI-NEXT:    ret
@@ -150,7 +150,7 @@ define i8 addrspace(200)* @atomicrmw_xchg_cap_seq_cst(i8 addrspace(200)** %a, i8
 ; RV32IXCHERI-NEXT:    addi sp, sp, -16
 ; RV32IXCHERI-NEXT:    sw ra, 12(sp) # 4-byte Folded Spill
 ; RV32IXCHERI-NEXT:    li a2, 5
-; RV32IXCHERI-NEXT:    call __atomic_exchange_cap@plt
+; RV32IXCHERI-NEXT:    call __atomic_exchange_cap
 ; RV32IXCHERI-NEXT:    lw ra, 12(sp) # 4-byte Folded Reload
 ; RV32IXCHERI-NEXT:    addi sp, sp, 16
 ; RV32IXCHERI-NEXT:    ret
@@ -165,7 +165,7 @@ define i8 addrspace(200)* @atomicrmw_xchg_cap_seq_cst(i8 addrspace(200)** %a, i8
 ; RV64IXCHERI-NEXT:    addi sp, sp, -16
 ; RV64IXCHERI-NEXT:    sd ra, 8(sp) # 8-byte Folded Spill
 ; RV64IXCHERI-NEXT:    li a2, 5
-; RV64IXCHERI-NEXT:    call __atomic_exchange_cap@plt
+; RV64IXCHERI-NEXT:    call __atomic_exchange_cap
 ; RV64IXCHERI-NEXT:    ld ra, 8(sp) # 8-byte Folded Reload
 ; RV64IXCHERI-NEXT:    addi sp, sp, 16
 ; RV64IXCHERI-NEXT:    ret

@@ -34,16 +34,16 @@ define signext i32 @test_alloca() local_unnamed_addr addrspace(200) nounwind {
 ; RV64-NEXT:    addi a0, sp, 1032
 ; RV64-NEXT:    li a2, 1024
 ; RV64-NEXT:    li a1, 0
-; RV64-NEXT:    call memset@plt
+; RV64-NEXT:    call memset
 ; RV64-NEXT:    addi a0, sp, 1032
-; RV64-NEXT:    call byref@plt
+; RV64-NEXT:    call byref
 ; RV64-NEXT:    addi a0, sp, 8
 ; RV64-NEXT:    addi a1, sp, 1032
 ; RV64-NEXT:    li a2, 1024
-; RV64-NEXT:    call memcpy@plt
+; RV64-NEXT:    call memcpy
 ; RV64-NEXT:    li a0, 1024
 ; RV64-NEXT:    addi a1, sp, 8
-; RV64-NEXT:    call varargs@plt
+; RV64-NEXT:    call varargs
 ; RV64-NEXT:    addi sp, sp, 32
 ; RV64-NEXT:    ld ra, 2024(sp) # 8-byte Folded Reload
 ; RV64-NEXT:    addi sp, sp, 2032
@@ -202,17 +202,17 @@ define signext i32 @test_byval() local_unnamed_addr addrspace(200) nounwind {
 ; RV64-NEXT:    addi a0, sp, 1032
 ; RV64-NEXT:    li a2, 1024
 ; RV64-NEXT:    li a1, 0
-; RV64-NEXT:    call memset@plt
+; RV64-NEXT:    call memset
 ; RV64-NEXT:    addi a0, sp, 1032
-; RV64-NEXT:    call byref@plt
+; RV64-NEXT:    call byref
 ; RV64-NEXT:    addi a0, sp, 8
 ; RV64-NEXT:    addi a1, sp, 1032
 ; RV64-NEXT:    li a2, 1024
 ; Call memcpy for local alloca: dst=sp+8, src=sp+1032, size=1024
-; RV64-NEXT:    call memcpy@plt
+; RV64-NEXT:    call memcpy
 ; RV64-NEXT:    li a0, 1024
 ; RV64-NEXT:    addi a1, sp, 8
-; RV64-NEXT:    call varargs@plt
+; RV64-NEXT:    call varargs
 ; RV64-NEXT:    addi sp, sp, 32
 ; RV64-NEXT:    ld ra, 2024(sp) # 8-byte Folded Reload
 ; RV64-NEXT:    addi sp, sp, 2032
