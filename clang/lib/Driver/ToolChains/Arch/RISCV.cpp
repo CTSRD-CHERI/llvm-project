@@ -44,9 +44,9 @@ static bool getArchFeatures(const Driver &D, StringRef Arch,
     return false;
   }
 
-  (*ISAInfo)->toFeatures(
-      Features, [&Args](const Twine &Str) { return Args.MakeArgString(Str); },
-      /*AddAllExtensions=*/true);
+  for (const std::string &Str : (*ISAInfo)->toFeatures(/*AddAllExtension=*/true,
+                                                       /*IgnoreUnknown=*/false))
+    Features.push_back(Args.MakeArgString(Str));
   ISAInfoOut = std::move(*ISAInfo);
 
   if (EnableExperimentalExtensions)
