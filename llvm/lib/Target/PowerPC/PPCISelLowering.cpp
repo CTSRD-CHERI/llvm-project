@@ -16242,7 +16242,7 @@ SDValue PPCTargetLowering::PerformDAGCombine(SDNode *N,
     // Since we are doing this pre-legalize, the RHS can be a constant of
     // arbitrary bitwidth which may cause issues when trying to get the value
     // from the underlying APInt.
-    auto RHSAPInt = cast<ConstantSDNode>(RHS)->getAPIntValue();
+    auto RHSAPInt = RHS->getAsAPIntVal();
     if (!RHSAPInt.isIntN(64))
       break;
 

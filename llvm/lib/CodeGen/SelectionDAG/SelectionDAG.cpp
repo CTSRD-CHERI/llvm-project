@@ -328,7 +328,7 @@ bool ISD::isVectorShrinkable(const SDNode *N, unsigned NewEltSize,
     if (!isa<ConstantSDNode>(Op))
       return false;
 
-    APInt C = cast<ConstantSDNode>(Op)->getAPIntValue().trunc(EltSize);
+    APInt C = Op->getAsAPIntVal().trunc(EltSize);
     if (Signed && C.trunc(NewEltSize).sext(EltSize) != C)
       return false;
     if (!Signed && C.trunc(NewEltSize).zext(EltSize) != C)
@@ -7267,7 +7267,7 @@ SDValue SelectionDAG::getNode(unsigned Opcode, const SDLoc &DL, EVT VT,
             (N2VT.getVectorMinNumElements() + N3->getAsZExtVal()) <=
                 VT.getVectorMinNumElements()) &&
            "Insert subvector overflow!");
-    assert(cast<ConstantSDNode>(N3)->getAPIntValue().getBitWidth() ==
+    assert(N3->getAsAPIntVal().getBitWidth() ==
                TLI->getVectorIdxTy(getDataLayout()).getFixedSizeInBits() &&
            "Constant index for INSERT_SUBVECTOR has an invalid size");
 
@@ -9519,7 +9519,7 @@ SDValue SelectionDAG::getGatherVP(SDVTList VTs, EVT VT, const SDLoc &dl,
              N->getValueType(0).getVectorElementCount()) &&
          "Vector width mismatch between index and data");
   assert(isa<ConstantSDNode>(N->getScale()) &&
-         cast<ConstantSDNode>(N->getScale())->getAPIntValue().isPowerOf2() &&
+         N->getScale()->getAsAPIntVal().isPowerOf2() &&
          "Scale should be a constant power of 2");
 
   CSEMap.InsertNode(N, IP);
@@ -9563,7 +9563,7 @@ SDValue SelectionDAG::getScatterVP(SDVTList VTs, EVT VT, const SDLoc &dl,
              N->getValue().getValueType().getVectorElementCount()) &&
          "Vector width mismatch between index and data");
   assert(isa<ConstantSDNode>(N->getScale()) &&
-         cast<ConstantSDNode>(N->getScale())->getAPIntValue().isPowerOf2() &&
+         N->getScale()->getAsAPIntVal().isPowerOf2() &&
          "Scale should be a constant power of 2");
 
   CSEMap.InsertNode(N, IP);
@@ -9705,7 +9705,7 @@ SDValue SelectionDAG::getMaskedGather(SDVTList VTs, EVT MemVT, const SDLoc &dl,
              N->getValueType(0).getVectorElementCount()) &&
          "Vector width mismatch between index and data");
   assert(isa<ConstantSDNode>(N->getScale()) &&
-         cast<ConstantSDNode>(N->getScale())->getAPIntValue().isPowerOf2() &&
+         N->getScale()->getAsAPIntVal().isPowerOf2() &&
          "Scale should be a constant power of 2");
 
   CSEMap.InsertNode(N, IP);
@@ -9751,7 +9751,7 @@ SDValue SelectionDAG::getMaskedScatter(SDVTList VTs, EVT MemVT, const SDLoc &dl,
              N->getValue().getValueType().getVectorElementCount()) &&
          "Vector width mismatch between index and data");
   assert(isa<ConstantSDNode>(N->getScale()) &&
-         cast<ConstantSDNode>(N->getScale())->getAPIntValue().isPowerOf2() &&
+         N->getScale()->getAsAPIntVal().isPowerOf2() &&
          "Scale should be a constant power of 2");
 
   CSEMap.InsertNode(N, IP);
