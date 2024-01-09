@@ -32,7 +32,7 @@ void llvm::initializeCodeGen(PassRegistry &Registry) {
   initializeCheckDebugMachineModulePass(Registry);
   initializeCheriBoundAllocasPass(Registry);
   initializeCheriGetAddressElimPass(Registry);
-  initializeCodeGenPreparePass(Registry);
+  initializeCodeGenPrepareLegacyPassPass(Registry);
   initializeDeadMachineInstructionElimPass(Registry);
   initializeDebugifyMachineModulePass(Registry);
   initializeDetectDeadLanesPass(Registry);
