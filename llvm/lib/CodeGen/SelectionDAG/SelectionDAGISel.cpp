@@ -2129,7 +2129,7 @@ void SelectionDAGISel::SelectInlineAsmMemoryOperands(std::vector<SDValue> &Ops,
     --e;  // Don't process a glue operand if it is here.
 
   while (i != e) {
-    InlineAsm::Flag Flags(cast<ConstantSDNode>(InOps[i])->getZExtValue());
+    InlineAsm::Flag Flags(InOps[i]->getAsZExtVal());
     if (!Flags.isMemKind() && !Flags.isFuncKind()) {
       // Just skip over this operand, copying the operands verbatim.
       Ops.insert(Ops.end(), InOps.begin() + i,
@@ -2143,12 +2143,10 @@ void SelectionDAGISel::SelectInlineAsmMemoryOperands(std::vector<SDValue> &Ops,
       if (Flags.isUseOperandTiedToDef(TiedToOperand)) {
         // We need the constraint ID from the operand this is tied to.
         unsigned CurOp = InlineAsm::Op_FirstOperand;
-        Flags =
-            InlineAsm::Flag(cast<ConstantSDNode>(InOps[CurOp])->getZExtValue());
+        Flags = InlineAsm::Flag(InOps[CurOp]->getAsZExtVal());
         for (; TiedToOperand; --TiedToOperand) {
           CurOp += Flags.getNumOperandRegisters() + 1;
-          Flags = InlineAsm::Flag(
-              cast<ConstantSDNode>(InOps[CurOp])->getZExtValue());
+          Flags = InlineAsm::Flag(InOps[CurOp]->getAsZExtVal());
         }
       }
 
@@ -2388,9 +2386,8 @@ void SelectionDAGISel::pushStackMapLiveVariable(SmallVectorImpl<SDValue> &Ops,
   if (OpNode->getOpcode() == ISD::Constant) {
     Ops.push_back(
         CurDAG->getTargetConstant(StackMaps::ConstantOp, DL, MVT::i64));
-    Ops.push_back(
-        CurDAG->getTargetConstant(cast<ConstantSDNode>(OpNode)->getZExtValue(),
-                                  DL, OpVal.getValueType()));
+    Ops.push_back(CurDAG->getTargetConstant(OpNode->getAsZExtVal(), DL,
+                                            OpVal.getValueType()));
   } else {
     Ops.push_back(OpVal);
   }
@@ -2460,7 +2457,7 @@ void SelectionDAGISel::Select_PATCHPOINT(SDNode *N) {
   Ops.push_back(*It++);
 
   // Push the args for the call.
-  for (uint64_t I = cast<ConstantSDNode>(NumArgs)->getZExtValue(); I != 0; I--)
+  for (uint64_t I = NumArgs->getAsZExtVal(); I != 0; I--)
     Ops.push_back(*It++);
 
   // Now push the live variables.
