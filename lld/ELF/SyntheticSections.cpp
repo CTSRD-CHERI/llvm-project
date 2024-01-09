@@ -1493,9 +1493,10 @@ DynamicSection<ELFT>::computeContents() {
       addInt(DT_AARCH64_MEMTAG_MODE, config->androidMemtagMode == NT_MEMTAG_LEVEL_ASYNC);
       addInt(DT_AARCH64_MEMTAG_HEAP, config->androidMemtagHeap);
       addInt(DT_AARCH64_MEMTAG_STACK, config->androidMemtagStack);
-      if (mainPart->memtagDescriptors->isNeeded()) {
-        addInSec(DT_AARCH64_MEMTAG_GLOBALS, *mainPart->memtagDescriptors);
-        addInt(DT_AARCH64_MEMTAG_GLOBALSSZ, mainPart->memtagDescriptors->getSize());
+      if (mainPart->memtagGlobalDescriptors->isNeeded()) {
+        addInSec(DT_AARCH64_MEMTAG_GLOBALS, *mainPart->memtagGlobalDescriptors);
+        addInt(DT_AARCH64_MEMTAG_GLOBALSSZ,
+               mainPart->memtagGlobalDescriptors->getSize());
       }
     }
   }
@@ -4055,8 +4056,9 @@ static size_t computeOrWriteULEB128(uint64_t v, uint8_t *buf, size_t offset) {
 // https://github.com/ARM-software/abi-aa/blob/main/memtagabielf64/memtagabielf64.rst#83encoding-of-sht_aarch64_memtag_globals_dynamic
 constexpr uint64_t kMemtagStepSizeBits = 3;
 constexpr uint64_t kMemtagGranuleSize = 16;
-static size_t createMemtagDescriptors(const SmallVector<const Symbol *, 0> &symbols,
-                                      uint8_t *buf = nullptr) {
+static size_t
+createMemtagGlobalDescriptors(const SmallVector<const Symbol *, 0> &symbols,
+                              uint8_t *buf = nullptr) {
   size_t sectionSize = 0;
   uint64_t lastGlobalEnd = 0;
 
@@ -4097,7 +4099,7 @@ static size_t createMemtagDescriptors(const SmallVector<const Symbol *, 0> &symb
   return sectionSize;
 }
 
-bool MemtagDescriptors::updateAllocSize() {
+bool MemtagGlobalDescriptors::updateAllocSize() {
   size_t oldSize = getSize();
   std::stable_sort(symbols.begin(), symbols.end(),
                    [](const Symbol *s1, const Symbol *s2) {
@@ -4106,12 +4108,12 @@ bool MemtagDescriptors::updateAllocSize() {
   return oldSize != getSize();
 }
 
-void MemtagDescriptors::writeTo(uint8_t *buf) {
-  createMemtagDescriptors(symbols, buf);
+void MemtagGlobalDescriptors::writeTo(uint8_t *buf) {
+  createMemtagGlobalDescriptors(symbols, buf);
 }
 
-size_t MemtagDescriptors::getSize() const {
-  return createMemtagDescriptors(symbols);
+size_t MemtagGlobalDescriptors::getSize() const {
+  return createMemtagGlobalDescriptors(symbols);
 }
 
 InStruct elf::in;
