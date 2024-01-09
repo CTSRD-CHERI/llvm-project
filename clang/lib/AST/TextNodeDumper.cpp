@@ -1106,6 +1106,16 @@ void clang::TextNodeDumper::VisitReturnStmt(const ReturnStmt *Node) {
   }
 }
 
+void clang::TextNodeDumper::VisitCoawaitExpr(const CoawaitExpr *Node) {
+  if (Node->isImplicit())
+    OS << " implicit";
+}
+
+void clang::TextNodeDumper::VisitCoreturnStmt(const CoreturnStmt *Node) {
+  if (Node->isImplicit())
+    OS << " implicit";
+}
+
 void TextNodeDumper::VisitConstantExpr(const ConstantExpr *Node) {
   if (Node->hasAPValueResult())
     AddChild("value",
