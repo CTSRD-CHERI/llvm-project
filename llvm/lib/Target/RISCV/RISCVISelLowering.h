@@ -269,6 +269,9 @@ enum NodeType : unsigned {
   SSUBSAT_VL,
   USUBSAT_VL,
 
+  // Averaging adds of unsigned integers.
+  AVGFLOORU_VL,
+
   MULHS_VL,
   MULHU_VL,
   FADD_VL,
@@ -939,6 +942,7 @@ private:
   SDValue lowerFixedLengthVectorSelectToRVV(SDValue Op,
                                             SelectionDAG &DAG) const;
   SDValue lowerToScalableOp(SDValue Op, SelectionDAG &DAG) const;
+  SDValue lowerUnsignedAvgFloor(SDValue Op, SelectionDAG &DAG) const;
   SDValue LowerIS_FPCLASS(SDValue Op, SelectionDAG &DAG) const;
   SDValue lowerVPOp(SDValue Op, SelectionDAG &DAG) const;
   SDValue lowerLogicVPOp(SDValue Op, SelectionDAG &DAG) const;
