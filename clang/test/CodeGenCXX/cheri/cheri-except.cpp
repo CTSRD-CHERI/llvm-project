@@ -26,7 +26,7 @@ void fn1() {
 // ASM-NEXT:   .chericap       _ZTIi
 // ASM-LABEL: .hidden	DW.ref.__gxx_personality_v0
 // ASM-NEXT:  .weak	DW.ref.__gxx_personality_v0
-// ASM-NEXT:  .section .data.DW.ref.__gxx_personality_v0,"aGw",@progbits,DW.ref.__gxx_personality_v0,comdat
+// ASM-NEXT:  .section .data.DW.ref.__gxx_personality_v0,"awG",@progbits,DW.ref.__gxx_personality_v0,comdat
 // ASM-NEXT:  .p2align 4
 // ASM-NEXT:  .type DW.ref.__gxx_personality_v0,@object
 // ASM-NEXT:  .size DW.ref.__gxx_personality_v0, 16
