@@ -4667,11 +4667,13 @@ let Flags = [TargetSpecific] in {
 def menable_experimental_extensions : Flag<["-"], "menable-experimental-extensions">, Group<m_Group>,
   HelpText<"Enable use of experimental RISC-V extensions.">;
 def mrvv_vector_bits_EQ : Joined<["-"], "mrvv-vector-bits=">, Group<m_Group>,
-  HelpText<"Specify the size in bits of an RVV vector register. Defaults to "
-           "the vector length agnostic value of \"scalable\". Accepts power of "
-           "2 values between 64 and 65536. Also accepts \"zvl\" "
-           "to use the value implied by -march/-mcpu. Value will be reflected "
-           "in __riscv_v_fixed_vlen preprocessor define (RISC-V only)">;
+  Visibility<[ClangOption, FlangOption]>,
+  HelpText<"Specify the size in bits of an RVV vector register">,
+  DocBrief<"Defaults to the vector length agnostic value of \"scalable\". "
+           "Accepts power of 2 values between 64 and 65536. Also accepts "
+           "\"zvl\" to use the value implied by -march/-mcpu. On Clang, value "
+           "will be reflected in __riscv_v_fixed_vlen preprocessor define "
+           "(RISC-V only)">;
 // TODO: Remove these options (https://github.com/CTSRD-CHERI/llvm-project/issues/681)
 def mxcheri_norvc : Flag<["-"], "mxcheri-norvc">, Group<m_riscv_Features_Group>,
   HelpText<"Disable using compressed CHERI instructions">;
