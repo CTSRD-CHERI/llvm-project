@@ -20033,6 +20033,11 @@ RISCVTargetLowering::getPICJumpTableRelocBaseExpr(const MachineFunction *MF,
   return MCSymbolRefExpr::create(Sym, Ctx);
 }
 
+ISD::NodeType RISCVTargetLowering::getExtendForAtomicCmpSwapArg() const {
+  // Zacas will use amocas.w which does not require extension.
+  return Subtarget.hasStdExtZacas() ? ISD::ANY_EXTEND : ISD::SIGN_EXTEND;
+}
+
 Register RISCVTargetLowering::getExceptionPointerRegister(
     const Constant *PersonalityFn) const {
   return RISCVABI::isCheriPureCapABI(Subtarget.getTargetABI())
