@@ -271,6 +271,8 @@ enum NodeType : unsigned {
 
   // Averaging adds of unsigned integers.
   AVGFLOORU_VL,
+  // Rounding averaging adds of unsigned integers.
+  AVGCEILU_VL,
 
   MULHS_VL,
   MULHU_VL,
