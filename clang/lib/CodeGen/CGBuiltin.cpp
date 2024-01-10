@@ -966,7 +966,7 @@ CodeGenFunction::emitFlexibleArrayMemberSize(const Expr *E, unsigned Type,
     //         };
     //    };
     //
-    // We don't konw which 'count' to use in this scenario:
+    // We don't know which 'count' to use in this scenario:
     //
     //     size_t get_size(struct union_of_fams *p) {
     //         return __builtin_dynamic_object_size(p, 1);
