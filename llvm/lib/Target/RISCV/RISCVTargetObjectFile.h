@@ -48,6 +48,12 @@ public:
 
   bool isInSmallSection(uint64_t Size) const;
 
+  const MCExpr *getIndirectSymViaGOTPCRel(const GlobalValue *GV,
+                                          const MCSymbol *Sym,
+                                          const MCValue &MV, int64_t Offset,
+                                          MachineModuleInfo *MMI,
+                                          MCStreamer &Streamer) const override;
+
   TailPaddingAmount
   getTailPaddingForPreciseBounds(uint64_t Size,
                                  const TargetMachine &TM) const override;
