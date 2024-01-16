@@ -13,8 +13,10 @@
 // The RISC-V calling convention is handled with custom code in
 // RISCVISelLowering.cpp (CC_RISCV).
 
+def CSR_ILP32E_LP64E : CalleeSavedRegs<(add X1, X8, X9)>;
+
 def CSR_ILP32_LP64
-    : CalleeSavedRegs<(add X1, X8, X9, (sequence "X%u", 18, 27))>;
+    : CalleeSavedRegs<(add CSR_ILP32E_LP64E, (sequence "X%u", 18, 27))>;
 
 def CSR_ILP32F_LP64F
     : CalleeSavedRegs<(add CSR_ILP32_LP64,
@@ -105,3 +107,15 @@ def CSR_XLEN_CLEN_F64_Interrupt: CalleeSavedRegs<(add X1,
     (sequence "F%u_D", 28, 31),
     (sequence "F%u_D", 8, 9),
     (sequence "F%u_D", 18, 27))>;
+
+// Same as CSR_Interrupt, but excluding X16-X31.
+def CSR_Interrupt_RVE : CalleeSavedRegs<(sub CSR_Interrupt,
+                                        (sequence "X%u", 16, 31))>;
+
+// Same as CSR_XLEN_F32_Interrupt, but excluding X16-X31.
+def CSR_XLEN_F32_Interrupt_RVE: CalleeSavedRegs<(sub CSR_XLEN_F32_Interrupt,
+                                                (sequence "X%u", 16, 31))>;
+
+// Same as CSR_XLEN_F64_Interrupt, but excluding X16-X31.
+def CSR_XLEN_F64_Interrupt_RVE: CalleeSavedRegs<(sub CSR_XLEN_F64_Interrupt,
+                                                (sequence "X%u", 16, 31))>;

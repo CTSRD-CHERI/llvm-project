@@ -34,12 +34,16 @@ class RISCVTargetInfo : public TargetInfo {
         ABI == "il32pc64e") {
       if (HasCheri)
         Layout = "e-m:e-pf200:64:64:64:32-p:32:32-i64:64-n32-S128";
+      else if(ABI == "ilp32e")
+        Layout = "e-m:e-p:32:32-i64:64-n32-S32";
       else
         Layout = "e-m:e-p:32:32-i64:64-n32-S128";
-    } else if (ABI == "lp64" || ABI == "lp64f" || ABI == "lp64d" ||
+    } else if (ABI == "lp64" || ABI == "lp64f" || ABI == "lp64d" || ABI == "lp64e" ||
                ABI == "l64pc128" || ABI == "l64pc128f" || ABI == "l64pc128d") {
       if (HasCheri)
         Layout = "e-m:e-pf200:128:128:128:64-p:64:64-i64:64-i128:128-n32:64-S128";
+      else if (ABI == "lp64e")
+        Layout = "e-m:e-p:64:64-i64:64-i128:128-n32:64-S64";
       else
         Layout = "e-m:e-p:64:64-i64:64-i128:128-n32:64-S128";
     } else
@@ -187,6 +191,12 @@ public:
   }
 
   bool setABI(const std::string &Name) override {
+    if (Name == "ilp32e") {
+      ABI = Name;
+      resetDataLayout("e-m:e-p:32:32-i64:64-n32-S32");
+      return true;
+    }
+
     if (Name == "ilp32" || Name == "ilp32f" || Name == "ilp32d") {
       ABI = Name;
       return true;
@@ -218,6 +228,12 @@ public:
   }
 
   bool setABI(const std::string &Name) override {
+    if (Name == "lp64e") {
+      ABI = Name;
+      resetDataLayout("e-m:e-p:64:64-i64:64-i128:128-n32:64-S64");
+      return true;
+    }
+
     if (Name == "lp64" || Name == "lp64f" || Name == "lp64d") {
       ABI = Name;
       return true;

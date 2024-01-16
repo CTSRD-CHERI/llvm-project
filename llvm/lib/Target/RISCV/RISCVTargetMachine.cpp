@@ -133,11 +133,17 @@ static std::string computeDataLayout(const Triple &TT, StringRef FS,
                                      const TargetOptions &Options) {
   assert((TT.isArch32Bit() || TT.isArch64Bit()) &&
          "only RV32 and RV64 are currently supported");
+  StringRef ABIName = Options.MCOptions.getABIName();
 
+  StringRef RVEOption = "-S128";
   StringRef IntegerTypes;
   if (TT.isArch64Bit()) {
     IntegerTypes = "-p:64:64-i64:64-i128:128-n32:64";
+    if (ABIName == "lp64e")
+      RVEOption = "-S64";
   } else {
+    if (ABIName == "ilp32e")
+      RVEOption = "-S32";
     IntegerTypes = "-p:32:32-i64:64-n32";
   }
 
@@ -159,7 +165,7 @@ static std::string computeDataLayout(const Triple &TT, StringRef FS,
       PurecapOptions = "-A200-P200-G200";
   }
 
-  return ("e-m:e" + CapTypes + IntegerTypes + "-S128" + PurecapOptions).str();
+  return ("e-m:e" + CapTypes + IntegerTypes + RVEOption + PurecapOptions).str();
 }
 
 static Reloc::Model getEffectiveRelocModel(const Triple &TT,
