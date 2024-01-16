@@ -188,7 +188,7 @@ static const RISCVSupportedExtension SupportedExperimentalExtensions[] = {
 
     {"zcmop", {0, 2}},
 
-    {"zfbfmin", {0, 8}},
+    {"zfbfmin", {1, 0}},
 
     {"zicfilp", {0, 4}},
     {"zicfiss", {0, 4}},
@@ -199,8 +199,8 @@ static const RISCVSupportedExtension SupportedExperimentalExtensions[] = {
 
     {"ztso", {0, 1}},
 
-    {"zvfbfmin", {0, 8}},
-    {"zvfbfwma", {0, 8}},
+    {"zvfbfmin", {1, 0}},
+    {"zvfbfwma", {1, 0}},
 };
 
 static void verifyTables() {
