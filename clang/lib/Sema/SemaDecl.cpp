@@ -5805,7 +5805,7 @@ Decl *Sema::BuildAnonymousStructOrUnion(Scope *S, DeclSpec &DS,
   // Mock up a declarator.
   Declarator Dc(DS, ParsedAttributesView::none(), DeclaratorContext::Member);
   StorageClass SC = StorageClassSpecToVarDeclStorageClass(DS);
-  TypeSourceInfo *TInfo = GetTypeForDeclarator(Dc, S);
+  TypeSourceInfo *TInfo = GetTypeForDeclarator(Dc);
   assert(TInfo && "couldn't build declarator info for anonymous struct/union");
 
   // Create a declaration for this anonymous struct/union.
@@ -5902,7 +5902,7 @@ Decl *Sema::BuildMicrosoftCAnonymousStruct(Scope *S, DeclSpec &DS,
 
   // Mock up a declarator.
   Declarator Dc(DS, ParsedAttributesView::none(), DeclaratorContext::TypeName);
-  TypeSourceInfo *TInfo = GetTypeForDeclarator(Dc, S);
+  TypeSourceInfo *TInfo = GetTypeForDeclarator(Dc);
   assert(TInfo && "couldn't build declarator info for anonymous struct");
 
   auto *ParentDecl = cast<RecordDecl>(CurContext);
@@ -6440,7 +6440,7 @@ NamedDecl *Sema::HandleDeclarator(Scope *S, Declarator &D,
     }
   }
 
-  TypeSourceInfo *TInfo = GetTypeForDeclarator(D, S);
+  TypeSourceInfo *TInfo = GetTypeForDeclarator(D);
   QualType R = TInfo->getType();
 
   if (DiagnoseUnexpandedParameterPack(D.getIdentifierLoc(), TInfo,
@@ -15155,7 +15155,7 @@ Decl *Sema::ActOnParamDeclarator(Scope *S, Declarator &D,
 
   CheckFunctionOrTemplateParamDeclarator(S, D);
 
-  TypeSourceInfo *TInfo = GetTypeForDeclarator(D, S);
+  TypeSourceInfo *TInfo = GetTypeForDeclarator(D);
   QualType parmDeclType = TInfo->getType();
 
   // Check for redeclaration of parameters, e.g. int foo(int x, int x);
@@ -18465,7 +18465,7 @@ FieldDecl *Sema::HandleField(Scope *S, RecordDecl *Record,
   SourceLocation Loc = DeclStart;
   if (II) Loc = D.getIdentifierLoc();
 
-  TypeSourceInfo *TInfo = GetTypeForDeclarator(D, S);
+  TypeSourceInfo *TInfo = GetTypeForDeclarator(D);
   QualType T = TInfo->getType();
   if (getLangOpts().CPlusPlus) {
     CheckExtraCXXDefaultArguments(D);
@@ -18829,7 +18829,7 @@ Decl *Sema::ActOnIvar(Scope *S, SourceLocation DeclStart, Declarator &D,
   // FIXME: Unnamed fields can be handled in various different ways, for
   // example, unnamed unions inject all members into the struct namespace!
 
-  TypeSourceInfo *TInfo = GetTypeForDeclarator(D, S);
+  TypeSourceInfo *TInfo = GetTypeForDeclarator(D);
   QualType T = TInfo->getType();
 
   if (BitWidth) {
