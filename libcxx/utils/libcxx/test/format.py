@@ -7,6 +7,7 @@
 # ===----------------------------------------------------------------------===##
 
 import lit
+import libcxx.test.config as config
 import lit.formats
 import os
 import re
@@ -52,6 +53,14 @@ def _executeScriptInternal(test, litConfig, commands):
     return (out, err, exitCode, timeoutInfo, parsedCommands)
 
 
+def _validateModuleDependencies(modules):
+    for m in modules:
+        if m not in ("std", "std.compat"):
+            raise RuntimeError(
+                f"Invalid module dependency '{m}', only 'std' and 'std.compat' are valid"
+            )
+
+
 def parseScript(test, preamble):
     """
     Extract the script from a test, with substitutions applied.
@@ -92,6 +101,8 @@ def parseScript(test, preamble):
     additionalCompileFlags = []
     additionalLinkFlags = []
     fileDependencies = []
+    modules = []  # The enabled modules
+    moduleCompileFlags = []  # The compilation flags to use modules
     parsers = [
         lit.TestRunner.IntegratedTestKeywordParser(
             "FILE_DEPENDENCIES:",
@@ -107,6 +118,11 @@ def parseScript(test, preamble):
             'ADDITIONAL_LINK_FLAGS:',
             lit.TestRunner.ParserKind.LIST,
             initial_value=additionalLinkFlags
+        ),
+        lit.TestRunner.IntegratedTestKeywordParser(
+            "MODULE_DEPENDENCIES:",
+            lit.TestRunner.ParserKind.SPACE_LIST,
+            initial_value=modules,
         ),
     ]
 
@@ -137,7 +153,6 @@ def parseScript(test, preamble):
     script += preamble
     script += scriptInTest
 
-
     # Add compile flags specified with ADDITIONAL_COMPILE_FLAGS.
     substitutions = [
         (s, x + " " + " ".join(additionalCompileFlags))
@@ -145,6 +160,48 @@ def parseScript(test, preamble):
         else (s, x + ' ' + ' '.join(additionalLinkFlags)) if s == '%{link_flags}' else (s, x)
         for (s, x) in substitutions
     ]
+
+    if modules:
+        _validateModuleDependencies(modules)
+
+        # The moduleCompileFlags are added to the %{compile_flags}, but
+        # the modules need to be built without these flags. So expand the
+        # %{compile_flags} eagerly and hardcode them in the build script.
+        compileFlags = config._getSubstitution("%{compile_flags}", test.config)
+
+        # Building the modules needs to happen before the other script
+        # commands are executed. Therefore the commands are added to the
+        # front of the list.
+        if "std.compat" in modules:
+            script.insert(
+                0,
+                "%dbg(MODULE std.compat) %{cxx} %{flags} "
+                f"{compileFlags} "
+                "-Wno-reserved-module-identifier -Wno-reserved-user-defined-literal "
+                "--precompile -o %T/std.compat.pcm -c %{module}/std.compat.cppm",
+            )
+            moduleCompileFlags.extend(
+                ["-fmodule-file=std.compat=%T/std.compat.pcm", "%T/std.compat.pcm"]
+            )
+
+        # Make sure the std module is built before std.compat. Libc++'s
+        # std.compat module depends on the std module. It is not
+        # known whether the compiler expects the modules in the order of
+        # their dependencies. However it's trivial to provide them in
+        # that order.
+        script.insert(
+            0,
+            "%dbg(MODULE std) %{cxx} %{flags} "
+            f"{compileFlags} "
+            "-Wno-reserved-module-identifier -Wno-reserved-user-defined-literal "
+            "--precompile -o %T/std.pcm -c %{module}/std.cppm",
+        )
+        moduleCompileFlags.extend(["-fmodule-file=std=%T/std.pcm", "%T/std.pcm"])
+
+        # Add compile flags required for the modules.
+        substitutions = config._appendToSubstitution(
+            substitutions, "%{compile_flags}", " ".join(moduleCompileFlags)
+        )
 
     # Perform substitutions in the script itself.
     script = lit.TestRunner.applySubstitutions(
