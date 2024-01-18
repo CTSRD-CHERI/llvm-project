@@ -3580,6 +3580,14 @@ FunctionProtoType::FunctionProtoType(QualType result, ArrayRef<QualType> params,
     FunctionTypeBits.HasExtraBitfields = false;
   }
 
+  if (epi.requiresFunctionProtoTypeArmAttributes()) {
+    auto &ArmTypeAttrs = *getTrailingObjects<FunctionTypeArmAttributes>();
+    ArmTypeAttrs = FunctionTypeArmAttributes();
+
+    // Also set the bit in FunctionTypeExtraBitfields
+    auto &ExtraBits = *getTrailingObjects<FunctionTypeExtraBitfields>();
+    ExtraBits.HasArmTypeAttributes = true;
+  }
 
   // Fill in the trailing argument array.
   auto *argSlot = getTrailingObjects<QualType>();
@@ -3591,10 +3599,10 @@ FunctionProtoType::FunctionProtoType(QualType result, ArrayRef<QualType> params,
 
   // Propagate the SME ACLE attributes.
   if (epi.AArch64SMEAttributes != SME_NormalFunction) {
-    auto &ExtraBits = *getTrailingObjects<FunctionTypeExtraBitfields>();
+    auto &ArmTypeAttrs = *getTrailingObjects<FunctionTypeArmAttributes>();
     assert(epi.AArch64SMEAttributes <= SME_AttributeMask &&
            "Not enough bits to encode SME attributes");
-    ExtraBits.AArch64SMEAttributes = epi.AArch64SMEAttributes;
+    ArmTypeAttrs.AArch64SMEAttributes = epi.AArch64SMEAttributes;
   }
 
   // Fill in the exception type array if present.
