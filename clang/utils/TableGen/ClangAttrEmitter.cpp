@@ -3425,7 +3425,7 @@ void EmitClangAttrTokenKinds(RecordKeeper &Records, raw_ostream &OS) {
                      "RegularKeyword attributes with arguments are not "
                      "yet supported");
         OS << "KEYWORD_ATTRIBUTE("
-           << S.getSpellingRecord().getValueAsString("Name") << ")\n";
+           << S.getSpellingRecord().getValueAsString("Name") << ", )\n";
       }
   OS << "#undef KEYWORD_ATTRIBUTE\n";
 }
