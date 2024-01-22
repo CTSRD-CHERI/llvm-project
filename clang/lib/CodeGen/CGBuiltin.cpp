@@ -10513,7 +10513,7 @@ CodeGenFunction::getSVEOverloadTypes(const SVETypeFlags &TypeFlags,
 
   llvm::Type *DefaultType = getSVEType(TypeFlags);
 
-  if (TypeFlags.isOverloadWhile())
+  if (TypeFlags.isOverloadWhileOrMultiVecCvt())
     return {DefaultType, Ops[1]->getType()};
 
   if (TypeFlags.isOverloadWhileRW())
