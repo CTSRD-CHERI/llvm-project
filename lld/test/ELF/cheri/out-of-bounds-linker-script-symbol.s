@@ -30,11 +30,11 @@
 
 # WARN-NOT:  warning:
 # WARN:      ld.lld: warning: Symbol <unknown kind> _TLS_Data_begin
-# WARN-NEXT: >>> defined in <internal> is defined as being in section .tdata but the value ({{0xFFFFFFFFFFFFFFF8|0xA8}}) is outside this section. Will create a zero-size capability.
+# WARN-NEXT: >>> defined in {{.*}} is defined as being in section .tdata but the value ({{0xFFFFFFFFFFFFFFF8|0xA8}}) is outside this section. Will create a zero-size capability.
 # WARN-NEXT: >>> referenced by <internal>:(.captable+0x0)
 # WARN-EMPTY:
 # WARN-NEXT: warning: Symbol <unknown kind> _TLS_Data_end
-# WARN-NEXT: >>> defined in <internal> is defined as being in section .tdata but the value ({{0x1|0xB9}}) is outside this section. Will create a zero-size capability.
+# WARN-NEXT: >>> defined in {{.*}} is defined as being in section .tdata but the value ({{0x1|0xB9}}) is outside this section. Will create a zero-size capability.
 # WARN-NEXT: >>> referenced by <internal>:(.captable+0x10)
 # WARN-EMPTY:
 # WARN-NOT:  warning:

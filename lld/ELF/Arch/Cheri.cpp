@@ -58,7 +58,7 @@ SymbolAndOffset::fromSectionWithOffset(InputSectionBase *isec, int64_t offset,
   int64_t fallbackOffset = offset;
   // For internal symbols we don't have a matching InputFile, just return
   auto* file = isec->file;
-  if (!file) {
+  if (!file || file->isInternal()) {
     if (Default)
       return *Default;
     return {isec, offset};

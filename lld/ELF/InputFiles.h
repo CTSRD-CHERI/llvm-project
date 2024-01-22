@@ -63,14 +63,17 @@ public:
     SharedKind,
     BitcodeKind,
     BinaryKind,
+    InternalKind,
   };
 
+  InputFile(Kind k, MemoryBufferRef m);
   Kind kind() const { return fileKind; }
 
   bool isElf() const {
     Kind k = kind();
     return k == ObjKind || k == SharedKind;
   }
+  bool isInternal() const { return kind() == InternalKind; }
 
   StringRef getName() const { return mb.getBufferIdentifier(); }
   MemoryBufferRef mb;
@@ -151,9 +154,6 @@ public:
   // True if the file has TLSGD/TLSLD GOT relocations without R_PPC64_TLSGD or
   // R_PPC64_TLSLD. Disable TLS relaxation to avoid bad code generation.
   bool ppc64DisableTLSRelax = false;
-
-protected:
-  InputFile(Kind k, MemoryBufferRef m);
 
 public:
   // If not empty, this stores the name of the archive containing this file.
@@ -383,6 +383,7 @@ public:
   void parse();
 };
 
+InputFile *createInternalFile(StringRef name);
 ELFFileBase *createObjFile(MemoryBufferRef mb, StringRef archiveName = "",
                            bool lazy = false);
 
