@@ -152,7 +152,9 @@ void alloc(void** p) {
   //expected-warning@-1{{Pointer value aligned to a 1 byte boundary stored as type 'void * __capability'. Memory pointed by it is supposed to hold capabilities, for which 16-byte capability alignment will be required}}
 }
 
-void test(void) {
+void test_assign(struct T *pT) {
   intptr_t *cp; // expected-note{{Capabilities stored}}
   alloc((void**)&cp);
+
+  pT->p = (void*)"string"; // no warning
 }
