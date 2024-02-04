@@ -349,10 +349,11 @@ void CGRecordLowering::lowerUnion() {
     if (!IsZeroInitializable)
       continue;
     // Conditionally update our storage type if we've got a new "better" one.
-    if (!StorageType ||
-        getAlignment(FieldType) >  getAlignment(StorageType) ||
+    if (!StorageType || getAlignment(FieldType) > getAlignment(StorageType) ||
         (getAlignment(FieldType) == getAlignment(StorageType) &&
-        getSize(FieldType) > getSize(StorageType)))
+         getSize(FieldType) > getSize(StorageType)) ||
+        (DataLayout.isFatPointer(FieldType) &&
+         !DataLayout.isFatPointer(StorageType)))
       StorageType = FieldType;
   }
   // If we have no storage type just pad to the appropriate size and return.
