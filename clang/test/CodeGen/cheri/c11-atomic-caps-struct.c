@@ -4,6 +4,7 @@
 // RUN:   | opt -S --passes=mem2reg | FileCheck --check-prefix=HYBRID %s
 // RUN: %riscv64_cheri_purecap_cc1 -target-feature +a -std=c11 -o - -emit-llvm -disable-O0-optnone %s -verify \
 // RUN:   | opt -S --passes=mem2reg | FileCheck --check-prefix=PURECAP %s
+// expected-no-diagnostics
 
 typedef struct capstruct {
   unsigned __intcap value;
@@ -36,24 +37,25 @@ void test_init(_Atomic(capstruct) *f, capstruct value) {
 // HYBRID-NEXT:  entry:
 // HYBRID-NEXT:    [[RETVAL:%.*]] = alloca [[STRUCT_CAPSTRUCT:%.*]], align 16
 // HYBRID-NEXT:    [[ATOMIC_TEMP:%.*]] = alloca [[STRUCT_CAPSTRUCT]], align 16
-// HYBRID-NEXT:    call void @__atomic_load(i64 noundef 16, ptr noundef [[F]], ptr noundef [[ATOMIC_TEMP]], i32 noundef signext 5)
+// HYBRID-NEXT:    [[TMP0:%.*]] = load atomic ptr addrspace(200), ptr [[F]] seq_cst, align 16
+// HYBRID-NEXT:    store ptr addrspace(200) [[TMP0]], ptr [[ATOMIC_TEMP]], align 16
 // HYBRID-NEXT:    call void @llvm.memcpy.p0.p0.i64(ptr align 16 [[RETVAL]], ptr align 16 [[ATOMIC_TEMP]], i64 16, i1 false)
-// HYBRID-NEXT:    [[TMP0:%.*]] = load [[STRUCT_CAPSTRUCT]], ptr [[RETVAL]], align 16
-// HYBRID-NEXT:    ret [[STRUCT_CAPSTRUCT]] [[TMP0]]
+// HYBRID-NEXT:    [[TMP1:%.*]] = load [[STRUCT_CAPSTRUCT]], ptr [[RETVAL]], align 16
+// HYBRID-NEXT:    ret [[STRUCT_CAPSTRUCT]] [[TMP1]]
 //
 // PURECAP-LABEL: define {{[^@]+}}@test_load
 // PURECAP-SAME: (ptr addrspace(200) noundef [[F:%.*]]) addrspace(200) #[[ATTR0]] {
 // PURECAP-NEXT:  entry:
 // PURECAP-NEXT:    [[RETVAL:%.*]] = alloca [[STRUCT_CAPSTRUCT:%.*]], align 16, addrspace(200)
 // PURECAP-NEXT:    [[ATOMIC_TEMP:%.*]] = alloca [[STRUCT_CAPSTRUCT]], align 16, addrspace(200)
-// PURECAP-NEXT:    call void @__atomic_load(i64 noundef 16, ptr addrspace(200) noundef [[F]], ptr addrspace(200) noundef [[ATOMIC_TEMP]], i32 noundef signext 5)
+// PURECAP-NEXT:    [[TMP0:%.*]] = load atomic ptr addrspace(200), ptr addrspace(200) [[F]] seq_cst, align 16
+// PURECAP-NEXT:    store ptr addrspace(200) [[TMP0]], ptr addrspace(200) [[ATOMIC_TEMP]], align 16
 // PURECAP-NEXT:    call void @llvm.memcpy.p200.p200.i64(ptr addrspace(200) align 16 [[RETVAL]], ptr addrspace(200) align 16 [[ATOMIC_TEMP]], i64 16, i1 false)
-// PURECAP-NEXT:    [[TMP0:%.*]] = load [[STRUCT_CAPSTRUCT]], ptr addrspace(200) [[RETVAL]], align 16
-// PURECAP-NEXT:    ret [[STRUCT_CAPSTRUCT]] [[TMP0]]
+// PURECAP-NEXT:    [[TMP1:%.*]] = load [[STRUCT_CAPSTRUCT]], ptr addrspace(200) [[RETVAL]], align 16
+// PURECAP-NEXT:    ret [[STRUCT_CAPSTRUCT]] [[TMP1]]
 //
 capstruct test_load(_Atomic(capstruct) *f) {
   return __c11_atomic_load(f, __ATOMIC_SEQ_CST);
-  // expected-warning@-1{{large atomic operation may incur significant performance penalty}}
 }
 
 // HYBRID-LABEL: define {{[^@]+}}@test_store
@@ -64,7 +66,8 @@ capstruct test_load(_Atomic(capstruct) *f) {
 // HYBRID-NEXT:    [[COERCE_DIVE:%.*]] = getelementptr inbounds [[STRUCT_CAPSTRUCT]], ptr [[VALUE]], i32 0, i32 0
 // HYBRID-NEXT:    store ptr addrspace(200) [[VALUE_COERCE]], ptr [[COERCE_DIVE]], align 16
 // HYBRID-NEXT:    call void @llvm.memcpy.p0.p0.i64(ptr align 16 [[DOTATOMICTMP]], ptr align 16 [[VALUE]], i64 16, i1 false)
-// HYBRID-NEXT:    call void @__atomic_store(i64 noundef 16, ptr noundef [[F]], ptr noundef [[DOTATOMICTMP]], i32 noundef signext 5)
+// HYBRID-NEXT:    [[TMP0:%.*]] = load ptr addrspace(200), ptr [[DOTATOMICTMP]], align 16
+// HYBRID-NEXT:    store atomic ptr addrspace(200) [[TMP0]], ptr [[F]] seq_cst, align 16
 // HYBRID-NEXT:    ret void
 //
 // PURECAP-LABEL: define {{[^@]+}}@test_store
@@ -75,12 +78,12 @@ capstruct test_load(_Atomic(capstruct) *f) {
 // PURECAP-NEXT:    [[COERCE_DIVE:%.*]] = getelementptr inbounds [[STRUCT_CAPSTRUCT]], ptr addrspace(200) [[VALUE]], i32 0, i32 0
 // PURECAP-NEXT:    store ptr addrspace(200) [[VALUE_COERCE]], ptr addrspace(200) [[COERCE_DIVE]], align 16
 // PURECAP-NEXT:    call void @llvm.memcpy.p200.p200.i64(ptr addrspace(200) align 16 [[DOTATOMICTMP]], ptr addrspace(200) align 16 [[VALUE]], i64 16, i1 false)
-// PURECAP-NEXT:    call void @__atomic_store(i64 noundef 16, ptr addrspace(200) noundef [[F]], ptr addrspace(200) noundef [[DOTATOMICTMP]], i32 noundef signext 5)
+// PURECAP-NEXT:    [[TMP0:%.*]] = load ptr addrspace(200), ptr addrspace(200) [[DOTATOMICTMP]], align 16
+// PURECAP-NEXT:    store atomic ptr addrspace(200) [[TMP0]], ptr addrspace(200) [[F]] seq_cst, align 16
 // PURECAP-NEXT:    ret void
 //
 void test_store(_Atomic(capstruct) *f, capstruct value) {
   __c11_atomic_store(f, value, __ATOMIC_SEQ_CST);
-  // expected-warning@-1{{large atomic operation may incur significant performance penalty}}
 }
 
 // HYBRID-LABEL: define {{[^@]+}}@test_xchg
@@ -93,10 +96,12 @@ void test_store(_Atomic(capstruct) *f, capstruct value) {
 // HYBRID-NEXT:    [[COERCE_DIVE:%.*]] = getelementptr inbounds [[STRUCT_CAPSTRUCT]], ptr [[VALUE]], i32 0, i32 0
 // HYBRID-NEXT:    store ptr addrspace(200) [[VALUE_COERCE]], ptr [[COERCE_DIVE]], align 16
 // HYBRID-NEXT:    call void @llvm.memcpy.p0.p0.i64(ptr align 16 [[DOTATOMICTMP]], ptr align 16 [[VALUE]], i64 16, i1 false)
-// HYBRID-NEXT:    call void @__atomic_exchange(i64 noundef 16, ptr noundef [[F]], ptr noundef [[DOTATOMICTMP]], ptr noundef [[ATOMIC_TEMP]], i32 noundef signext 5)
+// HYBRID-NEXT:    [[TMP0:%.*]] = load ptr addrspace(200), ptr [[DOTATOMICTMP]], align 16
+// HYBRID-NEXT:    [[TMP1:%.*]] = atomicrmw xchg ptr [[F]], ptr addrspace(200) [[TMP0]] seq_cst, align 16
+// HYBRID-NEXT:    store ptr addrspace(200) [[TMP1]], ptr [[ATOMIC_TEMP]], align 16
 // HYBRID-NEXT:    call void @llvm.memcpy.p0.p0.i64(ptr align 16 [[RETVAL]], ptr align 16 [[ATOMIC_TEMP]], i64 16, i1 false)
-// HYBRID-NEXT:    [[TMP0:%.*]] = load [[STRUCT_CAPSTRUCT]], ptr [[RETVAL]], align 16
-// HYBRID-NEXT:    ret [[STRUCT_CAPSTRUCT]] [[TMP0]]
+// HYBRID-NEXT:    [[TMP2:%.*]] = load [[STRUCT_CAPSTRUCT]], ptr [[RETVAL]], align 16
+// HYBRID-NEXT:    ret [[STRUCT_CAPSTRUCT]] [[TMP2]]
 //
 // PURECAP-LABEL: define {{[^@]+}}@test_xchg
 // PURECAP-SAME: (ptr addrspace(200) noundef [[F:%.*]], ptr addrspace(200) [[VALUE_COERCE:%.*]]) addrspace(200) #[[ATTR0]] {
@@ -108,14 +113,15 @@ void test_store(_Atomic(capstruct) *f, capstruct value) {
 // PURECAP-NEXT:    [[COERCE_DIVE:%.*]] = getelementptr inbounds [[STRUCT_CAPSTRUCT]], ptr addrspace(200) [[VALUE]], i32 0, i32 0
 // PURECAP-NEXT:    store ptr addrspace(200) [[VALUE_COERCE]], ptr addrspace(200) [[COERCE_DIVE]], align 16
 // PURECAP-NEXT:    call void @llvm.memcpy.p200.p200.i64(ptr addrspace(200) align 16 [[DOTATOMICTMP]], ptr addrspace(200) align 16 [[VALUE]], i64 16, i1 false)
-// PURECAP-NEXT:    call void @__atomic_exchange(i64 noundef 16, ptr addrspace(200) noundef [[F]], ptr addrspace(200) noundef [[DOTATOMICTMP]], ptr addrspace(200) noundef [[ATOMIC_TEMP]], i32 noundef signext 5)
+// PURECAP-NEXT:    [[TMP0:%.*]] = load ptr addrspace(200), ptr addrspace(200) [[DOTATOMICTMP]], align 16
+// PURECAP-NEXT:    [[TMP1:%.*]] = atomicrmw xchg ptr addrspace(200) [[F]], ptr addrspace(200) [[TMP0]] seq_cst, align 16
+// PURECAP-NEXT:    store ptr addrspace(200) [[TMP1]], ptr addrspace(200) [[ATOMIC_TEMP]], align 16
 // PURECAP-NEXT:    call void @llvm.memcpy.p200.p200.i64(ptr addrspace(200) align 16 [[RETVAL]], ptr addrspace(200) align 16 [[ATOMIC_TEMP]], i64 16, i1 false)
-// PURECAP-NEXT:    [[TMP0:%.*]] = load [[STRUCT_CAPSTRUCT]], ptr addrspace(200) [[RETVAL]], align 16
-// PURECAP-NEXT:    ret [[STRUCT_CAPSTRUCT]] [[TMP0]]
+// PURECAP-NEXT:    [[TMP2:%.*]] = load [[STRUCT_CAPSTRUCT]], ptr addrspace(200) [[RETVAL]], align 16
+// PURECAP-NEXT:    ret [[STRUCT_CAPSTRUCT]] [[TMP2]]
 //
 capstruct test_xchg(_Atomic(capstruct) *f, capstruct value) {
   return __c11_atomic_exchange(f, value, __ATOMIC_SEQ_CST);
-  // expected-warning@-1{{large atomic operation may incur significant performance penalty}}
 }
 
 // HYBRID-LABEL: define {{[^@]+}}@test_cmpxchg_weak
@@ -126,8 +132,19 @@ capstruct test_xchg(_Atomic(capstruct) *f, capstruct value) {
 // HYBRID-NEXT:    [[COERCE_DIVE:%.*]] = getelementptr inbounds [[STRUCT_CAPSTRUCT]], ptr [[NEW]], i32 0, i32 0
 // HYBRID-NEXT:    store ptr addrspace(200) [[NEW_COERCE]], ptr [[COERCE_DIVE]], align 16
 // HYBRID-NEXT:    call void @llvm.memcpy.p0.p0.i64(ptr align 16 [[DOTATOMICTMP]], ptr align 16 [[NEW]], i64 16, i1 false)
-// HYBRID-NEXT:    [[CALL:%.*]] = call zeroext i1 @__atomic_compare_exchange(i64 noundef 16, ptr noundef [[F]], ptr noundef [[EXP]], ptr noundef [[DOTATOMICTMP]], i32 noundef signext 0, i32 noundef signext 0)
-// HYBRID-NEXT:    ret i1 [[CALL]]
+// HYBRID-NEXT:    [[TMP0:%.*]] = load ptr addrspace(200), ptr [[EXP]], align 16
+// HYBRID-NEXT:    [[TMP1:%.*]] = load ptr addrspace(200), ptr [[DOTATOMICTMP]], align 16
+// HYBRID-NEXT:    [[TMP2:%.*]] = cmpxchg weak ptr [[F]], ptr addrspace(200) [[TMP0]], ptr addrspace(200) [[TMP1]] monotonic monotonic, align 16
+// HYBRID-NEXT:    [[TMP3:%.*]] = extractvalue { ptr addrspace(200), i1 } [[TMP2]], 0
+// HYBRID-NEXT:    [[TMP4:%.*]] = extractvalue { ptr addrspace(200), i1 } [[TMP2]], 1
+// HYBRID-NEXT:    br i1 [[TMP4]], label [[CMPXCHG_CONTINUE:%.*]], label [[CMPXCHG_STORE_EXPECTED:%.*]]
+// HYBRID:       cmpxchg.store_expected:
+// HYBRID-NEXT:    store ptr addrspace(200) [[TMP3]], ptr [[EXP]], align 16
+// HYBRID-NEXT:    br label [[CMPXCHG_CONTINUE]]
+// HYBRID:       cmpxchg.continue:
+// HYBRID-NEXT:    [[FROMBOOL:%.*]] = zext i1 [[TMP4]] to i8
+// HYBRID-NEXT:    [[TOBOOL:%.*]] = trunc i8 [[FROMBOOL]] to i1
+// HYBRID-NEXT:    ret i1 [[TOBOOL]]
 //
 // PURECAP-LABEL: define {{[^@]+}}@test_cmpxchg_weak
 // PURECAP-SAME: (ptr addrspace(200) noundef [[F:%.*]], ptr addrspace(200) noundef [[EXP:%.*]], ptr addrspace(200) [[NEW_COERCE:%.*]]) addrspace(200) #[[ATTR0]] {
@@ -137,12 +154,22 @@ capstruct test_xchg(_Atomic(capstruct) *f, capstruct value) {
 // PURECAP-NEXT:    [[COERCE_DIVE:%.*]] = getelementptr inbounds [[STRUCT_CAPSTRUCT]], ptr addrspace(200) [[NEW]], i32 0, i32 0
 // PURECAP-NEXT:    store ptr addrspace(200) [[NEW_COERCE]], ptr addrspace(200) [[COERCE_DIVE]], align 16
 // PURECAP-NEXT:    call void @llvm.memcpy.p200.p200.i64(ptr addrspace(200) align 16 [[DOTATOMICTMP]], ptr addrspace(200) align 16 [[NEW]], i64 16, i1 false)
-// PURECAP-NEXT:    [[CALL:%.*]] = call zeroext i1 @__atomic_compare_exchange(i64 noundef 16, ptr addrspace(200) noundef [[F]], ptr addrspace(200) noundef [[EXP]], ptr addrspace(200) noundef [[DOTATOMICTMP]], i32 noundef signext 0, i32 noundef signext 0)
-// PURECAP-NEXT:    ret i1 [[CALL]]
+// PURECAP-NEXT:    [[TMP0:%.*]] = load ptr addrspace(200), ptr addrspace(200) [[EXP]], align 16
+// PURECAP-NEXT:    [[TMP1:%.*]] = load ptr addrspace(200), ptr addrspace(200) [[DOTATOMICTMP]], align 16
+// PURECAP-NEXT:    [[TMP2:%.*]] = cmpxchg weak ptr addrspace(200) [[F]], ptr addrspace(200) [[TMP0]], ptr addrspace(200) [[TMP1]] monotonic monotonic, align 16
+// PURECAP-NEXT:    [[TMP3:%.*]] = extractvalue { ptr addrspace(200), i1 } [[TMP2]], 0
+// PURECAP-NEXT:    [[TMP4:%.*]] = extractvalue { ptr addrspace(200), i1 } [[TMP2]], 1
+// PURECAP-NEXT:    br i1 [[TMP4]], label [[CMPXCHG_CONTINUE:%.*]], label [[CMPXCHG_STORE_EXPECTED:%.*]]
+// PURECAP:       cmpxchg.store_expected:
+// PURECAP-NEXT:    store ptr addrspace(200) [[TMP3]], ptr addrspace(200) [[EXP]], align 16
+// PURECAP-NEXT:    br label [[CMPXCHG_CONTINUE]]
+// PURECAP:       cmpxchg.continue:
+// PURECAP-NEXT:    [[FROMBOOL:%.*]] = zext i1 [[TMP4]] to i8
+// PURECAP-NEXT:    [[TOBOOL:%.*]] = trunc i8 [[FROMBOOL]] to i1
+// PURECAP-NEXT:    ret i1 [[TOBOOL]]
 //
 _Bool test_cmpxchg_weak(_Atomic(capstruct) *f, capstruct *exp, capstruct new) {
   return __c11_atomic_compare_exchange_weak(f, exp, new, __ATOMIC_RELAXED, __ATOMIC_RELAXED);
-  // expected-warning@-1{{large atomic operation may incur significant performance penalty}}
 }
 
 // HYBRID-LABEL: define {{[^@]+}}@test_cmpxchg_strong
@@ -153,8 +180,19 @@ _Bool test_cmpxchg_weak(_Atomic(capstruct) *f, capstruct *exp, capstruct new) {
 // HYBRID-NEXT:    [[COERCE_DIVE:%.*]] = getelementptr inbounds [[STRUCT_CAPSTRUCT]], ptr [[NEW]], i32 0, i32 0
 // HYBRID-NEXT:    store ptr addrspace(200) [[NEW_COERCE]], ptr [[COERCE_DIVE]], align 16
 // HYBRID-NEXT:    call void @llvm.memcpy.p0.p0.i64(ptr align 16 [[DOTATOMICTMP]], ptr align 16 [[NEW]], i64 16, i1 false)
-// HYBRID-NEXT:    [[CALL:%.*]] = call zeroext i1 @__atomic_compare_exchange(i64 noundef 16, ptr noundef [[F]], ptr noundef [[EXP]], ptr noundef [[DOTATOMICTMP]], i32 noundef signext 0, i32 noundef signext 0)
-// HYBRID-NEXT:    ret i1 [[CALL]]
+// HYBRID-NEXT:    [[TMP0:%.*]] = load ptr addrspace(200), ptr [[EXP]], align 16
+// HYBRID-NEXT:    [[TMP1:%.*]] = load ptr addrspace(200), ptr [[DOTATOMICTMP]], align 16
+// HYBRID-NEXT:    [[TMP2:%.*]] = cmpxchg ptr [[F]], ptr addrspace(200) [[TMP0]], ptr addrspace(200) [[TMP1]] monotonic monotonic, align 16
+// HYBRID-NEXT:    [[TMP3:%.*]] = extractvalue { ptr addrspace(200), i1 } [[TMP2]], 0
+// HYBRID-NEXT:    [[TMP4:%.*]] = extractvalue { ptr addrspace(200), i1 } [[TMP2]], 1
+// HYBRID-NEXT:    br i1 [[TMP4]], label [[CMPXCHG_CONTINUE:%.*]], label [[CMPXCHG_STORE_EXPECTED:%.*]]
+// HYBRID:       cmpxchg.store_expected:
+// HYBRID-NEXT:    store ptr addrspace(200) [[TMP3]], ptr [[EXP]], align 16
+// HYBRID-NEXT:    br label [[CMPXCHG_CONTINUE]]
+// HYBRID:       cmpxchg.continue:
+// HYBRID-NEXT:    [[FROMBOOL:%.*]] = zext i1 [[TMP4]] to i8
+// HYBRID-NEXT:    [[TOBOOL:%.*]] = trunc i8 [[FROMBOOL]] to i1
+// HYBRID-NEXT:    ret i1 [[TOBOOL]]
 //
 // PURECAP-LABEL: define {{[^@]+}}@test_cmpxchg_strong
 // PURECAP-SAME: (ptr addrspace(200) noundef [[F:%.*]], ptr addrspace(200) noundef [[EXP:%.*]], ptr addrspace(200) [[NEW_COERCE:%.*]]) addrspace(200) #[[ATTR0]] {
@@ -164,10 +202,20 @@ _Bool test_cmpxchg_weak(_Atomic(capstruct) *f, capstruct *exp, capstruct new) {
 // PURECAP-NEXT:    [[COERCE_DIVE:%.*]] = getelementptr inbounds [[STRUCT_CAPSTRUCT]], ptr addrspace(200) [[NEW]], i32 0, i32 0
 // PURECAP-NEXT:    store ptr addrspace(200) [[NEW_COERCE]], ptr addrspace(200) [[COERCE_DIVE]], align 16
 // PURECAP-NEXT:    call void @llvm.memcpy.p200.p200.i64(ptr addrspace(200) align 16 [[DOTATOMICTMP]], ptr addrspace(200) align 16 [[NEW]], i64 16, i1 false)
-// PURECAP-NEXT:    [[CALL:%.*]] = call zeroext i1 @__atomic_compare_exchange(i64 noundef 16, ptr addrspace(200) noundef [[F]], ptr addrspace(200) noundef [[EXP]], ptr addrspace(200) noundef [[DOTATOMICTMP]], i32 noundef signext 0, i32 noundef signext 0)
-// PURECAP-NEXT:    ret i1 [[CALL]]
+// PURECAP-NEXT:    [[TMP0:%.*]] = load ptr addrspace(200), ptr addrspace(200) [[EXP]], align 16
+// PURECAP-NEXT:    [[TMP1:%.*]] = load ptr addrspace(200), ptr addrspace(200) [[DOTATOMICTMP]], align 16
+// PURECAP-NEXT:    [[TMP2:%.*]] = cmpxchg ptr addrspace(200) [[F]], ptr addrspace(200) [[TMP0]], ptr addrspace(200) [[TMP1]] monotonic monotonic, align 16
+// PURECAP-NEXT:    [[TMP3:%.*]] = extractvalue { ptr addrspace(200), i1 } [[TMP2]], 0
+// PURECAP-NEXT:    [[TMP4:%.*]] = extractvalue { ptr addrspace(200), i1 } [[TMP2]], 1
+// PURECAP-NEXT:    br i1 [[TMP4]], label [[CMPXCHG_CONTINUE:%.*]], label [[CMPXCHG_STORE_EXPECTED:%.*]]
+// PURECAP:       cmpxchg.store_expected:
+// PURECAP-NEXT:    store ptr addrspace(200) [[TMP3]], ptr addrspace(200) [[EXP]], align 16
+// PURECAP-NEXT:    br label [[CMPXCHG_CONTINUE]]
+// PURECAP:       cmpxchg.continue:
+// PURECAP-NEXT:    [[FROMBOOL:%.*]] = zext i1 [[TMP4]] to i8
+// PURECAP-NEXT:    [[TOBOOL:%.*]] = trunc i8 [[FROMBOOL]] to i1
+// PURECAP-NEXT:    ret i1 [[TOBOOL]]
 //
 _Bool test_cmpxchg_strong(_Atomic(capstruct) *f, capstruct *exp, capstruct new) {
   return __c11_atomic_compare_exchange_strong(f, exp, new, __ATOMIC_RELAXED, __ATOMIC_RELAXED);
-  // expected-warning@-1{{large atomic operation may incur significant performance penalty}}
 }

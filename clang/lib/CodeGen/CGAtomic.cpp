@@ -148,7 +148,8 @@ bool isAtomicStoreOp(AtomicExpr::AtomicOp Op) {
       }
       UseLibcall = !C.getTargetInfo().hasBuiltinAtomic(
           AtomicSizeInBits, C.toBits(lvalue.getAlignment()),
-          AtomicTy->isCHERICapabilityType(CGF.CGM.getContext()));
+          AtomicTy->isCHERICapabilityType(CGF.getContext()) ||
+              AtomicTy->isSingleCapabilityRecord(CGF.getContext()));
     }
 
     QualType getAtomicType() const { return AtomicTy; }
@@ -549,7 +550,8 @@ static void EmitAtomicOp(CodeGenFunction &CGF, AtomicExpr *E, Address Dest,
   bool PostOpMinMax = false;
   unsigned PostOp = 0;
   QualType AtomicTy = E->getPtr()->getType()->getPointeeType();
-  bool IsCheriCap = AtomicTy->isCHERICapabilityType(CGF.CGM.getContext());
+  bool IsCheriCap = AtomicTy->isCHERICapabilityType(CGF.getContext()) ||
+                    AtomicTy->isSingleCapabilityRecord(CGF.getContext());
 
   switch (E->getOp()) {
   case AtomicExpr::AO__c11_atomic_init:
@@ -820,12 +822,14 @@ static void
 AddDirectArgument(CodeGenFunction &CGF, CallArgList &Args,
                   bool UseOptimizedLibcall, llvm::Value *Val, QualType ValTy,
                   SourceLocation Loc, CharUnits SizeInChars) {
+  bool IsCapTy = ValTy->isCHERICapabilityType(CGF.getContext()) ||
+                 ValTy->isSingleCapabilityRecord(CGF.getContext());
   if (UseOptimizedLibcall) {
     // Load value and pass it to the function directly.
     CharUnits Align = CGF.getContext().getTypeAlignInChars(ValTy);
     int64_t SizeInBits = CGF.getContext().toBits(SizeInChars);
     llvm::Type *ITy;
-    if (ValTy->isCHERICapabilityType(CGF.getContext())) {
+    if (IsCapTy) {
       ValTy = CGF.getContext().getPointerType(CGF.getContext().VoidTy,
                                               PIK_Capability);
       ITy = CGF.Int8CheriCapTy;
@@ -845,7 +849,7 @@ AddDirectArgument(CodeGenFunction &CGF, CallArgList &Args,
   } else {
     // Non-optimized functions always take a reference.
     // NB: Capabilities must be passed directly to the optimized libcall
-    assert(!ValTy->isCHERICapabilityType(CGF.getContext()) &&
+    assert(!IsCapTy &&
            "Capabilities should not be passed to the generic libcall");
     Args.add(RValue::get(Val), CGF.getContext().VoidPtrTy);
   }
@@ -874,7 +878,8 @@ RValue CodeGenFunction::EmitAtomicExpr(AtomicExpr *E) {
   uint64_t Size = TInfo.Width.getQuantity();
   unsigned MaxInlineWidthInBits = getTarget().getMaxAtomicInlineWidth();
 
-  bool IsCheriCap = AtomicTy->isCHERICapabilityType(CGM.getContext());
+  bool IsCheriCap = AtomicTy->isCHERICapabilityType(CGM.getContext()) ||
+                    AtomicTy->isSingleCapabilityRecord(CGM.getContext());
   bool Oversized = (!IsCheriCap &&
                     getContext().toBits(TInfo.Width) > MaxInlineWidthInBits) ||
                    (IsCheriCap && MaxInlineWidthInBits == 0);
@@ -1523,14 +1528,16 @@ RValue CodeGenFunction::EmitAtomicExpr(AtomicExpr *E) {
 
 Address AtomicInfo::castToAtomicIntPointer(Address addr) const {
   llvm::Type *ty;
-  if (AtomicTy->isCHERICapabilityType(CGF.getContext())) {
+  if (AtomicTy->isCHERICapabilityType(CGF.getContext()) ||
+      AtomicTy->isSingleCapabilityRecord(CGF.getContext())) {
     // If capability atomics are natively supported the instruction expects
     // a capability type. We also pass capabilities directly to the atomic
     // libcalls (i.e. always use optimized ones) since this is required to
     // support the RMW operations and special-casing the load/store/xchg to
     // use the generic libcalls (with mutex+memcpy) adds unncessary complexity.
-    if (!UseLibcall) {
-      // If we aren't using a libcall there is no need to cast to i8*
+    if (!UseLibcall && !AtomicTy->isSingleCapabilityRecord(CGF.getContext())) {
+      // If we aren't using a libcall and aren't using a single-capability
+      // struct a there is no need to cast to i8*
       return addr.withElementType(getAtomicAddress().getElementType());
     }
     ty = CGF.CGM.Int8CheriCapTy;
