@@ -146,6 +146,7 @@ void gen_storage(struct T *pT, void *p, size_t n) {
 
 // ----
 char extra[100]; // expected-note{{Original allocation}}
+void *gP;
 
 void alloc(void** p) {
   *p = extra;
@@ -155,6 +156,7 @@ void alloc(void** p) {
 void test_assign(struct T *pT) {
   intptr_t *cp; // expected-note{{Memory pointed by '__intcap * __capability' value is supposed to hold capabilities}}
   alloc((void**)&cp);
+  gP = cp; // no duplicate warning
 
   pT->p = (void*)"string"; // no warning
 }
