@@ -229,7 +229,8 @@ private:
                                   Instruction *TheLoad,
                                   const SCEVAddRecExpr *StoreEv,
                                   const SCEVAddRecExpr *LoadEv,
-                                  const SCEV *BECount);
+                                  const SCEV *BECount,
+                                  PreserveCheriTags PreserveTags);
   bool avoidLIRForMultiBlockLoop(bool IsMemset = false,
                                  bool IsLoopMemset = false);
 
@@ -888,7 +889,7 @@ bool LoopIdiomRecognize::processLoopMemCpy(MemCpyInst *MCI,
   return processLoopStoreOfLoopLoad(
       Dest, Source, SE->getConstant(Dest->getType(), SizeInBytes),
       MCI->getDestAlign(), MCI->getSourceAlign(), MCI, MCI, StoreEv, LoadEv,
-      BECount);
+      BECount, MCI->shouldPreserveCheriTags());
 }
 
 /// processLoopMemSet - See if this memset can be promoted to a large memset.
@@ -1255,8 +1256,17 @@ bool LoopIdiomRecognize::processLoopStoreOfLoopLoad(StoreInst *SI,
 
   Value *StorePtr = SI->getPointerOperand();
   const SCEVAddRecExpr *StoreEv = cast<SCEVAddRecExpr>(SE->getSCEV(StorePtr));
-  unsigned StoreSize = DL->getTypeStoreSize(SI->getValueOperand()->getType());
-
+  Type *StoreType = SI->getValueOperand()->getType();
+  unsigned StoreSize = DL->getTypeStoreSize(StoreType);
+  auto PreserveTags = PreserveCheriTags::Unknown;
+  if (DL->isFatPointer(StoreType->getScalarType())) {
+    // Capabilities and vectors of capabilities need to preserve tags
+    PreserveTags = PreserveCheriTags::Required;
+  } else if (StoreType->isSingleValueType()) {
+    // But all stores of simple types (i.e. non-struct, non-array) never copy
+    // CHERI tag bits, so we can mark the memcpy as non-tag-preserving.
+    PreserveTags = PreserveCheriTags::Unnecessary;
+  }
   // The store must be feeding a non-volatile load.
   LoadInst *LI = cast<LoadInst>(SI->getValueOperand());
   assert(LI->isUnordered() && "Expected only non-volatile non-ordered loads.");
@@ -1270,7 +1280,7 @@ bool LoopIdiomRecognize::processLoopStoreOfLoopLoad(StoreInst *SI,
   const SCEV *StoreSizeSCEV = SE->getConstant(StorePtr->getType(), StoreSize);
   return processLoopStoreOfLoopLoad(StorePtr, LoadPtr, StoreSizeSCEV,
                                     SI->getAlign(), LI->getAlign(), SI, LI,
-                                    StoreEv, LoadEv, BECount);
+                                    StoreEv, LoadEv, BECount, PreserveTags);
 }
 
 class MemmoveVerifier {
@@ -1321,7 +1331,8 @@ bool LoopIdiomRecognize::processLoopStoreOfLoopLoad(
     Value *DestPtr, Value *SourcePtr, const SCEV *StoreSizeSCEV,
     MaybeAlign StoreAlign, MaybeAlign LoadAlign, Instruction *TheStore,
     Instruction *TheLoad, const SCEVAddRecExpr *StoreEv,
-    const SCEVAddRecExpr *LoadEv, const SCEV *BECount) {
+    const SCEVAddRecExpr *LoadEv, const SCEV *BECount,
+    PreserveCheriTags PreserveTags) {
 
   // FIXME: until llvm.memcpy.inline supports dynamic sizes, we need to
   // conservatively bail here, since otherwise we may have to transform
@@ -1462,8 +1473,6 @@ bool LoopIdiomRecognize::processLoopStoreOfLoopLoad(
     AATags = AATags.extendTo(-1);
 
   CallInst *NewCall = nullptr;
-  // https://github.com/CTSRD-CHERI/llvm-project/pull/612
-  PreserveCheriTags PreserveTags = PreserveCheriTags::TODO;
   // Check whether to generate an unordered atomic memcpy:
   //  If the load or store are atomic, then they must necessarily be unordered
   //  by previous checks.
