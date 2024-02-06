@@ -18,7 +18,7 @@ define void @get_state(ptr addrspace("A") nocapture noalias %state) addrspace("P
 ; HYBRID-LABEL: define {{[^@]+}}@get_state
 ; HYBRID-SAME: (ptr noalias nocapture [[STATE:%.*]]) {
 ; HYBRID-NEXT:  entry:
-; HYBRID-NEXT:    call void @llvm.memcpy.p0.p0.i64(ptr align 4 [[STATE]], ptr align 4 @nocap, i64 100, i1 false)
+; HYBRID-NEXT:    call void @llvm.memcpy.p0.p0.i64(ptr align 4 [[STATE]], ptr align 4 @nocap, i64 100, i1 false) #[[ATTR1:[0-9]+]]
 ; HYBRID-NEXT:    ret void
 ;
 ; PURECAP-LABEL: define {{[^@]+}}@get_state
@@ -61,7 +61,7 @@ define void @get_cap_state(ptr addrspace("A") nocapture noalias %state) addrspac
 ; HYBRID-LABEL: define {{[^@]+}}@get_cap_state
 ; HYBRID-SAME: (ptr noalias nocapture [[STATE:%.*]]) {
 ; HYBRID-NEXT:  entry:
-; HYBRID-NEXT:    call void @llvm.memcpy.p0.p0.i64(ptr align 16 [[STATE]], ptr align 16 @cap, i64 400, i1 false)
+; HYBRID-NEXT:    call void @llvm.memcpy.p0.p0.i64(ptr align 16 [[STATE]], ptr align 16 @cap, i64 400, i1 false) #[[ATTR2:[0-9]+]]
 ; HYBRID-NEXT:    ret void
 ;
 ; PURECAP-LABEL: define {{[^@]+}}@get_cap_state
@@ -98,5 +98,5 @@ for.end:
 }
 
 ; UTC_ARGS: --disable
-; HYBRID-TODO: attributes #[[ATTR1]] = { no_preserve_cheri_tags }
-; HYBRID-TODO: attributes #[[ATTR2]] = { must_preserve_cheri_tags }
+; HYBRID: attributes #[[ATTR1]] = { no_preserve_cheri_tags }
+; HYBRID: attributes #[[ATTR2]] = { must_preserve_cheri_tags }
