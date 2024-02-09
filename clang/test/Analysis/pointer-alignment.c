@@ -98,7 +98,7 @@ B* flex(size_t n) {
 char c_buf[100]; // expected-note{{Original allocation}} expected-note{{Original allocation}} expected-note{{Original allocation}}
 void implicit_cap_storage(void **impl_cap_ptr) {
   *impl_cap_ptr = &c_buf[0];
-  // expected-warning@-1{{Pointer value aligned to a 1 byte boundary stored as type 'void * __capability'. Memory pointed by it may be used to hold capabilities, for which 16-byte capability alignment will be required}}
+  // expected-warning@-1{{Pointer value aligned to a 1 byte boundary stored as value of type 'void * __capability'. Memory pointed by it may be used to hold capabilities, for which 16-byte capability alignment will be required}}
 }
 
 char c_buf_aligned[100] __attribute__((aligned(_Alignof(void*)))); // expected-note{{Capabilities stored in 'char[100]'}}
@@ -109,7 +109,7 @@ void copy_through_unaligned(intptr_t *src, void *dst, size_t n) {
   memcpy(c_buf, c_buf_aligned, n * sizeof(intptr_t));
   // expected-warning@-1{{Copied memory object of type 'char[100]' contains capabilities that require 16-byte capability alignment. Destination address alignment is 1. Storing a capability at an underaligned address leads to tag stripping}}
   memcpy(d, c_buf, n * sizeof(intptr_t));
-  // expected-warning@-1{{Destination memory object pointed by 'void * __capability' pointer may contain capabilities that require 16-byte capability alignment. Source address alignment is 1, which means that copied object may have its capabilities tags stripped earlier due to underaligned storage}}
+  // expected-warning@-1{{Destination memory object pointed by 'void * __capability' pointer may be supposed to contain capabilities that require 16-byte capability alignment. Source address alignment is 1, which means that copied object may have its capabilities tags stripped earlier due to underaligned storage}}
 }
 
 void after_cap_data(int n, int D) {
@@ -122,8 +122,9 @@ void after_cap_data(int n, int D) {
 char a1[100], a2[100], a3[100], a4[100]; // expected-note{{Original allocation}} expected-note{{}} expected-note{{}}
 
 struct T {
-  void *p;
-} gS;
+  void *pVoid;
+  intptr_t *pCap;
+} *gS;
 
 void copy(void *dst, void* src, size_t n) {
   memcpy(dst, src, n); // no-warn
@@ -132,11 +133,11 @@ void copy(void *dst, void* src, size_t n) {
 void gen_storage(struct T *pT, void *p, size_t n) {
   memcpy(a1, p, n);
   //expected-warning@-1{{Copied memory object pointed by 'void * __capability' pointer may contain capabilities that require 16-byte capability alignment. Destination address alignment is 1. Storing a capability at an underaligned address leads to tag stripping}}
-  memcpy(pT->p, a2, n);
-  //expected-warning@-1{{Destination memory object pointed by 'void * __capability' pointer may contain capabilities that require 16-byte capability alignment. Source address alignment is 1, which means that copied object may have its capabilities tags stripped earlier due to underaligned storage}}
+  memcpy(pT->pVoid, a2, n);
+  //expected-warning@-1{{Destination memory object pointed by 'void * __capability' pointer may be supposed to contain capabilities that require 16-byte capability alignment. Source address alignment is 1, which means that copied object may have its capabilities tags stripped earlier due to underaligned storage}}
 
   struct T *mT = malloc(sizeof(struct T));
-  memcpy(a3, mT->p, n);
+  memcpy(a3, mT->pVoid, n);
   //expected-warning@-1{{Copied memory object pointed by 'void * __capability' pointer may contain capabilities that require 16-byte capability alignment. Destination address alignment is 1. Storing a capability at an underaligned address leads to tag stripping}}
 
   void *m = malloc(n);
@@ -145,12 +146,12 @@ void gen_storage(struct T *pT, void *p, size_t n) {
 }
 
 // ----
-char extra[100]; // expected-note{{Original allocation}}
+char extra[100]; // expected-note{{Original allocation of type 'char[100]' has an alignment requirement 1 byte}}
 void *gP;
 
 void alloc(void** p) {
   *p = extra;
-  //expected-warning@-1{{Pointer value aligned to a 1 byte boundary stored as type 'void * __capability'. Memory pointed by it is supposed to hold capabilities, for which 16-byte capability alignment will be required}}
+  //expected-warning@-1{{Pointer value aligned to a 1 byte boundary stored as value of type 'intptr_t * __capability'. Memory pointed by it is supposed to hold capabilities, for which 16-byte capability alignment will be required}}
 }
 
 void test_assign(struct T *pT) {
@@ -158,5 +159,5 @@ void test_assign(struct T *pT) {
   alloc((void**)&cp);
   gP = cp; // no duplicate warning
 
-  pT->p = (void*)"string"; // no warning
+  pT->pVoid = (void*)"string"; // no warning
 }
