@@ -119,7 +119,7 @@ void after_cap_data(int n, int D) {
 }
 
 // ----
-char a1[100], a2[100], a3[100], a4[100]; // expected-note{{Original allocation}} expected-note{{}} expected-note{{}}
+char a1[100], a2[100], a3[100], a4[100], a5[100], a6[100]; // expected-note{{Original allocation}} expected-note{{}} expected-note{{}} expected-note{{}} expected-note{{}}
 
 struct T {
   void *pVoid;
@@ -140,9 +140,15 @@ void gen_storage(struct T *pT, void *p, size_t n) {
   memcpy(a3, mT->pVoid, n);
   //expected-warning@-1{{Copied memory object pointed by 'void * __capability' pointer may contain capabilities that require 16-byte capability alignment. Destination address alignment is 1. Storing a capability at an underaligned address leads to tag stripping}}
 
+  memcpy(mT->pCap, a4, n);
+  //expected-warning@-1{{Destination memory object pointed by 'intptr_t * __capability' pointer is supposed to contain capabilities that require 16-byte capability alignment. Source address alignment is 1, which means that copied object may have its capabilities tags stripped earlier due to underaligned storage}}
+
+  memcpy(gS->pCap, a5, n);
+  //expected-warning@-1{{Destination memory object pointed by 'intptr_t * __capability' pointer is supposed to contain capabilities that require 16-byte capability alignment. Source address alignment is 1, which means that copied object may have its capabilities tags stripped earlier due to underaligned storage}}
+
   void *m = malloc(n);
-  memcpy(a4, m, n); // no-warn
-  copy(a4, m, n);
+  memcpy(a6, m, n); // no-warn
+  copy(a6, m, n);
 }
 
 // ----
