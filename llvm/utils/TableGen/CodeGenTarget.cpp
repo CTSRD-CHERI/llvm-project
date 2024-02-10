@@ -240,15 +240,14 @@ StringRef llvm::getEnumName(MVT::SimpleValueType T) {
   case MVT::nxv2f64:   return "MVT::nxv2f64";
   case MVT::nxv4f64:   return "MVT::nxv4f64";
   case MVT::nxv8f64:   return "MVT::nxv8f64";
+  case MVT::c64:       return "MVT::c64";
+  case MVT::c128:      return "MVT::c128";
+  case MVT::c256:      return "MVT::c256";
+  case MVT::cPTR:      return "MVT::cPTR";
   case MVT::token:     return "MVT::token";
   case MVT::Metadata:  return "MVT::Metadata";
   case MVT::iPTR:      return "MVT::iPTR";
   case MVT::iPTRAny:   return "MVT::iPTRAny";
-  case MVT::iFATPTR64: return "MVT::iFATPTR64";
-  case MVT::iFATPTR128:return "MVT::iFATPTR128";
-  case MVT::iFATPTR256:return "MVT::iFATPTR256";
-  case MVT::iFATPTR512:return "MVT::iFATPTR512";
-  case MVT::iFATPTRAny:return "MVT::iFATPTRAny";
   case MVT::Untyped:   return "MVT::Untyped";
   case MVT::funcref:   return "MVT::funcref";
   case MVT::externref: return "MVT::externref";
@@ -740,11 +739,7 @@ CodeGenIntrinsic::CodeGenIntrinsic(Record *R,
         continue;
 
       MVT::SimpleValueType VT = getValueType(TyEl->getValueAsDef("VT"));
-      // iFATPTRAny is overloaded from the perspective of the back end (it
-      // becomes one of the fixed-sized iFATPTR types), but it is not overloaded
-      // from the perspective of the IR, where it is (currently, at least) always
-      // an address-space-200 pointer.
-      if (MVT(VT).isOverloaded() && (MVT(VT) != MVT::iFATPTRAny)) {
+      if (MVT(VT).isOverloaded()) {
         OverloadedVTs.push_back(VT);
         isOverloaded = true;
       }
@@ -931,7 +926,8 @@ bool CodeGenIntrinsic::isParamAPointer(unsigned ParamIdx) const {
   if (ParamIdx >= IS.ParamVTs.size())
     return false;
   MVT ParamType = MVT(IS.ParamVTs[ParamIdx]);
-  return ParamType == MVT::iPTR || ParamType == MVT::iPTRAny;
+  return ParamType == MVT::iPTR || ParamType == MVT::cPTR ||
+         ParamType == MVT::iPTRAny;
 }
 
 bool CodeGenIntrinsic::isParamImmArg(unsigned ParamIdx) const {

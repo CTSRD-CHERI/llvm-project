@@ -5,7 +5,7 @@
 ; RUN: llc -mtriple=riscv64 -mattr=+f,+xcheri,+cap-mode -target-abi l64pc128f -verify-machineinstrs < %s \
 ; RUN:   | %cheri128_FileCheck --check-prefixes=CHECK,RV64IFXCHERI %s --allow-unused-prefixes
 ; Previously expandUnalignedLoad() would trigger assertions for unaligned floating-point values since we were creating
-; incorrect iFATPTR constants.
+; incorrect capability constants.
 declare i32 @printf(i8 addrspace(200)*, ...) addrspace(200)
 
 define i32 @unaligned_float(float addrspace(200)* nocapture readonly %arg, float %newval) unnamed_addr addrspace(200) nounwind {

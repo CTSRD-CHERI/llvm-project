@@ -367,7 +367,7 @@ public:
                    uint32_t AS) const {
 #endif
     if (DL.isFatPointer(AS))
-      return MVT::getFatPointerVT(DL.getPointerSizeInBits(AS));
+      return MVT::getCapabilityVT(DL.getPointerSizeInBits(AS));
     return MVT::getIntegerVT(DL.getPointerSizeInBits(AS));
   }
 
@@ -382,7 +382,7 @@ public:
                    uint32_t AS) const {
 #endif
     if (DL.isFatPointer(AS))
-      return MVT::getFatPointerVT(DL.getPointerSizeInBits(AS));
+      return MVT::getCapabilityVT(DL.getPointerSizeInBits(AS));
     return MVT::getIntegerVT(DL.getPointerSizeInBits(AS));
   }
 
@@ -3477,7 +3477,7 @@ protected:
   bool EnableExtLdPromotion;
 
   /// The type to use for CHERI capabilities (if supported)
-  /// Should be one of iFATPTR64/128/256
+  /// Should be one of c64/c128/c256
   MVT CapType = MVT();
 
   /// Whether the CHERI capability type supports precise bounds for any

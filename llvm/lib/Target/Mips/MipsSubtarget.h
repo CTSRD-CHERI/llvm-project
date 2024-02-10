@@ -373,8 +373,7 @@ public:
   bool isCheri256() const { return IsCheri256; }
   bool useCheriCapTable() const { return getABI().IsCheriPureCap(); };
   MVT typeForCapabilities() const {
-    return IsCheri64 ? MVT::iFATPTR64 :
-      (IsCheri128 ? MVT::iFATPTR128 : MVT::iFATPTR256);
+    return IsCheri64 ? MVT::c64 : (IsCheri128 ? MVT::c128 : MVT::c256);
   }
 
   /// This is a very ugly hack.  CodeGenPrepare can sink pointer arithmetic to

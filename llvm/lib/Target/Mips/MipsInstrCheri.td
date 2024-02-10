@@ -443,9 +443,8 @@ def CCSeal : CheriFmt3Op<0x1f, (outs CheriOpnd:$r1), (ins CheriOpnd:$r2, CheriOp
 def CTestSubset : CheriFmt3Op<0x20, (outs GPR64Opnd:$r1), (ins CheriOpnd0IsDDC:$r2, CheriOpnd:$r3),
   "ctestsubset\t$r1, $r2, $r3", [(set GPR64Opnd: $r1, (CapSubsetTest CheriOpnd0IsDDC: $r2, CheriOpnd: $r3))]>;
 
-// Note: we need to duplicate these patterns for iFATPTR128,256, etc. for some reason
 multiclass UseCNullPatterns<dag NullPat> {
-  def : Pat<(ptradd NullPat, (i64 0)), (COPY CNULL)>;
+  def : Pat<(ptradd NullPat, (i64 0)), (CapRegType (COPY CNULL))>;
   def : Pat<(ptradd NullPat, GPR64Opnd:$addr), (CIncOffset CNULL, $addr)>;
   def : Pat<(int_cheri_cap_offset_set NullPat, GPR64Opnd:$addr), (CIncOffset CNULL, $addr)>;
   def : Pat<(int_cheri_cap_address_set NullPat, GPR64Opnd:$addr), (CSetAddr CNULL, $addr)>;
@@ -455,10 +454,7 @@ multiclass UseCNullPatterns<dag NullPat> {
     def : Pat<(int_cheri_cap_address_set NullPat, simm11s0Pattern:$imm), (CIncOffsetImm CNULL, simm11s0Pattern:$imm)>;
   }
 }
-defm : UseCNullPatterns<(iFATPTR64 (inttoptr (i64 0)))>;
-defm : UseCNullPatterns<(iFATPTR128 (inttoptr (i64 0)))>;
-defm : UseCNullPatterns<(iFATPTR256 (inttoptr (i64 0)))>;
-defm : UseCNullPatterns<(CapRegType (inttoptr (i64 0)))>;
+defm : UseCNullPatterns<(inttoptr (i64 0))>;
 
 
 // Cursors
@@ -939,88 +935,76 @@ def CSCB  : CheriFmtCSC<0, (outs GPR32Opnd:$rd), (ins GPR32Opnd: $rs, CheriOpnd0
                         "cscb\t$rd, $rs, $cb">;
 }
 
-def AddrFI64  : ComplexPattern<iFATPTR64, 1, "selectAddrFI", [frameindex], []>;
-def AddrFI128 : ComplexPattern<iFATPTR128, 1, "selectAddrFI", [frameindex], []>;
-def AddrFI256 : ComplexPattern<iFATPTR256, 1, "selectAddrFI", [frameindex], []>;
+def CapFI : ComplexPattern<cPTR, 1, "selectAddrFI", [frameindex], []>;
 // Load and store patterns for frame indices
 // FIXME: truncstore/extload nodes are not being used?
-// These patterns need duplicating for each of the capability sizes.  It's not
-// clear why: we should be able to pattern match a ComplexPattern with an
-// overloaded return type, but that appears to be broken.
 
-multiclass FrameIndexStorePatterns<PatFrag storeOp, ValueType iFatptrTy, ValueType intTy, ComplexPattern Addr, Instruction OutOp, PatFrag immfrag> {
-  def : Pat<(storeOp intTy:$rs, (iFatptrTy (ptradd Addr:$addr, immfrag:$offset))), (OutOp $rs, ZERO_64, immfrag:$offset, $addr)>;
-  def : Pat<(storeOp intTy:$rs, Addr:$addr), (OutOp $rs, ZERO_64, (i64 0), $addr)>;
+multiclass FrameIndexStorePatterns<PatFrag storeOp, ValueType intTy, Instruction OutOp, PatFrag immfrag> {
+  def : Pat<(storeOp intTy:$rs, (ptradd CapFI:$addr, immfrag:$offset)), (OutOp $rs, ZERO_64, immfrag:$offset, $addr)>;
+  def : Pat<(storeOp intTy:$rs, CapFI:$addr), (OutOp $rs, ZERO_64, (i64 0), $addr)>;
 }
-multiclass FrameIndexLoadPatterns<PatFrag loadOp, ValueType iFatptrTy, ValueType intTy, ComplexPattern Addr, Instruction OutOp, PatFrag immfrag> {
-  def : Pat<(intTy (loadOp (iFatptrTy (ptradd Addr:$addr, immfrag:$offset)))), (OutOp ZERO_64, immfrag:$offset, $addr)>;
-  def : Pat<(intTy (loadOp Addr:$addr)), (OutOp ZERO_64, (i64 0), $addr)>;
+multiclass FrameIndexLoadPatterns<PatFrag loadOp, ValueType intTy, Instruction OutOp, PatFrag immfrag> {
+  def : Pat<(intTy (loadOp (ptradd CapFI:$addr, immfrag:$offset))), (OutOp ZERO_64, immfrag:$offset, $addr)>;
+  def : Pat<(intTy (loadOp CapFI:$addr)), (OutOp ZERO_64, (i64 0), $addr)>;
 }
 
-multiclass FrameIndexPatterns<ValueType iFatptrTy, ComplexPattern Addr> {
-  // FIXME: avoid this pattern for i8/i16 stack loads
-  def : Pat<(store CheriOpnd:$cs, (iFatptrTy (ptradd Addr:$addr, simm11s4Pattern:$offset))), (STORECAP $cs, ZERO_64, imm:$offset, $addr)>;
-  def : Pat<(store CheriOpnd:$cs, Addr:$addr), (STORECAP $cs, ZERO_64, (i64 0), $addr)>;
+// FIXME: avoid this pattern for i8/i16 stack loads
+def : Pat<(store CheriOpnd:$cs, (ptradd CapFI:$addr, simm11s4Pattern:$offset)), (STORECAP $cs, ZERO_64, imm:$offset, $addr)>;
+def : Pat<(store CheriOpnd:$cs, CapFI:$addr), (STORECAP $cs, ZERO_64, (i64 0), $addr)>;
 
-  def : Pat<(load (iFatptrTy (ptradd Addr:$addr, simm11s4Pattern:$offset))), (LOADCAP ZERO_64, imm:$offset, $addr)>;
-  def : Pat<(load Addr:$addr), (LOADCAP ZERO_64, (i64 0), $addr)>;
+def : Pat<(load (ptradd CapFI:$addr, simm11s4Pattern:$offset)), (LOADCAP ZERO_64, imm:$offset, $addr)>;
+def : Pat<(load CapFI:$addr), (LOADCAP ZERO_64, (i64 0), $addr)>;
 
-  // i64 load
-  defm: FrameIndexLoadPatterns<load, iFatptrTy, i64, Addr, CAPLOAD64, simm8s3Pattern>;
+// i64 load
+defm: FrameIndexLoadPatterns<load, i64, CAPLOAD64, simm8s3Pattern>;
 
-  // i32 load
-  defm: FrameIndexLoadPatterns<sextloadi32, iFatptrTy, i64, Addr, CAPLOAD3264, simm8s2Pattern>;
-  defm: FrameIndexLoadPatterns<extloadi32, iFatptrTy, i64, Addr, CAPLOAD3264, simm8s2Pattern>;
-  defm: FrameIndexLoadPatterns<zextloadi32, iFatptrTy, i64, Addr, CAPLOADU32, simm8s2Pattern>;
-  defm: FrameIndexLoadPatterns<load, iFatptrTy, i32, Addr, CAPLOAD32, simm8s2Pattern>;
+// i32 load
+defm: FrameIndexLoadPatterns<sextloadi32, i64, CAPLOAD3264, simm8s2Pattern>;
+defm: FrameIndexLoadPatterns<extloadi32, i64, CAPLOAD3264, simm8s2Pattern>;
+defm: FrameIndexLoadPatterns<zextloadi32, i64, CAPLOADU32, simm8s2Pattern>;
+defm: FrameIndexLoadPatterns<load, i32, CAPLOAD32, simm8s2Pattern>;
 
-  // i16 load
-  defm: FrameIndexLoadPatterns<zextloadi16, iFatptrTy, i32, Addr, CAPLOADU1632, simm8s1Pattern>;
-  defm: FrameIndexLoadPatterns<zextloadi16, iFatptrTy, i64, Addr, CAPLOADU16, simm8s1Pattern>;
-  defm: FrameIndexLoadPatterns<sextloadi16, iFatptrTy, i32, Addr, CAPLOAD1632, simm8s1Pattern>;
-  defm: FrameIndexLoadPatterns<sextloadi16, iFatptrTy, i64, Addr, CAPLOAD16, simm8s1Pattern>;
-  // Use clhu instead of clh for anyext to match MIPS
-  defm: FrameIndexLoadPatterns<extloadi16, iFatptrTy, i32, Addr, CAPLOADU1632, simm8s1Pattern>;
-  defm: FrameIndexLoadPatterns<extloadi16, iFatptrTy, i64, Addr, CAPLOADU16, simm8s1Pattern>;
+// i16 load
+defm: FrameIndexLoadPatterns<zextloadi16, i32, CAPLOADU1632, simm8s1Pattern>;
+defm: FrameIndexLoadPatterns<zextloadi16, i64, CAPLOADU16, simm8s1Pattern>;
+defm: FrameIndexLoadPatterns<sextloadi16, i32, CAPLOAD1632, simm8s1Pattern>;
+defm: FrameIndexLoadPatterns<sextloadi16, i64, CAPLOAD16, simm8s1Pattern>;
+// Use clhu instead of clh for anyext to match MIPS
+defm: FrameIndexLoadPatterns<extloadi16, i32, CAPLOADU1632, simm8s1Pattern>;
+defm: FrameIndexLoadPatterns<extloadi16, i64, CAPLOADU16, simm8s1Pattern>;
 
-  // i8 load
-  defm: FrameIndexLoadPatterns<zextloadi8, iFatptrTy, i32, Addr, CAPLOADU832, simm8Pattern>;
-  defm: FrameIndexLoadPatterns<zextloadi8, iFatptrTy, i64, Addr, CAPLOADU8, simm8Pattern>;
-  defm: FrameIndexLoadPatterns<sextloadi8, iFatptrTy, i32, Addr, CAPLOAD832, simm8Pattern>;
-  defm: FrameIndexLoadPatterns<sextloadi8, iFatptrTy, i64, Addr, CAPLOAD8, simm8Pattern>;
-  // Use clbu instead of clb for anyext to match MIPS
-  defm: FrameIndexLoadPatterns<extloadi8, iFatptrTy, i32, Addr, CAPLOADU832, simm8Pattern>;
-  defm: FrameIndexLoadPatterns<extloadi8, iFatptrTy, i64, Addr, CAPLOADU8, simm8Pattern>;
+// i8 load
+defm: FrameIndexLoadPatterns<zextloadi8, i32, CAPLOADU832, simm8Pattern>;
+defm: FrameIndexLoadPatterns<zextloadi8, i64, CAPLOADU8, simm8Pattern>;
+defm: FrameIndexLoadPatterns<sextloadi8, i32, CAPLOAD832, simm8Pattern>;
+defm: FrameIndexLoadPatterns<sextloadi8, i64, CAPLOAD8, simm8Pattern>;
+// Use clbu instead of clb for anyext to match MIPS
+defm: FrameIndexLoadPatterns<extloadi8, i32, CAPLOADU832, simm8Pattern>;
+defm: FrameIndexLoadPatterns<extloadi8, i64, CAPLOADU8, simm8Pattern>;
 
-  // i1 load
-  defm: FrameIndexLoadPatterns<zextloadi1, iFatptrTy, i32, Addr, CAPLOADU832, simm8Pattern>;
-  defm: FrameIndexLoadPatterns<zextloadi1, iFatptrTy, i64, Addr, CAPLOADU8, simm8Pattern>;
-  defm: FrameIndexLoadPatterns<sextloadi1, iFatptrTy, i32, Addr, CAPLOAD832, simm8Pattern>;
-  defm: FrameIndexLoadPatterns<sextloadi1, iFatptrTy, i64, Addr, CAPLOAD8, simm8Pattern>;
-  // Use clbu instead of clb for anyext to match MIPS
-  defm: FrameIndexLoadPatterns<extloadi1, iFatptrTy, i32, Addr, CAPLOADU832, simm8Pattern>;
-  defm: FrameIndexLoadPatterns<extloadi1, iFatptrTy, i64, Addr, CAPLOADU8, simm8Pattern>;
+// i1 load
+defm: FrameIndexLoadPatterns<zextloadi1, i32, CAPLOADU832, simm8Pattern>;
+defm: FrameIndexLoadPatterns<zextloadi1, i64, CAPLOADU8, simm8Pattern>;
+defm: FrameIndexLoadPatterns<sextloadi1, i32, CAPLOAD832, simm8Pattern>;
+defm: FrameIndexLoadPatterns<sextloadi1, i64, CAPLOAD8, simm8Pattern>;
+// Use clbu instead of clb for anyext to match MIPS
+defm: FrameIndexLoadPatterns<extloadi1, i32, CAPLOADU832, simm8Pattern>;
+defm: FrameIndexLoadPatterns<extloadi1, i64, CAPLOADU8, simm8Pattern>;
 
-  // stores
+// stores
 
-  // This pattern allows omitting lots of unnncessary sll instructions
-  def : Pat<(store (i32 (trunc GPR64:$rs)), Addr:$addr), (CAPSTORE3264 $rs, ZERO_64, (i64 0), $addr)>;
+// This pattern allows omitting lots of unnncessary sll instructions
+def : Pat<(store (i32 (trunc GPR64:$rs)), CapFI:$addr), (CAPSTORE3264 $rs, ZERO_64, (i64 0), $addr)>;
 
-  defm: FrameIndexStorePatterns<truncstorei32, iFatptrTy, i64, Addr, CAPSTORE3264, simm8s2Pattern>;
-  defm: FrameIndexStorePatterns<truncstorei16, iFatptrTy, i64, Addr, CAPSTORE16, simm8s1Pattern>;
-  defm: FrameIndexStorePatterns<truncstorei8, iFatptrTy, i64, Addr, CAPSTORE8, simm8Pattern>;
-  // GPR32 versions
-  defm: FrameIndexStorePatterns<truncstorei16, iFatptrTy, i32, Addr, CAPSTORE1632, simm8s1Pattern>;
-  defm: FrameIndexStorePatterns<truncstorei8, iFatptrTy, i32, Addr, CAPSTORE832, simm8Pattern>;
+defm: FrameIndexStorePatterns<truncstorei32, i64, CAPSTORE3264, simm8s2Pattern>;
+defm: FrameIndexStorePatterns<truncstorei16, i64, CAPSTORE16, simm8s1Pattern>;
+defm: FrameIndexStorePatterns<truncstorei8, i64, CAPSTORE8, simm8Pattern>;
+// GPR32 versions
+defm: FrameIndexStorePatterns<truncstorei16, i32, CAPSTORE1632, simm8s1Pattern>;
+defm: FrameIndexStorePatterns<truncstorei8, i32, CAPSTORE832, simm8Pattern>;
 
-  defm: FrameIndexStorePatterns<store, iFatptrTy, i64, Addr, CAPSTORE64, simm8s3Pattern>;
-  defm: FrameIndexStorePatterns<store, iFatptrTy, i32, Addr, CAPSTORE32, simm8s2Pattern>;
-}
-
-defm : FrameIndexPatterns<iFATPTR64, AddrFI64>;
-defm : FrameIndexPatterns<iFATPTR128, AddrFI128>;
-defm : FrameIndexPatterns<iFATPTR256, AddrFI256>;
-
+defm: FrameIndexStorePatterns<store, i64, CAPSTORE64, simm8s3Pattern>;
+defm: FrameIndexStorePatterns<store, i32, CAPSTORE32, simm8s2Pattern>;
 
 class CheriBoundedStackPseudo<dag ins> : CheriPseudo<(outs CheriOpnd: $cd), ins, "#CapGlobalAddrPseudo $cd, $fi, $frameoffs, $size", []> {
   let hasSideEffects = 0; // could actually trap if we are out of stack space but I don't think that matters
@@ -1040,35 +1024,29 @@ def CheriBoundedStackPseudoImm : CheriBoundedStackPseudo<(ins CheriOpnd:$fi, sim
 // FIXME: duplicated to avoid machine verified errors
 def CheriBoundedStackPseudoReg : CheriBoundedStackPseudo<(ins CheriOpnd:$fi, simm11s0:$frameoffs, GPR64Opnd:$size)>;
 
-// TODO: for some reason all these need to be duplicated for the AddrFI patterns again
-multiclass StackCapPatterns<ValueType iFatptrTy, ComplexPattern Addr> {
-  def : Pat<(iFatptrTy (int_cheri_bounded_stack_cap Addr:$fi, uimm11s0Pattern:$size)),
-            (CheriBoundedStackPseudoImm (Addr:$fi), (i64 0), imm:$size)>;
-  def : Pat<(iFatptrTy (int_cheri_bounded_stack_cap Addr:$fi, GPR64Opnd:$size)),
-            (CheriBoundedStackPseudoReg (Addr:$fi), (i64 0), GPR64Opnd:$size)>;
+def : Pat<(int_cheri_bounded_stack_cap CapFI:$fi, uimm11s0Pattern:$size),
+          (CheriBoundedStackPseudoImm (CapFI:$fi), (i64 0), imm:$size)>;
+def : Pat<(int_cheri_bounded_stack_cap CapFI:$fi, GPR64Opnd:$size),
+          (CheriBoundedStackPseudoReg (CapFI:$fi), (i64 0), GPR64Opnd:$size)>;
 
-  // These  should not be needed since they would mask bugs in CheriBoundAllocas.cpp.
-  // (but keep them here just in case):
-  // let AddedComplexity = -120 in {
-  //   // If the incoffset was placed in a different basic block we
-  //   // might have to turn the bounded stack cap into a plain setbounds:
-  //   def : Pat<(iFatptrTy (int_cheri_bounded_stack_cap CheriOpnd:$reg, uimm11s0Pattern:$size)),
-  //             (iFatptrTy (CSetBounds CheriOpnd:$reg, imm:$size))>;
-  //   def : Pat<(iFatptrTy (int_cheri_bounded_stack_cap CheriOpnd:$reg, GPR64Opnd:$size)),
-  //             (iFatptrTy (CSetBounds CheriOpnd:$reg, GPR64Opnd:$size))>;
-  // }
+// These  should not be needed since they would mask bugs in CheriBoundAllocas.cpp.
+// (but keep them here just in case):
+// let AddedComplexity = -120 in {
+//   // If the incoffset was placed in a different basic block we
+//   // might have to turn the bounded stack cap into a plain setbounds:
+//   def : Pat<(int_cheri_bounded_stack_cap CheriOpnd:$reg, uimm11s0Pattern:$size),
+//             (CSetBounds CheriOpnd:$reg, imm:$size)>;
+//   def : Pat<(int_cheri_bounded_stack_cap CheriOpnd:$reg, GPR64Opnd:$size),
+//             (CSetBounds CheriOpnd:$reg, GPR64Opnd:$size)>;
+// }
 
-  // NOTE: removing the parentheses around (AddrFI128:$fi) in the output pattern will result in
-  // an invalid CIncOffset: %2:cherigpr = CIncOffset %2:cherigpr, $zero_64
-  def : Pat<(iFatptrTy Addr:$fi), (CIncOffset (Addr:$fi), ZERO_64)>;
-  let AddedComplexity = 5 in {
-    // Add complexity to select this before the generic CIncOffsetImm pattern
-    def : Pat<(iFatptrTy (ptradd Addr:$fi, simm11s0Pattern:$offset)), (CIncOffsetImm (Addr:$fi), imm:$offset)>;
-  }
+// NOTE: removing the parentheses around (CapFI:$fi) in the output pattern will result in
+// an invalid CIncOffset: %2:cherigpr = CIncOffset %2:cherigpr, $zero_64
+def : Pat<(cPTR CapFI:$fi), (CIncOffset (CapFI:$fi), ZERO_64)>;
+let AddedComplexity = 5 in {
+  // Add complexity to select this before the generic CIncOffsetImm pattern
+  def : Pat<(ptradd CapFI:$fi, simm11s0Pattern:$offset), (CIncOffsetImm (CapFI:$fi), imm:$offset)>;
 }
-defm : StackCapPatterns<iFATPTR64, AddrFI64>;
-defm : StackCapPatterns<iFATPTR128, AddrFI128>;
-defm : StackCapPatterns<iFATPTR256, AddrFI256>;
 
 def : Pat<(int_cheri_bounded_stack_cap_dynamic CheriOpnd:$cs, GPR64Opnd:$rt),
           (CSetBounds CheriOpnd:$cs, GPR64Opnd:$rt)>;
@@ -1080,17 +1058,13 @@ def : Pat<(int_cheri_bounded_stack_cap_dynamic CheriOpnd:$cs, uimm11s0Pattern:$i
 //   auto FI = cast<FrameIndexSDNode>(N);
 //   return CurDAG->getTargetFrameIndex(FI->getIndex(), MVT::i32);
 // }]>;
-// def : Pat<(iFATPTR128 frameindex:$fi), (CIncOffset (frameindex_to_targetframeindex $fi), ZERO_64)>;
+// def : Pat<(c128 frameindex:$fi), (CIncOffset (frameindex_to_targetframeindex $fi), ZERO_64)>;
 //
 // Using a Pseudo instruction also seems to work fine:
-// def StackToCapPseudo64 : CheriPseudo<(outs CheriOpnd: $cd), (ins CheriOpnd:$fi), "#StackToCapPseudo $cd, $fi", [(set CheriOpnd:$cd, AddrFI64:$fi)]>;
-// def StackToCapPseudo128 : CheriPseudo<(outs CheriOpnd: $cd), (ins CheriOpnd:$fi), "#StackToCapPseudo $cd, $fi", [(set CheriOpnd:$cd, AddrFI128:$fi)]>;
-// def StackToCapPseudo256 : CheriPseudo<(outs CheriOpnd: $cd), (ins CheriOpnd:$fi), "#StackToCapPseudo $cd, $fi", [(set CheriOpnd:$cd, AddrFI256:$fi)]>;
+// def StackToCapPseudo : CheriPseudo<(outs CheriOpnd: $cd), (ins CheriOpnd:$fi), "#StackToCapPseudo $cd, $fi", [(set CheriOpnd:$cd, CapFI:$fi)]>;
 
 // TODO: maybe this will allow folding more offsets into the CIncOffset/clc/csc, etc.
-// def addrRegImm64 : ComplexPattern<iFATPTR64, 2, "selectAddrRegImm", [frameindex]>;
-// def addrRegImm128 : ComplexPattern<iFATPTR128, 2, "selectAddrRegImm", [frameindex]>;
-// def addrRegImm256 : ComplexPattern<iFATPTR256, 2, "selectAddrRegImm", [frameindex]>;
+// def addrRegImm : ComplexPattern<cPTR, 2, "selectAddrRegImm", [frameindex]>;
 
 
 let Defs = [C11], Uses = [C11], hasSideEffects = 1, hasNoSchedulingInfo=1, Predicates=[IsCHERI,IsCHERIABI] in {

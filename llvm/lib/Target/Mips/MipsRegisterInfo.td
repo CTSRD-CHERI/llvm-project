@@ -444,7 +444,7 @@ def CPURAReg : RegisterClass<"Mips", [i32], 32, (add RA)>, Unallocatable;
 def CPUSPReg : RegisterClass<"Mips", [i32], 32, (add SP)>, Unallocatable;
 
 def CapRegType : ValueTypeByHwMode<[Cap64, Cap128, Cap256, DefaultMode],
-                                   [iFATPTR64, iFATPTR128, iFATPTR256, iFATPTR128]>;
+                                   [c64, c128, c256, c128]>;
 
 def CheriGPR : RegisterClass<"Mips", [CapRegType], 256, (add
   C1, C2, C3, C4, C5, C6, C7, C8, C9,

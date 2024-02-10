@@ -44,6 +44,9 @@ def SDT_RISCVIntBinOpW : SDTypeProfile<1, 2, [
 def SDT_RISCVIntShiftDOpW : SDTypeProfile<1, 3, [
   SDTCisSameAs<0, 1>, SDTCisSameAs<0, 2>, SDTCisVT<0, i64>, SDTCisVT<3, i64>
 ]>;
+def SDT_RISCVSymLoad : SDTypeProfile<1, 1, [
+  SDTCisSameAs<0, 1>, SDTCisPtrTy<0>
+]>;
 
 // Target-independent nodes, but with target-specific formats.
 def callseq_start : SDNode<"ISD::CALLSEQ_START", SDT_CallSeqStart,
@@ -92,9 +95,9 @@ def riscv_add_tprel : SDNode<"RISCVISD::ADD_TPREL",
                                                   SDTCisSameAs<0, 3>,
                                                   SDTCisInt<0>]>>;
 
-def riscv_la : SDNode<"RISCVISD::LA", SDTLoad,
+def riscv_la : SDNode<"RISCVISD::LA", SDT_RISCVSymLoad,
                       [SDNPHasChain, SDNPMayLoad, SDNPMemOperand]>;
-def riscv_la_tls_ie : SDNode<"RISCVISD::LA_TLS_IE", SDTLoad,
+def riscv_la_tls_ie : SDNode<"RISCVISD::LA_TLS_IE", SDT_RISCVSymLoad,
                              [SDNPHasChain, SDNPMayLoad, SDNPMemOperand]>;
 def riscv_la_tls_gd : SDNode<"RISCVISD::LA_TLS_GD", SDTIntUnaryOp>;
 
@@ -299,7 +302,7 @@ def BareSymbol : AsmOperandClass {
 }
 
 // A bare symbol.
-def bare_symbol : Operand<XLenVT> {
+def bare_symbol : Operand<iPTRAny> {
   let ParserMatchClass = BareSymbol;
 }
 

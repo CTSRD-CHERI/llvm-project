@@ -159,14 +159,11 @@ std::string EVT::getEVTString() const {
              getVectorElementType().getEVTString();
     if (isInteger())
       return "i" + utostr(getSizeInBits());
+    if (isCapability())
+      return "c" + utostr(getSizeInBits());
     if (isFloatingPoint())
       return "f" + utostr(getSizeInBits());
     llvm_unreachable("Invalid EVT!");
-  case MVT::iFATPTR64: return "iFATPTR64";
-  case MVT::iFATPTR128: return "iFATPTR128";
-  case MVT::iFATPTR256: return "iFATPTR256";
-  case MVT::iFATPTR512: return "iFATPTR512";
-  case MVT::iFATPTRAny: return "iFATPTRAny";
   case MVT::bf16:      return "bf16";
   case MVT::ppcf128:   return "ppcf128";
   case MVT::isVoid:    return "isVoid";
@@ -537,11 +534,10 @@ Type *EVT::getTypeForEVT(LLVMContext &Context) const {
   case MVT::nxv8f64:
     return ScalableVectorType::get(Type::getDoubleTy(Context), 8);
   case MVT::Metadata: return Type::getMetadataTy(Context);
-  case MVT::iFATPTR64:
-  case MVT::iFATPTR128:
-  case MVT::iFATPTR256:
-  case MVT::iFATPTR512:
-  case MVT::iFATPTRAny:
+  case MVT::c64:
+  case MVT::c128:
+  case MVT::c256:
+    // XXX: Hard-coded AS
     return PointerType::get(Type::getInt8Ty(Context), 200);
   }
   // clang-format on
@@ -571,7 +567,7 @@ MVT MVT::getVT(Type *Ty, bool HandleUnknown){
   case Type::PointerTyID: {
     // FIXME: require a DataLayout here!
     if (isCheriPointer(Ty, nullptr))
-      return MVT(MVT::iFATPTRAny);
+      return MVT(MVT::cPTR);
     return MVT(MVT::iPTR);
   }
   case Type::FixedVectorTyID:
