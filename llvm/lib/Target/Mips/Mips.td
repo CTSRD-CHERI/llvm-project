@@ -8,9 +8,6 @@
 // This is the top level entry point for the Mips target.
 //===----------------------------------------------------------------------===//
 
-// Ugly hack to notify TableGen that we support fat pointers
-class SupportsFatPointers;
-
 //===----------------------------------------------------------------------===//
 // Target-independent interfaces
 //===----------------------------------------------------------------------===//

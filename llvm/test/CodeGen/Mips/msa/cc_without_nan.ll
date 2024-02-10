@@ -1,10 +1,4 @@
 ; RUN: llc -mtriple mips64-unknown-linux -mcpu=mips64r5 -mattr=+msa -verify-machineinstrs  < %s | FileCheck %s
-; FIXME: emitINSERT_DF_VIDX() creates an invalid sequence:
-; %25:gpr64 = DSLL %5:gpr32, 3
-; %26:msa128d = SLD_B %7:msa128d(tied-def 0), %7:msa128d, %25.sub_32:gpr64
-; Expected a GPR64 register, but got a GPR32 register
-; Since we don't care about MSA for CHERI, mark this as XFAIL for now
-; XFAIL: *
 
 ; The fcmp fast flag will result in conversion from
 ; setolt, setoeq, setole, setone to

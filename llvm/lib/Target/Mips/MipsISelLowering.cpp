@@ -1272,7 +1272,7 @@ performCIncOffsetToCandAddrCombine(SDNode *N, SelectionDAG &DAG,
   //          t6: i64 = llvm.cheri.cap.address.get TargetConstant:i64<9>, t4
   //        t8: i64 = and t6, Constant:i64<16383>
   //      t10: i64 = sub nsw Constant:i64<0>, t8
-  //    t11: iFATPTR128 = PTRADD t4, t10
+  //    t11: c128 = PTRADD t4, t10
   // This can be folded to a CAndAddr with the inverted mask (i.e. XOR -1,
   // mask).
 
@@ -2668,8 +2668,8 @@ SDValue MipsTargetLowering::lowerADDRSPACECAST(SDValue Op, SelectionDAG &DAG)
   if (Src.getValueType() == Op.getValueType())
     return Src;
   if (ABI.IsCheriPureCap()) {
-    // XXXAR: HACK for the capability table (we turn this into an iFATPTR later
-    // so we can just return the value
+    // XXXAR: HACK for the capability table (we turn this into a capability
+    // later so we can just return the value)
     if (isa<GlobalAddressSDNode>(Src)) {
       return Op;
     }

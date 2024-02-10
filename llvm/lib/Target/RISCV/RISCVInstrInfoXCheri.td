@@ -17,10 +17,6 @@ def SDT_RISCVCheriBoolUnary : SDTypeProfile<1, 1, [
   SDTCisInt<0>, SDTCisVT<1, CLenVT>
 ]>;
 
-def SDT_RISCVCheriAddr : SDTypeProfile<1, 1, [
-  SDTCisVT<0, CLenVT>, SDTCisPtrTy<1>
-]>;
-
 def SDT_RISCVCheriBoolBinary : SDTypeProfile<1, 2, [
   SDTCisInt<0>, SDTCisVT<1, CLenVT>, SDTCisVT<2, CLenVT>
 ]>;
@@ -40,12 +36,12 @@ def riscv_cap_subset_test : SDNode<"RISCVISD::CAP_SUBSET_TEST",
                                    SDT_RISCVCheriBoolBinary>;
 def riscv_cap_equal_exact : SDNode<"RISCVISD::CAP_EQUAL_EXACT",
                                    SDT_RISCVCheriBoolBinary>;
-def riscv_cllc            : SDNode<"RISCVISD::CLLC", SDT_RISCVCheriAddr>;
-def riscv_clgc            : SDNode<"RISCVISD::CLGC", SDTLoad,
+def riscv_cllc            : SDNode<"RISCVISD::CLLC", SDT_RISCVSymLoad>;
+def riscv_clgc            : SDNode<"RISCVISD::CLGC", SDT_RISCVSymLoad,
                                    [SDNPHasChain, SDNPMayLoad, SDNPMemOperand]>;
-def riscv_cla_tls_ie      : SDNode<"RISCVISD::CLA_TLS_IE", SDTLoad,
+def riscv_cla_tls_ie      : SDNode<"RISCVISD::CLA_TLS_IE", SDT_RISCVSymLoad,
                                    [SDNPHasChain, SDNPMayLoad, SDNPMemOperand]>;
-def riscv_clc_tls_gd      : SDNode<"RISCVISD::CLC_TLS_GD", SDT_RISCVCheriAddr>;
+def riscv_clc_tls_gd      : SDNode<"RISCVISD::CLC_TLS_GD", SDT_RISCVSymLoad>;
 
 //===----------------------------------------------------------------------===//
 // Operand and SDNode transformation definitions.
@@ -125,14 +121,10 @@ def uimm10_lsb0000 : Operand<XLenVT>,
   }];
 }
 
-def CapFrameAddrRegImm64 : ComplexPattern<iFATPTR64, 2,
-                                          "SelectCapFrameAddrRegImm",
-                                          [frameindex, ptradd]>;
-def CapFrameAddrRegImm128 : ComplexPattern<iFATPTR128, 2,
-                                           "SelectCapFrameAddrRegImm",
-                                           [frameindex, ptradd]>;
-def CapRegImm64 : ComplexPattern<iFATPTR64, 2, "SelectCapRegImm">;
-def CapRegImm128 : ComplexPattern<iFATPTR128, 2, "SelectCapRegImm">;
+def CapFrameAddrRegImm : ComplexPattern<cPTR, 2,
+                                        "SelectCapFrameAddrRegImm",
+                                        [frameindex, ptradd]>;
+def CapRegImm : ComplexPattern<cPTR, 2, "SelectCapRegImm">;
 
 //===----------------------------------------------------------------------===//
 // Instruction Formats
@@ -1233,9 +1225,7 @@ def : PatGpcrUimm12<int_cheri_bounded_stack_cap, CSetBoundsImm>;
 def : PatGpcrGpr<int_cheri_bounded_stack_cap_dynamic, CSetBounds>;
 def : PatGpcrUimm12<int_cheri_bounded_stack_cap_dynamic, CSetBoundsImm>;
 
-def : Pat<(CapFrameAddrRegImm64 GPCR:$rs1, simm12:$imm12),
-          (CIncOffsetImm GPCR:$rs1, simm12:$imm12)>;
-def : Pat<(CapFrameAddrRegImm128 GPCR:$rs1, simm12:$imm12),
+def : Pat<(CapFrameAddrRegImm GPCR:$rs1, simm12:$imm12),
           (CIncOffsetImm GPCR:$rs1, simm12:$imm12)>;
 
 /// Pointer-Arithmetic Instructions
@@ -1246,11 +1236,11 @@ def : Pat<(CapFrameAddrRegImm128 GPCR:$rs1, simm12:$imm12),
 let Predicates = [HasCheri, NotCheriISAv9] in {
 def : Pat<(int_cheri_cap_to_pointer GPCR:$rs1, GPCRC0IsDDC:$rs2),
           (CToPtr GPCR:$rs1, GPCRC0IsDDC:$rs2)>;
-def : Pat<(int_cheri_cap_to_pointer (CLenVT (int_cheri_ddc_get)), GPCR:$rs1),
+def : Pat<(int_cheri_cap_to_pointer (int_cheri_ddc_get), GPCR:$rs1),
           (CToPtr $rs1, DDC)>;
 def : Pat<(int_cheri_cap_from_pointer GPCRC0IsDDC:$rs1, GPR:$rs2),
           (CFromPtr GPCRC0IsDDC:$rs1, GPR:$rs2)>;
-def : Pat<(int_cheri_cap_from_pointer (CLenVT (int_cheri_ddc_get)), GPR:$rs2),
+def : Pat<(int_cheri_cap_from_pointer (int_cheri_ddc_get), GPR:$rs2),
           (CFromPtr DDC, $rs2)>;
 }  // let Predicates = [HasCheri, NotCheriISAv9]
 def : Pat<(int_cheri_cap_diff GPCR:$cs1, GPCR:$cs2),
@@ -1271,7 +1261,7 @@ def : Pat<(ptrtoint GPCR:$rs1), (CToPtr GPCR:$rs1, DDC)>;
 /// Null Capability Patterns
 
 def : Pat<(inttoptr (XLenVT 0)), (CLenVT (COPY C0))>;
-def : Pat<(XLenVT (ptrtoint (CLenVT (inttoptr (XLenVT 0))))),
+def : Pat<(ptrtoint (CLenVT (inttoptr (XLenVT 0)))),
           (XLenVT (COPY (XLenVT X0)))>;
 
 /// Pointer-Comparison Instructions
@@ -1290,32 +1280,15 @@ multiclass CheriSetCCPatGpcrImm<PatFrag CondOp, Operand ImmTy, dag GprImmDag> {
   def : Pat<(CondOp GPCR:$cs1, (inttoptr ImmTy:$imm12)),
             (OutPatFrag<(ops node:$rs1, node:$imm12), GprImmDag>
               (EXTRACT_SUBREG GPCR:$cs1, sub_cap_addr), ImmTy:$imm12)>;
-  def : Pat<(CondOp GPCR:$cs1,
-              (ptradd (iFATPTR64 (inttoptr (XLenVT 0))), ImmTy:$imm12)),
+  def : Pat<(CondOp GPCR:$cs1, (ptradd (inttoptr (XLenVT 0)), ImmTy:$imm12)),
             (OutPatFrag<(ops node:$rs1, node:$imm12), GprImmDag>
               (EXTRACT_SUBREG GPCR:$cs1, sub_cap_addr), ImmTy:$imm12)>;
   def : Pat<(CondOp GPCR:$cs1,
-              (ptradd (iFATPTR128 (inttoptr (XLenVT 0))), ImmTy:$imm12)),
+              (int_cheri_cap_offset_set (inttoptr (XLenVT 0)), ImmTy:$imm12)),
             (OutPatFrag<(ops node:$rs1, node:$imm12), GprImmDag>
               (EXTRACT_SUBREG GPCR:$cs1, sub_cap_addr), ImmTy:$imm12)>;
   def : Pat<(CondOp GPCR:$cs1,
-              (int_cheri_cap_offset_set
-                (iFATPTR64 (inttoptr (XLenVT 0))), ImmTy:$imm12)),
-            (OutPatFrag<(ops node:$rs1, node:$imm12), GprImmDag>
-              (EXTRACT_SUBREG GPCR:$cs1, sub_cap_addr), ImmTy:$imm12)>;
-  def : Pat<(CondOp GPCR:$cs1,
-              (int_cheri_cap_offset_set
-                (iFATPTR128 (inttoptr (XLenVT 0))), ImmTy:$imm12)),
-            (OutPatFrag<(ops node:$rs1, node:$imm12), GprImmDag>
-              (EXTRACT_SUBREG GPCR:$cs1, sub_cap_addr), ImmTy:$imm12)>;
-  def : Pat<(CondOp GPCR:$cs1,
-              (int_cheri_cap_address_set
-                (iFATPTR64 (inttoptr (XLenVT 0))), ImmTy:$imm12)),
-            (OutPatFrag<(ops node:$rs1, node:$imm12), GprImmDag>
-              (EXTRACT_SUBREG GPCR:$cs1, sub_cap_addr), ImmTy:$imm12)>;
-  def : Pat<(CondOp GPCR:$cs1,
-              (int_cheri_cap_address_set
-                (iFATPTR128 (inttoptr (XLenVT 0))), ImmTy:$imm12)),
+              (int_cheri_cap_address_set (inttoptr (XLenVT 0)), ImmTy:$imm12)),
             (OutPatFrag<(ops node:$rs1, node:$imm12), GprImmDag>
               (EXTRACT_SUBREG GPCR:$cs1, sub_cap_addr), ImmTy:$imm12)>;
 }
@@ -1336,7 +1309,7 @@ class Swap<PatFrag BinFrag>
 
 // NB: Constants are wrapped as (ptradd (inttoptr 0) C) so the operand order
 // isn't canonicalised like for integers so we have to add extra patterns for
-// the commutative and inverse cases. Maybe we should support Constant:iFATPTR,
+// the commutative and inverse cases. Maybe we should support Constant:cN,
 // represent them as (inttoptr C), or just canonicalise the current form?
 
 def  : CheriSetCCPatGpcrGpcr<setlt, (SLT node:$rs1, node:$rs2)>;
@@ -1585,24 +1558,24 @@ multiclass AMOCapPat<string CLenStr, string AtomicOp, string BaseInst> {
 }
 
 let Predicates = [HasCheri, IsRV32, NotCapMode] in {
-defm : LdPat<load, LC_64, iFATPTR64>;
-defm : StPat<store, SC_64, GPCR, iFATPTR64>;
+defm : LdPat<load, LC_64, c64>;
+defm : StPat<store, SC_64, GPCR, c64>;
 } // Predicates = [HasCheri, IsRV32, NotCapMode]
 
 let Predicates = [HasCheri, IsRV64, NotCapMode] in {
-defm : LdPat<load, LC_128, iFATPTR128>;
-defm : StPat<store, SC_128, GPCR, iFATPTR128>;
+defm : LdPat<load, LC_128, c128>;
+defm : StPat<store, SC_128, GPCR, c128>;
 } // Predicates = [HasCheri, IsRV64, NotCapMode]
 
 let Predicates = [HasCheri, HasStdExtA, IsRV32, NotCapMode] in {
-defm : LdPat<atomic_load_cap, LC_64, iFATPTR64>;
-defm : AtomicStPat<atomic_store_cap, SC_64, GPCR, iFATPTR64>;
+defm : LdPat<atomic_load_cap, LC_64, c64>;
+defm : AtomicStPat<atomic_store_cap, SC_64, GPCR, c64>;
 defm : AMOCapPat<"64", "atomic_swap_cap", "AMOSWAP_C">;
 } // Predicates = [HasCheri, HasStdExtA, IsRV32, NotCapMode]
 
 let Predicates = [HasCheri, HasStdExtA, IsRV64, NotCapMode] in {
-defm : LdPat<atomic_load_cap, LC_128, iFATPTR128>;
-defm : AtomicStPat<atomic_store_cap, SC_128, GPCR, iFATPTR128>;
+defm : LdPat<atomic_load_cap, LC_128, c128>;
+defm : AtomicStPat<atomic_store_cap, SC_128, GPCR, c128>;
 defm : AMOCapPat<"128", "atomic_swap_cap", "AMOSWAP_C">;
 } // Predicates = [HasCheri, HasStdExtA, IsRV64, NotCapMode]
 
@@ -1637,16 +1610,12 @@ defm : PseudoCmpXchgPat<"atomic_cmp_swap_cap", PseudoCmpXchgCap, GPCR>;
 /// Capability Mode Instructions
 
 multiclass CheriLdPat<PatFrag LoadOp, RVInst Inst> {
-  def : Pat<(LoadOp (CapRegImm64 GPCR:$rs1, simm12:$imm12)),
-            (Inst GPCR:$rs1, simm12:$imm12)>;
-  def : Pat<(LoadOp (CapRegImm128 GPCR:$rs1, simm12:$imm12)),
+  def : Pat<(LoadOp (CapRegImm GPCR:$rs1, simm12:$imm12)),
             (Inst GPCR:$rs1, simm12:$imm12)>;
 }
 
 multiclass CheriStPat<PatFrag StoreOp, RVInst Inst, RegisterClass StTy> {
-  def : Pat<(StoreOp StTy:$rs2, (CapRegImm64 GPCR:$rs1, simm12:$imm12)),
-            (Inst StTy:$rs2, GPCR:$rs1, simm12:$imm12)>;
-  def : Pat<(StoreOp StTy:$rs2, (CapRegImm128 GPCR:$rs1, simm12:$imm12)),
+  def : Pat<(StoreOp StTy:$rs2, (CapRegImm GPCR:$rs1, simm12:$imm12)),
             (Inst StTy:$rs2, GPCR:$rs1, simm12:$imm12)>;
 }
 

@@ -800,8 +800,9 @@ def encoder;
 /// derived from this.  TableGen treats the register class as having a symbolic
 /// type that it doesn't know, and resolves the actual regclass to use by using
 /// the TargetRegisterInfo::getPointerRegClass() hook at codegen time.
-class PointerLikeRegClass<int Kind> {
+class PointerLikeRegClass<int Kind, ValueType Type = iPTR> {
   int RegClassKind = Kind;
+  ValueType RegClassType = Type;
 }
 
 

@@ -18,9 +18,6 @@
 ; RUN:   -verify-machineinstrs < %s \
 ; RUN:   | FileCheck -check-prefixes=N64,N64-LE %s
 
-; For some reason CHERI breaks this this test, but we don't support msa anyway
-; XFAIL: *
-
 @v4i8 = global <4 x i8> <i8 0, i8 0, i8 0, i8 0>
 @v16i8 = global <16 x i8> <i8 0, i8 0, i8 0, i8 0, i8 0, i8 0, i8 0, i8 0, i8 0, i8 0, i8 0, i8 0, i8 0, i8 0, i8 0, i8 0>
 @v8i16 = global <8 x i16> <i16 0, i16 0, i16 0, i16 0, i16 0, i16 0, i16 0, i16 0>

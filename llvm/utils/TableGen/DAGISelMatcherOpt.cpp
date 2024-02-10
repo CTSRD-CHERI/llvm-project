@@ -369,9 +369,9 @@ static void FactorNodes(std::unique_ptr<Matcher> &InputMatcherPtr) {
         cast_or_null<CheckTypeMatcher>(FindNodeWithKind(NewOptionsToMatch[i],
                                                         Matcher::CheckType));
       if (!CTM ||
-          // iPTR checks could alias any other case without us knowing, don't
-          // bother with them.
-          CTM->getType() == MVT::iPTR ||
+          // iPTR/cPTR checks could alias any other case without us knowing,
+          // don't bother with them.
+          CTM->getType() == MVT::iPTR || CTM->getType() == MVT::cPTR ||
           // SwitchType only works for result #0.
           CTM->getResNo() != 0 ||
           // If the CheckType isn't at the start of the list, see if we can move

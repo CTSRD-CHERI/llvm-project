@@ -144,10 +144,14 @@ namespace llvm {
       return isSimple() ? V.isInteger() : isExtendedInteger();
     }
 
-    /// Return true if this is a fat pointer type.
-    bool isFatPointer() const {
-      return isSimple() ? V.isFatPointer() : false;
+    /// Return true if this is a capability type.
+    bool isCapability() const {
+      // TODO: isExtendedCapability?
+      return isSimple() ? V.isCapability() : false;
     }
+
+    /// Return true if this is a capability type. Deprecated.
+    bool isFatPointer() const { return isCapability(); }
 
     /// Return true if this is an integer, but not a vector.
     bool isScalarInteger() const {
@@ -213,7 +217,7 @@ namespace llvm {
     /// Return true if this is an overloaded type for TableGen.
     bool isOverloaded() const {
       return (V == MVT::iAny || V == MVT::fAny || V == MVT::vAny ||
-              V == MVT::iPTRAny || V == MVT::iFATPTRAny);
+              V == MVT::iPTRAny);
     }
 
     /// Return true if the bit size is a multiple of 8.

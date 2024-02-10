@@ -1007,11 +1007,6 @@ enum IIT_Info {
   IIT_ANYPTR_TO_ELT = 56,
   IIT_I2 = 57,
   IIT_I4 = 58,
-  IIT_IFATPTR64 = IIT_I4 + 1,
-  IIT_IFATPTR128 = IIT_IFATPTR64 + 1,
-  IIT_IFATPTR256 = IIT_IFATPTR128 + 1,
-  IIT_IFATPTR512 = IIT_IFATPTR256 + 1,
-  IIT_IFATPTRAny = IIT_IFATPTR512 + 1,
 };
 
 static void DecodeIITType(unsigned &NextElt, ArrayRef<unsigned char> Infos,
@@ -1149,15 +1144,6 @@ static void DecodeIITType(unsigned &NextElt, ArrayRef<unsigned char> Infos,
     OutputTable.push_back(IITDescriptor::get(IITDescriptor::Pointer,
                                              Infos[NextElt++]));
     DecodeIITType(NextElt, Infos, Info, OutputTable);
-    return;
-  }
-  case IIT_IFATPTR64:
-  case IIT_IFATPTR128:
-  case IIT_IFATPTR256:
-  case IIT_IFATPTR512:
-  case IIT_IFATPTRAny: {
-    OutputTable.push_back(IITDescriptor::get(IITDescriptor::Pointer, 200));
-    DecodeIITType(++NextElt, Infos, Info, OutputTable);
     return;
   }
   case IIT_ARG: {
