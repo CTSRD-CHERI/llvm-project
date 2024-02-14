@@ -3,6 +3,7 @@
 ;; After merging to LLVM 15 the stack bounds pass the switch to opqaue pointers caused
 ;; miscompilations in the stack bounding pass (the unbounded value was used instead of
 ;; the bounded one due to the removal of the bitcast instructions).
+; REQUIRES: asserts
 ; RUN: opt -mtriple=mips64 -mcpu=cheri128 -mattr=+cheri128 --relocation-model=pic -target-abi purecap -cheri-bound-allocas -o - -S %s -debug-only=cheri-bound-allocas 2>%t.dbg| FileCheck %s
 ; RUN: FileCheck %s -input-file=%t.dbg -check-prefix DBG
 ; RUN: llc -mtriple=mips64 -mcpu=cheri128 -mattr=+cheri128 --relocation-model=pic -target-abi purecap %s -o - | FileCheck %s -check-prefix ASM
