@@ -116,8 +116,7 @@ declare dso_local void @__cxa_end_catch() local_unnamed_addr addrspace(200)
 @IF-RISCV@; RELOCS-NEXT:   R_RISCV_SUB32 - 0x0
 @IF-RISCV@; RELOCS-NEXT:   R_RISCV_ADD32 - 0x0
 @IF-RISCV@; RELOCS-NEXT:   R_RISCV_SUB32 - 0x0
-@IF-RISCV@; RELOCS-NEXT:   R_RISCV_ADD32 .L_ZTIi.DW.stub 0x0
-@IF-RISCV@; RELOCS-NEXT:   R_RISCV_SUB32 - 0x0
+@IF-RISCV@; RELOCS-NEXT:   R_RISCV_32_PCREL .L_ZTIi.DW.stub 0x0
 ; RELOCS-NEXT:  }
 
 ; The local alias should have the same type and non-zero size as the real function:
