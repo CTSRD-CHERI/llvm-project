@@ -158,6 +158,6 @@ entry:
 
 ; UTC_ARGS: --disable
 ; CHECK-IR: attributes #[[ATTR1]] = { nounwind }
-; The no_preserve_cheri_tags should be attribute 3/4 in all cases
-; CHECK-IR: attributes #[[ATTR3]] = { no_preserve_cheri_tags nounwind }
-; CHECK-IR: attributes #[[ATTR4]] = { no_preserve_cheri_tags }
+; The no_preserve_cheri_tags should be attribute 4/5 in all cases
+; CHECK-IR: attributes #[[ATTR4]] = { no_preserve_cheri_tags nounwind }
+; CHECK-IR: attributes #[[ATTR5]] = { no_preserve_cheri_tags }
