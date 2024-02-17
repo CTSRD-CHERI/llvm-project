@@ -15,17 +15,23 @@ CHERI_GENERIC_UTC_KEY = 'CHERI-GENERIC-UTC:'
 CHERI_GENERIC_UTC_CMD = re.compile((r'.*' + CHERI_GENERIC_UTC_KEY + r'\s*(?P<cmd>.*)\s*$').encode("utf-8"))
 
 
+def _list2bytes(l: "list[str]") -> bytes:
+    return " ".join(l).encode("utf-8")
+
 class ArchSpecificValues(object):
     def __init__(self, architecture: str, *, cap_range, cap_width,
                  common_args: list, hybrid_sf_args: list, hybrid_hf_args: list,
                  purecap_sf_args: list, purecap_hf_args: list, datalayout: bytes,
                  base_architecture: str = None):
-        self.hybrid_datalayout = datalayout
-        self.purecap_datalayout = datalayout + b"-A200-P200-G200"
-        self.hybrid_softfloat_args = (" ".join(common_args + hybrid_sf_args)).encode("utf-8")
-        self.hybrid_hardfloat_args = (" ".join(common_args + hybrid_hf_args)).encode("utf-8")
-        self.purecap_softfloat_args = (" ".join(common_args + purecap_sf_args)).encode("utf-8")
-        self.purecap_hardfloat_args = (" ".join(common_args + purecap_hf_args)).encode("utf-8")
+
+        self.replacements: "dict[bytes, bytes]" = {
+            b"@HYBRID_DATALAYOUT@": datalayout,
+            b"@PURECAP_DATALAYOUT@": datalayout + b"-A200-P200-G200",
+            b"@HYBRID_SOFTFLOAT_ARGS@": _list2bytes(common_args + hybrid_sf_args),
+            b"@HYBRID_HARDFLOAT_ARGS@": _list2bytes(common_args + hybrid_hf_args),
+            b"@PURECAP_SOFTFLOAT_ARGS@": _list2bytes(common_args + purecap_sf_args),
+            b"@PURECAP_HARDFLOAT_ARGS@": _list2bytes(common_args + purecap_hf_args),
+        }
         self.cap_width = cap_width
         self.cap_range = cap_range
         self.name = architecture
@@ -200,12 +206,9 @@ def update_one_test(test_name: str, input_file: typing.BinaryIO,
                 int(math.log2(arch_def.cap_range / 8))).encode("utf-8"))
             # Opt tests require a datalayout since the lit substitutions don't
             # include it in their commandline
-            converted_line = converted_line.replace(b"@PURECAP_DATALAYOUT@", arch_def.purecap_datalayout)
-            converted_line = converted_line.replace(b"@HYBRID_DATALAYOUT@", arch_def.hybrid_datalayout)
-            converted_line = converted_line.replace(b"@HYBRID_SOFTFLOAT_ARGS@", arch_def.hybrid_softfloat_args)
-            converted_line = converted_line.replace(b"@HYBRID_HARDFLOAT_ARGS@", arch_def.hybrid_hardfloat_args)
-            converted_line = converted_line.replace(b"@PURECAP_SOFTFLOAT_ARGS@", arch_def.purecap_softfloat_args)
-            converted_line = converted_line.replace(b"@PURECAP_HARDFLOAT_ARGS@", arch_def.purecap_hardfloat_args)
+            for key, replacement in arch_def.replacements.items():
+                converted_line = converted_line.replace(key, replacement)
+
             if args.verbose and converted_line != line:
                 print("Adjusted line:")
                 print("  Before:", line)
