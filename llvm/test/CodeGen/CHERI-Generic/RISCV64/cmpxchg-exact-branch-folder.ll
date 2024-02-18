@@ -4,16 +4,33 @@
 ; CHERI-GENERIC-UTC: llc
 ; CHERI-GENERIC-UTC: mir
 ; RUN: llc -mtriple=riscv64 --relocation-model=pic -target-abi l64pc128d -mattr=+xcheri,+cap-mode,+f,+d -mattr=+a < %s --stop-after=branch-folder | FileCheck %s --check-prefixes=MIR
-; RUN: not --crash llc -mtriple=riscv64 --relocation-model=pic -target-abi l64pc128d -mattr=+xcheri,+cap-mode,+f,+d -mattr=+a < %s
+; RUN: cat %s | llc -mtriple=riscv64 --relocation-model=pic -target-abi l64pc128d -mattr=+xcheri,+cap-mode,+f,+d -mattr=+a | FileCheck %s
 ; REQUIRES: asserts
 
 ; The branch-folder MIR pass will merge the two blocks inside these functions but
 ; since the base pointer is distinct it will have two MachineMemOperands.
 ; The cmpxchg exact logic stored the exact flag in the MachineMemOperand and
 ; previously assumed there would only ever be one operand, so this test ensures
-; we can handle the merged logic.
+; we can handle the merged logic by adding separate pseudo instructions (which
+; ensures that the branches with different comparisons can no longer be merged).
 
 define dso_local signext i32 @merge_i32(i1 %cond1, ptr addrspace(200) %ptr, i32 %newval, i32 %cmpval) {
+; CHECK-LABEL: merge_i32:
+; CHECK:       # %bb.0: # %entry
+; CHECK-NEXT:    andi a0, a0, 1
+; CHECK-NEXT:    clc ca0, 0(ca1)
+; CHECK-NEXT:    sext.w a1, a3
+; CHECK-NEXT:  .LBB0_1: # %entry
+; CHECK-NEXT:    # =>This Inner Loop Header: Depth=1
+; CHECK-NEXT:    clr.w a3, (ca0)
+; CHECK-NEXT:    bne a3, a1, .LBB0_3
+; CHECK-NEXT:  # %bb.2: # %entry
+; CHECK-NEXT:    # in Loop: Header=BB0_1 Depth=1
+; CHECK-NEXT:    csc.w.rl a4, a2, (ca0)
+; CHECK-NEXT:    bnez a4, .LBB0_1
+; CHECK-NEXT:  .LBB0_3: # %entry
+; CHECK-NEXT:    li a0, 0
+; CHECK-NEXT:    cret
   ; MIR-LABEL: name: merge_i32
   ; MIR: bb.0.entry:
   ; MIR-NEXT:   liveins: $c11, $x10, $x12, $x13
@@ -42,13 +59,28 @@ end:
 }
 
 define dso_local signext i32 @merge_ptr_addr(i1 %cond1, ptr addrspace(200) %ptr, ptr addrspace(200) %newval, ptr addrspace(200) %cmpval) {
+; CHECK-LABEL: merge_ptr_addr:
+; CHECK:       # %bb.0: # %entry
+; CHECK-NEXT:    andi a0, a0, 1
+; CHECK-NEXT:    clc ca0, 0(ca1)
+; CHECK-NEXT:  .LBB1_1: # %entry
+; CHECK-NEXT:    # =>This Inner Loop Header: Depth=1
+; CHECK-NEXT:    clr.c.rl ca1, (ca0)
+; CHECK-NEXT:    bne a1, a3, .LBB1_3
+; CHECK-NEXT:  # %bb.2: # %entry
+; CHECK-NEXT:    # in Loop: Header=BB1_1 Depth=1
+; CHECK-NEXT:    csc.c a4, ca2, (ca0)
+; CHECK-NEXT:    bnez a4, .LBB1_1
+; CHECK-NEXT:  .LBB1_3: # %entry
+; CHECK-NEXT:    li a0, 0
+; CHECK-NEXT:    cret
   ; MIR-LABEL: name: merge_ptr_addr
   ; MIR: bb.0.entry:
   ; MIR-NEXT:   liveins: $c11, $c12, $c13, $x10
   ; MIR-NEXT: {{  $}}
   ; MIR-NEXT:   renamable $x10 = ANDI killed renamable $x10, 1
   ; MIR-NEXT:   renamable $c10 = CLC_128 killed renamable $c11, 0 :: (load (s128) from %ir.ptr, addrspace 200)
-  ; MIR-NEXT:   dead early-clobber renamable $c11, dead early-clobber renamable $x14 = PseudoCheriCmpXchgCap killed renamable $c10, killed renamable $c13, killed renamable $c12, 5 :: (load store release monotonic (s128) on %ir.ld2, addrspace 200), (load store release monotonic (s128) on %ir.ld1, addrspace 200)
+  ; MIR-NEXT:   dead early-clobber renamable $c11, dead early-clobber renamable $x14 = PseudoCheriCmpXchgCapAddr killed renamable $c10, killed renamable $c13, killed renamable $c12, 5 :: (load store release monotonic (s128) on %ir.ld2, addrspace 200), (load store release monotonic (s128) on %ir.ld1, addrspace 200)
   ; MIR-NEXT:   $x10 = COPY $x0
   ; MIR-NEXT:   PseudoCRET implicit $x10
 entry:
@@ -69,13 +101,29 @@ end:
 }
 
 define dso_local signext i32 @merge_ptr_exact(i1 %cond1, ptr addrspace(200) %ptr, ptr addrspace(200) %newval, ptr addrspace(200) %cmpval) {
+; CHECK-LABEL: merge_ptr_exact:
+; CHECK:       # %bb.0: # %entry
+; CHECK-NEXT:    andi a0, a0, 1
+; CHECK-NEXT:    clc ca0, 0(ca1)
+; CHECK-NEXT:  .LBB2_1: # %entry
+; CHECK-NEXT:    # =>This Inner Loop Header: Depth=1
+; CHECK-NEXT:    clr.c.rl ca1, (ca0)
+; CHECK-NEXT:    cseqx a4, ca1, ca3
+; CHECK-NEXT:    beqz a4, .LBB2_3
+; CHECK-NEXT:  # %bb.2: # %entry
+; CHECK-NEXT:    # in Loop: Header=BB2_1 Depth=1
+; CHECK-NEXT:    csc.c a4, ca2, (ca0)
+; CHECK-NEXT:    bnez a4, .LBB2_1
+; CHECK-NEXT:  .LBB2_3: # %entry
+; CHECK-NEXT:    li a0, 0
+; CHECK-NEXT:    cret
   ; MIR-LABEL: name: merge_ptr_exact
   ; MIR: bb.0.entry:
   ; MIR-NEXT:   liveins: $c11, $c12, $c13, $x10
   ; MIR-NEXT: {{  $}}
   ; MIR-NEXT:   renamable $x10 = ANDI killed renamable $x10, 1
   ; MIR-NEXT:   renamable $c10 = CLC_128 killed renamable $c11, 0 :: (load (s128) from %ir.ptr, addrspace 200)
-  ; MIR-NEXT:   dead early-clobber renamable $c11, dead early-clobber renamable $x14 = PseudoCheriCmpXchgCap killed renamable $c10, killed renamable $c13, killed renamable $c12, 5 :: (load store release monotonic exact (s128) on %ir.ld2, addrspace 200), (load store release monotonic exact (s128) on %ir.ld1, addrspace 200)
+  ; MIR-NEXT:   dead early-clobber renamable $c11, dead early-clobber renamable $x14 = PseudoCheriCmpXchgCapExact killed renamable $c10, killed renamable $c13, killed renamable $c12, 5 :: (load store release monotonic exact (s128) on %ir.ld2, addrspace 200), (load store release monotonic exact (s128) on %ir.ld1, addrspace 200)
   ; MIR-NEXT:   $x10 = COPY $x0
   ; MIR-NEXT:   PseudoCRET implicit $x10
 entry:
@@ -95,15 +143,62 @@ end:
   ret i32 0
 }
 
-; FIXME: these two branches should not be merged!
 define dso_local signext i32 @merge_ptr_mismatch_exact_flag(i1 %cond1, ptr addrspace(200) %ptr, ptr addrspace(200) %newval, ptr addrspace(200) %cmpval) {
+; CHECK-LABEL: merge_ptr_mismatch_exact_flag:
+; CHECK:       # %bb.0: # %entry
+; CHECK-NEXT:    andi a0, a0, 1
+; CHECK-NEXT:    beqz a0, .LBB3_2
+; CHECK-NEXT:  # %bb.1: # %if.then
+; CHECK-NEXT:    clc ca0, 0(ca1)
+; CHECK-NEXT:  .LBB3_3: # %if.then
+; CHECK-NEXT:    # =>This Inner Loop Header: Depth=1
+; CHECK-NEXT:    clr.c.rl ca1, (ca0)
+; CHECK-NEXT:    cseqx a4, ca1, ca3
+; CHECK-NEXT:    beqz a4, .LBB3_5
+; CHECK-NEXT:  # %bb.4: # %if.then
+; CHECK-NEXT:    # in Loop: Header=BB3_3 Depth=1
+; CHECK-NEXT:    csc.c a4, ca2, (ca0)
+; CHECK-NEXT:    bnez a4, .LBB3_3
+; CHECK-NEXT:  .LBB3_5: # %if.then
+; CHECK-NEXT:    li a0, 0
+; CHECK-NEXT:    cret
+; CHECK-NEXT:  .LBB3_2: # %if.else
+; CHECK-NEXT:    clc ca0, 0(ca1)
+; CHECK-NEXT:  .LBB3_6: # %if.else
+; CHECK-NEXT:    # =>This Inner Loop Header: Depth=1
+; CHECK-NEXT:    clr.c.rl ca1, (ca0)
+; CHECK-NEXT:    bne a1, a3, .LBB3_8
+; CHECK-NEXT:  # %bb.7: # %if.else
+; CHECK-NEXT:    # in Loop: Header=BB3_6 Depth=1
+; CHECK-NEXT:    csc.c a4, ca2, (ca0)
+; CHECK-NEXT:    bnez a4, .LBB3_6
+; CHECK-NEXT:  .LBB3_8: # %if.else
+; CHECK-NEXT:    li a0, 0
+; CHECK-NEXT:    cret
   ; MIR-LABEL: name: merge_ptr_mismatch_exact_flag
   ; MIR: bb.0.entry:
+  ; MIR-NEXT:   successors: %bb.1(0x40000000), %bb.2(0x40000000)
   ; MIR-NEXT:   liveins: $c11, $c12, $c13, $x10
   ; MIR-NEXT: {{  $}}
   ; MIR-NEXT:   renamable $x10 = ANDI killed renamable $x10, 1
+  ; MIR-NEXT:   BEQ killed renamable $x10, $x0, %bb.2
+  ; MIR-NEXT: {{  $}}
+  ; MIR-NEXT: bb.1.if.then:
+  ; MIR-NEXT:   successors: %bb.3(0x80000000)
+  ; MIR-NEXT:   liveins: $c11, $c12, $c13
+  ; MIR-NEXT: {{  $}}
   ; MIR-NEXT:   renamable $c10 = CLC_128 killed renamable $c11, 0 :: (load (s128) from %ir.ptr, addrspace 200)
-  ; MIR-NEXT:   dead early-clobber renamable $c11, dead early-clobber renamable $x14 = PseudoCheriCmpXchgCap killed renamable $c10, killed renamable $c13, killed renamable $c12, 5 :: (load store release monotonic (s128) on %ir.ld2, addrspace 200), (load store release monotonic exact (s128) on %ir.ld1, addrspace 200)
+  ; MIR-NEXT:   dead early-clobber renamable $c11, dead early-clobber renamable $x14 = PseudoCheriCmpXchgCapExact killed renamable $c10, killed renamable $c13, killed renamable $c12, 5 :: (load store release monotonic exact (s128) on %ir.ld1, addrspace 200)
+  ; MIR-NEXT:   PseudoCBR %bb.3
+  ; MIR-NEXT: {{  $}}
+  ; MIR-NEXT: bb.2.if.else:
+  ; MIR-NEXT:   successors: %bb.3(0x80000000)
+  ; MIR-NEXT:   liveins: $c11, $c12, $c13
+  ; MIR-NEXT: {{  $}}
+  ; MIR-NEXT:   renamable $c10 = CLC_128 killed renamable $c11, 0 :: (load (s128) from %ir.ptr, addrspace 200)
+  ; MIR-NEXT:   dead early-clobber renamable $c11, dead early-clobber renamable $x14 = PseudoCheriCmpXchgCapAddr killed renamable $c10, killed renamable $c13, killed renamable $c12, 5 :: (load store release monotonic (s128) on %ir.ld2, addrspace 200)
+  ; MIR-NEXT: {{  $}}
+  ; MIR-NEXT: bb.3.end:
   ; MIR-NEXT:   $x10 = COPY $x0
   ; MIR-NEXT:   PseudoCRET implicit $x10
 entry:

@@ -1594,7 +1594,8 @@ def PseudoAtomicLoadMinCap : PseudoAMO<GPCR> { let Size = 24; }
 def PseudoAtomicLoadUMaxCap : PseudoAMO<GPCR> { let Size = 24; }
 def PseudoAtomicLoadUMinCap : PseudoAMO<GPCR> { let Size = 24; }
 def PseudoAtomicLoadNandCap : PseudoAMO<GPCR> { let Size = 24; }
-def PseudoCmpXchgCap : PseudoCmpXchg<GPCR> { let Size = 16; }
+def PseudoCmpXchgCapAddr : PseudoCmpXchg<GPCR> { let Size = 16; }
+def PseudoCmpXchgCapExact : PseudoCmpXchg<GPCR> { let Size = 16; }
 } // Predicates = [HasCheri, HasStdExtA]f
 
 let Predicates = [HasCheri, HasStdExtA, NotCapMode] in {
@@ -1608,7 +1609,8 @@ defm : PseudoAMOPat<"atomic_load_min_cap", PseudoAtomicLoadMinCap, GPCR>;
 defm : PseudoAMOPat<"atomic_load_umax_cap", PseudoAtomicLoadUMaxCap, GPCR>;
 defm : PseudoAMOPat<"atomic_load_umin_cap", PseudoAtomicLoadUMinCap, GPCR>;
 defm : PseudoAMOPat<"atomic_load_nand_cap", PseudoAtomicLoadNandCap, GPCR>;
-defm : PseudoCmpXchgPat<"atomic_cmp_swap_cap", PseudoCmpXchgCap, GPCR>;
+defm : PseudoCmpXchgPat<"atomic_cmp_swap_cap_addr", PseudoCmpXchgCapAddr, GPCR>;
+defm : PseudoCmpXchgPat<"atomic_cmp_swap_cap_exact", PseudoCmpXchgCapExact, GPCR>;
 } // Predicates = [HasCheri, HasStdExtA, NotCapMode]
 
 /// Capability Mode Instructions
@@ -1751,7 +1753,8 @@ def PseudoCheriAtomicLoadMinCap : PseudoCheriAMO<GPCR> { let Size = 24; }
 def PseudoCheriAtomicLoadUMaxCap : PseudoCheriAMO<GPCR> { let Size = 24; }
 def PseudoCheriAtomicLoadUMinCap : PseudoCheriAMO<GPCR> { let Size = 24; }
 def PseudoCheriAtomicLoadNandCap : PseudoCheriAMO<GPCR> { let Size = 24; }
-def PseudoCheriCmpXchgCap : PseudoCheriCmpXchg<GPCR> { let Size = 16; }
+def PseudoCheriCmpXchgCapAddr : PseudoCheriCmpXchg<GPCR> { let Size = 16; }
+def PseudoCheriCmpXchgCapExact : PseudoCheriCmpXchg<GPCR> { let Size = 16; }
 } // Predicates = [HasCheri, HasStdExtA]
 
 let Predicates = [HasCheri, HasStdExtA, IsRV64] in {
@@ -1950,7 +1953,8 @@ defm : PseudoCheriCmpXchgPat<"atomic_cmp_swap_8", PseudoCheriCmpXchg8>;
 defm : PseudoCheriCmpXchgPat<"atomic_cmp_swap_16", PseudoCheriCmpXchg16>;
 defm : PseudoCheriCmpXchgPat<"atomic_cmp_swap_32", PseudoCheriCmpXchg32>;
 
-defm : PseudoCheriCmpXchgPat<"atomic_cmp_swap_cap", PseudoCheriCmpXchgCap, GPCR>;
+defm : PseudoCheriCmpXchgPat<"atomic_cmp_swap_cap_addr", PseudoCheriCmpXchgCapAddr, GPCR>;
+defm : PseudoCheriCmpXchgPat<"atomic_cmp_swap_cap_exact", PseudoCheriCmpXchgCapExact, GPCR>;
 
 } // Predicates = [HasCheri, HasStdExtA, IsCapMode]
 

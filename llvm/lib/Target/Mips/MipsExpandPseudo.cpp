@@ -212,6 +212,7 @@ bool MipsExpandPseudo::expandAtomicCmpSwap(MachineBasicBlock &BB,
 
   unsigned Size = -1;
   bool IsCapCmpXchg = false;
+  bool UseExactEquals = false;
   switch(I->getOpcode()) {
     case Mips::ATOMIC_CMP_SWAP_I32_POSTRA: Size = 4; break;
     case Mips::ATOMIC_CMP_SWAP_I64_POSTRA: Size = 8; break;
@@ -219,7 +220,10 @@ bool MipsExpandPseudo::expandAtomicCmpSwap(MachineBasicBlock &BB,
     case Mips::CAP_ATOMIC_CMP_SWAP_I16_POSTRA: Size = 2; break;
     case Mips::CAP_ATOMIC_CMP_SWAP_I32_POSTRA: Size = 4; break;
     case Mips::CAP_ATOMIC_CMP_SWAP_I64_POSTRA: Size = 8; break;
-    case Mips::CAP_ATOMIC_CMP_SWAP_CAP_POSTRA:
+    case Mips::CAP_ATOMIC_CMP_SWAP_CAP_EXACT_POSTRA:
+      UseExactEquals = true;
+      LLVM_FALLTHROUGH;
+    case Mips::CAP_ATOMIC_CMP_SWAP_CAP_ADDR_POSTRA:
       Size = CAP_ATOMIC_SIZE;
       IsCapCmpXchg = true;
       break;
@@ -327,9 +331,6 @@ bool MipsExpandPseudo::expandAtomicCmpSwap(MachineBasicBlock &BB,
   if (!IsCapOp)
     LLOp.addImm(0);
   if (IsCapCmpXchg) {
-    assert(I->hasOneMemOperand());
-    bool UseExactEquals =
-        STI->useCheriExactEquals() || I->memoperands()[0]->isExactCompare();
     unsigned CapCmp = UseExactEquals ? Mips::CEXEQ : Mips::CEQ;
     // load, compare, and exit if not equal
     //   cllc dest, ptr
@@ -1098,7 +1099,8 @@ bool MipsExpandPseudo::expandMI(MachineBasicBlock &MBB,
   case Mips::CAP_ATOMIC_CMP_SWAP_I16_POSTRA:
   case Mips::CAP_ATOMIC_CMP_SWAP_I32_POSTRA:
   case Mips::CAP_ATOMIC_CMP_SWAP_I64_POSTRA:
-  case Mips::CAP_ATOMIC_CMP_SWAP_CAP_POSTRA:
+  case Mips::CAP_ATOMIC_CMP_SWAP_CAP_ADDR_POSTRA:
+  case Mips::CAP_ATOMIC_CMP_SWAP_CAP_EXACT_POSTRA:
     return expandAtomicCmpSwap(MBB, MBBI, NMBB, /*IsCapOp=*/true);
   case Mips::PseudoPccRelativeAddressPostRA:
     return expandPccRelativeAddr(MBB, MBBI, NMBB);

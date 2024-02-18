@@ -1888,10 +1888,21 @@ multiclass binary_atomic_op_cap<SDNode atomic_op> {
   defm NAME : binary_atomic_op_ord;
 }
 
-multiclass ternary_atomic_op_cap<SDNode atomic_op> {
+multiclass ternary_atomic_op_cap_inexact<SDNode atomic_op> {
   def "" : PatFrag<(ops node:$ptr, node:$cmp, node:$val),
                 (atomic_op node:$ptr, node:$cmp, node:$val), [{
-    return cast<AtomicSDNode>(N)->getMemoryVT().isCapability();
+    auto AN = cast<AtomicSDNode>(N);
+    return AN->getMemoryVT().isCapability() && !AN->isExactCmpXchg();
+  }]>;
+
+  defm NAME : ternary_atomic_op_ord;
+}
+
+multiclass ternary_atomic_op_cap_exact<SDNode atomic_op> {
+  def "" : PatFrag<(ops node:$ptr, node:$cmp, node:$val),
+                (atomic_op node:$ptr, node:$cmp, node:$val), [{
+    auto AN = cast<AtomicSDNode>(N);
+    return AN->getMemoryVT().isCapability() && AN->isExactCmpXchg();
   }]>;
 
   defm NAME : ternary_atomic_op_ord;
@@ -1910,7 +1921,8 @@ defm atomic_load_max_cap  : binary_atomic_op_cap<atomic_load_max_cap_node>;
 defm atomic_load_umin_cap : binary_atomic_op_cap<atomic_load_umin_cap_node>;
 defm atomic_load_umax_cap : binary_atomic_op_cap<atomic_load_umax_cap_node>;
 defm atomic_store_cap     : binary_atomic_op_cap<atomic_store_cap_node>;
-defm atomic_cmp_swap_cap  : ternary_atomic_op_cap<atomic_cmp_swap_cap_node>;
+defm atomic_cmp_swap_cap_addr  : ternary_atomic_op_cap_inexact<atomic_cmp_swap_cap_node>;
+defm atomic_cmp_swap_cap_exact : ternary_atomic_op_cap_exact<atomic_cmp_swap_cap_node>;
 
 def atomic_load_cap :
   PatFrag<(ops node:$ptr),

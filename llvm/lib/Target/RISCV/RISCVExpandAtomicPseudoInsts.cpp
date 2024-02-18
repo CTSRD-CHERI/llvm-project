@@ -160,7 +160,8 @@ bool RISCVExpandAtomicPseudo::expandMI(MachineBasicBlock &MBB,
   case RISCV::PseudoAtomicLoadUMinCap:
     return expandAtomicMinMaxOp(MBB, MBBI, AtomicRMWInst::UMin, false, CLenVT,
                                 false, NextMBBI);
-  case RISCV::PseudoCmpXchgCap:
+  case RISCV::PseudoCmpXchgCapAddr:
+  case RISCV::PseudoCmpXchgCapExact:
     return expandAtomicCmpXchg(MBB, MBBI, false, CLenVT, false, NextMBBI);
   case RISCV::PseudoCheriAtomicSwap8:
     return expandAtomicBinOp(MBB, MBBI, AtomicRMWInst::Xchg, false, MVT::i8,
@@ -272,7 +273,8 @@ bool RISCVExpandAtomicPseudo::expandMI(MachineBasicBlock &MBB,
   case RISCV::PseudoCheriAtomicLoadUMinCap:
     return expandAtomicMinMaxOp(MBB, MBBI, AtomicRMWInst::UMin, false, CLenVT,
                                 true, NextMBBI);
-  case RISCV::PseudoCheriCmpXchgCap:
+  case RISCV::PseudoCheriCmpXchgCapAddr:
+  case RISCV::PseudoCheriCmpXchgCapExact:
     return expandAtomicCmpXchg(MBB, MBBI, false, CLenVT, true, NextMBBI);
   }
 
@@ -1020,8 +1022,9 @@ bool RISCVExpandAtomicPseudo::expandAtomicCmpXchg(
     BuildMI(LoopHeadMBB, DL, TII->get(getLRForRMW(PtrIsCap, Ordering, VT)),
             DestReg)
         .addReg(AddrReg);
-    assert(MI.hasOneMemOperand());
-    if (VT.isFatPointer() && MI.memoperands()[0]->isExactCompare()) {
+    bool ExactCapCompare = MI.getOpcode() == RISCV::PseudoCmpXchgCapExact ||
+                           MI.getOpcode() == RISCV::PseudoCheriCmpXchgCapExact;
+    if (VT.isFatPointer() && ExactCapCompare) {
       BuildMI(LoopHeadMBB, DL, TII->get(RISCV::CSEQX), ScratchReg)
           .addReg(DestReg, 0)
           .addReg(CmpValReg, 0);
