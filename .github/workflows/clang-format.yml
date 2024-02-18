@@ -31,4 +31,3 @@ jobs:
         with:
           source-ref: "${{ github.event.pull_request.head.sha }}"
           target-ref: "${{ github.base_ref }}" # required, merge target
-          clang-version: 12     # optional, default: 12
