@@ -78,6 +78,12 @@ int voidptr_cast(int *ip1, int *ip2) {
   return b1 || b2;
 }
 
+intptr_t param(int *pI, char* pC) {
+  intptr_t *ipI = (intptr_t*)pI; // expected-warning{{Pointer value aligned to a 4 byte boundary cast to type 'intptr_t * __capability' with 16-byte capability alignment}}
+  intptr_t *ipC = (intptr_t*)pC; // no warn
+  return ipI - ipC;
+}
+
 typedef struct B {
   long *ptr;
   long flex[1]; // expected-note{{Original allocation}}
@@ -149,6 +155,10 @@ void gen_storage(struct T *pT, void *p, size_t n) {
   void *m = malloc(n);
   memcpy(a6, m, n); // no-warn
   copy(a6, m, n);
+
+
+  int x;
+  memcpy(&x, p, sizeof(int)); // no warn
 }
 
 // ----
@@ -166,4 +176,20 @@ void test_assign(struct T *pT) {
   gP = cp; // no duplicate warning
 
   pT->pVoid = (void*)"string"; // no warning
+}
+
+
+#define offsetof(T,F) __builtin_offsetof(T, F)
+
+struct S2 {
+  char c[10];
+  short sh;
+  int x;
+};
+int test_offsetof(char *pC, short *pSh, struct S2 *pS2) {
+  struct S2 *q = (struct S2*)((char*)pSh - offsetof(struct S2, sh)); // no-warn
+  short* pSh2 = &pS2->sh;
+  struct S2 *q2 = (struct S2*)((char*)pSh2 - offsetof(struct S2, sh));
+  struct S2 *q3 = (struct S2*)((char*)pC - offsetof(struct S2, c)); // no-warn
+  return q->x + q2->x + q3->x;
 }
