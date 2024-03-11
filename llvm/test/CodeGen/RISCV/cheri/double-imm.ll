@@ -5,7 +5,7 @@
 ; RUN: %riscv64_cheri_purecap_llc -mattr=+d -verify-machineinstrs < %s \
 ; RUN:   | FileCheck %s
 
-; CHECK-LABEL: .section .sdata,"aw",@progbits
+; CHECK-LABEL: .section .srodata.cst8,"aM",@progbits,8
 ; CHECK-NEXT:  .p2align 3
 ; CHECK-NEXT: .LCPI0_0:
 ; CHECK-NEXT:  .quad 0x3ff0000000000000 # double 1
