@@ -12,6 +12,8 @@ extern void * malloc(size_t);
 extern void *memmove(void *dest, const void *src, size_t n);
 extern void free(void *ptr);
 
+typedef unsigned long uintptr_t;
+
 static int x;
 
 // =====     Tag-stripping copy     =====
@@ -30,7 +32,7 @@ void copy_intptr_byte2(int *px, int **ppy) {
   *(char*)ppy = *s; 
 }
 
-static void swapfunc(void *a, void *b, int n) {
+void swapfunc(void *a, void *b, int n) {
   long i = n;
   char *pi = (char *)(a);
   char *pj = (char *)(b);
@@ -57,7 +59,9 @@ void memcpy_impl_unaligned(void* src0, void *dst0, size_t len) {
   char *src = src0;
   char *dst = dst0;
 
-  if ((len < sizeof(BLOCK_TYPE)) || ((long)src & (BLOCK_SIZE - 1)) || ((long)dst & (BLOCK_SIZE - 1)))
+  if ((len < sizeof(BLOCK_TYPE)) ||
+        ((uintptr_t)src & (BLOCK_SIZE - 1)) ||
+        ((uintptr_t)dst & (BLOCK_SIZE - 1)))
     while (len--)
       *dst++ = *src++; 
 }
@@ -81,7 +85,7 @@ void voidptr_arg_store1(void *q) {
   *s = 42;
 }
 
-// =====     Part of capability representation used as argument in binary operator     =====
+// === Part of capability representation used as argument in binary operator ===
 
 int hash_no_call(void *key0, size_t len) {
   char *k = key0;
@@ -124,7 +128,7 @@ int memcmp_impl(const void* m1, const void *m2, size_t len) {
     return 0;
 }
 
-int ptr_cmp(int *x, int *y) {
-    return memcmp_impl(&x, &y, sizeof(int*));
+int ptr_cmp(int *px, int *py) {
+    return memcmp_impl(&px, &py, sizeof(int*));
 }
 

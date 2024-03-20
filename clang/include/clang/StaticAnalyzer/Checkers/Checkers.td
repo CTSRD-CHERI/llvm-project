@@ -1774,7 +1774,7 @@ def CapabilityCopyChecker : Checker<"CapabilityCopy">,
                     "Report tag-stripping copy for char* function parameters. "
                     "Suppression of warnings for C-strings is used to reduce "
                     "the number of false alarms, but it's not very reliable.",
-                    "true",
+                    "false",
                     Released>
     ]>,
   Documentation<NotDocumented>;
