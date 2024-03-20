@@ -1,5 +1,6 @@
 // RUN: %cheri_purecap_cc1 -analyze -verify %s \
-// RUN:   -analyzer-checker=core,cheri.CapabilityCopy
+// RUN:   -analyzer-checker=core,cheri.CapabilityCopy \
+// RUN:   -analyzer-config cheri.CapabilityCopy:ReportForCharPtr=true
 
 typedef __intcap_t intptr_t;
 typedef __uintcap_t uintptr_t;
@@ -9,7 +10,7 @@ typedef __uintcap_t uintptr_t;
 
 typedef __typeof__(sizeof(int)) size_t;
 extern void * malloc(size_t);
-extern void *memmove(void *dest, const void *src, size_t n);
+extern void * memmove(void *dest, const void *src, size_t n);
 extern void free(void *ptr);
 
 static int x;
@@ -47,7 +48,7 @@ void copy_intptr(int **ppy) {
 
 // =====   Pointer to capability passed as void*   ====
 
-static void swapfunc(void *a, void *b, int n) {
+void swapfunc(void *a, void *b, int n) {
   long i = n;
   char *pi = (char *)(a);
   char *pj = (char *)(b);
@@ -71,7 +72,9 @@ void memcpy_impl_unaligned(void* src0, void *dst0, size_t len) {
   char *src = src0;
   char *dst = dst0;
 
-  if ((len < sizeof(BLOCK_TYPE)) || ((long)src & (BLOCK_SIZE - 1)) || ((long)dst & (BLOCK_SIZE - 1)))
+  if ((len < sizeof(BLOCK_TYPE)) ||
+      ((uintptr_t)src & (BLOCK_SIZE - 1)) ||
+      ((uintptr_t)dst & (BLOCK_SIZE - 1)))
     while (len--)
       *dst++ = *src++; // expected-warning{{Tag-stripping store of a capability}}
 }
@@ -92,21 +95,22 @@ struct S {
 };
 
 void struct_field(void *p) {
+  int x1;
   struct S *ps = p;
   ps->p = malloc(10*sizeof(int));
-  int x = ps->x;
-  *ps->p = x; // no warning
+  x1 = ps->x;
+  *ps->p = x1; // no warning
 }
 
-char fp_malloc() {
+char fp_malloc(void) {
   void *q = malloc(100);
   char *s = (char*)q; // no warning
   return *s;
 }
 
 char fp_init_str(void) {
-  char s[] = "String literal"; // no warning
-  return s[3];
+  char sl[] = "String literal"; // no warning
+  return sl[3];
 }
 
 void copyAsLong(void* src0, void *dst0, size_t len) {
@@ -128,6 +132,7 @@ void char_ptr(char* src, char *dst, size_t len) {
 #define EOL 10
 void c_string(char* src1, char* src2, char* src3, char *src4, char *dst) {
   int i = 0;
+  char c;
   while (src1[i])
     *dst++ = src1[i++]; // no warning
 
@@ -135,7 +140,6 @@ void c_string(char* src1, char* src2, char* src3, char *src4, char *dst) {
   while (*src2 != '.')
     *dst++ = *src2++; // no warning
 
-  char c;
   while ((c = *src3++))
     *dst++ = c; // no warning
 
@@ -146,7 +150,7 @@ void c_string(char* src1, char* src2, char* src3, char *src4, char *dst) {
 extern size_t strlen(const char *s);
 void strcpy_impl(char* src, char *dst) {
   size_t len = strlen(src);
-  for (int i=0; i < len; i++)
+  for (unsigned int i=0; i < len; i++)
     *dst++ = *src++; // no warning
 }
 
@@ -202,7 +206,7 @@ int memcmp_impl(const void* m1, const void *m2, size_t len) {
     return 0;
 }
 
-int ptr_cmp(int *x, int *y) {
-    return memcmp_impl(&x, &y, sizeof(int*));
+int ptr_cmp(int *px, int *py) {
+    return memcmp_impl(&px, &py, sizeof(int*));
 }
 
