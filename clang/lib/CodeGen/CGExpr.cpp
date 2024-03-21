@@ -1293,6 +1293,17 @@ CodeGenFunction::canTightenCheriBounds(QualType Ty, const Expr *E,
           "referenced value is a weak symbol and could therefore be NULL");
     }
   }
+
+  // Don't set bounds on null pointer arithmetic used for hand-rolled offsetof
+  // idioms, even if it's UB.
+  const Expr *BaseDeref =
+    E->getDereferencedBaseExpr(getContext())->IgnoreParenCasts();
+  if (BaseDeref->isNullPointerConstant(getContext(),
+                                       Expr::NPC_ValueDependentIsNotNull))
+    return cannotSetBounds(*this, E, Ty, Kind,
+                           "not setting bounds on null-derived pointer used "
+                           "for hand-rolled offsetof idioms");
+
   auto HandleMemberExpr = [&](const MemberExpr* ME, bool* ReturnValueValid) -> Optional<CodeGenFunction::TightenBoundsResult> {
     assert(*ReturnValueValid && "API misuse");
     CHERI_BOUNDS_DBG(<< "got MemberExpr -> ");
