@@ -4757,6 +4757,7 @@ AtomicCmpXchgInst *AtomicCmpXchgInst::cloneImpl() const {
       getSuccessOrdering(), getFailureOrdering(), getSyncScopeID());
   Result->setVolatile(isVolatile());
   Result->setWeak(isWeak());
+  Result->setExactCompare(isExactCompare());
   return Result;
 }
 

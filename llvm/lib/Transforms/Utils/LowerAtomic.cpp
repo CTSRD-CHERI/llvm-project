@@ -27,6 +27,7 @@ bool llvm::lowerAtomicCmpXchgInst(AtomicCmpXchgInst *CXI) {
   Value *Val = CXI->getNewValOperand();
 
   LoadInst *Orig = Builder.CreateLoad(Val->getType(), Ptr);
+  assert(!CXI->isExactCompare() && "Exact cmpxchg is not handled yet!");
   Value *Equal = Builder.CreateICmpEQ(Orig, Cmp);
   Value *Res = Builder.CreateSelect(Equal, Val, Orig);
   Builder.CreateStore(Res, Ptr);

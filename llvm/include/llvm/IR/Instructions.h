@@ -547,17 +547,18 @@ public:
   void operator delete(void *Ptr) { User::operator delete(Ptr); }
 
   using VolatileField = BoolBitfieldElementT<0>;
-  using WeakField = BoolBitfieldElementT<VolatileField::NextBit>;
+  using ExactCompareField = BoolBitfieldElementT<VolatileField::NextBit>;
+  using WeakField = BoolBitfieldElementT<ExactCompareField::NextBit>;
   using SuccessOrderingField =
       AtomicOrderingBitfieldElementT<WeakField::NextBit>;
   using FailureOrderingField =
       AtomicOrderingBitfieldElementT<SuccessOrderingField::NextBit>;
   using AlignmentField =
       AlignmentBitfieldElementT<FailureOrderingField::NextBit>;
-  static_assert(
-      Bitfield::areContiguous<VolatileField, WeakField, SuccessOrderingField,
-                              FailureOrderingField, AlignmentField>(),
-      "Bitfields must be contiguous");
+  static_assert(Bitfield::areContiguous<VolatileField, ExactCompareField,
+                                        WeakField, SuccessOrderingField,
+                                        FailureOrderingField, AlignmentField>(),
+                "Bitfields must be contiguous");
 
   /// Return the alignment of the memory that is being allocated by the
   /// instruction.
@@ -582,6 +583,14 @@ public:
   bool isWeak() const { return getSubclassData<WeakField>(); }
 
   void setWeak(bool IsWeak) { setSubclassData<WeakField>(IsWeak); }
+
+  /// Return true if the cmpxchg must compare all bits of the value
+  /// This is only relevant for CHERI where the two possible semantics are
+  /// comparing only the address or all capability bits.
+  bool isExactCompare() const { return getSubclassData<ExactCompareField>(); }
+  void setExactCompare(bool Exact) {
+    setSubclassData<ExactCompareField>(Exact);
+  }
 
   /// Transparently provide more efficient getOperand methods.
   DECLARE_TRANSPARENT_OPERAND_ACCESSORS(Value);

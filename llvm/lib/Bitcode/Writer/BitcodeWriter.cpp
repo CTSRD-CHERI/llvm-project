@@ -3156,6 +3156,7 @@ void ModuleBitcodeWriter::writeInstruction(const Instruction &I,
         getEncodedOrdering(cast<AtomicCmpXchgInst>(I).getFailureOrdering()));
     Vals.push_back(cast<AtomicCmpXchgInst>(I).isWeak());
     Vals.push_back(getEncodedAlign(cast<AtomicCmpXchgInst>(I).getAlign()));
+    Vals.push_back(cast<AtomicCmpXchgInst>(I).isExactCompare());
     break;
   case Instruction::AtomicRMW:
     Code = bitc::FUNC_CODE_INST_ATOMICRMW;

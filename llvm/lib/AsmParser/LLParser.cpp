@@ -7418,6 +7418,7 @@ int LLParser::parseCmpXchg(Instruction *&Inst, PerFunctionState &PFS) {
 
   if (EatIfPresent(lltok::kw_volatile))
     isVolatile = true;
+  bool isExact = EatIfPresent(lltok::kw_exact);
 
   if (parseTypeAndValue(Ptr, PtrLoc, PFS) ||
       parseToken(lltok::comma, "expected ',' after cmpxchg address") ||
@@ -7455,6 +7456,7 @@ int LLParser::parseCmpXchg(Instruction *&Inst, PerFunctionState &PFS) {
                             SuccessOrdering, FailureOrdering, SSID);
   CXI->setVolatile(isVolatile);
   CXI->setWeak(isWeak);
+  CXI->setExactCompare(isExact);
 
   Inst = CXI;
   return AteExtraComma ? InstExtraComma : InstNormal;

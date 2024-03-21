@@ -1556,7 +1556,7 @@ void HexagonFrameLowering::processFunctionBeforeFrameFinalized(
                   MMO->getPointerInfo(), MMO->getFlags(), MMO->getSize(),
                   MFI.getObjectAlign(FI), MMO->getAAInfo(), MMO->getRanges(),
                   MMO->getSyncScopeID(), MMO->getSuccessOrdering(),
-                  MMO->getFailureOrdering());
+                  MMO->isExactCompare(), MMO->getFailureOrdering());
               new_memops.push_back(NewMMO);
               KeepOld = false;
               continue;

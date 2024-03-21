@@ -3984,6 +3984,9 @@ void AssemblyWriter::printInstruction(const Instruction &I) {
   if (isa<AtomicCmpXchgInst>(I) && cast<AtomicCmpXchgInst>(I).isWeak())
     Out << " weak";
 
+  if (isa<AtomicCmpXchgInst>(I) && cast<AtomicCmpXchgInst>(I).isExactCompare())
+    Out << " exact";
+
   // If this is a volatile operation, print out the volatile marker.
   if ((isa<LoadInst>(I)  && cast<LoadInst>(I).isVolatile()) ||
       (isa<StoreInst>(I) && cast<StoreInst>(I).isVolatile()) ||
