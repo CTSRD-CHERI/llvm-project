@@ -1123,9 +1123,6 @@ public:
   CanQualType SignedCharTy, ShortTy, IntTy, LongTy, LongLongTy, Int128Ty;
   CanQualType UnsignedCharTy, UnsignedShortTy, UnsignedIntTy, UnsignedLongTy;
   CanQualType IntCapTy, UnsignedIntCapTy;
-  // Non-provenance carrying intcap_t types
-  QualType NoProvenanceIntCapTy;
-  QualType NoProvenanceUnsignedIntCapTy;
   CanQualType UnsignedLongLongTy, UnsignedInt128Ty;
   CanQualType FloatTy, DoubleTy, LongDoubleTy, Float128Ty, Ibm128Ty;
   CanQualType ShortAccumTy, AccumTy,
