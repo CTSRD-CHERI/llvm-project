@@ -48,7 +48,9 @@ long write_uintcap(__uintcap_t *cap) {
 // OFFSET-NEXT:  entry:
 // OFFSET-NEXT:    [[TMP0:%.*]] = tail call i64 @llvm.cheri.cap.offset.get.i64(ptr addrspace(200) [[CAP:%.*]])
 // OFFSET-NEXT:    [[AND:%.*]] = and i64 [[TMP0]], 3
-// OFFSET-NEXT:    ret i64 [[AND]]
+// OFFSET-NEXT:    [[TMP1:%.*]] = tail call i8 addrspace(200)* @llvm.cheri.cap.offset.set.i64(i8 addrspace(200)* [[CAP]], i64 [[AND]])
+// OFFSET-NEXT:    [[TMP2:%.*]] = tail call i64 @llvm.cheri.cap.offset.get.i64(i8 addrspace(200)* [[TMP1]])
+// OFFSET-NEXT:    ret i64 [[TMP2]]
 //
 long get_low_bits(__uintcap_t cap) {
   return cap & 3;
@@ -126,7 +128,9 @@ __uintcap_t xor_uintcap(__uintcap_t cap, __uintcap_t cap2) {
 // OFFSET-NEXT:    [[TMP0:%.*]] = tail call i64 @llvm.cheri.cap.offset.get.i64(ptr addrspace(200) [[CAP:%.*]])
 // OFFSET-NEXT:    [[TMP1:%.*]] = tail call i64 @llvm.cheri.cap.offset.get.i64(ptr addrspace(200) [[CAP2:%.*]])
 // OFFSET-NEXT:    [[XOR:%.*]] = xor i64 [[TMP1]], [[TMP0]]
-// OFFSET-NEXT:    ret i64 [[XOR]]
+// OFFSET-NEXT:    [[TMP2:%.*]] = tail call i8 addrspace(200)* @llvm.cheri.cap.offset.set.i64(i8 addrspace(200)* [[CAP]], i64 [[XOR]])
+// OFFSET-NEXT:    [[TMP3:%.*]] = tail call i64 @llvm.cheri.cap.offset.get.i64(i8 addrspace(200)* [[TMP2]])
+// OFFSET-NEXT:    ret i64 [[TMP3]]
 //
 long xor_uintcap_return_long(__uintcap_t cap, __uintcap_t cap2) {
   return cap ^ cap2;
@@ -160,7 +164,9 @@ __uintcap_t modulo_return_uintcap(__uintcap_t cap) {
 // OFFSET-NEXT:  entry:
 // OFFSET-NEXT:    [[TMP0:%.*]] = tail call i64 @llvm.cheri.cap.offset.get.i64(ptr addrspace(200) [[CAP:%.*]])
 // OFFSET-NEXT:    [[REM:%.*]] = and i64 [[TMP0]], 31
-// OFFSET-NEXT:    ret i64 [[REM]]
+// OFFSET-NEXT:    [[TMP1:%.*]] = tail call i8 addrspace(200)* @llvm.cheri.cap.offset.set.i64(i8 addrspace(200)* [[CAP]], i64 [[REM]])
+// OFFSET-NEXT:    [[TMP2:%.*]] = tail call i64 @llvm.cheri.cap.offset.get.i64(i8 addrspace(200)* [[TMP1]])
+// OFFSET-NEXT:    ret i64 [[TMP2]]
 //
 long modulo_return_long(__uintcap_t cap) {
   return cap % 32;
