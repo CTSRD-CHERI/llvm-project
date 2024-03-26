@@ -65,6 +65,7 @@ class PointerAlignmentChecker
     {{"memcpy", 3}, {0, 1}},
     {{"mempcpy", 3}, {0, 1}},
     {{"memmove", 3}, {0, 1}},
+    {{"bcopy", 3}, {1, 0}},
   };
 
 public:
