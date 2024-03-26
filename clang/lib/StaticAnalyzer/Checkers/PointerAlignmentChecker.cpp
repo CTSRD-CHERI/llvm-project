@@ -47,11 +47,19 @@ class PointerAlignmentChecker
     : public Checker<check::PreStmt<CastExpr>, check::PostStmt<CastExpr>,
                      check::PostStmt<BinaryOperator>, check::Bind,
                      check::PreCall, check::DeadSymbols> {
-  std::unique_ptr<BugType> CastAlignBug;
-  std::unique_ptr<BugType> CapCastAlignBug;
-  std::unique_ptr<BugType> GenPtrEscapeAlignBug;
-  std::unique_ptr<BugType> MemcpyAlignBug;
-
+  BugType CastAlignBug{this, "Cast increases required alignment", "Type Error"};
+  BugType CapCastAlignBug{this,
+      "Cast increases required alignment to capability alignment",
+      "CHERI portability"};
+  BugType CapStorageAlignBug{this,
+      "Not capability-aligned pointer used as capability storage",
+      "CHERI portability"};
+  BugType GenPtrEscapeAlignBug{this,
+      "Not capability-aligned pointer stored as 'void*'",
+      "CHERI portability"};
+  BugType MemcpyAlignBug{this,
+      "Copying capabilities through underaligned memory",
+      "CHERI portability"};
 
   const CallDescriptionMap<std::pair<int, int>> MemCpyFn {
     {{"memcpy", 3}, {0, 1}},
@@ -60,8 +68,6 @@ class PointerAlignmentChecker
   };
 
 public:
-  PointerAlignmentChecker();
-
   void checkPostStmt(const BinaryOperator *BO, CheckerContext &C) const;
   void checkPostStmt(const CastExpr *BO, CheckerContext &C) const;
   void checkPreStmt(const CastExpr *BO, CheckerContext &C) const;
@@ -118,21 +124,6 @@ private:
 
 REGISTER_MAP_WITH_PROGRAMSTATE(TrailingZerosMap, SymbolRef, int)
 REGISTER_SET_WITH_PROGRAMSTATE(CapStorageSet, const MemRegion*)
-
-PointerAlignmentChecker::PointerAlignmentChecker() {
-  CastAlignBug.reset(new BugType(this,
-      "Cast increases required alignment",
-      "Type Error"));
-  CapCastAlignBug.reset(new BugType(this,
-      "Cast increases required alignment to capability alignment",
-      "CHERI portability"));
-  GenPtrEscapeAlignBug.reset(new BugType(this,
-      "Not capability-aligned pointer stored as 'void*'",
-      "CHERI portability"));
-  MemcpyAlignBug.reset(new BugType(this,
-      "Copying capabilities through underaligned memory",
-      "CHERI portability"));
-}
 
 namespace {
 
@@ -415,8 +406,15 @@ unsigned int getFragileAlignment(const MemRegion *MR,
 }
 
 bool hasCapStorageType(const Expr *E, ASTContext &ASTCtx) {
-  const QualType &Ty = E->IgnoreCasts()->getType();
-  return Ty->isPointerType() && hasCapability(Ty->getPointeeType(), ASTCtx);
+  const QualType &Ty = E->getType();
+  if (!Ty->isPointerType())
+    return false;
+  if (hasCapability(Ty->getPointeeType(), ASTCtx))
+    return true;
+  if (const CastExpr *CE = dyn_cast<CastExpr>(E)) {
+    return hasCapStorageType(CE->getSubExpr(), ASTCtx);
+  }
+  return false;
 }
 
 } // namespace
@@ -455,7 +453,7 @@ void PointerAlignmentChecker::checkPreStmt(const CastExpr *CE,
   /* Emit warning */
   const QualType &DstTy = CE->getType();
   bool DstAlignIsCap = hasCapability(DstTy->getPointeeType(), ASTCtx);
-  const BugType &BT= DstAlignIsCap ? *CapCastAlignBug : *CastAlignBug;
+  const BugType &BT= DstAlignIsCap ? CapCastAlignBug : CastAlignBug;
 
   SmallString<350> ErrorMessage;
   llvm::raw_svector_ostream OS(ErrorMessage);
@@ -577,11 +575,13 @@ void PointerAlignmentChecker::checkBind(SVal L, SVal V, const Stmt *S,
           << " value is supposed to hold capabilities";
     } else
       OS2 << " this value may be used to hold capabilities";
-    emitAlignmentWarning(C, V, *GenPtrEscapeAlignBug, ErrorMessage,
-                         CapStorageReg, CapDstDecl, Note);
+    emitAlignmentWarning(C, V,
+        DstIsPtr2CapStorage ? CapStorageAlignBug : GenPtrEscapeAlignBug,
+        ErrorMessage, CapStorageReg, CapDstDecl, Note);
   } else
-    emitAlignmentWarning(C, V, *GenPtrEscapeAlignBug, ErrorMessage,
-                         CapStorageReg);
+    emitAlignmentWarning(C, V,
+        DstIsPtr2CapStorage ? CapStorageAlignBug : GenPtrEscapeAlignBug,
+        ErrorMessage, CapStorageReg);
 }
 
 void PointerAlignmentChecker::checkPreCall(const CallEvent &Call,
@@ -658,10 +658,10 @@ void PointerAlignmentChecker::checkPreCall(const CallEvent &Call,
       llvm::raw_svector_ostream OS2(Note);
       const QualType &AllocType = CapSrcDecl->getType().getCanonicalType();
       OS2 << "Capabilities stored in " << "'" << AllocType.getAsString() << "'";
-      emitAlignmentWarning(C, DstVal, *MemcpyAlignBug, ErrorMessage,
+      emitAlignmentWarning(C, DstVal, MemcpyAlignBug, ErrorMessage,
                            CapStorageReg, CapSrcDecl, Note);
     } else
-      emitAlignmentWarning(C, DstVal, *MemcpyAlignBug, ErrorMessage,
+      emitAlignmentWarning(C, DstVal, MemcpyAlignBug, ErrorMessage,
                            CapStorageReg);
     return;
   }
@@ -694,10 +694,10 @@ void PointerAlignmentChecker::checkPreCall(const CallEvent &Call,
       llvm::raw_svector_ostream OS2(Note);
       const QualType &AllocType = CapDstDecl->getType().getCanonicalType();
       OS2 << "Capabilities stored in " << "'" << AllocType.getAsString() << "'";
-      emitAlignmentWarning(C, SrcVal, *MemcpyAlignBug, ErrorMessage,
+      emitAlignmentWarning(C, SrcVal, MemcpyAlignBug, ErrorMessage,
                            CapStorageReg, CapDstDecl, Note);
     } else
-      emitAlignmentWarning(C, SrcVal, *MemcpyAlignBug, ErrorMessage,
+      emitAlignmentWarning(C, SrcVal, MemcpyAlignBug, ErrorMessage,
                            CapStorageReg);
     return;
   }
