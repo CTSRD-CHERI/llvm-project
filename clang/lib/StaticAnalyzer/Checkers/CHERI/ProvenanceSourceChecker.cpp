@@ -29,13 +29,28 @@ class ProvenanceSourceChecker : public Checker<check::PostStmt<CastExpr>,
                                                check::PostStmt<BinaryOperator>,
                                                check::PostStmt<UnaryOperator>,
                                                check::DeadSymbols> {
-  std::unique_ptr<BugType> AmbigProvAddrArithBugType;
-  std::unique_ptr<BugType> AmbigProvWrongOrderBugType;
-  std::unique_ptr<BugType> AmbigProvBinOpBugType;
+  BugType AmbigProvBinOpBugType{this,
+                  "Binary operation with ambiguous provenance",
+                  "CHERI portability"};
+  BugType AmbigProvAddrArithBugType{this,
+                  "CHERI-incompatible pointer arithmetic",
+                  "CHERI portability"};
+  BugType AmbigProvWrongOrderBugType{this,
+                  "Capability derived from wrong argument",
+                  "CHERI portability"};
 
-  std::unique_ptr<BugType> AmbigProvAsPtrBugType;
-  std::unique_ptr<BugType> InvalidCapPtrBugType;
-  std::unique_ptr<BugType> PtrdiffAsIntCapBugType;
+  BugType AmbigProvAsPtrBugType{this,
+                  "Capability with ambiguous provenance used as pointer",
+                  "CHERI portability"};
+  BugType InvalidCapPtrBugType{this,
+                  "NULL-derived capability used as pointer",
+                  "CHERI portability"};
+  BugType NoProvPtrBugType{this,
+                   "cheri_no_provenance capability used as pointer",
+                   "CHERI portability"};
+  BugType PtrdiffAsIntCapBugType{this,
+                  "Pointer difference as capability",
+                  "CHERI portability"};
 
 private:
   class InvalidCapBugVisitor : public BugReporterVisitor {
@@ -73,8 +88,6 @@ private:
   };
 
 public:
-  ProvenanceSourceChecker();
-
   void checkPostStmt(const CastExpr *CE, CheckerContext &C) const;
   void checkPreStmt(const CastExpr *CE, CheckerContext &C) const;
   void checkPostStmt(const BinaryOperator *BO, CheckerContext &C) const;
@@ -112,34 +125,6 @@ REGISTER_SET_WITH_PROGRAMSTATE(InvalidCap, SymbolRef)
 REGISTER_SET_WITH_PROGRAMSTATE(AmbiguousProvenanceSym, SymbolRef)
 REGISTER_SET_WITH_PROGRAMSTATE(AmbiguousProvenanceReg, const MemRegion *)
 REGISTER_TRAIT_WITH_PROGRAMSTATE(Ptr2IntCapId, unsigned)
-
-ProvenanceSourceChecker::ProvenanceSourceChecker() {
-  AmbigProvBinOpBugType.reset(
-      new BugType(this,
-                  "Binary operation with ambiguous provenance",
-                  "CHERI portability"));
-  AmbigProvAddrArithBugType.reset(
-      new BugType(this,
-                  "CHERI-incompatible pointer arithmetic",
-                  "CHERI portability"));
-  AmbigProvWrongOrderBugType.reset(
-      new BugType(this,
-                  "Capability derived from wrong argument",
-                  "CHERI portability"));
-
-  AmbigProvAsPtrBugType.reset(
-      new BugType(this,
-                  "Capability with ambiguous provenance used as pointer",
-                  "CHERI portability"));
-  InvalidCapPtrBugType.reset(
-      new BugType(this,
-                  "Invalid capability used as pointer",
-                  "CHERI portability"));
-  PtrdiffAsIntCapBugType.reset(
-      new BugType(this,
-                  "Pointer difference as capability",
-                  "CHERI portability"));
-}
 
 static bool isIntegerToIntCapCast(const CastExpr *CE) {
   if (CE->getCastKind() != CK_IntegralCast)
@@ -232,6 +217,14 @@ static bool isIntToVoidPtrCast(const CastExpr *CE) {
   return false;
 }
 
+static bool isNoProvToPtrCast(const CastExpr *CE) {
+  if (!CE->getType()->isPointerType())
+    return false;
+
+  const Expr *Src = CE->getSubExpr();
+  return Src->getType()->hasAttr(attr::CHERINoProvenance);
+}
+
 // Report intcap with ambiguous or NULL-derived provenance cast to pointer
 void ProvenanceSourceChecker::checkPreStmt(const CastExpr *CE,
                                            CheckerContext &C) const {
@@ -250,16 +243,20 @@ void ProvenanceSourceChecker::checkPreStmt(const CastExpr *CE,
     if (!ErrNode)
       return;
     R = std::make_unique<PathSensitiveBugReport>(
-        *AmbigProvAsPtrBugType,
+        AmbigProvAsPtrBugType,
         "Capability with ambiguous provenance is used as pointer", ErrNode);
-  } else if (hasNoProvenance(State, SrcVal) && !SrcVal.isConstant()
-             && !isIntToVoidPtrCast(CE)) {
+  } else if (hasNoProvenance(State, SrcVal) && !SrcVal.isConstant()) {
     ExplodedNode *ErrNode = C.generateNonFatalErrorNode();
     if (!ErrNode)
       return;
-    R = std::make_unique<PathSensitiveBugReport>(
-        *InvalidCapPtrBugType, "Invalid capability is used as pointer",
-        ErrNode);
+    if (isNoProvToPtrCast(CE))
+      R = std::make_unique<PathSensitiveBugReport>(
+          NoProvPtrBugType, "cheri_no_provenance capability used as pointer",
+          ErrNode);
+    else
+      R = std::make_unique<PathSensitiveBugReport>(
+          InvalidCapPtrBugType, "NULL-derived capability used as pointer",
+          ErrNode);
     if (SymbolRef S = SrcVal.getAsSymbol())
       R->addVisitor(std::make_unique<InvalidCapBugVisitor>(S));
   } else
@@ -287,7 +284,7 @@ ExplodedNode *ProvenanceSourceChecker::emitPtrdiffAsIntCapWarn(
   if (!ErrNode)
     return nullptr;
   auto R = std::make_unique<PathSensitiveBugReport>(
-      *PtrdiffAsIntCapBugType, "Pointer difference as capability",
+      PtrdiffAsIntCapBugType, "Pointer difference as capability",
       ErrNode);
   R->addRange(BO->getSourceRange());
 
@@ -337,7 +334,7 @@ const BugType &ProvenanceSourceChecker::explainWarning(
       OS << "LHS and RHS were derived from pointers."
             " Result capability will be derived from LHS by default."
             " This code may need to be rewritten for CHERI.";
-      return *AmbigProvAddrArithBugType;
+      return AmbigProvAddrArithBugType;
     }
 
     if (LHSIsNullDerived) {
@@ -352,7 +349,7 @@ const BugType &ProvenanceSourceChecker::explainWarning(
          << (BO->getType()->isUnsignedIntegerType() ? "size_t" : "ptrdiff_t")
          << "'. ";
     }
-    return *AmbigProvWrongOrderBugType;
+    return AmbigProvWrongOrderBugType;
   }
 
   OS << "; consider indicating the provenance-carrying argument "
@@ -374,7 +371,7 @@ const BugType &ProvenanceSourceChecker::explainWarning(
     }
   }
 
-  return *AmbigProvBinOpBugType;
+  return AmbigProvBinOpBugType;
 }
 
 ExplodedNode *ProvenanceSourceChecker::emitAmbiguousProvenanceWarn(

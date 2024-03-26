@@ -107,7 +107,7 @@ char add_var(int *p, int x, int c) {
 
 int * null_derived(int x) {
   intptr_t u = (intptr_t)x;
-  return (int*)u; // expected-warning{{Invalid capability is used as pointer}}
+  return (int*)u; // expected-warning{{NULL-derived capability used as pointer}}
 }
 
 uintptr_t fn1(char *str, int f) {
@@ -133,14 +133,14 @@ char* ptr_diff(char *s1, char *s2) {
   intptr_t a = (intptr_t)s1;
   intptr_t b = (intptr_t)s2;
   intptr_t d = a - b; // expected-warning{{Pointer difference as capability}}
-  return (char*)d; // expected-warning{{Invalid capability is used as pointer}}
+  return (char*)d; // expected-warning{{NULL-derived capability used as pointer}}
 }
 
 char* ptr_diff2(int x, char *s) {
   intptr_t a = (intptr_t)x;
   intptr_t b = (intptr_t)s;
   intptr_t d = a - b;
-  return (char*)d; // expected-warning{{Invalid capability is used as pointer}}
+  return (char*)d; // expected-warning{{NULL-derived capability used as pointer}}
 }
 
 void *fp2(char *p) {
@@ -175,13 +175,13 @@ uintptr_t fn2(char *a, char *b) {
 
 char *ptrdiff(char *a, unsigned x) {
   intptr_t ip = ((ptrdiff_t)a | (intptr_t)x);
-  char *p = (char*) ip; // expected-warning{{Invalid capability is used as pointer}}
+  char *p = (char*) ip; // expected-warning{{NULL-derived capability used as pointer}}
   return p;
 }
 
 int fp5(char *a, unsigned x) {
   void *p = (void*)(uintptr_t)a;
-  void *q = (void*)(uintptr_t)x; // common pattern, don't fire warning
+  void *q = (void*)(uintptr_t)x; // expected-warning{{cheri_no_provenance capability used as pointer}}
   return (char*)p - (char*)q;
 }
 
