@@ -178,7 +178,7 @@ void test_assign(struct T *pT) {
   pT->pVoid = (void*)"string"; // no warning
 }
 
-
+// ----
 #define offsetof(T,F) __builtin_offsetof(T, F)
 
 struct S2 {
@@ -192,4 +192,13 @@ int test_offsetof(char *pC, short *pSh, struct S2 *pS2) {
   struct S2 *q2 = (struct S2*)((char*)pSh2 - offsetof(struct S2, sh));
   struct S2 *q3 = (struct S2*)((char*)pC - offsetof(struct S2, c)); // no-warn
   return q->x + q2->x + q3->x;
+}
+
+// ----
+void cast_and_assign(void) {
+  char x[100]; // expected-note{{Original allocation}}
+  intptr_t *i;
+  i = (intptr_t*)x; // expected-warning{{Pointer value aligned to a 1 byte boundary cast}}
+                     // no duplicate assign warn
+  *i = 42;
 }
