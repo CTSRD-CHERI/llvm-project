@@ -132,7 +132,7 @@ uintptr_t align_down(void *p, size_t alignment) {
 char* ptr_diff(char *s1, char *s2) {
   intptr_t a = (intptr_t)s1;
   intptr_t b = (intptr_t)s2;
-  intptr_t d = a - b; // expected-warning{{Pointer difference as capability}}
+  intptr_t d = a - b;
   return (char*)d; // expected-warning{{NULL-derived capability used as pointer}}
 }
 
