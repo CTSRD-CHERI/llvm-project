@@ -50,6 +50,8 @@ option(LIBUNWIND_IS_BAREMETAL "Build libunwind for baremetal targets." OFF)
 option(LIBUNWIND_USE_FRAME_HEADER_CACHE "Cache frame headers for unwinding. Requires locking dl_iterate_phdr." OFF)
 option(LIBUNWIND_REMEMBER_HEAP_ALLOC "Use heap instead of the stack for .cfi_remember_state." OFF)
 option(LIBUNWIND_INSTALL_HEADERS "Install the libunwind headers." OFF)
+option(LIBUNWIND_SANDBOX_OTYPES "Use a libunwind implementation that assumes a c18n RTLD using otypes." ON)
+option(LIBUNWIND_SANDBOX_HARDENED "Harden the current sandbox implementation." ON)
 
 set(LIBUNWIND_LIBDIR_SUFFIX "${LLVM_LIBDIR_SUFFIX}" CACHE STRING
     "Define suffix of library directory name (32/64)")
@@ -291,6 +293,16 @@ endif()
 # Threading-support
 if (NOT LIBUNWIND_ENABLE_THREADS)
   add_compile_flags(-D_LIBUNWIND_HAS_NO_THREADS)
+endif()
+
+# Sandboxing and c18n support
+if (LIBUNWIND_SANDBOX_OTYPES)
+  add_compile_flags(-D_LIBUNWIND_SANDBOX_OTYPES)
+endif()
+
+# Hardening
+if (LIBUNWIND_SANDBOX_HARDENED)
+  add_compile_flags(-D_LIBUNWIND_SANDBOX_HARDENED)
 endif()
 
 # ARM WMMX register support
