@@ -537,20 +537,6 @@ void ProvenanceSourceChecker::checkDeadSymbols(SymbolReaper &SymReaper,
     C.addTransition(State);
 }
 
-namespace {
-
-static void describeCast(raw_ostream &OS, const CastExpr *CE,
-                         const LangOptions &LangOpts) {
-  OS << (dyn_cast<ImplicitCastExpr>(CE) ? "implicit" : "explicit");
-  OS << " cast from '";
-  CE->getSubExpr()->getType().print(OS, PrintingPolicy(LangOpts));
-  OS << "' to '";
-  CE->getType().print(OS, PrintingPolicy(LangOpts));
-  OS << "'";
-}
-
-} // namespace
-
 PathDiagnosticPieceRef
 ProvenanceSourceChecker::InvalidCapBugVisitor::VisitNode(
     const ExplodedNode *N, BugReporterContext &BRC,

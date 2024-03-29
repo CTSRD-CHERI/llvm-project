@@ -1791,4 +1791,9 @@ def SubObjectRepresentabilityChecker : Checker<"SubObjectRepresentability">,
 
 let ParentPackage = CHERIAlpha in {
 
+def AllocationChecker : Checker<"Allocation">,
+  HelpText<"TODO: help">,
+  Documentation<NotDocumented>;
+
+
 } // end alpha.cheri
