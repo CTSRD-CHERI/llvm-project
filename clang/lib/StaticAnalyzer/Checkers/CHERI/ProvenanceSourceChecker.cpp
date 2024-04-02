@@ -264,8 +264,6 @@ bool justConverted2IntCap(Expr *E, const ASTContext &Ctx) {
   return false;
 }
 
-
-
 FixItHint addFixIt(const Expr *NDOp, CheckerContext &C, bool IsUnsigned) {
   const SourceRange &SrcRange = NDOp->getSourceRange();
   bool InValidStr = true;
@@ -277,6 +275,14 @@ FixItHint addFixIt(const Expr *NDOp, CheckerContext &C, bool IsUnsigned) {
         (IsUnsigned ? "(size_t)(" : "(ptrdiff_t)(") + OpStr.str() + ")");
   }
   return {};
+}
+
+bool isArith(BinaryOperatorKind OpCode) {
+  if (BinaryOperator::isCompoundAssignmentOp(OpCode))
+    return isArith(BinaryOperator::getOpForCompoundAssignment(OpCode));
+  return BinaryOperator::isAdditiveOp(OpCode) ||
+         BinaryOperator::isMultiplicativeOp(OpCode) ||
+         BinaryOperator::isBitwiseOp(OpCode);
 }
 
 } // namespace
@@ -414,9 +420,7 @@ void ProvenanceSourceChecker::checkPostStmt(const BinaryOperator *BO,
     return;
 
   BinaryOperatorKind const OpCode = BO->getOpcode();
-  if (!(BinaryOperator::isAdditiveOp(OpCode)
-        || BinaryOperator::isMultiplicativeOp(OpCode)
-        || BinaryOperator::isBitwiseOp(OpCode)))
+  if (!isArith(OpCode))
     return;
   bool const IsSub = OpCode == clang::BO_Sub || OpCode == clang::BO_SubAssign;
 

@@ -185,8 +185,14 @@ int fp5(char *a, unsigned x) {
   return (char*)p - (char*)q;
 }
 
-char* const2ptr(int *p, int x) {
+char* const2ptr(void) {
   return (char*)(-1);
+}
+
+void *fn3(size_t x, int y) {
+  intptr_t a = (intptr_t)x;
+  a += y;
+  return (void*)a; // expected-warning{{NULL-derived capability used as pointer}}
 }
 
 //------------------- Inter-procedural warnings ---------------------
