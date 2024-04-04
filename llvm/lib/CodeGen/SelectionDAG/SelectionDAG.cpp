@@ -7649,14 +7649,14 @@ SDValue SelectionDAG::getMemset(SDValue Chain, const SDLoc &dl, SDValue Dst,
   // If zeroing out and bzero is present, use it.
   if (SrcIsZero && BzeroName) {
     TargetLowering::ArgListTy Args;
-    Args.push_back(CreateEntry(Dst, Type::getInt8PtrTy(Ctx)));
+    Args.push_back(CreateEntry(Dst, Dst.getValueType().getTypeForEVT(Ctx)));
     Args.push_back(CreateEntry(Size, DL.getIntPtrType(Ctx)));
     CLI.setLibCallee(
         TLI->getLibcallCallingConv(RTLIB::BZERO), Type::getVoidTy(Ctx),
         getExternalFunctionSymbol(BzeroName), std::move(Args));
   } else {
     TargetLowering::ArgListTy Args;
-    Args.push_back(CreateEntry(Dst, Type::getInt8PtrTy(Ctx)));
+    Args.push_back(CreateEntry(Dst, Dst.getValueType().getTypeForEVT(Ctx)));
     Args.push_back(CreateEntry(Src, Src.getValueType().getTypeForEVT(Ctx)));
     Args.push_back(CreateEntry(Size, DL.getIntPtrType(Ctx)));
     CLI.setLibCallee(
