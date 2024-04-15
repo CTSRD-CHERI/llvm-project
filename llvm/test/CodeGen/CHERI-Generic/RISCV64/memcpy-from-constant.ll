@@ -142,18 +142,8 @@ do.body:
 define linkonce_odr void @copy_from_underaligned_zero_constant(ptr addrspace(200) %dst) addrspace(200) {
 ; CHECK-LABEL: copy_from_underaligned_zero_constant:
 ; CHECK:       # %bb.0: # %do.body
-; CHECK-NEXT:    cincoffset csp, csp, -16
-; CHECK-NEXT:    .cfi_def_cfa_offset 16
-; CHECK-NEXT:    csc cra, 0(csp) # 16-byte Folded Spill
-; CHECK-NEXT:    .cfi_offset ra, -16
-; CHECK-NEXT:  .LBB10_1: # %do.body
-; CHECK-NEXT:    # Label of block must be emitted
-; CHECK-NEXT:    auipcc ca1, %captab_pcrel_hi(zero_constant)
-; CHECK-NEXT:    clc ca1, %pcrel_lo(.LBB10_1)(ca1)
-; CHECK-NEXT:    li a2, 16
-; CHECK-NEXT:    ccall memcpy
-; CHECK-NEXT:    clc cra, 0(csp) # 16-byte Folded Reload
-; CHECK-NEXT:    cincoffset csp, csp, 16
+; CHECK-NEXT:    csd zero, 8(ca0)
+; CHECK-NEXT:    csd zero, 0(ca0)
 ; CHECK-NEXT:    cret
 do.body:
   call void @llvm.memcpy.p200.p200.i64(ptr addrspace(200) align 8 %dst, ptr addrspace(200) align 8 @zero_constant, i64 16, i1 false) #1
@@ -163,18 +153,8 @@ do.body:
 define linkonce_odr void @copy_from_underaligned_zero_constant_preserve(ptr addrspace(200) %dst) addrspace(200) {
 ; CHECK-LABEL: copy_from_underaligned_zero_constant_preserve:
 ; CHECK:       # %bb.0: # %do.body
-; CHECK-NEXT:    cincoffset csp, csp, -16
-; CHECK-NEXT:    .cfi_def_cfa_offset 16
-; CHECK-NEXT:    csc cra, 0(csp) # 16-byte Folded Spill
-; CHECK-NEXT:    .cfi_offset ra, -16
-; CHECK-NEXT:  .LBB11_1: # %do.body
-; CHECK-NEXT:    # Label of block must be emitted
-; CHECK-NEXT:    auipcc ca1, %captab_pcrel_hi(zero_constant)
-; CHECK-NEXT:    clc ca1, %pcrel_lo(.LBB11_1)(ca1)
-; CHECK-NEXT:    li a2, 16
-; CHECK-NEXT:    ccall memcpy
-; CHECK-NEXT:    clc cra, 0(csp) # 16-byte Folded Reload
-; CHECK-NEXT:    cincoffset csp, csp, 16
+; CHECK-NEXT:    csd zero, 8(ca0)
+; CHECK-NEXT:    csd zero, 0(ca0)
 ; CHECK-NEXT:    cret
 do.body:
   call void @llvm.memcpy.p200.p200.i64(ptr addrspace(200) align 8 %dst, ptr addrspace(200) align 8 @zero_constant, i64 16, i1 false) #1

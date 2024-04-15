@@ -6887,7 +6887,7 @@ static SDValue getMemcpyLoadsAndStores(
   // TODO: the frontend/optimization passes probably shouldn't emit
   //  must-preserve-tags for such small memcpys
   auto CapTy = TLI.cheriCapabilityType();
-  if (CapTy.isValid()) {
+  if (CapTy.isValid() && !Op.isMemset()) {
     const uint64_t CapSize = CapTy.getStoreSize();
     if (PreserveTags == PreserveCheriTags::Required && !ReachedLimit &&
         Size >= CapSize && (!FoundLowering || !MemOps[0].isFatPointer())) {

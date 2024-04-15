@@ -142,20 +142,9 @@ do.body:
 define linkonce_odr void @copy_from_underaligned_zero_constant(ptr addrspace(200) %dst) addrspace(200) {
 ; CHECK-LABEL: copy_from_underaligned_zero_constant:
 ; CHECK:       # %bb.0: # %do.body
-; CHECK-NEXT:    cincoffset $c11, $c11, -16
-; CHECK-NEXT:    .cfi_def_cfa_offset 16
-; CHECK-NEXT:    csc $c17, $zero, 0($c11) # 16-byte Folded Spill
-; CHECK-NEXT:    .cfi_offset 89, -16
-; CHECK-NEXT:    lui $1, %pcrel_hi(_CHERI_CAPABILITY_TABLE_-8)
-; CHECK-NEXT:    daddiu $1, $1, %pcrel_lo(_CHERI_CAPABILITY_TABLE_-4)
-; CHECK-NEXT:    cgetpccincoffset $c1, $1
-; CHECK-NEXT:    clcbi $c4, %captab20(zero_constant)($c1)
-; CHECK-NEXT:    clcbi $c12, %capcall20(memcpy)($c1)
-; CHECK-NEXT:    cjalr $c12, $c17
-; CHECK-NEXT:    daddiu $4, $zero, 16
-; CHECK-NEXT:    clc $c17, $zero, 0($c11) # 16-byte Folded Reload
+; CHECK-NEXT:    csd $zero, $zero, 0($c3)
 ; CHECK-NEXT:    cjr $c17
-; CHECK-NEXT:    cincoffset $c11, $c11, 16
+; CHECK-NEXT:    csd $zero, $zero, 8($c3)
 do.body:
   call void @llvm.memcpy.p200.p200.i64(ptr addrspace(200) align 8 %dst, ptr addrspace(200) align 8 @zero_constant, i64 16, i1 false) #1
   ret void
@@ -164,20 +153,9 @@ do.body:
 define linkonce_odr void @copy_from_underaligned_zero_constant_preserve(ptr addrspace(200) %dst) addrspace(200) {
 ; CHECK-LABEL: copy_from_underaligned_zero_constant_preserve:
 ; CHECK:       # %bb.0: # %do.body
-; CHECK-NEXT:    cincoffset $c11, $c11, -16
-; CHECK-NEXT:    .cfi_def_cfa_offset 16
-; CHECK-NEXT:    csc $c17, $zero, 0($c11) # 16-byte Folded Spill
-; CHECK-NEXT:    .cfi_offset 89, -16
-; CHECK-NEXT:    lui $1, %pcrel_hi(_CHERI_CAPABILITY_TABLE_-8)
-; CHECK-NEXT:    daddiu $1, $1, %pcrel_lo(_CHERI_CAPABILITY_TABLE_-4)
-; CHECK-NEXT:    cgetpccincoffset $c1, $1
-; CHECK-NEXT:    clcbi $c4, %captab20(zero_constant)($c1)
-; CHECK-NEXT:    clcbi $c12, %capcall20(memcpy)($c1)
-; CHECK-NEXT:    cjalr $c12, $c17
-; CHECK-NEXT:    daddiu $4, $zero, 16
-; CHECK-NEXT:    clc $c17, $zero, 0($c11) # 16-byte Folded Reload
+; CHECK-NEXT:    csd $zero, $zero, 0($c3)
 ; CHECK-NEXT:    cjr $c17
-; CHECK-NEXT:    cincoffset $c11, $c11, 16
+; CHECK-NEXT:    csd $zero, $zero, 8($c3)
 do.body:
   call void @llvm.memcpy.p200.p200.i64(ptr addrspace(200) align 8 %dst, ptr addrspace(200) align 8 @zero_constant, i64 16, i1 false) #1
   ret void
