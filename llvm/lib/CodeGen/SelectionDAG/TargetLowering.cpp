@@ -208,6 +208,7 @@ bool TargetLowering::findOptimalMemOpLowering(
 
   // XXXAR: (ab)use MVT::isVoid to indicate that a memcpy call must be made
   if (VT == MVT::isVoid) {
+    assert(!Op.isMemset() && "MVT::isVoid should only be used for copies");
     return false; // cannot lower as memops
   }
   // If the type is a fat pointer, then forcibly disable overlap.
