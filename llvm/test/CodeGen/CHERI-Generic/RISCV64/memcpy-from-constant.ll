@@ -23,12 +23,7 @@ do.body:
 define linkonce_odr void @copy_from_zero_constant_with_offset(ptr addrspace(200) %dst) addrspace(200) {
 ; CHECK-LABEL: copy_from_zero_constant_with_offset:
 ; CHECK:       # %bb.0: # %do.body
-; CHECK-NEXT:  .LBB1_1: # %do.body
-; CHECK-NEXT:    # Label of block must be emitted
-; CHECK-NEXT:    auipcc ca1, %captab_pcrel_hi(zero_constant)
-; CHECK-NEXT:    clc ca1, %pcrel_lo(.LBB1_1)(ca1)
-; CHECK-NEXT:    clc ca1, 16(ca1)
-; CHECK-NEXT:    csc ca1, 0(ca0)
+; CHECK-NEXT:    csc cnull, 0(ca0)
 ; CHECK-NEXT:    cret
 do.body:
   %src = getelementptr inbounds i8, ptr addrspace(200) @zero_constant, i64 16
@@ -92,12 +87,7 @@ do.body:
 define linkonce_odr void @copy_from_zero_constant_with_offset_preserve(ptr addrspace(200) %dst) addrspace(200) {
 ; CHECK-LABEL: copy_from_zero_constant_with_offset_preserve:
 ; CHECK:       # %bb.0: # %do.body
-; CHECK-NEXT:  .LBB6_1: # %do.body
-; CHECK-NEXT:    # Label of block must be emitted
-; CHECK-NEXT:    auipcc ca1, %captab_pcrel_hi(zero_constant)
-; CHECK-NEXT:    clc ca1, %pcrel_lo(.LBB6_1)(ca1)
-; CHECK-NEXT:    clc ca1, 16(ca1)
-; CHECK-NEXT:    csc ca1, 0(ca0)
+; CHECK-NEXT:    csc cnull, 0(ca0)
 ; CHECK-NEXT:    cret
 do.body:
   %src = getelementptr inbounds i8, ptr addrspace(200) @zero_constant, i64 16

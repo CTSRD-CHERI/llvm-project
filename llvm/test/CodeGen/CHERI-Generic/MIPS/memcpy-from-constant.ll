@@ -23,13 +23,8 @@ do.body:
 define linkonce_odr void @copy_from_zero_constant_with_offset(ptr addrspace(200) %dst) addrspace(200) {
 ; CHECK-LABEL: copy_from_zero_constant_with_offset:
 ; CHECK:       # %bb.0: # %do.body
-; CHECK-NEXT:    lui $1, %pcrel_hi(_CHERI_CAPABILITY_TABLE_-8)
-; CHECK-NEXT:    daddiu $1, $1, %pcrel_lo(_CHERI_CAPABILITY_TABLE_-4)
-; CHECK-NEXT:    cgetpccincoffset $c1, $1
-; CHECK-NEXT:    clcbi $c1, %captab20(zero_constant)($c1)
-; CHECK-NEXT:    clc $c1, $zero, 16($c1)
 ; CHECK-NEXT:    cjr $c17
-; CHECK-NEXT:    csc $c1, $zero, 0($c3)
+; CHECK-NEXT:    csc $cnull, $zero, 0($c3)
 do.body:
   %src = getelementptr inbounds i8, ptr addrspace(200) @zero_constant, i64 16
   call void @llvm.memcpy.p200.p200.i64(ptr addrspace(200) align 16 %dst, ptr addrspace(200) align 16 %src, i64 16, i1 false)
@@ -92,13 +87,8 @@ do.body:
 define linkonce_odr void @copy_from_zero_constant_with_offset_preserve(ptr addrspace(200) %dst) addrspace(200) {
 ; CHECK-LABEL: copy_from_zero_constant_with_offset_preserve:
 ; CHECK:       # %bb.0: # %do.body
-; CHECK-NEXT:    lui $1, %pcrel_hi(_CHERI_CAPABILITY_TABLE_-8)
-; CHECK-NEXT:    daddiu $1, $1, %pcrel_lo(_CHERI_CAPABILITY_TABLE_-4)
-; CHECK-NEXT:    cgetpccincoffset $c1, $1
-; CHECK-NEXT:    clcbi $c1, %captab20(zero_constant)($c1)
-; CHECK-NEXT:    clc $c1, $zero, 16($c1)
 ; CHECK-NEXT:    cjr $c17
-; CHECK-NEXT:    csc $c1, $zero, 0($c3)
+; CHECK-NEXT:    csc $cnull, $zero, 0($c3)
 do.body:
   %src = getelementptr inbounds i8, ptr addrspace(200) @zero_constant, i64 16
   call void @llvm.memcpy.p200.p200.i64(ptr addrspace(200) align 16 %dst, ptr addrspace(200) align 16 %src, i64 16, i1 false) #1
