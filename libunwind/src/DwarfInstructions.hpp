@@ -60,7 +60,6 @@ private:
                                                R &newRegisters,
                                                CompartmentInfo &CI,
                                                uintcap_t sealer);
-  static bool isEndOfExecutiveStack(uintcap_t csp, CompartmentInfo &CI);
   static bool isTrampoline(uintcap_t ecsp, A &addressSpace, CompartmentInfo &CI,
                            uintcap_t returnAddress);
 #endif
@@ -305,8 +304,7 @@ uintptr_t DwarfInstructions<A, R>::restoreRegistersFromSandbox(
   assert(__builtin_cheri_tag_get((void *)csp) &&
          "Executive stack should be tagged!");
   // Derive the new executive CSP
-  ptraddr_t nextCSPAddr = addressSpace.get64(csp + CI.kNextOffset);
-  uintcap_t nextCSP = __builtin_cheri_address_set(csp, nextCSPAddr);
+  uintcap_t nextCSP = addressSpace.getCapability(csp + CI.kNextOffset);
 #ifdef _LIBUNWIND_SANDBOX_HARDENED
   // Seal ECSP
   nextCSP = __builtin_cheri_seal(nextCSP, sealer);
@@ -339,26 +337,15 @@ uintptr_t DwarfInstructions<A, R>::restoreRegistersFromSandbox(
 }
 
 template <typename A, typename R>
-bool DwarfInstructions<A, R>::isEndOfExecutiveStack(uintcap_t csp,
-                                                    CompartmentInfo &CI) {
-  CHERI_DBG("isEndOfExecutiveStack(): csp: %#p\n", (void *)csp);
-  ptraddr_t cspAddr = (ptraddr_t)csp;
-  ptraddr_t cspEndAddr =
-      __builtin_cheri_base_get(csp) + __builtin_cheri_length_get(csp);
-  // Ensure this has the correct trusted frame size.
-  return cspAddr > (cspEndAddr - CI.kTrustedFrameSize);
-}
-
-template <typename A, typename R>
 bool DwarfInstructions<A, R>::isTrampoline(uintcap_t ecsp, A &addressSpace,
                                            CompartmentInfo &CI,
                                            uintcap_t returnAddress) {
   // TODO(cheri): Use a cfp-based approach rather than the cookie.
   ptraddr_t expectedReturnAddress =
-      addressSpace.get64(ecsp + CI.kReturnAddressOffset) & (~0b11ULL);
+      addressSpace.get64(ecsp + CI.kReturnAddressOffset);
   CHERI_DBG("isTrampoline(): expectedReturnAddress: 0x%lx\n",
             expectedReturnAddress);
-  return expectedReturnAddress == returnAddress - 1;
+  return expectedReturnAddress == returnAddress;
 }
 #else // _LIBUNWIND_TARGET_AARCH64
 template <typename A, typename R>
@@ -374,12 +361,6 @@ uintptr_t DwarfInstructions<A, R>::restoreRegistersFromSandbox(
     uintcap_t sealer) {
   assert(0 && "not implemented on this architecture");
   return (uintptr_t)0;
-}
-template <typename A, typename R>
-bool DwarfInstructions<A, R>::isEndOfExecutiveStack(uintcap_t csp,
-                                                    CompartmentInfo &CI) {
-  assert(0 && "not implemented on this architecture");
-  return false;
 }
 template <typename A, typename R>
 bool DwarfInstructions<A, R>::isTrampoline(uintcap_t ecsp, A &addressSpace,
@@ -575,23 +556,13 @@ int DwarfInstructions<A, R>::stepWithDwarf(A &addressSpace, pc_t pc,
       // compartment boundary. We need to restore registers from the executive
       // stack and ask rtld for it.
       if (addressSpace.isValidSealer(sealer)) {
-        // Iteratively unwind all the executive mode return addresses. This is
-        // necessary to support tail calls to trampolines.
         uintcap_t csp = registers.getUnsealedECSP(sealer);
 	CompartmentInfo &CI = CompartmentInfo::sThisCompartmentInfo;
-        for (;;) {
-          if (isEndOfExecutiveStack(csp, CI)) {
-            return UNW_ESTOPUNWIND;
-          }
-          if (isTrampoline(csp, addressSpace, CI, returnAddress)) {
-            CHERI_DBG("%#p: detected a trampoline, unwinding from sandbox\n",
-                      (void *)returnAddress);
-            returnAddress = restoreRegistersFromSandbox(
-                csp, addressSpace, newRegisters, CI, sealer);
-            csp = newRegisters.getUnsealedECSP(sealer);
-          } else {
-            break;
-          }
+        if (csp != 0 && isTrampoline(csp, addressSpace, CI, returnAddress)) {
+          CHERI_DBG("%#p: detected a trampoline, unwinding from sandbox\n",
+                    (void *)returnAddress);
+          returnAddress = restoreRegistersFromSandbox(
+              csp, addressSpace, newRegisters, CI, sealer);
         }
       }
 #endif
