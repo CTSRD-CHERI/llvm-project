@@ -25,7 +25,9 @@ using namespace cheri;
 namespace {
 
 class AllocationChecker : public Checker<check::PostStmt<CastExpr>> {
-  BugType BT_1{this, "Allocation partitioning", "CHERI portability"};
+  BugType BT_Default{this, "Allocation partitioning", "CHERI portability"};
+  BugType BT_KnownReg{this, "Heap or static allocation partitioning",
+                      "CHERI portability"};
 
   class AllocPartitionBugVisitor : public BugReporterVisitor {
   public:
@@ -116,8 +118,10 @@ ExplodedNode *AllocationChecker::emitAllocationPartitionWarning(
     llvm::raw_svector_ostream OS(Buf);
     OS << "Allocation partition: ";
     describeCast(OS, CE, C.getASTContext().getLangOpts());
+    const MemSpaceRegion *MemSpace = MR->getMemorySpace();
+    bool KnownReg = isa<HeapSpaceRegion, GlobalsSpaceRegion>(MemSpace);
     auto R = std::make_unique<PathSensitiveBugReport>(
-        BT_1, OS.str(), ErrNode);
+        KnownReg ? BT_KnownReg : BT_Default, OS.str(), ErrNode);
     R->addVisitor(std::make_unique<AllocPartitionBugVisitor>(MR));
     C.emitReport(std::move(R));
     return ErrNode;
