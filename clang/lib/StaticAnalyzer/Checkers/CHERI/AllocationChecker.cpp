@@ -89,13 +89,24 @@ bool relatedTypes(const Type *Ty1, const Type *Ty2) {
     return true;
   if (Ty1->isArrayType())
     return relatedTypes(Ty1->getArrayElementTypeNoTypeQual(), Ty2);
+  if (Ty1->isRecordType()) {
+    if (RecordDecl *RD = Ty1->getAs<RecordType>()->getAsRecordDecl()) {
+      const RecordDecl::field_iterator &FirstField = RD->field_begin();
+      if (FirstField != RD->field_end()) {
+        const Type *FFTy = FirstField->getType()->getUnqualifiedDesugaredType();
+        return relatedTypes(FFTy, Ty2);
+      }
+    }
+  }
   return false;
 }
 
-bool isGenPtrType(QualType Ty) {
-  return Ty->isVoidPointerType() ||
-         ((Ty->isPointerType() || Ty->isArrayType()) &&
-          Ty->getPointeeOrArrayElementType()->isCharType());
+bool reportForType(QualType Ty) {
+  if (Ty->isVoidPointerType())
+    return false;
+  if (Ty->isPointerType() || Ty->isArrayType())
+    return !Ty->getPointeeOrArrayElementType()->isCharType();
+  return false;
 }
 
 Optional<QualType> getPrevType(ProgramStateRef State, const MemRegion *R) {
@@ -103,7 +114,7 @@ Optional<QualType> getPrevType(ProgramStateRef State, const MemRegion *R) {
     return *PrevTy;
   if (const TypedValueRegion *TR = R->getAs<TypedValueRegion>()) {
     QualType Ty = TR->getValueType();
-    if ((Ty->isPointerType() || Ty->isArrayType()) && !isGenPtrType(Ty))
+    if (reportForType(Ty))
       return Ty;
   }
   return None;
@@ -166,9 +177,7 @@ void AllocationChecker::checkPostStmt(const CastExpr *CE,
   }
 
   QualType DstTy = CE->getType().getUnqualifiedType();
-  if (!DstTy->isPointerType())
-    return;
-  if (DstTy->isVoidPointerType() || DstTy->getPointeeType()->isCharType())
+  if (!reportForType(DstTy))
     return;
 
   Optional<QualType> PrevTy = getPrevType(State, SR);

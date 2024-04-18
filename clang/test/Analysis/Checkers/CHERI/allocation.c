@@ -28,11 +28,10 @@ struct S2 * test_2(int n1) {
   return p2;
 }
 
-int * test_3(int n1, int n2) {
-  void *p1 = malloc(sizeof(struct S1)*n1 + sizeof(struct S2)*n2);
-  struct S2 *p2 = (struct S2 *)(p1+n1);
-  int *p3 = (int*)(p2 + n2); // expected-warning{{Allocation partition}}
-  return p3;
+struct S2 * test_3(int n1, int n2) {
+  struct S1 *p1 = malloc(sizeof(struct S1)*n1 + sizeof(struct S2)*n2);
+  struct S2 *p2 = (struct S2 *)(p1+n1); // expected-warning{{Allocation partition}}
+  return p2;
 }
 
 void array(int i, int j) {
@@ -40,4 +39,15 @@ void array(int i, int j) {
   int (*p1)[200] = &a[i];
   int *p2 = p1[j]; // no warn
   *p2 = 42;
+}
+
+struct S3 {
+  struct S2 s2;
+  int y;
+};
+
+struct S2 * first_field(void *p, int n1) {
+  struct S3 *p3 = p;
+  struct S2 *p2 = (struct S2 *)(p3+n1); // no warn
+  return p2;
 }
