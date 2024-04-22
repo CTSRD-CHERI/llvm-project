@@ -1787,4 +1787,8 @@ def PointerSizeAssumptionsChecker : Checker<"PointerSizeAssumptions">,
 
 let ParentPackage = CHERIAlpha in {
 
+def SubObjectRepresentabilityChecker : Checker<"SubObjectRepresentability">,
+  HelpText<"TODO: help">,
+  Documentation<NotDocumented>;
+
 } // end alpha.cheri
