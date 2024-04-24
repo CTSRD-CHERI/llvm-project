@@ -11,7 +11,7 @@ struct R1 {
       char a[0x3FFF]; // no warn
     } f1good;
     struct {
-      char c;
+      char c; // expected-note{{}}
       char a[0x4000]; // expected-warning{{Field 'a' of type 'char[16384]' (size 16384) requires 8 byte alignment for precise bounds; field offset is 1}}
     } f2bad;
     struct {
@@ -20,3 +20,16 @@ struct R1 {
     } f3good __attribute__((aligned(8)));
   } s2;
 } s1;
+
+struct S2 {
+  int x[3];
+  int *px;
+};
+
+struct R2 {
+  char x[0x50]; // expected-note{{16/80}}
+  struct S2 s2; // expected-note{{32/32 bytes exposed (may expose capability!)}}
+  char c; // expected-note{{1}}
+  char a[0x8000]; // expected-warning{{Field 'a' of type 'char[32768]'}}
+  char y[32]; // expected-note{{15/32}}
+};
