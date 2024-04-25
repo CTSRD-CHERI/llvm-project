@@ -34,15 +34,129 @@ using namespace ento;
 
 namespace {
 class SubObjectRepresentabilityChecker
-    : public Checker<check::ASTDecl<RecordDecl>> {
+    : public Checker<check::ASTDecl<RecordDecl>, check::ASTCodeBody> {
   BugType BT_1{this, "Field with imprecise subobject bounds",
+               "CHERI portability"};
+  BugType BT_2{this, "Address taken of a field with imprecise subobject bounds",
                "CHERI portability"};
 
 public:
   void checkASTDecl(const RecordDecl *R, AnalysisManager& mgr,
                     BugReporter &BR) const;
+  void checkASTCodeBody(const Decl *D, AnalysisManager &mgr,
+                        BugReporter &BR) const;
 };
 
+}
+
+namespace {
+
+std::unique_ptr<BasicBugReport> reportExposedFields(const FieldDecl *D, ASTContext &ASTCtx, BugReporter &BR,
+                         uint64_t Base, uint64_t Top, std::unique_ptr<BasicBugReport> Report) {
+  const RecordDecl *Parent = D->getParent();
+  auto FI = Parent->field_begin();
+  while (FI != Parent->field_end() &&
+         ASTCtx.getFieldOffset(*FI) / 8 +
+                 ASTCtx.getTypeSize(FI->getType()) / 8 <=
+             Base)
+    FI++;
+
+  bool Before = true;
+  while (FI != Parent->field_end() &&
+         ASTCtx.getFieldOffset(*FI) / 8 < Top) {
+    if (*FI != D) {
+      SmallString<1024> Note;
+      llvm::raw_svector_ostream OS2(Note);
+
+      uint64_t CurFieldOffset = ASTCtx.getFieldOffset(*FI) / 8;
+      uint64_t CurFieldSize = ASTCtx.getTypeSize(FI->getType()) / 8;
+      uint64_t BytesExposed =
+          Before
+              ? std::min(CurFieldSize, CurFieldOffset + CurFieldSize - Base)
+              : std::min(CurFieldSize, Top - CurFieldOffset);
+      OS2 << BytesExposed << "/" << CurFieldSize << " bytes exposed";
+      if (cheri::hasCapability(FI->getType(), ASTCtx))
+        OS2 << " (may expose capability!)";
+
+      PathDiagnosticLocation LN =
+          PathDiagnosticLocation::createBegin(*FI, BR.getSourceManager());
+      Report->addNote(OS2.str(), LN);
+    } else
+      Before = false;
+    FI++;
+  }
+  return Report;
+}
+
+// FIXME: CC_MORELLO is not set in cheri_compressed_cap
+// FIXME: other targets
+using Handler = CompressedCap128;
+Handler::cap_t getBoundedCap(uint64_t ParentSize, uint64_t Offset,
+                             uint64_t Size) {
+  Handler::addr_t InitLength = Handler ::representable_length(ParentSize);
+  Handler::cap_t MockCap = Handler::make_max_perms_cap(0, 0, InitLength);
+  bool exact = Handler::setbounds(&MockCap, Offset, Offset + Size);
+  assert(!exact);
+  return MockCap;
+}
+
+} // namespace
+
+std::unique_ptr<BugReport> checkField(const FieldDecl *D, AnalysisManager &mgr,
+                                      BugReporter &BR, const BugType &BT) {
+  QualType T = D->getType();
+
+  ASTContext &ASTCtx = BR.getContext();
+  uint64_t Offset = ASTCtx.getFieldOffset(D) / 8;
+  if (Offset > 0) {
+    uint64_t Size = ASTCtx.getTypeSize(T) / 8;
+    uint64_t ReqAlign = llvm::getMorelloRequiredAlignment(Size);
+    uint64_t CurAlign = 1 << llvm::countTrailingZeros(Offset);
+    if (CurAlign < ReqAlign) {
+      /* Emit warning */
+      SmallString<1024> Err;
+      llvm::raw_svector_ostream OS(Err);
+      const PrintingPolicy &PP = ASTCtx.getPrintingPolicy();
+      OS << "Field '";
+      D->getNameForDiagnostic(OS, PP, false);
+      OS << "' of type '" << T.getAsString(PP) << "'";
+      OS << " (size " << Size << ")";
+      OS << " requires " << ReqAlign << " byte alignment for precise bounds;";
+      OS << " field offset is " << Offset;
+      OS << " (aligned to " << CurAlign << ");";
+
+      /*
+       * Print current bounds
+       * TODO: use cheri_compressed_cap correctly
+       *
+      const RecordDecl *Parent = D->getParent();
+      uint64_t ParentSize = ASTCtx.getTypeSize(Parent->getTypeForDecl()) / 8;
+      auto MockCap = getBoundedCap(ParentSize, Offset, Size);
+      uint64_t Base = MockCap.base();
+      uint64_t Top = MockCap.top();
+      OS << " Current bounds: " << Base << "-" << Top;
+       */
+
+      // Note that this will fire for every translation unit that uses this
+      // class.  This is suboptimal, but at least scan-build will merge
+      // duplicate HTML reports.
+      PathDiagnosticLocation L =
+          PathDiagnosticLocation::createBegin(D, BR.getSourceManager());
+      auto Report = std::make_unique<BasicBugReport>(BT, OS.str(), L);
+      Report->setDeclWithIssue(D);
+      Report->addRange(D->getSourceRange());
+
+      /*
+       * Add exposed fields as notes
+       * TODO: use cheri_compressed_cap correctly
+      Report = reportExposedFields(D, ASTCtx, BR, Base, Top, std::move(Report));
+       */
+
+      return Report;
+    }
+  }
+
+  return nullptr;
 }
 
 void SubObjectRepresentabilityChecker::checkASTDecl(const RecordDecl *R,
@@ -61,82 +175,55 @@ void SubObjectRepresentabilityChecker::checkASTDecl(const RecordDecl *R,
   if (Kind != SrcMgr::C_User)
     return;
   */
-  
+
   for (FieldDecl *D : R->fields()) {
-    QualType T = D->getType();
+    auto Report = checkField(D, mgr, BR, BT_1);
+    if (Report)
+      BR.emitReport(std::move(Report));
+  }
+}
 
-    ASTContext &ASTCtx = BR.getContext();
-    uint64_t Offset = ASTCtx.getFieldOffset(D)/8;
-    if (Offset > 0) {
-      uint64_t Size = ASTCtx.getTypeSize(T)/8;
-      uint64_t ReqAlign = llvm::getMorelloRequiredAlignment(Size);
-      uint64_t CurAlign = 1 << llvm::countTrailingZeros(Offset);
-      if (CurAlign < ReqAlign) {
-        /* Emit warning */
-        SmallString<1024> Err;
-        llvm::raw_svector_ostream OS(Err);
-        const PrintingPolicy &PP = ASTCtx.getPrintingPolicy();
-        OS << "Field '";
-        D->getNameForDiagnostic(OS, PP, false);
-        OS << "' of type '" << T.getAsString(PP) << "'";
-        OS << " (size " << Size << ")";
-        OS << " requires " << ReqAlign << " byte alignment for precise bounds;";
-        OS << " field offset is " << Offset;
-        OS << " (aligned to " << CurAlign << ");";
+void SubObjectRepresentabilityChecker::checkASTCodeBody(const Decl *D, AnalysisManager &mgr,
+                      BugReporter &BR) const {
+  using namespace ast_matchers;
 
-        //FIXME: other targets
-        using Handler = CompressedCap128;
-        uint64_t ParentSize = ASTCtx.getTypeSize(R->getTypeForDecl())/8;
-        Handler::addr_t InitLength = Handler ::representable_length(ParentSize);
-        Handler::cap_t MockCap = Handler::make_max_perms_cap(0, 0, InitLength);
-        bool exact = Handler::setbounds(&MockCap, Offset, Offset + Size);
-        assert(!exact);
-        auto Base = MockCap.base();
-        Handler::addr_t Top = MockCap.top();
-        OS << " Current bounds: " << Base << "-" << Top;
+  auto Member = memberExpr().bind("member");
+  auto Decay =
+      castExpr(hasCastKind(CK_ArrayToPointerDecay), has(Member)).bind("decay");
+  auto Addr = unaryOperator(hasOperatorName("&"), has(Member)).bind("addr");
 
-        PathDiagnosticLocation L =
-            PathDiagnosticLocation::createBegin(D, BR.getSourceManager());
-        auto Report =
-            std::make_unique<BasicBugReport>(BT_1, OS.str(), L);
-        Report->setDeclWithIssue(D);
-        Report->addRange(D->getSourceRange());
+  auto PointerSizeCheck = traverse(TK_AsIs, stmt(anyOf(Decay, Addr)));
 
+  auto Matcher = decl(forEachDescendant(PointerSizeCheck));
 
-        auto FI = R->field_begin();
-        while (FI != R->field_end() &&
-               ASTCtx.getFieldOffset(*FI)/8
-                + ASTCtx.getTypeSize(FI->getType())/8 <= Base)
-          FI++;
-
-        bool Before = true;
-        while (FI != R->field_end() && ASTCtx.getFieldOffset(*FI)/8 < Top) {
-          if (*FI != D) {
-            SmallString<1024> Note;
-            llvm::raw_svector_ostream OS2(Note);
-
-            uint64_t CurFieldOffset = ASTCtx.getFieldOffset(*FI)/8;
-            uint64_t CurFieldSize = ASTCtx.getTypeSize(FI->getType())/8;
-            uint64_t BytesExposed =
-                Before ? std::min(CurFieldSize,
-                                  CurFieldOffset + CurFieldSize - Base)
-                       : std::min(CurFieldSize, Top - CurFieldOffset);
-            OS2 << BytesExposed << "/" << CurFieldSize << " bytes exposed";
-            if (cheri::hasCapability(FI->getType(), ASTCtx))
-              OS2 << " (may expose capability!)";
-
-            PathDiagnosticLocation LN =
-                PathDiagnosticLocation::createBegin(*FI, BR.getSourceManager());
-            Report->addNote(OS2.str(), LN);
-          } else
-            Before = false;
-          FI++;
+  auto Matches = match(Matcher, *D, BR.getContext());
+  for (const auto &Match : Matches) {
+    if (const CastExpr *CE = Match.getNodeAs<CastExpr>("decay")) {
+      if (const MemberExpr *ME = Match.getNodeAs<MemberExpr>("member")) {
+        ValueDecl *VD = ME->getMemberDecl();
+        if (FieldDecl *FD = dyn_cast<FieldDecl>(VD)) {
+          auto Report = checkField(FD, mgr, BR, BT_2);
+          if (Report) {
+            PathDiagnosticLocation LN = PathDiagnosticLocation::createBegin(
+                CE, BR.getSourceManager(), mgr.getAnalysisDeclContext(D));
+            Report->addNote("Array to pointer decay", LN);
+            BR.emitReport(std::move(Report));
+          }
         }
-
-        // Note that this will fire for every translation unit that uses this
-        // class.  This is suboptimal, but at least scan-build will merge
-        // duplicate HTML reports.
-        BR.emitReport(std::move(Report));
+      }
+    } else if (const UnaryOperator *UO =
+                   Match.getNodeAs<UnaryOperator>("addr")) {
+      if (const MemberExpr *ME = Match.getNodeAs<MemberExpr>("member")) {
+        ValueDecl *VD = ME->getMemberDecl();
+        if (FieldDecl *FD = dyn_cast<FieldDecl>(VD)) {
+          auto Report = checkField(FD, mgr, BR, BT_2);
+          if (Report) {
+            PathDiagnosticLocation LN = PathDiagnosticLocation::createBegin(
+                UO, BR.getSourceManager(), mgr.getAnalysisDeclContext(D));
+            Report->addNote("Address of a field taken", LN);
+            BR.emitReport(std::move(Report));
+          }
+        }
       }
     }
   }
