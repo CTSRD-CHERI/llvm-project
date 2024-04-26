@@ -12,6 +12,7 @@
 # RUN:  _TLS_Data_size = SIZEOF(.tdata); \
 # RUN: }" > %t.ldscript
 
+# REQUIRES: mips
 # RUN: %cheri128_purecap_llvm-mc -filetype=obj %s -o %t.o
 # RUN: %cheri128_purecap_llvm-mc -filetype=obj %s --defsym=TDATA=1 -o %t-tdata.o
 

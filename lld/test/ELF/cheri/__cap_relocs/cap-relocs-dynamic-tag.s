@@ -1,3 +1,4 @@
+# REQUIRES: mips
 # RUN: %cheri_purecap_llvm-mc %s -filetype=obj -o %t.o
 # RUN: ld.lld -z now -shared %t.o -o %t.so
 # RUN: llvm-readelf --program-headers --section-mapping %t.so | FileCheck %s -check-prefix SEGMENTS

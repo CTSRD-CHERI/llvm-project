@@ -1,4 +1,4 @@
-// REQUIRES: clang
+// REQUIRES: clang, mips
 
 // RUN: %cheri128_purecap_cc1 -emit-obj -O2 -mllvm -cheri-cap-table-abi=plt %s -o %t.o
 // RUNNOT: llvm-objdump -d -r %t.o | FileCheck %s --check-prefix OBJECT

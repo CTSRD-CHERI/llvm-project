@@ -1,3 +1,4 @@
+// REQUIRES: clang, mips
 // RUN: rm -rf %t
 // RUN: mkdir %t
 // RUN: %cheri_purecap_cc1 %s -emit-obj -o %t/libc-stubs.o -DLIBC_STUBS

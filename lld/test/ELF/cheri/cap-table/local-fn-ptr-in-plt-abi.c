@@ -1,3 +1,4 @@
+// REQUIRES: mips
 // RUN: %cheri128_purecap_cc1 -mllvm -cheri-cap-table-abi=plt -emit-obj -o %t.o %s
 // RUN: llvm-objdump -d -r %t.o | FileCheck %s --check-prefix DISAS
 // Should have a R_MIPS_CHERI_CAPTAB20 relocation against the function pointer and a R_MIPS_CHERI_CAPCALL20 against use_callback

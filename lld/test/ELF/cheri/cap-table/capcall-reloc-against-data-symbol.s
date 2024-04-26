@@ -8,7 +8,7 @@
 # CheriBSD crt1.c will now trap during crt_init_globals() if this happens instead
 # of creating a writable capability for the text segment.
 
-
+# REQUIRES: mips
 # RUN: %cheri128_purecap_llvm-mc -filetype=obj %s -o %t.o
 # RUN: %cheri128_purecap_llvm-mc -filetype=obj %s -defsym=BUILD_LIBCHERI=1 -o %t-libcheri.o
 # RUN: llvm-readobj -r %t.o | FileCheck %s --check-prefix RELOCS

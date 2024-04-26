@@ -2,6 +2,7 @@
 # more than 64 members and the fast path using a single 64-bit bitmask no longer works for those values
 # Check that we no longer trigger this assertion with R_* values >= 64
 
+# REQUIRES: mips
 # RUNNOT: %cheri_purecap_llvm-mc %s -filetype=asm -show-encoding -show-inst -show-inst-operands
 # RUN: %cheri_purecap_llvm-mc %s -filetype=obj -o %t.o
 # RUN: llvm-readobj -r %t.o | FileCheck %s

@@ -1,4 +1,5 @@
 
+# REQUIRES: mips
 # RUN: llvm-mc -triple=mips64-unknown-freebsd -mcpu=cheri256 -target-abi purecap -position-independent -filetype=obj %s -o %t-cheri256-main.o
 # RUN: llvm-mc -triple=mips64-unknown-freebsd -mcpu=cheri128 -target-abi purecap -position-independent -filetype=obj %s -o %t-cheri128-main.o
 # RUN: llvm-mc -triple=mips64-unknown-freebsd -mcpu=cheri256 -target-abi n64 -position-independent -filetype=obj %s -o %t-cheri256-hybrid-main.o
