@@ -1,3 +1,4 @@
+// REQUIRES: mips-registered-target
 // RUN: %cheri_purecap_cc1 %s -emit-obj -o - -fcxx-exceptions -fexceptions -debug-info-kind=standalone \
 // RUN:   | llvm-dwarfdump -debug-frame - | FileCheck %s -check-prefixes CHECK,DWARF4
 // Also try assembling with integrated as and verify that the return and stack registers are correct

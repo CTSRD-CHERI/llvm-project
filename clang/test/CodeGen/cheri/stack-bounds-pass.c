@@ -1,4 +1,5 @@
 // REQUIRES: asserts
+// REQUIRES: mips-registered-target
 // RUN: %cheri_purecap_clang -mcpu=cheri128 -cheri=128 -xc -O0 -fsanitize-address-use-after-scope -g0 %s -o %t.ll -c -S -emit-llvm -Xclang -disable-O0-optnone -Wno-array-bounds -Wno-return-stack-address
 // RUN: %cheri_purecap_opt -cheri-bound-allocas %t.ll -o /dev/null -S -cheri-stack-bounds-single-intrinsic-threshold=10 \
 // RUN:    -cheri-stack-bounds=if-needed -debug-only="cheri-bound-allocas" 2>&1 | FileCheck -check-prefix DBG %s
