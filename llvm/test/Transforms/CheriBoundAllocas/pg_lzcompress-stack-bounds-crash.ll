@@ -1,6 +1,6 @@
 ; RUN: %cheri_purecap_opt -cheri-bound-allocas %s -o - -S -debug-only="cheri-bound-allocas" 2>&1 | %cheri_FileCheck %s -check-prefix DBG
 ; RUN: %riscv64_cheri_purecap_opt -cheri-bound-allocas %s -o - -S -debug-only="cheri-bound-allocas" 2>&1 | %cheri_FileCheck %s -check-prefix DBG
-; REQUIRES: asserts
+; REQUIRES: asserts,mips-registered-target,riscv-registered-target
 ; This crash was found compiling postgres (due to a missing depth limitation in CheriPurecapABI.cpp)
 
 target datalayout = "E-m:e-pf200:128:128:128:64-i8:8:32-i16:16:32-i64:64-n32:64-S128-A200-P200-G200"
