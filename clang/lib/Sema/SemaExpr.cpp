@@ -9750,11 +9750,11 @@ Sema::CheckAssignmentConstraints(QualType LHSType, ExprResult &RHS,
   // CHERI callbacks may only be cast to other cheri callback types
   bool RHSIsCallback = false;
   bool LHSIsCallback = false;
-  if (auto RHSPointer = dyn_cast<PointerType>(RHSType))
+  if (auto RHSPointer = RHSType->getAs<PointerType>())
     if (auto RHSFnPTy = RHSPointer->getPointeeType()->getAs<FunctionType>())
       if (RHSFnPTy->getCallConv() == CC_CHERICCallback)
         RHSIsCallback = true;
-  if (auto LHSPointer = dyn_cast<PointerType>(LHSType))
+  if (auto LHSPointer = LHSType->getAs<PointerType>())
     if (auto LHSFnPTy = LHSPointer->getPointeeType()->getAs<FunctionType>())
       if (LHSFnPTy->getCallConv() == CC_CHERICCallback)
         LHSIsCallback = true;
@@ -9762,9 +9762,9 @@ Sema::CheckAssignmentConstraints(QualType LHSType, ExprResult &RHS,
     return Incompatible;
 
   // Conversions to normal pointers.
-  if (const PointerType *LHSPointer = dyn_cast<PointerType>(LHSType)) {
+  if (const PointerType *LHSPointer = LHSType->getAs<PointerType>()) {
     // U* -> T*
-    if (const PointerType *RHSPointer = dyn_cast<PointerType>(RHSType)) {
+    if (const PointerType *RHSPointer = RHSType->getAs<PointerType>()) {
       LangAS AddrSpaceL = LHSPointer->getPointeeType().getAddressSpace();
       LangAS AddrSpaceR = RHSPointer->getPointeeType().getAddressSpace();
       if (AddrSpaceL != AddrSpaceR) {
@@ -9783,8 +9783,9 @@ Sema::CheckAssignmentConstraints(QualType LHSType, ExprResult &RHS,
           Kind = CK_BitCast;
         if (RHSPointer->isCHERICapability() && isa<PointerType>(OrigRHSType) &&
             RHSPointer->getPointeeType()->isVoidType())
-          if (auto *TT = dyn_cast<TypedefType>(
-                cast<PointerType>(OrigRHSType)->getPointeeType())) {
+          if (auto *TT = OrigRHSType->getAs<PointerType>()
+                             ->getPointeeType()
+                             ->getAs<TypedefType>()) {
             unsigned FromAlign = Context.getTypeAlignInChars(TT).getQuantity();
             unsigned ToAlign =
               Context.getTypeAlignInChars(LHSType).getQuantity();
