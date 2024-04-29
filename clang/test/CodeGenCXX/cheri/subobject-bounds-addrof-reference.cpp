@@ -63,7 +63,7 @@ public:
   constexpr static pointer pointer_to(element_type &__r) noexcept {
     // This previously added bounds to __r and caused std::string to break
     return addressof(__r);
-    // expected-remark@-1{{not setting bounds for reference to 'pointer_traits<char *>::element_type' (aka 'char') (source is a C++ reference and therefore should already have sub-object bounds)}}
+    // expected-remark@-1{{not setting bounds for reference to 'element_type' (aka 'char') (source is a C++ reference and therefore should already have sub-object bounds)}}
   }
 };
 

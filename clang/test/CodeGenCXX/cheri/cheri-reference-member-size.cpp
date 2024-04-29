@@ -4,7 +4,7 @@
 
 // CHECK-LABEL: *** Dumping AST Record Layout
 // CHECK-NEXT:  0 | class Foo
-// CHECK-NEXT:  0 |   class A & __capability _a
+// CHECK-NEXT:  0 |   A & __capability _a
 // CHECK-NEXT:    | [sizeof=16,
 // CHECK-SAME:       dsize=16, align=16,
 // CHECK-NEXT:    |  nvsize=16, nvalign=16]
@@ -17,7 +17,7 @@
 // CHECK-LABEL:    *** Dumping AST Record Layout
 // CHECK-NEXT:     0 | class Bar
 // CHECK-NEXT:     0 |   class Foo (base)
-// CHECK-NEXT:     0 |     class A & __capability _a
+// CHECK-NEXT:     0 |     A & __capability _a
 // CHECK-NEXT:    16 |   int x
 // CHECK-NEXT:       | [sizeof=32, dsize=20, align=16,
 // CHECK-NEXT:       |  nvsize=20, nvalign=16]
