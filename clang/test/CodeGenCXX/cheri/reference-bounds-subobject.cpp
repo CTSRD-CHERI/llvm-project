@@ -6,7 +6,7 @@
 /// Check that using hybrid codegen with -cheri-bounds= does not trigger assertions by incorrectly adding bounds
 // RUN: %cheri_cc1 -cheri-bounds=references-only -O2 -std=c++17 -emit-llvm %s -o - | FileCheck %s --check-prefix=HYBRID
 
-// DBG: Found record type 'struct Nested' -> is C-like struct type and is marked as final -> setting bounds for 'struct Nested' reference to 8
+// DBG: Found record type 'Nested' -> is C-like struct type and is marked as final -> setting bounds for 'Nested' reference to 8
 // DBG: Found scalar type -> setting bounds for 'int' reference to 4
 // DBG: Found scalar type -> setting bounds for 'float' reference to 4
 
