@@ -3459,6 +3459,8 @@ void elf::combineEhSections() {
     sec->parent = &eh;
     eh.alignment = std::max(eh.alignment, sec->alignment);
     eh.sections.push_back(sec);
+    if (sec->flags & SHF_WRITE)
+      eh.flags |= SHF_WRITE;
     llvm::append_range(eh.dependentSections, sec->dependentSections);
   }
 
