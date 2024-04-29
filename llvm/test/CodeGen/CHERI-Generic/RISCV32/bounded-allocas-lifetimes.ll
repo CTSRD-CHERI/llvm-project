@@ -40,7 +40,7 @@ define void @dynamic_alloca(i64 zeroext %n) {
   ; CHECK-NEXT:   [[COPY1:%[0-9]+]]:gpcr = COPY $c2
   ; CHECK-NEXT:   [[PseudoCGetAddr:%[0-9]+]]:gpr = PseudoCGetAddr [[COPY1]]
   ; CHECK-NEXT:   [[SLLI:%[0-9]+]]:gpr = SLLI [[COPY]], 2
-  ; CHECK-NEXT:   [[ADDI:%[0-9]+]]:gpr = nuw ADDI [[SLLI]], 15
+  ; CHECK-NEXT:   [[ADDI:%[0-9]+]]:gpr = ADDI [[SLLI]], 15
   ; CHECK-NEXT:   [[ANDI:%[0-9]+]]:gpr = ANDI killed [[ADDI]], -16
   ; CHECK-NEXT:   [[CRRL:%[0-9]+]]:gpr = CRRL [[ANDI]]
   ; CHECK-NEXT:   [[SUB:%[0-9]+]]:gpr = SUB killed [[PseudoCGetAddr]], [[CRRL]]
