@@ -1,4 +1,6 @@
 ## This used to crash ld.lld for CHERI MIPS
+## The crash no longer occurs after 4ade5c91dcebe461716b83a453ac464fd8e8268e
+# UNSUPPORTED: true
 # REQUIRES: asserts
 # RUN: llvm-mc -filetype=obj -triple=mips64-unknown-freebsd --position-independent %s -o %t.o
 # RUN: ld.lld --eh-frame-hdr --shared -z notext -o %t.so %t.o
