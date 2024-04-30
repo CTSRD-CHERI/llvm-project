@@ -5,8 +5,7 @@
 # REQUIRES: asserts
 # RUN: yaml2obj %s -o %t.o
 # RUN: llvm-readobj -r --section-details %t.o | FileCheck %s -check-prefix OBJECT
-# RUN: ld.lld --noinhibit-exec --eh-frame-hdr --shared -o %t.so %t.o 2>&1 | FileCheck %s --check-prefix=ERR
-# ERR: internal linker error: wrote incorrect addend value 0x103B000000000 instead of 0x103B0 for dynamic relocation R_MIPS_REL32/R_MIPS_64/R_MIPS_NONE at offset 0x203DC
+# RUN: ld.lld --noinhibit-exec --eh-frame-hdr --shared -o %t.so %t.o
 # RUN: llvm-readobj --elf-output-style=GNU --program-headers --relocations --sections %t.so | FileCheck %s
 
 # OBJECT-LABEL:  Section {
@@ -25,7 +24,7 @@
 
 # CHECK-LABEL: Section Headers:
 # CHECK-NEXT: [Nr] Name              Type            Address          Off    Size   ES Flg Lk Inf Al
-# CHECK:      [ 8] .eh_frame         PROGBITS        00000000000203b8 0003b8 00003c 00  WA  0   0  8
+# CHECK:      [ 8] .eh_frame         PROGBITS        00000000000203b8 0003b8 000034 00  WA  0   0  8
 
 
 # CHECK-LABEL: There are 9 program headers, starting at offset 64
@@ -34,10 +33,10 @@
 # CHECK-NEXT:   PHDR           0x000040 0x0000000000000040 0x0000000000000040 0x0001f8 0x0001f8 R   0x8
 # CHECK-NEXT:   LOAD           0x000000 0x0000000000000000 0x0000000000000000 0x0003ac 0x0003ac R   0x10000
 # CHECK-NEXT:   LOAD           0x0003b0 0x00000000000103b0 0x00000000000103b0 0x000004 0x000004 R E 0x10000
-# CHECK-NEXT:   LOAD           0x0003b8 0x00000000000203b8 0x00000000000203b8 0x00003c 0x00003c RW  0x10000
-# CHECK-NEXT:   LOAD           0x000400 0x0000000000030400 0x0000000000030400 0x000010 0x000010 RW  0x10000
+# CHECK-NEXT:   LOAD           0x0003b8 0x00000000000203b8 0x00000000000203b8 0x000034 0x000034 RW  0x10000
+# CHECK-NEXT:   LOAD           0x0003f0 0x00000000000303f0 0x00000000000303f0 0x000010 0x000010 RW  0x10000
 # CHECK-NEXT:   DYNAMIC        0x000280 0x0000000000000280 0x0000000000000280 0x000100 0x000100 R   0x8
-# CHECK-NEXT:   GNU_RELRO      0x0003b8 0x00000000000203b8 0x00000000000203b8 0x00003c 0x000c48 R   0x1
+# CHECK-NEXT:   GNU_RELRO      0x0003b8 0x00000000000203b8 0x00000000000203b8 0x000034 0x000c48 R   0x1
 # CHECK-NEXT:   GNU_EH_FRAME   0x000398 0x0000000000000398 0x0000000000000398 0x000014 0x000014 R   0x4
 # CHECK-NEXT:   GNU_STACK      0x000000 0x0000000000000000 0x0000000000000000 0x000000 0x000000 RW  0x0
 # CHECK-EMPTY:
@@ -61,7 +60,7 @@
 ## which means we read the addend from the wrong offset and report the error.
 ## This was changed in commit 6faba31e0d88ce71e87567ddb51d2444524b8a81 (https://reviews.llvm.org/D122459)
 ## This fixed more common use-cases but now generates incorrect outputs for MIPS non-PIC object -> shared lib.
-# CHECK-NEXT: 00000000000203dc  0000000000001203 R_MIPS_REL32/R_MIPS_64/R_MIPS_NONE
+# CHECK-NEXT: 00000000000203d4  0000000000001203 R_MIPS_REL32/R_MIPS_64/R_MIPS_NONE 
 
 
 --- !ELF
