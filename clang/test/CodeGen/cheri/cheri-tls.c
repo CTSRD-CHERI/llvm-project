@@ -13,14 +13,14 @@ _Thread_local int dtors;
 int test(void) {
   // ASM-MIPS: rdhwr   $3, $29
   // ASM-MIPS: daddu   [[TLS_ADDR:\$[0-9]+]], $3, ${{[0-9]+}}
-  // ASM-MIPS-NEXT: jr $ra
   // ASM-MIPS-NEXT: lw $2, 0([[TLS_ADDR]])
+  // ASM-MIPS-NEXT: jr $ra
 
   // ASM-PURECAP: lui   [[TLS_OFF:\$[0-9]+]], %tprel_hi(dtors)
   // ASM-PURECAP-NEXT: daddiu   [[TLS_OFF]], [[TLS_OFF]], %tprel_lo(dtors)
   // ASM-PURECAP-NEXT: creadhwr   [[TLS_BASE:\$c[0-9]+]], $chwr_userlocal
-  // ASM-PURECAP-NEXT: cjr $c17
   // ASM-PURECAP-NEXT: clw $2, [[TLS_OFF]], 0([[TLS_BASE]])
+  // ASM-PURECAP-NEXT: cjr $c17
   int *i = &dtors;
   return *i;
 }

@@ -23,8 +23,7 @@ define i32 @alloca_in_entry(i1 %arg) local_unnamed_addr addrspace(200) nounwind 
 ; ASM-NEXT:    csc cra, 16(csp) # 16-byte Folded Spill
 ; ASM-NEXT:    mv a1, a0
 ; ASM-NEXT:    andi a0, a1, 1
-; ASM-NEXT:    li a1, 0
-; ASM-NEXT:    beq a0, a1, .LBB0_4
+; ASM-NEXT:    beqz a0, .LBB0_4
 ; ASM-NEXT:    j .LBB0_1
 ; ASM-NEXT:  .LBB0_1: # %do_alloca
 ; ASM-NEXT:    j .LBB0_2
@@ -113,8 +112,7 @@ define i32 @alloca_not_in_entry(i1 %arg) local_unnamed_addr addrspace(200) nounw
 ; ASM-NEXT:    cincoffset cs0, csp, 64
 ; ASM-NEXT:    mv a1, a0
 ; ASM-NEXT:    andi a0, a1, 1
-; ASM-NEXT:    li a1, 0
-; ASM-NEXT:    beq a0, a1, .LBB1_4
+; ASM-NEXT:    beqz a0, .LBB1_4
 ; ASM-NEXT:    j .LBB1_1
 ; ASM-NEXT:  .LBB1_1: # %do_alloca
 ; ASM-NEXT:    cmove ca0, csp
@@ -223,8 +221,7 @@ define i32 @crash_reproducer(i1 %arg) local_unnamed_addr addrspace(200) nounwind
 ; ASM-NEXT:    cincoffset cs0, csp, 64
 ; ASM-NEXT:    mv a1, a0
 ; ASM-NEXT:    andi a0, a1, 1
-; ASM-NEXT:    li a1, 0
-; ASM-NEXT:    beq a0, a1, .LBB2_2
+; ASM-NEXT:    beqz a0, .LBB2_2
 ; ASM-NEXT:    j .LBB2_1
 ; ASM-NEXT:  .LBB2_1: # %entry.while.end_crit_edge
 ; ASM-NEXT:  .LBB2_2: # %while.body
