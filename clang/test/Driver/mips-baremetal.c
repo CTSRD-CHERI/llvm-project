@@ -19,10 +19,9 @@
 
 // CHECK: "{{.*}}ld.lld" "{{.+}}.o" "-Bstatic"
 // SYSROOT-SAME:   "-L[[SYSROOT]]/lib"
-// NOSYSROOT-SAME: "-L[[RESOURCE_DIR]]/lib"
-// CHERIABI-SAME: "-L[[RESOURCE_DIR]]/libcheri"
+// NOSYSROOT-SAME: "-L{{.+}}/lib/clang-runtimes/mips64-none-elf/lib"
+// CHERIABI-SAME: "-L{{.+}}/lib/clang-runtimes/mips64-none-elf/lib"
 // CXX-SAME: "-lc++" "-lc++abi" "-lunwind"
 // CHECK-SAME: "-lc" "-lm"
-// CHERIABI-SAME: "-lclang_rt.builtins-cheri"
-// N64-SAME: "-lclang_rt.builtins-mips64"
+// CHECK-SAME: "-lclang_rt.builtins-mips64"
 // CHECK-SAME: "-o" "{{.+}}/mips-baremetal.c.tmp"

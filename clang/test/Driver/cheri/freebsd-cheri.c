@@ -30,5 +30,5 @@
 // RUN:  | FileCheck --check-prefix=FUZZER-PURECAP64 %s
 
 // FUZZER-PURECAP64: "/usr/bin/ld"
-// FUZZER-PURECAP64: "--whole-archive" "{{.+}}/lib/freebsd/libclang_rt.fuzzer-mips64c128.a" "--no-whole-archive"
-// FUZZER-PURECAP64: "--whole-archive" "{{.+}}/lib/freebsd/libclang_rt.ubsan_standalone-mips64c128.a" "--no-whole-archive"
+// FUZZER-PURECAP64: "--whole-archive" "{{.+}}/lib/freebsd/libclang_rt.fuzzer-mips64.a" "--no-whole-archive"
+// FUZZER-PURECAP64: "--whole-archive" "{{.+}}/lib/freebsd/libclang_rt.ubsan_standalone-mips64.a" "--no-whole-archive"
