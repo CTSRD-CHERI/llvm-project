@@ -8046,7 +8046,9 @@ SDValue TargetLowering::CTTZTableLookup(SDNode *Node, SelectionDAG &DAG,
       DAG.getNode(ISD::MUL, DL, VT, DAG.getNode(ISD::AND, DL, VT, Op, Neg),
                   DAG.getConstant(DeBruijn, DL, VT)),
       DAG.getConstant(ShiftAmt, DL, VT));
-  Lookup = DAG.getSExtOrTrunc(Lookup, DL, getPointerTy(TD));
+  Lookup = DAG.getSExtOrTrunc(
+      Lookup, DL,
+      getPointerRangeTy(TD, DAG.getDataLayout().getGlobalsAddressSpace()));
 
   SmallVector<uint8_t> Table(BitWidth, 0);
   for (unsigned i = 0; i < BitWidth; i++) {
@@ -8057,8 +8059,9 @@ SDValue TargetLowering::CTTZTableLookup(SDNode *Node, SelectionDAG &DAG,
 
   // Create a ConstantArray in Constant Pool
   auto *CA = ConstantDataArray::get(*DAG.getContext(), Table);
-  SDValue CPIdx = DAG.getConstantPool(CA, getPointerTy(TD),
-                                      TD.getPrefTypeAlign(CA->getType()));
+  SDValue CPIdx = DAG.getConstantPool(
+      CA, getPointerTy(TD, DAG.getDataLayout().getGlobalsAddressSpace()),
+      TD.getPrefTypeAlign(CA->getType()));
   SDValue ExtLoad = DAG.getExtLoad(ISD::ZEXTLOAD, DL, VT, DAG.getEntryNode(),
                                    DAG.getMemBasePlusOffset(CPIdx, Lookup, DL),
                                    PtrInfo, MVT::i8);
