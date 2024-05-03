@@ -42,12 +42,13 @@ _Bool is_aligned(void *ptr, long align) {
 void* align_up(void *ptr, long align) {
   // ASM-LABEL: align_up:
   // PURECAP-ASM:      cgetaddr	$1, $c3
-  // PURECAP-ASM-NEXT: daddu	$1, $4, $1
-  // PURECAP-ASM-NEXT: daddiu	$1, $1, -1
-  // PURECAP-ASM-NEXT: dnegu	$2, $4
-  // PURECAP-ASM-NEXT: and	$1, $1, $2
+  // PURECAP-ASM-NEXT: daddu $2, $4, $1
+  // PURECAP-ASM-NEXT: daddiu $2, $2, -1
+  // PURECAP-ASM-NEXT: dnegu $3, $4
+  // PURECAP-ASM-NEXT: and $2, $2, $3
+  // PURECAP-ASM-NEXT: dsubu $1, $2, $1
   // PURECAP-ASM-NEXT: cjr	$c17
-  // PURECAP-ASM-NEXT: csetaddr	$c3, $c3, $1
+  // PURECAP-ASM-NEXT: cincoffset $c3, $c3, $1
   // MIPS-ASM:      daddu	$1, $5, $4
   // MIPS-ASM-NEXT: daddiu	$1, $1, -1
   // MIPS-ASM-NEXT: dnegu	$2, $5
