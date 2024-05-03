@@ -7,9 +7,9 @@
 
 define i32 @dec_mask_neg_i32(i32 %X) {
 ; CHECK-LABEL: @dec_mask_neg_i32(
-; CHECK-NEXT:    [[TMP1:%.*]] = add i32 [[X:%.*]], -1
-; CHECK-NEXT:    [[TMP2:%.*]] = xor i32 [[X]], -1
-; CHECK-NEXT:    [[DEC:%.*]] = and i32 [[TMP1]], [[TMP2]]
+; CHECK-NEXT:    [[TMP1:%.*]] = xor i32 [[X:%.*]], -1
+; CHECK-NEXT:    [[TMP2:%.*]] = add i32 [[X]], -1
+; CHECK-NEXT:    [[DEC:%.*]] = and i32 [[TMP2]], [[TMP1]]
 ; CHECK-NEXT:    ret i32 [[DEC]]
 ;
   %neg = sub i32 0, %X
@@ -21,9 +21,9 @@ define i32 @dec_mask_neg_i32(i32 %X) {
 define i32 @dec_mask_commute_neg_i32(i32 %A) {
 ; CHECK-LABEL: @dec_mask_commute_neg_i32(
 ; CHECK-NEXT:    [[X:%.*]] = sdiv i32 42, [[A:%.*]]
-; CHECK-NEXT:    [[TMP1:%.*]] = add nsw i32 [[X]], -1
-; CHECK-NEXT:    [[TMP2:%.*]] = xor i32 [[X]], -1
-; CHECK-NEXT:    [[DEC:%.*]] = and i32 [[TMP1]], [[TMP2]]
+; CHECK-NEXT:    [[TMP1:%.*]] = xor i32 [[X]], -1
+; CHECK-NEXT:    [[TMP2:%.*]] = add nsw i32 [[X]], -1
+; CHECK-NEXT:    [[DEC:%.*]] = and i32 [[TMP2]], [[TMP1]]
 ; CHECK-NEXT:    ret i32 [[DEC]]
 ;
   %X = sdiv i32 42, %A ; thwart complexity-based canonicalization
@@ -35,9 +35,9 @@ define i32 @dec_mask_commute_neg_i32(i32 %A) {
 
 define i32 @dec_commute_mask_neg_i32(i32 %X) {
 ; CHECK-LABEL: @dec_commute_mask_neg_i32(
-; CHECK-NEXT:    [[TMP1:%.*]] = add i32 [[X:%.*]], -1
-; CHECK-NEXT:    [[TMP2:%.*]] = xor i32 [[X]], -1
-; CHECK-NEXT:    [[DEC:%.*]] = and i32 [[TMP1]], [[TMP2]]
+; CHECK-NEXT:    [[TMP1:%.*]] = xor i32 [[X:%.*]], -1
+; CHECK-NEXT:    [[TMP2:%.*]] = add i32 [[X]], -1
+; CHECK-NEXT:    [[DEC:%.*]] = and i32 [[TMP2]], [[TMP1]]
 ; CHECK-NEXT:    ret i32 [[DEC]]
 ;
   %neg = sub i32 0, %X
@@ -78,9 +78,9 @@ define i32 @dec_mask_multiuse_neg_i32(i32 %X) {
 
 define <2 x i32> @dec_mask_neg_v2i32(<2 x i32> %X) {
 ; CHECK-LABEL: @dec_mask_neg_v2i32(
-; CHECK-NEXT:    [[TMP1:%.*]] = add <2 x i32> [[X:%.*]], <i32 -1, i32 -1>
-; CHECK-NEXT:    [[TMP2:%.*]] = xor <2 x i32> [[X]], <i32 -1, i32 -1>
-; CHECK-NEXT:    [[DEC:%.*]] = and <2 x i32> [[TMP1]], [[TMP2]]
+; CHECK-NEXT:    [[TMP1:%.*]] = xor <2 x i32> [[X:%.*]], <i32 -1, i32 -1>
+; CHECK-NEXT:    [[TMP2:%.*]] = add <2 x i32> [[X]], <i32 -1, i32 -1>
+; CHECK-NEXT:    [[DEC:%.*]] = and <2 x i32> [[TMP2]], [[TMP1]]
 ; CHECK-NEXT:    ret <2 x i32> [[DEC]]
 ;
   %neg = sub <2 x i32> zeroinitializer, %X
@@ -91,9 +91,9 @@ define <2 x i32> @dec_mask_neg_v2i32(<2 x i32> %X) {
 
 define <2 x i32> @dec_mask_neg_v2i32_undef(<2 x i32> %X) {
 ; CHECK-LABEL: @dec_mask_neg_v2i32_undef(
-; CHECK-NEXT:    [[TMP1:%.*]] = add <2 x i32> [[X:%.*]], <i32 -1, i32 -1>
-; CHECK-NEXT:    [[TMP2:%.*]] = xor <2 x i32> [[X]], <i32 -1, i32 -1>
-; CHECK-NEXT:    [[DEC:%.*]] = and <2 x i32> [[TMP1]], [[TMP2]]
+; CHECK-NEXT:    [[TMP1:%.*]] = xor <2 x i32> [[X:%.*]], <i32 -1, i32 -1>
+; CHECK-NEXT:    [[TMP2:%.*]] = add <2 x i32> [[X]], <i32 -1, i32 -1>
+; CHECK-NEXT:    [[DEC:%.*]] = and <2 x i32> [[TMP2]], [[TMP1]]
 ; CHECK-NEXT:    ret <2 x i32> [[DEC]]
 ;
   %neg = sub <2 x i32> zeroinitializer, %X
