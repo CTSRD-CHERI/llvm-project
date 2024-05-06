@@ -51,3 +51,14 @@ struct S2 * first_field(void *p, int n1) {
   struct S2 *p2 = (struct S2 *)(p3+n1); // no warn
   return p2;
 }
+
+struct S4 {
+  long len;
+  int buf[];
+};
+
+int* flex_array(int len) {
+  struct S4 *p = malloc(sizeof(struct S4) + len*sizeof(int));
+  int *pB = (int*)(p + 1); // no warn
+  return pB;
+}
