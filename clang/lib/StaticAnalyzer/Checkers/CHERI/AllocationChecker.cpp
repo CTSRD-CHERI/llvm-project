@@ -101,11 +101,44 @@ bool relatedTypes(const Type *Ty1, const Type *Ty2) {
   return false;
 }
 
+bool hasFlexibleArrayMember(const Type *PTy) {
+  const RecordType *RTy = dyn_cast<RecordType>(PTy);
+  if (!RTy)
+    return false;
+
+  RecordDecl *RD = RTy->getDecl();
+  if (RD->hasFlexibleArrayMember())
+    return true;
+
+  // check last field
+  FieldDecl *LastField = nullptr;
+  for (auto i = RD->field_begin(), end = RD->field_end(); i != end; ++i)
+    LastField = *i;
+  if (!LastField)
+    return false;
+
+  QualType FieldTy = LastField->getType();
+  if (FieldTy->isVariableArrayType() || FieldTy->isIncompleteArrayType())
+    return true;
+
+  if (const ConstantArrayType *CAT =
+          dyn_cast<ConstantArrayType>(FieldTy.getTypePtr())) {
+    return CAT->getSize() == 0 || CAT->getSize() == 1;
+  }
+  return false;
+}
+
 bool reportForType(QualType Ty) {
   if (Ty->isVoidPointerType())
     return false;
-  if (Ty->isPointerType() || Ty->isArrayType())
-    return !Ty->getPointeeOrArrayElementType()->isCharType();
+  if (Ty->isPointerType() || Ty->isArrayType()) {
+    const Type *PTy = Ty->getPointeeOrArrayElementType();
+    if (PTy->isCharType())
+      return false;
+    if (hasFlexibleArrayMember(PTy))
+      return false;
+    return true;
+  }
   return false;
 }
 
