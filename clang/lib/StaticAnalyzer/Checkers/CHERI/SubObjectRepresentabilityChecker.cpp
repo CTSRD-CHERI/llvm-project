@@ -15,9 +15,9 @@
 //===----------------------------------------------------------------------===//
 
 #include "CHERIUtils.h"
-#include "clang/StaticAnalyzer/Checkers/BuiltinCheckerRegistration.h"
 #include "clang/AST/StmtVisitor.h"
 #include "clang/ASTMatchers/ASTMatchFinder.h"
+#include "clang/StaticAnalyzer/Checkers/BuiltinCheckerRegistration.h"
 #include "clang/StaticAnalyzer/Core/BugReporter/BugReporter.h"
 #include "clang/StaticAnalyzer/Core/Checker.h"
 #include "clang/StaticAnalyzer/Core/CheckerManager.h"
@@ -25,9 +25,7 @@
 #include "llvm/ADT/SmallString.h"
 #include "llvm/Support/raw_ostream.h"
 
-#include "llvm/Support/Morello.h"
 #include "llvm/CHERI/cheri-compressed-cap/cheri_compressed_cap.h"
-
 
 using namespace clang;
 using namespace ento;
@@ -47,12 +45,14 @@ public:
                         BugReporter &BR) const;
 };
 
-}
+} //namespace
 
 namespace {
 
-std::unique_ptr<BasicBugReport> reportExposedFields(const FieldDecl *D, ASTContext &ASTCtx, BugReporter &BR,
-                         uint64_t Base, uint64_t Top, std::unique_ptr<BasicBugReport> Report) {
+std::unique_ptr<BasicBugReport>
+reportExposedFields(const FieldDecl *D, ASTContext &ASTCtx, BugReporter &BR,
+                    uint64_t Base, uint64_t Top,
+                    std::unique_ptr<BasicBugReport> Report) {
   const RecordDecl *Parent = D->getParent();
   auto FI = Parent->field_begin();
   while (FI != Parent->field_end() &&
@@ -88,29 +88,34 @@ std::unique_ptr<BasicBugReport> reportExposedFields(const FieldDecl *D, ASTConte
   return Report;
 }
 
-// FIXME: CC_MORELLO is not set in cheri_compressed_cap
-// FIXME: other targets
-using Handler = CompressedCap128;
-Handler::cap_t getBoundedCap(uint64_t ParentSize, uint64_t Offset,
-                             uint64_t Size) {
-  Handler::addr_t InitLength = Handler ::representable_length(ParentSize);
-  Handler::cap_t MockCap = Handler::make_max_perms_cap(0, 0, InitLength);
-  bool exact = Handler::setbounds(&MockCap, Offset, Offset + Size);
+template <typename Handler>
+typename Handler::cap_t getBoundedCap(uint64_t ParentSize, uint64_t Offset,
+                                      uint64_t Size) {
+  typename Handler::addr_t InitLength =
+      Handler::representable_length(ParentSize);
+  typename Handler::cap_t MockCap =
+      Handler::make_max_perms_cap(0, Offset, InitLength);
+  bool exact = Handler::setbounds(&MockCap, Size);
   assert(!exact);
   return MockCap;
 }
 
-} // namespace
+template<typename Handler>
+uint64_t getRepresentableAlignment(uint64_t Size) {
+  return ~Handler::representable_mask(Size) + 1;
+}
 
-std::unique_ptr<BugReport> checkField(const FieldDecl *D, AnalysisManager &mgr,
-                                      BugReporter &BR, const BugType &BT) {
+template <typename Handler>
+std::unique_ptr<BugReport> checkFieldImpl(const FieldDecl *D,
+                                          BugReporter &BR,
+                                          const BugType &BT) {
   QualType T = D->getType();
 
   ASTContext &ASTCtx = BR.getContext();
   uint64_t Offset = ASTCtx.getFieldOffset(D) / 8;
   if (Offset > 0) {
     uint64_t Size = ASTCtx.getTypeSize(T) / 8;
-    uint64_t ReqAlign = llvm::getMorelloRequiredAlignment(Size);
+    uint64_t ReqAlign = getRepresentableAlignment<Handler>(Size);
     uint64_t CurAlign = 1 << llvm::countTrailingZeros(Offset);
     if (CurAlign < ReqAlign) {
       /* Emit warning */
@@ -125,17 +130,13 @@ std::unique_ptr<BugReport> checkField(const FieldDecl *D, AnalysisManager &mgr,
       OS << " field offset is " << Offset;
       OS << " (aligned to " << CurAlign << ");";
 
-      /*
-       * Print current bounds
-       * TODO: use cheri_compressed_cap correctly
-       *
       const RecordDecl *Parent = D->getParent();
       uint64_t ParentSize = ASTCtx.getTypeSize(Parent->getTypeForDecl()) / 8;
-      auto MockCap = getBoundedCap(ParentSize, Offset, Size);
+      typename Handler::cap_t MockCap =
+          getBoundedCap<Handler>(ParentSize, Offset, Size);
       uint64_t Base = MockCap.base();
       uint64_t Top = MockCap.top();
       OS << " Current bounds: " << Base << "-" << Top;
-       */
 
       // Note that this will fire for every translation unit that uses this
       // class.  This is suboptimal, but at least scan-build will merge
@@ -146,11 +147,7 @@ std::unique_ptr<BugReport> checkField(const FieldDecl *D, AnalysisManager &mgr,
       Report->setDeclWithIssue(D);
       Report->addRange(D->getSourceRange());
 
-      /*
-       * Add exposed fields as notes
-       * TODO: use cheri_compressed_cap correctly
       Report = reportExposedFields(D, ASTCtx, BR, Base, Top, std::move(Report));
-       */
 
       return Report;
     }
@@ -159,10 +156,29 @@ std::unique_ptr<BugReport> checkField(const FieldDecl *D, AnalysisManager &mgr,
   return nullptr;
 }
 
+std::unique_ptr<BugReport> checkField(const FieldDecl *D,
+                                      BugReporter &BR,
+                                      const BugType &BT) {
+  // TODO: other targets
+  return checkFieldImpl<CompressedCap128m>(D, BR, BT);
+}
+
+bool supportedTarget(const ASTContext &C) {
+  const TargetInfo &TI = C.getTargetInfo();
+  return TI.areAllPointersCapabilities()
+         && TI.getTriple().isAArch64(); // morello
+}
+
+} // namespace
+
+
 void SubObjectRepresentabilityChecker::checkASTDecl(const RecordDecl *R,
                                                     AnalysisManager &mgr,
                                                     BugReporter &BR) const {
-  if (!R->isCompleteDefinition())
+  if (!supportedTarget(mgr.getASTContext()))
+    return;
+
+  if (!R->isCompleteDefinition() || R->isDependentType())
     return;
 
   if (!R->getLocation().isValid())
@@ -177,16 +193,19 @@ void SubObjectRepresentabilityChecker::checkASTDecl(const RecordDecl *R,
   */
 
   for (FieldDecl *D : R->fields()) {
-    auto Report = checkField(D, mgr, BR, BT_1);
+    auto Report = checkField(D, BR, BT_1);
     if (Report)
       BR.emitReport(std::move(Report));
   }
 }
 
-void SubObjectRepresentabilityChecker::checkASTCodeBody(const Decl *D, AnalysisManager &mgr,
-                      BugReporter &BR) const {
-  using namespace ast_matchers;
+void SubObjectRepresentabilityChecker::checkASTCodeBody(const Decl *D,
+                                                        AnalysisManager &mgr,
+                                                        BugReporter &BR) const {
+  if (!supportedTarget(mgr.getASTContext()))
+    return;
 
+  using namespace ast_matchers;
   auto Member = memberExpr().bind("member");
   auto Decay =
       castExpr(hasCastKind(CK_ArrayToPointerDecay), has(Member)).bind("decay");
@@ -202,7 +221,7 @@ void SubObjectRepresentabilityChecker::checkASTCodeBody(const Decl *D, AnalysisM
       if (const MemberExpr *ME = Match.getNodeAs<MemberExpr>("member")) {
         ValueDecl *VD = ME->getMemberDecl();
         if (FieldDecl *FD = dyn_cast<FieldDecl>(VD)) {
-          auto Report = checkField(FD, mgr, BR, BT_2);
+          auto Report = checkField(FD, BR, BT_2);
           if (Report) {
             PathDiagnosticLocation LN = PathDiagnosticLocation::createBegin(
                 CE, BR.getSourceManager(), mgr.getAnalysisDeclContext(D));
@@ -216,7 +235,7 @@ void SubObjectRepresentabilityChecker::checkASTCodeBody(const Decl *D, AnalysisM
       if (const MemberExpr *ME = Match.getNodeAs<MemberExpr>("member")) {
         ValueDecl *VD = ME->getMemberDecl();
         if (FieldDecl *FD = dyn_cast<FieldDecl>(VD)) {
-          auto Report = checkField(FD, mgr, BR, BT_2);
+          auto Report = checkField(FD, BR, BT_2);
           if (Report) {
             PathDiagnosticLocation LN = PathDiagnosticLocation::createBegin(
                 UO, BR.getSourceManager(), mgr.getAnalysisDeclContext(D));
