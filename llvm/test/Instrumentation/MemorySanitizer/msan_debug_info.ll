@@ -527,7 +527,7 @@ define void @VAStart(i32 %x, ...) sanitize_memory {
 ; CHECK-DAG:    [[TMP29:%.*]] = add i64 [[TMP27]], 17592186044416, !dbg [[DBG11]]
 ; CHECK-DAG:    [[TMP30:%.*]] = inttoptr i64 [[TMP29]] to i32*, !dbg [[DBG11]]
 ; CHECK-DAG:    call void @llvm.memset.p0i8.i64(i8* align 8 [[TMP28]], i8 0, i64 24, i1 false), !dbg [[DBG11]]
-; CHECK-DAG:    call void @llvm.va_start(i8* [[ARRAYDECAY1]]), !dbg [[DBG11]]
+; CHECK-DAG:    call void @llvm.va_start.p0i8(i8* [[ARRAYDECAY1]]), !dbg [[DBG11]]
 ; CHECK-DAG:    [[TMP31:%.*]] = ptrtoint i8* [[ARRAYDECAY1]] to i64, !dbg [[DBG11]]
 ; CHECK-DAG:    [[TMP32:%.*]] = add i64 [[TMP31]], 16, !dbg [[DBG11]]
 ; CHECK-DAG:    [[TMP33:%.*]] = inttoptr i64 [[TMP32]] to i64**, !dbg [[DBG11]]
