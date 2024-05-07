@@ -1,4 +1,4 @@
-// RUN: %cheri_purecap_cc1 -emit-llvm -O2 -std=c++11 -fdeprecated-macro -fvisibility hidden -ftls-model=local-exec -fno-rtti -fcxx-exceptions -fexceptions -vectorize-loops -vectorize-slp -o - %s
+// RUN: %cheri_purecap_cc1 -emit-llvm -O2 -std=c++11 -fdeprecated-macro -fvisibility=hidden -ftls-model=local-exec -fno-rtti -fcxx-exceptions -fexceptions -vectorize-loops -vectorize-slp -o - %s
 // This previously crashed when compiling libunwind
 
 typedef __uintcap_t a;
