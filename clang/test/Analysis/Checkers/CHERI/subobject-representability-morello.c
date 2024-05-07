@@ -2,7 +2,7 @@
 
 // XFAIL: *
 // RUN: %clang_cc1 -triple aarch64-none-elf -target-feature +morello -target-feature +c64 -target-abi purecap \
-// RUN:            -analyze -analyzer-checker=core,alpha.cheri.SubObjectRepresentability -verify %s
+// RUN:            -analyze -analyzer-checker=core,cheri.SubObjectRepresentability -verify %s
 
 struct R1 {
   struct {
