@@ -24,12 +24,12 @@ struct Foo {
 
 // AGGRESSIVE-LABEL: @_Z20test_foo_not_alignedv(
 // AGGRESSIVE-NEXT:  entry:
-// AGGRESSIVE-NEXT:    [[CALL:%.*]] = tail call noalias noundef nonnull dereferenceable(4) ptr addrspace(200) @_Znwm(i64 noundef zeroext 4) #[[ATTR6:[0-9]+]]
+// AGGRESSIVE-NEXT:    [[CALL:%.*]] = tail call noalias noundef nonnull dereferenceable(4) ptr addrspace(200) @_Znwm(i64 noundef zeroext 4) #[[ATTR5:[0-9]+]]
 // AGGRESSIVE-NEXT:    ret ptr addrspace(200) [[CALL]]
 //
 // CONSERVATIVE-LABEL: @_Z20test_foo_not_alignedv(
 // CONSERVATIVE-NEXT:  entry:
-// CONSERVATIVE-NEXT:    [[CALL:%.*]] = tail call noalias noundef nonnull dereferenceable(4) ptr addrspace(200) @_Znwm(i64 noundef zeroext 4) #[[ATTR4:[0-9]+]]
+// CONSERVATIVE-NEXT:    [[CALL:%.*]] = tail call noalias noundef nonnull dereferenceable(4) ptr addrspace(200) @_Znwm(i64 noundef zeroext 4) #[[ATTR3:[0-9]+]]
 // CONSERVATIVE-NEXT:    ret ptr addrspace(200) [[CALL]]
 //
 Foo *test_foo_not_aligned() { return new Foo; }
@@ -37,12 +37,12 @@ Foo *test_foo_not_aligned() { return new Foo; }
 
 // AGGRESSIVE-LABEL: @_Z26test_foo_not_aligned_arrayv(
 // AGGRESSIVE-NEXT:  entry:
-// AGGRESSIVE-NEXT:    [[CALL:%.*]] = tail call noalias noundef nonnull dereferenceable(8) ptr addrspace(200) @_Znam(i64 noundef zeroext 8) #[[ATTR6]]
+// AGGRESSIVE-NEXT:    [[CALL:%.*]] = tail call noalias noundef nonnull dereferenceable(8) ptr addrspace(200) @_Znam(i64 noundef zeroext 8) #[[ATTR5]]
 // AGGRESSIVE-NEXT:    ret ptr addrspace(200) [[CALL]]
 //
 // CONSERVATIVE-LABEL: @_Z26test_foo_not_aligned_arrayv(
 // CONSERVATIVE-NEXT:  entry:
-// CONSERVATIVE-NEXT:    [[CALL:%.*]] = tail call noalias noundef nonnull dereferenceable(8) ptr addrspace(200) @_Znam(i64 noundef zeroext 8) #[[ATTR4]]
+// CONSERVATIVE-NEXT:    [[CALL:%.*]] = tail call noalias noundef nonnull dereferenceable(8) ptr addrspace(200) @_Znam(i64 noundef zeroext 8) #[[ATTR3]]
 // CONSERVATIVE-NEXT:    ret ptr addrspace(200) [[CALL]]
 //
 Foo *test_foo_not_aligned_array() { return new Foo[2]; }
@@ -51,21 +51,19 @@ Foo *test_foo_not_aligned_array() { return new Foo[2]; }
 // AGGRESSIVE-LABEL: @_Z35test_foo_not_aligned_array_nonconsti(
 // AGGRESSIVE-NEXT:  entry:
 // AGGRESSIVE-NEXT:    [[TMP0:%.*]] = sext i32 [[N:%.*]] to i64
-// AGGRESSIVE-NEXT:    [[TMP1:%.*]] = tail call { i64, i1 } @llvm.umul.with.overflow.i64(i64 [[TMP0]], i64 4)
-// AGGRESSIVE-NEXT:    [[TMP2:%.*]] = extractvalue { i64, i1 } [[TMP1]], 1
-// AGGRESSIVE-NEXT:    [[TMP3:%.*]] = extractvalue { i64, i1 } [[TMP1]], 0
-// AGGRESSIVE-NEXT:    [[TMP4:%.*]] = select i1 [[TMP2]], i64 -1, i64 [[TMP3]]
-// AGGRESSIVE-NEXT:    [[CALL:%.*]] = tail call noalias noundef nonnull ptr addrspace(200) @_Znam(i64 noundef zeroext [[TMP4]]) #[[ATTR6]]
+// AGGRESSIVE-NEXT:    [[TMP1:%.*]] = icmp slt i32 [[N]], 0
+// AGGRESSIVE-NEXT:    [[TMP2:%.*]] = shl nsw i64 [[TMP0]], 2
+// AGGRESSIVE-NEXT:    [[TMP3:%.*]] = select i1 [[TMP1]], i64 -1, i64 [[TMP2]]
+// AGGRESSIVE-NEXT:    [[CALL:%.*]] = tail call noalias noundef nonnull ptr addrspace(200) @_Znam(i64 noundef zeroext [[TMP3]]) #[[ATTR5]]
 // AGGRESSIVE-NEXT:    ret ptr addrspace(200) [[CALL]]
 //
 // CONSERVATIVE-LABEL: @_Z35test_foo_not_aligned_array_nonconsti(
 // CONSERVATIVE-NEXT:  entry:
 // CONSERVATIVE-NEXT:    [[TMP0:%.*]] = sext i32 [[N:%.*]] to i64
-// CONSERVATIVE-NEXT:    [[TMP1:%.*]] = tail call { i64, i1 } @llvm.umul.with.overflow.i64(i64 [[TMP0]], i64 4)
-// CONSERVATIVE-NEXT:    [[TMP2:%.*]] = extractvalue { i64, i1 } [[TMP1]], 1
-// CONSERVATIVE-NEXT:    [[TMP3:%.*]] = extractvalue { i64, i1 } [[TMP1]], 0
-// CONSERVATIVE-NEXT:    [[TMP4:%.*]] = select i1 [[TMP2]], i64 -1, i64 [[TMP3]]
-// CONSERVATIVE-NEXT:    [[CALL:%.*]] = tail call noalias noundef nonnull ptr addrspace(200) @_Znam(i64 noundef zeroext [[TMP4]]) #[[ATTR4]]
+// CONSERVATIVE-NEXT:    [[TMP1:%.*]] = icmp slt i32 [[N]], 0
+// CONSERVATIVE-NEXT:    [[TMP2:%.*]] = shl nsw i64 [[TMP0]], 2
+// CONSERVATIVE-NEXT:    [[TMP3:%.*]] = select i1 [[TMP1]], i64 -1, i64 [[TMP2]]
+// CONSERVATIVE-NEXT:    [[CALL:%.*]] = tail call noalias noundef nonnull ptr addrspace(200) @_Znam(i64 noundef zeroext [[TMP3]]) #[[ATTR3]]
 // CONSERVATIVE-NEXT:    ret ptr addrspace(200) [[CALL]]
 //
 Foo *test_foo_not_aligned_array_nonconst(int n) { return new Foo[n]; }
@@ -100,12 +98,11 @@ Foo *test_foo_nonalloc_array(void* buffer) { return new (buffer) Foo[2]; }
 // AGGRESSIVE-LABEL: @_Z32test_foo_nonalloc_array_nonconstPvi(
 // AGGRESSIVE-NEXT:  entry:
 // AGGRESSIVE-NEXT:    [[TMP0:%.*]] = sext i32 [[N:%.*]] to i64
-// AGGRESSIVE-NEXT:    [[TMP1:%.*]] = tail call { i64, i1 } @llvm.umul.with.overflow.i64(i64 [[TMP0]], i64 4)
-// AGGRESSIVE-NEXT:    [[TMP2:%.*]] = extractvalue { i64, i1 } [[TMP1]], 1
-// AGGRESSIVE-NEXT:    [[TMP3:%.*]] = extractvalue { i64, i1 } [[TMP1]], 0
-// AGGRESSIVE-NEXT:    [[TMP4:%.*]] = select i1 [[TMP2]], i64 -1, i64 [[TMP3]]
-// AGGRESSIVE-NEXT:    [[TMP5:%.*]] = tail call ptr addrspace(200) @llvm.cheri.cap.bounds.set.i64(ptr addrspace(200) [[BUFFER:%.*]], i64 [[TMP4]])
-// AGGRESSIVE-NEXT:    ret ptr addrspace(200) [[TMP5]]
+// AGGRESSIVE-NEXT:    [[TMP1:%.*]] = icmp slt i32 [[N]], 0
+// AGGRESSIVE-NEXT:    [[TMP2:%.*]] = shl nsw i64 [[TMP0]], 2
+// AGGRESSIVE-NEXT:    [[TMP3:%.*]] = select i1 [[TMP1]], i64 -1, i64 [[TMP2]]
+// AGGRESSIVE-NEXT:    [[TMP4:%.*]] = tail call ptr addrspace(200) @llvm.cheri.cap.bounds.set.i64(ptr addrspace(200) [[BUFFER:%.*]], i64 [[TMP3]])
+// AGGRESSIVE-NEXT:    ret ptr addrspace(200) [[TMP4]]
 //
 // CONSERVATIVE-LABEL: @_Z32test_foo_nonalloc_array_nonconstPvi(
 // CONSERVATIVE-NEXT:  entry:
