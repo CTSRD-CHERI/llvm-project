@@ -253,7 +253,7 @@ getReservedRegs(const MachineFunction &MF) const {
   }
 
   if (Subtarget.isCheri()) {
-    for (unsigned I = 0; I < array_lengthof(ReservedCheriRegs); ++I)
+    for (unsigned I = 0; I < std::size(ReservedCheriRegs); ++I)
       Reserved.set(ReservedCheriRegs[I]);
     auto &ABI = Subtarget.getABI();
     auto *FL =
@@ -269,10 +269,10 @@ getReservedRegs(const MachineFunction &MF) const {
 
     }
     if (Cheri8)
-      for (unsigned I = 0; I < array_lengthof(ReservedCheri8Regs); ++I)
+      for (unsigned I = 0; I < std::size(ReservedCheri8Regs); ++I)
         Reserved.set(ReservedCheri8Regs[I]);
     if (Cheri16)
-      for (unsigned I = 0; I < array_lengthof(ReservedCheri16Regs); ++I)
+      for (unsigned I = 0; I < std::size(ReservedCheri16Regs); ++I)
         Reserved.set(ReservedCheri16Regs[I]);
   } else
     Reserved.set(Mips::DDC);
