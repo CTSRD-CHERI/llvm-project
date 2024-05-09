@@ -1882,6 +1882,9 @@ private:
     uintptr_t __lr;    // Link register r30
     uintptr_t __sp;    // Stack pointer r31
     uintptr_t __pc;    // Program counter
+#if defined(__CHERI_PURE_CAPABILITY__) && defined(RTLD_SANDBOX)
+    uintptr_t __csp;   // Executive stack pointer
+#endif
     uint64_t __ra_sign_state; // RA sign state register
   };
 
@@ -1898,8 +1901,13 @@ inline Registers_arm64::Registers_arm64(const void *registers) {
                 "arm64 registers do not fit into unw_context_t");
   memcpy(&_registers, registers, sizeof(_registers));
 #ifdef __CHERI_PURE_CAPABILITY__
-  static_assert(sizeof(GPRs) == 0x220,
-                "expected VFP registers to be at offset 544");
+  #ifdef RTLD_SANDBOX
+    static_assert(sizeof(GPRs) == 0x230,
+                  "expected VFP registers to be at offset 560");
+  #else
+    static_assert(sizeof(GPRs) == 0x220,
+                  "expected VFP registers to be at offset 544");
+  #endif
 #else
   static_assert(sizeof(GPRs) == 0x110,
                 "expected VFP registers to be at offset 272");
@@ -1923,6 +1931,8 @@ inline bool Registers_arm64::validRegister(int regNum) const {
     return false;
 #ifdef __CHERI_PURE_CAPABILITY__
   if ((regNum >= UNW_ARM64_C0) && (regNum <= UNW_ARM64_C31))
+    return true;
+  if (regNum == UNW_ARM64_CCSP)
     return true;
 #endif
   if (regNum > 95)
@@ -1950,6 +1960,10 @@ inline uintptr_t Registers_arm64::getRegister(int regNum) const {
 #ifdef __CHERI_PURE_CAPABILITY__
   if ((regNum >= UNW_ARM64_C0) && (regNum <= UNW_ARM64_C31))
     return _registers.__x[regNum - UNW_ARM64_C0];
+#ifdef RTLD_SANDBOX
+  if (regNum == UNW_ARM64_CCSP)
+    return _registers.__csp;
+#endif
 #endif
   _LIBUNWIND_ABORT("unsupported arm64 register");
 }
@@ -1970,6 +1984,10 @@ inline void Registers_arm64::setRegister(int regNum, uintptr_t value) {
 #ifdef __CHERI_PURE_CAPABILITY__
   else if ((regNum >= UNW_ARM64_C0) && (regNum <= UNW_ARM64_C31))
     _registers.__x[regNum - UNW_ARM64_C0] = value;
+#ifdef RTLD_SANDBOX
+  else if (regNum == UNW_ARM64_CCSP)
+    _registers.__csp = value;
+#endif
 #endif
   else
     _LIBUNWIND_ABORT("unsupported arm64 register");
@@ -1982,6 +2000,8 @@ inline bool Registers_arm64::validCapabilityRegister(int regNum) const {
   if (regNum == UNW_REG_SP)
     return true;
   if ((regNum >= UNW_ARM64_C0) && (regNum <= UNW_ARM64_C31))
+    return true;
+  if (regNum == UNW_ARM64_CCSP)
     return true;
   return false;
 }
@@ -2198,6 +2218,8 @@ inline const char *Registers_arm64::getRegisterName(int regNum) {
     return "clr";
   case UNW_ARM64_C31:
     return "csp";
+  case UNW_ARM64_CCSP:
+    return "ccsp";
   default:
     return "unknown register";
   }
