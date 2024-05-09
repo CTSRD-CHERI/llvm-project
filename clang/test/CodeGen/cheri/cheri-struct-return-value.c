@@ -540,14 +540,12 @@ typedef struct {
 // CHECK-SAME: (i64 inreg [[IN_COERCE0:%.*]], i64 inreg [[IN_COERCE1:%.*]]) local_unnamed_addr addrspace(200) #[[ATTR0]] {
 // CHECK-NEXT:  entry:
 // CHECK-NEXT:    [[IN_SROA_2_0_INSERT_EXT:%.*]] = zext i64 [[IN_COERCE1]] to i128
-// CHECK-NEXT:    [[IN_SROA_0_0_INSERT_EXT:%.*]] = zext i64 [[IN_COERCE0]] to i128
-// CHECK-NEXT:    [[IN_SROA_0_0_INSERT_SHIFT:%.*]] = shl nuw i128 [[IN_SROA_0_0_INSERT_EXT]], 64
 // CHECK-NEXT:    [[IN_SROA_0_0_INSERT_INSERT:%.*]] = add nuw nsw i128 [[IN_SROA_2_0_INSERT_EXT]], 1
-// CHECK-NEXT:    [[ADD:%.*]] = add i128 [[IN_SROA_0_0_INSERT_INSERT]], [[IN_SROA_0_0_INSERT_SHIFT]]
-// CHECK-NEXT:    [[RETVAL_SROA_0_0_EXTRACT_SHIFT:%.*]] = lshr i128 [[ADD]], 64
-// CHECK-NEXT:    [[RETVAL_SROA_0_0_EXTRACT_TRUNC:%.*]] = trunc i128 [[RETVAL_SROA_0_0_EXTRACT_SHIFT]] to i64
-// CHECK-NEXT:    [[RETVAL_SROA_2_0_EXTRACT_TRUNC:%.*]] = trunc i128 [[ADD]] to i64
-// CHECK-NEXT:    [[DOTFCA_0_INSERT:%.*]] = insertvalue { i64, i64 } poison, i64 [[RETVAL_SROA_0_0_EXTRACT_TRUNC]], 0
+// CHECK-NEXT:    [[TMP0:%.*]] = lshr i128 [[IN_SROA_0_0_INSERT_INSERT]], 64
+// CHECK-NEXT:    [[DOTTR:%.*]] = trunc i128 [[TMP0]] to i64
+// CHECK-NEXT:    [[DOTNARROW:%.*]] = add i64 [[DOTTR]], [[IN_COERCE0]]
+// CHECK-NEXT:    [[RETVAL_SROA_2_0_EXTRACT_TRUNC:%.*]] = trunc i128 [[IN_SROA_0_0_INSERT_INSERT]] to i64
+// CHECK-NEXT:    [[DOTFCA_0_INSERT:%.*]] = insertvalue { i64, i64 } poison, i64 [[DOTNARROW]], 0
 // CHECK-NEXT:    [[DOTFCA_1_INSERT:%.*]] = insertvalue { i64, i64 } [[DOTFCA_0_INSERT]], i64 [[RETVAL_SROA_2_0_EXTRACT_TRUNC]], 1
 // CHECK-NEXT:    ret { i64, i64 } [[DOTFCA_1_INSERT]]
 //
@@ -561,7 +559,7 @@ Int128 int128(Int128 in) {
   // ASM-NEXT:  dsll $1, $1, 32
   // ASM-NEXT:  dsrl $1, $1, 32
   // ASM-NEXT:  cjr     $c17
-  // ASM-NEXT:  daddu $2, $4, $1
+  // ASM-NEXT:  daddu $2, $1, $4
 }
 
 typedef struct {
