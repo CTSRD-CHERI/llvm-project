@@ -587,7 +587,7 @@ int main() {
 // CHECK1-NEXT:    [[ARRAYIDX:%.*]] = getelementptr inbounds [2 x i32], [2 x i32]* [[VEC]], i64 0, i64 1
 // CHECK1-NEXT:    [[TMP2:%.*]] = load i32, i32* [[ARRAYIDX]], align 4
 // CHECK1-NEXT:    [[TMP3:%.*]] = zext i32 [[TMP2]] to i64
-// CHECK1-NEXT:    [[TMP4:%.*]] = call i8* @llvm.stacksave()
+// CHECK1-NEXT:    [[TMP4:%.*]] = call i8* @llvm.stacksave.p0i8()
 // CHECK1-NEXT:    store i8* [[TMP4]], i8** [[SAVED_STACK]], align 8
 // CHECK1-NEXT:    [[TMP5:%.*]] = mul nuw i64 10, [[TMP3]]
 // CHECK1-NEXT:    [[VLA:%.*]] = alloca i32, i64 [[TMP5]], align 16
@@ -611,7 +611,7 @@ int main() {
 // CHECK1-NEXT:    [[CALL10:%.*]] = call noundef i32 @_Z5tmainIiLi42EET_v()
 // CHECK1-NEXT:    store i32 [[CALL10]], i32* [[RETVAL]], align 4
 // CHECK1-NEXT:    [[TMP10:%.*]] = load i8*, i8** [[SAVED_STACK]], align 8
-// CHECK1-NEXT:    call void @llvm.stackrestore(i8* [[TMP10]])
+// CHECK1-NEXT:    call void @llvm.stackrestore.p0i8(i8* [[TMP10]])
 // CHECK1-NEXT:    [[ARRAY_BEGIN11:%.*]] = getelementptr inbounds [5 x %struct.S], [5 x %struct.S]* [[VVAR2]], i32 0, i32 0
 // CHECK1-NEXT:    [[TMP11:%.*]] = getelementptr inbounds [[STRUCT_S]], %struct.S* [[ARRAY_BEGIN11]], i64 5
 // CHECK1-NEXT:    br label [[ARRAYDESTROY_BODY:%.*]]
@@ -1061,7 +1061,7 @@ int main() {
 // CHECK1-NEXT:    [[TMP12:%.*]] = sdiv exact i64 [[TMP11]], ptrtoint (i32* getelementptr (i32, i32* null, i32 1) to i64)
 // CHECK1-NEXT:    [[TMP13:%.*]] = add nuw i64 [[TMP12]], 1
 // CHECK1-NEXT:    [[TMP14:%.*]] = mul nuw i64 [[TMP13]], ptrtoint (i32* getelementptr (i32, i32* null, i32 1) to i64)
-// CHECK1-NEXT:    [[TMP15:%.*]] = call i8* @llvm.stacksave()
+// CHECK1-NEXT:    [[TMP15:%.*]] = call i8* @llvm.stacksave.p0i8()
 // CHECK1-NEXT:    store i8* [[TMP15]], i8** [[SAVED_STACK]], align 8
 // CHECK1-NEXT:    [[VLA7:%.*]] = alloca i32, i64 [[TMP13]], align 16
 // CHECK1-NEXT:    store i64 [[TMP13]], i64* [[__VLA_EXPR0]], align 8
@@ -1265,7 +1265,7 @@ int main() {
 // CHECK1-NEXT:    br i1 [[ARRAYDESTROY_DONE]], label [[ARRAYDESTROY_DONE56]], label [[ARRAYDESTROY_BODY]]
 // CHECK1:       arraydestroy.done56:
 // CHECK1-NEXT:    [[TMP79:%.*]] = load i8*, i8** [[SAVED_STACK]], align 8
-// CHECK1-NEXT:    call void @llvm.stackrestore(i8* [[TMP79]])
+// CHECK1-NEXT:    call void @llvm.stackrestore.p0i8(i8* [[TMP79]])
 // CHECK1-NEXT:    ret void
 //
 //
@@ -1368,7 +1368,7 @@ int main() {
 // CHECK1-NEXT:    [[TMP4:%.*]] = mul nuw i64 [[TMP0]], [[TMP1]]
 // CHECK1-NEXT:    [[TMP5:%.*]] = mul nuw i64 [[TMP4]], 4
 // CHECK1-NEXT:    [[TMP6:%.*]] = udiv exact i64 [[TMP5]], ptrtoint (i32* getelementptr (i32, i32* null, i32 1) to i64)
-// CHECK1-NEXT:    [[TMP7:%.*]] = call i8* @llvm.stacksave()
+// CHECK1-NEXT:    [[TMP7:%.*]] = call i8* @llvm.stacksave.p0i8()
 // CHECK1-NEXT:    store i8* [[TMP7]], i8** [[SAVED_STACK]], align 8
 // CHECK1-NEXT:    [[VLA3:%.*]] = alloca i32, i64 [[TMP6]], align 16
 // CHECK1-NEXT:    store i64 [[TMP6]], i64* [[__VLA_EXPR0]], align 8
@@ -1543,7 +1543,7 @@ int main() {
 // CHECK1-NEXT:    br i1 [[ARRAYDESTROY_DONE]], label [[ARRAYDESTROY_DONE45:%.*]], label [[ARRAYDESTROY_BODY]]
 // CHECK1:       arraydestroy.done45:
 // CHECK1-NEXT:    [[TMP49:%.*]] = load i8*, i8** [[SAVED_STACK]], align 8
-// CHECK1-NEXT:    call void @llvm.stackrestore(i8* [[TMP49]])
+// CHECK1-NEXT:    call void @llvm.stackrestore.p0i8(i8* [[TMP49]])
 // CHECK1-NEXT:    [[TMP50:%.*]] = load i32*, i32** [[DOTGLOBAL_TID__ADDR]], align 8
 // CHECK1-NEXT:    [[TMP51:%.*]] = load i32, i32* [[TMP50]], align 4
 // CHECK1-NEXT:    call void @__kmpc_barrier(%struct.ident_t* @[[GLOB4]], i32 [[TMP51]])
@@ -1838,7 +1838,7 @@ int main() {
 // CHECK1-NEXT:    [[TMP8:%.*]] = sdiv exact i64 [[TMP7]], ptrtoint (%struct.S* getelementptr ([[STRUCT_S]], %struct.S* null, i32 1) to i64)
 // CHECK1-NEXT:    [[TMP9:%.*]] = add nuw i64 [[TMP8]], 1
 // CHECK1-NEXT:    [[TMP10:%.*]] = mul nuw i64 [[TMP9]], ptrtoint (%struct.S* getelementptr ([[STRUCT_S]], %struct.S* null, i32 1) to i64)
-// CHECK1-NEXT:    [[TMP11:%.*]] = call i8* @llvm.stacksave()
+// CHECK1-NEXT:    [[TMP11:%.*]] = call i8* @llvm.stacksave.p0i8()
 // CHECK1-NEXT:    store i8* [[TMP11]], i8** [[SAVED_STACK]], align 8
 // CHECK1-NEXT:    [[VLA:%.*]] = alloca [[STRUCT_S]], i64 [[TMP9]], align 16
 // CHECK1-NEXT:    store i64 [[TMP9]], i64* [[__VLA_EXPR0]], align 8
@@ -1970,7 +1970,7 @@ int main() {
 // CHECK1-NEXT:    br i1 [[ARRAYDESTROY_DONE]], label [[ARRAYDESTROY_DONE21]], label [[ARRAYDESTROY_BODY]]
 // CHECK1:       arraydestroy.done21:
 // CHECK1-NEXT:    [[TMP48:%.*]] = load i8*, i8** [[SAVED_STACK]], align 8
-// CHECK1-NEXT:    call void @llvm.stackrestore(i8* [[TMP48]])
+// CHECK1-NEXT:    call void @llvm.stackrestore.p0i8(i8* [[TMP48]])
 // CHECK1-NEXT:    [[TMP49:%.*]] = load i32*, i32** [[DOTGLOBAL_TID__ADDR]], align 8
 // CHECK1-NEXT:    [[TMP50:%.*]] = load i32, i32* [[TMP49]], align 4
 // CHECK1-NEXT:    call void @__kmpc_barrier(%struct.ident_t* @[[GLOB4]], i32 [[TMP50]])
@@ -3189,7 +3189,7 @@ int main() {
 // CHECK1-NEXT:    [[TMP7:%.*]] = sdiv exact i64 [[TMP6]], ptrtoint (%struct.S* getelementptr ([[STRUCT_S:%.*]], %struct.S* null, i32 1) to i64)
 // CHECK1-NEXT:    [[TMP8:%.*]] = add nuw i64 [[TMP7]], 1
 // CHECK1-NEXT:    [[TMP9:%.*]] = mul nuw i64 [[TMP8]], ptrtoint (%struct.S* getelementptr ([[STRUCT_S]], %struct.S* null, i32 1) to i64)
-// CHECK1-NEXT:    [[TMP10:%.*]] = call i8* @llvm.stacksave()
+// CHECK1-NEXT:    [[TMP10:%.*]] = call i8* @llvm.stacksave.p0i8()
 // CHECK1-NEXT:    store i8* [[TMP10]], i8** [[SAVED_STACK]], align 8
 // CHECK1-NEXT:    [[VLA:%.*]] = alloca [[STRUCT_S]], i64 [[TMP8]], align 16
 // CHECK1-NEXT:    store i64 [[TMP8]], i64* [[__VLA_EXPR0]], align 8
@@ -3321,7 +3321,7 @@ int main() {
 // CHECK1-NEXT:    br i1 [[ARRAYDESTROY_DONE]], label [[ARRAYDESTROY_DONE20]], label [[ARRAYDESTROY_BODY]]
 // CHECK1:       arraydestroy.done20:
 // CHECK1-NEXT:    [[TMP48:%.*]] = load i8*, i8** [[SAVED_STACK]], align 8
-// CHECK1-NEXT:    call void @llvm.stackrestore(i8* [[TMP48]])
+// CHECK1-NEXT:    call void @llvm.stackrestore.p0i8(i8* [[TMP48]])
 // CHECK1-NEXT:    [[TMP49:%.*]] = load i32*, i32** [[DOTGLOBAL_TID__ADDR]], align 8
 // CHECK1-NEXT:    [[TMP50:%.*]] = load i32, i32* [[TMP49]], align 4
 // CHECK1-NEXT:    call void @__kmpc_barrier(%struct.ident_t* @[[GLOB4]], i32 [[TMP50]])

@@ -101,7 +101,7 @@ int main(int argc, char **argv) {
 // CHECK1-NEXT:    [[TMP10:%.*]] = sdiv exact i64 [[TMP9]], ptrtoint (i8* getelementptr (i8, i8* null, i32 1) to i64)
 // CHECK1-NEXT:    [[TMP11:%.*]] = add nuw i64 [[TMP10]], 1
 // CHECK1-NEXT:    [[TMP12:%.*]] = mul nuw i64 [[TMP11]], ptrtoint (i8* getelementptr (i8, i8* null, i32 1) to i64)
-// CHECK1-NEXT:    [[TMP13:%.*]] = call i8* @llvm.stacksave()
+// CHECK1-NEXT:    [[TMP13:%.*]] = call i8* @llvm.stacksave.p0i8()
 // CHECK1-NEXT:    store i8* [[TMP13]], i8** [[SAVED_STACK]], align 8
 // CHECK1-NEXT:    [[VLA:%.*]] = alloca i8, i64 [[TMP11]], align 16
 // CHECK1-NEXT:    store i64 [[TMP11]], i64* [[__VLA_EXPR0]], align 8
@@ -283,7 +283,7 @@ int main(int argc, char **argv) {
 // CHECK1-NEXT:    br label [[DOTOMP_REDUCTION_DEFAULT]]
 // CHECK1:       .omp.reduction.default:
 // CHECK1-NEXT:    [[TMP100:%.*]] = load i8*, i8** [[SAVED_STACK]], align 8
-// CHECK1-NEXT:    call void @llvm.stackrestore(i8* [[TMP100]])
+// CHECK1-NEXT:    call void @llvm.stackrestore.p0i8(i8* [[TMP100]])
 // CHECK1-NEXT:    ret void
 //
 //
@@ -518,4 +518,6 @@ int main(int argc, char **argv) {
 // CHECK1-NEXT:    br i1 [[OMP_ARRAYCPY_DONE]], label [[OMP_ARRAYCPY_DONE5]], label [[OMP_ARRAYCPY_BODY]]
 // CHECK1:       omp.arraycpy.done5:
 // CHECK1-NEXT:    ret void
+//
+//
 //

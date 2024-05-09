@@ -94,7 +94,7 @@ int main (int argc, char **argv) {
 // CHECK1-NEXT:    [[CALL:%.*]] = call noundef i32 @_Z5tmainIPPcEiT_(i8** noundef [[TMP3]])
 // CHECK1-NEXT:    store i32 [[CALL]], i32* [[RETVAL]], align 4
 // CHECK1-NEXT:    [[TMP4:%.*]] = load i8*, i8** [[SAVED_STACK]], align 8
-// CHECK1-NEXT:    call void @llvm.stackrestore(i8* [[TMP4]])
+// CHECK1-NEXT:    call void @llvm.stackrestore.p0i8(i8* [[TMP4]])
 // CHECK1-NEXT:    [[TMP5:%.*]] = load i32, i32* [[RETVAL]], align 4
 // CHECK1-NEXT:    ret i32 [[TMP5]]
 //
@@ -157,13 +157,13 @@ int main (int argc, char **argv) {
 // CHECK1-NEXT:    store i32* [[DOTBOUND_TID_]], i32** [[DOTBOUND_TID__ADDR]], align 8
 // CHECK1-NEXT:    store i64 [[VLA]], i64* [[VLA_ADDR]], align 8
 // CHECK1-NEXT:    [[TMP0:%.*]] = load i64, i64* [[VLA_ADDR]], align 8
-// CHECK1-NEXT:    [[TMP1:%.*]] = call i8* @llvm.stacksave()
+// CHECK1-NEXT:    [[TMP1:%.*]] = call i8* @llvm.stacksave.p0i8()
 // CHECK1-NEXT:    store i8* [[TMP1]], i8** [[SAVED_STACK]], align 8
 // CHECK1-NEXT:    [[VLA1:%.*]] = alloca i32, i64 [[TMP0]], align 16
 // CHECK1-NEXT:    store i64 [[TMP0]], i64* [[__VLA_EXPR0]], align 8
 // CHECK1-NEXT:    call void (%struct.ident_t*, i32, void (i32*, i32*, ...)*, ...) @__kmpc_fork_call(%struct.ident_t* @[[GLOB1]], i32 3, void (i32*, i32*, ...)* bitcast (void (i32*, i32*, i64, i32*, i32*)* @.omp_outlined..2 to void (i32*, i32*, ...)*), i64 [[TMP0]], i32* [[VLA1]], i32* [[GLOBAL]])
 // CHECK1-NEXT:    [[TMP2:%.*]] = load i8*, i8** [[SAVED_STACK]], align 8
-// CHECK1-NEXT:    call void @llvm.stackrestore(i8* [[TMP2]])
+// CHECK1-NEXT:    call void @llvm.stackrestore.p0i8(i8* [[TMP2]])
 // CHECK1-NEXT:    ret void
 //
 //
@@ -329,7 +329,7 @@ int main (int argc, char **argv) {
 // CHECK2-NEXT:    [[CALL:%.*]] = call noundef i32 @_Z5tmainIPPcEiT_(i8** noundef [[TMP3]]), !dbg [[DBG36:![0-9]+]]
 // CHECK2-NEXT:    store i32 [[CALL]], i32* [[RETVAL]], align 4, !dbg [[DBG37:![0-9]+]]
 // CHECK2-NEXT:    [[TMP4:%.*]] = load i8*, i8** [[SAVED_STACK]], align 8, !dbg [[DBG38:![0-9]+]]
-// CHECK2-NEXT:    call void @llvm.stackrestore(i8* [[TMP4]]), !dbg [[DBG38]]
+// CHECK2-NEXT:    call void @llvm.stackrestore.p0i8(i8* [[TMP4]]), !dbg [[DBG38]]
 // CHECK2-NEXT:    [[TMP5:%.*]] = load i32, i32* [[RETVAL]], align 4, !dbg [[DBG38]]
 // CHECK2-NEXT:    ret i32 [[TMP5]], !dbg [[DBG38]]
 //
@@ -425,7 +425,7 @@ int main (int argc, char **argv) {
 // CHECK2-NEXT:    call void @llvm.dbg.declare(metadata i64* [[VLA_ADDR]], metadata [[META81:![0-9]+]], metadata !DIExpression()), !dbg [[DBG79]]
 // CHECK2-NEXT:    [[TMP0:%.*]] = load i64, i64* [[VLA_ADDR]], align 8, !dbg [[DBG82:![0-9]+]]
 // CHECK2-NEXT:    call void @llvm.dbg.declare(metadata i32* [[GLOBAL]], metadata [[META83:![0-9]+]], metadata !DIExpression()), !dbg [[DBG79]]
-// CHECK2-NEXT:    [[TMP1:%.*]] = call i8* @llvm.stacksave(), !dbg [[DBG82]]
+// CHECK2-NEXT:    [[TMP1:%.*]] = call i8* @llvm.stacksave.p0i8(), !dbg [[DBG82]]
 // CHECK2-NEXT:    store i8* [[TMP1]], i8** [[SAVED_STACK]], align 8, !dbg [[DBG82]]
 // CHECK2-NEXT:    [[VLA1:%.*]] = alloca i32, i64 [[TMP0]], align 16, !dbg [[DBG82]]
 // CHECK2-NEXT:    store i64 [[TMP0]], i64* [[__VLA_EXPR0]], align 8, !dbg [[DBG82]]
@@ -433,7 +433,7 @@ int main (int argc, char **argv) {
 // CHECK2-NEXT:    call void @llvm.dbg.declare(metadata i32* [[VLA1]], metadata [[META85:![0-9]+]], metadata !DIExpression()), !dbg [[DBG79]]
 // CHECK2-NEXT:    call void (%struct.ident_t*, i32, void (i32*, i32*, ...)*, ...) @__kmpc_fork_call(%struct.ident_t* @[[GLOB3:[0-9]+]], i32 3, void (i32*, i32*, ...)* bitcast (void (i32*, i32*, i64, i32*, i32*)* @.omp_outlined..3 to void (i32*, i32*, ...)*), i64 [[TMP0]], i32* [[VLA1]], i32* [[GLOBAL]]), !dbg [[DBG82]]
 // CHECK2-NEXT:    [[TMP2:%.*]] = load i8*, i8** [[SAVED_STACK]], align 8, !dbg [[DBG86:![0-9]+]]
-// CHECK2-NEXT:    call void @llvm.stackrestore(i8* [[TMP2]]), !dbg [[DBG86]]
+// CHECK2-NEXT:    call void @llvm.stackrestore.p0i8(i8* [[TMP2]]), !dbg [[DBG86]]
 // CHECK2-NEXT:    ret void, !dbg [[DBG88:![0-9]+]]
 //
 //
@@ -765,6 +765,8 @@ int main (int argc, char **argv) {
 // CHECK3-NEXT:    [[TMP3:%.*]] = load i32, i32* @global, align 4
 // CHECK3-NEXT:    [[ARRAYIDX1:%.*]] = getelementptr inbounds i32, i32* [[LOADGEP_VLA]], i64 1
 // CHECK3-NEXT:    store i32 [[TMP3]], i32* [[ARRAYIDX1]], align 4
+// CHECK3-NEXT:    br label [[OMP_PAR_REGION_PARALLEL_AFTER:%.*]]
+// CHECK3:       omp.par.region.parallel.after:
 // CHECK3-NEXT:    br label [[OMP_PAR_PRE_FINALIZE:%.*]]
 // CHECK3:       omp.par.pre_finalize:
 // CHECK3-NEXT:    br label [[OMP_PAR_OUTLINED_EXIT_EXITSTUB:%.*]]
@@ -830,6 +832,8 @@ int main (int argc, char **argv) {
 // CHECK3-NEXT:    [[TMP5:%.*]] = mul nsw i64 0, [[TMP2]]
 // CHECK3-NEXT:    [[ARRAYIDX2:%.*]] = getelementptr inbounds double, double* [[TMP4]], i64 [[TMP5]]
 // CHECK3-NEXT:    [[ARRAYIDX3:%.*]] = getelementptr inbounds double, double* [[ARRAYIDX2]], i64 0
+// CHECK3-NEXT:    br label [[OMP_PAR_REGION_PARALLEL_AFTER:%.*]]
+// CHECK3:       omp.par.region.parallel.after:
 // CHECK3-NEXT:    br label [[OMP_PAR_PRE_FINALIZE:%.*]]
 // CHECK3:       omp.par.pre_finalize:
 // CHECK3-NEXT:    br label [[OMP_PAR_OUTLINED_EXIT_EXITSTUB:%.*]]
@@ -903,7 +907,9 @@ int main (int argc, char **argv) {
 // CHECK4-NEXT:    [[TMP3:%.*]] = load i32, i32* @global, align 4, !dbg [[DBG35]]
 // CHECK4-NEXT:    [[ARRAYIDX1:%.*]] = getelementptr inbounds i32, i32* [[LOADGEP_VLA]], i64 1, !dbg [[DBG35]]
 // CHECK4-NEXT:    store i32 [[TMP3]], i32* [[ARRAYIDX1]], align 4, !dbg [[DBG35]]
-// CHECK4-NEXT:    br label [[OMP_PAR_PRE_FINALIZE:%.*]], !dbg [[DBG35]]
+// CHECK4-NEXT:    br label [[OMP_PAR_REGION_PARALLEL_AFTER:%.*]], !dbg [[DBG35]]
+// CHECK4:       omp.par.region.parallel.after:
+// CHECK4-NEXT:    br label [[OMP_PAR_PRE_FINALIZE:%.*]]
 // CHECK4:       omp.par.pre_finalize:
 // CHECK4-NEXT:    br label [[OMP_PAR_OUTLINED_EXIT_EXITSTUB:%.*]], !dbg [[DBG35]]
 // CHECK4:       omp.par.outlined.exit.exitStub:
@@ -971,7 +977,9 @@ int main (int argc, char **argv) {
 // CHECK4-NEXT:    [[TMP5:%.*]] = mul nsw i64 0, [[TMP2]], !dbg [[DBG66]]
 // CHECK4-NEXT:    [[ARRAYIDX2:%.*]] = getelementptr inbounds double, double* [[TMP4]], i64 [[TMP5]], !dbg [[DBG66]]
 // CHECK4-NEXT:    [[ARRAYIDX3:%.*]] = getelementptr inbounds double, double* [[ARRAYIDX2]], i64 0, !dbg [[DBG66]]
-// CHECK4-NEXT:    br label [[OMP_PAR_PRE_FINALIZE:%.*]], !dbg [[DBG67:![0-9]+]]
+// CHECK4-NEXT:    br label [[OMP_PAR_REGION_PARALLEL_AFTER:%.*]], !dbg [[DBG67:![0-9]+]]
+// CHECK4:       omp.par.region.parallel.after:
+// CHECK4-NEXT:    br label [[OMP_PAR_PRE_FINALIZE:%.*]]
 // CHECK4:       omp.par.pre_finalize:
 // CHECK4-NEXT:    br label [[OMP_PAR_OUTLINED_EXIT_EXITSTUB:%.*]], !dbg [[DBG67]]
 // CHECK4:       omp.par.outlined.exit.exitStub:
@@ -985,4 +993,24 @@ int main (int argc, char **argv) {
 // CHECK4-NEXT:    store i8** [[ARGC]], i8*** [[ARGC_ADDR]], align 8
 // CHECK4-NEXT:    call void @llvm.dbg.declare(metadata i8*** [[ARGC_ADDR]], metadata [[META71:![0-9]+]], metadata !DIExpression()), !dbg [[DBG72:![0-9]+]]
 // CHECK4-NEXT:    ret void, !dbg [[DBG72]]
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
 //

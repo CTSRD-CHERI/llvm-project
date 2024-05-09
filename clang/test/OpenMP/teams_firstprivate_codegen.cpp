@@ -284,6 +284,10 @@ void array_func(float a[3], St s[2], int n, long double vla1[n]) {
 // CHECK3-NEXT:    ret void
 //
 //
+//
+//
+//
+//
 // CHECK9-LABEL: define {{[^@]+}}@main
 // CHECK9-SAME: () #[[ATTR0:[0-9]+]] {
 // CHECK9-NEXT:  entry:
@@ -1886,6 +1890,10 @@ void array_func(float a[3], St s[2], int n, long double vla1[n]) {
 // CHECK11-NEXT:    ret void
 //
 //
+//
+//
+//
+//
 // CHECK17-LABEL: define {{[^@]+}}@_Z10array_funcPfP2StiPg
 // CHECK17-SAME: (float* [[A:%.*]], %struct.St* [[S:%.*]], i32 signext [[N:%.*]], ppc_fp128* [[VLA1:%.*]]) #[[ATTR0:[0-9]+]] {
 // CHECK17-NEXT:  entry:
@@ -2090,7 +2098,7 @@ void array_func(float a[3], St s[2], int n, long double vla1[n]) {
 // CHECK17-NEXT:    [[TMP2:%.*]] = load i64, i64* [[VLA_ADDR3]], align 8
 // CHECK17-NEXT:    [[TMP3:%.*]] = load i64, i64* [[VLA_ADDR5]], align 8
 // CHECK17-NEXT:    [[TMP4:%.*]] = load double*, double** [[VLA2_ADDR]], align 8
-// CHECK17-NEXT:    [[TMP5:%.*]] = call i8* @llvm.stacksave()
+// CHECK17-NEXT:    [[TMP5:%.*]] = call i8* @llvm.stacksave.p0i8()
 // CHECK17-NEXT:    store i8* [[TMP5]], i8** [[SAVED_STACK]], align 8
 // CHECK17-NEXT:    [[TMP6:%.*]] = mul nuw i64 [[TMP2]], [[TMP3]]
 // CHECK17-NEXT:    [[VLA7:%.*]] = alloca double, i64 [[TMP6]], align 128
@@ -2108,7 +2116,7 @@ void array_func(float a[3], St s[2], int n, long double vla1[n]) {
 // CHECK17-NEXT:    [[TMP14:%.*]] = load ppc_fp128*, ppc_fp128** [[VLA1_ADDR]], align 8
 // CHECK17-NEXT:    call void @_ZN2St7St_funcEPS_iPg(%struct.St* nonnull align 4 dereferenceable(8) [[ARRAYIDX]], %struct.St* [[TMP12]], i32 signext [[TMP13]], ppc_fp128* [[TMP14]])
 // CHECK17-NEXT:    [[TMP15:%.*]] = load i8*, i8** [[SAVED_STACK]], align 8
-// CHECK17-NEXT:    call void @llvm.stackrestore(i8* [[TMP15]])
+// CHECK17-NEXT:    call void @llvm.stackrestore.p0i8(i8* [[TMP15]])
 // CHECK17-NEXT:    ret void
 //
 //
@@ -2348,7 +2356,7 @@ void array_func(float a[3], St s[2], int n, long double vla1[n]) {
 // CHECK17-NEXT:    [[TMP3:%.*]] = load i64, i64* [[VLA_ADDR5]], align 8
 // CHECK17-NEXT:    [[TMP4:%.*]] = load double*, double** [[VLA2_ADDR]], align 8
 // CHECK17-NEXT:    [[TMP5:%.*]] = load i32*, i32** [[N_ADDR]], align 8
-// CHECK17-NEXT:    [[TMP6:%.*]] = call i8* @llvm.stacksave()
+// CHECK17-NEXT:    [[TMP6:%.*]] = call i8* @llvm.stacksave.p0i8()
 // CHECK17-NEXT:    store i8* [[TMP6]], i8** [[SAVED_STACK]], align 8
 // CHECK17-NEXT:    [[TMP7:%.*]] = mul nuw i64 [[TMP2]], [[TMP3]]
 // CHECK17-NEXT:    [[VLA7:%.*]] = alloca double, i64 [[TMP7]], align 128
@@ -2379,7 +2387,7 @@ void array_func(float a[3], St s[2], int n, long double vla1[n]) {
 // CHECK17-NEXT:    [[ARRAYIDX12:%.*]] = getelementptr inbounds ppc_fp128, ppc_fp128* [[TMP15]], i64 [[IDXPROM11]]
 // CHECK17-NEXT:    store ppc_fp128 [[CONV9]], ppc_fp128* [[ARRAYIDX12]], align 16
 // CHECK17-NEXT:    [[TMP17:%.*]] = load i8*, i8** [[SAVED_STACK]], align 8
-// CHECK17-NEXT:    call void @llvm.stackrestore(i8* [[TMP17]])
+// CHECK17-NEXT:    call void @llvm.stackrestore.p0i8(i8* [[TMP17]])
 // CHECK17-NEXT:    ret void
 //
 //
@@ -2590,7 +2598,7 @@ void array_func(float a[3], St s[2], int n, long double vla1[n]) {
 // CHECK19-NEXT:    [[TMP2:%.*]] = load i32, i32* [[VLA_ADDR3]], align 4
 // CHECK19-NEXT:    [[TMP3:%.*]] = load i32, i32* [[VLA_ADDR5]], align 4
 // CHECK19-NEXT:    [[TMP4:%.*]] = load double*, double** [[VLA2_ADDR]], align 4
-// CHECK19-NEXT:    [[TMP5:%.*]] = call i8* @llvm.stacksave()
+// CHECK19-NEXT:    [[TMP5:%.*]] = call i8* @llvm.stacksave.p0i8()
 // CHECK19-NEXT:    store i8* [[TMP5]], i8** [[SAVED_STACK]], align 4
 // CHECK19-NEXT:    [[TMP6:%.*]] = mul nuw i32 [[TMP2]], [[TMP3]]
 // CHECK19-NEXT:    [[VLA7:%.*]] = alloca double, i32 [[TMP6]], align 128
@@ -2608,7 +2616,7 @@ void array_func(float a[3], St s[2], int n, long double vla1[n]) {
 // CHECK19-NEXT:    [[TMP14:%.*]] = load x86_fp80*, x86_fp80** [[VLA1_ADDR]], align 4
 // CHECK19-NEXT:    call void @_ZN2St7St_funcEPS_iPe(%struct.St* nonnull align 4 dereferenceable(8) [[ARRAYIDX]], %struct.St* [[TMP12]], i32 [[TMP13]], x86_fp80* [[TMP14]])
 // CHECK19-NEXT:    [[TMP15:%.*]] = load i8*, i8** [[SAVED_STACK]], align 4
-// CHECK19-NEXT:    call void @llvm.stackrestore(i8* [[TMP15]])
+// CHECK19-NEXT:    call void @llvm.stackrestore.p0i8(i8* [[TMP15]])
 // CHECK19-NEXT:    ret void
 //
 //
@@ -2844,7 +2852,7 @@ void array_func(float a[3], St s[2], int n, long double vla1[n]) {
 // CHECK19-NEXT:    [[TMP3:%.*]] = load i32, i32* [[VLA_ADDR5]], align 4
 // CHECK19-NEXT:    [[TMP4:%.*]] = load double*, double** [[VLA2_ADDR]], align 4
 // CHECK19-NEXT:    [[TMP5:%.*]] = load i32*, i32** [[N_ADDR]], align 4
-// CHECK19-NEXT:    [[TMP6:%.*]] = call i8* @llvm.stacksave()
+// CHECK19-NEXT:    [[TMP6:%.*]] = call i8* @llvm.stacksave.p0i8()
 // CHECK19-NEXT:    store i8* [[TMP6]], i8** [[SAVED_STACK]], align 4
 // CHECK19-NEXT:    [[TMP7:%.*]] = mul nuw i32 [[TMP2]], [[TMP3]]
 // CHECK19-NEXT:    [[VLA7:%.*]] = alloca double, i32 [[TMP7]], align 128
@@ -2873,7 +2881,7 @@ void array_func(float a[3], St s[2], int n, long double vla1[n]) {
 // CHECK19-NEXT:    [[ARRAYIDX11:%.*]] = getelementptr inbounds x86_fp80, x86_fp80* [[TMP15]], i32 [[TMP16]]
 // CHECK19-NEXT:    store x86_fp80 [[CONV9]], x86_fp80* [[ARRAYIDX11]], align 4
 // CHECK19-NEXT:    [[TMP17:%.*]] = load i8*, i8** [[SAVED_STACK]], align 4
-// CHECK19-NEXT:    call void @llvm.stackrestore(i8* [[TMP17]])
+// CHECK19-NEXT:    call void @llvm.stackrestore.p0i8(i8* [[TMP17]])
 // CHECK19-NEXT:    ret void
 //
 //
@@ -2882,4 +2890,8 @@ void array_func(float a[3], St s[2], int n, long double vla1[n]) {
 // CHECK19-NEXT:  entry:
 // CHECK19-NEXT:    call void @__tgt_register_requires(i64 1)
 // CHECK19-NEXT:    ret void
+//
+//
+//
+//
 //
