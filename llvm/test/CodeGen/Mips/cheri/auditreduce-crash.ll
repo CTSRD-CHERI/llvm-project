@@ -12,9 +12,8 @@
 define i32 @select_hdr32(%struct.tokenstr addrspace(200)* byval(%struct.tokenstr), i32 addrspace(200)* %optchkd) nounwind {
 ; MIPS-LABEL: select_hdr32:
 ; MIPS:       # %bb.0: # %entry
-; MIPS-NEXT:    daddiu $sp, $sp, -[[#STACKFRAME_SIZE:]]
+; MIPS-NEXT:    daddiu $sp, $sp, -80
 ; MIPS-NEXT:    sd $ra, 8($sp) # 8-byte Folded Spill
-; MIPS-NEXT:    sd $4, 16($sp)
 ; MIPS-NEXT:    sd $11, 72($sp)
 ; MIPS-NEXT:    sd $10, 64($sp)
 ; MIPS-NEXT:    sd $9, 56($sp)
@@ -22,7 +21,8 @@ define i32 @select_hdr32(%struct.tokenstr addrspace(200)* byval(%struct.tokenstr
 ; MIPS-NEXT:    sd $7, 40($sp)
 ; MIPS-NEXT:    sd $6, 32($sp)
 ; MIPS-NEXT:    sd $5, 24($sp)
-; MIPS-NEXT:    lh $4, 16($sp)
+; MIPS-NEXT:    sd $4, 16($sp)
+; MIPS-NEXT:    dsra $4, $4, 48
 ; MIPS-NEXT:    lui $1, %highest(maskp)
 ; MIPS-NEXT:    daddiu $1, $1, %higher(maskp)
 ; MIPS-NEXT:    dsll $1, $1, 16
@@ -35,12 +35,12 @@ define i32 @select_hdr32(%struct.tokenstr addrspace(200)* byval(%struct.tokenstr
 ; MIPS-NEXT:    addiu $2, $zero, 0
 ; MIPS-NEXT:    ld $ra, 8($sp) # 8-byte Folded Reload
 ; MIPS-NEXT:    jr $ra
-; MIPS-NEXT:    daddiu $sp, $sp, [[#STACKFRAME_SIZE]]
+; MIPS-NEXT:    daddiu $sp, $sp, 80
 ;
 ; CHERI-LABEL: select_hdr32:
 ; CHERI:       # %bb.0: # %entry
-; CHERI-NEXT:    cincoffset $c11, $c11, -[[#STACKFRAME_SIZE:]]
-; CHERI-NEXT:    csc $c17, $zero, 0($c11)
+; CHERI-NEXT:    cincoffset $c11, $c11, -16
+; CHERI-NEXT:    csc $c17, $zero, 0($c11) # 16-byte Folded Spill
 ; CHERI-NEXT:    clh $4, $zero, 16($c11)
 ; CHERI-NEXT:    lui $1, %pcrel_hi(_CHERI_CAPABILITY_TABLE_-8)
 ; CHERI-NEXT:    daddiu $1, $1, %pcrel_lo(_CHERI_CAPABILITY_TABLE_-4)
@@ -51,9 +51,9 @@ define i32 @select_hdr32(%struct.tokenstr addrspace(200)* byval(%struct.tokenstr
 ; CHERI-NEXT:    cjalr $c12, $c17
 ; CHERI-NEXT:    daddiu $6, $zero, 0
 ; CHERI-NEXT:    addiu $2, $zero, 0
-; CHERI-NEXT:    clc $c17, $zero, 0($c11)
+; CHERI-NEXT:    clc $c17, $zero, 0($c11) # 16-byte Folded Reload
 ; CHERI-NEXT:    cjr $c17
-; CHERI-NEXT:    cincoffset $c11, $c11, [[#STACKFRAME_SIZE]]
+; CHERI-NEXT:    cincoffset $c11, $c11, 16
 entry:
   %1 = getelementptr %struct.tokenstr, %struct.tokenstr addrspace(200)* %0, i64 0, i32 0
   %tok.sroa.1.0..sroa_idx = getelementptr i8, i8 addrspace(200)* %1
@@ -66,7 +66,7 @@ entry:
 define i32 @foo(i512 addrspace(200)* byval(i512) %x, %struct.tokenstr addrspace(200)* byval(%struct.tokenstr), i32 addrspace(200)* %optchkd) nounwind {
 ; MIPS-LABEL: foo:
 ; MIPS:       # %bb.0: # %entry
-; MIPS-NEXT:    daddiu $sp, $sp, -[[#STACKFRAME_SIZE:]]
+; MIPS-NEXT:    daddiu $sp, $sp, -80
 ; MIPS-NEXT:    sd $ra, 8($sp) # 8-byte Folded Spill
 ; MIPS-NEXT:    sd $11, 72($sp)
 ; MIPS-NEXT:    sd $10, 64($sp)
@@ -90,12 +90,12 @@ define i32 @foo(i512 addrspace(200)* byval(i512) %x, %struct.tokenstr addrspace(
 ; MIPS-NEXT:    addiu $2, $zero, 0
 ; MIPS-NEXT:    ld $ra, 8($sp) # 8-byte Folded Reload
 ; MIPS-NEXT:    jr $ra
-; MIPS-NEXT:    daddiu $sp, $sp, [[#STACKFRAME_SIZE]]
+; MIPS-NEXT:    daddiu $sp, $sp, 80
 ;
 ; CHERI-LABEL: foo:
 ; CHERI:       # %bb.0: # %entry
-; CHERI-NEXT:    cincoffset $c11, $c11, -[[#STACKFRAME_SIZE:]]
-; CHERI-NEXT:    csc $c17, $zero, [[#STACKFRAME_SIZE - CAP_SIZE]]($c11)
+; CHERI-NEXT:    cincoffset $c11, $c11, -32
+; CHERI-NEXT:    csc $c17, $zero, 16($c11) # 16-byte Folded Spill
 ; CHERI-NEXT:    clh $4, $zero, 96($c11)
 ; CHERI-NEXT:    lui $1, %pcrel_hi(_CHERI_CAPABILITY_TABLE_-8)
 ; CHERI-NEXT:    daddiu $1, $1, %pcrel_lo(_CHERI_CAPABILITY_TABLE_-4)
@@ -106,9 +106,9 @@ define i32 @foo(i512 addrspace(200)* byval(i512) %x, %struct.tokenstr addrspace(
 ; CHERI-NEXT:    cjalr $c12, $c17
 ; CHERI-NEXT:    daddiu $6, $zero, 0
 ; CHERI-NEXT:    addiu $2, $zero, 0
-; CHERI-NEXT:    clc $c17, $zero, [[#STACKFRAME_SIZE - CAP_SIZE]]($c11)
+; CHERI-NEXT:    clc $c17, $zero, 16($c11) # 16-byte Folded Reload
 ; CHERI-NEXT:    cjr $c17
-; CHERI-NEXT:    cincoffset $c11, $c11, [[#STACKFRAME_SIZE]]
+; CHERI-NEXT:    cincoffset $c11, $c11, 32
 entry:
   %1 = getelementptr %struct.tokenstr, %struct.tokenstr addrspace(200)* %0, i64 0, i32 0
   %tok.sroa.1.0..sroa_idx = getelementptr i8, i8 addrspace(200)* %1
