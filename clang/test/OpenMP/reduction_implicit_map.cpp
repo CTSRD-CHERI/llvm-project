@@ -564,7 +564,7 @@ int main()
 // CHECK1-NEXT:    [[TMP4:%.*]] = sdiv exact i64 [[TMP3]], ptrtoint (double* getelementptr (double, double* null, i32 1) to i64)
 // CHECK1-NEXT:    [[TMP5:%.*]] = add nuw i64 [[TMP4]], 1
 // CHECK1-NEXT:    [[TMP6:%.*]] = mul nuw i64 [[TMP5]], ptrtoint (double* getelementptr (double, double* null, i32 1) to i64)
-// CHECK1-NEXT:    [[TMP7:%.*]] = call i8* @llvm.stacksave()
+// CHECK1-NEXT:    [[TMP7:%.*]] = call i8* @llvm.stacksave.p0i8()
 // CHECK1-NEXT:    store i8* [[TMP7]], i8** [[SAVED_STACK]], align 8
 // CHECK1-NEXT:    [[VLA:%.*]] = alloca double, i64 [[TMP5]], align 8
 // CHECK1-NEXT:    store i64 [[TMP5]], i64* [[__VLA_EXPR0]], align 8
@@ -718,7 +718,7 @@ int main()
 // CHECK1-NEXT:    br label [[DOTOMP_REDUCTION_DEFAULT]]
 // CHECK1:       .omp.reduction.default:
 // CHECK1-NEXT:    [[TMP62:%.*]] = load i8*, i8** [[SAVED_STACK]], align 8
-// CHECK1-NEXT:    call void @llvm.stackrestore(i8* [[TMP62]])
+// CHECK1-NEXT:    call void @llvm.stackrestore.p0i8(i8* [[TMP62]])
 // CHECK1-NEXT:    ret void
 //
 //

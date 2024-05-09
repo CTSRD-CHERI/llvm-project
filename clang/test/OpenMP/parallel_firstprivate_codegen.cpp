@@ -2781,7 +2781,7 @@ void array_func(float a[3], St s[2], int n, long double vla1[n]) {
 // CHECK17-NEXT:    [[TMP10:%.*]] = load float*, float** [[A_ADDR]], align 8
 // CHECK17-NEXT:    call void (%struct.ident_t*, i32, void (i32*, i32*, ...)*, ...) @__kmpc_fork_call(%struct.ident_t* @[[GLOB1:[0-9]+]], i32 8, void (i32*, i32*, ...)* bitcast (void (i32*, i32*, %struct.St*, i32*, i64, x86_fp80*, float*, i64, i64, double*)* @.omp_outlined. to void (i32*, i32*, ...)*), %struct.St* [[TMP8]], i32* [[N_ADDR]], i64 [[TMP1]], x86_fp80* [[TMP9]], float* [[TMP10]], i64 [[TMP3]], i64 [[TMP5]], double* [[VLA]])
 // CHECK17-NEXT:    [[TMP11:%.*]] = load i8*, i8** [[SAVED_STACK]], align 8
-// CHECK17-NEXT:    call void @llvm.stackrestore(i8* [[TMP11]])
+// CHECK17-NEXT:    call void @llvm.stackrestore.p0i8(i8* [[TMP11]])
 // CHECK17-NEXT:    ret void
 //
 //
@@ -2816,7 +2816,7 @@ void array_func(float a[3], St s[2], int n, long double vla1[n]) {
 // CHECK17-NEXT:    [[TMP2:%.*]] = load i64, i64* [[VLA_ADDR3]], align 8
 // CHECK17-NEXT:    [[TMP3:%.*]] = load i64, i64* [[VLA_ADDR5]], align 8
 // CHECK17-NEXT:    [[TMP4:%.*]] = load double*, double** [[VLA2_ADDR]], align 8
-// CHECK17-NEXT:    [[TMP5:%.*]] = call i8* @llvm.stacksave()
+// CHECK17-NEXT:    [[TMP5:%.*]] = call i8* @llvm.stacksave.p0i8()
 // CHECK17-NEXT:    store i8* [[TMP5]], i8** [[SAVED_STACK]], align 8
 // CHECK17-NEXT:    [[TMP6:%.*]] = mul nuw i64 [[TMP2]], [[TMP3]]
 // CHECK17-NEXT:    [[VLA7:%.*]] = alloca double, i64 [[TMP6]], align 128
@@ -2834,7 +2834,7 @@ void array_func(float a[3], St s[2], int n, long double vla1[n]) {
 // CHECK17-NEXT:    [[TMP14:%.*]] = load x86_fp80*, x86_fp80** [[VLA1_ADDR]], align 8
 // CHECK17-NEXT:    call void @_ZN2St7St_funcEPS_iPe(%struct.St* nonnull align 4 dereferenceable(8) [[ARRAYIDX]], %struct.St* [[TMP12]], i32 [[TMP13]], x86_fp80* [[TMP14]])
 // CHECK17-NEXT:    [[TMP15:%.*]] = load i8*, i8** [[SAVED_STACK]], align 8
-// CHECK17-NEXT:    call void @llvm.stackrestore(i8* [[TMP15]])
+// CHECK17-NEXT:    call void @llvm.stackrestore.p0i8(i8* [[TMP15]])
 // CHECK17-NEXT:    ret void
 //
 //
@@ -2873,7 +2873,7 @@ void array_func(float a[3], St s[2], int n, long double vla1[n]) {
 // CHECK17-NEXT:    [[TMP10:%.*]] = load %struct.St*, %struct.St** [[S_ADDR]], align 8
 // CHECK17-NEXT:    call void (%struct.ident_t*, i32, void (i32*, i32*, ...)*, ...) @__kmpc_fork_call(%struct.ident_t* @[[GLOB1]], i32 8, void (i32*, i32*, ...)* bitcast (void (i32*, i32*, i64, x86_fp80*, %struct.St*, i64, i64, double*, i32*, %struct.St*)* @.omp_outlined..1 to void (i32*, i32*, ...)*), i64 [[TMP1]], x86_fp80* [[TMP9]], %struct.St* [[THIS1]], i64 [[TMP3]], i64 [[TMP5]], double* [[VLA]], i32* [[N_ADDR]], %struct.St* [[TMP10]])
 // CHECK17-NEXT:    [[TMP11:%.*]] = load i8*, i8** [[SAVED_STACK]], align 8
-// CHECK17-NEXT:    call void @llvm.stackrestore(i8* [[TMP11]])
+// CHECK17-NEXT:    call void @llvm.stackrestore.p0i8(i8* [[TMP11]])
 // CHECK17-NEXT:    ret void
 //
 //
