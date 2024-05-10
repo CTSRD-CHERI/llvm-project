@@ -66,13 +66,13 @@ constexpr INTTYPE check_overflow1 = static_cast<INTTYPE>(__INT64_MAX__) + 1;
 // signed-long-error@-1{{must be initialized by a constant expression}}
 // signed-long-note@-2{{value 9223372036854775808 is outside the range of representable values of type 'long'}}
 // signed-intcap-error@-3{{must be initialized by a constant expression}}
-// signed-intcap-note@-4{{value 9223372036854775808 is outside the range of representable values of type '__intcap'}}
+// signed-intcap-note@-4{{value 9223372036854775808 is outside the range of representable values of type '__intcap __attribute__((cheri_no_provenance))'}}
 constexpr INTTYPE check_overflow2 = static_cast<INTTYPE>(__INT64_MIN__);
 constexpr INTTYPE check_overflow3 = static_cast<INTTYPE>(__INT64_MIN__) -1;
 // signed-long-error@-1{{must be initialized by a constant expression}}
 // signed-long-note@-2{{value -9223372036854775809 is outside the range of representable values of type 'long'}}
 // signed-intcap-error@-3{{must be initialized by a constant expression}}
-// signed-intcap-note@-4{{value -9223372036854775809 is outside the range of representable values of type '__intcap'}}
+// signed-intcap-note@-4{{value -9223372036854775809 is outside the range of representable values of type '__intcap __attribute__((cheri_no_provenance))'}}
 
 // No warnings for unsigned since it wraps around
 constexpr INTTYPE check_overflow4 = static_cast<__UINT64_TYPE__>(0);
