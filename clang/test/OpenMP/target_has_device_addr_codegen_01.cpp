@@ -52,7 +52,7 @@ int main() {
 // CHECK-NEXT:    [[TMP0:%.*]] = load float, float* [[A]], align 4
 // CHECK-NEXT:    [[CONV:%.*]] = fptosi float [[TMP0]] to i32
 // CHECK-NEXT:    [[TMP1:%.*]] = zext i32 [[CONV]] to i64
-// CHECK-NEXT:    [[TMP2:%.*]] = call i8* @llvm.stacksave()
+// CHECK-NEXT:    [[TMP2:%.*]] = call i8* @llvm.stacksave.p0i8()
 // CHECK-NEXT:    store i8* [[TMP2]], i8** [[SAVED_STACK]], align 8
 // CHECK-NEXT:    [[VLA:%.*]] = alloca float, i64 [[TMP1]], align 4
 // CHECK-NEXT:    store i64 [[TMP1]], i64* [[__VLA_EXPR0]], align 8
@@ -145,7 +145,7 @@ int main() {
 // CHECK-NEXT:    [[CONV1:%.*]] = fptosi float [[TMP51]] to i32
 // CHECK-NEXT:    store i32 [[CONV1]], i32* [[RETVAL]], align 4
 // CHECK-NEXT:    [[TMP52:%.*]] = load i8*, i8** [[SAVED_STACK]], align 8
-// CHECK-NEXT:    call void @llvm.stackrestore(i8* [[TMP52]])
+// CHECK-NEXT:    call void @llvm.stackrestore.p0i8(i8* [[TMP52]])
 // CHECK-NEXT:    [[TMP53:%.*]] = load i32, i32* [[RETVAL]], align 4
 // CHECK-NEXT:    ret i32 [[TMP53]]
 //
@@ -373,7 +373,7 @@ int main() {
 // SIMD-ONLY0-NEXT:    [[TMP0:%.*]] = load float, float* [[A]], align 4
 // SIMD-ONLY0-NEXT:    [[CONV:%.*]] = fptosi float [[TMP0]] to i32
 // SIMD-ONLY0-NEXT:    [[TMP1:%.*]] = zext i32 [[CONV]] to i64
-// SIMD-ONLY0-NEXT:    [[TMP2:%.*]] = call i8* @llvm.stacksave()
+// SIMD-ONLY0-NEXT:    [[TMP2:%.*]] = call i8* @llvm.stacksave.p0i8()
 // SIMD-ONLY0-NEXT:    store i8* [[TMP2]], i8** [[SAVED_STACK]], align 8
 // SIMD-ONLY0-NEXT:    [[VLA:%.*]] = alloca float, i64 [[TMP1]], align 4
 // SIMD-ONLY0-NEXT:    store i64 [[TMP1]], i64* [[__VLA_EXPR0]], align 8
@@ -405,7 +405,7 @@ int main() {
 // SIMD-ONLY0-NEXT:    [[CONV6:%.*]] = fptosi float [[TMP12]] to i32
 // SIMD-ONLY0-NEXT:    store i32 [[CONV6]], i32* [[RETVAL]], align 4
 // SIMD-ONLY0-NEXT:    [[TMP13:%.*]] = load i8*, i8** [[SAVED_STACK]], align 8
-// SIMD-ONLY0-NEXT:    call void @llvm.stackrestore(i8* [[TMP13]])
+// SIMD-ONLY0-NEXT:    call void @llvm.stackrestore.p0i8(i8* [[TMP13]])
 // SIMD-ONLY0-NEXT:    [[TMP14:%.*]] = load i32, i32* [[RETVAL]], align 4
 // SIMD-ONLY0-NEXT:    ret i32 [[TMP14]]
 //
