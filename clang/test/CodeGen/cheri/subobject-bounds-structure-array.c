@@ -216,13 +216,19 @@ int test_vector(v4i8 v4, ext_vector_size_int32_8 v8) {
 // CHECK-SAME: (i64 noundef signext [[INDEX:%.*]], i32 inreg noundef [[V4_COERCE:%.*]], i128 [[TMP0:%.*]], i64 inreg noundef [[V8_COERCE0:%.*]], i64 inreg noundef [[V8_COERCE1:%.*]], i64 inreg noundef [[V8_COERCE2:%.*]], i64 inreg noundef [[V8_COERCE3:%.*]]) local_unnamed_addr addrspace(200) #[[ATTR8]] {
 // CHECK-NEXT:  entry:
 // CHECK-NEXT:    [[TMP1:%.*]] = bitcast i32 [[V4_COERCE]] to <4 x i8>
-// CHECK-NEXT:    [[V8_SROA_0_0_VEC_INSERT:%.*]] = insertelement <4 x i64> undef, i64 [[V8_COERCE0]], i64 0
-// CHECK-NEXT:    [[V8_SROA_0_8_VEC_INSERT:%.*]] = insertelement <4 x i64> [[V8_SROA_0_0_VEC_INSERT]], i64 [[V8_COERCE1]], i64 1
-// CHECK-NEXT:    [[V8_SROA_0_16_VEC_INSERT:%.*]] = insertelement <4 x i64> [[V8_SROA_0_8_VEC_INSERT]], i64 [[V8_COERCE2]], i64 2
-// CHECK-NEXT:    [[V8_SROA_0_24_VEC_INSERT:%.*]] = insertelement <4 x i64> [[V8_SROA_0_16_VEC_INSERT]], i64 [[V8_COERCE3]], i64 3
-// CHECK-NEXT:    [[TMP2:%.*]] = bitcast <4 x i64> [[V8_SROA_0_24_VEC_INSERT]] to <8 x i32>
+// CHECK-NEXT:    [[TMP2:%.*]] = bitcast i64 [[V8_COERCE0]] to <2 x i32>
+// CHECK-NEXT:    [[V8_0_VECBLEND:%.*]] = shufflevector <2 x i32> [[TMP2]], <2 x i32> poison, <8 x i32> <i32 0, i32 1, i32 undef, i32 undef, i32 undef, i32 undef, i32 undef, i32 undef>
+// CHECK-NEXT:    [[TMP3:%.*]] = bitcast i64 [[V8_COERCE1]] to <2 x i32>
+// CHECK-NEXT:    [[V8_8_VEC_EXPAND:%.*]] = shufflevector <2 x i32> [[TMP3]], <2 x i32> poison, <8 x i32> <i32 undef, i32 undef, i32 0, i32 1, i32 undef, i32 undef, i32 undef, i32 undef>
+// CHECK-NEXT:    [[V8_8_VECBLEND:%.*]] = shufflevector <8 x i32> [[V8_0_VECBLEND]], <8 x i32> [[V8_8_VEC_EXPAND]], <8 x i32> <i32 0, i32 1, i32 10, i32 11, i32 undef, i32 undef, i32 undef, i32 undef>
+// CHECK-NEXT:    [[TMP4:%.*]] = bitcast i64 [[V8_COERCE2]] to <2 x i32>
+// CHECK-NEXT:    [[V8_16_VEC_EXPAND:%.*]] = shufflevector <2 x i32> [[TMP4]], <2 x i32> poison, <8 x i32> <i32 undef, i32 undef, i32 undef, i32 undef, i32 0, i32 1, i32 undef, i32 undef>
+// CHECK-NEXT:    [[V8_16_VECBLEND:%.*]] = shufflevector <8 x i32> [[V8_8_VECBLEND]], <8 x i32> [[V8_16_VEC_EXPAND]], <8 x i32> <i32 0, i32 1, i32 2, i32 3, i32 12, i32 13, i32 undef, i32 undef>
+// CHECK-NEXT:    [[TMP5:%.*]] = bitcast i64 [[V8_COERCE3]] to <2 x i32>
+// CHECK-NEXT:    [[V8_24_VEC_EXPAND:%.*]] = shufflevector <2 x i32> [[TMP5]], <2 x i32> poison, <8 x i32> <i32 undef, i32 undef, i32 undef, i32 undef, i32 undef, i32 undef, i32 0, i32 1>
+// CHECK-NEXT:    [[V8_24_VECBLEND:%.*]] = shufflevector <8 x i32> [[V8_16_VECBLEND]], <8 x i32> [[V8_24_VEC_EXPAND]], <8 x i32> <i32 0, i32 1, i32 2, i32 3, i32 4, i32 5, i32 14, i32 15>
 // CHECK-NEXT:    [[VECEXT:%.*]] = extractelement <4 x i8> [[TMP1]], i64 [[INDEX]]
-// CHECK-NEXT:    [[VECEXT3:%.*]] = extractelement <8 x i32> [[TMP2]], i64 [[INDEX]]
+// CHECK-NEXT:    [[VECEXT3:%.*]] = extractelement <8 x i32> [[V8_24_VECBLEND]], i64 [[INDEX]]
 // CHECK-NEXT:    [[CONV:%.*]] = sext i8 [[VECEXT]] to i32
 // CHECK-NEXT:    [[ADD:%.*]] = add nsw i32 [[VECEXT3]], [[CONV]]
 // CHECK-NEXT:    ret i32 [[ADD]]
