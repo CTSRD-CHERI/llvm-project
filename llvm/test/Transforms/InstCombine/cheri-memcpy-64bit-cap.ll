@@ -6,8 +6,8 @@ target datalayout = "e-m:e-pf200:64:64:64:32-p:32:32-i64:64-n32-S128-A200-P200-G
 
 define ptr addrspace(200) @test_memcpy_cap(ptr addrspace(200) %d, ptr addrspace(200) %s) {
 ; CHECK-LABEL: @test_memcpy_cap(
-; CHECK-NEXT:    [[TMP1:%.*]] = load i64, ptr addrspace(200) [[S:%.*]], align 8
-; CHECK-NEXT:    store i64 [[TMP1]], ptr addrspace(200) [[D:%.*]], align 8
+; CHECK-NEXT:    [[TMP1:%.*]] = load ptr addrspace(200), ptr addrspace(200) [[S:%.*]], align 8
+; CHECK-NEXT:    store ptr addrspace(200) [[TMP1]], ptr addrspace(200) [[D:%.*]], align 8
 ; CHECK-NEXT:    ret ptr addrspace(200) [[D]]
 ;
   call void @llvm.memcpy.p200.p200.i32(ptr addrspace(200) align 8 %d, ptr addrspace(200) align 8 %s, i32 8, i1 false) must_preserve_cheri_tags
@@ -18,8 +18,7 @@ define ptr addrspace(200) @test_memcpy_cap(ptr addrspace(200) %d, ptr addrspace(
 
 define ptr addrspace(200) @test_memcpy8_align_unknown(ptr addrspace(200) %d, ptr addrspace(200) %s) {
 ; CHECK-LABEL: @test_memcpy8_align_unknown(
-; CHECK-NEXT:    [[TMP1:%.*]] = load i64, ptr addrspace(200) [[S:%.*]], align 1
-; CHECK-NEXT:    store i64 [[TMP1]], ptr addrspace(200) [[D:%.*]], align 1
+; CHECK-NEXT:    call void @llvm.memcpy.p200.p200.i32(ptr addrspace(200) noundef nonnull align 1 dereferenceable(8) [[D:%.*]], ptr addrspace(200) noundef nonnull align 1 dereferenceable(8) [[S:%.*]], i32 8, i1 false) #[[ATTR1:[0-9]+]]
 ; CHECK-NEXT:    ret ptr addrspace(200) [[D]]
 ;
   call void @llvm.memcpy.p200.p200.i32(ptr addrspace(200) %d, ptr addrspace(200) %s, i32 8, i1 false) must_preserve_cheri_tags
@@ -30,8 +29,7 @@ define ptr addrspace(200) @test_memcpy8_align_unknown(ptr addrspace(200) %d, ptr
 
 define ptr addrspace(200) @test_memcpy8_align_4(ptr addrspace(200) %d, ptr addrspace(200) %s) {
 ; CHECK-LABEL: @test_memcpy8_align_4(
-; CHECK-NEXT:    [[TMP1:%.*]] = load i64, ptr addrspace(200) [[S:%.*]], align 4
-; CHECK-NEXT:    store i64 [[TMP1]], ptr addrspace(200) [[D:%.*]], align 4
+; CHECK-NEXT:    call void @llvm.memcpy.p200.p200.i32(ptr addrspace(200) noundef nonnull align 4 dereferenceable(8) [[D:%.*]], ptr addrspace(200) noundef nonnull align 4 dereferenceable(8) [[S:%.*]], i32 8, i1 false) #[[ATTR1]]
 ; CHECK-NEXT:    ret ptr addrspace(200) [[D]]
 ;
   call void @llvm.memcpy.p200.p200.i32(ptr addrspace(200) align 4 %d, ptr addrspace(200) align 4 %s, i32 8, i1 false) must_preserve_cheri_tags
