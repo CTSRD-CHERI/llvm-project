@@ -53,7 +53,7 @@ Defined *SymbolTable::ensureSymbolWillBeInDynsym(Symbol* original) {
   }
   StringRef newName = saver().save(uniqueName);
   Symbol* newSym = symtab->insert(newName);
-  newSym->resolve(*original);
+  newSym->resolve(cast<Defined>(*original));
   newSym->setName(newName); // resolve() changes the name to original->name
   newSym->binding = llvm::ELF::STB_GLOBAL;
   newSym->setVisibility(llvm::ELF::STV_HIDDEN);
