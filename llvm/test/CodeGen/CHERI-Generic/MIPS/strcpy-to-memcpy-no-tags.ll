@@ -133,22 +133,21 @@ entry:
 define void @test_stpncpy_to_memcpy(i8 addrspace(200)* align 8 %dst) addrspace(200) nounwind {
 ; CHECK-ASM-LABEL: test_stpncpy_to_memcpy:
 ; CHECK-ASM:       # %bb.0: # %entry
-; CHECK-ASM-NEXT:    cincoffset $c11, $c11, -16
-; CHECK-ASM-NEXT:    csc $c17, $zero, 0($c11) # 16-byte Folded Spill
 ; CHECK-ASM-NEXT:    lui $1, %pcrel_hi(_CHERI_CAPABILITY_TABLE_-8)
 ; CHECK-ASM-NEXT:    daddiu $1, $1, %pcrel_lo(_CHERI_CAPABILITY_TABLE_-4)
 ; CHECK-ASM-NEXT:    cgetpccincoffset $c1, $1
-; CHECK-ASM-NEXT:    clcbi $c4, %captab20(.Lstr)($c1)
-; CHECK-ASM-NEXT:    clcbi $c12, %capcall20(stpncpy)($c1)
-; CHECK-ASM-NEXT:    cjalr $c12, $c17
-; CHECK-ASM-NEXT:    daddiu $4, $zero, 17
-; CHECK-ASM-NEXT:    clc $c17, $zero, 0($c11) # 16-byte Folded Reload
+; CHECK-ASM-NEXT:    clcbi $c1, %captab20(.Lstr)($c1)
+; CHECK-ASM-NEXT:    cld $1, $zero, 0($c1)
+; CHECK-ASM-NEXT:    clb $2, $zero, 16($c1)
+; CHECK-ASM-NEXT:    cld $3, $zero, 8($c1)
+; CHECK-ASM-NEXT:    csd $1, $zero, 0($c3)
+; CHECK-ASM-NEXT:    csb $2, $zero, 16($c3)
 ; CHECK-ASM-NEXT:    cjr $c17
-; CHECK-ASM-NEXT:    cincoffset $c11, $c11, 16
+; CHECK-ASM-NEXT:    csd $3, $zero, 8($c3)
 ; CHECK-IR-LABEL: define {{[^@]+}}@test_stpncpy_to_memcpy
 ; CHECK-IR-SAME: (i8 addrspace(200)* align 8 [[DST:%.*]]) addrspace(200) #[[ATTR1]] {
 ; CHECK-IR-NEXT:  entry:
-; CHECK-IR-NEXT:    [[CALL:%.*]] = call i8 addrspace(200)* @stpncpy(i8 addrspace(200)* [[DST]], i8 addrspace(200)* getelementptr inbounds ([17 x i8], [17 x i8] addrspace(200)* @str, i64 0, i64 0), i64 17) #[[ATTR1]]
+; CHECK-IR-NEXT:    call void @llvm.memcpy.p200i8.p200i8.i64(i8 addrspace(200)* noundef nonnull align 8 dereferenceable(17) [[DST]], i8 addrspace(200)* noundef nonnull align 8 dereferenceable(17) getelementptr inbounds ([17 x i8], [17 x i8] addrspace(200)* @str, i64 0, i64 0), i64 17, i1 false) #[[ATTR4]]
 ; CHECK-IR-NEXT:    ret void
 ;
 entry:
