@@ -1339,7 +1339,7 @@ DynamicSection<ELFT>::computeContents() {
     addInt(config->enableNewDtags ? DT_RUNPATH : DT_RPATH,
            part.dynStrTab->addString(config->rpath));
 
-  for (SharedFile *file : ctx->sharedFiles)
+  for (SharedFile *file : ctx.sharedFiles)
     if (file->isNeeded)
       addInt(DT_NEEDED, part.dynStrTab->addString(file->soName));
 
@@ -1508,7 +1508,7 @@ DynamicSection<ELFT>::computeContents() {
   if (part.verNeed && part.verNeed->isNeeded()) {
     addInSec(DT_VERNEED, *part.verNeed);
     unsigned needNum = 0;
-    for (SharedFile *f : ctx->sharedFiles)
+    for (SharedFile *f : ctx.sharedFiles)
       if (!f->vernauxs.empty())
         ++needNum;
     addInt(DT_VERNEEDNUM, needNum);
@@ -1549,7 +1549,7 @@ DynamicSection<ELFT>::computeContents() {
       addInt(DT_MIPS_CHERI_FLAGS, targetCheriFlags);
     }
     // CHeck that we didn't link incompatible libraries:
-    for (InputFile *file : ctx->sharedFiles) {
+    for (InputFile *file : ctx.sharedFiles) {
       auto *f = cast<SharedFile>(file);
       // Add an e_flags check here for CHERI-MIPS to avoid linking between
       // incompatible libraries:
@@ -3235,7 +3235,7 @@ VersionNeedSection<ELFT>::VersionNeedSection()
                        ".gnu.version_r") {}
 
 template <class ELFT> void VersionNeedSection<ELFT>::finalizeContents() {
-  for (SharedFile *f : ctx->sharedFiles) {
+  for (SharedFile *f : ctx.sharedFiles) {
     if (f->vernauxs.empty())
       continue;
     verneeds.emplace_back();
@@ -3403,7 +3403,7 @@ template <class ELFT> void elf::splitSections() {
   llvm::TimeTraceScope timeScope("Split sections");
   // splitIntoPieces needs to be called on each MergeInputSection
   // before calling finalizeContents().
-  parallelForEach(ctx->objectFiles, [](ELFFileBase *file) {
+  parallelForEach(ctx.objectFiles, [](ELFFileBase *file) {
     for (InputSectionBase *sec : file->getSections()) {
       if (!sec)
         continue;
@@ -3801,9 +3801,9 @@ static uint8_t getAbiVersion() {
     return 0;
   }
 
-  if (config->emachine == EM_AMDGPU && !ctx->objectFiles.empty()) {
-    uint8_t ver = ctx->objectFiles[0]->abiVersion;
-    for (InputFile *file : makeArrayRef(ctx->objectFiles).slice(1))
+  if (config->emachine == EM_AMDGPU && !ctx.objectFiles.empty()) {
+    uint8_t ver = ctx.objectFiles[0]->abiVersion;
+    for (InputFile *file : makeArrayRef(ctx.objectFiles).slice(1))
       if (file->abiVersion != ver)
         error("incompatible ABI version: " + toString(file));
     return ver;
