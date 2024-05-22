@@ -34,10 +34,10 @@ define void @g(i32 %x, i32 %y) addrspace(200) nounwind {
 ; ASM-NEXT:    cret
 ; CHECK-LABEL: define {{[^@]+}}@g
 ; CHECK-SAME: (i32 [[X:%.*]], i32 [[Y:%.*]]) addrspace(200) #[[ATTR0:[0-9]+]] {
-; CHECK-NEXT:    [[TMP3:%.*]] = call i32 @llvm.cheri.cap.offset.get.i32(i8 addrspace(200)* bitcast (i32 addrspace(200)* @d to i8 addrspace(200)*))
+; CHECK-NEXT:    [[TMP3:%.*]] = call i32 @llvm.cheri.cap.offset.get.i32(i8 addrspace(200)* nonnull bitcast (i32 addrspace(200)* @d to i8 addrspace(200)*))
 ; CHECK-NEXT:    [[ADD:%.*]] = add i32 [[TMP3]], [[X]]
 ; CHECK-NEXT:    [[ADD1:%.*]] = add i32 [[ADD]], [[Y]]
-; CHECK-NEXT:    [[TMP11:%.*]] = call i8 addrspace(200)* @llvm.cheri.cap.offset.set.i32(i8 addrspace(200)* bitcast (i32 addrspace(200)* @d to i8 addrspace(200)*), i32 [[ADD1]])
+; CHECK-NEXT:    [[TMP11:%.*]] = call i8 addrspace(200)* @llvm.cheri.cap.offset.set.i32(i8 addrspace(200)* nonnull bitcast (i32 addrspace(200)* @d to i8 addrspace(200)*), i32 [[ADD1]])
 ; CHECK-NEXT:    store i8 addrspace(200)* [[TMP11]], i8 addrspace(200)* addrspace(200)* @e, align 32
 ; CHECK-NEXT:    ret void
 ;

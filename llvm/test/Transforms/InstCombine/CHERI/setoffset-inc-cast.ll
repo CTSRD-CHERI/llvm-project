@@ -20,7 +20,7 @@ define void @no_fold_nonconstant_offset_gep_zero(i8 addrspace(200)* %arg, i64 %o
 ; CHECK-LABEL: define {{[^@]+}}@no_fold_nonconstant_offset_gep_zero
 ; CHECK-SAME: (i8 addrspace(200)* [[ARG:%.*]], i64 [[OFFSET:%.*]]) addrspace(200)
 ; CHECK-NEXT:  bb:
-; CHECK-NEXT:    [[TMP:%.*]] = call i8 addrspace(200)* @llvm.cheri.cap.offset.set.i64(i8 addrspace(200)* bitcast (%struct.pluto addrspace(200)* @foo to i8 addrspace(200)*), i64 [[OFFSET]])
+; CHECK-NEXT:    [[TMP:%.*]] = call i8 addrspace(200)* @llvm.cheri.cap.offset.set.i64(i8 addrspace(200)* nonnull bitcast (%struct.pluto addrspace(200)* @foo to i8 addrspace(200)*), i64 [[OFFSET]])
 ; CHECK-NEXT:    [[TMP5:%.*]] = bitcast i8 addrspace(200)* [[TMP]] to i8 addrspace(200)* addrspace(200)*
 ; CHECK-NEXT:    store i8 addrspace(200)* [[ARG]], i8 addrspace(200)* addrspace(200)* [[TMP5]], align 16
 ; CHECK-NEXT:    ret void
@@ -37,7 +37,7 @@ define void @no_fold_nonconstant_offset_gep_one(i8 addrspace(200)* %arg, i64 %of
 ; CHECK-LABEL: define {{[^@]+}}@no_fold_nonconstant_offset_gep_one
 ; CHECK-SAME: (i8 addrspace(200)* [[ARG:%.*]], i64 [[OFFSET:%.*]]) addrspace(200)
 ; CHECK-NEXT:  bb:
-; CHECK-NEXT:    [[TMP:%.*]] = call i8 addrspace(200)* @llvm.cheri.cap.offset.set.i64(i8 addrspace(200)* bitcast (%struct.pluto addrspace(200)* @foo to i8 addrspace(200)*), i64 [[OFFSET]])
+; CHECK-NEXT:    [[TMP:%.*]] = call i8 addrspace(200)* @llvm.cheri.cap.offset.set.i64(i8 addrspace(200)* nonnull bitcast (%struct.pluto addrspace(200)* @foo to i8 addrspace(200)*), i64 [[OFFSET]])
 ; CHECK-NEXT:    [[TMP5:%.*]] = getelementptr inbounds i8, i8 addrspace(200)* [[TMP]], i64 16
 ; CHECK-NEXT:    [[TMP0:%.*]] = bitcast i8 addrspace(200)* [[TMP5]] to i8 addrspace(200)* addrspace(200)*
 ; CHECK-NEXT:    store i8 addrspace(200)* [[ARG]], i8 addrspace(200)* addrspace(200)* [[TMP0]], align 16
@@ -56,7 +56,7 @@ define void @no_fold_zero_offset_gep_zero(i8 addrspace(200)* %arg) addrspace(200
 ; CHECK-LABEL: define {{[^@]+}}@no_fold_zero_offset_gep_zero
 ; CHECK-SAME: (i8 addrspace(200)* [[ARG:%.*]]) addrspace(200)
 ; CHECK-NEXT:  bb:
-; CHECK-NEXT:    [[TMP:%.*]] = call i8 addrspace(200)* @llvm.cheri.cap.offset.set.i64(i8 addrspace(200)* bitcast (%struct.pluto addrspace(200)* @foo to i8 addrspace(200)*), i64 0)
+; CHECK-NEXT:    [[TMP:%.*]] = call i8 addrspace(200)* @llvm.cheri.cap.offset.set.i64(i8 addrspace(200)* nonnull bitcast (%struct.pluto addrspace(200)* @foo to i8 addrspace(200)*), i64 0)
 ; CHECK-NEXT:    [[TMP5:%.*]] = bitcast i8 addrspace(200)* [[TMP]] to i8 addrspace(200)* addrspace(200)*
 ; CHECK-NEXT:    store i8 addrspace(200)* [[ARG]], i8 addrspace(200)* addrspace(200)* [[TMP5]], align 16
 ; CHECK-NEXT:    ret void
@@ -73,7 +73,7 @@ define void @no_fold_zero_offset_gep_one(i8 addrspace(200)* %arg) addrspace(200)
 ; CHECK-LABEL: define {{[^@]+}}@no_fold_zero_offset_gep_one
 ; CHECK-SAME: (i8 addrspace(200)* [[ARG:%.*]]) addrspace(200)
 ; CHECK-NEXT:  bb:
-; CHECK-NEXT:    [[TMP:%.*]] = call i8 addrspace(200)* @llvm.cheri.cap.offset.set.i64(i8 addrspace(200)* bitcast (%struct.pluto addrspace(200)* @foo to i8 addrspace(200)*), i64 0)
+; CHECK-NEXT:    [[TMP:%.*]] = call i8 addrspace(200)* @llvm.cheri.cap.offset.set.i64(i8 addrspace(200)* nonnull bitcast (%struct.pluto addrspace(200)* @foo to i8 addrspace(200)*), i64 0)
 ; CHECK-NEXT:    [[TMP5:%.*]] = getelementptr inbounds i8, i8 addrspace(200)* [[TMP]], i64 16
 ; CHECK-NEXT:    [[TMP0:%.*]] = bitcast i8 addrspace(200)* [[TMP5]] to i8 addrspace(200)* addrspace(200)*
 ; CHECK-NEXT:    store i8 addrspace(200)* [[ARG]], i8 addrspace(200)* addrspace(200)* [[TMP0]], align 16
@@ -92,7 +92,7 @@ define void @fold_nonzero_offset_gep_zero(i8 addrspace(200)* %arg) addrspace(200
 ; CHECK-LABEL: define {{[^@]+}}@fold_nonzero_offset_gep_zero
 ; CHECK-SAME: (i8 addrspace(200)* [[ARG:%.*]]) addrspace(200)
 ; CHECK-NEXT:  bb:
-; CHECK-NEXT:    [[TMP:%.*]] = call i8 addrspace(200)* @llvm.cheri.cap.offset.set.i64(i8 addrspace(200)* bitcast (%struct.pluto addrspace(200)* @foo to i8 addrspace(200)*), i64 16)
+; CHECK-NEXT:    [[TMP:%.*]] = call i8 addrspace(200)* @llvm.cheri.cap.offset.set.i64(i8 addrspace(200)* nonnull bitcast (%struct.pluto addrspace(200)* @foo to i8 addrspace(200)*), i64 16)
 ; CHECK-NEXT:    [[TMP5:%.*]] = bitcast i8 addrspace(200)* [[TMP]] to i8 addrspace(200)* addrspace(200)*
 ; CHECK-NEXT:    store i8 addrspace(200)* [[ARG]], i8 addrspace(200)* addrspace(200)* [[TMP5]], align 16
 ; CHECK-NEXT:    ret void
@@ -109,7 +109,7 @@ define void @fold_nonzero_offset_gep_one(i8 addrspace(200)* %arg) addrspace(200)
 ; CHECK-LABEL: define {{[^@]+}}@fold_nonzero_offset_gep_one
 ; CHECK-SAME: (i8 addrspace(200)* [[ARG:%.*]]) addrspace(200)
 ; CHECK-NEXT:  bb:
-; CHECK-NEXT:    [[TMP:%.*]] = call i8 addrspace(200)* @llvm.cheri.cap.offset.set.i64(i8 addrspace(200)* bitcast (%struct.pluto addrspace(200)* @foo to i8 addrspace(200)*), i64 32)
+; CHECK-NEXT:    [[TMP:%.*]] = call i8 addrspace(200)* @llvm.cheri.cap.offset.set.i64(i8 addrspace(200)* nonnull bitcast (%struct.pluto addrspace(200)* @foo to i8 addrspace(200)*), i64 32)
 ; CHECK-NEXT:    [[TMP5:%.*]] = bitcast i8 addrspace(200)* [[TMP]] to i8 addrspace(200)* addrspace(200)*
 ; CHECK-NEXT:    store i8 addrspace(200)* [[ARG]], i8 addrspace(200)* addrspace(200)* [[TMP5]], align 16
 ; CHECK-NEXT:    ret void

@@ -124,7 +124,7 @@ define void @test_strncpy_to_memcpy(i8 addrspace(200)* align 4 %dst) addrspace(2
 ; CHECK-IR-LABEL: define {{[^@]+}}@test_strncpy_to_memcpy
 ; CHECK-IR-SAME: (i8 addrspace(200)* align 4 [[DST:%.*]]) addrspace(200) #[[ATTR1]] {
 ; CHECK-IR-NEXT:  entry:
-; CHECK-IR-NEXT:    [[CALL:%.*]] = call i8 addrspace(200)* @strncpy(i8 addrspace(200)* [[DST]], i8 addrspace(200)* getelementptr inbounds ([17 x i8], [17 x i8] addrspace(200)* @str, i32 0, i32 0), i64 17) #[[ATTR1]]
+; CHECK-IR-NEXT:    [[CALL:%.*]] = call i8 addrspace(200)* @strncpy(i8 addrspace(200)* [[DST]], i8 addrspace(200)* nonnull getelementptr inbounds ([17 x i8], [17 x i8] addrspace(200)* @str, i32 0, i32 0), i64 17) #[[ATTR1]]
 ; CHECK-IR-NEXT:    ret void
 ;
 entry:
@@ -151,7 +151,7 @@ define void @test_stpncpy_to_memcpy(i8 addrspace(200)* align 4 %dst) addrspace(2
 ; CHECK-IR-LABEL: define {{[^@]+}}@test_stpncpy_to_memcpy
 ; CHECK-IR-SAME: (i8 addrspace(200)* align 4 [[DST:%.*]]) addrspace(200) #[[ATTR1]] {
 ; CHECK-IR-NEXT:  entry:
-; CHECK-IR-NEXT:    [[CALL:%.*]] = call i8 addrspace(200)* @stpncpy(i8 addrspace(200)* [[DST]], i8 addrspace(200)* getelementptr inbounds ([17 x i8], [17 x i8] addrspace(200)* @str, i32 0, i32 0), i64 17) #[[ATTR1]]
+; CHECK-IR-NEXT:    [[CALL:%.*]] = call i8 addrspace(200)* @stpncpy(i8 addrspace(200)* [[DST]], i8 addrspace(200)* nonnull getelementptr inbounds ([17 x i8], [17 x i8] addrspace(200)* @str, i32 0, i32 0), i64 17) #[[ATTR1]]
 ; CHECK-IR-NEXT:    ret void
 ;
 entry:
