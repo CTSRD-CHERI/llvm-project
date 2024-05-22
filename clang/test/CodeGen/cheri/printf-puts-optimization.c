@@ -6,6 +6,6 @@ extern int printf(const char*, ...);
 
 void foo(void) {
   printf("Hello, world!\n");
-  // CHECK: tail call i32 @puts(ptr addrspace(200) nonnull @str)
+  // CHECK: tail call i32 @puts(ptr addrspace(200) nonnull dereferenceable(1) @str)
 }
 
