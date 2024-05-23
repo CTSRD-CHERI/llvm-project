@@ -21,6 +21,7 @@
 #include "clang/StaticAnalyzer/Core/PathSensitive/CallEvent.h"
 #include "clang/StaticAnalyzer/Core/PathSensitive/CheckerContext.h"
 #include "clang/StaticAnalyzer/Core/PathSensitive/ProgramStateTrait.h"
+#include <clang/StaticAnalyzer/Core/PathSensitive/CallDescription.h>
 
 
 using namespace clang;
@@ -48,6 +49,11 @@ class AllocationChecker : public Checker<check::PostStmt<CastExpr>,
   BugType BT_Default{this, "Allocation partitioning", "CHERI portability"};
   BugType BT_KnownReg{this, "Heap or static allocation partitioning",
                       "CHERI portability"};
+
+  const CallDescriptionSet IgnoreFnSet {
+      {"free", 1},
+  };
+
 
   class AllocPartitionBugVisitor : public BugReporterVisitor {
   public:
@@ -288,6 +294,9 @@ void AllocationChecker::checkPostStmt(const CastExpr *CE,
 
 void AllocationChecker::checkPreCall(const CallEvent &Call,
                                      CheckerContext &C) const {
+  if (IgnoreFnSet.contains(Call))
+    return;
+  
   ProgramStateRef State = C.getState();
   ExplodedNode *N = nullptr;
   bool Updated  = false;
