@@ -1,5 +1,5 @@
 // RUN: %cheri_purecap_cc1 -analyze -verify %s \
-// RUN:   -analyzer-checker=core,unix,alpha.cheri.Allocation
+// RUN:   -analyzer-checker=core,unix,alpha.cheri.Allocation,cheri.CheriAPIModelling
 
 typedef __typeof__(sizeof(int)) size_t;
 extern void * malloc(size_t);
@@ -79,4 +79,12 @@ void test_6(int n1, int n2) {
   struct S1 **p1 = malloc(sizeof(struct S1*)*n1 + sizeof(struct S2*)*n2);
   struct S2 **p2 = (struct S2 **)(p1+n1);
   foo(p2); // no warn
+}
+
+void *cheri_bounds_set(void *c, size_t x);
+void test_7(int n1, int n2) {
+  struct S1 *p1 = malloc(sizeof(struct S1)*n1 + sizeof(struct S2)*n2);
+  struct S2 *p2 = (struct S2 *)(p1+n1);
+  struct S2 *p3 = cheri_bounds_set(p2, sizeof(struct S2)*n2);
+  foo(p3); // no-warn
 }
