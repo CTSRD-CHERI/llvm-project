@@ -12,8 +12,8 @@ define i32 @get_ith_word(i32 signext %i, ...) nounwind {
 ; CHECK-NEXT:    clc ca1, 0(csp)
 ; CHECK-NEXT:  .LBB0_1: # %while.cond
 ; CHECK-NEXT:    # =>This Inner Loop Header: Depth=1
+; CHECK-NEXT:    mv a3, a0
 ; CHECK-NEXT:    cmove ca2, ca1
-; CHECK-NEXT:    sext.w a3, a0
 ; CHECK-NEXT:    addiw a0, a0, -1
 ; CHECK-NEXT:    cincoffset ca1, ca1, 4
 ; CHECK-NEXT:    bgtz a3, .LBB0_1
@@ -58,7 +58,7 @@ define i8 addrspace(200)* @get_ith_cap(i32 signext %i, ...) nounwind {
 ; CHECK-NEXT:    clc ca1, 0(csp)
 ; CHECK-NEXT:  .LBB1_1: # %while.cond
 ; CHECK-NEXT:    # =>This Inner Loop Header: Depth=1
-; CHECK-NEXT:    sext.w a3, a0
+; CHECK-NEXT:    mv a3, a0
 ; CHECK-NEXT:    addiw a0, a0, -1
 ; CHECK-NEXT:    addi a2, a1, 15
 ; CHECK-NEXT:    andi a2, a2, -16
