@@ -44,7 +44,7 @@ class AllocationChecker : public Checker<check::PostStmt<CastExpr>,
                                          check::Bind,
                                          check::EndFunction> {
   BugType BT_Default{this, "Allocation partitioning", "CHERI portability"};
-  BugType BT_KnownReg{this, "Heap or static allocation partitioning",
+  BugType BT_UnknownReg{this, "Unknown allocation partitioning",
                       "CHERI portability"};
 
   const CallDescriptionSet IgnoreFnSet {
@@ -87,6 +87,8 @@ public:
   void checkBind(SVal L, SVal V, const Stmt *S, CheckerContext &C) const;
   void checkEndFunction(const ReturnStmt *RS, CheckerContext &Ctx) const;
 
+  bool ReportForUnknownAllocations;
+
 private:
   ExplodedNode *emitAllocationPartitionWarning(CheckerContext &C,
                                                const MemRegion *MR,
@@ -118,7 +120,13 @@ std::pair<const MemRegion *, bool> getAllocationStart(const ASTContext &ASTCtx,
   return std::make_pair(R, ZeroShift);
 }
 
-bool isAllocation(const MemRegion *R) {
+bool isAllocation(const MemRegion *R, const AllocationChecker* Chk) {
+  if (!Chk->ReportForUnknownAllocations) {
+    const MemSpaceRegion *MemSpace = R->getMemorySpace();
+    if (!isa<HeapSpaceRegion, GlobalsSpaceRegion, StackSpaceRegion>(MemSpace))
+      return false;
+  }
+
   if (R->getAs<SymbolicRegion>())
     return true;
   if (const TypedValueRegion *TR = R->getAs<TypedValueRegion>()) {
@@ -210,12 +218,19 @@ ExplodedNode *AllocationChecker::emitAllocationPartitionWarning(
     CheckerContext &C, const MemRegion *MR, SourceRange SR,
     StringRef Msg = "") const {
   if (ExplodedNode *ErrNode = C.generateNonFatalErrorNode()) {
-    auto R = std::make_unique<PathSensitiveBugReport>(BT_Default, Msg, ErrNode);
-    R->addRange(SR);
-    R->markInteresting(MR);
 
     const MemRegion *PrevAlloc =
         getAllocationStart(C.getASTContext(), MR, C.getState()).first;
+    const MemSpaceRegion *MS =
+        PrevAlloc ? PrevAlloc->getMemorySpace() : MR->getMemorySpace();
+    const BugType &BT =
+        isa<HeapSpaceRegion, GlobalsSpaceRegion, StackSpaceRegion>(MS)
+            ? BT_Default
+            : BT_UnknownReg;
+    auto R = std::make_unique<PathSensitiveBugReport>(BT, Msg, ErrNode);
+    R->addRange(SR);
+    R->markInteresting(MR);
+
     R->addVisitor(std::make_unique<AllocPartitionBugVisitor>(
         PrevAlloc == MR ? nullptr : PrevAlloc, MR));
 
@@ -250,13 +265,9 @@ void AllocationChecker::checkPostStmt(const CastExpr *CE,
       getAllocationStart(ASTCtx, MR, State);
 
   const MemRegion *SR = StartPair.first;
-  if (!isAllocation(SR))
+  if (!isAllocation(SR, this))
     return;
   bool ZeroShift = StartPair.second;
-
-  const MemSpaceRegion *MemSpace = SR->getMemorySpace();
-  if (!isa<HeapSpaceRegion, GlobalsSpaceRegion, StackSpaceRegion>(MemSpace))
-    return;
 
   SVal DstVal = C.getSVal(CE);
   const MemRegion *DMR = DstVal.getAsRegion();
@@ -286,10 +297,14 @@ void AllocationChecker::checkPostStmt(const CastExpr *CE,
                             ->getUnqualifiedDesugaredType();
       const Type *Ty2 = DstTy->getPointeeType()->getUnqualifiedDesugaredType();
       if (!relatedTypes(ASTCtx, Ty1, Ty2)) {
-        State = State->add<SuballocationSet>(SR);
-        if (DMR)
+        if (!State->contains<SuballocationSet>(SR)) {
+          State = State->add<SuballocationSet>(SR);
+          Updated = true;
+        }
+        if (DMR && !State->contains<SuballocationSet>(DMR)) {
           State = State->add<SuballocationSet>(DMR);
-        Updated = true;
+          Updated = true;
+        }
       } // else OK
     } // else ??? (ignore for now)
   } else {
@@ -446,7 +461,10 @@ PathDiagnosticPieceRef AllocationChecker::AllocPartitionBugVisitor::VisitNode(
 //===----------------------------------------------------------------------===//
 
 void ento::registerAllocationChecker(CheckerManager &Mgr) {
-  Mgr.registerChecker<AllocationChecker>();
+  auto *Checker = Mgr.registerChecker<AllocationChecker>();
+  Checker->ReportForUnknownAllocations =
+      Mgr.getAnalyzerOptions().getCheckerBooleanOption(
+          Checker, "ReportForUnknownAllocations");
 }
 
 bool ento::shouldRegisterAllocationChecker(const CheckerManager &Mgr) {
