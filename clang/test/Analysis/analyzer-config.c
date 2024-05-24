@@ -4,6 +4,7 @@
 // CHECK:      [config]
 // CHECK-NEXT: add-pop-up-notes = true
 // CHECK-NEXT: aggressive-binary-operation-simplification = false
+// CHECK-NEXT: alpha.cheri.Allocation:ReportForUnknownAllocations = true
 // CHECK-NEXT: alpha.clone.CloneChecker:IgnoredFilesPattern = ""
 // CHECK-NEXT: alpha.clone.CloneChecker:MinimumCloneComplexity = 50
 // CHECK-NEXT: alpha.clone.CloneChecker:ReportNormalClones = true

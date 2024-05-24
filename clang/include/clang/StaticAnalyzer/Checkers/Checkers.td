@@ -1772,15 +1772,15 @@ def ProvenanceSourceChecker : Checker<"ProvenanceSource">,
 
 def CapabilityCopyChecker : Checker<"CapabilityCopy">,
   HelpText<"Check tag-stripping memory copy.">,
-    CheckerOptions<[
-      CmdLineOption<Boolean,
-                    "ReportForCharPtr",
-                    "Report tag-stripping copy for char* function parameters. "
-                    "Suppression of warnings for C-strings is used to reduce "
-                    "the number of false alarms, but it's not very reliable.",
-                    "false",
-                    Released>
-    ]>,
+  CheckerOptions<[
+    CmdLineOption<Boolean,
+                  "ReportForCharPtr",
+                  "Report tag-stripping copy for char* function parameters. "
+                  "Suppression of warnings for C-strings is used to reduce "
+                  "the number of false alarms, but it's not very reliable.",
+                  "false",
+                  Released>
+  ]>,
   Documentation<NotDocumented>;
 
 def PointerSizeAssumptionsChecker : Checker<"PointerSizeAssumptions">,
@@ -1797,6 +1797,13 @@ let ParentPackage = CHERIAlpha in {
 
 def AllocationChecker : Checker<"Allocation">,
   HelpText<"Suggest narrowing bounds for escaping suballocation capabilities">,
+  CheckerOptions<[
+    CmdLineOption<Boolean,
+                  "ReportForUnknownAllocations",
+                  "Report for pointers with untracked origin",
+                  "true",
+                  Released>
+  ]>,
   Documentation<NotDocumented>;
 
 } // end alpha.cheri
