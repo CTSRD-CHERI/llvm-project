@@ -21,7 +21,7 @@ int do_append(long c) { // expected-note{{conflicting prototype is here}}
   return store_char();
 }
 
-static int kr();
+static int kr(); // expected-warning {{a function declaration without a prototype is deprecated in all versions of C and is treated as a zero-parameter prototype in C2x, conflicting with a subsequent definition}}
 static int kr(arg) // expected-warning{{a function definition without a prototype is deprecated}}
   int arg;
 {

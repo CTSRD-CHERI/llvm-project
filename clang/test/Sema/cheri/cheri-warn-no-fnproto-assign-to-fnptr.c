@@ -151,7 +151,7 @@ static void test_callback(int arg) {
 }
 
 static void *kr(void *arg);
-static void *kr(arg) void *arg; // default-warning 2{{a function definition without a prototype is deprecated}}
+static void *kr(arg) void *arg; // default-warning {{a function definition without a prototype is deprecated in all versions of C and is not supported in C2x}}
 {
   return arg;
 }
@@ -159,7 +159,7 @@ static void *kr(arg) void *arg; // default-warning 2{{a function definition with
 static void *(*ptr3)(void *) = kr;         // this should not warn!
 static void *(*ptr3_addrof)(void *) = &kr; // this should not warn!
 
-static void *kr2();
+static void *kr2(); // default-warning {{a function declaration without a prototype is deprecated in all versions of C and is treated as a zero-parameter prototype in C2x, conflicting with a subsequent definition}}
 static void *kr2(arg) void *arg;  // default-warning {{a function definition without a prototype is deprecated}}
 {
   return arg;
