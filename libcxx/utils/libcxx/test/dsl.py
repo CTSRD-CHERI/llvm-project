@@ -8,9 +8,9 @@
 
 import os
 import pickle
-import pipes
 import platform
 import re
+import shlex
 import shutil
 import subprocess
 import tempfile
@@ -287,7 +287,7 @@ def hasAnyLocale(config, locales):
       }
     #endif
   """
-    return programSucceeds(config, program, args=[pipes.quote(l) for l in locales])
+    return programSucceeds(config, program, args=[shlex.quote(l) for l in locales])
 
 
 @_memoizeExpensiveOperation(lambda c, flags="": (c.substitutions, c.environment, flags))
