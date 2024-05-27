@@ -9,8 +9,8 @@
 ;   %2 = trunc i64 %1 to i32 ; truncate to drop the high bits
 ; It assumed it could get bits 32-63 by doing a ptrtoint, but on CHERI-MIPS ptrtoint returns bits 65-127
 
-; RUN: opt @PURECAP_HARDFLOAT_ARGS@ -S -memdep -basic-aa -gvn -o - %s | FileCheck %s
-; RUN: opt @PURECAP_HARDFLOAT_ARGS@ -S -memdep -basic-aa -gvn -o - %s | llc @PURECAP_HARDFLOAT_ARGS@ -O0 -o - | FileCheck %s --check-prefix=ASM
+; RUN: opt @PURECAP_HARDFLOAT_ARGS@ -S -aa-pipeline=basic-aa -passes=gvn -o - %s | FileCheck %s
+; RUN: opt @PURECAP_HARDFLOAT_ARGS@ -S -aa-pipeline=basic-aa -passes=gvn -o - %s | llc @PURECAP_HARDFLOAT_ARGS@ -O0 -o - | FileCheck %s --check-prefix=ASM
 
 ; Check in the baseline (broken test now) to show the diff in the fixed commit
 
