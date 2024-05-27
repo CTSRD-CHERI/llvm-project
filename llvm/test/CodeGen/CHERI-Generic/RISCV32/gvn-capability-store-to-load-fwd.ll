@@ -11,8 +11,8 @@
 ;   %2 = trunc i64 %1 to i32 ; truncate to drop the high bits
 ; It assumed it could get bits 32-63 by doing a ptrtoint, but on CHERI-MIPS ptrtoint returns bits 65-127
 
-; RUN: opt -mtriple=riscv32 --relocation-model=pic -target-abi il32pc64f -mattr=+xcheri,+cap-mode,+f -S -memdep -basic-aa -gvn -o - %s | FileCheck %s
-; RUN: opt -mtriple=riscv32 --relocation-model=pic -target-abi il32pc64f -mattr=+xcheri,+cap-mode,+f -S -memdep -basic-aa -gvn -o - %s | llc -mtriple=riscv32 --relocation-model=pic -target-abi il32pc64f -mattr=+xcheri,+cap-mode,+f -O0 -o - | FileCheck %s --check-prefix=ASM
+; RUN: opt -mtriple=riscv32 --relocation-model=pic -target-abi il32pc64f -mattr=+xcheri,+cap-mode,+f -S -aa-pipeline=basic-aa -passes=gvn -o - %s | FileCheck %s
+; RUN: opt -mtriple=riscv32 --relocation-model=pic -target-abi il32pc64f -mattr=+xcheri,+cap-mode,+f -S -aa-pipeline=basic-aa -passes=gvn -o - %s | llc -mtriple=riscv32 --relocation-model=pic -target-abi il32pc64f -mattr=+xcheri,+cap-mode,+f -O0 -o - | FileCheck %s --check-prefix=ASM
 
 ; Check in the baseline (broken test now) to show the diff in the fixed commit
 
