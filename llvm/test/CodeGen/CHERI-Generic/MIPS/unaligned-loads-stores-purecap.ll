@@ -17,12 +17,12 @@ define i64 @load_global_i64_align_1(i64 %y) addrspace(200) nounwind {
 ; CHECK-NEXT:    clbu $1, $zero, 6($c1)
 ; CHECK-NEXT:    clbu $2, $zero, 7($c1)
 ; CHECK-NEXT:    dsll $1, $1, 8
-; CHECK-NEXT:    clbu $3, $zero, 4($c1)
-; CHECK-NEXT:    clbu $4, $zero, 5($c1)
+; CHECK-NEXT:    clbu $3, $zero, 5($c1)
+; CHECK-NEXT:    clbu $4, $zero, 4($c1)
 ; CHECK-NEXT:    or $1, $1, $2
-; CHECK-NEXT:    dsll $2, $3, 8
-; CHECK-NEXT:    or $2, $2, $4
-; CHECK-NEXT:    dsll $2, $2, 16
+; CHECK-NEXT:    dsll $2, $3, 16
+; CHECK-NEXT:    dsll $3, $4, 24
+; CHECK-NEXT:    or $2, $3, $2
 ; CHECK-NEXT:    clbu $3, $zero, 2($c1)
 ; CHECK-NEXT:    or $1, $2, $1
 ; CHECK-NEXT:    clbu $2, $zero, 3($c1)
@@ -30,9 +30,9 @@ define i64 @load_global_i64_align_1(i64 %y) addrspace(200) nounwind {
 ; CHECK-NEXT:    clbu $4, $zero, 0($c1)
 ; CHECK-NEXT:    clbu $5, $zero, 1($c1)
 ; CHECK-NEXT:    or $2, $3, $2
-; CHECK-NEXT:    dsll $3, $4, 8
-; CHECK-NEXT:    or $3, $3, $5
-; CHECK-NEXT:    dsll $3, $3, 16
+; CHECK-NEXT:    dsll $3, $4, 24
+; CHECK-NEXT:    dsll $4, $5, 16
+; CHECK-NEXT:    or $3, $3, $4
 ; CHECK-NEXT:    or $2, $3, $2
 ; CHECK-NEXT:    dsll $2, $2, 32
 ; CHECK-NEXT:    cjr $c17
@@ -54,9 +54,9 @@ define i64 @load_global_i64_align_2(i64 %y) addrspace(200) nounwind {
 ; CHECK-NEXT:    clhu $3, $zero, 0($c1)
 ; CHECK-NEXT:    clhu $4, $zero, 2($c1)
 ; CHECK-NEXT:    or $1, $1, $2
-; CHECK-NEXT:    dsll $2, $3, 16
-; CHECK-NEXT:    or $2, $2, $4
-; CHECK-NEXT:    dsll $2, $2, 32
+; CHECK-NEXT:    dsll $2, $3, 48
+; CHECK-NEXT:    dsll $3, $4, 32
+; CHECK-NEXT:    or $2, $2, $3
 ; CHECK-NEXT:    cjr $c17
 ; CHECK-NEXT:    or $2, $2, $1
   %ret = load i64, i64 addrspace(200)* @a2, align 2

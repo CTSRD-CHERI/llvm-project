@@ -18,28 +18,28 @@ define i64 @load_global_i64_align_1(i64 %y) addrspace(200) nounwind {
 ; CHECK-NEXT:    cincoffset ca2, ca1, 1
 ; CHECK-NEXT:    lbu.cap a2, (ca2)
 ; CHECK-NEXT:    cincoffset ca3, ca1, 2
+; CHECK-NEXT:    lbu.cap a3, (ca3)
 ; CHECK-NEXT:    cincoffset ca4, ca1, 3
 ; CHECK-NEXT:    lbu.cap a4, (ca4)
-; CHECK-NEXT:    lbu.cap a3, (ca3)
 ; CHECK-NEXT:    slli a2, a2, 8
 ; CHECK-NEXT:    or a0, a2, a0
-; CHECK-NEXT:    slli a2, a4, 8
-; CHECK-NEXT:    or a2, a2, a3
-; CHECK-NEXT:    slli a2, a2, 16
+; CHECK-NEXT:    slli a2, a3, 16
+; CHECK-NEXT:    slli a3, a4, 24
+; CHECK-NEXT:    or a2, a3, a2
 ; CHECK-NEXT:    or a0, a2, a0
 ; CHECK-NEXT:    cincoffset ca2, ca1, 4
 ; CHECK-NEXT:    lbu.cap a2, (ca2)
 ; CHECK-NEXT:    cincoffset ca3, ca1, 5
 ; CHECK-NEXT:    lbu.cap a3, (ca3)
 ; CHECK-NEXT:    cincoffset ca4, ca1, 6
+; CHECK-NEXT:    lbu.cap a4, (ca4)
 ; CHECK-NEXT:    cincoffset ca1, ca1, 7
 ; CHECK-NEXT:    lbu.cap a1, (ca1)
-; CHECK-NEXT:    lbu.cap a4, (ca4)
 ; CHECK-NEXT:    slli a3, a3, 8
 ; CHECK-NEXT:    or a2, a3, a2
-; CHECK-NEXT:    slli a1, a1, 8
-; CHECK-NEXT:    or a1, a1, a4
-; CHECK-NEXT:    slli a1, a1, 16
+; CHECK-NEXT:    slli a3, a4, 16
+; CHECK-NEXT:    slli a1, a1, 24
+; CHECK-NEXT:    or a1, a1, a3
 ; CHECK-NEXT:    or a1, a1, a2
 ; CHECK-NEXT:    ret
   %ret = load i64, i64 addrspace(200)* addrspacecast(i64* @a1 to i64 addrspace(200)*), align 1

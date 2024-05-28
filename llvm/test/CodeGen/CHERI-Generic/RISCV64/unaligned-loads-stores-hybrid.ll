@@ -18,28 +18,28 @@ define i64 @load_global_i64_align_1(i64 %y) addrspace(200) nounwind {
 ; CHECK-NEXT:    cincoffset ca2, ca0, 1
 ; CHECK-NEXT:    lbu.cap a2, (ca2)
 ; CHECK-NEXT:    cincoffset ca3, ca0, 2
+; CHECK-NEXT:    lbu.cap a3, (ca3)
 ; CHECK-NEXT:    cincoffset ca4, ca0, 3
 ; CHECK-NEXT:    lbu.cap a4, (ca4)
-; CHECK-NEXT:    lbu.cap a3, (ca3)
 ; CHECK-NEXT:    slli a2, a2, 8
 ; CHECK-NEXT:    or a1, a2, a1
-; CHECK-NEXT:    slli a2, a4, 8
-; CHECK-NEXT:    or a2, a2, a3
-; CHECK-NEXT:    slli a2, a2, 16
+; CHECK-NEXT:    slli a2, a3, 16
+; CHECK-NEXT:    slli a3, a4, 24
+; CHECK-NEXT:    or a2, a3, a2
 ; CHECK-NEXT:    or a1, a2, a1
 ; CHECK-NEXT:    cincoffset ca2, ca0, 4
 ; CHECK-NEXT:    lbu.cap a2, (ca2)
 ; CHECK-NEXT:    cincoffset ca3, ca0, 5
 ; CHECK-NEXT:    lbu.cap a3, (ca3)
 ; CHECK-NEXT:    cincoffset ca4, ca0, 6
+; CHECK-NEXT:    lbu.cap a4, (ca4)
 ; CHECK-NEXT:    cincoffset ca0, ca0, 7
 ; CHECK-NEXT:    lbu.cap a0, (ca0)
-; CHECK-NEXT:    lbu.cap a4, (ca4)
 ; CHECK-NEXT:    slli a3, a3, 8
 ; CHECK-NEXT:    or a2, a3, a2
-; CHECK-NEXT:    slli a0, a0, 8
-; CHECK-NEXT:    or a0, a0, a4
-; CHECK-NEXT:    slli a0, a0, 16
+; CHECK-NEXT:    slli a3, a4, 16
+; CHECK-NEXT:    slli a0, a0, 24
+; CHECK-NEXT:    or a0, a0, a3
 ; CHECK-NEXT:    or a0, a0, a2
 ; CHECK-NEXT:    slli a0, a0, 32
 ; CHECK-NEXT:    or a0, a0, a1
@@ -59,14 +59,14 @@ define i64 @load_global_i64_align_2(i64 %y) addrspace(200) nounwind {
 ; CHECK-NEXT:    cincoffset ca2, ca0, 2
 ; CHECK-NEXT:    lhu.cap a2, (ca2)
 ; CHECK-NEXT:    cincoffset ca3, ca0, 4
+; CHECK-NEXT:    lhu.cap a3, (ca3)
 ; CHECK-NEXT:    cincoffset ca0, ca0, 6
 ; CHECK-NEXT:    lhu.cap a0, (ca0)
-; CHECK-NEXT:    lhu.cap a3, (ca3)
 ; CHECK-NEXT:    slli a2, a2, 16
 ; CHECK-NEXT:    or a1, a2, a1
-; CHECK-NEXT:    slli a0, a0, 16
-; CHECK-NEXT:    or a0, a0, a3
-; CHECK-NEXT:    slli a0, a0, 32
+; CHECK-NEXT:    slli a2, a3, 32
+; CHECK-NEXT:    slli a0, a0, 48
+; CHECK-NEXT:    or a0, a0, a2
 ; CHECK-NEXT:    or a0, a0, a1
 ; CHECK-NEXT:    ret
   %ret = load i64, i64 addrspace(200)* addrspacecast(i64* @a2 to i64 addrspace(200)*), align 2
