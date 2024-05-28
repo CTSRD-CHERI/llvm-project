@@ -39,17 +39,16 @@ define dso_local void @hoist_csetbounds(i32 signext %cond, %struct.foo addrspace
 ; CHECK-NEXT:    csc cs2, 16(csp) # 16-byte Folded Spill
 ; CHECK-NEXT:    csc cs3, 0(csp) # 16-byte Folded Spill
 ; CHECK-NEXT:    cmove cs0, ca1
-; CHECK-NEXT:    li a0, 0
 ; CHECK-NEXT:    cincoffset cs1, ca1, 4
-; CHECK-NEXT:    li s2, 99
+; CHECK-NEXT:    li s2, -1
+; CHECK-NEXT:    li s3, 99
 ; CHECK-NEXT:    j .LBB0_2
 ; CHECK-NEXT:  .LBB0_1: # %for.inc
 ; CHECK-NEXT:    # in Loop: Header=BB0_2 Depth=1
-; CHECK-NEXT:    addiw a0, s3, 1
-; CHECK-NEXT:    bgeu s3, s2, .LBB0_4
+; CHECK-NEXT:    addiw s2, s2, 1
+; CHECK-NEXT:    bgeu s2, s3, .LBB0_4
 ; CHECK-NEXT:  .LBB0_2: # %for.body
 ; CHECK-NEXT:    # =>This Inner Loop Header: Depth=1
-; CHECK-NEXT:    mv s3, a0
 ; CHECK-NEXT:    beqz s0, .LBB0_1
 ; CHECK-NEXT:  # %bb.3: # %if.then
 ; CHECK-NEXT:    # in Loop: Header=BB0_2 Depth=1
