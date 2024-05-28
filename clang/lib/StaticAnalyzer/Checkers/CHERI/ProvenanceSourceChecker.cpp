@@ -19,6 +19,7 @@
 #include "clang/StaticAnalyzer/Core/CheckerManager.h"
 #include "clang/StaticAnalyzer/Core/PathSensitive/CheckerContext.h"
 
+
 using namespace clang;
 using namespace ento;
 using namespace cheri;
@@ -45,8 +46,8 @@ class ProvenanceSourceChecker : public Checker<check::PostStmt<CastExpr>,
   BugType InvalidCapPtrBugType{this,
                   "NULL-derived capability used as pointer",
                   "CHERI portability"};
-  BugType NoProvPtrBugType{this,
-                   "cheri_no_provenance capability used as pointer",
+  BugType ProvenanceLossBugType{this,
+                   "NULL-derived capability: loss of provenance",
                    "CHERI portability"};
   
 private:
@@ -126,6 +127,14 @@ bool isIntegerToIntCapCast(const CastExpr *CE) {
     return false;
   if (!CE->getType()->isIntCapType() ||
       CE->getSubExpr()->getType()->isIntCapType())
+    return false;
+  return true;
+}
+
+bool isPointerToIntegerCast(const CastExpr *CE) {
+  if (CE->getCastKind() != CK_PointerToIntegral)
+    return false;
+  if (CE->getType()->isIntCapType())
     return false;
   return true;
 }
@@ -231,12 +240,14 @@ void ProvenanceSourceChecker::checkPreStmt(const CastExpr *CE,
         AmbigProvAsPtrBugType,
         "Capability with ambiguous provenance is used as pointer", ErrNode);
   } else if (hasNoProvenance(State, SrcVal) && !SrcVal.isConstant()) {
+    if (isNoProvToPtrCast(CE))
+      return; // intentional
     ExplodedNode *ErrNode = C.generateNonFatalErrorNode();
     if (!ErrNode)
       return;
-    if (isNoProvToPtrCast(CE))
+    if (SrcVal.getAs<nonloc::LocAsInteger>())
       R = std::make_unique<PathSensitiveBugReport>(
-          NoProvPtrBugType, "cheri_no_provenance capability used as pointer",
+          ProvenanceLossBugType, "NULL-derived capability: loss of provenance",
           ErrNode);
     else
       R = std::make_unique<PathSensitiveBugReport>(
@@ -553,16 +564,16 @@ ProvenanceSourceChecker::InvalidCapBugVisitor::VisitNode(
   llvm::raw_svector_ostream OS(Buf);
 
   if (const CastExpr *CE = dyn_cast<CastExpr>(S)) {
-    if (!isIntegerToIntCapCast(CE))
-      return nullptr;
-
     if (Sym != N->getSVal(CE).getAsSymbol())
       return nullptr;
-
-    if (!N->getState()->contains<InvalidCap>(Sym))
+    if (isIntegerToIntCapCast(CE)) {
+      if (!N->getState()->contains<InvalidCap>(Sym))
+        return nullptr;
+      OS << "NULL-derived capability: ";
+    } else if (isPointerToIntegerCast(CE)) {
+      OS << "Loss of provenance: ";
+    } else
       return nullptr;
-
-    OS << "NULL-derived capability: ";
     describeCast(OS, CE, BRC.getASTContext().getLangOpts());
   } else if (const BinaryOperator *BO = dyn_cast<BinaryOperator>(S)) {
     BinaryOperatorKind const OpCode = BO->getOpcode();
