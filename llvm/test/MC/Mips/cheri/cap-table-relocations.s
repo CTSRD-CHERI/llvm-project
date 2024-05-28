@@ -1,5 +1,5 @@
 # RUN: %cheri_llvm-mc %s -show-encoding | FileCheck %s
-# RUN: %cheri_llvm-mc %s -filetype=obj -o - | llvm-objdump -d -r - | FileCheck %s -check-prefix DUMP
+# RUN: %cheri_llvm-mc %s -filetype=obj -o - | llvm-objdump --no-print-imm-hex -d -r - | FileCheck %s -check-prefix DUMP
 #
 # Check that the assembler is able to handle the new capability table relocations.
 #

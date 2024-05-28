@@ -1,6 +1,6 @@
 # RUN: %cheri_purecap_llvm-mc -filetype=asm -o - %s
 # %s | llvm-objdump -d -r
-# RUN: %cheri_purecap_llvm-mc -filetype=obj -o - %s | llvm-objdump -d -r - | FileCheck %s
+# RUN: %cheri_purecap_llvm-mc -filetype=obj -o - %s | llvm-objdump --no-print-imm-hex -d -r - | FileCheck %s
 
 	.text
 	.globl	addrof_label_in_local   # -- Begin function addrof_label_in_local

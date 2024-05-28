@@ -80,9 +80,9 @@ body:             |
     ;CHECK-NEXT: {{  $}}
     ;CHECK-NEXT: %bb0_{{[0-9]+}}__1:gpr32 = LDRWui %stack.0, 0
     ;CHECK-NEXT: %bb0_{{[0-9]+}}__1:gpr32 = COPY %bb0_{{[0-9]+}}__1
+    ;CHECK-NEXT: %bb0_{{[0-9]+}}__1:gpr32 = COPY %bb0_{{[0-9]+}}__1
     ;CHECK-NEXT: %bb0_{{[0-9]+}}__2:gpr32 = COPY %bb0_{{[0-9]+}}__1
-    ;CHECK-NEXT: %bb0_{{[0-9]+}}__3:gpr32 = COPY %bb0_{{[0-9]+}}__2
-    ;CHECK-NEXT: $w0 = COPY %bb0_{{[0-9]+}}__3
+    ;CHECK-NEXT: $w0 = COPY %bb0_{{[0-9]+}}__2
 
     %0:gpr32 = LDRWui %stack.0, 0 :: (dereferenceable load (s64))
     %1:gpr32 = COPY %0
