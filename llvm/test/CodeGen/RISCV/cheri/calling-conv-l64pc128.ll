@@ -10,13 +10,13 @@ define i32 @get_ith_word(i32 signext %i, ...) nounwind {
 ; CHECK-NEXT:    cincoffset ca2, csp, 16
 ; CHECK-NEXT:    csc ca2, 0(ca1)
 ; CHECK-NEXT:    clc ca1, 0(csp)
+; CHECK-NEXT:    addiw a0, a0, 1
 ; CHECK-NEXT:  .LBB0_1: # %while.cond
 ; CHECK-NEXT:    # =>This Inner Loop Header: Depth=1
-; CHECK-NEXT:    mv a3, a0
 ; CHECK-NEXT:    cmove ca2, ca1
 ; CHECK-NEXT:    addiw a0, a0, -1
 ; CHECK-NEXT:    cincoffset ca1, ca1, 4
-; CHECK-NEXT:    bgtz a3, .LBB0_1
+; CHECK-NEXT:    bgtz a0, .LBB0_1
 ; CHECK-NEXT:  # %bb.2: # %while.end
 ; CHECK-NEXT:    csc ca1, 0(csp)
 ; CHECK-NEXT:    clw a0, 0(ca2)
@@ -56,15 +56,15 @@ define i8 addrspace(200)* @get_ith_cap(i32 signext %i, ...) nounwind {
 ; CHECK-NEXT:    cincoffset ca2, csp, 16
 ; CHECK-NEXT:    csc ca2, 0(ca1)
 ; CHECK-NEXT:    clc ca1, 0(csp)
+; CHECK-NEXT:    addiw a0, a0, 1
 ; CHECK-NEXT:  .LBB1_1: # %while.cond
 ; CHECK-NEXT:    # =>This Inner Loop Header: Depth=1
-; CHECK-NEXT:    mv a3, a0
-; CHECK-NEXT:    addiw a0, a0, -1
 ; CHECK-NEXT:    addi a2, a1, 15
 ; CHECK-NEXT:    andi a2, a2, -16
 ; CHECK-NEXT:    csetaddr ca2, ca1, a2
+; CHECK-NEXT:    addiw a0, a0, -1
 ; CHECK-NEXT:    cincoffset ca1, ca2, 16
-; CHECK-NEXT:    bgtz a3, .LBB1_1
+; CHECK-NEXT:    bgtz a0, .LBB1_1
 ; CHECK-NEXT:  # %bb.2: # %while.end
 ; CHECK-NEXT:    csc ca1, 0(csp)
 ; CHECK-NEXT:    clc ca0, 0(ca2)

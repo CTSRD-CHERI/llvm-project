@@ -57,32 +57,29 @@
 define void @hoist_alloca_uncond(i32 signext %cond) local_unnamed_addr addrspace(200) nounwind {
 ; CHECK-LABEL: hoist_alloca_uncond:
 ; CHECK:       # %bb.0: # %entry
-; CHECK-NEXT:    cincoffset csp, csp, -672
-; CHECK-NEXT:    csc cra, 656(csp) # 16-byte Folded Spill
-; CHECK-NEXT:    csc cs0, 640(csp) # 16-byte Folded Spill
-; CHECK-NEXT:    csc cs1, 624(csp) # 16-byte Folded Spill
-; CHECK-NEXT:    csc cs2, 608(csp) # 16-byte Folded Spill
-; CHECK-NEXT:    csc cs3, 592(csp) # 16-byte Folded Spill
-; CHECK-NEXT:    li s2, 0
+; CHECK-NEXT:    cincoffset csp, csp, -656
+; CHECK-NEXT:    csc cra, 640(csp) # 16-byte Folded Spill
+; CHECK-NEXT:    csc cs0, 624(csp) # 16-byte Folded Spill
+; CHECK-NEXT:    csc cs1, 608(csp) # 16-byte Folded Spill
+; CHECK-NEXT:    csc cs2, 592(csp) # 16-byte Folded Spill
+; CHECK-NEXT:    li s2, 100
 ; CHECK-NEXT:    cincoffset ca0, csp, 100
 ; CHECK-NEXT:    csetbounds cs0, ca0, 492
 ; CHECK-NEXT:    cincoffset ca0, csp, 12
 ; CHECK-NEXT:    csetbounds cs1, ca0, 88
-; CHECK-NEXT:    li s3, 100
 ; CHECK-NEXT:  .LBB0_1: # %for.body
 ; CHECK-NEXT:    # =>This Inner Loop Header: Depth=1
 ; CHECK-NEXT:    cmove ca0, cs0
 ; CHECK-NEXT:    cmove ca1, cs1
 ; CHECK-NEXT:    ccall call
-; CHECK-NEXT:    addiw s2, s2, 1
-; CHECK-NEXT:    bne s2, s3, .LBB0_1
+; CHECK-NEXT:    addiw s2, s2, -1
+; CHECK-NEXT:    bnez s2, .LBB0_1
 ; CHECK-NEXT:  # %bb.2: # %for.cond.cleanup
-; CHECK-NEXT:    clc cra, 656(csp) # 16-byte Folded Reload
-; CHECK-NEXT:    clc cs0, 640(csp) # 16-byte Folded Reload
-; CHECK-NEXT:    clc cs1, 624(csp) # 16-byte Folded Reload
-; CHECK-NEXT:    clc cs2, 608(csp) # 16-byte Folded Reload
-; CHECK-NEXT:    clc cs3, 592(csp) # 16-byte Folded Reload
-; CHECK-NEXT:    cincoffset csp, csp, 672
+; CHECK-NEXT:    clc cra, 640(csp) # 16-byte Folded Reload
+; CHECK-NEXT:    clc cs0, 624(csp) # 16-byte Folded Reload
+; CHECK-NEXT:    clc cs1, 608(csp) # 16-byte Folded Reload
+; CHECK-NEXT:    clc cs2, 592(csp) # 16-byte Folded Reload
+; CHECK-NEXT:    cincoffset csp, csp, 656
 ; CHECK-NEXT:    cret
 entry:
   %buf1 = alloca [123 x i32], align 4, addrspace(200)
@@ -107,16 +104,14 @@ declare void @call(i32 addrspace(200)*, i32 addrspace(200)*) local_unnamed_addr 
 define void @hoist_alloca_cond(i32 signext %cond) local_unnamed_addr addrspace(200) nounwind {
 ; CHECK-LABEL: hoist_alloca_cond:
 ; CHECK:       # %bb.0: # %entry
-; CHECK-NEXT:    cincoffset csp, csp, -688
-; CHECK-NEXT:    csc cra, 672(csp) # 16-byte Folded Spill
-; CHECK-NEXT:    csc cs0, 656(csp) # 16-byte Folded Spill
-; CHECK-NEXT:    csc cs1, 640(csp) # 16-byte Folded Spill
-; CHECK-NEXT:    csc cs2, 624(csp) # 16-byte Folded Spill
-; CHECK-NEXT:    csc cs3, 608(csp) # 16-byte Folded Spill
-; CHECK-NEXT:    csc cs4, 592(csp) # 16-byte Folded Spill
+; CHECK-NEXT:    cincoffset csp, csp, -672
+; CHECK-NEXT:    csc cra, 656(csp) # 16-byte Folded Spill
+; CHECK-NEXT:    csc cs0, 640(csp) # 16-byte Folded Spill
+; CHECK-NEXT:    csc cs1, 624(csp) # 16-byte Folded Spill
+; CHECK-NEXT:    csc cs2, 608(csp) # 16-byte Folded Spill
+; CHECK-NEXT:    csc cs3, 592(csp) # 16-byte Folded Spill
 ; CHECK-NEXT:    mv s0, a0
-; CHECK-NEXT:    li s3, 0
-; CHECK-NEXT:    li s4, 100
+; CHECK-NEXT:    li s3, 100
 ; CHECK-NEXT:    cincoffset ca0, csp, 100
 ; CHECK-NEXT:    csetbounds cs2, ca0, 492
 ; CHECK-NEXT:    cincoffset ca0, csp, 12
@@ -124,8 +119,8 @@ define void @hoist_alloca_cond(i32 signext %cond) local_unnamed_addr addrspace(2
 ; CHECK-NEXT:    j .LBB1_2
 ; CHECK-NEXT:  .LBB1_1: # %for.inc
 ; CHECK-NEXT:    # in Loop: Header=BB1_2 Depth=1
-; CHECK-NEXT:    addiw s3, s3, 1
-; CHECK-NEXT:    beq s3, s4, .LBB1_4
+; CHECK-NEXT:    addiw s3, s3, -1
+; CHECK-NEXT:    beqz s3, .LBB1_4
 ; CHECK-NEXT:  .LBB1_2: # %for.body
 ; CHECK-NEXT:    # =>This Inner Loop Header: Depth=1
 ; CHECK-NEXT:    beqz s0, .LBB1_1
@@ -136,13 +131,12 @@ define void @hoist_alloca_cond(i32 signext %cond) local_unnamed_addr addrspace(2
 ; CHECK-NEXT:    ccall call
 ; CHECK-NEXT:    j .LBB1_1
 ; CHECK-NEXT:  .LBB1_4: # %for.cond.cleanup
-; CHECK-NEXT:    clc cra, 672(csp) # 16-byte Folded Reload
-; CHECK-NEXT:    clc cs0, 656(csp) # 16-byte Folded Reload
-; CHECK-NEXT:    clc cs1, 640(csp) # 16-byte Folded Reload
-; CHECK-NEXT:    clc cs2, 624(csp) # 16-byte Folded Reload
-; CHECK-NEXT:    clc cs3, 608(csp) # 16-byte Folded Reload
-; CHECK-NEXT:    clc cs4, 592(csp) # 16-byte Folded Reload
-; CHECK-NEXT:    cincoffset csp, csp, 688
+; CHECK-NEXT:    clc cra, 656(csp) # 16-byte Folded Reload
+; CHECK-NEXT:    clc cs0, 640(csp) # 16-byte Folded Reload
+; CHECK-NEXT:    clc cs1, 624(csp) # 16-byte Folded Reload
+; CHECK-NEXT:    clc cs2, 608(csp) # 16-byte Folded Reload
+; CHECK-NEXT:    clc cs3, 592(csp) # 16-byte Folded Reload
+; CHECK-NEXT:    cincoffset csp, csp, 672
 ; CHECK-NEXT:    cret
 entry:
   %buf1 = alloca [123 x i32], align 4, addrspace(200)
