@@ -37,7 +37,7 @@ static void insertCall(Function &CurFn, StringRef Func,
       Func == "__cyg_profile_func_enter_bare") {
     Triple TargetTriple(M.getTargetTriple());
     if (TargetTriple.isOSAIX() && Func == "__mcount") {
-      Type *SizeTy = M.getDataLayout().getIntPtrType(C);
+      Type *SizeTy = M.getDataLayout().getIntPtrType(C, M.getDataLayout().getProgramAddressSpace());
       Type *SizePtrTy = SizeTy->getPointerTo();
       GlobalVariable *GV = new GlobalVariable(M, SizeTy, /*isConstant=*/false,
                                               GlobalValue::InternalLinkage,
