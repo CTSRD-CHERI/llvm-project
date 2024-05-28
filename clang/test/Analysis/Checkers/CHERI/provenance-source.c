@@ -1,7 +1,8 @@
-// RUN: %cheri_purecap_cc1 -analyze -verify %s \
+// RUN: %cheri_purecap_cc1 -Wcapability-to-integer-cast -analyze -verify %s \
 // RUN:   -analyzer-checker=core,cheri.ProvenanceSource
 // RUN: %check_analyzer_fixit %s %t \
 // RUN:   -triple mips64-unknown-freebsd -target-abi purecap -target-cpu cheri128 -cheri-size 128 \
+// RUN:   -Wcapability-to-integer-cast \
 // RUN:   -analyzer-checker=core,cheri.ProvenanceSource \
 // RUN:   -analyzer-config cheri.ProvenanceSource:ShowFixIts=true \
 // RUN:   -verify=non-nested,nested
@@ -110,7 +111,7 @@ int * null_derived(int x) {
   return (int*)u; // expected-warning{{NULL-derived capability used as pointer}}
 }
 
-uintptr_t fn1(char *str, int f) {
+intptr_t fn1(char *str, int f) {
     str++;
     intptr_t x = f;
     return ((intptr_t)str & x);
@@ -175,13 +176,14 @@ uintptr_t fn2(char *a, char *b) {
 
 char *ptrdiff(char *a, unsigned x) {
   intptr_t ip = ((ptrdiff_t)a | (intptr_t)x);
+  // expected-warning@-1{{cast from capability type 'char *' to non-capability, non-address type 'ptrdiff_t' (aka 'long') is most likely an error}}
   char *p = (char*) ip; // expected-warning{{NULL-derived capability used as pointer}}
   return p;
 }
 
 int fp5(char *a, unsigned x) {
   void *p = (void*)(uintptr_t)a;
-  void *q = (void*)(uintptr_t)x; // expected-warning{{cheri_no_provenance capability used as pointer}}
+  void *q = (void*)(uintptr_t)x; // no warning -- intentional
   return (char*)p - (char*)q;
 }
 
@@ -193,6 +195,14 @@ void *fn3(size_t x, int y) {
   intptr_t a = (intptr_t)x;
   a += y;
   return (void*)a; // expected-warning{{NULL-derived capability used as pointer}}
+}
+
+int * loss_of_prov(int *px) {
+  long x = (long)px;
+  // expected-warning@-1{{cast from capability type 'int *' to non-capability, non-address type 'long' is most likely an error}}
+  intptr_t u = (intptr_t)x;
+  return (int*)u;
+  // expected-warning@-1{{NULL-derived capability: loss of provenance}}
 }
 
 //------------------- Inter-procedural warnings ---------------------
