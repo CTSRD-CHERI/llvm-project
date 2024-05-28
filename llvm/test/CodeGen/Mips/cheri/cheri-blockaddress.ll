@@ -1,6 +1,6 @@
 ; RUN: %cheri_purecap_llc %s -o - | %cheri_FileCheck %s --check-prefix ASM
 ; RUN: %cheri_purecap_llc -filetype=obj %s -o - | llvm-readobj -r - | %cheri_FileCheck %s --check-prefix OBJ
-; RUN: %cheri_purecap_llc -cheri-cap-table-abi=pcrel %s -o - -filetype=obj | llvm-objdump -d -t -r - | %cheri_FileCheck %s -check-prefix DUMP
+; RUN: %cheri_purecap_llc -cheri-cap-table-abi=pcrel %s -o - -filetype=obj | llvm-objdump -d -t -r --no-print-imm-hex - | %cheri_FileCheck %s -check-prefix DUMP
 ; See address-of-label-crash.c in clang/test/CodeGen/cheri for the C source code
 
 ; Function Attrs: noinline nounwind optnone
