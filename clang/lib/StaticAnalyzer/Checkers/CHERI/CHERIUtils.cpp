@@ -52,14 +52,29 @@ bool hasCapability(const QualType OrigTy, ASTContext &Ctx) {
   return false;
 }
 
+namespace {
+void printType(raw_ostream &OS, const QualType &Ty,
+               const PrintingPolicy &PP) {
+  OS << "'";
+  Ty.print(OS, PP);
+  OS << "'";
+  const QualType &CanTy = Ty.getCanonicalType();
+  if (CanTy != Ty) {
+    OS << " (aka '";
+    CanTy.print(OS, PP);
+    OS << "')";
+  }
+}
+} // namespace
+
 void describeCast(raw_ostream &OS, const CastExpr *CE,
                          const LangOptions &LangOpts) {
+  const PrintingPolicy &PP = PrintingPolicy(LangOpts);
   OS << (dyn_cast<ImplicitCastExpr>(CE) ? "implicit" : "explicit");
-  OS << " cast from '";
-  CE->getSubExpr()->getType().print(OS, PrintingPolicy(LangOpts));
-  OS << "' to '";
-  CE->getType().print(OS, PrintingPolicy(LangOpts));
-  OS << "'";
+  OS << " cast from ";
+  printType(OS, CE->getSubExpr()->getType(), PP);
+  OS << " to ";
+  printType(OS, CE->getType(), PP);
 }
 
 
