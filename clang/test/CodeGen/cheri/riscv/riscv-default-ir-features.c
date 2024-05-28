@@ -41,11 +41,11 @@
 // RUN:   | FileCheck %s --check-prefixes=CHECK,RV64-NOCHERI '-DFEATURES=+64bit,+a,+c,+m,+relax,-save-restore,-xcheri-norvc'
 
 // RV32-NOCHERI: target datalayout = "e-m:e-p:32:32-i64:64-n32-S128"
-// RV64-NOCHERI: target datalayout = "e-m:e-p:64:64-i64:64-i128:128-n64-S128"
+// RV64-NOCHERI: target datalayout = "e-m:e-p:64:64-i64:64-i128:128-n32:64-S128"
 // RV32-XCHERI: target datalayout = "e-m:e-pf200:64:64:64:32-p:32:32-i64:64-n32-S128"
-// RV64-XCHERI: target datalayout = "e-m:e-pf200:128:128:128:64-p:64:64-i64:64-i128:128-n64-S128"
+// RV64-XCHERI: target datalayout = "e-m:e-pf200:128:128:128:64-p:64:64-i64:64-i128:128-n32:64-S128"
 // RV32-XCHERI-PURECAP: target datalayout = "e-m:e-pf200:64:64:64:32-p:32:32-i64:64-n32-S128-A200-P200-G200"
-// RV64-XCHERI-PURECAP: target datalayout = "e-m:e-pf200:128:128:128:64-p:64:64-i64:64-i128:128-n64-S128-A200-P200-G200"
+// RV64-XCHERI-PURECAP: target datalayout = "e-m:e-pf200:128:128:128:64-p:64:64-i64:64-i128:128-n32:64-S128-A200-P200-G200"
 
 // CHECK: "target-features"="[[FEATURES]]"
 
