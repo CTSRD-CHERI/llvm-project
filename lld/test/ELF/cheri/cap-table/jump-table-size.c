@@ -3,7 +3,7 @@
 // RUN: %cheri_purecap_cc1 -mllvm -mxcaptable -emit-obj -O2 -mllvm -cheri-cap-table-abi=plt %s -o %t.o
 // RUN: llvm-objdump -d -r -t %t.o | FileCheck %s --check-prefix OBJECT
 // RUN: ld.lld -o %t.exe %t.o
-// RUN: llvm-objdump -d -r --cap-relocs -t %t.exe | %cheri_FileCheck %s --check-prefixes EXE
+// RUN: llvm-objdump --no-print-imm-hex -d -r --cap-relocs -t %t.exe | %cheri_FileCheck %s --check-prefixes EXE
 
 // OBJECT-LABEL: SYMBOL TABLE:
 // OBJECT: 0000000000000000 l       .rodata		 0000000000000024 .LJTI0_0

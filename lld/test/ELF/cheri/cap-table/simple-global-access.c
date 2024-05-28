@@ -4,7 +4,7 @@
 // RUN: %cheri128_purecap_cc1 -mllvm -mxcaptable -emit-obj -O0 -mllvm -cheri-cap-table-abi=plt %s -o %t.o
 // RUN: llvm-objdump -d -r %t.o | FileCheck %s --check-prefix OBJECT
 // RUN: ld.lld -o %t.exe %t.o
-// RUN: llvm-objdump -d -r --cap-relocs -t %t.exe | FileCheck %s --check-prefixes EXE
+// RUN: llvm-objdump --no-print-imm-hex -d -r --cap-relocs -t %t.exe | FileCheck %s --check-prefixes EXE
 
 // OBJECT:       0000000000000004: R_MIPS_CHERI_CAPTAB_HI16/R_MIPS_NONE/R_MIPS_NONE	global
 // OBJECT:       0000000000000008: R_MIPS_CHERI_CAPTAB_LO16/R_MIPS_NONE/R_MIPS_NONE	global

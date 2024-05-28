@@ -4,7 +4,7 @@
 // RUN: %cheri128_purecap_cc1 -mllvm -cheri-cap-table-abi=plt -emit-obj -O2 %s -o %t.o
 // RUN: ld.lld -z now -shared -o %t.so %t.o -captable-scope=function -z captabledebug
 // RUN: llvm-readobj --cap-relocs --cap-table --dynamic-table -r %t.so | FileCheck %s --check-prefixes CHECK,PER-FUNCTION
-// RUN: llvm-objdump --syms -d %t.so | FileCheck %s --check-prefixes SYMBOLS,DISAS
+// RUN: llvm-objdump --syms -d --no-print-imm-hex %t.so | FileCheck %s --check-prefixes SYMBOLS,DISAS
 // RUN: ld.lld -z now -shared -o %t-file.so %t.o -captable-scope=file
 // RUN: llvm-readobj --cap-relocs --cap-table --dynamic-table -r %t-file.so | FileCheck %s --check-prefixes CHECK,PER-FILE
 // RUN: ld.lld -z now -shared -o %t-all.so %t.o -captable-scope=all
