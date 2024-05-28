@@ -20,7 +20,7 @@ void test1() {
 }
 
 // X86-LABEL: define {{.*}} @_ZN1BaSEOS_
-// CHERI: define linkonce_odr noundef nonnull align 8 dereferenceable(28) %struct.B addrspace(200)* @_ZN1BaSEOS_(%struct.B addrspace(200)* noundef nonnull align 8 dereferenceable(28) %this, %struct.B addrspace(200)* noundef nonnull align 8 dereferenceable(28) %0) addrspace(200)
+// CHERI: define linkonce_odr noundef nonnull align 8 dereferenceable(32) %struct.B addrspace(200)* @_ZN1BaSEOS_(%struct.B addrspace(200)* noundef nonnull align 8 dereferenceable(32) %this, %struct.B addrspace(200)* noundef nonnull align 8 dereferenceable(32) %0) addrspace(200)
 // X86:   call noundef nonnull align 1 dereferenceable(1) %struct.A* @_ZN1AaSEOS_(%struct.A* noundef nonnull align 1 dereferenceable(1) %a, %struct.A* noundef nonnull align 1 dereferenceable(1) %a2)
 // CHERI: call noundef nonnull align 1 dereferenceable(1) %struct.A addrspace(200)* @_ZN1AaSEOS_(%struct.A addrspace(200)* noundef nonnull align 1 dereferenceable(1) %a, %struct.A addrspace(200)* noundef nonnull align 1 dereferenceable(1) %a2)
 // BOTH-NOT: store
