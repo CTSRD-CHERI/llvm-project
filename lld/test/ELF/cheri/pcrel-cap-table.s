@@ -1,9 +1,9 @@
 # RUN: %cheri128_llvm-mc -filetype=obj %s -o %t.o
 # RUN: ld.lld -z now %t.o -o %t.exe
-# RUN: llvm-objdump --cap-relocs -t -d -h %t.exe | FileCheck %s
+# RUN: llvm-objdump --no-print-imm-hex --cap-relocs -t -d -h %t.exe | FileCheck %s
 # RUN: %cheri128_llvm-mc -filetype=obj -defsym=EMPTY_CAP_TABLE=1 %s -o %t2.o
 # RUN: ld.lld -z now %t2.o -o %t.exe
-# RUN: llvm-objdump --cap-relocs -t -d -h %t.exe | FileCheck %s --check-prefix EMPTY-TABLE
+# RUN: llvm-objdump --no-print-imm-hex --cap-relocs -t -d -h %t.exe | FileCheck %s --check-prefix EMPTY-TABLE
 
 .text
 

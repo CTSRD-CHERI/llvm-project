@@ -1,19 +1,19 @@
 # RUN: %cheri128_llvm-mc -filetype=obj %s -o %t.o
 # RUN: ld.lld %t.o -o %t.exe
-# RUN: llvm-objdump -t -d -h -s --section=.data --section=.text %t.exe | FileCheck %s --check-prefix STATIC
+# RUN: llvm-objdump --no-print-imm-hex -t -d -h -s --section=.data --section=.text %t.exe | FileCheck %s --check-prefix STATIC
 # RUN: ld.lld -pie %t.o -o %t-pie.exe
-# RUN: llvm-objdump -t -d -h -s --section=.data --section=.text %t-pie.exe | FileCheck %s --check-prefixes DYNAMIC,DYNAMIC-PIE
+# RUN: llvm-objdump --no-print-imm-hex -t -d -h -s --section=.data --section=.text %t-pie.exe | FileCheck %s --check-prefixes DYNAMIC,DYNAMIC-PIE
 # RUN: ld.lld -shared %t.o -o %t.so
-# RUN: llvm-objdump -t -d -h -s --section=.data --section=.text %t.so | FileCheck %s --check-prefixes DYNAMIC,DYNAMIC-SHLIB
+# RUN: llvm-objdump --no-print-imm-hex -t -d -h -s --section=.data --section=.text %t.so | FileCheck %s --check-prefixes DYNAMIC,DYNAMIC-SHLIB
 # Also check that --export-dynamic doesn't cause _HAS__DYNAMIC to be true
 # RUN: ld.lld -export-dynamic %t.o -o %t-export.exe
-# RUN: llvm-objdump -t -d -h -s --section=.data --section=.text %t-export.exe | FileCheck %s --check-prefix STATIC
+# RUN: llvm-objdump --no-print-imm-hex -t -d -h -s --section=.data --section=.text %t-export.exe | FileCheck %s --check-prefix STATIC
 
 # Check that a static executable that is linked against a shared library has a valid _DYNAMIC symbol
 # RUN: %cheri128_llvm-mc -filetype=obj %S/../Inputs/shared.s -o %t2.o
 # RUN: ld.lld -shared %t2.o -o %t-shlib.so
 # RUN: ld.lld %t.o %t-shlib.so -o %t-with-shlib.exe
-# RUN: llvm-objdump -t -d -h -s --section=.data --section=.text %t-with-shlib.exe | FileCheck %s --check-prefixes DYNAMIC,DYNAMIC-NONPIC
+# RUN: llvm-objdump --no-print-imm-hex -t -d -h -s --section=.data --section=.text %t-with-shlib.exe | FileCheck %s --check-prefixes DYNAMIC,DYNAMIC-NONPIC
 
 # This is a hack since we can't easily load the value of _DYNAMIC prior to globals
 # being initialized:
