@@ -1,7 +1,7 @@
 // RUN: %cheri_purecap_cc1 -Wno-incompatible-pointer-types -fsyntax-only %s -verify=default
 // RUN: %cheri_purecap_cc1 -Wno-incompatible-pointer-types -Wall -fsyntax-only %s -verify=default
 // RUN: %cheri_purecap_cc1 -Wno-incompatible-pointer-types -Wextra -fsyntax-only %s -verify=strict,default
-// RUN: %cheri_purecap_cc1 -Weverything -Wno-incompatible-pointer-types -Wno-strict-prototypes -Wdeprecated-non-prototype -Wcheri-prototypes -fsyntax-only %s -verify=default,strict
+// RUN: %cheri_purecap_cc1 -Weverything -Wno-incompatible-function-pointer-types-strict -Wno-incompatible-pointer-types -Wno-strict-prototypes -Wdeprecated-non-prototype -Wcheri-prototypes -fsyntax-only %s -verify=default,strict
 // RUN: %cheri_purecap_cc1 -Wno-incompatible-pointer-types -Wcheri -Wcheri-prototypes-strict -fsyntax-only %s -verify=default,strict
 // RUN: %cheri_purecap_cc1 -Wno-incompatible-pointer-types -Wno-cheri -Wno-deprecated-non-prototype -fsyntax-only %s -verify=cheri-off
 // cheri-off-no-diagnostics
