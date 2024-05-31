@@ -515,23 +515,10 @@ void ProvenanceSourceChecker::checkDeadSymbols(SymbolReaper &SymReaper,
     return;
 
   ProgramStateRef State = C.getState();
-
   bool Removed = false;
-  const InvalidCapTy &Set = State->get<InvalidCap>();
-  for (const auto &Sym : Set) {
-    if (!SymReaper.isDead(Sym))
-      continue;
-    State = State->remove<InvalidCap>(Sym);
-    Removed = true;
-  }
-
-  const AmbiguousProvenanceSymTy &Set2 = State->get<AmbiguousProvenanceSym>();
-  for (const auto &Sym : Set2) {
-    if (!SymReaper.isDead(Sym))
-      continue;
-    State = State->remove<AmbiguousProvenanceSym>(Sym);
-    Removed = true;
-  }
+  State = cleanDead<InvalidCap>(State, SymReaper, Removed);
+  State = cleanDead<AmbiguousProvenanceSym>(State, SymReaper, Removed);
+  State = cleanDead<AmbiguousProvenanceReg>(State, SymReaper, Removed);
 
   if (Removed)
     C.addTransition(State);

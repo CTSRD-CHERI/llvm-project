@@ -7,6 +7,10 @@
 //===----------------------------------------------------------------------===//
 
 #include "CHERIUtils.h"
+#include <clang/StaticAnalyzer/Core/PathSensitive/ProgramState.h>
+
+#include "clang/StaticAnalyzer/Core/PathSensitive/ProgramStateTrait.h"
+
 
 namespace clang {
 namespace ento {
@@ -54,8 +58,7 @@ bool hasCapability(const QualType OrigTy, ASTContext &Ctx) {
 
 namespace {
 
-void printType(raw_ostream &OS, const QualType &Ty,
-               const PrintingPolicy &PP) {
+void printType(raw_ostream &OS, const QualType &Ty, const PrintingPolicy &PP) {
   std::string TyStr = Ty.getAsString(PP);
   OS << "'" << TyStr << "'";
   std::string CanTyStr = Ty.getCanonicalType().getAsString(PP);
@@ -67,7 +70,7 @@ void printType(raw_ostream &OS, const QualType &Ty,
 } // namespace
 
 void describeCast(raw_ostream &OS, const CastExpr *CE,
-                         const LangOptions &LangOpts) {
+                  const LangOptions &LangOpts) {
   const PrintingPolicy &PP = PrintingPolicy(LangOpts);
   OS << (dyn_cast<ImplicitCastExpr>(CE) ? "implicit" : "explicit");
   OS << " cast from ";
@@ -84,7 +87,6 @@ const DeclRegion *getAllocationDecl(const MemRegion *MR) {
   return nullptr;
 }
 
-
-} // end of namespace: cheri
-} // end of namespace: ento
-} // end of namespace: clang
+} // namespace cheri
+} // namespace ento
+} // namespace clang

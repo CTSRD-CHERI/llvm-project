@@ -10,6 +10,8 @@
 #define LLVM_CLANG_LIB_STATICANALYZER_CHECKERS_CHERI_CHERIUTILS_H
 
 #include "clang/StaticAnalyzer/Core/Checker.h"
+#include <clang/StaticAnalyzer/Core/PathSensitive/ProgramState.h>
+#include "clang/StaticAnalyzer/Core/PathSensitive/ProgramStateTrait.h"
 
 namespace clang {
 namespace ento {
@@ -32,8 +34,44 @@ void describeCast(raw_ostream &OS, const CastExpr *CE,
 
 const DeclRegion *getAllocationDecl(const MemRegion *MR);
 
-} // end of namespace: cheri
-} // end of namespace: ento
-} // end of namespace: clang
+} // namespace cheri
+
+template <typename C>
+inline typename ProgramStateTrait<C>::key_type
+getKey(const std::pair<typename ProgramStateTrait<C>::key_type,
+                       typename ProgramStateTrait<C>::value_type> &P) {
+  return P.first;
+}
+
+template <typename C>
+inline typename ProgramStateTrait<C>::key_type
+getKey(const typename ProgramStateTrait<C>::key_type &K) {
+  return K;
+}
+
+inline bool isLive(SymbolReaper &SymReaper, const MemRegion *MR) {
+  return SymReaper.isLiveRegion(MR);
+}
+
+inline bool isLive(SymbolReaper &SymReaper, SymbolRef Sym) {
+  return SymReaper.isLive(Sym);
+}
+
+template <typename M>
+ProgramStateRef cleanDead(ProgramStateRef State, SymbolReaper &SymReaper,
+                         bool &Removed) {
+  const typename ProgramStateTrait<M>::data_type &Map = State->get<M>();
+  for (const auto &E : Map) {
+    const typename ProgramStateTrait<M>::key_type &K = getKey<M>(E);
+    if (isLive(SymReaper, K))
+      continue;
+    State = State->remove<M>(K);
+    Removed = true;
+  }
+  return State;
+}
+
+} // namespace ento
+} // namespace clang
 
 #endif // LLVM_CLANG_LIB_STATICANALYZER_CHECKERS_CHERI_CHERIUTILS_H

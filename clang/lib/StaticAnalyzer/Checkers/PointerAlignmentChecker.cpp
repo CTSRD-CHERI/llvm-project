@@ -29,13 +29,13 @@
 //===----------------------------------------------------------------------===//
 
 #include "CHERI/CHERIUtils.h"
+#include <clang/ASTMatchers/ASTMatchFinder.h>
 #include "clang/ASTMatchers/ASTMatchers.h"
 #include "clang/StaticAnalyzer/Checkers/BuiltinCheckerRegistration.h"
-#include "clang/StaticAnalyzer/Core/PathSensitive/CheckerContext.h"
-#include <clang/ASTMatchers/ASTMatchFinder.h>
 #include <clang/StaticAnalyzer/Core/BugReporter/BugType.h>
 #include <clang/StaticAnalyzer/Core/PathSensitive/CallDescription.h>
 #include <clang/StaticAnalyzer/Core/PathSensitive/CallEvent.h>
+#include "clang/StaticAnalyzer/Core/PathSensitive/CheckerContext.h"
 
 using namespace clang;
 using namespace ento;
@@ -914,17 +914,11 @@ void PointerAlignmentChecker::checkPostStmt(const BinaryOperator *BO,
 
 void PointerAlignmentChecker::checkDeadSymbols(SymbolReaper &SymReaper,
                                                   CheckerContext &C) const {
-  bool Updated = false;
   ProgramStateRef State = C.getState();
+  bool Updated = false;
 
-  TrailingZerosMapTy TZMap = State->get<TrailingZerosMap>();
-  for (TrailingZerosMapTy::iterator I = TZMap.begin(), E = TZMap.end();
-                                    I != E; ++I) {
-    if (SymReaper.isDead(I->first)) {
-      State = State->remove<TrailingZerosMap>(I->first);
-      Updated = true;
-    }
-  }
+  State = cleanDead<TrailingZerosMap>(State, SymReaper, Updated);
+  State = cleanDead<CapStorageSet>(State, SymReaper, Updated);
 
   if (Updated)
     C.addTransition(State);
