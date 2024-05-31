@@ -3939,7 +3939,7 @@ private:
       // If we cannot (because there's an intervening non-const or unbounded
       // gep) then we wouldn't expect to see dbg.assign intrinsics linked to
       // this instruction.
-      APInt OffsetInBytes(DL.getTypeSizeInBits(Ptr->getType()), false);
+      APInt OffsetInBytes(DL.getIndexTypeSizeInBits(Ptr->getType()), false);
       Value *Base = InBoundsGEP->stripAndAccumulateInBoundsConstantOffsets(
           DL, OffsetInBytes);
       if (auto *OldAI = dyn_cast<AllocaInst>(Base)) {
