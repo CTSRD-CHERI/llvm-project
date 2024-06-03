@@ -20,8 +20,8 @@ define { i8, i1 } @test_cmpxchg_strong_i8(i8 addrspace(200)* %ptr, i8 %exp, i8 %
 ; PURECAP-ATOMICS-NEXT:    csc.b.rl a4, a2, (ca0)
 ; PURECAP-ATOMICS-NEXT:    bnez a4, .LBB0_1
 ; PURECAP-ATOMICS-NEXT:  .LBB0_3:
-; PURECAP-ATOMICS-NEXT:    xor a0, a3, a1
-; PURECAP-ATOMICS-NEXT:    seqz a1, a0
+; PURECAP-ATOMICS-NEXT:    xor a1, a3, a1
+; PURECAP-ATOMICS-NEXT:    seqz a1, a1
 ; PURECAP-ATOMICS-NEXT:    mv a0, a3
 ; PURECAP-ATOMICS-NEXT:    cret
 ;
@@ -75,8 +75,8 @@ define { i16, i1 } @test_cmpxchg_strong_i16(i16 addrspace(200)* %ptr, i16 %exp, 
 ; PURECAP-ATOMICS-NEXT:    csc.h.rl a4, a2, (ca0)
 ; PURECAP-ATOMICS-NEXT:    bnez a4, .LBB1_1
 ; PURECAP-ATOMICS-NEXT:  .LBB1_3:
-; PURECAP-ATOMICS-NEXT:    xor a0, a3, a1
-; PURECAP-ATOMICS-NEXT:    seqz a1, a0
+; PURECAP-ATOMICS-NEXT:    xor a1, a3, a1
+; PURECAP-ATOMICS-NEXT:    seqz a1, a1
 ; PURECAP-ATOMICS-NEXT:    mv a0, a3
 ; PURECAP-ATOMICS-NEXT:    cret
 ;
@@ -130,8 +130,8 @@ define { i32, i1 } @test_cmpxchg_strong_i32(i32 addrspace(200)* %ptr, i32 %exp, 
 ; PURECAP-ATOMICS-NEXT:    csc.w.rl a4, a2, (ca0)
 ; PURECAP-ATOMICS-NEXT:    bnez a4, .LBB2_1
 ; PURECAP-ATOMICS-NEXT:  .LBB2_3:
-; PURECAP-ATOMICS-NEXT:    xor a0, a3, a1
-; PURECAP-ATOMICS-NEXT:    seqz a1, a0
+; PURECAP-ATOMICS-NEXT:    xor a1, a3, a1
+; PURECAP-ATOMICS-NEXT:    seqz a1, a1
 ; PURECAP-ATOMICS-NEXT:    mv a0, a3
 ; PURECAP-ATOMICS-NEXT:    cret
 ;
@@ -184,8 +184,8 @@ define { i64, i1 } @test_cmpxchg_strong_i64(i64 addrspace(200)* %ptr, i64 %exp, 
 ; PURECAP-ATOMICS-NEXT:    csc.d.rl a4, a2, (ca0)
 ; PURECAP-ATOMICS-NEXT:    bnez a4, .LBB3_1
 ; PURECAP-ATOMICS-NEXT:  .LBB3_3:
-; PURECAP-ATOMICS-NEXT:    xor a0, a3, a1
-; PURECAP-ATOMICS-NEXT:    seqz a1, a0
+; PURECAP-ATOMICS-NEXT:    xor a1, a3, a1
+; PURECAP-ATOMICS-NEXT:    seqz a1, a1
 ; PURECAP-ATOMICS-NEXT:    mv a0, a3
 ; PURECAP-ATOMICS-NEXT:    cret
 ;
@@ -349,8 +349,8 @@ define { i8, i1 } @test_cmpxchg_weak_i8(i8 addrspace(200)* %ptr, i8 %exp, i8 %ne
 ; PURECAP-ATOMICS-NEXT:    csc.b.rl a4, a2, (ca0)
 ; PURECAP-ATOMICS-NEXT:    bnez a4, .LBB6_1
 ; PURECAP-ATOMICS-NEXT:  .LBB6_3:
-; PURECAP-ATOMICS-NEXT:    xor a0, a3, a1
-; PURECAP-ATOMICS-NEXT:    seqz a1, a0
+; PURECAP-ATOMICS-NEXT:    xor a1, a3, a1
+; PURECAP-ATOMICS-NEXT:    seqz a1, a1
 ; PURECAP-ATOMICS-NEXT:    mv a0, a3
 ; PURECAP-ATOMICS-NEXT:    cret
 ;
@@ -404,8 +404,8 @@ define { i16, i1 } @test_cmpxchg_weak_i16(i16 addrspace(200)* %ptr, i16 %exp, i1
 ; PURECAP-ATOMICS-NEXT:    csc.h.rl a4, a2, (ca0)
 ; PURECAP-ATOMICS-NEXT:    bnez a4, .LBB7_1
 ; PURECAP-ATOMICS-NEXT:  .LBB7_3:
-; PURECAP-ATOMICS-NEXT:    xor a0, a3, a1
-; PURECAP-ATOMICS-NEXT:    seqz a1, a0
+; PURECAP-ATOMICS-NEXT:    xor a1, a3, a1
+; PURECAP-ATOMICS-NEXT:    seqz a1, a1
 ; PURECAP-ATOMICS-NEXT:    mv a0, a3
 ; PURECAP-ATOMICS-NEXT:    cret
 ;
@@ -459,8 +459,8 @@ define { i32, i1 } @test_cmpxchg_weak_i32(i32 addrspace(200)* %ptr, i32 %exp, i3
 ; PURECAP-ATOMICS-NEXT:    csc.w.rl a4, a2, (ca0)
 ; PURECAP-ATOMICS-NEXT:    bnez a4, .LBB8_1
 ; PURECAP-ATOMICS-NEXT:  .LBB8_3:
-; PURECAP-ATOMICS-NEXT:    xor a0, a3, a1
-; PURECAP-ATOMICS-NEXT:    seqz a1, a0
+; PURECAP-ATOMICS-NEXT:    xor a1, a3, a1
+; PURECAP-ATOMICS-NEXT:    seqz a1, a1
 ; PURECAP-ATOMICS-NEXT:    mv a0, a3
 ; PURECAP-ATOMICS-NEXT:    cret
 ;
@@ -513,8 +513,8 @@ define { i64, i1 } @test_cmpxchg_weak_i64(i64 addrspace(200)* %ptr, i64 %exp, i6
 ; PURECAP-ATOMICS-NEXT:    csc.d.rl a4, a2, (ca0)
 ; PURECAP-ATOMICS-NEXT:    bnez a4, .LBB9_1
 ; PURECAP-ATOMICS-NEXT:  .LBB9_3:
-; PURECAP-ATOMICS-NEXT:    xor a0, a3, a1
-; PURECAP-ATOMICS-NEXT:    seqz a1, a0
+; PURECAP-ATOMICS-NEXT:    xor a1, a3, a1
+; PURECAP-ATOMICS-NEXT:    seqz a1, a1
 ; PURECAP-ATOMICS-NEXT:    mv a0, a3
 ; PURECAP-ATOMICS-NEXT:    cret
 ;
