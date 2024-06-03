@@ -16,7 +16,6 @@
 #define LLVM_SUPPORT_CHERISETBOUNDS_H
 
 #include "llvm/ADT/FunctionExtras.h"
-#include "llvm/ADT/Optional.h"
 #include "llvm/ADT/SmallVector.h"
 #include "llvm/Support/ManagedStatic.h"
 #include "llvm/Support/raw_ostream.h"
@@ -56,8 +55,8 @@ enum class SetBoundsPointerSource {
 class CSetBoundsStatistics {
 public:
   struct Entry {
-    Optional<uint64_t> RequestedSize;
-    Optional<uint64_t> RequestedSizeMultipleOf;
+    std::optional<uint64_t> RequestedSize;
+    std::optional<uint64_t> RequestedSizeMultipleOf;
     Align KnownAlignment;
     SetBoundsPointerSource PointerKind;
     std::string SourceLocation;
@@ -67,9 +66,9 @@ public:
   CSetBoundsStatistics();
   ~CSetBoundsStatistics();
 
-  void add(Align KnownAlignment, Optional<uint64_t> Length, StringRef Pass,
+  void add(Align KnownAlignment, std::optional<uint64_t> Length, StringRef Pass,
            SetBoundsPointerSource Kind, const Twine &Details,
-           std::string SourceLoc, Optional<uint64_t> SizeMultipleOf = None);
+           std::string SourceLoc, std::optional<uint64_t> SizeMultipleOf = None);
   void print(llvm::raw_ostream &OS, StringRef MainFile, bool PrintHeader);
   void print(StatsOutputFile &S, StringRef MainFile);
   static StringRef outputFile();

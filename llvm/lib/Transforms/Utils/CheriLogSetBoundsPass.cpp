@@ -56,7 +56,7 @@ public:
           continue; // Not a call
         Function *CalledFunc = CB->getCalledFunction();
         const auto LogAllocSize =
-            [&](std::pair<unsigned, Optional<unsigned>> AllocSize) {
+            [&](std::pair<unsigned, std::optional<unsigned>> AllocSize) {
               // TODO: should we also log this for non-capabilities?
               if (!DL.isFatPointer(I.getType()))
                 return;
@@ -68,11 +68,11 @@ public:
               // See llvm::isValidAssumeForContext()
               Instruction *Ctx = &BB.back();
               Align Alignment = getKnownAlignment(&I, DL, Ctx, &AC, &DT);
-              Optional<uint64_t> KnownSize;
-              Optional<uint64_t> SizeMultipleOf;
+              std::optional<uint64_t> KnownSize;
+              std::optional<uint64_t> SizeMultipleOf;
 
-              Optional<uint64_t> FirstConstant;
-              Optional<uint64_t> SecondConstant;
+              std::optional<uint64_t> FirstConstant;
+              std::optional<uint64_t> SecondConstant;
               if (I.getNumOperands() > AllocSize.first)
                 FirstConstant =
                     cheri::inferConstantValue(I.getOperand(AllocSize.first));
