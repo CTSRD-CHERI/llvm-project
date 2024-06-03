@@ -65,10 +65,10 @@ StatsFormat ShouldCollectCSetBoundsStats = StatsOff;
 ManagedStatic<CSetBoundsStatistics> CSetBoundsStats;
 
 void CSetBoundsStatistics::add(Align KnownAlignment,
-                               Optional<uint64_t> KnownSize, StringRef Pass,
+                               std::optional<uint64_t> KnownSize, StringRef Pass,
                                SetBoundsPointerSource Kind,
                                const Twine &Details, std::string SourceLoc,
-                               Optional<uint64_t> SizeMultipleOf) {
+                               std::optional<uint64_t> SizeMultipleOf) {
   Entries.push_back({KnownSize, SizeMultipleOf, KnownAlignment, Kind,
                      std::move(SourceLoc), Pass.str(), Details.str()});
 }

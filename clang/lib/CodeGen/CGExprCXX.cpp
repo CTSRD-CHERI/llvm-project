@@ -1800,9 +1800,9 @@ llvm::Value *CodeGenFunction::EmitCXXNewExpr(const CXXNewExpr *E) {
     // TODO: placement new with pointer might not be heap!
     auto Kind = llvm::cheri::SetBoundsPointerSource::Heap;
     llvm::Align KnownAlignment = allocation.getAlignment().getAsAlign();
-    llvm::Optional<uint64_t> AllocSizeConstant =
+    std::optional<uint64_t> AllocSizeConstant =
         llvm::cheri::inferConstantValue(allocSize);
-    llvm::Optional<uint64_t> MultipleOf;
+    std::optional<uint64_t> MultipleOf;
     std::string BoundsSource;
     llvm::raw_string_ostream DS(BoundsSource);
     // allocator->getNameForDiagnostic(DS, getContext().getPrintingPolicy(),

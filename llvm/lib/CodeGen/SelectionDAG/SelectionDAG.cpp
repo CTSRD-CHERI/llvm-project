@@ -7488,7 +7488,7 @@ SDValue SelectionDAG::getCSetBounds(SDValue Val, const SDLoc &DL,
                                     cheri::SetBoundsPointerSource Kind,
                                     const Twine &Details, std::string SrcLoc) {
   if (cheri::ShouldCollectCSetBoundsStats) {
-    Optional<uint64_t> SizeConst;
+    std::optional<uint64_t> SizeConst;
     if (ConstantSDNode *Constant = dyn_cast<ConstantSDNode>(Length.getNode())) {
       SizeConst = Constant->getZExtValue();
     }

@@ -2645,7 +2645,7 @@ static SDValue setBounds(SelectionDAG &DAG, SDValue Val, uint64_t Length,
 static void addGlobalsCSetBoundsStats(const GlobalValue *GV, SelectionDAG &DAG,
                                       StringRef Pass, const DebugLoc &DL) {
   int64_t AllocSize = -1;
-  Optional<uint64_t> Size = None;
+  std::optional<uint64_t> Size = None;
   if (GV->getValueType()->isSized()) {
     Size = DAG.getDataLayout().getTypeStoreSize(GV->getValueType());
     AllocSize = DAG.getDataLayout().getTypeAllocSize(GV->getValueType());
@@ -4929,7 +4929,7 @@ SDValue MipsTargetLowering::LowerFormalArguments(
           LocVT = VA.getValVT();
       }
 
-      // Only arguments pased on the stack should make it here. 
+      // Only arguments pased on the stack should make it here.
       assert(VA.isMemLoc());
 
 

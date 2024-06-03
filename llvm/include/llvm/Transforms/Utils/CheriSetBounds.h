@@ -22,8 +22,8 @@ class Instruction;
 namespace cheri {
 
 // This probably exists somewhere else
-inline Optional<uint64_t> inferConstantValue(Value *V) {
-  Optional<uint64_t> Result;
+inline std::optional<uint64_t> inferConstantValue(Value *V) {
+  std::optional<uint64_t> Result;
   if (auto CI = dyn_cast_or_null<ConstantInt>(V)) {
     Result = CI->getSExtValue();
   } else {
@@ -35,7 +35,7 @@ inline Optional<uint64_t> inferConstantValue(Value *V) {
 inline void addSetBoundsStats(Align KnownAlignment, Value *Length,
                               StringRef Pass, SetBoundsPointerSource Kind,
                               const Twine &Details, std::string SourceLoc,
-                              Optional<uint64_t> SizeMultipleOf = None) {
+                              std::optional<uint64_t> SizeMultipleOf = None) {
   CSetBoundsStats->add(KnownAlignment, inferConstantValue(Length), Pass, Kind,
                        Details, std::move(SourceLoc), SizeMultipleOf);
 }
