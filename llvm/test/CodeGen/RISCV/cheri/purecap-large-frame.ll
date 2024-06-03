@@ -41,9 +41,9 @@ define void @just_above_threshold() local_unnamed_addr addrspace(200) nounwind {
 ; CHECK-NEXT:    cincoffset csp, csp, -2032
 ; CHECK-NEXT:    csc cra, 2016(csp) # 16-byte Folded Spill
 ; CHECK-NEXT:    cincoffset csp, csp, -48
-; CHECK-NEXT:    cincoffset ca0, csp, 2047
-; CHECK-NEXT:    cincoffset ca0, ca0, 1
-; CHECK-NEXT:    cincoffset ca0, ca0, 0
+; CHECK-NEXT:    lui a0, 1
+; CHECK-NEXT:    cincoffset ca0, csp, a0
+; CHECK-NEXT:    cincoffset ca0, ca0, -2048
 ; CHECK-NEXT:    csetbounds ca0, ca0, 16
 ; CHECK-NEXT:    ccall use_i128
 ; CHECK-NEXT:    cincoffset ca0, csp, 24
