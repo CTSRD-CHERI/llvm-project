@@ -79,7 +79,7 @@ private:
                CharUnits alignment, bool constant = false,
                llvm::GlobalValue::LinkageTypes linkage =
                    llvm::GlobalValue::InternalLinkage,
-               llvm::Optional<unsigned> addressSpace = llvm::None);
+               std::optional<unsigned> addressSpace = std::nullopt);
 
   ConstantInitFuture createFuture(llvm::Constant *initializer);
 

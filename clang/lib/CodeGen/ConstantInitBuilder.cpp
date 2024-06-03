@@ -67,7 +67,7 @@ inline ConstantInitFuture::ConstantInitFuture(ConstantInitBuilderBase *builder)
 llvm::GlobalVariable *ConstantInitBuilderBase::createGlobal(
     llvm::Constant *initializer, const llvm::Twine &name, CharUnits alignment,
     bool constant, llvm::GlobalValue::LinkageTypes linkage,
-    llvm::Optional<unsigned> addressSpace) {
+    std::optional<unsigned> addressSpace) {
   auto GV = new llvm::GlobalVariable(CGM.getModule(),
                                      initializer->getType(),
                                      constant,
