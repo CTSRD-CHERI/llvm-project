@@ -618,6 +618,9 @@ void TypePrinting::print(Type *Ty, raw_ostream &OS) {
     // extra dependencies we just print the pointer's address here.
     OS << "dxil-ptr (" << Ty << ")";
     return;
+  case Type::SizedCapabilityTyID:
+    OS << 'c' << cast<SizedCapabilityType>(Ty)->getBitWidth();
+    return;
   }
   llvm_unreachable("Invalid TypeID");
 }

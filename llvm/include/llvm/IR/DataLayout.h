@@ -756,6 +756,8 @@ inline TypeSize DataLayout::getTypeSizeInBits(Type *Ty) const {
                        getTypeSizeInBits(VTy->getElementType()).getFixedSize();
     return TypeSize(MinBits, EltCnt.isScalable());
   }
+  case Type::SizedCapabilityTyID:
+    return TypeSize::Fixed(cast<SizedCapabilityType>(Ty)->getBitWidth());
   default:
     llvm_unreachable("DataLayout::getTypeSizeInBits(): Unsupported type");
   }
