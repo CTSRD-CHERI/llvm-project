@@ -82,6 +82,7 @@ public:
     FixedVectorTyID,    ///< Fixed width SIMD vector type
     ScalableVectorTyID, ///< Scalable SIMD vector type
     DXILPointerTyID,    ///< DXIL typed pointer used by DirectX target
+    SizedCapabilityTyID,///< Fixed-size CHERI capability type
   };
 
 private:
@@ -225,6 +226,11 @@ public:
   /// True if this is an instance of PointerType.
   bool isPointerTy() const { return getTypeID() == PointerTyID; }
 
+  /// True if this is an instance of PointerType.
+  bool isSizedCapabilityTy() const {
+    return getTypeID() == SizedCapabilityTyID;
+  }
+
   /// True if this is an instance of an opaque PointerType.
   bool isOpaquePointerTy() const;
 
@@ -272,8 +278,8 @@ public:
   bool isSized(SmallPtrSetImpl<Type*> *Visited = nullptr) const {
     // If it's a primitive, it is always sized.
     if (getTypeID() == IntegerTyID || isFloatingPointTy() ||
-        getTypeID() == PointerTyID || getTypeID() == X86_MMXTyID ||
-        getTypeID() == X86_AMXTyID)
+        getTypeID() == PointerTyID || getTypeID() == SizedCapabilityTyID ||
+        getTypeID() == X86_MMXTyID || getTypeID() == X86_AMXTyID)
       return true;
     // If it is not something that can have a size (e.g. a function or label),
     // it doesn't have a size.
