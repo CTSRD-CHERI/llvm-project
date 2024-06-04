@@ -938,7 +938,7 @@ def : CompressPat<(JALR X1, GPRNoX0:$rs1, 0),
                   (C_JALR GPRNoX0:$rs1)>;
 } // Predicates = [HasStdExtC, NotCapMode]
 
-let Predicates = [HasStdExtC] in {
+let Predicates = [HasStdExtCOrZca] in {
 def : CompressPat<(ADD GPRNoX0:$rs1, GPRNoX0:$rs1, GPRNoX0:$rs2),
                   (C_ADD GPRNoX0:$rs1, GPRNoX0:$rs2)>;
 let isCompressOnly = true in
