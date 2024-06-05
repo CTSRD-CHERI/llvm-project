@@ -1,6 +1,6 @@
 ; Check that __builtin_assume_aligned does the right thing and allows us to elide the memcpy
 ; call even with must_preserve_cheri_tags attribute (run instcombine to propagate assume information)
-; RUN: opt @PURECAP_HARDFLOAT_ARGS@ -S -instcombine < %s | llc @PURECAP_HARDFLOAT_ARGS@ -O2 -o - | FileCheck %s
+; RUN: opt @PURECAP_HARDFLOAT_ARGS@ -S -passes=instcombine < %s | llc @PURECAP_HARDFLOAT_ARGS@ -O2 -o - | FileCheck %s
 target datalayout = "@PURECAP_DATALAYOUT@"
 
 declare void @llvm.memcpy.p200i8.p200i8.i64(i8 addrspace(200)* nocapture writeonly, i8 addrspace(200)* nocapture readonly, i64, i1)

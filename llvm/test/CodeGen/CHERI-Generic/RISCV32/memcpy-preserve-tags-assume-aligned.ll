@@ -2,7 +2,7 @@
 ; DO NOT EDIT -- This file was generated from test/CodeGen/CHERI-Generic/Inputs/memcpy-preserve-tags-assume-aligned.ll
 ; Check that __builtin_assume_aligned does the right thing and allows us to elide the memcpy
 ; call even with must_preserve_cheri_tags attribute (run instcombine to propagate assume information)
-; RUN: opt -mtriple=riscv32 --relocation-model=pic -target-abi il32pc64f -mattr=+xcheri,+cap-mode,+f -S -instcombine < %s | llc -mtriple=riscv32 --relocation-model=pic -target-abi il32pc64f -mattr=+xcheri,+cap-mode,+f -O2 -o - | FileCheck %s
+; RUN: opt -mtriple=riscv32 --relocation-model=pic -target-abi il32pc64f -mattr=+xcheri,+cap-mode,+f -S -passes=instcombine < %s | llc -mtriple=riscv32 --relocation-model=pic -target-abi il32pc64f -mattr=+xcheri,+cap-mode,+f -O2 -o - | FileCheck %s
 target datalayout = "e-m:e-pf200:64:64:64:32-p:32:32-i64:64-n32-S128-A200-P200-G200"
 
 declare void @llvm.memcpy.p200i8.p200i8.i64(i8 addrspace(200)* nocapture writeonly, i8 addrspace(200)* nocapture readonly, i64, i1)

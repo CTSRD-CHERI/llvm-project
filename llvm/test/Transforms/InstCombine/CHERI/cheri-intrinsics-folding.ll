@@ -1,4 +1,4 @@
-; RUN: %cheri_opt -S -instcombine %s -o - | FileCheck %s
+; RUN: %cheri_opt -S -passes=instcombine %s -o - | FileCheck %s
 target datalayout = "pf200:128:128:128:64-A200-P200-G200"
 
 

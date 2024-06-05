@@ -1,5 +1,5 @@
-; RUN: opt -S -instcombine -o - %s | FileCheck %s
-; RUN: opt -S -instcombine -o - %s | llc @PURECAP_HARDFLOAT_ARGS@ -O1 - -o - | %cheri_FileCheck %s --check-prefix ASM
+; RUN: opt -S -passes=instcombine -o - %s | FileCheck %s
+; RUN: opt -S -passes=instcombine -o - %s | llc @PURECAP_HARDFLOAT_ARGS@ -O1 - -o - | %cheri_FileCheck %s --check-prefix ASM
 
 target datalayout = "@PURECAP_DATALAYOUT@"
 ; Reduced test case for a crash in the new optimization to fold multiple setoffset calls (orignally found when compiling libunwind)

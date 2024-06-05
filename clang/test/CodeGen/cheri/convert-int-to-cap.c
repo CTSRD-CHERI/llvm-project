@@ -4,11 +4,11 @@
 // RUN: %cheri_cc1 -xc++ -Wno-cheri-capability-misuse -ast-dump %s -cheri-int-to-cap=relative | FileCheck %s --check-prefixes=AST,AST-RELATIVE,CXX-AST  --allow-unused-prefixes
 // RUN: %cheri_cc1 -xc++ -Wno-cheri-capability-misuse -ast-dump %s -cheri-int-to-cap=address | FileCheck %s --check-prefixes=AST,AST-ADDRESS,CXX-AST --allow-unused-prefixes
 
-// We pipe through opt -mem2reg to make the test checks shorter (but keep -O0 to avoid seeing any instcombine folds)
-// RUN: %cheri_cc1 -Wno-error=cheri-capability-misuse -verify=relative -emit-llvm -o - -disable-O0-optnone -cheri-int-to-cap=relative %s | opt -S -mem2reg -o - | FileCheck %s --check-prefixes=CHECK,RELATIVE --allow-unused-prefixes
-// RUN: %cheri_cc1 -Wno-error=cheri-capability-misuse -verify=address,c-address -emit-llvm -o - -disable-O0-optnone -cheri-int-to-cap=address %s | opt -S -mem2reg -o - | FileCheck %s --check-prefixes=CHECK,ADDRESS --allow-unused-prefixes
-// RUN: %cheri_cc1 -xc++ -Wno-error=cheri-capability-misuse -verify=relative -emit-llvm -o - -disable-O0-optnone -cheri-int-to-cap=relative %s | opt -S -mem2reg -o - | FileCheck %s --check-prefixes=CHECK,RELATIVE,CXX-CHECK --allow-unused-prefixes
-// RUN: %cheri_cc1 -xc++ -Wno-error=cheri-capability-misuse -verify=address -emit-llvm -o - -disable-O0-optnone -cheri-int-to-cap=address %s | opt -S -mem2reg -o - | FileCheck %s --check-prefixes=CHECK,ADDRESS,CXX-CHECK --allow-unused-prefixes
+// We pipe through opt -passes=mem2reg to make the test checks shorter (but keep -O0 to avoid seeing any instcombine folds)
+// RUN: %cheri_cc1 -Wno-error=cheri-capability-misuse -verify=relative -emit-llvm -o - -disable-O0-optnone -cheri-int-to-cap=relative %s | opt -S -passes=mem2reg -o - | FileCheck %s --check-prefixes=CHECK,RELATIVE --allow-unused-prefixes
+// RUN: %cheri_cc1 -Wno-error=cheri-capability-misuse -verify=address,c-address -emit-llvm -o - -disable-O0-optnone -cheri-int-to-cap=address %s | opt -S -passes=mem2reg -o - | FileCheck %s --check-prefixes=CHECK,ADDRESS --allow-unused-prefixes
+// RUN: %cheri_cc1 -xc++ -Wno-error=cheri-capability-misuse -verify=relative -emit-llvm -o - -disable-O0-optnone -cheri-int-to-cap=relative %s | opt -S -passes=mem2reg -o - | FileCheck %s --check-prefixes=CHECK,RELATIVE,CXX-CHECK --allow-unused-prefixes
+// RUN: %cheri_cc1 -xc++ -Wno-error=cheri-capability-misuse -verify=address -emit-llvm -o - -disable-O0-optnone -cheri-int-to-cap=address %s | opt -S -passes=mem2reg -o - | FileCheck %s --check-prefixes=CHECK,ADDRESS,CXX-CHECK --allow-unused-prefixes
 
 #ifdef __cplusplus
 extern "C" {

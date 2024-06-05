@@ -1,4 +1,4 @@
-; RUN: opt -S -instcombine -o - %s | FileCheck %s
+; RUN: opt -S -passes=instcombine -o - %s | FileCheck %s
 ; Reduced test case for a crash in the new optimization to fold multiple setoffset calls (orignally found when compiling libunwind)
 target datalayout = "pf200:128:128:128:64-A200-P200-G200"
 

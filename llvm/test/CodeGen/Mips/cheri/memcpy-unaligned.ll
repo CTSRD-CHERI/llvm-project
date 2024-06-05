@@ -3,8 +3,8 @@
 ; This is not safe if it is an unaligned capability store but we just expand that to
 ; a memcpy in SelectionDAG now. See https://github.com/CTSRD-CHERI/llvm-project/issues/301
 
-; RUN: %cheri128_purecap_opt -sroa -instsimplify %s -o - -S | FileCheck %s -check-prefix SROA
-; RUN: %cheri128_purecap_opt -sroa -instsimplify %s -o - -S | %cheri128_purecap_llc -O2 - -o - 2>%t.dbg | FileCheck %s
+; RUN: %cheri128_purecap_opt -passes=sroa,instsimplify %s -o - -S | FileCheck %s -check-prefix SROA
+; RUN: %cheri128_purecap_opt -passes=sroa,instsimplify %s -o - -S | %cheri128_purecap_llc -O2 - -o - 2>%t.dbg | FileCheck %s
 ; RUN: FileCheck %s -check-prefix=DBG -input-file=%t.dbg
 ; DBG:      warning: <unknown>:0:0: in function spgFormLeafTuple void (): found underaligned store of capability type (aligned to 1 bytes instead of 16). Will use memcpy() instead of capability load to preserve tags if it is aligned correctly at runtime
 ; DBG-NEXT: warning: <unknown>:0:0: in function align2_should_call_memcpy void (): found underaligned store of capability type (aligned to 2 bytes instead of 16). Will use memcpy() instead of capability load to preserve tags if it is aligned correctly at runtime

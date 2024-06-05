@@ -1,4 +1,4 @@
-; RUN: opt < %s -instcombine -S | FileCheck %s
+; RUN: opt < %s -passes=instcombine -S | FileCheck %s
 source_filename = "copyptr.c"
 target datalayout = "E-m:e-pf200:128:128:128:64-i8:8:32-i16:16:32-i64:64-n32:64-S128-A200"
 target triple = "cheri-unknown-freebsd"
