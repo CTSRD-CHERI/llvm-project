@@ -2,8 +2,8 @@
 ; Test that we use the CIncOffset with an immediate to set the offset on null
 ; instead of csetoffset/csetaddr which doesn't have an immediate version
 
-; RUN: %cheri_opt -S -instcombine %s -o - | FileCheck %s -check-prefix IR -enable-var-scope
-; RUN: %cheri_opt -S -instcombine %s -o - | %cheri_llc -filetype=asm -o - | FileCheck %s
+; RUN: %cheri_opt -S -passes=instcombine %s -o - | FileCheck %s -check-prefix IR -enable-var-scope
+; RUN: %cheri_opt -S -passes=instcombine %s -o - | %cheri_llc -filetype=asm -o - | FileCheck %s
 
 target datalayout = "pf200:128:128:128:64"
 

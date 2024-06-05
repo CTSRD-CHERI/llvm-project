@@ -19,9 +19,9 @@
 // RUN:   FileCheck %s -check-prefixes CHECK,CHECK-USHORT -enable-var-scope
 
 /// Test for CHERI
-// RUN: %cheri_cc1 -no-opaque-pointers -DTEST_CAP -o - -emit-llvm %s -disable-O0-optnone | opt -S -sroa | \
+// RUN: %cheri_cc1 -no-opaque-pointers -DTEST_CAP -o - -emit-llvm %s -disable-O0-optnone | opt -S -passes=sroa | \
 // RUN:   FileCheck %s -check-prefixes CHECK,CHECK-CAP_POINTER
-// RUN: %cheri_cc1 -no-opaque-pointers -DTEST_INTCAP -o - -emit-llvm %s -disable-O0-optnone | opt -S -sroa | \
+// RUN: %cheri_cc1 -no-opaque-pointers -DTEST_INTCAP -o - -emit-llvm %s -disable-O0-optnone | opt -S -passes=sroa | \
 // RUN:   FileCheck %s -check-prefixes CHECK,CHECK-INTCAP
 
 #ifdef TEST_VOID_PTR

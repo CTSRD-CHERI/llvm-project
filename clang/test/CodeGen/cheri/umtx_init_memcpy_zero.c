@@ -1,4 +1,4 @@
-// RUN: %cheri_purecap_cc1 -emit-llvm -o - -O0 -disable-O0-optnone %s | opt -S -mem2reg | FileCheck %s
+// RUN: %cheri_purecap_cc1 -emit-llvm -o - -O0 -disable-O0-optnone %s | opt -S -passes=mem2reg | FileCheck %s
 
 // When generating machine code the memcpy here used to be converted into a memset zero with
 // capability type. This then crashed the compiler since only integers and vectors were handled.

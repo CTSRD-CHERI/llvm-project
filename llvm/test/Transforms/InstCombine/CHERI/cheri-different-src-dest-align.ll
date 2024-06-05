@@ -1,7 +1,7 @@
 ; We would previously generate a broken CHERI capability load for a memcpy with dest aligned to cap size
 ; REQUIRES: mips-registered-target
 ; but src not aligned and then assert later on
-; RUN: %cheri128_opt %s -instcombine -S -o %t.ll
+; RUN: %cheri128_opt %s -passes=instcombine -S -o %t.ll
 ; RUN: FileCheck %s -input-file=%t.ll
 ; check that we don't generate broken output due to instcombine:
 ; RUN: %cheri128_llc -O2 %t.ll -o - | FileCheck %s -check-prefix ASM -implicit-check-not clc

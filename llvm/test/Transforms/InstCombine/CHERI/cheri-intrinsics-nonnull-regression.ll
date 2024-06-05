@@ -1,4 +1,4 @@
-; RUN: opt -S -instcombine %s -o - | FileCheck %s
+; RUN: opt -S -passes=instcombine %s -o - | FileCheck %s
 ; This used to produce a nonnull attribute on a null parameter in llvm.cheri.cap.address.set
 ; Check that we convert the set on NULL to a GEP instruction
 target datalayout = "pf200:128:128:128:64-A200-P200-G200"
