@@ -321,7 +321,8 @@ typedef struct {
 // CHECK-NEXT:    [[ADD:%.*]] = add nsw i64 [[IN_COERCE0]], 1
 // CHECK-NEXT:    [[TMP0:%.*]] = getelementptr i8, ptr addrspace(200) [[IN_COERCE2]], i64 2
 // CHECK-NEXT:    [[DOTFCA_0_INSERT:%.*]] = insertvalue { i64, i64, ptr addrspace(200) } poison, i64 [[ADD]], 0
-// CHECK-NEXT:    [[DOTFCA_2_INSERT:%.*]] = insertvalue { i64, i64, ptr addrspace(200) } [[DOTFCA_0_INSERT]], ptr addrspace(200) [[TMP0]], 2
+// CHECK-NEXT:    [[DOTFCA_1_INSERT:%.*]] = insertvalue { i64, i64, ptr addrspace(200) } [[DOTFCA_0_INSERT]], i64 undef, 1
+// CHECK-NEXT:    [[DOTFCA_2_INSERT:%.*]] = insertvalue { i64, i64, ptr addrspace(200) } [[DOTFCA_1_INSERT]], ptr addrspace(200) [[TMP0]], 2
 // CHECK-NEXT:    ret { i64, i64, ptr addrspace(200) } [[DOTFCA_2_INSERT]]
 //
 IntAndCap int_and_cap(IntAndCap in) {
@@ -345,7 +346,8 @@ typedef struct {
 // CHECK-NEXT:    [[ADD3:%.*]] = add nsw i64 [[IN_COERCE1]], 1
 // CHECK-NEXT:    [[DOTFCA_0_INSERT:%.*]] = insertvalue { ptr addrspace(200), i64, i64 } poison, ptr addrspace(200) [[TMP0]], 0
 // CHECK-NEXT:    [[DOTFCA_1_INSERT:%.*]] = insertvalue { ptr addrspace(200), i64, i64 } [[DOTFCA_0_INSERT]], i64 [[ADD3]], 1
-// CHECK-NEXT:    ret { ptr addrspace(200), i64, i64 } [[DOTFCA_1_INSERT]]
+// CHECK-NEXT:    [[DOTFCA_2_INSERT:%.*]] = insertvalue { ptr addrspace(200), i64, i64 } [[DOTFCA_1_INSERT]], i64 undef, 2
+// CHECK-NEXT:    ret { ptr addrspace(200), i64, i64 } [[DOTFCA_2_INSERT]]
 //
 CapAndInt cap_and_int(CapAndInt in) {
   return (CapAndInt){ .i = in.i + 1, .c = in.c + 2 };
