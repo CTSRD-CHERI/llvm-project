@@ -32,10 +32,11 @@ inline std::optional<uint64_t> inferConstantValue(Value *V) {
   return Result;
 }
 
-inline void addSetBoundsStats(Align KnownAlignment, Value *Length,
-                              StringRef Pass, SetBoundsPointerSource Kind,
-                              const Twine &Details, std::string SourceLoc,
-                              std::optional<uint64_t> SizeMultipleOf = None) {
+inline void
+addSetBoundsStats(Align KnownAlignment, Value *Length, StringRef Pass,
+                  SetBoundsPointerSource Kind, const Twine &Details,
+                  std::string SourceLoc,
+                  std::optional<uint64_t> SizeMultipleOf = std::nullopt) {
   CSetBoundsStats->add(KnownAlignment, inferConstantValue(Length), Pass, Kind,
                        Details, std::move(SourceLoc), SizeMultipleOf);
 }

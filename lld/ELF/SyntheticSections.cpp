@@ -166,7 +166,7 @@ Optional<unsigned> MipsAbiFlagsSection<ELFT>::getCheriAbiVariant() const {
   auto cheriAbiVariant = flags.isa_ext & Mips::AFL_EXT_CHERI_ABI_MASK;
   if (!cheriAbiVariant) {
     warn("Linking old object files without CheriABI variant flag.");
-    return None;
+    return std::nullopt;
   }
   switch (cheriAbiVariant) {
   case Mips::AFL_EXT_CHERI_ABI_LEGACY:
@@ -179,7 +179,7 @@ Optional<unsigned> MipsAbiFlagsSection<ELFT>::getCheriAbiVariant() const {
     return DF_MIPS_CHERI_ABI_FNDESC;
   default:
     error("Unknown CHERI ABI variant " + Twine(cheriAbiVariant));
-    return None;
+    return std::nullopt;
   }
 }
 

@@ -68,7 +68,8 @@ public:
 
   void add(Align KnownAlignment, std::optional<uint64_t> Length, StringRef Pass,
            SetBoundsPointerSource Kind, const Twine &Details,
-           std::string SourceLoc, std::optional<uint64_t> SizeMultipleOf = None);
+           std::string SourceLoc,
+           std::optional<uint64_t> SizeMultipleOf = std::nullopt);
   void print(llvm::raw_ostream &OS, StringRef MainFile, bool PrintHeader);
   void print(StatsOutputFile &S, StringRef MainFile);
   static StringRef outputFile();

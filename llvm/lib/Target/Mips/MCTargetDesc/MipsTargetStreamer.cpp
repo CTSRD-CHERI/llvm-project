@@ -50,7 +50,7 @@ llvm::Optional<unsigned> llvm::getCheriCapabilitySize(FeatureBitset Features) {
     return 8;
   }
   assert(!Features[Mips::FeatureMipsCheri]);
-  return None;
+  return std::nullopt;
 }
 
 static bool isMicroMips(const MCSubtargetInfo *STI) {

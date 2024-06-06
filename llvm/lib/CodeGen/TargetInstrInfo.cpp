@@ -1391,13 +1391,13 @@ bool TargetInstrInfo::isGuaranteedValidSetBounds(const MachineInstr &MI) const {
     return false;
   }
   const auto &MRI = MI.getMF()->getRegInfo();
-  Optional<int64_t> RequestedSize = getAsIntImmediate(*Size, MRI);
+  auto RequestedSize = getAsIntImmediate(*Size, MRI);
   if (!RequestedSize || *RequestedSize < 0) {
     LLVM_DEBUG(dbgs() << "unknown/negative bounds size -> CSetBounds may trap";
                MI.dump());
     return false;
   }
-  Optional<int64_t> ObjectOffset = 0;
+  std::optional<int64_t> ObjectOffset = 0;
   while (BoundedOp->isReg() && BoundedOp->getReg().isVirtual()) {
     auto *Def = MRI.getUniqueVRegDef(BoundedOp->getReg());
     const MachineOperand *Base = nullptr;
@@ -1409,7 +1409,8 @@ bool TargetInstrInfo::isGuaranteedValidSetBounds(const MachineInstr &MI) const {
         continue; // Try to accumulate CIncOffset sequences
       }
     }
-    ObjectOffset = None; // Not CIncOffset or CIncOffset with unknown offset
+    // Not CIncOffset or CIncOffset with unknown offset
+    ObjectOffset = std::nullopt;
     break;
   }
   if (!ObjectOffset || *ObjectOffset < 0) {

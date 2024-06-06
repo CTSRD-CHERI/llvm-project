@@ -919,7 +919,7 @@ CodeGenFunction::setCHERIBoundsOnArrayDecay(llvm::Value *Value, const Expr *E) {
   return Value;
 }
 
-static Optional<CodeGenFunction::TightenBoundsResult>
+static std::optional<CodeGenFunction::TightenBoundsResult>
 cannotSetBounds(const CodeGenFunction &CGF, llvm::raw_string_ostream &DbgOS,
                 const Expr *E, QualType Type, SubObjectBoundsKind Kind,
                 const Twine &Reason) {
@@ -928,7 +928,7 @@ cannotSetBounds(const CodeGenFunction &CGF, llvm::raw_string_ostream &DbgOS,
       << (int)Kind << Type << Reason.str() << E->getSourceRange();
   DEBUG_WITH_TYPE("cheri-bounds", llvm::dbgs() << DbgOS.str() << Reason
                                                << " -> not setting bounds\n");
-  return None;
+  return std::nullopt;
 }
 
 static bool hasBoundsOptOutAnnotation(const CodeGenFunction &CGF,
@@ -1139,7 +1139,7 @@ static bool containsVariableLengthArray(LangOptions::CheriBoundsMode BoundsMode,
   return findPossibleVLA(RD) != nullptr;
 }
 
-Optional<CodeGenFunction::TightenBoundsResult>
+std::optional<CodeGenFunction::TightenBoundsResult>
 CodeGenFunction::canTightenCheriBounds(QualType Ty, const Expr *E,
                                        SubObjectBoundsKind Kind) {
   const auto BoundsMode = getLangOpts().getCheriBounds();
@@ -1244,7 +1244,7 @@ CodeGenFunction::canTightenCheriBounds(QualType Ty, const Expr *E,
                   llvm::StringSwitch<Optional<unsigned>>(CXXMD->getName())
                       .Case("at", 1)
                       .Cases("front", "back", 0)
-                      .Default(None);
+                      .Default(std::nullopt);
               if (ExpectedParams && CXXMD->getNumParams() == *ExpectedParams)
                 KnownBad = true;
             }
@@ -1293,7 +1293,8 @@ CodeGenFunction::canTightenCheriBounds(QualType Ty, const Expr *E,
           "referenced value is a weak symbol and could therefore be NULL");
     }
   }
-  auto HandleMemberExpr = [&](const MemberExpr* ME, bool* ReturnValueValid) -> Optional<CodeGenFunction::TightenBoundsResult> {
+  auto HandleMemberExpr = [&](const MemberExpr *ME, bool *ReturnValueValid)
+      -> std::optional<CodeGenFunction::TightenBoundsResult> {
     assert(*ReturnValueValid && "API misuse");
     CHERI_BOUNDS_DBG(<< "got MemberExpr -> ");
     // TODO: should we do this recusively? E.g. for &foo.a.b.c.d if type a is
@@ -1302,22 +1303,22 @@ CodeGenFunction::canTightenCheriBounds(QualType Ty, const Expr *E,
     if (ME->isArrow() && !BaseTy->getPointeeType().isNull()) {
       if (hasBoundsOptOutAnnotation(*this, DbgOS, E, BaseTy, Kind,
                                     "base pointer type"))
-        return None;
+        return std::nullopt;
       BaseTy = BaseTy->getPointeeType();
     }
     if (hasBoundsOptOutAnnotation(*this, DbgOS, E, BaseTy, Kind, "base type"))
-      return None;
+      return std::nullopt;
 
     // When subscripting, attributes on the field only make sense for arrays,
     // since pointers (and references) don't have their storage inline.
     if (Kind == SubObjectBoundsKind::ArraySubscript &&
         !ME->getMemberDecl()->getType()->isArrayType()) {
       *ReturnValueValid = false;
-      return None;
+      return std::nullopt;
     }
 
     if (hasBoundsOptOutAnnotation(*this, DbgOS, E, ME->getMemberDecl(), Kind, "field"))
-      return None;
+      return std::nullopt;
 
     // Check whether the field or the field type has a "use-remaining-size" attr
     // TODO: also allow this attribute on typedefs?
@@ -1361,7 +1362,7 @@ CodeGenFunction::canTightenCheriBounds(QualType Ty, const Expr *E,
       return BoundsOnContainer(BaseTy, ME);
     }
     *ReturnValueValid = false;
-    return None;
+    return std::nullopt;
   };
   if (auto ME = dyn_cast<MemberExpr>(E)) {
     // FIXME: refactor this properly to get a sane API...
@@ -1407,7 +1408,7 @@ CodeGenFunction::canTightenCheriBounds(QualType Ty, const Expr *E,
     CHERI_BOUNDS_DBG(<< "Found array subscript -> ");
     switch (canSetBoundsOnArraySubscript(E, DbgOS, ASE, Kind, BoundsMode, *this)) {
     case ArrayBoundsResult::Never:
-      return None;
+      return std::nullopt;
     case ArrayBoundsResult::Always:
       return ExactBounds(TypeSize);
     case ArrayBoundsResult::UseFullArray: {
@@ -1433,7 +1434,7 @@ CodeGenFunction::canTightenCheriBounds(QualType Ty, const Expr *E,
 
   // General opt-out based on the type of the expression
   if (hasBoundsOptOutAnnotation(*this, DbgOS, E, Ty, Kind, "expression"))
-    return None;
+    return std::nullopt;
 
   // if (Ty->isArrayType()) {
   if (const ArrayType *AT = getContext().getAsArrayType(Ty)) {
@@ -1537,7 +1538,7 @@ CodeGenFunction::canTightenCheriBounds(QualType Ty, const Expr *E,
 #endif
   // TODO: assert here to find all the cases?
   // llvm_unreachable("Don't know whether to set bounds on type");
-  return None;
+  return std::nullopt;
 }
 
 RValue
@@ -6470,7 +6471,7 @@ RValue CodeGenFunction::EmitCall(QualType CalleeType, const CGCallee &OrigCallee
     // Load the global and use it in the call
     auto *MethodNum = Builder.CreateLoad(MethodNumVar);
     MethodNum->setMetadata(CGM.getModule().getMDKindID("invariant.load"),
-        llvm::MDNode::get(getLLVMContext(), None));
+                           llvm::MDNode::get(getLLVMContext(), std::nullopt));
     CallArg MethodNumArg(RValue::get(MethodNum), NumTy);
     NewParams.push_back(NumTy);
     // If we have a non-empty suffix, then we're not the version of the method

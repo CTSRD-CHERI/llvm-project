@@ -755,7 +755,7 @@ ExprResult Sema::ImpCastExprToType(Expr *E, QualType Ty,
       // infinite recursion here
       if (!ImpCastPointerToCHERICapability(ExprTy, TypeTy, E, true))
         return ExprError();               // diagnostics already emitted
-      DiagID = None;                      // got a permitted explicit conversion
+      DiagID = std::nullopt;              // got a permitted explicit conversion
       Kind = CK_PointerToCHERICapability; // update cast-kind for the new cast
     }
     if (DiagID) {

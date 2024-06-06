@@ -2865,8 +2865,7 @@ public:
     return getPointerInterpretation() == PIK_Capability;
   }
 
-  llvm::Optional<PointerInterpretationKind>
-  getPointerInterpretation() const {
+  std::optional<PointerInterpretationKind> getPointerInterpretation() const {
     return static_cast<const T *>(this)->getPointerInterpretationImpl();
   }
 };
@@ -3158,10 +3157,10 @@ private:
   /// The element type of the array.
   QualType ElementType;
 
-  llvm::Optional<PointerInterpretationKind>
+  std::optional<PointerInterpretationKind>
   getPointerInterpretationImpl() const {
     if (!ArrayTypeBits.HasPIK)
-      return llvm::None;
+      return std::nullopt;
     return static_cast<PointerInterpretationKind>(ArrayTypeBits.PIK);
   }
 
@@ -3169,7 +3168,7 @@ protected:
   friend class ASTContext; // ASTContext creates these.
 
   ArrayType(TypeClass tc, QualType et, QualType can, ArraySizeModifier sm,
-            unsigned tq, llvm::Optional<PointerInterpretationKind> PIK,
+            unsigned tq, std::optional<PointerInterpretationKind> PIK,
             const Expr *sz = nullptr);
 
 public:
@@ -3208,7 +3207,7 @@ class ConstantArrayType final
 
   ConstantArrayType(QualType et, QualType can, const llvm::APInt &size,
                     const Expr *sz, ArraySizeModifier sm, unsigned tq,
-                    llvm::Optional<PointerInterpretationKind> PIK)
+                    std::optional<PointerInterpretationKind> PIK)
       : ArrayType(ConstantArray, et, can, sm, tq, PIK, sz), Size(size) {
     ConstantArrayTypeBits.HasStoredSizeExpr = sz != nullptr;
     if (ConstantArrayTypeBits.HasStoredSizeExpr) {
@@ -3251,7 +3250,7 @@ public:
                       QualType ET, const llvm::APInt &ArraySize,
                       const Expr *SizeExpr, ArraySizeModifier SizeMod,
                       unsigned TypeQuals,
-                      llvm::Optional<PointerInterpretationKind> PIK);
+                      std::optional<PointerInterpretationKind> PIK);
 
   static bool classof(const Type *T) {
     return T->getTypeClass() == ConstantArray;
@@ -3264,9 +3263,8 @@ public:
 class IncompleteArrayType : public ArrayType {
   friend class ASTContext; // ASTContext creates these.
 
-  IncompleteArrayType(QualType et, QualType can,
-                      ArraySizeModifier sm, unsigned tq,
-                      llvm::Optional<PointerInterpretationKind> PIK)
+  IncompleteArrayType(QualType et, QualType can, ArraySizeModifier sm,
+                      unsigned tq, std::optional<PointerInterpretationKind> PIK)
       : ArrayType(IncompleteArray, et, can, sm, tq, PIK) {}
 
 public:
@@ -3286,7 +3284,7 @@ public:
 
   static void Profile(llvm::FoldingSetNodeID &ID, QualType ET,
                       ArraySizeModifier SizeMod, unsigned TypeQuals,
-                      llvm::Optional<PointerInterpretationKind> PIK) {
+                      std::optional<PointerInterpretationKind> PIK) {
     ID.AddPointer(ET.getAsOpaquePtr());
     ID.AddInteger(SizeMod);
     ID.AddInteger(TypeQuals);
@@ -3320,12 +3318,11 @@ class VariableArrayType : public ArrayType {
   /// The range spanned by the left and right array brackets.
   SourceRange Brackets;
 
-  VariableArrayType(QualType et, QualType can, Expr *e,
-                    ArraySizeModifier sm, unsigned tq,
-                    SourceRange brackets,
-                    llvm::Optional<PointerInterpretationKind> PIK)
-      : ArrayType(VariableArray, et, can, sm, tq, PIK, e),
-        SizeExpr((Stmt*) e), Brackets(brackets) {}
+  VariableArrayType(QualType et, QualType can, Expr *e, ArraySizeModifier sm,
+                    unsigned tq, SourceRange brackets,
+                    std::optional<PointerInterpretationKind> PIK)
+      : ArrayType(VariableArray, et, can, sm, tq, PIK, e), SizeExpr((Stmt *)e),
+        Brackets(brackets) {}
 
 public:
   friend class StmtIteratorBase;
@@ -3383,7 +3380,7 @@ class DependentSizedArrayType : public ArrayType {
   DependentSizedArrayType(const ASTContext &Context, QualType et, QualType can,
                           Expr *e, ArraySizeModifier sm, unsigned tq,
                           SourceRange brackets,
-                          llvm::Optional<PointerInterpretationKind> PIK);
+                          std::optional<PointerInterpretationKind> PIK);
 
 public:
   friend class StmtIteratorBase;
@@ -3414,7 +3411,7 @@ public:
   static void Profile(llvm::FoldingSetNodeID &ID, const ASTContext &Context,
                       QualType ET, ArraySizeModifier SizeMod,
                       unsigned TypeQuals, Expr *E,
-                      llvm::Optional<PointerInterpretationKind> PIK);
+                      std::optional<PointerInterpretationKind> PIK);
 };
 
 /// Represents an extended address space qualifier where the input address space

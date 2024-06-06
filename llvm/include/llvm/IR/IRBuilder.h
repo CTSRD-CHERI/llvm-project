@@ -438,9 +438,10 @@ public:
   ///
   /// If no module is given via \p M, it is take from the insertion point basic
   /// block.
-  GlobalVariable *CreateGlobalString(StringRef Str, const Twine &Name = "",
-                                     Optional<unsigned> AddressSpace = None,
-                                     Module *M = nullptr);
+  GlobalVariable *
+  CreateGlobalString(StringRef Str, const Twine &Name = "",
+                     Optional<unsigned> AddressSpace = std::nullopt,
+                     Module *M = nullptr);
 
   /// Get a constant value representing either true or false.
   ConstantInt *getInt1(bool V) {
@@ -1889,9 +1890,10 @@ public:
   ///
   /// If no module is given via \p M, it is take from the insertion point basic
   /// block.
-  Constant *CreateGlobalStringPtr(StringRef Str, const Twine &Name = "",
-                                  Optional<unsigned> AddressSpace = None,
-                                  Module *M = nullptr) {
+  Constant *
+  CreateGlobalStringPtr(StringRef Str, const Twine &Name = "",
+                        llvm::Optional<unsigned> AddressSpace = std::nullopt,
+                        Module *M = nullptr) {
     GlobalVariable *GV = CreateGlobalString(Str, Name, AddressSpace, M);
     Constant *Zero = ConstantInt::get(Type::getInt32Ty(Context), 0);
     Constant *Indices[] = {Zero, Zero};

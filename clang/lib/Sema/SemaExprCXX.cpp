@@ -6861,10 +6861,10 @@ QualType Sema::FindCompositePointerType(SourceLocation Loc,
     /// The class for a pointer-to-member; a constant array type with a bound
     /// (if any) for an array.
     const Type *ClassOrBound;
-    llvm::Optional<PointerInterpretationKind> PIK;
+    std::optional<PointerInterpretationKind> PIK;
 
     Step(Kind K, const Type *ClassOrBound = nullptr,
-         llvm::Optional<PointerInterpretationKind> PIK = llvm::None)
+         std::optional<PointerInterpretationKind> PIK = std::nullopt)
         : K(K), ClassOrBound(ClassOrBound), PIK(PIK) {}
     QualType rebuild(ASTContext &Ctx, QualType T) const {
       T = Ctx.getQualifiedType(T, Quals);

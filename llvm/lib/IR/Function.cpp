@@ -1875,7 +1875,7 @@ std::optional<Function *> Intrinsic::remangleIntrinsicFunction(Function *F) {
   if (ID == Intrinsic::vastart || ID == Intrinsic::vaend ||
       ID == Intrinsic::vacopy) {
     if (Name.contains('.'))
-      return None;
+      return std::nullopt;
   }
 
   Function *NewDecl = [&] {
