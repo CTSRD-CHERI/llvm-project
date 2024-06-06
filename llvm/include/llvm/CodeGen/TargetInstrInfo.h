@@ -31,6 +31,7 @@
 #include <cassert>
 #include <cstddef>
 #include <cstdint>
+#include <optional>
 #include <utility>
 #include <vector>
 
@@ -156,7 +157,7 @@ public:
                     const MachineRegisterInfo &MRI) const {
     if (Op.isImm())
       return Op.getImm();
-    return None;
+    return std::nullopt;
   }
 
   /// Given \p MO is a PhysReg use return if it can be ignored for the purpose

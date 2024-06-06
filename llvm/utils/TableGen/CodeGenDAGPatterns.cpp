@@ -350,7 +350,7 @@ bool TypeSetByHwMode::intersect(SetType &Out, const SetType &In) {
   for (const auto &I : WildParts)
     Changed |= IntersectP(I.first, I.second);
 
-  Changed |= IntersectP(llvm::None, [&](MVT T) {
+  Changed |= IntersectP(std::nullopt, [&](MVT T) {
     return !any_of(WildParts, [=](const WildPartT &I) { return I.second(T); });
   });
 

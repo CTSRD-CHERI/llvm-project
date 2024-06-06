@@ -3161,7 +3161,7 @@ private:
   llvm::Optional<PointerInterpretationKind>
   getPointerInterpretationImpl() const {
     if (!ArrayTypeBits.HasPIK)
-      return llvm::None;
+      return std::nullopt;
     return static_cast<PointerInterpretationKind>(ArrayTypeBits.PIK);
   }
 

@@ -1463,7 +1463,7 @@ public:
                                 unsigned IndexTypeQuals,
                                 SourceRange Brackets,
                                 llvm::Optional<PointerInterpretationKind>
-                                PIK = llvm::None) const;
+                                PIK = std::nullopt) const;
 
   /// Return a non-unique reference to the type for a dependently-sized
   /// array of the specified element type.
@@ -1475,7 +1475,7 @@ public:
                                       unsigned IndexTypeQuals,
                                       SourceRange Brackets,
                                       llvm::Optional<PointerInterpretationKind>
-                                      PIK = llvm::None) const;
+                                      PIK = std::nullopt) const;
 
   /// Return a unique reference to the type for an incomplete array of
   /// the specified element type.
@@ -1483,7 +1483,7 @@ public:
                                   ArrayType::ArraySizeModifier ASM,
                                   unsigned IndexTypeQuals,
                                   llvm::Optional<PointerInterpretationKind>
-                                  PIK = llvm::None) const;
+                                  PIK = std::nullopt) const;
 
 
   /// Return the unique reference to the type for a constant array of
@@ -1493,7 +1493,7 @@ public:
                                 ArrayType::ArraySizeModifier ASM,
                                 unsigned IndexTypeQuals,
                                 llvm::Optional<PointerInterpretationKind>
-                                PIK = llvm::None) const;
+                                PIK = std::nullopt) const;
 
   /// Return a type for a constant array for a string literal of the
   /// specified element type and length.
@@ -2814,7 +2814,7 @@ public:
   /// See C99 6.7.5.3p7 and C99 6.3.2.1p3.
   QualType getArrayDecayedType(QualType T,
                                llvm::Optional<PointerInterpretationKind>
-                               PIKFromBase = llvm::None) const;
+                               PIKFromBase = std::nullopt) const;
 
   /// Return the type that \p PromotableType will promote to: C99
   /// 6.3.1.1p2, assuming that \p PromotableType is a promotable integer type.

@@ -2645,7 +2645,7 @@ static SDValue setBounds(SelectionDAG &DAG, SDValue Val, uint64_t Length,
 static void addGlobalsCSetBoundsStats(const GlobalValue *GV, SelectionDAG &DAG,
                                       StringRef Pass, const DebugLoc &DL) {
   int64_t AllocSize = -1;
-  std::optional<uint64_t> Size = None;
+  std::optional<uint64_t> Size = std::nullopt;
   if (GV->getValueType()->isSized()) {
     Size = DAG.getDataLayout().getTypeStoreSize(GV->getValueType());
     AllocSize = DAG.getDataLayout().getTypeAllocSize(GV->getValueType());
