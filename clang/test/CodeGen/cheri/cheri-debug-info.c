@@ -56,7 +56,7 @@ int foo(int* i) { // CHECK-IR:  call void @llvm.dbg.declare(metadata ptr{{( addr
 // DEBUG-INFO-EMPTY:
 // DEBUG-INFO-NEXT: DW_TAG_compile_unit
 // DEBUG-INFO-NEXT:               DW_AT_producer	("clang version
-// DEBUG-INFO-NEXT:               DW_AT_language	(DW_LANG_C99)
+// DEBUG-INFO-NEXT:               DW_AT_language	(DW_LANG_C11)
 // DEBUG-INFO-NEXT:               DW_AT_name	("
 // DEBUG-INFO-NEXT:               DW_AT_stmt_list	(0x00000000)
 // DEBUG-INFO-NEXT:               DW_AT_comp_dir	("
@@ -136,7 +136,7 @@ int foo(int* i) { // CHECK-IR:  call void @llvm.dbg.declare(metadata ptr{{( addr
 // DEBUG-INFO-OPT-EMPTY:
 // DEBUG-INFO-OPT-NEXT: 0x0000000b: DW_TAG_compile_unit
 // DEBUG-INFO-OPT-NEXT:               DW_AT_producer	("clang
-// DEBUG-INFO-OPT-NEXT:               DW_AT_language	(DW_LANG_C99)
+// DEBUG-INFO-OPT-NEXT:               DW_AT_language	(DW_LANG_C11)
 // DEBUG-INFO-OPT-NEXT:               DW_AT_name	("{{.+}}/test/CodeGen/cheri/<stdin>")
 // DEBUG-INFO-OPT-NEXT:               DW_AT_stmt_list	(0x00000000)
 // DEBUG-INFO-OPT-NEXT:               DW_AT_comp_dir	("{{.+}}")
