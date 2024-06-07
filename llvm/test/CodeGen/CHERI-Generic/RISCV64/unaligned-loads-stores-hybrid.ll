@@ -35,11 +35,11 @@ define i64 @load_global_i64_align_1(i64 %y) addrspace(200) nounwind {
 ; CHECK-NEXT:    lbu.cap a4, (ca4)
 ; CHECK-NEXT:    cincoffset ca0, ca0, 7
 ; CHECK-NEXT:    lbu.cap a0, (ca0)
-; CHECK-NEXT:    slli a3, a3, 8
+; CHECK-NEXT:    slliw a3, a3, 8
 ; CHECK-NEXT:    or a2, a3, a2
-; CHECK-NEXT:    slli a4, a4, 16
-; CHECK-NEXT:    slli a0, a0, 24
-; CHECK-NEXT:    or a0, a0, a4
+; CHECK-NEXT:    slliw a3, a4, 16
+; CHECK-NEXT:    slliw a0, a0, 24
+; CHECK-NEXT:    or a0, a0, a3
 ; CHECK-NEXT:    or a0, a0, a2
 ; CHECK-NEXT:    slli a0, a0, 32
 ; CHECK-NEXT:    or a0, a0, a1
