@@ -970,10 +970,15 @@ public:
     // Adds require special handling.  If we are adding intcap_t values, then we
     // must do the same trick as other operations.  If not, then we can just use
     // the normal path.
-    BinOpInfo BOP = EmitBinOps(E);
+    QualType promotionTy = getPromotionType(E->getType());
+    BinOpInfo BOP = EmitBinOps(E, promotionTy);
     if (!(E->getType()->isCHERICapabilityType(CGF.getContext()) &&
-          !E->getType()->isPointerType()))
-      return EmitAdd(BOP);
+          !E->getType()->isPointerType())){
+      auto result = EmitAdd(BOP);
+      if (result && !promotionTy.isNull())
+        return EmitUnPromotedValue(result, E->getType());
+      return result;
+    }
     // FIXME: should not need this!
     Value *LHS = BOP.LHS;
     Value *RHS = BOP.RHS;
@@ -989,10 +994,15 @@ public:
     // Subs require special handling.  If we are adding intcap_t values, then we
     // must do the same trick as other operations.  If not, then we can just use
     // the normal path.
-    BinOpInfo BOP = EmitBinOps(E);
+    QualType promotionTy = getPromotionType(E->getType());
+    BinOpInfo BOP = EmitBinOps(E, promotionTy);
     if (!(E->getType()->isCHERICapabilityType(CGF.getContext()) &&
-          !E->getType()->isPointerType()))
-      return EmitSub(BOP);
+          !E->getType()->isPointerType())){
+      auto result = EmitSub(BOP);
+      if (result && !promotionTy.isNull())
+        return EmitUnPromotedValue(result, E->getType());
+      return result;
+    }
     Value *LHS = BOP.LHS;
     Value *RHS = BOP.RHS;
     BOP.LHS = GetBinOpVal(BOP, LHS);
