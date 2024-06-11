@@ -21,8 +21,8 @@ define i64 @load_global_i64_align_1(i64 %y) addrspace(200) nounwind {
 ; CHECK-NEXT:    or a0, a0, a2
 ; CHECK-NEXT:    slli a3, a3, 16
 ; CHECK-NEXT:    slli a4, a4, 24
-; CHECK-NEXT:    or a3, a4, a3
 ; CHECK-NEXT:    or a0, a3, a0
+; CHECK-NEXT:    or a0, a4, a0
 ; CHECK-NEXT:    clbu a2, 5(ca1)
 ; CHECK-NEXT:    clbu a3, 4(ca1)
 ; CHECK-NEXT:    clbu a4, 6(ca1)
@@ -31,7 +31,7 @@ define i64 @load_global_i64_align_1(i64 %y) addrspace(200) nounwind {
 ; CHECK-NEXT:    or a2, a2, a3
 ; CHECK-NEXT:    slli a4, a4, 16
 ; CHECK-NEXT:    slli a1, a1, 24
-; CHECK-NEXT:    or a1, a1, a4
+; CHECK-NEXT:    or a2, a4, a2
 ; CHECK-NEXT:    or a1, a1, a2
 ; CHECK-NEXT:    cret
   %ret = load i64, i64 addrspace(200)* @a1, align 1

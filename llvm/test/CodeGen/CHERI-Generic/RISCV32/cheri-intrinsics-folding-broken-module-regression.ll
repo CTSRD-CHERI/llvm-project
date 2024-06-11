@@ -27,8 +27,8 @@ define void @g(i32 %x, i32 %y) addrspace(200) nounwind {
 ; ASM-NEXT:  .LBB0_2: # Label of block must be emitted
 ; ASM-NEXT:    auipcc ca4, %captab_pcrel_hi(e)
 ; ASM-NEXT:    clc ca4, %pcrel_lo(.LBB0_2)(ca4)
-; ASM-NEXT:    add a0, a1, a0
 ; ASM-NEXT:    add a0, a0, a3
+; ASM-NEXT:    add a0, a1, a0
 ; ASM-NEXT:    csetoffset ca0, ca2, a0
 ; ASM-NEXT:    csc ca0, 0(ca4)
 ; ASM-NEXT:    cret

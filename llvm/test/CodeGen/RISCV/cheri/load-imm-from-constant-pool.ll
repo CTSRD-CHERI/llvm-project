@@ -19,10 +19,10 @@ define i64 @add_constant(i64 %arg) nounwind {
 ; CHECK-ILP32-NEXT:    addi a2, a2, 801
 ; CHECK-ILP32-NEXT:    add a2, a0, a2
 ; CHECK-ILP32-NEXT:    sltu a0, a2, a0
-; CHECK-ILP32-NEXT:    add a0, a1, a0
-; CHECK-ILP32-NEXT:    lui a1, 74565
-; CHECK-ILP32-NEXT:    addi a1, a1, 1656
-; CHECK-ILP32-NEXT:    add a1, a0, a1
+; CHECK-ILP32-NEXT:    lui a3, 74565
+; CHECK-ILP32-NEXT:    addi a3, a3, 1656
+; CHECK-ILP32-NEXT:    add a0, a0, a3
+; CHECK-ILP32-NEXT:    add a1, a1, a0
 ; CHECK-ILP32-NEXT:    mv a0, a2
 ; CHECK-ILP32-NEXT:    ret
 ;
@@ -32,10 +32,10 @@ define i64 @add_constant(i64 %arg) nounwind {
 ; CHECK-IL32PC64-NEXT:    addi a2, a2, 801
 ; CHECK-IL32PC64-NEXT:    add a2, a0, a2
 ; CHECK-IL32PC64-NEXT:    sltu a0, a2, a0
-; CHECK-IL32PC64-NEXT:    add a0, a1, a0
-; CHECK-IL32PC64-NEXT:    lui a1, 74565
-; CHECK-IL32PC64-NEXT:    addi a1, a1, 1656
-; CHECK-IL32PC64-NEXT:    add a1, a0, a1
+; CHECK-IL32PC64-NEXT:    lui a3, 74565
+; CHECK-IL32PC64-NEXT:    addi a3, a3, 1656
+; CHECK-IL32PC64-NEXT:    add a0, a0, a3
+; CHECK-IL32PC64-NEXT:    add a1, a1, a0
 ; CHECK-IL32PC64-NEXT:    mv a0, a2
 ; CHECK-IL32PC64-NEXT:    cret
 ;

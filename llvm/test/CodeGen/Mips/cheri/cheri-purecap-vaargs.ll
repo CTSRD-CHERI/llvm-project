@@ -19,10 +19,11 @@ define void @copy_to_global(i8 addrspace(200)* nocapture readnone %y, i32 signex
 ; CHECK-NEXT:    lui $1, %pcrel_hi(_CHERI_CAPABILITY_TABLE_-8)
 ; CHECK-NEXT:    daddiu $1, $1, %pcrel_lo(_CHERI_CAPABILITY_TABLE_-4)
 ; CHECK-NEXT:    cgetpccincoffset $c1, $1
-; CHECK-NEXT:    clcbi $c1, %captab20(va_copy)($c1)
 ; CHECK-NEXT:    csetbounds $c2, $c11, 16
 ; CHECK-NEXT:    csc $c13, $zero, 0($c2)
-; CHECK-NEXT:    csc $c13, $zero, 0($c1)
+; CHECK-NEXT:    clc $c2, $zero, 0($c2)
+; CHECK-NEXT:    clcbi $c1, %captab20(va_copy)($c1)
+; CHECK-NEXT:    csc $c2, $zero, 0($c1)
 ; CHECK-NEXT:    cgetnull $c13
 ; CHECK-NEXT:    cincoffset $c11, $c24, $zero
 ; CHECK-NEXT:    clc $c17, $zero, 32($c11) # 16-byte Folded Reload
