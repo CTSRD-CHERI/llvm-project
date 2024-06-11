@@ -72,7 +72,7 @@ define i8 addrspace(200)* @reassociated_node_reuses_other_node(i64 %arg1, %struc
 ; CHECK-LABEL: reassociated_node_reuses_other_node:
 ; CHECK:       # %bb.0: # %bb
 ; CHECK-NEXT:    slli a0, a0, 5
-; CHECK-NEXT:    ori a2, a0, 16
+; CHECK-NEXT:    addi a2, a0, 16
 ; CHECK-NEXT:    cincoffset ca2, ca1, a2
 ; CHECK-NEXT:    csc cnull, 0(ca2)
 ; CHECK-NEXT:    clc ca2, 16(ca1)
