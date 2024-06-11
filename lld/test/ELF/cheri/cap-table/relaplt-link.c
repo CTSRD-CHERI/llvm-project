@@ -8,7 +8,7 @@
 // FIXME: this test should be using assembly input and not C
 
 // Check x86_64 since MIPS n64 doesn't seem to use .rel.plt:
-// RUN: %clang_cc1 -triple=x86_64-unknown-freebsd -emit-obj -O2 %s -o %t-amd64.o
+// RUN: %clang_cc1 -mrelax-relocations=no -triple=x86_64-unknown-freebsd -emit-obj -O2 %s -o %t-amd64.o
 // RUN: llvm-readobj -r %t-amd64.o | FileCheck --check-prefix AMD64-OBJ %s
 // AMD64-OBJ: Relocations [
 // AMD64-OBJ-NEXT: Section ({{.+}}) .rela.text {
