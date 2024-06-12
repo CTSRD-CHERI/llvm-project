@@ -288,7 +288,6 @@ void simple(float *a, float *b, int *c) {
 //.
 // CHECK: !0 = !{i32 1, !"wchar_size", i32 4}
 // CHECK: !1 = !{i32 7, !"openmp", i32 50}
-// CHECK: !2 = !{!"clang version 16.0.0"}
 // CHECK: !3 = distinct !{!3, !4}
 // CHECK: !4 = !{!"llvm.loop.mustprogress"}
 // CHECK: !5 = distinct !{}
