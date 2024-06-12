@@ -29,20 +29,20 @@ extern void* foo;
 
 // PURECAP_IR-LABEL: @test(
 // PURECAP_IR-NEXT:  entry:
-// PURECAP_IR-NEXT:    [[TMP0:%.*]] = load i8, ptr addrspace(200) @cancel, align 1, !tbaa [[TBAA2:![0-9]+]], !range [[RNG6:![0-9]+]]
+// PURECAP_IR-NEXT:    [[TMP0:%.*]] = load i8, ptr addrspace(200) @cancel, align 1, !tbaa [[TBAA2:![0-9]+]], !range [[RNG6:![0-9]+]], !noundef !7
 // PURECAP_IR-NEXT:    [[TOBOOL_I:%.*]] = icmp ne i8 [[TMP0]], 0
-// PURECAP_IR-NEXT:    tail call void asm sideeffect "", "=*r|m,0,~{memory},~{$1}"(ptr addrspace(200) nonnull elementtype(i8) @cancel, i1 [[TOBOOL_I]]) #[[ATTR1:[0-9]+]], !srcloc !7
-// PURECAP_IR-NEXT:    [[TMP1:%.*]] = load ptr addrspace(200), ptr addrspace(200) @foo, align 16, !tbaa [[TBAA8:![0-9]+]]
-// PURECAP_IR-NEXT:    tail call void asm sideeffect "", "=*r|m,0,~{memory},~{$1}"(ptr addrspace(200) nonnull elementtype(ptr addrspace(200)) @foo, ptr addrspace(200) [[TMP1]]) #[[ATTR1]], !srcloc !7
+// PURECAP_IR-NEXT:    tail call void asm sideeffect "", "=*r|m,0,~{memory},~{$1}"(ptr addrspace(200) nonnull elementtype(i8) @cancel, i1 [[TOBOOL_I]]) #[[ATTR1:[0-9]+]], !srcloc !8
+// PURECAP_IR-NEXT:    [[TMP1:%.*]] = load ptr addrspace(200), ptr addrspace(200) @foo, align 16, !tbaa [[TBAA9:![0-9]+]]
+// PURECAP_IR-NEXT:    tail call void asm sideeffect "", "=*r|m,0,~{memory},~{$1}"(ptr addrspace(200) nonnull elementtype(ptr addrspace(200)) @foo, ptr addrspace(200) [[TMP1]]) #[[ATTR1]], !srcloc !8
 // PURECAP_IR-NEXT:    ret void
 //
 // N64_IR-LABEL: @test(
 // N64_IR-NEXT:  entry:
-// N64_IR-NEXT:    [[TMP0:%.*]] = load i8, ptr @cancel, align 1, !tbaa [[TBAA2:![0-9]+]], !range [[RNG6:![0-9]+]]
+// N64_IR-NEXT:    [[TMP0:%.*]] = load i8, ptr @cancel, align 1, !tbaa [[TBAA2:![0-9]+]], !range [[RNG6:![0-9]+]], !noundef !7
 // N64_IR-NEXT:    [[TOBOOL_I:%.*]] = icmp ne i8 [[TMP0]], 0
-// N64_IR-NEXT:    tail call void asm sideeffect "", "=*r|m,0,~{memory},~{$1}"(ptr nonnull elementtype(i8) @cancel, i1 [[TOBOOL_I]]) #[[ATTR1:[0-9]+]], !srcloc !7
-// N64_IR-NEXT:    [[TMP1:%.*]] = load ptr, ptr @foo, align 8, !tbaa [[TBAA8:![0-9]+]]
-// N64_IR-NEXT:    tail call void asm sideeffect "", "=*r|m,0,~{memory},~{$1}"(ptr nonnull elementtype(ptr) @foo, ptr [[TMP1]]) #[[ATTR1]], !srcloc !7
+// N64_IR-NEXT:    tail call void asm sideeffect "", "=*r|m,0,~{memory},~{$1}"(ptr nonnull elementtype(i8) @cancel, i1 [[TOBOOL_I]]) #[[ATTR1:[0-9]+]], !srcloc !8
+// N64_IR-NEXT:    [[TMP1:%.*]] = load ptr, ptr @foo, align 8, !tbaa [[TBAA9:![0-9]+]]
+// N64_IR-NEXT:    tail call void asm sideeffect "", "=*r|m,0,~{memory},~{$1}"(ptr nonnull elementtype(ptr) @foo, ptr [[TMP1]]) #[[ATTR1]], !srcloc !8
 // N64_IR-NEXT:    ret void
 //
 extern "C" void test() {
@@ -70,11 +70,11 @@ inline void DoNotOptimize2(Tp& value) {
 }
 // PURECAP_IR-LABEL: @test2(
 // PURECAP_IR-NEXT:  entry:
-// PURECAP_IR-NEXT:    [[TMP0:%.*]] = load i8, ptr addrspace(200) @cancel, align 1, !tbaa [[TBAA2]], !range [[RNG6]]
+// PURECAP_IR-NEXT:    [[TMP0:%.*]] = load i8, ptr addrspace(200) @cancel, align 1, !tbaa [[TBAA2]], !range [[RNG6]], !noundef !7
 // PURECAP_IR-NEXT:    [[TOBOOL_I:%.*]] = icmp ne i8 [[TMP0]], 0
-// PURECAP_IR-NEXT:    tail call void asm sideeffect "", "=*C|m,0,~{memory},~{$1}"(ptr addrspace(200) nonnull elementtype(i8) @cancel, i1 [[TOBOOL_I]]) #[[ATTR1]], !srcloc !10
-// PURECAP_IR-NEXT:    [[TMP1:%.*]] = load ptr addrspace(200), ptr addrspace(200) @foo, align 16, !tbaa [[TBAA8]]
-// PURECAP_IR-NEXT:    tail call void asm sideeffect "", "=*C|m,0,~{memory},~{$1}"(ptr addrspace(200) nonnull elementtype(ptr addrspace(200)) @foo, ptr addrspace(200) [[TMP1]]) #[[ATTR1]], !srcloc !10
+// PURECAP_IR-NEXT:    tail call void asm sideeffect "", "=*C|m,0,~{memory},~{$1}"(ptr addrspace(200) nonnull elementtype(i8) @cancel, i1 [[TOBOOL_I]]) #[[ATTR1]], !srcloc !11
+// PURECAP_IR-NEXT:    [[TMP1:%.*]] = load ptr addrspace(200), ptr addrspace(200) @foo, align 16, !tbaa [[TBAA9]]
+// PURECAP_IR-NEXT:    tail call void asm sideeffect "", "=*C|m,0,~{memory},~{$1}"(ptr addrspace(200) nonnull elementtype(ptr addrspace(200)) @foo, ptr addrspace(200) [[TMP1]]) #[[ATTR1]], !srcloc !11
 // PURECAP_IR-NEXT:    ret void
 //
 extern "C" void test2() {
