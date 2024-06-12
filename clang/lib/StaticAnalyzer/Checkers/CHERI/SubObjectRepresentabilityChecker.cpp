@@ -31,6 +31,12 @@ using namespace clang;
 using namespace ento;
 
 namespace {
+
+template <typename Handler>
+std::unique_ptr<BugReport> checkFieldImpl(const FieldDecl *D,
+                                          BugReporter &BR,
+                                          const BugType &BT);
+
 class SubObjectRepresentabilityChecker
     : public Checker<check::ASTDecl<RecordDecl>, check::ASTCodeBody> {
   BugType BT_1{this, "Field with imprecise subobject bounds",
@@ -43,6 +49,21 @@ public:
                     BugReporter &BR) const;
   void checkASTCodeBody(const Decl *D, AnalysisManager &mgr,
                         BugReporter &BR) const;
+
+private:
+
+  using CheckFieldFn = std::function<std::unique_ptr<BugReport>(
+      const FieldDecl *D, BugReporter &BR, const BugType &BT)>;
+
+  const std::map<llvm::Triple::ArchType, CheckFieldFn> CheckFieldFnMap {
+      {llvm::Triple::aarch64, &checkFieldImpl<CompressedCap128m>},
+      {llvm::Triple::mips, &checkFieldImpl<CompressedCap64>},
+      {llvm::Triple::mips64, &checkFieldImpl<CompressedCap128>},
+      {llvm::Triple::riscv32, &checkFieldImpl<CompressedCap64>},
+      {llvm::Triple::riscv64, &checkFieldImpl<CompressedCap128>}
+  };
+
+  CheckFieldFn getCheckFieldFn(ASTContext &ASTCtx) const;
 };
 
 } //namespace
@@ -156,42 +177,33 @@ std::unique_ptr<BugReport> checkFieldImpl(const FieldDecl *D,
   return nullptr;
 }
 
-std::unique_ptr<BugReport> checkField(const FieldDecl *D,
-                                      BugReporter &BR,
-                                      const BugType &BT) {
-  // TODO: other targets
-  return checkFieldImpl<CompressedCap128m>(D, BR, BT);
-}
-
-bool supportedTarget(const ASTContext &C) {
-  const TargetInfo &TI = C.getTargetInfo();
-  return TI.areAllPointersCapabilities()
-         && TI.getTriple().isAArch64(); // morello
-}
-
 } // namespace
 
+SubObjectRepresentabilityChecker::CheckFieldFn
+SubObjectRepresentabilityChecker::getCheckFieldFn(ASTContext &ASTCtx) const {
+  const TargetInfo &TI = ASTCtx.getTargetInfo();
+  if (!TI.areAllPointersCapabilities())
+    return nullptr;
+
+  auto It = CheckFieldFnMap.find(TI.getTriple().getArch());
+  if (It == CheckFieldFnMap.end())
+    return nullptr;
+  return It->second;
+}
 
 void SubObjectRepresentabilityChecker::checkASTDecl(const RecordDecl *R,
                                                     AnalysisManager &mgr,
                                                     BugReporter &BR) const {
-  if (!supportedTarget(mgr.getASTContext()))
-    return;
+  CheckFieldFn checkField = getCheckFieldFn(mgr.getASTContext());
+  if (!checkField)
+    return; // skip this target
 
   if (!R->isCompleteDefinition() || R->isDependentType())
     return;
 
   if (!R->getLocation().isValid())
     return;
-
-  /*
-  SrcMgr::CharacteristicKind Kind =
-      BR.getSourceManager().getFileCharacteristic(Location);
-  // Ignore records in system headers
-  if (Kind != SrcMgr::C_User)
-    return;
-  */
-
+  
   for (FieldDecl *D : R->fields()) {
     auto Report = checkField(D, BR, BT_1);
     if (Report)
@@ -202,8 +214,9 @@ void SubObjectRepresentabilityChecker::checkASTDecl(const RecordDecl *R,
 void SubObjectRepresentabilityChecker::checkASTCodeBody(const Decl *D,
                                                         AnalysisManager &mgr,
                                                         BugReporter &BR) const {
-  if (!supportedTarget(mgr.getASTContext()))
-    return;
+  CheckFieldFn checkField = getCheckFieldFn(mgr.getASTContext());
+  if (!checkField)
+    return; // skip this target
 
   using namespace ast_matchers;
   auto Member = memberExpr().bind("member");
