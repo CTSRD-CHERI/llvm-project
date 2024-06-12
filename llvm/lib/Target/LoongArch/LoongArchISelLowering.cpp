@@ -332,7 +332,8 @@ SDValue LoongArchTargetLowering::lowerEH_DWARF_CFA(SDValue Op,
   MachineFunction &MF = DAG.getMachineFunction();
   auto Size = Subtarget.getGRLen() / 8;
   auto FI = MF.getFrameInfo().CreateFixedObject(Size, 0, false);
-  return DAG.getFrameIndex(FI, getPointerTy(DAG.getDataLayout()));
+  return DAG.getFrameIndex(FI, getPointerTy(DAG.getDataLayout(),
+                                            DAG.getDataLayout().getAllocaAddrSpace()));
 }
 
 SDValue LoongArchTargetLowering::lowerVASTART(SDValue Op,
@@ -341,8 +342,9 @@ SDValue LoongArchTargetLowering::lowerVASTART(SDValue Op,
   auto *FuncInfo = MF.getInfo<LoongArchMachineFunctionInfo>();
 
   SDLoc DL(Op);
+  unsigned AllocaAS = DAG.getDataLayout().getAllocaAddrSpace();
   SDValue FI = DAG.getFrameIndex(FuncInfo->getVarArgsFrameIndex(),
-                                 getPointerTy(MF.getDataLayout()));
+                                 getPointerTy(MF.getDataLayout(), AllocaAS));
 
   // vastart just stores the address of the VarArgsFrameIndex slot into the
   // memory location argument.
@@ -467,7 +469,7 @@ template <class NodeTy>
 SDValue LoongArchTargetLowering::getAddr(NodeTy *N, SelectionDAG &DAG,
                                          bool IsLocal) const {
   SDLoc DL(N);
-  EVT Ty = getPointerTy(DAG.getDataLayout());
+  EVT Ty = getPointerTy(DAG.getDataLayout(), DAG.getDataLayout().getAllocaAddrSpace());
   SDValue Addr = getTargetNode(N, DL, Ty, DAG, 0);
   // TODO: Check CodeModel.
   if (IsLocal)
@@ -507,7 +509,7 @@ SDValue LoongArchTargetLowering::getStaticTLSAddr(GlobalAddressSDNode *N,
                                                   SelectionDAG &DAG,
                                                   unsigned Opc) const {
   SDLoc DL(N);
-  EVT Ty = getPointerTy(DAG.getDataLayout());
+  EVT Ty = getPointerTy(DAG.getDataLayout(), DAG.getDataLayout().getAllocaAddrSpace());
   MVT GRLenVT = Subtarget.getGRLenVT();
 
   SDValue Addr = DAG.getTargetGlobalAddress(N->getGlobal(), DL, Ty, 0, 0);
@@ -522,7 +524,7 @@ SDValue LoongArchTargetLowering::getDynamicTLSAddr(GlobalAddressSDNode *N,
                                                    SelectionDAG &DAG,
                                                    unsigned Opc) const {
   SDLoc DL(N);
-  EVT Ty = getPointerTy(DAG.getDataLayout());
+  EVT Ty = getPointerTy(DAG.getDataLayout(), DAG.getDataLayout().getAllocaAddrSpace());
   IntegerType *CallTy = Type::getIntNTy(*DAG.getContext(), Ty.getSizeInBits());
 
   // Use a PC-relative addressing mode to access the dynamic GOT address.
@@ -591,7 +593,7 @@ LoongArchTargetLowering::lowerINTRINSIC_WO_CHAIN(SDValue Op,
   default:
     return SDValue(); // Don't custom lower most intrinsics.
   case Intrinsic::thread_pointer: {
-    EVT PtrVT = getPointerTy(DAG.getDataLayout());
+    EVT PtrVT = getPointerTy(DAG.getDataLayout(), DAG.getDataLayout().getAllocaAddrSpace());
     return DAG.getRegister(LoongArch::R2, PtrVT);
   }
   }
@@ -2216,7 +2218,7 @@ SDValue LoongArchTargetLowering::LowerFormalArguments(
         "GHC calling convention requires the F and D extensions");
   }
 
-  EVT PtrVT = getPointerTy(DAG.getDataLayout());
+  EVT PtrVT = getPointerTy(DAG.getDataLayout(), DAG.getDataLayout().getAllocaAddrSpace());
   MVT GRLenVT = Subtarget.getGRLenVT();
   unsigned GRLenInBytes = Subtarget.getGRLen() / 8;
   // Used with varargs to acumulate store chains.
@@ -2305,7 +2307,7 @@ SDValue LoongArchTargetLowering::LowerFormalArguments(
       RegInfo.addLiveIn(ArgRegs[I], Reg);
       SDValue ArgValue = DAG.getCopyFromReg(Chain, DL, Reg, GRLenVT);
       FI = MFI.CreateFixedObject(GRLenInBytes, VaArgOffset, true);
-      SDValue PtrOff = DAG.getFrameIndex(FI, getPointerTy(DAG.getDataLayout()));
+      SDValue PtrOff = DAG.getFrameIndex(FI, getPointerTy(DAG.getDataLayout(), DAG.getDataLayout().getAllocaAddrSpace()));
       SDValue Store = DAG.getStore(Chain, DL, ArgValue, PtrOff,
                                    MachinePointerInfo::getFixedStack(MF, FI));
       cast<StoreSDNode>(Store.getNode())
@@ -2391,7 +2393,7 @@ LoongArchTargetLowering::LowerCall(CallLoweringInfo &CLI,
   SDValue Callee = CLI.Callee;
   CallingConv::ID CallConv = CLI.CallConv;
   bool IsVarArg = CLI.IsVarArg;
-  EVT PtrVT = getPointerTy(DAG.getDataLayout());
+  EVT PtrVT = getPointerTy(DAG.getDataLayout(), DAG.getDataLayout().getDefaultGlobalsAddressSpace());
   MVT GRLenVT = Subtarget.getGRLenVT();
   bool &IsTailCall = CLI.IsTailCall;
 
@@ -2432,12 +2434,13 @@ LoongArchTargetLowering::LowerCall(CallLoweringInfo &CLI,
 
     int FI =
         MF.getFrameInfo().CreateStackObject(Size, Alignment, /*isSS=*/false);
-    SDValue FIPtr = DAG.getFrameIndex(FI, getPointerTy(DAG.getDataLayout()));
+    SDValue FIPtr = DAG.getFrameIndex(FI, getPointerTy(DAG.getDataLayout(), DAG.getDataLayout().getDefaultGlobalsAddressSpace()));
     SDValue SizeNode = DAG.getConstant(Size, DL, GRLenVT);
 
     Chain = DAG.getMemcpy(Chain, DL, FIPtr, Arg, SizeNode, Alignment,
                           /*IsVolatile=*/false,
                           /*AlwaysInline=*/false, /*isTailCall=*/IsTailCall,
+                          /*PreserveTags*/ PreserveCheriTags::Unknown,
                           MachinePointerInfo(), MachinePointerInfo());
     ByValArgs.push_back(FIPtr);
   }
@@ -2715,7 +2718,7 @@ EVT LoongArchTargetLowering::getSetCCResultType(const DataLayout &DL,
                                                 LLVMContext &Context,
                                                 EVT VT) const {
   if (!VT.isVector())
-    return getPointerTy(DL);
+    return getPointerTy(DL, 0);
   return VT.changeVectorElementTypeToInteger();
 }
 

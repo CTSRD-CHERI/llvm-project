@@ -40,7 +40,7 @@
 
 using namespace llvm;
 
-static MCRegisterInfo *createLoongArchMCRegisterInfo(const Triple &TT) {
+static MCRegisterInfo *createLoongArchMCRegisterInfo(const Triple &TT, const MCTargetOptions &Options) {
   MCRegisterInfo *X = new MCRegisterInfo();
   InitLoongArchMCRegisterInfo(X, LoongArch::R1);
   return X;
