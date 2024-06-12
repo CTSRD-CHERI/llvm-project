@@ -247,7 +247,8 @@ public:
     }
     bool isNull() const { return value == nullptr; }
     bool isValid() const {
-#ifdef __CHERI_PURE_CAPABILITY__
+#if defined(__CHERI_PURE_CAPABILITY__) &&                                      \
+    !defined(__ARM_MORELLO_PURECAP_BENCHMARK_ABI)
       return __builtin_cheri_tag_get(value);
 #else
       return !isNull();
