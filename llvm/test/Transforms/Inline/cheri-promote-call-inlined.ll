@@ -4,9 +4,9 @@
 ; This is most likely a problem in Transforms/Utils/CloneFunction.cpp that fails to simplify the purecap
 ; pointer-to-member call (possibly because of the @llvm.cheri.cap.address.get.i64 call).
 ; Test case is based on clang/test/CodeGenCXX/member-function-pointer-calls.cpp
-; RUN: opt -enable-new-pm=1 -S "-passes=cgscc(inline)" < %s | FileCheck %s --check-prefixes=INLINE-ONLY
+; RUN: opt -opaque-pointers=0 -enable-new-pm=1 -S "-passes=cgscc(inline)" < %s | FileCheck %s --check-prefixes=INLINE-ONLY
 ; The -O2 pipeline eventually manages to devirtualize the second call but misses the first one:
-; RUN: opt -enable-new-pm=1 -S "-passes=default<O2>" < %s | FileCheck %s --check-prefixes=FULL
+; RUN: opt -opaque-pointers=0 -enable-new-pm=1 -S "-passes=default<O2>" < %s | FileCheck %s --check-prefixes=FULL
 target datalayout = "e-m:e-pf200:128:128:128:64-p:64:64-i64:64-i128:128-n64-S128-A200-P200-G200"
 target triple = "riscv64-unknown-freebsd"
 

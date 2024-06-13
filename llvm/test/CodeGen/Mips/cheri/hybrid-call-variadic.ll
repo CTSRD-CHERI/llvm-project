@@ -1,4 +1,4 @@
-; RUN: %cheri128_llc -o - %s | FileCheck %s
+; RUN: %cheri128_llc -opaque-pointers=0 -o - %s | FileCheck %s
 ; The capability argument was not being passed on the stack but in $c3 instead
 ; Note: passing capabilities to variadics in the hybrid ABI is completely broken.
 ; https://github.com/CTSRD-CHERI/llvm/issues/271

@@ -10,8 +10,8 @@
 ;     e();
 ; }
 ; Check that the vectorizers doesn't make any changes and doesn't crash:
-; RUN: opt -S %s -o - -passes=slp-vectorizer -vectorize-slp | FileCheck %s
-; RUNNOT: %cheri_cc1 -S -O3 %s -o - -vectorize-slp
+; RUN: opt -opaque-pointers=0 -S %s -o - -passes=slp-vectorizer -vectorize-slp | FileCheck %s
+; RUNNOT: %cheri_cc1 -opaque-pointers=0 -S -O3 %s -o - -vectorize-slp
 
 target datalayout = "E-m:e-pf200:128:128:128:64-i8:8:32-i16:16:32-i64:64-n32:64-S128"
 target triple = "mips64-unknown-freebsd"

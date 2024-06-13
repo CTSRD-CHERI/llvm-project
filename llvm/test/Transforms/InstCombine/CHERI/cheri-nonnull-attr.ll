@@ -1,4 +1,4 @@
-; RUN: opt -S -passes=instcombine %s | FileCheck %s
+; RUN: opt -opaque-pointers=0 -S -passes=instcombine %s | FileCheck %s
 target datalayout = "E-m:e-pf200:128:128:128:64-i8:8:32-i16:16:32-i64:64-n32:64-S128-A200-P200-G200"
 
 @char_ptr = external local_unnamed_addr addrspace(200) global i8 addrspace(200)*, align 32

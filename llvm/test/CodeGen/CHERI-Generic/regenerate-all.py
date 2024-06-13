@@ -36,7 +36,7 @@ class ArchSpecificValues(object):
 
 MIPSConfig = ArchSpecificValues(
     "MIPS", cap_range=64, cap_width=128,
-    common_args=["-mtriple=mips64", "-mcpu=cheri128", "-mattr=+cheri128",
+    common_args=["-opaque-pointers=0", "-mtriple=mips64", "-mcpu=cheri128", "-mattr=+cheri128",
                  "--relocation-model=pic"],
     hybrid_sf_args=["-target-abi", "n64", "-mattr=+soft-float"],
     hybrid_hf_args=["-target-abi", "n64"],
@@ -45,7 +45,7 @@ MIPSConfig = ArchSpecificValues(
     datalayout=b"E-m:e-pf200:128:128:128:64-i8:8:32-i16:16:32-i64:64-n32:64-S128")
 RISCV32Config = ArchSpecificValues(
     "RISCV32", base_architecture="RISCV", cap_range=32, cap_width=64,
-    common_args=["-mtriple=riscv32", "--relocation-model=pic"],
+    common_args=["-opaque-pointers=0", "-mtriple=riscv32", "--relocation-model=pic"],
     hybrid_sf_args=["-target-abi", "ilp32", "-mattr=+xcheri,-f"],
     hybrid_hf_args=["-target-abi", "ilp32f", "-mattr=+xcheri,+f"],
     purecap_sf_args=["-target-abi", "il32pc64", "-mattr=+xcheri,+cap-mode,-f"],
@@ -53,7 +53,7 @@ RISCV32Config = ArchSpecificValues(
     datalayout=b"e-m:e-pf200:64:64:64:32-p:32:32-i64:64-n32-S128")
 RISCV64Config = ArchSpecificValues(
     "RISCV64", base_architecture="RISCV", cap_range=64, cap_width=128,
-    common_args=["-mtriple=riscv64", "--relocation-model=pic"],
+    common_args=["-opaque-pointers=0", "-mtriple=riscv64", "--relocation-model=pic"],
     hybrid_sf_args=["-target-abi", "lp64", "-mattr=+xcheri,-f,-d"],
     hybrid_hf_args=["-target-abi", "lp64d", "-mattr=+xcheri,+f,+d"],
     purecap_sf_args=["-target-abi", "l64pc128", "-mattr=+xcheri,+cap-mode,-f,-d"],

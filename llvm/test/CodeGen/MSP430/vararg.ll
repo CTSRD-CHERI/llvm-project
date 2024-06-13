@@ -1,4 +1,4 @@
-; RUN: llc -verify-machineinstrs < %s | FileCheck %s
+; RUN: llc -opaque-pointers=0 -verify-machineinstrs < %s | FileCheck %s
 
 target datalayout = "e-p:16:16:16-i8:8:8-i16:16:16-i32:16:32-n8:16"
 target triple = "msp430---elf"
