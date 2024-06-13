@@ -1,4 +1,4 @@
-; RUN: llc -mattr=sram,movw,addsubiw < %s -march=avr | FileCheck %s
+; RUN: llc -opaque-pointers=0 -mattr=sram,movw,addsubiw < %s -march=avr | FileCheck %s
 
 declare void @llvm.va_start.p0i8(i8*)
 declare i16 @vsprintf(i8* nocapture, i8* nocapture, i8*)

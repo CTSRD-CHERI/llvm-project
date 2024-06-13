@@ -4,14 +4,14 @@
 ; global would require bounds that span all the individual elements.
 ; See https://github.com/CTSRD-CHERI/llvm-project/issues/572
 ; RUN: sed -e 's/addrspace(200)/addrspace(0)/g' -e 's/-A200-P200-G200//g' %s | \
-; RUN:     opt -enable-new-pm=1 -passes=rel-lookup-table-converter -relocation-model=pic -S | FileCheck %s --check-prefix=RISCV64
+; RUN:     opt -opaque-pointers=0 -enable-new-pm=1 -passes=rel-lookup-table-converter -relocation-model=pic -S | FileCheck %s --check-prefix=RISCV64
 ; RUN: sed -e 's/addrspace(200)/addrspace(0)/g' -e 's/-A200-P200-G200//g' %s | \
-; RUN:     %riscv64_cheri_llc -relocation-model=pic | FileCheck %s --check-prefixes=RISCV64-ASM-NOREL
-; RUN: sed -e 's/addrspace(200)/addrspace(0)/g' -e 's/-A200-P200-G200//g' %s | opt -enable-new-pm=1 -passes=rel-lookup-table-converter \
-; RUN:     -relocation-model=pic -S | %riscv64_cheri_llc -relocation-model=pic | FileCheck %s --check-prefixes=RISCV64-ASM-REL
-; RUN: opt -enable-new-pm=1 -o - -passes=rel-lookup-table-converter -relocation-model=pic -S %s | FileCheck %s --check-prefix=PURECAP
-; RUN: opt -enable-new-pm=1 -o - -passes=rel-lookup-table-converter -relocation-model=pic -S %s | \
-; RUN:     %riscv64_cheri_purecap_llc -relocation-model=pic | FileCheck %s --check-prefix=PURECAP-ASM
+; RUN:     %riscv64_cheri_llc -opaque-pointers=0 -relocation-model=pic | FileCheck %s --check-prefixes=RISCV64-ASM-NOREL
+; RUN: sed -e 's/addrspace(200)/addrspace(0)/g' -e 's/-A200-P200-G200//g' %s | opt -opaque-pointers=0 -enable-new-pm=1 -passes=rel-lookup-table-converter \
+; RUN:     -relocation-model=pic -S | %riscv64_cheri_llc -opaque-pointers=0 -relocation-model=pic | FileCheck %s --check-prefixes=RISCV64-ASM-REL
+; RUN: opt -opaque-pointers=0 -enable-new-pm=1 -o - -passes=rel-lookup-table-converter -relocation-model=pic -S %s | FileCheck %s --check-prefix=PURECAP
+; RUN: opt -opaque-pointers=0 -enable-new-pm=1 -o - -passes=rel-lookup-table-converter -relocation-model=pic -S %s | \
+; RUN:     %riscv64_cheri_purecap_llc -opaque-pointers=0 -relocation-model=pic | FileCheck %s --check-prefix=PURECAP-ASM
 ; REQUIRES: riscv-registered-target
 
 target datalayout = "e-m:e-pf200:128:128:128:64-p:64:64-i64:64-i128:128-n64-S128-A200-P200-G200"

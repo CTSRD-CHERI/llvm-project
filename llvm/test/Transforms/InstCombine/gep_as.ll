@@ -1,4 +1,4 @@
-; RUN: opt -passes=instcombine -S < %s | FileCheck %s
+; RUN: opt -opaque-pointers=0 -passes=instcombine -S < %s | FileCheck %s
 target datalayout = "pf200:128:128:128:64"
 target triple = "riscv64-unknown-freebsd"
 
