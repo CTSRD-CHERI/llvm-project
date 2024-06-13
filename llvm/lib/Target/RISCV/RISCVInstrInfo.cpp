@@ -2086,7 +2086,7 @@ RISCVInstrInfo::getSerializableBitmaskMachineOperandTargetFlags() const {
   using namespace RISCVII;
   static const std::pair<unsigned, const char *> TargetFlags[] = {
       {MO_JUMP_TABLE_BASE, "riscv-jump-table-base"}};
-  return makeArrayRef(TargetFlags);
+  return ArrayRef(TargetFlags);
 }
 
 bool RISCVInstrInfo::isFunctionSafeToOutlineFrom(
