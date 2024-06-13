@@ -50,18 +50,18 @@ Foo *test_foo_not_aligned_array() { return new Foo[2]; }
 
 // AGGRESSIVE-LABEL: @_Z35test_foo_not_aligned_array_nonconsti(
 // AGGRESSIVE-NEXT:  entry:
-// AGGRESSIVE-NEXT:    [[TMP0:%.*]] = sext i32 [[N:%.*]] to i64
+// AGGRESSIVE-NEXT:    [[TMP0:%.*]] = zext i32 [[N:%.*]] to i64
 // AGGRESSIVE-NEXT:    [[TMP1:%.*]] = icmp slt i32 [[N]], 0
-// AGGRESSIVE-NEXT:    [[TMP2:%.*]] = shl nsw i64 [[TMP0]], 2
+// AGGRESSIVE-NEXT:    [[TMP2:%.*]] = shl nuw nsw i64 [[TMP0]], 2
 // AGGRESSIVE-NEXT:    [[TMP3:%.*]] = select i1 [[TMP1]], i64 -1, i64 [[TMP2]]
 // AGGRESSIVE-NEXT:    [[CALL:%.*]] = tail call noalias noundef nonnull ptr addrspace(200) @_Znam(i64 noundef zeroext [[TMP3]]) #[[ATTR5]]
 // AGGRESSIVE-NEXT:    ret ptr addrspace(200) [[CALL]]
 //
 // CONSERVATIVE-LABEL: @_Z35test_foo_not_aligned_array_nonconsti(
 // CONSERVATIVE-NEXT:  entry:
-// CONSERVATIVE-NEXT:    [[TMP0:%.*]] = sext i32 [[N:%.*]] to i64
+// CONSERVATIVE-NEXT:    [[TMP0:%.*]] = zext i32 [[N:%.*]] to i64
 // CONSERVATIVE-NEXT:    [[TMP1:%.*]] = icmp slt i32 [[N]], 0
-// CONSERVATIVE-NEXT:    [[TMP2:%.*]] = shl nsw i64 [[TMP0]], 2
+// CONSERVATIVE-NEXT:    [[TMP2:%.*]] = shl nuw nsw i64 [[TMP0]], 2
 // CONSERVATIVE-NEXT:    [[TMP3:%.*]] = select i1 [[TMP1]], i64 -1, i64 [[TMP2]]
 // CONSERVATIVE-NEXT:    [[CALL:%.*]] = tail call noalias noundef nonnull ptr addrspace(200) @_Znam(i64 noundef zeroext [[TMP3]]) #[[ATTR3]]
 // CONSERVATIVE-NEXT:    ret ptr addrspace(200) [[CALL]]
@@ -97,9 +97,9 @@ Foo *test_foo_nonalloc_array(void* buffer) { return new (buffer) Foo[2]; }
 
 // AGGRESSIVE-LABEL: @_Z32test_foo_nonalloc_array_nonconstPvi(
 // AGGRESSIVE-NEXT:  entry:
-// AGGRESSIVE-NEXT:    [[TMP0:%.*]] = sext i32 [[N:%.*]] to i64
+// AGGRESSIVE-NEXT:    [[TMP0:%.*]] = zext i32 [[N:%.*]] to i64
 // AGGRESSIVE-NEXT:    [[TMP1:%.*]] = icmp slt i32 [[N]], 0
-// AGGRESSIVE-NEXT:    [[TMP2:%.*]] = shl nsw i64 [[TMP0]], 2
+// AGGRESSIVE-NEXT:    [[TMP2:%.*]] = shl nuw nsw i64 [[TMP0]], 2
 // AGGRESSIVE-NEXT:    [[TMP3:%.*]] = select i1 [[TMP1]], i64 -1, i64 [[TMP2]]
 // AGGRESSIVE-NEXT:    [[TMP4:%.*]] = tail call ptr addrspace(200) @llvm.cheri.cap.bounds.set.i64(ptr addrspace(200) [[BUFFER:%.*]], i64 [[TMP3]])
 // AGGRESSIVE-NEXT:    ret ptr addrspace(200) [[TMP4]]
