@@ -298,7 +298,7 @@ bool CheriNeedBoundsChecker::canLoadStoreBeOutOfBounds(
     llvm_unreachable("Invalid load/store type");
   }
   APInt Size = APInt(CurrentGEPOffset.getBitWidth(),
-                     DL.getTypeStoreSize(LoadStoreType).getFixedSize());
+                     DL.getTypeStoreSize(LoadStoreType).getFixedValue());
   DBG_INDENTED("Load/store size="
                    << Size << ", alloca size=" << MinSizeInBytes
                    << ", current GEP offset=" << CurrentGEPOffset << " for ";
