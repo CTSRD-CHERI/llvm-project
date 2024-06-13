@@ -1695,7 +1695,7 @@ SDValue DAGCombiner::visitCopyToReg(SDNode *N) {
         SDValue Glue = N->getNumOperands() > 3 ? N->getOperand(3) : SDValue();
         SDValue Ops[] = {N->getOperand(0), N->getOperand(1), NullValue, Glue};
         SDNode *NewCopy = DAG.UpdateNodeOperands(
-            N, makeArrayRef(Ops, Glue.getNode() ? 4 : 3));
+            N, ArrayRef(Ops, Glue.getNode() ? 4 : 3));
         return SDValue(NewCopy, 0);
       }
     }

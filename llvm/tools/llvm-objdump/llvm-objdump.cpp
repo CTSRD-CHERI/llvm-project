@@ -1320,7 +1320,7 @@ static void disassembleObject(const Target *TheTarget, ObjectFile &Obj,
     RelocMap = getRelocsMap(Obj);
   bool Is64Bits = Obj.getBytesInAddress() > 4;
 
-  llvm::Optional<uint64_t> CheriCapTableAddress;
+  std::optional<uint64_t> CheriCapTableAddress;
 
   // Create a mapping from virtual address to symbol name.  This is used to
   // pretty print the symbols while disassembling.

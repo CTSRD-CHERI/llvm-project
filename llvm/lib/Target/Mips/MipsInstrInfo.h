@@ -201,7 +201,7 @@ public:
                         const MachineOperand *&Size) const override;
   bool isPtrAddInstr(const MachineInstr &I, const MachineOperand *&Base,
                      const MachineOperand *&Increment) const override;
-  Optional<int64_t>
+  std::optional<int64_t>
   getAsIntImmediate(const MachineOperand &Op,
                     const MachineRegisterInfo &MRI) const override;
 

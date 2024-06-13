@@ -1377,7 +1377,7 @@ bool RISCVInstrInfo::isAsCheapAsAMove(const MachineInstr &MI) const {
   return MI.isAsCheapAsAMove();
 }
 
-Optional<int64_t>
+std::optional<int64_t>
 RISCVInstrInfo::getAsIntImmediate(const MachineOperand &Op,
                                   const MachineRegisterInfo &MRI) const {
   if (Op.isImm())

@@ -1394,7 +1394,7 @@ bool TargetInstrInfo::isGuaranteedValidSetBounds(const MachineInstr &MI) const {
     return false;
   }
   const auto &MRI = MI.getMF()->getRegInfo();
-  llvm::Optional<int64_t> RequestedSize = getAsIntImmediate(*Size, MRI);
+  std::optional<int64_t> RequestedSize = getAsIntImmediate(*Size, MRI);
   if (!RequestedSize || *RequestedSize < 0) {
     LLVM_DEBUG(dbgs() << "unknown/negative bounds size -> CSetBounds may trap";
                MI.dump());
@@ -1421,7 +1421,7 @@ bool TargetInstrInfo::isGuaranteedValidSetBounds(const MachineInstr &MI) const {
         MI.dump());
     return false;
   }
-  Optional<int64_t> ObjectSize;
+  std::optional<int64_t> ObjectSize;
   // TODO: handle global vars
   if (BoundedOp->isFI()) {
     const auto &MFI = MI.getMF()->getFrameInfo();

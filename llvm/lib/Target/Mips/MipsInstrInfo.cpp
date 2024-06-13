@@ -1062,7 +1062,7 @@ MipsInstrInfo::describeLoadedValue(const MachineInstr &MI, Register Reg) const {
   return TargetInstrInfo::describeLoadedValue(MI, Reg);
 }
 
-Optional<int64_t>
+std::optional<int64_t>
 MipsInstrInfo::getAsIntImmediate(const MachineOperand &Op,
                                  const MachineRegisterInfo &MRI) const {
   if (Op.isImm())

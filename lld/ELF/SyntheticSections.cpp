@@ -162,7 +162,7 @@ std::unique_ptr<MipsAbiFlagsSection<ELFT>> MipsAbiFlagsSection<ELFT>::create() {
 }
 
 template <class ELFT>
-Optional<unsigned> MipsAbiFlagsSection<ELFT>::getCheriAbiVariant() const {
+std::optional<unsigned> MipsAbiFlagsSection<ELFT>::getCheriAbiVariant() const {
   auto cheriAbiVariant = flags.isa_ext & Mips::AFL_EXT_CHERI_ABI_MASK;
   if (!cheriAbiVariant) {
     warn("Linking old object files without CheriABI variant flag.");

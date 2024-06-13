@@ -358,7 +358,7 @@ int analyzeLoadFromClobberingLoad(Type *LoadTy, Value *LoadPtr, LoadInst *DepLI,
     return -1;
 
   Value *DepPtr = DepLI->getPointerOperand();
-  uint64_t DepSize = DL.getTypeSizeInBits(DepLI->getType()).getFixedSize();
+  uint64_t DepSize = DL.getTypeSizeInBits(DepLI->getType()).getFixedValue();
   int R = analyzeLoadFromClobberingWrite(LoadTy, LoadPtr, DepPtr, DepSize, DL,
                                          TLI);
   if (R != -1)

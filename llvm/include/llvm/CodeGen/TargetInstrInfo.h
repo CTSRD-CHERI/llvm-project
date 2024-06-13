@@ -153,7 +153,7 @@ public:
                              const MachineOperand *&Increment) const {
     return false;
   }
-  virtual Optional<int64_t>
+  virtual std::optional<int64_t>
   getAsIntImmediate(const MachineOperand &Op,
                     const MachineRegisterInfo &MRI) const {
     if (Op.isImm())

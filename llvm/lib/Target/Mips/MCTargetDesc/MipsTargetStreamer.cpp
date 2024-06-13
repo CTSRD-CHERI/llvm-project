@@ -36,7 +36,7 @@ static cl::opt<bool> RoundSectionSizes(
     cl::desc("Round section sizes up to the section alignment"), cl::Hidden);
 } // end anonymous namespace
 
-llvm::Optional<unsigned> llvm::getCheriCapabilitySize(FeatureBitset Features) {
+std::optional<unsigned> llvm::getCheriCapabilitySize(FeatureBitset Features) {
   if (Features[Mips::FeatureMipsCheri256]) {
     assert(Features[Mips::FeatureMipsCheri]);
     return 32;

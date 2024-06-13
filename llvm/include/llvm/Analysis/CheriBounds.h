@@ -13,7 +13,7 @@ public:
       MinSizeInBytes = *AllocaSize / 8;
     PointerAS = AI->getType()->getAddressSpace();
   }
-  CheriNeedBoundsChecker(Instruction *I, Optional<uint64_t> MinSize,
+  CheriNeedBoundsChecker(Instruction *I, std::optional<uint64_t> MinSize,
                          const DataLayout &DL)
       : RootInst(I), DL(DL), MinSizeInBytes(MinSize) {
     assert(I->getType()->isPointerTy());
@@ -35,7 +35,7 @@ private:
 
   Instruction *RootInst;
   const DataLayout &DL;
-  Optional<uint64_t> MinSizeInBytes;
+  std::optional<uint64_t> MinSizeInBytes;
   unsigned PointerAS = 0;
 };
 

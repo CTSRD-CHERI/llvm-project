@@ -269,7 +269,7 @@ void TypeSetByHwMode::dump() const {
 }
 
 bool TypeSetByHwMode::intersect(SetType &Out, const SetType &In) {
-  auto IntersectP = [&](Optional<MVT> WildVT, function_ref<bool(MVT)> P) {
+  auto IntersectP = [&](std::optional<MVT> WildVT, function_ref<bool(MVT)> P) {
     // Complement of In within this partition.
     auto CompIn = [&](MVT T) -> bool { return !In.count(T) && P(T); };
 

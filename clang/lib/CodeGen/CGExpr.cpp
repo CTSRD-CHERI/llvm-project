@@ -920,7 +920,7 @@ CodeGenFunction::setCHERIBoundsOnArrayDecay(llvm::Value *Value, const Expr *E) {
   return Value;
 }
 
-static Optional<CodeGenFunction::TightenBoundsResult>
+static std::optional<CodeGenFunction::TightenBoundsResult>
 cannotSetBounds(const CodeGenFunction &CGF, llvm::raw_string_ostream &DbgOS,
                 const Expr *E, QualType Type, SubObjectBoundsKind Kind,
                 const Twine &Reason) {
@@ -1140,7 +1140,7 @@ static bool containsVariableLengthArray(LangOptions::CheriBoundsMode BoundsMode,
   return findPossibleVLA(RD) != nullptr;
 }
 
-Optional<CodeGenFunction::TightenBoundsResult>
+std::optional<CodeGenFunction::TightenBoundsResult>
 CodeGenFunction::canTightenCheriBounds(QualType Ty, const Expr *E,
                                        SubObjectBoundsKind Kind) {
   const auto BoundsMode = getLangOpts().getCheriBounds();
@@ -1242,7 +1242,7 @@ CodeGenFunction::canTightenCheriBounds(QualType Ty, const Expr *E,
               // Handle taking the address of .at(N)/.front()/.back()
               // NumParams == 1 for .at() due to implicit this not being counted
               auto ExpectedParams =
-                  llvm::StringSwitch<Optional<unsigned>>(CXXMD->getName())
+                  llvm::StringSwitch<std::optional<unsigned>>(CXXMD->getName())
                       .Case("at", 1)
                       .Cases("front", "back", 0)
                 .Default(std::nullopt);
@@ -1294,7 +1294,7 @@ CodeGenFunction::canTightenCheriBounds(QualType Ty, const Expr *E,
           "referenced value is a weak symbol and could therefore be NULL");
     }
   }
-  auto HandleMemberExpr = [&](const MemberExpr* ME, bool* ReturnValueValid) -> Optional<CodeGenFunction::TightenBoundsResult> {
+  auto HandleMemberExpr = [&](const MemberExpr* ME, bool* ReturnValueValid) -> std::optional<CodeGenFunction::TightenBoundsResult> {
     assert(*ReturnValueValid && "API misuse");
     CHERI_BOUNDS_DBG(<< "got MemberExpr -> ");
     // TODO: should we do this recusively? E.g. for &foo.a.b.c.d if type a is

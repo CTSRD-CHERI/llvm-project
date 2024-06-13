@@ -130,10 +130,10 @@ public:
   RelType tlsGotRel;
   RelType tlsModuleIndexRel;
   RelType tlsOffsetRel;
-  llvm::Optional<RelType> absPointerRel; // TODO: remove the optional
-  llvm::Optional<RelType> sizeRel;
-  llvm::Optional<RelType> cheriCapRel;
-  llvm::Optional<RelType> cheriCapCallRel;
+  std::optional<RelType> absPointerRel; // TODO: remove the optional
+  std::optional<RelType> sizeRel;
+  std::optional<RelType> cheriCapRel;
+  std::optional<RelType> cheriCapCallRel;
   unsigned gotEntrySize = config->wordsize;
   unsigned pltEntrySize;
   unsigned pltHeaderSize;
