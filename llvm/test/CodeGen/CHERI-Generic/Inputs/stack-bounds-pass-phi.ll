@@ -6,7 +6,7 @@
 ; RUN: FileCheck %s -check-prefix DBG -input-file=%t.dbg
 target datalayout = "@PURECAP_DATALAYOUT@"
 
-declare void @foo(i32 addrspace(200)*) addrspace(200)
+declare void @foo(ptr addrspace(200)) addrspace(200)
 
 ; Check that we don't attempt to insert stack bounds intrinisics before the PHI at the start of a basic block:
 define void @test_phi(i1 %cond) addrspace(200) nounwind {
@@ -17,22 +17,22 @@ entry:
   br i1 %cond, label %block1, label %block2
 
 block1:
-  store i32 1, i32 addrspace(200)* %alloca1, align 4
-  store i32 2, i32 addrspace(200)* %alloca2, align 4
-  store i32 3, i32 addrspace(200)* %alloca3, align 4
+  store i32 1, ptr addrspace(200) %alloca1, align 4
+  store i32 2, ptr addrspace(200) %alloca2, align 4
+  store i32 3, ptr addrspace(200) %alloca3, align 4
   br label %phi_block
 
 block2:
-  store i32 4, i32 addrspace(200)* %alloca1, align 4
-  store i32 5, i32 addrspace(200)* %alloca2, align 4
-  store i32 6, i32 addrspace(200)* %alloca3, align 4
+  store i32 4, ptr addrspace(200) %alloca1, align 4
+  store i32 5, ptr addrspace(200) %alloca2, align 4
+  store i32 6, ptr addrspace(200) %alloca3, align 4
   br label %phi_block
 
 phi_block:
-  %val1 = phi i32 addrspace(200)* [ null, %block1 ], [ %alloca1, %block2 ]
-  %val2 = phi i32 addrspace(200)* [ %alloca2, %block1 ], [ %alloca3, %block2 ]
-  call void @foo(i32 addrspace(200)* %val1)
-  call void @foo(i32 addrspace(200)* %val2)
+  %val1 = phi ptr addrspace(200) [ null, %block1 ], [ %alloca1, %block2 ]
+  %val2 = phi ptr addrspace(200) [ %alloca2, %block1 ], [ %alloca3, %block2 ]
+  call void @foo(ptr addrspace(200) %val1)
+  call void @foo(ptr addrspace(200) %val2)
   ret void
 }
 
@@ -44,22 +44,22 @@ entry:
   br i1 %cond, label %block1, label %block2
 
 block1:
-  store i32 1, i32 addrspace(200)* %alloca1, align 4
+  store i32 1, ptr addrspace(200) %alloca1, align 4
   br label %phi_block
 
 block2:
-  store i32 5, i32 addrspace(200)* %alloca2, align 4
+  store i32 5, ptr addrspace(200) %alloca2, align 4
   br label %phi_block
 
 phi_block:
-  %val1 = phi i32 addrspace(200)* [ %alloca1, %block1 ], [ %alloca2, %block2 ]
-  call void @foo(i32 addrspace(200)* %val1)
+  %val1 = phi ptr addrspace(200) [ %alloca1, %block1 ], [ %alloca2, %block2 ]
+  call void @foo(ptr addrspace(200) %val1)
   ret void
 }
 
-; DBG: -Adding stack bounds since phi user needs bounds:   call void @foo(i32 addrspace(200)* %val1)
+; DBG: -Adding stack bounds since phi user needs bounds:   call void @foo(ptr addrspace(200) %val1)
 ; DBG: test_phi: 1 of 3 users need bounds for   %alloca1 = alloca i32, align 4, addrspace(200)
-; DBG: -Adding stack bounds since phi user needs bounds:   call void @foo(i32 addrspace(200)* %val2)
+; DBG: -Adding stack bounds since phi user needs bounds:   call void @foo(ptr addrspace(200) %val2)
 ; DBG: test_phi: 1 of 3 users need bounds for   %alloca2 = alloca i32, align 4, addrspace(200)
-; DBG: -Adding stack bounds since phi user needs bounds:   call void @foo(i32 addrspace(200)* %val2)
+; DBG: -Adding stack bounds since phi user needs bounds:   call void @foo(ptr addrspace(200) %val2)
 ; DBG: test_phi: 1 of 3 users need bounds for   %alloca3 = alloca i32, align 4, addrspace(200)

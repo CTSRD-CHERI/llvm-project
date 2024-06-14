@@ -1,6 +1,6 @@
 ; Check that we call memset_c/memmove_c/memcpy_c in hybrid mode.
-; RUN: llc -opaque-pointers @PURECAP_HARDFLOAT_ARGS@ %s -o - | FileCheck %s --check-prefix=PURECAP
-; RUN: llc -opaque-pointers @HYBRID_HARDFLOAT_ARGS@ %s -o - | FileCheck %s --check-prefix=HYBRID
+; RUN: llc @PURECAP_HARDFLOAT_ARGS@ %s -o - | FileCheck %s --check-prefix=PURECAP
+; RUN: llc @HYBRID_HARDFLOAT_ARGS@ %s -o - | FileCheck %s --check-prefix=HYBRID
 %struct.x = type { i32, i32, i32, i32, i32, i32, i32, i32, i32, i32 }
 
 declare void @llvm.memmove.p200i8.p200i8.i64(ptr addrspace(200) nocapture, ptr addrspace(200) nocapture readonly, i64, i1)
