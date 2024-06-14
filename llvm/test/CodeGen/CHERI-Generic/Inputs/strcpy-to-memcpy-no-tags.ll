@@ -3,8 +3,8 @@
 ; CHERI-GENERIC-UTC: llc
 ; Note: unlike other tests we do want to test attributes in this one.
 ; CHERI-GENERIC-UTC: opt --function-signature
-; RUN: opt < %s -passes=instcombine -S | FileCheck %s --check-prefix=CHECK-IR
-; RUN: opt < %s -passes=instcombine -S | llc @PURECAP_HARDFLOAT_ARGS@ - -o - | FileCheck %s --check-prefix=CHECK-ASM
+; RUN: opt -opaque-pointers=0 < %s -passes=instcombine -S | FileCheck %s --check-prefix=CHECK-IR
+; RUN: opt -opaque-pointers=0 < %s -passes=instcombine -S | llc @PURECAP_HARDFLOAT_ARGS@ - -o - | FileCheck %s --check-prefix=CHECK-ASM
 target datalayout = "@PURECAP_DATALAYOUT@"
 
 @str = private unnamed_addr addrspace(200) constant [17 x i8] c"exactly 16 chars\00", align @CAP_RANGE_BYTES@

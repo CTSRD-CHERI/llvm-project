@@ -1,12 +1,12 @@
 ; Check that we can generate sensible code for atomic operations using capability pointers on capabilities
 ; in both hybrid and purecap mode.
 ; See https://github.com/CTSRD-CHERI/llvm-project/issues/470
-@IF-RISCV@; RUN: llc @PURECAP_HARDFLOAT_ARGS@ -mattr=+a < %s | FileCheck %s --check-prefixes=PURECAP,PURECAP-ATOMICS --allow-unused-prefixes
-@IF-RISCV@; RUN: llc @PURECAP_HARDFLOAT_ARGS@ -mattr=-a < %s | FileCheck %s --check-prefixes=PURECAP,PURECAP-LIBCALLS --allow-unused-prefixes
-@IFNOT-RISCV@; RUN: llc @PURECAP_HARDFLOAT_ARGS@ < %s | FileCheck %s --check-prefix=PURECAP
-@IF-RISCV@; RUN: llc @HYBRID_HARDFLOAT_ARGS@ -mattr=+a < %s | FileCheck %s --check-prefixes=HYBRID,HYBRID-ATOMICS --allow-unused-prefixes
-@IF-RISCV@; RUN: llc @HYBRID_HARDFLOAT_ARGS@ -mattr=+a < %s | FileCheck %s --check-prefixes=HYBRID,HYBRID-LIBCALLS --allow-unused-prefixes
-@IFNOT-RISCV@; RUN: llc @HYBRID_HARDFLOAT_ARGS@ < %s | FileCheck %s --check-prefix=HYBRID
+@IF-RISCV@; RUN: llc -opaque-pointers=0 @PURECAP_HARDFLOAT_ARGS@ -mattr=+a < %s | FileCheck %s --check-prefixes=PURECAP,PURECAP-ATOMICS --allow-unused-prefixes
+@IF-RISCV@; RUN: llc -opaque-pointers=0 @PURECAP_HARDFLOAT_ARGS@ -mattr=-a < %s | FileCheck %s --check-prefixes=PURECAP,PURECAP-LIBCALLS --allow-unused-prefixes
+@IFNOT-RISCV@; RUN: llc -opaque-pointers=0 @PURECAP_HARDFLOAT_ARGS@ < %s | FileCheck %s --check-prefix=PURECAP
+@IF-RISCV@; RUN: llc -opaque-pointers=0 @HYBRID_HARDFLOAT_ARGS@ -mattr=+a < %s | FileCheck %s --check-prefixes=HYBRID,HYBRID-ATOMICS --allow-unused-prefixes
+@IF-RISCV@; RUN: llc -opaque-pointers=0 @HYBRID_HARDFLOAT_ARGS@ -mattr=+a < %s | FileCheck %s --check-prefixes=HYBRID,HYBRID-LIBCALLS --allow-unused-prefixes
+@IFNOT-RISCV@; RUN: llc -opaque-pointers=0 @HYBRID_HARDFLOAT_ARGS@ < %s | FileCheck %s --check-prefix=HYBRID
 
 define { i8, i1 } @test_cmpxchg_strong_i8(i8 addrspace(200)* %ptr, i8 %exp, i8 %new) nounwind {
   %1 = cmpxchg i8 addrspace(200)* %ptr, i8 %exp, i8 %new acq_rel acquire

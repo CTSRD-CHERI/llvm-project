@@ -1,8 +1,8 @@
 ; This used to create a broken function.
 ; FIXME: the getoffset+add sequence should be folded to an increment
 ; REQUIRES: mips-registered-target
-; RUN: opt @PURECAP_HARDFLOAT_ARGS@ -S -passes=instcombine %s -o - | FileCheck %s
-; RUN: opt @PURECAP_HARDFLOAT_ARGS@ -S '-passes=default<O3>' %s | llc @PURECAP_HARDFLOAT_ARGS@ -O3 -o - | FileCheck %s --check-prefix ASM
+; RUN: opt -opaque-pointers=0 @PURECAP_HARDFLOAT_ARGS@ -S -passes=instcombine %s -o - | FileCheck %s
+; RUN: opt -opaque-pointers=0 @PURECAP_HARDFLOAT_ARGS@ -S '-passes=default<O3>' %s | llc -opaque-pointers=0 @PURECAP_HARDFLOAT_ARGS@ -O3 -o - | FileCheck %s --check-prefix ASM
 target datalayout = "@PURECAP_DATALAYOUT@"
 
 @d = common addrspace(200) global iCAPRANGE 0, align 4

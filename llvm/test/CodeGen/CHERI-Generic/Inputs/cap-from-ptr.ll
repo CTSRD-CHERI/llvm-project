@@ -1,9 +1,9 @@
 ;; Check that we can correctly generate code for llvm.cheri.cap.from.pointer()
 ;; This previously asserted on RISC-V due to a broken ISel pattern.
 ;; We pipe this input through instcombine first to ensure SelectionDAG sees canonical IR.
-; RUN: opt @PURECAP_HARDFLOAT_ARGS@ -passes=instcombine -S < %s | FileCheck %s --check-prefix=CHECK-IR
-; RUN: opt @PURECAP_HARDFLOAT_ARGS@ -passes=instcombine -S < %s | llc @PURECAP_HARDFLOAT_ARGS@ | FileCheck %s --check-prefix=PURECAP
-; RUN: opt @HYBRID_HARDFLOAT_ARGS@ -passes=instcombine -S < %s | llc @HYBRID_HARDFLOAT_ARGS@ | FileCheck %s --check-prefix=HYBRID
+; RUN: opt -opaque-pointers=0 @PURECAP_HARDFLOAT_ARGS@ -passes=instcombine -S < %s | FileCheck %s --check-prefix=CHECK-IR
+; RUN: opt -opaque-pointers=0 @PURECAP_HARDFLOAT_ARGS@ -passes=instcombine -S < %s | llc @PURECAP_HARDFLOAT_ARGS@ | FileCheck %s --check-prefix=PURECAP
+; RUN: opt -opaque-pointers=0 @HYBRID_HARDFLOAT_ARGS@ -passes=instcombine -S < %s | llc @HYBRID_HARDFLOAT_ARGS@ | FileCheck %s --check-prefix=HYBRID
 
 define internal i8 addrspace(200)* @test(i8 addrspace(200)* addrspace(200)* %ptr, i8 addrspace(200)* %cap, iCAPRANGE %offset) nounwind {
 entry:

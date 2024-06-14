@@ -4,8 +4,8 @@
 
 ; Note: Opt correctly hoists the condition+csetbounds into a preheader, and LLC
 ; used to unconditionally hoist the csetbounds.
-; RUN: opt -data-layout="@PURECAP_DATALAYOUT@" @PURECAP_HARDFLOAT_ARGS@ -enable-new-pm=1 "-passes=default<O3>" -S < %s | FileCheck %s --check-prefix=HOIST-OPT
-; RUN: llc @PURECAP_HARDFLOAT_ARGS@ -O3 < %s | FileCheck %s
+; RUN: opt -opaque-pointers=0 -data-layout="@PURECAP_DATALAYOUT@" @PURECAP_HARDFLOAT_ARGS@ -enable-new-pm=1 "-passes=default<O3>" -S < %s | FileCheck %s --check-prefix=HOIST-OPT
+; RUN: llc -opaque-pointers=0 @PURECAP_HARDFLOAT_ARGS@ -O3 < %s | FileCheck %s
 
 ; Generated from the following C code (with subobject bounds):
 ; struct foo {
