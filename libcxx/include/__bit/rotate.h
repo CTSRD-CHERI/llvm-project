@@ -33,7 +33,7 @@ _Tp __rotr(_Tp __t, unsigned int __cnt) _NOEXCEPT
 
 #if __has_feature(capabilities)
 template<>
-_LIBCPP_HIDE_FROM_ABI _LIBCPP_CONSTEXPR_AFTER_CXX11 inline
+_LIBCPP_HIDE_FROM_ABI _LIBCPP_CONSTEXPR_SINCE_CXX14 inline
 unsigned __intcap __rotr(unsigned __intcap __t, unsigned int __cnt) _NOEXCEPT {
     // __builtin_cheri_address_set cannot be used in a constant expression (yet), so we return a null-derived integer.
     return std::__rotr(static_cast<ptraddr_t>(__t), __cnt);

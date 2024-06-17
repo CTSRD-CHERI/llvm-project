@@ -85,7 +85,7 @@ int __countl_zero(_Tp __t) _NOEXCEPT
 
 #if __has_feature(capabilities)
 template<>
-_LIBCPP_HIDE_FROM_ABI _LIBCPP_CONSTEXPR_AFTER_CXX11 inline
+_LIBCPP_HIDE_FROM_ABI _LIBCPP_CONSTEXPR_SINCE_CXX14 inline
 int __countl_zero(unsigned __intcap __t) _NOEXCEPT {
     return std::__countl_zero(static_cast<ptraddr_t>(__t));
 }

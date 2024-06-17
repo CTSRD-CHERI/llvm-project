@@ -41,6 +41,7 @@ typedef std::chrono::nanoseconds ns;
 // to fail. To prevent this we give Thread sanitizer more time to complete the
 // test.
 #if !defined(TEST_IS_EXECUTED_IN_A_SLOW_ENVIRONMENT)
+ms WaitTime = ms(1500);
 ms Tolerance = ms(250);
 #else
 ms WaitTime = ms(750);

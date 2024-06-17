@@ -78,7 +78,7 @@ struct _LIBCPP_TEMPLATE_VIS _LIBCPP_AVAILABILITY_FORMAT formatter<__int128_t, _C
     : public __formatter_integer<_CharT> {};
 #  endif
 #  if __has_feature(capabilities)
-template <__formatter::__char_type _CharT>
+template <__fmt_char_type _CharT>
 struct _LIBCPP_TEMPLATE_VIS _LIBCPP_AVAILABILITY_FORMAT formatter<__intcap, _CharT>
     : public __formatter_integer<_CharT> {};
 #  endif
@@ -105,7 +105,7 @@ struct _LIBCPP_TEMPLATE_VIS _LIBCPP_AVAILABILITY_FORMAT formatter<__uint128_t, _
     : public __formatter_integer<_CharT> {};
 #  endif
 #  if __has_feature(capabilities)
-template <__formatter::__char_type _CharT>
+template <__fmt_char_type _CharT>
 struct _LIBCPP_TEMPLATE_VIS _LIBCPP_AVAILABILITY_FORMAT formatter<unsigned __intcap, _CharT>
     : public __formatter_integer<_CharT> {};
 #  endif

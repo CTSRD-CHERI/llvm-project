@@ -58,6 +58,7 @@
 #include "llvm/Demangle/Demangle.h"
 #include "llvm/Support/Endian.h"
 #include <algorithm>
+#include <mutex>
 
 using namespace llvm;
 using namespace llvm::ELF;
@@ -1077,6 +1078,7 @@ void RelocationScanner::processAux(RelExpr expr, RelType type, uint64_t offset,
             R_CHERI_CAPABILITY_TABLE_INDEX_CALL,
             R_CHERI_CAPABILITY_TABLE_INDEX_CALL_SMALL_IMMEDIATE,
             R_CHERI_CAPABILITY_TABLE_ENTRY_PC>(expr)) {
+    std::lock_guard<std::mutex> lock(relocMutex);
     in.cheriCapTable->addEntry(sym, expr, sec, offset);
     // Write out the index into the instruction
     sec->relocations.push_back({expr, type, offset, addend, &sym});
@@ -1127,6 +1129,7 @@ void RelocationScanner::processAux(RelExpr expr, RelType type, uint64_t offset,
   bool canWrite = (sec->flags & SHF_WRITE) || !config->zText;
 
   if (expr == R_CHERI_CAPABILITY) {
+    std::lock_guard<std::mutex> lock(relocMutex);
     static auto getRelocTargetLocation = [&]() -> std::string {
       return "\n>>> referenced by " +
              SymbolAndOffset(sec, offset).verboseToString();
@@ -1322,11 +1325,13 @@ static unsigned handleTlsRelocation(RelType type, Symbol &sym,
   // No targets currently support TLS relaxation, so we can avoid duplicating
   // much of the logic below for the captable.
   if (expr == R_CHERI_CAPABILITY_TABLE_TLSGD_ENTRY_PC) {
+    std::lock_guard<std::mutex> lock(relocMutex);
     in.cheriCapTable->addDynTlsEntry(sym);
     c.relocations.push_back({expr, type, offset, addend, &sym});
     return 1;
   }
   if (expr == R_CHERI_CAPABILITY_TABLE_TLSIE_ENTRY_PC) {
+    std::lock_guard<std::mutex> lock(relocMutex);
     in.cheriCapTable->addTlsEntry(sym);
     c.relocations.push_back({expr, type, offset, addend, &sym});
     return 1;
