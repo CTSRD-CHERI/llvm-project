@@ -6005,7 +6005,7 @@ Error BitcodeReader::parseFunctionBody(Function *F) {
     }
     case bitc::FUNC_CODE_INST_CMPXCHG: {
       // CMPXCHG: [ptrty, ptr, cmp, val, vol, success_ordering, synchscope,
-      // failure_ordering, weak, align?]
+      // failure_ordering, weak, align?, exact?]
       const size_t NumRecords = Record.size();
       unsigned OpNum = 0;
       Value *Ptr = nullptr;
@@ -6026,7 +6026,7 @@ Error BitcodeReader::parseFunctionBody(Function *F) {
                    CurBB))
         return error("Invalid record");
 
-      if (NumRecords < OpNum + 3 || NumRecords > OpNum + 6)
+      if (NumRecords < OpNum + 3 || NumRecords > OpNum + 7)
         return error("Invalid record");
 
       const bool IsVol = Record[OpNum];
@@ -6050,10 +6050,11 @@ Error BitcodeReader::parseFunctionBody(Function *F) {
 
       MaybeAlign Alignment;
 
-      if (NumRecords == (OpNum + 6)) {
+      if (NumRecords >= (OpNum + 6)) {
         if (Error Err = parseAlignmentValue(Record[OpNum + 5], Alignment))
           return Err;
       }
+      const bool IsExact = NumRecords >= (OpNum + 7) && Record[OpNum + 6];
       if (!Alignment)
         Alignment =
             Align(TheModule->getDataLayout().getTypeStoreSize(Cmp->getType()));
@@ -6062,6 +6063,7 @@ Error BitcodeReader::parseFunctionBody(Function *F) {
                                 FailureOrdering, SSID);
       cast<AtomicCmpXchgInst>(I)->setVolatile(IsVol);
       cast<AtomicCmpXchgInst>(I)->setWeak(IsWeak);
+      cast<AtomicCmpXchgInst>(I)->setExactCompare(IsExact);
 
       unsigned I1TypeID = getVirtualTypeID(Type::getInt1Ty(Context));
       ResTypeID = getVirtualTypeID(I->getType(), {CmpTypeID, I1TypeID});

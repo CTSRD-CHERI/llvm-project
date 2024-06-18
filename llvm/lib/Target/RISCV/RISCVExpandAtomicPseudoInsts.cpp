@@ -160,7 +160,8 @@ bool RISCVExpandAtomicPseudo::expandMI(MachineBasicBlock &MBB,
   case RISCV::PseudoAtomicLoadUMinCap:
     return expandAtomicMinMaxOp(MBB, MBBI, AtomicRMWInst::UMin, false, CLenVT,
                                 false, NextMBBI);
-  case RISCV::PseudoCmpXchgCap:
+  case RISCV::PseudoCmpXchgCapAddr:
+  case RISCV::PseudoCmpXchgCapExact:
     return expandAtomicCmpXchg(MBB, MBBI, false, CLenVT, false, NextMBBI);
   case RISCV::PseudoCheriAtomicSwap8:
     return expandAtomicBinOp(MBB, MBBI, AtomicRMWInst::Xchg, false, MVT::i8,
@@ -272,7 +273,8 @@ bool RISCVExpandAtomicPseudo::expandMI(MachineBasicBlock &MBB,
   case RISCV::PseudoCheriAtomicLoadUMinCap:
     return expandAtomicMinMaxOp(MBB, MBBI, AtomicRMWInst::UMin, false, CLenVT,
                                 true, NextMBBI);
-  case RISCV::PseudoCheriCmpXchgCap:
+  case RISCV::PseudoCheriCmpXchgCapAddr:
+  case RISCV::PseudoCheriCmpXchgCapExact:
     return expandAtomicCmpXchg(MBB, MBBI, false, CLenVT, true, NextMBBI);
   }
 
@@ -1020,10 +1022,22 @@ bool RISCVExpandAtomicPseudo::expandAtomicCmpXchg(
     BuildMI(LoopHeadMBB, DL, TII->get(getLRForRMW(PtrIsCap, Ordering, VT)),
             DestReg)
         .addReg(AddrReg);
-    BuildMI(LoopHeadMBB, DL, TII->get(RISCV::BNE))
-        .addReg(DestIntReg, 0)
-        .addReg(CmpValIntReg, 0)
-        .addMBB(DoneMBB);
+    bool ExactCapCompare = MI.getOpcode() == RISCV::PseudoCmpXchgCapExact ||
+                           MI.getOpcode() == RISCV::PseudoCheriCmpXchgCapExact;
+    if (VT.isFatPointer() && ExactCapCompare) {
+      BuildMI(LoopHeadMBB, DL, TII->get(RISCV::CSEQX), ScratchReg)
+          .addReg(DestReg, 0)
+          .addReg(CmpValReg, 0);
+      BuildMI(LoopHeadMBB, DL, TII->get(RISCV::BEQ))
+          .addReg(ScratchReg, 0)
+          .addReg(RISCV::X0, 0)
+          .addMBB(DoneMBB);
+    } else {
+      BuildMI(LoopHeadMBB, DL, TII->get(RISCV::BNE))
+          .addReg(DestIntReg, 0)
+          .addReg(CmpValIntReg, 0)
+          .addMBB(DoneMBB);
+    }
     // .looptail:
     //   sc.[w|d] scratch, newval, (addr)
     //   bnez scratch, loophead

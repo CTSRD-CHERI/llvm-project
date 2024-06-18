@@ -183,7 +183,7 @@ static void cloneMemOperands(MachineInstr &DstMI, MachineInstr &SrcMI,
         NewPtrInfo, OldMMO->getFlags(), OldMMO->getMemoryType(),
         OldMMO->getBaseAlign(), OldMMO->getAAInfo(), OldMMO->getRanges(),
         OldMMO->getSyncScopeID(), OldMMO->getSuccessOrdering(),
-        OldMMO->getFailureOrdering());
+        OldMMO->isExactCompare(), OldMMO->getFailureOrdering());
     NewMMOs.push_back(NewMMO);
   }
 

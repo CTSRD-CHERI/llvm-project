@@ -645,6 +645,9 @@ int FunctionComparator::cmpOperations(const Instruction *L,
     if (int Res =
             cmpNumbers(CXI->isWeak(), cast<AtomicCmpXchgInst>(R)->isWeak()))
       return Res;
+    if (int Res = cmpNumbers(CXI->isExactCompare(),
+                             cast<AtomicCmpXchgInst>(R)->isExactCompare()))
+      return Res;
     if (int Res =
             cmpOrderings(CXI->getSuccessOrdering(),
                          cast<AtomicCmpXchgInst>(R)->getSuccessOrdering()))

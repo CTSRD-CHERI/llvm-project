@@ -1453,6 +1453,12 @@ public:
     return MMO->getFailureOrdering();
   }
 
+  /// Return true if the memory operation ordering is Unordered or higher.
+  bool isExactCmpXchg() const {
+    assert(getMemoryVT().isFatPointer());
+    return MMO->isExactCompare();
+  }
+
   // Methods to support isa and dyn_cast
   static bool classof(const SDNode *N) {
     return N->getOpcode() == ISD::ATOMIC_CMP_SWAP     ||

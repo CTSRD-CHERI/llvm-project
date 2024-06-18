@@ -1639,6 +1639,15 @@ void MipsTargetLowering::computeKnownBitsForTargetNode(
   }
 }
 
+SDValue
+MipsTargetLowering::getCapabilityEqualExact(const SDLoc &DL, llvm::SDValue LHS,
+                                            llvm::SDValue RHS,
+                                            llvm::SelectionDAG &DAG) const {
+  SDValue Res = DAG.getNode(MipsISD::CapEqualExact, DL, MVT::i64, LHS, RHS);
+  return DAG.getNode(ISD::AssertZext, DL, MVT::i64, Res,
+                     DAG.getValueType(MVT::i1));
+}
+
 TailPaddingAmount
 MipsTargetLowering::getTailPaddingForPreciseBounds(uint64_t Size) const {
   if (!Subtarget.isCheri())
@@ -1828,7 +1837,8 @@ MipsTargetLowering::EmitInstrWithCustomInserter(MachineInstr &MI,
   case Mips::CAP_ATOMIC_CMP_SWAP_I16:
   case Mips::CAP_ATOMIC_CMP_SWAP_I32:
   case Mips::CAP_ATOMIC_CMP_SWAP_I64:
-  case Mips::CAP_ATOMIC_CMP_SWAP_CAP:
+  case Mips::CAP_ATOMIC_CMP_SWAP_CAP_ADDR:
+  case Mips::CAP_ATOMIC_CMP_SWAP_CAP_EXACT:
     return emitAtomicCmpSwap(MI, BB);
 
 
@@ -2436,8 +2446,12 @@ MipsTargetLowering::emitAtomicCmpSwap(MachineInstr &MI,
     AtomicOp = Mips::CAP_ATOMIC_CMP_SWAP_I64_POSTRA;
     ScratchTy = MVT::i64;
     break;
-  case Mips::CAP_ATOMIC_CMP_SWAP_CAP:
-    AtomicOp = Mips::CAP_ATOMIC_CMP_SWAP_CAP_POSTRA;
+  case Mips::CAP_ATOMIC_CMP_SWAP_CAP_ADDR:
+    AtomicOp = Mips::CAP_ATOMIC_CMP_SWAP_CAP_ADDR_POSTRA;
+    ScratchTy = MVT::i64;
+    break;
+  case Mips::CAP_ATOMIC_CMP_SWAP_CAP_EXACT:
+    AtomicOp = Mips::CAP_ATOMIC_CMP_SWAP_CAP_EXACT_POSTRA;
     ScratchTy = MVT::i64;
     break;
   default:

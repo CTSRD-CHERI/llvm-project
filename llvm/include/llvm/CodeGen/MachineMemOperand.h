@@ -164,10 +164,13 @@ private:
     unsigned SSID : 8;            // SyncScope::ID
     /// Atomic ordering requirements for this memory operation. For cmpxchg
     /// atomic operations, atomic ordering requirements when store occurs.
-    unsigned Ordering : 4;        // enum AtomicOrdering
+    unsigned Ordering : 3; // enum AtomicOrdering
     /// For cmpxchg atomic operations, atomic ordering requirements when store
     /// does not occur.
-    unsigned FailureOrdering : 4; // enum AtomicOrdering
+    unsigned FailureOrdering : 3; // enum AtomicOrdering
+    /// Whether capability comparisons are exact for cmpxchg atomic operations.
+    unsigned ExactCompare : 1;
+    static_assert((unsigned)AtomicOrdering::LAST <= 7, "Not enough bits");
   };
 
   MachinePointerInfo PtrInfo;
@@ -193,12 +196,14 @@ public:
                     const MDNode *Ranges = nullptr,
                     SyncScope::ID SSID = SyncScope::System,
                     AtomicOrdering Ordering = AtomicOrdering::NotAtomic,
+                    bool ExactCompare = false,
                     AtomicOrdering FailureOrdering = AtomicOrdering::NotAtomic);
   MachineMemOperand(MachinePointerInfo PtrInfo, Flags flags, LLT type, Align a,
                     const AAMDNodes &AAInfo = AAMDNodes(),
                     const MDNode *Ranges = nullptr,
                     SyncScope::ID SSID = SyncScope::System,
                     AtomicOrdering Ordering = AtomicOrdering::NotAtomic,
+                    bool ExactCompare = false,
                     AtomicOrdering FailureOrdering = AtomicOrdering::NotAtomic);
 
   const MachinePointerInfo &getPointerInfo() const { return PtrInfo; }
@@ -278,6 +283,13 @@ public:
   /// when store does not occur.
   AtomicOrdering getFailureOrdering() const {
     return static_cast<AtomicOrdering>(AtomicInfo.FailureOrdering);
+  }
+
+  /// For cmpxchg atomic operations, return whether the new value operand
+  /// needs to be compared exactly with the old value or if the address is
+  /// sufficient (only relevant for CHERI capabilities).
+  bool isExactCompare() const {
+    return static_cast<bool>(AtomicInfo.ExactCompare);
   }
 
   /// Return a single atomic ordering that is at least as strong as both the
