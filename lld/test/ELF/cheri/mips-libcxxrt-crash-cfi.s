@@ -1,5 +1,5 @@
 ## This used to crash ld.lld for CHERI MIPS
-# REQUIRES: asserts
+# REQUIRES: asserts, mips
 # RUN: llvm-mc -filetype=obj -triple=mips64-unknown-freebsd --position-independent %s -o %t.o
 # RUN: ld.lld --eh-frame-hdr --shared -z notext -o %t.so %t.o
 # RUN: llvm-mc -filetype=obj -triple=mips64-unknown-freebsd %s -o %t-nopic.o

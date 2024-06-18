@@ -1,4 +1,5 @@
 # Test that weak symbols defined by linker scripts are written correctly
+# REQUIRES: mips
 # RUN: %cheri_purecap_llvm-mc -filetype=obj -defsym=MAIN_FILE=1 %s -o %t.o
 
 # RUN: ld.lld --fatal-warnings -o %t.exe %t.o

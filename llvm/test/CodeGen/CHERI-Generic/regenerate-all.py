@@ -81,6 +81,9 @@ class CmdArgs(object):
         parser = argparse.ArgumentParser()
         parser.add_argument("--llvm-bindir", type=Path, required=True)
         parser.add_argument("--verbose", action="store_true")
+        parser.add_argument("--arch", default='all', 
+                            choices=[a.name for a in ALL_ARCHITECTURES]+['all'],
+                            help="Architecture for which to generate tests: defaults to 'all'")
         parser.add_argument("tests", default=[], nargs=argparse.ZERO_OR_MORE)
         self.args = parser.parse_args()
         print(self.args)
@@ -230,6 +233,8 @@ def update_one_test(test_name: str, input_file: typing.BinaryIO,
 def main():
     options = CmdArgs()
     architectures = ALL_ARCHITECTURES
+    if options.args.arch != 'all':
+        architectures = [arch for arch in architectures if arch.name == options.args.arch]
     # TODO: add command line flag to select subsets
     # TODO: add option to delete all files that don't exist in Inputs/ to handle renaming
     if options.args.tests:

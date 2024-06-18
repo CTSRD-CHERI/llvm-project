@@ -1,4 +1,4 @@
-// REQUIRES: clang, x86
+// REQUIRES: clang, x86, mips
 // Fix running llvm-strip on CheriABI binaries with a .rel.plt section.
 // Check that set sh_info correctly for .rel.plt since otherwise llvm-strip will
 // fail. Since all .rel.plt relocations will affect the captable sh_info should

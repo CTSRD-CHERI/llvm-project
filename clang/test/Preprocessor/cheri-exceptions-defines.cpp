@@ -1,3 +1,4 @@
+// REQUIRES: mips-registered-target
 // RUN: %clang -fgnuc-version=4.2.1 -x c++ -target cheri -mabi=purecap -fno-rtti -fno-exceptions -E -dM %s |  FileCheck -check-prefixes=CHECK-CHERI-SANDBOX-NOEXCEPTIONS %s
 // RUN: %clang_cc1 -fgnuc-version=4.2.1 -x c++ -triple cheri -target-abi purecap -fno-rtti -E -dM %s | FileCheck -check-prefix=CHECK-CHERI-SANDBOX-NOEXCEPTIONS %s
 // CHECK-CHERI-SANDBOX-NOEXCEPTIONS-NOT: #define OBJC_ZEROCOST_EXCEPTIONS 1

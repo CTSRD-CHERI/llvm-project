@@ -1,5 +1,5 @@
 
-// REQUIRES: clang
+// REQUIRES: clang, mips
 
 // RUN: %cheri128_purecap_cc1 -mllvm -cheri-cap-table-abi=plt -emit-obj -O2 %s -o %t.o
 // RUN: ld.lld -z now -shared -o %t.so %t.o -captable-scope=function -z captabledebug

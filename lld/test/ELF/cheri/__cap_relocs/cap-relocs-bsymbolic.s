@@ -2,6 +2,7 @@
 # All relocations should be load address plus offset and not preemptible!
 # This was a problem with __cap_relocs and was found building RTLD
 
+// REQUIRES: mips
 // RUN: %cheri128_purecap_llvm-mc -filetype=obj -defsym=CHERI=1 %s -o %t-cheri.o
 // RUN: llvm-readobj -r %t-cheri.o | FileCheck %s --check-prefixes OBJ-RELOCS,CHERI-OBJ-RELOCS
 // RUN: llvm-mc -triple=mips64-unknown-freebsd -position-independent -filetype=obj %s -o %t-mips.o

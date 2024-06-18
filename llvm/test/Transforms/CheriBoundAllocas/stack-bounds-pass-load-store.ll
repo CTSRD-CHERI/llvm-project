@@ -3,7 +3,7 @@
 ; is a single trivially rematerizable instruction so it can freely move it around to avoid stack spills.
 ; we were moving the allocation of the register that is only used later to the beginning
 
-; REQUIRES: asserts
+; REQUIRES: asserts,mips-registered-target,riscv-registered-target
 ; RUN: %cheri_purecap_opt -cheri-bound-allocas %s -o - -S -cheri-stack-bounds=if-needed -debug-only=cheri-bound-allocas 2>%t.dbg | FileCheck %s
 ; RUN: FileCheck %s -input-file=%t.dbg --check-prefixes=DBG,DBG-TYPED
 ; RUN: %cheri_purecap_opt -opaque-pointers=1 -instsimplify -cheri-bound-allocas %s -o - -S -cheri-stack-bounds=if-needed -debug-only=cheri-bound-allocas 2>%t.dbg | FileCheck %s --check-prefix=OPAQUE

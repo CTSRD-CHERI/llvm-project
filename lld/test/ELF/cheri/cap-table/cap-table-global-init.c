@@ -1,3 +1,4 @@
+// REQUIRES: mips
 // RUN: %cheri128_purecap_cc1 -pedantic -Wextra %s -emit-obj -mllvm -cheri-cap-table-abi=plt -x c -O0 -o %t.o
 // RUN: ld.lld %t.o -o %t.exe
 // RUN: llvm-objdump -t %t.exe | FileCheck %s

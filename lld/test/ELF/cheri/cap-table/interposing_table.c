@@ -1,4 +1,4 @@
-// REQUIRES: clang
+// REQUIRES: clang, mips
 // RUN: %cheri_cc1 -emit-obj -O2 -cheri-size 256 -target-cpu cheri256 -target-feature +soft-float \
 // RUN:   -msoft-float -target-abi purecap -mllvm -cheri-cap-table-abi=plt %s -o %t.o
 // RUN: ld.lld %t.o %S/Inputs/interposing_table.o  -o %t.exe

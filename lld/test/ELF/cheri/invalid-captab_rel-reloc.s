@@ -1,3 +1,4 @@
+# REQUIRES: mips
 # RUN: %cheri128_llvm-mc -filetype=obj %s -o %t.o
 # RUN: ld.lld -pie %t.o -o %t.exe
 # RUsN: llvm-readobj --cap-relocs --dynamic-table %t.exe | FileCheck %s

@@ -1,3 +1,4 @@
+// REQUIRES: mips-registered-target
 // There was a bug where CheriBSD would invoke hybrid clang with a -purecap triple suffix.
 // This should result in an error instead of nonsense output (it broke the debug info by emitting C17 as the return register!)
 

@@ -1,4 +1,4 @@
-// REQUIRES: clang
+// REQUIRES: clang, mips
 
 // Check that when we use R_CHERI_CAPABILITY instead of legacy cap_relocs the zutil.c test works as expected (i.e. bounds on the strings)
 

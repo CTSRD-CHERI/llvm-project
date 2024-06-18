@@ -1,3 +1,4 @@
+# REQUIRES: mips
 # RUN: %cheri128_llvm-mc -filetype=obj %s -o %t.o
 # RUN: ld.lld -z lazy -pie %t.o -o %t.exe
 # RUN: llvm-readelf --program-headers --section-mapping %t.exe | FileCheck %s -check-prefix LAZY-SEGMENTS
