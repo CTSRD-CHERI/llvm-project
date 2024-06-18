@@ -23,20 +23,20 @@ define void @g(i64 %x, i64 %y) addrspace(200) nounwind {
 ; ASM-NEXT:    lui $1, %pcrel_hi(_CHERI_CAPABILITY_TABLE_-8)
 ; ASM-NEXT:    daddiu $1, $1, %pcrel_lo(_CHERI_CAPABILITY_TABLE_-4)
 ; ASM-NEXT:    cgetpccincoffset $c1, $1
-; ASM-NEXT:    daddu $2, $5, $4
 ; ASM-NEXT:    clcbi $c2, %captab20(d)($c1)
 ; ASM-NEXT:    clcbi $c1, %captab20(e)($c1)
 ; ASM-NEXT:    cgetoffset $1, $c2
-; ASM-NEXT:    daddu $1, $2, $1
+; ASM-NEXT:    daddu $1, $1, $4
 ; ASM-NEXT:    csetoffset $c2, $c2, $1
+; ASM-NEXT:    cincoffset $c2, $c2, $5
 ; ASM-NEXT:    cjr $c17
 ; ASM-NEXT:    csc $c2, $zero, 0($c1)
 ; CHECK-LABEL: define {{[^@]+}}@g
 ; CHECK-SAME: (i64 [[X:%.*]], i64 [[Y:%.*]]) addrspace(200) #[[ATTR0:[0-9]+]] {
 ; CHECK-NEXT:    [[TMP3:%.*]] = call i64 @llvm.cheri.cap.offset.get.i64(i8 addrspace(200)* bitcast (i64 addrspace(200)* @d to i8 addrspace(200)*))
 ; CHECK-NEXT:    [[ADD:%.*]] = add i64 [[TMP3]], [[X]]
-; CHECK-NEXT:    [[ADD1:%.*]] = add i64 [[ADD]], [[Y]]
-; CHECK-NEXT:    [[TMP11:%.*]] = call i8 addrspace(200)* @llvm.cheri.cap.offset.set.i64(i8 addrspace(200)* bitcast (i64 addrspace(200)* @d to i8 addrspace(200)*), i64 [[ADD1]])
+; CHECK-NEXT:    [[TMP5:%.*]] = call i8 addrspace(200)* @llvm.cheri.cap.offset.set.i64(i8 addrspace(200)* bitcast (i64 addrspace(200)* @d to i8 addrspace(200)*), i64 [[ADD]])
+; CHECK-NEXT:    [[TMP11:%.*]] = getelementptr i8, i8 addrspace(200)* [[TMP5]], i64 [[Y]]
 ; CHECK-NEXT:    store i8 addrspace(200)* [[TMP11]], i8 addrspace(200)* addrspace(200)* @e, align 32
 ; CHECK-NEXT:    ret void
 ;
