@@ -120,6 +120,9 @@ def FuchsiaAlpha : Package<"fuchsia">, ParentPackage<Alpha>;
 def WebKit : Package<"webkit">;
 def WebKitAlpha : Package<"webkit">, ParentPackage<Alpha>;
 
+def CHERI : Package<"cheri">;
+def CHERIAlpha : Package<"cheri">, ParentPackage<Alpha>;
+
 //===----------------------------------------------------------------------===//
 // Core Checkers.
 //===----------------------------------------------------------------------===//
@@ -1664,6 +1667,10 @@ def UnixAPIPortabilityChecker : Checker<"UnixAPI">,
   HelpText<"Finds implementation-defined behavior in UNIX/Posix functions">,
   Documentation<NotDocumented>;
 
+def PointerAlignmentChecker : Checker<"PointerAlignment">,
+  HelpText<"Check underaligned pointers.">,
+  Documentation<NotDocumented>;
+
 } // end optin.portability
 
 //===----------------------------------------------------------------------===//
@@ -1734,3 +1741,69 @@ def UncountedLocalVarsChecker : Checker<"UncountedLocalVarsChecker">,
   Documentation<HasDocumentation>;
 
 } // end alpha.webkit
+
+//===----------------------------------------------------------------------===//
+// CHERI checkers.
+//===----------------------------------------------------------------------===//
+
+let ParentPackage = CHERI in {
+
+def CheriAPIModelling : Checker<"CheriAPIModelling">,
+  HelpText<"Model CheriAPI">,
+  Documentation<NotDocumented>;
+
+def ProvenanceSourceChecker : Checker<"ProvenanceSource">,
+  HelpText<"Check expressions with ambiguous provenance source.">,
+  CheckerOptions<[
+    CmdLineOption<Boolean,
+                  "ShowFixIts",
+                  "Enable fix-it hints for this checker",
+                  "false",
+                  InAlpha>,
+    CmdLineOption<Boolean,
+                  "ReportForAmbiguousProvenance",
+                  "Report for binary operations with ambiguous provenance "
+                  "for which the default capability derivation from LHS is fine. "
+                  "Disabled if [-Wcheri-provenance] is disabled.",
+                  "true",
+                  Released>
+  ]>,
+  Documentation<NotDocumented>;
+
+def CapabilityCopyChecker : Checker<"CapabilityCopy">,
+  HelpText<"Check tag-stripping memory copy.">,
+  CheckerOptions<[
+    CmdLineOption<Boolean,
+                  "ReportForCharPtr",
+                  "Report tag-stripping copy for char* function parameters. "
+                  "Suppression of warnings for C-strings is used to reduce "
+                  "the number of false alarms, but it's not very reliable.",
+                  "false",
+                  Released>
+  ]>,
+  Documentation<NotDocumented>;
+
+def PointerSizeAssumptionsChecker : Checker<"PointerSizeAssumptions">,
+  HelpText<"Detect hardcoded expectations on pointer sizes">,
+  Documentation<NotDocumented>;
+
+def SubObjectRepresentabilityChecker : Checker<"SubObjectRepresentability">,
+  HelpText<"Check for record fields with unrepresentable subobject bounds">,
+  Documentation<NotDocumented>;
+
+} // end cheri
+
+let ParentPackage = CHERIAlpha in {
+
+def AllocationChecker : Checker<"Allocation">,
+  HelpText<"Suggest narrowing bounds for escaping suballocation capabilities">,
+  CheckerOptions<[
+    CmdLineOption<Boolean,
+                  "ReportForUnknownAllocations",
+                  "Report for pointers with untracked origin",
+                  "true",
+                  Released>
+  ]>,
+  Documentation<NotDocumented>;
+
+} // end alpha.cheri

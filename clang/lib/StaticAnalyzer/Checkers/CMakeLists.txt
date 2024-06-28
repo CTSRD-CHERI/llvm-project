@@ -24,6 +24,13 @@ add_clang_library(clangStaticAnalyzerCheckers
   CheckSecuritySyntaxOnly.cpp
   CheckSizeofPointer.cpp
   CheckerDocumentation.cpp
+  CHERI/AllocationChecker.cpp
+  CHERI/CapabilityCopyChecker.cpp
+  CHERI/CheriAPIModelling.cpp
+  CHERI/CHERIUtils.cpp
+  CHERI/PointerSizeAssumptionsChecker.cpp
+  CHERI/ProvenanceSourceChecker.cpp
+  CHERI/SubObjectRepresentabilityChecker.cpp
   ChrootChecker.cpp
   CloneChecker.cpp
   ContainerModeling.cpp
@@ -89,6 +96,7 @@ add_clang_library(clangStaticAnalyzerCheckers
   ObjCUnusedIVarsChecker.cpp
   OSObjectCStyleCast.cpp
   PaddingChecker.cpp
+  PointerAlignmentChecker.cpp
   PointerArithChecker.cpp
   PointerIterationChecker.cpp
   PointerSortingChecker.cpp
