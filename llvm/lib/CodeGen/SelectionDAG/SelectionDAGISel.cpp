@@ -1307,30 +1307,6 @@ static bool isFoldedOrDeadInstruction(const Instruction *I,
          !FuncInfo.isExportedInst(I); // Exported instrs must be computed.
 }
 
-static const AllocaInst *findAllocaForDbgDeclare(const Value *Address) {
-  if (const auto *AI = dyn_cast<AllocaInst>(Address))
-    return AI;
-#if 0
-  // Look through any csetbounds/mipsstacktocap instructions to find the alloca.
-  // This is needed because the MIPS CHERI PurecapABI pass inserts a setbounds
-  // for every stack allocation
-  // TODO: should we just not update the dbg.declare statements instead of
-  // working around it here?
-  if (const auto *CI = dyn_cast<CallInst>(Address))
-    if (const auto *F = CI->getCalledFunction())
-      if (F->getIntrinsicID() == Intrinsic::cheri_cap_bounds_set ||
-          F->getIntrinsicID() == Intrinsic::mips_stack_to_cap)
-        return findAllocaForDbgDeclare(CI->getArgOperand(0));
-  // We also need to ignore the bitcast that is used in order to call the
-  // stacktocap/bounds_set
-  if (auto *O = dyn_cast<Operator>(Address))
-    if (O->getOpcode() == Instruction::BitCast ||
-        O->getOpcode() == Instruction::AddrSpaceCast)
-      return findAllocaForDbgDeclare(O->getOperand(0));
-#endif
-  return nullptr;
-}
-
 static void processDbgDeclare(FunctionLoweringInfo &FuncInfo,
                               const Value *Address, DIExpression *Expr,
                               DILocalVariable *Var, DebugLoc DbgLoc) {
