@@ -37,6 +37,10 @@ def int_cheri_cap_flags_get :
   Intrinsic<[llvm_anyint_ty],
             [llvm_cap_ty],
             [IntrNoMem, IntrWillReturn]>;
+def int_cheri_cap_cid_set :
+  Intrinsic<[llvm_cap_ty],
+            [llvm_cap_ty, llvm_anyint_ty],
+            [IntrNoMem, IntrWillReturn]>;
 def int_cheri_cap_high_set :
   Intrinsic<[llvm_cap_ty],
             [llvm_cap_ty, llvm_anyint_ty],

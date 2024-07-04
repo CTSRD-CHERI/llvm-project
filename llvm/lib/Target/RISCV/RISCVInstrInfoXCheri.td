@@ -343,6 +343,7 @@ def CUnseal         : Cheri_rr<0xc, "cunseal", GPCR, GPCR>;
 def CAndPerm        : Cheri_rr<0xd, "candperm">;
 } // let mayTrap = 1
 def CSetFlags       : Cheri_rr<0xe, "csetflags">;
+def CSetCID         : Cheri_rr<0x18, "csetcid">;
 def CSetOffset      : Cheri_rr<0xf, "csetoffset">;
 def CSetAddr        : Cheri_rr<0x10, "csetaddr">;
 def CSetHigh        : Cheri_rr<0x16, "csethigh">;
@@ -1205,6 +1206,7 @@ def : PatGpcrGpcr<int_cheri_cap_seal, CSeal>;
 def : PatGpcrGpcr<int_cheri_cap_unseal, CUnseal>;
 def : PatGpcrGpr<int_cheri_cap_perms_and, CAndPerm>;
 def : PatGpcrGpr<int_cheri_cap_flags_set, CSetFlags>;
+def : PatGpcrGpr<int_cheri_cap_cid_set, CSetCID>;
 def : PatGpcrGpr<int_cheri_cap_offset_set, CSetOffset>;
 def : PatGpcrGpr<int_cheri_cap_address_set, CSetAddr>;
 def : PatGpcrGpr<int_cheri_cap_high_set, CSetHigh>;
