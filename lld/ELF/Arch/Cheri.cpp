@@ -13,11 +13,6 @@ using namespace llvm;
 using namespace llvm::object;
 using namespace llvm::ELF;
 
-
-// Change these to #define for extremely verbose debug output
-#undef DEBUG_CAP_RELOCS
-#undef DEBUG_CAP_TABLE
-
 namespace lld {
 namespace elf {
 
@@ -342,13 +337,6 @@ void CheriCapRelocsSection::addCapReloc(CheriCapRelocLocation loc,
     return; // Maybe happens with vtables?
   }
   if (targetNeedsDynReloc) {
-#ifdef DEBUG_CAP_RELOCS
-    message("Adding dyn reloc at " + toString(this) + "+0x" +
-            utohexstr(CurrentEntryOffset) + " against " +
-            Target.verboseToString());
-    message("Symbol preemptible:" + Twine(Target.Sym->IsPreemptible));
-#endif
-
     bool relativeToLoadAddress = false;
     // The addend is not used as the offset into the capability here, as we
     // have the offset field in the __cap_relocs for that. The Addend
@@ -456,12 +444,6 @@ static uint64_t getTargetSize(const CheriCapRelocLocation &location,
       // Use less-or-equal here to account for __end_foo symbols which point 1 past the section
       if (offsetInOS <= os->size) {
         targetSize = os->size - offsetInOS;
-#ifdef DEBUG_CAP_RELOCS
-        if (Config->verboseCapRelocs)
-            errs() << " OS OFFSET 0x" << utohexstr(OS->Addr) << "SYM OFFSET 0x"
-                   << utohexstr(OffsetInOS) << " SECLEN 0x" << utohexstr(OS->Size)
-                   << " -> target size 0x" << utohexstr(TargetSize) << "\n";
-#endif
         UnknownSectionSize = false;
       }
     }
@@ -695,16 +677,6 @@ void CheriCapTableSection::addEntry(Symbol &sym, RelExpr expr,
     if (!idx.usedInCallExpr)
       it.first->second.usedInCallExpr = false;
   }
-#if defined(DEBUG_CAP_TABLE)
-  std::string DbgContext;
-  if (Config->CapTableScope == CapTableScopePolicy::File) {
-    DbgContext = " for file '" + toString(IS->File) + "'";
-  } else if (Config->CapTableScope == CapTableScopePolicy::Function) {
-    DbgContext =  " for function '" + toString(*findMatchingFunction(IS, Offset)) + "'";
-  }
-  llvm::errs() << "Added symbol " << toString(Sym) << " to .captable"
-               << DbgContext << ". Total count " << Entries.size() << "\n";
-#endif
 }
 
 void CheriCapTableSection::addDynTlsEntry(Symbol &sym) {
@@ -734,12 +706,6 @@ uint32_t CheriCapTableSection::getIndex(const Symbol &sym,
   // start of the current captable subset (or the global table in the default
   // case). When using per-function tables the first index in every function
   // will always be zero.
-#if defined(DEBUG_CAP_TABLE)
-  message("captable index for " + toString(Sym) + " is " +
-          Twine(*it->second.Index) + " - " +
-          Twine(Entries.FirstIndex) + ": " +
-          Twine(*it->second.Index - Entries.FirstIndex));
-#endif
   return *it->second.index - entries.firstIndex;
 }
 
