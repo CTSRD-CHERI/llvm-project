@@ -3143,9 +3143,6 @@ static int getMipsRegisterSize(uint8_t Flag) {
   }
 }
 
-static const EnumEntry<uint64_t> CapRelocsPermsFlags[] = {
-    {"Function", 0x8000000000000000ULL}};
-
 template <class ELFT> void ELFDumper<ELFT>::printCheriCapRelocs() {
   const ELFFile<ELFT> &Obj = ObjF.getELFFile();
   const Elf_Shdr *Shdr = findSectionByName("__cap_relocs");
