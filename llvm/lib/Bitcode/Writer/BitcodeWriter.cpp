@@ -1062,6 +1062,8 @@ void ModuleBitcodeWriter::writeTypeTable() {
         TypeVals.push_back(true);
       break;
     }
+    case Type::SizedCapabilityTyID:
+      llvm_unreachable("Fixed-size capabilities cannot be added to IR modules");
     case Type::TargetExtTyID: {
       TargetExtType *TET = cast<TargetExtType>(T);
       Code = bitc::TYPE_CODE_TARGET_TYPE;

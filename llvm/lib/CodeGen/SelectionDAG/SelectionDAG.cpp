@@ -6997,7 +6997,7 @@ static bool isMemSrcFromConstant(SDValue Src, ConstantDataArraySlice &Slice) {
   GlobalAddressSDNode *G = nullptr;
   if (Src.getOpcode() == ISD::GlobalAddress)
     G = cast<GlobalAddressSDNode>(Src);
-  else if (Src.getOpcode() == ISD::ADD &&
+  else if ((Src.getOpcode() == ISD::ADD || Src.getOpcode() == ISD::PTRADD) &&
            Src.getOperand(0).getOpcode() == ISD::GlobalAddress &&
            Src.getOperand(1).getOpcode() == ISD::Constant) {
     G = cast<GlobalAddressSDNode>(Src.getOperand(0));
@@ -7116,7 +7116,7 @@ static SDValue getMemcpyLoadsAndStores(
   // TODO: the frontend/optimization passes probably shouldn't emit
   //  must-preserve-tags for such small memcpys
   auto CapTy = TLI.cheriCapabilityType();
-  if (CapTy.isValid()) {
+  if (CapTy.isValid() && !Op.isMemset()) {
     const uint64_t CapSize = CapTy.getStoreSize();
     if (PreserveTags == PreserveCheriTags::Required && !ReachedLimit &&
         Size >= CapSize && (!FoundLowering || !MemOps[0].isFatPointer())) {

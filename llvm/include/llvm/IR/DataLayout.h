@@ -759,6 +759,8 @@ inline TypeSize DataLayout::getTypeSizeInBits(Type *Ty) const {
                        getTypeSizeInBits(VTy->getElementType()).getFixedValue();
     return TypeSize(MinBits, EltCnt.isScalable());
   }
+  case Type::SizedCapabilityTyID:
+    return TypeSize::Fixed(cast<SizedCapabilityType>(Ty)->getBitWidth());
   case Type::TargetExtTyID: {
     Type *LayoutTy = cast<TargetExtType>(Ty)->getLayoutType();
     return getTypeSizeInBits(LayoutTy);

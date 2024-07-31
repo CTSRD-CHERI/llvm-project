@@ -846,6 +846,8 @@ Align DataLayout::getAlignment(Type *Ty, bool abi_or_pref) const {
   }
   case Type::X86_AMXTyID:
     return Align(64);
+  case Type::SizedCapabilityTyID:
+    return Align(cast<SizedCapabilityType>(Ty)->getBitWidth() / 8);
   case Type::TargetExtTyID: {
     Type *LayoutTy = cast<TargetExtType>(Ty)->getLayoutType();
     return getAlignment(LayoutTy, abi_or_pref);

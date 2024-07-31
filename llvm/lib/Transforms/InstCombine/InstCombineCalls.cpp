@@ -163,20 +163,20 @@ Instruction *InstCombinerImpl::SimplifyAnyMemTransfer(AnyMemTransferInst *MI) {
   assert(Size && "0-sized memory transferring should be removed already.");
 
   Type *CpyTy = nullptr;
-  if (Size > 8 || (Size&(Size-1))) {
-    // This heuristic is silly, because it prevents us from doing vector
-    // loads and stores.  It also means that on CHERI we weren't optimising
-    // single-pointer copies.  For now, special case pointer signed and aligned
-    // things for CHERI.
-    if (!DL.isFatPointer(200))
-      return nullptr;  // If not 1/2/4/8 bytes, exit.
-    uint64_t PtrCpySize = DL.getPointerSize(200);
+  // Special case pointer sized and aligned things for CHERI.
+  if (DL.isFatPointer(200) && Size == DL.getPointerSize(200) &&
+      MI->shouldPreserveCheriTags() != PreserveCheriTags::Unnecessary) {
+    // May contain a capability
     Align PtrCpyAlign = DL.getPointerPrefAlignment(200);
-    if ((Size != PtrCpySize) || (CopyDstAlign && *CopyDstAlign < PtrCpyAlign) ||
-        (CopySrcAlign && *CopySrcAlign < PtrCpyAlign))
+    if (CopyDstAlign && *CopyDstAlign >= PtrCpyAlign &&
+        CopySrcAlign && *CopySrcAlign >= PtrCpyAlign)
+      CpyTy = Type::getInt8PtrTy(MI->getContext(), 200);
+    else
       return nullptr;
-    CpyTy = Type::getInt8PtrTy(MI->getContext(), 200);
   }
+
+  if (!CpyTy && (Size > 8 || (Size&(Size-1))))
+    return nullptr;  // If not 1/2/4/8 bytes, exit.
 
   // If it is an atomic and alignment is less than the size then we will
   // introduce the unaligned memory access which will be later transformed
