@@ -467,9 +467,11 @@ bool llvm::lowerGlobalIFuncUsersAsGlobalCtor(
 
   InitBuilder.CreateRetVoid();
 
-  PointerType *ConstantDataTy = Ctx.supportsTypedPointers()
-                                    ? PointerType::get(Type::getInt8Ty(Ctx), 0)
-                                    : PointerType::get(Ctx, 0);
+  auto ConstantAS = DL.getDefaultGlobalsAddressSpace();
+  PointerType *ConstantDataTy =
+      Ctx.supportsTypedPointers()
+          ? PointerType::get(Type::getInt8Ty(Ctx), ConstantAS)
+          : PointerType::get(Ctx, ConstantAS);
 
   // TODO: Is this the right priority? Probably should be before any other
   // constructors?
