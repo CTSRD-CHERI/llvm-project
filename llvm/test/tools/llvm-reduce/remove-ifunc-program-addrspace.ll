@@ -1,4 +1,3 @@
-; REQUIRES: UNSUPORTED
 ; RUN: llvm-reduce --abort-on-invalid-reduction --delta-passes=ifuncs --test FileCheck --test-arg --check-prefixes=CHECK-INTERESTINGNESS --test-arg %s --test-arg --input-file %s -o %t
 ; RUN: FileCheck -implicit-check-not=ifunc_remove --check-prefixes=CHECK-FINAL --input-file=%t %s
 
@@ -16,8 +15,8 @@ define void @existing_ctor() addrspace(1) {
 
 ; CHECK-FINAL: [[TABLE:@[0-9]+]] = internal addrspace(2) global [6 x ptr addrspace(1)] poison, align 8
 
-; CHECK-FINAL: @llvm.global_ctors = appending addrspace(2) global [2 x { i32, ptr addrspace(1), ptr }] [{ i32, ptr addrspace(1), ptr } { i32 0, ptr addrspace(1) @existing_ctor, ptr null }, { i32, ptr addrspace(1), ptr } { i32 10, ptr addrspace(1) [[TABLE_CTOR:@[0-9]+]], ptr null }]
-@llvm.global_ctors = appending global [1 x { i32, ptr addrspace(1), ptr }] [{ i32, ptr addrspace(1), ptr } { i32 0, ptr addrspace(1) @existing_ctor, ptr null }]
+; CHECK-FINAL: @llvm.global_ctors = appending addrspace(2) global [2 x { i32, ptr addrspace(1), ptr addrspace(2) }] [{ i32, ptr addrspace(1), ptr addrspace(2) } { i32 0, ptr addrspace(1) @existing_ctor, ptr addrspace(2) null }, { i32, ptr addrspace(1), ptr addrspace(2) } { i32 10, ptr addrspace(1) [[TABLE_CTOR:@[0-9]+]], ptr addrspace(2) null }]
+@llvm.global_ctors = appending global [1 x { i32, ptr addrspace(1), ptr addrspace(2) }] [{ i32, ptr addrspace(1), ptr addrspace(2) } { i32 0, ptr addrspace(1) @existing_ctor, ptr addrspace(2) null }]
 
 
 
