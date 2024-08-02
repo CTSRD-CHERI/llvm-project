@@ -10684,6 +10684,9 @@ public:
   bool CheckCHERIAssignCompatible(QualType LHS, QualType RHS, Expr *&RHSExpr,
                                   bool InsertBitCast = true);
 
+  void DiagnoseAmbiguousProvenance(Expr *LHS, Expr *RHS, SourceLocation Loc,
+                                   bool IsCompAssign);
+
   void CheckTollFreeBridgeCast(QualType castType, Expr *castExpr);
 
   void CheckObjCBridgeRelatedCast(QualType castType, Expr *castExpr);
