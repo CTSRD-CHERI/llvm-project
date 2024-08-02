@@ -11472,36 +11472,34 @@ static void DiagnoseDivisionSizeofPointerOrArray(Sema &S, Expr *LHS, Expr *RHS,
   }
 }
 
-static void diagnoseAmbiguousProvenance(Sema &S, ExprResult &LHS,
-                                        ExprResult &RHS, SourceLocation Loc,
-                                        bool IsCompAssign) {
+void Sema::DiagnoseAmbiguousProvenance(Expr *LHS, Expr *RHS, SourceLocation Loc,
+                                       bool IsCompAssign) {
   // For compound assignment the provenance source is obvious
   // TODO: for compound assignment, we should implement a warning that a
   //  capability RHS with a non-cap LHS is potentially inefficient.
   if (IsCompAssign)
     return;
 
-  const QualType LHSType = LHS.get()->getType();
-  const QualType RHSType = RHS.get()->getType();
-  bool isLHSCap = LHSType->isCHERICapabilityType(S.Context);
-  bool isRHSCap = RHSType->isCHERICapabilityType(S.Context);
+  const QualType LHSType = LHS->getType();
+  const QualType RHSType = RHS->getType();
+  bool isLHSCap = LHSType->isCHERICapabilityType(Context);
+  bool isRHSCap = RHSType->isCHERICapabilityType(Context);
   // If both sides can carry provenance (i.e. not marked as non-provenance
   // carrying) we should emit a warning
   bool LHSProvenance = isLHSCap && !LHSType->hasAttr(attr::CHERINoProvenance);
   bool RHSProvenance = isRHSCap && !RHSType->hasAttr(attr::CHERINoProvenance);
 
   if (LHSProvenance && RHSProvenance) {
-    S.DiagRuntimeBehavior(
-        Loc, RHS.get(),
-        S.PDiag(diag::warn_ambiguous_provenance_capability_binop)
-            << LHSType << RHSType << LHS.get()->getSourceRange()
-            << RHS.get()->getSourceRange());
+    DiagRuntimeBehavior(Loc, RHS,
+                        PDiag(diag::warn_ambiguous_provenance_capability_binop)
+                            << LHSType << RHSType << LHS->getSourceRange()
+                            << RHS->getSourceRange());
     // In the case of ambiguous provenance we currently default to LHS-derived
     // values. To achieve this behaviour, flag the RHS as non-provenance
     // carrying for code-generation.
     // FIXME: in the future make this an error and require manual annotation.
-    RHS.get()->setType(
-        S.Context.getAttributedType(attr::CHERINoProvenance, RHSType, RHSType));
+    RHS->setType(
+        Context.getAttributedType(attr::CHERINoProvenance, RHSType, RHSType));
   }
 }
 
@@ -11554,7 +11552,7 @@ QualType Sema::CheckMultiplyDivideOperands(ExprResult &LHS, ExprResult &RHS,
     DiagnoseBadDivideOrRemainderValues(*this, LHS, RHS, Loc, IsDiv);
     DiagnoseDivisionSizeofPointerOrArray(*this, LHS.get(), RHS.get(), Loc);
   } else {
-    diagnoseAmbiguousProvenance(*this, LHS, RHS, Loc, IsCompAssign);
+    DiagnoseAmbiguousProvenance(LHS.get(), RHS.get(), Loc, IsCompAssign);
   }
   return compType;
 }
@@ -11947,7 +11945,7 @@ QualType Sema::CheckAdditionOperands(ExprResult &LHS, ExprResult &RHS,
   if (!compType.isNull() && compType->isArithmeticType()) {
     if (CompLHSTy) *CompLHSTy = compType;
     assert(Opc == BO_AddAssign || Opc == BO_Add);
-    diagnoseAmbiguousProvenance(*this, LHS, RHS, Loc, Opc == BO_AddAssign);
+    DiagnoseAmbiguousProvenance(LHS.get(), RHS.get(), Loc, Opc == BO_AddAssign);
     return compType;
   }
 
@@ -14100,7 +14098,7 @@ inline QualType Sema::CheckBitwiseOperands(ExprResult &LHS, ExprResult &RHS,
 
   if (!compType.isNull() && compType->isIntegralOrUnscopedEnumerationType()) {
     const bool UsingUIntCapOffset = getLangOpts().cheriUIntCapUsesOffset();
-    diagnoseAmbiguousProvenance(*this, LHS, RHS, Loc, IsCompAssign);
+    DiagnoseAmbiguousProvenance(LHS.get(), RHS.get(), Loc, IsCompAssign);
     const bool isLHSCap = LHS.get()->getType()->isCHERICapabilityType(Context);
     if (isLHSCap && (Opc == BO_And || Opc == BO_AndAssign)) {
       // Bitwise and can cause checking low pointer bits to be compiled to
