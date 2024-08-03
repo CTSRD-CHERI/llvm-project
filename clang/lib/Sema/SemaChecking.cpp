@@ -37,8 +37,10 @@
 #include "clang/AST/TypeLoc.h"
 #include "clang/AST/UnresolvedSet.h"
 #include "clang/Basic/AddressSpaces.h"
+#include "clang/Basic/Builtins.h"
 #include "clang/Basic/CharInfo.h"
 #include "clang/Basic/Diagnostic.h"
+#include "clang/Basic/DiagnosticFrontend.h"
 #include "clang/Basic/IdentifierTable.h"
 #include "clang/Basic/LLVM.h"
 #include "clang/Basic/LangOptions.h"
@@ -473,6 +475,18 @@ static bool SemaBuiltinOverflow(Sema &S, CallExpr *TheCall,
                       diag::err_overflow_builtin_bit_int_max_size)
                << 128;
     }
+  }
+
+  // ScalarExprEmitter::EmitSub's diagnostics aren't included here since
+  // they're generally unhelpful, grouped under pedantic warnings, and would be
+  // confusing without also taking into account the type of the result.
+  if (BuiltinID != Builtin::BI__builtin_sub_overflow) {
+    assert((BuiltinID == Builtin::BI__builtin_add_overflow ||
+            BuiltinID == Builtin::BI__builtin_mul_overflow) &&
+           "Unexpected overflow builtin");
+
+    S.DiagnoseAmbiguousProvenance(TheCall->getArg(0), TheCall->getArg(1),
+                                  TheCall->getExprLoc(), false);
   }
 
   return false;
