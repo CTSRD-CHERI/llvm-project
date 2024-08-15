@@ -1605,13 +1605,13 @@ void MipsTargetLowering::computeKnownBitsForTargetNode(
           (KnownLengthBits.Zero | KnownLengthBits.One).getZExtValue();
 
         // Calculate bits for property (1)
-        uint64_t LeadingKnownBits = countLeadingOnes(MinMaxRoundedAgreeMask);
+        uint64_t LeadingKnownBits = llvm::countl_one(MinMaxRoundedAgreeMask);
         uint64_t LeadingKnownMask =
           MinRoundedOverflow == MaxRoundedOverflow
             ? maskLeadingOnes<uint64_t>(LeadingKnownBits) : 0;
 
         // Calculate bits for property (2)
-        uint64_t TrailingKnownBits = countTrailingOnes(MinMaxRoundedAgreeMask);
+        uint64_t TrailingKnownBits = llvm::countr_one(MinMaxRoundedAgreeMask);
         uint64_t TrailingKnownMask =
             maskTrailingOnes<uint64_t>(TrailingKnownBits) & InputKnownMask;
 
