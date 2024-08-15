@@ -23,7 +23,7 @@ define i32 @get_ith_word(i32 signext %i, ...) nounwind {
 ; CHECK-NEXT:    cincoffset csp, csp, 16
 ; CHECK-NEXT:    cret
 entry:
-  %ap = alloca i8 addrspace(200)*, align 8, addrspace(200)
+  %ap = alloca i8 addrspace(200)*, align 16, addrspace(200)
   %0 = bitcast i8 addrspace(200)* addrspace(200)* %ap to i8 addrspace(200)*
   call void @llvm.lifetime.start.p200i8(i64 8, i8 addrspace(200)* nonnull %0) #2
   call void @llvm.va_start.p200i8(i8 addrspace(200)* nonnull %0)

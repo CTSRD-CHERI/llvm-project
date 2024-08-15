@@ -29,7 +29,7 @@ define void @just_below_threshold() local_unnamed_addr addrspace(200) nounwind {
 ; CHECK-NEXT:    cret
 entry:
   %obj1 = alloca i128, align 16, addrspace(200)
-  %obj2 = alloca %struct.large, align 1, addrspace(200)
+  %obj2 = alloca %struct.large, align 16, addrspace(200)
   call i32 @use_i128(i128 addrspace(200)* %obj1)
   call i32 @use_large(%struct.large addrspace(200)* %obj2)
   ret void
@@ -55,7 +55,7 @@ define void @just_above_threshold() local_unnamed_addr addrspace(200) nounwind {
 ; CHECK-NEXT:    cret
 entry:
   %obj1 = alloca i128, align 16, addrspace(200)
-  %obj2 = alloca %struct.too.large, align 1, addrspace(200)
+  %obj2 = alloca %struct.too.large, addrspace(200)
   call i32 @use_i128(i128 addrspace(200)* %obj1)
   call i32 @use_too_large(%struct.too.large addrspace(200)* %obj2)
   ret void
