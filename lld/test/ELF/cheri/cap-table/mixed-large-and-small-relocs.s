@@ -18,7 +18,7 @@
 
 # But if there are too many small relocs there is nothing we can do
 # RUN: not ld.lld %t-bad.o -o %t.exe 2>&1 | FileCheck %s -check-prefix ERR
-# ERR: (function load_sym_small_out_of_bounds024: .text+0x2f40): relocation R_MIPS_CHERI_CAPTAB_CLC11 out of range: 1024 is not in [-1024, 1023]; references sym_small_out_of_bounds024
+# ERR: (function load_sym_small_out_of_bounds024: .text+0x2f40): relocation R_MIPS_CHERI_CAPTAB_CLC11 out of range: 1024 is not in [-1024, 1023]; references 'sym_small_out_of_bounds024'
 
 .macro generate_1000_captable_values, prefix=0
     .irp j, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9,
