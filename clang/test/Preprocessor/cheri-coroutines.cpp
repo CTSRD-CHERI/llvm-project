@@ -23,7 +23,6 @@
 // RUN: %riscv64_cheri_cc1 -std=c++20 -E -dM -x c++ /dev/null \
 // RUN:    | FileCheck %s --check-prefixes=HYBRID-CXX20
 // HYBRID-CXX20: #define __cplusplus 202002L
-// HYBRID-CXX20: #define __cpp_coroutines 201703L
 // HYBRID-CXX20: #define __cpp_impl_coroutine 201902L
 // RUN: %riscv64_cheri_purecap_cc1 -std=c++20 -E -dM -x c++ /dev/null \
 // RUN:    | FileCheck %s --check-prefix=PURECAP-CXX20
