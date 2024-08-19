@@ -7312,8 +7312,28 @@ void SelectionDAGBuilder::visitIntrinsicCall(const CallInst &I,
     SDValue Const = getValue(I.getOperand(1));
 
     EVT PtrVT = Ptr.getValueType();
-    setValue(&I, DAG.getNode(ISD::AND, sdl, PtrVT, Ptr,
-                             DAG.getZExtOrTrunc(Const, sdl, PtrVT)));
+    const bool IsCapability = PtrVT.isFatPointer();
+    SDValue Result = Ptr;
+    EVT AddrVT = PtrVT;
+    // For Cheri ptrmask expands to:
+    // ptrmask($cap, $mask) -> csetaddr(and(cgetaddr($cap), $mask))
+
+    if (IsCapability) {
+      auto PtrAS = I.getOperand(0)->getType()->getPointerAddressSpace();
+      AddrVT = TLI.getPointerRangeTy(DAG.getDataLayout(), PtrAS);
+      Result = DAG.getNode(
+          ISD::INTRINSIC_WO_CHAIN, sdl, AddrVT,
+          DAG.getConstant(Intrinsic::cheri_cap_address_get, sdl, AddrVT), Ptr);
+    }
+    Result = DAG.getNode(ISD::AND, sdl, AddrVT, Result,
+                         DAG.getZExtOrTrunc(Const, sdl, AddrVT));
+    if (IsCapability)
+      Result = DAG.getNode(
+          ISD::INTRINSIC_WO_CHAIN, sdl, PtrVT,
+          DAG.getConstant(Intrinsic::cheri_cap_address_set, sdl, AddrVT), Ptr,
+          Result);
+
+    setValue(&I, Result);
     return;
   }
   case Intrinsic::cheri_cap_address_set: {

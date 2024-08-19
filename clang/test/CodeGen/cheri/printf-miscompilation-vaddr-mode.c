@@ -9,17 +9,15 @@
 // CHECK-NEXT:    [[B:%.*]] = alloca ptr addrspace(200), align 16, addrspace(200)
 // CHECK-NEXT:    store ptr addrspace(200) [[D:%.*]], ptr addrspace(200) [[D_ADDR]], align 16
 // CHECK-NEXT:    [[ARGP_CUR:%.*]] = load ptr addrspace(200), ptr addrspace(200) [[D_ADDR]], align 16
-// CHECK-NEXT:    [[TMP0:%.*]] = call i64 @llvm.cheri.cap.address.get.i64(ptr addrspace(200) [[ARGP_CUR]])
-// CHECK-NEXT:    [[TMP1:%.*]] = add i64 [[TMP0]], 15
-// CHECK-NEXT:    [[TMP2:%.*]] = and i64 [[TMP1]], -16
-// CHECK-NEXT:    [[TMP3:%.*]] = call ptr addrspace(200) @llvm.cheri.cap.address.set.i64(ptr addrspace(200) [[ARGP_CUR]], i64 [[TMP2]])
-// CHECK-NEXT:    [[ARGP_NEXT:%.*]] = getelementptr inbounds i8, ptr addrspace(200) [[TMP3]], i64 16
+// CHECK-NEXT:    [[TMP0:%.*]] = getelementptr inbounds i8, ptr addrspace(200) [[ARGP_CUR]], i32 15
+// CHECK-NEXT:    [[ARGP_CUR_ALIGNED:%.*]] = call ptr addrspace(200) @llvm.ptrmask.p200.i64(ptr addrspace(200) [[TMP0]], i64 -16)
+// CHECK-NEXT:    [[ARGP_NEXT:%.*]] = getelementptr inbounds i8, ptr addrspace(200) [[ARGP_CUR_ALIGNED]], i64 16
 // CHECK-NEXT:    store ptr addrspace(200) [[ARGP_NEXT]], ptr addrspace(200) [[D_ADDR]], align 16
-// CHECK-NEXT:    [[TMP4:%.*]] = load ptr addrspace(200), ptr addrspace(200) [[TMP3]], align 16
-// CHECK-NEXT:    store ptr addrspace(200) [[TMP4]], ptr addrspace(200) [[B]], align 16
-// CHECK-NEXT:    [[TMP5:%.*]] = load ptr addrspace(200), ptr addrspace(200) [[B]], align 16
-// CHECK-NEXT:    [[TMP6:%.*]] = load i32, ptr addrspace(200) [[TMP5]], align 4
-// CHECK-NEXT:    ret i32 [[TMP6]]
+// CHECK-NEXT:    [[TMP1:%.*]] = load ptr addrspace(200), ptr addrspace(200) [[ARGP_CUR_ALIGNED]], align 16
+// CHECK-NEXT:    store ptr addrspace(200) [[TMP1]], ptr addrspace(200) [[B]], align 16
+// CHECK-NEXT:    [[TMP2:%.*]] = load ptr addrspace(200), ptr addrspace(200) [[B]], align 16
+// CHECK-NEXT:    [[TMP3:%.*]] = load i32, ptr addrspace(200) [[TMP2]], align 4
+// CHECK-NEXT:    ret i32 [[TMP3]]
 //
 int c(__builtin_va_list d) {
   int* b = __builtin_va_arg(d, int *);
