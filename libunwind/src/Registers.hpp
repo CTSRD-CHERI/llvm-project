@@ -4618,7 +4618,7 @@ inline reg_t Registers_riscv::getRegister(int regNum) const {
   if ((regNum > 0) && (regNum < 32))
     return _registers[regNum];
   if (regNum == UNW_RISCV_VLENB) {
-    reg_t vlenb;
+    size_t vlenb;
     __asm__("csrr %0, 0xC22" : "=r"(vlenb));
     return vlenb;
   }
