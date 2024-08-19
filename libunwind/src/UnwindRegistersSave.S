@@ -1224,19 +1224,19 @@ DEFINE_LIBUNWIND_FUNCTION(__unw_getcontext)
 
 #elif defined(__riscv)
 
-.macro save_fpr num
+.macro save_fpr num, ctxreg
 #ifdef __CHERI_PURE_CAPABILITY__
-  cfsd   f\num, (__SIZEOF_CHERI_CAPABILITY__ * 32 + 8 * \num)(ca0)
+  cfsd   f\num, (__SIZEOF_CHERI_CAPABILITY__ * 32 + 8 * \num)(c\ctxreg)
 #else
-  FSTORE f\num, (8 * 32 + 8 * \num)(a0)
+  FSTORE f\num, (8 * 32 + 8 * \num)(\ctxreg)
 #endif
 .endm
 
-.macro save_gpr num
+.macro save_gpr num, ctxreg
 #ifdef __CHERI_PURE_CAPABILITY__
-  csc   c\num, (__SIZEOF_CHERI_CAPABILITY__ * \num)(ca0)
+  csc   c\num, (__SIZEOF_CHERI_CAPABILITY__ * \num)(c\ctxreg)
 #else
-  ISTORE x\num, (8 * \num)(a0)
+  ISTORE x\num, (8 * \num)(\ctxreg)
 #endif
 .endm
 
@@ -1253,12 +1253,12 @@ DEFINE_LIBUNWIND_FUNCTION(__unw_getcontext)
   ISTORE    x1, (8 * 0)(a0) // store ra as pc
 #endif
   .irp i,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29,30,31
-    save_gpr x\i, (RISCV_ISIZE * \i)(a0)
+    save_gpr \i, a0
   .endr
 
 # if defined(__riscv_flen)
   .irp i,FROM_0_TO_31
-    save_fpr f\i, (RISCV_FOFFSET + RISCV_FSIZE * \i)(a0)
+    save_fpr \i, a0
   .endr
 # endif
 
