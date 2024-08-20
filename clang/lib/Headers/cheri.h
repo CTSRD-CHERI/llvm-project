@@ -90,23 +90,6 @@ void * __capability cheri_offset_increment(void *__capability __cap,
 }
 
 static inline
-void * __capability cheri_tag_clear(void * __capability __cap) {
-  return __IF_CAPS(__builtin_cheri_tag_clear(__cap), (void*)__cap);
-}
-
-static inline
-void * __capability cheri_seal(void * __capability __cap,
-                               const void * __capability __type) {
-  return __IF_CAPS(__builtin_cheri_seal(__cap, __type), (void*)__cap);
-}
-
-static inline
-void * __capability cheri_unseal(void * __capability __cap,
-                                 const void * __capability __type) {
-  return __IF_CAPS(__builtin_cheri_unseal(__cap, __type), (void*)__cap);
-}
-
-static inline
 __SIZE_TYPE__ cheri_copy_from_high(void *__capability __cap) {
   return __IF_CAPS(__builtin_cheri_copy_from_high(__cap), __SIZE_MAX__);
 }

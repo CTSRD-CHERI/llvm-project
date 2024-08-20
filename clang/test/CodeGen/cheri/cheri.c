@@ -31,12 +31,6 @@
 // PTRS: define dso_local ptr @cheri_offset_increment(ptr noundef readnone{{( %.+)?}}, i32
 // PTRS: %[[TEMP1:[0-9a-z.]+]] = getelementptr inbounds i8, ptr{{( %.+)?}}, i32
 // PTRS: ret ptr %[[TEMP1]]
-// PTRS: define dso_local ptr @cheri_tag_clear(ptr noundef readnone returned
-// PTRS: ret ptr
-// PTRS: define dso_local ptr @cheri_seal(ptr noundef readnone returned{{( %.+)?}}, ptr nocapture noundef readnone
-// PTRS: ret ptr
-// PTRS: define dso_local ptr @cheri_unseal(ptr noundef readnone returned{{( %.+)?}}, ptr nocapture noundef readnone
-// PTRS: ret ptr
 // PTRS: define dso_local ptr @cheri_cap_from_pointer(ptr nocapture noundef readnone{{( %.+)?}}, ptr noundef readnone returned{{( %.+)?}})
 // PTRS: ret ptr
 // PTRS: define dso_local ptr @cheri_cap_to_pointer(ptr nocapture noundef readnone{{( %.+)?}}, ptr noundef readnone returned{{( %.+)?}})
@@ -75,12 +69,6 @@
 // CAPS: define dso_local ptr addrspace(200) @cheri_offset_increment(ptr addrspace(200) noundef readnone{{( %.+)?}}, i64 noundef signext
 // CAPS: %__builtin_cheri_offset_increment = getelementptr i8, ptr addrspace(200) %__cap, i64 %__offset
 // CAPS: ret ptr addrspace(200) %__builtin_cheri_offset_increment
-// CAPS: define dso_local ptr addrspace(200) @cheri_tag_clear(ptr addrspace(200) noundef readnone
-// CAPS: call ptr addrspace(200) @llvm.cheri.cap.tag.clear(ptr addrspace(200)
-// CAPS: define dso_local ptr addrspace(200) @cheri_seal(ptr addrspace(200) noundef readnone{{( %.+)?}}, ptr addrspace(200) noundef readnone
-// CAPS: call ptr addrspace(200) @llvm.cheri.cap.seal(ptr addrspace(200){{( %.+)?}}, ptr addrspace(200)
-// CAPS: define dso_local ptr addrspace(200) @cheri_unseal(ptr addrspace(200) noundef readnone{{( %.+)?}}, ptr addrspace(200) noundef readnone
-// CAPS: call ptr addrspace(200) @llvm.cheri.cap.unseal(ptr addrspace(200){{( %.+)?}}, ptr addrspace(200)
 // CAPS: define dso_local ptr addrspace(200) @cheri_cap_from_pointer(ptr addrspace(200) noundef readnone{{( %.+)?}}, ptr noundef{{( %.+)?}})
 // CAPS: call ptr addrspace(200) @llvm.cheri.cap.from.pointer.i64(ptr addrspace(200){{( %.+)?}}, i64
 // CAPS: define dso_local ptr @cheri_cap_to_pointer(ptr addrspace(200) noundef{{( %.+)?}}, ptr addrspace(200) noundef{{( %.+)?}})
