@@ -22,10 +22,10 @@ define dso_local double @ddc_fld(double* %a) nounwind {
 ; CHECK-ILP32-LABEL: ddc_fld:
 ; CHECK-ILP32:       # %bb.0:
 ; CHECK-ILP32-NEXT:    addi sp, sp, -16
-; CHECK-ILP32-NEXT:    fld ft0, 0(a0)
-; CHECK-ILP32-NEXT:    fld ft1, 24(a0)
-; CHECK-ILP32-NEXT:    fadd.d ft0, ft0, ft1
-; CHECK-ILP32-NEXT:    fsd ft0, 8(sp)
+; CHECK-ILP32-NEXT:    fld fa5, 0(a0)
+; CHECK-ILP32-NEXT:    fld fa4, 24(a0)
+; CHECK-ILP32-NEXT:    fadd.d fa5, fa5, fa4
+; CHECK-ILP32-NEXT:    fsd fa5, 8(sp)
 ; CHECK-ILP32-NEXT:    lw a0, 8(sp)
 ; CHECK-ILP32-NEXT:    lw a1, 12(sp)
 ; CHECK-ILP32-NEXT:    addi sp, sp, 16
@@ -33,9 +33,9 @@ define dso_local double @ddc_fld(double* %a) nounwind {
 ;
 ; CHECK-ILP32D-LABEL: ddc_fld:
 ; CHECK-ILP32D:       # %bb.0:
-; CHECK-ILP32D-NEXT:    fld ft0, 0(a0)
-; CHECK-ILP32D-NEXT:    fld ft1, 24(a0)
-; CHECK-ILP32D-NEXT:    fadd.d fa0, ft0, ft1
+; CHECK-ILP32D-NEXT:    fld fa5, 0(a0)
+; CHECK-ILP32D-NEXT:    fld fa4, 24(a0)
+; CHECK-ILP32D-NEXT:    fadd.d fa0, fa5, fa4
 ; CHECK-ILP32D-NEXT:    ret
 ;
 ; CHECK-IL32PC64-LABEL: ddc_fld:
@@ -46,16 +46,16 @@ define dso_local double @ddc_fld(double* %a) nounwind {
 ; CHECK-IL32PC64-NEXT:    lw.ddc a2, (a2)
 ; CHECK-IL32PC64-NEXT:    csw a1, 8(csp)
 ; CHECK-IL32PC64-NEXT:    csw a2, 12(csp)
-; CHECK-IL32PC64-NEXT:    cfld ft0, 8(csp)
+; CHECK-IL32PC64-NEXT:    cfld fa5, 8(csp)
 ; CHECK-IL32PC64-NEXT:    addi a0, a0, 24
 ; CHECK-IL32PC64-NEXT:    lw.ddc a1, (a0)
 ; CHECK-IL32PC64-NEXT:    addi a0, a0, 4
 ; CHECK-IL32PC64-NEXT:    lw.ddc a0, (a0)
 ; CHECK-IL32PC64-NEXT:    csw a1, 8(csp)
 ; CHECK-IL32PC64-NEXT:    csw a0, 12(csp)
-; CHECK-IL32PC64-NEXT:    cfld ft1, 8(csp)
-; CHECK-IL32PC64-NEXT:    fadd.d ft0, ft0, ft1
-; CHECK-IL32PC64-NEXT:    cfsd ft0, 8(csp)
+; CHECK-IL32PC64-NEXT:    cfld fa4, 8(csp)
+; CHECK-IL32PC64-NEXT:    fadd.d fa5, fa5, fa4
+; CHECK-IL32PC64-NEXT:    cfsd fa5, 8(csp)
 ; CHECK-IL32PC64-NEXT:    clw a0, 8(csp)
 ; CHECK-IL32PC64-NEXT:    clw a1, 12(csp)
 ; CHECK-IL32PC64-NEXT:    cincoffset csp, csp, 16
@@ -69,31 +69,31 @@ define dso_local double @ddc_fld(double* %a) nounwind {
 ; CHECK-IL32PC64D-NEXT:    lw.ddc a2, (a2)
 ; CHECK-IL32PC64D-NEXT:    csw a1, 8(csp)
 ; CHECK-IL32PC64D-NEXT:    csw a2, 12(csp)
-; CHECK-IL32PC64D-NEXT:    cfld ft0, 8(csp)
+; CHECK-IL32PC64D-NEXT:    cfld fa5, 8(csp)
 ; CHECK-IL32PC64D-NEXT:    addi a0, a0, 24
 ; CHECK-IL32PC64D-NEXT:    lw.ddc a1, (a0)
 ; CHECK-IL32PC64D-NEXT:    addi a0, a0, 4
 ; CHECK-IL32PC64D-NEXT:    lw.ddc a0, (a0)
 ; CHECK-IL32PC64D-NEXT:    csw a1, 8(csp)
 ; CHECK-IL32PC64D-NEXT:    csw a0, 12(csp)
-; CHECK-IL32PC64D-NEXT:    cfld ft1, 8(csp)
-; CHECK-IL32PC64D-NEXT:    fadd.d fa0, ft0, ft1
+; CHECK-IL32PC64D-NEXT:    cfld fa4, 8(csp)
+; CHECK-IL32PC64D-NEXT:    fadd.d fa0, fa5, fa4
 ; CHECK-IL32PC64D-NEXT:    cincoffset csp, csp, 16
 ; CHECK-IL32PC64D-NEXT:    cret
 ;
 ; CHECK-LP64-LABEL: ddc_fld:
 ; CHECK-LP64:       # %bb.0:
-; CHECK-LP64-NEXT:    fld ft0, 0(a0)
-; CHECK-LP64-NEXT:    fld ft1, 24(a0)
-; CHECK-LP64-NEXT:    fadd.d ft0, ft0, ft1
-; CHECK-LP64-NEXT:    fmv.x.d a0, ft0
+; CHECK-LP64-NEXT:    fld fa5, 0(a0)
+; CHECK-LP64-NEXT:    fld fa4, 24(a0)
+; CHECK-LP64-NEXT:    fadd.d fa5, fa5, fa4
+; CHECK-LP64-NEXT:    fmv.x.d a0, fa5
 ; CHECK-LP64-NEXT:    ret
 ;
 ; CHECK-LP64D-LABEL: ddc_fld:
 ; CHECK-LP64D:       # %bb.0:
-; CHECK-LP64D-NEXT:    fld ft0, 0(a0)
-; CHECK-LP64D-NEXT:    fld ft1, 24(a0)
-; CHECK-LP64D-NEXT:    fadd.d fa0, ft0, ft1
+; CHECK-LP64D-NEXT:    fld fa5, 0(a0)
+; CHECK-LP64D-NEXT:    fld fa4, 24(a0)
+; CHECK-LP64D-NEXT:    fadd.d fa0, fa5, fa4
 ; CHECK-LP64D-NEXT:    ret
 ;
 ; CHECK-L64PC128-LABEL: ddc_fld:
@@ -101,10 +101,10 @@ define dso_local double @ddc_fld(double* %a) nounwind {
 ; CHECK-L64PC128-NEXT:    ld.ddc a1, (a0)
 ; CHECK-L64PC128-NEXT:    addi a0, a0, 24
 ; CHECK-L64PC128-NEXT:    ld.ddc a0, (a0)
-; CHECK-L64PC128-NEXT:    fmv.d.x ft0, a1
-; CHECK-L64PC128-NEXT:    fmv.d.x ft1, a0
-; CHECK-L64PC128-NEXT:    fadd.d ft0, ft0, ft1
-; CHECK-L64PC128-NEXT:    fmv.x.d a0, ft0
+; CHECK-L64PC128-NEXT:    fmv.d.x fa5, a1
+; CHECK-L64PC128-NEXT:    fmv.d.x fa4, a0
+; CHECK-L64PC128-NEXT:    fadd.d fa5, fa5, fa4
+; CHECK-L64PC128-NEXT:    fmv.x.d a0, fa5
 ; CHECK-L64PC128-NEXT:    cret
 ;
 ; CHECK-L64PC128D-LABEL: ddc_fld:
@@ -112,9 +112,9 @@ define dso_local double @ddc_fld(double* %a) nounwind {
 ; CHECK-L64PC128D-NEXT:    ld.ddc a1, (a0)
 ; CHECK-L64PC128D-NEXT:    addi a0, a0, 24
 ; CHECK-L64PC128D-NEXT:    ld.ddc a0, (a0)
-; CHECK-L64PC128D-NEXT:    fmv.d.x ft0, a1
-; CHECK-L64PC128D-NEXT:    fmv.d.x ft1, a0
-; CHECK-L64PC128D-NEXT:    fadd.d fa0, ft0, ft1
+; CHECK-L64PC128D-NEXT:    fmv.d.x fa5, a1
+; CHECK-L64PC128D-NEXT:    fmv.d.x fa4, a0
+; CHECK-L64PC128D-NEXT:    fadd.d fa0, fa5, fa4
 ; CHECK-L64PC128D-NEXT:    cret
   %1 = load double, double* %a
   %2 = getelementptr double, double* %a, i32 3
@@ -131,21 +131,21 @@ define dso_local void @ddc_fsd(double* %a, double %b, double %c) nounwind {
 ; CHECK-ILP32-NEXT:    addi sp, sp, -16
 ; CHECK-ILP32-NEXT:    sw a3, 8(sp)
 ; CHECK-ILP32-NEXT:    sw a4, 12(sp)
-; CHECK-ILP32-NEXT:    fld ft0, 8(sp)
+; CHECK-ILP32-NEXT:    fld fa5, 8(sp)
 ; CHECK-ILP32-NEXT:    sw a1, 8(sp)
 ; CHECK-ILP32-NEXT:    sw a2, 12(sp)
-; CHECK-ILP32-NEXT:    fld ft1, 8(sp)
-; CHECK-ILP32-NEXT:    fadd.d ft0, ft1, ft0
-; CHECK-ILP32-NEXT:    fsd ft0, 0(a0)
-; CHECK-ILP32-NEXT:    fsd ft0, 64(a0)
+; CHECK-ILP32-NEXT:    fld fa4, 8(sp)
+; CHECK-ILP32-NEXT:    fadd.d fa5, fa4, fa5
+; CHECK-ILP32-NEXT:    fsd fa5, 0(a0)
+; CHECK-ILP32-NEXT:    fsd fa5, 64(a0)
 ; CHECK-ILP32-NEXT:    addi sp, sp, 16
 ; CHECK-ILP32-NEXT:    ret
 ;
 ; CHECK-ILP32D-LABEL: ddc_fsd:
 ; CHECK-ILP32D:       # %bb.0:
-; CHECK-ILP32D-NEXT:    fadd.d ft0, fa0, fa1
-; CHECK-ILP32D-NEXT:    fsd ft0, 0(a0)
-; CHECK-ILP32D-NEXT:    fsd ft0, 64(a0)
+; CHECK-ILP32D-NEXT:    fadd.d fa5, fa0, fa1
+; CHECK-ILP32D-NEXT:    fsd fa5, 0(a0)
+; CHECK-ILP32D-NEXT:    fsd fa5, 64(a0)
 ; CHECK-ILP32D-NEXT:    ret
 ;
 ; CHECK-IL32PC64-LABEL: ddc_fsd:
@@ -153,18 +153,18 @@ define dso_local void @ddc_fsd(double* %a, double %b, double %c) nounwind {
 ; CHECK-IL32PC64-NEXT:    cincoffset csp, csp, -16
 ; CHECK-IL32PC64-NEXT:    csw a3, 8(csp)
 ; CHECK-IL32PC64-NEXT:    csw a4, 12(csp)
-; CHECK-IL32PC64-NEXT:    cfld ft0, 8(csp)
+; CHECK-IL32PC64-NEXT:    cfld fa5, 8(csp)
 ; CHECK-IL32PC64-NEXT:    csw a1, 8(csp)
 ; CHECK-IL32PC64-NEXT:    csw a2, 12(csp)
-; CHECK-IL32PC64-NEXT:    cfld ft1, 8(csp)
-; CHECK-IL32PC64-NEXT:    fadd.d ft0, ft1, ft0
-; CHECK-IL32PC64-NEXT:    cfsd ft0, 8(csp)
+; CHECK-IL32PC64-NEXT:    cfld fa4, 8(csp)
+; CHECK-IL32PC64-NEXT:    fadd.d fa5, fa4, fa5
+; CHECK-IL32PC64-NEXT:    cfsd fa5, 8(csp)
 ; CHECK-IL32PC64-NEXT:    clw a1, 8(csp)
 ; CHECK-IL32PC64-NEXT:    clw a2, 12(csp)
 ; CHECK-IL32PC64-NEXT:    sw.ddc a1, (a0)
 ; CHECK-IL32PC64-NEXT:    addi a1, a0, 4
 ; CHECK-IL32PC64-NEXT:    sw.ddc a2, (a1)
-; CHECK-IL32PC64-NEXT:    cfsd ft0, 8(csp)
+; CHECK-IL32PC64-NEXT:    cfsd fa5, 8(csp)
 ; CHECK-IL32PC64-NEXT:    clw a1, 8(csp)
 ; CHECK-IL32PC64-NEXT:    clw a2, 12(csp)
 ; CHECK-IL32PC64-NEXT:    addi a0, a0, 64
@@ -177,14 +177,14 @@ define dso_local void @ddc_fsd(double* %a, double %b, double %c) nounwind {
 ; CHECK-IL32PC64D-LABEL: ddc_fsd:
 ; CHECK-IL32PC64D:       # %bb.0:
 ; CHECK-IL32PC64D-NEXT:    cincoffset csp, csp, -16
-; CHECK-IL32PC64D-NEXT:    fadd.d ft0, fa0, fa1
-; CHECK-IL32PC64D-NEXT:    cfsd ft0, 8(csp)
+; CHECK-IL32PC64D-NEXT:    fadd.d fa5, fa0, fa1
+; CHECK-IL32PC64D-NEXT:    cfsd fa5, 8(csp)
 ; CHECK-IL32PC64D-NEXT:    clw a1, 8(csp)
 ; CHECK-IL32PC64D-NEXT:    clw a2, 12(csp)
 ; CHECK-IL32PC64D-NEXT:    sw.ddc a1, (a0)
 ; CHECK-IL32PC64D-NEXT:    addi a1, a0, 4
 ; CHECK-IL32PC64D-NEXT:    sw.ddc a2, (a1)
-; CHECK-IL32PC64D-NEXT:    cfsd ft0, 8(csp)
+; CHECK-IL32PC64D-NEXT:    cfsd fa5, 8(csp)
 ; CHECK-IL32PC64D-NEXT:    clw a1, 8(csp)
 ; CHECK-IL32PC64D-NEXT:    clw a2, 12(csp)
 ; CHECK-IL32PC64D-NEXT:    addi a0, a0, 64
@@ -196,26 +196,26 @@ define dso_local void @ddc_fsd(double* %a, double %b, double %c) nounwind {
 ;
 ; CHECK-LP64-LABEL: ddc_fsd:
 ; CHECK-LP64:       # %bb.0:
-; CHECK-LP64-NEXT:    fmv.d.x ft0, a2
-; CHECK-LP64-NEXT:    fmv.d.x ft1, a1
-; CHECK-LP64-NEXT:    fadd.d ft0, ft1, ft0
-; CHECK-LP64-NEXT:    fsd ft0, 0(a0)
-; CHECK-LP64-NEXT:    fsd ft0, 64(a0)
+; CHECK-LP64-NEXT:    fmv.d.x fa5, a2
+; CHECK-LP64-NEXT:    fmv.d.x fa4, a1
+; CHECK-LP64-NEXT:    fadd.d fa5, fa4, fa5
+; CHECK-LP64-NEXT:    fsd fa5, 0(a0)
+; CHECK-LP64-NEXT:    fsd fa5, 64(a0)
 ; CHECK-LP64-NEXT:    ret
 ;
 ; CHECK-LP64D-LABEL: ddc_fsd:
 ; CHECK-LP64D:       # %bb.0:
-; CHECK-LP64D-NEXT:    fadd.d ft0, fa0, fa1
-; CHECK-LP64D-NEXT:    fsd ft0, 0(a0)
-; CHECK-LP64D-NEXT:    fsd ft0, 64(a0)
+; CHECK-LP64D-NEXT:    fadd.d fa5, fa0, fa1
+; CHECK-LP64D-NEXT:    fsd fa5, 0(a0)
+; CHECK-LP64D-NEXT:    fsd fa5, 64(a0)
 ; CHECK-LP64D-NEXT:    ret
 ;
 ; CHECK-L64PC128-LABEL: ddc_fsd:
 ; CHECK-L64PC128:       # %bb.0:
-; CHECK-L64PC128-NEXT:    fmv.d.x ft0, a2
-; CHECK-L64PC128-NEXT:    fmv.d.x ft1, a1
-; CHECK-L64PC128-NEXT:    fadd.d ft0, ft1, ft0
-; CHECK-L64PC128-NEXT:    fmv.x.d a1, ft0
+; CHECK-L64PC128-NEXT:    fmv.d.x fa5, a2
+; CHECK-L64PC128-NEXT:    fmv.d.x fa4, a1
+; CHECK-L64PC128-NEXT:    fadd.d fa5, fa4, fa5
+; CHECK-L64PC128-NEXT:    fmv.x.d a1, fa5
 ; CHECK-L64PC128-NEXT:    sd.ddc a1, (a0)
 ; CHECK-L64PC128-NEXT:    addi a0, a0, 64
 ; CHECK-L64PC128-NEXT:    sd.ddc a1, (a0)
@@ -223,8 +223,8 @@ define dso_local void @ddc_fsd(double* %a, double %b, double %c) nounwind {
 ;
 ; CHECK-L64PC128D-LABEL: ddc_fsd:
 ; CHECK-L64PC128D:       # %bb.0:
-; CHECK-L64PC128D-NEXT:    fadd.d ft0, fa0, fa1
-; CHECK-L64PC128D-NEXT:    fmv.x.d a1, ft0
+; CHECK-L64PC128D-NEXT:    fadd.d fa5, fa0, fa1
+; CHECK-L64PC128D-NEXT:    fmv.x.d a1, fa5
 ; CHECK-L64PC128D-NEXT:    sd.ddc a1, (a0)
 ; CHECK-L64PC128D-NEXT:    addi a0, a0, 64
 ; CHECK-L64PC128D-NEXT:    sd.ddc a1, (a0)
@@ -247,16 +247,16 @@ define dso_local double @cap_fld(double addrspace(200)* %a) nounwind {
 ; CHECK-ILP32-NEXT:    lw.cap a2, (ca2)
 ; CHECK-ILP32-NEXT:    sw a1, 8(sp)
 ; CHECK-ILP32-NEXT:    sw a2, 12(sp)
-; CHECK-ILP32-NEXT:    fld ft0, 8(sp)
+; CHECK-ILP32-NEXT:    fld fa5, 8(sp)
 ; CHECK-ILP32-NEXT:    cincoffset ca0, ca0, 24
 ; CHECK-ILP32-NEXT:    lw.cap a1, (ca0)
 ; CHECK-ILP32-NEXT:    cincoffset ca0, ca0, 4
 ; CHECK-ILP32-NEXT:    lw.cap a0, (ca0)
 ; CHECK-ILP32-NEXT:    sw a1, 8(sp)
 ; CHECK-ILP32-NEXT:    sw a0, 12(sp)
-; CHECK-ILP32-NEXT:    fld ft1, 8(sp)
-; CHECK-ILP32-NEXT:    fadd.d ft0, ft0, ft1
-; CHECK-ILP32-NEXT:    fsd ft0, 8(sp)
+; CHECK-ILP32-NEXT:    fld fa4, 8(sp)
+; CHECK-ILP32-NEXT:    fadd.d fa5, fa5, fa4
+; CHECK-ILP32-NEXT:    fsd fa5, 8(sp)
 ; CHECK-ILP32-NEXT:    lw a0, 8(sp)
 ; CHECK-ILP32-NEXT:    lw a1, 12(sp)
 ; CHECK-ILP32-NEXT:    addi sp, sp, 16
@@ -270,25 +270,25 @@ define dso_local double @cap_fld(double addrspace(200)* %a) nounwind {
 ; CHECK-ILP32D-NEXT:    lw.cap a2, (ca2)
 ; CHECK-ILP32D-NEXT:    sw a1, 8(sp)
 ; CHECK-ILP32D-NEXT:    sw a2, 12(sp)
-; CHECK-ILP32D-NEXT:    fld ft0, 8(sp)
+; CHECK-ILP32D-NEXT:    fld fa5, 8(sp)
 ; CHECK-ILP32D-NEXT:    cincoffset ca0, ca0, 24
 ; CHECK-ILP32D-NEXT:    lw.cap a1, (ca0)
 ; CHECK-ILP32D-NEXT:    cincoffset ca0, ca0, 4
 ; CHECK-ILP32D-NEXT:    lw.cap a0, (ca0)
 ; CHECK-ILP32D-NEXT:    sw a1, 8(sp)
 ; CHECK-ILP32D-NEXT:    sw a0, 12(sp)
-; CHECK-ILP32D-NEXT:    fld ft1, 8(sp)
-; CHECK-ILP32D-NEXT:    fadd.d fa0, ft0, ft1
+; CHECK-ILP32D-NEXT:    fld fa4, 8(sp)
+; CHECK-ILP32D-NEXT:    fadd.d fa0, fa5, fa4
 ; CHECK-ILP32D-NEXT:    addi sp, sp, 16
 ; CHECK-ILP32D-NEXT:    ret
 ;
 ; CHECK-IL32PC64-LABEL: cap_fld:
 ; CHECK-IL32PC64:       # %bb.0:
 ; CHECK-IL32PC64-NEXT:    cincoffset csp, csp, -16
-; CHECK-IL32PC64-NEXT:    cfld ft0, 0(ca0)
-; CHECK-IL32PC64-NEXT:    cfld ft1, 24(ca0)
-; CHECK-IL32PC64-NEXT:    fadd.d ft0, ft0, ft1
-; CHECK-IL32PC64-NEXT:    cfsd ft0, 8(csp)
+; CHECK-IL32PC64-NEXT:    cfld fa5, 0(ca0)
+; CHECK-IL32PC64-NEXT:    cfld fa4, 24(ca0)
+; CHECK-IL32PC64-NEXT:    fadd.d fa5, fa5, fa4
+; CHECK-IL32PC64-NEXT:    cfsd fa5, 8(csp)
 ; CHECK-IL32PC64-NEXT:    clw a0, 8(csp)
 ; CHECK-IL32PC64-NEXT:    clw a1, 12(csp)
 ; CHECK-IL32PC64-NEXT:    cincoffset csp, csp, 16
@@ -296,9 +296,9 @@ define dso_local double @cap_fld(double addrspace(200)* %a) nounwind {
 ;
 ; CHECK-IL32PC64D-LABEL: cap_fld:
 ; CHECK-IL32PC64D:       # %bb.0:
-; CHECK-IL32PC64D-NEXT:    cfld ft0, 0(ca0)
-; CHECK-IL32PC64D-NEXT:    cfld ft1, 24(ca0)
-; CHECK-IL32PC64D-NEXT:    fadd.d fa0, ft0, ft1
+; CHECK-IL32PC64D-NEXT:    cfld fa5, 0(ca0)
+; CHECK-IL32PC64D-NEXT:    cfld fa4, 24(ca0)
+; CHECK-IL32PC64D-NEXT:    fadd.d fa0, fa5, fa4
 ; CHECK-IL32PC64D-NEXT:    cret
 ;
 ; CHECK-LP64-LABEL: cap_fld:
@@ -306,10 +306,10 @@ define dso_local double @cap_fld(double addrspace(200)* %a) nounwind {
 ; CHECK-LP64-NEXT:    ld.cap a1, (ca0)
 ; CHECK-LP64-NEXT:    cincoffset ca0, ca0, 24
 ; CHECK-LP64-NEXT:    ld.cap a0, (ca0)
-; CHECK-LP64-NEXT:    fmv.d.x ft0, a1
-; CHECK-LP64-NEXT:    fmv.d.x ft1, a0
-; CHECK-LP64-NEXT:    fadd.d ft0, ft0, ft1
-; CHECK-LP64-NEXT:    fmv.x.d a0, ft0
+; CHECK-LP64-NEXT:    fmv.d.x fa5, a1
+; CHECK-LP64-NEXT:    fmv.d.x fa4, a0
+; CHECK-LP64-NEXT:    fadd.d fa5, fa5, fa4
+; CHECK-LP64-NEXT:    fmv.x.d a0, fa5
 ; CHECK-LP64-NEXT:    ret
 ;
 ; CHECK-LP64D-LABEL: cap_fld:
@@ -317,24 +317,24 @@ define dso_local double @cap_fld(double addrspace(200)* %a) nounwind {
 ; CHECK-LP64D-NEXT:    ld.cap a1, (ca0)
 ; CHECK-LP64D-NEXT:    cincoffset ca0, ca0, 24
 ; CHECK-LP64D-NEXT:    ld.cap a0, (ca0)
-; CHECK-LP64D-NEXT:    fmv.d.x ft0, a1
-; CHECK-LP64D-NEXT:    fmv.d.x ft1, a0
-; CHECK-LP64D-NEXT:    fadd.d fa0, ft0, ft1
+; CHECK-LP64D-NEXT:    fmv.d.x fa5, a1
+; CHECK-LP64D-NEXT:    fmv.d.x fa4, a0
+; CHECK-LP64D-NEXT:    fadd.d fa0, fa5, fa4
 ; CHECK-LP64D-NEXT:    ret
 ;
 ; CHECK-L64PC128-LABEL: cap_fld:
 ; CHECK-L64PC128:       # %bb.0:
-; CHECK-L64PC128-NEXT:    cfld ft0, 0(ca0)
-; CHECK-L64PC128-NEXT:    cfld ft1, 24(ca0)
-; CHECK-L64PC128-NEXT:    fadd.d ft0, ft0, ft1
-; CHECK-L64PC128-NEXT:    fmv.x.d a0, ft0
+; CHECK-L64PC128-NEXT:    cfld fa5, 0(ca0)
+; CHECK-L64PC128-NEXT:    cfld fa4, 24(ca0)
+; CHECK-L64PC128-NEXT:    fadd.d fa5, fa5, fa4
+; CHECK-L64PC128-NEXT:    fmv.x.d a0, fa5
 ; CHECK-L64PC128-NEXT:    cret
 ;
 ; CHECK-L64PC128D-LABEL: cap_fld:
 ; CHECK-L64PC128D:       # %bb.0:
-; CHECK-L64PC128D-NEXT:    cfld ft0, 0(ca0)
-; CHECK-L64PC128D-NEXT:    cfld ft1, 24(ca0)
-; CHECK-L64PC128D-NEXT:    fadd.d fa0, ft0, ft1
+; CHECK-L64PC128D-NEXT:    cfld fa5, 0(ca0)
+; CHECK-L64PC128D-NEXT:    cfld fa4, 24(ca0)
+; CHECK-L64PC128D-NEXT:    fadd.d fa0, fa5, fa4
 ; CHECK-L64PC128D-NEXT:    cret
   %1 = load double, double addrspace(200)* %a
   %2 = getelementptr double, double addrspace(200)* %a, i32 3
@@ -351,18 +351,18 @@ define dso_local void @cap_fsd(double addrspace(200)* %a, double %b, double %c) 
 ; CHECK-ILP32-NEXT:    addi sp, sp, -16
 ; CHECK-ILP32-NEXT:    sw a3, 8(sp)
 ; CHECK-ILP32-NEXT:    sw a4, 12(sp)
-; CHECK-ILP32-NEXT:    fld ft0, 8(sp)
+; CHECK-ILP32-NEXT:    fld fa5, 8(sp)
 ; CHECK-ILP32-NEXT:    sw a1, 8(sp)
 ; CHECK-ILP32-NEXT:    sw a2, 12(sp)
-; CHECK-ILP32-NEXT:    fld ft1, 8(sp)
-; CHECK-ILP32-NEXT:    fadd.d ft0, ft1, ft0
-; CHECK-ILP32-NEXT:    fsd ft0, 8(sp)
+; CHECK-ILP32-NEXT:    fld fa4, 8(sp)
+; CHECK-ILP32-NEXT:    fadd.d fa5, fa4, fa5
+; CHECK-ILP32-NEXT:    fsd fa5, 8(sp)
 ; CHECK-ILP32-NEXT:    lw a1, 8(sp)
 ; CHECK-ILP32-NEXT:    lw a2, 12(sp)
 ; CHECK-ILP32-NEXT:    sw.cap a1, (ca0)
 ; CHECK-ILP32-NEXT:    cincoffset ca1, ca0, 4
 ; CHECK-ILP32-NEXT:    sw.cap a2, (ca1)
-; CHECK-ILP32-NEXT:    fsd ft0, 8(sp)
+; CHECK-ILP32-NEXT:    fsd fa5, 8(sp)
 ; CHECK-ILP32-NEXT:    lw a1, 8(sp)
 ; CHECK-ILP32-NEXT:    lw a2, 12(sp)
 ; CHECK-ILP32-NEXT:    cincoffset ca0, ca0, 64
@@ -375,14 +375,14 @@ define dso_local void @cap_fsd(double addrspace(200)* %a, double %b, double %c) 
 ; CHECK-ILP32D-LABEL: cap_fsd:
 ; CHECK-ILP32D:       # %bb.0:
 ; CHECK-ILP32D-NEXT:    addi sp, sp, -16
-; CHECK-ILP32D-NEXT:    fadd.d ft0, fa0, fa1
-; CHECK-ILP32D-NEXT:    fsd ft0, 8(sp)
+; CHECK-ILP32D-NEXT:    fadd.d fa5, fa0, fa1
+; CHECK-ILP32D-NEXT:    fsd fa5, 8(sp)
 ; CHECK-ILP32D-NEXT:    lw a1, 8(sp)
 ; CHECK-ILP32D-NEXT:    lw a2, 12(sp)
 ; CHECK-ILP32D-NEXT:    sw.cap a1, (ca0)
 ; CHECK-ILP32D-NEXT:    cincoffset ca1, ca0, 4
 ; CHECK-ILP32D-NEXT:    sw.cap a2, (ca1)
-; CHECK-ILP32D-NEXT:    fsd ft0, 8(sp)
+; CHECK-ILP32D-NEXT:    fsd fa5, 8(sp)
 ; CHECK-ILP32D-NEXT:    lw a1, 8(sp)
 ; CHECK-ILP32D-NEXT:    lw a2, 12(sp)
 ; CHECK-ILP32D-NEXT:    cincoffset ca0, ca0, 64
@@ -397,29 +397,29 @@ define dso_local void @cap_fsd(double addrspace(200)* %a, double %b, double %c) 
 ; CHECK-IL32PC64-NEXT:    cincoffset csp, csp, -16
 ; CHECK-IL32PC64-NEXT:    csw a3, 8(csp)
 ; CHECK-IL32PC64-NEXT:    csw a4, 12(csp)
-; CHECK-IL32PC64-NEXT:    cfld ft0, 8(csp)
+; CHECK-IL32PC64-NEXT:    cfld fa5, 8(csp)
 ; CHECK-IL32PC64-NEXT:    csw a1, 8(csp)
 ; CHECK-IL32PC64-NEXT:    csw a2, 12(csp)
-; CHECK-IL32PC64-NEXT:    cfld ft1, 8(csp)
-; CHECK-IL32PC64-NEXT:    fadd.d ft0, ft1, ft0
-; CHECK-IL32PC64-NEXT:    cfsd ft0, 0(ca0)
-; CHECK-IL32PC64-NEXT:    cfsd ft0, 64(ca0)
+; CHECK-IL32PC64-NEXT:    cfld fa4, 8(csp)
+; CHECK-IL32PC64-NEXT:    fadd.d fa5, fa4, fa5
+; CHECK-IL32PC64-NEXT:    cfsd fa5, 0(ca0)
+; CHECK-IL32PC64-NEXT:    cfsd fa5, 64(ca0)
 ; CHECK-IL32PC64-NEXT:    cincoffset csp, csp, 16
 ; CHECK-IL32PC64-NEXT:    cret
 ;
 ; CHECK-IL32PC64D-LABEL: cap_fsd:
 ; CHECK-IL32PC64D:       # %bb.0:
-; CHECK-IL32PC64D-NEXT:    fadd.d ft0, fa0, fa1
-; CHECK-IL32PC64D-NEXT:    cfsd ft0, 0(ca0)
-; CHECK-IL32PC64D-NEXT:    cfsd ft0, 64(ca0)
+; CHECK-IL32PC64D-NEXT:    fadd.d fa5, fa0, fa1
+; CHECK-IL32PC64D-NEXT:    cfsd fa5, 0(ca0)
+; CHECK-IL32PC64D-NEXT:    cfsd fa5, 64(ca0)
 ; CHECK-IL32PC64D-NEXT:    cret
 ;
 ; CHECK-LP64-LABEL: cap_fsd:
 ; CHECK-LP64:       # %bb.0:
-; CHECK-LP64-NEXT:    fmv.d.x ft0, a2
-; CHECK-LP64-NEXT:    fmv.d.x ft1, a1
-; CHECK-LP64-NEXT:    fadd.d ft0, ft1, ft0
-; CHECK-LP64-NEXT:    fmv.x.d a1, ft0
+; CHECK-LP64-NEXT:    fmv.d.x fa5, a2
+; CHECK-LP64-NEXT:    fmv.d.x fa4, a1
+; CHECK-LP64-NEXT:    fadd.d fa5, fa4, fa5
+; CHECK-LP64-NEXT:    fmv.x.d a1, fa5
 ; CHECK-LP64-NEXT:    sd.cap a1, (ca0)
 ; CHECK-LP64-NEXT:    cincoffset ca0, ca0, 64
 ; CHECK-LP64-NEXT:    sd.cap a1, (ca0)
@@ -427,8 +427,8 @@ define dso_local void @cap_fsd(double addrspace(200)* %a, double %b, double %c) 
 ;
 ; CHECK-LP64D-LABEL: cap_fsd:
 ; CHECK-LP64D:       # %bb.0:
-; CHECK-LP64D-NEXT:    fadd.d ft0, fa0, fa1
-; CHECK-LP64D-NEXT:    fmv.x.d a1, ft0
+; CHECK-LP64D-NEXT:    fadd.d fa5, fa0, fa1
+; CHECK-LP64D-NEXT:    fmv.x.d a1, fa5
 ; CHECK-LP64D-NEXT:    sd.cap a1, (ca0)
 ; CHECK-LP64D-NEXT:    cincoffset ca0, ca0, 64
 ; CHECK-LP64D-NEXT:    sd.cap a1, (ca0)
@@ -436,18 +436,18 @@ define dso_local void @cap_fsd(double addrspace(200)* %a, double %b, double %c) 
 ;
 ; CHECK-L64PC128-LABEL: cap_fsd:
 ; CHECK-L64PC128:       # %bb.0:
-; CHECK-L64PC128-NEXT:    fmv.d.x ft0, a2
-; CHECK-L64PC128-NEXT:    fmv.d.x ft1, a1
-; CHECK-L64PC128-NEXT:    fadd.d ft0, ft1, ft0
-; CHECK-L64PC128-NEXT:    cfsd ft0, 0(ca0)
-; CHECK-L64PC128-NEXT:    cfsd ft0, 64(ca0)
+; CHECK-L64PC128-NEXT:    fmv.d.x fa5, a2
+; CHECK-L64PC128-NEXT:    fmv.d.x fa4, a1
+; CHECK-L64PC128-NEXT:    fadd.d fa5, fa4, fa5
+; CHECK-L64PC128-NEXT:    cfsd fa5, 0(ca0)
+; CHECK-L64PC128-NEXT:    cfsd fa5, 64(ca0)
 ; CHECK-L64PC128-NEXT:    cret
 ;
 ; CHECK-L64PC128D-LABEL: cap_fsd:
 ; CHECK-L64PC128D:       # %bb.0:
-; CHECK-L64PC128D-NEXT:    fadd.d ft0, fa0, fa1
-; CHECK-L64PC128D-NEXT:    cfsd ft0, 0(ca0)
-; CHECK-L64PC128D-NEXT:    cfsd ft0, 64(ca0)
+; CHECK-L64PC128D-NEXT:    fadd.d fa5, fa0, fa1
+; CHECK-L64PC128D-NEXT:    cfsd fa5, 0(ca0)
+; CHECK-L64PC128D-NEXT:    cfsd fa5, 64(ca0)
 ; CHECK-L64PC128D-NEXT:    cret
   %1 = fadd double %b, %c
   store double %1, double addrspace(200)* %a

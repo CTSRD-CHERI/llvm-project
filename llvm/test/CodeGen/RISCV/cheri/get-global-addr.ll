@@ -14,8 +14,8 @@ define double @constant_pool(double %a) nounwind {
 ; L64PC128-NEXT:  .LBB0_1: # Label of block must be emitted
 ; L64PC128-NEXT:    auipcc ca0, %pcrel_hi(.LCPI0_0)
 ; L64PC128-NEXT:    cincoffset ca0, ca0, %pcrel_lo(.LBB0_1)
-; L64PC128-NEXT:    cfld ft0, 0(ca0)
-; L64PC128-NEXT:    fadd.d fa0, fa0, ft0
+; L64PC128-NEXT:    cfld fa5, 0(ca0)
+; L64PC128-NEXT:    fadd.d fa0, fa0, fa5
 ; L64PC128-NEXT:    cret
   %1 = fadd double %a, 1.0
   ret double %1

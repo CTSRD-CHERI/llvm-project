@@ -14,11 +14,6 @@
 // Operand definitions.
 //===----------------------------------------------------------------------===//
 
-def uimm8 : Operand<XLenVT>, ImmLeaf<XLenVT, [{return isUInt<8>(Imm);}]> {
-  let ParserMatchClass = UImmAsmOperand<8>;
-  let DecoderMethod = "decodeUImmOperand<8>";
-}
-
 def uimm12 : Operand<XLenVT>, ImmLeaf<XLenVT, [{return isUInt<12>(Imm);}]> {
   let ParserMatchClass = UImmAsmOperand<12>;
   let DecoderMethod = "decodeUImmOperand<12>";

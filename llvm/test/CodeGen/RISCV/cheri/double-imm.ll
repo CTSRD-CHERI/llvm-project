@@ -19,8 +19,8 @@ define double @double_add_const(double %a) nounwind {
 ; CHECK-NEXT:  .LBB0_1: # Label of block must be emitted
 ; CHECK-NEXT:    auipcc ca0, %pcrel_hi(.LCPI0_0)
 ; CHECK-NEXT:    cincoffset ca0, ca0, %pcrel_lo(.LBB0_1)
-; CHECK-NEXT:    cfld ft0, 0(ca0)
-; CHECK-NEXT:    fadd.d fa0, fa0, ft0
+; CHECK-NEXT:    cfld fa5, 0(ca0)
+; CHECK-NEXT:    fadd.d fa0, fa0, fa5
 ; CHECK-NEXT:    cret
   %1 = fadd double %a, 1.0
   ret double %1
@@ -30,8 +30,8 @@ define float @float_add_const(float %a) nounwind {
 ; CHECK-LABEL: float_add_const:
 ; CHECK:       # %bb.0:
 ; CHECK-NEXT:    lui a0, 260096
-; CHECK-NEXT:    fmv.w.x ft0, a0
-; CHECK-NEXT:    fadd.s fa0, fa0, ft0
+; CHECK-NEXT:    fmv.w.x fa5, a0
+; CHECK-NEXT:    fadd.s fa0, fa0, fa5
 ; CHECK-NEXT:    cret
   %1 = fadd float %a, 1.0
   ret float %1
