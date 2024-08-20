@@ -61,7 +61,6 @@ struct mytype_bad *next_bad_diag(struct mytype_bad *ptr, struct mytype_bad *new_
   // This should generate an error because list is not annotated as no_subobject_bounds
   return container_of_safe(next_entry, struct mytype_bad, list);
   // expected-error@-1{{static assertion failed due to requirement '__builtin_marked_no_subobject_bounds(struct mytype_bad) || __builtin_marked_no_subobject_bounds(struct list_entry)': this type is unsafe for use in containerof() with sub-object bounds. Please mark the member/type with __no_subobject_bounds}}
-  // expected-note@-2 {{expression evaluates to '0 || 0'}}
 }
 
 struct mytype_good {
