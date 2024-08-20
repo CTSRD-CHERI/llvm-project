@@ -129,7 +129,7 @@ SDValue RISCVSelectionDAGInfo::EmitTargetCodeForMemset(
       // then let's emit some stores instead.
       if (SizeVal < (CLenInBytes * 8))
         if (isa<ConstantSDNode>(Src) &&
-            cast<ConstantSDNode>(Src)->isNullValue()) {
+            cast<ConstantSDNode>(Src)->isZero()) {
           SmallVector<SDValue, 8> OutChains;
           SDValue ZeroCap = DAG.getNullCapability(dl);
           for (uint64_t i = 0; i < (SizeVal / CLenInBytes); i++) {

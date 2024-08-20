@@ -1572,7 +1572,7 @@ SDValue SelectionDAG::getConstant(const ConstantInt &Val, const SDLoc &DL,
     MVT IntVT = MVT::getIntegerVT(AddrBitWidth);
     // XXXAR: If this is actually needed somewhere we should add a
     // DAG.getIntCapConstant() helper function.
-    assert(Int.isNullValue() && "Should not create non-zero capability "
+    assert(Int.isZero() && "Should not create non-zero capability "
                                 "constants with SelectionDAG::getConstant()");
     return getNode(ISD::INTTOPTR, DL, VT, getConstant(Int, DL, IntVT));
   }
@@ -6381,7 +6381,7 @@ SDValue SelectionDAG::getNode(unsigned Opcode, const SDLoc &DL, EVT VT,
     assert(N2.getValueType().isInteger() &&
            "Second PTRADD argument must be an integer type!");
     // ptradd(X, 0) -> X.
-    if (N2C && N2C->isNullValue())
+    if (N2C && N2C->isZero())
       return N1;
     break;
   case ISD::AND:
@@ -7164,7 +7164,7 @@ SDValue SelectionDAG::getMemBasePlusOffset(SDValue Ptr, SDValue Offset,
                                            const SDNodeFlags Flags) {
   assert(Offset.getValueType().isInteger());
   if (auto *Constant = dyn_cast<ConstantSDNode>(Offset.getNode())) {
-    if (Constant->isNullValue())
+    if (Constant->isZero())
       return Ptr;
   }
   EVT BasePtrVT = Ptr.getValueType();

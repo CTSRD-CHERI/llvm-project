@@ -1882,7 +1882,7 @@ SDValue DAGCombiner::visitCopyToReg(SDNode *N) {
   SDValue Src = N->getOperand(2);
   if (Src.getOpcode() == ISD::INTTOPTR && Src.getValueType().isFatPointer()) {
     if (auto ConstVal = dyn_cast<ConstantSDNode>(Src.getOperand(0))) {
-      if (ConstVal->isNullValue() && TLI.getNullCapabilityRegister()) {
+      if (ConstVal->isZero() && TLI.getNullCapabilityRegister()) {
         auto NullValue = DAG.getRegister(TLI.getNullCapabilityRegister(),
                                          Src.getValueType());
         // Glue argument is optional

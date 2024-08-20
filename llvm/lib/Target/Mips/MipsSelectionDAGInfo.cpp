@@ -81,7 +81,7 @@ SDValue EmitTargetCodeForMemOp(SelectionDAG &DAG, const SDLoc &dl,
   if (SrcAS == 0)
     Src = DAG.getAddrSpaceCast(dl, CapType, Src, 0, 200);
 
-  
+
   const char *memFnName = isMemCpy ?
     (STI.isABI_CheriPureCap() ?  "memcpy" : "memcpy_c") :
     (STI.isABI_CheriPureCap() ?  "memmove" : "memmove_c");
@@ -132,7 +132,7 @@ SDValue MipsSelectionDAGInfo::EmitTargetCodeForMemset(
       // If this size is a small constant, and the value we're writing is zero,
       // then let's emit some stores instead.
       if ((SizeVal < (CapSize * 8)))
-        if (isa<ConstantSDNode>(Src) && cast<ConstantSDNode>(Src)->isNullValue()) {
+        if (isa<ConstantSDNode>(Src) && cast<ConstantSDNode>(Src)->isZero()) {
           SmallVector<SDValue, 8> OutChains;
           SDValue ZeroCap = DAG.getNullCapability(dl);
           for (uint64_t i = 0; i < (SizeVal / CapSize); i++) {
@@ -206,7 +206,7 @@ SDValue MipsSelectionDAGInfo::EmitTargetCodeForMemset(
   }
 
 
-  const char *memFnName = 
+  const char *memFnName =
     STI.isABI_CheriPureCap() ?  "memset" : "memset_c";
   return callFunction(DAG, dl, Chain, memFnName, Dst, Src, Size);
 }
