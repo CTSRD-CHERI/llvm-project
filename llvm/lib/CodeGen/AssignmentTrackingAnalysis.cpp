@@ -213,7 +213,7 @@ void FunctionVarLocs::clear() {
 static std::pair<Value *, DIExpression *>
 walkToAllocaAndPrependOffsetDeref(const DataLayout &DL, Value *Start,
                                   DIExpression *Expression) {
-  APInt OffsetInBytes(DL.getTypeSizeInBits(Start->getType()), false);
+  APInt OffsetInBytes(DL.getIndexTypeSizeInBits(Start->getType()), false);
   Value *End =
       Start->stripAndAccumulateInBoundsConstantOffsets(DL, OffsetInBytes);
   SmallVector<uint64_t, 3> Ops;
