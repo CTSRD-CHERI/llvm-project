@@ -73,12 +73,8 @@ static DecodeStatus DecodeGPRRegisterClass(MCInst &Inst, uint32_t RegNo,
 
 static DecodeStatus DecodeGPCRRegisterClass(MCInst &Inst, uint64_t RegNo,
                                             uint64_t Address,
-                                            const void *Decoder) {
-  const FeatureBitset &FeatureBits =
-      static_cast<const MCDisassembler *>(Decoder)
-          ->getSubtargetInfo()
-          .getFeatureBits();
-  bool IsRV32E = FeatureBits[RISCV::FeatureRVE];
+                                            const MCDisassembler *Decoder) {
+  bool IsRV32E = Decoder->getSubtargetInfo().hasFeature(RISCV::FeatureRVE);
 
   if (RegNo >= 32 || (IsRV32E && RegNo >= 16))
     return MCDisassembler::Fail;
@@ -145,7 +141,7 @@ static DecodeStatus DecodeFPR64CRegisterClass(MCInst &Inst, uint32_t RegNo,
 
 static DecodeStatus DecodeGPCRC0IsDDCRegisterClass(MCInst &Inst, uint64_t RegNo,
                                                    uint64_t Address,
-                                                   const void *Decoder) {
+                                                   const MCDisassembler *Decoder) {
   if (RegNo == 0) {
     Inst.addOperand(MCOperand::createReg(RISCV::DDC));
     return MCDisassembler::Success;
@@ -330,11 +326,11 @@ static void addImplySP(MCInst &Inst) {
       Inst.getOpcode() == RISCV::C_CFLDCSP ||
       Inst.getOpcode() == RISCV::C_CFSDCSP ||
       Inst.getOpcode() == RISCV::C_CIncOffsetImm4CSPN) {
-    DecodeGPCRRegisterClass(Inst, 2, Address, Decoder);
+    Inst.addOperand(MCOperand::createReg(RISCV::C2));
   }
   if (Inst.getOpcode() == RISCV::C_CIncOffsetImm16CSP) {
-    DecodeGPCRRegisterClass(Inst, 2, Address, Decoder);
-    DecodeGPCRRegisterClass(Inst, 2, Address, Decoder);
+    Inst.addOperand(MCOperand::createReg(RISCV::C2));
+    Inst.addOperand(MCOperand::createReg(RISCV::C2));
   }
 }
 

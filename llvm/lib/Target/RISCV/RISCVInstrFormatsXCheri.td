@@ -19,6 +19,10 @@ def uimm12 : Operand<XLenVT>, ImmLeaf<XLenVT, [{return isUInt<12>(Imm);}]> {
   let DecoderMethod = "decodeUImmOperand<12>";
 }
 
+// A 12-bit signed immediate plus one where the imm range will be [-2047, 2048].
+def simm12_plus1 : ImmLeaf<XLenVT,
+  [{return (isInt<12>(Imm) && Imm != -2048) || Imm == 2048;}]>;
+
 def SpecialCapRegisterAsmOperand : AsmOperandClass {
   let Name = "SpecialCapRegister";
   let ParserMethod = "parseSpecialCapRegister";
