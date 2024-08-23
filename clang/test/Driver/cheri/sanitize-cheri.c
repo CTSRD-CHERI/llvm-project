@@ -21,8 +21,8 @@
 
 // POINTER-OVERFLOW: "-fsanitize=pointer-overflow" "-fsanitize-recover=pointer-overflow"
 // UNREPRESENTABLE:  "-fsanitize=cheri-unrepresentable" "-fsanitize-recover=cheri-unrepresentable"
-// UNDEFINED:        "-fsanitize=alignment,array-bounds,bool,builtin,enum,float-cast-overflow,integer-divide-by-zero,nonnull-attribute,null,pointer-overflow,return,returns-nonnull-attribute,shift-base,shift-exponent,signed-integer-overflow,unreachable,vla-bound,vptr"
-// UNDEFINED-SAME:   "-fsanitize-recover=alignment,array-bounds,bool,builtin,enum,float-cast-overflow,integer-divide-by-zero,nonnull-attribute,null,pointer-overflow,returns-nonnull-attribute,shift-base,shift-exponent,signed-integer-overflow,vla-bound,vptr"
+// UNDEFINED: "-fsanitize=alignment,array-bounds,bool,builtin,enum,float-cast-overflow,function,integer-divide-by-zero,nonnull-attribute,null,pointer-overflow,return,returns-nonnull-attribute,shift-base,shift-exponent,signed-integer-overflow,unreachable,vla-bound,vptr"
+// UNDEFINED-SAME: "-fsanitize-recover=alignment,array-bounds,bool,builtin,enum,float-cast-overflow,function,integer-divide-by-zero,nonnull-attribute,null,pointer-overflow,returns-nonnull-attribute,shift-base,shift-exponent,signed-integer-overflow,vla-bound,vptr"
 /// -fsanitize=cheri currently only enables cheri-unrepresentable
 // CHERI:            "-fsanitize=cheri-unrepresentable" "-fsanitize-recover=cheri-unrepresentable"
 // UNSUPPORTED-UNREPRESENTABLE: error: unsupported option '-fsanitize=cheri-unrepresentable' for target '{{.+}}'
