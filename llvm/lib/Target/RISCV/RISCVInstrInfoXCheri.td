@@ -236,65 +236,95 @@ multiclass CheriStore_ri<bits<3> funct3, string opcodestr> {
                   0>;
 }
 
-let hasSideEffects = 0, mayLoad = 1, mayStore = 0 in
-class CLR_r<bit aq, bit rl, bits<3> funct3, string opcodestr>
-    : RVInstRAtomic<0b00010, aq, rl, funct3, OPC_AMO,
-                    (outs GPR:$rd), (ins GPCRMemZeroOffset:$rs1),
-                    opcodestr, "$rd, $rs1"> {
-  let rs2 = 0;
+
+multiclass CLR_r<bit aq, bit rl, bits<3> funct3, string opcodestr,
+                 string Namespace> {
+  let hasSideEffects = 0, mayLoad = 1, mayStore = 0,
+      DecoderNamespace = Namespace in
+  def "" : RVInstRAtomic<0b00010, aq, rl, funct3, OPC_AMO,
+                         (outs GPR:$rd), (ins GPCRMemZeroOffset:$rs1),
+                         "c" # opcodestr, "$rd, $rs1"> {
+    let rs2 = 0;
+  }
+  def : InstAlias<opcodestr # "$rd, $rs1",
+                  (!cast<Instruction>(NAME) GPR:$rd, GPCRMemZeroOffset:$rs1),
+                  0>;
 }
 
-multiclass CLR_r_aq_rl<bits<3> funct3, string opcodestr> {
-  def ""     : CLR_r<0, 0, funct3, opcodestr>;
-  def _AQ    : CLR_r<1, 0, funct3, opcodestr # ".aq">;
-  def _RL    : CLR_r<0, 1, funct3, opcodestr # ".rl">;
-  def _AQ_RL : CLR_r<1, 1, funct3, opcodestr # ".aqrl">;
+multiclass CLR_r_aq_rl<bits<3> funct3, string opcodestr,
+                       string Namespace = "CapModeOnly_"> {
+  defm ""     : CLR_r<0, 0, funct3, opcodestr, Namespace>;
+  defm _AQ    : CLR_r<1, 0, funct3, opcodestr # ".aq", Namespace>;
+  defm _RL    : CLR_r<0, 1, funct3, opcodestr # ".rl", Namespace>;
+  defm _AQ_RL : CLR_r<1, 1, funct3, opcodestr # ".aqrl", Namespace>;
 }
 
-let hasSideEffects = 0, mayLoad = 1, mayStore = 1 in
-class CAMO_rr<bits<5> funct5, bit aq, bit rl, bits<3> funct3, string opcodestr>
-    : RVInstRAtomic<funct5, aq, rl, funct3, OPC_AMO,
-                    (outs GPR:$rd), (ins GPCRMemZeroOffset:$rs1, GPR:$rs2),
-                    opcodestr, "$rd, $rs2, $rs1">;
-
-multiclass CAMO_rr_aq_rl<bits<5> funct5, bits<3> funct3, string opcodestr> {
-  def ""     : CAMO_rr<funct5, 0, 0, funct3, opcodestr>;
-  def _AQ    : CAMO_rr<funct5, 1, 0, funct3, opcodestr # ".aq">;
-  def _RL    : CAMO_rr<funct5, 0, 1, funct3, opcodestr # ".rl">;
-  def _AQ_RL : CAMO_rr<funct5, 1, 1, funct3, opcodestr # ".aqrl">;
+multiclass CAMO_rr<bits<5> funct5, bit aq, bit rl, bits<3> funct3,
+                   string opcodestr, string Namespace> {
+  let hasSideEffects = 0, mayLoad = 1, mayStore = 1,
+      DecoderNamespace = Namespace in
+  def "" : RVInstRAtomic<funct5, aq, rl, funct3, OPC_AMO,
+                         (outs GPR:$rd), (ins GPCRMemZeroOffset:$rs1, GPR:$rs2),
+                         "c" # opcodestr, "$rd, $rs2, $rs1">;
+  def : InstAlias<opcodestr # "$rd, $rs2, $rs1",
+                  (!cast<Instruction>(NAME) GPR:$rd, GPCRMemZeroOffset:$rs1,
+                   GPR:$rs2), 0>;
 }
 
-let hasSideEffects = 0, mayLoad = 1, mayStore = 0 in
-class CLR_C_r<bit aq, bit rl, bits<3> funct3, string opcodestr>
-    : RVInstRAtomic<0b00010, aq, rl, funct3, OPC_AMO,
-                    (outs GPCR:$rd), (ins GPCRMemZeroOffset:$rs1),
-                    opcodestr, "$rd, $rs1"> {
-  let rs2 = 0;
+multiclass CAMO_rr_aq_rl<bits<5> funct5, bits<3> funct3, string opcodestr,
+                         string Namespace = "CapModeOnly_"> {
+  defm ""     : CAMO_rr<funct5, 0, 0, funct3, opcodestr, Namespace>;
+  defm _AQ    : CAMO_rr<funct5, 1, 0, funct3, opcodestr # ".aq", Namespace>;
+  defm _RL    : CAMO_rr<funct5, 0, 1, funct3, opcodestr # ".rl", Namespace>;
+  defm _AQ_RL : CAMO_rr<funct5, 1, 1, funct3, opcodestr # ".aqrl", Namespace>;
 }
 
-multiclass CLR_C_r_aq_rl<string clenstr, bits<3> funct3, string opcodestr> {
-  def _ # clenstr       : CLR_C_r<0, 0, funct3, opcodestr>;
-  def _AQ_ # clenstr    : CLR_C_r<1, 0, funct3, opcodestr # ".aq">;
-  def _RL_ # clenstr    : CLR_C_r<0, 1, funct3, opcodestr # ".rl">;
-  def _AQ_RL_ # clenstr : CLR_C_r<1, 1, funct3, opcodestr # ".aqrl">;
+multiclass CLR_C_r<bit aq, bit rl, bits<3> funct3, string opcodestr,
+                   string Namespace> {
+let hasSideEffects = 0, mayLoad = 1, mayStore = 0,
+    DecoderNamespace = Namespace in
+  def "" : RVInstRAtomic<0b00010, aq, rl, funct3, OPC_AMO,
+                         (outs GPCR:$rd), (ins GPCRMemZeroOffset:$rs1),
+                         "c" # opcodestr, "$rd, $rs1"> {
+    let rs2 = 0;
+  }
+  def : InstAlias<opcodestr # "$rd, $rs1",
+                  (!cast<Instruction>(NAME) GPCR:$rd, GPCRMemZeroOffset:$rs1),
+                  0>;
 }
 
-let hasSideEffects = 0, mayLoad = 1, mayStore = 1 in
-class CAMO_C_rr<bits<5> funct5, bit aq, bit rl, bits<3> funct3,
-                string opcodestr, RegisterClass rdClass>
-    : RVInstRAtomic<funct5, aq, rl, funct3, OPC_AMO,
-                    (outs rdClass:$rd), (ins GPCRMemZeroOffset:$rs1, GPCR:$rs2),
-                    opcodestr, "$rd, $rs2, $rs1">;
+multiclass CLR_C_r_aq_rl<string clenstr, bits<3> funct3, string opcodestr,
+                         string Namespace = "CapModeOnly_"> {
+  defm _ # clenstr       : CLR_C_r<0, 0, funct3, opcodestr, Namespace>;
+  defm _AQ_ # clenstr    : CLR_C_r<1, 0, funct3, opcodestr # ".aq", Namespace>;
+  defm _RL_ # clenstr    : CLR_C_r<0, 1, funct3, opcodestr # ".rl", Namespace>;
+  defm _AQ_RL_ # clenstr : CLR_C_r<1, 1, funct3, opcodestr # ".aqrl", Namespace>;
+}
+
+multiclass CAMO_C_rr<bits<5> funct5, bit aq, bit rl, bits<3> funct3,
+                string opcodestr, RegisterClass rdClass, string Namespace> {
+  let hasSideEffects = 0, mayLoad = 1, mayStore = 1,
+      DecoderNamespace = Namespace in
+  def "" : RVInstRAtomic<funct5, aq, rl, funct3, OPC_AMO,
+                         (outs rdClass:$rd),
+                         (ins GPCRMemZeroOffset:$rs1, GPCR:$rs2),
+                         "c" # opcodestr, "$rd, $rs2, $rs1">;
+  def : InstAlias<opcodestr # "$rd, $rs2, $rs1",
+                 (!cast<Instruction>(NAME) rdClass:$rd, GPCRMemZeroOffset:$rs1,
+                  GPCR:$rs2), 0>;
+}
 
 multiclass CAMO_C_rr_aq_rl<string clenstr, bits<5> funct5, bits<3> funct3,
-                          string opcodestr, RegisterClass rdClass> {
-  def _ # clenstr       : CAMO_C_rr<funct5, 0, 0, funct3, opcodestr, rdClass>;
-  def _AQ_ # clenstr    : CAMO_C_rr<funct5, 1, 0, funct3, opcodestr # ".aq",
-                                    rdClass>;
-  def _RL_ # clenstr    : CAMO_C_rr<funct5, 0, 1, funct3, opcodestr # ".rl",
-                                    rdClass>;
-  def _AQ_RL_ # clenstr : CAMO_C_rr<funct5, 1, 1, funct3, opcodestr # ".aqrl",
-                                    rdClass>;
+                          string opcodestr, RegisterClass rdClass,
+                          string Namespace = "CapModeOnly_"> {
+  defm _ # clenstr       : CAMO_C_rr<funct5, 0, 0, funct3, opcodestr, rdClass,
+                                     Namespace>;
+  defm _AQ_ # clenstr    : CAMO_C_rr<funct5, 1, 0, funct3, opcodestr # ".aq",
+                                     rdClass, Namespace>;
+  defm _RL_ # clenstr    : CAMO_C_rr<funct5, 0, 1, funct3, opcodestr # ".rl",
+                                     rdClass, Namespace>;
+  defm _AQ_RL_ # clenstr : CAMO_C_rr<funct5, 1, 1, funct3, opcodestr # ".aqrl",
+                                     rdClass, Namespace>;
 }
 
 let hasSideEffects = 0, mayLoad = 1, mayStore = 0 in
@@ -823,54 +853,52 @@ defm : CPrefixedInstAlias<"sd $rs2, (${rs1})", (CSD  GPR:$rs2, GPCR:$rs1, 0)>;
 
 /// 'A' (Atomic Instructions) extension
 
-let DecoderNamespace = "CapModeOnly_" in {
 let Predicates = [HasCheri, HasStdExtA, IsCapMode] in {
-defm CLR_B       : CLR_r_aq_rl<0b000, "clr.b">;
-defm CSC_B       : CAMO_rr_aq_rl<0b00011, 0b000, "csc.b">;
+defm CLR_B       : CLR_r_aq_rl<0b000, "lr.b">;
+defm CSC_B       : CAMO_rr_aq_rl<0b00011, 0b000, "sc.b">;
 
-defm CLR_H       : CLR_r_aq_rl<0b001, "clr.h">;
-defm CSC_H       : CAMO_rr_aq_rl<0b00011, 0b001, "csc.h">;
+defm CLR_H       : CLR_r_aq_rl<0b001, "lr.h">;
+defm CSC_H       : CAMO_rr_aq_rl<0b00011, 0b001, "sc.h">;
 
-defm CLR_W       : CLR_r_aq_rl<0b010, "clr.w">;
-defm CSC_W       : CAMO_rr_aq_rl<0b00011, 0b010, "csc.w">;
-defm CAMOSWAP_W  : CAMO_rr_aq_rl<0b00001, 0b010, "camoswap.w">;
-defm CAMOADD_W   : CAMO_rr_aq_rl<0b00000, 0b010, "camoadd.w">;
-defm CAMOXOR_W   : CAMO_rr_aq_rl<0b00100, 0b010, "camoxor.w">;
-defm CAMOAND_W   : CAMO_rr_aq_rl<0b01100, 0b010, "camoand.w">;
-defm CAMOOR_W    : CAMO_rr_aq_rl<0b01000, 0b010, "camoor.w">;
-defm CAMOMIN_W   : CAMO_rr_aq_rl<0b10000, 0b010, "camomin.w">;
-defm CAMOMAX_W   : CAMO_rr_aq_rl<0b10100, 0b010, "camomax.w">;
-defm CAMOMINU_W  : CAMO_rr_aq_rl<0b11000, 0b010, "camominu.w">;
-defm CAMOMAXU_W  : CAMO_rr_aq_rl<0b11100, 0b010, "camomaxu.w">;
+defm CLR_W       : CLR_r_aq_rl<0b010, "lr.w">;
+defm CSC_W       : CAMO_rr_aq_rl<0b00011, 0b010, "sc.w">;
+defm CAMOSWAP_W  : CAMO_rr_aq_rl<0b00001, 0b010, "amoswap.w">;
+defm CAMOADD_W   : CAMO_rr_aq_rl<0b00000, 0b010, "amoadd.w">;
+defm CAMOXOR_W   : CAMO_rr_aq_rl<0b00100, 0b010, "amoxor.w">;
+defm CAMOAND_W   : CAMO_rr_aq_rl<0b01100, 0b010, "amoand.w">;
+defm CAMOOR_W    : CAMO_rr_aq_rl<0b01000, 0b010, "amoor.w">;
+defm CAMOMIN_W   : CAMO_rr_aq_rl<0b10000, 0b010, "amomin.w">;
+defm CAMOMAX_W   : CAMO_rr_aq_rl<0b10100, 0b010, "amomax.w">;
+defm CAMOMINU_W  : CAMO_rr_aq_rl<0b11000, 0b010, "amominu.w">;
+defm CAMOMAXU_W  : CAMO_rr_aq_rl<0b11100, 0b010, "amomaxu.w">;
 } // Predicates = [HasCheri, HasStdExtA, IsCapMode]
 
 let Predicates = [HasCheri, HasStdExtA, IsRV64, IsCapMode] in {
-defm CLR_D       : CLR_r_aq_rl<0b011, "clr.d">;
-defm CSC_D       : CAMO_rr_aq_rl<0b00011, 0b011, "csc.d">;
-defm CAMOSWAP_D  : CAMO_rr_aq_rl<0b00001, 0b011, "camoswap.d">;
-defm CAMOADD_D   : CAMO_rr_aq_rl<0b00000, 0b011, "camoadd.d">;
-defm CAMOXOR_D   : CAMO_rr_aq_rl<0b00100, 0b011, "camoxor.d">;
-defm CAMOAND_D   : CAMO_rr_aq_rl<0b01100, 0b011, "camoand.d">;
-defm CAMOOR_D    : CAMO_rr_aq_rl<0b01000, 0b011, "camoor.d">;
-defm CAMOMIN_D   : CAMO_rr_aq_rl<0b10000, 0b011, "camomin.d">;
-defm CAMOMAX_D   : CAMO_rr_aq_rl<0b10100, 0b011, "camomax.d">;
-defm CAMOMINU_D  : CAMO_rr_aq_rl<0b11000, 0b011, "camominu.d">;
-defm CAMOMAXU_D  : CAMO_rr_aq_rl<0b11100, 0b011, "camomaxu.d">;
+defm CLR_D       : CLR_r_aq_rl<0b011, "lr.d">;
+defm CSC_D       : CAMO_rr_aq_rl<0b00011, 0b011, "sc.d">;
+defm CAMOSWAP_D  : CAMO_rr_aq_rl<0b00001, 0b011, "amoswap.d">;
+defm CAMOADD_D   : CAMO_rr_aq_rl<0b00000, 0b011, "amoadd.d">;
+defm CAMOXOR_D   : CAMO_rr_aq_rl<0b00100, 0b011, "amoxor.d">;
+defm CAMOAND_D   : CAMO_rr_aq_rl<0b01100, 0b011, "amoand.d">;
+defm CAMOOR_D    : CAMO_rr_aq_rl<0b01000, 0b011, "amoor.d">;
+defm CAMOMIN_D   : CAMO_rr_aq_rl<0b10000, 0b011, "amomin.d">;
+defm CAMOMAX_D   : CAMO_rr_aq_rl<0b10100, 0b011, "amomax.d">;
+defm CAMOMINU_D  : CAMO_rr_aq_rl<0b11000, 0b011, "amominu.d">;
+defm CAMOMAXU_D  : CAMO_rr_aq_rl<0b11100, 0b011, "amomaxu.d">;
 } // Predicates = [HasCheri, HasStdExtA, IsRV64, IsCapMode]
-} // DecoderNamespace = "CapModeOnly_"
 
-let DecoderNamespace = "RISCV32CapModeOnly_",
-    Predicates = [HasCheri, HasStdExtA, IsRV32, IsCapMode] in {
-defm CLR_C       : CLR_C_r_aq_rl<"64", 0b011, "clr.c">;
-defm CSC_C       : CAMO_C_rr_aq_rl<"64", 0b00011, 0b011, "csc.c", GPR>;
-defm CAMOSWAP_C  : CAMO_C_rr_aq_rl<"64", 0b00001, 0b011, "camoswap.c", GPCR>;
+let Predicates = [HasCheri, HasStdExtA, IsRV32, IsCapMode] in {
+defm CLR_C       : CLR_C_r_aq_rl<"64", 0b011, "lr.c", "RISCV32CapModeOnly_">;
+defm CSC_C       : CAMO_C_rr_aq_rl<"64", 0b00011, 0b011, "sc.c", GPR,
+                                   "RISCV32CapModeOnly_">;
+defm CAMOSWAP_C  : CAMO_C_rr_aq_rl<"64", 0b00001, 0b011, "amoswap.c", GPCR,
+                                   "RISCV32CapModeOnly_">;
 }
 
-let DecoderNamespace = "CapModeOnly_",
-    Predicates = [HasCheri, HasStdExtA, IsRV64, IsCapMode] in {
-defm CLR_C       : CLR_C_r_aq_rl<"128", 0b100, "clr.c">;
-defm CSC_C       : CAMO_C_rr_aq_rl<"128", 0b00011, 0b100, "csc.c", GPR>;
-defm CAMOSWAP_C  : CAMO_C_rr_aq_rl<"128", 0b00001, 0b100, "camoswap.c", GPCR>;
+let Predicates = [HasCheri, HasStdExtA, IsRV64, IsCapMode] in {
+defm CLR_C       : CLR_C_r_aq_rl<"128", 0b100, "lr.c">;
+defm CSC_C       : CAMO_C_rr_aq_rl<"128", 0b00011, 0b100, "sc.c", GPR>;
+defm CAMOSWAP_C  : CAMO_C_rr_aq_rl<"128", 0b00001, 0b100, "amoswap.c", GPCR>;
 }
 
 /// 'F' (Single-Precision Floating-Point) extension
