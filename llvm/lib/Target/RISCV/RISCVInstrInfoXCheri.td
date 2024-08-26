@@ -732,6 +732,13 @@ def : InstAlias<"cjalr $rs, $offset",      (CJALR       C1, GPCR:$rs, simm12:$of
 def : InstAlias<"cjalr $rd, $rs, $offset", (CJALR GPCR:$rd, GPCR:$rs, simm12:$offset), 0>;
 } // Predicates = [HasCheri, IsCapMode]
 
+// Expands to an instruction alias with and without a c prefix for loads/stores
+multiclass CPrefixedInstAlias<string Asm, dag Result> {
+  def : InstAlias<"c" # Asm, Result, 0>;
+  def : InstAlias<Asm, Result, 0>;
+}
+
+
 let Predicates = [HasCheri, IsCapMode] in {
 defm CLB  : CheriLoad_ri<0b000, "lb">;
 defm CLH  : CheriLoad_ri<0b001, "lh">;
@@ -767,12 +774,10 @@ def CSC_64  : RVInstS<0x3, OPC_STORE, (outs),
 def : InstAlias<"sc $rs2, ${imm12}(${rs1})",
                 (CSC_64  GPCR:$rs2, GPCR:$rs1, simm12:$imm12), 0>;
 
-let EmitPriority = 0 in {
-def : InstAlias<"clc $rd, (${rs1})",
-                (CLC_64  GPCR:$rd, GPCR:$rs1, 0)>;
-def : InstAlias<"csc $rs2, (${rs1})",
-                (CSC_64  GPCR:$rs2, GPCR:$rs1, 0)>;
-}
+defm : CPrefixedInstAlias<"lc $rd, (${rs1})",
+                          (CLC_64  GPCR:$rd, GPCR:$rs1, 0)>;
+defm : CPrefixedInstAlias<"sc $rs2, (${rs1})",
+                          (CSC_64  GPCR:$rs2, GPCR:$rs1, 0)>;
 }
 
 let Predicates = [HasCheri, IsRV64, IsCapMode] in {
@@ -792,44 +797,29 @@ def CSC_128  : RVInstS<0x4, OPC_STORE, (outs),
 def : InstAlias<"sc $rs2, ${imm12}(${rs1})",
                 (CSC_128  GPCR:$rs2, GPCR:$rs1, simm12:$imm12), 0>;
 
-let EmitPriority = 0 in {
-def : InstAlias<"clc $rd, (${rs1})",
-                (CLC_128  GPCR:$rd, GPCR:$rs1, 0)>;
-def : InstAlias<"csc $rs2, (${rs1})",
-                (CSC_128  GPCR:$rs2, GPCR:$rs1, 0)>;
-}
+defm : CPrefixedInstAlias<"lc $rd, (${rs1})",
+                          (CLC_128  GPCR:$rd, GPCR:$rs1, 0)>;
+defm : CPrefixedInstAlias<"sc $rs2, (${rs1})",
+                          (CSC_128  GPCR:$rs2, GPCR:$rs1, 0)>;
 }
 
-let EmitPriority = 0 in {
 let Predicates = [HasCheri, IsCapMode] in {
-def : InstAlias<"clb $rd, (${rs1})",
-                (CLB  GPR:$rd, GPCR:$rs1, 0)>;
-def : InstAlias<"clh $rd, (${rs1})",
-                (CLH  GPR:$rd, GPCR:$rs1, 0)>;
-def : InstAlias<"clw $rd, (${rs1})",
-                (CLW  GPR:$rd, GPCR:$rs1, 0)>;
-def : InstAlias<"clbu $rd, (${rs1})",
-                (CLBU  GPR:$rd, GPCR:$rs1, 0)>;
-def : InstAlias<"clhu $rd, (${rs1})",
-                (CLHU  GPR:$rd, GPCR:$rs1, 0)>;
+defm : CPrefixedInstAlias<"lb $rd, (${rs1})", (CLB  GPR:$rd, GPCR:$rs1, 0)>;
+defm : CPrefixedInstAlias<"lh $rd, (${rs1})", (CLH  GPR:$rd, GPCR:$rs1, 0)>;
+defm : CPrefixedInstAlias<"lw $rd, (${rs1})", (CLW  GPR:$rd, GPCR:$rs1, 0)>;
+defm : CPrefixedInstAlias<"lbu $rd, (${rs1})", (CLBU  GPR:$rd, GPCR:$rs1, 0)>;
+defm : CPrefixedInstAlias<"lhu $rd, (${rs1})", (CLHU  GPR:$rd, GPCR:$rs1, 0)>;
 
-def : InstAlias<"csb $rs2, (${rs1})",
-                (CSB  GPR:$rs2, GPCR:$rs1, 0)>;
-def : InstAlias<"csh $rs2, (${rs1})",
-                (CSH  GPR:$rs2, GPCR:$rs1, 0)>;
-def : InstAlias<"csw $rs2, (${rs1})",
-                (CSW  GPR:$rs2, GPCR:$rs1, 0)>;
+defm : CPrefixedInstAlias<"sb $rs2, (${rs1})", (CSB  GPR:$rs2, GPCR:$rs1, 0)>;
+defm : CPrefixedInstAlias<"sh $rs2, (${rs1})", (CSH  GPR:$rs2, GPCR:$rs1, 0)>;
+defm : CPrefixedInstAlias<"sw $rs2, (${rs1})", (CSW  GPR:$rs2, GPCR:$rs1, 0)>;
 } // Predicates = [HasCheri, IsCapMode]
 
 let Predicates = [HasCheri, IsRV64, IsCapMode] in {
-def : InstAlias<"clwu $rd, (${rs1})",
-                (CLWU  GPR:$rd, GPCR:$rs1, 0)>;
-def : InstAlias<"cld $rd, (${rs1})",
-                (CLD  GPR:$rd, GPCR:$rs1, 0)>;
-def : InstAlias<"csd $rs2, (${rs1})",
-                (CSD  GPR:$rs2, GPCR:$rs1, 0)>;
+defm : CPrefixedInstAlias<"lwu $rd, (${rs1})", (CLWU  GPR:$rd, GPCR:$rs1, 0)>;
+defm : CPrefixedInstAlias<"ld $rd, (${rs1})", (CLD  GPR:$rd, GPCR:$rs1, 0)>;
+defm : CPrefixedInstAlias<"sd $rs2, (${rs1})", (CSD  GPR:$rs2, GPCR:$rs1, 0)>;
 } // Predicates = [HasCheri, IsRV64, IsCapMode]
-}
 
 /// 'A' (Atomic Instructions) extension
 
