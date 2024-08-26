@@ -246,10 +246,6 @@ void MipsTargetInfo::getTargetDefines(const LangOptions &Opts,
   if (IsCHERI || ABI == "n32" || ABI == "n64")
     Builder.defineMacro("__GCC_HAVE_SYNC_COMPARE_AND_SWAP_8");
 
-
-  if (getTriple().getOS() == llvm::Triple::UnknownOS &&
-      getTriple().isOSBinFormatELF())
-    Builder.defineMacro("__ELF__");
 }
 
 bool MipsTargetInfo::hasFeature(StringRef Feature) const {
