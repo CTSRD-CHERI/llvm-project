@@ -1,11 +1,24 @@
-# RUN: llvm-mc %s -triple=riscv32 -mattr=+xcheri,+cap-mode -riscv-no-aliases -show-encoding \
+# RUN: llvm-mc -triple=riscv32 -mattr=+xcheri,+cap-mode -riscv-no-aliases -show-encoding < %s \
 # RUN:     | FileCheck -check-prefixes=CHECK-ASM,CHECK-ASM-AND-OBJ %s
-# RUN: llvm-mc %s -triple=riscv64 -mattr=+xcheri,+cap-mode -riscv-no-aliases -show-encoding \
+# RUN: llvm-mc -triple=riscv64 -mattr=+xcheri,+cap-mode -riscv-no-aliases -show-encoding < %s \
 # RUN:     | FileCheck --check-prefixes=CHECK-ASM,CHECK-ASM-AND-OBJ %s
 # RUN: llvm-mc -filetype=obj -triple riscv32 -mattr=+xcheri,+cap-mode < %s \
 # RUN:     | llvm-objdump -M no-aliases --mattr=+xcheri,+cap-mode -d - \
 # RUN:     | FileCheck -check-prefixes=CHECK-ASM-AND-OBJ %s
 # RUN: llvm-mc -filetype=obj -triple riscv64 -mattr=+xcheri,+cap-mode < %s \
+# RUN:     | llvm-objdump -M no-aliases --mattr=+xcheri,+cap-mode -d - \
+# RUN:     | FileCheck --check-prefixes=CHECK-ASM-AND-OBJ %s
+
+## Same test again without the "c" prefix on all lines
+# RUN: sed -e 's/^c//' < %s > %t.s
+# RUN: llvm-mc -triple=riscv32 -mattr=+xcheri,+cap-mode -riscv-no-aliases -show-encoding < %t.s \
+# RUN:     | FileCheck -check-prefixes=CHECK-ASM,CHECK-ASM-AND-OBJ %s
+# RUN: llvm-mc -triple=riscv64 -mattr=+xcheri,+cap-mode -riscv-no-aliases -show-encoding < %t.s \
+# RUN:     | FileCheck --check-prefixes=CHECK-ASM,CHECK-ASM-AND-OBJ %s
+# RUN: llvm-mc -filetype=obj -triple riscv32 -mattr=+xcheri,+cap-mode < %t.s \
+# RUN:     | llvm-objdump -M no-aliases --mattr=+xcheri,+cap-mode -d - \
+# RUN:     | FileCheck -check-prefixes=CHECK-ASM-AND-OBJ %s
+# RUN: llvm-mc -filetype=obj -triple riscv64 -mattr=+xcheri,+cap-mode < %t.s \
 # RUN:     | llvm-objdump -M no-aliases --mattr=+xcheri,+cap-mode -d - \
 # RUN:     | FileCheck --check-prefixes=CHECK-ASM-AND-OBJ %s
 
