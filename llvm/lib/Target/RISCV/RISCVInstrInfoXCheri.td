@@ -214,16 +214,27 @@ multiclass AMO_C_rr_aq_rl<string clenstr, bits<5> funct5, bits<3> funct3,
                                    rdClass>;
 }
 
-let hasSideEffects = 0, mayLoad = 1, mayStore = 0 in
-class CheriLoad_ri<bits<3> funct3, string opcodestr>
-    : RVInstI<funct3, OPC_LOAD, (outs GPR:$rd), (ins GPCR:$rs1, simm12:$imm12),
-              opcodestr, "$rd, ${imm12}(${rs1})">;
+multiclass CheriLoad_ri<bits<3> funct3, string opcodestr> {
+  let hasSideEffects = 0, mayLoad = 1, mayStore = 0,
+      DecoderNamespace = "CapModeOnly_" in
+  def "" : RVInstI<funct3, OPC_LOAD, (outs GPR:$rd),
+                   (ins GPCR:$rs1, simm12:$imm12), "c" # opcodestr,
+                   "$rd, ${imm12}(${rs1})">;
+  def : InstAlias<opcodestr # " $rd, ${imm12}(${rs1})",
+                  (!cast<Instruction>(NAME) GPR:$rd, GPCR:$rs1, simm12:$imm12),
+                  0>;
+}
 
-let hasSideEffects = 0, mayLoad = 0, mayStore = 1 in
-class CheriStore_ri<bits<3> funct3, string opcodestr>
-    : RVInstS<funct3, OPC_STORE, (outs),
-              (ins GPR:$rs2, GPCR:$rs1, simm12:$imm12),
-              opcodestr, "$rs2, ${imm12}(${rs1})">;
+multiclass CheriStore_ri<bits<3> funct3, string opcodestr> {
+  let hasSideEffects = 0, mayLoad = 0, mayStore = 1,
+      DecoderNamespace = "CapModeOnly_" in
+  def "" : RVInstS<funct3, OPC_STORE, (outs),
+                   (ins GPR:$rs2, GPCR:$rs1, simm12:$imm12),
+                   "c" # opcodestr, "$rs2, ${imm12}(${rs1})">;
+  def : InstAlias<opcodestr # "$rs2, ${imm12}(${rs1})",
+                  (!cast<Instruction>(NAME) GPR:$rs2, GPCR:$rs1, simm12:$imm12),
+                  0>;
+}
 
 let hasSideEffects = 0, mayLoad = 1, mayStore = 0 in
 class CLR_r<bit aq, bit rl, bits<3> funct3, string opcodestr>
@@ -721,25 +732,23 @@ def : InstAlias<"cjalr $rs, $offset",      (CJALR       C1, GPCR:$rs, simm12:$of
 def : InstAlias<"cjalr $rd, $rs, $offset", (CJALR GPCR:$rd, GPCR:$rs, simm12:$offset), 0>;
 } // Predicates = [HasCheri, IsCapMode]
 
-let DecoderNamespace = "CapModeOnly_" in {
 let Predicates = [HasCheri, IsCapMode] in {
-def CLB  : CheriLoad_ri<0b000, "clb">;
-def CLH  : CheriLoad_ri<0b001, "clh">;
-def CLW  : CheriLoad_ri<0b010, "clw">;
-def CLBU : CheriLoad_ri<0b100, "clbu">;
-def CLHU : CheriLoad_ri<0b101, "clhu">;
+defm CLB  : CheriLoad_ri<0b000, "lb">;
+defm CLH  : CheriLoad_ri<0b001, "lh">;
+defm CLW  : CheriLoad_ri<0b010, "lw">;
+defm CLBU : CheriLoad_ri<0b100, "lbu">;
+defm CLHU : CheriLoad_ri<0b101, "lhu">;
 
-def CSB : CheriStore_ri<0b000, "csb">;
-def CSH : CheriStore_ri<0b001, "csh">;
-def CSW : CheriStore_ri<0b010, "csw">;
+defm CSB : CheriStore_ri<0b000, "sb">;
+defm CSH : CheriStore_ri<0b001, "sh">;
+defm CSW : CheriStore_ri<0b010, "sw">;
 } // Predicates = [HasCheri, IsCapMode]
 
 let Predicates = [HasCheri, IsRV64, IsCapMode] in {
-def CLWU   : CheriLoad_ri<0b110, "clwu">;
-def CLD    : CheriLoad_ri<0b011, "cld">;
-def CSD    : CheriStore_ri<0b011, "csd">;
+defm CLWU   : CheriLoad_ri<0b110, "lwu">;
+defm CLD    : CheriLoad_ri<0b011, "ld">;
+defm CSD    : CheriStore_ri<0b011, "sd">;
 } // Predicates = [HasCheri, IsRV64, IsCapMode]
-} // DecoderNameSpace = "CapModeOnly_"
 
 let Predicates = [HasCheri, IsRV32, IsCapMode] in {
 let DecoderNamespace = "RISCV32CapModeOnly_",
@@ -747,12 +756,16 @@ let DecoderNamespace = "RISCV32CapModeOnly_",
 def CLC_64  : RVInstI<0x3, OPC_LOAD, (outs GPCR:$rd),
                       (ins GPCR:$rs1, simm12:$imm12),
                       "clc", "$rd, ${imm12}(${rs1})">;
+def : InstAlias<"lc $rd, ${imm12}(${rs1})",
+                (CLC_64  GPCR:$rd, GPCR:$rs1, simm12:$imm12), 0>;
 
 let DecoderNamespace = "RISCV32CapModeOnly_",
     hasSideEffects = 0, mayLoad = 0, mayStore = 1 in
 def CSC_64  : RVInstS<0x3, OPC_STORE, (outs),
                       (ins GPCR:$rs2, GPCR:$rs1, simm12:$imm12),
                       "csc", "$rs2, ${imm12}(${rs1})">;
+def : InstAlias<"sc $rs2, ${imm12}(${rs1})",
+                (CSC_64  GPCR:$rs2, GPCR:$rs1, simm12:$imm12), 0>;
 
 let EmitPriority = 0 in {
 def : InstAlias<"clc $rd, (${rs1})",
@@ -768,12 +781,16 @@ let DecoderNamespace = "CapModeOnly_",
 def CLC_128  : RVInstI<0x2, OPC_MISC_MEM, (outs GPCR:$rd),
                        (ins GPCR:$rs1, simm12:$imm12),
                        "clc", "$rd, ${imm12}(${rs1})">;
+def : InstAlias<"lc $rd, ${imm12}(${rs1})",
+                (CLC_128  GPCR:$rd, GPCR:$rs1, simm12:$imm12), 0>;
 
 let DecoderNamespace = "CapModeOnly_",
     hasSideEffects = 0, mayLoad = 0, mayStore = 1 in
 def CSC_128  : RVInstS<0x4, OPC_STORE, (outs),
                        (ins GPCR:$rs2, GPCR:$rs1, simm12:$imm12),
                        "csc", "$rs2, ${imm12}(${rs1})">;
+def : InstAlias<"sc $rs2, ${imm12}(${rs1})",
+                (CSC_128  GPCR:$rs2, GPCR:$rs1, simm12:$imm12), 0>;
 
 let EmitPriority = 0 in {
 def : InstAlias<"clc $rd, (${rs1})",
