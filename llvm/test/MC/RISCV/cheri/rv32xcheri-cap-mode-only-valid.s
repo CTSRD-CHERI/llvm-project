@@ -21,3 +21,10 @@ clc ca2, 17(ca0)
 # CHECK-ASM-SAME: encoding: [0xa3,0xbc,0xf6,0x00]
 csc ca5, 25(ca3)
 
+
+# CHECK-ASM-AND-OBJ: clc ca2, 0(ca0)
+# CHECK-ASM-SAME: encoding: [0x03,0x36,0x05,0x00]
+clc ca2, (ca0)
+# CHECK-ASM-AND-OBJ: csc ca5, 0(ca3)
+# CHECK-ASM-SAME: encoding: [0x23,0xb0,0xf6,0x00]
+csc ca5, (ca3)
