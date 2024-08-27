@@ -2,7 +2,6 @@
 // Calling K&R function prototypes used to insert bad bitcasts while casting
 // from variadic to non-variadic function-pointer-types.
 // RUN: %cheri_purecap_cc1 -emit-llvm -o - %s | FileCheck %s
-// RUN: %cheri_purecap_cc1 -no-opaque-pointers -emit-llvm -o - %s | FileCheck %s --check-prefix=TYPED
 
 void crt_init_globals();
 
@@ -10,12 +9,6 @@ void crt_init_globals();
 // CHECK-NEXT:  entry:
 // CHECK-NEXT:    call void @crt_init_globals()
 // CHECK-NEXT:    ret void
-//
-// TYPED-LABEL: @__start(
-// TYPED-NEXT:  entry:
-// TYPED-NEXT:    call void bitcast (void (...) addrspace(200)* @crt_init_globals to void () addrspace(200)*)()
-// TYPED-NEXT:    ret void
-//
 void __start(void)
 {
   crt_init_globals();

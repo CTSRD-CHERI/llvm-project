@@ -2,8 +2,7 @@
 /// The subobject bounds logic used to trigger assertions when using opaque
 /// pointers with "remaining size" bounds. Check that these work for typed and untyped pointers
 // REQUIRES: asserts
-// RUN: %riscv64_cheri_purecap_cc1 -opaque-pointers -cheri-bounds=subobject-safe -o - -emit-llvm %s | FileCheck %s --check-prefix=OPAQUE
-// RUN: %riscv64_cheri_purecap_cc1 -no-opaque-pointers -cheri-bounds=subobject-safe -o - -emit-llvm %s | FileCheck %s --check-prefix=TYPED
+// RUN: %riscv64_cheri_purecap_cc1 -cheri-bounds=subobject-safe -o - -emit-llvm %s | FileCheck %s --check-prefix=OPAQUE
 
 union union_two_chararrays {
   char chararray16[16];
@@ -16,18 +15,6 @@ union union_two_chararrays {
 // OPAQUE-NEXT:    [[TMP0:%.*]] = load ptr addrspace(200), ptr addrspace(200) [[TWOARRAYS_ADDR]], align 16
 // OPAQUE-NEXT:    [[TMP1:%.*]] = call ptr addrspace(200) @llvm.cheri.cap.bounds.set.i64(ptr addrspace(200) [[TMP0]], i64 32)
 // OPAQUE-NEXT:    ret ptr addrspace(200) [[TMP1]]
-//
-// TYPED-LABEL: @bounds_subobject_union_two_chararrays(
-// TYPED-NEXT:  entry:
-// TYPED-NEXT:    [[TWOARRAYS_ADDR:%.*]] = alloca [[UNION_UNION_TWO_CHARARRAYS:%.*]] addrspace(200)*, align 16, addrspace(200)
-// TYPED-NEXT:    store [[UNION_UNION_TWO_CHARARRAYS]] addrspace(200)* [[TWOARRAYS:%.*]], [[UNION_UNION_TWO_CHARARRAYS]] addrspace(200)* addrspace(200)* [[TWOARRAYS_ADDR]], align 16
-// TYPED-NEXT:    [[TMP0:%.*]] = load [[UNION_UNION_TWO_CHARARRAYS]] addrspace(200)*, [[UNION_UNION_TWO_CHARARRAYS]] addrspace(200)* addrspace(200)* [[TWOARRAYS_ADDR]], align 16
-// TYPED-NEXT:    [[TMP1:%.*]] = bitcast [[UNION_UNION_TWO_CHARARRAYS]] addrspace(200)* [[TMP0]] to i8 addrspace(200)*
-// TYPED-NEXT:    [[TMP2:%.*]] = call i8 addrspace(200)* @llvm.cheri.cap.bounds.set.i64(i8 addrspace(200)* [[TMP1]], i64 32)
-// TYPED-NEXT:    [[ADDRESS_WITH_BOUNDS:%.*]] = bitcast i8 addrspace(200)* [[TMP2]] to [[UNION_UNION_TWO_CHARARRAYS]] addrspace(200)*
-// TYPED-NEXT:    [[CHARARRAY16:%.*]] = bitcast [[UNION_UNION_TWO_CHARARRAYS]] addrspace(200)* [[ADDRESS_WITH_BOUNDS]] to [16 x i8] addrspace(200)*
-// TYPED-NEXT:    [[TMP3:%.*]] = bitcast [16 x i8] addrspace(200)* [[CHARARRAY16]] to i8 addrspace(200)*
-// TYPED-NEXT:    ret i8 addrspace(200)* [[TMP3]]
 //
 void *bounds_subobject_union_two_chararrays(union union_two_chararrays *twoarrays) {
   return &twoarrays->chararray16;
