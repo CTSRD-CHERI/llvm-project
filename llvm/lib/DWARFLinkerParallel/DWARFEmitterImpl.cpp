@@ -33,7 +33,8 @@ Error DwarfEmitterImpl::init(Triple TheTriple,
   TripleName = TheTriple.getTriple();
 
   // Create all the MC Objects.
-  MRI.reset(TheTarget->createMCRegInfo(TripleName));
+  MCTargetOptions MCOpts;
+  MRI.reset(TheTarget->createMCRegInfo(TripleName, MCOpts));
   if (!MRI)
     return createStringError(std::errc::invalid_argument,
                              "no register info for target %s",
