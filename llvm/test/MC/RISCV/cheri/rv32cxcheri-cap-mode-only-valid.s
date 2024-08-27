@@ -9,18 +9,30 @@
 # CHECK-ASM-AND-OBJ: c.clccsp cra, 40(csp)
 # CHECK-ASM-SAME: encoding: [0xa2,0x70]
 c.clccsp cra, 40(csp)
+# CHECK-ASM-AND-OBJ: c.clccsp cra, 40(csp)
+# CHECK-ASM-SAME: encoding: [0xa2,0x70]
+c.lcsp cra, 40(csp)
 # CHECK-ASM-AND-OBJ: c.csccsp cra, 256(csp)
 # CHECK-ASM-SAME: encoding: [0x06,0xe2]
 c.csccsp cra, 256(csp)
+# CHECK-ASM-AND-OBJ: c.csccsp cra, 256(csp)
+# CHECK-ASM-SAME: encoding: [0x06,0xe2]
+c.scsp cra, 256(csp)
 # CHECK-ASM-AND-OBJ: c.clc ca2, 16(ca0)
 # CHECK-ASM-SAME: encoding: [0x10,0x69]
 c.clc ca2, 16(ca0)
+# CHECK-ASM-AND-OBJ: c.clc ca2, 16(ca0)
+# CHECK-ASM-SAME: encoding: [0x10,0x69]
+c.lc ca2, 16(ca0)
 # CHECK-ASM-AND-OBJ: c.csc ca5, 128(ca3)
 # CHECK-ASM-SAME: encoding: [0xdc,0xe2]
 c.csc ca5, 128(ca3)
+# CHECK-ASM-AND-OBJ: c.csc ca5, 128(ca3)
+# CHECK-ASM-SAME: encoding: [0xdc,0xe2]
+c.sc ca5, 128(ca3)
 
 ## C.JAL is only defined for RV32C:
-# CHECK-OBJ: c.cjal 0x806
+# CHECK-OBJ: c.cjal 0x80e
 # CHECK-ASM: c.cjal 2046
 # CHECK-ASM-SAME: encoding: [0xfd,0x2f]
 c.cjal 2046

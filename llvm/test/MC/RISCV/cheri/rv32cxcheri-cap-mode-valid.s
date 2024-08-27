@@ -12,15 +12,27 @@
 # CHECK-ASM-AND-OBJ: c.clwcsp ra, 0(csp)
 # CHECK-ASM-SAME: encoding: [0x82,0x40]
 c.clwcsp ra, 0(csp)
+# CHECK-ASM-AND-OBJ: c.clwcsp ra, 0(csp)
+# CHECK-ASM-SAME: encoding: [0x82,0x40]
+c.lwsp ra, 0(csp)
 # CHECK-ASM-AND-OBJ: c.cswcsp ra, 252(csp)
 # CHECK-ASM-SAME: encoding: [0x86,0xdf]
 c.cswcsp ra, 252(csp)
+# CHECK-ASM-AND-OBJ: c.cswcsp ra, 252(csp)
+# CHECK-ASM-SAME: encoding: [0x86,0xdf]
+c.swsp ra, 252(csp)
 # CHECK-ASM-AND-OBJ: c.clw a2, 0(ca0)
 # CHECK-ASM-SAME: encoding: [0x10,0x41]
 c.clw a2, 0(ca0)
+# CHECK-ASM-AND-OBJ: c.clw a2, 0(ca0)
+# CHECK-ASM-SAME: encoding: [0x10,0x41]
+c.lw a2, 0(ca0)
 # CHECK-ASM-AND-OBJ: c.csw a5, 124(ca3)
 # CHECK-ASM-SAME: encoding: [0xfc,0xde]
 c.csw a5, 124(ca3)
+# CHECK-ASM-AND-OBJ: c.csw a5, 124(ca3)
+# CHECK-ASM-SAME: encoding: [0xfc,0xde]
+c.sw a5, 124(ca3)
 
 # CHECK-ASM-AND-OBJ: c.cjr ca7
 # CHECK-ASM-SAME: encoding: [0x82,0x88]

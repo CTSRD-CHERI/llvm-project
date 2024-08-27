@@ -1135,7 +1135,21 @@ def : InstAlias<"c.cincoffsetimm4cspn $rd, $rs1, $imm",
                 (C_CIncOffsetImm4CSPN GPCRC:$rd, CSP:$rs1, uimm10_lsb00nonzero:$imm), 0>;
 def : InstAlias<"c.cincoffsetimm16csp $rd, $imm",
                 (C_CIncOffsetImm16CSP CSP:$rd, simm10_lsb0000nonzero:$imm), 0>;
+def : MnemonicAlias<"c.lw", "c.clw">;
+def : MnemonicAlias<"c.sw", "c.csw">;
+def : MnemonicAlias<"c.sc", "c.csc">;
+def : MnemonicAlias<"c.lc", "c.clc">;
+def : MnemonicAlias<"c.lwsp", "c.clwcsp">;
+def : MnemonicAlias<"c.swsp", "c.cswcsp">;
+def : MnemonicAlias<"c.scsp", "c.csccsp">;
+def : MnemonicAlias<"c.lcsp", "c.clccsp">;
 } // Predicates = [HasCheri, HasCheriRVC, HasStdExtC, IsCapMode]
+let Predicates = [HasCheri, HasCheriRVC, HasStdExtC, IsRV64, IsCapMode] in {
+def : MnemonicAlias<"c.ld", "c.cld">;
+def : MnemonicAlias<"c.sd", "c.csd">;
+def : MnemonicAlias<"c.ldsp", "c.cldcsp">;
+def : MnemonicAlias<"c.sdsp", "c.csdcsp">;
+} // Predicates = [HasCheri, HasCheriRVC, HasStdExtC, IsRV64, IsCapMode]
 
 //===----------------------------------------------------------------------===//
 // Pseudo-instructions and codegen patterns
