@@ -916,8 +916,13 @@ def CFSW : RVInstS<0b010, OPC_STORE_FP, (outs),
                    (ins FPR32:$rs2, GPCR:$rs1, simm12:$imm12),
                    "cfsw", "$rs2, ${imm12}(${rs1})">;
 
-def : InstAlias<"cflw $rd, (${rs1})",  (CFLW FPR32:$rd,  GPCR:$rs1, 0), 0>;
-def : InstAlias<"cfsw $rs2, (${rs1})", (CFSW FPR32:$rs2, GPCR:$rs1, 0), 0>;
+defm : CPrefixedInstAlias<"flw $rd, (${rs1})", (CFLW FPR32:$rd, GPCR:$rs1, 0)>;
+defm : CPrefixedInstAlias<"fsw $rs2, (${rs1})",
+                          (CFSW FPR32:$rs2, GPCR:$rs1, 0)>;
+def : InstAlias<"flw $rd, ${imm12}(${rs1})",
+                (CFLW FPR32:$rd, GPCR:$rs1, simm12:$imm12), 0>;
+def : InstAlias<"fsw $rs2, ${imm12}(${rs1})",
+                (CFSW FPR32:$rs2, GPCR:$rs1, simm12:$imm12), 0>;
 } // Predicates = [HasCheri, HasStdExtF, IsCapMode]
 
 /// 'D' (Single-Precision Floating-Point) extension
@@ -935,8 +940,13 @@ def CFSD : RVInstS<0b011, OPC_STORE_FP, (outs),
                    (ins FPR64:$rs2, GPCR:$rs1, simm12:$imm12),
                    "cfsd", "$rs2, ${imm12}(${rs1})">;
 
-def : InstAlias<"cfld $rd, (${rs1})",  (CFLD FPR64:$rd,  GPCR:$rs1, 0), 0>;
-def : InstAlias<"cfsd $rs2, (${rs1})", (CFSD FPR64:$rs2, GPCR:$rs1, 0), 0>;
+defm : CPrefixedInstAlias<"fld $rd, (${rs1})", (CFLD FPR64:$rd, GPCR:$rs1, 0)>;
+defm : CPrefixedInstAlias<"fsd $rs2, (${rs1})",
+                          (CFSD FPR64:$rs2, GPCR:$rs1, 0)>;
+def : InstAlias<"fld $rd, ${imm12}(${rs1})",
+                (CFLD FPR64:$rd, GPCR:$rs1, simm12:$imm12), 0>;
+def : InstAlias<"fsd $rs2, ${imm12}(${rs1})",
+                (CFSD FPR64:$rs2, GPCR:$rs1, simm12:$imm12), 0>;
 } // Predicates = [HasCheri, HasStdExtD, IsCapMode]
 
 /// 'C' (Compressed Instructions) extension
@@ -1150,6 +1160,13 @@ def : MnemonicAlias<"c.sd", "c.csd">;
 def : MnemonicAlias<"c.ldsp", "c.cldcsp">;
 def : MnemonicAlias<"c.sdsp", "c.csdcsp">;
 } // Predicates = [HasCheri, HasCheriRVC, HasStdExtC, IsRV64, IsCapMode]
+let Predicates = [HasCheri, HasCheriRVC, HasStdExtC, HasStdExtD, IsRV32,
+                  IsCapMode] in {
+def : MnemonicAlias<"c.fld", "c.cfld">;
+def : MnemonicAlias<"c.fsd", "c.cfsd">;
+def : MnemonicAlias<"c.fldsp", "c.cfldcsp">;
+def : MnemonicAlias<"c.fsdsp", "c.cfsdcsp">;
+}
 
 //===----------------------------------------------------------------------===//
 // Pseudo-instructions and codegen patterns
