@@ -6,7 +6,7 @@
 ; RUN: llc -mtriple=mips64 -mcpu=cheri128 -mattr=+cheri128 --relocation-model=pic -target-abi purecap < %s | FileCheck %s --check-prefix=PURECAP
 ; RUN: llc -mtriple=mips64 -mcpu=cheri128 -mattr=+cheri128 --relocation-model=pic -target-abi n64 < %s | FileCheck %s --check-prefix=HYBRID
 
-define { i8, i1 } @test_cmpxchg_strong_i8(i8 addrspace(200)* %ptr, i8 %exp, i8 %new) nounwind {
+define { i8, i1 } @test_cmpxchg_strong_i8(ptr addrspace(200) %ptr, i8 %exp, i8 %new) nounwind {
 ; PURECAP-LABEL: test_cmpxchg_strong_i8:
 ; PURECAP:       # %bb.0:
 ; PURECAP-NEXT:    sll $1, $5, 0
@@ -50,11 +50,11 @@ define { i8, i1 } @test_cmpxchg_strong_i8(i8 addrspace(200)* %ptr, i8 %exp, i8 %
 ; HYBRID-NEXT:    sync
 ; HYBRID-NEXT:    jr $ra
 ; HYBRID-NEXT:    nop
-  %1 = cmpxchg i8 addrspace(200)* %ptr, i8 %exp, i8 %new acq_rel acquire
+  %1 = cmpxchg ptr addrspace(200) %ptr, i8 %exp, i8 %new acq_rel acquire
   ret { i8, i1 } %1
 }
 
-define { i16, i1 } @test_cmpxchg_strong_i16(i16 addrspace(200)* %ptr, i16 %exp, i16 %new) nounwind {
+define { i16, i1 } @test_cmpxchg_strong_i16(ptr addrspace(200) %ptr, i16 %exp, i16 %new) nounwind {
 ; PURECAP-LABEL: test_cmpxchg_strong_i16:
 ; PURECAP:       # %bb.0:
 ; PURECAP-NEXT:    sll $1, $5, 0
@@ -98,11 +98,11 @@ define { i16, i1 } @test_cmpxchg_strong_i16(i16 addrspace(200)* %ptr, i16 %exp, 
 ; HYBRID-NEXT:    sync
 ; HYBRID-NEXT:    jr $ra
 ; HYBRID-NEXT:    nop
-  %1 = cmpxchg i16 addrspace(200)* %ptr, i16 %exp, i16 %new acq_rel acquire
+  %1 = cmpxchg ptr addrspace(200) %ptr, i16 %exp, i16 %new acq_rel acquire
   ret { i16, i1 } %1
 }
 
-define { i32, i1 } @test_cmpxchg_strong_i32(i32 addrspace(200)* %ptr, i32 %exp, i32 %new) nounwind {
+define { i32, i1 } @test_cmpxchg_strong_i32(ptr addrspace(200) %ptr, i32 %exp, i32 %new) nounwind {
 ; PURECAP-LABEL: test_cmpxchg_strong_i32:
 ; PURECAP:       # %bb.0:
 ; PURECAP-NEXT:    sll $1, $5, 0
@@ -142,11 +142,11 @@ define { i32, i1 } @test_cmpxchg_strong_i32(i32 addrspace(200)* %ptr, i32 %exp, 
 ; HYBRID-NEXT:    sync
 ; HYBRID-NEXT:    jr $ra
 ; HYBRID-NEXT:    nop
-  %1 = cmpxchg i32 addrspace(200)* %ptr, i32 %exp, i32 %new acq_rel acquire
+  %1 = cmpxchg ptr addrspace(200) %ptr, i32 %exp, i32 %new acq_rel acquire
   ret { i32, i1 } %1
 }
 
-define { i64, i1 } @test_cmpxchg_strong_i64(i64 addrspace(200)* %ptr, i64 %exp, i64 %new) nounwind {
+define { i64, i1 } @test_cmpxchg_strong_i64(ptr addrspace(200) %ptr, i64 %exp, i64 %new) nounwind {
 ; PURECAP-LABEL: test_cmpxchg_strong_i64:
 ; PURECAP:       # %bb.0:
 ; PURECAP-NEXT:    sync
@@ -182,11 +182,11 @@ define { i64, i1 } @test_cmpxchg_strong_i64(i64 addrspace(200)* %ptr, i64 %exp, 
 ; HYBRID-NEXT:    sync
 ; HYBRID-NEXT:    jr $ra
 ; HYBRID-NEXT:    nop
-  %1 = cmpxchg i64 addrspace(200)* %ptr, i64 %exp, i64 %new acq_rel acquire
+  %1 = cmpxchg ptr addrspace(200) %ptr, i64 %exp, i64 %new acq_rel acquire
   ret { i64, i1 } %1
 }
 
-define { i8 addrspace(200)*, i1 } @test_cmpxchg_strong_cap(i8 addrspace(200)* addrspace(200)* %ptr, i8 addrspace(200)* %exp, i8 addrspace(200)* %new) nounwind {
+define { ptr addrspace(200), i1 } @test_cmpxchg_strong_cap(ptr addrspace(200) %ptr, ptr addrspace(200) %exp, ptr addrspace(200) %new) nounwind {
 ; PURECAP-LABEL: test_cmpxchg_strong_cap:
 ; PURECAP:       # %bb.0:
 ; PURECAP-NEXT:    sync
@@ -222,11 +222,11 @@ define { i8 addrspace(200)*, i1 } @test_cmpxchg_strong_cap(i8 addrspace(200)* ad
 ; HYBRID-NEXT:    sync
 ; HYBRID-NEXT:    jr $ra
 ; HYBRID-NEXT:    cmove $c3, $c1
-  %1 = cmpxchg i8 addrspace(200)* addrspace(200)* %ptr, i8 addrspace(200)* %exp, i8 addrspace(200)* %new acq_rel acquire
-  ret { i8 addrspace(200)*, i1 } %1
+  %1 = cmpxchg ptr addrspace(200) %ptr, ptr addrspace(200) %exp, ptr addrspace(200) %new acq_rel acquire
+  ret { ptr addrspace(200), i1 } %1
 }
 
-define { i32 addrspace(200)*, i1 } @test_cmpxchg_strong_cap_i32(i32 addrspace(200)* addrspace(200)* %ptr, i32 addrspace(200)* %exp, i32 addrspace(200)* %new) nounwind {
+define { ptr addrspace(200), i1 } @test_cmpxchg_strong_cap_i32(ptr addrspace(200) %ptr, ptr addrspace(200) %exp, ptr addrspace(200) %new) nounwind {
 ; PURECAP-LABEL: test_cmpxchg_strong_cap_i32:
 ; PURECAP:       # %bb.0:
 ; PURECAP-NEXT:    sync
@@ -262,12 +262,12 @@ define { i32 addrspace(200)*, i1 } @test_cmpxchg_strong_cap_i32(i32 addrspace(20
 ; HYBRID-NEXT:    sync
 ; HYBRID-NEXT:    jr $ra
 ; HYBRID-NEXT:    cmove $c3, $c1
-  %1 = cmpxchg weak i32 addrspace(200)* addrspace(200)* %ptr, i32 addrspace(200)* %exp, i32 addrspace(200)* %new acq_rel acquire
-  ret { i32 addrspace(200)*, i1 } %1
+  %1 = cmpxchg weak ptr addrspace(200) %ptr, ptr addrspace(200) %exp, ptr addrspace(200) %new acq_rel acquire
+  ret { ptr addrspace(200), i1 } %1
 }
 
 
-define { i8, i1 } @test_cmpxchg_weak_i8(i8 addrspace(200)* %ptr, i8 %exp, i8 %new) nounwind {
+define { i8, i1 } @test_cmpxchg_weak_i8(ptr addrspace(200) %ptr, i8 %exp, i8 %new) nounwind {
 ; PURECAP-LABEL: test_cmpxchg_weak_i8:
 ; PURECAP:       # %bb.0:
 ; PURECAP-NEXT:    sll $1, $5, 0
@@ -311,11 +311,11 @@ define { i8, i1 } @test_cmpxchg_weak_i8(i8 addrspace(200)* %ptr, i8 %exp, i8 %ne
 ; HYBRID-NEXT:    sync
 ; HYBRID-NEXT:    jr $ra
 ; HYBRID-NEXT:    nop
-  %1 = cmpxchg weak i8 addrspace(200)* %ptr, i8 %exp, i8 %new acq_rel acquire
+  %1 = cmpxchg weak ptr addrspace(200) %ptr, i8 %exp, i8 %new acq_rel acquire
   ret { i8, i1 } %1
 }
 
-define { i16, i1 } @test_cmpxchg_weak_i16(i16 addrspace(200)* %ptr, i16 %exp, i16 %new) nounwind {
+define { i16, i1 } @test_cmpxchg_weak_i16(ptr addrspace(200) %ptr, i16 %exp, i16 %new) nounwind {
 ; PURECAP-LABEL: test_cmpxchg_weak_i16:
 ; PURECAP:       # %bb.0:
 ; PURECAP-NEXT:    sll $1, $5, 0
@@ -359,11 +359,11 @@ define { i16, i1 } @test_cmpxchg_weak_i16(i16 addrspace(200)* %ptr, i16 %exp, i1
 ; HYBRID-NEXT:    sync
 ; HYBRID-NEXT:    jr $ra
 ; HYBRID-NEXT:    nop
-  %1 = cmpxchg weak i16 addrspace(200)* %ptr, i16 %exp, i16 %new acq_rel acquire
+  %1 = cmpxchg weak ptr addrspace(200) %ptr, i16 %exp, i16 %new acq_rel acquire
   ret { i16, i1 } %1
 }
 
-define { i32, i1 } @test_cmpxchg_weak_i32(i32 addrspace(200)* %ptr, i32 %exp, i32 %new) nounwind {
+define { i32, i1 } @test_cmpxchg_weak_i32(ptr addrspace(200) %ptr, i32 %exp, i32 %new) nounwind {
 ; PURECAP-LABEL: test_cmpxchg_weak_i32:
 ; PURECAP:       # %bb.0:
 ; PURECAP-NEXT:    sll $1, $5, 0
@@ -403,11 +403,11 @@ define { i32, i1 } @test_cmpxchg_weak_i32(i32 addrspace(200)* %ptr, i32 %exp, i3
 ; HYBRID-NEXT:    sync
 ; HYBRID-NEXT:    jr $ra
 ; HYBRID-NEXT:    nop
-  %1 = cmpxchg weak i32 addrspace(200)* %ptr, i32 %exp, i32 %new acq_rel acquire
+  %1 = cmpxchg weak ptr addrspace(200) %ptr, i32 %exp, i32 %new acq_rel acquire
   ret { i32, i1 } %1
 }
 
-define { i64, i1 } @test_cmpxchg_weak_i64(i64 addrspace(200)* %ptr, i64 %exp, i64 %new) nounwind {
+define { i64, i1 } @test_cmpxchg_weak_i64(ptr addrspace(200) %ptr, i64 %exp, i64 %new) nounwind {
 ; PURECAP-LABEL: test_cmpxchg_weak_i64:
 ; PURECAP:       # %bb.0:
 ; PURECAP-NEXT:    sync
@@ -443,11 +443,11 @@ define { i64, i1 } @test_cmpxchg_weak_i64(i64 addrspace(200)* %ptr, i64 %exp, i6
 ; HYBRID-NEXT:    sync
 ; HYBRID-NEXT:    jr $ra
 ; HYBRID-NEXT:    nop
-  %1 = cmpxchg weak i64 addrspace(200)* %ptr, i64 %exp, i64 %new acq_rel acquire
+  %1 = cmpxchg weak ptr addrspace(200) %ptr, i64 %exp, i64 %new acq_rel acquire
   ret { i64, i1 } %1
 }
 
-define { i8 addrspace(200)*, i1 } @test_cmpxchg_weak_cap(i8 addrspace(200)* addrspace(200)* %ptr, i8 addrspace(200)* %exp, i8 addrspace(200)* %new) nounwind {
+define { ptr addrspace(200), i1 } @test_cmpxchg_weak_cap(ptr addrspace(200) %ptr, ptr addrspace(200) %exp, ptr addrspace(200) %new) nounwind {
 ; PURECAP-LABEL: test_cmpxchg_weak_cap:
 ; PURECAP:       # %bb.0:
 ; PURECAP-NEXT:    sync
@@ -483,11 +483,11 @@ define { i8 addrspace(200)*, i1 } @test_cmpxchg_weak_cap(i8 addrspace(200)* addr
 ; HYBRID-NEXT:    sync
 ; HYBRID-NEXT:    jr $ra
 ; HYBRID-NEXT:    cmove $c3, $c1
-  %1 = cmpxchg weak i8 addrspace(200)* addrspace(200)* %ptr, i8 addrspace(200)* %exp, i8 addrspace(200)* %new acq_rel acquire
-  ret { i8 addrspace(200)*, i1 } %1
+  %1 = cmpxchg weak ptr addrspace(200) %ptr, ptr addrspace(200) %exp, ptr addrspace(200) %new acq_rel acquire
+  ret { ptr addrspace(200), i1 } %1
 }
 
-define { i32 addrspace(200)*, i1 } @test_cmpxchg_weak_cap_i32(i32 addrspace(200)* addrspace(200)* %ptr, i32 addrspace(200)* %exp, i32 addrspace(200)* %new) nounwind {
+define { ptr addrspace(200), i1 } @test_cmpxchg_weak_cap_i32(ptr addrspace(200) %ptr, ptr addrspace(200) %exp, ptr addrspace(200) %new) nounwind {
 ; PURECAP-LABEL: test_cmpxchg_weak_cap_i32:
 ; PURECAP:       # %bb.0:
 ; PURECAP-NEXT:    sync
@@ -523,6 +523,6 @@ define { i32 addrspace(200)*, i1 } @test_cmpxchg_weak_cap_i32(i32 addrspace(200)
 ; HYBRID-NEXT:    sync
 ; HYBRID-NEXT:    jr $ra
 ; HYBRID-NEXT:    cmove $c3, $c1
-  %1 = cmpxchg weak i32 addrspace(200)* addrspace(200)* %ptr, i32 addrspace(200)* %exp, i32 addrspace(200)* %new acq_rel acquire
-  ret { i32 addrspace(200)*, i1 } %1
+  %1 = cmpxchg weak ptr addrspace(200) %ptr, ptr addrspace(200) %exp, ptr addrspace(200) %new acq_rel acquire
+  ret { ptr addrspace(200), i1 } %1
 }

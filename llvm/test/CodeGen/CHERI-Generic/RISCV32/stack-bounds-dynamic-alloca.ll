@@ -14,7 +14,7 @@
 ; }
 target datalayout = "e-m:e-pf200:64:64:64:32-p:32:32-i64:64-n32-S128-A200-P200-G200"
 
-declare i32 @use_alloca(i8 addrspace(200)*) local_unnamed_addr addrspace(200)
+declare i32 @use_alloca(ptr addrspace(200)) local_unnamed_addr addrspace(200)
 
 define i32 @alloca_in_entry(i1 %arg) local_unnamed_addr addrspace(200) nounwind {
 ; ASM-LABEL: alloca_in_entry:
@@ -86,21 +86,21 @@ entry:
   %alloca = alloca [16 x i8], align 16, addrspace(200)
   br i1 %arg, label %do_alloca, label %exit
 
-do_alloca:
+do_alloca:                                        ; preds = %entry
   br label %use_alloca_no_bounds
 
-use_alloca_no_bounds:
-  %ptr = bitcast [16 x i8] addrspace(200)* %alloca to i64 addrspace(200)*
-  %ptr_plus_one = getelementptr i64, i64 addrspace(200)* %ptr, i64 1
-  store i64 1234, i64 addrspace(200)* %ptr_plus_one, align 8
+use_alloca_no_bounds:                             ; preds = %do_alloca
+  %ptr = bitcast ptr addrspace(200) %alloca to ptr addrspace(200)
+  %ptr_plus_one = getelementptr i64, ptr addrspace(200) %ptr, i64 1
+  store i64 1234, ptr addrspace(200) %ptr_plus_one, align 8
   br label %use_alloca_need_bounds
 
-use_alloca_need_bounds:
-  %.sub.le = getelementptr inbounds [16 x i8], [16 x i8] addrspace(200)* %alloca, i64 0, i64 0
-  %call = call signext i32 @use_alloca(i8 addrspace(200)* %.sub.le)
+use_alloca_need_bounds:                           ; preds = %use_alloca_no_bounds
+  %.sub.le = getelementptr inbounds [16 x i8], ptr addrspace(200) %alloca, i64 0, i64 0
+  %call = call signext i32 @use_alloca(ptr addrspace(200) %.sub.le)
   br label %exit
 
-exit:
+exit:                                             ; preds = %use_alloca_need_bounds, %entry
   ret i32 123
 }
 
@@ -193,22 +193,22 @@ define i32 @alloca_not_in_entry(i1 %arg) local_unnamed_addr addrspace(200) nounw
 entry:
   br i1 %arg, label %do_alloca, label %exit
 
-do_alloca:
+do_alloca:                                        ; preds = %entry
   %alloca = alloca [16 x i8], align 16, addrspace(200)
   br label %use_alloca_no_bounds
 
-use_alloca_no_bounds:
-  %ptr = bitcast [16 x i8] addrspace(200)* %alloca to i64 addrspace(200)*
-  %ptr_plus_one = getelementptr i64, i64 addrspace(200)* %ptr, i64 1
-  store i64 1234, i64 addrspace(200)* %ptr_plus_one, align 8
+use_alloca_no_bounds:                             ; preds = %do_alloca
+  %ptr = bitcast ptr addrspace(200) %alloca to ptr addrspace(200)
+  %ptr_plus_one = getelementptr i64, ptr addrspace(200) %ptr, i64 1
+  store i64 1234, ptr addrspace(200) %ptr_plus_one, align 8
   br label %use_alloca_need_bounds
 
-use_alloca_need_bounds:
-  %.sub.le = getelementptr inbounds [16 x i8], [16 x i8] addrspace(200)* %alloca, i64 0, i64 0
-  %call = call signext i32 @use_alloca(i8 addrspace(200)* %.sub.le)
+use_alloca_need_bounds:                           ; preds = %use_alloca_no_bounds
+  %.sub.le = getelementptr inbounds [16 x i8], ptr addrspace(200) %alloca, i64 0, i64 0
+  %call = call signext i32 @use_alloca(ptr addrspace(200) %.sub.le)
   br label %exit
 
-exit:
+exit:                                             ; preds = %use_alloca_need_bounds, %entry
   ret i32 123
 }
 
@@ -293,19 +293,19 @@ define i32 @crash_reproducer(i1 %arg) local_unnamed_addr addrspace(200) nounwind
 entry:
   br i1 %arg, label %entry.while.end_crit_edge, label %while.body
 
-entry.while.end_crit_edge:
+entry.while.end_crit_edge:                        ; preds = %entry
   unreachable
 
-while.body:
+while.body:                                       ; preds = %entry
   %0 = alloca [16 x i8], align 16, addrspace(200)
   br label %while.end.loopexit
 
-while.end.loopexit:
-  %.sub.le = getelementptr inbounds [16 x i8], [16 x i8] addrspace(200)* %0, i64 0, i64 0
+while.end.loopexit:                               ; preds = %while.body
+  %.sub.le = getelementptr inbounds [16 x i8], ptr addrspace(200) %0, i64 0, i64 0
   br label %while.end
 
-while.end:
-  %call = call signext i32 @use_alloca(i8 addrspace(200)* %.sub.le)
+while.end:                                        ; preds = %while.end.loopexit
+  %call = call signext i32 @use_alloca(ptr addrspace(200) %.sub.le)
   %result = add i32 %call, 1234
   ret i32 %result
 }

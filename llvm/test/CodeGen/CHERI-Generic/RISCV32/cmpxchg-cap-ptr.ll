@@ -8,7 +8,7 @@
 ; RUN: llc -mtriple=riscv32 --relocation-model=pic -target-abi ilp32f -mattr=+xcheri,+f -mattr=+a < %s | FileCheck %s --check-prefixes=HYBRID,HYBRID-ATOMICS --allow-unused-prefixes
 ; RUN: llc -mtriple=riscv32 --relocation-model=pic -target-abi ilp32f -mattr=+xcheri,+f -mattr=+a < %s | FileCheck %s --check-prefixes=HYBRID,HYBRID-LIBCALLS --allow-unused-prefixes
 
-define { i8, i1 } @test_cmpxchg_strong_i8(i8 addrspace(200)* %ptr, i8 %exp, i8 %new) nounwind {
+define { i8, i1 } @test_cmpxchg_strong_i8(ptr addrspace(200) %ptr, i8 %exp, i8 %new) nounwind {
 ; PURECAP-ATOMICS-LABEL: test_cmpxchg_strong_i8:
 ; PURECAP-ATOMICS:       # %bb.0:
 ; PURECAP-ATOMICS-NEXT:    slli a1, a1, 24
@@ -59,11 +59,11 @@ define { i8, i1 } @test_cmpxchg_strong_i8(i8 addrspace(200)* %ptr, i8 %exp, i8 %
 ; HYBRID-NEXT:    lw ra, 12(sp) # 4-byte Folded Reload
 ; HYBRID-NEXT:    addi sp, sp, 16
 ; HYBRID-NEXT:    ret
-  %1 = cmpxchg i8 addrspace(200)* %ptr, i8 %exp, i8 %new acq_rel acquire
+  %1 = cmpxchg ptr addrspace(200) %ptr, i8 %exp, i8 %new acq_rel acquire
   ret { i8, i1 } %1
 }
 
-define { i16, i1 } @test_cmpxchg_strong_i16(i16 addrspace(200)* %ptr, i16 %exp, i16 %new) nounwind {
+define { i16, i1 } @test_cmpxchg_strong_i16(ptr addrspace(200) %ptr, i16 %exp, i16 %new) nounwind {
 ; PURECAP-ATOMICS-LABEL: test_cmpxchg_strong_i16:
 ; PURECAP-ATOMICS:       # %bb.0:
 ; PURECAP-ATOMICS-NEXT:    slli a1, a1, 16
@@ -114,11 +114,11 @@ define { i16, i1 } @test_cmpxchg_strong_i16(i16 addrspace(200)* %ptr, i16 %exp, 
 ; HYBRID-NEXT:    lw ra, 12(sp) # 4-byte Folded Reload
 ; HYBRID-NEXT:    addi sp, sp, 16
 ; HYBRID-NEXT:    ret
-  %1 = cmpxchg i16 addrspace(200)* %ptr, i16 %exp, i16 %new acq_rel acquire
+  %1 = cmpxchg ptr addrspace(200) %ptr, i16 %exp, i16 %new acq_rel acquire
   ret { i16, i1 } %1
 }
 
-define { i32, i1 } @test_cmpxchg_strong_i32(i32 addrspace(200)* %ptr, i32 %exp, i32 %new) nounwind {
+define { i32, i1 } @test_cmpxchg_strong_i32(ptr addrspace(200) %ptr, i32 %exp, i32 %new) nounwind {
 ; PURECAP-ATOMICS-LABEL: test_cmpxchg_strong_i32:
 ; PURECAP-ATOMICS:       # %bb.0:
 ; PURECAP-ATOMICS-NEXT:  .LBB2_1: # =>This Inner Loop Header: Depth=1
@@ -167,11 +167,11 @@ define { i32, i1 } @test_cmpxchg_strong_i32(i32 addrspace(200)* %ptr, i32 %exp, 
 ; HYBRID-NEXT:    lw ra, 12(sp) # 4-byte Folded Reload
 ; HYBRID-NEXT:    addi sp, sp, 16
 ; HYBRID-NEXT:    ret
-  %1 = cmpxchg i32 addrspace(200)* %ptr, i32 %exp, i32 %new acq_rel acquire
+  %1 = cmpxchg ptr addrspace(200) %ptr, i32 %exp, i32 %new acq_rel acquire
   ret { i32, i1 } %1
 }
 
-define { i64, i1 } @test_cmpxchg_strong_i64(i64 addrspace(200)* %ptr, i64 %exp, i64 %new) nounwind {
+define { i64, i1 } @test_cmpxchg_strong_i64(ptr addrspace(200) %ptr, i64 %exp, i64 %new) nounwind {
 ; PURECAP-LABEL: test_cmpxchg_strong_i64:
 ; PURECAP:       # %bb.0:
 ; PURECAP-NEXT:    cincoffset csp, csp, -32
@@ -228,11 +228,11 @@ define { i64, i1 } @test_cmpxchg_strong_i64(i64 addrspace(200)* %ptr, i64 %exp, 
 ; HYBRID-NEXT:    lw s0, 8(sp) # 4-byte Folded Reload
 ; HYBRID-NEXT:    addi sp, sp, 16
 ; HYBRID-NEXT:    ret
-  %1 = cmpxchg i64 addrspace(200)* %ptr, i64 %exp, i64 %new acq_rel acquire
+  %1 = cmpxchg ptr addrspace(200) %ptr, i64 %exp, i64 %new acq_rel acquire
   ret { i64, i1 } %1
 }
 
-define { i8 addrspace(200)*, i1 } @test_cmpxchg_strong_cap(i8 addrspace(200)* addrspace(200)* %ptr, i8 addrspace(200)* %exp, i8 addrspace(200)* %new) nounwind {
+define { ptr addrspace(200), i1 } @test_cmpxchg_strong_cap(ptr addrspace(200) %ptr, ptr addrspace(200) %exp, ptr addrspace(200) %new) nounwind {
 ; PURECAP-ATOMICS-LABEL: test_cmpxchg_strong_cap:
 ; PURECAP-ATOMICS:       # %bb.0:
 ; PURECAP-ATOMICS-NEXT:  .LBB4_1: # =>This Inner Loop Header: Depth=1
@@ -281,11 +281,11 @@ define { i8 addrspace(200)*, i1 } @test_cmpxchg_strong_cap(i8 addrspace(200)* ad
 ; HYBRID-NEXT:    lw ra, 12(sp) # 4-byte Folded Reload
 ; HYBRID-NEXT:    addi sp, sp, 16
 ; HYBRID-NEXT:    ret
-  %1 = cmpxchg i8 addrspace(200)* addrspace(200)* %ptr, i8 addrspace(200)* %exp, i8 addrspace(200)* %new acq_rel acquire
-  ret { i8 addrspace(200)*, i1 } %1
+  %1 = cmpxchg ptr addrspace(200) %ptr, ptr addrspace(200) %exp, ptr addrspace(200) %new acq_rel acquire
+  ret { ptr addrspace(200), i1 } %1
 }
 
-define { i32 addrspace(200)*, i1 } @test_cmpxchg_strong_cap_i32(i32 addrspace(200)* addrspace(200)* %ptr, i32 addrspace(200)* %exp, i32 addrspace(200)* %new) nounwind {
+define { ptr addrspace(200), i1 } @test_cmpxchg_strong_cap_i32(ptr addrspace(200) %ptr, ptr addrspace(200) %exp, ptr addrspace(200) %new) nounwind {
 ; PURECAP-ATOMICS-LABEL: test_cmpxchg_strong_cap_i32:
 ; PURECAP-ATOMICS:       # %bb.0:
 ; PURECAP-ATOMICS-NEXT:  .LBB5_1: # =>This Inner Loop Header: Depth=1
@@ -334,12 +334,12 @@ define { i32 addrspace(200)*, i1 } @test_cmpxchg_strong_cap_i32(i32 addrspace(20
 ; HYBRID-NEXT:    lw ra, 12(sp) # 4-byte Folded Reload
 ; HYBRID-NEXT:    addi sp, sp, 16
 ; HYBRID-NEXT:    ret
-  %1 = cmpxchg weak i32 addrspace(200)* addrspace(200)* %ptr, i32 addrspace(200)* %exp, i32 addrspace(200)* %new acq_rel acquire
-  ret { i32 addrspace(200)*, i1 } %1
+  %1 = cmpxchg weak ptr addrspace(200) %ptr, ptr addrspace(200) %exp, ptr addrspace(200) %new acq_rel acquire
+  ret { ptr addrspace(200), i1 } %1
 }
 
 
-define { i8, i1 } @test_cmpxchg_weak_i8(i8 addrspace(200)* %ptr, i8 %exp, i8 %new) nounwind {
+define { i8, i1 } @test_cmpxchg_weak_i8(ptr addrspace(200) %ptr, i8 %exp, i8 %new) nounwind {
 ; PURECAP-ATOMICS-LABEL: test_cmpxchg_weak_i8:
 ; PURECAP-ATOMICS:       # %bb.0:
 ; PURECAP-ATOMICS-NEXT:    slli a1, a1, 24
@@ -390,11 +390,11 @@ define { i8, i1 } @test_cmpxchg_weak_i8(i8 addrspace(200)* %ptr, i8 %exp, i8 %ne
 ; HYBRID-NEXT:    lw ra, 12(sp) # 4-byte Folded Reload
 ; HYBRID-NEXT:    addi sp, sp, 16
 ; HYBRID-NEXT:    ret
-  %1 = cmpxchg weak i8 addrspace(200)* %ptr, i8 %exp, i8 %new acq_rel acquire
+  %1 = cmpxchg weak ptr addrspace(200) %ptr, i8 %exp, i8 %new acq_rel acquire
   ret { i8, i1 } %1
 }
 
-define { i16, i1 } @test_cmpxchg_weak_i16(i16 addrspace(200)* %ptr, i16 %exp, i16 %new) nounwind {
+define { i16, i1 } @test_cmpxchg_weak_i16(ptr addrspace(200) %ptr, i16 %exp, i16 %new) nounwind {
 ; PURECAP-ATOMICS-LABEL: test_cmpxchg_weak_i16:
 ; PURECAP-ATOMICS:       # %bb.0:
 ; PURECAP-ATOMICS-NEXT:    slli a1, a1, 16
@@ -445,11 +445,11 @@ define { i16, i1 } @test_cmpxchg_weak_i16(i16 addrspace(200)* %ptr, i16 %exp, i1
 ; HYBRID-NEXT:    lw ra, 12(sp) # 4-byte Folded Reload
 ; HYBRID-NEXT:    addi sp, sp, 16
 ; HYBRID-NEXT:    ret
-  %1 = cmpxchg weak i16 addrspace(200)* %ptr, i16 %exp, i16 %new acq_rel acquire
+  %1 = cmpxchg weak ptr addrspace(200) %ptr, i16 %exp, i16 %new acq_rel acquire
   ret { i16, i1 } %1
 }
 
-define { i32, i1 } @test_cmpxchg_weak_i32(i32 addrspace(200)* %ptr, i32 %exp, i32 %new) nounwind {
+define { i32, i1 } @test_cmpxchg_weak_i32(ptr addrspace(200) %ptr, i32 %exp, i32 %new) nounwind {
 ; PURECAP-ATOMICS-LABEL: test_cmpxchg_weak_i32:
 ; PURECAP-ATOMICS:       # %bb.0:
 ; PURECAP-ATOMICS-NEXT:  .LBB8_1: # =>This Inner Loop Header: Depth=1
@@ -498,11 +498,11 @@ define { i32, i1 } @test_cmpxchg_weak_i32(i32 addrspace(200)* %ptr, i32 %exp, i3
 ; HYBRID-NEXT:    lw ra, 12(sp) # 4-byte Folded Reload
 ; HYBRID-NEXT:    addi sp, sp, 16
 ; HYBRID-NEXT:    ret
-  %1 = cmpxchg weak i32 addrspace(200)* %ptr, i32 %exp, i32 %new acq_rel acquire
+  %1 = cmpxchg weak ptr addrspace(200) %ptr, i32 %exp, i32 %new acq_rel acquire
   ret { i32, i1 } %1
 }
 
-define { i64, i1 } @test_cmpxchg_weak_i64(i64 addrspace(200)* %ptr, i64 %exp, i64 %new) nounwind {
+define { i64, i1 } @test_cmpxchg_weak_i64(ptr addrspace(200) %ptr, i64 %exp, i64 %new) nounwind {
 ; PURECAP-LABEL: test_cmpxchg_weak_i64:
 ; PURECAP:       # %bb.0:
 ; PURECAP-NEXT:    cincoffset csp, csp, -32
@@ -559,11 +559,11 @@ define { i64, i1 } @test_cmpxchg_weak_i64(i64 addrspace(200)* %ptr, i64 %exp, i6
 ; HYBRID-NEXT:    lw s0, 8(sp) # 4-byte Folded Reload
 ; HYBRID-NEXT:    addi sp, sp, 16
 ; HYBRID-NEXT:    ret
-  %1 = cmpxchg weak i64 addrspace(200)* %ptr, i64 %exp, i64 %new acq_rel acquire
+  %1 = cmpxchg weak ptr addrspace(200) %ptr, i64 %exp, i64 %new acq_rel acquire
   ret { i64, i1 } %1
 }
 
-define { i8 addrspace(200)*, i1 } @test_cmpxchg_weak_cap(i8 addrspace(200)* addrspace(200)* %ptr, i8 addrspace(200)* %exp, i8 addrspace(200)* %new) nounwind {
+define { ptr addrspace(200), i1 } @test_cmpxchg_weak_cap(ptr addrspace(200) %ptr, ptr addrspace(200) %exp, ptr addrspace(200) %new) nounwind {
 ; PURECAP-ATOMICS-LABEL: test_cmpxchg_weak_cap:
 ; PURECAP-ATOMICS:       # %bb.0:
 ; PURECAP-ATOMICS-NEXT:  .LBB10_1: # =>This Inner Loop Header: Depth=1
@@ -612,11 +612,11 @@ define { i8 addrspace(200)*, i1 } @test_cmpxchg_weak_cap(i8 addrspace(200)* addr
 ; HYBRID-NEXT:    lw ra, 12(sp) # 4-byte Folded Reload
 ; HYBRID-NEXT:    addi sp, sp, 16
 ; HYBRID-NEXT:    ret
-  %1 = cmpxchg weak i8 addrspace(200)* addrspace(200)* %ptr, i8 addrspace(200)* %exp, i8 addrspace(200)* %new acq_rel acquire
-  ret { i8 addrspace(200)*, i1 } %1
+  %1 = cmpxchg weak ptr addrspace(200) %ptr, ptr addrspace(200) %exp, ptr addrspace(200) %new acq_rel acquire
+  ret { ptr addrspace(200), i1 } %1
 }
 
-define { i32 addrspace(200)*, i1 } @test_cmpxchg_weak_cap_i32(i32 addrspace(200)* addrspace(200)* %ptr, i32 addrspace(200)* %exp, i32 addrspace(200)* %new) nounwind {
+define { ptr addrspace(200), i1 } @test_cmpxchg_weak_cap_i32(ptr addrspace(200) %ptr, ptr addrspace(200) %exp, ptr addrspace(200) %new) nounwind {
 ; PURECAP-ATOMICS-LABEL: test_cmpxchg_weak_cap_i32:
 ; PURECAP-ATOMICS:       # %bb.0:
 ; PURECAP-ATOMICS-NEXT:  .LBB11_1: # =>This Inner Loop Header: Depth=1
@@ -665,6 +665,6 @@ define { i32 addrspace(200)*, i1 } @test_cmpxchg_weak_cap_i32(i32 addrspace(200)
 ; HYBRID-NEXT:    lw ra, 12(sp) # 4-byte Folded Reload
 ; HYBRID-NEXT:    addi sp, sp, 16
 ; HYBRID-NEXT:    ret
-  %1 = cmpxchg weak i32 addrspace(200)* addrspace(200)* %ptr, i32 addrspace(200)* %exp, i32 addrspace(200)* %new acq_rel acquire
-  ret { i32 addrspace(200)*, i1 } %1
+  %1 = cmpxchg weak ptr addrspace(200) %ptr, ptr addrspace(200) %exp, ptr addrspace(200) %new acq_rel acquire
+  ret { ptr addrspace(200), i1 } %1
 }
