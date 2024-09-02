@@ -72,8 +72,6 @@ memptr.end:                                       ; preds = %memptr.nonvirtual, 
 
 
 
-  ; OPT: cincoffset $c11, $c11, -[[#CAP_SIZE]]
-  ; OPT: csc     $c17, $zero, 0($c11)      # {{16|32}}-byte Folded Spill
   ; OPT: dsra    [[ADJ:\$[0-9]+]], $4, 1
   ; OPT: andi    [[ISVIRT:\$[0-9]+]], $4, 1
   ; OPT: beqz    [[ISVIRT]], .LBB0_2
@@ -83,6 +81,8 @@ memptr.end:                                       ; preds = %memptr.nonvirtual, 
   ; OPT: cgetaddr  [[VTABLE_OFFSET:\$1]], $c4
   ; OPT: clc     $c4, [[VTABLE_OFFSET]], 0([[VTABLE]])
   ; OPT: .LBB0_2:                                # %memptr.end
+  ; OPT: cincoffset $c11, $c11, -[[#CAP_SIZE]]
+  ; OPT: csc     $c17, $zero, 0($c11)      # {{16|32}}-byte Folded Spill
   ; OPT: cmove   $c12, $c4
   ; OPT: cjalr   $c12, $c17
   ; OPT: clc     $c17, $zero, 0($c11)      # {{16|32}}-byte Folded Reload
