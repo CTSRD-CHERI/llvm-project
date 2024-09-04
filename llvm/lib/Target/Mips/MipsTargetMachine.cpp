@@ -22,7 +22,7 @@
 #include "MipsTargetObjectFile.h"
 #include "MipsTargetTransformInfo.h"
 #include "TargetInfo/MipsTargetInfo.h"
-#include "llvm/ADT/STLExtras.h"
+#include "llvm/ADT/StringExtras.h"
 #include "llvm/ADT/StringRef.h"
 #include "llvm/Analysis/TargetTransformInfo.h"
 #include "llvm/CodeGen/BasicTTIImpl.h"
