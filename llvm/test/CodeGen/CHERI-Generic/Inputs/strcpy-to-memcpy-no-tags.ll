@@ -9,41 +9,41 @@ target datalayout = "@PURECAP_DATALAYOUT@"
 
 @str = private unnamed_addr addrspace(200) constant [17 x i8] c"exactly 16 chars\00", align @CAP_RANGE_BYTES@
 
-declare i8 addrspace(200)* @strcpy(i8 addrspace(200)*, i8 addrspace(200)*) addrspace(200)
-declare i8 addrspace(200)* @stpcpy(i8 addrspace(200)*, i8 addrspace(200)*) addrspace(200)
-declare i8 addrspace(200)* @strcat(i8 addrspace(200)*, i8 addrspace(200)*) addrspace(200)
-declare i8 addrspace(200)* @strncpy(i8 addrspace(200)*, i8 addrspace(200)*, i64) addrspace(200)
-declare i8 addrspace(200)* @stpncpy(i8 addrspace(200)*, i8 addrspace(200)*, i64) addrspace(200)
+declare ptr addrspace(200) @strcpy(ptr addrspace(200), ptr addrspace(200)) addrspace(200)
+declare ptr addrspace(200) @stpcpy(ptr addrspace(200), ptr addrspace(200)) addrspace(200)
+declare ptr addrspace(200) @strcat(ptr addrspace(200), ptr addrspace(200)) addrspace(200)
+declare ptr addrspace(200) @strncpy(ptr addrspace(200), ptr addrspace(200), i64) addrspace(200)
+declare ptr addrspace(200) @stpncpy(ptr addrspace(200), ptr addrspace(200), i64) addrspace(200)
 
-define void @test_strcpy_to_memcpy(i8 addrspace(200)* align @CAP_RANGE_BYTES@ %dst) addrspace(200) nounwind {
+define void @test_strcpy_to_memcpy(ptr addrspace(200) align @CAP_RANGE_BYTES@ %dst) addrspace(200) nounwind {
 entry:
-  %call = call i8 addrspace(200)* @strcpy(i8 addrspace(200)* %dst, i8 addrspace(200)* getelementptr inbounds ([17 x i8], [17 x i8] addrspace(200)* @str, i64 0, i64 0))
+  %call = call ptr addrspace(200) @strcpy(ptr addrspace(200) %dst, ptr addrspace(200) @str)
   ret void
 }
 
-define void @test_stpcpy_to_memcpy(i8 addrspace(200)* align @CAP_RANGE_BYTES@ %dst) addrspace(200) nounwind {
+define void @test_stpcpy_to_memcpy(ptr addrspace(200) align @CAP_RANGE_BYTES@ %dst) addrspace(200) nounwind {
 entry:
-  %call = call i8 addrspace(200)* @stpcpy(i8 addrspace(200)* %dst, i8 addrspace(200)* getelementptr inbounds ([17 x i8], [17 x i8] addrspace(200)* @str, i64 0, i64 0))
+  %call = call ptr addrspace(200) @stpcpy(ptr addrspace(200) %dst, ptr addrspace(200) @str)
   ret void
 }
 
-define void @test_strcat_to_memcpy(i8 addrspace(200)* align @CAP_RANGE_BYTES@ %dst) addrspace(200) nounwind {
+define void @test_strcat_to_memcpy(ptr addrspace(200) align @CAP_RANGE_BYTES@ %dst) addrspace(200) nounwind {
 entry:
-  %call = call i8 addrspace(200)* @strcat(i8 addrspace(200)* %dst, i8 addrspace(200)* getelementptr inbounds ([17 x i8], [17 x i8] addrspace(200)* @str, i64 0, i64 0))
+  %call = call ptr addrspace(200) @strcat(ptr addrspace(200) %dst, ptr addrspace(200) @str)
   ret void
 }
 
 
-define void @test_strncpy_to_memcpy(i8 addrspace(200)* align @CAP_RANGE_BYTES@ %dst) addrspace(200) nounwind {
+define void @test_strncpy_to_memcpy(ptr addrspace(200) align @CAP_RANGE_BYTES@ %dst) addrspace(200) nounwind {
 entry:
-  %call = call i8 addrspace(200)* @strncpy(i8 addrspace(200)* %dst, i8 addrspace(200)* getelementptr inbounds ([17 x i8], [17 x i8] addrspace(200)* @str, i64 0, i64 0), i64 17)
+  %call = call ptr addrspace(200) @strncpy(ptr addrspace(200) %dst, ptr addrspace(200) @str, i64 17)
   ret void
 }
 
 ; Note: stpncpy is not handled by SimplifyLibcalls yet, so this should not be changed.
-define void @test_stpncpy_to_memcpy(i8 addrspace(200)* align @CAP_RANGE_BYTES@ %dst) addrspace(200) nounwind {
+define void @test_stpncpy_to_memcpy(ptr addrspace(200) align @CAP_RANGE_BYTES@ %dst) addrspace(200) nounwind {
 entry:
-  %call = call i8 addrspace(200)* @stpncpy(i8 addrspace(200)* %dst, i8 addrspace(200)* getelementptr inbounds ([17 x i8], [17 x i8] addrspace(200)* @str, i64 0, i64 0), i64 17)
+  %call = call ptr addrspace(200) @stpncpy(ptr addrspace(200) %dst, ptr addrspace(200) @str, i64 17)
   ret void
 }
 

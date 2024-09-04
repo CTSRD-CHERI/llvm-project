@@ -11,13 +11,13 @@ target datalayout = "E-m:e-pf200:128:128:128:64-i8:8:32-i16:16:32-i64:64-n32:64-
 
 @str = private unnamed_addr addrspace(200) constant [17 x i8] c"exactly 16 chars\00", align 8
 
-declare i8 addrspace(200)* @strcpy(i8 addrspace(200)*, i8 addrspace(200)*) addrspace(200)
-declare i8 addrspace(200)* @stpcpy(i8 addrspace(200)*, i8 addrspace(200)*) addrspace(200)
-declare i8 addrspace(200)* @strcat(i8 addrspace(200)*, i8 addrspace(200)*) addrspace(200)
-declare i8 addrspace(200)* @strncpy(i8 addrspace(200)*, i8 addrspace(200)*, i64) addrspace(200)
-declare i8 addrspace(200)* @stpncpy(i8 addrspace(200)*, i8 addrspace(200)*, i64) addrspace(200)
+declare ptr addrspace(200) @strcpy(ptr addrspace(200), ptr addrspace(200)) addrspace(200)
+declare ptr addrspace(200) @stpcpy(ptr addrspace(200), ptr addrspace(200)) addrspace(200)
+declare ptr addrspace(200) @strcat(ptr addrspace(200), ptr addrspace(200)) addrspace(200)
+declare ptr addrspace(200) @strncpy(ptr addrspace(200), ptr addrspace(200), i64) addrspace(200)
+declare ptr addrspace(200) @stpncpy(ptr addrspace(200), ptr addrspace(200), i64) addrspace(200)
 
-define void @test_strcpy_to_memcpy(i8 addrspace(200)* align 8 %dst) addrspace(200) nounwind {
+define void @test_strcpy_to_memcpy(ptr addrspace(200) align 8 %dst) addrspace(200) nounwind {
 ; CHECK-ASM-LABEL: test_strcpy_to_memcpy:
 ; CHECK-ASM:       # %bb.0: # %entry
 ; CHECK-ASM-NEXT:    lui $1, %pcrel_hi(_CHERI_CAPABILITY_TABLE_-8)
@@ -38,11 +38,11 @@ define void @test_strcpy_to_memcpy(i8 addrspace(200)* align 8 %dst) addrspace(20
 ; CHECK-IR-NEXT:    ret void
 ;
 entry:
-  %call = call i8 addrspace(200)* @strcpy(i8 addrspace(200)* %dst, i8 addrspace(200)* getelementptr inbounds ([17 x i8], [17 x i8] addrspace(200)* @str, i64 0, i64 0))
+  %call = call ptr addrspace(200) @strcpy(ptr addrspace(200) %dst, ptr addrspace(200) @str)
   ret void
 }
 
-define void @test_stpcpy_to_memcpy(i8 addrspace(200)* align 8 %dst) addrspace(200) nounwind {
+define void @test_stpcpy_to_memcpy(ptr addrspace(200) align 8 %dst) addrspace(200) nounwind {
 ; CHECK-ASM-LABEL: test_stpcpy_to_memcpy:
 ; CHECK-ASM:       # %bb.0: # %entry
 ; CHECK-ASM-NEXT:    lui $1, %pcrel_hi(_CHERI_CAPABILITY_TABLE_-8)
@@ -63,11 +63,11 @@ define void @test_stpcpy_to_memcpy(i8 addrspace(200)* align 8 %dst) addrspace(20
 ; CHECK-IR-NEXT:    ret void
 ;
 entry:
-  %call = call i8 addrspace(200)* @stpcpy(i8 addrspace(200)* %dst, i8 addrspace(200)* getelementptr inbounds ([17 x i8], [17 x i8] addrspace(200)* @str, i64 0, i64 0))
+  %call = call ptr addrspace(200) @stpcpy(ptr addrspace(200) %dst, ptr addrspace(200) @str)
   ret void
 }
 
-define void @test_strcat_to_memcpy(i8 addrspace(200)* align 8 %dst) addrspace(200) nounwind {
+define void @test_strcat_to_memcpy(ptr addrspace(200) align 8 %dst) addrspace(200) nounwind {
 ; CHECK-ASM-LABEL: test_strcat_to_memcpy:
 ; CHECK-ASM:       # %bb.0: # %entry
 ; CHECK-ASM-NEXT:    cincoffset $c11, $c11, -48
@@ -99,12 +99,12 @@ define void @test_strcat_to_memcpy(i8 addrspace(200)* align 8 %dst) addrspace(20
 ; CHECK-IR-NEXT:    ret void
 ;
 entry:
-  %call = call i8 addrspace(200)* @strcat(i8 addrspace(200)* %dst, i8 addrspace(200)* getelementptr inbounds ([17 x i8], [17 x i8] addrspace(200)* @str, i64 0, i64 0))
+  %call = call ptr addrspace(200) @strcat(ptr addrspace(200) %dst, ptr addrspace(200) @str)
   ret void
 }
 
 
-define void @test_strncpy_to_memcpy(i8 addrspace(200)* align 8 %dst) addrspace(200) nounwind {
+define void @test_strncpy_to_memcpy(ptr addrspace(200) align 8 %dst) addrspace(200) nounwind {
 ; CHECK-ASM-LABEL: test_strncpy_to_memcpy:
 ; CHECK-ASM:       # %bb.0: # %entry
 ; CHECK-ASM-NEXT:    lui $1, %pcrel_hi(_CHERI_CAPABILITY_TABLE_-8)
@@ -125,12 +125,12 @@ define void @test_strncpy_to_memcpy(i8 addrspace(200)* align 8 %dst) addrspace(2
 ; CHECK-IR-NEXT:    ret void
 ;
 entry:
-  %call = call i8 addrspace(200)* @strncpy(i8 addrspace(200)* %dst, i8 addrspace(200)* getelementptr inbounds ([17 x i8], [17 x i8] addrspace(200)* @str, i64 0, i64 0), i64 17)
+  %call = call ptr addrspace(200) @strncpy(ptr addrspace(200) %dst, ptr addrspace(200) @str, i64 17)
   ret void
 }
 
 ; Note: stpncpy is not handled by SimplifyLibcalls yet, so this should not be changed.
-define void @test_stpncpy_to_memcpy(i8 addrspace(200)* align 8 %dst) addrspace(200) nounwind {
+define void @test_stpncpy_to_memcpy(ptr addrspace(200) align 8 %dst) addrspace(200) nounwind {
 ; CHECK-ASM-LABEL: test_stpncpy_to_memcpy:
 ; CHECK-ASM:       # %bb.0: # %entry
 ; CHECK-ASM-NEXT:    lui $1, %pcrel_hi(_CHERI_CAPABILITY_TABLE_-8)
@@ -151,7 +151,7 @@ define void @test_stpncpy_to_memcpy(i8 addrspace(200)* align 8 %dst) addrspace(2
 ; CHECK-IR-NEXT:    ret void
 ;
 entry:
-  %call = call i8 addrspace(200)* @stpncpy(i8 addrspace(200)* %dst, i8 addrspace(200)* getelementptr inbounds ([17 x i8], [17 x i8] addrspace(200)* @str, i64 0, i64 0), i64 17)
+  %call = call ptr addrspace(200) @stpncpy(ptr addrspace(200) %dst, ptr addrspace(200) @str, i64 17)
   ret void
 }
 
