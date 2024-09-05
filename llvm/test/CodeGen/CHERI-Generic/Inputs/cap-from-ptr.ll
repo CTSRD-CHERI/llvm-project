@@ -5,46 +5,46 @@
 ; RUN: opt @PURECAP_HARDFLOAT_ARGS@ -passes=instcombine -S < %s | llc @PURECAP_HARDFLOAT_ARGS@ | FileCheck %s --check-prefix=PURECAP
 ; RUN: opt @HYBRID_HARDFLOAT_ARGS@ -passes=instcombine -S < %s | llc @HYBRID_HARDFLOAT_ARGS@ | FileCheck %s --check-prefix=HYBRID
 
-define internal i8 addrspace(200)* @test(i8 addrspace(200)* addrspace(200)* %ptr, i8 addrspace(200)* %cap, iCAPRANGE %offset) nounwind {
+define internal ptr addrspace(200) @test(ptr addrspace(200) %ptr, ptr addrspace(200) %cap, iCAPRANGE %offset) nounwind {
 entry:
-  %new = call i8 addrspace(200)* @llvm.cheri.cap.from.pointer.iCAPRANGE(i8 addrspace(200)* %cap, iCAPRANGE %offset)
-  store i8 addrspace(200)* %new, i8 addrspace(200)* addrspace(200)* %ptr, align 16
-  ret i8 addrspace(200)* %new
+  %new = call ptr addrspace(200) @llvm.cheri.cap.from.pointer.iCAPRANGE(ptr addrspace(200) %cap, iCAPRANGE %offset)
+  store ptr addrspace(200) %new, ptr addrspace(200) %ptr, align 16
+  ret ptr addrspace(200) %new
 }
 
 ;; (int_cheri_cap_from_ptr x, 0) -> null
-define internal i8 addrspace(200)* @cap_from_ptr_zero(i8 addrspace(200)* addrspace(200)* %ptr, i8 addrspace(200)* %cap) nounwind {
+define internal ptr addrspace(200) @cap_from_ptr_zero(ptr addrspace(200) %ptr, ptr addrspace(200) %cap) nounwind {
 entry:
-  %new = call i8 addrspace(200)* @llvm.cheri.cap.from.pointer.iCAPRANGE(i8 addrspace(200)* %cap, iCAPRANGE 0)
-  store i8 addrspace(200)* %new, i8 addrspace(200)* addrspace(200)* %ptr, align 16
-  ret i8 addrspace(200)* %new
+  %new = call ptr addrspace(200) @llvm.cheri.cap.from.pointer.iCAPRANGE(ptr addrspace(200) %cap, iCAPRANGE 0)
+  store ptr addrspace(200) %new, ptr addrspace(200) %ptr, align 16
+  ret ptr addrspace(200) %new
 }
 
 ;; Check that (int_cheri_cap_from_ptr ddc, x) can use the DDC register directly
-define internal i8 addrspace(200)* @cap_from_ptr_ddc(i8 addrspace(200)* addrspace(200)* %ptr, iCAPRANGE %offset) nounwind {
+define internal ptr addrspace(200) @cap_from_ptr_ddc(ptr addrspace(200) %ptr, iCAPRANGE %offset) nounwind {
 entry:
-  %ddc = call i8 addrspace(200)* @llvm.cheri.ddc.get()
-  %new = call i8 addrspace(200)* @llvm.cheri.cap.from.pointer.iCAPRANGE(i8 addrspace(200)* %ddc, iCAPRANGE %offset)
-  store i8 addrspace(200)* %new, i8 addrspace(200)* addrspace(200)* %ptr, align 16
-  ret i8 addrspace(200)* %new
+  %ddc = call ptr addrspace(200) @llvm.cheri.ddc.get()
+  %new = call ptr addrspace(200) @llvm.cheri.cap.from.pointer.iCAPRANGE(ptr addrspace(200) %ddc, iCAPRANGE %offset)
+  store ptr addrspace(200) %new, ptr addrspace(200) %ptr, align 16
+  ret ptr addrspace(200) %new
 }
 
 ;; Check that (int_cheri_cap_from_ptr x, 0) -> null has priority over direct DDC usage
-define internal i8 addrspace(200)* @cap_from_ptr_ddc_zero(i8 addrspace(200)* addrspace(200)* %ptr) nounwind {
+define internal ptr addrspace(200) @cap_from_ptr_ddc_zero(ptr addrspace(200) %ptr) nounwind {
 entry:
-  %ddc = call i8 addrspace(200)* @llvm.cheri.ddc.get()
-  %new = call i8 addrspace(200)* @llvm.cheri.cap.from.pointer.iCAPRANGE(i8 addrspace(200)* %ddc, iCAPRANGE 0)
-  store i8 addrspace(200)* %new, i8 addrspace(200)* addrspace(200)* %ptr, align 16
-  ret i8 addrspace(200)* %new
+  %ddc = call ptr addrspace(200) @llvm.cheri.ddc.get()
+  %new = call ptr addrspace(200) @llvm.cheri.cap.from.pointer.iCAPRANGE(ptr addrspace(200) %ddc, iCAPRANGE 0)
+  store ptr addrspace(200) %new, ptr addrspace(200) %ptr, align 16
+  ret ptr addrspace(200) %new
 }
 
 ;; Check that (int_cheri_cap_from_ptr null, x) does not use register zero (since that is DDC)
-define internal i8 addrspace(200)* @cap_from_ptr_null(i8 addrspace(200)* addrspace(200)* %ptr, iCAPRANGE %offset) nounwind {
+define internal ptr addrspace(200) @cap_from_ptr_null(ptr addrspace(200) %ptr, iCAPRANGE %offset) nounwind {
 entry:
-  %new = call i8 addrspace(200)* @llvm.cheri.cap.from.pointer.iCAPRANGE(i8 addrspace(200)* null, iCAPRANGE %offset)
-  store i8 addrspace(200)* %new, i8 addrspace(200)* addrspace(200)* %ptr, align 16
-  ret i8 addrspace(200)* %new
+  %new = call ptr addrspace(200) @llvm.cheri.cap.from.pointer.iCAPRANGE(ptr addrspace(200) null, iCAPRANGE %offset)
+  store ptr addrspace(200) %new, ptr addrspace(200) %ptr, align 16
+  ret ptr addrspace(200) %new
 }
 
-declare i8 addrspace(200)* @llvm.cheri.cap.from.pointer.iCAPRANGE(i8 addrspace(200)*, iCAPRANGE)
-declare i8 addrspace(200)* @llvm.cheri.ddc.get()
+declare ptr addrspace(200) @llvm.cheri.cap.from.pointer.iCAPRANGE(ptr addrspace(200), iCAPRANGE)
+declare ptr addrspace(200) @llvm.cheri.ddc.get()

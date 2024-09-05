@@ -24,33 +24,33 @@
 ; }
 
 %struct.foo = type { i32, i32 }
-declare dso_local void @call(i32 addrspace(200)*, i32 addrspace(200)*) local_unnamed_addr addrspace(200) nounwind
-declare i8 addrspace(200)* @llvm.cheri.cap.bounds.set.iCAPRANGE(i8 addrspace(200)*, iCAPRANGE) addrspace(200) nounwind readnone willreturn
+declare dso_local void @call(ptr addrspace(200), ptr addrspace(200)) local_unnamed_addr addrspace(200) nounwind
+declare ptr addrspace(200) @llvm.cheri.cap.bounds.set.iCAPRANGE(ptr addrspace(200), iCAPRANGE) addrspace(200) nounwind readnone willreturn
 
-define dso_local void @hoist_csetbounds(i32 signext %cond, %struct.foo addrspace(200)* %f) local_unnamed_addr addrspace(200) nounwind {
+define dso_local void @hoist_csetbounds(i32 signext %cond, ptr addrspace(200) %f) local_unnamed_addr addrspace(200) nounwind {
 entry:
-  %tobool = icmp eq %struct.foo addrspace(200)* %f, null
-  %0 = bitcast %struct.foo addrspace(200)* %f to i8 addrspace(200)*
-  %dst = getelementptr inbounds %struct.foo, %struct.foo addrspace(200)* %f, i64 0, i32 1
-  %1 = bitcast i32 addrspace(200)* %dst to i8 addrspace(200)*
+  %tobool = icmp eq ptr addrspace(200) %f, null
+  %0 = bitcast ptr addrspace(200) %f to ptr addrspace(200)
+  %dst = getelementptr inbounds %struct.foo, ptr addrspace(200) %f, i64 0, i32 1
+  %1 = bitcast ptr addrspace(200) %dst to ptr addrspace(200)
   br label %for.body
 
-for.cond.cleanup:
+for.cond.cleanup:                                 ; preds = %for.inc
   ret void
 
-for.body:
+for.body:                                         ; preds = %for.inc, %entry
   %i.06 = phi i32 [ 0, %entry ], [ %inc, %for.inc ]
   br i1 %tobool, label %for.inc, label %if.then
 
-if.then:
-  %2 = call i8 addrspace(200)* @llvm.cheri.cap.bounds.set.iCAPRANGE(i8 addrspace(200)* nonnull %0, iCAPRANGE 4)
-  %address.with.bounds = bitcast i8 addrspace(200)* %2 to i32 addrspace(200)*
-  %3 = call i8 addrspace(200)* @llvm.cheri.cap.bounds.set.iCAPRANGE(i8 addrspace(200)* nonnull %1, iCAPRANGE 4)
-  %address.with.bounds1 = bitcast i8 addrspace(200)* %3 to i32 addrspace(200)*
-  call void @call(i32 addrspace(200)* %address.with.bounds, i32 addrspace(200)* %address.with.bounds1)
+if.then:                                          ; preds = %for.body
+  %2 = call ptr addrspace(200) @llvm.cheri.cap.bounds.set.iCAPRANGE(ptr addrspace(200) nonnull %0, iCAPRANGE 4)
+  %address.with.bounds = bitcast ptr addrspace(200) %2 to ptr addrspace(200)
+  %3 = call ptr addrspace(200) @llvm.cheri.cap.bounds.set.iCAPRANGE(ptr addrspace(200) nonnull %1, iCAPRANGE 4)
+  %address.with.bounds1 = bitcast ptr addrspace(200) %3 to ptr addrspace(200)
+  call void @call(ptr addrspace(200) %address.with.bounds, ptr addrspace(200) %address.with.bounds1)
   br label %for.inc
 
-for.inc:
+for.inc:                                          ; preds = %if.then, %for.body
   %inc = add nuw nsw i32 %i.06, 1
   %cmp = icmp ult i32 %i.06, 99
   br i1 %cmp, label %for.body, label %for.cond.cleanup

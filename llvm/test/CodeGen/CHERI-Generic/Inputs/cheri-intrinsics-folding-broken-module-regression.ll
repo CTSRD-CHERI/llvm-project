@@ -6,7 +6,7 @@
 target datalayout = "@PURECAP_DATALAYOUT@"
 
 @d = common addrspace(200) global iCAPRANGE 0, align 4
-@e = common addrspace(200) global i8 addrspace(200)* null, align 32
+@e = common addrspace(200) global ptr addrspace(200) null, align 32
 
 ; C Source code:
 ;int d;
@@ -18,21 +18,21 @@ target datalayout = "@PURECAP_DATALAYOUT@"
 define void @g(iCAPRANGE %x, iCAPRANGE %y) addrspace(200) nounwind {
   %x.addr = alloca iCAPRANGE, align 4, addrspace(200)
   %y.addr = alloca iCAPRANGE, align 4, addrspace(200)
-  store iCAPRANGE %x, iCAPRANGE addrspace(200)* %x.addr, align 4
-  store iCAPRANGE %y, iCAPRANGE addrspace(200)* %y.addr, align 4
-  %tmp1 = load iCAPRANGE, iCAPRANGE addrspace(200)* %x.addr, align 4
-  %tmp2 = call i8 addrspace(200)* @llvm.cheri.cap.offset.set.iCAPRANGE(i8 addrspace(200)* null, iCAPRANGE %tmp1)
-  %tmp3 = call iCAPRANGE @llvm.cheri.cap.offset.get.iCAPRANGE(i8 addrspace(200)* bitcast (iCAPRANGE addrspace(200)* @d to i8 addrspace(200)*))
-  %tmp4 = call iCAPRANGE @llvm.cheri.cap.offset.get.iCAPRANGE(i8 addrspace(200)* %tmp2)
+  store iCAPRANGE %x, ptr addrspace(200) %x.addr, align 4
+  store iCAPRANGE %y, ptr addrspace(200) %y.addr, align 4
+  %tmp1 = load iCAPRANGE, ptr addrspace(200) %x.addr, align 4
+  %tmp2 = call ptr addrspace(200) @llvm.cheri.cap.offset.set.iCAPRANGE(ptr addrspace(200) null, iCAPRANGE %tmp1)
+  %tmp3 = call iCAPRANGE @llvm.cheri.cap.offset.get.iCAPRANGE(ptr addrspace(200) @d)
+  %tmp4 = call iCAPRANGE @llvm.cheri.cap.offset.get.iCAPRANGE(ptr addrspace(200) %tmp2)
   %add = add iCAPRANGE %tmp3, %tmp4
-  %tmp5 = call i8 addrspace(200)* @llvm.cheri.cap.offset.set.iCAPRANGE(i8 addrspace(200)* bitcast (iCAPRANGE addrspace(200)* @d to i8 addrspace(200)*), iCAPRANGE %add)
-  %tmp7 = load iCAPRANGE, iCAPRANGE addrspace(200)* %y.addr, align 4
-  %tmp8 = call i8 addrspace(200)* @llvm.cheri.cap.offset.set.iCAPRANGE(i8 addrspace(200)* null, iCAPRANGE %tmp7)
-  %tmp9 = call iCAPRANGE @llvm.cheri.cap.offset.get.iCAPRANGE(i8 addrspace(200)* %tmp5)
-  %tmp10 = call iCAPRANGE @llvm.cheri.cap.offset.get.iCAPRANGE(i8 addrspace(200)* %tmp8)
+  %tmp5 = call ptr addrspace(200) @llvm.cheri.cap.offset.set.iCAPRANGE(ptr addrspace(200) @d, iCAPRANGE %add)
+  %tmp7 = load iCAPRANGE, ptr addrspace(200) %y.addr, align 4
+  %tmp8 = call ptr addrspace(200) @llvm.cheri.cap.offset.set.iCAPRANGE(ptr addrspace(200) null, iCAPRANGE %tmp7)
+  %tmp9 = call iCAPRANGE @llvm.cheri.cap.offset.get.iCAPRANGE(ptr addrspace(200) %tmp5)
+  %tmp10 = call iCAPRANGE @llvm.cheri.cap.offset.get.iCAPRANGE(ptr addrspace(200) %tmp8)
   %add1 = add iCAPRANGE %tmp9, %tmp10
-  %tmp11 = call i8 addrspace(200)* @llvm.cheri.cap.offset.set.iCAPRANGE(i8 addrspace(200)* %tmp5, iCAPRANGE %add1)
-  store i8 addrspace(200)* %tmp11, i8 addrspace(200)* addrspace(200)* @e, align 32
+  %tmp11 = call ptr addrspace(200) @llvm.cheri.cap.offset.set.iCAPRANGE(ptr addrspace(200) %tmp5, iCAPRANGE %add1)
+  store ptr addrspace(200) %tmp11, ptr addrspace(200) @e, align 32
   ret void
 }
 
@@ -43,6 +43,5 @@ define void @g(iCAPRANGE %x, iCAPRANGE %y) addrspace(200) nounwind {
 ;   ret void
 ; }
 ;
-declare i8 addrspace(200)* @llvm.cheri.cap.offset.set.iCAPRANGE(i8 addrspace(200)*, iCAPRANGE) addrspace(200)
-declare i8 addrspace(200)* @llvm.cheri.cap.offset.increment.iCAPRANGE(i8 addrspace(200)*, iCAPRANGE) addrspace(200)
-declare iCAPRANGE @llvm.cheri.cap.offset.get.iCAPRANGE(i8 addrspace(200)*) addrspace(200)
+declare ptr addrspace(200) @llvm.cheri.cap.offset.set.iCAPRANGE(ptr addrspace(200), iCAPRANGE) addrspace(200)
+declare iCAPRANGE @llvm.cheri.cap.offset.get.iCAPRANGE(ptr addrspace(200)) addrspace(200)
