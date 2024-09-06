@@ -4017,6 +4017,8 @@ size_t MemtagAndroidNote::getSize() const {
 
 InStruct elf::in;
 
+std::vector<Compartment> elf::compartments;
+
 std::vector<Partition> elf::partitions;
 Partition *elf::mainPart;
 

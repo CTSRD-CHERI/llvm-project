@@ -103,6 +103,7 @@ bool elf::link(ArrayRef<const char *> args, llvm::raw_ostream &stdoutOS,
     tar = nullptr;
     in.reset();
 
+    compartments.clear();
     partitions.clear();
     partitions.emplace_back();
 
@@ -120,6 +121,7 @@ bool elf::link(ArrayRef<const char *> args, llvm::raw_ostream &stdoutOS,
   script = std::make_unique<LinkerScript>();
   symtab = std::make_unique<SymbolTable>();
 
+  compartments.clear();
   partitions.clear();
   partitions.emplace_back();
 

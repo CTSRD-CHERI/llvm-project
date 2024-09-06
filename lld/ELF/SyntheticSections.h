@@ -1290,6 +1290,22 @@ struct InStruct {
 
 extern InStruct in;
 
+struct Compartment {
+  StringRef name;
+
+  // Synthetic sections
+  std::unique_ptr<GotSection> got;
+  std::unique_ptr<GotPltSection> gotPlt;
+  std::unique_ptr<IgotPltSection> igotPlt;
+  std::unique_ptr<CheriCapTableSection> cheriCapTable;
+  std::unique_ptr<PltSection> plt;
+  std::unique_ptr<IpltSection> iplt;
+  std::unique_ptr<RelocationBaseSection> relaPlt;
+  std::unique_ptr<RelocationBaseSection> relaIplt;
+};
+
+extern std::vector<Compartment> compartments;
+
 } // namespace elf
 } // namespace lld
 
