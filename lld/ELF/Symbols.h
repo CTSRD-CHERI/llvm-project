@@ -20,6 +20,7 @@
 #include "llvm/Object/ELF.h"
 #include "llvm/Support/Compiler.h"
 #include <tuple>
+#include <unordered_map>
 
 namespace lld {
 namespace elf {
@@ -31,6 +32,7 @@ std::string verboseToString(const elf::Symbol *b, uint64_t symOffset = 0);
 
 namespace elf {
 class CommonSymbol;
+struct Compartment;
 class Defined;
 class OutputSection;
 class SectionBase;
@@ -75,6 +77,54 @@ struct SymbolAux {
 };
 
 LLVM_LIBRARY_VISIBILITY extern SmallVector<SymbolAux, 0> symAux;
+
+// Per-compartment data stored for each symbol.  Since each compartment has a
+// separate GOTs, this holds fields related to GOT and PLT entries.
+struct SymbolCompartAux {
+  SymbolCompartAux() : isInIplt(false), gotInIgot(false) {}
+
+  SymbolCompartAux &operator=(const SymbolCompartAux &other) {
+    if (this != &other) {
+      flags.store(other.flags.load(std::memory_order_relaxed),
+                  std::memory_order_relaxed);
+      isInIplt = other.isInIplt;
+      gotInIgot = other.gotInIgot;
+      auxIdx = other.auxIdx;
+    }
+    return *this;
+  }
+
+  // Temporary flags used to communicate which symbol entries need PLT and GOT
+  // entries during postScanRelocations();
+  std::atomic<uint16_t> flags = 0;
+
+  // True if this symbol is in the Iplt sub-section of the Plt and the Igot
+  // sub-section of the .got.plt or .got.
+  uint8_t isInIplt : 1;
+
+  // True if this symbol needs a GOT entry and its GOT entry is actually in
+  // Igot. This will be true only for certain non-preemptible ifuncs.
+  uint8_t gotInIgot : 1;
+
+  // A symAux index used to access GOT/PLT entry indexes. This is allocated in
+  // postScanRelocations().
+  uint32_t auxIdx = 0;
+
+  void setFlags(uint16_t bits) {
+    flags.fetch_or(bits, std::memory_order_relaxed);
+  }
+  bool hasFlag(uint16_t bit) const {
+    assert(bit && (bit & (bit - 1)) == 0 && "bit must be a power of 2");
+    return flags.load(std::memory_order_relaxed) & bit;
+  }
+};
+
+typedef std::unordered_map<const Symbol *, std::unique_ptr<SymbolCompartAux>>
+    SymCompartMap;
+extern SymbolCompartAux defaultSymbolCompartAux;
+
+// XXX: This could be per-SymCompartMap
+extern std::mutex compartMutex;
 
 // The base class for real symbol classes.
 class Symbol {
@@ -211,6 +261,8 @@ public:
     nameSize = s.size();
   }
 
+  Compartment *containingCompartment() const;
+
   void parseSymbolVersion();
 
   // Get the NUL-terminated version suffix ("", "@...", or "@@...").
@@ -219,27 +271,55 @@ public:
   // truncated by Symbol::parseSymbolVersion().
   const char *getVersionSuffix() const { return nameData + nameSize; }
 
-  uint32_t getGotIdx() const { return symAux[auxIdx].gotIdx; }
-  uint32_t getPltIdx() const { return symAux[auxIdx].pltIdx; }
-  uint32_t getTlsDescIdx() const { return symAux[auxIdx].tlsDescIdx; }
-  uint32_t getTlsGdIdx() const { return symAux[auxIdx].tlsGdIdx; }
-  uint32_t getTgotIdx() const { return symAux[auxIdx].tgotIdx; }
-  uint32_t getTgotGotIdx() const { return symAux[auxIdx].tgotGotIdx; }
-  uint32_t getTgotTlsDescIdx() const { return symAux[auxIdx].tgotTlsDescIdx; }
-  uint32_t getTgotTlsGdIdx() const { return symAux[auxIdx].tgotTlsGdIdx; }
+  const SymbolCompartAux &compartAux(const Compartment &c) const;
 
-  bool isInGot() const { return getGotIdx() != uint32_t(-1); }
-  bool isInPlt() const { return getPltIdx() != uint32_t(-1); }
+  SymbolCompartAux &mutableCompartAux(Compartment &c);
+
+  uint32_t auxIdx(const Compartment &c) const { return compartAux(c).auxIdx; }
+
+  uint32_t getGotIdx(const Compartment &c) const {
+    return symAux[auxIdx(c)].gotIdx;
+  }
+  uint32_t getPltIdx(const Compartment &c) const {
+    return symAux[auxIdx(c)].pltIdx;
+  }
+  uint32_t getTlsDescIdx(const Compartment &c) const {
+    return symAux[auxIdx(c)].tlsDescIdx;
+  }
+  uint32_t getTlsGdIdx(const Compartment &c) const {
+    return symAux[auxIdx(c)].tlsGdIdx;
+  }
+  uint32_t getTgotIdx(const Compartment &c) const {
+    return symAux[auxIdx(c)].tgotIdx;
+  }
+  uint32_t getTgotGotIdx(const Compartment &c) const {
+    return symAux[auxIdx(c)].tgotGotIdx;
+  }
+  uint32_t getTgotTlsDescIdx(const Compartment &c) const {
+    return symAux[auxIdx(c)].tgotTlsDescIdx;
+  }
+  uint32_t getTgotTlsGdIdx(const Compartment &c) const {
+    return symAux[auxIdx(c)].tgotTlsGdIdx;
+  }
+
+  bool isInGot(const Compartment &c) const {
+    return getGotIdx(c) != uint32_t(-1);
+  }
+  bool isInPlt(const Compartment &c) const {
+    return getPltIdx(c) != uint32_t(-1);
+  }
+  bool isInAnyGot() const;
+  bool isInAnyPlt() const;
 
   uint64_t getVA(int64_t addend = 0) const;
 
-  uint64_t getGotOffset() const;
-  uint64_t getGotVA() const;
-  uint64_t getGotPltOffset() const;
-  uint64_t getGotPltVA() const;
-  uint64_t getPltVA() const;
-  uint64_t getTgotOffset() const;
-  uint64_t getTgotVA() const;
+  uint64_t getGotOffset(const Compartment &c) const;
+  uint64_t getGotVA(const Compartment &c) const;
+  uint64_t getGotPltOffset(const Compartment &c) const;
+  uint64_t getGotPltVA(const Compartment &c) const;
+  uint64_t getPltVA(const Compartment &c) const;
+  uint64_t getTgotOffset(const Compartment &c) const;
+  uint64_t getTgotVA(const Compartment &c) const;
   uint64_t getMipsCheriCapTableVA(const InputSectionBase *isec,
                                   uint64_t offset) const;
   uint64_t getMipsCheriCapTableOffset(const InputSectionBase *isec,
@@ -281,9 +361,9 @@ protected:
   Symbol(Kind k, InputFile *file, StringRef name, uint8_t binding,
          uint8_t stOther, uint8_t type)
       : file(file), nameData(name.data()), nameSize(name.size()), type(type),
-        binding(binding), stOther(stOther), symbolKind(k), 
-        usedByDynReloc(false), isSectionStartSymbol(false), 
-	exportDynamic(false) {}
+        binding(binding), stOther(stOther), symbolKind(k),
+        usedByDynReloc(false), isSectionStartSymbol(false),
+        exportDynamic(false), needsCopyAny(false) {}
 
   void overwrite(Symbol &sym, Kind k) const {
     if (sym.traced)
@@ -296,14 +376,6 @@ protected:
   }
 
 public:
-  // True if this symbol is in the Iplt sub-section of the Plt and the Igot
-  // sub-section of the .got.plt or .got.
-  uint8_t isInIplt : 1;
-
-  // True if this symbol needs a GOT entry and its GOT entry is actually in
-  // Igot. This will be true only for certain non-preemptible ifuncs.
-  uint8_t gotInIgot : 1;
-
   // True if defined relative to a section discarded by ICF.
   uint8_t folded : 1;
 
@@ -323,13 +395,9 @@ public:
   // True if targeted by a range extension thunk.
   uint8_t thunkAccessed : 1;
 
-  // Temporary flags used to communicate which symbol entries need PLT and GOT
-  // entries during postScanRelocations();
-  std::atomic<uint16_t> flags;
+  // True if any compartment needs a canonical PLT entry or a copy relocation.
+  std::atomic<bool> needsCopyAny;
 
-  // A symAux index used to access GOT/PLT entry indexes. This is allocated in
-  // postScanRelocations().
-  uint32_t auxIdx;
   uint32_t dynsymIndex;
 
   // This field is a index to the symbol's version definition.
@@ -338,23 +406,27 @@ public:
   // Version definition index.
   uint16_t versionId;
 
-  void setFlags(uint16_t bits) {
-    flags.fetch_or(bits, std::memory_order_relaxed);
+  void setFlags(Compartment &c, uint16_t bits) {
+    SymbolCompartAux &aux = mutableCompartAux(c);
+    aux.setFlags(bits);
   }
-  bool hasFlag(uint16_t bit) const {
+  bool hasFlag(const Compartment &c, uint16_t bit) const {
     assert(bit && (bit & (bit - 1)) == 0 && "bit must be a power of 2");
-    return flags.load(std::memory_order_relaxed) & bit;
+    const SymbolCompartAux &aux = compartAux(c);
+    return aux.hasFlag(bit);
   }
 
-  bool needsDynReloc() const {
-    return flags.load(std::memory_order_relaxed) &
+  bool needsDynReloc(const Compartment &c) const {
+    const SymbolCompartAux &aux = compartAux(c);
+    return aux.flags.load(std::memory_order_relaxed) &
            (NEEDS_COPY | NEEDS_GOT | NEEDS_PLT | NEEDS_TLSDESC | NEEDS_TLSGD |
             NEEDS_GOT_DTPREL | NEEDS_TLSIE | NEEDS_TGOT | NEEDS_TGOT_GOT |
             NEEDS_TGOT_TLSGD | NEEDS_TGOT_TLSDESC);
   }
-  void allocateAux() {
-    assert(auxIdx == 0);
-    auxIdx = symAux.size();
+  void allocateAux(Compartment &c) {
+    SymbolCompartAux &aux = mutableCompartAux(c);
+    assert(aux.auxIdx == 0);
+    aux.auxIdx = symAux.size();
     symAux.emplace_back();
   }
 

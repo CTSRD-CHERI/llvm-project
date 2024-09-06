@@ -28,6 +28,7 @@
 #include "llvm/Support/GlobPattern.h"
 #include "llvm/Support/PrettyStackTrace.h"
 #include <atomic>
+#include <map>
 #include <memory>
 #include <optional>
 #include <vector>
@@ -43,6 +44,7 @@ class InputSectionBase;
 class EhInputSection;
 class Symbol;
 class BitcodeCompiler;
+struct Compartment;
 
 enum ELFKind : uint8_t {
   ELFNoneKind,
@@ -141,6 +143,15 @@ private:
 
 public:
   SmallVector<std::pair<StringRef, unsigned>, 0> archiveFiles;
+};
+
+struct CompartmentMembers {
+  std::vector<std::string> symbols;
+  std::vector<std::string> files;
+};
+
+struct CompartmentPolicy {
+  std::map<std::string, CompartmentMembers> compartments;
 };
 
 // This struct contains the global configuration for the linker.
@@ -255,6 +266,7 @@ struct Config {
   bool mipsN32Abi = false;
   bool mmapOutputFile;
   bool nmagic;
+  bool noDefaultCompartment = false;
   bool noDynamicLinker = false;
   bool noinhibitExec;
   bool nostdlib;
@@ -447,6 +459,9 @@ struct Config {
   // If an input file matches a wildcard pattern, remap it to the value.
   llvm::SmallVector<std::pair<llvm::GlobPattern, llvm::StringRef>, 0>
       remapInputsWildcards;
+
+  std::vector<CompartmentPolicy> compartmentPolicies;
+  bool verboseCompartmentalization = false;
 };
 struct ConfigWrapper {
   Config c;

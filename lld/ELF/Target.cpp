@@ -147,8 +147,8 @@ int64_t TargetInfo::getImplicitAddend(const uint8_t *buf, RelType type) const {
 bool TargetInfo::usesOnlyLowPageBits(RelType type) const { return false; }
 
 bool TargetInfo::needsThunk(RelExpr expr, RelType type, const InputFile *file,
-                            uint64_t branchAddr, const Symbol &s,
-                            int64_t a) const {
+                            const Compartment &c, uint64_t branchAddr,
+                            const Symbol &s, int64_t a) const {
   return false;
 }
 
@@ -191,4 +191,8 @@ uint64_t TargetInfo::getImageBase() const {
   if (config->imageBase)
     return *config->imageBase;
   return config->isPic ? 0 : defaultImageBase;
+}
+void lld::elf::TargetInfo::relocateNoSym(uint8_t *loc, RelType type,
+                                         uint64_t val) const {
+  relocate(loc, Relocation{R_NONE, type, 0, 0, nullptr}, val);
 }

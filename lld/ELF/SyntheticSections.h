@@ -1347,6 +1347,11 @@ inline Partition &SectionBase::getPartition() const {
   return partitions[partition - 1];
 }
 
+inline Compartment &SectionBase::getCompartment() const {
+  // XXX: Should this work? assert(isLive());
+  return compartments[compartment];
+}
+
 // Linker generated sections which can be used as inputs and are not specific to
 // a partition.
 struct InStruct {
@@ -1354,12 +1359,8 @@ struct InStruct {
   std::unique_ptr<SyntheticSection> riscvAttributes;
   std::unique_ptr<BssSection> bss;
   std::unique_ptr<BssSection> bssRelRo;
-  std::unique_ptr<GotSection> got;
-  std::unique_ptr<GotPltSection> gotPlt;
-  std::unique_ptr<IgotPltSection> igotPlt;
-  std::unique_ptr<TgotSection> tgot;
+  std::unique_ptr<StringTableSection> compartStrTab;
   std::unique_ptr<MipsCheriCapTableSection> mipsCheriCapTable;
-  std::unique_ptr<CheriPccPaddingSection> pccPadding;
   // For per-file/per-function tables:
   std::unique_ptr<MipsCheriCapTableMappingSection> mipsCheriCapTableMapping;
   std::unique_ptr<SyntheticSection> armCmseSGSection;
@@ -1371,11 +1372,8 @@ struct InStruct {
   std::unique_ptr<MipsRldMapSection> mipsRldMap;
   std::unique_ptr<SyntheticSection> partEnd;
   std::unique_ptr<SyntheticSection> partIndex;
-  std::unique_ptr<PltSection> plt;
-  std::unique_ptr<IpltSection> iplt;
   std::unique_ptr<PPC32Got2Section> ppc32Got2;
   std::unique_ptr<IBTPltSection> ibtPlt;
-  std::unique_ptr<RelocationBaseSection> relaPlt;
   std::unique_ptr<RelocationBaseSection> relaIplt;
   std::unique_ptr<RelocationBaseSection> relaTgot;
   std::unique_ptr<CheriCapRelocsSection> tgotCapRelocs;
@@ -1384,12 +1382,56 @@ struct InStruct {
   std::unique_ptr<SymbolTableBaseSection> symTab;
   std::unique_ptr<SymtabShndxSection> symTabShndx;
 
-  PhdrEntry *cheriBounds;
-
   void reset();
 };
 
 LLVM_LIBRARY_VISIBILITY extern InStruct in;
+
+struct Compartment {
+  StringRef name;
+  unsigned nameIndex;
+
+  std::string suffix;
+
+  SymCompartMap symCompartMap;
+
+  // Synthetic sections
+  std::unique_ptr<GotSection> got;
+  std::unique_ptr<GotPltSection> gotPlt;
+  std::unique_ptr<IgotPltSection> igotPlt;
+  std::unique_ptr<TgotSection> tgot;
+  std::unique_ptr<CheriPccPaddingSection> pccPadding;
+  std::unique_ptr<PltSection> plt;
+  std::unique_ptr<IpltSection> iplt;
+  std::unique_ptr<RelocationBaseSection> relaPlt;
+
+  SmallVector<PhdrEntry *, 1> phdrs;
+  PhdrEntry *relRo;
+  PhdrEntry *cheriBounds;
+
+  unsigned getNumber() const { return this - &compartments[0]; }
+  bool isDefault() const { return this == &compartments[0]; }
+};
+
+inline const SymbolCompartAux &Symbol::compartAux(const Compartment &c) const {
+  // Could be a shared lock if lock_guard worked for such things
+  std::lock_guard<std::mutex> lock(compartMutex);
+  const SymCompartMap &map = c.symCompartMap;
+  auto it = map.find(this);
+  return it == map.end() ? defaultSymbolCompartAux : *it->second.get();
+}
+
+inline SymbolCompartAux &Symbol::mutableCompartAux(Compartment &c) {
+  // XXX: This should possibly by an assertion to require the caller
+  // to hold the lock so that it also protects the caller's operations
+  // on the compartAux, but C++ people don't believe in lock assertions,
+  // so just write lock while adding the new entry to the table and
+  // let the caller (not) deal with the races.
+  std::lock_guard<std::mutex> lock(compartMutex);
+  SymCompartMap &map = c.symCompartMap;
+  auto p = map.emplace(this, std::make_unique<SymbolCompartAux>());
+  return *p.first->second.get();
+}
 
 } // namespace lld::elf
 
