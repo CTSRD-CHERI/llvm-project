@@ -26,11 +26,15 @@ namespace elf {
 class InputFile;
 class Symbol;
 
+struct Compartment;
 class Defined;
 struct Partition;
 class SyntheticSection;
 template <class ELFT> class ObjFile;
 class OutputSection;
+
+LLVM_LIBRARY_VISIBILITY extern std::vector<Compartment> compartments;
+LLVM_LIBRARY_VISIBILITY extern Compartment *defaultCompart;
 
 LLVM_LIBRARY_VISIBILITY extern std::vector<Partition> partitions;
 
@@ -62,6 +66,7 @@ public:
   uint8_t keepUnique : 1;
 
   uint8_t partition = 1;
+  uint8_t compartment = 0;
   uint32_t type;
   StringRef name;
 
@@ -69,6 +74,8 @@ public:
   // collector, or 0 if this section is dead. Normally there is only one
   // partition, so this will either be 0 or 1.
   elf::Partition &getPartition() const;
+
+  elf::Compartment &getCompartment() const;
 
   // These corresponds to the fields in Elf_Shdr.
   uint64_t flags;

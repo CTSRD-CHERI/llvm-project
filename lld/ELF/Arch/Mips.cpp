@@ -32,12 +32,13 @@ public:
                      const uint8_t *loc) const override;
   int64_t getImplicitAddend(const uint8_t *buf, RelType type) const override;
   RelType getDynRel(RelType type) const override;
-  void writeGotPlt(uint8_t *buf, const Symbol &s) const override;
-  void writePltHeader(uint8_t *buf) const override;
-  void writePlt(uint8_t *buf, const Symbol &sym,
+  void writeGotPlt(Compartment &c, uint8_t *buf,
+                   const Symbol &s) const override;
+  void writePltHeader(Compartment &c, uint8_t *buf) const override;
+  void writePlt(Compartment &c, uint8_t *buf, const Symbol &sym,
                 uint64_t pltEntryAddr) const override;
   bool needsThunk(RelExpr expr, RelType type, const InputFile *file,
-                  uint64_t branchAddr, const Symbol &s,
+                  const Compartment &c, uint64_t branchAddr, const Symbol &s,
                   int64_t a) const override;
   void relocate(uint8_t *loc, const Relocation &rel,
                 uint64_t val) const override;
@@ -254,8 +255,9 @@ template <class ELFT> RelType MIPS<ELFT>::getDynRel(RelType type) const {
 }
 
 template <class ELFT>
-void MIPS<ELFT>::writeGotPlt(uint8_t *buf, const Symbol &) const {
-  uint64_t va = in.plt->getVA();
+void MIPS<ELFT>::writeGotPlt(Compartment &c, uint8_t *buf,
+                             const Symbol &) const {
+  uint64_t va = c.plt->getVA();
   if (isMicroMips())
     va |= 1;
   write32(buf, va);
@@ -305,10 +307,11 @@ static void writeMicroRelocation16(uint8_t *loc, uint64_t v, uint8_t bitsSize,
   write16(loc, data);
 }
 
-template <class ELFT> void MIPS<ELFT>::writePltHeader(uint8_t *buf) const {
+template <class ELFT>
+void MIPS<ELFT>::writePltHeader(Compartment &c, uint8_t *buf) const {
   if (isMicroMips()) {
-    uint64_t gotPlt = in.gotPlt->getVA();
-    uint64_t plt = in.plt->getVA();
+    uint64_t gotPlt = c.gotPlt->getVA();
+    uint64_t plt = c.plt->getVA();
     // Overwrite trap instructions written by Writer::writeTrapInstr.
     memset(buf, 0, pltHeaderSize);
 
@@ -360,16 +363,16 @@ template <class ELFT> void MIPS<ELFT>::writePltHeader(uint8_t *buf) const {
   write32(buf + 24, jalrInst); // jalr.hb $25 or jalr $25
   write32(buf + 28, 0x2718fffe); // subu  $24, $24, 2
 
-  uint64_t gotPlt = in.gotPlt->getVA();
+  uint64_t gotPlt = c.gotPlt->getVA();
   writeValue(buf, gotPlt + 0x8000, 16, 16);
   writeValue(buf + 4, gotPlt, 16, 0);
   writeValue(buf + 8, gotPlt, 16, 0);
 }
 
 template <class ELFT>
-void MIPS<ELFT>::writePlt(uint8_t *buf, const Symbol &sym,
+void MIPS<ELFT>::writePlt(Compartment &c, uint8_t *buf, const Symbol &sym,
                           uint64_t pltEntryAddr) const {
-  uint64_t gotPltEntryAddr = sym.getGotPltVA();
+  uint64_t gotPltEntryAddr = sym.getGotPltVA(c);
   if (isMicroMips()) {
     // Overwrite trap instructions written by Writer::writeTrapInstr.
     memset(buf, 0, pltEntrySize);
@@ -406,8 +409,8 @@ void MIPS<ELFT>::writePlt(uint8_t *buf, const Symbol &sym,
 
 template <class ELFT>
 bool MIPS<ELFT>::needsThunk(RelExpr expr, RelType type, const InputFile *file,
-                            uint64_t branchAddr, const Symbol &s,
-                            int64_t /*a*/) const {
+                            const Compartment &c, uint64_t branchAddr,
+                            const Symbol &s, int64_t /*a*/) const {
   // Any MIPS PIC code function is invoked with its address in register $t9.
   // So if we have a branch instruction from non-PIC code to the PIC one
   // we cannot make the jump directly and need to create a small stubs

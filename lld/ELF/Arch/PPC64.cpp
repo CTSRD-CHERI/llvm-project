@@ -159,16 +159,16 @@ public:
                      const uint8_t *loc) const override;
   RelType getDynRel(RelType type) const override;
   int64_t getImplicitAddend(const uint8_t *buf, RelType type) const override;
-  void writePltHeader(uint8_t *buf) const override;
-  void writePlt(uint8_t *buf, const Symbol &sym,
+  void writePltHeader(Compartment &c, uint8_t *buf) const override;
+  void writePlt(Compartment &c, uint8_t *buf, const Symbol &sym,
                 uint64_t pltEntryAddr) const override;
-  void writeIplt(uint8_t *buf, const Symbol &sym,
+  void writeIplt(Compartment &c, uint8_t *buf, const Symbol &sym,
                  uint64_t pltEntryAddr) const override;
   void relocate(uint8_t *loc, const Relocation &rel,
                 uint64_t val) const override;
   void writeGotHeader(uint8_t *buf) const override;
   bool needsThunk(RelExpr expr, RelType type, const InputFile *file,
-                  uint64_t branchAddr, const Symbol &s,
+                  const Compartment &c, uint64_t branchAddr, const Symbol &s,
                   int64_t a) const override;
   uint32_t getThunkSectionSpacing() const override;
   bool inBranchRange(RelType type, uint64_t src, uint64_t dst) const override;
@@ -194,7 +194,7 @@ uint64_t elf::getPPC64TocBase() {
   // TOC starts where the first of these sections starts. We always create a
   // .got when we see a relocation that uses it, so for us the start is always
   // the .got.
-  uint64_t tocVA = in.got->getVA();
+  uint64_t tocVA = defaultCompart->got->getVA();
 
   // Per the ppc64-elf-linux ABI, The TOC base is TOC value plus 0x8000
   // thus permitting a full 64 Kbytes segment. Note that the glibc startup
@@ -1089,7 +1089,7 @@ void PPC64::writeGotHeader(uint8_t *buf) const {
   write64(buf, getPPC64TocBase());
 }
 
-void PPC64::writePltHeader(uint8_t *buf) const {
+void PPC64::writePltHeader(Compartment &c, uint8_t *buf) const {
   // The generic resolver stub goes first.
   write32(buf +  0, 0x7c0802a6); // mflr r0
   write32(buf +  4, 0x429f0005); // bcl  20,4*cr7+so,8 <_glink+0x8>
@@ -1108,20 +1108,20 @@ void PPC64::writePltHeader(uint8_t *buf) const {
   // The 'bcl' instruction will set the link register to the address of the
   // following instruction ('mflr r11'). Here we store the offset from that
   // instruction  to the first entry in the GotPlt section.
-  int64_t gotPltOffset = in.gotPlt->getVA() - (in.plt->getVA() + 8);
+  int64_t gotPltOffset = c.gotPlt->getVA() - (c.plt->getVA() + 8);
   write64(buf + 52, gotPltOffset);
 }
 
-void PPC64::writePlt(uint8_t *buf, const Symbol &sym,
+void PPC64::writePlt(Compartment &c, uint8_t *buf, const Symbol &sym,
                      uint64_t /*pltEntryAddr*/) const {
-  int32_t offset = pltHeaderSize + sym.getPltIdx() * pltEntrySize;
+  int32_t offset = pltHeaderSize + sym.getPltIdx(c) * pltEntrySize;
   // bl __glink_PLTresolve
   write32(buf, 0x48000000 | ((-offset) & 0x03FFFFFc));
 }
 
-void PPC64::writeIplt(uint8_t *buf, const Symbol &sym,
+void PPC64::writeIplt(Compartment &c, uint8_t *buf, const Symbol &sym,
                       uint64_t /*pltEntryAddr*/) const {
-  writePPC64LoadAndBranch(buf, sym.getGotPltVA() - getPPC64TocBase());
+  writePPC64LoadAndBranch(buf, sym.getGotPltVA(c) - getPPC64TocBase());
 }
 
 static std::pair<RelType, uint64_t> toAddr16Rel(RelType type, uint64_t val) {
@@ -1376,13 +1376,14 @@ void PPC64::relocate(uint8_t *loc, const Relocation &rel, uint64_t val) const {
 }
 
 bool PPC64::needsThunk(RelExpr expr, RelType type, const InputFile *file,
-                       uint64_t branchAddr, const Symbol &s, int64_t a) const {
+                       const Compartment &c, uint64_t branchAddr,
+                       const Symbol &s, int64_t a) const {
   if (type != R_PPC64_REL14 && type != R_PPC64_REL24 &&
       type != R_PPC64_REL24_NOTOC)
     return false;
 
   // If a function is in the Plt it needs to be called with a call-stub.
-  if (s.isInPlt())
+  if (s.isInPlt(c))
     return true;
 
   // This check looks at the st_other bits of the callee with relocation

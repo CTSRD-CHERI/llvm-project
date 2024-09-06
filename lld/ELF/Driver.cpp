@@ -24,6 +24,7 @@
 
 #include "Driver.h"
 #include "Arch/Cheri.h"
+#include "Compartments.h"
 #include "Config.h"
 #include "ICF.h"
 #include "InputFiles.h"
@@ -134,6 +135,8 @@ bool link(ArrayRef<const char *> args, llvm::raw_ostream &stdoutOS,
     tar = nullptr;
     in.reset();
 
+    compartments.clear();
+    compartments.emplace_back();
     partitions.clear();
     partitions.emplace_back();
 
@@ -151,6 +154,8 @@ bool link(ArrayRef<const char *> args, llvm::raw_ostream &stdoutOS,
 
   symAux.emplace_back();
 
+  compartments.clear();
+  compartments.emplace_back();
   partitions.clear();
   partitions.emplace_back();
 
@@ -1279,6 +1284,7 @@ static void readConfigs(opt::InputArgList &args) {
   config->mmapOutputFile =
       args.hasFlag(OPT_mmap_output_file, OPT_no_mmap_output_file, true);
   config->nmagic = args.hasFlag(OPT_nmagic, OPT_no_nmagic, false);
+  config->noDefaultCompartment = args.hasArg(OPT_no_default_compartment);
   config->noinhibitExec = args.hasArg(OPT_noinhibit_exec);
   config->nostdlib = args.hasArg(OPT_nostdlib);
   config->oFormatBinary = isOutputFormatBinary(args);
@@ -1387,6 +1393,7 @@ static void readConfigs(opt::InputArgList &args) {
   config->useAndroidRelrTags = args.hasFlag(
       OPT_use_android_relr_tags, OPT_no_use_android_relr_tags, false);
   config->verboseCapRelocs = args.hasArg(OPT_verbose_cap_relocs);
+  config->verboseCompartmentalization = args.hasArg(OPT_verbose_c18n);
   config->warnBackrefs =
       args.hasFlag(OPT_warn_backrefs, OPT_no_warn_backrefs, false);
   config->warnCommon = args.hasFlag(OPT_warn_common, OPT_no_warn_common, false);
@@ -1691,6 +1698,19 @@ static void readConfigs(opt::InputArgList &args) {
     } else {
       error(Twine("cannot find version script ") + arg->getValue());
     }
+
+  for (auto *arg : args.filtered(OPT_compartment_policy))
+    if (std::optional<MemoryBufferRef> buffer = readFile(arg->getValue())) {
+      readCompartmentPolicy(*buffer);
+    } else {
+      error(Twine("cannot find compartmentalization policy ") +
+            arg->getValue());
+    }
+
+  // Impose a limit of 254 compartments.  This limit comes from the amount
+  // of space devoted to the compartment number in RankFlags.
+  if (compartments.size() > 254)
+    fatal("may not have more than 254 compartments");
 }
 
 // Some Config members do not directly correspond to any particular
@@ -2961,6 +2981,9 @@ void LinkerDriver::link(opt::InputArgList &args) {
   // partition.
   mainPart = &partitions[0];
 
+  // Similarly for the default compartment.
+  defaultCompart = &compartments[0];
+
   // Read .note.gnu.property sections from input object files which
   // contain a hint to tweak linker's and loader's behaviors.
   config->andFeatures = getAndFeatures();
@@ -3007,6 +3030,9 @@ void LinkerDriver::link(opt::InputArgList &args) {
   // Make copies of any input sections that need to be copied into each
   // partition.
   copySectionsIntoPartitions();
+
+  // Assign input sections to compartments.
+  assignSectionsToCompartments();
 
   // Create synthesized sections such as .got and .plt. This is called before
   // processSectionCommands() so that they can be placed by SECTIONS commands.
