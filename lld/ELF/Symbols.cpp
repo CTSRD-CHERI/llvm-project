@@ -26,8 +26,7 @@ using namespace llvm::ELF;
 using namespace lld;
 using namespace lld::elf;
 
-static_assert(sizeof(SymbolUnion) <= 64 + sizeof(Symbol::defaultCompartAux),
-              "SymbolUnion too large");
+static_assert(sizeof(SymbolUnion) <= 64, "SymbolUnion too large");
 
 template <typename T> struct AssertSymbol {
   static_assert(std::is_trivially_destructible<T>(),
@@ -146,6 +145,7 @@ Defined *ElfSym::relaIpltEnd;
 Defined *ElfSym::tlsModuleBase;
 SmallVector<SymbolAux, 0> elf::symAux;
 SymbolCompartAux elf::defaultSymbolCompartAux;
+std::mutex elf::compartMutex;
 
 static uint64_t getSymVA(const Symbol &sym, int64_t addend) {
   switch (sym.kind()) {

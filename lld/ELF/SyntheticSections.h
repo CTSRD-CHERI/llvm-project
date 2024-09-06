@@ -1359,6 +1359,7 @@ struct InStruct {
   std::unique_ptr<SyntheticSection> riscvAttributes;
   std::unique_ptr<BssSection> bss;
   std::unique_ptr<BssSection> bssRelRo;
+  std::unique_ptr<StringTableSection> compartStrTab;
   std::unique_ptr<MipsCheriCapTableSection> mipsCheriCapTable;
   // For per-file/per-function tables:
   std::unique_ptr<MipsCheriCapTableMappingSection> mipsCheriCapTableMapping;
@@ -1411,6 +1412,8 @@ struct Compartment {
 
   std::string suffix;
 
+  SymCompartMap symCompartMap;
+
   // Synthetic sections
   std::unique_ptr<GotSection> got;
   std::unique_ptr<GotPltSection> gotPlt;
@@ -1424,6 +1427,7 @@ struct Compartment {
   // True if we need to reserve two .got entries for local-dynamic TLS model.
   MovableAtomic<bool> needsTlsLd{false};
 
+  SmallVector<PhdrEntry *, 1> phdrs;
   PhdrEntry *relRo;
   PhdrEntry *cheriBounds;
 
@@ -1432,13 +1436,23 @@ struct Compartment {
 };
 
 inline const SymbolCompartAux &Symbol::compartAux(const Compartment &c) const {
-  assert(c.isDefault());
-  return defaultCompartAux;
+  // Could be a shared lock if lock_guard worked for such things
+  std::lock_guard<std::mutex> lock(compartMutex);
+  const SymCompartMap &map = c.symCompartMap;
+  auto it = map.find(this);
+  return it == map.end() ? defaultSymbolCompartAux : *it->second.get();
 }
 
 inline SymbolCompartAux &Symbol::mutableCompartAux(Compartment &c) {
-  assert(c.isDefault());
-  return defaultCompartAux;
+  // XXX: This should possibly by an assertion to require the caller
+  // to hold the lock so that it also protects the caller's operations
+  // on the compartAux, but C++ people don't believe in lock assertions,
+  // so just write lock while adding the new entry to the table and
+  // let the caller (not) deal with the races.
+  std::lock_guard<std::mutex> lock(compartMutex);
+  SymCompartMap &map = c.symCompartMap;
+  auto p = map.emplace(this, std::make_unique<SymbolCompartAux>());
+  return *p.first->second.get();
 }
 
 } // namespace lld::elf

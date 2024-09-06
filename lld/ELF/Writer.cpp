@@ -300,6 +300,10 @@ template <class ELFT> void elf::createSyntheticSections() {
 
   auto add = [](SyntheticSection &sec) { ctx.inputSections.push_back(&sec); };
 
+  if (compartments.size() > 1)
+    in.compartStrTab =
+        std::make_unique<StringTableSection>(".c18nstrtab", true);
+
   in.shStrTab = std::make_unique<StringTableSection>(".shstrtab", false);
 
   Out::programHeaders = make<OutputSection>("", 0, SHF_ALLOC);
@@ -449,6 +453,9 @@ template <class ELFT> void elf::createSyntheticSections() {
   }
 
   if (partitions.size() != 1) {
+    if (compartments.size() > 1)
+      error("Compartments are not supported with partitions");
+
     // Create the partition end marker. This needs to be in partition number 255
     // so that it is sorted after all other partitions. It also has other
     // special handling (see createPhdrs() and combineEhSections()).
@@ -599,6 +606,8 @@ template <class ELFT> void elf::createSyntheticSections() {
   add(*in.shStrTab);
   if (in.strTab)
     add(*in.strTab);
+  if (in.compartStrTab)
+    add(*in.compartStrTab);
 }
 
 // The main function of the writer.
@@ -2405,6 +2414,7 @@ template <class ELFT> void Writer<ELFT>::finalizeSections() {
 
     finalizeSynthetic(in.bss.get());
     finalizeSynthetic(in.bssRelRo.get());
+    finalizeSynthetic(in.compartStrTab.get());
     finalizeSynthetic(in.symTabShndx.get());
     finalizeSynthetic(in.shStrTab.get());
     finalizeSynthetic(in.strTab.get());
@@ -2690,6 +2700,23 @@ SmallVector<PhdrEntry *, 0> Writer<ELFT>::createPhdrs(Partition &part) {
     }
   }
 
+  // PT_C18N_NAME spans all the sections belonging to each compartment.
+  Compartment *lastCompartment = nullptr;
+  for (OutputSection *sec : outputSections) {
+    if (sec->partition != partNo || !needsPtLoad(sec))
+      continue;
+    Compartment &c = sec->getCompartment();
+    if (!c.isDefault()) {
+      if (&c != lastCompartment) {
+        if (c.phdrs.empty())
+          c.nameIndex = in.compartStrTab->addString(c.name);
+        c.phdrs.push_back(make<PhdrEntry>(PT_C18N_NAME, 0));
+      }
+      c.phdrs.back()->add(sec);
+    }
+    lastCompartment = &c;
+  }
+
   // PT_GNU_RELRO includes all sections that should be marked as
   // read-only by dynamic linker after processing relocations.
   // Current dynamic loaders only support one PT_GNU_RELRO PHDR, give
@@ -2698,7 +2725,7 @@ SmallVector<PhdrEntry *, 0> Writer<ELFT>::createPhdrs(Partition &part) {
     c.relRo = make<PhdrEntry>(PT_GNU_RELRO, PF_R);
 
   bool inRelroPhdr = false;
-  Compartment *lastCompartment = nullptr;
+  lastCompartment = nullptr;
   DenseSet<OutputSection *> relroEnd;
   for (OutputSection *sec : outputSections) {
     if (sec->partition != partNo || !needsPtLoad(sec))
@@ -2817,6 +2844,15 @@ SmallVector<PhdrEntry *, 0> Writer<ELFT>::createPhdrs(Partition &part) {
   // Add an entry for .dynamic.
   if (OutputSection *sec = part.dynamic->getParent())
     addHdr(PT_DYNAMIC, sec->getPhdrFlags())->add(sec);
+
+  for (Compartment &c : compartments) {
+    if (c.isDefault())
+      continue;
+    if (c.phdrs.empty())
+      error("no output sections for compartment " + c.name);
+    for (PhdrEntry *phdr : c.phdrs)
+      ret.push_back(phdr);
+  }
 
   for (Compartment &c : compartments)
     if (c.relRo->firstSec)
@@ -3118,6 +3154,11 @@ template <class ELFT> void Writer<ELFT>::setPhdrs(Partition &part) {
       p->p_memsz =
           alignToPowerOf2(p->p_offset + p->p_memsz, config->commonPageSize) -
           p->p_offset;
+    }
+
+    if (p->p_type == PT_C18N_NAME) {
+      // Store the name index in the paddr field.
+      p->p_paddr = first->getCompartment().nameIndex;
     }
   }
 }

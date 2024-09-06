@@ -331,14 +331,15 @@ static void replaceWithDefined(Symbol &sym, SectionBase &sec, uint64_t value,
   sym.verdefIndex = old.verdefIndex;
   sym.exportDynamic = true;
   sym.isUsedInRegularObj = true;
+
   // A copy relocated alias may need a GOT entry.
+  // NB: compartAux not copied for old, but preserved on sym; modify in-place.
   for (Compartment &c : compartments) {
-    const SymbolCompartAux &oldAux = old.compartAux(c);
-    if (&oldAux == &defaultSymbolCompartAux)
+    const SymbolCompartAux &aux = sym.compartAux(c);
+    if (&aux == &defaultSymbolCompartAux)
       continue;
-    SymbolCompartAux &symAux = sym.mutableCompartAux(c);
-    symAux.flags.store(oldAux.flags.load(std::memory_order_relaxed) & NEEDS_GOT,
-                       std::memory_order_relaxed);
+    const_cast<SymbolCompartAux &>(aux).flags.fetch_and(
+        NEEDS_GOT, std::memory_order_relaxed);
   }
   sym.needsCopyAny = false;
 }
@@ -1827,6 +1828,8 @@ static bool handleNonPreemptibleIfunc(Compartment &c, Symbol &sym,
   // may alter section/value, so create a copy of the symbol to make
   // section/value fixed.
   auto *directSym = makeDefined(cast<Defined>(sym));
+  SymbolCompartAux &directAux = directSym->mutableCompartAux(c);
+  directAux = aux;
   directSym->allocateAux(c);
   addPltEntry(*c.iplt, *c.igotPlt, *in.relaIplt, target->iRelativeRel,
               *directSym);

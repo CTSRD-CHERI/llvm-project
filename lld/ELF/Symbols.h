@@ -20,6 +20,7 @@
 #include "llvm/Object/ELF.h"
 #include "llvm/Support/Compiler.h"
 #include <tuple>
+#include <unordered_map>
 
 namespace lld {
 namespace elf {
@@ -82,6 +83,17 @@ LLVM_LIBRARY_VISIBILITY extern SmallVector<SymbolAux, 0> symAux;
 struct SymbolCompartAux {
   SymbolCompartAux() : isInIplt(false), gotInIgot(false) {}
 
+  SymbolCompartAux &operator=(const SymbolCompartAux &other) {
+    if (this != &other) {
+      flags.store(other.flags.load(std::memory_order_relaxed),
+                  std::memory_order_relaxed);
+      isInIplt = other.isInIplt;
+      gotInIgot = other.gotInIgot;
+      auxIdx = other.auxIdx;
+    }
+    return *this;
+  }
+
   // Temporary flags used to communicate which symbol entries need PLT and GOT
   // entries during postScanRelocations();
   std::atomic<uint16_t> flags = 0;
@@ -107,7 +119,12 @@ struct SymbolCompartAux {
   }
 };
 
+typedef std::unordered_map<const Symbol *, std::unique_ptr<SymbolCompartAux>>
+    SymCompartMap;
 extern SymbolCompartAux defaultSymbolCompartAux;
+
+// XXX: This could be per-SymCompartMap
+extern std::mutex compartMutex;
 
 // The base class for real symbol classes.
 class Symbol {
@@ -377,8 +394,6 @@ public:
 
   // True if targeted by a range extension thunk.
   uint8_t thunkAccessed : 1;
-
-  SymbolCompartAux defaultCompartAux;
 
   // True if any compartment needs a canonical PLT entry or a copy relocation.
   std::atomic<bool> needsCopyAny;
