@@ -1341,6 +1341,21 @@ struct InStruct {
 
 LLVM_LIBRARY_VISIBILITY extern InStruct in;
 
+struct Compartment {
+  StringRef name;
+
+  // Synthetic sections
+  std::unique_ptr<GotSection> got;
+  std::unique_ptr<GotPltSection> gotPlt;
+  std::unique_ptr<IgotPltSection> igotPlt;
+  std::unique_ptr<PltSection> plt;
+  std::unique_ptr<IpltSection> iplt;
+  std::unique_ptr<RelocationBaseSection> relaPlt;
+  std::unique_ptr<RelocationBaseSection> relaIplt;
+};
+
+extern std::vector<Compartment> compartments;
+
 } // namespace lld::elf
 
 #endif
