@@ -134,6 +134,7 @@ bool link(ArrayRef<const char *> args, llvm::raw_ostream &stdoutOS,
     tar = nullptr;
     in.reset();
 
+    compartments.clear();
     partitions.clear();
     partitions.emplace_back();
 
@@ -151,6 +152,7 @@ bool link(ArrayRef<const char *> args, llvm::raw_ostream &stdoutOS,
 
   symAux.emplace_back();
 
+  compartments.clear();
   partitions.clear();
   partitions.emplace_back();
 

@@ -449,6 +449,9 @@ template <class ELFT> void elf::createSyntheticSections() {
   }
 
   if (partitions.size() != 1) {
+    if (compartments.size() != 0)
+      error("Compartments are not supported with partitions");
+
     // Create the partition end marker. This needs to be in partition number 255
     // so that it is sorted after all other partitions. It also has other
     // special handling (see createPhdrs() and combineEhSections()).
@@ -472,14 +475,22 @@ template <class ELFT> void elf::createSyntheticSections() {
   } else {
     in.got = std::make_unique<GotSection>();
     add(*in.got);
+    for (Compartment &compart : compartments) {
+      compart.got = std::make_unique<GotSection>();
+      add(*compart.got);
+    }
   }
 
   if (config->emachine == EM_PPC) {
+    if (compartments.size() != 0)
+      error("Compartments are not supported with for EM_PCC");
     in.ppc32Got2 = std::make_unique<PPC32Got2Section>();
     add(*in.ppc32Got2);
   }
 
   if (config->emachine == EM_PPC64) {
+    if (compartments.size() != 0)
+      error("Compartments are not supported with for EM_PCC64");
     in.ppc64LongBranchTarget = std::make_unique<PPC64LongBranchTargetSection>();
     add(*in.ppc64LongBranchTarget);
   }
@@ -490,6 +501,12 @@ template <class ELFT> void elf::createSyntheticSections() {
   add(*in.igotPlt);
   in.tgot = std::make_unique<TgotSection>();
   add(*in.tgot);
+  for (Compartment &compart : compartments) {
+    compart.gotPlt = std::make_unique<GotPltSection>();
+    add(*compart.gotPlt);
+    compart.igotPlt = std::make_unique<IgotPltSection>();
+    add(*compart.igotPlt);
+  }
 
   if (config->emachine == EM_ARM) {
     in.armCmseSGSection = std::make_unique<ArmCmseSGSection>();
@@ -498,6 +515,8 @@ template <class ELFT> void elf::createSyntheticSections() {
 
   // _GLOBAL_OFFSET_TABLE_ is defined relative to either .got.plt or .got. Treat
   // it as a relocation and ensure the referenced section is created.
+  //
+  // TODO: _GLOBAL_OFFSET_TABLE_ should be compartment-relative?
   if (ElfSym::globalOffsetTable && config->emachine != EM_MIPS) {
     if (target->gotBaseSymInGotPlt)
       in.gotPlt->hasGotPltOffRel = true;
@@ -514,6 +533,12 @@ template <class ELFT> void elf::createSyntheticSections() {
       config->isRela ? ".rela.plt" : ".rel.plt", /*sort=*/false,
       /*threadCount=*/1);
   add(*in.relaPlt);
+  for (Compartment &compart : compartments) {
+    compart.relaPlt = std::make_unique<RelocationSection<ELFT>>(
+        config->isRela ? ".rela.plt" : ".rel.plt", /*sort=*/false,
+        /*threadCount=*/1);
+    add(*compart.relaPlt);
+  }
 
   // The relaIplt immediately follows .rel[a].dyn to ensure that the IRelative
   // relocations are processed last by the dynamic loader. We cannot place the
@@ -525,6 +550,11 @@ template <class ELFT> void elf::createSyntheticSections() {
       config->androidPackDynRelocs ? in.relaPlt->name : relaDynName,
       /*sort=*/false, /*threadCount=*/1);
   add(*in.relaIplt);
+  for (Compartment &compart : compartments) {
+    compart.relaIplt = std::make_unique<RelocationSection<ELFT>>(
+        in.relaPlt->name, /*sort=*/false, /*threadCount=*/1);
+    add(*compart.relaIplt);
+  }
 
   in.relaTgot = std::make_unique<RelocationSection<ELFT>>(
       config->isRela ? ".rela.tgot" : ".rel.tgot", /*sort=*/false,
@@ -537,6 +567,8 @@ template <class ELFT> void elf::createSyntheticSections() {
 
   if ((config->emachine == EM_386 || config->emachine == EM_X86_64) &&
       (config->andFeatures & GNU_PROPERTY_X86_FEATURE_1_IBT)) {
+    if (compartments.size() != 0)
+      error("Compartments are not supported with IBT");
     in.ibtPlt = std::make_unique<IBTPltSection>();
     add(*in.ibtPlt);
   }
@@ -548,6 +580,15 @@ template <class ELFT> void elf::createSyntheticSections() {
   add(*in.plt);
   in.iplt = std::make_unique<IpltSection>();
   add(*in.iplt);
+  for (Compartment &compart : compartments) {
+    if (config->emachine == EM_PPC)
+      compart.plt = std::make_unique<PPC32GlinkSection>();
+    else
+      compart.plt = std::make_unique<PltSection>();
+    add(*compart.plt);
+    compart.iplt = std::make_unique<IpltSection>();
+    add(*compart.iplt);
+  }
 
   if (config->isCheriAbi && needsCheriPccSegment()) {
     in.pccPadding = std::make_unique<CheriPccPaddingSection>();
