@@ -16,7 +16,7 @@ char *__capability global_cap_const = (char *__capability)(long)1234;
 // AST-NEXT:  CStyleCastExpr {{.+}} 'long' <IntegralCast>
 // AST-NEXT:  IntegerLiteral {{.+}} 'int' 1234
 char *__capability global_cap_const_tocap = (__cheri_tocap char *__capability)(char *)1234;
-// HYBRID-NEXT: @global_cap_const_tocap = global ptr addrspace(200) inttoptr (i64 1234 to ptr addrspace(200)), align 16
+// HYBRID-NEXT: @global_cap_const_tocap = global ptr addrspace(200) addrspacecast (ptr inttoptr (i64 1234 to ptr) to ptr addrspace(200)), align 16
 // PURECAP-NEXT: @global_cap_const_tocap = addrspace(200) global ptr addrspace(200) getelementptr (i8, ptr addrspace(200) null, i64 1234), align 16
 // AST-LABEL: VarDecl {{.+}} global_cap_const_tocap 'char * __capability' cinit
 // AST-NEXT:  CStyleCastExpr {{.+}} 'char * __capability' <PointerToCHERICapability>
