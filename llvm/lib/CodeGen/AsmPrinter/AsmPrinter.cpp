@@ -928,9 +928,6 @@ void AsmPrinter::emitFunctionHeader() {
 
   if (MAI->hasDotTypeDotSizeDirective()) {
     OutStreamer->emitSymbolAttribute(CurrentFnSym, MCSA_ELF_TypeFunction);
-    if (CurrentFnBeginForEH)
-      OutStreamer->emitSymbolAttribute(CurrentFnBeginForEH,
-                                       MCSA_ELF_TypeFunction);
   }
 
   if (F.hasFnAttribute(Attribute::Cold))
@@ -1011,14 +1008,22 @@ void AsmPrinter::emitFunctionHeader() {
     if (MAI->useAssignmentForEHBegin()) {
       MCSymbol *CurPos = OutContext.createTempSymbol();
       OutStreamer->emitLabel(CurPos);
-      if (CurrentFnBeginForEH)
-        OutStreamer->emitAssignment(CurrentFnBeginForEH,
-                                    MCSymbolRefExpr::create(CurPos, OutContext));
+      if (CurrentFnBeginForEH) {
+        OutStreamer->emitAssignment(
+            CurrentFnBeginForEH, MCSymbolRefExpr::create(CurPos, OutContext));
+        if (MAI->hasDotTypeDotSizeDirective())
+          OutStreamer->emitSymbolAttribute(CurrentFnBeginForEH,
+                                           MCSA_ELF_TypeFunction);
+      }
       OutStreamer->emitAssignment(CurrentFnBegin,
                                  MCSymbolRefExpr::create(CurPos, OutContext));
     } else {
-      if (CurrentFnBeginForEH)
+      if (CurrentFnBeginForEH) {
         OutStreamer->emitLabel(CurrentFnBeginForEH);
+        if (MAI->hasDotTypeDotSizeDirective())
+          OutStreamer->emitSymbolAttribute(CurrentFnBeginForEH,
+                                           MCSA_ELF_TypeFunction);
+      }
       OutStreamer->emitLabel(CurrentFnBegin);
     }
   }

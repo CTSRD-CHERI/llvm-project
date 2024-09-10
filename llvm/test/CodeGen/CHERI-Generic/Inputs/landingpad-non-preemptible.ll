@@ -15,10 +15,6 @@
 ;     }
 ; }
 
-; UTC_ARGS: --disable
-; CHECK: .type .L_Z8do_catchv$eh_alias,@function
-; UTC_ARGS: --enable
-
 @_ZTIi = external dso_local addrspace(200) constant ptr addrspace(200)
 define dso_local noundef signext i32 @_Z8do_catchv() local_unnamed_addr addrspace(200) #0 personality ptr addrspace(200) @__gxx_personality_v0 {
 entry:
