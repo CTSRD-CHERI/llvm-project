@@ -21,8 +21,8 @@
 ; CHECK: .type .L_Z8do_catchv$eh_alias,@function
 ; UTC_ARGS: --enable
 
-@_ZTIi = external dso_local addrspace(200) constant i8 addrspace(200)*
-define dso_local i32 @_Z8do_catchv() local_unnamed_addr addrspace(200) uwtable personality i8 addrspace(200)* bitcast (i32 (...) addrspace(200)* @__gxx_personality_v0 to i8 addrspace(200)*) {
+@_ZTIi = external dso_local addrspace(200) constant ptr addrspace(200)
+define dso_local noundef signext i32 @_Z8do_catchv() local_unnamed_addr addrspace(200) #0 personality ptr addrspace(200) @__gxx_personality_v0 {
 ; CHECK-LABEL: _Z8do_catchv:
 ; CHECK:       # %bb.0: # %entry
 ; CHECK-NEXT:    cincoffset $c11, $c11, -48
@@ -46,7 +46,7 @@ define dso_local i32 @_Z8do_catchv() local_unnamed_addr addrspace(200) uwtable p
 ; CHECK-NEXT:  # %bb.1:
 ; CHECK-NEXT:    move $16, $2
 ; CHECK-NEXT:  .LBB0_2: # %return
-; CHECK-NEXT:    move $2, $16
+; CHECK-NEXT:    sll $2, $16, 0
 ; CHECK-NEXT:    clc $c17, $zero, 0($c11) # 16-byte Folded Reload
 ; CHECK-NEXT:    clc $c18, $zero, 16($c11) # 16-byte Folded Reload
 ; CHECK-NEXT:    cld $16, $zero, 32($c11) # 8-byte Folded Reload
@@ -75,27 +75,29 @@ define dso_local i32 @_Z8do_catchv() local_unnamed_addr addrspace(200) uwtable p
 ; CHECK-NEXT:    b .LBB0_2
 ; CHECK-NEXT:    nop
 entry:
-  %call = invoke i32 @_Z3foov() to label %return unwind label %lpad
-lpad:
-  %0 = landingpad { i8 addrspace(200)*, i32 }
-  catch i8 addrspace(200)* bitcast (i8 addrspace(200)* addrspace(200)* @_ZTIi to i8 addrspace(200)*)
-  catch i8 addrspace(200)* null
-  %1 = extractvalue { i8 addrspace(200)*, i32 } %0, 0
-  %2 = extractvalue { i8 addrspace(200)*, i32 } %0, 1
-  %3 = tail call i32 @llvm.eh.typeid.for(i8* addrspacecast (i8 addrspace(200)* bitcast (i8 addrspace(200)* addrspace(200)* @_ZTIi to i8 addrspace(200)*) to i8*))
+  %call = invoke noundef signext i32 @_Z3foov()
+  to label %return unwind label %lpad
+
+lpad:                                             ; preds = %entry
+  %0 = landingpad { ptr addrspace(200), i32 }
+  catch ptr addrspace(200) @_ZTIi
+  catch ptr addrspace(200) null
+  %1 = extractvalue { ptr addrspace(200), i32 } %0, 0
+  %2 = extractvalue { ptr addrspace(200), i32 } %0, 1
+  %3 = tail call i32 @llvm.eh.typeid.for(ptr addrspacecast (ptr addrspace(200) @_ZTIi to ptr)) nounwind
   %matches = icmp eq i32 %2, %3
-  %4 = tail call i8 addrspace(200)* @__cxa_begin_catch(i8 addrspace(200)* %1) nounwind
+  %4 = tail call ptr addrspace(200) @__cxa_begin_catch(ptr addrspace(200) %1) nounwind
   br i1 %matches, label %catch1, label %catch
 
-catch1:
+catch1:                                           ; preds = %lpad
   tail call void @__cxa_end_catch() nounwind
   br label %return
 
-catch:
+catch:                                            ; preds = %lpad
   tail call void @__cxa_end_catch()
   br label %return
 
-return:
+return:                                           ; preds = %entry, %catch1, %catch
   %retval.0 = phi i32 [ 1, %catch1 ], [ 2, %catch ], [ %call, %entry ]
   ret i32 %retval.0
 }
@@ -106,7 +108,7 @@ declare dso_local i32 @__gxx_personality_v0(...) addrspace(200)
 
 declare i32 @llvm.eh.typeid.for(i8*) addrspace(200) nounwind readnone
 
-declare dso_local i8 addrspace(200)* @__cxa_begin_catch(i8 addrspace(200)*) local_unnamed_addr addrspace(200)
+declare dso_local ptr addrspace(200) @__cxa_begin_catch(ptr addrspace(200)) local_unnamed_addr addrspace(200)
 
 declare dso_local void @__cxa_end_catch() local_unnamed_addr addrspace(200)
 
