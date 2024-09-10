@@ -37,11 +37,11 @@ declare dso_local void @__cxa_end_catch() local_unnamed_addr addrspace(200)
 ; CHECK-NEXT:  .globl _Z4testv                        # -- Begin function _Z4testv
 ; CHECK-NEXT:  .p2align 2
 ; CHECK-NEXT:  .type _Z4testv,@function
-; CHECK-NEXT:  .type .L_Z4testv$eh_alias,@function
 ; CHECK-NEXT: _Z4testv:                               # @_Z4testv
 ; PIC-NEXT:   .L_Z4testv$local:
 ; PIC-NEXT:   .type .L_Z4testv$local,@function
 ; CHECK-NEXT: .L_Z4testv$eh_alias:
+; CHECK-NEXT:  .type .L_Z4testv$eh_alias,@function
 ; CHECK-NEXT: .Lfunc_begin0:
 ; CHECK-NEXT:  .cfi_startproc
 ; CHECK-NEXT:  .cfi_personality 155, DW.ref.__gxx_personality_v0
