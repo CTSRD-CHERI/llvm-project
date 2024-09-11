@@ -428,7 +428,7 @@ void MipsAsmPrinter::emitFunctionEntryLabel() {
     TS.emitDirectiveSetNoMips16();
 
   TS.emitDirectiveEnt(*CurrentFnSym);
-  OutStreamer->emitLabel(CurrentFnSym);
+  AsmPrinter::emitFunctionEntryLabel();
 }
 
 /// EmitFunctionBodyStart - Targets can override this to emit stuff before

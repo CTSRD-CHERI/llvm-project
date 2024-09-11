@@ -69,6 +69,8 @@ ASM_FUNCTION_M68K_RE = re.compile(
 
 ASM_FUNCTION_MIPS_RE = re.compile(
     r'^_?(?P<func>[^:]+):[ \t]*#+[ \t]*@"?(?P=func)"?\n[^:]*?' # f: (name of func)
+    r'(?:\s*\.?L(?P=func)\$local:\n)?'  # optional .L<func>$local: due to -fno-semantic-interposition
+    r'(?:\s*\.type\s+\.?L(?P=func)\$local,@function\n)?'  # optional .type .L<func>$local
     r'(?:\s*\.?Ltmp[^:\n]*:\n)?[^:]*?'        # optional .Ltmp<N> for EH
     r'(?:^[ \t]+\.(frame|f?mask|set).*?\n)+'  # Mips+LLVM standard asm prologue
     r'(?P<body>.*?)\n'                        # (body of the function)
@@ -103,7 +105,6 @@ ASM_FUNCTION_PPC_RE = re.compile(
 
 ASM_FUNCTION_RISCV_RE = re.compile(
     r'^_?(?P<func>[^:]+):[ \t]*#+[ \t]*@"?(?P=func)"?\n'
-    r'(?:\s*\.?L(?P=func)\$eh_alias:\n)?'         # optional .L<func>$eh_alias: due to CHERI EH
     r'(?:\s*\.?L(?P=func)\$jump_table_base:\n)?'  # optional .L<func>$jump_table_base: due to CHERI jump tables
     r'(?:\s*\.?L(?P=func)\$local:\n)?'  # optional .L<func>$local: due to -fno-semantic-interposition
     r'(?:\s*\.type\s+\.?L(?P=func)\$local,@function\n)?'  # optional .type .L<func>$local

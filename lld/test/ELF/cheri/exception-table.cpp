@@ -4,20 +4,20 @@
 // RUN: llvm-readobj -r %t-riscv64.o | FileCheck %s --check-prefix=RV64-OBJ-RELOCS
 /// Should have two relocations against a local alias for _Z4testll
 // MIPS-OBJ-RELOCS:      Section ({{.+}}) .rela.gcc_except_table {
-// MIPS-OBJ-RELOCS-NEXT:   R_MIPS_CHERI_CAPABILITY/R_MIPS_NONE/R_MIPS_NONE .L_Z4testll$eh_alias
-// MIPS-OBJ-RELOCS-NEXT:   R_MIPS_CHERI_CAPABILITY/R_MIPS_NONE/R_MIPS_NONE .L_Z4testll$eh_alias
+// MIPS-OBJ-RELOCS-NEXT:   R_MIPS_CHERI_CAPABILITY/R_MIPS_NONE/R_MIPS_NONE .L_Z4testll$local
+// MIPS-OBJ-RELOCS-NEXT:   R_MIPS_CHERI_CAPABILITY/R_MIPS_NONE/R_MIPS_NONE .L_Z4testll$local
 // MIPS-OBJ-RELOCS-NEXT: }
 // RV64-OBJ-RELOCS:      Section ({{.+}}) .rela.gcc_except_table {
 // RV64-OBJ-RELOCS-NEXT:   R_RISCV_ADD32 - 0x0
 // RV64-OBJ-RELOCS-NEXT:   R_RISCV_SUB32 - 0x0
 // RV64-OBJ-RELOCS-NEXT:   R_RISCV_ADD32 - 0x0
 // RV64-OBJ-RELOCS-NEXT:   R_RISCV_SUB32 - 0x0
-// RV64-OBJ-RELOCS-NEXT:   R_RISCV_CHERI_CAPABILITY .L_Z4testll$eh_alias
+// RV64-OBJ-RELOCS-NEXT:   R_RISCV_CHERI_CAPABILITY .L_Z4testll$local
 // RV64-OBJ-RELOCS-NEXT:   R_RISCV_ADD32 - 0x0
 // RV64-OBJ-RELOCS-NEXT:   R_RISCV_SUB32 - 0x0
 // RV64-OBJ-RELOCS-NEXT:   R_RISCV_ADD32 - 0x0
 // RV64-OBJ-RELOCS-NEXT:   R_RISCV_SUB32 - 0x0
-// RV64-OBJ-RELOCS-NEXT:   R_RISCV_CHERI_CAPABILITY .L_Z4testll$eh_alias
+// RV64-OBJ-RELOCS-NEXT:   R_RISCV_CHERI_CAPABILITY .L_Z4testll$local
 // RV64-OBJ-RELOCS-NEXT:   R_RISCV_ADD32 - 0x0
 // RV64-OBJ-RELOCS-NEXT:   R_RISCV_SUB32 - 0x0
 // RV64-OBJ-RELOCS-NEXT:   R_RISCV_ADD32 - 0x0
@@ -73,16 +73,16 @@
 
 /// Local relocations for exception handling:
 // MIPS-RELOCS-NEXT: CHERI __cap_relocs [
-// MIPS-RELOCS-NEXT:   0x02{{.+}} Base: 0x1{{.+}} (.L_Z4testll$eh_alias+132) Length: 164 Perms: Function
-// MIPS-RELOCS-NEXT:   0x02{{.+}} Base: 0x1{{.+}} (.L_Z4testll$eh_alias+100) Length: 164 Perms: Function
+// MIPS-RELOCS-NEXT:   0x02{{.+}} Base: 0x1{{.+}} (.L_Z4testll$local+132) Length: 164 Perms: Function
+// MIPS-RELOCS-NEXT:   0x02{{.+}} Base: 0x1{{.+}} (.L_Z4testll$local+100) Length: 164 Perms: Function
 // MIPS-RELOCS-NEXT: ]
 
 /// Should also emit __cap_relocs for RISC-V:
 // RUN: ld.lld -shared %t-riscv64.o -o %t.so
 // RUN: llvm-readelf -r --cap-relocs %t.so | FileCheck %s --check-prefixes=RV64-RELOCS
 // RV64-RELOCS: CHERI __cap_relocs [
-// RV64-RELOCS-NEXT:   0x002{{.+}} Base: 0x1{{.+}} (.L_Z4testll$eh_alias+96) Length: 120 Perms: Function
-// RV64-RELOCS-NEXT:   0x002{{.+}} Base: 0x1{{.+}} (.L_Z4testll$eh_alias+72) Length: 120 Perms: Function
+// RV64-RELOCS-NEXT:   0x002{{.+}} Base: 0x1{{.+}} (.L_Z4testll$local+96) Length: 120 Perms: Function
+// RV64-RELOCS-NEXT:   0x002{{.+}} Base: 0x1{{.+}} (.L_Z4testll$local+72) Length: 120 Perms: Function
 // RV64-RELOCS-NEXT: ]
 
 long external_fn(long arg);
