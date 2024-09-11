@@ -1,6 +1,6 @@
 ;; Check that the directives at the start of the function are emitted in a sensible order
-; RUN: %riscv64_cheri_purecap_llc -relocation-model=pic < %s | FileCheck %s --check-prefixes=PIC,CHECK
-; RUN: %riscv64_cheri_purecap_llc -relocation-model=static < %s | FileCheck %s --check-prefixes=CHECK
+; RUN: %riscv64_cheri_purecap_llc -relocation-model=pic < %s | FileCheck %s
+; RUN: %riscv64_cheri_purecap_llc -relocation-model=static < %s | FileCheck %s
 
 target triple = "riscv64-unknown-freebsd13"
 
@@ -38,10 +38,8 @@ declare dso_local void @__cxa_end_catch() local_unnamed_addr addrspace(200)
 ; CHECK-NEXT:  .p2align 2
 ; CHECK-NEXT:  .type _Z4testv,@function
 ; CHECK-NEXT: _Z4testv:                               # @_Z4testv
-; PIC-NEXT:   .L_Z4testv$local:
-; PIC-NEXT:   .type .L_Z4testv$local,@function
-; CHECK-NEXT: .L_Z4testv$eh_alias:
-; CHECK-NEXT:  .type .L_Z4testv$eh_alias,@function
+; CHECK-NEXT:   .L_Z4testv$local:
+; CHECK-NEXT:   .type .L_Z4testv$local,@function
 ; CHECK-NEXT: .Lfunc_begin0:
 ; CHECK-NEXT:  .cfi_startproc
 ; CHECK-NEXT:  .cfi_personality 155, DW.ref.__gxx_personality_v0
@@ -50,10 +48,9 @@ declare dso_local void @__cxa_end_catch() local_unnamed_addr addrspace(200)
 
 ; CHECK: .Lfunc_end0:
 ; CHECK-NEXT: .size _Z4testv, .Lfunc_end0-_Z4testv
-; CHECK-NEXT: .size .L_Z4testv$eh_alias, .Lfunc_end0-_Z4testv
-; PIC-NEXT: .size .L_Z4testv$local, .Lfunc_end0-_Z4testv
+; CHECK-NEXT: .size .L_Z4testv$local, .Lfunc_end0-_Z4testv
 ; CHECK-NEXT: .cfi_endproc
 
 ; CHECK: .section .gcc_except_table
 ; CHECK: .word 12 # (landing pad is a capability)
-; CHECK-NEXT: .chericap .L_Z4testv$eh_alias + .Ltmp2-.Lfunc_begin0 # jumps to .Ltmp2
+; CHECK-NEXT: .chericap .L_Z4testv$local + .Ltmp2-.Lfunc_begin0 # jumps to .Ltmp2

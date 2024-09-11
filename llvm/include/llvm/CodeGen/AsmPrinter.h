@@ -199,11 +199,8 @@ private:
 protected:
   MCSymbol *CurrentFnBegin = nullptr;
 
-  /// The symbol used to represent the start of the current function for the
-  /// purpose of exception handling for pure-capability CHERI targets.
-  MCSymbol *CurrentFnBeginForEH = nullptr;
-  
   /// For dso_local functions, the current $local alias for the function.
+  /// Also used for exception handling for pure-capability CHERI targets.
   MCSymbol *CurrentFnBeginLocal = nullptr;
 
   /// A vector of all debug/EH info emitters we should use. This vector
@@ -329,7 +326,10 @@ public:
   /// Similar to getSymbol() but preferred for references. On ELF, this uses a
   /// local symbol if a reference to GV is guaranteed to be resolved to the
   /// definition in the same module.
-  MCSymbol *getSymbolPreferLocal(const GlobalValue &GV) const;
+  /// If \p Force is set to true, return a local alias if possible even if the
+  /// normal heuristics say it is not beneficial.
+  MCSymbol *getSymbolPreferLocal(const GlobalValue &GV,
+                                 bool Force = false) const;
 
   bool doesDwarfUseRelocationsAcrossSections() const {
     return DwarfUsesRelocationsAcrossSections;
