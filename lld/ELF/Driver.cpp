@@ -3032,6 +3032,9 @@ void LinkerDriver::link(opt::InputArgList &args) {
   // partition.
   copySectionsIntoPartitions();
 
+  // Assign input sections to compartments.
+  assignSectionsToCompartments();
+
   // Create synthesized sections such as .got and .plt. This is called before
   // processSectionCommands() so that they can be placed by SECTIONS commands.
   invokeELFT(createSyntheticSections,);
