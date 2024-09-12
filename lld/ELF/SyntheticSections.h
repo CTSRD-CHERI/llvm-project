@@ -1344,6 +1344,8 @@ LLVM_LIBRARY_VISIBILITY extern InStruct in;
 struct Compartment {
   StringRef name;
 
+  std::string suffix;
+
   // Synthetic sections
   std::unique_ptr<GotSection> got;
   std::unique_ptr<GotPltSection> gotPlt;

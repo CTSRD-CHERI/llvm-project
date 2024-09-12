@@ -148,6 +148,27 @@ void elf::copySectionsIntoPartitions() {
                            newSections.end());
 }
 
+void elf::assignSectionsToCompartments() {
+  for (Compartment &c : compartments) {
+    c.suffix = "." + c.name.str();
+  }
+
+  for (InputSectionBase *s : ctx.inputSections) {
+    if (s->file == nullptr) {
+      continue;
+    }
+
+    Compartment *c = s->file->compartment;
+    if (c == nullptr) {
+      continue;
+    }
+
+    if (s->name.startswith(".text") || isRelroSection(s->name)) {
+      s->compartment = c;
+    }
+  }
+}
+
 static Defined *addOptionalRegular(StringRef name, SectionBase *sec,
                                    uint64_t val, uint8_t stOther = STV_HIDDEN,
                                    bool canBeSectionStart = true) {
@@ -473,6 +494,7 @@ template <class ELFT> void elf::createSyntheticSections() {
     add(*in.got);
     for (Compartment &compart : compartments) {
       compart.got = std::make_unique<GotSection>();
+      compart.got->compartment = &compart;
       add(*compart.got);
     }
   }
@@ -497,8 +519,10 @@ template <class ELFT> void elf::createSyntheticSections() {
   add(*in.igotPlt);
   for (Compartment &compart : compartments) {
     compart.gotPlt = std::make_unique<GotPltSection>();
+    compart.gotPlt->compartment = &compart;
     add(*compart.gotPlt);
     compart.igotPlt = std::make_unique<IgotPltSection>();
+    compart.igotPlt->compartment = &compart;
     add(*compart.igotPlt);
   }
 
@@ -531,6 +555,7 @@ template <class ELFT> void elf::createSyntheticSections() {
     compart.relaPlt = std::make_unique<RelocationSection<ELFT>>(
         config->isRela ? ".rela.plt" : ".rel.plt", /*sort=*/false,
         /*threadCount=*/1);
+    compart.relaPlt->compartment = &compart;
     add(*compart.relaPlt);
   }
 
@@ -547,6 +572,7 @@ template <class ELFT> void elf::createSyntheticSections() {
   for (Compartment &compart : compartments) {
     compart.relaIplt = std::make_unique<RelocationSection<ELFT>>(
         in.relaPlt->name, /*sort=*/false, /*threadCount=*/1);
+    compart.relaIplt->compartment = &compart;
     add(*compart.relaIplt);
   }
 
@@ -570,8 +596,10 @@ template <class ELFT> void elf::createSyntheticSections() {
       compart.plt = std::make_unique<PPC32GlinkSection>();
     else
       compart.plt = std::make_unique<PltSection>();
+    compart.plt->compartment = &compart;
     add(*compart.plt);
     compart.iplt = std::make_unique<IpltSection>();
+    compart.iplt->compartment = &compart;
     add(*compart.iplt);
   }
 
@@ -826,6 +854,19 @@ template <class ELFT> void Writer<ELFT>::addSectionSymbols() {
   }
 }
 
+// Sections with some special names are put into RELRO. This is a
+// bit unfortunate because section names shouldn't be significant in
+// ELF in spirit. But in reality many linker features depend on
+// magic section names.
+bool elf::isRelroSection(StringRef s)
+{
+  return s == ".data.rel.ro" || s == ".bss.rel.ro" || s == ".ctors" ||
+         s == ".dtors" || s == ".jcr" || s == ".eh_frame" ||
+         s == ".fini_array" || s == ".init_array" ||
+         s == ".openbsd.randomdata" || s == ".preinit_array" ||
+         s == "__cap_relocs" || s == ".gcc_except_table";
+}
+
 // Today's loaders have a feature to make segments read-only after
 // processing dynamic relocations to enhance security. PT_GNU_RELRO
 // is defined for that.
@@ -901,16 +942,7 @@ bool elf::isRelroSection(const OutputSection *sec) {
   if (sec->name == ".dynamic")
     return true;
 
-  // Sections with some special names are put into RELRO. This is a
-  // bit unfortunate because section names shouldn't be significant in
-  // ELF in spirit. But in reality many linker features depend on
-  // magic section names.
-  StringRef s = sec->name;
-  return s == ".data.rel.ro" || s == ".bss.rel.ro" || s == ".ctors" ||
-         s == ".dtors" || s == ".jcr" || s == ".eh_frame" ||
-         s == ".fini_array" || s == ".init_array" ||
-         s == ".openbsd.randomdata" || s == ".preinit_array" ||
-         s == "__cap_relocs" || s == ".gcc_except_table";
+  return isRelroSection(sec->name);
 }
 
 // We compute a rank for each section. The rank indicates where the
@@ -2485,6 +2517,8 @@ SmallVector<PhdrEntry *, 0> Writer<ELFT>::createPhdrs(Partition &part) {
   OutputSection *relroEnd = nullptr;
   for (OutputSection *sec : outputSections) {
     if (sec->partition != partNo || !needsPtLoad(sec))
+      continue;
+    if (sec->compartment != nullptr)
       continue;
     if (isRelroSection(sec)) {
       inRelroPhdr = true;
