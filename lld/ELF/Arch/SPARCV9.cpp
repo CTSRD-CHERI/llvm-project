@@ -24,7 +24,7 @@ public:
   SPARCV9();
   RelExpr getRelExpr(RelType type, const Symbol &s,
                      const uint8_t *loc) const override;
-  void writePlt(uint8_t *buf, const Symbol &sym,
+  void writePlt(Compartment *c, uint8_t *buf, const Symbol &sym,
                 uint64_t pltEntryAddr) const override;
   void relocate(uint8_t *loc, const Relocation &rel,
                 uint64_t val) const override;
@@ -174,7 +174,7 @@ void SPARCV9::relocate(uint8_t *loc, const Relocation &rel,
   }
 }
 
-void SPARCV9::writePlt(uint8_t *buf, const Symbol & /*sym*/,
+void SPARCV9::writePlt(Compartment *c, uint8_t *buf, const Symbol & /*sym*/,
                        uint64_t pltEntryAddr) const {
   const uint8_t pltData[] = {
       0x03, 0x00, 0x00, 0x00, // sethi   (. - .PLT0), %g1
@@ -188,7 +188,7 @@ void SPARCV9::writePlt(uint8_t *buf, const Symbol & /*sym*/,
   };
   memcpy(buf, pltData, sizeof(pltData));
 
-  uint64_t off = pltEntryAddr - in.plt->getVA();
+  uint64_t off = pltEntryAddr - plt(c)->getVA();
   relocateNoSym(buf, R_SPARC_22, off);
   relocateNoSym(buf + 4, R_SPARC_WDISP19, -(off + 4 - pltEntrySize));
 }

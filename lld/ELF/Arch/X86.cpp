@@ -28,10 +28,10 @@ public:
   int64_t getImplicitAddend(const uint8_t *buf, RelType type) const override;
   void writeGotPltHeader(uint8_t *buf) const override;
   RelType getDynRel(RelType type) const override;
-  void writeGotPlt(uint8_t *buf, const Symbol &s) const override;
+  void writeGotPlt(Compartment *c, uint8_t *buf, const Symbol &s) const override;
   void writeIgotPlt(uint8_t *buf, const Symbol &s) const override;
-  void writePltHeader(uint8_t *buf) const override;
-  void writePlt(uint8_t *buf, const Symbol &sym,
+  void writePltHeader(Compartment *c, uint8_t *buf) const override;
+  void writePlt(Compartment *c, uint8_t *buf, const Symbol &sym,
                 uint64_t pltEntryAddr) const override;
   void relocate(uint8_t *loc, const Relocation &rel,
                 uint64_t val) const override;
@@ -176,7 +176,7 @@ void X86::writeGotPltHeader(uint8_t *buf) const {
   write32le(buf, mainPart->dynamic->getVA());
 }
 
-void X86::writeGotPlt(uint8_t *buf, const Symbol &s) const {
+void X86::writeGotPlt(Compartment *c, uint8_t *buf, const Symbol &s) const {
   // Entries in .got.plt initially points back to the corresponding
   // PLT entries with a fixed offset to skip the first instruction.
   write32le(buf, s.getPltVA() + 6);
@@ -195,7 +195,7 @@ RelType X86::getDynRel(RelType type) const {
   return type;
 }
 
-void X86::writePltHeader(uint8_t *buf) const {
+void X86::writePltHeader(Compartment *c, uint8_t *buf) const {
   if (config->isPic) {
     const uint8_t v[] = {
         0xff, 0xb3, 0x04, 0x00, 0x00, 0x00, // pushl 4(%ebx)
@@ -212,14 +212,14 @@ void X86::writePltHeader(uint8_t *buf) const {
       0x90, 0x90, 0x90, 0x90, // nop
   };
   memcpy(buf, pltData, sizeof(pltData));
-  uint32_t gotPlt = in.gotPlt->getVA();
+  uint32_t gotPlt = lld::elf::gotPlt(c)->getVA();
   write32le(buf + 2, gotPlt + 4);
   write32le(buf + 8, gotPlt + 8);
 }
 
-void X86::writePlt(uint8_t *buf, const Symbol &sym,
+void X86::writePlt(Compartment *c, uint8_t *buf, const Symbol &sym,
                    uint64_t pltEntryAddr) const {
-  unsigned relOff = in.relaPlt->entsize * sym.getPltIdx();
+  unsigned relOff = relaPlt(c)->entsize * sym.getPltIdx();
   if (config->isPic) {
     const uint8_t inst[] = {
         0xff, 0xa3, 0, 0, 0, 0, // jmp *foo@GOT(%ebx)
@@ -227,7 +227,7 @@ void X86::writePlt(uint8_t *buf, const Symbol &sym,
         0xe9, 0,    0, 0, 0,    // jmp .PLT0@PC
     };
     memcpy(buf, inst, sizeof(inst));
-    write32le(buf + 2, sym.getGotPltVA() - in.gotPlt->getVA());
+    write32le(buf + 2, sym.getGotPltVA() - gotPlt(c)->getVA());
   } else {
     const uint8_t inst[] = {
         0xff, 0x25, 0, 0, 0, 0, // jmp *foo@GOT
@@ -239,7 +239,7 @@ void X86::writePlt(uint8_t *buf, const Symbol &sym,
   }
 
   write32le(buf + 7, relOff);
-  write32le(buf + 12, in.plt->getVA() - pltEntryAddr - 16);
+  write32le(buf + 12, plt(c)->getVA() - pltEntryAddr - 16);
 }
 
 int64_t X86::getImplicitAddend(const uint8_t *buf, RelType type) const {
@@ -488,10 +488,11 @@ namespace {
 class IntelIBT : public X86 {
 public:
   IntelIBT();
-  void writeGotPlt(uint8_t *buf, const Symbol &s) const override;
-  void writePlt(uint8_t *buf, const Symbol &sym,
+  void writeGotPlt(Compartment *c, uint8_t *buf, const Symbol &s) const override;
+  void writePlt(Compartment *c, uint8_t *buf, const Symbol &sym,
                 uint64_t pltEntryAddr) const override;
-  void writeIBTPlt(uint8_t *buf, size_t numEntries) const override;
+  void writeIBTPlt(Compartment *c, uint8_t *buf,
+                   size_t numEntries) const override;
 
   static const unsigned IBTPltHeaderSize = 16;
 };
@@ -499,13 +500,13 @@ public:
 
 IntelIBT::IntelIBT() { pltHeaderSize = 0; }
 
-void IntelIBT::writeGotPlt(uint8_t *buf, const Symbol &s) const {
+void IntelIBT::writeGotPlt(Compartment *c, uint8_t *buf, const Symbol &s) const {
   uint64_t va =
       in.ibtPlt->getVA() + IBTPltHeaderSize + s.getPltIdx() * pltEntrySize;
   write32le(buf, va);
 }
 
-void IntelIBT::writePlt(uint8_t *buf, const Symbol &sym,
+void IntelIBT::writePlt(Compartment *c, uint8_t *buf, const Symbol &sym,
                         uint64_t /*pltEntryAddr*/) const {
   if (config->isPic) {
     const uint8_t inst[] = {
@@ -514,7 +515,7 @@ void IntelIBT::writePlt(uint8_t *buf, const Symbol &sym,
         0x66, 0x0f, 0x1f, 0x44, 0, 0, // nop
     };
     memcpy(buf, inst, sizeof(inst));
-    write32le(buf + 6, sym.getGotPltVA() - in.gotPlt->getVA());
+    write32le(buf + 6, sym.getGotPltVA() - gotPlt(c)->getVA());
     return;
   }
 
@@ -527,8 +528,9 @@ void IntelIBT::writePlt(uint8_t *buf, const Symbol &sym,
   write32le(buf + 6, sym.getGotPltVA());
 }
 
-void IntelIBT::writeIBTPlt(uint8_t *buf, size_t numEntries) const {
-  writePltHeader(buf);
+void IntelIBT::writeIBTPlt(Compartment *c, uint8_t *buf,
+                           size_t numEntries) const {
+  writePltHeader(c, buf);
   buf += IBTPltHeaderSize;
 
   const uint8_t inst[] = {
@@ -550,18 +552,18 @@ namespace {
 class RetpolinePic : public X86 {
 public:
   RetpolinePic();
-  void writeGotPlt(uint8_t *buf, const Symbol &s) const override;
-  void writePltHeader(uint8_t *buf) const override;
-  void writePlt(uint8_t *buf, const Symbol &sym,
+  void writeGotPlt(Compartment *c, uint8_t *buf, const Symbol &s) const override;
+  void writePltHeader(Compartment *c, uint8_t *buf) const override;
+  void writePlt(Compartment *c, uint8_t *buf, const Symbol &sym,
                 uint64_t pltEntryAddr) const override;
 };
 
 class RetpolineNoPic : public X86 {
 public:
   RetpolineNoPic();
-  void writeGotPlt(uint8_t *buf, const Symbol &s) const override;
-  void writePltHeader(uint8_t *buf) const override;
-  void writePlt(uint8_t *buf, const Symbol &sym,
+  void writeGotPlt(Compartment *c, uint8_t *buf, const Symbol &s) const override;
+  void writePltHeader(Compartment *c, uint8_t *buf) const override;
+  void writePlt(Compartment *c, uint8_t *buf, const Symbol &sym,
                 uint64_t pltEntryAddr) const override;
 };
 } // namespace
@@ -572,11 +574,12 @@ RetpolinePic::RetpolinePic() {
   ipltEntrySize = 32;
 }
 
-void RetpolinePic::writeGotPlt(uint8_t *buf, const Symbol &s) const {
+void RetpolinePic::writeGotPlt(Compartment *c, uint8_t *buf,
+                               const Symbol &s) const {
   write32le(buf, s.getPltVA() + 17);
 }
 
-void RetpolinePic::writePltHeader(uint8_t *buf) const {
+void RetpolinePic::writePltHeader(Compartment *c, uint8_t *buf) const {
   const uint8_t insn[] = {
       0xff, 0xb3, 4,    0,    0,    0,          // 0:    pushl 4(%ebx)
       0x50,                                     // 6:    pushl %eax
@@ -597,9 +600,9 @@ void RetpolinePic::writePltHeader(uint8_t *buf) const {
   memcpy(buf, insn, sizeof(insn));
 }
 
-void RetpolinePic::writePlt(uint8_t *buf, const Symbol &sym,
+void RetpolinePic::writePlt(Compartment *c, uint8_t *buf, const Symbol &sym,
                             uint64_t pltEntryAddr) const {
-  unsigned relOff = in.relaPlt->entsize * sym.getPltIdx();
+  unsigned relOff = relaPlt(c)->entsize * sym.getPltIdx();
   const uint8_t insn[] = {
       0x50,                            // pushl %eax
       0x8b, 0x83, 0,    0,    0,    0, // mov foo@GOT(%ebx), %eax
@@ -611,8 +614,8 @@ void RetpolinePic::writePlt(uint8_t *buf, const Symbol &sym,
   };
   memcpy(buf, insn, sizeof(insn));
 
-  uint32_t ebx = in.gotPlt->getVA();
-  unsigned off = pltEntryAddr - in.plt->getVA();
+  uint32_t ebx = gotPlt(c)->getVA();
+  unsigned off = pltEntryAddr - plt(c)->getVA();
   write32le(buf + 3, sym.getGotPltVA() - ebx);
   write32le(buf + 8, -off - 12 + 32);
   write32le(buf + 13, -off - 17 + 18);
@@ -626,11 +629,12 @@ RetpolineNoPic::RetpolineNoPic() {
   ipltEntrySize = 32;
 }
 
-void RetpolineNoPic::writeGotPlt(uint8_t *buf, const Symbol &s) const {
+void RetpolineNoPic::writeGotPlt(Compartment *c, uint8_t *buf,
+                                 const Symbol &s) const {
   write32le(buf, s.getPltVA() + 16);
 }
 
-void RetpolineNoPic::writePltHeader(uint8_t *buf) const {
+void RetpolineNoPic::writePltHeader(Compartment *c, uint8_t *buf) const {
   const uint8_t insn[] = {
       0xff, 0x35, 0,    0,    0,    0, // 0:    pushl GOTPLT+4
       0x50,                            // 6:    pushl %eax
@@ -651,14 +655,14 @@ void RetpolineNoPic::writePltHeader(uint8_t *buf) const {
   };
   memcpy(buf, insn, sizeof(insn));
 
-  uint32_t gotPlt = in.gotPlt->getVA();
+  uint32_t gotPlt = lld::elf::gotPlt(c)->getVA();
   write32le(buf + 2, gotPlt + 4);
   write32le(buf + 8, gotPlt + 8);
 }
 
-void RetpolineNoPic::writePlt(uint8_t *buf, const Symbol &sym,
+void RetpolineNoPic::writePlt(Compartment *c, uint8_t *buf, const Symbol &sym,
                               uint64_t pltEntryAddr) const {
-  unsigned relOff = in.relaPlt->entsize * sym.getPltIdx();
+  unsigned relOff = relaPlt(c)->entsize * sym.getPltIdx();
   const uint8_t insn[] = {
       0x50,                         // 0:  pushl %eax
       0xa1, 0,    0,    0,    0,    // 1:  mov foo_in_GOT, %eax
@@ -671,7 +675,7 @@ void RetpolineNoPic::writePlt(uint8_t *buf, const Symbol &sym,
   };
   memcpy(buf, insn, sizeof(insn));
 
-  unsigned off = pltEntryAddr - in.plt->getVA();
+  unsigned off = pltEntryAddr - plt(c)->getVA();
   write32le(buf + 2, sym.getGotPltVA());
   write32le(buf + 7, -off - 11 + 32);
   write32le(buf + 12, -off - 16 + 17);

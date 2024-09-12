@@ -30,10 +30,10 @@ public:
   int getCapabilitySize() const override;
   int64_t getImplicitAddend(const uint8_t *buf, RelType type) const override;
   void writeGotHeader(uint8_t *buf) const override;
-  void writeGotPlt(uint8_t *buf, const Symbol &s) const override;
+  void writeGotPlt(Compartment *c, uint8_t *buf, const Symbol &s) const override;
   void writeIgotPlt(uint8_t *buf, const Symbol &s) const override;
-  void writePltHeader(uint8_t *buf) const override;
-  void writePlt(uint8_t *buf, const Symbol &sym,
+  void writePltHeader(Compartment *c, uint8_t *buf) const override;
+  void writePlt(Compartment *c, uint8_t *buf, const Symbol &sym,
                 uint64_t pltEntryAddr) const override;
   RelType getDynRel(RelType type) const override;
   RelExpr getRelExpr(RelType type, const Symbol &s,
@@ -213,11 +213,11 @@ void RISCV::writeGotHeader(uint8_t *buf) const {
     write32le(buf, mainPart->dynamic->getVA());
 }
 
-void RISCV::writeGotPlt(uint8_t *buf, const Symbol &s) const {
+void RISCV::writeGotPlt(Compartment *c, uint8_t *buf, const Symbol &s) const {
   if (config->is64)
-    write64le(buf, in.plt->getVA());
+    write64le(buf, plt(c)->getVA());
   else
-    write32le(buf, in.plt->getVA());
+    write32le(buf, plt(c)->getVA());
 }
 
 void RISCV::writeIgotPlt(uint8_t *buf, const Symbol &s) const {
@@ -229,7 +229,7 @@ void RISCV::writeIgotPlt(uint8_t *buf, const Symbol &s) const {
   }
 }
 
-void RISCV::writePltHeader(uint8_t *buf) const {
+void RISCV::writePltHeader(Compartment *c, uint8_t *buf) const {
   // TODO: Remove once we have a CHERI .got.plt and R_RISCV_CHERI_JUMP_SLOT.
   // Without those there can be no lazy binding support (though the former
   // requirement can be relaxed provided .captable[0] is _dl_runtime_resolve,
@@ -250,7 +250,7 @@ void RISCV::writePltHeader(uint8_t *buf) const {
   // l[wdc] (c)t0, Ptrsize((c)t0); (c)t0 = link_map
   // (c)jr (c)t3
   // (if shift == 0): nop
-  uint32_t offset = in.gotPlt->getVA() - in.plt->getVA();
+  uint32_t offset = gotPlt(c)->getVA() - plt(c)->getVA();
   uint32_t ptrsub = config->isCheriAbi ? CSub : SUB;
   uint32_t ptrload = config->isCheriAbi ? config->is64 ? CLC_128 : CLC_64
                                         : config->is64 ? LD : LW;
@@ -272,7 +272,7 @@ void RISCV::writePltHeader(uint8_t *buf) const {
     write32le(buf + 28, itype(ADDI, 0, 0, 0));
 }
 
-void RISCV::writePlt(uint8_t *buf, const Symbol &sym,
+void RISCV::writePlt(Compartment *c, uint8_t *buf, const Symbol &sym,
                      uint64_t pltEntryAddr) const {
   // 1: auipc(c) (c)t3, %pcrel_hi(f@[.got.plt|.captable])
   // l[wdc] (c)t3, %pcrel_lo(1b)((c)t3)
@@ -280,7 +280,7 @@ void RISCV::writePlt(uint8_t *buf, const Symbol &sym,
   // nop
   uint32_t ptrload = config->isCheriAbi ? config->is64 ? CLC_128 : CLC_64
                                         : config->is64 ? LD : LW;
-  uint32_t entryva = config->isCheriAbi ? sym.getCapTableVA(in.plt.get(), 0)
+  uint32_t entryva = config->isCheriAbi ? sym.getCapTableVA(plt(c), 0)
                                         : sym.getGotPltVA();
   uint32_t offset = entryva - pltEntryAddr;
   write32le(buf + 0, utype(AUIPC, X_T3, hi20(offset)));

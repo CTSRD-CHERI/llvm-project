@@ -34,7 +34,8 @@ public:
   virtual RelType getDynRel(RelType type) const { return 0; }
   virtual void writeGotPltHeader(uint8_t *buf) const {}
   virtual void writeGotHeader(uint8_t *buf) const {}
-  virtual void writeGotPlt(uint8_t *buf, const Symbol &s) const {};
+  virtual void writeGotPlt(Compartment *c, uint8_t *buf,
+                           const Symbol &s) const {};
   virtual void writeIgotPlt(uint8_t *buf, const Symbol &s) const {}
   virtual int64_t getImplicitAddend(const uint8_t *buf, RelType type) const;
   virtual int getTlsGdRelaxSkip(RelType type) const { return 1; }
@@ -42,16 +43,17 @@ public:
   // If lazy binding is supported, the first entry of the PLT has code
   // to call the dynamic linker to resolve PLT entries the first time
   // they are called. This function writes that code.
-  virtual void writePltHeader(uint8_t *buf) const {}
+  virtual void writePltHeader(Compartment *c, uint8_t *buf) const {}
 
-  virtual void writePlt(uint8_t *buf, const Symbol &sym,
+  virtual void writePlt(Compartment *c, uint8_t *buf, const Symbol &sym,
                         uint64_t pltEntryAddr) const {}
-  virtual void writeIplt(uint8_t *buf, const Symbol &sym,
+  virtual void writeIplt(Compartment *c, uint8_t *buf, const Symbol &sym,
                          uint64_t pltEntryAddr) const {
     // All but PPC32 and PPC64 use the same format for .plt and .iplt entries.
-    writePlt(buf, sym, pltEntryAddr);
+    writePlt(c, buf, sym, pltEntryAddr);
   }
-  virtual void writeIBTPlt(uint8_t *buf, size_t numEntries) const {}
+  virtual void writeIBTPlt(Compartment *c, uint8_t *buf,
+                           size_t numEntries) const {}
   virtual void addPltHeaderSymbols(InputSection &isec) const {}
   virtual void addPltSymbols(InputSection &isec, uint64_t off) const {}
 
@@ -208,7 +210,7 @@ static inline std::string getErrorLocation(const uint8_t *loc) {
   return getErrorPlace(loc).loc;
 }
 
-void writePPC32GlinkSection(uint8_t *buf, size_t numEntries);
+void writePPC32GlinkSection(Compartment *c, uint8_t *buf, size_t numEntries);
 
 bool tryRelaxPPC64TocIndirection(const Relocation &rel, uint8_t *bufLoc);
 unsigned getPPCDFormOp(unsigned secondaryOp);

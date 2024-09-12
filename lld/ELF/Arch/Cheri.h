@@ -285,7 +285,7 @@ public:
   bool isNeeded() const override {
     if (config->capTableScope == CapTableScopePolicy::All)
       return false;
-    return in.cheriCapTable && in.cheriCapTable->isNeeded();
+    return cheriCapTable(compartment) && cheriCapTable(compartment)->isNeeded();
   }
   void writeTo(uint8_t *buf) override;
   size_t getSize() const override;

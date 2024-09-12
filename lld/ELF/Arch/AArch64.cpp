@@ -34,9 +34,9 @@ public:
                      const uint8_t *loc) const override;
   RelType getDynRel(RelType type) const override;
   int64_t getImplicitAddend(const uint8_t *buf, RelType type) const override;
-  void writeGotPlt(uint8_t *buf, const Symbol &s) const override;
-  void writePltHeader(uint8_t *buf) const override;
-  void writePlt(uint8_t *buf, const Symbol &sym,
+  void writeGotPlt(Compartment *c, uint8_t *buf, const Symbol &s) const override;
+  void writePltHeader(Compartment *c, uint8_t *buf) const override;
+  void writePlt(Compartment *c, uint8_t *buf, const Symbol &sym,
                 uint64_t pltEntryAddr) const override;
   bool needsThunk(RelExpr expr, RelType type, const InputFile *file,
                   uint64_t branchAddr, const Symbol &s,
@@ -210,11 +210,11 @@ int64_t AArch64::getImplicitAddend(const uint8_t *buf, RelType type) const {
   }
 }
 
-void AArch64::writeGotPlt(uint8_t *buf, const Symbol &) const {
-  write64(buf, in.plt->getVA());
+void AArch64::writeGotPlt(Compartment *c, uint8_t *buf, const Symbol &) const {
+  write64(buf, plt(c)->getVA());
 }
 
-void AArch64::writePltHeader(uint8_t *buf) const {
+void AArch64::writePltHeader(Compartment *c, uint8_t *buf) const {
   const uint8_t pltData[] = {
       0xf0, 0x7b, 0xbf, 0xa9, // stp    x16, x30, [sp,#-16]!
       0x10, 0x00, 0x00, 0x90, // adrp   x16, Page(&(.plt.got[2]))
@@ -227,15 +227,15 @@ void AArch64::writePltHeader(uint8_t *buf) const {
   };
   memcpy(buf, pltData, sizeof(pltData));
 
-  uint64_t got = in.gotPlt->getVA();
-  uint64_t plt = in.plt->getVA();
+  uint64_t got = gotPlt(c)->getVA();
+  uint64_t plt = lld::elf::plt(c)->getVA();
   relocateNoSym(buf + 4, R_AARCH64_ADR_PREL_PG_HI21,
                 getAArch64Page(got + 16) - getAArch64Page(plt + 4));
   relocateNoSym(buf + 8, R_AARCH64_LDST64_ABS_LO12_NC, got + 16);
   relocateNoSym(buf + 12, R_AARCH64_ADD_ABS_LO12_NC, got + 16);
 }
 
-void AArch64::writePlt(uint8_t *buf, const Symbol &sym,
+void AArch64::writePlt(Compartment *c, uint8_t *buf, const Symbol &sym,
                        uint64_t pltEntryAddr) const {
   const uint8_t inst[] = {
       0x10, 0x00, 0x00, 0x90, // adrp x16, Page(&(.plt.got[n]))
@@ -762,8 +762,8 @@ namespace {
 class AArch64BtiPac final : public AArch64 {
 public:
   AArch64BtiPac();
-  void writePltHeader(uint8_t *buf) const override;
-  void writePlt(uint8_t *buf, const Symbol &sym,
+  void writePltHeader(Compartment *c, uint8_t *buf) const override;
+  void writePlt(Compartment *c, uint8_t *buf, const Symbol &sym,
                 uint64_t pltEntryAddr) const override;
 
 private:
@@ -791,7 +791,7 @@ AArch64BtiPac::AArch64BtiPac() {
   }
 }
 
-void AArch64BtiPac::writePltHeader(uint8_t *buf) const {
+void AArch64BtiPac::writePltHeader(Compartment *c, uint8_t *buf) const {
   const uint8_t btiData[] = { 0x5f, 0x24, 0x03, 0xd5 }; // bti c
   const uint8_t pltData[] = {
       0xf0, 0x7b, 0xbf, 0xa9, // stp    x16, x30, [sp,#-16]!
@@ -804,8 +804,8 @@ void AArch64BtiPac::writePltHeader(uint8_t *buf) const {
   };
   const uint8_t nopData[] = { 0x1f, 0x20, 0x03, 0xd5 }; // nop
 
-  uint64_t got = in.gotPlt->getVA();
-  uint64_t plt = in.plt->getVA();
+  uint64_t got = gotPlt(c)->getVA();
+  uint64_t plt = lld::elf::plt(c)->getVA();
 
   if (btiHeader) {
     // PltHeader is called indirectly by plt[N]. Prefix pltData with a BTI C
@@ -825,7 +825,7 @@ void AArch64BtiPac::writePltHeader(uint8_t *buf) const {
     memcpy(buf + sizeof(pltData), nopData, sizeof(nopData));
 }
 
-void AArch64BtiPac::writePlt(uint8_t *buf, const Symbol &sym,
+void AArch64BtiPac::writePlt(Compartment *c, uint8_t *buf, const Symbol &sym,
                              uint64_t pltEntryAddr) const {
   // The PLT entry is of the form:
   // [btiData] addrInst (pacBr | stdBr) [nopData]

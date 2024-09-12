@@ -31,8 +31,8 @@ public:
   RelType getDynRel(RelType type) const override;
   void relocate(uint8_t *loc, const Relocation &rel,
                 uint64_t val) const override;
-  void writePltHeader(uint8_t *buf) const override;
-  void writePlt(uint8_t *buf, const Symbol &sym,
+  void writePltHeader(Compartment *c, uint8_t *buf) const override;
+  void writePlt(Compartment *c, uint8_t *buf, const Symbol &sym,
                 uint64_t pltEntryAddr) const override;
 };
 } // namespace
@@ -347,7 +347,7 @@ void Hexagon::relocate(uint8_t *loc, const Relocation &rel,
   }
 }
 
-void Hexagon::writePltHeader(uint8_t *buf) const {
+void Hexagon::writePltHeader(Compartment *c, uint8_t *buf) const {
   const uint8_t pltData[] = {
       0x00, 0x40, 0x00, 0x00, // { immext (#0)
       0x1c, 0xc0, 0x49, 0x6a, //   r28 = add (pc, ##GOT0@PCREL) } # @GOT0
@@ -361,12 +361,12 @@ void Hexagon::writePltHeader(uint8_t *buf) const {
   memcpy(buf, pltData, sizeof(pltData));
 
   // Offset from PLT0 to the GOT.
-  uint64_t off = in.gotPlt->getVA() - in.plt->getVA();
+  uint64_t off = gotPlt(c)->getVA() - plt(c)->getVA();
   relocateNoSym(buf, R_HEX_B32_PCREL_X, off);
   relocateNoSym(buf + 4, R_HEX_6_PCREL_X, off);
 }
 
-void Hexagon::writePlt(uint8_t *buf, const Symbol &sym,
+void Hexagon::writePlt(Compartment *c, uint8_t *buf, const Symbol &sym,
                        uint64_t pltEntryAddr) const {
   const uint8_t inst[] = {
       0x00, 0x40, 0x00, 0x00, // { immext (#0)

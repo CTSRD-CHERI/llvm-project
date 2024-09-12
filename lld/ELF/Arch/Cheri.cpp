@@ -805,9 +805,9 @@ uint64_t CheriCapTableSection::assignIndices(uint64_t startIndex,
     // rather than the normal relocation section to make processing of PLT
     // relocations in RTLD more efficient.
     RelocationBaseSection *dynRelSec =
-        it.second.usedInCallExpr ? in.relaPlt.get() : mainPart->relaDyn.get();
+        it.second.usedInCallExpr ? relaPlt(compartment) : mainPart->relaDyn.get();
     addCapabilityRelocation<ELFT>(
-        targetSym, elfCapabilityReloc, in.cheriCapTable.get(), off,
+        targetSym, elfCapabilityReloc, cheriCapTable(compartment), off,
         R_CHERI_CAPABILITY, 0, it.second.usedInCallExpr,
         [&]() {
           return ("\n>>> referenced by " + refName + "\n>>> first used in " +
@@ -943,7 +943,7 @@ size_t CheriCapTableMappingSection::getSize() const {
 
 void CheriCapTableMappingSection::writeTo(uint8_t *buf) {
   assert(config->capTableScope != CapTableScopePolicy::All);
-  if (!in.cheriCapTable)
+  if (cheriCapTable(compartment))
     return;
   if (!in.symTab) {
     error("Cannot write " + this->name + " without .symtab section!");
@@ -953,19 +953,19 @@ void CheriCapTableMappingSection::writeTo(uint8_t *buf) {
   // Write the mapping from function vaddr -> captable subset for RTLD
   std::vector<CaptableMappingEntry> entries;
   // Note: Symtab->getSymbols() only returns the symbols in .dynsym. We need
-  // to use In.sym()tab instead since we also want to add all local functions!
+  // to use in.symTab instead since we also want to add all local functions!
   for (const SymbolTableEntry &ste : in.symTab->getSymbols()) {
     Symbol* sym = ste.sym;
     if (!sym->isDefined() || !sym->isFunc())
       continue;
     const CheriCapTableSection::CaptableMap *capTableMap = nullptr;
     if (config->capTableScope == CapTableScopePolicy::Function) {
-      auto it = in.cheriCapTable->perFunctionEntries.find(sym);
-      if (it != in.cheriCapTable->perFunctionEntries.end())
+      auto it = cheriCapTable(compartment)->perFunctionEntries.find(sym);
+      if (it != cheriCapTable(compartment)->perFunctionEntries.end())
         capTableMap = &it->second;
     } else if (config->capTableScope == CapTableScopePolicy::File) {
-      auto it = in.cheriCapTable->perFileEntries.find(sym->file);
-      if (it != in.cheriCapTable->perFileEntries.end())
+      auto it = cheriCapTable(compartment)->perFileEntries.find(sym->file);
+      if (it != cheriCapTable(compartment)->perFileEntries.end())
         capTableMap = &it->second;
     } else {
       llvm_unreachable("Invalid mode!");

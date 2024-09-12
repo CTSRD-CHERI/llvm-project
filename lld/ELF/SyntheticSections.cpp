@@ -1218,7 +1218,7 @@ void GotPltSection::writeTo(uint8_t *buf) {
   target->writeGotPltHeader(buf);
   buf += target->gotPltHeaderEntriesNum * target->gotEntrySize;
   for (const Symbol *b : entries) {
-    target->writeGotPlt(buf, *b);
+    target->writeGotPlt(compartment, buf, *b);
     buf += target->gotEntrySize;
   }
 }
@@ -2673,11 +2673,11 @@ PltSection::PltSection()
 void PltSection::writeTo(uint8_t *buf) {
   // At beginning of PLT, we have code to call the dynamic
   // linker to resolve dynsyms at runtime. Write such code.
-  target->writePltHeader(buf);
+  target->writePltHeader(compartment, buf);
   size_t off = headerSize;
 
   for (const Symbol *sym : entries) {
-    target->writePlt(buf + off, *sym, getVA() + off);
+    target->writePlt(compartment, buf + off, *sym, getVA() + off);
     off += target->pltEntrySize;
   }
 }
@@ -2720,7 +2720,7 @@ IpltSection::IpltSection()
 void IpltSection::writeTo(uint8_t *buf) {
   uint32_t off = 0;
   for (const Symbol *sym : entries) {
-    target->writeIplt(buf + off, *sym, getVA() + off);
+    target->writeIplt(compartment, buf + off, *sym, getVA() + off);
     off += target->ipltEntrySize;
   }
 }
@@ -2750,7 +2750,7 @@ PPC32GlinkSection::PPC32GlinkSection() {
 }
 
 void PPC32GlinkSection::writeTo(uint8_t *buf) {
-  writePPC32GlinkSection(buf, entries.size());
+  writePPC32GlinkSection(compartment, buf, entries.size());
 }
 
 size_t PPC32GlinkSection::getSize() const {
@@ -2819,15 +2819,17 @@ IBTPltSection::IBTPltSection()
     : SyntheticSection(SHF_ALLOC | SHF_EXECINSTR, SHT_PROGBITS, 16, ".plt") {}
 
 void IBTPltSection::writeTo(uint8_t *buf) {
-  target->writeIBTPlt(buf, in.plt->getNumEntries());
+  target->writeIBTPlt(compartment, buf, plt(compartment)->getNumEntries());
 }
 
 size_t IBTPltSection::getSize() const {
   // 16 is the header size of .plt.
-  return 16 + in.plt->getNumEntries() * target->pltEntrySize;
+  return 16 + plt(compartment)->getNumEntries() * target->pltEntrySize;
 }
 
-bool IBTPltSection::isNeeded() const { return in.plt->getNumEntries() > 0; }
+bool IBTPltSection::isNeeded() const {
+  return plt(compartment)->getNumEntries() > 0;
+}
 
 // The string hash function for .gdb_index.
 static uint32_t computeGdbHash(StringRef s) {
