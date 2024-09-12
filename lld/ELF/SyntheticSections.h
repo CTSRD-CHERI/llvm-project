@@ -1308,6 +1308,62 @@ struct Compartment {
 
 extern std::vector<Compartment> compartments;
 
+inline GotSection *got(const Compartment *c) {
+  if (c == nullptr)
+    return in.got.get();
+  else
+    return c->got.get();
+}
+
+inline GotPltSection *gotPlt(const Compartment *c) {
+  if (c == nullptr)
+    return in.gotPlt.get();
+  else
+    return c->gotPlt.get();
+}
+
+inline IgotPltSection *igotPlt(const Compartment *c) {
+  if (c == nullptr)
+    return in.igotPlt.get();
+  else
+    return c->igotPlt.get();
+}
+
+inline CheriCapTableSection *cheriCapTable(const Compartment *c) {
+  if (c == nullptr)
+    return in.cheriCapTable.get();
+  else
+    return c->cheriCapTable.get();
+}
+
+inline PltSection *plt(const Compartment *c) {
+  if (c == nullptr)
+    return in.plt.get();
+  else
+    return c->plt.get();
+}
+
+inline IpltSection *iplt(const Compartment *c) {
+  if (c == nullptr)
+    return in.iplt.get();
+  else
+    return c->iplt.get();
+}
+
+inline RelocationBaseSection *relaPlt(const Compartment *c) {
+  if (c == nullptr)
+    return in.relaPlt.get();
+  else
+    return c->relaPlt.get();
+}
+
+inline RelocationBaseSection *relaIplt(const Compartment *c) {
+  if (c == nullptr)
+    return in.relaIplt.get();
+  else
+    return c->relaIplt.get();
+}
+
 } // namespace elf
 } // namespace lld
 
