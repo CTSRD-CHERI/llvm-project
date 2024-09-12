@@ -2085,6 +2085,12 @@ template <class ELFT> void Writer<ELFT>::finalizeSections() {
       in.plt->addSymbols();
     if (in.iplt && in.iplt->isNeeded())
       in.iplt->addSymbols();
+    for (Compartment &c : compartments) {
+      if (c.plt && c.plt->isNeeded())
+        c.plt->addSymbols();
+      if (c.iplt && c.iplt->isNeeded())
+        c.iplt->addSymbols();
+    }
 
     if (config->unresolvedSymbolsInShlib != UnresolvedPolicy::Ignore) {
       auto diagnose =
@@ -2265,6 +2271,16 @@ template <class ELFT> void Writer<ELFT>::finalizeSections() {
       finalizeSynthetic(part.verSym.get());
       finalizeSynthetic(part.verNeed.get());
       finalizeSynthetic(part.dynamic.get());
+    }
+
+    for (Compartment &c : compartments) {
+      finalizeSynthetic(c.got.get());
+      finalizeSynthetic(c.gotPlt.get());
+      finalizeSynthetic(c.igotPlt.get());
+      finalizeSynthetic(c.relaIplt.get());
+      finalizeSynthetic(c.relaPlt.get());
+      finalizeSynthetic(c.plt.get());
+      finalizeSynthetic(c.iplt.get());
     }
   }
 
