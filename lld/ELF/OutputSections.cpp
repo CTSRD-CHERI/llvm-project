@@ -97,6 +97,7 @@ static bool canMergeToProgbits(unsigned type) {
 // 3. Call commitSection(isec).
 void OutputSection::recordSection(InputSectionBase *isec) {
   partition = isec->partition;
+  compartment = isec->compartment;
   isec->parent = this;
   if (commands.empty() || !isa<InputSectionDescription>(commands.back()))
     commands.push_back(make<InputSectionDescription>(""));

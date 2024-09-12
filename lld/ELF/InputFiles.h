@@ -144,6 +144,9 @@ public:
   // R_PPC64_TLSLD. Disable TLS relaxation to avoid bad code generation.
   bool ppc64DisableTLSRelax = false;
 
+  // Compartment containing this file or nullptr.
+  Compartment *compartment = nullptr;
+
 protected:
   InputFile(Kind k, MemoryBufferRef m);
 
@@ -272,9 +275,6 @@ public:
   // True if the file defines functions compiled with -fsplit-stack,
   // but had one or more functions with the no_split_stack attribute.
   bool someNoSplitStack = false;
-
-  // Compartment containing this object file or nullptr.
-  Compartment *compartment = nullptr;
 
   // Get cached DWARF information.
   DWARFCache *getDwarf();

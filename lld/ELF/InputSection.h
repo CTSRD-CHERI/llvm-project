@@ -24,6 +24,7 @@ namespace elf {
 class InputFile;
 class Symbol;
 
+struct Compartment;
 class Defined;
 struct Partition;
 class SyntheticSection;
@@ -74,6 +75,8 @@ public:
   uint32_t type;
   uint32_t link;
   uint32_t info;
+
+  Compartment *compartment = nullptr;
 
   OutputSection *getOutputSection();
   const OutputSection *getOutputSection() const {
@@ -396,7 +399,8 @@ private:
   template <class ELFT> void copyShtGroup(uint8_t *buf);
 };
 
-static_assert(sizeof(InputSection) <= 168, "InputSection is too big");
+static_assert(sizeof(InputSection) <= 168 + sizeof(Compartment *),
+              "InputSection is too big");
 
 inline bool isDebugSection(const InputSectionBase &sec) {
   return (sec.flags & llvm::ELF::SHF_ALLOC) == 0 &&

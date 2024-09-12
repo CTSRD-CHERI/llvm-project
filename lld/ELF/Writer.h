@@ -18,6 +18,7 @@ namespace elf {
 class InputFile;
 class OutputSection;
 void copySectionsIntoPartitions();
+void assignSectionsToCompartments();
 template <class ELFT> void createSyntheticSections();
 void combineEhSections();
 template <class ELFT> void writeResult();
@@ -57,6 +58,7 @@ uint8_t getMipsIsaExt(uint64_t oldExt, llvm::StringRef oldFile, uint64_t newExt,
                       llvm::StringRef newFile);
 void checkMipsShlibCompatible(InputFile *f, uint64_t shlibCheriFlags,
                               uint64_t targetCheriFlags);
+bool isRelroSection(StringRef name);
 bool isRelroSection(const OutputSection *sec);
 
 bool isMipsN32Abi(const InputFile *f);

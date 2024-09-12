@@ -798,6 +798,8 @@ static OutputDesc *addInputSec(StringMap<TinyPtrVector<OutputSection *>> &map,
   for (OutputSection *sec : v) {
     if (sec->partition != isec->partition)
       continue;
+    if (sec->compartment != isec->compartment)
+      continue;
 
     if (config->relocatable && (isec->flags & SHF_LINK_ORDER)) {
       // Merging two SHF_LINK_ORDER sections with different sh_link fields will
@@ -833,6 +835,8 @@ void LinkerScript::addOrphanSections() {
       orphanSections.push_back(s);
 
       StringRef name = getOutputSectionName(s);
+      if (s->compartment != nullptr)
+        name = saver().save(name.str() + s->compartment->suffix);
       if (config->unique) {
         v.push_back(createSection(s, name));
       } else if (OutputSection *sec = findByName(sectionCommands, name)) {
@@ -890,6 +894,8 @@ void LinkerScript::diagnoseOrphanHandling() const {
       continue;
 
     StringRef name = getOutputSectionName(sec);
+    if (sec->compartment != nullptr)
+      name = saver().save(name.str() + sec->compartment->suffix);
     if (config->orphanHandling == OrphanHandlingPolicy::Error)
       error(toString(sec) + " is being placed in '" + name + "'");
     else
