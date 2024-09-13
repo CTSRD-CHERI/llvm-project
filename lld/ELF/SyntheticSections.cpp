@@ -1342,11 +1342,11 @@ static uint64_t addRelaSz(const RelocationBaseSection &relaDyn) {
 // output section. When this occurs we cannot just use the OutputSection
 // Size. Moreover the [DT_JMPREL, DT_JMPREL + DT_PLTRELSZ) is permitted to
 // overlap with the [DT_RELA, DT_RELA + DT_RELASZ).
-static uint64_t addPltRelSz() {
-  size_t size = in.relaPlt->getSize();
-  if (in.relaIplt->getParent() == in.relaPlt->getParent() &&
-      in.relaIplt->name == in.relaPlt->name)
-    size += in.relaIplt->getSize();
+static uint64_t addPltRelSz(const Compartment *c) {
+  size_t size = relaPlt(c)->getSize();
+  if (relaIplt(c)->getParent() == relaPlt(c)->getParent() &&
+      relaIplt(c)->name == relaPlt(c)->name)
+    size += relaIplt(c)->getSize();
   return size;
 }
 
@@ -1470,28 +1470,41 @@ DynamicSection<ELFT>::computeContents() {
   // as relaIplt has. And we still want to emit proper dynamic tags for that
   // case, so here we always use relaPlt as marker for the beginning of
   // .rel[a].plt section.
-  if (isMain && (in.relaPlt->isNeeded() || in.relaIplt->isNeeded())) {
-    addInSec(DT_JMPREL, *in.relaPlt);
-    entries.emplace_back(DT_PLTRELSZ, addPltRelSz());
+  bool pltrel = false, aarch64_variant_pcs = false;
+  auto addPlt = [&](const Compartment *c) {
+    if (!relaPlt(c)->isNeeded() && !relaIplt(c)->isNeeded())
+      return;
+    addInSec(DT_JMPREL, *relaPlt(c));
+    addInt(DT_PLTRELSZ, addPltRelSz(c));
     switch (config->emachine) {
     case EM_MIPS:
-      addInSec(DT_MIPS_PLTGOT, *in.gotPlt);
+      addInSec(DT_MIPS_PLTGOT, *gotPlt(c));
       break;
     case EM_SPARCV9:
-      addInSec(DT_PLTGOT, *in.plt);
+      addInSec(DT_PLTGOT, *plt(c));
       break;
     case EM_AARCH64:
       if (llvm::find_if(in.relaPlt->relocs, [](const DynamicReloc &r) {
            return r.type == target->pltRel &&
                   r.sym->stOther & STO_AARCH64_VARIANT_PCS;
-          }) != in.relaPlt->relocs.end())
-        addInt(DT_AARCH64_VARIANT_PCS, 0);
+         }) != in.relaPlt->relocs.end())
+        aarch64_variant_pcs = true;
       LLVM_FALLTHROUGH;
     default:
-      addInSec(DT_PLTGOT, *in.gotPlt);
+      addInSec(DT_PLTGOT, *gotPlt(c));
       break;
     }
-    addInt(DT_PLTREL, config->isRela ? DT_RELA : DT_REL);
+    pltrel = true;
+  };
+
+  if (isMain) {
+    addPlt(nullptr);
+    for (const Compartment &c : compartments)
+      addPlt(&c);
+    if (aarch64_variant_pcs)
+      addInt(DT_AARCH64_VARIANT_PCS, 0);
+    if (pltrel)
+      addInt(DT_PLTREL, config->isRela ? DT_RELA : DT_REL);
   }
 
   if (config->emachine == EM_AARCH64) {
