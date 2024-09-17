@@ -4,7 +4,7 @@
 
 target triple = "riscv64-unknown-freebsd13"
 
-define dso_local noundef signext i32 @_Z4testv() local_unnamed_addr addrspace(200) uwtable personality ptr addrspace(200) @__gxx_personality_v0 {
+define noundef signext i32 @_Z4testv() local_unnamed_addr addrspace(200) uwtable personality ptr addrspace(200) @__gxx_personality_v0 {
 entry:
   %call = invoke noundef signext i32 @_Z3foov(ptr addrspace(200) @_Z4testv)
           to label %return unwind label %lpad
