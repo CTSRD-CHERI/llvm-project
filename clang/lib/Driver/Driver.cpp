@@ -2314,6 +2314,9 @@ bool Driver::HandleImmediateArgs(const Compilation &C) {
   }
 
   if (C.getArgs().hasArg(options::OPT_print_multi_directory)) {
+    if(TC.getSelectedMultilibs().empty()){
+      llvm::outs() << ".\n";
+    }
     for (const Multilib &Multilib : TC.getSelectedMultilibs()) {
       if (Multilib.gccSuffix().empty())
         llvm::outs() << ".\n";
