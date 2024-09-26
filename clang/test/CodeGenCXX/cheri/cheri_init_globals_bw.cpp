@@ -14,5 +14,6 @@ void _start(void);
 
 
 void _start(void) {
-  cheri_init_globals();
+  cheri_init_globals_cbuildcap(__builtin_cheri_global_data_get(),
+                               __builtin_cheri_program_counter_get());
 }

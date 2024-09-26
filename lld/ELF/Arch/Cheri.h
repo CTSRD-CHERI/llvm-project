@@ -325,6 +325,9 @@ void addCapabilityRelocation(Symbol *sym, RelType type, InputSectionBase *sec,
                              bool isCallExpr,
                              llvm::function_ref<std::string()> referencedBy,
                              RelocationBaseSection *dynRelSec = nullptr);
+
+uint64_t getCapMetaBits(int64_t a, const Symbol &sym,
+                        const InputSectionBase *isec, uint64_t offset);
 } // namespace elf
 } // namespace lld
 

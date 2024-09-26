@@ -23,6 +23,15 @@ struct capreloc {
   __SIZE_TYPE__ permissions;
 };
 
+struct ELFRela {
+  __SIZE_TYPE__ offset;
+  __SIZE_TYPE__ info;
+  __SIZE_TYPE__ addend;
+};
+
+// Bit of a hack as we should include it from llvm
+#define R_RISCV_CHERI_RELATIVE 202
+
 #define GET_BIT_MASK(OFF_BITS) ~(__SIZE_TYPE__)(OFF_BITS)
 
 static const __SIZE_TYPE__ function_reloc_flag = (__SIZE_TYPE__)1
@@ -99,6 +108,96 @@ static __attribute__((always_inline)) void cheri_init_globals_impl(
 }
 
 static __attribute__((always_inline)) void
+cheri_init_globals_cbuildcap(void *__capability rw, void *__capability rx) {
+  const struct ELFRela *start_rela;
+  const struct ELFRela *stop_rela;
+  __SIZE_TYPE__ start_addr, stop_addr;
+#if !defined(__CHERI_PURE_CAPABILITY__)
+  __asm__("lla %0, __rela_dyn_start\n\t"
+          "lla %1, __rela_dyn_end\n\t"
+          : "=r"(start_addr), "=r"(stop_addr));
+#else
+  void *__capability tmp;
+  __asm__("llc %2, __rela_dyn_start\n\t"
+          "cgetaddr %0, %2\n\t"
+          "llc %2, __rela_dyn_end\n\t"
+          "cgetaddr %1, %2\n\t"
+          : "=r"(start_addr), "=r"(stop_addr), "=&C"(tmp));
+#endif
+  if (start_addr == 0 || stop_addr == 0)
+    return;
+
+#if !defined(__CHERI_PURE_CAPABILITY__)
+  start_rela = (const struct ELFRela *)(__UINTPTR_TYPE__)start_addr;
+  stop_rela = (const struct ELFRela *)(__UINTPTR_TYPE__)stop_addr;
+#else
+  __SIZE_TYPE__ rela_size = stop_addr - start_addr;
+  start_rela = (const struct ELFRela *)__builtin_cheri_address_set(
+      __builtin_cheri_program_counter_get(), start_addr);
+  start_rela = __builtin_cheri_bounds_set(start_rela, rela_size);
+  stop_rela = (const struct ELFRela *)(const void *)((const char *)start_rela +
+                                                    rela_size);
+#endif
+
+#if !defined(__CHERI_PURE_CAPABILITY__) || __CHERI_CAPABILITY_TABLE__ == 3
+    /* pc-relative or hybrid ABI -> need large bounds on $pcc */
+    bool can_set_code_bounds = false;
+#else
+    bool can_set_code_bounds = true; /* fn-desc/plt ABI -> tight bounds okay */
+#endif
+
+  struct CapFrag {
+    __SIZE_TYPE__ addr;
+    __SIZE_TYPE__ meta;
+  };
+
+  for (const struct ELFRela *r = start_rela; r < stop_rela; r++) {
+    if (r->info != R_RISCV_CHERI_RELATIVE)
+      continue;
+
+    void *__capability *__capability dest =
+        (void *__capability *__capability)__builtin_cheri_address_set(
+            rw, r->offset);
+    struct CapFrag *__capability frag = (struct CapFrag *__capability)(dest);
+
+    if (frag->addr == 0) {
+      *dest = (void *__capability)0;
+      continue;
+    }
+
+    __SIZE_TYPE__ length = frag->meta >> 5;
+    __SIZE_TYPE__ perms = frag->meta & ((1 << 5) - 1);
+    enum PermKind {
+      PK_FUNC = 0,
+      PK_OBJ,
+      PK_CONST,
+    };
+
+    bool is_func = perms == PK_FUNC;
+    bool can_set_bounds = (!is_func || can_set_code_bounds) && length != 0;
+    void *auth_cap = is_func ? rx : rw;
+    if (perms == PK_FUNC) {
+      auth_cap = __builtin_cheri_perms_and(auth_cap,
+                                           function_pointer_permissions_mask);
+    } else if (perms == PK_OBJ) {
+      auth_cap =
+          __builtin_cheri_perms_and(auth_cap, global_pointer_permissions_mask);
+    } else if (perms == PK_CONST) {
+      auth_cap = __builtin_cheri_perms_and(auth_cap,
+                                           constant_pointer_permissions_mask);
+    }
+
+    void *cap = __builtin_cheri_address_set(auth_cap, frag->addr);
+    if (can_set_bounds)
+      cap = __builtin_cheri_bounds_set(cap, length);
+    cap = __builtin_cheri_offset_increment(cap, r->addend);
+    if (is_func)
+      cap = __builtin_cheri_seal_entry(cap);
+    *dest = cap;
+  }
+}
+
+static __attribute__((always_inline)) void
 cheri_init_globals_3(void *__capability data_cap,
                      const void *__capability code_cap,
                      const void *__capability rodata_cap) {
@@ -117,6 +216,9 @@ cheri_init_globals_3(void *__capability data_cap,
           "cgetaddr %1, %2\n\t"
           : "=r"(start_addr), "=r"(stop_addr), "=&C"(tmp));
 #endif
+
+  if (start_addr == 0 || stop_addr == 0)
+    return;
 
 #if !defined(__CHERI_PURE_CAPABILITY__)
   start_relocs = (const struct capreloc *)(__UINTPTR_TYPE__)start_addr;

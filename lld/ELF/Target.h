@@ -328,4 +328,20 @@ inline void write64(void *p, uint64_t v) {
     llvm_unreachable("unknown config->ekind");                                 \
   }
 
+#define invokeAndRetELFT(f, ...)                                               \
+  [&]() {                                                                      \
+    switch (config->ekind) {                                                   \
+    case ELF32LEKind:                                                          \
+      return f<ELF32LE>(__VA_ARGS__);                                          \
+    case ELF32BEKind:                                                          \
+      return f<ELF32BE>(__VA_ARGS__);                                          \
+    case ELF64LEKind:                                                          \
+      return f<ELF64LE>(__VA_ARGS__);                                          \
+    case ELF64BEKind:                                                          \
+      return f<ELF64BE>(__VA_ARGS__);                                          \
+    default:                                                                   \
+      llvm_unreachable("unknown config->ekind");                               \
+    };                                                                         \
+  }();
+
 #endif

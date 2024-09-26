@@ -431,7 +431,8 @@ static void checkOptions() {
   }
   if (config->localCapRelocsMode == CapRelocsMode::ElfReloc)
     error("local-cap-relocs=elf is not implemented yet");
-  if (config->localCapRelocsMode == CapRelocsMode::CBuildCap)
+  if (config->localCapRelocsMode == CapRelocsMode::CBuildCap &&
+      config->emachine != EM_RISCV)
     error("local-cap-relocs=cbuildcap is not implemented yet");
   assert(config->preemptibleCapRelocsMode != CapRelocsMode::CBuildCap);
 

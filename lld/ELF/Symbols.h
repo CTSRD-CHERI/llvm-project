@@ -550,6 +550,10 @@ struct ElfSym {
   static Defined *relaIpltStart;
   static Defined *relaIpltEnd;
 
+  // __rela_dyn_{start,end} symbols.
+  static Defined *relaDynStart;
+  static Defined *relaDynEnd;
+
   // _TLS_MODULE_BASE_ on targets that support TLSDESC.
   static Defined *tlsModuleBase;
 };

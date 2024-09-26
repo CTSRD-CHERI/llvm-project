@@ -5,9 +5,16 @@
 #include "../SyntheticSections.h"
 #include "../Target.h"
 #include "../Writer.h"
+#include "Relocations.h"
 #include "lld/Common/CommonLinkerContext.h"
+#include "lld/Common/ErrorHandler.h"
 #include "lld/Common/Memory.h"
+#include "llvm/ADT/APInt.h"
+#include "llvm/ADT/StringExtras.h"
+#include "llvm/BinaryFormat/ELF.h"
 #include "llvm/Support/Path.h"
+#include <cmath>
+#include <cstdint>
 
 using namespace llvm;
 using namespace llvm::object;
@@ -20,6 +27,178 @@ using namespace llvm::ELF;
 
 namespace lld {
 namespace elf {
+
+enum PermissionKind {
+  PK_FUNC = 0,
+  PK_OBJ,
+  PK_CONST,
+};
+
+enum ArchPermTy {
+  AP_CAP = 0,
+  AP_WRITE,
+  AP_READ,
+  AP_EXEC,
+  AP_ASR,
+};
+
+constexpr uint64_t bit(size_t n) { return 1UL << n;}
+
+template <class T> constexpr T ones(size_t bits) { return (1U << bits) - 1; }
+
+template <class T> constexpr T truncate(T val, size_t bits) {
+  static_assert(std::is_unsigned_v<T>, "Only use unsigned values!");
+  return val & ones<T>(bits);
+}
+
+template <class T> constexpr unsigned getBit(T val, size_t bit) {
+  return ((1 << (bit)) & val) == 0 ? 0U : 1U;
+}
+
+// Architectural Permissions
+struct AP {
+  static uint64_t function() {
+    if (config->is64) {
+      return (bit(AP_CAP) | bit(AP_READ) | bit(AP_EXEC) | bit(AP_ASR)) << 47;
+    } else {
+      // Quandrant 1 - value 2
+      return (0b01010) << 25;
+    }
+  }
+  static uint64_t readOnly() {
+    if (config->is64) {
+      return (bit(AP_CAP) | bit(AP_READ) | bit(AP_ASR)) << 47;
+    } else {
+      // Quandrant 3 - value 3
+      return (0b11011) << 25;
+    }
+  }
+  static uint64_t readWrite() {
+    if (config->is64) {
+      return (bit(AP_CAP) | bit(AP_WRITE) | bit(AP_READ) | bit(AP_ASR)) << 47;
+    } else {
+      // Quandrant 3 - value 7
+      return (0b11111) << 25;
+    }
+  }
+};
+
+PermissionKind getCapabilityPermissionKind(const Symbol &sym) {
+  PermissionKind PK = PK_OBJ;
+  if (sym.isFunc())
+    PK = PK_FUNC;
+  else if (auto *os = sym.getOutputSection()) {
+    if ((os->flags & SHF_WRITE) == 0 || isRelroSection(os)) {
+      PK = PK_CONST;
+    } else {
+      PK = PK_OBJ;
+    }
+    if (os->flags & SHF_EXECINSTR) {
+      warn("Non-function __cap_reloc against symbol in section with "
+           "SHF_EXECINSTR (" +
+           toString(os->name) + ") for symbol " + toString(sym));
+    }
+  }
+  return PK;
+}
+
+uint64_t encodeCapabilityPermissions(const Symbol &sym) {
+  switch (getCapabilityPermissionKind(sym)) {
+  case PK_FUNC:
+    return AP::function();
+  case PK_OBJ:
+    return AP::readWrite();
+  case PK_CONST:
+    return AP::readOnly();
+  }
+  return 0;
+}
+
+// Morello style capability fragment.
+// [Size [XLEN-1:5], Permissions [4:0]]
+uint64_t encodeAlternativeMeta(const Symbol &sym, uint64_t l) {
+  return (l << 5) | getCapabilityPermissionKind(sym);
+}
+
+template <class ELFT>
+uint64_t encodeCapabilityBounds(uint64_t b, uint64_t l, bool *exact) {
+  using NativeTy = std::conditional_t<ELFT::Is64Bits, uint64_t, uint32_t>;
+  const uint64_t MXLEN = ELFT::Is64Bits ? 64 : 32;
+  const uint64_t MW = ELFT::Is64Bits ? 14 : 10;
+  const uint64_t EW = ELFT::Is64Bits ? 6 : 5;
+  const uint64_t EF_BIT_POS = ELFT::Is64Bits ? 26 : 19;
+  const uint64_t ADDR_BW = ELFT::Is64Bits ? 65 : 33;
+  const uint64_t IE_WIDTH = MW - (EW / 2);
+  const uint64_t EXP_PART_SIZE = EW / 2;
+  const uint64_t CAP_MAX_E = MXLEN - MW + 2;
+
+  const uint64_t t = b + l;
+  assert(t - b == l && "Length too large - Overflow happened!");
+  uint64_t E =  CAP_MAX_E -
+               countl_zero(static_cast<NativeTy>(l | ones<NativeTy>(MW - 1))) - 1;
+  assert(E <= CAP_MAX_E && "Exponent too large!");
+  const bool IE = E != 0 || getBit(l, MW - 2) == 1;
+  const uint64_t EF = IE ? 0 : 1;
+  uint64_t L8 = 0;
+
+  uint64_t T = 0;
+  uint64_t B = 0;
+  if (!IE) {
+    B = truncate(b, MW);
+    T = truncate(t, MW);
+    if (!ELFT::Is64Bits)
+      L8 = getBit(l, 8);
+    if (exact)
+      *exact = true;
+  } else {
+    uint64_t B_ie = truncate(b >> (E + 3), IE_WIDTH);
+    uint64_t T_ie = truncate(t >> (E + 3), IE_WIDTH);
+
+    APInt maskLo = (APInt(ADDR_BW, 1) << (E + 3)) - 1;
+    APInt zero65 = APInt(ADDR_BW, 0);
+    bool lostSignificantBase = (APInt(ADDR_BW, b) & maskLo) != zero65;
+    bool lostSignificantTop = (APInt(ADDR_BW, t) & maskLo) != zero65;
+
+    if (lostSignificantTop) {
+      T_ie = truncate(T_ie + 1, IE_WIDTH);
+    }
+
+    uint64_t l_ie = truncate(T_ie - B_ie, IE_WIDTH);
+    bool overflowed = getBit(l_ie, IE_WIDTH - 1);
+    bool incE = false;
+    if (overflowed) {
+      incE = true;
+      lostSignificantBase |= getBit(B_ie, 0) == 1;
+      lostSignificantTop |= getBit(T_ie, 0) == 1;
+
+      B_ie = truncate(b >> (E + 3 + 1), IE_WIDTH);
+      T_ie = truncate(t >> (E + 3 + 1), IE_WIDTH);
+      if (lostSignificantTop)
+        T_ie = truncate(T_ie + 1, IE_WIDTH);
+    }
+    E += incE ? 1 : 0;
+
+    // sort out the exponent
+    E = CAP_MAX_E - E;
+    const uint64_t E_B = truncate(E, EXP_PART_SIZE);
+    const uint64_t E_T = truncate(E >> EXP_PART_SIZE, EXP_PART_SIZE);
+    if (!ELFT::Is64Bits)
+      L8 = getBit(E, EW - 1);
+    B = (B_ie << EXP_PART_SIZE) | E_B;
+    T = (T_ie << EXP_PART_SIZE) | E_T;
+
+    if (exact)
+      *exact = !(lostSignificantBase || lostSignificantTop);
+  }
+
+  uint64_t Bits = 0;
+  Bits |= truncate(B, MW);
+  Bits |= truncate(T, MW - 2) << MW;
+  Bits |= EF << EF_BIT_POS;
+  if (!ELFT::Is64Bits)
+    Bits |= (L8 << 18);
+  return Bits;
+}
 
 // See CheriBSD crt_init_globals()
 template <class ELFT> struct InMemoryCapRelocEntry {
@@ -1085,6 +1264,16 @@ void CheriCapTableMappingSection::writeTo(uint8_t *buf) {
   memcpy(buf, entries.data(), entries.size() * sizeof(CaptableMappingEntry));
 }
 
+template <class ELFT>
+void writeCatableRelocationFragments(InputSectionBase *sec, Symbol *sym,
+                                     uint64_t offset) {
+  const uint64_t wordSize = ELFT::Is64Bits ? 8 : 4;
+  sec->addReloc(
+      {R_CHERI_CAPTAB_FRAG_ADDR, target->symbolicRel, offset, 0, sym});
+  sec->addReloc({R_CHERI_CAPTAB_FRAG_META, target->symbolicRel,
+                 offset + wordSize, 0, sym});
+}
+
 template <typename ELFT>
 void addCapabilityRelocation(Symbol *sym, RelType type, InputSectionBase *sec,
                              uint64_t offset, RelExpr expr, int64_t addend,
@@ -1202,8 +1391,37 @@ void addCapabilityRelocation(Symbol *sym, RelType type, InputSectionBase *sec,
                                     sym->isPreemptible, addend);
   } else {
     assert(config->localCapRelocsMode == CapRelocsMode::CBuildCap);
-    error("CBuildCap method not implemented yet!");
+    assert(!sym->includeInDynsym() && "Must not be a dynamic symbol");
+    if (config->emachine != EM_RISCV)
+      error("CBuildCap method not implemented yet!");
+    in.relaDyn->addReloc({R_RISCV_CHERI_RELATIVE, sec, offset,
+                          DynamicReloc::AgainstSymbol, *sym, addend, R_ABS});
+    writeCatableRelocationFragments<ELFT>(sec, sym, offset);
   }
+}
+
+uint64_t getCapMetaBits(int64_t a, const Symbol &sym,
+                        const InputSectionBase *isec, uint64_t offset) {
+  const uint64_t baseAddr = sym.getVA(a);
+  const uint64_t shift = config->is64 ? 8 : 4;
+  CheriCapRelocLocation loc{const_cast<InputSectionBase *>(isec),
+                            offset - shift};
+  CheriCapReloc reloc{SymbolAndOffset{const_cast<Symbol *>(&sym), 0}, 0,
+                      static_cast<bool>(sym.isPreemptible)};
+
+  bool exact = false;
+  uint64_t symSize = invokeAndRetELFT(getTargetSize, loc, reloc);
+  uint64_t metaBits =
+      invokeAndRetELFT(encodeCapabilityBounds, baseAddr, symSize, &exact);
+
+  if (!exact)
+    nonFatalWarning(
+        "Capability written to captable with rounding. Base Address = 0x" +
+        utohexstr(baseAddr) + ", size=0x" + utohexstr(symSize) +
+        ", the bits writter are 0x" + utohexstr(metaBits));
+
+  // TODO - write out raw capability bits instead of adhoc format.
+  return encodeAlternativeMeta(sym, symSize);
 }
 
 } // namespace elf
