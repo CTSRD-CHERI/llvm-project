@@ -50,9 +50,9 @@ define void @dynamic_alloca(i64 zeroext %n) {
   ; CHECK-NEXT:   [[SCBNDSR:%[0-9]+]]:gpcr = SCBNDSR [[SCADDR]], [[AND]]
   ; CHECK-NEXT:   $c2 = COPY [[SCADDR]]
   ; CHECK-NEXT:   ADJCALLSTACKUPCAP 0, 0, implicit-def dead $c2, implicit $c2
-  ; CHECK-NEXT:   [[SCBNDS:%[0-9]+]]:gpcr = SCBNDS killed [[SCBNDSR]], [[SLLI]]
+  ; CHECK-NEXT:   [[SCBNDSR1:%[0-9]+]]:gpcr = SCBNDSR killed [[SCBNDSR]], [[SLLI]]
   ; CHECK-NEXT:   ADJCALLSTACKDOWNCAP 0, 0, implicit-def dead $c2, implicit $c2
-  ; CHECK-NEXT:   $c10 = COPY [[SCBNDS]]
+  ; CHECK-NEXT:   $c10 = COPY [[SCBNDSR1]]
   ; CHECK-NEXT:   PseudoCCALL target-flags(riscv-ccall) @use, csr_il32pc64d_l64pc128d, implicit-def dead $c1, implicit $c10, implicit-def $c2
   ; CHECK-NEXT:   ADJCALLSTACKUPCAP 0, 0, implicit-def dead $c2, implicit $c2
   ; CHECK-NEXT:   PseudoCRET

@@ -323,10 +323,10 @@ def : PatGpcrGpr<cptradd, CADD>;
 def : PatGpcrSimm12<cptradd, CADDI>;
 
 // TODO: Make this rematerialisable like MIPS
-def : PatGpcrGpr<int_cheri_bounded_stack_cap, SCBNDS>;
+def : PatGpcrGpr<int_cheri_bounded_stack_cap, SCBNDSR>;
 def : Pat<(int_cheri_bounded_stack_cap GPCR:$rs1, csetbnd_imm:$imm),
           (SCBNDSI GPCR:$rs1, csetbnd_imm:$imm)>;
-def : PatGpcrGpr<int_cheri_bounded_stack_cap_dynamic, SCBNDS>;
+def : PatGpcrGpr<int_cheri_bounded_stack_cap_dynamic, SCBNDSR>;
 def : Pat<(int_cheri_bounded_stack_cap_dynamic GPCR:$rs1, csetbnd_imm:$imm),
           (SCBNDSI GPCR:$rs1, csetbnd_imm:$imm)>;
 def : Pat<(CapFrameAddrRegImm GPCR:$rs1, simm12:$imm12),

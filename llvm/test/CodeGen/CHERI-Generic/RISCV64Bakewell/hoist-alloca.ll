@@ -36,26 +36,26 @@
 ; MACHINELICM-DBG-NEXT: from %bb.2 to %bb.0
 ; MACHINELICM-DBG: Hoisting [[INC:%[0-9]+]]:gpcr = CADDI %stack.0.buf1, 0
 ; MACHINELICM-DBG-NEXT: from %bb.2 to %bb.0
-; MACHINELICM-DBG: Hoisting [[BOUNDS:%[0-9]+]]:gpcr = SCBNDS [[INC]]:gpcr, [[IMM]]:gpr
+; MACHINELICM-DBG: Hoisting [[BOUNDS:%[0-9]+]]:gpcr = SCBNDSR [[INC]]:gpcr, [[IMM]]:gpr
 ; MACHINELICM-DBG-NEXT: from %bb.2 to %bb.0
 ; MACHINELICM-DBG: Hoisting [[IMM:%[0-9]+]]:gpr = ADDI $x0, 88
 ; MACHINELICM-DBG-NEXT: from %bb.2 to %bb.0
 ; MACHINELICM-DBG: Hoisting [[INC:%[0-9]+]]:gpcr = CADDI %stack.1.buf2, 0
 ; MACHINELICM-DBG-NEXT: from %bb.2 to %bb.0
-; MACHINELICM-DBG: Hoisting [[BOUNDS:%[0-9]+]]:gpcr = SCBNDS [[INC]]:gpcr, [[IMM]]:gpr
+; MACHINELICM-DBG: Hoisting [[BOUNDS:%[0-9]+]]:gpcr = SCBNDSR [[INC]]:gpcr, [[IMM]]:gpr
 ; MACHINELICM-DBG-NEXT: from %bb.2 to %bb.0
 ; MACHINELICM-DBG-LABEL: ******** Pre-regalloc Machine LICM: hoist_alloca_cond
 ; MACHINELICM-DBG: Hoisting [[IMM:%[0-9]+]]:gpr = ADDI $x0, 492
 ; from %bb.3 to %bb.0
 ; MACHINELICM-DBG: Hoisting [[INC:%[0-9]+]]:gpcr = CADDI %stack.0.buf1, 0
 ; MACHINELICM-DBG-NEXT: from %bb.3 to %bb.0
-; MACHINELICM-DBG: Hoisting [[BOUNDS:%[0-9]+]]:gpcr = SCBNDS [[INC]]:gpcr, [[IMM]]:gpr
+; MACHINELICM-DBG: Hoisting [[BOUNDS:%[0-9]+]]:gpcr = SCBNDSR [[INC]]:gpcr, [[IMM]]:gpr
 ; MACHINELICM-DBG-NEXT: from %bb.3 to %bb.0
 ; MACHINELICM-DBG: Hoisting [[IMM:%[0-9]+]]:gpr = ADDI $x0, 88
 ; MACHINELICM-DBG-NEXT: from %bb.3 to %bb.0
 ; MACHINELICM-DBG: Hoisting [[INC:%[0-9]+]]:gpcr = CADDI %stack.1.buf2, 0
 ; MACHINELICM-DBG-NEXT: from %bb.3 to %bb.0
-; MACHINELICM-DBG: Hoisting [[BOUNDS:%[0-9]+]]:gpcr = SCBNDS [[INC]]:gpcr, [[IMM]]:gpr
+; MACHINELICM-DBG: Hoisting [[BOUNDS:%[0-9]+]]:gpcr = SCBNDSR [[INC]]:gpcr, [[IMM]]:gpr
 ; MACHINELICM-DBG-NEXT: from %bb.3 to %bb.0
 ; RUN: llc -mtriple=riscv64 --relocation-model=pic -target-abi l64pc128d -mattr=+zcheripurecap,+cap-mode,+f,+d -O1 -o - < %s | FileCheck %s
 define void @hoist_alloca_uncond(i32 signext %cond) local_unnamed_addr addrspace(200) nounwind {
@@ -69,10 +69,10 @@ define void @hoist_alloca_uncond(i32 signext %cond) local_unnamed_addr addrspace
 ; CHECK-NEXT:    li s2, 100
 ; CHECK-NEXT:    li a0, 492
 ; CHECK-NEXT:    caddi ca1, csp, 100
-; CHECK-NEXT:    scbnds cs0, ca1, a0
+; CHECK-NEXT:    scbndsr cs0, ca1, a0
 ; CHECK-NEXT:    li a0, 88
 ; CHECK-NEXT:    caddi ca1, csp, 12
-; CHECK-NEXT:    scbnds cs1, ca1, a0
+; CHECK-NEXT:    scbndsr cs1, ca1, a0
 ; CHECK-NEXT:  .LBB0_1: # %for.body
 ; CHECK-NEXT:    # =>This Inner Loop Header: Depth=1
 ; CHECK-NEXT:    cmv ca0, cs0
@@ -116,10 +116,10 @@ define void @hoist_alloca_cond(i32 signext %cond) local_unnamed_addr addrspace(2
 ; CHECK-NEXT:    li s3, 100
 ; CHECK-NEXT:    li a0, 492
 ; CHECK-NEXT:    caddi ca1, csp, 100
-; CHECK-NEXT:    scbnds cs2, ca1, a0
+; CHECK-NEXT:    scbndsr cs2, ca1, a0
 ; CHECK-NEXT:    li a0, 88
 ; CHECK-NEXT:    caddi ca1, csp, 12
-; CHECK-NEXT:    scbnds cs1, ca1, a0
+; CHECK-NEXT:    scbndsr cs1, ca1, a0
 ; CHECK-NEXT:    j .LBB1_2
 ; CHECK-NEXT:  .LBB1_1: # %for.inc
 ; CHECK-NEXT:    # in Loop: Header=BB1_2 Depth=1

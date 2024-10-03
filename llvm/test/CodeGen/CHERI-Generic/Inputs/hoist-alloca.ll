@@ -44,8 +44,8 @@
 ; MACHINELICM-DBG-NEXT:  from %bb.2 to %bb.0
 @IF-RISCV32@; MACHINELICM-DBG: Hoisting [[BOUNDS:%[0-9]+]]:gpcr = CSetBoundsImm [[INC]]:gpcr, 512
 @IF-RISCV64@; MACHINELICM-DBG: Hoisting [[BOUNDS:%[0-9]+]]:gpcr = CSetBoundsImm [[INC]]:gpcr, 492
-@IF-RISCV32Bakewell@; MACHINELICM-DBG: Hoisting [[BOUNDS:%[0-9]+]]:gpcr = SCBNDS [[INC]]:gpcr, [[IMM]]:gpr
-@IF-RISCV64Bakewell@; MACHINELICM-DBG: Hoisting [[BOUNDS:%[0-9]+]]:gpcr = SCBNDS [[INC]]:gpcr, [[IMM]]:gpr
+@IF-RISCV32Bakewell@; MACHINELICM-DBG: Hoisting [[BOUNDS:%[0-9]+]]:gpcr = SCBNDSR [[INC]]:gpcr, [[IMM]]:gpr
+@IF-RISCV64Bakewell@; MACHINELICM-DBG: Hoisting [[BOUNDS:%[0-9]+]]:gpcr = SCBNDSR [[INC]]:gpcr, [[IMM]]:gpr
 @IF-RISCV@; MACHINELICM-DBG-NEXT:  from %bb.2 to %bb.0
 @IF-RISCV32Bakewell@; MACHINELICM-DBG: Hoisting [[IMM:%[0-9]+]]:gpr = ADDI $x0, 88
 @IF-RISCV32Bakewell@; MACHINELICM-DBG-NEXT:  from %bb.2 to %bb.0
@@ -59,8 +59,8 @@
 ; MACHINELICM-DBG-NEXT:  from %bb.2 to %bb.0
 @IF-RISCV64@; MACHINELICM-DBG: Hoisting [[BOUNDS:%[0-9]+]]:gpcr = CSetBoundsImm [[INC]]:gpcr, 88
 @IF-RISCV32@; MACHINELICM-DBG: Hoisting [[BOUNDS:%[0-9]+]]:gpcr = CSetBoundsImm [[INC]]:gpcr, 88
-@IF-RISCV32Bakewell@; MACHINELICM-DBG: Hoisting [[BOUNDS:%[0-9]+]]:gpcr = SCBNDS [[INC]]:gpcr, [[IMM]]:gpr
-@IF-RISCV64Bakewell@; MACHINELICM-DBG: Hoisting [[BOUNDS:%[0-9]+]]:gpcr = SCBNDS [[INC]]:gpcr, [[IMM]]:gpr
+@IF-RISCV32Bakewell@; MACHINELICM-DBG: Hoisting [[BOUNDS:%[0-9]+]]:gpcr = SCBNDSR [[INC]]:gpcr, [[IMM]]:gpr
+@IF-RISCV64Bakewell@; MACHINELICM-DBG: Hoisting [[BOUNDS:%[0-9]+]]:gpcr = SCBNDSR [[INC]]:gpcr, [[IMM]]:gpr
 @IF-RISCV@; MACHINELICM-DBG-NEXT:  from %bb.2 to %bb.0
 ; MACHINELICM-DBG-LABEL: ******** Pre-regalloc Machine LICM: hoist_alloca_cond
 @IF-MIPS@; MACHINELICM-DBG: Hoisting %{{[0-9]+}}:cherigpr = CheriBoundedStackPseudoImm %stack.0.buf1, 0, 492
@@ -75,8 +75,8 @@
 ; MACHINELICM-DBG-NEXT:  from %bb.3 to %bb.0
 @IF-RISCV32@; MACHINELICM-DBG: Hoisting [[BOUNDS:%[0-9]+]]:gpcr = CSetBoundsImm [[INC]]:gpcr, 512
 @IF-RISCV64@; MACHINELICM-DBG: Hoisting [[BOUNDS:%[0-9]+]]:gpcr = CSetBoundsImm [[INC]]:gpcr, 492
-@IF-RISCV32Bakewell@; MACHINELICM-DBG: Hoisting [[BOUNDS:%[0-9]+]]:gpcr = SCBNDS [[INC]]:gpcr, [[IMM]]:gpr
-@IF-RISCV64Bakewell@; MACHINELICM-DBG: Hoisting [[BOUNDS:%[0-9]+]]:gpcr = SCBNDS [[INC]]:gpcr, [[IMM]]:gpr
+@IF-RISCV32Bakewell@; MACHINELICM-DBG: Hoisting [[BOUNDS:%[0-9]+]]:gpcr = SCBNDSR [[INC]]:gpcr, [[IMM]]:gpr
+@IF-RISCV64Bakewell@; MACHINELICM-DBG: Hoisting [[BOUNDS:%[0-9]+]]:gpcr = SCBNDSR [[INC]]:gpcr, [[IMM]]:gpr
 @IF-RISCV@; MACHINELICM-DBG-NEXT:  from %bb.3 to %bb.0
 @IF-RISCV32Bakewell@; MACHINELICM-DBG: Hoisting [[IMM:%[0-9]+]]:gpr = ADDI $x0, 88
 @IF-RISCV32Bakewell@; MACHINELICM-DBG-NEXT: from %bb.3 to %bb.0
@@ -90,8 +90,8 @@
 ; MACHINELICM-DBG-NEXT:  from %bb.3 to %bb.0
 @IF-RISCV64@; MACHINELICM-DBG: Hoisting [[BOUNDS:%[0-9]+]]:gpcr = CSetBoundsImm [[INC]]:gpcr, 88
 @IF-RISCV32@; MACHINELICM-DBG: Hoisting [[BOUNDS:%[0-9]+]]:gpcr = CSetBoundsImm [[INC]]:gpcr, 88
-@IF-RISCV32Bakewell@; MACHINELICM-DBG: Hoisting [[BOUNDS:%[0-9]+]]:gpcr = SCBNDS [[INC]]:gpcr, [[IMM]]:gpr
-@IF-RISCV64Bakewell@; MACHINELICM-DBG: Hoisting [[BOUNDS:%[0-9]+]]:gpcr = SCBNDS [[INC]]:gpcr, [[IMM]]:gpr
+@IF-RISCV32Bakewell@; MACHINELICM-DBG: Hoisting [[BOUNDS:%[0-9]+]]:gpcr = SCBNDSR [[INC]]:gpcr, [[IMM]]:gpr
+@IF-RISCV64Bakewell@; MACHINELICM-DBG: Hoisting [[BOUNDS:%[0-9]+]]:gpcr = SCBNDSR [[INC]]:gpcr, [[IMM]]:gpr
 @IF-RISCV@; MACHINELICM-DBG-NEXT:  from %bb.3 to %bb.0
 
 ; RUN: llc @PURECAP_HARDFLOAT_ARGS@ -O1 -o - < %s | FileCheck %s
