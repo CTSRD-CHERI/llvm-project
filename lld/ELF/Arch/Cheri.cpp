@@ -112,6 +112,64 @@ SymbolAndOffset SymbolAndOffset::findRealSymbol() const {
   return *this;
 }
 
+SymbolAndOffset SymbolAndOffset::findSymbolForCapabilityRelocation() const {
+  // In some cases we can end up with a symbol+offset that points to an
+  // assembler local symbol without a type or size.
+  // This happens e.g. for exception landing pads that are a relocation
+  // against "fnstart+(lpad-fnstart)", but when building with RISC-V -mrelax,
+  // the addend value may not be a constant, so the compiler must emit a
+  // relocation against `lpad` instead which does not have a type or size
+  // information. For such STT_NOTYPE symbols, we identify the surrounding one.
+  // NOTE: This must only be called after linker relaxations are processed.
+  Defined *self = dyn_cast<Defined>(sym());
+  if (!self)
+    return *this;
+  assert(self->getSize() == 0);
+  assert(self->type == STT_NOTYPE);
+  Defined *bestMatch = self;
+  uint64_t bestSize = bestMatch->getSize();
+  const uint64_t targetValue = self->value + offset;
+  auto foundBetterMatch = [&](Defined *newMatch) {
+    int64_t oldOffset = targetValue - bestMatch->value;
+    int64_t newOffset = targetValue - newMatch->value;
+    log("Found better match for capability relocation against " +
+        lld::toString(*bestMatch) + "+" + Twine(oldOffset) + ": " +
+        lld::toString(*newMatch) + "+" + Twine(newOffset));
+    bestMatch = newMatch;
+    bestSize = bestMatch->getSize();
+  };
+  if (auto *isec = dyn_cast_or_null<InputSectionBase>(self->section)) {
+    if (!isec->file)
+      return *this;
+    for (Symbol *b : isec->file->getSymbols()) {
+      if (auto *d = dyn_cast<Defined>(b)) {
+        if (d->section != isec)
+          continue;
+        uint64_t dsize = d->getSize();
+        if (d->value <= targetValue && targetValue < d->value + dsize) {
+          // Try to find a better match (with a size/type). The match is
+          // considered better if
+          //  - The current match has no size, and the new one does
+          //  - The current match is preemptible, and the new one isn't
+          //  - The current match has a smaller (non-zero) size
+          //  - The current match has no type, and the new one is func/object
+          if (d->type != STT_FUNC && d->type != STT_OBJECT)
+            continue;
+          if (bestSize == 0 && dsize != 0)
+            foundBetterMatch(d);
+          else if (bestMatch->isPreemptible && !d->isPreemptible)
+            foundBetterMatch(d);
+          else if (dsize != 0 && dsize < bestSize)
+            foundBetterMatch(d);
+          else if (bestMatch->type == STT_NOTYPE)
+            foundBetterMatch(d);
+        }
+      }
+    }
+  }
+  return {bestMatch, (int64_t)(targetValue - bestMatch->value)};
+}
+
 std::string CheriCapRelocLocation::toString() const {
  return SymbolAndOffset(section, offset).verboseToString();
 }
@@ -324,16 +382,16 @@ void CheriCapRelocsSection::addCapReloc(CheriCapRelocLocation loc,
   }
 }
 
-template<typename ELFT>
+template <typename ELFT>
 static uint64_t getTargetSize(const CheriCapRelocLocation &location,
-                              const CheriCapReloc &reloc) {
-  uint64_t targetSize = reloc.target.sym()->getSize();
+                              const SymbolAndOffset &target) {
+  uint64_t targetSize = target.sym()->getSize();
   if (targetSize > INT_MAX) {
-    error("Insanely large symbol size for " + reloc.target.verboseToString() +
+    error("Insanely large symbol size for " + target.verboseToString() +
           "for cap_reloc at" + location.toString());
     return 0;
   }
-  auto targetSym = reloc.target.sym();
+  auto targetSym = target.sym();
   if (targetSize == 0 && !targetSym->isPreemptible) {
     StringRef name = targetSym->getName();
     // Section end symbols like __preinit_array_end, etc. should actually be
@@ -377,19 +435,20 @@ static uint64_t getTargetSize(const CheriCapRelocLocation &location,
     if (OutputSection *os = targetSym->getOutputSection()) {
       // Cast must succeed since getOutputSection() returned non-NULL
       Defined* def = cast<Defined>(targetSym);
-      // warn("Could not find size for symbol " + reloc.target.verboseToString() +
+      // warn("Could not find size for symbol " + target.verboseToString() +
       //    " and could not determine section size. Using 0.");
       if ((int64_t)def->value < 0 || def->value > os->size) {
         // Note: we allow def->value == os->size for pointers to the end
-        warn("Symbol " + reloc.target.verboseToString() +
+        warn("Symbol " + target.verboseToString() +
              " is defined as being in section " + os->name +
              " but the value (0x" + utohexstr(targetSym->getVA()) +
              ") is outside this section. Will create a zero-size capability."
-             "\n>>> referenced by " + location.toString());
+             "\n>>> referenced by " +
+             location.toString());
         return 0;
       }
       // For negative offsets use 0 instead (we want the range of the full symbol in that case)
-      int64_t offset = std::max((int64_t)0, reloc.target.offset);
+      int64_t offset = std::max((int64_t)0, target.offset);
       uint64_t targetVA = targetSym->getVA(offset);
       assert(targetVA >= os->addr);
       uint64_t offsetInOS = targetVA - os->addr;
@@ -408,12 +467,12 @@ static uint64_t getTargetSize(const CheriCapRelocLocation &location,
     }
     if (warnAboutUnknownSize || errorHandler().verbose) {
       std::string msg = "could not determine size of cap reloc against " +
-          reloc.target.verboseToString() +
-          "\n>>> referenced by " + location.toString();
+                        target.verboseToString() + "\n>>> referenced by " +
+                        location.toString();
       warn(msg);
     }
     if (UnknownSectionSize) {
-      warn("Could not find size for symbol " + reloc.target.verboseToString() +
+      warn("Could not find size for symbol " + target.verboseToString() +
            " and could not determine section size. Using 0.");
       // TargetSize = std::numeric_limits<uint64_t>::max();
       return 0;
@@ -439,6 +498,15 @@ void CheriCapRelocsSection::writeToImpl(uint8_t *buf) {
     const CheriCapRelocLocation &location = i.first;
     const CheriCapReloc &reloc = i.second;
     assert(location.offset <= location.section->getSize());
+
+    // If we are targeting a symbol that does not have type and size
+    // information, try to find the intended target symbol. This can happen for
+    // relocations against a label inside a function or a subobject.
+    SymbolAndOffset realTarget = reloc.target;
+    if (Symbol *s = reloc.target.symOrSec.dyn_cast<Symbol *>())
+      if (s->type == STT_NOTYPE && s->getSize() == 0)
+        realTarget = reloc.target.findSymbolForCapabilityRelocation();
+
     // We write the virtual address of the location in both static and the
     // shared library case:
     // In the static case we can compute the final virtual address and write it
@@ -448,43 +516,38 @@ void CheriCapRelocsSection::writeToImpl(uint8_t *buf) {
     uint64_t locationVA =
         location.section->getOutputSection()->addr + outSecOffset;
 
-    // For the target the virtual address the addend is always zero so
-    // if we need a dynamic reloc we write zero
-    // TODO: would it be more efficient for local symbols to write the DSO VA
-    // and add a relocation against the load address?
-    // Also this would make llvm-objdump --cap-relocs more useful because it
-    // would actually display the symbol that the relocation is against
-    uint64_t targetVA = reloc.target.sym()->getVA(reloc.target.offset);
+    // The target VA is the base address of the capability, so symbol + 0
+    uint64_t targetVA = realTarget.sym()->getVA(0);
     bool preemptibleDynReloc =
-        reloc.needsDynReloc && reloc.target.sym()->isPreemptible;
+        reloc.needsDynReloc && realTarget.sym()->isPreemptible;
     uint64_t targetSize = 0;
     if (preemptibleDynReloc) {
       // If we have a relocation against a preemptible symbol (even in the
       // current DSO) we can't compute the virtual address here so we only write
       // the addend
-      if (reloc.target.offset != 0)
+      if (realTarget.offset != 0)
         error("Dyn Reloc Target offset was nonzero: " +
-              Twine(reloc.target.offset) + " - " +
-              reloc.target.verboseToString());
-      targetVA = reloc.target.offset;
+              Twine(realTarget.offset) + " - " + realTarget.verboseToString());
+      targetVA = realTarget.offset;
     } else {
       // For non-preemptible symbols we can write the target size:
-      targetSize = getTargetSize<ELFT>(location, reloc);
+      targetSize = getTargetSize<ELFT>(location, realTarget);
     }
-    uint64_t targetOffset = reloc.capabilityOffset;
+    uint64_t targetOffset = reloc.capabilityOffset + realTarget.offset;
     uint64_t permissions = 0;
     // Fow now Function implies ReadOnly so don't add the flag
-    if (reloc.target.sym()->isFunc()) {
+    if (realTarget.sym()->isFunc()) {
       permissions |= CaptablePermissions<ELFT>::function;
-    } else if (auto os = reloc.target.sym()->getOutputSection()) {
-      assert(!reloc.target.sym()->isTls());
+    } else if (auto os = realTarget.sym()->getOutputSection()) {
+      assert(!realTarget.sym()->isTls());
       // if ((OS->getPhdrFlags() & PF_W) == 0) {
       if (((os->flags & SHF_WRITE) == 0) || isRelroSection(os)) {
         permissions |= CaptablePermissions<ELFT>::readOnly;
       } else if (os->flags & SHF_EXECINSTR) {
         warn("Non-function __cap_reloc against symbol in section with "
-             "SHF_EXECINSTR (" + toString(os->name) + ") for symbol " +
-             reloc.target.verboseToString());
+             "SHF_EXECINSTR (" +
+             toString(os->name) + ") for symbol " +
+             realTarget.verboseToString());
       }
     }
 

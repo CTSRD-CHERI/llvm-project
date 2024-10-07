@@ -35,6 +35,7 @@ public:
   // of the local symbol so that it still works even if the local symbol table
   // is stripped. This function tries to find the local symbol to a better match
   SymbolAndOffset findRealSymbol() const;
+  SymbolAndOffset findSymbolForCapabilityRelocation() const;
   Symbol *sym() const {
     assert(symOrSec.is<Symbol *>());
     return symOrSec.get<Symbol *>();

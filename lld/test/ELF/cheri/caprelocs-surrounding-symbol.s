@@ -2,9 +2,9 @@
 ## against STT_NONE targets with size==0.
 # RUN: %riscv64_cheri_purecap_llvm-mc -filetype=obj %s -o %t.o
 # RUN: llvm-readobj --symbols --relocations --cap-relocs --expand-relocs %t.o | FileCheck %s --check-prefix=OBJ-RELOCS
-# RUN: ld.lld -pie %t.o -o %t.exe -e fn1 --verbose 2>&1 | FileCheck %s --check-prefix=LLD-WARN "--implicit-check-not=warning:"
+# RUN: ld.lld -pie %t.o -o %t.exe -e fn1 --verbose 2>&1 | FileCheck %s --check-prefix=LLD-OUTPUT "--implicit-check-not=warning:"
 # RUN: llvm-readobj --symbols --relocations --cap-relocs --expand-relocs %t.exe | FileCheck %s --check-prefix=EXE-RELOCS
-
+# LLD-OUTPUT: relaxation passes: 1
 
 .text
 .global fn1
@@ -73,13 +73,13 @@ fn_reloc1:
 # OBJ-RELOCS-NEXT:     Symbol: .Lfirst_fn_target (
 # OBJ-RELOCS-NEXT:     Addend: 0x0
 # OBJ-RELOCS-NEXT:   }
-# LLD-WARN: warning: could not determine size of cap reloc against local <unknown kind> .Lfirst_fn_target
+# LLD-OUTPUT-NEXT: Found better match for capability relocation against .Lfirst_fn_target+0: fn1+8
 # EXE-RELOCS-NEXT:   Relocation {
 # EXE-RELOCS-NEXT:     Location: 0x3440 (fn_reloc1)
-# EXE-RELOCS-NEXT:     Base: .Lfirst_fn_target (0x1340)
-# EXE-RELOCS-NEXT:     Offset: 0
-# EXE-RELOCS-NEXT:     Length: 16
-# EXE-RELOCS-NEXT:     Permissions: Constant (0x4000000000000000)
+# EXE-RELOCS-NEXT:     Base: fn1 (0x1338)
+# EXE-RELOCS-NEXT:     Offset: 8
+# EXE-RELOCS-NEXT:     Length: 12
+# EXE-RELOCS-NEXT:     Permissions: Function (0x8000000000000000)
 # EXE-RELOCS-NEXT:   }
 
 fn_reloc2:
@@ -98,13 +98,13 @@ fn_reloc2:
 # OBJ-RELOCS-NEXT:     Symbol: .Lsecond_fn_target (
 # OBJ-RELOCS-NEXT:     Addend: 0x0
 # OBJ-RELOCS-NEXT:   }
-# LLD-WARN: warning: could not determine size of cap reloc against local <unknown kind> .Lsecond_fn_target
+# LLD-OUTPUT-NEXT: Found better match for capability relocation against .Lsecond_fn_target+0: .Lfn2$start+8
 # EXE-RELOCS-NEXT:   Relocation {
 # EXE-RELOCS-NEXT:     Location: 0x3450 (fn_reloc2)
-# EXE-RELOCS-NEXT:     Base: .Lsecond_fn_target (0x134C)
-# EXE-RELOCS-NEXT:     Offset: 0
-# EXE-RELOCS-NEXT:     Length: 4
-# EXE-RELOCS-NEXT:     Permissions: Constant (0x4000000000000000)
+# EXE-RELOCS-NEXT:     Base: .Lfn2$start (0x1344)
+# EXE-RELOCS-NEXT:     Offset: 8
+# EXE-RELOCS-NEXT:     Length: 12
+# EXE-RELOCS-NEXT:     Permissions: Function (0x8000000000000000)
 # EXE-RELOCS-NEXT:   }
 data_reloc1:
 .chericap .Linside_obj1
@@ -114,12 +114,12 @@ data_reloc1:
 # OBJ-RELOCS-NEXT:     Symbol: .Linside_obj1 (
 # OBJ-RELOCS-NEXT:     Addend: 0x0
 # OBJ-RELOCS-NEXT:   }
-# LLD-WARN: warning: could not determine size of cap reloc against local <unknown kind> .Linside_obj1
+# LLD-OUTPUT-NEXT: Found better match for capability relocation against .Linside_obj1+0: obj1+16
 # EXE-RELOCS-NEXT:   Relocation {
 # EXE-RELOCS-NEXT:     Location: 0x3460 (data_reloc1)
-# EXE-RELOCS-NEXT:     Base: .Linside_obj1 (0x3410)
-# EXE-RELOCS-NEXT:     Offset: 0
-# EXE-RELOCS-NEXT:     Length: 48
+# EXE-RELOCS-NEXT:     Base: obj1 (0x3400)
+# EXE-RELOCS-NEXT:     Offset: 16
+# EXE-RELOCS-NEXT:     Length: 32
 # EXE-RELOCS-NEXT:     Permissions: Object (0x0)
 # EXE-RELOCS-NEXT:   }
 data_reloc2:
@@ -130,7 +130,11 @@ data_reloc2:
 # OBJ-RELOCS-NEXT:     Symbol: obj2_subobject1 (
 # OBJ-RELOCS-NEXT:     Addend: 0x0
 # OBJ-RELOCS-NEXT:   }
-# LLD-WARN: warning: could not determine size of cap reloc against local object obj2_subobject1
+# LLD-OUTPUT-NEXT: warning: could not determine size of cap reloc against local object obj2_subobject1
+# LLD-OUTPUT-NEXT: >>> defined in {{.+}}caprelocs-surrounding-symbol.s.tmp.o:(obj2))
+# LLD-OUTPUT-NEXT: >>> referenced by local <unknown kind> data_reloc2
+# LLD-OUTPUT-NEXT: >>> defined in {{.+}}caprelocs-surrounding-symbol.s.tmp.o:(.relocs_section+0x30))
+# LLD-OUTPUT-EMPTY:
 # EXE-RELOCS-NEXT:   Relocation {
 # EXE-RELOCS-NEXT:     Location: 0x3470 (data_reloc2)
 # EXE-RELOCS-NEXT:     Base: obj2_subobject1 (0x3430)
@@ -161,13 +165,13 @@ data_reloc4:
 # OBJ-RELOCS-NEXT:     Symbol: .Linside_obj2_subobject2 (
 # OBJ-RELOCS-NEXT:     Addend: 0x0
 # OBJ-RELOCS-NEXT:   }
-# LLD-WARN: warning: could not determine size of cap reloc against local <unknown kind> .Linside_obj2_subobject2
+# LLD-OUTPUT-NEXT: Found better match for capability relocation against .Linside_obj2_subobject2+0: obj2+18
+# LLD-OUTPUT-NEXT: Found better match for capability relocation against obj2+18: obj2_subobject2+1
 # EXE-RELOCS-NEXT:   Relocation {
 # EXE-RELOCS-NEXT:     Location: 0x3490 (data_reloc4)
-# EXE-RELOCS-NEXT:     Base: .Linside_obj2_subobject2 (0x3432)
-# FIXME: should be offset = 1 and length = 15
-# EXE-RELOCS-NEXT:     Offset: 0
-# EXE-RELOCS-NEXT:     Length: 14
+# EXE-RELOCS-NEXT:     Base: obj2_subobject2 (0x3431)
+# EXE-RELOCS-NEXT:     Offset: 1
+# EXE-RELOCS-NEXT:     Length: 15
 # EXE-RELOCS-NEXT:     Permissions: Object (0x0)
 # EXE-RELOCS-NEXT:   }
 
@@ -175,3 +179,4 @@ data_reloc4:
 # OBJ-RELOCS-NEXT:  }
 # OBJ-RELOCS-NEXT: ]
 # EXE-RELOCS-NEXT: ]
+# LLD-OUTPUT-EMPTY:
