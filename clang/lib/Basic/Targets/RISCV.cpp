@@ -50,6 +50,16 @@ ArrayRef<const char *> RISCVTargetInfo::getGCCRegNames() const {
   return llvm::ArrayRef(GCCRegNames);
 }
 
+ArrayRef<const char *> RISCVTargetInfo::getCHERIRegNames() const {
+  const char *FirstCHERIReg = "c0";
+  const char *LastCHERIReg = "c31";
+  ArrayRef<const char *> GCCRegs = getGCCRegNames();
+
+  auto *Start = llvm::find(GCCRegs, FirstCHERIReg);
+  auto *End = llvm::find(GCCRegs, LastCHERIReg);
+  return llvm::ArrayRef(Start, ++End);
+}
+
 ArrayRef<TargetInfo::GCCRegAlias> RISCVTargetInfo::getGCCRegAliases() const {
   static const TargetInfo::GCCRegAlias GCCRegAliases[] = {
       {{"zero"}, "x0"}, {{"ra"}, "x1"},   {{"sp"}, "x2"},    {{"gp"}, "x3"},

@@ -7955,8 +7955,8 @@ NamedDecl *Sema::ActOnVariableDeclarator(
       }
     } else if (SC == SC_Register) {
       // Global Named register
+      const auto &TI = Context.getTargetInfo();
       if (DeclAttrsMatchCUDAMode(getLangOpts(), NewVD)) {
-        const auto &TI = Context.getTargetInfo();
         bool HasSizeMismatch;
 
         if (!TI.isValidGCCRegisterName(Label))
@@ -7970,6 +7970,12 @@ NamedDecl *Sema::ActOnVariableDeclarator(
       }
 
       if (!R->isIntegralType(Context) && !R->isPointerType()) {
+        Diag(D.getBeginLoc(), diag::err_asm_bad_register_type);
+        NewVD->setInvalidDecl(true);
+      } else if ((TI.isValidCHERIRegister(Label) &&
+                  !R->isCHERICapabilityType(Context)) ||
+                 (!TI.isValidCHERIRegister(Label) &&
+                  R->isCHERICapabilityType(Context))) {
         Diag(D.getBeginLoc(), diag::err_asm_bad_register_type);
         NewVD->setInvalidDecl(true);
       }

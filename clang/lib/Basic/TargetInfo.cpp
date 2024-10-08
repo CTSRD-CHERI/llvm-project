@@ -689,6 +689,32 @@ bool TargetInfo::isValidGCCRegisterName(StringRef Name) const {
   return false;
 }
 
+bool TargetInfo::isValidCHERIRegister(StringRef Name) const {
+  if (Name.empty())
+    return false;
+
+  Name = removeGCCRegisterPrefix(Name);
+  if (Name.empty())
+    return false;
+
+  ArrayRef<const char *> Names = getCHERIRegNames();
+  if (llvm::is_contained(Names, Name))
+    return true;
+
+  for (const GCCRegAlias &GRA : getGCCRegAliases())
+    for (const char *A : GRA.Aliases) {
+      if (!A)
+        break;
+      if (A == Name && llvm::is_contained(Names, GRA.Register))
+        return true;
+    }
+  return false;
+}
+
+ArrayRef<const char *> TargetInfo::getCHERIRegNames() const {
+  return std::nullopt;
+}
+
 StringRef TargetInfo::getNormalizedGCCRegisterName(StringRef Name,
                                                    bool ReturnCanonical) const {
   assert(isValidGCCRegisterName(Name) && "Invalid register passed in");

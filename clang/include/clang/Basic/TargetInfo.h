@@ -1051,6 +1051,10 @@ public:
   /// This is used by Sema for inline asm statements.
   virtual bool isValidGCCRegisterName(StringRef Name) const;
 
+  bool isValidCHERIRegister(StringRef Name) const;
+
+  virtual ArrayRef<const char *> getCHERIRegNames() const;
+
   /// Returns the "normalized" GCC register name.
   ///
   /// ReturnCannonical true will return the register name without any additions
