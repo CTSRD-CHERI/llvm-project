@@ -17,4 +17,13 @@ __uintcap_t b(void)
   return not_cap_stack_pointer;
 }
 
+void g(void){
+  register __uintcap_t a0 asm("a4") = 0; //expected-error{{bad type for named register variable}}
+  asm volatile ("nop": "=C"(a0));
+}
+
+void h(void) {
+  register unsigned long a0 asm("ca4") = 0; //expected-error{{bad type for named register variable}}
+  asm volatile ("nop": "=r"(a0));
+}
 

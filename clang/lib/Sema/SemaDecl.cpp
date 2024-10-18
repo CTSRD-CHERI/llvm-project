@@ -7942,12 +7942,21 @@ NamedDecl *Sema::ActOnVariableDeclarator(
       case SC_Auto:
         Diag(E->getExprLoc(), diag::warn_asm_label_on_auto_decl) << Label;
         break;
-      case SC_Register:
+      case SC_Register: {
+        const auto &TI = Context.getTargetInfo();
         // Local Named register
-        if (!Context.getTargetInfo().isValidGCCRegisterName(Label) &&
+        if (!TI.isValidGCCRegisterName(Label) &&
             DeclAttrsMatchCUDAMode(getLangOpts(), getCurFunctionDecl()))
           Diag(E->getExprLoc(), diag::err_asm_unknown_register_name) << Label;
+        if ((TI.isValidCHERIRegister(Label) &&
+                    !R->isCHERICapabilityType(Context)) ||
+                   (!TI.isValidCHERIRegister(Label) &&
+                    R->isCHERICapabilityType(Context))) {
+          Diag(D.getBeginLoc(), diag::err_asm_bad_register_type);
+          NewVD->setInvalidDecl(true);
+        }
         break;
+      }
       case SC_Static:
       case SC_Extern:
       case SC_PrivateExtern:
