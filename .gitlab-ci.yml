@@ -4,9 +4,15 @@ variables:
   KUBERNETES_CPU_REQUEST: "16"
   KUBERNETES_CPU_LIMIT: "16"
   OMP_NUM_THREADS: "16"
-  KUBERNETES_MEMORY_REQUEST: "128Gi"
-  KUBERNETES_MEMORY_LIMIT: "128Gi"
+  KUBERNETES_MEMORY_REQUEST: "256Gi"
+  KUBERNETES_MEMORY_LIMIT: "256Gi"
   PACKAGE_NAME: "bakewell_compiler.tar.gz"
+
+default:
+  tags:
+    - linux
+    - container
+  image: container-registry.codasip.com/cheri/software/bakewell/cherillvm:0.1.1
 
 stages:
   - build_and_test
@@ -16,10 +22,6 @@ build_and_test_llvm:
   stage: build_and_test
   rules:
     - if: $CI_PIPELINE_SOURCE != "schedule"
-  image: container-registry.codasip.com/cheri/software/bakewell/cherillvm:0.1.1
-  tags:
-    - linux
-    - kubernetes
   script:
     - mkdir -p $BUILD_DIR
     - cmake -DLLVM_ENABLE_PROJECTS="clang;lld" -DLLVM_PARALLEL_LINK_JOBS=4 -DCMAKE_BUILD_TYPE="Debug" -B $BUILD_DIR -S $CI_PROJECT_DIR/llvm
@@ -30,10 +32,6 @@ nightly_build:
     nightly_build
   rules:
   - if: $CI_PIPELINE_SOURCE == "schedule"
-  image: container-registry.codasip.com/cheri/software/bakewell/cherillvm:0.1.1
-  tags:
-    - linux
-    - kubernetes
   script:
     - mkdir -p $BUILD_DIR && mkdir -p $INSTALL_DIR
     - cmake -DCMAKE_BUILD_TYPE="Release" -DLLVM_TARGETS_TO_BUILD="RISCV" -DLLVM_ENABLE_PROJECTS="clang;lld" -DLLVM_PARALLEL_LINK_JOBS=2 -DCMAKE_INSTALL_PREFIX=$INSTALL_DIR -B $BUILD_DIR -S $CI_PROJECT_DIR/llvm
