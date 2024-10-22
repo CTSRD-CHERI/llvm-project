@@ -35,7 +35,7 @@ public:
   void writePltHeader(Compartment *c, uint8_t *buf) const override;
   void writePlt(Compartment *c, uint8_t *buf, const Symbol &sym,
                 uint64_t pltEntryAddr) const override;
-  void relocate(uint8_t *loc, const Relocation &rel,
+  void relocate(Compartment *c, uint8_t *loc, const Relocation &rel,
                 uint64_t val) const override;
   int64_t getImplicitAddend(const uint8_t *buf, RelType type) const override;
   void applyJumpInstrMod(uint8_t *loc, JumpModType type,
@@ -177,7 +177,7 @@ static bool isFallThruRelocation(InputSection &is, InputFile *file,
     return false;
 
   uint64_t addrLoc = is.getOutputSection()->addr + is.outSecOff + r.offset;
-  uint64_t targetOffset = InputSectionBase::getRelocTargetVA(
+  uint64_t targetOffset = InputSectionBase::getRelocTargetVA(is.compartment,
       file, r.type, r.addend, addrLoc, *r.sym, r.expr, &is, r.offset);
 
   // If this jmp is a fall thru, the target offset is the beginning of the
@@ -371,7 +371,7 @@ void X86_64::writeGotPltHeader(uint8_t *buf) const {
 
 void X86_64::writeGotPlt(Compartment *c, uint8_t *buf, const Symbol &s) const {
   // See comments in X86::writeGotPlt.
-  write64le(buf, s.getPltVA() + 6);
+  write64le(buf, s.getPltVA(c) + 6);
 }
 
 void X86_64::writeIgotPlt(uint8_t *buf, const Symbol &s) const {
@@ -402,8 +402,8 @@ void X86_64::writePlt(Compartment *c, uint8_t *buf, const Symbol &sym,
   };
   memcpy(buf, inst, sizeof(inst));
 
-  write32le(buf + 2, sym.getGotPltVA() - pltEntryAddr - 6);
-  write32le(buf + 7, sym.getPltIdx());
+  write32le(buf + 2, sym.getGotPltVA(c) - pltEntryAddr - 6);
+  write32le(buf + 7, sym.getPltIdx(c));
   write32le(buf + 12, plt(c)->getVA() - pltEntryAddr - 16);
 }
 
@@ -717,7 +717,8 @@ int64_t X86_64::getImplicitAddend(const uint8_t *buf, RelType type) const {
 
 static void relaxGot(uint8_t *loc, const Relocation &rel, uint64_t val);
 
-void X86_64::relocate(uint8_t *loc, const Relocation &rel, uint64_t val) const {
+void X86_64::relocate(Compartment *c, uint8_t *loc, const Relocation &rel,
+                      uint64_t val) const {
   switch (rel.type) {
   case R_X86_64_8:
     checkIntUInt(loc, val, 8, rel);
@@ -990,14 +991,15 @@ void X86_64::relocateAlloc(InputSectionBase &sec, uint8_t *buf) const {
   uint64_t secAddr = sec.getOutputSection()->addr;
   if (auto *s = dyn_cast<InputSection>(&sec))
     secAddr += s->outSecOff;
+  Compartment *c = sec.compartment;
   for (const Relocation &rel : sec.relocs()) {
     if (rel.expr == R_NONE) // See deleteFallThruJmpInsn
       continue;
     uint8_t *loc = buf + rel.offset;
     const uint64_t val =
-        sec.getRelocTargetVA(sec.file, rel.type, rel.addend,
+        sec.getRelocTargetVA(c, sec.file, rel.type, rel.addend,
                              secAddr + rel.offset, *rel.sym, rel.expr, &sec, rel.offset);
-    relocate(loc, rel, val);
+    relocate(c, loc, rel, val);
   }
   if (sec.jumpInstrMod) {
     applyJumpInstrMod(buf + sec.jumpInstrMod->offset,
@@ -1026,7 +1028,7 @@ IntelIBT::IntelIBT() { pltHeaderSize = 0; }
 
 void IntelIBT::writeGotPlt(Compartment *c, uint8_t *buf, const Symbol &s) const {
   uint64_t va =
-      in.ibtPlt->getVA() + IBTPltHeaderSize + s.getPltIdx() * pltEntrySize;
+      in.ibtPlt->getVA() + IBTPltHeaderSize + s.getPltIdx(c) * pltEntrySize;
   write64le(buf, va);
 }
 
@@ -1038,7 +1040,7 @@ void IntelIBT::writePlt(Compartment *c, uint8_t *buf, const Symbol &sym,
       0x66, 0x0f, 0x1f, 0x44, 0, 0, // nop
   };
   memcpy(buf, Inst, sizeof(Inst));
-  write32le(buf + 6, sym.getGotPltVA() - pltEntryAddr - 10);
+  write32le(buf + 6, sym.getGotPltVA(c) - pltEntryAddr - 10);
 }
 
 void IntelIBT::writeIBTPlt(Compartment *c, uint8_t *buf,
@@ -1097,7 +1099,7 @@ Retpoline::Retpoline() {
 }
 
 void Retpoline::writeGotPlt(Compartment *c, uint8_t *buf, const Symbol &s) const {
-  write64le(buf, s.getPltVA() + 17);
+  write64le(buf, s.getPltVA(c) + 17);
 }
 
 void Retpoline::writePltHeader(Compartment *c, uint8_t *buf) const {
@@ -1136,10 +1138,10 @@ void Retpoline::writePlt(Compartment *c, uint8_t *buf, const Symbol &sym,
 
   uint64_t off = pltEntryAddr - plt(c)->getVA();
 
-  write32le(buf + 3, sym.getGotPltVA() - pltEntryAddr - 7);
+  write32le(buf + 3, sym.getGotPltVA(c) - pltEntryAddr - 7);
   write32le(buf + 8, -off - 12 + 32);
   write32le(buf + 13, -off - 17 + 18);
-  write32le(buf + 18, sym.getPltIdx());
+  write32le(buf + 18, sym.getPltIdx(c));
   write32le(buf + 23, -off - 27);
 }
 
@@ -1174,7 +1176,7 @@ void RetpolineZNow::writePlt(Compartment *c, uint8_t *buf, const Symbol &sym,
   };
   memcpy(buf, insn, sizeof(insn));
 
-  write32le(buf + 3, sym.getGotPltVA() - pltEntryAddr - 7);
+  write32le(buf + 3, sym.getGotPltVA(c) - pltEntryAddr - 7);
   write32le(buf + 8, plt(c)->getVA() - pltEntryAddr - 12);
 }
 

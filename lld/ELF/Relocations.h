@@ -16,6 +16,7 @@
 
 namespace lld::elf {
 class Symbol;
+struct Compartment;
 class InputSection;
 class InputSectionBase;
 class OutputSection;
@@ -178,7 +179,7 @@ private:
   ThunkSection *addThunkSection(OutputSection *os, InputSectionDescription *,
                                 uint64_t off);
 
-  bool normalizeExistingThunk(Relocation &rel, uint64_t src);
+  bool normalizeExistingThunk(Compartment *c, Relocation &rel, uint64_t src);
 
   // Record all the available Thunks for a (Symbol, addend) pair, where Symbol
   // is represented as a (section, offset) pair. There may be multiple

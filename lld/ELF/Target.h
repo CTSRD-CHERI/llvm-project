@@ -68,7 +68,8 @@ public:
   // Decide whether a Thunk is needed for the relocation from File
   // targeting S.
   virtual bool needsThunk(RelExpr expr, RelType relocType,
-                          const InputFile *file, uint64_t branchAddr,
+                          const InputFile *file, const Compartment *c,
+                          uint64_t branchAddr,
                           const Symbol &s, int64_t a) const;
 
   // On systems with range extensions we place collections of Thunks at
@@ -88,10 +89,11 @@ public:
   virtual bool inBranchRange(RelType type, uint64_t src,
                              uint64_t dst) const;
 
-  virtual void relocate(uint8_t *loc, const Relocation &rel,
+  virtual void relocate(Compartment *c, uint8_t *loc, const Relocation &rel,
                         uint64_t val) const = 0;
-  void relocateNoSym(uint8_t *loc, RelType type, uint64_t val) const {
-    relocate(loc, Relocation{R_NONE, type, 0, 0, nullptr}, val);
+  void relocateNoSym(Compartment *c, uint8_t *loc, RelType type,
+                     uint64_t val) const {
+    relocate(c, loc, Relocation{R_NONE, type, 0, 0, nullptr}, val);
   }
   virtual void relocateAlloc(InputSectionBase &sec, uint8_t *buf) const;
 

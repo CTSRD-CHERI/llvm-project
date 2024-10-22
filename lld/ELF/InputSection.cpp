@@ -651,7 +651,8 @@ static int64_t getTlsTpOffset(const Symbol &s) {
   }
 }
 
-uint64_t InputSectionBase::getRelocTargetVA(const InputFile *file, RelType type,
+uint64_t InputSectionBase::getRelocTargetVA(const Compartment *c,
+                                            const InputFile *file, RelType type,
                                             int64_t a, uint64_t p,
                                             const Symbol &sym, RelExpr expr,
                                             const InputSectionBase *isec,
@@ -671,43 +672,45 @@ uint64_t InputSectionBase::getRelocTargetVA(const InputFile *file, RelType type,
     return sym.getVA(a) - getARMStaticBase(sym);
   case R_GOT:
   case R_RELAX_TLS_GD_TO_IE_ABS:
-    return sym.getGotVA() + a;
-  case R_LOONGARCH_GOT:
+    return sym.getGotVA(c) + a;
+  case R_LOONGARCH_GOT: {
     // The LoongArch TLS GD relocs reuse the R_LARCH_GOT_PC_LO12 reloc type
     // for their page offsets. The arithmetics are different in the TLS case
     // so we have to duplicate some logic here.
-    if (sym.hasFlag(NEEDS_TLSGD) && type != R_LARCH_TLS_IE_PC_LO12)
+    if (sym.hasFlag(c, NEEDS_TLSGD) && type != R_LARCH_TLS_IE_PC_LO12)
       // Like R_LOONGARCH_TLSGD_PAGE_PC but taking the absolute value.
-      return in.got->getGlobalDynAddr(sym) + a;
-    return getRelocTargetVA(file, type, a, p, sym, R_GOT, isec, offset);
+      return got(c)->getGlobalDynAddr(sym) + a;
+    return getRelocTargetVA(c, file, type, a, p, sym, R_GOT, isec, offset);
+  }
   case R_GOTONLY_PC:
-    return in.got->getVA() + a - p;
+    return got(c)->getVA() + a - p;
   case R_GOTPLTONLY_PC:
-    return in.gotPlt->getVA() + a - p;
+    return gotPlt(c)->getVA() + a - p;
   case R_GOTREL:
   case R_PPC64_RELAX_TOC:
-    return sym.getVA(a) - in.got->getVA();
+    return sym.getVA(a) - got(c)->getVA();
   case R_GOTPLTREL:
-    return sym.getVA(a) - in.gotPlt->getVA();
+    return sym.getVA(a) - gotPlt(c)->getVA();
   case R_GOTPLT:
   case R_RELAX_TLS_GD_TO_IE_GOTPLT:
-    return sym.getGotVA() + a - in.gotPlt->getVA();
+    return sym.getGotVA(c) + a - gotPlt(c)->getVA();
   case R_TLSLD_GOT_OFF:
   case R_GOT_OFF:
   case R_RELAX_TLS_GD_TO_IE_GOT_OFF:
-    return sym.getGotOffset() + a;
+    return sym.getGotOffset(c) + a;
   case R_AARCH64_GOT_PAGE_PC:
   case R_AARCH64_RELAX_TLS_GD_TO_IE_PAGE_PC:
-    return getAArch64Page(sym.getGotVA() + a) - getAArch64Page(p);
+    return getAArch64Page(sym.getGotVA(c) + a) - getAArch64Page(p);
   case R_AARCH64_GOT_PAGE:
-    return sym.getGotVA() + a - getAArch64Page(in.got->getVA());
+    return sym.getGotVA(c) + a - getAArch64Page(got(c)->getVA());
   case R_GOT_PC:
   case R_RELAX_TLS_GD_TO_IE:
-    return sym.getGotVA() + a - p;
-  case R_LOONGARCH_GOT_PAGE_PC:
-    if (sym.hasFlag(NEEDS_TLSGD))
-      return getLoongArchPageDelta(in.got->getGlobalDynAddr(sym) + a, p);
-    return getLoongArchPageDelta(sym.getGotVA() + a, p);
+    return sym.getGotVA(c) + a - p;
+  case R_LOONGARCH_GOT_PAGE_PC: {
+    if (sym.hasFlag(c, NEEDS_TLSGD))
+      return getLoongArchPageDelta(got(c)->getGlobalDynAddr(sym) + a, p);
+    return getLoongArchPageDelta(sym.getGotVA(c) + a, p);
+  }
   case R_MIPS_GOTREL:
     return sym.getVA(a) - in.mipsGot->getGp(file);
   case R_MIPS_GOT_GP:
@@ -752,7 +755,7 @@ uint64_t InputSectionBase::getRelocTargetVA(const InputFile *file, RelType type,
   }
   case R_RISCV_PC_INDIRECT: {
     if (const Relocation *hiRel = getRISCVPCRelHi20(&sym, a))
-      return getRelocTargetVA(file, hiRel->type, hiRel->addend, sym.getVA(),
+      return getRelocTargetVA(c, file, hiRel->type, hiRel->addend, sym.getVA(),
                               *hiRel->sym, hiRel->expr, isec, offset);
     return 0;
   }
@@ -787,19 +790,19 @@ uint64_t InputSectionBase::getRelocTargetVA(const InputFile *file, RelType type,
     return dest - p;
   }
   case R_PLT:
-    return sym.getPltVA() + a;
+    return sym.getPltVA(c) + a;
   case R_PLT_PC:
   case R_PPC64_CALL_PLT:
-    return sym.getPltVA() + a - p;
+    return sym.getPltVA(c) + a - p;
   case R_LOONGARCH_PLT_PAGE_PC:
-    return getLoongArchPageDelta(sym.getPltVA() + a, p);
+    return getLoongArchPageDelta(sym.getPltVA(c) + a, p);
   case R_PLT_GOTPLT:
-    return sym.getPltVA() + a - in.gotPlt->getVA();
+    return sym.getPltVA(c) + a - gotPlt(c)->getVA();
   case R_PPC32_PLTREL:
     // R_PPC_PLTREL24 uses the addend (usually 0 or 0x8000) to indicate r30
     // stores _GLOBAL_OFFSET_TABLE_ or .got2+0x8000. The addend is ignored for
     // target VA computation.
-    return sym.getPltVA() - p;
+    return sym.getPltVA(c) - p;
   case R_PPC64_CALL: {
     uint64_t symVA = sym.getVA(a);
     // If we have an undefined weak symbol, we might get here with a symbol
@@ -840,27 +843,27 @@ uint64_t InputSectionBase::getRelocTargetVA(const InputFile *file, RelType type,
   case R_SIZE:
     return sym.getSize() + a;
   case R_TLSDESC:
-    return in.got->getTlsDescAddr(sym) + a;
+    return got(c)->getTlsDescAddr(sym) + a;
   case R_TLSDESC_PC:
-    return in.got->getTlsDescAddr(sym) + a - p;
+    return got(c)->getTlsDescAddr(sym) + a - p;
   case R_TLSDESC_GOTPLT:
-    return in.got->getTlsDescAddr(sym) + a - in.gotPlt->getVA();
+    return got(c)->getTlsDescAddr(sym) + a - gotPlt(c)->getVA();
   case R_AARCH64_TLSDESC_PAGE:
-    return getAArch64Page(in.got->getTlsDescAddr(sym) + a) - getAArch64Page(p);
+    return getAArch64Page(got(c)->getTlsDescAddr(sym) + a) - getAArch64Page(p);
   case R_TLSGD_GOT:
-    return in.got->getGlobalDynOffset(sym) + a;
+    return got(c)->getGlobalDynOffset(sym) + a;
   case R_TLSGD_GOTPLT:
-    return in.got->getGlobalDynAddr(sym) + a - in.gotPlt->getVA();
+    return got(c)->getGlobalDynAddr(sym) + a - gotPlt(c)->getVA();
   case R_TLSGD_PC:
-    return in.got->getGlobalDynAddr(sym) + a - p;
+    return got(c)->getGlobalDynAddr(sym) + a - p;
   case R_LOONGARCH_TLSGD_PAGE_PC:
-    return getLoongArchPageDelta(in.got->getGlobalDynAddr(sym) + a, p);
+    return getLoongArchPageDelta(got(c)->getGlobalDynAddr(sym) + a, p);
   case R_TLSLD_GOTPLT:
-    return in.got->getVA() + in.got->getTlsIndexOff() + a - in.gotPlt->getVA();
+    return got(c)->getVA() + got(c)->getTlsIndexOff() + a - gotPlt(c)->getVA();
   case R_TLSLD_GOT:
-    return in.got->getTlsIndexOff() + a;
+    return got(c)->getTlsIndexOff() + a;
   case R_TLSLD_PC:
-    return in.got->getTlsIndexVA() + a - p;
+    return got(c)->getTlsIndexVA() + a - p;
   case R_ABS_CAP:
     llvm_unreachable("R_ABS_CAP should not be handled here!");
   case R_ABS_CAP_ADDR:
@@ -997,7 +1000,7 @@ void InputSection::relocateNonAlloc(uint8_t *buf, ArrayRef<RelTy> rels) {
         // If -z dead-reloc-in-nonalloc= is specified, respect it.
         const uint64_t value = tombstone ? SignExtend64<bits>(*tombstone)
                                          : (isDebugLocOrRanges ? 1 : 0);
-        target.relocateNoSym(bufLoc, type, value);
+        target.relocateNoSym(compartment, bufLoc, type, value);
         continue;
       }
     }
@@ -1007,7 +1010,7 @@ void InputSection::relocateNonAlloc(uint8_t *buf, ArrayRef<RelTy> rels) {
       continue;
 
     if (expr == R_SIZE) {
-      target.relocateNoSym(bufLoc, type,
+      target.relocateNoSym(compartment, bufLoc, type,
                            SignExtend64<bits>(sym.getSize() + addend));
       continue;
     }
@@ -1016,7 +1019,8 @@ void InputSection::relocateNonAlloc(uint8_t *buf, ArrayRef<RelTy> rels) {
     // sections.
     if (expr == R_ABS || expr == R_DTPREL || expr == R_GOTPLTREL ||
         expr == R_RISCV_ADD) {
-      target.relocateNoSym(bufLoc, type, SignExtend64<bits>(sym.getVA(addend)));
+      target.relocateNoSym(compartment, bufLoc, type,
+                           SignExtend64<bits>(sym.getVA(addend)));
       continue;
     }
 
@@ -1036,7 +1040,7 @@ void InputSection::relocateNonAlloc(uint8_t *buf, ArrayRef<RelTy> rels) {
     // address 0. For bug-compatibility, we accept them with warnings. We
     // know Steel Bank Common Lisp as of 2018 have this bug.
     warn(msg);
-    target.relocateNoSym(
+    target.relocateNoSym(compartment,
         bufLoc, type,
         SignExtend64<bits>(sym.getVA(addend - offset - outSecOff)));
   }
@@ -1055,7 +1059,7 @@ static void relocateNonAllocForRelocatable(InputSection *sec, uint8_t *buf) {
     assert(rel.expr == R_ABS);
     uint8_t *bufLoc = buf + rel.offset;
     uint64_t targetVA = SignExtend64(rel.sym->getVA(rel.addend), bits);
-    target->relocate(bufLoc, rel, targetVA);
+    target->relocate(sec->compartment, bufLoc, rel, targetVA);
   }
 }
 

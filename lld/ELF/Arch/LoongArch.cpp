@@ -35,7 +35,7 @@ public:
   RelExpr getRelExpr(RelType type, const Symbol &s,
                      const uint8_t *loc) const override;
   bool usesOnlyLowPageBits(RelType type) const override;
-  void relocate(uint8_t *loc, const Relocation &rel,
+  void relocate(Compartment *c, uint8_t *loc, const Relocation &rel,
                 uint64_t val) const override;
 };
 } // end anonymous namespace
@@ -399,7 +399,7 @@ void LoongArch::writePlt(Compartment *c, uint8_t *buf, const Symbol &sym,
   //   ld.[wd]   $t3, $t3, %pcrel_lo12(f@.got.plt)
   //   jirl      $t1, $t3, 0
   //   nop
-  uint32_t offset = sym.getGotPltVA() - pltEntryAddr;
+  uint32_t offset = sym.getGotPltVA(c) - pltEntryAddr;
   write32le(buf + 0, insn(PCADDU12I, R_T3, hi20(offset), 0));
   write32le(buf + 4,
             insn(config->is64 ? LD_D : LD_W, R_T3, R_T3, lo12(offset)));
@@ -550,7 +550,7 @@ bool LoongArch::usesOnlyLowPageBits(RelType type) const {
   }
 }
 
-void LoongArch::relocate(uint8_t *loc, const Relocation &rel,
+void LoongArch::relocate(Compartment *c, uint8_t *loc, const Relocation &rel,
                          uint64_t val) const {
   switch (rel.type) {
   case R_LARCH_32_PCREL:
