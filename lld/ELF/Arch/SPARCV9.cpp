@@ -26,7 +26,7 @@ public:
                      const uint8_t *loc) const override;
   void writePlt(Compartment *c, uint8_t *buf, const Symbol &sym,
                 uint64_t pltEntryAddr) const override;
-  void relocate(uint8_t *loc, const Relocation &rel,
+  void relocate(Compartment *c, uint8_t *loc, const Relocation &rel,
                 uint64_t val) const override;
 };
 } // namespace
@@ -84,7 +84,7 @@ RelExpr SPARCV9::getRelExpr(RelType type, const Symbol &s,
   }
 }
 
-void SPARCV9::relocate(uint8_t *loc, const Relocation &rel,
+void SPARCV9::relocate(Compartment *c, uint8_t *loc, const Relocation &rel,
                        uint64_t val) const {
   switch (rel.type) {
   case R_SPARC_32:
@@ -189,8 +189,8 @@ void SPARCV9::writePlt(Compartment *c, uint8_t *buf, const Symbol & /*sym*/,
   memcpy(buf, pltData, sizeof(pltData));
 
   uint64_t off = pltEntryAddr - plt(c)->getVA();
-  relocateNoSym(buf, R_SPARC_22, off);
-  relocateNoSym(buf + 4, R_SPARC_WDISP19, -(off + 4 - pltEntrySize));
+  relocateNoSym(c, buf, R_SPARC_22, off);
+  relocateNoSym(c, buf + 4, R_SPARC_WDISP19, -(off + 4 - pltEntrySize));
 }
 
 TargetInfo *elf::getSPARCV9TargetInfo() {

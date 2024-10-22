@@ -1347,6 +1347,8 @@ struct Compartment {
 
   std::string suffix;
 
+  SymCompartMap symCompartMap;
+
   // Synthetic sections
   std::unique_ptr<GotSection> got;
   std::unique_ptr<GotPltSection> gotPlt;
