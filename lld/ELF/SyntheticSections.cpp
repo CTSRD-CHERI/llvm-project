@@ -662,19 +662,19 @@ void GotSection::addEntry(Symbol &sym) {
   // TODO: Separate out TLS IE entries for CHERI so we can pack them more
   // efficiently rather than consuming a whole capability-sized slot for an
   // integer.
-  assert(sym.auxIdx == symAux.size() - 1);
+  assert(sym.auxIdx(compartment) == symAux.size() - 1);
   symAux.back().gotIdx = numEntries++;
 }
 
 bool GotSection::addTlsDescEntry(Symbol &sym) {
-  assert(sym.auxIdx == symAux.size() - 1);
+  assert(sym.auxIdx(compartment) == symAux.size() - 1);
   symAux.back().tlsDescIdx = numEntries;
   numEntries += 2;
   return true;
 }
 
 bool GotSection::addDynTlsEntry(Symbol &sym) {
-  assert(sym.auxIdx == symAux.size() - 1);
+  assert(sym.auxIdx(compartment) == symAux.size() - 1);
   symAux.back().tlsGdIdx = numEntries;
   // Global Dynamic TLS entries take two GOT slots, except on CHERI where they
   // can be packed into one GOT slot.
@@ -686,18 +686,18 @@ bool GotSection::addDynTlsEntry(Symbol &sym) {
 }
 
 void GotSection::addTgotEntry(Symbol &sym) {
-  assert(sym.auxIdx == symAux.size() - 1);
+  assert(sym.auxIdx(compartment) == symAux.size() - 1);
   symAux.back().tgotGotIdx = numEntries++;
 }
 
 void GotSection::addTgotTlsDescEntry(Symbol &sym) {
-  assert(sym.auxIdx == symAux.size() - 1);
+  assert(sym.auxIdx(compartment) == symAux.size() - 1);
   symAux.back().tgotTlsDescIdx = numEntries;
   numEntries += 2;
 }
 
 bool GotSection::addTgotDynTlsEntry(Symbol &sym) {
-  assert(sym.auxIdx == symAux.size() - 1);
+  assert(sym.auxIdx(compartment) == symAux.size() - 1);
   symAux.back().tgotTlsGdIdx = numEntries;
   // Global Dynamic TLS entries take two GOT slots, except on CHERI where they
   // can be packed into one GOT slot.
@@ -719,7 +719,7 @@ bool GotSection::addTlsIndex() {
 }
 
 uint32_t GotSection::getTlsDescOffset(const Symbol &sym) const {
-  return sym.getTlsDescIdx() * target->gotEntrySize;
+  return sym.getTlsDescIdx(compartment) * target->gotEntrySize;
 }
 
 uint64_t GotSection::getTlsDescAddr(const Symbol &sym) const {
@@ -727,15 +727,15 @@ uint64_t GotSection::getTlsDescAddr(const Symbol &sym) const {
 }
 
 uint64_t GotSection::getGlobalDynAddr(const Symbol &b) const {
-  return this->getVA() + b.getTlsGdIdx() * target->gotEntrySize;
+  return this->getVA() + b.getTlsGdIdx(compartment) * target->gotEntrySize;
 }
 
 uint64_t GotSection::getGlobalDynOffset(const Symbol &b) const {
-  return b.getTlsGdIdx() * target->gotEntrySize;
+  return b.getTlsGdIdx(compartment) * target->gotEntrySize;
 }
 
 uint64_t GotSection::getTgotOffset(const Symbol &sym) const {
-  return sym.getTgotGotIdx() * target->gotEntrySize;
+  return sym.getTgotGotIdx(compartment) * target->gotEntrySize;
 }
 
 uint64_t GotSection::getTgotAddr(const Symbol &sym) const {
@@ -743,7 +743,7 @@ uint64_t GotSection::getTgotAddr(const Symbol &sym) const {
 }
 
 uint64_t GotSection::getTgotTlsDescOffset(const Symbol &sym) const {
-  return sym.getTgotTlsDescIdx() * target->gotEntrySize;
+  return sym.getTgotTlsDescIdx(compartment) * target->gotEntrySize;
 }
 
 uint64_t GotSection::getTgotTlsDescAddr(const Symbol &sym) const {
@@ -751,11 +751,11 @@ uint64_t GotSection::getTgotTlsDescAddr(const Symbol &sym) const {
 }
 
 uint64_t GotSection::getTgotGlobalDynAddr(const Symbol &b) const {
-  return this->getVA() + b.getTgotTlsGdIdx() * target->gotEntrySize;
+  return this->getVA() + b.getTgotTlsGdIdx(compartment) * target->gotEntrySize;
 }
 
 uint64_t GotSection::getTgotGlobalDynOffset(const Symbol &b) const {
-  return b.getTgotTlsGdIdx() * target->gotEntrySize;
+  return b.getTgotTlsGdIdx(compartment) * target->gotEntrySize;
 }
 
 void GotSection::finalizeContents() {
@@ -1055,13 +1055,13 @@ void MipsGotSection::build() {
   // Update SymbolAux::gotIdx field to use this
   // value later in the `sortMipsSymbols` function.
   for (auto &p : primGot->global) {
-    if (p.first->auxIdx == 0)
-      p.first->allocateAux();
+    if (p.first->auxIdx(compartment) == 0)
+      p.first->allocateAux(compartment);
     symAux.back().gotIdx = p.second;
   }
   for (auto &p : primGot->relocs) {
-    if (p.first->auxIdx == 0)
-      p.first->allocateAux();
+    if (p.first->auxIdx(compartment) == 0)
+      p.first->allocateAux(compartment);
     symAux.back().gotIdx = p.second;
   }
 
@@ -1231,7 +1231,7 @@ GotPltSection::GotPltSection()
 }
 
 void GotPltSection::addEntry(Symbol &sym) {
-  assert(sym.auxIdx == symAux.size() - 1 &&
+  assert(sym.auxIdx(compartment) == symAux.size() - 1 &&
          symAux.back().pltIdx == entries.size());
   entries.push_back(&sym);
 }
@@ -1298,7 +1298,7 @@ TgotSection::TgotSection()
 
 void TgotSection::addConstant(const Relocation &r) { relocations.push_back(r); }
 void TgotSection::addEntry(Symbol &sym) {
-  assert(sym.auxIdx == symAux.size() - 1);
+  assert(sym.auxIdx(nullptr) == symAux.size() - 1);
   symAux.back().tgotIdx = entries.size();
   entries.push_back(&sym);
 }
@@ -1744,7 +1744,8 @@ int64_t DynamicReloc::computeAddend() const {
     return addend;
   case AddendOnlyWithTargetVA:
   case AgainstSymbolWithTargetVA: {
-    uint64_t ca = InputSection::getRelocTargetVA(inputSec->file, type, addend,
+    uint64_t ca = InputSection::getRelocTargetVA(inputSec->compartment,
+                                                 inputSec->file, type, addend,
                                                  getOffset(), *sym, expr,
                                                  inputSec, offsetInSec);
     return config->is64 ? ca : SignExtend64<32>(ca);
@@ -2297,13 +2298,16 @@ SymbolTableBaseSection::SymbolTableBaseSection(StringTableSection &strTabSec)
 // ftp://www.linux-mips.org/pub/linux/mips/doc/ABI/mipsabi.pdf
 static bool sortMipsSymbols(const SymbolTableEntry &l,
                             const SymbolTableEntry &r) {
+  // XXXJHB: Assume a single compartment for MIPS.
+  Compartment *c = nullptr;
+
   // Sort entries related to non-local preemptible symbols by GOT indexes.
   // All other entries go to the beginning of a dynsym in arbitrary order.
-  if (l.sym->isInGot() && r.sym->isInGot())
-    return l.sym->getGotIdx() < r.sym->getGotIdx();
-  if (!l.sym->isInGot() && !r.sym->isInGot())
+  if (l.sym->isInGot(c) && r.sym->isInGot(c))
+    return l.sym->getGotIdx(c) < r.sym->getGotIdx(c);
+  if (!l.sym->isInGot(c) && !r.sym->isInGot(c))
     return false;
-  return !l.sym->isInGot();
+  return !l.sym->isInGot(c);
 }
 
 void SymbolTableBaseSection::finalizeContents() {
@@ -2418,8 +2422,8 @@ static BssSection *getCommonSec(Symbol *sym) {
 }
 
 static uint32_t getSymSectionIndex(Symbol *sym) {
-  assert(!(sym->hasFlag(NEEDS_COPY) && sym->isObject()));
-  if (!isa<Defined>(sym) || sym->hasFlag(NEEDS_COPY))
+  assert(!(sym->needsCopyAny && sym->isObject()));
+  if (!isa<Defined>(sym) || sym->needsCopyAny)
     return SHN_UNDEF;
   if (const OutputSection *os = sym->getOutputSection())
     return os->sectionIndex >= SHN_LORESERVE ? (uint32_t)SHN_XINDEX
@@ -2479,7 +2483,7 @@ template <class ELFT> void SymbolTableSection<ELFT>::writeTo(uint8_t *buf) {
 
     for (SymbolTableEntry &ent : symbols) {
       Symbol *sym = ent.sym;
-      if (sym->isInPlt() && sym->hasFlag(NEEDS_COPY))
+      if (sym->isInAnyPlt() && sym->needsCopyAny)
         eSym->st_other |= STO_MIPS_PLT;
       if (isMicroMips()) {
         // We already set the less-significant bit for symbols
@@ -2490,7 +2494,7 @@ template <class ELFT> void SymbolTableSection<ELFT>::writeTo(uint8_t *buf) {
         // like `objdump` will be able to deal with a correct
         // symbol position.
         if (sym->isDefined() &&
-            ((sym->stOther & STO_MIPS_MICROMIPS) || sym->hasFlag(NEEDS_COPY))) {
+            ((sym->stOther & STO_MIPS_MICROMIPS) || sym->needsCopyAny)) {
           if (!strTabSec.isDynamic())
             eSym->st_value &= ~1;
           eSym->st_other |= STO_MIPS_MICROMIPS;
@@ -2756,7 +2760,7 @@ void PltSection::writeTo(uint8_t *buf) {
 }
 
 void PltSection::addEntry(Symbol &sym) {
-  assert(sym.auxIdx == symAux.size() - 1);
+  assert(sym.auxIdx(compartment) == symAux.size() - 1);
   symAux.back().pltIdx = entries.size();
   entries.push_back(&sym);
 }
@@ -2803,7 +2807,7 @@ size_t IpltSection::getSize() const {
 }
 
 void IpltSection::addEntry(Symbol &sym) {
-  assert(sym.auxIdx == symAux.size() - 1);
+  assert(sym.auxIdx(compartment) == symAux.size() - 1);
   symAux.back().pltIdx = entries.size();
   entries.push_back(&sym);
 }
@@ -3785,7 +3789,8 @@ void ARMExidxSyntheticSection::writeTo(uint8_t *buf) {
       write32(buf + offset + 4, 0x1);
       uint64_t s = isec->getVA();
       uint64_t p = getVA() + offset;
-      target->relocateNoSym(buf + offset, R_ARM_PREL31, s - p);
+      target->relocateNoSym(isec->compartment, buf + offset, R_ARM_PREL31,
+                            s - p);
       offset += 8;
     }
   }
@@ -3794,7 +3799,7 @@ void ARMExidxSyntheticSection::writeTo(uint8_t *buf) {
   write32(buf + offset + 4, 0x1);
   uint64_t s = sentinel->getVA(sentinel->getSize());
   uint64_t p = getVA() + offset;
-  target->relocateNoSym(buf + offset, R_ARM_PREL31, s - p);
+  target->relocateNoSym(nullptr, buf + offset, R_ARM_PREL31, s - p);
   assert(size == offset + 8);
 }
 
@@ -3807,6 +3812,7 @@ ThunkSection::ThunkSection(OutputSection *os, uint64_t off)
     : SyntheticSection(SHF_ALLOC | SHF_EXECINSTR, SHT_PROGBITS,
                        config->emachine == EM_PPC64 ? 16 : 4, ".text.thunk") {
   this->parent = os;
+  this->compartment = os->compartment;
   this->outSecOff = off;
 }
 
