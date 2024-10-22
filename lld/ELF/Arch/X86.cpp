@@ -33,17 +33,17 @@ public:
   void writePltHeader(Compartment *c, uint8_t *buf) const override;
   void writePlt(Compartment *c, uint8_t *buf, const Symbol &sym,
                 uint64_t pltEntryAddr) const override;
-  void relocate(uint8_t *loc, const Relocation &rel,
+  void relocate(Compartment *c, uint8_t *loc, const Relocation &rel,
                 uint64_t val) const override;
 
   RelExpr adjustTlsExpr(RelType type, RelExpr expr) const override;
-  void relaxTlsGdToIe(uint8_t *loc, const Relocation &rel,
+  void relaxTlsGdToIe(Compartment *c, uint8_t *loc, const Relocation &rel,
                       uint64_t val) const override;
-  void relaxTlsGdToLe(uint8_t *loc, const Relocation &rel,
+  void relaxTlsGdToLe(Compartment *c, uint8_t *loc, const Relocation &rel,
                       uint64_t val) const override;
-  void relaxTlsIeToLe(uint8_t *loc, const Relocation &rel,
+  void relaxTlsIeToLe(Compartment *c, uint8_t *loc, const Relocation &rel,
                       uint64_t val) const override;
-  void relaxTlsLdToLe(uint8_t *loc, const Relocation &rel,
+  void relaxTlsLdToLe(Compartment *c, uint8_t *loc, const Relocation &rel,
                       uint64_t val) const override;
 };
 } // namespace
@@ -179,7 +179,7 @@ void X86::writeGotPltHeader(uint8_t *buf) const {
 void X86::writeGotPlt(Compartment *c, uint8_t *buf, const Symbol &s) const {
   // Entries in .got.plt initially points back to the corresponding
   // PLT entries with a fixed offset to skip the first instruction.
-  write32le(buf, s.getPltVA() + 6);
+  write32le(buf, s.getPltVA(c) + 6);
 }
 
 void X86::writeIgotPlt(uint8_t *buf, const Symbol &s) const {
@@ -219,7 +219,7 @@ void X86::writePltHeader(Compartment *c, uint8_t *buf) const {
 
 void X86::writePlt(Compartment *c, uint8_t *buf, const Symbol &sym,
                    uint64_t pltEntryAddr) const {
-  unsigned relOff = relaPlt(c)->entsize * sym.getPltIdx();
+  unsigned relOff = relaPlt(c)->entsize * sym.getPltIdx(c);
   if (config->isPic) {
     const uint8_t inst[] = {
         0xff, 0xa3, 0, 0, 0, 0, // jmp *foo@GOT(%ebx)
@@ -227,7 +227,7 @@ void X86::writePlt(Compartment *c, uint8_t *buf, const Symbol &sym,
         0xe9, 0,    0, 0, 0,    // jmp .PLT0@PC
     };
     memcpy(buf, inst, sizeof(inst));
-    write32le(buf + 2, sym.getGotPltVA() - gotPlt(c)->getVA());
+    write32le(buf + 2, sym.getGotPltVA(c) - gotPlt(c)->getVA());
   } else {
     const uint8_t inst[] = {
         0xff, 0x25, 0, 0, 0, 0, // jmp *foo@GOT
@@ -235,7 +235,7 @@ void X86::writePlt(Compartment *c, uint8_t *buf, const Symbol &sym,
         0xe9, 0,    0, 0, 0,    // jmp .PLT0@PC
     };
     memcpy(buf, inst, sizeof(inst));
-    write32le(buf + 2, sym.getGotPltVA());
+    write32le(buf + 2, sym.getGotPltVA(c));
   }
 
   write32le(buf + 7, relOff);
@@ -289,7 +289,8 @@ int64_t X86::getImplicitAddend(const uint8_t *buf, RelType type) const {
   }
 }
 
-void X86::relocate(uint8_t *loc, const Relocation &rel, uint64_t val) const {
+void X86::relocate(Compartment *c, uint8_t *loc, const Relocation &rel,
+                   uint64_t val) const {
   switch (rel.type) {
   case R_386_8:
     // R_386_{PC,}{8,16} are not part of the i386 psABI, but they are
@@ -353,7 +354,7 @@ void X86::relocate(uint8_t *loc, const Relocation &rel, uint64_t val) const {
   }
 }
 
-void X86::relaxTlsGdToLe(uint8_t *loc, const Relocation &rel,
+void X86::relaxTlsGdToLe(Compartment *c, uint8_t *loc, const Relocation &rel,
                          uint64_t val) const {
   if (rel.type == R_386_TLS_GD) {
     // Convert
@@ -387,7 +388,7 @@ void X86::relaxTlsGdToLe(uint8_t *loc, const Relocation &rel,
   }
 }
 
-void X86::relaxTlsGdToIe(uint8_t *loc, const Relocation &rel,
+void X86::relaxTlsGdToIe(Compartment *c, uint8_t *loc, const Relocation &rel,
                          uint64_t val) const {
   if (rel.type == R_386_TLS_GD) {
     // Convert
@@ -421,7 +422,7 @@ void X86::relaxTlsGdToIe(uint8_t *loc, const Relocation &rel,
 
 // In some conditions, relocations can be optimized to avoid using GOT.
 // This function does that for Initial Exec to Local Exec case.
-void X86::relaxTlsIeToLe(uint8_t *loc, const Relocation &rel,
+void X86::relaxTlsIeToLe(Compartment *c, uint8_t *loc, const Relocation &rel,
                          uint64_t val) const {
   // Ulrich's document section 6.2 says that @gotntpoff can
   // be used with MOVL or ADDL instructions.
@@ -459,7 +460,7 @@ void X86::relaxTlsIeToLe(uint8_t *loc, const Relocation &rel,
   write32le(loc, val);
 }
 
-void X86::relaxTlsLdToLe(uint8_t *loc, const Relocation &rel,
+void X86::relaxTlsLdToLe(Compartment *c, uint8_t *loc, const Relocation &rel,
                          uint64_t val) const {
   if (rel.type == R_386_TLS_LDO_32) {
     write32le(loc, val);
@@ -502,7 +503,7 @@ IntelIBT::IntelIBT() { pltHeaderSize = 0; }
 
 void IntelIBT::writeGotPlt(Compartment *c, uint8_t *buf, const Symbol &s) const {
   uint64_t va =
-      in.ibtPlt->getVA() + IBTPltHeaderSize + s.getPltIdx() * pltEntrySize;
+      in.ibtPlt->getVA() + IBTPltHeaderSize + s.getPltIdx(c) * pltEntrySize;
   write32le(buf, va);
 }
 
@@ -515,7 +516,7 @@ void IntelIBT::writePlt(Compartment *c, uint8_t *buf, const Symbol &sym,
         0x66, 0x0f, 0x1f, 0x44, 0, 0, // nop
     };
     memcpy(buf, inst, sizeof(inst));
-    write32le(buf + 6, sym.getGotPltVA() - gotPlt(c)->getVA());
+    write32le(buf + 6, sym.getGotPltVA(c) - gotPlt(c)->getVA());
     return;
   }
 
@@ -525,7 +526,7 @@ void IntelIBT::writePlt(Compartment *c, uint8_t *buf, const Symbol &sym,
       0x66, 0x0f, 0x1f, 0x44, 0, 0, // nop
   };
   memcpy(buf, inst, sizeof(inst));
-  write32le(buf + 6, sym.getGotPltVA());
+  write32le(buf + 6, sym.getGotPltVA(c));
 }
 
 void IntelIBT::writeIBTPlt(Compartment *c, uint8_t *buf,
@@ -576,7 +577,7 @@ RetpolinePic::RetpolinePic() {
 
 void RetpolinePic::writeGotPlt(Compartment *c, uint8_t *buf,
                                const Symbol &s) const {
-  write32le(buf, s.getPltVA() + 17);
+  write32le(buf, s.getPltVA(c) + 17);
 }
 
 void RetpolinePic::writePltHeader(Compartment *c, uint8_t *buf) const {
@@ -602,7 +603,7 @@ void RetpolinePic::writePltHeader(Compartment *c, uint8_t *buf) const {
 
 void RetpolinePic::writePlt(Compartment *c, uint8_t *buf, const Symbol &sym,
                             uint64_t pltEntryAddr) const {
-  unsigned relOff = relaPlt(c)->entsize * sym.getPltIdx();
+  unsigned relOff = relaPlt(c)->entsize * sym.getPltIdx(c);
   const uint8_t insn[] = {
       0x50,                            // pushl %eax
       0x8b, 0x83, 0,    0,    0,    0, // mov foo@GOT(%ebx), %eax
@@ -616,7 +617,7 @@ void RetpolinePic::writePlt(Compartment *c, uint8_t *buf, const Symbol &sym,
 
   uint32_t ebx = gotPlt(c)->getVA();
   unsigned off = pltEntryAddr - plt(c)->getVA();
-  write32le(buf + 3, sym.getGotPltVA() - ebx);
+  write32le(buf + 3, sym.getGotPltVA(c) - ebx);
   write32le(buf + 8, -off - 12 + 32);
   write32le(buf + 13, -off - 17 + 18);
   write32le(buf + 18, relOff);
@@ -631,7 +632,7 @@ RetpolineNoPic::RetpolineNoPic() {
 
 void RetpolineNoPic::writeGotPlt(Compartment *c, uint8_t *buf,
                                  const Symbol &s) const {
-  write32le(buf, s.getPltVA() + 16);
+  write32le(buf, s.getPltVA(c) + 16);
 }
 
 void RetpolineNoPic::writePltHeader(Compartment *c, uint8_t *buf) const {
@@ -662,7 +663,7 @@ void RetpolineNoPic::writePltHeader(Compartment *c, uint8_t *buf) const {
 
 void RetpolineNoPic::writePlt(Compartment *c, uint8_t *buf, const Symbol &sym,
                               uint64_t pltEntryAddr) const {
-  unsigned relOff = relaPlt(c)->entsize * sym.getPltIdx();
+  unsigned relOff = relaPlt(c)->entsize * sym.getPltIdx(c);
   const uint8_t insn[] = {
       0x50,                         // 0:  pushl %eax
       0xa1, 0,    0,    0,    0,    // 1:  mov foo_in_GOT, %eax
@@ -676,7 +677,7 @@ void RetpolineNoPic::writePlt(Compartment *c, uint8_t *buf, const Symbol &sym,
   memcpy(buf, insn, sizeof(insn));
 
   unsigned off = pltEntryAddr - plt(c)->getVA();
-  write32le(buf + 2, sym.getGotPltVA());
+  write32le(buf + 2, sym.getGotPltVA(c));
   write32le(buf + 7, -off - 11 + 32);
   write32le(buf + 12, -off - 16 + 17);
   write32le(buf + 17, relOff);

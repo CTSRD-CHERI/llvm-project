@@ -86,9 +86,9 @@ std::string lld::verboseToString(const Symbol *b, uint64_t symOffset) {
   else
     msg += "<unknown kind> ";
 
-  if (b->isInGot())
+  if (b->isInAnyGot())
     msg += "(in GOT) ";
-  if (b->isInPlt())
+  if (b->isInAnyPlt())
     msg += "(in PLT) ";
 
   const elf::Defined* dr = dyn_cast<elf::Defined>(b);
@@ -139,6 +139,15 @@ Defined *ElfSym::relaIpltEnd;
 Defined *ElfSym::riscvGlobalPointer;
 Defined *ElfSym::tlsModuleBase;
 SmallVector<SymbolAux, 0> elf::symAux;
+SymCompartMap elf::defaultSymCompartMap;
+
+const SymCompartMap &lld::elf::symCompartMap(const Compartment *c) {
+  return c == nullptr ? defaultSymCompartMap : c->symCompartMap;
+}
+
+SymCompartMap &lld::elf::symCompartMap(Compartment *c) {
+  return c == nullptr ? defaultSymCompartMap : c->symCompartMap;
+}
 
 static uint64_t getSymVA(const Symbol &sym, int64_t addend) {
   switch (sym.kind()) {
@@ -192,7 +201,7 @@ static uint64_t getSymVA(const Symbol &sym, int64_t addend) {
     // field etc) do the same trick as compiler uses to mark microMIPS
     // for CPU - set the less-significant bit.
     if (config->emachine == EM_MIPS && isMicroMips() &&
-        ((sym.stOther & STO_MIPS_MICROMIPS) || sym.needsCopy))
+        ((sym.stOther & STO_MIPS_MICROMIPS) || sym.needsCopyAny))
       va |= 1;
 
     if (d.isTls() && !config->relocatable) {
@@ -221,37 +230,59 @@ static uint64_t getSymVA(const Symbol &sym, int64_t addend) {
   llvm_unreachable("invalid symbol kind");
 }
 
+bool Symbol::isInAnyGot() const {
+  if (isInGot(nullptr))
+    return true;
+  for (Compartment &c : compartments)
+    if (isInGot(&c))
+      return true;
+  return false;
+}
+
+bool Symbol::isInAnyPlt() const {
+  if (isInPlt(nullptr))
+    return true;
+  for (Compartment &c : compartments)
+    if (isInPlt(&c))
+      return true;
+  return false;
+}
+
 uint64_t Symbol::getVA(int64_t addend) const {
   return getSymVA(*this, addend) + addend;
 }
 
-uint64_t Symbol::getGotVA() const {
-  if (gotInIgot)
-    return in.igotPlt->getVA() + getGotPltOffset();
-  return in.got->getVA() + getGotOffset();
+uint64_t Symbol::getGotVA(const Compartment *c) const {
+  const SymbolCompartAux *aux = compartAux(c);
+  if (aux->gotInIgot)
+    return igotPlt(c)->getVA() + getGotPltOffset(c);
+  return got(c)->getVA() + getGotOffset(c);
 }
 
-uint64_t Symbol::getGotOffset() const {
-  return getGotIdx() * target->gotEntrySize;
+uint64_t Symbol::getGotOffset(const Compartment *c) const {
+  return getGotIdx(c) * target->gotEntrySize;
 }
 
-uint64_t Symbol::getGotPltVA() const {
-  if (isInIplt)
-    return in.igotPlt->getVA() + getGotPltOffset();
-  return in.gotPlt->getVA() + getGotPltOffset();
+uint64_t Symbol::getGotPltVA(const Compartment *c) const {
+  const SymbolCompartAux *aux = compartAux(c);
+  if (aux->isInIplt)
+    return igotPlt(c)->getVA() + getGotPltOffset(c);
+  return gotPlt(c)->getVA() + getGotPltOffset(c);
 }
 
-uint64_t Symbol::getGotPltOffset() const {
-  if (isInIplt)
-    return getPltIdx() * target->gotEntrySize;
-  return (getPltIdx() + target->gotPltHeaderEntriesNum) * target->gotEntrySize;
+uint64_t Symbol::getGotPltOffset(const Compartment *c) const {
+  const SymbolCompartAux *aux = compartAux(c);
+  if (aux->isInIplt)
+    return getPltIdx(c) * target->gotEntrySize;
+  return (getPltIdx(c) + target->gotPltHeaderEntriesNum) * target->gotEntrySize;
 }
 
-uint64_t Symbol::getPltVA() const {
-  uint64_t outVA = isInIplt
-                       ? in.iplt->getVA() + getPltIdx() * target->ipltEntrySize
-                       : in.plt->getVA() + in.plt->headerSize +
-                             getPltIdx() * target->pltEntrySize;
+uint64_t Symbol::getPltVA(const Compartment *c) const {
+  const SymbolCompartAux *aux = compartAux(c);
+  uint64_t outVA = aux->isInIplt
+                       ? iplt(c)->getVA() + getPltIdx(c) * target->ipltEntrySize
+                       : plt(c)->getVA() + plt(c)->headerSize +
+                             getPltIdx(c) * target->pltEntrySize;
 
   // While linking microMIPS code PLT code are always microMIPS
   // code. Set the less-significant bit to track that fact.
@@ -263,14 +294,16 @@ uint64_t Symbol::getPltVA() const {
 
 uint64_t Symbol::getCapTableVA(const InputSectionBase *isec,
                                uint64_t offset) const {
-  return ElfSym::cheriCapabilityTable->getVA() +
+  Compartment *c = isec->compartment;
+  return cheriCapTable(c)->getVA() +
     getCapTableOffset(isec, offset);
 }
 
 uint64_t Symbol::getCapTableOffset(const InputSectionBase *isec,
                                    uint64_t offset) const {
+  Compartment *c = isec->compartment;
   return config->capabilitySize *
-    in.cheriCapTable->getIndex(*this, isec, offset);
+    cheriCapTable(c)->getIndex(*this, isec, offset);
 }
 
 uint64_t Defined::getSize() const {

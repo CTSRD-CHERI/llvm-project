@@ -38,7 +38,7 @@ public:
   bool needsThunk(RelExpr expr, RelType type, const InputFile *file,
                   uint64_t branchAddr, const Symbol &s,
                   int64_t a) const override;
-  void relocate(uint8_t *loc, const Relocation &rel,
+  void relocate(Compartment *c, uint8_t *loc, const Relocation &rel,
                 uint64_t val) const override;
   bool usesOnlyLowPageBits(RelType type) const override;
 };
@@ -327,12 +327,12 @@ template <class ELFT> void MIPS<ELFT>::writePltHeader(Compartment *c,
       write16(buf + 18, 0x0f83); // move    $28, $3
       write16(buf + 20, 0x472b); // jalrc   $25
       write16(buf + 22, 0x0c00); // nop
-      relocateNoSym(buf, R_MICROMIPS_PC19_S2, gotPlt - plt);
+      relocateNoSym(c, buf, R_MICROMIPS_PC19_S2, gotPlt - plt);
     } else {
       write16(buf + 18, 0x45f9); // jalrc   $25
       write16(buf + 20, 0x0f83); // move    $28, $3
       write16(buf + 22, 0x0c00); // nop
-      relocateNoSym(buf, R_MICROMIPS_PC23_S2, gotPlt - plt);
+      relocateNoSym(c, buf, R_MICROMIPS_PC23_S2, gotPlt - plt);
     }
     return;
   }
@@ -373,7 +373,7 @@ template <class ELFT> void MIPS<ELFT>::writePltHeader(Compartment *c,
 template <class ELFT>
 void MIPS<ELFT>::writePlt(Compartment *c, uint8_t *buf, const Symbol &sym,
                           uint64_t pltEntryAddr) const {
-  uint64_t gotPltEntryAddr = sym.getGotPltVA();
+  uint64_t gotPltEntryAddr = sym.getGotPltVA(c);
   if (isMicroMips()) {
     // Overwrite trap instructions written by Writer::writeTrapInstr.
     memset(buf, 0, pltEntrySize);
@@ -383,13 +383,13 @@ void MIPS<ELFT>::writePlt(Compartment *c, uint8_t *buf, const Symbol &sym,
       write16(buf + 4, 0xff22);  // lw $25, 0($2)
       write16(buf + 8, 0x0f02);  // move $24, $2
       write16(buf + 10, 0x4723); // jrc $25 / jr16 $25
-      relocateNoSym(buf, R_MICROMIPS_PC19_S2, gotPltEntryAddr - pltEntryAddr);
+      relocateNoSym(c, buf, R_MICROMIPS_PC19_S2, gotPltEntryAddr - pltEntryAddr);
     } else {
       write16(buf, 0x7900);      // addiupc $2, (GOTPLT) - .
       write16(buf + 4, 0xff22);  // lw $25, 0($2)
       write16(buf + 8, 0x4599);  // jrc $25 / jr16 $25
       write16(buf + 10, 0x0f02); // move $24, $2
-      relocateNoSym(buf, R_MICROMIPS_PC23_S2, gotPltEntryAddr - pltEntryAddr);
+      relocateNoSym(c, buf, R_MICROMIPS_PC23_S2, gotPltEntryAddr - pltEntryAddr);
     }
     return;
   }
@@ -623,7 +623,8 @@ static uint64_t fixupCrossModeJump(uint8_t *loc, RelType type, uint64_t val) {
 }
 
 template <class ELFT>
-void MIPS<ELFT>::relocate(uint8_t *loc, const Relocation &rel,
+void MIPS<ELFT>::relocate(Compartment *c, uint8_t *loc,
+                          const Relocation &rel,
                           uint64_t val) const {
   const endianness e = ELFT::TargetEndianness;
   RelType type = rel.type;

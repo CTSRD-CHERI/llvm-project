@@ -35,7 +35,7 @@ public:
   void writePltHeader(Compartment *c, uint8_t *buf) const override;
   void writePlt(Compartment *c, uint8_t *buf, const Symbol &sym,
                 uint64_t pltEntryAddr) const override;
-  void relocate(uint8_t *loc, const Relocation &rel,
+  void relocate(Compartment *c, uint8_t *loc, const Relocation &rel,
                 uint64_t val) const override;
   int64_t getImplicitAddend(const uint8_t *buf, RelType type) const override;
   void applyJumpInstrMod(uint8_t *loc, JumpModType type,
@@ -43,15 +43,15 @@ public:
 
   RelExpr adjustGotPcExpr(RelType type, int64_t addend,
                           const uint8_t *loc) const override;
-  void relaxGot(uint8_t *loc, const Relocation &rel,
+  void relaxGot(Compartment *c, uint8_t *loc, const Relocation &rel,
                 uint64_t val) const override;
-  void relaxTlsGdToIe(uint8_t *loc, const Relocation &rel,
+  void relaxTlsGdToIe(Compartment *c, uint8_t *loc, const Relocation &rel,
                       uint64_t val) const override;
-  void relaxTlsGdToLe(uint8_t *loc, const Relocation &rel,
+  void relaxTlsGdToLe(Compartment *c, uint8_t *loc, const Relocation &rel,
                       uint64_t val) const override;
-  void relaxTlsIeToLe(uint8_t *loc, const Relocation &rel,
+  void relaxTlsIeToLe(Compartment *c, uint8_t *loc, const Relocation &rel,
                       uint64_t val) const override;
-  void relaxTlsLdToLe(uint8_t *loc, const Relocation &rel,
+  void relaxTlsLdToLe(Compartment *c, uint8_t *loc, const Relocation &rel,
                       uint64_t val) const override;
   bool adjustPrologueForCrossSplitStack(uint8_t *loc, uint8_t *end,
                                         uint8_t stOther) const override;
@@ -187,7 +187,7 @@ static bool isFallThruRelocation(InputSection &is, InputFile *file,
     return false;
 
   uint64_t addrLoc = is.getOutputSection()->addr + is.outSecOff + r.offset;
-  uint64_t targetOffset = InputSectionBase::getRelocTargetVA(
+  uint64_t targetOffset = InputSectionBase::getRelocTargetVA(is.compartment,
       file, r.type, r.addend, addrLoc, *r.sym, r.expr, &is, r.offset);
 
   // If this jmp is a fall thru, the target offset is the beginning of the
@@ -384,7 +384,7 @@ void X86_64::writeGotPltHeader(uint8_t *buf) const {
 
 void X86_64::writeGotPlt(Compartment *c, uint8_t *buf, const Symbol &s) const {
   // See comments in X86::writeGotPlt.
-  write64le(buf, s.getPltVA() + 6);
+  write64le(buf, s.getPltVA(c) + 6);
 }
 
 void X86_64::writeIgotPlt(uint8_t *buf, const Symbol &s) const {
@@ -415,8 +415,8 @@ void X86_64::writePlt(Compartment *c, uint8_t *buf, const Symbol &sym,
   };
   memcpy(buf, inst, sizeof(inst));
 
-  write32le(buf + 2, sym.getGotPltVA() - pltEntryAddr - 6);
-  write32le(buf + 7, sym.getPltIdx());
+  write32le(buf + 2, sym.getGotPltVA(c) - pltEntryAddr - 6);
+  write32le(buf + 7, sym.getPltIdx(c));
   write32le(buf + 12, plt(c)->getVA() - pltEntryAddr - 16);
 }
 
@@ -427,7 +427,8 @@ RelType X86_64::getDynRel(RelType type) const {
   return R_X86_64_NONE;
 }
 
-void X86_64::relaxTlsGdToLe(uint8_t *loc, const Relocation &rel,
+void X86_64::relaxTlsGdToLe(Compartment *c, uint8_t *loc,
+                            const Relocation &rel,
                             uint64_t val) const {
   if (rel.type == R_X86_64_TLSGD) {
     // Convert
@@ -468,7 +469,8 @@ void X86_64::relaxTlsGdToLe(uint8_t *loc, const Relocation &rel,
   }
 }
 
-void X86_64::relaxTlsGdToIe(uint8_t *loc, const Relocation &rel,
+void X86_64::relaxTlsGdToIe(Compartment *c, uint8_t *loc,
+                            const Relocation &rel,
                             uint64_t val) const {
   if (rel.type == R_X86_64_TLSGD) {
     // Convert
@@ -510,7 +512,7 @@ void X86_64::relaxTlsGdToIe(uint8_t *loc, const Relocation &rel,
 
 // In some conditions, R_X86_64_GOTTPOFF relocation can be optimized to
 // R_X86_64_TPOFF32 so that it does not use GOT.
-void X86_64::relaxTlsIeToLe(uint8_t *loc, const Relocation &,
+void X86_64::relaxTlsIeToLe(Compartment *c, uint8_t *loc, const Relocation &,
                             uint64_t val) const {
   uint8_t *inst = loc - 3;
   uint8_t reg = loc[-1] >> 3;
@@ -552,7 +554,8 @@ void X86_64::relaxTlsIeToLe(uint8_t *loc, const Relocation &,
   write32le(loc, val + 4);
 }
 
-void X86_64::relaxTlsLdToLe(uint8_t *loc, const Relocation &rel,
+void X86_64::relaxTlsLdToLe(Compartment *c, uint8_t *loc,
+                            const Relocation &rel,
                             uint64_t val) const {
   if (rel.type == R_X86_64_DTPOFF64) {
     write64le(loc, val);
@@ -741,7 +744,8 @@ int64_t X86_64::getImplicitAddend(const uint8_t *buf, RelType type) const {
   }
 }
 
-void X86_64::relocate(uint8_t *loc, const Relocation &rel, uint64_t val) const {
+void X86_64::relocate(Compartment *c, uint8_t *loc, const Relocation &rel,
+                      uint64_t val) const {
   switch (rel.type) {
   case R_X86_64_8:
     checkIntUInt(loc, val, 8, rel);
@@ -901,7 +905,8 @@ static void relaxGotNoPic(uint8_t *loc, uint64_t val, uint8_t op,
   write32le(loc, val);
 }
 
-void X86_64::relaxGot(uint8_t *loc, const Relocation &rel, uint64_t val) const {
+void X86_64::relaxGot(Compartment *c, uint8_t *loc, const Relocation &rel,
+                      uint64_t val) const {
   checkInt(loc, val, 32, rel);
   const uint8_t op = loc[-2];
   const uint8_t modRm = loc[-1];
@@ -996,7 +1001,7 @@ IntelIBT::IntelIBT() { pltHeaderSize = 0; }
 
 void IntelIBT::writeGotPlt(Compartment *c, uint8_t *buf, const Symbol &s) const {
   uint64_t va =
-      in.ibtPlt->getVA() + IBTPltHeaderSize + s.getPltIdx() * pltEntrySize;
+      in.ibtPlt->getVA() + IBTPltHeaderSize + s.getPltIdx(c) * pltEntrySize;
   write64le(buf, va);
 }
 
@@ -1008,7 +1013,7 @@ void IntelIBT::writePlt(Compartment *c, uint8_t *buf, const Symbol &sym,
       0x66, 0x0f, 0x1f, 0x44, 0, 0, // nop
   };
   memcpy(buf, Inst, sizeof(Inst));
-  write32le(buf + 6, sym.getGotPltVA() - pltEntryAddr - 10);
+  write32le(buf + 6, sym.getGotPltVA(c) - pltEntryAddr - 10);
 }
 
 void IntelIBT::writeIBTPlt(Compartment *c, uint8_t *buf,
@@ -1067,7 +1072,7 @@ Retpoline::Retpoline() {
 }
 
 void Retpoline::writeGotPlt(Compartment *c, uint8_t *buf, const Symbol &s) const {
-  write64le(buf, s.getPltVA() + 17);
+  write64le(buf, s.getPltVA(c) + 17);
 }
 
 void Retpoline::writePltHeader(Compartment *c, uint8_t *buf) const {
@@ -1106,10 +1111,10 @@ void Retpoline::writePlt(Compartment *c, uint8_t *buf, const Symbol &sym,
 
   uint64_t off = pltEntryAddr - plt(c)->getVA();
 
-  write32le(buf + 3, sym.getGotPltVA() - pltEntryAddr - 7);
+  write32le(buf + 3, sym.getGotPltVA(c) - pltEntryAddr - 7);
   write32le(buf + 8, -off - 12 + 32);
   write32le(buf + 13, -off - 17 + 18);
-  write32le(buf + 18, sym.getPltIdx());
+  write32le(buf + 18, sym.getPltIdx(c));
   write32le(buf + 23, -off - 27);
 }
 
@@ -1144,7 +1149,7 @@ void RetpolineZNow::writePlt(Compartment *c, uint8_t *buf, const Symbol &sym,
   };
   memcpy(buf, insn, sizeof(insn));
 
-  write32le(buf + 3, sym.getGotPltVA() - pltEntryAddr - 7);
+  write32le(buf + 3, sym.getGotPltVA(c) - pltEntryAddr - 7);
   write32le(buf + 8, plt(c)->getVA() - pltEntryAddr - 12);
 }
 

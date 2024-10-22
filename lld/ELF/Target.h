@@ -87,10 +87,11 @@ public:
   virtual bool inBranchRange(RelType type, uint64_t src,
                              uint64_t dst) const;
 
-  virtual void relocate(uint8_t *loc, const Relocation &rel,
+  virtual void relocate(Compartment *c, uint8_t *loc, const Relocation &rel,
                         uint64_t val) const = 0;
-  void relocateNoSym(uint8_t *loc, RelType type, uint64_t val) const {
-    relocate(loc, Relocation{R_NONE, type, 0, 0, nullptr}, val);
+  void relocateNoSym(Compartment *c, uint8_t *loc, RelType type,
+                     uint64_t val) const {
+    relocate(c, loc, Relocation{R_NONE, type, 0, 0, nullptr}, val);
   }
 
   // Do a linker relaxation pass and return true if we changed something.
@@ -164,15 +165,19 @@ public:
   virtual RelExpr adjustTlsExpr(RelType type, RelExpr expr) const;
   virtual RelExpr adjustGotPcExpr(RelType type, int64_t addend,
                                   const uint8_t *loc) const;
-  virtual void relaxGot(uint8_t *loc, const Relocation &rel,
+  virtual void relaxGot(Compartment *c, uint8_t *loc, const Relocation &rel,
                         uint64_t val) const;
-  virtual void relaxTlsGdToIe(uint8_t *loc, const Relocation &rel,
+  virtual void relaxTlsGdToIe(Compartment *c, uint8_t *loc,
+                              const Relocation &rel,
                               uint64_t val) const;
-  virtual void relaxTlsGdToLe(uint8_t *loc, const Relocation &rel,
+  virtual void relaxTlsGdToLe(Compartment *c, uint8_t *loc,
+                              const Relocation &rel,
                               uint64_t val) const;
-  virtual void relaxTlsIeToLe(uint8_t *loc, const Relocation &rel,
+  virtual void relaxTlsIeToLe(Compartment *c, uint8_t *loc,
+                              const Relocation &rel,
                               uint64_t val) const;
-  virtual void relaxTlsLdToLe(uint8_t *loc, const Relocation &rel,
+  virtual void relaxTlsLdToLe(Compartment *c, uint8_t *loc,
+                              const Relocation &rel,
                               uint64_t val) const;
 
 protected:
@@ -212,7 +217,8 @@ static inline std::string getErrorLocation(const uint8_t *loc) {
 
 void writePPC32GlinkSection(Compartment *c, uint8_t *buf, size_t numEntries);
 
-bool tryRelaxPPC64TocIndirection(const Relocation &rel, uint8_t *bufLoc);
+bool tryRelaxPPC64TocIndirection(Compartment *c, const Relocation &rel,
+                                 uint8_t *bufLoc);
 unsigned getPPCDFormOp(unsigned secondaryOp);
 
 // In the PowerPC64 Elf V2 abi a function can have 2 entry points.  The first
@@ -240,9 +246,11 @@ class AArch64Relaxer {
 public:
   explicit AArch64Relaxer(ArrayRef<Relocation> relocs);
 
-  bool tryRelaxAdrpAdd(const Relocation &adrpRel, const Relocation &addRel,
+  bool tryRelaxAdrpAdd(Compartment *c, const Relocation &adrpRel,
+                       const Relocation &addRel,
                        uint64_t secAddr, uint8_t *buf) const;
-  bool tryRelaxAdrpLdr(const Relocation &adrpRel, const Relocation &ldrRel,
+  bool tryRelaxAdrpLdr(Compartment *c, const Relocation &adrpRel,
+                       const Relocation &ldrRel,
                        uint64_t secAddr, uint8_t *buf) const;
 };
 

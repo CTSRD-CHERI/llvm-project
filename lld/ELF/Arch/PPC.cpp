@@ -6,6 +6,7 @@
 //
 //===----------------------------------------------------------------------===//
 
+#include "InputFiles.h"
 #include "OutputSections.h"
 #include "Symbols.h"
 #include "SyntheticSections.h"
@@ -47,17 +48,17 @@ public:
                   int64_t a) const override;
   uint32_t getThunkSectionSpacing() const override;
   bool inBranchRange(RelType type, uint64_t src, uint64_t dst) const override;
-  void relocate(uint8_t *loc, const Relocation &rel,
+  void relocate(Compartment *c, uint8_t *loc, const Relocation &rel,
                 uint64_t val) const override;
   RelExpr adjustTlsExpr(RelType type, RelExpr expr) const override;
   int getTlsGdRelaxSkip(RelType type) const override;
-  void relaxTlsGdToIe(uint8_t *loc, const Relocation &rel,
+  void relaxTlsGdToIe(Compartment *c, uint8_t *loc, const Relocation &rel,
                       uint64_t val) const override;
-  void relaxTlsGdToLe(uint8_t *loc, const Relocation &rel,
+  void relaxTlsGdToLe(Compartment *c, uint8_t *loc, const Relocation &rel,
                       uint64_t val) const override;
-  void relaxTlsLdToLe(uint8_t *loc, const Relocation &rel,
+  void relaxTlsLdToLe(Compartment *c, uint8_t *loc, const Relocation &rel,
                       uint64_t val) const override;
-  void relaxTlsIeToLe(uint8_t *loc, const Relocation &rel,
+  void relaxTlsIeToLe(Compartment *c, uint8_t *loc, const Relocation &rel,
                       uint64_t val) const override;
 };
 } // namespace
@@ -80,7 +81,7 @@ void elf::writePPC32GlinkSection(Compartment *c, uint8_t *buf,
   uint32_t glink = plt(c)->getVA(); // VA of .glink
   if (!config->isPic) {
     for (const Symbol *sym : cast<PPC32GlinkSection>(*plt(c)).canonical_plts) {
-      writePPC32PltCallStub(buf, sym->getGotPltVA(), nullptr, 0);
+      writePPC32PltCallStub(buf, sym->getGotPltVA(c), nullptr, 0);
       buf += 16;
       glink += 16;
     }
@@ -182,7 +183,7 @@ void PPC::writeIplt(Compartment *c, uint8_t *buf, const Symbol &sym,
                     uint64_t /*pltEntryAddr*/) const {
   // In -pie or -shared mode, assume r30 points to .got2+0x8000, and use a
   // .got2.plt_pic32. thunk.
-  writePPC32PltCallStub(buf, sym.getGotPltVA(), sym.file, 0x8000);
+  writePPC32PltCallStub(buf, sym.getGotPltVA(c), sym.file, 0x8000);
 }
 
 void PPC::writeGotHeader(uint8_t *buf) const {
@@ -194,14 +195,14 @@ void PPC::writeGotHeader(uint8_t *buf) const {
 
 void PPC::writeGotPlt(Compartment *c, uint8_t *buf, const Symbol &s) const {
   // Address of the symbol resolver stub in .glink .
-  write32(buf, plt(c)->getVA() + plt(c)->headerSize + 4 * s.getPltIdx());
+  write32(buf, plt(c)->getVA() + plt(c)->headerSize + 4 * s.getPltIdx(c));
 }
 
 bool PPC::needsThunk(RelExpr expr, RelType type, const InputFile *file,
                      uint64_t branchAddr, const Symbol &s, int64_t a) const {
   if (type != R_PPC_LOCAL24PC && type != R_PPC_REL24 && type != R_PPC_PLTREL24)
     return false;
-  if (s.isInPlt())
+  if (s.isInPlt(file->compartment))
     return true;
   if (s.isUndefWeak())
     return false;
@@ -309,7 +310,8 @@ static std::pair<RelType, uint64_t> fromDTPREL(RelType type, uint64_t val) {
   }
 }
 
-void PPC::relocate(uint8_t *loc, const Relocation &rel, uint64_t val) const {
+void PPC::relocate(Compartment *c, uint8_t *loc, const Relocation &rel,
+                   uint64_t val) const {
   RelType newType;
   std::tie(newType, val) = fromDTPREL(rel.type, val);
   switch (newType) {
@@ -400,14 +402,14 @@ int PPC::getTlsGdRelaxSkip(RelType type) const {
   return 1;
 }
 
-void PPC::relaxTlsGdToIe(uint8_t *loc, const Relocation &rel,
+void PPC::relaxTlsGdToIe(Compartment *c, uint8_t *loc, const Relocation &rel,
                          uint64_t val) const {
   switch (rel.type) {
   case R_PPC_GOT_TLSGD16: {
     // addi rT, rA, x@got@tlsgd --> lwz rT, x@got@tprel(rA)
     uint32_t insn = readFromHalf16(loc);
     writeFromHalf16(loc, 0x80000000 | (insn & 0x03ff0000));
-    relocateNoSym(loc, R_PPC_GOT_TPREL16, val);
+    relocateNoSym(c, loc, R_PPC_GOT_TPREL16, val);
     break;
   }
   case R_PPC_TLSGD:
@@ -419,7 +421,7 @@ void PPC::relaxTlsGdToIe(uint8_t *loc, const Relocation &rel,
   }
 }
 
-void PPC::relaxTlsGdToLe(uint8_t *loc, const Relocation &rel,
+void PPC::relaxTlsGdToLe(Compartment *c, uint8_t *loc, const Relocation &rel,
                          uint64_t val) const {
   switch (rel.type) {
   case R_PPC_GOT_TLSGD16:
@@ -435,7 +437,7 @@ void PPC::relaxTlsGdToLe(uint8_t *loc, const Relocation &rel,
   }
 }
 
-void PPC::relaxTlsLdToLe(uint8_t *loc, const Relocation &rel,
+void PPC::relaxTlsLdToLe(Compartment *c, uint8_t *loc, const Relocation &rel,
                          uint64_t val) const {
   switch (rel.type) {
   case R_PPC_GOT_TLSLD16:
@@ -452,14 +454,14 @@ void PPC::relaxTlsLdToLe(uint8_t *loc, const Relocation &rel,
   case R_PPC_DTPREL16_HA:
   case R_PPC_DTPREL16_HI:
   case R_PPC_DTPREL16_LO:
-    relocate(loc, rel, val);
+    relocate(c, loc, rel, val);
     break;
   default:
     llvm_unreachable("unsupported relocation for TLS LD to LE relaxation");
   }
 }
 
-void PPC::relaxTlsIeToLe(uint8_t *loc, const Relocation &rel,
+void PPC::relaxTlsIeToLe(Compartment *c, uint8_t *loc, const Relocation &rel,
                          uint64_t val) const {
   switch (rel.type) {
   case R_PPC_GOT_TPREL16: {

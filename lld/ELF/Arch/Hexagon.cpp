@@ -29,7 +29,7 @@ public:
   RelExpr getRelExpr(RelType type, const Symbol &s,
                      const uint8_t *loc) const override;
   RelType getDynRel(RelType type) const override;
-  void relocate(uint8_t *loc, const Relocation &rel,
+  void relocate(Compartment *c, uint8_t *loc, const Relocation &rel,
                 uint64_t val) const override;
   void writePltHeader(Compartment *c, uint8_t *buf) const override;
   void writePlt(Compartment *c, uint8_t *buf, const Symbol &sym,
@@ -241,7 +241,7 @@ static uint32_t findMaskR16(uint32_t insn) {
 
 static void or32le(uint8_t *p, int32_t v) { write32le(p, read32le(p) | v); }
 
-void Hexagon::relocate(uint8_t *loc, const Relocation &rel,
+void Hexagon::relocate(Compartment *c, uint8_t *loc, const Relocation &rel,
                        uint64_t val) const {
   switch (rel.type) {
   case R_HEX_NONE:
@@ -362,8 +362,8 @@ void Hexagon::writePltHeader(Compartment *c, uint8_t *buf) const {
 
   // Offset from PLT0 to the GOT.
   uint64_t off = gotPlt(c)->getVA() - plt(c)->getVA();
-  relocateNoSym(buf, R_HEX_B32_PCREL_X, off);
-  relocateNoSym(buf + 4, R_HEX_6_PCREL_X, off);
+  relocateNoSym(c, buf, R_HEX_B32_PCREL_X, off);
+  relocateNoSym(c, buf + 4, R_HEX_6_PCREL_X, off);
 }
 
 void Hexagon::writePlt(Compartment *c, uint8_t *buf, const Symbol &sym,
@@ -376,9 +376,9 @@ void Hexagon::writePlt(Compartment *c, uint8_t *buf, const Symbol &sym,
   };
   memcpy(buf, inst, sizeof(inst));
 
-  uint64_t gotPltEntryAddr = sym.getGotPltVA();
-  relocateNoSym(buf, R_HEX_B32_PCREL_X, gotPltEntryAddr - pltEntryAddr);
-  relocateNoSym(buf + 4, R_HEX_6_PCREL_X, gotPltEntryAddr - pltEntryAddr);
+  uint64_t gotPltEntryAddr = sym.getGotPltVA(c);
+  relocateNoSym(c, buf, R_HEX_B32_PCREL_X, gotPltEntryAddr - pltEntryAddr);
+  relocateNoSym(c, buf + 4, R_HEX_6_PCREL_X, gotPltEntryAddr - pltEntryAddr);
 }
 
 RelType Hexagon::getDynRel(RelType type) const {

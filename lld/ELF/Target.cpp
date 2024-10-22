@@ -171,27 +171,31 @@ RelExpr TargetInfo::adjustGotPcExpr(RelType type, int64_t addend,
   return R_GOT_PC;
 }
 
-void TargetInfo::relaxGot(uint8_t *loc, const Relocation &rel,
+void TargetInfo::relaxGot(Compartment *c, uint8_t *loc, const Relocation &rel,
                           uint64_t val) const {
   llvm_unreachable("Should not have claimed to be relaxable");
 }
 
-void TargetInfo::relaxTlsGdToLe(uint8_t *loc, const Relocation &rel,
+void TargetInfo::relaxTlsGdToLe(Compartment *c, uint8_t *loc,
+                                const Relocation &rel,
                                 uint64_t val) const {
   llvm_unreachable("Should not have claimed to be relaxable");
 }
 
-void TargetInfo::relaxTlsGdToIe(uint8_t *loc, const Relocation &rel,
+void TargetInfo::relaxTlsGdToIe(Compartment *c, uint8_t *loc,
+                                const Relocation &rel,
                                 uint64_t val) const {
   llvm_unreachable("Should not have claimed to be relaxable");
 }
 
-void TargetInfo::relaxTlsIeToLe(uint8_t *loc, const Relocation &rel,
+void TargetInfo::relaxTlsIeToLe(Compartment *c, uint8_t *loc,
+                                const Relocation &rel,
                                 uint64_t val) const {
   llvm_unreachable("Should not have claimed to be relaxable");
 }
 
-void TargetInfo::relaxTlsLdToLe(uint8_t *loc, const Relocation &rel,
+void TargetInfo::relaxTlsLdToLe(Compartment *c, uint8_t *loc,
+                                const Relocation &rel,
                                 uint64_t val) const {
   llvm_unreachable("Should not have claimed to be relaxable");
 }

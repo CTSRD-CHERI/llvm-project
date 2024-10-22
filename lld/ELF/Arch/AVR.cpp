@@ -45,7 +45,7 @@ public:
   uint32_t calcEFlags() const override;
   RelExpr getRelExpr(RelType type, const Symbol &s,
                      const uint8_t *loc) const override;
-  void relocate(uint8_t *loc, const Relocation &rel,
+  void relocate(Compartment *c, uint8_t *loc, const Relocation &rel,
                 uint64_t val) const override;
 };
 } // namespace
@@ -92,7 +92,8 @@ static void writeLDI(uint8_t *loc, uint64_t val) {
   write16le(loc, (read16le(loc) & 0xf0f0) | (val & 0xf0) << 4 | (val & 0x0f));
 }
 
-void AVR::relocate(uint8_t *loc, const Relocation &rel, uint64_t val) const {
+void AVR::relocate(Compartment *c, uint8_t *loc, const Relocation &rel,
+                   uint64_t val) const {
   switch (rel.type) {
   case R_AVR_8:
     checkUInt(loc, val, 8, rel);

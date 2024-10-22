@@ -6,6 +6,7 @@
 //
 //===----------------------------------------------------------------------===//
 
+#include "InputFiles.h"
 #include "Symbols.h"
 #include "SyntheticSections.h"
 #include "Target.h"
@@ -44,14 +45,14 @@ public:
   uint32_t getThunkSectionSpacing() const override;
   bool inBranchRange(RelType type, uint64_t src, uint64_t dst) const override;
   bool usesOnlyLowPageBits(RelType type) const override;
-  void relocate(uint8_t *loc, const Relocation &rel,
+  void relocate(Compartment *c, uint8_t *loc, const Relocation &rel,
                 uint64_t val) const override;
   RelExpr adjustTlsExpr(RelType type, RelExpr expr) const override;
-  void relaxTlsGdToLe(uint8_t *loc, const Relocation &rel,
+  void relaxTlsGdToLe(Compartment *c, uint8_t *loc, const Relocation &rel,
                       uint64_t val) const override;
-  void relaxTlsGdToIe(uint8_t *loc, const Relocation &rel,
+  void relaxTlsGdToIe(Compartment *c, uint8_t *loc, const Relocation &rel,
                       uint64_t val) const override;
-  void relaxTlsIeToLe(uint8_t *loc, const Relocation &rel,
+  void relaxTlsIeToLe(Compartment *c, uint8_t *loc, const Relocation &rel,
                       uint64_t val) const override;
 };
 } // namespace
@@ -229,10 +230,10 @@ void AArch64::writePltHeader(Compartment *c, uint8_t *buf) const {
 
   uint64_t got = gotPlt(c)->getVA();
   uint64_t plt = lld::elf::plt(c)->getVA();
-  relocateNoSym(buf + 4, R_AARCH64_ADR_PREL_PG_HI21,
+  relocateNoSym(c, buf + 4, R_AARCH64_ADR_PREL_PG_HI21,
                 getAArch64Page(got + 16) - getAArch64Page(plt + 4));
-  relocateNoSym(buf + 8, R_AARCH64_LDST64_ABS_LO12_NC, got + 16);
-  relocateNoSym(buf + 12, R_AARCH64_ADD_ABS_LO12_NC, got + 16);
+  relocateNoSym(c, buf + 8, R_AARCH64_LDST64_ABS_LO12_NC, got + 16);
+  relocateNoSym(c, buf + 12, R_AARCH64_ADD_ABS_LO12_NC, got + 16);
 }
 
 void AArch64::writePlt(Compartment *c, uint8_t *buf, const Symbol &sym,
@@ -245,21 +246,22 @@ void AArch64::writePlt(Compartment *c, uint8_t *buf, const Symbol &sym,
   };
   memcpy(buf, inst, sizeof(inst));
 
-  uint64_t gotPltEntryAddr = sym.getGotPltVA();
-  relocateNoSym(buf, R_AARCH64_ADR_PREL_PG_HI21,
+  uint64_t gotPltEntryAddr = sym.getGotPltVA(c);
+  relocateNoSym(c, buf, R_AARCH64_ADR_PREL_PG_HI21,
                 getAArch64Page(gotPltEntryAddr) - getAArch64Page(pltEntryAddr));
-  relocateNoSym(buf + 4, R_AARCH64_LDST64_ABS_LO12_NC, gotPltEntryAddr);
-  relocateNoSym(buf + 8, R_AARCH64_ADD_ABS_LO12_NC, gotPltEntryAddr);
+  relocateNoSym(c, buf + 4, R_AARCH64_LDST64_ABS_LO12_NC, gotPltEntryAddr);
+  relocateNoSym(c, buf + 8, R_AARCH64_ADD_ABS_LO12_NC, gotPltEntryAddr);
 }
 
 bool AArch64::needsThunk(RelExpr expr, RelType type, const InputFile *file,
                          uint64_t branchAddr, const Symbol &s,
                          int64_t a) const {
+  Compartment *c = file->compartment;
   // If s is an undefined weak symbol and does not have a PLT entry then it will
   // be resolved as a branch to the next instruction. If it is hidden, its
   // binding has been converted to local, so we just check isUndefined() here. A
   // undefined non-weak symbol will have been errored.
-  if (s.isUndefined() && !s.isInPlt())
+  if (s.isUndefined() && !s.isInPlt(c))
     return false;
   // ELF for the ARM 64-bit architecture, section Call and Jump relocations
   // only permits range extension thunks for R_AARCH64_CALL26 and
@@ -267,7 +269,7 @@ bool AArch64::needsThunk(RelExpr expr, RelType type, const InputFile *file,
   if (type != R_AARCH64_CALL26 && type != R_AARCH64_JUMP26 &&
       type != R_AARCH64_PLT32)
     return false;
-  uint64_t dst = expr == R_PLT_PC ? s.getPltVA() : s.getVA(a);
+  uint64_t dst = expr == R_PLT_PC ? s.getPltVA(c) : s.getVA(a);
   return !inBranchRange(type, branchAddr, dst);
 }
 
@@ -335,7 +337,7 @@ static void writeSMovWImm(uint8_t *loc, uint32_t imm) {
   write32le(loc, inst | ((imm & 0xFFFF) << 5));
 }
 
-void AArch64::relocate(uint8_t *loc, const Relocation &rel,
+void AArch64::relocate(Compartment *c, uint8_t *loc, const Relocation &rel,
                        uint64_t val) const {
   switch (rel.type) {
   case R_AARCH64_ABS16:
@@ -494,7 +496,8 @@ void AArch64::relocate(uint8_t *loc, const Relocation &rel,
   }
 }
 
-void AArch64::relaxTlsGdToLe(uint8_t *loc, const Relocation &rel,
+void AArch64::relaxTlsGdToLe(Compartment *c, uint8_t *loc,
+                             const Relocation &rel,
                              uint64_t val) const {
   // TLSDESC Global-Dynamic relocation are in the form:
   //   adrp    x0, :tlsdesc:v             [R_AARCH64_TLSDESC_ADR_PAGE21]
@@ -525,7 +528,8 @@ void AArch64::relaxTlsGdToLe(uint8_t *loc, const Relocation &rel,
   }
 }
 
-void AArch64::relaxTlsGdToIe(uint8_t *loc, const Relocation &rel,
+void AArch64::relaxTlsGdToIe(Compartment *c, uint8_t *loc,
+                             const Relocation &rel,
                              uint64_t val) const {
   // TLSDESC Global-Dynamic relocation are in the form:
   //   adrp    x0, :tlsdesc:v             [R_AARCH64_TLSDESC_ADR_PAGE21]
@@ -546,18 +550,19 @@ void AArch64::relaxTlsGdToIe(uint8_t *loc, const Relocation &rel,
     break;
   case R_AARCH64_TLSDESC_ADR_PAGE21:
     write32le(loc, 0x90000000); // adrp
-    relocateNoSym(loc, R_AARCH64_TLSIE_ADR_GOTTPREL_PAGE21, val);
+    relocateNoSym(c, loc, R_AARCH64_TLSIE_ADR_GOTTPREL_PAGE21, val);
     break;
   case R_AARCH64_TLSDESC_LD64_LO12:
     write32le(loc, 0xf9400000); // ldr
-    relocateNoSym(loc, R_AARCH64_TLSIE_LD64_GOTTPREL_LO12_NC, val);
+    relocateNoSym(c, loc, R_AARCH64_TLSIE_LD64_GOTTPREL_LO12_NC, val);
     break;
   default:
     llvm_unreachable("unsupported relocation for TLS GD to LE relaxation");
   }
 }
 
-void AArch64::relaxTlsIeToLe(uint8_t *loc, const Relocation &rel,
+void AArch64::relaxTlsIeToLe(Compartment *c, uint8_t *loc,
+                             const Relocation &rel,
                              uint64_t val) const {
   checkUInt(loc, val, 32, rel);
 
@@ -599,7 +604,8 @@ AArch64Relaxer::AArch64Relaxer(ArrayRef<Relocation> relocs) {
   safeToRelaxAdrpLdr = i == size;
 }
 
-bool AArch64Relaxer::tryRelaxAdrpAdd(const Relocation &adrpRel,
+bool AArch64Relaxer::tryRelaxAdrpAdd(Compartment *c,
+                                     const Relocation &adrpRel,
                                      const Relocation &addRel, uint64_t secAddr,
                                      uint8_t *buf) const {
   // When the address of sym is within the range of ADR then
@@ -644,11 +650,12 @@ bool AArch64Relaxer::tryRelaxAdrpAdd(const Relocation &adrpRel,
   write32le(buf + adrpRel.offset, 0xd503201f);
   // adr x_<dest_reg>
   write32le(buf + adrRel.offset, 0x10000000 | adrpDestReg);
-  target->relocate(buf + adrRel.offset, adrRel, val);
+  target->relocate(c, buf + adrRel.offset, adrRel, val);
   return true;
 }
 
-bool AArch64Relaxer::tryRelaxAdrpLdr(const Relocation &adrpRel,
+bool AArch64Relaxer::tryRelaxAdrpLdr(Compartment *c,
+                                     const Relocation &adrpRel,
                                      const Relocation &ldrRel, uint64_t secAddr,
                                      uint8_t *buf) const {
   if (!safeToRelaxAdrpLdr)
@@ -714,12 +721,12 @@ bool AArch64Relaxer::tryRelaxAdrpLdr(const Relocation &adrpRel,
   // add x_<dest reg>, x_<dest reg>
   write32le(buf + addRel.offset, 0x91000000 | adrpDestReg | (adrpDestReg << 5));
 
-  target->relocate(buf + adrpSymRel.offset, adrpSymRel,
+  target->relocate(c, buf + adrpSymRel.offset, adrpSymRel,
                    SignExtend64(getAArch64Page(sym.getVA()) -
                                     getAArch64Page(secAddr + adrpSymRel.offset),
                                 64));
-  target->relocate(buf + addRel.offset, addRel, SignExtend64(sym.getVA(), 64));
-  tryRelaxAdrpAdd(adrpSymRel, addRel, secAddr, buf);
+  target->relocate(c, buf + addRel.offset, addRel, SignExtend64(sym.getVA(), 64));
+  tryRelaxAdrpAdd(c, adrpSymRel, addRel, secAddr, buf);
   return true;
 }
 
@@ -816,10 +823,10 @@ void AArch64BtiPac::writePltHeader(Compartment *c, uint8_t *buf) const {
   }
   memcpy(buf, pltData, sizeof(pltData));
 
-  relocateNoSym(buf + 4, R_AARCH64_ADR_PREL_PG_HI21,
+  relocateNoSym(c, buf + 4, R_AARCH64_ADR_PREL_PG_HI21,
                 getAArch64Page(got + 16) - getAArch64Page(plt + 8));
-  relocateNoSym(buf + 8, R_AARCH64_LDST64_ABS_LO12_NC, got + 16);
-  relocateNoSym(buf + 12, R_AARCH64_ADD_ABS_LO12_NC, got + 16);
+  relocateNoSym(c, buf + 8, R_AARCH64_LDST64_ABS_LO12_NC, got + 16);
+  relocateNoSym(c, buf + 12, R_AARCH64_ADD_ABS_LO12_NC, got + 16);
   if (!btiHeader)
     // We didn't add the BTI c instruction so round out size with NOP.
     memcpy(buf + sizeof(pltData), nopData, sizeof(nopData));
@@ -849,19 +856,21 @@ void AArch64BtiPac::writePlt(Compartment *c, uint8_t *buf, const Symbol &sym,
   // escape to shared objects. isInIplt indicates a non-preemptible ifunc. Its
   // address may escape if referenced by a direct relocation. The condition is
   // conservative.
-  bool hasBti = btiHeader && (sym.needsCopy || sym.isInIplt);
+  const SymbolCompartAux *aux = sym.compartAux(c);
+  bool hasBti = btiHeader && (aux == nullptr ? false :
+                              (aux->needsCopy || aux->isInIplt));
   if (hasBti) {
     memcpy(buf, btiData, sizeof(btiData));
     buf += sizeof(btiData);
     pltEntryAddr += sizeof(btiData);
   }
 
-  uint64_t gotPltEntryAddr = sym.getGotPltVA();
+  uint64_t gotPltEntryAddr = sym.getGotPltVA(c);
   memcpy(buf, addrInst, sizeof(addrInst));
-  relocateNoSym(buf, R_AARCH64_ADR_PREL_PG_HI21,
+  relocateNoSym(c, buf, R_AARCH64_ADR_PREL_PG_HI21,
                 getAArch64Page(gotPltEntryAddr) - getAArch64Page(pltEntryAddr));
-  relocateNoSym(buf + 4, R_AARCH64_LDST64_ABS_LO12_NC, gotPltEntryAddr);
-  relocateNoSym(buf + 8, R_AARCH64_ADD_ABS_LO12_NC, gotPltEntryAddr);
+  relocateNoSym(c, buf + 4, R_AARCH64_LDST64_ABS_LO12_NC, gotPltEntryAddr);
+  relocateNoSym(c, buf + 8, R_AARCH64_ADD_ABS_LO12_NC, gotPltEntryAddr);
 
   if (pacEntry)
     memcpy(buf + sizeof(addrInst), pacBr, sizeof(pacBr));

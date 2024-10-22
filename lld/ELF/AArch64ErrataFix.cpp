@@ -415,9 +415,10 @@ void Patch843419Section::writeTo(uint8_t *buf) {
   relocateAlloc(buf, buf + getSize());
 
   // Return address is the next instruction after the one we have just copied.
+  Compartment *c = patchee->compartment;
   uint64_t s = getLDSTAddr() + 4;
   uint64_t p = patchSym->getVA() + 4;
-  target->relocateNoSym(buf + 4, R_AARCH64_JUMP26, s - p);
+  target->relocateNoSym(c, buf + 4, R_AARCH64_JUMP26, s - p);
 }
 
 void AArch64Err843419Patcher::init() {

@@ -38,7 +38,7 @@ public:
   RelType getDynRel(RelType type) const override;
   RelExpr getRelExpr(RelType type, const Symbol &s,
                      const uint8_t *loc) const override;
-  void relocate(uint8_t *loc, const Relocation &rel,
+  void relocate(Compartment *c, uint8_t *loc, const Relocation &rel,
                 uint64_t val) const override;
   bool relaxOnce(int pass) const override;
 };
@@ -281,7 +281,7 @@ void RISCV::writePlt(Compartment *c, uint8_t *buf, const Symbol &sym,
   uint32_t ptrload = config->isCheriAbi ? config->is64 ? CLC_128 : CLC_64
                                         : config->is64 ? LD : LW;
   uint32_t entryva = config->isCheriAbi ? sym.getCapTableVA(plt(c), 0)
-                                        : sym.getGotPltVA();
+                                        : sym.getGotPltVA(c);
   uint32_t offset = entryva - pltEntryAddr;
   write32le(buf + 0, utype(AUIPC, X_T3, hi20(offset)));
   write32le(buf + 4, itype(ptrload, X_T3, X_T3, lo12(offset)));
@@ -368,7 +368,8 @@ RelExpr RISCV::getRelExpr(const RelType type, const Symbol &s,
   }
 }
 
-void RISCV::relocate(uint8_t *loc, const Relocation &rel, uint64_t val) const {
+void RISCV::relocate(Compartment *c, uint8_t *loc, const Relocation &rel,
+                     uint64_t val) const {
   const unsigned bits = config->wordsize * 8;
 
   switch (rel.type) {
@@ -464,8 +465,8 @@ void RISCV::relocate(uint8_t *loc, const Relocation &rel, uint64_t val) const {
     int64_t hi = SignExtend64(val + 0x800, bits) >> 12;
     checkInt(loc, hi, 20, rel);
     if (isInt<20>(hi)) {
-      relocateNoSym(loc, R_RISCV_PCREL_HI20, val);
-      relocateNoSym(loc + 4, R_RISCV_PCREL_LO12_I, val);
+      relocateNoSym(c, loc, R_RISCV_PCREL_HI20, val);
+      relocateNoSym(c, loc + 4, R_RISCV_PCREL_LO12_I, val);
     }
     return;
   }
@@ -638,7 +639,7 @@ static void relaxCall(const InputSection &sec, size_t i, uint64_t loc,
   const uint64_t insnPair = read64le(sec.rawData.data() + r.offset);
   const uint32_t rd = extractBits(insnPair, 32 + 11, 32 + 7);
   const uint64_t dest =
-      (r.expr == R_PLT_PC ? sym.getPltVA() : sym.getVA()) + r.addend;
+      (r.expr == R_PLT_PC ? sym.getPltVA(sec.compartment) : sym.getVA()) + r.addend;
   const int64_t displace = dest - loc;
 
   if (rvc && isInt<12>(displace) && rd == 0) {
