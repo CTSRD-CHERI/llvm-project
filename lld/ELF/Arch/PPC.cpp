@@ -6,6 +6,7 @@
 //
 //===----------------------------------------------------------------------===//
 
+#include "InputFiles.h"
 #include "OutputSections.h"
 #include "Symbols.h"
 #include "SyntheticSections.h"
@@ -43,20 +44,22 @@ public:
                  uint64_t pltEntryAddr) const override;
   void writeGotPlt(Compartment *c, uint8_t *buf, const Symbol &s) const override;
   bool needsThunk(RelExpr expr, RelType relocType, const InputFile *file,
-                  uint64_t branchAddr, const Symbol &s,
+                  const Compartment *c, uint64_t branchAddr, const Symbol &s,
                   int64_t a) const override;
   uint32_t getThunkSectionSpacing() const override;
   bool inBranchRange(RelType type, uint64_t src, uint64_t dst) const override;
-  void relocate(uint8_t *loc, const Relocation &rel,
+  void relocate(Compartment *c, uint8_t *loc, const Relocation &rel,
                 uint64_t val) const override;
   RelExpr adjustTlsExpr(RelType type, RelExpr expr) const override;
   int getTlsGdRelaxSkip(RelType type) const override;
   void relocateAlloc(InputSectionBase &sec, uint8_t *buf) const override;
 
 private:
-  void relaxTlsGdToIe(uint8_t *loc, const Relocation &rel, uint64_t val) const;
+  void relaxTlsGdToIe(Compartment *c, uint8_t *loc, const Relocation &rel,
+                      uint64_t val) const;
   void relaxTlsGdToLe(uint8_t *loc, const Relocation &rel, uint64_t val) const;
-  void relaxTlsLdToLe(uint8_t *loc, const Relocation &rel, uint64_t val) const;
+  void relaxTlsLdToLe(Compartment *c, uint8_t *loc, const Relocation &rel,
+                      uint64_t val) const;
   void relaxTlsIeToLe(uint8_t *loc, const Relocation &rel, uint64_t val) const;
 };
 } // namespace
@@ -79,7 +82,7 @@ void elf::writePPC32GlinkSection(Compartment *c, uint8_t *buf,
   uint32_t glink = plt(c)->getVA(); // VA of .glink
   if (!config->isPic) {
     for (const Symbol *sym : cast<PPC32GlinkSection>(*plt(c)).canonical_plts) {
-      writePPC32PltCallStub(buf, sym->getGotPltVA(), nullptr, 0);
+      writePPC32PltCallStub(buf, sym->getGotPltVA(c), nullptr, 0);
       buf += 16;
       glink += 16;
     }
@@ -181,7 +184,7 @@ void PPC::writeIplt(Compartment *c, uint8_t *buf, const Symbol &sym,
                     uint64_t /*pltEntryAddr*/) const {
   // In -pie or -shared mode, assume r30 points to .got2+0x8000, and use a
   // .got2.plt_pic32. thunk.
-  writePPC32PltCallStub(buf, sym.getGotPltVA(), sym.file, 0x8000);
+  writePPC32PltCallStub(buf, sym.getGotPltVA(c), sym.file, 0x8000);
 }
 
 void PPC::writeGotHeader(uint8_t *buf) const {
@@ -193,14 +196,15 @@ void PPC::writeGotHeader(uint8_t *buf) const {
 
 void PPC::writeGotPlt(Compartment *c, uint8_t *buf, const Symbol &s) const {
   // Address of the symbol resolver stub in .glink .
-  write32(buf, plt(c)->getVA() + plt(c)->headerSize + 4 * s.getPltIdx());
+  write32(buf, plt(c)->getVA() + plt(c)->headerSize + 4 * s.getPltIdx(c));
 }
 
 bool PPC::needsThunk(RelExpr expr, RelType type, const InputFile *file,
+                     const Compartment *c,
                      uint64_t branchAddr, const Symbol &s, int64_t a) const {
   if (type != R_PPC_LOCAL24PC && type != R_PPC_REL24 && type != R_PPC_PLTREL24)
     return false;
-  if (s.isInPlt())
+  if (s.isInPlt(c))
     return true;
   if (s.isUndefWeak())
     return false;
@@ -308,7 +312,8 @@ static std::pair<RelType, uint64_t> fromDTPREL(RelType type, uint64_t val) {
   }
 }
 
-void PPC::relocate(uint8_t *loc, const Relocation &rel, uint64_t val) const {
+void PPC::relocate(Compartment *c, uint8_t *loc, const Relocation &rel,
+                   uint64_t val) const {
   RelType newType;
   std::tie(newType, val) = fromDTPREL(rel.type, val);
   switch (newType) {
@@ -399,14 +404,14 @@ int PPC::getTlsGdRelaxSkip(RelType type) const {
   return 1;
 }
 
-void PPC::relaxTlsGdToIe(uint8_t *loc, const Relocation &rel,
+void PPC::relaxTlsGdToIe(Compartment *c, uint8_t *loc, const Relocation &rel,
                          uint64_t val) const {
   switch (rel.type) {
   case R_PPC_GOT_TLSGD16: {
     // addi rT, rA, x@got@tlsgd --> lwz rT, x@got@tprel(rA)
     uint32_t insn = readFromHalf16(loc);
     writeFromHalf16(loc, 0x80000000 | (insn & 0x03ff0000));
-    relocateNoSym(loc, R_PPC_GOT_TPREL16, val);
+    relocateNoSym(c, loc, R_PPC_GOT_TPREL16, val);
     break;
   }
   case R_PPC_TLSGD:
@@ -434,7 +439,7 @@ void PPC::relaxTlsGdToLe(uint8_t *loc, const Relocation &rel,
   }
 }
 
-void PPC::relaxTlsLdToLe(uint8_t *loc, const Relocation &rel,
+void PPC::relaxTlsLdToLe(Compartment *c, uint8_t *loc, const Relocation &rel,
                          uint64_t val) const {
   switch (rel.type) {
   case R_PPC_GOT_TLSLD16:
@@ -451,7 +456,7 @@ void PPC::relaxTlsLdToLe(uint8_t *loc, const Relocation &rel,
   case R_PPC_DTPREL16_HA:
   case R_PPC_DTPREL16_HI:
   case R_PPC_DTPREL16_LO:
-    relocate(loc, rel, val);
+    relocate(c, loc, rel, val);
     break;
   default:
     llvm_unreachable("unsupported relocation for TLS LD to LE relaxation");
@@ -487,27 +492,28 @@ void PPC::relocateAlloc(InputSectionBase &sec, uint8_t *buf) const {
   uint64_t secAddr = sec.getOutputSection()->addr;
   if (auto *s = dyn_cast<InputSection>(&sec))
     secAddr += s->outSecOff;
+  Compartment *c = sec.compartment;
   for (const Relocation &rel : sec.relocs()) {
     uint8_t *loc = buf + rel.offset;
     const uint64_t val = SignExtend64(
-        sec.getRelocTargetVA(sec.file, rel.type, rel.addend,
+        sec.getRelocTargetVA(c, sec.file, rel.type, rel.addend,
                              secAddr + rel.offset, *rel.sym, rel.expr, &sec, rel.offset),
         32);
     switch (rel.expr) {
     case R_RELAX_TLS_GD_TO_IE_GOT_OFF:
-      relaxTlsGdToIe(loc, rel, val);
+      relaxTlsGdToIe(c, loc, rel, val);
       break;
     case R_RELAX_TLS_GD_TO_LE:
       relaxTlsGdToLe(loc, rel, val);
       break;
     case R_RELAX_TLS_LD_TO_LE_ABS:
-      relaxTlsLdToLe(loc, rel, val);
+      relaxTlsLdToLe(c, loc, rel, val);
       break;
     case R_RELAX_TLS_IE_TO_LE:
       relaxTlsIeToLe(loc, rel, val);
       break;
     default:
-      relocate(loc, rel, val);
+      relocate(c, loc, rel, val);
       break;
     }
   }
