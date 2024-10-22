@@ -48,9 +48,9 @@ public:
   RelExpr getRelExpr(RelType type, const Symbol &s,
                      const uint8_t *loc) const override;
   bool needsThunk(RelExpr expr, RelType type, const InputFile *file,
-                  uint64_t branchAddr, const Symbol &s,
+                  const Compartment *c, uint64_t branchAddr, const Symbol &s,
                   int64_t a) const override;
-  void relocate(uint8_t *loc, const Relocation &rel,
+  void relocate(Compartment *c, uint8_t *loc, const Relocation &rel,
                 uint64_t val) const override;
 };
 } // namespace
@@ -104,6 +104,7 @@ static void writeLDI(uint8_t *loc, uint64_t val) {
 }
 
 bool AVR::needsThunk(RelExpr expr, RelType type, const InputFile *file,
+                     const Compartment *c,
                      uint64_t branchAddr, const Symbol &s, int64_t a) const {
   switch (type) {
   case R_AVR_LO8_LDI_GS:
@@ -116,7 +117,8 @@ bool AVR::needsThunk(RelExpr expr, RelType type, const InputFile *file,
   }
 }
 
-void AVR::relocate(uint8_t *loc, const Relocation &rel, uint64_t val) const {
+void AVR::relocate(Compartment *c, uint8_t *loc, const Relocation &rel,
+                   uint64_t val) const {
   switch (rel.type) {
   case R_AVR_8:
     checkUInt(loc, val, 8, rel);

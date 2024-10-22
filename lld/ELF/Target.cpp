@@ -143,6 +143,7 @@ int64_t TargetInfo::getImplicitAddend(const uint8_t *buf, RelType type) const {
 bool TargetInfo::usesOnlyLowPageBits(RelType type) const { return false; }
 
 bool TargetInfo::needsThunk(RelExpr expr, RelType type, const InputFile *file,
+                            const Compartment *c,
                             uint64_t branchAddr, const Symbol &s,
                             int64_t a) const {
   return false;
@@ -171,14 +172,15 @@ void TargetInfo::relocateAlloc(InputSectionBase &sec, uint8_t *buf) const {
   uint64_t secAddr = sec.getOutputSection()->addr;
   if (auto *s = dyn_cast<InputSection>(&sec))
     secAddr += s->outSecOff;
+  Compartment *c = sec.compartment;
   for (const Relocation &rel : sec.relocs()) {
     uint8_t *loc = buf + rel.offset;
     const uint64_t val = SignExtend64(
-        sec.getRelocTargetVA(sec.file, rel.type, rel.addend,
+        sec.getRelocTargetVA(c, sec.file, rel.type, rel.addend,
                              secAddr + rel.offset, *rel.sym, rel.expr, &sec, rel.offset),
         bits);
     if (rel.expr != R_RELAX_HINT)
-      relocate(loc, rel, val);
+      relocate(c, loc, rel, val);
   }
 }
 
