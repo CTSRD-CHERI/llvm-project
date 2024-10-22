@@ -373,6 +373,7 @@ bool RISCVTargetInfo::hasFeature(StringRef Feature) const {
                     .Case("riscv64", Is64Bit)
                     .Case("32bit", !Is64Bit)
                     .Case("64bit", Is64Bit)
+                    .Case("cheri-bounded-vararg", CheriBoundVarArg)
                     .Default(std::nullopt);
   if (Result)
     return *Result;
@@ -405,6 +406,7 @@ bool RISCVTargetInfo::handleTargetFeatures(std::vector<std::string> &Features,
       ISAInfo->hasExtension("zcheri-pte")) {
     HasCheri = true;
     CapSize = XLen * 2;
+    CheriBoundVarArg = llvm::is_contained(Features, "+cheri-bounded-vararg");
   }
 
   if (ABI.empty())

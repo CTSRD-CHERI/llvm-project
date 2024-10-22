@@ -50,6 +50,9 @@ public:
   Address EmitVAArg(CodeGenFunction &CGF, Address VAListAddr,
                     QualType Ty) const override;
 
+  Address EmitVAArgCap(CodeGenFunction &CGF, Address VAListAddr,
+                       QualType ty) const;
+
   ABIArgInfo extendType(QualType Ty) const;
 
   bool detectFPCCEligibleStruct(QualType Ty, llvm::Type *&Field1Ty,
@@ -352,6 +355,17 @@ ABIArgInfo RISCVABIInfo::classifyArgumentType(QualType Ty, bool IsFixed,
 
   bool IsCapability = Ty->isCHERICapabilityType(getContext()) ||
                       IsSingleCapRecord;
+  bool IsPureCap = getContext().getTargetInfo().areAllPointersCapabilities();
+  bool HasBoundedVarArg = IsPureCap && getTarget().hasFeature("cheri-bounded-vararg");
+
+  // cheri-bounded-vararg
+  // varargs that cannot fit neatly into a CLen wide slot will be passed
+  // indirectly.
+  if (!IsFixed && HasBoundedVarArg &&
+      std::max(Size, static_cast<uint64_t>(getContext().getTypeAlign(Ty))) >
+          getTarget().getCHERICapabilityWidth()) {
+    return getNaturalAlignIndirect(Ty, /*ByVal=*/false);
+  }
 
   // Capabilities (including single-capability records, which are treated the
   // same as a single capability) are passed indirectly for hybrid varargs.
@@ -485,6 +499,10 @@ ABIArgInfo RISCVABIInfo::classifyReturnType(QualType RetTy) const {
 
 Address RISCVABIInfo::EmitVAArg(CodeGenFunction &CGF, Address VAListAddr,
                                 QualType Ty) const {
+  if (getTarget().hasFeature("cheri-bounded-vararg") &&
+      getContext().getTargetInfo().areAllPointersCapabilities())
+    return EmitVAArgCap(CGF, VAListAddr, Ty);
+
   CharUnits SlotSize = CharUnits::fromQuantity(XLen / 8);
 
   // Empty records are ignored for parameter passing purposes.
@@ -513,6 +531,38 @@ Address RISCVABIInfo::EmitVAArg(CodeGenFunction &CGF, Address VAListAddr,
 
   return emitVoidPtrVAArg(CGF, VAListAddr, Ty, IsIndirect, TInfo,
                           SlotSize, /*AllowHigherAlign=*/true);
+}
+
+Address RISCVABIInfo::EmitVAArgCap(CodeGenFunction &CGF, Address VAListAddr,
+                                   QualType Ty) const {
+  int ArgGPRsLeft = 0, ArgFPRsLeft = 0;
+  ABIArgInfo AI =
+      classifyArgumentType(Ty, /*IsFixed=*/false, ArgGPRsLeft, ArgFPRsLeft);
+  llvm::Type *BaseTy = CGF.ConvertType(Ty);
+  llvm::Type *PtrTy = llvm::PointerType::get(
+      getVMContext(), getDataLayout().getAllocaAddrSpace());
+  if(AI.isIndirect())
+    BaseTy = PtrTy;
+
+  llvm::Value *ArgPtr = CGF.Builder.CreateLoad(VAListAddr, "stack");
+
+  CharUnits StackSlotSize =
+      CharUnits::fromQuantity(getDataLayout().getABITypeAlign(PtrTy));
+  Address OnStackAddr(ArgPtr, BaseTy, StackSlotSize);
+
+  if (isEmptyRecord(getContext(), Ty, /*AllowArrays*/true)) {
+    return OnStackAddr.withElementType(CGF.ConvertTypeForMem(Ty));
+  }
+
+  llvm::Value *StackSizeC = CGF.Builder.getSize(StackSlotSize);
+  llvm::Value *NewStack = CGF.Builder.CreateInBoundsGEP(CGF.Int8Ty, ArgPtr, StackSizeC, "new_stack");
+  CGF.Builder.CreateStore(NewStack, VAListAddr);
+  if (AI.isIndirect()) {
+    CharUnits TyAlign = getContext().getTypeUnadjustedAlignInChars(Ty);
+    return Address(CGF.Builder.CreateLoad(OnStackAddr, "vaarg.addr"),
+                   CGF.ConvertType(Ty), TyAlign);
+  }
+  return OnStackAddr;
 }
 
 ABIArgInfo RISCVABIInfo::extendType(QualType Ty) const {

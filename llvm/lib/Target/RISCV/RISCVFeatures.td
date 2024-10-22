@@ -889,6 +889,14 @@ def IsPureCapABI
 def NotPureCapABI
     : Predicate<"!RISCVABI::isCheriPureCapABI(Subtarget->getTargetABI())">;
 
+def FeatureCheriBoundVarArg
+    : SubtargetFeature<"cheri-bounded-vararg", "HasCheriBoundVarArg", "true",
+      "Bound varargs for cheri purecap calls">;
+def HasCheriBoundVarArg
+    : Predicate<"Subtarget->hasCheriBoundVarArg()">,
+                AssemblerPredicate<(all_of FeatureCheriBoundVarArg),
+                "Purecap VarArgs passed on stack.">;
+
 def FeatureRelax
     : SubtargetFeature<"relax", "EnableLinkerRelax", "true",
                        "Enable Linker relaxation.">;

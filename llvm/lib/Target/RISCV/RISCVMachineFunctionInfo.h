@@ -50,6 +50,9 @@ private:
   int VarArgsFrameIndex = 0;
   /// Size of the save area used for varargs
   int VarArgsSaveSize = 0;
+  /// FrameIndex where we store the argument that holds the pointer to the
+  /// variadic arguments for the pure capability ABI.
+  int PureCapVarArgsIndex = 0;
   /// FrameIndex used for transferring values between 64-bit FPRs and a pair
   /// of 32-bit GPRs via the stack.
   int MoveF64FrameIndex = -1;
@@ -89,6 +92,9 @@ public:
 
   unsigned getVarArgsSaveSize() const { return VarArgsSaveSize; }
   void setVarArgsSaveSize(int Size) { VarArgsSaveSize = Size; }
+
+  int getPureCapVarArgsIndex() const { return PureCapVarArgsIndex; }
+  void setPureCapVarArgsIndex(int Index) { PureCapVarArgsIndex = Index; }
 
   int getMoveF64FrameIndex(MachineFunction &MF) {
     if (MoveF64FrameIndex == -1)

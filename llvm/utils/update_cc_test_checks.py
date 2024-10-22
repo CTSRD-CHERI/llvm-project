@@ -249,6 +249,11 @@ def config():
             builtin_include_dir,
             "-nostdsysteminc",
         ]
+        tools = ["%riscv32_cheri_purecap_cc1", "%riscv64_cheri_purecap_cc1"]
+        for t in tools:
+            SUBST[t].extend(["-internal-isystem",
+                                         builtin_include_dir,
+                                         "-nostdsysteminc"])
     except subprocess.CalledProcessError:
         common.warn(
             "Could not determine clang builtins directory, some tests "

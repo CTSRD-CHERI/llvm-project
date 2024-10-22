@@ -867,6 +867,7 @@ private:
   SDValue lowerSELECT(SDValue Op, SelectionDAG &DAG) const;
   SDValue lowerBRCOND(SDValue Op, SelectionDAG &DAG) const;
   SDValue lowerVASTART(SDValue Op, SelectionDAG &DAG) const;
+  SDValue lowerVASTARTCap(SDValue Op, SelectionDAG &DAG) const;
   SDValue lowerFRAMEADDR(SDValue Op, SelectionDAG &DAG) const;
   SDValue lowerRETURNADDR(SDValue Op, SelectionDAG &DAG) const;
   SDValue lowerShiftLeftParts(SDValue Op, SelectionDAG &DAG) const;
