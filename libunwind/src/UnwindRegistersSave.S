@@ -890,7 +890,7 @@ DEFINE_LIBUNWIND_FUNCTION(__unw_getcontext)
   mov    c0, c30
   bl     dl_c18n_get_trusted_stack
   ldp    c1, c30, [csp], #0x20
-  str    c0, [c1, #-0x20]         // -0x230 + 0x210 = 0x20
+  str    c0, [c1, #-0x20]         // -0x230 + 0x210 = -0x20
 #endif
   mov    x0, #0                   // return UNW_ESUCCESS
 #ifdef __ARM_MORELLO_PURECAP_BENCHMARK_ABI
