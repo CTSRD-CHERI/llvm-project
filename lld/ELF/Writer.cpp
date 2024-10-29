@@ -959,6 +959,7 @@ enum RankFlags {
   RF_NOT_ADDR_SET = 1 << 27,
   RF_NOT_ALLOC = 1 << 26,
   RF_PARTITION = 1 << 18, // Partition number (8 bits)
+  RF_COMPARTMENT = RF_PARTITION,
   RF_NOT_PART_EHDR = 1 << 17,
   RF_NOT_PART_PHDR = 1 << 16,
   RF_NOT_INTERP = 1 << 15,
@@ -981,6 +982,12 @@ enum RankFlags {
 
 static unsigned getSectionRank(const OutputSection &osec) {
   unsigned rank = osec.partition * RF_PARTITION;
+
+  // The default compartment uses an index of 1 since the partition number of
+  // mainPart is 1.  Increment the index so that additional compartments start
+  // at 2.
+  if (osec.compartment != nullptr)
+    rank = (osec.compartment->index + 1) * RF_COMPARTMENT;
 
   // We want to put section specified by -T option first, so we
   // can start assigning VA starting from them later.
