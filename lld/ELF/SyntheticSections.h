@@ -1392,6 +1392,8 @@ struct InStruct {
 LLVM_LIBRARY_VISIBILITY extern InStruct in;
 
 struct Compartment {
+  size_t index;
+
   StringRef name;
 
   std::string suffix;
