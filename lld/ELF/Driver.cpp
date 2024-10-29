@@ -1711,7 +1711,13 @@ static void readConfigs(opt::InputArgList &args) {
     compartments.emplace_back();
     Compartment &newCompart = compartments.back();
     newCompart.name = arg->getValue();
+    newCompart.index = compartments.size();
   }
+
+  // Impose a limit of 254 compartments.  This limit comes from the amount
+  // of space devoted to the compartment number in RankFlags.
+  if (compartments.size() > 254)
+    fatal("may not have more than 254 compartments");
 }
 
 // Some Config members do not directly correspond to any particular
