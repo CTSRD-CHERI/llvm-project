@@ -1,12 +1,12 @@
 # RUN: not llvm-mc -triple riscv32 -mattr=+zcheripurecap,+cap-mode <%s 2>&1 \
 # RUN:     | FileCheck %s -check-prefixes=CHECK
 # RUN: not llvm-mc -triple riscv64 -mattr=+zcheripurecap,+cap-mode <%s 2>&1 \
-# RUN:     | FileCheck %s -check-prefixes=CHECK 
+# RUN:     | FileCheck %s -check-prefixes=CHECK
 
 cgettype    a0, ca0         # CHECK: <stdin>:[[#@LINE]]:1:  error: instruction requires the following: CHERI Extension
 cgetsealed  a0, ca0         # CHECK: <stdin>:[[#@LINE]]:1:  error: instruction requires the following: CHERI Extension
 cgetoffset  a0, ca0         # CHECK: <stdin>:[[#@LINE]]:1:  error: instruction requires the following: CHERI Extension
-cgetflags   a0, ca0         # CHECK: <stdin>:[[#@LINE]]:1:  error: instruction requires the following: CHERI Extension  
+cgetflags   a0, ca0         # CHECK: <stdin>:[[#@LINE]]:1:  error: instruction requires the following: CHERI Extension
 cunseal     ca0, ca0, ca0   # CHECK: <stdin>:[[#@LINE]]:1:  error: instruction requires the following: CHERI Extension
 scmode      ca0, ca0, a0    # CHECK: <stdin>:[[#@LINE]]:1:  error: instruction requires the following: The zcherihybrid Extension is Enabled
 csetoffset  ca0, ca0, a0    # CHECK: <stdin>:[[#@LINE]]:1:  error: instruction requires the following: CHERI Extension
@@ -17,7 +17,8 @@ cseal       ca0, ca0, ca0   # CHECK: <stdin>:[[#@LINE]]:1:  error: instruction r
 ctoptr      a0, ca0, ca0    # CHECK: <stdin>:[[#@LINE]]:1:  error: instruction requires the following: CHERI Extension
 cfromptr    ca0, ca0, a0    # CHECK: <stdin>:[[#@LINE]]:1:  error: instruction requires the following: CHERI Extension
 cinvoke     ca0, ca0        # CHECK: <stdin>:[[#@LINE]]:1:  error: instruction requires the following: CHERI Extension
-modesw                      # CHECK: <stdin>:[[#@LINE]]:1:  error: instruction requires the following: The zcherihybrid Extension is Enabled
+modesw.cap                  # CHECK: <stdin>:[[#@LINE]]:1:  error: instruction requires the following: The zcherihybrid Extension is Enabled
+modesw.int                  # CHECK: <stdin>:[[#@LINE]]:1:  error: instruction requires the following: The zcherihybrid Extension is Enabled
 cclear      1, 0x42         # CHECK: <stdin>:[[#@LINE]]:1:  error: instruction requires the following: CHERI Extension
 fpclear     1, 0x42         # CHECK: <stdin>:[[#@LINE]]:1:  error: instruction requires the following: CHERI Extension
 crrl        a0, a0          # CHECK: <stdin>:[[#@LINE]]:1:  error: instruction requires the following: CHERI Extension

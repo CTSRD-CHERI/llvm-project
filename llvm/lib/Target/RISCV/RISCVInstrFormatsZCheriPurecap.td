@@ -97,6 +97,18 @@ class RVInstCheriSetBoundsImmFmt<bits<6> funct6, bits<3> funct3,
   let Inst{6-0}   = opcode.Value;
 }
 
+let hasSideEffects = 1, mayLoad = 0, mayStore = 0 in
+class CheriModeSwitchInstr<bits<7> funct7, RISCVOpcode opcode, string opcodestr>
+      : RVInst<(outs ), (ins ), opcodestr, "", [], InstFormatR>{
+
+  let Inst{31-25} = funct7;
+  let Inst{24-20} = 0x0;
+  let Inst{19-15} = 0x0;
+  let Inst{14-12} = 0x1;
+  let Inst{11-7}  = 0x0;
+  let Inst{6-0}   = opcode.Value;
+}
+
 let hasNoSchedulingInfo = 1,
     hasSideEffects = 1, mayLoad = 0, mayStore = 0 in
 class CheriCSR_ir<bits<3> funct3, string opcodestr, RegisterClass rs1Class=GPCR>

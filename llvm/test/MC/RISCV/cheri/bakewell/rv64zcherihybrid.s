@@ -116,7 +116,7 @@ gcbase a0, ca0
 # CHECK-ASM: encoding: [0x33,0x05,0x65,0x10]
 gclen a0, ca0
 
-# CHECK-ASM-AND-OBJ: cram a0, a0  
+# CHECK-ASM-AND-OBJ: cram a0, a0
 # CHECK-ASM: encoding: [0x33,0x05,0x75,0x10]
 cram a0, a0
 
@@ -128,9 +128,13 @@ lc ca0, 0(a0)
 # CHECK-ASM: encoding: [0x23,0x40,0xa5,0x00]
 sc ca0, 0(a0)
 
-# CHECK-ASM-AND-OBJ: modesw
+# CHECK-ASM-AND-OBJ: modesw.cap
 # CHECK-ASM: encoding: [0x33,0x10,0x00,0x12]
-modesw
+modesw.cap
+
+# CHECK-ASM-AND-OBJ: modesw.int
+# CHECK-ASM: encoding: [0x33,0x10,0x00,0x14]
+modesw.int
 
 # CHECK-ASM-AND-OBJ: scmode
 # CHECK-ASM: encoding: [0x33,0x75,0xb5,0x0c]

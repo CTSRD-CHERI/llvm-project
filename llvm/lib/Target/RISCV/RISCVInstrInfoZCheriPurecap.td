@@ -99,21 +99,9 @@ def SCMODE        : ZCheri_rr<0x6, 0x7, "scmode">;
 // Mode Switch Instructions
 //===----------------------------------------------------------------------===//
 
-let hasSideEffects = 1, mayLoad = 0, mayStore = 0 in
-class CheriEmptyInstr<bits<7> funct7, bits<3> funct3, RISCVOpcode opcode,
-                      string opcodestr>
-      : RVInst<(outs ), (ins ), opcodestr, "", [], InstFormatR>{
-
-let Inst{31-25} = funct7;
-let Inst{24-20} = 0x0;
-let Inst{19-15} = 0x0;
-let Inst{14-12} = funct3;
-let Inst{11-7}  = 0x0;
-let Inst{6-0}   = opcode.Value;
-}
-
 let Predicates = [HasZCheriHybrid] in {
-def CModeSwitch : CheriEmptyInstr<0x9, 0x1, OPC_OP, "modesw">;
+def MODESW_CAP : CheriModeSwitchInstr<0x9, OPC_OP, "modesw.cap">;
+def MODESW_INT : CheriModeSwitchInstr<0xA, OPC_OP, "modesw.int">;
 } // HasZCheriHybrid
 
 //===----------------------------------------------------------------------===//
