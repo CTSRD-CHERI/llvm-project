@@ -33,3 +33,5 @@ sc          ca0, 0(a0)      # CHECK: <stdin>:[[#@LINE]]:1:  error: instruction r
 cmv         a0 , a0         # CHECK: <stdin>:[[#@LINE]]:13: error: invalid operand for instruction
 cbld        ca0, c0,  ca0   # CHECK: <stdin>:[[#@LINE]]:18: error: invalid operand for instruction
 scss        a0 , c0,  ca0   # CHECK: <stdin>:[[#@LINE]]:18: error: invalid operand for instruction
+gctype      ca0, ca0        # CHECK: <stdin>:[[#@LINE]]:13: error: invalid operand for instruction
+gctype      a0, a0          # CHECK: <stdin>:[[#@LINE]]:17: error: invalid operand for instruction

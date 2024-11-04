@@ -7,9 +7,7 @@
 define i1 @sealed_get(i8 addrspace(200)* %cap) nounwind {
 ; RV32LEGACY-LABEL: sealed_get:
 ; RV32LEGACY:       # %bb.0:
-; RV32LEGACY-NEXT:    gchi a0, ca0
-; RV32LEGACY-NEXT:    srli a0, a0, 20
-; RV32LEGACY-NEXT:    andi a0, a0, 1
+; RV32LEGACY-NEXT:    gctype a0, ca0
 ; RV32LEGACY-NEXT:    snez a0, a0
 ; RV32LEGACY-NEXT:    ret
   %sealed = call i1 @llvm.cheri.cap.sealed.get(i8 addrspace(200)* %cap)

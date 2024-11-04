@@ -116,7 +116,7 @@ gcbase a0, ca0
 # CHECK-ASM: encoding: [0x33,0x05,0x65,0x10]
 gclen a0, ca0
 
-# CHECK-ASM-AND-OBJ: cram a0, a0  
+# CHECK-ASM-AND-OBJ: cram a0, a0
 # CHECK-ASM: encoding: [0x33,0x05,0x75,0x10]
 cram a0, a0
 
@@ -127,3 +127,7 @@ lc ca0, 0(ca0)
 # CHECK-ASM-AND-OBJ: sc ca0, 0(ca0)
 # CHECK-ASM: encoding: [0x23,0x40,0xa5,0x00]
 sc ca0, 0(ca0)
+
+# CHECK-ASM-AND-OBJ: gctype a0, ca0
+# CHECK-ASM: encoding: [0x33,0x05,0x25,0x10]
+gctype a0, ca0

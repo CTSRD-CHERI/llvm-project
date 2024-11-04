@@ -1,12 +1,12 @@
 # RUN: not llvm-mc -triple riscv32 -mattr=+zcheripurecap,+zcherihybrid <%s 2>&1 \
 # RUN:     | FileCheck %s -check-prefixes=CHECK
 # RUN: not llvm-mc -triple riscv64 -mattr=+zcheripurecap,+zcherihybrid <%s 2>&1 \
-# RUN:     | FileCheck %s -check-prefixes=CHECK 
+# RUN:     | FileCheck %s -check-prefixes=CHECK
 
 cgettype    a0, ca0         # CHECK: <stdin>:[[#@LINE]]:1:  error: instruction requires the following: CHERI Extension
 cgetsealed  a0, ca0         # CHECK: <stdin>:[[#@LINE]]:1:  error: instruction requires the following: CHERI Extension
 cgetoffset  a0, ca0         # CHECK: <stdin>:[[#@LINE]]:1:  error: instruction requires the following: CHERI Extension
-cgetflags   a0, ca0         # CHECK: <stdin>:[[#@LINE]]:1:  error: instruction requires the following: CHERI Extension  
+cgetflags   a0, ca0         # CHECK: <stdin>:[[#@LINE]]:1:  error: instruction requires the following: CHERI Extension
 cunseal     ca0, ca0, ca0   # CHECK: <stdin>:[[#@LINE]]:1:  error: instruction requires the following: CHERI Extension
 csetoffset  ca0, ca0, a0    # CHECK: <stdin>:[[#@LINE]]:1:  error: instruction requires the following: CHERI Extension
 ccleartag   ca0, ca0        # CHECK: <stdin>:[[#@LINE]]:1:  error: instruction requires the following: CHERI Extension
@@ -30,3 +30,5 @@ scbndsi     ca0, ca0, sz    # CHECK: <stdin>:[[#@LINE]]:23: error: immediate mus
 cmv         a0 , a0         # CHECK: <stdin>:[[#@LINE]]:13: error: invalid operand for instruction
 cbld        ca0, c0,  ca0   # CHECK: <stdin>:[[#@LINE]]:18: error: invalid operand for instruction
 scss        a0 , c0,  ca0   # CHECK: <stdin>:[[#@LINE]]:18: error: invalid operand for instruction
+gctype      ca0, ca0        # CHECK: <stdin>:[[#@LINE]]:13: error: invalid operand for instruction
+gctype      a0, a0          # CHECK: <stdin>:[[#@LINE]]:17: error: invalid operand for instruction

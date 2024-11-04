@@ -52,6 +52,7 @@ def GCPERM : ZCheri_r<0x1, "gcperm">;
 def GCHI   : ZCheri_r<0x4, "gchi"  >;
 def GCBASE : ZCheri_r<0x5, "gcbase">;
 def GCLEN  : ZCheri_r<0x6, "gclen" >;
+def GCTYPE : ZCheri_r<0x2, "gctype">;
 } // Predicates = [HasZCheriPurecap]
 
 //===----------------------------------------------------------------------===//
@@ -248,31 +249,8 @@ def : PatCapInspect<int_cheri_cap_perms_get,  GCPERM>;
 def : PatCapInspect<int_cheri_cap_high_get,   GCHI  >;
 def : PatCapInspect<int_cheri_cap_base_get,   GCBASE>;
 def : PatCapInspect<int_cheri_cap_length_get, GCLEN >;
-
-
-// bit 20 is the sealed bit (32-bit)
-let Predicates = [HasZCheriPurecap, IsRV32] in
-def : Pat<(XLenVT (riscv_cap_sealed_get GPCR:$cs1)),
-          (ANDI (SRLI (GCHI GPCR:$cs1), 20), 1)>;
-
-// bit 27 is the sealed bit (64-bit)
-let Predicates = [HasZCheriPurecap, IsRV64] in
-def : Pat<(XLenVT (riscv_cap_sealed_get GPCR:$cs1)),
-          (ANDI (SRLI (GCHI GPCR:$cs1), 27), 1)>;
-
-// -1 if unsealed, -2 if sentry
-// to match Cambridge v9 cap_type_get
-let Predicates = [HasZCheriPurecap, IsRV32] in
-def : Pat<(XLenVT (int_cheri_cap_type_get GPCR:$cs1)),
-          (XORI (ANDI (SRLI (GCHI GPCR:$cs1), 20), 1),
-                -1)>;
-
-// -1 if unsealed, -2 if sentry
-// to match Cambridge v9 cap_type_get
-let Predicates = [HasZCheriPurecap, IsRV64] in
-def : Pat<(XLenVT (int_cheri_cap_type_get GPCR:$cs1)),
-          (XORI (ANDI (SRLI (GCHI GPCR:$cs1), 27), 1),
-                -1)>;
+def : PatCapInspect<riscv_cap_sealed_get,     GCTYPE>;
+def : PatCapInspect<int_cheri_cap_type_get,   GCTYPE>;
 
 // bit 25 is the mode bit (32-bit)
 let Predicates = [HasZCheriPurecap, IsRV32] in
