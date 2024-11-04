@@ -123,7 +123,7 @@ void RISCVMCCodeEmitter::expandFunctionCall(const MCInst &MI,
   MCInst TmpInst;
   MCOperand Func;
   MCRegister Ra;
-  bool IsCap;
+  bool IsCap = false;
   if (MI.getOpcode() == RISCV::PseudoTAIL) {
     Func = MI.getOperand(0);
     Ra = RISCV::X6;
