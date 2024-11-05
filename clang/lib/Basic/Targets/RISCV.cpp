@@ -241,6 +241,7 @@ void RISCVTargetInfo::getTargetDefines(const LangOptions &Opts,
       Builder.defineMacro("__CHERI_BW_CAP_PERMISSION_EXECUTE__", Twine(1 << 3));
       Builder.defineMacro("__CHERI_BW_CAP_PERMISSION_ACCESS_SYSTEM_REGISTERS__",
                           Twine(1 << 4));
+      Builder.defineMacro("__CHERI_BW_CAP_PERMISSION_LOAD_MUTABLE__", Twine(1 << 5));
     } else {
       // Macros for use with the set and get permissions builtins.
       Builder.defineMacro("__CHERI_CAP_PERMISSION_GLOBAL__", Twine(1 << 0));
