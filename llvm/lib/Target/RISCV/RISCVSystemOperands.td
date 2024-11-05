@@ -80,7 +80,7 @@ def lookupSiFiveRegByName : SearchIndex {
 }
 
 def lookupSiFiveRegByDeprecatedName : SearchIndex {
-  let Table = SiFiveRegsList;
+let Table = SiFiveRegsList;
   let Key = [ "DeprecatedName" ];
 }
 
@@ -220,9 +220,11 @@ def : SysReg<"htimedeltah", 0x615>;
 
 def : SysReg<"vsstatus", 0x200>;
 def : SysReg<"vsie", 0x204>;
+let isDisabledInCapMode = 1 in {
 def : SysReg<"vstvec", 0x205>;
 def : SysReg<"vsscratch", 0x240>;
 def : SysReg<"vsepc", 0x241>;
+}
 def : SysReg<"vscause", 0x242>;
 def : SysReg<"vstval", 0x243>;
 def : SysReg<"vsip", 0x244>;

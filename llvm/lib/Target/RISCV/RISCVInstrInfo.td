@@ -872,7 +872,9 @@ def SFENCE_VMA  : Priv_rr<"sfence.vma", 0b0001001>, Sched<[]>;
 let Predicates = [HasStdExtH] in {
 def HFENCE_VVMA : Priv_rr<"hfence.vvma", 0b0010001>, Sched<[]>;
 def HFENCE_GVMA : Priv_rr<"hfence.gvma", 0b0110001>, Sched<[]>;
+}
 
+let Predicates = [HasStdExtH, NotCapMode] in {
 def HLV_B   : HLoad_r<0b0110000, 0b00000, "hlv.b">, Sched<[]>;
 def HLV_BU  : HLoad_r<0b0110000, 0b00001, "hlv.bu">, Sched<[]>;
 def HLV_H   : HLoad_r<0b0110010, 0b00000, "hlv.h">, Sched<[]>;
@@ -884,7 +886,7 @@ def HSV_B   : HStore_rr<0b0110001, "hsv.b">, Sched<[]>;
 def HSV_H   : HStore_rr<0b0110011, "hsv.h">, Sched<[]>;
 def HSV_W   : HStore_rr<0b0110101, "hsv.w">, Sched<[]>;
 }
-let Predicates = [IsRV64, HasStdExtH] in {
+let Predicates = [IsRV64, HasStdExtH, NotCapMode] in {
 def HLV_WU  : HLoad_r<0b0110100, 0b00001, "hlv.wu">, Sched<[]>;
 def HLV_D   : HLoad_r<0b0110110, 0b00000, "hlv.d">, Sched<[]>;
 def HSV_D   : HStore_rr<0b0110111, "hsv.d">, Sched<[]>;
