@@ -111,23 +111,6 @@ define i32 @offset_get(i8 addrspace(200)* %cap) nounwind {
   %offset = call i32 @llvm.cheri.cap.offset.get.i32(i8 addrspace(200)* %cap)
   ret i32 %offset
 }
-define i32 @flags_get(i8 addrspace(200)* %cap) nounwind {
-; PURECAP-LABEL: flags_get:
-; PURECAP:       # %bb.0:
-; PURECAP-NEXT:    gchi a0, ca0
-; PURECAP-NEXT:    srli a0, a0, 25
-; PURECAP-NEXT:    andi a0, a0, 1
-; PURECAP-NEXT:    ret
-;
-; HYBRID-LABEL: flags_get:
-; HYBRID:       # %bb.0:
-; HYBRID-NEXT:    gchi a0, ca0
-; HYBRID-NEXT:    srli a0, a0, 25
-; HYBRID-NEXT:    andi a0, a0, 1
-; HYBRID-NEXT:    ret
-  %flags = call i32 @llvm.cheri.cap.flags.get.i32(i8 addrspace(200)* %cap)
-  ret i32 %flags
-}
 define i32 @address_get(i8 addrspace(200)* %cap) nounwind {
 ; PURECAP-LABEL: address_get:
 ; PURECAP:       # %bb.0:
@@ -180,26 +163,6 @@ define i8 addrspace(200)* @perms_and(i8 addrspace(200)* %cap, i32 %perms) nounwi
 ; HYBRID-NEXT:    acperm ca0, ca0, a1
 ; HYBRID-NEXT:    ret
   %newcap = call i8 addrspace(200)* @llvm.cheri.cap.perms.and.i32(i8 addrspace(200)* %cap, i32 %perms)
-  ret i8 addrspace(200)* %newcap
-}
-define i8 addrspace(200)* @flags_set(i8 addrspace(200)* %cap, i32 %flags) nounwind {
-; PURECAP-LABEL: flags_set:
-; PURECAP:       # %bb.0:
-; PURECAP-NEXT:    lui a2, 1040384
-; PURECAP-NEXT:    addi a2, a2, -1
-; PURECAP-NEXT:    gchi a3, ca0
-; PURECAP-NEXT:    and a2, a3, a2
-; PURECAP-NEXT:    andi a1, a1, 1
-; PURECAP-NEXT:    slli a1, a1, 25
-; PURECAP-NEXT:    or a1, a2, a1
-; PURECAP-NEXT:    schi ca0, ca0, a1
-; PURECAP-NEXT:    ret
-;
-; HYBRID-LABEL: flags_set:
-; HYBRID:       # %bb.0:
-; HYBRID-NEXT:    scmode ca0, ca0, a1
-; HYBRID-NEXT:    ret
-  %newcap = call i8 addrspace(200)* @llvm.cheri.cap.flags.set.i32(i8 addrspace(200)* %cap, i32 %flags)
   ret i8 addrspace(200)* %newcap
 }
 define i8 addrspace(200)* @offset_set(i8 addrspace(200)* %cap, i32 %offset) nounwind {
@@ -338,21 +301,21 @@ define i32 @to_pointer(i8 addrspace(200)* %cap1, i8 addrspace(200)* %cap2) nounw
 define i8 addrspace(200)* @from_pointer(i8 addrspace(200)* %cap, i32 %ptr) nounwind {
 ; PURECAP-LABEL: from_pointer:
 ; PURECAP:       # %bb.0:
-; PURECAP-NEXT:    bnez a1, .LBB21_2
+; PURECAP-NEXT:    bnez a1, .LBB19_2
 ; PURECAP-NEXT:  # %bb.1:
 ; PURECAP-NEXT:    cmv ca0, cnull
 ; PURECAP-NEXT:    ret
-; PURECAP-NEXT:  .LBB21_2:
+; PURECAP-NEXT:  .LBB19_2:
 ; PURECAP-NEXT:    scaddr ca0, ca0, a1
 ; PURECAP-NEXT:    ret
 ;
 ; HYBRID-LABEL: from_pointer:
 ; HYBRID:       # %bb.0:
-; HYBRID-NEXT:    bnez a1, .LBB21_2
+; HYBRID-NEXT:    bnez a1, .LBB19_2
 ; HYBRID-NEXT:  # %bb.1:
 ; HYBRID-NEXT:    cmv ca0, cnull
 ; HYBRID-NEXT:    ret
-; HYBRID-NEXT:  .LBB21_2:
+; HYBRID-NEXT:  .LBB19_2:
 ; HYBRID-NEXT:    scaddr ca0, ca0, a1
 ; HYBRID-NEXT:    ret
   %newcap = call i8 addrspace(200)* @llvm.cheri.cap.from.pointer(i8 addrspace(200)* %cap, i32 %ptr)

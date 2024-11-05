@@ -143,3 +143,7 @@ scmode ca0, ca0, a1
 # CHECK-ASM-AND-OBJ: gctype a0, ca0
 # CHECK-ASM: encoding: [0x33,0x05,0x25,0x10]
 gctype a0, ca0
+
+# CHECK-ASM-AND-OBJ: gcmode a0, ca0
+# CHECK-ASM: encoding: [0x33,0x05,0x35,0x10]
+gcmode a0, ca0

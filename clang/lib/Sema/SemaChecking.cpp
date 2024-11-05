@@ -280,6 +280,14 @@ static bool SemaVerifyBakewellBuiltins(Sema &S, unsigned BuiltinID, CallExpr *Th
     return false;
   }
   switch (BuiltinID) {
+  case Builtin::BI__builtin_cheri_flags_get:
+  case Builtin::BI__builtin_cheri_flags_set:
+    if (S.Context.getTargetInfo().hasFeature("zcherihybrid"))
+      return false;
+    S.Diag(TheCall->getBeginLoc(), diag::err_bakewell_unsupported_builtin)
+        << TheCall->getSourceRange()
+        << StringRef("Requires zcherihybrid");
+    return true;
   case Builtin::BI__builtin_cheri_cap_type_copy:
   case Builtin::BI__builtin_cheri_unseal:
   case Builtin::BI__builtin_cheri_conditional_seal:

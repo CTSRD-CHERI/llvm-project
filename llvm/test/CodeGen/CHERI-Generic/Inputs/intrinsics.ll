@@ -54,10 +54,12 @@ define iCAPRANGE @offset_get(i8 addrspace(200)* %cap) nounwind {
   ret iCAPRANGE %offset
 }
 
+#if !(defined(RISCV32BAKEWELL) | defined(RISCV64BAKEWELL))
 define iCAPRANGE @flags_get(i8 addrspace(200)* %cap) nounwind {
   %flags = call iCAPRANGE @llvm.cheri.cap.flags.get.iCAPRANGE(i8 addrspace(200)* %cap)
   ret iCAPRANGE %flags
 }
+#endif
 
 define iCAPRANGE @address_get(i8 addrspace(200)* %cap) nounwind {
   %address = call iCAPRANGE @llvm.cheri.cap.address.get.iCAPRANGE(i8 addrspace(200)* %cap)
@@ -105,10 +107,12 @@ define i8 addrspace(200)* @perms_and(i8 addrspace(200)* %cap, iCAPRANGE %perms) 
   ret i8 addrspace(200)* %newcap
 }
 
+#if !(defined(RISCV32BAKEWELL) | defined(RISCV64BAKEWELL))
 define i8 addrspace(200)* @flags_set(i8 addrspace(200)* %cap, iCAPRANGE %flags) nounwind {
   %newcap = call i8 addrspace(200)* @llvm.cheri.cap.flags.set.iCAPRANGE(i8 addrspace(200)* %cap, iCAPRANGE %flags)
   ret i8 addrspace(200)* %newcap
 }
+#endif
 
 define i8 addrspace(200)* @offset_set(i8 addrspace(200)* %cap, iCAPRANGE %offset) nounwind {
   %newcap = call i8 addrspace(200)* @llvm.cheri.cap.offset.set.iCAPRANGE(i8 addrspace(200)* %cap, iCAPRANGE %offset)

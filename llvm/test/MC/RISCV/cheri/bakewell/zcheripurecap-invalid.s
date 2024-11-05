@@ -19,6 +19,7 @@ cfromptr    ca0, ca0, a0    # CHECK: <stdin>:[[#@LINE]]:1:  error: instruction r
 cinvoke     ca0, ca0        # CHECK: <stdin>:[[#@LINE]]:1:  error: instruction requires the following: CHERI Extension
 modesw.cap                  # CHECK: <stdin>:[[#@LINE]]:1:  error: instruction requires the following: The zcherihybrid Extension is Enabled
 modesw.int                  # CHECK: <stdin>:[[#@LINE]]:1:  error: instruction requires the following: The zcherihybrid Extension is Enabled
+gcmode      a0, ca0         # CHECK: <stdin>:[[#@LINE]]:1:  error: instruction requires the following: The zcherihybrid Extension is Enabled
 cclear      1, 0x42         # CHECK: <stdin>:[[#@LINE]]:1:  error: instruction requires the following: CHERI Extension
 fpclear     1, 0x42         # CHECK: <stdin>:[[#@LINE]]:1:  error: instruction requires the following: CHERI Extension
 crrl        a0, a0          # CHECK: <stdin>:[[#@LINE]]:1:  error: instruction requires the following: CHERI Extension

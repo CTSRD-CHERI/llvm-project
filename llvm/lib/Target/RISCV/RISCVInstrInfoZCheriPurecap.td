@@ -55,6 +55,10 @@ def GCLEN  : ZCheri_r<0x6, "gclen" >;
 def GCTYPE : ZCheri_r<0x2, "gctype">;
 } // Predicates = [HasZCheriPurecap]
 
+let Predicates = [HasZCheriHybrid] in {
+def GCMODE : ZCheri_r<0x3, "gcmode">;
+} // Predicates = [HasZCheriHybrid]
+
 //===----------------------------------------------------------------------===//
 // Capability-Modification Instructions
 //===----------------------------------------------------------------------===//
@@ -251,16 +255,8 @@ def : PatCapInspect<int_cheri_cap_base_get,   GCBASE>;
 def : PatCapInspect<int_cheri_cap_length_get, GCLEN >;
 def : PatCapInspect<riscv_cap_sealed_get,     GCTYPE>;
 def : PatCapInspect<int_cheri_cap_type_get,   GCTYPE>;
-
-// bit 25 is the mode bit (32-bit)
-let Predicates = [HasZCheriPurecap, IsRV32] in
-def : Pat<(XLenVT (int_cheri_cap_flags_get GPCR:$cs1)),
-          (ANDI (SRLI (GCHI GPCR:$cs1), 25), 1)>;
-
-// bit 52 is the mode bit (64-bit)
-let Predicates = [HasZCheriPurecap, IsRV64] in
-def : Pat<(XLenVT (int_cheri_cap_flags_get GPCR:$cs1)),
-          (ANDI (SRLI (GCHI GPCR:$cs1), 52), 1)>;
+let Predicates = [HasZCheriHybrid] in
+def : PatCapInspect<int_cheri_cap_flags_get,  GCMODE>;
 
 def : Pat<(XLenVT (int_cheri_cap_offset_get GPCR:$cs1)),
           (SUB (XLenVT (EXTRACT_SUBREG GPCR:$cs1, sub_cap_addr)),
