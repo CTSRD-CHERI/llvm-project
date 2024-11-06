@@ -19,7 +19,7 @@
 # SYM:        Name: __rela_dyn_end
         .text
         .attribute      4, 16
-        .attribute      5, "rv64i2p1_zcheripurecap0p0"
+        .attribute      5, "rv64i2p1_zcheripurecap0p8"
         .file   "test.c"
         .globl  foo                             # -- Begin function foo
         .p2align        2

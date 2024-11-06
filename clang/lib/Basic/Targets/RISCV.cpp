@@ -187,14 +187,6 @@ void RISCVTargetInfo::getTargetDefines(const LangOptions &Opts,
     auto ExtName = Extension.first;
     auto ExtInfo = Extension.second;
 
-    // TODO - This should be addressed properly once extension naming is decided
-    auto IsValidMacroNameSymbol = [](char C) {
-      return isalpha(C) || isdigit(C) || C == '_';
-    };
-    ExtName.erase(
-        std::remove_if(ExtName.begin(), ExtName.end(),
-                       [&](char c) { return !IsValidMacroNameSymbol(c); }),
-        ExtName.end());
     Builder.defineMacro(
         Twine("__riscv_", ExtName),
         Twine(getVersionValue(ExtInfo.MajorVersion, ExtInfo.MinorVersion)));
