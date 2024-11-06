@@ -389,3 +389,54 @@ let Predicates = [HasStdExtH, HasZCheriPurecap, NotCapMode] in {
 def HLV_C    : CHLoad_r<0b0111000, 0b00000, "hlv.c", GPRMemZeroOffset>, Sched<[]>;
 def HSV_C    : CHStore_rr<0b0111001, "hsv.c", GPRMemZeroOffset>, Sched<[]>;
 }
+
+//===----------------------------------------------------------------------===//
+// Cheri Cache Management Operations.
+//===----------------------------------------------------------------------===//
+
+// Instruction Class Templates
+let hasSideEffects = 0, mayLoad = 0, mayStore = 1 in
+class CCBO_r<bits<12> optype, string opcodestr>
+    : RVInstI<0b010, OPC_MISC_MEM, (outs), (ins GPCRMemZeroOffset:$rs1),
+              opcodestr, "$rs1"> {
+  let imm12 = optype;
+  let rd = 0b00000;
+}
+
+let hasSideEffects = 0, mayLoad = 1, mayStore = 1 in
+class CPrefetch_ri<bits<5> optype, string opcodestr>
+    : RVInstS<0b110, OPC_OP_IMM, (outs), (ins GPCR:$rs1, simm12_lsb00000:$imm12),
+              opcodestr, "${imm12}(${rs1})"> {
+  let Inst{11-7} = 0b00000;
+  let rs2 = optype;
+}
+
+// Instructions
+let DecoderNamespace = "CapModeOnly_" in {
+let Predicates = [HasStdExtZicbom, HasZCheriPurecap, IsCapMode] in {
+def CCBO_CLEAN : CCBO_r<0b000000000001, "cbo.clean">, Sched<[]>;
+def CCBO_FLUSH : CCBO_r<0b000000000010, "cbo.flush">, Sched<[]>;
+def CCBO_INVAL : CCBO_r<0b000000000000, "cbo.inval">, Sched<[]>;
+} // Predicates = [HasStdExtZicbom, HasZCheriPurecap, IsCapMode]
+
+let Predicates = [HasStdExtZicboz, HasZCheriPurecap, IsCapMode] in {
+def CCBO_ZERO : CCBO_r<0b000000000100, "cbo.zero">, Sched<[]>;
+} // Predicates = [HasStdExtZicboz, HasZCheriPurecap, IsCapMode]
+
+let Predicates = [HasStdExtZicbop, HasZCheriPurecap, IsCapMode] in {
+def CPREFETCH_I : CPrefetch_ri<0b00000, "prefetch.i">, Sched<[]>;
+def CPREFETCH_R : CPrefetch_ri<0b00001, "prefetch.r">, Sched<[]>;
+def CPREFETCH_W : CPrefetch_ri<0b00011, "prefetch.w">, Sched<[]>;
+} // Predicates = [HasStdExtZicbop, HasZCheriPurecap, IsCapMode]
+}
+
+// Patterns
+let Predicates = [HasStdExtZicbop, HasZCheriPurecap, IsCapMode] in {
+  // FIXME: Match address with offset
+  def : Pat<(prefetch GPCR:$rs1, imm, imm, (XLenVT 0)),
+            (CPREFETCH_I GPCR:$rs1, 0)>;
+  def : Pat<(prefetch GPCR:$rs1, (XLenVT 0), imm, (XLenVT 1)),
+            (CPREFETCH_R GPCR:$rs1, 0)>;
+  def : Pat<(prefetch GPCR:$rs1, (XLenVT 1), imm, (XLenVT 1)),
+            (CPREFETCH_W GPCR:$rs1, 0)>;
+}

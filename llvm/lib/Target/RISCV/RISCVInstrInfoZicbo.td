@@ -54,27 +54,27 @@ class Prefetch_ri<bits<5> optype, string opcodestr>
 // Instructions
 //===----------------------------------------------------------------------===//
 
-let Predicates = [HasStdExtZicbom] in {
+let Predicates = [HasStdExtZicbom, NotCapMode] in {
 def CBO_CLEAN : CBO_r<0b000000000001, "cbo.clean">, Sched<[]>;
 def CBO_FLUSH : CBO_r<0b000000000010, "cbo.flush">, Sched<[]>;
 def CBO_INVAL : CBO_r<0b000000000000, "cbo.inval">, Sched<[]>;
-} // Predicates = [HasStdExtZicbom]
+} // Predicates = [HasStdExtZicbom, NotCapMode]
 
-let Predicates = [HasStdExtZicboz] in {
+let Predicates = [HasStdExtZicboz, NotCapMode] in {
 def CBO_ZERO : CBO_r<0b000000000100, "cbo.zero">, Sched<[]>;
-} // Predicates = [HasStdExtZicboz]
+} // Predicates = [HasStdExtZicboz, NotCapMode]
 
-let Predicates = [HasStdExtZicbop] in {
+let Predicates = [HasStdExtZicbop, NotCapMode] in {
 def PREFETCH_I : Prefetch_ri<0b00000, "prefetch.i">, Sched<[]>;
 def PREFETCH_R : Prefetch_ri<0b00001, "prefetch.r">, Sched<[]>;
 def PREFETCH_W : Prefetch_ri<0b00011, "prefetch.w">, Sched<[]>;
-} // Predicates = [HasStdExtZicbop]
+} // Predicates = [HasStdExtZicbop, NotCapMode]
 
 //===----------------------------------------------------------------------===//
 // Patterns
 //===----------------------------------------------------------------------===//
 
-let Predicates = [HasStdExtZicbop] in {
+let Predicates = [HasStdExtZicbop, NotCapMode] in {
   // FIXME: Match address with offset
   def : Pat<(prefetch GPR:$rs1, imm, imm, (XLenVT 0)),
             (PREFETCH_I GPR:$rs1, 0)>;
