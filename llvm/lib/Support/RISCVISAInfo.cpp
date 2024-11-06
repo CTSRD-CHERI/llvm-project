@@ -100,9 +100,9 @@ static const RISCVSupportedExtension SupportedExtensions[] = {
     {"zcd", RISCVExtensionVersion{1, 0}},
     {"zce", RISCVExtensionVersion{1, 0}},
     {"zcf", RISCVExtensionVersion{1, 0}},
-    {"zcheri-pte", RISCVExtensionVersion{0, 8}},
-    {"zcherihybrid", RISCVExtensionVersion{0, 8}},
-    {"zcheripurecap", RISCVExtensionVersion{0, 8}},
+    {"zcheri-pte", RISCVExtensionVersion{0, 9}},
+    {"zcherihybrid", RISCVExtensionVersion{0, 9}},
+    {"zcheripurecap", RISCVExtensionVersion{0, 9}},
     {"zcmp", RISCVExtensionVersion{1, 0}},
     {"zcmt", RISCVExtensionVersion{1, 0}},
 
