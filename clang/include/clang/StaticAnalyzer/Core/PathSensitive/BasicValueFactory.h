@@ -223,7 +223,7 @@ public:
 
   const llvm::APSInt &getZeroWithTypeSize(QualType T) {
     assert(T->isScalarType());
-    return getValue(0, Ctx.getTypeSize(T), true);
+    return getValue(0, Ctx.getIntWidth(T), true);
   }
 
   const llvm::APSInt &getTruthValue(bool b, QualType T) {

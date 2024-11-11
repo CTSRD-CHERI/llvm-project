@@ -10972,9 +10972,11 @@ unsigned ASTContext::getIntWidth(QualType T) const {
   if (Target->SupportsCapabilities()) {
     if (T->isPointerType() && T->getAs<PointerType>()->isCHERICapability())
       return Target->getPointerRangeForCHERICapability();
+    if (T->isReferenceType() && T->getAs<ReferenceType>()->isCHERICapability()) {
+      return Target->getPointerRangeForCHERICapability();
+    }
     if (T->isIntCapType())
       return Target->getPointerRangeForCHERICapability();
-    assert(!T->isReferenceType() && "Should probably not be handled here");
   }
   // For builtin types, just use the standard type sizing method
   return (unsigned)getTypeSize(T);

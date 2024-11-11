@@ -4,6 +4,7 @@
 // CHECK:      [config]
 // CHECK-NEXT: add-pop-up-notes = true
 // CHECK-NEXT: aggressive-binary-operation-simplification = false
+// CHECK-NEXT: alpha.cheri.Allocation:ReportForUnknownAllocations = true
 // CHECK-NEXT: alpha.clone.CloneChecker:IgnoredFilesPattern = ""
 // CHECK-NEXT: alpha.clone.CloneChecker:MinimumCloneComplexity = 50
 // CHECK-NEXT: alpha.clone.CloneChecker:ReportNormalClones = true
@@ -33,6 +34,9 @@
 // CHECK-NEXT: cfg-rich-constructors = true
 // CHECK-NEXT: cfg-scopes = false
 // CHECK-NEXT: cfg-temporary-dtors = true
+// CHECK-NEXT: cheri.CapabilityCopy:ReportForCharPtr = false
+// CHECK-NEXT: cheri.ProvenanceSource:ReportForAmbiguousProvenance = true
+// CHECK-NEXT: cheri.ProvenanceSource:ShowFixIts = false
 // CHECK-NEXT: consider-single-element-arrays-as-flexible-array-members = false
 // CHECK-NEXT: core.CallAndMessage:ArgInitializedness = true
 // CHECK-NEXT: core.CallAndMessage:ArgPointeeInitializedness = false

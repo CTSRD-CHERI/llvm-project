@@ -305,7 +305,10 @@ public:
     return nonloc::ConcreteInt(BasicVals.getValue(integer, ptrType));
   }
 
-  NonLoc makeLocAsInteger(Loc loc, unsigned bits) {
+  NonLoc makeLocAsInteger(Loc loc, unsigned bits, bool hasProvenance) {
+    assert((bits & ~255) == 0);
+    if (hasProvenance)
+      bits |= 256;
     return nonloc::LocAsInteger(BasicVals.getPersistentSValWithData(loc, bits));
   }
 

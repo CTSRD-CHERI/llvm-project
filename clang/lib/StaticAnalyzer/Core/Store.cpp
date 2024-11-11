@@ -440,9 +440,24 @@ SVal StoreManager::getLValueIvar(const ObjCIvarDecl *decl, SVal base) {
   return getLValueFieldOrIvar(decl, base);
 }
 
-SVal StoreManager::getLValueElement(QualType elementType, NonLoc Offset,
-                                    SVal Base) {
+static const SVal getNewIndex(ProgramStateRef State, SValBuilder &SVB,
+                                NonLoc Offset, NonLoc BaseIdx) {
+  if (isa<nonloc::ConcreteInt>(BaseIdx) && isa<nonloc::ConcreteInt>(Offset)) {
+    const llvm::APSInt &BIdxI = BaseIdx.castAs<nonloc::ConcreteInt>().getValue();
+    assert(BIdxI.isSigned());
+    const llvm::APSInt &OffI = Offset.castAs<nonloc::ConcreteInt>().getValue();
+    const llvm::APSInt &NewIdxI = BIdxI + OffI;
+    return nonloc::ConcreteInt(SVB.getBasicValueFactory().getValue(NewIdxI));
+  }
+  if (isa<nonloc::LocAsInteger>(BaseIdx) || isa<nonloc::LocAsInteger>(Offset))
+    return UnknownVal();
 
+  const QualType &Ty = SVB.getArrayIndexType();
+  return SVB.evalBinOpNN(State, BO_Add, BaseIdx, Offset, Ty);
+}
+
+SVal StoreManager::getLValueElement(ProgramStateRef State, QualType elementType,
+                                    NonLoc Offset, SVal Base) {
   // Special case, if index is 0, return the same type as if
   // this was not an array dereference.
   if (Offset.isZeroConstant()) {
@@ -486,36 +501,24 @@ SVal StoreManager::getLValueElement(QualType elementType, NonLoc Offset,
                                                     BaseRegion, Ctx));
   }
 
-  SVal BaseIdx = ElemR->getIndex();
+  const SubRegion *ArrayR = cast<SubRegion>(ElemR->getSuperRegion());
+  // Avoid creating NewIndex if BaseIdx is 0
+  if (!isa<ElementRegion>(BaseRegion->StripCasts()))
+    return loc::MemRegionVal(
+        MRMgr.getElementRegion(elementType, Offset, ArrayR, Ctx));
 
-  if (!isa<nonloc::ConcreteInt>(BaseIdx))
+  SVal BaseIdx = ElemR->getIndex();
+  if (!isa<NonLoc>(BaseIdx))
     return UnknownVal();
 
-  const llvm::APSInt &BaseIdxI =
-      BaseIdx.castAs<nonloc::ConcreteInt>().getValue();
-
-  // Only allow non-integer offsets if the base region has no offset itself.
-  // FIXME: This is a somewhat arbitrary restriction. We should be using
-  // SValBuilder here to add the two offsets without checking their types.
-  if (!isa<nonloc::ConcreteInt>(Offset)) {
-    if (isa<ElementRegion>(BaseRegion->StripCasts()))
-      return UnknownVal();
-
-    return loc::MemRegionVal(MRMgr.getElementRegion(
-        elementType, Offset, cast<SubRegion>(ElemR->getSuperRegion()), Ctx));
+  SVal NIdx = getNewIndex(State, svalBuilder, Offset, BaseIdx.castAs<NonLoc>());
+  if (Optional<NonLoc> NewIdx = NIdx.getAs<NonLoc>()) {
+    // Construct the new ElementRegion.
+    return loc::MemRegionVal(
+        MRMgr.getElementRegion(elementType, NewIdx.getValue(), ArrayR, Ctx));
   }
-
-  const llvm::APSInt& OffI = Offset.castAs<nonloc::ConcreteInt>().getValue();
-  assert(BaseIdxI.isSigned());
-
-  // Compute the new index.
-  nonloc::ConcreteInt NewIdx(svalBuilder.getBasicValueFactory().getValue(BaseIdxI +
-                                                                    OffI));
-
-  // Construct the new ElementRegion.
-  const SubRegion *ArrayR = cast<SubRegion>(ElemR->getSuperRegion());
-  return loc::MemRegionVal(MRMgr.getElementRegion(elementType, NewIdx, ArrayR,
-                                                  Ctx));
+  
+  return UnknownVal();
 }
 
 StoreManager::BindingsHandler::~BindingsHandler() = default;

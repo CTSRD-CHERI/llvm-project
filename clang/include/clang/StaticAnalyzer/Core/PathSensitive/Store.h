@@ -146,7 +146,8 @@ public:
     return getLValueFieldOrIvar(D, Base);
   }
 
-  virtual SVal getLValueElement(QualType elementType, NonLoc offset, SVal Base);
+  virtual SVal getLValueElement(ProgramStateRef State, QualType elementType,
+                                NonLoc offset, SVal Base);
 
   /// ArrayToPointer - Used by ExprEngine::VistCast to handle implicit
   ///  conversions between arrays and pointers.

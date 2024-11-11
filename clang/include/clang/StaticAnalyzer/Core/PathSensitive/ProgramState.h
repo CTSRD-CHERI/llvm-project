@@ -794,9 +794,11 @@ inline SVal ProgramState::getLValue(const IndirectFieldDecl *D,
   return Base;
 }
 
-inline SVal ProgramState::getLValue(QualType ElementType, SVal Idx, SVal Base) const{
+inline SVal ProgramState::getLValue(QualType ElementType, SVal Idx,
+                                    SVal Base) const {
   if (Optional<NonLoc> N = Idx.getAs<NonLoc>())
-    return getStateManager().StoreMgr->getLValueElement(ElementType, *N, Base);
+    return getStateManager().StoreMgr->getLValueElement(this, ElementType, *N,
+                                                        Base);
   return UnknownVal();
 }
 
