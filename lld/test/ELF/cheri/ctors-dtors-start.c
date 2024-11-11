@@ -1,3 +1,4 @@
+// REQUIRES: clang, mips
 // RUN: %cheri_purecap_cc1 %s -emit-obj -o %t.o
 // RUN: ld.lld %t.o -static -o %t.exe --fatal-warnings
 // RUN: llvm-objdump -h -r -t  --cap-relocs %t.exe | FileCheck --check-prefix WITH-CTORS %s

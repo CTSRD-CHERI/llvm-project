@@ -1,3 +1,4 @@
+# REQUIRES: mips
 # RUN: %cheri_purecap_llvm-mc -filetype=obj %s -o %t.o
 # RUN: ld.lld --fatal-warnings -pie %t.o -o %t.exe
 # RUN: llvm-readobj --dyn-relocations %t.exe | FileCheck %s --check-prefix=INTERPOSABLE

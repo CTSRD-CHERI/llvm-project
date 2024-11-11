@@ -1,3 +1,4 @@
+# REQUIRES: mips
 # RUN: llvm-mc -filetype=obj -triple=mips64-unknown-linux %s -o %t-linux.o
 # RUN: llvm-objdump --section=.data -s %t-linux.o | FileCheck --check-prefix DATA-RELA %s
 

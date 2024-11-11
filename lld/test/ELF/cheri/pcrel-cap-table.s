@@ -1,3 +1,4 @@
+# REQUIRES: mips
 # RUN: %cheri128_llvm-mc -filetype=obj %s -o %t.o
 # RUN: ld.lld -z now %t.o -o %t.exe
 # RUN: llvm-objdump --cap-relocs -t -d -h %t.exe | FileCheck %s

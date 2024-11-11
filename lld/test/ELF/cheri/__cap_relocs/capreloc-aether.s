@@ -1,3 +1,4 @@
+# REQUIRES: mips
 # RUN: %cheri_purecap_llvm-mc %s -filetype=obj -o %t.o
 # RUN: ld.lld -T %S/Inputs/capreloc-aether.script %t.o -o %t
 # RUN: llvm-readobj --cap-relocs %t | FileCheck %s

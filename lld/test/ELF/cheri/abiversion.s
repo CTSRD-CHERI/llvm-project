@@ -1,3 +1,4 @@
+# REQUIRES: mips
 # RUN: %cheri128_purecap_llvm-mc -filetype=obj %s -o %t.o
 # RUN: ld.lld -pie %t.o -o %t.exe
 # RUN: llvm-readobj -h %t.exe | FileCheck %s

@@ -1,3 +1,4 @@
+// REQUIRES: mips-registered-target
 // CHERI triple without any flags should set 128 defines
 // RUN: %plain_clang_cheri_triple_allowed -target cheri-unknown-freebsd11  \
 // RUN:  -mabi=purecap -E -dM -xc /dev/null 2>&1 | FileCheck --check-prefixes=PURECAP,PURECAP-128,CHERI128 %s

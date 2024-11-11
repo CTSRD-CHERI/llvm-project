@@ -1,3 +1,4 @@
+# REQUIRES: mips
 # RUN: %cheri128_llvm-mc -filetype=obj %s -o %t.o
 # RUN: ld.lld %t.o -o %t.exe
 # RUN: llvm-objdump -t -d -h -s --section=.data --section=.text %t.exe | FileCheck %s --check-prefix STATIC

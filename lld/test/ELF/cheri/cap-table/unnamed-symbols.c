@@ -1,3 +1,4 @@
+// REQUIRES: mips
 // RUN: %cheri128_purecap_cc1 -DGET_NUMBER=1 -emit-obj -O0 -mllvm -cheri-cap-table-abi=plt %s -o %t-get_number.o
 // RUN: %cheri128_purecap_cc1 -DGET_ORDINAL=1 -emit-obj -O0 -mllvm -cheri-cap-table-abi=plt %s -o %t-get_ordinal.o
 // RUN: %cheri128_purecap_cc1 -DMAIN=1 -emit-obj -O0 -mllvm -cheri-cap-table-abi=plt %s -o %t-main.o

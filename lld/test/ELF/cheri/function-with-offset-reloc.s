@@ -2,6 +2,7 @@
 ## This may no longer work in the future since it's not ideal when using sentries
 ## and tightly bounded code capabilities.
 
+# REQUIRES: mips
 # RUN: %cheri128_purecap_llvm-mc %s -filetype=obj -o %t.o
 # RUN: %cheri128_purecap_llvm-mc %s -defsym=SHLIB=1 -filetype=obj -o %t-lib.o
 # RUN: ld.lld %t-lib.o -shared -o %t-lib.so

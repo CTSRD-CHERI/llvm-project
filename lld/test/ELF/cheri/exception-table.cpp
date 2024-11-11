@@ -1,3 +1,4 @@
+// REQUIRES: clang, mips
 // RUN: %cheri_purecap_cc1 -O2 -mframe-pointer=none -fcxx-exceptions -fexceptions %s -emit-obj -o %t.o
 // RUN: llvm-readobj -r %t.o | FileCheck %s --check-prefix=MIPS-OBJ-RELOCS
 // RUN: %riscv64_cheri_purecap_cc1 -O2 -mframe-pointer=none -fcxx-exceptions -fexceptions %s -emit-obj -o %t-riscv64.o

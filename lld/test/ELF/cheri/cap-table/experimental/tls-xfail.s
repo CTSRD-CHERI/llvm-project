@@ -1,3 +1,4 @@
+# REQUIRES: mips
 # RUN: %cheri128_purecap_llvm-mc -filetype=obj %s -o %t.o
 # RUN: ld.lld -shared -o %t.so %t.o -captable-scope=all
 # RUN: llvm-readobj -r --cap-table %t.so

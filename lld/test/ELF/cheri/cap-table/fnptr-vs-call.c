@@ -1,4 +1,4 @@
-// REQUIRES: clang
+// REQUIRES: clang, mips
 
 // RUN: %cheri_purecap_cc1 -mllvm -cheri-cap-table-abi=plt -DFNPTR1 -emit-obj -O2 %s -o %t-fnptr1.o
 // RUN: %cheri_purecap_cc1 -mllvm -cheri-cap-table-abi=plt -DFNPTR2 -emit-obj -O2 %s -o %t-fnptr2.o

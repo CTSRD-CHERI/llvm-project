@@ -1,3 +1,4 @@
+# REQUIRES: mips
 # RUN: llvm-mc -triple=mips64-unknown-freebsd -mcpu=cheri256 -target-abi purecap -position-independent -filetype=obj -defsym=FIRST=1 -o %t1.o %s
 # RUN: llvm-mc -triple=mips64-unknown-freebsd -mcpu=cheri256 -target-abi purecap -position-independent -filetype=obj -defsym=FIRST=0 -o %t2.o %s
 # RUN: ld.lld %t1.o %t2.o -shared -o %t.so

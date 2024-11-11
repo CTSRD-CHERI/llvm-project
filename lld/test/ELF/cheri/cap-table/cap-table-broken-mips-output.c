@@ -3,6 +3,7 @@
 // This previously caused the following error in llvm-objdump: index past the end of the symbol table
 
 // create a n64 output that doesn't have any cap-table entries
+// REQUIRES: mips
 // RUN: %cheri_cc1 %s -emit-obj -x c -O3 -o %t.o
 // RUN: llvm-objdump -t %t.o | FileCheck --check-prefix OBJ %s
 // RUN: ld.lld %t.o -o %t.exe

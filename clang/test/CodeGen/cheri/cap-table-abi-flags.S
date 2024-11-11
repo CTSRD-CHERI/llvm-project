@@ -1,3 +1,4 @@
+// REQUIRES: mips-registered-target
 # RUN: %cheri_purecap_clang -cheri-cap-table-abi=plt -c %s -o - -### 2>&1 | FileCheck %s -check-prefix CMDLINE
 
 # Preprocess first then run as (make sure both contain the cap-table-abi flag

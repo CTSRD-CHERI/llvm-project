@@ -3,7 +3,7 @@
 ; is a single trivially rematerizable instruction so it can freely move it around to avoid stack spills.
 ; we were moving the allocation of the register that is only used later to the beginning
 
-; REQUIRES: asserts
+; REQUIRES: asserts,mips-registered-target,riscv-registered-target
 ; RUN: %cheri_purecap_opt -opaque-pointers=0 -cheri-bound-allocas %s -o - -S | FileCheck %s -check-prefix DEFAULT
 ; RUN: %cheri_purecap_opt -opaque-pointers=0 -cheri-bound-allocas %s -o - -S -cheri-stack-bounds-single-intrinsic-threshold=0 -cheri-stack-bounds=if-needed | FileCheck %s -check-prefix IF-NEEDED-SINGLE
 ; RUN: %cheri_purecap_opt -opaque-pointers=0 -cheri-bound-allocas %s -o - -S -cheri-stack-bounds-single-intrinsic-threshold=10 -cheri-stack-bounds=if-needed | FileCheck %s -check-prefix IF-NEEDED-PER-USE

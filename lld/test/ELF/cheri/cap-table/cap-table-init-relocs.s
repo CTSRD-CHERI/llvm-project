@@ -1,3 +1,4 @@
+# REQUIRES: mips
 # RUN: %cheri128_purecap_llvm-mc -filetype=obj %s -o %t.o
 # RUN: ld.lld -z now -shared -o %t %t.o -preemptible-caprelocs=legacy --no-relative-cap-relocs -local-caprelocs=legacy
 # RUN: llvm-readobj -r %t | FileCheck %s --check-prefix LEGACY-BOTH-ELF-RELOCS

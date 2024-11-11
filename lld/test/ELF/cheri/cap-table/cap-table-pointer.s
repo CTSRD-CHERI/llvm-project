@@ -1,3 +1,4 @@
+# REQUIRES: mips
 # RUN: %cheri_purecap_llvm-mc -filetype=obj %s -o %t.o
 # RUN: ld.lld --fatal-warnings -pie %t.o -o %t.exe
 # RUN: llvm-readobj --cap-relocs --cap-table --dyn-relocations --symbols %t.exe | %cheri_FileCheck %s

@@ -1,3 +1,4 @@
+// REQUIRES: mips
 // RUN: %cheri128_purecap_llvm-mc -filetype=obj -defsym=FIRST=1 %s -o %t1.o
 // RUN: %cheri128_purecap_llvm-mc -filetype=obj %s -o %t2.o
 // RUN: echo "SECTIONS { \

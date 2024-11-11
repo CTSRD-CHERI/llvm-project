@@ -1,3 +1,4 @@
+// REQUIRES: mips-registered-target
 // Check that we accept all the values for -cheri-bounds= (CC1 option)
 
 // RUN: %cheri_purecap_cc1 -cheri-bounds=conservative -emit-llvm %s -o /dev/null

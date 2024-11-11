@@ -1,3 +1,4 @@
+// REQUIRES: mips-registered-target
 // RUN: %cheri_purecap_clang -cheri-cap-table-abi=plt -c %s -o - | llvm-readobj --arch-specific - | FileCheck %s -check-prefix PLT
 // PLT: ISA Extension: CHERI purecap (PLT based) (0xC2)
 

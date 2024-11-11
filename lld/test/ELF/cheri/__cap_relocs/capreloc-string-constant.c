@@ -1,4 +1,4 @@
-// REQUIRES: clang
+// REQUIRES: clang, mips
 
 // RUN: %cheri_purecap_cc1 %s -emit-obj -o %t.o
 // RUN: llvm-readobj -r %t.o | FileCheck --check-prefix READOBJ %s
