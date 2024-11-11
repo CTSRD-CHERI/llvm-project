@@ -23,7 +23,6 @@ namespace elf {
 
 class InputFile;
 class Symbol;
-class DynamicReloc;
 
 class Defined;
 struct Partition;
@@ -397,10 +396,7 @@ private:
   template <class ELFT> void copyShtGroup(uint8_t *buf);
 };
 
-// TODO: drop the extra SmallVector<Relocation, 0>, it should not longer be
-// needed.
-static_assert(sizeof(InputSection) <= 168 + sizeof(std::vector<DynamicReloc>),
-              "InputSection is too big");
+static_assert(sizeof(InputSection) <= 168, "InputSection is too big");
 
 inline bool isDebugSection(const InputSectionBase &sec) {
   return (sec.flags & llvm::ELF::SHF_ALLOC) == 0 &&
