@@ -102,6 +102,7 @@ static const RISCVSupportedExtension SupportedExtensions[] = {
     {"zcf", RISCVExtensionVersion{1, 0}},
     {"zcheri-pte", RISCVExtensionVersion{0, 9}},
     {"zcherihybrid", RISCVExtensionVersion{0, 9}},
+    {"zcherilevels", RISCVExtensionVersion{0, 9}},
     {"zcheripurecap", RISCVExtensionVersion{0, 9}},
     {"zcmp", RISCVExtensionVersion{1, 0}},
     {"zcmt", RISCVExtensionVersion{1, 0}},
@@ -967,6 +968,7 @@ static const char *ImpliedExtsZce[] = {"zcb", "zcmp", "zcmt"};
 static const char *ImpliedExtsZcf[] = {"zca"};
 static const char *ImpliedExtsZcmp[] = {"zca"};
 static const char *ImpliedExtsZcmt[] = {"zca"};
+static const char *ImpliedExtsZCheriLevels[] = {"zcheripurecap"};
 static const char *ImpliedExtsZCheriHybrid[] = {"zcheripurecap"};
 static const char *ImpliedExtsZCheriPTE[] = {"zcheripurecap"};
 static const char *ImpliedExtsZdinx[] = {"zfinx"};
@@ -1035,6 +1037,7 @@ static constexpr ImpliedExtsEntry ImpliedExts[] = {
     {{"zcf"}, {ImpliedExtsZcf}},
     {{"zcheri-pte"}, {ImpliedExtsZCheriPTE}},
     {{"zcherihybrid"}, {ImpliedExtsZCheriHybrid}},
+    {{"zcherilevels"}, {ImpliedExtsZCheriLevels}},
     {{"zcmp"}, {ImpliedExtsZcmp}},
     {{"zcmt"}, {ImpliedExtsZcmt}},
     {{"zdinx"}, {ImpliedExtsZdinx}},

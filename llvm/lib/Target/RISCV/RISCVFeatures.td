@@ -874,6 +874,10 @@ def HasZCheriPTE
       AssemblerPredicate<(all_of FeatureStdExtZCheriPTE),
       "The zcheri-pte Extension is Enabled">;
 
+def FeatureStdExtZCheriLevels
+    : SubtargetFeature<"zcherlevels", "HasStdExtZCheriLevels", "true",
+                       "'zcherilevels' (Extension for Capability Levels)">;
+
 def FeatureCapMode
     : SubtargetFeature<"cap-mode", "IsCapMode", "true",
                        "Capability mode">;

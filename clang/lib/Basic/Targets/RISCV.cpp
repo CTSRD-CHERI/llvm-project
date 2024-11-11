@@ -242,6 +242,12 @@ void RISCVTargetInfo::getTargetDefines(const LangOptions &Opts,
       Builder.defineMacro("__CHERI_BW_CAP_PERMISSION_ACCESS_SYSTEM_REGISTERS__",
                           Twine(1 << 4));
       Builder.defineMacro("__CHERI_BW_CAP_PERMISSION_LOAD_MUTABLE__", Twine(1 << 5));
+      if(ISAInfo->hasExtension("zcherilevels")){
+        Builder.defineMacro("__CHERI_BW_CAP_PERMISSION_ELEVATE_LEVEL__",
+                            Twine(1 << 6));
+        Builder.defineMacro("__CHERI_BW_CAP_PERMISSION_STORE_LEVEL__",
+                            Twine(1 << 7));
+      }
     } else {
       // Macros for use with the set and get permissions builtins.
       Builder.defineMacro("__CHERI_CAP_PERMISSION_GLOBAL__", Twine(1 << 0));
@@ -404,7 +410,8 @@ bool RISCVTargetInfo::handleTargetFeatures(std::vector<std::string> &Features,
   if (ISAInfo->hasExtension("xcheri") ||
       ISAInfo->hasExtension("zcheripurecap") ||
       ISAInfo->hasExtension("zcherihybrid") ||
-      ISAInfo->hasExtension("zcheri-pte")) {
+      ISAInfo->hasExtension("zcheri-pte") ||
+      ISAInfo->hasExtension("zcherilevels")) {
     HasCheri = true;
     CapSize = XLen * 2;
     CheriBoundVarArg = llvm::is_contained(Features, "+cheri-bounded-vararg");
