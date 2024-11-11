@@ -2873,7 +2873,7 @@ bool IRTranslator::translateAtomicCmpXchg(const User &U,
       *MF->getMachineMemOperand(
           MachinePointerInfo(I.getPointerOperand()), Flags, MRI->getType(Cmp),
           getMemOpAlign(I), I.getAAMetadata(), nullptr, I.getSyncScopeID(),
-          I.getSuccessOrdering(), I.getFailureOrdering()));
+          I.getSuccessOrdering(), I.isExactCompare(), I.getFailureOrdering()));
   return true;
 }
 

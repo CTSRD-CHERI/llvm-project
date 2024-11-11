@@ -447,12 +447,9 @@ define i64 @atomic_load_i64_unordered(i64 addrspace(200)* %a) nounwind {
 ;
 ; RV32IAXCHERI-LABEL: atomic_load_i64_unordered:
 ; RV32IAXCHERI:       # %bb.0:
-; RV32IAXCHERI-NEXT:    cincoffset csp, csp, -16
-; RV32IAXCHERI-NEXT:    csc cra, 8(csp) # 8-byte Folded Spill
-; RV32IAXCHERI-NEXT:    li a1, 0
-; RV32IAXCHERI-NEXT:    ccall __atomic_load_8
-; RV32IAXCHERI-NEXT:    clc cra, 8(csp) # 8-byte Folded Reload
-; RV32IAXCHERI-NEXT:    cincoffset csp, csp, 16
+; RV32IAXCHERI-NEXT:    clc ca1, 0(ca0)
+; RV32IAXCHERI-NEXT:    mv a0, a1
+; RV32IAXCHERI-NEXT:    cgethigh a1, ca1
 ; RV32IAXCHERI-NEXT:    cret
 ;
 ; RV64IXCHERI-LABEL: atomic_load_i64_unordered:
@@ -486,12 +483,9 @@ define i64 @atomic_load_i64_monotonic(i64 addrspace(200)* %a) nounwind {
 ;
 ; RV32IAXCHERI-LABEL: atomic_load_i64_monotonic:
 ; RV32IAXCHERI:       # %bb.0:
-; RV32IAXCHERI-NEXT:    cincoffset csp, csp, -16
-; RV32IAXCHERI-NEXT:    csc cra, 8(csp) # 8-byte Folded Spill
-; RV32IAXCHERI-NEXT:    li a1, 0
-; RV32IAXCHERI-NEXT:    ccall __atomic_load_8
-; RV32IAXCHERI-NEXT:    clc cra, 8(csp) # 8-byte Folded Reload
-; RV32IAXCHERI-NEXT:    cincoffset csp, csp, 16
+; RV32IAXCHERI-NEXT:    clc ca1, 0(ca0)
+; RV32IAXCHERI-NEXT:    mv a0, a1
+; RV32IAXCHERI-NEXT:    cgethigh a1, ca1
 ; RV32IAXCHERI-NEXT:    cret
 ;
 ; RV64IXCHERI-LABEL: atomic_load_i64_monotonic:
@@ -525,12 +519,10 @@ define i64 @atomic_load_i64_acquire(i64 addrspace(200)* %a) nounwind {
 ;
 ; RV32IAXCHERI-LABEL: atomic_load_i64_acquire:
 ; RV32IAXCHERI:       # %bb.0:
-; RV32IAXCHERI-NEXT:    cincoffset csp, csp, -16
-; RV32IAXCHERI-NEXT:    csc cra, 8(csp) # 8-byte Folded Spill
-; RV32IAXCHERI-NEXT:    li a1, 2
-; RV32IAXCHERI-NEXT:    ccall __atomic_load_8
-; RV32IAXCHERI-NEXT:    clc cra, 8(csp) # 8-byte Folded Reload
-; RV32IAXCHERI-NEXT:    cincoffset csp, csp, 16
+; RV32IAXCHERI-NEXT:    clc ca1, 0(ca0)
+; RV32IAXCHERI-NEXT:    mv a0, a1
+; RV32IAXCHERI-NEXT:    cgethigh a1, ca1
+; RV32IAXCHERI-NEXT:    fence r, rw
 ; RV32IAXCHERI-NEXT:    cret
 ;
 ; RV64IXCHERI-LABEL: atomic_load_i64_acquire:
@@ -565,12 +557,11 @@ define i64 @atomic_load_i64_seq_cst(i64 addrspace(200)* %a) nounwind {
 ;
 ; RV32IAXCHERI-LABEL: atomic_load_i64_seq_cst:
 ; RV32IAXCHERI:       # %bb.0:
-; RV32IAXCHERI-NEXT:    cincoffset csp, csp, -16
-; RV32IAXCHERI-NEXT:    csc cra, 8(csp) # 8-byte Folded Spill
-; RV32IAXCHERI-NEXT:    li a1, 5
-; RV32IAXCHERI-NEXT:    ccall __atomic_load_8
-; RV32IAXCHERI-NEXT:    clc cra, 8(csp) # 8-byte Folded Reload
-; RV32IAXCHERI-NEXT:    cincoffset csp, csp, 16
+; RV32IAXCHERI-NEXT:    fence rw, rw
+; RV32IAXCHERI-NEXT:    clc ca1, 0(ca0)
+; RV32IAXCHERI-NEXT:    mv a0, a1
+; RV32IAXCHERI-NEXT:    cgethigh a1, ca1
+; RV32IAXCHERI-NEXT:    fence r, rw
 ; RV32IAXCHERI-NEXT:    cret
 ;
 ; RV64IXCHERI-LABEL: atomic_load_i64_seq_cst:
@@ -1026,12 +1017,9 @@ define void @atomic_store_i64_unordered(i64 addrspace(200)* %a, i64 %b) nounwind
 ;
 ; RV32IAXCHERI-LABEL: atomic_store_i64_unordered:
 ; RV32IAXCHERI:       # %bb.0:
-; RV32IAXCHERI-NEXT:    cincoffset csp, csp, -16
-; RV32IAXCHERI-NEXT:    csc cra, 8(csp) # 8-byte Folded Spill
-; RV32IAXCHERI-NEXT:    li a3, 0
-; RV32IAXCHERI-NEXT:    ccall __atomic_store_8
-; RV32IAXCHERI-NEXT:    clc cra, 8(csp) # 8-byte Folded Reload
-; RV32IAXCHERI-NEXT:    cincoffset csp, csp, 16
+; RV32IAXCHERI-NEXT:    cincoffset ca1, cnull, a1
+; RV32IAXCHERI-NEXT:    csethigh ca1, ca1, a2
+; RV32IAXCHERI-NEXT:    csc ca1, 0(ca0)
 ; RV32IAXCHERI-NEXT:    cret
 ;
 ; RV64IXCHERI-LABEL: atomic_store_i64_unordered:
@@ -1065,12 +1053,9 @@ define void @atomic_store_i64_monotonic(i64 addrspace(200)* %a, i64 %b) nounwind
 ;
 ; RV32IAXCHERI-LABEL: atomic_store_i64_monotonic:
 ; RV32IAXCHERI:       # %bb.0:
-; RV32IAXCHERI-NEXT:    cincoffset csp, csp, -16
-; RV32IAXCHERI-NEXT:    csc cra, 8(csp) # 8-byte Folded Spill
-; RV32IAXCHERI-NEXT:    li a3, 0
-; RV32IAXCHERI-NEXT:    ccall __atomic_store_8
-; RV32IAXCHERI-NEXT:    clc cra, 8(csp) # 8-byte Folded Reload
-; RV32IAXCHERI-NEXT:    cincoffset csp, csp, 16
+; RV32IAXCHERI-NEXT:    cincoffset ca1, cnull, a1
+; RV32IAXCHERI-NEXT:    csethigh ca1, ca1, a2
+; RV32IAXCHERI-NEXT:    csc ca1, 0(ca0)
 ; RV32IAXCHERI-NEXT:    cret
 ;
 ; RV64IXCHERI-LABEL: atomic_store_i64_monotonic:
@@ -1104,12 +1089,10 @@ define void @atomic_store_i64_release(i64 addrspace(200)* %a, i64 %b) nounwind {
 ;
 ; RV32IAXCHERI-LABEL: atomic_store_i64_release:
 ; RV32IAXCHERI:       # %bb.0:
-; RV32IAXCHERI-NEXT:    cincoffset csp, csp, -16
-; RV32IAXCHERI-NEXT:    csc cra, 8(csp) # 8-byte Folded Spill
-; RV32IAXCHERI-NEXT:    li a3, 3
-; RV32IAXCHERI-NEXT:    ccall __atomic_store_8
-; RV32IAXCHERI-NEXT:    clc cra, 8(csp) # 8-byte Folded Reload
-; RV32IAXCHERI-NEXT:    cincoffset csp, csp, 16
+; RV32IAXCHERI-NEXT:    fence rw, w
+; RV32IAXCHERI-NEXT:    cincoffset ca1, cnull, a1
+; RV32IAXCHERI-NEXT:    csethigh ca1, ca1, a2
+; RV32IAXCHERI-NEXT:    csc ca1, 0(ca0)
 ; RV32IAXCHERI-NEXT:    cret
 ;
 ; RV64IXCHERI-LABEL: atomic_store_i64_release:
@@ -1144,12 +1127,10 @@ define void @atomic_store_i64_seq_cst(i64 addrspace(200)* %a, i64 %b) nounwind {
 ;
 ; RV32IAXCHERI-LABEL: atomic_store_i64_seq_cst:
 ; RV32IAXCHERI:       # %bb.0:
-; RV32IAXCHERI-NEXT:    cincoffset csp, csp, -16
-; RV32IAXCHERI-NEXT:    csc cra, 8(csp) # 8-byte Folded Spill
-; RV32IAXCHERI-NEXT:    li a3, 5
-; RV32IAXCHERI-NEXT:    ccall __atomic_store_8
-; RV32IAXCHERI-NEXT:    clc cra, 8(csp) # 8-byte Folded Reload
-; RV32IAXCHERI-NEXT:    cincoffset csp, csp, 16
+; RV32IAXCHERI-NEXT:    fence rw, w
+; RV32IAXCHERI-NEXT:    cincoffset ca1, cnull, a1
+; RV32IAXCHERI-NEXT:    csethigh ca1, ca1, a2
+; RV32IAXCHERI-NEXT:    csc ca1, 0(ca0)
 ; RV32IAXCHERI-NEXT:    cret
 ;
 ; RV64IXCHERI-LABEL: atomic_store_i64_seq_cst:

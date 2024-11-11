@@ -759,8 +759,9 @@ let usesCustomInserter = 1 in {
 
   // Capability atomics:
   // FIXME: this seems wrong it should be CheriGPROrCNULL
-  def CAP_ATOMIC_SWAP_CAP      : CapAtomic2Ops<atomic_swap_cap, CheriOpnd>;
-  def CAP_ATOMIC_CMP_SWAP_CAP  : CapAtomicCmpSwap<atomic_cmp_swap_cap, CheriOpnd>;
+  def CAP_ATOMIC_SWAP_CAP           : CapAtomic2Ops<atomic_swap_cap, CheriOpnd>;
+  def CAP_ATOMIC_CMP_SWAP_CAP_ADDR  : CapAtomicCmpSwap<atomic_cmp_swap_cap_addr, CheriOpnd>;
+  def CAP_ATOMIC_CMP_SWAP_CAP_EXACT : CapAtomicCmpSwap<atomic_cmp_swap_cap_exact, CheriOpnd>;
 
   // TODO: implement these:
   // def ATOMIC_LOAD_ADD_CAP  : Atomic2Ops<atomic_load_add_cap, CheriOpnd>;
@@ -812,8 +813,9 @@ def CAP_ATOMIC_CMP_SWAP_I64_POSTRA  : CapAtomicCmpSwapPostRA<GPR64Opnd>;
 // Capability postra atomics:
 // TODO: do we want add/sub/or/xor/nand/and for capabilities?
 // I guess add/sub makes sense but the others don't
-def CAP_ATOMIC_SWAP_CAP_POSTRA      : CapAtomic2OpsPostRA<CheriOpnd>;
-def CAP_ATOMIC_CMP_SWAP_CAP_POSTRA  : CapAtomicCmpSwapPostRA<CheriOpnd>;
+def CAP_ATOMIC_SWAP_CAP_POSTRA           : CapAtomic2OpsPostRA<CheriOpnd>;
+def CAP_ATOMIC_CMP_SWAP_CAP_ADDR_POSTRA  : CapAtomicCmpSwapPostRA<CheriOpnd>;
+def CAP_ATOMIC_CMP_SWAP_CAP_EXACT_POSTRA : CapAtomicCmpSwapPostRA<CheriOpnd>;
 // TODO:
 // def CAP_ATOMIC_LOAD_ADD_CAP_POSTRA      : CapAtomic2OpsPostRA<CheriOpnd>;
 // def CAP_ATOMIC_LOAD_SUB_CAP_POSTRA      : CapAtomic2OpsPostRA<CheriOpnd>;
@@ -849,8 +851,8 @@ def : MipsPat<(atomic_store_cap GPR64Opnd:$a, CheriOpnd:$v),
               (STORECAP $v, GPR64Opnd:$a, (i64 0), DDC)>;
 def : MipsPat<(atomic_swap_cap GPR64Opnd:$a, CheriOpnd:$swap),
               (CAP_ATOMIC_SWAP_CAP (CFromPtr DDC, GPR64Opnd:$a), CheriOpnd:$swap)>;
-def : MipsPat<(atomic_cmp_swap_cap GPR64Opnd:$a, CheriOpnd:$cmp, CheriOpnd:$swap),
-              (CAP_ATOMIC_CMP_SWAP_CAP (CFromPtr DDC, GPR64Opnd:$a), CheriOpnd:$cmp, CheriOpnd:$swap)>;
+def : MipsPat<(atomic_cmp_swap_cap_addr GPR64Opnd:$a, CheriOpnd:$cmp, CheriOpnd:$swap),
+              (CAP_ATOMIC_CMP_SWAP_CAP_ADDR (CFromPtr DDC, GPR64Opnd:$a), CheriOpnd:$cmp, CheriOpnd:$swap)>;
 }
 ////////////////////////////////////////////////////////////////////////////////
 // Helpers for capability-using calls and returns

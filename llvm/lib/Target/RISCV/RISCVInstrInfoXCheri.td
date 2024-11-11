@@ -1410,6 +1410,10 @@ multiclass CheriExplicitStPat<PatFrag StoreOp, RVInst Inst,
   def : Pat<(StoreOp StTy:$rs2, AddrTy:$rs1), (Inst StTy:$rs2, AddrTy:$rs1)>;
 }
 
+multiclass CheriExplicitAtomicStPat<PatFrag StoreOp, RVInst Inst,
+                                    RegisterClass StTy, RegisterClass AddrTy>
+    : CheriExplicitStPat<Swap<StoreOp>, Inst, StTy, AddrTy>;
+
 /// DDC-relative loads
 
 let Predicates = [HasCheri, IsCapMode] in {
@@ -1590,7 +1594,8 @@ def PseudoAtomicLoadMinCap : PseudoAMO<GPCR> { let Size = 24; }
 def PseudoAtomicLoadUMaxCap : PseudoAMO<GPCR> { let Size = 24; }
 def PseudoAtomicLoadUMinCap : PseudoAMO<GPCR> { let Size = 24; }
 def PseudoAtomicLoadNandCap : PseudoAMO<GPCR> { let Size = 24; }
-def PseudoCmpXchgCap : PseudoCmpXchg<GPCR> { let Size = 16; }
+def PseudoCmpXchgCapAddr : PseudoCmpXchg<GPCR> { let Size = 16; }
+def PseudoCmpXchgCapExact : PseudoCmpXchg<GPCR> { let Size = 16; }
 } // Predicates = [HasCheri, HasStdExtA]f
 
 let Predicates = [HasCheri, HasStdExtA, NotCapMode] in {
@@ -1604,7 +1609,8 @@ defm : PseudoAMOPat<"atomic_load_min_cap", PseudoAtomicLoadMinCap, GPCR>;
 defm : PseudoAMOPat<"atomic_load_umax_cap", PseudoAtomicLoadUMaxCap, GPCR>;
 defm : PseudoAMOPat<"atomic_load_umin_cap", PseudoAtomicLoadUMinCap, GPCR>;
 defm : PseudoAMOPat<"atomic_load_nand_cap", PseudoAtomicLoadNandCap, GPCR>;
-defm : PseudoCmpXchgPat<"atomic_cmp_swap_cap", PseudoCmpXchgCap, GPCR>;
+defm : PseudoCmpXchgPat<"atomic_cmp_swap_cap_addr", PseudoCmpXchgCapAddr, GPCR>;
+defm : PseudoCmpXchgPat<"atomic_cmp_swap_cap_exact", PseudoCmpXchgCapExact, GPCR>;
 } // Predicates = [HasCheri, HasStdExtA, NotCapMode]
 
 /// Capability Mode Instructions
@@ -1747,7 +1753,8 @@ def PseudoCheriAtomicLoadMinCap : PseudoCheriAMO<GPCR> { let Size = 24; }
 def PseudoCheriAtomicLoadUMaxCap : PseudoCheriAMO<GPCR> { let Size = 24; }
 def PseudoCheriAtomicLoadUMinCap : PseudoCheriAMO<GPCR> { let Size = 24; }
 def PseudoCheriAtomicLoadNandCap : PseudoCheriAMO<GPCR> { let Size = 24; }
-def PseudoCheriCmpXchgCap : PseudoCheriCmpXchg<GPCR> { let Size = 16; }
+def PseudoCheriCmpXchgCapAddr : PseudoCheriCmpXchg<GPCR> { let Size = 16; }
+def PseudoCheriCmpXchgCapExact : PseudoCheriCmpXchg<GPCR> { let Size = 16; }
 } // Predicates = [HasCheri, HasStdExtA]
 
 let Predicates = [HasCheri, HasStdExtA, IsRV64] in {
@@ -1946,7 +1953,8 @@ defm : PseudoCheriCmpXchgPat<"atomic_cmp_swap_8", PseudoCheriCmpXchg8>;
 defm : PseudoCheriCmpXchgPat<"atomic_cmp_swap_16", PseudoCheriCmpXchg16>;
 defm : PseudoCheriCmpXchgPat<"atomic_cmp_swap_32", PseudoCheriCmpXchg32>;
 
-defm : PseudoCheriCmpXchgPat<"atomic_cmp_swap_cap", PseudoCheriCmpXchgCap, GPCR>;
+defm : PseudoCheriCmpXchgPat<"atomic_cmp_swap_cap_addr", PseudoCheriCmpXchgCapAddr, GPCR>;
+defm : PseudoCheriCmpXchgPat<"atomic_cmp_swap_cap_exact", PseudoCheriCmpXchgCapExact, GPCR>;
 
 } // Predicates = [HasCheri, HasStdExtA, IsCapMode]
 
@@ -1993,6 +2001,29 @@ defm : CheriLdPat<atomic_load_cap, CLC_128>;
 defm : CheriAtomicStPat<atomic_store_cap, CSC_128, GPCR>;
 defm : CheriAMOCapPat<"128", "atomic_swap_cap", "CAMOSWAP_C">;
 } // Predicates = [HasCheri, HasStdExtA, IsRV64, IsCapMode]
+
+// Hybrid-mode atomic capability-based loads and stores
+// As above, fences will be inserted for atomic load/stores according to the
+// logic in RISCVTargetLowering::{emitLeadingFence,emitTrailingFence}.
+let Predicates = [HasCheri, HasStdExtA, NotCapMode] in {
+defm : CheriExplicitLdPat<atomic_load_8,  LB_CAP, GPCR>;
+defm : CheriExplicitLdPat<atomic_load_16, LH_CAP, GPCR>;
+defm : CheriExplicitLdPat<atomic_load_32, LW_CAP, GPCR>;
+defm : CheriExplicitAtomicStPat<atomic_store_8,  SB_CAP, GPR, GPCR>;
+defm : CheriExplicitAtomicStPat<atomic_store_16, SH_CAP, GPR, GPCR>;
+defm : CheriExplicitAtomicStPat<atomic_store_32, SW_CAP, GPR, GPCR>;
+} // Predicates = [HasCheri, HasStdExtA, NotCapMode]
+let Predicates = [HasCheri, HasStdExtA, IsRV32, NotCapMode] in {
+defm : CheriExplicitLdPat<atomic_load_cap, LC_CAP_64, GPCR>;
+defm : CheriExplicitAtomicStPat<atomic_store_cap, SC_CAP_64, GPCR, GPCR>;
+} // Predicates = [HasCheri, HasStdExtA, IsRV32, NotCapMode]
+let Predicates = [HasCheri, HasStdExtA, IsRV64, NotCapMode] in {
+defm : CheriExplicitLdPat<atomic_load_64, LD_CAP, GPCR>;
+defm : CheriExplicitAtomicStPat<atomic_store_64, SD_CAP, GPR, GPCR>;
+defm : CheriExplicitLdPat<atomic_load_cap, LC_CAP_128, GPCR>;
+defm : CheriExplicitAtomicStPat<atomic_store_cap, SC_CAP_128, GPCR, GPCR>;
+} // Predicates = [HasCheri, HasStdExtA, IsRV64, NotCapMode]
+
 
 /// 'F' (Single-Precision Floating-Point) extension
 

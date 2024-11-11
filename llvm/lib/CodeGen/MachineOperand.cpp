@@ -1032,7 +1032,7 @@ MachinePointerInfo MachinePointerInfo::getUnknownStack(MachineFunction &MF) {
 MachineMemOperand::MachineMemOperand(MachinePointerInfo ptrinfo, Flags f,
                                      LLT type, Align a, const AAMDNodes &AAInfo,
                                      const MDNode *Ranges, SyncScope::ID SSID,
-                                     AtomicOrdering Ordering,
+                                     AtomicOrdering Ordering, bool ExactCompare,
                                      AtomicOrdering FailureOrdering)
     : PtrInfo(ptrinfo), MemoryType(type), FlagVals(f), BaseAlign(a),
       AAInfo(AAInfo), Ranges(Ranges) {
@@ -1047,17 +1047,18 @@ MachineMemOperand::MachineMemOperand(MachinePointerInfo ptrinfo, Flags f,
   assert(getSuccessOrdering() == Ordering && "Value truncated");
   AtomicInfo.FailureOrdering = static_cast<unsigned>(FailureOrdering);
   assert(getFailureOrdering() == FailureOrdering && "Value truncated");
+  AtomicInfo.ExactCompare = ExactCompare;
 }
 
 MachineMemOperand::MachineMemOperand(MachinePointerInfo ptrinfo, Flags f,
                                      uint64_t s, Align a,
                                      const AAMDNodes &AAInfo,
                                      const MDNode *Ranges, SyncScope::ID SSID,
-                                     AtomicOrdering Ordering,
+                                     AtomicOrdering Ordering, bool ExactCompare,
                                      AtomicOrdering FailureOrdering)
-    : MachineMemOperand(ptrinfo, f,
-                        s == ~UINT64_C(0) ? LLT() : LLT::scalar(8 * s), a,
-                        AAInfo, Ranges, SSID, Ordering, FailureOrdering) {}
+    : MachineMemOperand(
+          ptrinfo, f, s == ~UINT64_C(0) ? LLT() : LLT::scalar(8 * s), a, AAInfo,
+          Ranges, SSID, Ordering, ExactCompare, FailureOrdering) {}
 
 /// Profile - Gather unique data for the object.
 ///
@@ -1129,6 +1130,8 @@ void MachineMemOperand::print(raw_ostream &OS, ModuleSlotTracker &MST,
     OS << toIRString(getSuccessOrdering()) << ' ';
   if (getFailureOrdering() != AtomicOrdering::NotAtomic)
     OS << toIRString(getFailureOrdering()) << ' ';
+  if (AtomicInfo.ExactCompare)
+    OS << "exact ";
 
   if (getMemoryType().isValid())
     OS << '(' << getMemoryType() << ')';

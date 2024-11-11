@@ -568,6 +568,10 @@ public:
 
   TargetLowering::AtomicExpansionKind
   shouldExpandAtomicRMWInIR(AtomicRMWInst *AI) const override;
+  AtomicExpansionKind
+  shouldExpandAtomicLoadInIR(llvm::LoadInst *LI) const override;
+  AtomicExpansionKind
+  shouldExpandAtomicStoreInIR(llvm::StoreInst *SI) const override;
   Value *emitMaskedAtomicRMWIntrinsic(IRBuilderBase &Builder, AtomicRMWInst *AI,
                                       Value *AlignedAddr, Value *Incr,
                                       Value *Mask, Value *ShiftAmt,
@@ -730,7 +734,10 @@ private:
   SDValue expandUnalignedRVVLoad(SDValue Op, SelectionDAG &DAG) const;
   SDValue expandUnalignedRVVStore(SDValue Op, SelectionDAG &DAG) const;
 
+  SDValue getCapabilityEqualExact(const SDLoc &DL, SDValue LHS, SDValue RHS,
+                                  SelectionDAG &DAG) const override;
   bool hasCapabilitySetAddress() const override { return true; }
+  unsigned cheriCapabilityAddressSpace() const override { return 200; }
 
   TailPaddingAmount
   getTailPaddingForPreciseBounds(uint64_t Size) const override;
