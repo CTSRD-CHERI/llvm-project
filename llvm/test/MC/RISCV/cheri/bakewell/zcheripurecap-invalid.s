@@ -8,7 +8,7 @@ cgetsealed  a0, ca0         # CHECK: <stdin>:[[#@LINE]]:1:  error: instruction r
 cgetoffset  a0, ca0         # CHECK: <stdin>:[[#@LINE]]:1:  error: instruction requires the following: CHERI Extension
 cgetflags   a0, ca0         # CHECK: <stdin>:[[#@LINE]]:1:  error: instruction requires the following: CHERI Extension
 cunseal     ca0, ca0, ca0   # CHECK: <stdin>:[[#@LINE]]:1:  error: instruction requires the following: CHERI Extension
-scmode      ca0, ca0, a0    # CHECK: <stdin>:[[#@LINE]]:1:  error: instruction requires the following: The zcherihybrid Extension is Enabled
+scmode      ca0, ca0, a0    # CHECK: <stdin>:[[#@LINE]]:1:  error: instruction requires the following: 'zcherihybrid' (Backwards compatiblity for 'zcheripurecap' with RISCV)
 csetoffset  ca0, ca0, a0    # CHECK: <stdin>:[[#@LINE]]:1:  error: instruction requires the following: CHERI Extension
 ccleartag   ca0, ca0        # CHECK: <stdin>:[[#@LINE]]:1:  error: instruction requires the following: CHERI Extension
 ccopytype   ca0, ca0, ca0   # CHECK: <stdin>:[[#@LINE]]:1:  error: instruction requires the following: CHERI Extension
@@ -17,20 +17,20 @@ cseal       ca0, ca0, ca0   # CHECK: <stdin>:[[#@LINE]]:1:  error: instruction r
 ctoptr      a0, ca0, ca0    # CHECK: <stdin>:[[#@LINE]]:1:  error: instruction requires the following: CHERI Extension
 cfromptr    ca0, ca0, a0    # CHECK: <stdin>:[[#@LINE]]:1:  error: instruction requires the following: CHERI Extension
 cinvoke     ca0, ca0        # CHECK: <stdin>:[[#@LINE]]:1:  error: instruction requires the following: CHERI Extension
-modesw.cap                  # CHECK: <stdin>:[[#@LINE]]:1:  error: instruction requires the following: The zcherihybrid Extension is Enabled
-modesw.int                  # CHECK: <stdin>:[[#@LINE]]:1:  error: instruction requires the following: The zcherihybrid Extension is Enabled
-gcmode      a0, ca0         # CHECK: <stdin>:[[#@LINE]]:1:  error: instruction requires the following: The zcherihybrid Extension is Enabled
+modesw.cap                  # CHECK: <stdin>:[[#@LINE]]:1:  error: instruction requires the following: 'zcherihybrid' (Backwards compatiblity for 'zcheripurecap' with RISCV)
+modesw.int                  # CHECK: <stdin>:[[#@LINE]]:1:  error: instruction requires the following: 'zcherihybrid' (Backwards compatiblity for 'zcheripurecap' with RISCV)
+gcmode      a0, ca0         # CHECK: <stdin>:[[#@LINE]]:1:  error: instruction requires the following: 'zcherihybrid' (Backwards compatiblity for 'zcheripurecap' with RISCV)
 cclear      1, 0x42         # CHECK: <stdin>:[[#@LINE]]:1:  error: instruction requires the following: CHERI Extension
 fpclear     1, 0x42         # CHECK: <stdin>:[[#@LINE]]:1:  error: instruction requires the following: CHERI Extension
 crrl        a0, a0          # CHECK: <stdin>:[[#@LINE]]:1:  error: instruction requires the following: CHERI Extension
 cloadtags   a0, (ca0)       # CHECK: <stdin>:[[#@LINE]]:1:  error: instruction requires the following: CHERI Extension
-jalr        a0, 42(a0)      # CHECK: <stdin>:[[#@LINE]]:1:  error: instruction requires the following: Not Capability Mode
-jalr.mode   ca0, 0(ca0)     # CHECK: <stdin>:[[#@LINE]]:1:  error: instruction requires the following: The zcherihybrid Extension is Enabled, Not Capability Mode
+jalr        a0, 42(a0)      # CHECK: <stdin>:[[#@LINE]]:1:  error: instruction requires the following: Integer Pointer Mode
+jalr.mode   ca0, 0(ca0)     # CHECK: <stdin>:[[#@LINE]]:1:  error: instruction requires the following: 'zcherihybrid' (Backwards compatiblity for 'zcheripurecap' with RISCV), Integer Pointer Mode
 scbndsi     ca0, ca0, 33    # CHECK: <stdin>:[[#@LINE]]:23: error: immediate must be an integer in range [0, 31] or be a multiple of 16 in the range [0, 496]
 scbndsi     ca0, ca0, 104   # CHECK: <stdin>:[[#@LINE]]:23: error: immediate must be an integer in range [0, 31] or be a multiple of 16 in the range [0, 496]
 scbndsi     ca0, ca0, 512   # CHECK: <stdin>:[[#@LINE]]:23: error: immediate must be an integer in range [0, 31] or be a multiple of 16 in the range [0, 496]
-lc          ca0, 0(a0)      # CHECK: <stdin>:[[#@LINE]]:1:  error: instruction requires the following: Not Capability Mode
-sc          ca0, 0(a0)      # CHECK: <stdin>:[[#@LINE]]:1:  error: instruction requires the following: Not Capability Mode
+lc          ca0, 0(a0)      # CHECK: <stdin>:[[#@LINE]]:1:  error: instruction requires the following: Integer Pointer Mode
+sc          ca0, 0(a0)      # CHECK: <stdin>:[[#@LINE]]:1:  error: instruction requires the following: Integer Pointer Mode
 cmv         a0 , a0         # CHECK: <stdin>:[[#@LINE]]:13: error: invalid operand for instruction
 cbld        ca0, c0,  ca0   # CHECK: <stdin>:[[#@LINE]]:18: error: invalid operand for instruction
 scss        a0 , c0,  ca0   # CHECK: <stdin>:[[#@LINE]]:18: error: invalid operand for instruction

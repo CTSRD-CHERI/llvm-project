@@ -410,7 +410,7 @@ bool RISCVTargetInfo::handleTargetFeatures(std::vector<std::string> &Features,
   if (ISAInfo->hasExtension("xcheri") ||
       ISAInfo->hasExtension("zcheripurecap") ||
       ISAInfo->hasExtension("zcherihybrid") ||
-      ISAInfo->hasExtension("zcheri-pte") ||
+      ISAInfo->hasExtension("zcheripte") ||
       ISAInfo->hasExtension("zcherilevels")) {
     HasCheri = true;
     CapSize = XLen * 2;

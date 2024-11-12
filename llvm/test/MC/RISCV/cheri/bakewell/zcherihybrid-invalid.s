@@ -20,9 +20,9 @@ cclear      1, 0x42         # CHECK: <stdin>:[[#@LINE]]:1:  error: instruction r
 fpclear     1, 0x42         # CHECK: <stdin>:[[#@LINE]]:1:  error: instruction requires the following: CHERI Extension
 crrl        a0, a0          # CHECK: <stdin>:[[#@LINE]]:1:  error: instruction requires the following: CHERI Extension
 cloadtags   a0, (ca0)       # CHECK: <stdin>:[[#@LINE]]:1:  error: instruction requires the following: CHERI Extension
-jalr        ca0, 42(ca0)    # CHECK: <stdin>:[[#@LINE]]:1:  error: instruction requires the following: Capability Mode
+jalr        ca0, 42(ca0)    # CHECK: <stdin>:[[#@LINE]]:1:  error: instruction requires the following: Capability Pointer Mode
 jalr.mode   a0, 42(a0)      # CHECK: <stdin>:[[#@LINE]]:17: error: invalid operand for instruction
-jalr.mode   a0, 0(a0)       # CHECK: <stdin>:[[#@LINE]]:1:  error: instruction requires the following: Capability Mode
+jalr.mode   a0, 0(a0)       # CHECK: <stdin>:[[#@LINE]]:1:  error: instruction requires the following: Capability Pointer Mode
 scbndsi     ca0, ca0, 33    # CHECK: <stdin>:[[#@LINE]]:23: error: immediate must be an integer in range [0, 31] or be a multiple of 16 in the range [0, 496]
 scbndsi     ca0, ca0, 104   # CHECK: <stdin>:[[#@LINE]]:23: error: immediate must be an integer in range [0, 31] or be a multiple of 16 in the range [0, 496]
 scbndsi     ca0, ca0, 512   # CHECK: <stdin>:[[#@LINE]]:23: error: immediate must be an integer in range [0, 31] or be a multiple of 16 in the range [0, 496]

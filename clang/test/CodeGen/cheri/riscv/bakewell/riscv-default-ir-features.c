@@ -34,18 +34,18 @@
 
 
 // PTE Mode
-// RUN: %clang --target=riscv32 -march=rv32izcheri-pte -S -emit-llvm %s -o - \
-// RUN:   | FileCheck %s --check-prefixes=CHECK,RV32-ZCHERIPTE '-DFEATURES=+32bit,+relax,+zcheri-pte,+zcheripurecap'
-// RUN: %clang --target=riscv64 -march=rv64izcheri-pte -S -emit-llvm %s -o - \
-// RUN:   | FileCheck %s --check-prefixes=CHECK,RV64-ZCHERIPTE '-DFEATURES=+64bit,+relax,+zcheri-pte,+zcheripurecap'
-// RUN: %clang --target=riscv32 -march=rv32izcheri-pte -S -mxcheri-rvc -emit-llvm %s -o - \
-// RUN:   | FileCheck %s --check-prefixes=CHECK,RV32-ZCHERIPTE,NO-RVC '-DFEATURES=+32bit,+relax,+zcheri-pte,+zcheripurecap'
-// RUN: %clang --target=riscv64 -march=rv64izcheri-pte -S -mxcheri-rvc -emit-llvm %s -o - \
-// RUN:   | FileCheck %s --check-prefixes=CHECK,RV64-ZCHERIPTE,NO-RVC '-DFEATURES=+64bit,+relax,+zcheri-pte,+zcheripurecap'
-// RUN: %clang --target=riscv32 -march=rv32izcheri-pte -S -mno-xcheri-rvc -emit-llvm %s -o - \
-// RUN:   | FileCheck %s --check-prefixes=CHECK,RV32-ZCHERIPTE '-DFEATURES=+32bit,+relax,+xcheri-norvc,+zcheri-pte,+zcheripurecap'
-// RUN: %clang --target=riscv64 -march=rv64izcheri-pte -S -mno-xcheri-rvc -emit-llvm %s -o - \
-// RUN:   | FileCheck %s --check-prefixes=CHECK,RV64-ZCHERIPTE '-DFEATURES=+64bit,+relax,+xcheri-norvc,+zcheri-pte,+zcheripurecap'
+// RUN: %clang --target=riscv32 -march=rv32izcheripte -S -emit-llvm %s -o - \
+// RUN:   | FileCheck %s --check-prefixes=CHECK,RV32-ZCHERIPTE '-DFEATURES=+32bit,+relax,+zcheripte,+zcheripurecap'
+// RUN: %clang --target=riscv64 -march=rv64izcheripte -S -emit-llvm %s -o - \
+// RUN:   | FileCheck %s --check-prefixes=CHECK,RV64-ZCHERIPTE '-DFEATURES=+64bit,+relax,+zcheripte,+zcheripurecap'
+// RUN: %clang --target=riscv32 -march=rv32izcheripte -S -mxcheri-rvc -emit-llvm %s -o - \
+// RUN:   | FileCheck %s --check-prefixes=CHECK,RV32-ZCHERIPTE,NO-RVC '-DFEATURES=+32bit,+relax,+zcheripte,+zcheripurecap'
+// RUN: %clang --target=riscv64 -march=rv64izcheripte -S -mxcheri-rvc -emit-llvm %s -o - \
+// RUN:   | FileCheck %s --check-prefixes=CHECK,RV64-ZCHERIPTE,NO-RVC '-DFEATURES=+64bit,+relax,+zcheripte,+zcheripurecap'
+// RUN: %clang --target=riscv32 -march=rv32izcheripte -S -mno-xcheri-rvc -emit-llvm %s -o - \
+// RUN:   | FileCheck %s --check-prefixes=CHECK,RV32-ZCHERIPTE '-DFEATURES=+32bit,+relax,+xcheri-norvc,+zcheripte,+zcheripurecap'
+// RUN: %clang --target=riscv64 -march=rv64izcheripte -S -mno-xcheri-rvc -emit-llvm %s -o - \
+// RUN:   | FileCheck %s --check-prefixes=CHECK,RV64-ZCHERIPTE '-DFEATURES=+64bit,+relax,+xcheri-norvc,+zcheripte,+zcheripurecap'
 
 // RV32-NOCHERI: target datalayout = "e-m:e-p:32:32-i64:64-n32-S128"
 // RV64-NOCHERI: target datalayout = "e-m:e-p:64:64-i64:64-i128:128-n32:64-S128"

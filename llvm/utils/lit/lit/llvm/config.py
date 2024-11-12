@@ -659,7 +659,7 @@ class LLVMConfig(object):
                     '-target-feature', '+xcheri', '-mllvm', '-verify-machineinstrs']
             riscv64_cheri_cc1_args = clang_cc1_args + [ '-triple', 'riscv64-unknown-freebsd',
                     '-target-feature', '+xcheri', '-mllvm', '-verify-machineinstrs']
-            
+
             riscv32_bakewell_purecap_cc1_args = clang_cc1_args + ['-triple', 'riscv32-unknown-freebsd',
                     '-target-feature', '+zcheripurecap', '-mllvm', '-verify-machineinstrs']
             riscv64_bakewell_purecap_cc1_args = clang_cc1_args + ['-triple', 'riscv64-unknown-freebsd',
@@ -669,9 +669,9 @@ class LLVMConfig(object):
             riscv64_bakewell_hybrid_cc1_args = clang_cc1_args + ['-triple', 'riscv64-unknown-freebsd',
                     '-target-feature', '+zcherihybrid', '-mllvm', '-verify-machineinstrs']
             riscv32_bakewell_pte_cc1_args = clang_cc1_args + ['-triple', 'riscv32-unknown-freebsd',
-                    '-target-feature', '+zcheri-pte', '-mllvm', '-verify-machineinstrs']
+                    '-target-feature', '+zcheripte', '-mllvm', '-verify-machineinstrs']
             riscv64_bakewell_pte_cc1_args = clang_cc1_args + ['-triple', 'riscv64-unknown-freebsd',
-                    '-target-feature', '+zcheri-pte', '-mllvm', '-verify-machineinstrs']
+                    '-target-feature', '+zcheripte', '-mllvm', '-verify-machineinstrs']
 
             cheri_cc1_args = cheri128_cc1_args
             default_cheri_cpu = 'cheri128'

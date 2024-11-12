@@ -832,61 +832,63 @@ def HasCheriRVC : Predicate<"Subtarget->enableCheriRVCInstrs()">,
 // Bakewell Features //
 def FeatureStdExtZCheriPureCap
     : SubtargetFeature<"zcheripurecap", "HasStdExtZCheriPureCap", "true",
-                       "Implements RISC-V CHERI purecap", []>;
+                       "'zcheripurecap' (CHERI aware Instructions)", []>;
 
 def HasZCheriPurecap
     : Predicate<"Subtarget->hasStdExtZCheriPureCap()">,
-      AssemblerPredicate<(all_of FeatureStdExtZCheriPureCap),
-      "The zcheripurecap Extension is Enabled">;
+                AssemblerPredicate<(all_of FeatureStdExtZCheriPureCap),
+                "'zcheripurecap' (CHERI aware Instructions)">;
 
 def HasZCheriPurecapOrCheri
     : Predicate<"Subtarget->hasCheri() || Subtarget->hasStdExtZCheriPureCap()">,
-      AssemblerPredicate<(any_of FeatureCheri, FeatureStdExtZCheriPureCap),
-      "Has zcheripurecap or xcheri">;
+                AssemblerPredicate<(any_of FeatureCheri, FeatureStdExtZCheriPureCap),
+                "'zcheripurecap' (CHERI aware Instructions) or "
+                "Implements CHERI extension">;
 
 def NotHasZCheriPurecap
     : Predicate<"!Subtarget->hasStdExtZCheriPureCap()">,
-      AssemblerPredicate<(all_of (not FeatureStdExtZCheriPureCap)),
-      "The zcheripurecap Extension is Disabled">;
+                AssemblerPredicate<(all_of (not FeatureStdExtZCheriPureCap)),
+                "'zcheripurecap' (CHERI aware Instructions) is disabled">;
 
 def FeatureStdExtZCheriHybrid
     : SubtargetFeature<"zcherihybrid", "HasStdExtZCheriHybrid", "true",
-                       "Implements RISC-V CHERI hybrid extension",
+                       "'zcherihybrid' (Backwards compatiblity for 'zcheripurecap' with RISCV)",
                        [FeatureStdExtZCheriPureCap]>;
 
 def HasZCheriHybrid
     : Predicate<"Subtarget->hasStdExtZCheriHybrid()">,
-      AssemblerPredicate<(all_of FeatureStdExtZCheriHybrid),
-      "The zcherihybrid Extension is Enabled">;
+                AssemblerPredicate<(all_of FeatureStdExtZCheriHybrid),
+                "'zcherihybrid' (Backwards compatiblity for 'zcheripurecap' with RISCV)">;
 
 def NotHasZCheriHybrid
     : Predicate<"!Subtarget->hasStdExtZCheriHybrid()">,
-      AssemblerPredicate<(all_of (not FeatureStdExtZCheriHybrid)),
-      "The zcherihybrid Extension is Disabled">;
+                AssemblerPredicate<(all_of (not FeatureStdExtZCheriHybrid)),
+                "'zcherihybrid' (Backwards compatiblity for 'zcheripurecap' with RISCV) is disabled">;
 
 def FeatureStdExtZCheriPTE
-    : SubtargetFeature<"zcheri-pte", "HasStdExtZCheriPTE", "true",
-                       "Implements RISC-V CHERI PTE",
+    : SubtargetFeature<"zcheripte", "HasStdExtZCheriPTE", "true",
+                       "'zcheripte' (CHERI Page-Based Virtual-Memory)",
                        [FeatureStdExtZCheriPureCap]>;
 
 def HasZCheriPTE
     : Predicate<"Subtarget->hasStdExtZCheriPTE()">,
-      AssemblerPredicate<(all_of FeatureStdExtZCheriPTE),
-      "The zcheri-pte Extension is Enabled">;
+                AssemblerPredicate<(all_of FeatureStdExtZCheriPTE),
+                "'zcheripte' (Extension for CHERI Page-Based Virtual-Memory Systems)">;
 
 def FeatureStdExtZCheriLevels
     : SubtargetFeature<"zcherlevels", "HasStdExtZCheriLevels", "true",
-                       "'zcherilevels' (Extension for Capability Levels)">;
+                       "'zcheripte' (Extension for CHERI Page-Based Virtual-Memory Systems)",
+                       [FeatureStdExtZCheriPureCap]>;
 
 def FeatureCapMode
     : SubtargetFeature<"cap-mode", "IsCapMode", "true",
-                       "Capability mode">;
+                       "Capability Pointer mode">;
 def IsCapMode  : Predicate<"Subtarget->isCapMode()">,
                            AssemblerPredicate<(all_of FeatureCapMode),
-                           "Capability Mode">;
+                           "Capability Pointer Mode">;
 def NotCapMode : Predicate<"!Subtarget->isCapMode()">,
                            AssemblerPredicate<(all_of (not FeatureCapMode)),
-                           "Not Capability Mode">;
+                           "Integer Pointer Mode">;
 
 def IsPureCapABI
     : Predicate<"RISCVABI::isCheriPureCapABI(Subtarget->getTargetABI())">;

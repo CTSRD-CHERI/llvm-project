@@ -32,9 +32,9 @@ c.csw a5, 1(ca3)
 c.csw a5, 4(a3)
 # CHECK: <stdin>:[[#@LINE-1]]:13: error: invalid operand for instruction
 c.sw a5, 4(a3)
-# CHECK-RV32-NO-C: <stdin>:[[#@LINE-1]]:1: error: instruction requires the following: 'C' (Compressed Instructions) or 'Zca' (part of the C extension, excluding compressed floating point loads/stores), Not Capability Mode
+# CHECK-RV32-NO-C: <stdin>:[[#@LINE-1]]:1: error: instruction requires the following: 'C' (Compressed Instructions) or 'Zca' (part of the C extension, excluding compressed floating point loads/stores), Integer Pointer Mode
 # CHECK-RV32-C: <stdin>:[[#@LINE-2]]:12: error: invalid operand for instruction
-# CHECK-RV64-NO-C: <stdin>:[[#@LINE-3]]:1: error: instruction requires the following: 'C' (Compressed Instructions) or 'Zca' (part of the C extension, excluding compressed floating point loads/stores), Not Capability Mode
+# CHECK-RV64-NO-C: <stdin>:[[#@LINE-3]]:1: error: instruction requires the following: 'C' (Compressed Instructions) or 'Zca' (part of the C extension, excluding compressed floating point loads/stores), Integer Pointer Mode
 # CHECK-RV64-C: <stdin>:[[#@LINE-4]]:12: error: invalid operand for instruction
 
 # Bad operands:

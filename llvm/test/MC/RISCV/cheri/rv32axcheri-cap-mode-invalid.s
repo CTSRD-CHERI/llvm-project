@@ -5,7 +5,7 @@ amoswap.w a1, a2, c3 # CHECK: :[[@LINE]]:19: error: expected '(' or optional int
 amomin.w a1, a2, 1 # CHECK: :[[@LINE]]:20: error: expected '(' after optional integer offset
 amomin.w a1, a2, 1(c3) # CHECK: :[[@LINE]]:18: error: optional integer offset must be 0
 lr.w a4, c5 # CHECK: :[[@LINE]]:10: error: expected '(' or optional integer offset
-lr.w a4, (a5) # CHECK: :[[@LINE]]:1: error: instruction requires the following: Not Capability Mode
+lr.w a4, (a5) # CHECK: :[[@LINE]]:1: error: instruction requires the following: Integer Pointer Mode
 
 # Only .aq, .rl, and .aqrl suffixes are valid
 amoxor.w.rlqa a2, a3, (c4) # CHECK: :[[@LINE]]:1: error: unrecognized instruction mnemonic
