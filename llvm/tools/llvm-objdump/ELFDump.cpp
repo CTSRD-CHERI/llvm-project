@@ -253,6 +253,9 @@ template <class ELFT> void ELFDumper<ELFT>::printProgramHeaders() {
 
   for (const typename ELFT::Phdr &Phdr : *ProgramHeaderOrError) {
     switch (Phdr.p_type) {
+    case ELF::PT_CHERI_PCC:
+      outs() << "CHERI_PCC ";
+      break;
     case ELF::PT_CHERI_TGOT:
       outs() << "CHERI_TGOT ";
       break;
