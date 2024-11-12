@@ -61,7 +61,7 @@ private:
   void finalizeAddressDependentContent();
   void optimizeBasicBlockJumps();
   void sortInputSections();
-  void sortCheriPccPaddingSection();
+  void sortCheriPccPaddingSection(Compartment *c);
   void sortOrphanSections();
   void finalizeSections();
   void checkExecuteOnly();
@@ -620,6 +620,11 @@ template <class ELFT> void elf::createSyntheticSections() {
   if (config->isCheriAbi && needsCheriPccSegment()) {
     in.pccPadding = std::make_unique<CheriPccPaddingSection>();
     add(*in.pccPadding);
+    for (Compartment &compart : compartments) {
+      compart.pccPadding = std::make_unique<CheriPccPaddingSection>();
+      compart.pccPadding->compartment = &compart;
+      add(*compart.pccPadding);
+    }
   }
 
   if (config->andFeatures)
@@ -1567,8 +1572,9 @@ template <class ELFT> void Writer<ELFT>::sortInputSections() {
 
 // The CHERI PCC padding output section must be placed immediately after the
 // last section covered by the PCC bounds.
-template <class ELFT> void Writer<ELFT>::sortCheriPccPaddingSection() {
-  CheriPccPaddingSection *psec = in.pccPadding.get();
+template <class ELFT>
+void Writer<ELFT>::sortCheriPccPaddingSection(Compartment *c) {
+  CheriPccPaddingSection *psec = pccPadding(c);
   if (!psec->isNeeded())
     return;
 
@@ -1583,10 +1589,10 @@ template <class ELFT> void Writer<ELFT>::sortCheriPccPaddingSection() {
   auto paddingSec = *fromPos;
   script->sectionCommands.erase(fromPos);
 
-  // Second, find the last CHERI PCC output section.
+  // Second, find the last CHERI PCC output section for this compartment.
   auto isPccSection = [&](SectionCommand *cmd) {
     auto *to = dyn_cast<OutputDesc>(cmd);
-    return to != nullptr && to->osec.cheriPcc;
+    return to != nullptr && to->osec.compartment == c && to->osec.cheriPcc;
   };
 
   auto insertPos = llvm::find_if(script->sectionCommands, isPccSection);
@@ -1642,7 +1648,10 @@ template <class ELFT> void Writer<ELFT>::sortSections() {
     sortOrphanSections();
 
   if (in.pccPadding)
-    sortCheriPccPaddingSection();
+    sortCheriPccPaddingSection(nullptr);
+  for (Compartment &c : compartments)
+    if (c.pccPadding)
+      sortCheriPccPaddingSection(&c);
 
   script->adjustSectionsAfterSorting();
 }
@@ -1972,6 +1981,7 @@ template <class ELFT> void Writer<ELFT>::optimizeBasicBlockJumps() {
 // Which output sections are always covered by CHERI PCC bounds.  This includes
 // executable sections, GOTs, and PCC padding.
 static bool isCheriBoundsSection(const OutputSection *sec) {
+  const Compartment *c = sec->compartment;
   uint64_t flags = sec->flags;
 
   // Non-allocatable sections are not mapped into memory.
@@ -1983,15 +1993,15 @@ static bool isCheriBoundsSection(const OutputSection *sec) {
     return true;
 
   // .got is accessed relative to PCC.
-  if (in.got && sec == in.got->getParent())
+  if (got(c) && sec == got(c)->getParent())
     return true;
   if (in.mipsGot && sec == in.mipsGot->getParent())
     return true;
 
   // .got.plt is accessed relative to PCC.
-  if (sec == in.gotPlt->getParent())
+  if (sec == gotPlt(c)->getParent())
     return true;
-  if (sec == in.igotPlt->getParent())
+  if (sec == igotPlt(c)->getParent())
     return true;
 
   // CHERI-MIPS capability table is accessed relative to PCC.
@@ -1999,7 +2009,7 @@ static bool isCheriBoundsSection(const OutputSection *sec) {
     return true;
 
   // The PCC padding section is included in PCC bounds.
-  if (sec == in.pccPadding->getParent())
+  if (sec == pccPadding(c)->getParent())
     return true;
 
   // XXX: CheriBSD's runtime loader assumes all read-only capabilities can be
@@ -2028,50 +2038,39 @@ static void markCheriPccSections() {
     if (s->getSize() == 0)
       continue;
     if ((s->flags & (SHF_ALLOC | SHF_EXECINSTR)) ==
-        (SHF_ALLOC | SHF_EXECINSTR)) {
-      in.pccPadding->markNeeded();
-      break;
-    }
+        (SHF_ALLOC | SHF_EXECINSTR))
+      pccPadding(s->compartment)->markNeeded();
   }
 
   // Even if all executable input sections are empty, there may be a symbol
   // defined in one, for which we need to have CHERI PCC bounds.
-  if (!in.pccPadding->isNeeded()) {
-    for (Symbol *sym : symtab.getSymbols()) {
+  for (Symbol *sym : symtab.getSymbols()) {
+    Defined *d = dyn_cast<Defined>(sym);
+    if (!d || !d->section)
+      continue;
+    if ((d->section->flags & (SHF_ALLOC | SHF_EXECINSTR)) ==
+        (SHF_ALLOC | SHF_EXECINSTR))
+      pccPadding(d->section->compartment)->markNeeded();
+  }
+
+  for (ELFFileBase *file : ctx.objectFiles) {
+    for (Symbol *sym : file->getLocalSymbols()) {
       Defined *d = dyn_cast<Defined>(sym);
       if (!d || !d->section)
         continue;
       if ((d->section->flags & (SHF_ALLOC | SHF_EXECINSTR)) ==
-          (SHF_ALLOC | SHF_EXECINSTR)) {
-        in.pccPadding->markNeeded();
-        break;
-      }
+          (SHF_ALLOC | SHF_EXECINSTR))
+        pccPadding(d->section->compartment)->markNeeded();
     }
   }
-
-  if (!in.pccPadding->isNeeded()) {
-    for (ELFFileBase *file : ctx.objectFiles) {
-      for (Symbol *sym : file->getLocalSymbols()) {
-        Defined *d = dyn_cast<Defined>(sym);
-        if (!d || !d->section)
-          continue;
-        if ((d->section->flags & (SHF_ALLOC | SHF_EXECINSTR)) ==
-            (SHF_ALLOC | SHF_EXECINSTR)) {
-          in.pccPadding->markNeeded();
-          break;
-        }
-      }
-    }
-  }
-
-  if (!in.pccPadding->isNeeded())
-    return;
 
   // Mark all output sections accessed via PCC if there is at least one
   // executable input section.
   for (SectionCommand *cmd : script->sectionCommands) {
     if (auto *osd = dyn_cast<OutputDesc>(cmd)) {
       OutputSection &osec = osd->osec;
+      if (!pccPadding(osec.compartment)->isNeeded())
+        continue;
       if (isCheriBoundsSection(&osec))
         osec.cheriPcc.store(true, std::memory_order_relaxed);
     }
@@ -2473,6 +2472,7 @@ template <class ELFT> void Writer<ELFT>::finalizeSections() {
       finalizeSynthetic(c.got.get());
       finalizeSynthetic(c.gotPlt.get());
       finalizeSynthetic(c.igotPlt.get());
+      finalizeSynthetic(c.pccPadding.get());
       finalizeSynthetic(c.relaIplt.get());
       finalizeSynthetic(c.relaPlt.get());
       finalizeSynthetic(c.plt.get());
@@ -2748,7 +2748,8 @@ SmallVector<PhdrEntry *, 0> Writer<ELFT>::createPhdrs(Partition &part) {
     // Treat a CHERI PCC padding section as relro if it is preceded by a relro
     // section.
     if (isRelroSection(sec) ||
-        (in.pccPadding && inRelroPhdr && sec == in.pccPadding->getParent())) {
+        (pccPadding(sec->compartment) && inRelroPhdr &&
+         sec == pccPadding(sec->compartment)->getParent())) {
       if (inRelroPhdr || !relRo->firstSec) {
         inRelroPhdr = true;
         relRo->add(sec);
@@ -2761,16 +2762,21 @@ SmallVector<PhdrEntry *, 0> Writer<ELFT>::createPhdrs(Partition &part) {
     }
   }
 
-  // Determine the sections PCC should cover.
+  // Determine the sections PCC should cover for each compartment.
   if (in.pccPadding) {
     in.cheriBounds = make<PhdrEntry>(PT_CHERI_PCC, PF_R | PF_X);
+    for (Compartment &compart : compartments)
+      compart.cheriBounds = make<PhdrEntry>(PT_CHERI_PCC, PF_R | PF_X);
 
     for (OutputSection *sec : outputSections) {
       if (sec->partition != partNo || !needsPtLoad(sec))
         continue;
       if (!sec->cheriPcc.load(std::memory_order_relaxed))
         continue;
-      in.cheriBounds->add(sec);
+      if (sec->compartment == nullptr)
+        in.cheriBounds->add(sec);
+      else
+        sec->compartment->cheriBounds->add(sec);
     }
   }
 
@@ -2848,6 +2854,12 @@ SmallVector<PhdrEntry *, 0> Writer<ELFT>::createPhdrs(Partition &part) {
   if (in.cheriBounds) {
     if (in.cheriBounds->firstSec)
       ret.push_back(in.cheriBounds);
+  }
+  for (Compartment &compart : compartments) {
+    if (compart.cheriBounds) {
+      if (compart.cheriBounds->firstSec)
+        ret.push_back(compart.cheriBounds);
+    }
   }
 
   // PT_GNU_EH_FRAME is a special section pointing on .eh_frame_hdr.

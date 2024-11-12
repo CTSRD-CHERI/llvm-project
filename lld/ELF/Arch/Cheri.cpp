@@ -518,10 +518,19 @@ void CheriCapRelocsSection::writeToImpl(uint8_t *buf) {
     uint64_t permissions = CapRelocPermission<ELFT>::encodeType(targetType);
 
     // Use PCC bounds from the PT_CHERI_PCC segment.
-    if (PhdrEntry *ph = in.cheriBounds; ph && isCapRelocTypeExec(targetType)) {
-      targetOffset += targetVA - ph->p_vaddr;
-      targetVA = ph->p_vaddr;
-      targetSize = ph->p_memsz;
+    if (isCapRelocTypeExec(targetType)) {
+      Compartment *c;
+      if (Symbol *s = dyn_cast<Symbol *>(realTarget.symOrSec))
+        c = *s->containingCompartment();
+      else {
+        InputSectionBase *isec = cast<InputSectionBase *>(realTarget.symOrSec);
+        c = isec->compartment;
+      }
+      if (PhdrEntry *ph = cheriBounds(c)) {
+        targetOffset += targetVA - ph->p_vaddr;
+        targetVA = ph->p_vaddr;
+        targetSize = ph->p_memsz;
+      }
     }
 
     // TODO: should we warn about symbols that are out-of-bounds?
@@ -1044,6 +1053,9 @@ bool cheriCapabilityBoundsAlign() {
   bool changed = false;
   if (in.cheriBounds)
     changed |= alignPCCBounds(in.cheriBounds, *in.pccPadding);
+  for (Compartment &compart : compartments)
+    if (compart.cheriBounds)
+      changed |= alignPCCBounds(compart.cheriBounds, *compart.pccPadding);
   return changed;
 }
 
