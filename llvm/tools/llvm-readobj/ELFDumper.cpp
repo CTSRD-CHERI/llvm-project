@@ -1473,6 +1473,8 @@ static StringRef segmentTypeToString(unsigned Arch, unsigned Type) {
     LLVM_READOBJ_ENUM_CASE(ELF, PT_OPENBSD_RANDOMIZE);
     LLVM_READOBJ_ENUM_CASE(ELF, PT_OPENBSD_WXNEEDED);
     LLVM_READOBJ_ENUM_CASE(ELF, PT_OPENBSD_BOOTDATA);
+
+    LLVM_READOBJ_ENUM_CASE(ELF, PT_CHERI_PCC);
   default:
     return "";
   }
