@@ -76,8 +76,8 @@ fn_reloc1:
 # OBJ-RELOCS-NEXT:   }
 # LLD-OUTPUT-NEXT: Found better match for capability relocation against .Lfirst_fn_target+0: fn1+8
 # EXE-RELOCS-NEXT:   Relocation {
-# EXE-RELOCS-NEXT:     Location: 0x3440 (fn_reloc1)
-# EXE-RELOCS-NEXT:     Base: fn1 (0x1338)
+# EXE-RELOCS-NEXT:     Location: 0x3480 (fn_reloc1)
+# EXE-RELOCS-NEXT:     Base: fn1 (0x1370)
 # EXE-RELOCS-NEXT:     Offset: 8
 # EXE-RELOCS-NEXT:     Length: 12
 # EXE-RELOCS-NEXT:     Permissions: Function (0x8000000000000000)
@@ -101,8 +101,8 @@ fn_reloc2:
 # OBJ-RELOCS-NEXT:   }
 # LLD-OUTPUT-NEXT: Found better match for capability relocation against .Lsecond_fn_target+0: .Lfn2$start+8
 # EXE-RELOCS-NEXT:   Relocation {
-# EXE-RELOCS-NEXT:     Location: 0x3450 (fn_reloc2)
-# EXE-RELOCS-NEXT:     Base: .Lfn2$start (0x1344)
+# EXE-RELOCS-NEXT:     Location: 0x3490 (fn_reloc2)
+# EXE-RELOCS-NEXT:     Base: .Lfn2$start (0x137C)
 # EXE-RELOCS-NEXT:     Offset: 8
 # EXE-RELOCS-NEXT:     Length: 12
 # EXE-RELOCS-NEXT:     Permissions: Function (0x8000000000000000)
@@ -117,8 +117,8 @@ data_reloc1:
 # OBJ-RELOCS-NEXT:   }
 # LLD-OUTPUT-NEXT: Found better match for capability relocation against .Linside_obj1+0: obj1+16
 # EXE-RELOCS-NEXT:   Relocation {
-# EXE-RELOCS-NEXT:     Location: 0x3460 (data_reloc1)
-# EXE-RELOCS-NEXT:     Base: obj1 (0x3400)
+# EXE-RELOCS-NEXT:     Location: 0x34A0 (data_reloc1)
+# EXE-RELOCS-NEXT:     Base: obj1 (0x3438)
 # EXE-RELOCS-NEXT:     Offset: 16
 # EXE-RELOCS-NEXT:     Length: 32
 # EXE-RELOCS-NEXT:     Permissions: Object (0x0)
@@ -137,8 +137,8 @@ data_reloc2:
 # LLD-OUTPUT-NEXT: >>> defined in {{.+}}caprelocs-surrounding-symbol.s.tmp.o:(.relocs_section+0x30))
 # LLD-OUTPUT-EMPTY:
 # EXE-RELOCS-NEXT:   Relocation {
-# EXE-RELOCS-NEXT:     Location: 0x3470 (data_reloc2)
-# EXE-RELOCS-NEXT:     Base: obj2_subobject1 (0x3430)
+# EXE-RELOCS-NEXT:     Location: 0x34B0 (data_reloc2)
+# EXE-RELOCS-NEXT:     Base: obj2_subobject1 (0x3468)
 # EXE-RELOCS-NEXT:     Offset: 0
 # EXE-RELOCS-NEXT:     Length: 16
 # EXE-RELOCS-NEXT:     Permissions: Object (0x0)
@@ -152,8 +152,8 @@ data_reloc3:
 # OBJ-RELOCS-NEXT:     Addend: 0x0
 # OBJ-RELOCS-NEXT:   }
 # EXE-RELOCS-NEXT:   Relocation {
-# EXE-RELOCS-NEXT:     Location: 0x3480 (data_reloc3)
-# EXE-RELOCS-NEXT:     Base: obj2_subobject2 (0x3431)
+# EXE-RELOCS-NEXT:     Location: 0x34C0 (data_reloc3)
+# EXE-RELOCS-NEXT:     Base: obj2_subobject2 (0x3469)
 # EXE-RELOCS-NEXT:     Offset: 0
 # EXE-RELOCS-NEXT:     Length: 15
 # EXE-RELOCS-NEXT:     Permissions: Object (0x0)
@@ -169,8 +169,8 @@ data_reloc4:
 # LLD-OUTPUT-NEXT: Found better match for capability relocation against .Linside_obj2_subobject2+0: obj2+18
 # LLD-OUTPUT-NEXT: Found better match for capability relocation against obj2+18: obj2_subobject2+1
 # EXE-RELOCS-NEXT:   Relocation {
-# EXE-RELOCS-NEXT:     Location: 0x3490 (data_reloc4)
-# EXE-RELOCS-NEXT:     Base: obj2_subobject2 (0x3431)
+# EXE-RELOCS-NEXT:     Location: 0x34D0 (data_reloc4)
+# EXE-RELOCS-NEXT:     Base: obj2_subobject2 (0x3469)
 # EXE-RELOCS-NEXT:     Offset: 1
 # EXE-RELOCS-NEXT:     Length: 15
 # EXE-RELOCS-NEXT:     Permissions: Object (0x0)

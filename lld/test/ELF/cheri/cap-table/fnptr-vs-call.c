@@ -40,7 +40,7 @@
 // RUN: llvm-readobj --dynamic-table -r %t-call1.so | FileCheck --check-prefix ONE-CALL %s
 // ONE-CALL-LABEL: DynamicSection [
 // ONE-CALL-NEXT: Tag                Type                 Name/Value
-// ONE-CALL-NEXT: 0x0000000000000017 JMPREL               0x3F8
+// ONE-CALL-NEXT: 0x0000000000000017 JMPREL               0x430
 // ONE-CALL-NEXT: 0x0000000000000002 PLTRELSZ             16 (bytes)
 // ONE-CALL-NEXT: 0x0000000070000032 MIPS_PLTGOT          0x0
 // ONE-CALL-NEXT: 0x0000000000000014 PLTREL               REL
@@ -53,7 +53,7 @@
 // RUN: llvm-readobj --dynamic-table -r %t-2calls.so | FileCheck --check-prefix TWO-CALLS %s
 // TWO-CALLS-LABEL: DynamicSection [
 // TWO-CALLS-NEXT: Tag                Type                 Name/Value
-// TWO-CALLS-NEXT: 0x0000000000000017 JMPREL               0x448
+// TWO-CALLS-NEXT: 0x0000000000000017 JMPREL               0x480
 // TWO-CALLS-NEXT: 0x0000000000000002 PLTRELSZ             32 (bytes)
 // TWO-CALLS-NEXT: 0x0000000070000032 MIPS_PLTGOT          0x0
 // TWO-CALLS-NEXT: 0x0000000000000014 PLTREL               REL
@@ -83,10 +83,10 @@
 // RUN: llvm-readobj --dynamic-table -r %t-all.so  | FileCheck --check-prefix ALL %s
 // ALL-LABEL: DynamicSection [
 // ALL-NEXT:  Tag                Type                 Name/Value
-// ALL-NEXT:  0x0000000000000011 REL                  0x4D0
+// ALL-NEXT:  0x0000000000000011 REL                  0x508
 // ALL-NEXT:  0x0000000000000012 RELSZ                32 (bytes)
 // ALL-NEXT:  0x0000000000000013 RELENT               16 (bytes)
-// ALL-NEXT:  0x0000000000000017 JMPREL               0x4F0
+// ALL-NEXT:  0x0000000000000017 JMPREL               0x528
 // ALL-NEXT:  0x0000000000000002 PLTRELSZ             16 (bytes)
 // ALL-NEXT:  0x0000000070000032 MIPS_PLTGOT          0x0
 // ALL-NEXT:  0x0000000000000014 PLTREL               REL
