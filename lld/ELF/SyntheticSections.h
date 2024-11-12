@@ -1404,12 +1404,14 @@ struct Compartment {
   std::unique_ptr<GotSection> got;
   std::unique_ptr<GotPltSection> gotPlt;
   std::unique_ptr<IgotPltSection> igotPlt;
+  std::unique_ptr<CheriPccPaddingSection> pccPadding;
   std::unique_ptr<PltSection> plt;
   std::unique_ptr<IpltSection> iplt;
   std::unique_ptr<RelocationBaseSection> relaPlt;
   std::unique_ptr<RelocationBaseSection> relaIplt;
 
   PhdrEntry *relRo;
+  PhdrEntry *cheriBounds;
 };
 
 extern std::vector<Compartment> compartments;
@@ -1433,6 +1435,13 @@ inline IgotPltSection *igotPlt(const Compartment *c) {
     return in.igotPlt.get();
   else
     return c->igotPlt.get();
+}
+
+inline CheriPccPaddingSection *pccPadding(const Compartment *c) {
+  if (c == nullptr)
+    return in.pccPadding.get();
+  else
+    return c->pccPadding.get();
 }
 
 inline PltSection *plt(const Compartment *c) {
@@ -1463,6 +1472,12 @@ inline RelocationBaseSection *relaIplt(const Compartment *c) {
     return c->relaIplt.get();
 }
 
+inline PhdrEntry *cheriBounds(const Compartment *c) {
+  if (c == nullptr)
+    return in.cheriBounds;
+  else
+    return c->cheriBounds;
+}
 } // namespace lld::elf
 
 #endif
