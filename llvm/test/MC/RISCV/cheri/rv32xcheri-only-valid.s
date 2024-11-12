@@ -5,11 +5,11 @@
 # RUN:     | FileCheck -check-prefix=CHECK-INST %s
 
 # CHECK-INST: lc cra, 3(sp)
-# CHECK: encoding: [0x83,0x30,0x31,0x00]
+# CHECK: encoding: [0x8f,0x40,0x31,0x00]
 lc c1, 3(x2)
 
 # CHECK-INST: sc cra, 3(sp)
-# CHECK: encoding: [0xa3,0x31,0x11,0x00]
+# CHECK: encoding: [0xa3,0x41,0x11,0x00]
 sc c1, 3(x2)
 
 # CHECK-INST: lc.ddc cra, (sp)

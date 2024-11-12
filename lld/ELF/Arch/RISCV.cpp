@@ -68,8 +68,7 @@ enum Op {
   SUB = 0x40000033,
 
   CIncOffsetImm = 0x201B,
-  CLC_64 = 0x3003,
-  CLC_128 = 0x400F,
+  CLC = 0x400F,
   CSub = 0x2800005b,
 };
 
@@ -270,8 +269,7 @@ void RISCV::writePltHeader(uint8_t *buf) const {
   // (if shift == 0): nop
   uint32_t offset = in.gotPlt->getVA() - in.plt->getVA();
   uint32_t ptrsub = config->isCheriAbi ? CSub : SUB;
-  uint32_t ptrload = config->isCheriAbi ? config->is64 ? CLC_128 : CLC_64
-                                        : config->is64 ? LD : LW;
+  uint32_t ptrload = config->isCheriAbi ? CLC : config->is64 ? LD : LW;
   uint32_t ptraddi = config->isCheriAbi ? CIncOffsetImm : ADDI;
   // Shift is log2(pltsize / ptrsize), which is 0 for CHERI-128 so skipped
   uint32_t shift = 2 - config->is64 - config->isCheriAbi;
@@ -296,8 +294,7 @@ void RISCV::writePlt(uint8_t *buf, const Symbol &sym,
   // l[wdc] (c)t3, %pcrel_lo(1b)((c)t3)
   // (c)jalr (c)t1, (c)t3
   // nop
-  uint32_t ptrload = config->isCheriAbi ? config->is64 ? CLC_128 : CLC_64
-                                        : config->is64 ? LD : LW;
+  uint32_t ptrload = config->isCheriAbi ? CLC : config->is64 ? LD : LW;
   uint32_t entryva = config->isCheriAbi ? sym.getCapTableVA(in.plt.get(), 0)
                                         : sym.getGotPltVA();
   uint32_t offset = entryva - pltEntryAddr;

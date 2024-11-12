@@ -235,12 +235,9 @@ bool RISCVExpandPseudo::expandCapLoadLocalCap(
 bool RISCVExpandPseudo::expandCapLoadGlobalCap(
     MachineBasicBlock &MBB, MachineBasicBlock::iterator MBBI,
     MachineBasicBlock::iterator &NextMBBI) {
-  MachineFunction *MF = MBB.getParent();
 
-  const auto &STI = MF->getSubtarget<RISCVSubtarget>();
-  unsigned SecondOpcode = STI.is64Bit() ? RISCV::CLC_128 : RISCV::CLC_64;
   return expandAuipccInstPair(MBB, MBBI, NextMBBI, RISCVII::MO_CAPTAB_PCREL_HI,
-                              SecondOpcode);
+                              RISCV::CLC);
 }
 
 bool RISCVExpandPseudo::expandCapLoadTLSIEAddress(

@@ -121,7 +121,7 @@ gclen a0, ca0
 cram a0, a0
 
 # CHECK-ASM-AND-OBJ: lc ca0, 0(a0)
-# CHECK-ASM: encoding: [0x0f,0x25,0x05,0x00]
+# CHECK-ASM: encoding: [0x0f,0x45,0x05,0x00]
 lc ca0, 0(a0)
 
 # CHECK-ASM-AND-OBJ: sc ca0, 0(a0)

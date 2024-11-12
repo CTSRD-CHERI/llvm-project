@@ -592,10 +592,6 @@ DecodeStatus RISCVDisassembler::getInstruction(MCInst &MI, uint64_t &Size,
 
     Insn = support::endian::read32le(Bytes.data());
 
-    TRY_TO_DECODE(STI.hasFeature(RISCV::FeatureCapMode) &&
-                      !STI.hasFeature(RISCV::Feature64Bit),
-                  DecoderTableRISCV32CapModeOnly_32,
-                  "RISCV32CapModeOnly_32 table");
     TRY_TO_DECODE(!STI.hasFeature(RISCV::Feature64Bit),
                   DecoderTableRISCV32Only_32, "RISCV32Only_32 table");
     TRY_TO_DECODE_FEATURE(RISCV::FeatureCapMode, DecoderTableCapModeOnly_32,
