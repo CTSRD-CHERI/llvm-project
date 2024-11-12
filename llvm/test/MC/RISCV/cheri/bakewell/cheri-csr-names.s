@@ -146,6 +146,20 @@ csrrs ct1, mscratchc, zero
 # uimm12
 csrrs ct2, 0x340, zero
 
+# mtidc
+# name
+# CHECK-INST: csrrs ct1, mtidc, zero
+# CHECK-ENC: encoding: [0x73,0x23,0x00,0x78]
+# CHECK-INST-ALIAS: csrr ct1, mtidc
+# uimm12
+# CHECK-INST: csrrs ct2, mtidc, zero
+# CHECK-ENC: encoding: [0xf3,0x23,0x00,0x78]
+# CHECK-INST-ALIAS: csrr ct2, mtidc
+# name
+csrrs ct1, mtidc, zero
+# uimm12
+csrrs ct2, 0x780, zero
+
 ##################################
 # Supervisor Information Registers
 ##################################
@@ -361,3 +375,17 @@ csrrs ct2, 0x245, zero
 csrrs t1, vstval2, zero
 # uimm12
 csrrs t2, 0x24b, zero
+
+# vstidc
+# name
+# CHECK-INST: csrrs ct1, vstidc, zero
+# CHECK-ENC: encoding: [0x73,0x23,0x00,0xa8]
+# CHECK-INST-ALIAS: csrr ct1, vstidc
+# uimm12
+# CHECK-INST: csrrs ct2, vstidc, zero
+# CHECK-ENC: encoding: [0xf3,0x23,0x00,0xa8]
+# CHECK-INST-ALIAS: csrr ct2, vstidc
+# name
+csrrs ct1, vstidc, zero
+# uimm12
+csrrs ct2, 0xa80, zero

@@ -51,6 +51,7 @@ def : CheriSysReg<"stidc", 0x580>;
 def : CheriSysReg<"mtvecc", 0x305>;
 def : CheriSysReg<"mscratchc", 0x340>;
 def : CheriSysReg<"mepcc", 0x341>;
+def : CheriSysReg<"mtidc", 0x780>;
 
 //===----------------------------------------------------------------------===//
 // Supervisor-mode Cheri CSRs
@@ -85,3 +86,4 @@ def : CheriSysReg<"vsscratchc", 0x240>;
 def : CheriSysReg<"vsepcc", 0x241>;
 def : CheriSysReg<"vstdc", 0x245>;
 def : SysReg<"vstval2", 0x24b>;
+def : CheriSysReg<"vstidc", 0xa80>;
