@@ -238,6 +238,9 @@ static void printProgramHeaders(const ELFFile<ELFT> &Obj, StringRef FileName) {
     case ELF::PT_GNU_STACK:
       outs() << "   STACK ";
       break;
+    case ELF::PT_CHERI_PCC:
+      outs() << "CHERI_PCC ";
+      break;
     case ELF::PT_INTERP:
       outs() << "  INTERP ";
       break;

@@ -1389,6 +1389,8 @@ enum {
   PT_OPENBSD_WXNEEDED = 0x65a3dbe7,  // Program does W^X violations.
   PT_OPENBSD_BOOTDATA = 0x65a41be6,  // Section for boot arguments.
 
+  PT_CHERI_PCC = 0x64348450,
+
   // ARM program header types.
   PT_ARM_ARCHEXT = 0x70000000, // Platform architecture compatibility info
   // These all contain stack unwind tables.
