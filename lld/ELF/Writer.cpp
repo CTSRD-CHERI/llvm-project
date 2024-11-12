@@ -2491,6 +2491,41 @@ static uint64_t computeFlags(uint64_t flags) {
   return flags;
 }
 
+// Which sections are covered by CHERI PCC bounds.  Currently this includes
+// executable sections, read-only data sections, and GOTs.
+static bool isCheriBoundsSection(const OutputSection *sec) {
+  const Compartment *c = sec->compartment;
+  uint64_t flags = sec->flags;
+
+  // Non-allocatable sections are not mapped into memory.
+  if (!(flags & SHF_ALLOC))
+    return false;
+
+  // Executable sections are fetched via PCC.
+  if (flags & SHF_EXECINSTR)
+    return true;
+
+  // .got is accessed relative to PCC.
+  if (got(c) && sec == got(c)->getParent())
+    return true;
+  if (in.mipsGot && sec == in.mipsGot->getParent())
+    return true;
+
+  // .got.plt is accessed relative to PCC.
+  if (sec == gotPlt(c)->getParent())
+    return true;
+
+  // CHERI capability table is accessed relative to PCC.
+  if (in.mipsCheriCapTable && sec == in.mipsCheriCapTable->getParent())
+    return true;
+
+  // .rodata symbols are accessed relative to PCC.
+  if (sec->name.startswith(".rodata"))
+    return true;
+
+  return false;
+}
+
 // Decide which program headers to create and which sections to include in each
 // one.
 template <class ELFT>
@@ -2570,6 +2605,24 @@ SmallVector<PhdrEntry *, 0> Writer<ELFT>::createPhdrs(Partition &part) {
     }
   }
 
+  // Determine the sections PCC should cover for each compartment.
+  if (config->isCheriAbi) {
+    in.cheriBounds = make<PhdrEntry>(PT_CHERI_PCC, PF_R | PF_X);
+    for (Compartment &compart : compartments)
+      compart.cheriBounds = make<PhdrEntry>(PT_CHERI_PCC, PF_R | PF_X);
+
+    for (OutputSection *sec : outputSections) {
+      if (sec->partition != partNo || !needsPtLoad(sec))
+        continue;
+      if (!isCheriBoundsSection(sec))
+        continue;
+      if (sec->compartment == nullptr)
+        in.cheriBounds->add(sec);
+      else
+        sec->compartment->cheriBounds->add(sec);
+    }
+  }
+
   for (OutputSection *sec : outputSections) {
     if (!needsPtLoad(sec))
       continue;
@@ -2634,6 +2687,14 @@ SmallVector<PhdrEntry *, 0> Writer<ELFT>::createPhdrs(Partition &part) {
   for (Compartment &compart : compartments)
     if (compart.relRo->firstSec)
       ret.push_back(compart.relRo);
+
+  if (config->isCheriAbi) {
+    if (in.cheriBounds->firstSec)
+      ret.push_back(in.cheriBounds);
+    for (Compartment &compart : compartments)
+      if (compart.cheriBounds->firstSec)
+        ret.push_back(compart.cheriBounds);
+  }
 
   // PT_GNU_EH_FRAME is a special section pointing on .eh_frame_hdr.
   if (part.ehFrame->isNeeded() && part.ehFrameHdr &&

@@ -1336,6 +1336,8 @@ struct InStruct {
   std::unique_ptr<SymbolTableBaseSection> symTab;
   std::unique_ptr<SymtabShndxSection> symTabShndx;
 
+  PhdrEntry *cheriBounds;
+
   void reset();
 };
 
@@ -1360,6 +1362,7 @@ struct Compartment {
   std::unique_ptr<RelocationBaseSection> relaIplt;
 
   PhdrEntry *relRo;
+  PhdrEntry *cheriBounds;
 };
 
 extern std::vector<Compartment> compartments;
