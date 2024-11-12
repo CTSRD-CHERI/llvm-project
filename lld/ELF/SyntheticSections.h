@@ -1336,6 +1336,8 @@ struct InStruct {
   std::unique_ptr<SymbolTableBaseSection> symTab;
   std::unique_ptr<SymtabShndxSection> symTabShndx;
 
+  PhdrEntry *cheriBounds;
+
   void reset();
 };
 

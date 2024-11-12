@@ -21,51 +21,51 @@
 # RUN: llvm-readobj -x .got %t | FileCheck --check-prefix=HEX64 %s
 # RUN: llvm-objdump -d --no-show-raw-insn %t | FileCheck --check-prefix=DIS64 %s
 
-# SEC32: .got PROGBITS         00012230 000230 000018
-# SEC64: .got PROGBITS 00000000000123a0 0003a0 000030
+# SEC32: .got PROGBITS         00012250 000250 000018
+# SEC64: .got PROGBITS 00000000000123e0 0003e0 000030
 
 # RELOC32:      .rela.dyn {
-# RELOC32-NEXT:   0x12238 R_RISCV_CHERI_CAPABILITY b 0x0
+# RELOC32-NEXT:   0x12258 R_RISCV_CHERI_CAPABILITY b 0x0
 # RELOC32-NEXT: }
 # RELOC32:      CHERI __cap_relocs [
-# RELOC32-NEXT:   0x012240 Base: 0x13248 (a) Length: 4 Perms: Object
+# RELOC32-NEXT:   0x012260 Base: 0x13268 (a) Length: 4 Perms: Object
 # RELOC32-NEXT: ]
 
 # RELOC64:      .rela.dyn {
-# RELOC64-NEXT:   0x123B0 R_RISCV_CHERI_CAPABILITY b 0x0
+# RELOC64-NEXT:   0x123F0 R_RISCV_CHERI_CAPABILITY b 0x0
 # RELOC64-NEXT: }
 # RELOC64:      CHERI __cap_relocs [
-# RELOC64-NEXT:   0x0123c0 Base: 0x133d0 (a) Length: 4 Perms: Object
+# RELOC64-NEXT:   0x012400 Base: 0x13410 (a) Length: 4 Perms: Object
 # RELOC64-NEXT: ]
 
-# NM32: 00013248 d a
-# NM64: 00000000000133d0 d a
+# NM32: 00013268 d a
+# NM64: 0000000000013410 d a
 
 ## .got[0] = _DYNAMIC
 ## .got[1] = 0 (relocated by R_RISCV_CHERI_CAPABILITY at run time)
 ## .got[2] = 0 (relocated by __cap_relocs at run time)
 # HEX32: section '.got':
-# HEX32: 0x00012230 c0210100 00000000 00000000 00000000
-# HEX32: 0x00012240 00000000 00000000
+# HEX32: 0x00012250 e0210100 00000000 00000000 00000000
+# HEX32: 0x00012260 00000000 00000000
 
 # HEX64: section '.got':
-# HEX64: 0x000123a0 c0220100 00000000 00000000 00000000
-# HEX64: 0x000123b0 00000000 00000000 00000000 00000000
-# HEX64: 0x000123c0 00000000 00000000 00000000 00000000
+# HEX64: 0x000123e0 f8220100 00000000 00000000 00000000
+# HEX64: 0x000123f0 00000000 00000000 00000000 00000000
+# HEX64: 0x00012400 00000000 00000000 00000000 00000000
 
-## &.got[2]-. = 0x12240-0x111b0 = 4096*1+144
-# DIS32:      111b0: auipcc ca0, 1
+## &.got[2]-. = 0x12260-0x111d0 = 4096*1+144
+# DIS32:      111d0: auipcc ca0, 1
 # DIS32-NEXT:        lc ca0, 144(ca0)
-## &.got[1]-. = 0x12238-0x111b8 = 4096*1+128
-# DIS32:      111b8: auipcc ca0, 1
+## &.got[1]-. = 0x12258-0x111d8 = 4096*1+128
+# DIS32:      111d8: auipcc ca0, 1
 # DIS32-NEXT:        lc ca0, 128(ca0)
 
-## &.got[2]-. = 0x123c0-0x112b0 = 4096*1+272
-# DIS64:      112b0: auipcc ca0, 1
-# DIS64-NEXT:        lc ca0, 272(ca0)
-## &.got[1]-. = 0x123b0-0x112b8 = 4096*1+248
-# DIS64:      112b8: auipcc ca0, 1
-# DIS64-NEXT:        lc ca0, 248(ca0)
+## &.got[2]-. = 0x12400-0x112e8 = 4096*1+280
+# DIS64:      112e8: auipcc ca0, 1
+# DIS64-NEXT:        lc ca0, 280(ca0)
+## &.got[1]-. = 0x123f0-0x112f0 = 4096*1+256
+# DIS64:      112f0: auipcc ca0, 1
+# DIS64-NEXT:        lc ca0, 256(ca0)
 
 clgc ca0, a
 clgc ca0, b

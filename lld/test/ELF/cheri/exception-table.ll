@@ -34,7 +34,7 @@
 ; RUN: ld.lld -shared %t/mips.o %t/mips-override.o -o %t/mips.so 
 ; RUN: llvm-readelf -r --section-mapping --sections --program-headers --cap-relocs  %t/mips.so | FileCheck %s --check-prefixes=HEADERS,MIPS-RELOCS
 
-; HEADERS-LABEL: There are 10 program headers, starting at
+; HEADERS-LABEL: There are 11 program headers, starting at
 ; HEADERS-EMPTY:
 ; HEADERS-NEXT: Program Headers:
 ; HEADERS-NEXT: Type           Offset   VirtAddr PhysAddr FileSiz  MemSiz   Flg Align
@@ -45,6 +45,7 @@
 ; HEADERS-NEXT: LOAD           0x{{.+}} 0x{{.+}} 0x{{.+}} 0x{{.+}} 0x{{.+}} RW  0x10000
 ; HEADERS-NEXT: DYNAMIC        0x{{.+}} 0x{{.+}} 0x{{.+}} 0x{{.+}} 0x{{.+}} R   0x8
 ; HEADERS-NEXT: GNU_RELRO      0x{{.+}} 0x{{.+}} 0x{{.+}} 0x{{.+}} 0x{{.+}} R   0x1
+; HEADERS-NEXT: CHERI_PCC      0x{{.+}} 0x{{.+}} 0x{{.+}} 0x{{.+}} 0x{{.+}} R E 0x10
 ; HEADERS-NEXT: GNU_STACK      0x{{.+}} 0x{{.+}} 0x{{.+}} 0x{{.+}} 0x{{.+}} RW  0x0
 ; HEADERS-NEXT: OPTIONS        0x{{.+}} 0x{{.+}} 0x{{.+}} 0x{{.+}} 0x{{.+}} R   0x8
 ; HEADERS-NEXT: ABIFLAGS       0x{{.+}} 0x{{.+}} 0x{{.+}} 0x{{.+}} 0x{{.+}} R   0x8
@@ -58,9 +59,10 @@
 ; HEADERS-NEXT: 04     .data .captable .got
 ; HEADERS-NEXT: 05     .dynamic
 ; HEADERS-NEXT: 06     .gcc_except_table
-; HEADERS-NEXT: 07
-; HEADERS-NEXT: 08     .MIPS.options
-; HEADERS-NEXT: 09     .MIPS.abiflags
+; HEADERS-NEXT: 07     .text .gcc_except_table .data .captable .got
+; HEADERS-NEXT: 08
+; HEADERS-NEXT: 09     .MIPS.options
+; HEADERS-NEXT: 10     .MIPS.abiflags
 ; HEADERS-NEXT: None   .bss .mdebug.abi64 .pdr .comment .symtab .shstrtab .strtab
 
 ; MIPS-RELOCS-LABEL:      Relocation section '.rel.dyn' {{.+}} contains 2 entries:
