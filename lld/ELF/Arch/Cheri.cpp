@@ -321,6 +321,19 @@ enum class CapRelocType {
   CODE,
 };
 
+bool isCapRelocTypeExec(CapRelocType type) {
+  switch (type) {
+  case CapRelocType::DATA:
+  case CapRelocType::RODATA:
+    return false;
+  case CapRelocType::FUNC:
+  case CapRelocType::IFUNC:
+  case CapRelocType::CODE:
+    return true;
+  }
+  llvm_unreachable("unknown CapRelocType");
+}
+
 static CapRelocType getTargetType(const SymbolAndOffset &target) {
   bool isFunc, isGnuIFunc, isTls;
   OutputSection *os;
@@ -428,6 +441,13 @@ void CheriCapRelocsSection::writeToImpl(uint8_t *buf) {
       targetType = CapRelocType::CODE;
     }
     uint64_t permissions = CapRelocPermission<ELFT>::encodeType(targetType);
+
+    // Use PCC bounds from the PT_CHERI_PCC segment.
+    if (PhdrEntry *ph = in.cheriBounds; ph && isCapRelocTypeExec(targetType)) {
+      targetOffset += targetVA - ph->p_vaddr;
+      targetVA = ph->p_vaddr;
+      targetSize = ph->p_memsz;
+    }
 
     // TODO: should we warn about symbols that are out-of-bounds?
     // mandoc seems to do it so I guess we need it
@@ -910,22 +930,8 @@ static void getMipsCheriAbiVariant(std::optional<unsigned> &abi,
   abi = static_cast<MipsAbiFlagsSection<ELFT> &>(sec).getCheriAbiVariant();
 }
 
-static bool needsCheriMipsTrampoline(RelType type, const Symbol &sym) {
-  // In the PLT ABI (and fndesc?) we have to use an elf relocation for function
-  // pointers to ensure that the runtime linker adds the required trampolines
-  // that sets $cgp:
-
+static bool isCheriMipsTrampolineAbi() {
   if (config->emachine != EM_MIPS)
-    return false;
-
-  if (!sym.isFunc() || type == *target->symbolicCapCallRel)
-    return false;
-
-  // In static binaries we do not need PLT stubs for function pointers since
-  // all functions share the same $cgp
-  // TODO: this is no longer true if we were to support dlopen() in static
-  // binaries
-  if (!hasDynamicLinker())
     return false;
 
   if (!in.mipsAbiFlags)
@@ -937,6 +943,27 @@ static bool needsCheriMipsTrampoline(RelType type, const Symbol &sym) {
     return false;
 
   if (*abi != DF_MIPS_CHERI_ABI_PLT && *abi != DF_MIPS_CHERI_ABI_FNDESC)
+    return false;
+
+  return true;
+}
+
+static bool needsCheriMipsTrampoline(RelType type, const Symbol &sym) {
+  // In the PLT ABI (and fndesc?) we have to use an elf relocation for function
+  // pointers to ensure that the runtime linker adds the required trampolines
+  // that sets $cgp:
+
+  if (!isCheriMipsTrampolineAbi())
+    return false;
+
+  if (!sym.isFunc() || type == *target->symbolicCapCallRel)
+    return false;
+
+  // In static binaries we do not need PLT stubs for function pointers since
+  // all functions share the same $cgp
+  // TODO: this is no longer true if we were to support dlopen() in static
+  // binaries
+  if (!hasDynamicLinker())
     return false;
 
   return true;
@@ -979,6 +1006,54 @@ void addRelativeCapabilityRelocation(
          "relative ELF capability relocations not currently implemented");
   in.capRelocs->addCapReloc(isCode, {&isec, offsetInSec}, {symOrSec, 0u},
                             addend);
+}
+
+// CHERI-MIPS using the PLT and fndesc ABIs uses a different mechanism for
+// determining the bounds of PCC.
+bool needsCheriPccSegment() { return !isCheriMipsTrampolineAbi(); }
+
+// Determine the required alignment for a single PT_CHERI_PCC segment.  Apply
+// the alignment to the first OutputSection and adjust the length of the padding
+// section to align the end of the segment.  Returns true if the alignment of
+// the first OutputSection changed or the size of the padding section changed.
+static bool alignPCCBounds(PhdrEntry *p, CheriPccPaddingSection &psec) {
+  OutputSection *first = p->firstSec;
+  OutputSection *last = p->lastSec;
+
+  if (!first)
+    return false;
+
+  assert(psec.getParent() == last && "padding section is not last");
+  assert(psec.isNeeded() && "padding section is not enabled");
+
+  // Ignore existing padding.
+  uint64_t size = last->getVA() - first->getVA();
+  uint64_t align = target->getCheriRequiredAlignment(size);
+  if (align == 0)
+    align = 1;
+  bool changed = false;
+  if (first->addralign < align) {
+    first->addralign = align;
+    if (first->ptLoad)
+      first->ptLoad->p_align =
+          std::max(first->ptLoad->p_align, first->addralign);
+    p->p_align = std::max(p->p_align, first->addralign);
+    changed = true;
+  }
+  uint64_t padSize = alignTo(size, align) - size;
+  if (psec.getSize() != padSize) {
+    psec.setSize(padSize);
+    changed = true;
+  }
+  return changed;
+}
+
+bool cheriCapabilityBoundsAlign() {
+  // Align the PT_CHERI_PCC segment.
+  bool changed = false;
+  if (in.cheriBounds)
+    changed |= alignPCCBounds(in.cheriBounds, *in.pccPadding);
+  return changed;
 }
 
 } // namespace elf

@@ -7,10 +7,10 @@
 # RUNNOT: llvm-readobj -r %t.o
 # RUN: not ld.lld -shared %t.o -o %t.so 2>&1 | FileCheck %s --check-prefix=ERR
 # RUN: ld.lld -shared %t.o -o %t.so -z notext
-# RUN: llvm-readobj -s --cap-relocs %t.so | FileCheck %s
+# RUN: llvm-readobj -ls --cap-relocs %t.so | FileCheck %s
 # RUN: not ld.lld -static %t.o -o %t.exe 2>&1 | FileCheck %s --check-prefix=ERR
 # RUN: ld.lld -static %t.o -o %t.exe -z notext
-# RUN: llvm-readobj -s --cap-relocs %t.exe | FileCheck %s
+# RUN: llvm-readobj -ls --cap-relocs %t.exe | FileCheck %s
 
 .text
 .global __start
@@ -51,6 +51,13 @@ bar:
 # ERR-NEXT: >>> defined in  ({{.+}}capability-in-rodata.s.tmp.o:(bar))
 # ERR-EMPTY:
 
+# CHECK:      Type: PT_CHERI_PCC
+# CHECK-NEXT: Offset:
+# CHECK-NEXT: VirtualAddress: 0x[[#%X,PCC_BASE:]]
+# CHECK-NEXT: PhysicalAddress:
+# CHECK-NEXT: FileSize:
+# CHECK-NEXT: MemSize: [[#PCC_LENGTH:]]
+
 # CHECK:      Name: __start
 # CHECK-NEXT: Value: 0x[[#%X,START:]]
 # CHECK:      Name: foo
@@ -60,7 +67,7 @@ bar:
 
 # CHECK:      CHERI Capability Relocations [
 # CHECK-NEXT:   Section ({{.+}}) __cap_relocs {
-# CHECK-NEXT:     0x[[#FOO]] FUNC - 0x[[#START+4]] [0x[[#START]]-0x[[#START+16]]]
+# CHECK-NEXT:     0x[[#FOO]] FUNC - 0x[[#START+4]] [0x[[#PCC_BASE]]-0x[[#%X,PCC_BASE+PCC_LENGTH]]]
 # CHECK-NEXT:     0x[[#BAR]] RODATA - 0x[[#FOO+123]] [0x[[#FOO]]-0x[[#FOO+16]]]
 # CHECK-NEXT:   }
 # CHECK-NEXT: ]

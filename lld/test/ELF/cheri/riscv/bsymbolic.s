@@ -9,8 +9,8 @@
 # CHECK:      Relocations [
 # CHECK-NEXT: ]
 # CHECK:      __cap_relocs {
-# CHECK-NEXT:   0x3390 DATA - 0x3390 [0x3390-0x33B0]
-# CHECK-NEXT:   0x33A0 FUNC - 0x12E8 [0x12E8-0x12EC]
+# CHECK-NEXT:   0x33D0 DATA - 0x33D0 [0x33D0-0x33F0]
+# CHECK-NEXT:   0x33E0 FUNC - 0x1320 [0x2D0-0x1328]
 # CHECK-NEXT: }
 
   .type func, @function
