@@ -299,20 +299,6 @@ def : Pat<(CapFrameAddrRegImm GPCR:$rs1, simm12:$imm12),
 let Predicates = [HasZCheriHybrid] in
 def : PatGpcrGpr<int_cheri_cap_flags_set, SCMODE>;
 
-// bit 25 is the flags bit (32-bit)
-let Predicates = [HasZCheriPurecap, NotHasZCheriHybrid, IsRV32] in
-def: Pat<(int_cheri_cap_flags_set GPCR:$cs1, (XLenVT GPR:$rs2)),
-         (SCHI GPCR:$cs1, (OR (AND (GCHI GPCR:$cs1),
-                                   (ADDI (LUI 1040384), -1)),
-                              (SLLI (ANDI (XLenVT GPR:$rs2), 1), 25)))>;
-
-// bit 52 is the flags bit (64-bit)
-let Predicates = [HasZCheriPurecap, NotHasZCheriHybrid, IsRV64] in
-def: Pat<(int_cheri_cap_flags_set GPCR:$cs1, (XLenVT GPR:$rs2)),
-         (SCHI GPCR:$cs1, (OR (AND (GCHI GPCR:$cs1),
-                                   (ADDI (SLLI (XLenVT -1), 52), (XLenVT -1))),
-                              (XLenVT (SLLI (ANDI (XLenVT GPR:$rs2), 1), 52))))>;
-
 /// Pointer-Arithmetic Instructions
 let Predicates = [IsPureCapABI, HasZCheriPurecap] in {
 def : Pat<(inttoptr (XLenVT GPR:$rs2)), (CADD C0, GPR:$rs2)>;
