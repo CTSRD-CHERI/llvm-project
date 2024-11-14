@@ -187,16 +187,16 @@ def C_SH : CStoreH_rri<0b100011, 0b0, "c.sh">,
 }
 
 // Zcmp
-let DecoderNamespace = "RVZcmp", Predicates = [HasStdExtZcmp],
+let DecoderNamespace = "RVZcmp", Predicates = [HasStdExtZcmp, NotCapMode],
     Defs = [X10, X11], hasSideEffects = 0, mayLoad = 0, mayStore = 0 in {
 def CM_MVA01S : RVInst16CA<0b101011, 0b11, 0b10, (outs),
                             (ins SR07:$rs1, SR07:$rs2), "cm.mva01s", "$rs1, $rs2">;
 
 def CM_MVSA01 : RVInst16CA<0b101011, 0b01, 0b10, (outs SR07:$rs1, SR07:$rs2),
                             (ins), "cm.mvsa01", "$rs1, $rs2">;
-} // DecoderNamespace = "RVZcmp", Predicates = [HasStdExtZcmp]...
+} // DecoderNamespace = "RVZcmp", Predicates = [HasStdExtZcmp, NotCapMode]...
 
-let DecoderNamespace = "RVZcmp", Predicates = [HasStdExtZcmp] in {
+let DecoderNamespace = "RVZcmp", Predicates = [HasStdExtZcmp, NotCapMode] in {
 let hasSideEffects = 0, mayLoad = 0, mayStore = 1 in
 def CM_PUSH : RVInstZcCPPP<0b11000, "cm.push">;
 
@@ -208,7 +208,7 @@ def CM_POPRETZ : RVInstZcCPPP<0b11100, "cm.popretz">;
 
 let hasSideEffects = 0, mayLoad = 1, mayStore = 0 in
 def CM_POP : RVInstZcCPPP<0b11010, "cm.pop">;
-} // DecoderNamespace = "RVZcmp", Predicates = [HasStdExtZcmp]...
+} // DecoderNamespace = "RVZcmp", Predicates = [HasStdExtZcmp, NotCapMode]...
 
 let DecoderNamespace = "RVZcmt", Predicates = [HasStdExtZcmt],
     hasSideEffects = 0, mayLoad = 0, mayStore = 0 in {
