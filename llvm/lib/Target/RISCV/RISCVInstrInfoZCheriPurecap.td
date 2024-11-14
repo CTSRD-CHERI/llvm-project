@@ -426,3 +426,92 @@ let Predicates = [HasStdExtZicbop, HasZCheriPurecap, IsCapMode] in {
   def : Pat<(prefetch GPCR:$rs1, (XLenVT 1), imm, (XLenVT 1)),
             (CPREFETCH_W GPCR:$rs1, 0)>;
 }
+
+//===----------------------------------------------------------------------===//
+// Cheri Zcb Instructions
+//===----------------------------------------------------------------------===//
+
+// Instruction Class Templates
+
+let hasSideEffects = 0, mayLoad = 1, mayStore = 0 in
+class CCLoadB_ri<bits<6> funct6, string OpcodeStr>
+    : RVInst16CLB<funct6, 0b00, (outs GPRC:$rd),
+                  (ins GPCRC:$rs1, uimm2:$imm),
+                  OpcodeStr, "$rd, ${imm}(${rs1})"> {
+  bits<2> imm;
+
+  let Inst{6-5} = imm{0,1};
+}
+
+let hasSideEffects = 0, mayLoad = 0, mayStore = 1 in
+class CCStoreB_rri<bits<6> funct6, string OpcodeStr>
+    : RVInst16CSB<funct6, 0b00, (outs),
+                  (ins GPRC:$rs2, GPCRC:$rs1, uimm2:$imm),
+                  OpcodeStr, "$rs2, ${imm}(${rs1})"> {
+  bits<2> imm;
+
+  let Inst{6-5} = imm{0,1};
+}
+
+let hasSideEffects = 0, mayLoad = 1, mayStore = 0 in
+class CCLoadH_ri<bits<6> funct6, bit funct1, string OpcodeStr>
+    : RVInst16CLH<funct6, funct1, 0b00, (outs GPRC:$rd),
+                  (ins GPCRC:$rs1, uimm2_lsb0:$imm),
+                  OpcodeStr, "$rd, ${imm}(${rs1})"> {
+  bits<2> imm;
+
+  let Inst{5} = imm{1};
+}
+
+let hasSideEffects = 0, mayLoad = 0, mayStore = 1 in
+class CCStoreH_rri<bits<6> funct6, bit funct1, string OpcodeStr>
+    : RVInst16CSH<funct6, funct1, 0b00, (outs),
+                  (ins GPRC:$rs2, GPCRC:$rs1, uimm2_lsb0:$imm),
+                  OpcodeStr, "$rs2, ${imm}(${rs1})"> {
+  bits<2> imm;
+
+  let Inst{5} = imm{1};
+}
+
+// Instructions
+
+let Predicates = [HasStdExtZcb, HasZCheriPurecap, IsCapMode],
+    DecoderNamespace = "CapModeOnly_" in {
+
+def C_CLBU : CCLoadB_ri<0b100000, "c.lbu">,
+             Sched<[WriteLDB, ReadMemBase]>;
+def C_CLHU : CCLoadH_ri<0b100001, 0b0, "c.lhu">,
+             Sched<[WriteLDH, ReadMemBase]>;
+def C_CLH  : CCLoadH_ri<0b100001, 0b1, "c.lh">,
+             Sched<[WriteLDH, ReadMemBase]>;
+
+def C_CSB : CCStoreB_rri<0b100010, "c.sb">,
+            Sched<[WriteSTB, ReadStoreData, ReadMemBase]>;
+def C_CSH : CCStoreH_rri<0b100011, 0b0, "c.sh">,
+            Sched<[WriteSTH, ReadStoreData, ReadMemBase]>;
+}
+
+// Patterns
+
+let Predicates = [HasStdExtZcb, HasZCheriPurecap, IsCapMode] in {
+def : CompressPat<(CLBU GPRC:$rd, GPCRC:$rs1, uimm2:$imm),
+                  (C_CLBU GPRC:$rd, GPCRC:$rs1, uimm2:$imm)>;
+def : CompressPat<(LHU GPRC:$rd, GPRCMem:$rs1, uimm2_lsb0:$imm),
+                  (C_LHU GPRC:$rd, GPRCMem:$rs1, uimm2_lsb0:$imm)>;
+def : CompressPat<(LH GPRC:$rd, GPRCMem:$rs1, uimm2_lsb0:$imm),
+                  (C_LH GPRC:$rd, GPRCMem:$rs1, uimm2_lsb0:$imm)>;
+def : CompressPat<(SB GPRC:$rs2, GPRCMem:$rs1, uimm2:$imm),
+                  (C_SB GPRC:$rs2, GPRCMem:$rs1, uimm2:$imm)>;
+def : CompressPat<(SH GPRC:$rs2, GPRCMem:$rs1, uimm2_lsb0:$imm),
+                  (C_SH GPRC:$rs2, GPRCMem:$rs1, uimm2_lsb0:$imm)>;
+} // Predicates = [HasStdExtZcb, HasZCheriPurecap, IsCapMode]
+
+// Pseudo Instructions
+
+let Predicates = [HasStdExtZcb, IsCapMode] in {
+def : InstAlias<"c.lbu $rd, (${rs1})",(C_CLBU GPRC:$rd, GPCRC:$rs1, 0)>;
+def : InstAlias<"c.lhu $rd, (${rs1})",(C_CLHU GPRC:$rd, GPCRC:$rs1, 0)>;
+def : InstAlias<"c.lh $rd, (${rs1})", (C_CLH GPRC:$rd, GPCRC:$rs1, 0)>;
+def : InstAlias<"c.sb $rd, (${rs1})", (C_CSB GPRC:$rd, GPCRC:$rs1, 0)>;
+def : InstAlias<"c.sh $rd, (${rs1})", (C_CSH GPRC:$rd, GPCRC:$rs1, 0)>;
+}
