@@ -785,9 +785,6 @@ static diag::kind getFutureCompatDiagKind(const IdentifierInfo &II,
         .Case(#NAME, diag::warn_cxx11_keyword)
 #define CXX20_KEYWORD(NAME, FLAGS)                                             \
         .Case(#NAME, diag::warn_cxx20_keyword)
-// CHERI-TODO: COROUTINES_KEYWORD is not included in CXX20_KEYWORD until
-// https://github.com/CTSRD-CHERI/llvm-project/issues/717 has been fixed.
-#define COROUTINES_KEYWORD(NAME) .Case(#NAME, diag::warn_cxx20_keyword)
 #include "clang/Basic/TokenKinds.def"
         // char8_t is not modeled as a CXX20_KEYWORD because it's not
         // unconditionally enabled in C++20 mode. (It can be disabled

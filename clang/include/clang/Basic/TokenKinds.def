@@ -29,9 +29,7 @@
 #define CXX20_KEYWORD(X,Y) KEYWORD(X,KEYCXX20|(Y))
 #endif
 #ifndef COROUTINES_KEYWORD
-// Not a CXX20_KEYWORD() since we disable LangOpts.Coroutines for purecap.
-// See https://github.com/CTSRD-CHERI/llvm-project/issues/717
-#define COROUTINES_KEYWORD(X) KEYWORD(X,KEYCOROUTINES)
+#define COROUTINES_KEYWORD(X) CXX20_KEYWORD(X,KEYCOROUTINES)
 #endif
 #ifndef MODULES_KEYWORD
 #define MODULES_KEYWORD(X) KEYWORD(X,KEYMODULES)
