@@ -1153,7 +1153,7 @@ llvm::DIType *CGDebugInfo::CreatePointerLikeType(llvm::dwarf::Tag Tag,
   if (Ty->isCHERICapabilityType(CGM.getContext()))
     AddressSpace = CGM.getTargetCodeGenInfo().getCHERICapabilityAS();
   else
-    AddressSpace = CGM.getAddressSpaceForType(PointeeTy);
+    AddressSpace = CGM.getContext().getTargetAddressSpace(PointeeTy);
   uint64_t Size = CGM.getTarget().getPointerWidth(AddressSpace);
   auto Align = getTypeAlignIfRequired(Ty, CGM.getContext());
   Optional<unsigned> DWARFAddressSpace =
@@ -1714,7 +1714,7 @@ llvm::DISubroutineType *CGDebugInfo::getOrCreateInstanceMethodType(
     // Create pointer type directly in this case.
     const PointerType *ThisPtrTy = cast<PointerType>(ThisPtr);
     QualType PointeeTy = ThisPtrTy->getPointeeType();
-    unsigned AS = CGM.getAddressSpaceForType(PointeeTy);
+    unsigned AS = CGM.getContext().getTargetAddressSpace(PointeeTy);
     uint64_t Size = CGM.getTarget().getPointerWidth(AS);
     auto Align = getTypeAlignIfRequired(ThisPtrTy, CGM.getContext());
     llvm::DIType *PointeeType = getOrCreateType(PointeeTy, Unit);
@@ -4467,7 +4467,7 @@ llvm::DILocalVariable *CGDebugInfo::EmitDeclare(const VarDecl *VD,
 
   auto Align = getDeclAlignIfRequired(VD, CGM.getContext());
 
-  unsigned AddressSpace = CGM.getAddressSpaceForType(VD->getType());
+  unsigned AddressSpace = CGM.getContext().getTargetAddressSpace(VD->getType());
   AppendAddressSpaceXDeref(AddressSpace, Expr);
 
   // If this is implicit parameter of CXXThis or ObjCSelf kind, then give it an
@@ -4628,7 +4628,7 @@ llvm::DILocalVariable *CGDebugInfo::EmitDeclare(const BindingDecl *BD,
     return nullptr;
 
   auto Align = getDeclAlignIfRequired(BD, CGM.getContext());
-  unsigned AddressSpace = CGM.getAddressSpaceForType(BD->getType());
+  unsigned AddressSpace = CGM.getContext().getTargetAddressSpace(BD->getType());
 
   SmallVector<uint64_t, 3> Expr;
   AppendAddressSpaceXDeref(AddressSpace, Expr);
@@ -5307,7 +5307,8 @@ void CGDebugInfo::EmitGlobalVariable(llvm::GlobalVariable *Var,
     auto Align = getDeclAlignIfRequired(D, CGM.getContext());
 
     SmallVector<uint64_t, 4> Expr;
-    unsigned AddressSpace = CGM.getAddressSpaceForType(D->getType());
+    unsigned AddressSpace =
+        CGM.getContext().getTargetAddressSpace(D->getType());
     if (CGM.getLangOpts().CUDA && CGM.getLangOpts().CUDAIsDevice) {
       if (D->hasAttr<CUDASharedAttr>())
         AddressSpace =

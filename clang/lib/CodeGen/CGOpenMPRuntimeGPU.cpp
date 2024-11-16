@@ -3133,7 +3133,7 @@ CGOpenMPRuntimeGPU::getParameterAddress(CodeGenFunction &CGF,
   const Type *NonQualTy = QC.strip(NativeParamType);
   QualType NativePointeeTy = cast<ReferenceType>(NonQualTy)->getPointeeType();
   unsigned NativePointeeAddrSpace =
-      CGF.CGM.getAddressSpaceForType(NativePointeeTy);
+      CGF.getContext().getTargetAddressSpace(NativePointeeTy);
   QualType TargetTy = TargetParam->getType();
   llvm::Value *TargetAddr = CGF.EmitLoadOfScalar(
       LocalAddr, /*Volatile=*/false, TargetTy, SourceLocation());

@@ -393,10 +393,6 @@ static bool checkAliasedGlobal(DiagnosticsEngine &Diags,
   return true;
 }
 
-unsigned CodeGenModule::getAddressSpaceForType(QualType T) {
-    return getTypes().getTargetAddressSpace(T);
-}
-
 void CodeGenModule::checkAliases() {
   // Check if the constructed aliases are well formed. It is really unfortunate
   // that we have to do this in CodeGen, but we only construct mangled names
@@ -3853,8 +3849,8 @@ void CodeGenModule::emitCPUDispatchDefinition(GlobalDecl GD) {
   GlobalDecl ResolverGD;
   if (getTarget().supportsIFunc()) {
     ResolverType = llvm::FunctionType::get(
-        llvm::PointerType::get(DeclTy,
-                               getAddressSpaceForType(FD->getType())),
+        llvm::PointerType::get(
+            DeclTy, getContext().getTargetAddressSpace(FD->getType())),
         false);
   }
   else {
@@ -3993,7 +3989,7 @@ llvm::Constant *CodeGenModule::GetOrCreateMultiVersionResolver(GlobalDecl GD) {
   if (getTarget().supportsIFunc() && !FD->isCPUSpecificMultiVersion()) {
     llvm::Type *ResolverType = llvm::FunctionType::get(
         llvm::PointerType::get(
-            DeclTy, getAddressSpaceForType(FD->getType())),
+            DeclTy, getContext().getTargetAddressSpace(FD->getType())),
         false);
     llvm::Constant *Resolver = GetOrCreateLLVMFunction(
         MangledName + ".resolver", ResolverType, GlobalDecl{},
@@ -4737,7 +4733,7 @@ LangAS CodeGenModule::GetGlobalVarAddressSpace(const VarDecl *D) {
       }
       // All non-TLS variables should be in the Cap AS
       return getLangASFromTargetAS(CapAS);
-    } else if (D && getAddressSpaceForType(D->getType()) == CapAS) {
+    } else if (D && getContext().getTargetAddressSpace(D->getType()) == CapAS) {
       // In the hybrid ABI all globals are in AS 0 (even capabilities)
       return LangAS::Default; // XXXAR: FIXME: is this really  correct?
     }

@@ -751,8 +751,6 @@ public:
 
   const TargetCodeGenInfo &getTargetCodeGenInfo();
 
-  unsigned getAddressSpaceForType(QualType T);
-
   CodeGenTypes &getTypes() { return Types; }
 
   CodeGenVTables &getVTables() { return VTables; }
