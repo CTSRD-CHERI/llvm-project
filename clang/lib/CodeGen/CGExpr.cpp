@@ -1242,7 +1242,7 @@ CodeGenFunction::canTightenCheriBounds(QualType Ty, const Expr *E,
               // Handle taking the address of .at(N)/.front()/.back()
               // NumParams == 1 for .at() due to implicit this not being counted
               auto ExpectedParams =
-                  llvm::StringSwitch<Optional<unsigned>>(CXXMD->getName())
+                  llvm::StringSwitch<std::optional<unsigned>>(CXXMD->getName())
                       .Case("at", 1)
                       .Cases("front", "back", 0)
                       .Default(std::nullopt);

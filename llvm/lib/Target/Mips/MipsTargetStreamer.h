@@ -22,7 +22,7 @@ namespace llvm {
 class formatted_raw_ostream;
 
 // TODO: move this somewhere common
-llvm::Optional<unsigned> getCheriCapabilitySize(FeatureBitset Features);
+std::optional<unsigned> getCheriCapabilitySize(FeatureBitset Features);
 
 class MipsTargetStreamer : public MCTargetStreamer {
 public:

@@ -52,7 +52,7 @@ ArrayRef<MCPhysReg> MipsABIInfo::GetByValArgRegs() const {
 
 ArrayRef<MCPhysReg> MipsABIInfo::GetVarArgRegs() const {
   if (IsCheriPureCap())
-    return makeArrayRef(CheriCapArgRegs);
+    return ArrayRef(CheriCapArgRegs);
   if (IsO32())
     return ArrayRef(O32IntRegs);
   if (IsN32() || IsN64())

@@ -42,7 +42,8 @@ using namespace llvm;
 /// created.
 GlobalVariable *
 IRBuilderBase::CreateGlobalString(StringRef Str, const Twine &Name,
-                                  Optional<unsigned> AddressSpace, Module *M) {
+                                  std::optional<unsigned> AddressSpace,
+                                  Module *M) {
   Constant *StrConstant = ConstantDataArray::getString(Context, Str);
   if (!M)
     M = BB->getParent()->getParent();

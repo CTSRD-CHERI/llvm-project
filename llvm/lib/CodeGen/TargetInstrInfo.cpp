@@ -1422,7 +1422,7 @@ bool TargetInstrInfo::isGuaranteedValidSetBounds(const MachineInstr &MI) const {
         MI.dump());
     return false;
   }
-  Optional<int64_t> ObjectSize;
+  std::optional<int64_t> ObjectSize;
   // TODO: handle global vars
   if (BoundedOp->isFI()) {
     const auto &MFI = MI.getMF()->getFrameInfo();

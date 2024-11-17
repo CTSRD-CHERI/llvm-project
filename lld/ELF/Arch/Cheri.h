@@ -224,10 +224,10 @@ private:
     // immediate can be ordered before ones that are accessed using the
     // longer sequence of instructions
     // int64_t Index = -1;
-    llvm::Optional<uint32_t> index;
+    std::optional<uint32_t> index;
     bool needsSmallImm = false;
     bool usedInCallExpr = false;
-    llvm::Optional<SymbolAndOffset> firstUse;
+    std::optional<SymbolAndOffset> firstUse;
   };
   struct CaptableMap {
     uint64_t firstIndex = std::numeric_limits<uint64_t>::max();

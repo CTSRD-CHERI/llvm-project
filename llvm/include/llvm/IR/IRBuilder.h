@@ -441,7 +441,7 @@ public:
   /// block.
   GlobalVariable *
   CreateGlobalString(StringRef Str, const Twine &Name = "",
-                     Optional<unsigned> AddressSpace = std::nullopt,
+                     std::optional<unsigned> AddressSpace = std::nullopt,
                      Module *M = nullptr);
 
   /// Get a constant value representing either true or false.
@@ -1910,7 +1910,7 @@ public:
   /// block.
   Constant *
   CreateGlobalStringPtr(StringRef Str, const Twine &Name = "",
-                        llvm::Optional<unsigned> AddressSpace = std::nullopt,
+                        std::optional<unsigned> AddressSpace = std::nullopt,
                         Module *M = nullptr) {
     GlobalVariable *GV = CreateGlobalString(Str, Name, AddressSpace, M);
     Constant *Zero = ConstantInt::get(Type::getInt32Ty(Context), 0);

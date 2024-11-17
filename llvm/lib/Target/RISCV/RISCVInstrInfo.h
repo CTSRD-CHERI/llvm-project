@@ -136,7 +136,7 @@ public:
                      const MachineOperand *&Increment) const override;
   bool isCheriGetAddressInst(MachineInstr &MI) const override;
   unsigned getCheriAddressSubregIdx(MVT CapTy) const override;
-  Optional<int64_t>
+  std::optional<int64_t>
   getAsIntImmediate(const MachineOperand &Op,
                     const MachineRegisterInfo &MRI) const override;
 

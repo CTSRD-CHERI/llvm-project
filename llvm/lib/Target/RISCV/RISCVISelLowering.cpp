@@ -4855,7 +4855,8 @@ SDValue RISCVTargetLowering::lowerSELECT(SDValue Op, SelectionDAG &DAG) const {
   // (select condv, truev, falsev)
   // -> (riscvisd::select_cc condv, zero, setne, truev, falsev)
   if (CondV.getOpcode() != ISD::SETCC ||
-      ((CondV.getOperand(0).getSimpleValueType() != XLenVT) && (!CondV.getOperand(0).getSimpleValueType().isFatPointer()))) {
+      ((CondV.getOperand(0).getSimpleValueType() != XLenVT) &&
+       (!CondV.getOperand(0).getSimpleValueType().isFatPointer()))) {
     SDValue Zero = DAG.getConstant(0, DL, XLenVT);
     SDValue SetNE = DAG.getCondCode(ISD::SETNE);
 
@@ -4911,7 +4912,7 @@ SDValue RISCVTargetLowering::lowerSELECT(SDValue Op, SelectionDAG &DAG) const {
   if (LHS.getValueType().isFatPointer()) {
     LHS = DAG.getTargetExtractSubreg(RISCV::sub_cap_addr, DL, XLenVT, LHS);
     RHS = DAG.getTargetExtractSubreg(RISCV::sub_cap_addr, DL, XLenVT, RHS);
-   }
+  }
 
   SDValue TargetCC = DAG.getCondCode(CCVal);
 

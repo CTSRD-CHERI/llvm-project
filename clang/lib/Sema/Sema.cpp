@@ -746,7 +746,7 @@ ExprResult Sema::ImpCastExprToType(Expr *E, QualType Ty,
         ExprTy->isCHERICapabilityType(Context, /*IncludeIntCap=*/false);
     const bool ResultIsCap =
         TypeTy->isCHERICapabilityType(Context, /*IncludeIntCap=*/false);
-    Optional<unsigned> DiagID;
+    std::optional<unsigned> DiagID;
     if (FromIsCap && !ResultIsCap && ExprTy->isPointerType()) {
       // T* __capability -> T* is never allowed implicitly.
       DiagID = diag::err_typecheck_convert_cap_to_ptr;
