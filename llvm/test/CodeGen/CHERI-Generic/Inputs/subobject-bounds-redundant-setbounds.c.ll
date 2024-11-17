@@ -33,118 +33,103 @@ target datalayout = "@PURECAP_DATALAYOUT@"
 ;}
 
 
-define void @use_inline(i32 addrspace(200)* nocapture %arg) local_unnamed_addr addrspace(200) {
-  store i32 2, i32 addrspace(200)* %arg, align 4
+define void @use_inline(ptr addrspace(200) nocapture %arg) local_unnamed_addr addrspace(200) {
+  store i32 2, ptr addrspace(200) %arg, align 4
   ret void
 }
 
 define signext i32 @stack_array() local_unnamed_addr addrspace(200) nounwind {
   %array = alloca [10 x i32], align 4, addrspace(200)
-  %1 = bitcast [10 x i32] addrspace(200)* %array to i8 addrspace(200)*
-  call void @llvm.lifetime.start.p200i8(i64 40, i8 addrspace(200)* nonnull %1)
-  %2 = call i8 addrspace(200)* @llvm.cheri.cap.bounds.set.iCAPRANGE(i8 addrspace(200)* nonnull %1, iCAPRANGE 40)
-  call void @use(i8 addrspace(200)* %2)
-  %arrayidx = getelementptr inbounds i8, i8 addrspace(200)* %2, i64 20
-  %3 = bitcast i8 addrspace(200)* %arrayidx to i32 addrspace(200)*
-  %4 = load i32, i32 addrspace(200)* %3, align 4
-  call void @llvm.lifetime.end.p200i8(i64 40, i8 addrspace(200)* nonnull %1)
-  ret i32 %4
+  call void @llvm.lifetime.start.p200(i64 40, ptr addrspace(200) nonnull %array)
+  %bounded = call ptr addrspace(200) @llvm.cheri.cap.bounds.set.iCAPRANGE(ptr addrspace(200) nonnull %array, iCAPRANGE 40)
+  call void @use(ptr addrspace(200) %bounded)
+  %arrayidx = getelementptr inbounds i8, ptr addrspace(200) %bounded, i64 20
+  %ld = load i32, ptr addrspace(200) %arrayidx, align 4
+  call void @llvm.lifetime.end.p200(i64 40, ptr addrspace(200) nonnull %array)
+  ret i32 %ld
 }
 
 ; DBG-LABEL: Checking function stack_array
-; DBG-NEXT: cheri-bound-allocas:  -Checking if bitcast needs stack bounds:   %1 = bitcast [10 x i32] addrspace(200)* %array to i8 addrspace(200)*
-; DBG-NEXT: cheri-bound-allocas:   -No need for stack bounds for lifetime_{start,end}:   call void @llvm.lifetime.end.p200i8(i64 40, i8 addrspace(200)* nonnull %1)
-; DBG-NEXT: cheri-bound-allocas:   -No need for stack bounds for use in setbounds with smaller or equal size: original size=40, setbounds size=40 current offset=0:  %2 = call i8 addrspace(200)* @llvm.cheri.cap.bounds.set.iCAPRANGE(i8 addrspace(200)* nonnull %1, iCAPRANGE 40)
-; DBG-NEXT: cheri-bound-allocas:   -No need for stack bounds for lifetime_{start,end}:   call void @llvm.lifetime.start.p200i8(i64 40, i8 addrspace(200)* nonnull %1)
-; DBG-NEXT: cheri-bound-allocas:  -no bitcast users need bounds:   %1 = bitcast [10 x i32] addrspace(200)* %array to i8 addrspace(200)*
-; DBG-NEXT: cheri-bound-allocas: stack_array: 0 of 1 users need bounds for   %array = alloca [10 x i32], align 4, addrspace(200)
+; DBG-NEXT: cheri-bound-allocas:  -No need for stack bounds for lifetime_{start,end}:   call void @llvm.lifetime.end.p200(i64 40, ptr addrspace(200) nonnull %array)
+; DBG-NEXT: cheri-bound-allocas:  -No need for stack bounds for use in setbounds with smaller or equal size: original size=40, setbounds size=40 current offset=0:  %bounded = call ptr addrspace(200) @llvm.cheri.cap.bounds.set.iCAPRANGE(ptr addrspace(200) nonnull %array, iCAPRANGE 40)
+; DBG-NEXT: cheri-bound-allocas:  -No need for stack bounds for lifetime_{start,end}:   call void @llvm.lifetime.start.p200(i64 40, ptr addrspace(200) nonnull %array)
+; DBG-NEXT: cheri-bound-allocas: stack_array: 0 of 3 users need bounds for   %array = alloca [10 x i32], align 4, addrspace(200)
 ; DBG-NEXT: cheri-bound-allocas: No need to set bounds on stack alloca  %array = alloca [10 x i32], align 4, addrspace(200)
 ; DBG-EMPTY:
 
-declare void @llvm.lifetime.start.p200i8(i64 immarg, i8 addrspace(200)* nocapture) addrspace(200)
+declare void @llvm.lifetime.start.p200(i64 immarg, ptr addrspace(200) nocapture) addrspace(200)
 
-declare void @use(i8 addrspace(200)*) local_unnamed_addr addrspace(200)
+declare void @use(ptr addrspace(200)) local_unnamed_addr addrspace(200)
 
-declare i8 addrspace(200)* @llvm.cheri.cap.bounds.set.iCAPRANGE(i8 addrspace(200)*, iCAPRANGE) addrspace(200)
+declare ptr addrspace(200) @llvm.cheri.cap.bounds.set.iCAPRANGE(ptr addrspace(200), iCAPRANGE) addrspace(200)
 
-declare void @llvm.lifetime.end.p200i8(i64 immarg, i8 addrspace(200)* nocapture) addrspace(200)
+declare void @llvm.lifetime.end.p200(i64 immarg, ptr addrspace(200) nocapture) addrspace(200)
 
 define signext i32 @stack_int() local_unnamed_addr addrspace(200) nounwind {
   %value = alloca i32, align 4, addrspace(200)
-  %1 = bitcast i32 addrspace(200)* %value to i8 addrspace(200)*
-  call void @llvm.lifetime.start.p200i8(i64 4, i8 addrspace(200)* nonnull %1)
-  store i32 1, i32 addrspace(200)* %value, align 4
-  %2 = call i8 addrspace(200)* @llvm.cheri.cap.bounds.set.iCAPRANGE(i8 addrspace(200)* nonnull %1, iCAPRANGE 4)
-  call void @use(i8 addrspace(200)* %2)
-  %3 = load i32, i32 addrspace(200)* %value, align 4
-  call void @llvm.lifetime.end.p200i8(i64 4, i8 addrspace(200)* nonnull %1)
-  ret i32 %3
+  call void @llvm.lifetime.start.p200(i64 4, ptr addrspace(200) nonnull %value)
+  store i32 1, ptr addrspace(200) %value, align 4
+  %bounded = call ptr addrspace(200) @llvm.cheri.cap.bounds.set.iCAPRANGE(ptr addrspace(200) nonnull %value, iCAPRANGE 4)
+  call void @use(ptr addrspace(200) %bounded)
+  %ld = load i32, ptr addrspace(200) %value, align 4
+  call void @llvm.lifetime.end.p200(i64 4, ptr addrspace(200) nonnull %value)
+  ret i32 %ld
 }
 
 ; DBG-LABEL: Checking function stack_int
-; DBG-NEXT: cheri-bound-allocas:  -Checking if load/store needs bounds (GEP offset is 0):   %3 = load i32, i32 addrspace(200)* %value, align 4
+; DBG-NEXT: cheri-bound-allocas:  -No need for stack bounds for lifetime_{start,end}:   call void @llvm.lifetime.end.p200(i64 4, ptr addrspace(200) nonnull %value)
+; DBG-NEXT: cheri-bound-allocas:  -Checking if load/store needs bounds (GEP offset is 0):   %ld = load i32, ptr addrspace(200) %value, align 4
 ; DBG-NEXT: cheri-bound-allocas:   -Load/store size=4, alloca size=4, current GEP offset=0 for i32
-; DBG-NEXT: cheri-bound-allocas:   -Load/store is in bounds -> can reuse $csp for   %3 = load i32, i32 addrspace(200)* %value, align 4
-; DBG-NEXT: cheri-bound-allocas:  -Checking if load/store needs bounds (GEP offset is 0):   store i32 1, i32 addrspace(200)* %value, align 4
+; DBG-NEXT: cheri-bound-allocas:   -Load/store is in bounds -> can reuse $csp for   %ld = load i32, ptr addrspace(200) %value, align 4
+; DBG-NEXT: cheri-bound-allocas:  -No need for stack bounds for use in setbounds with smaller or equal size: original size=4, setbounds size=4 current offset=0:  %bounded = call ptr addrspace(200) @llvm.cheri.cap.bounds.set.iCAPRANGE(ptr addrspace(200) nonnull %value, iCAPRANGE 4)
+; DBG-NEXT: cheri-bound-allocas:  -Checking if load/store needs bounds (GEP offset is 0):   store i32 1, ptr addrspace(200) %value, align 4
 ; DBG-NEXT: cheri-bound-allocas:   -Load/store size=4, alloca size=4, current GEP offset=0 for i32
-; DBG-NEXT: cheri-bound-allocas:   -Load/store is in bounds -> can reuse $csp for   store i32 1, i32 addrspace(200)* %value, align 4
-; DBG-NEXT: cheri-bound-allocas:  -Checking if bitcast needs stack bounds:   %1 = bitcast i32 addrspace(200)* %value to i8 addrspace(200)*
-; DBG-NEXT: cheri-bound-allocas:   -No need for stack bounds for lifetime_{start,end}:   call void @llvm.lifetime.end.p200i8(i64 4, i8 addrspace(200)* nonnull %1)
-; DBG-NEXT: cheri-bound-allocas:   -No need for stack bounds for use in setbounds with smaller or equal size: original size=4, setbounds size=4 current offset=0:  %2 = call i8 addrspace(200)* @llvm.cheri.cap.bounds.set.iCAPRANGE(i8 addrspace(200)* nonnull %1, iCAPRANGE 4)
-; DBG-NEXT: cheri-bound-allocas:   -No need for stack bounds for lifetime_{start,end}:   call void @llvm.lifetime.start.p200i8(i64 4, i8 addrspace(200)* nonnull %1)
-; DBG-NEXT: cheri-bound-allocas:  -no bitcast users need bounds:   %1 = bitcast i32 addrspace(200)* %value to i8 addrspace(200)*
-; DBG-NEXT: cheri-bound-allocas: stack_int: 0 of 3 users need bounds for   %value = alloca i32, align 4, addrspace(200)
+; DBG-NEXT: cheri-bound-allocas:   -Load/store is in bounds -> can reuse $csp for   store i32 1, ptr addrspace(200) %value, align 4
+; DBG-NEXT: cheri-bound-allocas:  -No need for stack bounds for lifetime_{start,end}:   call void @llvm.lifetime.start.p200(i64 4, ptr addrspace(200) nonnull %value)
+; DBG-NEXT: cheri-bound-allocas: stack_int: 0 of 5 users need bounds for   %value = alloca i32, align 4, addrspace(200)
 ; DBG-NEXT: cheri-bound-allocas: No need to set bounds on stack alloca  %value = alloca i32, align 4, addrspace(200)
 ; DBG-EMPTY:
 
 define signext i32 @stack_int_inlined() local_unnamed_addr addrspace(200) nounwind {
   %value = alloca i32, align 4, addrspace(200)
-  %1 = bitcast i32 addrspace(200)* %value to i8 addrspace(200)*
-  call void @llvm.lifetime.start.p200i8(i64 4, i8 addrspace(200)* nonnull %1)
-  store i32 1, i32 addrspace(200)* %value, align 4
-  %2 = call i8 addrspace(200)* @llvm.cheri.cap.bounds.set.iCAPRANGE(i8 addrspace(200)* nonnull %1, iCAPRANGE 4)
-  %address.with.bounds = bitcast i8 addrspace(200)* %2 to i32 addrspace(200)*
-  store i32 2, i32 addrspace(200)* %address.with.bounds, align 4
-  %3 = load i32, i32 addrspace(200)* %value, align 4
-  call void @llvm.lifetime.end.p200i8(i64 4, i8 addrspace(200)* nonnull %1)
-  ret i32 %3
+  call void @llvm.lifetime.start.p200(i64 4, ptr addrspace(200) nonnull %value)
+  store i32 1, ptr addrspace(200) %value, align 4
+  %address.with.bounds = call ptr addrspace(200) @llvm.cheri.cap.bounds.set.iCAPRANGE(ptr addrspace(200) nonnull %value, iCAPRANGE 4)
+  store i32 2, ptr addrspace(200) %address.with.bounds, align 4
+  %ld = load i32, ptr addrspace(200) %value, align 4
+  call void @llvm.lifetime.end.p200(i64 4, ptr addrspace(200) nonnull %value)
+  ret i32 %ld
 }
 
 ; DBG-LABEL: Checking function stack_int_inlined
-; DBG-NEXT: cheri-bound-allocas:  -Checking if load/store needs bounds (GEP offset is 0):   %3 = load i32, i32 addrspace(200)* %value, align 4
+; DBG-NEXT: cheri-bound-allocas:  -No need for stack bounds for lifetime_{start,end}:   call void @llvm.lifetime.end.p200(i64 4, ptr addrspace(200) nonnull %value)
+; DBG-NEXT: cheri-bound-allocas:  -Checking if load/store needs bounds (GEP offset is 0):   %ld = load i32, ptr addrspace(200) %value, align 4
 ; DBG-NEXT: cheri-bound-allocas:   -Load/store size=4, alloca size=4, current GEP offset=0 for i32
-; DBG-NEXT: cheri-bound-allocas:   -Load/store is in bounds -> can reuse $csp for   %3 = load i32, i32 addrspace(200)* %value, align 4
-; DBG-NEXT: cheri-bound-allocas:  -Checking if load/store needs bounds (GEP offset is 0):   store i32 1, i32 addrspace(200)* %value, align 4
+; DBG-NEXT: cheri-bound-allocas:   -Load/store is in bounds -> can reuse $csp for   %ld = load i32, ptr addrspace(200) %value, align 4
+; DBG-NEXT: cheri-bound-allocas:  -No need for stack bounds for use in setbounds with smaller or equal size: original size=4, setbounds size=4 current offset=0:  %address.with.bounds = call ptr addrspace(200) @llvm.cheri.cap.bounds.set.iCAPRANGE(ptr addrspace(200) nonnull %value, iCAPRANGE 4)
+; DBG-NEXT: cheri-bound-allocas:  -Checking if load/store needs bounds (GEP offset is 0):   store i32 1, ptr addrspace(200) %value, align 4
 ; DBG-NEXT: cheri-bound-allocas:   -Load/store size=4, alloca size=4, current GEP offset=0 for i32
-; DBG-NEXT: cheri-bound-allocas:   -Load/store is in bounds -> can reuse $csp for   store i32 1, i32 addrspace(200)* %value, align 4
-; DBG-NEXT: cheri-bound-allocas:  -Checking if bitcast needs stack bounds:   %1 = bitcast i32 addrspace(200)* %value to i8 addrspace(200)*
-; DBG-NEXT: cheri-bound-allocas:   -No need for stack bounds for lifetime_{start,end}:   call void @llvm.lifetime.end.p200i8(i64 4, i8 addrspace(200)* nonnull %1)
-; DBG-NEXT: cheri-bound-allocas:   -No need for stack bounds for use in setbounds with smaller or equal size: original size=4, setbounds size=4 current offset=0:  %2 = call i8 addrspace(200)* @llvm.cheri.cap.bounds.set.iCAPRANGE(i8 addrspace(200)* nonnull %1, iCAPRANGE 4)
-; DBG-NEXT: cheri-bound-allocas:   -No need for stack bounds for lifetime_{start,end}:   call void @llvm.lifetime.start.p200i8(i64 4, i8 addrspace(200)* nonnull %1)
-; DBG-NEXT: cheri-bound-allocas:  -no bitcast users need bounds:   %1 = bitcast i32 addrspace(200)* %value to i8 addrspace(200)*
-; DBG-NEXT: cheri-bound-allocas: stack_int_inlined: 0 of 3 users need bounds for   %value = alloca i32, align 4, addrspace(200)
+; DBG-NEXT: cheri-bound-allocas:   -Load/store is in bounds -> can reuse $csp for   store i32 1, ptr addrspace(200) %value, align 4
+; DBG-NEXT: cheri-bound-allocas:  -No need for stack bounds for lifetime_{start,end}:   call void @llvm.lifetime.start.p200(i64 4, ptr addrspace(200) nonnull %value)
+; DBG-NEXT: cheri-bound-allocas: stack_int_inlined: 0 of 5 users need bounds for   %value = alloca i32, align 4, addrspace(200)
 ; DBG-NEXT: cheri-bound-allocas: No need to set bounds on stack alloca  %value = alloca i32, align 4, addrspace(200)
 ; DBG-EMPTY:
 
 define signext i32 @out_of_bounds_setbounds() local_unnamed_addr addrspace(200) nounwind {
   %value = alloca i32, align 4, addrspace(200)
   ; TOO big, cannot elide the setbonds:
-  %1 = bitcast i32 addrspace(200)* %value to i8 addrspace(200)*
-  %2 = call i8 addrspace(200)* @llvm.cheri.cap.bounds.set.iCAPRANGE(i8 addrspace(200)* nonnull %1, iCAPRANGE 5)
-  %address.with.bounds = bitcast i8 addrspace(200)* %2 to i32 addrspace(200)*
-  store i32 2, i32 addrspace(200)* %address.with.bounds, align 4
-  %3 = load i32, i32 addrspace(200)* %value, align 4
-  ret i32 %3
+  %address.with.bounds = call ptr addrspace(200) @llvm.cheri.cap.bounds.set.iCAPRANGE(ptr addrspace(200) nonnull %value, iCAPRANGE 5)
+  store i32 2, ptr addrspace(200) %address.with.bounds, align 4
+  %ld = load i32, ptr addrspace(200) %value, align 4
+  ret i32 %ld
 }
 
 ; DBG-NEXT: Checking function out_of_bounds_setbounds
-; DBG-NEXT: cheri-bound-allocas:  -Checking if load/store needs bounds (GEP offset is 0):   %3 = load i32, i32 addrspace(200)* %value, align 4
+; DBG-NEXT: cheri-bound-allocas:  -Checking if load/store needs bounds (GEP offset is 0):   %ld = load i32, ptr addrspace(200) %value, align 4
 ; DBG-NEXT: cheri-bound-allocas:   -Load/store size=4, alloca size=4, current GEP offset=0 for i32
-; DBG-NEXT: cheri-bound-allocas:   -Load/store is in bounds -> can reuse $csp for   %3 = load i32, i32 addrspace(200)* %value, align 4
-; DBG-NEXT: cheri-bound-allocas:  -Checking if bitcast needs stack bounds:   %1 = bitcast i32 addrspace(200)* %value to i8 addrspace(200)*
-; DBG-NEXT: cheri-bound-allocas:   -out_of_bounds_setbounds: setbounds use offset OUT OF BOUNDS and will trap -> adding csetbounds:   %2 = call i8 addrspace(200)* @llvm.cheri.cap.bounds.set.iCAPRANGE(i8 addrspace(200)* nonnull %1, iCAPRANGE 5)
-; DBG-NEXT: cheri-bound-allocas:  -Adding stack bounds since bitcast user needs bounds:   %2 = call i8 addrspace(200)* @llvm.cheri.cap.bounds.set.iCAPRANGE(i8 addrspace(200)* nonnull %1, iCAPRANGE 5)
-; DBG-NEXT: cheri-bound-allocas: Found alloca use that needs bounds:   %1 = bitcast i32 addrspace(200)* %value to i8 addrspace(200)*
+; DBG-NEXT: cheri-bound-allocas:   -Load/store is in bounds -> can reuse $csp for   %ld = load i32, ptr addrspace(200) %value, align 4
+; DBG-NEXT: cheri-bound-allocas:  -out_of_bounds_setbounds: setbounds use offset OUT OF BOUNDS and will trap -> adding csetbounds:   %address.with.bounds = call ptr addrspace(200) @llvm.cheri.cap.bounds.set.iCAPRANGE(ptr addrspace(200) nonnull %value, iCAPRANGE 5)
+; DBG-NEXT: cheri-bound-allocas: Found alloca use that needs bounds:   %address.with.bounds = call ptr addrspace(200) @llvm.cheri.cap.bounds.set.iCAPRANGE(ptr addrspace(200) nonnull %value, iCAPRANGE 5)
 ; DBG-NEXT: cheri-bound-allocas: out_of_bounds_setbounds: 1 of 2 users need bounds for   %value = alloca i32, align 4, addrspace(200)
 ; DBG-NEXT: out_of_bounds_setbounds: setting bounds on stack alloca to 4  %value = alloca i32, align 4, addrspace(200)
 ; DBG-EMPTY:
@@ -152,22 +137,18 @@ define signext i32 @out_of_bounds_setbounds() local_unnamed_addr addrspace(200) 
 define signext i32 @setbounds_escapes() local_unnamed_addr addrspace(200) nounwind {
   %value = alloca i32, align 4, addrspace(200)
   ; Too big, cannot elide the setbonds:
-  %1 = bitcast i32 addrspace(200)* %value to i8 addrspace(200)*
-  %2 = call i8 addrspace(200)* @llvm.cheri.cap.bounds.set.iCAPRANGE(i8 addrspace(200)* nonnull %1, iCAPRANGE 4)
-  %address.with.bounds = bitcast i8 addrspace(200)* %2 to i32 addrspace(200)*
-  store i32 2, i32 addrspace(200)* %address.with.bounds, align 4
-  call void @use(i8 addrspace(200)* %2)
-  %3 = load i32, i32 addrspace(200)* %value, align 4
-  ret i32 %3
+  %address.with.bounds = call ptr addrspace(200) @llvm.cheri.cap.bounds.set.iCAPRANGE(ptr addrspace(200) nonnull %value, iCAPRANGE 4)
+  store i32 2, ptr addrspace(200) %address.with.bounds, align 4
+  call void @use(ptr addrspace(200) %address.with.bounds)
+  %ld = load i32, ptr addrspace(200) %value, align 4
+  ret i32 %ld
 }
 
 ; DBG-NEXT: Checking function setbounds_escapes
-; DBG-NEXT: cheri-bound-allocas:  -Checking if load/store needs bounds (GEP offset is 0):   %3 = load i32, i32 addrspace(200)* %value, align 4
+; DBG-NEXT: cheri-bound-allocas:  -Checking if load/store needs bounds (GEP offset is 0):   %ld = load i32, ptr addrspace(200) %value, align 4
 ; DBG-NEXT: cheri-bound-allocas:   -Load/store size=4, alloca size=4, current GEP offset=0 for i32
-; DBG-NEXT: cheri-bound-allocas:   -Load/store is in bounds -> can reuse $csp for   %3 = load i32, i32 addrspace(200)* %value, align 4
-; DBG-NEXT: cheri-bound-allocas:  -Checking if bitcast needs stack bounds:   %1 = bitcast i32 addrspace(200)* %value to i8 addrspace(200)*
-; DBG-NEXT: cheri-bound-allocas:   -No need for stack bounds for use in setbounds with smaller or equal size: original size=4, setbounds size=4 current offset=0:  %2 = call i8 addrspace(200)* @llvm.cheri.cap.bounds.set.iCAPRANGE(i8 addrspace(200)* nonnull %1, iCAPRANGE 4)
-; DBG-NEXT: cheri-bound-allocas:  -no bitcast users need bounds:   %1 = bitcast i32 addrspace(200)* %value to i8 addrspace(200)*
+; DBG-NEXT: cheri-bound-allocas:   -Load/store is in bounds -> can reuse $csp for   %ld = load i32, ptr addrspace(200) %value, align 4
+; DBG-NEXT: cheri-bound-allocas:  -No need for stack bounds for use in setbounds with smaller or equal size: original size=4, setbounds size=4 current offset=0:  %address.with.bounds = call ptr addrspace(200) @llvm.cheri.cap.bounds.set.iCAPRANGE(ptr addrspace(200) nonnull %value, iCAPRANGE 4)
 ; DBG-NEXT: cheri-bound-allocas: setbounds_escapes: 0 of 2 users need bounds for   %value = alloca i32, align 4, addrspace(200)
 ; DBG-NEXT: cheri-bound-allocas: No need to set bounds on stack alloca  %value = alloca i32, align 4, addrspace(200)
 ; DBG-EMPTY:
@@ -176,18 +157,15 @@ define signext i32 @setbounds_escapes() local_unnamed_addr addrspace(200) nounwi
 define void @assume_aligned() local_unnamed_addr addrspace(200) nounwind {
   %1 = alloca [4 x i8], align 4, addrspace(200)
   call void @llvm.assume(i1 true) [ "align"([4 x i8] addrspace(200)* %1, i64 4) ]
-  %2 = bitcast [4 x i8] addrspace(200)* %1 to i32 addrspace(200)*
-  store i32 1, i32 addrspace(200)* %2
+  store i32 1, ptr addrspace(200) %1
   ret void
 }
 
 ; DBG-NEXT: Checking function assume_aligned
-; DBG-NEXT: cheri-bound-allocas:  -Checking if bitcast needs stack bounds:   %2 = bitcast [4 x i8] addrspace(200)* %1 to i32 addrspace(200)*
-; DBG-NEXT: cheri-bound-allocas:   -Checking if load/store needs bounds (GEP offset is 0):   store i32 1, i32 addrspace(200)* %2, align 4
-; DBG-NEXT: cheri-bound-allocas:    -Load/store size=4, alloca size=4, current GEP offset=0 for i32
-; DBG-NEXT: cheri-bound-allocas:    -Load/store is in bounds -> can reuse $csp for   store i32 1, i32 addrspace(200)* %2, align 4
-; DBG-NEXT: cheri-bound-allocas:  -no bitcast users need bounds:   %2 = bitcast [4 x i8] addrspace(200)* %1 to i32 addrspace(200)*
-; DBG-NEXT: cheri-bound-allocas:  -No need for stack bounds for assume:   call void @llvm.assume(i1 true) [ "align"([4 x i8] addrspace(200)* %1, i64 4) ]
+; DBG-NEXT: cheri-bound-allocas:  -Checking if load/store needs bounds (GEP offset is 0):   store i32 1, ptr addrspace(200) %1, align 4
+; DBG-NEXT: cheri-bound-allocas:   -Load/store size=4, alloca size=4, current GEP offset=0 for i32
+; DBG-NEXT: cheri-bound-allocas:   -Load/store is in bounds -> can reuse $csp for   store i32 1, ptr addrspace(200) %1, align 4
+; DBG-NEXT: cheri-bound-allocas:  -No need for stack bounds for assume:   call void @llvm.assume(i1 true) [ "align"(ptr addrspace(200) %1, i64 4) ]
 ; DBG-NEXT: cheri-bound-allocas: assume_aligned: 0 of 2 users need bounds for   %1 = alloca [4 x i8], align 4, addrspace(200)
 ; DBG-NEXT: cheri-bound-allocas: No need to set bounds on stack alloca  %1 = alloca [4 x i8], align 4, addrspace(200)
 ; DBG-EMPTY:
