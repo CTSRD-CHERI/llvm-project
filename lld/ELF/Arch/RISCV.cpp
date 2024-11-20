@@ -17,6 +17,7 @@
 #include "llvm/Support/RISCVAttributes.h"
 #include "llvm/Support/RISCVISAInfo.h"
 #include "llvm/Support/TimeProfiler.h"
+#include "llvm/CHERI/cheri-compressed-cap/cheri_compressed_cap.h"
 
 using namespace llvm;
 using namespace llvm::object;
@@ -32,6 +33,7 @@ public:
   RISCV();
   uint32_t calcEFlags() const override;
   int getCapabilitySize() const override;
+  uint64_t getCheriRequiredAlignment(uint64_t len) const override;
   int64_t getImplicitAddend(const uint8_t *buf, RelType type) const override;
   void writeGotHeader(uint8_t *buf) const override;
   void writeGotPlt(Compartment *c, uint8_t *buf, const Symbol &s) const override;
@@ -153,6 +155,13 @@ static uint32_t getEFlags(InputFile *f) {
 
 int RISCV::getCapabilitySize() const {
   return config->is64 ? 16 : 8;
+}
+
+uint64_t RISCV::getCheriRequiredAlignment(uint64_t len) const {
+  if (config->is64)
+    return cc128_get_required_alignment(len);
+  else
+    return cc64_get_required_alignment(len);
 }
 
 uint32_t RISCV::calcEFlags() const {
