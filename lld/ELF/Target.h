@@ -29,6 +29,7 @@ public:
   virtual uint32_t calcEFlags() const { return 0; }
   virtual int getCapabilitySize() const { return 0; }
   virtual bool calcIsCheriAbi() const;
+  virtual uint64_t getCheriRequiredAlignment(uint64_t len) const;
   virtual RelExpr getRelExpr(RelType type, const Symbol &s,
                              const uint8_t *loc) const = 0;
   virtual RelType getDynRel(RelType type) const { return 0; }

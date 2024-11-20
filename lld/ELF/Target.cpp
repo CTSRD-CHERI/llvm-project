@@ -139,6 +139,11 @@ bool TargetInfo::calcIsCheriAbi() const {
   return false;
 }
 
+uint64_t TargetInfo::getCheriRequiredAlignment(uint64_t len) const {
+  error("current target does not provide required Cheri alignment");
+  return 1;
+}
+
 int64_t TargetInfo::getImplicitAddend(const uint8_t *buf, RelType type) const {
   internalLinkerError(getErrorLocation(buf),
                       "cannot read addend for relocation " + toString(type));

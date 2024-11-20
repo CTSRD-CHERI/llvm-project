@@ -324,6 +324,12 @@ void addCapabilityRelocation(Symbol *sym, RelType type, InputSectionBase *sec,
                              bool isCallExpr,
                              llvm::function_ref<std::string()> referencedBy,
                              RelocationBaseSection *dynRelSec = nullptr);
+
+// Align OutputSections as needed to ensure the bounds of capabilities
+// such as PCC do not permit undesired access to portions of other
+// OutputSections.  Return true if the alignment of any OutputSection
+// was modified.
+bool cheriCapabilityBoundsAlign();
 } // namespace elf
 } // namespace lld
 
