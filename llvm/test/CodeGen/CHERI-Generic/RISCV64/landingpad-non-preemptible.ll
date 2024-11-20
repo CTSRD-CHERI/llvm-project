@@ -42,7 +42,7 @@ define dso_local noundef signext i32 @_Z8do_catchv() local_unnamed_addr addrspac
 ; CHECK-NEXT:    cincoffset csp, csp, 48
 ; CHECK-NEXT:    cret
 ; CHECK-NEXT:  .LBB0_3: # %lpad
-; CHECK-NEXT:  .Ltmp2:
+; CHECK-NEXT:  .Llpad0:
 ; CHECK-NEXT:    sext.w s1, a1
 ; CHECK-NEXT:    ccall __cxa_begin_catch
 ; CHECK-NEXT:    li s0, 2
@@ -111,8 +111,7 @@ declare dso_local void @__cxa_end_catch() local_unnamed_addr addrspace(200)
 ; CHECK-NEXT:  [[CS_DIRECTIVE]] .Ltmp1-.Ltmp0                  #   Call between .Ltmp0 and .Ltmp1
 ; Note: RISC-V uses DW_EH_PE_udata4, so the 0xc marker uses 4 bytes instead of 1
 ; CHECK-NEXT:  [[SMALL_CS_DIRECTIVE:(\.byte)|(\.word)]] 12     # (landing pad is a capability)
-; Note: the following line should not be using _Z8do_catchv, but a local alias
-; CHECK-NEXT:  .chericap  .L_Z8do_catchv$local + .Ltmp2-.Lfunc_begin0   #     jumps to .Ltmp2
+; CHECK-NEXT:  .chericap .Llpad0                               #     jumps to .Llpad0
 ; CHECK-NEXT:  .byte 3                               #   On action: 2
 ; CHECK-NEXT:  [[CS_DIRECTIVE]] .Ltmp1-.Lfunc_begin0           # >> Call Site 2 <<
 ; CHECK-NEXT:  [[CS_DIRECTIVE]] .Lfunc_end0-.Ltmp1             #   Call between .Ltmp1 and .Lfunc_end0
@@ -143,7 +142,7 @@ declare dso_local void @__cxa_end_catch() local_unnamed_addr addrspace(200)
 ; RELOCS-NEXT:   R_RISCV_SUB32 - 0x0
 ; RELOCS-NEXT:   R_RISCV_ADD32 - 0x0
 ; RELOCS-NEXT:   R_RISCV_SUB32 - 0x0
-; RELOCS-NEXT:   R_RISCV_CHERI_CAPABILITY  .L_Z8do_catchv$local 0x34
+; RELOCS-NEXT:   R_RISCV_CHERI_CAPABILITY  .Llpad0 0x0{{$}}
 ; RELOCS-NEXT:   R_RISCV_ADD32 - 0x0
 ; RELOCS-NEXT:   R_RISCV_SUB32 - 0x0
 ; RELOCS-NEXT:   R_RISCV_ADD32 - 0x0
