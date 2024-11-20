@@ -43,6 +43,7 @@ class InputSectionBase;
 class EhInputSection;
 class Symbol;
 class BitcodeCompiler;
+struct Compartment;
 
 enum ELFKind : uint8_t {
   ELFNoneKind,
@@ -447,6 +448,8 @@ struct Config {
   // If an input file matches a wildcard pattern, remap it to the value.
   llvm::SmallVector<std::pair<llvm::GlobPattern, llvm::StringRef>, 0>
       remapInputsWildcards;
+
+  Compartment *compartment = nullptr;
 };
 struct ConfigWrapper {
   Config c;
