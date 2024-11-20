@@ -129,6 +129,9 @@ def : Flag<["--"], "color-diagnostics">, Alias<color_diagnostics>, AliasArgs<["a
 def : Flag<["--"], "no-color-diagnostics">, Alias<color_diagnostics>, AliasArgs<["never"]>,
   HelpText<"Alias for --color-diagnostics=never">;
 
+defm compartment: EEq<"compartment", "Set the containing compartment of the inputs following this option">,
+  MetaVarName<"<compart>">;
+
 def cref: FF<"cref">,
   HelpText<"Output cross reference table. If -Map is specified, print to the map file">;
 
