@@ -2783,7 +2783,7 @@ bool UnwindCursor<A, R>::setInfoForSigReturn(Registers_riscv &) {
   struct iovec local_iov = {&instructions, sizeof instructions};
   struct iovec remote_iov = {reinterpret_cast<void *>(pc), sizeof instructions};
   long bytesRead =
-      syscall(SYS_process_vm_readv, getpid(), &local_iov, 1, &remote_iov, 1, 0);
+      syscall((uintptr_t)SYS_process_vm_readv, (uintptr_t)getpid(), (uintptr_t)&local_iov, (uintptr_t)1, (uintptr_t)&remote_iov, (uintptr_t)1, (uintptr_t)0);
   // Look for the two instructions used in the sigreturn trampoline
   // __vdso_rt_sigreturn:
   //
@@ -2817,9 +2817,9 @@ int UnwindCursor<A, R>::stepThroughSigReturn(Registers_riscv &) {
   const pint_t kOffsetSpToSigcontext = 128 + 8 + 8 + 24 + 8 + 128;
 
   const pint_t sigctx = _registers.getSP() + kOffsetSpToSigcontext;
-  _registers.setIP(_addressSpace.get64(sigctx));
+  _registers.setIP(_addressSpace.getP(sigctx));
   for (int i = UNW_RISCV_X1; i <= UNW_RISCV_X31; ++i) {
-    uint64_t value = _addressSpace.get64(sigctx + static_cast<pint_t>(i * 8));
+    uintptr_t value = _addressSpace.getP(sigctx + static_cast<pint_t>(i * __SIZEOF_POINTER__));
     _registers.setRegister(i, value);
   }
   _isSignalFrame = true;
