@@ -1,6 +1,17 @@
 ;; Check that the directives at the start of the function are emitted in a sensible order
-; RUN: %riscv64_cheri_purecap_llc -relocation-model=pic < %s | FileCheck %s
-; RUN: %riscv64_cheri_purecap_llc -relocation-model=static < %s | FileCheck %s
+; RUN: %riscv64_cheri_purecap_llc -relocation-model=pic -mattr=-relax < %s | FileCheck %s
+; RUN: %riscv64_cheri_purecap_llc -relocation-model=static -mattr=-relax < %s | FileCheck %s
+; RUN: %riscv64_cheri_purecap_llc -relocation-model=pic -mattr=+relax < %s | FileCheck %s
+; RUN: %riscv64_cheri_purecap_llc -relocation-model=static -mattr=+relax < %s | FileCheck %s
+;; Check the .o output as well to ensure the relocations make sense.
+; RUN: %riscv64_cheri_purecap_llc -relocation-model=static -mattr=+relax < %s -filetype=obj -o - \
+; RUN:   | llvm-readelf --symbols --relocations --expand-relocs - | FileCheck %s --check-prefix=OBJ
+; RUN: %riscv64_cheri_purecap_llc -relocation-model=static -mattr=-relax < %s -filetype=obj -o - \
+; RUN:   | llvm-readelf --symbols --relocations --expand-relocs - | FileCheck %s --check-prefix=OBJ
+; RUN: %riscv64_cheri_purecap_llc -relocation-model=pic -mattr=+relax < %s -filetype=obj -o - \
+; RUN:   | llvm-readelf --symbols --relocations --expand-relocs - | FileCheck %s --check-prefix=OBJ
+; RUN: %riscv64_cheri_purecap_llc -relocation-model=pic -mattr=-relax < %s -filetype=obj -o - \
+; RUN:   | llvm-readelf --symbols --relocations --expand-relocs - | FileCheck %s --check-prefix=OBJ
 
 target triple = "riscv64-unknown-freebsd13"
 
@@ -54,3 +65,12 @@ declare dso_local void @__cxa_end_catch() local_unnamed_addr addrspace(200)
 ; CHECK: .section .gcc_except_table
 ; CHECK: .word 12 # (landing pad is a capability)
 ; CHECK-NEXT: .chericap .L_Z4testv$local + .Ltmp2-.Lfunc_begin0 # jumps to .Ltmp2
+
+; OBJ-LABEL: Relocation section '.rela.gcc_except_table' at offset
+; OBJ: Offset             Info             Type                    Symbol's Value   Symbol's Name + Addend
+; OBJ: 0000000000000020  00000002000000c1 R_RISCV_CHERI_CAPABILITY 0000000000000000 .L_Z4testv$local + 24{{$}}
+
+; OBJ-LABEL: Symbol table '.symtab' contains
+; OBJ:    Value          Size Type    Bind   Vis       Ndx Name
+; OBJ: 0000000000000000    60 FUNC    LOCAL  DEFAULT     2 .L_Z4testv$local
+; OBJ: 0000000000000000    60 FUNC    GLOBAL DEFAULT     2 _Z4testv
