@@ -219,6 +219,7 @@ void ErrorHandler::reportDiagnostic(StringRef location, Colors c,
   }
   os << msg << '\n';
   lld::errs() << buf;
+  sep = getSeparator(msg);
 }
 
 void ErrorHandler::log(const Twine &msg) {
@@ -249,13 +250,9 @@ void ErrorHandler::warn(const Twine &msg) {
   std::lock_guard<std::mutex> lock(mu);
   if (warningLimit == 0 || warningCount < warningLimit) {
     reportDiagnostic(getLocation(msg), Colors::MAGENTA, "warning", msg);
-    sep = getSeparator(msg);
   } else if (warningCount == warningLimit) {
     reportDiagnostic(getLocation(msg), Colors::MAGENTA, "warning",
                      warningLimitExceededMsg);
-    // Set separator based on limit exceeded flag and not the message that
-    // wasn't printed:
-    sep = getSeparator(warningLimitExceededMsg);
   }
   ++warningCount;
 }
@@ -283,13 +280,9 @@ void ErrorHandler::error(const Twine &msg) {
 
     if (errorLimit == 0 || errorCount < errorLimit) {
       reportDiagnostic(getLocation(msg), Colors::RED, "error", msg);
-      sep = getSeparator(msg);
     } else if (errorCount == errorLimit) {
       reportDiagnostic(logName, Colors::RED, "error", errorLimitExceededMsg);
       exit = exitEarly;
-      // Set separator based on limit exceeded flag and not the message that
-      // wasn't printed:
-      sep = getSeparator(errorLimitExceededMsg);
     }
 
     ++errorCount;
