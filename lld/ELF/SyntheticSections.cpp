@@ -1589,6 +1589,10 @@ DynamicSection<ELFT>::computeContents() {
     addInSec(DT_GNU_HASH, *part.gnuHashTab);
   if (part.hashTab && part.hashTab->getParent())
     addInSec(DT_HASH, *part.hashTab);
+  if (in.compartStrTab) {
+    addInSec(DT_C18N_STRTAB, *in.compartStrTab);
+    addInt(DT_C18N_STRTABSZ, in.compartStrTab->getSize());
+  }
 
   if (isMain) {
     if (Out::preinitArray) {
@@ -4066,6 +4070,7 @@ void InStruct::reset() {
   riscvAttributes.reset();
   bss.reset();
   bssRelRo.reset();
+  compartStrTab.reset();
   got.reset();
   gotPlt.reset();
   igotPlt.reset();
