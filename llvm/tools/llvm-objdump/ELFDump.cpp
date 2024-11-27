@@ -241,6 +241,9 @@ static void printProgramHeaders(const ELFFile<ELFT> &Obj, StringRef FileName) {
     case ELF::PT_CHERI_PCC:
       outs() << "CHERI_PCC ";
       break;
+    case ELF::PT_C18N_NAME:
+      outs() << "C18N_NAME ";
+      break;
     case ELF::PT_INTERP:
       outs() << "  INTERP ";
       break;
