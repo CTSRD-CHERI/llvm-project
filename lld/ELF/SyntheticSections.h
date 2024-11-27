@@ -1309,6 +1309,7 @@ struct InStruct {
   std::unique_ptr<SyntheticSection> riscvAttributes;
   std::unique_ptr<BssSection> bss;
   std::unique_ptr<BssSection> bssRelRo;
+  std::unique_ptr<StringTableSection> compartStrTab;
   std::unique_ptr<GotSection> got;
   std::unique_ptr<GotPltSection> gotPlt;
   std::unique_ptr<IgotPltSection> igotPlt;
@@ -1348,6 +1349,7 @@ struct Compartment {
   size_t index;
 
   StringRef name;
+  unsigned nameIndex;
 
   std::string suffix;
 
@@ -1362,6 +1364,7 @@ struct Compartment {
   std::unique_ptr<RelocationBaseSection> relaPlt;
   std::unique_ptr<RelocationBaseSection> relaIplt;
 
+  PhdrEntry *phdr;
   PhdrEntry *relRo;
   PhdrEntry *cheriBounds;
 };
