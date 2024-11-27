@@ -1423,6 +1423,8 @@ enum {
 
   PT_CHERI_PCC = 0x64348450,
 
+  PT_C18N_NAME = 0x64331380,
+
   // ARM program header types.
   PT_ARM_ARCHEXT = 0x70000000, // Platform architecture compatibility info
   // These all contain stack unwind tables.

@@ -1475,6 +1475,8 @@ static StringRef segmentTypeToString(unsigned Arch, unsigned Type) {
     LLVM_READOBJ_ENUM_CASE(ELF, PT_OPENBSD_BOOTDATA);
 
     LLVM_READOBJ_ENUM_CASE(ELF, PT_CHERI_PCC);
+
+    LLVM_READOBJ_ENUM_CASE(ELF, PT_C18N_NAME);
   default:
     return "";
   }
@@ -2504,6 +2506,7 @@ std::string ELFDumper<ELFT>::getDynamicEntry(uint64_t Type,
   case DT_RELRENT:
   case DT_ANDROID_RELSZ:
   case DT_ANDROID_RELASZ:
+  case DT_C18N_STRTABSZ:
     return std::to_string(Value) + " (bytes)";
   case DT_NEEDED:
   case DT_SONAME:
