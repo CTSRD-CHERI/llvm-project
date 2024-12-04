@@ -103,9 +103,16 @@ body:             |
   bb.0 (%ir-block.0):
     liveins: $c12, $a0
 
+
     ; CHECK-LABEL: name: test_bounded_stack
-    ; CHECK: liveins: $c12, $a0{{$}}
-    ; CHECK: $c11 = CIncOffset $c11, killed $at_64
+    ; CHECK: liveins: $c12, $a0
+    ; CHECK-NEXT: {{  $}}
+    ; CHECK-NEXT: $at_64 = DADDiu $zero_64, 1
+    ; CHECK-NEXT: $at_64 = DSLL killed $at_64, 48
+    ; CHECK-NEXT: $at_64 = DADDiu killed $at_64, -1
+    ; CHECK-NEXT: $at_64 = DSLL killed $at_64, 16
+    ; CHECK-NEXT: $at_64 = DADDiu killed $at_64, -14896
+    ; CHECK-NEXT: $c11 = CIncOffset $c11, killed $at_64
     ; CHECK-NEXT: CFI_INSTRUCTION def_cfa_offset 80432
 
     $c3 = CheriBoundedStackPseudoImm %stack.0.over_16_bit_imm , 0, 22

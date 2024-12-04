@@ -118,34 +118,45 @@ machineFunctionInfo: {}
 body:             |
   ; CHECK-LABEL: name: bar
   ; CHECK: bb.0.bb:
-  ; CHECK:   successors: %bb.1(0x80000000)
-  ; CHECK:   [[PseudoPccRelativeAddressPostRA:%[0-9]+]]:cherigpr = PseudoPccRelativeAddressPostRA &_CHERI_CAPABILITY_TABLE_, implicit-def dead early-clobber %9
-  ; CHECK:   [[DEF:%[0-9]+]]:gpr32 = IMPLICIT_DEF
-  ; CHECK:   [[LOADCAP_BigImm:%[0-9]+]]:cherigpr = LOADCAP_BigImm target-flags(mips-captable20) @global, [[PseudoPccRelativeAddressPostRA]] :: (load (s128) from cap-table)
-  ; CHECK: bb.1.bb16.lr.ph:
-  ; CHECK:   successors: %bb.2(0x80000000)
-  ; CHECK:   [[PHI:%[0-9]+]]:gpr32 = PHI [[DEF]], %bb.0, %5, %bb.5
-  ; CHECK:   [[LOADCAP:%[0-9]+]]:cherigpr = LOADCAP $zero_64, 0, [[LOADCAP_BigImm]] :: (dereferenceable load (s128) from @global, addrspace 200)
-  ; CHECK:   [[CMove:%[0-9]+]]:cherigpr = COPY $cnull
-  ; CHECK: bb.2.bb16:
-  ; CHECK:   successors: %bb.4(0x30000000), %bb.3(0x50000000)
-  ; CHECK:   [[PHI1:%[0-9]+]]:cherigpr = PHI [[CMove]], %bb.1, %4, %bb.4
-  ; CHECK:   BEQ [[PHI]], $zero, %bb.4, implicit-def dead $at
-  ; CHECK:   B %bb.3, implicit-def dead $at
-  ; CHECK: bb.3.bb19:
-  ; CHECK:   successors: %bb.4(0x80000000)
-  ; CHECK:   [[LOADCAP1:%[0-9]+]]:cherigpr = LOADCAP $zero_64, 176, [[LOADCAP]] :: (load (s128) from %ir.2, addrspace 200)
-  ; CHECK:   [[CAPLOAD64_:%[0-9]+]]:gpr64 = CAPLOAD64 $zero_64, 48, killed [[LOADCAP1]] :: (load (s64) from %ir.tmp24, align 16, addrspace 200)
-  ; CHECK:   [[CIncOffset:%[0-9]+]]:cherigpr = CIncOffset $cnull, killed [[CAPLOAD64_]]
-  ; CHECK: bb.4.bb28:
-  ; CHECK:   successors: %bb.5(0x04000000), %bb.2(0x7c000000)
-  ; CHECK:   [[PHI2:%[0-9]+]]:cherigpr = PHI [[PHI1]], %bb.2, [[CIncOffset]], %bb.3
-  ; CHECK:   CBNZ [[PHI2]], %bb.2, implicit-def dead $at
-  ; CHECK:   B %bb.5, implicit-def dead $at
-  ; CHECK: bb.5.bb30:
-  ; CHECK:   successors: %bb.1(0x80000000)
-  ; CHECK:   [[SLL:%[0-9]+]]:gpr32 = SLL [[PHI]], 1
-  ; CHECK:   B %bb.1, implicit-def dead $at
+  ; CHECK-NEXT:   successors: %bb.1(0x80000000)
+  ; CHECK-NEXT: {{  $}}
+  ; CHECK-NEXT:   [[PseudoPccRelativeAddressPostRA:%[0-9]+]]:cherigpr = PseudoPccRelativeAddressPostRA &_CHERI_CAPABILITY_TABLE_, implicit-def dead early-clobber %9
+  ; CHECK-NEXT:   [[DEF:%[0-9]+]]:gpr32 = IMPLICIT_DEF
+  ; CHECK-NEXT:   [[LOADCAP_BigImm:%[0-9]+]]:cherigpr = LOADCAP_BigImm target-flags(mips-captable20) @global, [[PseudoPccRelativeAddressPostRA]] :: (load (s128) from cap-table)
+  ; CHECK-NEXT: {{  $}}
+  ; CHECK-NEXT: bb.1.bb16.lr.ph:
+  ; CHECK-NEXT:   successors: %bb.2(0x80000000)
+  ; CHECK-NEXT: {{  $}}
+  ; CHECK-NEXT:   [[PHI:%[0-9]+]]:gpr32 = PHI [[DEF]], %bb.0, %5, %bb.5
+  ; CHECK-NEXT:   [[LOADCAP:%[0-9]+]]:cherigpr = LOADCAP $zero_64, 0, [[LOADCAP_BigImm]] :: (dereferenceable load (s128) from @global, addrspace 200)
+  ; CHECK-NEXT:   [[COPY:%[0-9]+]]:cherigpr = COPY $cnull
+  ; CHECK-NEXT: {{  $}}
+  ; CHECK-NEXT: bb.2.bb16:
+  ; CHECK-NEXT:   successors: %bb.4(0x30000000), %bb.3(0x50000000)
+  ; CHECK-NEXT: {{  $}}
+  ; CHECK-NEXT:   [[PHI1:%[0-9]+]]:cherigpr = PHI [[COPY]], %bb.1, %4, %bb.4
+  ; CHECK-NEXT:   BEQ [[PHI]], $zero, %bb.4, implicit-def dead $at
+  ; CHECK-NEXT:   B %bb.3, implicit-def dead $at
+  ; CHECK-NEXT: {{  $}}
+  ; CHECK-NEXT: bb.3.bb19:
+  ; CHECK-NEXT:   successors: %bb.4(0x80000000)
+  ; CHECK-NEXT: {{  $}}
+  ; CHECK-NEXT:   [[LOADCAP1:%[0-9]+]]:cherigpr = LOADCAP $zero_64, 176, [[LOADCAP]] :: (load (s128) from %ir.2, addrspace 200)
+  ; CHECK-NEXT:   [[CAPLOAD64_:%[0-9]+]]:gpr64 = CAPLOAD64 $zero_64, 48, killed [[LOADCAP1]] :: (load (s64) from %ir.tmp24, align 16, addrspace 200)
+  ; CHECK-NEXT:   [[CIncOffset:%[0-9]+]]:cherigpr = CIncOffset $cnull, killed [[CAPLOAD64_]]
+  ; CHECK-NEXT: {{  $}}
+  ; CHECK-NEXT: bb.4.bb28:
+  ; CHECK-NEXT:   successors: %bb.5(0x04000000), %bb.2(0x7c000000)
+  ; CHECK-NEXT: {{  $}}
+  ; CHECK-NEXT:   [[PHI2:%[0-9]+]]:cherigpr = PHI [[PHI1]], %bb.2, [[CIncOffset]], %bb.3
+  ; CHECK-NEXT:   CBNZ [[PHI2]], %bb.2, implicit-def dead $at
+  ; CHECK-NEXT:   B %bb.5, implicit-def dead $at
+  ; CHECK-NEXT: {{  $}}
+  ; CHECK-NEXT: bb.5.bb30:
+  ; CHECK-NEXT:   successors: %bb.1(0x80000000)
+  ; CHECK-NEXT: {{  $}}
+  ; CHECK-NEXT:   [[SLL:%[0-9]+]]:gpr32 = SLL [[PHI]], 1
+  ; CHECK-NEXT:   B %bb.1, implicit-def dead $at
   bb.0.bb:
     successors: %bb.1(0x80000000)
 

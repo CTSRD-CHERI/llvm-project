@@ -59,13 +59,13 @@ body:             |
   bb.0 (%ir-block.0):
     ; CHECK-LABEL: name: a
     ; CHECK: renamable $c1 = PseudoPccRelativeAddressPostRA &_CHERI_CAPABILITY_TABLE_, implicit-def dead early-clobber renamable $at_64
-    ; CHECK: ADJCALLSTACKCAPDOWN 0, 0, implicit-def dead $c11, implicit $c11
-    ; CHECK: renamable $c12 = LOADCAP_BigImm target-flags(mips-captable20-call) @b, killed renamable $c1 :: (load (s128) from call-entry @b)
-    ; CHECK: $c13 = COPY $cnull
-    ; CHECK: CapJumpLinkPseudo $c12, csr_cheri_purecap, implicit-def dead $c17, implicit-def dead $c26, implicit killed $c13, implicit-def $c11, implicit-def $v0
-    ; CHECK: ADJCALLSTACKCAPUP 0, 0, implicit-def dead $c11, implicit $c11
-    ; CHECK: $c13 = COPY $cnull
-    ; CHECK: CapRetPseudo implicit $v0, implicit killed $c13
+    ; CHECK-NEXT: ADJCALLSTACKCAPDOWN 0, 0, implicit-def dead $c11, implicit $c11
+    ; CHECK-NEXT: renamable $c12 = LOADCAP_BigImm target-flags(mips-captable20-call) @b, killed renamable $c1 :: (load (s128) from call-entry @b)
+    ; CHECK-NEXT: $c13 = COPY $cnull
+    ; CHECK-NEXT: CapJumpLinkPseudo $c12, csr_cheri_purecap, implicit-def dead $c17, implicit-def dead $c26, implicit killed $c13, implicit-def $c11, implicit-def $v0
+    ; CHECK-NEXT: ADJCALLSTACKCAPUP 0, 0, implicit-def dead $c11, implicit $c11
+    ; CHECK-NEXT: $c13 = COPY $cnull
+    ; CHECK-NEXT: CapRetPseudo implicit $v0, implicit killed $c13
     renamable $c1 = PseudoPccRelativeAddressPostRA &_CHERI_CAPABILITY_TABLE_, implicit-def dead early-clobber renamable $at_64
     ADJCALLSTACKCAPDOWN 0, 0, implicit-def dead $c11, implicit $c11
     renamable $c12 = LOADCAP_BigImm target-flags(mips-captable20-call) @b, killed renamable $c1 :: (load (s128) from call-entry @b)

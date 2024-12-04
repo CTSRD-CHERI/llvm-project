@@ -79,20 +79,25 @@ machineFunctionInfo: {}
 body:             |
   ; CHECK-LABEL: name: d
   ; CHECK: bb.0.entry:
-  ; CHECK:   successors: %bb.1(0x80000000)
-  ; CHECK:   [[PseudoPccRelativeAddressPostRA:%[0-9]+]]:cherigpr = PseudoPccRelativeAddressPostRA &_CHERI_CAPABILITY_TABLE_, implicit-def dead early-clobber %2
-  ; CHECK:   [[LOADCAP_BigImm:%[0-9]+]]:cherigpr = LOADCAP_BigImm target-flags(mips-captable20) @b, [[PseudoPccRelativeAddressPostRA]] :: (load (s128) from cap-table)
-  ; CHECK:   [[CAPLOAD16_:%[0-9]+]]:gpr64 = CAPLOAD16 $zero_64, 0, killed [[LOADCAP_BigImm]] :: (dereferenceable load (s16) from @b, addrspace 200)
-  ; CHECK:   [[DSLL:%[0-9]+]]:gpr64 = DSLL killed [[CAPLOAD16_]], 2
-  ; CHECK:   [[LOADCAP_BigImm1:%[0-9]+]]:cherigpr = LOADCAP_BigImm target-flags(mips-captable20) @a, [[PseudoPccRelativeAddressPostRA]] :: (load (s128) from cap-table)
-  ; CHECK:   [[CIncOffsetImm:%[0-9]+]]:cherigpr = CIncOffsetImm killed [[LOADCAP_BigImm1]], 1
-  ; CHECK: bb.1.other_block:
-  ; CHECK:   successors: %bb.2(0x80000000)
-  ; CHECK:   B %bb.2, implicit-def dead $at
-  ; CHECK: bb.2.for.cond:
-  ; CHECK:   successors: %bb.1(0x80000000)
-  ; CHECK:   CAPSTORE32 killed $zero, [[DSLL]], 0, [[CIncOffsetImm]] :: (store (s32) into %ir.2, addrspace 200)
-  ; CHECK:   B %bb.1, implicit-def dead $at
+  ; CHECK-NEXT:   successors: %bb.1(0x80000000)
+  ; CHECK-NEXT: {{  $}}
+  ; CHECK-NEXT:   [[PseudoPccRelativeAddressPostRA:%[0-9]+]]:cherigpr = PseudoPccRelativeAddressPostRA &_CHERI_CAPABILITY_TABLE_, implicit-def dead early-clobber %2
+  ; CHECK-NEXT:   [[LOADCAP_BigImm:%[0-9]+]]:cherigpr = LOADCAP_BigImm target-flags(mips-captable20) @b, [[PseudoPccRelativeAddressPostRA]] :: (load (s128) from cap-table)
+  ; CHECK-NEXT:   [[CAPLOAD16_:%[0-9]+]]:gpr64 = CAPLOAD16 $zero_64, 0, killed [[LOADCAP_BigImm]] :: (dereferenceable load (s16) from @b, addrspace 200)
+  ; CHECK-NEXT:   [[DSLL:%[0-9]+]]:gpr64 = DSLL killed [[CAPLOAD16_]], 2
+  ; CHECK-NEXT:   [[LOADCAP_BigImm1:%[0-9]+]]:cherigpr = LOADCAP_BigImm target-flags(mips-captable20) @a, [[PseudoPccRelativeAddressPostRA]] :: (load (s128) from cap-table)
+  ; CHECK-NEXT:   [[CIncOffsetImm:%[0-9]+]]:cherigpr = CIncOffsetImm killed [[LOADCAP_BigImm1]], 1
+  ; CHECK-NEXT: {{  $}}
+  ; CHECK-NEXT: bb.1.other_block:
+  ; CHECK-NEXT:   successors: %bb.2(0x80000000)
+  ; CHECK-NEXT: {{  $}}
+  ; CHECK-NEXT:   B %bb.2, implicit-def dead $at
+  ; CHECK-NEXT: {{  $}}
+  ; CHECK-NEXT: bb.2.for.cond:
+  ; CHECK-NEXT:   successors: %bb.1(0x80000000)
+  ; CHECK-NEXT: {{  $}}
+  ; CHECK-NEXT:   CAPSTORE32 killed $zero, [[DSLL]], 0, [[CIncOffsetImm]] :: (store (s32) into %ir.2, addrspace 200)
+  ; CHECK-NEXT:   B %bb.1, implicit-def dead $at
   bb.0.entry:
     successors: %bb.1(0x80000000)
 

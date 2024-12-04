@@ -156,18 +156,40 @@ stack:           []
 constants:       []
 body:             |
   ; CHECK-LABEL: name: foo
-  ; CHECK:      bb.0.entry:
+  ; CHECK: bb.0.entry:
   ; CHECK-NEXT:   successors: %bb.1(0x40000000), %bb.2(0x40000000)
   ; CHECK-NEXT:   liveins: $c3
-  ; CHECK:        DBG_VALUE $c3, $noreg, !18, !DIExpression(), debug-location !21
+  ; CHECK-NEXT: {{  $}}
+  ; CHECK-NEXT:   DBG_VALUE $c3, $noreg, !18, !DIExpression(), debug-location !21
   ; CHECK-NEXT:   [[COPY:%[0-9]+]]:cherigpr = COPY $c3
   ; CHECK-NEXT:   DBG_VALUE [[COPY]], $noreg, !18, !DIExpression(), debug-location !21
   ; CHECK-NEXT:   INLINEASM &"li $$zero, 1", 25 /* sideeffect mayload maystore attdialect */, 12 /* clobber */, implicit-def early-clobber $at, !23, debug-location !22
-  ; This used to keep the cincoffsetimm even though it was only used by debug instructions
-  ; CHECK-NOT: CIncOffsetImm
-  ; The DBG_VALUE should have been updated to use $noreg:
-  ; CHECK-NEXT: DBG_VALUE %4:cherigpr, $noreg, !19, !DIExpression(), debug-location !26
+  ; CHECK-NEXT:   DBG_VALUE %4:cherigpr, $noreg, !19, !DIExpression(), debug-location !26
   ; CHECK-NEXT:   [[CAPLOAD32_:%[0-9]+]]:gpr32 = CAPLOAD32 $zero_64, 160, [[COPY]], debug-location !27 :: (load (s32) from %ir.0, !tbaa !28, addrspace 200)
+  ; CHECK-NEXT:   DBG_VALUE [[CAPLOAD32_]], $noreg, !20, !DIExpression(), debug-location !32
+  ; CHECK-NEXT:   INLINEASM &"li $$zero, 2", 25 /* sideeffect mayload maystore attdialect */, 12 /* clobber */, implicit-def early-clobber $at, !34, debug-location !33
+  ; CHECK-NEXT:   [[CAPLOADU832_:%[0-9]+]]:gpr32 = CAPLOADU832 $zero_64, 4, [[COPY]], debug-location !35 :: (load (s8) from %ir.arrayidx1, !tbaa !37, addrspace 200)
+  ; CHECK-NEXT:   [[ADDiu:%[0-9]+]]:gpr32 = ADDiu $zero, 97
+  ; CHECK-NEXT:   BNE killed [[CAPLOADU832_]], killed [[ADDiu]], %bb.2, implicit-def dead $at, debug-location !39
+  ; CHECK-NEXT:   B %bb.1, implicit-def dead $at, debug-location !39
+  ; CHECK-NEXT: {{  $}}
+  ; CHECK-NEXT: bb.1.if.then:
+  ; CHECK-NEXT:   successors: %bb.2(0x80000000)
+  ; CHECK-NEXT: {{  $}}
+  ; CHECK-NEXT:   INLINEASM &"li $$zero, 3", 25 /* sideeffect mayload maystore attdialect */, 12 /* clobber */, implicit-def early-clobber $at, !42, debug-location !40
+  ; CHECK-NEXT:   [[CAPLOAD32_1:%[0-9]+]]:gpr32 = CAPLOAD32 $zero_64, 160, [[COPY]], debug-location !43 :: (load (s32) from %ir.3, !tbaa !28, addrspace 200)
+  ; CHECK-NEXT:   [[ADDu:%[0-9]+]]:gpr32 = nsw ADDu killed [[CAPLOAD32_1]], [[CAPLOAD32_]], debug-location !44
+  ; CHECK-NEXT:   DBG_VALUE [[ADDu]], $noreg, !20, !DIExpression(), debug-location !32
+  ; CHECK-NEXT: {{  $}}
+  ; CHECK-NEXT: bb.2.if.end:
+  ; CHECK-NEXT:   [[PHI:%[0-9]+]]:gpr32 = PHI [[CAPLOAD32_]], %bb.0, [[ADDu]], %bb.1, debug-location !46
+  ;; This used to keep the cincoffsetimm even though it was only used by debug instructions
+  ;; The DBG_VALUE should have been updated to use $noreg:
+  ; CHECK-NEXT:   DBG_VALUE [[PHI]], $noreg, !20, !DIExpression(), debug-location !32
+  ; CHECK-NEXT:   INLINEASM &"li $$zero, 4", 25 /* sideeffect mayload maystore attdialect */, 12 /* clobber */, implicit-def early-clobber $at, !48, debug-location !47
+  ; CHECK-NEXT:   [[SLL64_32_:%[0-9]+]]:gpr64 = SLL64_32 [[PHI]], debug-location !49
+  ; CHECK-NEXT:   $v0_64 = COPY [[SLL64_32_]], debug-location !49
+  ; CHECK-NEXT:   CapRetPseudo implicit $v0_64, debug-location !49
 
   bb.0.entry:
     successors: %bb.1(0x40000000), %bb.2(0x40000000)

@@ -119,5 +119,3 @@ entry:
 }
 
 declare i32 @au_preselect(i16 signext, %struct.au_mask addrspace(200)*, i32, i32)
-
-attributes #0 = { align=4 }

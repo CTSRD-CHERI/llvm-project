@@ -102,9 +102,16 @@ body:             |
   bb.0 (%ir-block.0):
     liveins: $c12, $a0
 
+
     ; CHECK-LABEL: name: _ZN19QWebSettingsPrivate5applyEv
-    ; CHECK: liveins: $c12, $a0{{$}}
-    ; CHECK: $c11 = CIncOffset $c11, killed $at_64
+    ; CHECK: liveins: $c12, $a0
+    ; CHECK-NEXT: {{  $}}
+    ; CHECK-NEXT: $at_64 = DADDiu $zero_64, 1
+    ; CHECK-NEXT: $at_64 = DSLL killed $at_64, 48
+    ; CHECK-NEXT: $at_64 = DADDiu killed $at_64, -1
+    ; CHECK-NEXT: $at_64 = DSLL killed $at_64, 16
+    ; CHECK-NEXT: $at_64 = DADDiu killed $at_64, -14896
+    ; CHECK-NEXT: $c11 = CIncOffset $c11, killed $at_64
     ; CHECK-NEXT: CFI_INSTRUCTION def_cfa_offset 80432
 
     CAPSTORE8 killed $zero_64, $zero_64, 0, %stack.6.tiny_imm :: (store (s8) into %ir.tiny_imm, align 4, addrspace 200)

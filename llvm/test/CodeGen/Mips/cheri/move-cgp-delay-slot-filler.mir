@@ -77,13 +77,15 @@ body:             |
     liveins: $c26, $s0_64, $c18, $c17
 
     ; CHECK-LABEL: name: a
-    ; CHECK:      $c11 = CIncOffsetImm $c11, -48
+    ; CHECK: liveins: $c26, $s0_64, $c18, $c17
+    ; CHECK-NEXT: {{  $}}
+    ; CHECK-NEXT: $c11 = CIncOffsetImm $c11, -48
     ; CHECK-NEXT: CAPSTORE64 killed $s0_64, $zero_64, 40, $c11 :: (store (s64) into %stack.0)
     ; CHECK-NEXT: STORECAP killed $c18, $zero_64, 16, $c11 :: (store (s128) into %stack.1)
     ; CHECK-NEXT: STORECAP killed $c17, $zero_64, 0, $c11 :: (store (s128) into %stack.2)
     ; CHECK-NEXT: $c18 = CMove $c26
     ; CHECK-NEXT: renamable $c12 = LOADCAP_BigImm target-flags(mips-captable20-call) @external_fn1, renamable $c18 :: (load (s128) from call-entry @external_fn1)
-    ; $c26 = CMove $c18 was not moved into the delay slot previously
+    ;; $c26 = CMove $c18 was not moved into the delay slot previously
     ; CHECK-NEXT: CapJumpLinkPseudo $c12, csr_cheri_purecap, implicit-def dead $c17, implicit-def dead $c26, implicit $c26, implicit-def $c11, implicit-def $v0 {
     ; CHECK-NEXT:   $c26 = CMove $c18
     ; CHECK-NEXT: }

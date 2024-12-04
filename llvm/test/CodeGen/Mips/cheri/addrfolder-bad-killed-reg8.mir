@@ -107,27 +107,31 @@ machineFunctionInfo: {}
 body:             |
   ; CHECK-LABEL: name: __bt_pgout
   ; CHECK: bb.0.entry:
-  ; CHECK:   successors: %bb.2(0x40000000), %bb.1(0x40000000)
-  ; CHECK:   liveins: $c3
-  ; CHECK:   [[COPY:%[0-9]+]]:cherigpr = COPY $c3
-  ; CHECK:   [[CIncOffsetImm:%[0-9]+]]:cherigpr = CIncOffsetImm $cnull, 20
-  ; CHECK:   [[CAPLOADU16_:%[0-9]+]]:gpr64 = CAPLOADU16 $zero_64, 0, killed [[CIncOffsetImm]] :: (load (s16) from `i16 addrspace(200)* getelementptr ([1 x i16], [1 x i16] addrspace(200)* inttoptr (i64 20 to [1 x i16] addrspace(200)*), i64 0, i64 undef)`, addrspace 200)
-  ; CHECK:   CAPSTORE8 killed $zero_64, [[CAPLOADU16_]], 0, [[COPY]] :: (store (s8) into %ir.add.ptr, addrspace 200)
-  ; CHECK:   [[CAPLOADU832_:%[0-9]+]]:gpr32 = CAPLOADU832 [[CAPLOADU16_]], 4, [[COPY]] :: (load (s8) from %ir.add.ptr33, addrspace 200)
-  ; CHECK:   [[ANDi:%[0-9]+]]:gpr32 = ANDi killed [[CAPLOADU832_]], 2
-  ; CHECK:   BEQ killed [[ANDi]], $zero, %bb.2, implicit-def dead $at
-  ; CHECK:   B %bb.1, implicit-def dead $at
-  ; CHECK: bb.1.if.then37:
-  ; CHECK:   successors: %bb.2(0x80000000)
-  ; CHECK:   [[CIncOffsetImm1:%[0-9]+]]:cherigpr = CIncOffsetImm [[COPY]], 5
-  ; CHECK:   [[CAPLOAD32_:%[0-9]+]]:gpr32 = CAPLOAD32 [[CAPLOADU16_]], 0, killed [[CIncOffsetImm1]] :: (load (s32) from %ir.3, addrspace 200)
-  ; CHECK:   [[SRL:%[0-9]+]]:gpr32 = SRL killed [[CAPLOAD32_]], 24
-  ; CHECK:   [[DEF:%[0-9]+]]:gpr64 = IMPLICIT_DEF
-  ; CHECK:   [[INSERT_SUBREG:%[0-9]+]]:gpr64 = INSERT_SUBREG [[DEF]], killed [[SRL]], %subreg.sub_32
-  ; CHECK:   [[CIncOffsetImm2:%[0-9]+]]:cherigpr = CIncOffsetImm $cnull, 3
-  ; CHECK:   CAPSTORE8 killed [[INSERT_SUBREG]], $zero_64, 0, killed [[CIncOffsetImm2]] :: (store (s8) into `i8 addrspace(200)* inttoptr (i64 3 to i8 addrspace(200)*)`, addrspace 200)
-  ; CHECK: bb.2.if.end58:
-  ; CHECK:   TRAP
+  ; CHECK-NEXT:   successors: %bb.2(0x40000000), %bb.1(0x40000000)
+  ; CHECK-NEXT:   liveins: $c3
+  ; CHECK-NEXT: {{  $}}
+  ; CHECK-NEXT:   [[COPY:%[0-9]+]]:cherigpr = COPY $c3
+  ; CHECK-NEXT:   [[CIncOffsetImm:%[0-9]+]]:cherigpr = CIncOffsetImm $cnull, 20
+  ; CHECK-NEXT:   [[CAPLOADU16_:%[0-9]+]]:gpr64 = CAPLOADU16 $zero_64, 0, killed [[CIncOffsetImm]] :: (load (s16) from `i16 addrspace(200)* getelementptr ([1 x i16], [1 x i16] addrspace(200)* inttoptr (i64 20 to [1 x i16] addrspace(200)*), i64 0, i64 undef)`, addrspace 200)
+  ; CHECK-NEXT:   CAPSTORE8 killed $zero_64, [[CAPLOADU16_]], 0, [[COPY]] :: (store (s8) into %ir.add.ptr, addrspace 200)
+  ; CHECK-NEXT:   [[CAPLOADU832_:%[0-9]+]]:gpr32 = CAPLOADU832 [[CAPLOADU16_]], 4, [[COPY]] :: (load (s8) from %ir.add.ptr33, addrspace 200)
+  ; CHECK-NEXT:   [[ANDi:%[0-9]+]]:gpr32 = ANDi killed [[CAPLOADU832_]], 2
+  ; CHECK-NEXT:   BEQ killed [[ANDi]], $zero, %bb.2, implicit-def dead $at
+  ; CHECK-NEXT:   B %bb.1, implicit-def dead $at
+  ; CHECK-NEXT: {{  $}}
+  ; CHECK-NEXT: bb.1.if.then37:
+  ; CHECK-NEXT:   successors: %bb.2(0x80000000)
+  ; CHECK-NEXT: {{  $}}
+  ; CHECK-NEXT:   [[CIncOffsetImm1:%[0-9]+]]:cherigpr = CIncOffsetImm [[COPY]], 5
+  ; CHECK-NEXT:   [[CAPLOAD32_:%[0-9]+]]:gpr32 = CAPLOAD32 [[CAPLOADU16_]], 0, killed [[CIncOffsetImm1]] :: (load (s32) from %ir.3, addrspace 200)
+  ; CHECK-NEXT:   [[SRL:%[0-9]+]]:gpr32 = SRL killed [[CAPLOAD32_]], 24
+  ; CHECK-NEXT:   [[DEF:%[0-9]+]]:gpr64 = IMPLICIT_DEF
+  ; CHECK-NEXT:   [[INSERT_SUBREG:%[0-9]+]]:gpr64 = INSERT_SUBREG [[DEF]], killed [[SRL]], %subreg.sub_32
+  ; CHECK-NEXT:   [[CIncOffsetImm2:%[0-9]+]]:cherigpr = CIncOffsetImm $cnull, 3
+  ; CHECK-NEXT:   CAPSTORE8 killed [[INSERT_SUBREG]], $zero_64, 0, killed [[CIncOffsetImm2]] :: (store (s8) into `i8 addrspace(200)* inttoptr (i64 3 to i8 addrspace(200)*)`, addrspace 200)
+  ; CHECK-NEXT: {{  $}}
+  ; CHECK-NEXT: bb.2.if.end58:
+  ; CHECK-NEXT:   TRAP
   bb.0.entry:
     successors: %bb.2(0x40000000), %bb.1(0x40000000)
     liveins: $c3

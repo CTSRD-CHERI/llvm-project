@@ -102,21 +102,24 @@ machineFunctionInfo: {}
 body:             |
   ; CHECK-LABEL: name: f
   ; CHECK: bb.0.entry:
-  ; CHECK:   successors: %bb.1(0x80000000)
-  ; CHECK:   [[PseudoPccRelativeAddressPostRA:%[0-9]+]]:cherigpr = PseudoPccRelativeAddressPostRA &_CHERI_CAPABILITY_TABLE_, implicit-def dead early-clobber %2
-  ; CHECK:   [[LOADCAP_BigImm:%[0-9]+]]:cherigpr = LOADCAP_BigImm target-flags(mips-captable20) @f, [[PseudoPccRelativeAddressPostRA]] :: (load (s128) from cap-table)
-  ; CHECK:   [[CAPLOAD16_:%[0-9]+]]:gpr64 = CAPLOAD16 $zero_64, 6, [[LOADCAP_BigImm]] :: (load (s16) from `i16 addrspace(200)* getelementptr (%struct.d.0.1.2.3.6.7.32, %struct.d.0.1.2.3.6.7.32 addrspace(200)* bitcast (void () addrspace(200)* @f to %struct.d.0.1.2.3.6.7.32 addrspace(200)*), i64 0, i32 2, i64 0)`, addrspace 200)
-  ; CHECK:   [[DSLL:%[0-9]+]]:gpr64 = DSLL killed [[CAPLOAD16_]], 3
-  ; CHECK:   [[CIncOffset:%[0-9]+]]:cherigpr = CIncOffset [[LOADCAP_BigImm]], [[DSLL]]
-  ; CHECK:   [[CIncOffsetImm:%[0-9]+]]:cherigpr = CIncOffsetImm [[LOADCAP_BigImm]], 1
-  ; CHECK: bb.1.for.cond:
-  ; CHECK:   successors: %bb.1(0x80000000)
-  ; CHECK:   [[CAPLOAD3264_:%[0-9]+]]:gpr64 = CAPLOAD3264 [[DSLL]], 0, [[CIncOffsetImm]] :: (load (s32) from %ir.2, addrspace 200)
-  ; CHECK:   [[DADDiu:%[0-9]+]]:gpr64 = nsw DADDiu killed [[CAPLOAD3264_]], 3
-  ; CHECK:   [[CSetAddr:%[0-9]+]]:cherigpr = CSetAddr killed $cnull, killed [[DADDiu]]
-  ; CHECK:   [[CAPLOAD8_:%[0-9]+]]:gpr64 = CAPLOAD8 $zero_64, 0, killed [[CSetAddr]] :: (load (s8) from %ir.5, addrspace 200)
-  ; CHECK:   CAPSTORE8 killed [[CAPLOAD8_]], $zero_64, 1, [[CIncOffset]] :: (store (s8) into %ir.sunkaddr1, addrspace 200)
-  ; CHECK:   B %bb.1, implicit-def dead $at
+  ; CHECK-NEXT:   successors: %bb.1(0x80000000)
+  ; CHECK-NEXT: {{  $}}
+  ; CHECK-NEXT:   [[PseudoPccRelativeAddressPostRA:%[0-9]+]]:cherigpr = PseudoPccRelativeAddressPostRA &_CHERI_CAPABILITY_TABLE_, implicit-def dead early-clobber %2
+  ; CHECK-NEXT:   [[LOADCAP_BigImm:%[0-9]+]]:cherigpr = LOADCAP_BigImm target-flags(mips-captable20) @f, [[PseudoPccRelativeAddressPostRA]] :: (load (s128) from cap-table)
+  ; CHECK-NEXT:   [[CAPLOAD16_:%[0-9]+]]:gpr64 = CAPLOAD16 $zero_64, 6, [[LOADCAP_BigImm]] :: (load (s16) from `i16 addrspace(200)* getelementptr (%struct.d.0.1.2.3.6.7.32, %struct.d.0.1.2.3.6.7.32 addrspace(200)* bitcast (void () addrspace(200)* @f to %struct.d.0.1.2.3.6.7.32 addrspace(200)*), i64 0, i32 2, i64 0)`, addrspace 200)
+  ; CHECK-NEXT:   [[DSLL:%[0-9]+]]:gpr64 = DSLL killed [[CAPLOAD16_]], 3
+  ; CHECK-NEXT:   [[CIncOffset:%[0-9]+]]:cherigpr = CIncOffset [[LOADCAP_BigImm]], [[DSLL]]
+  ; CHECK-NEXT:   [[CIncOffsetImm:%[0-9]+]]:cherigpr = CIncOffsetImm [[LOADCAP_BigImm]], 1
+  ; CHECK-NEXT: {{  $}}
+  ; CHECK-NEXT: bb.1.for.cond:
+  ; CHECK-NEXT:   successors: %bb.1(0x80000000)
+  ; CHECK-NEXT: {{  $}}
+  ; CHECK-NEXT:   [[CAPLOAD3264_:%[0-9]+]]:gpr64 = CAPLOAD3264 [[DSLL]], 0, [[CIncOffsetImm]] :: (load (s32) from %ir.2, addrspace 200)
+  ; CHECK-NEXT:   [[DADDiu:%[0-9]+]]:gpr64 = nsw DADDiu killed [[CAPLOAD3264_]], 3
+  ; CHECK-NEXT:   [[CSetAddr:%[0-9]+]]:cherigpr = CSetAddr killed $cnull, killed [[DADDiu]]
+  ; CHECK-NEXT:   [[CAPLOAD8_:%[0-9]+]]:gpr64 = CAPLOAD8 $zero_64, 0, killed [[CSetAddr]] :: (load (s8) from %ir.5, addrspace 200)
+  ; CHECK-NEXT:   CAPSTORE8 killed [[CAPLOAD8_]], $zero_64, 1, [[CIncOffset]] :: (store (s8) into %ir.sunkaddr1, addrspace 200)
+  ; CHECK-NEXT:   B %bb.1, implicit-def dead $at
   bb.0.entry:
     successors: %bb.1(0x80000000)
 
