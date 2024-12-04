@@ -3,13 +3,13 @@
 ; RUN: %cheri_purecap_llc -o - %s -verify-machineinstrs | %cheri_FileCheck %s -check-prefix CHERI
 
 %struct.au_mask = type {}
-%struct.tokenstr = type { i8, i8*, i64, %union.anon }
+%struct.tokenstr = type { i8, ptr, i64, %union.anon }
 %union.anon = type { %struct.au_execarg_t }
-%struct.au_execarg_t = type { i32, [128 x i8 addrspace(200)*] }
+%struct.au_execarg_t = type { i32, [128 x ptr addrspace(200)] }
 
 @maskp = external addrspace(200) global %struct.au_mask
 
-define i32 @select_hdr32(%struct.tokenstr addrspace(200)* byval(%struct.tokenstr), i32 addrspace(200)* %optchkd) nounwind {
+define i32 @select_hdr32(ptr addrspace(200) byval(%struct.tokenstr) %0, ptr addrspace(200) %optchkd) #0 {
 ; MIPS-LABEL: select_hdr32:
 ; MIPS:       # %bb.0: # %entry
 ; MIPS-NEXT:    daddiu $sp, $sp, -80
@@ -55,15 +55,15 @@ define i32 @select_hdr32(%struct.tokenstr addrspace(200)* byval(%struct.tokenstr
 ; CHERI-NEXT:    cjr $c17
 ; CHERI-NEXT:    cincoffset $c11, $c11, 16
 entry:
-  %1 = getelementptr %struct.tokenstr, %struct.tokenstr addrspace(200)* %0, i64 0, i32 0
-  %tok.sroa.1.0..sroa_idx = getelementptr i8, i8 addrspace(200)* %1
-  %tok.sroa.1.0..sroa_cast = bitcast i8 addrspace(200)* %tok.sroa.1.0..sroa_idx to i16 addrspace(200)*
-  %tok.sroa.1.0.copyload = load i16, i16 addrspace(200)* %tok.sroa.1.0..sroa_cast
-  %call26 = call i32 @au_preselect(i16 %tok.sroa.1.0.copyload, %struct.au_mask addrspace(200)* @maskp, i32 3, i32 0)
+  %1 = getelementptr %struct.tokenstr, ptr addrspace(200) %0, i64 0, i32 0
+  %tok.sroa.1.0..sroa_idx = getelementptr i8, ptr addrspace(200) %1
+  %tok.sroa.1.0..sroa_cast = bitcast ptr addrspace(200) %tok.sroa.1.0..sroa_idx to ptr addrspace(200)
+  %tok.sroa.1.0.copyload = load i16, ptr addrspace(200) %tok.sroa.1.0..sroa_cast, align 2
+  %call26 = call i32 @au_preselect(i16 %tok.sroa.1.0.copyload, ptr addrspace(200) @maskp, i32 3, i32 0)
   ret i32 0
 }
 
-define i32 @foo(i512 addrspace(200)* byval(i512) %x, %struct.tokenstr addrspace(200)* byval(%struct.tokenstr), i32 addrspace(200)* %optchkd) nounwind {
+define i32 @foo(ptr addrspace(200) byval(i512) %x, ptr addrspace(200) byval(%struct.tokenstr) %0, ptr addrspace(200) %optchkd) #0 {
 ; MIPS-LABEL: foo:
 ; MIPS:       # %bb.0: # %entry
 ; MIPS-NEXT:    daddiu $sp, $sp, -80
@@ -110,12 +110,12 @@ define i32 @foo(i512 addrspace(200)* byval(i512) %x, %struct.tokenstr addrspace(
 ; CHERI-NEXT:    cjr $c17
 ; CHERI-NEXT:    cincoffset $c11, $c11, 32
 entry:
-  %1 = getelementptr %struct.tokenstr, %struct.tokenstr addrspace(200)* %0, i64 0, i32 0
-  %tok.sroa.1.0..sroa_idx = getelementptr i8, i8 addrspace(200)* %1
-  %tok.sroa.1.0..sroa_cast = bitcast i8 addrspace(200)* %tok.sroa.1.0..sroa_idx to i16 addrspace(200)*
-  %tok.sroa.1.0.copyload = load i16, i16 addrspace(200)* %tok.sroa.1.0..sroa_cast
-  %call26 = call i32 @au_preselect(i16 %tok.sroa.1.0.copyload, %struct.au_mask addrspace(200)* @maskp, i32 3, i32 0)
+  %1 = getelementptr %struct.tokenstr, ptr addrspace(200) %0, i64 0, i32 0
+  %tok.sroa.1.0..sroa_idx = getelementptr i8, ptr addrspace(200) %1
+  %tok.sroa.1.0..sroa_cast = bitcast ptr addrspace(200) %tok.sroa.1.0..sroa_idx to ptr addrspace(200)
+  %tok.sroa.1.0.copyload = load i16, ptr addrspace(200) %tok.sroa.1.0..sroa_cast, align 2
+  %call26 = call i32 @au_preselect(i16 %tok.sroa.1.0.copyload, ptr addrspace(200) @maskp, i32 3, i32 0)
   ret i32 0
 }
 
-declare i32 @au_preselect(i16 signext, %struct.au_mask addrspace(200)*, i32, i32)
+declare i32 @au_preselect(i16 signext, ptr addrspace(200), i32, i32)

@@ -10,9 +10,9 @@
   @cheri_errno = external thread_local(initialexec) global i32, align 4
 
   ; Function Attrs: noinline nounwind optnone
-  define void @test_sandbox_cs_clock_gettime_default() #0 {
+  define void @test_sandbox_cs_clock_gettime_default() addrspace(200) #0 {
   entry:
-    store i32 0, i32 addrspace(200)* addrspacecast (i32* @cheri_errno to i32 addrspace(200)*), align 4
+    store i32 0, ptr addrspace(200) addrspacecast (ptr @cheri_errno to ptr addrspace(200)), align 4
     unreachable
   }
 

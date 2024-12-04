@@ -11,11 +11,11 @@
 ; Function Attrs: noinline nounwind optnone
 define void @b() #0 {
 entry:
-  %0 = call i64 asm "dla $0, _DYNAMIC\0A\09", "=r,~{$1}"() #1, !srcloc !2
+  %0 = call i64 asm "dla $0, _DYNAMIC\0A\09", "=r,~{$1}"(), !srcloc !2
 
   ; CHECK: <inline asm>:1:2: error: Can't expand $gp-relative in cap-table mode
   ; CHECK:       dla $2, _DYNAMIC
-  store i64 %0, i64 addrspace(200)* @a, align 8
+  store i64 %0, ptr addrspace(200) @a, align 8
   ret void
 }
 

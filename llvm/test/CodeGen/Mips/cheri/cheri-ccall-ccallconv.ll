@@ -2,7 +2,7 @@
 ; RUN: %cheri_llc -frame-pointer=all %s -relocation-model=pic -o - | FileCheck %s
 
 ; Function Attrs: nounwind
-define void @a(i8 addrspace(200)* %a1, i8 addrspace(200)* %a2, i64 %foo, i64 %bar) #0 {
+define void @a(ptr addrspace(200) %a1, ptr addrspace(200) %a2, i64 %foo, i64 %bar) #0 {
 ; CHECK-LABEL: a:
 ; CHECK:       # %bb.0:
 ; CHECK-NEXT:    daddiu $sp, $sp, -32
@@ -48,11 +48,11 @@ define void @a(i8 addrspace(200)* %a1, i8 addrspace(200)* %a2, i64 %foo, i64 %ba
 ; CHECK-NEXT:    ld $ra, 24($sp) # 8-byte Folded Reload
 ; CHECK-NEXT:    jr $ra
 ; CHECK-NEXT:    daddiu $sp, $sp, 32
-  tail call chericcallcc void @b(i8 addrspace(200)* %a1, i8 addrspace(200)* %a2, i64 %foo, i64 %bar) #2
+  tail call chericcallcc void @b(ptr addrspace(200) %a1, ptr addrspace(200) %a2, i64 %foo, i64 %bar) #2
   ret void
 }
 
-declare chericcallcc void @b(i8 addrspace(200)*, i8 addrspace(200)*, i64, i64) #1
+declare chericcallcc void @b(ptr addrspace(200), ptr addrspace(200), i64, i64) #1
 
 attributes #0 = { nounwind "less-precise-fpmad"="false" "no-frame-pointer-elim"="true" "no-frame-pointer-elim-non-leaf" "no-infs-fp-math"="false" "no-nans-fp-math"="false" "stack-protector-buffer-size"="8" "unsafe-fp-math"="false" "use-soft-float"="false" }
 attributes #1 = { "less-precise-fpmad"="false" "no-frame-pointer-elim"="true" "no-frame-pointer-elim-non-leaf" "no-infs-fp-math"="false" "no-nans-fp-math"="false" "stack-protector-buffer-size"="8" "unsafe-fp-math"="false" "use-soft-float"="false" }

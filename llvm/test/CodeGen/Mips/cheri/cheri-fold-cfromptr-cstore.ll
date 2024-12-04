@@ -25,8 +25,8 @@ define void @fn1() #0 {
 ; CHECK-NEXT:    jr $ra
 ; CHECK-NEXT:    sw $1, %lo(a)($2)
 entry:
-  %0 = load i32, i32* @b, align 4, !tbaa !1
-  store i32 %0, i32 addrspace(200)* getelementptr (%struct.int_struct, %struct.int_struct addrspace(200)* addrspacecast (%struct.int_struct* @a to %struct.int_struct addrspace(200)*), i64 0, i32 0), align 4, !tbaa !5
+  %0 = load i32, ptr @b, align 4, !tbaa !1
+  store i32 %0, ptr addrspace(200) addrspacecast (ptr @a to ptr addrspace(200)), align 4, !tbaa !5
   ret void
 }
 

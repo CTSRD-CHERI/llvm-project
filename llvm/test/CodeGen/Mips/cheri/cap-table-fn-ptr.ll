@@ -2,12 +2,12 @@
 ; RUN: %cheri_purecap_llc -cheri-cap-table-abi=plt %s -o - -mxcaptable=false | %cheri_FileCheck %s -check-prefixes CHECK,SMALL
 source_filename = "/Users/alex/cheri/llvm/tools/clang/test/CodeGen/CHERI/cap-table-call-extern.c"
 
-@fn = common local_unnamed_addr addrspace(200) global void () addrspace(200)* null, align 32
+@fn = common local_unnamed_addr addrspace(200) global ptr addrspace(200) null, align 32
 
 ; Function Attrs: nounwind
 define void @test() local_unnamed_addr nounwind {
 entry:
-  %0 = load void () addrspace(200)*, void () addrspace(200)* addrspace(200)* @fn, align 32
+  %0 = load ptr addrspace(200), ptr addrspace(200) @fn, align 32
   tail call void %0() #1
   ret void
   ; TODO: it would be nice if we could have function pointers inlined into the GOT

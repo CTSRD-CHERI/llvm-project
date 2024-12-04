@@ -1,7 +1,7 @@
 ; RUN: %cheri_llc -O1 %s -o - | FileCheck %s
 
 ; Function Attrs: norecurse nounwind
-define void @doThing(i8 addrspace(200)* nocapture readonly %in, i8 addrspace(200)* nocapture %out) local_unnamed_addr #0 {
+define void @doThing(ptr addrspace(200) nocapture readonly %in, ptr addrspace(200) nocapture %out) local_unnamed_addr #0 {
 entry:
   ; Check that the +8 is folded into the load / store and isn't a separate cincoffset
   ; CHECK-NOT: cincoffset
@@ -9,14 +9,14 @@ entry:
   ; CHECK: 	csb	$[[REG]], $zero, 6($c4)
   ; CHECK-NOT: cincoffset
   ; CHECK-NOT: cincoffset
-  %arrayidx = getelementptr inbounds i8, i8 addrspace(200)* %in, i64 8
-  %0 = load i8, i8 addrspace(200)* %arrayidx, align 1, !tbaa !3
-  %arrayidx1 = getelementptr inbounds i8, i8 addrspace(200)* %out, i64 6
-  store i8 %0, i8 addrspace(200)* %arrayidx1, align 1, !tbaa !3
+  %arrayidx = getelementptr inbounds i8, ptr addrspace(200) %in, i64 8
+  %0 = load i8, ptr addrspace(200) %arrayidx, align 1, !tbaa !3
+  %arrayidx1 = getelementptr inbounds i8, ptr addrspace(200) %out, i64 6
+  store i8 %0, ptr addrspace(200) %arrayidx1, align 1, !tbaa !3
   ret void
 }
 
-attributes #0 = { norecurse nounwind  }
+attributes #0 = { norecurse nounwind }
 
 !llvm.module.flags = !{!0, !1}
 !llvm.ident = !{!2}

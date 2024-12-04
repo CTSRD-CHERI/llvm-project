@@ -5,9 +5,9 @@ source_filename = "/Users/alex/cheri/llvm/tools/clang/test/CodeGen/CHERI/cap-tab
 
 declare void @external_func() addrspace(200)
 
-@fnptr_uninit = common local_unnamed_addr addrspace(200) global void () addrspace(200)* null, align 32
+@fnptr_uninit = common local_unnamed_addr addrspace(200) global ptr addrspace(200) null, align 32
 
-@fnptr_init = local_unnamed_addr addrspace(200) global void () addrspace(200)* @external_func, align 32
+@fnptr_init = local_unnamed_addr addrspace(200) global ptr addrspace(200) @external_func, align 32
 
 
 ; Function Attrs: nounwindm
@@ -22,9 +22,9 @@ entry:
   ret void
 }
 
-define void () addrspace(200)* @test_load_fnptr() {
+define ptr addrspace(200) @test_load_fnptr() {
 entry:
-  ret void () addrspace(200)* @external_func
+  ret ptr addrspace(200) @external_func
   ; CHECK-LABEL: test_load_fnptr:
   ; SMALLTABLE: clcbi	$c3, %captab20(external_func)($c26)
   ; BIGTABLE:      lui	$1, %captab_hi(external_func)

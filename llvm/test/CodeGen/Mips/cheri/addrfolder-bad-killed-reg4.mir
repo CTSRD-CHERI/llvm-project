@@ -7,7 +7,7 @@
   target triple = "cheri-unknown-freebsd"
 
   ; Function Attrs: nounwind
-  define i32 @loop(i32 addrspace(200)* nocapture %x, i32 %len) #0 {
+  define i32 @loop(ptr addrspace(200) nocapture %x, i32 %len) #0 {
   entry:
     %cmp9 = icmp sgt i32 %len, 0
     br i1 %cmp9, label %for.body.preheader, label %for.end
@@ -15,14 +15,14 @@
   for.body.preheader:                               ; preds = %entry
     br label %for.body
 
-  for.body:                                         ; preds = %for.body.preheader, %for.body
+  for.body:                                         ; preds = %for.body, %for.body.preheader
     %i.011 = phi i32 [ %inc, %for.body ], [ 0, %for.body.preheader ]
     %sum.010 = phi i32 [ %add, %for.body ], [ 0, %for.body.preheader ]
     %0 = sext i32 %i.011 to i256
-    %arrayidx = getelementptr inbounds i32, i32 addrspace(200)* %x, i256 %0
-    %1 = load i32, i32 addrspace(200)* %arrayidx, align 4
+    %arrayidx = getelementptr inbounds i32, ptr addrspace(200) %x, i256 %0
+    %1 = load i32, ptr addrspace(200) %arrayidx, align 4
     %add = add nsw i32 %1, %sum.010
-    store i32 %add, i32 addrspace(200)* %arrayidx, align 4
+    store i32 %add, ptr addrspace(200) %arrayidx, align 4
     %inc = add nsw i32 %i.011, 1
     %exitcond = icmp eq i32 %len, %inc
     br i1 %exitcond, label %for.end, label %for.body
@@ -32,7 +32,7 @@
     ret i32 %sum.0.lcssa
   }
 
-  attributes #0 = { nounwind  }
+  attributes #0 = { nounwind }
 
 ...
 ---

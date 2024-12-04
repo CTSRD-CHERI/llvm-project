@@ -3,8 +3,8 @@
 ;; This used to have an unfilled branch-delay slot but is ow converted to a conditional move
 ; RUN: %cheri128_purecap_llc %s -o - | FileCheck %s '-D#CAP_SIZE=16'
 
-; Function Attrs: norecurse nounwind readnone uwtable
-define i32 addrspace(200)* @test(i32 addrspace(200)* readnone %inCap, i32 signext %test, i32 signext %inInt) local_unnamed_addr addrspace(200) #0 {
+; Function Attrs: norecurse memory(none) uwtable
+define ptr addrspace(200) @test(ptr addrspace(200) readnone %inCap, i32 signext %test, i32 signext %inInt) local_unnamed_addr addrspace(200) #0 {
 ; CHECK-LABEL: test:
 ; CHECK:       # %bb.0: # %entry
 ; CHECK-NEXT:    cincoffset $c11, $c11, -[[#STACKFRAME_SIZE:]]
@@ -29,9 +29,9 @@ entry:
   %tobool = icmp eq i32 %test, 0
   %add = add nsw i32 %inInt, 4
   %idx.ext = sext i32 %add to i64
-  %add.ptr = getelementptr inbounds i32, i32 addrspace(200)* %inCap, i64 %idx.ext
-  %ret.0 = select i1 %tobool, i32 addrspace(200)* %inCap, i32 addrspace(200)* %add.ptr
-  ret i32 addrspace(200)* %ret.0
+  %add.ptr = getelementptr inbounds i32, ptr addrspace(200) %inCap, i64 %idx.ext
+  %ret.0 = select i1 %tobool, ptr addrspace(200) %inCap, ptr addrspace(200) %add.ptr
+  ret ptr addrspace(200) %ret.0
 }
 
-attributes #0 = { norecurse readnone uwtable "frame-pointer"="all" }
+attributes #0 = { norecurse memory(none) uwtable "frame-pointer"="all" }

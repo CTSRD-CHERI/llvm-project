@@ -8,7 +8,7 @@
 @x = global i64 0, align 8
 
 ; Function Attrs: nounwind
-define void @foo(i64 %y) addrspace(200) nounwind {
+define void @foo(i64 %y) addrspace(200) #0 {
 ; BOUNDS-LABEL: foo:
 ; BOUNDS:       # %bb.0: # %entry
 ; BOUNDS-NEXT:    lui $1, %hi(%neg(%gp_rel(foo)))
@@ -29,6 +29,8 @@ define void @foo(i64 %y) addrspace(200) nounwind {
 ; NOBOUNDS-NEXT:    jr $ra
 ; NOBOUNDS-NEXT:    sd $4, 0($1)
 entry:
-  store i64 %y, i64 addrspace(200)* addrspacecast(i64* @x to i64 addrspace(200)*), align 8
+  store i64 %y, ptr addrspace(200) addrspacecast (ptr @x to ptr addrspace(200)), align 8
   ret void
 }
+
+attributes #0 = { nounwind }

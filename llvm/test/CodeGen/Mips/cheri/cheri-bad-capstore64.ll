@@ -18,7 +18,7 @@
 ;   # %bb.0:
 ;     jr $ra
 ;     csd $5, $4, 8($c3)
-define void @bad_capstore64(i8 addrspace(200)* %cb, i64 %rt, i8 addrspace(200)** %rs) {
+define void @bad_capstore64(ptr addrspace(200) %cb, i64 %rt, ptr %rs) {
 ; CHECK-LABEL: bad_capstore64:
 ; CHECK:       # %bb.0:
 ; CHECK-NEXT:    daddiu $1, $4, 8
@@ -26,7 +26,7 @@ define void @bad_capstore64(i8 addrspace(200)* %cb, i64 %rt, i8 addrspace(200)**
 ; CHECK-NEXT:    jr $ra
 ; CHECK-NEXT:    csc $c1, $5, 0($ddc)
   %add = add i64 %rt, 8
-  %ptradd = getelementptr i8, i8 addrspace(200)* %cb, i64 %add
-  store i8 addrspace(200)* %ptradd, i8 addrspace(200)** %rs
+  %ptradd = getelementptr i8, ptr addrspace(200) %cb, i64 %add
+  store ptr addrspace(200) %ptradd, ptr %rs
   ret void
 }

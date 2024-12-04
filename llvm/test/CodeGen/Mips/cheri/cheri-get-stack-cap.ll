@@ -8,26 +8,26 @@
 ; RUN: sed 's/addrspace(G)/addrspace(200)/' %s | %cheri_purecap_llc -o - -thread-model=posix -mattr=-noabicalls \
 ; RUN:      -O2 -verify-machineinstrs | FileCheck %s -check-prefix PCREL
 
-@reserved_reg_target = external addrspace(G) global i8 addrspace(200)*, align 32
+@reserved_reg_target = external addrspace(G) global ptr addrspace(200), align 32
 
-define i8 addrspace(200)* @getstack() nounwind {
+define ptr addrspace(200) @getstack() nounwind {
 entry:
   ; PCREL-LABEL: getstack:
   ; PCREL:      clcbi	$c1, %captab20(reserved_reg_target)($c1)
   ; PCREL-NEXT: csc	$c11, $zero, 0($c1)
   ; PCREL-NEXT: cjr	$c17
   ; PCREL-NEXT: cmove	$c3, $c11
-  %0 = call i8 addrspace(200)* @llvm.cheri.stack.cap.get()
-  store i8 addrspace(200)* %0, i8 addrspace(200)* addrspace(G)* @reserved_reg_target, align 32
-  ret i8 addrspace(200)* %0
+  %0 = call ptr addrspace(200) @llvm.cheri.stack.cap.get()
+  store ptr addrspace(200) %0, ptr addrspace(G) @reserved_reg_target, align 32
+  ret ptr addrspace(200) %0
 }
-declare i8 addrspace(200)* @llvm.cheri.stack.cap.get()
+declare ptr addrspace(200) @llvm.cheri.stack.cap.get()
 
 ; Function Attrs: noinline nounwind optnone
 define void @test_fault_read_epcc() {
 entry:
-  %0 = call i8 addrspace(200)* @llvm.mips.epcc.get()
-  store i8 addrspace(200)* %0, i8 addrspace(200)* addrspace(G)* @reserved_reg_target, align 32
+  %0 = call ptr addrspace(200) @llvm.mips.epcc.get()
+  store ptr addrspace(200) %0, ptr addrspace(G) @reserved_reg_target, align 32
   ; PCREL-LABEL: test_fault_read_epcc:
   ; PCREL:      clcbi   $c1, %captab20(reserved_reg_target)($c1)
   ; PCREL-NEXT: creadhwr        $c2, $chwr_epcc
@@ -36,7 +36,7 @@ entry:
 
   ret void
 }
-declare i8 addrspace(200)* @llvm.mips.epcc.get()
+declare ptr addrspace(200) @llvm.mips.epcc.get()
 
 
 ;define i32 @x86_intrin() nounwind {

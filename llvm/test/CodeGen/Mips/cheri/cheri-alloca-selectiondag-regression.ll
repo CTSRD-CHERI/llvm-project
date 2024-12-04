@@ -2,7 +2,7 @@
 ; RUN: %cheri128_purecap_llc -O0 %s -o - | FileCheck '-D#CAP_SIZE=16' %s -check-prefix C128
 ; This was crashing after https://reviews.llvm.org/D40095 was merged
 
-declare i32 @a(i32 addrspace(200)*)
+declare i32 @a(ptr addrspace(200))
 
 define i32 @d(i64 %i) nounwind {
 ; C128-LABEL: d:
@@ -39,6 +39,6 @@ define i32 @d(i64 %i) nounwind {
 ; C128-NEXT:    nop
 entry:
   %e = alloca i32, i64 %i, addrspace(200)
-  %call = call i32 @a(i32 addrspace(200)* %e)
+  %call = call i32 @a(ptr addrspace(200) %e)
   ret i32 %call
 }

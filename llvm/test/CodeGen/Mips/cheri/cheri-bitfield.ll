@@ -9,12 +9,12 @@
 @x = internal addrspace(200) global %struct.foo zeroinitializer, align 8
 
 ; Function Attrs: noinline nounwind
-define i32 @main(i32 signext %argc, i8 addrspace(200)* addrspace(200)* %argv) #0 {
+define i32 @main(i32 signext %argc, ptr addrspace(200) %argv) #0 {
 ; CHECK-LABEL: main:
 ; CHECK:       # %bb.0: # %entry
-; CHECK-NEXT:    cincoffset $c11, $c11, -[[STACKFRAME_SIZE:64|128]]
-; CHECK-NEXT:    csc $c24, $zero, [[#CAP_SIZE * 3]]($c11)
-; CHECK-NEXT:    csc $c17, $zero, [[#CAP_SIZE * 2]]($c11)
+; CHECK-NEXT:    cincoffset $c11, $c11, -64
+; CHECK-NEXT:    csc $c24, $zero, 48($c11) # 16-byte Folded Spill
+; CHECK-NEXT:    csc $c17, $zero, 32($c11) # 16-byte Folded Spill
 ; CHECK-NEXT:    cincoffset $c24, $c11, $zero
 ; CHECK-NEXT:    cgetaddr $1, $c11
 ; CHECK-NEXT:    daddiu $2, $zero, -32
@@ -37,21 +37,21 @@ define i32 @main(i32 signext %argc, i8 addrspace(200)* addrspace(200)* %argv) #0
 ; CHECK-NEXT:    addiu $2, $zero, 0
 ; CHECK-NEXT:    csd $1, $zero, 8($c1)
 ; CHECK-NEXT:    cincoffset $c11, $c24, $zero
-; CHECK-NEXT:    clc $c17, $zero, [[#CAP_SIZE * 2]]($c11)
-; CHECK-NEXT:    clc $c24, $zero, [[#CAP_SIZE * 3]]($c11)
+; CHECK-NEXT:    clc $c17, $zero, 32($c11) # 16-byte Folded Reload
+; CHECK-NEXT:    clc $c24, $zero, 48($c11) # 16-byte Folded Reload
 ; CHECK-NEXT:    cjr $c17
-; CHECK-NEXT:    cincoffset $c11, $c11, [[STACKFRAME_SIZE]]
+; CHECK-NEXT:    cincoffset $c11, $c11, 64
 entry:
   %retval = alloca i32, align 4, addrspace(200)
   %argc.addr = alloca i32, align 4, addrspace(200)
-  %argv.addr = alloca i8 addrspace(200)* addrspace(200)*, align 32, addrspace(200)
-  store i32 0, i32 addrspace(200)* %retval, align 4
-  store i32 %argc, i32 addrspace(200)* %argc.addr, align 4
-  store i8 addrspace(200)* addrspace(200)* %argv, i8 addrspace(200)* addrspace(200)* addrspace(200)* %argv.addr, align 32
-  %bf.load = load i128, i128 addrspace(200)* getelementptr inbounds (%struct.foo, %struct.foo addrspace(200)* @x, i32 0, i32 0), align 4
+  %argv.addr = alloca ptr addrspace(200), align 32, addrspace(200)
+  store i32 0, ptr addrspace(200) %retval, align 4
+  store i32 %argc, ptr addrspace(200) %argc.addr, align 4
+  store ptr addrspace(200) %argv, ptr addrspace(200) %argv.addr, align 32
+  %bf.load = load i128, ptr addrspace(200) @x, align 4
   %bf.clear = and i128 %bf.load, -4294967295
   %bf.set = or i128 %bf.clear, 2
-  store i128 %bf.set, i128 addrspace(200)* getelementptr inbounds (%struct.foo, %struct.foo addrspace(200)* @x, i32 0, i32 0), align 4
+  store i128 %bf.set, ptr addrspace(200) @x, align 4
   ret i32 0
 }
 
@@ -60,5 +60,5 @@ attributes #0 = { noinline nounwind }
 !llvm.module.flags = !{!0}
 !llvm.ident = !{!1}
 
-!0 = !{i32 1, !"PIC Level", i32 2}
+!0 = !{i32 8, !"PIC Level", i32 2}
 !1 = !{!"clang version 5.0.0 (ssh://dc552@vica.cl.cam.ac.uk:/home/dc552/CHERISDK/llvm/tools/clang 36fb1dc82f2552b06fa268eab5513cf52c16f41b)"}

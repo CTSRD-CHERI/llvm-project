@@ -18,7 +18,7 @@ define void @foo(i64 %y) addrspace(200) #0 {
 ; CHECK-NEXT:    cjr $c17
 ; CHECK-NEXT:    csd $4, $zero, 0($c1)
 entry:
-  store i64 %y, i64 addrspace(200)* @x, align 4
+  store i64 %y, ptr addrspace(200) @x, align 4
   ret void
 }
 

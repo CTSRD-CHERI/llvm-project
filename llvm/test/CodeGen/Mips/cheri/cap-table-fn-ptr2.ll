@@ -6,11 +6,11 @@ source_filename = "/Users/alex/cheri/llvm/tools/clang/test/CodeGen/CHERI/cap-tab
 
 declare void @extern_func() addrspace(200) #0
 
-@fn = local_unnamed_addr addrspace(200) global void () addrspace(200)* @extern_func, align 32
-@fn2 = internal unnamed_addr addrspace(200) global void () addrspace(200)* @extern_func, align 32
+@fn = local_unnamed_addr addrspace(200) global ptr addrspace(200) @extern_func, align 32
+@fn2 = internal unnamed_addr addrspace(200) global ptr addrspace(200) @extern_func, align 32
 
 ; Function Attrs: nounwind
-define void @test(void () addrspace(200)* %arg) local_unnamed_addr addrspace(200) #1 {
+define void @test(ptr addrspace(200) %arg) local_unnamed_addr addrspace(200) #1 {
 entry:
   %0 = load void () addrspace(200)*, void () addrspace(200)* addrspace(200)* @fn, align 32
   ; load address of fn:

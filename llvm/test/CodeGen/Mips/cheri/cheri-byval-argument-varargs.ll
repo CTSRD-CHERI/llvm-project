@@ -55,26 +55,21 @@ define i32 @fn1() local_unnamed_addr #0 {
 ; CHECK-NEXT:    cincoffset $c11, $c11, $1
 entry:
   %tmp = alloca %struct.Dwarf_Error, align 8, addrspace(200)
-  %0 = bitcast %struct.Dwarf_Error addrspace(200)* %tmp to i8 addrspace(200)*
-  call void @llvm.memcpy.p200i8.p200i8.i64(i8 addrspace(200)* nonnull %0, i8 addrspace(200)* bitcast (%struct.Dwarf_Error addrspace(200)* @a to i8 addrspace(200)*), i64 4096, i32 4, i1 false), !tbaa.struct !1
-  %call = call i32 (...) @fn2(%struct.Dwarf_Error addrspace(200)* byval(%struct.Dwarf_Error) nonnull align 8 %tmp) #3
+  %0 = bitcast ptr addrspace(200) %tmp to ptr addrspace(200)
+  call void @llvm.memcpy.p200.p200.i64(ptr addrspace(200) nonnull align 4 %0, ptr addrspace(200) align 4 @a, i64 4096, i1 false)
+  %call = call i32 (...) @fn2(ptr addrspace(200) nonnull byval(%struct.Dwarf_Error) align 8 %tmp) #0
   ret i32 undef
 }
 
-declare i32 @fn2(...) #1
+; Function Attrs: nounwind
+declare i32 @fn2(...) #0
 
-; Function Attrs: argmemonly nounwind
-declare void @llvm.memcpy.p200i8.p200i8.i64(i8 addrspace(200)* nocapture writeonly, i8 addrspace(200)* nocapture readonly, i64, i32, i1) #2
+; Function Attrs: nocallback nofree nounwind willreturn memory(argmem: readwrite)
+declare void @llvm.memcpy.p200.p200.i64(ptr addrspace(200) noalias nocapture writeonly, ptr addrspace(200) noalias nocapture readonly, i64, i1 immarg) #1
 
 attributes #0 = { nounwind }
-attributes #1 = { nounwind }
-attributes #2 = { argmemonly nounwind }
-attributes #3 = { nounwind }
+attributes #1 = { nocallback nofree nounwind willreturn memory(argmem: readwrite) }
 
 !llvm.ident = !{!0}
 
 !0 = !{!"clang version 5.0.0 (https://github.com/llvm-mirror/clang.git 0c91ed96d08feda61fd68f0fe034787f01cb9fa7) (https://github.com/llvm-mirror/llvm.git 6952b345731e6ea7246b4bc5173140b7fce21719)"}
-!1 = !{i64 0, i64 4096, !2}
-!2 = !{!3, !3, i64 0}
-!3 = !{!"omnipotent char", !4, i64 0}
-!4 = !{!"Simple C/C++ TBAA"}

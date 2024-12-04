@@ -14,7 +14,7 @@ define void @test_sandbox_cs_clock_gettime_default() #0 {
 ; CAPTABLE-NEXT:    addiu $2, $zero, 0
 ; CAPTABLE-NEXT:    csw $zero, $1, 0($c1)
 entry:
-  store i32 0, i32 addrspace(200)* @cheri_errno, align 4
+  store i32 0, ptr addrspace(200) @cheri_errno, align 4
   unreachable
 }
 

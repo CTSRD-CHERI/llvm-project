@@ -3,15 +3,15 @@
 ; RUN: %cheri_purecap_llc %s -o - -filetype=obj | llvm-readobj -r - | %cheri_FileCheck -check-prefix=RELOCS %s
 
 @a = common addrspace(200) global [5 x i32] zeroinitializer, align 4
-@b = addrspace(200) global [3 x i32 addrspace(200)*] [
-    i32 addrspace(200)* bitcast (i8 addrspace(200)* getelementptr (i8, i8 addrspace(200)* bitcast ([5 x i32] addrspace(200)* @a to i8 addrspace(200)*), i64 8) to i32 addrspace(200)*),
-    i32 addrspace(200)* bitcast (i8 addrspace(200)* getelementptr (i8, i8 addrspace(200)* bitcast ([5 x i32] addrspace(200)* @a to i8 addrspace(200)*), i64 4) to i32 addrspace(200)*),
-    i32 addrspace(200)* getelementptr inbounds ([5 x i32], [5 x i32] addrspace(200)* @a, i32 0, i32 0)
+@b = addrspace(200) global [3 x ptr addrspace(200)] [
+    ptr addrspace(200) getelementptr (i8, ptr addrspace(200) @a, i64 8),
+    ptr addrspace(200) getelementptr (i8, ptr addrspace(200) @a, i64 4),
+    ptr addrspace(200) @a
   ], align 32
-@c = addrspace(200) constant [3 x i32 addrspace(200)*] [
-    i32 addrspace(200)* bitcast (i8 addrspace(200)* getelementptr (i8, i8 addrspace(200)* bitcast ([5 x i32] addrspace(200)* @a to i8 addrspace(200)*), i64 16) to i32 addrspace(200)*),
-    i32 addrspace(200)* bitcast (i8 addrspace(200)* getelementptr (i8, i8 addrspace(200)* bitcast ([5 x i32] addrspace(200)* @a to i8 addrspace(200)*), i64 12) to i32 addrspace(200)*),
-    i32 addrspace(200)* getelementptr inbounds ([5 x i32], [5 x i32] addrspace(200)* @a, i32 0, i32 0)
+@c = addrspace(200) constant [3 x ptr addrspace(200)] [
+    ptr addrspace(200) getelementptr (i8, ptr addrspace(200) @a, i64 16),
+    ptr addrspace(200) getelementptr (i8, ptr addrspace(200) @a, i64 12),
+    ptr addrspace(200) @a
   ], align 32
 
 ; CHECK:      .data

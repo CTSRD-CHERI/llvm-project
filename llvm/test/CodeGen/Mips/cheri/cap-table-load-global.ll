@@ -8,7 +8,7 @@ declare void @extern_func() #0
 ; Function Attrs: nounwind
 define i64 @test() local_unnamed_addr #1 {
 entry:
-  %loaded = load i64, i64 addrspace(200)* @global, align 8
+  %loaded = load i64, ptr addrspace(200) @global, align 8
   ; CHECK-LABEL: test:
   ; CHECK:         cmove   $c1,  $c26
   ; BIGTABLE-NEXT:      lui  $1, %captab_hi(global)

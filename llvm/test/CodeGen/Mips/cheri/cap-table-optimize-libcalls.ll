@@ -8,7 +8,7 @@ source_filename = "/Users/alex/cheri/llvm/tools/clang/test/CodeGen/cap-table-pri
 
 define void @a() {
 entry:
-  %call = call i32 (i8 addrspace(200)*, ...) @printf(i8 addrspace(200)* getelementptr inbounds ([33 x i8], [33 x i8] addrspace(200)* @.str, i32 0, i32 0))
+  %call = call i32 (ptr addrspace(200), ...) @printf(ptr addrspace(200) @.str)
   ret void
 
   ; CHECK:      clcbi $c3, %captab20(.L.str)($c18)
@@ -17,4 +17,4 @@ entry:
   ; CHECK-NEXT: cgetnull $c13
 }
 
-declare i32 @printf(i8 addrspace(200)*, ...)
+declare i32 @printf(ptr addrspace(200), ...)
