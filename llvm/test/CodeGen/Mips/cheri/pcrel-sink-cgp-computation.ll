@@ -2,7 +2,7 @@
 ; RUN: sed 's/addrspace(200)/addrspace(0)/g' %s | %cheri128_llc -target-abi n64 -relocation-model=pic -o - | FileCheck %s -check-prefix MIPS
 ; RUN: %cheri128_purecap_llc -O2 %s -o - | FileCheck %s -check-prefix PURECAP
 
-declare i32 @func(i8 addrspace(200)*) local_unnamed_addr addrspace(200) #0
+declare i32 @func(ptr addrspace(200)) local_unnamed_addr addrspace(200) #0
 
 ; This previously generated the full pc-relative _CHERI_CAPABILITY_TABLE_ address computation
 ; in the entry BB even though it is only used in the call_func BB
@@ -57,7 +57,7 @@ entry:                                       ; preds = %entry
   br i1 %arg, label %call_func, label %exit
 
 call_func:
-  %call = call signext i32 @func(i8 addrspace(200)* null) #1
+  %call = call signext i32 @func(ptr addrspace(200) null) #1
   br label %exit
 
 exit:

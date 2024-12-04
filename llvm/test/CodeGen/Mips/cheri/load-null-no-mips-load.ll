@@ -5,7 +5,7 @@
 
 define i32 @main() local_unnamed_addr #0 {
 entry:
-  %0 = load i32, i32 addrspace(200)* null, align 536870912
+  %0 = load i32, ptr addrspace(200) null, align 536870912
   ret i32 %0
 }
 

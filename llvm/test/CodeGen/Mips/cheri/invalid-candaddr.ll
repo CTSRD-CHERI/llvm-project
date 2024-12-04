@@ -36,8 +36,7 @@
 ;	return (__CAP_CHECK(__DECONST_CAP(void * __capability, addr), size));
 ;}
 
-; Function Attrs: nounwind readnone
-define signext i32 @cap_covers_pages_regression(i8 addrspace(200)* %cap, i64 zeroext %size) local_unnamed_addr #0 {
+define signext i32 @cap_covers_pages_regression(ptr addrspace(200) %cap, i64 zeroext %size) local_unnamed_addr nounwind {
 ; OPT-LABEL: cap_covers_pages_regression:
 ; OPT:       # %bb.0: # %entry
 ; OPT-NEXT:    daddiu $1, $zero, 4095
@@ -83,15 +82,15 @@ define signext i32 @cap_covers_pages_regression(i8 addrspace(200)* %cap, i64 zer
 ; OPTNONE-NEXT:    cjr $c17
 ; OPTNONE-NEXT:    nop
 entry:
-  %0 = tail call i64 @llvm.cheri.cap.address.get.i64(i8 addrspace(200)* %cap)
+  %0 = tail call i64 @llvm.cheri.cap.address.get.i64(ptr addrspace(200) %cap)
   %and = and i64 %0, 4095
   %idx.neg = sub nsw i64 0, %and
-  %add.ptr = getelementptr inbounds i8, i8 addrspace(200)* %cap, i64 %idx.neg
+  %add.ptr = getelementptr inbounds i8, ptr addrspace(200) %cap, i64 %idx.neg
   %add = add i64 %size, 4095
   %add1 = add i64 %add, %and
   %and2 = and i64 %add1, -4096
-  %1 = tail call i64 @llvm.cheri.cap.length.get.i64(i8 addrspace(200)* %add.ptr)
-  %2 = tail call i64 @llvm.cheri.cap.offset.get.i64(i8 addrspace(200)* %add.ptr)
+  %1 = tail call i64 @llvm.cheri.cap.length.get.i64(ptr addrspace(200) %add.ptr)
+  %2 = tail call i64 @llvm.cheri.cap.offset.get.i64(ptr addrspace(200) %add.ptr)
   %cmp3 = icmp uge i64 %1, %2
   %sub = sub i64 %1, %2
   %cmp5 = icmp uge i64 %sub, %and2
@@ -100,7 +99,7 @@ entry:
   ret i32 %ret.0
 }
 
-define i8 addrspace(200)* @test_basic_andaddr_combine_ptradd(i8 addrspace(200)* %cap, i64 zeroext %size) #0 {
+define ptr addrspace(200) @test_basic_andaddr_combine_ptradd(ptr addrspace(200) %cap, i64 zeroext %size) nounwind {
 ; OPT-LABEL: test_basic_andaddr_combine_ptradd:
 ; OPT:       # %bb.0: # %entry
 ; OPT-NEXT:    daddiu $1, $zero, -4096
@@ -117,14 +116,15 @@ define i8 addrspace(200)* @test_basic_andaddr_combine_ptradd(i8 addrspace(200)* 
 ; OPTNONE-NEXT:    cjr $c17
 ; OPTNONE-NEXT:    nop
 entry:
-  %0 = tail call i64 @llvm.cheri.cap.address.get.i64(i8 addrspace(200)* %cap)
+  %0 = tail call i64 @llvm.cheri.cap.address.get.i64(ptr addrspace(200) %cap)
   %and = and i64 %0, 4095
   %idx.neg = sub nsw i64 0, %and
-  %add.ptr = getelementptr inbounds i8, i8 addrspace(200)* %cap, i64 %idx.neg
-  ret i8 addrspace(200)* %add.ptr
+  %add.ptr = getelementptr inbounds i8, ptr addrspace(200) %cap, i64 %idx.neg
+  ret ptr addrspace(200) %add.ptr
 }
 
-define i8 addrspace(200)* @test_basic_andaddr_combine_incoffset(i8 addrspace(200)* %cap, i64 zeroext %size) #0 {
+; Function Attrs: nounwind memory(none)
+define ptr addrspace(200) @test_basic_andaddr_combine_incoffset(ptr addrspace(200) %cap, i64 zeroext %size) #0 {
 ; OPT-LABEL: test_basic_andaddr_combine_incoffset:
 ; OPT:       # %bb.0: # %entry
 ; OPT-NEXT:    daddiu $1, $zero, -4096
@@ -141,14 +141,14 @@ define i8 addrspace(200)* @test_basic_andaddr_combine_incoffset(i8 addrspace(200
 ; OPTNONE-NEXT:    cjr $c17
 ; OPTNONE-NEXT:    nop
 entry:
-  %0 = tail call i64 @llvm.cheri.cap.address.get.i64(i8 addrspace(200)* %cap)
+  %0 = tail call i64 @llvm.cheri.cap.address.get.i64(ptr addrspace(200) %cap)
   %and = and i64 %0, 4095
   %idx.neg = sub nsw i64 0, %and
-  %add.ptr = call i8 addrspace(200)* @llvm.cheri.cap.offset.increment.i64(i8 addrspace(200)* %cap, i64 %idx.neg)
-  ret i8 addrspace(200)* %add.ptr
+  %add.ptr = getelementptr i8, ptr addrspace(200) %cap, i64 %idx.neg
+  ret ptr addrspace(200) %add.ptr
 }
 
-define i8 addrspace(200)* @fold_setaddr(i8 addrspace(200)* %cap, i64 zeroext %size) #0 {
+define ptr addrspace(200) @fold_setaddr(ptr addrspace(200) %cap, i64 zeroext %size) nounwind {
 ; OPT-LABEL: fold_setaddr:
 ; OPT:       # %bb.0: # %entry
 ; OPT-NEXT:    daddiu $1, $zero, -4095
@@ -162,29 +162,18 @@ define i8 addrspace(200)* @fold_setaddr(i8 addrspace(200)* %cap, i64 zeroext %si
 ; OPTNONE-NEXT:    cjr $c17
 ; OPTNONE-NEXT:    nop
 entry:
-  %0 = tail call i64 @llvm.cheri.cap.address.get.i64(i8 addrspace(200)* %cap)
+  %0 = tail call i64 @llvm.cheri.cap.address.get.i64(ptr addrspace(200) %cap)
   %and = and i64 %0, -4095
-  %ret = tail call i8 addrspace(200)* @llvm.cheri.cap.address.set.i64(i8 addrspace(200)* %cap, i64 %and)
-  ret i8 addrspace(200)* %ret
+  %ret = tail call ptr addrspace(200) @llvm.cheri.cap.address.set.i64(ptr addrspace(200) %cap, i64 %and)
+  ret ptr addrspace(200) %ret
 }
 
-; Function Attrs: nounwind readnone
-declare i64 @llvm.cheri.cap.address.get.i64(i8 addrspace(200)*) #1
+declare i64 @llvm.cheri.cap.address.get.i64(ptr addrspace(200))
 
-; Function Attrs: nounwind readnone
-declare i64 @llvm.cheri.cap.length.get.i64(i8 addrspace(200)*) #1
+declare i64 @llvm.cheri.cap.length.get.i64(ptr addrspace(200))
 
-; Function Attrs: nounwind readnone
-declare i64 @llvm.cheri.cap.offset.get.i64(i8 addrspace(200)*) #1
+declare i64 @llvm.cheri.cap.offset.get.i64(ptr addrspace(200))
 
-; Function Attrs: nounwind readnone
-declare i8 addrspace(200)* @llvm.cheri.cap.offset.increment.i64(i8 addrspace(200)*, i64) #1
+declare ptr addrspace(200) @llvm.cheri.cap.offset.set.i64(ptr addrspace(200), i64)
 
-; Function Attrs: nounwind readnone
-declare i8 addrspace(200)* @llvm.cheri.cap.offset.set.i64(i8 addrspace(200)*, i64) #1
-
-; Function Attrs: nounwind readnone
-declare i8 addrspace(200)* @llvm.cheri.cap.address.set.i64(i8 addrspace(200)*, i64) #1
-
-attributes #0 = { nounwind readnone }
-attributes #1 = { nounwind readnone }
+declare ptr addrspace(200) @llvm.cheri.cap.address.set.i64(ptr addrspace(200), i64)

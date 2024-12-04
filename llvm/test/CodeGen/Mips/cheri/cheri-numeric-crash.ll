@@ -15,7 +15,7 @@ entry:
   %0 = mul i128 %div, -10000
   %sub7 = add i128 %0, %sub
   %conv = trunc i128 %sub7 to i16
-  store i16 %conv, i16* undef, align 2
+  store i16 %conv, ptr undef, align 2
   unreachable
 }
 

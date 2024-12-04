@@ -25,9 +25,9 @@ if.then:                                          ; preds = %entry
   ret void
 
 c:                                                ; preds = %c, %entry
-  %0 = load i32, i32 addrspace(200)* @a, align 4
+  %0 = load i32, ptr addrspace(200) @a, align 4
   %inc = add nsw i32 %0, 1
-  store i32 %inc, i32 addrspace(200)* @a, align 4
+  store i32 %inc, ptr addrspace(200) @a, align 4
   br label %c
 }
 

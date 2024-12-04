@@ -9,7 +9,7 @@
 
 @maskp = external addrspace(200) global %struct.au_mask
 
-define i32 @select_hdr32(ptr addrspace(200) byval(%struct.tokenstr) %0, ptr addrspace(200) %optchkd) #0 {
+define i32 @select_hdr32(ptr addrspace(200) byval(%struct.tokenstr) %0, ptr addrspace(200) %optchkd) nounwind {
 ; MIPS-LABEL: select_hdr32:
 ; MIPS:       # %bb.0: # %entry
 ; MIPS-NEXT:    daddiu $sp, $sp, -80
@@ -63,7 +63,7 @@ entry:
   ret i32 0
 }
 
-define i32 @foo(ptr addrspace(200) byval(i512) %x, ptr addrspace(200) byval(%struct.tokenstr) %0, ptr addrspace(200) %optchkd) #0 {
+define i32 @foo(ptr addrspace(200) byval(i512) %x, ptr addrspace(200) byval(%struct.tokenstr) %0, ptr addrspace(200) %optchkd) nounwind {
 ; MIPS-LABEL: foo:
 ; MIPS:       # %bb.0: # %entry
 ; MIPS-NEXT:    daddiu $sp, $sp, -80

@@ -3,7 +3,7 @@
 ; RUN: %cheri_llc -mattr=+cheri-exact-equals %s -o - | FileCheck %s --check-prefix=CHECK-EXACT
 ; RUN: %cheri_llc -mattr=-cheri-exact-equals %s -o - | FileCheck %s --check-prefix=CHECK-INEXACT
 
-define i32 @eq(i8 addrspace(200)* %a, i8 addrspace(200)* readnone %b) nounwind {
+define i32 @eq(ptr addrspace(200) %a, ptr addrspace(200) readnone %b) nounwind {
 ; CHECK-INEXACT-LABEL: eq:
 ; CHECK-INEXACT:       # %bb.0:
 ; CHECK-INEXACT-NEXT:    jr $ra
@@ -13,12 +13,12 @@ define i32 @eq(i8 addrspace(200)* %a, i8 addrspace(200)* readnone %b) nounwind {
 ; CHECK-EXACT:       # %bb.0:
 ; CHECK-EXACT-NEXT:    jr $ra
 ; CHECK-EXACT-NEXT:    cexeq $2, $c3, $c4
-  %cmp = icmp eq i8 addrspace(200)* %a, %b
+  %cmp = icmp eq ptr addrspace(200) %a, %b
   %conv = zext i1 %cmp to i32
   ret i32 %conv
 }
 
-define i32 @ne(i8 addrspace(200)* %a, i8 addrspace(200)* readnone %b) nounwind {
+define i32 @ne(ptr addrspace(200) %a, ptr addrspace(200) readnone %b) nounwind {
 ; CHECK-INEXACT-LABEL: ne:
 ; CHECK-INEXACT:       # %bb.0:
 ; CHECK-INEXACT-NEXT:    jr $ra
@@ -28,12 +28,12 @@ define i32 @ne(i8 addrspace(200)* %a, i8 addrspace(200)* readnone %b) nounwind {
 ; CHECK-EXACT:       # %bb.0:
 ; CHECK-EXACT-NEXT:    jr $ra
 ; CHECK-EXACT-NEXT:    cnexeq $2, $c3, $c4
-  %cmp = icmp ne i8 addrspace(200)* %a, %b
+  %cmp = icmp ne ptr addrspace(200) %a, %b
   %conv = zext i1 %cmp to i32
   ret i32 %conv
 }
 
-define i32 @lt(i8 addrspace(200)* %a, i8 addrspace(200)* readnone %b) nounwind {
+define i32 @lt(ptr addrspace(200) %a, ptr addrspace(200) readnone %b) nounwind {
 ; CHECK-INEXACT-LABEL: lt:
 ; CHECK-INEXACT:       # %bb.0:
 ; CHECK-INEXACT-NEXT:    jr $ra
@@ -43,11 +43,11 @@ define i32 @lt(i8 addrspace(200)* %a, i8 addrspace(200)* readnone %b) nounwind {
 ; CHECK-EXACT:       # %bb.0:
 ; CHECK-EXACT-NEXT:    jr $ra
 ; CHECK-EXACT-NEXT:    clt $2, $c3, $c4
-  %cmp = icmp slt i8 addrspace(200)* %a, %b
+  %cmp = icmp slt ptr addrspace(200) %a, %b
   %conv = zext i1 %cmp to i32
   ret i32 %conv
 }
-define i32 @ult(i8 addrspace(200)* %a, i8 addrspace(200)* readnone %b) nounwind {
+define i32 @ult(ptr addrspace(200) %a, ptr addrspace(200) readnone %b) nounwind {
 ; CHECK-INEXACT-LABEL: ult:
 ; CHECK-INEXACT:       # %bb.0:
 ; CHECK-INEXACT-NEXT:    jr $ra
@@ -57,12 +57,12 @@ define i32 @ult(i8 addrspace(200)* %a, i8 addrspace(200)* readnone %b) nounwind 
 ; CHECK-EXACT:       # %bb.0:
 ; CHECK-EXACT-NEXT:    jr $ra
 ; CHECK-EXACT-NEXT:    cltu $2, $c3, $c4
-  %cmp = icmp ult i8 addrspace(200)* %a, %b
+  %cmp = icmp ult ptr addrspace(200) %a, %b
   %conv = zext i1 %cmp to i32
   ret i32 %conv
 }
 
-define i32 @le(i8 addrspace(200)* %a, i8 addrspace(200)* readnone %b) nounwind {
+define i32 @le(ptr addrspace(200) %a, ptr addrspace(200) readnone %b) nounwind {
 ; CHECK-INEXACT-LABEL: le:
 ; CHECK-INEXACT:       # %bb.0:
 ; CHECK-INEXACT-NEXT:    jr $ra
@@ -72,12 +72,12 @@ define i32 @le(i8 addrspace(200)* %a, i8 addrspace(200)* readnone %b) nounwind {
 ; CHECK-EXACT:       # %bb.0:
 ; CHECK-EXACT-NEXT:    jr $ra
 ; CHECK-EXACT-NEXT:    cle $2, $c3, $c4
-  %cmp = icmp sle i8 addrspace(200)* %a, %b
+  %cmp = icmp sle ptr addrspace(200) %a, %b
   %conv = zext i1 %cmp to i32
   ret i32 %conv
 }
 
-define i32 @ule(i8 addrspace(200)* %a, i8 addrspace(200)* readnone %b) nounwind {
+define i32 @ule(ptr addrspace(200) %a, ptr addrspace(200) readnone %b) nounwind {
 ; CHECK-INEXACT-LABEL: ule:
 ; CHECK-INEXACT:       # %bb.0:
 ; CHECK-INEXACT-NEXT:    jr $ra
@@ -87,12 +87,12 @@ define i32 @ule(i8 addrspace(200)* %a, i8 addrspace(200)* readnone %b) nounwind 
 ; CHECK-EXACT:       # %bb.0:
 ; CHECK-EXACT-NEXT:    jr $ra
 ; CHECK-EXACT-NEXT:    cleu $2, $c3, $c4
-  %cmp = icmp ule i8 addrspace(200)* %a, %b
+  %cmp = icmp ule ptr addrspace(200) %a, %b
   %conv = zext i1 %cmp to i32
   ret i32 %conv
 }
 
-define i32 @gt(i8 addrspace(200)* %a, i8 addrspace(200)* readnone %b) nounwind {
+define i32 @gt(ptr addrspace(200) %a, ptr addrspace(200) readnone %b) nounwind {
 ; CHECK-INEXACT-LABEL: gt:
 ; CHECK-INEXACT:       # %bb.0:
 ; CHECK-INEXACT-NEXT:    jr $ra
@@ -102,12 +102,12 @@ define i32 @gt(i8 addrspace(200)* %a, i8 addrspace(200)* readnone %b) nounwind {
 ; CHECK-EXACT:       # %bb.0:
 ; CHECK-EXACT-NEXT:    jr $ra
 ; CHECK-EXACT-NEXT:    clt $2, $c4, $c3
-  %cmp = icmp sgt i8 addrspace(200)* %a, %b
+  %cmp = icmp sgt ptr addrspace(200) %a, %b
   %conv = zext i1 %cmp to i32
   ret i32 %conv
 }
 
-define i32 @ugt(i8 addrspace(200)* %a, i8 addrspace(200)* readnone %b) nounwind {
+define i32 @ugt(ptr addrspace(200) %a, ptr addrspace(200) readnone %b) nounwind {
 ; CHECK-INEXACT-LABEL: ugt:
 ; CHECK-INEXACT:       # %bb.0:
 ; CHECK-INEXACT-NEXT:    jr $ra
@@ -117,12 +117,12 @@ define i32 @ugt(i8 addrspace(200)* %a, i8 addrspace(200)* readnone %b) nounwind 
 ; CHECK-EXACT:       # %bb.0:
 ; CHECK-EXACT-NEXT:    jr $ra
 ; CHECK-EXACT-NEXT:    cltu $2, $c4, $c3
-  %cmp = icmp ugt i8 addrspace(200)* %a, %b
+  %cmp = icmp ugt ptr addrspace(200) %a, %b
   %conv = zext i1 %cmp to i32
   ret i32 %conv
 }
 
-define i32 @ge(i8 addrspace(200)* %a, i8 addrspace(200)* readnone %b) nounwind {
+define i32 @ge(ptr addrspace(200) %a, ptr addrspace(200) readnone %b) nounwind {
 ; CHECK-INEXACT-LABEL: ge:
 ; CHECK-INEXACT:       # %bb.0:
 ; CHECK-INEXACT-NEXT:    jr $ra
@@ -132,12 +132,12 @@ define i32 @ge(i8 addrspace(200)* %a, i8 addrspace(200)* readnone %b) nounwind {
 ; CHECK-EXACT:       # %bb.0:
 ; CHECK-EXACT-NEXT:    jr $ra
 ; CHECK-EXACT-NEXT:    cle $2, $c4, $c3
-  %cmp = icmp sge i8 addrspace(200)* %a, %b
+  %cmp = icmp sge ptr addrspace(200) %a, %b
   %conv = zext i1 %cmp to i32
   ret i32 %conv
 }
 
-define i32 @uge(i8 addrspace(200)* %a, i8 addrspace(200)* readnone %b) nounwind {
+define i32 @uge(ptr addrspace(200) %a, ptr addrspace(200) readnone %b) nounwind {
 ; CHECK-INEXACT-LABEL: uge:
 ; CHECK-INEXACT:       # %bb.0:
 ; CHECK-INEXACT-NEXT:    jr $ra
@@ -147,14 +147,14 @@ define i32 @uge(i8 addrspace(200)* %a, i8 addrspace(200)* readnone %b) nounwind 
 ; CHECK-EXACT:       # %bb.0:
 ; CHECK-EXACT-NEXT:    jr $ra
 ; CHECK-EXACT-NEXT:    cleu $2, $c4, $c3
-  %cmp = icmp uge i8 addrspace(200)* %a, %b
+  %cmp = icmp uge ptr addrspace(200) %a, %b
   %conv = zext i1 %cmp to i32
   ret i32 %conv
 }
 
-declare i1 @llvm.cheri.cap.equal.exact(i8 addrspace(200)*, i8 addrspace(200)*)
+declare i1 @llvm.cheri.cap.equal.exact(ptr addrspace(200), ptr addrspace(200))
 
-define i32 @exeq(i8 addrspace(200)* %a, i8 addrspace(200)* readnone %b) nounwind {
+define i32 @exeq(ptr addrspace(200) %a, ptr addrspace(200) readnone %b) nounwind {
 ; CHECK-INEXACT-LABEL: exeq:
 ; CHECK-INEXACT:       # %bb.0:
 ; CHECK-INEXACT-NEXT:    jr $ra
@@ -164,12 +164,12 @@ define i32 @exeq(i8 addrspace(200)* %a, i8 addrspace(200)* readnone %b) nounwind
 ; CHECK-EXACT:       # %bb.0:
 ; CHECK-EXACT-NEXT:    jr $ra
 ; CHECK-EXACT-NEXT:    cexeq $2, $c3, $c4
-  %cmp = call i1 @llvm.cheri.cap.equal.exact(i8 addrspace(200)* %a, i8 addrspace(200)* %b)
+  %cmp = call i1 @llvm.cheri.cap.equal.exact(ptr addrspace(200) %a, ptr addrspace(200) %b)
   %conv = zext i1 %cmp to i32
   ret i32 %conv
 }
 
-define i32 @nexeq(i8 addrspace(200)* %a, i8 addrspace(200)* readnone %b) nounwind {
+define i32 @nexeq(ptr addrspace(200) %a, ptr addrspace(200) readnone %b) nounwind {
 ; CHECK-INEXACT-LABEL: nexeq:
 ; CHECK-INEXACT:       # %bb.0:
 ; CHECK-INEXACT-NEXT:    jr $ra
@@ -179,7 +179,7 @@ define i32 @nexeq(i8 addrspace(200)* %a, i8 addrspace(200)* readnone %b) nounwin
 ; CHECK-EXACT:       # %bb.0:
 ; CHECK-EXACT-NEXT:    jr $ra
 ; CHECK-EXACT-NEXT:    cnexeq $2, $c3, $c4
-  %cmp = call i1 @llvm.cheri.cap.equal.exact(i8 addrspace(200)* %a, i8 addrspace(200)* %b)
+  %cmp = call i1 @llvm.cheri.cap.equal.exact(ptr addrspace(200) %a, ptr addrspace(200) %b)
   %not = xor i1 %cmp, true
   %conv = zext i1 %not to i32
   ret i32 %conv

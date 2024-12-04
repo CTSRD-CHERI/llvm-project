@@ -2,7 +2,7 @@
 ; RUN: %cheri_llc %s -o - | FileCheck %s
 
 ; Function Attrs: nounwind readnone
-define i8 addrspace(200)* @select(i8 addrspace(200)* readnone %b, i8 addrspace(200)* readnone %c) nounwind {
+define ptr addrspace(200) @select(ptr addrspace(200) readnone %b, ptr addrspace(200) readnone %c) nounwind {
 ; CHECK-LABEL: select:
 ; CHECK:       # %bb.0: # %entry
 ; CHECK-NEXT:    cltu $1, $c3, $c4
@@ -10,7 +10,7 @@ define i8 addrspace(200)* @select(i8 addrspace(200)* readnone %b, i8 addrspace(2
 ; CHECK-NEXT:    jr $ra
 ; CHECK-NEXT:    cmove $c3, $c4
 entry:
-  %cmp = icmp ult i8 addrspace(200)* %b, %c
-  %cond = select i1 %cmp, i8 addrspace(200)* %b, i8 addrspace(200)* %c
-  ret i8 addrspace(200)* %cond
+  %cmp = icmp ult ptr addrspace(200) %b, %c
+  %cond = select i1 %cmp, ptr addrspace(200) %b, ptr addrspace(200) %c
+  ret ptr addrspace(200) %cond
 }

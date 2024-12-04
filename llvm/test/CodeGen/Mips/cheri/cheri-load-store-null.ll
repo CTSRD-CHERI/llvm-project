@@ -19,53 +19,48 @@
 ; }
 ;
 
-%struct.foo = type { i8 addrspace(200)*, i8 addrspace(200)*, i8 addrspace(200)* }
+%struct.foo = type { ptr addrspace(200), ptr addrspace(200), ptr addrspace(200) }
 
-; Function Attrs: norecurse nounwind writeonly
-define void @store_null1(%struct.foo addrspace(200)* nocapture %foo, i8 addrspace(200)* nocapture readnone %arg) local_unnamed_addr addrspace(200) #0 {
+define void @store_null1(ptr addrspace(200) nocapture %foo, ptr addrspace(200) nocapture readnone %arg) local_unnamed_addr addrspace(200) {
 ; CHECK-LABEL: store_null1:
 ; CHECK:       # %bb.0: # %entry
 ; CHECK-NEXT:    cjr $c17
-; CHECK-NEXT:    csc $cnull, $zero, {{32|64}}($c3)
+; CHECK-NEXT:    csc $cnull, $zero, 32($c3)
 entry:
-  %value3 = getelementptr inbounds %struct.foo, %struct.foo addrspace(200)* %foo, i64 0, i32 2
-  store i8 addrspace(200)* null, i8 addrspace(200)* addrspace(200)* %value3, align 32
+  %value3 = getelementptr inbounds %struct.foo, ptr addrspace(200) %foo, i64 0, i32 2
+  store ptr addrspace(200) null, ptr addrspace(200) %value3, align 32
   ret void
 }
 
-; Function Attrs: norecurse nounwind writeonly
-define void @store_null2(%struct.foo addrspace(200)* nocapture %foo, i8 addrspace(200)* %arg) local_unnamed_addr addrspace(200) #0 {
+define void @store_null2(ptr addrspace(200) nocapture %foo, ptr addrspace(200) %arg) local_unnamed_addr addrspace(200) {
 ; CHECK-LABEL: store_null2:
 ; CHECK:       # %bb.0: # %entry
 ; CHECK-NEXT:    csc $cnull, $zero, 0($c3)
-; CHECK-NEXT:    csc $c4, $zero, {{16|32}}($c3)
+; CHECK-NEXT:    csc $c4, $zero, 16($c3)
 ; CHECK-NEXT:    cjr $c17
-; CHECK-NEXT:    csc $cnull, $zero, {{32|64}}($c3)
-; TODO: this could use $cnull but it doesn't matter since we had to
+; CHECK-NEXT:    csc $cnull, $zero, 32($c3)
 entry:
-  %value1 = getelementptr inbounds %struct.foo, %struct.foo addrspace(200)* %foo, i64 0, i32 0
-  store i8 addrspace(200)* null, i8 addrspace(200)* addrspace(200)* %value1, align 32
-  %value2 = getelementptr inbounds %struct.foo, %struct.foo addrspace(200)* %foo, i64 0, i32 1
-  store i8 addrspace(200)* %arg, i8 addrspace(200)* addrspace(200)* %value2, align 32
-  %value3 = getelementptr inbounds %struct.foo, %struct.foo addrspace(200)* %foo, i64 0, i32 2
-  store i8 addrspace(200)* null, i8 addrspace(200)* addrspace(200)* %value3, align 32
+  %value1 = getelementptr inbounds %struct.foo, ptr addrspace(200) %foo, i64 0, i32 0
+  store ptr addrspace(200) null, ptr addrspace(200) %value1, align 32
+  %value2 = getelementptr inbounds %struct.foo, ptr addrspace(200) %foo, i64 0, i32 1
+  store ptr addrspace(200) %arg, ptr addrspace(200) %value2, align 32
+  %value3 = getelementptr inbounds %struct.foo, ptr addrspace(200) %foo, i64 0, i32 2
+  store ptr addrspace(200) null, ptr addrspace(200) %value3, align 32
   ret void
 }
 
-; Function Attrs: norecurse nounwind writeonly
-define void @store_relative_to_null(%struct.foo addrspace(200)* nocapture %foo, i8 addrspace(200)* nocapture readnone %arg) local_unnamed_addr addrspace(200) #0 {
+define void @store_relative_to_null(ptr addrspace(200) nocapture %foo, ptr addrspace(200) nocapture readnone %arg) local_unnamed_addr addrspace(200) {
 ; CHECK-LABEL: store_relative_to_null:
 ; CHECK:       # %bb.0: # %entry
 ; CHECK-NEXT:    cgetnull $c1
 ; CHECK-NEXT:    cjr $c17
 ; CHECK-NEXT:    csc $c4, $zero, 0($c1)
 entry:
-  store i8 addrspace(200)* %arg, i8 addrspace(200)* addrspace(200)* null, align 32
+  store ptr addrspace(200) %arg, ptr addrspace(200) null, align 32
   ret void
 }
 
-; Function Attrs: norecurse nounwind writeonly
-define i8 addrspace(200)* @load_relative_to_null(%struct.foo addrspace(200)* nocapture %foo, i8 addrspace(200)* nocapture readnone %arg) local_unnamed_addr addrspace(200) #0 {
+define ptr addrspace(200) @load_relative_to_null(ptr addrspace(200) nocapture %foo, ptr addrspace(200) nocapture readnone %arg) local_unnamed_addr addrspace(200) {
 ; CHECK-LABEL: load_relative_to_null:
 ; CHECK:       # %bb.0: # %entry
 ; CHECK-NEXT:    cgetnull $c1
@@ -73,6 +68,6 @@ define i8 addrspace(200)* @load_relative_to_null(%struct.foo addrspace(200)* noc
 ; CHECK-NEXT:    cjr $c17
 ; CHECK-NEXT:    nop
 entry:
-  %result = load i8 addrspace(200)*, i8 addrspace(200)* addrspace(200)* null, align 32
-  ret i8 addrspace(200)* %result
+  %result = load ptr addrspace(200), ptr addrspace(200) null, align 32
+  ret ptr addrspace(200) %result
 }

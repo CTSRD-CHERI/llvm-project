@@ -5,7 +5,7 @@
 ; This previously crashed due to the use of getPointerTy instead of getPointerRangeTy
 
 ; Check that we generate the same code as MIPS
-define void @b(i8 %a) local_unnamed_addr addrspace(200) #0 {
+define void @b(i8 %a) local_unnamed_addr addrspace(200) {
 ; CHECK-LABEL: b:
 ; CHECK:       # %bb.0: # %entry
 ; CHECK-NEXT:    sll $1, $4, 0

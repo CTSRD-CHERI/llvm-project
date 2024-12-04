@@ -12,6 +12,6 @@ define void @cgetnull_asm() addrspace(200) nounwind {
 ; CHECK-NEXT:    cjr $c17
 ; CHECK-NEXT:    nop
 entry:
-  call void asm sideeffect "", "C,~{$1}"(i8 addrspace(200)* null)
+  call void asm sideeffect "", "C,~{$1}"(ptr addrspace(200) null)
   ret void
 }

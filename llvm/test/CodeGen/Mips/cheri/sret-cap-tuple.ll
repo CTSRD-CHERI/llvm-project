@@ -5,15 +5,15 @@
 ; Similar issue was found compiling rust-derived IR that was generating a LDL instruction for i128.
 ; Again the sret value is align 1
 
-declare dso_local void @use_tuple_cap(i8 addrspace(200)*) unnamed_addr addrspace(200) #0
-declare dso_local void @use_tuple_i64(i64) unnamed_addr addrspace(200) #0
-declare dso_local void @use_huge_value(i1024) unnamed_addr addrspace(200) #0
+declare dso_local void @use_tuple_cap(ptr addrspace(200)) unnamed_addr addrspace(200)
+declare dso_local void @use_tuple_i64(i64) unnamed_addr addrspace(200)
+declare dso_local void @use_huge_value(i1024) unnamed_addr addrspace(200)
 
-declare dso_local { i8 addrspace(200)*, i8 addrspace(200)*, i8 addrspace(200)*, i8 addrspace(200)* } @get_tuple_cap(i8 addrspace(200)*) unnamed_addr addrspace(200) #0
-declare dso_local { i64, i64, i64, i64 } @get_tuple_i64(i8 addrspace(200)*) unnamed_addr addrspace(200) #0
-declare dso_local i1024 @get_huge_type(i8 addrspace(200)*) unnamed_addr addrspace(200) #0
+declare dso_local { ptr addrspace(200), ptr addrspace(200), ptr addrspace(200), ptr addrspace(200) } @get_tuple_cap(ptr addrspace(200)) unnamed_addr addrspace(200)
+declare dso_local { i64, i64, i64, i64 } @get_tuple_i64(ptr addrspace(200)) unnamed_addr addrspace(200)
+declare dso_local i1024 @get_huge_type(ptr addrspace(200)) unnamed_addr addrspace(200)
 
-define internal void @test(i8 addrspace(200)* align 16 dereferenceable(16) %ctr) unnamed_addr addrspace(200) nounwind #0 {
+define internal void @test(ptr addrspace(200) align 16 dereferenceable(16) %ctr) unnamed_addr addrspace(200) nounwind {
 ; CHECK-LABEL: test:
 ; CHECK:       # %bb.0: # %start
 ; CHECK-NEXT:    cincoffset $c11, $c11, -96
@@ -37,13 +37,13 @@ define internal void @test(i8 addrspace(200)* align 16 dereferenceable(16) %ctr)
 ; CHECK-NEXT:    cjr $c17
 ; CHECK-NEXT:    nop
 start:
-  %0 = call { i8 addrspace(200)*, i8 addrspace(200)*, i8 addrspace(200)*, i8 addrspace(200)* } @get_tuple_cap(i8 addrspace(200)* align 16 dereferenceable(16) %ctr)
-  %sret = extractvalue { i8 addrspace(200)*, i8 addrspace(200)*, i8 addrspace(200)*, i8 addrspace(200)* } %0, 3
-  call void @use_tuple_cap(i8 addrspace(200)* %sret)
+  %0 = call { ptr addrspace(200), ptr addrspace(200), ptr addrspace(200), ptr addrspace(200) } @get_tuple_cap(ptr addrspace(200) align 16 dereferenceable(16) %ctr)
+  %sret = extractvalue { ptr addrspace(200), ptr addrspace(200), ptr addrspace(200), ptr addrspace(200) } %0, 3
+  call void @use_tuple_cap(ptr addrspace(200) %sret)
   ret void
 }
 
-define internal void @test2(i8 addrspace(200)* align 16 dereferenceable(16) %ctr) unnamed_addr addrspace(200) nounwind {
+define internal void @test2(ptr addrspace(200) align 16 dereferenceable(16) %ctr) unnamed_addr addrspace(200) nounwind {
 ; CHECK-LABEL: test2:
 ; CHECK:       # %bb.0: # %start
 ; CHECK-NEXT:    cincoffset $c11, $c11, -64
@@ -67,13 +67,13 @@ define internal void @test2(i8 addrspace(200)* align 16 dereferenceable(16) %ctr
 ; CHECK-NEXT:    cjr $c17
 ; CHECK-NEXT:    nop
 start:
-  %0 = call { i64, i64, i64, i64 } @get_tuple_i64(i8 addrspace(200)* align 16 dereferenceable(16) %ctr)
+  %0 = call { i64, i64, i64, i64 } @get_tuple_i64(ptr addrspace(200) align 16 dereferenceable(16) %ctr)
   %sret = extractvalue { i64, i64, i64, i64 } %0, 3
   call void @use_tuple_i64(i64 %sret)
   ret void
 }
 
-define internal void @test3(i8 addrspace(200)* align 16 dereferenceable(16) %ctr) unnamed_addr addrspace(200) nounwind {
+define internal void @test3(ptr addrspace(200) align 16 dereferenceable(16) %ctr) unnamed_addr addrspace(200) nounwind {
 ; CHECK-LABEL: test3:
 ; CHECK:       # %bb.0: # %start
 ; CHECK-NEXT:    cincoffset $c11, $c11, -240
@@ -124,7 +124,7 @@ define internal void @test3(i8 addrspace(200)* align 16 dereferenceable(16) %ctr
 ; CHECK-NEXT:    cjr $c17
 ; CHECK-NEXT:    nop
 start:
-  %0 = call i1024 @get_huge_type(i8 addrspace(200)* align 16 dereferenceable(16) %ctr)
+  %0 = call i1024 @get_huge_type(ptr addrspace(200) align 16 dereferenceable(16) %ctr)
   call void @use_huge_value(i1024 %0)
   ret void
 }
@@ -143,10 +143,10 @@ define internal { i64, i64, i64, i64 } @get_tuple_i64_impl() unnamed_addr addrsp
 ; CHECK-NEXT:    csd $1, $zero, 8($c3)
 ; CHECK-NEXT:    cjr $c17
 ; CHECK-NEXT:    nop
-  ret { i64, i64, i64, i64 } { i64 10,  i64 20,  i64 30, i64 40 }
+  ret { i64, i64, i64, i64 } { i64 10, i64 20, i64 30, i64 40 }
 }
 
-define internal { i8 addrspace(200)*, i8 addrspace(200)*, i8 addrspace(200)*, i8 addrspace(200)* } @get_tuple_cap_impl() unnamed_addr addrspace(200) nounwind {
+define internal { ptr addrspace(200), ptr addrspace(200), ptr addrspace(200), ptr addrspace(200) } @get_tuple_cap_impl() unnamed_addr addrspace(200) nounwind {
 ; CHECK-LABEL: get_tuple_cap_impl:
 ; CHECK:       # %bb.0:
 ; CHECK-NEXT:    # kill: def $c1 killed $c3
@@ -160,10 +160,10 @@ define internal { i8 addrspace(200)*, i8 addrspace(200)*, i8 addrspace(200)*, i8
 ; CHECK-NEXT:    csc $c1, $zero, 16($c3)
 ; CHECK-NEXT:    cjr $c17
 ; CHECK-NEXT:    nop
-  ret { i8 addrspace(200)*, i8 addrspace(200)*, i8 addrspace(200)*, i8 addrspace(200)* } {
-     i8 addrspace(200)* inttoptr (i64 10 to i8 addrspace(200)*),
-     i8 addrspace(200)* inttoptr (i64 20 to i8 addrspace(200)*),
-     i8 addrspace(200)* inttoptr (i64 30 to i8 addrspace(200)*),
-     i8 addrspace(200)* inttoptr (i64 40 to i8 addrspace(200)*)
+  ret { ptr addrspace(200), ptr addrspace(200), ptr addrspace(200), ptr addrspace(200) } {
+     ptr addrspace(200) inttoptr (i64 10 to ptr addrspace(200)),
+     ptr addrspace(200) inttoptr (i64 20 to ptr addrspace(200)),
+     ptr addrspace(200) inttoptr (i64 30 to ptr addrspace(200)),
+     ptr addrspace(200) inttoptr (i64 40 to ptr addrspace(200))
   }
 }

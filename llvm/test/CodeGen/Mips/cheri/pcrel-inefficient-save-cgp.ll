@@ -3,16 +3,12 @@
 ; RUN: %cheri_purecap_llc -cheri-cap-table-abi=pcrel -O2 %s -o - | %cheri_FileCheck %s -check-prefixes PCREL
 
 
-%class.QWebSettings = type opaque
-%class.QGraphicsWebView = type { i8 }
-%class.QWebPage = type { i8 }
+declare ptr addrspace(200) @_ZN16QGraphicsWebView4pageEv(ptr addrspace(200)) addrspace(200)
 
-
-declare %class.QWebPage addrspace(200)* @_ZN16QGraphicsWebView4pageEv(%class.QGraphicsWebView addrspace(200)*) addrspace(200)
-declare %class.QWebSettings addrspace(200)* @_ZN8QWebPage8settingsEv(%class.QWebPage addrspace(200)*) addrspace(200)
+declare ptr addrspace(200) @_ZN8QWebPage8settingsEv(ptr addrspace(200)) addrspace(200)
 
 ; Function Attrs: nounwind
-define %class.QWebSettings addrspace(200)* @_ZN16QGraphicsWebView8settingsEv(%class.QGraphicsWebView addrspace(200)* %this) addrspace(200) nounwind align 2 {
+define ptr addrspace(200) @_ZN16QGraphicsWebView8settingsEv(ptr addrspace(200) %this) addrspace(200) nounwind align 2 {
 ; PLT-LABEL: _ZN16QGraphicsWebView8settingsEv:
 ; PLT:       # %bb.0: # %entry
 ; PLT-NEXT:    cincoffset $c11, $c11, -[[STACKFRAME_SIZE:32|64]]
@@ -50,7 +46,7 @@ define %class.QWebSettings addrspace(200)* @_ZN16QGraphicsWebView8settingsEv(%cl
 ; PCREL-NEXT:    cjr $c17
 ; PCREL-NEXT:    cincoffset $c11, $c11, [[STACKFRAME_SIZE]]
 entry:
-  %call = tail call %class.QWebPage addrspace(200)* @_ZN16QGraphicsWebView4pageEv(%class.QGraphicsWebView addrspace(200)* %this)
-  %call2 = tail call %class.QWebSettings addrspace(200)* @_ZN8QWebPage8settingsEv(%class.QWebPage addrspace(200)* %call)
-  ret %class.QWebSettings addrspace(200)* %call2
+  %call = tail call ptr addrspace(200) @_ZN16QGraphicsWebView4pageEv(ptr addrspace(200) %this)
+  %call2 = tail call ptr addrspace(200) @_ZN8QWebPage8settingsEv(ptr addrspace(200) %call)
+  ret ptr addrspace(200) %call2
 }

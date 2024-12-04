@@ -14,18 +14,14 @@ target datalayout = "pf200:128:128:128:64-A200-P200-G200"
 ; }
 %struct.b = type { i32, i8 }
 
-; Function Attrs: nounwind readnone willreturn
-declare i64 @llvm.cheri.cap.offset.get.i64(i8 addrspace(200)*) addrspace(200) #1
+declare i64 @llvm.cheri.cap.offset.get.i64(ptr addrspace(200)) addrspace(200)
 
-define dso_local i64 @e() addrspace(200) #0 {
+define dso_local i64 @e() addrspace(200) nounwind {
 ; CHECK-LABEL: e:
 ; CHECK:       # %bb.0: # %entry
 ; CHECK-NEXT:    cjr $c17
 ; CHECK-NEXT:    daddiu $2, $zero, 4
 entry:
-  %0 = call i64 @llvm.cheri.cap.offset.get.i64(i8 addrspace(200)* getelementptr inbounds (%struct.b, %struct.b addrspace(200)* null, i32 0, i32 1))
+  %0 = call i64 @llvm.cheri.cap.offset.get.i64(ptr addrspace(200) getelementptr inbounds (%struct.b, ptr addrspace(200) null, i32 0, i32 1))
   ret i64 %0
 }
-
-attributes #0 = { "use-soft-float"="false" }
-attributes #1 = { nounwind readnone willreturn }

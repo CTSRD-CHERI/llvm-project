@@ -26,8 +26,6 @@ define float @return_constant_pool() nounwind readnone {
 ; PURECAP-NEXT:    mtc1 $1, $f0
 ; PURECAP-NEXT:    cjr $c17
 ; PURECAP-NEXT:    nop
-
-
 entry:
   ret float 8.0
 }
@@ -53,13 +51,10 @@ define double @return_constant_pool2() nounwind readnone {
 ; PURECAP-NEXT:    dmtc1 $1, $f0
 ; PURECAP-NEXT:    cjr $c17
 ; PURECAP-NEXT:    nop
-
-
 entry:
   ret double 12.0
 }
 
-%struct.a = type { }
 define void @b() nounwind {
 ; N64-LABEL: b:
 ; N64:       # %bb.0:
@@ -94,7 +89,7 @@ define void @b() nounwind {
 ; PURECAP-NEXT:    cjalr $c12, $c17
 ; PURECAP-NEXT:    nop
   %c = fmul double undef, undef
-  call void @d(%struct.a addrspace(200)* undef, %struct.a addrspace(200)* undef, i32 undef, double %c)
+  call void @d(ptr addrspace(200) undef, ptr addrspace(200) undef, i32 undef, double %c)
   unreachable
 }
-declare void @d(%struct.a addrspace(200)*, %struct.a addrspace(200)*, i32 , double)
+declare void @d(ptr addrspace(200), ptr addrspace(200), i32, double)

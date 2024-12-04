@@ -7,20 +7,20 @@ target triple = "x86_64-apple-darwin18.2.0"
 
 %class.duration.i128 = type { i128 }
 
-define i128 @c(%class.duration.i128* %d) {
+define i128 @c(ptr %d) {
 entry:
-  %i.e = alloca i8 addrspace(200)*
-  %f = bitcast i8 addrspace(200)** %i.e to %class.duration.i128*
-  %0 = bitcast %class.duration.i128* %d to i8 addrspace(200)**
-  %1 = load i8 addrspace(200)*, i8 addrspace(200)** %0
-  store i8 addrspace(200)* %1, i8 addrspace(200)** %i.e
-  %call = call i128 @g(%class.duration.i128* %f)
+  %i.e = alloca ptr addrspace(200), align 16
+  %f = bitcast ptr %i.e to ptr
+  %0 = bitcast ptr %d to ptr
+  %1 = load ptr addrspace(200), ptr %0, align 16
+  store ptr addrspace(200) %1, ptr %i.e, align 16
+  %call = call i128 @g(ptr %f)
   ret i128 %call
 }
 
-define i128 @g(%class.duration.i128* %h) {
+define i128 @g(ptr %h) {
 entry:
-  %as = getelementptr %class.duration.i128, %class.duration.i128* %h, i64 0, i32 0
-  %0 = load i128, i128* %as, align 16
+  %as = getelementptr %class.duration.i128, ptr %h, i64 0, i32 0
+  %0 = load i128, ptr %as, align 16
   ret i128 %0
 }

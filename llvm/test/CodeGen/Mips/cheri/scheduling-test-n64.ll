@@ -44,14 +44,14 @@
 ; MIPS4-NEXT: dsubu $2, $3, $2
 ; MIPS4-NEXT: daddu $2, $2, $1
 
-define i64 @test2(i8* %a1, i8* %a2) nounwind {
+define i64 @test2(ptr %a1, ptr %a2) nounwind {
 entry:
-  %sub.ptr.lhs.cast = ptrtoint i8* %a1 to i64
-  %sub.ptr.rhs.cast = ptrtoint i8* %a2 to i64
-  %0 = bitcast i8* %a1 to i64*
-  %1 = load i64, i64* %0, align 8
-  %2 = bitcast i8* %a2 to i64*
-  %3 = load i64, i64* %2, align 8
+  %sub.ptr.lhs.cast = ptrtoint ptr %a1 to i64
+  %sub.ptr.rhs.cast = ptrtoint ptr %a2 to i64
+  %0 = bitcast ptr %a1 to ptr
+  %1 = load i64, ptr %0, align 8
+  %2 = bitcast ptr %a2 to ptr
+  %3 = load i64, ptr %2, align 8
   %sub.ptr.sub = sub i64 %sub.ptr.lhs.cast, %sub.ptr.rhs.cast
   %sub = sub nsw i64 %1, %3
   %add = add nsw i64 %sub, %sub.ptr.sub
@@ -80,12 +80,12 @@ entry:
 ; MIPS4-NEXT: ld $3, 0($4)
 ; MIPS4-NEXT: dsubu $2, $3, $2
 ; MIPS4-NEXT: daddu $2, $2, $1
-define i64 @test3(i8* %a1, i8* %a2, i64 signext %extra1, i64 signext %extra2) nounwind {
+define i64 @test3(ptr %a1, ptr %a2, i64 signext %extra1, i64 signext %extra2) nounwind {
 entry:
-  %0 = bitcast i8* %a1 to i64*
-  %1 = load i64, i64* %0, align 8
-  %2 = bitcast i8* %a2 to i64*
-  %3 = load i64, i64* %2, align 8
+  %0 = bitcast ptr %a1 to ptr
+  %1 = load i64, ptr %0, align 8
+  %2 = bitcast ptr %a2 to ptr
+  %3 = load i64, ptr %2, align 8
   %add = add nsw i64 %extra1, %extra2
   %sub = sub nsw i64 %1, %3
   %add1 = add nsw i64 %sub, %add

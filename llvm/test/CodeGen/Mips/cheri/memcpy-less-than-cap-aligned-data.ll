@@ -3,9 +3,10 @@
 
 @.str = private unnamed_addr addrspace(200) constant [18 x i8] c"ASSERTION FAILED \00", align 1
 
+declare void @llvm.memcpy.p200.p200.i64(ptr addrspace(200) noalias nocapture writeonly, ptr addrspace(200) noalias nocapture readonly, i64, i1 immarg) addrspace(200)
+
 ; Function Attrs: nounwind
-declare void @llvm.memcpy.p200i8.p200i8.i64(i8 addrspace(200)* nocapture writeonly, i8 addrspace(200)* nocapture readonly, i64, i1) addrspace(200) #1
-define void @_Z1av(i8 addrspace(200)* %dst) local_unnamed_addr addrspace(200) nounwind {
+define void @_Z1av(ptr addrspace(200) %dst) local_unnamed_addr addrspace(200) nounwind {
 ; CHECK-LABEL: _Z1av:
 ; CHECK:       # %bb.0: # %entry
 ; CHECK-NEXT:    cincoffset $c11, $c11, -[[STACKFRAME_SIZE:16|32]]
@@ -23,6 +24,6 @@ define void @_Z1av(i8 addrspace(200)* %dst) local_unnamed_addr addrspace(200) no
 entry:
   ; This should call memcpy since its > CAP_SIZE and not aligned
   ; TODO: could notice that this is a constant value without any capabilities and inline it?
-  tail call void @llvm.memcpy.p200i8.p200i8.i64(i8 addrspace(200)* align 536870912 %dst, i8 addrspace(200)* align 1 getelementptr inbounds ([18 x i8], [18 x i8] addrspace(200)* @.str, i64 0, i64 0), i64 17, i1 false)
+  tail call void @llvm.memcpy.p200.p200.i64(ptr addrspace(200) align 536870912 %dst, ptr addrspace(200) align 1 @.str, i64 17, i1 false)
   ret void
 }

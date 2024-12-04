@@ -4,13 +4,11 @@
 ; This was crahsing after merging to Jan 8th 2018 (cheri_prinf.c from cheribsd)
 ; Assertion failed: (Offset.getBitWidth() == DL.getPointerAddrSizeInBits(cast<PointerType>( getType())->getAddressSpace()) && "The offset must have exactly as many bits as our pointer.")
 
-; Function Attrs: nounwind readnone speculatable
-declare void @llvm.dbg.declare(metadata, metadata, metadata) #0
+declare void @llvm.dbg.declare(metadata, metadata, metadata)
 
-; Function Attrs: noinline nounwind optnone
-define void @libcheri_printf_putchar() #1 !dbg !35 {
+define void @libcheri_printf_putchar() noinline nounwind optnone !dbg !35 {
 entry:
-  call void @llvm.dbg.declare(metadata i8 addrspace(200)* addrspace(200)* undef, metadata !39, metadata !DIExpression()), !dbg !40
+  call void @llvm.dbg.declare(metadata ptr addrspace(200) undef, metadata !39, metadata !DIExpression()), !dbg !40
   ret void, !dbg !41
 }
 
@@ -43,9 +41,6 @@ entry:
 ; CHECK-NEXT: 	cjr	$c17
 ; CHECK-NEXT: 	cincoffset	$c11, $c11, [[#CAP_SIZE * 2]]
 ; CHECK-NEXT: .Ltmp2:
-
-attributes #0 = { nounwind readnone speculatable }
-attributes #1 = { noinline nounwind optnone }
 
 !llvm.dbg.cu = !{!0}
 !llvm.module.flags = !{!33, !34}
@@ -84,8 +79,8 @@ attributes #1 = { noinline nounwind optnone }
 !31 = !{!32}
 !32 = !DISubrange(count: 37)
 !33 = !{i32 2, !"Debug Info Version", i32 3}
-!34 = !{i32 7, !"PIC Level", i32 1}
-!35 = distinct !DISubprogram(name: "libcheri_printf_putchar", scope: !28, file: !28, line: 527, type: !36, isLocal: true, isDefinition: true, scopeLine: 528, flags: DIFlagPrototyped, isOptimized: false, unit: !0)
+!34 = !{i32 8, !"PIC Level", i32 1}
+!35 = distinct !DISubprogram(name: "libcheri_printf_putchar", scope: !28, file: !28, line: 527, type: !36, scopeLine: 528, flags: DIFlagPrototyped, spFlags: DISPFlagLocalToUnit | DISPFlagDefinition, unit: !0)
 !36 = !DISubroutineType(types: !37)
 !37 = !{null, !38, !4}
 !38 = !DIBasicType(name: "int", size: 32, encoding: DW_ATE_signed)

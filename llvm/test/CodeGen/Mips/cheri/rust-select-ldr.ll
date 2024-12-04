@@ -3,9 +3,9 @@
 ; RUN: %cheri_purecap_llc -verify-machineinstrs -O0 -o - %s | %cheri_FileCheck %s -check-prefix PURECAP
 ; This rust-derived IR was generating a LDL instruction for the extractvalue of the hidden sret paramter:
 
-declare dso_local i128 @"_ZN3lib6option15Option$LT$T$GT$6unwrap17h50e7a820126dcfe5E"(i64, i128) unnamed_addr addrspace(200) #0
+declare dso_local i128 @"_ZN3lib6option15Option$LT$T$GT$6unwrap17h50e7a820126dcfe5E"(i64, i128) unnamed_addr addrspace(200)
 
-declare dso_local { i64, i128 } @"_ZN63_$LT$main..Counter$u20$as$u20$lib..iter..iterator..Iterator$GT$4next17h229c875ab7438d23E"(i128 addrspace(200)*) unnamed_addr addrspace(200) #0
+declare dso_local { i64, i128 } @"_ZN63_$LT$main..Counter$u20$as$u20$lib..iter..iterator..Iterator$GT$4next17h229c875ab7438d23E"(ptr addrspace(200)) unnamed_addr addrspace(200)
 
 define internal void @_ZN4main4main17hfe98083a4c87500fE() unnamed_addr addrspace(200) nounwind {
 ; MIPS-LABEL: _ZN4main4main17hfe98083a4c87500fE:
@@ -55,7 +55,7 @@ define internal void @_ZN4main4main17hfe98083a4c87500fE() unnamed_addr addrspace
 ; This is an insanely slow sequence of instructions but at least it no longer asserts:
 start:
   %ctr = alloca i128, align 16, addrspace(200)
-  %0 = call { i64, i128 } @"_ZN63_$LT$main..Counter$u20$as$u20$lib..iter..iterator..Iterator$GT$4next17h229c875ab7438d23E"(i128 addrspace(200)* align 16 dereferenceable(16) %ctr)
+  %0 = call { i64, i128 } @"_ZN63_$LT$main..Counter$u20$as$u20$lib..iter..iterator..Iterator$GT$4next17h229c875ab7438d23E"(ptr addrspace(200) align 16 dereferenceable(16) %ctr)
   %1 = extractvalue { i64, i128 } %0, 0
   %2 = extractvalue { i64, i128 } %0, 1
   %3 = call i128 @"_ZN3lib6option15Option$LT$T$GT$6unwrap17h50e7a820126dcfe5E"(i64 %1, i128 %2)

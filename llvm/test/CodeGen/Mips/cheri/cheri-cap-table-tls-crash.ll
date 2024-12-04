@@ -6,19 +6,44 @@
 @tls_item = external dso_local thread_local(initialexec) addrspace(200) global i8, align 1
 @.str.6 = external dso_local unnamed_addr addrspace(200) constant [15 x i8], align 1
 
-declare void @printf(i8 addrspace(200)*, ...) addrspace(200)
+declare void @printf(ptr addrspace(200), ...) addrspace(200)
 
 ; Function Attrs: noinline nounwind optnone uwtable
 define dso_local void @check_tls_item() addrspace(200) #0 {
+; CHECK-LABEL: check_tls_item:
+; CHECK:       # %bb.0: # %entry
+; CHECK-NEXT:    cincoffset $c11, $c11, -48
+; CHECK-NEXT:    .cfi_def_cfa_offset 48
+; CHECK-NEXT:    csc $c17, $zero, 32($c11) # 16-byte Folded Spill
+; CHECK-NEXT:    .cfi_offset 89, -16
+; CHECK-NEXT:    lui $1, %pcrel_hi(_CHERI_CAPABILITY_TABLE_-8)
+; CHECK-NEXT:    daddiu $1, $1, %pcrel_lo(_CHERI_CAPABILITY_TABLE_-4)
+; CHECK-NEXT:    cgetpccincoffset $c1, $1
+; CHECK-NEXT:    csc $c1, $zero, 16($c11) # 16-byte Folded Spill
+; CHECK-NEXT:    cmove $c2, $c11
+; CHECK-NEXT:    daddiu $1, $zero, 0
+; CHECK-NEXT:    csd $zero, $zero, 0($c2)
+; CHECK-NEXT:    csetbounds $c2, $c2, 8
+; CHECK-NEXT:    ori $1, $zero, 65495
+; CHECK-NEXT:    candperm $c13, $c2, $1
+; CHECK-NEXT:    clcbi $c3, %captab20(.str.6)($c1)
+; CHECK-NEXT:    clcbi $c12, %capcall20(printf)($c1)
+; CHECK-NEXT:    cjalr $c12, $c17
+; CHECK-NEXT:    nop
+; CHECK-NEXT:    clc $c1, $zero, 16($c11) # 16-byte Folded Reload
+; CHECK-NEXT:    lui $1, %captab_tprel_hi(tls_item)
+; CHECK-NEXT:    daddiu $1, $1, %captab_tprel_lo(tls_item)
+; CHECK-NEXT:    cld $1, $1, 0($c1)
+; CHECK-NEXT:    creadhwr $c1, $chwr_userlocal
+; CHECK-NEXT:    clb $1, $1, 0($c1)
+; CHECK-NEXT:    clc $c17, $zero, 32($c11) # 16-byte Folded Reload
+; CHECK-NEXT:    cincoffset $c11, $c11, 48
+; CHECK-NEXT:    cjr $c17
+; CHECK-NEXT:    nop
 entry:
-  call void (i8 addrspace(200)*, ...) @printf(i8 addrspace(200)* getelementptr inbounds ([15 x i8], [15 x i8] addrspace(200)* @.str.6, i32 0, i32 0), i32 signext undef)
-  %0 = load volatile i8, i8 addrspace(200)* @tls_item, align 1
+  call void (ptr addrspace(200), ...) @printf(ptr addrspace(200) @.str.6, i32 signext undef)
+  %0 = load volatile i8, ptr addrspace(200) @tls_item, align 1
   ret void
-
-  ; CHECK:      lui	$1, %captab_tprel_hi(tls_item)
-  ; CHECK-NEXT: daddiu	$1, $1, %captab_tprel_lo(tls_item)
-  ; CHECK-NEXT: cld $1, $1, 0($c1)
-  ; CHECK-NEXT: creadhwr	$c1, $chwr_userlocal
 }
 
 attributes #0 = { noinline nounwind optnone uwtable }

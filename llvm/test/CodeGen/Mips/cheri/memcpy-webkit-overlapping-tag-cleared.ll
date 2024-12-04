@@ -3,27 +3,21 @@
 ; Regression test for a crash in Webkit where the tag bit for hash map keys was cleared due to
 ; inlined memcpy performing an unaligned csd that cleared the tag bit of the key member
 
-%struct.PropertyMapEntryPadded = type { %struct.UniquedStringImpl addrspace(200)*, i32, i8, i8, [10 x i8] }
-%struct.PropertyMapEntryNoPadding = type { %struct.UniquedStringImpl addrspace(200)*, i32, i8, i8 }
-%struct.UniquedStringImpl = type opaque
 
-; Function Attrs: argmemonly nounwind
-declare void @llvm.lifetime.start.p200i8(i64, i8 addrspace(200)* nocapture) addrspace(200) #1
-; Function Attrs: argmemonly nounwind
-declare void @llvm.memcpy.p200i8.p200i8.i64(i8 addrspace(200)* nocapture writeonly, i8 addrspace(200)* nocapture readonly, i64, i1) addrspace(200) #1
-; Function Attrs: argmemonly nounwind
-declare void @llvm.lifetime.end.p200i8(i64, i8 addrspace(200)* nocapture) addrspace(200) #1
+declare void @llvm.lifetime.start.p200(i64 immarg, ptr addrspace(200) nocapture) addrspace(200)
 
+declare void @llvm.memcpy.p200.p200.i64(ptr addrspace(200) noalias nocapture writeonly, ptr addrspace(200) noalias nocapture readonly, i64, i1 immarg) addrspace(200)
 
-declare %struct.PropertyMapEntryPadded addrspace(200)* @find_in_table(i32 signext) local_unnamed_addr addrspace(200) #2
+declare void @llvm.lifetime.end.p200(i64 immarg, ptr addrspace(200) nocapture) addrspace(200)
 
-; This performs two capability copies:
-define i1 @insert_padded_test(%struct.PropertyMapEntryPadded addrspace(200)* nocapture readonly %key, i32 signext %index) local_unnamed_addr addrspace(200) #0 {
+declare ptr addrspace(200) @find_in_table(i32 signext) local_unnamed_addr addrspace(200) nounwind
+
+define i1 @insert_padded_test(ptr addrspace(200) nocapture readonly %key, i32 signext %index) local_unnamed_addr addrspace(200) nounwind {
 ; CHECK-LABEL: insert_padded_test:
 ; CHECK:       # %bb.0: # %entry
-; CHECK-NEXT:    cincoffset $c11, $c11, -[[STACKFRAME_SIZE:32|64]]
-; CHECK-NEXT:    csc $c18, $zero, [[#CAP_SIZE * 1]]($c11)
-; CHECK-NEXT:    csc $c17, $zero, 0($c11)
+; CHECK-NEXT:    cincoffset $c11, $c11, -32
+; CHECK-NEXT:    csc $c18, $zero, 16($c11) # 16-byte Folded Spill
+; CHECK-NEXT:    csc $c17, $zero, 0($c11) # 16-byte Folded Spill
 ; CHECK-NEXT:    lui $1, %pcrel_hi(_CHERI_CAPABILITY_TABLE_-8)
 ; CHECK-NEXT:    daddiu $1, $1, %pcrel_lo(_CHERI_CAPABILITY_TABLE_-4)
 ; CHECK-NEXT:    cgetpccincoffset $c1, $1
@@ -35,26 +29,26 @@ define i1 @insert_padded_test(%struct.PropertyMapEntryPadded addrspace(200)* noc
 ; CHECK-NEXT:    clc $c1, $zero, 16($c18)
 ; CHECK-NEXT:    addiu $2, $zero, 1
 ; CHECK-NEXT:    csc $c1, $zero, 16($c3)
-; CHECK-NEXT:    clc $c17, $zero, 0($c11)
-; CHECK-NEXT:    clc $c18, $zero, [[#CAP_SIZE * 1]]($c11)
+; CHECK-NEXT:    clc $c17, $zero, 0($c11) # 16-byte Folded Reload
+; CHECK-NEXT:    clc $c18, $zero, 16($c11) # 16-byte Folded Reload
 ; CHECK-NEXT:    cjr $c17
-; CHECK-NEXT:    cincoffset $c11, $c11, [[STACKFRAME_SIZE]]
+; CHECK-NEXT:    cincoffset $c11, $c11, 32
 entry:
-  %call = tail call %struct.PropertyMapEntryPadded addrspace(200)* @find_in_table(i32 signext %index) #3
-  %0 = bitcast %struct.PropertyMapEntryPadded addrspace(200)* %call to i8 addrspace(200)*
-  %1 = bitcast %struct.PropertyMapEntryPadded addrspace(200)* %key to i8 addrspace(200)*
-  tail call void @llvm.memcpy.p200i8.p200i8.i64(i8 addrspace(200)* align 16 %0, i8 addrspace(200)* nonnull align 16 %1, i64 32, i1 false)
-  ret i1 1
+  %call = tail call ptr addrspace(200) @find_in_table(i32 signext %index) nounwind
+  %0 = bitcast ptr addrspace(200) %call to ptr addrspace(200)
+  %1 = bitcast ptr addrspace(200) %key to ptr addrspace(200)
+  tail call void @llvm.memcpy.p200.p200.i64(ptr addrspace(200) align 16 %0, ptr addrspace(200) nonnull align 16 %1, i64 32, i1 false)
+  ret i1 true
 }
 
 ; Ensure that we don't attempt to perfom a CIncOffset by 14 followed by an 8byte store for the last few bytes
-; This was preivoulsy clearing the tag bit. Perform a 4byte store followed by a 2 byte one instead!
-define i1 @insert_padded_but_copy_only_relevant_bytes(%struct.PropertyMapEntryPadded addrspace(200)* nocapture readonly %key, i32 signext %index) local_unnamed_addr addrspace(200) #0 {
+; This was preivoulsy clearing the tag bit. Perform a 4 byte store followed by a 2 byte one instead!
+define i1 @insert_padded_but_copy_only_relevant_bytes(ptr addrspace(200) nocapture readonly %key, i32 signext %index) local_unnamed_addr addrspace(200) nounwind {
 ; CHECK-LABEL: insert_padded_but_copy_only_relevant_bytes:
 ; CHECK:       # %bb.0: # %entry
-; CHECK-NEXT:    cincoffset $c11, $c11, -[[STACKFRAME_SIZE:32|64]]
-; CHECK-NEXT:    csc $c18, $zero, [[#CAP_SIZE * 1]]($c11)
-; CHECK-NEXT:    csc $c17, $zero, 0($c11)
+; CHECK-NEXT:    cincoffset $c11, $c11, -32
+; CHECK-NEXT:    csc $c18, $zero, 16($c11) # 16-byte Folded Spill
+; CHECK-NEXT:    csc $c17, $zero, 0($c11) # 16-byte Folded Spill
 ; CHECK-NEXT:    lui $1, %pcrel_hi(_CHERI_CAPABILITY_TABLE_-8)
 ; CHECK-NEXT:    daddiu $1, $1, %pcrel_lo(_CHERI_CAPABILITY_TABLE_-4)
 ; CHECK-NEXT:    cgetpccincoffset $c1, $1
@@ -66,25 +60,26 @@ define i1 @insert_padded_but_copy_only_relevant_bytes(%struct.PropertyMapEntryPa
 ; CHECK-NEXT:    clc $c1, $zero, 16($c18)
 ; CHECK-NEXT:    addiu $2, $zero, 1
 ; CHECK-NEXT:    csc $c1, $zero, 16($c3)
-; CHECK-NEXT:    clc $c17, $zero, 0($c11)
-; CHECK-NEXT:    clc $c18, $zero, [[#CAP_SIZE * 1]]($c11)
+; CHECK-NEXT:    clc $c17, $zero, 0($c11) # 16-byte Folded Reload
+; CHECK-NEXT:    clc $c18, $zero, 16($c11) # 16-byte Folded Reload
 ; CHECK-NEXT:    cjr $c17
-; CHECK-NEXT:    cincoffset $c11, $c11, [[STACKFRAME_SIZE]]
+; CHECK-NEXT:    cincoffset $c11, $c11, 32
 entry:
-  %call = tail call %struct.PropertyMapEntryPadded addrspace(200)* @find_in_table(i32 signext %index) #3
-  %0 = bitcast %struct.PropertyMapEntryPadded addrspace(200)* %call to i8 addrspace(200)*
-  %1 = bitcast %struct.PropertyMapEntryPadded addrspace(200)* %key to i8 addrspace(200)*
-  tail call void @llvm.memcpy.p200i8.p200i8.i64(i8 addrspace(200)* align 16 %0, i8 addrspace(200)* nonnull align 16 %1, i64 32, i1 false)
-  ret i1 1
+  %call = tail call ptr addrspace(200) @find_in_table(i32 signext %index) nounwind
+  %0 = bitcast ptr addrspace(200) %call to ptr addrspace(200)
+  %1 = bitcast ptr addrspace(200) %key to ptr addrspace(200)
+  tail call void @llvm.memcpy.p200.p200.i64(ptr addrspace(200) align 16 %0, ptr addrspace(200) nonnull align 16 %1, i64 32, i1 false)
+  ret i1 true
 }
 
-declare %struct.PropertyMapEntryNoPadding addrspace(200)* @find_in_table_unpadded(i32 signext) local_unnamed_addr addrspace(200) #2
-define i1 @insert_no_padding(%struct.PropertyMapEntryNoPadding addrspace(200)* nocapture readonly %key, i32 signext %index) local_unnamed_addr addrspace(200) #0 {
+declare ptr addrspace(200) @find_in_table_unpadded(i32 signext) local_unnamed_addr addrspace(200) nounwind
+
+define i1 @insert_no_padding(ptr addrspace(200) nocapture readonly %key, i32 signext %index) local_unnamed_addr addrspace(200) nounwind {
 ; CHECK-LABEL: insert_no_padding:
 ; CHECK:       # %bb.0: # %entry
-; CHECK-NEXT:    cincoffset $c11, $c11, -[[STACKFRAME_SIZE:32|64]]
-; CHECK-NEXT:    csc $c18, $zero, [[#CAP_SIZE * 1]]($c11)
-; CHECK-NEXT:    csc $c17, $zero, 0($c11)
+; CHECK-NEXT:    cincoffset $c11, $c11, -32
+; CHECK-NEXT:    csc $c18, $zero, 16($c11) # 16-byte Folded Spill
+; CHECK-NEXT:    csc $c17, $zero, 0($c11) # 16-byte Folded Spill
 ; CHECK-NEXT:    lui $1, %pcrel_hi(_CHERI_CAPABILITY_TABLE_-8)
 ; CHECK-NEXT:    daddiu $1, $1, %pcrel_lo(_CHERI_CAPABILITY_TABLE_-4)
 ; CHECK-NEXT:    cgetpccincoffset $c1, $1
@@ -98,19 +93,14 @@ define i1 @insert_no_padding(%struct.PropertyMapEntryNoPadding addrspace(200)* n
 ; CHECK-NEXT:    clh $1, $zero, 20($c18)
 ; CHECK-NEXT:    addiu $2, $zero, 1
 ; CHECK-NEXT:    csh $1, $zero, 20($c3)
-; CHECK-NEXT:    clc $c17, $zero, 0($c11)
-; CHECK-NEXT:    clc $c18, $zero, [[#CAP_SIZE * 1]]($c11)
+; CHECK-NEXT:    clc $c17, $zero, 0($c11) # 16-byte Folded Reload
+; CHECK-NEXT:    clc $c18, $zero, 16($c11) # 16-byte Folded Reload
 ; CHECK-NEXT:    cjr $c17
-; CHECK-NEXT:    cincoffset $c11, $c11, [[STACKFRAME_SIZE]]
+; CHECK-NEXT:    cincoffset $c11, $c11, 32
 entry:
-  %call = tail call %struct.PropertyMapEntryNoPadding addrspace(200)* @find_in_table_unpadded(i32 signext %index) #3
-  %0 = bitcast %struct.PropertyMapEntryNoPadding addrspace(200)* %call to i8 addrspace(200)*
-  %1 = bitcast %struct.PropertyMapEntryNoPadding addrspace(200)* %key to i8 addrspace(200)*
-  tail call void @llvm.memcpy.p200i8.p200i8.i64(i8 addrspace(200)* align 16 %0, i8 addrspace(200)* nonnull align 16 %1, i64 22, i1 false)
-  ret i1 1
+  %call = tail call ptr addrspace(200) @find_in_table_unpadded(i32 signext %index) nounwind
+  %0 = bitcast ptr addrspace(200) %call to ptr addrspace(200)
+  %1 = bitcast ptr addrspace(200) %key to ptr addrspace(200)
+  tail call void @llvm.memcpy.p200.p200.i64(ptr addrspace(200) align 16 %0, ptr addrspace(200) nonnull align 16 %1, i64 22, i1 false)
+  ret i1 true
 }
-
-attributes #0 = { nounwind }
-attributes #1 = { argmemonly nounwind }
-attributes #2 = { nounwind }
-attributes #3 = { nounwind }

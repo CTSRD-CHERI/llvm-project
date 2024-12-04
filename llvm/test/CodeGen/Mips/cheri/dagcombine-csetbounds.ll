@@ -2,28 +2,23 @@
 ; RUNNOT: %cheri_purecap_llc -O2 -start-after=cheri-bound-allocas %s -o - -debug-only=dagcombine,mips-lower
 ; RUN: %cheri_purecap_llc -O2 -start-after=cheri-bound-allocas %s -o - | %cheri_FileCheck %s
 
-; Function Attrs: argmemonly nounwind
-declare void @llvm.lifetime.start.p200i8(i64 immarg, i8 addrspace(200)* nocapture) addrspace(200) #1
+declare void @use(ptr addrspace(200)) local_unnamed_addr addrspace(200) nounwind
 
-declare void @use(i8 addrspace(200)*) local_unnamed_addr addrspace(200) #2
+declare ptr addrspace(200) @llvm.cheri.cap.bounds.set.i64(ptr addrspace(200), i64) addrspace(200)
+declare ptr addrspace(200) @llvm.cheri.cap.bounds.set.exact.i64(ptr addrspace(200), i64) addrspace(200)
 
-; Function Attrs: nounwind readnone
-declare i8 addrspace(200)* @llvm.cheri.cap.bounds.set.i64(i8 addrspace(200)*, i64) addrspace(200) #3
-declare i8 addrspace(200)* @llvm.cheri.cap.bounds.set.exact.i64(i8 addrspace(200)*, i64) addrspace(200) #3
+declare void @llvm.lifetime.start.p200(i64 immarg, ptr addrspace(200) nocapture) addrspace(200)
+declare void @llvm.lifetime.end.p200(i64 immarg, ptr addrspace(200) nocapture) addrspace(200) #2
 
-; Function Attrs: argmemonly nounwind
-declare void @llvm.lifetime.end.p200i8(i64 immarg, i8 addrspace(200)* nocapture) addrspace(200) #1
-
-; Function Attrs: nounwind readnone
-declare i8 addrspace(200)* @llvm.cheri.bounded.stack.cap.i64(i8 addrspace(200)*, i64) addrspace(200) #3
+declare ptr addrspace(200) @llvm.cheri.bounded.stack.cap.i64(ptr addrspace(200), i64) addrspace(200) #1
 
 ; Function Attrs: nounwind
-define signext i32 @stack_array() local_unnamed_addr addrspace(200) #0 {
+define signext i32 @stack_array() local_unnamed_addr addrspace(200) nounwind {
 ; CHECK-LABEL: stack_array:
 ; CHECK:       # %bb.0: # %entry
-; CHECK-NEXT:    cincoffset $c11, $c11, -[[#STACKFRAME_SIZE:]]
-; CHECK-NEXT:    csc $c18, $zero, [[#CAP_SIZE * 4]]($c11)
-; CHECK-NEXT:    csc $c17, $zero, [[#CAP_SIZE * 3]]($c11)
+; CHECK-NEXT:    cincoffset $c11, $c11, -80
+; CHECK-NEXT:    csc $c18, $zero, 64($c11) # 16-byte Folded Spill
+; CHECK-NEXT:    csc $c17, $zero, 48($c11) # 16-byte Folded Spill
 ; CHECK-NEXT:    lui $1, %pcrel_hi(_CHERI_CAPABILITY_TABLE_-8)
 ; CHECK-NEXT:    daddiu $1, $1, %pcrel_lo(_CHERI_CAPABILITY_TABLE_-4)
 ; CHECK-NEXT:    cgetpccincoffset $c1, $1
@@ -34,30 +29,30 @@ define signext i32 @stack_array() local_unnamed_addr addrspace(200) #0 {
 ; CHECK-NEXT:    cjalr $c12, $c17
 ; CHECK-NEXT:    csetbounds $c3, $c3, 40
 ; CHECK-NEXT:    clw $2, $zero, 20($c18)
-; CHECK-NEXT:    clc $c17, $zero, [[#CAP_SIZE * 3]]($c11)
-; CHECK-NEXT:    clc $c18, $zero, [[#CAP_SIZE * 4]]($c11)
+; CHECK-NEXT:    clc $c17, $zero, 48($c11) # 16-byte Folded Reload
+; CHECK-NEXT:    clc $c18, $zero, 64($c11) # 16-byte Folded Reload
 ; CHECK-NEXT:    cjr $c17
-; CHECK-NEXT:    cincoffset $c11, $c11, [[#STACKFRAME_SIZE]]
+; CHECK-NEXT:    cincoffset $c11, $c11, 80
 entry:
   %array = alloca [10 x i32], align 4, addrspace(200)
-  %0 = bitcast [10 x i32] addrspace(200)* %array to i8 addrspace(200)*
-  %1 = call i8 addrspace(200)* @llvm.cheri.bounded.stack.cap.i64(i8 addrspace(200)* %0, i64 40)
-  %2 = bitcast i8 addrspace(200)* %1 to [10 x i32] addrspace(200)*
-  %3 = bitcast [10 x i32] addrspace(200)* %2 to i8 addrspace(200)*
-  %4 = call i8 addrspace(200)* @llvm.cheri.cap.bounds.set.i64(i8 addrspace(200)* nonnull %3, i64 40)
-  call void @use(i8 addrspace(200)* %4) #4
-  %arrayidx = getelementptr inbounds i8, i8 addrspace(200)* %4, i64 20
-  %5 = bitcast i8 addrspace(200)* %arrayidx to i32 addrspace(200)*
-  %6 = load i32, i32 addrspace(200)* %5, align 4
+  %0 = bitcast ptr addrspace(200) %array to ptr addrspace(200)
+  %1 = call ptr addrspace(200) @llvm.cheri.bounded.stack.cap.i64(ptr addrspace(200) %0, i64 40)
+  %2 = bitcast ptr addrspace(200) %1 to ptr addrspace(200)
+  %3 = bitcast ptr addrspace(200) %2 to ptr addrspace(200)
+  %4 = call ptr addrspace(200) @llvm.cheri.cap.bounds.set.i64(ptr addrspace(200) nonnull %3, i64 40)
+  call void @use(ptr addrspace(200) %4) nounwind
+  %arrayidx = getelementptr inbounds i8, ptr addrspace(200) %4, i64 20
+  %5 = bitcast ptr addrspace(200) %arrayidx to ptr addrspace(200)
+  %6 = load i32, ptr addrspace(200) %5, align 4
   ret i32 %6
 }
 
 ; Function Attrs: nounwind
-define signext i32 @stack_int() local_unnamed_addr addrspace(200) #0 {
+define signext i32 @stack_int() local_unnamed_addr addrspace(200) nounwind {
 ; CHECK-LABEL: stack_int:
 ; CHECK:       # %bb.0: # %entry
-; CHECK-NEXT:    cincoffset $c11, $c11, -[[#STACKFRAME_SIZE:]]
-; CHECK-NEXT:    csc $c17, $zero, [[#CAP_SIZE * 1]]($c11)
+; CHECK-NEXT:    cincoffset $c11, $c11, -32
+; CHECK-NEXT:    csc $c17, $zero, 16($c11) # 16-byte Folded Spill
 ; CHECK-NEXT:    lui $1, %pcrel_hi(_CHERI_CAPABILITY_TABLE_-8)
 ; CHECK-NEXT:    daddiu $1, $1, %pcrel_lo(_CHERI_CAPABILITY_TABLE_-4)
 ; CHECK-NEXT:    cgetpccincoffset $c1, $1
@@ -68,28 +63,28 @@ define signext i32 @stack_int() local_unnamed_addr addrspace(200) #0 {
 ; CHECK-NEXT:    cjalr $c12, $c17
 ; CHECK-NEXT:    csetbounds $c3, $c3, 4
 ; CHECK-NEXT:    clw $2, $zero, 12($c11)
-; CHECK-NEXT:    clc $c17, $zero, [[#CAP_SIZE * 1]]($c11)
+; CHECK-NEXT:    clc $c17, $zero, 16($c11) # 16-byte Folded Reload
 ; CHECK-NEXT:    cjr $c17
-; CHECK-NEXT:    cincoffset $c11, $c11, [[#STACKFRAME_SIZE]]
+; CHECK-NEXT:    cincoffset $c11, $c11, 32
 entry:
   %value = alloca i32, align 4, addrspace(200)
-  %0 = bitcast i32 addrspace(200)* %value to i8 addrspace(200)*
-  %1 = call i8 addrspace(200)* @llvm.cheri.bounded.stack.cap.i64(i8 addrspace(200)* %0, i64 4)
-  %2 = bitcast i8 addrspace(200)* %1 to i32 addrspace(200)*
-  %3 = bitcast i32 addrspace(200)* %2 to i8 addrspace(200)*
-  store i32 1, i32 addrspace(200)* %value, align 4
-  %4 = call i8 addrspace(200)* @llvm.cheri.cap.bounds.set.i64(i8 addrspace(200)* nonnull %3, i64 4)
-  call void @use(i8 addrspace(200)* %4) #4
-  %5 = load i32, i32 addrspace(200)* %value, align 4
+  %0 = bitcast ptr addrspace(200) %value to ptr addrspace(200)
+  %1 = call ptr addrspace(200) @llvm.cheri.bounded.stack.cap.i64(ptr addrspace(200) %0, i64 4)
+  %2 = bitcast ptr addrspace(200) %1 to ptr addrspace(200)
+  %3 = bitcast ptr addrspace(200) %2 to ptr addrspace(200)
+  store i32 1, ptr addrspace(200) %value, align 4
+  %4 = call ptr addrspace(200) @llvm.cheri.cap.bounds.set.i64(ptr addrspace(200) nonnull %3, i64 4)
+  call void @use(ptr addrspace(200) %4) nounwind
+  %5 = load i32, ptr addrspace(200) %value, align 4
   ret i32 %5
 }
 
 ; Function Attrs: nounwind
-define signext i32 @stack_int_exact() local_unnamed_addr addrspace(200) #0 {
+define signext i32 @stack_int_exact() local_unnamed_addr addrspace(200) nounwind {
 ; CHECK-LABEL: stack_int_exact:
 ; CHECK:       # %bb.0: # %entry
-; CHECK-NEXT:    cincoffset $c11, $c11, -[[#STACKFRAME_SIZE:]]
-; CHECK-NEXT:    csc $c17, $zero, [[#CAP_SIZE * 1]]($c11)
+; CHECK-NEXT:    cincoffset $c11, $c11, -32
+; CHECK-NEXT:    csc $c17, $zero, 16($c11) # 16-byte Folded Spill
 ; CHECK-NEXT:    lui $1, %pcrel_hi(_CHERI_CAPABILITY_TABLE_-8)
 ; CHECK-NEXT:    daddiu $1, $1, %pcrel_lo(_CHERI_CAPABILITY_TABLE_-4)
 ; CHECK-NEXT:    cgetpccincoffset $c1, $1
@@ -102,24 +97,18 @@ define signext i32 @stack_int_exact() local_unnamed_addr addrspace(200) #0 {
 ; CHECK-NEXT:    cjalr $c12, $c17
 ; CHECK-NEXT:    csetboundsexact $c3, $c2, $1
 ; CHECK-NEXT:    clw $2, $zero, 12($c11)
-; CHECK-NEXT:    clc $c17, $zero, [[#CAP_SIZE * 1]]($c11)
+; CHECK-NEXT:    clc $c17, $zero, 16($c11) # 16-byte Folded Reload
 ; CHECK-NEXT:    cjr $c17
-; CHECK-NEXT:    cincoffset $c11, $c11, [[#STACKFRAME_SIZE]]
+; CHECK-NEXT:    cincoffset $c11, $c11, 32
 entry:
   %value = alloca i32, align 4, addrspace(200)
-  %0 = bitcast i32 addrspace(200)* %value to i8 addrspace(200)*
-  %1 = call i8 addrspace(200)* @llvm.cheri.bounded.stack.cap.i64(i8 addrspace(200)* %0, i64 4)
-  %2 = bitcast i8 addrspace(200)* %1 to i32 addrspace(200)*
-  %3 = bitcast i32 addrspace(200)* %2 to i8 addrspace(200)*
-  store i32 1, i32 addrspace(200)* %value, align 4
-  %4 = call i8 addrspace(200)* @llvm.cheri.cap.bounds.set.exact.i64(i8 addrspace(200)* nonnull %3, i64 4)
-  call void @use(i8 addrspace(200)* %4) #4
-  %5 = load i32, i32 addrspace(200)* %value, align 4
+  %0 = bitcast ptr addrspace(200) %value to ptr addrspace(200)
+  %1 = call ptr addrspace(200) @llvm.cheri.bounded.stack.cap.i64(ptr addrspace(200) %0, i64 4)
+  %2 = bitcast ptr addrspace(200) %1 to ptr addrspace(200)
+  %3 = bitcast ptr addrspace(200) %2 to ptr addrspace(200)
+  store i32 1, ptr addrspace(200) %value, align 4
+  %4 = call ptr addrspace(200) @llvm.cheri.cap.bounds.set.exact.i64(ptr addrspace(200) nonnull %3, i64 4)
+  call void @use(ptr addrspace(200) %4) nounwind
+  %5 = load i32, ptr addrspace(200) %value, align 4
   ret i32 %5
 }
-
-attributes #0 = { nounwind }
-attributes #1 = { argmemonly nounwind }
-attributes #2 = { nounwind }
-attributes #3 = { nounwind readnone }
-attributes #4 = { nounwind }

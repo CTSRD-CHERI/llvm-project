@@ -1,16 +1,9 @@
 ; RUN: %cheri_purecap_llc -O0 %s -o - | %cheri_FileCheck %s -check-prefixes CHECK
 ; ModuleID = 'cheri-stack.c'
 
-; Function Attrs: argmemonly nounwind
-declare void @llvm.lifetime.start.p200i8(i64, i8 addrspace(200)* nocapture) #2
+declare i32 @use_arg(ptr addrspace(200))
 
-declare i32 @use_arg(i32 addrspace(200)*) #3
-
-; Function Attrs: argmemonly nounwind
-declare void @llvm.lifetime.end.p200i8(i64, i8 addrspace(200)* nocapture) #2
-
-; Function Attrs: norecurse nounwind readnone
-define i32 @no_stack() local_unnamed_addr #0 {
+define i32 @no_stack() local_unnamed_addr {
 entry:
 ; Check that a function that doesn't use the stack doesn't manipulate the stack
 ; pointer.  Note that at higher optimisation levels, the delay slot would be
@@ -22,25 +15,22 @@ entry:
   ret i32 1
 }
 
-; Function Attrs: nounwind
-define i32 @has_alloca() local_unnamed_addr #1 {
+define i32 @has_alloca() local_unnamed_addr nounwind {
 entry:
 ; Check that a function that allocates a buffer on the stack correctly derives
 ; it from the frame capability
 ; CHECK-LABEL: has_alloca
 ; CHECK: cincoffset	$c[[ALLOCREG:([0-9]+|sp)]], $c11, [[#CAP_SIZE - 4]]
 ; CHECK-NEXT: csetbounds	$c3, $c[[ALLOCREG]], 4
-
   %var = alloca i32, align 4, addrspace(200)
-  %0 = bitcast i32 addrspace(200)* %var to i8 addrspace(200)*
-  call void @llvm.lifetime.start.p200i8(i64 4, i8 addrspace(200)* nonnull %0) #4
-  %call = call i32 @use_arg(i32 addrspace(200)* nonnull %var) #4
-  call void @llvm.lifetime.end.p200i8(i64 4, i8 addrspace(200)* nonnull %0) #4
+  %0 = bitcast ptr addrspace(200) %var to ptr addrspace(200)
+  call void @llvm.lifetime.start.p200(i64 4, ptr addrspace(200) nonnull %0)
+  %call = call i32 @use_arg(ptr addrspace(200) nonnull %var)
+  call void @llvm.lifetime.end.p200(i64 4, ptr addrspace(200) nonnull %0)
   ret i32 %call
 }
 
-; Function Attrs: nounwind
-define i32 @has_spill(i32 signext %x) local_unnamed_addr #1 {
+define i32 @has_spill(i32 signext %x) local_unnamed_addr nounwind {
 entry:
 ; Check that we spill and reload relative to the correct frame capability and
 ; that we're loading from the same place that we spill
@@ -56,14 +46,13 @@ entry:
 ; CHECK: cincoffset	$c11, $c11, [[#FRAMESIZE]]
 
   %x.addr = alloca i32, align 4, addrspace(200)
-  store i32 %x, i32 addrspace(200)* %x.addr, align 4
-  %call = call i32 @use_arg(i32 addrspace(200)* nonnull %x.addr) #4
+  store i32 %x, ptr addrspace(200) %x.addr, align 4
+  %call = call i32 @use_arg(ptr addrspace(200) nonnull %x.addr)
   %add = add nsw i32 %call, %x
   ret i32 %add
 }
 
-; Function Attrs: nounwind
-define i32 @dynamic_alloca(i64 %x) local_unnamed_addr #1 {
+define i32 @dynamic_alloca(i64 %x) local_unnamed_addr nounwind {
 entry:
 ; Check that we are able to handle dynamic allocations
 ; Again, because we're at -O0, we get a load of redundant copies
@@ -82,6 +71,10 @@ entry:
 ; CHECK-NEXT: csetbounds $c{{[0-9]+}}, $c[[TEMPCAP2]], ${{([0-9]+)}}
 ; CHECK: clcbi	$c12, %capcall20(use_arg)($c1)
   %vla = alloca i32, i64 %x, align 4, addrspace(200)
-  %call = call i32 @use_arg(i32 addrspace(200)* nonnull %vla) #4
+  %call = call i32 @use_arg(ptr addrspace(200) nonnull %vla)
   ret i32 %call
 }
+
+declare void @llvm.lifetime.start.p200(i64 immarg, ptr addrspace(200) nocapture)
+
+declare void @llvm.lifetime.end.p200(i64 immarg, ptr addrspace(200) nocapture)

@@ -4,24 +4,23 @@
 define i32 @foo() nounwind {
 ; CHECK-LABEL: foo:
 ; CHECK:       # %bb.0: # %entry
-; CHECK-NEXT:    cincoffset $c11, $c11, -[[#STACKFRAME_SIZE:]]
-; CHECK-NEXT:    csc $c17, $zero, [[#STACKFRAME_SIZE - (CAP_SIZE)]]($c11)
+; CHECK-NEXT:    cincoffset $c11, $c11, -192
+; CHECK-NEXT:    csc $c17, $zero, 176($c11) # 16-byte Folded Spill
 ; CHECK-NEXT:    lui $1, %pcrel_hi(_CHERI_CAPABILITY_TABLE_-8)
 ; CHECK-NEXT:    daddiu $1, $1, %pcrel_lo(_CHERI_CAPABILITY_TABLE_-4)
 ; CHECK-NEXT:    cgetpccincoffset $c1, $1
 ; CHECK-NEXT:    clcbi $c12, %capcall20(bar)($c1)
-; CHECK-NEXT:    cincoffset $c3, $c11, [[#CAP_SIZE - 8]]
+; CHECK-NEXT:    cincoffset $c3, $c11, 8
 ; CHECK-NEXT:    cjalr $c12, $c17
 ; CHECK-NEXT:    csetbounds $c3, $c3, 168
-; CHECK-NEXT:    clc $c17, $zero, [[#STACKFRAME_SIZE - (CAP_SIZE)]]($c11)
+; CHECK-NEXT:    clc $c17, $zero, 176($c11) # 16-byte Folded Reload
 ; CHECK-NEXT:    cjr $c17
-; CHECK-NEXT:    cincoffset $c11, $c11, [[#STACKFRAME_SIZE]]
+; CHECK-NEXT:    cincoffset $c11, $c11, 192
 entry:
   %buffer = alloca [42 x i32], align 4, addrspace(200)
-  %arraydecay = getelementptr inbounds [42 x i32], [42 x i32] addrspace(200)* %buffer, i32 0, i32 0
-  %call = call i32 @bar(i32 addrspace(200)* %arraydecay)
+  %arraydecay = getelementptr inbounds [42 x i32], ptr addrspace(200) %buffer, i32 0, i32 0
+  %call = call i32 @bar(ptr addrspace(200) %arraydecay)
   ret i32 %call
 }
 
-declare i32 @bar(i32 addrspace(200)*) #1
-
+declare i32 @bar(ptr addrspace(200)) nounwind

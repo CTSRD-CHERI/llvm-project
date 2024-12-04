@@ -3,8 +3,8 @@
 ; This is not safe if it is an unaligned capability store but we just expand that to
 ; a memcpy in SelectionDAG now. See https://github.com/CTSRD-CHERI/llvm-project/issues/301
 
-; RUN: %cheri128_purecap_opt -opaque-pointers=0 -passes=sroa,instsimplify %s -o - -S | FileCheck %s -check-prefix SROA
-; RUN: %cheri128_purecap_opt -opaque-pointers=0 -passes=sroa,instsimplify %s -o - -S | %cheri128_purecap_llc -opaque-pointers=0 -O2 - -o - 2>%t.dbg | FileCheck %s
+; RUN: %cheri128_purecap_opt -passes=sroa,instsimplify %s -o - -S | FileCheck %s -check-prefix SROA
+; RUN: %cheri128_purecap_opt -passes=sroa,instsimplify %s -o - -S | %cheri128_purecap_llc -O2 - -o - 2>%t.dbg | FileCheck %s
 ; RUN: FileCheck %s -check-prefix=DBG -input-file=%t.dbg
 ; DBG:      warning: <unknown>:0:0: in function spgFormLeafTuple void (): found underaligned store of capability type (aligned to 1 bytes instead of 16). Will use memcpy() instead of capability load to preserve tags if it is aligned correctly at runtime
 ; DBG-NEXT: warning: <unknown>:0:0: in function align2_should_call_memcpy void (): found underaligned store of capability type (aligned to 2 bytes instead of 16). Will use memcpy() instead of capability load to preserve tags if it is aligned correctly at runtime
@@ -14,51 +14,44 @@
 
 target datalayout = "E-m:e-pf200:128:128:128:64-i8:8:32-i16:16:32-i64:64-n32:64-S128-A200-P200-G200"
 
-@b = common addrspace(200) global i8 addrspace(200)* null, align 16
+@b = common addrspace(200) global ptr addrspace(200) null, align 16
 @nocaps = common addrspace(200) global [2 x i64] zeroinitializer, align 16
+@unaligned_dst = common addrspace(200) global [2 x i64] zeroinitializer, align 8
 
-; Function Attrs: nounwind readnone
-declare i8 addrspace(200)* @llvm.cheri.cap.address.set.i64(i8 addrspace(200)*, i64) addrspace(200) #1
+declare ptr addrspace(200) @llvm.cheri.cap.address.set.i64(ptr addrspace(200), i64) addrspace(200)
+declare void @llvm.memcpy.p200.p200.i64(ptr addrspace(200) noalias nocapture writeonly, ptr addrspace(200) noalias nocapture readonly, i64, i1 immarg) addrspace(200)
 
-; Function Attrs: argmemonly nounwind
-declare void @llvm.memcpy.p200i8.p200i8.i64(i8 addrspace(200)* nocapture writeonly, i8 addrspace(200)* nocapture readonly, i64, i1) addrspace(200) #2
 
 ; Function Attrs: noinline nounwind
-define void @spgFormLeafTuple() addrspace(200) #0 {
-; SROA-LABEL: define {{[^@]+}}@spgFormLeafTuple() addrspace(200) #2
+define void @spgFormLeafTuple() addrspace(200) nounwind {
+; SROA-LABEL: @spgFormLeafTuple(
 ; SROA-NEXT:  entry:
-; SROA-NEXT:    [[TMP1:%.*]] = load i8 addrspace(200)*, i8 addrspace(200)* addrspace(200)* @b, align 16
-; SROA-NEXT:    [[C_0__SROA_CAST:%.*]] = bitcast i8 addrspace(200)* [[TMP1]] to i8 addrspace(200)* addrspace(200)*
-; SROA-NEXT:    store i8 addrspace(200)* getelementptr (i8, i8 addrspace(200)* null, i64 1), i8 addrspace(200)* addrspace(200)* [[C_0__SROA_CAST]], align 1
+; SROA-NEXT:    [[TMP0:%.*]] = load ptr addrspace(200), ptr addrspace(200) @b, align 16
+; SROA-NEXT:    store ptr addrspace(200) getelementptr (i8, ptr addrspace(200) null, i64 1), ptr addrspace(200) [[TMP0]], align 1
 ; SROA-NEXT:    ret void
 ;
 ; This should not be turned into a store since the target is not aligned!
 entry:
-  %c = alloca i8 addrspace(200)*, align 16, addrspace(200)
-  %0 = call i8 addrspace(200)* @llvm.cheri.cap.address.set.i64(i8 addrspace(200)* null, i64 1)
-  store i8 addrspace(200)* %0, i8 addrspace(200)* addrspace(200)* %c, align 16
-  %1 = load i8 addrspace(200)*, i8 addrspace(200)* addrspace(200)* @b, align 16
-  %2 = bitcast i8 addrspace(200)* addrspace(200)* %c to i8 addrspace(200)*
-  call void @llvm.memcpy.p200i8.p200i8.i64(i8 addrspace(200)* align 1 %1, i8 addrspace(200)* align 16 %2, i64 16, i1 false)
+  %c = alloca ptr addrspace(200), align 16, addrspace(200)
+  store ptr addrspace(200) getelementptr (i8, ptr addrspace(200) null, i64 1), ptr addrspace(200) %c, align 16
+  %0 = load ptr addrspace(200), ptr addrspace(200) @b, align 16
+  call void @llvm.memcpy.p200.p200.i64(ptr addrspace(200) noundef nonnull align 1 dereferenceable(16) %0, ptr addrspace(200) noundef nonnull align 16 dereferenceable(16) %c, i64 16, i1 false)
   ret void
 
   ; CHECK-LABEL: spgFormLeafTuple:
   ; CHECK: clcbi $c12, %capcall20(memcpy)($c1)
 }
 
-@unaligned_dst = common addrspace(200) global [2 x i64] zeroinitializer, align 8
-
-define void @copy_nocaps() addrspace(200) #0 {
-; SROA-LABEL: define {{[^@]+}}@copy_nocaps() addrspace(200) #2
+; Function Attrs: noinline nounwind
+define void @copy_nocaps() addrspace(200) nounwind {
+; SROA-LABEL: @copy_nocaps(
 ; SROA-NEXT:  entry:
-; SROA-NEXT:    call void @llvm.memcpy.p200i8.p200i8.i64(i8 addrspace(200)* align 8 bitcast ([2 x i64] addrspace(200)* @unaligned_dst to i8 addrspace(200)*), i8 addrspace(200)* align 8 bitcast ([2 x i64] addrspace(200)* @nocaps to i8 addrspace(200)*), i64 16, i1 false)
+; SROA-NEXT:    call void @llvm.memcpy.p200.p200.i64(ptr addrspace(200) noundef nonnull align 8 dereferenceable(16) @unaligned_dst, ptr addrspace(200) noundef nonnull align 16 dereferenceable(16) @nocaps, i64 16, i1 false)
 ; SROA-NEXT:    ret void
 ;
 ; This should not be turned into a store since the target is not aligned!
 entry:
-  %src = bitcast [2 x i64] addrspace(200)* @nocaps to i8 addrspace(200)*
-  %dst = bitcast [2 x i64] addrspace(200)* @unaligned_dst to i8 addrspace(200)*
-  call void @llvm.memcpy.p200i8.p200i8.i64(i8 addrspace(200)* align 8 %dst, i8 addrspace(200)* align 8 %src, i64 16, i1 false)
+  call void @llvm.memcpy.p200.p200.i64(ptr addrspace(200) noundef nonnull align 8 dereferenceable(16) @unaligned_dst, ptr addrspace(200) noundef nonnull align 16 dereferenceable(16) @nocaps, i64 16, i1 false)
   ret void
 
   ; CHECK-LABEL: copy_nocaps:
@@ -66,92 +59,82 @@ entry:
   ; CHECK: clcbi $c12, %capcall20(memcpy)($c1)
 }
 
-define void @align2_should_call_memcpy() addrspace(200) #0 {
-; SROA-LABEL: define {{[^@]+}}@align2_should_call_memcpy() addrspace(200) #2
+define void @align2_should_call_memcpy() addrspace(200) nounwind {
+; SROA-LABEL: @align2_should_call_memcpy(
 ; SROA-NEXT:  entry:
-; SROA-NEXT:    [[TMP1:%.*]] = load i8 addrspace(200)*, i8 addrspace(200)* addrspace(200)* @b, align 16
-; SROA-NEXT:    [[C_0__SROA_CAST:%.*]] = bitcast i8 addrspace(200)* [[TMP1]] to i8 addrspace(200)* addrspace(200)*
-; SROA-NEXT:    store i8 addrspace(200)* getelementptr (i8, i8 addrspace(200)* null, i64 1), i8 addrspace(200)* addrspace(200)* [[C_0__SROA_CAST]], align 2
+; SROA-NEXT:    [[TMP0:%.*]] = load ptr addrspace(200), ptr addrspace(200) @b, align 16
+; SROA-NEXT:    store ptr addrspace(200) getelementptr (i8, ptr addrspace(200) null, i64 1), ptr addrspace(200) [[TMP0]], align 2
 ; SROA-NEXT:    ret void
 ;
 ; This should not be turned into a store since the target is not aligned!
 entry:
-  %c = alloca i8 addrspace(200)*, align 16, addrspace(200)
-  %0 = call i8 addrspace(200)* @llvm.cheri.cap.address.set.i64(i8 addrspace(200)* null, i64 1)
-  store i8 addrspace(200)* %0, i8 addrspace(200)* addrspace(200)* %c, align 16
-  %1 = load i8 addrspace(200)*, i8 addrspace(200)* addrspace(200)* @b, align 16
-  %2 = bitcast i8 addrspace(200)* addrspace(200)* %c to i8 addrspace(200)*
-  call void @llvm.memcpy.p200i8.p200i8.i64(i8 addrspace(200)* align 2 %1, i8 addrspace(200)* align 16 %2, i64 16, i1 false)
+  %c = alloca ptr addrspace(200), align 16, addrspace(200)
+  %0 = call ptr addrspace(200) @llvm.cheri.cap.address.set.i64(ptr addrspace(200) null, i64 1)
+  store ptr addrspace(200) %0, ptr addrspace(200) %c, align 16
+  %1 = load ptr addrspace(200), ptr addrspace(200) @b, align 16
+  call void @llvm.memcpy.p200.p200.i64(ptr addrspace(200) align 2 %1, ptr addrspace(200) align 16 %c, i64 16, i1 false)
   ret void
 
   ; CHECK-LABEL: align2_should_call_memcpy:
   ; CHECK: clcbi $c12, %capcall20(memcpy)($c
 }
 
-
 ; Function Attrs: noinline nounwind
-define void @align4_should_call_memcpy() addrspace(200) #0 {
-; SROA-LABEL: define {{[^@]+}}@align4_should_call_memcpy() addrspace(200) #2
+define void @align4_should_call_memcpy() addrspace(200) nounwind {
+; SROA-LABEL: @align4_should_call_memcpy(
 ; SROA-NEXT:  entry:
-; SROA-NEXT:    [[TMP1:%.*]] = load i8 addrspace(200)*, i8 addrspace(200)* addrspace(200)* @b, align 16
-; SROA-NEXT:    [[C_0__SROA_CAST:%.*]] = bitcast i8 addrspace(200)* [[TMP1]] to i8 addrspace(200)* addrspace(200)*
-; SROA-NEXT:    store i8 addrspace(200)* getelementptr (i8, i8 addrspace(200)* null, i64 1), i8 addrspace(200)* addrspace(200)* [[C_0__SROA_CAST]], align 4
+; SROA-NEXT:    [[TMP0:%.*]] = load ptr addrspace(200), ptr addrspace(200) @b, align 16
+; SROA-NEXT:    store ptr addrspace(200) getelementptr (i8, ptr addrspace(200) null, i64 1), ptr addrspace(200) [[TMP0]], align 4
 ; SROA-NEXT:    ret void
 ;
 ; This should not be turned into a store since the target is not aligned!
 entry:
-  %c = alloca i8 addrspace(200)*, align 16, addrspace(200)
-  %0 = call i8 addrspace(200)* @llvm.cheri.cap.address.set.i64(i8 addrspace(200)* null, i64 1)
-  store i8 addrspace(200)* %0, i8 addrspace(200)* addrspace(200)* %c, align 16
-  %1 = load i8 addrspace(200)*, i8 addrspace(200)* addrspace(200)* @b, align 16
-  %2 = bitcast i8 addrspace(200)* addrspace(200)* %c to i8 addrspace(200)*
-  call void @llvm.memcpy.p200i8.p200i8.i64(i8 addrspace(200)* align 4 %1, i8 addrspace(200)* align 16 %2, i64 16, i1 false)
+  %c = alloca ptr addrspace(200), align 16, addrspace(200)
+  %0 = call ptr addrspace(200) @llvm.cheri.cap.address.set.i64(ptr addrspace(200) null, i64 1)
+  store ptr addrspace(200) %0, ptr addrspace(200) %c, align 16
+  %1 = load ptr addrspace(200), ptr addrspace(200) @b, align 16
+  call void @llvm.memcpy.p200.p200.i64(ptr addrspace(200) align 4 %1, ptr addrspace(200) align 16 %c, i64 16, i1 false)
   ret void
 
   ; CHECK-LABEL: align4_should_call_memcpy:
   ; CHECK: clcbi $c12, %capcall20(memcpy)($c
 }
 
-define void @align8_should_call_memcpy() addrspace(200) #0 {
-; SROA-LABEL: define {{[^@]+}}@align8_should_call_memcpy() addrspace(200) #2
+define void @align8_should_call_memcpy() addrspace(200) nounwind {
+; SROA-LABEL: @align8_should_call_memcpy(
 ; SROA-NEXT:  entry:
-; SROA-NEXT:    [[TMP1:%.*]] = load i8 addrspace(200)*, i8 addrspace(200)* addrspace(200)* @b, align 16
-; SROA-NEXT:    [[C_0__SROA_CAST:%.*]] = bitcast i8 addrspace(200)* [[TMP1]] to i8 addrspace(200)* addrspace(200)*
-; SROA-NEXT:    store i8 addrspace(200)* getelementptr (i8, i8 addrspace(200)* null, i64 1), i8 addrspace(200)* addrspace(200)* [[C_0__SROA_CAST]], align 8
+; SROA-NEXT:    [[TMP0:%.*]] = load ptr addrspace(200), ptr addrspace(200) @b, align 16
+; SROA-NEXT:    store ptr addrspace(200) getelementptr (i8, ptr addrspace(200) null, i64 1), ptr addrspace(200) [[TMP0]], align 8
 ; SROA-NEXT:    ret void
 ;
 ; This should not be turned into a store since the target is not aligned!
 entry:
-  %c = alloca i8 addrspace(200)*, align 16, addrspace(200)
-  %0 = call i8 addrspace(200)* @llvm.cheri.cap.address.set.i64(i8 addrspace(200)* null, i64 1)
-  store i8 addrspace(200)* %0, i8 addrspace(200)* addrspace(200)* %c, align 16
-  %1 = load i8 addrspace(200)*, i8 addrspace(200)* addrspace(200)* @b, align 16
-  %2 = bitcast i8 addrspace(200)* addrspace(200)* %c to i8 addrspace(200)*
-  call void @llvm.memcpy.p200i8.p200i8.i64(i8 addrspace(200)* align 8 %1, i8 addrspace(200)* align 16 %2, i64 16, i1 false)
+  %c = alloca ptr addrspace(200), align 16, addrspace(200)
+  %0 = call ptr addrspace(200) @llvm.cheri.cap.address.set.i64(ptr addrspace(200) null, i64 1)
+  store ptr addrspace(200) %0, ptr addrspace(200) %c, align 16
+  %1 = load ptr addrspace(200), ptr addrspace(200) @b, align 16
+  call void @llvm.memcpy.p200.p200.i64(ptr addrspace(200) align 8 %1, ptr addrspace(200) align 16 %c, i64 16, i1 false)
   ret void
 
   ; CHECK-LABEL: align8_should_call_memcpy:
   ; CHECK: clcbi $c12, %capcall20(memcpy)($c
 }
 
-
-; Here SROA can rewrite the memcpy to a single store:
-define void @align16_can_be_inlined() addrspace(200) #0 {
-; SROA-LABEL: define {{[^@]+}}@align16_can_be_inlined() addrspace(200) #2
+;; Here SROA can rewrite the memcpy to a single store:
+define void @align16_can_be_inlined() addrspace(200) nounwind {
+; SROA-LABEL: @align16_can_be_inlined(
 ; SROA-NEXT:  entry:
-; SROA-NEXT:    [[TMP1:%.*]] = load i8 addrspace(200)*, i8 addrspace(200)* addrspace(200)* @b, align 16
-; SROA-NEXT:    [[C_0__SROA_CAST:%.*]] = bitcast i8 addrspace(200)* [[TMP1]] to i8 addrspace(200)* addrspace(200)*
-; SROA-NEXT:    store i8 addrspace(200)* getelementptr (i8, i8 addrspace(200)* null, i64 1), i8 addrspace(200)* addrspace(200)* [[C_0__SROA_CAST]], align 16
+; SROA-NEXT:    [[TMP0:%.*]] = load ptr addrspace(200), ptr addrspace(200) @b, align 16
+; SROA-NEXT:    store ptr addrspace(200) getelementptr (i8, ptr addrspace(200) null, i64 1), ptr addrspace(200) [[TMP0]], align 16
 ; SROA-NEXT:    ret void
 ;
 ; The memcpy can be turned into a store by sroa:
 entry:
-  %c = alloca i8 addrspace(200)*, align 16, addrspace(200)
-  %0 = call i8 addrspace(200)* @llvm.cheri.cap.address.set.i64(i8 addrspace(200)* null, i64 1)
-  store i8 addrspace(200)* %0, i8 addrspace(200)* addrspace(200)* %c, align 16
-  %1 = load i8 addrspace(200)*, i8 addrspace(200)* addrspace(200)* @b, align 16
-  %2 = bitcast i8 addrspace(200)* addrspace(200)* %c to i8 addrspace(200)*
-  call void @llvm.memcpy.p200i8.p200i8.i64(i8 addrspace(200)* align 16 %1, i8 addrspace(200)* align 16 %2, i64 16, i1 false)
+  %c = alloca ptr addrspace(200), align 16, addrspace(200)
+  %0 = call ptr addrspace(200) @llvm.cheri.cap.address.set.i64(ptr addrspace(200) null, i64 1)
+  store ptr addrspace(200) %0, ptr addrspace(200) %c, align 16
+  %1 = load ptr addrspace(200), ptr addrspace(200) @b, align 16
+  call void @llvm.memcpy.p200.p200.i64(ptr addrspace(200) align 16 %1, ptr addrspace(200) align 16 %c, i64 16, i1 false)
   ret void
 ; CHECK-LABEL: align16_can_be_inlined:
 ; CHECK-NOT: %capcall20(memcpy)
@@ -161,7 +144,3 @@ entry:
 ; CHECK: cincoffset $c2, $cnull, 1
 ; CHECK: csc $c2, $zero, 0($c1)
 }
-
-attributes #0 = { noinline nounwind }
-attributes #1 = { nounwind readnone }
-attributes #2 = { argmemonly nounwind }

@@ -10,45 +10,44 @@
 ;     e();
 ; }
 ; Check that the vectorizers doesn't make any changes and doesn't crash:
-; RUN: opt -opaque-pointers=0 -S %s -o - -passes=slp-vectorizer -vectorize-slp | FileCheck %s
-; RUNNOT: %cheri_cc1 -opaque-pointers=0 -S -O3 %s -o - -vectorize-slp
+; RUN: opt -S %s -o - -passes=slp-vectorizer -vectorize-slp | FileCheck %s
 
 target datalayout = "E-m:e-pf200:128:128:128:64-i8:8:32-i16:16:32-i64:64-n32:64-S128"
 target triple = "mips64-unknown-freebsd"
 
-%struct.anon = type { i8 addrspace(200)*, i8 addrspace(200)* }
+%struct.anon = type { ptr addrspace(200), ptr addrspace(200) }
 
 @c = common global %struct.anon zeroinitializer, align 16
 
 define void @d() local_unnamed_addr nounwind {
-; CHECK-LABEL: define {{[^@]+}}@d() local_unnamed_addr #0
+; CHECK-LABEL: @d(
 ; CHECK-NEXT:  entry:
-; CHECK-NEXT:    [[TMP0:%.*]] = load i8 addrspace(200)*, i8 addrspace(200)** getelementptr inbounds (%struct.anon, %struct.anon* @c, i64 0, i32 0), align 16
-; CHECK-NEXT:    [[CMP:%.*]] = icmp eq i8 addrspace(200)* [[TMP0]], null
-; CHECK-NEXT:    [[TMP1:%.*]] = load i8 addrspace(200)*, i8 addrspace(200)** getelementptr inbounds (%struct.anon, %struct.anon* @c, i64 0, i32 1), align 16
-; CHECK-NEXT:    [[CMP1:%.*]] = icmp eq i8 addrspace(200)* [[TMP1]], null
+; CHECK-NEXT:    [[TMP0:%.*]] = load ptr addrspace(200), ptr @c, align 16
+; CHECK-NEXT:    [[CMP:%.*]] = icmp eq ptr addrspace(200) [[TMP0]], null
+; CHECK-NEXT:    [[TMP1:%.*]] = load ptr addrspace(200), ptr getelementptr inbounds ([[STRUCT_ANON:%.*]], ptr @c, i64 0, i32 1), align 16
+; CHECK-NEXT:    [[CMP1:%.*]] = icmp eq ptr addrspace(200) [[TMP1]], null
 ; CHECK-NEXT:    [[OR_COND:%.*]] = or i1 [[CMP]], [[CMP1]]
 ; CHECK-NEXT:    br i1 [[OR_COND]], label [[IF_THEN:%.*]], label [[IF_END:%.*]]
 ; CHECK:       if.then:
-; CHECK-NEXT:    [[CALL:%.*]] = tail call signext i32 bitcast (i32 (...)* @e to i32 ()*)()
+; CHECK-NEXT:    [[CALL:%.*]] = tail call signext i32 @e()
 ; CHECK-NEXT:    br label [[IF_END]]
 ; CHECK:       if.end:
 ; CHECK-NEXT:    ret void
 ;
 entry:
-  %0 = load i8 addrspace(200)*, i8 addrspace(200)** getelementptr inbounds (%struct.anon, %struct.anon* @c, i64 0, i32 0), align 16
-  %cmp = icmp eq i8 addrspace(200)* %0, null
-  %1 = load i8 addrspace(200)*, i8 addrspace(200)** getelementptr inbounds (%struct.anon, %struct.anon* @c, i64 0, i32 1), align 16
-  %cmp1 = icmp eq i8 addrspace(200)* %1, null
+  %0 = load ptr addrspace(200), ptr @c, align 16
+  %cmp = icmp eq ptr addrspace(200) %0, null
+  %1 = load ptr addrspace(200), ptr getelementptr inbounds (%struct.anon, ptr @c, i64 0, i32 1), align 16
+  %cmp1 = icmp eq ptr addrspace(200) %1, null
   %or.cond = or i1 %cmp, %cmp1
   br i1 %or.cond, label %if.then, label %if.end
 
 if.then:                                          ; preds = %entry
-  %call = tail call signext i32 bitcast (i32 (...)* @e to i32 ()*)() #2
+  %call = tail call signext i32 @e()
   br label %if.end
 
-if.end:                                           ; preds = %entry, %if.then
+if.end:                                           ; preds = %if.then, %entry
   ret void
 }
 
-declare signext i32 @e(...) #1
+declare signext i32 @e(...)

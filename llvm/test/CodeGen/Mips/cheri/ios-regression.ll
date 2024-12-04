@@ -75,11 +75,10 @@
 ; Reduced IR:
 %class.c = type { %struct.b }
 %struct.b = type { [128 x i8] }
-%class.d = type { i8 }
 
 $_ZN1dIcE1fE1c = comdat any
 
-define weak_odr void @_ZN1dIcE1fE1c(%class.c addrspace(200)* noalias sret(%class.c) %agg.result, %class.d addrspace(200)* %this, i64 inreg %.coerce0, i64 inreg %.coerce1, i64 inreg %.coerce2, i64 inreg %.coerce3, i64 inreg %.coerce4, i64 inreg %.coerce5, i64 inreg %.coerce6, i64 inreg %.coerce7, i64 inreg %.coerce8, i64 inreg %.coerce9, i64 inreg %.coerce10, i64 inreg %.coerce11, i64 inreg %.coerce12, i64 inreg %.coerce13, i64 inreg %.coerce14, i64 inreg %.coerce15) comdat align 2 {
+define weak_odr void @_ZN1dIcE1fE1c(ptr addrspace(200) noalias sret(%class.c) %agg.result, ptr addrspace(200) %this, i64 inreg %.coerce0, i64 inreg %.coerce1, i64 inreg %.coerce2, i64 inreg %.coerce3, i64 inreg %.coerce4, i64 inreg %.coerce5, i64 inreg %.coerce6, i64 inreg %.coerce7, i64 inreg %.coerce8, i64 inreg %.coerce9, i64 inreg %.coerce10, i64 inreg %.coerce11, i64 inreg %.coerce12, i64 inreg %.coerce13, i64 inreg %.coerce14, i64 inreg %.coerce15) comdat align 2 {
 ; CHECK-LABEL: _ZN1dIcE1fE1c:
 ; CHECK:       # %bb.0: # %entry
 ; CHECK-NEXT:    cjr $c17
@@ -88,4 +87,4 @@ entry:
   ret void
 }
 
-declare void @_ZN1dIcE1gEv(%class.c addrspace(200)* sret(%class.c), %class.d addrspace(200)*)
+declare void @_ZN1dIcE1gEv(ptr addrspace(200) sret(%class.c), ptr addrspace(200))

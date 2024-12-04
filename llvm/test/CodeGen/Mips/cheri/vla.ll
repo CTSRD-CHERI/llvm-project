@@ -13,7 +13,7 @@
 ;   ret void
 ; }
 
-define void @foo(i8 addrspace(200)* %arg) nounwind {
+define void @foo(ptr addrspace(200) %arg) nounwind {
 ; N64-LABEL: foo:
 ; N64:       # %bb.0: # %entry
 ; N64-NEXT:    daddiu $sp, $sp, -16
@@ -40,20 +40,16 @@ define void @foo(i8 addrspace(200)* %arg) nounwind {
 ; CAPTABLE-NEXT:    cjr $c17
 ; CAPTABLE-NEXT:    nop
 entry:
-  call void @test(i8 addrspace(200)* %arg)
+  call void @test(ptr addrspace(200) %arg)
   ret void
 }
 
-; Function Attrs: nounwind
-declare i8 addrspace(200)* @llvm.stacksave.p200i8() #1
+declare void @test(ptr addrspace(200)) nounwind
 
-declare void @test(i8 addrspace(200)*) #2
+declare ptr addrspace(200) @llvm.cheri.pcc.get()
 
-; Function Attrs: nounwind readnone
-declare i8 addrspace(200)* @llvm.cheri.pcc.get() #3
+declare ptr addrspace(200) @llvm.cheri.cap.offset.set.i64(ptr addrspace(200), i64)
 
-; Function Attrs: nounwind readnone
-declare i8 addrspace(200)* @llvm.cheri.cap.offset.set.i64(i8 addrspace(200)*, i64) #3
+declare ptr addrspace(200) @llvm.stacksave.p200()
 
-; Function Attrs: nounwind
-declare void @llvm.stackrestore.p200i8(i8 addrspace(200)*) #1
+declare void @llvm.stackrestore.p200(ptr addrspace(200))

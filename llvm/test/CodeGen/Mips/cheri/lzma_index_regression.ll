@@ -3,14 +3,13 @@
 ; Reduced test case for index.c no longer compiling after memset optimization
 ; See https://github.com/CTSRD-CHERI/llvm/issues/265
 %struct.am = type { %struct.n, %struct.m, [8 x i8] }
-%struct.n = type { %struct.n addrspace(200)* }
+%struct.n = type { ptr addrspace(200) }
 %struct.m = type { i32, i32, i8, i8, i8, i8, i8, i32, i32 }
 
 @q = common addrspace(200) global %struct.am zeroinitializer, align 16
 @p = common addrspace(200) global %struct.am zeroinitializer, align 16
 
-; Function Attrs: noinline nounwind optnone
-define void @r() #0 {
+define void @r() noinline nounwind optnone {
 ; Check that we do a 24-byte copy as a capability load/store followed by a dword load / store
 ; CHECK-LABEL: r:
 ; CHECK:       # %bb.0:
@@ -26,12 +25,8 @@ define void @r() #0 {
 ; CHECK-NEXT:    cjr $c17
 ; CHECK-NEXT:    nop
 ;
-  call void @llvm.memcpy.p200i8.p200i8.i64(i8 addrspace(200)* align 16 bitcast (%struct.m addrspace(200)* getelementptr inbounds (%struct.am, %struct.am addrspace(200)* @q, i32 0, i32 1) to i8 addrspace(200)*), i8 addrspace(200)* align 16 bitcast (%struct.m addrspace(200)* getelementptr inbounds (%struct.am, %struct.am addrspace(200)* @p, i32 0, i32 1) to i8 addrspace(200)*), i64 24, i1 false)
+  call void @llvm.memcpy.p200.p200.i64(ptr addrspace(200) align 16 getelementptr inbounds (%struct.am, ptr addrspace(200) @q, i32 0, i32 1), ptr addrspace(200) align 16 getelementptr inbounds (%struct.am, ptr addrspace(200) @p, i32 0, i32 1), i64 24, i1 false)
   ret void
 }
 
-; Function Attrs: argmemonly nounwind
-declare void @llvm.memcpy.p200i8.p200i8.i64(i8 addrspace(200)* nocapture writeonly, i8 addrspace(200)* nocapture readonly, i64, i1) #1
-
-attributes #0 = { noinline nounwind optnone }
-attributes #1 = { argmemonly nounwind }
+declare void @llvm.memcpy.p200.p200.i64(ptr addrspace(200) noalias nocapture writeonly, ptr addrspace(200) noalias nocapture readonly, i64, i1 immarg)

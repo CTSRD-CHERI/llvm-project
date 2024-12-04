@@ -3,16 +3,12 @@
 ; Check that we don't accidentally create a nonsense COPY node ($at_64 = COPY killed renamable $c1)
 ; when the result of the GlobalAddr goes through a ptrtoint
 
-%class.A = type { i32 (...) addrspace(200)* addrspace(200)* }
+declare i32 @foo(ptr addrspace(200)) addrspace(200)
 
-; Function Attrs: noinline nounwind
-declare i32 @foo(%class.A addrspace(200)*) addrspace(200)
+declare ptr addrspace(200) @llvm.cheri.cap.offset.set.i64(ptr addrspace(200), i64) addrspace(200)
 
-; Function Attrs: nounwind readnone
-declare i8 addrspace(200)* @llvm.cheri.cap.offset.set.i64(i8 addrspace(200)*, i64) addrspace(200)
-
-; Function Attrs: noinline norecurse nounwind
-define void @main(i8 addrspace(200)* %arg) addrspace(200) nounwind {
+; Function Attrs: nounwind
+define void @main(ptr addrspace(200) %arg) addrspace(200) nounwind {
 ; CHECK-LABEL: main:
 ; CHECK:       # %bb.0: # %entry
 ; CHECK-NEXT:    cincoffset $c11, $c11, -[[#STACKFRAME_SIZE:]]
@@ -29,8 +25,8 @@ define void @main(i8 addrspace(200)* %arg) addrspace(200) nounwind {
 ; CHECK-NEXT:    cjr $c17
 ; CHECK-NEXT:    cincoffset $c11, $c11, [[#STACKFRAME_SIZE]]
 entry:
-  %0 = call i8 addrspace(200)* @llvm.cheri.cap.offset.set.i64(i8 addrspace(200)* %arg, i64 ptrtoint (i32 (%class.A addrspace(200)*) addrspace(200)* @foo to i64))
-  %1 = bitcast i8 addrspace(200)* %0 to i32 (%class.A addrspace(200)*) addrspace(200)*
-  %call3 = call i32 %1(%class.A addrspace(200)* undef)
+  %0 = call ptr addrspace(200) @llvm.cheri.cap.offset.set.i64(ptr addrspace(200) %arg, i64 ptrtoint (ptr addrspace(200) @foo to i64))
+  %1 = bitcast ptr addrspace(200) %0 to ptr addrspace(200)
+  %call3 = call i32 %1(ptr addrspace(200) undef)
   ret void
 }

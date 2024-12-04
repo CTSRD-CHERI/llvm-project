@@ -19,8 +19,8 @@
 ; Function Attrs: nounwind
 define i64 @test_gd() local_unnamed_addr {
 entry:
-  %loaded_tls_ext = load i64, i64 addrspace(TLS)* @external_gd, align 8
-  %loaded_tls_int = load i64, i64 addrspace(TLS)* @internal_gd, align 8
+  %loaded_tls_ext = load i64, ptr addrspace(TLS) @external_gd, align 8
+  %loaded_tls_int = load i64, ptr addrspace(TLS) @internal_gd, align 8
   %result = add i64 %loaded_tls_ext, %loaded_tls_int
   ret i64 %result
 }

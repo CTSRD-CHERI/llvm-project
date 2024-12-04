@@ -4,10 +4,9 @@
 ; callee-save register even for the if (x == NULL) return 0 case
 ; RUN: %cheri_purecap_llc %s -o - | %cheri_FileCheck %s
 
-%struct.tree = type { i32, %struct.tree addrspace(200)*, %struct.tree addrspace(200)* }
+%struct.tree = type { i32, ptr addrspace(200), ptr addrspace(200) }
 
-; Function Attrs: nounwind readonly
-define signext i32 @TreeAdd(%struct.tree addrspace(200)* readonly %t) local_unnamed_addr addrspace(200) #0 {
+define signext i32 @TreeAdd(ptr addrspace(200) readonly %t) local_unnamed_addr addrspace(200) nounwind {
 ; CHECK-LABEL: TreeAdd:
 ; CHECK:       # %bb.0: # %entry
 ; CHECK-NEXT:    cbez $c3, .LBB0_2
@@ -43,18 +42,18 @@ define signext i32 @TreeAdd(%struct.tree addrspace(200)* readonly %t) local_unna
 ; CHECK-NEXT:    cjr $c17
 ; CHECK-NEXT:    daddiu $2, $zero, 0
 entry:
-  %cmp = icmp eq %struct.tree addrspace(200)* %t, null
+  %cmp = icmp eq ptr addrspace(200) %t, null
   br i1 %cmp, label %return, label %if.else
 
 if.else:                                          ; preds = %entry
-  %left = getelementptr inbounds %struct.tree, %struct.tree addrspace(200)* %t, i64 0, i32 1
-  %0 = load %struct.tree addrspace(200)*, %struct.tree addrspace(200)* addrspace(200)* %left, align 16
-  %call = tail call signext i32 @TreeAdd(%struct.tree addrspace(200)* %0)
-  %right = getelementptr inbounds %struct.tree, %struct.tree addrspace(200)* %t, i64 0, i32 2
-  %1 = load %struct.tree addrspace(200)*, %struct.tree addrspace(200)* addrspace(200)* %right, align 16
-  %call1 = tail call signext i32 @TreeAdd(%struct.tree addrspace(200)* %1)
-  %val = getelementptr inbounds %struct.tree, %struct.tree addrspace(200)* %t, i64 0, i32 0
-  %2 = load i32, i32 addrspace(200)* %val, align 16
+  %left = getelementptr inbounds %struct.tree, ptr addrspace(200) %t, i64 0, i32 1
+  %0 = load ptr addrspace(200), ptr addrspace(200) %left, align 16
+  %call = tail call signext i32 @TreeAdd(ptr addrspace(200) %0)
+  %right = getelementptr inbounds %struct.tree, ptr addrspace(200) %t, i64 0, i32 2
+  %1 = load ptr addrspace(200), ptr addrspace(200) %right, align 16
+  %call1 = tail call signext i32 @TreeAdd(ptr addrspace(200) %1)
+  %val = getelementptr inbounds %struct.tree, ptr addrspace(200) %t, i64 0, i32 0
+  %2 = load i32, ptr addrspace(200) %val, align 16
   %add = add nsw i32 %call1, %call
   %add2 = add nsw i32 %add, %2
   ret i32 %add2
@@ -62,5 +61,3 @@ if.else:                                          ; preds = %entry
 return:                                           ; preds = %entry
   ret i32 0
 }
-
-attributes #0 = { nounwind readonly }

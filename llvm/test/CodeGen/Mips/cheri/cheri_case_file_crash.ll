@@ -7,7 +7,7 @@ declare i32 @__gxx_personality_v0(...) addrspace(200)
 
 declare void @b()
 
-define void @c() personality i8 addrspace(200)* bitcast (i32 (...) addrspace(200)* @__gxx_personality_v0 to i8 addrspace(200)*) {
+define void @c() personality ptr addrspace(200) @__gxx_personality_v0 {
   invoke void @d()
           to label %1 unwind label %4
 
@@ -24,9 +24,9 @@ define void @c() personality i8 addrspace(200)* bitcast (i32 (...) addrspace(200
           to label %6 unwind label %14
 
 ; <label>:4:                                      ; preds = %2, %1, %0
-  %5 = landingpad { i8 addrspace(200)*, i32 }
+  %5 = landingpad { ptr addrspace(200), i32 }
           cleanup
-  resume { i8 addrspace(200)*, i32 } undef
+  resume { ptr addrspace(200), i32 } undef
 
 ; <label>:6:                                      ; preds = %3
   invoke void @g()
@@ -57,16 +57,16 @@ define void @c() personality i8 addrspace(200)* bitcast (i32 (...) addrspace(200
           to label %13 unwind label %14
 
 ; <label>:13:                                     ; preds = %12
-  invoke void (i8 addrspace(200)*, i32, ...) @i(i8 addrspace(200)* undef, i32 0)
+  invoke void (ptr addrspace(200), i32, ...) @i(ptr addrspace(200) undef, i32 0)
           to label %19 unwind label %14
 
 ; <label>:14:                                     ; preds = %13, %12, %11, %10, %9, %8, %7, %6, %3
-  %15 = landingpad { i8 addrspace(200)*, i32 }
+  %15 = landingpad { ptr addrspace(200), i32 }
           cleanup
-  resume { i8 addrspace(200)*, i32 } undef
+  resume { ptr addrspace(200), i32 } undef
 
 ; <label>:16:                                     ; preds = %19
-  %17 = landingpad { i8 addrspace(200)*, i32 }
+  %17 = landingpad { ptr addrspace(200), i32 }
           cleanup
   br label %18
 

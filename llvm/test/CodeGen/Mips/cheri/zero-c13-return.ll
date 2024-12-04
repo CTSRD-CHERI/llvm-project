@@ -8,73 +8,67 @@
 
 @global = local_unnamed_addr addrspace(200) global i8 123, align 8
 
-
-define i8 addrspace(200)* @many_arg_fn(i8 addrspace(200)* %arg1, i8 addrspace(200)* %arg2, i8 addrspace(200)* %arg3, i8 addrspace(200)* %arg4,
-                                        i8 addrspace(200)* %arg5, i8 addrspace(200)* %arg6, i8 addrspace(200)* %arg7, i8 addrspace(200)* %arg8,
-                                        i8 addrspace(200)* %arg9, i8 addrspace(200)* %arg10, i8 addrspace(200)* %arg11, i8 addrspace(200)* %arg12) {
+define ptr addrspace(200) @many_arg_fn(ptr addrspace(200) %arg1, ptr addrspace(200) %arg2, ptr addrspace(200) %arg3, ptr addrspace(200) %arg4, ptr addrspace(200) %arg5, ptr addrspace(200) %arg6, ptr addrspace(200) %arg7, ptr addrspace(200) %arg8, ptr addrspace(200) %arg9, ptr addrspace(200) %arg10, ptr addrspace(200) %arg11, ptr addrspace(200) %arg12) {
 ; CHECK-LABEL: many_arg_fn:
 ; CHECK:       # %bb.0: # %entry
 ; CHECK-NEXT:    clcbi $c3, %captab20(global)($c26)
 ; CHECK-NEXT:    cjr $c17
 ; CHECK-NEXT:    cgetnull $c13
 entry:
-  ret i8 addrspace(200)* @global
+  ret ptr addrspace(200) @global
 }
 
-define i8 addrspace(200)* @variadic_fn(i8 addrspace(200)* %in_arg1, ...) {
-; This cgetnull should remain here since we are calling a function without on-stack args from one with
+define ptr addrspace(200) @variadic_fn(ptr addrspace(200) %in_arg1, ...) {
+;; This cgetnull should remain here since we are calling a function without on-stack args from one with
 ; CHECK-LABEL: variadic_fn:
 ; CHECK:       # %bb.0: # %entry
 ; CHECK-NEXT:    clcbi $c3, %captab20(global)($c26)
 ; CHECK-NEXT:    cjr $c17
 ; CHECK-NEXT:    cgetnull $c13
 entry:
-  ret i8 addrspace(200)* @global
+  ret ptr addrspace(200) @global
 }
 
-
-define i8 addrspace(200)* @no_onstack_args(i8 addrspace(200)* %in_arg1) {
-; There should not be a cgetnull for a function with only one arg
+define ptr addrspace(200) @no_onstack_args(ptr addrspace(200) %in_arg1) {
+;; There should not be a cgetnull for a function with only one arg
 ; CHECK-LABEL: no_onstack_args:
 ; CHECK:       # %bb.0: # %entry
 ; CHECK-NEXT:    clcbi $c3, %captab20(global)($c26)
 ; CHECK-NEXT:    cjr $c17
 ; CHECK-NEXT:    nop
 entry:
-  ret i8 addrspace(200)* @global
+  ret ptr addrspace(200) @global
 }
 
-define i8 addrspace(200)* @eight_arg_fn(i8 addrspace(200)* %arg1, i8 addrspace(200)* %arg2, i8 addrspace(200)* %arg3, i8 addrspace(200)* %arg4,
-                                        i8 addrspace(200)* %arg5, i8 addrspace(200)* %arg6, i8 addrspace(200)* %arg7, i8 addrspace(200)* %arg8) {
-; There should not be a cgetnull for a function with 8 args (no-onstack args)
+define ptr addrspace(200) @eight_arg_fn(ptr addrspace(200) %arg1, ptr addrspace(200) %arg2, ptr addrspace(200) %arg3, ptr addrspace(200) %arg4, ptr addrspace(200) %arg5, ptr addrspace(200) %arg6, ptr addrspace(200) %arg7, ptr addrspace(200) %arg8) {
+;; There should not be a cgetnull for a function with 8 args (no-onstack args)
 ; CHECK-LABEL: eight_arg_fn:
 ; CHECK:       # %bb.0: # %entry
 ; CHECK-NEXT:    clcbi $c3, %captab20(global)($c26)
 ; CHECK-NEXT:    cjr $c17
 ; CHECK-NEXT:    nop
 entry:
-  ret i8 addrspace(200)* @global
+  ret ptr addrspace(200) @global
 }
 
-define i8 addrspace(200)* @nine_arg_fn(i8 addrspace(200)* %arg1, i8 addrspace(200)* %arg2, i8 addrspace(200)* %arg3, i8 addrspace(200)* %arg4,
-                                        i8 addrspace(200)* %arg5, i8 addrspace(200)* %arg6, i8 addrspace(200)* %arg7, i8 addrspace(200)* %arg8, i8 addrspace(200)* %arg9) {
-; We should clear $c13 in a function with 9 args since that includes one on-stack arg
+define ptr addrspace(200) @nine_arg_fn(ptr addrspace(200) %arg1, ptr addrspace(200) %arg2, ptr addrspace(200) %arg3, ptr addrspace(200) %arg4, ptr addrspace(200) %arg5, ptr addrspace(200) %arg6, ptr addrspace(200) %arg7, ptr addrspace(200) %arg8, ptr addrspace(200) %arg9) {
+;; We should clear $c13 in a function with 9 args since that includes one on-stack arg
 ; CHECK-LABEL: nine_arg_fn:
 ; CHECK:       # %bb.0: # %entry
 ; CHECK-NEXT:    clcbi $c3, %captab20(global)($c26)
 ; CHECK-NEXT:    cjr $c17
 ; CHECK-NEXT:    cgetnull $c13
 entry:
-  ret i8 addrspace(200)* @global
+  ret ptr addrspace(200) @global
 }
 
-define i8 addrspace(200)* @no_onstack_args_call_variadic(i8 addrspace(200)* %in_arg1) nounwind {
-; We should not need to clear $c13 after calling the variadic function since it will clear it prior to return
+define ptr addrspace(200) @no_onstack_args_call_variadic(ptr addrspace(200) %in_arg1) nounwind {
+;; We should not need to clear $c13 after calling the variadic function since it will clear it prior to return
 ; CHECK-LABEL: no_onstack_args_call_variadic:
 ; CHECK:       # %bb.0: # %entry
-; CHECK-NEXT:    cincoffset $c11, $c11, -[[#CAP_SIZE * 3]]
-; CHECK-NEXT:    csc $c18, $zero, [[#CAP_SIZE * 2]]($c11)
-; CHECK-NEXT:    csc $c17, $zero, [[#CAP_SIZE]]($c11)
+; CHECK-NEXT:    cincoffset $c11, $c11, -48
+; CHECK-NEXT:    csc $c18, $zero, 32($c11) # 16-byte Folded Spill
+; CHECK-NEXT:    csc $c17, $zero, 16($c11) # 16-byte Folded Spill
 ; CHECK-NEXT:    cmove $c18, $c26
 ; CHECK-NEXT:    daddiu $1, $zero, 42
 ; CHECK-NEXT:    csd $1, $zero, 0($c11)
@@ -86,11 +80,11 @@ define i8 addrspace(200)* @no_onstack_args_call_variadic(i8 addrspace(200)* %in_
 ; CHECK-NEXT:    clcbi $c3, %captab20(global)($c18)
 ; Restore $cgp
 ; CHECK-NEXT:    cmove $c26, $c18
-; CHECK-NEXT:    clc $c17, $zero, [[#CAP_SIZE]]($c11)
-; CHECK-NEXT:    clc $c18, $zero, [[#CAP_SIZE * 2]]($c11)
+; CHECK-NEXT:    clc $c17, $zero, 16($c11) # 16-byte Folded Reload
+; CHECK-NEXT:    clc $c18, $zero, 32($c11) # 16-byte Folded Reload
 ; CHECK-NEXT:    cjr $c17
-; CHECK-NEXT:    cincoffset $c11, $c11, [[#CAP_SIZE * 3]]
+; CHECK-NEXT:    cincoffset $c11, $c11, 48
 entry:
-  %0 = call i8 addrspace(200)* (i8 addrspace(200)*, ...) @variadic_fn(i8 addrspace(200)* %in_arg1, i64 42)
-  ret i8 addrspace(200)* @global
+  %0 = call ptr addrspace(200) (ptr addrspace(200), ...) @variadic_fn(ptr addrspace(200) %in_arg1, i64 42)
+  ret ptr addrspace(200) @global
 }

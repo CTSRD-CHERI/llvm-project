@@ -2,10 +2,9 @@
 ; We previously create a NULL value in $c18 and moved that into $c13 since it was being used twice
 ; RUN: %cheri_purecap_llc -verify-machineinstrs  -o - -O2 -cheri-cap-table-abi=pcrel %s 2>&1 | %cheri_FileCheck %s -implicit-check-not cmove
 
-declare i8 addrspace(200)* @one_arg(i8 addrspace(200)* %first_arg)
+declare ptr addrspace(200) @one_arg(ptr addrspace(200))
 
-
-define void @call_one_arg_from_many_arg(i8 addrspace(200)* %in_arg1, i8 addrspace(200)* %arg2, i8 addrspace(200)* %arg3, i8 addrspace(200)* %arg4,
+define void @call_one_arg_from_many_arg(ptr addrspace(200) %in_arg1, ptr addrspace(200) %arg2, ptr addrspace(200) %arg3, ptr addrspace(200) %arg4, ptr addrspace(200) %arg5, ptr addrspace(200) %arg6, ptr addrspace(200) %arg7, ptr addrspace(200) %arg8, ptr addrspace(200) %arg9, ptr addrspace(200) %arg10, ptr addrspace(200) %arg11, ptr addrspace(200) %arg12) {
 ; CHECK-LABEL: call_one_arg_from_many_arg:
 ; CHECK:       # %bb.0: # %entry
 ; CHECK-NEXT:    cincoffset $c11, $c11, -[[#CAP_SIZE]]
@@ -23,13 +22,8 @@ define void @call_one_arg_from_many_arg(i8 addrspace(200)* %in_arg1, i8 addrspac
 ; CHECK-NEXT:    clc $c17, $zero, 0($c11)
 ; CHECK-NEXT:    cjr $c17
 ; CHECK-NEXT:    cincoffset $c11, $c11, [[#CAP_SIZE]]
-                                        i8 addrspace(200)* %arg5, i8 addrspace(200)* %arg6, i8 addrspace(200)* %arg7, i8 addrspace(200)* %arg8,
-                                        i8 addrspace(200)* %arg9, i8 addrspace(200)* %arg10, i8 addrspace(200)* %arg11, i8 addrspace(200)* %arg12) {
-; TODO: we should not be saving null to $c18 since that is a waste of time and space
 entry:
-  %first_arg = call i8 addrspace(200)* @llvm.cheri.cap.offset.increment.i64(i8 addrspace(200)* %in_arg1, i64 77)
-  %0 = call i8 addrspace(200)* @one_arg(i8 addrspace(200)* %first_arg)
+  %first_arg = getelementptr i8, ptr addrspace(200) %in_arg1, i64 77
+  %0 = call ptr addrspace(200) @one_arg(ptr addrspace(200) %first_arg)
   ret void
 }
-
-declare i8 addrspace(200)* @llvm.cheri.cap.offset.increment.i64(i8 addrspace(200)*, i64)

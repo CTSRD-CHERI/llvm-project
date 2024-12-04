@@ -13,7 +13,7 @@ declare void @extern_func()
 ; Function Attrs: nounwind
 define i64 @test() local_unnamed_addr {
 entry:
-  %loaded = load i64, i64 addrspace(200)* @global, align 8
+  %loaded = load i64, ptr addrspace(200) @global, align 8
   ret i64 %loaded
 }
 ; COMMON-LABEL: Machine code for function test:

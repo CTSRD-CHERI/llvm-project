@@ -4,11 +4,9 @@
 ; We were previously generating a csb with an immediate that was out of range, clobbering other values on the stack!
 
 
-%"class.Webcore::Settings" = type {}
-
 %"class.Webcore::URL" = type { i8, [300 x i8], i32, i32, i32, i32, i32, i32, i32, i32, i32, i32, [4 x i8] }
 
-declare void @_BAR(%"class.Webcore::Settings" addrspace(200)*, %"class.Webcore::URL" addrspace(200)* dereferenceable(64)) local_unnamed_addr addrspace(200) #0
+declare void @_BAR(ptr addrspace(200), ptr addrspace(200) dereferenceable(64)) local_unnamed_addr addrspace(200)
 
 define hidden void @_ZN19QWebSettingsPrivate5applyEv() local_unnamed_addr addrspace(200) nounwind {
 ; CHECK-LABEL: _ZN19QWebSettingsPrivate5applyEv:
@@ -34,9 +32,9 @@ define hidden void @_ZN19QWebSettingsPrivate5applyEv() local_unnamed_addr addrsp
 ; CHECK-NEXT:    nop
   %ref.tmp38 = alloca i8, align 4, addrspace(200)
   %ref.tmp77 = alloca %"class.Webcore::URL", align 16, addrspace(200)
-  store i8 0, i8 addrspace(200)* %ref.tmp38, align 4
+  store i8 0, ptr addrspace(200) %ref.tmp38, align 4
   br label %_FOOOO.exit
-_FOOOO.exit:       ; preds = %lor.lhs.false.i463, %entry
-  call void @_BAR(%"class.Webcore::Settings" addrspace(200)* undef, %"class.Webcore::URL" addrspace(200)* nonnull dereferenceable(64) %ref.tmp77) #13
+_FOOOO.exit:                                      ; preds = %0
+  call void @_BAR(ptr addrspace(200) undef, ptr addrspace(200) nonnull dereferenceable(64) %ref.tmp77)
   unreachable
 }

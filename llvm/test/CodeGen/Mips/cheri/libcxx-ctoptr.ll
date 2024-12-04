@@ -5,7 +5,7 @@
 ; libc++ member pointer calls were broken due to using ctoptr instead of cgetaddr for ptrtoint
 ; Check that we generate the right ctoptr/cgetaddr
 
-define i64 @test(i8 addrspace(200)* %__vp) {
+define i64 @test(ptr addrspace(200) %__vp) {
 ; HYBRID-LABEL: test:
 ; HYBRID:       # %bb.0: # %entry
 ; HYBRID-NEXT:    jr $ra
@@ -16,11 +16,11 @@ define i64 @test(i8 addrspace(200)* %__vp) {
 ; PURECAP-NEXT:    cjr $c17
 ; PURECAP-NEXT:    cgetaddr $2, $c3
 entry:
-  %ret = ptrtoint i8 addrspace(200)* %__vp to i64
+  %ret = ptrtoint ptr addrspace(200) %__vp to i64
   ret i64 %ret
 }
 
-define i32 @test32(i8 addrspace(200)* %__vp) {
+define i32 @test32(ptr addrspace(200) %__vp) {
 ; HYBRID-LABEL: test32:
 ; HYBRID:       # %bb.0: # %entry
 ; HYBRID-NEXT:    ctoptr $1, $c3, $ddc
@@ -33,11 +33,11 @@ define i32 @test32(i8 addrspace(200)* %__vp) {
 ; PURECAP-NEXT:    cjr $c17
 ; PURECAP-NEXT:    sll $2, $1, 0
 entry:
-  %ret = ptrtoint i8 addrspace(200)* %__vp to i32
+  %ret = ptrtoint ptr addrspace(200) %__vp to i32
   ret i32 %ret
 }
 
-define i16 @test16(i8 addrspace(200)* %__vp) {
+define i16 @test16(ptr addrspace(200) %__vp) {
 ; HYBRID-LABEL: test16:
 ; HYBRID:       # %bb.0: # %entry
 ; HYBRID-NEXT:    ctoptr $1, $c3, $ddc
@@ -50,7 +50,7 @@ define i16 @test16(i8 addrspace(200)* %__vp) {
 ; PURECAP-NEXT:    cjr $c17
 ; PURECAP-NEXT:    sll $2, $1, 0
 entry:
-  %ret = ptrtoint i8 addrspace(200)* %__vp to i16
+  %ret = ptrtoint ptr addrspace(200) %__vp to i16
   ret i16 %ret
 }
 

@@ -3,37 +3,35 @@
 ; RUN: %cheri_purecap_llc %s -o - -asm-verbose -verify-regalloc -O2 | %cheri_FileCheck %s -check-prefix OPT
 
 
-%class.A = type <{ i32 (...) addrspace(200)* addrspace(200)*, i32, i32, [24 x i8] }>
-
-@global_func_ptr = external local_unnamed_addr addrspace(200) global void (%class.A addrspace(200)*) addrspace(200)*, align 32
+@global_func_ptr = external local_unnamed_addr addrspace(200) global ptr addrspace(200), align 32
 
 ; Function Attrs: nounwind
-define i32 @func_ptr_dereference(%class.A addrspace(200)* %a, i8 addrspace(200)* inreg %ptr.coerce0, i64 inreg %ptr.coerce1) local_unnamed_addr #0 {
+define i32 @func_ptr_dereference(ptr addrspace(200) %a, ptr addrspace(200) inreg %ptr.coerce0, i64 inreg %ptr.coerce1) local_unnamed_addr addrspace(200) #0 {
 entry:
   %memptr.adj.shifted = ashr i64 %ptr.coerce1, 1
-  %this.not.adjusted = bitcast %class.A addrspace(200)* %a to i8 addrspace(200)*
-  %memptr.vtable.addr = getelementptr inbounds i8, i8 addrspace(200)* %this.not.adjusted, i64 %memptr.adj.shifted
-  %this.adjusted = bitcast i8 addrspace(200)* %memptr.vtable.addr to %class.A addrspace(200)*
+  %this.not.adjusted = bitcast ptr addrspace(200) %a to ptr addrspace(200)
+  %memptr.vtable.addr = getelementptr inbounds i8, ptr addrspace(200) %this.not.adjusted, i64 %memptr.adj.shifted
+  %this.adjusted = bitcast ptr addrspace(200) %memptr.vtable.addr to ptr addrspace(200)
   %0 = and i64 %ptr.coerce1, 1
   %memptr.isvirtual = icmp eq i64 %0, 0
   br i1 %memptr.isvirtual, label %memptr.nonvirtual, label %memptr.virtual
 
 memptr.virtual:                                   ; preds = %entry
-  %1 = bitcast i8 addrspace(200)* %memptr.vtable.addr to i8 addrspace(200)* addrspace(200)*
-  %vtable = load i8 addrspace(200)*, i8 addrspace(200)* addrspace(200)* %1, align 32, !tbaa !2
-  %memptr.vtable.offset = ptrtoint i8 addrspace(200)* %ptr.coerce0 to i64
-  %2 = getelementptr i8, i8 addrspace(200)* %vtable, i64 %memptr.vtable.offset
-  %3 = bitcast i8 addrspace(200)* %2 to i32 (%class.A addrspace(200)*) addrspace(200)* addrspace(200)*
-  %memptr.virtualfn = load i32 (%class.A addrspace(200)*) addrspace(200)*, i32 (%class.A addrspace(200)*) addrspace(200)* addrspace(200)* %3, align 32
+  %1 = bitcast ptr addrspace(200) %memptr.vtable.addr to ptr addrspace(200)
+  %vtable = load ptr addrspace(200), ptr addrspace(200) %1, align 32, !tbaa !2
+  %memptr.vtable.offset = ptrtoint ptr addrspace(200) %ptr.coerce0 to i64
+  %2 = getelementptr i8, ptr addrspace(200) %vtable, i64 %memptr.vtable.offset
+  %3 = bitcast ptr addrspace(200) %2 to ptr addrspace(200)
+  %memptr.virtualfn = load ptr addrspace(200), ptr addrspace(200) %3, align 32
   br label %memptr.end
 
 memptr.nonvirtual:                                ; preds = %entry
-  %memptr.nonvirtualfn = bitcast i8 addrspace(200)* %ptr.coerce0 to i32 (%class.A addrspace(200)*) addrspace(200)*
+  %memptr.nonvirtualfn = bitcast ptr addrspace(200) %ptr.coerce0 to ptr addrspace(200)
   br label %memptr.end
 
 memptr.end:                                       ; preds = %memptr.nonvirtual, %memptr.virtual
-  %4 = phi i32 (%class.A addrspace(200)*) addrspace(200)* [ %memptr.virtualfn, %memptr.virtual ], [ %memptr.nonvirtualfn, %memptr.nonvirtual ]
-  %call = tail call i32 %4(%class.A addrspace(200)* %this.adjusted) #1
+  %4 = phi ptr addrspace(200) [ %memptr.virtualfn, %memptr.virtual ], [ %memptr.nonvirtualfn, %memptr.nonvirtual ]
+  %call = tail call i32 %4(ptr addrspace(200) %this.adjusted) #0
   ret i32 %call
   ; CHECK: cincoffset      $c11, $c11, -[[STACK_ADJ:(([0-9]+))]]
   ; CHECK: csc     $c17, [[STACK_RETURN_ADDR:\$zero, (([0-9]+))\(\$c11\)]]

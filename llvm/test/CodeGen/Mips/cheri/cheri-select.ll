@@ -2,7 +2,7 @@
 ; RUN: %cheri_llc %s -o - | FileCheck %s
 
 ; Function Attrs: nounwind
-define i8 addrspace(200)* @select(i8 addrspace(200)* %b, i8 addrspace(200)* %c) nounwind {
+define ptr addrspace(200) @select(ptr addrspace(200) %b, ptr addrspace(200) %c) nounwind {
 ; CHECK-LABEL: select:
 ; CHECK:       # %bb.0: # %entry
 ; CHECK-NEXT:    daddiu $sp, $sp, -64
@@ -29,25 +29,24 @@ define i8 addrspace(200)* @select(i8 addrspace(200)* %b, i8 addrspace(200)* %c) 
 ; CHECK-NEXT:    jr $ra
 ; CHECK-NEXT:    daddiu $sp, $sp, 64
 entry:
-  %b.addr = alloca i8 addrspace(200)*, align 32
-  %c.addr = alloca i8 addrspace(200)*, align 32
-  store i8 addrspace(200)* %b, i8 addrspace(200)** %b.addr, align 32
-  store i8 addrspace(200)* %c, i8 addrspace(200)** %c.addr, align 32
-  %0 = load i8 addrspace(200)*, i8 addrspace(200)** %b.addr, align 32
-  %1 = load i8 addrspace(200)*, i8 addrspace(200)** %c.addr, align 32
-  %cmp = icmp ult i8 addrspace(200)* %0, %1
+  %b.addr = alloca ptr addrspace(200), align 32
+  %c.addr = alloca ptr addrspace(200), align 32
+  store ptr addrspace(200) %b, ptr %b.addr, align 32
+  store ptr addrspace(200) %c, ptr %c.addr, align 32
+  %0 = load ptr addrspace(200), ptr %b.addr, align 32
+  %1 = load ptr addrspace(200), ptr %c.addr, align 32
+  %cmp = icmp ult ptr addrspace(200) %0, %1
   br i1 %cmp, label %cond.true, label %cond.false
 
 cond.true:                                        ; preds = %entry
-  %2 = load i8 addrspace(200)*, i8 addrspace(200)** %b.addr, align 32
+  %2 = load ptr addrspace(200), ptr %b.addr, align 32
   br label %cond.end
 
 cond.false:                                       ; preds = %entry
-  %3 = load i8 addrspace(200)*, i8 addrspace(200)** %c.addr, align 32
+  %3 = load ptr addrspace(200), ptr %c.addr, align 32
   br label %cond.end
 
 cond.end:                                         ; preds = %cond.false, %cond.true
-  %cond = phi i8 addrspace(200)* [ %2, %cond.true ], [ %3, %cond.false ]
-  ret i8 addrspace(200)* %cond
+  %cond = phi ptr addrspace(200) [ %2, %cond.true ], [ %3, %cond.false ]
+  ret ptr addrspace(200) %cond
 }
-

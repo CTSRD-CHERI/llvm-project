@@ -3,16 +3,16 @@
 ; RUN: FileCheck -input-file=%t.csv %s
 ; This used to crash due to use of an unsized global
 
-declare void @a(i64 addrspace(200)*, i32 (i8 addrspace(200)*, i8 addrspace(200)*) addrspace(200)*) addrspace(200)
+declare void @a(ptr addrspace(200), ptr addrspace(200)) addrspace(200)
 
 @globali64 = local_unnamed_addr addrspace(200) global i64 123, align 8
 
 define void @b() addrspace(200) {
-  call void @a(i64 addrspace(200)* @globali64, i32(i8 addrspace(200) *, i8 addrspace(200) *) addrspace(200) * @atcomp)
+  call void @a(ptr addrspace(200) nonnull @globali64, ptr addrspace(200) nonnull @atcomp)
   unreachable
 }
 
-declare i32 @atcomp(i8 addrspace(200) *, i8 addrspace(200) *) addrspace(200)
+declare i32 @atcomp(ptr addrspace(200), ptr addrspace(200)) addrspace(200)
 
 ; CHECK-LABEL:  alignment_bits,size,kind,source_loc,compiler_pass,details
 ; CHECK-NEXT:  0,<unknown>,g,"<somewhere in b>","MipsTargetLowering::lowerGlobalAddress","load of global atcomp (alloc size=-1)"

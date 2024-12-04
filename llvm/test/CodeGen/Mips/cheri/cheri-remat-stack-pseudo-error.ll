@@ -15,9 +15,10 @@
 @a_small = common addrspace(200) global %struct.Dwarf_Error_small zeroinitializer, align 4
 
 declare void @fn2(...) addrspace(200)
-declare void @llvm.memcpy.p200i8.p200i8.i64(i8 addrspace(200)* nocapture writeonly, i8 addrspace(200)* nocapture readonly, i64, i1) addrspace(200) argmemonly nounwind
 
-define void @fn1() addrspace(200) #0 {
+declare void @llvm.memcpy.p200.p200.i64(ptr addrspace(200) noalias nocapture writeonly, ptr addrspace(200) noalias nocapture readonly, i64, i1 immarg) addrspace(200)
+
+define void @fn1() addrspace(200) noinline nounwind optnone {
 ; ASM-LABEL: fn1:
 ; ASM:       # %bb.0: # %entry
 ; ASM-NEXT:    daddiu $1, $zero, -[[#STACKFRAME_SIZE:]]
@@ -47,9 +48,9 @@ define void @fn1() addrspace(200) #0 {
 ; ASM-NEXT:    cincoffset $c11, $c11, $1
 entry:
   %byval-temp = alloca %struct.Dwarf_Error, align 8, addrspace(200)
-  %0 = bitcast %struct.Dwarf_Error addrspace(200)* %byval-temp to i8 addrspace(200)*
-  call void @llvm.memcpy.p200i8.p200i8.i64(i8 addrspace(200)* align 8 %0, i8 addrspace(200)* align 4 bitcast (%struct.Dwarf_Error addrspace(200)* @a to i8 addrspace(200)*), i64 4096, i1 false)
-  call addrspace(200) void bitcast (void (...) addrspace(200)* @fn2 to void (%struct.Dwarf_Error addrspace(200)*) addrspace(200)*)(%struct.Dwarf_Error addrspace(200)* align 8 %byval-temp)
+  %0 = bitcast ptr addrspace(200) %byval-temp to ptr addrspace(200)
+  call void @llvm.memcpy.p200.p200.i64(ptr addrspace(200) align 8 %0, ptr addrspace(200) align 4 @a, i64 4096, i1 false)
+  call void @fn2(ptr addrspace(200) align 8 %byval-temp)
   ret void
 }
 
@@ -70,9 +71,7 @@ entry:
 ; CHECK-NEXT: $c12 = COPY [[JUMP_TARGET]]
 ; CHECK-NEXT: CapJumpLinkPseudo killed $c12, csr_cheri_purecap, implicit-def dead $c17, implicit-def dead $c26, implicit killed $c3, implicit-def $c11
 
-
-
-define void @small_stack_fn1() addrspace(200) #0 {
+define void @small_stack_fn1() addrspace(200) noinline nounwind optnone {
 ; ASM-LABEL: small_stack_fn1:
 ; ASM:       # %bb.0: # %entry
 ; ASM-NEXT:    cincoffset $c11, $c11, -[[#STACKFRAME_SIZE:]]
@@ -97,9 +96,9 @@ define void @small_stack_fn1() addrspace(200) #0 {
 ; ASM-NEXT:    cincoffset $c11, $c11, [[#STACKFRAME_SIZE]]
 entry:
   %byval-temp = alloca %struct.Dwarf_Error_small, align 8, addrspace(200)
-  %0 = bitcast %struct.Dwarf_Error_small addrspace(200)* %byval-temp to i8 addrspace(200)*
-  call void @llvm.memcpy.p200i8.p200i8.i64(i8 addrspace(200)* align 8 %0, i8 addrspace(200)* align 4 bitcast (%struct.Dwarf_Error_small addrspace(200)* @a_small to i8 addrspace(200)*), i64 512, i1 false)
-  call addrspace(200) void bitcast (void (...) addrspace(200)* @fn2 to void (%struct.Dwarf_Error_small addrspace(200)*) addrspace(200)*)(%struct.Dwarf_Error_small addrspace(200)* align 8 %byval-temp)
+  %0 = bitcast ptr addrspace(200) %byval-temp to ptr addrspace(200)
+  call void @llvm.memcpy.p200.p200.i64(ptr addrspace(200) align 8 %0, ptr addrspace(200) align 4 @a_small, i64 512, i1 false)
+  call void @fn2(ptr addrspace(200) align 8 %byval-temp)
   ret void
 }
 ; Same thing with a smaller stack frame. In this case we can rematerialize it:
@@ -115,5 +114,3 @@ entry:
 ; CHECK-NEXT: $c12 = COPY [[JUMP_TARGET]]
 ; CHECK-NEXT: CapJumpLinkPseudo killed $c12, csr_cheri_purecap, implicit-def dead $c17, implicit-def dead $c26, implicit killed $c3, implicit-def $c11
 ; CHECK-NOT: CheriBoundedStackPseudo
-
-attributes #0 = { noinline nounwind optnone }

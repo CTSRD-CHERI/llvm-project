@@ -13,8 +13,8 @@ target triple = "cheri-unknown-freebsd"
 ; Function Attrs: nounwind
 define i64 @test() local_unnamed_addr {
 entry:
-  %loaded_tls = load i64, i64 addrspace(TLS)* @global_tls, align 8
-  %loaded_normal = load i64, i64 addrspace(200)* @global_normal, align 8
+  %loaded_tls = load i64, ptr addrspace(TLS) @global_tls, align 8
+  %loaded_normal = load i64, ptr addrspace(200) @global_normal, align 8
   %result = add i64 %loaded_tls, %loaded_normal
   ret i64 %result
 }

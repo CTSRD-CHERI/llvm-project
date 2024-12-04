@@ -10,7 +10,7 @@
 declare i32 @external_func() addrspace(200)
 declare i32 @external_func2() addrspace(200)
 declare dso_local i32 @external_local_func() addrspace(200)
-@fn_ptr = internal unnamed_addr addrspace(200) global i32 () addrspace(200)* @external_func, align 32
+@fn_ptr = internal unnamed_addr addrspace(200) global ptr addrspace(200) @external_func, align 32
 @global_int = internal addrspace(200) global i64 4, align 4
 
 
@@ -27,7 +27,7 @@ define internal i64 @local_func_no_calls_but_uses_globals(i64 %arg) addrspace(20
 ; CHECK-NEXT:    cjr $c17
 ; CHECK-NEXT:    nop
 entry:
-  %global_val = load i64, i64 addrspace(200)* @global_int
+  %global_val = load i64, ptr addrspace(200) @global_int, align 8
   %result = add i64 %arg, %global_val
   ret i64 %result
 }
@@ -251,7 +251,7 @@ define i32 @call_fn_ptr() addrspace(200) nounwind {
 ; CHECK-NEXT:    nop
 entry:
   %call = call i32 @external_func()
-  %fn = load i32 () addrspace(200)*, i32 () addrspace(200)* addrspace(200)* @fn_ptr, align 32
+  %fn = load ptr addrspace(200), ptr addrspace(200) @fn_ptr, align 32
   %call2 = call i32 %fn()
   %result = add i32 %call, %call2
   ret i32 %result
@@ -265,7 +265,7 @@ declare void @external_call1() addrspace(200)
 declare void @external_call2() addrspace(200)
 declare i32 @external_i32() addrspace(200)
 
-define i8 addrspace(200)* @access_global_after_external_call() addrspace(200) nounwind {
+define ptr addrspace(200) @access_global_after_external_call() addrspace(200) nounwind {
 ; CHECK-LABEL: access_global_after_external_call:
 ; CHECK:       # %bb.0: # %entry
 ; CHECK-NEXT:    cincoffset $c11, $c11, -[[#STACKFRAME_SIZE:]]
@@ -288,8 +288,8 @@ define i8 addrspace(200)* @access_global_after_external_call() addrspace(200) no
 ; CHECK-NEXT:    cjr $c17
 ; CHECK-NEXT:    nop
 entry:
-  call addrspace(200) void @external_call1()
-  ret i8 addrspace(200)* @global
+  call void @external_call1()
+  ret ptr addrspace(200) @global
 }
 
 define void @call_two_functions() addrspace(200) nounwind {
@@ -354,7 +354,7 @@ define i32 @not_needed_after_call(i32 %arg1, i32 %arg2) addrspace(200) nounwind 
 ; CHECK-NEXT:    cjr $c17
 ; CHECK-NEXT:    nop
 entry:
-  call addrspace(200) void @external_call1()
+  call void @external_call1()
   %ret = add i32 %arg1, %arg2
   ret i32 %ret
 }
@@ -381,7 +381,7 @@ define void @tailcall_external(i32 %arg1, i32 %arg2) addrspace(200) nounwind {
 ; CHECK-NEXT:    cjr $c17
 ; CHECK-NEXT:    nop
 entry:
-  tail call addrspace(200) void @external_call1()
+  tail call void @external_call1()
   ret void
 }
 
@@ -404,7 +404,7 @@ define internal i32 @tailcall_local(i32 %arg1, i32 %arg2) addrspace(200) nounwin
 ; CHECK-NEXT:    cjr $c17
 ; CHECK-NEXT:    nop
 entry:
-  %ret = tail call addrspace(200) i32 @local_func()
+  %ret = tail call i32 @local_func()
   ret i32 %ret
 }
 
