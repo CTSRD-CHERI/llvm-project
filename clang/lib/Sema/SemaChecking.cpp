@@ -457,7 +457,7 @@ static bool SemaBuiltinOverflow(Sema &S, CallExpr *TheCall,
     TheCall->setArg(I, Arg.get());
 
     QualType Ty = Arg.get()->getType();
-    if (!Ty->isIntegerType()) {
+    if (!Ty->isIntegerType() || Ty->isIntCapType()) {
       S.Diag(Arg.get()->getBeginLoc(), diag::err_overflow_builtin_must_be_int)
           << Ty << Arg.get()->getSourceRange();
       return true;
