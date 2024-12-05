@@ -1334,12 +1334,7 @@ unsigned RISCVInstrInfo::getInstSizeInBytes(const MachineInstr &MI) const {
     if (isCompressibleInst(MI, STI))
       return 2;
   }
-  auto Result = get(Opcode).getSize();
-  // Check that all pseudos have the appropriate size defined in tablegen.
-  // TODO: is returning 0 for COPY correct or should we be more conservative?
-  if (Result == 0 && MI.isPseudo() && isTargetSpecificOpcode(Opcode))
-    report_fatal_error("Unexpected zero size for pseudo: " + getName(Opcode));
-  return Result;
+  return get(Opcode).getSize();
 }
 
 bool RISCVInstrInfo::isAsCheapAsAMove(const MachineInstr &MI) const {
