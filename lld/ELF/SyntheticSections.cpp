@@ -1764,6 +1764,7 @@ void RelocationBaseSection::partitionRels() {
 
 void RelocationBaseSection::finalizeContents() {
   SymbolTableBaseSection *symTab = getPartition().dynSymTab.get();
+  Compartment *c = compartment;
 
   // When linking glibc statically, .rel{,a}.plt contains R_*_IRELATIVE
   // relocations due to IFUNC (e.g. strcpy). sh_link will be set to 0 in that
@@ -1773,7 +1774,7 @@ void RelocationBaseSection::finalizeContents() {
   else
     getParent()->link = 0;
 
-  if (in.relaPlt.get() == this && in.gotPlt->getParent()) {
+  if (relaPlt(c) == this && gotPlt(c)->getParent()) {
     getParent()->flags |= ELF::SHF_INFO_LINK;
     // For CheriABI we use the captable as the sh_info value
     if (config->isCheriAbi && in.mipsCheriCapTable &&
@@ -1781,10 +1782,10 @@ void RelocationBaseSection::finalizeContents() {
       assert(in.mipsCheriCapTable->getParent()->sectionIndex != UINT32_MAX);
       getParent()->info = in.mipsCheriCapTable->getParent()->sectionIndex;
     } else {
-      getParent()->info = in.gotPlt->getParent()->sectionIndex;
+      getParent()->info = gotPlt(c)->getParent()->sectionIndex;
     }
   }
-  if (in.relaIplt.get() == this && in.igotPlt->getParent()) {
+  if (relaIplt(c) == this && igotPlt(c)->getParent()) {
     getParent()->flags |= ELF::SHF_INFO_LINK;
     // For CheriABI we use the captable as the sh_info value
     if (config->isCheriAbi && in.mipsCheriCapTable &&
@@ -1792,7 +1793,7 @@ void RelocationBaseSection::finalizeContents() {
       assert(in.mipsCheriCapTable->getParent()->sectionIndex != UINT32_MAX);
       getParent()->info = in.mipsCheriCapTable->getParent()->sectionIndex;
     } else {
-      getParent()->info = in.igotPlt->getParent()->sectionIndex;
+      getParent()->info = igotPlt(c)->getParent()->sectionIndex;
     }
   }
   for (auto reloc : relocs) {

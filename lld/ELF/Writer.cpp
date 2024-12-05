@@ -1504,7 +1504,7 @@ static void sortSection(OutputSection &osec,
   // sections in the required order from the beginning so that the in.relaIplt
   // section is placed last in an output section. Here we just do not apply
   // sorting for an output section which holds the in.relaIplt section.
-  if (in.relaIplt->getParent() == &osec)
+  if (relaIplt(osec.compartment)->getParent() == &osec)
     return;
 
   // Sort input sections by priority using the list provided by
