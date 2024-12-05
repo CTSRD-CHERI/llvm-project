@@ -93,13 +93,9 @@ int noexcept;  // cxx98-warning {{'noexcept' is a keyword in C++11}}
 int static_assert; // cxx98-warning {{'static_assert' is a keyword in C++11}}
 char thread_local; // cxx98-warning {{'thread_local' is a keyword in C++11}}
 
-// Not a CXX20_KEYWORD(), we should re-enable this check after
-// See https://github.com/CTSRD-CHERI/llvm-project/issues/717
-#if 0
 int co_await; // cxx98-warning {{'co_await' is a keyword in C++20}}
 char co_return; // cxx98-warning {{'co_return' is a keyword in C++20}}
 char co_yield; // cxx98-warning {{'co_yield' is a keyword in C++20}}
-#endif
 int constinit; // cxx98-warning {{'constinit' is a keyword in C++20}}
 int consteval; // cxx98-warning {{'consteval' is a keyword in C++20}}
 int requires; // cxx98-warning {{'requires' is a keyword in C++20}}

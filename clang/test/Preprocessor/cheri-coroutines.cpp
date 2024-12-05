@@ -2,11 +2,11 @@
 /// instead crashing while trying to generate code.
 /// See https://github.com/CTSRD-CHERI/llvm-project/issues/717
 
-// RUN: %riscv64_cheri_cc1 -std=c++17 -fcoroutines-ts -E -dM -x c++ /dev/null \
+// RUN: %riscv64_cheri_cc1 -std=c++17 -fcoroutines -E -dM -x c++ /dev/null \
 // RUN:    | FileCheck %s --check-prefixes=HYBRID-CXX17-TS
 // HYBRID-CXX17-TS: #define __cplusplus 201703L
 // HYBRID-CXX17-TS: #define __cpp_coroutines 201703L
-// RUN: %riscv64_cheri_purecap_cc1 -std=c++17 -fcoroutines-ts -E -dM -x c++ /dev/null \
+// RUN: %riscv64_cheri_purecap_cc1 -std=c++17 -fcoroutines -E -dM -x c++ /dev/null \
 // RUN:    | FileCheck %s --check-prefix=PURECAP-CXX17-TS
 // PURECAP-CXX17-TS: #define __cplusplus 201703L
 // PURECAP-CXX17-TS-NOT: #define __cpp_coroutines
