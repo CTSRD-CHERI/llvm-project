@@ -2,7 +2,8 @@
 // RUN:   | llvm-dwarfdump -debug-frame - | FileCheck %s -check-prefixes CHECK,DWARF4
 // Also try assembling with integrated as and verify that the return and stack registers are correct
 // RUN: %cheri_purecap_cc1 %s -S -o %t.s -fcxx-exceptions -fexceptions -debug-info-kind=standalone
-// RUN: %cheri_purecap_clang -c %t.s -o - | llvm-dwarfdump -debug-frame - | FileCheck %s -check-prefixes CHECK,DWARF2
+// RUN: %cheri_purecap_clang -c %t.s -o - -gdwarf-2 | llvm-dwarfdump -debug-frame - | FileCheck %s -check-prefixes CHECK,DWARF2
+// RUN: %cheri_purecap_clang -c %t.s -o - -gdwarf-4 | llvm-dwarfdump -debug-frame - | FileCheck %s -check-prefixes CHECK,DWARF4
 // RUN: %cheri_purecap_llvm-mc %t.s -o - -filetype=obj | llvm-dwarfdump -debug-frame - | FileCheck %s -check-prefixes CHECK,DWARF4
 
 int test(int arg1, int arg2) {
@@ -14,7 +15,6 @@ int test(int arg1, int arg2) {
 // CHECK-NEXT: 00000000 000000{{.+}} ffffffff CIE
 // CHECK-NEXT:  Format: DWARF32
 // DWARF4-NEXT: Version:               4
-// FIXME: passing -gdwarf-4 crashes -> just check for version 1 here
 // DWARF2-NEXT: Version:          1
 // CHECK-NEXT:  Augmentation:          ""
 // DWARF4-NEXT: Address size:          8
