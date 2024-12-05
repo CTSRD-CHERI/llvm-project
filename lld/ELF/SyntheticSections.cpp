@@ -1774,6 +1774,7 @@ void RelocationBaseSection::partitionRels() {
 
 void RelocationBaseSection::finalizeContents() {
   SymbolTableBaseSection *symTab = getPartition().dynSymTab.get();
+  Compartment *c = compartment;
 
   // When linking glibc statically, .rel{,a}.plt contains R_*_IRELATIVE
   // relocations due to IFUNC (e.g. strcpy). sh_link will be set to 0 in that
@@ -1783,7 +1784,7 @@ void RelocationBaseSection::finalizeContents() {
   else
     getParent()->link = 0;
 
-  if (in.relaPlt.get() == this && in.gotPlt->getParent()) {
+  if (relaPlt(c) == this && gotPlt(c)->getParent()) {
     getParent()->flags |= ELF::SHF_INFO_LINK;
     // For CheriABI we use the captable as the sh_info value
     if (config->isCheriAbi && in.mipsCheriCapTable &&
@@ -1791,8 +1792,7 @@ void RelocationBaseSection::finalizeContents() {
       assert(in.mipsCheriCapTable->getParent()->sectionIndex != UINT32_MAX);
       getParent()->info = in.mipsCheriCapTable->getParent()->sectionIndex;
     } else {
-      if (in.relaPlt.get() == this)
-        getParent()->info = in.gotPlt->getParent()->sectionIndex;
+      getParent()->info = gotPlt(c)->getParent()->sectionIndex;
     }
     if (in.relaDyn.get() == this) {
       if (in.igotPlt && in.igotPlt->isNeeded()) {
@@ -1802,17 +1802,18 @@ void RelocationBaseSection::finalizeContents() {
       }
     }
   }
-  if (in.relaIplt.get() == this && in.igotPlt->getParent()) {
+  if (relaIplt(c) == this && igotPlt(c)->getParent()) {
     getParent()->flags |= ELF::SHF_INFO_LINK;
     // For CheriABI we use the captable as the sh_info value
     if (config->isCheriAbi && in.mipsCheriCapTable &&
         in.mipsCheriCapTable->isNeeded()) {
       assert(in.mipsCheriCapTable->getParent()->sectionIndex != UINT32_MAX);
       getParent()->info = in.mipsCheriCapTable->getParent()->sectionIndex;
-    } else if (in.igotPlt && in.igotPlt->isNeeded()) {
-      getParent()->info = in.igotPlt->getParent()->sectionIndex;
-    } else if (!config->hasDynSymTab)
+    } else if (igotPlt(c) && igotPlt(c)->isNeeded()) {
+      getParent()->info = igotPlt(c)->getParent()->sectionIndex;
+    } else if (!config->hasDynSymTab) {
       getParent()->info = 0;
+    }
   }
   for (auto reloc : relocs) {
     if (config->isCheriAbi && reloc.inputSec->name == "__cap_relocs") {
