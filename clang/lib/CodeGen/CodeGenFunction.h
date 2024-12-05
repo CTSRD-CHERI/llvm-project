@@ -559,7 +559,7 @@ public:
   bool InCheriContainerBoundsEmission = false;
   struct TightenBoundsResult {
     // either a fixed size or when UseRemainingSize is set the maximum size
-    Optional<uint64_t> Size;
+    std::optional<uint64_t> Size;
     bool IsSubObject = false;
     bool IsContainerSize = false;
     bool UseRemainingSize = false;
