@@ -2338,6 +2338,43 @@ TEST_F(ComputeKnownBitsTest, ComputeKnownUSubSatZerosPreserved) {
   expectKnownBits(/*zero*/ 2u, /*one*/ 0u);
 }
 
+TEST_F(ComputeKnownBitsTest, ComputeKnownBitsPtrToInt) {
+  parseAssembly("define void @test(ptr %p) {\n"
+                "  %A = load ptr, ptr %p\n"
+                "  %i = ptrtoint ptr %A to i64\n"
+                "  %m = and i64 %i, 31\n"
+                "  %c = icmp eq i64 %m, 0\n"
+                "  call void @llvm.assume(i1 %c)\n"
+                "  ret void\n"
+                "}\n"
+                "declare void @llvm.assume(i1)\n");
+  AssumptionCache AC(*F);
+  KnownBits Known = computeKnownBits(A, M->getDataLayout(), /* Depth */ 0, &AC,
+                                     F->front().getTerminator());
+  EXPECT_EQ(Known.Zero.getZExtValue(), 31u);
+  EXPECT_EQ(Known.One.getZExtValue(), 0u);
+}
+
+TEST_F(ComputeKnownBitsTest, ComputeKnownBitsPtrToIntCHERI) {
+  parseAssembly("target datalayout = \"pf200:128:128:128:64-A200-P200-G200\""
+                "define void @test(ptr addrspace(200) %p) {\n"
+                "  %A = load ptr addrspace(200), ptr addrspace(200) %p\n"
+                "  %i = ptrtoint ptr addrspace(200) %A to i64\n"
+                "  %m = and i64 %i, 31\n"
+                "  %c = icmp eq i64 %m, 0\n"
+                "  call void @llvm.assume(i1 %c)\n"
+                "  ret void\n"
+                "}\n"
+                "declare void @llvm.assume(i1)\n");
+  AssumptionCache AC(*F);
+  const auto &DL = M->getDataLayout();
+  KnownBits Known =
+      computeKnownBits(A, DL, /* Depth */ 0, &AC, F->front().getTerminator());
+  EXPECT_EQ(DL.getTypeSizeInBits(A->getType()), 128);
+  EXPECT_EQ(DL.getTypeIntegerRangeInBits(A->getType()), 64);
+  EXPECT_TRUE(Known.isUnknown());
+}
+
 TEST_F(ComputeKnownBitsTest, ComputeKnownBitsPtrToIntTrunc) {
   // ptrtoint truncates the pointer type. Make sure we don't crash.
   parseAssembly(
