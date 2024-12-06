@@ -2,9 +2,9 @@
 ; ModuleID = '/Users/alex/cheri/llvm-project/clang/test/CodeGen/cheri/cheri-inregs-param-info.c'
 ; This previously crashed because we were attempting to rematerialize a bounded stack cap where the size was not an immediate
 ; This caused use of a dead register -> fix this by only rematerializing ones with immediates
-; RUN: %cheri_purecap_llc %s -o %t.mir -stop-before="simple-register-coalescing"
-; RUN: %cheri_purecap_llc %t.mir -o - -start-before="simple-register-coalescing" -stop-after="simple-register-coalescing" -verify-machineinstrs | FileCheck %s
-; RUN: %cheri_purecap_llc %t.mir -o /dev/null -start-before="simple-register-coalescing" -verify-machineinstrs
+; RUN: %cheri_purecap_llc %s -o %t.mir -stop-before="register-coalescer"
+; RUN: %cheri_purecap_llc %t.mir -o - -start-before="register-coalescer" -stop-after="register-coalescer" -verify-machineinstrs | FileCheck %s
+; RUN: %cheri_purecap_llc %t.mir -o /dev/null -start-before="register-coalescer" -verify-machineinstrs
 ; Try compiling the full thing
 ; RUN: %cheri_purecap_llc %s -o - -verify-machineinstrs | %cheri_FileCheck %s -check-prefix ASM
 
