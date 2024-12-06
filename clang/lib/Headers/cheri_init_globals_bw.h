@@ -38,16 +38,16 @@ static const __SIZE_TYPE__ function_reloc_flag = (__SIZE_TYPE__)1
                                                  << (__SIZE_WIDTH__ - 1);
 
 static const __SIZE_TYPE__ function_pointer_permissions_mask =
-    GET_BIT_MASK(__CHERI_BW_CAP_PERMISSION_WRITE__);
+    GET_BIT_MASK(__CHERI_CAP_PERMISSION_WRITE__);
 
 static const __SIZE_TYPE__ constant_reloc_flag = (__SIZE_TYPE__)1
                                                  << (__SIZE_WIDTH__ - 2);
 
 static const __SIZE_TYPE__ constant_pointer_permissions_mask = GET_BIT_MASK(
-    __CHERI_BW_CAP_PERMISSION_WRITE__ | __CHERI_BW_CAP_PERMISSION_EXECUTE__);
+    __CHERI_CAP_PERMISSION_WRITE__ | __CHERI_CAP_PERMISSION_EXECUTE__);
 
 static const __SIZE_TYPE__ global_pointer_permissions_mask =
-    GET_BIT_MASK(__CHERI_BW_CAP_PERMISSION_EXECUTE__);
+    GET_BIT_MASK(__CHERI_CAP_PERMISSION_EXECUTE__);
 
 __attribute__((__weak__)) extern struct capreloc __start___cap_relocs;
 __attribute__((__weak__)) extern struct capreloc __stop___cap_relocs;

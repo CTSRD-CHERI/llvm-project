@@ -77,15 +77,16 @@ typedef long cheri_otype_t;
 /* Capability permissions: */
 typedef enum __attribute__((flag_enum, enum_extensibility(open))) {
 #if defined(__riscv_zcheripurecap)
-  CHERI_BW_PERM_CAP = __CHERI_BW_CAP_PERMISSION_CAPABILITY__,
-  CHERI_BW_PERM_WRITE = __CHERI_BW_CAP_PERMISSION_WRITE__,
-  CHERI_BW_PERM_READ = __CHERI_BW_CAP_PERMISSION_READ__,
-  CHERI_BW_PERM_EXECUTE = __CHERI_BW_CAP_PERMISSION_EXECUTE__,
-  CHERI_BW_PERM_SYSTEM_REGS = __CHERI_BW_CAP_PERMISSION_ACCESS_SYSTEM_REGISTERS__,
-  CHERI_BW_PERM_LOAD_MUTABLE = __CHERI_BW_CAP_PERMISSION_LOAD_MUTABLE__,
+  CHERI_PERM_CAP = __CHERI_CAP_PERMISSION_CAPABILITY__,
+  CHERI_PERM_WRITE = __CHERI_CAP_PERMISSION_WRITE__,
+  CHERI_PERM_READ = __CHERI_CAP_PERMISSION_READ__,
+  CHERI_PERM_EXECUTE = __CHERI_CAP_PERMISSION_EXECUTE__,
+  CHERI_PERM_SYSTEM_REGS = __CHERI_CAP_PERMISSION_ACCESS_SYSTEM_REGISTERS__,
+  CHERI_PERM_LOAD_MUTABLE = __CHERI_CAP_PERMISSION_LOAD_MUTABLE__,
 #if defined(__riscv_zcherilevels)
-  CHERI_BW_PERM_ELEVATE_LEVEL = __CHERI_BW_CAP_PERMISSION_ELEVATE_LEVEL__;
-  CHERI_BW_PERM_STORE_LEVEL = __CHERI_BW_CAP_PERMISSION_STORE_LEVEL__;
+  CHERI_PERM_ELEVATE_LEVEL = __CHERI_CAP_PERMISSION_ELEVATE_LEVEL__,
+  CHERI_PERM_STORE_LEVEL = __CHERI_CAP_PERMISSION_STORE_LEVEL__,
+  CHERI_PERM_CAPABILITY_LEVEL = __CHERI_CAP_PERMISSION_CAPABILITY_LEVEL__,
 #endif
 #else
   CHERI_PERM_GLOBAL = __CHERI_CAP_PERMISSION_GLOBAL__,
@@ -113,9 +114,9 @@ typedef enum __attribute__((flag_enum, enum_extensibility(open))) {
 
 /* Partially portable builtins: */
 /* Note: {get,set}flags does nothing for MIPS, but can still be used. */
+#if !defined(__riscv_zcheripurecap)
 #define cheri_flags_get(x) __builtin_cheri_flags_get(x)
 #define cheri_flags_set(x, y) __builtin_cheri_flags_set((x), (y))
-#if !defined(__riscv_zcheripurecap)
 #define cheri_tags_load(x) __builtin_cheri_cap_load_tags(x)
 #endif
 

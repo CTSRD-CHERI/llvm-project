@@ -679,8 +679,14 @@ class LLVMConfig(object):
                                 '-mcpu=' + default_cheri_cpu, '-msoft-float']
             riscv32_cheri_clang_args = ['-target', 'riscv32-unknown-freebsd', '-nostdinc', '-march=rv32imafdcxcheri']
             riscv64_cheri_clang_args = ['-target', 'riscv64-unknown-freebsd', '-nostdinc', '-march=rv64imafdcxcheri']
-            riscv32_cheri_bakewell_clang_args = ['-target', 'riscv32-unknown-freebsd', '-nostdinc', '-march=rv32imafdcxcheri-bakewell']
-            riscv64_cheri_bakewell_clang_args = ['-target', 'riscv64-unknown-freebsd', '-nostdinc', '-march=rv64imafdcxcheri-bakewell']
+            riscv32_cheri_bakewell_clang_args = ['-target',
+                                                 'riscv32-unknown-freebsd',
+                                                 '-nostdinc',
+                                                 '-march=rv32imafdc_zcheribakewell']
+            riscv64_cheri_bakewell_clang_args = ['-target',
+                                                 'riscv64-unknown-freebsd',
+                                                 '-nostdinc',
+                                                 '-march=rv64imafdc_zcheripurecap']
 
             tool_substitutions = [
                 # CHERI substitutions (order is important due to repeated substitutions!)

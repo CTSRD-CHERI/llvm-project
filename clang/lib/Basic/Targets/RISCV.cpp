@@ -234,19 +234,21 @@ void RISCVTargetInfo::getTargetDefines(const LangOptions &Opts,
 
     // Macros for use with the set and get permissions builtins for bakewell.
     if (ISAInfo->hasExtension("zcheripurecap")) {
-      Builder.defineMacro("__CHERI_BW_CAP_PERMISSION_CAPABILITY__",
-                          Twine(1 << 0));
-      Builder.defineMacro("__CHERI_BW_CAP_PERMISSION_WRITE__", Twine(1 << 1));
-      Builder.defineMacro("__CHERI_BW_CAP_PERMISSION_READ__", Twine(1 << 2));
-      Builder.defineMacro("__CHERI_BW_CAP_PERMISSION_EXECUTE__", Twine(1 << 3));
-      Builder.defineMacro("__CHERI_BW_CAP_PERMISSION_ACCESS_SYSTEM_REGISTERS__",
-                          Twine(1 << 4));
-      Builder.defineMacro("__CHERI_BW_CAP_PERMISSION_LOAD_MUTABLE__", Twine(1 << 5));
+      Builder.defineMacro("__CHERI_CAP_PERMISSION_WRITE__", Twine(1 << 0));
+      Builder.defineMacro("__CHERI_CAP_PERMISSION_LOAD_MUTABLE__", Twine(1 << 1));
+      Builder.defineMacro("__CHERI_CAP_PERMISSION_CAPABILITY__",
+                          Twine(1 << 5));
+      Builder.defineMacro("__CHERI_CAP_PERMISSION_ACCESS_SYSTEM_REGISTERS__",
+                          Twine(1 << 16));
+      Builder.defineMacro("__CHERI_CAP_PERMISSION_EXECUTE__", Twine(1 << 17));
+      Builder.defineMacro("__CHERI_CAP_PERMISSION_READ__", Twine(1 << 18));
       if(ISAInfo->hasExtension("zcherilevels")){
-        Builder.defineMacro("__CHERI_BW_CAP_PERMISSION_ELEVATE_LEVEL__",
-                            Twine(1 << 6));
-        Builder.defineMacro("__CHERI_BW_CAP_PERMISSION_STORE_LEVEL__",
-                            Twine(1 << 7));
+        Builder.defineMacro("__CHERI_CAP_PERMISSION_ELEVATE_LEVEL__",
+                            Twine(1 << 2));
+        Builder.defineMacro("__CHERI_CAP_PERMISSION_STORE_LEVEL__",
+                            Twine(1 << 3));
+        Builder.defineMacro("__CHERI_CAP_PERMISSION_CAPABILITY_LEVEL__",
+                            Twine(1 << 4));
       }
     } else {
       // Macros for use with the set and get permissions builtins.
