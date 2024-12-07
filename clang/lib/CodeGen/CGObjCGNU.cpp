@@ -2636,7 +2636,7 @@ CGObjCGNU::GenerateMessageSendSuper(CodeGenFunction &CGF,
   llvm::Value *imp = LookupIMPSuper(CGF, ObjCSuper, cmd, MSI);
   if (AS != 0)
     MSI.MessengerType =
-        llvm::PointerType::getWithSamePointeeType(MSI.MessengerType, AS);
+        llvm::PointerType::get(MSI.MessengerType->getContext(), AS);
   imp = EnforceType(Builder, imp, MSI.MessengerType);
 
   llvm::Metadata *impMD[] = {
@@ -2823,7 +2823,7 @@ CGObjCGNU::GenerateMessageSend(CodeGenFunction &CGF,
       // of the pointer, or we will end up deriving a DDC-relative capability,
       // which won't have the execute permission.
       MSI.MessengerType =
-          llvm::PointerType::getWithSamePointeeType(MSI.MessengerType, 0);
+          llvm::PointerType::get(MSI.MessengerType->getContext(), 0);
     }
 
   // Reset the receiver in case the lookup modified it
@@ -3882,7 +3882,7 @@ llvm::Function *CGObjCGNU::ModuleInitFunction() {
   llvm::Constant *module = [&] {
     llvm::Type *moduleEltTys[] = {
         LongTy, LongTy, PtrToInt8Ty,
-        llvm::PointerType::getWithSamePointeeType(symtabTy, AS), IntTy};
+        llvm::PointerType::get(symtabTy->getContext(), AS), IntTy};
     llvm::StructType *moduleTy =
       llvm::StructType::get(CGM.getLLVMContext(),
          ArrayRef(moduleEltTys).drop_back(unsigned(RuntimeVersion < 10)));
@@ -3935,8 +3935,8 @@ llvm::Function *CGObjCGNU::ModuleInitFunction() {
 
   llvm::PointerType *moduleTy = cast<llvm::PointerType>(module->getType());
   llvm::FunctionType *FT = llvm::FunctionType::get(
-      Builder.getVoidTy(),
-      llvm::PointerType::getWithSamePointeeType(moduleTy, AS), true);
+      Builder.getVoidTy(), llvm::PointerType::get(moduleTy->getContext(), AS),
+      true);
   llvm::FunctionCallee Register =
       CGM.CreateRuntimeFunction(FT, "__objc_exec_class");
   Builder.CreateCall(Register, module);

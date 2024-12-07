@@ -294,21 +294,6 @@ public:
           // Instead of cloning the alloca, mutate it in-place to avoid missing
           // some important metadata (debug info/attributes/etc.).
           AI->setAllocatedType(TypeWithPadding);
-          if (!AI->getType()->isOpaquePointerTy()) {
-            // Explicitly create a bitcast instruction to allow us to RAUW all
-            // uses after changing the type (not needed with opaque pointers).
-            // We have to use a NULL source temporarily since we can only use
-            // AI after calling AI->mutateType(), and RAUW will assert if
-            // called after AI->mutateType(), so we need this temporary.
-            auto *NewPtr = new BitCastInst(
-                ConstantPointerNull::get(AllocaPtrTy), AllocaPtrTy,
-                "without-tail-padding", AI->getNextNonDebugInstruction());
-            AI->replaceAllUsesWith(NewPtr);
-            AI->mutateType(
-                TypeWithPadding->getPointerTo(AI->getAddressSpace()));
-            // Finally, set bitcast source to AI
-            NewPtr->getOperandUse(0).set(AI);
-          }
           Size = ConstantInt::get(
               SizeTy, AllocaSize + static_cast<uint64_t>(TailPadding));
         }

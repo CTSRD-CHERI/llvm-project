@@ -2389,7 +2389,6 @@ RValue CodeGenFunction::EmitBuiltinExpr(const GlobalDecl GD, unsigned BuiltinID,
       return RValue::get(llvm::ConstantFP::get(getLLVMContext(),
                                                Result.Val.getFloat()));
   }
-  unsigned DefaultAS = CGM.getTargetCodeGenInfo().getDefaultAS();
 
   // If current long-double semantics is IEEE 128-bit, replace math builtins
   // of long-double with f128 equivalent.

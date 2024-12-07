@@ -1706,7 +1706,6 @@ ItaniumCXXABI::GetVirtualBaseClassOffset(CodeGenFunction &CGF, Address This,
         "vbase.offset.ptr");
 
   llvm::Value *VBaseOffset;
-  unsigned DefaultAS = CGM.getTargetCodeGenInfo().getDefaultAS();
   bool IsPurecap =
       CGF.getContext().getTargetInfo().areAllPointersCapabilities();
   if (CGM.getItaniumVTableContext().isRelativeLayout()) {
@@ -2247,7 +2246,6 @@ static llvm::Value *performTypeAdjustment(CodeGenFunction &CGF,
     llvm::Value *VTablePtr = CGF.Builder.CreateLoad(VTablePtrPtr);
 
     llvm::Value *Offset;
-    unsigned AS = CGF.CGM.getDataLayout().getGlobalsAddressSpace();
     llvm::Value *OffsetPtr = CGF.Builder.CreateConstInBoundsGEP1_64(
         CGF.Int8Ty, VTablePtr, VirtualAdjustment);
     if (CGF.CGM.getItaniumVTableContext().isRelativeLayout()) {
