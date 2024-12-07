@@ -138,16 +138,11 @@ declare dso_local void @__cxa_end_catch() local_unnamed_addr addrspace(200)
 
 ; RELOCS-LABEL: Relocations [
 ; RELOCS-LABEL:  Section ({{.+}}) .rela.gcc_except_table {
-; RELOCS-NEXT:   R_RISCV_ADD32 <null> 0x0
-; RELOCS-NEXT:   R_RISCV_SUB32 <null> 0x0
-; RELOCS-NEXT:   R_RISCV_ADD32 <null> 0x0
-; RELOCS-NEXT:   R_RISCV_SUB32 <null> 0x0
 ; RELOCS-NEXT:   R_RISCV_CHERI_CAPABILITY  .Llpad0 0x0{{$}}
 ; RELOCS-NEXT:   R_RISCV_ADD32 <null> 0x0
 ; RELOCS-NEXT:   R_RISCV_SUB32 <null> 0x0
-; RELOCS-NEXT:   R_RISCV_ADD32 <null> 0x0
+; RELOCS-NEXT:   R_RISCV_ADD32 .L_ZTIi.DW.stub 0x0
 ; RELOCS-NEXT:   R_RISCV_SUB32 <null> 0x0
-; RELOCS-NEXT:   R_RISCV_32_PCREL .L_ZTIi.DW.stub 0x0
 ; RELOCS-NEXT:  }
 
 ; The local alias should have the same type and non-zero size as the real function:
