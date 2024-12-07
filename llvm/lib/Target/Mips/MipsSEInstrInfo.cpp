@@ -211,11 +211,13 @@ static bool isORCopyInst(const MachineInstr &MI) {
 }
 
 static bool isCIncOffsetCopyInst(const MachineInstr &MI) {
-  if (MI.getOpcode() == Mips::CIncOffset &&
-      MI.getOperand(2).getReg() == Mips::ZERO_64)
-    return true;
-  if (MI.getOpcode() == Mips::CIncOffsetImm && MI.getOperand(2).getImm() == 0)
-    return true;
+  if (MI.getOpcode() == Mips::CIncOffset) {
+    assert(MI.getOperand(1).isReg() && "Must be a register");
+    return MI.getOperand(2).getReg() == Mips::ZERO_64;
+  } else if (MI.getOpcode() == Mips::CIncOffsetImm) {
+    assert(MI.getOperand(1).isReg() && "Must be a register");
+    return MI.getOperand(2).getImm() == 0;
+  }
   return false;
 }
 
