@@ -43,7 +43,7 @@ declare dso_local void @__cxa_end_catch() local_unnamed_addr addrspace(200)
 
 ; CHECK:  .text
 ; CHECK-NEXT:  .attribute 4, 16
-; CHECK-NEXT:  .attribute 5, "rv64i2p0_xcheri0p0"
+; CHECK-NEXT:  .attribute 5, "rv64i2p1_xcheri0p0"
 ; CHECK-NEXT:  .file "<stdin>"
 ; CHECK-NEXT:  .globl _Z4testv                        # -- Begin function _Z4testv
 ; CHECK-NEXT:  .p2align 2
@@ -68,7 +68,7 @@ declare dso_local void @__cxa_end_catch() local_unnamed_addr addrspace(200)
 
 ; OBJ-LABEL: Relocation section '.rela.gcc_except_table' at offset
 ; OBJ: Offset             Info             Type                    Symbol's Value   Symbol's Name + Addend
-; OBJ: 0000000000000020  0000000{{a|b}}000000c1 R_RISCV_CHERI_CAPABILITY 0000000000000024 .Llpad0 + 0{{$}}
+; OBJ: 0000000000000020  0000000{{8|9}}000000c1 R_RISCV_CHERI_CAPABILITY 0000000000000024 .Llpad0 + 0{{$}}
 
 ; OBJ-LABEL: Symbol table '.symtab' contains
 ; OBJ:    Value          Size Type    Bind   Vis       Ndx Name
