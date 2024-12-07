@@ -557,7 +557,7 @@ Int128 int128(Int128 in) {
   // ASM-LABEL: int128:
   // ASM: # %bb.0: # %entry
   // ASM-NEXT:  daddiu $3, $5, 1
-  // ASM-NEXT:  sltu $1, $3, $5
+  // ASM-NEXT:  sltiu $1, $3, 1
   // ASM-NEXT:  dsll $1, $1, 32
   // ASM-NEXT:  dsrl $1, $1, 32
   // ASM-NEXT:  cjr     $c17
@@ -589,7 +589,7 @@ Int128AndCap int128_and_cap(Int128AndCap in) {
   // ASM-LABEL: int128_and_cap:
   // ASM: # %bb.0: # %entry
   // ASM-NEXT:  daddiu $1, $6, 1
-  // ASM-NEXT:  sltu   $2, $1, $6
+  // ASM-NEXT:  sltiu  $2, $1, 1
   // ASM-NEXT:  dsll   $2, $2, 32
   // ASM-NEXT:  dsrl   $2, $2, 32
   // ASM-NEXT:  daddu  $2, $5, $2
