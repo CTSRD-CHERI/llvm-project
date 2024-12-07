@@ -2372,7 +2372,8 @@ TEST_F(ComputeKnownBitsTest, ComputeKnownBitsPtrToIntCHERI) {
       computeKnownBits(A, DL, /* Depth */ 0, &AC, F->front().getTerminator());
   EXPECT_EQ(DL.getTypeSizeInBits(A->getType()), 128u);
   EXPECT_EQ(DL.getTypeIntegerRangeInBits(A->getType()), 64u);
-  EXPECT_TRUE(Known.isUnknown());
+  EXPECT_EQ(Known.Zero.getZExtValue(), 31u);
+  EXPECT_EQ(Known.One.getZExtValue(), 0u);
 }
 
 TEST_F(ComputeKnownBitsTest, ComputeKnownBitsPtrToIntTrunc) {
