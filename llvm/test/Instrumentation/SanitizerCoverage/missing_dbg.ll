@@ -16,7 +16,7 @@ entry:
 ; CHECK-LABEL: @with_dbg
 ; CHECK-NEXT:  entry:
 ; CHECK:       call void @__sanitizer_cov_trace_pc_guard(ptr @__sancov_gen_) #1, !dbg [[DBG1:![0-9]+]]
-; CHECK:       call void @__sanitizer_cov_trace_pc_guard(ptr inttoptr (i64 add (i64 ptrtoint (ptr @__sancov_gen_ to i64), i64 4) to ptr)) #1, !dbg [[DBG2:![0-9]+]]
+; CHECK:       call void @__sanitizer_cov_trace_pc_guard(ptr getelementptr inbounds ([2 x i32], ptr @__sancov_gen_, i32 0, i64 1)) #1, !dbg [[DBG2:![0-9]+]]
 
 define i32 @without_dbg(ptr %a, ptr %b) {
 entry:
@@ -32,7 +32,7 @@ entry:
 ; CHECK-LABEL: @without_dbg
 ; CHECK-NEXT:  entry:
 ; CHECK:       call void @__sanitizer_cov_trace_pc_guard(ptr @__sancov_gen_.1) #1
-; CHECK:       call void @__sanitizer_cov_trace_pc_guard(ptr inttoptr (i64 add (i64 ptrtoint (ptr @__sancov_gen_.1 to i64), i64 4) to ptr)) #1
+; CHECK:       call void @__sanitizer_cov_trace_pc_guard(ptr getelementptr inbounds ([2 x i32], ptr @__sancov_gen_.1, i32 0, i64 1)) #1
 
 !llvm.dbg.cu = !{!0}
 !llvm.module.flags = !{!2}
