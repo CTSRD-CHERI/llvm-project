@@ -876,8 +876,8 @@ def HasZCheriPTE
                 "'zcheripte' (Extension for CHERI Page-Based Virtual-Memory Systems)">;
 
 def FeatureStdExtZCheriLevels
-    : SubtargetFeature<"zcherlevels", "HasStdExtZCheriLevels", "true",
-                       "'zcheripte' (Extension for CHERI Page-Based Virtual-Memory Systems)",
+    : SubtargetFeature<"zcherilevels", "HasStdExtZCheriLevels", "true",
+                       "'zcherilevels' (Extension for Capability Levels)",
                        [FeatureStdExtZCheriPureCap]>;
 
 def FeatureStdExtZish4add
