@@ -25,6 +25,8 @@ void llvm::createMemCpyLoopKnownSize(
     ConstantInt *CopyLen, Align SrcAlign, Align DstAlign, bool SrcIsVolatile,
     bool DstIsVolatile, bool CanOverlap, const TargetTransformInfo &TTI,
     std::optional<uint32_t> AtomicElementSize) {
+  assert(!InsertBefore->getModule()->getDataLayout().hasCheriCapabilities() &&
+         "Should not expand memcpy in IR for CHERI until hooks are updated");
   // No need to expand zero length copies.
   if (CopyLen->isZero())
     return;
@@ -180,6 +182,8 @@ void llvm::createMemCpyLoopUnknownSize(
     Align SrcAlign, Align DstAlign, bool SrcIsVolatile, bool DstIsVolatile,
     bool CanOverlap, const TargetTransformInfo &TTI,
     std::optional<uint32_t> AtomicElementSize) {
+  assert(!InsertBefore->getModule()->getDataLayout().hasCheriCapabilities() &&
+         "Should not expand memcpy in IR for CHERI until hooks are updated");
   BasicBlock *PreLoopBB = InsertBefore->getParent();
   BasicBlock *PostLoopBB =
       PreLoopBB->splitBasicBlock(InsertBefore, "post-loop-memcpy-expansion");
@@ -381,6 +385,8 @@ static void createMemMoveLoop(Instruction *InsertBefore, Value *SrcAddr,
                               Align DstAlign, bool SrcIsVolatile,
                               bool DstIsVolatile,
                               const TargetTransformInfo &TTI) {
+  assert(!InsertBefore->getModule()->getDataLayout().hasCheriCapabilities() &&
+         "Should not expand memcpy in IR for CHERI until hooks are updated");
   Type *TypeOfCopyLen = CopyLen->getType();
   BasicBlock *OrigBB = InsertBefore->getParent();
   Function *F = OrigBB->getParent();
