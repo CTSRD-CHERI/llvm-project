@@ -131,7 +131,7 @@ define i32 @atomic_cap_ptr_nand(i32 addrspace(200)* %ptr, i32 %val) nounwind {
 ; PURECAP-ATOMICS-NEXT:    clr.w.aqrl a2, (ca0)
 ; PURECAP-ATOMICS-NEXT:    and a3, a2, a1
 ; PURECAP-ATOMICS-NEXT:    not a3, a3
-; PURECAP-ATOMICS-NEXT:    csc.w.aqrl a3, a3, (ca0)
+; PURECAP-ATOMICS-NEXT:    csc.w.rl a3, a3, (ca0)
 ; PURECAP-ATOMICS-NEXT:    bnez a3, .LBB4_1
 ; PURECAP-ATOMICS-NEXT:  # %bb.2:
 ; PURECAP-ATOMICS-NEXT:    mv a0, a2
@@ -567,7 +567,7 @@ define float @atomic_cap_ptr_fadd(float addrspace(200)* %ptr, float %val) nounwi
 ; PURECAP-ATOMICS-NEXT:    bne a3, a2, .LBB11_5
 ; PURECAP-ATOMICS-NEXT:  # %bb.4: # %atomicrmw.start
 ; PURECAP-ATOMICS-NEXT:    # in Loop: Header=BB11_3 Depth=2
-; PURECAP-ATOMICS-NEXT:    csc.w.aqrl a4, a1, (ca0)
+; PURECAP-ATOMICS-NEXT:    csc.w.rl a4, a1, (ca0)
 ; PURECAP-ATOMICS-NEXT:    bnez a4, .LBB11_3
 ; PURECAP-ATOMICS-NEXT:  .LBB11_5: # %atomicrmw.start
 ; PURECAP-ATOMICS-NEXT:    # in Loop: Header=BB11_1 Depth=1
@@ -657,7 +657,7 @@ define float @atomic_cap_ptr_fsub(float addrspace(200)* %ptr, float %val) nounwi
 ; PURECAP-ATOMICS-NEXT:    bne a3, a2, .LBB12_5
 ; PURECAP-ATOMICS-NEXT:  # %bb.4: # %atomicrmw.start
 ; PURECAP-ATOMICS-NEXT:    # in Loop: Header=BB12_3 Depth=2
-; PURECAP-ATOMICS-NEXT:    csc.w.aqrl a4, a1, (ca0)
+; PURECAP-ATOMICS-NEXT:    csc.w.rl a4, a1, (ca0)
 ; PURECAP-ATOMICS-NEXT:    bnez a4, .LBB12_3
 ; PURECAP-ATOMICS-NEXT:  .LBB12_5: # %atomicrmw.start
 ; PURECAP-ATOMICS-NEXT:    # in Loop: Header=BB12_1 Depth=1
