@@ -2370,8 +2370,8 @@ TEST_F(ComputeKnownBitsTest, ComputeKnownBitsPtrToIntCHERI) {
   const auto &DL = M->getDataLayout();
   KnownBits Known =
       computeKnownBits(A, DL, /* Depth */ 0, &AC, F->front().getTerminator());
-  EXPECT_EQ(DL.getTypeSizeInBits(A->getType()), 128);
-  EXPECT_EQ(DL.getTypeIntegerRangeInBits(A->getType()), 64);
+  EXPECT_EQ(DL.getTypeSizeInBits(A->getType()), 128u);
+  EXPECT_EQ(DL.getTypeIntegerRangeInBits(A->getType()), 64u);
   EXPECT_TRUE(Known.isUnknown());
 }
 
