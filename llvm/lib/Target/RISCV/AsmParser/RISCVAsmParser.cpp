@@ -2022,7 +2022,7 @@ ParseStatus RISCVAsmParser::parseCSRSystemRegister(OperandVector &Operands) {
       int64_t Imm = CE->getValue();
       if (isUInt<12>(Imm)) {
         auto CheriSysReg = RISCVCheriSysReg::lookupCheriSysRegByEncoding(Imm);
-        if (CheriSysReg && STI->hasFeature(RISCV::FeatureStdExtZCheriPureCap)) {
+        if (CheriSysReg && STI->hasFeature(RISCV::FeatureCapMode)) {
           Operands.push_back(
               RISCVOperand::createCheriSysReg(CheriSysReg->Name, S, Imm));
           return MatchOperand_Success;
