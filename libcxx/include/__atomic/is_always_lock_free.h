@@ -25,10 +25,11 @@ struct __libcpp_is_always_lock_free {
 
 #ifdef __CHERI_PURE_CAPABILITY__
 // FIXME: can be removed after https://github.com/CTSRD-CHERI/llvm-project/pull/721 lands
+#include <__atomic/atomic_lock_free.h>
 template<typename _Tp> struct __libcpp_is_always_lock_free<_Tp*> { enum { __value = 2 == ATOMIC_POINTER_LOCK_FREE }; };
-template<> struct __libcpp_is_always_lock_free<intptr_t> { enum { __value = 2 == ATOMIC_POINTER_LOCK_FREE }; };
-template<> struct __libcpp_is_always_lock_free<uintptr_t> { enum { __value = 2 == ATOMIC_POINTER_LOCK_FREE }; };
-template<> struct __libcpp_is_always_lock_free<std::nullptr_t> { enum { __value = 2 == ATOMIC_POINTER_LOCK_FREE }; };
+template<> struct __libcpp_is_always_lock_free<__INTPTR_TYPE__> { enum { __value = 2 == ATOMIC_POINTER_LOCK_FREE }; };
+template<> struct __libcpp_is_always_lock_free<__UINTPTR_TYPE__> { enum { __value = 2 == ATOMIC_POINTER_LOCK_FREE }; };
+template<> struct __libcpp_is_always_lock_free<decltype(nullptr)> { enum { __value = 2 == ATOMIC_POINTER_LOCK_FREE }; };
 #endif
 
 _LIBCPP_END_NAMESPACE_STD
