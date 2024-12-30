@@ -3793,7 +3793,8 @@ TEST_F(DIArgListTest, UpdatesOnRAUW) {
   ConstantAsMetadata *CI =
       ConstantAsMetadata::get(ConstantInt::get(Context, APInt(8, 0)));
   std::unique_ptr<GlobalVariable> GV0(
-      new GlobalVariable(Ty, false, GlobalValue::ExternalLinkage));
+      new GlobalVariable(Ty, false, GlobalValue::ExternalLinkage, nullptr, "",
+                         GlobalVariable::NotThreadLocal, 0));
   auto *MD0 = ValueAsMetadata::get(GV0.get());
 
   SmallVector<ValueAsMetadata *, 2> VMs;
@@ -3804,7 +3805,8 @@ TEST_F(DIArgListTest, UpdatesOnRAUW) {
   EXPECT_EQ(AL->getArgs()[1], MD0);
 
   std::unique_ptr<GlobalVariable> GV1(
-      new GlobalVariable(Ty, false, GlobalValue::ExternalLinkage));
+      new GlobalVariable(Ty, false, GlobalValue::ExternalLinkage, nullptr, "",
+                         GlobalVariable::NotThreadLocal, 0));
   auto *MD1 = ValueAsMetadata::get(GV1.get());
   GV0->replaceAllUsesWith(GV1.get());
   EXPECT_EQ(AL->getArgs()[0], CI);
