@@ -3011,7 +3011,6 @@ RValue CodeGenFunction::EmitBuiltinExpr(const GlobalDecl GD, unsigned BuiltinID,
         FnExpect, {ArgValue, ExpectedValue, Confidence}, "expval");
     return RValue::get(Result);
   }
-  case Builtin::BI__builtin_assume_aligned_cap:
   case Builtin::BI__builtin_assume_aligned: {
     const Expr *Ptr = E->getArg(0);
     Value *PtrValue = EmitScalarExpr(Ptr);

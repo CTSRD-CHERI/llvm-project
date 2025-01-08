@@ -55,7 +55,7 @@ void test_subobject_addrof_global() {
 }
 
 void test_subobject_addrof_assume_aligned(struct Nested * __capability cap) {
-  struct Nested * __capability cap2 = __builtin_assume_aligned_cap(cap, 4096);
+  struct Nested * __capability cap2 = __builtin_assume_aligned(cap, 4096);
   do_stuff_with_int_capability(&cap2->a);
   // HYBRID-CSV-NEXT: 0,4,o,"{{.+}}/csetbounds-stats-subobject.c:[[@LINE-1]]:32","Add subobject bounds","addrof operator on int"
   // PURECAP-CSV-NEXT: 0,4,o,"{{.+}}/csetbounds-stats-subobject.c:[[@LINE-2]]:32","Add subobject bounds","addrof operator on int"

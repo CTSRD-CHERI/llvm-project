@@ -44,5 +44,5 @@ int* assume_aligned_ptr(void* ptr) {
 // PURECAP-NEXT:    ret ptr addrspace(200) [[TMP0]]
 //
 int* __capability assume_aligned_cap(void* __capability ptr) {
-  return __builtin_assume_aligned_cap(ptr, 4);
+  return __builtin_assume_aligned(ptr, 4);
 }
