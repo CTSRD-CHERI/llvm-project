@@ -817,7 +817,7 @@ static CapTableScopePolicy getCapTableScope(opt::InputArgList &args) {
 
 static CapRelocsMode getLocalCapRelocsMode(opt::InputArgList &args) {
   auto *arg =
-      args.getLastArg(OPT_local_caprelocs_cbuildcap, OPT_local_caprelocs_elf,
+      args.getLastArg(OPT_local_caprelocs_legacy, OPT_local_caprelocs_elf,
                       OPT_local_caprelocs_cbuildcap);
   if (!arg) // TODO: change default to CBuildCap (at least for non-PIC)
     return CapRelocsMode::Legacy;
