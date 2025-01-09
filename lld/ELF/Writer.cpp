@@ -1070,12 +1070,14 @@ template <class ELFT> void Writer<ELFT>::addCapDynRelocsSymbols() {
       needsInterpSection())
     return;
 
-  ElfSym::relaDynStart = addOptionalRegular(
-      config->isRela ? "__rela_dyn_start" : "__rel_dyn_start", Out::elfHeader,
-      0, STV_HIDDEN, STB_WEAK);
+  ElfSym::relaDynStart = addOptionalRegular(config->isRela ? "__rela_dyn_start"
+                                                           : "__rel_dyn_start",
+                                            Out::elfHeader, 0, STV_HIDDEN,
+                                            /*canBeSectionStart=*/true);
   ElfSym::relaDynEnd =
       addOptionalRegular(config->isRela ? "__rela_dyn_end" : "rel_dyn_end",
-                         Out::elfHeader, 0, STV_HIDDEN, STB_WEAK);
+                         Out::elfHeader, 0, STV_HIDDEN,
+                         /*canBeSectionStart=*/false);
 }
 
 // This function generates assignments for predefined symbols (e.g. _end or

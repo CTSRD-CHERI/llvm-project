@@ -861,13 +861,13 @@ void RISCV::relocateAlloc(InputSectionBase &sec, uint8_t *buf) const {
                                           rel.expr, &sec, rel.offset),
                      bits);
     switch (rel.expr) {
-    case lld::elf::R_CHERI_CAPTAB_FRAG_ADDR:
     case lld::elf::R_CHERI_CAPTAB_FRAG_META:
+    case lld::elf::R_CHERI_CAPTAB_FRAG_ADDR:
       if(bits == 64)
           write64(loc, val);
       else
           write32(loc, val);
-      continue;
+      break;
     default:
       break;
     }

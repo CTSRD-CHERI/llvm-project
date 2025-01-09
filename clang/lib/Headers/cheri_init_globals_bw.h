@@ -29,6 +29,17 @@ struct ELFRela {
   __SIZE_TYPE__ addend;
 };
 
+struct CapFrag {
+  __SIZE_TYPE__ addr;
+  __SIZE_TYPE__ meta;
+};
+
+enum PermKind {
+  PK_FUNC = 0,
+  PK_OBJ = 1,
+  PK_CONST = 2,
+};
+
 // Bit of a hack as we should include it from llvm
 #define R_RISCV_CHERI_RELATIVE 202
 
@@ -112,94 +123,123 @@ static __attribute__((always_inline)) void cheri_init_globals_impl(
   }
 }
 
-static __attribute__((always_inline)) void
-cheri_init_globals_cbuildcap(void *__capability rw, void *__capability rx) {
-  const struct ELFRela *start_rela;
-  const struct ELFRela *stop_rela;
-  __SIZE_TYPE__ start_addr, stop_addr;
-#if !defined(__CHERI_PURE_CAPABILITY__)
-  __asm__("lla %0, __rela_dyn_start\n\t"
-          "lla %1, __rela_dyn_end\n\t"
-          : "=r"(start_addr), "=r"(stop_addr));
-#else
-  void *__capability tmp;
-  __asm__("llc %2, __rela_dyn_start\n\t"
-          "cgetaddr %0, %2\n\t"
-          "llc %2, __rela_dyn_end\n\t"
-          "cgetaddr %1, %2\n\t"
-          : "=r"(start_addr), "=r"(stop_addr), "=&C"(tmp));
-#endif
-  if (start_addr == 0 || stop_addr == 0)
-    return;
-
-#if !defined(__CHERI_PURE_CAPABILITY__)
-  start_rela = (const struct ELFRela *)(__UINTPTR_TYPE__)start_addr;
-  stop_rela = (const struct ELFRela *)(__UINTPTR_TYPE__)stop_addr;
-#else
-  __SIZE_TYPE__ rela_size = stop_addr - start_addr;
-  start_rela = (const struct ELFRela *)__builtin_cheri_address_set(
-      __builtin_cheri_program_counter_get(), start_addr);
-  start_rela = __builtin_cheri_bounds_set(start_rela, rela_size);
-  stop_rela = (const struct ELFRela *)(const void *)((const char *)start_rela +
-                                                    rela_size);
-#endif
-
-#if !defined(__CHERI_PURE_CAPABILITY__) || __CHERI_CAPABILITY_TABLE__ == 3
-    /* pc-relative or hybrid ABI -> need large bounds on $pcc */
-    bool can_set_code_bounds = false;
-#else
-    bool can_set_code_bounds = true; /* fn-desc/plt ABI -> tight bounds okay */
-#endif
-
-  struct CapFrag {
-    __SIZE_TYPE__ addr;
-    __SIZE_TYPE__ meta;
-  };
-
-  for (const struct ELFRela *r = start_rela; r < stop_rela; r++) {
-    if (r->info != R_RISCV_CHERI_RELATIVE)
+static __attribute__((always_inline)) void cheri_init_globals_cbuildcap_impl(
+    const struct ELFRela *start_rela, const struct ELFRela *stop_rela,
+    void *__capability data_cap, const void *__capability code_cap,
+    const void *__capability rodata_cap, bool tight_code_bounds,
+    __SIZE_TYPE__ base_addr) {
+  data_cap =
+      __builtin_cheri_perms_and(data_cap, global_pointer_permissions_mask);
+  code_cap =
+      __builtin_cheri_perms_and(code_cap, function_pointer_permissions_mask);
+  rodata_cap =
+      __builtin_cheri_perms_and(rodata_cap, constant_pointer_permissions_mask);
+  for (const struct ELFRela *rela = start_rela; rela < stop_rela; rela++) {
+    if (rela->info != R_RISCV_CHERI_RELATIVE)
       continue;
-
-    void *__capability *__capability dest =
-        (void *__capability *__capability)__builtin_cheri_address_set(
-            rw, r->offset);
-    struct CapFrag *__capability frag = (struct CapFrag *__capability)(dest);
-
+    const void *__capability *__capability dest =
+        (const void *__capability *__capability)__builtin_cheri_address_set(
+            data_cap, rela->offset + base_addr);
+    const struct CapFrag *__capability frag =
+        (const struct CapFrag *__capability)dest;
+    const __SIZE_TYPE__ length = frag->meta >> 5;
+    const __SIZE_TYPE__ perms = frag->meta & 0b11111;
     if (frag->addr == 0) {
       *dest = (void *__capability)0;
       continue;
     }
-
-    __SIZE_TYPE__ length = frag->meta >> 5;
-    __SIZE_TYPE__ perms = frag->meta & ((1 << 5) - 1);
-    enum PermKind {
-      PK_FUNC = 0,
-      PK_OBJ,
-      PK_CONST,
-    };
-
-    bool is_func = perms == PK_FUNC;
-    bool can_set_bounds = (!is_func || can_set_code_bounds) && length != 0;
-    void *auth_cap = is_func ? rx : rw;
+    const void *__capability base_cap;
+    bool can_set_bounds = true;
     if (perms == PK_FUNC) {
-      auth_cap = __builtin_cheri_perms_and(auth_cap,
-                                           function_pointer_permissions_mask);
-    } else if (perms == PK_OBJ) {
-      auth_cap =
-          __builtin_cheri_perms_and(auth_cap, global_pointer_permissions_mask);
+      base_cap = code_cap;
+      can_set_bounds = tight_code_bounds;
     } else if (perms == PK_CONST) {
-      auth_cap = __builtin_cheri_perms_and(auth_cap,
-                                           constant_pointer_permissions_mask);
+      base_cap = rodata_cap;
+    } else {
+      base_cap = data_cap;
     }
-
-    void *cap = __builtin_cheri_address_set(auth_cap, frag->addr);
-    if (can_set_bounds)
-      cap = __builtin_cheri_bounds_set(cap, length);
-    cap = __builtin_cheri_offset_increment(cap, r->addend);
-    if (is_func)
-      cap = __builtin_cheri_seal_entry(cap);
-    *dest = cap;
+    const void *__capability src =
+        __builtin_cheri_address_set(base_cap, frag->addr + base_addr);
+    if (can_set_bounds && (length != 0)) {
+      src = __builtin_cheri_bounds_set(src, length);
+    }
+    src = __builtin_cheri_offset_increment(src, rela->addend);
+    if (perms == PK_FUNC) {
+      src = __builtin_cheri_seal_entry(src);
+    }
+    *dest = src;
   }
+}
+
+static __attribute__((always_inline)) void
+cheri_init_globals_cbuildcap(void *__capability data_cap,
+                             const void *__capability code_cap,
+                             const void *__capability rodata_cap) {
+  const struct ELFRela *start_relocs;
+  const struct ELFRela *stop_relocs;
+  __SIZE_TYPE__ start_addr, stop_addr;
+#if !defined(__CHERI_PURE_CAPABILITY__)
+  __asm__(
+          ".weak __rela_dyn_start\n\t"
+          ".hidden __rela_dyn_start\n\t"
+          "lla %0, __rela_dyn_start\n\t"
+          ".weak __rela_dyn_end\n\t"
+          ".hidden __rela_dyn_end\n\t"
+          "lla %1, __rela_dyn_end\n\t"
+          : "=r"(start_addr), "=r"(stop_addr));
+#else
+  void *__capability tmp;
+  __asm__(
+          ".weak __rela_dyn_start\n\t"
+          ".hidden __rela_dyn_start\n\t"
+          "llc %2, __rela_dyn_start\n\t"
+          "cgetaddr %0, %2\n\t"
+          ".weak __rela_dyn_end\n\t"
+          ".hidden __rela_dyn_end\n\t"
+          "llc %2, __rela_dyn_end\n\t"
+          "cgetaddr %1, %2\n\t"
+          : "=r"(start_addr), "=r"(stop_addr), "=&C"(tmp));
+#endif
+
+  if (start_addr == 0 || stop_addr == 0)
+    return;
+
+#if !defined(__CHERI_PURE_CAPABILITY__)
+  start_relocs = (const struct ELFRela *)(__UINTPTR_TYPE__)start_addr;
+  stop_relocs = (const struct ELFRela *)(__UINTPTR_TYPE__)stop_addr;
+#else
+  __SIZE_TYPE__ relocs_size = stop_addr - start_addr;
+  /*
+   * Always get __cap_relocs relative to the initial $pcc. This should span
+   * rodata and rw data, too so we can access __cap_relocs, no matter where it
+   * was placed.
+   */
+  start_relocs = (const struct ELFRela *)__builtin_cheri_address_set(
+      __builtin_cheri_program_counter_get(), start_addr);
+  start_relocs = __builtin_cheri_bounds_set(start_relocs, relocs_size);
+  /*
+   * Note: with imprecise capabilities start_relocs could have a non-zero offset
+   * so we must not use setoffset!
+   * TODO: use csetboundsexact and teach the linker to align __cap_relocs.
+   */
+  stop_relocs =
+      (const struct ELFRela *)(const void *)((const char *)start_relocs +
+                                              relocs_size);
+#endif
+
+#if !defined(__CHERI_PURE_CAPABILITY__) || __CHERI_CAPABILITY_TABLE__ == 3
+  /* pc-relative or hybrid ABI -> need large bounds on $pcc */
+  bool can_set_code_bounds = false;
+#else
+  bool can_set_code_bounds = true; /* fn-desc/plt ABI -> tight bounds okay */
+#endif
+  /*
+   * We can assume that all relocations in the __cap_relocs section have already
+   * been processed so we don't need to add a relocation base address to the
+   * location of the capreloc.
+   */
+  cheri_init_globals_cbuildcap_impl(start_relocs, stop_relocs, data_cap, code_cap,
+                          rodata_cap, can_set_code_bounds, /*relocbase=*/0);
 }
 
 static __attribute__((always_inline)) void

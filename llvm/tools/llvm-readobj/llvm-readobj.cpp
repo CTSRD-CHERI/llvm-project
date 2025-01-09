@@ -107,6 +107,7 @@ static bool BBAddrMap;
 bool ExpandRelocs;
 static bool CGProfile;
 static bool CheriCapRelocs;
+static bool CheriCapRelocsCBuildCap;
 static bool CheriCapTable;
 static bool CheriCapTableMapping;
 bool Demangle;
@@ -223,6 +224,7 @@ static void parseOptions(const opt::InputArgList &Args) {
   opts::ArchSpecificInfo = Args.hasArg(OPT_arch_specific);
   opts::BBAddrMap = Args.hasArg(OPT_bb_addr_map);
   opts::CheriCapRelocs = Args.hasArg(OPT_cap_relocs);
+  opts::CheriCapRelocsCBuildCap = Args.hasArg(OPT_cap_relocs_cbuildcap);
   opts::CheriCapTable = Args.hasArg(OPT_cap_table);
   opts::CheriCapTableMapping = Args.hasArg(OPT_cap_table_mapping);
   opts::CGProfile = Args.hasArg(OPT_cg_profile);
@@ -471,6 +473,8 @@ static void dumpObject(ObjectFile &Obj, ScopedPrinter &Writer,
       Dumper->printArchSpecificInfo();
     if (opts::CheriCapRelocs)
       Dumper->printCheriCapRelocs();
+    if (opts::CheriCapRelocsCBuildCap)
+      Dumper->printCheriCapRelocsCBuildCap();
     if (opts::CheriCapTable)
       Dumper->printCheriCapTable();
     if (opts::CheriCapTableMapping)
@@ -698,6 +702,7 @@ int llvm_readobj_main(int argc, char **argv, const llvm::ToolContext &) {
     opts::HashHistogram = true;
     if (opts::Output == opts::LLVM) {
       opts::CheriCapRelocs = true;
+      opts::CheriCapRelocsCBuildCap = true;
       opts::CheriCapTable = true;
       opts::Addrsig = true;
       opts::PrintStackSizes = true;

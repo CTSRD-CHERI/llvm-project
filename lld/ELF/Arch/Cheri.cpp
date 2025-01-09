@@ -30,8 +30,8 @@ namespace elf {
 
 enum PermissionKind {
   PK_FUNC = 0,
-  PK_OBJ,
-  PK_CONST,
+  PK_OBJ = 1,
+  PK_CONST = 2,
 };
 
 enum ArchPermTy {
@@ -1406,25 +1406,13 @@ void addCapabilityRelocation(Symbol *sym, RelType type, InputSectionBase *sec,
 
 uint64_t getCapMetaBits(int64_t a, const Symbol &sym,
                         const InputSectionBase *isec, uint64_t offset) {
-  const uint64_t baseAddr = sym.getVA(a);
   const uint64_t shift = config->is64 ? 8 : 4;
   CheriCapRelocLocation loc{const_cast<InputSectionBase *>(isec),
                             offset - shift};
   CheriCapReloc reloc{SymbolAndOffset{const_cast<Symbol *>(&sym), 0}, 0,
                       static_cast<bool>(sym.isPreemptible)};
 
-  bool exact = false;
   uint64_t symSize = invokeAndRetELFT(getTargetSize, loc, reloc);
-  uint64_t metaBits =
-      invokeAndRetELFT(encodeCapabilityBounds, baseAddr, symSize, &exact);
-
-  if (!exact)
-    nonFatalWarning(
-        "Capability written to captable with rounding. Base Address = 0x" +
-        utohexstr(baseAddr) + ", size=0x" + utohexstr(symSize) +
-        ", the bits writter are 0x" + utohexstr(metaBits));
-
-  // TODO - write out raw capability bits instead of adhoc format.
   return encodeAlternativeMeta(sym, symSize);
 }
 
