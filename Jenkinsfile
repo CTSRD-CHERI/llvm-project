@@ -32,7 +32,8 @@ def nodeLabel = null
 echo("JOB_NAME='${env.JOB_NAME}', JOB_BASE_NAME='${env.JOB_BASE_NAME}'")
 if (env.JOB_NAME.toLowerCase().contains("linux")) {
     // Ensure that we can run the resulting binaries on all Linux slaves:
-    nodeLabel = "linux-baseline"
+    //nodeLabel = "linux-baseline"
+    nodeLabel = "linux-next"
 } else if (env.JOB_NAME.toLowerCase().contains("freebsd")) {
     nodeLabel = "freebsd"
 } else {
