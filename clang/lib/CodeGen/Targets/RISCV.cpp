@@ -345,11 +345,7 @@ ABIArgInfo RISCVABIInfo::classifyArgumentType(QualType Ty, bool IsFixed,
 
   uint64_t Size = getContext().getTypeSize(Ty);
 
-  bool IsSingleCapRecord = false;
-  if (auto *RT = Ty->getAs<RecordType>())
-    IsSingleCapRecord = Size == getTarget().getCHERICapabilityWidth() &&
-                        getContext().containsCapabilities(RT->getDecl());
-
+  bool IsSingleCapRecord = Ty->isSingleCapabilityRecord(getContext());
   bool IsCapability = Ty->isCHERICapabilityType(getContext()) ||
                       IsSingleCapRecord;
 
@@ -495,13 +491,7 @@ Address RISCVABIInfo::EmitVAArg(CodeGenFunction &CGF, Address VAListAddr,
 
   auto TInfo = getContext().getTypeInfoInChars(Ty);
 
-  bool IsSingleCapRecord = false;
-  CharUnits CapabilityWidth =
-    CharUnits::fromQuantity(getTarget().getCHERICapabilityWidth() / 8);
-  if (const auto *RT = Ty->getAs<RecordType>())
-    IsSingleCapRecord = TInfo.Width == CapabilityWidth &&
-                        getContext().containsCapabilities(RT->getDecl());
-
+  bool IsSingleCapRecord = Ty->isSingleCapabilityRecord(getContext());
   bool IsCapability = Ty->isCHERICapabilityType(getContext()) ||
                       IsSingleCapRecord;
 

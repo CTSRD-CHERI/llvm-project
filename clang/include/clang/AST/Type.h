@@ -2239,6 +2239,9 @@ public:
   /// pointers.
   bool isCHERICapabilityType(const ASTContext &Context,
                              bool IncludeIntCap = true) const;
+  /// Returns true if this is a struct/union type that contains exactly one
+  /// capability element.
+  bool isSingleCapabilityRecord(const ASTContext &Context) const;
   /// Returns true for __uintcap_t or __intcap_t (and enums/_Atomic with that
   /// underlying type)
   bool isIntCapType() const;
