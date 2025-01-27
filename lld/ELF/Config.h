@@ -24,6 +24,7 @@
 #include "llvm/Support/PrettyStackTrace.h"
 #include <atomic>
 #include <memory>
+#include <map>
 #include <vector>
 
 namespace lld {
@@ -100,6 +101,15 @@ struct VersionDefinition {
   uint16_t id;
   SmallVector<SymbolVersion, 0> nonLocalPatterns;
   SmallVector<SymbolVersion, 0> localPatterns;
+};
+
+struct CompartmentMembers {
+  std::vector<std::string> symbols;
+  std::vector<std::string> files;
+};
+
+struct CompartmentPolicy {
+  std::map<std::string, CompartmentMembers> compartments;
 };
 
 // This struct contains the global configuration for the linker.
@@ -395,6 +405,7 @@ struct Configuration {
   bool androidMemtagStack;
 
   Compartment *compartment = nullptr;
+  CompartmentPolicy compartmentPolicy;
 };
 
 // The only instance of Configuration struct.
