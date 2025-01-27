@@ -146,6 +146,9 @@ def : Flag<["--"], "no-color-diagnostics">, Alias<color_diagnostics>, AliasArgs<
 defm compartment: EEq<"compartment", "Set the containing compartment of the inputs following this option">,
   MetaVarName<"<compart>">;
 
+defm compartment_policy: EEq<"compartment-policy", "Use a policy file to split output into compartments">,
+  MetaVarName<"<file>">;
+
 def cref: FF<"cref">,
   HelpText<"Output cross reference table. If -Map is specified, print to the map file">;
 

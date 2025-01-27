@@ -28,6 +28,7 @@
 #include "llvm/Support/GlobPattern.h"
 #include "llvm/Support/PrettyStackTrace.h"
 #include <atomic>
+#include <map>
 #include <memory>
 #include <optional>
 #include <vector>
@@ -142,6 +143,15 @@ private:
 
 public:
   SmallVector<std::pair<StringRef, unsigned>, 0> archiveFiles;
+};
+
+struct CompartmentMembers {
+  std::vector<std::string> symbols;
+  std::vector<std::string> files;
+};
+
+struct CompartmentPolicy {
+  std::map<std::string, CompartmentMembers> compartments;
 };
 
 // This struct contains the global configuration for the linker.
@@ -450,6 +460,7 @@ struct Config {
       remapInputsWildcards;
 
   Compartment *compartment = nullptr;
+  CompartmentPolicy compartmentPolicy;
 };
 struct ConfigWrapper {
   Config c;
