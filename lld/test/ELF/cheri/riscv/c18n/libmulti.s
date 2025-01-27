@@ -4,12 +4,20 @@
 # RUN: %riscv64_cheri_purecap_llvm-mc -filetype=obj %t/one.s -o %t/one.o
 # RUN: %riscv64_cheri_purecap_llvm-mc -filetype=obj %t/oneb.s -o %t/oneb.o
 # RUN: %riscv64_cheri_purecap_llvm-mc -filetype=obj %t/two.s -o %t/two.o
-# RUN: ld.lld --shared --compartment=one %t/one.o %t/oneb.o --compartment=two %t/two.o -o %t/libmulti.so.0
+# RUN: ld.lld --shared --compartment-policy=%t/compartments.json %t/one.o %t/oneb.o %t/two.o -o %t/libmulti.so.0
 
 # RUN: llvm-readelf -t %t/libmulti.so.0 | FileCheck --check-prefix=SECTIONS %s
 # RUN: llvm-readelf -l %t/libmulti.so.0 | FileCheck --check-prefix=SEGMENTS %s
 # RUN: llvm-readelf -s %t/libmulti.so.0 | FileCheck --check-prefix=SYMBOLS %s
 # RUN: llvm-readelf -d %t/libmulti.so.0 | FileCheck --check-prefix=DYNAMIC %s
+
+# Legacy version linked via --compartment
+# RUN: ld.lld --shared --compartment=one %t/one.o %t/oneb.o --compartment=two %t/two.o -o %t/libmulti_legacy.so.0
+
+# RUN: llvm-readelf -t %t/libmulti_legacy.so.0 | FileCheck --check-prefix=SECTIONS %s
+# RUN: llvm-readelf -l %t/libmulti_legacy.so.0 | FileCheck --check-prefix=SEGMENTS %s
+# RUN: llvm-readelf -s %t/libmulti_legacy.so.0 | FileCheck --check-prefix=SYMBOLS %s
+# RUN: llvm-readelf -d %t/libmulti_legacy.so.0 | FileCheck --check-prefix=DYNAMIC %s
 
 # SECTIONS-LABEL: Section Headers:
 # SECTIONS:	[ 6] .c18nstrtab
@@ -167,3 +175,12 @@ counter_str:
 	cincoffset	csp, csp, 64
 	ret
 	.size	counter_str, . - counter_str
+
+#--- compartments.json
+
+{
+    "compartments": {
+	"one": { "files": ["*/one.*o", "*/oneb.*o"] },
+	"two": { "files": [], "symbols": ["counter_str"] }
+    }
+}
