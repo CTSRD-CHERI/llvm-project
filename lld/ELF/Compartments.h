@@ -21,6 +21,8 @@ void addCompartment(StringRef name);
 
 Compartment *findCompartment(StringRef name);
 
+void readCompartmentPolicy(MemoryBufferRef mb);
+
 void assignSectionsToCompartments();
 
 } // namespace elf

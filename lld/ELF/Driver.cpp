@@ -1695,6 +1695,17 @@ static void readConfigs(opt::InputArgList &args) {
       error(Twine("cannot find version script ") + arg->getValue());
     }
 
+  if (args.hasArg(OPT_compartment_policy) && args.hasArg(OPT_compartment))
+    error(Twine("cannot use both --compartment-policy and --compartment"));
+
+  for (auto *arg : args.filtered(OPT_compartment_policy))
+    if (std::optional<MemoryBufferRef> buffer = readFile(arg->getValue())) {
+      readCompartmentPolicy(*buffer);
+    } else {
+      error(Twine("cannot find compartmentalization policy ") +
+            arg->getValue());
+    }
+
   for (auto *arg : args.filtered(OPT_compartment)) {
     if (arg->getValue()[0] == '\0' ||
         findCompartment(arg->getValue()) != nullptr)
