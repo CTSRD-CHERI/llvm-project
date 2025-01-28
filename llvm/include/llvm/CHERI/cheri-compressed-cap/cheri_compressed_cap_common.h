@@ -44,29 +44,51 @@ enum {
     // For the reset capability we use an internal exponent and need
     // 2^ADDR_WIDTH, which uses the max exponent.
     _CC_N(RESET_EXP) = _CC_N(MAX_EXPONENT),
+#if _CC_N(FIELD_EF_USED) == 1
+    _CC_N(RESET_T) = 0,
+    // The value that is encoded in { L8, TE, BE }. Risc-v cheri stores the
+    // difference between max exponent and the actual exponent.
+    _CC_N(RESET_EXP_CODED) = (_CC_N(MAX_EXPONENT) - _CC_N(RESET_EXP)),
+#else
     _CC_N(RESET_T) = 1u << (_CC_N(ADDR_WIDTH) - _CC_N(RESET_EXP) - _CC_N(FIELD_EXPONENT_HIGH_PART_SIZE)),
+    _CC_N(RESET_EXP_CODED) = _CC_N(RESET_EXP),
+#endif
+
 #ifdef CC_IS_MORELLO
     // Due to magic constant XOR aversion (i.e. fields are either entirely
     // inverted or not at all, rather than select bits within them like in
     // normal CHERI Concentrate), NULL is special in Morello.
     _CC_N(NULL_EXP) = _CC_N(MAX_ENCODABLE_EXPONENT),
     _CC_N(NULL_T) = 0,
+    _CC_N(NULL_EXP_CODED) = _CC_N(NULL_EXP),
 #else
     // NULL uses identical bounds encoding to the reset capability.
     _CC_N(NULL_EXP) = _CC_N(RESET_EXP),
     _CC_N(NULL_T) = _CC_N(RESET_T),
+    _CC_N(NULL_EXP_CODED) = _CC_N(RESET_EXP_CODED),
 #endif
+
     _CC_N(RESET_EBT) =
-        _CC_ENCODE_EBT_FIELD(1, INTERNAL_EXPONENT) | _CC_ENCODE_EBT_FIELD(_CC_N(RESET_T), EXP_NONZERO_TOP) |
+        _CC_ENCODE_EBT_FIELD(1, INTERNAL_EXPONENT) | _CC_ENCODE_EBT_FIELD(0, EF) |
+        _CC_ENCODE_EBT_FIELD(_CC_N(RESET_T), EXP_NONZERO_TOP) |
         _CC_ENCODE_EBT_FIELD(0, EXP_NONZERO_BOTTOM) |
-        _CC_ENCODE_EBT_FIELD(_CC_N(RESET_EXP) >> _CC_N(FIELD_EXPONENT_LOW_PART_SIZE), EXPONENT_HIGH_PART) |
-        _CC_ENCODE_EBT_FIELD(_CC_N(RESET_EXP) & _CC_N(FIELD_EXPONENT_LOW_PART_MAX_VALUE), EXPONENT_LOW_PART),
+        _CC_ENCODE_EBT_FIELD(_CC_N(RESET_EXP_CODED) >> (_CC_N(FIELD_EXPONENT_HIGH_PART_SIZE) + _CC_N(FIELD_EXPONENT_LOW_PART_SIZE)), L8) |
+        _CC_ENCODE_EBT_FIELD(_CC_N(RESET_EXP_CODED) >> _CC_N(FIELD_EXPONENT_LOW_PART_SIZE), EXPONENT_HIGH_PART) |
+        _CC_ENCODE_EBT_FIELD(_CC_N(RESET_EXP_CODED) & _CC_N(FIELD_EXPONENT_LOW_PART_MAX_VALUE), EXPONENT_LOW_PART),
+    /*
+     * Please note that we don't have to exclude unused fields.
+     * _CC_ENCODE_FIELD(value, field_name) is 0 when the field's size is 0.
+     */
     _CC_N(NULL_PESBT) = _CC_ENCODE_FIELD(0, UPERMS) | _CC_ENCODE_FIELD(0, HWPERMS) | _CC_ENCODE_FIELD(0, RESERVED) |
-                        _CC_ENCODE_FIELD(0, FLAGS) | _CC_ENCODE_FIELD(1, INTERNAL_EXPONENT) |
+                        _CC_ENCODE_FIELD(0, FLAGS) |
+                        _CC_ENCODE_FIELD(0, CT) |
+                        _CC_ENCODE_FIELD(0, CL) |
+                        _CC_ENCODE_FIELD(1, INTERNAL_EXPONENT) | _CC_ENCODE_FIELD(0, EF) |
                         _CC_ENCODE_FIELD(_CC_N(OTYPE_UNSEALED), OTYPE) |
                         _CC_ENCODE_FIELD(_CC_N(NULL_T), EXP_NONZERO_TOP) | _CC_ENCODE_FIELD(0, EXP_NONZERO_BOTTOM) |
-                        _CC_ENCODE_FIELD(_CC_N(NULL_EXP) >> _CC_N(FIELD_EXPONENT_LOW_PART_SIZE), EXPONENT_HIGH_PART) |
-                        _CC_ENCODE_FIELD(_CC_N(NULL_EXP) & _CC_N(FIELD_EXPONENT_LOW_PART_MAX_VALUE), EXPONENT_LOW_PART),
+                        _CC_ENCODE_FIELD(_CC_N(NULL_EXP_CODED) >> (_CC_N(FIELD_EXPONENT_HIGH_PART_SIZE) + _CC_N(FIELD_EXPONENT_LOW_PART_SIZE)), L8) |
+                        _CC_ENCODE_FIELD(_CC_N(NULL_EXP_CODED) >> _CC_N(FIELD_EXPONENT_LOW_PART_SIZE), EXPONENT_HIGH_PART) |
+                        _CC_ENCODE_FIELD(_CC_N(NULL_EXP_CODED) & _CC_N(FIELD_EXPONENT_LOW_PART_MAX_VALUE), EXPONENT_LOW_PART),
     // We mask on store/load so this invisibly keeps null 0 whatever we choose
     // it to be.
     _CC_N(NULL_XOR_MASK) = _CC_N(NULL_PESBT),
@@ -90,17 +112,24 @@ enum {
 #define _CC_CURSOR_MASK _CC_N(CURSOR_MASK)
 // Check that the sizes of the individual fields match up
 _CC_STATIC_ASSERT_SAME(_CC_N(FIELD_EBT_SIZE) + _CC_N(FIELD_OTYPE_SIZE) + _CC_N(FIELD_FLAGS_SIZE) +
-                           _CC_N(FIELD_RESERVED_SIZE) + _CC_N(FIELD_HWPERMS_SIZE) + _CC_N(FIELD_UPERMS_SIZE),
+                           _CC_N(FIELD_CT_SIZE) + _CC_N(FIELD_CL_SIZE) +
+                           _CC_N(FIELD_M_SIZE) + _CC_N(FIELD_AP_SIZE) + _CC_N(FIELD_SDP_SIZE) +
+                           _CC_N(FIELD_RESERVED_SIZE) + _CC_N(FIELD_RESERVED2_SIZE) +
+                           _CC_N(FIELD_HWPERMS_SIZE) + _CC_N(FIELD_UPERMS_SIZE),
                        _CC_ADDR_WIDTH);
-_CC_STATIC_ASSERT_SAME(_CC_N(FIELD_INTERNAL_EXPONENT_SIZE) + _CC_N(FIELD_EXP_ZERO_TOP_SIZE) +
-                           _CC_N(FIELD_EXP_ZERO_BOTTOM_SIZE),
+/*
+ * Please note that only one of internal exponent or EF will be used at a
+ * time. Unused fields have size 0, they don't have to be commented out.
+ */
+_CC_STATIC_ASSERT_SAME(_CC_N(FIELD_INTERNAL_EXPONENT_SIZE) + _CC_N(FIELD_EF_SIZE) +_CC_N(FIELD_L8_SIZE) +
+                           _CC_N(FIELD_EXP_ZERO_TOP_SIZE) + _CC_N(FIELD_EXP_ZERO_BOTTOM_SIZE),
                        _CC_N(FIELD_EBT_SIZE));
-_CC_STATIC_ASSERT_SAME(_CC_N(FIELD_INTERNAL_EXPONENT_SIZE) + _CC_N(FIELD_TOP_ENCODED_SIZE) +
-                           _CC_N(FIELD_BOTTOM_ENCODED_SIZE),
+_CC_STATIC_ASSERT_SAME(_CC_N(FIELD_INTERNAL_EXPONENT_SIZE) + _CC_N(FIELD_EF_SIZE) +_CC_N(FIELD_L8_SIZE) +
+                           _CC_N(FIELD_TOP_ENCODED_SIZE) + _CC_N(FIELD_BOTTOM_ENCODED_SIZE),
                        _CC_N(FIELD_EBT_SIZE));
-_CC_STATIC_ASSERT_SAME(_CC_N(FIELD_INTERNAL_EXPONENT_SIZE) + _CC_N(FIELD_EXP_NONZERO_TOP_SIZE) +
-                           _CC_N(FIELD_EXP_NONZERO_BOTTOM_SIZE) + _CC_N(FIELD_EXPONENT_HIGH_PART_SIZE) +
-                           _CC_N(FIELD_EXPONENT_LOW_PART_SIZE),
+_CC_STATIC_ASSERT_SAME(_CC_N(FIELD_INTERNAL_EXPONENT_SIZE) + _CC_N(FIELD_EF_SIZE) +_CC_N(FIELD_L8_SIZE) +
+                           _CC_N(FIELD_EXP_NONZERO_TOP_SIZE) + _CC_N(FIELD_EXP_NONZERO_BOTTOM_SIZE) +
+                           _CC_N(FIELD_EXPONENT_HIGH_PART_SIZE) + _CC_N(FIELD_EXPONENT_LOW_PART_SIZE),
                        _CC_N(FIELD_EBT_SIZE));
 
 // Sanity-check the min/max otype macros:
@@ -116,8 +145,12 @@ typedef struct _cc_N(cap) _cc_N(cap_t);
 static inline uint8_t _cc_N(get_flags)(const _cc_cap_t* cap);
 static inline uint32_t _cc_N(get_otype)(const _cc_cap_t* cap);
 static inline uint32_t _cc_N(get_perms)(const _cc_cap_t* cap);
-static inline uint8_t _cc_N(get_reserved)(const _cc_cap_t* cap);
+static inline uint16_t _cc_N(get_ap)(const _cc_cap_t* cap);
+static inline uint32_t _cc_N(get_reserved)(const _cc_cap_t* cap);
 static inline uint32_t _cc_N(get_uperms)(const _cc_cap_t* cap);
+static inline uint8_t _cc_N(get_sdp)(const _cc_cap_t* cap);
+static inline uint8_t _cc_N(get_ct)(const _cc_cap_t* cap);
+static inline uint8_t _cc_N(get_cl)(const _cc_cap_t* cap);
 
 // In order to allow vector loads and store from memory we can optionally reverse the first two fields.
 struct _cc_N(cap) {
@@ -137,6 +170,9 @@ struct _cc_N(cap) {
     uint8_t cr_bounds_valid; /* Set if bounds decode was given an invalid cap */
     uint8_t cr_exp;          /* Exponent */
     uint8_t cr_extra;        /* Additional data stored by the caller */
+    uint16_t cr_arch_perm;   /* decoded architectural permissions (AP) */
+    uint8_t cr_m;            /* decoded M bit (or a copy of the bit in pesbt) */
+    uint8_t cr_lvbits;       /* lvbits for Zcherilevel (0 if unsupported) */
 #ifdef __cplusplus
     inline _cc_addr_t base() const { return cr_base; }
     inline _cc_addr_t address() const { return _cr_cursor; }
@@ -151,11 +187,45 @@ struct _cc_N(cap) {
         const _cc_length_t l = length();
         return l > _CC_MAX_ADDR ? _CC_MAX_ADDR : (_cc_addr_t)l;
     }
-    inline uint32_t software_permissions() const { return _cc_N(get_uperms)(this); }
-    inline uint32_t permissions() const { return _cc_N(get_perms)(this); }
+    inline uint32_t software_permissions() const {
+#if _CC_N(FIELD_UPERMS_USED)
+        return _cc_N(get_uperms)(this);
+#else
+        return _cc_N(get_sdp)(this);
+#endif
+    }
+    inline uint32_t permissions() const {
+#if _CC_N(FIELD_HWPERMS_USED)
+        return _cc_N(get_perms)(this);
+#else
+        /*
+         * This assumes that the capability is "decompressed", i.e.
+         * cr_arch_perm is in sync with the encoded AP field.
+         * (We can't change a struct member in a const function.)
+         *
+         * It seems that applications create capabilities via
+         * _cc_N(make_max_perms_cap), _cc_N(make_null_derived_cap) or
+         * _cc_N(decompress_mem). In thoses cases, we should be ok.
+         */
+        return cr_arch_perm;
+#endif
+    }
+    inline uint8_t global() const {
+#if _CC_N(FIELD_CL_USED)
+        return _cc_N(get_cl)(this);
+#else
+        return (permissions() & _CC_N(PERM_GLOBAL)) != 0;
+#endif
+    }
     inline uint32_t type() const { return _cc_N(get_otype)(this); }
-    inline bool is_sealed() const { return type() != _CC_N(OTYPE_UNSEALED); }
-    inline uint8_t reserved_bits() const { return _cc_N(get_reserved)(this); }
+    inline bool is_sealed() const {
+#if _CC_N(FIELD_OTYPE_USED) == 1
+        return type() != _CC_N(OTYPE_UNSEALED);
+#else
+        return _cc_N(get_ct)(this);
+#endif
+    }
+    inline uint32_t reserved_bits() const { return _cc_N(get_reserved)(this); }
     inline uint8_t flags() const { return _cc_N(get_flags)(this); }
     inline bool operator==(const _cc_N(cap) & other) const;
 #endif
@@ -240,8 +310,13 @@ TRUNCATE_LSB_FUNC(64)
 struct _cc_N(bounds_bits) {
     uint16_t B; // bottom bits (currently 14 bits)
     uint16_t T; // top bits (12 bits plus two implied bits)
-    uint8_t E;  // exponent
-    bool IE;    // internal exponent flag
+    // for risc-v cheri, the exponent is max_exp - { L8 (if present), TE, BE },
+    // this may become negative for invalid encodings
+    int8_t E;
+    union {
+        bool IE; // cheri v9's internal exponent flag
+        bool EF; // cheri risc-v cheri's exponent format
+    };
 };
 #define _cc_bounds_bits struct _cc_N(bounds_bits)
 
@@ -256,11 +331,20 @@ struct _cc_N(bounds_bits) {
     static inline void _cc_N(update_##FN)(_cc_cap_t * cap, _cc_addr_t value) {                                         \
         cap->cr_pesbt = _cc_N(cap_pesbt_deposit_##FN)(cap->cr_pesbt, value);                                           \
     }
+// M and AP accessors must not be called from outside this library. External
+// access must go through cr_arch_perm and cr_m.
+// TODO: Is there a way to enforce this? Do we need ALL_WRAPPERS_INTERNAL()?
+ALL_WRAPPERS(M, m, uint8_t)
+ALL_WRAPPERS(AP, ap, uint16_t)
+ALL_WRAPPERS(SDP, sdp, uint8_t)
+ALL_WRAPPERS(CL, cl, uint8_t)
 ALL_WRAPPERS(HWPERMS, perms, uint32_t)
 ALL_WRAPPERS(UPERMS, uperms, uint32_t)
 ALL_WRAPPERS(OTYPE, otype, uint32_t)
+ALL_WRAPPERS(CT, ct, uint8_t)
 ALL_WRAPPERS(FLAGS, flags, uint8_t)
-ALL_WRAPPERS(RESERVED, reserved, uint8_t)
+ALL_WRAPPERS(RESERVED, reserved, uint32_t)
+ALL_WRAPPERS(RESERVED2, reserved2, uint32_t)
 #undef ALL_WRAPPERS
 
 /// Extract the bits used for bounds and infer the top two bits of T
@@ -275,14 +359,32 @@ static inline _cc_bounds_bits _cc_N(extract_bounds_bits)(_cc_addr_t pesbt) {
     _CC_STATIC_ASSERT(sizeof(result.E) * __CHAR_BIT__ >=
                           _CC_N(FIELD_EXPONENT_LOW_PART_SIZE) + _CC_N(FIELD_EXPONENT_HIGH_PART_SIZE),
                       "E field too small");
-    result.IE = (bool)(uint32_t)_CC_EXTRACT_FIELD(pesbt, INTERNAL_EXPONENT);
     uint8_t L_msb;
+#if _CC_N(FIELD_EF_USED) == 1
+    result.EF = (bool)(uint32_t)_CC_EXTRACT_FIELD(pesbt, EF);
+    if (!result.EF) {
+        uint8_t e_enc = (uint8_t)(_CC_EXTRACT_FIELD(pesbt, EXPONENT_LOW_PART) |
+                (_CC_EXTRACT_FIELD(pesbt, EXPONENT_HIGH_PART) << _CC_N(FIELD_EXPONENT_LOW_PART_SIZE)) |
+                (_CC_EXTRACT_FIELD(pesbt, L8) << ( _CC_N(FIELD_EXPONENT_LOW_PART_SIZE) + _CC_N(FIELD_EXPONENT_HIGH_PART_SIZE))));
+        if (e_enc > _CC_MAX_EXPONENT) {
+            /* The capability is malformed. */
+            memset(&result, 0x0, sizeof(result));
+            return result;
+        }
+        /*
+         * This may become negative, such an exponent is invalid. Generally, we
+         * extract the values here and check them in _cc_N(bounds_bits_valid).
+         */
+        result.E = _CC_MAX_EXPONENT - e_enc;
+#else
+    result.IE = (bool)(uint32_t)_CC_EXTRACT_FIELD(pesbt, INTERNAL_EXPONENT);
     if (result.IE) {
         result.E = (uint8_t)(_CC_EXTRACT_FIELD(pesbt, EXPONENT_LOW_PART) |
                              (_CC_EXTRACT_FIELD(pesbt, EXPONENT_HIGH_PART) << _CC_N(FIELD_EXPONENT_LOW_PART_SIZE)));
         // Do not offset by 1! We also need to encode E=0 even with IE
         // Also allow nonsense values over 64 - BWidth + 2: this is expected by sail-generated tests
         // E = MIN(64 - BWidth + 2, E);
+#endif
         result.B = (uint16_t)_CC_EXTRACT_FIELD(pesbt, EXP_NONZERO_BOTTOM) << _CC_N(FIELD_EXPONENT_LOW_PART_SIZE);
         result.T = (uint16_t)_CC_EXTRACT_FIELD(pesbt, EXP_NONZERO_TOP) << _CC_N(FIELD_EXPONENT_HIGH_PART_SIZE);
         L_msb = 1;
@@ -293,7 +395,8 @@ static inline _cc_bounds_bits _cc_N(extract_bounds_bits)(_cc_addr_t pesbt) {
         pesbt ^= _CC_N(NULL_XOR_MASK);
 #endif
         result.E = 0;
-        L_msb = 0;
+        /* This returns 0 if the current format does not use an L8 field. */
+        L_msb = _CC_EXTRACT_FIELD(pesbt, L8);
         result.B = (uint16_t)_CC_EXTRACT_FIELD(pesbt, EXP_ZERO_BOTTOM);
         result.T = (uint16_t)_CC_EXTRACT_FIELD(pesbt, EXP_ZERO_TOP);
     }
@@ -312,17 +415,36 @@ static inline _cc_bounds_bits _cc_N(extract_bounds_bits)(_cc_addr_t pesbt) {
 
 // Certain bit patterns can result in invalid bounds bits. These values must never be tagged!
 static inline bool _cc_N(bounds_bits_valid)(_cc_bounds_bits bounds) {
-    // https://github.com/CTSRD-CHERI/sail-cheri-riscv/blob/7a308ef3661e43461c8431c391aaece7fba6e992/src/cheri_properties.sail#L104
     _cc_addr_t Bmsb = _cc_N(getbits)(bounds.B, _CC_MANTISSA_WIDTH - 1, 1);
+#if _CC_N(FIELD_EF_USED) == 0
+    // https://github.com/CTSRD-CHERI/sail-cheri-riscv/blob/7a308ef3661e43461c8431c391aaece7fba6e992/src/cheri_properties.sail#L104
     _cc_addr_t Bmsb2 = _cc_N(getbits)(bounds.B, _CC_MANTISSA_WIDTH - 2, 2);
     _cc_addr_t Tmsb = _cc_N(getbits)(bounds.T, _CC_MANTISSA_WIDTH - 1, 1);
     if (bounds.E >= _CC_MAX_EXPONENT) {
         return Tmsb == 0 && Bmsb2 == 0;
     } else if (bounds.E == _CC_MAX_EXPONENT - 1) {
         return Bmsb == 0;
-    } else {
-        return true;
     }
+#else
+    /*
+     * Perform the malformed capability bounds checks as defined in section
+     * 2.2.6 of the cheri risc-v cheri specification.
+     */
+    if (!bounds.EF) {
+        if (bounds.E < 0) {
+            return false;
+#if _CC_N(FIELD_L8_USED) == 1
+        } else if (bounds.E == 0) {
+            return false;
+#endif
+        } else if (bounds.E == _CC_MAX_EXPONENT - 1) {
+            return Bmsb == 0;
+        } else if (bounds.E == _CC_MAX_EXPONENT) {
+            return bounds.B == 0;
+        }
+    }
+#endif
+    return true;
 }
 
 /// Returns the address with Morello flags (high address bits) removed and sign extended.
@@ -350,7 +472,24 @@ static inline bool _cc_N(compute_base_top)(_cc_bounds_bits bounds, _cc_addr_t cu
 
     // For the remaining computations we have to clamp E to max_E
     //  let E = min(maxE, unsigned(c.E)) in
-    uint8_t E = _CC_MIN(_CC_MAX_EXPONENT, bounds.E);
+    // For risc-v cheri, a negative bounds.E is an error that'll be caught later.
+    // We can use any E for the calculations, the result will be discarded.
+    uint8_t E = bounds.E > 0 ?  _CC_MIN(_CC_MAX_EXPONENT, bounds.E) : 0;
+
+#if _CC_N(FIELD_EF_USED) == 1
+    // let a_mid = truncate(a >> E, cap_mantissa_width) in
+    uint16_t a_mid = (uint16_t)_cc_N(truncate_addr)(cursor >> E, _CC_MANTISSA_WIDTH);
+    // let R = c.B - (0b01 @ zeros(cap_mantissa_width - 2)) in /* wraps */
+    uint16_t R = (int16_t)bounds.B - (1U << (_CC_MANTISSA_WIDTH - 2));
+    R %= (1U << _CC_MANTISSA_WIDTH);
+
+    // let aHi = if a_mid <_u R then 1 else 0 in
+    int aHi = a_mid < R ? 1 : 0;
+    // let bHi = if c.B   <_u R then 1 else 0 in
+    int bHi = bounds.B < R ? 1 : 0;
+    // let tHi = if c.T   <_u R then 1 else 0 in
+    int tHi = bounds.T < R ? 1 : 0;
+#else
     /* Extract bits we need to make the top correction and calculate representable limit */
     // let a3 = truncate(a >> (E + mantissa_width - 3), 3) in
     // let B3 = truncateLSB(c.B, 3) in
@@ -367,6 +506,7 @@ static inline bool _cc_N(compute_base_top)(_cc_bounds_bits bounds, _cc_addr_t cu
     int aHi = a3 < R3 ? 1 : 0;
     int bHi = B3 < R3 ? 1 : 0;
     int tHi = T3 < R3 ? 1 : 0;
+#endif
 
     /* Compute region corrections for top and base relative to a */
     // let correction_base = bHi - aHi in
@@ -417,6 +557,15 @@ static inline bool _cc_N(compute_base_top)(_cc_bounds_bits bounds, _cc_addr_t cu
         _cc_debug_assert((_cc_addr_t)base <= top);
     } else {
         // _cc_debug_assert(!tagged && "Should not create invalid tagged capabilities");
+#if _CC_N(FIELD_EF_USED) == 1
+        /*
+         * For cheri risc-v cheri, malformed bounds decode as zero (e.g. for the
+         * gcbase and gclen instructions).
+         */
+        *base_out = 0;
+        *top_out = 0;
+        return false;
+#endif
     }
     *base_out = (_cc_addr_t)base; // strip the (invalid) top bit
     *top_out = top;
@@ -424,22 +573,297 @@ static inline bool _cc_N(compute_base_top)(_cc_bounds_bits bounds, _cc_addr_t cu
     return true;
 }
 
+#define CAP_AP_C   (1 << 0)
+#define CAP_AP_W   (1 << 1)
+#define CAP_AP_R   (1 << 2)
+#define CAP_AP_X   (1 << 3)
+#define CAP_AP_ASR (1 << 4)
+#define CAP_AP_LM  (1 << 5)
+#define CAP_AP_EL  (1 << 6)
+#define CAP_AP_SL  (1 << 7)
+
+#if _CC_N(M_AP_FCTS) == M_AP_FCTS_NONE
+static inline void _cc_N(m_ap_compress)(__attribute__((unused)) _cc_cap_t *cap)
+{
+}
+
+static inline void _cc_N(m_ap_decompress)(__attribute__((unused)) _cc_cap_t *cap)
+{
+}
+#elif _CC_N(M_AP_FCTS) == M_AP_FCTS_IDENT
+static inline void _cc_N(m_ap_compress)(_cc_cap_t *cap)
+{
+    if ((cap->cr_lvbits == 0) && (cap->cr_arch_perm & (CAP_AP_SL | CAP_AP_EL))) {
+      cap->cr_arch_perm &= ~(CAP_AP_SL | CAP_AP_EL);
+    }
+
+    _cc_N(update_ap)(cap, cap->cr_arch_perm);
+    _cc_N(update_m)(cap, cap->cr_m);
+}
+
+static inline void _cc_N(m_ap_decompress)(_cc_cap_t *cap)
+{
+    cap->cr_arch_perm = _cc_N(get_ap)(cap);
+    if ((cap->cr_lvbits == 0) && (cap->cr_arch_perm & (CAP_AP_SL | CAP_AP_EL))) {
+      cap->cr_arch_perm &= ~(CAP_AP_SL | CAP_AP_EL);
+    }
+    cap->cr_m = _cc_N(get_m)(cap);
+}
+#elif _CC_N(M_AP_FCTS) == M_AP_FCTS_QUADR
+
+#define CAP_AP_Q0 ((uint8_t)(0b00 <<3))
+#define CAP_AP_Q1 ((uint8_t)(0b01 <<3))
+#define CAP_AP_Q2 ((uint8_t)(0b10 <<3))
+#define CAP_AP_Q3 ((uint8_t)(0b11 <<3))
+
+#define CAP_AP_Q_MASK ((uint8_t)(0b11 <<3))
+
+#define EL_OPT(cap) (((cap)->cr_lvbits == 0) ? 0 : CAP_AP_EL)
+#define SL_OPT(cap) (((cap)->cr_lvbits == 0) ? 0 : CAP_AP_SL)
+
+static inline void _cc_N(m_ap_compress)(_cc_cap_t *cap)
+{
+    uint8_t res = 0;
+
+    if (cap->cr_arch_perm & CAP_AP_X) {
+      res |= CAP_AP_Q1;
+      if (cap->cr_m) {
+          res |= 1;
+      }
+      switch (cap->cr_arch_perm &
+              (CAP_AP_R | CAP_AP_W | CAP_AP_C | CAP_AP_LM | CAP_AP_ASR)) {
+          case CAP_AP_R | CAP_AP_W | CAP_AP_C | CAP_AP_LM | CAP_AP_ASR:
+              res |= 0;
+              break;
+          case CAP_AP_R | CAP_AP_C | CAP_AP_LM:
+              res |= 2;
+              break;
+          case CAP_AP_R | CAP_AP_W | CAP_AP_C | CAP_AP_LM:
+              res |= 4;
+              break;
+          case CAP_AP_R | CAP_AP_W:
+              res |= 6;
+              break;
+          default:
+              /* We set res = UINT8_MAX to indicate an error. */
+              res = UINT8_MAX;
+      }
+    }
+    else if (cap->cr_m) {
+        /* M is valid only in Q1. Otherwise, M is reserved and must be 0. */
+        res = UINT8_MAX;
+    }
+    else if ((cap->cr_arch_perm &
+                (CAP_AP_R | CAP_AP_C | CAP_AP_LM | CAP_AP_EL | CAP_AP_X | CAP_AP_ASR)) ==
+            (CAP_AP_R | CAP_AP_C | CAP_AP_LM | EL_OPT(cap))) {
+      res |= CAP_AP_Q3;
+
+      switch (cap->cr_arch_perm & (CAP_AP_W | SL_OPT(cap))) {
+          case 0:
+              res |= 3;
+              break;
+          case CAP_AP_W | CAP_AP_SL:
+              res |= 6;
+              break;
+          case CAP_AP_W:
+              res |= 7;
+              break;
+          default:
+              res = UINT8_MAX;
+      }
+    }
+    else if ((cap->cr_arch_perm &
+                (CAP_AP_R | CAP_AP_C | CAP_AP_EL | CAP_AP_X | CAP_AP_ASR )) ==
+            (CAP_AP_R | CAP_AP_C)) {
+      res |= CAP_AP_Q2;
+      switch (cap->cr_arch_perm & (CAP_AP_W | CAP_AP_LM | SL_OPT(cap))) {
+          case 0:
+              res |= 3;
+              break;
+          case CAP_AP_W | CAP_AP_LM | CAP_AP_SL:
+              res |= 6;
+              break;
+          case CAP_AP_W | CAP_AP_LM:
+              res |= 7;
+              break;
+          default:
+              res = UINT8_MAX;
+      }
+    }
+    else {
+      res |= CAP_AP_Q0;
+
+      if (cap->cr_arch_perm & (CAP_AP_C | CAP_AP_X | CAP_AP_ASR)) {
+          res = UINT8_MAX;
+      }
+      else {
+          switch (cap->cr_arch_perm & (CAP_AP_R | CAP_AP_W)) {
+              case 0:
+                  break;
+              case CAP_AP_R:
+                  res |= 1;
+                  break;
+              case CAP_AP_W:
+                  res |= 4;
+                  break;
+              case CAP_AP_R | CAP_AP_W:
+                  res |= 5;
+                  break;
+          }
+      }
+    }
+
+    /*
+     * TODO: We should warn about invalid permissions here.
+     * _cc_debug_assert(res != UINT8_MAX) is too strong, we want to continue
+     * running so the testsuite can test our error handling.
+     */
+    if (res == UINT8_MAX) {
+        res = 0;
+        cap->cr_arch_perm = 0;
+    }
+    _cc_N(update_ap)(cap, res);
+}
+
+/*
+ * This shifts the lvbits value when we want to check both lvbits and the
+ * permission encoding (without the quadrant info) at once.
+ *
+ * __builtin_ctz has been supported in gcc since v3.4.6 - it's tricky to
+ * check if it is available (__has_builtin was added to gcc 10)
+ * clang supports __builtin_ctz as well
+ */
+#define __LVBITS(x) ((x) << __builtin_ctz(CAP_AP_Q_MASK))
+
+static inline void _cc_N(m_ap_decompress)(_cc_cap_t *cap)
+{
+    uint8_t perm_comp = _cc_N(get_ap)(cap);
+    bool m_bit = false;
+    uint8_t res = 0;
+
+    /*
+     * For the internal processing below, we assume that EL, SL are used.
+     * If the caller does not use EL and SL, we clear those bits before we
+     * return the bitmask.
+     */
+
+    switch (perm_comp & CAP_AP_Q_MASK) {
+        case CAP_AP_Q0:
+            switch (perm_comp & ~CAP_AP_Q_MASK) {
+                case 0:
+                    break;
+                case 1:
+                    res |= CAP_AP_R;
+                    break;
+                case 4:
+                    res |= CAP_AP_W;
+                    break;
+                case 5:
+                    res |= CAP_AP_R | CAP_AP_W;
+                    break;
+                default:
+                    /*
+                     * Unsupported encoding in quadrant 0. All permissions are
+                     * implicitly denied.
+                     */
+                    res = 0;
+            }
+            break;
+        case CAP_AP_Q1:
+            res |= CAP_AP_X;
+            if (perm_comp & 1) {
+                m_bit = true;
+            }
+            switch ((perm_comp & ~CAP_AP_Q_MASK) >> 1) {
+                case 0:
+                    res |= CAP_AP_R | CAP_AP_W | CAP_AP_C | CAP_AP_LM | CAP_AP_X | CAP_AP_ASR | CAP_AP_EL | CAP_AP_SL;
+                    break;
+                case 1:
+                    res |= CAP_AP_R | CAP_AP_C | CAP_AP_LM | CAP_AP_X | CAP_AP_EL | CAP_AP_SL;
+                    break;
+                case 2:
+                    res |= CAP_AP_R | CAP_AP_W | CAP_AP_C | CAP_AP_LM | CAP_AP_X | CAP_AP_EL | CAP_AP_SL;
+                    break;
+                case 3:
+                    res |= CAP_AP_R | CAP_AP_W | CAP_AP_X;
+                    break;
+                default:
+                    /* TODO: this cannot happen */
+                    res = 0;
+                    break;
+            }
+            break;
+        case CAP_AP_Q2:
+            switch (__LVBITS(cap->cr_lvbits) | (perm_comp & ~CAP_AP_Q_MASK)) {
+                case __LVBITS(0) | 3:
+                case __LVBITS(1) | 3:
+                    res |= CAP_AP_R | CAP_AP_C;
+                    break;
+                /* 4 and 5 are reserved for lvbits=2, we don't support this */
+                case __LVBITS(1) | 6:
+                    res |= CAP_AP_R | CAP_AP_W | CAP_AP_C | CAP_AP_LM | CAP_AP_SL;
+                    break;
+                case __LVBITS(1) | 7:
+                    res |= CAP_AP_R | CAP_AP_W | CAP_AP_C | CAP_AP_LM;
+                    break;
+                default:
+                    /*
+                     * Unsupported encoding in quadrant 2. All permissions are
+                     * implicitly granted.
+                     */
+                    res |= CAP_AP_R | CAP_AP_W | CAP_AP_C | CAP_AP_LM | CAP_AP_X | CAP_AP_ASR | CAP_AP_EL | CAP_AP_SL;
+            }
+            break;
+        case CAP_AP_Q3:
+            switch (__LVBITS(cap->cr_lvbits) | (perm_comp & ~CAP_AP_Q_MASK)) {
+                case __LVBITS(0) | 3:
+                case __LVBITS(1) | 3:
+                    res |= CAP_AP_R | CAP_AP_C | CAP_AP_LM | CAP_AP_EL;
+                    break;
+                /* 4 and 5 are reserved for lvbits=2, we don't support this */
+                case __LVBITS(1) | 6:
+                    res |= CAP_AP_R | CAP_AP_W | CAP_AP_C | CAP_AP_LM | CAP_AP_EL | CAP_AP_SL;
+                    break;
+                case __LVBITS(0) | 7:
+                case __LVBITS(1) | 7:
+                    res |= CAP_AP_R | CAP_AP_W | CAP_AP_C | CAP_AP_LM | CAP_AP_EL;
+                    break;
+                default:
+                    /*
+                     * Unsupported encoding in quadrant 3. All permissions are
+                     * implicitly granted.
+                     */
+                    res |= CAP_AP_R | CAP_AP_W | CAP_AP_C | CAP_AP_LM | CAP_AP_X | CAP_AP_ASR | CAP_AP_EL | CAP_AP_SL;
+            }
+            break;
+    }
+
+    if (cap->cr_lvbits == 0) {
+        res &= ~(CAP_AP_EL | CAP_AP_SL);
+    }
+    cap->cr_arch_perm = res;
+    cap->cr_m = m_bit ? 1 : 0;
+}
+#endif
+
 /// Expand a PESBT+address+tag input to a _cc_cap_t, but don't check that the tagged value is derivable.
 /// This is an internal helper and should not not be used outside of this header.
-static inline void _cc_N(unsafe_decompress_raw)(_cc_addr_t pesbt, _cc_addr_t cursor, bool tag, _cc_cap_t* cdp) {
+static inline void _cc_N(unsafe_decompress_raw)(_cc_addr_t pesbt, _cc_addr_t cursor, bool tag, uint8_t lvbits, _cc_cap_t* cdp) {
     memset(cdp, 0, sizeof(*cdp));
     cdp->cr_tag = tag;
     cdp->_cr_cursor = cursor;
     cdp->cr_pesbt = pesbt;
+    cdp->cr_lvbits = lvbits;
 
     _cc_bounds_bits bounds = _cc_N(extract_bounds_bits)(pesbt);
     bool valid = _cc_N(compute_base_top)(bounds, cursor, &cdp->cr_base, &cdp->_cr_top);
     cdp->cr_bounds_valid = valid;
     cdp->cr_exp = bounds.E;
+    _cc_N(m_ap_decompress)(cdp);
 }
 
-static inline void _cc_N(decompress_raw)(_cc_addr_t pesbt, _cc_addr_t cursor, bool tag, _cc_cap_t* cdp) {
-    _cc_N(unsafe_decompress_raw)(pesbt, cursor, tag, cdp);
+static inline void _cc_N(decompress_raw__)(_cc_addr_t pesbt, _cc_addr_t cursor, bool tag, uint8_t lvbits,_cc_cap_t* cdp) {
+    _cc_N(unsafe_decompress_raw)(pesbt, cursor, tag, lvbits, cdp);
     if (tag) {
         _cc_debug_assert(cdp->cr_base <= _CC_N(MAX_ADDR));
 #ifndef CC_IS_MORELLO
@@ -451,20 +875,30 @@ static inline void _cc_N(decompress_raw)(_cc_addr_t pesbt, _cc_addr_t cursor, bo
     }
 }
 
+static inline void _cc_N(decompress_raw)(_cc_addr_t pesbt, _cc_addr_t cursor, bool tag, _cc_cap_t* cdp) {
+    _cc_N(decompress_raw__)(pesbt, cursor, tag, 0, cdp);
+}
+
 /*
  * Decompress a 128-bit capability.
  */
 static inline void _cc_N(decompress_mem)(uint64_t pesbt, uint64_t cursor, bool tag, _cc_cap_t* cdp) {
-    _cc_N(decompress_raw)(pesbt ^ _CC_N(NULL_XOR_MASK), cursor, tag, cdp);
+    _cc_N(decompress_raw__)(pesbt ^ _CC_N(NULL_XOR_MASK), cursor, tag, 0, cdp);
 }
 
-static inline bool _cc_N(is_cap_sealed)(const _cc_cap_t* cp) { return _cc_N(get_otype)(cp) != _CC_N(OTYPE_UNSEALED); }
+static inline bool _cc_N(is_cap_sealed)(const _cc_cap_t* cp) {
+#if _CC_N(FIELD_OTYPE_USED) == 1
+    return _cc_N(get_otype)(cp) != _CC_N(OTYPE_UNSEALED);
+#else
+    return _cc_N(get_ct)(cp);
+#endif
+}
 
 /// Check that the expanded bounds match the compressed cr_pesbt value.
 static inline bool _cc_N(pesbt_is_correct)(const _cc_cap_t* csp) {
     _cc_cap_t tmp;
     // NB: We use the unsafe decompression function here to handle non-derivable caps without asserting.
-    _cc_N(unsafe_decompress_raw)(csp->cr_pesbt, csp->_cr_cursor, csp->cr_tag, &tmp);
+    _cc_N(unsafe_decompress_raw)(csp->cr_pesbt, csp->_cr_cursor, csp->cr_tag, 0, &tmp);
     tmp.cr_extra = csp->cr_extra; // raw_equal also compares, cr_extra but we don't care about that here.
     if (!_cc_N(raw_equal)(&tmp, csp)) {
         return false;
@@ -501,7 +935,7 @@ static inline bool _cc_N(is_representable_cap_exact)(const _cc_cap_t* cap) {
     _cc_addr_t pesbt = _cc_N(compress_raw)(cap);
     _cc_cap_t decompressed_cap;
     // NB: We use the unsafe decompression function here to handle non-derivable caps without asserting.
-    _cc_N(unsafe_decompress_raw)(pesbt, cap->_cr_cursor, cap->cr_tag, &decompressed_cap);
+    _cc_N(unsafe_decompress_raw)(pesbt, cap->_cr_cursor, cap->cr_tag, 0, &decompressed_cap);
     // These fields must not change:
     _cc_debug_assert(decompressed_cap._cr_cursor == cap->_cr_cursor);
     _cc_debug_assert(decompressed_cap.cr_pesbt == cap->cr_pesbt);
@@ -552,7 +986,37 @@ static inline uint32_t _cc_N(compute_ebt)(_cc_addr_t req_base, _cc_length_t req_
         //  lostSignificantTop  : bool = false;
         //  lostSignificantBase : bool = false;
         //  incE : bool = false;
-        uint32_t ebt_bits = _CC_ENCODE_EBT_FIELD(0, INTERNAL_EXPONENT) | _CC_ENCODE_EBT_FIELD(req_top, EXP_ZERO_TOP) |
+
+        /*
+         * L8 is bit 8 of the bounds length.
+         *
+         * For RV32 and exponent E == 0, both B and T are 10 bits wide.
+         * A capability stores B[9:0] and T[7:0]. For the bounds length l
+         * (the req_length64 variable), we know T = B + l. If l[9] was 1
+         * we'd not have exponent 0, so l[9] must be 0.
+         *
+         * T[9:8] are not stored. Apart from B[9:0] and T[7:0], what else is
+         * required to recover T[9:8] from a stored capability?
+         *
+         *   B   .. .... ....
+         * + l   0. #### ####
+         *       ------------
+         * = T   xx .... ....
+         *
+         * (. == known bit (stored), # == known bit (not stored),
+         * x == unknown bit).
+         *
+         * T[9:8] = B[9:8] + l[8] + carry bit
+         * The carry bit is 1 if B[7:0] > T [7:0]
+         *
+         * Long story short: If we also store l[8] in the capability, we
+         * can recover T[9:8].
+         */
+        uint8_t l8 = _cc_N(getbits)(req_length64, 8, 1);
+
+        uint32_t ebt_bits = _CC_ENCODE_EBT_FIELD(0, INTERNAL_EXPONENT) | _CC_ENCODE_EBT_FIELD(1, EF) |
+                            _CC_ENCODE_EBT_FIELD(l8, L8) |
+                            _CC_ENCODE_EBT_FIELD(req_top, EXP_ZERO_TOP) |
                             _CC_ENCODE_EBT_FIELD(req_base, EXP_ZERO_BOTTOM);
 #ifdef CC_IS_MORELLO
         // Due to morello conditionally inverting bits, we need to invert the bits that would be an internal exponent
@@ -634,18 +1098,27 @@ static inline uint32_t _cc_N(compute_ebt)(_cc_addr_t req_base, _cc_length_t req_
     const _cc_addr_t Bbits = bot_ie << _CC_N(FIELD_EXPONENT_LOW_PART_SIZE);
     const _cc_addr_t Tbits = top_ie << _CC_N(FIELD_EXPONENT_LOW_PART_SIZE);
     const uint8_t newE = E + (incE ? 1 : 0);
-
+#if _CC_N(FIELD_EF_USED) == 1
+    /* _cc_N(get_exponent) above returned a valid exponent. If we decided to
+     * increment it, we should have checked that it's still valid. */
+    _cc_debug_assert(newE <= _CC_N(MAX_EXPONENT));
+    const uint8_t newE_coded = _CC_N(MAX_EXPONENT) - newE;
+#else
+    const uint8_t newE_coded = newE;
+#endif
     //  };
     //  let exact = not(lostSignificantBase | lostSignificantTop);
     *exact = !lostSignificantBase && !lostSignificantTop;
-    // Split E between T and B
+    // Split E between L8, T and B
+    const uint8_t l8 = newE_coded >> (_CC_N(FIELD_EXPONENT_LOW_PART_SIZE) + _CC_N(FIELD_EXPONENT_HIGH_PART_SIZE));
     const _cc_addr_t expHighBits =
-        _cc_N(getbits)(newE >> _CC_N(FIELD_EXPONENT_LOW_PART_SIZE), 0, _CC_N(FIELD_EXPONENT_HIGH_PART_SIZE));
-    const _cc_addr_t expLowBits = _cc_N(getbits)(newE, 0, _CC_N(FIELD_EXPONENT_LOW_PART_SIZE));
+        _cc_N(getbits)(newE_coded >> _CC_N(FIELD_EXPONENT_LOW_PART_SIZE), 0, _CC_N(FIELD_EXPONENT_HIGH_PART_SIZE));
+    const _cc_addr_t expLowBits = _cc_N(getbits)(newE_coded, 0, _CC_N(FIELD_EXPONENT_LOW_PART_SIZE));
     const _cc_addr_t Te = Tbits | expHighBits;
     const _cc_addr_t Be = Bbits | expLowBits;
-    return _CC_ENCODE_EBT_FIELD(1, INTERNAL_EXPONENT) | _CC_ENCODE_EBT_FIELD(Te, TOP_ENCODED) |
-           _CC_ENCODE_EBT_FIELD(Be, BOTTOM_ENCODED);
+    return _CC_ENCODE_EBT_FIELD(1, INTERNAL_EXPONENT) | _CC_ENCODE_EBT_FIELD(0, EF) |
+           _CC_ENCODE_EBT_FIELD(l8, L8) |
+           _CC_ENCODE_EBT_FIELD(Te, TOP_ENCODED) | _CC_ENCODE_EBT_FIELD(Be, BOTTOM_ENCODED);
 }
 
 static inline bool _cc_N(precise_is_representable_new_addr)(const _cc_cap_t* oldcap, _cc_addr_t new_cursor) {
@@ -709,13 +1182,19 @@ static inline bool _cc_N(is_representable_with_addr)(const _cc_cap_t* cap, _cc_a
     }
 }
 
-/// Updates the address of a capability using semantics that match the hardware (i.e. using a fast approximate
+/// Updates the address of a capability using semantics that match the hardware/format (i.e. using a fast approximate
 /// representability check rather than a precise one).
 static inline void _cc_N(set_addr)(_cc_cap_t* cap, _cc_addr_t new_addr) {
+#if _CC_N(FIELD_EF_USED) == 1
+    // The fast representability check is not usable for the risc-v formats.
+    bool precise_repr_check = true;
+#else
+    bool precise_repr_check = false;
+#endif
     if (cap->cr_tag && _cc_N(is_cap_sealed)(cap)) {
         cap->cr_tag = false;
     }
-    if (!_cc_N(is_representable_with_addr)(cap, new_addr, /*precise_representable_check=*/false)) {
+    if (!_cc_N(is_representable_with_addr)(cap, new_addr, precise_repr_check)) {
         // Detag and recompute the new bounds if the capability became unrepresentable.
         cap->cr_tag = false;
         _cc_N(decompress_raw)(cap->cr_pesbt, new_addr, false, cap);
@@ -786,13 +1265,18 @@ static inline bool _cc_N(setbounds_impl)(_cc_cap_t* cap, _cc_length_t req_len, _
     if (req_base < cap->cr_base || req_top > cap->_cr_top) {
         cap->cr_tag = 0;
     }
+#if _CC_N(FIELD_L8_USED) == 1
+    _CC_STATIC_ASSERT(_CC_EXP_LOW_WIDTH == 2, "expected 2 bits to be used by");
+    _CC_STATIC_ASSERT(_CC_EXP_HIGH_WIDTH == 2, "expected 2 bits to be used by");
+#else
+    _CC_STATIC_ASSERT(_CC_EXP_LOW_WIDTH == 3, "expected 3 bits to be used by");
+    _CC_STATIC_ASSERT(_CC_EXP_HIGH_WIDTH == 3, "expected 3 bits to be used by");
+#endif
     /*
      * With compressed capabilities we may need to increase the range of
      * memory addresses to be wider than requested so it is
      * representable.
      */
-    _CC_STATIC_ASSERT(_CC_EXP_LOW_WIDTH == 3, "expected 3 bits to be used by");  // expected 3 bits to
-    _CC_STATIC_ASSERT(_CC_EXP_HIGH_WIDTH == 3, "expected 3 bits to be used by"); // expected 3 bits to
     bool exact = false;
     uint32_t new_ebt = _cc_N(compute_ebt)(req_base, req_top, alignment_mask, &exact);
     _cc_addr_t new_base;
@@ -885,7 +1369,9 @@ static inline bool _cc_N(checked_setbounds)(_cc_cap_t* cap, _cc_length_t req_len
     return _cc_N(setbounds)(cap, req_len);
 }
 
-static inline _cc_cap_t _cc_N(make_max_perms_cap)(_cc_addr_t base, _cc_addr_t cursor, _cc_length_t top) {
+// For risc-v cheri formats, the value of M depends on Zcherihybrid support.
+// CL field and SL, EL perms depend on lvbits (number of Zcherilevels or 0 if unsupported)
+static inline _cc_cap_t _cc_N(make_max_perms_cap_m_lv)(_cc_addr_t base, _cc_addr_t cursor, _cc_length_t top, bool m, uint8_t lvbits) {
     _cc_cap_t creg;
     memset(&creg, 0, sizeof(creg));
     assert(base <= top && "Invalid arguments");
@@ -893,7 +1379,10 @@ static inline _cc_cap_t _cc_N(make_max_perms_cap)(_cc_addr_t base, _cc_addr_t cu
     creg._cr_cursor = cursor;
     creg.cr_bounds_valid = true;
     creg._cr_top = top;
+    /* There's no need to exclude unused fields here. */
     creg.cr_pesbt = _CC_ENCODE_FIELD(_CC_N(UPERMS_ALL), UPERMS) | _CC_ENCODE_FIELD(_CC_N(PERMS_ALL), HWPERMS) |
+                    _CC_ENCODE_FIELD(_CC_N(FIELD_SDP_MAX_VALUE), SDP) |
+                    _CC_ENCODE_FIELD(0, CT) |
                     _CC_ENCODE_FIELD(_CC_N(OTYPE_UNSEALED), OTYPE);
     creg.cr_tag = true;
     creg.cr_exp = _CC_N(RESET_EXP);
@@ -901,7 +1390,21 @@ static inline _cc_cap_t _cc_N(make_max_perms_cap)(_cc_addr_t base, _cc_addr_t cu
     _cc_N(update_ebt)(&creg, _cc_N(compute_ebt)(creg.cr_base, creg._cr_top, NULL, &exact_input));
     assert(exact_input && "Invalid arguments");
     assert(_cc_N(is_representable_cap_exact)(&creg));
+    creg.cr_m = m ? 1 : 0;
+    assert(lvbits <= 1 && "We only support local-global levels.");
+    creg.cr_lvbits = lvbits;
+    /* We need the most global level here, the level can only be decreased. */
+    creg.cr_pesbt |= _CC_ENCODE_FIELD(lvbits, CL);
+    creg.cr_arch_perm = CAP_AP_C | CAP_AP_W | CAP_AP_R | CAP_AP_X | CAP_AP_ASR | CAP_AP_LM;
+    if (lvbits > 0) {
+        creg.cr_arch_perm |= CAP_AP_EL | CAP_AP_SL;
+    }
+    _cc_N(m_ap_compress)(&creg);
     return creg;
+}
+
+static inline _cc_cap_t _cc_N(make_max_perms_cap)(_cc_addr_t base, _cc_addr_t cursor, _cc_length_t top) {
+    return _cc_N(make_max_perms_cap_m_lv)(base, cursor, top, false, 0);
 }
 
 /* @return the mask that needs to be applied to base in order to get a precisely representable capability */
