@@ -29,11 +29,6 @@ struct ELFRela {
   __SIZE_TYPE__ addend;
 };
 
-struct CapFrag {
-  __SIZE_TYPE__ addr;
-  __SIZE_TYPE__ meta;
-};
-
 enum PermKind {
   PK_FUNC = 0,
   PK_OBJ = 1,
@@ -140,31 +135,30 @@ static __attribute__((always_inline)) void cheri_init_globals_cbuildcap_impl(
     const void *__capability *__capability dest =
         (const void *__capability *__capability)__builtin_cheri_address_set(
             data_cap, rela->offset + base_addr);
-    const struct CapFrag *__capability frag =
-        (const struct CapFrag *__capability)dest;
-    const __SIZE_TYPE__ length = frag->meta >> 5;
-    const __SIZE_TYPE__ perms = frag->meta & 0b11111;
-    if (frag->addr == 0) {
+    const __SIZE_TYPE__ addr = __builtin_cheri_address_get(*dest);
+    const __SIZE_TYPE__ length = __builtin_cheri_length_get(*dest);
+    const __SIZE_TYPE__ perms = __builtin_cheri_perms_get(*dest);
+    if (addr == 0) {
       *dest = (void *__capability)0;
       continue;
     }
     const void *__capability base_cap;
     bool can_set_bounds = true;
-    if (perms == PK_FUNC) {
+    if (perms & __CHERI_CAP_PERMISSION_EXECUTE__) {
       base_cap = code_cap;
       can_set_bounds = tight_code_bounds;
-    } else if (perms == PK_CONST) {
-      base_cap = rodata_cap;
-    } else {
+    } else if (perms & __CHERI_CAP_PERMISSION_WRITE__) {
       base_cap = data_cap;
+    } else {
+      base_cap = rodata_cap;
     }
     const void *__capability src =
-        __builtin_cheri_address_set(base_cap, frag->addr + base_addr);
+        __builtin_cheri_address_set(base_cap, addr + base_addr);
     if (can_set_bounds && (length != 0)) {
       src = __builtin_cheri_bounds_set(src, length);
     }
     src = __builtin_cheri_offset_increment(src, rela->addend);
-    if (perms == PK_FUNC) {
+    if (__builtin_cheri_sealed_get(*dest)) {
       src = __builtin_cheri_seal_entry(src);
     }
     *dest = src;

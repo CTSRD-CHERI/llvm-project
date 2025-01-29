@@ -12,7 +12,7 @@
 # RELOCS-NEXT:   }
 
 # CAPTAB: Contents of section .captable:
-# CAPTAB-NEXT: 12240 50320100 00000000 81000000 00000000
+# CAPTAB-NEXT: 12240 50320100 00000000 50329504 0070e201
 #                    [    address    ] [      meta     ]
 
 # SYM:        Name: __rela_dyn_start 
