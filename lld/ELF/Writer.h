@@ -17,7 +17,6 @@ namespace lld::elf {
 class InputFile;
 class OutputSection;
 void copySectionsIntoPartitions();
-void assignSectionsToCompartments();
 template <class ELFT> void createSyntheticSections();
 template <class ELFT> void writeResult();
 

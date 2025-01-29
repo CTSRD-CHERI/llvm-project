@@ -148,27 +148,6 @@ void elf::copySectionsIntoPartitions() {
                            newSections.end());
 }
 
-void elf::assignSectionsToCompartments() {
-  for (Compartment &c : compartments) {
-    c.suffix = "." + c.name.str();
-  }
-
-  for (InputSectionBase *s : ctx.inputSections) {
-    if (s->file == nullptr) {
-      continue;
-    }
-
-    Compartment *c = s->file->compartment;
-    if (c == nullptr) {
-      continue;
-    }
-
-    if (s->name.startswith(".text") || isRelroSection(s->name)) {
-      s->compartment = c;
-    }
-  }
-}
-
 static Defined *addOptionalRegular(StringRef name, SectionBase *sec,
                                    uint64_t val, uint8_t stOther = STV_HIDDEN,
                                    bool canBeSectionStart = true) {

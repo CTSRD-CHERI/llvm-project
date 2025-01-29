@@ -25,6 +25,7 @@
 #include "Driver.h"
 #include "Arch/Cheri.h"
 #include "Config.h"
+#include "Compartments.h"
 #include "ICF.h"
 #include "InputFiles.h"
 #include "InputSection.h"
@@ -1160,16 +1161,6 @@ static bool remapInputs(StringRef line, const Twine &location) {
   return false;
 }
 
-static Compartment *findCompartment(StringRef name) {
-  if (name.empty())
-    return nullptr;
-  for (Compartment &compart : compartments) {
-    if (compart.name.compare(name) == 0)
-      return &compart;
-  }
-  return nullptr;
-}
-
 // Initializes Config members by the command line options.
 static void readConfigs(opt::InputArgList &args) {
   errorHandler().verbose = args.hasArg(OPT_verbose);
@@ -1708,10 +1699,7 @@ static void readConfigs(opt::InputArgList &args) {
     if (arg->getValue()[0] == '\0' ||
         findCompartment(arg->getValue()) != nullptr)
       continue;
-    compartments.emplace_back();
-    Compartment &newCompart = compartments.back();
-    newCompart.name = arg->getValue();
-    newCompart.index = compartments.size();
+    addCompartment(arg->getValue());
   }
 
   // Impose a limit of 254 compartments.  This limit comes from the amount
