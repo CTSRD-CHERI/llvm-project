@@ -25,6 +25,7 @@ add_lld_library(lldELF
   Arch/X86_64.cpp
   ARMErrataFix.cpp
   CallGraphSort.cpp
+  Compartments.cpp
   DWARF.cpp
   Driver.cpp
   DriverUtils.cpp

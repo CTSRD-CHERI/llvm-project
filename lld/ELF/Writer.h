@@ -18,7 +18,6 @@ namespace elf {
 class InputFile;
 class OutputSection;
 void copySectionsIntoPartitions();
-void assignSectionsToCompartments();
 template <class ELFT> void createSyntheticSections();
 void combineEhSections();
 template <class ELFT> void writeResult();

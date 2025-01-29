@@ -146,27 +146,6 @@ void elf::copySectionsIntoPartitions() {
                        newSections.end());
 }
 
-void elf::assignSectionsToCompartments() {
-  for (Compartment &c : compartments) {
-    c.suffix = "." + c.name.str();
-  }
-
-  for (InputSectionBase *s : inputSections) {
-    if (s->file == nullptr) {
-      continue;
-    }
-
-    Compartment *c = s->file->compartment;
-    if (c == nullptr) {
-      continue;
-    }
-
-    if (s->name.startswith(".text") || isRelroSection(s->name)) {
-      s->compartment = c;
-    }
-  }
-}
-
 void elf::combineEhSections() {
   llvm::TimeTraceScope timeScope("Combine EH sections");
   for (InputSectionBase *&s : inputSections) {
