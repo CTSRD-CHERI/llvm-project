@@ -13,7 +13,6 @@
 #include "Compartments.h"
 #include "InputFiles.h"
 #include "SyntheticSections.h"
-#include "Writer.h"
 #include "Arch/Cheri.h"
 
 using namespace llvm;
@@ -53,7 +52,7 @@ void assignSectionsToCompartments() {
       continue;
     }
 
-    if (s->name.startswith(".text") || isRelroSection(s->name)) {
+    if (s->name.startswith(".text")) {
       s->compartment = c;
     }
   }
