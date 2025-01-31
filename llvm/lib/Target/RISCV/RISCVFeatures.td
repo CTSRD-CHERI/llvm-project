@@ -819,18 +819,32 @@ def IsRVE : Predicate<"Subtarget->isRVE()">,
 def FeatureCheriCommon
     : SubtargetFeature<"cheri-common", "HasCheri", "true",
                        "Implements CHERI (ISAv9 or standard extension)">;
+def HasCheriCommon
+    : Predicate<"Subtarget->hasCheri()">,
+      AssemblerPredicate<(all_of FeatureCheriCommon), "CHERI Extension">;
 
 def FeatureXCheri
     : SubtargetFeature<"xcheri", "HasXCheri", "true",
                        "Implements CHERI extension", [FeatureCheriCommon]>;
-def HasCheri : Predicate<"Subtarget->hasXCheri()">,
-               AssemblerPredicate<(all_of FeatureXCheri), "CHERI Extension">;
 def FeatureCheriNoRVC
     : SubtargetFeature<"xcheri-norvc", "EnableCheriRVCInstrs", "false",
                        "Disable CHERI RVC Instructions.">;
 def HasCheriRVC : Predicate<"Subtarget->enableCheriRVCInstrs()">,
                   AssemblerPredicate<(all_of (not FeatureCheriNoRVC)),
                                      "CHERI RVC Instructions">;
+
+def FeatureXCheriStdCompat
+    : SubtargetFeature<"xcheri-std-compat", "HasXCheriStdCompat", "true",
+                       "Implements CHERI extension subset compatible with the "
+                       "upcoming standard",
+                       [FeatureCheriCommon, FeatureXCheri]>;
+def HasXCheriAll
+    : Predicate<"Subtarget->hasXCheriNonStd()">,
+      AssemblerPredicate<(all_of FeatureXCheri, (not FeatureXCheriStdCompat)),
+                         "'xcheri' extension with non-standard instructions">;
+def HasXCheriStdCompat : Predicate<"Subtarget->hasXCheriStdCompat()">,
+                         AssemblerPredicate<(all_of FeatureXCheriStdCompat),
+                                            "CHERI standard-compatible subset">;
 
 def FeatureCapMode
     : SubtargetFeature<"cap-mode", "IsCapMode", "true",

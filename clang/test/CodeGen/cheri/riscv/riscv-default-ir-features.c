@@ -52,6 +52,7 @@
 // RV32-NOCHERI-SAME: -xcheri,
 // RV64-NOCHERI-SAME: -xcheri,
 // XCHERI-RVC-SAME: -xcheri-norvc,
+// CHECK-SAME: -xcheri-std-compat,
 // CHECK-NOT: xcheri
 // CHECK-SAME: }
 

@@ -32,6 +32,7 @@
 // RUN: %clang --target=riscv32-unknown-elf -### %s -march=rv64ixcheri -mxcheri-norvc 2>&1 | FileCheck %s --check-prefixes=XCHERI,XCHERI-NORVC
 // RUN: %clang --target=riscv32-unknown-elf -### %s -march=rv64ixcheri -mno-xcheri-rvc 2>&1 | FileCheck %s --check-prefixes=XCHERI,XCHERI-NORVC
 // XCHERI: "-target-feature" "+xcheri"
+// XCHERI: "-xcheri-std-compat"
 // XCHERI-NOT: "{{[+|-]}}xcheri-
 // XCHERI-EXPLICIT-RVC: "-target-feature" "-xcheri-norvc"
 // XCHERI-NORVC: "-target-feature" "+xcheri-norvc"

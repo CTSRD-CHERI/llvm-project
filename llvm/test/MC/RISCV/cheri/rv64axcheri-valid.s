@@ -3,6 +3,8 @@
 # RUN: llvm-mc -filetype=obj -triple riscv64 -mattr=+a,+xcheri < %s \
 # RUN:     | llvm-objdump -M no-aliases --mattr=+a,+xcheri -d - \
 # RUN:     | FileCheck -check-prefixes=CHECK-ASM-AND-OBJ %s
+# RUN: not llvm-mc %s --triple=riscv64 --mattr=+a,+xcheri-std-compat --filetype=obj -o /dev/null 2>&1 \
+# RUN:     | FileCheck --check-prefix=STD-COMPAT-ERROR --implicit-check-not="error:" %s
 
 # CHECK-ASM-AND-OBJ: lr.c ct0, (t1)
 # CHECK-ASM: encoding: [0xaf,0x42,0x03,0x10]
@@ -44,29 +46,53 @@ amoswap.c.rl ca4, cra, (s0)
 amoswap.c.aqrl ca4, cra, (s0)
 
 # CHECK-ASM-AND-OBJ: lr.d.ddc ra, (sp)
+# STD-COMPAT-ERROR: [[#@LINE+4]]:1: error: instruction requires the following: 'xcheri' extension with non-standard instructions{{$}}
+# STD-COMPAT-ERROR-NEXT: lr.d.ddc x1, (x2)
+# STD-COMPAT-ERROR-NEXT: ^{{$}}
 # CHECK-ASM: encoding: [0xdb,0x00,0x31,0xfb]
 lr.d.ddc x1, (x2)
 # CHECK-ASM-AND-OBJ: lr.c.ddc cra, (sp)
+# STD-COMPAT-ERROR-NEXT: [[#@LINE+4]]:1: error: instruction requires the following: 'xcheri' extension with non-standard instructions{{$}}
+# STD-COMPAT-ERROR-NEXT: lr.c.ddc c1, (x2)
+# STD-COMPAT-ERROR-NEXT: ^{{$}}
 # CHECK-ASM: encoding: [0xdb,0x00,0x41,0xfb]
 lr.c.ddc c1, (x2)
 
 # CHECK-ASM-AND-OBJ: sc.d.ddc ra, (sp)
+# STD-COMPAT-ERROR-NEXT: [[#@LINE+4]]:1: error: instruction requires the following: 'xcheri' extension with non-standard instructions{{$}}
+# STD-COMPAT-ERROR-NEXT: sc.d.ddc x1, (x2)
+# STD-COMPAT-ERROR-NEXT: ^{{$}}
 # CHECK-ASM: encoding: [0xdb,0x09,0x11,0xf8]
 sc.d.ddc x1, (x2)
 # CHECK-ASM-AND-OBJ: sc.c.ddc cra, (sp)
+# STD-COMPAT-ERROR-NEXT: [[#@LINE+4]]:1: error: instruction requires the following: 'xcheri' extension with non-standard instructions{{$}}
+# STD-COMPAT-ERROR-NEXT: sc.c.ddc c1, (x2)
+# STD-COMPAT-ERROR-NEXT: ^{{$}}
 # CHECK-ASM: encoding: [0x5b,0x0a,0x11,0xf8]
 sc.c.ddc c1, (x2)
 
 # CHECK-ASM-AND-OBJ: lr.d.cap ra, (csp)
+# STD-COMPAT-ERROR-NEXT: [[#@LINE+4]]:1: error: instruction requires the following: 'xcheri' extension with non-standard instructions{{$}}
+# STD-COMPAT-ERROR-NEXT: lr.d.cap x1, (c2)
+# STD-COMPAT-ERROR-NEXT: ^{{$}}
 # CHECK-ASM: encoding: [0xdb,0x00,0xb1,0xfb]
 lr.d.cap x1, (c2)
 # CHECK-ASM-AND-OBJ: lr.c.cap cra, (csp)
+# STD-COMPAT-ERROR-NEXT: [[#@LINE+4]]:1: error: instruction requires the following: 'xcheri' extension with non-standard instructions{{$}}
+# STD-COMPAT-ERROR-NEXT: lr.c.cap c1, (c2)
+# STD-COMPAT-ERROR-NEXT: ^{{$}}
 # CHECK-ASM: encoding: [0xdb,0x00,0xc1,0xfb]
 lr.c.cap c1, (c2)
 
 # CHECK-ASM-AND-OBJ: sc.d.cap ra, (csp)
+# STD-COMPAT-ERROR-NEXT: [[#@LINE+4]]:1: error: instruction requires the following: 'xcheri' extension with non-standard instructions{{$}}
+# STD-COMPAT-ERROR-NEXT: sc.d.cap x1, (c2)
+# STD-COMPAT-ERROR-NEXT: ^{{$}}
 # CHECK-ASM: encoding: [0xdb,0x0d,0x11,0xf8]
 sc.d.cap x1, (c2)
 # CHECK-ASM-AND-OBJ: sc.c.cap cra, (csp)
+# STD-COMPAT-ERROR-NEXT: [[#@LINE+4]]:1: error: instruction requires the following: 'xcheri' extension with non-standard instructions{{$}}
+# STD-COMPAT-ERROR-NEXT: sc.c.cap c1, (c2)
+# STD-COMPAT-ERROR-NEXT: ^{{$}}
 # CHECK-ASM: encoding: [0x5b,0x0e,0x11,0xf8]
 sc.c.cap c1, (c2)
