@@ -816,12 +816,15 @@ def FeatureRVE
 def IsRVE : Predicate<"Subtarget->isRVE()">,
                         AssemblerPredicate<(all_of FeatureRVE)>;
 
-def FeatureCheri
-    : SubtargetFeature<"xcheri", "HasCheri", "true",
-                       "Implements CHERI extension">;
-def HasCheri : Predicate<"Subtarget->hasCheri()">,
-                         AssemblerPredicate<(all_of FeatureCheri),
-                         "CHERI Extension">;
+def FeatureCheriCommon
+    : SubtargetFeature<"cheri-common", "HasCheri", "true",
+                       "Implements CHERI (ISAv9 or standard extension)">;
+
+def FeatureXCheri
+    : SubtargetFeature<"xcheri", "HasXCheri", "true",
+                       "Implements CHERI extension", [FeatureCheriCommon]>;
+def HasCheri : Predicate<"Subtarget->hasXCheri()">,
+               AssemblerPredicate<(all_of FeatureXCheri), "CHERI Extension">;
 def FeatureCheriNoRVC
     : SubtargetFeature<"xcheri-norvc", "EnableCheriRVCInstrs", "false",
                        "Disable CHERI RVC Instructions.">;
