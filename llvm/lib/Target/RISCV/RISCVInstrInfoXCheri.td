@@ -1284,7 +1284,12 @@ def : PatGpcr<int_cheri_cap_base_get, CGetBase>;
 def : PatGpcr<int_cheri_cap_length_get, CGetLen>;
 def : PatGpcr<riscv_cap_tag_get, CGetTag>;
 def : PatGpcr<riscv_cap_sealed_get, CGetSealed>;
+let Predicates = [HasXCheriAll] in
 def : PatGpcr<int_cheri_cap_offset_get, CGetOffset>;
+let Predicates = [HasXCheriStdCompat] in
+def : Pat<(XLenVT (int_cheri_cap_offset_get GPCR:$cs1)),
+          (SUB (XLenVT (EXTRACT_SUBREG GPCR:$cs1, sub_cap_addr)),
+               (CGetBase GPCR:$cs1))>;
 def : PatGpcr<int_cheri_cap_flags_get, CGetFlags>;
 def : Pat<(XLenVT (int_cheri_cap_address_get GPCR:$cs1)), (PseudoCGetAddr GPCR:$cs1)>;
 def : PatGpcr<int_cheri_cap_high_get, CGetHigh>;
