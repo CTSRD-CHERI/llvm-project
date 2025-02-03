@@ -107,7 +107,12 @@ static std::string computeDataLayout(const Triple &TT, StringRef FS,
 
   StringRef CapTypes = "";
   StringRef PurecapOptions = "";
-  if (llvm::is_contained(llvm::split(FS, ','), "+xcheri")) {
+  unsigned XLen = TT.isArch64Bit() ? 64 : 32;
+  std::vector<std::string> Features;
+  if (!FS.empty())
+    llvm::append_range(Features, llvm::split(FS, ','));
+  auto ISAInfo = cantFail(llvm::RISCVISAInfo::parseFeatures(XLen, Features));
+  if (ISAInfo->hasExtension("xcheri")) {
     if (TT.isArch64Bit())
       CapTypes = "-pf200:128:128:128:64";
     else
