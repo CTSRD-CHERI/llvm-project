@@ -179,18 +179,6 @@ void riscv::getRISCVTargetFeatures(const Driver &D, const llvm::Triple &Triple,
     Features.push_back("-relax");
   }
 
-  if (Arg *A = Args.getLastArg(options::OPT_mabi_EQ)) {
-    bool IsPureCapability = isCheriPurecapABIName(A->getValue());
-    if (IsPureCapability) {
-      if (llvm::find(Features, "+xcheri") == Features.end()) {
-        D.Diag(diag::err_riscv_invalid_abi) << A->getValue()
-          << "pure capability ABI requires xcheri extension to be specified";
-        return;
-      }
-      Features.push_back("+cap-mode");
-    }
-  }
-
   // GCC Compatibility: -mno-save-restore is default, unless -msave-restore is
   // specified.
   if (Args.hasFlag(options::OPT_msave_restore, options::OPT_mno_save_restore, false))
@@ -202,6 +190,26 @@ void riscv::getRISCVTargetFeatures(const Driver &D, const llvm::Triple &Triple,
   // which may override the defaults.
   handleTargetFeaturesGroup(D, Triple, Args, Features,
                             options::OPT_m_riscv_Features_Group);
+
+  if (Arg *A = Args.getLastArg(options::OPT_mabi_EQ)) {
+    bool IsPureCapability = isCheriPurecapABIName(A->getValue());
+    if (IsPureCapability) {
+      auto ISAInfo = llvm::RISCVISAInfo::parseFeatures(
+          Triple.isArch32Bit() ? 32 : 64,
+          std::vector<std::string>(Features.begin(), Features.end()));
+      if (!ISAInfo) {
+        handleAllErrors(ISAInfo.takeError(), [&](llvm::StringError &ErrMsg) {
+          D.Diag(diag::err_invalid_feature_combination) << ErrMsg.getMessage();
+        });
+      } else if (!(*ISAInfo)->hasExtension("xcheri")) {
+        D.Diag(diag::err_riscv_invalid_abi)
+            << A->getValue()
+            << "pure capability ABI requires xcheri extension to be specified";
+        return;
+      }
+      Features.push_back("+cap-mode");
+    }
+  }
 }
 
 StringRef riscv::getRISCVABI(const ArgList &Args, const llvm::Triple &Triple) {
