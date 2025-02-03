@@ -282,6 +282,11 @@ void RISCVAsmPrinter::emitFunctionEntryLabel() {
         static_cast<RISCVTargetStreamer &>(*OutStreamer->getTargetStreamer());
     RTS.emitDirectiveVariantCC(*CurrentFnSym);
   }
+  if (RMFI->isDontSeal()) {
+    auto &RTS =
+        static_cast<RISCVTargetStreamer &>(*OutStreamer->getTargetStreamer());
+    RTS.emitDirectiveCheriDontSeal(*CurrentFnSym);
+  }
   AsmPrinter::emitFunctionEntryLabel();
   auto &Subtarget = MF->getSubtarget<RISCVSubtarget>();
   const MachineJumpTableInfo *MJTI = MF->getJumpTableInfo();

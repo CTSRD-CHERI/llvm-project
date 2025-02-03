@@ -1276,8 +1276,10 @@ struct NormalizedOther {
 
     if (EMachine == ELF::EM_AARCH64)
       Map["STO_AARCH64_VARIANT_PCS"] = ELF::STO_AARCH64_VARIANT_PCS;
-    if (EMachine == ELF::EM_RISCV)
+    if (EMachine == ELF::EM_RISCV) {
       Map["STO_RISCV_VARIANT_CC"] = ELF::STO_RISCV_VARIANT_CC;
+      Map["STO_RISCV_CHERI_DONT_SEAL"] = ELF::STO_RISCV_CHERI_DONT_SEAL;
+    }
     return Map;
   }
 

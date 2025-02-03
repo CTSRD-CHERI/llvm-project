@@ -693,7 +693,8 @@ enum {
 enum {
   // Symbol may follow different calling convention than the standard calling
   // convention.
-  STO_RISCV_VARIANT_CC = 0x80
+  STO_RISCV_CHERI_DONT_SEAL = 0x40,
+  STO_RISCV_VARIANT_CC = 0x80,
 };
 
 // ELF Relocation types for S390/zSeries

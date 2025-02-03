@@ -146,6 +146,11 @@ void RISCVTargetELFStreamer::emitDirectiveVariantCC(MCSymbol &Symbol) {
   cast<MCSymbolELF>(Symbol).setOther(ELF::STO_RISCV_VARIANT_CC);
 }
 
+void RISCVTargetELFStreamer::emitDirectiveCheriDontSeal(MCSymbol &Symbol) {
+  getStreamer().getAssembler().registerSymbol(Symbol);
+  cast<MCSymbolELF>(Symbol).setOther(ELF::STO_RISCV_CHERI_DONT_SEAL);
+}
+
 void RISCVELFStreamer::reset() {
   static_cast<RISCVTargetStreamer *>(getTargetStreamer())->reset();
   MCELFStreamer::reset();

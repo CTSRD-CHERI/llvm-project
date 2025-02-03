@@ -49,6 +49,9 @@ static const __SIZE_TYPE__ constant_pointer_permissions_mask = GET_BIT_MASK(
 static const __SIZE_TYPE__ global_pointer_permissions_mask =
     GET_BIT_MASK(__CHERI_CAP_PERMISSION_EXECUTE__);
 
+static const __SIZE_TYPE__ dont_seal_reloc_flag = (__SIZE_TYPE__)1
+                                                  << (__SIZE_WIDTH__ - 3);
+
 __attribute__((__weak__)) extern struct capreloc __start___cap_relocs;
 __attribute__((__weak__)) extern struct capreloc __stop___cap_relocs;
 
@@ -99,7 +102,9 @@ static __attribute__((always_inline)) void cheri_init_globals_impl(
       src = __builtin_cheri_bounds_set(src, reloc->size);
     }
     src = __builtin_cheri_offset_increment(src, reloc->offset);
-    if ((reloc->permissions & function_reloc_flag) == function_reloc_flag) {
+    bool dont_seal = (reloc->permissions & dont_seal_reloc_flag) == dont_seal_reloc_flag;
+    if (((reloc->permissions & function_reloc_flag) == function_reloc_flag) &&
+        !dont_seal) {
       /* Convert function pointers to sentries: */
       src = __builtin_cheri_seal_entry(src);
     }

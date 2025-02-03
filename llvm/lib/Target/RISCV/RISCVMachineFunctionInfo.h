@@ -70,6 +70,8 @@ private:
   unsigned CalleeSavedStackSize = 0;
   /// Is there any vector argument or return?
   bool IsVectorCall = false;
+  /// Is this a cheri exception handler
+  bool IsCheriDontSeal = false;
 
   /// Registers that have been sign extended from i32.
   SmallVector<Register, 8> SExt32Registers;
@@ -155,6 +157,8 @@ public:
 
   bool isVectorCall() const { return IsVectorCall; }
   void setIsVectorCall() { IsVectorCall = true; }
+  bool isDontSeal() const { return IsCheriDontSeal; }
+  void setIsDontSeal() { IsCheriDontSeal = true; }
 };
 
 } // end namespace llvm

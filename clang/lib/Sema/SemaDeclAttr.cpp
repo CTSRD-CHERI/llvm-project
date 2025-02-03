@@ -2202,6 +2202,16 @@ static void handleNoCapRelocsAttr(Sema &S, Decl *D, const ParsedAttr &Attrs) {
   D->addAttr(::new (S.Context) NoCapRelocsAttr(S.Context, Attrs));
 }
 
+static void handleCHERIDontSealAttr(Sema &S, Decl *D, const ParsedAttr &AL) {
+  const TargetInfo &TI = S.Context.getTargetInfo();
+  if (!TI.areAllPointersCapabilities()) {
+    S.Diag(AL.getLoc(), diag::warn_unknown_attribute_ignored)
+        << AL << AL.getRange();
+    return;
+  }
+  D->addAttr(::new (S.Context) CHERIDontSealAttr(S.Context, AL));
+}
+
 static void handleStandardNoReturnAttr(Sema &S, Decl *D, const ParsedAttr &A) {
   // The [[_Noreturn]] spelling is deprecated in C2x, so if that was used,
   // issue an appropriate diagnostic. However, don't issue a diagnostic if the
@@ -9411,6 +9421,9 @@ ProcessDeclAttribute(Sema &S, Scope *scope, Decl *D, const ParsedAttr &AL,
     break;
   case ParsedAttr::AT_CHERISubobjectBoundsUseRemainingSize:
     handleCHERISubobjectBoundsUseRemainingSizeAttr(S, D, AL);
+    break;
+  case ParsedAttr::AT_CHERIDontSeal:
+    handleCHERIDontSealAttr(S, D, AL);
     break;
   case ParsedAttr::AT_StdCall:
   case ParsedAttr::AT_CDecl:

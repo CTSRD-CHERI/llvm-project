@@ -1759,7 +1759,8 @@ const EnumEntry<unsigned> ElfMips16SymOtherFlags[] = {
 };
 
 const EnumEntry<unsigned> ElfRISCVSymOtherFlags[] = {
-    LLVM_READOBJ_ENUM_ENT(ELF, STO_RISCV_VARIANT_CC)};
+    LLVM_READOBJ_ENUM_ENT(ELF, STO_RISCV_VARIANT_CC),
+    LLVM_READOBJ_ENUM_ENT(ELF, STO_RISCV_CHERI_DONT_SEAL)};
 
 static const char *getElfMipsOptionsOdkType(unsigned Odk) {
   switch (Odk) {
@@ -3441,8 +3442,10 @@ template <class ELFT> void ELFDumper<ELFT>::printCheriCapRelocs() {
                 entry + 4*sizeof(TargetUint));
     bool isFunction = Perms & (UINT64_C(1) << ((sizeof(TargetUint) * 8) - 1));
     bool isReadOnly = Perms & (UINT64_C(1) << ((sizeof(TargetUint) * 8) - 2));
-    const char *PermStr =
-        isFunction ? "Function" : (isReadOnly ? "Constant" : "Object");
+    bool isDontSeal = Perms & (UINT64_C(1) << ((sizeof(TargetUint) * 8) - 3));
+    const char *PermStr = isFunction
+                              ? (isDontSeal ? "Function(Unsealed)" : "Function")
+                              : (isReadOnly ? "Constant" : "Object");
     // Perms &= 0xffffffff;
     std::string BaseSymbol;
     if (Base == 0) {
@@ -4519,6 +4522,12 @@ void GNUELFDumper<ELFT>::printSymbol(const Elf_Sym &Symbol, unsigned SymIndex,
       if (Other & STO_RISCV_VARIANT_CC) {
         Other &= ~STO_RISCV_VARIANT_CC;
         Fields[5].Str += " [VARIANT_CC";
+        if (Other != 0)
+          Fields[5].Str.append(" | " + utohexstr(Other, /*LowerCase=*/true));
+        Fields[5].Str.append("]");
+      } else if (Other & STO_RISCV_CHERI_DONT_SEAL) {
+        Other &= ~ STO_RISCV_CHERI_DONT_SEAL;
+        Fields[5].Str += " [DONT_SEAL";
         if (Other != 0)
           Fields[5].Str.append(" | " + utohexstr(Other, /*LowerCase=*/true));
         Fields[5].Str.append("]");

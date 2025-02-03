@@ -15944,6 +15944,10 @@ SDValue RISCVTargetLowering::LowerFormalArguments(
         "Function interrupt attribute argument not supported!");
   }
 
+  if (Func.hasFnAttribute(Attribute::DontSeal)) {
+    MF.getInfo<RISCVMachineFunctionInfo>()->setIsDontSeal();
+  }
+
   EVT PtrVT = getPointerTy(DAG.getDataLayout(),
                            DAG.getDataLayout().getAllocaAddrSpace());
   MVT XLenVT = Subtarget.getXLenVT();

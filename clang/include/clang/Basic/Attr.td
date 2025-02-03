@@ -2485,6 +2485,15 @@ def CHERINoProvenance : TypeAttr {
   let Documentation = [Undocumented]; // FIXME
 }
 
+// Attributes for exception handler functions
+def CHERIDontSeal : InheritableAttr {
+  let Spellings = [GNU<"cheri_dont_seal">,
+                  CXX11<"cheri", "dont_seal">,
+                  C2x<"cheri", "dont_seal">];
+  let Subjects = SubjectList<[Function]>;
+  let Documentation = [Undocumented];
+}
+
 def IntelOclBicc : DeclOrTypeAttr {
   let Spellings = [Clang<"intel_ocl_bicc", 0>];
 //  let Subjects = [Function, ObjCMethod];

@@ -38,6 +38,7 @@ void RISCVTargetStreamer::emitDirectiveOptionNoCapMode() {}
 void RISCVTargetStreamer::emitDirectiveOptionArch(
     ArrayRef<RISCVOptionArchArg> Args) {}
 void RISCVTargetStreamer::emitDirectiveVariantCC(MCSymbol &Symbol) {}
+void RISCVTargetStreamer::emitDirectiveCheriDontSeal(MCSymbol &Symbol) {}
 void RISCVTargetStreamer::emitAttribute(unsigned Attribute, unsigned Value) {}
 void RISCVTargetStreamer::finishAttributeSection() {}
 void RISCVTargetStreamer::emitTextAttribute(unsigned Attribute,
@@ -135,6 +136,11 @@ void RISCVTargetAsmStreamer::emitDirectiveOptionArch(
 
 void RISCVTargetAsmStreamer::emitDirectiveVariantCC(MCSymbol &Symbol) {
   OS << "\t.variant_cc\t" << Symbol.getName() << "\n";
+}
+
+void RISCVTargetAsmStreamer::emitDirectiveCheriDontSeal(
+    MCSymbol &Symbol) {
+  OS << "\t.dont_seal\t" << Symbol.getName() << "\n";
 }
 
 void RISCVTargetAsmStreamer::emitAttribute(unsigned Attribute, unsigned Value) {

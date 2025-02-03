@@ -255,6 +255,7 @@ class RISCVAsmParser : public MCTargetAsmParser {
   bool parseDirectiveAttribute();
   bool parseDirectiveInsn(SMLoc L);
   bool parseDirectiveVariantCC();
+  bool parseDirectiveCheriDontSeal();
 
   /// Helper to reset target features for a new arch string. It
   /// also records the new arch string that is expanded by RISCVISAInfo
@@ -2948,6 +2949,8 @@ ParseStatus RISCVAsmParser::parseDirective(AsmToken DirectiveID) {
     return parseDirectiveInsn(DirectiveID.getLoc());
   if (IDVal == ".variant_cc")
     return parseDirectiveVariantCC();
+  if (IDVal == ".dont_seal")
+    return parseDirectiveCheriDontSeal();
 
   return ParseStatus::NoMatch;
 }
@@ -3333,6 +3336,23 @@ bool RISCVAsmParser::parseDirectiveVariantCC() {
   if (parseEOL())
     return true;
   getTargetStreamer().emitDirectiveVariantCC(
+      *getContext().getOrCreateSymbol(Name));
+  return false;
+}
+
+///  parseDirectiveCheriDontSeal
+///  ::= .dont_seal symbol
+bool RISCVAsmParser::parseDirectiveCheriDontSeal() {
+  if (!getSTI().hasFeature(RISCV::FeatureStdExtZCheriPureCap))
+    return Error(getParser().getTok().getLoc(),
+                 "option requires 'zcheripurecap' extension");
+
+  StringRef Name;
+  if (getParser().parseIdentifier(Name))
+    return TokError("expected symbol name");
+  if (parseEOL())
+    return true;
+  getTargetStreamer().emitDirectiveCheriDontSeal(
       *getContext().getOrCreateSymbol(Name));
   return false;
 }

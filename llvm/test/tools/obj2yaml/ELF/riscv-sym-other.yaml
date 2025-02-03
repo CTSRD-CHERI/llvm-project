@@ -7,7 +7,11 @@
 # CHECK:  - Name:  foo1
 # CHECK:    Other: [ STO_RISCV_VARIANT_CC ]
 # CHECK:  - Name:  foo2
-# CHECK:    Other: [ STO_RISCV_VARIANT_CC, 64 ]
+# CHECK:    Other: [ STO_RISCV_VARIANT_CC, 32 ]
+# CHECK:  - Name:  foo3
+# CHECK:    Other: [ STO_RISCV_CHERI_DONT_SEAL ]
+# CHECK:  - Name:  foo4
+# CHECK:    Other: [ STO_RISCV_CHERI_DONT_SEAL, 32 ]
 
 --- !ELF
 FileHeader:
@@ -19,4 +23,8 @@ Symbols:
   - Name:  foo1
     Other: [ STO_RISCV_VARIANT_CC ]
   - Name:  foo2
-    Other: [ STO_RISCV_VARIANT_CC, 0x40 ]
+    Other: [ STO_RISCV_VARIANT_CC, 0x20 ]
+  - Name:  foo3
+    Other: [ STO_RISCV_CHERI_DONT_SEAL ]
+  - Name:  foo4
+    Other: [ STO_RISCV_CHERI_DONT_SEAL, 0x20 ]

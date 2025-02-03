@@ -49,6 +49,7 @@ public:
   virtual void emitDirectiveOptionNoRelax();
   virtual void emitDirectiveOptionCapMode();
   virtual void emitDirectiveOptionNoCapMode();
+  virtual void emitDirectiveCheriDontSeal(MCSymbol &Symbol);
   virtual void emitDirectiveOptionArch(ArrayRef<RISCVOptionArchArg> Args);
   virtual void emitDirectiveVariantCC(MCSymbol &Symbol);
   virtual void emitAttribute(unsigned Attribute, unsigned Value);
@@ -87,6 +88,7 @@ public:
   void emitDirectiveOptionNoCapMode() override;
   void emitDirectiveOptionArch(ArrayRef<RISCVOptionArchArg> Args) override;
   void emitDirectiveVariantCC(MCSymbol &Symbol) override;
+  void emitDirectiveCheriDontSeal(MCSymbol &Symbol) override;
 };
 
 }

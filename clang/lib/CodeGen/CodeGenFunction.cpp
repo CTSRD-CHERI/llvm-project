@@ -953,6 +953,8 @@ void CodeGenFunction::StartFunction(GlobalDecl GD, QualType RetTy,
     Fn->addFnAttr(llvm::Attribute::NoProfile);
   if (D && D->hasAttr<NoCapRelocsAttr>())
     Fn->addFnAttr(llvm::Attribute::NoCapRelocs);
+  if (D && D->hasAttr<CHERIDontSealAttr>())
+    Fn->addFnAttr(llvm::Attribute::DontSeal);
 
   if (D) {
     // Function attributes take precedence over command line flags.

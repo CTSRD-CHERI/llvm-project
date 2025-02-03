@@ -717,6 +717,7 @@ enum AttributeKindCodes {
   ATTR_KIND_MUST_PRESERVE_CHERI_TAGS = 89,
   ATTR_KIND_NO_PRESERVE_CHERI_TAGS = 90,
   ATTR_KIND_NO_CAP_RELOCS = 91,
+  ATTR_KIND_DONT_SEAL = 92,
 };
 
 enum ComdatSelectionKindCodes {
