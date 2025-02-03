@@ -1297,7 +1297,9 @@ def : PatGpcr<int_cheri_cap_high_get, CGetHigh>;
 
 /// Capability-Modification Instructions
 
+let Predicates = [HasXCheriAll] in
 def : PatGpcrGpcr<int_cheri_cap_seal, CSeal>;
+let Predicates = [HasXCheriAll] in
 def : PatGpcrGpcr<int_cheri_cap_unseal, CUnseal>;
 def : PatGpcrGpr<int_cheri_cap_perms_and, CAndPerm>;
 def : PatGpcrGpr<int_cheri_cap_flags_set, CSetFlags>;
@@ -1316,7 +1318,9 @@ let Predicates = [HasXCheriStdCompat] in
 def : Pat<(int_cheri_cap_tag_clear GPCR:$cs1),
           (CSetHigh GPCR:$cs1, (CGetHigh GPCR:$cs1))>;
 def : PatGpcrGpcr<int_cheri_cap_build, CBuildCap>;
+let Predicates = [HasXCheriAll] in
 def : PatGpcrGpcr<int_cheri_cap_type_copy, CCopyType>;
+let Predicates = [HasXCheriAll] in
 def : PatGpcrGpcr<int_cheri_cap_conditional_seal, CCSeal>;
 def : PatGpcr<int_cheri_cap_seal_entry, CSealEntry, CLenVT>;
 
@@ -1486,6 +1490,7 @@ def : PatGpr<int_cheri_representable_alignment_mask, CRAM>;
 
 /// Tag-Memory Access Instructions
 
+let Predicates = [HasXCheriAll] in
 def : PatGpcr<int_cheri_cap_load_tags, CLoadTags, XLenVT>;
 
 /// Memory-Access with Explicit Address Type Instructions
