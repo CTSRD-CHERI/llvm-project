@@ -92,21 +92,20 @@ static bool fromJSON(const json::Value &E, CompartmentPolicy &Out,
 }
 
 void readCompartmentPolicy(MemoryBufferRef mb) {
-  if (!config->compartmentPolicy.compartments.empty())
-    fatal(Twine("multiple compartment policies not supported"));
-
   Expected<CompartmentPolicy> policy =
     json::parse<CompartmentPolicy>(mb.getBuffer());
   if (!policy)
-    fatal(Twine("failed to parse compartmentalization policy: ") +
+    fatal(Twine("failed to parse compartmentalization policy \"") +
+          mb.getBufferIdentifier() + Twine("\": ") +
           toString(policy.takeError()));
-  config->compartmentPolicy = std::move(*policy);
 
-  for (const auto &kv : config->compartmentPolicy.compartments) {
+  for (const auto &kv : policy->compartments) {
     if (findCompartment(kv.first) != nullptr)
       continue;
     addCompartment(kv.first);
   }
+
+  config->compartmentPolicies.emplace_back(std::move(*policy));
 }
 
 static Compartment *compartmentForSection(const InputSectionBase *s,
@@ -264,13 +263,15 @@ void assignSectionsToCompartments() {
   bool valid = true;
   CompartmentLookup fileLookup;
   CompartmentLookup symbolLookup;
-  for (const auto &kv : config->compartmentPolicy.compartments) {
-    Compartment *c = findCompartment(kv.first);
-    for (const auto &glob : kv.second.files) {
-      valid &= fileLookup.addPattern(glob, c);
-    }
-    for (const auto &glob : kv.second.symbols) {
-      valid &= symbolLookup.addPattern(glob, c);
+  for (const auto &policy : config->compartmentPolicies) {
+    for (const auto &kv : policy.compartments) {
+      Compartment *c = findCompartment(kv.first);
+      for (const auto &glob : kv.second.files) {
+        valid &= fileLookup.addPattern(glob, c);
+      }
+      for (const auto &glob : kv.second.symbols) {
+        valid &= symbolLookup.addPattern(glob, c);
+      }
     }
   }
   if (!valid)
