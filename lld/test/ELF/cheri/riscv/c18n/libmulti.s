@@ -11,6 +11,14 @@
 # RUN: llvm-readelf -s %t/libmulti.so.0 | FileCheck --check-prefix=SYMBOLS %s
 # RUN: llvm-readelf -d %t/libmulti.so.0 | FileCheck --check-prefix=DYNAMIC %s
 
+# Using multiple policy files
+# RUN: ld.lld --shared --compartment-policy=%t/one.json --compartment-policy=%t/two.json %t/one.o %t/oneb.o %t/two.o -o %t/libmulti_multi.so.0
+
+# RUN: llvm-readelf -t %t/libmulti_multi.so.0 | FileCheck --check-prefix=SECTIONS %s
+# RUN: llvm-readelf -l %t/libmulti_multi.so.0 | FileCheck --check-prefix=SEGMENTS %s
+# RUN: llvm-readelf -s %t/libmulti_multi.so.0 | FileCheck --check-prefix=SYMBOLS %s
+# RUN: llvm-readelf -d %t/libmulti_multi.so.0 | FileCheck --check-prefix=DYNAMIC %s
+
 # Legacy version linked via --compartment
 # RUN: ld.lld --shared --compartment=one %t/one.o %t/oneb.o --compartment=two %t/two.o -o %t/libmulti_legacy.so.0
 
@@ -182,5 +190,21 @@ counter_str:
     "compartments": {
 	"one": { "files": ["*/one.*o", "*/oneb.*o"] },
 	"two": { "files": [], "symbols": ["counter_str"] }
+    }
+}
+
+#--- one.json
+
+{
+    "compartments": {
+	"one": { "files": ["*/one.*o", "*/oneb.*o"] }
+    }
+}
+
+#--- two.json
+
+{
+    "compartments": {
+	"two": { "symbols": ["counter_str"] }
     }
 }
