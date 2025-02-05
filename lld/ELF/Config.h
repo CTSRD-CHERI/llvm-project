@@ -405,7 +405,7 @@ struct Configuration {
   bool androidMemtagStack;
 
   Compartment *compartment = nullptr;
-  CompartmentPolicy compartmentPolicy;
+  std::vector<CompartmentPolicy> compartmentPolicies;
   bool verboseCompartmentalization = false;
 };
 
