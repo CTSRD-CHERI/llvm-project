@@ -38,22 +38,25 @@ define dso_local void @hoist_csetbounds(i32 signext %cond, ptr addrspace(200) %f
 ; CHECK-NEXT:    csc cs1, 24(csp) # 8-byte Folded Spill
 ; CHECK-NEXT:    csc cs2, 16(csp) # 8-byte Folded Spill
 ; CHECK-NEXT:    csc cs3, 8(csp) # 8-byte Folded Spill
+; CHECK-NEXT:    csc cs4, 0(csp) # 8-byte Folded Spill
 ; CHECK-NEXT:    cmove cs0, ca1
-; CHECK-NEXT:    cincoffset cs1, ca1, 4
-; CHECK-NEXT:    li s2, -1
-; CHECK-NEXT:    li s3, 99
+; CHECK-NEXT:    cincoffset ca0, ca1, 4
+; CHECK-NEXT:    li s3, -1
+; CHECK-NEXT:    li s4, 99
+; CHECK-NEXT:    csetbounds cs2, ca1, 4
+; CHECK-NEXT:    csetbounds cs1, ca0, 4
 ; CHECK-NEXT:    j .LBB0_2
 ; CHECK-NEXT:  .LBB0_1: # %for.inc
 ; CHECK-NEXT:    # in Loop: Header=BB0_2 Depth=1
-; CHECK-NEXT:    addi s2, s2, 1
-; CHECK-NEXT:    bgeu s2, s3, .LBB0_4
+; CHECK-NEXT:    addi s3, s3, 1
+; CHECK-NEXT:    bgeu s3, s4, .LBB0_4
 ; CHECK-NEXT:  .LBB0_2: # %for.body
 ; CHECK-NEXT:    # =>This Inner Loop Header: Depth=1
 ; CHECK-NEXT:    beqz s0, .LBB0_1
 ; CHECK-NEXT:  # %bb.3: # %if.then
 ; CHECK-NEXT:    # in Loop: Header=BB0_2 Depth=1
-; CHECK-NEXT:    csetbounds ca0, cs0, 4
-; CHECK-NEXT:    csetbounds ca1, cs1, 4
+; CHECK-NEXT:    cmove ca0, cs2
+; CHECK-NEXT:    cmove ca1, cs1
 ; CHECK-NEXT:    ccall call
 ; CHECK-NEXT:    j .LBB0_1
 ; CHECK-NEXT:  .LBB0_4: # %for.cond.cleanup
@@ -62,6 +65,7 @@ define dso_local void @hoist_csetbounds(i32 signext %cond, ptr addrspace(200) %f
 ; CHECK-NEXT:    clc cs1, 24(csp) # 8-byte Folded Reload
 ; CHECK-NEXT:    clc cs2, 16(csp) # 8-byte Folded Reload
 ; CHECK-NEXT:    clc cs3, 8(csp) # 8-byte Folded Reload
+; CHECK-NEXT:    clc cs4, 0(csp) # 8-byte Folded Reload
 ; CHECK-NEXT:    cincoffset csp, csp, 48
 ; CHECK-NEXT:    cret
 ; HOIST-OPT-LABEL: define dso_local void @hoist_csetbounds

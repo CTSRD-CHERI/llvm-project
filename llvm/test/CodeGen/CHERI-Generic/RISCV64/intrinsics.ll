@@ -399,12 +399,16 @@ declare i8 addrspace(200)* @llvm.cheri.pcc.get()
 define i64 @to_pointer(i8 addrspace(200)* %cap1, i8 addrspace(200)* %cap2) nounwind {
 ; PURECAP-LABEL: to_pointer:
 ; PURECAP:       # %bb.0:
-; PURECAP-NEXT:    ctoptr a0, ca0, ca1
+; PURECAP-NEXT:    cgettag a0, ca1
+; PURECAP-NEXT:    neg a0, a0
+; PURECAP-NEXT:    and a0, a1, a0
 ; PURECAP-NEXT:    cret
 ;
 ; HYBRID-LABEL: to_pointer:
 ; HYBRID:       # %bb.0:
-; HYBRID-NEXT:    ctoptr a0, ca0, ca1
+; HYBRID-NEXT:    cgettag a0, ca1
+; HYBRID-NEXT:    neg a0, a0
+; HYBRID-NEXT:    and a0, a1, a0
 ; HYBRID-NEXT:    ret
   %ptr = call i64 @llvm.cheri.cap.to.pointer(i8 addrspace(200)* %cap1, i8 addrspace(200)* %cap2)
   ret i64 %ptr
@@ -413,12 +417,16 @@ define i64 @to_pointer(i8 addrspace(200)* %cap1, i8 addrspace(200)* %cap2) nounw
 define i64 @to_pointer_ddc_relative(i8 addrspace(200)* %cap) nounwind {
 ; PURECAP-LABEL: to_pointer_ddc_relative:
 ; PURECAP:       # %bb.0:
-; PURECAP-NEXT:    ctoptr a0, ca0, ddc
+; PURECAP-NEXT:    cgettag a1, ca0
+; PURECAP-NEXT:    neg a1, a1
+; PURECAP-NEXT:    and a0, a0, a1
 ; PURECAP-NEXT:    cret
 ;
 ; HYBRID-LABEL: to_pointer_ddc_relative:
 ; HYBRID:       # %bb.0:
-; HYBRID-NEXT:    ctoptr a0, ca0, ddc
+; HYBRID-NEXT:    cgettag a1, ca0
+; HYBRID-NEXT:    neg a1, a1
+; HYBRID-NEXT:    and a0, a0, a1
 ; HYBRID-NEXT:    ret
   %ddc = call i8 addrspace(200)* @llvm.cheri.ddc.get()
   %ptr = call i64 @llvm.cheri.cap.to.pointer(i8 addrspace(200)* %ddc, i8 addrspace(200)* %cap)
@@ -428,12 +436,22 @@ define i64 @to_pointer_ddc_relative(i8 addrspace(200)* %cap) nounwind {
 define i8 addrspace(200)* @from_pointer(i8 addrspace(200)* %cap, i64 %ptr) nounwind {
 ; PURECAP-LABEL: from_pointer:
 ; PURECAP:       # %bb.0:
-; PURECAP-NEXT:    cfromptr ca0, ca0, a1
+; PURECAP-NEXT:    bnez a1, .LBB27_2
+; PURECAP-NEXT:  # %bb.1:
+; PURECAP-NEXT:    cmove ca0, cnull
+; PURECAP-NEXT:    cret
+; PURECAP-NEXT:  .LBB27_2:
+; PURECAP-NEXT:    csetaddr ca0, ca0, a1
 ; PURECAP-NEXT:    cret
 ;
 ; HYBRID-LABEL: from_pointer:
 ; HYBRID:       # %bb.0:
-; HYBRID-NEXT:    cfromptr ca0, ca0, a1
+; HYBRID-NEXT:    bnez a1, .LBB27_2
+; HYBRID-NEXT:  # %bb.1:
+; HYBRID-NEXT:    cmove ca0, cnull
+; HYBRID-NEXT:    ret
+; HYBRID-NEXT:  .LBB27_2:
+; HYBRID-NEXT:    csetaddr ca0, ca0, a1
 ; HYBRID-NEXT:    ret
   %newcap = call i8 addrspace(200)* @llvm.cheri.cap.from.pointer(i8 addrspace(200)* %cap, i64 %ptr)
   ret i8 addrspace(200)* %newcap
@@ -442,12 +460,24 @@ define i8 addrspace(200)* @from_pointer(i8 addrspace(200)* %cap, i64 %ptr) nounw
 define i8 addrspace(200)* @from_ddc(i64 %ptr) nounwind {
 ; PURECAP-LABEL: from_ddc:
 ; PURECAP:       # %bb.0:
-; PURECAP-NEXT:    cfromptr ca0, ddc, a0
+; PURECAP-NEXT:    cspecialr ca1, ddc
+; PURECAP-NEXT:    bnez a0, .LBB28_2
+; PURECAP-NEXT:  # %bb.1:
+; PURECAP-NEXT:    cmove ca0, cnull
+; PURECAP-NEXT:    cret
+; PURECAP-NEXT:  .LBB28_2:
+; PURECAP-NEXT:    csetaddr ca0, ca1, a0
 ; PURECAP-NEXT:    cret
 ;
 ; HYBRID-LABEL: from_ddc:
 ; HYBRID:       # %bb.0:
-; HYBRID-NEXT:    cfromptr ca0, ddc, a0
+; HYBRID-NEXT:    cspecialr ca1, ddc
+; HYBRID-NEXT:    bnez a0, .LBB28_2
+; HYBRID-NEXT:  # %bb.1:
+; HYBRID-NEXT:    cmove ca0, cnull
+; HYBRID-NEXT:    ret
+; HYBRID-NEXT:  .LBB28_2:
+; HYBRID-NEXT:    csetaddr ca0, ca1, a0
 ; HYBRID-NEXT:    ret
   %ddc = call i8 addrspace(200)* @llvm.cheri.ddc.get()
   %cap = call i8 addrspace(200)* @llvm.cheri.cap.from.pointer(i8 addrspace(200)* %ddc, i64 %ptr)

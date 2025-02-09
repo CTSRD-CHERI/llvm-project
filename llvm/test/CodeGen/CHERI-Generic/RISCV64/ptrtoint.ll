@@ -12,7 +12,9 @@ define internal i64 @ptrtoint(i8 addrspace(200)* %cap) addrspace(200) nounwind {
 ;
 ; HYBRID-LABEL: ptrtoint:
 ; HYBRID:       # %bb.0:
-; HYBRID-NEXT:    ctoptr a0, ca0, ddc
+; HYBRID-NEXT:    cgettag a1, ca0
+; HYBRID-NEXT:    neg a1, a1
+; HYBRID-NEXT:    and a0, a0, a1
 ; HYBRID-NEXT:    ret
   %ret = ptrtoint i8 addrspace(200)* %cap to i64
   ret i64 %ret
@@ -26,7 +28,9 @@ define internal i64 @ptrtoint_plus_const(i8 addrspace(200)* %cap) addrspace(200)
 ;
 ; HYBRID-LABEL: ptrtoint_plus_const:
 ; HYBRID:       # %bb.0:
-; HYBRID-NEXT:    ctoptr a0, ca0, ddc
+; HYBRID-NEXT:    cgettag a1, ca0
+; HYBRID-NEXT:    neg a1, a1
+; HYBRID-NEXT:    and a0, a0, a1
 ; HYBRID-NEXT:    addi a0, a0, 2
 ; HYBRID-NEXT:    ret
   %zero = ptrtoint i8 addrspace(200)* %cap to i64
@@ -42,7 +46,9 @@ define internal i64 @ptrtoint_plus_var(i8 addrspace(200)* %cap, i64 %add) addrsp
 ;
 ; HYBRID-LABEL: ptrtoint_plus_var:
 ; HYBRID:       # %bb.0:
-; HYBRID-NEXT:    ctoptr a0, ca0, ddc
+; HYBRID-NEXT:    cgettag a2, ca0
+; HYBRID-NEXT:    neg a2, a2
+; HYBRID-NEXT:    and a0, a0, a2
 ; HYBRID-NEXT:    add a0, a0, a1
 ; HYBRID-NEXT:    ret
   %zero = ptrtoint i8 addrspace(200)* %cap to i64
@@ -58,7 +64,9 @@ define internal i64 @ptrtoint_null() addrspace(200) nounwind {
 ;
 ; HYBRID-LABEL: ptrtoint_null:
 ; HYBRID:       # %bb.0:
-; HYBRID-NEXT:    li a0, 0
+; HYBRID-NEXT:    cgettag a0, cnull
+; HYBRID-NEXT:    neg a0, a0
+; HYBRID-NEXT:    and a0, zero, a0
 ; HYBRID-NEXT:    ret
   %ret = ptrtoint i8 addrspace(200)* null to i64
   ret i64 %ret
@@ -72,7 +80,10 @@ define internal i64 @ptrtoint_null_plus_const() addrspace(200) nounwind {
 ;
 ; HYBRID-LABEL: ptrtoint_null_plus_const:
 ; HYBRID:       # %bb.0:
-; HYBRID-NEXT:    li a0, 2
+; HYBRID-NEXT:    cgettag a0, cnull
+; HYBRID-NEXT:    neg a0, a0
+; HYBRID-NEXT:    and a0, zero, a0
+; HYBRID-NEXT:    addi a0, a0, 2
 ; HYBRID-NEXT:    ret
   %zero = ptrtoint i8 addrspace(200)* null to i64
   %ret = add i64 %zero, 2
@@ -87,7 +98,10 @@ define internal i64 @ptrtoint_null_plus_var(i64 %add) addrspace(200) nounwind {
 ;
 ; HYBRID-LABEL: ptrtoint_null_plus_var:
 ; HYBRID:       # %bb.0:
-; HYBRID-NEXT:    add a0, zero, a0
+; HYBRID-NEXT:    cgettag a1, cnull
+; HYBRID-NEXT:    neg a1, a1
+; HYBRID-NEXT:    and a1, zero, a1
+; HYBRID-NEXT:    add a0, a1, a0
 ; HYBRID-NEXT:    ret
   %zero = ptrtoint i8 addrspace(200)* null to i64
   %ret = add i64 %zero, %add

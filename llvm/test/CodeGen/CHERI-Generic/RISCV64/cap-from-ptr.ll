@@ -10,14 +10,26 @@
 define internal ptr addrspace(200) @test(ptr addrspace(200) %ptr, ptr addrspace(200) %cap, i64 %offset) nounwind {
 ; PURECAP-LABEL: test:
 ; PURECAP:       # %bb.0: # %entry
-; PURECAP-NEXT:    cfromptr ca1, ca1, a2
+; PURECAP-NEXT:    bnez a2, .LBB0_2
+; PURECAP-NEXT:  # %bb.1: # %entry
+; PURECAP-NEXT:    cmove ca1, cnull
+; PURECAP-NEXT:    j .LBB0_3
+; PURECAP-NEXT:  .LBB0_2:
+; PURECAP-NEXT:    csetaddr ca1, ca1, a2
+; PURECAP-NEXT:  .LBB0_3: # %entry
 ; PURECAP-NEXT:    csc ca1, 0(ca0)
 ; PURECAP-NEXT:    cmove ca0, ca1
 ; PURECAP-NEXT:    cret
 ;
 ; HYBRID-LABEL: test:
 ; HYBRID:       # %bb.0: # %entry
-; HYBRID-NEXT:    cfromptr ca1, ca1, a2
+; HYBRID-NEXT:    bnez a2, .LBB0_2
+; HYBRID-NEXT:  # %bb.1: # %entry
+; HYBRID-NEXT:    cmove ca1, cnull
+; HYBRID-NEXT:    j .LBB0_3
+; HYBRID-NEXT:  .LBB0_2:
+; HYBRID-NEXT:    csetaddr ca1, ca1, a2
+; HYBRID-NEXT:  .LBB0_3: # %entry
 ; HYBRID-NEXT:    sc.cap ca1, (ca0)
 ; HYBRID-NEXT:    cmove ca0, ca1
 ; HYBRID-NEXT:    ret
@@ -63,14 +75,28 @@ entry:
 define internal ptr addrspace(200) @cap_from_ptr_ddc(ptr addrspace(200) %ptr, i64 %offset) nounwind {
 ; PURECAP-LABEL: cap_from_ptr_ddc:
 ; PURECAP:       # %bb.0: # %entry
-; PURECAP-NEXT:    cfromptr ca1, ddc, a1
+; PURECAP-NEXT:    cspecialr ca2, ddc
+; PURECAP-NEXT:    bnez a1, .LBB2_2
+; PURECAP-NEXT:  # %bb.1: # %entry
+; PURECAP-NEXT:    cmove ca1, cnull
+; PURECAP-NEXT:    j .LBB2_3
+; PURECAP-NEXT:  .LBB2_2:
+; PURECAP-NEXT:    csetaddr ca1, ca2, a1
+; PURECAP-NEXT:  .LBB2_3: # %entry
 ; PURECAP-NEXT:    csc ca1, 0(ca0)
 ; PURECAP-NEXT:    cmove ca0, ca1
 ; PURECAP-NEXT:    cret
 ;
 ; HYBRID-LABEL: cap_from_ptr_ddc:
 ; HYBRID:       # %bb.0: # %entry
-; HYBRID-NEXT:    cfromptr ca1, ddc, a1
+; HYBRID-NEXT:    cspecialr ca2, ddc
+; HYBRID-NEXT:    bnez a1, .LBB2_2
+; HYBRID-NEXT:  # %bb.1: # %entry
+; HYBRID-NEXT:    cmove ca1, cnull
+; HYBRID-NEXT:    j .LBB2_3
+; HYBRID-NEXT:  .LBB2_2:
+; HYBRID-NEXT:    csetaddr ca1, ca2, a1
+; HYBRID-NEXT:  .LBB2_3: # %entry
 ; HYBRID-NEXT:    sc.cap ca1, (ca0)
 ; HYBRID-NEXT:    cmove ca0, ca1
 ; HYBRID-NEXT:    ret
@@ -119,16 +145,26 @@ entry:
 define internal ptr addrspace(200) @cap_from_ptr_null(ptr addrspace(200) %ptr, i64 %offset) nounwind {
 ; PURECAP-LABEL: cap_from_ptr_null:
 ; PURECAP:       # %bb.0: # %entry
-; PURECAP-NEXT:    cmove ca2, cnull
-; PURECAP-NEXT:    cfromptr ca1, ca2, a1
+; PURECAP-NEXT:    bnez a1, .LBB4_2
+; PURECAP-NEXT:  # %bb.1: # %entry
+; PURECAP-NEXT:    cmove ca1, cnull
+; PURECAP-NEXT:    j .LBB4_3
+; PURECAP-NEXT:  .LBB4_2:
+; PURECAP-NEXT:    csetaddr ca1, cnull, a1
+; PURECAP-NEXT:  .LBB4_3: # %entry
 ; PURECAP-NEXT:    csc ca1, 0(ca0)
 ; PURECAP-NEXT:    cmove ca0, ca1
 ; PURECAP-NEXT:    cret
 ;
 ; HYBRID-LABEL: cap_from_ptr_null:
 ; HYBRID:       # %bb.0: # %entry
-; HYBRID-NEXT:    cmove ca2, cnull
-; HYBRID-NEXT:    cfromptr ca1, ca2, a1
+; HYBRID-NEXT:    bnez a1, .LBB4_2
+; HYBRID-NEXT:  # %bb.1: # %entry
+; HYBRID-NEXT:    cmove ca1, cnull
+; HYBRID-NEXT:    j .LBB4_3
+; HYBRID-NEXT:  .LBB4_2:
+; HYBRID-NEXT:    csetaddr ca1, cnull, a1
+; HYBRID-NEXT:  .LBB4_3: # %entry
 ; HYBRID-NEXT:    sc.cap ca1, (ca0)
 ; HYBRID-NEXT:    cmove ca0, ca1
 ; HYBRID-NEXT:    ret

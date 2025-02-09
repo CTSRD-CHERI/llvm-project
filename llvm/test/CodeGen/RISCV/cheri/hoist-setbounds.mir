@@ -3,15 +3,12 @@
 # RUN: %riscv64_cheri_purecap_llc -o - %s -run-pass=early-machinelicm -avoid-speculation=false \
 # RUN:    -hoist-cheap-insts -machinelicm-ignore-reg-pressure | FileCheck %s
 --- |
-  ; ModuleID = '<stdin>'
   source_filename = "<stdin>"
   target datalayout = "e-m:e-pf200:128:128:128:64-p:64:64-i64:64-i128:128-n64-S128-A200-P200-G200"
   target triple = "riscv64-unknown-freebsd"
 
-  ; Function Attrs: nounwind
   declare void @call(i32 addrspace(200)*, i32 addrspace(200)*) local_unnamed_addr addrspace(200) #0
 
-  ; Function Attrs: nounwind
   define void @hoist_alloca_cond(i32 signext %cond) local_unnamed_addr addrspace(200) #0 {
   entry:
     %buf1 = alloca [123 x i32], align 4, addrspace(200)
@@ -44,7 +41,6 @@
     br i1 %exitcond.not, label %for.cond.cleanup, label %for.body
   }
 
-  ; Function Attrs: nounwind readnone willreturn
   declare i8 addrspace(200)* @llvm.cheri.bounded.stack.cap.i64(i8 addrspace(200)*, i64) addrspace(200) #1
 
   attributes #0 = { nounwind "target-features"="+cap-mode,+xcheri" }
@@ -107,24 +103,31 @@ body:             |
   ; CHECK-NEXT:   [[CSetBoundsExact:%[0-9]+]]:gpcr = CSetBoundsExact [[CIncOffsetImm]], [[ADDI]]
   ; CHECK-NEXT:   [[CSetBoundsImm:%[0-9]+]]:gpcr = CSetBoundsImm [[CIncOffsetImm]], 492
   ; CHECK-NEXT:   [[CIncOffsetImm1:%[0-9]+]]:gpcr = CIncOffsetImm %stack.0.buf1, 1
+  ; CHECK-NEXT:   [[CSetBounds1:%[0-9]+]]:gpcr = CSetBounds [[CIncOffsetImm1]], [[ADDI]]
+  ; CHECK-NEXT:   [[CSetBoundsExact1:%[0-9]+]]:gpcr = CSetBoundsExact [[CIncOffsetImm1]], [[ADDI]]
+  ; CHECK-NEXT:   [[CSetBoundsImm1:%[0-9]+]]:gpcr = CSetBoundsImm [[CIncOffsetImm1]], 492
   ; CHECK-NEXT:   [[ADDI2:%[0-9]+]]:gpr = ADDI $x0, 491
-  ; CHECK-NEXT:   [[CSetBounds1:%[0-9]+]]:gpcr = CSetBounds [[CIncOffsetImm1]], [[ADDI2]]
-  ; CHECK-NEXT:   [[CSetBoundsExact1:%[0-9]+]]:gpcr = CSetBoundsExact [[CIncOffsetImm1]], [[ADDI2]]
-  ; CHECK-NEXT:   [[CSetBoundsImm1:%[0-9]+]]:gpcr = CSetBoundsImm [[CIncOffsetImm1]], 491
+  ; CHECK-NEXT:   [[CSetBounds2:%[0-9]+]]:gpcr = CSetBounds [[CIncOffsetImm1]], [[ADDI2]]
+  ; CHECK-NEXT:   [[CSetBoundsExact2:%[0-9]+]]:gpcr = CSetBoundsExact [[CIncOffsetImm1]], [[ADDI2]]
+  ; CHECK-NEXT:   [[CSetBoundsImm2:%[0-9]+]]:gpcr = CSetBoundsImm [[CIncOffsetImm1]], 491
   ; CHECK-NEXT:   [[ADDI3:%[0-9]+]]:gpr = ADDI $x0, 88
   ; CHECK-NEXT:   [[CIncOffsetImm2:%[0-9]+]]:gpcr = CIncOffsetImm %stack.1.buf2, 0
-  ; CHECK-NEXT:   [[CSetBounds2:%[0-9]+]]:gpcr = CSetBounds [[CIncOffsetImm2]], [[ADDI3]]
-  ; CHECK-NEXT:   [[CSetBoundsExact2:%[0-9]+]]:gpcr = CSetBoundsExact [[CIncOffsetImm2]], [[ADDI3]]
+  ; CHECK-NEXT:   [[CSetBounds3:%[0-9]+]]:gpcr = CSetBounds [[CIncOffsetImm2]], [[ADDI3]]
+  ; CHECK-NEXT:   [[CSetBoundsExact3:%[0-9]+]]:gpcr = CSetBoundsExact [[CIncOffsetImm2]], [[ADDI3]]
   ; CHECK-NEXT:   [[CIncOffsetImm3:%[0-9]+]]:gpcr = CIncOffsetImm [[CIncOffsetImm1]], -1
-  ; CHECK-NEXT:   [[CSetBounds3:%[0-9]+]]:gpcr = CSetBounds [[CIncOffsetImm3]], [[ADDI3]]
-  ; CHECK-NEXT:   [[CSetBoundsExact3:%[0-9]+]]:gpcr = CSetBoundsExact [[CIncOffsetImm3]], [[ADDI3]]
-  ; CHECK-NEXT:   [[CSetBoundsImm2:%[0-9]+]]:gpcr = CSetBoundsImm [[CIncOffsetImm3]], 492
+  ; CHECK-NEXT:   [[CSetBounds4:%[0-9]+]]:gpcr = CSetBounds [[CIncOffsetImm3]], [[ADDI3]]
+  ; CHECK-NEXT:   [[CSetBoundsExact4:%[0-9]+]]:gpcr = CSetBoundsExact [[CIncOffsetImm3]], [[ADDI3]]
+  ; CHECK-NEXT:   [[CSetBoundsImm3:%[0-9]+]]:gpcr = CSetBoundsImm [[CIncOffsetImm3]], 492
   ; CHECK-NEXT:   [[CIncOffsetImm4:%[0-9]+]]:gpcr = CIncOffsetImm $c0, 1
   ; CHECK-NEXT:   [[CIncOffsetImm5:%[0-9]+]]:gpcr = CIncOffsetImm [[CIncOffsetImm4]], -1
+  ; CHECK-NEXT:   [[CSetBounds5:%[0-9]+]]:gpcr = CSetBounds [[CIncOffsetImm5]], [[ADDI3]]
+  ; CHECK-NEXT:   [[CSetBoundsExact5:%[0-9]+]]:gpcr = CSetBoundsExact [[CIncOffsetImm5]], [[ADDI3]]
+  ; CHECK-NEXT:   [[CSetBoundsImm4:%[0-9]+]]:gpcr = CSetBoundsImm [[CIncOffsetImm5]], 492
   ; CHECK-NEXT:   [[CSetOffset:%[0-9]+]]:gpcr = CSetOffset [[CIncOffsetImm1]], $x0
-  ; CHECK-NEXT:   [[CSetBoundsImm3:%[0-9]+]]:gpcr = CSetBoundsImm [[CIncOffsetImm1]], 0
+  ; CHECK-NEXT:   [[CSetBoundsImm5:%[0-9]+]]:gpcr = CSetBoundsImm [[CIncOffsetImm1]], 0
   ; CHECK-NEXT:   [[CIncOffsetImm6:%[0-9]+]]:gpcr = CIncOffsetImm %stack.0.buf1, 492
-  ; CHECK-NEXT:   [[CSetBoundsImm4:%[0-9]+]]:gpcr = CSetBoundsImm [[CIncOffsetImm6]], 0
+  ; CHECK-NEXT:   [[CSetBoundsImm6:%[0-9]+]]:gpcr = CSetBoundsImm [[CIncOffsetImm6]], 0
+  ; CHECK-NEXT:   [[CSetBoundsImm7:%[0-9]+]]:gpcr = CSetBoundsImm [[CIncOffsetImm6]], 1
   ; CHECK-NEXT:   PseudoBR %bb.2
   ; CHECK-NEXT: {{  $}}
   ; CHECK-NEXT: bb.1.for.cond.cleanup:
@@ -139,14 +142,6 @@ body:             |
   ; CHECK-NEXT: bb.3.if.then:
   ; CHECK-NEXT:   successors: %bb.4(0x80000000)
   ; CHECK-NEXT: {{  $}}
-  ; CHECK-NEXT:   [[CSetBounds4:%[0-9]+]]:gpcr = CSetBounds [[CIncOffsetImm1]], [[ADDI]]
-  ; CHECK-NEXT:   [[CSetBoundsExact4:%[0-9]+]]:gpcr = CSetBoundsExact [[CIncOffsetImm1]], [[ADDI]]
-  ; CHECK-NEXT:   [[CSetBoundsImm5:%[0-9]+]]:gpcr = CSetBoundsImm [[CIncOffsetImm1]], 492
-  ; CHECK-NEXT:   [[CSetBoundsImm6:%[0-9]+]]:gpcr = CSetBoundsImm [[CIncOffsetImm1]], 492
-  ; CHECK-NEXT:   [[CSetBounds5:%[0-9]+]]:gpcr = CSetBounds [[CIncOffsetImm5]], [[ADDI3]]
-  ; CHECK-NEXT:   [[CSetBoundsExact5:%[0-9]+]]:gpcr = CSetBoundsExact [[CIncOffsetImm5]], [[ADDI3]]
-  ; CHECK-NEXT:   [[CSetBoundsImm7:%[0-9]+]]:gpcr = CSetBoundsImm [[CIncOffsetImm5]], 492
-  ; CHECK-NEXT:   [[CSetBoundsImm8:%[0-9]+]]:gpcr = CSetBoundsImm [[CIncOffsetImm6]], 1
   ; CHECK-NEXT: {{  $}}
   ; CHECK-NEXT: bb.4.for.inc:
   ; CHECK-NEXT:   successors: %bb.1(0x04000000), %bb.2(0x7c000000)
@@ -177,12 +172,12 @@ body:             |
     %11:gpcr = CSetBounds %10, %5
     %12:gpcr = CSetBoundsExact %10, %5
     %13:gpcr = CSetBoundsImm %10, 492
-    ; These will trap since the length is too big:
+    ; These will tag-clear since the length is too big:
     %14:gpcr = CSetBounds %10, %5
     %15:gpcr = CSetBoundsExact %10, %5
     %16:gpcr = CSetBoundsImm %10, 492
 
-    ; plus + 1 -> OOB, so shouldn't be hoisted:
+    ; plus + 1 -> OOB, tag-clear
     %30:gpcr = CIncOffsetImm %stack.0.buf1, 1
     %31:gpcr = CSetBounds %30, %5
     %32:gpcr = CSetBoundsExact %30, %5

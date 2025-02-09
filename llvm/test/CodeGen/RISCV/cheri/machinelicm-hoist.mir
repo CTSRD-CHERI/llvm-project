@@ -2,20 +2,15 @@
 ## Check that MachineLICM doesn't hoist a instructions that could potentially trap but are not guaranteed to execute
 ## See also llvm/test/CodeGen/MIPS/machinelicm-hoist.mir for CHERI-MIPS
 ## See https://github.com/CTSRD-CHERI/llvm-project/issues/348 and https://github.com/CTSRD-CHERI/llvm-project/issues/359
-## TODO: Currently, we default to the v8 (trapping) semantics, but in the future this will change.
-# RUN: %riscv64_cheri_purecap_llc -o - %s -run-pass=early-machinelicm -avoid-speculation=false \
-# RUN:    -hoist-cheap-insts -machinelicm-ignore-reg-pressure | FileCheck %s
 # RUN: %riscv64_cheri_purecap_llc -mtriple=riscv64 -target-abi l64pc128 -o - %s -run-pass=early-machinelicm -avoid-speculation=false \
-# RUN:    -hoist-cheap-insts -machinelicm-ignore-reg-pressure --mattr=+xcheri-v9-semantics | FileCheck %s --check-prefix=TAG-CLEAR
+# RUN:    -hoist-cheap-insts -machinelicm-ignore-reg-pressure | FileCheck %s --check-prefix=TAG-CLEAR
 --- |
-  ; ModuleID = '/Users/alex/cheri/llvm-project/llvm/test/CodeGen/CHERI-Generic/test.ll'
   source_filename = "/Users/alex/cheri/llvm-project/llvm/test/CodeGen/CHERI-Generic/test.ll"
   target datalayout = "e-m:e-pf200:128:128:128:64-p:64:64-i64:64-i128:128-n64-S128-A200-P200-G200"
   target triple = "riscv64-unknown-freebsd"
 
   %struct.foo = type { i32, i32 }
 
-  ; Function Attrs: nounwind
   define dso_local void @hoist_csetbounds(i64 %arg, %struct.foo addrspace(200)* %f, %struct.foo addrspace(200)* %f2) local_unnamed_addr addrspace(200) #0 {
   entry:
     br label %for.body
@@ -80,123 +75,6 @@ callSites:       []
 constants:       []
 machineFunctionInfo: {}
 body:             |
-  ; CHECK-LABEL: name: hoist_csetbounds
-  ; CHECK: bb.0.entry:
-  ; CHECK-NEXT:   successors: %bb.2(0x80000000)
-  ; CHECK-NEXT:   liveins: $x10, $c11, $c12
-  ; CHECK-NEXT: {{  $}}
-  ; CHECK-NEXT:   [[COPY:%[0-9]+]]:gpr = COPY $x10
-  ; CHECK-NEXT:   [[COPY1:%[0-9]+]]:gpcr = COPY $c11
-  ; CHECK-NEXT:   [[COPY2:%[0-9]+]]:gpcr = COPY $c12
-  ; CHECK-NEXT:   [[COPY3:%[0-9]+]]:gpcrc0isddc = COPY $c12
-  ; CHECK-NEXT:   [[CIncOffsetImm:%[0-9]+]]:gpcr = CIncOffsetImm [[COPY1]], 4
-  ; CHECK-NEXT:   [[COPY4:%[0-9]+]]:gpcrc0isddc = COPY [[CIncOffsetImm]]
-  ; CHECK-NEXT:   [[CAndPerm:%[0-9]+]]:gpcr = CAndPerm [[COPY1]], [[COPY]]
-  ; CHECK-NEXT:   [[COPY5:%[0-9]+]]:gpcrc0isddc = COPY [[CAndPerm]]
-  ; CHECK-NEXT:   [[CGetPerm:%[0-9]+]]:gpr = CGetPerm [[COPY2]]
-  ; CHECK-NEXT:   [[CGetType:%[0-9]+]]:gpr = CGetType [[COPY2]]
-  ; CHECK-NEXT:   [[CGetBase:%[0-9]+]]:gpr = CGetBase [[COPY2]]
-  ; CHECK-NEXT:   [[CGetLen:%[0-9]+]]:gpr = CGetLen [[COPY2]]
-  ; CHECK-NEXT:   [[CGetTag:%[0-9]+]]:gpr = CGetTag [[COPY2]]
-  ; CHECK-NEXT:   [[CGetSealed:%[0-9]+]]:gpr = CGetSealed [[COPY2]]
-  ; CHECK-NEXT:   [[CGetOffset:%[0-9]+]]:gpr = CGetOffset [[COPY2]]
-  ; CHECK-NEXT:   [[PseudoCGetAddr:%[0-9]+]]:gpr = PseudoCGetAddr [[COPY2]]
-  ; CHECK-NEXT:   [[CGetHigh:%[0-9]+]]:gpr = CGetHigh [[COPY2]]
-  ; CHECK-NEXT:   [[CClearTag:%[0-9]+]]:gpcr = CClearTag [[COPY1]]
-  ; CHECK-NEXT:   [[CMove:%[0-9]+]]:gpcr = CMove [[COPY1]]
-  ; CHECK-NEXT:   [[CTestSubset:%[0-9]+]]:gpr = CTestSubset [[COPY3]], [[COPY2]]
-  ; CHECK-NEXT:   [[CRRL:%[0-9]+]]:gpr = CRRL [[COPY]]
-  ; CHECK-NEXT:   [[CRAM:%[0-9]+]]:gpr = CRAM [[COPY]]
-  ; CHECK-NEXT:   [[CSetFlags:%[0-9]+]]:gpcr = CSetFlags [[CIncOffsetImm]], [[COPY]]
-  ; CHECK-NEXT:   [[CSetOffset:%[0-9]+]]:gpcr = CSetOffset [[CIncOffsetImm]], [[COPY]]
-  ; CHECK-NEXT:   [[CSetAddr:%[0-9]+]]:gpcr = CSetAddr [[CIncOffsetImm]], [[COPY]]
-  ; CHECK-NEXT:   [[CIncOffset:%[0-9]+]]:gpcr = CIncOffset [[CIncOffsetImm]], [[COPY]]
-  ; CHECK-NEXT:   [[CIncOffsetImm1:%[0-9]+]]:gpcr = CIncOffsetImm [[CIncOffsetImm]], 10
-  ; CHECK-NEXT:   [[CClearTag1:%[0-9]+]]:gpcr = CClearTag [[CIncOffsetImm]]
-  ; CHECK-NEXT:   [[CSetHigh:%[0-9]+]]:gpcr = CSetHigh [[CIncOffsetImm]], [[COPY]]
-  ; CHECK-NEXT:   [[CSetFlags1:%[0-9]+]]:gpcr = CSetFlags [[CAndPerm]], [[COPY]]
-  ; CHECK-NEXT:   [[CSetOffset1:%[0-9]+]]:gpcr = CSetOffset [[CAndPerm]], [[COPY]]
-  ; CHECK-NEXT:   [[CSetAddr1:%[0-9]+]]:gpcr = CSetAddr [[CAndPerm]], [[COPY]]
-  ; CHECK-NEXT:   [[CIncOffset1:%[0-9]+]]:gpcr = CIncOffset [[CAndPerm]], [[COPY]]
-  ; CHECK-NEXT:   [[CIncOffsetImm2:%[0-9]+]]:gpcr = CIncOffsetImm [[CAndPerm]], 10
-  ; CHECK-NEXT:   [[CClearTag2:%[0-9]+]]:gpcr = CClearTag [[CAndPerm]]
-  ; CHECK-NEXT:   [[CSetFlags2:%[0-9]+]]:gpcr = CSetFlags $c0, [[COPY]]
-  ; CHECK-NEXT:   [[CSetOffset2:%[0-9]+]]:gpcr = CSetOffset $c0, [[COPY]]
-  ; CHECK-NEXT:   [[CSetAddr2:%[0-9]+]]:gpcr = CSetAddr $c0, [[COPY]]
-  ; CHECK-NEXT:   [[CIncOffset2:%[0-9]+]]:gpcr = CIncOffset $c0, [[COPY]]
-  ; CHECK-NEXT:   [[CIncOffsetImm3:%[0-9]+]]:gpcr = CIncOffsetImm $c0, 10
-  ; CHECK-NEXT:   [[CClearTag3:%[0-9]+]]:gpcr = CClearTag $c0
-  ; CHECK-NEXT:   [[CSetHigh1:%[0-9]+]]:gpcr = CSetHigh $c0, [[COPY]]
-  ; CHECK-NEXT:   PseudoBR %bb.2
-  ; CHECK-NEXT: {{  $}}
-  ; CHECK-NEXT: bb.1.for.cond.cleanup:
-  ; CHECK-NEXT:   PseudoCRET
-  ; CHECK-NEXT: {{  $}}
-  ; CHECK-NEXT: bb.2.for.body:
-  ; CHECK-NEXT:   successors: %bb.4(0x30000000), %bb.3(0x50000000)
-  ; CHECK-NEXT: {{  $}}
-  ; CHECK-NEXT:   BNE [[COPY]], $x0, %bb.4
-  ; CHECK-NEXT:   PseudoBR %bb.3
-  ; CHECK-NEXT: {{  $}}
-  ; CHECK-NEXT: bb.3.if.then:
-  ; CHECK-NEXT:   successors: %bb.4(0x80000000)
-  ; CHECK-NEXT: {{  $}}
-  ; CHECK-NEXT:   [[CSeal:%[0-9]+]]:gpcr = CSeal [[COPY1]], [[COPY2]]
-  ; CHECK-NEXT:   [[CUnseal:%[0-9]+]]:gpcr = CUnseal [[COPY1]], [[COPY2]]
-  ; CHECK-NEXT:   [[CAndPerm1:%[0-9]+]]:gpcr = CAndPerm [[COPY1]], [[COPY]]
-  ; CHECK-NEXT:   [[CSetFlags3:%[0-9]+]]:gpcr = CSetFlags [[COPY1]], [[COPY]]
-  ; CHECK-NEXT:   [[CSetOffset3:%[0-9]+]]:gpcr = CSetOffset [[COPY1]], [[COPY]]
-  ; CHECK-NEXT:   [[CSetAddr3:%[0-9]+]]:gpcr = CSetAddr [[COPY1]], [[COPY]]
-  ; CHECK-NEXT:   [[CIncOffset3:%[0-9]+]]:gpcr = CIncOffset [[COPY1]], [[COPY]]
-  ; CHECK-NEXT:   [[CIncOffsetImm4:%[0-9]+]]:gpcr = CIncOffsetImm [[COPY1]], 10
-  ; CHECK-NEXT:   [[CSetBounds:%[0-9]+]]:gpcr = CSetBounds [[COPY1]], [[COPY]]
-  ; CHECK-NEXT:   [[CSetBoundsExact:%[0-9]+]]:gpcr = CSetBoundsExact [[COPY1]], [[COPY]]
-  ; CHECK-NEXT:   [[CSetBoundsImm:%[0-9]+]]:gpcr = CSetBoundsImm [[COPY1]], 10
-  ; CHECK-NEXT:   [[CBuildCap:%[0-9]+]]:gpcr = CBuildCap [[COPY3]], [[COPY2]]
-  ; CHECK-NEXT:   [[CCopyType:%[0-9]+]]:gpcr = CCopyType [[COPY1]], [[COPY2]]
-  ; CHECK-NEXT:   [[CCSeal:%[0-9]+]]:gpcr = CCSeal [[COPY1]], [[COPY2]]
-  ; CHECK-NEXT:   [[CSealEntry:%[0-9]+]]:gpcr = CSealEntry [[COPY1]]
-  ; CHECK-NEXT:   [[CSetHigh2:%[0-9]+]]:gpcr = CSetHigh [[COPY1]], [[COPY]]
-  ; CHECK-NEXT:   [[CToPtr:%[0-9]+]]:gpr = CToPtr [[COPY1]], [[COPY3]]
-  ; CHECK-NEXT:   [[CFromPtr:%[0-9]+]]:gpcr = CFromPtr [[COPY3]], [[COPY]]
-  ; CHECK-NEXT:   [[CSpecialRW:%[0-9]+]]:gpcr = CSpecialRW 0, [[COPY1]]
-  ; CHECK-NEXT:   CClear 1, 1
-  ; CHECK-NEXT:   FPClear 1, 1
-  ; CHECK-NEXT:   [[CSeal1:%[0-9]+]]:gpcr = CSeal [[CIncOffsetImm]], [[COPY2]]
-  ; CHECK-NEXT:   [[CUnseal1:%[0-9]+]]:gpcr = CUnseal [[CIncOffsetImm]], [[COPY2]]
-  ; CHECK-NEXT:   [[CAndPerm2:%[0-9]+]]:gpcr = CAndPerm [[CIncOffsetImm]], [[COPY]]
-  ; CHECK-NEXT:   [[CSetBounds1:%[0-9]+]]:gpcr = CSetBounds [[CIncOffsetImm]], [[COPY]]
-  ; CHECK-NEXT:   [[CSetBoundsExact1:%[0-9]+]]:gpcr = CSetBoundsExact [[CIncOffsetImm]], [[COPY]]
-  ; CHECK-NEXT:   [[CSetBoundsImm1:%[0-9]+]]:gpcr = CSetBoundsImm [[CIncOffsetImm]], 10
-  ; CHECK-NEXT:   [[CBuildCap1:%[0-9]+]]:gpcr = CBuildCap [[COPY4]], [[COPY2]]
-  ; CHECK-NEXT:   [[CCopyType1:%[0-9]+]]:gpcr = CCopyType [[CIncOffsetImm]], [[COPY2]]
-  ; CHECK-NEXT:   [[CCSeal1:%[0-9]+]]:gpcr = CCSeal [[CIncOffsetImm]], [[COPY2]]
-  ; CHECK-NEXT:   [[CSealEntry1:%[0-9]+]]:gpcr = CSealEntry [[CIncOffsetImm]]
-  ; CHECK-NEXT:   [[CSeal2:%[0-9]+]]:gpcr = CSeal [[CAndPerm]], [[COPY2]]
-  ; CHECK-NEXT:   [[CUnseal2:%[0-9]+]]:gpcr = CUnseal [[CAndPerm]], [[COPY2]]
-  ; CHECK-NEXT:   [[CAndPerm3:%[0-9]+]]:gpcr = CAndPerm [[CAndPerm]], [[COPY]]
-  ; CHECK-NEXT:   [[CSetBounds2:%[0-9]+]]:gpcr = CSetBounds [[CAndPerm]], [[COPY]]
-  ; CHECK-NEXT:   [[CSetBoundsExact2:%[0-9]+]]:gpcr = CSetBoundsExact [[CAndPerm]], [[COPY]]
-  ; CHECK-NEXT:   [[CSetBoundsImm2:%[0-9]+]]:gpcr = CSetBoundsImm [[CAndPerm]], 10
-  ; CHECK-NEXT:   [[CBuildCap2:%[0-9]+]]:gpcr = CBuildCap [[COPY5]], [[COPY2]]
-  ; CHECK-NEXT:   [[CCopyType2:%[0-9]+]]:gpcr = CCopyType [[CAndPerm]], [[COPY2]]
-  ; CHECK-NEXT:   [[CCSeal2:%[0-9]+]]:gpcr = CCSeal [[CAndPerm]], [[COPY2]]
-  ; CHECK-NEXT:   [[CSealEntry2:%[0-9]+]]:gpcr = CSealEntry [[CIncOffsetImm]]
-  ; CHECK-NEXT:   [[CSeal3:%[0-9]+]]:gpcr = CSeal $c0, [[COPY2]]
-  ; CHECK-NEXT:   [[CUnseal3:%[0-9]+]]:gpcr = CUnseal $c0, [[COPY2]]
-  ; CHECK-NEXT:   [[CAndPerm4:%[0-9]+]]:gpcr = CAndPerm $c0, [[COPY]]
-  ; CHECK-NEXT:   [[CSetBounds3:%[0-9]+]]:gpcr = CSetBounds $c0, [[COPY]]
-  ; CHECK-NEXT:   [[CSetBoundsExact3:%[0-9]+]]:gpcr = CSetBoundsExact $c0, [[COPY]]
-  ; CHECK-NEXT:   [[CSetBoundsImm3:%[0-9]+]]:gpcr = CSetBoundsImm $c0, 10
-  ; CHECK-NEXT:   [[CCopyType3:%[0-9]+]]:gpcr = CCopyType $c0, [[COPY2]]
-  ; CHECK-NEXT:   [[CCSeal3:%[0-9]+]]:gpcr = CCSeal $c0, [[COPY2]]
-  ; CHECK-NEXT:   [[CSealEntry3:%[0-9]+]]:gpcr = CSealEntry $c0
-  ; CHECK-NEXT: {{  $}}
-  ; CHECK-NEXT: bb.4.for.inc:
-  ; CHECK-NEXT:   successors: %bb.2(0x7c000000), %bb.1(0x04000000)
-  ; CHECK-NEXT: {{  $}}
-  ; CHECK-NEXT:   BLTU [[COPY]], $x0, %bb.2
-  ; CHECK-NEXT:   PseudoBR %bb.1
   ; TAG-CLEAR-LABEL: name: hoist_csetbounds
   ; TAG-CLEAR: bb.0.entry:
   ; TAG-CLEAR-NEXT:   successors: %bb.2(0x80000000)
@@ -235,8 +113,6 @@ body:             |
   ; TAG-CLEAR-NEXT:   [[CCSeal:%[0-9]+]]:gpcr = CCSeal [[COPY1]], [[COPY2]]
   ; TAG-CLEAR-NEXT:   [[CSealEntry:%[0-9]+]]:gpcr = CSealEntry [[COPY1]]
   ; TAG-CLEAR-NEXT:   [[CSetHigh:%[0-9]+]]:gpcr = CSetHigh [[COPY1]], [[COPY]]
-  ; TAG-CLEAR-NEXT:   [[CToPtr:%[0-9]+]]:gpr = CToPtr [[COPY1]], [[COPY3]]
-  ; TAG-CLEAR-NEXT:   [[CFromPtr:%[0-9]+]]:gpcr = CFromPtr [[COPY3]], [[COPY]]
   ; TAG-CLEAR-NEXT:   [[CMove:%[0-9]+]]:gpcr = CMove [[COPY1]]
   ; TAG-CLEAR-NEXT:   [[CTestSubset:%[0-9]+]]:gpr = CTestSubset [[COPY3]], [[COPY2]]
   ; TAG-CLEAR-NEXT:   [[CRRL:%[0-9]+]]:gpr = CRRL [[COPY]]
@@ -320,10 +196,8 @@ body:             |
     %1:gpcr = COPY $c11
     %2:gpcr = COPY $c12
     %3:gpcrc0isddc = COPY $c12
-    ; %4/%5 should be known to be unsealed (since CIncOffset succeeded)
     %4:gpcr = CIncOffsetImm %1, 4
     %5:gpcrc0isddc = COPY %4
-    ; %6/%7, should be known to be tagged and unsealed
     %6:gpcr = CAndPerm %1, %0
     %7:gpcrc0isddc = COPY %6
 
@@ -352,7 +226,7 @@ body:             |
     %16:gpr = CGetOffset %2
     %17:gpr = PseudoCGetAddr %2
     %18:gpr = CGetHigh %2
-    ; However, mutators can't since the input could be sealed/untagged/other constraints
+    ; Mutators can also be hoisted since we default to non-trapping
     %30:gpcr = CSeal %1, %2
     %31:gpcr = CUnseal %1, %2
     %32:gpcr = CAndPerm %1, %0
@@ -372,8 +246,6 @@ body:             |
     %46:gpcr = CSetHigh %1, %0
 
     ; Pointer-arithmetic instructions
-    %60:gpr = CToPtr %1, %3  ; can trap
-    %61:gpcr = CFromPtr %3, %0 ; can trap
     %63:gpcr = CMove %1 ; never traps
 
     ; Assertion Instructions

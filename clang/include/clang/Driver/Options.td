@@ -3910,14 +3910,6 @@ def mno_xcheri_rvc : Flag<["-"], "mno-xcheri-rvc">, Alias<mxcheri_norvc>;
 def mno_xcheri_norvc : Flag<["-"], "mno-xcheri-norvc">, Group<m_riscv_Features_Group>,
   HelpText<"Enable using compressed CHERI instructions">;
 def mxcheri_rvc : Flag<["-"], "mxcheri-rvc">, Alias<mno_xcheri_norvc>;
-// Temporary flags to enable/disable CHERI ISAv8 compatibility.
-// Flag name is a bit odd but this is required by handleTargetFeaturesGroup().
-def mxcheri_v9_semantics : Flag<["-"], "mxcheri-v9-semantics">, Group<m_riscv_Features_Group>,
-  HelpText<"Generate code that is no longer compatible with CHERI ISAv8">;
-def mno_xcheri_v9_semantics : Flag<["-"], "mno-xcheri-v9-semantics">, Group<m_riscv_Features_Group>,
-  HelpText<"Generate code that is compatible with CHERI ISAv8">;
-// Add an alias with a more sensible name for when the default is flipped.
-def mxcheri_v8_compat : Flag<["-"], "mxcheri-v8-compat">, Alias<mno_xcheri_v9_semantics>;
 
 def munaligned_access : Flag<["-"], "munaligned-access">, Group<m_Group>,
   HelpText<"Allow memory accesses to be unaligned (AArch32/AArch64/LoongArch only)">;
