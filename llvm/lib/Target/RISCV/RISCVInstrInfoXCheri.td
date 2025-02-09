@@ -377,13 +377,10 @@ def PseudoCGetAddr : Pseudo<(outs GPR:$rd), (ins GPCR:$cs1), [],
 //===----------------------------------------------------------------------===//
 
 let Predicates = [HasCheri] in {
-let Constraints = "@traps_if_sealed $rs1" in {
-let mayTrap = 1 in {
 let defsCanBeSealed = 1 in
 def CSeal           : Cheri_rr<0xb, "cseal", GPCR, GPCR>;
 def CUnseal         : Cheri_rr<0xc, "cunseal", GPCR, GPCR>;
 def CAndPerm        : Cheri_rr<0xd, "candperm">;
-} // let mayTrap = 1
 def CSetFlags       : Cheri_rr<0xe, "csetflags">;
 def CSetOffset      : Cheri_rr<0xf, "csetoffset">;
 def CSetAddr        : Cheri_rr<0x10, "csetaddr">;
@@ -392,15 +389,10 @@ let isReMaterializable = 1, isAsCheapAsAMove = 1 in
 def CIncOffset      : Cheri_rr<0x11, "cincoffset">;
 let isReMaterializable = 1, isAsCheapAsAMove = 1 in
 def CIncOffsetImm   : Cheri_ri<0x1, "cincoffset", 1>;
-// Note: mayTrap is optimized in RISCVInstrInfo::isGuaranteedNotToTrap()
-let mayTrap = 1 in {
 def CSetBounds      : Cheri_rr<0x8, "csetbounds">;
 def CSetBoundsExact : Cheri_rr<0x9, "csetboundsexact">;
 def CSetBoundsImm   : Cheri_ri<0x2, "csetbounds", 0>;
-} // mayTrap = 1
-} // let Constraints = "@traps_if_sealed $rs1"
 def CClearTag       : Cheri_r<0xb, "ccleartag", GPCR>;
-let mayTrap = 1 in {
 let defsCanBeSealed = 1 in
 def CBuildCap       : Cheri_rr<0x1d, "cbuildcap", GPCR, GPCR, GPCRC0IsDDC>;
 def CCopyType       : Cheri_rr<0x1e, "ccopytype", GPCR, GPCR>;
@@ -408,7 +400,6 @@ let defsCanBeSealed = 1 in
 def CCSeal          : Cheri_rr<0x1f, "ccseal", GPCR, GPCR>;
 let defsCanBeSealed = 1 in
 def CSealEntry      : Cheri_r<0x11, "csealentry", GPCR>;
-} // let mayTrap = 1
 
 def : InstAlias<"cincoffsetimm $cd, $cs1, $imm",
                 (CIncOffsetImm GPCR:$cd, GPCR:$cs1, simm12:$imm), 0>;
@@ -420,10 +411,6 @@ def : InstAlias<"csetboundsimm $cd, $cs1, $imm",
 // Pointer-Arithmetic Instructions
 //===----------------------------------------------------------------------===//
 
-let Predicates = [HasCheri, NotCheriISAv9], mayTrap = 1 in {
-def CToPtr      : Cheri_rr<0x12, "ctoptr", GPR, GPCRC0IsDDC>;
-def CFromPtr    : Cheri_rr<0x13, "cfromptr", GPCR, GPR, GPCRC0IsDDC>;
-}
 let Predicates = [HasCheri] in {
 let hasSideEffects = 0, mayLoad = 0, mayStore = 0, isCodeGenOnly = 0,
     isAsmParserOnly = 1 in
@@ -1299,17 +1286,6 @@ def : Pat<(CapFrameAddrRegImm GPCR:$rs1, simm12:$imm12),
 
 // int_cheri_cap_to_pointer and int_cheri_cap_from_pointer are expanded in C++
 // code for ISAv9, so we don't need replacement patterns here.
-// TODO: these intrinsics should probably be removed at some point.
-let Predicates = [HasCheri, NotCheriISAv9] in {
-def : Pat<(XLenVT (int_cheri_cap_to_pointer GPCR:$rs1, GPCRC0IsDDC:$rs2)),
-          (CToPtr GPCR:$rs1, GPCRC0IsDDC:$rs2)>;
-def : Pat<(XLenVT (int_cheri_cap_to_pointer (int_cheri_ddc_get), GPCR:$rs1)),
-          (CToPtr $rs1, DDC)>;
-def : Pat<(int_cheri_cap_from_pointer GPCRC0IsDDC:$rs1, (XLenVT GPR:$rs2)),
-          (CFromPtr GPCRC0IsDDC:$rs1, GPR:$rs2)>;
-def : Pat<(int_cheri_cap_from_pointer (int_cheri_ddc_get), (XLenVT GPR:$rs2)),
-          (CFromPtr DDC, $rs2)>;
-}  // let Predicates = [HasCheri, NotCheriISAv9]
 def : Pat<(XLenVT (int_cheri_cap_diff GPCR:$cs1, GPCR:$cs2)),
           (SUB (XLenVT (EXTRACT_SUBREG GPCR:$cs1, sub_cap_addr)),
                (XLenVT (EXTRACT_SUBREG GPCR:$cs2, sub_cap_addr)))>;
@@ -1318,11 +1294,6 @@ let Predicates = [IsPureCapABI] in {
 def : Pat<(inttoptr (XLenVT GPR:$rs2)), (CIncOffset C0, GPR:$rs2)>;
 def : Pat<(inttoptr simm12:$imm12), (CIncOffsetImm C0, simm12:$imm12)>;
 def : Pat<(XLenVT (ptrtoint GPCR:$rs1)), (PseudoCGetAddr GPCR:$rs1)>;
-}
-
-let Predicates = [NotPureCapABI, NotCheriISAv9] in {
-def : Pat<(inttoptr (XLenVT GPR:$rs2)), (CFromPtr DDC, (XLenVT GPR:$rs2))>;
-def : Pat<(XLenVT (ptrtoint GPCR:$rs1)), (CToPtr GPCR:$rs1, DDC)>;
 }
 
 /// Null Capability Patterns

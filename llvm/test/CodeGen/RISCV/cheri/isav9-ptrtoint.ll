@@ -2,8 +2,8 @@
 ;; Check that we do not emit CToPtr in ISAv9 hybrid mode. Since there is no DDC
 ;; offsetting, hybrid mode can expand ptrtoint to to a branchless version of
 ;; `x.tag ? x.addr : 0`
-; RUN: %riscv64_cheri_purecap_llc -mattr=+xcheri-v9-semantics < %s | FileCheck %s --check-prefix=PURECAP
-; RUN: %riscv64_cheri_llc -mattr=+xcheri-v9-semantics < %s | FileCheck %s --check-prefix=HYBRID
+; RUN: %riscv64_cheri_purecap_llc < %s | FileCheck %s --check-prefix=PURECAP
+; RUN: %riscv64_cheri_llc < %s | FileCheck %s --check-prefix=HYBRID
 
 define dso_local i64 @ptrtoint(i8 addrspace(200)* %cap) addrspace(200) nounwind {
 ; PURECAP-LABEL: ptrtoint:

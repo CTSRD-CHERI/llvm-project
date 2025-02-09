@@ -101,18 +101,6 @@ ccseal c1, c2, c3
 # CHECK: encoding: [0xdb,0x00,0x11,0xff]
 csealentry c1, c2
 
-# CHECK-INST: ctoptr ra, csp, cgp
-# CHECK: encoding: [0xdb,0x00,0x31,0x24]
-ctoptr x1, c2, c3
-# CHECK-INST: ctoptr ra, csp, ddc
-# CHECK: encoding: [0xdb,0x00,0x01,0x24]
-ctoptr x1, c2, ddc
-# CHECK-INST: cfromptr cra, csp, gp
-# CHECK: encoding: [0xdb,0x00,0x31,0x26]
-cfromptr c1, c2, x3
-# CHECK-INST: cfromptr cra, ddc, gp
-# CHECK: encoding: [0xdb,0x00,0x30,0x26]
-cfromptr c1, ddc, x3
 # CHECK-INST: sub ra, sp, gp
 # CHECK: encoding: [0xb3,0x00,0x31,0x40]
 csub x1, c2, c3

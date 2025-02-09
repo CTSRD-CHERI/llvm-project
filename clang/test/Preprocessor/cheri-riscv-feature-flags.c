@@ -1,11 +1,6 @@
 // RUN: %riscv64_cheri_cc1 -E -dM -ffreestanding < /dev/null \
-// RUN:   | FileCheck %s --check-prefixes=CHECK,CHECK64 --implicit-check-not=cheri --implicit-check-not=CHERI
-// RUN: %riscv32_cheri_cc1 -E -dM -ffreestanding < /dev/null \
-// RUN:   | FileCheck %s --check-prefixes=CHECK,CHECK32 --implicit-check-not=cheri --implicit-check-not=CHERI
-/// Check for the new flags for removed ISAv8 compatibility:
-// RUN: %riscv64_cheri_cc1 -E -dM -ffreestanding -target-feature +xcheri-v9-semantics < /dev/null \
 // RUN:   | FileCheck %s --check-prefixes=CHECK,CHECK64,CHECK-V9ISA --implicit-check-not=cheri --implicit-check-not=CHERI
-// RUN: %riscv32_cheri_cc1 -E -dM -ffreestanding -target-feature +xcheri-v9-semantics < /dev/null \
+// RUN: %riscv32_cheri_cc1 -E -dM -ffreestanding < /dev/null \
 // RUN:   | FileCheck %s --check-prefixes=CHECK,CHECK32,CHECK-V9ISA --implicit-check-not=cheri --implicit-check-not=CHERI
 
 // CHECK32: #define __CHERI_ADDRESS_BITS__ 32

@@ -553,8 +553,7 @@ RISCVTargetLowering::RISCVTargetLowering(const TargetMachine &TM,
     setOperationAction(ISD::GlobalTLSAddress, CLenVT, Custom);
     setOperationAction(ISD::ADDRSPACECAST, CLenVT, Custom);
     setOperationAction(ISD::ADDRSPACECAST, XLenVT, Custom);
-    if (Subtarget.hasCheriISAv9Semantics() &&
-        !RISCVABI::isCheriPureCapABI(Subtarget.getTargetABI())) {
+    if (!RISCVABI::isCheriPureCapABI(Subtarget.getTargetABI())) {
       setOperationAction(ISD::PTRTOINT, XLenVT, Custom);
       setOperationAction(ISD::INTTOPTR, CLenVT, Custom);
     }
@@ -4987,8 +4986,7 @@ SDValue RISCVTargetLowering::LowerOperation(SDValue Op,
   case ISD::INTTOPTR: {
     SDValue Op0 = Op.getOperand(0);
     if (Op.getValueType().isFatPointer()) {
-      assert(Subtarget.hasCheriISAv9Semantics() &&
-             !RISCVABI::isCheriPureCapABI(Subtarget.getTargetABI()));
+      assert(!RISCVABI::isCheriPureCapABI(Subtarget.getTargetABI()));
       if (isNullConstant(Op0)) {
         // Do not custom lower (inttoptr 0) here as that is the canonical
         // representation of capability NULL, and expanding it here disables
@@ -5014,8 +5012,7 @@ SDValue RISCVTargetLowering::LowerOperation(SDValue Op,
   case ISD::PTRTOINT: {
     SDValue Op0 = Op.getOperand(0);
     if (Op0.getValueType().isFatPointer()) {
-      assert(Subtarget.hasCheriISAv9Semantics() &&
-             !RISCVABI::isCheriPureCapABI(Subtarget.getTargetABI()));
+      assert(!RISCVABI::isCheriPureCapABI(Subtarget.getTargetABI()));
       // In purecap ptrtoint is lowered to an address read using a tablegen
       // pattern, but for hybrid mode we need to emit the expansion here as
       // CToPtr is no longer part of ISAv9.
@@ -7473,22 +7470,15 @@ SDValue RISCVTargetLowering::LowerINTRINSIC_WO_CHAIN(SDValue Op,
   default:
     break; // Don't custom lower most intrinsics.
   case Intrinsic::cheri_cap_from_pointer:
-    // Expand CFromPtr if the dedicated instruction has been removed.
-    if (Subtarget.hasCheriISAv9Semantics()) {
-      return emitCFromPtrReplacement(DAG, DL, Op.getOperand(1),
-                                     Op.getOperand(2), Op.getValueType(),
-                                     XLenVT);
-    }
-    break;
+    // Expand CFromPtr since the dedicated instruction has been removed.
+    return emitCFromPtrReplacement(DAG, DL, Op.getOperand(1), Op.getOperand(2),
+                                   Op.getValueType(), XLenVT);
   case Intrinsic::cheri_cap_to_pointer:
-    // Expand CToPtr if the dedicated instruction has been removed.
-    if (Subtarget.hasCheriISAv9Semantics()) {
-      // NB: DDC/PCC relocation has been removed, so we no longer subtract the
-      // base of the authorizing capability. This is consistent with the
-      // behaviour of Morello's CVT instruction when CCTLR.DDCBO is off.
-      return emitCToPtrReplacement(DAG, DL, Op->getOperand(2), XLenVT);
-    }
-    break;
+    // Expand CToPtr since the dedicated instruction has been removed.
+    // NB: DDC/PCC relocation has been removed, so we no longer subtract the
+    // base of the authorizing capability. This is consistent with the
+    // behaviour of Morello's CVT instruction when CCTLR.DDCBO is off.
+    return emitCToPtrReplacement(DAG, DL, Op->getOperand(2), XLenVT);
   case Intrinsic::thread_pointer: {
     MCPhysReg PhysReg = RISCVABI::isCheriPureCapABI(Subtarget.getTargetABI())
         ? RISCV::C4 : RISCV::X4;
