@@ -69,7 +69,6 @@ class MCObjectStreamer : public MCStreamer {
   virtual void emitInstToData(const MCInst &Inst, const MCSubtargetInfo&) = 0;
   void emitCFIStartProcImpl(MCDwarfFrameInfo &Frame) override;
   void emitCFIEndProcImpl(MCDwarfFrameInfo &Frame) override;
-  MCSymbol *emitCFILabel() override;
   void emitInstructionImpl(const MCInst &Inst, const MCSubtargetInfo &STI);
   void resolvePendingFixups();
 
@@ -87,6 +86,7 @@ public:
   bool isIntegratedAssemblerRequired() const override { return true; }
 
   void emitFrames(MCAsmBackend *MAB);
+  MCSymbol *emitCFILabel() override;
   void emitCFISections(bool EH, bool Debug) override;
 
   MCFragment *getCurrentFragment() const;

@@ -99,7 +99,6 @@ public:
   void emitDarwinTargetVariantBuildVersion(unsigned Platform, unsigned Major,
                                            unsigned Minor, unsigned Update,
                                            VersionTuple SDKVersion) override;
-  void emitThumbFunc(MCSymbol *Func) override;
   bool emitSymbolAttribute(MCSymbol *Symbol, MCSymbolAttr Attribute) override;
   void emitSymbolDesc(MCSymbol *Symbol, unsigned DescValue) override;
   void emitCommonSymbol(MCSymbol *Symbol, uint64_t Size, Align ByteAlignment,
@@ -305,13 +304,6 @@ void MCMachOStreamer::emitDarwinTargetVariantBuildVersion(
     VersionTuple SDKVersion) {
   getAssembler().setDarwinTargetVariantBuildVersion(
       (MachO::PlatformType)Platform, Major, Minor, Update, SDKVersion);
-}
-
-void MCMachOStreamer::emitThumbFunc(MCSymbol *Symbol) {
-  // Remember that the function is a thumb function. Fixup and relocation
-  // values will need adjusted.
-  getAssembler().setIsThumbFunc(Symbol);
-  cast<MCSymbolMachO>(Symbol)->setThumbFunc();
 }
 
 bool MCMachOStreamer::emitSymbolAttribute(MCSymbol *Sym,
