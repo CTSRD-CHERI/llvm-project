@@ -52,6 +52,8 @@
 // RV32-NOCHERI-SAME: -xcheri,
 // RV64-NOCHERI-SAME: -xcheri,
 // XCHERI-RVC-SAME: -xcheri-norvc,
+// CHECK-NOT: xcheri
+// CHECK-SAME: }
 
 // RV32-NOCHERI: !{i32 1, !"target-abi", !"ilp32"}
 // RV64-NOCHERI: !{i32 1, !"target-abi", !"lp64"}
