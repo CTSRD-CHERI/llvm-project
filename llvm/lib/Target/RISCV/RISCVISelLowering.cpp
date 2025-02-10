@@ -4472,12 +4472,12 @@ RISCVTargetLowering::lowerCTLZ_CTTZ_ZERO_UNDEF(SDValue Op,
 /// `cfromptr(auth, addr)` is `addr ? csetaddr(auth, addr) : 0` which is
 /// semantic change but it is consistent with Morello when CCTLR.DDCBO==0.
 static SDValue emitCFromPtrReplacement(SelectionDAG &DAG, const SDLoc &DL,
-                                       SDValue Base, SDValue IntVal,
-                                       EVT CLenVT) {
-  SDValue AsCap = DAG.getNode(
-      ISD::INTRINSIC_WO_CHAIN, DL, CLenVT,
-      DAG.getConstant(Intrinsic::cheri_cap_address_set, DL, MVT::i64), Base,
-      IntVal);
+                                       SDValue Base, SDValue IntVal, EVT CLenVT,
+                                       EVT XLenVT) {
+  SDValue AsCap =
+      DAG.getNode(ISD::INTRINSIC_WO_CHAIN, DL, CLenVT,
+                  DAG.getConstant(Intrinsic::cheri_cap_address_set, DL, XLenVT),
+                  Base, IntVal);
   return DAG.getSelectCC(DL, IntVal,
                          DAG.getConstant(0, DL, IntVal.getValueType()), AsCap,
                          DAG.getNullCapability(DL), ISD::SETNE);
@@ -4997,7 +4997,8 @@ SDValue RISCVTargetLowering::LowerOperation(SDValue Op,
       }
       SDLoc DL(Op);
       EVT CLenVT = Op.getValueType();
-      auto GetDDC = DAG.getConstant(Intrinsic::cheri_ddc_get, DL, MVT::i64);
+      MVT XLenVT = Subtarget.getXLenVT();
+      auto GetDDC = DAG.getConstant(Intrinsic::cheri_ddc_get, DL, XLenVT);
       auto DDC = DAG.getNode(ISD::INTRINSIC_WO_CHAIN, DL, CapType, GetDDC);
       // It would be nice if we could just use SetAddr on DDC, but for
       // consistency between constant inttoptr and non-constant inttoptr
@@ -5006,7 +5007,7 @@ SDValue RISCVTargetLowering::LowerOperation(SDValue Op,
       // getting different values for inttoptr with a constant zero argument and
       // inttoptr with a variable that happens to be zero (the latter should not
       // result in a tagged value).
-      return emitCFromPtrReplacement(DAG, DL, DDC, Op0, CLenVT);
+      return emitCFromPtrReplacement(DAG, DL, DDC, Op0, CLenVT, XLenVT);
     }
     return Op;
   }
@@ -7475,7 +7476,8 @@ SDValue RISCVTargetLowering::LowerINTRINSIC_WO_CHAIN(SDValue Op,
     // Expand CFromPtr if the dedicated instruction has been removed.
     if (Subtarget.hasCheriISAv9Semantics()) {
       return emitCFromPtrReplacement(DAG, DL, Op.getOperand(1),
-                                     Op.getOperand(2), Op.getValueType());
+                                     Op.getOperand(2), Op.getValueType(),
+                                     XLenVT);
     }
     break;
   case Intrinsic::cheri_cap_to_pointer:
