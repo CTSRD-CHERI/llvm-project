@@ -39,8 +39,7 @@ define i32 @first_i32_store_to_load_fwd(ptr addrspace(200) %arg) local_unnamed_a
 ;
   %stackval = alloca %struct.addrinfo, align 16, addrspace(200)
   %field = getelementptr inbounds %struct.addrinfo, ptr addrspace(200) %stackval, i64 0, i32 0
-  %as_cap = bitcast ptr addrspace(200) %stackval to ptr addrspace(200)
-  store ptr addrspace(200) %arg, ptr addrspace(200) %as_cap, align 16
+  store ptr addrspace(200) %arg, ptr addrspace(200) %stackval, align 16
   %result = load i32, ptr addrspace(200) %field, align 4
   ret i32 %result
 }
@@ -64,8 +63,7 @@ define i32 @second_i32_store_to_load_fwd(ptr addrspace(200) %arg) local_unnamed_
 ;
   %stackval = alloca %struct.addrinfo, align 16, addrspace(200)
   %field = getelementptr inbounds %struct.addrinfo, ptr addrspace(200) %stackval, i64 0, i32 1
-  %as_cap = bitcast ptr addrspace(200) %stackval to ptr addrspace(200)
-  store ptr addrspace(200) %arg, ptr addrspace(200) %as_cap, align 16
+  store ptr addrspace(200) %arg, ptr addrspace(200) %stackval, align 16
   %result = load i32, ptr addrspace(200) %field, align 4
   ret i32 %result
 }
@@ -89,8 +87,7 @@ define i32 @third_i32_store_to_load_fwd(ptr addrspace(200) %arg) local_unnamed_a
 ;
   %stackval = alloca %struct.addrinfo, align 16, addrspace(200)
   %field = getelementptr inbounds %struct.addrinfo, ptr addrspace(200) %stackval, i64 0, i32 2
-  %as_cap = bitcast ptr addrspace(200) %stackval to ptr addrspace(200)
-  store ptr addrspace(200) %arg, ptr addrspace(200) %as_cap, align 16
+  store ptr addrspace(200) %arg, ptr addrspace(200) %stackval, align 16
   %result = load i32, ptr addrspace(200) %field, align 4
   ret i32 %result
 }
@@ -114,8 +111,7 @@ define i32 @fourth_i32_store_to_load_fwd(ptr addrspace(200) %arg) local_unnamed_
 ;
   %stackval = alloca %struct.addrinfo, align 16, addrspace(200)
   %field = getelementptr inbounds %struct.addrinfo, ptr addrspace(200) %stackval, i64 0, i32 3
-  %as_cap = bitcast ptr addrspace(200) %stackval to ptr addrspace(200)
-  store ptr addrspace(200) %arg, ptr addrspace(200) %as_cap, align 16
+  store ptr addrspace(200) %arg, ptr addrspace(200) %stackval, align 16
   %result = load i32, ptr addrspace(200) %field, align 4
   ret i32 %result
 }
