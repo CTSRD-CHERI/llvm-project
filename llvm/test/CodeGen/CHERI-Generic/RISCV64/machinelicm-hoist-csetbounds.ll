@@ -71,23 +71,21 @@ define dso_local void @hoist_csetbounds(i32 signext %cond, ptr addrspace(200) %f
 ; HOIST-OPT-NEXT:    br i1 [[TOBOOL]], label [[FOR_COND_CLEANUP:%.*]], label [[ENTRY_SPLIT:%.*]]
 ; HOIST-OPT:       entry.split:
 ; HOIST-OPT-NEXT:    [[DST:%.*]] = getelementptr inbounds [[STRUCT_FOO:%.*]], ptr addrspace(200) [[F]], i64 0, i32 1
-; HOIST-OPT-NEXT:    [[TMP0:%.*]] = tail call ptr addrspace(200) @llvm.cheri.cap.bounds.set.i64(ptr addrspace(200) nonnull [[F]], i64 4)
-; HOIST-OPT-NEXT:    [[TMP1:%.*]] = tail call ptr addrspace(200) @llvm.cheri.cap.bounds.set.i64(ptr addrspace(200) nonnull [[DST]], i64 4)
+; HOIST-OPT-NEXT:    [[ADDRESS_WITH_BOUNDS:%.*]] = tail call ptr addrspace(200) @llvm.cheri.cap.bounds.set.i64(ptr addrspace(200) nonnull [[F]], i64 4)
+; HOIST-OPT-NEXT:    [[ADDRESS_WITH_BOUNDS1:%.*]] = tail call ptr addrspace(200) @llvm.cheri.cap.bounds.set.i64(ptr addrspace(200) nonnull [[DST]], i64 4)
 ; HOIST-OPT-NEXT:    br label [[FOR_BODY:%.*]]
 ; HOIST-OPT:       for.cond.cleanup:
 ; HOIST-OPT-NEXT:    ret void
 ; HOIST-OPT:       for.body:
 ; HOIST-OPT-NEXT:    [[I_06:%.*]] = phi i32 [ 0, [[ENTRY_SPLIT]] ], [ [[INC:%.*]], [[FOR_BODY]] ]
-; HOIST-OPT-NEXT:    tail call void @call(ptr addrspace(200) [[TMP0]], ptr addrspace(200) [[TMP1]])
+; HOIST-OPT-NEXT:    tail call void @call(ptr addrspace(200) [[ADDRESS_WITH_BOUNDS]], ptr addrspace(200) [[ADDRESS_WITH_BOUNDS1]])
 ; HOIST-OPT-NEXT:    [[INC]] = add nuw nsw i32 [[I_06]], 1
 ; HOIST-OPT-NEXT:    [[CMP:%.*]] = icmp ult i32 [[I_06]], 99
 ; HOIST-OPT-NEXT:    br i1 [[CMP]], label [[FOR_BODY]], label [[FOR_COND_CLEANUP]]
 ;
 entry:
   %tobool = icmp eq ptr addrspace(200) %f, null
-  %0 = bitcast ptr addrspace(200) %f to ptr addrspace(200)
   %dst = getelementptr inbounds %struct.foo, ptr addrspace(200) %f, i64 0, i32 1
-  %1 = bitcast ptr addrspace(200) %dst to ptr addrspace(200)
   br label %for.body
 
 for.cond.cleanup:                                 ; preds = %for.inc
@@ -98,10 +96,8 @@ for.body:                                         ; preds = %for.inc, %entry
   br i1 %tobool, label %for.inc, label %if.then
 
 if.then:                                          ; preds = %for.body
-  %2 = call ptr addrspace(200) @llvm.cheri.cap.bounds.set.i64(ptr addrspace(200) nonnull %0, i64 4)
-  %address.with.bounds = bitcast ptr addrspace(200) %2 to ptr addrspace(200)
-  %3 = call ptr addrspace(200) @llvm.cheri.cap.bounds.set.i64(ptr addrspace(200) nonnull %1, i64 4)
-  %address.with.bounds1 = bitcast ptr addrspace(200) %3 to ptr addrspace(200)
+  %address.with.bounds = call ptr addrspace(200) @llvm.cheri.cap.bounds.set.i64(ptr addrspace(200) nonnull %f, i64 4)
+  %address.with.bounds1 = call ptr addrspace(200) @llvm.cheri.cap.bounds.set.i64(ptr addrspace(200) nonnull %dst, i64 4)
   call void @call(ptr addrspace(200) %address.with.bounds, ptr addrspace(200) %address.with.bounds1)
   br label %for.inc
 

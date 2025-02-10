@@ -24,8 +24,7 @@ do_alloca:                                        ; preds = %entry
   br label %use_alloca_no_bounds
 
 use_alloca_no_bounds:                             ; preds = %do_alloca
-  %ptr = bitcast ptr addrspace(200) %alloca to ptr addrspace(200)
-  %ptr_plus_one = getelementptr i64, ptr addrspace(200) %ptr, i64 1
+  %ptr_plus_one = getelementptr i64, ptr addrspace(200) %alloca, i64 1
   store i64 1234, ptr addrspace(200) %ptr_plus_one, align 8
   br label %use_alloca_need_bounds
 
@@ -47,8 +46,7 @@ do_alloca:                                        ; preds = %entry
   br label %use_alloca_no_bounds
 
 use_alloca_no_bounds:                             ; preds = %do_alloca
-  %ptr = bitcast ptr addrspace(200) %alloca to ptr addrspace(200)
-  %ptr_plus_one = getelementptr i64, ptr addrspace(200) %ptr, i64 1
+  %ptr_plus_one = getelementptr i64, ptr addrspace(200) %alloca, i64 1
   store i64 1234, ptr addrspace(200) %ptr_plus_one, align 8
   br label %use_alloca_need_bounds
 

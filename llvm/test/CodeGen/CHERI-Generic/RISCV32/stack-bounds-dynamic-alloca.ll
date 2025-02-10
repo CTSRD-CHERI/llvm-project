@@ -70,8 +70,7 @@ define i32 @alloca_in_entry(i1 %arg) local_unnamed_addr addrspace(200) nounwind 
 ; CHECK:       do_alloca:
 ; CHECK-NEXT:    br label [[USE_ALLOCA_NO_BOUNDS:%.*]]
 ; CHECK:       use_alloca_no_bounds:
-; CHECK-NEXT:    [[PTR:%.*]] = bitcast ptr addrspace(200) [[ALLOCA]] to ptr addrspace(200)
-; CHECK-NEXT:    [[PTR_PLUS_ONE:%.*]] = getelementptr i64, ptr addrspace(200) [[PTR]], i64 1
+; CHECK-NEXT:    [[PTR_PLUS_ONE:%.*]] = getelementptr i64, ptr addrspace(200) [[ALLOCA]], i64 1
 ; CHECK-NEXT:    store i64 1234, ptr addrspace(200) [[PTR_PLUS_ONE]], align 8
 ; CHECK-NEXT:    br label [[USE_ALLOCA_NEED_BOUNDS:%.*]]
 ; CHECK:       use_alloca_need_bounds:
@@ -90,8 +89,7 @@ do_alloca:                                        ; preds = %entry
   br label %use_alloca_no_bounds
 
 use_alloca_no_bounds:                             ; preds = %do_alloca
-  %ptr = bitcast ptr addrspace(200) %alloca to ptr addrspace(200)
-  %ptr_plus_one = getelementptr i64, ptr addrspace(200) %ptr, i64 1
+  %ptr_plus_one = getelementptr i64, ptr addrspace(200) %alloca, i64 1
   store i64 1234, ptr addrspace(200) %ptr_plus_one, align 8
   br label %use_alloca_need_bounds
 
@@ -179,8 +177,7 @@ define i32 @alloca_not_in_entry(i1 %arg) local_unnamed_addr addrspace(200) nounw
 ; CHECK-NEXT:    [[TMP0:%.*]] = call ptr addrspace(200) @llvm.cheri.bounded.stack.cap.dynamic.i32(ptr addrspace(200) [[ALLOCA]], i32 16)
 ; CHECK-NEXT:    br label [[USE_ALLOCA_NO_BOUNDS:%.*]]
 ; CHECK:       use_alloca_no_bounds:
-; CHECK-NEXT:    [[PTR:%.*]] = bitcast ptr addrspace(200) [[ALLOCA]] to ptr addrspace(200)
-; CHECK-NEXT:    [[PTR_PLUS_ONE:%.*]] = getelementptr i64, ptr addrspace(200) [[PTR]], i64 1
+; CHECK-NEXT:    [[PTR_PLUS_ONE:%.*]] = getelementptr i64, ptr addrspace(200) [[ALLOCA]], i64 1
 ; CHECK-NEXT:    store i64 1234, ptr addrspace(200) [[PTR_PLUS_ONE]], align 8
 ; CHECK-NEXT:    br label [[USE_ALLOCA_NEED_BOUNDS:%.*]]
 ; CHECK:       use_alloca_need_bounds:
@@ -198,8 +195,7 @@ do_alloca:                                        ; preds = %entry
   br label %use_alloca_no_bounds
 
 use_alloca_no_bounds:                             ; preds = %do_alloca
-  %ptr = bitcast ptr addrspace(200) %alloca to ptr addrspace(200)
-  %ptr_plus_one = getelementptr i64, ptr addrspace(200) %ptr, i64 1
+  %ptr_plus_one = getelementptr i64, ptr addrspace(200) %alloca, i64 1
   store i64 1234, ptr addrspace(200) %ptr_plus_one, align 8
   br label %use_alloca_need_bounds
 
