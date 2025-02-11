@@ -176,7 +176,8 @@ compartmentForSection(const InputSectionBase *s,
 
 // Returns true for sections that can be assigned to a compartment
 static bool canCompartmentalize(const InputSectionBase *s) {
-  return s->name.startswith(".text");
+  return s->name.startswith(".text") || s->name.startswith(".rodata") ||
+    s->name.startswith(".data") || s->name.startswith(".bss");
 }
 
 // Returns a pointer to an exported symbol if a section contains exported
