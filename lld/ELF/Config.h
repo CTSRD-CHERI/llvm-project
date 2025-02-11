@@ -461,6 +461,7 @@ struct Config {
 
   Compartment *compartment = nullptr;
   CompartmentPolicy compartmentPolicy;
+  bool verboseCompartmentalization = false;
 };
 struct ConfigWrapper {
   Config c;

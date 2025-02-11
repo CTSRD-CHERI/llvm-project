@@ -1390,6 +1390,7 @@ static void readConfigs(opt::InputArgList &args) {
   config->useAndroidRelrTags = args.hasFlag(
       OPT_use_android_relr_tags, OPT_no_use_android_relr_tags, false);
   config->verboseCapRelocs = args.hasArg(OPT_verbose_cap_relocs);
+  config->verboseCompartmentalization = args.hasArg(OPT_verbose_c18n);
   config->warnBackrefs =
       args.hasFlag(OPT_warn_backrefs, OPT_no_warn_backrefs, false);
   config->warnCommon = args.hasFlag(OPT_warn_common, OPT_no_warn_common, false);
