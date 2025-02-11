@@ -163,7 +163,7 @@ compartmentForSection(const InputSectionBase *s,
 
   // Finally, if a compartment was assigned by a subset of symbols, note any
   // symbols that inherited this compartment.
-  if (current != nullptr) {
+  if (config->verboseCompartmentalization && current != nullptr) {
     for (Symbol *b : implicit_symbols) {
       if (!b->includeInDynsym())
         continue;
@@ -299,6 +299,9 @@ void assignSectionsToCompartments() {
     }
 
     s->file->compartment = *c;
+    if (config->verboseCompartmentalization && s->file->compartment != nullptr)
+      message("info: input file " + s->file->getName() + " matched to " +
+              s->file->compartment->name);
   }
 
   // Second, make a first pass assigning input sections to compartments based on
@@ -323,6 +326,9 @@ void assignSectionsToCompartments() {
     if (c == nullptr)
       continue;
 
+    if (config->verboseCompartmentalization)
+      message("info: input section " + s->file->getName() + ":" + s->name +
+              " assigned to compartment " + c->name);
     s->compartment = c;
   }
   if (!valid)
@@ -360,11 +366,69 @@ void assignSectionsToCompartments() {
       if (c == nullptr)
         continue;
 
+      if (config->verboseCompartmentalization) {
+        const auto pair = cdep.second;
+        InputSectionBase *s2 = pair.first;
+        Symbol *sym = pair.second;
+
+        message("info: input section " + s->file->getName() + ":" + s->name +
+                " assigned to implied compartment " + c->name +
+                " due to symbol " + sym->getName() + " needed by " +
+                s2->file->getName() + ":" + s2->name);
+      }
+
       s->compartment = c;
       assigned = true;
     }
     if (assigned)
       continue;
+
+    if (config->verboseCompartmentalization) {
+      for (const auto &kv : depends) {
+        InputSectionBase *s = kv.first;
+        const CompartmentDeps &cdeps = kv.second;
+
+        if (cdeps.size() == 1) {
+          Compartment *c = cdeps.begin()->first;
+          if (c != nullptr) {
+            if (!canCompartmentalize(s)) {
+              message("info: input section " + s->file->getName() + ":" +
+                      s->name + " not assigned to implied compartment " +
+                      c->name);
+            } else {
+              Symbol *b = firstExportedSymbol(s);
+              if (b != nullptr) {
+                message("info: input section " + s->file->getName() + ":" +
+                        s->name + " not assigned to implied compartment " +
+                        c->name + " due to exported symbol " + b->getName());
+              }
+            }
+          }
+          continue;
+        }
+
+        if (!canCompartmentalize(s) || firstExportedSymbol(s) != nullptr)
+          continue;
+
+        message("info: input section " + s->file->getName() + ":" + s->name +
+                " depended on by:");
+        for (const auto &cdep : cdeps) {
+          Compartment *c = cdep.first;
+          const auto pair = cdep.second;
+          InputSectionBase *s2 = pair.first;
+          Symbol *sym = pair.second;
+
+          if (c == nullptr)
+            message("\tsection " + s2->file->getName() + ":" + s2->name +
+                    " from the default compartment due to symbol " +
+                    sym->getName());
+          else
+            message("\tsection " + s2->file->getName() + ":" + s2->name +
+                    " from compartment " + c->name + " due to symbol " +
+                    sym->getName());
+        }
+      }
+    }
 
     break;
   }
