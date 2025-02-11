@@ -17,6 +17,7 @@
 #include "llvm/Support/RISCVAttributes.h"
 #include "llvm/Support/RISCVISAInfo.h"
 #include "llvm/Support/TimeProfiler.h"
+#include "Cheri.h"
 
 using namespace llvm;
 using namespace llvm::object;
@@ -66,7 +67,7 @@ enum Op {
   SRLI = 0x5013,
   SUB = 0x40000033,
 
-  CIncOffsetImm = 0x201B,
+  CADDI = 0x201B,
   CLC = 0x400F,
 };
 
@@ -136,6 +137,7 @@ RISCV::RISCV() {
 
   // .got.plt[0] = _dl_runtime_resolve, .got.plt[1] = link_map
   gotPltHeaderEntriesNum = 2;
+  //cheriCapTableHeaderEntriesNum = 2;
 
   pltHeaderSize = 32;
   pltEntrySize = 16;
@@ -256,7 +258,7 @@ void RISCV::writePltHeader(uint8_t *buf) const {
   // (if shift == 0): nop
   uint32_t offset = in.gotPlt->getVA() - in.plt->getVA();
   uint32_t ptrload = config->isCheriAbi ? CLC : config->is64 ? LD : LW;
-  uint32_t ptraddi = config->isCheriAbi ? CIncOffsetImm : ADDI;
+  uint32_t ptraddi = config->isCheriAbi ? CADDI : ADDI;
   // Shift is log2(pltsize / ptrsize), which is 0 for CHERI-128 so skipped
   uint32_t shift = 2 - config->is64 - config->isCheriAbi;
   uint32_t ptrsize = config->isCheriAbi ? config->capabilitySize

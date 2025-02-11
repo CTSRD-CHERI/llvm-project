@@ -158,3 +158,4 @@ _start:
 foo:
   ret
 .size foo, . - foo
+
