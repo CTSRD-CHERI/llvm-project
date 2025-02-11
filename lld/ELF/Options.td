@@ -149,6 +149,8 @@ defm compartment: EEq<"compartment", "Set the containing compartment of the inpu
 defm compartment_policy: EEq<"compartment-policy", "Use a policy file to split output into compartments">,
   MetaVarName<"<file>">;
 
+def verbose_c18n : F<"verbose-c18n">, HelpText<"Log compartmentalization policy inferences">;
+
 def cref: FF<"cref">,
   HelpText<"Output cross reference table. If -Map is specified, print to the map file">;
 
