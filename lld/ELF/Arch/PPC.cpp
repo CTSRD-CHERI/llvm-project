@@ -44,7 +44,7 @@ public:
                  uint64_t pltEntryAddr) const override;
   void writeGotPlt(Compartment *c, uint8_t *buf, const Symbol &s) const override;
   bool needsThunk(RelExpr expr, RelType relocType, const InputFile *file,
-                  uint64_t branchAddr, const Symbol &s,
+                  const Compartment *c, uint64_t branchAddr, const Symbol &s,
                   int64_t a) const override;
   uint32_t getThunkSectionSpacing() const override;
   bool inBranchRange(RelType type, uint64_t src, uint64_t dst) const override;
@@ -199,10 +199,11 @@ void PPC::writeGotPlt(Compartment *c, uint8_t *buf, const Symbol &s) const {
 }
 
 bool PPC::needsThunk(RelExpr expr, RelType type, const InputFile *file,
+                     const Compartment *c,
                      uint64_t branchAddr, const Symbol &s, int64_t a) const {
   if (type != R_PPC_LOCAL24PC && type != R_PPC_REL24 && type != R_PPC_PLTREL24)
     return false;
-  if (s.isInPlt(file->compartment))
+  if (s.isInPlt(c))
     return true;
   if (s.isUndefWeak())
     return false;

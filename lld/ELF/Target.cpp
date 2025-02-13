@@ -153,6 +153,7 @@ int64_t TargetInfo::getImplicitAddend(const uint8_t *buf, RelType type) const {
 bool TargetInfo::usesOnlyLowPageBits(RelType type) const { return false; }
 
 bool TargetInfo::needsThunk(RelExpr expr, RelType type, const InputFile *file,
+                            const Compartment *c,
                             uint64_t branchAddr, const Symbol &s,
                             int64_t a) const {
   return false;

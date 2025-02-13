@@ -68,7 +68,8 @@ public:
   // Decide whether a Thunk is needed for the relocation from File
   // targeting S.
   virtual bool needsThunk(RelExpr expr, RelType relocType,
-                          const InputFile *file, uint64_t branchAddr,
+                          const InputFile *file, const Compartment *c,
+                          uint64_t branchAddr,
                           const Symbol &s, int64_t a) const;
 
   // On systems with range extensions we place collections of Thunks at

@@ -37,7 +37,7 @@ public:
   void addPltSymbols(InputSection &isec, uint64_t off) const override;
   void addPltHeaderSymbols(InputSection &isd) const override;
   bool needsThunk(RelExpr expr, RelType type, const InputFile *file,
-                  uint64_t branchAddr, const Symbol &s,
+                  const Compartment *c, uint64_t branchAddr, const Symbol &s,
                   int64_t a) const override;
   uint32_t getThunkSectionSpacing() const override;
   bool inBranchRange(RelType type, uint64_t src, uint64_t dst) const override;
@@ -293,9 +293,9 @@ void ARM::addPltSymbols(InputSection &isec, uint64_t off) const {
 }
 
 bool ARM::needsThunk(RelExpr expr, RelType type, const InputFile *file,
+                     const Compartment *c,
                      uint64_t branchAddr, const Symbol &s,
                      int64_t a) const {
-  Compartment *c = file->compartment;
   // If s is an undefined weak symbol and does not have a PLT entry then it will
   // be resolved as a branch to the next instruction. If it is hidden, its
   // binding has been converted to local, so we just check isUndefined() here. A

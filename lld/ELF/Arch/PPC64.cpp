@@ -375,7 +375,7 @@ public:
                 uint64_t val) const override;
   void writeGotHeader(uint8_t *buf) const override;
   bool needsThunk(RelExpr expr, RelType type, const InputFile *file,
-                  uint64_t branchAddr, const Symbol &s,
+                  const Compartment *c, uint64_t branchAddr, const Symbol &s,
                   int64_t a) const override;
   uint32_t getThunkSectionSpacing() const override;
   bool inBranchRange(RelType type, uint64_t src, uint64_t dst) const override;
@@ -1374,13 +1374,14 @@ void PPC64::relocate(Compartment *c, uint8_t *loc, const Relocation &rel,
 }
 
 bool PPC64::needsThunk(RelExpr expr, RelType type, const InputFile *file,
+                       const Compartment *c,
                        uint64_t branchAddr, const Symbol &s, int64_t a) const {
   if (type != R_PPC64_REL14 && type != R_PPC64_REL24 &&
       type != R_PPC64_REL24_NOTOC)
     return false;
 
   // If a function is in the Plt it needs to be called with a call-stub.
-  if (s.isInPlt(file->compartment))
+  if (s.isInPlt(c))
     return true;
 
   // This check looks at the st_other bits of the callee with relocation

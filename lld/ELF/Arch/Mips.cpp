@@ -36,7 +36,7 @@ public:
   void writePlt(Compartment *c, uint8_t *buf, const Symbol &sym,
                 uint64_t pltEntryAddr) const override;
   bool needsThunk(RelExpr expr, RelType type, const InputFile *file,
-                  uint64_t branchAddr, const Symbol &s,
+                  const Compartment *c, uint64_t branchAddr, const Symbol &s,
                   int64_t a) const override;
   void relocate(Compartment *c, uint8_t *loc, const Relocation &rel,
                 uint64_t val) const override;
@@ -410,6 +410,7 @@ void MIPS<ELFT>::writePlt(Compartment *c, uint8_t *buf, const Symbol &sym,
 
 template <class ELFT>
 bool MIPS<ELFT>::needsThunk(RelExpr expr, RelType type, const InputFile *file,
+                            const Compartment *c,
                             uint64_t branchAddr, const Symbol &s,
                             int64_t /*a*/) const {
   // Any MIPS PIC code function is invoked with its address in register $t9.

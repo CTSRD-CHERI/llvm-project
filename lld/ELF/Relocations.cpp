@@ -2283,7 +2283,8 @@ bool ThunkCreator::createThunks(uint32_t pass,
             if (pass > 0 && normalizeExistingThunk(isec->compartment, rel, src))
               continue;
 
-            if (!target->needsThunk(rel.expr, rel.type, isec->file, src,
+            if (!target->needsThunk(rel.expr, rel.type, isec->file,
+                                    isec->compartment, src,
                                     *rel.sym, rel.addend))
               continue;
 
