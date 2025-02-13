@@ -70,7 +70,8 @@ public:
 Thunk *addThunk(const InputSection &isec, Relocation &rel);
 
 void writePPC32PltCallStub(uint8_t *buf, uint64_t gotPltVA,
-                           const InputFile *file, int64_t addend);
+                           const InputFile *file, const Compartment *c,
+                           int64_t addend);
 void writePPC64LoadAndBranch(uint8_t *buf, int64_t offset);
 
 } // namespace lld::elf
