@@ -300,10 +300,13 @@ void assignSectionsToCompartments() {
       continue;
     }
 
+    if (*c == nullptr)
+      continue;
+
     s->file->compartment = *c;
-    if (config->verboseCompartmentalization && s->file->compartment != nullptr)
+    if (config->verboseCompartmentalization)
       message("info: input file " + s->file->getName() + " matched to " +
-              s->file->compartment->name);
+              (*c)->name);
   }
 
   // Second, make a first pass assigning input sections to compartments based on
