@@ -82,7 +82,7 @@ void elf::writePPC32GlinkSection(Compartment *c, uint8_t *buf,
   uint32_t glink = plt(c)->getVA(); // VA of .glink
   if (!config->isPic) {
     for (const Symbol *sym : cast<PPC32GlinkSection>(*plt(c)).canonical_plts) {
-      writePPC32PltCallStub(buf, sym->getGotPltVA(c), nullptr, 0);
+      writePPC32PltCallStub(buf, sym->getGotPltVA(c), nullptr, c, 0);
       buf += 16;
       glink += 16;
     }
@@ -184,7 +184,7 @@ void PPC::writeIplt(Compartment *c, uint8_t *buf, const Symbol &sym,
                     uint64_t /*pltEntryAddr*/) const {
   // In -pie or -shared mode, assume r30 points to .got2+0x8000, and use a
   // .got2.plt_pic32. thunk.
-  writePPC32PltCallStub(buf, sym.getGotPltVA(c), sym.file, 0x8000);
+  writePPC32PltCallStub(buf, sym.getGotPltVA(c), sym.file, c, 0x8000);
 }
 
 void PPC::writeGotHeader(uint8_t *buf) const {
