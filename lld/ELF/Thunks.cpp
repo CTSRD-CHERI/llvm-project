@@ -280,7 +280,8 @@ public:
   // decide the offsets in the call stub.
   PPC32PltCallStub(const InputSection &isec, const Relocation &rel,
                    Symbol &dest)
-      : Thunk(dest, rel.addend), file(isec.file) {}
+      : Thunk(dest, rel.addend), file(isec.file),
+        compartment(isec.compartment) {}
   uint32_t size() override { return 16; }
   void writeTo(uint8_t *buf) override;
   void addSymbols(ThunkSection &isec) override;
@@ -289,6 +290,7 @@ public:
 private:
   // Records the call site of the call stub.
   const InputFile *file;
+  Compartment *compartment;
 };
 
 class PPC32LongThunk final : public Thunk {
@@ -834,7 +836,8 @@ InputSection *MicroMipsR6Thunk::getTargetInputSection() const {
 }
 
 void elf::writePPC32PltCallStub(uint8_t *buf, uint64_t gotPltVA,
-                                const InputFile *file, int64_t addend) {
+                                const InputFile *file, const Compartment *c,
+                                int64_t addend) {
   if (!config->isPic) {
     write32(buf + 0, 0x3d600000 | (gotPltVA + 0x8000) >> 16); // lis r11,ha
     write32(buf + 4, 0x816b0000 | (uint16_t)gotPltVA);        // lwz r11,l(r11)
@@ -842,7 +845,6 @@ void elf::writePPC32PltCallStub(uint8_t *buf, uint64_t gotPltVA,
     write32(buf + 12, 0x4e800420);                            // bctr
     return;
   }
-  const Compartment *c = file->compartment;
   uint32_t offset;
   if (addend >= 0x8000) {
     // The stub loads an address relative to r30 (.got2+Addend). Addend is
@@ -871,8 +873,8 @@ void elf::writePPC32PltCallStub(uint8_t *buf, uint64_t gotPltVA,
 }
 
 void PPC32PltCallStub::writeTo(uint8_t *buf) {
-  writePPC32PltCallStub(buf, destination.getGotPltVA(file->compartment), file,
-                        addend);
+  writePPC32PltCallStub(buf, destination.getGotPltVA(compartment), file,
+                        compartment, addend);
 }
 
 void PPC32PltCallStub::addSymbols(ThunkSection &isec) {
