@@ -1336,8 +1336,8 @@ static bool UpgradeIntrinsicFunction1(Function *F, Function *&NewFn) {
 
   case 't':
     if (Name == "thread.pointer") {
-      NewFn = Intrinsic::getDeclaration(F->getParent(), Intrinsic::thread_pointer,
-                                        F->getReturnType());
+      NewFn = Intrinsic::getDeclaration(
+          F->getParent(), Intrinsic::thread_pointer, F->getReturnType());
       return true;
     }
     break;

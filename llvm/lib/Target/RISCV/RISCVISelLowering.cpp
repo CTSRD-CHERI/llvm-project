@@ -17981,12 +17981,14 @@ bool RISCVTargetLowering::preferScalarizeSplat(SDNode *N) const {
 
 static Value *useTpOffset(IRBuilderBase &IRB, unsigned Offset) {
   Module *M = IRB.GetInsertBlock()->getParent()->getParent();
-  Function *ThreadPointerFunc = Intrinsic::getDeclaration(
-      M, Intrinsic::thread_pointer, IRB.getInt8PtrTy());
+  unsigned AS = M->getDataLayout().getGlobalsAddressSpace();
+  Function *ThreadPointerFunc =
+      Intrinsic::getDeclaration(M, Intrinsic::thread_pointer,
+                                IRB.getInt8PtrTy(AS));
   return IRB.CreatePointerCast(
       IRB.CreateConstGEP1_32(IRB.getInt8Ty(),
                              IRB.CreateCall(ThreadPointerFunc), Offset),
-      IRB.getInt8PtrTy()->getPointerTo(0));
+      IRB.getInt8PtrTy()->getPointerTo(AS));
 }
 
 Value *RISCVTargetLowering::getIRStackGuard(IRBuilderBase &IRB) const {

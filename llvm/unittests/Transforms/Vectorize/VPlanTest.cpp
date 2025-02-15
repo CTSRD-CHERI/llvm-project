@@ -1175,8 +1175,10 @@ TEST(VPRecipeTest, MayHaveSideEffectsAndMayReadWriteMemory) {
     // Test for a call to a function without side-effects.
     LLVMContext C;
     Module M("", C);
+    IntegerType *Int8 = IntegerType::get(C, 8);
+    PointerType *Int8Ptr = PointerType::get(Int8, 0);
     Function *TheFn = Intrinsic::getDeclaration(&M, Intrinsic::thread_pointer,
-                                                llvm::PointerType::get(C, 0));
+                                                Int8Ptr);
 
     auto *Call = CallInst::Create(TheFn->getFunctionType(), TheFn);
     VPValue Op1;
