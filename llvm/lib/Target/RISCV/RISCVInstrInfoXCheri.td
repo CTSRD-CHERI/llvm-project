@@ -357,14 +357,21 @@ class CCheriStore_rri<bits<3> funct3, string OpcodeStr,
 
 let Predicates = [HasCheri] in {
 def CGetPerm   : Cheri_r<0x0, "cgetperm">;
+def : MnemonicAlias<"gcperm", "cgetperm">;
 def CGetType   : Cheri_r<0x1, "cgettype">;
+def : MnemonicAlias<"gctype", "cgettype">;
 def CGetBase   : Cheri_r<0x2, "cgetbase">;
+def : MnemonicAlias<"gcbase", "cgetbase">;
 def CGetLen    : Cheri_r<0x3, "cgetlen">;
+def : MnemonicAlias<"gclen", "cgetlen">;
 def CGetTag    : Cheri_r<0x4, "cgettag">;
+def : MnemonicAlias<"gctag", "cgettag">;
 def CGetSealed : Cheri_r<0x5, "cgetsealed">;
 def CGetOffset : Cheri_r<0x6, "cgetoffset">;
 def CGetFlags  : Cheri_r<0x7, "cgetflags">;
+// NB: No alias for gcmode->cgetflags since the result is inverted.
 def CGetHigh   : Cheri_r<0x17, "cgethigh">;
+def : MnemonicAlias<"gchi", "cgethigh">;
 // For backwards compatibility we still accept cgetaddr from assembly.
 let mayStore = false, mayLoad = false, Size = 4, isCodeGenOnly = false,
 hasSideEffects = false in
