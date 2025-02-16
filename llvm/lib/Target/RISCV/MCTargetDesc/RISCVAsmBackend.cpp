@@ -96,7 +96,6 @@ RISCVAsmBackend::getFixupKindInfo(MCFixupKind Kind) const {
       {"fixup_riscv_sub_6b", 2, 6, 0},
 
       {"fixup_riscv_captab_pcrel_hi20", 12, 20, MCFixupKindInfo::FKF_IsPCRel},
-      {"fixup_riscv_capability", 0, 0, MCFixupKindInfo::FKF_Provenance},
       {"fixup_riscv_tprel_cincoffset", 0, 0, 0},
       {"fixup_riscv_tls_ie_captab_pcrel_hi20", 12, 20,
        MCFixupKindInfo::FKF_IsPCRel},
@@ -421,7 +420,8 @@ static uint64_t adjustFixupValue(const MCFixup &Fixup, uint64_t Value,
   case RISCV::fixup_riscv_tls_got_hi20:
   case RISCV::fixup_riscv_tls_gd_hi20:
   case RISCV::fixup_riscv_captab_pcrel_hi20:
-  case RISCV::fixup_riscv_capability:
+  case FK_Cap_8:
+  case FK_Cap_16:
   case RISCV::fixup_riscv_tls_ie_captab_pcrel_hi20:
   case RISCV::fixup_riscv_tls_gd_captab_pcrel_hi20:
     llvm_unreachable("Relocation should be unconditionally forced\n");
@@ -607,7 +607,7 @@ bool RISCVAsmBackend::handleAddSubRelocations(const MCAsmLayout &Layout,
                                               uint64_t &FixedValue) const {
   uint64_t FixedValueA, FixedValueB;
   unsigned TA = 0, TB = 0;
-  switch ((unsigned)Fixup.getKind()) {
+  switch (Fixup.getKind()) {
   case llvm::FK_Data_1:
     TA = ELF::R_RISCV_ADD8;
     TB = ELF::R_RISCV_SUB8;
@@ -624,7 +624,8 @@ bool RISCVAsmBackend::handleAddSubRelocations(const MCAsmLayout &Layout,
     TA = ELF::R_RISCV_ADD64;
     TB = ELF::R_RISCV_SUB64;
     break;
-  case RISCV::fixup_riscv_capability:
+  case llvm::FK_Cap_8:
+  case llvm::FK_Cap_16:
     return false;
   default:
     llvm_unreachable("unsupported fixup size");

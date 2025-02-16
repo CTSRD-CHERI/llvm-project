@@ -40,7 +40,7 @@ MCAsmBackend *createMipsAsmBackend(const Target &T, const MCSubtargetInfo &STI,
                                    const MCTargetOptions &Options);
 
 std::unique_ptr<MCObjectTargetWriter>
-createMipsELFObjectWriter(const Triple &TT, bool IsN32);
+createMipsELFObjectWriter(const Triple &TT, bool IsN32, unsigned CapSize);
 
 namespace MIPS_MC {
 StringRef selectMipsCPU(const Triple &TT, StringRef CPU);

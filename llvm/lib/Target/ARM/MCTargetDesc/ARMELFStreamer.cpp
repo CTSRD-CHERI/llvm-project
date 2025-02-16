@@ -1275,9 +1275,9 @@ void ARMELFStreamer::EmitPersonalityFixup(StringRef Name) {
 
   visitUsedExpr(*PersonalityRef);
   MCDataFragment *DF = getOrCreateDataFragment();
-  DF->getFixups().push_back(MCFixup::create(DF->getContents().size(),
-                                            PersonalityRef,
-                                            MCFixup::getKindForSize(4, false)));
+  DF->getFixups().push_back(
+      MCFixup::create(DF->getContents().size(), PersonalityRef,
+                      MCFixup::getKindForSize(4, false, false)));
 }
 
 void ARMELFStreamer::FlushPendingOffset() {

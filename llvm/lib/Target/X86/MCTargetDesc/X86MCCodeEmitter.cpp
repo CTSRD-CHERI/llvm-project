@@ -354,7 +354,7 @@ static MCFixupKind getImmFixupKind(uint64_t TSFlags) {
       return MCFixupKind(X86::reloc_signed_4byte);
     }
   }
-  return MCFixup::getKindForSize(Size, isPCRel);
+  return MCFixup::getKindForSize(Size, isPCRel, false);
 }
 
 enum GlobalOffsetTableExprKind { GOT_None, GOT_Normal, GOT_SymDiff };
