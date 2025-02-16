@@ -68,6 +68,9 @@ cunseal c1, c2, c3
 # CHECK-INST: candperm cra, csp, gp
 # CHECK-SAME: encoding: [0xdb,0x00,0x31,0x1a]
 candperm c1, c2, x3
+# CHECK-INST: candperm cra, csp, gp
+# CHECK-SAME: encoding: [0xdb,0x00,0x31,0x1a]
+acperm c1, c2, x3
 # CHECK-INST: csetflags cra, csp, gp
 # CHECK-SAME: encoding: [0xdb,0x00,0x31,0x1c]
 csetflags c1, c2, x3
@@ -77,39 +80,69 @@ csetoffset c1, c2, x3
 # CHECK-INST: csetaddr cra, csp, gp
 # CHECK-SAME: encoding: [0xdb,0x00,0x31,0x20]
 csetaddr c1, c2, x3
+# CHECK-INST: csetaddr cra, csp, gp
+# CHECK-SAME: encoding: [0xdb,0x00,0x31,0x20]
+scaddr c1, c2, x3
 # CHECK-INST: csethigh cra, csp, gp
 # CHECK-SAME: encoding: [0xdb,0x00,0x31,0x2c]
 csethigh c1, c2, x3
+# CHECK-INST: csethigh cra, csp, gp
+# CHECK-SAME: encoding: [0xdb,0x00,0x31,0x2c]
+schi c1, c2, x3
 # CHECK-INST: cincoffset cra, csp, gp
 # CHECK-SAME: encoding: [0xdb,0x00,0x31,0x22]
 cincoffset c1, c2, x3
+# CHECK-INST: cincoffset cra, csp, gp
+# CHECK-SAME: encoding: [0xdb,0x00,0x31,0x22]
+add c1, c2, x3
 # CHECK-INST: cincoffset cra, csp, -173
 # CHECK-SAME: encoding: [0xdb,0x10,0x31,0xf5]
 cincoffset c1, c2, -173
 # CHECK-INST: cincoffset cra, csp, -173
 # CHECK-SAME: encoding: [0xdb,0x10,0x31,0xf5]
+add c1, c2, -173
+# CHECK-INST: cincoffset cra, csp, -173
+# CHECK-SAME: encoding: [0xdb,0x10,0x31,0xf5]
 cincoffsetimm c1, c2, -173
+# CHECK-INST: cincoffset cra, csp, -173
+# CHECK-SAME: encoding: [0xdb,0x10,0x31,0xf5]
+addi c1, c2, -173
 # CHECK-INST: csetbounds cra, csp, gp
 # CHECK-SAME: encoding: [0xdb,0x00,0x31,0x10]
 csetbounds c1, c2, x3
+# CHECK-INST: csetbounds cra, csp, gp
+# CHECK-SAME: encoding: [0xdb,0x00,0x31,0x10]
+scbndsr c1, c2, x3
 # CHECK-INST: csetboundsexact cra, csp, gp
 # CHECK-SAME: encoding: [0xdb,0x00,0x31,0x12]
 csetboundsexact c1, c2, x3
+# CHECK-INST: csetboundsexact cra, csp, gp
+# CHECK-SAME: encoding: [0xdb,0x00,0x31,0x12]
+scbnds c1, c2, x3
 # CHECK-INST: csetbounds cra, csp, 3029
 # CHECK-SAME: encoding: [0xdb,0x20,0x51,0xbd]
 csetbounds c1, c2, 0xbd5
 # CHECK-INST: csetbounds cra, csp, 3029
 # CHECK-SAME: encoding: [0xdb,0x20,0x51,0xbd]
+scbnds c1, c2, 0xbd5
+# CHECK-INST: csetbounds cra, csp, 3029
+# CHECK-SAME: encoding: [0xdb,0x20,0x51,0xbd]
 csetboundsimm c1, c2, 0xbd5
+# CHECK-INST: csetbounds cra, csp, 3029
+# CHECK-SAME: encoding: [0xdb,0x20,0x51,0xbd]
+scbndsi c1, c2, 0xbd5
 # CHECK-INST: ccleartag cra, csp
 # CHECK-SAME: encoding: [0xdb,0x00,0xb1,0xfe]
 ccleartag c1, c2
 # CHECK-INST: cbuildcap cra, csp, cgp
 # CHECK-SAME: encoding: [0xdb,0x00,0x31,0x3a]
 cbuildcap c1, c2, c3
+# CHECK-INST: cbuildcap cra, csp, cgp
+# CHECK-SAME: encoding: [0xdb,0x00,0x31,0x3a]
+cbld c1, c2, c3
 # CHECK-INST: cbuildcap cra, ddc, cgp
 # CHECK-SAME: encoding: [0xdb,0x00,0x30,0x3a]
-cbuildcap c1, ddc, c3
+cbuildcap c1, ddc, c3  # Note: Not supported with the cbld syntax
 # CHECK-INST: ccopytype cra, csp, cgp
 # CHECK-SAME: encoding: [0xdb,0x00,0x31,0x3c]
 ccopytype c1, c2, c3
@@ -119,6 +152,9 @@ ccseal c1, c2, c3
 # CHECK-INST: csealentry cra, csp
 # CHECK-SAME: encoding: [0xdb,0x00,0x11,0xff]
 csealentry c1, c2
+# CHECK-INST: csealentry cra, csp
+# CHECK-SAME: encoding: [0xdb,0x00,0x11,0xff]
+sentry c1, c2
 
 # CHECK-INST: sub ra, sp, gp
 # CHECK-SAME: encoding: [0xb3,0x00,0x31,0x40]

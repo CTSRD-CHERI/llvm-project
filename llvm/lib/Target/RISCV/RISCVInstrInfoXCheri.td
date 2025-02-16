@@ -388,25 +388,47 @@ let defsCanBeSealed = 1 in
 def CSeal           : Cheri_rr<0xb, "cseal", GPCR, GPCR>;
 def CUnseal         : Cheri_rr<0xc, "cunseal", GPCR, GPCR>;
 def CAndPerm        : Cheri_rr<0xd, "candperm">;
+def : MnemonicAlias<"acperm", "candperm">;
 def CSetFlags       : Cheri_rr<0xe, "csetflags">;
+// NB: No alias for scmode->csetflags since the argument is inverted.
 def CSetOffset      : Cheri_rr<0xf, "csetoffset">;
 def CSetAddr        : Cheri_rr<0x10, "csetaddr">;
+def : MnemonicAlias<"scaddr", "csetaddr">;
 def CSetHigh        : Cheri_rr<0x16, "csethigh">;
+def : MnemonicAlias<"schi", "csethigh">;
 let isReMaterializable = 1, isAsCheapAsAMove = 1 in
 def CIncOffset      : Cheri_rr<0x11, "cincoffset">;
+def : InstAlias<"add $cd, $cs1, $rs2",
+                (CIncOffset GPCR:$cd, GPCR:$cs1, GPR:$rs2), 0>;
 let isReMaterializable = 1, isAsCheapAsAMove = 1 in
 def CIncOffsetImm   : Cheri_ri<0x1, "cincoffset", 1>;
+def : InstAlias<"addi $cd, $cs1, $imm",
+                (CIncOffsetImm GPCR:$cd, GPCR:$cs1, simm12:$imm), 0>;
+def : InstAlias<"add $cd, $cs1, $imm",
+                (CIncOffsetImm GPCR:$cd, GPCR:$cs1, simm12:$imm), 0>;
 def CSetBounds      : Cheri_rr<0x8, "csetbounds">;
+def : InstAlias<"scbndsr $cd, $cs1, $rs2",
+                (CSetBounds GPCR:$cd, GPCR:$cs1, GPR:$rs2), 0>;
 def CSetBoundsExact : Cheri_rr<0x9, "csetboundsexact">;
+def : InstAlias<"scbnds $cd, $cs1, $rs2",
+                (CSetBoundsExact GPCR:$cd, GPCR:$cs1, GPR:$rs2), 0>;
 def CSetBoundsImm   : Cheri_ri<0x2, "csetbounds", 0>;
+// TODO: should restrict the valid immediates for scbnds(i)
+def : InstAlias<"scbndsi $cd, $cs1, $imm",
+                (CSetBoundsImm GPCR:$cd, GPCR:$cs1, uimm12:$imm), 0>;
+def : InstAlias<"scbnds $cd, $cs1, $imm",
+                (CSetBoundsImm GPCR:$cd, GPCR:$cs1, uimm12:$imm), 0>;
 def CClearTag       : Cheri_r<0xb, "ccleartag", GPCR>;
 let defsCanBeSealed = 1 in
 def CBuildCap       : Cheri_rr<0x1d, "cbuildcap", GPCR, GPCR, GPCRC0IsDDC>;
+def : InstAlias<"cbld $cd, $cs1, $cs2",
+                (CBuildCap GPCR:$cd, GPCRNoC0:$cs1, GPCR:$cs2), 0>;
 def CCopyType       : Cheri_rr<0x1e, "ccopytype", GPCR, GPCR>;
 let defsCanBeSealed = 1 in
 def CCSeal          : Cheri_rr<0x1f, "ccseal", GPCR, GPCR>;
 let defsCanBeSealed = 1 in
 def CSealEntry      : Cheri_r<0x11, "csealentry", GPCR>;
+def : MnemonicAlias<"sentry", "csealentry">;
 
 def : InstAlias<"cincoffsetimm $cd, $cs1, $imm",
                 (CIncOffsetImm GPCR:$cd, GPCR:$cs1, simm12:$imm), 0>;
