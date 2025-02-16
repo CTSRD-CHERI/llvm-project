@@ -105,24 +105,16 @@ void MipsELFStreamer::emitValueImpl(const MCExpr *Value, unsigned Size,
   Labels.clear();
 }
 
-void MipsELFStreamer::EmitCheriCapabilityImpl(const MCSymbol *Symbol,
-                                              const MCExpr *Addend,
-                                              unsigned CapSize, SMLoc Loc) {
-  assert(Addend && "Should have received a MCConstExpr(0) instead of nullptr");
-  visitUsedSymbol(*Symbol);
-  MCContext &Context = getContext();
-  const MCSymbolRefExpr *SRE =
-      MCSymbolRefExpr::create(Symbol, MCSymbolRefExpr::VK_None, Context, Loc);
-  const MCBinaryExpr *CapExpr = MCBinaryExpr::createAdd(
-      MipsMCExpr::create(MipsMCExpr::MEK_CHERI_CAP, SRE, Context), Addend,
-      Context);
+void MipsELFStreamer::EmitCheriCapability(const MCExpr *Value, unsigned CapSize,
+                                          SMLoc Loc) {
+  visitUsedExpr(*Value);
 
   // Pad to ensure that the capability is aligned
   emitValueToAlignment(Align(CapSize), 0, 1, 0);
 
   MCDataFragment *DF = new MCDataFragment();
-  MCFixup cheriFixup = MCFixup::create(
-      0, CapExpr, MCFixupKind(Mips::fixup_CHERI_CAPABILITY), Loc);
+  MCFixup cheriFixup =
+      MCFixup::create(0, Value, MCFixupKind(Mips::fixup_CHERI_CAPABILITY), Loc);
   DF->getFixups().push_back(cheriFixup);
   DF->getContents().resize(DF->getContents().size() + CapSize, '\xca');
   insert(DF);

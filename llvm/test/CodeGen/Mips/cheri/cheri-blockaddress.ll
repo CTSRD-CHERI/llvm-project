@@ -62,7 +62,7 @@ indirectgoto:                                     ; preds = %entry
 ; ASM: .end	addrof_label_in_local
 
 ; ASM-LABEL: addrof_label_in_static.b:
-; ASM-NEXT: 	.chericap	addrof_label_in_static + .Ltmp0-addrof_label_in_static
+; ASM-NEXT: 	.chericap	addrof_label_in_static+(.Ltmp0-addrof_label_in_static)
 ; ASM-NEXT: 	.size	addrof_label_in_static.b, [[#CAP_SIZE]]
 
 ; The .o file should contain a relocation against the function with a constant addend (0x1c)

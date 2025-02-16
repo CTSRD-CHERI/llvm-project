@@ -217,7 +217,7 @@ void AsmPrinter::emitCallSiteCheriCapability(const MCSymbol *Hi,
   // non-preemptible symbol with a size set.
   CurrentFnBeginLocal->setUsedInReloc();
   OutStreamer->EmitCheriCapability(
-      Hi, (int64_t)0, getObjFileLowering().getCheriCapabilitySize(TM));
+      Hi, getObjFileLowering().getCheriCapabilitySize(TM));
 }
 
 //===----------------------------------------------------------------------===//

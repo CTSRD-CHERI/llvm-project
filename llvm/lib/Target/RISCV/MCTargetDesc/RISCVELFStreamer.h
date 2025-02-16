@@ -54,8 +54,8 @@ public:
                        SMLoc Loc) override;
 
 protected:
-  void EmitCheriCapabilityImpl(const MCSymbol *Symbol, const MCExpr *Addend,
-                               unsigned CapSize, SMLoc Loc) override;
+  void EmitCheriCapability(const MCExpr *Value, unsigned CapSize,
+                           SMLoc Loc) override;
 
   void changeSection(MCSection *Section, const MCExpr *Subsection) override;
   void emitInstruction(const MCInst &Inst,

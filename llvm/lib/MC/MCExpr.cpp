@@ -756,7 +756,7 @@ static void AttemptToFoldSymbolOffsetDifference(
 /// is done (see the object streamer for example) and having the Asm argument
 /// lets us avoid relaxations early.
 static bool
-EvaluateSymbolicAdd(const MCAssembler *Asm, const MCAsmLayout *Layout,
+EvaluateSymbolicAdd(const MCAssembler *Asm, const MCAsmLayout *Layout, const MCFixup *Fixup,
                     const SectionAddrMap *Addrs, bool InSet, const MCValue &LHS,
                     const MCSymbolRefExpr *RHS_A, const MCSymbolRefExpr *RHS_B,
                     int64_t RHS_Cst, MCValue &Res) {
@@ -774,6 +774,17 @@ EvaluateSymbolicAdd(const MCAssembler *Asm, const MCAsmLayout *Layout,
 
   // If we have a layout, we can fold resolved differences.
   if (Asm) {
+    // If we have exactly one symbol on one side then that side represents a
+    // pointer, otherwise it represents an integer (a constant and a possible
+    // symbol difference). Similarly, if exactly one side represents a pointer
+    // then the whole addition represents a pointer, otherwise it represents an
+    // integer.
+    bool LHS_Provenance = (LHS_A == nullptr) != (LHS_B == nullptr);
+    bool RHS_Provenance = (RHS_A == nullptr) != (RHS_B == nullptr);
+    bool FoldCrossTerms = !Fixup ||
+                          !Asm->getWriter().fixupNeedsProvenance(*Asm, Fixup) ||
+                          LHS_Provenance == RHS_Provenance;
+
     // First, fold out any differences which are fully resolved. By
     // reassociating terms in
     //   Result = (LHS_A - LHS_B + LHS_Cst) + (RHS_A - RHS_B + RHS_Cst).
@@ -783,15 +794,18 @@ EvaluateSymbolicAdd(const MCAssembler *Asm, const MCAsmLayout *Layout,
     //   (RHS_A - LHS_B),
     //   (RHS_A - RHS_B).
     // Since we are attempting to be as aggressive as possible about folding, we
-    // attempt to evaluate each possible alternative.
+    // attempt to evaluate each possible alternative, subject to provenance
+    // requirements for the specific fixup.
     AttemptToFoldSymbolOffsetDifference(Asm, Layout, Addrs, InSet, LHS_A, LHS_B,
                                         Result_Cst);
-    AttemptToFoldSymbolOffsetDifference(Asm, Layout, Addrs, InSet, LHS_A, RHS_B,
-                                        Result_Cst);
+    if (FoldCrossTerms)
+      AttemptToFoldSymbolOffsetDifference(Asm, Layout, Addrs, InSet, LHS_A,
+                                          RHS_B, Result_Cst);
     AttemptToFoldSymbolOffsetDifference(Asm, Layout, Addrs, InSet, RHS_A, LHS_B,
                                         Result_Cst);
-    AttemptToFoldSymbolOffsetDifference(Asm, Layout, Addrs, InSet, RHS_A, RHS_B,
-                                        Result_Cst);
+    if (FoldCrossTerms)
+      AttemptToFoldSymbolOffsetDifference(Asm, Layout, Addrs, InSet, RHS_A,
+                                          RHS_B, Result_Cst);
   }
 
   // We can't represent the addition or subtraction of two symbols.
@@ -974,12 +988,12 @@ bool MCExpr::evaluateAsRelocatableImpl(MCValue &Res, const MCAssembler *Asm,
       case MCBinaryExpr::Sub:
         // Negate RHS and add.
         // The cast avoids undefined behavior if the constant is INT64_MIN.
-        return EvaluateSymbolicAdd(Asm, Layout, Addrs, InSet, LHSValue,
+        return EvaluateSymbolicAdd(Asm, Layout, Fixup, Addrs, InSet, LHSValue,
                                    RHSValue.getSymB(), RHSValue.getSymA(),
                                    -(uint64_t)RHSValue.getConstant(), Res);
 
       case MCBinaryExpr::Add:
-        return EvaluateSymbolicAdd(Asm, Layout, Addrs, InSet, LHSValue,
+        return EvaluateSymbolicAdd(Asm, Layout, Fixup, Addrs, InSet, LHSValue,
                                    RHSValue.getSymA(), RHSValue.getSymB(),
                                    RHSValue.getConstant(), Res);
       }

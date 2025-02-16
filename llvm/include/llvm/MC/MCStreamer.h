@@ -833,10 +833,14 @@ public:
   // MCAsmInfo only knowns about the triple which is not enough
 
   // Emit the expression \p Value into the output as a CHERI capability
-  void EmitCheriCapability(const MCSymbol *Value, int64_t Addend,
-                           unsigned CapSize, SMLoc Loc = SMLoc());
+  virtual void EmitCheriCapability(const MCExpr *Value, unsigned CapSize,
+                                   SMLoc Loc = SMLoc());
   void EmitCheriCapability(const MCSymbol *Value, const MCExpr *Addend,
                            unsigned CapSize, SMLoc Loc = SMLoc());
+  void EmitCheriCapability(const MCSymbol *Value, int64_t Addend,
+                           unsigned CapSize, SMLoc Loc = SMLoc());
+  void EmitCheriCapability(const MCSymbol *Value, unsigned CapSize,
+                           SMLoc Loc = SMLoc());
 
   // Emit \p Value as an untagged capability-size value
   virtual void emitCheriIntcap(int64_t Value, unsigned CapSize,
@@ -1174,10 +1178,6 @@ public:
   virtual MCSymbol *emitDwarfUnitLength(const Twine &Prefix,
                                         const Twine &Comment);
 protected:
-  virtual void EmitCheriCapabilityImpl(const MCSymbol *Value,
-                                       const MCExpr *Addend, unsigned CapSize,
-                                       SMLoc Loc = SMLoc());
-
   /// Target-independent untagged CHERI capability
   virtual void emitCheriIntcapGeneric(const MCExpr *Expr, unsigned CapSize,
                                       SMLoc Loc);
