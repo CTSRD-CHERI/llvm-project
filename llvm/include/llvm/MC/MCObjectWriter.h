@@ -89,6 +89,8 @@ public:
                                                       bool InSet,
                                                       bool IsPCRel) const;
 
+  bool fixupNeedsProvenance(const MCAssembler &Asm, const MCFixup *Fixup) const;
+
   /// ELF only. Mark that we have seen GNU ABI usage (e.g. SHF_GNU_RETAIN).
   virtual void markGnuAbi() {}
 

@@ -157,23 +157,16 @@ void RISCVELFStreamer::emitCheriIntcap(const MCExpr *Expr, unsigned CapSize,
   emitCheriIntcapGeneric(Expr, CapSize, Loc);
 }
 
-void RISCVELFStreamer::EmitCheriCapabilityImpl(const MCSymbol *Symbol,
-                                               const MCExpr *Addend,
-                                               unsigned CapSize, SMLoc Loc) {
-  assert(Addend && "Should have received a MCConstExpr(0) instead of nullptr");
-  visitUsedSymbol(*Symbol);
-  MCContext &Context = getContext();
-
-  const MCSymbolRefExpr *SRE =
-      MCSymbolRefExpr::create(Symbol, MCSymbolRefExpr::VK_None, Context, Loc);
-  const MCBinaryExpr *CapExpr = MCBinaryExpr::createAdd(SRE, Addend, Context);
+void RISCVELFStreamer::EmitCheriCapability(const MCExpr *Value,
+                                           unsigned CapSize, SMLoc Loc) {
+  visitUsedExpr(*Value);
 
   // Pad to ensure that the capability is aligned
   emitValueToAlignment(Align(CapSize), 0, 1, 0);
 
   MCDataFragment *DF = new MCDataFragment();
   MCFixup CapFixup =
-      MCFixup::create(0, CapExpr, MCFixupKind(RISCV::fixup_riscv_capability));
+      MCFixup::create(0, Value, MCFixupKind(RISCV::fixup_riscv_capability));
   DF->getFixups().push_back(CapFixup);
   DF->getContents().resize(DF->getContents().size() + CapSize, '\xca');
   insert(DF);

@@ -28,6 +28,8 @@ struct MCFixupKindInfo {
     /// FIXME This is a workaround because we don't support certain ARM
     /// relocation types. This flag should eventually be removed.
     FKF_Constant = 1 << 3,
+
+    FKF_Provenance = (1 << 4),
   };
 
   /// A target specific name for the fixup kind. The names will be unique for

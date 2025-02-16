@@ -151,10 +151,6 @@ void MipsMCExpr::printImpl(raw_ostream &OS, const MCAsmInfo *MAI) const {
   case MEK_CAPTABLE_LO16:
     OS << "%captab_lo";
     break;
-  case MEK_CHERI_CAP:
-    // FIXME: should we really end up here?
-    OS << "%chericap";
-    break;
   case MEK_CAPTAB_TLSGD_HI16:
     OS << "%captab_tlsgd_hi";
     break;
@@ -215,8 +211,6 @@ MipsMCExpr::evaluateAsRelocatableImpl(MCValue &Res,
     case MEK_None:
     case MEK_Special:
       llvm_unreachable("MEK_None and MEK_Special are invalid");
-    case MEK_CHERI_CAP:
-      llvm_unreachable("MEK_CHERI_CAP is invalid");
     case MEK_DTPREL:
       // MEK_DTPREL is used for marking TLS DIEExpr only
       // and contains a regular sub-expression.
@@ -323,9 +317,6 @@ void MipsMCExpr::fixELFSymbolsInTLSFixups(MCAssembler &Asm) const {
   case MEK_None:
   case MEK_Special:
     llvm_unreachable("MEK_None and MEK_Special are invalid");
-    break;
-  case MEK_CHERI_CAP:
-    llvm_unreachable("MEK_CHERI_CAP is not handled here");
     break;
   case MEK_CALL_HI16:
   case MEK_CALL_LO16:

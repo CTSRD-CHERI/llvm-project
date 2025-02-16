@@ -76,14 +76,14 @@ long test(long arg, long arg2) {
 /// Landing pads are not relative offsets but real capabilities:
 // MIPS-NEXT:        .uleb128 .Ltmp2-.Lfunc_begin0               # jumps to .Ltmp2
 // PURECAP-NEXT:     .byte 12                                    # (landing pad is a capability)
-// PURECAP-NEXT:     .chericap	_Z4testll + .Ltmp2-.Lfunc_begin0 #     jumps to .Ltmp2
+// PURECAP-NEXT:     .chericap	_Z4testll+(.Ltmp2-.Lfunc_begin0) #     jumps to .Ltmp2
 // CHECK-NEXT:     .byte	1                       #   On action: 1
 // CHECK-NEXT:     .uleb128 .Ltmp3-.Lfunc_begin0   # >> Call Site 2 <<
 // CHECK-NEXT:     .uleb128 .Ltmp4-.Ltmp3          #   Call between .Ltmp3 and .Ltmp4
 // MIPS-NEXT:        .uleb128 .Ltmp5-.Lfunc_begin0               # jumps to .Ltmp5
 /// Landing pads are not relative offsets but real capabilities:
 // PURECAP-NEXT:     .byte 12                                    # (landing pad is a capability)
-// PURECAP-NEXT:     .chericap	_Z4testll + .Ltmp5-.Lfunc_begin0 #     jumps to .Ltmp5
+// PURECAP-NEXT:     .chericap	_Z4testll+(.Ltmp5-.Lfunc_begin0) #     jumps to .Ltmp5
 // CHECK-NEXT:     .byte	1                       #   On action: 1
 // CHECK-NEXT:     .uleb128 .Ltmp4-.Lfunc_begin0   # >> Call Site 3 <<
 // CHECK-NEXT:     .uleb128 .Lfunc_end0-.Ltmp4     #   Call between .Ltmp4 and .Lfunc_end0
