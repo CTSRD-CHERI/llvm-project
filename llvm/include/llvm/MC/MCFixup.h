@@ -41,6 +41,9 @@ enum MCFixupKind {
   FK_SecRel_2,    ///< A two-byte section relative fixup.
   FK_SecRel_4,    ///< A four-byte section relative fixup.
   FK_SecRel_8,    ///< A eight-byte section relative fixup.
+  FK_Cap_8,       ///< A eight-byte capability fixup.
+  FK_Cap_16,      ///< A sixteen-byte capability fixup.
+  FK_Cap_32,      ///< A thirty-two-byte capability fixup.
 
   FirstTargetFixupKind = 128,
 
@@ -106,23 +109,35 @@ public:
 
   /// Return the generic fixup kind for a value with the given size. It
   /// is an error to pass an unsupported size.
-  static MCFixupKind getKindForSize(unsigned Size, bool IsPCRel) {
+  static MCFixupKind getKindForSize(unsigned Size, bool IsPCRel, bool IsCap) {
+    assert((!IsPCRel || !IsCap) && "Invalid pc-relative caapbility fixup!");
     switch (Size) {
     default: llvm_unreachable("Invalid generic fixup size!");
     case 1:
+      assert(!IsCap && "Invalid cap fixup size!");
       return IsPCRel ? FK_PCRel_1 : FK_Data_1;
     case 2:
+      assert(!IsCap && "Invalid cap fixup size!");
       return IsPCRel ? FK_PCRel_2 : FK_Data_2;
     case 4:
+      assert(!IsCap && "Invalid cap fixup size!");
       return IsPCRel ? FK_PCRel_4 : FK_Data_4;
     case 8:
-      return IsPCRel ? FK_PCRel_8 : FK_Data_8;
+      return IsCap ? FK_Cap_8 : IsPCRel ? FK_PCRel_8 : FK_Data_8;
+    case 16:
+      assert(IsCap && "Invalid integer fixup size!");
+      return FK_Cap_16;
+    case 32:
+      assert(IsCap && "Invalid integer fixup size!");
+      return FK_Cap_32;
     }
   }
 
   /// Return the generic fixup kind for a value with the given size in bits.
   /// It is an error to pass an unsupported size.
-  static MCFixupKind getKindForSizeInBits(unsigned Size, bool IsPCRel) {
+  static MCFixupKind getKindForSizeInBits(unsigned Size, bool IsPCRel,
+                                          bool IsCap) {
+    assert((!IsPCRel || !IsCap) && "Invalid pc-relative caapbility fixup!");
     switch (Size) {
     default:
       llvm_unreachable("Invalid generic fixup size!");
@@ -130,13 +145,22 @@ public:
       assert(!IsPCRel && "Invalid pc-relative fixup size!");
       return FK_Data_6b;
     case 8:
+      assert(!IsCap && "Invalid cap fixup size!");
       return IsPCRel ? FK_PCRel_1 : FK_Data_1;
     case 16:
+      assert(!IsCap && "Invalid cap fixup size!");
       return IsPCRel ? FK_PCRel_2 : FK_Data_2;
     case 32:
+      assert(!IsCap && "Invalid cap fixup size!");
       return IsPCRel ? FK_PCRel_4 : FK_Data_4;
     case 64:
-      return IsPCRel ? FK_PCRel_8 : FK_Data_8;
+      return IsCap ? FK_Cap_8 : IsPCRel ? FK_PCRel_8 : FK_Data_8;
+    case 128:
+      assert(IsCap && "Invalid integer fixup size!");
+      return FK_Cap_16;
+    case 256:
+      assert(IsCap && "Invalid integer fixup size!");
+      return FK_Cap_32;
     }
   }
 

@@ -232,9 +232,6 @@ namespace Mips {
     fixup_CHERI_CAPCALL_HI16,
     fixup_CHERI_CAPCALL_LO16,
 
-    // resulting in - R_MIPS_CHERI_CAPABILITY
-    fixup_CHERI_CAPABILITY,
-
     // 16 bit fixup for _CHERI_CAPABILITY_TABLE offest resulting in - R_MIPS_CHERI_CAPTABLEREL16.
     fixup_Mips_CAPTABLEREL16,
     // resulting in - R_MIPS_CHERI_CAPTABLEREL16/R_MIPS_SUB/R_MIPS_HI16
