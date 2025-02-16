@@ -105,6 +105,9 @@ const MCFixupKindInfo &MCAsmBackend::getFixupKindInfo(MCFixupKind Kind) const {
       {"FK_SecRel_2", 0, 16, 0},
       {"FK_SecRel_4", 0, 32, 0},
       {"FK_SecRel_8", 0, 64, 0},
+      {"FK_Cap_8", 0, 64, MCFixupKindInfo::FKF_Provenance},
+      {"FK_Cap_16", 0, 128, MCFixupKindInfo::FKF_Provenance},
+      {"FK_Cap_32", 0, 256, MCFixupKindInfo::FKF_Provenance},
   };
 
   assert((size_t)Kind <= std::size(Builtins) && "Unknown fixup kind");
