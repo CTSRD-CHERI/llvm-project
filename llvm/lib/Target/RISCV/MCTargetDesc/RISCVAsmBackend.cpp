@@ -96,7 +96,7 @@ RISCVAsmBackend::getFixupKindInfo(MCFixupKind Kind) const {
       {"fixup_riscv_sub_6b", 2, 6, 0},
 
       {"fixup_riscv_captab_pcrel_hi20", 12, 20, MCFixupKindInfo::FKF_IsPCRel},
-      {"fixup_riscv_capability", 0, 0, 0},
+      {"fixup_riscv_capability", 0, 0, MCFixupKindInfo::FKF_Provenance},
       {"fixup_riscv_tprel_cincoffset", 0, 0, 0},
       {"fixup_riscv_tls_ie_captab_pcrel_hi20", 12, 20,
        MCFixupKindInfo::FKF_IsPCRel},
@@ -607,7 +607,7 @@ bool RISCVAsmBackend::handleAddSubRelocations(const MCAsmLayout &Layout,
                                               uint64_t &FixedValue) const {
   uint64_t FixedValueA, FixedValueB;
   unsigned TA = 0, TB = 0;
-  switch (Fixup.getKind()) {
+  switch ((unsigned)Fixup.getKind()) {
   case llvm::FK_Data_1:
     TA = ELF::R_RISCV_ADD8;
     TB = ELF::R_RISCV_SUB8;
@@ -624,6 +624,8 @@ bool RISCVAsmBackend::handleAddSubRelocations(const MCAsmLayout &Layout,
     TA = ELF::R_RISCV_ADD64;
     TB = ELF::R_RISCV_SUB64;
     break;
+  case RISCV::fixup_riscv_capability:
+    return false;
   default:
     llvm_unreachable("unsupported fixup size");
   }

@@ -5873,55 +5873,28 @@ bool AsmParser::parseDirectiveAddrsigSym() {
 }
 
 /// parseDirectiveCheriCap
-///  ::= .chericap sym[+off]
+///  ::= .chericap expression
 bool AsmParser::parseDirectiveCheriCap(SMLoc DirectiveLoc) {
-  const MCExpr *SymExpr;
+  const MCExpr *Expr;
   SMLoc ExprLoc = getLexer().getLoc();
 
   if (!getTargetParser().isCheri())
     return Error(DirectiveLoc, "'.chericap' requires CHERI");
 
-  if (parseExpression(SymExpr))
+  if (parseExpression(Expr))
     return true;
 
-  int64_t Offset = 0;
+  int64_t Value;
   unsigned CapSize = getTargetParser().getCheriCapabilitySize();
   // Allow .chericap 0x123456 to create an untagged uintcap_t
-  if (SymExpr->evaluateAsAbsolute(Offset)) {
-    getStreamer().emitCheriIntcap(Offset, CapSize, ExprLoc);
-  } else {
-    const MCSymbolRefExpr *SRE = nullptr;
-    if (const MCBinaryExpr *BE = dyn_cast<MCBinaryExpr>(SymExpr)) {
-      const MCConstantExpr *CE = nullptr;
-      bool Neg = false;
-      switch (BE->getOpcode()) {
-        case MCBinaryExpr::Sub:
-          Neg = true;
-          LLVM_FALLTHROUGH;
-        case MCBinaryExpr::Add:
-          CE = dyn_cast<MCConstantExpr>(BE->getRHS());
-          break;
-        default:
-          break;
-      }
+  if (Expr->evaluateAsAbsolute(Value, getStreamer().getAssemblerPtr()))
+    getStreamer().emitCheriIntcap(Value, CapSize, ExprLoc);
+  else
+    getStreamer().EmitCheriCapability(Expr, CapSize, ExprLoc);
 
-      SRE = dyn_cast<MCSymbolRefExpr>(BE->getLHS());
-      if (!SRE || !CE)
-        return Error(ExprLoc, "must be sym[+const]");
-      Offset = CE->getValue();
-      if (Neg)
-        Offset = -Offset;
-    } else {
-      SRE = dyn_cast<MCSymbolRefExpr>(SymExpr);
-      if (!SRE)
-        return Error(ExprLoc, "must be sym[+const]");
-      Offset = 0;
-    }
-    const MCSymbol &Symbol = SRE->getSymbol();
-    getStreamer().EmitCheriCapability(&Symbol, Offset, CapSize, ExprLoc);
-  }
   if (parseToken(AsmToken::EndOfStatement, "expected end of statement"))
     return true;
+
   return false;
 }
 

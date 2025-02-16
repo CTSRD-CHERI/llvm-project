@@ -53,7 +53,6 @@ public:
     MEK_CAPCALL_LO16,
     MEK_CAPCALL20,
 
-    MEK_CHERI_CAP,
     // Like GPREL but the offset from _CHERI_CAPABILITY_TABLE_ to symbol
     MEK_CAPTABLEREL,
 
