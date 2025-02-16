@@ -483,9 +483,12 @@ def : InstAlias<"ret.pcc",       (JALR_PCC X0,       X1), 2>;
 
 let Predicates = [HasCheri] in {
 def CTestSubset : Cheri_rr<0x20, "ctestsubset", GPR, GPCR, GPCRC0IsDDC>;
+def : InstAlias<"scss $rd, $cs1, $cs2",
+                (CTestSubset GPR:$rd, GPCRNoC0:$cs1, GPCR:$cs2), 0>;
 def CSEQX       : Cheri_rr<0x21, "csetequalexact", GPR, GPCR, GPCR>;
 
 def : InstAlias<"cseqx $rd, $cs1, $cs2", (CSEQX GPR:$rd, GPCR:$cs1, GPCR:$cs2)>;
+def : InstAlias<"sceq $rd, $cs1, $cs2", (CSEQX GPR:$rd, GPCR:$cs1, GPCR:$cs2), 0>;
 }
 
 //===----------------------------------------------------------------------===//
