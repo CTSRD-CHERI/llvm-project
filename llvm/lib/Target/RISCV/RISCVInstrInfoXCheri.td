@@ -759,34 +759,31 @@ def CJALR : RVInstI<0b000, OPC_JALR, (outs GPCR:$rd),
 } // hasSideEffects = 0, mayLoad = 0, mayStore = 0
 } // DecoderNameSpace = "CapModeOnly_"
 
-let Predicates = [HasCheri, IsCapMode] in {
-def : InstAlias<"j $offset",    (CJAL C0, simm21_lsb0_jal:$offset)>;
-def : InstAlias<"cjal $offset", (CJAL C1, simm21_lsb0_jal:$offset)>;
+// Expands to an instruction alias with and without a c prefix for loads/stores/jumps
+multiclass CPrefixedInstAlias<string Asm, dag Result, int Emit = 0> {
+  def : InstAlias<"c" # Asm, Result, Emit>;
+  def : InstAlias<Asm, Result, 0>;
+}
 
-// Non-canonical form; JAL X0 and CJAL X0 are semantically identical so "j" is
-// the canonical form, but we provide this for completeness.
-def : InstAlias<"cj $offset",   (CJAL C0, simm21_lsb0_jal:$offset), 0>;
+let Predicates = [HasCheri, IsCapMode] in {
+// "cj" is the non-canonical form, but we provide this for completeness.
+defm: CPrefixedInstAlias<"j $offset",    (CJAL C0, simm21_lsb0_jal:$offset), 1>;
+defm: CPrefixedInstAlias<"jal $offset", (CJAL C1, simm21_lsb0_jal:$offset), 1>;
 
 // Non-zero offset aliases of "cjalr" are the lowest weight, followed by the
 // two-register form, then the one-register forms and finally "cret".
-def : InstAlias<"cjr $rs",                (CJALR       C0, GPCR:$rs, 0), 3>;
-def : InstAlias<"cjr ${offset}(${rs})",   (CJALR       C0, GPCR:$rs, simm12:$offset)>;
-def : InstAlias<"cjalr $rs",              (CJALR       C1, GPCR:$rs, 0), 3>;
-def : InstAlias<"cjalr ${offset}(${rs})", (CJALR       C1, GPCR:$rs, simm12:$offset)>;
-def : InstAlias<"cjalr $rd, $rs",         (CJALR GPCR:$rd, GPCR:$rs, 0), 2>;
-def : InstAlias<"cret",                   (CJALR       C0,       C1, 0), 4>;
+defm: CPrefixedInstAlias<"jr $rs",                (CJALR       C0, GPCR:$rs, 0), 3>;
+defm: CPrefixedInstAlias<"jr ${offset}(${rs})",   (CJALR       C0, GPCR:$rs, simm12:$offset), 1>;
+defm: CPrefixedInstAlias<"jalr $rs",              (CJALR       C1, GPCR:$rs, 0), 3>;
+defm: CPrefixedInstAlias<"jalr ${offset}(${rs})", (CJALR       C1, GPCR:$rs, simm12:$offset), 1>;
+defm: CPrefixedInstAlias<"jalr $rd, $rs",         (CJALR GPCR:$rd, GPCR:$rs, 0), 2>;
+defm: CPrefixedInstAlias<"ret",                   (CJALR       C0,       C1, 0), 4>;
 
 // Non-canonical forms for jump targets also accepted by the assembler.
-def : InstAlias<"cjr $rs, $offset",        (CJALR       C0, GPCR:$rs, simm12:$offset), 0>;
-def : InstAlias<"cjalr $rs, $offset",      (CJALR       C1, GPCR:$rs, simm12:$offset), 0>;
-def : InstAlias<"cjalr $rd, $rs, $offset", (CJALR GPCR:$rd, GPCR:$rs, simm12:$offset), 0>;
+defm: CPrefixedInstAlias<"jr $rs, $offset",        (CJALR       C0, GPCR:$rs, simm12:$offset), 0>;
+defm: CPrefixedInstAlias<"jalr $rs, $offset",      (CJALR       C1, GPCR:$rs, simm12:$offset), 0>;
+defm: CPrefixedInstAlias<"jalr $rd, $rs, $offset", (CJALR GPCR:$rd, GPCR:$rs, simm12:$offset), 0>;
 } // Predicates = [HasCheri, IsCapMode]
-
-// Expands to an instruction alias with and without a c prefix for loads/stores
-multiclass CPrefixedInstAlias<string Asm, dag Result> {
-  def : InstAlias<"c" # Asm, Result, 0>;
-  def : InstAlias<Asm, Result, 0>;
-}
 
 
 let Predicates = [HasCheri, IsCapMode] in {
