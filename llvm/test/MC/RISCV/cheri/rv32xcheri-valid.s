@@ -194,9 +194,12 @@ cinvoke c1, c2
 # CHECK-INST: ctestsubset ra, csp, cgp
 # CHECK-SAME: encoding: [0xdb,0x00,0x31,0x40]
 ctestsubset x1, c2, c3
+# CHECK-INST: ctestsubset ra, csp, cgp
+# CHECK-SAME: encoding: [0xdb,0x00,0x31,0x40]
+scss x1, c2, c3
 # CHECK-INST: ctestsubset ra, ddc, cgp
 # CHECK-SAME: encoding: [0xdb,0x00,0x30,0x40]
-ctestsubset x1, ddc, c3
+ctestsubset x1, ddc, c3  # Note: Not supported with the scss syntax
 
 # CHECK-INST: csetequalexact ra, csp, cgp
 # CHECK-SAME: encoding: [0xdb,0x00,0x31,0x42]
@@ -204,6 +207,9 @@ csetequalexact x1, c2, c3
 # CHECK-INST: csetequalexact ra, csp, cgp
 # CHECK-SAME: encoding: [0xdb,0x00,0x31,0x42]
 cseqx x1, c2, c3
+# CHECK-INST: csetequalexact ra, csp, cgp
+# CHECK-SAME: encoding: [0xdb,0x00,0x31,0x42]
+sceq x1, c2, c3
 
 # CHECK-INST: cspecialrw cra, uscratchc, csp
 # CHECK-SAME: encoding: [0xdb,0x00,0x61,0x02]
