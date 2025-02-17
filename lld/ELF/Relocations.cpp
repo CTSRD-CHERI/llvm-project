@@ -1491,6 +1491,9 @@ template <class ELFT, class RelTy> void RelocationScanner::scanOne(RelTy *&i) {
     return;
   }
 
+  auto symCompartment = sym.containingCompartment();
+  bool crossCompartment = symCompartment && *symCompartment != c;
+
   // Relax relocations.
   //
   // If we know that a PLT entry will be resolved within the same ELF module, we
@@ -1499,7 +1502,8 @@ template <class ELFT, class RelTy> void RelocationScanner::scanOne(RelTy *&i) {
   // be resolved within the executable will actually be resolved that way at
   // runtime, because the main executable is always at the beginning of a search
   // list. We can leverage that fact.
-  if (!sym.isPreemptible && (!sym.isGnuIFunc() || config->zIfuncNoplt)) {
+  if (!sym.isPreemptible && (!sym.isGnuIFunc() || config->zIfuncNoplt) &&
+      !crossCompartment) {
     if (expr != R_GOT_PC) {
       // The 0x8000 bit of r_addend of R_PPC_PLTREL24 is used to choose call
       // stub type. It should be ignored if optimized to R_PC.
@@ -1716,10 +1720,48 @@ static bool handleNonPreemptibleIfunc(Compartment *c, Symbol &sym) {
   return true;
 }
 
+static bool handleCrossCompartmentCall(Compartment *c, Symbol &sym) {
+  // Handle a cross-compartment call to a non-preemptible function.
+  //
+  // These need to force indirection via a PLT stub.  These use a
+  // RELATIVE relocation rather than a typical jump slot relocation.
+  // Reuse the Iplt to hold the PLT stub.
+  if (sym.isPreemptible || !sym.isDefined() || !sym.isFunc())
+    return false;
+
+  auto symCompartment = sym.containingCompartment();
+  assert (symCompartment);
+  if (*symCompartment == c)
+    return false;
+
+  // Skip unreferenced func.
+  SymbolCompartAux *aux = sym.compartAux(c);
+  if (!(aux->needsGot || aux->needsPlt || aux->hasDirectReloc))
+    return true;
+
+  aux->isInIplt = true;
+
+  // Create an Iplt entry and the associated RELATIVE relocation.
+  sym.allocateAux(c);
+  addPltEntry(*iplt(c), *igotPlt(c), *relaIplt(c), target->relativeRel,
+              sym);
+
+  if (aux->hasDirectReloc) {
+    if (aux->needsGot)
+      addGotEntry(c, sym);
+  } else if (aux->needsGot) {
+    // Redirect GOT accesses to point to the Igot.
+    aux->gotInIgot = true;
+  }
+  return true;
+}
+
 void elf::postScanRelocations() {
   auto fn = [](Symbol &sym) {
   auto compartFn = [](Compartment *c, Symbol &sym) {
     if (handleNonPreemptibleIfunc(c, sym))
+      return;
+    if (handleCrossCompartmentCall(c, sym))
       return;
     if (!sym.needsDynReloc(c))
       return;
