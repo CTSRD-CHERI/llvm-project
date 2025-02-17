@@ -226,6 +226,8 @@ public:
     nameSize = s.size();
   }
 
+  llvm::Optional<Compartment *> containingCompartment() const;
+
   void parseSymbolVersion();
 
   // Get the NUL-terminated version suffix ("", "@...", or "@@...").
