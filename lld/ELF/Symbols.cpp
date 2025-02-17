@@ -352,6 +352,13 @@ OutputSection *Symbol::getOutputSection() const {
   return nullptr;
 }
 
+std::optional<Compartment *> Symbol::containingCompartment() const {
+  if (auto *s = dyn_cast<Defined>(this))
+    if (auto *sec = s->section)
+      return sec->compartment;
+  return {};
+}
+
 // If a symbol name contains '@', the characters after that is
 // a symbol version name. This function parses that.
 void Symbol::parseSymbolVersion() {
