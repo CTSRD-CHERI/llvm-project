@@ -343,6 +343,20 @@ OutputSection *Symbol::getOutputSection() const {
   return nullptr;
 }
 
+std::optional<Compartment *> Symbol::containingCompartment() const {
+  if (!isDefined())
+    return {};
+
+  const Defined *d = static_cast<const Defined *>(this);
+
+  // Do not claim a compartment for Defined symbols without an input
+  // section.
+  if (d->section == nullptr)
+	  return {};
+
+  return static_cast<InputSectionBase *>(d->section)->compartment;
+}
+
 // If a symbol name contains '@', the characters after that is
 // a symbol version name. This function parses that.
 void Symbol::parseSymbolVersion() {
