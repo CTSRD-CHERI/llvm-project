@@ -344,6 +344,9 @@ void assignSectionsToCompartments() {
       if (s->name == ".eh_frame")
         continue;
 
+      if (s->compartment == nullptr)
+	continue;
+
       invokeELFT(scanRelocations, s, depends);
     }
 
@@ -359,8 +362,6 @@ void assignSectionsToCompartments() {
 
       const auto &cdep = *cdeps.begin();
       Compartment *c = cdep.first;
-      if (c == nullptr)
-        continue;
 
       s->compartment = c;
       assigned = true;
