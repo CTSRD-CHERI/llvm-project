@@ -353,6 +353,9 @@ void assignSectionsToCompartments() {
       if (s->name == ".eh_frame")
         continue;
 
+      if (s->compartment == nullptr)
+	continue;
+
       invokeELFT(scanRelocations, s, depends);
     }
 
@@ -368,8 +371,6 @@ void assignSectionsToCompartments() {
 
       const auto &cdep = *cdeps.begin();
       Compartment *c = cdep.first;
-      if (c == nullptr)
-        continue;
 
       if (config->verboseCompartmentalization) {
         const auto pair = cdep.second;
@@ -423,14 +424,9 @@ void assignSectionsToCompartments() {
           InputSectionBase *s2 = pair.first;
           Symbol *sym = pair.second;
 
-          if (c == nullptr)
-            message("\tsection " + s2->file->getName() + ":" + s2->name +
-                    " from the default compartment due to symbol " +
-                    sym->getName());
-          else
-            message("\tsection " + s2->file->getName() + ":" + s2->name +
-                    " from compartment " + c->name + " due to symbol " +
-                    sym->getName());
+	  message("\tsection " + s2->file->getName() + ":" + s2->name +
+                  " from compartment " + c->name + " due to symbol " +
+                  sym->getName());
         }
       }
     }
