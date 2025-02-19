@@ -250,6 +250,13 @@ void RISCVTargetInfo::getTargetDefines(const LangOptions &Opts,
         Builder.defineMacro("__CHERI_CAP_PERMISSION_CAPABILITY_LEVEL__",
                             Twine(1 << 4));
       }
+      // Software Defined Permissions
+      Builder.defineMacro("__CHERI_CAP_PERMISSION_USER_00__", Twine(1 << 6));
+      Builder.defineMacro("__CHERI_CAP_PERMISSION_USER_01__", Twine(1 << 7));
+      if (Is64Bit) {
+        Builder.defineMacro("__CHERI_CAP_PERMISSION_USER_02__", Twine(1 << 8));
+        Builder.defineMacro("__CHERI_CAP_PERMISSION_USER_03__", Twine(1 << 9));
+      }
     } else {
       // Macros for use with the set and get permissions builtins.
       Builder.defineMacro("__CHERI_CAP_PERMISSION_GLOBAL__", Twine(1 << 0));
