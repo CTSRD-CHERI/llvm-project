@@ -2696,9 +2696,12 @@ SmallVector<PhdrEntry *, 0> Writer<ELFT>::createPhdrs(Partition &part) {
   if (OutputSection *sec = part.dynamic->getParent())
     addHdr(PT_DYNAMIC, sec->getPhdrFlags())->add(sec);
 
-  for (Compartment &compart : compartments)
+  for (Compartment &compart : compartments) {
     if (compart.phdr != nullptr)
       ret.push_back(compart.phdr);
+    else
+      error("no output sections for compartment " + compart.name);
+  }
 
   if (firstRelRo->firstSec)
     ret.push_back(firstRelRo);
