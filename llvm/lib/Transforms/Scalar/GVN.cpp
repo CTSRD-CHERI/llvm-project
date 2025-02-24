@@ -44,6 +44,7 @@
 #include "llvm/Analysis/ValueTracking.h"
 #include "llvm/IR/Attributes.h"
 #include "llvm/IR/BasicBlock.h"
+#include "llvm/IR/Cheri.h"
 #include "llvm/IR/Constant.h"
 #include "llvm/IR/Constants.h"
 #include "llvm/IR/DebugLoc.h"
@@ -1983,6 +1984,17 @@ bool GVNPass::processNonLocalLoad(LoadInst *Load) {
 }
 
 static bool impliesEquivalanceIfTrue(CmpInst* Cmp) {
+  Value *LHS = Cmp->getOperand(0);
+  Value *RHS = Cmp->getOperand(1);
+  const DataLayout &DL = Cmp->getModule()->getDataLayout();
+  bool InvolvesCapabilities = isCheriPointer(LHS->getType(), &DL) ||
+                              isCheriPointer(RHS->getType(), &DL);
+  bool IsAnyOperandConstant = isa<Constant>(LHS) || isa<Constant>(RHS);
+  // When comparing CHERI capabilities with a constant, the subsequent
+  // dominated blocks cannot replace the value with a constant.
+  if (Cmp->getPredicate() == CmpInst::Predicate::ICMP_EQ &&
+      InvolvesCapabilities && IsAnyOperandConstant)
+    return false;
   if (Cmp->getPredicate() == CmpInst::Predicate::ICMP_EQ)
     return true;
 
@@ -2009,6 +2021,17 @@ static bool impliesEquivalanceIfTrue(CmpInst* Cmp) {
 }
 
 static bool impliesEquivalanceIfFalse(CmpInst* Cmp) {
+  Value *LHS = Cmp->getOperand(0);
+  Value *RHS = Cmp->getOperand(1);
+  const DataLayout &DL = Cmp->getModule()->getDataLayout();
+  bool InvolvesCapabilities = isCheriPointer(LHS->getType(), &DL) ||
+                              isCheriPointer(RHS->getType(), &DL);
+  bool IsAnyOperandConstant = isa<Constant>(LHS) || isa<Constant>(RHS);
+  // When comparing CHERI capabilities with a constant, the subsequent
+  // dominated blocks cannot replace the value with a constant.
+  if (Cmp->getPredicate() == CmpInst::Predicate::ICMP_NE &&
+      InvolvesCapabilities && IsAnyOperandConstant)
+    return false;
   if (Cmp->getPredicate() == CmpInst::Predicate::ICMP_NE)
     return true;
 

@@ -80,6 +80,7 @@
 #include "llvm/Analysis/ValueTracking.h"
 #include "llvm/IR/Argument.h"
 #include "llvm/IR/BasicBlock.h"
+#include "llvm/IR/Cheri.h"
 #include "llvm/IR/Constant.h"
 #include "llvm/IR/Constants.h"
 #include "llvm/IR/Dominators.h"
@@ -1584,6 +1585,15 @@ NewGVN::performSymbolicPredicateInfoEvaluation(IntrinsicInst *I) const {
     Predicate = CmpInst::getSwappedPredicate(Predicate);
     AdditionallyUsedValue = CmpOp1;
   }
+
+  const DataLayout &DL = I->getModule()->getDataLayout();
+  bool IncludesCapabilities = isCheriPointer(CmpOp0->getType(), &DL) ||
+                              isCheriPointer(CmpOp1->getType(), &DL);
+  bool UsesConstants = isa<Constant>(CmpOp0) || isa<Constant>(CmpOp1);
+  // When comparing CHERI capabilities with a constant, the subsequent
+  // dominated blocks cannot replace the value with a constant.
+  if (Predicate == CmpInst::ICMP_EQ && IncludesCapabilities && UsesConstants)
+    return ExprResult::none();
 
   if (Predicate == CmpInst::ICMP_EQ)
     return ExprResult::some(createVariableOrConstant(FirstOp),

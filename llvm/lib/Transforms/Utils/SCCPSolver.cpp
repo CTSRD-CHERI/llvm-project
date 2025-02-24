@@ -18,6 +18,7 @@
 #include "llvm/Analysis/ValueLattice.h"
 #include "llvm/Analysis/ValueLatticeUtils.h"
 #include "llvm/Analysis/ValueTracking.h"
+#include "llvm/IR/Cheri.h"
 #include "llvm/IR/InstVisitor.h"
 #include "llvm/Support/Casting.h"
 #include "llvm/Support/Debug.h"
@@ -1769,12 +1770,23 @@ void SCCPInstVisitor::handleCallResult(CallBase &CB) {
         return;
       } else if (Pred == CmpInst::ICMP_EQ &&
                  (CondVal.isConstant() || CondVal.isNotConstant())) {
+        // With CHERI when we compare a capability with a constant the dominated
+        // branches that follow cannot be replaced with this constant as it will
+        // not maintain tags.
+        if (isCheriPointer(OtherOp->getType(), &DL))
+          return;
+
         // For non-integer values or integer constant expressions, only
         // propagate equal constants or not-constants.
         addAdditionalUser(OtherOp, &CB);
         mergeInValue(IV, &CB, CondVal);
         return;
       } else if (Pred == CmpInst::ICMP_NE && CondVal.isConstant()) {
+        // With CHERI when we compare a capability with a constant the dominated
+        // branches that follow cannot be replaced with this constant as it will
+        // not maintain tags.
+        if (isCheriPointer(OtherOp->getType(), &DL))
+          return;
         // Propagate inequalities.
         addAdditionalUser(OtherOp, &CB);
         mergeInValue(IV, &CB,
