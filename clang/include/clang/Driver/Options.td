@@ -3911,6 +3911,14 @@ def mno_xcheri_norvc : Flag<["-"], "mno-xcheri-norvc">, Group<m_riscv_Features_G
   HelpText<"Enable using compressed CHERI instructions">;
 def mxcheri_rvc : Flag<["-"], "mxcheri-rvc">, Alias<mno_xcheri_norvc>;
 
+def mxcheri_std_compat : Flag<["-"], "mxcheri-std-compat">,
+                         Group<m_riscv_Features_Group>,
+                         HelpText<"Enable the subset of CHERI features that "
+                                  "are compatible with the upcoming standard">;
+def mno_xcheri_std_compat : Flag<["-"], "mno-xcheri-std-compat">,
+                            Group<m_riscv_Features_Group>,
+                            HelpText<"Enable non-standard CHERI features">;
+
 def munaligned_access : Flag<["-"], "munaligned-access">, Group<m_Group>,
   HelpText<"Allow memory accesses to be unaligned (AArch32/AArch64/LoongArch only)">;
 def mno_unaligned_access : Flag<["-"], "mno-unaligned-access">, Group<m_Group>,

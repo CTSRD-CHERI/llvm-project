@@ -168,6 +168,7 @@ public:
     assert(HasCheri && "Cannot get capability type for non-CHERI");
     return is64Bit() ? MVT::c128 : MVT::c64;
   }
+  bool hasXCheriNonStd() const { return HasXCheri && !HasXCheriStdCompat; }
 
   bool hasMacroFusion() const { return hasLUIADDIFusion(); }
 

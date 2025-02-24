@@ -780,3 +780,39 @@
 // RUN: -march=rv64i_zacas1p0 -x c -E -dM %s \
 // RUN: -o - | FileCheck --check-prefix=CHECK-ZACAS-EXT %s
 // CHECK-ZACAS-EXT: __riscv_zacas 1000000{{$}}
+
+// RUN: %clang -target riscv64-unknown-none -march=rv64gcxcheri -x c -E -dM %s \
+// RUN:   -o - | FileCheck %s --check-prefixes=CHECK-XCHERI --implicit-check-not=__riscv_
+// RUN: %clang -target riscv64-unknown-none -march=rv64gcxcheri -mxcheri-std-compat -x c -E -dM %s \
+// RUN:   -o - | FileCheck %s --check-prefixes=CHECK-XCHERI,CHECK-XCHERI-STD-COMPAT --implicit-check-not=__riscv_
+
+
+// CHECK-XCHERI:      #define __riscv 1
+// CHECK-XCHERI-NEXT: #define __riscv_a 2001000
+// CHECK-XCHERI-NEXT: #define __riscv_arch_test 1
+// CHECK-XCHERI-NEXT: #define __riscv_atomic 1
+// CHECK-XCHERI-NEXT: #define __riscv_c 2000000
+// CHECK-XCHERI-NEXT: #define __riscv_clen 128
+// CHECK-XCHERI-NEXT: #define __riscv_cmodel_medlow 1
+// CHECK-XCHERI-NEXT: #define __riscv_compressed 1
+// CHECK-XCHERI-NEXT: #define __riscv_d 2002000
+// CHECK-XCHERI-NEXT: #define __riscv_div 1
+// CHECK-XCHERI-NEXT: #define __riscv_f 2002000
+// CHECK-XCHERI-NEXT: #define __riscv_fdiv 1
+// CHECK-XCHERI-NEXT: #define __riscv_flen 64
+// CHECK-XCHERI-NEXT: #define __riscv_float_abi_double 1
+// CHECK-XCHERI-NEXT: #define __riscv_fsqrt 1
+// CHECK-XCHERI-NEXT: #define __riscv_i 2001000
+// CHECK-XCHERI-NEXT: #define __riscv_m 2000000
+// CHECK-XCHERI-NEXT: #define __riscv_mul 1
+// CHECK-XCHERI-NEXT: #define __riscv_muldiv 1
+// CHECK-XCHERI-NEXT: #define __riscv_xcheri 0
+// CHECK-XCHERI-NEXT: #define __riscv_xcheri_mode_dependent_jumps 1
+// CHECK-XCHERI-NEXT: #define __riscv_xcheri_no_relocation 1
+// CHECK-XCHERI-STD-COMPAT-NEXT: #define __riscv_xcheri_std_compat 0
+// CHECK-XCHERI-NEXT: #define __riscv_xcheri_tag_clear 1
+// CHECK-XCHERI-NEXT: #define __riscv_xlen 64
+// CHECK-XCHERI-NEXT: #define __riscv_zicsr 2000000
+// CHECK-XCHERI-NEXT: #define __riscv_zifencei 2000000
+
+

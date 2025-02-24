@@ -7460,6 +7460,10 @@ static SDValue lowerGetVectorLength(SDNode *N, SelectionDAG &DAG,
   return DAG.getNode(ISD::INTRINSIC_WO_CHAIN, DL, XLenVT, ID, AVL, Sew, LMul);
 }
 
+bool RISCVTargetLowering::hasCapabilitySetOffset() const {
+  return Subtarget.hasXCheriNonStd();
+}
+
 SDValue RISCVTargetLowering::LowerINTRINSIC_WO_CHAIN(SDValue Op,
                                                      SelectionDAG &DAG) const {
   unsigned IntNo = Op.getConstantOperandVal(0);
@@ -13562,12 +13566,27 @@ SDValue RISCVTargetLowering::PerformDAGCombine(SDNode *N,
                           ISD::SETNE);
     }
     case Intrinsic::cheri_cap_sealed_get: {
-      SDValue IntRes =
-          DAG.getNode(RISCVISD::CAP_SEALED_GET, DL, XLenVT, N->getOperand(1));
-      IntRes = DAG.getNode(ISD::AssertZext, DL, XLenVT, IntRes,
-                           DAG.getValueType(MVT::i1));
-      return DAG.getSetCC(DL, MVT::i1, IntRes, DAG.getConstant(0, DL, XLenVT),
-                          ISD::SETNE);
+      if (!Subtarget.hasXCheriNonStd()) {
+        // The RISC-V standard does not have CGetSealed, use GCTYPE and
+        // compare to unsealed instead.
+        SDValue Type = DAG.getNode(
+            ISD::INTRINSIC_WO_CHAIN, DL, XLenVT,
+            DAG.getConstant(Intrinsic::cheri_cap_type_get, DL, MVT::i64),
+            N->getOperand(1));
+        // Note in the RISC-V standard unsealed capabilities have a zero type,
+        // but in ISAv9 unsealed is otype - 1.
+        int64_t UnsealedOtype = Subtarget.hasXCheri() ? -1 : 0;
+        return DAG.getSetCC(DL, MVT::i1, Type,
+                            DAG.getConstant(UnsealedOtype, DL, XLenVT),
+                            ISD::SETNE);
+      } else {
+        SDValue IntRes =
+            DAG.getNode(RISCVISD::CAP_SEALED_GET, DL, XLenVT, N->getOperand(1));
+        IntRes = DAG.getNode(ISD::AssertZext, DL, XLenVT, IntRes,
+                             DAG.getValueType(MVT::i1));
+        return DAG.getSetCC(DL, MVT::i1, IntRes, DAG.getConstant(0, DL, XLenVT),
+                            ISD::SETNE);
+      }
     }
     case Intrinsic::cheri_cap_subset_test: {
       SDValue IntRes = DAG.getNode(RISCVISD::CAP_SUBSET_TEST, DL, XLenVT,
@@ -16568,11 +16587,11 @@ bool RISCVTargetLowering::isUsedByReturnOnly(SDNode *N, SDValue &Chain) const {
     return false;
 
   SDNode *Copy = *N->use_begin();
-  
+
   if (Copy->getOpcode() == ISD::BITCAST) {
     return isUsedByReturnOnly(Copy, Chain);
   }
-  
+
   // TODO: Handle additional opcodes in order to support tail-calling libcalls
   // with soft float ABIs.
   if (Copy->getOpcode() != ISD::CopyToReg) {

@@ -9,232 +9,413 @@
 # RUN:     | llvm-objdump -M no-aliases --mattr=+xcheri -d - \
 # RUN:     | FileCheck -check-prefix=CHECK-INST %s
 
+# RUN: not llvm-mc %s --triple=riscv64 --mattr=+xcheri-std-compat --filetype=obj -o /dev/null 2>&1 \
+# RUN:     | FileCheck --check-prefix=STD-COMPAT-ERROR --implicit-check-not="error:" %s
+
 # CHECK-INST: cgetperm ra, csp
-# CHECK: encoding: [0xdb,0x00,0x01,0xfe]
+# CHECK-SAME: encoding: [0xdb,0x00,0x01,0xfe]
 cgetperm x1, c2
+# CHECK-INST: cgetperm ra, csp
+# CHECK-SAME: encoding: [0xdb,0x00,0x01,0xfe]
+gcperm x1, c2
 # CHECK-INST: cgettype ra, csp
-# CHECK: encoding: [0xdb,0x00,0x11,0xfe]
+# CHECK-SAME: encoding: [0xdb,0x00,0x11,0xfe]
 cgettype x1, c2
+# CHECK-INST: cgettype ra, csp
+# CHECK-SAME: encoding: [0xdb,0x00,0x11,0xfe]
+gctype x1, c2
 # CHECK-INST: cgetbase ra, csp
-# CHECK: encoding: [0xdb,0x00,0x21,0xfe]
+# CHECK-SAME: encoding: [0xdb,0x00,0x21,0xfe]
 cgetbase x1, c2
+# CHECK-INST: cgetbase ra, csp
+# CHECK-SAME: encoding: [0xdb,0x00,0x21,0xfe]
+gcbase x1, c2
 # CHECK-INST: cgetlen ra, csp
-# CHECK: encoding: [0xdb,0x00,0x31,0xfe]
+# CHECK-SAME: encoding: [0xdb,0x00,0x31,0xfe]
 cgetlen x1, c2
+# CHECK-INST: cgetlen ra, csp
+# CHECK-SAME: encoding: [0xdb,0x00,0x31,0xfe]
+gclen x1, c2
 # CHECK-INST: cgettag ra, csp
-# CHECK: encoding: [0xdb,0x00,0x41,0xfe]
+# CHECK-SAME: encoding: [0xdb,0x00,0x41,0xfe]
 cgettag x1, c2
+# CHECK-INST: cgettag ra, csp
+# CHECK-SAME: encoding: [0xdb,0x00,0x41,0xfe]
+gctag x1, c2
 # CHECK-INST: cgetsealed ra, csp
-# CHECK: encoding: [0xdb,0x00,0x51,0xfe]
+# STD-COMPAT-ERROR: [[#@LINE+4]]:1: error: instruction requires the following: 'xcheri' extension with non-standard instructions{{$}}
+# STD-COMPAT-ERROR-NEXT: cgetsealed x1, c2
+# STD-COMPAT-ERROR-NEXT: ^{{$}}
+# CHECK-SAME: encoding: [0xdb,0x00,0x51,0xfe]
 cgetsealed x1, c2
 # CHECK-INST: cgetoffset ra, csp
-# CHECK: encoding: [0xdb,0x00,0x61,0xfe]
+# STD-COMPAT-ERROR-NEXT: [[#@LINE+4]]:1: error: instruction requires the following: 'xcheri' extension with non-standard instructions{{$}}
+# STD-COMPAT-ERROR-NEXT: cgetoffset x1, c2
+# STD-COMPAT-ERROR-NEXT: ^{{$}}
+# CHECK-SAME: encoding: [0xdb,0x00,0x61,0xfe]
 cgetoffset x1, c2
 # CHECK-INST: cgetflags ra, csp
-# CHECK: encoding: [0xdb,0x00,0x71,0xfe]
+# CHECK-SAME: encoding: [0xdb,0x00,0x71,0xfe]
 cgetflags x1, c2
+# TODO: gcmode = cgetflags xor 1
 # CHECK-INST: addi ra, sp, 0
-# CHECK: encoding: [0x93,0x00,0x01,0x00]
+# CHECK-SAME: encoding: [0x93,0x00,0x01,0x00]
 cgetaddr x1, c2
 # CHECK-INST: cgethigh ra, csp
-# CHECK: encoding: [0xdb,0x00,0x71,0xff]
+# CHECK-SAME: encoding: [0xdb,0x00,0x71,0xff]
 cgethigh x1, c2
+# CHECK-INST: cgethigh ra, csp
+# CHECK-SAME: encoding: [0xdb,0x00,0x71,0xff]
+gchi x1, c2
 
 # CHECK-INST: cseal cra, csp, cgp
-# CHECK: encoding: [0xdb,0x00,0x31,0x16]
+# STD-COMPAT-ERROR-NEXT: [[#@LINE+4]]:1: error: instruction requires the following: 'xcheri' extension with non-standard instructions{{$}}
+# STD-COMPAT-ERROR-NEXT: cseal c1, c2, c3
+# STD-COMPAT-ERROR-NEXT: ^{{$}}
+# CHECK-SAME: encoding: [0xdb,0x00,0x31,0x16]
 cseal c1, c2, c3
 # CHECK-INST: cunseal cra, csp, cgp
-# CHECK: encoding: [0xdb,0x00,0x31,0x18]
+# STD-COMPAT-ERROR-NEXT: [[#@LINE+4]]:1: error: instruction requires the following: 'xcheri' extension with non-standard instructions{{$}}
+# STD-COMPAT-ERROR-NEXT: cunseal c1, c2, c3
+# STD-COMPAT-ERROR-NEXT: ^{{$}}
+# CHECK-SAME: encoding: [0xdb,0x00,0x31,0x18]
 cunseal c1, c2, c3
 # CHECK-INST: candperm cra, csp, gp
-# CHECK: encoding: [0xdb,0x00,0x31,0x1a]
+# CHECK-SAME: encoding: [0xdb,0x00,0x31,0x1a]
 candperm c1, c2, x3
+# CHECK-INST: candperm cra, csp, gp
+# CHECK-SAME: encoding: [0xdb,0x00,0x31,0x1a]
+acperm c1, c2, x3
 # CHECK-INST: csetflags cra, csp, gp
-# CHECK: encoding: [0xdb,0x00,0x31,0x1c]
+# CHECK-SAME: encoding: [0xdb,0x00,0x31,0x1c]
 csetflags c1, c2, x3
 # CHECK-INST: csetoffset cra, csp, gp
-# CHECK: encoding: [0xdb,0x00,0x31,0x1e]
+# STD-COMPAT-ERROR-NEXT: [[#@LINE+4]]:1: error: instruction requires the following: 'xcheri' extension with non-standard instructions{{$}}
+# STD-COMPAT-ERROR-NEXT: csetoffset c1, c2, x3
+# STD-COMPAT-ERROR-NEXT: ^{{$}}
+# CHECK-SAME: encoding: [0xdb,0x00,0x31,0x1e]
 csetoffset c1, c2, x3
 # CHECK-INST: csetaddr cra, csp, gp
-# CHECK: encoding: [0xdb,0x00,0x31,0x20]
+# CHECK-SAME: encoding: [0xdb,0x00,0x31,0x20]
 csetaddr c1, c2, x3
+# CHECK-INST: csetaddr cra, csp, gp
+# CHECK-SAME: encoding: [0xdb,0x00,0x31,0x20]
+scaddr c1, c2, x3
 # CHECK-INST: csethigh cra, csp, gp
-# CHECK: encoding: [0xdb,0x00,0x31,0x2c]
+# CHECK-SAME: encoding: [0xdb,0x00,0x31,0x2c]
 csethigh c1, c2, x3
+# CHECK-INST: csethigh cra, csp, gp
+# CHECK-SAME: encoding: [0xdb,0x00,0x31,0x2c]
+schi c1, c2, x3
 # CHECK-INST: cincoffset cra, csp, gp
-# CHECK: encoding: [0xdb,0x00,0x31,0x22]
+# CHECK-SAME: encoding: [0xdb,0x00,0x31,0x22]
 cincoffset c1, c2, x3
+# CHECK-INST: cincoffset cra, csp, gp
+# CHECK-SAME: encoding: [0xdb,0x00,0x31,0x22]
+add c1, c2, x3
 # CHECK-INST: cincoffset cra, csp, -173
-# CHECK: encoding: [0xdb,0x10,0x31,0xf5]
+# CHECK-SAME: encoding: [0xdb,0x10,0x31,0xf5]
 cincoffset c1, c2, -173
 # CHECK-INST: cincoffset cra, csp, -173
-# CHECK: encoding: [0xdb,0x10,0x31,0xf5]
+# CHECK-SAME: encoding: [0xdb,0x10,0x31,0xf5]
+add c1, c2, -173
+# CHECK-INST: cincoffset cra, csp, -173
+# CHECK-SAME: encoding: [0xdb,0x10,0x31,0xf5]
 cincoffsetimm c1, c2, -173
+# CHECK-INST: cincoffset cra, csp, -173
+# CHECK-SAME: encoding: [0xdb,0x10,0x31,0xf5]
+addi c1, c2, -173
 # CHECK-INST: csetbounds cra, csp, gp
-# CHECK: encoding: [0xdb,0x00,0x31,0x10]
+# CHECK-SAME: encoding: [0xdb,0x00,0x31,0x10]
 csetbounds c1, c2, x3
+# CHECK-INST: csetbounds cra, csp, gp
+# CHECK-SAME: encoding: [0xdb,0x00,0x31,0x10]
+scbndsr c1, c2, x3
 # CHECK-INST: csetboundsexact cra, csp, gp
-# CHECK: encoding: [0xdb,0x00,0x31,0x12]
+# CHECK-SAME: encoding: [0xdb,0x00,0x31,0x12]
 csetboundsexact c1, c2, x3
+# CHECK-INST: csetboundsexact cra, csp, gp
+# CHECK-SAME: encoding: [0xdb,0x00,0x31,0x12]
+scbnds c1, c2, x3
 # CHECK-INST: csetbounds cra, csp, 3029
-# CHECK: encoding: [0xdb,0x20,0x51,0xbd]
+# CHECK-SAME: encoding: [0xdb,0x20,0x51,0xbd]
 csetbounds c1, c2, 0xbd5
 # CHECK-INST: csetbounds cra, csp, 3029
-# CHECK: encoding: [0xdb,0x20,0x51,0xbd]
+# CHECK-SAME: encoding: [0xdb,0x20,0x51,0xbd]
+scbnds c1, c2, 0xbd5
+# CHECK-INST: csetbounds cra, csp, 3029
+# CHECK-SAME: encoding: [0xdb,0x20,0x51,0xbd]
 csetboundsimm c1, c2, 0xbd5
+# CHECK-INST: csetbounds cra, csp, 3029
+# CHECK-SAME: encoding: [0xdb,0x20,0x51,0xbd]
+scbndsi c1, c2, 0xbd5
 # CHECK-INST: ccleartag cra, csp
-# CHECK: encoding: [0xdb,0x00,0xb1,0xfe]
+# STD-COMPAT-ERROR-NEXT: [[#@LINE+4]]:1: error: instruction requires the following: 'xcheri' extension with non-standard instructions{{$}}
+# STD-COMPAT-ERROR-NEXT: ccleartag c1, c2
+# STD-COMPAT-ERROR-NEXT: ^{{$}}
+# CHECK-SAME: encoding: [0xdb,0x00,0xb1,0xfe]
 ccleartag c1, c2
 # CHECK-INST: cbuildcap cra, csp, cgp
-# CHECK: encoding: [0xdb,0x00,0x31,0x3a]
+# CHECK-SAME: encoding: [0xdb,0x00,0x31,0x3a]
 cbuildcap c1, c2, c3
+# CHECK-INST: cbuildcap cra, csp, cgp
+# CHECK-SAME: encoding: [0xdb,0x00,0x31,0x3a]
+cbld c1, c2, c3
 # CHECK-INST: cbuildcap cra, ddc, cgp
-# CHECK: encoding: [0xdb,0x00,0x30,0x3a]
-cbuildcap c1, ddc, c3
+# CHECK-SAME: encoding: [0xdb,0x00,0x30,0x3a]
+cbuildcap c1, ddc, c3  # Note: Not supported with the cbld syntax
 # CHECK-INST: ccopytype cra, csp, cgp
-# CHECK: encoding: [0xdb,0x00,0x31,0x3c]
+# STD-COMPAT-ERROR-NEXT: [[#@LINE+4]]:1: error: instruction requires the following: 'xcheri' extension with non-standard instructions{{$}}
+# STD-COMPAT-ERROR-NEXT: ccopytype c1, c2, c3
+# STD-COMPAT-ERROR-NEXT: ^{{$}}
+# CHECK-SAME: encoding: [0xdb,0x00,0x31,0x3c]
 ccopytype c1, c2, c3
 # CHECK-INST: ccseal cra, csp, cgp
-# CHECK: encoding: [0xdb,0x00,0x31,0x3e]
+# STD-COMPAT-ERROR-NEXT: [[#@LINE+4]]:1: error: instruction requires the following: 'xcheri' extension with non-standard instructions{{$}}
+# STD-COMPAT-ERROR-NEXT: ccseal c1, c2, c3
+# STD-COMPAT-ERROR-NEXT: ^{{$}}
+# CHECK-SAME: encoding: [0xdb,0x00,0x31,0x3e]
 ccseal c1, c2, c3
 # CHECK-INST: csealentry cra, csp
-# CHECK: encoding: [0xdb,0x00,0x11,0xff]
+# CHECK-SAME: encoding: [0xdb,0x00,0x11,0xff]
 csealentry c1, c2
+# CHECK-INST: csealentry cra, csp
+# CHECK-SAME: encoding: [0xdb,0x00,0x11,0xff]
+sentry c1, c2
 
 # CHECK-INST: sub ra, sp, gp
-# CHECK: encoding: [0xb3,0x00,0x31,0x40]
+# CHECK-SAME: encoding: [0xb3,0x00,0x31,0x40]
 csub x1, c2, c3
 # CHECK-INST: cmove cra, csp
-# CHECK: encoding: [0xdb,0x00,0xa1,0xfe]
+# CHECK-SAME: encoding: [0xdb,0x00,0xa1,0xfe]
 cmove c1, c2
 
 # CHECK-INST: jalr.cap cra, csp
-# CHECK: encoding: [0xdb,0x00,0xc1,0xfe]
+# STD-COMPAT-ERROR-NEXT: [[#@LINE+4]]:1: error: instruction requires the following: 'xcheri' extension with non-standard instructions{{$}}
+# STD-COMPAT-ERROR-NEXT: jalr.cap c1, c2
+# STD-COMPAT-ERROR-NEXT: ^{{$}}
+# CHECK-SAME: encoding: [0xdb,0x00,0xc1,0xfe]
 jalr.cap c1, c2
 # CHECK-INST: jalr.cap cra, csp
-# CHECK: encoding: [0xdb,0x00,0xc1,0xfe]
+# STD-COMPAT-ERROR-NEXT: [[#@LINE+4]]:1: error: instruction requires the following: 'xcheri' extension with non-standard instructions{{$}}
+# STD-COMPAT-ERROR-NEXT: jalr.cap c2
+# STD-COMPAT-ERROR-NEXT: ^{{$}}
+# CHECK-SAME: encoding: [0xdb,0x00,0xc1,0xfe]
 jalr.cap c2
 # CHECK-INST: jalr.cap cnull, cra
-# CHECK: encoding: [0x5b,0x80,0xc0,0xfe]
+# STD-COMPAT-ERROR-NEXT: [[#@LINE+4]]:1: error: instruction requires the following: 'xcheri' extension with non-standard instructions{{$}}
+# STD-COMPAT-ERROR-NEXT: jr.cap c1
+# STD-COMPAT-ERROR-NEXT: ^{{$}}
+# CHECK-SAME: encoding: [0x5b,0x80,0xc0,0xfe]
 jr.cap c1
 # CHECK-INST: jalr.cap cnull, cra
-# CHECK: encoding: [0x5b,0x80,0xc0,0xfe]
+# STD-COMPAT-ERROR-NEXT: [[#@LINE+4]]:1: error: instruction requires the following: 'xcheri' extension with non-standard instructions{{$}}
+# STD-COMPAT-ERROR-NEXT: ret.cap
+# STD-COMPAT-ERROR-NEXT: ^{{$}}
+# CHECK-SAME: encoding: [0x5b,0x80,0xc0,0xfe]
 ret.cap
 # CHECK-INST: jalr.pcc ra, sp
-# CHECK: encoding: [0xdb,0x00,0x41,0xff]
+# STD-COMPAT-ERROR-NEXT: [[#@LINE+4]]:1: error: instruction requires the following: 'xcheri' extension with non-standard instructions{{$}}
+# STD-COMPAT-ERROR-NEXT: jalr.pcc x1, x2
+# STD-COMPAT-ERROR-NEXT: ^{{$}}
+# CHECK-SAME: encoding: [0xdb,0x00,0x41,0xff]
 jalr.pcc x1, x2
 # CHECK-INST: jalr.pcc ra, sp
-# CHECK: encoding: [0xdb,0x00,0x41,0xff]
+# STD-COMPAT-ERROR-NEXT: [[#@LINE+4]]:1: error: instruction requires the following: 'xcheri' extension with non-standard instructions{{$}}
+# STD-COMPAT-ERROR-NEXT: jalr.pcc x2
+# STD-COMPAT-ERROR-NEXT: ^{{$}}
+# CHECK-SAME: encoding: [0xdb,0x00,0x41,0xff]
 jalr.pcc x2
 # CHECK-INST: jalr.pcc zero, ra
-# CHECK: encoding: [0x5b,0x80,0x40,0xff]
+# STD-COMPAT-ERROR-NEXT: [[#@LINE+4]]:1: error: instruction requires the following: 'xcheri' extension with non-standard instructions{{$}}
+# STD-COMPAT-ERROR-NEXT: jr.pcc x1
+# STD-COMPAT-ERROR-NEXT: ^{{$}}
+# CHECK-SAME: encoding: [0x5b,0x80,0x40,0xff]
 jr.pcc x1
 # CHECK-INST: jalr.pcc zero, ra
-# CHECK: encoding: [0x5b,0x80,0x40,0xff]
+# STD-COMPAT-ERROR-NEXT: [[#@LINE+4]]:1: error: instruction requires the following: 'xcheri' extension with non-standard instructions{{$}}
+# STD-COMPAT-ERROR-NEXT: ret.pcc
+# STD-COMPAT-ERROR-NEXT: ^{{$}}
+# CHECK-SAME: encoding: [0x5b,0x80,0x40,0xff]
 ret.pcc
 # CHECK-INST: cinvoke cra, csp
-# CHECK: encoding: [0xdb,0x80,0x20,0xfc]
+# STD-COMPAT-ERROR-NEXT: [[#@LINE+4]]:1: error: instruction requires the following: 'xcheri' extension with non-standard instructions{{$}}
+# STD-COMPAT-ERROR-NEXT: cinvoke c1, c2
+# STD-COMPAT-ERROR-NEXT: ^{{$}}
+# CHECK-SAME: encoding: [0xdb,0x80,0x20,0xfc]
 cinvoke c1, c2
 
 # CHECK-INST: ctestsubset ra, csp, cgp
-# CHECK: encoding: [0xdb,0x00,0x31,0x40]
+# CHECK-SAME: encoding: [0xdb,0x00,0x31,0x40]
 ctestsubset x1, c2, c3
+# CHECK-INST: ctestsubset ra, csp, cgp
+# CHECK-SAME: encoding: [0xdb,0x00,0x31,0x40]
+scss x1, c2, c3
 # CHECK-INST: ctestsubset ra, ddc, cgp
-# CHECK: encoding: [0xdb,0x00,0x30,0x40]
-ctestsubset x1, ddc, c3
+# CHECK-SAME: encoding: [0xdb,0x00,0x30,0x40]
+ctestsubset x1, ddc, c3  # Note: Not supported with the scss syntax
 
 # CHECK-INST: csetequalexact ra, csp, cgp
-# CHECK: encoding: [0xdb,0x00,0x31,0x42]
+# CHECK-SAME: encoding: [0xdb,0x00,0x31,0x42]
 csetequalexact x1, c2, c3
 # CHECK-INST: csetequalexact ra, csp, cgp
-# CHECK: encoding: [0xdb,0x00,0x31,0x42]
+# CHECK-SAME: encoding: [0xdb,0x00,0x31,0x42]
 cseqx x1, c2, c3
+# CHECK-INST: csetequalexact ra, csp, cgp
+# CHECK-SAME: encoding: [0xdb,0x00,0x31,0x42]
+sceq x1, c2, c3
 
 # CHECK-INST: cspecialrw cra, uscratchc, csp
-# CHECK: encoding: [0xdb,0x00,0x61,0x02]
+# CHECK-SAME: encoding: [0xdb,0x00,0x61,0x02]
 cspecialrw c1, uscratchc, c2
 # CHECK-INST: cspecialrw cra, uscratchc, csp
-# CHECK: encoding: [0xdb,0x00,0x61,0x02]
+# CHECK-SAME: encoding: [0xdb,0x00,0x61,0x02]
 cspecialrw c1, 0x6, c2
 # CHECK-INST: cspecialrw cra, uscratchc, cnull
-# CHECK: encoding: [0xdb,0x00,0x60,0x02]
+# CHECK-SAME: encoding: [0xdb,0x00,0x60,0x02]
 cspecialr c1, uscratchc
 # CHECK-INST: cspecialrw cnull, uscratchc, csp
-# CHECK: encoding: [0x5b,0x00,0x61,0x02]
+# CHECK-SAME: encoding: [0x5b,0x00,0x61,0x02]
 cspecialw uscratchc, c2
 
 # CHECK-INST: cclear 1, 66
-# CHECK: encoding: [0x5b,0x01,0xe5,0xfe]
+# STD-COMPAT-ERROR-NEXT: [[#@LINE+4]]:1: error: instruction requires the following: 'xcheri' extension with non-standard instructions{{$}}
+# STD-COMPAT-ERROR-NEXT: cclear 1, 0x42
+# STD-COMPAT-ERROR-NEXT: ^{{$}}
+# CHECK-SAME: encoding: [0x5b,0x01,0xe5,0xfe]
 cclear 1, 0x42
 # CHECK-INST: fpclear 1, 66
-# CHECK: encoding: [0x5b,0x01,0x05,0xff]
+# STD-COMPAT-ERROR-NEXT: [[#@LINE+4]]:1: error: instruction requires the following: 'xcheri' extension with non-standard instructions{{$}}
+# STD-COMPAT-ERROR-NEXT: fpclear 1, 0x42
+# STD-COMPAT-ERROR-NEXT: ^{{$}}
+# CHECK-SAME: encoding: [0x5b,0x01,0x05,0xff]
 fpclear 1, 0x42
 
 # CHECK-INST: croundrepresentablelength ra, sp
-# CHECK: encoding: [0xdb,0x00,0x81,0xfe]
+# STD-COMPAT-ERROR-NEXT: [[#@LINE+4]]:1: error: instruction requires the following: 'xcheri' extension with non-standard instructions{{$}}
+# STD-COMPAT-ERROR-NEXT: croundrepresentablelength x1, x2
+# STD-COMPAT-ERROR-NEXT: ^{{$}}
+# CHECK-SAME: encoding: [0xdb,0x00,0x81,0xfe]
 croundrepresentablelength x1, x2
 # CHECK-INST: croundrepresentablelength ra, sp
-# CHECK: encoding: [0xdb,0x00,0x81,0xfe]
+# STD-COMPAT-ERROR-NEXT: [[#@LINE+4]]:1: error: instruction requires the following: 'xcheri' extension with non-standard instructions{{$}}
+# STD-COMPAT-ERROR-NEXT: crrl x1, x2
+# STD-COMPAT-ERROR-NEXT: ^{{$}}
+# CHECK-SAME: encoding: [0xdb,0x00,0x81,0xfe]
 crrl x1, x2
 # CHECK-INST: crepresentablealignmentmask ra, sp
-# CHECK: encoding: [0xdb,0x00,0x91,0xfe]
+# CHECK-SAME: encoding: [0xdb,0x00,0x91,0xfe]
 crepresentablealignmentmask x1, x2
 # CHECK-INST: crepresentablealignmentmask ra, sp
-# CHECK: encoding: [0xdb,0x00,0x91,0xfe]
+# CHECK-SAME: encoding: [0xdb,0x00,0x91,0xfe]
 cram x1, x2
 
 # CHECK-INST: cloadtags ra, (csp)
-# CHECK: encoding: [0xdb,0x00,0x21,0xff]
+# STD-COMPAT-ERROR-NEXT: [[#@LINE+4]]:1: error: instruction requires the following: 'xcheri' extension with non-standard instructions{{$}}
+# STD-COMPAT-ERROR-NEXT: cloadtags x1, (c2)
+# STD-COMPAT-ERROR-NEXT: ^{{$}}
+# CHECK-SAME: encoding: [0xdb,0x00,0x21,0xff]
 cloadtags x1, (c2)
 
 # CHECK-INST: lb.ddc ra, (sp)
-# CHECK: encoding: [0xdb,0x00,0x01,0xfa]
+# STD-COMPAT-ERROR-NEXT: [[#@LINE+4]]:1: error: instruction requires the following: 'xcheri' extension with non-standard instructions{{$}}
+# STD-COMPAT-ERROR-NEXT: lb.ddc x1, (x2)
+# STD-COMPAT-ERROR-NEXT: ^{{$}}
+# CHECK-SAME: encoding: [0xdb,0x00,0x01,0xfa]
 lb.ddc x1, (x2)
 # CHECK-INST: lh.ddc ra, (sp)
-# CHECK: encoding: [0xdb,0x00,0x11,0xfa]
+# STD-COMPAT-ERROR-NEXT: [[#@LINE+4]]:1: error: instruction requires the following: 'xcheri' extension with non-standard instructions{{$}}
+# STD-COMPAT-ERROR-NEXT: lh.ddc x1, (x2)
+# STD-COMPAT-ERROR-NEXT: ^{{$}}
+# CHECK-SAME: encoding: [0xdb,0x00,0x11,0xfa]
 lh.ddc x1, (x2)
 # CHECK-INST: lw.ddc ra, (sp)
-# CHECK: encoding: [0xdb,0x00,0x21,0xfa]
+# STD-COMPAT-ERROR-NEXT: [[#@LINE+4]]:1: error: instruction requires the following: 'xcheri' extension with non-standard instructions{{$}}
+# STD-COMPAT-ERROR-NEXT: lw.ddc x1, (x2)
+# STD-COMPAT-ERROR-NEXT: ^{{$}}
+# CHECK-SAME: encoding: [0xdb,0x00,0x21,0xfa]
 lw.ddc x1, (x2)
 # CHECK-INST: lbu.ddc ra, (sp)
-# CHECK: encoding: [0xdb,0x00,0x41,0xfa]
+# STD-COMPAT-ERROR-NEXT: [[#@LINE+4]]:1: error: instruction requires the following: 'xcheri' extension with non-standard instructions{{$}}
+# STD-COMPAT-ERROR-NEXT: lbu.ddc x1, (x2)
+# STD-COMPAT-ERROR-NEXT: ^{{$}}
+# CHECK-SAME: encoding: [0xdb,0x00,0x41,0xfa]
 lbu.ddc x1, (x2)
 # CHECK-INST: lhu.ddc ra, (sp)
-# CHECK: encoding: [0xdb,0x00,0x51,0xfa]
+# STD-COMPAT-ERROR-NEXT: [[#@LINE+4]]:1: error: instruction requires the following: 'xcheri' extension with non-standard instructions{{$}}
+# STD-COMPAT-ERROR-NEXT: lhu.ddc x1, (x2)
+# STD-COMPAT-ERROR-NEXT: ^{{$}}
+# CHECK-SAME: encoding: [0xdb,0x00,0x51,0xfa]
 lhu.ddc x1, (x2)
 
 # CHECK-INST: sb.ddc ra, (sp)
-# CHECK: encoding: [0x5b,0x00,0x11,0xf8]
+# STD-COMPAT-ERROR-NEXT: [[#@LINE+4]]:1: error: instruction requires the following: 'xcheri' extension with non-standard instructions{{$}}
+# STD-COMPAT-ERROR-NEXT: sb.ddc x1, (x2)
+# STD-COMPAT-ERROR-NEXT: ^{{$}}
+# CHECK-SAME: encoding: [0x5b,0x00,0x11,0xf8]
 sb.ddc x1, (x2)
 # CHECK-INST: sh.ddc ra, (sp)
-# CHECK: encoding: [0xdb,0x00,0x11,0xf8]
+# STD-COMPAT-ERROR-NEXT: [[#@LINE+4]]:1: error: instruction requires the following: 'xcheri' extension with non-standard instructions{{$}}
+# STD-COMPAT-ERROR-NEXT: sh.ddc x1, (x2)
+# STD-COMPAT-ERROR-NEXT: ^{{$}}
+# CHECK-SAME: encoding: [0xdb,0x00,0x11,0xf8]
 sh.ddc x1, (x2)
 # CHECK-INST: sw.ddc ra, (sp)
-# CHECK: encoding: [0x5b,0x01,0x11,0xf8]
+# STD-COMPAT-ERROR-NEXT: [[#@LINE+4]]:1: error: instruction requires the following: 'xcheri' extension with non-standard instructions{{$}}
+# STD-COMPAT-ERROR-NEXT: sw.ddc x1, (x2)
+# STD-COMPAT-ERROR-NEXT: ^{{$}}
+# CHECK-SAME: encoding: [0x5b,0x01,0x11,0xf8]
 sw.ddc x1, (x2)
 
 # CHECK-INST: lb.cap ra, (csp)
-# CHECK: encoding: [0xdb,0x00,0x81,0xfa]
+# STD-COMPAT-ERROR-NEXT: [[#@LINE+4]]:1: error: instruction requires the following: 'xcheri' extension with non-standard instructions{{$}}
+# STD-COMPAT-ERROR-NEXT: lb.cap x1, (c2)
+# STD-COMPAT-ERROR-NEXT: ^{{$}}
+# CHECK-SAME: encoding: [0xdb,0x00,0x81,0xfa]
 lb.cap x1, (c2)
 # CHECK-INST: lh.cap ra, (csp)
-# CHECK: encoding: [0xdb,0x00,0x91,0xfa]
+# STD-COMPAT-ERROR-NEXT: [[#@LINE+4]]:1: error: instruction requires the following: 'xcheri' extension with non-standard instructions{{$}}
+# STD-COMPAT-ERROR-NEXT: lh.cap x1, (c2)
+# STD-COMPAT-ERROR-NEXT: ^{{$}}
+# CHECK-SAME: encoding: [0xdb,0x00,0x91,0xfa]
 lh.cap x1, (c2)
 # CHECK-INST: lw.cap ra, (csp)
-# CHECK: encoding: [0xdb,0x00,0xa1,0xfa]
+# STD-COMPAT-ERROR-NEXT: [[#@LINE+4]]:1: error: instruction requires the following: 'xcheri' extension with non-standard instructions{{$}}
+# STD-COMPAT-ERROR-NEXT: lw.cap x1, (c2)
+# STD-COMPAT-ERROR-NEXT: ^{{$}}
+# CHECK-SAME: encoding: [0xdb,0x00,0xa1,0xfa]
 lw.cap x1, (c2)
 # CHECK-INST: lbu.cap ra, (csp)
-# CHECK: encoding: [0xdb,0x00,0xc1,0xfa]
+# STD-COMPAT-ERROR-NEXT: [[#@LINE+4]]:1: error: instruction requires the following: 'xcheri' extension with non-standard instructions{{$}}
+# STD-COMPAT-ERROR-NEXT: lbu.cap x1, (c2)
+# STD-COMPAT-ERROR-NEXT: ^{{$}}
+# CHECK-SAME: encoding: [0xdb,0x00,0xc1,0xfa]
 lbu.cap x1, (c2)
 # CHECK-INST: lhu.cap ra, (csp)
-# CHECK: encoding: [0xdb,0x00,0xd1,0xfa]
+# STD-COMPAT-ERROR-NEXT: [[#@LINE+4]]:1: error: instruction requires the following: 'xcheri' extension with non-standard instructions{{$}}
+# STD-COMPAT-ERROR-NEXT: lhu.cap x1, (c2)
+# STD-COMPAT-ERROR-NEXT: ^{{$}}
+# CHECK-SAME: encoding: [0xdb,0x00,0xd1,0xfa]
 lhu.cap x1, (c2)
 
 # CHECK-INST: sb.cap ra, (csp)
-# CHECK: encoding: [0x5b,0x04,0x11,0xf8]
+# STD-COMPAT-ERROR-NEXT: [[#@LINE+4]]:1: error: instruction requires the following: 'xcheri' extension with non-standard instructions{{$}}
+# STD-COMPAT-ERROR-NEXT: sb.cap x1, (c2)
+# STD-COMPAT-ERROR-NEXT: ^{{$}}
+# CHECK-SAME: encoding: [0x5b,0x04,0x11,0xf8]
 sb.cap x1, (c2)
 # CHECK-INST: sh.cap ra, (csp)
-# CHECK: encoding: [0xdb,0x04,0x11,0xf8]
+# STD-COMPAT-ERROR-NEXT: [[#@LINE+4]]:1: error: instruction requires the following: 'xcheri' extension with non-standard instructions{{$}}
+# STD-COMPAT-ERROR-NEXT: sh.cap x1, (c2)
+# STD-COMPAT-ERROR-NEXT: ^{{$}}
+# CHECK-SAME: encoding: [0xdb,0x04,0x11,0xf8]
 sh.cap x1, (c2)
 # CHECK-INST: sw.cap ra, (csp)
-# CHECK: encoding: [0x5b,0x05,0x11,0xf8]
+# STD-COMPAT-ERROR-NEXT: [[#@LINE+4]]:1: error: instruction requires the following: 'xcheri' extension with non-standard instructions{{$}}
+# STD-COMPAT-ERROR-NEXT: sw.cap x1, (c2)
+# STD-COMPAT-ERROR-NEXT: ^{{$}}
+# CHECK-SAME: encoding: [0x5b,0x05,0x11,0xf8]
 sw.cap x1, (c2)
+
+# Should not see any further errors
+# STD-COMPAT-ERROR-EMPTY:

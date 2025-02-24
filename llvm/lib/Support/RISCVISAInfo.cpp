@@ -68,6 +68,7 @@ static const RISCVSupportedExtension SupportedExtensions[] = {
 
     // vendor-defined ('X') extensions
     {"xcheri", RISCVExtensionVersion{0, 0}},
+    {"xcheri-std-compat", RISCVExtensionVersion{0, 0}},
     {"xcvbitmanip", RISCVExtensionVersion{1, 0}},
     {"xcvmac", RISCVExtensionVersion{1, 0}},
     {"xsfcie", RISCVExtensionVersion{1, 0}},
@@ -955,6 +956,7 @@ Error RISCVISAInfo::checkDependency() {
 static const char *ImpliedExtsD[] = {"f"};
 static const char *ImpliedExtsF[] = {"zicsr"};
 static const char *ImpliedExtsV[] = {"zvl128b", "zve64d"};
+static const char *ImpliedExtsXCheriStdCompat[] = {"xcheri"};
 static const char *ImpliedExtsXTHeadVdot[] = {"v"};
 static const char *ImpliedExtsXsfvcp[] = {"zve32x"};
 static const char *ImpliedExtsZacas[] = {"a"};
@@ -1021,6 +1023,7 @@ static constexpr ImpliedExtsEntry ImpliedExts[] = {
     {{"d"}, {ImpliedExtsD}},
     {{"f"}, {ImpliedExtsF}},
     {{"v"}, {ImpliedExtsV}},
+    {{"xcheri-std-compat"}, {ImpliedExtsXCheriStdCompat}},
     {{"xsfvcp"}, {ImpliedExtsXsfvcp}},
     {{"xtheadvdot"}, {ImpliedExtsXTHeadVdot}},
     {{"zacas"}, {ImpliedExtsZacas}},
