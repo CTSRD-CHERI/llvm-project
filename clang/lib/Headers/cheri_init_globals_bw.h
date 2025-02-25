@@ -29,14 +29,10 @@ struct ELFRela {
   __SIZE_TYPE__ addend;
 };
 
-enum PermKind {
-  PK_FUNC = 0,
-  PK_OBJ = 1,
-  PK_CONST = 2,
-};
-
 // Bit of a hack as we should include it from llvm
+#ifndef R_RISCV_CHERI_RELATIVE
 #define R_RISCV_CHERI_RELATIVE 202
+#endif
 
 #define GET_BIT_MASK(OFF_BITS) ~(__SIZE_TYPE__)(OFF_BITS)
 
