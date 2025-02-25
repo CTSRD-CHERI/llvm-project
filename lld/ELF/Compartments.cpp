@@ -258,6 +258,9 @@ static void scanRelocations(InputSectionBase *sec, SectionDepends &depends) {
 }
 
 void assignSectionsToCompartments() {
+  if (compartments.empty())
+    return;
+
   for (Compartment &c : compartments) {
     c.suffix = "." + c.name.str();
   }
