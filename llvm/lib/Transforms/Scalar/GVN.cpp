@@ -1989,11 +1989,11 @@ static bool impliesEquivalanceIfTrue(CmpInst* Cmp) {
   const DataLayout &DL = Cmp->getModule()->getDataLayout();
   bool InvolvesCapabilities = isCheriPointer(LHS->getType(), &DL) ||
                               isCheriPointer(RHS->getType(), &DL);
-  bool IsAnyOperandConstant = isa<Constant>(LHS) || isa<Constant>(RHS);
-  // When comparing CHERI capabilities with a constant, the subsequent
-  // dominated blocks cannot replace the value with a constant.
+  // When comparing CHERI capabilities comparing equality only compares
+  // addresses and does not imply that the capabilities are equivalent. We
+  // therefore cannot replace any subsequent uses.
   if (Cmp->getPredicate() == CmpInst::Predicate::ICMP_EQ &&
-      InvolvesCapabilities && IsAnyOperandConstant)
+      InvolvesCapabilities)
     return false;
   if (Cmp->getPredicate() == CmpInst::Predicate::ICMP_EQ)
     return true;
@@ -2026,11 +2026,11 @@ static bool impliesEquivalanceIfFalse(CmpInst* Cmp) {
   const DataLayout &DL = Cmp->getModule()->getDataLayout();
   bool InvolvesCapabilities = isCheriPointer(LHS->getType(), &DL) ||
                               isCheriPointer(RHS->getType(), &DL);
-  bool IsAnyOperandConstant = isa<Constant>(LHS) || isa<Constant>(RHS);
-  // When comparing CHERI capabilities with a constant, the subsequent
-  // dominated blocks cannot replace the value with a constant.
+  // When comparing CHERI capabilities comparing equality only compares
+  // addresses and does not imply that the capabilities are equivalent. We
+  // therefore cannot replace any subsequent uses.
   if (Cmp->getPredicate() == CmpInst::Predicate::ICMP_NE &&
-      InvolvesCapabilities && IsAnyOperandConstant)
+      InvolvesCapabilities)
     return false;
   if (Cmp->getPredicate() == CmpInst::Predicate::ICMP_NE)
     return true;

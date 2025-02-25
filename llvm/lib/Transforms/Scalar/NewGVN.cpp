@@ -1589,10 +1589,10 @@ NewGVN::performSymbolicPredicateInfoEvaluation(IntrinsicInst *I) const {
   const DataLayout &DL = I->getModule()->getDataLayout();
   bool IncludesCapabilities = isCheriPointer(CmpOp0->getType(), &DL) ||
                               isCheriPointer(CmpOp1->getType(), &DL);
-  bool UsesConstants = isa<Constant>(CmpOp0) || isa<Constant>(CmpOp1);
-  // When comparing CHERI capabilities with a constant, the subsequent
-  // dominated blocks cannot replace the value with a constant.
-  if (Predicate == CmpInst::ICMP_EQ && IncludesCapabilities && UsesConstants)
+  // When comparing CHERI capabilities comparing equality only compares
+  // addresses and does not imply that the capabilities are equivalent. We
+  // therefore cannot replace any subsequent uses.
+  if (Predicate == CmpInst::ICMP_EQ && IncludesCapabilities)
     return ExprResult::none();
 
   if (Predicate == CmpInst::ICMP_EQ)
