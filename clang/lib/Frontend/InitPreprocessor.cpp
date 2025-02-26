@@ -997,7 +997,6 @@ static void InitializePredefinedMacros(const TargetInfo &TI,
   if (TI.SupportsCapabilities()) {
     const uint64_t CapWidth = TI.getCHERICapabilityWidth();
     const uint64_t CapRange = TI.getPointerRangeForCHERICapability();
-    Builder.defineMacro("__CHERI__", "1"); // TODO: or define __CHERI__ to 128/256?
     Builder.defineMacro("__CHERI_CAPABILITY_WIDTH__", Twine(CapWidth));
     DefineTypeSizeof("__SIZEOF_CHERI_CAPABILITY__", CapWidth, TI, Builder);
     Builder.defineMacro("__CHERI_ADDRESS_BITS__", Twine(CapRange));
@@ -1012,6 +1011,8 @@ static void InitializePredefinedMacros(const TargetInfo &TI,
     DefineTypeSize("__UINTCAP_MAX__", TI.getIntTypeByWidth(CapRange, false), TI, Builder);
 
     if (TI.areAllPointersCapabilities()) {
+      Builder.defineMacro("__CHERI__");
+
       // XXXAR is there a reason we use two instead of just defining it?
       // I don't think we have any checks that rely on the value
       Builder.defineMacro("__CHERI_PURE_CAPABILITY__", "2");
