@@ -36,3 +36,7 @@ c.sc ca5, 128(ca3)
 # CHECK-ASM: c.cjal 2046
 # CHECK-ASM-SAME: encoding: [0xfd,0x2f]
 c.cjal 2046
+# CHECK-OBJ: c.cjal 0x810
+# CHECK-ASM: c.cjal 2046
+# CHECK-ASM-SAME: encoding: [0xfd,0x2f]
+c.jal 2046

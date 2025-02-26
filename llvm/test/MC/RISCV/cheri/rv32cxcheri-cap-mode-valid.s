@@ -37,9 +37,15 @@ c.sw a5, 124(ca3)
 # CHECK-ASM-AND-OBJ: c.cjr ca7
 # CHECK-ASM-SAME: encoding: [0x82,0x88]
 c.cjr ca7
+# CHECK-ASM-AND-OBJ: c.cjr ca7
+# CHECK-ASM-SAME: encoding: [0x82,0x88]
+c.jr ca7
 # CHECK-ASM-AND-OBJ: c.cjalr ca1
 # CHECK-ASM-SAME: encoding: [0x82,0x95]
 c.cjalr ca1
+# CHECK-ASM-AND-OBJ: c.cjalr ca1
+# CHECK-ASM-SAME: encoding: [0x82,0x95]
+c.jalr ca1
 
 # CHECK-ASM-AND-OBJ: c.cincoffset16csp csp, -512
 # CHECK-ASM-SAME: encoding: [0x01,0x71]
