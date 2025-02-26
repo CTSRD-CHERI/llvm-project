@@ -38,8 +38,8 @@ define void @use_inline(ptr addrspace(200) nocapture %arg) local_unnamed_addr ad
 ; ASM-LABEL: use_inline:
 ; ASM:       # %bb.0:
 ; ASM-NEXT:    li a1, 2
-; ASM-NEXT:    csw a1, 0(ca0)
-; ASM-NEXT:    cret
+; ASM-NEXT:    sw a1, 0(ca0)
+; ASM-NEXT:    ret
 ; CHECK-LABEL: define void @use_inline
 ; CHECK-SAME: (ptr addrspace(200) nocapture [[ARG:%.*]]) local_unnamed_addr addrspace(200) #[[ATTR0:[0-9]+]] {
 ; CHECK-NEXT:    store i32 2, ptr addrspace(200) [[ARG]], align 4
@@ -53,17 +53,17 @@ define signext i32 @stack_array() local_unnamed_addr addrspace(200) nounwind {
 ; ASM-LABEL: stack_array:
 ; ASM:       # %bb.0:
 ; ASM-NEXT:    cincoffset csp, csp, -64
-; ASM-NEXT:    csc cra, 56(csp) # 8-byte Folded Spill
-; ASM-NEXT:    csc cs0, 48(csp) # 8-byte Folded Spill
+; ASM-NEXT:    sc cra, 56(csp) # 8-byte Folded Spill
+; ASM-NEXT:    sc cs0, 48(csp) # 8-byte Folded Spill
 ; ASM-NEXT:    cincoffset ca0, csp, 8
 ; ASM-NEXT:    csetbounds cs0, ca0, 40
 ; ASM-NEXT:    cmove ca0, cs0
 ; ASM-NEXT:    ccall use
-; ASM-NEXT:    clw a0, 20(cs0)
-; ASM-NEXT:    clc cra, 56(csp) # 8-byte Folded Reload
-; ASM-NEXT:    clc cs0, 48(csp) # 8-byte Folded Reload
+; ASM-NEXT:    lw a0, 20(cs0)
+; ASM-NEXT:    lc cra, 56(csp) # 8-byte Folded Reload
+; ASM-NEXT:    lc cs0, 48(csp) # 8-byte Folded Reload
 ; ASM-NEXT:    cincoffset csp, csp, 64
-; ASM-NEXT:    cret
+; ASM-NEXT:    ret
 ; CHECK-LABEL: define signext i32 @stack_array
 ; CHECK-SAME: () local_unnamed_addr addrspace(200) #[[ATTR1:[0-9]+]] {
 ; CHECK-NEXT:    [[ARRAY:%.*]] = alloca [10 x i32], align 4, addrspace(200)
@@ -105,16 +105,16 @@ define signext i32 @stack_int() local_unnamed_addr addrspace(200) nounwind {
 ; ASM-LABEL: stack_int:
 ; ASM:       # %bb.0:
 ; ASM-NEXT:    cincoffset csp, csp, -16
-; ASM-NEXT:    csc cra, 8(csp) # 8-byte Folded Spill
+; ASM-NEXT:    sc cra, 8(csp) # 8-byte Folded Spill
 ; ASM-NEXT:    li a0, 1
-; ASM-NEXT:    csw a0, 4(csp)
+; ASM-NEXT:    sw a0, 4(csp)
 ; ASM-NEXT:    cincoffset ca0, csp, 4
 ; ASM-NEXT:    csetbounds ca0, ca0, 4
 ; ASM-NEXT:    ccall use
-; ASM-NEXT:    clw a0, 4(csp)
-; ASM-NEXT:    clc cra, 8(csp) # 8-byte Folded Reload
+; ASM-NEXT:    lw a0, 4(csp)
+; ASM-NEXT:    lc cra, 8(csp) # 8-byte Folded Reload
 ; ASM-NEXT:    cincoffset csp, csp, 16
-; ASM-NEXT:    cret
+; ASM-NEXT:    ret
 ; CHECK-LABEL: define signext i32 @stack_int
 ; CHECK-SAME: () local_unnamed_addr addrspace(200) #[[ATTR1]] {
 ; CHECK-NEXT:    [[VALUE:%.*]] = alloca i32, align 4, addrspace(200)
@@ -155,14 +155,14 @@ define signext i32 @stack_int_inlined() local_unnamed_addr addrspace(200) nounwi
 ; ASM:       # %bb.0:
 ; ASM-NEXT:    cincoffset csp, csp, -16
 ; ASM-NEXT:    li a0, 1
-; ASM-NEXT:    csw a0, 12(csp)
+; ASM-NEXT:    sw a0, 12(csp)
 ; ASM-NEXT:    cincoffset ca0, csp, 12
 ; ASM-NEXT:    csetbounds ca0, ca0, 4
 ; ASM-NEXT:    li a1, 2
-; ASM-NEXT:    csw a1, 0(ca0)
-; ASM-NEXT:    clw a0, 12(csp)
+; ASM-NEXT:    sw a1, 0(ca0)
+; ASM-NEXT:    lw a0, 12(csp)
 ; ASM-NEXT:    cincoffset csp, csp, 16
-; ASM-NEXT:    cret
+; ASM-NEXT:    ret
 ; CHECK-LABEL: define signext i32 @stack_int_inlined
 ; CHECK-SAME: () local_unnamed_addr addrspace(200) #[[ATTR1]] {
 ; CHECK-NEXT:    [[VALUE:%.*]] = alloca i32, align 4, addrspace(200)
@@ -206,10 +206,10 @@ define signext i32 @out_of_bounds_setbounds() local_unnamed_addr addrspace(200) 
 ; ASM-NEXT:    csetbounds ca0, ca0, 4
 ; ASM-NEXT:    csetbounds ca0, ca0, 5
 ; ASM-NEXT:    li a1, 2
-; ASM-NEXT:    csw a1, 0(ca0)
-; ASM-NEXT:    clw a0, 12(csp)
+; ASM-NEXT:    sw a1, 0(ca0)
+; ASM-NEXT:    lw a0, 12(csp)
 ; ASM-NEXT:    cincoffset csp, csp, 16
-; ASM-NEXT:    cret
+; ASM-NEXT:    ret
 ; CHECK-LABEL: define signext i32 @out_of_bounds_setbounds
 ; CHECK-SAME: () local_unnamed_addr addrspace(200) #[[ATTR1]] {
 ; CHECK-NEXT:    [[VALUE:%.*]] = alloca i32, align 4, addrspace(200)
@@ -241,16 +241,16 @@ define signext i32 @setbounds_escapes() local_unnamed_addr addrspace(200) nounwi
 ; ASM-LABEL: setbounds_escapes:
 ; ASM:       # %bb.0:
 ; ASM-NEXT:    cincoffset csp, csp, -16
-; ASM-NEXT:    csc cra, 8(csp) # 8-byte Folded Spill
+; ASM-NEXT:    sc cra, 8(csp) # 8-byte Folded Spill
 ; ASM-NEXT:    cincoffset ca0, csp, 4
 ; ASM-NEXT:    csetbounds ca0, ca0, 4
 ; ASM-NEXT:    li a1, 2
-; ASM-NEXT:    csw a1, 0(ca0)
+; ASM-NEXT:    sw a1, 0(ca0)
 ; ASM-NEXT:    ccall use
-; ASM-NEXT:    clw a0, 4(csp)
-; ASM-NEXT:    clc cra, 8(csp) # 8-byte Folded Reload
+; ASM-NEXT:    lw a0, 4(csp)
+; ASM-NEXT:    lc cra, 8(csp) # 8-byte Folded Reload
 ; ASM-NEXT:    cincoffset csp, csp, 16
-; ASM-NEXT:    cret
+; ASM-NEXT:    ret
 ; CHECK-LABEL: define signext i32 @setbounds_escapes
 ; CHECK-SAME: () local_unnamed_addr addrspace(200) #[[ATTR1]] {
 ; CHECK-NEXT:    [[VALUE:%.*]] = alloca i32, align 4, addrspace(200)
@@ -284,9 +284,9 @@ define void @assume_aligned() local_unnamed_addr addrspace(200) nounwind {
 ; ASM:       # %bb.0:
 ; ASM-NEXT:    cincoffset csp, csp, -16
 ; ASM-NEXT:    li a0, 1
-; ASM-NEXT:    csw a0, 12(csp)
+; ASM-NEXT:    sw a0, 12(csp)
 ; ASM-NEXT:    cincoffset csp, csp, 16
-; ASM-NEXT:    cret
+; ASM-NEXT:    ret
 ; CHECK-LABEL: define void @assume_aligned
 ; CHECK-SAME: () local_unnamed_addr addrspace(200) #[[ATTR1]] {
 ; CHECK-NEXT:    [[TMP1:%.*]] = alloca [4 x i8], align 4, addrspace(200)

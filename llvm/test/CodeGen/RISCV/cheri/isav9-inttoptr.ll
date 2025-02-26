@@ -7,7 +7,7 @@ define dso_local i8 addrspace(200)* @inttoptr(i64 %ptr) addrspace(200) nounwind 
 ; PURECAP-LABEL: inttoptr:
 ; PURECAP:       # %bb.0:
 ; PURECAP-NEXT:    cincoffset ca0, cnull, a0
-; PURECAP-NEXT:    cret
+; PURECAP-NEXT:    ret
 ;
 ; HYBRID-LABEL: inttoptr:
 ; HYBRID:       # %bb.0:
@@ -28,7 +28,7 @@ define dso_local i8 addrspace(200)* @inttoptr_plus_const(i64 %ptr) addrspace(200
 ; PURECAP:       # %bb.0:
 ; PURECAP-NEXT:    cincoffset ca0, cnull, a0
 ; PURECAP-NEXT:    cincoffset ca0, ca0, 2
-; PURECAP-NEXT:    cret
+; PURECAP-NEXT:    ret
 ;
 ; HYBRID-LABEL: inttoptr_plus_const:
 ; HYBRID:       # %bb.0:
@@ -59,7 +59,7 @@ define dso_local i8 addrspace(200)* @inttoptr_plus_var(i64 %ptr, i64 %add) addrs
 ; PURECAP:       # %bb.0:
 ; PURECAP-NEXT:    cincoffset ca0, cnull, a0
 ; PURECAP-NEXT:    cincoffset ca0, ca0, a1
-; PURECAP-NEXT:    cret
+; PURECAP-NEXT:    ret
 ;
 ; HYBRID-LABEL: inttoptr_plus_var:
 ; HYBRID:       # %bb.0:
@@ -81,7 +81,7 @@ define dso_local i8 addrspace(200)* @inttoptr_null() addrspace(200) nounwind {
 ; PURECAP-LABEL: inttoptr_null:
 ; PURECAP:       # %bb.0:
 ; PURECAP-NEXT:    cmove ca0, cnull
-; PURECAP-NEXT:    cret
+; PURECAP-NEXT:    ret
 ;
 ; HYBRID-LABEL: inttoptr_null:
 ; HYBRID:       # %bb.0:
@@ -95,7 +95,7 @@ define dso_local i8 addrspace(200)* @inttoptr_null_plus_const() addrspace(200) n
 ; PURECAP-LABEL: inttoptr_null_plus_const:
 ; PURECAP:       # %bb.0:
 ; PURECAP-NEXT:    cincoffset ca0, cnull, 2
-; PURECAP-NEXT:    cret
+; PURECAP-NEXT:    ret
 ;
 ; HYBRID-LABEL: inttoptr_null_plus_const:
 ; HYBRID:       # %bb.0:
@@ -110,7 +110,7 @@ define dso_local i8 addrspace(200)* @inttoptr_null_plus_var(i64 %add) addrspace(
 ; PURECAP-LABEL: inttoptr_null_plus_var:
 ; PURECAP:       # %bb.0:
 ; PURECAP-NEXT:    cincoffset ca0, cnull, a0
-; PURECAP-NEXT:    cret
+; PURECAP-NEXT:    ret
 ;
 ; HYBRID-LABEL: inttoptr_null_plus_var:
 ; HYBRID:       # %bb.0:

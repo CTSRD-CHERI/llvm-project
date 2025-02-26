@@ -9,7 +9,7 @@ define dso_local i64 @ptrtoint(i8 addrspace(200)* %cap) addrspace(200) nounwind 
 ; PURECAP-LABEL: ptrtoint:
 ; PURECAP:       # %bb.0:
 ; PURECAP-NEXT:    mv a0, a0
-; PURECAP-NEXT:    cret
+; PURECAP-NEXT:    ret
 ;
 ; HYBRID-LABEL: ptrtoint:
 ; HYBRID:       # %bb.0:
@@ -25,7 +25,7 @@ define dso_local i64 @ptrtoint_plus_const(i8 addrspace(200)* %cap) addrspace(200
 ; PURECAP-LABEL: ptrtoint_plus_const:
 ; PURECAP:       # %bb.0:
 ; PURECAP-NEXT:    addi a0, a0, 2
-; PURECAP-NEXT:    cret
+; PURECAP-NEXT:    ret
 ;
 ; HYBRID-LABEL: ptrtoint_plus_const:
 ; HYBRID:       # %bb.0:
@@ -43,7 +43,7 @@ define dso_local i64 @ptrtoint_plus_var(i8 addrspace(200)* %cap, i64 %add) addrs
 ; PURECAP-LABEL: ptrtoint_plus_var:
 ; PURECAP:       # %bb.0:
 ; PURECAP-NEXT:    add a0, a0, a1
-; PURECAP-NEXT:    cret
+; PURECAP-NEXT:    ret
 ;
 ; HYBRID-LABEL: ptrtoint_plus_var:
 ; HYBRID:       # %bb.0:
@@ -61,7 +61,7 @@ define dso_local i64 @ptrtoint_null() addrspace(200) nounwind {
 ; PURECAP-LABEL: ptrtoint_null:
 ; PURECAP:       # %bb.0:
 ; PURECAP-NEXT:    li a0, 0
-; PURECAP-NEXT:    cret
+; PURECAP-NEXT:    ret
 ;
 ; HYBRID-LABEL: ptrtoint_null:
 ; HYBRID:       # %bb.0:
@@ -77,7 +77,7 @@ define dso_local i64 @ptrtoint_null_plus_const() addrspace(200) nounwind {
 ; PURECAP-LABEL: ptrtoint_null_plus_const:
 ; PURECAP:       # %bb.0:
 ; PURECAP-NEXT:    li a0, 2
-; PURECAP-NEXT:    cret
+; PURECAP-NEXT:    ret
 ;
 ; HYBRID-LABEL: ptrtoint_null_plus_const:
 ; HYBRID:       # %bb.0:
@@ -95,7 +95,7 @@ define dso_local i64 @ptrtoint_null_plus_var(i64 %add) addrspace(200) nounwind {
 ; PURECAP-LABEL: ptrtoint_null_plus_var:
 ; PURECAP:       # %bb.0:
 ; PURECAP-NEXT:    add a0, zero, a0
-; PURECAP-NEXT:    cret
+; PURECAP-NEXT:    ret
 ;
 ; HYBRID-LABEL: ptrtoint_null_plus_var:
 ; HYBRID:       # %bb.0:

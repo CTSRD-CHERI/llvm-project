@@ -19,9 +19,9 @@ define void @below_threshold(i32 %in, i32 addrspace(200)* %out) nounwind {
 ; CHECK-NEXT:  .LBB0_3: # %bb2
 ; CHECK-NEXT:    li a0, 3
 ; CHECK-NEXT:  .LBB0_4: # %exit
-; CHECK-NEXT:    csw a0, 0(ca1)
+; CHECK-NEXT:    sw a0, 0(ca1)
 ; CHECK-NEXT:  .LBB0_5: # %exit
-; CHECK-NEXT:    cret
+; CHECK-NEXT:    ret
 entry:
   switch i32 %in, label %exit [
   i32 1, label %bb1
@@ -68,9 +68,9 @@ define void @above_threshold_mips(i32 %in, i32 addrspace(200)* %out) nounwind {
 ; CHECK-NEXT:  .LBB1_8: # %bb3
 ; CHECK-NEXT:    li a0, 2
 ; CHECK-NEXT:  .LBB1_9: # %exit
-; CHECK-NEXT:    csw a0, 0(ca1)
+; CHECK-NEXT:    sw a0, 0(ca1)
 ; CHECK-NEXT:  .LBB1_10: # %exit
-; CHECK-NEXT:    cret
+; CHECK-NEXT:    ret
 entry:
   switch i32 %in, label %exit [
   i32 1, label %bb1
@@ -105,20 +105,20 @@ define void @above_threshold_all(i32 %in, i32 addrspace(200)* %out) nounwind {
 ; CHECK-NEXT:    bltu a2, a0, .LBB2_9
 ; CHECK-NEXT:  # %bb.1: # %entry
 ; CHECK-NEXT:    cincoffset csp, csp, -16
-; CHECK-NEXT:    csc cra, 8(csp) # 8-byte Folded Spill
+; CHECK-NEXT:    sc cra, 8(csp) # 8-byte Folded Spill
 ; CHECK-NEXT:    slli a0, a0, 2
 ; CHECK-NEXT:  .LBB2_10: # %entry
 ; CHECK-NEXT:    # Label of block must be emitted
 ; CHECK-NEXT:    auipcc ca2, %pcrel_hi(.LJTI2_0)
 ; CHECK-NEXT:    cincoffset ca2, ca2, %pcrel_lo(.LBB2_10)
 ; CHECK-NEXT:    cincoffset ca0, ca2, a0
-; CHECK-NEXT:    clw a0, 0(ca0)
+; CHECK-NEXT:    lw a0, 0(ca0)
 ; CHECK-NEXT:  .LBB2_11: # %entry
 ; CHECK-NEXT:    # Label of block must be emitted
 ; CHECK-NEXT:    auipcc ca2, %pcrel_hi(.Labove_threshold_all$jump_table_base)
 ; CHECK-NEXT:    cincoffset ca2, ca2, %pcrel_lo(.LBB2_11)
 ; CHECK-NEXT:    cincoffset ca0, ca2, a0
-; CHECK-NEXT:    cjr ca0
+; CHECK-NEXT:    jr ca0
 ; CHECK-NEXT:  .LBB2_2: # %bb1
 ; CHECK-NEXT:    li a0, 4
 ; CHECK-NEXT:    j .LBB2_8
@@ -137,11 +137,11 @@ define void @above_threshold_all(i32 %in, i32 addrspace(200)* %out) nounwind {
 ; CHECK-NEXT:  .LBB2_7: # %bb6
 ; CHECK-NEXT:    li a0, 200
 ; CHECK-NEXT:  .LBB2_8:
-; CHECK-NEXT:    csw a0, 0(ca1)
-; CHECK-NEXT:    clc cra, 8(csp) # 8-byte Folded Reload
+; CHECK-NEXT:    sw a0, 0(ca1)
+; CHECK-NEXT:    lc cra, 8(csp) # 8-byte Folded Reload
 ; CHECK-NEXT:    cincoffset csp, csp, 16
 ; CHECK-NEXT:  .LBB2_9: # %exit
-; CHECK-NEXT:    cret
+; CHECK-NEXT:    ret
 entry:
   switch i32 %in, label %exit [
   i32 1, label %bb1

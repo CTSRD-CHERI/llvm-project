@@ -33,12 +33,12 @@ define dso_local void @hoist_csetbounds(i32 signext %cond, ptr addrspace(200) %f
 ; CHECK-LABEL: hoist_csetbounds:
 ; CHECK:       # %bb.0: # %entry
 ; CHECK-NEXT:    cincoffset csp, csp, -96
-; CHECK-NEXT:    csc cra, 80(csp) # 16-byte Folded Spill
-; CHECK-NEXT:    csc cs0, 64(csp) # 16-byte Folded Spill
-; CHECK-NEXT:    csc cs1, 48(csp) # 16-byte Folded Spill
-; CHECK-NEXT:    csc cs2, 32(csp) # 16-byte Folded Spill
-; CHECK-NEXT:    csc cs3, 16(csp) # 16-byte Folded Spill
-; CHECK-NEXT:    csc cs4, 0(csp) # 16-byte Folded Spill
+; CHECK-NEXT:    sc cra, 80(csp) # 16-byte Folded Spill
+; CHECK-NEXT:    sc cs0, 64(csp) # 16-byte Folded Spill
+; CHECK-NEXT:    sc cs1, 48(csp) # 16-byte Folded Spill
+; CHECK-NEXT:    sc cs2, 32(csp) # 16-byte Folded Spill
+; CHECK-NEXT:    sc cs3, 16(csp) # 16-byte Folded Spill
+; CHECK-NEXT:    sc cs4, 0(csp) # 16-byte Folded Spill
 ; CHECK-NEXT:    cmove cs0, ca1
 ; CHECK-NEXT:    cincoffset ca0, ca1, 4
 ; CHECK-NEXT:    li s3, -1
@@ -60,14 +60,14 @@ define dso_local void @hoist_csetbounds(i32 signext %cond, ptr addrspace(200) %f
 ; CHECK-NEXT:    ccall call
 ; CHECK-NEXT:    j .LBB0_1
 ; CHECK-NEXT:  .LBB0_4: # %for.cond.cleanup
-; CHECK-NEXT:    clc cra, 80(csp) # 16-byte Folded Reload
-; CHECK-NEXT:    clc cs0, 64(csp) # 16-byte Folded Reload
-; CHECK-NEXT:    clc cs1, 48(csp) # 16-byte Folded Reload
-; CHECK-NEXT:    clc cs2, 32(csp) # 16-byte Folded Reload
-; CHECK-NEXT:    clc cs3, 16(csp) # 16-byte Folded Reload
-; CHECK-NEXT:    clc cs4, 0(csp) # 16-byte Folded Reload
+; CHECK-NEXT:    lc cra, 80(csp) # 16-byte Folded Reload
+; CHECK-NEXT:    lc cs0, 64(csp) # 16-byte Folded Reload
+; CHECK-NEXT:    lc cs1, 48(csp) # 16-byte Folded Reload
+; CHECK-NEXT:    lc cs2, 32(csp) # 16-byte Folded Reload
+; CHECK-NEXT:    lc cs3, 16(csp) # 16-byte Folded Reload
+; CHECK-NEXT:    lc cs4, 0(csp) # 16-byte Folded Reload
 ; CHECK-NEXT:    cincoffset csp, csp, 96
-; CHECK-NEXT:    cret
+; CHECK-NEXT:    ret
 ; HOIST-OPT-LABEL: define dso_local void @hoist_csetbounds
 ; HOIST-OPT-SAME: (i32 signext [[COND:%.*]], ptr addrspace(200) [[F:%.*]]) local_unnamed_addr addrspace(200) #[[ATTR0:[0-9]+]] {
 ; HOIST-OPT-NEXT:  entry:

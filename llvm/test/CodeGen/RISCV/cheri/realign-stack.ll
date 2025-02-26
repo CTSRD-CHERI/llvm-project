@@ -10,34 +10,34 @@ define i8 addrspace(200)* @pluto() addrspace(200) nounwind {
 ; IL32PC64-LABEL: pluto:
 ; IL32PC64:       # %bb.0: # %bb
 ; IL32PC64-NEXT:    cincoffset csp, csp, -128
-; IL32PC64-NEXT:    csc cra, 120(csp) # 8-byte Folded Spill
-; IL32PC64-NEXT:    csc cs0, 112(csp) # 8-byte Folded Spill
+; IL32PC64-NEXT:    sc cra, 120(csp) # 8-byte Folded Spill
+; IL32PC64-NEXT:    sc cs0, 112(csp) # 8-byte Folded Spill
 ; IL32PC64-NEXT:    cincoffset cs0, csp, 128
 ; IL32PC64-NEXT:    andi a0, sp, -64
 ; IL32PC64-NEXT:    csetaddr csp, csp, a0
 ; IL32PC64-NEXT:    cincoffset ca0, csp, 0
 ; IL32PC64-NEXT:    csetbounds ca0, ca0, 64
 ; IL32PC64-NEXT:    cincoffset csp, cs0, -128
-; IL32PC64-NEXT:    clc cra, 120(csp) # 8-byte Folded Reload
-; IL32PC64-NEXT:    clc cs0, 112(csp) # 8-byte Folded Reload
+; IL32PC64-NEXT:    lc cra, 120(csp) # 8-byte Folded Reload
+; IL32PC64-NEXT:    lc cs0, 112(csp) # 8-byte Folded Reload
 ; IL32PC64-NEXT:    cincoffset csp, csp, 128
-; IL32PC64-NEXT:    cret
+; IL32PC64-NEXT:    ret
 ;
 ; L64PC128-LABEL: pluto:
 ; L64PC128:       # %bb.0: # %bb
 ; L64PC128-NEXT:    cincoffset csp, csp, -128
-; L64PC128-NEXT:    csc cra, 112(csp) # 16-byte Folded Spill
-; L64PC128-NEXT:    csc cs0, 96(csp) # 16-byte Folded Spill
+; L64PC128-NEXT:    sc cra, 112(csp) # 16-byte Folded Spill
+; L64PC128-NEXT:    sc cs0, 96(csp) # 16-byte Folded Spill
 ; L64PC128-NEXT:    cincoffset cs0, csp, 128
 ; L64PC128-NEXT:    andi a0, sp, -64
 ; L64PC128-NEXT:    csetaddr csp, csp, a0
 ; L64PC128-NEXT:    cincoffset ca0, csp, 0
 ; L64PC128-NEXT:    csetbounds ca0, ca0, 64
 ; L64PC128-NEXT:    cincoffset csp, cs0, -128
-; L64PC128-NEXT:    clc cra, 112(csp) # 16-byte Folded Reload
-; L64PC128-NEXT:    clc cs0, 96(csp) # 16-byte Folded Reload
+; L64PC128-NEXT:    lc cra, 112(csp) # 16-byte Folded Reload
+; L64PC128-NEXT:    lc cs0, 96(csp) # 16-byte Folded Reload
 ; L64PC128-NEXT:    cincoffset csp, csp, 128
-; L64PC128-NEXT:    cret
+; L64PC128-NEXT:    ret
 bb:
   %tmp = alloca %struct.wobble, align 64, addrspace(200)
   %ret = bitcast %struct.wobble addrspace(200)* %tmp to i8 addrspace(200)*

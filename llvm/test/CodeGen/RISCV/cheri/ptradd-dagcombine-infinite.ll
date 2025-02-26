@@ -9,7 +9,7 @@ define %struct.foo addrspace(200)* @fold_geps(i64 %arg1, %struct.foo addrspace(2
 ; CHECK-LABEL: fold_geps:
 ; CHECK:       # %bb.0: # %entry
 ; CHECK-NEXT:    cincoffset ca0, ca1, -32
-; CHECK-NEXT:    cret
+; CHECK-NEXT:    ret
 entry:
   %mul = mul nsw i64 0, %arg1
   %gep1 = getelementptr inbounds %struct.foo, %struct.foo addrspace(200)* %arg2, i64 %mul
@@ -21,7 +21,7 @@ define %struct.foo addrspace(200)* @fold_geps2(i64 %a, i64 %b, %struct.foo addrs
 ; CHECK-LABEL: fold_geps2:
 ; CHECK:       # %bb.0: # %entry
 ; CHECK-NEXT:    cincoffset ca0, ca2, -32
-; CHECK-NEXT:    cret
+; CHECK-NEXT:    ret
 entry:
   %zero = sub i64 %a, %a  ; Use a fold that does not return SDValue(N, 0)
   %gep1 = getelementptr inbounds %struct.foo, %struct.foo addrspace(200)* %ptr, i64 %zero
@@ -37,7 +37,7 @@ define %struct.foo addrspace(200)* @cannot_fold(i64 %arg1, %struct.foo addrspace
 ; CHECK-NEXT:    slli a0, a0, 5
 ; CHECK-NEXT:    cincoffset ca0, ca1, a0
 ; CHECK-NEXT:    cincoffset ca0, ca0, -32
-; CHECK-NEXT:    cret
+; CHECK-NEXT:    ret
 entry:
   %mul = mul i64 %arg1, %arg1
   %gep1 = getelementptr inbounds %struct.foo, %struct.foo addrspace(200)* %arg2, i64 %mul
@@ -52,7 +52,7 @@ define i8 addrspace(200)* @cannot_fold_2(i64 %arg1, i8 addrspace(200)* %ptr) nou
 ; CHECK-NEXT:    neg a0, a0
 ; CHECK-NEXT:    cincoffset ca0, ca1, a0
 ; CHECK-NEXT:    cincoffset ca0, ca0, 304
-; CHECK-NEXT:    cret
+; CHECK-NEXT:    ret
 entry:
   %sub = sub i64 0, %arg1
   %gep1 = getelementptr inbounds i8, i8 addrspace(200)* %ptr, i64 %sub
@@ -74,13 +74,13 @@ define i8 addrspace(200)* @reassociated_node_reuses_other_node(i64 %arg1, %struc
 ; CHECK-NEXT:    slli a0, a0, 5
 ; CHECK-NEXT:    addi a2, a0, 16
 ; CHECK-NEXT:    cincoffset ca2, ca1, a2
-; CHECK-NEXT:    csc cnull, 0(ca2)
-; CHECK-NEXT:    clc ca2, 16(ca1)
+; CHECK-NEXT:    sc cnull, 0(ca2)
+; CHECK-NEXT:    lc ca2, 16(ca1)
 ; CHECK-NEXT:    cincoffset ca0, ca1, a0
-; CHECK-NEXT:    csc ca2, 16(ca0)
-; CHECK-NEXT:    clc ca1, 0(ca1)
-; CHECK-NEXT:    csc ca1, 0(ca0)
-; CHECK-NEXT:    cret
+; CHECK-NEXT:    sc ca2, 16(ca0)
+; CHECK-NEXT:    lc ca1, 0(ca1)
+; CHECK-NEXT:    sc ca1, 0(ca0)
+; CHECK-NEXT:    ret
 bb:
   %dst0 = getelementptr inbounds %struct.bar, %struct.bar addrspace(200)* %arg2, i64 %arg1, i32 0
   %dst1 = getelementptr inbounds %struct.bar, %struct.bar addrspace(200)* %arg2, i64 %arg1, i32 1
@@ -99,7 +99,7 @@ bb:
 define i8 addrspace(200)* @trivial_ptradd_fold(i8 addrspace(200)* %this) nounwind {
 ; CHECK-LABEL: trivial_ptradd_fold:
 ; CHECK:       # %bb.0: # %entry
-; CHECK-NEXT:    cret
+; CHECK-NEXT:    ret
 entry:
   %0 = getelementptr inbounds i8, i8 addrspace(200)* %this, i64 -16
   %1 = getelementptr inbounds i8, i8 addrspace(200)* %0, i64 16

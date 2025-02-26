@@ -12,13 +12,13 @@ define void @foo() nounwind {
 ; CHECK-LABEL: foo:
 ; CHECK:       # %bb.0:
 ; CHECK-NEXT:    cincoffset csp, csp, -32
-; CHECK-NEXT:    csc cra, 16(csp) # 16-byte Folded Spill
+; CHECK-NEXT:    sc cra, 16(csp) # 16-byte Folded Spill
 ; CHECK-NEXT:    cincoffset ca0, csp, 15
 ; CHECK-NEXT:    csetbounds ca0, ca0, 0
 ; CHECK-NEXT:    ccall bar
-; CHECK-NEXT:    clc cra, 16(csp) # 16-byte Folded Reload
+; CHECK-NEXT:    lc cra, 16(csp) # 16-byte Folded Reload
 ; CHECK-NEXT:    cincoffset csp, csp, 32
-; CHECK-NEXT:    cret
+; CHECK-NEXT:    ret
   %x = alloca [2 x i8], align 1, addrspace(200)
   %x_plus_1 = getelementptr inbounds [2 x i8], [2 x i8] addrspace(200)* %x, i64 0, i64 1
   %p = call i8 addrspace(200)* @llvm.cheri.cap.bounds.set.i64(i8 addrspace(200)* %x_plus_1, i64 0)

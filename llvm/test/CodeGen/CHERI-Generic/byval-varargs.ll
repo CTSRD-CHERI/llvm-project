@@ -97,9 +97,9 @@ define signext i32 @test_alloca() local_unnamed_addr addrspace(200) nounwind {
 ; PURECAP-RV64-LABEL: test_alloca:
 ; PURECAP-RV64:       # %bb.0: # %entry
 ; PURECAP-RV64-NEXT:    cincoffset csp, csp, -2032
-; PURECAP-RV64-NEXT:    csc cra, 2016(csp) # 16-byte Folded Spill
-; PURECAP-RV64-NEXT:    csc cs0, 2000(csp) # 16-byte Folded Spill
-; PURECAP-RV64-NEXT:    csc cs1, 1984(csp) # 16-byte Folded Spill
+; PURECAP-RV64-NEXT:    sc cra, 2016(csp) # 16-byte Folded Spill
+; PURECAP-RV64-NEXT:    sc cs0, 2000(csp) # 16-byte Folded Spill
+; PURECAP-RV64-NEXT:    sc cs1, 1984(csp) # 16-byte Folded Spill
 ; PURECAP-RV64-NEXT:    cincoffset csp, csp, -96
 ; PURECAP-RV64-NEXT:    cincoffset ca0, csp, 1056
 ; PURECAP-RV64-NEXT:    csetbounds cs0, ca0, 1024
@@ -116,14 +116,14 @@ define signext i32 @test_alloca() local_unnamed_addr addrspace(200) nounwind {
 ; PURECAP-RV64-NEXT:    cmove ca1, cs0
 ; PURECAP-RV64-NEXT:    ccall memcpy
 ; PURECAP-RV64-NEXT:    li a0, 1024
-; PURECAP-RV64-NEXT:    csc cs1, 0(csp)
+; PURECAP-RV64-NEXT:    sc cs1, 0(csp)
 ; PURECAP-RV64-NEXT:    ccall varargs
 ; PURECAP-RV64-NEXT:    cincoffset csp, csp, 96
-; PURECAP-RV64-NEXT:    clc cra, 2016(csp) # 16-byte Folded Reload
-; PURECAP-RV64-NEXT:    clc cs0, 2000(csp) # 16-byte Folded Reload
-; PURECAP-RV64-NEXT:    clc cs1, 1984(csp) # 16-byte Folded Reload
+; PURECAP-RV64-NEXT:    lc cra, 2016(csp) # 16-byte Folded Reload
+; PURECAP-RV64-NEXT:    lc cs0, 2000(csp) # 16-byte Folded Reload
+; PURECAP-RV64-NEXT:    lc cs1, 1984(csp) # 16-byte Folded Reload
 ; PURECAP-RV64-NEXT:    cincoffset csp, csp, 2032
-; PURECAP-RV64-NEXT:    cret
+; PURECAP-RV64-NEXT:    ret
 ;
 ; PURECAP-MIPS-LABEL: test_alloca:
 ; PURECAP-MIPS:       # %bb.0: # %entry
@@ -275,9 +275,9 @@ define signext i32 @test_byval() local_unnamed_addr addrspace(200) nounwind {
 ; Stack frame size should be > 2048 (split into two instructions)
 ; PURECAP-RV64:       # %bb.0: # %entry
 ; PURECAP-RV64-NEXT:    cincoffset csp, csp, -2032
-; PURECAP-RV64-NEXT:    csc cra, 2016(csp) # 16-byte Folded Spill
-; PURECAP-RV64-NEXT:    csc cs0, 2000(csp) # 16-byte Folded Spill
-; PURECAP-RV64-NEXT:    csc cs1, 1984(csp) # 16-byte Folded Spill
+; PURECAP-RV64-NEXT:    sc cra, 2016(csp) # 16-byte Folded Spill
+; PURECAP-RV64-NEXT:    sc cs0, 2000(csp) # 16-byte Folded Spill
+; PURECAP-RV64-NEXT:    sc cs1, 1984(csp) # 16-byte Folded Spill
 ; PURECAP-RV64-NEXT:    cincoffset csp, csp, -96
 ; PURECAP-RV64-NEXT:    cincoffset ca0, csp, 1056
 ; PURECAP-RV64-NEXT:    csetbounds cs0, ca0, 1024
@@ -295,14 +295,14 @@ define signext i32 @test_byval() local_unnamed_addr addrspace(200) nounwind {
 ; TODO: should we add the csetbounds here? Not really necessary if we trust memcpy().
 ; PURECAP-RV64-NEXT:    ccall memcpy
 ; PURECAP-RV64-NEXT:    li a0, 1024
-; PURECAP-RV64-NEXT:    csc cs1, 0(csp)
+; PURECAP-RV64-NEXT:    sc cs1, 0(csp)
 ; PURECAP-RV64-NEXT:    ccall varargs
 ; PURECAP-RV64-NEXT:    cincoffset csp, csp, 96
-; PURECAP-RV64-NEXT:    clc cra, 2016(csp) # 16-byte Folded Reload
-; PURECAP-RV64-NEXT:    clc cs0, 2000(csp) # 16-byte Folded Reload
-; PURECAP-RV64-NEXT:    clc cs1, 1984(csp) # 16-byte Folded Reload
+; PURECAP-RV64-NEXT:    lc cra, 2016(csp) # 16-byte Folded Reload
+; PURECAP-RV64-NEXT:    lc cs0, 2000(csp) # 16-byte Folded Reload
+; PURECAP-RV64-NEXT:    lc cs1, 1984(csp) # 16-byte Folded Reload
 ; PURECAP-RV64-NEXT:    cincoffset csp, csp, 2032
-; PURECAP-RV64-NEXT:    cret
+; PURECAP-RV64-NEXT:    ret
 ;
 ; PURECAP-MIPS-LABEL: test_byval:
 ; Stack frame size should be > 2048:

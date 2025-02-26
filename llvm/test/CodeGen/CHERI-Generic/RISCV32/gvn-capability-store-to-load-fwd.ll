@@ -25,10 +25,10 @@ define i32 @first_i32_store_to_load_fwd(ptr addrspace(200) %arg) local_unnamed_a
 ; ASM-LABEL: first_i32_store_to_load_fwd:
 ; ASM:       # %bb.0:
 ; ASM-NEXT:    cincoffset csp, csp, -48
-; ASM-NEXT:    csc ca0, 0(csp)
-; ASM-NEXT:    clw a0, 0(csp)
+; ASM-NEXT:    sc ca0, 0(csp)
+; ASM-NEXT:    lw a0, 0(csp)
 ; ASM-NEXT:    cincoffset csp, csp, 48
-; ASM-NEXT:    cret
+; ASM-NEXT:    ret
 ; CHECK-LABEL: define i32 @first_i32_store_to_load_fwd
 ; CHECK-SAME: (ptr addrspace(200) [[ARG:%.*]]) local_unnamed_addr addrspace(200) #[[ATTR0:[0-9]+]] {
 ; CHECK-NEXT:    [[STACKVAL:%.*]] = alloca [[STRUCT_ADDRINFO:%.*]], align 8, addrspace(200)
@@ -47,10 +47,10 @@ define i32 @second_i32_store_to_load_fwd(ptr addrspace(200) %arg) local_unnamed_
 ; ASM-LABEL: second_i32_store_to_load_fwd:
 ; ASM:       # %bb.0:
 ; ASM-NEXT:    cincoffset csp, csp, -48
-; ASM-NEXT:    csc ca0, 0(csp)
-; ASM-NEXT:    clw a0, 4(csp)
+; ASM-NEXT:    sc ca0, 0(csp)
+; ASM-NEXT:    lw a0, 4(csp)
 ; ASM-NEXT:    cincoffset csp, csp, 48
-; ASM-NEXT:    cret
+; ASM-NEXT:    ret
 ; CHECK-LABEL: define i32 @second_i32_store_to_load_fwd
 ; CHECK-SAME: (ptr addrspace(200) [[ARG:%.*]]) local_unnamed_addr addrspace(200) #[[ATTR0]] {
 ; CHECK-NEXT:    [[STACKVAL:%.*]] = alloca [[STRUCT_ADDRINFO:%.*]], align 8, addrspace(200)
@@ -70,10 +70,10 @@ define i32 @third_i32_store_to_load_fwd(ptr addrspace(200) %arg) local_unnamed_a
 ; ASM-LABEL: third_i32_store_to_load_fwd:
 ; ASM:       # %bb.0:
 ; ASM-NEXT:    cincoffset csp, csp, -48
-; ASM-NEXT:    csc ca0, 0(csp)
+; ASM-NEXT:    sc ca0, 0(csp)
 ; ASM-NEXT:    # implicit-def: $x10
 ; ASM-NEXT:    cincoffset csp, csp, 48
-; ASM-NEXT:    cret
+; ASM-NEXT:    ret
 ; CHECK-LABEL: define i32 @third_i32_store_to_load_fwd
 ; CHECK-SAME: (ptr addrspace(200) [[ARG:%.*]]) local_unnamed_addr addrspace(200) #[[ATTR0]] {
 ; CHECK-NEXT:    [[STACKVAL:%.*]] = alloca [[STRUCT_ADDRINFO:%.*]], align 8, addrspace(200)
@@ -92,10 +92,10 @@ define i32 @fourth_i32_store_to_load_fwd(ptr addrspace(200) %arg) local_unnamed_
 ; ASM-LABEL: fourth_i32_store_to_load_fwd:
 ; ASM:       # %bb.0:
 ; ASM-NEXT:    cincoffset csp, csp, -48
-; ASM-NEXT:    csc ca0, 0(csp)
+; ASM-NEXT:    sc ca0, 0(csp)
 ; ASM-NEXT:    # implicit-def: $x10
 ; ASM-NEXT:    cincoffset csp, csp, 48
-; ASM-NEXT:    cret
+; ASM-NEXT:    ret
 ; CHECK-LABEL: define i32 @fourth_i32_store_to_load_fwd
 ; CHECK-SAME: (ptr addrspace(200) [[ARG:%.*]]) local_unnamed_addr addrspace(200) #[[ATTR0]] {
 ; CHECK-NEXT:    [[STACKVAL:%.*]] = alloca [[STRUCT_ADDRINFO:%.*]], align 8, addrspace(200)
