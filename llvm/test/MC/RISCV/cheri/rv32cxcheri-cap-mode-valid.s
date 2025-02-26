@@ -50,12 +50,24 @@ c.jalr ca1
 # CHECK-ASM-AND-OBJ: c.cincoffset16csp csp, -512
 # CHECK-ASM-SAME: encoding: [0x01,0x71]
 c.cincoffset16csp csp, -512
+# CHECK-ASM-AND-OBJ: c.cincoffset16csp csp, -512
+# CHECK-ASM-SAME: encoding: [0x01,0x71]
+c.addi16sp csp, -512
 # CHECK-ASM-AND-OBJ: c.cincoffset16csp csp, 496
 # CHECK-ASM-SAME: encoding: [0x7d,0x61]
 c.cincoffset16csp csp, 496
+# CHECK-ASM-AND-OBJ: c.cincoffset16csp csp, 496
+# CHECK-ASM-SAME: encoding: [0x7d,0x61]
+c.addi16sp csp, 496
 # CHECK-ASM-AND-OBJ: c.cincoffset4cspn ca3, csp, 1020
 # CHECK-ASM-SAME: encoding: [0xf4,0x1f]
 c.cincoffset4cspn ca3, csp, 1020
+# CHECK-ASM-AND-OBJ: c.cincoffset4cspn ca3, csp, 1020
+# CHECK-ASM-SAME: encoding: [0xf4,0x1f]
+c.addi4spn ca3, csp, 1020
 # CHECK-ASM-AND-OBJ: c.cincoffset4cspn ca3, csp, 4
 # CHECK-ASM-SAME: encoding: [0x54,0x00]
 c.cincoffset4cspn ca3, csp, 4
+# CHECK-ASM-AND-OBJ: c.cincoffset4cspn ca3, csp, 4
+# CHECK-ASM-SAME: encoding: [0x54,0x00]
+c.addi4spn ca3, csp, 4
