@@ -11,13 +11,13 @@
 define void @_thr_umutex_init(%struct.umutex addrspace(200)* %mtx) local_unnamed_addr addrspace(200) nounwind "frame-pointer"="none" {
 ; CHECK-LABEL: _thr_umutex_init:
 ; CHECK:       # %bb.0:
-; CHECK-NEXT:    csc cnull, 40(ca0)
-; CHECK-NEXT:    csc cnull, 32(ca0)
-; CHECK-NEXT:    csc cnull, 24(ca0)
-; CHECK-NEXT:    csc cnull, 16(ca0)
-; CHECK-NEXT:    csc cnull, 8(ca0)
-; CHECK-NEXT:    csc cnull, 0(ca0)
-; CHECK-NEXT:    cret
+; CHECK-NEXT:    sc cnull, 40(ca0)
+; CHECK-NEXT:    sc cnull, 32(ca0)
+; CHECK-NEXT:    sc cnull, 24(ca0)
+; CHECK-NEXT:    sc cnull, 16(ca0)
+; CHECK-NEXT:    sc cnull, 8(ca0)
+; CHECK-NEXT:    sc cnull, 0(ca0)
+; CHECK-NEXT:    ret
   %1 = bitcast %struct.umutex addrspace(200)* %mtx to i8 addrspace(200)*
   tail call void @llvm.memcpy.p200i8.p200i8.i64(i8 addrspace(200)* align 16 %1, i8 addrspace(200)* align 16 bitcast (%struct.umutex addrspace(200)* @_thr_umutex_init.default_mtx to i8 addrspace(200)*), i64 48, i1 false)
   ret void
@@ -28,20 +28,20 @@ define void @_thr_umutex_init_volatile(%struct.umutex addrspace(200)* %mtx) loca
 ; CHECK:       # %bb.0:
 ; CHECK-NEXT:  .LBB1_1: # Label of block must be emitted
 ; CHECK-NEXT:    auipcc ca1, %captab_pcrel_hi(_thr_umutex_init.default_mtx)
-; CHECK-NEXT:    clc ca1, %pcrel_lo(.LBB1_1)(ca1)
-; CHECK-NEXT:    clc ca2, 40(ca1)
-; CHECK-NEXT:    csc ca2, 40(ca0)
-; CHECK-NEXT:    clc ca2, 32(ca1)
-; CHECK-NEXT:    csc ca2, 32(ca0)
-; CHECK-NEXT:    clc ca2, 24(ca1)
-; CHECK-NEXT:    csc ca2, 24(ca0)
-; CHECK-NEXT:    clc ca2, 16(ca1)
-; CHECK-NEXT:    csc ca2, 16(ca0)
-; CHECK-NEXT:    clc ca2, 8(ca1)
-; CHECK-NEXT:    csc ca2, 8(ca0)
-; CHECK-NEXT:    clc ca1, 0(ca1)
-; CHECK-NEXT:    csc ca1, 0(ca0)
-; CHECK-NEXT:    cret
+; CHECK-NEXT:    lc ca1, %pcrel_lo(.LBB1_1)(ca1)
+; CHECK-NEXT:    lc ca2, 40(ca1)
+; CHECK-NEXT:    sc ca2, 40(ca0)
+; CHECK-NEXT:    lc ca2, 32(ca1)
+; CHECK-NEXT:    sc ca2, 32(ca0)
+; CHECK-NEXT:    lc ca2, 24(ca1)
+; CHECK-NEXT:    sc ca2, 24(ca0)
+; CHECK-NEXT:    lc ca2, 16(ca1)
+; CHECK-NEXT:    sc ca2, 16(ca0)
+; CHECK-NEXT:    lc ca2, 8(ca1)
+; CHECK-NEXT:    sc ca2, 8(ca0)
+; CHECK-NEXT:    lc ca1, 0(ca1)
+; CHECK-NEXT:    sc ca1, 0(ca0)
+; CHECK-NEXT:    ret
   %1 = bitcast %struct.umutex addrspace(200)* %mtx to i8 addrspace(200)*
   tail call void @llvm.memcpy.p200i8.p200i8.i64(i8 addrspace(200)* align 16 %1, i8 addrspace(200)* align 16 bitcast (%struct.umutex addrspace(200)* @_thr_umutex_init.default_mtx to i8 addrspace(200)*), i64 48, i1 true)
   ret void

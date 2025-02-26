@@ -103,7 +103,6 @@ declare void @varargs(i32, ...) addrspace(200) nounwind
 ; go in an even integer register pair and would thus reserve the odd register,
 ; even though we're passing on the stack.
 define void @test_varargs_odd_cap_reg() addrspace(200) nounwind {
-entry:
 ; CHECK-LABEL: test_varargs_odd_cap_reg:
 ; CHECK:       # %bb.0: # %entry
 ; CHECK-NEXT:    cincoffset csp, csp, -32
@@ -114,6 +113,7 @@ entry:
 ; CHECK-NEXT:    lc cra, 16(csp) # 16-byte Folded Reload
 ; CHECK-NEXT:    cincoffset csp, csp, 32
 ; CHECK-NEXT:    ret
+entry:
   tail call void (i32, ...) @varargs(i32 1, ptr addrspace(200) null)
   ret void
 }

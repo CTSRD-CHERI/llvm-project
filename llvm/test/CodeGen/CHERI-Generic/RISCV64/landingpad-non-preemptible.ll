@@ -23,9 +23,9 @@ define dso_local noundef signext i32 @_Z8do_catchv() local_unnamed_addr addrspac
 ; CHECK:       # %bb.0: # %entry
 ; CHECK-NEXT:    cincoffset csp, csp, -48
 ; CHECK-NEXT:    .cfi_def_cfa_offset 48
-; CHECK-NEXT:    csc cra, 32(csp) # 16-byte Folded Spill
-; CHECK-NEXT:    csc cs0, 16(csp) # 16-byte Folded Spill
-; CHECK-NEXT:    csc cs1, 0(csp) # 16-byte Folded Spill
+; CHECK-NEXT:    sc cra, 32(csp) # 16-byte Folded Spill
+; CHECK-NEXT:    sc cs0, 16(csp) # 16-byte Folded Spill
+; CHECK-NEXT:    sc cs1, 0(csp) # 16-byte Folded Spill
 ; CHECK-NEXT:    .cfi_offset ra, -16
 ; CHECK-NEXT:    .cfi_offset s0, -32
 ; CHECK-NEXT:    .cfi_offset s1, -48
@@ -36,11 +36,11 @@ define dso_local noundef signext i32 @_Z8do_catchv() local_unnamed_addr addrspac
 ; CHECK-NEXT:    mv s0, a0
 ; CHECK-NEXT:  .LBB0_2: # %return
 ; CHECK-NEXT:    mv a0, s0
-; CHECK-NEXT:    clc cra, 32(csp) # 16-byte Folded Reload
-; CHECK-NEXT:    clc cs0, 16(csp) # 16-byte Folded Reload
-; CHECK-NEXT:    clc cs1, 0(csp) # 16-byte Folded Reload
+; CHECK-NEXT:    lc cra, 32(csp) # 16-byte Folded Reload
+; CHECK-NEXT:    lc cs0, 16(csp) # 16-byte Folded Reload
+; CHECK-NEXT:    lc cs1, 0(csp) # 16-byte Folded Reload
 ; CHECK-NEXT:    cincoffset csp, csp, 48
-; CHECK-NEXT:    cret
+; CHECK-NEXT:    ret
 ; CHECK-NEXT:  .LBB0_3: # %lpad
 ; CHECK-NEXT:  .Llpad0:
 ; CHECK-NEXT:    sext.w s1, a1

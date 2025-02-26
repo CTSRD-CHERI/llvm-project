@@ -12,17 +12,18 @@
 # RUN:     | llvm-objdump -M no-aliases --mattr=+xcheri,+cap-mode -d - \
 # RUN:     | FileCheck -check-prefixes=CHECK-ASM-AND-OBJ %s
 
-# CHECK-ASM-AND-OBJ: lc ca2, 17(ca0)
+
+# CHECK-ASM-AND-OBJ: {{[[:<:]]}}lc ca2, 17(ca0)
 # CHECK-ASM-SAME: encoding: [0x0f,0x46,0x15,0x01]
 clc ca2, 17(ca0)
-# CHECK-ASM-AND-OBJ: sc ca5, 25(ca3)
+# CHECK-ASM-AND-OBJ: {{[[:<:]]}}sc ca5, 25(ca3)
 # CHECK-ASM-SAME: encoding: [0xa3,0xcc,0xf6,0x00]
 csc ca5, 25(ca3)
 
 
-# CHECK-ASM-AND-OBJ: lc ca2, 0(ca0)
+# CHECK-ASM-AND-OBJ: {{[[:<:]]}}lc ca2, 0(ca0)
 # CHECK-ASM-SAME: encoding: [0x0f,0x46,0x05,0x00]
 clc ca2, (ca0)
-# CHECK-ASM-AND-OBJ: sc ca5, 0(ca3)
+# CHECK-ASM-AND-OBJ: {{[[:<:]]}}sc ca5, 0(ca3)
 # CHECK-ASM-SAME: encoding: [0x23,0xc0,0xf6,0x00]
 csc ca5, (ca3)

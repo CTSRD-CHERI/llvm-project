@@ -35,19 +35,19 @@ define dso_local void @lazy_bind_args() addrspace(200) nounwind {
 ; ASM-LABEL: lazy_bind_args:
 ; ASM:       # %bb.0: # %entry
 ; ASM-NEXT:    cincoffset csp, csp, -32
-; ASM-NEXT:    csc cra, 16(csp) # 16-byte Folded Spill
+; ASM-NEXT:    sc cra, 16(csp) # 16-byte Folded Spill
 ; ASM-NEXT:    cincoffset ca0, csp, 0
 ; ASM-NEXT:    csetbounds ca0, ca0, 16
-; ASM-NEXT:    csc ca0, 0(csp)
+; ASM-NEXT:    sc ca0, 0(csp)
 ; ASM-NEXT:    ccall cheribsdtest_dynamic_identity_cap
-; ASM-NEXT:    clc ca1, 0(csp)
+; ASM-NEXT:    lc ca1, 0(csp)
 ; ASM-NEXT:    cmove ca2, ca0
 ; ASM-NEXT:    cmove ca0, ca1
 ; ASM-NEXT:    cmove ca1, ca2
 ; ASM-NEXT:    ccall cheribsdtest_check_cap_eq
-; ASM-NEXT:    clc cra, 16(csp) # 16-byte Folded Reload
+; ASM-NEXT:    lc cra, 16(csp) # 16-byte Folded Reload
 ; ASM-NEXT:    cincoffset csp, csp, 32
-; ASM-NEXT:    cret
+; ASM-NEXT:    ret
 ; CHECK-LABEL: define dso_local void @lazy_bind_args
 ; CHECK-SAME: () addrspace(200) #[[ATTR2:[0-9]+]] {
 ; CHECK-NEXT:  entry:

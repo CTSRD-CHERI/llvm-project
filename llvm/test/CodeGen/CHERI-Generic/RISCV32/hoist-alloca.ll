@@ -58,11 +58,11 @@ define void @hoist_alloca_uncond(i32 signext %cond) local_unnamed_addr addrspace
 ; CHECK-LABEL: hoist_alloca_uncond:
 ; CHECK:       # %bb.0: # %entry
 ; CHECK-NEXT:    cincoffset csp, csp, -704
-; CHECK-NEXT:    csc cra, 696(csp) # 8-byte Folded Spill
-; CHECK-NEXT:    csc cs0, 688(csp) # 8-byte Folded Spill
-; CHECK-NEXT:    csc cs1, 680(csp) # 8-byte Folded Spill
-; CHECK-NEXT:    csc cs2, 672(csp) # 8-byte Folded Spill
-; CHECK-NEXT:    csc cs3, 664(csp) # 8-byte Folded Spill
+; CHECK-NEXT:    sc cra, 696(csp) # 8-byte Folded Spill
+; CHECK-NEXT:    sc cs0, 688(csp) # 8-byte Folded Spill
+; CHECK-NEXT:    sc cs1, 680(csp) # 8-byte Folded Spill
+; CHECK-NEXT:    sc cs2, 672(csp) # 8-byte Folded Spill
+; CHECK-NEXT:    sc cs3, 664(csp) # 8-byte Folded Spill
 ; CHECK-NEXT:    cincoffset cs0, csp, 704
 ; CHECK-NEXT:    andi a0, sp, -64
 ; CHECK-NEXT:    csetaddr csp, csp, a0
@@ -80,13 +80,13 @@ define void @hoist_alloca_uncond(i32 signext %cond) local_unnamed_addr addrspace
 ; CHECK-NEXT:    bnez s3, .LBB0_1
 ; CHECK-NEXT:  # %bb.2: # %for.cond.cleanup
 ; CHECK-NEXT:    cincoffset csp, cs0, -704
-; CHECK-NEXT:    clc cra, 696(csp) # 8-byte Folded Reload
-; CHECK-NEXT:    clc cs0, 688(csp) # 8-byte Folded Reload
-; CHECK-NEXT:    clc cs1, 680(csp) # 8-byte Folded Reload
-; CHECK-NEXT:    clc cs2, 672(csp) # 8-byte Folded Reload
-; CHECK-NEXT:    clc cs3, 664(csp) # 8-byte Folded Reload
+; CHECK-NEXT:    lc cra, 696(csp) # 8-byte Folded Reload
+; CHECK-NEXT:    lc cs0, 688(csp) # 8-byte Folded Reload
+; CHECK-NEXT:    lc cs1, 680(csp) # 8-byte Folded Reload
+; CHECK-NEXT:    lc cs2, 672(csp) # 8-byte Folded Reload
+; CHECK-NEXT:    lc cs3, 664(csp) # 8-byte Folded Reload
 ; CHECK-NEXT:    cincoffset csp, csp, 704
-; CHECK-NEXT:    cret
+; CHECK-NEXT:    ret
 entry:
   %buf1 = alloca [123 x i32], align 4, addrspace(200)
   %buf2 = alloca [22 x i32], align 4, addrspace(200)
@@ -111,12 +111,12 @@ define void @hoist_alloca_cond(i32 signext %cond) local_unnamed_addr addrspace(2
 ; CHECK-LABEL: hoist_alloca_cond:
 ; CHECK:       # %bb.0: # %entry
 ; CHECK-NEXT:    cincoffset csp, csp, -704
-; CHECK-NEXT:    csc cra, 696(csp) # 8-byte Folded Spill
-; CHECK-NEXT:    csc cs0, 688(csp) # 8-byte Folded Spill
-; CHECK-NEXT:    csc cs1, 680(csp) # 8-byte Folded Spill
-; CHECK-NEXT:    csc cs2, 672(csp) # 8-byte Folded Spill
-; CHECK-NEXT:    csc cs3, 664(csp) # 8-byte Folded Spill
-; CHECK-NEXT:    csc cs4, 656(csp) # 8-byte Folded Spill
+; CHECK-NEXT:    sc cra, 696(csp) # 8-byte Folded Spill
+; CHECK-NEXT:    sc cs0, 688(csp) # 8-byte Folded Spill
+; CHECK-NEXT:    sc cs1, 680(csp) # 8-byte Folded Spill
+; CHECK-NEXT:    sc cs2, 672(csp) # 8-byte Folded Spill
+; CHECK-NEXT:    sc cs3, 664(csp) # 8-byte Folded Spill
+; CHECK-NEXT:    sc cs4, 656(csp) # 8-byte Folded Spill
 ; CHECK-NEXT:    cincoffset cs0, csp, 704
 ; CHECK-NEXT:    andi a1, sp, -64
 ; CHECK-NEXT:    csetaddr csp, csp, a1
@@ -142,14 +142,14 @@ define void @hoist_alloca_cond(i32 signext %cond) local_unnamed_addr addrspace(2
 ; CHECK-NEXT:    j .LBB1_1
 ; CHECK-NEXT:  .LBB1_4: # %for.cond.cleanup
 ; CHECK-NEXT:    cincoffset csp, cs0, -704
-; CHECK-NEXT:    clc cra, 696(csp) # 8-byte Folded Reload
-; CHECK-NEXT:    clc cs0, 688(csp) # 8-byte Folded Reload
-; CHECK-NEXT:    clc cs1, 680(csp) # 8-byte Folded Reload
-; CHECK-NEXT:    clc cs2, 672(csp) # 8-byte Folded Reload
-; CHECK-NEXT:    clc cs3, 664(csp) # 8-byte Folded Reload
-; CHECK-NEXT:    clc cs4, 656(csp) # 8-byte Folded Reload
+; CHECK-NEXT:    lc cra, 696(csp) # 8-byte Folded Reload
+; CHECK-NEXT:    lc cs0, 688(csp) # 8-byte Folded Reload
+; CHECK-NEXT:    lc cs1, 680(csp) # 8-byte Folded Reload
+; CHECK-NEXT:    lc cs2, 672(csp) # 8-byte Folded Reload
+; CHECK-NEXT:    lc cs3, 664(csp) # 8-byte Folded Reload
+; CHECK-NEXT:    lc cs4, 656(csp) # 8-byte Folded Reload
 ; CHECK-NEXT:    cincoffset csp, csp, 704
-; CHECK-NEXT:    cret
+; CHECK-NEXT:    ret
 entry:
   %buf1 = alloca [123 x i32], align 4, addrspace(200)
   %buf2 = alloca [22 x i32], align 4, addrspace(200)

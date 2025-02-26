@@ -19,19 +19,19 @@ define void @use_after_call() addrspace(200) nounwind {
 ; CHECK-LABEL: use_after_call:
 ; CHECK:       # %bb.0:
 ; CHECK-NEXT:    cincoffset csp, csp, -32
-; CHECK-NEXT:    csc cra, 24(csp) # 8-byte Folded Spill
-; CHECK-NEXT:    csc cs0, 16(csp) # 8-byte Folded Spill
+; CHECK-NEXT:    sc cra, 24(csp) # 8-byte Folded Spill
+; CHECK-NEXT:    sc cs0, 16(csp) # 8-byte Folded Spill
 ; CHECK-NEXT:    cincoffset ca0, csp, 12
 ; CHECK-NEXT:    csetbounds cs0, ca0, 4
 ; CHECK-NEXT:    li a0, 123
-; CHECK-NEXT:    csw a0, 12(csp)
+; CHECK-NEXT:    sw a0, 12(csp)
 ; CHECK-NEXT:    ccall foo
 ; CHECK-NEXT:    cmove ca0, cs0
 ; CHECK-NEXT:    ccall one_arg
-; CHECK-NEXT:    clc cra, 24(csp) # 8-byte Folded Reload
-; CHECK-NEXT:    clc cs0, 16(csp) # 8-byte Folded Reload
+; CHECK-NEXT:    lc cra, 24(csp) # 8-byte Folded Reload
+; CHECK-NEXT:    lc cs0, 16(csp) # 8-byte Folded Reload
 ; CHECK-NEXT:    cincoffset csp, csp, 32
-; CHECK-NEXT:    cret
+; CHECK-NEXT:    ret
 ;
 ; HYBRID-LABEL: use_after_call:
 ; HYBRID:       # %bb.0:
@@ -56,9 +56,9 @@ define void @use_after_call_no_store() addrspace(200) nounwind {
 ; CHECK-LABEL: use_after_call_no_store:
 ; CHECK:       # %bb.0:
 ; CHECK-NEXT:    cincoffset csp, csp, -32
-; CHECK-NEXT:    csc cra, 24(csp) # 8-byte Folded Spill
-; CHECK-NEXT:    csc cs0, 16(csp) # 8-byte Folded Spill
-; CHECK-NEXT:    csc cs1, 8(csp) # 8-byte Folded Spill
+; CHECK-NEXT:    sc cra, 24(csp) # 8-byte Folded Spill
+; CHECK-NEXT:    sc cs0, 16(csp) # 8-byte Folded Spill
+; CHECK-NEXT:    sc cs1, 8(csp) # 8-byte Folded Spill
 ; CHECK-NEXT:    cincoffset ca0, csp, 4
 ; CHECK-NEXT:    csetbounds cs0, ca0, 4
 ; CHECK-NEXT:    cincoffset ca0, csp, 0
@@ -68,11 +68,11 @@ define void @use_after_call_no_store() addrspace(200) nounwind {
 ; CHECK-NEXT:    ccall one_arg
 ; CHECK-NEXT:    cmove ca0, cs1
 ; CHECK-NEXT:    ccall one_arg
-; CHECK-NEXT:    clc cra, 24(csp) # 8-byte Folded Reload
-; CHECK-NEXT:    clc cs0, 16(csp) # 8-byte Folded Reload
-; CHECK-NEXT:    clc cs1, 8(csp) # 8-byte Folded Reload
+; CHECK-NEXT:    lc cra, 24(csp) # 8-byte Folded Reload
+; CHECK-NEXT:    lc cs0, 16(csp) # 8-byte Folded Reload
+; CHECK-NEXT:    lc cs1, 8(csp) # 8-byte Folded Reload
 ; CHECK-NEXT:    cincoffset csp, csp, 32
-; CHECK-NEXT:    cret
+; CHECK-NEXT:    ret
 ;
 ; HYBRID-LABEL: use_after_call_no_store:
 ; HYBRID:       # %bb.0:
@@ -98,9 +98,9 @@ define void @multi_use() addrspace(200) nounwind {
 ; CHECK-LABEL: multi_use:
 ; CHECK:       # %bb.0:
 ; CHECK-NEXT:    cincoffset csp, csp, -32
-; CHECK-NEXT:    csc cra, 24(csp) # 8-byte Folded Spill
-; CHECK-NEXT:    csc cs0, 16(csp) # 8-byte Folded Spill
-; CHECK-NEXT:    csc cs1, 8(csp) # 8-byte Folded Spill
+; CHECK-NEXT:    sc cra, 24(csp) # 8-byte Folded Spill
+; CHECK-NEXT:    sc cs0, 16(csp) # 8-byte Folded Spill
+; CHECK-NEXT:    sc cs1, 8(csp) # 8-byte Folded Spill
 ; CHECK-NEXT:    cincoffset ca0, csp, 4
 ; CHECK-NEXT:    csetbounds cs0, ca0, 4
 ; CHECK-NEXT:    cincoffset ca0, csp, 0
@@ -114,11 +114,11 @@ define void @multi_use() addrspace(200) nounwind {
 ; CHECK-NEXT:    ccall one_arg
 ; CHECK-NEXT:    cmove ca0, cs1
 ; CHECK-NEXT:    ccall one_arg
-; CHECK-NEXT:    clc cra, 24(csp) # 8-byte Folded Reload
-; CHECK-NEXT:    clc cs0, 16(csp) # 8-byte Folded Reload
-; CHECK-NEXT:    clc cs1, 8(csp) # 8-byte Folded Reload
+; CHECK-NEXT:    lc cra, 24(csp) # 8-byte Folded Reload
+; CHECK-NEXT:    lc cs0, 16(csp) # 8-byte Folded Reload
+; CHECK-NEXT:    lc cs1, 8(csp) # 8-byte Folded Reload
 ; CHECK-NEXT:    cincoffset csp, csp, 32
-; CHECK-NEXT:    cret
+; CHECK-NEXT:    ret
 ;
 ; HYBRID-LABEL: multi_use:
 ; HYBRID:       # %bb.0:

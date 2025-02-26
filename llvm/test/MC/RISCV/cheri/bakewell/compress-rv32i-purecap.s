@@ -30,13 +30,13 @@ caddi cs0, csp, 1020
 
 # CHECK-BYTES: e0 5f
 # CHECK-ALIAS: lw s0, 124(ca5)
-# CHECK-INST: c.clw s0, 124(ca5)
+# CHECK-INST: c.lw s0, 124(ca5)
 # CHECK: # encoding: [0xe0,0x5f]
 lw s0, 124(ca5)
 
 # CHECK-BYTES: e0 df
 # CHECK-ALIAS: sw s0, 124(ca5)
-# CHECK-INST: c.csw s0, 124(ca5)
+# CHECK-INST: c.sw s0, 124(ca5)
 # CHECK: # encoding: [0xe0,0xdf]
 sw s0, 124(ca5)
 
@@ -168,13 +168,13 @@ slli s0, s0, 31
 
 # CHECK-BYTES: fe 50
 # CHECK-ALIAS: lw ra, 252(csp)
-# CHECK-INST: c.clwcsp  ra, 252(csp)
+# CHECK-INST: c.lwsp  ra, 252(csp)
 # CHECK: # encoding:  [0xfe,0x50]
 lw ra, 252(csp)
 
 # CHECK-BYTES: 82 80
 # CHECK-ALIAS: ret
-# CHECK-INST: c.cjr cra
+# CHECK-INST: c.jr cra
 # CHECK: # encoding:  [0x82,0x80]
 jalr cnull, 0(cra)
 
@@ -186,7 +186,7 @@ ebreak
 
 # CHECK-BYTES: 02 94
 # CHECK-ALIAS: jalr cs0
-# CHECK-INST: c.cjalr cs0
+# CHECK-INST: c.jalr cs0
 # CHECK: # encoding: [0x02,0x94]
 jalr cra, 0(cs0)
 
@@ -204,7 +204,7 @@ add s0, s0, a5
 
 # CHECK-BYTES: 82 df
 # CHECK-ALIAS: sw zero, 252(csp)
-# CHECK-INST: c.cswcsp zero, 252(csp)
+# CHECK-INST: c.swsp zero, 252(csp)
 # CHECK: # encoding: [0x82,0xdf]
 sw zero, 252(csp)
 
@@ -217,7 +217,7 @@ unimp
 # CHECK-BYTES32: a0 7b
 # CHECK-BYTES64: a0 3b
 # CHECK-ALIAS: lc cs0, 112(ca5)
-# CHECK-INST: c.clc
+# CHECK-INST: c.lc
 # CHECK32: # encoding: [0xa0,0x7b]
 # CHECK64: # encoding: [0xa0,0x3b]
 lc cs0, 112(ca5)
@@ -225,7 +225,7 @@ lc cs0, 112(ca5)
 # CHECK-BYTES32: ce 70
 # CHECK-BYTES64: ce 30
 # CHECK-ALIAS: lc cra, 240(csp)
-# CHECK-INST: c.clccsp
+# CHECK-INST: c.lcsp
 # CHECK32: # encoding: [0xce,0x70]
 # CHECK64: # encoding: [0xce,0x30]
 lc cra, 240(csp)
@@ -233,7 +233,7 @@ lc cra, 240(csp)
 # CHECK-BYTES32: a0 fb
 # CHECK-BYTES64: a0 bb
 # CHECK-ALIAS: sc cs0, 112(ca5)
-# CHECK-INST: c.csc
+# CHECK-INST: c.sc
 # CHECK32: # encoding: [0xa0,0xfb]
 # CHECK64: # encoding: [0xa0,0xbb]
 sc cs0, 112(ca5)
@@ -241,7 +241,7 @@ sc cs0, 112(ca5)
 # CHECK-BYTES32: 86 f9
 # CHECK-BYTES64: 86 b9
 # CHECK-ALIAS: sc cra, 240(csp)
-# CHECK-INST: c.csccsp
+# CHECK-INST: c.scsp
 # CHECK32: # encoding: [0x86,0xf9]
 # CHECK64: # encoding: [0x86,0xb9]
 sc cra, 240(csp)

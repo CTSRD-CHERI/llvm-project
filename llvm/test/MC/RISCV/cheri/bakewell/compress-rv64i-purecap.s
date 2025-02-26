@@ -13,13 +13,13 @@
 
 # CHECK-BYTES: e0 7f
 # CHECK-ALIAS: ld s0, 248(ca5)
-# CHECK-INST: c.cld s0, 248(ca5)
+# CHECK-INST: c.ld s0, 248(ca5)
 # CHECK: # encoding: [0xe0,0x7f]
 ld s0, 248(ca5)
 
 # CHECK-BYTES: a0 e3
 # CHECK-ALIAS: sd s0, 64(ca5)
-# CHECK-INST: c.csd s0, 64(ca5)
+# CHECK-INST: c.sd s0, 64(ca5)
 # CHECK: # encoding: [0xa0,0xe3]
 sd s0, 64(ca5)
 
@@ -49,12 +49,12 @@ addw s0, a5, s0
 
 # CHECK-BYTES: ee 70
 # CHECK-ALIAS: ld ra, 248(csp)
-# CHECK-INST: c.cldcsp ra, 248(csp)
+# CHECK-INST: c.ldsp ra, 248(csp)
 # CHECK: # encoding:  [0xee,0x70]
 ld ra, 248(csp)
 
 # CHECK-BYTES: a2 e0
 # CHECK-ALIAS: sd s0, 64(csp)
-# CHECK-INST: c.csdcsp s0, 64(csp)
+# CHECK-INST: c.sdsp s0, 64(csp)
 # CHECK: # encoding: [0xa2,0xe0]
 sd s0, 64(csp)

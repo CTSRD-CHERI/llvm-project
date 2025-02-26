@@ -25,8 +25,8 @@ define internal i32 @foo(i32 addrspace(200)* %a, i64 addrspace(200)* %b) nounwin
 ; PURECAP-LABEL: foo:
 ; PURECAP:       # %bb.0: # %entry
 ; PURECAP-NEXT:    cincoffset csp, csp, -32
-; PURECAP-NEXT:    csc cra, 16(csp) # 16-byte Folded Spill
-; PURECAP-NEXT:    csc cs0, 0(csp) # 16-byte Folded Spill
+; PURECAP-NEXT:    sc cra, 16(csp) # 16-byte Folded Spill
+; PURECAP-NEXT:    sc cs0, 0(csp) # 16-byte Folded Spill
 ; PURECAP-NEXT:    cincoffset cs0, ca0, 4
 ; PURECAP-NEXT:  .LBB0_1: # %loop
 ; PURECAP-NEXT:    # =>This Inner Loop Header: Depth=1

@@ -6,8 +6,8 @@
 define zeroext i16 @trunc_load_zext(i32 addrspace(200)* %p) {
 ; PURECAP-LABEL: trunc_load_zext:
 ; PURECAP:       # %bb.0:
-; PURECAP-NEXT:    clhu a0, 0(ca0)
-; PURECAP-NEXT:    cret
+; PURECAP-NEXT:    lhu a0, 0(ca0)
+; PURECAP-NEXT:    ret
 ;
 ; HYBRID-LABEL: trunc_load_zext:
 ; HYBRID:       # %bb.0:
@@ -21,8 +21,8 @@ define zeroext i16 @trunc_load_zext(i32 addrspace(200)* %p) {
 define signext i16 @trunc_load_sext(i32 addrspace(200)* %p) {
 ; PURECAP-LABEL: trunc_load_sext:
 ; PURECAP:       # %bb.0:
-; PURECAP-NEXT:    clh a0, 0(ca0)
-; PURECAP-NEXT:    cret
+; PURECAP-NEXT:    lh a0, 0(ca0)
+; PURECAP-NEXT:    ret
 ;
 ; HYBRID-LABEL: trunc_load_sext:
 ; HYBRID:       # %bb.0:
@@ -36,8 +36,8 @@ define signext i16 @trunc_load_sext(i32 addrspace(200)* %p) {
 define zeroext i16 @trunc_load_gep_zext(i32 addrspace(200)* %p) {
 ; PURECAP-LABEL: trunc_load_gep_zext:
 ; PURECAP:       # %bb.0:
-; PURECAP-NEXT:    clhu a0, 4(ca0)
-; PURECAP-NEXT:    cret
+; PURECAP-NEXT:    lhu a0, 4(ca0)
+; PURECAP-NEXT:    ret
 ;
 ; HYBRID-LABEL: trunc_load_gep_zext:
 ; HYBRID:       # %bb.0:
@@ -53,8 +53,8 @@ define zeroext i16 @trunc_load_gep_zext(i32 addrspace(200)* %p) {
 define signext i16 @trunc_load_gep_sext(i32 addrspace(200)* %p) {
 ; PURECAP-LABEL: trunc_load_gep_sext:
 ; PURECAP:       # %bb.0:
-; PURECAP-NEXT:    clh a0, 4(ca0)
-; PURECAP-NEXT:    cret
+; PURECAP-NEXT:    lh a0, 4(ca0)
+; PURECAP-NEXT:    ret
 ;
 ; HYBRID-LABEL: trunc_load_gep_sext:
 ; HYBRID:       # %bb.0:
@@ -70,8 +70,8 @@ define signext i16 @trunc_load_gep_sext(i32 addrspace(200)* %p) {
 define zeroext i16 @trunc_lshr_load_zext(i32 addrspace(200)* %p) {
 ; PURECAP-LABEL: trunc_lshr_load_zext:
 ; PURECAP:       # %bb.0:
-; PURECAP-NEXT:    clhu a0, 2(ca0)
-; PURECAP-NEXT:    cret
+; PURECAP-NEXT:    lhu a0, 2(ca0)
+; PURECAP-NEXT:    ret
 ;
 ; HYBRID-LABEL: trunc_lshr_load_zext:
 ; HYBRID:       # %bb.0:
@@ -87,8 +87,8 @@ define zeroext i16 @trunc_lshr_load_zext(i32 addrspace(200)* %p) {
 define signext i16 @trunc_lshr_load_sext(i32 addrspace(200)* %p) {
 ; PURECAP-LABEL: trunc_lshr_load_sext:
 ; PURECAP:       # %bb.0:
-; PURECAP-NEXT:    clh a0, 2(ca0)
-; PURECAP-NEXT:    cret
+; PURECAP-NEXT:    lh a0, 2(ca0)
+; PURECAP-NEXT:    ret
 ;
 ; HYBRID-LABEL: trunc_lshr_load_sext:
 ; HYBRID:       # %bb.0:

@@ -24,18 +24,18 @@
 define i32 @loadstore(ptr addrspace(200) %intptrarg, ptr addrspace(200) %ptrptrarg) addrspace(200) #0 {
 ; CHECK-LABEL: <loadstore>:
 ; CHECK-NEXT:    c.cincoffset16csp csp, -32
-; CHECK-NEXT:    c.clw a2, 0(ca0)
+; CHECK-NEXT:    c.lw a2, 0(ca0)
 ; CHECK-NEXT:    c.li a3, 1
-; CHECK-NEXT:    c.csw a3, 0(ca0)
-; CHECK-NEXT:    c.clc ca0, 0(ca1)
-; CHECK-NEXT:    c.csc ca0, 0(ca1)
-; CHECK-NEXT:    c.csccsp ca0, 16(csp)
-; CHECK-NEXT:    c.clccsp ca0, 16(csp)
-; CHECK-NEXT:    c.cswcsp a2, 0(csp)
-; CHECK-NEXT:    c.clwcsp a0, 0(csp)
+; CHECK-NEXT:    c.sw a3, 0(ca0)
+; CHECK-NEXT:    c.lc ca0, 0(ca1)
+; CHECK-NEXT:    c.sc ca0, 0(ca1)
+; CHECK-NEXT:    c.scsp ca0, 16(csp)
+; CHECK-NEXT:    c.lcsp ca0, 16(csp)
+; CHECK-NEXT:    c.swsp a2, 0(csp)
+; CHECK-NEXT:    c.lwsp a0, 0(csp)
 ; CHECK-NEXT:    addi a0, a2, 0
 ; CHECK-NEXT:    c.cincoffset16csp csp, 32
-; CHECK-NEXT:    c.cjr cra
+; CHECK-NEXT:    c.jr cra
 ; CHECK-NORVC-LABEL: <loadstore>:
 ; CHECK-NORVC-NEXT:  {{[^a-z.]}}caddi csp, csp, -32
 ; CHECK-NORVC-NEXT:  {{[^a-z.]}}lw a2, 0(ca0)

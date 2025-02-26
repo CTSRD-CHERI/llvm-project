@@ -13,7 +13,7 @@
 define void @_ZN3fooD2Ev() addrspace(200) nounwind {
 ; ASM-LABEL: _ZN3fooD2Ev:
 ; ASM:       # %bb.0:
-; ASM-NEXT:    cret
+; ASM-NEXT:    ret
   ret void
 }
 

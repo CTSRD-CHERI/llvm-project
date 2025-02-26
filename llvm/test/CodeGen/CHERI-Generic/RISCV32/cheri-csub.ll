@@ -12,7 +12,7 @@ define i32 @subp(i8 addrspace(200)* readnone %a, i8 addrspace(200)* readnone %b)
 ; PURECAP-LABEL: subp:
 ; PURECAP:       # %bb.0:
 ; PURECAP-NEXT:    sub a0, a0, a1
-; PURECAP-NEXT:    cret
+; PURECAP-NEXT:    ret
   %1 = tail call i32 @llvm.cheri.cap.diff.i32(i8 addrspace(200)* %a, i8 addrspace(200)* %b)
   ret i32 %1
 }

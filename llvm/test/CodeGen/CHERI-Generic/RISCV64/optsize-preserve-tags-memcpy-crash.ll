@@ -13,17 +13,17 @@
 define hidden void @optnone_preserve_tags_memcpy(i8 addrspace(200)* %dst, i8 addrspace(200)* %src) optnone noinline nounwind {
 ; CHECK-LABEL: optnone_preserve_tags_memcpy:
 ; CHECK:       # %bb.0:
-; CHECK-NEXT:    clb a2, 30(ca1)
-; CHECK-NEXT:    csb a2, 30(ca0)
-; CHECK-NEXT:    clh a2, 28(ca1)
-; CHECK-NEXT:    csh a2, 28(ca0)
-; CHECK-NEXT:    clw a2, 24(ca1)
-; CHECK-NEXT:    csw a2, 24(ca0)
-; CHECK-NEXT:    cld a2, 16(ca1)
-; CHECK-NEXT:    csd a2, 16(ca0)
-; CHECK-NEXT:    clc ca1, 0(ca1)
-; CHECK-NEXT:    csc ca1, 0(ca0)
-; CHECK-NEXT:    cret
+; CHECK-NEXT:    lb a2, 30(ca1)
+; CHECK-NEXT:    sb a2, 30(ca0)
+; CHECK-NEXT:    lh a2, 28(ca1)
+; CHECK-NEXT:    sh a2, 28(ca0)
+; CHECK-NEXT:    lw a2, 24(ca1)
+; CHECK-NEXT:    sw a2, 24(ca0)
+; CHECK-NEXT:    ld a2, 16(ca1)
+; CHECK-NEXT:    sd a2, 16(ca0)
+; CHECK-NEXT:    lc ca1, 0(ca1)
+; CHECK-NEXT:    sc ca1, 0(ca0)
+; CHECK-NEXT:    ret
   tail call void @llvm.memcpy.p200i8.p200i8.i64(i8 addrspace(200)* noundef nonnull align 16 dereferenceable(31) %dst, i8 addrspace(200)* noundef nonnull align 16 dereferenceable(31) %src, i64 31, i1 false) must_preserve_cheri_tags
   ret void
 }
@@ -32,12 +32,12 @@ define hidden void @optsize_preserve_tags_memcpy(i8 addrspace(200)* %dst, i8 add
 ; CHECK-LABEL: optsize_preserve_tags_memcpy:
 ; CHECK:       # %bb.0:
 ; CHECK-NEXT:    cincoffset csp, csp, -16
-; CHECK-NEXT:    csc cra, 0(csp) # 16-byte Folded Spill
+; CHECK-NEXT:    sc cra, 0(csp) # 16-byte Folded Spill
 ; CHECK-NEXT:    li a2, 31
 ; CHECK-NEXT:    ccall memcpy
-; CHECK-NEXT:    clc cra, 0(csp) # 16-byte Folded Reload
+; CHECK-NEXT:    lc cra, 0(csp) # 16-byte Folded Reload
 ; CHECK-NEXT:    cincoffset csp, csp, 16
-; CHECK-NEXT:    cret
+; CHECK-NEXT:    ret
   tail call void @llvm.memcpy.p200i8.p200i8.i64(i8 addrspace(200)* noundef nonnull align 16 dereferenceable(31) %dst, i8 addrspace(200)* noundef nonnull align 16 dereferenceable(31) %src, i64 31, i1 false) must_preserve_cheri_tags
   ret void
 }
@@ -45,17 +45,17 @@ define hidden void @optsize_preserve_tags_memcpy(i8 addrspace(200)* %dst, i8 add
 define hidden void @default_preserve_tags_memcpy(i8 addrspace(200)* %dst, i8 addrspace(200)* %src) nounwind {
 ; CHECK-LABEL: default_preserve_tags_memcpy:
 ; CHECK:       # %bb.0:
-; CHECK-NEXT:    clb a2, 30(ca1)
-; CHECK-NEXT:    csb a2, 30(ca0)
-; CHECK-NEXT:    clh a2, 28(ca1)
-; CHECK-NEXT:    csh a2, 28(ca0)
-; CHECK-NEXT:    clw a2, 24(ca1)
-; CHECK-NEXT:    csw a2, 24(ca0)
-; CHECK-NEXT:    cld a2, 16(ca1)
-; CHECK-NEXT:    csd a2, 16(ca0)
-; CHECK-NEXT:    clc ca1, 0(ca1)
-; CHECK-NEXT:    csc ca1, 0(ca0)
-; CHECK-NEXT:    cret
+; CHECK-NEXT:    lb a2, 30(ca1)
+; CHECK-NEXT:    sb a2, 30(ca0)
+; CHECK-NEXT:    lh a2, 28(ca1)
+; CHECK-NEXT:    sh a2, 28(ca0)
+; CHECK-NEXT:    lw a2, 24(ca1)
+; CHECK-NEXT:    sw a2, 24(ca0)
+; CHECK-NEXT:    ld a2, 16(ca1)
+; CHECK-NEXT:    sd a2, 16(ca0)
+; CHECK-NEXT:    lc ca1, 0(ca1)
+; CHECK-NEXT:    sc ca1, 0(ca0)
+; CHECK-NEXT:    ret
   tail call void @llvm.memcpy.p200i8.p200i8.i64(i8 addrspace(200)* noundef nonnull align 16 dereferenceable(31) %dst, i8 addrspace(200)* noundef nonnull align 16 dereferenceable(31) %src, i64 31, i1 false) must_preserve_cheri_tags
   ret void
 }
@@ -63,17 +63,17 @@ define hidden void @default_preserve_tags_memcpy(i8 addrspace(200)* %dst, i8 add
 define hidden void @optnone_preserve_tags_memmove(i8 addrspace(200)* %dst, i8 addrspace(200)* %src) optnone noinline nounwind {
 ; CHECK-LABEL: optnone_preserve_tags_memmove:
 ; CHECK:       # %bb.0:
-; CHECK-NEXT:    clc ca2, 0(ca1)
-; CHECK-NEXT:    cld a3, 16(ca1)
-; CHECK-NEXT:    clw a4, 24(ca1)
-; CHECK-NEXT:    clh a5, 28(ca1)
-; CHECK-NEXT:    clb a1, 30(ca1)
-; CHECK-NEXT:    csb a1, 30(ca0)
-; CHECK-NEXT:    csh a5, 28(ca0)
-; CHECK-NEXT:    csw a4, 24(ca0)
-; CHECK-NEXT:    csd a3, 16(ca0)
-; CHECK-NEXT:    csc ca2, 0(ca0)
-; CHECK-NEXT:    cret
+; CHECK-NEXT:    lc ca2, 0(ca1)
+; CHECK-NEXT:    ld a3, 16(ca1)
+; CHECK-NEXT:    lw a4, 24(ca1)
+; CHECK-NEXT:    lh a5, 28(ca1)
+; CHECK-NEXT:    lb a1, 30(ca1)
+; CHECK-NEXT:    sb a1, 30(ca0)
+; CHECK-NEXT:    sh a5, 28(ca0)
+; CHECK-NEXT:    sw a4, 24(ca0)
+; CHECK-NEXT:    sd a3, 16(ca0)
+; CHECK-NEXT:    sc ca2, 0(ca0)
+; CHECK-NEXT:    ret
   tail call void @llvm.memmove.p200i8.p200i8.i64(i8 addrspace(200)* noundef nonnull align 16 dereferenceable(31) %dst, i8 addrspace(200)* noundef nonnull align 16 dereferenceable(31) %src, i64 31, i1 false) must_preserve_cheri_tags
   ret void
 }
@@ -82,12 +82,12 @@ define hidden void @optsize_preserve_tags_memmove(i8 addrspace(200)* %dst, i8 ad
 ; CHECK-LABEL: optsize_preserve_tags_memmove:
 ; CHECK:       # %bb.0:
 ; CHECK-NEXT:    cincoffset csp, csp, -16
-; CHECK-NEXT:    csc cra, 0(csp) # 16-byte Folded Spill
+; CHECK-NEXT:    sc cra, 0(csp) # 16-byte Folded Spill
 ; CHECK-NEXT:    li a2, 31
 ; CHECK-NEXT:    ccall memmove
-; CHECK-NEXT:    clc cra, 0(csp) # 16-byte Folded Reload
+; CHECK-NEXT:    lc cra, 0(csp) # 16-byte Folded Reload
 ; CHECK-NEXT:    cincoffset csp, csp, 16
-; CHECK-NEXT:    cret
+; CHECK-NEXT:    ret
   tail call void @llvm.memmove.p200i8.p200i8.i64(i8 addrspace(200)* noundef nonnull align 16 dereferenceable(31) %dst, i8 addrspace(200)* noundef nonnull align 16 dereferenceable(31) %src, i64 31, i1 false) must_preserve_cheri_tags
   ret void
 }
@@ -95,17 +95,17 @@ define hidden void @optsize_preserve_tags_memmove(i8 addrspace(200)* %dst, i8 ad
 define hidden void @default_preserve_tags_memmove(i8 addrspace(200)* %dst, i8 addrspace(200)* %src) nounwind{
 ; CHECK-LABEL: default_preserve_tags_memmove:
 ; CHECK:       # %bb.0:
-; CHECK-NEXT:    clc ca2, 0(ca1)
-; CHECK-NEXT:    clb a3, 30(ca1)
-; CHECK-NEXT:    clh a4, 28(ca1)
-; CHECK-NEXT:    clw a5, 24(ca1)
-; CHECK-NEXT:    cld a1, 16(ca1)
-; CHECK-NEXT:    csb a3, 30(ca0)
-; CHECK-NEXT:    csh a4, 28(ca0)
-; CHECK-NEXT:    csw a5, 24(ca0)
-; CHECK-NEXT:    csd a1, 16(ca0)
-; CHECK-NEXT:    csc ca2, 0(ca0)
-; CHECK-NEXT:    cret
+; CHECK-NEXT:    lc ca2, 0(ca1)
+; CHECK-NEXT:    lb a3, 30(ca1)
+; CHECK-NEXT:    lh a4, 28(ca1)
+; CHECK-NEXT:    lw a5, 24(ca1)
+; CHECK-NEXT:    ld a1, 16(ca1)
+; CHECK-NEXT:    sb a3, 30(ca0)
+; CHECK-NEXT:    sh a4, 28(ca0)
+; CHECK-NEXT:    sw a5, 24(ca0)
+; CHECK-NEXT:    sd a1, 16(ca0)
+; CHECK-NEXT:    sc ca2, 0(ca0)
+; CHECK-NEXT:    ret
   tail call void @llvm.memmove.p200i8.p200i8.i64(i8 addrspace(200)* noundef nonnull align 16 dereferenceable(31) %dst, i8 addrspace(200)* noundef nonnull align 16 dereferenceable(31) %src, i64 31, i1 false) must_preserve_cheri_tags
   ret void
 }

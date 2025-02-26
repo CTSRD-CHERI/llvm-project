@@ -15,13 +15,13 @@ define void @infer_values_from_null_set_offset() addrspace(200) nounwind {
 ; ASM-LABEL: infer_values_from_null_set_offset:
 ; ASM:       # %bb.0:
 ; ASM-NEXT:    cincoffset csp, csp, -16
-; ASM-NEXT:    csc cra, 0(csp) # 16-byte Folded Spill
+; ASM-NEXT:    sc cra, 0(csp) # 16-byte Folded Spill
 ; ASM-NEXT:    lui a0, 30
 ; ASM-NEXT:    addiw a0, a0, 576
 ; ASM-NEXT:    ccall check_fold
-; ASM-NEXT:    clc cra, 0(csp) # 16-byte Folded Reload
+; ASM-NEXT:    lc cra, 0(csp) # 16-byte Folded Reload
 ; ASM-NEXT:    cincoffset csp, csp, 16
-; ASM-NEXT:    cret
+; ASM-NEXT:    ret
 ; CHECK-LABEL: define void @infer_values_from_null_set_offset
 ; CHECK-SAME: () addrspace(200) #[[ATTR1:[0-9]+]] {
 ; CHECK-NEXT:    [[OFFSET_CHECK:%.*]] = call i64 @check_fold(i64 123456)
@@ -37,8 +37,8 @@ define void @multiple_uses_big_constant() addrspace(200) nounwind {
 ; ASM-LABEL: multiple_uses_big_constant:
 ; ASM:       # %bb.0:
 ; ASM-NEXT:    cincoffset csp, csp, -32
-; ASM-NEXT:    csc cra, 16(csp) # 16-byte Folded Spill
-; ASM-NEXT:    csc cs0, 0(csp) # 16-byte Folded Spill
+; ASM-NEXT:    sc cra, 16(csp) # 16-byte Folded Spill
+; ASM-NEXT:    sc cs0, 0(csp) # 16-byte Folded Spill
 ; ASM-NEXT:    lui a0, 30
 ; ASM-NEXT:    addiw a0, a0, 576
 ; ASM-NEXT:    cincoffset cs0, cnull, a0
@@ -48,10 +48,10 @@ define void @multiple_uses_big_constant() addrspace(200) nounwind {
 ; ASM-NEXT:    ccall check_fold_i8ptr
 ; ASM-NEXT:    cmove ca0, cs0
 ; ASM-NEXT:    ccall check_fold_i8ptr
-; ASM-NEXT:    clc cra, 16(csp) # 16-byte Folded Reload
-; ASM-NEXT:    clc cs0, 0(csp) # 16-byte Folded Reload
+; ASM-NEXT:    lc cra, 16(csp) # 16-byte Folded Reload
+; ASM-NEXT:    lc cs0, 0(csp) # 16-byte Folded Reload
 ; ASM-NEXT:    cincoffset csp, csp, 32
-; ASM-NEXT:    cret
+; ASM-NEXT:    ret
 ; CHECK-LABEL: define void @multiple_uses_big_constant
 ; CHECK-SAME: () addrspace(200) #[[ATTR1]] {
 ; CHECK-NEXT:    call void @check_fold_i8ptr(ptr addrspace(200) getelementptr (i8, ptr addrspace(200) null, i64 123456))
@@ -71,16 +71,16 @@ define void @multiple_uses_small_constant() addrspace(200) nounwind {
 ; ASM-LABEL: multiple_uses_small_constant:
 ; ASM:       # %bb.0:
 ; ASM-NEXT:    cincoffset csp, csp, -16
-; ASM-NEXT:    csc cra, 0(csp) # 16-byte Folded Spill
+; ASM-NEXT:    sc cra, 0(csp) # 16-byte Folded Spill
 ; ASM-NEXT:    cincoffset ca0, cnull, 123
 ; ASM-NEXT:    ccall check_fold_i8ptr
 ; ASM-NEXT:    cincoffset ca0, cnull, 123
 ; ASM-NEXT:    ccall check_fold_i8ptr
 ; ASM-NEXT:    cincoffset ca0, cnull, 123
 ; ASM-NEXT:    ccall check_fold_i8ptr
-; ASM-NEXT:    clc cra, 0(csp) # 16-byte Folded Reload
+; ASM-NEXT:    lc cra, 0(csp) # 16-byte Folded Reload
 ; ASM-NEXT:    cincoffset csp, csp, 16
-; ASM-NEXT:    cret
+; ASM-NEXT:    ret
 ; CHECK-LABEL: define void @multiple_uses_small_constant
 ; CHECK-SAME: () addrspace(200) #[[ATTR1]] {
 ; CHECK-NEXT:    call void @check_fold_i8ptr(ptr addrspace(200) getelementptr (i8, ptr addrspace(200) null, i64 123))
