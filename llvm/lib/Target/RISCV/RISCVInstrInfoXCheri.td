@@ -1170,6 +1170,8 @@ def : MnemonicAlias<"c.lwsp", "c.clwcsp">;
 def : MnemonicAlias<"c.swsp", "c.cswcsp">;
 def : MnemonicAlias<"c.scsp", "c.csccsp">;
 def : MnemonicAlias<"c.lcsp", "c.clccsp">;
+def : MnemonicAlias<"c.jr", "c.cjr">;
+def : MnemonicAlias<"c.jalr", "c.cjalr">;
 } // Predicates = [HasCheri, HasCheriRVC, HasStdExtC, IsCapMode]
 let Predicates = [HasCheri, HasCheriRVC, HasStdExtC, IsRV64, IsCapMode] in {
 def : MnemonicAlias<"c.ld", "c.cld">;
@@ -1184,6 +1186,8 @@ def : MnemonicAlias<"c.fsd", "c.cfsd">;
 def : MnemonicAlias<"c.fldsp", "c.cfldcsp">;
 def : MnemonicAlias<"c.fsdsp", "c.cfsdcsp">;
 }
+let Predicates = [HasCheri, HasCheriRVC, HasStdExtC, IsRV32, IsCapMode] in
+def : MnemonicAlias<"c.jal", "c.cjal">;
 
 //===----------------------------------------------------------------------===//
 // Pseudo-instructions and codegen patterns
