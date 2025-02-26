@@ -1162,6 +1162,8 @@ def : InstAlias<"c.cincoffsetimm4cspn $rd, $rs1, $imm",
                 (C_CIncOffsetImm4CSPN GPCRC:$rd, CSP:$rs1, uimm10_lsb00nonzero:$imm), 0>;
 def : InstAlias<"c.cincoffsetimm16csp $rd, $imm",
                 (C_CIncOffsetImm16CSP CSP:$rd, simm10_lsb0000nonzero:$imm), 0>;
+def : MnemonicAlias<"c.addi4spn", "c.cincoffsetimm4cspn">;
+def : MnemonicAlias<"c.addi16sp", "c.cincoffsetimm16csp">;
 def : MnemonicAlias<"c.lw", "c.clw">;
 def : MnemonicAlias<"c.sw", "c.csw">;
 def : MnemonicAlias<"c.sc", "c.csc">;
