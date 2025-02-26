@@ -23,7 +23,7 @@ define i64 @perms_get(i8 addrspace(200)* %cap) nounwind {
 ; PURECAP-LABEL: perms_get:
 ; PURECAP:       # %bb.0:
 ; PURECAP-NEXT:    cgetperm a0, ca0
-; PURECAP-NEXT:    cret
+; PURECAP-NEXT:    ret
 ;
 ; HYBRID-LABEL: perms_get:
 ; HYBRID:       # %bb.0:
@@ -37,7 +37,7 @@ define i64 @type_get(i8 addrspace(200)* %cap) nounwind {
 ; PURECAP-LABEL: type_get:
 ; PURECAP:       # %bb.0:
 ; PURECAP-NEXT:    cgettype a0, ca0
-; PURECAP-NEXT:    cret
+; PURECAP-NEXT:    ret
 ;
 ; HYBRID-LABEL: type_get:
 ; HYBRID:       # %bb.0:
@@ -51,7 +51,7 @@ define i64 @base_get(i8 addrspace(200)* %cap) nounwind {
 ; PURECAP-LABEL: base_get:
 ; PURECAP:       # %bb.0:
 ; PURECAP-NEXT:    cgetbase a0, ca0
-; PURECAP-NEXT:    cret
+; PURECAP-NEXT:    ret
 ;
 ; HYBRID-LABEL: base_get:
 ; HYBRID:       # %bb.0:
@@ -65,7 +65,7 @@ define i64 @length_get(i8 addrspace(200)* %cap) nounwind {
 ; PURECAP-LABEL: length_get:
 ; PURECAP:       # %bb.0:
 ; PURECAP-NEXT:    cgetlen a0, ca0
-; PURECAP-NEXT:    cret
+; PURECAP-NEXT:    ret
 ;
 ; HYBRID-LABEL: length_get:
 ; HYBRID:       # %bb.0:
@@ -79,7 +79,7 @@ define i64 @tag_get(i8 addrspace(200)* %cap) nounwind {
 ; PURECAP-LABEL: tag_get:
 ; PURECAP:       # %bb.0:
 ; PURECAP-NEXT:    cgettag a0, ca0
-; PURECAP-NEXT:    cret
+; PURECAP-NEXT:    ret
 ;
 ; HYBRID-LABEL: tag_get:
 ; HYBRID:       # %bb.0:
@@ -94,7 +94,7 @@ define i64 @sealed_get(i8 addrspace(200)* %cap) nounwind {
 ; PURECAP-LABEL: sealed_get:
 ; PURECAP:       # %bb.0:
 ; PURECAP-NEXT:    cgetsealed a0, ca0
-; PURECAP-NEXT:    cret
+; PURECAP-NEXT:    ret
 ;
 ; HYBRID-LABEL: sealed_get:
 ; HYBRID:       # %bb.0:
@@ -109,7 +109,7 @@ define i64 @offset_get(i8 addrspace(200)* %cap) nounwind {
 ; PURECAP-LABEL: offset_get:
 ; PURECAP:       # %bb.0:
 ; PURECAP-NEXT:    cgetoffset a0, ca0
-; PURECAP-NEXT:    cret
+; PURECAP-NEXT:    ret
 ;
 ; HYBRID-LABEL: offset_get:
 ; HYBRID:       # %bb.0:
@@ -123,7 +123,7 @@ define i64 @flags_get(i8 addrspace(200)* %cap) nounwind {
 ; PURECAP-LABEL: flags_get:
 ; PURECAP:       # %bb.0:
 ; PURECAP-NEXT:    cgetflags a0, ca0
-; PURECAP-NEXT:    cret
+; PURECAP-NEXT:    ret
 ;
 ; HYBRID-LABEL: flags_get:
 ; HYBRID:       # %bb.0:
@@ -137,7 +137,7 @@ define i64 @address_get(i8 addrspace(200)* %cap) nounwind {
 ; PURECAP-LABEL: address_get:
 ; PURECAP:       # %bb.0:
 ; PURECAP-NEXT:    mv a0, a0
-; PURECAP-NEXT:    cret
+; PURECAP-NEXT:    ret
 ;
 ; HYBRID-LABEL: address_get:
 ; HYBRID:       # %bb.0:
@@ -151,7 +151,7 @@ define i64 @high_get(i8 addrspace(200)* %cap) nounwind {
 ; PURECAP-LABEL: high_get:
 ; PURECAP:       # %bb.0:
 ; PURECAP-NEXT:    cgethigh a0, ca0
-; PURECAP-NEXT:    cret
+; PURECAP-NEXT:    ret
 ;
 ; HYBRID-LABEL: high_get:
 ; HYBRID:       # %bb.0:
@@ -182,7 +182,7 @@ define i8 addrspace(200)* @seal(i8 addrspace(200)* %cap1, i8 addrspace(200)* %ca
 ; PURECAP-LABEL: seal:
 ; PURECAP:       # %bb.0:
 ; PURECAP-NEXT:    cseal ca0, ca0, ca1
-; PURECAP-NEXT:    cret
+; PURECAP-NEXT:    ret
 ;
 ; HYBRID-LABEL: seal:
 ; HYBRID:       # %bb.0:
@@ -196,7 +196,7 @@ define i8 addrspace(200)* @unseal(i8 addrspace(200)* %cap1, i8 addrspace(200)* %
 ; PURECAP-LABEL: unseal:
 ; PURECAP:       # %bb.0:
 ; PURECAP-NEXT:    cunseal ca0, ca0, ca1
-; PURECAP-NEXT:    cret
+; PURECAP-NEXT:    ret
 ;
 ; HYBRID-LABEL: unseal:
 ; HYBRID:       # %bb.0:
@@ -210,7 +210,7 @@ define i8 addrspace(200)* @perms_and(i8 addrspace(200)* %cap, i64 %perms) nounwi
 ; PURECAP-LABEL: perms_and:
 ; PURECAP:       # %bb.0:
 ; PURECAP-NEXT:    candperm ca0, ca0, a1
-; PURECAP-NEXT:    cret
+; PURECAP-NEXT:    ret
 ;
 ; HYBRID-LABEL: perms_and:
 ; HYBRID:       # %bb.0:
@@ -224,7 +224,7 @@ define i8 addrspace(200)* @flags_set(i8 addrspace(200)* %cap, i64 %flags) nounwi
 ; PURECAP-LABEL: flags_set:
 ; PURECAP:       # %bb.0:
 ; PURECAP-NEXT:    csetflags ca0, ca0, a1
-; PURECAP-NEXT:    cret
+; PURECAP-NEXT:    ret
 ;
 ; HYBRID-LABEL: flags_set:
 ; HYBRID:       # %bb.0:
@@ -238,7 +238,7 @@ define i8 addrspace(200)* @offset_set(i8 addrspace(200)* %cap, i64 %offset) noun
 ; PURECAP-LABEL: offset_set:
 ; PURECAP:       # %bb.0:
 ; PURECAP-NEXT:    csetoffset ca0, ca0, a1
-; PURECAP-NEXT:    cret
+; PURECAP-NEXT:    ret
 ;
 ; HYBRID-LABEL: offset_set:
 ; HYBRID:       # %bb.0:
@@ -252,7 +252,7 @@ define i8 addrspace(200)* @address_set(i8 addrspace(200)* %cap, i64 %address) no
 ; PURECAP-LABEL: address_set:
 ; PURECAP:       # %bb.0:
 ; PURECAP-NEXT:    csetaddr ca0, ca0, a1
-; PURECAP-NEXT:    cret
+; PURECAP-NEXT:    ret
 ;
 ; HYBRID-LABEL: address_set:
 ; HYBRID:       # %bb.0:
@@ -266,7 +266,7 @@ define i8 addrspace(200)* @bounds_set(i8 addrspace(200)* %cap, i64 %bounds) noun
 ; PURECAP-LABEL: bounds_set:
 ; PURECAP:       # %bb.0:
 ; PURECAP-NEXT:    csetbounds ca0, ca0, a1
-; PURECAP-NEXT:    cret
+; PURECAP-NEXT:    ret
 ;
 ; HYBRID-LABEL: bounds_set:
 ; HYBRID:       # %bb.0:
@@ -280,7 +280,7 @@ define i8 addrspace(200)* @bounds_set_exact(i8 addrspace(200)* %cap, i64 %bounds
 ; PURECAP-LABEL: bounds_set_exact:
 ; PURECAP:       # %bb.0:
 ; PURECAP-NEXT:    csetboundsexact ca0, ca0, a1
-; PURECAP-NEXT:    cret
+; PURECAP-NEXT:    ret
 ;
 ; HYBRID-LABEL: bounds_set_exact:
 ; HYBRID:       # %bb.0:
@@ -294,7 +294,7 @@ define i8 addrspace(200)* @high_set(i8 addrspace(200)* %cap, i64 %high) nounwind
 ; PURECAP-LABEL: high_set:
 ; PURECAP:       # %bb.0:
 ; PURECAP-NEXT:    csethigh ca0, ca0, a1
-; PURECAP-NEXT:    cret
+; PURECAP-NEXT:    ret
 ;
 ; HYBRID-LABEL: high_set:
 ; HYBRID:       # %bb.0:
@@ -308,7 +308,7 @@ define i8 addrspace(200)* @bounds_set_immediate(i8 addrspace(200)* %cap) nounwin
 ; PURECAP-LABEL: bounds_set_immediate:
 ; PURECAP:       # %bb.0:
 ; PURECAP-NEXT:    csetbounds ca0, ca0, 42
-; PURECAP-NEXT:    cret
+; PURECAP-NEXT:    ret
 ;
 ; HYBRID-LABEL: bounds_set_immediate:
 ; HYBRID:       # %bb.0:
@@ -322,7 +322,7 @@ define i8 addrspace(200)* @tag_clear(i8 addrspace(200)* %cap) nounwind {
 ; PURECAP-LABEL: tag_clear:
 ; PURECAP:       # %bb.0:
 ; PURECAP-NEXT:    ccleartag ca0, ca0
-; PURECAP-NEXT:    cret
+; PURECAP-NEXT:    ret
 ;
 ; HYBRID-LABEL: tag_clear:
 ; HYBRID:       # %bb.0:
@@ -336,7 +336,7 @@ define i8 addrspace(200)* @build(i8 addrspace(200)* %cap1, i8 addrspace(200)* %c
 ; PURECAP-LABEL: build:
 ; PURECAP:       # %bb.0:
 ; PURECAP-NEXT:    cbuildcap ca0, ca0, ca1
-; PURECAP-NEXT:    cret
+; PURECAP-NEXT:    ret
 ;
 ; HYBRID-LABEL: build:
 ; HYBRID:       # %bb.0:
@@ -350,7 +350,7 @@ define i8 addrspace(200)* @type_copy(i8 addrspace(200)* %cap1, i8 addrspace(200)
 ; PURECAP-LABEL: type_copy:
 ; PURECAP:       # %bb.0:
 ; PURECAP-NEXT:    ccopytype ca0, ca0, ca1
-; PURECAP-NEXT:    cret
+; PURECAP-NEXT:    ret
 ;
 ; HYBRID-LABEL: type_copy:
 ; HYBRID:       # %bb.0:
@@ -364,7 +364,7 @@ define i8 addrspace(200)* @conditional_seal(i8 addrspace(200)* %cap1, i8 addrspa
 ; PURECAP-LABEL: conditional_seal:
 ; PURECAP:       # %bb.0:
 ; PURECAP-NEXT:    ccseal ca0, ca0, ca1
-; PURECAP-NEXT:    cret
+; PURECAP-NEXT:    ret
 ;
 ; HYBRID-LABEL: conditional_seal:
 ; HYBRID:       # %bb.0:
@@ -378,7 +378,7 @@ define i8 addrspace(200)* @seal_entry(i8 addrspace(200)* %cap) nounwind {
 ; PURECAP-LABEL: seal_entry:
 ; PURECAP:       # %bb.0:
 ; PURECAP-NEXT:    csealentry ca0, ca0
-; PURECAP-NEXT:    cret
+; PURECAP-NEXT:    ret
 ;
 ; HYBRID-LABEL: seal_entry:
 ; HYBRID:       # %bb.0:
@@ -402,7 +402,7 @@ define i64 @to_pointer(i8 addrspace(200)* %cap1, i8 addrspace(200)* %cap2) nounw
 ; PURECAP-NEXT:    cgettag a0, ca1
 ; PURECAP-NEXT:    neg a0, a0
 ; PURECAP-NEXT:    and a0, a1, a0
-; PURECAP-NEXT:    cret
+; PURECAP-NEXT:    ret
 ;
 ; HYBRID-LABEL: to_pointer:
 ; HYBRID:       # %bb.0:
@@ -420,7 +420,7 @@ define i64 @to_pointer_ddc_relative(i8 addrspace(200)* %cap) nounwind {
 ; PURECAP-NEXT:    cgettag a1, ca0
 ; PURECAP-NEXT:    neg a1, a1
 ; PURECAP-NEXT:    and a0, a0, a1
-; PURECAP-NEXT:    cret
+; PURECAP-NEXT:    ret
 ;
 ; HYBRID-LABEL: to_pointer_ddc_relative:
 ; HYBRID:       # %bb.0:
@@ -439,10 +439,10 @@ define i8 addrspace(200)* @from_pointer(i8 addrspace(200)* %cap, i64 %ptr) nounw
 ; PURECAP-NEXT:    bnez a1, .LBB27_2
 ; PURECAP-NEXT:  # %bb.1:
 ; PURECAP-NEXT:    cmove ca0, cnull
-; PURECAP-NEXT:    cret
+; PURECAP-NEXT:    ret
 ; PURECAP-NEXT:  .LBB27_2:
 ; PURECAP-NEXT:    csetaddr ca0, ca0, a1
-; PURECAP-NEXT:    cret
+; PURECAP-NEXT:    ret
 ;
 ; HYBRID-LABEL: from_pointer:
 ; HYBRID:       # %bb.0:
@@ -464,10 +464,10 @@ define i8 addrspace(200)* @from_ddc(i64 %ptr) nounwind {
 ; PURECAP-NEXT:    bnez a0, .LBB28_2
 ; PURECAP-NEXT:  # %bb.1:
 ; PURECAP-NEXT:    cmove ca0, cnull
-; PURECAP-NEXT:    cret
+; PURECAP-NEXT:    ret
 ; PURECAP-NEXT:  .LBB28_2:
 ; PURECAP-NEXT:    csetaddr ca0, ca1, a0
-; PURECAP-NEXT:    cret
+; PURECAP-NEXT:    ret
 ;
 ; HYBRID-LABEL: from_ddc:
 ; HYBRID:       # %bb.0:
@@ -488,7 +488,7 @@ define i64 @diff(i8 addrspace(200)* %cap1, i8 addrspace(200)* %cap2) nounwind {
 ; PURECAP-LABEL: diff:
 ; PURECAP:       # %bb.0:
 ; PURECAP-NEXT:    sub a0, a0, a1
-; PURECAP-NEXT:    cret
+; PURECAP-NEXT:    ret
 ;
 ; HYBRID-LABEL: diff:
 ; HYBRID:       # %bb.0:
@@ -502,7 +502,7 @@ define i8 addrspace(200)* @ddc_get() nounwind {
 ; PURECAP-LABEL: ddc_get:
 ; PURECAP:       # %bb.0:
 ; PURECAP-NEXT:    cspecialr ca0, ddc
-; PURECAP-NEXT:    cret
+; PURECAP-NEXT:    ret
 ;
 ; HYBRID-LABEL: ddc_get:
 ; HYBRID:       # %bb.0:
@@ -516,7 +516,7 @@ define i8 addrspace(200)* @pcc_get() nounwind {
 ; PURECAP-LABEL: pcc_get:
 ; PURECAP:       # %bb.0:
 ; PURECAP-NEXT:    auipcc ca0, 0
-; PURECAP-NEXT:    cret
+; PURECAP-NEXT:    ret
 ;
 ; HYBRID-LABEL: pcc_get:
 ; HYBRID:       # %bb.0:
@@ -534,7 +534,7 @@ define i64 @subset_test(i8 addrspace(200)* %cap1, i8 addrspace(200)* %cap2) noun
 ; PURECAP-LABEL: subset_test:
 ; PURECAP:       # %bb.0:
 ; PURECAP-NEXT:    ctestsubset a0, ca0, ca1
-; PURECAP-NEXT:    cret
+; PURECAP-NEXT:    ret
 ;
 ; HYBRID-LABEL: subset_test:
 ; HYBRID:       # %bb.0:
@@ -551,7 +551,7 @@ define i64 @equal_exact(i8 addrspace(200)* %cap1, i8 addrspace(200)* %cap2) noun
 ; PURECAP-LABEL: equal_exact:
 ; PURECAP:       # %bb.0:
 ; PURECAP-NEXT:    cseqx a0, ca0, ca1
-; PURECAP-NEXT:    cret
+; PURECAP-NEXT:    ret
 ;
 ; HYBRID-LABEL: equal_exact:
 ; HYBRID:       # %bb.0:

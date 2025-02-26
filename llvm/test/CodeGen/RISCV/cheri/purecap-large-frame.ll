@@ -15,7 +15,7 @@ define void @just_below_threshold() local_unnamed_addr addrspace(200) nounwind {
 ; CHECK-LABEL: just_below_threshold:
 ; CHECK:       # %bb.0: # %entry
 ; CHECK-NEXT:    cincoffset csp, csp, -2032
-; CHECK-NEXT:    csc cra, 2016(csp) # 16-byte Folded Spill
+; CHECK-NEXT:    sc cra, 2016(csp) # 16-byte Folded Spill
 ; CHECK-NEXT:    cincoffset csp, csp, -32
 ; CHECK-NEXT:    cincoffset ca0, csp, 2032
 ; CHECK-NEXT:    csetbounds ca0, ca0, 16
@@ -24,9 +24,9 @@ define void @just_below_threshold() local_unnamed_addr addrspace(200) nounwind {
 ; CHECK-NEXT:    csetbounds ca0, ca0, 2014
 ; CHECK-NEXT:    ccall use_large
 ; CHECK-NEXT:    cincoffset csp, csp, 32
-; CHECK-NEXT:    clc cra, 2016(csp) # 16-byte Folded Reload
+; CHECK-NEXT:    lc cra, 2016(csp) # 16-byte Folded Reload
 ; CHECK-NEXT:    cincoffset csp, csp, 2032
-; CHECK-NEXT:    cret
+; CHECK-NEXT:    ret
 entry:
   %obj1 = alloca i128, align 16, addrspace(200)
   %obj2 = alloca %struct.large, align 16, addrspace(200)
@@ -39,7 +39,7 @@ define void @just_above_threshold() local_unnamed_addr addrspace(200) nounwind {
 ; CHECK-LABEL: just_above_threshold:
 ; CHECK:       # %bb.0: # %entry
 ; CHECK-NEXT:    cincoffset csp, csp, -2032
-; CHECK-NEXT:    csc cra, 2016(csp) # 16-byte Folded Spill
+; CHECK-NEXT:    sc cra, 2016(csp) # 16-byte Folded Spill
 ; CHECK-NEXT:    cincoffset csp, csp, -48
 ; CHECK-NEXT:    lui a0, 1
 ; CHECK-NEXT:    cincoffset ca0, csp, a0
@@ -50,9 +50,9 @@ define void @just_above_threshold() local_unnamed_addr addrspace(200) nounwind {
 ; CHECK-NEXT:    csetbounds ca0, ca0, 2018
 ; CHECK-NEXT:    ccall use_too_large
 ; CHECK-NEXT:    cincoffset csp, csp, 48
-; CHECK-NEXT:    clc cra, 2016(csp) # 16-byte Folded Reload
+; CHECK-NEXT:    lc cra, 2016(csp) # 16-byte Folded Reload
 ; CHECK-NEXT:    cincoffset csp, csp, 2032
-; CHECK-NEXT:    cret
+; CHECK-NEXT:    ret
 entry:
   %obj1 = alloca i128, align 16, addrspace(200)
   %obj2 = alloca %struct.too.large, addrspace(200)

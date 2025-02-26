@@ -10,7 +10,7 @@ define i64 @getaddr(i8 addrspace(200)* %arg) nounwind {
 ; CHECK-LABEL: getaddr:
 ; CHECK:       # %bb.0: # %entry
 ; CHECK-NEXT:    mv a0, a0
-; CHECK-NEXT:    cret
+; CHECK-NEXT:    ret
 entry:
   %ret = tail call i64 @llvm.cheri.cap.address.get.i64(i8 addrspace(200)* %arg)
   ret i64 %ret
@@ -21,7 +21,7 @@ define i64 @getaddr_plus_one(i8 addrspace(200)* %arg) nounwind {
 ; CHECK-LABEL: getaddr_plus_one:
 ; CHECK:       # %bb.0: # %entry
 ; CHECK-NEXT:    addi a0, a0, 1
-; CHECK-NEXT:    cret
+; CHECK-NEXT:    ret
 entry:
   %addr = tail call i64 @llvm.cheri.cap.address.get.i64(i8 addrspace(200)* %arg)
   %ret = add i64 %addr, 1
@@ -46,7 +46,7 @@ define i64 @getaddr_minus_zero(i8 addrspace(200)* %arg) nounwind {
 ; CHECK-LABEL: getaddr_minus_zero:
 ; CHECK:       # %bb.0: # %entry
 ; CHECK-NEXT:    mv a0, a0
-; CHECK-NEXT:    cret
+; CHECK-NEXT:    ret
 entry:
   %addr = tail call i64 @llvm.cheri.cap.address.get.i64(i8 addrspace(200)* %arg)
   %ret = sub i64 %addr, 0

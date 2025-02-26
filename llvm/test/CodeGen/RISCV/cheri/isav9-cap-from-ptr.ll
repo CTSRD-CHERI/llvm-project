@@ -14,9 +14,9 @@ define dso_local i8 addrspace(200)* @cap_from_ptr(i8 addrspace(200)* addrspace(2
 ; ISAV9-NEXT:  .LBB0_2:
 ; ISAV9-NEXT:    csetaddr ca1, ca1, a2
 ; ISAV9-NEXT:  .LBB0_3: # %entry
-; ISAV9-NEXT:    csc ca1, 0(ca0)
+; ISAV9-NEXT:    sc ca1, 0(ca0)
 ; ISAV9-NEXT:    cmove ca0, ca1
-; ISAV9-NEXT:    cret
+; ISAV9-NEXT:    ret
 entry:
   %new = call i8 addrspace(200)* @llvm.cheri.cap.from.pointer.i64(i8 addrspace(200)* %cap, i64 %offset)
   store i8 addrspace(200)* %new, i8 addrspace(200)* addrspace(200)* %ptr, align 16
@@ -35,9 +35,9 @@ define dso_local i8 addrspace(200)* @cap_from_ptr_ddc(i8 addrspace(200)* addrspa
 ; ISAV9-NEXT:  .LBB1_2:
 ; ISAV9-NEXT:    csetaddr ca1, ca2, a1
 ; ISAV9-NEXT:  .LBB1_3: # %entry
-; ISAV9-NEXT:    csc ca1, 0(ca0)
+; ISAV9-NEXT:    sc ca1, 0(ca0)
 ; ISAV9-NEXT:    cmove ca0, ca1
-; ISAV9-NEXT:    cret
+; ISAV9-NEXT:    ret
 entry:
   %ddc = call i8 addrspace(200)* @llvm.cheri.ddc.get()
   %new = call i8 addrspace(200)* @llvm.cheri.cap.from.pointer.i64(i8 addrspace(200)* %ddc, i64 %offset)

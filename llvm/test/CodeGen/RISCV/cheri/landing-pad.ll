@@ -19,7 +19,7 @@ define void @test() addrspace(200) personality i8 addrspace(200)* bitcast (i32 (
 ; RV32IXCHERI:       # %bb.0: # %entry
 ; RV32IXCHERI-NEXT:    cincoffset csp, csp, -16
 ; RV32IXCHERI-NEXT:    .cfi_def_cfa_offset 16
-; RV32IXCHERI-NEXT:    csc cra, 8(csp) # 8-byte Folded Spill
+; RV32IXCHERI-NEXT:    sc cra, 8(csp) # 8-byte Folded Spill
 ; RV32IXCHERI-NEXT:    .cfi_offset ra, -8
 ; RV32IXCHERI-NEXT:  .Ltmp0:
 ; RV32IXCHERI-NEXT:    ccall throw_exception
@@ -31,15 +31,15 @@ define void @test() addrspace(200) personality i8 addrspace(200)* bitcast (i32 (
 ; RV32IXCHERI-NEXT:    ccall __cxa_end_catch
 ; RV32IXCHERI-NEXT:    j .LBB0_2
 ; RV32IXCHERI-NEXT:  .LBB0_2: # %try.cont
-; RV32IXCHERI-NEXT:    clc cra, 8(csp) # 8-byte Folded Reload
+; RV32IXCHERI-NEXT:    lc cra, 8(csp) # 8-byte Folded Reload
 ; RV32IXCHERI-NEXT:    cincoffset csp, csp, 16
-; RV32IXCHERI-NEXT:    cret
+; RV32IXCHERI-NEXT:    ret
 ;
 ; RV64IXCHERI-LABEL: test:
 ; RV64IXCHERI:       # %bb.0: # %entry
 ; RV64IXCHERI-NEXT:    cincoffset csp, csp, -16
 ; RV64IXCHERI-NEXT:    .cfi_def_cfa_offset 16
-; RV64IXCHERI-NEXT:    csc cra, 0(csp) # 16-byte Folded Spill
+; RV64IXCHERI-NEXT:    sc cra, 0(csp) # 16-byte Folded Spill
 ; RV64IXCHERI-NEXT:    .cfi_offset ra, -16
 ; RV64IXCHERI-NEXT:  .Ltmp0:
 ; RV64IXCHERI-NEXT:    ccall throw_exception
@@ -51,9 +51,9 @@ define void @test() addrspace(200) personality i8 addrspace(200)* bitcast (i32 (
 ; RV64IXCHERI-NEXT:    ccall __cxa_end_catch
 ; RV64IXCHERI-NEXT:    j .LBB0_2
 ; RV64IXCHERI-NEXT:  .LBB0_2: # %try.cont
-; RV64IXCHERI-NEXT:    clc cra, 0(csp) # 16-byte Folded Reload
+; RV64IXCHERI-NEXT:    lc cra, 0(csp) # 16-byte Folded Reload
 ; RV64IXCHERI-NEXT:    cincoffset csp, csp, 16
-; RV64IXCHERI-NEXT:    cret
+; RV64IXCHERI-NEXT:    ret
 entry:
   invoke void @throw_exception() to label %try.cont unwind label %lpad
 

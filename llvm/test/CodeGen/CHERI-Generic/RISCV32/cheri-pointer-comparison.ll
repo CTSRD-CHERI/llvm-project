@@ -51,7 +51,7 @@ define i32 @eq(i8 addrspace(200)* %a, i8 addrspace(200)* %b) nounwind {
 ; PURECAP:       # %bb.0:
 ; PURECAP-NEXT:    xor a0, a0, a1
 ; PURECAP-NEXT:    seqz a0, a0
-; PURECAP-NEXT:    cret
+; PURECAP-NEXT:    ret
   %cmp = icmp eq i8 addrspace(200)* %a, %b
   %conv = zext i1 %cmp to i32
   ret i32 %conv
@@ -68,7 +68,7 @@ define i32 @ne(i8 addrspace(200)* %a, i8 addrspace(200)* %b) nounwind {
 ; PURECAP:       # %bb.0:
 ; PURECAP-NEXT:    xor a0, a0, a1
 ; PURECAP-NEXT:    snez a0, a0
-; PURECAP-NEXT:    cret
+; PURECAP-NEXT:    ret
   %cmp = icmp ne i8 addrspace(200)* %a, %b
   %conv = zext i1 %cmp to i32
   ret i32 %conv
@@ -83,7 +83,7 @@ define i32 @ugt(i8 addrspace(200)* %a, i8 addrspace(200)* %b) nounwind {
 ; PURECAP-LABEL: ugt:
 ; PURECAP:       # %bb.0:
 ; PURECAP-NEXT:    sltu a0, a1, a0
-; PURECAP-NEXT:    cret
+; PURECAP-NEXT:    ret
   %cmp = icmp ugt i8 addrspace(200)* %a, %b
   %conv = zext i1 %cmp to i32
   ret i32 %conv
@@ -100,7 +100,7 @@ define i32 @uge(i8 addrspace(200)* %a, i8 addrspace(200)* %b) nounwind {
 ; PURECAP:       # %bb.0:
 ; PURECAP-NEXT:    sltu a0, a0, a1
 ; PURECAP-NEXT:    xori a0, a0, 1
-; PURECAP-NEXT:    cret
+; PURECAP-NEXT:    ret
   %cmp = icmp uge i8 addrspace(200)* %a, %b
   %conv = zext i1 %cmp to i32
   ret i32 %conv
@@ -115,7 +115,7 @@ define i32 @ult(i8 addrspace(200)* %a, i8 addrspace(200)* %b) nounwind {
 ; PURECAP-LABEL: ult:
 ; PURECAP:       # %bb.0:
 ; PURECAP-NEXT:    sltu a0, a0, a1
-; PURECAP-NEXT:    cret
+; PURECAP-NEXT:    ret
   %cmp = icmp ult i8 addrspace(200)* %a, %b
   %conv = zext i1 %cmp to i32
   ret i32 %conv
@@ -132,7 +132,7 @@ define i32 @ule(i8 addrspace(200)* %a, i8 addrspace(200)* %b) nounwind {
 ; PURECAP:       # %bb.0:
 ; PURECAP-NEXT:    sltu a0, a1, a0
 ; PURECAP-NEXT:    xori a0, a0, 1
-; PURECAP-NEXT:    cret
+; PURECAP-NEXT:    ret
   %cmp = icmp ule i8 addrspace(200)* %a, %b
   %conv = zext i1 %cmp to i32
   ret i32 %conv
@@ -147,7 +147,7 @@ define i32 @sgt(i8 addrspace(200)* %a, i8 addrspace(200)* %b) nounwind {
 ; PURECAP-LABEL: sgt:
 ; PURECAP:       # %bb.0:
 ; PURECAP-NEXT:    slt a0, a1, a0
-; PURECAP-NEXT:    cret
+; PURECAP-NEXT:    ret
   %cmp = icmp sgt i8 addrspace(200)* %a, %b
   %conv = zext i1 %cmp to i32
   ret i32 %conv
@@ -164,7 +164,7 @@ define i32 @sge(i8 addrspace(200)* %a, i8 addrspace(200)* %b) nounwind {
 ; PURECAP:       # %bb.0:
 ; PURECAP-NEXT:    slt a0, a0, a1
 ; PURECAP-NEXT:    xori a0, a0, 1
-; PURECAP-NEXT:    cret
+; PURECAP-NEXT:    ret
   %cmp = icmp sge i8 addrspace(200)* %a, %b
   %conv = zext i1 %cmp to i32
   ret i32 %conv
@@ -179,7 +179,7 @@ define i32 @slt(i8 addrspace(200)* %a, i8 addrspace(200)* %b) nounwind {
 ; PURECAP-LABEL: slt:
 ; PURECAP:       # %bb.0:
 ; PURECAP-NEXT:    slt a0, a0, a1
-; PURECAP-NEXT:    cret
+; PURECAP-NEXT:    ret
   %cmp = icmp slt i8 addrspace(200)* %a, %b
   %conv = zext i1 %cmp to i32
   ret i32 %conv
@@ -196,7 +196,7 @@ define i32 @sle(i8 addrspace(200)* %a, i8 addrspace(200)* %b) nounwind {
 ; PURECAP:       # %bb.0:
 ; PURECAP-NEXT:    slt a0, a1, a0
 ; PURECAP-NEXT:    xori a0, a0, 1
-; PURECAP-NEXT:    cret
+; PURECAP-NEXT:    ret
   %cmp = icmp sle i8 addrspace(200)* %a, %b
   %conv = zext i1 %cmp to i32
   ret i32 %conv
@@ -211,7 +211,7 @@ define i32 @eq_null(i8 addrspace(200)* %a) nounwind {
 ; PURECAP-LABEL: eq_null:
 ; PURECAP:       # %bb.0:
 ; PURECAP-NEXT:    seqz a0, a0
-; PURECAP-NEXT:    cret
+; PURECAP-NEXT:    ret
   %cmp = icmp eq i8 addrspace(200)* %a, null
   %conv = zext i1 %cmp to i32
   ret i32 %conv
@@ -226,7 +226,7 @@ define i32 @ne_null(i8 addrspace(200)* %a) nounwind {
 ; PURECAP-LABEL: ne_null:
 ; PURECAP:       # %bb.0:
 ; PURECAP-NEXT:    snez a0, a0
-; PURECAP-NEXT:    cret
+; PURECAP-NEXT:    ret
   %cmp = icmp ne i8 addrspace(200)* %a, null
   %conv = zext i1 %cmp to i32
   ret i32 %conv
@@ -241,7 +241,7 @@ define i32 @ugt_null(i8 addrspace(200)* %a) nounwind {
 ; PURECAP-LABEL: ugt_null:
 ; PURECAP:       # %bb.0:
 ; PURECAP-NEXT:    snez a0, a0
-; PURECAP-NEXT:    cret
+; PURECAP-NEXT:    ret
   %cmp = icmp ugt i8 addrspace(200)* %a, null
   %conv = zext i1 %cmp to i32
   ret i32 %conv
@@ -258,7 +258,7 @@ define i32 @uge_null(i8 addrspace(200)* %a) nounwind {
 ; PURECAP:       # %bb.0:
 ; PURECAP-NEXT:    sltu a0, a0, zero
 ; PURECAP-NEXT:    xori a0, a0, 1
-; PURECAP-NEXT:    cret
+; PURECAP-NEXT:    ret
   %cmp = icmp uge i8 addrspace(200)* %a, null
   %conv = zext i1 %cmp to i32
   ret i32 %conv
@@ -273,7 +273,7 @@ define i32 @ult_null(i8 addrspace(200)* %a) nounwind {
 ; PURECAP-LABEL: ult_null:
 ; PURECAP:       # %bb.0:
 ; PURECAP-NEXT:    sltiu a0, a0, 0
-; PURECAP-NEXT:    cret
+; PURECAP-NEXT:    ret
   %cmp = icmp ult i8 addrspace(200)* %a, null
   %conv = zext i1 %cmp to i32
   ret i32 %conv
@@ -290,7 +290,7 @@ define i32 @ule_null(i8 addrspace(200)* %a) nounwind {
 ; PURECAP:       # %bb.0:
 ; PURECAP-NEXT:    snez a0, a0
 ; PURECAP-NEXT:    xori a0, a0, 1
-; PURECAP-NEXT:    cret
+; PURECAP-NEXT:    ret
   %cmp = icmp ule i8 addrspace(200)* %a, null
   %conv = zext i1 %cmp to i32
   ret i32 %conv
@@ -305,7 +305,7 @@ define i32 @sgt_null(i8 addrspace(200)* %a) nounwind {
 ; PURECAP-LABEL: sgt_null:
 ; PURECAP:       # %bb.0:
 ; PURECAP-NEXT:    sgtz a0, a0
-; PURECAP-NEXT:    cret
+; PURECAP-NEXT:    ret
   %cmp = icmp sgt i8 addrspace(200)* %a, null
   %conv = zext i1 %cmp to i32
   ret i32 %conv
@@ -322,7 +322,7 @@ define i32 @sge_null(i8 addrspace(200)* %a) nounwind {
 ; PURECAP:       # %bb.0:
 ; PURECAP-NEXT:    sltz a0, a0
 ; PURECAP-NEXT:    xori a0, a0, 1
-; PURECAP-NEXT:    cret
+; PURECAP-NEXT:    ret
   %cmp = icmp sge i8 addrspace(200)* %a, null
   %conv = zext i1 %cmp to i32
   ret i32 %conv
@@ -337,7 +337,7 @@ define i32 @slt_null(i8 addrspace(200)* %a) nounwind {
 ; PURECAP-LABEL: slt_null:
 ; PURECAP:       # %bb.0:
 ; PURECAP-NEXT:    slti a0, a0, 0
-; PURECAP-NEXT:    cret
+; PURECAP-NEXT:    ret
   %cmp = icmp slt i8 addrspace(200)* %a, null
   %conv = zext i1 %cmp to i32
   ret i32 %conv
@@ -354,7 +354,7 @@ define i32 @sle_null(i8 addrspace(200)* %a) nounwind {
 ; PURECAP:       # %bb.0:
 ; PURECAP-NEXT:    sgtz a0, a0
 ; PURECAP-NEXT:    xori a0, a0, 1
-; PURECAP-NEXT:    cret
+; PURECAP-NEXT:    ret
   %cmp = icmp sle i8 addrspace(200)* %a, null
   %conv = zext i1 %cmp to i32
   ret i32 %conv
@@ -375,7 +375,7 @@ define i8 addrspace(200)* @select_eq(i8 addrspace(200)* %a, i8 addrspace(200)* %
 ; PURECAP-NEXT:  # %bb.1:
 ; PURECAP-NEXT:    cmove ca0, ca1
 ; PURECAP-NEXT:  .LBB20_2:
-; PURECAP-NEXT:    cret
+; PURECAP-NEXT:    ret
   %cmp = icmp eq i8 addrspace(200)* %a, %b
   %cond = select i1 %cmp, i8 addrspace(200)* %a, i8 addrspace(200)* %b
   ret i8 addrspace(200)* %cond
@@ -396,7 +396,7 @@ define i8 addrspace(200)* @select_ne(i8 addrspace(200)* %a, i8 addrspace(200)* %
 ; PURECAP-NEXT:  # %bb.1:
 ; PURECAP-NEXT:    cmove ca0, ca1
 ; PURECAP-NEXT:  .LBB21_2:
-; PURECAP-NEXT:    cret
+; PURECAP-NEXT:    ret
   %cmp = icmp ne i8 addrspace(200)* %a, %b
   %cond = select i1 %cmp, i8 addrspace(200)* %a, i8 addrspace(200)* %b
   ret i8 addrspace(200)* %cond
@@ -417,7 +417,7 @@ define i8 addrspace(200)* @select_ugt(i8 addrspace(200)* %a, i8 addrspace(200)* 
 ; PURECAP-NEXT:  # %bb.1:
 ; PURECAP-NEXT:    cmove ca0, ca1
 ; PURECAP-NEXT:  .LBB22_2:
-; PURECAP-NEXT:    cret
+; PURECAP-NEXT:    ret
   %cmp = icmp ugt i8 addrspace(200)* %a, %b
   %cond = select i1 %cmp, i8 addrspace(200)* %a, i8 addrspace(200)* %b
   ret i8 addrspace(200)* %cond
@@ -438,7 +438,7 @@ define i8 addrspace(200)* @select_uge(i8 addrspace(200)* %a, i8 addrspace(200)* 
 ; PURECAP-NEXT:  # %bb.1:
 ; PURECAP-NEXT:    cmove ca0, ca1
 ; PURECAP-NEXT:  .LBB23_2:
-; PURECAP-NEXT:    cret
+; PURECAP-NEXT:    ret
   %cmp = icmp uge i8 addrspace(200)* %a, %b
   %cond = select i1 %cmp, i8 addrspace(200)* %a, i8 addrspace(200)* %b
   ret i8 addrspace(200)* %cond
@@ -459,7 +459,7 @@ define i8 addrspace(200)* @select_ult(i8 addrspace(200)* %a, i8 addrspace(200)* 
 ; PURECAP-NEXT:  # %bb.1:
 ; PURECAP-NEXT:    cmove ca0, ca1
 ; PURECAP-NEXT:  .LBB24_2:
-; PURECAP-NEXT:    cret
+; PURECAP-NEXT:    ret
   %cmp = icmp ult i8 addrspace(200)* %a, %b
   %cond = select i1 %cmp, i8 addrspace(200)* %a, i8 addrspace(200)* %b
   ret i8 addrspace(200)* %cond
@@ -480,7 +480,7 @@ define i8 addrspace(200)* @select_ule(i8 addrspace(200)* %a, i8 addrspace(200)* 
 ; PURECAP-NEXT:  # %bb.1:
 ; PURECAP-NEXT:    cmove ca0, ca1
 ; PURECAP-NEXT:  .LBB25_2:
-; PURECAP-NEXT:    cret
+; PURECAP-NEXT:    ret
   %cmp = icmp ule i8 addrspace(200)* %a, %b
   %cond = select i1 %cmp, i8 addrspace(200)* %a, i8 addrspace(200)* %b
   ret i8 addrspace(200)* %cond
@@ -501,7 +501,7 @@ define i8 addrspace(200)* @select_sgt(i8 addrspace(200)* %a, i8 addrspace(200)* 
 ; PURECAP-NEXT:  # %bb.1:
 ; PURECAP-NEXT:    cmove ca0, ca1
 ; PURECAP-NEXT:  .LBB26_2:
-; PURECAP-NEXT:    cret
+; PURECAP-NEXT:    ret
   %cmp = icmp sgt i8 addrspace(200)* %a, %b
   %cond = select i1 %cmp, i8 addrspace(200)* %a, i8 addrspace(200)* %b
   ret i8 addrspace(200)* %cond
@@ -522,7 +522,7 @@ define i8 addrspace(200)* @select_sge(i8 addrspace(200)* %a, i8 addrspace(200)* 
 ; PURECAP-NEXT:  # %bb.1:
 ; PURECAP-NEXT:    cmove ca0, ca1
 ; PURECAP-NEXT:  .LBB27_2:
-; PURECAP-NEXT:    cret
+; PURECAP-NEXT:    ret
   %cmp = icmp sge i8 addrspace(200)* %a, %b
   %cond = select i1 %cmp, i8 addrspace(200)* %a, i8 addrspace(200)* %b
   ret i8 addrspace(200)* %cond
@@ -543,7 +543,7 @@ define i8 addrspace(200)* @select_slt(i8 addrspace(200)* %a, i8 addrspace(200)* 
 ; PURECAP-NEXT:  # %bb.1:
 ; PURECAP-NEXT:    cmove ca0, ca1
 ; PURECAP-NEXT:  .LBB28_2:
-; PURECAP-NEXT:    cret
+; PURECAP-NEXT:    ret
   %cmp = icmp slt i8 addrspace(200)* %a, %b
   %cond = select i1 %cmp, i8 addrspace(200)* %a, i8 addrspace(200)* %b
   ret i8 addrspace(200)* %cond
@@ -564,7 +564,7 @@ define i8 addrspace(200)* @select_sle(i8 addrspace(200)* %a, i8 addrspace(200)* 
 ; PURECAP-NEXT:  # %bb.1:
 ; PURECAP-NEXT:    cmove ca0, ca1
 ; PURECAP-NEXT:  .LBB29_2:
-; PURECAP-NEXT:    cret
+; PURECAP-NEXT:    ret
   %cmp = icmp sle i8 addrspace(200)* %a, %b
   %cond = select i1 %cmp, i8 addrspace(200)* %a, i8 addrspace(200)* %b
   ret i8 addrspace(200)* %cond
@@ -585,7 +585,7 @@ define i8 addrspace(200)* @select_eq_null(i8 addrspace(200)* %a, i8 addrspace(20
 ; PURECAP-NEXT:  # %bb.1:
 ; PURECAP-NEXT:    cmove ca0, ca1
 ; PURECAP-NEXT:  .LBB30_2:
-; PURECAP-NEXT:    cret
+; PURECAP-NEXT:    ret
   %cmp = icmp eq i8 addrspace(200)* %a, null
   %cond = select i1 %cmp, i8 addrspace(200)* %a, i8 addrspace(200)* %b
   ret i8 addrspace(200)* %cond
@@ -606,7 +606,7 @@ define i8 addrspace(200)* @select_ne_null(i8 addrspace(200)* %a, i8 addrspace(20
 ; PURECAP-NEXT:  # %bb.1:
 ; PURECAP-NEXT:    cmove ca0, ca1
 ; PURECAP-NEXT:  .LBB31_2:
-; PURECAP-NEXT:    cret
+; PURECAP-NEXT:    ret
   %cmp = icmp ne i8 addrspace(200)* %a, null
   %cond = select i1 %cmp, i8 addrspace(200)* %a, i8 addrspace(200)* %b
   ret i8 addrspace(200)* %cond
@@ -627,7 +627,7 @@ define i8 addrspace(200)* @select_ugt_null(i8 addrspace(200)* %a, i8 addrspace(2
 ; PURECAP-NEXT:  # %bb.1:
 ; PURECAP-NEXT:    cmove ca0, ca1
 ; PURECAP-NEXT:  .LBB32_2:
-; PURECAP-NEXT:    cret
+; PURECAP-NEXT:    ret
   %cmp = icmp ugt i8 addrspace(200)* %a, null
   %cond = select i1 %cmp, i8 addrspace(200)* %a, i8 addrspace(200)* %b
   ret i8 addrspace(200)* %cond
@@ -648,7 +648,7 @@ define i8 addrspace(200)* @select_uge_null(i8 addrspace(200)* %a, i8 addrspace(2
 ; PURECAP-NEXT:  # %bb.1:
 ; PURECAP-NEXT:    cmove ca0, ca1
 ; PURECAP-NEXT:  .LBB33_2:
-; PURECAP-NEXT:    cret
+; PURECAP-NEXT:    ret
   %cmp = icmp uge i8 addrspace(200)* %a, null
   %cond = select i1 %cmp, i8 addrspace(200)* %a, i8 addrspace(200)* %b
   ret i8 addrspace(200)* %cond
@@ -669,7 +669,7 @@ define i8 addrspace(200)* @select_ult_null(i8 addrspace(200)* %a, i8 addrspace(2
 ; PURECAP-NEXT:  # %bb.1:
 ; PURECAP-NEXT:    cmove ca0, ca1
 ; PURECAP-NEXT:  .LBB34_2:
-; PURECAP-NEXT:    cret
+; PURECAP-NEXT:    ret
   %cmp = icmp ult i8 addrspace(200)* %a, null
   %cond = select i1 %cmp, i8 addrspace(200)* %a, i8 addrspace(200)* %b
   ret i8 addrspace(200)* %cond
@@ -690,7 +690,7 @@ define i8 addrspace(200)* @select_ule_null(i8 addrspace(200)* %a, i8 addrspace(2
 ; PURECAP-NEXT:  # %bb.1:
 ; PURECAP-NEXT:    cmove ca0, ca1
 ; PURECAP-NEXT:  .LBB35_2:
-; PURECAP-NEXT:    cret
+; PURECAP-NEXT:    ret
   %cmp = icmp ule i8 addrspace(200)* %a, null
   %cond = select i1 %cmp, i8 addrspace(200)* %a, i8 addrspace(200)* %b
   ret i8 addrspace(200)* %cond
@@ -711,7 +711,7 @@ define i8 addrspace(200)* @select_sgt_null(i8 addrspace(200)* %a, i8 addrspace(2
 ; PURECAP-NEXT:  # %bb.1:
 ; PURECAP-NEXT:    cmove ca0, ca1
 ; PURECAP-NEXT:  .LBB36_2:
-; PURECAP-NEXT:    cret
+; PURECAP-NEXT:    ret
   %cmp = icmp sgt i8 addrspace(200)* %a, null
   %cond = select i1 %cmp, i8 addrspace(200)* %a, i8 addrspace(200)* %b
   ret i8 addrspace(200)* %cond
@@ -732,7 +732,7 @@ define i8 addrspace(200)* @select_sge_null(i8 addrspace(200)* %a, i8 addrspace(2
 ; PURECAP-NEXT:  # %bb.1:
 ; PURECAP-NEXT:    cmove ca0, ca1
 ; PURECAP-NEXT:  .LBB37_2:
-; PURECAP-NEXT:    cret
+; PURECAP-NEXT:    ret
   %cmp = icmp sge i8 addrspace(200)* %a, null
   %cond = select i1 %cmp, i8 addrspace(200)* %a, i8 addrspace(200)* %b
   ret i8 addrspace(200)* %cond
@@ -753,7 +753,7 @@ define i8 addrspace(200)* @select_slt_null(i8 addrspace(200)* %a, i8 addrspace(2
 ; PURECAP-NEXT:  # %bb.1:
 ; PURECAP-NEXT:    cmove ca0, ca1
 ; PURECAP-NEXT:  .LBB38_2:
-; PURECAP-NEXT:    cret
+; PURECAP-NEXT:    ret
   %cmp = icmp slt i8 addrspace(200)* %a, null
   %cond = select i1 %cmp, i8 addrspace(200)* %a, i8 addrspace(200)* %b
   ret i8 addrspace(200)* %cond
@@ -774,7 +774,7 @@ define i8 addrspace(200)* @select_sle_null(i8 addrspace(200)* %a, i8 addrspace(2
 ; PURECAP-NEXT:  # %bb.1:
 ; PURECAP-NEXT:    cmove ca0, ca1
 ; PURECAP-NEXT:  .LBB39_2:
-; PURECAP-NEXT:    cret
+; PURECAP-NEXT:    ret
   %cmp = icmp sle i8 addrspace(200)* %a, null
   %cond = select i1 %cmp, i8 addrspace(200)* %a, i8 addrspace(200)* %b
   ret i8 addrspace(200)* %cond

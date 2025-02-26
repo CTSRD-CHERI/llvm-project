@@ -10,15 +10,15 @@ define dso_local ptr addrspace(200) @frameaddr() addrspace(200) nounwind {
 ; PURECAP-LABEL: frameaddr:
 ; PURECAP:       # %bb.0: # %entry
 ; PURECAP-NEXT:    cincoffset csp, csp, -32
-; PURECAP-NEXT:    csc cra, 24(csp) # 8-byte Folded Spill
-; PURECAP-NEXT:    csc cs0, 16(csp) # 8-byte Folded Spill
+; PURECAP-NEXT:    sc cra, 24(csp) # 8-byte Folded Spill
+; PURECAP-NEXT:    sc cs0, 16(csp) # 8-byte Folded Spill
 ; PURECAP-NEXT:    cincoffset cs0, csp, 32
-; PURECAP-NEXT:    csc cs0, -32(cs0)
+; PURECAP-NEXT:    sc cs0, -32(cs0)
 ; PURECAP-NEXT:    cmove ca0, cs0
-; PURECAP-NEXT:    clc cra, 24(csp) # 8-byte Folded Reload
-; PURECAP-NEXT:    clc cs0, 16(csp) # 8-byte Folded Reload
+; PURECAP-NEXT:    lc cra, 24(csp) # 8-byte Folded Reload
+; PURECAP-NEXT:    lc cs0, 16(csp) # 8-byte Folded Reload
 ; PURECAP-NEXT:    cincoffset csp, csp, 32
-; PURECAP-NEXT:    cret
+; PURECAP-NEXT:    ret
 ;
 ; HYBRID-LABEL: frameaddr:
 ; HYBRID:       # %bb.0: # %entry
@@ -46,10 +46,10 @@ define dso_local ptr addrspace(200) @retaddr() addrspace(200) nounwind {
 ; PURECAP-LABEL: retaddr:
 ; PURECAP:       # %bb.0: # %entry
 ; PURECAP-NEXT:    cincoffset csp, csp, -16
-; PURECAP-NEXT:    csc cra, 0(csp)
+; PURECAP-NEXT:    sc cra, 0(csp)
 ; PURECAP-NEXT:    cmove ca0, cra
 ; PURECAP-NEXT:    cincoffset csp, csp, 16
-; PURECAP-NEXT:    cret
+; PURECAP-NEXT:    ret
 ;
 ; HYBRID-LABEL: retaddr:
 ; HYBRID:       # %bb.0: # %entry

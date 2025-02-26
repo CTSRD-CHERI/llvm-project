@@ -13,21 +13,21 @@ define void @test_string_memmove(i8 addrspace(200)* %dst, i8 addrspace(200)* %sr
 ; CHECK:       # %bb.0:
 ; CHECK-NEXT:    cmove ca7, ca1
 ; CHECK-NEXT:    cmove ca1, ca0
-; CHECK-NEXT:    clc ca0, 0(ca7)
-; CHECK-NEXT:    clc ca2, 8(ca7)
-; CHECK-NEXT:    clc ca3, 16(ca7)
-; CHECK-NEXT:    clc ca4, 24(ca7)
-; CHECK-NEXT:    clc ca5, 32(ca7)
-; CHECK-NEXT:    clw a6, 40(ca7)
-; CHECK-NEXT:    clb a7, 44(ca7)
-; CHECK-NEXT:    csb a7, 44(ca1)
-; CHECK-NEXT:    csw a6, 40(ca1)
-; CHECK-NEXT:    csc ca5, 32(ca1)
-; CHECK-NEXT:    csc ca4, 24(ca1)
-; CHECK-NEXT:    csc ca3, 16(ca1)
-; CHECK-NEXT:    csc ca2, 8(ca1)
-; CHECK-NEXT:    csc ca0, 0(ca1)
-; CHECK-NEXT:    cret
+; CHECK-NEXT:    lc ca0, 0(ca7)
+; CHECK-NEXT:    lc ca2, 8(ca7)
+; CHECK-NEXT:    lc ca3, 16(ca7)
+; CHECK-NEXT:    lc ca4, 24(ca7)
+; CHECK-NEXT:    lc ca5, 32(ca7)
+; CHECK-NEXT:    lw a6, 40(ca7)
+; CHECK-NEXT:    lb a7, 44(ca7)
+; CHECK-NEXT:    sb a7, 44(ca1)
+; CHECK-NEXT:    sw a6, 40(ca1)
+; CHECK-NEXT:    sc ca5, 32(ca1)
+; CHECK-NEXT:    sc ca4, 24(ca1)
+; CHECK-NEXT:    sc ca3, 16(ca1)
+; CHECK-NEXT:    sc ca2, 8(ca1)
+; CHECK-NEXT:    sc ca0, 0(ca1)
+; CHECK-NEXT:    ret
   call void @llvm.memmove.p200i8.p200i8.i64(i8 addrspace(200)* align 16 %dst, i8 addrspace(200)* align 16 %src, i64 45, i1 false) must_preserve_cheri_tags
   ret void
 }
@@ -37,25 +37,25 @@ define void @test_string_memcpy(i8 addrspace(200)* %dst, i8 addrspace(200)* %src
 ; CHECK-LABEL: test_string_memcpy:
 ; CHECK:       # %bb.0:
 ; CHECK-NEXT:    cincoffset csp, csp, -16
-; CHECK-NEXT:    csc ca1, 8(csp) # 8-byte Folded Spill
+; CHECK-NEXT:    sc ca1, 8(csp) # 8-byte Folded Spill
 ; CHECK-NEXT:    cmove ca1, ca0
-; CHECK-NEXT:    clc ca0, 8(csp) # 8-byte Folded Reload
-; CHECK-NEXT:    clb a2, 44(ca0)
-; CHECK-NEXT:    csb a2, 44(ca1)
-; CHECK-NEXT:    clw a2, 40(ca0)
-; CHECK-NEXT:    csw a2, 40(ca1)
-; CHECK-NEXT:    clc ca2, 32(ca0)
-; CHECK-NEXT:    csc ca2, 32(ca1)
-; CHECK-NEXT:    clc ca2, 24(ca0)
-; CHECK-NEXT:    csc ca2, 24(ca1)
-; CHECK-NEXT:    clc ca2, 16(ca0)
-; CHECK-NEXT:    csc ca2, 16(ca1)
-; CHECK-NEXT:    clc ca2, 8(ca0)
-; CHECK-NEXT:    csc ca2, 8(ca1)
-; CHECK-NEXT:    clc ca0, 0(ca0)
-; CHECK-NEXT:    csc ca0, 0(ca1)
+; CHECK-NEXT:    lc ca0, 8(csp) # 8-byte Folded Reload
+; CHECK-NEXT:    lb a2, 44(ca0)
+; CHECK-NEXT:    sb a2, 44(ca1)
+; CHECK-NEXT:    lw a2, 40(ca0)
+; CHECK-NEXT:    sw a2, 40(ca1)
+; CHECK-NEXT:    lc ca2, 32(ca0)
+; CHECK-NEXT:    sc ca2, 32(ca1)
+; CHECK-NEXT:    lc ca2, 24(ca0)
+; CHECK-NEXT:    sc ca2, 24(ca1)
+; CHECK-NEXT:    lc ca2, 16(ca0)
+; CHECK-NEXT:    sc ca2, 16(ca1)
+; CHECK-NEXT:    lc ca2, 8(ca0)
+; CHECK-NEXT:    sc ca2, 8(ca1)
+; CHECK-NEXT:    lc ca0, 0(ca0)
+; CHECK-NEXT:    sc ca0, 0(ca1)
 ; CHECK-NEXT:    cincoffset csp, csp, 16
-; CHECK-NEXT:    cret
+; CHECK-NEXT:    ret
   call void @llvm.memcpy.p200i8.p200i8.i64(i8 addrspace(200)* align 16 %dst, i8 addrspace(200)* align 16 %src, i64 45, i1 false) must_preserve_cheri_tags
   ret void
 }

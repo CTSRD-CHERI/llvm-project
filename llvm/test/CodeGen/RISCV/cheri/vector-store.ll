@@ -15,15 +15,15 @@ define <4 x i32> @vec_load(ptr addrspace(200) %src) addrspace(200) nounwind {
 ;
 ; PURECAP-LABEL: vec_load:
 ; PURECAP:       # %bb.0:
-; PURECAP-NEXT:    clw a2, 12(ca1)
-; PURECAP-NEXT:    clw a3, 8(ca1)
-; PURECAP-NEXT:    clw a4, 4(ca1)
-; PURECAP-NEXT:    clw a1, 0(ca1)
-; PURECAP-NEXT:    csw a2, 12(ca0)
-; PURECAP-NEXT:    csw a3, 8(ca0)
-; PURECAP-NEXT:    csw a4, 4(ca0)
-; PURECAP-NEXT:    csw a1, 0(ca0)
-; PURECAP-NEXT:    cret
+; PURECAP-NEXT:    lw a2, 12(ca1)
+; PURECAP-NEXT:    lw a3, 8(ca1)
+; PURECAP-NEXT:    lw a4, 4(ca1)
+; PURECAP-NEXT:    lw a1, 0(ca1)
+; PURECAP-NEXT:    sw a2, 12(ca0)
+; PURECAP-NEXT:    sw a3, 8(ca0)
+; PURECAP-NEXT:    sw a4, 4(ca0)
+; PURECAP-NEXT:    sw a1, 0(ca0)
+; PURECAP-NEXT:    ret
   %ret = load <4 x i32>, ptr addrspace(200) %src, align 16
   ret <4 x i32> %ret
 }
@@ -39,11 +39,11 @@ define void @vec_store(i32 %0, ptr addrspace(200) %dst) addrspace(200) nounwind 
 ;
 ; PURECAP-LABEL: vec_store:
 ; PURECAP:       # %bb.0:
-; PURECAP-NEXT:    csw zero, 12(ca1)
-; PURECAP-NEXT:    csw zero, 8(ca1)
-; PURECAP-NEXT:    csw a0, 4(ca1)
-; PURECAP-NEXT:    csw zero, 0(ca1)
-; PURECAP-NEXT:    cret
+; PURECAP-NEXT:    sw zero, 12(ca1)
+; PURECAP-NEXT:    sw zero, 8(ca1)
+; PURECAP-NEXT:    sw a0, 4(ca1)
+; PURECAP-NEXT:    sw zero, 0(ca1)
+; PURECAP-NEXT:    ret
   %vecins = insertelement <4 x i32> zeroinitializer, i32 %0, i32 1
   store <4 x i32> %vecins, ptr addrspace(200) %dst, align 16
   ret void

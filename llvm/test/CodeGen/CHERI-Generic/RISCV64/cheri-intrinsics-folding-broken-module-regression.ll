@@ -22,17 +22,17 @@ define void @g(i64 %x, i64 %y) addrspace(200) nounwind {
 ; ASM:       # %bb.0:
 ; ASM-NEXT:  .LBB0_1: # Label of block must be emitted
 ; ASM-NEXT:    auipcc ca2, %captab_pcrel_hi(d)
-; ASM-NEXT:    clc ca2, %pcrel_lo(.LBB0_1)(ca2)
+; ASM-NEXT:    lc ca2, %pcrel_lo(.LBB0_1)(ca2)
 ; ASM-NEXT:    cincoffset ca3, ca2, a0
 ; ASM-NEXT:    add a0, a1, a0
 ; ASM-NEXT:  .LBB0_2: # Label of block must be emitted
 ; ASM-NEXT:    auipcc ca1, %captab_pcrel_hi(e)
-; ASM-NEXT:    clc ca1, %pcrel_lo(.LBB0_2)(ca1)
+; ASM-NEXT:    lc ca1, %pcrel_lo(.LBB0_2)(ca1)
 ; ASM-NEXT:    cgetoffset a2, ca2
 ; ASM-NEXT:    add a0, a0, a2
 ; ASM-NEXT:    csetoffset ca0, ca3, a0
-; ASM-NEXT:    csc ca0, 0(ca1)
-; ASM-NEXT:    cret
+; ASM-NEXT:    sc ca0, 0(ca1)
+; ASM-NEXT:    ret
 ; CHECK-LABEL: define void @g
 ; CHECK-SAME: (i64 [[X:%.*]], i64 [[Y:%.*]]) addrspace(200) #[[ATTR0:[0-9]+]] {
 ; CHECK-NEXT:    [[TMP5:%.*]] = getelementptr i8, ptr addrspace(200) @d, i64 [[X]]

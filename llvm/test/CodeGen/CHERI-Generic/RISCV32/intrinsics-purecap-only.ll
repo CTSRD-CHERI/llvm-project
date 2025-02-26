@@ -11,7 +11,7 @@ define i8 addrspace(200)* @stack_get() nounwind {
 ; PURECAP-LABEL: stack_get:
 ; PURECAP:       # %bb.0:
 ; PURECAP-NEXT:    cmove ca0, csp
-; PURECAP-NEXT:    cret
+; PURECAP-NEXT:    ret
   %cap = call i8 addrspace(200)* @llvm.cheri.stack.cap.get()
   ret i8 addrspace(200)* %cap
 }
