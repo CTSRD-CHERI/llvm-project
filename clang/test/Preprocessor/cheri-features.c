@@ -32,6 +32,15 @@ void* __capability y = 0;
 // CHECK-MIPS: warning: __CHERI__ not defined
 #endif
 
+#if defined(__CHERI_HYBRID__)
+#pragma message("__CHERI_HYBRID__ defined")
+// CHECK-CHERI: warning: __CHERI_HYBRID__ defined
+void* __capability y = 0;
+#else
+#pragma message("__CHERI_HYBRID__ not defined")
+// CHECK-MIPS: warning: __CHERI_HYBRID__ not defined
+#endif
+
 int main() {
 	return 0;
 }

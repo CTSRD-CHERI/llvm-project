@@ -1023,6 +1023,8 @@ static void InitializePredefinedMacros(const TargetInfo &TI,
       if (LangOpts.getCheriBounds() > LangOptions::CBM_Conservative)
         Builder.defineMacro("__CHERI_SUBOBJECT_BOUNDS__",
                             Twine(LangOpts.getCheriBounds()));
+    } else {
+      Builder.defineMacro("__CHERI_HYBRID__");
     }
   }
 

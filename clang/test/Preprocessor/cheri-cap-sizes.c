@@ -39,6 +39,7 @@
 // PURECAP: #define __CHERI_PURE_CAPABILITY__ 2
 // MIPS-NOT: __CHERI_PURE_CAPABILITY__
 // CHECK: #define __CHERI__ 1
+// MIPS: #define __CHERI_HYBRID__ 1
 // Note: 64-bit range for intcap makes more sense than the full range for pointers
 // CHECK: #define __INTCAP_MAX__ 9223372036854775807L
 
