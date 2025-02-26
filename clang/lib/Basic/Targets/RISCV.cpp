@@ -390,6 +390,8 @@ bool RISCVTargetInfo::hasFeature(StringRef Feature) const {
                     .Case("32bit", !Is64Bit)
                     .Case("64bit", Is64Bit)
                     .Case("cheri-bounded-vararg", CheriBoundVarArg)
+                    .Case("cheri-bounded-memarg-caller", CheriBoundMemArgCaller)
+                    .Case("cheri-bounded-memarg-callee", CheriBoundMemArgCallee)
                     .Default(std::nullopt);
   if (Result)
     return *Result;
@@ -424,6 +426,10 @@ bool RISCVTargetInfo::handleTargetFeatures(std::vector<std::string> &Features,
     HasCheri = true;
     CapSize = XLen * 2;
     CheriBoundVarArg = llvm::is_contained(Features, "+cheri-bounded-vararg");
+    CheriBoundMemArgCaller =
+        llvm::is_contained(Features, "+cheri-bounded-memarg-caller");
+    CheriBoundMemArgCallee =
+        llvm::is_contained(Features, "+cheri-bounded-memarg-callee");
   }
 
   if (ABI.empty())

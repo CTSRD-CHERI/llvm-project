@@ -23,7 +23,7 @@
 
 # SYM:      0000000000010200    24 NOTYPE  LOCAL  HIDDEN      1 __rela_dyn_start
 # SYM-NEXT: 0000000000010218     0 NOTYPE  LOCAL  HIDDEN      1 __rela_dyn_end
-# SYM:      0000000000013250     4 OBJECT  GLOBAL DEFAULT     4 x
+# SYM:      0000000000013260     4 OBJECT  GLOBAL DEFAULT     4 x
         .text
         .attribute      4, 16
         .attribute      5, "rv64i2p1_zcheripurecap0p9"

@@ -910,7 +910,21 @@ def FeatureCheriBoundVarArg
 def HasCheriBoundVarArg
     : Predicate<"Subtarget->hasCheriBoundVarArg()">,
                 AssemblerPredicate<(all_of FeatureCheriBoundVarArg),
-                "Purecap VarArgs passed on stack.">;
+                "Purecap VarArgs passed via bound capability.">;
+def FeatureCheriBoundMemArgCaller
+    : SubtargetFeature<"cheri-bounded-memarg-caller", "HasCheriBoundMemArgCaller", "true",
+      "Bound memargs for cheri purecap calls on the caller">;
+def FeatureCheriBoundMemArgCallee
+    : SubtargetFeature<"cheri-bounded-memarg-callee", "HasCheriBoundMemArgCallee", "true",
+      "Bound memargs for cheri purecap calls on the caller">;
+def HasCheriBoundMemArgCaller
+    : Predicate<"Subtarget->hasCheriBoundMemArgCaaller() && RISCVABI::isCheriPureCapABI(Subtarget->getTargetABI())">,
+      AssemblerPredicate<(all_of FeatureCheriBoundMemArgCaller),
+      "Purecap MemArgs passed via bound capability in caller">;
+def HasCheriBoundMemArgCallee
+    : Predicate<"Subtarget->hasCheriBoundMemArgCallee() && RISCVABI::isCheriPureCapABI(Subtarget->getTargetABI())">,
+      AssemblerPredicate<(all_of FeatureCheriBoundMemArgCallee),
+      "Purecap MemArgs passed via bound capability in callee">;
 
 def FeatureRelax
     : SubtargetFeature<"relax", "EnableLinkerRelax", "true",
