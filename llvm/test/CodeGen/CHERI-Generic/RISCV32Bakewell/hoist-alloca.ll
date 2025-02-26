@@ -32,7 +32,7 @@
 ; RUN: FileCheck --input-file=%t.dbg --check-prefix=MACHINELICM-DBG %s
 ; Check that MachineLICM hoists the CheriBoundedStackPseudoImm (MIPS) / IncOffset+SetBoundsImm (RISCV) instructions
 ; MACHINELICM-DBG-LABEL: ******** Pre-regalloc Machine LICM: hoist_alloca_uncond
-; MACHINELICM-DBG: Hoisting [[IMM:%[0-9]+]]:gpr = ADDI $x0, 512
+; MACHINELICM-DBG: Hoisting [[IMM:%[0-9]+]]:gpr = ADDI $x0, 492
 ; MACHINELICM-DBG-NEXT: from %bb.2 to %bb.0
 ; MACHINELICM-DBG: Hoisting [[INC:%[0-9]+]]:gpcr = CADDI %stack.0.buf1, 0
 ; MACHINELICM-DBG-NEXT: from %bb.2 to %bb.0
@@ -45,7 +45,7 @@
 ; MACHINELICM-DBG: Hoisting [[BOUNDS:%[0-9]+]]:gpcr = SCBNDSR [[INC]]:gpcr, [[IMM]]:gpr
 ; MACHINELICM-DBG-NEXT: from %bb.2 to %bb.0
 ; MACHINELICM-DBG-LABEL: ******** Pre-regalloc Machine LICM: hoist_alloca_cond
-; MACHINELICM-DBG: Hoisting [[IMM:%[0-9]+]]:gpr = ADDI $x0, 512
+; MACHINELICM-DBG: Hoisting [[IMM:%[0-9]+]]:gpr = ADDI $x0, 492
 ; from %bb.3 to %bb.0
 ; MACHINELICM-DBG: Hoisting [[INC:%[0-9]+]]:gpcr = CADDI %stack.0.buf1, 0
 ; MACHINELICM-DBG-NEXT: from %bb.3 to %bb.0
@@ -61,37 +61,31 @@
 define void @hoist_alloca_uncond(i32 signext %cond) local_unnamed_addr addrspace(200) nounwind {
 ; CHECK-LABEL: hoist_alloca_uncond:
 ; CHECK:       # %bb.0: # %entry
-; CHECK-NEXT:    caddi csp, csp, -704
-; CHECK-NEXT:    sc cra, 696(csp) # 8-byte Folded Spill
-; CHECK-NEXT:    sc cs0, 688(csp) # 8-byte Folded Spill
-; CHECK-NEXT:    sc cs1, 680(csp) # 8-byte Folded Spill
-; CHECK-NEXT:    sc cs2, 672(csp) # 8-byte Folded Spill
-; CHECK-NEXT:    sc cs3, 664(csp) # 8-byte Folded Spill
-; CHECK-NEXT:    caddi cs0, csp, 704
-; CHECK-NEXT:    andi a0, sp, -64
-; CHECK-NEXT:    scaddr csp, csp, a0
-; CHECK-NEXT:    li s3, 100
-; CHECK-NEXT:    li a0, 512
-; CHECK-NEXT:    caddi ca1, csp, 128
-; CHECK-NEXT:    scbndsr cs2, ca1, a0
+; CHECK-NEXT:    caddi csp, csp, -624
+; CHECK-NEXT:    sc cra, 616(csp) # 8-byte Folded Spill
+; CHECK-NEXT:    sc cs0, 608(csp) # 8-byte Folded Spill
+; CHECK-NEXT:    sc cs1, 600(csp) # 8-byte Folded Spill
+; CHECK-NEXT:    sc cs2, 592(csp) # 8-byte Folded Spill
+; CHECK-NEXT:    li s2, 100
+; CHECK-NEXT:    li a0, 492
+; CHECK-NEXT:    caddi ca1, csp, 100
+; CHECK-NEXT:    scbndsr cs0, ca1, a0
 ; CHECK-NEXT:    li a0, 88
-; CHECK-NEXT:    caddi ca1, csp, 40
+; CHECK-NEXT:    caddi ca1, csp, 12
 ; CHECK-NEXT:    scbndsr cs1, ca1, a0
 ; CHECK-NEXT:  .LBB0_1: # %for.body
 ; CHECK-NEXT:    # =>This Inner Loop Header: Depth=1
-; CHECK-NEXT:    cmv ca0, cs2
+; CHECK-NEXT:    cmv ca0, cs0
 ; CHECK-NEXT:    cmv ca1, cs1
 ; CHECK-NEXT:    call call
-; CHECK-NEXT:    addi s3, s3, -1
-; CHECK-NEXT:    bnez s3, .LBB0_1
+; CHECK-NEXT:    addi s2, s2, -1
+; CHECK-NEXT:    bnez s2, .LBB0_1
 ; CHECK-NEXT:  # %bb.2: # %for.cond.cleanup
-; CHECK-NEXT:    caddi csp, cs0, -704
-; CHECK-NEXT:    lc cra, 696(csp) # 8-byte Folded Reload
-; CHECK-NEXT:    lc cs0, 688(csp) # 8-byte Folded Reload
-; CHECK-NEXT:    lc cs1, 680(csp) # 8-byte Folded Reload
-; CHECK-NEXT:    lc cs2, 672(csp) # 8-byte Folded Reload
-; CHECK-NEXT:    lc cs3, 664(csp) # 8-byte Folded Reload
-; CHECK-NEXT:    caddi csp, csp, 704
+; CHECK-NEXT:    lc cra, 616(csp) # 8-byte Folded Reload
+; CHECK-NEXT:    lc cs0, 608(csp) # 8-byte Folded Reload
+; CHECK-NEXT:    lc cs1, 600(csp) # 8-byte Folded Reload
+; CHECK-NEXT:    lc cs2, 592(csp) # 8-byte Folded Reload
+; CHECK-NEXT:    caddi csp, csp, 624
 ; CHECK-NEXT:    ret
 entry:
   %buf1 = alloca [123 x i32], align 4, addrspace(200)
@@ -112,47 +106,41 @@ declare void @call(i32 addrspace(200)*, i32 addrspace(200)*) local_unnamed_addr 
 define void @hoist_alloca_cond(i32 signext %cond) local_unnamed_addr addrspace(200) nounwind {
 ; CHECK-LABEL: hoist_alloca_cond:
 ; CHECK:       # %bb.0: # %entry
-; CHECK-NEXT:    caddi csp, csp, -704
-; CHECK-NEXT:    sc cra, 696(csp) # 8-byte Folded Spill
-; CHECK-NEXT:    sc cs0, 688(csp) # 8-byte Folded Spill
-; CHECK-NEXT:    sc cs1, 680(csp) # 8-byte Folded Spill
-; CHECK-NEXT:    sc cs2, 672(csp) # 8-byte Folded Spill
-; CHECK-NEXT:    sc cs3, 664(csp) # 8-byte Folded Spill
-; CHECK-NEXT:    sc cs4, 656(csp) # 8-byte Folded Spill
-; CHECK-NEXT:    caddi cs0, csp, 704
-; CHECK-NEXT:    andi a1, sp, -64
-; CHECK-NEXT:    scaddr csp, csp, a1
-; CHECK-NEXT:    mv s1, a0
-; CHECK-NEXT:    li s4, 100
-; CHECK-NEXT:    li a0, 512
-; CHECK-NEXT:    caddi ca1, csp, 128
+; CHECK-NEXT:    caddi csp, csp, -624
+; CHECK-NEXT:    sc cra, 616(csp) # 8-byte Folded Spill
+; CHECK-NEXT:    sc cs0, 608(csp) # 8-byte Folded Spill
+; CHECK-NEXT:    sc cs1, 600(csp) # 8-byte Folded Spill
+; CHECK-NEXT:    sc cs2, 592(csp) # 8-byte Folded Spill
+; CHECK-NEXT:    sc cs3, 584(csp) # 8-byte Folded Spill
+; CHECK-NEXT:    mv s0, a0
+; CHECK-NEXT:    li s3, 100
+; CHECK-NEXT:    li a0, 492
+; CHECK-NEXT:    caddi ca1, csp, 92
 ; CHECK-NEXT:    scbndsr cs2, ca1, a0
 ; CHECK-NEXT:    li a0, 88
-; CHECK-NEXT:    caddi ca1, csp, 40
-; CHECK-NEXT:    scbndsr cs3, ca1, a0
+; CHECK-NEXT:    caddi ca1, csp, 4
+; CHECK-NEXT:    scbndsr cs1, ca1, a0
 ; CHECK-NEXT:    j .LBB1_2
 ; CHECK-NEXT:  .LBB1_1: # %for.inc
 ; CHECK-NEXT:    # in Loop: Header=BB1_2 Depth=1
-; CHECK-NEXT:    addi s4, s4, -1
-; CHECK-NEXT:    beqz s4, .LBB1_4
+; CHECK-NEXT:    addi s3, s3, -1
+; CHECK-NEXT:    beqz s3, .LBB1_4
 ; CHECK-NEXT:  .LBB1_2: # %for.body
 ; CHECK-NEXT:    # =>This Inner Loop Header: Depth=1
-; CHECK-NEXT:    beqz s1, .LBB1_1
+; CHECK-NEXT:    beqz s0, .LBB1_1
 ; CHECK-NEXT:  # %bb.3: # %if.then
 ; CHECK-NEXT:    # in Loop: Header=BB1_2 Depth=1
 ; CHECK-NEXT:    cmv ca0, cs2
-; CHECK-NEXT:    cmv ca1, cs3
+; CHECK-NEXT:    cmv ca1, cs1
 ; CHECK-NEXT:    call call
 ; CHECK-NEXT:    j .LBB1_1
 ; CHECK-NEXT:  .LBB1_4: # %for.cond.cleanup
-; CHECK-NEXT:    caddi csp, cs0, -704
-; CHECK-NEXT:    lc cra, 696(csp) # 8-byte Folded Reload
-; CHECK-NEXT:    lc cs0, 688(csp) # 8-byte Folded Reload
-; CHECK-NEXT:    lc cs1, 680(csp) # 8-byte Folded Reload
-; CHECK-NEXT:    lc cs2, 672(csp) # 8-byte Folded Reload
-; CHECK-NEXT:    lc cs3, 664(csp) # 8-byte Folded Reload
-; CHECK-NEXT:    lc cs4, 656(csp) # 8-byte Folded Reload
-; CHECK-NEXT:    caddi csp, csp, 704
+; CHECK-NEXT:    lc cra, 616(csp) # 8-byte Folded Reload
+; CHECK-NEXT:    lc cs0, 608(csp) # 8-byte Folded Reload
+; CHECK-NEXT:    lc cs1, 600(csp) # 8-byte Folded Reload
+; CHECK-NEXT:    lc cs2, 592(csp) # 8-byte Folded Reload
+; CHECK-NEXT:    lc cs3, 584(csp) # 8-byte Folded Reload
+; CHECK-NEXT:    caddi csp, csp, 624
 ; CHECK-NEXT:    ret
 entry:
   %buf1 = alloca [123 x i32], align 4, addrspace(200)

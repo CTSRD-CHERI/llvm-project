@@ -13980,10 +13980,10 @@ void RISCVTargetLowering::computeKnownBitsForTargetNode(const SDValue Op,
       KnownBits KnownLengthBits = DAG.computeKnownBits(Op.getOperand(1));
       uint64_t MinLength = KnownLengthBits.One.getZExtValue();
       uint64_t MaxLength = (~KnownLengthBits.Zero).getZExtValue();
-      uint64_t MinRoundedLength =
-          RISCVCompressedCap::getRepresentableLength(MinLength, IsRV64);
-      uint64_t MaxRoundedLength =
-          RISCVCompressedCap::getRepresentableLength(MaxLength, IsRV64);
+      uint64_t MinRoundedLength = RISCVCompressedCap::getRepresentableLength(
+          MinLength, IsRV64, Subtarget.hasStdExtZCheriPureCap());
+      uint64_t MaxRoundedLength = RISCVCompressedCap::getRepresentableLength(
+          MaxLength, IsRV64, Subtarget.hasStdExtZCheriPureCap());
       bool MinRoundedOverflow = MinRoundedLength < MinLength;
       bool MaxRoundedOverflow = MaxRoundedLength < MaxLength;
 
@@ -14038,8 +14038,10 @@ void RISCVTargetLowering::computeKnownBitsForTargetNode(const SDValue Op,
       uint64_t MinLength = KnownLengthBits.One.getZExtValue();
       uint64_t MaxLength = (~KnownLengthBits.Zero).getZExtValue();
 
-      Known.Zero |= ~RISCVCompressedCap::getAlignmentMask(MinLength, IsRV64);
-      Known.One |= RISCVCompressedCap::getAlignmentMask(MaxLength, IsRV64);
+      Known.Zero |= ~RISCVCompressedCap::getAlignmentMask(
+          MinLength, IsRV64, Subtarget.hasStdExtZCheriPureCap());
+      Known.One |= RISCVCompressedCap::getAlignmentMask(
+          MaxLength, IsRV64, Subtarget.hasStdExtZCheriPureCap());
       break;
     }
     case Intrinsic::riscv_vsetvli:
@@ -14145,15 +14147,16 @@ RISCVTargetLowering::getTailPaddingForPreciseBounds(uint64_t Size) const {
   if (!RISCVABI::isCheriPureCapABI(Subtarget.getTargetABI()))
     return TailPaddingAmount::None;
 
-  return RISCVCompressedCap::getRequiredTailPadding(Size, Subtarget.is64Bit());
+  return RISCVCompressedCap::getRequiredTailPadding(
+      Size, Subtarget.is64Bit(), Subtarget.hasStdExtZCheriPureCap());
 }
 
-Align
-RISCVTargetLowering::getAlignmentForPreciseBounds(uint64_t Size) const {
+Align RISCVTargetLowering::getAlignmentForPreciseBounds(uint64_t Size) const {
   if (!RISCVABI::isCheriPureCapABI(Subtarget.getTargetABI()))
     return Align();
 
-  return RISCVCompressedCap::getRequiredAlignment(Size, Subtarget.is64Bit());
+  return RISCVCompressedCap::getRequiredAlignment(
+      Size, Subtarget.is64Bit(), Subtarget.hasStdExtZCheriPureCap());
 }
 
 const Constant *
