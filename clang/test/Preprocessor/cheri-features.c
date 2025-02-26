@@ -25,10 +25,10 @@ void* __capability x = 0;
 
 #if defined(__CHERI__)
 #pragma message("__CHERI__ defined")
-// CHECK-CHERI: warning: __CHERI__ defined
 void* __capability y = 0;
 #else
 #pragma message("__CHERI__ not defined")
+// CHECK-CHERI: warning: __CHERI__ not defined
 // CHECK-MIPS: warning: __CHERI__ not defined
 #endif
 
