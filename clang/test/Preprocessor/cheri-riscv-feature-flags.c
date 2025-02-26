@@ -19,6 +19,7 @@
 // CHECK: #define __CHERI_CAP_PERMISSION_PERMIT_STORE__ 8
 // CHECK: #define __CHERI_CAP_PERMISSION_PERMIT_UNSEAL__ 512
 // CHECK: #define __CHERI__ 1
+// CHECK: #define __CHERI_HYBRID__ 1
 // CHECK32: #define __SIZEOF_CHERI_CAPABILITY__ 8
 // CHECK64: #define __SIZEOF_CHERI_CAPABILITY__ 16
 // __VERSION__ and __clang_version__ could contain CHERI due to the Git URL.
