@@ -40,7 +40,7 @@
 #error MISSING TYPE
 #endif
 
-#ifndef __CHERI__
+#if !__has_feature(capabilities)
 #define __capability
 #endif
 
