@@ -604,7 +604,7 @@ bool MCExpr::evaluateAsAbsolute(int64_t &Res, const MCAssembler *Asm,
 static void AttemptToFoldSymbolOffsetDifference(
     const MCAssembler *Asm, const MCAsmLayout *Layout,
     const SectionAddrMap *Addrs, bool InSet, const MCSymbolRefExpr *&A,
-    const MCSymbolRefExpr *&B, int64_t &Addend) {
+    const MCSymbolRefExpr *&B, int64_t &Addend, bool IgnoreRISCV) {
   if (!A || !B)
     return;
 
@@ -646,7 +646,7 @@ static void AttemptToFoldSymbolOffsetDifference(
   // separated by a linker-relaxable instruction. If the section contains
   // instructions and InSet is false (not expressions in directive like
   // .size/.fill), disable the fast path.
-  if (Layout && (InSet || !SecA.hasInstructions() ||
+  if (Layout && (InSet || !SecA.hasInstructions() || IgnoreRISCV ||
                  !Asm->getContext().getTargetTriple().isRISCV())) {
     // If both symbols are in the same fragment, return the difference of their
     // offsets. canGetFragmentOffset(FA) may be false.
@@ -781,9 +781,9 @@ EvaluateSymbolicAdd(const MCAssembler *Asm, const MCAsmLayout *Layout, const MCF
     // integer.
     bool LHS_Provenance = (LHS_A == nullptr) != (LHS_B == nullptr);
     bool RHS_Provenance = (RHS_A == nullptr) != (RHS_B == nullptr);
-    bool FoldCrossTerms = !Fixup ||
-                          !Asm->getWriter().fixupNeedsProvenance(*Asm, Fixup) ||
-                          LHS_Provenance == RHS_Provenance;
+    bool NeedsProvenance =
+        Fixup && Asm->getWriter().fixupNeedsProvenance(*Asm, Fixup);
+    bool FoldCrossTerms = !NeedsProvenance || LHS_Provenance == RHS_Provenance;
 
     // First, fold out any differences which are fully resolved. By
     // reassociating terms in
@@ -797,15 +797,15 @@ EvaluateSymbolicAdd(const MCAssembler *Asm, const MCAsmLayout *Layout, const MCF
     // attempt to evaluate each possible alternative, subject to provenance
     // requirements for the specific fixup.
     AttemptToFoldSymbolOffsetDifference(Asm, Layout, Addrs, InSet, LHS_A, LHS_B,
-                                        Result_Cst);
+                                        Result_Cst, NeedsProvenance);
     if (FoldCrossTerms)
       AttemptToFoldSymbolOffsetDifference(Asm, Layout, Addrs, InSet, LHS_A,
-                                          RHS_B, Result_Cst);
+                                          RHS_B, Result_Cst, NeedsProvenance);
     AttemptToFoldSymbolOffsetDifference(Asm, Layout, Addrs, InSet, RHS_A, LHS_B,
-                                        Result_Cst);
+                                        Result_Cst, NeedsProvenance);
     if (FoldCrossTerms)
       AttemptToFoldSymbolOffsetDifference(Asm, Layout, Addrs, InSet, RHS_A,
-                                          RHS_B, Result_Cst);
+                                          RHS_B, Result_Cst, NeedsProvenance);
   }
 
   // We can't represent the addition or subtraction of two symbols.
