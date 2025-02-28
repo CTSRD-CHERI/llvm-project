@@ -202,9 +202,8 @@ class SourceWin(cui.TitledWin):
                 # hack! getting the LineEntry via SBBreakpointLocation.GetAddress.GetLineEntry does not work good for
                 # inlined frames, so we get the description (which does take
                 # into account inlined functions) and parse it.
-                desc = lldbutil.get_description(
-                    location, lldb.eDescriptionLevelFull)
-                match = re.search('at\ ([^:]+):([\d]+)', desc)
+                desc = lldbutil.get_description(location, lldb.eDescriptionLevelFull)
+                match = re.search(r"at\ ([^:]+):([\d]+)", desc)
                 try:
                     path = match.group(1)
                     line = int(match.group(2).strip())

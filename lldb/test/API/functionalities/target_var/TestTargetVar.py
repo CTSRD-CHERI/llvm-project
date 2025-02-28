@@ -17,7 +17,7 @@ class targetCommandTestCase(TestBase):
         lldbutil.run_to_name_breakpoint(self, "main")
         self.expect("target variable i", substrs=["i", "42"])
         self.expect(
-            "target variable var", patterns=["\(incomplete \*\) var = 0[xX](0)*dead"]
+            "target variable var", patterns=[r"\(incomplete \*\) var = 0[xX](0)*dead"]
         )
         self.expect(
             "target variable var[0]",
