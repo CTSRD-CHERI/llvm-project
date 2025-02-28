@@ -1074,6 +1074,35 @@ void AsmPrinter::emitFunctionHeader() {
 
 static bool needFuncLabelsForEH(const MachineFunction &MF);
 
+/// Returns true if function begin label should be emitted due to a
+/// BlockAddress used as an initializer for a GlobalVariable.
+static bool needFuncLabelForBlockAddress(const MachineFunction &MF) {
+  SmallVector<const Value *, 4> Users;
+
+  for (const auto &MBB : MF) {
+    if (!MBB.isIRBlockAddressTaken())
+      continue;
+
+    const auto *BB = MBB.getAddressTakenIRBlock();
+    for (const auto &U : BB->users()) {
+      if (isa<BlockAddress>(U))
+        Users.push_back(U);
+    }
+  }
+
+  while (!Users.empty()) {
+    const Value *V = Users.pop_back_val();
+    if (isa<GlobalVariable>(V))
+      return true;
+    if (isa<Instruction>(V))
+      continue;
+    for (const auto &U : V->users())
+      Users.push_back(U);
+  }
+
+  return false;
+}
+
 /// EmitFunctionEntryLabel - Emit the label that is the entrypoint for the
 /// function.  This can be overridden by targets as required to do custom stuff.
 void AsmPrinter::emitFunctionEntryLabel() {
@@ -1090,7 +1119,9 @@ void AsmPrinter::emitFunctionEntryLabel() {
   if (TM.getTargetTriple().isOSBinFormatELF()) {
     // For CHERI purecap exception handling, we always have to use a local
     // alias even if the function is not dso_local.
-    bool ForceLocal = MAI->isCheriPurecapABI() && needFuncLabelsForEH(*MF);
+    bool ForceLocal =
+        MAI->isCheriPurecapABI() &&
+        (needFuncLabelsForEH(*MF) || needFuncLabelForBlockAddress(*MF));
     MCSymbol *Sym = getSymbolPreferLocal(MF->getFunction(), ForceLocal);
     if (Sym != CurrentFnSym) {
       cast<MCSymbolELF>(Sym)->setType(ELF::STT_FUNC);
@@ -3632,7 +3663,8 @@ static void emitGlobalConstantCHERICap(const DataLayout &DL, const Constant *CV,
   } else if (const MCSymbolRefExpr *SRE = dyn_cast<MCSymbolRefExpr>(Expr)) {
     if (auto BA = dyn_cast<BlockAddress>(CV)) {
       // For block addresses we emit `.chericap FN+(.LtmpN - FN)`
-      auto FnStart = AP.getSymbol(BA->getFunction());
+      // NB: Must use a non-preemptible symbol
+      auto FnStart = AP.getSymbolPreferLocal(*BA->getFunction(), true);
       const MCExpr *DiffToStart = MCBinaryExpr::createSub(SRE, MCSymbolRefExpr::create(FnStart, AP.OutContext), AP.OutContext);
       AP.OutStreamer->EmitCheriCapability(FnStart, DiffToStart, CapWidth);
       return;
