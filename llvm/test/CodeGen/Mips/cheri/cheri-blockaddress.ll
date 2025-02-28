@@ -62,12 +62,12 @@ indirectgoto:                                     ; preds = %entry
 ; ASM: .end	addrof_label_in_local
 
 ; ASM-LABEL: addrof_label_in_static.b:
-; ASM-NEXT: 	.chericap	addrof_label_in_static+(.Ltmp0-addrof_label_in_static)
+; ASM-NEXT: 	.chericap	.Laddrof_label_in_static$local+(.Ltmp0-.Laddrof_label_in_static$local)
 ; ASM-NEXT: 	.size	addrof_label_in_static.b, [[#CAP_SIZE]]
 
 ; The .o file should contain a relocation against the function with a constant addend (0x1c)
 ; OBJ:       Section (8) .rela.data {
-; OBJ-NEXT:    0x0 R_MIPS_CHERI_CAPABILITY/R_MIPS_NONE/R_MIPS_NONE addrof_label_in_static 0x1C
+; OBJ-NEXT:    0x0 R_MIPS_CHERI_CAPABILITY/R_MIPS_NONE/R_MIPS_NONE .Laddrof_label_in_static$local 0x1C
 ; OBJ-NEXT:  }
 
 
