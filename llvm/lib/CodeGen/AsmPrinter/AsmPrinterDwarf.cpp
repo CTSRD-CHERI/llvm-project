@@ -203,21 +203,20 @@ void AsmPrinter::emitCallSiteValue(uint64_t Value, unsigned Encoding) const {
 
 void AsmPrinter::emitCallSiteCheriCapability(const MCSymbol *Hi,
                                              const MCSymbol *Lo) const {
+  const TargetLoweringObjectFile &TLOF = getObjFileLowering();
+  // Get the Hi-Lo expression. We use (and need) Lo since the offset needs to
+  // be a constant expression, whereas CurrentFnSym is preemptible.
+  const MCExpr *DiffToStart = MCBinaryExpr::createSub(
+      MCSymbolRefExpr::create(Hi, OutContext),
+      MCSymbolRefExpr::create(Lo, OutContext),
+      OutContext);
   // Note: we cannot use Lo here since that is an assembler-local symbol and
   // this would result in EmitCheriCapability() creating a relocation against
   // section plus offset rather than function + offset. We need the right
   // bounds and permissions info and need to use a non-preemptible alias.
   assert(CurrentFnBeginLocal && "Missing local function entry alias for EH!");
-  // Ensure that CurrentFnBeginLocal ends up in the symbol table so that ld.lld
-  // can find the surrounding function even if the actual function is not used.
-  // This happens with weak functions where the unused function's landing pads
-  // would otherwise no longer have a valid surrounding symbol. While this does
-  // not matter as they are unused, it does trigger ld.lld warnings. Always
-  // emitting the local symbol also ensures we can find a valid surrounding and
-  // non-preemptible symbol with a size set.
-  CurrentFnBeginLocal->setUsedInReloc();
-  OutStreamer->EmitCheriCapability(
-      Hi, getObjFileLowering().getCheriCapabilitySize(TM));
+  OutStreamer->EmitCheriCapability(CurrentFnBeginLocal, DiffToStart,
+                                   TLOF.getCheriCapabilitySize(TM));
 }
 
 //===----------------------------------------------------------------------===//

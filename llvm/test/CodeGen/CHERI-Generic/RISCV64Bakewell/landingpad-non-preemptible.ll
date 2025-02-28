@@ -8,15 +8,14 @@
 ; This test case was generated from the following C++ code:
 ; extern long foo();
 ; int do_catch() {
-;     try {
-;         return foo();
-;     } catch(int &i) {
-;         return 1;
-;     } catch(...) {
-;         return 2;
-;     }
+; try {
+; return foo();
+; } catch(int &i) {
+; return 1;
+; } catch(...) {
+; return 2;
 ; }
-
+; }
 @_ZTIi = external dso_local addrspace(200) constant ptr addrspace(200)
 define dso_local noundef signext i32 @_Z8do_catchv() local_unnamed_addr addrspace(200) #0 personality ptr addrspace(200) @__gxx_personality_v0 {
 ; CHECK-LABEL: _Z8do_catchv:
@@ -42,7 +41,7 @@ define dso_local noundef signext i32 @_Z8do_catchv() local_unnamed_addr addrspac
 ; CHECK-NEXT:    caddi csp, csp, 48
 ; CHECK-NEXT:    ret
 ; CHECK-NEXT:  .LBB0_3: # %lpad
-; CHECK-NEXT:  .Llpad0:
+; CHECK-NEXT:  .Ltmp2:
 ; CHECK-NEXT:    sext.w s1, a1
 ; CHECK-NEXT:    call __cxa_begin_catch
 ; CHECK-NEXT:    li s0, 2
@@ -57,7 +56,6 @@ define dso_local noundef signext i32 @_Z8do_catchv() local_unnamed_addr addrspac
 entry:
   %call = invoke noundef signext i32 @_Z3foov()
   to label %return unwind label %lpad
-
 lpad: ; preds = %entry
   %0 = landingpad { ptr addrspace(200), i32 }
   catch ptr addrspace(200) @_ZTIi
@@ -68,15 +66,12 @@ lpad: ; preds = %entry
   %matches = icmp eq i32 %2, %3
   %4 = tail call ptr addrspace(200) @__cxa_begin_catch(ptr addrspace(200) %1) nounwind
   br i1 %matches, label %catch1, label %catch
-
 catch1: ; preds = %lpad
   tail call void @__cxa_end_catch() nounwind
   br label %return
-
 catch: ; preds = %lpad
   tail call void @__cxa_end_catch()
   br label %return
-
 return: ; preds = %entry, %catch1, %catch
   %retval.0 = phi i32 [ 1, %catch1 ], [ 2, %catch ], [ %call, %entry ]
   ret i32 %retval.0
@@ -104,7 +99,8 @@ declare dso_local void @__cxa_end_catch() local_unnamed_addr addrspace(200)
 ; CHECK-NEXT: [[CS_DIRECTIVE]] .Ltmp1-.Ltmp0 # Call between .Ltmp0 and .Ltmp1
 ; Note: RISC-V uses DW_EH_PE_udata4, so the 0xc marker uses 4 bytes instead of 1
 ; CHECK-NEXT: [[SMALL_CS_DIRECTIVE:(\.byte)|(\.word)]] 12 # (landing pad is a capability)
-; CHECK-NEXT: .chericap .Llpad0 # jumps to .Llpad0
+; Note: the following line should not be using _Z8do_catchv, but a local alias
+; CHECK-NEXT: .chericap .L_Z8do_catchv$local+(.Ltmp2-.Lfunc_begin0) # jumps to .Ltmp2
 ; CHECK-NEXT: .byte 3 # On action: 2
 ; CHECK-NEXT: [[CS_DIRECTIVE]] .Ltmp1-.Lfunc_begin0 # >> Call Site 2 <<
 ; CHECK-NEXT: [[CS_DIRECTIVE]] .Lfunc_end0-.Ltmp1 # Call between .Ltmp1 and .Lfunc_end0
@@ -125,19 +121,14 @@ declare dso_local void @__cxa_end_catch() local_unnamed_addr addrspace(200)
 ; CHECK-NEXT: .Lttbase0:
 ; CHECK-NEXT: .p2align 2
 ; CHECK-NEXT: # -- End function
-
-
-
-
 ; RELOCS-LABEL: Relocations [
 ; RELOCS-LABEL: Section ({{.+}}) .rela.gcc_except_table {
-; RELOCS-NEXT: R_RISCV_CHERI_CAPABILITY .Llpad0 0x0{{$}}
+; RELOCS-NEXT: R_RISCV_CHERI_CAPABILITY .L_Z8do_catchv$local 0x34
 ; RELOCS-NEXT: R_RISCV_ADD32 <null> 0x0
 ; RELOCS-NEXT: R_RISCV_SUB32 <null> 0x0
 ; RELOCS-NEXT: R_RISCV_ADD32 .L_ZTIi.DW.stub 0x0
 ; RELOCS-NEXT: R_RISCV_SUB32 <null> 0x0
 ; RELOCS-NEXT: }
-
 ; The local alias should have the same type and non-zero size as the real function:
 ; RELOCS: Symbol {
 ; RELOCS-LABEL: Name: .L_Z8do_catchv$local (
