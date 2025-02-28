@@ -453,8 +453,7 @@ unsigned MipsELFObjectWriter::getRelocType(MCContext &Ctx,
     const auto &ElfSym = cast<const MCSymbolELF>(Target.getSymA()->getSymbol());
     // Assert that we don't create .chericap relocations against temporary
     // symbols since those will result in wrong relocations (against sec+offset)
-    if (ElfSym.isDefined() && !ElfSym.getSize() &&
-        !ElfSym.getName().starts_with(".Llpad")) {
+    if (ElfSym.isDefined() && !ElfSym.getSize()) {
       Ctx.reportWarning(Fixup.getLoc(),
           "creating a R_MIPS_CHERI_CAPABILITY relocation against an unsized "
           "defined symbol: " + ElfSym.getName() +

@@ -26,7 +26,7 @@ define void @test() addrspace(200) personality i8 addrspace(200)* bitcast (i32 (
 ; RV32IXCHERI-NEXT:  .Ltmp1:
 ; RV32IXCHERI-NEXT:    j .LBB0_2
 ; RV32IXCHERI-NEXT:  .LBB0_1: # %lpad
-; RV32IXCHERI-NEXT:  .Llpad0:
+; RV32IXCHERI-NEXT:  .Ltmp2:
 ; RV32IXCHERI-NEXT:    ccall __cxa_begin_catch
 ; RV32IXCHERI-NEXT:    ccall __cxa_end_catch
 ; RV32IXCHERI-NEXT:    j .LBB0_2
@@ -46,7 +46,7 @@ define void @test() addrspace(200) personality i8 addrspace(200)* bitcast (i32 (
 ; RV64IXCHERI-NEXT:  .Ltmp1:
 ; RV64IXCHERI-NEXT:    j .LBB0_2
 ; RV64IXCHERI-NEXT:  .LBB0_1: # %lpad
-; RV64IXCHERI-NEXT:  .Llpad0:
+; RV64IXCHERI-NEXT:  .Ltmp2:
 ; RV64IXCHERI-NEXT:    ccall __cxa_begin_catch
 ; RV64IXCHERI-NEXT:    ccall __cxa_end_catch
 ; RV64IXCHERI-NEXT:    j .LBB0_2
