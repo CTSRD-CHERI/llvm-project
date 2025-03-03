@@ -5,6 +5,15 @@
 // RUN:   2>&1 | FileCheck --check-prefix=CHECK-MIPS %s
 
 
+#if __has_feature(cheri)
+#pragma message("__has_feature(cheri)")
+// CHECK-CHERI: warning: __has_feature(cheri)
+void* __capability w = 0;
+#else
+#pragma message("no cheri")
+// CHECK-MIPS: warning: no cheri
+#endif
+
 #if __has_feature(capabilities)
 #pragma message("__has_feature(capabilities)")
 // CHECK-CHERI: warning: __has_feature(capabilities)

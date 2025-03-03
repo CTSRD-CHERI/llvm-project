@@ -240,6 +240,7 @@ FEATURE(experimental_library, LangOpts.ExperimentalLibrary)
 
 // CHERI features:
 FEATURE(capabilities, PP.getTargetInfo().SupportsCapabilities())
+FEATURE(cheri, PP.getTargetInfo().SupportsCapabilities())
 FEATURE(pointer_interpretation, PP.getTargetInfo().SupportsCapabilities())
 FEATURE(cheri_casts, PP.getTargetInfo().SupportsCapabilities())
 
