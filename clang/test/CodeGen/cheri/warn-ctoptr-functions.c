@@ -22,7 +22,7 @@ typedef	__sighandler_t	* __kerncap sig_t;	/* type of pointer to a signal functio
 typedef long sigset_t;
 struct __siginfo;
 
-#if __has_feature(capabilities)
+#if __has_feature(cheri)
 struct sigaction_c {
 	union {
 		void    (* __capability __sa_handler)(int);
@@ -42,7 +42,7 @@ struct sigaction_native {
 	sigset_t sa_mask;		/* signal mask to apply */
 };
 
-#if __has_feature(capabilities)
+#if __has_feature(cheri)
 typedef struct sigaction_c	ksigaction_t;
 #else
 typedef	struct sigaction_native	ksigaction_t;

@@ -7,7 +7,7 @@
 // RUN: %cheri_cc1 -Wall -Wcheri-pointer-conversion -verify=c,expected,hybrid,hybrid-c -x c -fsyntax-only %s
 // RUN: %cheri_purecap_cc1 -Wall -Wcheri-pointer-conversion -verify=c,expected,purecap,purecap-c -x c -fsyntax-only %s
 
-#if __has_feature(capabilities)
+#if __has_feature(cheri)
 typedef unsigned __intcap uintcap_t;
 #else
 typedef unsigned long uintcap_t;
