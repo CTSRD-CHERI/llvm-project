@@ -49,12 +49,13 @@ struct capreloc {
 };
 static const __SIZE_TYPE__ function_reloc_flag = (__SIZE_TYPE__)1
                                                  << (__SIZE_WIDTH__ - 1);
+static const __SIZE_TYPE__ constant_reloc_flag = (__SIZE_TYPE__)1
+                                                 << (__SIZE_WIDTH__ - 2);
+#ifdef __riscv_xcheri
 static const __SIZE_TYPE__ function_pointer_permissions_mask =
     ~(__SIZE_TYPE__)(__CHERI_CAP_PERMISSION_PERMIT_SEAL__ |
                      __CHERI_CAP_PERMISSION_PERMIT_STORE_CAPABILITY__ |
                      __CHERI_CAP_PERMISSION_PERMIT_STORE__);
-static const __SIZE_TYPE__ constant_reloc_flag = (__SIZE_TYPE__)1
-                                                 << (__SIZE_WIDTH__ - 2);
 static const __SIZE_TYPE__ constant_pointer_permissions_mask =
     ~(__SIZE_TYPE__)(__CHERI_CAP_PERMISSION_PERMIT_SEAL__ |
                      __CHERI_CAP_PERMISSION_PERMIT_STORE_CAPABILITY__ |
@@ -64,6 +65,18 @@ static const __SIZE_TYPE__ constant_pointer_permissions_mask =
 static const __SIZE_TYPE__ global_pointer_permissions_mask =
     ~(__SIZE_TYPE__)(__CHERI_CAP_PERMISSION_PERMIT_SEAL__ |
                      __CHERI_CAP_PERMISSION_PERMIT_EXECUTE__);
+#else
+static const __SIZE_TYPE__ function_pointer_permissions_mask =
+    ~(__SIZE_TYPE__)(__CHERI_CAP_PERMISSION_WRITE__);
+static const __SIZE_TYPE__ constant_pointer_permissions_mask =
+    ~(__SIZE_TYPE__)(__CHERI_CAP_PERMISSION_WRITE__ |
+#ifdef __riscv_zcherilevels
+		     __CHERI_CAP_PERMISSION_STORE_LEVEL__ |
+#endif
+		     __CHERI_CAP_PERMISSION_EXECUTE__);
+static const __SIZE_TYPE__ global_pointer_permissions_mask =
+    ~(__SIZE_TYPE__)(__CHERI_CAP_PERMISSION_EXECUTE__);
+#endif
 
 __attribute__((weak)) extern struct capreloc __start___cap_relocs;
 __attribute__((weak)) extern struct capreloc __stop___cap_relocs;
