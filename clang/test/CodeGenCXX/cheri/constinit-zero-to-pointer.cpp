@@ -24,7 +24,7 @@ const AttributeData kBarcodeAttributeData{
 AttributeData test() { return kBarcodeAttributeData; }
 
 /// Also check enums with underlying type __intcap for CHERI targets:
-#if __has_feature(capabilities)
+#if __has_feature(cheri)
 enum class IntCapEnum : __intcap { Zero };
 
 void *intcapEnumToPtrConstant = (void *)IntCapEnum::Zero;

@@ -1,7 +1,7 @@
 // RUN: %clang_cc1 -fsyntax-only %s -verify
 // RUN: %cheri_cc1 -fsyntax-only %s -verify
 // RUN: %cheri_purecap_cc1 -fsyntax-only %s -verify
-#if !__has_feature(capabilities)
+#if !__has_feature(cheri)
 #define __capability
 #endif
 

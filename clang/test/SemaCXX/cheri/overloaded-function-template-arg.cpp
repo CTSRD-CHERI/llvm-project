@@ -32,7 +32,7 @@ void instantiate() {
   c<void(char), a>::function(1);         // expected-error{{address of overloaded function 'a' does not match required type 'void (char)'}}
 }
 
-#if __has_feature(capabilities)
+#if __has_feature(cheri)
 template <class T, T *__capability Func>
 // hybrid-note@-1 3 {{template parameter is declared here}}
 struct c_cap {
