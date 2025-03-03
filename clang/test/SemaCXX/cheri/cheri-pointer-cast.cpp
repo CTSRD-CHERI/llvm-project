@@ -9,7 +9,7 @@ typedef unsigned long ulong;
 
 int foo;
 
-#if __has_feature(capabilities)
+#if __has_feature(cheri)
 #define CAP __capability
 #else
 #define CAP
@@ -68,7 +68,7 @@ int main() {
 }
 
 // Check that we don't warn on dependent types
-#if __has_feature(capabilities)
+#if __has_feature(cheri)
 template <typename T>
 long offset_get(T x) {
   return __builtin_cheri_offset_get(reinterpret_cast<void * __capability>(x));
