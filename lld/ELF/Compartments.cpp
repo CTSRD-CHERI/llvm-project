@@ -155,7 +155,7 @@ compartmentForSection(const InputSectionBase *s,
 
       Expected<Compartment *> symbolC = symbolLookup.findMatch(b->getName());
       if (!symbolC) {
-        error("symbol " + b->getName() + toString(symbolC.takeError()));
+        error("symbol " + b->getName() + " " + toString(symbolC.takeError()));
         hasError = true;
         continue;
       }
@@ -171,7 +171,7 @@ compartmentForSection(const InputSectionBase *s,
       }
 
       if (current != nullptr) {
-        error(isecName(s) + "assigned to " + compartmentName(current) +
+        error(isecName(s) + " assigned to " + compartmentName(current) +
               " by " + symbolName(firstSym) + " and " +
               compartmentName(*symbolC) + " by " + symbolName(b));
         hasError = true;
