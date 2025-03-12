@@ -1,7 +1,10 @@
-FROM docker.io/library/rockylinux:8.9
+FROM rockylinux/rockylinux:9.4
 
-RUN dnf group -y install "Development tools"
-RUN dnf install -y cmake
+RUN dnf install -y epel-release
+RUN dnf install -y 'dnf-command(config-manager)' && \
+    dnf config-manager --set-enabled crb && \
+    dnf groupinstall -y "Development Tools" && \
+    dnf install -y cmake ninja-build lld clang perl
 
 RUN useradd --create-home --no-log-init -u 4000 --shell /bin/bash gitlab-ci
 
