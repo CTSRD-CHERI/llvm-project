@@ -777,7 +777,9 @@ unsigned DataLayout::getMaxIndexSize() const {
   unsigned MaxIndexSize = 0;
   for (auto &P : Pointers)
     MaxIndexSize =
-        std::max(MaxIndexSize, (unsigned)divideCeil(P.TypeBitWidth, 8));
+        std::max(MaxIndexSize,
+                 (unsigned)divideCeil(
+                     getPointerAlignElem(P.AddressSpace).IndexBitWidth, 8));
 
   return MaxIndexSize;
 }
