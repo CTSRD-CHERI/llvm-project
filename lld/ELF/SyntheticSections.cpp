@@ -1344,9 +1344,9 @@ static uint64_t addRelaSz(const RelocationBaseSection &relaDyn) {
 // overlap with the [DT_RELA, DT_RELA + DT_RELASZ).
 static uint64_t addPltRelSz(const Compartment *c) {
   size_t size = relaPlt(c)->getSize();
-  if (relaIplt(c)->getParent() == relaPlt(c)->getParent() &&
-      relaIplt(c)->name == relaPlt(c)->name)
-    size += relaIplt(c)->getSize();
+  if (in.relaIplt->getParent() == relaPlt(c)->getParent() &&
+      in.relaIplt->name == relaPlt(c)->name)
+    size += in.relaIplt->getSize();
   return size;
 }
 
@@ -1472,7 +1472,7 @@ DynamicSection<ELFT>::computeContents() {
   // .rel[a].plt section.
   bool pltrel = false, aarch64_variant_pcs = false;
   auto addPlt = [&](const Compartment *c) {
-    if (!relaPlt(c)->isNeeded() && !relaIplt(c)->isNeeded())
+    if (!relaPlt(c)->isNeeded() && !(c == nullptr && in.relaIplt->isNeeded()))
       return;
     addInSec(DT_JMPREL, *relaPlt(c));
     addInt(DT_PLTRELSZ, addPltRelSz(c));
@@ -1793,7 +1793,7 @@ void RelocationBaseSection::finalizeContents() {
       getParent()->info = gotPlt(c)->getParent()->sectionIndex;
     }
   }
-  if (relaIplt(c) == this && igotPlt(c)->getParent()) {
+  if (in.relaIplt.get() == this && igotPlt(c)->getParent()) {
     getParent()->flags |= ELF::SHF_INFO_LINK;
     // For CheriABI we use the captable as the sh_info value
     if (config->isCheriAbi && cheriCapTable(c) && cheriCapTable(c)->isNeeded()) {

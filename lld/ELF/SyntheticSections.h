@@ -1312,7 +1312,6 @@ struct Compartment {
   std::unique_ptr<PltSection> plt;
   std::unique_ptr<IpltSection> iplt;
   std::unique_ptr<RelocationBaseSection> relaPlt;
-  std::unique_ptr<RelocationBaseSection> relaIplt;
 
   PhdrEntry *phdr;
   PhdrEntry *relRo;
@@ -1368,13 +1367,6 @@ inline RelocationBaseSection *relaPlt(const Compartment *c) {
     return in.relaPlt.get();
   else
     return c->relaPlt.get();
-}
-
-inline RelocationBaseSection *relaIplt(const Compartment *c) {
-  if (c == nullptr)
-    return in.relaIplt.get();
-  else
-    return c->relaIplt.get();
 }
 
 } // namespace elf

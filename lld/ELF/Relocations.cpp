@@ -1695,7 +1695,7 @@ static bool handleNonPreemptibleIfunc(Compartment *c, Symbol &sym) {
   SymbolCompartAux *directAux = directSym->compartAux(c);
   *directAux = *aux;
   directSym->allocateAux(c);
-  addPltEntry(*iplt(c), *igotPlt(c), *relaIplt(c), target->iRelativeRel,
+  addPltEntry(*iplt(c), *igotPlt(c), *in.relaIplt, target->iRelativeRel,
               *directSym);
   sym.allocateAux(c);
   symAux.back().pltIdx = symAux[directSym->auxIdx(c)].pltIdx;
@@ -1743,7 +1743,7 @@ static bool handleCrossCompartmentCall(Compartment *c, Symbol &sym) {
 
   // Create an Iplt entry and the associated RELATIVE relocation.
   sym.allocateAux(c);
-  addPltEntry(*iplt(c), *igotPlt(c), *relaIplt(c), target->relativeRel,
+  addPltEntry(*iplt(c), *igotPlt(c), *in.relaIplt, target->relativeRel,
               sym);
 
   if (aux->hasDirectReloc) {
