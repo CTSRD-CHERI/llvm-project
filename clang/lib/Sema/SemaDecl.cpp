@@ -19338,7 +19338,8 @@ void Sema::ActOnFields(Scope *S, SourceLocation RecLoc, Decl *EnclosingDecl,
       CDecl->setIvarRBraceLoc(RBrac);
     }
   }
-  if (Record && Record->hasAttr<PackedAttr>() && !Record->isDependentType()) {
+  if (Record && (Record->hasAttr<PackedAttr>() || Record->hasAttr<MaxFieldAlignmentAttr>()) &&
+      !Record->isDependentType()) {
     std::function<bool(const RecordDecl *R)> contains_capabilities =
       [&](const RecordDecl *R) {
         for (const auto *F : R->fields()) {
