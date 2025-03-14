@@ -12,6 +12,7 @@
 //===----------------------------------------------------------------------===//
 
 #include "RISCVBaseInfo.h"
+#include "RISCVMCTargetDesc.h"
 #include "llvm/ADT/ArrayRef.h"
 #include "llvm/MC/MCInst.h"
 #include "llvm/MC/MCRegisterInfo.h"
@@ -135,6 +136,9 @@ void validate(const Triple &TT, const FeatureBitset &FeatureBits) {
   if (FeatureBits[RISCV::Feature32Bit] &&
       FeatureBits[RISCV::Feature64Bit])
     report_fatal_error("RV32 and RV64 can't be combined");
+  // TODO: Support capability variant of R_RISCV_ADD
+  if (FeatureBits[RISCV::FeatureCheri] && FeatureBits[RISCV::FeatureRelax])
+    report_fatal_error("CHERI does not currently support linker relaxation");
 }
 
 llvm::Expected<std::unique_ptr<RISCVISAInfo>>

@@ -1,15 +1,15 @@
 ;; Check that the directives at the start of the function are emitted in a sensible order
 ; RUN: %riscv64_cheri_purecap_llc -relocation-model=pic -mattr=-relax < %s | FileCheck %s
 ; RUN: %riscv64_cheri_purecap_llc -relocation-model=static -mattr=-relax < %s | FileCheck %s
-; RUN: %riscv64_cheri_purecap_llc -relocation-model=pic -mattr=+relax < %s | FileCheck %s
-; RUN: %riscv64_cheri_purecap_llc -relocation-model=static -mattr=+relax < %s | FileCheck %s
+; RUNNOT: %riscv64_cheri_purecap_llc -relocation-model=pic -mattr=+relax < %s | FileCheck %s
+; RUNNOT: %riscv64_cheri_purecap_llc -relocation-model=static -mattr=+relax < %s | FileCheck %s
 ;; Check the .o output as well to ensure the relocations make sense.
-; RUN: %riscv64_cheri_purecap_llc -relocation-model=static -mattr=+relax < %s -filetype=obj -o - \
-; RUN:   | llvm-readelf --symbols --relocations --expand-relocs - | FileCheck %s --check-prefix=OBJ
+; RUNNOT: %riscv64_cheri_purecap_llc -relocation-model=static -mattr=+relax < %s -filetype=obj -o - \
+; RUNNOT:   | llvm-readelf --symbols --relocations --expand-relocs - | FileCheck %s --check-prefix=OBJ
 ; RUN: %riscv64_cheri_purecap_llc -relocation-model=static -mattr=-relax < %s -filetype=obj -o - \
 ; RUN:   | llvm-readelf --symbols --relocations --expand-relocs - | FileCheck %s --check-prefix=OBJ
-; RUN: %riscv64_cheri_purecap_llc -relocation-model=pic -mattr=+relax < %s -filetype=obj -o - \
-; RUN:   | llvm-readelf --symbols --relocations --expand-relocs - | FileCheck %s --check-prefix=OBJ
+; RUNNOT: %riscv64_cheri_purecap_llc -relocation-model=pic -mattr=+relax < %s -filetype=obj -o - \
+; RUNNOT:   | llvm-readelf --symbols --relocations --expand-relocs - | FileCheck %s --check-prefix=OBJ
 ; RUN: %riscv64_cheri_purecap_llc -relocation-model=pic -mattr=-relax < %s -filetype=obj -o - \
 ; RUN:   | llvm-readelf --symbols --relocations --expand-relocs - | FileCheck %s --check-prefix=OBJ
 
