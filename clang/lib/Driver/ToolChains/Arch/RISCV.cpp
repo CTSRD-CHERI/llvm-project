@@ -169,8 +169,16 @@ void riscv::getRISCVTargetFeatures(const Driver &D, const llvm::Triple &Triple,
   if (Args.hasArg(options::OPT_ffixed_x31))
     Features.push_back("+reserve-x31");
 
+  bool IsCheri = ISAInfo->hasExtension("xcheri");
+
   // -mrelax is default, unless -mno-relax is specified.
-  if (Args.hasFlag(options::OPT_mrelax, options::OPT_mno_relax, true)) {
+  // For CHERI it's currently not supported, so forbid enabling it and disable
+  // it by default (see llvm::RISCVFeatures::validate).
+  if (Args.hasFlag(options::OPT_mrelax, options::OPT_mno_relax, !IsCheri)) {
+    if (IsCheri)
+      D.Diag(clang::diag::err_drv_riscv_unsupported_with_linker_relaxation)
+          << "CHERI";
+
     Features.push_back("+relax");
     // -gsplit-dwarf -mrelax requires DW_AT_high_pc/DW_AT_ranges/... indexing
     // into .debug_addr, which is currently not implemented.
@@ -197,7 +205,7 @@ void riscv::getRISCVTargetFeatures(const Driver &D, const llvm::Triple &Triple,
   if (Arg *A = Args.getLastArg(options::OPT_mabi_EQ)) {
     bool IsPureCapability = isCheriPurecapABIName(A->getValue());
     if (IsPureCapability) {
-      if (!ISAInfo->hasExtension("xcheri")) {
+      if (!IsCheri) {
         D.Diag(diag::err_riscv_invalid_abi)
             << A->getValue()
             << "pure capability ABI requires xcheri extension to be specified";
