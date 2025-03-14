@@ -18,21 +18,21 @@
 // RV64: "target-features"="+64bit,+a,+c,+m,+relax,
 // RV64-SAME: -save-restore
 
-// RV32-XCHERI: "target-features"="+32bit,+relax,+xcheri,
+// RV32-XCHERI: "target-features"="+32bit,+xcheri,
 // RV32-XCHERI-SAME: -save-restore
-// RV64-XCHERI: "target-features"="+64bit,+relax,+xcheri,
+// RV64-XCHERI: "target-features"="+64bit,+xcheri,
 // RV64-XCHERI-SAME: -save-restore
 
-// RV32-XCHERI-RVC: "target-features"="+32bit,+relax,+xcheri
-// RV64-XCHERI-RVC: "target-features"="+64bit,+relax,+xcheri
-// RV32-XCHERI-NORVC: "target-features"="+32bit,+relax,+xcheri,+xcheri-norvc
+// RV32-XCHERI-RVC: "target-features"="+32bit,+xcheri
+// RV64-XCHERI-RVC: "target-features"="+64bit,+xcheri
+// RV32-XCHERI-NORVC: "target-features"="+32bit,+xcheri,+xcheri-norvc
 // RV32-XCHERI-NORVC: -save-restore
-// RV64-XCHERI-NORVC: "target-features"="+64bit,+relax,+xcheri,+xcheri-norvc
+// RV64-XCHERI-NORVC: "target-features"="+64bit,+xcheri,+xcheri-norvc
 // RV64-XCHERI-NORVC: -save-restore
-// RV32-XCHERI-EXPLICIT-RVC: "target-features"="+32bit,+relax,+xcheri
+// RV32-XCHERI-EXPLICIT-RVC: "target-features"="+32bit,+xcheri
 // RV32-XCHERI-EXPLICIT-RVC-SAME -save-restore
 // XCHERI-RVC-SAME: ,-xcheri-norvc,
-// RV64-XCHERI-EXPLICIT-RVC: "target-features"="+64bit,+relax,+xcheri
+// RV64-XCHERI-EXPLICIT-RVC: "target-features"="+64bit,+xcheri
 
 // XCHERI-NOT: xcheri
 
