@@ -474,12 +474,12 @@ static uint64_t getTargetSize(const CheriCapRelocLocation &location,
       auto def = dyn_cast<Defined>(esym);
       if (def && !def->section) {
         targetSize = def->value;
-	/*
-	 * Symbol has explicitly given size zero but a zero size will
-	 * result in an allmighty cap. Increase size to 1 for lack of
-	 * a better short term solution.
-	 */
-	if (targetSize == 0)
+        /*
+         * Symbol has explicitly given size zero but a zero size will
+         * result in an allmighty cap. Increase size to 1 for lack of
+         * a better short term solution.
+         */
+        if (targetSize == 0)
           targetSize = 1;
         return targetSize;
       }
