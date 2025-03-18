@@ -13,6 +13,7 @@
 #include "Target.h"
 #include "lld/Common/ErrorHandler.h"
 #include "llvm/BinaryFormat/ELF.h"
+#include "llvm/CHERI/cheri-compressed-cap/cheri_compressed_cap.h"
 
 using namespace llvm;
 using namespace llvm::object;
@@ -26,6 +27,7 @@ public:
   MIPS();
   uint32_t calcEFlags() const override;
   int getCapabilitySize() const override;
+  uint64_t getCheriRequiredAlignment(uint64_t len) const override;
   RelExpr getRelExpr(RelType type, const Symbol &s,
                      const uint8_t *loc) const override;
   int64_t getImplicitAddend(const uint8_t *buf, RelType type) const override;
@@ -87,6 +89,13 @@ template <class ELFT> int MIPS<ELFT>::getCapabilitySize() const {
   if ((config->eflags & EF_MIPS_MACH) == EF_MIPS_MACH_CHERI256)
     return 32;
   return 0;
+}
+
+template <class ELFT> uint64_t MIPS<ELFT>::getCheriRequiredAlignment(
+    uint64_t len) const {
+  if ((config->eflags & EF_MIPS_MACH) == EF_MIPS_MACH_CHERI128)
+    return cc128_get_required_alignment(len);
+  return 1;
 }
 
 template <class ELFT>
