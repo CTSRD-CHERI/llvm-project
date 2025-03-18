@@ -13,7 +13,6 @@
 ; }
 target datalayout = "e-m:e-pf200:64:64:64:32-p:32:32-i64:64-n32-S128-A200-P200-G200"
 declare i32 @use_alloca(ptr addrspace(200)) local_unnamed_addr addrspace(200)
-; Function Attrs: nounwind
 define i32 @alloca_in_entry(i1 %arg) local_unnamed_addr addrspace(200) nounwind {
 ; ASM-LABEL: alloca_in_entry:
 ; ASM:       # %bb.0: # %entry
@@ -68,8 +67,7 @@ define i32 @alloca_in_entry(i1 %arg) local_unnamed_addr addrspace(200) nounwind 
 ; CHECK:       do_alloca:
 ; CHECK-NEXT:    br label [[USE_ALLOCA_NO_BOUNDS:%.*]]
 ; CHECK:       use_alloca_no_bounds:
-; CHECK-NEXT:    [[PTR:%.*]] = bitcast ptr addrspace(200) [[ALLOCA]] to ptr addrspace(200)
-; CHECK-NEXT:    [[PTR_PLUS_ONE:%.*]] = getelementptr i64, ptr addrspace(200) [[PTR]], i64 1
+; CHECK-NEXT:    [[PTR_PLUS_ONE:%.*]] = getelementptr i64, ptr addrspace(200) [[ALLOCA]], i64 1
 ; CHECK-NEXT:    store i64 1234, ptr addrspace(200) [[PTR_PLUS_ONE]], align 8
 ; CHECK-NEXT:    br label [[USE_ALLOCA_NEED_BOUNDS:%.*]]
 ; CHECK:       use_alloca_need_bounds:
@@ -86,8 +84,7 @@ entry:
 do_alloca: ; preds = %entry
   br label %use_alloca_no_bounds
 use_alloca_no_bounds: ; preds = %do_alloca
-  %ptr = bitcast ptr addrspace(200) %alloca to ptr addrspace(200)
-  %ptr_plus_one = getelementptr i64, ptr addrspace(200) %ptr, i64 1
+  %ptr_plus_one = getelementptr i64, ptr addrspace(200) %alloca, i64 1
   store i64 1234, ptr addrspace(200) %ptr_plus_one, align 8
   br label %use_alloca_need_bounds
 use_alloca_need_bounds: ; preds = %use_alloca_no_bounds
@@ -97,7 +94,6 @@ use_alloca_need_bounds: ; preds = %use_alloca_no_bounds
 exit: ; preds = %use_alloca_need_bounds, %entry
   ret i32 123
 }
-; Function Attrs: nounwind
 define i32 @alloca_not_in_entry(i1 %arg) local_unnamed_addr addrspace(200) nounwind {
 ; ASM-LABEL: alloca_not_in_entry:
 ; ASM:       # %bb.0: # %entry
@@ -175,8 +171,7 @@ define i32 @alloca_not_in_entry(i1 %arg) local_unnamed_addr addrspace(200) nounw
 ; CHECK-NEXT:    [[TMP0:%.*]] = call ptr addrspace(200) @llvm.cheri.bounded.stack.cap.dynamic.i32(ptr addrspace(200) [[ALLOCA]], i32 16)
 ; CHECK-NEXT:    br label [[USE_ALLOCA_NO_BOUNDS:%.*]]
 ; CHECK:       use_alloca_no_bounds:
-; CHECK-NEXT:    [[PTR:%.*]] = bitcast ptr addrspace(200) [[ALLOCA]] to ptr addrspace(200)
-; CHECK-NEXT:    [[PTR_PLUS_ONE:%.*]] = getelementptr i64, ptr addrspace(200) [[PTR]], i64 1
+; CHECK-NEXT:    [[PTR_PLUS_ONE:%.*]] = getelementptr i64, ptr addrspace(200) [[ALLOCA]], i64 1
 ; CHECK-NEXT:    store i64 1234, ptr addrspace(200) [[PTR_PLUS_ONE]], align 8
 ; CHECK-NEXT:    br label [[USE_ALLOCA_NEED_BOUNDS:%.*]]
 ; CHECK:       use_alloca_need_bounds:
@@ -192,8 +187,7 @@ do_alloca: ; preds = %entry
   %alloca = alloca [16 x i8], align 16, addrspace(200)
   br label %use_alloca_no_bounds
 use_alloca_no_bounds: ; preds = %do_alloca
-  %ptr = bitcast ptr addrspace(200) %alloca to ptr addrspace(200)
-  %ptr_plus_one = getelementptr i64, ptr addrspace(200) %ptr, i64 1
+  %ptr_plus_one = getelementptr i64, ptr addrspace(200) %alloca, i64 1
   store i64 1234, ptr addrspace(200) %ptr_plus_one, align 8
   br label %use_alloca_need_bounds
 use_alloca_need_bounds: ; preds = %use_alloca_no_bounds
@@ -203,7 +197,8 @@ use_alloca_need_bounds: ; preds = %use_alloca_no_bounds
 exit: ; preds = %use_alloca_need_bounds, %entry
   ret i32 123
 }
-; Function Attrs: nounwind
+; The original reduced test case from libc/gen/exec.c
+; We can't use llvm.cheri.bounded.stack.cap.i64 here, since that only works for static allocas:
 define i32 @crash_reproducer(i1 %arg) local_unnamed_addr addrspace(200) nounwind {
 ; ASM-LABEL: crash_reproducer:
 ; ASM:       # %bb.0: # %entry

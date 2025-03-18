@@ -77,17 +77,17 @@ entry:
   %alloca2 = alloca i32, align 4, addrspace(200)
   %alloca3 = alloca i32, align 4, addrspace(200)
   br i1 %cond, label %block1, label %block2
-block1: ; preds = %entry
+block1:
   store i32 1, ptr addrspace(200) %alloca1, align 4
   store i32 2, ptr addrspace(200) %alloca2, align 4
   store i32 3, ptr addrspace(200) %alloca3, align 4
   br label %phi_block
-block2: ; preds = %entry
+block2:
   store i32 4, ptr addrspace(200) %alloca1, align 4
   store i32 5, ptr addrspace(200) %alloca2, align 4
   store i32 6, ptr addrspace(200) %alloca3, align 4
   br label %phi_block
-phi_block: ; preds = %block2, %block1
+phi_block:
   %val1 = phi ptr addrspace(200) [ null, %block1 ], [ %alloca1, %block2 ]
   %val2 = phi ptr addrspace(200) [ %alloca2, %block1 ], [ %alloca3, %block2 ]
   call void @foo(ptr addrspace(200) %val1)
@@ -140,13 +140,13 @@ entry:
   %alloca1 = alloca i32, align 4, addrspace(200)
   %alloca2 = alloca i32, align 4, addrspace(200)
   br i1 %cond, label %block1, label %block2
-block1: ; preds = %entry
+block1:
   store i32 1, ptr addrspace(200) %alloca1, align 4
   br label %phi_block
-block2: ; preds = %entry
+block2:
   store i32 5, ptr addrspace(200) %alloca2, align 4
   br label %phi_block
-phi_block: ; preds = %block2, %block1
+phi_block:
   %val1 = phi ptr addrspace(200) [ %alloca1, %block1 ], [ %alloca2, %block2 ]
   call void @foo(ptr addrspace(200) %val1)
   ret void

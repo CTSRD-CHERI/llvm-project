@@ -1305,7 +1305,7 @@ uint64_t getCapMetaBits(int64_t a, const Symbol &sym,
   CheriCapReloc reloc{SymbolAndOffset{const_cast<Symbol *>(&sym), 0}, 0,
                       static_cast<bool>(sym.isPreemptible)};
 
-  uint64_t symSize = invokeAndRetELFT(getTargetSize, loc, reloc);
+  uint64_t symSize = invokeAndRetELFT(getTargetSize, loc, reloc.target);
 
   if (config->is64) {
     cc128r_cap_t cap =

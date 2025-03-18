@@ -73,11 +73,9 @@ def CADDI         : CheriRVInstrI<0x2, OPC_OP_IMM_32, "caddi", 1>;
 }
 let defsCanBeSealed = 1 in {
 def SENTRY        : ZCheri_r<0x8, "sentry", GPCR>;
-let mayTrap = 1 in
 def CBLD          : ZCheri_rr<0x6, 0x5, "cbld", GPCR, GPCRNoC0, GPCR>;
 } // defsCanBeSealed = 1
 
-let mayTrap = 1 in {
 def SCBNDS        : ZCheri_rr<0x7, 0x0, "scbnds">;
 def SCBNDSR       : ZCheri_rr<0x7, 0x1, "scbndsr">;
 let hasSideEffects = 0, mayLoad = 0, mayStore = 0 in
@@ -86,7 +84,6 @@ def SCBNDSI
                                  (ins GPCR:$rs1, csetbnd_imm:$imm),
                                  "scbndsi", "$rd, $rs1, $imm"
                                 >;
-} // mayTrap = 1
 
 def : InstAlias<"scbnds $cd, $cs1, $imm",
                 (SCBNDSI GPCR:$cd, GPCR:$cs1, csetbnd_imm:$imm), 0>;

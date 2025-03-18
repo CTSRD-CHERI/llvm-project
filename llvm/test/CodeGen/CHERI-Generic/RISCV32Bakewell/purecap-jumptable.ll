@@ -110,7 +110,7 @@ define void @above_threshold_all(i32 %in, i32 addrspace(200)* %out) nounwind {
 ; CHECK-NEXT:    cadd ca0, ca2, a0
 ; CHECK-NEXT:    lw a0, 0(ca0)
 ; CHECK-NEXT:  .LBB2_11: # %entry
-; CHECK-NEXT:    # Label of block must be emitte
+; CHECK-NEXT:    # Label of block must be emitted
 ; CHECK-NEXT:    auipc ca2, %pcrel_hi(.Labove_threshold_all$jump_table_base)
 ; CHECK-NEXT:    caddi ca2, ca2, %pcrel_lo(.LBB2_11)
 ; CHECK-NEXT:    cadd ca0, ca2, a0
@@ -170,10 +170,10 @@ exit:
 }
 ; UTC_ARGS: --disable
 ; CHECK-LABEL: .LJTI2_0:
-; CHECK-NEXT:    .word .LBB2_2-.Labove_threshold_all$jump_table_base
-; CHECK-NEXT:    .word .LBB2_3-.Labove_threshold_all$jump_table_base
-; CHECK-NEXT:    .word .LBB2_4-.Labove_threshold_all$jump_table_base
-; CHECK-NEXT:    .word .LBB2_5-.Labove_threshold_all$jump_table_base
-; CHECK-NEXT:    .word .LBB2_6-.Labove_threshold_all$jump_table_base
-; CHECK-NEXT:    .word .LBB2_7-.Labove_threshold_all$jump_table_base
+; CHECK-NEXT: .word .LBB2_2-.Labove_threshold_all$jump_table_base
+; CHECK-NEXT: .word .LBB2_3-.Labove_threshold_all$jump_table_base
+; CHECK-NEXT: .word .LBB2_4-.Labove_threshold_all$jump_table_base
+; CHECK-NEXT: .word .LBB2_5-.Labove_threshold_all$jump_table_base
+; CHECK-NEXT: .word .LBB2_6-.Labove_threshold_all$jump_table_base
+; CHECK-NEXT: .word .LBB2_7-.Labove_threshold_all$jump_table_base
 ; UTC_ARGS: --enable

@@ -36,22 +36,24 @@ define dso_local void @hoist_csetbounds(i32 signext %cond, ptr addrspace(200) %f
 ; CHECK-NEXT:    sc cs3, 8(csp) # 8-byte Folded Spill
 ; CHECK-NEXT:    sc cs4, 0(csp) # 8-byte Folded Spill
 ; CHECK-NEXT:    cmv cs0, ca1
-; CHECK-NEXT:    caddi cs1, ca1, 4
-; CHECK-NEXT:    li s2, -1
-; CHECK-NEXT:    li s3, 99
-; CHECK-NEXT:    li s4, 4
+; CHECK-NEXT:    caddi ca0, ca1, 4
+; CHECK-NEXT:    li s3, -1
+; CHECK-NEXT:    li s4, 99
+; CHECK-NEXT:    li a1, 4
+; CHECK-NEXT:    scbndsr cs2, cs0, a1
+; CHECK-NEXT:    scbndsr cs1, ca0, a1
 ; CHECK-NEXT:    j .LBB0_2
 ; CHECK-NEXT:  .LBB0_1: # %for.inc
 ; CHECK-NEXT:    # in Loop: Header=BB0_2 Depth=1
-; CHECK-NEXT:    addi s2, s2, 1
-; CHECK-NEXT:    bgeu s2, s3, .LBB0_4
+; CHECK-NEXT:    addi s3, s3, 1
+; CHECK-NEXT:    bgeu s3, s4, .LBB0_4
 ; CHECK-NEXT:  .LBB0_2: # %for.body
 ; CHECK-NEXT:    # =>This Inner Loop Header: Depth=1
 ; CHECK-NEXT:    beqz s0, .LBB0_1
 ; CHECK-NEXT:  # %bb.3: # %if.then
 ; CHECK-NEXT:    # in Loop: Header=BB0_2 Depth=1
-; CHECK-NEXT:    scbndsr ca0, cs0, s4
-; CHECK-NEXT:    scbndsr ca1, cs1, s4
+; CHECK-NEXT:    cmv ca0, cs2
+; CHECK-NEXT:    cmv ca1, cs1
 ; CHECK-NEXT:    call call
 ; CHECK-NEXT:    j .LBB0_1
 ; CHECK-NEXT:  .LBB0_4: # %for.cond.cleanup
@@ -70,23 +72,21 @@ define dso_local void @hoist_csetbounds(i32 signext %cond, ptr addrspace(200) %f
 ; HOIST-OPT-NEXT:    br i1 [[TOBOOL]], label [[FOR_COND_CLEANUP:%.*]], label [[ENTRY_SPLIT:%.*]]
 ; HOIST-OPT:       entry.split:
 ; HOIST-OPT-NEXT:    [[DST:%.*]] = getelementptr inbounds [[STRUCT_FOO:%.*]], ptr addrspace(200) [[F]], i32 0, i32 1
-; HOIST-OPT-NEXT:    [[TMP0:%.*]] = tail call ptr addrspace(200) @llvm.cheri.cap.bounds.set.i32(ptr addrspace(200) nonnull [[F]], i32 4)
-; HOIST-OPT-NEXT:    [[TMP1:%.*]] = tail call ptr addrspace(200) @llvm.cheri.cap.bounds.set.i32(ptr addrspace(200) nonnull [[DST]], i32 4)
+; HOIST-OPT-NEXT:    [[ADDRESS_WITH_BOUNDS:%.*]] = tail call ptr addrspace(200) @llvm.cheri.cap.bounds.set.i32(ptr addrspace(200) nonnull [[F]], i32 4)
+; HOIST-OPT-NEXT:    [[ADDRESS_WITH_BOUNDS1:%.*]] = tail call ptr addrspace(200) @llvm.cheri.cap.bounds.set.i32(ptr addrspace(200) nonnull [[DST]], i32 4)
 ; HOIST-OPT-NEXT:    br label [[FOR_BODY:%.*]]
 ; HOIST-OPT:       for.cond.cleanup:
 ; HOIST-OPT-NEXT:    ret void
 ; HOIST-OPT:       for.body:
 ; HOIST-OPT-NEXT:    [[I_06:%.*]] = phi i32 [ 0, [[ENTRY_SPLIT]] ], [ [[INC:%.*]], [[FOR_BODY]] ]
-; HOIST-OPT-NEXT:    tail call void @call(ptr addrspace(200) [[TMP0]], ptr addrspace(200) [[TMP1]])
+; HOIST-OPT-NEXT:    tail call void @call(ptr addrspace(200) [[ADDRESS_WITH_BOUNDS]], ptr addrspace(200) [[ADDRESS_WITH_BOUNDS1]])
 ; HOIST-OPT-NEXT:    [[INC]] = add nuw nsw i32 [[I_06]], 1
 ; HOIST-OPT-NEXT:    [[EXITCOND_NOT:%.*]] = icmp eq i32 [[INC]], 100
 ; HOIST-OPT-NEXT:    br i1 [[EXITCOND_NOT]], label [[FOR_COND_CLEANUP]], label [[FOR_BODY]]
 ;
 entry:
   %tobool = icmp eq ptr addrspace(200) %f, null
-  %0 = bitcast ptr addrspace(200) %f to ptr addrspace(200)
   %dst = getelementptr inbounds %struct.foo, ptr addrspace(200) %f, i64 0, i32 1
-  %1 = bitcast ptr addrspace(200) %dst to ptr addrspace(200)
   br label %for.body
 for.cond.cleanup: ; preds = %for.inc
   ret void
@@ -94,10 +94,8 @@ for.body: ; preds = %for.inc, %entry
   %i.06 = phi i32 [ 0, %entry ], [ %inc, %for.inc ]
   br i1 %tobool, label %for.inc, label %if.then
 if.then: ; preds = %for.body
-  %2 = call ptr addrspace(200) @llvm.cheri.cap.bounds.set.i32(ptr addrspace(200) nonnull %0, i32 4)
-  %address.with.bounds = bitcast ptr addrspace(200) %2 to ptr addrspace(200)
-  %3 = call ptr addrspace(200) @llvm.cheri.cap.bounds.set.i32(ptr addrspace(200) nonnull %1, i32 4)
-  %address.with.bounds1 = bitcast ptr addrspace(200) %3 to ptr addrspace(200)
+  %address.with.bounds = call ptr addrspace(200) @llvm.cheri.cap.bounds.set.i32(ptr addrspace(200) nonnull %f, i32 4)
+  %address.with.bounds1 = call ptr addrspace(200) @llvm.cheri.cap.bounds.set.i32(ptr addrspace(200) nonnull %dst, i32 4)
   call void @call(ptr addrspace(200) %address.with.bounds, ptr addrspace(200) %address.with.bounds1)
   br label %for.inc
 for.inc: ; preds = %if.then, %for.body
