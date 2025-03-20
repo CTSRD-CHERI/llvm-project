@@ -100,7 +100,7 @@ static __attribute__((always_inline)) void cheri_init_globals_impl(
     }
     const void *__capability src =
         __builtin_cheri_address_set(base_cap, reloc->object + base_addr);
-    if (can_set_bounds && (reloc->size != 0)) {
+    if (can_set_bounds) {
       src = __builtin_cheri_bounds_set(src, reloc->size);
     }
     src = __builtin_cheri_offset_increment(src, reloc->offset);
@@ -132,30 +132,41 @@ static __attribute__((always_inline)) void cheri_init_globals_cbuildcap_impl(
         (const void *__capability *__capability)__builtin_cheri_address_set(
             data_cap, rela->offset + base_addr);
     const __SIZE_TYPE__ addr = __builtin_cheri_address_get(*dest);
-    const __SIZE_TYPE__ length = __builtin_cheri_length_get(*dest);
     const __SIZE_TYPE__ perms = __builtin_cheri_perms_get(*dest);
+    const __SIZE_TYPE__ is_sealed = __builtin_cheri_sealed_get(*dest);
+    const bool is_fn = perms & __CHERI_CAP_PERMISSION_EXECUTE__;
+    const bool is_rw = perms & __CHERI_CAP_PERMISSION_WRITE__;
+
     if (addr == 0) {
       *dest = (void *__capability)0;
       continue;
     }
+
     const void *__capability base_cap;
-    bool can_set_bounds = true;
-    if (perms & __CHERI_CAP_PERMISSION_EXECUTE__) {
+    if (is_fn) {
       base_cap = code_cap;
-      can_set_bounds = tight_code_bounds;
-    } else if (perms & __CHERI_CAP_PERMISSION_WRITE__) {
+    } else if (is_rw) {
       base_cap = data_cap;
     } else {
       base_cap = rodata_cap;
     }
-    const void *__capability src =
-        __builtin_cheri_address_set(base_cap, addr + base_addr);
-    if (can_set_bounds && (length != 0)) {
-      src = __builtin_cheri_bounds_set(src, length);
-    }
-    src = __builtin_cheri_offset_increment(src, rela->addend);
-    if (__builtin_cheri_sealed_get(*dest)) {
-      src = __builtin_cheri_seal_entry(src);
+
+    const void *__capability src;
+    // if we can't set tight code bounds on the fn then we have
+    // to initialize it manually from the base cap.
+    // TODO - can we initialize the bounds correctly in the linker
+    if (is_fn && !tight_code_bounds) {
+      src = __builtin_cheri_address_set(base_cap, addr + base_addr);
+      src = __builtin_cheri_offset_increment(src, rela->addend);
+      if (is_sealed) {
+        src = __builtin_cheri_seal_entry(src);
+      }
+    } else {
+      src = __builtin_cheri_cap_build(base_cap, (__intcap)*dest);
+      // incrementing sealed caps will clear their tag
+      // TODO - can exec caps ever have a non-zero addend?
+      if (!is_sealed)
+        src = __builtin_cheri_offset_increment(src, rela->addend);
     }
     *dest = src;
   }

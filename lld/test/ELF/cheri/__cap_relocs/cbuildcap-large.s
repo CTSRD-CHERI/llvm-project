@@ -18,7 +18,7 @@
 
 # GOT: Contents of section .got:
 # GOT-NEXT: 12240
-# GOT-NEXT: 12250 60320100 00000000 33994f02 0070e201
+# GOT-NEXT: 12250 60320100 00000000 33994f02 0070f201
 #                 [    address    ] [      meta     ]
 #                 address = 0x13250 -> matches symbol VA
 

@@ -345,4 +345,11 @@ inline void write64(void *p, uint64_t v) {
     };                                                                         \
   }();
 
+#define invokeIs64Bit(f, ...)                                                  \
+  [&] {                                                                        \
+    if (config->is64)                                                          \
+      return f<true>(__VA_ARGS__);                                             \
+    return f<false>(__VA_ARGS__);                                              \
+  }();
+
 #endif

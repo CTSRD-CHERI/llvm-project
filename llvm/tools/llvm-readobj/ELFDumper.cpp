@@ -16,7 +16,7 @@
 #include "ObjDumper.h"
 #include "StackMapPrinter.h"
 #include "llvm-readobj.h"
-#include "llvm/CHERI/cheri-compressed-cap/cheri_compressed_cap.h"
+#include "llvm/CHERI/compressed_cap_utils.h"
 #include "llvm/ADT/ArrayRef.h"
 #include "llvm/ADT/BitVector.h"
 #include "llvm/ADT/DenseMap.h"
@@ -3434,13 +3434,13 @@ template <class ELFT> void ELFDumper<ELFT>::printCheriCapRelocsCBuildCap() {
     const TargetUint MetaBits =
         support::endian::read<TargetUint, ELFT::TargetEndianness, 1>(
             CapFrag.data() + sizeof(TargetUint));
-    cc128r_cap_t Cap{};
-    cc128r_decompress_mem(MetaBits, Base, false, &Cap);
+
+    cc::CapTy<ELFT::Is64Bits> Cap;
+    cc::decompressMem<ELFT::Is64Bits>(MetaBits, Base, false, &Cap);
     const TargetUint Length = Cap.length();
     const TargetUint Perms = Cap.permissions();
     const TargetUint Target = RelaRel.Offset;
     const TargetUint Offset = RelaRel.Addend.value_or(0);
-
     const bool IsFunction = Perms & CAP_AP_X;
     const bool IsObject = Perms & CAP_AP_W;
     const bool IsReadOnly = !IsObject;

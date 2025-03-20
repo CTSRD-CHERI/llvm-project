@@ -13,7 +13,7 @@
 #include "llvm/ADT/StringExtras.h"
 #include "llvm/BinaryFormat/ELF.h"
 #include "llvm/Support/Path.h"
-#include <llvm/CHERI/cheri-compressed-cap/cheri_compressed_cap.h>
+#include <llvm/CHERI/compressed_cap_utils.h>
 #include <cmath>
 #include <cstdint>
 
@@ -31,52 +31,51 @@ enum PermissionKind {
   PK_DONT_SEAL = 3,
 };
 
-#define GET_CAPABILITY(WIDTH)                                                  \
-  cc##WIDTH##r_cap_t get##WIDTH##Capability(cc##WIDTH##r_addr_t addr,          \
-                                            cc##WIDTH##r_addr_t length,        \
-                                            PermissionKind kind) {             \
-    cc##WIDTH##r_addr_t representableLength =                                  \
-        cc##WIDTH##r_get_representable_length(length);                         \
-    cc##WIDTH##r_addr_t top = addr + representableLength;                      \
-    cc##WIDTH##r_cap_t cap =                                                   \
-        cc##WIDTH##r_make_max_perms_cap(addr, /*cursor=*/addr, top);           \
-    switch (kind) {                                                            \
-    case PK_DONT_SEAL:                                                         \
-      cap.cr_arch_perm = cap.cr_arch_perm & ~CAP_AP_W;                         \
-      break;                                                                   \
-    case PK_FUNC:                                                              \
-      cap.cr_arch_perm = cap.cr_arch_perm & ~CAP_AP_W;                         \
-      cc##WIDTH##r_update_ct(&cap, 1);                                         \
-      break;                                                                   \
-    case PK_OBJ:                                                               \
-      cap.cr_arch_perm = cap.cr_arch_perm & ~(CAP_AP_X | CAP_AP_ASR);          \
-      break;                                                                   \
-    case PK_CONST:                                                             \
-      cap.cr_arch_perm =                                                       \
-          cap.cr_arch_perm & ~(CAP_AP_W | CAP_AP_X | CAP_AP_ASR);              \
-      break;                                                                   \
-    }                                                                          \
-    cc##WIDTH##r_compress_mem(&cap);                                           \
-    cc##WIDTH##r_m_ap_compress(&cap);                                          \
-    return cap;                                                                \
+template <bool Is64Bit>
+static uint64_t
+getCapabilityTopBits(cc::AddrTy<Is64Bit> addr, cc::AddrTy<Is64Bit> length,
+                     PermissionKind kind, bool useLevels = false) {
+  cc::AddrTy<Is64Bit> representableLength =
+      cc::getRepresentableLength<Is64Bit>(length);
+  cc::AddrTy<Is64Bit> top = addr + representableLength;
+  cc::CapTy<Is64Bit> cap = cc::makeMaxPermCapMLV<Is64Bit>(
+      addr, /*cursor=*/addr, top, /*mode=*/Is64Bit,
+      /*lvbits=*/useLevels ? 1 : 0);
+  switch (kind) {
+  case PK_DONT_SEAL:
+    cap.cr_arch_perm = cap.cr_arch_perm & ~(CAP_AP_W | CAP_AP_ASR);
+    break;
+  case PK_FUNC:
+    cap.cr_m = 0;
+    cap.cr_arch_perm = cap.cr_arch_perm & ~(CAP_AP_W | CAP_AP_ASR);
+    cc::updateCT<Is64Bit>(&cap, 1);
+    break;
+  case PK_OBJ:
+    cap.cr_arch_perm = cap.cr_arch_perm & ~(CAP_AP_X | CAP_AP_ASR);
+    break;
+  case PK_CONST:
+    cap.cr_arch_perm =
+        cap.cr_arch_perm & ~(CAP_AP_W | CAP_AP_X | CAP_AP_ASR | CAP_AP_SL);
+    break;
   }
+  cc::compressMem<Is64Bit>(&cap);
+  cc::modeApCompress<Is64Bit>(&cap);
+  assert(cap.cr_arch_perm != 0 && "Perms cleared");
+  return static_cast<uint64_t>(cap.cr_pesbt);
+}
 
-GET_CAPABILITY(128)
-GET_CAPABILITY(64)
-#undef GET_CAPABILITY
-
-PermissionKind getCapabilityPermissionKind(const Symbol &sym) {
-  PermissionKind PK = PK_OBJ;
+static PermissionKind getCapabilityPermissionKind(const Symbol &sym) {
+  PermissionKind kind = PK_OBJ;
   if (sym.isFunc())
     if (sym.isFuncDontSeal())
-      PK = PK_DONT_SEAL;
+      kind = PK_DONT_SEAL;
     else
-      PK = PK_FUNC;
+      kind = PK_FUNC;
   else if (auto *os = sym.getOutputSection()) {
     if ((os->flags & SHF_WRITE) == 0 || isRelroSection(os)) {
-      PK = PK_CONST;
+      kind = PK_CONST;
     } else {
-      PK = PK_OBJ;
+      kind = PK_OBJ;
     }
     if (os->flags & SHF_EXECINSTR) {
       warn("Non-function __cap_reloc against symbol in section with "
@@ -84,7 +83,7 @@ PermissionKind getCapabilityPermissionKind(const Symbol &sym) {
            toString(os->name) + ") for symbol " + toString(sym));
     }
   }
-  return PK;
+  return kind;
 }
 
 bool isCheriAbi(const InputFile *f) {
@@ -1188,14 +1187,12 @@ void MipsCheriCapTableMappingSection::writeTo(uint8_t *buf) {
   memcpy(buf, entries.data(), entries.size() * sizeof(CaptableMappingEntry));
 }
 
-template <class ELFT>
-void writeCatableRelocationFragments(InputSectionBase *sec, Symbol *sym,
+static void writeCatableRelocationFragments(InputSectionBase *sec, Symbol *sym,
                                      uint64_t offset) {
-  const uint64_t wordSize = ELFT::Is64Bits ? 8 : 4;
   sec->addReloc(
       {R_CHERI_CAPTAB_FRAG_ADDR, target->symbolicRel, offset, 0, sym});
   sec->addReloc({R_CHERI_CAPTAB_FRAG_META, target->symbolicRel,
-                 offset + wordSize, 0, sym});
+                 offset + config->wordsize, 0, sym});
 }
 
 template <typename ELFT>
@@ -1322,29 +1319,23 @@ void addCapabilityRelocation(
       error("CBuildCap method not implemented yet!");
     in.relaDyn->addReloc({R_RISCV_CHERI_RELATIVE, sec, offset,
                           DynamicReloc::AgainstSymbol, *sym, addend, R_ABS});
-    writeCatableRelocationFragments<ELFT>(sec, sym, offset);
+    writeCatableRelocationFragments(sec, sym, offset);
   }
 }
 
 uint64_t getCapMetaBits(int64_t a, const Symbol &sym,
                         const InputSectionBase *isec, uint64_t offset) {
   const uint64_t baseAddr = sym.getVA(a);
-  const uint64_t shift = config->is64 ? 8 : 4;
   CheriCapRelocLocation loc{const_cast<InputSectionBase *>(isec),
-                            offset - shift};
+                            offset - config->wordsize};
   CheriCapReloc reloc{SymbolAndOffset{const_cast<Symbol *>(&sym), 0}, 0,
                       static_cast<bool>(sym.isPreemptible)};
-
   uint64_t symSize = invokeAndRetELFT(getTargetSize, loc, reloc.target);
+  PermissionKind kind = getCapabilityPermissionKind(sym);
 
-  if (config->is64) {
-    cc128r_cap_t cap =
-        get128Capability(baseAddr, symSize, getCapabilityPermissionKind(sym));
-    return static_cast<uint64_t>(cap.cr_pesbt);
-  }
-  cc64r_cap_t cap =
-      get64Capability(baseAddr, symSize, getCapabilityPermissionKind(sym));
-  return static_cast<uint64_t>(cap.cr_pesbt);
+  uint64_t metaBits =
+      invokeIs64Bit(getCapabilityTopBits, baseAddr, symSize, kind);
+  return metaBits;
 }
 
 } // namespace elf
