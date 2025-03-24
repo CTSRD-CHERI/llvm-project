@@ -94,7 +94,7 @@ two_value:
 
 {
     "compartments": {
-	"one": { "files": ["*/one*.o"] }
+	"one": { "files": ["one*.o"] }
     }
 }
 
@@ -102,6 +102,6 @@ two_value:
 
 {
     "compartments": {
-	"two": { "files": ["*/two.o"] }
+	"two": { "files": ["two.o"] }
     }
 }
