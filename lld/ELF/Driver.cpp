@@ -1282,6 +1282,7 @@ static void readConfigs(opt::InputArgList &args) {
   config->mmapOutputFile =
       args.hasFlag(OPT_mmap_output_file, OPT_no_mmap_output_file, true);
   config->nmagic = args.hasFlag(OPT_nmagic, OPT_no_nmagic, false);
+  config->noDefaultCompartment = args.hasArg(OPT_no_default_compartment);
   config->noinhibitExec = args.hasArg(OPT_noinhibit_exec);
   config->nostdlib = args.hasArg(OPT_nostdlib);
   config->oFormatBinary = isOutputFormatBinary(args);
