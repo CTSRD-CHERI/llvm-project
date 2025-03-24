@@ -188,7 +188,7 @@ counter_str:
 
 {
     "compartments": {
-	"one": { "files": ["*/one.*o", "*/oneb.*o"] },
+	"one": { "files": ["one.*o", "oneb.*o"] },
 	"two": { "files": [], "symbols": ["counter_str"] }
     }
 }
@@ -197,7 +197,7 @@ counter_str:
 
 {
     "compartments": {
-	"one": { "files": ["*/one.*o", "*/oneb.*o"] }
+	"one": { "files": ["one.*o", "oneb.*o"] }
     }
 }
 
