@@ -107,7 +107,7 @@ two_func:
 
 {
     "compartments": {
-	"one": { "files": ["*/one.o", "*/dice.o"] },
-	"two": { "files": ["*/two.o"] }
+	"one": { "files": ["one.o", "dice.o"] },
+	"two": { "files": ["two.o"] }
     }
 }

@@ -17,6 +17,7 @@
 #include "llvm/Support/Errc.h"
 #include "llvm/Support/GlobPattern.h"
 #include "llvm/Support/JSON.h"
+#include "llvm/Support/Path.h"
 #include "Arch/Cheri.h"
 
 using namespace llvm;
@@ -338,12 +339,22 @@ void assignSectionsToCompartments() {
     if (s->file->compartment != nullptr)
       continue;
 
-    Expected<Compartment *> c = fileLookup.findMatch(s->file->getName());
+    StringRef path = s->file->getName();
+    Expected<Compartment *> c = fileLookup.findMatch(path);
     if (!c) {
-      error("input file " + s->file->getName() + " " +
-            toString(c.takeError()));
+      error("input file " + path + " " + toString(c.takeError()));
       valid = false;
       continue;
+    }
+
+    // If the path is not a basename, try to match on the basename.
+    if (*c == nullptr && llvm::sys::path::has_parent_path(path)) {
+      c = fileLookup.findMatch(llvm::sys::path::filename(path));
+      if (!c) {
+        error("input file " + path + " " + toString(c.takeError()));
+        valid = false;
+        continue;
+      }
     }
 
     if (*c == nullptr)
