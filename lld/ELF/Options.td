@@ -310,6 +310,9 @@ def nmagic: F<"nmagic">, MetaVarName<"<magic>">,
 def nostdlib: F<"nostdlib">,
   HelpText<"Only search directories specified on the command line">;
 
+def no_default_compartment: F<"no-default-compartment">,
+  HelpText<"Do not permit input sections in the default compartment">;
+
 def no_dynamic_linker: F<"no-dynamic-linker">,
   HelpText<"Inhibit output of .interp section">;
 

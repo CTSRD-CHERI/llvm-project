@@ -222,6 +222,27 @@ static Symbol *firstExportedSymbol(const InputSectionBase *s) {
   return nullptr;
 }
 
+static void checkDefaultCompartment()
+{
+  bool valid = true;
+  if (config->noDefaultCompartment) {
+    for (InputSectionBase *s : ctx.inputSections) {
+      if (s->file == nullptr || (s->flags & ELF::SHF_ALLOC) == 0)
+        continue;
+
+      if (!canCompartmentalize(s))
+        continue;
+
+      if (s->compartment == nullptr) {
+        error(isecName(s) + " not assigned to a compartment");
+        valid = false;
+      }
+    }
+    if (!valid)
+      exitLld(1);
+  }
+}
+
 typedef std::pair <InputSectionBase *, Symbol *> SectionDep;
 typedef std::unordered_map<Compartment *, SectionDep> CompartmentDeps;
 typedef std::unordered_map<InputSectionBase *,
@@ -282,8 +303,10 @@ static void scanRelocations(InputSectionBase *sec, SectionDepends &depends) {
 }
 
 void assignSectionsToCompartments() {
-  if (compartments.empty())
+  if (compartments.empty()) {
+    checkDefaultCompartment();
     return;
+  }
 
   for (Compartment &c : compartments) {
     c.suffix = "." + c.name.str();
@@ -456,6 +479,8 @@ void assignSectionsToCompartments() {
 
     break;
   }
+
+  checkDefaultCompartment();
 }
 
 }
