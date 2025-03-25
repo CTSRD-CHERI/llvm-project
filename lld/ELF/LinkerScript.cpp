@@ -508,6 +508,10 @@ LinkerScript::computeInputSections(const InputSectionDescription *cmd,
       if (!sec->isLive() || sec->parent || seen.contains(i))
         continue;
 
+      // Ignore sections in a compartment
+      if (sec->compartment != nullptr)
+        continue;
+
       // For --emit-relocs we have to ignore entries like
       //   .rela.dyn : { *(.rela.data) }
       // which are common because they are in the default bfd script.
