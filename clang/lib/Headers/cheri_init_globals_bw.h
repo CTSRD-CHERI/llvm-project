@@ -118,13 +118,7 @@ static __attribute__((always_inline)) void cheri_init_globals_cbuildcap_impl(
     const struct ELFRela *start_rela, const struct ELFRela *stop_rela,
     void *__capability data_cap, const void *__capability code_cap,
     const void *__capability rodata_cap, bool tight_code_bounds,
-    __SIZE_TYPE__ base_addr) {
-  data_cap =
-      __builtin_cheri_perms_and(data_cap, global_pointer_permissions_mask);
-  code_cap =
-      __builtin_cheri_perms_and(code_cap, function_pointer_permissions_mask);
-  rodata_cap =
-      __builtin_cheri_perms_and(rodata_cap, constant_pointer_permissions_mask);
+    __SIZE_TYPE__ base_addr, bool init_with_cbld) {
   for (const struct ELFRela *rela = start_rela; rela < stop_rela; rela++) {
     if (rela->info != R_RISCV_CHERI_RELATIVE)
       continue;
@@ -155,9 +149,10 @@ static __attribute__((always_inline)) void cheri_init_globals_cbuildcap_impl(
     // if we can't set tight code bounds on the fn then we have
     // to initialize it manually from the base cap.
     // TODO - can we initialize the bounds correctly in the linker
-    if (is_fn && !tight_code_bounds) {
+    if ((is_fn && !tight_code_bounds) || !init_with_cbld) {
       src = __builtin_cheri_address_set(base_cap, addr + base_addr);
       src = __builtin_cheri_offset_increment(src, rela->addend);
+      src = __builtin_cheri_perms_and(src, perms);
       if (is_sealed) {
         src = __builtin_cheri_seal_entry(src);
       }
@@ -239,8 +234,9 @@ cheri_init_globals_cbuildcap(void *__capability data_cap,
    * been processed so we don't need to add a relocation base address to the
    * location of the capreloc.
    */
-  cheri_init_globals_cbuildcap_impl(start_relocs, stop_relocs, data_cap, code_cap,
-                          rodata_cap, can_set_code_bounds, /*relocbase=*/0);
+  cheri_init_globals_cbuildcap_impl(start_relocs, stop_relocs, data_cap,
+                                    code_cap, rodata_cap, can_set_code_bounds,
+                                    /*relocbase=*/0, /*init_with_cbld*/ true);
 }
 
 static __attribute__((always_inline)) void

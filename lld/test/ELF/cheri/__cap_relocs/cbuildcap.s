@@ -18,7 +18,7 @@
 
 # GOT: Contents of section .got:
 # GOT-NEXT: 12240 
-# GOT-NEXT: 12250  60320100 00000000 60329904 0070f201
+# GOT-NEXT: 12250  60320100 00000000 60329904 0070e201
 #                  [    address    ] [      meta     ]
 
 #CAPRELOCS: CHERI __rela_dyn relocs [

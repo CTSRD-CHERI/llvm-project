@@ -32,15 +32,14 @@ enum PermissionKind {
 };
 
 template <bool Is64Bit>
-static uint64_t
-getCapabilityTopBits(cc::AddrTy<Is64Bit> addr, cc::AddrTy<Is64Bit> length,
-                     PermissionKind kind, bool useLevels = false) {
+static uint64_t getCapabilityTopBits(cc::AddrTy<Is64Bit> addr,
+                                     cc::AddrTy<Is64Bit> length,
+                                     PermissionKind kind) {
   cc::AddrTy<Is64Bit> representableLength =
       cc::getRepresentableLength<Is64Bit>(length);
   cc::AddrTy<Is64Bit> top = addr + representableLength;
-  cc::CapTy<Is64Bit> cap = cc::makeMaxPermCapMLV<Is64Bit>(
-      addr, /*cursor=*/addr, top, /*mode=*/Is64Bit,
-      /*lvbits=*/useLevels ? 1 : 0);
+  cc::CapTy<Is64Bit> cap =
+      cc::makeMaxPermCap<Is64Bit>(addr, /*cursor=*/addr, top);
   switch (kind) {
   case PK_DONT_SEAL:
     cap.cr_arch_perm = cap.cr_arch_perm & ~(CAP_AP_W | CAP_AP_ASR);
