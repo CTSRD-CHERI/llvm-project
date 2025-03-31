@@ -646,8 +646,16 @@ void assignSectionsToCompartments() {
 
   for (SectionList &list : dsu) {
     // Ignore singleton sets.
-    if (list.size() == 1)
+    if (list.size() == 1) {
+      if (config->verboseCompartmentalization) {
+        InputSectionBase *s = list.front();
+        if (s->compartment == nullptr && canCompartmentalize(s)) {
+          message("info: potential compartment:");
+          message("\t" + isecName(s));
+        }
+      }
       continue;
+    }
 
     // More than one compartment?
     Compartment *c = nullptr;
