@@ -2,7 +2,7 @@
 # RUN: echo '.globl bar, weak; .type bar,@function; .type weak,@function; bar: weak:' > %t1.s
 
 # RUN: %riscv32_cheri_purecap_llvm-mc -filetype=obj %t1.s -o %t1.32.o
-# RUN: ld.lld -shared %t1.32.o -soname=t1.32.so -o %t1.32.so
+# RUN: ld.lld -shared %t1.32.o -soname=t1.32.so -m elf32lriscv_cheri -o %t1.32.so
 # RUN: %riscv32_cheri_purecap_llvm-mc -filetype=obj %s -o %t.32.o
 # RUN: ld.lld %t.32.o %t1.32.so -z separate-code -o %t.32.got
 # RUN: llvm-readelf -S -s %t.32.got | FileCheck --check-prefixes=SEC,NM %s
@@ -16,7 +16,7 @@
 # RUN: llvm-objdump -d --no-show-raw-insn --mattr=+zcheripurecap %t.32.got.plt | FileCheck --check-prefixes=DIS,DISGOTPLT,DISGOTPLT32 %s
 
 # RUN: %riscv64_cheri_purecap_llvm-mc -filetype=obj %t1.s -o %t1.64.o
-# RUN: ld.lld -shared %t1.64.o -soname=t1.64.so -o %t1.64.so
+# RUN: ld.lld -shared %t1.64.o -soname=t1.64.so -m elf64lriscv_cheri -o %t1.64.so
 # RUN: %riscv64_cheri_purecap_llvm-mc -filetype=obj %s -o %t.64.o
 # RUN: ld.lld %t.64.o %t1.64.so -z separate-code -o %t.64.got
 # RUN: llvm-readelf -S -s %t.64.got | FileCheck --check-prefixes=SEC,NM %s

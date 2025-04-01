@@ -200,10 +200,8 @@ public:
   uint32_t getTlsIndexOffset() const;
   uint32_t getTlsOffset(const Symbol &sym) const;
   bool isNeeded() const override {
-    return nonTlsEntryCount() > (in.plt->isNeeded()
-                                     ? target->cheriCapTableHeaderEntriesNum
-                                     : 0) ||
-           !dynTlsEntries.empty() || !tlsEntries.empty();
+    return nonTlsEntryCount() > 0 || !dynTlsEntries.empty() ||
+           !tlsEntries.empty();
   }
   void writeTo(uint8_t *buf) override;
   template <class ELFT> void assignValuesAndAddCapTableSymbols();
@@ -247,8 +245,6 @@ private:
                                               uint64_t offset);
   size_t nonTlsEntryCount() const {
     size_t totalCount = globalEntries.size();
-    if(totalCount > 0 && in.plt->isNeeded())
-      totalCount += target->cheriCapTableHeaderEntriesNum;
     if (LLVM_LIKELY(config->capTableScope == CapTableScopePolicy::All)) {
       assert(perFileEntries.empty() && perFunctionEntries.empty());
     } else {

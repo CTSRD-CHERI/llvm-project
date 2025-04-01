@@ -137,11 +137,12 @@ RISCV::RISCV() {
 
   // .got.plt[0] = _dl_runtime_resolve, .got.plt[1] = link_map
   gotPltHeaderEntriesNum = 2;
-  //cheriCapTableHeaderEntriesNum = 2;
 
   pltHeaderSize = 32;
   pltEntrySize = 16;
   ipltEntrySize = 16;
+  if (config->isCheriAbi)
+    gotEntrySize = getCapabilitySize();
 }
 
 static uint32_t getEFlags(InputFile *f) {
@@ -278,7 +279,7 @@ void RISCV::writePltHeader(uint8_t *buf) const {
 
 void RISCV::writePlt(uint8_t *buf, const Symbol &sym,
                      uint64_t pltEntryAddr) const {
-  // 1: auipc(c) (c)t3, %pcrel_hi(f@[.got.plt|.captable])
+  // 1: auipc(c) (c)t3, %pcrel_hi(f@[.got.plt])
   // l[wdc] (c)t3, %pcrel_lo(1b)((c)t3)
   // (c)jalr (c)t1, (c)t3
   // nop

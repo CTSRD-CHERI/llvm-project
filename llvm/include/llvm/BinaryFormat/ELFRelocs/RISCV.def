@@ -67,4 +67,3 @@ ELF_RELOC(R_RISCV_CHERI_CJAL,                     199) // Deprecated
 ELF_RELOC(R_RISCV_CHERI_CCALL,                    200) // Deprecated
 ELF_RELOC(R_RISCV_CHERI_RVC_CJUMP,                201) // Deprecated
 ELF_RELOC(R_RISCV_CHERI_RELATIVE,                 202)
-ELF_RELOC(R_RISCV_CHERI_JUMP_SLOT,                203)

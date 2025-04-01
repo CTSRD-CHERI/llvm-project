@@ -1933,6 +1933,13 @@ void LinkerDriver::createFiles(opt::InputArgList &args) {
 
 // If -m <machine_type> was not given, infer it from object files.
 void LinkerDriver::inferMachineType() {
+  auto interpretRISCVCheriAbi = [](InputFile *f){
+    if (f->emachine != EM_RISCV)
+      return;
+    if(f->eflags & EF_RISCV_CHERIABI && !config->isCheriAbi)
+      config->isCheriAbi = true;
+  };
+
   if (config->ekind != ELFNoneKind)
     return;
 
@@ -1943,6 +1950,8 @@ void LinkerDriver::inferMachineType() {
     config->emachine = f->emachine;
     config->osabi = f->osabi;
     config->mipsN32Abi = f->emachine == EM_MIPS && isMipsN32Abi(f);
+    // try and deduce isCheriAbi before target creation
+    interpretRISCVCheriAbi(f);
     return;
   }
   error("target emulation unknown: -m or at least one .o file required");

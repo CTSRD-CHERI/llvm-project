@@ -5773,8 +5773,8 @@ SDValue RISCVTargetLowering::getAddr(NodeTy *N, EVT Ty, SelectionDAG &DAG,
   if (RISCVABI::isCheriPureCapABI(Subtarget.getTargetABI())) {
     SDValue Addr = getTargetNode(N, DL, Ty, DAG, 0);
     MachineFunction &MF = DAG.getMachineFunction();
-    bool nocaprelocs = MF.getFunction().hasFnAttribute(Attribute::NoCapRelocs);
-    if (NoCapTableRelocs || nocaprelocs || (IsLocal && CanDeriveFromPcc)) {
+    bool NoCapRelocs = MF.getFunction().hasFnAttribute(Attribute::NoCapRelocs);
+    if (NoCapTableRelocs || NoCapRelocs || (IsLocal && CanDeriveFromPcc)) {
       // Use PC-relative addressing to access the symbol. This generates the
       // pattern (PseudoCLLC sym), which expands to
       // (cincoffsetimm (auipcc %pcrel_hi(sym)) %pcrel_lo(auipc)).

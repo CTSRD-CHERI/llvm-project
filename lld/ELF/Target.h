@@ -143,8 +143,6 @@ public:
   // to support lazy loading.
   unsigned gotPltHeaderEntriesNum = 3;
 
-  unsigned cheriCapTableHeaderEntriesNum = 0;
-
   // On PPC ELF V2 abi, the first entry in the .got is the .TOC.
   unsigned gotHeaderEntriesNum = 0;
 
