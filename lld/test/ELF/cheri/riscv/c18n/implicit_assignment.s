@@ -17,7 +17,7 @@
 # RUN: ld.lld --shared --verbose-c18n --compartment-policy=%t/one.json %t/one.o %t/two_hidden.o -o %t/implicit_baz_hidden.so.0 2>&1 | FileCheck --check-prefixes=ONE,BUF,BAZ %s
 
 # Neither 'bar' nor 'baz' can be implied because they are exported
-# RUN: ld.lld --shared --verbose-c18n --compartment-policy=%t/one.json %t/one.o %t/two.o %t/three.o -o %t/implicit_bar_baz_exported.so.0 2>&1 | FileCheck --check-prefixes=ONE,BUF,NOBAZ,NOBAR %s
+# RUN: ld.lld --shared --verbose-c18n --compartment-policy=%t/one.json %t/one.o %t/two.o %t/three.o -o %t/implicit_bar_baz_exported.so.0 2>&1 | FileCheck --check-prefixes=ONE,BUF,NOBAR,NOBAZ %s
 
 # 'bar' can't be implied because it is exported
 # This also prevents implying the DSU, so 'baz' is silently not implied either
@@ -32,17 +32,17 @@
 # ONE: one.o:.text assigned to compartment one
 # TWO: three.o:.text assigned to compartment two
 # BUF: one.o:.data assigned to implied compartment one due to direct access of symbol buf
+# NOBAR: three.o:.text not assigned to implied compartment one due to exported symbol bar
 # NOBAZ: two.o:.data not assigned to implied compartment one due to exported symbol baz
 # BAZ: info: assigning disjoint set to compartment one:
 # BAZ-NEXT: two_hidden.o:.data
-# NOBAR: three.o:.text not assigned to implied compartment one due to exported symbol bar
 # BAR: info: assigning disjoint set to compartment one:
-# BAR-NEXT: two_hidden.o:.data
 # BAR-NEXT: three_hidden.o:.text
+# BAR-NEXT: two_hidden.o:.data
 # TWO: info: disjoint set spans multiple compartments:
-# TWO-NEXT: two_hidden.o:.data from the default compartment
-# TWO-NEXT: three.o:.text from compartment two
 # TWO-NEXT: one.o:.text from compartment one
+# TWO-NEXT: three.o:.text from compartment two
+# TWO-NEXT: two_hidden.o:.data from the default compartment
 
 #--- one.s
 
