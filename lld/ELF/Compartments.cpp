@@ -21,6 +21,7 @@
 #include "Arch/Cheri.h"
 
 #include <list>
+#include <set>
 
 using namespace llvm;
 using namespace llvm::object;
@@ -38,17 +39,47 @@ using namespace lld::elf;
 // Symbol's name in diagnostic messages.
 typedef std::pair<InputSectionBase *, RelExpr> SectionKey;
 typedef std::unordered_map<SectionKey, Symbol &> SectionDeps;
-typedef std::unordered_map<InputSectionBase *,
-                           SectionDeps> SectionDepends;
+typedef std::map<InputSectionBase *, SectionDeps> SectionDepends;
 
 // CompartmentDeps is constructed by walking a single SectionDeps
 // collapsing entries from multiple <section, relocation, symbol>
 // tuples down to a single representative <section, symbol> pair from
 // each Compartment.
-typedef std::pair <const InputSectionBase *, const Symbol *> CompartmentValue;
-typedef std::unordered_map<Compartment *, CompartmentValue> CompartmentDeps;
+typedef std::pair<const InputSectionBase *, const Symbol *> CompartmentValue;
+typedef std::map<Compartment *, CompartmentValue> CompartmentDeps;
 
 namespace std {
+  template <> struct less<Compartment *> {
+    bool operator()(const Compartment *lhs, const Compartment *rhs) const {
+      if (lhs == nullptr)
+        return (true);
+      if (rhs == nullptr)
+        return (false);
+
+      return (lhs->name.compare(rhs->name) < 0);
+    }
+  };
+
+  template <> struct less<InputSectionBase *> {
+    bool operator()(const InputSectionBase *lhs,
+                    const InputSectionBase *rhs) const {
+      if (lhs->file != nullptr || rhs->file != nullptr) {
+        if (lhs->file == nullptr)
+          return (true);
+        if (rhs->file == nullptr)
+          return (false);
+
+        int rval = lhs->file->getName().compare(rhs->file->getName());
+        if (rval < 0)
+          return (true);
+        if (rval > 0)
+          return (false);
+      }
+
+      return (lhs->name.compare(rhs->name) < 0);
+    }
+  };
+
   template <> struct hash<SectionKey> {
     size_t operator()(SectionKey A) const {
       size_t h1 = std::hash<InputSectionBase *>{}(A.first);
@@ -98,13 +129,12 @@ private:
 };
 
 // A disjoint set union of input sections is implemented by having a
-// std::unordered_map<> map input section pointers to a parent input section.
-// A second unordered_map<> maps tree root input sections to a list of all set
-// members.
+// std::unordered_map<> map input section pointers to a parent input section.  A
+// std::map<> maps tree root input sections to a list of all set members.
 typedef std::list<InputSectionBase *> SectionList;
 
 class SectionDSU {
-  typedef std::unordered_map<InputSectionBase *, SectionList> setMap;
+  typedef std::map<InputSectionBase *, SectionList> setMap;
 public:
 
   class iterator {
@@ -161,7 +191,7 @@ public:
     if (a == b)
       return;
 
-    if (sets[a].size() < sets[b].size())
+    if (std::less<InputSectionBase *>()(b, a))
       std::swap(a, b);
 
     SectionList &aList = sets[a];
@@ -655,6 +685,15 @@ void assignSectionsToCompartments() {
         }
       }
       continue;
+    }
+
+    if (config->verboseCompartmentalization) {
+      std::set<InputSectionBase *> set;
+      for (InputSectionBase *s : list)
+        set.insert(s);
+      list.clear();
+      for (InputSectionBase *s : set)
+        list.push_back(s);
     }
 
     // More than one compartment?
