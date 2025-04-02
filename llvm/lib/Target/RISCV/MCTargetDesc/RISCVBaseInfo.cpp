@@ -129,6 +129,9 @@ MCRegister getBPReg(ABI TargetABI) {
 // Returns the register holding shadow call stack pointer.
 MCRegister getSCSPReg() { return RISCV::X3; }
 
+// Returns the register used for bounded mem/var args
+MCRegister getCheriBoundedArgReg() { return RISCV::C6; }
+
 } // namespace RISCVABI
 
 namespace RISCVFeatures {

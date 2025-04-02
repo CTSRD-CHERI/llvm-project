@@ -197,11 +197,6 @@ public:
     return 1;
   }
 
-  MCRegister getCheriBoundedArgReg() const {
-    // TODO - formalize which register will be used.
-    return RISCV::C6;
-  }
-
 protected:
   // GlobalISel related APIs.
   std::unique_ptr<CallLowering> CallLoweringInfo;
