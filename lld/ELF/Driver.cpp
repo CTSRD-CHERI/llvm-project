@@ -172,10 +172,10 @@ static std::tuple<ELFKind, uint16_t, uint8_t, bool> parseEmulation(
   if (s.ends_with("_fbsd")) {
     s = s.drop_back(5);
     osabi = ELFOSABI_FREEBSD;
-    if (s.endswith("_cheri")) {
-      s = s.drop_back(6);
-      forceCheriAbi = true;
-    }
+  }
+  if (s.endswith("_cheri")) {
+    s = s.drop_back(6);
+    forceCheriAbi = true;
   }
 
   std::pair<ELFKind, uint16_t> ret =

@@ -151,6 +151,7 @@ void RISCV::Linker::ConstructJob(Compilation &C, const JobAction &JA,
                                  const char *LinkingOutput) const {
   const ToolChain &ToolChain = getToolChain();
   const Driver &D = ToolChain.getDriver();
+  const bool IsPureCapABI = ToolChain.isCheriPurecap();
   ArgStringList CmdArgs;
 
   if (!D.SysRoot.empty())
@@ -158,10 +159,14 @@ void RISCV::Linker::ConstructJob(Compilation &C, const JobAction &JA,
 
   bool IsRV64 = ToolChain.getArch() == llvm::Triple::riscv64;
   CmdArgs.push_back("-m");
+
+  StringRef PureCapABIStrSuffix;
+  if (IsPureCapABI)
+    PureCapABIStrSuffix = "_cheri";
   if (IsRV64) {
-    CmdArgs.push_back("elf64lriscv");
+    CmdArgs.push_back(Args.MakeArgString("elf64lriscv" + PureCapABIStrSuffix));
   } else {
-    CmdArgs.push_back("elf32lriscv");
+    CmdArgs.push_back(Args.MakeArgString("elf32lriscv" + PureCapABIStrSuffix));
   }
   CmdArgs.push_back("-X");
 
