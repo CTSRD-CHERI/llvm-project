@@ -40,7 +40,15 @@ static const __SIZE_TYPE__ function_reloc_flag = (__SIZE_TYPE__)1
                                                  << (__SIZE_WIDTH__ - 1);
 
 static const __SIZE_TYPE__ function_pointer_permissions_mask =
+#if __riscv_xlen == 32
+/*
+  It is not possible to disable write AP for a function pointer,
+   as there is no encoding to single it out in CHERI RV32 spec yet.
+*/
+    GET_BIT_MASK(0);
+#else
     GET_BIT_MASK(__CHERI_CAP_PERMISSION_WRITE__);
+#endif
 
 static const __SIZE_TYPE__ constant_reloc_flag = (__SIZE_TYPE__)1
                                                  << (__SIZE_WIDTH__ - 2);
