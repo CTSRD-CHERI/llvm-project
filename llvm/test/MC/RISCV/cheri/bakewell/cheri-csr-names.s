@@ -206,6 +206,20 @@ csrrs ct1, sepcc, zero
 # uimm12
 csrrs ct2, 0x141, zero
 
+# stval2
+# name
+# CHECK-INST: csrrs t1, stval2, zero
+# CHECK-ENC: encoding: [0x73,0x23,0xb0,0x14]
+# CHECK-INST-ALIAS: csrr t1, stval2
+# uimm12
+# CHECK-INST: csrrs t2, stval2, zero
+# CHECK-ENC: encoding: [0xf3,0x23,0xb0,0x14]
+# CHECK-INST-ALIAS: csrr t2, stval2
+# name
+csrrs t1, stval2, zero
+# uimm12
+csrrs t2, 0x14b, zero
+
 ##################################
 # Supervisor Information Registers
 ##################################

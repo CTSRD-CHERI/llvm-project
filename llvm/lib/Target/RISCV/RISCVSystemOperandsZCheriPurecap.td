@@ -59,6 +59,7 @@ def : CheriSysReg<"mtidc", 0x780>;
 def : CheriSysReg<"stvecc", 0x105>;
 def : CheriSysReg<"sscratchc", 0x140>;
 def : CheriSysReg<"sepcc", 0x141>;
+def : SysReg<"stval2", 0x14b>;
 
 //===----------------------------------------------------------------------===//
 // User-mode Cheri CSRs
