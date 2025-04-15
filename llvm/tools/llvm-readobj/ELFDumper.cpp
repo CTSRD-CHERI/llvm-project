@@ -607,6 +607,7 @@ public:
                                bool IsGnu) const override;
 
 private:
+  std::pair<const char *, size_t> lookupC18nStrtab();
   void printHashTableSymbols(const Elf_Hash &HashTable);
   void printGnuHashTableSymbols(const Elf_GnuHash &GnuHashTable);
 
@@ -4887,6 +4888,42 @@ template <class ELFT> void GNUELFDumper<ELFT>::printSectionDetails() {
   }
 }
 
+template <class ELFT>
+std::pair<const char *, size_t> GNUELFDumper<ELFT>::lookupC18nStrtab() {
+  ArrayRef<Elf_Shdr> Sections = cantFail(this->Obj.sections());
+
+  StringRef SecStrTable;
+  if (Expected<StringRef> SecStrTableOrErr =
+          this->Obj.getSectionStringTable(Sections, this->WarningHandler))
+    SecStrTable = *SecStrTableOrErr;
+  else
+    return {};
+
+  for (const Elf_Shdr &S : Sections) {
+    if (S.sh_type != ELF::SHT_STRTAB || (S.sh_flags & ELF::SHF_ALLOC) == 0)
+      continue;
+
+    StringRef Name;
+    if (Expected<StringRef> NameOrErr =
+        this->Obj.getSectionName(S, SecStrTable))
+      Name = *NameOrErr;
+    else
+      continue;
+
+    if (Name == ".c18nstrtab") {
+      if (S.sh_offset >= this->Obj.getBufSize() ||
+          S.sh_offset + S.sh_size >= this->Obj.getBufSize())
+        return {};
+
+      const char *Data =
+          reinterpret_cast<const char *>(this->Obj.base()) + S.sh_offset;
+      return std::make_pair(Data, S.sh_size);
+    }
+  }
+
+  return {};
+}
+
 static inline std::string printPhdrFlags(unsigned Flag) {
   std::string Str;
   Str = (Flag & PF_R) ? "R" : " ";
@@ -5016,6 +5053,8 @@ template <class ELFT> void GNUELFDumper<ELFT>::printProgramHeaders() {
     return;
   }
 
+  auto C18nStrtab = lookupC18nStrtab();
+
   for (const Elf_Phdr &Phdr : *PhdrsOrErr) {
     Fields[0].Str = getGNUPtType(Header.e_machine, Phdr.p_type);
     Fields[1].Str = to_string(format_hex(Phdr.p_offset, 8));
@@ -5051,6 +5090,34 @@ template <class ELFT> void GNUELFDumper<ELFT>::printProgramHeaders() {
       }
 
       OS << "      [Requesting program interpreter: ";
+      OS << StringRef(Data, Len) << "]";
+    }
+    if (Phdr.p_type == ELF::PT_C18N_NAME) {
+      OS << "\n";
+      auto ReportBadCompartName = [&](const Twine &Msg) {
+        this->reportUniqueWarning(
+            "unable to read compartment name at offset 0x" +
+            Twine::utohexstr(Phdr.p_paddr) + ": " + Msg);
+      };
+
+      if (C18nStrtab.first == nullptr) {
+        ReportBadCompartName("unable to read .c18nstrtab");
+        continue;
+      }
+      if (Phdr.p_paddr >= C18nStrtab.second) {
+        ReportBadCompartName("offset out of bounds of .c18nstrtab");
+        continue;
+      }
+
+      const char *Data = C18nStrtab.first + Phdr.p_paddr;
+      size_t MaxSize = C18nStrtab.second - Phdr.p_paddr;
+      size_t Len = strnlen(Data, MaxSize);
+      if (Len == MaxSize) {
+        ReportBadCompartName("it is not null-terminated");
+        continue;
+      }
+
+      OS << "      [Compartment: ";
       OS << StringRef(Data, Len) << "]";
     }
     OS << "\n";
