@@ -15,6 +15,7 @@
 #include "llvm/Transforms/Instrumentation/SanitizerCoverage.h"
 #include "llvm/ADT/ArrayRef.h"
 #include "llvm/ADT/SmallVector.h"
+#include "llvm/ADT/StringExtras.h"
 #include "llvm/Analysis/GlobalsModRef.h"
 #include "llvm/Analysis/PostDominators.h"
 #include "llvm/IR/Constant.h"
@@ -30,6 +31,7 @@
 #include "llvm/IR/Module.h"
 #include "llvm/IR/Type.h"
 #include "llvm/Support/CommandLine.h"
+#include "llvm/Support/Process.h"
 #include "llvm/Support/SpecialCaseList.h"
 #include "llvm/Support/VirtualFileSystem.h"
 #include "llvm/TargetParser/Triple.h"
@@ -390,6 +392,11 @@ bool ModuleSanitizerCoverage::instrumentModule(
   DL = &M.getDataLayout();
   CurModule = &M;
   CurModuleUniqueId = getUniqueModuleId(CurModule);
+  if (CurModuleUniqueId.empty()) {
+    CurModuleUniqueId = "clangPidTime_" +
+                        llvm::itostr(sys::Process::getProcessId()) + "_" +
+                        llvm::itostr(time(nullptr));
+  }
   TargetTriple = Triple(M.getTargetTriple());
   FunctionGuardArray = nullptr;
   Function8bitCounterArray = nullptr;
@@ -724,7 +731,10 @@ GlobalVariable *ModuleSanitizerCoverage::CreateFunctionLocalArrayInSection(
   ArrayType *ArrayTy = ArrayType::get(Ty, NumElements);
   auto Array = new GlobalVariable(
       *CurModule, ArrayTy, false, GlobalVariable::PrivateLinkage,
-      Constant::getNullValue(ArrayTy), "__sancov_gen_");
+      Constant::getNullValue(ArrayTy),
+      DL->getGlobalsAddressSpace() == 200
+          ? Twine("__sancov_gen_") + Twine(CurModuleUniqueId)
+          : "__sancov_gen_");
 
   if (TargetTriple.supportsCOMDAT() &&
       (TargetTriple.isOSBinFormatELF() || !F.isInterposable()))
@@ -862,7 +872,10 @@ void ModuleSanitizerCoverage::InjectTraceForSwitch(
       GlobalVariable *GV = new GlobalVariable(
           *CurModule, ArrayOfInt64Ty, false, GlobalVariable::InternalLinkage,
           ConstantArray::get(ArrayOfInt64Ty, Initializers),
-          "__sancov_gen_cov_switch_values");
+          DL->getGlobalsAddressSpace() == 200
+              ? Twine("__sancov_gen_cov_switch_values") +
+                    Twine(CurModuleUniqueId)
+              : "__sancov_gen_cov_switch_values");
       IRB.CreateCall(SanCovTraceSwitchFunction,
                      {Cond, IRB.CreatePointerCast(GV, GlobalsInt64PtrTy)});
     }
