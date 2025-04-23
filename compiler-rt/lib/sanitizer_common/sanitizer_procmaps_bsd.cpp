@@ -49,8 +49,9 @@ void GetMemoryProfile(fill_profile_f cb, uptr *stats) {
   }; 
 
   struct kinfo_proc InfoProc;
-  uptr Len = sizeof(InfoProc);
-  CHECK_EQ(internal_sysctl(Mib, ARRAY_SIZE(Mib), nullptr, (uptr *)&InfoProc, &Len, 0), 0);
+  usize Len = sizeof(InfoProc);
+  CHECK_EQ(internal_sysctl(Mib, ARRAY_SIZE(Mib), &InfoProc, &Len, nullptr, 0),
+           0);
   cb(0, InfoProc.ki_rssize * GetPageSizeCached(), false, stats);
 }
 #endif
