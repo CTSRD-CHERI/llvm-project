@@ -162,6 +162,7 @@ Clang-Tidy Checks
    `cert-msc51-cpp <cert/msc51-cpp.html>`_,
    `cert-oop57-cpp <cert/oop57-cpp.html>`_,
    `cert-oop58-cpp <cert/oop58-cpp.html>`_,
+   `cheri-PtrToIntCast <cheri/PtrToIntCast.html>`_, "Yes"
    `clang-analyzer-core.DynamicTypePropagation <clang-analyzer/core.DynamicTypePropagation.html>`_,
    `clang-analyzer-core.uninitialized.CapturedBlockVariable <clang-analyzer/core.uninitialized.CapturedBlockVariable.html>`_,
    `clang-analyzer-cplusplus.InnerPointer <clang-analyzer/cplusplus.InnerPointer.html>`_,

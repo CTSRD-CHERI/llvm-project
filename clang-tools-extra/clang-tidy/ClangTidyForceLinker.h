@@ -44,6 +44,11 @@ extern volatile int CERTModuleAnchorSource;
 static int LLVM_ATTRIBUTE_UNUSED CERTModuleAnchorDestination =
     CERTModuleAnchorSource;
 
+// This anchor is used to force the linker to link the CheriModule.
+extern volatile int CheriModuleAnchorSource;
+static int LLVM_ATTRIBUTE_UNUSED CheriModuleAnchorDestination =
+    CheriModuleAnchorSource;
+
 // This anchor is used to force the linker to link the ConcurrencyModule.
 extern volatile int ConcurrencyModuleAnchorSource;
 static int LLVM_ATTRIBUTE_UNUSED ConcurrencyModuleAnchorDestination =
