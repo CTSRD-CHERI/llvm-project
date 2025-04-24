@@ -42,8 +42,6 @@ def : CheriSysReg<"dpcc", 0x7b1>;
 def : CheriSysReg<"dscratch0c", 0x7b2>;
 def : CheriSysReg<"dscratch1c", 0x7b3>;
 def : CheriSysReg<"dinfc", 0x7bd>;
-def : CheriSysReg<"utidc", 0xc80>;
-def : CheriSysReg<"stidc", 0x580>;
 
 //===----------------------------------------------------------------------===//
 // Machine-mode Cheri CSRs
@@ -60,11 +58,13 @@ def : CheriSysReg<"stvecc", 0x105>;
 def : CheriSysReg<"sscratchc", 0x140>;
 def : CheriSysReg<"sepcc", 0x141>;
 def : SysReg<"stval2", 0x14b>;
+def : CheriSysReg<"stidc", 0x580>;
 
 //===----------------------------------------------------------------------===//
 // User-mode Cheri CSRs
 //===----------------------------------------------------------------------===//
 def : CheriSysReg<"jvtc", 0x017>;
+def : CheriSysReg<"utidc", 0x480>;
 
 //===----------------------------------------------------------------------===//
 // Zcherihybrid CSRs
