@@ -73,16 +73,16 @@ csrrs ct2, 0x7bd, zero
 # utidc
 # name
 # CHECK-INST: csrrs ct1, utidc, zero
-# CHECK-ENC: encoding: [0x73,0x23,0x00,0xc8]
+# CHECK-ENC: encoding: [0x73,0x23,0x00,0x48]
 # CHECK-INST-ALIAS: csrr ct1, utidc
 # uimm12
 # CHECK-INST: csrrs ct2, utidc, zero
-# CHECK-ENC: encoding: [0xf3,0x23,0x00,0xc8]
+# CHECK-ENC: encoding: [0xf3,0x23,0x00,0x48]
 # CHECK-INST-ALIAS: csrr ct2, utidc
 # name
 csrrs ct1, utidc, zero
 # uimm12
-csrrs ct2, 0xc80, zero
+csrrs ct2, 0x480, zero
 
 # stidc
 # name
