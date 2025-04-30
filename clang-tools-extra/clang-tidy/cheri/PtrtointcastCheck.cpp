@@ -22,7 +22,7 @@ void PtrtointcastCheck::registerMatchers(MatchFinder *Finder) {
  * Return true if the source range contains the literal string "__force".
  */
 bool PtrtointcastCheck::isForced(SourceManager *SM, SourceLocation Start,
-                                  SourceLocation End) {
+                                 SourceLocation End) {
   const char *S = SM->getCharacterData(Start);
   const char *E = SM->getCharacterData(End);
 
@@ -49,8 +49,7 @@ bool PtrtointcastCheck::isForced(SourceManager *SM, const CastExpr *C) {
  * used in a way that can never result in a valid pointer.
  */
 bool PtrtointcastCheck::checkExprUsage(ASTContext *Ctx, SourceManager *SM,
-                                       const Expr *E,
-                                       unsigned int AddrWidth) {
+                                       const Expr *E, unsigned int AddrWidth) {
   /*
    * If the expression has no parents, we do not know how it
    * is used.
@@ -178,7 +177,7 @@ bool PtrtointcastCheck::checkExprUsage(ASTContext *Ctx, SourceManager *SM,
       case BO_XorAssign:
         if (E != Binop->getRHS())
           break;
-	LLVM_FALLTHROUGH;
+        LLVM_FALLTHROUGH;
       case BO_Add:
       case BO_Sub:
       case BO_And:
@@ -219,7 +218,7 @@ bool PtrtointcastCheck::checkExprUsage(ASTContext *Ctx, SourceManager *SM,
  * not possibly be a valid pointer.
  */
 bool PtrtointcastCheck::checkCastExpr(ASTContext *Ctx, const Expr *E,
-                                        unsigned int AddrWidth) {
+                                      unsigned int AddrWidth) {
   /*
    * A constant expression cast to a capability type
    * can never be a valid pointer.
@@ -342,9 +341,92 @@ void PtrtointcastCheck::checkCast(const MatchFinder::MatchResult &Result) {
   }
 }
 
+/* Check to pointee types for compatibility. */
+bool PtrtointcastCheck::checkPointeeTypes(ASTContext *Ctx, const Type *From,
+                                          const Type *To) {
+  /* Pointers to Array types are in fact pointers to the first element. */
+  if (auto FromA = dyn_cast<ArrayType>(From))
+    if (FromA->canDecayToPointerType())
+      From = FromA->getElementType().getTypePtr();
+  if (auto ToA = dyn_cast<ArrayType>(To))
+    if (ToA->canDecayToPointerType())
+      To = ToA->getElementType().getTypePtr();
+
+  /* If both are real pointers the pointee types must be compatible. */
+  if (From->isCapabilityPointerType() && To->isCapabilityPointerType()) {
+    auto FromP = From->getPointeeType().getTypePtr();
+    auto ToP = To->getPointeeType().getTypePtr();
+    return checkPointeeTypes(Ctx, FromP, ToP);
+  }
+
+  /* It is fine if either both or none of the types are capabilities. */
+  if (From->isCHERICapabilityType(*Ctx) == To->isCHERICapabilityType(*Ctx))
+    return true;
+
+  /* Exactly one of the types is not a Capability type. Find it. */
+  const Type *Cap = From->isCHERICapabilityType(*Ctx) ? From : To;
+  const Type *NonCap = To->isCHERICapabilityType(*Ctx) ? From : To;
+
+  /* "void" is ok */
+  if (NonCap->isVoidType())
+    return true;
+
+  /* Check type sizes */
+  uint64_t CapSize = Ctx->getTypeSize(Cap);
+  uint64_t NonCapSize = Ctx->getTypeSize(NonCap);
+
+  /* Ok if the sizes match. */
+  if (CapSize == NonCapSize)
+    return true;
+
+  /* Assume cast to (char *) is fine. */
+  if (NonCapSize <= 8)
+    return true;
+
+  /*
+   * Accept casts between structures and capabilities if the
+   * structure has at least capability alignment.
+   */
+  if (NonCapSize > CapSize && NonCap->isStructureType()) {
+    if (Ctx->getTypeAlign(NonCap) >= Ctx->getTypeAlign(Cap))
+      return true;
+  }
+
+  return false;
+}
+
+/*
+ * Check for pointer casts where the terminal non-pointer type is
+ * a pointer on one side and an address on the other.
+ */
+void PtrtointcastCheck::checkIndirectCast(
+    const MatchFinder::MatchResult &Result) {
+  auto Ctx = Result.Context;
+  const auto *C = Result.Nodes.getNodeAs<ExplicitCastExpr>("cast");
+  const auto *From = C->getSubExpr()->getType().getTypePtr();
+  const auto *To = C->getType().getTypePtr();
+
+  /*
+   * This function only cares about the pointer target type in pointer
+   * conversions.
+   */
+  if (!From->isCapabilityPointerType() || !To->isCapabilityPointerType())
+    return;
+  auto FromP = From->getPointeeType().getTypePtr();
+  auto ToP = To->getPointeeType().getTypePtr();
+  if (checkPointeeTypes(Ctx, FromP, ToP))
+    return;
+
+  diag(C->getExprLoc(), "CHERI: Incompatible pointer target types in cast");
+}
+
 void PtrtointcastCheck::check(const MatchFinder::MatchResult &Result) {
+  /* Check all casts to/from capability types. */
   if (Result.Nodes.getNodeAs<CastExpr>("cast"))
-    return checkCast(Result);
+    checkCast(Result);
+  /* Check if target types are suspicious in explicit casts. */
+  if (Result.Nodes.getNodeAs<ExplicitCastExpr>("cast"))
+    checkIndirectCast(Result);
 }
 
 } // namespace clang::tidy::cheri

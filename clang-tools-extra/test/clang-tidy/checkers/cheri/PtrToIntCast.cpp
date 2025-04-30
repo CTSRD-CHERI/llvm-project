@@ -93,3 +93,53 @@ __uintcap_t tocap2(unsigned long arg) {
 unsigned long null(void) { return (unsigned long)NULL; }
 
 unsigned long one(void) { return (unsigned long)ONE; }
+
+unsigned long *foo4(void **bar) {
+  return (unsigned long *)bar;
+// CHECK-MESSAGES: :[[@LINE-1]]:10: warning: CHERI: Incompatible pointer target types in cast [cheri-PtrToIntCast]
+}
+
+__uintcap_t *foo5(void **bar) { return (__uintcap_t *)bar; }
+
+void **foo6(__uintcap_t *bar) { return (void **)bar; }
+
+void **foo7(unsigned long *bar) {
+  return (void **)bar;
+// CHECK-MESSAGES: :[[@LINE-1]]:10: warning: CHERI: Incompatible pointer target types in cast [cheri-PtrToIntCast]
+}
+
+unsigned long **foo8(void ***bar) {
+  return (unsigned long **)bar;
+// CHECK-MESSAGES: :[[@LINE-1]]:10: warning: CHERI: Incompatible pointer target types in cast [cheri-PtrToIntCast]
+}
+
+__uintcap_t **foo9(void ***bar) { return (__uintcap_t **)bar; }
+
+void ***foo10(__uintcap_t **bar) { return (void ***)bar; }
+
+void ***foo11(unsigned long **bar) {
+  return (void ***)bar;
+// CHECK-MESSAGES: :[[@LINE-1]]:10: warning: CHERI: Incompatible pointer target types in cast [cheri-PtrToIntCast]
+}
+
+void nop(void *x) {
+  do {
+    (void)(x);
+  } while (0);
+}
+
+void *voidptr1(__uintcap_t *arg) { return (void *)arg; }
+
+void *voidptr2(__uintcap_t **arg) { return (void *)arg; }
+
+void *voidptr3(void *arg) { return (void *)arg; }
+
+void *voidptr4(void **arg) { return (void *)arg; }
+
+char *buffer1(void **arg) { return (char *)arg; }
+
+char *buffer2(__uintcap_t *arg) { return (char *)arg; }
+
+void **buffer3(char *arg) { return (void **)arg; }
+
+__uintcap_t *buffer4(char *arg) { return (__uintcap_t *)arg; }
