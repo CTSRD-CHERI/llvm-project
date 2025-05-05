@@ -59,9 +59,15 @@ bool PtrtointcastCheck::checkExprUsage(ASTContext *Ctx, SourceManager *SM,
 
   /* Check all uses (parents) of the expression. */
   for (auto &P : Ctx->getParents(*E)) {
-    const auto *Pexpr = P.get<Expr>();
+    /* Special case: Do not complain about the argument of "typeof()" */
+    if (auto t = P.get<TypeLoc>()) {
+      auto tof = dyn_cast<TypeOfExprType>(t->getType().getTypePtr());
+      if (tof && tof->getUnderlyingExpr() == E)
+        continue;
+    }
 
-    /* Use is never ok if it is not in an expression. */
+    /* Otherwise use is never ok if it is not in an expression. */
+    const auto *Pexpr = P.get<Expr>();
     if (!Pexpr)
       return false;
 

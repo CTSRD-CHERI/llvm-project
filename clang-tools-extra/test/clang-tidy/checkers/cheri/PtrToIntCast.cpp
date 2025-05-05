@@ -143,3 +143,8 @@ char *buffer2(__uintcap_t *arg) { return (char *)arg; }
 void **buffer3(char *arg) { return (void **)arg; }
 
 __uintcap_t *buffer4(char *arg) { return (__uintcap_t *)arg; }
+
+/* No warning for cast in typeof! */
+unsigned long is_aligned(void *p) {
+  return (__typeof__((unsigned long)p))17;
+}
