@@ -129,7 +129,7 @@ bool PtrtointcastCheck::checkExprUsage(ASTContext *Ctx, SourceManager *SM,
          * never be a pointer but (cap & ~0xfffUL) is not.
          */
         auto Val = Other->getIntegerConstantExpr(*Ctx);
-        if (Val && Val->getExtValue() >= 0)
+        if (Val && Val->sge(0))
           continue;
 
         /* Also ok if the parent usage is ok. */
@@ -237,9 +237,9 @@ bool PtrtointcastCheck::checkCastExpr(ASTContext *Ctx, const Expr *E,
        * If either side of the binary expression
        * is a positive constant this is ok.
        */
-      if (Clhs && Clhs->getExtValue() >= 0)
+      if (Clhs && Clhs->sge(0))
         return true;
-      if (Crhs && Crhs->getExtValue() >= 0)
+      if (Crhs && Crhs->sge(0))
         return true;
       break;
     }

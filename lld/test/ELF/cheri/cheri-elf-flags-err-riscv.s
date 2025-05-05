@@ -13,7 +13,7 @@
 # RUN: not ld.lld %t-rv64-hybrid-main.o -m elf64lriscv_cheri -o /dev/null 2>&1 | FileCheck %s --check-prefix=EMU_ERROR
 # RUN: ld.lld %t-rv32-hybrid-main.o -o /dev/null
 # RUN: not ld.lld %t-rv32-hybrid-main.o -m elf32lriscv_cheri -o /dev/null 2>&1 | FileCheck %s --check-prefix=EMU_ERROR
-# EMU_ERROR: object file is non-CheriABI but emulation forces it
+# EMU_ERROR: is incompatible with elf{{32|64}}lriscv_cheri
 
 
 .global _start
