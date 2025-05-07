@@ -9,6 +9,7 @@
 #include "../ClangTidy.h"
 #include "../ClangTidyModule.h"
 #include "../ClangTidyModuleRegistry.h"
+#include "IoctlCheck.h"
 #include "PtrtointcastCheck.h"
 
 namespace clang::tidy {
@@ -18,6 +19,8 @@ namespace cheri {
 class CheriModule : public ClangTidyModule {
 public:
   void addCheckFactories(ClangTidyCheckFactories &CheckFactories) override {
+    CheckFactories.registerCheck<IoctlCheck>(
+        "cheri-Ioctl");
     CheckFactories.registerCheck<PtrtointcastCheck>("cheri-PtrToIntCast");
   }
 };

@@ -1,5 +1,9 @@
 // RUN: %check_clang_tidy %s cheri-PtrToIntCast %t --extra-arg=-target --extra-arg=riscv64-codasip-linux-musl --extra-arg=-march=rv64imafdc_zcherihybrid_zihintpause_zicbom_zcherilevels --extra-arg=-mabi=l64pc128d
 
+#ifndef __CHERI__
+typedef unsigned long __uintcap_t;
+#endif
+
 #define __force
 int foo1(__uintcap_t x) { return x; }
 

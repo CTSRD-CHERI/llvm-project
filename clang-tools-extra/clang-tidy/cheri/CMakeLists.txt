@@ -5,6 +5,7 @@ set(LLVM_LINK_COMPONENTS
 
 add_clang_library(clangTidyCheriModule
   CheriTidyModule.cpp
+  IoctlCheck.cpp
   PtrtointcastCheck.cpp
 
   LINK_LIBS

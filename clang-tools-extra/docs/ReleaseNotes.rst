@@ -154,6 +154,11 @@ New checks
   This check relies heavily on, but is not exclusive to, the functions from
   the *Annex K. "Bounds-checking interfaces"* of C11.
 
+- New :doc:`cheri-Ioctl
+  <clang-tidy/checks/cheri/Ioctl>` check.
+
+  FIXME: add release notes.
+
 - New :doc:`cheri-PtrToIntCast
   <clang-tidy/checks/cheri/PtrToIntCast>` check.
 
