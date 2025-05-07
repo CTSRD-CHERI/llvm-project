@@ -15,6 +15,14 @@ extern "C" {
 #include <stdbool.h>
 #endif
 
+#define ELF64_R_TYPE(INFO) ((INFO) & 0xFFFFFFFF)
+#define ELF32_R_TYPE(INFO) ((INFO) & 0xFF)
+#if __CHERI_ADDRESS_BITS__ == 32
+#define R_TYPE ELF32_R_TYPE
+#else
+#define R_TYPE ELF64_R_TYPE
+#endif
+
 struct capreloc {
   __SIZE_TYPE__ capability_location;
   __SIZE_TYPE__ object;
@@ -128,7 +136,7 @@ static __attribute__((always_inline)) void cheri_init_globals_cbuildcap_impl(
     const void *__capability rodata_cap, bool tight_code_bounds,
     __SIZE_TYPE__ base_addr, bool init_with_cbld) {
   for (const struct ELFRela *rela = start_rela; rela < stop_rela; rela++) {
-    if (rela->info != R_RISCV_CHERI_RELATIVE)
+    if (R_TYPE(rela->info) != R_RISCV_CHERI_RELATIVE)
       continue;
     const void *__capability *__capability dest =
         (const void *__capability *__capability)__builtin_cheri_address_set(
@@ -244,7 +252,7 @@ cheri_init_globals_cbuildcap(void *__capability data_cap,
    */
   cheri_init_globals_cbuildcap_impl(start_relocs, stop_relocs, data_cap,
                                     code_cap, rodata_cap, can_set_code_bounds,
-                                    /*relocbase=*/0, /*init_with_cbld*/ true);
+                                    /*relocbase=*/0, /*init_with_cbld*/ false);
 }
 
 static __attribute__((always_inline)) void

@@ -1313,11 +1313,13 @@ void addCapabilityRelocation(
                                     sym && sym->isPreemptible, addend);
   } else {
     assert(config->localCapRelocsMode == CapRelocsMode::CBuildCap);
-    assert(!sym->includeInDynsym() && "Must not be a dynamic symbol");
+    assert(!sym->isPreemptible && "Must not be a preemptible symbol");
     if (config->emachine != EM_RISCV)
       error("CBuildCap method not implemented yet!");
-    in.relaDyn->addReloc({R_RISCV_CHERI_RELATIVE, sec, offset,
-                          DynamicReloc::AgainstSymbol, *sym, addend, R_ABS});
+    RelocationBaseSection &oSec =
+        sym->includeInDynsym() ? *mainPart->relaDyn : *in.relaDyn;
+    oSec.addReloc(DynamicReloc::AgainstSymbol, R_RISCV_CHERI_RELATIVE, *sec,
+                  offset, *sym, addend, expr, target->symbolicRel);
     writeCatableRelocationFragments(sec, sym, offset);
   }
 }
