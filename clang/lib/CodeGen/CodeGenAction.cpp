@@ -976,6 +976,9 @@ void BackendConsumer::DiagnosticHandlerImpl(const DiagnosticInfo &DI) {
         << DICI.getMessage();
     Diags.Report(Loc, diag::note_cheri_memintrin_misaligned_fixit)
         << "memcpy() or memmove()" << IsPurecap;
+    if (!DICI.isLocationAvailable())
+      Diags.Report(Loc, diag::note_fe_backend_invalid_loc)
+        << "unknown";
     if (BadDebugInfo)
       // If we were not able to translate the file:line:col information
       // back to a SourceLocation, at least emit a note stating that
