@@ -84,6 +84,9 @@ def warn_fe_backend_optimization_failure : Warning<"%0">, BackendInfo,
     InGroup<BackendOptimizationFailure>, DefaultWarn;
 def note_fe_backend_invalid_loc : Note<"could "
   "not determine the original source location for %0:%1:%2">, BackendInfo;
+def note_fe_backend_unknown_loc : Note<"could "
+  "not determine the original source location. "
+  "You may want to recompile with -gline-tables-only">, BackendInfo;
 
 def err_fe_backend_unsupported : Error<"%0">, BackendInfo;
 def warn_fe_backend_unsupported : Warning<"%0">, BackendInfo;
