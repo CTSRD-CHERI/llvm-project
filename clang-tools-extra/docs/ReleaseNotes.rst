@@ -154,15 +154,22 @@ New checks
   This check relies heavily on, but is not exclusive to, the functions from
   the *Annex K. "Bounds-checking interfaces"* of C11.
 
+- New :doc:`cheri-FixPtrToUlongCast
+  <clang-tidy/checks/cheri/FixPtrToUlongCast>` check.
+
+  Warn about explicit casts of pointers to a type that can only hold
+  an address.
+
 - New :doc:`cheri-Ioctl
   <clang-tidy/checks/cheri/Ioctl>` check.
 
-  FIXME: add release notes.
+  Check prototypes of linux kernel ioctl functions and warn about
+  suspicious uses of the generic ioctl argument.
 
 - New :doc:`cheri-PtrToIntCast
   <clang-tidy/checks/cheri/PtrToIntCast>` check.
 
-  FIXME: add release notes.
+  Warn about suspicious casts between capabilities and plain addressese.
 
 - New :doc:`cppcoreguidelines-avoid-capturing-lambda-coroutines
   <clang-tidy/checks/cppcoreguidelines/avoid-capturing-lambda-coroutines>` check.

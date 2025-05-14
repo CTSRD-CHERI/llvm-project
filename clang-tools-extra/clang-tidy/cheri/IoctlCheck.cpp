@@ -7,6 +7,7 @@
 //===----------------------------------------------------------------------===//
 
 #include "IoctlCheck.h"
+#include "CheriUtil.h"
 #include "clang/AST/ASTContext.h"
 #include "clang/ASTMatchers/ASTMatchFinder.h"
 #include "clang/Basic/TargetInfo.h"
@@ -209,41 +210,56 @@ std::map<StringRef, bool> Ioctl::Blacklist;
  * "MISSSING:" the list is current for the active kernel version
  * and kernel configuration.
  *
- * FIXME: Ioctl functions passed snd_ctl_register_ioctl() are not
+ * FIXME: Ioctl functions passed to snd_ctl_register_ioctl() are not
  *     detected automatically. It should be fairly easy to add an
  *     appropriate check hardcoding the funtion name, though.
  */
 void Ioctl::doInit() {
   /* Root */
   addField("file_operations", "unlocked_ioctl", 2);
+  addFunc("do_vfs_ioctl", 3);
+  addFunc("vfs_ioctl", 2);
   /* Special case: Args to snd_ctl_register_ioctl */
   addFunc("snd_hwdep_control_ioctl", 3);
   addFunc("snd_pcm_control_ioctl", 3);
   addFunc("snd_rawmidi_control_ioctl", 3);
 
   /* Blacklisted functions that are never ioctl functions. */
-  addBlacklist("loop_set_dio");
-  addBlacklist("loop_set_block_size");
-  addBlacklist("nbd_add_socket");
-  addBlacklist("nbd_set_size");
-  addBlacklist("nbd_set_cmd_timeout");
-  addBlacklist("cdrom_ioctl_eject_sw");
-  addBlacklist("cdrom_ioctl_media_changed");
-  addBlacklist("cdrom_ioctl_timed_media_change");
-  addBlacklist("cdrom_ioctl_set_options");
   addBlacklist("cdrom_ioctl_clear_options");
-  addBlacklist("cdrom_ioctl_select_speed");
-  addBlacklist("cdrom_ioctl_select_disc");
-  addBlacklist("cdrom_ioctl_lock_door");
   addBlacklist("cdrom_ioctl_debug");
   addBlacklist("cdrom_ioctl_drive_status");
+  addBlacklist("cdrom_ioctl_eject_sw");
+  addBlacklist("cdrom_ioctl_lock_door");
+  addBlacklist("cdrom_ioctl_media_changed");
+  addBlacklist("cdrom_ioctl_select_disc");
+  addBlacklist("cdrom_ioctl_select_speed");
+  addBlacklist("cdrom_ioctl_set_options");
+  addBlacklist("gru_find_lock_gts");
+  addBlacklist("gru_ktest");
+  addBlacklist("hcall_set_irqline");
+  addBlacklist("hci_uart_set_flags");
+  addBlacklist("hpet_time_div");
+  addBlacklist("i915_perf_config_locked");
+  addBlacklist("ioctl_file_clone");
   addBlacklist("iommufd_vfio_check_extension");
   addBlacklist("iommufd_vfio_set_iommu");
+  addBlacklist("ksys_ioperm");
+  addBlacklist("kvm_arch_init_vm");
   addBlacklist("kvm_create_vm");
   addBlacklist("kvm_dev_ioctl_create_vm");
-  addBlacklist("kvm_arch_init_vm");
+  addBlacklist("kvm_vm_ioctl_check_extension");
+  addBlacklist("kvm_vm_ioctl_check_extension_generic");
+  addBlacklist("loop_set_block_size");
+  addBlacklist("loop_set_dio");
+  addBlacklist("nbd_add_socket");
+  addBlacklist("nbd_set_cmd_timeout");
+  addBlacklist("nbd_set_size");
+  addBlacklist("pin_user_pages_fast");
   addBlacklist("seccomp_notify_set_flags");
   addBlacklist("set_offload");
+  addBlacklist("trace_binder_ioctl");
+  addBlacklist("valid_signal");
+  addBlacklist("vfio_iommu_type1_check_extension");
 
   /* Detected. Make sure list is unique. */
   addField("atm_ioctl", "ioctl", 2);
@@ -252,6 +268,7 @@ void Ioctl::doInit() {
   addField("dfl_feature_ops", "ioctl", 3);
   addField("fb_ops", "fb_ioctl", 2);
   addField("iio_ioctl_handler", "ioctl", 3);
+  addField("isst_if_cmd_cb", "def_ioctl", 2);
   addField("kvm_device_ops", "ioctl", 2);
   addField("posix_clock_operations", "ioctl", 2);
   addField("ppp_channel_ops", "ioctl", 2);
@@ -283,16 +300,21 @@ void Ioctl::doInit() {
   addFunc("__nbd_ioctl", 3);
   addFunc("__nd_ioctl", 4);
   addFunc("__snd_timer_user_ioctl", 2);
-  addFunc("__traceiter_binder_ioctl", 2);
+  addFunc("__ssam_cdev_device_ioctl", 2);
+  addFunc("__surface_dtx_ioctl", 2);
   addFunc("__tty_perform_flush", 1);
   addFunc("__tun_chr_ioctl", 2);
   addFunc("_ctl_ioctl", 2);
   addFunc("_ctl_mpt2_ioctl", 2);
+  addFunc("_hl_ioctl", 2);
   addFunc("_perf_ioctl", 2);
   addFunc("aac_cfg_ioctl", 2);
   addFunc("abx80x_ioctl", 2);
   addFunc("ac_ioctl", 2);
   addFunc("acm_tty_ioctl", 2);
+  addFunc("acpi_thermal_rel_ioctl", 2);
+  addFunc("acq_ioctl", 2);
+  addFunc("acrn_dev_ioctl", 2);
   addFunc("adf_ctl_alloc_resources", 1);
   addFunc("adf_ctl_ioctl", 2);
   addFunc("adf_ctl_ioctl_dev_config", 2);
@@ -312,6 +334,7 @@ void Ioctl::doInit() {
   addFunc("aspeed_lpc_ctrl_ioctl", 2);
   addFunc("aspeed_p2a_ioctl", 2);
   addFunc("asr_ioctl", 2);
+  addFunc("assign_ctxt", 1);
   addFunc("at91_wdt_ioctl", 2);
   addFunc("atalk_ioctl", 2);
   addFunc("atm_mpoa_ioctl", 2);
@@ -338,6 +361,7 @@ void Ioctl::doInit() {
   addFunc("blkdev_report_zones_ioctl", 2);
   addFunc("blkdev_roset", 2);
   addFunc("blkdev_zone_mgmt_ioctl", 3);
+  addFunc("blkif_ioctl", 3);
   addFunc("bnep_sock_ioctl", 2);
   addFunc("br2684_ioctl", 2);
   addFunc("bsg_ioctl", 2);
@@ -355,6 +379,7 @@ void Ioctl::doInit() {
   addFunc("capi_ioctl", 2);
   addFunc("capi_unlocked_ioctl", 2);
   addFunc("cdrom_ioctl", 3);
+  addFunc("cdrom_ioctl_timed_media_change", 1);
   addFunc("cec_ioctl", 2);
   addFunc("ceph_ioctl", 2);
   addFunc("ceph_set_encryption_policy", 1);
@@ -376,7 +401,9 @@ void Ioctl::doInit() {
   addFunc("cuse_file_ioctl", 2);
   addFunc("cxl_memdev_ioctl", 2);
   addFunc("data_sock_ioctl", 2);
+  addFunc("dbc_ioctl", 2);
   addFunc("ddb_ioctl", 2);
+  addFunc("dell_smbios_wmi_ioctl", 2);
   addFunc("dfl_feature_ioctl_get_num_irqs", 2);
   addFunc("dfl_feature_ioctl_set_irq", 2);
   addFunc("dimm_ioctl", 2);
@@ -387,6 +414,7 @@ void Ioctl::doInit() {
   addFunc("dm_verity_ioctl", 2);
   addFunc("dma_buf_ioctl", 2);
   addFunc("dma_heap_ioctl", 2);
+  addFunc("dmirror_fops_unlocked_ioctl", 2);
   addFunc("do_cancel_ioctl", 1);
   addFunc("do_execute_ddcb", 1);
   addFunc("do_fb_ioctl", 2);
@@ -428,9 +456,11 @@ void Ioctl::doInit() {
   addFunc("ep_eventpoll_ioctl", 2);
   addFunc("ep_ioctl", 2);
   addFunc("epx_c3_ioctl", 2);
+  addFunc("erst_dbg_ioctl", 2);
   addFunc("esas2r_proc_ioctl", 2);
   addFunc("eurwdt_ioctl", 2);
   addFunc("evdev_ioctl", 2);
+  addFunc("evtchn_ioctl", 2);
   addFunc("exfat_ioctl", 2);
   addFunc("exfat_ioctl_fitrim", 1);
   addFunc("ext2_ioctl", 2);
@@ -477,6 +507,8 @@ void Ioctl::doInit() {
   addFunc("fat_generic_ioctl", 2);
   addFunc("fat_ioctl_fitrim", 1);
   addFunc("fb_ioctl", 2);
+  addFunc("fd_ioctl", 3);
+  addFunc("fd_locked_ioctl", 3);
   addFunc("ffs_ep0_ioctl", 2);
   addFunc("ffs_epfile_ioctl", 2);
   addFunc("fitpc2_wdt_ioctl", 2);
@@ -490,6 +522,8 @@ void Ioctl::doInit() {
   addFunc("fme_pr", 1);
   addFunc("fme_pr_ioctl", 3);
   addFunc("fop_ioctl", 2);
+  addFunc("fsl_mc_uapi_dev_ioctl", 2);
+  addFunc("fsl_mc_uapi_send_command", 1);
   addFunc("ftdi_ioctl", 2);
   addFunc("full_proxy_unlocked_ioctl", 2);
   addFunc("fuse_dev_ioctl", 2);
@@ -505,15 +539,30 @@ void Ioctl::doInit() {
   addFunc("gamecube_rtc_ioctl", 2);
   addFunc("gb_tty_ioctl", 2);
   addFunc("genwqe_ioctl", 2);
+  addFunc("geodewdt_ioctl", 2);
+  addFunc("get_base_info", 1);
+  addFunc("get_ctxt_info", 1);
   addFunc("gfs2_ioctl", 2);
+  addFunc("gntalloc_ioctl", 2);
+  addFunc("gntdev_ioctl", 2);
   addFunc("gpio_ioctl", 2);
+  addFunc("gru_create_new_context", 0);
+  addFunc("gru_dump_chiplet_request", 0);
+  addFunc("gru_file_unlocked_ioctl", 2);
+  addFunc("gru_get_config_info", 0);
+  addFunc("gru_get_exception_detail", 0);
+  addFunc("gru_get_gseg_statistics", 0);
+  addFunc("gru_handle_user_call_os", 0);
+  addFunc("gru_set_context_option", 0);
+  addFunc("gru_user_flush_tlb", 0);
+  addFunc("gru_user_unload_context", 0);
   addFunc("gsmld_ioctl", 2);
   addFunc("gsmtty_ioctl", 2);
   addFunc("gup_test_ioctl", 2);
   addFunc("hci_sock_bound_ioctl", 2);
   addFunc("hci_sock_ioctl", 2);
-  addFunc("hci_uart_set_flags", 1);
   addFunc("hci_uart_tty_ioctl", 2);
+  addFunc("hfi1_file_ioctl", 2);
   addFunc("hfsplus_ioctl", 2);
   addFunc("hiddev_ioctl", 2);
   addFunc("hidp_sock_ioctl", 2);
@@ -521,13 +570,19 @@ void Ioctl::doInit() {
   addFunc("hisi_acc_vf_precopy_ioctl", 2);
   addFunc("hisi_acc_vfio_pci_ioctl", 2);
   addFunc("hisi_qm_uacce_ioctl", 2);
+  addFunc("hl_ioctl_control", 2);
+  addFunc("hpet_ioctl", 2);
+  addFunc("hpet_ioctl_common", 2);
   addFunc("hpfs_ioctl", 2);
   addFunc("hsc_ioctl", 2);
+  addFunc("hsmp_ioctl", 2);
   addFunc("hso_serial_ioctl", 2);
   addFunc("hso_wait_modem_status", 1);
   addFunc("hung_up_tty_ioctl", 2);
   addFunc("hwdep_ioctl", 3);
   addFunc("i2cdev_ioctl", 2);
+  addFunc("i915_perf_ioctl", 2);
+  addFunc("i915_perf_ioctl_locked", 2);
   addFunc("ib_umad_ioctl", 2);
   addFunc("ib_uverbs_ioctl", 2);
   addFunc("ibwdt_ioctl", 2);
@@ -539,6 +594,7 @@ void Ioctl::doInit() {
   addFunc("inet6_ioctl", 2);
   addFunc("inet_ioctl", 2);
   addFunc("inotify_ioctl", 2);
+  addFunc("intel_vgpu_ioctl", 2);
   addFunc("ioctl_dev", 3);
   addFunc("iommufd_fops_ioctl", 2);
   addFunc("iommufd_vfio_ioctl", 2);
@@ -549,6 +605,7 @@ void Ioctl::doInit() {
   addFunc("ipwireless_ppp_ioctl", 2);
   addFunc("isl12022_rtc_ioctl", 2);
   addFunc("isotp_sock_no_ioctlcmd", 2);
+  addFunc("isst_if_def_ioctl", 2);
   addFunc("it8712f_wdt_ioctl", 2);
   addFunc("ivtvfb_ioctl", 2);
   addFunc("j1939_sk_no_ioctlcmd", 2);
@@ -561,6 +618,7 @@ void Ioctl::doInit() {
   addFunc("kcov_ioctl_locked", 2);
   addFunc("kcs_bmc_ipmi_ioctl", 2);
   addFunc("kempld_wdt_ioctl", 2);
+  addFunc("kfd_ioctl", 2);
   addFunc("kobil_ioctl", 2);
   addFunc("kvm_arch_dev_ioctl", 2);
   addFunc("kvm_arch_vcpu_async_ioctl", 2);
@@ -569,10 +627,11 @@ void Ioctl::doInit() {
   addFunc("kvm_dev_ioctl", 2);
   addFunc("kvm_device_ioctl", 2);
   addFunc("kvm_device_ioctl_attr", 2);
+  addFunc("kvm_mmu_change_mmu_pages", 1);
   addFunc("kvm_vcpu_ioctl", 2);
   addFunc("kvm_vm_ioctl", 2);
-  addFunc("kvm_vm_ioctl_check_extension", 1);
-  addFunc("kvm_vm_ioctl_check_extension_generic", 1);
+  addFunc("kvm_vm_ioctl_set_nr_mmu_pages", 1);
+  addFunc("kvm_vm_ioctl_set_tss_addr", 1);
   addFunc("kyrofb_ioctl", 2);
   addFunc("lane_ioctl", 2);
   addFunc("lcd_ioctl", 2);
@@ -587,11 +646,13 @@ void Ioctl::doInit() {
   addFunc("lp_do_ioctl", 2);
   addFunc("lp_ioctl", 2);
   addFunc("mISDN_ioctl", 2);
+  addFunc("manage_rcvq", 2);
   addFunc("map_benchmark_ioctl", 2);
   addFunc("matroxfb_dh_ioctl", 2);
   addFunc("matroxfb_ioctl", 2);
   addFunc("mb862xxfb_ioctl", 2);
   addFunc("mbochs_ioctl", 2);
+  addFunc("mce_chrdev_ioctl", 2);
   addFunc("mctp_ioctl", 2);
   addFunc("mctp_ioctl_alloctag", 2);
   addFunc("mctp_ioctl_droptag", 2);
@@ -606,6 +667,7 @@ void Ioctl::doInit() {
   addFunc("megasas_mgmt_ioctl", 2);
   addFunc("megasas_mgmt_ioctl_aen", 1);
   addFunc("megasas_mgmt_ioctl_fw", 1);
+  addFunc("mei_ioctl", 2);
   addFunc("mkiss_ioctl", 2);
   addFunc("mlx5vf_precopy_ioctl", 2);
   addFunc("mmc_blk_ioctl", 3);
@@ -631,12 +693,14 @@ void Ioctl::doInit() {
   addFunc("mptctl_replace_fw", 1);
   addFunc("mraid_mm_ioctl", 2);
   addFunc("mraid_mm_unlocked_ioctl", 2);
+  addFunc("msr_ioctl", 2);
   addFunc("mtdchar_ioctl", 2);
   addFunc("mtdchar_unlocked_ioctl", 2);
   addFunc("mtip_block_ioctl", 3);
   addFunc("mtip_hw_ioctl", 2);
   addFunc("mtty_ioctl", 2);
   addFunc("mtty_precopy_ioctl", 2);
+  addFunc("mwave_ioctl", 2);
   addFunc("mxser_cflags_changed", 1);
   addFunc("mxser_ioctl", 2);
   addFunc("n_hdlc_tty_ioctl", 2);
@@ -646,6 +710,8 @@ void Ioctl::doInit() {
   addFunc("nci_uart_tty_ioctl", 2);
   addFunc("nct3018y_ioctl", 2);
   addFunc("nd_ioctl", 2);
+  addFunc("ne_enclave_ioctl", 2);
+  addFunc("ne_ioctl", 2);
   addFunc("netlink_ioctl", 2);
   addFunc("nilfs_ioctl", 2);
   addFunc("nosy_ioctl", 2);
@@ -665,6 +731,7 @@ void Ioctl::doInit() {
   addFunc("nvme_ns_chr_ioctl", 2);
   addFunc("nvme_ns_head_chr_ioctl", 2);
   addFunc("nvme_ns_head_ioctl", 3);
+  addFunc("nvram_misc_ioctl", 2);
   addFunc("ocfs2_ioctl", 2);
   addFunc("odev_ioctl", 2);
   addFunc("omapfb_ioctl", 2);
@@ -715,6 +782,7 @@ void Ioctl::doInit() {
   addFunc("pps_cdev_ioctl", 2);
   addFunc("pptp_ppp_ioctl", 2);
   addFunc("printer_ioctl", 2);
+  addFunc("privcmd_ioctl", 2);
   addFunc("proc_reg_unlocked_ioctl", 2);
   addFunc("ptp_ioctl", 2);
   addFunc("pty_bsd_ioctl", 2);
@@ -768,11 +836,16 @@ void Ioctl::doInit() {
   addFunc("sc1200wdt_ioctl", 2);
   addFunc("sch311x_wdt_ioctl", 2);
   addFunc("scom_ioctl", 2);
+  addFunc("scu_ipc_ioctl", 2);
   addFunc("sd_ioctl", 3);
   addFunc("seccomp_notify_ioctl", 2);
   addFunc("serial_ioctl", 2);
   addFunc("serport_ldisc_ioctl", 2);
+  addFunc("set_ctxt_pkey", 1);
+  addFunc("sev_ioctl", 2);
   addFunc("sg_ioctl", 2);
+  addFunc("sgx_ioctl", 2);
+  addFunc("sgx_vepc_ioctl", 2);
   addFunc("sh_mobile_lcdc_ioctl", 2);
   addFunc("sh_mobile_lcdc_overlay_ioctl", 2);
   addFunc("sisfb_ioctl", 2);
@@ -795,6 +868,7 @@ void Ioctl::doInit() {
   addFunc("snd_compr_tstamp", 1);
   addFunc("snd_ctl_ioctl", 2);
   addFunc("snd_disconnect_ioctl", 2);
+  addFunc("snd_emux_ioctl_seq_oss", 2);
   addFunc("snd_hwdep_ioctl", 2);
   addFunc("snd_mixer_oss_ioctl", 2);
   addFunc("snd_mixer_oss_ioctl1", 2);
@@ -808,15 +882,19 @@ void Ioctl::doInit() {
   addFunc("snd_seq_oss_ioctl", 2);
   addFunc("snd_seq_oss_synth_ioctl", 3);
   addFunc("snd_timer_user_ioctl", 2);
+  addFunc("snp_guest_ioctl", 2);
   addFunc("sock_do_ioctl", 3);
   addFunc("sock_ioctl", 2);
   addFunc("sock_no_ioctl", 2);
+  addFunc("sonypi_misc_ioctl", 2);
   addFunc("spidev_ioctl", 2);
   addFunc("sr_block_ioctl", 3);
+  addFunc("ssam_cdev_device_ioctl", 2);
   addFunc("sstfb_ioctl", 2);
   addFunc("st_ioctl", 2);
   addFunc("stm_char_ioctl", 2);
   addFunc("subdev_ioctl", 2);
+  addFunc("surface_dtx_ioctl", 2);
   addFunc("svc_ioctl", 2);
   addFunc("sw_sync_ioctl", 2);
   addFunc("sw_sync_ioctl_create_fence", 1);
@@ -828,13 +906,14 @@ void Ioctl::doInit() {
   addFunc("sync_file_ioctl_merge", 1);
   addFunc("sync_file_ioctl_set_deadline", 1);
   addFunc("tap_ioctl", 2);
+  addFunc("tdx_guest_ioctl", 2);
   addFunc("tee_ioctl", 2);
   addFunc("thread_with_stdio_ioctl", 2);
   addFunc("timerfd_ioctl", 2);
   addFunc("tioclinux", 1);
   addFunc("tipc_ioctl", 2);
+  addFunc("toshiba_acpi_ioctl", 2);
   addFunc("tps6594_pfsm_ioctl", 2);
-  addFunc("trace_binder_ioctl", 1);
   addFunc("tracing_buffers_ioctl", 2);
   addFunc("tty_ioctl", 2);
   addFunc("tty_jobctrl_ioctl", 4);
@@ -863,10 +942,14 @@ void Ioctl::doInit() {
   addFunc("usbdev_ioctl", 2);
   addFunc("usblp_ioctl", 2);
   addFunc("usbtmc_ioctl", 2);
+  addFunc("user_event_ack", 2);
   addFunc("user_events_ioctl", 2);
   addFunc("user_events_ioctl_del", 1);
   addFunc("user_events_ioctl_reg", 1);
   addFunc("user_events_ioctl_unreg", 0);
+  addFunc("user_exp_rcv_clear", 1);
+  addFunc("user_exp_rcv_invalid", 1);
+  addFunc("user_exp_rcv_setup", 1);
   addFunc("userfaultfd_api", 1);
   addFunc("userfaultfd_continue", 1);
   addFunc("userfaultfd_copy", 1);
@@ -879,8 +962,9 @@ void Ioctl::doInit() {
   addFunc("userfaultfd_wake", 1);
   addFunc("userfaultfd_writeprotect", 1);
   addFunc("userfaultfd_zeropage", 1);
+  addFunc("uv_mmtimer_ioctl", 2);
   addFunc("v4l2_ioctl", 2);
-  addFunc("valid_signal", 0);
+  addFunc("vbg_misc_device_ioctl", 2);
   addFunc("vcc_ioctl", 2);
   addFunc("vchiq_ioctl", 2);
   addFunc("vduse_dev_ioctl", 2);
@@ -888,8 +972,15 @@ void Ioctl::doInit() {
   addFunc("vfio_container_ioctl_check_extension", 1);
   addFunc("vfio_device_fops_unl_ioctl", 2);
   addFunc("vfio_fops_unl_ioctl", 2);
+  addFunc("vfio_fsl_mc_ioctl", 2);
   addFunc("vfio_group_fops_unl_ioctl", 2);
   addFunc("vfio_ioctl_set_iommu", 1);
+  addFunc("vfio_iommu_type1_dirty_pages", 1);
+  addFunc("vfio_iommu_type1_get_info", 1);
+  addFunc("vfio_iommu_type1_ioctl", 2);
+  addFunc("vfio_iommu_type1_map_dma", 1);
+  addFunc("vfio_iommu_type1_open", 0);
+  addFunc("vfio_iommu_type1_unmap_dma", 1);
   addFunc("vfio_noiommu_ioctl", 2);
   addFunc("vfio_noiommu_open", 0);
   addFunc("vfio_pci_core_ioctl", 2);
@@ -906,8 +997,11 @@ void Ioctl::doInit() {
   addFunc("virtiovf_vfio_pci_core_ioctl", 2);
   addFunc("virtual_ncidev_ioctl", 2);
   addFunc("vivid_fb_ioctl", 2);
+  addFunc("vmci_host_unlocked_ioctl", 2);
   addFunc("vme_user_ioctl", 3);
   addFunc("vme_user_unlocked_ioctl", 2);
+  addFunc("vmw_generic_ioctl", 2);
+  addFunc("vmw_unlocked_ioctl", 2);
   addFunc("vol_cdev_ioctl", 2);
   addFunc("vsock_dev_ioctl", 2);
   addFunc("vt_do_kdskled", 2);
@@ -929,6 +1023,8 @@ void Ioctl::doInit() {
   addFunc("wwan_port_fops_ioctl", 2);
   addFunc("x25_ioctl", 2);
   addFunc("xe_drm_ioctl", 2);
+  addFunc("xen_mce_chrdev_ioctl", 2);
+  addFunc("xenbus_backend_ioctl", 2);
   addFunc("xfs_file_ioctl", 2);
   addFunc("xr_ioctl", 2);
   addFunc("xsdfec_dev_ioctl", 2);
@@ -1017,7 +1113,6 @@ void IoctlCheck::checkFunctionDecl(
 void IoctlCheck::checkFieldDecl(
     const ast_matchers::MatchFinder::MatchResult &Result,
     const FieldDecl *Field) {
-  auto Ctx = Result.Context;
   const auto *Rec = Result.Nodes.getNodeAs<RecordDecl>("record");
 
   if (!Rec) {
@@ -1031,28 +1126,7 @@ void IoctlCheck::checkFieldDecl(
     return;
   }
 
-  /* Wade through sugar to find the function type. */
-  const Type *T = Field->getType().getDesugaredType(*Ctx).getTypePtr();
-  bool DerefDone = false;
-  while (1) {
-    if (const auto *Tmp = dyn_cast<ParenType>(T)) {
-      T = Tmp->getInnerType().getTypePtr();
-      continue;
-    }
-    if (const auto *Tmp = dyn_cast<TypedefType>(T)) {
-      T = Tmp->getDecl()->getUnderlyingType().getTypePtr();
-      continue;
-    }
-    if (!DerefDone) {
-      if (const auto *PT = dyn_cast<PointerType>(T)) {
-        T = PT->getPointeeType().getTypePtr();
-        DerefDone = true;
-        continue;
-      }
-    }
-    break;
-  }
-  const auto *FT = dyn_cast<FunctionProtoType>(T);
+  const auto *FT = Util::extractFunctionProtoType(Field);
   if (!FT) {
     diag(Field->getLocation(), "CHERI: Ioctl field '%0' in '%1' should have "
                                "function pointer type instead of '%2'")

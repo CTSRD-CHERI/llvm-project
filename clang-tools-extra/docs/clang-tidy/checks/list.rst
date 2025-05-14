@@ -162,6 +162,7 @@ Clang-Tidy Checks
    `cert-msc51-cpp <cert/msc51-cpp.html>`_,
    `cert-oop57-cpp <cert/oop57-cpp.html>`_,
    `cert-oop58-cpp <cert/oop58-cpp.html>`_,
+   `cheri-FixPtrToUlongCast <cheri/FixPtrToUlongCast.html>`_, "Yes"
    `cheri-Ioctl <cheri/Ioctl.html>`_, "Yes"
    `cheri-PtrToIntCast <cheri/PtrToIntCast.html>`_,
    `clang-analyzer-core.DynamicTypePropagation <clang-analyzer/core.DynamicTypePropagation.html>`_,

@@ -23,17 +23,13 @@ public:
   PtrtointcastCheck(StringRef Name, ClangTidyContext *Context)
       : ClangTidyCheck(Name, Context) {}
   void registerMatchers(ast_matchers::MatchFinder *Finder) override;
-  bool isForced(SourceManager *SM, SourceLocation Start, SourceLocation End);
-  bool isForced(SourceManager *SM, const CastExpr *C);
   void check(const ast_matchers::MatchFinder::MatchResult &Result) override;
   void checkCast(const ast_matchers::MatchFinder::MatchResult &Result);
   void checkIndirectCast(const ast_matchers::MatchFinder::MatchResult &Result);
 
 private:
-  bool checkExprUsage(ASTContext *ctx, SourceManager *SM, const Expr *Expr,
-                      unsigned int AddrWidth);
-  bool checkCastExpr(ASTContext *Ctx, const Expr *expr, unsigned int AddrWidth);
-  bool checkPointeeTypes(ASTContext *Ctx, const Type *From, const Type *To);
+  static bool checkPointeeTypes(ASTContext *Ctx, const Type *From,
+                                const Type *To);
 };
 
 } // namespace clang::tidy::cheri

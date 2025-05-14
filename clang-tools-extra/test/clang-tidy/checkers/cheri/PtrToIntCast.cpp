@@ -148,3 +148,44 @@ __uintcap_t *buffer4(char *arg) { return (__uintcap_t *)arg; }
 unsigned long is_aligned(void *p) {
   return (__typeof__((unsigned long)p))17;
 }
+
+/* No warning for pointer difference, even with parens. */
+unsigned long ptrdiff(void *p, void *q) {
+  return (unsigned long)p - (((unsigned long)(((q)))));
+}
+
+/* No warning when used in a varargs call */
+extern void normal(unsigned long arg);
+extern void varargs(unsigned long arg, ...);
+void varargscheck(void *foo)
+{
+  normal((unsigned long)foo);
+// CHECK-MESSAGES: :[[@LINE-1]]:10: warning: CHERI: Invalid capability to integer cast [cheri-PtrToIntCast]
+  varargs((unsigned long)foo);
+}
+
+
+int f (char *src, char *dst, char *iv)
+{
+  if ((unsigned long)src)
+    return 1;
+
+  while ((unsigned long)src | (unsigned long)dst)
+    src++;
+
+  do {
+    dst++;
+  } while ((unsigned long)dst);
+
+  for (; (unsigned long)iv; iv++)
+    ;
+
+  return 0;
+}
+
+int check(unsigned long b)
+{
+  if (((void *)(__uintcap_t)b != NULL))
+    return 0;
+  return 1;
+}

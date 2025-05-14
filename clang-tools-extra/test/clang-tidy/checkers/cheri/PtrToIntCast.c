@@ -1,9 +1,5 @@
 // RUN: %check_clang_tidy %s cheri-PtrToIntCast %t --extra-arg=-target --extra-arg=riscv64-codasip-linux-musl --extra-arg=-march=rv64imafdc_zcherihybrid_zihintpause_zicbom_zcherilevels --extra-arg=-mabi=l64pc128d
 
-#ifndef __CHERI__
-typedef unsigned long __uintcap_t;
-#endif
-
 #define __force
 int foo1(__uintcap_t x) { return x; }
 
@@ -151,4 +147,45 @@ __uintcap_t *buffer4(char *arg) { return (__uintcap_t *)arg; }
 /* No warning for cast in typeof! */
 unsigned long is_aligned(void *p) {
   return (__typeof__((unsigned long)p))17;
+}
+
+/* No warning for pointer difference, even with parens. */
+unsigned long ptrdiff(void *p, void *q) {
+  return (unsigned long)p - (((unsigned long)(((q)))));
+}
+
+/* No warning when used in a varargs call */
+extern void normal(unsigned long arg);
+extern void varargs(unsigned long arg, ...);
+void varargscheck(void *foo)
+{
+  normal((unsigned long)foo);
+// CHECK-MESSAGES: :[[@LINE-1]]:10: warning: CHERI: Invalid capability to integer cast [cheri-PtrToIntCast]
+  varargs((unsigned long)foo);
+}
+
+
+int f (char *src, char *dst, char *iv)
+{
+  if ((unsigned long)src)
+    return 1;
+
+  while ((unsigned long)src | (unsigned long)dst)
+    src++;
+
+  do {
+    dst++;
+  } while ((unsigned long)dst);
+
+  for (; (unsigned long)iv; iv++)
+    ;
+
+  return 0;
+}
+
+int check(unsigned long b)
+{
+  if (((void *)(__uintcap_t)b != NULL))
+    return 0;
+  return 1;
 }
