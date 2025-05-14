@@ -277,8 +277,6 @@ void PtrtointcastCheck::checkCast(const MatchFinder::MatchResult &Result) {
   const auto *To = C->getType().getTypePtr();
   bool FromCap = From->isCHERICapabilityType(*Ctx);
   bool ToCap = To->isCHERICapabilityType(*Ctx);
-  unsigned int Fromsz = Ctx->getTypeSize(From);
-  unsigned int Tosz = Ctx->getTypeSize(To);
   unsigned int AddrWidth;
 
   /*
@@ -297,7 +295,11 @@ void PtrtointcastCheck::checkCast(const MatchFinder::MatchResult &Result) {
       return;
     if (Kind == CK_FunctionToPointerDecay)
       return;
+    if (Kind == CK_BuiltinFnToFnPtr)
+      return;
   }
+  unsigned int Fromsz = Ctx->getTypeSize(From);
+  unsigned int Tosz = Ctx->getTypeSize(To);
 
   /* The width of an address is half the size of a pointer. */
   if (FromCap)
