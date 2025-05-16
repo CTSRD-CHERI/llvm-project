@@ -2431,7 +2431,7 @@ EmitAsmStores(CodeGenFunction &CGF, const AsmStmt &S,
         Tmp = Builder.CreateIntToPtr(Tmp, TruncTy);
       } else if (Tmp->getType()->isPointerTy() && TruncTy->isIntegerTy()) {
         uint64_t TmpSize =
-            CGM.getDataLayout().getTypeSizeInBits(Tmp->getType());
+            CGM.getDataLayout().getIndexTypeSizeInBits(Tmp->getType());
         Tmp = Builder.CreatePtrToInt(
             Tmp, llvm::IntegerType::get(CTX, (unsigned)TmpSize));
         Tmp = Builder.CreateTrunc(Tmp, TruncTy);
