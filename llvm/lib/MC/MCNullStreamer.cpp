@@ -43,6 +43,7 @@ namespace {
                       TailPaddingAmount TailPadding = TailPaddingAmount::None,
                       SMLoc Loc = SMLoc()) override {}
     void emitGPRel32Value(const MCExpr *Value) override {}
+    void emitSubsectionsViaSymbols() override {};
     void beginCOFFSymbolDef(const MCSymbol *Symbol) override {}
     void emitCOFFSymbolStorageClass(int StorageClass) override {}
     void emitCOFFSymbolType(int Type) override {}

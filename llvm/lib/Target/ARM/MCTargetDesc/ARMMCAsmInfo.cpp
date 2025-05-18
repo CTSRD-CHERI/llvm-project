@@ -24,8 +24,6 @@ ARMMCAsmInfoDarwin::ARMMCAsmInfoDarwin(const Triple &TheTriple) {
 
   Data64bitsDirective = nullptr;
   CommentString = "@";
-  Code16Directive = ".code\t16";
-  Code32Directive = ".code\t32";
   UseDataRegionDirectives = true;
 
   SupportsDebugInformation = true;
@@ -51,8 +49,6 @@ ARMELFMCAsmInfo::ARMELFMCAsmInfo(const Triple &TheTriple) {
 
   Data64bitsDirective = nullptr;
   CommentString = "@";
-  Code16Directive = ".code\t16";
-  Code32Directive = ".code\t32";
 
   SupportsDebugInformation = true;
 
@@ -105,8 +101,6 @@ ARMCOFFMCAsmInfoGNU::ARMCOFFMCAsmInfoGNU() {
   HasSingleParameterDotFile = true;
 
   CommentString = "@";
-  Code16Directive = ".code\t16";
-  Code32Directive = ".code\t32";
   PrivateGlobalPrefix = ".L";
   PrivateLabelPrefix = ".L";
 

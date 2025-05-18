@@ -41,7 +41,6 @@ public:
 
   void initSections(bool NoExecStack, const MCSubtargetInfo &STI) override;
   void emitLabel(MCSymbol *Symbol, SMLoc Loc = SMLoc()) override;
-  void emitAssemblerFlag(MCAssemblerFlag Flag) override;
   bool emitSymbolAttribute(MCSymbol *Symbol, MCSymbolAttr Attribute) override;
   void emitSymbolDesc(MCSymbol *Symbol, unsigned DescValue) override;
   void beginCOFFSymbolDef(MCSymbol const *Symbol) override;

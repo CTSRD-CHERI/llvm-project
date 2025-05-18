@@ -219,9 +219,6 @@ public:
   virtual void finishLayout(MCAssembler const &Asm,
                             MCAsmLayout &Layout) const {}
 
-  /// Handle any target-specific assembler flags. By default, do nothing.
-  virtual void handleAssemblerFlag(MCAssemblerFlag Flag) {}
-
   /// Generate the compact unwind encoding for the CFI instructions.
   virtual uint32_t generateCompactUnwindEncoding(const MCDwarfFrameInfo *FI,
                                                  const MCContext *Ctxt) const {

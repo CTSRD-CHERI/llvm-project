@@ -119,23 +119,6 @@ void MCELFStreamer::emitLabelAtPos(MCSymbol *S, SMLoc Loc, MCFragment *F,
     Symbol->setType(ELF::STT_TLS);
 }
 
-void MCELFStreamer::emitAssemblerFlag(MCAssemblerFlag Flag) {
-  // Let the target do whatever target specific stuff it needs to do.
-  getAssembler().getBackend().handleAssemblerFlag(Flag);
-  // Do any generic stuff we need to do.
-  switch (Flag) {
-  case MCAF_SyntaxUnified: return; // no-op here.
-  case MCAF_Code16: return; // Change parsing mode; no-op here.
-  case MCAF_Code32: return; // Change parsing mode; no-op here.
-  case MCAF_Code64: return; // Change parsing mode; no-op here.
-  case MCAF_SubsectionsViaSymbols:
-    getAssembler().setSubsectionsViaSymbols(true);
-    return;
-  }
-
-  llvm_unreachable("invalid assembler flag!");
-}
-
 // If bundle alignment is used and there are any instructions in the section, it
 // needs to be aligned to at least the bundle size.
 static void setSectionAlignmentForBundling(const MCAssembler &Assembler,
