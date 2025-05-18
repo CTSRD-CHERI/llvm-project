@@ -51,7 +51,6 @@ public:
   void emitLabel(MCSymbol *Symbol, SMLoc Loc = SMLoc()) override;
   void emitLabelAtPos(MCSymbol *Symbol, SMLoc Loc, MCFragment *F,
                       uint64_t Offset) override;
-  void emitAssemblerFlag(MCAssemblerFlag Flag) override;
   void emitWeakReference(MCSymbol *Alias, const MCSymbol *Symbol) override;
   bool emitSymbolAttribute(MCSymbol *Symbol, MCSymbolAttr Attribute) override;
   void emitSymbolDesc(MCSymbol *Symbol, unsigned DescValue) override;

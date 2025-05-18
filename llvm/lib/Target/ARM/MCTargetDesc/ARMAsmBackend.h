@@ -18,10 +18,9 @@
 namespace llvm {
 
 class ARMAsmBackend : public MCAsmBackend {
-  bool isThumbMode;    // Currently emitting Thumb code.
 public:
-  ARMAsmBackend(const Target &T, bool isThumb, support::endianness Endian)
-      : MCAsmBackend(Endian), isThumbMode(isThumb) {}
+  ARMAsmBackend(const Target &T, support::endianness Endian)
+      : MCAsmBackend(Endian) {}
 
   unsigned getNumFixupKinds() const override {
     return ARM::NumTargetFixupKinds;
@@ -66,11 +65,7 @@ public:
   bool writeNopData(raw_ostream &OS, uint64_t Count,
                     const MCSubtargetInfo *STI) const override;
 
-  void handleAssemblerFlag(MCAssemblerFlag Flag) override;
-
   unsigned getPointerSize() const { return 4; }
-  bool isThumb() const { return isThumbMode; }
-  void setIsThumb(bool it) { isThumbMode = it; }
 };
 } // end namespace llvm
 

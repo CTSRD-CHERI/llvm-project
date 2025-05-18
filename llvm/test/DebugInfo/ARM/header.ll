@@ -8,8 +8,8 @@
 ; CHECK-NEXT: .syntax unified
 ; CHECK-NEXT: .globl  _f
 ; CHECK-NEXT: .p2align  2
-; CHECK-NEXT: .code 32                    @ @f
-; CHECK-NEXT: _f:
+; CHECK-NEXT: .code 32
+; CHECK-NEXT: _f:                         @ @f
 
 ; CHECK:  .section        __DWARF,__debug_str,regular,debug
 
