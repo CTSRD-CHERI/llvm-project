@@ -161,15 +161,17 @@ TLSModel::Model TargetMachine::getTLSModel(const GlobalValue *GV) const {
   Reloc::Model RM = getRelocationModel();
   bool IsSharedLibrary = RM == Reloc::PIC_ && !IsPIE;
   bool IsLocal = shouldAssumeDSOLocal(*GV->getParent(), GV);
+  bool IsTGOT = DL.isFatPointer(DL.getDefaultGlobalsAddressSpace()) &&
+                MCTargetOptions::cheriTLSUseTGOT();
 
   TLSModel::Model Model;
   if (IsSharedLibrary) {
-    if (IsLocal)
+    if (IsLocal && !IsTGOT)
       Model = TLSModel::LocalDynamic;
     else
       Model = TLSModel::GeneralDynamic;
   } else {
-    if (IsLocal)
+    if (IsLocal || IsTGOT)
       Model = TLSModel::LocalExec;
     else
       Model = TLSModel::InitialExec;
@@ -177,6 +179,9 @@ TLSModel::Model TargetMachine::getTLSModel(const GlobalValue *GV) const {
 
   // If the user specified a more specific model, use that.
   TLSModel::Model SelectedModel = getSelectedTLSModel(GV);
+  // Local Dynamic is not valid for CHERI TGOT
+  if (SelectedModel == TLSModel::LocalDynamic && IsTGOT)
+    SelectedModel = TLSModel::GeneralDynamic;
   if (SelectedModel > Model)
     return SelectedModel;
 
