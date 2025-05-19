@@ -27,6 +27,14 @@ CheriCapabilityTableABI MCTargetOptions::cheriCapabilityTableABI() {
   return CapTableABI;
 }
 
+static cl::opt<bool> CheriTLSUseTGOT(
+    "cheri-tgot-tls", cl::desc("Use TGOT for CHERI TLS instead of legacy ABI"),
+    cl::init(false));
+
+bool MCTargetOptions::cheriTLSUseTGOT() {
+  return CheriTLSUseTGOT;
+}
+
 MCTargetOptions::MCTargetOptions()
     : MCRelaxAll(false), MCNoExecStack(false), MCFatalWarnings(false),
       MCNoWarn(false), MCNoDeprecatedWarn(false), MCNoTypeCheck(false),
