@@ -154,6 +154,12 @@ New checks
   This check relies heavily on, but is not exclusive to, the functions from
   the *Annex K. "Bounds-checking interfaces"* of C11.
 
+- New :doc:`cheri-FixIntToPtrCast
+  <clang-tidy/checks/cheri/FixIntToPtrCast>` check.
+
+  Warn about and fix casts where a smaller integer type is cast
+  to a pointer.
+
 - New :doc:`cheri-FixPtrToUlongCast
   <clang-tidy/checks/cheri/FixPtrToUlongCast>` check.
 

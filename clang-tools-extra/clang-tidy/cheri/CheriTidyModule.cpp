@@ -9,6 +9,7 @@
 #include "../ClangTidy.h"
 #include "../ClangTidyModule.h"
 #include "../ClangTidyModuleRegistry.h"
+#include "FixinttoptrcastCheck.h"
 #include "FixptrtoulongcastCheck.h"
 #include "IoctlCheck.h"
 #include "PtrtointcastCheck.h"
@@ -20,6 +21,8 @@ namespace cheri {
 class CheriModule : public ClangTidyModule {
 public:
   void addCheckFactories(ClangTidyCheckFactories &CheckFactories) override {
+    CheckFactories.registerCheck<FixinttoptrcastCheck>(
+        "cheri-FixIntToPtrCast");
     CheckFactories.registerCheck<FixptrtoulongcastCheck>(
         "cheri-FixPtrToUlongCast");
     CheckFactories.registerCheck<IoctlCheck>(
