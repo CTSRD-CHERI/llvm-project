@@ -154,6 +154,12 @@ New checks
   This check relies heavily on, but is not exclusive to, the functions from
   the *Annex K. "Bounds-checking interfaces"* of C11.
 
+- New :doc:`cheri-FixDriverData
+  <clang-tidy/checks/cheri/FixDriverData>` check.
+
+  Static initializations of driver data fields should use a cast to uintptr_t
+  instead of some variant of unsigned long.
+
 - New :doc:`cheri-FixIntToPtrCast
   <clang-tidy/checks/cheri/FixIntToPtrCast>` check.
 
