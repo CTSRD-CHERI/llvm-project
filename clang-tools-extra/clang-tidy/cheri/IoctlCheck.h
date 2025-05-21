@@ -34,8 +34,10 @@ private:
   void extractFunctionDecl(const Expr *E, const FunctionDecl *&Decl);
   void extractFieldDecl(const Expr *E, const RecordDecl *&Record,
                         const FieldDecl *&Field);
+  void checkCallWithArgs(const ast_matchers::MatchFinder::MatchResult &Result,
+                         const CallExpr *Call);
   void checkCallWithArg(const ast_matchers::MatchFinder::MatchResult &Result,
-                        const DeclRefExpr *Arg);
+                        const CallExpr *Call, const Expr *Arg);
 };
 
 } // namespace clang::tidy::cheri

@@ -6,8 +6,8 @@
 //
 //===----------------------------------------------------------------------===//
 
-#include "IoctlCheck.h"
 #include "CheriUtil.h"
+#include "IoctlCheck.h"
 #include "clang/AST/ASTContext.h"
 #include "clang/ASTMatchers/ASTMatchFinder.h"
 #include "clang/Basic/TargetInfo.h"
@@ -1069,6 +1069,9 @@ void IoctlCheck::checkFunctionDecl(
     const FunctionDecl *Func) {
   auto F = Ioctl::findFunc(Func->getName());
 
+  if (!F)
+    return;
+
   if (Ioctl::isBlacklisted(Func->getName())) {
     diag(Func->getLocation(), "CHERI: ERROR: Ioctl function also on blacklist");
     return;
@@ -1323,29 +1326,81 @@ void IoctlCheck::checkInitList(const InitListExpr *InitList) {
 }
 
 /*
- * Check a CallExpr in an ioctl function where the user_uintptr_t
- * argument of the surrounding function is forwarded verbatim to
- * the CallExpr.
+ * Iterate through the various actual arguments of a CallExpr and
+ * call checkCallWithArg() for each of them.
+ */
+void IoctlCheck::checkCallWithArgs(
+    const ast_matchers::MatchFinder::MatchResult &Result,
+    const CallExpr *Call) {
+  for (unsigned int i = 0; i < Call->getNumArgs(); ++i)
+    checkCallWithArg(Result, Call, Call->getArg(i));
+}
+
+/*
+ * Check the argument of a CallExpr within another outer function.
+ * First filter out cases where:
+ * - The outer function is not in ioctl function at all
+ * - The actual argument in question is not just one of the formal
+ *   parameters of the outer function.
+ * - The formal parameter of the outer function that is forwarded
+ *   is not the ioctl pointer argument.
  * Complain if the called entity is
  * - a function but not an ioctl function
  * - a structure field that is not an ioctl field.
  * Additionally, complain if the argument position does not match.
  */
 void IoctlCheck::checkCallWithArg(
-    const ast_matchers::MatchFinder::MatchResult &Result,
-    const DeclRefExpr *Arg) {
+    const ast_matchers::MatchFinder::MatchResult &Result, const CallExpr *Call,
+    const Expr *Arg) {
   auto Ctx = Result.Context;
   const auto *Outer = Result.Nodes.getNodeAs<FunctionDecl>("outer");
-  const auto *Param = Result.Nodes.getNodeAs<ParmVarDecl>("param");
-  const auto *Call = Result.Nodes.getNodeAs<CallExpr>("call");
+  const ParmVarDecl *Param = nullptr;
   const FunctionDecl *Decl;
   const RecordDecl *Record;
   const FieldDecl *Field;
+  const Expr *Tmp;
 
-  if (!Outer || !Param || !Call) {
+  if (!Outer) {
     diag(Arg->getExprLoc(), "CHERI: ERROR: Inconsistent match");
     return;
   }
+
+  /* Ignore anything that is not in an ioctl function. */
+  const auto *F = Ioctl::findFunc(Outer->getName());
+  if (!F)
+    return;
+
+  /*
+   * Remove implicit casts and the DeclRefExpr to find the ParamVarDecl
+   * of the forwarded formal parameter (if any).
+   */
+  Tmp = Arg;
+  while (1) {
+    if (const auto *Ref = dyn_cast<DeclRefExpr>(Tmp)) {
+      Param = dyn_cast<ParmVarDecl>(Ref->getDecl());
+      break;
+    }
+    if (const auto *Paren = dyn_cast<ParenExpr>(Tmp)) {
+      Tmp = Paren->getSubExpr();
+      continue;
+    }
+    if (const auto *Impl = dyn_cast<ImplicitCastExpr>(Tmp)) {
+      Tmp = Impl->getSubExpr();
+      continue;
+    }
+    return;
+  }
+  if (!Param)
+    return;
+
+  /*
+   * Ignore if the parameter that is forwarded is not the ioctl
+   * pointer arg.
+   */
+  if (F->PtrArg_ >= Outer->getNumParams())
+    return;
+  if (Outer->getParamDecl(F->PtrArg_) != Param)
+    return;
 
   if (Ioctl::isBlacklisted(Outer->getName())) {
     diag(Outer->getLocation(),
@@ -1353,14 +1408,8 @@ void IoctlCheck::checkCallWithArg(
     return;
   }
 
-  const auto *F = Ioctl::findFunc(Outer->getName());
-  if (!F) {
-    diag(Arg->getExprLoc(), "CHERI: ERROR: No outer function for call");
-    return;
-  }
-
   /* Determine the index of the parameter in the call. */
-  const Expr *Tmp = Arg;
+  Tmp = Arg;
   while (1) {
     const auto &Parents = Ctx->getParents(*Tmp);
     const Expr *PE = nullptr;
@@ -1478,33 +1527,34 @@ void IoctlCheck::checkCallWithArg(
  */
 void IoctlCheck::registerMatchers(MatchFinder *Finder) {
   /*
-   * Function declaration of an ioctl function.
-   * Used to check the type of the ioctl argument.
+   * Match all function declarations. We will only look at ioctl
+   * functions in the check() routine.
    */
-  for (const auto &It : Ioctl::funcs()) {
-    /* Declaration or definition of an ioctl function. */
-    Finder->addMatcher(functionDecl(hasName(It.second.Name_)).bind("func"),
-                       this);
+  Finder->addMatcher(functionDecl().bind("func"), this);
 
-    /*
-     * Matches all CallExpr within the body of an ioctl function if
-     * the user_uintptr_t parameter is forwarded as an argument to
-     * the call.
-     */
-    Finder->addMatcher(
-        functionDecl(
-            hasName(It.second.Name_),
-            hasBody(forEachDescendant(
-                callExpr(hasAnyArgument(traverse(
-                             TK_IgnoreUnlessSpelledInSource,
-                             declRefExpr(
-                                 to(parmVarDecl(isAtPosition(It.second.PtrArg_))
-                                        .bind("param")))
-                                 .bind("declref"))))
-                    .bind("call"))))
-            .bind("outer"),
-        this);
-  }
+  /*
+   * Matches all CallExpr within the body of another function where
+   * one of the parameters of the outer function is forwarded verbatim
+   * to the callee. The check() function will ignore the match if the
+   * outer function is not an ioctl function or the parameter is not
+   * one of the ioctl parameters.
+   * NOTE:
+   * The hasAnyArgument() matcher will only match once even if many
+   * parameters of outer function are used verbatim in the same
+   * CallExpr. We would like to use forEachArgumentWithParmType()
+   * but that apparently matches on any subexpression of the actual
+   * argument expression. Thus the check() function must examine all
+   * actual arguments of the CallExpr.
+   */
+  Finder->addMatcher(
+      functionDecl(
+          hasBody(forEachDescendant(
+              callExpr(hasAnyArgument(traverse(TK_IgnoreUnlessSpelledInSource,
+                                               declRefExpr(to(parmVarDecl())))))
+                  .bind("call"))))
+          .bind("outer"),
+      this);
+
   for (const auto &It : Ioctl::fields()) {
     for (const auto &M : It.second) {
       /* Declaration of a record with an ioctl field. */
@@ -1550,8 +1600,8 @@ void IoctlCheck::check(const MatchFinder::MatchResult &Result) {
     extractFieldDecl(E->getLHS(), Record, Field);
     checkFieldInitializer(E->getRHS(), Record, Field);
   }
-  if (const auto *C = Result.Nodes.getNodeAs<DeclRefExpr>("declref"))
-    checkCallWithArg(Result, C);
+  if (const auto *C = Result.Nodes.getNodeAs<CallExpr>("call"))
+    checkCallWithArgs(Result, C);
 }
 
 } // namespace clang::tidy::cheri
