@@ -1223,9 +1223,8 @@ def : Pat<(riscv_clgc tglobaladdr:$in), (PseudoCLGC tglobaladdr:$in)>;
 
 let hasSideEffects = 0, mayLoad = 1, mayStore = 0, isCodeGenOnly = 0,
     isAsmParserOnly = 1, Size = 8 in
-def PseudoCLA_TLS_IE : Pseudo<(outs GPR:$dst, GPCR:$tmp),
-                              (ins bare_symbol:$src), [],
-                              "cla.tls.ie", "$dst, $src, $tmp">;
+def PseudoCLA_TLS_IE : Pseudo<(outs GPR:$dst), (ins bare_symbol:$src), [],
+                              "cla.tls.ie", "$dst, $src">;
 
 def : Pat<(riscv_cla_tls_ie tglobaltlsaddr:$in),
           (PseudoCLA_TLS_IE  tglobaltlsaddr:$in)>;

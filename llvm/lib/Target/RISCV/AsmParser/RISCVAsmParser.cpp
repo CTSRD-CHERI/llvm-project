@@ -1353,6 +1353,11 @@ static MCRegister convertFPR64ToFPR32(MCRegister Reg) {
   return Reg - RISCV::F0_D + RISCV::F0_F;
 }
 
+static MCRegister convertGPRToGPCR(MCRegister Reg) {
+  assert(Reg >= RISCV::X0 && Reg <= RISCV::X31 && "Invalid register");
+  return Reg - RISCV::X0 + RISCV::C0;
+}
+
 static MCRegister convertVRToVRMx(const MCRegisterInfo &RI, MCRegister Reg,
                                   unsigned Kind) {
   unsigned RegClassID;
@@ -3714,13 +3719,13 @@ void RISCVAsmParser::emitCapLoadTLSIEAddress(MCInst &Inst, SMLoc IDLoc,
                                              MCStreamer &Out) {
   // The capability load TLS IE address pseudo-instruction "cla.tls.ie" is used
   // in initial-exec TLS model addressing of global symbols:
-  //   cla.tls.ie rdest, symbol, tmp
+  //   cla.tls.ie rdest, symbol
   // expands to
-  //   TmpLabel: AUIPCC tmp, %tls_ie_captab_pcrel_hi(symbol)
-  //             CLx rdest, %pcrel_lo(TmpLabel)(tmp)
+  //   TmpLabel: AUIPCC cdest, %tls_ie_captab_pcrel_hi(symbol)
+  //             CLx rdest, %pcrel_lo(TmpLabel)(cdest)
   MCOperand DestReg = Inst.getOperand(0);
-  MCOperand TmpReg = Inst.getOperand(1);
-  const MCExpr *Symbol = Inst.getOperand(2).getExpr();
+  MCOperand TmpReg = MCOperand::createReg(convertGPRToGPCR(DestReg.getReg()));
+  const MCExpr *Symbol = Inst.getOperand(1).getExpr();
   unsigned SecondOpcode = isRV64() ? RISCV::CLD : RISCV::CLW;
   emitAuipccInstPair(DestReg, TmpReg, Symbol,
                      RISCVMCExpr::VK_RISCV_TLS_IE_CAPTAB_PCREL_HI, SecondOpcode,
@@ -3733,8 +3738,8 @@ void RISCVAsmParser::emitCapLoadTLSGDCap(MCInst &Inst, SMLoc IDLoc,
   // used in global-dynamic TLS model addressing of global symbols:
   //   clc.tls.gd cdest, symbol
   // expands to
-  //   TmpLabel: AUIPCC rdest, %tls_gd_pcrel_hi(symbol)
-  //             CINCOFFSET rdest, rdest, %pcrel_lo(TmpLabel)
+  //   TmpLabel: AUIPCC cdest, %tls_gd_pcrel_hi(symbol)
+  //             CINCOFFSET cdest, cdest, %pcrel_lo(TmpLabel)
   MCOperand DestReg = Inst.getOperand(0);
   const MCExpr *Symbol = Inst.getOperand(1).getExpr();
   emitAuipccInstPair(DestReg, DestReg, Symbol,

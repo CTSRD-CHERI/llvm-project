@@ -26,6 +26,11 @@ using namespace llvm;
 #define RISCV_EXPAND_PSEUDO_NAME "RISC-V pseudo instruction expansion pass"
 #define RISCV_PRERA_EXPAND_PSEUDO_NAME "RISC-V Pre-RA pseudo instruction expansion pass"
 
+static Register convertGPRToGPCR(Register Reg) {
+  assert(Reg >= RISCV::X0 && Reg <= RISCV::X31 && "Invalid register");
+  return Reg - RISCV::X0 + RISCV::C0;
+}
+
 namespace {
 
 class RISCVExpandPseudo : public MachineFunctionPass {
@@ -49,7 +54,8 @@ private:
   bool expandAuipccInstPair(MachineBasicBlock &MBB,
                             MachineBasicBlock::iterator MBBI,
                             MachineBasicBlock::iterator &NextMBBI,
-                            unsigned FlagsHi, unsigned SecondOpcode);
+                            unsigned FlagsHi, unsigned SecondOpcode,
+                            bool IntDest = false);
   bool expandCapLoadLocalCap(MachineBasicBlock &MBB,
                              MachineBasicBlock::iterator MBBI,
                              MachineBasicBlock::iterator &NextMBBI);
@@ -177,15 +183,15 @@ bool RISCVExpandPseudo::expandMI(MachineBasicBlock &MBB,
 bool RISCVExpandPseudo::expandAuipccInstPair(
     MachineBasicBlock &MBB, MachineBasicBlock::iterator MBBI,
     MachineBasicBlock::iterator &NextMBBI, unsigned FlagsHi,
-    unsigned SecondOpcode) {
+    unsigned SecondOpcode, bool IntDest) {
   MachineFunction *MF = MBB.getParent();
   MachineInstr &MI = *MBBI;
   DebugLoc DL = MI.getDebugLoc();
 
-  bool HasTmpReg = MI.getNumOperands() > 2;
-  Register DestReg = MI.getOperand(0).getReg();
-  Register TmpReg = MI.getOperand(HasTmpReg ? 1 : 0).getReg();
-  const MachineOperand &Symbol = MI.getOperand(HasTmpReg ? 2 : 1);
+  MachineOperand DestOp = MI.getOperand(0);
+  Register DestReg = DestOp.getReg();
+  Register TmpReg = IntDest ? convertGPRToGPCR(DestReg) : DestReg;
+  const MachineOperand &Symbol = MI.getOperand(1);
   if (Symbol.getTargetFlags() & RISCVII::MO_JUMP_TABLE_BASE)
     FlagsHi |= RISCVII::MO_JUMP_TABLE_BASE;
 
@@ -246,7 +252,7 @@ bool RISCVExpandPseudo::expandCapLoadTLSIEAddress(
   unsigned SecondOpcode = STI.is64Bit() ? RISCV::CLD : RISCV::CLW;
   return expandAuipccInstPair(MBB, MBBI, NextMBBI,
                               RISCVII::MO_TLS_IE_CAPTAB_PCREL_HI,
-                              SecondOpcode);
+                              SecondOpcode, true);
 }
 
 bool RISCVExpandPseudo::expandCapLoadTLSGDCap(

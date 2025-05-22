@@ -60,8 +60,8 @@ define void @test_cla_tls_ie(i32 signext %n) {
 ; RV32I:       # %bb.0: # %entry
 ; RV32I-NEXT:  .LBB1_3: # %entry
 ; RV32I-NEXT:    # Label of block must be emitted
-; RV32I-NEXT:    auipcc ca1, %tls_ie_captab_pcrel_hi(ie)
-; RV32I-NEXT:    lw a2, %pcrel_lo(.LBB1_3)(ca1)
+; RV32I-NEXT:    auipcc ca2, %tls_ie_captab_pcrel_hi(ie)
+; RV32I-NEXT:    lw a2, %pcrel_lo(.LBB1_3)(ca2)
 ; RV32I-NEXT:    li a1, 0
 ; RV32I-NEXT:    cincoffset ca2, ctp, a2
 ; RV32I-NEXT:  .LBB1_1: # %loop
@@ -76,8 +76,8 @@ define void @test_cla_tls_ie(i32 signext %n) {
 ; RV64I:       # %bb.0: # %entry
 ; RV64I-NEXT:  .LBB1_3: # %entry
 ; RV64I-NEXT:    # Label of block must be emitted
-; RV64I-NEXT:    auipcc ca1, %tls_ie_captab_pcrel_hi(ie)
-; RV64I-NEXT:    ld a2, %pcrel_lo(.LBB1_3)(ca1)
+; RV64I-NEXT:    auipcc ca2, %tls_ie_captab_pcrel_hi(ie)
+; RV64I-NEXT:    ld a2, %pcrel_lo(.LBB1_3)(ca2)
 ; RV64I-NEXT:    li a1, 0
 ; RV64I-NEXT:    cincoffset ca2, ctp, a2
 ; RV64I-NEXT:  .LBB1_1: # %loop
