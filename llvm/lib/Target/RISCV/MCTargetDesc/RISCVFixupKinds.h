@@ -107,6 +107,21 @@ enum Fixups {
   // DWARF CFA.
   fixup_riscv_sub_6b,
 
+  // 20-bit fixup corresponding to %tgot_tprel_hi(foo) for instructions like lui
+  fixup_riscv_tgot_tprel_hi20,
+  // 12-bit fixup corresponding to %tgot_tprel_lo(foo) for the I-type load
+  // instructions
+  fixup_riscv_tgot_tprel_lo12_i,
+  // Fixup corresponding to %tgot_tprel_add(foo) for PseudoCIncOffsetTPRel, used
+  // as a linker hint
+  fixup_riscv_tgot_tprel_add,
+  // 20-bit fixup corresponding to %tls_ie_pcrel_hi(foo) for instructions like
+  // auipc
+  fixup_riscv_tls_tgot_got_hi20,
+  // 20-bit fixup corresponding to %tls_gd_pcrel_hi(foo) for instructions like
+  // auipc
+  fixup_riscv_tls_tgot_gd_hi20,
+
   // Used as a sentinel, must be the last
   fixup_riscv_invalid,
   NumTargetFixupKinds = fixup_riscv_invalid - FirstTargetFixupKind
