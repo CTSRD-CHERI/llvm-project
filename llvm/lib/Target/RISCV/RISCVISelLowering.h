@@ -430,6 +430,9 @@ enum NodeType : unsigned {
   // Load initial exec thread-local address.
   LA_TLS_IE,
   CLA_TLS_IE,
+  // Represents a load with a 12-bit offset from the TGOT. Selected to the
+  // relevant I-type load.
+  LOAD_TGOT,
 
   TH_LWD,
   TH_LWUD,
