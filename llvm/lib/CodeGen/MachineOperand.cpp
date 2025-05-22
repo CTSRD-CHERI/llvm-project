@@ -1058,6 +1058,10 @@ MachinePointerInfo MachinePointerInfo::getGOT(MachineFunction &MF) {
   return MachinePointerInfo(MF.getPSVManager().getGOT());
 }
 
+MachinePointerInfo MachinePointerInfo::getTGOT(MachineFunction &MF) {
+  return MachinePointerInfo(MF.getPSVManager().getTGOT());
+}
+
 MachinePointerInfo MachinePointerInfo::getCapTable(MachineFunction &MF) {
   return MachinePointerInfo(MF.getPSVManager().getCapTable());
 }
@@ -1188,6 +1192,9 @@ void MachineMemOperand::print(raw_ostream &OS, ModuleSlotTracker &MST,
       break;
     case PseudoSourceValue::GOT:
       OS << "got";
+      break;
+    case PseudoSourceValue::TGOT:
+      OS << "tgot";
       break;
     case PseudoSourceValue::CapTable:
       OS << "cap-table";
