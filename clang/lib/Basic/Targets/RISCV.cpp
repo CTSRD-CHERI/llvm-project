@@ -220,6 +220,9 @@ void RISCVTargetInfo::getTargetDefines(const LangOptions &Opts,
       auto CapTableABI = llvm::MCTargetOptions::cheriCapabilityTableABI();
       Builder.defineMacro("__CHERI_CAPABILITY_TABLE__",
                           Twine(((int)CapTableABI) + 1));
+
+      if (llvm::MCTargetOptions::cheriTLSUseTGOT())
+        Builder.defineMacro("__CHERI_TGOT_TLS__");
     }
 
     // Macros for use with the set and get permissions builtins.
