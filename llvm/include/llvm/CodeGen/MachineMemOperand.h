@@ -106,6 +106,9 @@ struct MachinePointerInfo {
   /// Return a MachinePointerInfo record that refers to a GOT entry.
   static MachinePointerInfo getGOT(MachineFunction &MF);
 
+  /// Return a MachinePointerInfo record that refers to a TGOT entry.
+  static MachinePointerInfo getTGOT(MachineFunction &MF);
+
   /// Return a MachinePointerInfo record that refers to a MCT entry.
   static MachinePointerInfo getCapTable(MachineFunction &MF);
 

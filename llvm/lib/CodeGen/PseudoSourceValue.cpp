@@ -19,8 +19,8 @@
 using namespace llvm;
 
 static const char *const PSVNames[] = {
-    "Stack", "GOT", "CapTable", "JumpTable", "ConstantPool", "FixedStack",
-    "GlobalValueCallEntry", "ExternalSymbolCallEntry"};
+    "Stack", "GOT", "TGOT", "CapTable", "JumpTable", "ConstantPool",
+    "FixedStack", "GlobalValueCallEntry", "ExternalSymbolCallEntry"};
 static_assert(std::size(PSVNames) == PseudoSourceValue::TargetCustom, "Missing entry?");
 
 PseudoSourceValue::PseudoSourceValue(unsigned Kind, const TargetMachine &TM)
@@ -34,28 +34,29 @@ void PseudoSourceValue::printCustom(raw_ostream &O) const {
   if (Kind < TargetCustom)
     O << PSVNames[Kind];
   else
-    O << "TargetCustom" << (Kind - 1);
-  // XXXAR: Kind -1 to offset the added CapTable entry (easier than merge
-  // conflicts in multiple test files)
+    O << "TargetCustom" << (Kind - 2);
+  // XXXAR: Kind -2 to offset the added CapTable and TGOT entries (easier than
+  // merge conflicts in multiple test files)
   // FIXME: this should probably be (Kind - TargetCustom)
 }
 
 bool PseudoSourceValue::isConstant(const MachineFrameInfo *) const {
   if (isStack())
     return false;
-  if (isGOT() || isCapTable() || isConstantPool() || isJumpTable())
+  if (isGOT() || isTGOT() || isCapTable() || isConstantPool() || isJumpTable())
     return true;
   llvm_unreachable("Unknown PseudoSourceValue!");
 }
 
 bool PseudoSourceValue::isAliased(const MachineFrameInfo *) const {
-  if (isStack() || isGOT() || isCapTable() || isConstantPool() || isJumpTable())
+  if (isStack() || isGOT() || isTGOT() || isCapTable() || isConstantPool() ||
+      isJumpTable())
     return false;
   llvm_unreachable("Unknown PseudoSourceValue!");
 }
 
 bool PseudoSourceValue::mayAlias(const MachineFrameInfo *) const {
-  return !(isGOT() || isCapTable() || isConstantPool() || isJumpTable());
+  return !(isGOT() || isTGOT() || isCapTable() || isConstantPool() || isJumpTable());
 }
 
 bool FixedStackPseudoSourceValue::isConstant(
@@ -106,6 +107,7 @@ ExternalSymbolPseudoSourceValue::ExternalSymbolPseudoSourceValue(
 PseudoSourceValueManager::PseudoSourceValueManager(const TargetMachine &TMInfo)
     : TM(TMInfo), StackPSV(PseudoSourceValue::Stack, TM),
       GOTPSV(PseudoSourceValue::GOT, TM),
+      TGOTPSV(PseudoSourceValue::TGOT, TM),
       CapTablePSV(PseudoSourceValue::CapTable, TM),
       JumpTablePSV(PseudoSourceValue::JumpTable, TM),
       ConstantPoolPSV(PseudoSourceValue::ConstantPool, TM) {}
@@ -115,6 +117,10 @@ const PseudoSourceValue *PseudoSourceValueManager::getStack() {
 }
 
 const PseudoSourceValue *PseudoSourceValueManager::getGOT() { return &GOTPSV; }
+
+const PseudoSourceValue *PseudoSourceValueManager::getTGOT() {
+  return &TGOTPSV;
+}
 
 const PseudoSourceValue *PseudoSourceValueManager::getCapTable() {
   return &CapTablePSV;
