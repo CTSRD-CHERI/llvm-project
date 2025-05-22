@@ -616,8 +616,7 @@ public:
     if (!isImm() || evaluateConstantImm(getImm(), Imm, VK))
       return false;
     return RISCVAsmParser::classifySymbolRef(getImm(), VK) &&
-           (VK == RISCVMCExpr::VK_RISCV_TPREL_CINCOFFSET ||
-            VK == RISCVMCExpr::VK_RISCV_TGOT_TPREL_ADD);
+           VK == RISCVMCExpr::VK_RISCV_TPREL_CINCOFFSET;
   }
 
   bool isCSRSystemRegister() const { return isSystemRegister(); }
@@ -1352,11 +1351,6 @@ static MCRegister convertFPR64ToFPR16(MCRegister Reg) {
 static MCRegister convertFPR64ToFPR32(MCRegister Reg) {
   assert(Reg >= RISCV::F0_D && Reg <= RISCV::F31_D && "Invalid register");
   return Reg - RISCV::F0_D + RISCV::F0_F;
-}
-
-static MCRegister convertGPRToGPCR(MCRegister Reg) {
-  assert(Reg >= RISCV::X0 && Reg <= RISCV::X31 && "Invalid register");
-  return Reg - RISCV::X0 + RISCV::C0;
 }
 
 static MCRegister convertVRToVRMx(const MCRegisterInfo &RI, MCRegister Reg,
@@ -3720,13 +3714,13 @@ void RISCVAsmParser::emitCapLoadTLSIEAddress(MCInst &Inst, SMLoc IDLoc,
                                              MCStreamer &Out) {
   // The capability load TLS IE address pseudo-instruction "cla.tls.ie" is used
   // in initial-exec TLS model addressing of global symbols:
-  //   cla.tls.ie rdest, symbol
+  //   cla.tls.ie rdest, symbol, tmp
   // expands to
-  //   TmpLabel: AUIPCC cdest, %tls_ie_captab_pcrel_hi(symbol)
-  //             CLx rdest, %pcrel_lo(TmpLabel)(cdest)
+  //   TmpLabel: AUIPCC tmp, %tls_ie_captab_pcrel_hi(symbol)
+  //             CLx rdest, %pcrel_lo(TmpLabel)(tmp)
   MCOperand DestReg = Inst.getOperand(0);
-  MCOperand TmpReg = MCOperand::createReg(convertGPRToGPCR(DestReg.getReg()));
-  const MCExpr *Symbol = Inst.getOperand(1).getExpr();
+  MCOperand TmpReg = Inst.getOperand(1);
+  const MCExpr *Symbol = Inst.getOperand(2).getExpr();
   unsigned SecondOpcode = isRV64() ? RISCV::CLD : RISCV::CLW;
   emitAuipccInstPair(DestReg, TmpReg, Symbol,
                      RISCVMCExpr::VK_RISCV_TLS_IE_CAPTAB_PCREL_HI, SecondOpcode,
@@ -3739,8 +3733,8 @@ void RISCVAsmParser::emitCapLoadTLSGDCap(MCInst &Inst, SMLoc IDLoc,
   // used in global-dynamic TLS model addressing of global symbols:
   //   clc.tls.gd cdest, symbol
   // expands to
-  //   TmpLabel: AUIPCC cdest, %tls_gd_pcrel_hi(symbol)
-  //             CINCOFFSET cdest, cdest, %pcrel_lo(TmpLabel)
+  //   TmpLabel: AUIPCC rdest, %tls_gd_pcrel_hi(symbol)
+  //             CINCOFFSET rdest, rdest, %pcrel_lo(TmpLabel)
   MCOperand DestReg = Inst.getOperand(0);
   const MCExpr *Symbol = Inst.getOperand(1).getExpr();
   emitAuipccInstPair(DestReg, DestReg, Symbol,
