@@ -153,11 +153,11 @@
 _start:
 	clc.tls.gd ca0, evar
 
-	cla.tls.ie a0, evar
+	cla.tls.ie a0, evar, ca0
 
 	clc.tls.gd ca0, lvar
 
-	cla.tls.ie a0, lvar
+	cla.tls.ie a0, lvar, ca0
 
 .if PIC == 0
 	lui a0, %tprel_hi(lvar)
