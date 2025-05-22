@@ -227,6 +227,11 @@ enum {
   MO_TPREL_ADD = 10,
   MO_TLS_GOT_HI = 11,
   MO_TLS_GD_HI = 12,
+  MO_TGOT_TPREL_LO = 13,
+  MO_TGOT_TPREL_HI = 14,
+  MO_TGOT_TPREL_ADD = 15,
+  MO_TLS_TGOT_GOT_HI = 16,
+  MO_TLS_TGOT_GD_HI = 17,
 
   // Used to differentiate between target-specific "direct" flags and "bitmask"
   // flags. A machine operand can only have one "direct" flag, but can have
