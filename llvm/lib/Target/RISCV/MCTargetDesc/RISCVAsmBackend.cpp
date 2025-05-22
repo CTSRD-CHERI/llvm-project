@@ -94,6 +94,12 @@ RISCVAsmBackend::getFixupKindInfo(MCFixupKind Kind) const {
 
       {"fixup_riscv_set_6b", 2, 6, 0},
       {"fixup_riscv_sub_6b", 2, 6, 0},
+
+      {"fixup_riscv_tgot_tprel_hi20", 12, 20, 0},
+      {"fixup_riscv_tgot_tprel_lo12_i", 20, 12, 0},
+      {"fixup_riscv_tgot_tprel_add", 0, 0, 0},
+      {"fixup_riscv_tls_tgot_got_hi20", 12, 20, MCFixupKindInfo::FKF_IsPCRel},
+      {"fixup_riscv_tls_tgot_gd_hi20", 12, 20, MCFixupKindInfo::FKF_IsPCRel},
   };
   static_assert((std::size(Infos)) == RISCV::NumTargetFixupKinds,
                 "Not all fixup kinds added to Infos array");
@@ -132,6 +138,8 @@ bool RISCVAsmBackend::shouldForceRelocation(const MCAssembler &Asm,
   case RISCV::fixup_riscv_got_hi20:
   case RISCV::fixup_riscv_tls_got_hi20:
   case RISCV::fixup_riscv_tls_gd_hi20:
+  case RISCV::fixup_riscv_tls_tgot_got_hi20:
+  case RISCV::fixup_riscv_tls_tgot_gd_hi20:
     return true;
   }
 
@@ -407,6 +415,11 @@ static uint64_t adjustFixupValue(const MCFixup &Fixup, uint64_t Value,
   case RISCV::fixup_riscv_tls_gd_hi20:
   case FK_Cap_8:
   case FK_Cap_16:
+  case RISCV::fixup_riscv_tgot_tprel_hi20:
+  case RISCV::fixup_riscv_tgot_tprel_lo12_i:
+  case RISCV::fixup_riscv_tgot_tprel_add:
+  case RISCV::fixup_riscv_tls_tgot_got_hi20:
+  case RISCV::fixup_riscv_tls_tgot_gd_hi20:
     llvm_unreachable("Relocation should be unconditionally forced\n");
   case RISCV::fixup_riscv_set_8:
   case RISCV::fixup_riscv_add_8:
