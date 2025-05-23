@@ -127,6 +127,7 @@ public:
 private:
   void createFiles(llvm::opt::InputArgList &args);
   void inferMachineType();
+  void inferIsCheriAbi();
   void link(llvm::opt::InputArgList &args);
   template <class ELFT> void compileBitcodeFiles(bool skipLinkedOutput);
 

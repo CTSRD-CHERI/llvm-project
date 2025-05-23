@@ -494,33 +494,21 @@ static Mips::AFL_EXT cheriFlagsToAFL_EXT(uint64_t cheriFlags) {
 
 void elf::checkMipsShlibCompatible(InputFile *f, uint64_t inputCheriFlags,
                                    uint64_t targetCheriFlags) {
-  const uint32_t targetABI = config->eflags & (EF_MIPS_ABI | EF_MIPS_ABI2);
   assert(f->emachine == config->emachine);
-  uint32_t abi = f->eflags & (EF_MIPS_ABI | EF_MIPS_ABI2);
-  // Mips can't link against cheriabi and the other way around
-  if ((config->isCheriAbi && abi != EF_MIPS_ABI_CHERIABI) ||
-      (!config->isCheriAbi && abi == EF_MIPS_ABI_CHERIABI)) {
-    // assert(errorCount() && "Should have already caused an errors");
-    // llvm_unreachable("Should have been checked earlier!");
-    if (!errorCount())
-      error(toString(f) + ": ABI '" + getAbiName(abi) +
-            "' is incompatible with target ABI: " + getAbiName(targetABI));
-  } else {
-    uint64_t inputCheriAbi = inputCheriFlags & DF_MIPS_CHERI_ABI_MASK;
-    uint64_t targetCheriAbi = targetCheriFlags & DF_MIPS_CHERI_ABI_MASK;
-    if (inputCheriAbi != targetCheriAbi) {
-      std::string msg = "target pure-capability ABI " +
-                        getMipsIsaExtName(cheriFlagsToAFL_EXT(targetCheriAbi)) +
-                        " is incompatible with linked shared library\n>>> " +
-                        toString(f) + " uses " +
-                        getMipsIsaExtName(cheriFlagsToAFL_EXT(inputCheriAbi));
-      // mixing legacy/non-legacy is an error, anything a warning
-      if (inputCheriAbi == DF_MIPS_CHERI_ABI_LEGACY ||
-          targetCheriAbi == DF_MIPS_CHERI_ABI_LEGACY)
-        error(msg);
-      else
-        warn(msg);
-    }
+  uint64_t inputCheriAbi = inputCheriFlags & DF_MIPS_CHERI_ABI_MASK;
+  uint64_t targetCheriAbi = targetCheriFlags & DF_MIPS_CHERI_ABI_MASK;
+  if (inputCheriAbi != targetCheriAbi) {
+    std::string msg = "target pure-capability ABI " +
+                      getMipsIsaExtName(cheriFlagsToAFL_EXT(targetCheriAbi)) +
+                      " is incompatible with linked shared library\n>>> " +
+                      toString(f) + " uses " +
+                      getMipsIsaExtName(cheriFlagsToAFL_EXT(inputCheriAbi));
+    // mixing legacy/non-legacy is an error, anything a warning
+    if (inputCheriAbi == DF_MIPS_CHERI_ABI_LEGACY ||
+        targetCheriAbi == DF_MIPS_CHERI_ABI_LEGACY)
+      error(msg);
+    else
+      warn(msg);
   }
 }
 

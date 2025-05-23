@@ -676,6 +676,7 @@ void LinkerDriver::linkerMain(ArrayRef<const char *> argsArr) {
       return;
 
     inferMachineType();
+    inferIsCheriAbi();
     setConfigs(args);
     checkOptions();
     if (errorCount())
@@ -1961,6 +1962,20 @@ static uint64_t getMaxPageSize(opt::InputArgList &args) {
   return val;
 }
 
+// If -m <machine_type> did not force a CheriABI emulation, infer it from
+// object files.
+void LinkerDriver::inferIsCheriAbi() {
+  if (config->isCheriAbi)
+    return;
+
+  for (InputFile *f : files) {
+    if (f->ekind == ELFNoneKind)
+      continue;
+    config->isCheriAbi = isCheriAbi(f);
+    return;
+  }
+}
+
 // Parse -z common-page-size=<value>. The default value is defined by
 // each target.
 static uint64_t getCommonPageSize(opt::InputArgList &args) {
@@ -3003,7 +3018,6 @@ void LinkerDriver::link(opt::InputArgList &args) {
   target = getTarget();
 
   config->eflags = target->calcEFlags();
-  config->isCheriAbi = target->calcIsCheriAbi();
   // maxPageSize (sometimes called abi page size) is the maximum page size that
   // the output can be run on. For example if the OS can use 4k or 64k page
   // sizes then maxPageSize must be 64k for the output to be useable on both.

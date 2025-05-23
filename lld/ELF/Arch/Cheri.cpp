@@ -16,6 +16,17 @@ using namespace llvm::ELF;
 namespace lld {
 namespace elf {
 
+bool isCheriAbi(const InputFile *f) {
+  switch (f->emachine) {
+  case EM_MIPS:
+    return (f->eflags & EF_MIPS_ABI) == EF_MIPS_ABI_CHERIABI;
+  case EM_RISCV:
+    return f->eflags & EF_RISCV_CHERIABI;
+  default:
+    return false;
+  }
+}
+
 // See CheriBSD crt_init_globals()
 template <class ELFT> struct InMemoryCapRelocEntry {
   static constexpr size_t fieldSize = ELFT::Is64Bits ? 8 : 4;
