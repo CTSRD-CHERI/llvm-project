@@ -77,7 +77,7 @@ struct CheriCapReloc {
 // FIXME: should de-template this class properly
 class CheriCapRelocsSection : public SyntheticSection {
 public:
-  CheriCapRelocsSection();
+  CheriCapRelocsSection(StringRef name);
   // Add a __cap_relocs section from in input object file
   template <class ELFT>
   void addSection(InputSectionBase *s);
