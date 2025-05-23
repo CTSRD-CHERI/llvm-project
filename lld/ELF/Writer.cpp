@@ -320,7 +320,7 @@ template <class ELFT> void elf::createSyntheticSections() {
   add(*in.bssRelRo);
 
   if (config->capabilitySize > 0) {
-    in.capRelocs = std::make_unique<CheriCapRelocsSection>();
+    in.capRelocs = std::make_unique<CheriCapRelocsSection>("__cap_relocs");
     in.cheriCapTable = std::make_unique<CheriCapTableSection>();
     add(*in.cheriCapTable);
     if (config->capTableScope != CapTableScopePolicy::All) {

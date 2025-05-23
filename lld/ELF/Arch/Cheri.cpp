@@ -34,11 +34,11 @@ template <class ELFT> struct InMemoryCapRelocEntry {
   CapRelocUint permissions;
 };
 
-CheriCapRelocsSection::CheriCapRelocsSection()
+CheriCapRelocsSection::CheriCapRelocsSection(StringRef name)
     : SyntheticSection((config->isPic && !config->relativeCapRelocsOnly)
                            ? SHF_ALLOC | SHF_WRITE /* XXX: actually RELRO */
                            : SHF_ALLOC,
-                       SHT_PROGBITS, config->wordsize, "__cap_relocs") {
+                       SHT_PROGBITS, config->wordsize, name) {
   this->entsize = config->wordsize * 5;
 }
 
