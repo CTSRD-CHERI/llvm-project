@@ -686,6 +686,29 @@ bool GotSection::addDynTlsEntry(Symbol &sym) {
   return true;
 }
 
+void GotSection::addTgotEntry(Symbol &sym) {
+  assert(sym.auxIdx == symAux.size() - 1);
+  symAux.back().tgotGotIdx = numEntries++;
+}
+
+void GotSection::addTgotTlsDescEntry(Symbol &sym) {
+  assert(sym.auxIdx == symAux.size() - 1);
+  symAux.back().tgotTlsDescIdx = numEntries;
+  numEntries += 2;
+}
+
+bool GotSection::addTgotDynTlsEntry(Symbol &sym) {
+  assert(sym.auxIdx == symAux.size() - 1);
+  symAux.back().tgotTlsGdIdx = numEntries;
+  // Global Dynamic TLS entries take two GOT slots, except on CHERI where they
+  // can be packed into one GOT slot.
+  if (config->isCheriAbi)
+    ++numEntries;
+  else
+    numEntries += 2;
+  return true;
+}
+
 // Reserves TLS entries for a TLS module ID and a TLS block offset.
 // In total it takes two GOT slots.
 bool GotSection::addTlsIndex() {
@@ -710,6 +733,30 @@ uint64_t GotSection::getGlobalDynAddr(const Symbol &b) const {
 
 uint64_t GotSection::getGlobalDynOffset(const Symbol &b) const {
   return b.getTlsGdIdx() * target->gotEntrySize;
+}
+
+uint64_t GotSection::getTgotOffset(const Symbol &sym) const {
+  return sym.getTgotGotIdx() * target->gotEntrySize;
+}
+
+uint64_t GotSection::getTgotAddr(const Symbol &sym) const {
+  return getVA() + getTgotOffset(sym);
+}
+
+uint64_t GotSection::getTgotTlsDescOffset(const Symbol &sym) const {
+  return sym.getTgotTlsDescIdx() * target->gotEntrySize;
+}
+
+uint64_t GotSection::getTgotTlsDescAddr(const Symbol &sym) const {
+  return getVA() + getTgotTlsDescOffset(sym);
+}
+
+uint64_t GotSection::getTgotGlobalDynAddr(const Symbol &b) const {
+  return this->getVA() + b.getTgotTlsGdIdx() * target->gotEntrySize;
+}
+
+uint64_t GotSection::getTgotGlobalDynOffset(const Symbol &b) const {
+  return b.getTgotTlsGdIdx() * target->gotEntrySize;
 }
 
 void GotSection::finalizeContents() {
@@ -1246,6 +1293,23 @@ void IgotPltSection::writeTo(uint8_t *buf) {
   }
 }
 
+TgotSection::TgotSection()
+    : SyntheticSection(SHF_ALLOC | SHF_WRITE, SHT_PROGBITS,
+                       target->gotEntrySize, ".tgot") {}
+
+void TgotSection::addConstant(const Relocation &r) { relocations.push_back(r); }
+void TgotSection::addEntry(Symbol &sym) {
+  assert(sym.auxIdx == symAux.size() - 1);
+  symAux.back().tgotIdx = entries.size();
+  entries.push_back(&sym);
+}
+
+size_t TgotSection::getSize() const {
+  return entries.size() * target->gotEntrySize;
+}
+
+void TgotSection::writeTo(uint8_t *buf) { target->relocateAlloc(*this, buf); }
+
 StringTableSection::StringTableSection(StringRef name, bool dynamic)
     : SyntheticSection(dynamic ? (uint64_t)SHF_ALLOC : 0, SHT_STRTAB, 1, name),
       dynamic(dynamic) {
@@ -1481,6 +1545,12 @@ DynamicSection<ELFT>::computeContents() {
       break;
     }
     addInt(DT_PLTREL, config->isRela ? DT_RELA : DT_REL);
+  }
+
+  if (isMain && in.relaTgot->isNeeded()) {
+    addInSec(DT_CHERI_TGOTREL, *in.relaTgot);
+    addInt(DT_CHERI_TGOTRELSZ, in.relaTgot->getSize());
+    addInt(DT_CHERI_TGOTRELT, config->isRela ? DT_RELA : DT_REL);
   }
 
   if (config->emachine == EM_AARCH64) {
@@ -1773,6 +1843,10 @@ void RelocationBaseSection::finalizeContents() {
     } else {
       getParent()->info = in.igotPlt->getParent()->sectionIndex;
     }
+  }
+  if (in.relaTgot.get() == this && in.tgot->getParent()) {
+    getParent()->flags |= ELF::SHF_INFO_LINK;
+    getParent()->info = in.tgot->getParent()->sectionIndex;
   }
   for (auto reloc : relocs) {
     if (config->isCheriAbi && reloc.inputSec->name == "__cap_relocs") {

@@ -651,6 +651,8 @@ static int64_t getTlsTpOffset(const Symbol &s) {
   }
 }
 
+static int64_t getTlsTgotOffset(const Symbol &s) { return s.getTgotOffset(); }
+
 uint64_t InputSectionBase::getRelocTargetVA(const InputFile *file, RelType type,
                                             int64_t a, uint64_t p,
                                             const Symbol &sym, RelExpr expr,
@@ -861,6 +863,22 @@ uint64_t InputSectionBase::getRelocTargetVA(const InputFile *file, RelType type,
     return in.got->getTlsIndexOff() + a;
   case R_TLSLD_PC:
     return in.got->getTlsIndexVA() + a - p;
+  case R_TGOT:
+    return sym.getTgotOffset() + a;
+  case R_TGOT_TP:
+  case R_RELAX_TGOT_TLS_GD_TO_LE:
+  case R_RELAX_TGOT_TLS_IE_TO_LE:
+    return getTlsTgotOffset(sym) + a;
+  case R_TGOT_GOT:
+  case R_RELAX_TGOT_TLS_GD_TO_IE_ABS:
+    return in.got->getTgotAddr(sym) + a;
+  case R_TGOT_GOT_PC:
+  case R_RELAX_TGOT_TLS_GD_TO_IE:
+    return in.got->getTgotAddr(sym) + a - p;
+  case R_TGOT_TLSDESC:
+    return in.got->getTgotTlsDescAddr(sym) + a;
+  case R_TGOT_TLSGD_PC:
+    return in.got->getTgotGlobalDynAddr(sym) + a - p;
   case R_ABS_CAP:
     llvm_unreachable("R_ABS_CAP should not be handled here!");
   case R_MIPS_CHERI_CAPTAB_INDEX:

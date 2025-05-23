@@ -59,6 +59,13 @@ enum RelExpr {
   R_RELAX_TLS_LD_TO_LE,
   R_RELAX_TLS_LD_TO_LE_ABS,
   R_SIZE,
+  R_TGOT,
+  R_TGOT_TP,
+  R_TGOT_GOT,
+  R_TGOT_GOT_PC,
+  R_TGOT_TLSDESC,
+  R_TGOT_TLSDESC_CALL,
+  R_TGOT_TLSGD_PC,
   R_TPREL,
   R_TPREL_NEG,
   R_TLSDESC,
@@ -74,6 +81,10 @@ enum RelExpr {
   R_TLSLD_GOT_OFF,
   R_TLSLD_HINT,
   R_TLSLD_PC,
+  R_RELAX_TGOT_TLS_GD_TO_IE,
+  R_RELAX_TGOT_TLS_GD_TO_IE_ABS,
+  R_RELAX_TGOT_TLS_GD_TO_LE,
+  R_RELAX_TGOT_TLS_IE_TO_LE,
 
   // The following is abstract relocation types used for only one target.
   //
