@@ -252,16 +252,21 @@ static bool isCompatible(InputFile *file) {
   if (!file->isElf() && !isa<BitcodeFile>(file))
     return true;
 
+  bool onlyCheriAbi = false;
   if (file->ekind == config->ekind && file->emachine == config->emachine) {
-    if (config->emachine != EM_MIPS)
-      return true;
-    if (isMipsN32Abi(file) == config->mipsN32Abi)
-      return true;
+    if (config->emachine != EM_MIPS ||
+        isMipsN32Abi(file) == config->mipsN32Abi) {
+      if (isCheriAbi(file) == config->isCheriAbi)
+        return true;
+      onlyCheriAbi = true;
+    }
   }
 
   StringRef target =
       !config->bfdname.empty() ? config->bfdname : config->emulation;
-  if (!target.empty()) {
+  // NB: Don't print the target for isCheriABI mismatches if it doesn't force
+  // it, since it's a valid target for both.
+  if (!target.empty() && (!onlyCheriAbi || target.contains("_cheri"))) {
     error(toString(file) + " is incompatible with " + target);
     return false;
   }

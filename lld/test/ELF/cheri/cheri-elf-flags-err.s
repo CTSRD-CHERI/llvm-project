@@ -19,7 +19,7 @@
 # RUN: ld.lld %t-cheri128-hybrid-lib.o %t-cheri128-hybrid-main.o -o /dev/null
 # But with -melf64btsmip_cheri_fbsd the target ABI should be purecap (and therefore linking should fail)!
 # RUN: not ld.lld -melf64btsmip_cheri_fbsd %t-cheri128-hybrid-lib.o %t-cheri128-hybrid-main.o -o %t.exe 2>&1 | FileCheck -DCHERI_TYPE=cheri128 -check-prefix HYBRID-input-with-explicit-PURECAP %s
-# HYBRID-input-with-explicit-PURECAP: error: {{.*}}-cheri128-hybrid-lib.o: object file is non-CheriABI but emulation forces it
+# HYBRID-input-with-explicit-PURECAP: error: {{.*}}-cheri128-hybrid-lib.o is incompatible with elf64btsmip_cheri_fbsd
 
 # Similarly purecap input should work fine without a -m flag:
 # RUN: ld.lld %t-cheri128-lib.o %t-cheri128-main.o -o /dev/null
@@ -124,16 +124,16 @@ __start:
 # CHERI128-HYBRID-FLAGS-NEXT:    EF_MIPS_MACH_CHERI128 (0xC10000)
 # CHERI128-HYBRID-FLAGS-NEXT:  ]
 
-# CHERI256-vs-MIPS: {{.*}}/cheri-elf-flags-err.s.tmp-mips64.o: ABI 'n64' is incompatible with target ABI 'purecap'
-# CHERI128-vs-MIPS: {{.*}}/cheri-elf-flags-err.s.tmp-mips64.o: ABI 'n64' is incompatible with target ABI 'purecap'
+# CHERI256-vs-MIPS: {{.*}}/cheri-elf-flags-err.s.tmp-mips64.o is incompatible with {{.*}}/cheri-elf-flags-err.s.tmp-cheri256-main.o
+# CHERI128-vs-MIPS: {{.*}}/cheri-elf-flags-err.s.tmp-mips64.o is incompatible with {{.*}}/cheri-elf-flags-err.s.tmp-cheri128-main.o
 # CHERI256-vs-CHERI128: incompatible target ISA:
 # CHERI256-vs-CHERI128-NEXT: {{.+}}-cheri256-main.o: mips4 (cheri256)
 # CHERI256-vs-CHERI128-NEXT: {{.+}}-cheri128-lib.o: mips4 (cheri128)
 # CHERI128-vs-CHERI256: incompatible target ISA:
 # CHERI128-vs-CHERI256-NEXT: {{.+}}-cheri128-main.o: mips4 (cheri128)
 # CHERI128-vs-CHERI256-NEXT: {{.+}}-cheri256-lib.o: mips4 (cheri256)
-# CHERI256-vs-CHERI256-HYBRID: {{.*}}/cheri-elf-flags-err.s.tmp-cheri256-hybrid-lib.o: ABI 'n64' is incompatible with target ABI 'purecap'
-# CHERI128-vs-CHERI128-HYBRID: {{.*}}/cheri-elf-flags-err.s.tmp-cheri128-hybrid-lib.o: ABI 'n64' is incompatible with target ABI 'purecap'
+# CHERI256-vs-CHERI256-HYBRID: {{.*}}/cheri-elf-flags-err.s.tmp-cheri256-hybrid-lib.o is incompatible with {{.*}}/cheri-elf-flags-err.s.tmp-cheri256-main.o
+# CHERI128-vs-CHERI128-HYBRID: {{.*}}/cheri-elf-flags-err.s.tmp-cheri128-hybrid-lib.o is incompatible with {{.*}}/cheri-elf-flags-err.s.tmp-cheri128-main.o
 
 # TODO: should those files actually link?
 # CHERI256-HYBRID-vs-MIPS: target ISA 'cheri256' is incompatible with 'mips64': {{.*}}/cheri-elf-flags-err.s.tmp-mips64.o

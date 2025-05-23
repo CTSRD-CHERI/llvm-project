@@ -50,9 +50,9 @@
 # FNDESC: 0x000000007000C002 MIPS_CHERI_FLAGS ABI_FNDESC RELATIVE_CAPRELOCS
 # MIPS-NOT: MIPS_CHERI_FLAGS
 
-# ERR-CHERIABI-LINKING-MIPS: ld.lld: error: {{.+}}mix-abis-shlib.s.tmp-lib-mips.so: ABI 'n64' is incompatible with target ABI: purecap
+# ERR-CHERIABI-LINKING-MIPS: ld.lld: error: {{.+}}mix-abis-shlib.s.tmp-lib-mips.so is incompatible with {{.+}}mix-abis-shlib.s.tmp-{{.+}}.o
 # ERR-CHERIABI-LINKING-MIPS-EMPTY:
-# ERR-MIPS-LINKING-CHERIABI: ld.lld: error: {{.+}}mix-abis-shlib.s.tmp-lib-{{.+}}.so: ABI 'purecap' is incompatible with target ABI: n64
+# ERR-MIPS-LINKING-CHERIABI: ld.lld: error: {{.+}}mix-abis-shlib.s.tmp-lib-{{.+}}.so is incompatible with {{.+}}mix-abis-shlib.s.tmp-mips.o
 # ERR-MIPS-LINKING-CHERIABI-EMPTY:
 
 # ERR-SHARED: ld.lld: error: target pure-capability ABI EXT_CHERI_ABI_[[IN_ABI]] is incompatible with linked shared library

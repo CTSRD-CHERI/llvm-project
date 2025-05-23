@@ -31,7 +31,6 @@ class RISCV final : public TargetInfo {
 public:
   RISCV();
   uint32_t calcEFlags() const override;
-  bool calcIsCheriAbi() const override;
   int getCapabilitySize() const override;
   int64_t getImplicitAddend(const uint8_t *buf, RelType type) const override;
   void writeGotHeader(uint8_t *buf) const override;
@@ -185,16 +184,6 @@ uint32_t RISCV::calcEFlags() const {
   }
 
   return target;
-}
-
-bool RISCV::calcIsCheriAbi() const {
-  bool isCheriAbi = config->eflags & EF_RISCV_CHERIABI;
-
-  if (config->isCheriAbi && !ctx.objectFiles.empty() && !isCheriAbi)
-    error(toString(ctx.objectFiles.front()) +
-          ": object file is non-CheriABI but emulation forces it");
-
-  return isCheriAbi;
 }
 
 int64_t RISCV::getImplicitAddend(const uint8_t *buf, RelType type) const {

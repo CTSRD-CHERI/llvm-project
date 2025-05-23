@@ -15,7 +15,7 @@
 
 llc ca0, foo
 # RELOC: R_RISCV_PCREL_HI20 foo 0x0
-# RELOC: R_RISCV_PCREL_LO12_I <null> 0x0
+# RELOC: R_RISCV_PCREL_LO12_I .Lpcrel_hi0 0x0
 # INSTR: auipc ca0, 0
 # INSTR: caddi ca0, ca0, 0
 # FIXUP: fixup A - offset: 0, value: %pcrel_hi(foo), kind: fixup_riscv_pcrel_hi20
@@ -23,7 +23,7 @@ llc ca0, foo
 
 lgc ca0, bar
 # RELOC: R_RISCV_CHERI_CAPTAB_PCREL_HI20 bar 0x0
-# RELOC: R_RISCV_PCREL_LO12_I <null> 0x0
+# RELOC: R_RISCV_PCREL_LO12_I .Lpcrel_hi1 0x0
 # INSTR: auipc ca0, 0
 # INSTR: lc ca0, 0(ca0)
 # FIXUP: fixup A - offset: 0, value: %captab_pcrel_hi(bar), kind: fixup_riscv_captab_pcrel_hi20
