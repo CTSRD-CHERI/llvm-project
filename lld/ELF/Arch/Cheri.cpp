@@ -930,7 +930,6 @@ void CheriCapTableSection::assignValuesAndAddCapTableSymbols() {
     if (!s->isPreemptible && !config->shared)
       this->relocations.push_back({R_TPREL, target->symbolicRel, offset, 0, s});
     else
-      // FIXME: casting to GotSection here is a massive hack!!
       mainPart->relaDyn->addAddendOnlyRelocIfNonPreemptible(
           target->tlsGotRel, *this, offset, *s, target->symbolicRel);
   }
