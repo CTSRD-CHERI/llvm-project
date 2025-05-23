@@ -244,6 +244,8 @@ RISCV_DYNAMIC_TAG(RISCV_VARIANT_CC, 0x70000001)
 
 RISCV_DYNAMIC_TAG(RISCV_CHERI___CAPRELOCS, 0x7000c000)    // start of __cap_relocs section
 RISCV_DYNAMIC_TAG(RISCV_CHERI___CAPRELOCSSZ, 0x7000c001)  // size of __cap_relocs section
+RISCV_DYNAMIC_TAG(RISCV_CHERI___TGOTCAPRELOCS, 0x7000c002)    // start of __tgot_cap_relocs section
+RISCV_DYNAMIC_TAG(RISCV_CHERI___TGOTCAPRELOCSSZ, 0x7000c003)  // size of __tgot_cap_relocs section
 
 // Sun machine-independent extensions.
 DYNAMIC_TAG(AUXILIARY, 0x7FFFFFFD) // Shared object to load before self
