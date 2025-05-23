@@ -132,6 +132,8 @@ RISCV::RISCV() {
 
   // .got[0] = _DYNAMIC
   gotHeaderEntriesNum = 1;
+  if (config->isCheriAbi)
+    gotEntrySize = getCapabilitySize();
 
   // .got.plt[0] = _dl_runtime_resolve, .got.plt[1] = link_map
   gotPltHeaderEntriesNum = 2;
