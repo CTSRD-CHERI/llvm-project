@@ -590,7 +590,9 @@ static Relocation *getRISCVPCRelHi20(const Symbol *sym, uint64_t addend) {
         it->type == R_RISCV_TLS_GD_HI20 || it->type == R_RISCV_TLS_GOT_HI20 ||
         it->type == R_RISCV_CHERI_CAPTAB_PCREL_HI20 ||
         it->type == R_RISCV_CHERI_TLS_GD_CAPTAB_PCREL_HI20 ||
-        it->type == R_RISCV_CHERI_TLS_IE_CAPTAB_PCREL_HI20)
+        it->type == R_RISCV_CHERI_TLS_IE_CAPTAB_PCREL_HI20 ||
+        it->type == R_RISCV_CHERI_TLS_TGOT_GOT_HI20 ||
+        it->type == R_RISCV_CHERI_TLS_TGOT_GD_HI20)
       return &*it;
 
   errorOrWarn("R_RISCV_PCREL_LO12 relocation points to " +
