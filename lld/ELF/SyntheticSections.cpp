@@ -1674,6 +1674,10 @@ DynamicSection<ELFT>::computeContents() {
       addInSec(DT_RISCV_CHERI___CAPRELOCS, *in.capRelocs);
       addInt(DT_RISCV_CHERI___CAPRELOCSSZ, in.capRelocs->getParent()->size);
     }
+    if (in.tgotCapRelocs && in.tgotCapRelocs->isNeeded()) {
+      addInSec(DT_RISCV_CHERI___TGOTCAPRELOCS, *in.tgotCapRelocs);
+      addInt(DT_RISCV_CHERI___TGOTCAPRELOCSSZ, in.tgotCapRelocs->getParent()->size);
+    }
   }
 
   // DT_PPC_GOT indicates to glibc Secure PLT is used. If DT_PPC_GOT is absent,
