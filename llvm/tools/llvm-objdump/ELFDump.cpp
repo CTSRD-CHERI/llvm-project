@@ -347,17 +347,17 @@ template <typename ELFT> void ELFDumper<ELFT>::printDynamicRelocations() {
 }
 
 template <typename ELFT> void ELFDumper<ELFT>::printCheriCapRelocations() {
-  StringRef Data;
+  StringRef Data, TgotData;
   for (const SectionRef &Sec : Obj.sections()) {
     Expected<StringRef> Name = Sec.getName();
     if (!Name) {
       consumeError(Name.takeError());
       continue;
     }
-    if (*Name == "__cap_relocs") {
+    if (*Name == "__cap_relocs")
       Data = unwrapOrError(Sec.getContents(), Obj.getFileName());
-      break;
-    }
+    if (*Name == "__tgot_cap_relocs")
+      TgotData = unwrapOrError(Sec.getContents(), Obj.getFileName());
   }
 
   using uintX_t = typename ELFT::uint;
@@ -421,6 +421,7 @@ template <typename ELFT> void ELFDumper<ELFT>::printCheriCapRelocations() {
   };
 
   PrintRelocs(Data, "CAPABILITY RELOCATION RECORDS:");
+  PrintRelocs(TgotData, "TGOT CAPABILITY RELOCATION RECORDS:");
 }
 
 template <class ELFT>
