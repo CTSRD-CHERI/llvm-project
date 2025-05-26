@@ -16,12 +16,29 @@ using namespace clang::ast_matchers;
 namespace clang::tidy::cheri {
 
 void FixptrtoulongcastCheck::registerMatchers(MatchFinder *Finder) {
+  // clang-format off
   Finder->addMatcher(
       explicitCastExpr(
-          hasDestinationType(hasCanonicalType(builtinType())),
-          hasSourceExpression(expr(hasType(pointerType().bind("from")))))
-          .bind("cast"),
-      this);
+          hasDestinationType(
+              hasCanonicalType(
+                  builtinType()
+              )
+          ),
+          hasSourceExpression(
+              expr(
+                  hasType(
+                      type(
+                          hasUnqualifiedDesugaredType(
+                              pointerType()
+                          )
+                      ).bind("from")
+                  )
+              )
+          )
+      ).bind("cast"),
+      this
+  );
+  // clang-format on
 }
 
 void FixptrtoulongcastCheck::check(const MatchFinder::MatchResult &Result) {
@@ -30,6 +47,8 @@ void FixptrtoulongcastCheck::check(const MatchFinder::MatchResult &Result) {
   const auto *C = Result.Nodes.getNodeAs<ExplicitCastExpr>("cast");
   const auto *From = Result.Nodes.getNodeAs<Type>("from");
   const auto *To = C->getType().getTypePtr();
+  const char *TypeString = "uintptr_t";
+  const char *CastString = "(uintptr_t)";
 
   /* Do not touch a forced cast. */
   if (Util::isForced(Result.SourceManager, C))
@@ -40,9 +59,8 @@ void FixptrtoulongcastCheck::check(const MatchFinder::MatchResult &Result) {
     return;
 
   /* Determine what kind of destination type we deal with. */
-  bool ToAddr = Util::isPlainAddress(Ctx, To);
-  bool ToCap = Util::isIntegerCapability(Ctx, To);
-  if (!ToAddr && !ToCap)
+  bool FixCast = Util::isPlainAddress(Ctx, To);
+  if (!FixCast && !Util::isIntegerCapability(Ctx, To))
     return;
 
   if (Util::checkCastExpr(Ctx, C))
@@ -50,28 +68,39 @@ void FixptrtoulongcastCheck::check(const MatchFinder::MatchResult &Result) {
   if (Util::checkExprUsage(Ctx, SM, C))
     return;
 
+  bool UserPtr = Util::isUserPtr(From);
+  if (UserPtr) {
+    TypeString = "user_uintptr_t";
+    CastString = "(user_uintptr_t)";
+  }
+  if (!FixCast && UserPtr != Util::isUserIntCapTypedef(To))
+    FixCast = true;
+
   /* Check usage of the cast expression. */
   const auto &Parents = Ctx->getParents(*C);
   if (Parents.empty())
     return;
 
   const auto *Var = Parents[0].get<VarDecl>();
-  if (Var && !Util::isPlainAddress(Ctx, Var))
-    Var = nullptr;
+  if (Var && !Util::isPlainAddress(Ctx, Var)) {
+    if (UserPtr == Util::isUserIntCapTypedef(Var->getType().getTypePtr()))
+      Var = nullptr;
+  }
 
-  if (ToAddr)
+  if (FixCast)
     diag(C->getExprLoc(), "CHERI: Explicit cast from pointer to 'unsigned "
-                          "long'. Cast to 'uintptr_t' instead");
+                          "long'. Cast to '%0' instead")
+        << TypeString;
   if (const auto *CC = dyn_cast<CStyleCastExpr>(C)) {
-    if (ToAddr)
+    if (FixCast)
       diag(C->getExprLoc(), "Here:") << FixItHint::CreateReplacement(
-          SourceRange(CC->getLParenLoc(), CC->getRParenLoc()), "(uintptr_t)");
+          SourceRange(CC->getLParenLoc(), CC->getRParenLoc()), CastString);
   }
   if (Var) {
     auto Begin = Var->getTypeSpecStartLoc();
     auto End = Var->getTypeSpecEndLoc();
     diag(C->getExprLoc(), "CHERI: Variable type should be 'uintptr_t'")
-        << FixItHint::CreateReplacement(SourceRange(Begin, End), "uintptr_t");
+        << FixItHint::CreateReplacement(SourceRange(Begin, End), TypeString);
   }
 }
 

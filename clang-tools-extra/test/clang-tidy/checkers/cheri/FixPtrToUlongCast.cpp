@@ -1,5 +1,6 @@
 // RUN: %check_clang_tidy %s cheri-FixPtrToUlongCast %t
 
+#define __user [[clang::annotate_type("user")]]
 #ifdef __CHERI__
 typedef __uintcap_t uintptr_t;
 #else
@@ -15,10 +16,10 @@ unsigned long f1(void *p)
 // CHECK-MESSAGES: :[[@LINE-2]]:10: warning: Here: [cheri-FixPtrToUlongCast]
 }
 
-unsigned long f2(void *p)
+unsigned long f2(void __user *p)
 {
   return (unsigned long)p;
-// CHECK-MESSAGES: :[[@LINE-1]]:10: warning: CHERI: Explicit cast from pointer to 'unsigned long'. Cast to 'uintptr_t' instead [cheri-FixPtrToUlongCast]
+// CHECK-MESSAGES: :[[@LINE-1]]:10: warning: CHERI: Explicit cast from pointer to 'unsigned long'. Cast to 'user_uintptr_t' instead [cheri-FixPtrToUlongCast]
 // CHECK-MESSAGES: :[[@LINE-2]]:10: warning: Here: [cheri-FixPtrToUlongCast]
 }
 

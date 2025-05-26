@@ -6,8 +6,8 @@
 //
 //===----------------------------------------------------------------------===//
 
-#include "CheriUtil.h"
 #include "IoctlCheck.h"
+#include "CheriUtil.h"
 #include "clang/AST/ASTContext.h"
 #include "clang/ASTMatchers/ASTMatchFinder.h"
 #include "clang/Basic/TargetInfo.h"
@@ -1530,8 +1530,8 @@ void IoctlCheck::checkCallWithArg(
     }
   } else if (!Decl) {
     diag(Arg->getExprLoc(),
-        "CHERI: Ioctl pointer parameter '%0' of ioctl function '%1' "
-	"used as argument %2 in a call to an unknown object")
+         "CHERI: Ioctl pointer parameter '%0' of ioctl function '%1' "
+         "used as argument %2 in a call to an unknown object")
         << Param->getName() << F->Name_ << (ArgPos + 1);
   }
 }
@@ -1561,39 +1561,84 @@ void IoctlCheck::registerMatchers(MatchFinder *Finder) {
    * argument expression. Thus the check() function must examine all
    * actual arguments of the CallExpr.
    */
+  // clang-format off
   Finder->addMatcher(
       functionDecl(
-          hasBody(forEachDescendant(
-              callExpr(hasAnyArgument(traverse(TK_IgnoreUnlessSpelledInSource,
-                                               declRefExpr(to(parmVarDecl())))))
-                  .bind("call"))))
-          .bind("outer"),
-      this);
+          hasBody(
+              forEachDescendant(
+                  callExpr(
+                      hasAnyArgument(
+                          traverse(
+                              TK_IgnoreUnlessSpelledInSource,
+                              declRefExpr(
+                                  to(
+                                      parmVarDecl()
+                                  )
+                              )
+                          )
+                      )
+                  ).bind("call")
+              )
+          )
+      ).bind("outer"),
+      this
+  );
+  // clang-format on
 
   for (const auto &It : Ioctl::fields()) {
     for (const auto &M : It.second) {
       /* Declaration of a record with an ioctl field. */
+      // clang-format off
       Finder->addMatcher(
-          recordDecl(hasName(M.StructName_),
-                     has(fieldDecl(hasName(M.FieldName_)).bind("field")))
-              .bind("record"),
-          this);
+          recordDecl(
+              hasName(M.StructName_),
+              has(
+                  fieldDecl(
+                      hasName(M.FieldName_)
+                  ).bind("field")
+              )
+          ).bind("record"),
+          this
+      );
 
       /* Initialization of a struct with an ioctl field. */
       Finder->addMatcher(
-          initListExpr(hasType(recordDecl(hasName(M.StructName_))))
-              .bind("initlist"),
-          this);
+          initListExpr(
+              hasType(
+                  recordDecl(
+                      hasName(M.StructName_)
+                  )
+              )
+          ).bind("initlist"),
+          this
+      );
 
       /* Assignment to an ioctl field. */
       Finder->addMatcher(
-          binaryOperator(hasOperatorName("="),
-                         hasLHS(memberExpr(
-                             hasObjectExpression(hasType(
-                                 pointsTo(recordDecl(hasName(M.StructName_))))),
-                             hasDeclaration(fieldDecl(hasName(M.FieldName_))))))
-              .bind("assign"),
-          this);
+          binaryOperator(
+              hasOperatorName("="),
+              hasLHS(
+                  memberExpr(
+                      hasObjectExpression(
+                          hasType(
+                              pointsTo(
+                                  recordDecl(
+                                      hasName(M.StructName_)
+                                  )
+                              )
+                          )
+                      ),
+                      hasDeclaration(
+                          fieldDecl(
+                              hasName(M.FieldName_)
+                          )
+                      )
+                  )
+              )
+          ).bind("assign"),
+          this
+      );
+      // clang-format on
     }
   }
 }

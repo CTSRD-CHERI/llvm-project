@@ -6,12 +6,17 @@ typedef __uintcap_t user_uintptr_t;
 typedef unsigned long user_uintptr_t;
 #endif
 
+typedef long (*ioctl_t) (int fd, unsigned long, user_uintptr_t);
 struct file_operations {
 	long (*unlocked_ioctl) (int fd, unsigned long, user_uintptr_t);
 };
 
 struct other {
 	long (*unlocked_ioctl) (int fd, unsigned long, user_uintptr_t);
+};
+
+struct media_file_operations {
+        ioctl_t ioctl;
 };
 
 extern long smc_ioctl(int fd, unsigned long cmd, unsigned long);

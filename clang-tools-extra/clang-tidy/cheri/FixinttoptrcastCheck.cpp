@@ -16,11 +16,29 @@ using namespace clang::ast_matchers;
 namespace clang::tidy::cheri {
 
 void FixinttoptrcastCheck::registerMatchers(MatchFinder *Finder) {
-  Finder->addMatcher(explicitCastExpr(hasDestinationType(pointerType()),
-                                      hasSourceExpression(expr(hasType(
-                                          hasCanonicalType(isInteger())))))
-                         .bind("cast"),
-                     this);
+  // clang-format off
+  Finder->addMatcher(
+      explicitCastExpr(
+          hasDestinationType(
+              type(
+                  hasUnqualifiedDesugaredType(
+                      pointerType()
+                  )
+              )
+          ),
+          hasSourceExpression(
+              expr(
+                  hasType(
+                      hasCanonicalType(
+                          isInteger()
+                      )
+                  )
+              )
+          )
+      ) .bind("cast"),
+      this
+  );
+  // clang-format on
 }
 
 void FixinttoptrcastCheck::check(const MatchFinder::MatchResult &Result) {

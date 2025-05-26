@@ -1,5 +1,5 @@
 // RUN: %check_clang_tidy %s cheri-FixIntToPtrCast %t
-
+#define __user [[clang::annotate_type("user")]]
 void *f1(int x)
 {
   return (((void*)(((x)))));
@@ -9,9 +9,9 @@ void *f1(int x)
 
 void *f2(int x)
 {
-  return (void*)x;
-// CHECK-MESSAGES: :[[@LINE-1]]:17: warning: CHERI: Intermediate cast to 'uintptr_t' required [cheri-FixIntToPtrCast]
-// CHECK-MESSAGES: :[[@LINE-2]]:17: warning: Here: [cheri-FixIntToPtrCast]
+  return (void* __user)x;
+// CHECK-MESSAGES: :[[@LINE-1]]:24: warning: CHERI: Intermediate cast to 'uintptr_t' required [cheri-FixIntToPtrCast]
+// CHECK-MESSAGES: :[[@LINE-2]]:24: warning: Here: [cheri-FixIntToPtrCast]
 }
 
 void *g1(void)
@@ -21,7 +21,7 @@ void *g1(void)
 
 void *g2(void)
 {
-  return (void*)17U;
+  return (void __user*)17U;
 }
 
 void *h1(int x)

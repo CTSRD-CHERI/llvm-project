@@ -41,6 +41,36 @@ public:
     return false;
   }
 
+  static bool isUserAttr(const AttributedType *AT) {
+#ifdef NOTYET
+    const auto *TA = dyn_cast<TypeAttr>(AT->getAttr());
+    if (!TA)
+      return false;
+    const auto *N = TA->getAttrName();
+    if (!N)
+      return false;
+
+    return N->getName() == StringRef("user");
+#else
+    return AT->getAttrKind() == attr::AnnotateType;
+#endif
+  }
+
+  static bool isUserPtr(const Type *OrigT) {
+    const auto *PT = OrigT->getAs<PointerType>();
+    if (!PT)
+      return false;
+    const Type *T = PT->getPointeeType().getTypePtr();
+    while (1) {
+      const auto *AT = T->getAs<AttributedType>();
+      if (!AT)
+        return false;
+      if (isUserAttr(AT))
+        return true;
+      T = AT->getModifiedType().getTypePtr();
+    }
+  }
+
   /*
    * Given a type of something that is or can be called find the
    * type of the actual function that is called as a FunctionProtoType.
@@ -49,32 +79,10 @@ public:
    * Returns a nullptr if the result is not a FunctionProtoType.
    */
   static const FunctionProtoType *extractFunctionProtoType(const Type *T) {
-    bool DerefDone = false;
+    if (const auto *PT = T->getAs<PointerType>())
+      T = PT->getPointeeType().getTypePtr();
 
-    while (1) {
-      if (const auto *Tmp = dyn_cast<ParenType>(T)) {
-        T = Tmp->getInnerType().getTypePtr();
-        continue;
-      }
-      if (const auto *Tmp = dyn_cast<TypedefType>(T)) {
-        T = Tmp->getDecl()->getUnderlyingType().getTypePtr();
-        continue;
-      }
-      if (const auto *Tmp = dyn_cast<ElaboratedType>(T)) {
-        T = Tmp->getNamedType().getTypePtr();
-        continue;
-      }
-      if (!DerefDone) {
-        if (const auto *PT = dyn_cast<PointerType>(T)) {
-          T = PT->getPointeeType().getTypePtr();
-          DerefDone = true;
-          continue;
-        }
-      }
-      break;
-    }
-
-    return dyn_cast<FunctionProtoType>(T);
+    return T->getAs<FunctionProtoType>();
   }
 
   /* Convenience wrapper */
@@ -88,12 +96,10 @@ public:
   }
 
   /*
-   * Return true if this is a typdef type with a name that indicats
+   * Return true if this is a typdef type with a name that indicates
    * an integer capability type.
    */
   static bool isIntCapTypedef(const Type *T) {
-    if (const auto *E = T->getAs<ElaboratedType>())
-      T = E->getNamedType().getTypePtr();
     const auto *TD = T->getAs<TypedefType>();
     if (TD) {
       const auto &Name = TD->getDecl()->getName();
@@ -118,9 +124,22 @@ public:
     return false;
   }
 
+  static bool isUserIntCapTypedef(const Type *T) {
+    const auto *TD = T->getAs<TypedefType>();
+    if (TD) {
+      const auto &Name = TD->getDecl()->getName();
+      if (Name == StringRef("user_uintptr_t"))
+        return true;
+      if (Name == StringRef("user_intptr_t"))
+        return true;
+      if (Name == StringRef("__kernel_uintptr_t"))
+        return true;
+    }
+
+    return false;
+  }
+
   static bool isNonCapTypedef(const Type *T) {
-    if (const auto *E = T->getAs<ElaboratedType>())
-      T = E->getNamedType().getTypePtr();
     const auto *TD = T->getAs<TypedefType>();
     if (TD) {
       const auto &Name = TD->getDecl()->getName();
@@ -268,7 +287,7 @@ public:
     for (const auto &P : Ctx->getParents(*E)) {
       const auto *Pexpr = P.get<Expr>();
 
-      /* If th use is not in an expression ignore it. */
+      /* If the use is not in an expression ignore it. */
       if (!Pexpr)
         continue;
 
@@ -334,8 +353,9 @@ public:
       }
 
       /*
-       * If the expression is used in the condition of an if or loop
-       * statement it is implicitly converted to bool and thus ok.
+       * If the expression is used in as the condition in a
+       * conditional statement it is implicitly converted to
+       * bool and thus ok.
        */
       if (const auto *S = P.get<IfStmt>())
         if (S->getCond() == E)
@@ -552,7 +572,7 @@ public:
      * A constant expression cast to a capability type
      * can never be a valid pointer.
      */
-    if (E->isIntegerConstantExpr(*Ctx))
+    if (E->getIntegerConstantExpr(*Ctx))
       return true;
 
     /* If the expression is too small to be an adress it is ok, too. */
