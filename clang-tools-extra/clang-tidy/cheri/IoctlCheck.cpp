@@ -219,6 +219,10 @@ void Ioctl::doInit() {
   addField("file_operations", "unlocked_ioctl", 2);
   addFunc("do_vfs_ioctl", 3);
   addFunc("vfs_ioctl", 2);
+  /* Not detected automatically due to NOLINT. */
+  addField("media_file_operations", "ioctl", 2);
+  /* Not detected automatically unless we re-write some code. */
+  addField("proc_ops", "proc_ioctl", 2);
   /* Special case: Args to snd_ctl_register_ioctl */
   addFunc("snd_hwdep_control_ioctl", 3);
   addFunc("snd_pcm_control_ioctl", 3);
@@ -277,6 +281,7 @@ void Ioctl::doInit() {
   addField("rtc_class_ops", "ioctl", 2);
   addField("smb_version_operations", "ioctl_query_info", 5);
   addField("snd_hwdep_ops", "ioctl", 3);
+  addField("snd_info_entry_ops", "ioctl", 4);
   addField("snd_kctl_ioctl", "fioctl", 3);
   addField("snd_seq_oss_callback", "ioctl", 2);
   addField("thread_with_stdio_ops", "unlocked_ioctl", 2);
@@ -373,6 +378,7 @@ void Ioctl::doInit() {
   addFunc("ca8210_test_int_ioctl", 2);
   addFunc("cache_ioctl", 3);
   addFunc("cache_ioctl_pipefs", 2);
+  addFunc("cache_ioctl_procfs", 2);
   addFunc("cachefiles_ondemand_fd_ioctl", 2);
   addFunc("can327_ldisc_ioctl", 2);
   addFunc("cap_ioctl_unlocked", 2);
@@ -581,6 +587,7 @@ void Ioctl::doInit() {
   addFunc("hung_up_tty_ioctl", 2);
   addFunc("hwdep_ioctl", 3);
   addFunc("i2cdev_ioctl", 2);
+  addFunc("i8k_ioctl", 2);
   addFunc("i915_perf_ioctl", 2);
   addFunc("i915_perf_ioctl_locked", 2);
   addFunc("ib_umad_ioctl", 2);
@@ -660,6 +667,7 @@ void Ioctl::doInit() {
   addFunc("mctp_ioctl_tag_copy_to_user", 0);
   addFunc("md_ioctl", 3);
   addFunc("mdpy_ioctl", 2);
+  addFunc("media_device_ioctl", 2);
   addFunc("media_ioctl", 2);
   addFunc("media_request_ioctl", 2);
   addFunc("megadev_ioctl", 2);
@@ -698,6 +706,7 @@ void Ioctl::doInit() {
   addFunc("mtdchar_unlocked_ioctl", 2);
   addFunc("mtip_block_ioctl", 3);
   addFunc("mtip_hw_ioctl", 2);
+  addFunc("mtrr_ioctl", 2);
   addFunc("mtty_ioctl", 2);
   addFunc("mtty_precopy_ioctl", 2);
   addFunc("mwave_ioctl", 2);
@@ -783,6 +792,7 @@ void Ioctl::doInit() {
   addFunc("pptp_ppp_ioctl", 2);
   addFunc("printer_ioctl", 2);
   addFunc("privcmd_ioctl", 2);
+  addFunc("proc_bus_pci_ioctl", 2);
   addFunc("proc_reg_unlocked_ioctl", 2);
   addFunc("ptp_ioctl", 2);
   addFunc("pty_bsd_ioctl", 2);
@@ -870,6 +880,7 @@ void Ioctl::doInit() {
   addFunc("snd_disconnect_ioctl", 2);
   addFunc("snd_emux_ioctl_seq_oss", 2);
   addFunc("snd_hwdep_ioctl", 2);
+  addFunc("snd_info_entry_ioctl", 2);
   addFunc("snd_mixer_oss_ioctl", 2);
   addFunc("snd_mixer_oss_ioctl1", 2);
   addFunc("snd_mixer_oss_ioctl_card", 2);
@@ -1477,7 +1488,6 @@ void IoctlCheck::checkCallWithArg(
   }
 
   extractFunctionDecl(Call->getCallee(), Decl);
-
   if (Decl) {
     /*
      * An ioctl argument passed to a parameter of a variadic function
@@ -1518,6 +1528,11 @@ void IoctlCheck::checkCallWithArg(
       diag(Arg->getExprLoc(), "MISSING: addField(\"%0\", \"%1\", %2)")
           << Record->getName() << Field->getName() << ArgPos;
     }
+  } else if (!Decl) {
+    diag(Arg->getExprLoc(),
+        "CHERI: Ioctl pointer parameter '%0' of ioctl function '%1' "
+	"used as argument %2 in a call to an unknown object")
+        << Param->getName() << F->Name_ << (ArgPos + 1);
   }
 }
 
