@@ -147,6 +147,10 @@ public:
         return true;
       if (Name == StringRef("__ptraddr64_t"))
         return true;
+      if (Name == StringRef("resource_size_t"))
+        return true;
+      if (Name == StringRef("phys_addr_t"))
+        return true;
     }
 
     return false;
