@@ -154,6 +154,11 @@ New checks
   This check relies heavily on, but is not exclusive to, the functions from
   the *Annex K. "Bounds-checking interfaces"* of C11.
 
+- New :doc:`cheri-FixCapAsArraySubscript
+  <clang-tidy/checks/cheri/FixCapAsArraySubscript>` check.
+
+  Explicitly cast capabilities used as an array index to an unsigned long.
+
 - New :doc:`cheri-FixDriverData
   <clang-tidy/checks/cheri/FixDriverData>` check.
 

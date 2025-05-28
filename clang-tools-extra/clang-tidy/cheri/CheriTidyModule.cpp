@@ -9,6 +9,7 @@
 #include "../ClangTidy.h"
 #include "../ClangTidyModule.h"
 #include "../ClangTidyModuleRegistry.h"
+#include "FixcapasarraysubscriptCheck.h"
 #include "FixdriverdataCheck.h"
 #include "FixinttoptrcastCheck.h"
 #include "FixptrtoulongcastCheck.h"
@@ -22,6 +23,8 @@ namespace cheri {
 class CheriModule : public ClangTidyModule {
 public:
   void addCheckFactories(ClangTidyCheckFactories &CheckFactories) override {
+    CheckFactories.registerCheck<FixcapasarraysubscriptCheck>(
+        "cheri-FixCapAsArraySubscript");
     CheckFactories.registerCheck<FixdriverdataCheck>(
         "cheri-FixDriverData");
     CheckFactories.registerCheck<FixinttoptrcastCheck>(
