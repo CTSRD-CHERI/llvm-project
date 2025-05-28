@@ -30,6 +30,8 @@ correspondingSetIntrinsic(Intrinsic::ID GetIntrin) {
     return Intrinsic::cheri_cap_address_set;
   case Intrinsic::cheri_cap_flags_get:
     return Intrinsic::cheri_cap_flags_set;
+  case Intrinsic::cheri_cap_high_get:
+    return Intrinsic::cheri_cap_high_set;
   default:
     llvm_unreachable("No matching set intrinsic");
   }
@@ -43,6 +45,8 @@ correspondingGetIntrinsic(Intrinsic::ID SetIntrin) {
     return Intrinsic::cheri_cap_address_get;
   case Intrinsic::cheri_cap_flags_set:
     return Intrinsic::cheri_cap_flags_get;
+  case Intrinsic::cheri_cap_high_set:
+    return Intrinsic::cheri_cap_high_get;
   default:
     llvm_unreachable("No matching get intrinsic");
   }
