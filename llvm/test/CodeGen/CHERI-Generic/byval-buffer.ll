@@ -170,7 +170,7 @@ define dso_local void @clang_purecap_byval_args() local_unnamed_addr addrspace(2
 ; PURECAP-RV64-NEXT:    sc cs0, 1040(csp) # 16-byte Folded Spill
 ; PURECAP-RV64-NEXT:  .LBB0_1: # %entry
 ; PURECAP-RV64-NEXT:    # Label of block must be emitted
-; PURECAP-RV64-NEXT:    auipcc cs0, %captab_pcrel_hi(global_foo)
+; PURECAP-RV64-NEXT:    auipcc cs0, %got_pcrel_hi(global_foo)
 ; PURECAP-RV64-NEXT:    lc cs0, %pcrel_lo(.LBB0_1)(cs0)
 ; PURECAP-RV64-NEXT:    li a2, 1024
 ; PURECAP-RV64-NEXT:    cmove ca0, cs0

@@ -5775,9 +5775,9 @@ SDValue RISCVTargetLowering::getAddr(NodeTy *N, EVT Ty, SelectionDAG &DAG,
       // for read-only constants (e.g. floating-point constant-pools).
       return DAG.getNode(RISCVISD::CLLC, DL, Ty, Addr);
     }
-    // Generate a sequence to load a capability from the captable. This
-    // generates the pattern (PseudoCLGC sym), which expands to
-    // (clc (auipcc %captab_pcrel_hi(sym)) %pcrel_lo(auipc)).
+    // Generate a sequence to load a capability from the GOT. This generates
+    // the pattern (PseudoCLGC sym), which expands to
+    // (clc (auipcc %got_pcrel_hi(sym)) %pcrel_lo(auipc)).
     MachineFunction &MF = DAG.getMachineFunction();
     MachineMemOperand *MemOp = MF.getMachineMemOperand(
         MachinePointerInfo::getGOT(MF),
@@ -5862,14 +5862,14 @@ SDValue RISCVTargetLowering::lowerGlobalAddress(SDValue Op,
   GlobalAddressSDNode *N = cast<GlobalAddressSDNode>(Op);
   assert(N->getOffset() == 0 && "unexpected offset in global node");
 
-  // External variables always have to be loaded from the captable to get bounds
-  // and to allow for them to be provided by another DSO without requiring copy
+  // External variables always have to be loaded from the GOT to get bounds and
+  // to allow for them to be provided by another DSO without requiring copy
   // relocations.
   // Read-only accesses in the same DSO *could* theoretically use pc-relative
   // addressing, but that would mean we get a capability bounded to the $pcc
   // bounds and therefore would not be checked when we pass the reference to
-  // another function. Therefore, we always load from the captable for all
-  // global variables.
+  // another function. Therefore, we always load from the GOT for all global
+  // variables.
   const GlobalValue *GV = N->getGlobal();
   return getAddr(N, Ty, DAG, GV->isDSOLocal(), /*CanDeriveFromPcc=*/false,
                  GV->hasExternalWeakLinkage());
@@ -5908,10 +5908,10 @@ SDValue RISCVTargetLowering::getStaticTLSAddr(GlobalAddressSDNode *N,
 
   if (RISCVABI::isCheriPureCapABI(Subtarget.getTargetABI())) {
     if (NotLocal) {
-      // Use PC-relative addressing to access the captable for this TLS symbol,
-      // then load the address from the captable and add the thread pointer.
-      // This generates the pattern (PseudoCLA_TLS_IE sym), which expands to
-      // (cld (auipcc %tls_ie_captab_pcrel_hi(sym)) %pcrel_lo(auipc)).
+      // Use PC-relative addressing to access the GOT for this TLS symbol, then
+      // load the address from the GOT and add the thread pointer. This
+      // generates the pattern (PseudoCLA_TLS_IE sym), which expands to
+      // (cld (auipcc %tls_ie_pcrel_hi(sym)) %pcrel_lo(auipc)).
       SDValue Addr = DAG.getTargetGlobalAddress(GV, DL, Ty, 0, 0);
       MachineFunction &MF = DAG.getMachineFunction();
       MachineMemOperand *MemOp = MF.getMachineMemOperand(
@@ -5932,12 +5932,12 @@ SDValue RISCVTargetLowering::getStaticTLSAddr(GlobalAddressSDNode *N,
     // pointer, with the appropriate adjustment for the thread pointer offset.
     // This generates the pattern
     // (cincoffset (cincoffset_tprel (lui %tprel_hi(sym))
-    //                               ctp %tprel_cincoffset(sym))
+    //                               ctp %tprel_add(sym))
     //             %tprel_lo(sym))
     SDValue AddrHi =
         DAG.getTargetGlobalAddress(GV, DL, XLenVT, 0, RISCVII::MO_TPREL_HI);
     SDValue AddrCIncOffset =
-        DAG.getTargetGlobalAddress(GV, DL, Ty, 0, RISCVII::MO_TPREL_CINCOFFSET);
+        DAG.getTargetGlobalAddress(GV, DL, Ty, 0, RISCVII::MO_TPREL_ADD);
     SDValue AddrLo =
         DAG.getTargetGlobalAddress(GV, DL, XLenVT, 0, RISCVII::MO_TPREL_LO);
 
@@ -6006,7 +6006,7 @@ SDValue RISCVTargetLowering::getDynamicTLSAddr(GlobalAddressSDNode *N,
   //
   // For pure capability TLS, this generates the pattern (PseudoCLC_TLS_GD sym),
   // which expands to
-  // (cincoffset (auipcc %tls_gd_captab_pcrel_hi(sym)) %pcrel_lo(auipc)).
+  // (cincoffset (auipcc %tls_gd_pcrel_hi(sym)) %pcrel_lo(auipc)).
   unsigned Opcode = RISCVABI::isCheriPureCapABI(Subtarget.getTargetABI())
                         ? RISCVISD::CLC_TLS_GD
                         : RISCVISD::LA_TLS_GD;
@@ -16297,14 +16297,11 @@ SDValue RISCVTargetLowering::LowerCall(CallLoweringInfo &CLI,
   if (GlobalAddressSDNode *S = dyn_cast<GlobalAddressSDNode>(Callee)) {
     const GlobalValue *GV = S->getGlobal();
 
-    unsigned OpFlags;
-    if (RISCVABI::isCheriPureCapABI(Subtarget.getTargetABI())) {
-      OpFlags = RISCVII::MO_CCALL;
-    } else {
-      OpFlags = RISCVII::MO_CALL;
-      if (!getTargetMachine().shouldAssumeDSOLocal(*GV->getParent(), GV))
-        OpFlags = RISCVII::MO_PLT;
-    }
+    unsigned OpFlags = RISCVII::MO_CALL;
+    // See RISCVMCCodeEmitter::getImmOpValue
+    if (!RISCVABI::isCheriPureCapABI(Subtarget.getTargetABI()) &&
+        !getTargetMachine().shouldAssumeDSOLocal(*GV->getParent(), GV))
+      OpFlags = RISCVII::MO_PLT;
 
     if (RISCVABI::isCheriPureCapABI(Subtarget.getTargetABI()) &&
         UseLegacyIndirectPurecapCalls)
@@ -16313,16 +16310,13 @@ SDValue RISCVTargetLowering::LowerCall(CallLoweringInfo &CLI,
     else
       Callee = DAG.getTargetGlobalAddress(GV, DL, PtrVT, 0, OpFlags);
   } else if (ExternalSymbolSDNode *S = dyn_cast<ExternalSymbolSDNode>(Callee)) {
-    unsigned OpFlags;
+    unsigned OpFlags = RISCVII::MO_CALL;
 
-    if (RISCVABI::isCheriPureCapABI(Subtarget.getTargetABI())) {
-      OpFlags = RISCVII::MO_CCALL;
-    } else {
-      OpFlags = RISCVII::MO_CALL;
-      if (!getTargetMachine().shouldAssumeDSOLocal(*MF.getFunction().getParent(),
-                                                   nullptr))
-        OpFlags = RISCVII::MO_PLT;
-    }
+    // See RISCVMCCodeEmitter::getImmOpValue
+    if (!RISCVABI::isCheriPureCapABI(Subtarget.getTargetABI()) &&
+        !getTargetMachine().shouldAssumeDSOLocal(*MF.getFunction().getParent(),
+                                                 nullptr))
+      OpFlags = RISCVII::MO_PLT;
 
     // Legacy behaviour always used indirect calls even for static functions.
     // This could be optimised, but shouldAssumeDSOLocal is too weak, since

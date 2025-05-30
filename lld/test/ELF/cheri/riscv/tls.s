@@ -167,7 +167,7 @@ _start:
 
 .if PIC == 0
 	lui a0, %tprel_hi(lvar)
-	cincoffset ca0, ctp, a0, %tprel_cincoffset(lvar)
+	cincoffset ca0, ctp, a0, %tprel_add(lvar)
 	cincoffset ca0, ca0, %tprel_lo(lvar)
 .endif
 
