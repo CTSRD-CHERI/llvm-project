@@ -113,8 +113,6 @@ RISCV::RISCV() {
   relativeRel = R_RISCV_RELATIVE;
   iRelativeRel = R_RISCV_IRELATIVE;
   cheriCapRel = R_RISCV_CHERI_CAPABILITY;
-  // TODO: R_RISCV_CHERI_JUMP_SLOT in a separate .got.plt / .captable.plt
-  cheriCapCallRel = R_RISCV_CHERI_CAPABILITY;
   if (config->is64) {
     symbolicRel = R_RISCV_64;
     tlsModuleIndexRel = R_RISCV_TLS_DTPMOD64;
