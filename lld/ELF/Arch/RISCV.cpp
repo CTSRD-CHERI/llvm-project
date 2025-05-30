@@ -127,7 +127,10 @@ RISCV::RISCV() {
     tlsOffsetRel = R_RISCV_TLS_DTPREL32;
     tlsGotRel = R_RISCV_TLS_TPREL32;
   }
-  gotRel = symbolicRel;
+  if (config->isCheriAbi)
+    gotRel = *cheriCapRel;
+  else
+    gotRel = symbolicRel;
   absPointerRel = symbolicRel;
 
   // .got[0] = _DYNAMIC
@@ -288,8 +291,7 @@ void RISCV::writePlt(uint8_t *buf, const Symbol &sym,
   // nop
   uint32_t ptrload = config->isCheriAbi ? config->is64 ? CLC_128 : CLC_64
                                         : config->is64 ? LD : LW;
-  uint32_t entryva = config->isCheriAbi ? sym.getCapTableVA(in.plt.get(), 0)
-                                        : sym.getGotPltVA();
+  uint32_t entryva = config->isCheriAbi ? sym.getGotVA() : sym.getGotPltVA();
   uint32_t offset = entryva - pltEntryAddr;
   write32le(buf + 0, utype(AUIPC, X_T3, hi20(offset)));
   write32le(buf + 4, itype(ptrload, X_T3, X_T3, lo12(offset)));
@@ -363,12 +365,13 @@ RelExpr RISCV::getRelExpr(const RelType type, const Symbol &s,
     return config->relax ? R_RELAX_HINT : R_NONE;
   case R_RISCV_CHERI_CAPABILITY:
     return R_CHERI_CAPABILITY;
+  // TODO: Deprecate and eventually remove these
   case R_RISCV_CHERI_CAPTAB_PCREL_HI20:
-    return R_CHERI_CAPABILITY_TABLE_ENTRY_PC;
+    return R_GOT_PC;
   case R_RISCV_CHERI_TLS_IE_CAPTAB_PCREL_HI20:
-    return R_CHERI_CAPABILITY_TABLE_TLSIE_ENTRY_PC;
+    return R_GOT_PC;
   case R_RISCV_CHERI_TLS_GD_CAPTAB_PCREL_HI20:
-    return R_CHERI_CAPABILITY_TABLE_TLSGD_ENTRY_PC;
+    return R_TLSGD_PC;
   default:
     error(getErrorLocation(loc) + "unknown relocation (" + Twine(type) +
           ") against symbol " + toString(s));

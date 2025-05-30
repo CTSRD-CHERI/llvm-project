@@ -7,7 +7,7 @@
 # RUN: ld.lld %t.32.o %t1.32.so -z separate-code -o %t.32
 # RUN: llvm-readelf -S -s %t.32 | FileCheck --check-prefixes=SEC,NM %s
 # RUN: llvm-readobj -r %t.32 | FileCheck --check-prefix=RELOC32 %s
-# RUN: llvm-readelf -x .captable %t.32 | FileCheck --check-prefix=CAPTAB32 %s
+# RUN: llvm-readelf -x .got %t.32 | FileCheck --check-prefix=GOT32 %s
 # RUN: llvm-objdump -d --no-show-raw-insn %t.32 | FileCheck --check-prefixes=DIS,DIS32 %s
 
 # RUN: %riscv64_cheri_purecap_llvm-mc -filetype=obj %t1.s -o %t1.64.o
@@ -16,7 +16,7 @@
 # RUN: ld.lld %t.64.o %t1.64.so -z separate-code -o %t.64
 # RUN: llvm-readelf -S -s %t.64 | FileCheck --check-prefixes=SEC,NM %s
 # RUN: llvm-readobj -r %t.64 | FileCheck --check-prefix=RELOC64 %s
-# RUN: llvm-readelf -x .captable %t.64 | FileCheck --check-prefix=CAPTAB64 %s
+# RUN: llvm-readelf -x .got %t.64 | FileCheck --check-prefix=GOT64 %s
 # RUN: llvm-objdump -d --no-show-raw-insn %t.64 | FileCheck --check-prefixes=DIS,DIS64 %s
 
 # SEC: .plt PROGBITS {{0*}}00011030
@@ -27,19 +27,21 @@
 # NM: {{0*}}00000000 0 FUNC WEAK   DEFAULT UND weak
 
 # RELOC32:      .rela.dyn {
-# RELOC32-NEXT:   0x12000 R_RISCV_CHERI_CAPABILITY bar 0x0
-# RELOC32-NEXT:   0x12008 R_RISCV_CHERI_CAPABILITY weak 0x0
+# RELOC32-NEXT:   0x12068 R_RISCV_CHERI_CAPABILITY bar 0x0
+# RELOC32-NEXT:   0x12070 R_RISCV_CHERI_CAPABILITY weak 0x0
 # RELOC32-NEXT: }
-# CAPTAB32:      section '.captable'
-# CAPTAB32-NEXT: 0x00012000 00000000 00000000 00000000 00000000
+# GOT32:      section '.got'
+# GOT32-NEXT: 0x00012060 00200100 00000000 00000000 00000000
+# GOT32-NEXT: 0x00012070 00000000 00000000
 
 # RELOC64:      .rela.dyn {
-# RELOC64-NEXT:   0x12000 R_RISCV_CHERI_CAPABILITY bar 0x0
-# RELOC64-NEXT:   0x12010 R_RISCV_CHERI_CAPABILITY weak 0x0
+# RELOC64-NEXT:   0x120D0 R_RISCV_CHERI_CAPABILITY bar 0x0
+# RELOC64-NEXT:   0x120E0 R_RISCV_CHERI_CAPABILITY weak 0x0
 # RELOC64-NEXT: }
-# CAPTAB64:      section '.captable'
-# CAPTAB64-NEXT: 0x00012000 00000000 00000000 00000000 00000000
-# CAPTAB64-NEXT: 0x00012010 00000000 00000000 00000000 00000000
+# GOT64:      section '.got'
+# GOT64-NEXT: 0x000120c0 00200100 00000000 00000000 00000000
+# GOT64-NEXT: 0x000120d0 00000000 00000000 00000000 00000000
+# GOT64-NEXT: 0x000120e0 00000000 00000000 00000000 00000000
 
 # DIS:      <_start>:
 ## Direct call
@@ -62,17 +64,19 @@
 # DIS:      <.plt>:
 # DIS-NEXT:     ...
 
-## 32-bit: &.captable[bar]-. = 0x12000-0x11050 = 4096*1-80
+## 32-bit: &.got[bar]-. = 0x12068-0x11050 = 4096*1+24
+## 64-bit: &.got[bar]-. = 0x120d0-0x11050 = 4096*1+128
 # DIS:        11050: auipcc ct3, 1
-# DIS32-NEXT:   lc ct3, -80(ct3)
-# DIS64-NEXT:   lc ct3, -80(ct3)
+# DIS32-NEXT:   lc ct3, 24(ct3)
+# DIS64-NEXT:   lc ct3, 128(ct3)
 # DIS-NEXT:     jalr ct1, ct3
 # DIS-NEXT:     nop
 
-## 32-bit: &.captable[weak]-. = 0x12008-0x11060 = 4096*1-88
+## 32-bit: &.got[weak]-. = 0x12070-0x11060 = 4096*1+16
+## 64-bit: &.got[weak]-. = 0x120e0-0x11060 = 4096*1+128
 # DIS:        11060: auipcc ct3, 1
-# DIS32-NEXT:   lc ct3, -88(ct3)
-# DIS64-NEXT:   lc ct3, -80(ct3)
+# DIS32-NEXT:   lc ct3, 16(ct3)
+# DIS64-NEXT:   lc ct3, 128(ct3)
 # DIS-NEXT:     jalr ct1, ct3
 # DIS-NEXT:     nop
 
