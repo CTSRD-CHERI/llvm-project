@@ -41,7 +41,7 @@ define dso_local void @withreloc() addrspace(200) #1 {
 ; CAM-NEXT:    cincoffset csp, csp, -16
 ; CAM-NEXT:  .LBB1_1: # %entry
 ; CAM-NEXT:    # Label of block must be emitted
-; CAM-NEXT:    auipc ca0, %captab_pcrel_hi(value)
+; CAM-NEXT:    auipc ca0, %got_pcrel_hi(value)
 ; CAM-NEXT:    lc ca0, %pcrel_lo(.LBB1_1)(ca0)
 ; CAM-NEXT:    sc ca0, 8(csp)
 ; CAM-NEXT:    cincoffset csp, csp, 16
@@ -52,7 +52,7 @@ define dso_local void @withreloc() addrspace(200) #1 {
 ; BWL-NEXT:    caddi csp, csp, -16
 ; BWL-NEXT:  .LBB1_1: # %entry
 ; BWL-NEXT:    # Label of block must be emitted
-; BWL-NEXT:    auipc ca0, %captab_pcrel_hi(value)
+; BWL-NEXT:    auipc ca0, %got_pcrel_hi(value)
 ; BWL-NEXT:    lc ca0, %pcrel_lo(.LBB1_1)(ca0)
 ; BWL-NEXT:    sc ca0, 8(csp)
 ; BWL-NEXT:    caddi csp, csp, 16

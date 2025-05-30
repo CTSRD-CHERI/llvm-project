@@ -84,7 +84,7 @@ define void @test_strcat_to_memcpy(ptr addrspace(200) align 4 %dst) addrspace(20
 ; CHECK-ASM-NEXT:    cincoffset ca0, cs0, a0
 ; CHECK-ASM-NEXT:  .LBB2_1: # %entry
 ; CHECK-ASM-NEXT:    # Label of block must be emitted
-; CHECK-ASM-NEXT:    auipcc ca1, %captab_pcrel_hi(.Lstr)
+; CHECK-ASM-NEXT:    auipcc ca1, %got_pcrel_hi(.Lstr)
 ; CHECK-ASM-NEXT:    lc ca1, %pcrel_lo(.LBB2_1)(ca1)
 ; CHECK-ASM-NEXT:    li a2, 17
 ; CHECK-ASM-NEXT:    ccall memcpy
@@ -113,7 +113,7 @@ define void @test_strncpy_to_memcpy(ptr addrspace(200) align 4 %dst) addrspace(2
 ; CHECK-ASM-NEXT:    sc cra, 8(csp) # 8-byte Folded Spill
 ; CHECK-ASM-NEXT:  .LBB3_1: # %entry
 ; CHECK-ASM-NEXT:    # Label of block must be emitted
-; CHECK-ASM-NEXT:    auipcc ca1, %captab_pcrel_hi(.Lstr)
+; CHECK-ASM-NEXT:    auipcc ca1, %got_pcrel_hi(.Lstr)
 ; CHECK-ASM-NEXT:    lc ca1, %pcrel_lo(.LBB3_1)(ca1)
 ; CHECK-ASM-NEXT:    li a2, 17
 ; CHECK-ASM-NEXT:    li a3, 0
@@ -140,7 +140,7 @@ define void @test_stpncpy_to_memcpy(ptr addrspace(200) align 4 %dst) addrspace(2
 ; CHECK-ASM-NEXT:    sc cra, 8(csp) # 8-byte Folded Spill
 ; CHECK-ASM-NEXT:  .LBB4_1: # %entry
 ; CHECK-ASM-NEXT:    # Label of block must be emitted
-; CHECK-ASM-NEXT:    auipcc ca1, %captab_pcrel_hi(.Lstr)
+; CHECK-ASM-NEXT:    auipcc ca1, %got_pcrel_hi(.Lstr)
 ; CHECK-ASM-NEXT:    lc ca1, %pcrel_lo(.LBB4_1)(ca1)
 ; CHECK-ASM-NEXT:    li a2, 17
 ; CHECK-ASM-NEXT:    li a3, 0

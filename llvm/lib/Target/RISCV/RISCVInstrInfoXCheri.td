@@ -47,38 +47,12 @@ def riscv_clc_tls_gd      : SDNode<"RISCVISD::CLC_TLS_GD", SDT_RISCVSymLoad>;
 // Operand and SDNode transformation definitions.
 //===----------------------------------------------------------------------===//
 
-def CCallSymbol : AsmOperandClass {
-  let Name = "CCallSymbol";
-  let RenderMethod = "addImmOperands";
-  let DiagnosticType = "InvalidCCallSymbol";
-  let ParserMethod = "parseCallSymbol<true>";
-}
-
 def cap_call_symbol : Operand<CLenVT> {
-  let ParserMatchClass = CCallSymbol;
-}
-
-def PseudoCJumpSymbol : AsmOperandClass {
-  let Name = "PseudoCJumpSymbol";
-  let RenderMethod = "addImmOperands";
-  let DiagnosticType = "InvalidPseudoCJumpSymbol";
-  let ParserMethod = "parsePseudoJumpSymbol<true>";
+  let ParserMatchClass = CallSymbol;
 }
 
 def pseudo_cap_jump_symbol : Operand<CLenVT> {
-  let ParserMatchClass = PseudoCJumpSymbol;
-}
-
-def TPRelCIncOffsetSymbol : AsmOperandClass {
-  let Name = "TPRelCIncOffsetSymbol";
-  let RenderMethod = "addImmOperands";
-  let DiagnosticType = "InvalidTPRelCIncOffsetSymbol";
-  let ParserMethod = "parseOperandWithModifier";
-}
-
-// A bare symbol with the %tprel_add variant.
-def tprel_cincoffset_symbol : Operand<XLenVT> {
-  let ParserMatchClass = TPRelCIncOffsetSymbol;
+  let ParserMatchClass = PseudoJumpSymbol;
 }
 
 def CheriZeroOffsetMemOpOperand : AsmOperandClass {
@@ -1202,8 +1176,10 @@ def : Pat<(riscv_clc_tls_gd tglobaltlsaddr:$in),
 let hasSideEffects = 0, mayLoad = 0, mayStore = 0, isCodeGenOnly = 0 in
 def PseudoCIncOffsetTPRel : Pseudo<(outs GPCR:$rd),
                                    (ins GPCR:$rs1, GPRNoX0:$rs2,
-                                        tprel_cincoffset_symbol:$src), [],
-                                   "cadd", "$rd, $rs1, $rs2, $src">;
+                                        tprel_add_symbol:$src), [],
+                                   "cincoffset", "$rd, $rs1, $rs2, $src">;
+def : InstAlias<"cadd $rd, $rs1, $rs2, $src",
+                (PseudoCIncOffsetTPRel GPCR:$rd, GPCR:$rs1, GPRNoX0:$rs2, tprel_add_symbol:$src), 0>;
 }
 
 let Predicates = [HasZCheriPurecapOrCheri, HasStdExtD, IsRV32] in {

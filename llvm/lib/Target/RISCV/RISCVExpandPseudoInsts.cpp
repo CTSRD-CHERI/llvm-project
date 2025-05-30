@@ -12,6 +12,7 @@
 //
 //===----------------------------------------------------------------------===//
 
+#include "MCTargetDesc/RISCVBaseInfo.h"
 #include "MCTargetDesc/RISCVMCTargetDesc.h"
 #include "RISCV.h"
 #include "RISCVInstrInfo.h"
@@ -241,8 +242,7 @@ bool RISCVExpandPseudo::expandCapLoadLocalCap(
 bool RISCVExpandPseudo::expandCapLoadGlobalCap(
     MachineBasicBlock &MBB, MachineBasicBlock::iterator MBBI,
     MachineBasicBlock::iterator &NextMBBI) {
-
-  return expandAuipccInstPair(MBB, MBBI, NextMBBI, RISCVII::MO_CAPTAB_PCREL_HI,
+  return expandAuipccInstPair(MBB, MBBI, NextMBBI, RISCVII::MO_GOT_HI,
                               RISCV::CLC);
 }
 
@@ -253,8 +253,7 @@ bool RISCVExpandPseudo::expandCapLoadTLSIEAddress(
 
   const auto &STI = MF->getSubtarget<RISCVSubtarget>();
   unsigned SecondOpcode = STI.is64Bit() ? RISCV::CLD : RISCV::CLW;
-  return expandAuipccInstPair(MBB, MBBI, NextMBBI,
-                              RISCVII::MO_TLS_IE_CAPTAB_PCREL_HI,
+  return expandAuipccInstPair(MBB, MBBI, NextMBBI, RISCVII::MO_TLS_GOT_HI,
                               SecondOpcode, true);
 }
 
@@ -264,9 +263,10 @@ bool RISCVExpandPseudo::expandCapLoadTLSGDCap(
   const auto &STI = MBB.getParent()->getSubtarget<RISCVSubtarget>();
   const bool HasZCheriPurecap =
       STI.hasFeature(RISCV::FeatureStdExtZCheriPureCap);
-  return expandAuipccInstPair(
-      MBB, MBBI, NextMBBI, RISCVII::MO_TLS_GD_CAPTAB_PCREL_HI,
-      HasZCheriPurecap ? RISCV::CADDI : RISCV::CIncOffsetImm);
+  const unsigned IncOpc =
+      HasZCheriPurecap ? RISCV::CADDI : RISCV::CIncOffsetImm;
+  return expandAuipccInstPair(MBB, MBBI, NextMBBI, RISCVII::MO_TLS_GD_HI,
+                              IncOpc);
 }
 
 bool RISCVExpandPseudo::expandCGetAddr(MachineBasicBlock &MBB,

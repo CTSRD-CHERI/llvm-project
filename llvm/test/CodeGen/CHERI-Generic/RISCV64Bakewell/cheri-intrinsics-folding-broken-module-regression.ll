@@ -16,10 +16,10 @@ define void @g(i64 %x, i64 %y) addrspace(200) nounwind {
 ; ASM-LABEL: g:
 ; ASM:       # %bb.0:
 ; ASM-NEXT:  .LBB0_1: # Label of block must be emitted
-; ASM-NEXT:    auipc ca2, %captab_pcrel_hi(d)
+; ASM-NEXT:    auipc ca2, %got_pcrel_hi(d)
 ; ASM-NEXT:    lc ca2, %pcrel_lo(.LBB0_1)(ca2)
 ; ASM-NEXT:  .LBB0_2: # Label of block must be emitted
-; ASM-NEXT:    auipc ca3, %captab_pcrel_hi(e)
+; ASM-NEXT:    auipc ca3, %got_pcrel_hi(e)
 ; ASM-NEXT:    lc ca3, %pcrel_lo(.LBB0_2)(ca3)
 ; ASM-NEXT:    cadd ca0, ca2, a0
 ; ASM-NEXT:    cadd ca0, ca0, a1

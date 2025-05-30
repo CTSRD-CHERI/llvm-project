@@ -10,24 +10,24 @@
 .option capmode
 
 jump foo, ct6
-# RELOC: R_RISCV_CHERI_CCALL foo 0x0
+# RELOC: R_RISCV_CALL_PLT foo 0x0
 # INSTR: auipc t6, 0
 # INSTR: jr  t6
-# FIXUP: fixup A - offset: 0, value: foo, kind: fixup_riscv_ccall
+# FIXUP: fixup A - offset: 0, value: foo, kind: fixup_riscv_call
 
 # Ensure that jumps to symbols whose names coincide with register names work.
 
 jump zero, cra
-# RELOC: R_RISCV_CHERI_CCALL zero 0x0
+# RELOC: R_RISCV_CALL_PLT zero 0x0
 # INSTR: auipc ra, 0
 # INSTR: ret
-# FIXUP: fixup A - offset: 0, value: zero, kind: fixup_riscv_ccall
+# FIXUP: fixup A - offset: 0, value: zero, kind: fixup_riscv_call
 
 1:
 jump 1b, ct6
 # INSTR: auipc t6, 0
 # INSTR: jr  t6
-# FIXUP: fixup A - offset: 0, value: .Ltmp0, kind: fixup_riscv_ccall
+# FIXUP: fixup A - offset: 0, value: .Ltmp0, kind: fixup_riscv_call
 
 .option nocapmode
 

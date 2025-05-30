@@ -32,7 +32,7 @@ foo:                                    # @foo
         caddi   csp, csp, -16
 .LBB0_1:                                # %entry
                                         # Label of block must be emitted
-        auipc   ca0, %captab_pcrel_hi(x)
+        auipc   ca0, %got_pcrel_hi(x)
         lc      ca0, %pcrel_lo(.LBB0_1)(ca0)
         sc      ca0, 0(csp)
         lc      ca0, 0(csp)
