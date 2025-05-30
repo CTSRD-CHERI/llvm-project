@@ -47,7 +47,7 @@ template <class ELFT> struct InMemoryCapRelocEntry {
 
 CheriCapRelocsSection::CheriCapRelocsSection(StringRef name)
     : SyntheticSection((config->isPic && !config->relativeCapRelocsOnly)
-                           ? SHF_ALLOC | SHF_WRITE /* XXX: actually RELRO */
+                           ? SHF_ALLOC | SHF_WRITE
                            : SHF_ALLOC,
                        SHT_PROGBITS, config->wordsize, name) {
   this->entsize = config->wordsize * 5;
@@ -583,10 +583,9 @@ void CheriCapRelocsSection::writeTo(uint8_t *buf) {
   invokeELFT(writeToImpl, buf);
 }
 
-
 CheriCapTableSection::CheriCapTableSection()
-  : SyntheticSection(SHF_ALLOC | SHF_WRITE, /* XXX: actually RELRO for BIND_NOW*/
-                     SHT_PROGBITS, config->capabilitySize, ".captable") {
+    : SyntheticSection(SHF_ALLOC | SHF_WRITE, SHT_PROGBITS,
+                       config->capabilitySize, ".captable") {
   assert(config->capabilitySize > 0);
   this->entsize = config->capabilitySize;
 }
