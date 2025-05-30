@@ -869,22 +869,6 @@ uint64_t InputSectionBase::getRelocTargetVA(const InputFile *file, RelType type,
   case R_CHERI_CAPABILITY_TABLE_INDEX_CALL_SMALL_IMMEDIATE:
     assert(a == 0 && "capability table index relocs should not have addends");
     return sym.getCapTableOffset(isec, offset);
-  case R_CHERI_CAPABILITY_TABLE_ENTRY_PC: {
-    assert(a == 0 && "capability table entry relocs should not have addends");
-    return sym.getCapTableVA(isec, offset) - p;
-  }
-  case R_CHERI_CAPABILITY_TABLE_TLSGD_ENTRY_PC: {
-    assert(a == 0 && "capability table index relocs should not have addends");
-    uint64_t capTableOffset =
-        in.cheriCapTable->getDynTlsOffset(sym);
-    return ElfSym::cheriCapabilityTable->getVA() + capTableOffset - p;
-  }
-  case R_CHERI_CAPABILITY_TABLE_TLSIE_ENTRY_PC: {
-    assert(a == 0 && "capability table index relocs should not have addends");
-    uint64_t capTableOffset =
-        in.cheriCapTable->getTlsOffset(sym);
-    return ElfSym::cheriCapabilityTable->getVA() + capTableOffset - p;
-  }
   case R_CHERI_CAPABILITY_TABLE_REL:
     if (!ElfSym::cheriCapabilityTable) {
       error("cannot compute difference between non-existent "

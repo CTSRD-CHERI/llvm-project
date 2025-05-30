@@ -3,15 +3,16 @@
 # RUN: ld.lld --local-caprelocs=cbuildcap %t.rv32.o -o %t.rv32
 
 # RUN: llvm-readobj --relocs %t.rv32 | FileCheck %s --check-prefix=RELOCS
-# RUN: llvm-objdump -s --section=.captable %t.rv32 | FileCheck %s --check-prefix=CAPTAB
+# RUN: llvm-objdump -s --section=.got %t.rv32 | FileCheck %s --check-prefix=GOT
 
 # RELOCS:      Relocations [
 # RELOCS-NEXT:   Section ({{[0-9]+}}) .rela.dyn {
-# RELOCS-NEXT:     0x12240 R_RISCV_CHERI_RELATIVE - 0x0
+# RELOCS-NEXT:     0x12250 R_RISCV_CHERI_RELATIVE - 0x0
 # RELOCS-NEXT:   }
 
-# CAPTAB: Contents of section .captable:
-# CAPTAB-NEXT: 12240 50320100 00000000 2b994d02 0070e201
+# GOT: Contents of section .got:
+# GOT-NEXT: 12240
+# GOT-NEXT: 12250 60320100 00000000 33994f02 0070e201
 #                    [    address    ] [      meta     ]
 
         .text
