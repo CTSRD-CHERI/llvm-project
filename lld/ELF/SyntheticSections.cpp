@@ -1586,14 +1586,15 @@ DynamicSection<ELFT>::computeContents() {
       if (f->isNeeded)
         checkMipsShlibCompatible(f, f->cheriFlags, targetCheriFlags);
     }
-    if (in.cheriCapTable && in.cheriCapTable->isNeeded()) {
-      addInSec(DT_MIPS_CHERI_CAPTABLE, *in.cheriCapTable);
-      addInt(DT_MIPS_CHERI_CAPTABLESZ, in.cheriCapTable->getParent()->size);
+    if (in.mipsCheriCapTable && in.mipsCheriCapTable->isNeeded()) {
+      addInSec(DT_MIPS_CHERI_CAPTABLE, *in.mipsCheriCapTable);
+      addInt(DT_MIPS_CHERI_CAPTABLESZ, in.mipsCheriCapTable->getParent()->size);
     }
-    if (in.cheriCapTableMapping && in.cheriCapTableMapping->isNeeded()) {
-      addInSec(DT_MIPS_CHERI_CAPTABLE_MAPPING, *in.cheriCapTableMapping);
+    if (in.mipsCheriCapTableMapping &&
+        in.mipsCheriCapTableMapping->isNeeded()) {
+      addInSec(DT_MIPS_CHERI_CAPTABLE_MAPPING, *in.mipsCheriCapTableMapping);
       addInt(DT_MIPS_CHERI_CAPTABLE_MAPPINGSZ,
-             in.cheriCapTableMapping->getParent()->size);
+             in.mipsCheriCapTableMapping->getParent()->size);
     }
     if (in.capRelocs && in.capRelocs->isNeeded()) {
       addInSec(DT_MIPS_CHERI___CAPRELOCS, *in.capRelocs);
@@ -1739,9 +1740,10 @@ void RelocationBaseSection::finalizeContents() {
   if (in.relaPlt.get() == this && in.gotPlt->getParent()) {
     getParent()->flags |= ELF::SHF_INFO_LINK;
     // For CheriABI we use the captable as the sh_info value
-    if (config->isCheriAbi && in.cheriCapTable && in.cheriCapTable->isNeeded()) {
-      assert(in.cheriCapTable->getParent()->sectionIndex != UINT32_MAX);
-      getParent()->info = in.cheriCapTable->getParent()->sectionIndex;
+    if (config->isCheriAbi && in.mipsCheriCapTable &&
+        in.mipsCheriCapTable->isNeeded()) {
+      assert(in.mipsCheriCapTable->getParent()->sectionIndex != UINT32_MAX);
+      getParent()->info = in.mipsCheriCapTable->getParent()->sectionIndex;
     } else {
       getParent()->info = in.gotPlt->getParent()->sectionIndex;
     }
@@ -1749,9 +1751,10 @@ void RelocationBaseSection::finalizeContents() {
   if (in.relaIplt.get() == this && in.igotPlt->getParent()) {
     getParent()->flags |= ELF::SHF_INFO_LINK;
     // For CheriABI we use the captable as the sh_info value
-    if (config->isCheriAbi && in.cheriCapTable && in.cheriCapTable->isNeeded()) {
-      assert(in.cheriCapTable->getParent()->sectionIndex != UINT32_MAX);
-      getParent()->info = in.cheriCapTable->getParent()->sectionIndex;
+    if (config->isCheriAbi && in.mipsCheriCapTable &&
+        in.mipsCheriCapTable->isNeeded()) {
+      assert(in.mipsCheriCapTable->getParent()->sectionIndex != UINT32_MAX);
+      getParent()->info = in.mipsCheriCapTable->getParent()->sectionIndex;
     } else {
       getParent()->info = in.igotPlt->getParent()->sectionIndex;
     }
@@ -3957,8 +3960,8 @@ void InStruct::reset() {
   bss.reset();
   bssRelRo.reset();
   capRelocs.reset();
-  cheriCapTableMapping.reset();
-  cheriCapTableMapping.reset();
+  mipsCheriCapTableMapping.reset();
+  mipsCheriCapTableMapping.reset();
   got.reset();
   gotPlt.reset();
   igotPlt.reset();

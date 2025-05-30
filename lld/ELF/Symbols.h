@@ -226,9 +226,10 @@ public:
   uint64_t getGotPltOffset() const;
   uint64_t getGotPltVA() const;
   uint64_t getPltVA() const;
-  uint64_t getCapTableVA(const InputSectionBase *isec, uint64_t offset) const;
-  uint64_t getCapTableOffset(const InputSectionBase *isec,
-                             uint64_t offset) const;
+  uint64_t getMipsCheriCapTableVA(const InputSectionBase *isec,
+                                  uint64_t offset) const;
+  uint64_t getMipsCheriCapTableOffset(const InputSectionBase *isec,
+                                      uint64_t offset) const;
   uint64_t getSize() const;
   OutputSection *getOutputSection() const;
 
@@ -540,8 +541,8 @@ struct ElfSym {
   static Defined *mipsLocalGp;
 
   // The _CHERI_CAPABILITY_TABLE_ symbol points to the beginning of the
-  // .captable section
-  static Defined *cheriCapabilityTable;
+  // .captable section. Only for MIPS.
+  static Defined *mipsCheriCapabilityTable;
 
   // __global_pointer$ for RISC-V.
   static Defined *riscvGlobalPointer;

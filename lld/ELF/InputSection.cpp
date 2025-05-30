@@ -863,28 +863,28 @@ uint64_t InputSectionBase::getRelocTargetVA(const InputFile *file, RelType type,
     return in.got->getTlsIndexVA() + a - p;
   case R_CHERI_CAPABILITY:
     llvm_unreachable("R_CHERI_CAPABILITY should not be handled here!");
-  case R_CHERI_CAPABILITY_TABLE_INDEX:
-  case R_CHERI_CAPABILITY_TABLE_INDEX_SMALL_IMMEDIATE:
-  case R_CHERI_CAPABILITY_TABLE_INDEX_CALL:
-  case R_CHERI_CAPABILITY_TABLE_INDEX_CALL_SMALL_IMMEDIATE:
+  case R_MIPS_CHERI_CAPTAB_INDEX:
+  case R_MIPS_CHERI_CAPTAB_INDEX_SMALL_IMMEDIATE:
+  case R_MIPS_CHERI_CAPTAB_INDEX_CALL:
+  case R_MIPS_CHERI_CAPTAB_INDEX_CALL_SMALL_IMMEDIATE:
     assert(a == 0 && "capability table index relocs should not have addends");
-    return sym.getCapTableOffset(isec, offset);
-  case R_CHERI_CAPABILITY_TABLE_REL:
-    if (!ElfSym::cheriCapabilityTable) {
+    return sym.getMipsCheriCapTableOffset(isec, offset);
+  case R_MIPS_CHERI_CAPTAB_REL:
+    if (!ElfSym::mipsCheriCapabilityTable) {
       error("cannot compute difference between non-existent "
             "CheriCapabilityTable and symbol " + toString(sym));
       return sym.getVA(a);
     }
-    return sym.getVA(a) - ElfSym::cheriCapabilityTable->getVA();
+    return sym.getVA(a) - ElfSym::mipsCheriCapabilityTable->getVA();
   case R_MIPS_CHERI_CAPTAB_TLSGD:
     assert(a == 0 && "capability table index relocs should not have addends");
-    return in.cheriCapTable->getDynTlsOffset(sym);
+    return in.mipsCheriCapTable->getDynTlsOffset(sym);
   case R_MIPS_CHERI_CAPTAB_TLSLD:
     assert(a == 0 && "capability table index relocs should not have addends");
-    return in.cheriCapTable->getTlsIndexOffset();
+    return in.mipsCheriCapTable->getTlsIndexOffset();
   case R_MIPS_CHERI_CAPTAB_TPREL:
     assert(a == 0 && "capability table index relocs should not have addends");
-    return in.cheriCapTable->getTlsOffset(sym);
+    return in.mipsCheriCapTable->getTlsOffset(sym);
   default:
     llvm_unreachable("invalid expression");
   }

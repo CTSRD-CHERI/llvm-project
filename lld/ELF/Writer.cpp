@@ -321,11 +321,15 @@ template <class ELFT> void elf::createSyntheticSections() {
 
   if (config->capabilitySize > 0) {
     in.capRelocs = std::make_unique<CheriCapRelocsSection>("__cap_relocs");
-    in.cheriCapTable = std::make_unique<CheriCapTableSection>();
-    add(*in.cheriCapTable);
-    if (config->capTableScope != CapTableScopePolicy::All) {
-      in.cheriCapTableMapping = std::make_unique<CheriCapTableMappingSection>();
-      add(*in.cheriCapTableMapping);
+
+    if (config->emachine == EM_MIPS) {
+      in.mipsCheriCapTable = std::make_unique<MipsCheriCapTableSection>();
+      add(*in.mipsCheriCapTable);
+      if (config->capTableScope != CapTableScopePolicy::All) {
+        in.mipsCheriCapTableMapping =
+            std::make_unique<MipsCheriCapTableMappingSection>();
+        add(*in.mipsCheriCapTableMapping);
+      }
     }
   }
 
@@ -847,7 +851,7 @@ bool elf::isRelroSection(const OutputSection *sec) {
 
   // Similarly the CHERI capability table is also relro since the capabilities
   // in the table need to be initialized at runtime to set the tag bits
-  if (in.cheriCapTable && sec == in.cheriCapTable->getParent()) {
+  if (in.mipsCheriCapTable && sec == in.mipsCheriCapTable->getParent()) {
     // Without -z now, the PLT stubs can update the captable entries so we
     // can't mark it as relro. It can also be relro for static binaries:
     return config->zNow || !config->isPic;
@@ -1944,13 +1948,13 @@ template <class ELFT> void Writer<ELFT>::finalizeSections() {
       }
     }
 
-    if (in.cheriCapTable) {
+    if (config->emachine == EM_MIPS && in.mipsCheriCapTable) {
       // When creating relocatable output we should not define the
       // _CHERI_CAPABILITY_TABLE_ symbol because otherwise we get duplicate
       // symbol errors when linking that into a final executable
       if (!config->relocatable)
-        ElfSym::cheriCapabilityTable =
-            addOptionalRegular(captableSym, in.cheriCapTable.get(), 0);
+        ElfSym::mipsCheriCapabilityTable =
+            addOptionalRegular(captableSym, in.mipsCheriCapTable.get(), 0);
     }
 
     // This responsible for splitting up .eh_frame section into
@@ -1987,18 +1991,19 @@ template <class ELFT> void Writer<ELFT>::finalizeSections() {
     // Do the cap table index assignment
     // Must come before CapRelocs->finalizeContents() because it can add
     // __cap_relocs
-    if (in.cheriCapTable) {
+    if (in.mipsCheriCapTable) {
       // Ensure that we always have a _CHERI_CAPABILITY_TABLE_ symbol if the
       // cap table exists. This makes llvm-objdump more useful since it can now
       // print the target of a cap table load
-      if (!ElfSym::cheriCapabilityTable && in.cheriCapTable->isNeeded()) {
-        ElfSym::cheriCapabilityTable = cast<Defined>(
-            symtab.addSymbol(Defined{nullptr, captableSym, STB_LOCAL,
-              STV_HIDDEN, STT_NOTYPE, 0, 0, in.cheriCapTable.get()}));
-        ElfSym::cheriCapabilityTable->isSectionStartSymbol = true;
-        assert(!ElfSym::cheriCapabilityTable->isPreemptible);
+      if (!ElfSym::mipsCheriCapabilityTable &&
+          in.mipsCheriCapTable->isNeeded()) {
+        ElfSym::mipsCheriCapabilityTable = cast<Defined>(symtab.addSymbol(
+            Defined{nullptr, captableSym, STB_LOCAL, STV_HIDDEN, STT_NOTYPE, 0,
+                    0, in.mipsCheriCapTable.get()}));
+        ElfSym::mipsCheriCapabilityTable->isSectionStartSymbol = true;
+        assert(!ElfSym::mipsCheriCapabilityTable->isPreemptible);
       }
-      in.cheriCapTable->assignValuesAndAddCapTableSymbols<ELFT>();
+      in.mipsCheriCapTable->assignValuesAndAddCapTableSymbols<ELFT>();
     }
 
     // Now handle __cap_relocs (must be before RelaDyn because it might
@@ -2342,9 +2347,9 @@ template <class ELFT> void Writer<ELFT>::addStartEndSymbols() {
   define("__fini_array_start", "__fini_array_end", Out::finiArray);
   define("__ctors_start", "__ctors_end", findSection(".ctors"));
   define("__dtors_start", "__dtors_end", findSection(".dtors"));
-  if (in.cheriCapTable)
+  if (in.mipsCheriCapTable)
     define("__cap_table_start", "__cap_table_end",
-           in.cheriCapTable->getOutputSection());
+           in.mipsCheriCapTable->getOutputSection());
 
   if (OutputSection *sec = findSection(".ARM.exidx"))
     define("__exidx_start", "__exidx_end", sec);
