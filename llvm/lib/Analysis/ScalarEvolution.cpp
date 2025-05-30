@@ -249,6 +249,10 @@ static cl::opt<bool> UseContextForNoWrapFlagInference(
     cl::desc("Infer nuw/nsw flags using context where suitable"),
     cl::init(true));
 
+static cl::opt<bool> DisableCheriScalarEvolution(
+    "cheri-disable-scalar-evolution", cl::Hidden,
+    cl::desc("Disable ScalarEvolution for Capabilities"), cl::init(false));
+
 //===----------------------------------------------------------------------===//
 //                           SCEV class definitions
 //===----------------------------------------------------------------------===//
@@ -1715,9 +1719,9 @@ const SCEV *ScalarEvolution::getZeroExtendExprImpl(const SCEV *Op, Type *Ty,
           Step = getZeroExtendExpr(Step, Ty, Depth + 1);
           return getAddRecExpr(Start, Step, L, AR->getNoWrapFlags());
         }
-        
+
         // For a negative step, we can extend the operands iff doing so only
-        // traverses values in the range zext([0,UINT_MAX]). 
+        // traverses values in the range zext([0,UINT_MAX]).
         if (isKnownNegative(Step)) {
           const SCEV *N = getConstant(APInt::getMaxValue(BitWidth) -
                                       getSignedRangeMin(Step));
@@ -6204,10 +6208,11 @@ const SCEV *ScalarEvolution::createNodeForGEP(GEPOperator *GEP) {
          "GEP source element type must be sized");
 
   const DataLayout &DL = F.getParent()->getDataLayout();
-  // FIXME: Ideally, we should teach Scalar Evolution to
-  // understand fat pointers.
-  if (DL.isFatPointer(GEP->getPointerOperandType()->getPointerAddressSpace()))
-    return getUnknown(GEP);
+
+  if (DisableCheriScalarEvolution) {
+    if (DL.isFatPointer(GEP->getPointerOperandType()->getPointerAddressSpace()))
+      return getUnknown(GEP);
+  }
 
   SmallVector<const SCEV *, 4> IndexExprs;
   for (Value *Index : GEP->indices())
@@ -7562,6 +7567,25 @@ ScalarEvolution::getOperandsToCreate(Value *V, SmallVectorImpl<Value *> &Ops) {
 
     if (auto *II = dyn_cast<IntrinsicInst>(U)) {
       switch (II->getIntrinsicID()) {
+      case Intrinsic::cheri_cap_address_get: {
+        const SCEV *Op = getSCEV(II->getOperand(0));
+        const SCEV *IntOp = getPtrToIntExpr(Op, II->getType());
+        if (isa<SCEVCouldNotCompute>(IntOp))
+          return getUnknown(V);
+        return IntOp;
+      }
+      case Intrinsic::cheri_cap_address_set: {
+        // An address_set(X, Y) is the same as X + Y - ptrtoint(X).
+        const SCEV *X = getSCEV(II->getArgOperand(0));
+        const SCEV *Y = getSCEV(II->getArgOperand(1));
+        Type *DstIntTy = II->getOperand(1)->getType();
+        const SCEV *IntOp = getPtrToIntExpr(X, DstIntTy);
+        if (isa<SCEVCouldNotCompute>(IntOp))
+          return getUnknown(V);
+        const SCEV *SetAddr = getAddExpr(
+            X, getMinusSCEV(Y, IntOp, SCEV::FlagAnyWrap), SCEV::FlagAnyWrap);
+        return SetAddr;
+      }
       case Intrinsic::abs:
         Ops.push_back(II->getArgOperand(0));
         return nullptr;
@@ -9013,7 +9037,7 @@ ScalarEvolution::ExitLimit ScalarEvolution::computeExitLimitFromICmp(
       InnerLHS = ZExt->getOperand();
     if (const SCEVAddRecExpr *AR = dyn_cast<SCEVAddRecExpr>(InnerLHS)) {
       auto *StrideC = dyn_cast<SCEVConstant>(AR->getStepRecurrence(*this));
-      if (!AR->hasNoSelfWrap() && AR->getLoop() == L && AR->isAffine() && 
+      if (!AR->hasNoSelfWrap() && AR->getLoop() == L && AR->isAffine() &&
           StrideC && StrideC->getAPInt().isPowerOf2()) {
         auto Flags = AR->getNoWrapFlags();
         Flags = setFlags(Flags, SCEV::FlagNW);
@@ -12507,7 +12531,7 @@ bool ScalarEvolution::canIVOverflowOnLT(const SCEV *RHS, const SCEV *Stride,
 
 bool ScalarEvolution::canIVOverflowOnGT(const SCEV *RHS, const SCEV *Stride,
                                         bool IsSigned) {
-  
+
   unsigned BitWidth = getTypeSizeInBits(RHS->getType());
   const SCEV *One = getOne(Stride->getType());
 
