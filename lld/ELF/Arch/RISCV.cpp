@@ -112,7 +112,6 @@ RISCV::RISCV() {
   pltRel = R_RISCV_JUMP_SLOT;
   relativeRel = R_RISCV_RELATIVE;
   iRelativeRel = R_RISCV_IRELATIVE;
-  sizeRel = R_RISCV_CHERI_SIZE;
   cheriCapRel = R_RISCV_CHERI_CAPABILITY;
   // TODO: R_RISCV_CHERI_JUMP_SLOT in a separate .got.plt / .captable.plt
   cheriCapCallRel = R_RISCV_CHERI_CAPABILITY;
