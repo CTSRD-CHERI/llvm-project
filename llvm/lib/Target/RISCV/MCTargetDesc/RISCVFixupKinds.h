@@ -107,29 +107,6 @@ enum Fixups {
   // DWARF CFA.
   fixup_riscv_sub_6b,
 
-  // fixup_riscv_captab_pcrel_hi20 - 20-bit fixup corresponding to
-  // captab_pcrel_hi(foo) for instructions like auipcc
-  fixup_riscv_captab_pcrel_hi20,
-  // fixup_riscv_tprel_cincoffset - A fixup corresponding to
-  // %tprel_cincoffset(foo) for the cincoffset_tls instruction. Used to provide
-  // a hint to the linker.
-  fixup_riscv_tprel_cincoffset,
-  // fixup_riscv_tls_ie_captab_pcrel_hi20 - 20-bit fixup corresponding to
-  // tls_ie_captab_pcrel_hi(foo) for instructions like auipcc
-  fixup_riscv_tls_ie_captab_pcrel_hi20,
-  // fixup_riscv_tls_gd_captab_pcrel_hi20 - 20-bit fixup corresponding to
-  // tls_gd_captab_pcrel_hi(foo) for instructions like auipcc
-  fixup_riscv_tls_gd_captab_pcrel_hi20,
-  // fixup_riscv_cjal - 20-bit fixup for symbol references in the cjal
-  // instruction
-  fixup_riscv_cjal,
-  // fixup_riscv_call - A fixup representing a ccall attached to the auipcc
-  // instruction in a pair composed of adjacent auipcc+cjalr instructions.
-  fixup_riscv_ccall,
-  // fixup_riscv_rvc_cjump - 11-bit fixup for symbol references in the
-  // compressed capability jump instruction
-  fixup_riscv_rvc_cjump,
-
   // Used as a sentinel, must be the last
   fixup_riscv_invalid,
   NumTargetFixupKinds = fixup_riscv_invalid - FirstTargetFixupKind

@@ -2172,12 +2172,7 @@ RISCVInstrInfo::getSerializableDirectMachineOperandTargetFlags() const {
       {MO_TPREL_HI, "riscv-tprel-hi"},
       {MO_TPREL_ADD, "riscv-tprel-add"},
       {MO_TLS_GOT_HI, "riscv-tls-got-hi"},
-      {MO_TLS_GD_HI, "riscv-tls-gd-hi"},
-      {MO_CAPTAB_PCREL_HI, "riscv-captab-pcrel-hi"},
-      {MO_TPREL_CINCOFFSET, "riscv-tprel-cincoffset"},
-      {MO_TLS_IE_CAPTAB_PCREL_HI, "riscv-tls-ie-captab-pcrel-hi"},
-      {MO_TLS_GD_CAPTAB_PCREL_HI, "riscv-tls-gd-captab-pcrel-hi"},
-      {MO_CCALL, "riscv-ccall"}};
+      {MO_TLS_GD_HI, "riscv-tls-gd-hi"}};
   return ArrayRef(TargetFlags);
 }
 
@@ -2345,12 +2340,11 @@ MachineBasicBlock::iterator RISCVInstrInfo::insertOutlinedCall(
   bool IsPurecap = RISCVABI::isCheriPureCapABI(
       MF.getSubtarget<RISCVSubtarget>().getTargetABI());
   It = MBB.insert(
-      It,
-      BuildMI(MF, DebugLoc(),
-              get(IsPurecap ? RISCV::PseudoCCALLReg : RISCV::PseudoCALLReg),
-              IsPurecap ? RISCV::C5 : RISCV::X5)
-          .addGlobalAddress(M.getNamedValue(MF.getName()), 0,
-                            IsPurecap ? RISCVII::MO_CCALL : RISCVII::MO_CALL));
+      It, BuildMI(MF, DebugLoc(),
+                  get(IsPurecap ? RISCV::PseudoCCALLReg : RISCV::PseudoCALLReg),
+                  IsPurecap ? RISCV::C5 : RISCV::X5)
+              .addGlobalAddress(M.getNamedValue(MF.getName()), 0,
+                                RISCVII::MO_CALL));
   return It;
 }
 

@@ -36,7 +36,7 @@ const RISCVMCExpr *RISCVMCExpr::create(const MCExpr *Expr, VariantKind Kind,
 void RISCVMCExpr::printImpl(raw_ostream &OS, const MCAsmInfo *MAI) const {
   VariantKind Kind = getKind();
   bool HasVariant = ((Kind != VK_RISCV_None) && (Kind != VK_RISCV_CALL) &&
-                     (Kind != VK_RISCV_CALL_PLT) && (Kind != VK_RISCV_CCALL));
+                     (Kind != VK_RISCV_CALL_PLT));
 
   if (HasVariant)
     OS << '%' << getVariantKindName(getKind()) << '(';
@@ -81,9 +81,6 @@ const MCFixup *RISCVMCExpr::getPCRelHiFixup(const MCFragment **DFOut) const {
     case RISCV::fixup_riscv_tls_got_hi20:
     case RISCV::fixup_riscv_tls_gd_hi20:
     case RISCV::fixup_riscv_pcrel_hi20:
-    case RISCV::fixup_riscv_captab_pcrel_hi20:
-    case RISCV::fixup_riscv_tls_ie_captab_pcrel_hi20:
-    case RISCV::fixup_riscv_tls_gd_captab_pcrel_hi20:
       if (DFOut)
         *DFOut = DF;
       return &F;
@@ -124,10 +121,6 @@ RISCVMCExpr::VariantKind RISCVMCExpr::getVariantKindForName(StringRef name) {
       .Case("tprel_add", VK_RISCV_TPREL_ADD)
       .Case("tls_ie_pcrel_hi", VK_RISCV_TLS_GOT_HI)
       .Case("tls_gd_pcrel_hi", VK_RISCV_TLS_GD_HI)
-      .Case("captab_pcrel_hi", VK_RISCV_CAPTAB_PCREL_HI)
-      .Case("tprel_cincoffset", VK_RISCV_TPREL_CINCOFFSET)
-      .Case("tls_ie_captab_pcrel_hi", VK_RISCV_TLS_IE_CAPTAB_PCREL_HI)
-      .Case("tls_gd_captab_pcrel_hi", VK_RISCV_TLS_GD_CAPTAB_PCREL_HI)
       .Default(VK_RISCV_Invalid);
 }
 
@@ -156,20 +149,10 @@ StringRef RISCVMCExpr::getVariantKindName(VariantKind Kind) {
     return "tls_ie_pcrel_hi";
   case VK_RISCV_TLS_GD_HI:
     return "tls_gd_pcrel_hi";
-  case VK_RISCV_CAPTAB_PCREL_HI:
-    return "captab_pcrel_hi";
-  case VK_RISCV_TPREL_CINCOFFSET:
-    return "tprel_cincoffset";
-  case VK_RISCV_TLS_IE_CAPTAB_PCREL_HI:
-    return "tls_ie_captab_pcrel_hi";
-  case VK_RISCV_TLS_GD_CAPTAB_PCREL_HI:
-    return "tls_gd_captab_pcrel_hi";
   case VK_RISCV_CALL:
     return "call";
   case VK_RISCV_CALL_PLT:
     return "call_plt";
-  case VK_RISCV_CCALL:
-    return "ccall";
   case VK_RISCV_32_PCREL:
     return "32_pcrel";
   }
@@ -212,8 +195,6 @@ void RISCVMCExpr::fixELFSymbolsInTLSFixups(MCAssembler &Asm) const {
   case VK_RISCV_TPREL_HI:
   case VK_RISCV_TLS_GOT_HI:
   case VK_RISCV_TLS_GD_HI:
-  case VK_RISCV_TLS_IE_CAPTAB_PCREL_HI:
-  case VK_RISCV_TLS_GD_CAPTAB_PCREL_HI:
     break;
   }
 
@@ -227,12 +208,7 @@ bool RISCVMCExpr::evaluateAsConstant(int64_t &Res) const {
       Kind == VK_RISCV_GOT_HI || Kind == VK_RISCV_TPREL_HI ||
       Kind == VK_RISCV_TPREL_LO || Kind == VK_RISCV_TPREL_ADD ||
       Kind == VK_RISCV_TLS_GOT_HI || Kind == VK_RISCV_TLS_GD_HI ||
-      Kind == VK_RISCV_CALL || Kind == VK_RISCV_CALL_PLT ||
-      Kind == VK_RISCV_CAPTAB_PCREL_HI ||
-      Kind == VK_RISCV_TPREL_CINCOFFSET ||
-      Kind == VK_RISCV_TLS_IE_CAPTAB_PCREL_HI ||
-      Kind == VK_RISCV_TLS_GD_CAPTAB_PCREL_HI ||
-      Kind == VK_RISCV_CCALL)
+      Kind == VK_RISCV_CALL || Kind == VK_RISCV_CALL_PLT)
     return false;
 
   if (!getSubExpr()->evaluateAsRelocatable(Value, nullptr, nullptr))

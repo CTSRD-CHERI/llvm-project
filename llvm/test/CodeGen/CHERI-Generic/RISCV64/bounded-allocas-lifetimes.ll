@@ -17,7 +17,7 @@ define void @static_alloca() {
   ; CHECK-NEXT:   LIFETIME_START %stack.0
   ; CHECK-NEXT:   ADJCALLSTACKDOWNCAP 0, 0, implicit-def dead $c2, implicit $c2
   ; CHECK-NEXT:   $c10 = COPY [[CSetBoundsImm]]
-  ; CHECK-NEXT:   PseudoCCALL target-flags(riscv-ccall) @use, csr_il32pc64d_l64pc128d, implicit-def dead $c1, implicit $c10, implicit-def $c2
+  ; CHECK-NEXT:   PseudoCCALL target-flags(riscv-call) @use, csr_il32pc64d_l64pc128d, implicit-def dead $c1, implicit $c10, implicit-def $c2
   ; CHECK-NEXT:   ADJCALLSTACKUPCAP 0, 0, implicit-def dead $c2, implicit $c2
   ; CHECK-NEXT:   LIFETIME_END %stack.0
   ; CHECK-NEXT:   PseudoCRET
@@ -54,7 +54,7 @@ define void @dynamic_alloca(i64 zeroext %n) {
   ; CHECK-NEXT:   [[CSetBounds1:%[0-9]+]]:gpcr = CSetBounds killed [[CSetBounds]], [[SLLI]]
   ; CHECK-NEXT:   ADJCALLSTACKDOWNCAP 0, 0, implicit-def dead $c2, implicit $c2
   ; CHECK-NEXT:   $c10 = COPY [[CSetBounds1]]
-  ; CHECK-NEXT:   PseudoCCALL target-flags(riscv-ccall) @use, csr_il32pc64d_l64pc128d, implicit-def dead $c1, implicit $c10, implicit-def $c2
+  ; CHECK-NEXT:   PseudoCCALL target-flags(riscv-call) @use, csr_il32pc64d_l64pc128d, implicit-def dead $c1, implicit $c10, implicit-def $c2
   ; CHECK-NEXT:   ADJCALLSTACKUPCAP 0, 0, implicit-def dead $c2, implicit $c2
   ; CHECK-NEXT:   PseudoCRET
   %1 = alloca i32, i64 %n, align 4, addrspace(200)
