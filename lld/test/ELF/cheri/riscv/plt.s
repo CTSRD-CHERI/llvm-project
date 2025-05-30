@@ -74,7 +74,7 @@
 
 ## 32-bit: &.got[weak]-. = 0x12070-0x11060 = 4096*1+16
 ## 64-bit: &.got[weak]-. = 0x120e0-0x11060 = 4096*1+128
-# DIS:        11060: auipcc ct3, 1
+# DIS:        11060: auipc ct3, 1
 # DIS32-NEXT:   lc ct3, 16(ct3)
 # DIS64-NEXT:   lc ct3, 128(ct3)
 # DIS-NEXT:     jalr ct1, ct3
