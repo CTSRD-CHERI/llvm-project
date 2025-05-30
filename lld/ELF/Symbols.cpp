@@ -138,7 +138,7 @@ Defined *ElfSym::globalOffsetTable;
 Defined *ElfSym::mipsGp;
 Defined *ElfSym::mipsGpDisp;
 Defined *ElfSym::mipsLocalGp;
-Defined *ElfSym::cheriCapabilityTable;
+Defined *ElfSym::mipsCheriCapabilityTable;
 Defined *ElfSym::riscvGlobalPointer;
 Defined *ElfSym::relaIpltStart;
 Defined *ElfSym::relaIpltEnd;
@@ -266,16 +266,16 @@ uint64_t Symbol::getPltVA() const {
   return outVA;
 }
 
-uint64_t Symbol::getCapTableVA(const InputSectionBase *isec,
-                               uint64_t offset) const {
-  return ElfSym::cheriCapabilityTable->getVA() +
-    getCapTableOffset(isec, offset);
+uint64_t Symbol::getMipsCheriCapTableVA(const InputSectionBase *isec,
+                                        uint64_t offset) const {
+  return ElfSym::mipsCheriCapabilityTable->getVA() +
+         getMipsCheriCapTableOffset(isec, offset);
 }
 
-uint64_t Symbol::getCapTableOffset(const InputSectionBase *isec,
-                                   uint64_t offset) const {
+uint64_t Symbol::getMipsCheriCapTableOffset(const InputSectionBase *isec,
+                                            uint64_t offset) const {
   return config->capabilitySize *
-    in.cheriCapTable->getIndex(*this, isec, offset);
+         in.mipsCheriCapTable->getIndex(*this, isec, offset);
 }
 
 uint64_t Defined::getSize() const {

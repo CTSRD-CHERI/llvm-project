@@ -186,9 +186,9 @@ private:
 // +---------------------------------------+
 // TODO: TLS caps also need to be per file/function
 
-class CheriCapTableSection : public SyntheticSection {
+class MipsCheriCapTableSection : public SyntheticSection {
 public:
-  CheriCapTableSection();
+  MipsCheriCapTableSection();
   // InputFile and Offset is needed in order to implement per-file/per-function
   // tables
   void addEntry(Symbol &sym, RelExpr expr, InputSectionBase *isec,
@@ -266,7 +266,7 @@ private:
   CaptableMap dynTlsEntries;
   CaptableMap tlsEntries;
   bool valuesAssigned = false;
-  friend class CheriCapTableMappingSection;
+  friend class MipsCheriCapTableMappingSection;
 };
 
 // TODO: could shrink these to reduce size overhead but this is experimental
@@ -280,13 +280,13 @@ struct CaptableMappingEntry {
 
 // Map from symbol vaddr -> captable subset so that RTLD can setup the correct
 // trampolines to initialize $cgp to the correct subset
-class CheriCapTableMappingSection : public SyntheticSection {
+class MipsCheriCapTableMappingSection : public SyntheticSection {
 public:
-  CheriCapTableMappingSection();
+  MipsCheriCapTableMappingSection();
   bool isNeeded() const override {
     if (config->capTableScope == CapTableScopePolicy::All)
       return false;
-    return in.cheriCapTable && in.cheriCapTable->isNeeded();
+    return in.mipsCheriCapTable && in.mipsCheriCapTable->isNeeded();
   }
   void writeTo(uint8_t *buf) override;
   size_t getSize() const override;

@@ -583,14 +583,14 @@ void CheriCapRelocsSection::writeTo(uint8_t *buf) {
   invokeELFT(writeToImpl, buf);
 }
 
-CheriCapTableSection::CheriCapTableSection()
+MipsCheriCapTableSection::MipsCheriCapTableSection()
     : SyntheticSection(SHF_ALLOC | SHF_WRITE, SHT_PROGBITS,
                        config->capabilitySize, ".captable") {
   assert(config->capabilitySize > 0);
   this->entsize = config->capabilitySize;
 }
 
-void CheriCapTableSection::writeTo(uint8_t* buf) {
+void MipsCheriCapTableSection::writeTo(uint8_t *buf) {
   // Capability part should be filled with all zeros and crt_init_globals fills
   // it in. For the TLS part, assignValuesAndAddCapTableSymbols adds any static
   // relocations needed, and should be procesed by relocateAlloc.
@@ -603,8 +603,8 @@ static Defined *findMatchingFunction(const InputSectionBase *isec,
   return isec->getEnclosingFunction(symOffset);
 }
 
-CheriCapTableSection::CaptableMap &
-CheriCapTableSection::getCaptableMapForFileAndOffset(
+MipsCheriCapTableSection::CaptableMap &
+MipsCheriCapTableSection::getCaptableMapForFileAndOffset(
     const InputSectionBase *isec, uint64_t offset) {
   if (LLVM_LIKELY(config->capTableScope == CapTableScopePolicy::All))
     return globalEntries;
@@ -626,8 +626,9 @@ CheriCapTableSection::getCaptableMapForFileAndOffset(
   return globalEntries;
 }
 
-void CheriCapTableSection::addEntry(Symbol &sym, RelExpr expr,
-                                    InputSectionBase *isec, uint64_t offset) {
+void MipsCheriCapTableSection::addEntry(Symbol &sym, RelExpr expr,
+                                        InputSectionBase *isec,
+                                        uint64_t offset) {
   // FIXME: can this be called from multiple threads?
   CapTableIndex idx;
   idx.needsSmallImm = false;
@@ -635,8 +636,8 @@ void CheriCapTableSection::addEntry(Symbol &sym, RelExpr expr,
   idx.firstUse = SymbolAndOffset(isec, offset);
   assert(!idx.firstUse->symOrSec.isNull());
   switch (expr) {
-  case R_CHERI_CAPABILITY_TABLE_INDEX_SMALL_IMMEDIATE:
-  case R_CHERI_CAPABILITY_TABLE_INDEX_CALL_SMALL_IMMEDIATE:
+  case R_MIPS_CHERI_CAPTAB_INDEX_SMALL_IMMEDIATE:
+  case R_MIPS_CHERI_CAPTAB_INDEX_CALL_SMALL_IMMEDIATE:
     idx.needsSmallImm = true;
     break;
   default:
@@ -648,8 +649,8 @@ void CheriCapTableSection::addEntry(Symbol &sym, RelExpr expr,
   // not used as a function pointer and therefore does not need a unique
   // address (plt stub) across all DSOs.
   switch (expr) {
-  case R_CHERI_CAPABILITY_TABLE_INDEX_CALL:
-  case R_CHERI_CAPABILITY_TABLE_INDEX_CALL_SMALL_IMMEDIATE:
+  case R_MIPS_CHERI_CAPTAB_INDEX_CALL:
+  case R_MIPS_CHERI_CAPTAB_INDEX_CALL_SMALL_IMMEDIATE:
     if (!sym.isFunc() && !sym.isUndefWeak()) {
       CheriCapRelocLocation loc{isec, offset};
       std::string msg = "call relocation against non-function symbol " + verboseToString(&sym, 0) +
@@ -689,25 +690,25 @@ void CheriCapTableSection::addEntry(Symbol &sym, RelExpr expr,
   }
 }
 
-void CheriCapTableSection::addDynTlsEntry(Symbol &sym) {
+void MipsCheriCapTableSection::addDynTlsEntry(Symbol &sym) {
   dynTlsEntries.map.insert(std::make_pair(&sym, CapTableIndex()));
 }
 
-void CheriCapTableSection::addTlsIndex() {
+void MipsCheriCapTableSection::addTlsIndex() {
   dynTlsEntries.map.insert(std::make_pair(nullptr, CapTableIndex()));
 }
 
-void CheriCapTableSection::addTlsEntry(Symbol &sym) {
+void MipsCheriCapTableSection::addTlsEntry(Symbol &sym) {
   tlsEntries.map.insert(std::make_pair(&sym, CapTableIndex()));
 }
 
-uint32_t CheriCapTableSection::getIndex(const Symbol &sym,
-                                        const InputSectionBase *isec,
-                                        uint64_t offset) const {
+uint32_t MipsCheriCapTableSection::getIndex(const Symbol &sym,
+                                            const InputSectionBase *isec,
+                                            uint64_t offset) const {
   assert(valuesAssigned && "getIndex called before index assignment");
   const CaptableMap &entries =
-      const_cast<CheriCapTableSection *>(this)->getCaptableMapForFileAndOffset(
-          isec, offset);
+      const_cast<MipsCheriCapTableSection *>(this)
+          ->getCaptableMapForFileAndOffset(isec, offset);
   auto it = entries.map.find(const_cast<Symbol *>(&sym));
   assert(entries.firstIndex != std::numeric_limits<uint64_t>::max() &&
          "First index not set yet?");
@@ -719,21 +720,21 @@ uint32_t CheriCapTableSection::getIndex(const Symbol &sym,
   return *it->second.index - entries.firstIndex;
 }
 
-uint32_t CheriCapTableSection::getDynTlsOffset(const Symbol &sym) const {
+uint32_t MipsCheriCapTableSection::getDynTlsOffset(const Symbol &sym) const {
   assert(valuesAssigned && "getDynTlsOffset called before index assignment");
   auto it = dynTlsEntries.map.find(const_cast<Symbol *>(&sym));
   assert(it != dynTlsEntries.map.end());
   return *it->second.index * config->wordsize;
 }
 
-uint32_t CheriCapTableSection::getTlsIndexOffset() const {
+uint32_t MipsCheriCapTableSection::getTlsIndexOffset() const {
   assert(valuesAssigned && "getTlsIndexOffset called before index assignment");
   auto it = dynTlsEntries.map.find(nullptr);
   assert(it != dynTlsEntries.map.end());
   return *it->second.index * config->wordsize;
 }
 
-uint32_t CheriCapTableSection::getTlsOffset(const Symbol &sym) const {
+uint32_t MipsCheriCapTableSection::getTlsOffset(const Symbol &sym) const {
   assert(valuesAssigned && "getTlsOffset called before index assignment");
   auto it = tlsEntries.map.find(const_cast<Symbol *>(&sym));
   assert(it != tlsEntries.map.end());
@@ -741,9 +742,9 @@ uint32_t CheriCapTableSection::getTlsOffset(const Symbol &sym) const {
 }
 
 template <class ELFT>
-uint64_t CheriCapTableSection::assignIndices(uint64_t startIndex,
-                                             CaptableMap &entries,
-                                             const Twine &symContext) {
+uint64_t MipsCheriCapTableSection::assignIndices(uint64_t startIndex,
+                                                 CaptableMap &entries,
+                                                 const Twine &symContext) {
   // Usually StartIndex will be zero (one global captable) but if we are
   // compiling with per-file/per-function
   uint64_t smallEntryCount = 0;
@@ -846,7 +847,7 @@ uint64_t CheriCapTableSection::assignIndices(uint64_t startIndex,
     RelocationBaseSection *dynRelSec =
         it.second.usedInCallExpr ? in.relaPlt.get() : mainPart->relaDyn.get();
     addCapabilityRelocation<ELFT>(
-        targetSym, elfCapabilityReloc, in.cheriCapTable.get(), off,
+        targetSym, elfCapabilityReloc, in.mipsCheriCapTable.get(), off,
         R_CHERI_CAPABILITY, 0, it.second.usedInCallExpr,
         [&]() {
           return ("\n>>> referenced by " + refName + "\n>>> first used in " +
@@ -860,7 +861,7 @@ uint64_t CheriCapTableSection::assignIndices(uint64_t startIndex,
 }
 
 template <class ELFT>
-void CheriCapTableSection::assignValuesAndAddCapTableSymbols() {
+void MipsCheriCapTableSection::assignValuesAndAddCapTableSymbols() {
   // First assign the global indices (which will usually be the only ones)
   uint64_t assignedEntries = assignIndices<ELFT>(0, globalEntries, "");
   if (LLVM_UNLIKELY(config->capTableScope != CapTableScopePolicy::All)) {
@@ -948,22 +949,22 @@ void CheriCapTableSection::assignValuesAndAddCapTableSymbols() {
 }
 
 template void
-CheriCapTableSection::assignValuesAndAddCapTableSymbols<ELF32LE>();
+MipsCheriCapTableSection::assignValuesAndAddCapTableSymbols<ELF32LE>();
 template void
-CheriCapTableSection::assignValuesAndAddCapTableSymbols<ELF32BE>();
+MipsCheriCapTableSection::assignValuesAndAddCapTableSymbols<ELF32BE>();
 template void
-CheriCapTableSection::assignValuesAndAddCapTableSymbols<ELF64LE>();
+MipsCheriCapTableSection::assignValuesAndAddCapTableSymbols<ELF64LE>();
 template void
-CheriCapTableSection::assignValuesAndAddCapTableSymbols<ELF64BE>();
+MipsCheriCapTableSection::assignValuesAndAddCapTableSymbols<ELF64BE>();
 
-CheriCapTableMappingSection::CheriCapTableMappingSection()
+MipsCheriCapTableMappingSection::MipsCheriCapTableMappingSection()
     : SyntheticSection(SHF_ALLOC, SHT_PROGBITS, 8, ".captable_mapping") {
   assert(config->capabilitySize > 0);
   this->entsize = sizeof(CaptableMappingEntry);
   static_assert(sizeof(CaptableMappingEntry) == 24, "");
 }
 
-size_t CheriCapTableMappingSection::getSize() const {
+size_t MipsCheriCapTableMappingSection::getSize() const {
   assert(config->capTableScope != CapTableScopePolicy::All);
   if (!isNeeded())
     return 0;
@@ -980,9 +981,9 @@ size_t CheriCapTableMappingSection::getSize() const {
   return count * sizeof(CaptableMappingEntry);
 }
 
-void CheriCapTableMappingSection::writeTo(uint8_t *buf) {
+void MipsCheriCapTableMappingSection::writeTo(uint8_t *buf) {
   assert(config->capTableScope != CapTableScopePolicy::All);
-  if (!in.cheriCapTable)
+  if (!in.mipsCheriCapTable)
     return;
   if (!in.symTab) {
     error("Cannot write " + this->name + " without .symtab section!");
@@ -997,14 +998,14 @@ void CheriCapTableMappingSection::writeTo(uint8_t *buf) {
     Symbol* sym = ste.sym;
     if (!sym->isDefined() || !sym->isFunc())
       continue;
-    const CheriCapTableSection::CaptableMap *capTableMap = nullptr;
+    const MipsCheriCapTableSection::CaptableMap *capTableMap = nullptr;
     if (config->capTableScope == CapTableScopePolicy::Function) {
-      auto it = in.cheriCapTable->perFunctionEntries.find(sym);
-      if (it != in.cheriCapTable->perFunctionEntries.end())
+      auto it = in.mipsCheriCapTable->perFunctionEntries.find(sym);
+      if (it != in.mipsCheriCapTable->perFunctionEntries.end())
         capTableMap = &it->second;
     } else if (config->capTableScope == CapTableScopePolicy::File) {
-      auto it = in.cheriCapTable->perFileEntries.find(sym->file);
-      if (it != in.cheriCapTable->perFileEntries.end())
+      auto it = in.mipsCheriCapTable->perFileEntries.find(sym->file);
+      if (it != in.mipsCheriCapTable->perFileEntries.end())
         capTableMap = &it->second;
     } else {
       llvm_unreachable("Invalid mode!");
