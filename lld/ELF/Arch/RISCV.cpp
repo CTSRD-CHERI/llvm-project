@@ -68,7 +68,6 @@ enum Op {
   CIncOffsetImm = 0x105b,
   CLC_64 = 0x3003,
   CLC_128 = 0x200f,
-  CSub = 0x2800005b,
 };
 
 enum Reg {
@@ -259,7 +258,6 @@ void RISCV::writePltHeader(uint8_t *buf) const {
   // (c)jr (c)t3
   // (if shift == 0): nop
   uint32_t offset = in.gotPlt->getVA() - in.plt->getVA();
-  uint32_t ptrsub = config->isCheriAbi ? CSub : SUB;
   uint32_t ptrload = config->isCheriAbi ? config->is64 ? CLC_128 : CLC_64
                                         : config->is64 ? LD : LW;
   uint32_t ptraddi = config->isCheriAbi ? CIncOffsetImm : ADDI;
@@ -268,7 +266,7 @@ void RISCV::writePltHeader(uint8_t *buf) const {
   uint32_t ptrsize = config->isCheriAbi ? config->capabilitySize
                                         : config->wordsize;
   write32le(buf + 0, utype(AUIPC, X_T2, hi20(offset)));
-  write32le(buf + 4, rtype(ptrsub, X_T1, X_T1, X_T3));
+  write32le(buf + 4, rtype(SUB, X_T1, X_T1, X_T3));
   write32le(buf + 8, itype(ptrload, X_T3, X_T2, lo12(offset)));
   write32le(buf + 12, itype(ADDI, X_T1, X_T1, -target->pltHeaderSize - 12));
   write32le(buf + 16, itype(ptraddi, X_T0, X_T2, lo12(offset)));
