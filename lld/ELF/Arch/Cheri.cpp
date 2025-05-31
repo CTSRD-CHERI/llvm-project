@@ -604,12 +604,13 @@ void CheriCapRelocsSection::writeToImpl(uint8_t *buf) {
 
     // The target VA is the base address of the capability, so symbol + 0
     uint64_t targetVA;
-    bool isPreemptible, isFunc, isTls;
+    bool isPreemptible, isFunc, isTls, dontSeal = false;
     OutputSection *os;
     if (Symbol *s = dyn_cast<Symbol *>(realTarget.symOrSec)) {
       targetVA = realTarget.sym()->getVA(0);
       isPreemptible = reloc.needsDynReloc && realTarget.sym()->isPreemptible;
       isFunc = s->isFunc();
+      dontSeal = isFunc && s->isFuncDontSeal();
       isTls = s->isTls();
       os = s->getOutputSection();
     } else {
@@ -638,7 +639,7 @@ void CheriCapRelocsSection::writeToImpl(uint8_t *buf) {
     uint64_t permissions = 0;
     // Fow now Function implies ReadOnly so don't add the flag
     if (isFunc) {
-      if (realTarget.sym()->isFuncDontSeal())
+      if (dontSeal)
         permissions |= CaptablePermissions<ELFT>::dontSeal;
       permissions |= CaptablePermissions<ELFT>::function;
     } else if (os) {

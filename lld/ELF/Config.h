@@ -308,6 +308,7 @@ struct Config {
   // -z captabledebug: add additional symbols $captable_load_<symbols> before
   // each captable clc instruction that indicates which symbol should be loaded
   bool zCapTableDebug;
+  bool zCheriRiscvJumpSlot;
   bool zCombreloc;
   bool zCopyreloc;
   bool zForceBti;
