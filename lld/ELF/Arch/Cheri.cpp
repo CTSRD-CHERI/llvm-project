@@ -322,7 +322,8 @@ void CheriCapRelocsSection::addCapReloc(CheriCapRelocLocation loc,
   auto sourceMsg = [&]() -> std::string {
     return sourceSymbol ? verboseToString(sourceSymbol) : loc.toString();
   };
-  if (target.sym()->isUndefined() && !target.sym()->isUndefWeak()) {
+  if (isa<Symbol *>(target.symOrSec) && target.sym()->isUndefined() &&
+      !target.sym()->isUndefWeak()) {
     std::string msg =
         "cap_reloc against undefined symbol: " + toString(*target.sym()) +
         "\n>>> referenced by " + sourceMsg();
@@ -348,6 +349,7 @@ void CheriCapRelocsSection::addCapReloc(CheriCapRelocLocation loc,
     return; // Maybe happens with vtables?
   }
   if (targetNeedsDynReloc) {
+    assert(isa<Symbol *>(target.symOrSec));
     bool relativeToLoadAddress = false;
     // The addend is not used as the offset into the capability here, as we
     // have the offset field in the __cap_relocs for that. The Addend
@@ -384,6 +386,9 @@ void CheriCapRelocsSection::addCapReloc(CheriCapRelocLocation loc,
 template <typename ELFT>
 static uint64_t getTargetSize(const CheriCapRelocLocation &location,
                               const SymbolAndOffset &target) {
+  if (InputSectionBase *isec = dyn_cast<InputSectionBase *>(target.symOrSec))
+    return isec->getSize();
+
   uint64_t targetSize = target.sym()->getSize();
   if (targetSize > INT_MAX) {
     error("Insanely large symbol size for " + target.verboseToString() +
@@ -510,9 +515,24 @@ void CheriCapRelocsSection::writeToImpl(uint8_t *buf) {
         location.section->getOutputSection()->addr + outSecOffset;
 
     // The target VA is the base address of the capability, so symbol + 0
-    uint64_t targetVA = realTarget.sym()->getVA(0);
-    bool preemptibleDynReloc =
-        reloc.needsDynReloc && realTarget.sym()->isPreemptible;
+    uint64_t targetVA;
+    bool isPreemptible, isFunc, isTls;
+    OutputSection *os;
+    if (Symbol *s = dyn_cast<Symbol *>(realTarget.symOrSec)) {
+      targetVA = realTarget.sym()->getVA(0);
+      isPreemptible = reloc.needsDynReloc && realTarget.sym()->isPreemptible;
+      isFunc = s->isFunc();
+      isTls = s->isTls();
+      os = s->getOutputSection();
+    } else {
+      InputSectionBase *isec = cast<InputSectionBase *>(realTarget.symOrSec);
+      targetVA = isec->getVA(0);
+      isPreemptible = false;
+      isFunc = (isec->flags & SHF_EXECINSTR) != 0;
+      isTls = isec->type == STT_TLS;
+      os = isec->getOutputSection();
+    }
+    bool preemptibleDynReloc = reloc.needsDynReloc && isPreemptible;
     uint64_t targetSize = 0;
     if (preemptibleDynReloc) {
       // If we have a relocation against a preemptible symbol (even in the
@@ -529,10 +549,10 @@ void CheriCapRelocsSection::writeToImpl(uint8_t *buf) {
     uint64_t targetOffset = reloc.capabilityOffset + realTarget.offset;
     uint64_t permissions = 0;
     // Fow now Function implies ReadOnly so don't add the flag
-    if (realTarget.sym()->isFunc()) {
+    if (isFunc) {
       permissions |= CaptablePermissions<ELFT>::function;
-    } else if (auto os = realTarget.sym()->getOutputSection()) {
-      assert(!realTarget.sym()->isTls());
+    } else if (os) {
+      assert(!isTls);
       // if ((OS->getPhdrFlags() & PF_W) == 0) {
       if (((os->flags & SHF_WRITE) == 0) || isRelroSection(os)) {
         permissions |= CaptablePermissions<ELFT>::readOnly;
@@ -1047,13 +1067,14 @@ void MipsCheriCapTableMappingSection::writeTo(uint8_t *buf) {
 }
 
 template <typename ELFT>
-void addCapabilityRelocation(Symbol *sym, RelType type, InputSectionBase *sec,
-                             uint64_t offset, RelExpr expr, int64_t addend,
-                             bool isCallExpr,
-                             llvm::function_ref<std::string()> referencedBy,
-                             RelocationBaseSection *dynRelSec) {
+void addCapabilityRelocation(
+    llvm::PointerUnion<Symbol *, InputSectionBase *> symOrSec, RelType type,
+    InputSectionBase *sec, uint64_t offset, RelExpr expr, int64_t addend,
+    bool isCallExpr, llvm::function_ref<std::string()> referencedBy,
+    RelocationBaseSection *dynRelSec) {
+  Symbol *sym = dyn_cast<Symbol *>(symOrSec);
   assert(expr == R_CHERI_CAPABILITY);
-  if (sec->name == ".gcc_except_table" && sym->isPreemptible) {
+  if (sec->name == ".gcc_except_table" && sym && sym->isPreemptible) {
     // We previously had an ugly workaround here to create a hidden alias for
     // relocations in the exception table, but this has since been fixed in
     // the compiler. Add an explicit error here in case someone tries to
@@ -1067,14 +1088,15 @@ void addCapabilityRelocation(Symbol *sym, RelType type, InputSectionBase *sec,
   // Emit either the legacy __cap_relocs section or a R_CHERI_CAPABILITY reloc
   // For local symbols we can also emit the untagged capability bits and
   // instruct csu/rtld to run CBuildCap
-  CapRelocsMode capRelocMode = sym->isPreemptible
+  CapRelocsMode capRelocMode = sym && sym->isPreemptible
                                    ? config->preemptibleCapRelocsMode
                                    : config->localCapRelocsMode;
   bool needTrampoline = false;
   // In the PLT ABI (and fndesc?) we have to use an elf relocation for function
   // pointers to ensure that the runtime linker adds the required trampolines
   // that sets $cgp:
-  if (!isCallExpr && config->emachine == llvm::ELF::EM_MIPS && sym->isFunc()) {
+  if (!isCallExpr && config->emachine == llvm::ELF::EM_MIPS && sym &&
+      sym->isFunc()) {
     if (!lld::elf::hasDynamicLinker()) {
       // In static binaries we do not need PLT stubs for function pointers since
       // all functions share the same $cgp
@@ -1083,7 +1105,6 @@ void addCapabilityRelocation(Symbol *sym, RelType type, InputSectionBase *sec,
       if (config->verboseCapRelocs)
         message("Do not need function pointer trampoline for " +
                 toString(*sym) + " in static binary");
-      needTrampoline = false;
     } else if (in.mipsAbiFlags) {
       auto abi = static_cast<MipsAbiFlagsSection<ELFT> &>(*in.mipsAbiFlags)
                      .getCheriAbiVariant();
@@ -1091,18 +1112,19 @@ void addCapabilityRelocation(Symbol *sym, RelType type, InputSectionBase *sec,
                   *abi == llvm::ELF::DF_MIPS_CHERI_ABI_FNDESC))
         needTrampoline = true;
     }
-  }
 
-  if (needTrampoline) {
-    capRelocMode = CapRelocsMode::ElfReloc;
-    assert(capRelocMode == config->preemptibleCapRelocsMode);
-    if (config->verboseCapRelocs)
-      message("Using trampoline for function pointer against " +
-              verboseToString(sym));
+    if (needTrampoline) {
+      capRelocMode = CapRelocsMode::ElfReloc;
+      assert(capRelocMode == config->preemptibleCapRelocsMode);
+      if (config->verboseCapRelocs)
+        message("Using trampoline for function pointer against " +
+                verboseToString(sym));
+    }
   }
 
   // local cap relocs don't need a Elf relocation with a full symbol lookup:
   if (capRelocMode == CapRelocsMode::ElfReloc) {
+    assert(sym && "ELF relocs should not be used against sections");
     assert((sym->isPreemptible || needTrampoline) &&
            "ELF relocs should not be used for non-preemptible symbols");
     assert((!sym->isLocal() || needTrampoline) &&
@@ -1157,10 +1179,10 @@ void addCapabilityRelocation(Symbol *sym, RelType type, InputSectionBase *sec,
 
   } else if (capRelocMode == CapRelocsMode::Legacy) {
     if (config->relativeCapRelocsOnly) {
-      assert(!sym->isPreemptible);
+      assert(!sym || !sym->isPreemptible);
     }
-    in.capRelocs->addCapReloc<ELFT>({sec, offset}, {sym, 0u},
-                                    sym->isPreemptible, addend);
+    in.capRelocs->addCapReloc<ELFT>({sec, offset}, {symOrSec, 0u},
+                                    sym && sym->isPreemptible, addend);
   } else {
     assert(config->localCapRelocsMode == CapRelocsMode::CBuildCap);
     error("CBuildCap method not implemented yet!");
@@ -1171,14 +1193,18 @@ void addCapabilityRelocation(Symbol *sym, RelType type, InputSectionBase *sec,
 } // namespace lld
 
 template void lld::elf::addCapabilityRelocation<ELF32LE>(
-    Symbol *, RelType, InputSectionBase *, uint64_t, RelExpr, int64_t, bool,
+    llvm::PointerUnion<Symbol *, InputSectionBase *>, RelType,
+    InputSectionBase *, uint64_t, RelExpr, int64_t, bool,
     llvm::function_ref<std::string()>, RelocationBaseSection *);
 template void lld::elf::addCapabilityRelocation<ELF32BE>(
-    Symbol *, RelType, InputSectionBase *, uint64_t, RelExpr, int64_t, bool,
+    llvm::PointerUnion<Symbol *, InputSectionBase *>, RelType,
+    InputSectionBase *, uint64_t, RelExpr, int64_t, bool,
     llvm::function_ref<std::string()>, RelocationBaseSection *);
 template void lld::elf::addCapabilityRelocation<ELF64LE>(
-    Symbol *, RelType, InputSectionBase *, uint64_t, RelExpr, int64_t, bool,
+    llvm::PointerUnion<Symbol *, InputSectionBase *>, RelType,
+    InputSectionBase *, uint64_t, RelExpr, int64_t, bool,
     llvm::function_ref<std::string()>, RelocationBaseSection *);
 template void lld::elf::addCapabilityRelocation<ELF64BE>(
-    Symbol *, RelType, InputSectionBase *, uint64_t, RelExpr, int64_t, bool,
+    llvm::PointerUnion<Symbol *, InputSectionBase *>, RelType,
+    InputSectionBase *, uint64_t, RelExpr, int64_t, bool,
     llvm::function_ref<std::string()>, RelocationBaseSection *);
