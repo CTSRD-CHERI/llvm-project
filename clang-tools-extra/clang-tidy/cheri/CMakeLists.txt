@@ -6,6 +6,7 @@ set(LLVM_LINK_COMPONENTS
 add_clang_library(clangTidyCheriModule
   CheriTidyModule.cpp
   FixcapasarraysubscriptCheck.cpp
+  FixcapformatCheck.cpp
   FixdriverdataCheck.cpp
   FixinttoptrcastCheck.cpp
   FixptrtoulongcastCheck.cpp

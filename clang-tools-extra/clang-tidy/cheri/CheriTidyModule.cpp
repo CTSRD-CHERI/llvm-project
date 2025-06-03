@@ -10,6 +10,7 @@
 #include "../ClangTidyModule.h"
 #include "../ClangTidyModuleRegistry.h"
 #include "FixcapasarraysubscriptCheck.h"
+#include "FixcapformatCheck.h"
 #include "FixdriverdataCheck.h"
 #include "FixinttoptrcastCheck.h"
 #include "FixptrtoulongcastCheck.h"
@@ -25,6 +26,8 @@ public:
   void addCheckFactories(ClangTidyCheckFactories &CheckFactories) override {
     CheckFactories.registerCheck<FixcapasarraysubscriptCheck>(
         "cheri-FixCapAsArraySubscript");
+    CheckFactories.registerCheck<FixcapformatCheck>(
+        "cheri-FixCapFormat");
     CheckFactories.registerCheck<FixdriverdataCheck>(
         "cheri-FixDriverData");
     CheckFactories.registerCheck<FixinttoptrcastCheck>(

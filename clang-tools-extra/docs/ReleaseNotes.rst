@@ -159,6 +159,13 @@ New checks
 
   Explicitly cast capabilities used as an array index to an unsigned long.
 
+- New :doc:`cheri-FixCapFormat
+  <clang-tidy/checks/cheri/FixCapFormat>` check.
+
+  Integer capabilities that are passed to printf-style functions
+  need a cast to "unsigned long" or printf will misinterpret the
+  value.
+
 - New :doc:`cheri-FixDriverData
   <clang-tidy/checks/cheri/FixDriverData>` check.
 

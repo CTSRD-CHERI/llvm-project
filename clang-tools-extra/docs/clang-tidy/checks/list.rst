@@ -163,6 +163,7 @@ Clang-Tidy Checks
    `cert-oop57-cpp <cert/oop57-cpp.html>`_,
    `cert-oop58-cpp <cert/oop58-cpp.html>`_,
    `cheri-FixCapAsArraySubscript <cheri/FixCapAsArraySubscript.html>`_, "Yes"
+   `cheri-FixCapFormat <cheri/FixCapFormat.html>`_, "Yes"
    `cheri-FixDriverData <cheri/FixDriverData.html>`_, "Yes"
    `cheri-FixIntToPtrCast <cheri/FixIntToPtrCast.html>`_, "Yes"
    `cheri-FixPtrToUlongCast <cheri/FixPtrToUlongCast.html>`_, "Yes"
