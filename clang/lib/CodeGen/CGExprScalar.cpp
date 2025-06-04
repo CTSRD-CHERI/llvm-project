@@ -2567,8 +2567,8 @@ Value *ScalarExprEmitter::VisitCastExpr(CastExpr *CE) {
   case CK_CHERICapabilityToAddress: {
     if (const DeclRefExpr *DRE = dyn_cast<DeclRefExpr>(E))
       if (const VarDecl *VD = dyn_cast<VarDecl>(DRE->getDecl()))
-        if (const ReferenceType *RT = dyn_cast<ReferenceType>(VD->getType()))
-          llvm_unreachable("CK_CHERICapabilityTo{Offset,Address} shoud not be "
+        if (isa<ReferenceType>(VD->getType()))
+          llvm_unreachable("CK_CHERICapabilityTo{Offset,Address} should not be "
                            "allowed for references");
 
     llvm::Value *Src = Visit(E); // The default case
