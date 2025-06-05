@@ -484,6 +484,23 @@ void CheriCapRelocsSection::writeToImpl(uint8_t *buf) {
       }
     }
 
+    // For function relocs, use the PCC bounds from the containing
+    // compartment.
+    if (config->emachine != EM_MIPS && (isFunc || isGnuIFunc)) {
+      std::optional<Compartment *> c;
+      if (Symbol *s = dyn_cast<Symbol *>(realTarget.symOrSec)) {
+        c = s->containingCompartment();
+      } else {
+        InputSectionBase *isec = cast<InputSectionBase *>(realTarget.symOrSec);
+        c = isec->compartment;
+      }
+      if (c) {
+        targetOffset += targetVA - pccBase(*c);
+        targetVA = pccBase(*c);
+        targetSize = pccSize(*c);
+      }
+    }
+
     // TODO: should we warn about symbols that are out-of-bounds?
     // mandoc seems to do it so I guess we need it
     // if (TargetOffset < 0 || TargetOffset > TargetSize) warn(...);

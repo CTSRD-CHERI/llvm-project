@@ -79,7 +79,7 @@ fn_reloc1:
 # EXE-RELOCS-NEXT:     Location: 0x3480 (fn_reloc1)
 # EXE-RELOCS-NEXT:     Base: fn1 (0x1370)
 # EXE-RELOCS-NEXT:     Offset: 8
-# EXE-RELOCS-NEXT:     Length: 12
+# EXE-RELOCS-NEXT:     Length: 24
 # EXE-RELOCS-NEXT:     Permissions: Function (0x8000000000000000)
 # EXE-RELOCS-NEXT:   }
 
@@ -102,9 +102,9 @@ fn_reloc2:
 # LLD-OUTPUT-NEXT: Found better match for capability relocation against .Lsecond_fn_target+0: .Lfn2$start+8
 # EXE-RELOCS-NEXT:   Relocation {
 # EXE-RELOCS-NEXT:     Location: 0x3490 (fn_reloc2)
-# EXE-RELOCS-NEXT:     Base: .Lfn2$start (0x137C)
-# EXE-RELOCS-NEXT:     Offset: 8
-# EXE-RELOCS-NEXT:     Length: 12
+# EXE-RELOCS-NEXT:     Base: fn1 (0x1370)
+# EXE-RELOCS-NEXT:     Offset: 20
+# EXE-RELOCS-NEXT:     Length: 24
 # EXE-RELOCS-NEXT:     Permissions: Function (0x8000000000000000)
 # EXE-RELOCS-NEXT:   }
 data_reloc1:
