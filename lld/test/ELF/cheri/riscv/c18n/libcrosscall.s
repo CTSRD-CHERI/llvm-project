@@ -27,8 +27,8 @@
 # SYMBOLS-NEXT:     8: 000000000000461c    12 FUNC    GLOBAL DEFAULT    10 two_func
 
 # CAPRELOCS-LABEL: CHERI __cap_relocs [
-# CAPRELOCS-NEXT:     0x0035e0 Base: 0x2590 (dice_roll) Length: 8 Perms: Function
-# CAPRELOCS-NEXT:     0x005640 Base: 0x2590 (dice_roll) Length: 8 Perms: Function
+# CAPRELOCS-NEXT:     0x0035e0 Base: 0x2590 (dice_roll) Length: 4192 Perms: Function
+# CAPRELOCS-NEXT:     0x005640 Base: 0x2590 (dice_roll) Length: 4192 Perms: Function
 
 # one_value() should call dice_roll() directly
 # 0x25a8 - 24 == 0x2590 (dice_roll)

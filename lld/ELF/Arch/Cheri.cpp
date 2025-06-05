@@ -393,6 +393,19 @@ void CheriCapRelocsSection::writeToImpl(uint8_t *buf) {
       }
     }
 
+    // For function symbols, use the PCC bounds from the containing
+    // compartment.
+    if (config->emachine != EM_MIPS && (isFunc || isGnuIFunc)) {
+      if (Symbol *s = dyn_cast<Symbol *>(realTarget.symOrSec)) {
+        auto c = s->containingCompartment();
+        if (c) {
+          targetOffset += targetVA - pccBase(*c);
+          targetVA = pccBase(*c);
+          targetSize = pccSize(*c);
+        }
+      }
+    }
+
     // TODO: should we warn about symbols that are out-of-bounds?
     // mandoc seems to do it so I guess we need it
     // if (TargetOffset < 0 || TargetOffset > TargetSize) warn(...);

@@ -24,8 +24,8 @@
 # SYMBOLS-NEXT:     6: 00000000000045a0    12 FUNC    GLOBAL DEFAULT    10 two_func
 
 # CAPRELOCS-LABEL: CHERI __cap_relocs [
-# CAPRELOCS-NEXT:     0x003590 Base: 0x2568 (dice_roll) Length: 8 Perms: Function
-# CAPRELOCS-NEXT:     0x0055c0 Base: 0x2568 (dice_roll) Length: 8 Perms: Function
+# CAPRELOCS-NEXT:     0x003590 Base: 0x2568 (dice_roll) Length: 4152 Perms: Function
+# CAPRELOCS-NEXT:     0x0055c0 Base: 0x2568 (dice_roll) Length: 4152 Perms: Function
 
 #--- dice.s
 
