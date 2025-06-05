@@ -4082,6 +4082,19 @@ size_t PackageMetadataNote::getSize() const {
          alignTo(config->packageMetadata.size() + 1, 4);
 }
 
+uint64_t elf::pccBase(const Compartment *c) {
+  return cheriBoundsPhdr(c)->firstSec->addr;
+}
+
+uint64_t elf::pccSize(const Compartment *c) {
+  PhdrEntry *phdr = cheriBoundsPhdr(c);
+  OutputSection *first = phdr->firstSec;
+  OutputSection *last = phdr->lastSec;
+  uint64_t size = last->getVA() + last->size - first->getVA();
+  uint64_t align = target->getCheriRequiredAlignment(size);
+  return alignToPowerOf2(size, align);
+}
+
 InStruct elf::in;
 
 std::vector<Compartment> elf::compartments;
