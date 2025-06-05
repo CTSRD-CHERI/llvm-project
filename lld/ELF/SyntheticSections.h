@@ -1412,6 +1412,16 @@ inline RelocationBaseSection *relaPlt(const Compartment *c) {
     return c->relaPlt.get();
 }
 
+inline PhdrEntry *cheriBoundsPhdr(const Compartment *c) {
+  if (c == nullptr)
+    return in.cheriBounds;
+  else
+    return c->cheriBounds;
+}
+
+uint64_t pccBase(const Compartment *c);
+uint64_t pccSize(const Compartment *c);
+
 } // namespace lld::elf
 
 #endif
