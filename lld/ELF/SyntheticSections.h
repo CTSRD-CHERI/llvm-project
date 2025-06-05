@@ -1361,6 +1361,9 @@ struct InStruct {
 
 LLVM_LIBRARY_VISIBILITY extern InStruct in;
 
+uint64_t pccBase();
+uint64_t pccSize();
+
 } // namespace lld::elf
 
 #endif
