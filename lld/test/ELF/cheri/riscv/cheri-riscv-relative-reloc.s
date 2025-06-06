@@ -6,7 +6,7 @@
 
 # OBJ:      Relocation section '.rela.text'
 # OBJ:      Offset
-# OBJ-NEXT: [[Y_ADDR:[0-9a-f]+]]     {{[0-9a-f]+}} R_RISCV_CHERI_CAPTAB_PCREL_HI20 {{[0-9a-f]+}} y + 0
+# OBJ-NEXT: [[Y_ADDR:[0-9a-f]+]]     {{[0-9a-f]+}} R_RISCV_GOT_HI20 {{[0-9a-f]+}} y + 0
 # OBJ-NEXT: [[START_ADDR:[0-9a-f]+]] {{[0-9a-f]+}} R_RISCV_PCREL_LO12_I            {{[0-9a-f]+}} _start + 0
 # OBJ:      Relocation section '.rela.data.rel.ro'
 # OBJ-NEXT: Offset
@@ -21,7 +21,7 @@
   .globl _start
   .type main,@function
 _start:
-  auipc ca1, %captab_pcrel_hi(y)
+  auipc ca1, %got_pcrel_hi(y)
   lc ca1, %pcrel_lo(_start)(ca1)
   ld a0, 0(ca1)
   ret
