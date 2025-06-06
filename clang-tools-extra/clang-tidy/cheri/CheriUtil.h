@@ -316,6 +316,21 @@ public:
         continue;
       }
 
+      /*
+       * Blacklist some expressions where the value is not propagated.
+       * We should rather have a whitelist here but let's see if we get
+       * away with this.
+       */
+      if (isa<ArraySubscriptExpr>(Pexpr))
+        continue;
+      if (isa<MemberExpr>(Pexpr))
+        continue;
+      if (auto Unop = dyn_cast<UnaryOperator>(Pexpr)) {
+        auto K = Unop->getOpcode();
+        if (K == UO_AddrOf || K == UO_Deref)
+            continue;
+      }
+
       /* Not a call expression: Check upstream use. */
       if (isVarArgsArgument(Ctx, Pexpr))
         return true;
