@@ -62,13 +62,20 @@ static void emitSCSPrologue(MachineFunction &MF, MachineBasicBlock &MBB,
   // Store return address to shadow call stack
   // (c)addi    (c)gp, (c)gp, [4|8|16]
   // s[w|d|c]   (c)ra, -[4|8|16](cgp)
-  unsigned IncrInstr = IsPureCapABI ? RISCV::CADDI : RISCV::ADDI;
+  unsigned IncrInstr =
+      IsPureCapABI
+          ? (STI.hasStdExtZCheriPureCap() ? RISCV::CADDI : RISCV::CIncOffsetImm)
+          : RISCV::ADDI;
   BuildMI(MBB, MI, DL, TII->get(IncrInstr))
       .addReg(SCSPReg, RegState::Define)
       .addReg(SCSPReg)
       .addImm(SlotSize)
       .setMIFlag(MachineInstr::FrameSetup);
-  unsigned StoreInstr = IsPureCapABI ? RISCV::CSC : (IsRV64 ? RISCV::SD : RISCV::SW);
+  unsigned StoreInstr = IsPureCapABI
+                            ? (STI.hasStdExtZCheriPureCap()
+                                   ? RISCV::CSC
+                                   : (IsRV64 ? RISCV::CSC_128 : RISCV::CSC_64))
+                            : (IsRV64 ? RISCV::SD : RISCV::SW);
   BuildMI(MBB, MI, DL, TII->get(StoreInstr))
       .addReg(RAReg)
       .addReg(SCSPReg)
@@ -116,19 +123,25 @@ static void emitSCSEpilogue(MachineFunction &MF, MachineBasicBlock &MBB,
   const RISCVInstrInfo *TII = STI.getInstrInfo();
   bool IsRV64 = STI.hasFeature(RISCV::Feature64Bit);
   bool IsPureCapABI = RISCVABI::isCheriPureCapABI(STI.getTargetABI());
+  bool HasZCheriPurecap = STI.hasFeature(RISCV::FeatureStdExtZCheriPureCap);
   MVT PtrVT = IsPureCapABI ? STI.typeForCapabilities() : STI.getXLenVT();
   int64_t SlotSize = PtrVT.getFixedSizeInBits() / 8;
   // Load return address from shadow call stack
   // l[w|d|c]  (c)ra, -[4|8|16]((c)gp)
   // (c)addi   (c)gp, (c)gp, -[4|8|16]
   unsigned LoadInstr =
-      IsPureCapABI ? RISCV::CLC : (IsRV64 ? RISCV::LD : RISCV::LW);
+      IsPureCapABI
+          ? (HasZCheriPurecap ? RISCV::CLC
+                             : (IsRV64 ? RISCV::CLC_128 : RISCV::CLC_64))
+          : (IsRV64 ? RISCV::LD : RISCV::LW);
   BuildMI(MBB, MI, DL, TII->get(LoadInstr))
       .addReg(RAReg, RegState::Define)
       .addReg(SCSPReg)
       .addImm(-SlotSize)
       .setMIFlag(MachineInstr::FrameDestroy);
-  unsigned IncrInstr = IsPureCapABI ? RISCV::CADDI : RISCV::ADDI;
+  unsigned IncrInstr =
+      IsPureCapABI ? (HasZCheriPurecap ? RISCV::CADDI : RISCV::CIncOffsetImm)
+                   : RISCV::ADDI;
   BuildMI(MBB, MI, DL, TII->get(IncrInstr))
       .addReg(SCSPReg, RegState::Define)
       .addReg(SCSPReg)

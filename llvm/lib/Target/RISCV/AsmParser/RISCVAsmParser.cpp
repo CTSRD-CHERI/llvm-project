@@ -3782,8 +3782,13 @@ void RISCVAsmParser::emitCapLoadGlobalCap(MCInst &Inst, SMLoc IDLoc,
   //             CLC cdest, %pcrel_lo(TmpLabel)(cdest)
   MCOperand DestReg = Inst.getOperand(0);
   const MCExpr *Symbol = Inst.getOperand(1).getExpr();
+  const bool HasZCheriPurecap =
+      STI->hasFeature(RISCV::FeatureStdExtZCheriPureCap);
+  unsigned SecondOpcode = HasZCheriPurecap
+                              ? RISCV::CLC
+                              : (isRV64() ? RISCV::CLC_128 : RISCV::CLC_64);
   emitAuipccInstPair(DestReg, DestReg, Symbol, RISCVMCExpr::VK_RISCV_GOT_HI,
-                     RISCV::CLC, IDLoc, Out);
+                     SecondOpcode, IDLoc, Out);
 }
 
 void RISCVAsmParser::emitCapLoadTLSIEAddress(MCInst &Inst, SMLoc IDLoc,

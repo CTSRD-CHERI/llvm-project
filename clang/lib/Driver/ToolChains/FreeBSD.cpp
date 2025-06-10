@@ -245,18 +245,12 @@ void freebsd::Linker::ConstructJob(Compilation &C, const JobAction &JA,
     break;
   case llvm::Triple::riscv32:
     CmdArgs.push_back("-m");
-    if (IsCHERIPureCapABI)
-      CmdArgs.push_back("elf32lriscv_cheri");
-    else
-      CmdArgs.push_back("elf32lriscv");
+    CmdArgs.push_back("elf32lriscv");
     CmdArgs.push_back("-X");
     break;
   case llvm::Triple::riscv64:
     CmdArgs.push_back("-m");
-    if (IsCHERIPureCapABI)
-        CmdArgs.push_back("elf64lriscv_cheri");
-    else
-      CmdArgs.push_back("elf64lriscv");
+    CmdArgs.push_back("elf64lriscv");
     CmdArgs.push_back("-X");
     break;
   default:

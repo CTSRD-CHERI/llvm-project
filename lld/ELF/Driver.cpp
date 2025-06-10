@@ -536,7 +536,7 @@ static uint8_t getZStartStopVisibility(opt::InputArgList &args) {
 
 constexpr const char *knownZFlags[] = {
     "captabledebug",
-    "cheri-riscv-jump-slot",
+    "cheri-riscv-v9",
     "combreloc",
     "copyreloc",
     "defs",
@@ -566,6 +566,7 @@ constexpr const char *knownZFlags[] = {
     "nostart-stop-gc",
     "notext",
     "now",
+    "no-cheri-riscv-jump-slot",
     "origin",
     "pac-plt",
     "pack-relative-relocs",
@@ -1436,6 +1437,7 @@ static void readConfigs(opt::InputArgList &args) {
   config->whyExtract = args.getLastArgValue(OPT_why_extract);
   config->zCapTableDebug = getZFlag(args, "captabledebug", "nocaptabledebug", false);
   config->zCheriRiscvJumpSlot = !hasZOption(args, "no-cheri-riscv-jump-slot");
+  config->zCheriRiscvV9 = hasZOption(args, "cheri-riscv-v9");
   config->zCombreloc = getZFlag(args, "combreloc", "nocombreloc", true);
   config->zCopyreloc = getZFlag(args, "copyreloc", "nocopyreloc", true);
   config->zForceBti = hasZOption(args, "force-bti");
@@ -1933,13 +1935,6 @@ void LinkerDriver::createFiles(opt::InputArgList &args) {
 
 // If -m <machine_type> was not given, infer it from object files.
 void LinkerDriver::inferMachineType() {
-  auto interpretRISCVCheriAbi = [](InputFile *f){
-    if (f->emachine != EM_RISCV)
-      return;
-    if(f->eflags & EF_RISCV_CHERIABI && !config->isCheriAbi)
-      config->isCheriAbi = true;
-  };
-
   if (config->ekind != ELFNoneKind)
     return;
 
@@ -1950,8 +1945,6 @@ void LinkerDriver::inferMachineType() {
     config->emachine = f->emachine;
     config->osabi = f->osabi;
     config->mipsN32Abi = f->emachine == EM_MIPS && isMipsN32Abi(f);
-    // try and deduce isCheriAbi before target creation
-    interpretRISCVCheriAbi(f);
     return;
   }
   error("target emulation unknown: -m or at least one .o file required");

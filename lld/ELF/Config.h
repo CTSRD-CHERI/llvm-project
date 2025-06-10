@@ -309,6 +309,7 @@ struct Config {
   // each captable clc instruction that indicates which symbol should be loaded
   bool zCapTableDebug;
   bool zCheriRiscvJumpSlot;
+  bool zCheriRiscvV9;
   bool zCombreloc;
   bool zCopyreloc;
   bool zForceBti;

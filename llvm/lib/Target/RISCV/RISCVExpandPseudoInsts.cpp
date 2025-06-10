@@ -242,8 +242,14 @@ bool RISCVExpandPseudo::expandCapLoadLocalCap(
 bool RISCVExpandPseudo::expandCapLoadGlobalCap(
     MachineBasicBlock &MBB, MachineBasicBlock::iterator MBBI,
     MachineBasicBlock::iterator &NextMBBI) {
+  const auto &STI = MBB.getParent()->getSubtarget<RISCVSubtarget>();
+  const bool HasZCheriPurecap =
+      STI.hasFeature(RISCV::FeatureStdExtZCheriPureCap);
+  unsigned LoadCapOpc = HasZCheriPurecap
+                            ? RISCV::CLC
+                            : (STI.is64Bit() ? RISCV::CLC_128 : RISCV::CLC_64);
   return expandAuipccInstPair(MBB, MBBI, NextMBBI, RISCVII::MO_GOT_HI,
-                              RISCV::CLC);
+                              LoadCapOpc);
 }
 
 bool RISCVExpandPseudo::expandCapLoadTLSIEAddress(

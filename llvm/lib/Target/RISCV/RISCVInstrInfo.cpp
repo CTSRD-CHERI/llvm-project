@@ -122,11 +122,18 @@ unsigned RISCVInstrInfo::isLoadFromStackSlot(const MachineInstr &MI,
   case RISCV::FLD:
   case RISCV::CLD:
   case RISCV::CFLD:
+  case RISCV::CLC_64:
+  case RISCV::LC_64:
     MemBytes = 8;
+    break;
+  case RISCV::CLC_128:
+  case RISCV::LC_128:
+    MemBytes = 16;
     break;
   case RISCV::CLC:
   case RISCV::LC:
     MemBytes = STI.isRV32() ? 8 : 16;
+    break;
   }
 
   if (MI.getOperand(1).isFI() && MI.getOperand(2).isImm() &&
@@ -169,7 +176,13 @@ unsigned RISCVInstrInfo::isStoreToStackSlot(const MachineInstr &MI,
   case RISCV::FSD:
   case RISCV::CSD:
   case RISCV::CFSD:
+  case RISCV::CSC_64:
+  case RISCV::SC_64:
     MemBytes = 8;
+    break;
+  case RISCV::CSC_128:
+  case RISCV::SC_128:
+    MemBytes = 16;
     break;
   case RISCV::SC:
   case RISCV::CSC:
@@ -587,7 +600,9 @@ void RISCVInstrInfo::storeRegToStackSlot(MachineBasicBlock &MBB,
                                                                : RISCV::CSD;
       IsScalableVector = false;
     } else if (RISCV::GPCRRegClass.hasSubClassEq(RC)) {
-      Opcode = RISCV::CSC;
+      Opcode = ST.hasStdExtZCheriPureCap()
+                   ? RISCV::CSC
+                   : (ST.isRV64() ? RISCV::CSC_128 : RISCV::CSC_64);
       IsScalableVector = false;
     } else if (RISCV::FPR32RegClass.hasSubClassEq(RC)) {
       Opcode = RISCV::CFSW;
@@ -604,7 +619,9 @@ void RISCVInstrInfo::storeRegToStackSlot(MachineBasicBlock &MBB,
                RISCV::SW : RISCV::SD;
       IsScalableVector = false;
     } else if (RISCV::GPCRRegClass.hasSubClassEq(RC)) {
-      Opcode = RISCV::SC;
+      Opcode = ST.hasStdExtZCheriPureCap()
+                   ? RISCV::SC
+                   : (ST.isRV64() ? RISCV::SC_128 : RISCV::SC_64);
       IsScalableVector = false;
     } else if (RISCV::GPRPF64RegClass.hasSubClassEq(RC)) {
       Opcode = RISCV::PseudoRV32ZdinxSD;
@@ -697,7 +714,9 @@ void RISCVInstrInfo::loadRegFromStackSlot(MachineBasicBlock &MBB,
                                                                : RISCV::CLD;
       IsScalableVector = false;
     } else if (RISCV::GPCRRegClass.hasSubClassEq(RC)) {
-      Opcode = RISCV::CLC;
+      Opcode = ST.hasStdExtZCheriPureCap()
+                   ? RISCV::CLC
+                   : (ST.isRV64() ? RISCV::CLC_128 : RISCV::CLC_64);
       IsScalableVector = false;
     } else if (RISCV::FPR32RegClass.hasSubClassEq(RC)) {
       Opcode = RISCV::CFLW;
@@ -714,7 +733,9 @@ void RISCVInstrInfo::loadRegFromStackSlot(MachineBasicBlock &MBB,
                RISCV::LW : RISCV::LD;
       IsScalableVector = false;
     } else if (RISCV::GPCRRegClass.hasSubClassEq(RC)) {
-      Opcode = RISCV::LC;
+      Opcode = ST.hasStdExtZCheriPureCap()
+                   ? RISCV::LC
+                   : (ST.isRV64() ? RISCV::LC_128 : RISCV::LC_64);
       IsScalableVector = false;
     } else if (RISCV::GPRPF64RegClass.hasSubClassEq(RC)) {
       Opcode = RISCV::PseudoRV32ZdinxLD;

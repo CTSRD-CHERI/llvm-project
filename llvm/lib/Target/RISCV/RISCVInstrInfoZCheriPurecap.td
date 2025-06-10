@@ -228,10 +228,75 @@ def : InstAlias<"csrrc $cd, $csr, $imm",
 // Memory-Access Instructions
 //===----------------------------------------------------------------------===//
 
+let Predicates = [HasZCheriPurecap, NotCapMode] in {
+let DecoderNamespace = "ZCheriOnly_", hasSideEffects = 0, mayLoad = 1, mayStore = 0 in
+def LC  : RVInstI<0b100, OPC_MISC_MEM, (outs GPCR:$rd),
+                      (ins GPR:$rs1, simm12:$imm12),
+                      "lc", "$rd, ${imm12}(${rs1})">;
+
+let DecoderNamespace = "ZCheriOnly_", hasSideEffects = 0, mayLoad = 0, mayStore = 1 in
+def SC  : RVInstS<0b100, OPC_STORE, (outs),
+                      (ins GPCR:$rs2, GPR:$rs1, simm12:$imm12),
+                      "sc", "$rs2, ${imm12}(${rs1})">;
+
+let EmitPriority = 0 in {
+def : InstAlias<"lc $rd, (${rs1})",
+                (LC  GPCR:$rd, GPR:$rs1, 0)>;
+def : InstAlias<"sc $rs2, (${rs1})",
+                (SC  GPCR:$rs2, GPR:$rs1, 0)>;
+}
+}
+
+let Predicates = [HasZCheriPurecap, HasStdExtA, NotCapMode] in {
+let DecoderNamespace = "ZCheriOnly_" in {
+  defm LR_C      : LR_C_r_aq_rl<"", 0b100, "lr.c">;
+  defm SC_C      : AMO_C_rr_aq_rl<"", 0b00011, 0b100, "sc.c", GPR>;
+  defm AMOSWAP_C : AMO_C_rr_aq_rl<"", 0b00001, 0b100, "amoswap.c", GPCR>;
+}
+}
 
 //===----------------------------------------------------------------------===//
 // Capability Mode Instructions
 //===----------------------------------------------------------------------===//
+// We need 'different' instruction definitions for cap-mode and non cap-mode
+// versions of capability instructions due to register class differences between
+// them - even though they share an encoding.
+
+// Load Capability
+let Predicates = [HasZCheriPurecap, IsCapMode] in {
+let DecoderNamespace = "ZCheriCapModeOnly_",
+    hasSideEffects = 0, mayLoad = 1, mayStore = 0 in {
+def CLC : RVInstI<0b100, OPC_MISC_MEM, (outs GPCR:$rd),
+                  (ins GPCR:$rs1, simm12:$imm12),
+                  "lc", "$rd, ${imm12}(${rs1})">;
+}
+def : InstAlias<"clc $rd, ${imm12}(${rs1})",
+                (CLC GPCR:$rd, GPCR:$rs1, simm12:$imm12), 0>;
+defm : CPrefixedInstAlias<"lc $rd, (${rs1})",
+                          (CLC  GPCR:$rd, GPCR:$rs1, 0)>;
+} // Predicates = [HasZCheriPurecap]
+
+// Store Capability
+let Predicates = [HasZCheriPurecap, IsCapMode] in {
+let DecoderNamespace = "ZCheriCapModeOnly_", hasSideEffects = 0,
+    mayLoad = 0, mayStore = 1 in
+def CSC : RVInstS<0b100, OPC_STORE, (outs),
+                       (ins GPCR:$rs2, GPCR:$rs1, simm12:$imm12),
+                       "sc", "$rs2, ${imm12}(${rs1})">;
+def : InstAlias<"csc $rs2, ${imm12}(${rs1})",
+                (CSC  GPCR:$rs2, GPCR:$rs1, simm12:$imm12), 0>;
+defm : CPrefixedInstAlias<"sc $rs2, (${rs1})",
+                          (CSC  GPCR:$rs2, GPCR:$rs1, 0)>;
+} // Predicates = [HasZCheriPurecap]
+
+
+// atomic instructions
+
+let Predicates = [HasZCheriPurecap, HasStdExtA, IsCapMode] in {
+defm CLR_C       : CLR_C_r_aq_rl<"", 0b100, "lr.c", "ZCheriCapModeOnly_">;
+defm CSC_C       : CAMO_C_rr_aq_rl<"", 0b00011, 0b100, "sc.c", GPR, "ZCheriCapModeOnly_">;
+defm CAMOSWAP_C  : CAMO_C_rr_aq_rl<"", 0b00001, 0b100, "amoswap.c", GPCR, "ZCheriCapModeOnly_">;
+}
 
 
 //===----------------------------------------------------------------------===//
@@ -326,6 +391,23 @@ def : Pat<(load GPCR:$rs1),
           (BuildPairF64Pseudo (LW_CAP GPCR:$rs1),
                               (LW_CAP (CADDI GPCR:$rs1, 4)))>;
 
+let Predicates = [HasZCheriPurecap, NotCapMode] in {
+def  : LdPat<load, LC, CLenVT>;
+def  : StPat<store, SC, GPCR, CLenVT>;
+def  : LdPat<atomic_load_cap, LC, CLenVT>;
+def  : AtomicStPat<atomic_store_cap, SC, GPCR, CLenVT>;
+defm : AMOCapPat<"", "atomic_swap_cap", "AMOSWAP_C">;
+}
+let Predicates = [HasZCheriPurecap, HasStdExtA, IsCapMode] in {
+defm : CheriLdPat<atomic_load_cap, CLC, CLenVT>;
+defm : CheriAtomicStPat<atomic_store_cap, CSC, GPCR, CLenVT>;
+defm : CheriAMOCapPat<"","atomic_swap_cap", "CAMOSWAP_C">;
+}
+let Predicates = [HasZCheriPurecap, IsCapMode] in {
+defm : CheriLdPat<load, CLC, CLenVT>;
+defm : CheriStPat<store, CSC, GPCR, CLenVT>;
+}
+
 //===----------------------------------------------------------------------===//
 // Compress Instruction tablegen backend.
 //===----------------------------------------------------------------------===//
@@ -336,11 +418,52 @@ def : CompressPat<(CADDI GPCRC:$rd, CSP:$rs1, uimm10_lsb00nonzero:$imm),
                   (C_CIncOffsetImm4CSPN GPCRC:$rd, CSP:$rs1, uimm10_lsb00nonzero:$imm)>;
 } // Predicates = [HasZCheriPurecap, HasCheriRVC, HasStdExtC, IsCapMode]
 
+let Predicates = [HasZCheriPurecap, HasCheriRVC, HasStdExtC, IsRV64, IsCapMode] in {
+def : CompressPat<(CLC GPCRC:$rd, GPCRC:$rs1, uimm9_lsb0000:$imm),
+                  (C_CLC_128 GPCRC:$rd, GPCRC:$rs1, uimm9_lsb0000:$imm)>;
+} // Predicates = [HasZCheriPurecap, HasCheriRVC, HasStdExtC, IsRV64, IsCapMode]
+
+let Predicates = [HasZCheriPurecap, HasCheriRVC, HasStdExtC, IsRV32, IsCapMode] in {
+def : CompressPat<(CLC GPCRC:$rd, GPCRC:$rs1, uimm8_lsb000:$imm),
+                  (C_CLC_64 GPCRC:$rd, GPCRC:$rs1, uimm8_lsb000:$imm)>;
+} // Predicates = [HasZCheriPurecap, HasCheriRVC, HasStdExtC, IsRV32, IsCapMode]
+
+let Predicates = [HasZCheriPurecap, HasCheriRVC, HasStdExtC, IsRV64, IsCapMode] in {
+def : CompressPat<(CSC GPCRC:$rs2, GPCRC:$rs1, uimm9_lsb0000:$imm),
+                  (C_CSC_128 GPCRC:$rs2, GPCRC:$rs1, uimm9_lsb0000:$imm)>;
+} // Predicates = [HasZCheriPurecap, HasCheriRVC, HasStdExtC, IsRV64, IsCapMode]
+
+let Predicates = [HasZCheriPurecap, HasCheriRVC, HasStdExtC, IsRV32, IsCapMode] in {
+def : CompressPat<(CSC GPCRC:$rs2, GPCRC:$rs1, uimm8_lsb000:$imm),
+                  (C_CSC_64 GPCRC:$rs2, GPCRC:$rs1, uimm8_lsb000:$imm)>;
+} // Predicates = [HasZCheriPurecap, HasCheriRVC, HasStdExtC, IsRV32, IsCapMode]
+
 // Quadrant 1
 let Predicates = [HasZCheriPurecap, HasCheriRVC, HasStdExtC, IsCapMode] in {
 def : CompressPat<(CADDI C2, C2, simm10_lsb0000nonzero:$imm),
                   (C_CIncOffsetImm16CSP C2, simm10_lsb0000nonzero:$imm)>;
-} // Predicates = [HasCheri, HasCheriRVC, HasStdExtC, IsCapMode]
+} // Predicates = [HasZCheriPurecap, HasCheriRVC, HasStdExtC, IsCapMode]
+
+// Quadrant 2
+let Predicates = [HasZCheriPurecap, HasCheriRVC, HasStdExtC, IsRV64, IsCapMode] in {
+def : CompressPat<(CLC GPCRNoC0:$rd, CSP:$rs1, uimm10_lsb0000:$imm),
+                  (C_CLCCSP_128 GPCRNoC0:$rd, CSP:$rs1, uimm10_lsb0000:$imm)>;
+} // Predicates = [HasZCheriPurecap, HasCheriRVC, HasStdExtC, IsRV64, IsCapMode]
+
+let Predicates = [HasZCheriPurecap, HasCheriRVC, HasStdExtC, IsRV32, IsCapMode] in {
+def : CompressPat<(CLC GPCRNoC0:$rd, CSP:$rs1, uimm9_lsb000:$imm),
+                  (C_CLCCSP_64 GPCRNoC0:$rd, CSP:$rs1, uimm9_lsb000:$imm)>;
+} // Predicates = [HasZCheriPurecap, HasCheriRVC, HasStdExtC, IsRV32, IsCapMode]
+
+let Predicates = [HasZCheriPurecap, HasCheriRVC, HasStdExtC, IsRV64, IsCapMode] in {
+def : CompressPat<(CSC GPCR:$rs2, CSP:$rs1, uimm10_lsb0000:$imm),
+                  (C_CSCCSP_128 GPCR:$rs2, CSP:$rs1, uimm10_lsb0000:$imm)>;
+} // Predicates = [HasZCheriPurecap, HasCheriRVC, HasStdExtC, IsRV64, IsCapMode]
+
+let Predicates = [HasZCheriPurecap, HasCheriRVC, HasStdExtC, IsRV32, IsCapMode] in {
+def : CompressPat<(CSC GPCR:$rs2, CSP:$rs1, uimm9_lsb000:$imm),
+                  (C_CSCCSP_64 GPCR:$rs2, CSP:$rs1, uimm9_lsb000:$imm)>;
+} // Predicates = [HasZCheriPurecap, HasCheriRVC, HasStdExtC, IsRV32, IsCapMode]
 
 //===----------------------------------------------------------------------===//
 // Cheri Hypervisor extensions.
