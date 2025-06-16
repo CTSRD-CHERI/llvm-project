@@ -46,7 +46,6 @@ public:
   void relocate(uint8_t *loc, const Relocation &rel,
                 uint64_t val) const override;
   bool relaxOnce(int pass) const override;
-  void relocateAlloc(InputSectionBase &sec, uint8_t *buf) const override;
 };
 
 } // end anonymous namespace
@@ -849,34 +848,6 @@ bool RISCV::relaxOnce(int pass) const {
       changed |= relax(*sec);
   }
   return changed;
-}
-
-void RISCV::relocateAlloc(InputSectionBase &sec, uint8_t *buf) const {
-  const unsigned bits = config->is64 ? 64 : 32;
-  uint64_t secAddr = sec.getOutputSection()->addr;
-  if (auto *s = dyn_cast<InputSection>(&sec))
-    secAddr += s->outSecOff;
-  for (const Relocation &rel : sec.relocs()) {
-    uint8_t *loc = buf + rel.offset;
-    const uint64_t val =
-        SignExtend64(sec.getRelocTargetVA(sec.file, rel.type, rel.addend,
-                                          secAddr + rel.offset, *rel.sym,
-                                          rel.expr, &sec, rel.offset),
-                     bits);
-    switch (rel.expr) {
-    case lld::elf::R_CHERI_CAPTAB_FRAG_META:
-    case lld::elf::R_CHERI_CAPTAB_FRAG_ADDR:
-      if(bits == 64)
-          write64(loc, val);
-      else
-          write32(loc, val);
-      break;
-    default:
-      break;
-    }
-    if (rel.expr != R_RELAX_HINT)
-      relocate(loc, rel, val);
-  }
 }
 
 void elf::riscvFinalizeRelax(int passes) {
