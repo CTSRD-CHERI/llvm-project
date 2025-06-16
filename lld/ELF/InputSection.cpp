@@ -885,9 +885,9 @@ uint64_t InputSectionBase::getRelocTargetVA(const InputFile *file, RelType type,
   case R_MIPS_CHERI_CAPTAB_TPREL:
     assert(a == 0 && "capability table index relocs should not have addends");
     return in.mipsCheriCapTable->getTlsOffset(sym);
-  case R_CHERI_CAPTAB_FRAG_ADDR:
+  case R_CHERI_CAPFRAG_ADDR:
     return sym.getVA(a);
-  case R_CHERI_CAPTAB_FRAG_META:
+  case R_CHERI_CAPFRAG_META:
     return getCapMetaBits(a, sym, isec, offset);
   default:
     llvm_unreachable("invalid expression");

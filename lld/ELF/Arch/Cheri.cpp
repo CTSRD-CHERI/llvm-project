@@ -1183,9 +1183,8 @@ void MipsCheriCapTableMappingSection::writeTo(uint8_t *buf) {
 
 static void writeCatableRelocationFragments(InputSectionBase *sec, Symbol *sym,
                                      uint64_t offset) {
-  sec->addReloc(
-      {R_CHERI_CAPTAB_FRAG_ADDR, target->symbolicRel, offset, 0, sym});
-  sec->addReloc({R_CHERI_CAPTAB_FRAG_META, target->symbolicRel,
+  sec->addReloc({R_CHERI_CAPFRAG_ADDR, target->symbolicRel, offset, 0, sym});
+  sec->addReloc({R_CHERI_CAPFRAG_META, target->symbolicRel,
                  offset + config->wordsize, 0, sym});
 }
 
