@@ -1232,7 +1232,7 @@ private:
       // In that case, we can completely elide the transfer.
       if (!II.isVolatile() && PrevP.beginOffset() == RawOffset) {
         for (unsigned I = PrevIdx; I < AS.Slices.size(); I++) {
-          if (AS.Slices[I].getUse() == nullptr)
+          if (AS.Slices[I].isDead())
             continue; // This can happen due to .kill() in a previous iteration
           if (AS.Slices[I].getUse()->getUser() != &II)
             continue;
@@ -1253,6 +1253,8 @@ private:
       // insertStrictAlignmentSlicesForRange()) as unsplittable.
       for (unsigned I = PrevIdx + 1; I < AS.Slices.size(); I++) {
         Slice &S = AS.Slices[I];
+        if (S.isDead())
+          continue; // could have been killed in the loop above.
         if (S.beginOffset() >= PrevP.beginOffset() &&
             S.endOffset() <= PrevP.endOffset() &&
             S.getUse()->getUser() == &II) {
