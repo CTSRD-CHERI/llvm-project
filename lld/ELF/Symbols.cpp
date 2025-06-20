@@ -278,8 +278,8 @@ uint64_t Symbol::getMipsCheriCapTableOffset(const InputSectionBase *isec,
          in.mipsCheriCapTable->getIndex(*this, isec, offset);
 }
 
-uint64_t Defined::getSize() const {
-  if (LLVM_UNLIKELY(config->isCheriAbi && isSectionStartSymbol)) {
+uint64_t Defined::getSize(bool forCheriCap) const {
+  if (LLVM_UNLIKELY((config->isCheriAbi || forCheriCap) && isSectionStartSymbol)) {
     assert(value == 0 && "Bad section start symbol?");
     if (!section)
       return 0; // Section is not included in the output
@@ -288,9 +288,9 @@ uint64_t Defined::getSize() const {
   return size;
 }
 
-uint64_t Symbol::getSize() const {
+uint64_t Symbol::getSize(bool forCheriCap) const {
   if (const auto *dr = dyn_cast<Defined>(this)) {
-    return dr->getSize();
+    return dr->getSize(forCheriCap);
   }
   // FIXME: assuming it is always shared broke this
   if (isa<Undefined>(this))

@@ -389,7 +389,7 @@ static uint64_t getTargetSize(const CheriCapRelocLocation &location,
   if (InputSectionBase *isec = dyn_cast<InputSectionBase *>(target.symOrSec))
     return isec->getSize();
 
-  uint64_t targetSize = target.sym()->getSize();
+  uint64_t targetSize = target.sym()->getSize(/*forCheriCap=*/true);
   if (targetSize > INT_MAX) {
     error("Insanely large symbol size for " + target.verboseToString() +
           "for cap_reloc at" + location.toString());

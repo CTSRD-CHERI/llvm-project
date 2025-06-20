@@ -9,14 +9,13 @@
 // RUN: %riscv64_cheri_purecap_llvm-mc -filetype=obj test.s -o test-purecap.o
 
 /// First check the default logic (no linker script)
-/// FIXME: this is currently broken
 // RUN: ld.lld --verbose test-hybrid.o -o test-hybrid.exe 2>&1 | FileCheck %s --check-prefix=LOG
 // RUN: ld.lld --verbose test-purecap.o -o test-purecap.exe 2>&1 | FileCheck %s --check-prefix=LOG
 // LOG-DAG: lld: Treating __start_mysection as a section start symbol
 // LOG-DAG: lld: Treating __preinit_array_start as a section start symbol
 // LOG-DAG: lld: Treating __init_array_start as a section start symbol
 // LOG-DAG: lld: Treating __fini_array_start as a section start symbol
-// RUN: llvm-readelf --cap-relocs --expand-relocs --symbols test-hybrid.exe | FileCheck %s --check-prefixes=CHECK,NOSCRIPT,HYBRID,WRONG-SIZE
+// RUN: llvm-readelf --cap-relocs --expand-relocs --symbols test-hybrid.exe | FileCheck %s --check-prefixes=CHECK,NOSCRIPT,HYBRID,CORRECT-SIZE
 // RUN: llvm-readelf --cap-relocs --expand-relocs --symbols test-purecap.exe | FileCheck %s --check-prefixes=CHECK,NOSCRIPT,PURECAP-NOSCRIPT,CORRECT-SIZE
 
 /// And also using a custom linker script that provides the start/stop symbols
