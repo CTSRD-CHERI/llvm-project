@@ -20,12 +20,8 @@
 
 /// And also using a custom linker script that provides the start/stop symbols
 /// FIXME: this is currently broken
-// RUN: ld.lld --verbose test-hybrid.o -o test-hybrid.exe --script test.script 2>&1
-// TODO: symbols are not marked as section start/stop for linker scripts
-// | FileCheck %s --check-prefix=LOG
-// RUN: ld.lld --verbose test-purecap.o -o test-purecap.exe --script test.script 2>&1
-// TODO: symbols are not marked as section start/stop for linker scripts
-// | FileCheck %s --check-prefix=LOG
+// RUN: ld.lld --verbose test-hybrid.o -o test-hybrid.exe --script test.script 2>&1 | FileCheck %s --check-prefix=LOG
+// RUN: ld.lld --verbose test-purecap.o -o test-purecap.exe --script test.script 2>&1 | FileCheck %s --check-prefix=LOG
 // RUN: llvm-readelf --cap-relocs --expand-relocs --symbols test-hybrid.exe | FileCheck %s --check-prefixes=CHECK,SCRIPT,HYBRID,WRONG-SIZE
 // RUN: llvm-readelf --cap-relocs --expand-relocs --symbols test-purecap.exe | FileCheck %s --check-prefixes=CHECK,SCRIPT,PURECAP-SCRIPT,WRONG-SIZE
 
