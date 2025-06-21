@@ -15,15 +15,14 @@
 // LOG-DAG: lld: Treating __preinit_array_start as a section start symbol
 // LOG-DAG: lld: Treating __init_array_start as a section start symbol
 // LOG-DAG: lld: Treating __fini_array_start as a section start symbol
-// RUN: llvm-readelf --cap-relocs --expand-relocs --symbols test-hybrid.exe | FileCheck %s --check-prefixes=CHECK,NOSCRIPT,HYBRID,CORRECT-SIZE
-// RUN: llvm-readelf --cap-relocs --expand-relocs --symbols test-purecap.exe | FileCheck %s --check-prefixes=CHECK,NOSCRIPT,PURECAP-NOSCRIPT,CORRECT-SIZE
+// RUN: llvm-readelf --cap-relocs --expand-relocs --symbols test-hybrid.exe | FileCheck %s --check-prefixes=CHECK,NOSCRIPT,HYBRID
+// RUN: llvm-readelf --cap-relocs --expand-relocs --symbols test-purecap.exe | FileCheck %s --check-prefixes=CHECK,NOSCRIPT,PURECAP
 
 /// And also using a custom linker script that provides the start/stop symbols
-/// FIXME: this is currently broken
 // RUN: ld.lld --verbose test-hybrid.o -o test-hybrid.exe --script test.script 2>&1 | FileCheck %s --check-prefix=LOG
 // RUN: ld.lld --verbose test-purecap.o -o test-purecap.exe --script test.script 2>&1 | FileCheck %s --check-prefix=LOG
-// RUN: llvm-readelf --cap-relocs --expand-relocs --symbols test-hybrid.exe | FileCheck %s --check-prefixes=CHECK,SCRIPT,HYBRID,WRONG-SIZE
-// RUN: llvm-readelf --cap-relocs --expand-relocs --symbols test-purecap.exe | FileCheck %s --check-prefixes=CHECK,SCRIPT,PURECAP-SCRIPT,WRONG-SIZE
+// RUN: llvm-readelf --cap-relocs --expand-relocs --symbols test-hybrid.exe | FileCheck %s --check-prefixes=CHECK,SCRIPT,HYBRID
+// RUN: llvm-readelf --cap-relocs --expand-relocs --symbols test-purecap.exe | FileCheck %s --check-prefixes=CHECK,SCRIPT,PURECAP
 
 
 //--- test.script
@@ -99,9 +98,7 @@ _start: ret
 
 /// In purecap mode, the start symbols should have size 8, in hybrid mode
 /// all symbols should have a zero st_size for backwards compatibility.
-// PURECAP-NOSCRIPT:  [[#%.16x,PREINIT_START:]]  [[#START_SYM_SIZE:8]] NOTYPE  LOCAL  HIDDEN      [[#]] __preinit_array_start
-// FIXME: in the linker script case we do not set the size correctly
-// PURECAP-SCRIPT:   [[#%.16x,PREINIT_START:]]  [[#START_SYM_SIZE:0]] NOTYPE  LOCAL  HIDDEN      [[#]] __preinit_array_start
+// PURECAP:   [[#%.16x,PREINIT_START:]]  [[#START_SYM_SIZE:8]] NOTYPE  LOCAL  HIDDEN      [[#]] __preinit_array_start
 // HYBRID:    [[#%.16x,PREINIT_START:]]  [[#START_SYM_SIZE:0]] NOTYPE  LOCAL  HIDDEN      [[#]] __preinit_array_start
 // CHECK-DAG: [[#%.16x,PREINIT_START+8]] 0                     NOTYPE  LOCAL  HIDDEN      [[#]] __preinit_array_end
 // CHECK-DAG: [[#%.16x,INIT_START:]]     [[#START_SYM_SIZE]]   NOTYPE  LOCAL  HIDDEN      [[#]] __init_array_start
@@ -118,8 +115,7 @@ _start: ret
 // CHECK-NEXT:     Location: [[#%#X,FIRST_RELOC:]]
 // CHECK-NEXT:     Base: __preinit_array_start ([[#%#X,PREINIT_START]])
 // CHECK-NEXT:     Offset: 0
-// WRONG-SIZE-NEXT:   Length: 0
-// CORRECT-SIZE-NEXT: Length: 8
+// CHECK-NEXT:     Length: 8
 // CHECK-NEXT:     Permissions: Constant (0x4000000000000000)
 // CHECK-NEXT:   }
 // CHECK-NEXT:   Relocation {
@@ -133,8 +129,7 @@ _start: ret
 // CHECK-NEXT:     Location:  [[#%#X,FIRST_RELOC+0x20]]
 // CHECK-NEXT:     Base: __init_array_start ([[#%#X,INIT_START]])
 // CHECK-NEXT:     Offset: 0
-// WRONG-SIZE-NEXT:   Length: 0
-// CORRECT-SIZE-NEXT: Length: 8
+// CHECK-NEXT:     Length: 8
 // CHECK-NEXT:     Permissions: Constant (0x4000000000000000)
 // CHECK-NEXT:   }
 // CHECK-NEXT:   Relocation {
@@ -148,8 +143,7 @@ _start: ret
 // CHECK-NEXT:     Location:  [[#%#X,FIRST_RELOC+0x40]]
 // CHECK-NEXT:     Base: __fini_array_start ([[#%#X,FINI_START]])
 // CHECK-NEXT:     Offset: 0
-// WRONG-SIZE-NEXT:   Length: 0
-// CORRECT-SIZE-NEXT: Length: 8
+// CHECK-NEXT:     Length: 8
 // CHECK-NEXT:     Permissions: Constant (0x4000000000000000)
 // CHECK-NEXT:   }
 // CHECK-NEXT:   Relocation {
@@ -163,8 +157,7 @@ _start: ret
 // CHECK-NEXT:     Location:  [[#%#X,FIRST_RELOC+0x60]]
 // CHECK-NEXT:     Base: __start_mysection ([[#%#X,MY_START]])
 // CHECK-NEXT:     Offset: 0
-// WRONG-SIZE-NEXT:   Length: 0
-// CORRECT-SIZE-NEXT: Length: 8
+// CHECK-NEXT:     Length: 8
 // CHECK-NEXT:     Permissions: Constant (0x4000000000000000)
 // CHECK-NEXT:   }
 // CHECK-NEXT:   Relocation {
