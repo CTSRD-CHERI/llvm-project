@@ -8,16 +8,16 @@
 /// -fsanitize=cheri/-fsanitize=cheri-unrepresentable is currently only supported for purecap since enabling it for hybrid
 /// would require Toolchain.cpp refactoring.
 // RUN: %riscv64_cheri_purecap_clang %s -fsanitize=cheri-unrepresentable -c -o - -### 2>&1 | FileCheck %s --check-prefix=UNREPRESENTABLE --implicit-check-not=error:
-// RUN: %riscv64_cheri_clang %s -fsanitize=cheri-unrepresentable -c -o - -### 2>&1 | FileCheck %s --check-prefix=UNSUPPORTED-UNREPRESENTABLE --implicit-check-not=error:
-// RUN: %clang -target x86-64-unknown-freebsd %s -fsanitize=cheri-unrepresentable -c -o - -### 2>&1 | FileCheck %s --check-prefix=UNSUPPORTED-UNREPRESENTABLE --implicit-check-not=error:
+// RUN: not %riscv64_cheri_clang %s -fsanitize=cheri-unrepresentable -c -o - -### 2>&1 | FileCheck %s --check-prefix=UNSUPPORTED-UNREPRESENTABLE --implicit-check-not=error:
+// RUN: not %clang -target x86-64-unknown-freebsd %s -fsanitize=cheri-unrepresentable -c -o - -### 2>&1 | FileCheck %s --check-prefix=UNSUPPORTED-UNREPRESENTABLE --implicit-check-not=error:
 
 // RUN: %riscv64_cheri_purecap_clang %s -fsanitize=cheri -c -o - -### 2>&1 | FileCheck %s --check-prefix=CHERI --implicit-check-not=error:
-// RUN: %riscv64_cheri_clang %s -fsanitize=cheri -c -o - -### 2>&1 | FileCheck %s --check-prefix=UNSUPPORTED-CHERI --implicit-check-not=error:
+// RUN: not %riscv64_cheri_clang %s -fsanitize=cheri -c -o - -### 2>&1 | FileCheck %s --check-prefix=UNSUPPORTED-CHERI --implicit-check-not=error:
 // RUN: %riscv32_cheri_purecap_clang %s -fsanitize=cheri -c -o - -### 2>&1 | FileCheck %s --check-prefix=CHERI --implicit-check-not=error:
-// RUN: %riscv32_cheri_clang %s -fsanitize=cheri -c -o - -### 2>&1 | FileCheck %s --check-prefix=UNSUPPORTED-CHERI --implicit-check-not=error:
+// RUN: not %riscv32_cheri_clang %s -fsanitize=cheri -c -o - -### 2>&1 | FileCheck %s --check-prefix=UNSUPPORTED-CHERI --implicit-check-not=error:
 // RUN: %cheri_purecap_clang %s -fsanitize=cheri -c -o - -### 2>&1 | FileCheck %s --check-prefix=CHERI --implicit-check-not=error:
-// RUN: %cheri_clang %s -fsanitize=cheri -c -o - -### 2>&1 | FileCheck %s --check-prefix=UNSUPPORTED-CHERI --implicit-check-not=error:
-// RUN: %clang -target x86-64-unknown-freebsd %s -fsanitize=cheri -c -o - -### 2>&1 | FileCheck %s --check-prefix=UNSUPPORTED-CHERI --implicit-check-not=error:
+// RUN: not %cheri_clang %s -fsanitize=cheri -c -o - -### 2>&1 | FileCheck %s --check-prefix=UNSUPPORTED-CHERI --implicit-check-not=error:
+// RUN: not %clang -target x86-64-unknown-freebsd %s -fsanitize=cheri -c -o - -### 2>&1 | FileCheck %s --check-prefix=UNSUPPORTED-CHERI --implicit-check-not=error:
 
 // POINTER-OVERFLOW: "-fsanitize=pointer-overflow" "-fsanitize-recover=pointer-overflow"
 // UNREPRESENTABLE:  "-fsanitize=cheri-unrepresentable" "-fsanitize-recover=cheri-unrepresentable"

@@ -47,7 +47,7 @@
 
 // RUN: %cheri_clang --target=mips64-unknown-freebsd -no-canonical-prefixes %s -fsanitize=fuzzer \
 // RUN:   --sysroot=%S/Inputs/basic_cheribsd_libcompat_tree -### 2>&1 | FileCheck --check-prefix=CHECK-FUZZER-MIPS64 %s
-// RUN: %riscv64_cheri_clang -no-canonical-prefixes %s -fsanitize=fuzzer \
+// RUN: not %riscv64_cheri_clang -no-canonical-prefixes %s -fsanitize=fuzzer \
 // RUN:   --sysroot=%S/Inputs/basic_cheribsd_libcompat_tree -### 2>&1 | FileCheck --check-prefix=CHECK-FUZZER-RISCV64 %s
 
 // CHECK-FUZZER-MIPS64: "--whole-archive" "{{.+}}/lib/freebsd/libclang_rt.fuzzer-mips64.a" "--no-whole-archive"

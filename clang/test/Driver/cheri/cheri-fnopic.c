@@ -1,6 +1,6 @@
-// RUN: %cheri_clang -### -target cheri-unknown-freebsd11 -cheri -mabi=purecap -fno-pic \
+// RUN: not %cheri_clang -### -target cheri-unknown-freebsd11 -cheri -mabi=purecap -fno-pic \
 // RUN:   -c %s 2>&1 | FileCheck --check-prefix=PURECAP_FNOPIC %s
-// RUN: %cheri_clang -c -### -target cheri-unknown-freebsd11 -cheri -mabi=purecap -fno-pic \
+// RUN: not %cheri_clang -c -### -target cheri-unknown-freebsd11 -cheri -mabi=purecap -fno-pic \
 // RUN:   %s 2>&1 | FileCheck --check-prefix=PURECAP_FNOPIC %s
 // RUN: not %cheri_clang -c -target cheri-unknown-freebsd11 -cheri -mabi=purecap -fno-pic %s -o /dev/null
 // RUN: not %cheri_clang -S -target cheri-unknown-freebsd11 -cheri -mabi=purecap -fno-pic %s -o /dev/null
