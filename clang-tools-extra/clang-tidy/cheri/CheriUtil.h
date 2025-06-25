@@ -609,8 +609,9 @@ public:
 
       switch (Binop->getOpcode()) {
       case BO_And: {
+      case BO_Rem:
         /*
-         * If either side of the binary expression
+         * If either side of and "and" or "remainder" expression
          * is a positive constant this is ok.
          */
         if (Clhs && Clhs->sge(0))
