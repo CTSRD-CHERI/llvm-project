@@ -277,7 +277,7 @@ void RISCV::writePltHeader(uint8_t *buf) const {
 
 void RISCV::writePlt(uint8_t *buf, const Symbol &sym,
                      uint64_t pltEntryAddr) const {
-  // 1: auipc(c) (c)t3, %pcrel_hi(f@[.got.plt|.captable])
+  // 1: auipc(c) (c)t3, %pcrel_hi(f@[.got.plt|.got])
   // l[wdc] (c)t3, %pcrel_lo(1b)((c)t3)
   // (c)jalr (c)t1, (c)t3
   // nop
