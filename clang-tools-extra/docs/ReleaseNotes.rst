@@ -184,6 +184,11 @@ New checks
   Warn about explicit casts of pointers to a type that can only hold
   an address.
 
+- New :doc:`cheri-FixUserPtrToAddr
+  <clang-tidy/checks/cheri/FixUserPtrToAddr>` check.
+
+  Warn about incorrect use for __c_ua() vs. __c_ua_u() in the linux kernel.
+
 - New :doc:`cheri-Ioctl
   <clang-tidy/checks/cheri/Ioctl>` check.
 

@@ -10,6 +10,7 @@ add_clang_library(clangTidyCheriModule
   FixdriverdataCheck.cpp
   FixinttoptrcastCheck.cpp
   FixptrtoulongcastCheck.cpp
+  FixuserptrtoaddrCheck.cpp
   IoctlCheck.cpp
   PtrtointcastCheck.cpp
 

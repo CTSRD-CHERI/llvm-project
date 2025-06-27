@@ -71,6 +71,10 @@ public:
     }
   }
 
+  static bool isUserPtr(const Expr *E) {
+    return isUserPtr(E->getType().getTypePtr());
+  }
+
   /*
    * Given a type of something that is or can be called find the
    * type of the actual function that is called as a FunctionProtoType.
