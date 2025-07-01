@@ -1931,8 +1931,9 @@ Value *llvm::emitMalloc(Value *Num, IRBuilderBase &B, const DataLayout &DL,
 
   StringRef MallocName = TLI->getName(LibFunc_malloc);
   Type *SizeTTy = getSizeTTy(B, TLI);
-  FunctionCallee Malloc = getOrInsertLibFunc(M, *TLI, LibFunc_malloc,
-                                             B.getInt8PtrTy(DL.getGlobalsAddressSpace()), SizeTTy);
+  FunctionCallee Malloc = getOrInsertLibFunc(
+      M, *TLI, LibFunc_malloc,
+      B.getInt8PtrTy(DL.getDefaultGlobalsAddressSpace()), SizeTTy);
   inferNonMandatoryLibFuncAttrs(M, MallocName, *TLI);
   CallInst *CI = B.CreateCall(Malloc, Num, MallocName);
 
@@ -1952,8 +1953,9 @@ Value *llvm::emitCalloc(Value *Num, Value *Size, IRBuilderBase &B,
   StringRef CallocName = TLI.getName(LibFunc_calloc);
   const DataLayout &DL = M->getDataLayout();
   Type *SizeTTy = getSizeTTy(B, &TLI);
-  FunctionCallee Calloc = getOrInsertLibFunc(M, TLI, LibFunc_calloc,
-                                             B.getInt8PtrTy(DL.getGlobalsAddressSpace()), SizeTTy, SizeTTy);
+  FunctionCallee Calloc = getOrInsertLibFunc(
+      M, TLI, LibFunc_calloc,
+      B.getInt8PtrTy(DL.getDefaultGlobalsAddressSpace()), SizeTTy, SizeTTy);
   inferNonMandatoryLibFuncAttrs(M, CallocName, TLI);
   CallInst *CI = B.CreateCall(Calloc, {Num, Size}, CallocName);
 
@@ -1973,9 +1975,9 @@ Value *llvm::emitHotColdNew(Value *Num, IRBuilderBase &B,
 
   StringRef Name = TLI->getName(NewFunc);
   const DataLayout &DL = M->getDataLayout();
-  FunctionCallee Func =
-      M->getOrInsertFunction(Name, B.getInt8PtrTy(DL.getGlobalsAddressSpace()),
-                             Num->getType(), B.getInt8Ty());
+  FunctionCallee Func = M->getOrInsertFunction(
+      Name, B.getInt8PtrTy(DL.getDefaultGlobalsAddressSpace()), Num->getType(),
+      B.getInt8Ty());
   inferNonMandatoryLibFuncAttrs(M, Name, *TLI);
   CallInst *CI = B.CreateCall(Func, {Num, B.getInt8(HotCold)}, Name);
 
@@ -1995,9 +1997,9 @@ Value *llvm::emitHotColdNewNoThrow(Value *Num, Value *NoThrow, IRBuilderBase &B,
 
   StringRef Name = TLI->getName(NewFunc);
   const DataLayout &DL = M->getDataLayout();
-  FunctionCallee Func =
-      M->getOrInsertFunction(Name, B.getInt8PtrTy(DL.getGlobalsAddressSpace()),
-                             Num->getType(), NoThrow->getType(), B.getInt8Ty());
+  FunctionCallee Func = M->getOrInsertFunction(
+      Name, B.getInt8PtrTy(DL.getDefaultGlobalsAddressSpace()), Num->getType(),
+      NoThrow->getType(), B.getInt8Ty());
   inferNonMandatoryLibFuncAttrs(M, Name, *TLI);
   CallInst *CI = B.CreateCall(Func, {Num, NoThrow, B.getInt8(HotCold)}, Name);
 
@@ -2017,9 +2019,9 @@ Value *llvm::emitHotColdNewAligned(Value *Num, Value *Align, IRBuilderBase &B,
 
   StringRef Name = TLI->getName(NewFunc);
   const DataLayout &DL = M->getDataLayout();
-  FunctionCallee Func =
-      M->getOrInsertFunction(Name, B.getInt8PtrTy(DL.getGlobalsAddressSpace()),
-                             Num->getType(), Align->getType(), B.getInt8Ty());
+  FunctionCallee Func = M->getOrInsertFunction(
+      Name, B.getInt8PtrTy(DL.getDefaultGlobalsAddressSpace()), Num->getType(),
+      Align->getType(), B.getInt8Ty());
   inferNonMandatoryLibFuncAttrs(M, Name, *TLI);
   CallInst *CI = B.CreateCall(Func, {Num, Align, B.getInt8(HotCold)}, Name);
 
@@ -2041,7 +2043,7 @@ Value *llvm::emitHotColdNewAlignedNoThrow(Value *Num, Value *Align,
   StringRef Name = TLI->getName(NewFunc);
   const DataLayout &DL = M->getDataLayout();
   FunctionCallee Func = M->getOrInsertFunction(
-      Name, B.getInt8PtrTy(DL.getGlobalsAddressSpace()), Num->getType(),
+      Name, B.getInt8PtrTy(DL.getDefaultGlobalsAddressSpace()), Num->getType(),
       Align->getType(), NoThrow->getType(), B.getInt8Ty());
   inferNonMandatoryLibFuncAttrs(M, Name, *TLI);
   CallInst *CI =

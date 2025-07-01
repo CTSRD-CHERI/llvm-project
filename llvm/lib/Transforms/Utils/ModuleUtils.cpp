@@ -33,7 +33,7 @@ static void appendToGlobalArray(StringRef ArrayName, Module &M, Function *F,
   unsigned CtorPtrAS = M.getDataLayout().getProgramAddressSpace();
   llvm::Type *CtorPFTy = llvm::PointerType::get(FnTy, CtorPtrAS);
   llvm::Type *ArgTy =
-      IRB.getInt8PtrTy(M.getDataLayout().getGlobalsAddressSpace());
+      IRB.getInt8PtrTy(M.getDataLayout().getDefaultGlobalsAddressSpace());
 
   // Get the current set of static global constructors and add the new ctor
   // to the list.
@@ -51,7 +51,7 @@ static void appendToGlobalArray(StringRef ArrayName, Module &M, Function *F,
   } else {
     EltTy = StructType::get(
         IRB.getInt32Ty(), PointerType::get(FnTy, F->getAddressSpace()),
-        IRB.getInt8PtrTy(M.getDataLayout().getGlobalsAddressSpace()));
+        IRB.getInt8PtrTy(M.getDataLayout().getDefaultGlobalsAddressSpace()));
   }
 
   // Build a 3 field global_ctor entry.  We don't take a comdat key.

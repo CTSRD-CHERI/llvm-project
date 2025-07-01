@@ -1988,7 +1988,7 @@ bool AtomicExpand::expandAtomicOpToLibcall(
   std::string LibcallName = TLI->getLibcallName(RTLibType);
   // We are compiling for CHERI purecap mode if the default globals address
   // space is a capability type.
-  bool IsCheriPurecap = DL.isFatPointer(DL.getGlobalsAddressSpace());
+  bool IsCheriPurecap = DL.isFatPointer(DL.getDefaultGlobalsAddressSpace());
   if (ValueOperandIsCap) {
     LibcallName += "_cap";
   }
