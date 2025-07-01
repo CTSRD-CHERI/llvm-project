@@ -41,9 +41,9 @@
 // PTRS: ret ptr
 // PTRS: define dso_local ptr @cheri_cap_to_pointer(ptr nocapture noundef readnone{{( %.+)?}}, ptr noundef readnone returned{{( %.+)?}})
 // PTRS: ret ptr
-// PTRS: define dso_local void @cheri_perms_check(ptr nocapture noundef{{( %.+)?}}, i16 noundef zeroext
+// PTRS: define dso_local void @cheri_perms_check(ptr nocapture noundef readnone{{( %.+)?}}, i16 noundef zeroext
 // PTRS: ret void
-// PTRS: define dso_local void @cheri_type_check(ptr nocapture noundef{{( %.+)?}}, ptr nocapture
+// PTRS: define dso_local void @cheri_type_check(ptr nocapture noundef readnone{{( %.+)?}}, ptr nocapture
 // PTRS: ret void
 // PTRS: define dso_local noalias ptr @cheri_global_data_get()
 // PTRS: ret ptr null
