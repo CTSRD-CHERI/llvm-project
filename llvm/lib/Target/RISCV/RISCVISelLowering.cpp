@@ -150,6 +150,7 @@ RISCVTargetLowering::RISCVTargetLowering(const TargetMachine &TM,
     CapType = Subtarget.typeForCapabilities();
     NullCapabilityRegister = RISCV::C0;
     addRegisterClass(CapType, &RISCV::GPCRRegClass);
+    IsCheriPureCap = RISCVABI::isCheriPureCapABI(ABI);
   }
 
   static const MVT::SimpleValueType BoolVecVTs[] = {
@@ -15168,8 +15169,9 @@ bool RISCV::CC_RISCV(const DataLayout &DL, RISCVABI::ABI ABI, unsigned ValNo,
   MVT XLenVT = XLen == 32 ? MVT::i32 : MVT::i64;
   MVT CLenVT = Subtarget.hasCheri() ? Subtarget.typeForCapabilities()
                                     : MVT();
-  MVT PtrVT = DL.isFatPointer(DL.getAllocaAddrSpace()) ? CLenVT : XLenVT;
-  bool IsPureCapVarArgs = !IsFixed && RISCVABI::isCheriPureCapABI(ABI);
+  bool IsPureCap = RISCVABI::isCheriPureCapABI(ABI);
+  MVT PtrVT = IsPureCap ? CLenVT : XLenVT;
+  bool IsPureCapVarArgs = !IsFixed && IsPureCap;
 
   // Static chain parameter must not be passed in normal argument registers,
   // so we assign t2 for it as done in GCC's __builtin_call_with_static_chain
