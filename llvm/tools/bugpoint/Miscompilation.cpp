@@ -869,9 +869,10 @@ CleanupAndPrepareModules(BugDriver &BD, std::unique_ptr<Module> Test,
   FunctionCallee resolverFunc = Safe->getOrInsertFunction(
       "getPointerToNamedFunction",
       Type::getInt8PtrTy(Safe->getContext(),
-                         Safe->getDataLayout().getGlobalsAddressSpace()),
-      Type::getInt8PtrTy(Safe->getContext(),
-                         Safe->getDataLayout().getGlobalsAddressSpace()));
+                         Safe->getDataLayout().getDefaultGlobalsAddressSpace()),
+      Type::getInt8PtrTy(
+          Safe->getContext(),
+          Safe->getDataLayout().getDefaultGlobalsAddressSpace()));
 
   // Use the function we just added to get addresses of functions we need.
   for (Module::iterator F = Safe->begin(), E = Safe->end(); F != E; ++F) {

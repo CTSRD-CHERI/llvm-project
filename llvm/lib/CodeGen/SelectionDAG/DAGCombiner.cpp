@@ -26839,7 +26839,7 @@ SDValue DAGCombiner::convertSelectOfFPConstantsToLoadOffset(
   SDValue CPIdx = DAG.getConstantPool(
       CA,
       TLI.getPointerTy(DAG.getDataLayout(),
-                       DAG.getDataLayout().getGlobalsAddressSpace()),
+                       DAG.getDataLayout().getDefaultGlobalsAddressSpace()),
       TD.getPrefTypeAlign(FPTy));
   Align Alignment = cast<ConstantPoolSDNode>(CPIdx)->getAlign();
 

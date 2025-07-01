@@ -6008,7 +6008,7 @@ SDValue RISCVTargetLowering::getDynamicTLSAddr(GlobalAddressSDNode *N,
                                                SelectionDAG &DAG) const {
   SDLoc DL(N);
   Type *CallTy = Type::getInt8PtrTy(
-      *DAG.getContext(), DAG.getDataLayout().getGlobalsAddressSpace());
+      *DAG.getContext(), DAG.getDataLayout().getDefaultGlobalsAddressSpace());
   const GlobalValue *GV = N->getGlobal();
 
   // Use a PC-relative addressing mode to access the global dynamic GOT address.
@@ -7527,8 +7527,9 @@ SDValue RISCVTargetLowering::LowerINTRINSIC_WO_CHAIN(SDValue Op,
   case Intrinsic::thread_pointer: {
     MCPhysReg PhysReg = RISCVABI::isCheriPureCapABI(Subtarget.getTargetABI())
         ? RISCV::C4 : RISCV::X4;
-    EVT PtrVT = getPointerTy(DAG.getDataLayout(),
-                             DAG.getDataLayout().getGlobalsAddressSpace());
+    EVT PtrVT =
+        getPointerTy(DAG.getDataLayout(),
+                     DAG.getDataLayout().getDefaultGlobalsAddressSpace());
     return DAG.getRegister(PhysReg, PtrVT);
   }
   case Intrinsic::riscv_orc_b:
@@ -18110,10 +18111,9 @@ bool RISCVTargetLowering::preferScalarizeSplat(SDNode *N) const {
 
 static Value *useTpOffset(IRBuilderBase &IRB, unsigned Offset) {
   Module *M = IRB.GetInsertBlock()->getParent()->getParent();
-  unsigned AS = M->getDataLayout().getGlobalsAddressSpace();
-  Function *ThreadPointerFunc =
-      Intrinsic::getDeclaration(M, Intrinsic::thread_pointer,
-                                IRB.getInt8PtrTy(AS));
+  unsigned AS = M->getDataLayout().getDefaultGlobalsAddressSpace();
+  Function *ThreadPointerFunc = Intrinsic::getDeclaration(
+      M, Intrinsic::thread_pointer, IRB.getInt8PtrTy(AS));
   return IRB.CreatePointerCast(
       IRB.CreateConstGEP1_32(IRB.getInt8Ty(),
                              IRB.CreateCall(ThreadPointerFunc), Offset),

@@ -72,7 +72,7 @@ IRBuilder<> *EscapeEnumerator::Next() {
   BasicBlock *CleanupBB = BasicBlock::Create(C, CleanupBBName, &F);
   Type *ExnTy = StructType::get(
       Type::getInt8PtrTy(
-          C, F.getParent()->getDataLayout().getGlobalsAddressSpace()),
+          C, F.getParent()->getDataLayout().getDefaultGlobalsAddressSpace()),
       Type::getInt32Ty(C));
   if (!F.hasPersonalityFn()) {
     FunctionCallee PersFn = getDefaultPersonalityFn(F.getParent());

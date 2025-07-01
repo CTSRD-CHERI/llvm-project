@@ -400,21 +400,16 @@ bool ModuleSanitizerCoverage::instrumentModule(
   IntptrTy = Type::getIntNTy(*C, DL->getPointerSizeInBits(0));
 
   PcAddrTy = Type::getIntNTy(*C, DL->getIndexSizeInBits(DL->getProgramAddressSpace()));
-  Type *PcAddrPtrTy = PcAddrTy->getPointerTo(DL->getGlobalsAddressSpace());
+  unsigned GlobalAS = DL->getDefaultGlobalsAddressSpace();
+  Type *PcAddrPtrTy = PcAddrTy->getPointerTo(GlobalAS);
   Type *VoidTy = Type::getVoidTy(*C);
   IRBuilder<> IRB(*C);
-  GlobalsInt128PtrTy =
-      PointerType::get(IRB.getInt128Ty(), DL->getGlobalsAddressSpace());
-  GlobalsInt64PtrTy =
-      PointerType::get(IRB.getInt64Ty(), DL->getGlobalsAddressSpace());
-  GlobalsInt32PtrTy =
-      PointerType::get(IRB.getInt32Ty(), DL->getGlobalsAddressSpace());
-  GlobalsInt16PtrTy =
-      PointerType::get(IRB.getInt16Ty(), DL->getGlobalsAddressSpace());
-  GlobalsInt8PtrTy =
-      PointerType::get(IRB.getInt8Ty(), DL->getGlobalsAddressSpace());
-  GlobalsInt1PtrTy =
-      PointerType::get(IRB.getInt1Ty(), DL->getGlobalsAddressSpace());
+  GlobalsInt128PtrTy = PointerType::get(IRB.getInt128Ty(), GlobalAS);
+  GlobalsInt64PtrTy = PointerType::get(IRB.getInt64Ty(), GlobalAS);
+  GlobalsInt32PtrTy = PointerType::get(IRB.getInt32Ty(), GlobalAS);
+  GlobalsInt16PtrTy = PointerType::get(IRB.getInt16Ty(), GlobalAS);
+  GlobalsInt8PtrTy = PointerType::get(IRB.getInt8Ty(), GlobalAS);
+  GlobalsInt1PtrTy = PointerType::get(IRB.getInt1Ty(), GlobalAS);
   Int64Ty = IRB.getInt64Ty();
   Int32Ty = IRB.getInt32Ty();
   Int16Ty = IRB.getInt16Ty();
@@ -1076,7 +1071,8 @@ ModuleSanitizerCoverage::getSectionEnd(const std::string &Section) const {
 void ModuleSanitizerCoverage::createFunctionControlFlow(Function &F) {
   SmallVector<Constant *, 32> CFs;
   IRBuilder<> IRB(&*F.getEntryBlock().getFirstInsertionPt());
-  Type *PcAddrPtrTy = PcAddrTy->getPointerTo(DL->getGlobalsAddressSpace());
+  Type *PcAddrPtrTy =
+      PcAddrTy->getPointerTo(DL->getDefaultGlobalsAddressSpace());
 
   for (auto &BB : F) {
     // blockaddress can not be used on function's entry block.

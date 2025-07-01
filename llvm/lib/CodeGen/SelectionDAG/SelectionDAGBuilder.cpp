@@ -2670,7 +2670,7 @@ void SelectionDAGBuilder::visitJumpTable(SwitchCG::JumpTable &JT) {
   assert(JT.Reg != -1U && "Should lower JT Header first!");
   const DataLayout &TD = DAG.getDataLayout();
   const auto &TLI = DAG.getTargetLoweringInfo();
-  EVT PTy = TLI.getPointerTy(TD, TD.getGlobalsAddressSpace());
+  EVT PTy = TLI.getPointerTy(TD, TD.getDefaultGlobalsAddressSpace());
   EVT IndexTy = TLI.getPointerRangeTy(TD , TD.getProgramAddressSpace());
   SDValue Index =
       DAG.getCopyFromReg(getControlRoot(), getCurSDLoc(), JT.Reg, IndexTy);
@@ -4518,14 +4518,14 @@ static bool getUniformBase(const Value *Ptr, SDValue &Base, SDValue &Index,
     Base = SDB->getValue(C);
 
     ElementCount NumElts = cast<VectorType>(Ptr->getType())->getElementCount();
-    EVT VT = EVT::getVectorVT(*DAG.getContext(),
-                              TLI.getPointerTy(DL, DL.getGlobalsAddressSpace()),
-                              NumElts);
+    EVT VT = EVT::getVectorVT(
+        *DAG.getContext(),
+        TLI.getPointerTy(DL, DL.getDefaultGlobalsAddressSpace()), NumElts);
     Index = DAG.getConstant(0, SDB->getCurSDLoc(), VT);
     IndexType = ISD::SIGNED_SCALED;
     Scale = DAG.getTargetConstant(
         1, SDB->getCurSDLoc(),
-        TLI.getPointerTy(DL, DL.getGlobalsAddressSpace()));
+        TLI.getPointerTy(DL, DL.getDefaultGlobalsAddressSpace()));
     return true;
   }
 
@@ -8924,7 +8924,7 @@ static SDValue getAddressForMemoryInput(SDValue Chain, const SDLoc &Location,
     OpInfo.CallOperand = DAG.getConstantPool(
         cast<Constant>(OpVal),
         TLI.getPointerTy(DAG.getDataLayout(),
-                         DAG.getDataLayout().getGlobalsAddressSpace()));
+                         DAG.getDataLayout().getDefaultGlobalsAddressSpace()));
     return Chain;
   }
 
@@ -9470,7 +9470,7 @@ void SelectionDAGBuilder::visitInlineAsm(const CallBase &Call,
         assert(InOperandVal.getValueType() ==
                    TLI.getPointerTy(
                        DAG.getDataLayout(),
-                       DAG.getDataLayout().getGlobalsAddressSpace()) &&
+                       DAG.getDataLayout().getDefaultGlobalsAddressSpace()) &&
                "Memory operands expect pointer values");
 
         unsigned ConstraintID =
