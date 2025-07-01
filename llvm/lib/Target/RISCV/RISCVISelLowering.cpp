@@ -157,6 +157,7 @@ RISCVTargetLowering::RISCVTargetLowering(const TargetMachine &TM,
     CapType = Subtarget.typeForCapabilities();
     NullCapabilityRegister = RISCV::C0;
     addRegisterClass(CapType, &RISCV::GPCRRegClass);
+    IsCheriPureCap = RISCVABI::isCheriPureCapABI(ABI);
   }
 
   static const MVT::SimpleValueType BoolVecVTs[] = {
@@ -15216,11 +15217,11 @@ bool RISCV::CC_RISCV(const DataLayout &DL, RISCVABI::ABI ABI, unsigned ValNo,
   unsigned XLen = DL.getLargestLegalIntTypeSizeInBits();
   assert(XLen == 32 || XLen == 64);
   MVT XLenVT = XLen == 32 ? MVT::i32 : MVT::i64;
-  MVT CLenVT = Subtarget.hasStdExtZCheriPureCapOrCheri()
-                   ? Subtarget.typeForCapabilities()
-                   : MVT();
-  MVT PtrVT = DL.isFatPointer(DL.getAllocaAddrSpace()) ? CLenVT : XLenVT;
-  bool IsPureCapVarArgs = !IsFixed && RISCVABI::isCheriPureCapABI(ABI);
+  MVT CLenVT = Subtarget.hasStdExtZCheriPureCapOrCheri() ? Subtarget.typeForCapabilities()
+                                    : MVT();
+  bool IsPureCap = RISCVABI::isCheriPureCapABI(ABI);
+  MVT PtrVT = IsPureCap ? CLenVT : XLenVT;
+  bool IsPureCapVarArgs = !IsFixed && IsPureCap;
   bool IsBoundedVarArgs = IsPureCapVarArgs && Subtarget.hasCheriBoundVarArg();
 
   // Static chain parameter must not be passed in normal argument registers,

@@ -1986,13 +1986,10 @@ bool AtomicExpand::expandAtomicOpToLibcall(
   // adding the 20+ new entries to RuntimeLibcalls.def. We also suffix with
   // _c for capability pointer arguments in hybrid mode.
   std::string LibcallName = TLI->getLibcallName(RTLibType);
-  // We are compiling for CHERI purecap mode if the default globals address
-  // space is a capability type.
-  bool IsCheriPurecap = DL.isFatPointer(DL.getDefaultGlobalsAddressSpace());
   if (ValueOperandIsCap) {
     LibcallName += "_cap";
   }
-  if (PointerOperandIsCap && !IsCheriPurecap) {
+  if (PointerOperandIsCap && !TLI->isCheriPureCap()) {
     // Add a _c suffix if the function uses capability pointer operands in
     // hybrid mode.
     assert(StringRef(LibcallName).startswith("__atomic"));
