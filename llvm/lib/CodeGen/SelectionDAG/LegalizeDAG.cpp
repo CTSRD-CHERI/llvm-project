@@ -333,8 +333,9 @@ SelectionDAGLegalize::ExpandConstantFP(ConstantFPSDNode *CFP, bool UseCP) {
   }
 
   SDValue CPIdx = DAG.getConstantPool(
-      LLVMC, TLI.getPointerTy(DAG.getDataLayout(),
-                              DAG.getDataLayout().getGlobalsAddressSpace()));
+      LLVMC,
+      TLI.getPointerTy(DAG.getDataLayout(),
+                       DAG.getDataLayout().getDefaultGlobalsAddressSpace()));
   Align Alignment = cast<ConstantPoolSDNode>(CPIdx)->getAlign();
   if (Extend) {
     SDValue Result = DAG.getExtLoad(
@@ -356,7 +357,7 @@ SDValue SelectionDAGLegalize::ExpandConstant(ConstantSDNode *CP) {
   SDValue CPIdx = DAG.getConstantPool(
       CP->getConstantIntValue(),
       TLI.getPointerTy(DAG.getDataLayout(),
-                       DAG.getDataLayout().getGlobalsAddressSpace()));
+                       DAG.getDataLayout().getDefaultGlobalsAddressSpace()));
   Align Alignment = cast<ConstantPoolSDNode>(CPIdx)->getAlign();
   SDValue Result = DAG.getLoad(
       VT, dl, DAG.getEntryNode(), CPIdx,
@@ -2013,8 +2014,9 @@ SDValue SelectionDAGLegalize::ExpandBUILD_VECTOR(SDNode *Node) {
     }
     Constant *CP = ConstantVector::get(CV);
     SDValue CPIdx = DAG.getConstantPool(
-        CP, TLI.getPointerTy(DAG.getDataLayout(),
-                             DAG.getDataLayout().getGlobalsAddressSpace()));
+        CP,
+        TLI.getPointerTy(DAG.getDataLayout(),
+                         DAG.getDataLayout().getDefaultGlobalsAddressSpace()));
     Align Alignment = cast<ConstantPoolSDNode>(CPIdx)->getAlign();
     return DAG.getLoad(
         VT, dl, DAG.getEntryNode(), CPIdx,
@@ -2829,7 +2831,7 @@ SDValue SelectionDAGLegalize::ExpandLegalINT_TO_FP(SDNode *Node,
   SDValue CPIdx = DAG.getConstantPool(
       FudgeFactor,
       TLI.getPointerTy(DAG.getDataLayout(),
-                       DAG.getDataLayout().getGlobalsAddressSpace()));
+                       DAG.getDataLayout().getDefaultGlobalsAddressSpace()));
   Align Alignment = cast<ConstantPoolSDNode>(CPIdx)->getAlign();
   CPIdx = DAG.getNode(ISD::ADD, dl, CPIdx.getValueType(), CPIdx, CstOffset);
   Alignment = commonAlignment(Alignment, 4);

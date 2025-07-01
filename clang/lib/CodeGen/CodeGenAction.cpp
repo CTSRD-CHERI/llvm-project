@@ -970,7 +970,7 @@ void BackendConsumer::DiagnosticHandlerImpl(const DiagnosticInfo &DI) {
     FullSourceLoc Loc =
         getBestLocationFromDebugLoc(DICI, BadDebugInfo, Filename, Line, Column);
     const auto &DL = DICI.getFunction().getParent()->getDataLayout();
-    bool IsPurecap = DL.isFatPointer(DL.getGlobalsAddressSpace());
+    bool IsPurecap = DL.isFatPointer(DL.getDefaultGlobalsAddressSpace());
 
     Diags.Report(Loc, diag::warn_fe_backend_cheri_inefficient)
         << DICI.getMessage();

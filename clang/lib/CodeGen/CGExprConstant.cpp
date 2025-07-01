@@ -1981,7 +1981,7 @@ ConstantLValueEmitter::tryEmitBase(const APValue::LValueBase &base) {
 
   // Handle typeid(T).
   if (TypeInfoLValue TI = base.dyn_cast<TypeInfoLValue>()) {
-    unsigned GlobalAS = CGM.getDataLayout().getGlobalsAddressSpace();
+    unsigned GlobalAS = CGM.getDataLayout().getDefaultGlobalsAddressSpace();
     llvm::Type *StdTypeInfoPtrTy = llvm::PointerType::get(CGM.getLLVMContext(), GlobalAS);
     llvm::Constant *TypeInfo =
         CGM.GetAddrOfRTTIDescriptor(QualType(TI.getType(), 0));

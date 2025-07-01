@@ -51,7 +51,7 @@ IRBuilderBase::CreateGlobalString(StringRef Str, const Twine &Name,
       *M, StrConstant->getType(), true, GlobalValue::PrivateLinkage,
       StrConstant, Name, nullptr, GlobalVariable::NotThreadLocal,
       AddressSpace ? *AddressSpace
-                   : M->getDataLayout().getGlobalsAddressSpace());
+                   : M->getDataLayout().getDefaultGlobalsAddressSpace());
   GV->setUnnamedAddr(GlobalValue::UnnamedAddr::Global);
   GV->setAlignment(Align(1));
   return GV;
