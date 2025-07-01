@@ -345,6 +345,7 @@ MipsTargetLowering::MipsTargetLowering(const MipsTargetMachine &TM,
   CapType = STI.typeForCapabilities();
   CapTypeHasPreciseBounds = STI.isCheri256();
   assert(cheriCapabilityType().isFatPointer());
+  IsCheriPureCap = ABI.IsCheriPureCap();
 
   // Mips does not have i1 type, so use i32 for
   // setcc operations results (slt, sgt, ...).

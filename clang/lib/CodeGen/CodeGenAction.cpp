@@ -969,8 +969,7 @@ void BackendConsumer::DiagnosticHandlerImpl(const DiagnosticInfo &DI) {
     bool BadDebugInfo = false;
     FullSourceLoc Loc =
         getBestLocationFromDebugLoc(DICI, BadDebugInfo, Filename, Line, Column);
-    const auto &DL = DICI.getFunction().getParent()->getDataLayout();
-    bool IsPurecap = DL.isFatPointer(DL.getDefaultGlobalsAddressSpace());
+    bool IsPurecap = Context->getTargetInfo().areAllPointersCapabilities();
 
     Diags.Report(Loc, diag::warn_fe_backend_cheri_inefficient)
         << DICI.getMessage();
