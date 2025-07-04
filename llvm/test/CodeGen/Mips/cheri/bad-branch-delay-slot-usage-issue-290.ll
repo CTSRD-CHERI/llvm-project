@@ -7,24 +7,24 @@
 define ptr addrspace(200) @test(ptr addrspace(200) readnone %inCap, i32 signext %test, i32 signext %inInt) local_unnamed_addr addrspace(200) #0 {
 ; CHECK-LABEL: test:
 ; CHECK:       # %bb.0: # %entry
-; CHECK-NEXT:    cincoffset $c11, $c11, -[[#STACKFRAME_SIZE:]]
-; CHECK-NEXT:    .cfi_def_cfa_offset [[#STACKFRAME_SIZE]]
-; CHECK-NEXT:    csc $c24, $zero, [[#STACKFRAME_SIZE - CAP_SIZE]]($c11)
-; CHECK-NEXT:    csc $c17, $zero, 0($c11)
-; CHECK-NEXT:    .cfi_offset 96, -[[#STACKFRAME_SIZE - CAP_SIZE]]
-; CHECK-NEXT:    .cfi_offset 89, -[[#CAP_SIZE * 2]]
+; CHECK-NEXT:    cincoffset $c11, $c11, -32
+; CHECK-NEXT:    .cfi_def_cfa_offset 32
+; CHECK-NEXT:    csc $c24, $zero, 16($c11) # 16-byte Folded Spill
+; CHECK-NEXT:    csc $c17, $zero, 0($c11) # 16-byte Folded Spill
+; CHECK-NEXT:    .cfi_offset 96, -16
+; CHECK-NEXT:    .cfi_offset 89, -32
 ; CHECK-NEXT:    cincoffset $c24, $c11, $zero
 ; CHECK-NEXT:    .cfi_def_cfa_register 96
-; CHECK-NEXT:    addiu $1, $5, 4
-; CHECK-NEXT:    dsll $1, $1, 2
+; CHECK-NEXT:    dsll $1, $5, 2
+; CHECK-NEXT:    daddiu $1, $1, 16
 ; CHECK-NEXT:    cincoffset $c1, $c3, $1
 ; CHECK-NEXT:    cmovz $c1, $c3, $4
 ; CHECK-NEXT:    cmove $c3, $c1
 ; CHECK-NEXT:    cincoffset $c11, $c24, $zero
-; CHECK-NEXT:    clc $c17, $zero, 0($c11)
-; CHECK-NEXT:    clc $c24, $zero, [[#STACKFRAME_SIZE - CAP_SIZE]]($c11)
+; CHECK-NEXT:    clc $c17, $zero, 0($c11) # 16-byte Folded Reload
+; CHECK-NEXT:    clc $c24, $zero, 16($c11) # 16-byte Folded Reload
 ; CHECK-NEXT:    cjr $c17
-; CHECK-NEXT:    cincoffset $c11, $c11, [[#STACKFRAME_SIZE]]
+; CHECK-NEXT:    cincoffset $c11, $c11, 32
 entry:
   %tobool = icmp eq i32 %test, 0
   %add = add nsw i32 %inInt, 4
