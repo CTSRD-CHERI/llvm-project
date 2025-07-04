@@ -612,8 +612,8 @@ public:
       auto Crhs = Binop->getRHS()->getIntegerConstantExpr(*Ctx);
 
       switch (Binop->getOpcode()) {
-      case BO_And: {
-      case BO_Rem:
+      case BO_And:
+      case BO_Rem: {
         /*
          * If either side of and "and" or "remainder" expression
          * is a positive constant this is ok.
