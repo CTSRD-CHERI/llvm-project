@@ -51,7 +51,7 @@ static const __SIZE_TYPE__ function_reloc_flag = (__SIZE_TYPE__)1
                                                  << (__SIZE_WIDTH__ - 1);
 static const __SIZE_TYPE__ constant_reloc_flag = (__SIZE_TYPE__)1
                                                  << (__SIZE_WIDTH__ - 2);
-#ifdef __riscv_xcheri
+#if defined(__riscv_xcheri) || defined(__mips__)
 static const __SIZE_TYPE__ function_pointer_permissions_mask =
     ~(__SIZE_TYPE__)(__CHERI_CAP_PERMISSION_PERMIT_SEAL__ |
                      __CHERI_CAP_PERMISSION_PERMIT_STORE_CAPABILITY__ |
