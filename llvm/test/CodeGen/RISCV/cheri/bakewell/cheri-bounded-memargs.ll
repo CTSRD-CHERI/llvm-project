@@ -13,11 +13,9 @@ define dso_local signext i32 @foo(i32 noundef signext %a, i32 noundef signext %b
 ; CHECK-NEXT:    sc cs1, 0(csp) # 16-byte Folded Spill
 ; CHECK-NEXT:    lc cs0, 16(ct1)
 ; CHECK-NEXT:    mv a0, a1
-; CHECK-NEXT:    cmv ct1, cnull
 ; CHECK-NEXT:    call bar
 ; CHECK-NEXT:    mv s1, a0
 ; CHECK-NEXT:    cmv ca0, cs0
-; CHECK-NEXT:    cmv ct1, cnull
 ; CHECK-NEXT:    call baz
 ; CHECK-NEXT:    addw a0, a0, s1
 ; CHECK-NEXT:    lc cra, 32(csp) # 16-byte Folded Reload
@@ -56,21 +54,19 @@ define dso_local signext i32 @baf(i32 noundef signext %a, i32 noundef signext %b
 ; CHECK-NEXT:    ld s1, 0(ct1)
 ; CHECK-NEXT:    caddi ca1, csp, 16
 ; CHECK-NEXT:    scbndsi ca1, ca1, 16
-; CHECK-NEXT:    li a2, -11
+; CHECK-NEXT:    lui a2, 1048544
+; CHECK-NEXT:    addiw a2, a2, -2
 ; CHECK-NEXT:    acperm ca0, ca0, a2
 ; CHECK-NEXT:    sc ca0, 0(ca1)
 ; CHECK-NEXT:    lc ca0, 16(csp)
 ; CHECK-NEXT:    caddi ca1, ca0, 16
 ; CHECK-NEXT:    sc ca1, 16(csp)
 ; CHECK-NEXT:    lc ca0, 0(ca0)
-; CHECK-NEXT:    cmv ct1, cnull
 ; CHECK-NEXT:    call try
 ; CHECK-NEXT:    mv a0, s1
-; CHECK-NEXT:    cmv ct1, cnull
 ; CHECK-NEXT:    call bar
 ; CHECK-NEXT:    mv s1, a0
 ; CHECK-NEXT:    cmv ca0, cs0
-; CHECK-NEXT:    cmv ct1, cnull
 ; CHECK-NEXT:    call baz
 ; CHECK-NEXT:    addw a0, a0, s1
 ; CHECK-NEXT:    lc cra, 64(csp) # 16-byte Folded Reload
@@ -102,7 +98,8 @@ define i32 @bb([4 x float] %f1.coerce, [4 x float] %f2.coerce, [4 x float] %f3.c
 ; CHECK-NEXT:    .cfi_def_cfa_offset 32
 ; CHECK-NEXT:    caddi ca2, csp, 16
 ; CHECK-NEXT:    scbndsi ca2, ca2, 16
-; CHECK-NEXT:    li a4, -11
+; CHECK-NEXT:    lui a4, 1048544
+; CHECK-NEXT:    addiw a4, a4, -2
 ; CHECK-NEXT:    acperm ca4, ct1, a4
 ; CHECK-NEXT:    sc ca4, 0(ca2)
 ; CHECK-NEXT:    sc ct1, 0(csp)
@@ -210,7 +207,8 @@ define i32 @f(i32 %0, i32 %1, i32 %2, i32 %3, i32 %4, i32 %5, i32 %6, i32 %7, i3
 ; CHECK-NEXT:    lw a1, 0(ct1)
 ; CHECK-NEXT:    caddi ca2, csp, 16
 ; CHECK-NEXT:    scbndsi ca2, ca2, 16
-; CHECK-NEXT:    li a3, -11
+; CHECK-NEXT:    lui a3, 1048544
+; CHECK-NEXT:    addiw a3, a3, -2
 ; CHECK-NEXT:    acperm ca0, ca0, a3
 ; CHECK-NEXT:    sc ca0, 0(ca2)
 ; CHECK-NEXT:    lc ca0, 16(csp)
@@ -335,7 +333,8 @@ define i32 @tryhitassert(i32, i32, i32, i32, i32, i32, i32, i32, i32 %memarg, ..
 ; CHECK-NEXT:    lw a1, 0(ct1)
 ; CHECK-NEXT:    caddi ca2, csp, 16
 ; CHECK-NEXT:    scbndsi ca2, ca2, 16
-; CHECK-NEXT:    li a3, -11
+; CHECK-NEXT:    lui a3, 1048544
+; CHECK-NEXT:    addiw a3, a3, -2
 ; CHECK-NEXT:    acperm ca0, ca0, a3
 ; CHECK-NEXT:    sc ca0, 0(ca2)
 ; CHECK-NEXT:    lc ca0, 16(csp)

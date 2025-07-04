@@ -6,13 +6,13 @@
 define i32 @caller_test_scalars(i32 %x, i128 %y, i64 %z, float %f, double %d) local_unnamed_addr addrspace(200) nounwind {
 ; CHECK-LABEL: caller_test_scalars:
 ; CHECK:       # %bb.0: # %entry
-; CHECK-NEXT:    cincoffset csp, csp, -192
-; CHECK-NEXT:    sc cra, 176(csp) # 16-byte Folded Spill
-; CHECK-NEXT:    sc cs0, 160(csp) # 16-byte Folded Spill
-; CHECK-NEXT:    sc cs1, 144(csp) # 16-byte Folded Spill
-; CHECK-NEXT:    sc cs2, 128(csp) # 16-byte Folded Spill
-; CHECK-NEXT:    sc cs3, 112(csp) # 16-byte Folded Spill
-; CHECK-NEXT:    sc cs4, 96(csp) # 16-byte Folded Spill
+; CHECK-NEXT:    cincoffset csp, csp, -176
+; CHECK-NEXT:    sc cra, 160(csp) # 16-byte Folded Spill
+; CHECK-NEXT:    sc cs0, 144(csp) # 16-byte Folded Spill
+; CHECK-NEXT:    sc cs1, 128(csp) # 16-byte Folded Spill
+; CHECK-NEXT:    sc cs2, 112(csp) # 16-byte Folded Spill
+; CHECK-NEXT:    sc cs3, 96(csp) # 16-byte Folded Spill
+; CHECK-NEXT:    sc cs4, 80(csp) # 16-byte Folded Spill
 ; CHECK-NEXT:    mv s0, a5
 ; CHECK-NEXT:    mv s1, a3
 ; CHECK-NEXT:    mv s2, a2
@@ -22,24 +22,24 @@ define i32 @caller_test_scalars(i32 %x, i128 %y, i64 %z, float %f, double %d) lo
 ; CHECK-NEXT:    srli a0, a0, 32
 ; CHECK-NEXT:    call __extendsfdf2
 ; CHECK-NEXT:    mv a1, a0
-; CHECK-NEXT:    sd s0, 80(csp)
-; CHECK-NEXT:    sd s1, 48(csp)
-; CHECK-NEXT:    sd s2, 32(csp)
+; CHECK-NEXT:    sd s0, 64(csp)
+; CHECK-NEXT:    sd s1, 32(csp)
+; CHECK-NEXT:    sd s2, 24(csp)
 ; CHECK-NEXT:    sd s3, 16(csp)
 ; CHECK-NEXT:    sd s4, 0(csp)
-; CHECK-NEXT:    csetbounds ca0, csp, 96
+; CHECK-NEXT:    csetbounds ca0, csp, 80
 ; CHECK-NEXT:    li a2, -11
 ; CHECK-NEXT:    candperm ct1, ca0, a2
 ; CHECK-NEXT:    li a0, 5
-; CHECK-NEXT:    sd a1, 64(csp)
+; CHECK-NEXT:    sd a1, 48(csp)
 ; CHECK-NEXT:    call callee
-; CHECK-NEXT:    lc cra, 176(csp) # 16-byte Folded Reload
-; CHECK-NEXT:    lc cs0, 160(csp) # 16-byte Folded Reload
-; CHECK-NEXT:    lc cs1, 144(csp) # 16-byte Folded Reload
-; CHECK-NEXT:    lc cs2, 128(csp) # 16-byte Folded Reload
-; CHECK-NEXT:    lc cs3, 112(csp) # 16-byte Folded Reload
-; CHECK-NEXT:    lc cs4, 96(csp) # 16-byte Folded Reload
-; CHECK-NEXT:    cincoffset csp, csp, 192
+; CHECK-NEXT:    lc cra, 160(csp) # 16-byte Folded Reload
+; CHECK-NEXT:    lc cs0, 144(csp) # 16-byte Folded Reload
+; CHECK-NEXT:    lc cs1, 128(csp) # 16-byte Folded Reload
+; CHECK-NEXT:    lc cs2, 112(csp) # 16-byte Folded Reload
+; CHECK-NEXT:    lc cs3, 96(csp) # 16-byte Folded Reload
+; CHECK-NEXT:    lc cs4, 80(csp) # 16-byte Folded Reload
+; CHECK-NEXT:    cincoffset csp, csp, 176
 ; CHECK-NEXT:    ret
 entry:
   %conv = fpext float %f to double
@@ -75,21 +75,22 @@ entry:
 define i32 @caller_test_struct(i32 %x, [2 x float] %y.coerce, i32 %z, { i8 addrspace(200)*, i64} %u.coerce) local_unnamed_addr addrspace(200) nounwind {
 ; CHECK-LABEL: caller_test_struct:
 ; CHECK:       # %bb.0: # %entry
-; CHECK-NEXT:    cincoffset csp, csp, -80
-; CHECK-NEXT:    sc cra, 64(csp) # 16-byte Folded Spill
-; CHECK-NEXT:    mv a5, a0
+; CHECK-NEXT:    cincoffset csp, csp, -96
+; CHECK-NEXT:    sc cra, 80(csp) # 16-byte Folded Spill
+; CHECK-NEXT:    mv a6, a0
+; CHECK-NEXT:    sd a5, 64(csp)
 ; CHECK-NEXT:    sc ca4, 48(csp)
 ; CHECK-NEXT:    sd a3, 32(csp)
 ; CHECK-NEXT:    sd a2, 24(csp)
 ; CHECK-NEXT:    sd a1, 16(csp)
-; CHECK-NEXT:    csetbounds ca0, csp, 64
+; CHECK-NEXT:    csetbounds ca0, csp, 80
 ; CHECK-NEXT:    li a1, -11
 ; CHECK-NEXT:    candperm ct1, ca0, a1
 ; CHECK-NEXT:    li a0, 3
-; CHECK-NEXT:    sd a5, 0(csp)
+; CHECK-NEXT:    sd a6, 0(csp)
 ; CHECK-NEXT:    call callee
-; CHECK-NEXT:    lc cra, 64(csp) # 16-byte Folded Reload
-; CHECK-NEXT:    cincoffset csp, csp, 80
+; CHECK-NEXT:    lc cra, 80(csp) # 16-byte Folded Reload
+; CHECK-NEXT:    cincoffset csp, csp, 96
 ; CHECK-NEXT:    ret
 entry:
   %call = tail call i32 (i32, ...) @callee(i32 3, i32 %x, [2 x float] %y.coerce, i32 %z, { i8 addrspace(200)*, i64} %u.coerce) nounwind
