@@ -644,15 +644,15 @@ define hidden ptr addrspace(200) @_ZN7WebCore67jsInternalSettingsGeneratedProtot
 ; CHECK-NEXT:    clc $c1, $zero, 80($c3)
 ; CHECK-NEXT:    lui $1, %pcrel_hi(_CHERI_CAPABILITY_TABLE_-8)
 ; CHECK-NEXT:    daddiu $1, $1, %pcrel_lo(_CHERI_CAPABILITY_TABLE_-4)
-; CHECK-NEXT:    cgetpccincoffset $c20, $1
+; CHECK-NEXT:    cgetpccincoffset $c19, $1
 ; CHECK-NEXT:    cbts $c1, .LBB0_3
-; CHECK-NEXT:    cmove $c18, $c3
+; CHECK-NEXT:    nop
 ; CHECK-NEXT:  .LBB0_1: # %if.then
-; CHECK-NEXT:    clcbi $c4, %captab20(.str.163)($c20)
-; CHECK-NEXT:    clcbi $c5, %captab20(.str.31)($c20)
-; CHECK-NEXT:    clcbi $c12, %capcall20(_ZN7WebCore18throwThisTypeErrorERN3JSC9ExecStateEPKcS4_)($c20)
+; CHECK-NEXT:    clcbi $c4, %captab20(.str.163)($c19)
+; CHECK-NEXT:    clcbi $c5, %captab20(.str.31)($c19)
+; CHECK-NEXT:    clcbi $c12, %capcall20(_ZN7WebCore18throwThisTypeErrorERN3JSC9ExecStateEPKcS4_)($c19)
 ; CHECK-NEXT:    cjalr $c12, $c17
-; CHECK-NEXT:    cmove $c3, $c18
+; CHECK-NEXT:    nop
 ; CHECK-NEXT:  .LBB0_2: # %cleanup44
 ; CHECK-NEXT:    cincoffset $c11, $c24, $zero
 ; CHECK-NEXT:    clc $c17, $zero, 32($c11) # 16-byte Folded Reload
@@ -667,8 +667,8 @@ define hidden ptr addrspace(200) @_ZN7WebCore67jsInternalSettingsGeneratedProtot
 ; CHECK-NEXT:  .LBB0_3: # %land.rhs.i
 ; CHECK-NEXT:    daddiu $1, $zero, -16384
 ; CHECK-NEXT:    candaddr $c2, $c1, $1
-; CHECK-NEXT:    cincoffset $c3, $c2, 200
-; CHECK-NEXT:    clbu $1, $zero, 0($c3)
+; CHECK-NEXT:    cincoffset $c4, $c2, 200
+; CHECK-NEXT:    clbu $1, $zero, 0($c4)
 ; CHECK-NEXT:    beqz $1, .LBB0_6
 ; CHECK-NEXT:    nop
 ; CHECK-NEXT:  # %bb.4: # %land.lhs.true.i.i.i
@@ -691,10 +691,10 @@ define hidden ptr addrspace(200) @_ZN7WebCore67jsInternalSettingsGeneratedProtot
 ; CHECK-NEXT:    cbez $c2, .LBB0_1
 ; CHECK-NEXT:    nop
 ; CHECK-NEXT:  # %bb.8: # %for.body.i.i.i.preheader
-; CHECK-NEXT:    clcbi $c3, %captab20(_ZN7WebCore27JSInternalSettingsGenerated6s_infoE)($c20)
+; CHECK-NEXT:    clcbi $c4, %captab20(_ZN7WebCore27JSInternalSettingsGenerated6s_infoE)($c19)
 ; CHECK-NEXT:  .LBB0_9: # %for.body.i.i.i
 ; CHECK-NEXT:    # =>This Inner Loop Header: Depth=1
-; CHECK-NEXT:    ceq $1, $c2, $c3
+; CHECK-NEXT:    ceq $1, $c2, $c4
 ; CHECK-NEXT:    bnez $1, .LBB0_12
 ; CHECK-NEXT:    nop
 ; CHECK-NEXT:  # %bb.10: # %for.inc.i.i.i
@@ -709,13 +709,13 @@ define hidden ptr addrspace(200) @_ZN7WebCore67jsInternalSettingsGeneratedProtot
 ; CHECK-NEXT:    cbez $c1, .LBB0_1
 ; CHECK-NEXT:    nop
 ; CHECK-NEXT:  # %bb.13: # %do.body
-; CHECK-NEXT:    clw $1, $zero, 76($c18)
+; CHECK-NEXT:    clw $1, $zero, 76($c3)
 ; CHECK-NEXT:    addiu $2, $zero, 1
 ; CHECK-NEXT:    beq $1, $2, .LBB0_26
 ; CHECK-NEXT:    nop
 ; CHECK-NEXT:  # %bb.14: # %if.end19
-; CHECK-NEXT:    clc $c2, $zero, 96($c18)
-; CHECK-NEXT:    clc $c19, $zero, 48($c1)
+; CHECK-NEXT:    clc $c2, $zero, 96($c3)
+; CHECK-NEXT:    clc $c18, $zero, 48($c1)
 ; CHECK-NEXT:    csc $c2, $zero, 0($c24)
 ; CHECK-NEXT:    cld $2, $zero, 8($c24)
 ; CHECK-NEXT:    daddiu $1, $zero, -1
@@ -736,15 +736,17 @@ define hidden ptr addrspace(200) @_ZN7WebCore67jsInternalSettingsGeneratedProtot
 ; CHECK-NEXT:    bnez $1, .LBB0_18
 ; CHECK-NEXT:    nop
 ; CHECK-NEXT:  # %bb.17: # %if.then4.i
-; CHECK-NEXT:    clcbi $c12, %capcall20(__eqdf2)($c20)
+; CHECK-NEXT:    clcbi $c12, %capcall20(__eqdf2)($c19)
 ; CHECK-NEXT:    daddiu $5, $zero, 0
-; CHECK-NEXT:    cjalr $c12, $c17
 ; CHECK-NEXT:    move $4, $16
+; CHECK-NEXT:    cjalr $c12, $c17
+; CHECK-NEXT:    cmove $c20, $c3
 ; CHECK-NEXT:    sltu $17, $zero, $2
-; CHECK-NEXT:    clcbi $c12, %capcall20(__unorddf2)($c20)
+; CHECK-NEXT:    clcbi $c12, %capcall20(__unorddf2)($c19)
 ; CHECK-NEXT:    daddiu $5, $zero, 0
 ; CHECK-NEXT:    cjalr $c12, $c17
 ; CHECK-NEXT:    move $4, $16
+; CHECK-NEXT:    cmove $c3, $c20
 ; CHECK-NEXT:    sltiu $1, $2, 1
 ; CHECK-NEXT:    b .LBB0_22
 ; CHECK-NEXT:    and $2, $1, $17
@@ -766,7 +768,7 @@ define hidden ptr addrspace(200) @_ZN7WebCore67jsInternalSettingsGeneratedProtot
 ; CHECK-NEXT:    clc $c1, $zero, 16($c24)
 ; CHECK-NEXT:    ceq $2, $c2, $c1
 ; CHECK-NEXT:  .LBB0_22: # %_ZNK3JSC7JSValue9toBooleanEPNS_9ExecStateE.exit
-; CHECK-NEXT:    clc $c1, $zero, 48($c18)
+; CHECK-NEXT:    clc $c1, $zero, 48($c3)
 ; CHECK-NEXT:    daddiu $1, $zero, -16384
 ; CHECK-NEXT:    candaddr $c1, $c1, $1
 ; CHECK-NEXT:    clc $c1, $zero, 304($c1)
@@ -776,10 +778,10 @@ define hidden ptr addrspace(200) @_ZN7WebCore67jsInternalSettingsGeneratedProtot
 ; CHECK-NEXT:    nop
 ; CHECK-NEXT:  # %bb.23: # %if.end36
 ; CHECK-NEXT:    dsll $1, $2, 32
-; CHECK-NEXT:    clcbi $c12, %capcall20(_ZN7WebCore25InternalSettingsGenerated23setCaretBrowsingEnabledEb)($c20)
+; CHECK-NEXT:    clcbi $c12, %capcall20(_ZN7WebCore25InternalSettingsGenerated23setCaretBrowsingEnabledEb)($c19)
 ; CHECK-NEXT:    dsrl $4, $1, 32
 ; CHECK-NEXT:    cjalr $c12, $c17
-; CHECK-NEXT:    cmove $c3, $c19
+; CHECK-NEXT:    cmove $c3, $c18
 ; CHECK-NEXT:    daddiu $1, $zero, 10
 ; CHECK-NEXT:    csd $1, $zero, 24($c24)
 ; CHECK-NEXT:    b .LBB0_2
@@ -797,11 +799,11 @@ define hidden ptr addrspace(200) @_ZN7WebCore67jsInternalSettingsGeneratedProtot
 ; CHECK-NEXT:    beqz $1, .LBB0_22
 ; CHECK-NEXT:    addiu $2, $zero, 1
 ; CHECK-NEXT:  # %bb.25: # %land.rhs.i.i.i
-; CHECK-NEXT:    clc $c2, $zero, 48($c18)
-; CHECK-NEXT:    candaddr $c3, $c2, $3
-; CHECK-NEXT:    clc $c3, $zero, 304($c3)
+; CHECK-NEXT:    clc $c2, $zero, 48($c3)
+; CHECK-NEXT:    candaddr $c4, $c2, $3
+; CHECK-NEXT:    clc $c4, $zero, 304($c4)
 ; CHECK-NEXT:    clwu $1, $zero, 0($c2)
-; CHECK-NEXT:    clc $c2, $zero, 224($c3)
+; CHECK-NEXT:    clc $c2, $zero, 224($c4)
 ; CHECK-NEXT:    dsll $1, $1, 4
 ; CHECK-NEXT:    clc $c2, $1, 0($c2)
 ; CHECK-NEXT:    clc $c2, $zero, 32($c2)
@@ -809,15 +811,15 @@ define hidden ptr addrspace(200) @_ZN7WebCore67jsInternalSettingsGeneratedProtot
 ; CHECK-NEXT:    b .LBB0_22
 ; CHECK-NEXT:    cne $2, $c1, $c2
 ; CHECK-NEXT:  .LBB0_26: # %if.then15
-; CHECK-NEXT:    clcbi $c12, %capcall20(_ZN3JSC29createNotEnoughArgumentsErrorEPNS_9ExecStateE)($c20)
+; CHECK-NEXT:    clcbi $c12, %capcall20(_ZN3JSC29createNotEnoughArgumentsErrorEPNS_9ExecStateE)($c19)
 ; CHECK-NEXT:    cjalr $c12, $c17
-; CHECK-NEXT:    cmove $c3, $c18
+; CHECK-NEXT:    cmove $c18, $c3
 ; CHECK-NEXT:    clc $c1, $zero, 48($c18)
 ; CHECK-NEXT:    daddiu $1, $zero, -16384
 ; CHECK-NEXT:    candaddr $c1, $c1, $1
 ; CHECK-NEXT:    clc $c1, $zero, 304($c1)
 ; CHECK-NEXT:    csc $c3, $zero, 16($c24)
-; CHECK-NEXT:    clcbi $c12, %capcall20(_ZN3JSC2VM14throwExceptionEPNS_9ExecStateENS_7JSValueE)($c20)
+; CHECK-NEXT:    clcbi $c12, %capcall20(_ZN3JSC2VM14throwExceptionEPNS_9ExecStateENS_7JSValueE)($c19)
 ; CHECK-NEXT:    cincoffset $c5, $c24, 16
 ; CHECK-NEXT:    csetbounds $c5, $c5, 16
 ; CHECK-NEXT:    cmove $c3, $c1

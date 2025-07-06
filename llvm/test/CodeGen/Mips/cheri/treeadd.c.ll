@@ -12,32 +12,32 @@ define signext i32 @TreeAdd(ptr addrspace(200) readonly %t) local_unnamed_addr a
 ; CHECK-NEXT:    cbez $c3, .LBB0_2
 ; CHECK-NEXT:    nop
 ; CHECK-NEXT:  # %bb.1: # %if.else
-; CHECK-NEXT:    cincoffset $c11, $c11, -[[#STACKFRAME_SIZE:]]
-; CHECK-NEXT:    csd $16, $zero, [[# STACKFRAME_SIZE - 8]]($c11)
-; CHECK-NEXT:    csc $c19, $zero, [[#C19_SAVE_OFFSET:]]($c11)
-; CHECK-NEXT:    csc $c18, $zero, [[#C18_SAVE_OFFSET:]]($c11)
-; CHECK-NEXT:    csc $c17, $zero, [[#C17_SAVE_OFFSET:]]($c11)
-; CHECK-NEXT:    cmove $c18, $c3
-; CHECK-NEXT:    clc $c3, $zero, [[#CAP_SIZE]]($c3)
+; CHECK-NEXT:    cincoffset $c11, $c11, -64
+; CHECK-NEXT:    csd $16, $zero, 56($c11) # 8-byte Folded Spill
+; CHECK-NEXT:    csc $c19, $zero, 32($c11) # 16-byte Folded Spill
+; CHECK-NEXT:    csc $c18, $zero, 16($c11) # 16-byte Folded Spill
+; CHECK-NEXT:    csc $c17, $zero, 0($c11) # 16-byte Folded Spill
+; CHECK-NEXT:    clc $c1, $zero, 16($c3)
 ; CHECK-NEXT:    lui $1, %pcrel_hi(_CHERI_CAPABILITY_TABLE_-8)
 ; CHECK-NEXT:    daddiu $1, $1, %pcrel_lo(_CHERI_CAPABILITY_TABLE_-4)
-; CHECK-NEXT:    cgetpccincoffset $c19, $1
-; CHECK-NEXT:    clcbi $c12, %capcall20(TreeAdd)($c19)
+; CHECK-NEXT:    cgetpccincoffset $c18, $1
+; CHECK-NEXT:    clcbi $c12, %capcall20(TreeAdd)($c18)
+; CHECK-NEXT:    cmove $c19, $c3
 ; CHECK-NEXT:    cjalr $c12, $c17
-; CHECK-NEXT:    nop
-; CHECK-NEXT:    clc $c3, $zero, [[#CAP_SIZE * 2]]($c18)
-; CHECK-NEXT:    clcbi $c12, %capcall20(TreeAdd)($c19)
+; CHECK-NEXT:    cmove $c3, $c1
+; CHECK-NEXT:    clc $c3, $zero, 32($c19)
+; CHECK-NEXT:    clcbi $c12, %capcall20(TreeAdd)($c18)
 ; CHECK-NEXT:    cjalr $c12, $c17
 ; CHECK-NEXT:    move $16, $2
-; CHECK-NEXT:    clw $1, $zero, 0($c18)
+; CHECK-NEXT:    clw $1, $zero, 0($c19)
 ; CHECK-NEXT:    addu $2, $2, $16
 ; CHECK-NEXT:    addu $2, $2, $1
-; CHECK-NEXT:    clc $c17, $zero, [[#C17_SAVE_OFFSET]]($c11)
-; CHECK-NEXT:    clc $c18, $zero, [[#C18_SAVE_OFFSET]]($c11)
-; CHECK-NEXT:    clc $c19, $zero, [[#C19_SAVE_OFFSET]]($c11)
-; CHECK-NEXT:    cld $16, $zero, [[# STACKFRAME_SIZE - 8]]($c11)
+; CHECK-NEXT:    clc $c17, $zero, 0($c11) # 16-byte Folded Reload
+; CHECK-NEXT:    clc $c18, $zero, 16($c11) # 16-byte Folded Reload
+; CHECK-NEXT:    clc $c19, $zero, 32($c11) # 16-byte Folded Reload
+; CHECK-NEXT:    cld $16, $zero, 56($c11) # 8-byte Folded Reload
 ; CHECK-NEXT:    cjr $c17
-; CHECK-NEXT:    cincoffset $c11, $c11, [[#STACKFRAME_SIZE]]
+; CHECK-NEXT:    cincoffset $c11, $c11, 64
 ; CHECK-NEXT:  .LBB0_2: # %return
 ; CHECK-NEXT:    cjr $c17
 ; CHECK-NEXT:    daddiu $2, $zero, 0
