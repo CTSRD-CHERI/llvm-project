@@ -24,6 +24,7 @@
 #include "llvm/ADT/Statistic.h"
 #include "llvm/Analysis/MemoryLocation.h"
 #include "llvm/Analysis/VectorUtils.h"
+#include "llvm/CodeGen/Analysis.h"
 #include "llvm/CodeGen/MachineFrameInfo.h"
 #include "llvm/CodeGen/MachineFunction.h"
 #include "llvm/CodeGen/MachineInstrBuilder.h"
@@ -2237,6 +2238,22 @@ bool RISCVTargetLowering::isLegalElementTypeForRVV(EVT ScalarTy) const {
 
 unsigned RISCVTargetLowering::combineRepeatedFPDivisors() const {
   return NumRepeatedDivisors;
+}
+
+bool RISCVTargetLowering::functionArgumentNeedsConsecutiveRegisters(
+    Type *Ty, CallingConv::ID CallConv, bool isVarArg,
+    const DataLayout &DL) const {
+  const bool IsPureCapABI =
+      RISCVABI::isCheriPureCapABI(Subtarget.getTargetABI());
+  const bool HasBoundedVarArgs =
+      IsPureCapABI && Subtarget.hasCheriBoundVarArg();
+  if (!Ty->isArrayTy())
+    return false;
+
+  // All non aggregate members of the type must have the same type
+  SmallVector<EVT> ValueVTs;
+  ComputeValueVTs(*this, DL, Ty, ValueVTs);
+  return all_equal(ValueVTs) && isVarArg && HasBoundedVarArgs;
 }
 
 static SDValue getVLOperand(SDValue Op) {
@@ -15348,6 +15365,37 @@ bool RISCV::CC_RISCV(const DataLayout &DL, RISCVABI::ABI ABI, unsigned ValNo,
   if (ValVT.isFixedLengthVector())
     LocVT = TLI.getContainerForFixedLengthVector(LocVT);
 
+  // For purecap bounded varargs - aggregate types which can fit into a stack
+  // slot are passed to CC_RISCV as separate arguments. We need to align the
+  // first argument to a CLEN alignment.
+  if (IsBoundedVarArgs && ArgFlags.isInConsecutiveRegs()) {
+    PendingLocs.push_back(
+        CCValAssign::getPending(ValNo, ValVT, LocVT, LocInfo));
+    PendingArgFlags.push_back(ArgFlags);
+    if (!ArgFlags.isInConsecutiveRegsLast())
+      return false;
+  }
+
+  if (IsBoundedVarArgs && ArgFlags.isInConsecutiveRegsLast()) {
+    for (size_t I = 0, E = PendingLocs.size(); I < E; I++){
+      CCValAssign VA = PendingLocs[I];
+      unsigned Size =
+          VA.getValVT() == CLenVT ? DL.getPointerSize(200) : XLen / 8;
+      Align Alignment(Size);
+      // For consecutive types the first item needs to be aligned.
+      if (I == 0)
+        Alignment = Align(SlotSize);
+
+      unsigned StackOffset = State.AllocateStack(Size, Alignment);
+      State.addLoc(CCValAssign::getMem(VA.getValNo(), VA.getValVT(),
+                                       StackOffset, VA.getLocVT(),
+                                       VA.getLocInfo()));
+    }
+    PendingLocs.clear();
+    PendingArgFlags.clear();
+    return false;
+  }
+
   // Split arguments might be passed indirectly, so keep track of the pending
   // values. Split vectors are passed via a mix of registers and indirectly, so
   // treat them as we would any other argument.
@@ -15427,15 +15475,9 @@ bool RISCV::CC_RISCV(const DataLayout &DL, RISCVABI::ABI ABI, unsigned ValNo,
     Reg = State.AllocateReg(ArgGPRs);
   }
 
-  // Aggregate types i.e. structs/arrays which can fit into 2*XLEN
-  // Don't allocate a slot for each instead we make sure that the next element
-  // is then properly aligned.
-  bool AllocateSlot = IsBoundedVarArgs;
-  if (OrigTy && OrigTy->isAggregateType())
-    AllocateSlot = false;
   unsigned StackOffset =
       Reg ? 0
-          : (AllocateSlot
+          : (IsBoundedVarArgs
                  ? State.AllocateStack(SlotSize, Align(SlotSize))
                  : State.AllocateStack(StoreSizeBytes, StackAlign));
 
@@ -16441,7 +16483,7 @@ SDValue RISCVTargetLowering::LowerCall(CallLoweringInfo &CLI,
       SDValue Address =
           DAG.getPointerAdd(DL, StackPtr, VA.getLocMemOffset());
 
-      if (UseBoundeMemArgsCaller && Outs[i].IsFixed) {
+      if (UseBoundeMemArgsCaller) {
         if (FirstArgAddr == SDValue()) {
           FirstArgAddr = Address;
           MemArgStartOffset = VA.getLocMemOffset();
@@ -16449,14 +16491,15 @@ SDValue RISCVTargetLowering::LowerCall(CallLoweringInfo &CLI,
         unsigned VTSize = VA.getValVT().getSizeInBits() / 8;
         MemArgEndOffset = VA.getLocMemOffset() + VTSize;
       }
+
       if (UseBoundedVarArgs && !Outs[i].IsFixed) {
         if (FirstVAAddr == SDValue()) {
           FirstVAAddr = Address;
           VAArgStartOffset = VA.getLocMemOffset();
         }
-        Align OffsetAlign = Align(PtrLenBytes);
         unsigned VTSize = VA.getValVT().getSizeInBits() / 8;
-        VAArgEndOffset = alignTo(VA.getLocMemOffset() + VTSize, OffsetAlign);
+        VAArgEndOffset =
+            alignTo(VA.getLocMemOffset() + VTSize, Align(PtrLenBytes));
         MemArgEndOffset = VAArgEndOffset;
       }
 
