@@ -15685,8 +15685,7 @@ static SDValue unpackFromMemLoc(SelectionDAG &DAG, SDValue Chain,
   MachineFrameInfo &MFI = MF.getFrameInfo();
   const RISCVSubtarget &STI = MF.getSubtarget<RISCVSubtarget>();
   const bool IsPureCapABI = RISCVABI::isCheriPureCapABI(STI.getTargetABI());
-  const bool UseBoundedMemArgsCallee =
-      IsPureCapABI && STI.hasCheriBoundMemArgCallee();
+  const bool UseBoundedMemArgsCallee = ArgRegArgs != SDValue();
 
   EVT LocVT = VA.getLocVT();
   EVT ValVT = VA.getValVT();
@@ -16029,10 +16028,10 @@ SDValue RISCVTargetLowering::LowerFormalArguments(
   const bool IsCheriPureCapABI =
       RISCVABI::isCheriPureCapABI(Subtarget.getTargetABI());
   const bool UseBoundedMemArgsCallee =
-      IsCheriPureCapABI && Subtarget.hasCheriBoundMemArgCallee();
+      IsCheriPureCapABI && Subtarget.hasCheriBoundMemArgCallee() && CallConv != CallingConv::Fast;
   const bool UseBoundedMemArgsCaller =
-      IsCheriPureCapABI && Subtarget.hasCheriBoundMemArgCaller();
-  const bool UseBoundedVarArgs = IsCheriPureCapABI && Subtarget.hasCheriBoundVarArg();
+      IsCheriPureCapABI && Subtarget.hasCheriBoundMemArgCaller() && CallConv != CallingConv::Fast;
+  const bool UseBoundedVarArgs = IsCheriPureCapABI && Subtarget.hasCheriBoundVarArg() && CallConv != CallingConv::Fast;
   if (UseBoundedMemArgsCallee) {
     for (size_t I = 0; I < Ins.size(); I++) {
       CCValAssign &VA = ArgLocs[I];
@@ -16274,11 +16273,11 @@ SDValue RISCVTargetLowering::LowerCall(CallLoweringInfo &CLI,
 
   MachineFunction &MF = DAG.getMachineFunction();
   bool PureCapABI = RISCVABI::isCheriPureCapABI(Subtarget.getTargetABI());
-  bool UseBoundedVarArgs = PureCapABI && Subtarget.hasCheriBoundVarArg();
+  bool UseBoundedVarArgs = PureCapABI && Subtarget.hasCheriBoundVarArg() && CallConv != CallingConv::Fast;
   bool UseBoundeMemArgsCaller =
-      PureCapABI && Subtarget.hasCheriBoundMemArgCaller();
+      PureCapABI && Subtarget.hasCheriBoundMemArgCaller() && CallConv != CallingConv::Fast;
   bool UseBoundeMemArgsCallee =
-      PureCapABI && Subtarget.hasCheriBoundMemArgCallee();
+      PureCapABI && Subtarget.hasCheriBoundMemArgCallee() && CallConv != CallingConv::Fast;
 
   // Analyze the operands of the call, assigning locations to each operand.
   SmallVector<CCValAssign, 16> ArgLocs;
