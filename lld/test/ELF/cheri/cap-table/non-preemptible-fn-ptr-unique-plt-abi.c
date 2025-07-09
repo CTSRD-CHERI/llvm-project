@@ -134,14 +134,14 @@
 // STATIC-NEXT:  DynamicSymbols [
 // STATIC-NEXT:  ]
 // STATIC-NEXT:  CHERI __cap_relocs [
-// STATIC-NEXT:     0x030630 (callbacks)     Base: 0x203f0 (default_callback+0) Length: 12 Perms: Function
-// STATIC-NEXT:     0x030640 Base: 0x20478 (static_callback+0) Length: 12 Perms: Function
-// STATIC-NEXT:     0x030650 Base: 0x203f0 (default_callback+0) Length: 12 Perms: Function
-// STATIC-NEXT:     0x030660 Base: 0x20478 (static_callback+0) Length: 12 Perms: Function
-// STATIC-NEXT:     0x030670 (default_callback@CAPTABLE) Base: 0x203f0 (default_callback+0) Length: 12 Perms: Function
-// STATIC-NEXT:     0x030680 (check_if_default@CAPTABLE) Base: 0x20600 (check_if_default+0) Length: {{.+}} Perms: Function
-// STATIC-NEXT:     0x030690 (static_callback@CAPTABLE.2) Base: 0x20478 (static_callback+0) Length: 12 Perms: Function
-// STATIC-NEXT:     0x0306a0 (callbacks@CAPTABLE.3) Base: 0x30630 (callbacks+0) Length: 64 Perms: Constant
+// STATIC-NEXT:     0x030640 (callbacks)     Base: 0x20400 (default_callback+0) Length: 12 Perms: Function
+// STATIC-NEXT:     0x030650 Base: 0x20488 (static_callback+0) Length: 12 Perms: Function
+// STATIC-NEXT:     0x030660 Base: 0x20400 (default_callback+0) Length: 12 Perms: Function
+// STATIC-NEXT:     0x030670 Base: 0x20488 (static_callback+0) Length: 12 Perms: Function
+// STATIC-NEXT:     0x030680 (default_callback@CAPTABLE) Base: 0x20400 (default_callback+0) Length: 12 Perms: Function
+// STATIC-NEXT:     0x030690 (check_if_default@CAPTABLE) Base: 0x20610 (check_if_default+0) Length: {{.+}} Perms: Function
+// STATIC-NEXT:     0x0306a0 (static_callback@CAPTABLE.2) Base: 0x20488 (static_callback+0) Length: 12 Perms: Function
+// STATIC-NEXT:     0x0306b0 (callbacks@CAPTABLE.3) Base: 0x30640 (callbacks+0) Length: 64 Perms: Constant
 // STATIC-NEXT:  ]
 // STATIC-NEXT:  CHERI .captable [
 // STATIC-NEXT:    0x0      default_callback@CAPTABLE
