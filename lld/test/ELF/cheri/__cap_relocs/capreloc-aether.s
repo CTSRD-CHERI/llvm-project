@@ -8,6 +8,6 @@
 .chericap data_end
 
 # CHECK:      CHERI __cap_relocs [
-# CHECK-NEXT:   0x0100a0 Base: 0x10000 (data_begin) Length: 0 Perms: Constant
-# CHECK-NEXT:   0x0100c0 Base: 0x20000 (data_end) Length: 0 Perms: Object
+# CHECK-NEXT:   0x0100c0 Base: 0x10000 (data_begin) Length: 0 Perms: Constant
+# CHECK-NEXT:   0x0100e0 Base: 0x20000 (data_end) Length: 0 Perms: Object
 # CHECK-NEXT: ]

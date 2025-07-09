@@ -1676,6 +1676,12 @@ template <class ELFT> void Writer<ELFT>::finalizeAddressDependentContent() {
       break;
     }
 
+    if (config->isCheriAbi && !config->relocatable) {
+      if (changed)
+        script->assignAddresses();
+      changed |= cheriCapabilityBoundsAlign();
+    }
+
     if (config->fixCortexA53Errata843419) {
       if (changed)
         script->assignAddresses();
@@ -2861,6 +2867,12 @@ template <class ELFT> void Writer<ELFT>::setPhdrs(Partition &part) {
       p->p_memsz =
           alignToPowerOf2(p->p_offset + p->p_memsz, config->commonPageSize) -
           p->p_offset;
+    }
+
+    if (p->p_type == PT_CHERI_PCC) {
+      // Round up the size to cover any padding.
+      p->p_memsz = alignToPowerOf2(
+          p->p_memsz, target->getCheriRequiredAlignment(p->p_memsz));
     }
   }
 }

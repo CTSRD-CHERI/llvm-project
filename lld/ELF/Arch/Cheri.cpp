@@ -952,5 +952,52 @@ void addRelativeCapabilityRelocation(
                             addend);
 }
 
+static OutputSection *nextOutputSection(OutputSection *sec) {
+  bool isNext = false;
+  for (OutputSection *os : outputSections) {
+    if (isNext) {
+      if (!(os->flags & SHF_ALLOC))
+        continue;
+      return os;
+    }
+    if (os == sec)
+      isNext = true;
+  }
+  return nullptr;
+}
+
+// Determine the required alignment for a single PT_CHERI_PCC segment and apply
+// it to the first OutputSection and the following OutputSection after the last
+// OutputSection.  Returns true if the alignment of any OutputSections were
+// modified.
+static bool alignPCCBounds(PhdrEntry *p) {
+  OutputSection *first = p->firstSec;
+  OutputSection *last = p->lastSec;
+
+  if (!first)
+    return false;
+
+  uint64_t size = last->getVA() + last->size - first->getVA();
+  uint64_t align = target->getCheriRequiredAlignment(size);
+  bool changed = false;
+  if (first->addralign < align) {
+    first->addralign = align;
+    changed = true;
+  }
+  OutputSection *next = nextOutputSection(last);
+  if (next != nullptr && next->addralign < align) {
+    next->addralign = align;
+    changed = true;
+  }
+  return changed;
+}
+
+bool cheriCapabilityBoundsAlign() {
+  // Align the PT_CHERI_PCC segment.
+  bool changed = false;
+  changed |= alignPCCBounds(in.cheriBounds);
+  return changed;
+}
+
 } // namespace elf
 } // namespace lld
