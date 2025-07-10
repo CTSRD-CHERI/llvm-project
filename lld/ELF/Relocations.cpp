@@ -1095,10 +1095,14 @@ bool RelocationScanner::isStaticLinkTimeConstant(RelExpr e, RelType type,
 // space for the extra PT_LOAD even if we end up not using it.
 void RelocationScanner::processAux(RelExpr expr, RelType type, uint64_t offset,
                                    Symbol &sym, int64_t addend) const {
+  auto symCompartment = sym.containingCompartment();
+  bool crossCompartment = symCompartment && *symCompartment != sec->compartment;
+
   // If non-ifunc non-preemptible, change PLT to direct call and optimize GOT
   // indirection.
   const bool isIfunc = sym.isGnuIFunc();
-  if (!sym.isPreemptible && (!isIfunc || config->zIfuncNoplt)) {
+  if (!sym.isPreemptible && (!isIfunc || config->zIfuncNoplt) &&
+      !crossCompartment) {
     if (expr != R_GOT_PC) {
       // The 0x8000 bit of r_addend of R_PPC_PLTREL24 is used to choose call
       // stub type. It should be ignored if optimized to R_PC.
@@ -1757,12 +1761,50 @@ static bool handleNonPreemptibleIfunc(Compartment *c, Symbol &sym,
   return true;
 }
 
+static bool handleCrossCompartmentCall(Compartment *c, Symbol &sym,
+                                       uint16_t flags) {
+  // Handle a cross-compartment call to a non-preemptible function.
+  //
+  // These need to force indirection via a PLT stub.  These use a
+  // RELATIVE relocation rather than a typical jump slot relocation.
+  // Reuse the Iplt to hold the PLT stub.
+  if (sym.isPreemptible || !sym.isDefined() || !sym.isFunc() ||
+      !(flags & NEEDS_PLT))
+    return false;
+
+  auto symCompartment = sym.containingCompartment();
+  // When --just-symbols is active, undefined symbols are treated as
+  // defined symbols, but without a containing input section.
+  if (!symCompartment)
+    return false;
+
+  // Access within the same compartment is treated normally.
+  if (*symCompartment == c)
+    return false;
+
+  SymbolCompartAux &aux = sym.compartAux(c);
+  aux.isInIplt = true;
+
+  // Create an Iplt entry and the associated RELATIVE relocation.
+  sym.allocateAux(c);
+  addPltEntry(*iplt(c), *igotPlt(c), *relaIplt(c), target->relativeRel,
+              sym);
+
+  if (flags & NEEDS_GOT) {
+    // Redirect GOT accesses to point to the Igot.
+    aux.gotInIgot = true;
+  }
+  return true;
+}
+
 void elf::postScanRelocations() {
   auto fn = [](Symbol &sym) {
   auto compartFn = [](Compartment *c, Symbol &sym) {
     SymbolCompartAux &aux = sym.compartAux(c);
     auto flags = aux.flags.load(std::memory_order_relaxed);
     if (handleNonPreemptibleIfunc(c, sym, flags))
+      return;
+    if (handleCrossCompartmentCall(c, sym, flags))
       return;
     if (!sym.needsDynReloc(c))
       return;
