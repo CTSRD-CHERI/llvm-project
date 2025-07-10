@@ -552,12 +552,6 @@ template <class ELFT> void elf::createSyntheticSections() {
       config->androidPackDynRelocs ? in.relaPlt->name : relaDynName,
       /*sort=*/false, /*threadCount=*/1);
   add(*in.relaIplt);
-  for (Compartment &compart : compartments) {
-    compart.relaIplt = std::make_unique<RelocationSection<ELFT>>(
-        in.relaPlt->name, /*sort=*/false, /*threadCount=*/1);
-    compart.relaIplt->compartment = &compart;
-    add(*compart.relaIplt);
-  }
 
   if ((config->emachine == EM_386 || config->emachine == EM_X86_64) &&
       (config->andFeatures & GNU_PROPERTY_X86_FEATURE_1_IBT)) {
@@ -1483,7 +1477,7 @@ static void sortSection(OutputSection &osec,
   // sections in the required order from the beginning so that the in.relaIplt
   // section is placed last in an output section. Here we just do not apply
   // sorting for an output section which holds the in.relaIplt section.
-  if (relaIplt(osec.compartment)->getParent() == &osec)
+  if (in.relaIplt->getParent() == &osec)
     return;
 
   // Sort input sections by priority using the list provided by
@@ -2277,7 +2271,6 @@ template <class ELFT> void Writer<ELFT>::finalizeSections() {
       finalizeSynthetic(c.got.get());
       finalizeSynthetic(c.gotPlt.get());
       finalizeSynthetic(c.igotPlt.get());
-      finalizeSynthetic(c.relaIplt.get());
       finalizeSynthetic(c.relaPlt.get());
       finalizeSynthetic(c.plt.get());
       finalizeSynthetic(c.iplt.get());
