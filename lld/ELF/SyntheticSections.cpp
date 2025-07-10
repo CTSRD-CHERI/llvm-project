@@ -1324,9 +1324,9 @@ static uint64_t addRelaSz(const RelocationBaseSection &relaDyn) {
 // overlap with the [DT_RELA, DT_RELA + DT_RELASZ).
 static uint64_t addPltRelSz(const Compartment *c) {
   size_t size = relaPlt(c)->getSize();
-  if (relaIplt(c)->getParent() == relaPlt(c)->getParent() &&
-      relaIplt(c)->name == relaPlt(c)->name)
-    size += relaIplt(c)->getSize();
+  if (in.relaIplt->getParent() == relaPlt(c)->getParent() &&
+      in.relaIplt->name == relaPlt(c)->name)
+    size += in.relaIplt->getSize();
   return size;
 }
 
@@ -1452,7 +1452,7 @@ DynamicSection<ELFT>::computeContents() {
   // .rel[a].plt section.
   bool pltrel = false, aarch64_variant_pcs = false, riscv_variant_cc = false;
   auto addPlt = [&](const Compartment *c) {
-    if (!relaPlt(c)->isNeeded() && !relaIplt(c)->isNeeded())
+    if (!relaPlt(c)->isNeeded() && !(c == nullptr && in.relaIplt->isNeeded()))
       return;
     addInSec(DT_JMPREL, *relaPlt(c));
     addInt(DT_PLTRELSZ, addPltRelSz(c));
@@ -1785,15 +1785,31 @@ void RelocationBaseSection::finalizeContents() {
       getParent()->info = gotPlt(c)->getParent()->sectionIndex;
     }
   }
-  if (relaIplt(c) == this && igotPlt(c)->getParent()) {
-    getParent()->flags |= ELF::SHF_INFO_LINK;
-    // For CheriABI we use the captable as the sh_info value
-    if (config->isCheriAbi && in.mipsCheriCapTable &&
-        in.mipsCheriCapTable->isNeeded()) {
-      assert(in.mipsCheriCapTable->getParent()->sectionIndex != UINT32_MAX);
-      getParent()->info = in.mipsCheriCapTable->getParent()->sectionIndex;
-    } else {
-      getParent()->info = igotPlt(c)->getParent()->sectionIndex;
+  if (in.relaIplt.get() == this) {
+    // Only add a link if there is exactly one Iplt section.
+    IgotPltSection *igotPlt = nullptr;
+    if (lld::elf::igotPlt(nullptr)->isNeeded())
+      igotPlt = lld::elf::igotPlt(nullptr);
+    for (const Compartment &c : compartments) {
+      if (lld::elf::igotPlt(&c)->isNeeded()) {
+        if (igotPlt == nullptr) {
+          igotPlt = lld::elf::igotPlt(&c);
+        } else {
+          igotPlt = nullptr;
+          break;
+        }
+      }
+    }
+    if (igotPlt && igotPlt->getParent()) {
+      getParent()->flags |= ELF::SHF_INFO_LINK;
+      // For CheriABI we use the captable as the sh_info value
+      if (config->isCheriAbi && in.mipsCheriCapTable &&
+          in.mipsCheriCapTable->isNeeded()) {
+        assert(in.mipsCheriCapTable->getParent()->sectionIndex != UINT32_MAX);
+        getParent()->info = in.mipsCheriCapTable->getParent()->sectionIndex;
+      } else {
+        getParent()->info = igotPlt->getParent()->sectionIndex;
+      }
     }
   }
   for (auto reloc : relocs) {
