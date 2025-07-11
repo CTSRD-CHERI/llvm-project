@@ -10,7 +10,7 @@ define i32 @get_ith_word(i32 signext %i, ...) addrspace(200) nounwind {
 ; CHECK-NEXT:    cincoffset ca2, csp, 16
 ; CHECK-NEXT:    sc ca2, 0(ca1)
 ; CHECK-NEXT:    lc ca1, 0(csp)
-; CHECK-NEXT:    addiw a0, a0, 1
+; CHECK-NEXT:    addi a0, a0, 1
 ; CHECK-NEXT:  .LBB0_1: # %while.cond
 ; CHECK-NEXT:    # =>This Inner Loop Header: Depth=1
 ; CHECK-NEXT:    cmove ca2, ca1
@@ -54,7 +54,7 @@ define ptr addrspace(200) @get_ith_cap(i32 signext %i, ...) addrspace(200) nounw
 ; CHECK-NEXT:    cincoffset ca2, csp, 16
 ; CHECK-NEXT:    sc ca2, 0(ca1)
 ; CHECK-NEXT:    lc ca1, 0(csp)
-; CHECK-NEXT:    addiw a0, a0, 1
+; CHECK-NEXT:    addi a0, a0, 1
 ; CHECK-NEXT:  .LBB1_1: # %while.cond
 ; CHECK-NEXT:    # =>This Inner Loop Header: Depth=1
 ; CHECK-NEXT:    addi a2, a1, 15

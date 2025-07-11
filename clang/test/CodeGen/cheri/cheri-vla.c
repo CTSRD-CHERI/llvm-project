@@ -13,8 +13,8 @@ extern void test(const char*);
 // CHECK-NEXT:    [[I_04:%.*]] = phi i64 [ 1, [[ENTRY:%.*]] ], [ [[INC:%.*]], [[FOR_BODY]] ]
 // CHECK-NEXT:    [[TMP0:%.*]] = call ptr addrspace(200) @llvm.stacksave.p200()
 // CHECK-NEXT:    [[VLA:%.*]] = alloca i8, i64 [[I_04]], align 1, addrspace(200)
-// CHECK-NEXT:    [[SUB:%.*]] = add nsw i64 [[I_04]], -1
-// CHECK-NEXT:    [[ARRAYIDX:%.*]] = getelementptr inbounds i8, ptr addrspace(200) [[VLA]], i64 [[SUB]]
+// CHECK-NEXT:    [[TMP1:%.*]] = getelementptr i8, ptr addrspace(200) [[VLA]], i64 [[I_04]]
+// CHECK-NEXT:    [[ARRAYIDX:%.*]] = getelementptr i8, ptr addrspace(200) [[TMP1]], i64 -1
 // CHECK-NEXT:    store i8 0, ptr addrspace(200) [[ARRAYIDX]], align 1, !tbaa [[TBAA2:![0-9]+]]
 // CHECK-NEXT:    call void @test(ptr addrspace(200) noundef nonnull [[VLA]]) #[[ATTR3:[0-9]+]]
 // CHECK-NEXT:    call void @llvm.stackrestore.p200(ptr addrspace(200) [[TMP0]])

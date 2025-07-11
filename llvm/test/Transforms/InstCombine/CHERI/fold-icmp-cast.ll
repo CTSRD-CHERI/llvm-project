@@ -56,7 +56,11 @@ define i1 @known_bits_cap(i64 %arg) local_unnamed_addr addrspace(200) {
 ; CHECK-LABEL: define {{[^@]+}}@known_bits_cap
 ; CHECK-SAME: (i64 [[ARG:%.*]]) local_unnamed_addr addrspace(200) {
 ; CHECK-NEXT:  bb:
-; CHECK-NEXT:    ret i1 true
+; CHECK-NEXT:    [[TMP0:%.*]] = getelementptr i8, ptr addrspace(200) null, i64 [[ARG]]
+; CHECK-NEXT:    [[TMP4:%.*]] = getelementptr i8, ptr addrspace(200) [[TMP0]], i64 1
+; CHECK-NEXT:    [[OP0_ADDR:%.*]] = call i64 @llvm.cheri.cap.address.get.i64(ptr addrspace(200) [[TMP4]])
+; CHECK-NEXT:    [[TMP6:%.*]] = icmp ne i64 [[OP0_ADDR]], 0
+; CHECK-NEXT:    ret i1 [[TMP6]]
 ;
 bb:
   %greater_zero = add nuw nsw i64 %arg, 1
