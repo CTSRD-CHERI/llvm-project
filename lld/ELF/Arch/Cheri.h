@@ -76,9 +76,6 @@ struct CheriCapReloc {
 class CheriCapRelocsSection : public SyntheticSection {
 public:
   CheriCapRelocsSection(StringRef name);
-  // Add a __cap_relocs section from in input object file
-  template <class ELFT>
-  void addSection(InputSectionBase *s);
   bool isNeeded() const override { return !relocsMap.empty(); }
   size_t getSize() const override { return relocsMap.size() * entsize; }
   void writeTo(uint8_t *buf) override;
@@ -89,7 +86,6 @@ public:
 
 private:
   template <class ELFT> void writeToImpl(uint8_t *);
-  template <class ELFT> void processSection(InputSectionBase *s);
   bool addEntry(CheriCapRelocLocation loc, CheriCapReloc relocation) {
     auto it = relocsMap.insert(std::make_pair(loc, relocation));
     // assert(it.first->second == Relocation);
