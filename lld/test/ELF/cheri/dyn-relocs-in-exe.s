@@ -43,5 +43,5 @@ dummy_shlib:
 # DYN-RELOCS:      Dynamic Relocations {
 # DYN-RELOCS-NEXT: }
 # DYN-RELOCS:      CHERI __cap_relocs [
-# DYN-RELOCS-NEXT:   0x{{.+}} (capsym) Base: 0x{{.+}} (__start+0) Length: 4 Perms: Function
+# DYN-RELOCS-NEXT:   0x{{.+}} (capsym) Base: 0x{{.+}} (__start) Length: 4 Perms: Function
 # DYN-RELOCS:      ]

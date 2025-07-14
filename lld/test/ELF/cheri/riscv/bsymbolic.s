@@ -9,8 +9,8 @@
 # CHECK:      Relocations [
 # CHECK-NEXT: ]
 # CHECK-NEXT: CHERI __cap_relocs [
-# CHECK-NEXT:   0x0033d0 (data) Base: 0x33d0 (data+0) Length: 32 Perms: Object
-# CHECK-NEXT:   0x0033e0 Base: 0x1320 (func+0) Length: 4 Perms: Function
+# CHECK-NEXT:   0x0033d0 (data) Base: 0x33d0 (data) Length: 32 Perms: Object
+# CHECK-NEXT:   0x0033e0 Base: 0x1320 (func) Length: 4 Perms: Function
 # CHECK-NEXT: ]
 
   .type func, @function
