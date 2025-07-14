@@ -34,7 +34,7 @@
 // PER-FILE-NEXT:   }
 // PER-FILE-NEXT: ]
 // PER-FILE-NEXT: CHERI __cap_relocs [
-// PER-FILE-NEXT:    0x020a20 (function3@CAPTABLE@file1.o.4) Base: 0x10{{.+}} (function3+0) Length: {{.+}} Perms: Function
+// PER-FILE-NEXT:    0x020a20 (function3@CAPTABLE@file1.o.4) Base: 0x10{{.+}} (function3) Length: {{.+}} Perms: Function
 // PER-FILE-NEXT: ]
 // PER-FILE-NEXT: CHERI .captable [
 // PER-FILE-NEXT:   0x0      extern_void_ptr@CAPTABLE@file1.o   R_MIPS_CHERI_CAPABILITY_CALL/R_MIPS_NONE/R_MIPS_NONE against extern_void_ptr

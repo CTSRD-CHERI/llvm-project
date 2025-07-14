@@ -53,7 +53,7 @@ local_ref_with_addend:
 # DYN-RELOCS-NEXT:   }
 
 # DYN-RELOCS-LABEL: CHERI __cap_relocs [
-# DYN-RELOCS-NEXT:     0x0204b0 (local_ref) Base: 0x10480 (bar+0) Length: 8 Perms: Function
+# DYN-RELOCS-NEXT:     0x0204b0 (local_ref) Base: 0x10480 (bar) Length: 8 Perms: Function
 # DYN-RELOCS-NEXT:     0x0204f0 (local_ref_with_addend) Base: 0x10480 (bar+4) Length: 8 Perms: Function
 # DYN-RELOCS-NEXT:  ]
 

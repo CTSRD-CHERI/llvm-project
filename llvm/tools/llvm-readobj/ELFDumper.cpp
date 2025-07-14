@@ -3518,9 +3518,10 @@ template <class ELFT> void ELFDumper<ELFT>::printCheriCapRelocs() {
         OS << left_justify((" (" + LocationSym + ")").str(), 16);
       OS << format(" Base: 0x%lx (", static_cast<unsigned long>(Base))
          << BaseSymbol;
-      if (SymbolOffset >= 0)
+      if (SymbolOffset > 0)
         OS << "+";
-      OS << SymbolOffset;
+      if (SymbolOffset != 0)
+        OS << SymbolOffset;
       OS << format(") Length: %ld", static_cast<unsigned long>(Length));
       OS << " Perms: " << PermStr;
       OS << "\n";
