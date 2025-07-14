@@ -3465,6 +3465,7 @@ template <class ELFT> void ELFDumper<ELFT>::printCheriCapRelocs() {
       break;
     }
     std::string BaseSymbol;
+    int64_t SymbolOffset = Offset;
     if (Base == 0) {
       // Base is 0 -> either it is really NULL or (more likely) there is a
       // dynamic relocation that will set the real address
@@ -3484,6 +3485,13 @@ template <class ELFT> void ELFDumper<ELFT>::printCheriCapRelocs() {
       if (it != SymbolNames.end()) {
         BaseSymbol = it->second;
         // errs() << "BaseSymbol = SymbolNames[" << Base << "] = " << it->second << "\n";
+      }
+      if (Offset != 0 && !opts::ExpandRelocs) {
+        it = SymbolNames.find(Base + Offset);
+        if (it != SymbolNames.end()) {
+          BaseSymbol = it->second;
+          SymbolOffset = 0;
+        }
       }
     }
     if (BaseSymbol.empty())
@@ -3510,9 +3518,9 @@ template <class ELFT> void ELFDumper<ELFT>::printCheriCapRelocs() {
         OS << left_justify((" (" + LocationSym + ")").str(), 16);
       OS << format(" Base: 0x%lx (", static_cast<unsigned long>(Base))
          << BaseSymbol;
-      if (Offset >= 0)
+      if (SymbolOffset >= 0)
         OS << "+";
-      OS << Offset;
+      OS << SymbolOffset;
       OS << format(") Length: %ld", static_cast<unsigned long>(Length));
       OS << " Perms: " << PermStr;
       OS << "\n";
