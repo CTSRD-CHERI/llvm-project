@@ -28,14 +28,14 @@
 # RELOC32-NEXT:   0x12288 R_RISCV_CHERI_CAPABILITY b 0x0
 # RELOC32-NEXT: }
 # RELOC32:      CHERI __cap_relocs [
-# RELOC32-NEXT:   0x012290 Base: 0x13400 (a+0) Length: 4 Perms: Object
+# RELOC32-NEXT:   0x012290 Base: 0x13400 (a) Length: 4 Perms: Object
 # RELOC32-NEXT: ]
 
 # RELOC64:      .rela.dyn {
 # RELOC64-NEXT:   0x123F0 R_RISCV_CHERI_CAPABILITY b 0x0
 # RELOC64-NEXT: }
 # RELOC64:      CHERI __cap_relocs [
-# RELOC64-NEXT:   0x012400 Base: 0x13410 (a+0) Length: 4 Perms: Object
+# RELOC64-NEXT:   0x012400 Base: 0x13410 (a) Length: 4 Perms: Object
 # RELOC64-NEXT: ]
 
 # NM32: 00013400 d a
