@@ -32,7 +32,7 @@ sw.bb1:
 ; CHECK-LABEL: c:
 ; CHECK-LABEL: %bb.0:                                 # %entry
 ; CHECK-NEXT:	sltiu	$1, $4, 11
-; CHECK-NEXT:	beqz	$1, .LBB0_3
+; CHECK-NEXT:	beqz	$1, .LBB0_4
 ; CHECK-NEXT:	nop
 
 ; CHECK-LABEL: .LBB0_1:                                # %entry
@@ -57,12 +57,12 @@ sw.bb1:
 ; CHECK-LABEL: .LBB0_2:                                # %sw.bb
 ; CHECK-NEXT: 	cjr	$c17
 ; CHECK-NEXT: 	daddiu	$2, $zero, 1
-; CHECK-LABEL: .LBB0_3:                                # %default
-; CHECK-NEXT: 	cjr	$c17
-; CHECK-NEXT: 	daddiu	$2, $zero, 1234
-; CHECK-LABEL: .LBB0_4:                                # %sw.bb1
+; CHECK-LABEL: .LBB0_3:                                # %sw.bb1
 ; CHECK-NEXT: 	cjr	$c17
 ; CHECK-NEXT: 	daddiu	$2, $zero, 0
+; CHECK-LABEL: .LBB0_4:                                # %default
+; CHECK-NEXT: 	cjr	$c17
+; CHECK-NEXT: 	daddiu	$2, $zero, 1234
 ; CHECK-NEXT: 	.set	at
 ; CHECK: 	.end	c
 ; CHECK-LABEL: .Lfunc_end0:
@@ -71,16 +71,16 @@ sw.bb1:
 ; CHECK-NEXT: 	.p2align	2
 ; CHECK-LABEL: .LJTI0_0:
 ; CHECK-NEXT: 	.4byte	.LBB0_2-.LJTI0_0
-; CHECK-NEXT: 	.4byte	.LBB0_3-.LJTI0_0
-; CHECK-NEXT: 	.4byte	.LBB0_3-.LJTI0_0
-; CHECK-NEXT: 	.4byte	.LBB0_2-.LJTI0_0
-; CHECK-NEXT: 	.4byte	.LBB0_3-.LJTI0_0
-; CHECK-NEXT: 	.4byte	.LBB0_2-.LJTI0_0
-; CHECK-NEXT: 	.4byte	.LBB0_3-.LJTI0_0
-; CHECK-NEXT: 	.4byte	.LBB0_3-.LJTI0_0
-; CHECK-NEXT: 	.4byte	.LBB0_3-.LJTI0_0
-; CHECK-NEXT: 	.4byte	.LBB0_3-.LJTI0_0
 ; CHECK-NEXT: 	.4byte	.LBB0_4-.LJTI0_0
+; CHECK-NEXT: 	.4byte	.LBB0_4-.LJTI0_0
+; CHECK-NEXT: 	.4byte	.LBB0_2-.LJTI0_0
+; CHECK-NEXT: 	.4byte	.LBB0_4-.LJTI0_0
+; CHECK-NEXT: 	.4byte	.LBB0_2-.LJTI0_0
+; CHECK-NEXT: 	.4byte	.LBB0_4-.LJTI0_0
+; CHECK-NEXT: 	.4byte	.LBB0_4-.LJTI0_0
+; CHECK-NEXT: 	.4byte	.LBB0_4-.LJTI0_0
+; CHECK-NEXT: 	.4byte	.LBB0_4-.LJTI0_0
+; CHECK-NEXT: 	.4byte	.LBB0_3-.LJTI0_0
 
 
 ; NO-OPT-LABEL: %bb.0:                                 # %entry
