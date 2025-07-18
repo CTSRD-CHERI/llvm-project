@@ -11,6 +11,10 @@ struct file_operations {
 	long (*unlocked_ioctl) (int fd, unsigned long, user_uintptr_t);
 };
 
+struct container {
+    struct file_operations ops;
+};
+
 struct other {
 	long (*unlocked_ioctl) (int fd, unsigned long, user_uintptr_t);
 };
@@ -89,4 +93,22 @@ other_ioctl(int fd, unsigned long cmd, unsigned long arg)
 	other_ops->unlocked_ioctl = smc_ioctl;
 	other_ops->unlocked_ioctl = other_ioctl;
 	return 0;
+}
+
+struct file_operations fops_global;
+
+long init(struct container *c, struct file_operations *f)
+{
+    c->ops.unlocked_ioctl = smc_ioctl;
+    f->unlocked_ioctl = smc_ioctl;
+    fops_global.unlocked_ioctl = smc_ioctl;
+    c->ops.unlocked_ioctl = other_ioctl;
+// CHECK-MESSAGES: :[[@LINE-1]]:{{.*}} warning: CHERI: Initialization of ioctl field 'unlocked_ioctl' in 'file_operations' with non-ioctl function 'other_ioctl' [cheri-Ioctl]
+// CHECK-MESSAGES: :[[@LINE-2]]:{{.*}} warning: MISSING: addFunc("other_ioctl", 2) [cheri-Ioctl]
+    f->unlocked_ioctl = other_ioctl;
+// CHECK-MESSAGES: :[[@LINE-1]]:{{.*}} warning: CHERI: Initialization of ioctl field 'unlocked_ioctl' in 'file_operations' with non-ioctl function 'other_ioctl' [cheri-Ioctl]
+// CHECK-MESSAGES: :[[@LINE-2]]:{{.*}} warning: MISSING: addFunc("other_ioctl", 2) [cheri-Ioctl]
+    fops_global.unlocked_ioctl = other_ioctl;
+// CHECK-MESSAGES: :[[@LINE-1]]:{{.*}} warning: CHERI: Initialization of ioctl field 'unlocked_ioctl' in 'file_operations' with non-ioctl function 'other_ioctl' [cheri-Ioctl]
+// CHECK-MESSAGES: :[[@LINE-2]]:{{.*}} warning: MISSING: addFunc("other_ioctl", 2) [cheri-Ioctl]
 }
