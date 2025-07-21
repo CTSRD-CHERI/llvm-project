@@ -55,7 +55,8 @@ public:
   MIPSTargetCodeGenInfo(CodeGenTypes &CGT, bool IsO32, CodeGenModule &CGM)
       : CommonCheriTargetCodeGenInfo(
             std::make_unique<MipsABIInfo>(CGT, IsO32, CGM)),
-        SizeOfUnwindException(IsO32 ? 24 : 32) {}
+        SizeOfUnwindException(
+            IsO32 ? 24 : TargetCodeGenInfo::getSizeOfUnwindException()) {}
 
   int getDwarfEHStackPointer(CodeGen::CodeGenModule &CGM) const override {
     return 29;

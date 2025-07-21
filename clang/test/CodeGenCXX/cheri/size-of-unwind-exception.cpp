@@ -7,7 +7,6 @@
 // RUN:  | opt -S -passes=mem2reg | FileCheck %s --check-prefix=CHECK-RV64
 
 /// Check that we use the correct size for struct _Unwind_Exception
-/// TODO: 64-bit CHERI architectures use the wrong size
 
 void foo();
 void bar(int *&);
@@ -31,7 +30,7 @@ void bar(int *&);
 // CHECK-MIPS-NEXT:    br i1 [[MATCHES]], label [[CATCH:%.*]], label [[EH_RESUME:%.*]]
 // CHECK-MIPS:       catch:
 // CHECK-MIPS-NEXT:    [[TMP4:%.*]] = call ptr addrspace(200) @__cxa_begin_catch(ptr addrspace(200) [[TMP1]]) #[[ATTR3]]
-// CHECK-MIPS-NEXT:    [[TMP5:%.*]] = getelementptr i8, ptr addrspace(200) [[TMP1]], i32 32
+// CHECK-MIPS-NEXT:    [[TMP5:%.*]] = getelementptr i8, ptr addrspace(200) [[TMP1]], i32 64
 // CHECK-MIPS-NEXT:    invoke void @_Z3barRPi(ptr addrspace(200) noundef nonnull align 16 dereferenceable(16) [[TMP5]])
 // CHECK-MIPS-NEXT:    to label [[INVOKE_CONT2:%.*]] unwind label [[LPAD1:%.*]]
 // CHECK-MIPS:       invoke.cont2:
@@ -113,7 +112,7 @@ void bar(int *&);
 // CHECK-RV64-NEXT:    br i1 [[MATCHES]], label [[CATCH:%.*]], label [[EH_RESUME:%.*]]
 // CHECK-RV64:       catch:
 // CHECK-RV64-NEXT:    [[TMP4:%.*]] = call ptr addrspace(200) @__cxa_begin_catch(ptr addrspace(200) [[TMP1]]) #[[ATTR3]]
-// CHECK-RV64-NEXT:    [[TMP5:%.*]] = getelementptr i8, ptr addrspace(200) [[TMP1]], i32 32
+// CHECK-RV64-NEXT:    [[TMP5:%.*]] = getelementptr i8, ptr addrspace(200) [[TMP1]], i32 64
 // CHECK-RV64-NEXT:    invoke void @_Z3barRPi(ptr addrspace(200) noundef nonnull align 16 dereferenceable(16) [[TMP5]])
 // CHECK-RV64-NEXT:    to label [[INVOKE_CONT2:%.*]] unwind label [[LPAD1:%.*]]
 // CHECK-RV64:       invoke.cont2:
