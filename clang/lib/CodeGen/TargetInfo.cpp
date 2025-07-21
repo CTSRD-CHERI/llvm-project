@@ -80,7 +80,8 @@ unsigned TargetCodeGenInfo::getSizeOfUnwindException() const {
   //   PowerPC    Linux
   //   ARM        Darwin (*not* EABI)
   //   AArch64    Linux
-  return 32;
+  unsigned PointerSize = Info->getTarget().getPointerWidth(LangAS::Default) / 8;
+  return PointerSize > 8 ? 4 * PointerSize : 32;
 }
 
 bool TargetCodeGenInfo::isNoProtoCallVariadic(const CallArgList &args,
