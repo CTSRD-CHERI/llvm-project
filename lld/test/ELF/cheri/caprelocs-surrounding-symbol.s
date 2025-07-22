@@ -1,5 +1,6 @@
 ## Check that lld uses the size of surrounding symbols for capability relocations
 ## against STT_NONE targets with size==0.
+# REQUIRES: riscv
 # RUN: %riscv64_cheri_purecap_llvm-mc -filetype=obj %s -o %t.o
 # RUN: llvm-readobj --symbols --relocations --cap-relocs --expand-relocs %t.o | FileCheck %s --check-prefix=OBJ-RELOCS
 # RUN: ld.lld -pie %t.o -o %t.exe -e fn1 --verbose 2>&1 | FileCheck %s --check-prefix=LLD-OUTPUT "--implicit-check-not=warning:"
