@@ -1,5 +1,6 @@
 ## This used to crash ld.lld for CHERI MIPS with "internal linker error: wrote incorrect addend value 0x1043000000000 instead of 0x10430"
 ## The crash no longer occurs after b2559f2f5ca950e917253b156bfd08ede5577cd5
+# REQUIRES: mips
 # RUN: llvm-mc -filetype=obj -triple=mips64-unknown-freebsd --position-independent %s -o %t.o
 # RUN: ld.lld --eh-frame-hdr --shared -z notext -o %t.so %t.o
 # RUN: llvm-mc -filetype=obj -triple=mips64-unknown-freebsd %s -o %t-nopic.o
