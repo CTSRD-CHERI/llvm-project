@@ -322,6 +322,9 @@ void addCapabilityRelocation(
     bool isCallExpr, llvm::function_ref<std::string()> referencedBy,
     RelocationBaseSection *dynRelSec = nullptr);
 
+void addNullDerivedCapability(Symbol &sym, InputSectionBase &sec,
+                              uint64_t offset, int64_t addend);
+
 uint64_t getCapMetaBits(int64_t a, const Symbol &sym,
                         const InputSectionBase *isec, uint64_t offset);
 } // namespace elf

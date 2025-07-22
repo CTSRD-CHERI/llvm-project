@@ -928,8 +928,11 @@ static void addGotEntry(Symbol &sym) {
   }
 
   // Otherwise, the value is either a link-time constant or the load base
-  // plus a constant. For CHERI it always requires run-time initialisation.
-  if (config->isCheriAbi) {
+  // plus a constant. For CHERI it always requires run-time initialisation,
+  // with the exception of undef weak symbols.
+  if (config->isCheriAbi && sym.isUndefWeak())
+    addNullDerivedCapability(sym, *in.got, off, 0);
+  else if (config->isCheriAbi) {
     invokeELFT(addCapabilityRelocation, &sym, *target->cheriCapRel,
                in.got.get(), off, R_CHERI_CAPABILITY, 0, false,
                [] { return ""; });
@@ -1000,9 +1003,10 @@ bool RelocationScanner::isStaticLinkTimeConstant(RelExpr e, RelType type,
   // Cheri capability relocations are never static link time constants since
   // even if we know the exact value of the capability we can't write it since
   // there is no way to store the tag bit
-  // TODO: for undef weak -> 0 (or other untagged values) it actually is okay
+  // The exception is for non-preemptible undef weak symbols, which are
+  // NULL-derived constants.
   if (e == R_CHERI_CAPABILITY)
-    return false;
+    return !sym.isPreemptible && sym.isUndefWeak();
 
   // These never do, except if the entire file is position dependent or if
   // only the low bits are used.
@@ -1146,11 +1150,12 @@ void RelocationScanner::processAux(RelExpr expr, RelType type, uint64_t offset,
   // -shared matches the spirit of its -z undefs default. -pie has freedom on
   // choices, and we choose dynamic relocations to be consistent with the
   // handling of GOT-generating relocations.
-  //
-  // R_CHERI_CAPABILITY is always handled below.
   if (isStaticLinkTimeConstant(expr, type, sym, offset) ||
-      (!config->isPic && sym.isUndefWeak() && expr != R_CHERI_CAPABILITY)) {
-    sec->addReloc({expr, type, offset, addend, &sym});
+      (!config->isPic && sym.isUndefWeak())) {
+    if (expr == R_CHERI_CAPABILITY)
+      addNullDerivedCapability(sym, *sec, offset, addend);
+    else
+      sec->addReloc({expr, type, offset, addend, &sym});
     return;
   }
 
