@@ -1,4 +1,4 @@
-; REQUIRES: riscv
+; REQUIRES: mips, riscv
 ; RUN: split-file %s %t
 ; RUN: %cheri_purecap_llc --relocation-model=pic < %t/input.ll -filetype=obj -o %t/mips.o
 ; RUN: %cheri_purecap_llc --relocation-model=pic < %t/weak_override.ll -filetype=obj -o %t/mips-override.o
