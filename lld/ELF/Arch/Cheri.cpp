@@ -747,8 +747,8 @@ uint64_t MipsCheriCapTableSection::assignIndices(uint64_t startIndex,
     RelocationBaseSection *dynRelSec =
         it.second.usedInCallExpr ? in.relaPlt.get() : mainPart->relaDyn.get();
     addCapabilityRelocation<ELFT>(
-        targetSym, elfCapabilityReloc, in.mipsCheriCapTable.get(), off,
-        R_CHERI_CAPABILITY, 0, it.second.usedInCallExpr,
+        targetSym, elfCapabilityReloc, this, off, R_CHERI_CAPABILITY, 0,
+        it.second.usedInCallExpr,
         [&]() {
           return ("\n>>> referenced by " + refName + "\n>>> first used in " +
                   it.second.firstUse->verboseToString())
