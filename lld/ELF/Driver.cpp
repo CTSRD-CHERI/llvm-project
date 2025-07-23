@@ -1187,7 +1187,6 @@ static void readConfigs(opt::InputArgList &args) {
     else if (arg->getOption().matches(OPT_Bsymbolic))
       config->bsymbolic = BsymbolicKind::All;
   }
-  config->buildingFreeBSDRtld = args.hasArg(OPT_building_freebsd_rtld);
   config->capTableScope = getCapTableScope(args);
   config->checkSections =
       args.hasFlag(OPT_check_sections, OPT_no_check_sections, true);
