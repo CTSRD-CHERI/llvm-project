@@ -737,19 +737,10 @@ def plugin_opt_eq : J<"plugin-opt=">;
 // CHERI options:
 def building_freebsd_rtld: F<"building-freebsd-rtld">,
     HelpText<"Disallow any relocations that are not supported by _rtld_relocate_nonplt_self">;
-defm relative_cap_relocs: B<"relative-cap-relocs",
-    "All __cap_relocs entries are relative to the load addresss (not compatible with -preemptible-caprelocs=legacy)",
-    "Add dynamic relocations to write the full addresses to all __cap_relocs entries">;
 defm sort_cap_relocs: B<"sort-cap-relocs",
     "Sort the __cap_relocs section by capability location",
     "Do not sort the __cap_relocs section by capability location">, Flags<[HelpHidden]>;
 def verbose_cap_relocs : F<"verbose-cap-relocs">, HelpText<"Print all cap_relocs information (this is a lot!)">;
-
-// Select which method is used to emit dynamic capability relocations:
-def preemptible_caprelocs_legacy: F<"preemptible-caprelocs=legacy">,
-  HelpText<"Emit capability relocations for preemptible symbols using the __cap_relocs mechanism">;
-def preemptible_caprelocs_elf: F<"preemptible-caprelocs=elf">,
-  HelpText<"Emit capability relocations for preemptible symbols using R_CAPABILITY relocations in .rel(a).dyn.">;
 
 def local_caprelocs_legacy: F<"local-caprelocs=legacy">,
   HelpText<"Emit capability relocations for local symbols using the __cap_relocs mechanism">;
