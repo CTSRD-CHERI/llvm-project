@@ -534,9 +534,10 @@ public:
     if (expr == R_CHERI_CAPABILITY) {
       expr = R_ADDEND;
       if (sym.isFunc() && addend != 0)
-        warn("got capability relocation with non-zero addend (0x" +
-             llvm::utohexstr(addend) + ") against function " + toString(sym) +
-             ". This may not be supported by the runtime linker." +
+        warn("capability relocation with non-zero addend (0x" +
+             llvm::utohexstr(addend) + ") against preemptible function " +
+             toString(sym) +
+             "; this may not be supported by the runtime linker" +
              getLocationMessage(sec, sym, offsetInSec));
     }
     if (writeAddend)
