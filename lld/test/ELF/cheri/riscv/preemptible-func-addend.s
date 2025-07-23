@@ -19,7 +19,7 @@ global:
   .data
 foo:
   .chericap local + 1
-  # CHECK: warning: got capability relocation with non-zero addend (0x1) against function global. This may not be supported by the runtime linker.
+  # CHECK: warning: capability relocation with non-zero addend (0x1) against preemptible function global; this may not be supported by the runtime linker
   .chericap global + 1
-  # CHECK: warning: got capability relocation with non-zero addend (0x1) against function undef. This may not be supported by the runtime linker.
+  # CHECK: warning: capability relocation with non-zero addend (0x1) against preemptible function undef; this may not be supported by the runtime linker
   .chericap undef + 1
