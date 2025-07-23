@@ -735,8 +735,6 @@ def plugin_opt_eq : J<"plugin-opt=">;
 
 
 // CHERI options:
-def building_freebsd_rtld: F<"building-freebsd-rtld">,
-    HelpText<"Disallow any relocations that are not supported by _rtld_relocate_nonplt_self">;
 defm sort_cap_relocs: B<"sort-cap-relocs",
     "Sort the __cap_relocs section by capability location",
     "Do not sort the __cap_relocs section by capability location">, Flags<[HelpHidden]>;
