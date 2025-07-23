@@ -3,7 +3,7 @@
 # RUN: llvm-readobj -r %t | FileCheck %s --check-prefix ELF-PREEMPTIBLE-LEGACY-LOCAL-ELF-RELOCS
 # RUN: llvm-objdump --cap-relocs -h -t %t | FileCheck %s --check-prefix ELF-PREEMPTIBLE-LEGACY-LOCAL-CAPRELOCS
 
-# TODO: ld.lld -o %t %t -local-caprelocs=cbuildcap
+# TODO: ld.lld -o %t %t -local-caprelocs=elf
 
 .text
 .ent __start

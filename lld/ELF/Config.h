@@ -59,7 +59,7 @@ enum class BsymbolicKind { None, NonWeakFunctions, Functions, All };
 // For --build-id.
 enum class BuildIdKind { None, Fast, Md5, Sha1, Hexstring, Uuid };
 
-enum class CapRelocsMode { Legacy, ElfReloc, CBuildCap };
+enum class CapRelocsMode { Legacy, ElfReloc };
 
 enum class CapTableScopePolicy { All, File, Function };
 
