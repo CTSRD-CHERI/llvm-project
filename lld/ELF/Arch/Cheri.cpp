@@ -5,6 +5,7 @@
 #include "../SyntheticSections.h"
 #include "../Target.h"
 #include "../Writer.h"
+#include "Config.h"
 #include "Relocations.h"
 #include "lld/Common/CommonLinkerContext.h"
 #include "lld/Common/ErrorHandler.h"
@@ -1028,6 +1029,19 @@ void addCapabilityRelocation(
   if (sym)
     assert(sym->isPreemptible || !sym->isUndefWeak());
 
+  // Previously called CBuildCap
+  if (config->localCapRelocsMode == CapRelocsMode::ElfReloc) {
+    assert(!sym->isPreemptible && "Must not be a preemptible symbol");
+    if (config->emachine != EM_RISCV)
+      error("CBuildCap method not implemented yet!");
+    RelocationBaseSection &oSec =
+        sym->includeInDynsym() ? *mainPart->relaDyn : *in.relaDyn;
+    oSec.addReloc(DynamicReloc::AgainstSymbol, R_RISCV_CHERI_RELATIVE, *sec,
+                  offset, *sym, addend, expr, target->symbolicRel);
+    writeCatableRelocationFragments(sec, sym, offset);
+    return;
+  }
+
   // local cap relocs don't need a Elf relocation with a full symbol lookup:
   if (capRelocMode == CapRelocsMode::ElfReloc) {
     assert(sym && "ELF relocs should not be used against sections");
@@ -1083,18 +1097,9 @@ void addCapabilityRelocation(
         DynamicReloc::AgainstSymbol, type, *sec, offset, *sym, addend, expr,
         /* Relocation type for the addend = */ target->symbolicRel);
 
-  } else if (capRelocMode == CapRelocsMode::Legacy) {
-    in.capRelocs->addCapReloc({sec, offset}, {symOrSec, 0u}, addend);
   } else {
-    assert(config->localCapRelocsMode == CapRelocsMode::CBuildCap);
-    assert(!sym->isPreemptible && "Must not be a preemptible symbol");
-    if (config->emachine != EM_RISCV)
-      error("CBuildCap method not implemented yet!");
-    RelocationBaseSection &oSec =
-        sym->includeInDynsym() ? *mainPart->relaDyn : *in.relaDyn;
-    oSec.addReloc(DynamicReloc::AgainstSymbol, R_RISCV_CHERI_RELATIVE, *sec,
-                  offset, *sym, addend, expr, target->symbolicRel);
-    writeCatableRelocationFragments(sec, sym, offset);
+    assert(config->localCapRelocsMode == CapRelocsMode::Legacy);
+    in.capRelocs->addCapReloc({sec, offset}, {symOrSec, 0u}, addend);
   }
 }
 

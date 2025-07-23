@@ -50,6 +50,7 @@
 #include "llvm/ADT/SetVector.h"
 #include "llvm/ADT/StringExtras.h"
 #include "llvm/ADT/StringSwitch.h"
+#include "llvm/BinaryFormat/ELF.h"
 #include "llvm/Config/llvm-config.h"
 #include "llvm/LTO/LTO.h"
 #include "llvm/Object/Archive.h"
@@ -429,11 +430,9 @@ static void checkOptions() {
     if (config->exportDynamic)
       error("-r and --export-dynamic may not be used together");
   }
-  if (config->localCapRelocsMode == CapRelocsMode::ElfReloc)
-    error("local-cap-relocs=elf is not implemented yet");
-  if (config->localCapRelocsMode == CapRelocsMode::CBuildCap &&
+  if (config->localCapRelocsMode == CapRelocsMode::ElfReloc &&
       config->emachine != EM_RISCV)
-    error("local-cap-relocs=cbuildcap is not implemented yet");
+    error("local-cap-relocs=elf is not implemented yet");
 
   if (config->executeOnly) {
     if (config->emachine != EM_AARCH64)
@@ -800,16 +799,13 @@ static CapTableScopePolicy getCapTableScope(opt::InputArgList &args) {
 
 static CapRelocsMode getLocalCapRelocsMode(opt::InputArgList &args) {
   auto *arg =
-      args.getLastArg(OPT_local_caprelocs_legacy, OPT_local_caprelocs_elf,
-                      OPT_local_caprelocs_cbuildcap);
-  if (!arg) // TODO: change default to CBuildCap (at least for non-PIC)
+      args.getLastArg(OPT_local_caprelocs_legacy, OPT_local_caprelocs_elf);
+  if (!arg) // TODO: change default to ElfReloc
     return CapRelocsMode::Legacy;
   if (arg->getOption().getID() == OPT_local_caprelocs_legacy) {
     return CapRelocsMode::Legacy;
   } else if (arg->getOption().getID() == OPT_local_caprelocs_elf) {
     return CapRelocsMode::ElfReloc;
-  } else if (arg->getOption().getID() == OPT_local_caprelocs_cbuildcap) {
-    return CapRelocsMode::CBuildCap;
   }
   llvm_unreachable("Invalid arg");
 }

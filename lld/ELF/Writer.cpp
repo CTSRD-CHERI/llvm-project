@@ -515,7 +515,7 @@ template <class ELFT> void elf::createSyntheticSections() {
 
   // add the dynRela section
   if (config->emachine == EM_RISCV &&
-      config->localCapRelocsMode == CapRelocsMode::CBuildCap)
+      config->localCapRelocsMode == CapRelocsMode::ElfReloc)
     in.relaDyn =
         std::make_unique<RelocationSection<ELFT>>(relaDynName, false, 1);
   else if (config->androidPackDynRelocs)

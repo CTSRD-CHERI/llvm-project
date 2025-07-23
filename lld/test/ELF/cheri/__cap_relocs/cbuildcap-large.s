@@ -1,6 +1,6 @@
 # REQUIRES: riscv
 # RUN: llvm-mc -filetype=obj -triple=riscv64-unknown-elf --mattr=+zcheripurecap,+cap-mode --target-abi=l64pc128 %s -o %t.rv32.o
-# RUN: ld.lld --local-caprelocs=cbuildcap %t.rv32.o -o %t.rv32
+# RUN: ld.lld --local-caprelocs=elf %t.rv32.o -o %t.rv32
 
 # RUN: llvm-readobj --relocs %t.rv32 | FileCheck %s --check-prefix=RELOCS
 # RUN: llvm-objdump -s --section=.rela.dyn %t.rv32 | FileCheck %s --check-prefix=RELADYN
