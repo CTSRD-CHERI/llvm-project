@@ -927,7 +927,7 @@ void addCapabilityRelocation(
   // For local symbols we can also emit the untagged capability bits and
   // instruct csu/rtld to run CBuildCap
   if ((!sym || !sym->isPreemptible) && !needTrampoline) {
-    assert(config->localCapRelocsMode == CapRelocsMode::Legacy &&
+    assert(!config->useRelativeCheriRelocs &&
            "relative ELF capability relocations not currently implemented");
     in.capRelocs->addCapReloc({sec, offset}, {symOrSec, 0u}, addend);
     return;
