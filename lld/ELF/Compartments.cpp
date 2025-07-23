@@ -20,8 +20,43 @@
 #include "llvm/Support/Path.h"
 #include "Arch/Cheri.h"
 
+#include <list>
+
 using namespace llvm;
 using namespace llvm::object;
+using namespace lld;
+using namespace lld::elf;
+
+// ELF relocations describe inter-section dependencies where the input
+// section S1 containing the relocation address depends on the input
+// section S2 that defines the target symbol.
+//
+// SectionDepends is a map of each S2 section that holds a logical
+// list of unique <S1, RelExpr> tuples that target S2.  This
+// list is actually stored as a map where each tuple is mapped to the
+// first Symbol targeted by such a tuple.  This permits using the
+// Symbol's name in diagnostic messages.
+typedef std::pair<InputSectionBase *, RelExpr> SectionKey;
+typedef std::unordered_map<SectionKey, Symbol &> SectionDeps;
+typedef std::unordered_map<InputSectionBase *,
+                           SectionDeps> SectionDepends;
+
+// CompartmentDeps is constructed by walking a single SectionDeps
+// collapsing entries from multiple <section, relocation, symbol>
+// tuples down to a single representative <section, symbol> pair from
+// each Compartment.
+typedef std::pair <const InputSectionBase *, const Symbol *> CompartmentValue;
+typedef std::unordered_map<Compartment *, CompartmentValue> CompartmentDeps;
+
+namespace std {
+  template <> struct hash<SectionKey> {
+    size_t operator()(SectionKey A) const {
+      size_t h1 = std::hash<InputSectionBase *>{}(A.first);
+      size_t h2 = std::hash<RelExpr>{}(A.second);
+      return h1 ^ (h2 << 1);
+    }
+  };
+}
 
 namespace lld {
 namespace elf {
@@ -60,6 +95,84 @@ public:
 
 private:
   std::vector<std::pair<GlobPattern, Compartment *> > matches;
+};
+
+// A disjoint set union of input sections is implemented by having a
+// std::unordered_map<> map input section pointers to a parent input section.
+// A second unordered_map<> maps tree root input sections to a list of all set
+// members.
+typedef std::list<InputSectionBase *> SectionList;
+
+class SectionDSU {
+  typedef std::unordered_map<InputSectionBase *, SectionList> setMap;
+public:
+
+  class iterator {
+  public:
+    explicit iterator(setMap &sets, bool start)
+    {
+      end = sets.end();
+      if (start) {
+        it = next(sets.begin());
+      } else {
+        it = end;
+      }
+    }
+
+    iterator & operator++() { it = next(++it); return *this; }
+    iterator operator++(int)
+    { iterator retval = *this; ++(*this); return retval; }
+    bool operator==(iterator other) const { return it == other.it; }
+    bool operator!=(iterator other) const { return it != other.it; }
+    SectionList & operator*() const { return it->second; }
+
+  private:
+    setMap::iterator next(setMap::iterator it)
+    {
+      while (it != end && it->second.empty())
+        it++;
+      return it;
+    }
+
+    setMap::iterator it;
+    setMap::iterator end;
+  };
+
+  iterator begin() { return iterator(sets, true); }
+  iterator end() { return iterator(sets, false); }
+
+  void makeSet(InputSectionBase *s)
+  {
+    parents.emplace(s, s);
+    sets.emplace(s, std::initializer_list<InputSectionBase *>({ s }));
+  }
+
+  InputSectionBase *findSet(InputSectionBase *s)
+  {
+    if (parents[s] == s)
+      return s;
+    return parents[s] = findSet(parents[s]);
+  }
+
+  void unionSets(InputSectionBase *a, InputSectionBase *b)
+  {
+    a = findSet(a);
+    b = findSet(b);
+    if (a == b)
+      return;
+
+    if (sets[a].size() < sets[b].size())
+      std::swap(a, b);
+
+    SectionList &aList = sets[a];
+    SectionList &bList = sets[b];
+    aList.splice(aList.end(), bList);
+    parents[b] = a;
+  }
+
+private:
+  std::unordered_map<InputSectionBase *, InputSectionBase *> parents;
+  setMap sets;
 };
 
 void addCompartment(StringRef name) {
@@ -240,11 +353,6 @@ static void checkDefaultCompartment()
   }
 }
 
-typedef std::pair <InputSectionBase *, Symbol *> SectionDep;
-typedef std::unordered_map<Compartment *, SectionDep> CompartmentDeps;
-typedef std::unordered_map<InputSectionBase *,
-                           CompartmentDeps> SectionDepends;
-
 template <class ELFT, class RelTy>
 static InputSectionBase *relocationTargetSection(InputSectionBase *sec,
                                                  const RelTy &rel) {
@@ -265,27 +373,31 @@ template <class ELFT, class RelTy>
 static void scanRelocations(InputSectionBase *sec, ArrayRef<RelTy> rels,
                             SectionDepends &depends) {
   for (const auto &rel : rels) {
-    InputSectionBase *target = relocationTargetSection<ELFT>(sec, rel);
+    InputSectionBase *tsec = relocationTargetSection<ELFT>(sec, rel);
 
-    if (target == nullptr)
+    if (tsec == nullptr)
       continue;
 
-    // Ignore self-dependencies.  If all other references are from another
-    // compartment, then the self-dependencies would also end up being from that
-    // other compartment if the section is assigned.  However, tracking
-    // self-dependencies means that the default compartment would always depend
-    // on the section preventing implicit assignment.
-    if (target == sec)
+    // Ignore self-dependencies.
+    if (tsec == sec)
       continue;
 
-    if (target->compartment != nullptr)
+    uint64_t offset = rel.r_offset;
+    if (offset == uint64_t(-1))
       continue;
 
-    CompartmentDeps &cdeps = depends[target];
-    if (cdeps.count(sec->compartment) == 0) {
-      uint32_t symIndex = rel.getSymbol(config->isMips64EL);
-      Symbol &sym = sec->getFile<ELFT>()->getSymbol(symIndex);
-      cdeps[sec->compartment] = std::make_pair(sec, &sym);
+    RelType type = rel.getType(config->isMips64EL);
+    uint32_t symIndex = rel.getSymbol(config->isMips64EL);
+    Symbol &sym = sec->getFile<ELFT>()->getSymbol(symIndex);
+    const uint8_t *loc = sec->content().begin() + offset;
+    RelExpr expr = target->getRelExpr(type, sym, loc);
+    if (expr == R_NONE)
+      continue;
+
+    SectionDeps &sdeps = depends[tsec];
+    SectionKey key(sec, expr);
+    if (sdeps.count(key) == 0) {
+      sdeps.emplace(key, sym);
     }
   }
 }
@@ -396,95 +508,220 @@ void assignSectionsToCompartments() {
   if (!valid)
     exitLld(1);
 
-  // Third, look for compartmentalizable sections not yet assigned to a
-  // compartment that are depended on solely by another compartmentalized
-  // section and assign those.  This process repeats until no new sections are
-  // assigned.
-  for (;;) {
-    SectionDepends depends;
-
-    for (InputSectionBase *s : ctx.inputSections) {
-      if (s->file == nullptr || (s->flags & ELF::SHF_ALLOC) == 0)
-        continue;
-
-      if (s->name == ".eh_frame")
-        continue;
-
-      if (s->compartment == nullptr)
-	continue;
-
-      invokeELFT(scanRelocations, s, depends);
-    }
-
-    bool assigned = false;
-    for (const auto &kv : depends) {
-      const CompartmentDeps &cdeps = kv.second;
-      if (cdeps.size() > 1)
-        continue;
-
-      InputSectionBase *s = kv.first;
-      if (!canCompartmentalize(s) || firstExportedSymbol(s) != nullptr)
-        continue;
-
-      const auto &cdep = *cdeps.begin();
-      Compartment *c = cdep.first;
-
-      if (config->verboseCompartmentalization) {
-        const auto pair = cdep.second;
-        InputSectionBase *s2 = pair.first;
-        Symbol *sym = pair.second;
-
-        message("info: " + isecName(s) + " assigned to implied " +
-                compartmentName(c) + " due to " + symbolName(sym) +
-                " needed by " + isecName(s2));
-      }
-
-      s->compartment = c;
-      assigned = true;
-    }
-    if (assigned)
+  // Third, build table of input section dependencies and add initial sets to
+  // DSU used in fifth step.
+  SectionDepends depends;
+  SectionDSU dsu;
+  for (InputSectionBase *s : ctx.inputSections) {
+    if (s->file == nullptr || (s->flags & ELF::SHF_ALLOC) == 0)
       continue;
 
-    if (config->verboseCompartmentalization) {
+    if (s->name == ".eh_frame")
+      continue;
+
+    invokeELFT(scanRelocations, s, depends);
+    dsu.makeSet(s);
+  }
+
+  // Fourth, for purecap CHERI, look for "hard" dependencies where an
+  // input section is required to be contained within the PCC bounds
+  // of another compartmentalized section.  These dependencies should
+  // always be from .text sections against some other section.  This
+  // repeats until no new sections are assigned.
+  if (config->isCheriAbi) {
+    for (;;) {
+      bool assigned = false;
       for (const auto &kv : depends) {
-        InputSectionBase *s = kv.first;
-        const CompartmentDeps &cdeps = kv.second;
+        InputSectionBase *s2 = kv.first;
+        const SectionDeps &sdeps = kv.second;
 
-        if (cdeps.size() == 1) {
-          Compartment *c = cdeps.begin()->first;
-          if (c != nullptr) {
-            if (!canCompartmentalize(s)) {
-              message("info: " + isecName(s) + " not assigned to implied " +
-                      compartmentName(c));
-            } else {
-              Symbol *b = firstExportedSymbol(s);
-              if (b != nullptr) {
-                message("info: " + isecName(s) + " not assigned to implied " +
-                        compartmentName(c) + " due to exported " +
-                        symbolName(b));
-              }
-            }
+        CompartmentDeps cdeps;
+        for (const auto &skv : sdeps) {
+          RelExpr expr = skv.first.second;
+          switch (expr) {
+          case R_PC:
+          case R_AARCH64_PAGE_PC:
+          case R_RISCV_PC_INDIRECT:
+            break;
+          default:
+            continue;
           }
+
+          const InputSectionBase *s1 = skv.first.first;
+          Compartment *c = s1->compartment;
+          if (cdeps.count(c) == 0)
+            cdeps[c] = std::make_pair(s1, &skv.second);
+        }
+        if (cdeps.size() == 0)
+          continue;
+
+        if (cdeps.size() > 1) {
+          std::string clist;
+          for (const auto &cdep : cdeps) {
+            Compartment *c = cdep.first;
+            const auto pair = cdep.second;
+            const InputSectionBase *s1 = pair.first;
+            const Symbol *sym = pair.second;
+
+            clist += "\n\t" + toString(compartmentName(c)) +
+              " directly accesses " + toString(symbolName(sym)) + " from " +
+              toString(isecName(s1));
+          }
+          error(isecName(s2) + " required by multiple compartments:" +
+                clist);
+          valid = false;
           continue;
         }
 
-        if (!canCompartmentalize(s) || firstExportedSymbol(s) != nullptr)
+        Compartment *c = cdeps.begin()->first;
+        if (c == s2->compartment)
           continue;
 
-        message("info: " + isecName(s) + " depended on by:");
-        for (const auto &cdep : cdeps) {
-          Compartment *c = cdep.first;
-          const auto pair = cdep.second;
-          InputSectionBase *s2 = pair.first;
-          Symbol *sym = pair.second;
+        const auto pair = cdeps.begin()->second;
+        const InputSectionBase *s1 = pair.first;
+        const Symbol *sym = pair.second;
 
-	  message("\t" + isecName(s2) + " from " + compartmentName(c) +
-                  " due to " + symbolName(sym));
+        if (s2->compartment != nullptr) {
+          error(symbolName(sym) + " assigned to " +
+                compartmentName(s2->compartment) +
+                " is directly accessed by " + compartmentName(c) + " in " +
+                isecName(s1));
+          valid = false;
+          continue;
         }
+
+        if (!canCompartmentalize(s2)) {
+          error(isecName(s2) + " containing " + symbolName(sym) +
+                " directly accessed by " + compartmentName(c) + " in " +
+                isecName(s1) + " cannot be compartmentalized");
+          valid = false;
+          continue;
+        }
+
+        Symbol *exported = firstExportedSymbol(s2);
+        if (exported != nullptr) {
+          error(isecName(s2) + " containing " + symbolName(sym) +
+                " directly accessed by " + compartmentName(c) + " in " +
+                isecName(s1) + " cannot be assigned due to exported " +
+                symbolName(exported));
+          valid = false;
+          continue;
+        }
+
+        // Report multiple errors before exiting
+        if (!valid)
+          continue;
+
+        if (config->verboseCompartmentalization)
+          message("info: " + isecName(s2) + " assigned to implied " +
+                  compartmentName(c) + " due to direct access of " +
+                  symbolName(sym) + " in " + isecName(s1));
+        s2->compartment = c;
+        assigned = true;
       }
+      if (!valid)
+        exitLld(1);
+      if (!assigned)
+        break;
+    }
+  }
+
+  // Fifth, look for compartmentalizable sections not yet assigned to a
+  // compartment that can be compartmentalized.  Start by using a disjoint set
+  // union pattern to build sets of related input sections.  Note that edges
+  // between sections that are already compartmentalized are ignored.  The goal
+  // is to find sets of sections in the default compartment that are only used
+  // by a single compartment.
+  for (const auto &kv : depends) {
+    InputSectionBase *s2 = kv.first;
+    const SectionDeps &sdeps = kv.second;
+    for (const auto &skv : sdeps) {
+      InputSectionBase *s1 = skv.first.first;
+
+      if (s1->compartment != nullptr && s2->compartment != nullptr)
+        continue;
+      dsu.unionSets(s2, s1);
+    }
+  }
+
+  for (SectionList &list : dsu) {
+    // Ignore singleton sets.
+    if (list.size() == 1)
+      continue;
+
+    // More than one compartment?
+    Compartment *c = nullptr;
+    bool multiple = false;
+    bool anyDefault = false;
+    for (InputSectionBase *s : list) {
+      if (!canCompartmentalize(s))
+        continue;
+      if (s->compartment == nullptr) {
+        anyDefault = true;
+        continue;
+      }
+      if (c == nullptr) {
+        c = s->compartment;
+        continue;
+      }
+      if (c == s->compartment)
+        continue;
+      multiple = true;
+      break;
     }
 
-    break;
+    if (multiple) {
+      if (config->verboseCompartmentalization) {
+        message("info: disjoint set spans multiple compartments:");
+        for (InputSectionBase *s : list)
+          if (canCompartmentalize(s))
+            message("\t" + isecName(s) + " from " +
+                    compartmentName(s->compartment));
+      }
+      continue;
+    }
+
+    // Nothing to do if the sole compartment is the default compartment or all
+    // of the input sections are already assigned.
+    if (!anyDefault)
+      continue;
+    if (c == nullptr) {
+      if (config->verboseCompartmentalization) {
+        message("info: potential compartment:");
+        for (InputSectionBase *s : list)
+          if (canCompartmentalize(s))
+            message("\t" + isecName(s));
+      }
+      continue;
+    }
+
+    // Don't assign anything if any of the input sections in the default
+    // compartment contain exported symbols.
+    bool exportedSym = false;
+    for (InputSectionBase *s : list) {
+      if (s->compartment == c || !canCompartmentalize(s))
+        continue;
+
+      Symbol *b = firstExportedSymbol(s);
+      if (b != nullptr) {
+        message("info: " + isecName(s) + " not assigned to implied " +
+                compartmentName(c) + " due to exported " + symbolName(b));
+        exportedSym = true;
+      }
+    }
+    if (exportedSym)
+      continue;
+
+    if (config->verboseCompartmentalization)
+      message("info: assigning disjoint set to " + compartmentName(c) + ":");
+    for (InputSectionBase *s : list) {
+      if (s->compartment == c || !canCompartmentalize(s))
+        continue;
+
+      s->compartment = c;
+      if (config->verboseCompartmentalization)
+        message("\t" + isecName(s));
+    }
   }
 
   checkDefaultCompartment();
