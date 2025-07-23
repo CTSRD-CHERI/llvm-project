@@ -69,14 +69,12 @@ struct CheriCapReloc {
   }
 };
 
-// FIXME: should de-template this class properly
 class CheriCapRelocsSection : public SyntheticSection {
 public:
   CheriCapRelocsSection(StringRef name);
   bool isNeeded() const override { return !relocsMap.empty(); }
   size_t getSize() const override { return relocsMap.size() * entsize; }
   void writeTo(uint8_t *buf) override;
-  template <class ELFT>
   void addCapReloc(CheriCapRelocLocation loc, const SymbolAndOffset &target,
                    int64_t capabilityOffset, Symbol *sourceSymbol = nullptr);
 
@@ -190,7 +188,7 @@ public:
            !tlsEntries.empty();
   }
   void writeTo(uint8_t *buf) override;
-  template <class ELFT> void assignValuesAndAddCapTableSymbols();
+  void assignValuesAndAddCapTableSymbols();
   size_t getSize() const override {
     size_t nonTlsEntries = nonTlsEntryCount();
     if (nonTlsEntries > 0 || !tlsEntries.empty() || !dynTlsEntries.empty()) {
@@ -220,7 +218,6 @@ private:
     size_t size() const { return map.size(); }
     bool empty() const { return map.empty(); }
   };
-  template <class ELFT>
   uint64_t assignIndices(uint64_t startIndex, CaptableMap &entries,
                          const Twine &symContext);
   /// @return a refernces to the captable map where the given symbol should
@@ -303,7 +300,6 @@ inline void readOnlyCapRelocsError(Symbol &sym, const Twine &sourceMsg) {
         sourceMsg);
 }
 
-template <typename ELFT>
 void addCapabilityRelocation(
     llvm::PointerUnion<Symbol *, InputSectionBase *> target, RelType type,
     InputSectionBase *sec, uint64_t offset, RelExpr expr, int64_t addend,
