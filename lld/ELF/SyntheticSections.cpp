@@ -1763,15 +1763,6 @@ void RelocationBaseSection::finalizeContents() {
       warn("attempting to add a dynamic relocation against the __cap_relocs "
            "section.");
     }
-    if (config->emachine == EM_MIPS && config->buildingFreeBSDRtld) {
-      unsigned baseRelocType = reloc.type & 0xff;
-      if (baseRelocType != R_MIPS_REL32 && baseRelocType != R_MIPS_NONE)
-        error(
-            "relocation " + toString(reloc.type) + " against " +
-            toString(*reloc.sym) +
-            " cannot be using when building FreeBSD RTLD" +
-            getLocationMessage(*reloc.inputSec, *reloc.sym, reloc.offsetInSec));
-    }
   }
 }
 

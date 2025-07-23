@@ -335,10 +335,7 @@ template <class ELFT> void elf::createSyntheticSections() {
 
   // Add MIPS-specific sections.
   if (config->emachine == EM_MIPS) {
-    // XXXAR: also add the RLD_MAP dynamic tags to rtld so that we can use
-    // gdb with rtld direct exec mode.
-    // TODO: should probably try to build rtld as PIE instead?
-    if ((!config->shared || config->buildingFreeBSDRtld) && config->hasDynSymTab) {
+    if (!config->shared && config->hasDynSymTab) {
       in.mipsRldMap = std::make_unique<MipsRldMapSection>();
       add(*in.mipsRldMap);
     }
