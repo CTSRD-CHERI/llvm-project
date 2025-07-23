@@ -2003,7 +2003,7 @@ template <class ELFT> void Writer<ELFT>::finalizeSections() {
         ElfSym::mipsCheriCapabilityTable->isSectionStartSymbol = true;
         assert(!ElfSym::mipsCheriCapabilityTable->isPreemptible);
       }
-      in.mipsCheriCapTable->assignValuesAndAddCapTableSymbols<ELFT>();
+      in.mipsCheriCapTable->assignValuesAndAddCapTableSymbols();
     }
 
     // Now handle __cap_relocs (must be before RelaDyn because it might
