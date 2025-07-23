@@ -911,9 +911,9 @@ static void addPltEntry(PltSection &plt, GotPltSection &gotPlt,
                                   : DynamicReloc::AddendOnlyWithTargetVA,
                 sym, 0, R_ABS});
   if (config->isCheriAbi)
-    invokeELFT(addCapabilityRelocation, &plt, *target->cheriCapRel, &gotPlt,
-               sym.getGotPltOffset(), R_CHERI_CAPABILITY, 0, false,
-               [] { return ""; });
+    addCapabilityRelocation(&plt, *target->cheriCapRel, &gotPlt,
+                            sym.getGotPltOffset(), R_CHERI_CAPABILITY, 0, false,
+                            [] { return ""; });
 }
 
 static void addGotEntry(Symbol &sym) {
@@ -932,11 +932,10 @@ static void addGotEntry(Symbol &sym) {
   // with the exception of undef weak symbols.
   if (config->isCheriAbi && sym.isUndefWeak())
     addNullDerivedCapability(sym, *in.got, off, 0);
-  else if (config->isCheriAbi) {
-    invokeELFT(addCapabilityRelocation, &sym, *target->cheriCapRel,
-               in.got.get(), off, R_CHERI_CAPABILITY, 0, false,
-               [] { return ""; });
-  } else if (!config->isPic || isAbsolute(sym))
+  else if (config->isCheriAbi)
+    addCapabilityRelocation(&sym, *target->cheriCapRel, in.got.get(), off,
+                            R_CHERI_CAPABILITY, 0, false, [] { return ""; });
+  else if (!config->isPic || isAbsolute(sym))
     in.got->addConstant({R_ABS, target->symbolicRel, off, 0, &sym});
   else
     addRelativeReloc(*in.got, off, sym, 0, R_ABS, target->symbolicRel);
@@ -1179,9 +1178,8 @@ void RelocationScanner::processAux(RelExpr expr, RelType type, uint64_t offset,
       readOnlyCapRelocsError(sym, getRelocTargetLocation());
       return;
     }
-    addCapabilityRelocation<ELFT>(&sym, type, sec, offset, expr, addend,
-                                  /* isCallExpr=*/false,
-                                  getRelocTargetLocation);
+    addCapabilityRelocation(&sym, type, sec, offset, expr, addend,
+                            /* isCallExpr=*/false, getRelocTargetLocation);
     // TODO: check if it is a call and needs a plt stub
     return;
   }
