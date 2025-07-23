@@ -433,12 +433,6 @@ static void checkOptions() {
     error("local-cap-relocs=elf is not implemented yet");
   if (config->localCapRelocsMode == CapRelocsMode::CBuildCap)
     error("local-cap-relocs=cbuildcap is not implemented yet");
-  assert(config->preemptibleCapRelocsMode != CapRelocsMode::CBuildCap);
-
-  if (config->preemptibleCapRelocsMode == CapRelocsMode::Legacy &&
-      config->relativeCapRelocsOnly)
-    error("--preemptible-caprelocs=legacy is not compatible with "
-          "--relative-cap-relocs");
 
   if (config->executeOnly) {
     if (config->emachine != EM_AARCH64)
@@ -785,21 +779,6 @@ static DiscardPolicy getDiscard(opt::InputArgList &args) {
   if (arg->getOption().getID() == OPT_discard_locals)
     return DiscardPolicy::Locals;
   return DiscardPolicy::None;
-}
-
-static CapRelocsMode getPreemptibleCapRelocsMode(opt::InputArgList &args) {
-  auto *arg = args.getLastArg(OPT_preemptible_caprelocs_legacy,
-                              OPT_preemptible_caprelocs_elf);
-  // The default behaviour is to emit R_CHERI_CAPABILITY relocations for
-  // preemptible symbols
-  if (!arg)
-    return CapRelocsMode::ElfReloc;
-  if (arg->getOption().getID() == OPT_preemptible_caprelocs_legacy) {
-    return CapRelocsMode::Legacy;
-  } else if (arg->getOption().getID() == OPT_preemptible_caprelocs_elf) {
-    return CapRelocsMode::ElfReloc;
-  }
-  llvm_unreachable("Invalid arg");
 }
 
 static CapTableScopePolicy getCapTableScope(opt::InputArgList &args) {
@@ -1343,7 +1322,6 @@ static void readConfigs(opt::InputArgList &args) {
   config->outputFile = args.getLastArgValue(OPT_o);
   config->packageMetadata = args.getLastArgValue(OPT_package_metadata);
   config->pie = args.hasFlag(OPT_pie, OPT_no_pie, false);
-  config->preemptibleCapRelocsMode = getPreemptibleCapRelocsMode(args);
   config->printIcfSections =
       args.hasFlag(OPT_print_icf_sections, OPT_no_print_icf_sections, false);
   config->printGcSections =
@@ -1775,14 +1753,6 @@ static void setConfigs(opt::InputArgList &args) {
   config->writeAddends = args.hasFlag(OPT_apply_dynamic_relocs,
                                       OPT_no_apply_dynamic_relocs, false) ||
                          !config->isRela;
-
-  // Avoid dynamic relocations for __cap_relocs unless we are building legacy
-  // TODO: remove once benchmarking is done.
-  bool relativeCapRelocsDefault =
-      !config->isPic || config->preemptibleCapRelocsMode != CapRelocsMode::Legacy;
-  config->relativeCapRelocsOnly =
-      args.hasFlag(OPT_relative_cap_relocs, OPT_no_relative_cap_relocs,
-                   relativeCapRelocsDefault);
 
   // Validation of dynamic relocation addends is on by default for assertions
   // builds (for supported targets) and disabled otherwise. Ideally we would

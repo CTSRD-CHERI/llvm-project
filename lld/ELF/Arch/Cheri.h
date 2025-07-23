@@ -64,11 +64,8 @@ struct CheriCapReloc {
   // will be e.g. `.rodata.str + 0x90` -> need to store offset as well
   SymbolAndOffset target;
   int64_t capabilityOffset;
-  bool needsDynReloc;
   bool operator==(const CheriCapReloc &other) const {
-    return target == other.target &&
-           capabilityOffset == other.capabilityOffset &&
-           needsDynReloc == other.needsDynReloc;
+    return target == other.target && capabilityOffset == other.capabilityOffset;
   }
 };
 
@@ -81,8 +78,7 @@ public:
   void writeTo(uint8_t *buf) override;
   template <class ELFT>
   void addCapReloc(CheriCapRelocLocation loc, const SymbolAndOffset &target,
-                   bool targetNeedsDynReloc, int64_t capabilityOffset,
-                   Symbol *sourceSymbol = nullptr);
+                   int64_t capabilityOffset, Symbol *sourceSymbol = nullptr);
 
 private:
   template <class ELFT> void writeToImpl(uint8_t *);
@@ -94,19 +90,13 @@ private:
             " does not match existing one:\n>   Existing: " +
             it.first->second.target.verboseToString() +
             ", cap offset=" + Twine(it.first->second.capabilityOffset) +
-            ", dyn=" + Twine(it.first->second.needsDynReloc) +
             "\n>   New:     " + relocation.target.verboseToString() +
-            ", cap offset=" + Twine(relocation.capabilityOffset) +
-            ", dyn=" + Twine(relocation.needsDynReloc));
+            ", cap offset=" + Twine(relocation.capabilityOffset));
     }
     return it.second;
   }
-  // TODO: list of added dynamic relocations?
 
   llvm::MapVector<CheriCapRelocLocation, CheriCapReloc> relocsMap;
-  // If we have dynamic relocations we can't sort the __cap_relocs section
-  // before writing it. TODO: actually we can but it will require refactoring
-  bool containsDynamicRelocations = false;
 };
 
 // General cap table structure (for CapSize = 2*WordSize):
