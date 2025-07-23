@@ -1021,10 +1021,10 @@ void addCapabilityRelocation(
     assert(sym->isPreemptible || !sym->isUndefWeak());
 
   // Previously called CBuildCap
-  if (config->localCapRelocsMode == CapRelocsMode::ElfReloc) {
+  if (config->useRelativeCheriRelocs) {
     assert(!sym->isPreemptible && "Must not be a preemptible symbol");
     if (config->emachine != EM_RISCV)
-      error("CBuildCap method not implemented yet!");
+      error("Relative Relocs method not implemented yet!");
     RelocationBaseSection &oSec =
         sym->includeInDynsym() ? *mainPart->relaDyn : *in.relaDyn;
     oSec.addReloc(DynamicReloc::AgainstSymbol, R_RISCV_CHERI_RELATIVE, *sec,
@@ -1037,7 +1037,7 @@ void addCapabilityRelocation(
   // For local symbols we can also emit the untagged capability bits and
   // instruct csu/rtld to run CBuildCap
   if ((!sym || !sym->isPreemptible) && !needTrampoline) {
-    assert(config->localCapRelocsMode == CapRelocsMode::Legacy &&
+    assert(!config->useRelativeCheriRelocs &&
            "relative ELF capability relocations not currently implemented");
     in.capRelocs->addCapReloc({sec, offset}, {symOrSec, 0u}, addend);
     return;

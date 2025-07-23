@@ -430,8 +430,7 @@ static void checkOptions() {
     if (config->exportDynamic)
       error("-r and --export-dynamic may not be used together");
   }
-  if (config->localCapRelocsMode == CapRelocsMode::ElfReloc &&
-      config->emachine != EM_RISCV)
+  if (config->useRelativeCheriRelocs && config->emachine != EM_RISCV)
     error("local-cap-relocs=elf is not implemented yet");
 
   if (config->executeOnly) {
@@ -793,19 +792,6 @@ static CapTableScopePolicy getCapTableScope(opt::InputArgList &args) {
     return CapTableScopePolicy::File;
   } else if (arg->getOption().getID() == OPT_captable_scope_function) {
     return CapTableScopePolicy::Function;
-  }
-  llvm_unreachable("Invalid arg");
-}
-
-static CapRelocsMode getLocalCapRelocsMode(opt::InputArgList &args) {
-  auto *arg =
-      args.getLastArg(OPT_local_caprelocs_legacy, OPT_local_caprelocs_elf);
-  if (!arg) // TODO: change default to ElfReloc
-    return CapRelocsMode::Legacy;
-  if (arg->getOption().getID() == OPT_local_caprelocs_legacy) {
-    return CapRelocsMode::Legacy;
-  } else if (arg->getOption().getID() == OPT_local_caprelocs_elf) {
-    return CapRelocsMode::ElfReloc;
   }
   llvm_unreachable("Invalid arg");
 }
@@ -1259,7 +1245,9 @@ static void readConfigs(opt::InputArgList &args) {
   config->ignoreFunctionAddressEquality =
       args.hasArg(OPT_ignore_function_address_equality);
   config->init = args.getLastArgValue(OPT_init, "_init");
-  config->localCapRelocsMode = getLocalCapRelocsMode(args);
+  // TODO: change default to true
+  config->useRelativeCheriRelocs =
+      args.hasFlag(OPT_local_caprelocs_elf, OPT_local_caprelocs_legacy, false);
   config->ltoAAPipeline = args.getLastArgValue(OPT_lto_aa_pipeline);
   config->ltoCSProfileGenerate = args.hasArg(OPT_lto_cs_profile_generate);
   config->ltoCSProfileFile = args.getLastArgValue(OPT_lto_cs_profile_file);
