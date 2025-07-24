@@ -34,10 +34,10 @@ public:
                      const uint8_t *loc) const override;
   RelType getDynRel(RelType type) const override;
   int64_t getImplicitAddend(const uint8_t *buf, RelType type) const override;
-  void writeGotPlt(uint8_t *buf, const Symbol &s) const override;
+  void writeGotPlt(Compartment *c, uint8_t *buf, const Symbol &s) const override;
   void writeIgotPlt(uint8_t *buf, const Symbol &s) const override;
-  void writePltHeader(uint8_t *buf) const override;
-  void writePlt(uint8_t *buf, const Symbol &sym,
+  void writePltHeader(Compartment *c, uint8_t *buf) const override;
+  void writePlt(Compartment *c, uint8_t *buf, const Symbol &sym,
                 uint64_t pltEntryAddr) const override;
   void addPltSymbols(InputSection &isec, uint64_t off) const override;
   void addPltHeaderSymbols(InputSection &isd) const override;
@@ -203,8 +203,8 @@ RelType ARM::getDynRel(RelType type) const {
   return R_ARM_NONE;
 }
 
-void ARM::writeGotPlt(uint8_t *buf, const Symbol &) const {
-  write32(buf, in.plt->getVA());
+void ARM::writeGotPlt(Compartment *c, uint8_t *buf, const Symbol &) const {
+  write32(buf, plt(c)->getVA());
 }
 
 void ARM::writeIgotPlt(uint8_t *buf, const Symbol &s) const {
@@ -214,7 +214,7 @@ void ARM::writeIgotPlt(uint8_t *buf, const Symbol &s) const {
 
 // Long form PLT Header that does not have any restrictions on the displacement
 // of the .plt from the .got.plt.
-static void writePltHeaderLong(uint8_t *buf) {
+static void writePltHeaderLong(Compartment *c, uint8_t *buf) {
   write32(buf + 0, 0xe52de004);   //     str lr, [sp,#-4]!
   write32(buf + 4, 0xe59fe004);   //     ldr lr, L2
   write32(buf + 8, 0xe08fe00e);   // L1: add lr, pc, lr
@@ -223,14 +223,14 @@ static void writePltHeaderLong(uint8_t *buf) {
   write32(buf + 20, 0xd4d4d4d4);  //     Pad to 32-byte boundary
   write32(buf + 24, 0xd4d4d4d4);  //     Pad to 32-byte boundary
   write32(buf + 28, 0xd4d4d4d4);
-  uint64_t gotPlt = in.gotPlt->getVA();
-  uint64_t l1 = in.plt->getVA() + 8;
+  uint64_t gotPlt = lld::elf::gotPlt(c)->getVA();
+  uint64_t l1 = plt(c)->getVA() + 8;
   write32(buf + 16, gotPlt - l1 - 8);
 }
 
 // The default PLT header requires the .got.plt to be within 128 Mb of the
 // .plt in the positive direction.
-void ARM::writePltHeader(uint8_t *buf) const {
+void ARM::writePltHeader(Compartment *c, uint8_t *buf) const {
   // Use a similar sequence to that in writePlt(), the difference is the calling
   // conventions mean we use lr instead of ip. The PLT entry is responsible for
   // saving lr on the stack, the dynamic loader is responsible for reloading
@@ -242,10 +242,10 @@ void ARM::writePltHeader(uint8_t *buf) const {
       0xe5bef000, //     ldr pc, [lr, #0x00000NNN] &(.got.plt -L1 - 4)
   };
 
-  uint64_t offset = in.gotPlt->getVA() - in.plt->getVA() - 4;
+  uint64_t offset = gotPlt(c)->getVA() - plt(c)->getVA() - 4;
   if (!llvm::isUInt<27>(offset)) {
     // We cannot encode the Offset, use the long form.
-    writePltHeaderLong(buf);
+    writePltHeaderLong(c, buf);
     return;
   }
   write32(buf + 0, pltData[0]);
@@ -277,7 +277,7 @@ static void writePltLong(uint8_t *buf, uint64_t gotPltEntryAddr,
 
 // The default PLT entries require the .got.plt to be within 128 Mb of the
 // .plt in the positive direction.
-void ARM::writePlt(uint8_t *buf, const Symbol &sym,
+void ARM::writePlt(Compartment *c, uint8_t *buf, const Symbol &sym,
                    uint64_t pltEntryAddr) const {
   // The PLT entry is similar to the example given in Appendix A of ELF for
   // the Arm Architecture. Instead of using the Group Relocations to find the
