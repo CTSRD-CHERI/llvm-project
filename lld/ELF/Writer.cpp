@@ -898,6 +898,7 @@ bool elf::isRelroSection(const OutputSection *sec, bool ignoreZRelro) {
   if (sec->relro)
     return true;
 
+  const Compartment *c = sec->compartment;
   uint64_t flags = sec->flags;
 
   // Non-allocatable or non-writable sections don't need RELRO because
@@ -929,7 +930,7 @@ bool elf::isRelroSection(const OutputSection *sec, bool ignoreZRelro) {
   // .got contains pointers to external symbols. They are resolved by
   // the dynamic linker when a module is loaded into memory, and after
   // that they are not expected to change. So, it can be in RELRO.
-  if (in.got && sec == in.got->getParent())
+  if (got(c) && sec == got(c)->getParent())
     return true;
 
   // .toc is a GOT-ish section for PowerPC64. Their contents are accessed
@@ -944,7 +945,7 @@ bool elf::isRelroSection(const OutputSection *sec, bool ignoreZRelro) {
   // by default resolved lazily, so we usually cannot put it into RELRO.
   // However, if "-z now" is given, the lazy symbol resolution is
   // disabled, which enables us to put it into RELRO.
-  if (sec == in.gotPlt->getParent())
+  if (sec == gotPlt(c)->getParent())
     return config->zNow;
 
   // Similarly the CHERI capability table is also relro since the capabilities
@@ -2723,27 +2724,40 @@ SmallVector<PhdrEntry *, 0> Writer<ELFT>::createPhdrs(Partition &part) {
   // read-only by dynamic linker after processing relocations.
   // Current dynamic loaders only support one PT_GNU_RELRO PHDR, give
   // an error message if more than one PT_GNU_RELRO PHDR is required.
-  PhdrEntry *relRo = make<PhdrEntry>(PT_GNU_RELRO, PF_R);
+  PhdrEntry *firstRelRo = make<PhdrEntry>(PT_GNU_RELRO, PF_R);
+  for (Compartment &compart : compartments)
+    compart.relRo = make<PhdrEntry>(PT_GNU_RELRO, PF_R);
+
+  PhdrEntry *relRo = firstRelRo;
   bool inRelroPhdr = false;
-  OutputSection *relroEnd = nullptr;
+  Compartment *lastCompartment = nullptr;
   for (OutputSection *sec : outputSections) {
     if (sec->partition != partNo || !needsPtLoad(sec))
       continue;
-    if (sec->compartment != nullptr)
-      continue;
+    if (sec->compartment != lastCompartment) {
+      if (inRelroPhdr) {
+        inRelroPhdr = false;
+        sec->relroEnd = true;
+      }
+      lastCompartment = sec->compartment;
+      if (sec->compartment == nullptr)
+        relRo = firstRelRo;
+      else
+        relRo = sec->compartment->relRo;
+    }
     // Treat a CHERI PCC padding section as relro if it is preceded by a relro
     // section.
     if (isRelroSection(sec) ||
         (in.pccPadding && inRelroPhdr && sec == in.pccPadding->getParent())) {
-      inRelroPhdr = true;
-      if (!relroEnd)
+      if (inRelroPhdr || !relRo->firstSec) {
+        inRelroPhdr = true;
         relRo->add(sec);
-      else
+      } else
         error("section: " + sec->name + " is not contiguous with other relro" +
               " sections");
     } else if (inRelroPhdr) {
       inRelroPhdr = false;
-      relroEnd = sec;
+      sec->relroEnd = true;
     }
   }
 
@@ -2795,7 +2809,7 @@ SmallVector<PhdrEntry *, 0> Writer<ELFT>::createPhdrs(Partition &part) {
     uint64_t newFlags = computeFlags(sec->getPhdrFlags());
     bool sameLMARegion =
         load && !sec->lmaExpr && sec->lmaRegion == load->firstSec->lmaRegion;
-    if (!(load && newFlags == flags && sec != relroEnd &&
+    if (!(load && newFlags == flags && !sec->relroEnd &&
           sec->memRegion == load->firstSec->memRegion &&
           (sameLMARegion || load->lastSec == Out::programHeaders) &&
           (script->hasSectionsCommand || sec->type == SHT_NOBITS ||
@@ -2825,8 +2839,11 @@ SmallVector<PhdrEntry *, 0> Writer<ELFT>::createPhdrs(Partition &part) {
   if (OutputSection *sec = part.dynamic->getParent())
     addHdr(PT_DYNAMIC, sec->getPhdrFlags())->add(sec);
 
-  if (relRo->firstSec)
-    ret.push_back(relRo);
+  if (firstRelRo->firstSec)
+    ret.push_back(firstRelRo);
+  for (Compartment &compart : compartments)
+    if (compart.relRo->firstSec)
+      ret.push_back(compart.relRo);
 
   if (in.cheriBounds) {
     if (in.cheriBounds->firstSec)
