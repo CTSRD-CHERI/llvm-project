@@ -25,10 +25,11 @@ public:
   LoongArch();
   uint32_t calcEFlags() const override;
   int64_t getImplicitAddend(const uint8_t *buf, RelType type) const override;
-  void writeGotPlt(uint8_t *buf, const Symbol &s) const override;
+  void writeGotPlt(Compartment *c, uint8_t *buf,
+                   const Symbol &s) const override;
   void writeIgotPlt(uint8_t *buf, const Symbol &s) const override;
-  void writePltHeader(uint8_t *buf) const override;
-  void writePlt(uint8_t *buf, const Symbol &sym,
+  void writePltHeader(Compartment *c, uint8_t *buf) const override;
+  void writePlt(Compartment *c, uint8_t *buf, const Symbol &sym,
                 uint64_t pltEntryAddr) const override;
   RelType getDynRel(RelType type) const override;
   RelExpr getRelExpr(RelType type, const Symbol &s,
@@ -338,11 +339,12 @@ int64_t LoongArch::getImplicitAddend(const uint8_t *buf, RelType type) const {
   }
 }
 
-void LoongArch::writeGotPlt(uint8_t *buf, const Symbol &s) const {
+void LoongArch::writeGotPlt(Compartment *c, uint8_t *buf,
+                            const Symbol &s) const {
   if (config->is64)
-    write64le(buf, in.plt->getVA());
+    write64le(buf, plt(c)->getVA());
   else
-    write32le(buf, in.plt->getVA());
+    write32le(buf, plt(c)->getVA());
 }
 
 void LoongArch::writeIgotPlt(uint8_t *buf, const Symbol &s) const {
@@ -354,7 +356,7 @@ void LoongArch::writeIgotPlt(uint8_t *buf, const Symbol &s) const {
   }
 }
 
-void LoongArch::writePltHeader(uint8_t *buf) const {
+void LoongArch::writePltHeader(Compartment *c, uint8_t *buf) const {
   // The LoongArch PLT is currently structured just like that of RISCV.
   // Annoyingly, this means the PLT is still using `pcaddu12i` to perform
   // PC-relative addressing (because `pcaddu12i` is the same as RISCV `auipc`),
@@ -373,7 +375,7 @@ void LoongArch::writePltHeader(uint8_t *buf) const {
   //   srli.[wd] $t1, $t1, (is64?1:2)             ; t1 = &.got.plt[i] - &.got.plt[0]
   //   ld.[wd]   $t0, $t0, Wordsize               ; t0 = link_map
   //   jr        $t3
-  uint32_t offset = in.gotPlt->getVA() - in.plt->getVA();
+  uint32_t offset = gotPlt(c)->getVA() - plt(c)->getVA();
   uint32_t sub = config->is64 ? SUB_D : SUB_W;
   uint32_t ld = config->is64 ? LD_D : LD_W;
   uint32_t addi = config->is64 ? ADDI_D : ADDI_W;
@@ -388,7 +390,7 @@ void LoongArch::writePltHeader(uint8_t *buf) const {
   write32le(buf + 28, insn(JIRL, R_ZERO, R_T3, 0));
 }
 
-void LoongArch::writePlt(uint8_t *buf, const Symbol &sym,
+void LoongArch::writePlt(Compartment *c, uint8_t *buf, const Symbol &sym,
                      uint64_t pltEntryAddr) const {
   // See the comment in writePltHeader for reason why pcaddu12i is used instead
   // of the pcalau12i that's more commonly seen in the ELF psABI v2.0 days.
