@@ -72,6 +72,9 @@ public:
   uint64_t addr = 0;
   uint32_t shName = 0;
 
+  // This section is the first section after the end of a relro segment.
+  bool relroEnd = false;
+
   void recordSection(InputSectionBase *isec);
   void commitSection(InputSection *isec);
   void finalizeInputSections();
