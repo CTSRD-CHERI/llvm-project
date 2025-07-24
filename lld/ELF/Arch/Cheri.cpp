@@ -689,7 +689,7 @@ uint64_t MipsCheriCapTableSection::assignIndices(uint64_t startIndex,
     // rather than the normal relocation section to make processing of PLT
     // relocations in RTLD more efficient.
     RelocationBaseSection &dynRelSec =
-        it.second.usedInCallExpr ? *in.relaPlt : *mainPart->relaDyn;
+        it.second.usedInCallExpr ? *relaPlt(compartment) : *mainPart->relaDyn;
     if (targetSym->isPreemptible)
       dynRelSec.addSymbolReloc(elfCapabilityReloc, *this, off, *targetSym);
     else if (targetSym->isUndefWeak())
@@ -822,7 +822,7 @@ void MipsCheriCapTableMappingSection::writeTo(uint8_t *buf) {
   // Write the mapping from function vaddr -> captable subset for RTLD
   std::vector<CaptableMappingEntry> entries;
   // Note: Symtab->getSymbols() only returns the symbols in .dynsym. We need
-  // to use In.sym()tab instead since we also want to add all local functions!
+  // to use in.symTab instead since we also want to add all local functions!
   for (const SymbolTableEntry &ste : in.symTab->getSymbols()) {
     Symbol* sym = ste.sym;
     if (!sym->isDefined() || !sym->isFunc())
