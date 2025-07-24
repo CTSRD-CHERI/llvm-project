@@ -92,15 +92,15 @@
 ; RV64-RELOCS: [ [[TEXT_SECT_IDX:[0-9]+]]] .text PROGBITS
 
 ; RV64-RELOCS-LABEL: Symbol table '.symtab' contains
-; RV64-RELOCS: [[#%.16x,TEST_ADDR:]]        116 FUNC    LOCAL  DEFAULT     [[TEXT_SECT_IDX]] .L_Z4testll$local
-; RV64-RELOCS: [[#%.16x,TEST2_ADDR:]]       124 FUNC    LOCAL  DEFAULT     [[TEXT_SECT_IDX]] .L_Z5test2ll$local
-; RV64-RELOCS: [[#%.16x,TEST_WEAK_ADDR:]]    52 FUNC    LOCAL  DEFAULT     [[TEXT_SECT_IDX]] .L_Z9test_weakll$local
-; RV64-RELOCS: [[#%.16x,TEST_ADDR]]         116 FUNC    GLOBAL DEFAULT     [[TEXT_SECT_IDX]] _Z4testll{{$}}
-; RV64-RELOCS: [[#%.16x,TEST2_ADDR]]        124 FUNC    GLOBAL DEFAULT     [[TEXT_SECT_IDX]] _Z5test2ll{{$}}
-; RV64-RELOCS-WEAK: [[#%.16x,TEST_WEAK_ADDR]]     52 FUNC    WEAK   DEFAULT     [[TEXT_SECT_IDX]] _Z9test_weakll{{$}}
+; RV64-RELOCS: [[#%.16x,TEST_ADDR:]]        116 FUNC    LOCAL  DEFAULT     9 .L_Z4testll$local
+; RV64-RELOCS: [[#%.16x,TEST2_ADDR:]]       124 FUNC    LOCAL  DEFAULT     9 .L_Z5test2ll$local
+; RV64-RELOCS: [[#%.16x,TEST_WEAK_ADDR:]]    52 FUNC    LOCAL  DEFAULT     9 .L_Z9test_weakll$local
+; RV64-RELOCS: [[#%.16x,TEST_ADDR]]         116 FUNC    GLOBAL DEFAULT     9 _Z4testll{{$}}
+; RV64-RELOCS: [[#%.16x,TEST2_ADDR]]        124 FUNC    GLOBAL DEFAULT     9 _Z5test2ll{{$}}
+; RV64-RELOCS-WEAK: [[#%.16x,TEST_WEAK_ADDR]]     52 FUNC    WEAK   DEFAULT     9 _Z9test_weakll{{$}}
 ; Check that the overridden address is not equal to the local symbol (and much smaller)
 ; RV64-RELOCS-OVERRIDE-NOT: [[#%.16x,TEST_WEAK_ADDR]]
-; RV64-RELOCS-OVERRIDE: [[#%.16x,TEST_WEAK_OVERRIDE_ADDR:]] 8 FUNC    GLOBAL   DEFAULT     [[TEXT_SECT_IDX]] _Z9test_weakll{{$}}
+; RV64-RELOCS-OVERRIDE: [[#%.16x,TEST_WEAK_OVERRIDE_ADDR:]] 8 FUNC    GLOBAL   DEFAULT     9 _Z9test_weakll{{$}}
 
 ; RV64-RELOCS: CHERI __cap_relocs [
 ; RV64-RELOCS-NEXT:   0x002{{.+}} Base: 0x[[#%x,TEST_ADDR]] (.L_Z4testll$local+92) Length: 116 Perms: Function
@@ -108,8 +108,10 @@
 ; RV64-RELOCS-NEXT:   0x002{{.+}} Base: 0x[[#%x,TEST2_ADDR]] (.L_Z5test2ll$local+72) Length: 124 Perms: Function
 ; Next one references the local symbol, and uses that length rather than the override:
 ; RV64-RELOCS-NEXT:   0x002{{.+}} Base: 0x[[#%x,TEST_WEAK_ADDR]] (.L_Z9test_weakll$local+28) Length: 52 Perms: Function
-; LAZY-BINDING will generate additional .got.plt relocations
-; RV64-RELOCS: ]
+; RV64-RELOCS-NEXT:   0x003{{.+}} Base: 0x[[#%x,PLT0_ADDR:]] (<unknown symbol>+0) Length: 80 Perms: Function
+; RV64-RELOCS-NEXT:   0x003{{.+}} Base: 0x[[#%x,PLT0_ADDR]] (<unknown symbol>+0) Length: 80 Perms: Function
+; RV64-RELOCS-NEXT:   0x003{{.+}} Base: 0x[[#%x,PLT0_ADDR]] (<unknown symbol>+0) Length: 80 Perms: Function
+; RV64-RELOCS-NEXT: ]
 
 ; IR was generated from the following code:
 ; long external_fn(long arg);
