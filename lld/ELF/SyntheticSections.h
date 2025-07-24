@@ -1358,6 +1358,8 @@ struct Compartment {
   std::unique_ptr<IpltSection> iplt;
   std::unique_ptr<RelocationBaseSection> relaPlt;
   std::unique_ptr<RelocationBaseSection> relaIplt;
+
+  PhdrEntry *relRo;
 };
 
 extern std::vector<Compartment> compartments;
