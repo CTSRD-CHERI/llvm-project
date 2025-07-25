@@ -890,12 +890,15 @@ template <class PltSection, class GotPltSection>
 static void addPltEntry(PltSection &plt, GotPltSection &gotPlt,
                         RelocationBaseSection &rel, RelType type, Symbol &sym) {
   plt.addEntry(sym);
-
-  if (config->isCheriAbi && !sym.isPreemptible)
-    error("cannot create non-preemptible PLT entry on CHERI against symbol: " +
-          toString(sym));
-
   gotPlt.addEntry(sym);
+
+  if (config->isCheriAbi && !sym.isPreemptible) {
+    addCapabilityRelocation(&sym, *target->cheriCapRel, &gotPlt,
+                            sym.getGotPltOffset(), R_CHERI_CAPABILITY, 0, false,
+                            [] { return ""; });
+    return;
+  }
+
   rel.addReloc({type, &gotPlt, sym.getGotPltOffset(),
                 sym.isPreemptible ? DynamicReloc::AgainstSymbol
                                   : DynamicReloc::AddendOnlyWithTargetVA,
