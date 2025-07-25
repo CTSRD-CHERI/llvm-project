@@ -865,6 +865,13 @@ template <bool shard = false>
 static void addRelativeReloc(InputSectionBase &isec, uint64_t offsetInSec,
                              Symbol &sym, int64_t addend, RelExpr expr,
                              RelType type) {
+  if (expr == R_CHERI_CAPABILITY) {
+    assert(!sym.isPreemptible);
+    addCapabilityRelocation(&sym, type, &isec, offsetInSec,
+                            expr, addend, false, [] { return ""; });
+    return;
+  }
+
   Partition &part = isec.getPartition();
 
   // Add a relative relocation. If relrDyn section is enabled, and the
@@ -914,26 +921,26 @@ static void addPltEntry(PltSection &plt, GotPltSection &gotPlt,
 static void addGotEntry(Symbol &sym) {
   in.got->addEntry(sym);
   uint64_t off = sym.getGotOffset();
+  RelExpr expr = config->isCheriAbi ? R_CHERI_CAPABILITY : R_ABS;
 
   // If preemptible, emit a GLOB_DAT relocation.
   if (sym.isPreemptible) {
     mainPart->relaDyn->addReloc({target->gotRel, in.got.get(), off,
-                                 DynamicReloc::AgainstSymbol, sym, 0, R_ABS});
+                                 DynamicReloc::AgainstSymbol, sym, 0, expr});
     return;
   }
+
+  RelType type = config->isCheriAbi ? *target->cheriCapRel : target->symbolicRel;
 
   // Otherwise, the value is either a link-time constant or the load base
   // plus a constant. For CHERI it always requires run-time initialisation,
   // with the exception of undef weak symbols.
   if (config->isCheriAbi && sym.isUndefWeak())
     addNullDerivedCapability(sym, *in.got, off, 0);
-  else if (config->isCheriAbi)
-    addCapabilityRelocation(&sym, *target->cheriCapRel, in.got.get(), off,
-                            R_CHERI_CAPABILITY, 0, false, [] { return ""; });
-  else if (!config->isPic || isAbsolute(sym))
-    in.got->addConstant({R_ABS, target->symbolicRel, off, 0, &sym});
+  else if (!config->isCheriAbi && (!config->isPic || isAbsolute(sym)))
+    in.got->addConstant({expr, type, off, 0, &sym});
   else
-    addRelativeReloc(*in.got, off, sym, 0, R_ABS, target->symbolicRel);
+    addRelativeReloc(*in.got, off, sym, 0, expr, type);
 }
 
 static void addTpOffsetGotEntry(Symbol &sym) {
