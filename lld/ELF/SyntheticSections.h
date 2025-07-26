@@ -524,17 +524,10 @@ public:
   template <bool shard = false>
   void addReloc(DynamicReloc::Kind kind, RelType dynType, InputSectionBase &sec,
                 uint64_t offsetInSec, Symbol &sym, int64_t addend, RelExpr expr,
-                RelType addendRelType) {
+                RelType addendRelType, bool writeZero = false) {
     // Write the addends to the relocated address if required. We skip
-    // it if the written value would be zero.
-    bool writeAddend =
-        config->writeAddends && (expr != R_ADDEND || addend != 0);
-    // If we are adding a dynamic R_CHERI_CAPABILITY relocation we need to write
-    // the added to the output file since it will be initialized to 0xcacacaca
-    if (expr == R_CHERI_CAPABILITY) {
-      expr = R_ADDEND;
-    }
-    if (writeAddend)
+    // it if the written value would be zero, unless forced.
+    if (config->writeAddends && (expr != R_ADDEND || addend != 0 || writeZero))
       sec.addReloc({expr, addendRelType, offsetInSec, addend, &sym});
     addReloc<shard>({dynType, &sec, offsetInSec, kind, sym, addend, expr});
   }
