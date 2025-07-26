@@ -951,9 +951,12 @@ void addCapabilityRelocation(
     assert(newSym->visibility() == llvm::ELF::STV_HIDDEN);
     sym = newSym; // Make the relocation point to the newly added symbol
   }
+  // .chericap initialises the memory to 0xcacacaca not 0, so if writing
+  // addends we still need to write even it if zero.
+  // TODO: Stop doing this in the assembler and drop this hack
   dynRelSec->addReloc(
-      DynamicReloc::AgainstSymbol, type, *sec, offset, *sym, addend, expr,
-      /* Relocation type for the addend = */ target->symbolicRel);
+      DynamicReloc::AgainstSymbol, type, *sec, offset, *sym, addend, R_ADDEND,
+      /*addendRelType=*/target->symbolicRel, /*writeZero=*/true);
 }
 
 void addNullDerivedCapability(Symbol &sym, InputSectionBase &sec,
