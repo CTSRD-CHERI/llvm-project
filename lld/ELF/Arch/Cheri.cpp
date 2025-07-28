@@ -944,33 +944,6 @@ void addRelativeCapabilityRelocation(
   in.capRelocs->addCapReloc({&isec, offsetInSec}, {symOrSec, 0u}, addend);
 }
 
-void addCapabilityRelocation(
-    llvm::PointerUnion<Symbol *, InputSectionBase *> symOrSec, RelType type,
-    InputSectionBase *sec, uint64_t offset, RelExpr expr, int64_t addend,
-    llvm::function_ref<std::string()> referencedBy,
-    RelocationBaseSection *dynRelSec) {
-  Symbol *sym = dyn_cast<Symbol *>(symOrSec);
-  assert(expr == R_ABS_CAP);
-
-  // Non-preemptible undef weak symbols are link-time constants and should use
-  // addNullDerivedCapability
-  if (sym)
-    assert(sym->isPreemptible || !sym->isUndefWeak());
-
-  // Emit either the legacy __cap_relocs section or a R_*_CHERI_CAPABILITY
-  // reloc
-  // For local symbols we can also emit the untagged capability bits and
-  // instruct csu/rtld to run CBuildCap
-  if (!sym || !sym->isPreemptible) {
-    addRelativeCapabilityRelocation(*sec, offset, symOrSec, addend, expr, type);
-    return;
-  }
-
-  if (!dynRelSec)
-    dynRelSec = mainPart->relaDyn.get();
-  dynRelSec->addSymbolReloc(type, *sec, offset, *sym, addend, type);
-}
-
 void addNullDerivedCapability(Symbol &sym, InputSectionBase &sec,
                               uint64_t offset, int64_t addend) {
   // Only non-preemptible undef weak symbols are link-time constants

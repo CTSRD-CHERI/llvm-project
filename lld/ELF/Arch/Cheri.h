@@ -309,12 +309,6 @@ void addSymbolCapabilityRelocation(RelType dynType, RelocationBaseSection &rel,
                                    InputSectionBase &isec, uint64_t offsetInSec,
                                    Symbol &sym, int64_t addend = 0);
 
-void addCapabilityRelocation(
-    llvm::PointerUnion<Symbol *, InputSectionBase *> target, RelType type,
-    InputSectionBase *sec, uint64_t offset, RelExpr expr, int64_t addend,
-    llvm::function_ref<std::string()> referencedBy,
-    RelocationBaseSection *dynRelSec = nullptr);
-
 void addNullDerivedCapability(Symbol &sym, InputSectionBase &sec,
                               uint64_t offset, int64_t addend);
 } // namespace elf
