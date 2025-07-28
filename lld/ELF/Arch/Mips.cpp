@@ -239,7 +239,7 @@ RelExpr MIPS<ELFT>::getRelExpr(RelType type, const Symbol &s,
 }
 
 template <class ELFT> RelType MIPS<ELFT>::getDynRel(RelType type) const {
-  if (type == symbolicRel)
+  if (type == symbolicRel || type == cheriCapRel)
     return type;
   return R_MIPS_NONE;
 }
