@@ -300,6 +300,11 @@ inline void readOnlyCapRelocsError(Symbol &sym, const Twine &sourceMsg) {
         sourceMsg);
 }
 
+void addRelativeCapabilityRelocation(
+    InputSectionBase &isec, uint64_t offsetInSec,
+    llvm::PointerUnion<Symbol *, InputSectionBase *> symOrSec, int64_t addend,
+    RelExpr expr, RelType type);
+
 void addCapabilityRelocation(
     llvm::PointerUnion<Symbol *, InputSectionBase *> target, RelType type,
     InputSectionBase *sec, uint64_t offset, RelExpr expr, int64_t addend,
