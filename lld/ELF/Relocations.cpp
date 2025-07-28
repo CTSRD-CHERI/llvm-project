@@ -866,6 +866,12 @@ static void addRelativeReloc(InputSectionBase &isec, uint64_t offsetInSec,
                              Symbol &sym, int64_t addend, RelExpr expr,
                              RelType type) {
   if (expr == R_ABS_CAP) {
+    if (shard) {
+      std::lock_guard<std::mutex> lock(relocMutex);
+      addRelativeReloc(isec, offsetInSec, sym, addend, expr, type);
+      return;
+    }
+
     addRelativeCapabilityRelocation(isec, offsetInSec, &sym, addend, expr,
                                     type);
     return;
