@@ -430,7 +430,7 @@ static void checkOptions() {
     if (config->exportDynamic)
       error("-r and --export-dynamic may not be used together");
   }
-  if (config->useRelativeCheriRelocs && config->emachine != EM_RISCV)
+  if (config->useRelativeElfCheriRelocs && config->emachine != EM_RISCV)
     error("local-cap-relocs=elf is not implemented yet");
 
   if (config->executeOnly) {
@@ -1244,7 +1244,7 @@ static void readConfigs(opt::InputArgList &args) {
       args.hasArg(OPT_ignore_function_address_equality);
   config->init = args.getLastArgValue(OPT_init, "_init");
   // TODO: change default to true
-  config->useRelativeCheriRelocs =
+  config->useRelativeElfCheriRelocs =
       args.hasFlag(OPT_local_caprelocs_elf, OPT_local_caprelocs_legacy, false);
   config->ltoAAPipeline = args.getLastArgValue(OPT_lto_aa_pipeline);
   config->ltoCSProfileGenerate = args.hasArg(OPT_lto_cs_profile_generate);

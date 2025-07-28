@@ -898,7 +898,7 @@ static void addPltEntry(PltSection &plt, GotPltSection &gotPlt,
   plt.addEntry(sym);
   gotPlt.addEntry(sym);
 
-  if (config->isCheriAbi && !config->useRelativeCheriRelocs) {
+  if (config->isCheriAbi && !config->useRelativeElfCheriRelocs) {
     if (!sym.isPreemptible) {
       addRelativeCapabilityRelocation(gotPlt, sym.getGotPltOffset(), &sym, 0,
                                       R_ABS_CAP, *target->cheriCapRel);

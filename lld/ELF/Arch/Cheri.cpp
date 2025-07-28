@@ -1018,8 +1018,19 @@ void addRelativeCapabilityRelocation(
     assert(!needsCheriMipsTrampoline(type, *sym));
     assert(!sym->isPreemptible);
   }
-  assert(!config->useRelativeCheriRelocs &&
-         "relative ELF capability relocations not currently implemented");
+
+  if (config->useRelativeElfCheriRelocs) {
+    assert(!sym->isPreemptible && "Must not be a preemptible symbol");
+    if (config->emachine != EM_RISCV)
+      error("Relative Relocs method not implemented yet!");
+    RelocationBaseSection &oSec =
+        sym->includeInDynsym() ? *mainPart->relaDyn : *in.relaDyn;
+    oSec.addReloc(DynamicReloc::AgainstSymbol, R_RISCV_CHERI_RELATIVE, isec,
+                  offsetInSec, *sym, addend, expr, target->symbolicRel);
+    writeCatableRelocationFragments(&isec, sym, offsetInSec);
+    return;
+  }
+
   in.capRelocs->addCapReloc({&isec, offsetInSec}, {symOrSec, 0u}, addend);
 }
 
@@ -1035,19 +1046,6 @@ void addCapabilityRelocation(
   // addNullDerivedCapability
   if (sym)
     assert(sym->isPreemptible || !sym->isUndefWeak());
-
-  // Previously called CBuildCap
-  if (config->useRelativeCheriRelocs) {
-    assert(!sym->isPreemptible && "Must not be a preemptible symbol");
-    if (config->emachine != EM_RISCV)
-      error("Relative Relocs method not implemented yet!");
-    RelocationBaseSection &oSec =
-        sym->includeInDynsym() ? *mainPart->relaDyn : *in.relaDyn;
-    oSec.addReloc(DynamicReloc::AgainstSymbol, R_RISCV_CHERI_RELATIVE, *sec,
-                  offset, *sym, addend, expr, target->symbolicRel);
-    writeCatableRelocationFragments(sec, sym, offset);
-    return;
-  }
 
   bool needTrampoline = sym && needsCheriMipsTrampoline(type, *sym);
 

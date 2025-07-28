@@ -511,7 +511,7 @@ template <class ELFT> void elf::createSyntheticSections() {
   add(*in.relaPlt);
 
   // add the dynRela section
-  if (config->emachine == EM_RISCV && config->useRelativeCheriRelocs)
+  if (config->emachine == EM_RISCV && config->useRelativeElfCheriRelocs)
     in.relaDyn =
         std::make_unique<RelocationSection<ELFT>>(relaDynName, false, 1);
   else if (config->androidPackDynRelocs)
