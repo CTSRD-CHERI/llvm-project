@@ -79,8 +79,9 @@ SymbolAndOffset::fromSectionWithOffset(InputSectionBase *isec, int64_t offset,
     }
   }
   // When using the legacy __cap_relocs style (where clang emits __cap_relocs
-  // instead of R_CHERI_CAPABILITY) the local symbols might not exist so we
+  // instead of R_*_CHERI_CAPABILITY) the local symbols might not exist so we
   // may have fall back to the section.
+  // TODO: Revisit this now we no longer support __cap_relocs input.
   if (!fallbackResult) {
     // worst case we fall back to the section + offset
     // Don't warn if the relocation is against an anonymous string constant
@@ -919,7 +920,8 @@ void addCapabilityRelocation(
   if (sym)
     assert(sym->isPreemptible || !sym->isUndefWeak());
 
-  // Emit either the legacy __cap_relocs section or a R_CHERI_CAPABILITY reloc
+  // Emit either the legacy __cap_relocs section or a R_*_CHERI_CAPABILITY
+  // reloc
   // For local symbols we can also emit the untagged capability bits and
   // instruct csu/rtld to run CBuildCap
   if ((!sym || !sym->isPreemptible) && !needTrampoline) {
@@ -935,7 +937,7 @@ void addCapabilityRelocation(
          toString(*sym) + "; this may not be supported by the runtime linker" +
          getLocationMessage(*sec, *sym, offset));
 
-  // We don't use a R_MIPS_CHERI_CAPABILITY relocation for the input but
+  // We don't use a R_*_CHERI_CAPABILITY relocation for the input but
   // instead need to use an absolute pointer size relocation to write
   // the offset addend
   if (!dynRelSec)
