@@ -893,15 +893,11 @@ void addCapabilityRelocation(
   // that sets $cgp:
   if (config->emachine == llvm::ELF::EM_MIPS && sym && sym->isFunc() &&
       type != *target->cheriCapCallRel) {
-    if (!lld::elf::hasDynamicLinker()) {
-      // In static binaries we do not need PLT stubs for function pointers since
-      // all functions share the same $cgp
-      // TODO: this is no longer true if we were to support dlopen() in static
-      // binaries
-      if (config->verboseCapRelocs)
-        message("Do not need function pointer trampoline for " +
-                toString(*sym) + " in static binary");
-    } else if (in.mipsAbiFlags) {
+    // In static binaries we do not need PLT stubs for function pointers since
+    // all functions share the same $cgp
+    // TODO: this is no longer true if we were to support dlopen() in static
+    // binaries
+    if (lld::elf::hasDynamicLinker() && in.mipsAbiFlags) {
       std::optional<unsigned> abi;
       invokeELFT(getMipsCheriAbiVariant, abi, *in.mipsAbiFlags);
       if (abi && (*abi == llvm::ELF::DF_MIPS_CHERI_ABI_PLT ||
