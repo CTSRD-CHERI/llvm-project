@@ -866,9 +866,8 @@ static void addRelativeReloc(InputSectionBase &isec, uint64_t offsetInSec,
                              Symbol &sym, int64_t addend, RelExpr expr,
                              RelType type) {
   if (expr == R_ABS_CAP) {
-    assert(!sym.isPreemptible);
-    addCapabilityRelocation(&sym, type, &isec, offsetInSec, expr, addend,
-                            [] { return ""; });
+    addRelativeCapabilityRelocation(isec, offsetInSec, &sym, addend, expr,
+                                    type);
     return;
   }
 
@@ -901,15 +900,13 @@ static void addPltEntry(PltSection &plt, GotPltSection &gotPlt,
 
   if (config->isCheriAbi && !config->useRelativeCheriRelocs) {
     if (!sym.isPreemptible) {
-      addCapabilityRelocation(&sym, *target->cheriCapRel, &gotPlt,
-                              sym.getGotPltOffset(), R_ABS_CAP, 0,
-                              [] { return ""; });
+      addRelativeCapabilityRelocation(gotPlt, sym.getGotPltOffset(), &sym, 0,
+                                      R_ABS_CAP, *target->cheriCapRel);
       return;
     }
 
-    addCapabilityRelocation(&plt, *target->cheriCapRel, &gotPlt,
-                            sym.getGotPltOffset(), R_ABS_CAP, 0,
-                            [] { return ""; });
+    addRelativeCapabilityRelocation(gotPlt, sym.getGotPltOffset(), &plt, 0,
+                                    R_ABS_CAP, *target->cheriCapRel);
   }
 
   rel.addReloc({type, &gotPlt, sym.getGotPltOffset(),
