@@ -879,6 +879,38 @@ static void getMipsCheriAbiVariant(std::optional<unsigned> &abi,
   abi = static_cast<MipsAbiFlagsSection<ELFT> &>(sec).getCheriAbiVariant();
 }
 
+static bool needsCheriMipsTrampoline(RelType type, const Symbol &sym) {
+  // In the PLT ABI (and fndesc?) we have to use an elf relocation for function
+  // pointers to ensure that the runtime linker adds the required trampolines
+  // that sets $cgp:
+
+  if (config->emachine != EM_MIPS)
+    return false;
+
+  if (!sym.isFunc() || type == *target->cheriCapCallRel)
+    return false;
+
+  // In static binaries we do not need PLT stubs for function pointers since
+  // all functions share the same $cgp
+  // TODO: this is no longer true if we were to support dlopen() in static
+  // binaries
+  if (!hasDynamicLinker())
+    return false;
+
+  if (!in.mipsAbiFlags)
+    return false;
+
+  std::optional<unsigned> abi;
+  invokeELFT(getMipsCheriAbiVariant, abi, *in.mipsAbiFlags);
+  if (!abi)
+    return false;
+
+  if (*abi != DF_MIPS_CHERI_ABI_PLT && *abi != DF_MIPS_CHERI_ABI_FNDESC)
+    return false;
+
+  return true;
+}
+
 void addCapabilityRelocation(
     llvm::PointerUnion<Symbol *, InputSectionBase *> symOrSec, RelType type,
     InputSectionBase *sec, uint64_t offset, RelExpr expr, int64_t addend,
@@ -887,33 +919,12 @@ void addCapabilityRelocation(
   Symbol *sym = dyn_cast<Symbol *>(symOrSec);
   assert(expr == R_ABS_CAP);
 
-  bool needTrampoline = false;
-  // In the PLT ABI (and fndesc?) we have to use an elf relocation for function
-  // pointers to ensure that the runtime linker adds the required trampolines
-  // that sets $cgp:
-  if (config->emachine == llvm::ELF::EM_MIPS && sym && sym->isFunc() &&
-      type != *target->cheriCapCallRel) {
-    // In static binaries we do not need PLT stubs for function pointers since
-    // all functions share the same $cgp
-    // TODO: this is no longer true if we were to support dlopen() in static
-    // binaries
-    if (lld::elf::hasDynamicLinker() && in.mipsAbiFlags) {
-      std::optional<unsigned> abi;
-      invokeELFT(getMipsCheriAbiVariant, abi, *in.mipsAbiFlags);
-      if (abi && (*abi == llvm::ELF::DF_MIPS_CHERI_ABI_PLT ||
-                  *abi == llvm::ELF::DF_MIPS_CHERI_ABI_FNDESC))
-        needTrampoline = true;
-    }
-
-    if (needTrampoline && config->verboseCapRelocs)
-      message("Using trampoline for function pointer against " +
-              verboseToString(sym));
-  }
-
   // Non-preemptible undef weak symbols are link-time constants and should use
   // addNullDerivedCapability
   if (sym)
     assert(sym->isPreemptible || !sym->isUndefWeak());
+
+  bool needTrampoline = sym && needsCheriMipsTrampoline(type, *sym);
 
   // Emit either the legacy __cap_relocs section or a R_*_CHERI_CAPABILITY
   // reloc
@@ -937,6 +948,9 @@ void addCapabilityRelocation(
   // the offset addend
   if (!dynRelSec)
     dynRelSec = mainPart->relaDyn.get();
+  if (needTrampoline && config->verboseCapRelocs)
+    message("Using trampoline for function pointer against " +
+            verboseToString(sym));
   if (needTrampoline && !sym->includeInDynsym()) {
     // Hack: Add a new global symbol with a unique name so that we can use
     // a dynamic relocation against it.
