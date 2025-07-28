@@ -1690,8 +1690,24 @@ RelocationBaseSection::RelocationBaseSection(StringRef name, uint32_t type,
 void RelocationBaseSection::addSymbolReloc(
     RelType dynType, InputSectionBase &isec, uint64_t offsetInSec, Symbol &sym,
     int64_t addend, std::optional<RelType> addendRelType) {
+  bool isCap =
+      dynType == target->cheriCapRel || dynType == target->cheriCapCallRel;
+  if (isCap && sym.isFunc() && addend != 0)
+    warn("capability relocation with non-zero addend (0x" +
+         llvm::utohexstr(addend) + ") against preemptible function " +
+         toString(sym) + "; this may not be supported by the runtime linker" +
+         getLocationMessage(isec, sym, offsetInSec));
+
+  // .chericap initialises the memory to 0xcacacaca not 0, so if writing
+  // addends we still need to write even it if zero (and must have an
+  // addendRelType in order to do so).
+  // TODO: Stop doing this in the assembler and drop this hack
+  bool writeZero = isCap;
+  if (writeZero && !addendRelType)
+    addendRelType = dynType;
   addReloc(DynamicReloc::AgainstSymbol, dynType, isec, offsetInSec, sym, addend,
-           R_ADDEND, addendRelType ? *addendRelType : target->noneRel);
+           R_ADDEND, addendRelType ? *addendRelType : target->noneRel,
+           writeZero);
 }
 
 void RelocationBaseSection::addAddendOnlyRelocIfNonPreemptible(
