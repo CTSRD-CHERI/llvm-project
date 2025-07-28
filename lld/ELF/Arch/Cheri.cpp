@@ -685,7 +685,7 @@ uint64_t MipsCheriCapTableSection::assignIndices(uint64_t startIndex,
       addNullDerivedCapability(*targetSym, *this, off, 0);
     else
       addCapabilityRelocation(
-          targetSym, elfCapabilityReloc, this, off, R_CHERI_CAPABILITY, 0,
+          targetSym, elfCapabilityReloc, this, off, R_ABS_CAP, 0,
           it.second.usedInCallExpr,
           [&]() {
             return ("\n>>> referenced by " + refName + "\n>>> first used in " +
@@ -886,7 +886,7 @@ void addCapabilityRelocation(
     bool isCallExpr, llvm::function_ref<std::string()> referencedBy,
     RelocationBaseSection *dynRelSec) {
   Symbol *sym = dyn_cast<Symbol *>(symOrSec);
-  assert(expr == R_CHERI_CAPABILITY);
+  assert(expr == R_ABS_CAP);
 
   bool needTrampoline = false;
   // In the PLT ABI (and fndesc?) we have to use an elf relocation for function

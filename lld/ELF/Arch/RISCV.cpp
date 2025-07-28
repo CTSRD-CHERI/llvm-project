@@ -352,7 +352,7 @@ RelExpr RISCV::getRelExpr(const RelType type, const Symbol &s,
   case R_RISCV_RELAX:
     return config->relax ? R_RELAX_HINT : R_NONE;
   case R_RISCV_CHERI_CAPABILITY:
-    return R_CHERI_CAPABILITY;
+    return R_ABS_CAP;
   // TODO: Deprecate and eventually remove these
   case R_RISCV_CHERI_CAPTAB_PCREL_HI20:
     return R_GOT_PC;

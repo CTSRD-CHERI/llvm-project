@@ -209,7 +209,7 @@ RelExpr MIPS<ELFT>::getRelExpr(RelType type, const Symbol &s,
   case R_MIPS_NONE:
     return R_NONE;
   case R_MIPS_CHERI_CAPABILITY:
-    return R_CHERI_CAPABILITY;
+    return R_ABS_CAP;
   case R_MIPS_CHERI_CAPTAB_LO16:
   case R_MIPS_CHERI_CAPTAB_HI16:
     return R_MIPS_CHERI_CAPTAB_INDEX;

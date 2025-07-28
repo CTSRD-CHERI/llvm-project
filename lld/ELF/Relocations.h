@@ -30,6 +30,7 @@ using JumpModType = uint32_t;
 // doesn't have to know about architecture-specific details.
 enum RelExpr {
   R_ABS,
+  R_ABS_CAP,
   R_ADDEND,
   R_DTPREL,
   R_GOT,
@@ -110,7 +111,6 @@ enum RelExpr {
   R_MIPS_CHERI_CAPTAB_TLSGD,
   R_MIPS_CHERI_CAPTAB_TLSLD,
   R_MIPS_CHERI_CAPTAB_TPREL,
-  R_CHERI_CAPABILITY,
   // Same as R_PC but with page-aligned semantics.
   R_LOONGARCH_PAGE_PC,
   // Same as R_PLT_PC but with page-aligned semantics.
