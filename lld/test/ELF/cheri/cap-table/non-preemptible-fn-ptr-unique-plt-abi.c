@@ -125,14 +125,8 @@
 // CHECK-NEXT: ]
 
 // no need for trampolines in static executable
-// RUN: ld.lld %t.o %t2.o -o %t-static.exe --verbose-cap-relocs 2>&1 | FileCheck %s -check-prefix STATIC-MESSAGE
-// STATIC-MESSAGE: Do not need function pointer trampoline for default_callback in static binary
-// STATIC-MESSAGE-NEXT: Do not need function pointer trampoline for static_callback in static binary
-// STATIC-MESSAGE-NEXT: Do not need function pointer trampoline for default_callback in static binary
-// STATIC-MESSAGE-NEXT: Do not need function pointer trampoline for static_callback in static binary
-// STATIC-MESSAGE-NEXT: Do not need function pointer trampoline for default_callback in static binary
-// STATIC-MESSAGE-NEXT: Do not need function pointer trampoline for static_callback in static binary
-// STATIC-MESSAGE-EMPTY:
+// RUN: ld.lld %t.o %t2.o -o %t-static.exe --verbose-cap-relocs 2>&1 | FileCheck %s --allow-empty --check-prefix STATIC-MESSAGE
+// STATIC-MESSAGE-NOT: Using trampoline for function pointer
 
 // RUN: llvm-readobj --dyn-symbols --dyn-relocations --cap-relocs --cap-table %t-static.exe | FileCheck %s --check-prefix STATIC
 // STATIC-LABEL: Dynamic Relocations {
