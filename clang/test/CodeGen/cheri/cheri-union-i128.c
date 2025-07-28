@@ -122,7 +122,7 @@ void call128(void) {
 }
 
 // CHECK-32-LABEL: define {{[^@]+}}@ret128
-// CHECK-32-SAME: (ptr addrspace(200) noalias sret([[UNION_U128:%.*]]) align 16 [[AGG_RESULT:%.*]]) addrspace(200) #[[ATTR0]] {
+// CHECK-32-SAME: (ptr addrspace(200) dead_on_unwind noalias writable sret([[UNION_U128:%.*]]) align 16 [[AGG_RESULT:%.*]]) addrspace(200) #[[ATTR0]] {
 // CHECK-32-NEXT:  entry:
 // CHECK-32-NEXT:    [[RESULT_PTR:%.*]] = alloca ptr addrspace(200), align 8, addrspace(200)
 // CHECK-32-NEXT:    store ptr addrspace(200) [[AGG_RESULT]], ptr addrspace(200) [[RESULT_PTR]], align 8
@@ -200,7 +200,7 @@ void call_nested(void) {
 }
 
 // CHECK-32-LABEL: define {{[^@]+}}@ret_nested
-// CHECK-32-SAME: (ptr addrspace(200) noalias sret([[UNION_NESTED:%.*]]) align 8 [[AGG_RESULT:%.*]]) addrspace(200) #[[ATTR0]] {
+// CHECK-32-SAME: (ptr addrspace(200) dead_on_unwind noalias writable sret([[UNION_NESTED:%.*]]) align 8 [[AGG_RESULT:%.*]]) addrspace(200) #[[ATTR0]] {
 // CHECK-32-NEXT:  entry:
 // CHECK-32-NEXT:    [[RESULT_PTR:%.*]] = alloca ptr addrspace(200), align 8, addrspace(200)
 // CHECK-32-NEXT:    store ptr addrspace(200) [[AGG_RESULT]], ptr addrspace(200) [[RESULT_PTR]], align 8
@@ -208,7 +208,7 @@ void call_nested(void) {
 // CHECK-32-NEXT:    ret void
 //
 // CHECK-64-LABEL: define {{[^@]+}}@ret_nested
-// CHECK-64-SAME: (ptr addrspace(200) noalias sret([[UNION_NESTED:%.*]]) align 16 [[AGG_RESULT:%.*]]) addrspace(200) #[[ATTR0]] {
+// CHECK-64-SAME: (ptr addrspace(200) dead_on_unwind noalias writable sret([[UNION_NESTED:%.*]]) align 16 [[AGG_RESULT:%.*]]) addrspace(200) #[[ATTR0]] {
 // CHECK-64-NEXT:  entry:
 // CHECK-64-NEXT:    [[RESULT_PTR:%.*]] = alloca ptr addrspace(200), align 16, addrspace(200)
 // CHECK-64-NEXT:    store ptr addrspace(200) [[AGG_RESULT]], ptr addrspace(200) [[RESULT_PTR]], align 16

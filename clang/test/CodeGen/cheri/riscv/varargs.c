@@ -101,7 +101,7 @@ struct S {
 // XXX: This currently reads a %struct.S* not a %struct.S addrspace(200)* from
 // the varargs array.
 // CHECK-IL32PC64-LABEL: define {{[^@]+}}@callee_S
-// CHECK-IL32PC64-SAME: (ptr addrspace(200) noalias sret([[STRUCT_S:%.*]]) align 1 [[AGG_RESULT:%.*]], i32 noundef [[N:%.*]], ...) addrspace(200) #[[ATTR0]] {
+// CHECK-IL32PC64-SAME: (ptr addrspace(200) dead_on_unwind noalias writable sret([[STRUCT_S:%.*]]) align 1 [[AGG_RESULT:%.*]], i32 noundef [[N:%.*]], ...) addrspace(200) #[[ATTR0]] {
 // CHECK-IL32PC64-NEXT:  entry:
 // CHECK-IL32PC64-NEXT:    [[AP:%.*]] = alloca ptr addrspace(200), align 8, addrspace(200)
 // CHECK-IL32PC64-NEXT:    call void @llvm.va_start.p200(ptr addrspace(200) [[AP]])
@@ -130,7 +130,7 @@ struct S {
 // CHECK-IL32PC64-NEXT:    ret void
 //
 // CHECK-L64PC128-LABEL: define {{[^@]+}}@callee_S
-// CHECK-L64PC128-SAME: (ptr addrspace(200) noalias sret([[STRUCT_S:%.*]]) align 1 [[AGG_RESULT:%.*]], i32 noundef signext [[N:%.*]], ...) addrspace(200) #[[ATTR0]] {
+// CHECK-L64PC128-SAME: (ptr addrspace(200) dead_on_unwind noalias writable sret([[STRUCT_S:%.*]]) align 1 [[AGG_RESULT:%.*]], i32 noundef signext [[N:%.*]], ...) addrspace(200) #[[ATTR0]] {
 // CHECK-L64PC128-NEXT:  entry:
 // CHECK-L64PC128-NEXT:    [[AP:%.*]] = alloca ptr addrspace(200), align 16, addrspace(200)
 // CHECK-L64PC128-NEXT:    call void @llvm.va_start.p200(ptr addrspace(200) [[AP]])
@@ -173,19 +173,19 @@ struct S callee_S(int n, ...) {
 }
 
 // CHECK-IL32PC64-LABEL: define {{[^@]+}}@caller_S
-// CHECK-IL32PC64-SAME: (ptr addrspace(200) noalias sret([[STRUCT_S:%.*]]) align 1 [[AGG_RESULT:%.*]], ptr addrspace(200) noundef [[S:%.*]]) addrspace(200) #[[ATTR0]] {
+// CHECK-IL32PC64-SAME: (ptr addrspace(200) dead_on_unwind noalias writable sret([[STRUCT_S:%.*]]) align 1 [[AGG_RESULT:%.*]], ptr addrspace(200) noundef [[S:%.*]]) addrspace(200) #[[ATTR0]] {
 // CHECK-IL32PC64-NEXT:  entry:
 // CHECK-IL32PC64-NEXT:    [[BYVAL_TEMP:%.*]] = alloca [[STRUCT_S]], align 1, addrspace(200)
 // CHECK-IL32PC64-NEXT:    call void @llvm.memcpy.p200.p200.i32(ptr addrspace(200) align 1 [[BYVAL_TEMP]], ptr addrspace(200) align 1 [[S]], i32 64, i1 false)
-// CHECK-IL32PC64-NEXT:    call void (ptr addrspace(200), i32, ...) @callee_S(ptr addrspace(200) sret([[STRUCT_S]]) align 1 [[AGG_RESULT]], i32 noundef 4, i32 noundef 1, i32 noundef 2, i32 noundef 3, ptr addrspace(200) noundef [[BYVAL_TEMP]])
+// CHECK-IL32PC64-NEXT:    call void (ptr addrspace(200), i32, ...) @callee_S(ptr addrspace(200) dead_on_unwind writable sret([[STRUCT_S]]) align 1 [[AGG_RESULT]], i32 noundef 4, i32 noundef 1, i32 noundef 2, i32 noundef 3, ptr addrspace(200) noundef [[BYVAL_TEMP]])
 // CHECK-IL32PC64-NEXT:    ret void
 //
 // CHECK-L64PC128-LABEL: define {{[^@]+}}@caller_S
-// CHECK-L64PC128-SAME: (ptr addrspace(200) noalias sret([[STRUCT_S:%.*]]) align 1 [[AGG_RESULT:%.*]], ptr addrspace(200) noundef [[S:%.*]]) addrspace(200) #[[ATTR0]] {
+// CHECK-L64PC128-SAME: (ptr addrspace(200) dead_on_unwind noalias writable sret([[STRUCT_S:%.*]]) align 1 [[AGG_RESULT:%.*]], ptr addrspace(200) noundef [[S:%.*]]) addrspace(200) #[[ATTR0]] {
 // CHECK-L64PC128-NEXT:  entry:
 // CHECK-L64PC128-NEXT:    [[BYVAL_TEMP:%.*]] = alloca [[STRUCT_S]], align 1, addrspace(200)
 // CHECK-L64PC128-NEXT:    call void @llvm.memcpy.p200.p200.i64(ptr addrspace(200) align 1 [[BYVAL_TEMP]], ptr addrspace(200) align 1 [[S]], i64 64, i1 false)
-// CHECK-L64PC128-NEXT:    call void (ptr addrspace(200), i32, ...) @callee_S(ptr addrspace(200) sret([[STRUCT_S]]) align 1 [[AGG_RESULT]], i32 noundef signext 4, i32 noundef signext 1, i32 noundef signext 2, i32 noundef signext 3, ptr addrspace(200) noundef [[BYVAL_TEMP]])
+// CHECK-L64PC128-NEXT:    call void (ptr addrspace(200), i32, ...) @callee_S(ptr addrspace(200) dead_on_unwind writable sret([[STRUCT_S]]) align 1 [[AGG_RESULT]], i32 noundef signext 4, i32 noundef signext 1, i32 noundef signext 2, i32 noundef signext 3, ptr addrspace(200) noundef [[BYVAL_TEMP]])
 // CHECK-L64PC128-NEXT:    ret void
 //
 struct S caller_S(struct S s) {
