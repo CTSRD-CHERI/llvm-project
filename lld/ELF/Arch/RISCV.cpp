@@ -574,6 +574,14 @@ void RISCV::relocate(uint8_t *loc, const Relocation &rel, uint64_t val) const {
   case R_RISCV_RELAX:
     return; // Ignored (for now)
 
+  case R_RISCV_CHERI_CAPABILITY:
+    // Write a word within the capability
+    if (config->is64)
+      write64le(loc, val);
+    else
+      write32le(loc, val);
+    break;
+
   default:
     llvm_unreachable("unknown relocation");
   }
