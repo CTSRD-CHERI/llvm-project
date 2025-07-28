@@ -288,8 +288,9 @@ void RISCV::writePlt(uint8_t *buf, const Symbol &sym,
 }
 
 RelType RISCV::getDynRel(RelType type) const {
-  return type == target->symbolicRel ? type
-                                     : static_cast<RelType>(R_RISCV_NONE);
+  return type == symbolicRel || type == cheriCapRel
+             ? type
+             : static_cast<RelType>(R_RISCV_NONE);
 }
 
 RelExpr RISCV::getRelExpr(const RelType type, const Symbol &s,
