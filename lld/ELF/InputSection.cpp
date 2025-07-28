@@ -861,8 +861,8 @@ uint64_t InputSectionBase::getRelocTargetVA(const InputFile *file, RelType type,
     return in.got->getTlsIndexOff() + a;
   case R_TLSLD_PC:
     return in.got->getTlsIndexVA() + a - p;
-  case R_CHERI_CAPABILITY:
-    llvm_unreachable("R_CHERI_CAPABILITY should not be handled here!");
+  case R_ABS_CAP:
+    llvm_unreachable("R_ABS_CAP should not be handled here!");
   case R_MIPS_CHERI_CAPTAB_INDEX:
   case R_MIPS_CHERI_CAPTAB_INDEX_SMALL_IMMEDIATE:
   case R_MIPS_CHERI_CAPTAB_INDEX_CALL:
