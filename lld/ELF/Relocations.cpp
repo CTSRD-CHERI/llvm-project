@@ -867,8 +867,8 @@ static void addRelativeReloc(InputSectionBase &isec, uint64_t offsetInSec,
                              RelType type) {
   if (expr == R_ABS_CAP) {
     assert(!sym.isPreemptible);
-    addCapabilityRelocation(&sym, type, &isec, offsetInSec,
-                            expr, addend, false, [] { return ""; });
+    addCapabilityRelocation(&sym, type, &isec, offsetInSec, expr, addend,
+                            [] { return ""; });
     return;
   }
 
@@ -902,13 +902,13 @@ static void addPltEntry(PltSection &plt, GotPltSection &gotPlt,
   if (config->isCheriAbi && !config->useRelativeCheriRelocs) {
     if (!sym.isPreemptible) {
       addCapabilityRelocation(&sym, *target->cheriCapRel, &gotPlt,
-                              sym.getGotPltOffset(), R_ABS_CAP, 0, false,
+                              sym.getGotPltOffset(), R_ABS_CAP, 0,
                               [] { return ""; });
       return;
     }
 
     addCapabilityRelocation(&plt, *target->cheriCapRel, &gotPlt,
-                            sym.getGotPltOffset(), R_ABS_CAP, 0, false,
+                            sym.getGotPltOffset(), R_ABS_CAP, 0,
                             [] { return ""; });
   }
 
@@ -1177,7 +1177,7 @@ void RelocationScanner::processAux(RelExpr expr, RelType type, uint64_t offset,
       return;
     }
     addCapabilityRelocation(&sym, type, sec, offset, expr, addend,
-                            /* isCallExpr=*/false, getRelocTargetLocation);
+                            getRelocTargetLocation);
     // TODO: check if it is a call and needs a plt stub
     return;
   }

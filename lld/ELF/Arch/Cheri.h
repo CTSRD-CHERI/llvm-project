@@ -303,7 +303,7 @@ inline void readOnlyCapRelocsError(Symbol &sym, const Twine &sourceMsg) {
 void addCapabilityRelocation(
     llvm::PointerUnion<Symbol *, InputSectionBase *> target, RelType type,
     InputSectionBase *sec, uint64_t offset, RelExpr expr, int64_t addend,
-    bool isCallExpr, llvm::function_ref<std::string()> referencedBy,
+    llvm::function_ref<std::string()> referencedBy,
     RelocationBaseSection *dynRelSec = nullptr);
 
 void addNullDerivedCapability(Symbol &sym, InputSectionBase &sec,
