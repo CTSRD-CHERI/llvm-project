@@ -679,19 +679,15 @@ uint64_t MipsCheriCapTableSection::assignIndices(uint64_t startIndex,
     // All capability call relocations should end up in the pltrel section
     // rather than the normal relocation section to make processing of PLT
     // relocations in RTLD more efficient.
-    RelocationBaseSection *dynRelSec =
-        it.second.usedInCallExpr ? in.relaPlt.get() : mainPart->relaDyn.get();
-    if (!targetSym->isPreemptible && targetSym->isUndefWeak())
+    RelocationBaseSection &dynRelSec =
+        it.second.usedInCallExpr ? *in.relaPlt : *mainPart->relaDyn;
+    if (targetSym->isPreemptible)
+      dynRelSec.addSymbolReloc(elfCapabilityReloc, *this, off, *targetSym);
+    else if (targetSym->isUndefWeak())
       addNullDerivedCapability(*targetSym, *this, off, 0);
     else
-      addCapabilityRelocation(
-          targetSym, elfCapabilityReloc, this, off, R_ABS_CAP, 0,
-          [&]() {
-            return ("\n>>> referenced by " + refName + "\n>>> first used in " +
-                    it.second.firstUse->verboseToString())
-                .str();
-          },
-          dynRelSec);
+      addRelativeCapabilityRelocation(*this, off, targetSym, 0, R_ABS_CAP,
+                                      elfCapabilityReloc);
   }
   assert(assignedSmallIndexes + assignedLargeIndexes == entries.size());
   return assignedSmallIndexes + assignedLargeIndexes;
