@@ -126,7 +126,7 @@
 
 // no need for trampolines in static executable
 // RUN: ld.lld %t.o %t2.o -o %t-static.exe --verbose-cap-relocs 2>&1 | FileCheck %s --allow-empty --check-prefix STATIC-MESSAGE
-// STATIC-MESSAGE-NOT: Using trampoline for function pointer
+// STATIC-MESSAGE-NOT: Forcing symbolic relocation for non-preemptible trampoline-using function pointer
 
 // RUN: llvm-readobj --dyn-symbols --dyn-relocations --cap-relocs --cap-table %t-static.exe | FileCheck %s --check-prefix STATIC
 // STATIC-LABEL: Dynamic Relocations {
