@@ -1166,7 +1166,6 @@ void RelocationScanner::processAux(RelExpr expr, RelType type, uint64_t offset,
   bool canWrite = (sec->flags & SHF_WRITE) ||
                   !(config->zText ||
                     (isa<EhInputSection>(sec) && config->emachine != EM_MIPS));
-
   if (canWrite) {
     RelType rel = target->getDynRel(type);
     if (oneof<R_GOT, R_LOONGARCH_GOT>(expr) ||
