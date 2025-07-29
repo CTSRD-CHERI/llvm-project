@@ -1028,10 +1028,20 @@ void addRelativeCapabilityRelocation(
     RelExpr expr, RelType type) {
   Symbol *sym = dyn_cast<Symbol *>(symOrSec);
   assert(expr == R_ABS_CAP);
-  if (sym) {
-    assert(!needsCheriMipsTrampoline(type, *sym));
-    assert(!sym->isPreemptible);
+  if (sym && needsCheriMipsTrampoline(type, *sym)) {
+    if (config->verboseCapRelocs)
+      message("Forcing symbolic relocation for non-preemptible "
+              "trampoline-using function pointer against " +
+              verboseToString(sym));
+
+    sym = &getCheriMipsTrampolineSym(type, *sym);
+    mainPart->relaDyn->addSymbolReloc(type, isec, offsetInSec, *sym, addend,
+                                      type);
+    return;
   }
+  assert(!sym || !sym->isPreemptible);
+  //assert(!config->useRelativeElfCheriRelocs &&
+  //       "relative ELF capability relocations not currently implemented");
 
   if (config->useRelativeElfCheriRelocs) {
     assert(!sym->isPreemptible && "Must not be a preemptible symbol");
@@ -1061,22 +1071,13 @@ void addCapabilityRelocation(
   if (sym)
     assert(sym->isPreemptible || !sym->isUndefWeak());
 
-  bool needTrampoline = sym && needsCheriMipsTrampoline(type, *sym);
-
   // Emit either the legacy __cap_relocs section or a R_*_CHERI_CAPABILITY
   // reloc
   // For local symbols we can also emit the untagged capability bits and
   // instruct csu/rtld to run CBuildCap
-  if ((!sym || !sym->isPreemptible) && !needTrampoline) {
+  if (!sym || !sym->isPreemptible) {
     addRelativeCapabilityRelocation(*sec, offset, symOrSec, addend, expr, type);
     return;
-  }
-
-  if (needTrampoline) {
-    if (config->verboseCapRelocs)
-      message("Using trampoline for function pointer against " +
-              verboseToString(sym));
-    sym = &getCheriMipsTrampolineSym(type, *sym);
   }
 
   if (!dynRelSec)
