@@ -171,6 +171,7 @@ private:
 class MipsCheriCapTableSection : public SyntheticSection {
 public:
   MipsCheriCapTableSection();
+  void addConstant(const Relocation &r) { addReloc(r); }
   // InputFile and Offset is needed in order to implement per-file/per-function
   // tables
   void addEntry(Symbol &sym, RelExpr expr, InputSectionBase *isec,
