@@ -470,7 +470,6 @@ private:
   int64_t computeMipsAddend(const RelTy &rel, RelExpr expr, bool isLocal) const;
   bool isStaticLinkTimeConstant(RelExpr e, RelType type, const Symbol &sym,
                                 uint64_t relOff) const;
-  template <typename ELFT>
   void processAux(RelExpr expr, RelType type, uint64_t offset, Symbol &sym,
                   int64_t addend) const;
   template <class ELFT, class RelTy> void scanOne(RelTy *&i);
@@ -1070,7 +1069,6 @@ bool RelocationScanner::isStaticLinkTimeConstant(RelExpr e, RelType type,
 // sections. Given that it is ro, we will need an extra PT_LOAD. This
 // complicates things for the dynamic linker and means we would have to reserve
 // space for the extra PT_LOAD even if we end up not using it.
-template <typename ELFT>
 void RelocationScanner::processAux(RelExpr expr, RelType type, uint64_t offset,
                                    Symbol &sym, int64_t addend) const {
   // If non-ifunc non-preemptible, change PLT to direct call and optimize GOT
@@ -1537,7 +1535,7 @@ template <class ELFT, class RelTy> void RelocationScanner::scanOne(RelTy *&i) {
     }
   }
 
-  processAux<ELFT>(expr, type, offset, sym, addend);
+  processAux(expr, type, offset, sym, addend);
 }
 
 // R_PPC64_TLSGD/R_PPC64_TLSLD is required to mark `bl __tls_get_addr` for
