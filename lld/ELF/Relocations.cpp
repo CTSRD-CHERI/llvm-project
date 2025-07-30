@@ -1150,7 +1150,12 @@ void RelocationScanner::processAux(RelExpr expr, RelType type, uint64_t offset,
   } else if (needsPlt(expr)) {
     sym.setFlags(sec->compartment, NEEDS_PLT);
   } else if (LLVM_UNLIKELY(isIfunc)) {
-    sym.setFlags(sec->compartment, HAS_DIRECT_RELOC);
+    // Direct references to non-preemptible ifuncs should reference the IPLT
+    // stub in the compartment containing the resolver, not the calling
+    // compartment.
+    auto symCompart = sym.containingCompartment();
+    assert(symCompart && "ifunc not contained in a compartment");
+    sym.setFlags(*symCompart, HAS_DIRECT_RELOC);
   }
 
   // If the relocation is known to be a link-time constant, we know no dynamic
