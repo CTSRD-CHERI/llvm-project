@@ -2149,9 +2149,23 @@ printELFCapRelocations(const ELFObjectFile<ELFT> *Obj) {
     uint64_t Perms =
         support::endian::read<TargetUint, ELFT::TargetEndianness, 1>(
                 entry + 4*sizeof(TargetUint));
-    bool isFunction = Perms & (UINT64_C(1) << ((sizeof(TargetUint) * 8) - 1));
-    bool isConstant = Perms & (UINT64_C(1) << ((sizeof(TargetUint) * 8) - 2));
-    //Perms &= 0xffffffff;
+    const uint64_t Function = UINT64_C(1) << ((sizeof(TargetUint) * 8) - 1);
+    const uint64_t Constant = UINT64_C(1) << ((sizeof(TargetUint) * 8) - 2);
+    StringRef PermStr;
+    switch (Perms) {
+    case 0:
+      PermStr = "";
+      break;
+    case Constant:
+      PermStr = " (Constant)";
+      break;
+    case Function:
+      PermStr = " (Function)";
+      break;
+    default:
+      PermStr = " (Unknown)";
+      break;
+    }
     StringRef Symbol = "<Unnamed symbol>";
     if (SymbolNames.find(Base) != SymbolNames.end())
       Symbol = SymbolNames[Base];
@@ -2160,8 +2174,7 @@ printELFCapRelocations(const ELFObjectFile<ELFT> *Obj) {
            << ")\tOffset: " << format(AddrFmt.data(), Offset)
            << "\tLength: " << format(AddrFmt.data(), Length)
            << "\tPermissions: " << format(PermsFmt.data(), Perms)
-           << (isFunction ? " (Function)\n"
-                          : (isConstant ? " (Constant)\n" : "\n"));
+           << PermStr << "\n";
   }
   outs() << "\n";
 }
