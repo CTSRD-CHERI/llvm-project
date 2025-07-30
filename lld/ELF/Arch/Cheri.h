@@ -305,10 +305,6 @@ void addRelativeCapabilityRelocation(
     InputSectionBase &isec, uint64_t offsetInSec,
     llvm::PointerUnion<Symbol *, InputSectionBase *> symOrSec, int64_t addend,
     RelExpr expr, RelType type);
-
-void addSymbolCapabilityRelocation(RelType dynType, RelocationBaseSection &rel,
-                                   InputSectionBase &isec, uint64_t offsetInSec,
-                                   Symbol &sym, int64_t addend = 0);
 } // namespace elf
 } // namespace lld
 
