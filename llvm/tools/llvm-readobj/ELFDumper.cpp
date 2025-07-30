@@ -3607,7 +3607,7 @@ template <class ELFT> void ELFDumper<ELFT>::printCheriCapRelocs() {
     case Function | Indirect:
       PermStr = "GNU Indirect Function";
       break;
-    case DontSeal:
+    case Function | DontSeal:
       PermStr = "Function(Unsealed)";
       break;
     default:
