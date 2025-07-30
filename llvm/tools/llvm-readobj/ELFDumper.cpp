@@ -3589,13 +3589,27 @@ template <class ELFT> void ELFDumper<ELFT>::printCheriCapRelocs() {
     uint64_t Perms =
         support::endian::read<TargetUint, ELFT::TargetEndianness, 1>(
                 entry + 4*sizeof(TargetUint));
-    bool isFunction = Perms & (UINT64_C(1) << ((sizeof(TargetUint) * 8) - 1));
-    bool isReadOnly = Perms & (UINT64_C(1) << ((sizeof(TargetUint) * 8) - 2));
-    bool isDontSeal = Perms & (UINT64_C(1) << ((sizeof(TargetUint) * 8) - 3));
-    const char *PermStr = isFunction
-                              ? (isDontSeal ? "Function(Unsealed)" : "Function")
-                              : (isReadOnly ? "Constant" : "Object");
-    // Perms &= 0xffffffff;
+    const uint64_t Function = UINT64_C(1) << ((sizeof(TargetUint) * 8) - 1);
+    const uint64_t Constant = UINT64_C(1) << ((sizeof(TargetUint) * 8) - 2);
+    const uint64_t DontSeal = UINT64_C(1) << ((sizeof(TargetUint) * 8) - 3);
+    StringRef PermStr;
+    switch (Perms) {
+    case 0:
+      PermStr = "Object";
+      break;
+    case Constant:
+      PermStr = "Constant";
+      break;
+    case Function:
+      PermStr = "Function";
+      break;
+    case DontSeal:
+      PermStr = "Function(Unsealed)";
+      break;
+    default:
+      PermStr = "Unknown";
+      break;
+    }
     std::string BaseSymbol;
     if (Base == 0) {
       // Base is 0 -> either it is really NULL or (more likely) there is a

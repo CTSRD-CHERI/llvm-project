@@ -460,7 +460,8 @@ void CheriCapRelocsSection::writeToImpl(uint8_t *buf) {
     if (isFunc) {
       if (dontSeal)
         permissions |= CaptablePermissions<ELFT>::dontSeal;
-      permissions |= CaptablePermissions<ELFT>::function;
+      else
+        permissions |= CaptablePermissions<ELFT>::function;
     } else if (os) {
       assert(!isTls);
       // if ((OS->getPhdrFlags() & PF_W) == 0) {
