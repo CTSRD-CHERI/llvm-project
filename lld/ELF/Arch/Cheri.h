@@ -309,9 +309,6 @@ void addRelativeCapabilityRelocation(
 void addSymbolCapabilityRelocation(RelType dynType, RelocationBaseSection &rel,
                                    InputSectionBase &isec, uint64_t offsetInSec,
                                    Symbol &sym, int64_t addend = 0);
-
-void addNullDerivedCapability(Symbol &sym, InputSectionBase &sec,
-                              uint64_t offset, int64_t addend);
 } // namespace elf
 } // namespace lld
 

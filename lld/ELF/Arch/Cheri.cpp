@@ -684,7 +684,7 @@ uint64_t MipsCheriCapTableSection::assignIndices(uint64_t startIndex,
     if (targetSym->isPreemptible)
       dynRelSec.addSymbolReloc(elfCapabilityReloc, *this, off, *targetSym);
     else if (targetSym->isUndefWeak())
-      addNullDerivedCapability(*targetSym, *this, off, 0);
+      addConstant({R_ABS_CAP, elfCapabilityReloc, off, 0, targetSym});
     else
       addRelativeCapabilityRelocation(*this, off, targetSym, 0, R_ABS_CAP,
                                       elfCapabilityReloc);
@@ -939,28 +939,6 @@ void addRelativeCapabilityRelocation(
   assert(!config->useRelativeElfCheriRelocs &&
          "relative ELF capability relocations not currently implemented");
   in.capRelocs->addCapReloc({&isec, offsetInSec}, {symOrSec, 0u}, addend);
-}
-
-void addNullDerivedCapability(Symbol &sym, InputSectionBase &sec,
-                              uint64_t offset, int64_t addend) {
-  // Only non-preemptible undef weak symbols are link-time constants
-  assert(!sym.isPreemptible && sym.isUndefWeak());
-  if (config->isLE) {
-    sec.addReloc({R_ABS, target->symbolicRel, offset, addend, &sym});
-    sec.addReloc(
-        {R_ADDEND, target->symbolicRel, offset + config->wordsize, 0, &sym});
-  } else {
-    sec.addReloc({R_ADDEND, target->symbolicRel, offset, 0, &sym});
-    sec.addReloc(
-        {R_ABS, target->symbolicRel, offset + config->wordsize, addend, &sym});
-  }
-  // Handle deprecated CHERI-256
-  if (target->getCapabilitySize() == config->wordsize * 4) {
-    sec.addReloc({R_ADDEND, target->symbolicRel, offset + 2 * config->wordsize,
-                  0, &sym});
-    sec.addReloc({R_ADDEND, target->symbolicRel, offset + 3 * config->wordsize,
-                  0, &sym});
-  }
 }
 
 } // namespace elf

@@ -947,9 +947,8 @@ static void addGotEntry(Symbol &sym) {
   // Otherwise, the value is either a link-time constant or the load base
   // plus a constant. For CHERI it always requires run-time initialisation,
   // with the exception of undef weak symbols.
-  if (config->isCheriAbi && sym.isUndefWeak())
-    addNullDerivedCapability(sym, *in.got, off, 0);
-  else if (!config->isCheriAbi && (!config->isPic || isAbsolute(sym)))
+  if ((config->isCheriAbi && sym.isUndefWeak()) ||
+      (!config->isCheriAbi && (!config->isPic || isAbsolute(sym))))
     in.got->addConstant({expr, type, off, 0, &sym});
   else
     addRelativeReloc(*in.got, off, sym, 0, expr, type);
@@ -1151,10 +1150,7 @@ void RelocationScanner::processAux(RelExpr expr, RelType type, uint64_t offset,
   // handling of GOT-generating relocations.
   if (isStaticLinkTimeConstant(expr, type, sym, offset) ||
       (!config->isPic && sym.isUndefWeak())) {
-    if (expr == R_ABS_CAP)
-      addNullDerivedCapability(sym, *sec, offset, addend);
-    else
-      sec->addReloc({expr, type, offset, addend, &sym});
+    sec->addReloc({expr, type, offset, addend, &sym});
     return;
   }
 

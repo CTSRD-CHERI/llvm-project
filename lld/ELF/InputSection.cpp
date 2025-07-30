@@ -863,6 +863,12 @@ uint64_t InputSectionBase::getRelocTargetVA(const InputFile *file, RelType type,
     return in.got->getTlsIndexVA() + a - p;
   case R_ABS_CAP:
     llvm_unreachable("R_ABS_CAP should not be handled here!");
+  case R_ABS_CAP_ADDR:
+    return sym.getVA(a);
+  case R_ABS_CAP_META:
+    assert(sym.isUndefined() &&
+           "cannot encode non-null derived capability yet");
+    return 0;
   case R_MIPS_CHERI_CAPTAB_INDEX:
   case R_MIPS_CHERI_CAPTAB_INDEX_SMALL_IMMEDIATE:
   case R_MIPS_CHERI_CAPTAB_INDEX_CALL:
@@ -888,6 +894,29 @@ uint64_t InputSectionBase::getRelocTargetVA(const InputFile *file, RelType type,
   default:
     llvm_unreachable("invalid expression");
   }
+}
+
+void InputSectionBase::addRelocCap(const Relocation &r) {
+  assert(r.expr == R_ABS_CAP);
+
+  RelExpr exprLo = R_ABS_CAP_ADDR, exprHi = R_ABS_CAP_META;
+  if (!config->isLE)
+    std::swap(exprLo, exprHi);
+
+  addReloc({exprLo, r.type, r.offset, r.addend, r.sym});
+  addReloc({exprHi, r.type, r.offset + config->wordsize, r.addend, r.sym});
+
+  // Handle deprecated CHERI-256
+  if (config->capabilitySize == config->wordsize * 4) {
+    assert(r.sym->isUndefined() &&
+           "can encode only null-derived capabilities for CHERI-256");
+    addReloc({R_ABS_CAP_META, r.type, r.offset + 2 * config->wordsize,
+              r.addend, r.sym});
+    addReloc({R_ABS_CAP_META, r.type, r.offset + 3 * config->wordsize,
+              r.addend, r.sym});
+  } else
+    assert(config->capabilitySize == config->wordsize * 2);
+
 }
 
 // This function applies relocations to sections without SHF_ALLOC bit.
