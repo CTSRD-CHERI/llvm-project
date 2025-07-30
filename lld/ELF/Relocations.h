@@ -31,6 +31,8 @@ using JumpModType = uint32_t;
 enum RelExpr {
   R_ABS,
   R_ABS_CAP,
+  R_ABS_CAP_ADDR,
+  R_ABS_CAP_META,
   R_ADDEND,
   R_DTPREL,
   R_GOT,
