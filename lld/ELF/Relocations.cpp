@@ -1712,7 +1712,10 @@ static bool handleNonPreemptibleIfunc(Symbol &sym, uint16_t flags) {
     auto &d = cast<Defined>(sym);
     d.section = in.iplt.get();
     d.value = d.getPltIdx() * target->ipltEntrySize;
-    d.setSize(0);
+    if (config->isCheriAbi)
+      d.setSize(target->ipltEntrySize);
+    else
+      d.setSize(0);
     // It's important to set the symbol type here so that dynamic loaders
     // don't try to call the PLT as if it were an ifunc resolver.
     d.type = STT_FUNC;
