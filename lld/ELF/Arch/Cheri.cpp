@@ -400,7 +400,7 @@ struct CaptablePermissions {
   static const uint64_t readOnly =
       UINT64_C(1) << ((sizeof(typename ELFT::uint) * 8) - 2);
   static const uint64_t dontSeal =
-      UINT64_C(1) << ((sizeof(typename ELFT::uint) * 8) - 3);
+      UINT64_C(1) << ((sizeof(typename ELFT::uint) * 8) - 4);
 };
 
 template <class ELFT>
