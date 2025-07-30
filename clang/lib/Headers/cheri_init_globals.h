@@ -39,6 +39,7 @@ extern "C" {
 #define CHERI_INIT_GLOBALS_VERSION 5
 #define CHERI_INIT_GLOBALS_NUM_ARGS 7
 #define CHERI_INIT_GLOBALS_SUPPORTS_CONSTANT_FLAG 1
+#define CHERI_INIT_GLOBALS_SUPPORTS_INDIRECT_FLAG 1
 
 struct capreloc {
   __SIZE_TYPE__ capability_location;
@@ -51,6 +52,8 @@ static const __SIZE_TYPE__ function_reloc_flag = (__SIZE_TYPE__)1
                                                  << (__SIZE_WIDTH__ - 1);
 static const __SIZE_TYPE__ constant_reloc_flag = (__SIZE_TYPE__)1
                                                  << (__SIZE_WIDTH__ - 2);
+static const __SIZE_TYPE__ indirect_reloc_flag = (__SIZE_TYPE__)1
+                                                 << (__SIZE_WIDTH__ - 3);
 #if defined(__riscv_xcheri) || defined(__mips__)
 static const __SIZE_TYPE__ function_pointer_permissions_mask =
     ~(__SIZE_TYPE__)(__CHERI_CAP_PERMISSION_PERMIT_SEAL__ |
@@ -184,6 +187,18 @@ cheri_init_globals_impl(const struct capreloc *start_relocs,
             data_cap, reloc->capability_location + base_addr);
     const void *__capability base_cap;
     bool can_set_bounds = true;
+    if (reloc->permissions == (function_reloc_flag | indirect_reloc_flag)) {
+        /*
+         * IRELATIVE-like caprelocs require deferred processing, with a
+         * target-specific set of parameters. Trap if the caller doesn't
+         * support that, as we can't do anything here, otherwise skip.
+         */
+#ifdef CHERI_INIT_GLOBALS_ALLOW_IFUNCS
+        continue;
+#else
+        __builtin_trap();
+#endif
+    }
     if (reloc->permissions == function_reloc_flag) {
       base_cap = code_cap; /* code pointer */
       /* Do not set tight bounds for functions (unless we are in the plt ABI) */
