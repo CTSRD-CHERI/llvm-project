@@ -171,15 +171,16 @@ cheri_init_globals_impl(const struct capreloc *start_relocs,
             data_cap, reloc->capability_location + base_addr);
     const void *__capability base_cap;
     bool can_set_bounds = true;
-    if ((reloc->permissions & function_reloc_flag) == function_reloc_flag) {
+    if (reloc->permissions == function_reloc_flag) {
       base_cap = code_cap; /* code pointer */
       /* Do not set tight bounds for functions (unless we are in the plt ABI) */
       can_set_bounds = tight_code_bounds;
-    } else if ((reloc->permissions & constant_reloc_flag) ==
-               constant_reloc_flag) {
+    } else if (reloc->permissions == constant_reloc_flag) {
       base_cap = rodata_cap; /* read-only data pointer */
-    } else {
+    } else if (reloc->permissions == 0) {
       base_cap = data_cap; /* read-write data */
+    } else {
+      __builtin_trap(); /* unknown permissions */
     }
     const void *__capability src =
         cheri_address_or_offset_set(base_cap, reloc->object + base_addr);
