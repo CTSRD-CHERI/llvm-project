@@ -1316,7 +1316,7 @@ DEFINE_LIBUNWIND_FUNCTION(_ZN9libunwind15Registers_sparc6jumptoEv)
 
 .macro restore_gpr num, ctxreg
 #ifdef __CHERI_PURE_CAPABILITY__
-  clc   c\num, (__SIZEOF_CHERI_CAPABILITY__ * \num)(c\ctxreg)
+  lc    c\num, (__SIZEOF_CHERI_CAPABILITY__ * \num)(c\ctxreg)
 #else
   ILOAD x\num, (RISCV_ISIZE * \num)(\ctxreg)
 #endif
@@ -1338,7 +1338,7 @@ DEFINE_LIBUNWIND_FUNCTION(_ZN9libunwind15Registers_riscv6jumptoEv)
 
   // x0 is zero
 #ifdef __CHERI_PURE_CAPABILITY__
-  lc   c1, (__SIZEOF_CHERI_CAPABILITY__ * 0)(ca0) // restore pc into ra
+  lc       c1, (__SIZEOF_CHERI_CAPABILITY__ * 0)(ca0) // restore pc into ra
 #else
   ILOAD    x1, (RISCV_ISIZE * 0)(a0) // restore pc into ra
 #endif
@@ -1351,7 +1351,7 @@ DEFINE_LIBUNWIND_FUNCTION(_ZN9libunwind15Registers_riscv6jumptoEv)
   .endr
   restore_gpr 10, a0  // restore a0
 
-  ret           // jump to ra/cra
+  ret           // jump to ra
 END_LIBUNWIND_FUNCTION(_ZN9libunwind15Registers_riscv6jumptoEv)
 
 #elif defined(__s390x__)
