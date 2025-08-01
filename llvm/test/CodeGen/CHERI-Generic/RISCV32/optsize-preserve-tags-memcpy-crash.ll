@@ -103,18 +103,18 @@ define hidden void @optsize_preserve_tags_memmove(i8 addrspace(200)* %dst, i8 ad
 define hidden void @default_preserve_tags_memmove(i8 addrspace(200)* %dst, i8 addrspace(200)* %src) nounwind{
 ; CHECK-LABEL: default_preserve_tags_memmove:
 ; CHECK:       # %bb.0:
-; CHECK-NEXT:    lw a6, 24(ca1)
+; CHECK-NEXT:    lw a2, 24(ca1)
 ; CHECK-NEXT:    lc ca3, 0(ca1)
 ; CHECK-NEXT:    lh a4, 28(ca1)
 ; CHECK-NEXT:    lb a5, 30(ca1)
-; CHECK-NEXT:    lc ca2, 16(ca1)
+; CHECK-NEXT:    lc ca6, 16(ca1)
 ; CHECK-NEXT:    sc ca3, 0(ca0)
 ; CHECK-NEXT:    lc ca1, 8(ca1)
 ; CHECK-NEXT:    sc ca1, 8(ca0)
-; CHECK-NEXT:    sc ca2, 16(ca0)
+; CHECK-NEXT:    sc ca6, 16(ca0)
 ; CHECK-NEXT:    sb a5, 30(ca0)
 ; CHECK-NEXT:    sh a4, 28(ca0)
-; CHECK-NEXT:    sw a6, 24(ca0)
+; CHECK-NEXT:    sw a2, 24(ca0)
 ; CHECK-NEXT:    ret
   tail call void @llvm.memmove.p200i8.p200i8.i64(i8 addrspace(200)* noundef nonnull align 16 dereferenceable(31) %dst, i8 addrspace(200)* noundef nonnull align 16 dereferenceable(31) %src, i64 31, i1 false) must_preserve_cheri_tags
   ret void

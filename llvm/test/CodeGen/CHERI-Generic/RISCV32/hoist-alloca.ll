@@ -68,13 +68,13 @@ define void @hoist_alloca_uncond(i32 signext %cond) local_unnamed_addr addrspace
 ; CHECK-NEXT:    csetaddr csp, csp, a0
 ; CHECK-NEXT:    li s3, 100
 ; CHECK-NEXT:    cincoffset ca0, csp, 128
-; CHECK-NEXT:    csetbounds cs2, ca0, 512
+; CHECK-NEXT:    csetbounds cs1, ca0, 512
 ; CHECK-NEXT:    cincoffset ca0, csp, 40
-; CHECK-NEXT:    csetbounds cs1, ca0, 88
+; CHECK-NEXT:    csetbounds cs2, ca0, 88
 ; CHECK-NEXT:  .LBB0_1: # %for.body
 ; CHECK-NEXT:    # =>This Inner Loop Header: Depth=1
-; CHECK-NEXT:    cmove ca0, cs2
-; CHECK-NEXT:    cmove ca1, cs1
+; CHECK-NEXT:    cmove ca0, cs1
+; CHECK-NEXT:    cmove ca1, cs2
 ; CHECK-NEXT:    ccall call
 ; CHECK-NEXT:    addi s3, s3, -1
 ; CHECK-NEXT:    bnez s3, .LBB0_1

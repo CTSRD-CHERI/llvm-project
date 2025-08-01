@@ -43,8 +43,8 @@ define dso_local void @hoist_csetbounds(i32 signext %cond, ptr addrspace(200) %f
 ; CHECK-NEXT:    cincoffset ca0, ca1, 4
 ; CHECK-NEXT:    li s3, -1
 ; CHECK-NEXT:    li s4, 99
-; CHECK-NEXT:    csetbounds cs2, ca1, 4
-; CHECK-NEXT:    csetbounds cs1, ca0, 4
+; CHECK-NEXT:    csetbounds cs1, ca1, 4
+; CHECK-NEXT:    csetbounds cs2, ca0, 4
 ; CHECK-NEXT:    j .LBB0_2
 ; CHECK-NEXT:  .LBB0_1: # %for.inc
 ; CHECK-NEXT:    # in Loop: Header=BB0_2 Depth=1
@@ -55,8 +55,8 @@ define dso_local void @hoist_csetbounds(i32 signext %cond, ptr addrspace(200) %f
 ; CHECK-NEXT:    beqz s0, .LBB0_1
 ; CHECK-NEXT:  # %bb.3: # %if.then
 ; CHECK-NEXT:    # in Loop: Header=BB0_2 Depth=1
-; CHECK-NEXT:    cmove ca0, cs2
-; CHECK-NEXT:    cmove ca1, cs1
+; CHECK-NEXT:    cmove ca0, cs1
+; CHECK-NEXT:    cmove ca1, cs2
 ; CHECK-NEXT:    ccall call
 ; CHECK-NEXT:    j .LBB0_1
 ; CHECK-NEXT:  .LBB0_4: # %for.cond.cleanup
