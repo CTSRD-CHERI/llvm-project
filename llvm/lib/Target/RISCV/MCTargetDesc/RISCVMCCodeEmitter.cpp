@@ -240,14 +240,22 @@ void RISCVMCCodeEmitter::expandCIncOffsetTPRel(
          "Expected expression as third input to CTP-relative cincoffset");
 
   const RISCVMCExpr *Expr = dyn_cast<RISCVMCExpr>(SrcSymbol.getExpr());
-  assert(Expr && Expr->getKind() == RISCVMCExpr::VK_RISCV_TPREL_ADD &&
-         "Expected tprel_add relocation on CTP-relative symbol");
+  assert(Expr &&
+         (Expr->getKind() == RISCVMCExpr::VK_RISCV_TPREL_ADD ||
+          Expr->getKind() == RISCVMCExpr::VK_RISCV_TGOT_TPREL_ADD) &&
+         "Expected tprel_add/tgot_tprel_add relocation on CTP-relative "
+         "symbol");
 
-  // Emit the correct tprel_add relocation for the symbol.
-  Fixups.push_back(MCFixup::create(
-      0, Expr, MCFixupKind(RISCV::fixup_riscv_tprel_add), MI.getLoc()));
+  // Emit the correct tprel_add/tgot_tprel_add relocation for the symbol.
+  RISCV::Fixups FixupKind =
+      Expr->getKind() == RISCVMCExpr::VK_RISCV_TGOT_TPREL_ADD
+          ? RISCV::fixup_riscv_tgot_tprel_add
+          : RISCV::fixup_riscv_tprel_add;
+  Fixups.push_back(
+      MCFixup::create(0, Expr, MCFixupKind(FixupKind), MI.getLoc()));
 
-  // Emit fixup_riscv_relax for tprel_add where the relax feature is enabled.
+  // Emit fixup_riscv_relax for tprel_add/tgot_tprel_add where the relax
+  // feature is enabled.
   if (STI.getFeatureBits()[RISCV::FeatureRelax]) {
     const MCConstantExpr *Dummy = MCConstantExpr::create(0, Ctx);
     Fixups.push_back(MCFixup::create(
@@ -528,6 +536,28 @@ unsigned RISCVMCCodeEmitter::getImmOpValue(const MCInst &MI, unsigned OpNo,
     case RISCVMCExpr::VK_RISCV_CALL_PLT:
       FixupKind = RISCV::fixup_riscv_call_plt;
       RelaxCandidate = true;
+      break;
+    case RISCVMCExpr::VK_RISCV_TGOT_TPREL_LO:
+      if (MIFrm == RISCVII::InstFormatI)
+        FixupKind = RISCV::fixup_riscv_tgot_tprel_lo12_i;
+      else
+        llvm_unreachable(
+            "VK_RISCV_TGOT_TPREL_LO used with unexpected instruction format");
+      RelaxCandidate = true;
+      break;
+    case RISCVMCExpr::VK_RISCV_TGOT_TPREL_HI:
+      FixupKind = RISCV::fixup_riscv_tgot_tprel_hi20;
+      RelaxCandidate = true;
+      break;
+    case RISCVMCExpr::VK_RISCV_TGOT_TPREL_ADD:
+      // See VK_RISCV_TPREL_ADD.
+      llvm_unreachable("VK_RISCV_TGOT_TPREL_ADD should not represent an "
+                       "instruction operand");
+    case RISCVMCExpr::VK_RISCV_TLS_TGOT_GOT_HI:
+      FixupKind = RISCV::fixup_riscv_tls_tgot_got_hi20;
+      break;
+    case RISCVMCExpr::VK_RISCV_TLS_TGOT_GD_HI:
+      FixupKind = RISCV::fixup_riscv_tls_tgot_gd_hi20;
       break;
     }
   } else if (Kind == MCExpr::SymbolRef &&

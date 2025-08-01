@@ -37,6 +37,7 @@ public:
   enum PSVKind : unsigned {
     Stack,
     GOT,
+    TGOT,
     CapTable,
     JumpTable,
     ConstantPool,
@@ -68,6 +69,7 @@ public:
 
   bool isStack() const { return Kind == Stack; }
   bool isGOT() const { return Kind == GOT; }
+  bool isTGOT() const { return Kind == TGOT; }
   bool isCapTable() const { return Kind == CapTable; }
   bool isConstantPool() const { return Kind == ConstantPool; }
   bool isJumpTable() const { return Kind == JumpTable; }
@@ -156,7 +158,8 @@ public:
 /// Manages creation of pseudo source values.
 class PseudoSourceValueManager {
   const TargetMachine &TM;
-  const PseudoSourceValue StackPSV, GOTPSV, CapTablePSV, JumpTablePSV, ConstantPoolPSV;
+  const PseudoSourceValue StackPSV, GOTPSV, TGOTPSV, CapTablePSV, JumpTablePSV,
+      ConstantPoolPSV;
   std::map<int, std::unique_ptr<FixedStackPseudoSourceValue>> FSValues;
   StringMap<std::unique_ptr<const ExternalSymbolPseudoSourceValue>>
       ExternalCallEntries;
@@ -174,6 +177,10 @@ public:
   /// Return a pseudo source value referencing the global offset table
   /// (or something the like).
   const PseudoSourceValue *getGOT();
+
+  /// Return a pseudo source value referencing the thread global offset table
+  /// (or something the like).
+  const PseudoSourceValue *getTGOT();
 
   /// Return a pseudo source value referencing the global capability table
   /// (or something the like).

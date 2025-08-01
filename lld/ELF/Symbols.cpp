@@ -266,6 +266,14 @@ uint64_t Symbol::getPltVA() const {
   return outVA;
 }
 
+uint64_t Symbol::getTgotVA() const {
+  return in.tgot->getVA() + getTgotOffset();
+}
+
+uint64_t Symbol::getTgotOffset() const {
+  return getTgotIdx() * target->gotEntrySize;
+}
+
 uint64_t Symbol::getMipsCheriCapTableVA(const InputSectionBase *isec,
                                         uint64_t offset) const {
   return ElfSym::mipsCheriCapabilityTable->getVA() +

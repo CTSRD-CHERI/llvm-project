@@ -108,11 +108,20 @@ public:
   void addEntry(Symbol &sym);
   bool addTlsDescEntry(Symbol &sym);
   bool addDynTlsEntry(Symbol &sym);
+  void addTgotEntry(Symbol &sym);
+  void addTgotTlsDescEntry(Symbol &sym);
+  bool addTgotDynTlsEntry(Symbol &sym);
   bool addTlsIndex();
   uint32_t getTlsDescOffset(const Symbol &sym) const;
   uint64_t getTlsDescAddr(const Symbol &sym) const;
   uint64_t getGlobalDynAddr(const Symbol &b) const;
   uint64_t getGlobalDynOffset(const Symbol &b) const;
+  uint64_t getTgotAddr(const Symbol &b) const;
+  uint64_t getTgotOffset(const Symbol &b) const;
+  uint64_t getTgotTlsDescAddr(const Symbol &b) const;
+  uint64_t getTgotTlsDescOffset(const Symbol &b) const;
+  uint64_t getTgotGlobalDynAddr(const Symbol &b) const;
+  uint64_t getTgotGlobalDynOffset(const Symbol &b) const;
 
   uint64_t getTlsIndexVA() { return this->getVA() + tlsIndexOff; }
   uint32_t getTlsIndexOff() const { return tlsIndexOff; }
@@ -374,6 +383,19 @@ private:
 class IgotPltSection final : public SyntheticSection {
 public:
   IgotPltSection();
+  void addEntry(Symbol &sym);
+  size_t getSize() const override;
+  void writeTo(uint8_t *buf) override;
+  bool isNeeded() const override { return !entries.empty(); }
+
+private:
+  SmallVector<const Symbol *, 0> entries;
+};
+
+class TgotSection final : public SyntheticSection {
+public:
+  TgotSection();
+  void addConstant(const Relocation &r);
   void addEntry(Symbol &sym);
   size_t getSize() const override;
   void writeTo(uint8_t *buf) override;
@@ -1312,8 +1334,10 @@ struct InStruct {
   std::unique_ptr<GotSection> got;
   std::unique_ptr<GotPltSection> gotPlt;
   std::unique_ptr<IgotPltSection> igotPlt;
+  std::unique_ptr<TgotSection> tgot;
   std::unique_ptr<MipsCheriCapTableSection> mipsCheriCapTable;
   std::unique_ptr<CheriCapRelocsSection> capRelocs;
+  std::unique_ptr<CheriCapRelocsSection> tgotCapRelocs;
   // For per-file/per-function tables:
   std::unique_ptr<MipsCheriCapTableMappingSection> mipsCheriCapTableMapping;
   std::unique_ptr<SyntheticSection> armCmseSGSection;
@@ -1331,6 +1355,7 @@ struct InStruct {
   std::unique_ptr<IBTPltSection> ibtPlt;
   std::unique_ptr<RelocationBaseSection> relaPlt;
   std::unique_ptr<RelocationBaseSection> relaIplt;
+  std::unique_ptr<RelocationBaseSection> relaTgot;
   std::unique_ptr<StringTableSection> shStrTab;
   std::unique_ptr<StringTableSection> strTab;
   std::unique_ptr<SymbolTableBaseSection> symTab;

@@ -21,6 +21,10 @@ def SDT_RISCVCheriBoolBinary : SDTypeProfile<1, 2, [
   SDTCisInt<0>, SDTCisVT<1, CLenVT>, SDTCisVT<2, CLenVT>
 ]>;
 
+def SDT_RISCVLoadTGOT : SDTypeProfile<1, 2, [
+  SDTCisPtrTy<0>, SDTCisSameAs<0, 1>, SDTCisInt<2>
+]>;
+
 // Target-dependent nodes.
 def riscv_cap_call        : SDNode<"RISCVISD::CAP_CALL", SDT_RISCVCapCall,
                                    [SDNPHasChain, SDNPOptInGlue, SDNPOutGlue,
@@ -42,6 +46,8 @@ def riscv_clgc            : SDNode<"RISCVISD::CLGC", SDT_RISCVSymLoad,
 def riscv_cla_tls_ie      : SDNode<"RISCVISD::CLA_TLS_IE", SDT_RISCVSymLoad,
                                    [SDNPHasChain, SDNPMayLoad, SDNPMemOperand]>;
 def riscv_clc_tls_gd      : SDNode<"RISCVISD::CLC_TLS_GD", SDT_RISCVSymLoad>;
+def riscv_load_tgot       : SDNode<"RISCVISD::LOAD_TGOT", SDT_RISCVLoadTGOT,
+                                   [SDNPHasChain, SDNPMayLoad, SDNPMemOperand]>;
 
 //===----------------------------------------------------------------------===//
 // Operand and SDNode transformation definitions.
@@ -1216,6 +1222,20 @@ def PseudoCIncOffsetTPRel : Pseudo<(outs GPCR:$rd),
                                    (ins GPCR:$rs1, GPR:$rs2,
                                         tprel_add_symbol:$src), [],
                                    "cincoffset", "$rd, $rs1, $rs2, $src">;
+}
+
+let Predicates = [HasCheri, IsCapMode, IsRV32] in {
+def : Pat<(riscv_load_tgot GPCR:$base, (XLenVT 0)),
+          (CLC_64 GPCR:$base, 0)>;
+def : Pat<(riscv_load_tgot GPCR:$base, tglobaltlsaddr:$lo),
+          (CLC_64 GPCR:$base, tglobaltlsaddr:$lo)>;
+}
+
+let Predicates = [HasCheri, IsCapMode, IsRV64] in {
+def : Pat<(riscv_load_tgot GPCR:$base, (XLenVT 0)),
+          (CLC_128 GPCR:$base, 0)>;
+def : Pat<(riscv_load_tgot GPCR:$base, tglobaltlsaddr:$lo),
+          (CLC_128 GPCR:$base, tglobaltlsaddr:$lo)>;
 }
 
 let Predicates = [HasCheri, HasStdExtD, IsRV32] in {

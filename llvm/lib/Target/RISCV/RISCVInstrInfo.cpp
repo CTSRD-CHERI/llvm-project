@@ -2172,7 +2172,12 @@ RISCVInstrInfo::getSerializableDirectMachineOperandTargetFlags() const {
       {MO_TPREL_HI, "riscv-tprel-hi"},
       {MO_TPREL_ADD, "riscv-tprel-add"},
       {MO_TLS_GOT_HI, "riscv-tls-got-hi"},
-      {MO_TLS_GD_HI, "riscv-tls-gd-hi"}};
+      {MO_TLS_GD_HI, "riscv-tls-gd-hi"},
+      {MO_TGOT_TPREL_LO, "riscv-tgot-tprel-lo"},
+      {MO_TGOT_TPREL_HI, "riscv-tgot-tprel-hi"},
+      {MO_TGOT_TPREL_ADD, "riscv-tgot-tprel-add"},
+      {MO_TLS_TGOT_GOT_HI, "riscv-tgot-tls-got-hi"},
+      {MO_TLS_TGOT_GD_HI, "riscv-tgot-tls-gd-hi"}};
   return ArrayRef(TargetFlags);
 }
 

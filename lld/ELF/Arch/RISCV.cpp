@@ -112,6 +112,8 @@ RISCV::RISCV() {
   relativeRel = R_RISCV_RELATIVE;
   iRelativeRel = R_RISCV_IRELATIVE;
   cheriCapRel = R_RISCV_CHERI_CAPABILITY;
+  tgotRel = R_RISCV_CHERI_TLS_TGOT_SLOT;
+  tgotGotRel = R_RISCV_CHERI_TLS_TGOTREL;
   if (config->is64) {
     symbolicRel = R_RISCV_64;
     tlsModuleIndexRel = R_RISCV_TLS_DTPMOD64;
@@ -350,10 +352,18 @@ RelExpr RISCV::getRelExpr(const RelType type, const Symbol &s,
     return R_RELAX_HINT;
   case R_RISCV_TPREL_ADD:
   case R_RISCV_CHERI_TPREL_CINCOFFSET:
+  case R_RISCV_CHERI_TLS_TGOT_ADD:
   case R_RISCV_RELAX:
     return config->relax ? R_RELAX_HINT : R_NONE;
   case R_RISCV_CHERI_CAPABILITY:
     return R_ABS_CAP;
+  case R_RISCV_CHERI_TLS_TGOT_HI20:
+  case R_RISCV_CHERI_TLS_TGOT_LO12_I:
+    return R_TGOT_TP;
+  case R_RISCV_CHERI_TLS_TGOT_GOT_HI20:
+    return R_TGOT_GOT_PC;
+  case R_RISCV_CHERI_TLS_TGOT_GD_HI20:
+    return R_TGOT_TLSGD_PC;
   // TODO: Deprecate and eventually remove these
   case R_RISCV_CHERI_CAPTAB_PCREL_HI20:
     return R_GOT_PC;
@@ -473,6 +483,9 @@ void RISCV::relocate(uint8_t *loc, const Relocation &rel, uint64_t val) const {
   case R_RISCV_CHERI_CAPTAB_PCREL_HI20:
   case R_RISCV_CHERI_TLS_IE_CAPTAB_PCREL_HI20:
   case R_RISCV_CHERI_TLS_GD_CAPTAB_PCREL_HI20:
+  case R_RISCV_CHERI_TLS_TGOT_GOT_HI20:
+  case R_RISCV_CHERI_TLS_TGOT_GD_HI20:
+  case R_RISCV_CHERI_TLS_TGOT_HI20:
   case R_RISCV_GOT_HI20:
   case R_RISCV_PCREL_HI20:
   case R_RISCV_TLS_GD_HI20:
@@ -485,6 +498,7 @@ void RISCV::relocate(uint8_t *loc, const Relocation &rel, uint64_t val) const {
     return;
   }
 
+  case R_RISCV_CHERI_TLS_TGOT_LO12_I:
   case R_RISCV_PCREL_LO12_I:
   case R_RISCV_TPREL_LO12_I:
   case R_RISCV_LO12_I: {
@@ -570,6 +584,13 @@ void RISCV::relocate(uint8_t *loc, const Relocation &rel, uint64_t val) const {
       write64le(loc, val);
     else
       write64le(loc, val - dtpOffset);
+    break;
+
+  case R_RISCV_CHERI_TLS_TGOTREL:
+    if (config->is64)
+      write64le(loc, val);
+    else
+      write32le(loc, val);
     break;
 
   case R_RISCV_RELAX:

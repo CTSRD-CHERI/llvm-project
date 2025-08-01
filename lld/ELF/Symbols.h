@@ -55,6 +55,10 @@ enum {
   NEEDS_TLSGD_TO_IE = 1 << 6,
   NEEDS_GOT_DTPREL = 1 << 7,
   NEEDS_TLSIE = 1 << 8,
+  NEEDS_TGOT = 1 << 9,
+  NEEDS_TGOT_GOT = 1 << 10,
+  NEEDS_TGOT_TLSGD = 1 << 11,
+  NEEDS_TGOT_TLSDESC = 1 << 12,
 };
 
 // Some index properties of a symbol are stored separately in this auxiliary
@@ -64,6 +68,10 @@ struct SymbolAux {
   uint32_t pltIdx = -1;
   uint32_t tlsDescIdx = -1;
   uint32_t tlsGdIdx = -1;
+  uint32_t tgotIdx = -1;
+  uint32_t tgotTlsDescIdx = -1;
+  uint32_t tgotTlsGdIdx = -1;
+  uint32_t tgotGotIdx = -1;
 };
 
 LLVM_LIBRARY_VISIBILITY extern SmallVector<SymbolAux, 0> symAux;
@@ -215,6 +223,10 @@ public:
   uint32_t getPltIdx() const { return symAux[auxIdx].pltIdx; }
   uint32_t getTlsDescIdx() const { return symAux[auxIdx].tlsDescIdx; }
   uint32_t getTlsGdIdx() const { return symAux[auxIdx].tlsGdIdx; }
+  uint32_t getTgotIdx() const { return symAux[auxIdx].tgotIdx; }
+  uint32_t getTgotGotIdx() const { return symAux[auxIdx].tgotGotIdx; }
+  uint32_t getTgotTlsDescIdx() const { return symAux[auxIdx].tgotTlsDescIdx; }
+  uint32_t getTgotTlsGdIdx() const { return symAux[auxIdx].tgotTlsGdIdx; }
 
   bool isInGot() const { return getGotIdx() != uint32_t(-1); }
   bool isInPlt() const { return getPltIdx() != uint32_t(-1); }
@@ -226,6 +238,8 @@ public:
   uint64_t getGotPltOffset() const;
   uint64_t getGotPltVA() const;
   uint64_t getPltVA() const;
+  uint64_t getTgotOffset() const;
+  uint64_t getTgotVA() const;
   uint64_t getMipsCheriCapTableVA(const InputSectionBase *isec,
                                   uint64_t offset) const;
   uint64_t getMipsCheriCapTableOffset(const InputSectionBase *isec,
@@ -335,7 +349,8 @@ public:
   bool needsDynReloc() const {
     return flags.load(std::memory_order_relaxed) &
            (NEEDS_COPY | NEEDS_GOT | NEEDS_PLT | NEEDS_TLSDESC | NEEDS_TLSGD |
-            NEEDS_TLSGD_TO_IE | NEEDS_GOT_DTPREL | NEEDS_TLSIE);
+            NEEDS_TLSGD_TO_IE | NEEDS_GOT_DTPREL | NEEDS_TLSIE | NEEDS_TGOT |
+            NEEDS_TGOT_GOT | NEEDS_TGOT_TLSGD | NEEDS_TGOT_TLSDESC);
   }
   void allocateAux() {
     assert(auxIdx == 0);

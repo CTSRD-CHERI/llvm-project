@@ -309,6 +309,8 @@ protected:
                            std::optional<StringRef> StrTable, bool IsDynamic,
                            bool NonVisibilityBitsUsed) const = 0;
 
+  void printCheriCapRelocsSection(const Elf_Shdr &Sec, bool IsTgot);
+
   virtual void printMipsABIFlags() = 0;
   virtual void printMipsGOT(const MipsGOTParser<ELFT> &Parser) = 0;
   virtual void printMipsPLT(const MipsGOTParser<ELFT> &Parser) = 0;
@@ -1473,6 +1475,8 @@ static StringRef segmentTypeToString(unsigned Arch, unsigned Type) {
     LLVM_READOBJ_ENUM_CASE(ELF, PT_OPENBSD_RANDOMIZE);
     LLVM_READOBJ_ENUM_CASE(ELF, PT_OPENBSD_WXNEEDED);
     LLVM_READOBJ_ENUM_CASE(ELF, PT_OPENBSD_BOOTDATA);
+
+    LLVM_READOBJ_ENUM_CASE(ELF, PT_CHERI_TGOT);
   default:
     return "";
   }
@@ -2459,6 +2463,7 @@ std::string ELFDumper<ELFT>::getDynamicEntry(uint64_t Type,
 
   switch (Type) {
   case DT_PLTREL:
+  case DT_CHERI_TGOTRELT:
     if (Value == DT_REL)
       return "REL";
     if (Value == DT_RELA)
@@ -2502,6 +2507,7 @@ std::string ELFDumper<ELFT>::getDynamicEntry(uint64_t Type,
   case DT_RELRENT:
   case DT_ANDROID_RELSZ:
   case DT_ANDROID_RELASZ:
+  case DT_CHERI_TGOTRELSZ:
     return std::to_string(Value) + " (bytes)";
   case DT_NEEDED:
   case DT_SONAME:
@@ -3338,25 +3344,22 @@ static int getMipsRegisterSize(uint8_t Flag) {
   }
 }
 
-template <class ELFT> void ELFDumper<ELFT>::printCheriCapRelocs() {
+template <class ELFT> void ELFDumper<ELFT>::printCheriCapRelocsSection(
+    const Elf_Shdr &Sec, bool IsTgot) {
   const ELFFile<ELFT> &Obj = ObjF.getELFFile();
-  const Elf_Shdr *Shdr = findSectionByName("__cap_relocs");
-  if (!Shdr) {
-    W.startLine() << "There is no __cap_relocs section in the file.\n";
-    return;
-  }
+  StringRef SecName = this->getPrintableSectionName(Sec);
   // TODO: get symbol name for __cap_reloc
   ArrayRef<uint8_t> Data =
-      unwrapOrError(ObjF.getFileName(), Obj.getSectionContents(*Shdr));
-  const uint64_t CapRelocsStartVaddr = Shdr->sh_addr;
-  const uint64_t CapRelocsEndVaddr = Shdr->sh_addr + Shdr->sh_size;
-  const size_t entry_size = ELFT::Is64Bits ? 40 : 20;
-  if (Data.size() % entry_size != 0) {
-    W.startLine() << "The __cap_relocs section has a wrong size: "
+      unwrapOrError(ObjF.getFileName(), Obj.getSectionContents(Sec));
+  const uint64_t CapRelocsStartVaddr = Sec.sh_addr;
+  const uint64_t CapRelocsEndVaddr = Sec.sh_addr + Sec.sh_size;
+  const size_t EntrySize = ELFT::Is64Bits ? 40 : 20;
+  if (Data.size() % EntrySize != 0) {
+    W.startLine() << "The " << SecName << " section has a wrong size: "
                   << Data.size() << "\n";
     return;
   }
-  ListScope L(W, "CHERI __cap_relocs");
+  ListScope L(W, ("CHERI " + SecName).str());
 #if 0
   errs() << "Cap relocs section from 0x" << utohexstr(CapRelocsFileOffset)
          << " to 0x" << utohexstr(CapRelocsEnd)
@@ -3399,8 +3402,13 @@ template <class ELFT> void ELFDumper<ELFT>::printCheriCapRelocs() {
   const Elf_Sym &FirstSym = Syms[0];
   for (const auto &Sym : Syms) {
     uint64_t Start = Sym.st_value;
-    if (!Start)
-      continue;
+    if (IsTgot) {
+      if (Sym.getType() != ELF::STT_TLS)
+        continue;
+    } else {
+      if (!Start)
+        continue;
+    }
     std::string Name =
         getFullSymbolName(Sym, &Sym - &FirstSym, ShndxTable, StrTable, UsingDynsym);
     if (Name.empty())
@@ -3421,36 +3429,36 @@ template <class ELFT> void ELFDumper<ELFT>::printCheriCapRelocs() {
   using TargetUint = typename ELFT::uint;
   using TargetInt =
       typename std::conditional<ELFT::Is64Bits, int64_t, int32_t>::type;
-  for (int i = 0, e = Data.size() / entry_size; i < e; i++) {
-    const uint64_t CurrentOffset = entry_size * i;
-    const uint8_t *entry = Data.data() + CurrentOffset;
+  for (int I = 0, E = Data.size() / EntrySize; I < E; I++) {
+    const uint64_t CurrentOffset = EntrySize * I;
+    const uint8_t *Entry = Data.data() + CurrentOffset;
     uint64_t Target =
         support::endian::read<TargetUint, ELFT::TargetEndianness, 1>(
-                entry);
+                Entry);
     uint64_t Base =
         support::endian::read<TargetUint, ELFT::TargetEndianness, 1>(
-                entry + sizeof(TargetUint));
+                Entry + sizeof(TargetUint));
     int64_t Offset =
         support::endian::read<TargetInt,  ELFT::TargetEndianness, 1>(
-                entry + 2*sizeof(TargetUint));
+                Entry + 2 * sizeof(TargetUint));
     uint64_t Length =
         support::endian::read<TargetUint, ELFT::TargetEndianness, 1>(
-                entry + 3*sizeof(TargetUint));
+                Entry + 3 * sizeof(TargetUint));
     uint64_t Perms =
         support::endian::read<TargetUint, ELFT::TargetEndianness, 1>(
-                entry + 4*sizeof(TargetUint));
-    bool isFunction = Perms & (UINT64_C(1) << ((sizeof(TargetUint) * 8) - 1));
-    bool isReadOnly = Perms & (UINT64_C(1) << ((sizeof(TargetUint) * 8) - 2));
+                Entry + 4 * sizeof(TargetUint));
+    bool IsFunction = Perms & (UINT64_C(1) << ((sizeof(TargetUint) * 8) - 1));
+    bool IsReadOnly = Perms & (UINT64_C(1) << ((sizeof(TargetUint) * 8) - 2));
     const char *PermStr =
-        isFunction ? "Function" : (isReadOnly ? "Constant" : "Object");
+        IsFunction ? "Function" : (IsReadOnly ? "Constant" : "Object");
     // Perms &= 0xffffffff;
     std::string BaseSymbol;
-    if (Base == 0) {
+    if (Base == 0 && !IsTgot) {
       // Base is 0 -> either it is really NULL or (more likely) there is a
       // dynamic relocation that will set the real address
-      auto it = CapRelocsDynRels.find(CapRelocsStartVaddr + CurrentOffset + 8);
-      if (it != CapRelocsDynRels.end()) {
-        Elf_Rel R = it->second;
+      auto It = CapRelocsDynRels.find(CapRelocsStartVaddr + CurrentOffset + 8);
+      if (It != CapRelocsDynRels.end()) {
+        Elf_Rel R = It->second;
         const Elf_Sym *Sym = unwrapOrError(ObjF.getFileName(),
                                            Obj.getRelocationSymbol(R, SymTab));
         // Since we are looking up dynamic relocations, we have to look for the
@@ -3460,10 +3468,10 @@ template <class ELFT> void ELFDumper<ELFT>::printCheriCapRelocs() {
         // errs() << "Found dyn_rel for base: 0x" << utohexstr(R.r_offset) << "Name=" << BaseSymbol << "\n";
       }
     } else {
-      auto it = SymbolNames.find(Base);
-      if (it != SymbolNames.end()) {
-        BaseSymbol = it->second;
-        // errs() << "BaseSymbol = SymbolNames[" << Base << "] = " << it->second << "\n";
+      auto It = SymbolNames.find(Base);
+      if (It != SymbolNames.end()) {
+        BaseSymbol = It->second;
+        // errs() << "BaseSymbol = SymbolNames[" << Base << "] = " << It->second << "\n";
       }
     }
     if (BaseSymbol.empty())
@@ -3498,6 +3506,16 @@ template <class ELFT> void ELFDumper<ELFT>::printCheriCapRelocs() {
       OS << "\n";
     }
   }
+}
+
+template <class ELFT> void ELFDumper<ELFT>::printCheriCapRelocs() {
+  if (const Elf_Shdr *Shdr = findSectionByName("__cap_relocs"))
+    printCheriCapRelocsSection(*Shdr, false);
+  else
+    W.startLine() << "There is no __cap_relocs section in the file.\n";
+
+  if (const Elf_Shdr *Shdr = findSectionByName("__tgot_cap_relocs"))
+    printCheriCapRelocsSection(*Shdr, true);
 }
 
 template <class ELFT> void ELFDumper<ELFT>::printCheriCapTable() {
