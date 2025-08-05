@@ -65,11 +65,11 @@ static const __SIZE_TYPE__ global_pointer_permissions_mask =
     ~(__SIZE_TYPE__)(__CHERI_CAP_PERMISSION_PERMIT_SEAL__ |
                      __CHERI_CAP_PERMISSION_PERMIT_EXECUTE__);
 
-__attribute__((weak)) extern struct capreloc __start___cap_relocs;
-__attribute__((weak)) extern struct capreloc __stop___cap_relocs;
+__attribute__((weak)) extern struct capreloc __start___cap_relocs[];
+__attribute__((weak)) extern struct capreloc __stop___cap_relocs[];
 
-__attribute__((weak)) extern void *__capability __cap_table_start;
-__attribute__((weak)) extern void *__capability __cap_table_end;
+__attribute__((weak)) extern void *__capability __cap_table_start[];
+__attribute__((weak)) extern void *__capability __cap_table_end[];
 
 /*
  * Sandbox data segments are relocated by moving DDC, since they're compiled as
