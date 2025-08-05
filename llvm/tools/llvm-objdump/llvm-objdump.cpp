@@ -2097,8 +2097,9 @@ printELFCapRelocations(const ELFObjectFile<ELFT> *Obj) {
   StringRef PermsFmt = Obj->getBytesInAddress() > 4 ? "0x%08" PRIx64 :
                                                       "0x%04" PRIx64;
 
-  std::unordered_map<uint64_t, std::string> SymbolNames;
-  for (const SymbolRef &Sym : Obj->symbols()) {
+  std::unordered_map<uint64_t, std::string> SymbolNames, TlsSymbolNames;
+  for (const ELFSymbolRef &Sym : Obj->symbols()) {
+    bool Tls = Sym.getELFType() == ELF::STT_TLS;
     if (auto Type = Sym.getType()) {
       // Skip STT_FILE symbols
       if (*Type == SymbolRef::ST_File)
@@ -2116,54 +2117,70 @@ printELFCapRelocations(const ELFObjectFile<ELFT> *Obj) {
       continue;
     }
     SymbolNames.insert({Start.get(), Name.get().str()});
+    if (Tls)
+      TlsSymbolNames.insert({Start.get(), Name.get().str()});
   }
-  StringRef Data;
+  StringRef Data, TgotData;
   for (const SectionRef &Sec : Obj->sections()) {
     Expected<StringRef> Name = Sec.getName();
     if (!Name) {
       consumeError(Name.takeError());
       continue;
     }
-    if (*Name == "__cap_relocs") {
+    if (*Name == "__cap_relocs")
       Data = unwrapOrError(Sec.getContents(), Obj->getFileName());
-      break;
-    }
+    if (*Name == "__tgot_cap_relocs")
+      TgotData = unwrapOrError(Sec.getContents(), Obj->getFileName());
   }
-  outs() << "CAPABILITY RELOCATION RECORDS:\n";
-  const size_t entry_size = ELFT::Is64Bits ? 40 : 20;
+  const size_t EntrySize = ELFT::Is64Bits ? 40 : 20;
   using TargetUint = typename ELFT::uint;
-  for (int i = 0, e = Data.size() / entry_size; i < e; i++) {
-    const char *entry = Data.data() + (entry_size * i);
+  auto PrintReloc = [&](const char *Entry, bool IsTgotReloc) {
     uint64_t Target =
         support::endian::read<TargetUint, ELFT::TargetEndianness, 1>(
-                entry);
+                Entry);
     uint64_t Base =
         support::endian::read<TargetUint, ELFT::TargetEndianness, 1>(
-                entry + sizeof(TargetUint));
+                Entry + sizeof(TargetUint));
     uint64_t Offset =
         support::endian::read<TargetUint, ELFT::TargetEndianness, 1>(
-                entry + 2*sizeof(TargetUint));
+                Entry + 2 * sizeof(TargetUint));
     uint64_t Length =
         support::endian::read<TargetUint, ELFT::TargetEndianness, 1>(
-                entry + 3*sizeof(TargetUint));
+                Entry + 3 * sizeof(TargetUint));
     uint64_t Perms =
         support::endian::read<TargetUint, ELFT::TargetEndianness, 1>(
-                entry + 4*sizeof(TargetUint));
-    bool isFunction = Perms & (UINT64_C(1) << ((sizeof(TargetUint) * 8) - 1));
-    bool isConstant = Perms & (UINT64_C(1) << ((sizeof(TargetUint) * 8) - 2));
+                Entry + 4 * sizeof(TargetUint));
+    bool IsFunction = Perms & (UINT64_C(1) << ((sizeof(TargetUint) * 8) - 1));
+    bool IsConstant = Perms & (UINT64_C(1) << ((sizeof(TargetUint) * 8) - 2));
     //Perms &= 0xffffffff;
     StringRef Symbol = "<Unnamed symbol>";
-    if (SymbolNames.find(Base) != SymbolNames.end())
-      Symbol = SymbolNames[Base];
+    if (IsTgotReloc) {
+      if (TlsSymbolNames.find(Base) != TlsSymbolNames.end())
+        Symbol = TlsSymbolNames[Base];
+    } else {
+      if (SymbolNames.find(Base) != SymbolNames.end())
+        Symbol = SymbolNames[Base];
+    }
     outs() << format(AddrFmt.data(), Target) << "\tBase: " << Symbol << " ("
            << format(AddrFmt.data(), Base)
            << ")\tOffset: " << format(AddrFmt.data(), Offset)
            << "\tLength: " << format(AddrFmt.data(), Length)
            << "\tPermissions: " << format(PermsFmt.data(), Perms)
-           << (isFunction ? " (Function)\n"
-                          : (isConstant ? " (Constant)\n" : "\n"));
-  }
+           << (IsFunction ? " (Function)\n"
+                          : (IsConstant ? " (Constant)\n" : "\n"));
+  };
+
+  outs() << "CAPABILITY RELOCATION RECORDS:\n";
+  for (int I = 0, E = Data.size() / EntrySize; I < E; I++)
+    PrintReloc(Data.data() + I * EntrySize, false);
   outs() << "\n";
+
+  if (TgotData.size() > 0) {
+    outs() << "TGOT CAPABILITY RELOCATION RECORDS:\n";
+    for (int I = 0, E = TgotData.size() / EntrySize; I < E; I++)
+      PrintReloc(TgotData.data() + I * EntrySize, true);
+    outs() << "\n";
+  }
 }
 
 void objdump::printCapRelocations(const ObjectFile *Obj) {

@@ -130,6 +130,9 @@ public:
   RelType tlsGotRel;
   RelType tlsModuleIndexRel;
   RelType tlsOffsetRel;
+  RelType tgotRel;
+  RelType tgotGotRel;
+  RelType tgotTlsDescRel;
   std::optional<RelType> absPointerRel; // TODO: remove the optional
   std::optional<RelType> sizeRel;
   std::optional<RelType> cheriCapRel;

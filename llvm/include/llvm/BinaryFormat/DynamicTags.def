@@ -122,6 +122,10 @@ DYNAMIC_TAG(VERNEED, 0X6FFFFFFE)    // The address of the version dependency
                                     // table.
 DYNAMIC_TAG(VERNEEDNUM, 0X6FFFFFFF) // The number of entries in DT_VERNEED.
 
+DYNAMIC_TAG(CHERI_TGOTREL, 0x64348450)
+DYNAMIC_TAG(CHERI_TGOTRELT, 0x64348451)
+DYNAMIC_TAG(CHERI_TGOTRELSZ, 0x64348453)
+
 // AArch64 specific dynamic table entries
 AARCH64_DYNAMIC_TAG(AARCH64_BTI_PLT, 0x70000001)
 AARCH64_DYNAMIC_TAG(AARCH64_PAC_PLT, 0x70000003)
@@ -240,6 +244,8 @@ RISCV_DYNAMIC_TAG(RISCV_VARIANT_CC, 0x70000001)
 
 RISCV_DYNAMIC_TAG(RISCV_CHERI___CAPRELOCS, 0x7000c000)    // start of __cap_relocs section
 RISCV_DYNAMIC_TAG(RISCV_CHERI___CAPRELOCSSZ, 0x7000c001)  // size of __cap_relocs section
+RISCV_DYNAMIC_TAG(RISCV_CHERI___TGOTCAPRELOCS, 0x7000c002)    // start of __tgot_cap_relocs section
+RISCV_DYNAMIC_TAG(RISCV_CHERI___TGOTCAPRELOCSSZ, 0x7000c003)  // size of __tgot_cap_relocs section
 
 // Sun machine-independent extensions.
 DYNAMIC_TAG(AUXILIARY, 0x7FFFFFFD) // Shared object to load before self

@@ -84,6 +84,7 @@ private:
   std::unique_ptr<FileOutputBuffer> &buffer;
 
   void addRelIpltSymbols();
+  void addRelTgotSymbols();
   void addStartEndSymbols();
   void addStartStopSymbols(OutputSection &osec);
 
@@ -333,6 +334,10 @@ template <class ELFT> void elf::createSyntheticSections() {
     }
   }
 
+  if (config->isCheriAbi)
+    in.tgotCapRelocs =
+        std::make_unique<CheriCapRelocsSection>("__tgot_cap_relocs");
+
   // Add MIPS-specific sections.
   if (config->emachine == EM_MIPS) {
     if (!config->shared && config->hasDynSymTab) {
@@ -484,6 +489,8 @@ template <class ELFT> void elf::createSyntheticSections() {
   add(*in.gotPlt);
   in.igotPlt = std::make_unique<IgotPltSection>();
   add(*in.igotPlt);
+  in.tgot = std::make_unique<TgotSection>();
+  add(*in.tgot);
 
   if (config->emachine == EM_ARM) {
     in.armCmseSGSection = std::make_unique<ArmCmseSGSection>();
@@ -519,6 +526,11 @@ template <class ELFT> void elf::createSyntheticSections() {
       config->androidPackDynRelocs ? in.relaPlt->name : relaDynName,
       /*sort=*/false, /*threadCount=*/1);
   add(*in.relaIplt);
+
+  in.relaTgot = std::make_unique<RelocationSection<ELFT>>(
+      config->isRela ? ".rela.tgot" : ".rel.tgot", /*sort=*/false,
+      /*threadCount=*/1);
+  add(*in.relaTgot);
 
   if ((config->emachine == EM_386 || config->emachine == EM_X86_64) &&
       (config->andFeatures & GNU_PROPERTY_X86_FEATURE_1_IBT)) {
@@ -2008,6 +2020,8 @@ template <class ELFT> void Writer<ELFT>::finalizeSections() {
     if (in.capRelocs) {
       finalizeSynthetic(in.capRelocs.get());
     }
+    if (in.tgotCapRelocs)
+      finalizeSynthetic(in.tgotCapRelocs.get());
     if (in.plt && in.plt->isNeeded())
       in.plt->addSymbols();
     if (in.iplt && in.iplt->isNeeded())
@@ -2163,8 +2177,10 @@ template <class ELFT> void Writer<ELFT>::finalizeSections() {
     finalizeSynthetic(in.mipsGot.get());
     finalizeSynthetic(in.igotPlt.get());
     finalizeSynthetic(in.gotPlt.get());
+    finalizeSynthetic(in.tgot.get());
     finalizeSynthetic(in.relaIplt.get());
     finalizeSynthetic(in.relaPlt.get());
+    finalizeSynthetic(in.relaTgot.get());
     finalizeSynthetic(in.plt.get());
     finalizeSynthetic(in.iplt.get());
     finalizeSynthetic(in.ppc32Got2.get());
@@ -2512,6 +2528,12 @@ SmallVector<PhdrEntry *, 0> Writer<ELFT>::createPhdrs(Partition &part) {
       tlsHdr->add(sec);
   if (tlsHdr->firstSec)
     ret.push_back(tlsHdr);
+
+  // Add an entry for .tgot.
+  if (in.tgot->isNeeded()) {
+    OutputSection *sec = in.tgot->getParent();
+    addHdr(PT_CHERI_TGOT, sec->getPhdrFlags())->add(sec);
+  }
 
   // Add an entry for .dynamic.
   if (OutputSection *sec = part.dynamic->getParent())

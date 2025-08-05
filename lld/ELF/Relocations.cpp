@@ -965,6 +965,35 @@ static void addTpOffsetGotEntry(Symbol &sym) {
       target->tlsGotRel, *in.got, off, sym, target->symbolicRel);
 }
 
+static void addTgotEntry(Symbol &sym) {
+  in.tgot->addEntry(sym);
+  uint64_t off = sym.getTgotOffset();
+
+  // If preemptible, emit a TGOT_SLOT relocation with a symbol.
+  if (sym.isPreemptible) {
+    in.relaTgot->addReloc({target->tgotRel, in.tgot.get(), off,
+                           DynamicReloc::AgainstSymbol, sym, 0, R_ADDEND});
+    return;
+  }
+
+  RelExpr expr = config->isCheriAbi ? R_ABS_CAP : R_ABS;
+  RelType type =
+      config->isCheriAbi ? *target->cheriCapRel : target->symbolicRel;
+
+  // Otherwise, the value is either an undef weak link-time constant or
+  // relative to this module's TLS block.
+  if (sym.isUndefWeak()) {
+    if (config->isCheriAbi)
+      addNullDerivedCapability(sym, *in.got, off, 0);
+    else
+      in.tgot->addConstant({expr, type, off, 0, &sym});
+  } else if (config->isCheriAbi && !config->useRelativeElfCheriRelocs)
+    in.tgotCapRelocs->addCapReloc({in.tgot.get(), off}, {&sym, 0}, 0);
+  else
+    in.relaTgot->addReloc(DynamicReloc::AddendOnlyWithTargetVA, target->tgotRel,
+                          *in.tgot, off, sym, 0, expr, type);
+}
+
 // Return true if we can define a symbol in the executable that
 // contains the value/function of a symbol defined in a shared
 // library.
@@ -1024,6 +1053,10 @@ bool RelocationScanner::isStaticLinkTimeConstant(RelExpr e, RelType type,
   // only the low bits are used.
   if (e == R_GOT || e == R_PLT)
     return target->usesOnlyLowPageBits(type) || !config->isPic;
+
+  // These never do, except if the output is an executable.
+  if (e == R_TGOT || e == R_TGOT_TP)
+    return !config->shared;
 
   if (sym.isPreemptible)
     return false;
@@ -1321,7 +1354,14 @@ static unsigned handleMipsTlsRelocation(RelType type, Symbol &sym,
 static unsigned handleTlsRelocation(RelType type, Symbol &sym,
                                     InputSectionBase &c, uint64_t offset,
                                     int64_t addend, RelExpr expr) {
-  if (expr == R_TPREL || expr == R_TPREL_NEG) {
+  bool isTgot =
+      oneof<R_TGOT, R_TGOT_TP, R_TGOT_GOT, R_TGOT_GOT_PC, R_TGOT_TLSDESC,
+            R_TGOT_TLSDESC_CALL, R_TGOT_TLSGD_PC>(expr);
+
+  if (oneof<R_TPREL, R_TPREL_NEG, R_TGOT, R_TGOT_TP>(expr)) {
+    if (isTgot)
+      sym.setFlags(NEEDS_TGOT);
+
     if (config->shared) {
       errorOrWarn("relocation " + toString(type) + " against " + toString(sym) +
                   " cannot be used with -shared" + getLocation(c, sym, offset));
@@ -1333,11 +1373,17 @@ static unsigned handleTlsRelocation(RelType type, Symbol &sym,
   if (config->emachine == EM_MIPS)
     return handleMipsTlsRelocation(type, sym, c, offset, addend, expr);
 
+  if (isTgot)
+    sym.setFlags(NEEDS_TGOT);
+
   if (oneof<R_AARCH64_TLSDESC_PAGE, R_TLSDESC, R_TLSDESC_CALL, R_TLSDESC_PC,
-            R_TLSDESC_GOTPLT>(expr) &&
+            R_TLSDESC_GOTPLT, R_TGOT_TLSDESC, R_TGOT_TLSDESC_CALL>(expr) &&
       config->shared) {
-    if (expr != R_TLSDESC_CALL) {
-      sym.setFlags(NEEDS_TLSDESC);
+    if (!oneof<R_TLSDESC_CALL, R_TGOT_TLSDESC_CALL>(expr)) {
+      if (isTgot)
+        sym.setFlags(NEEDS_TGOT_TLSDESC);
+      else
+        sym.setFlags(NEEDS_TLSDESC);
       c.addReloc({expr, type, offset, addend, &sym});
     }
     return 1;
@@ -1398,35 +1444,62 @@ static unsigned handleTlsRelocation(RelType type, Symbol &sym,
 
   if (oneof<R_AARCH64_TLSDESC_PAGE, R_TLSDESC, R_TLSDESC_CALL, R_TLSDESC_PC,
             R_TLSDESC_GOTPLT, R_TLSGD_GOT, R_TLSGD_GOTPLT, R_TLSGD_PC,
+            R_TGOT_TLSDESC, R_TGOT_TLSDESC_CALL, R_TGOT_TLSGD_PC,
             R_LOONGARCH_TLSGD_PAGE_PC>(expr)) {
     if (!toExecRelax) {
-      sym.setFlags(NEEDS_TLSGD);
+      if (isTgot)
+        sym.setFlags(NEEDS_TGOT_TLSGD);
+      else
+        sym.setFlags(NEEDS_TLSGD);
       c.addReloc({expr, type, offset, addend, &sym});
       return 1;
     }
 
     // Global-Dynamic relocs can be relaxed to Initial-Exec or Local-Exec
     // depending on the symbol being locally defined or not.
-    if (sym.isPreemptible) {
-      sym.setFlags(NEEDS_TLSGD_TO_IE);
-      c.addReloc({target->adjustTlsExpr(type, R_RELAX_TLS_GD_TO_IE), type,
-                  offset, addend, &sym});
+    // TGOT can always relax to Local-Exec for executables.
+    if (sym.isPreemptible && !isTgot) {
+      RelExpr relaxExpr;
+      if (isTgot) {
+        sym.setFlags(NEEDS_TGOT_GOT);
+        relaxExpr = R_RELAX_TGOT_TLS_GD_TO_IE;
+      } else {
+        sym.setFlags(NEEDS_TLSGD_TO_IE);
+        relaxExpr = R_RELAX_TLS_GD_TO_IE;
+      }
+      c.addReloc(
+          {target->adjustTlsExpr(type, relaxExpr), type, offset, addend, &sym});
     } else {
-      c.addReloc({target->adjustTlsExpr(type, R_RELAX_TLS_GD_TO_LE), type,
-                  offset, addend, &sym});
+      RelExpr relaxExpr;
+      if (isTgot)
+        relaxExpr = R_RELAX_TGOT_TLS_GD_TO_LE;
+      else
+        relaxExpr = R_RELAX_TLS_GD_TO_LE;
+      c.addReloc(
+          {target->adjustTlsExpr(type, relaxExpr), type, offset, addend, &sym});
     }
     return target->getTlsGdRelaxSkip(type);
   }
 
   if (oneof<R_GOT, R_GOTPLT, R_GOT_PC, R_AARCH64_GOT_PAGE_PC,
-            R_LOONGARCH_GOT_PAGE_PC, R_GOT_OFF, R_TLSIE_HINT>(expr)) {
+            R_LOONGARCH_GOT_PAGE_PC, R_GOT_OFF, R_TLSIE_HINT, R_TGOT_GOT,
+            R_TGOT_GOT_PC>(expr)) {
     ctx.hasTlsIe.store(true, std::memory_order_relaxed);
     // Initial-Exec relocs can be relaxed to Local-Exec if the symbol is locally
     // defined.
-    if (toExecRelax && isLocalInExecutable) {
-      c.addReloc({R_RELAX_TLS_IE_TO_LE, type, offset, addend, &sym});
+    // TGOT can always relax Initial-Exec to Local-Exec for executables.
+    if (toExecRelax && (isLocalInExecutable || isTgot)) {
+      RelExpr relaxExpr;
+      if (isTgot)
+        relaxExpr = R_RELAX_TGOT_TLS_IE_TO_LE;
+      else
+        relaxExpr = R_RELAX_TLS_IE_TO_LE;
+      c.addReloc({relaxExpr, type, offset, addend, &sym});
     } else if (expr != R_TLSIE_HINT) {
-      sym.setFlags(NEEDS_TLSIE);
+      if (isTgot)
+        sym.setFlags(NEEDS_TGOT_GOT);
+      else
+        sym.setFlags(NEEDS_TLSIE);
       // R_GOT needs a relative relocation for PIC on i386 and Hexagon.
       if (expr == R_GOT && config->isPic && !target->usesOnlyLowPageBits(type))
         addRelativeReloc<true>(c, offset, sym, addend, expr, type);
@@ -1806,6 +1879,42 @@ void elf::postScanRelocations() {
 
     if ((flags & NEEDS_TLSIE) && !(flags & NEEDS_TLSGD_TO_IE))
       addTpOffsetGotEntry(sym);
+
+    if (flags & NEEDS_TGOT)
+      addTgotEntry(sym);
+
+    if (flags & NEEDS_TGOT_GOT) {
+      got->addTgotEntry(sym);
+      uint64_t off = got->getTgotOffset(sym);
+      if (!config->shared)
+        got->relocations.push_back(
+            {R_TGOT_TP, target->tgotGotRel, off, 0, &sym});
+      else
+        mainPart->relaDyn->addReloc(DynamicReloc::AddendOnlyWithTargetVA,
+                                    target->tgotGotRel, *got, off, sym, 0,
+                                    R_TGOT, target->tgotGotRel);
+    }
+
+    if (flags & NEEDS_TGOT_TLSDESC) {
+      got->addTgotTlsDescEntry(sym);
+      uint64_t off = got->getTgotTlsDescOffset(sym);
+      mainPart->relaDyn->addReloc(DynamicReloc::AddendOnlyWithTargetVA,
+                                  target->tgotTlsDescRel, *got, off, sym, 0,
+                                  R_TGOT, target->tgotTlsDescRel);
+    }
+
+    if (flags & NEEDS_TGOT_TLSGD) {
+      got->addTgotDynTlsEntry(sym);
+      uint64_t off = got->getTgotGlobalDynOffset(sym);
+      if (!config->shared)
+        // Write one to the GOT slot.
+        got->addConstant({R_ADDEND, target->symbolicRel, off, 1, &sym});
+      else
+        mainPart->relaDyn->addReloc({target->tlsModuleIndexRel, got, off});
+
+      uint64_t offsetOff = off + config->wordsize;
+      got->addConstant({R_TGOT, target->symbolicRel, offsetOff, 0, &sym});
+    }
   };
 
   GotSection *got = in.got.get();

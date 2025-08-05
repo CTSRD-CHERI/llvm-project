@@ -109,6 +109,7 @@ public:
   StringRef getABIName() const;
 
   static CheriCapabilityTableABI cheriCapabilityTableABI();
+  static bool cheriTLSUseTGOT();
 
   /// getAssemblyLanguage - If this returns a non-empty string this represents
   /// the textual name of the assembly language that we will use for this
