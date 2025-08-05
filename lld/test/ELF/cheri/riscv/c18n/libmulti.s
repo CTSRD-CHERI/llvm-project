@@ -31,13 +31,15 @@
 # SECTIONS:	[ 6] .c18nstrtab
 # SECTIONS:	[10] .text.one
 # SECTIONS:	[11] .got.one
-# SECTIONS:	[12] .bss.one
-# SECTIONS:	[13] .rela.plt.two
-# SECTIONS:	[14] .rodata.two
-# SECTIONS:	[15] .text.two
-# SECTIONS:	[16] .plt.two
-# SECTIONS:	[17] .got.two
-# SECTIONS:	[18] .got.plt.two
+# SECTIONS:	[12] .pad.cheri.pcc.one
+# SECTIONS:	[13] .bss.one
+# SECTIONS:	[14] .rela.plt.two
+# SECTIONS:	[15] .rodata.two
+# SECTIONS:	[16] .text.two
+# SECTIONS:	[17] .plt.two
+# SECTIONS:	[18] .got.two
+# SECTIONS:	[19] .got.plt.two
+# SECTIONS:	[20] .pad.cheri.pcc.two
 
 # SEGMENTS:	There are 20 program headers, starting at offset 64
 
@@ -88,16 +90,16 @@
 # SEGMENTS-NEXT:   17     .text.one .got.one
 # SEGMENTS-NEXT:   18     .rodata.two .text.two .plt.two .got.two .got.plt.two
 # SEGMENTS-NEXT:   19
-# SEGMENTS-NEXT:   None   .comment .symtab .shstrtab .strtab
+# SEGMENTS-NEXT:   None   .pad.cheri.pcc.one .pad.cheri.pcc.two .comment .symtab .shstrtab .strtab
 
 # SYMBOLS-LABEL: Symbol table '.dynsym'
 # SYMBOLS:	 3: 0000000000002820    16 FUNC    GLOBAL DEFAULT    10 set_counter
 # SYMBOLS-NEXT:  4: 0000000000002830    24 FUNC    GLOBAL DEFAULT    10 increment_counter
 # SYMBOLS-NEXT:  5: 0000000000002848    24 FUNC    GLOBAL DEFAULT    10 decrement_counter
-# SYMBOLS-NEXT:  6: 00000000000068c8    84 FUNC    GLOBAL DEFAULT    15 counter_str
+# SYMBOLS-NEXT:  6: 00000000000068c8    84 FUNC    GLOBAL DEFAULT    16 counter_str
 
 # SYMBOLS-LABEL: Symbol table '.symtab'
-# SYMBOLS:	 3: 0000000000004880     4 OBJECT  LOCAL  HIDDEN     12 counter
+# SYMBOLS:	 3: 0000000000004880     4 OBJECT  LOCAL  HIDDEN     13 counter
 # SYMBOLS:	 5: 0000000000000000   128 TLS     LOCAL  DEFAULT     8 counter_buffer
 
 # DYNAMIC-LABEL: Dynamic section

@@ -14,17 +14,17 @@
 # SECTIONS-LABEL: Section Headers:
 # SECTIONS:	  [ 8] .text.one
 # SECTIONS:	  [ 9] .got.one
-# SECTIONS:	  [10] .text.two
-# SECTIONS:	  [11] .iplt.two
+# SECTIONS:	  [11] .text.two
+# SECTIONS:	  [12] .iplt.two
 # SECTIONS-NEXT:      PROGBITS        0000000000004630
-# SECTIONS:	  [12] .got.plt.two
+# SECTIONS:	  [13] .got.plt.two
 
 # SYMBOLS-LABEL: Symbol table '.symtab'
 # SYMBOLS:	    3: 0000000000002590     8 FUNC    LOCAL  HIDDEN      8 dice_roll
 # SYMBOLS:	    5: 0000000000002598    44 FUNC    GLOBAL DEFAULT     8 one_value
 # SYMBOLS-NEXT:     6: 00000000000025c4    12 FUNC    GLOBAL DEFAULT     8 one_func
-# SYMBOLS-NEXT:     7: 00000000000045f0    44 FUNC    GLOBAL DEFAULT    10 two_value
-# SYMBOLS-NEXT:     8: 000000000000461c    12 FUNC    GLOBAL DEFAULT    10 two_func
+# SYMBOLS-NEXT:     7: 00000000000045f0    44 FUNC    GLOBAL DEFAULT    11 two_value
+# SYMBOLS-NEXT:     8: 000000000000461c    12 FUNC    GLOBAL DEFAULT    11 two_func
 
 # CAPRELOCS-LABEL: CHERI __cap_relocs [
 # CAPRELOCS-NEXT:     0x0035e0 Base: 0x2590 (dice_roll) Length: 4192 Perms: Function
