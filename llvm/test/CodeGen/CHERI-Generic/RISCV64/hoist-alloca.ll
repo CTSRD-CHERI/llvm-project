@@ -113,9 +113,9 @@ define void @hoist_alloca_cond(i32 signext %cond) local_unnamed_addr addrspace(2
 ; CHECK-NEXT:    mv s0, a0
 ; CHECK-NEXT:    li s3, 100
 ; CHECK-NEXT:    cincoffset ca0, csp, 100
-; CHECK-NEXT:    csetbounds cs2, ca0, 492
+; CHECK-NEXT:    csetbounds cs1, ca0, 492
 ; CHECK-NEXT:    cincoffset ca0, csp, 12
-; CHECK-NEXT:    csetbounds cs1, ca0, 88
+; CHECK-NEXT:    csetbounds cs2, ca0, 88
 ; CHECK-NEXT:    j .LBB1_2
 ; CHECK-NEXT:  .LBB1_1: # %for.inc
 ; CHECK-NEXT:    # in Loop: Header=BB1_2 Depth=1
@@ -126,8 +126,8 @@ define void @hoist_alloca_cond(i32 signext %cond) local_unnamed_addr addrspace(2
 ; CHECK-NEXT:    beqz s0, .LBB1_1
 ; CHECK-NEXT:  # %bb.3: # %if.then
 ; CHECK-NEXT:    # in Loop: Header=BB1_2 Depth=1
-; CHECK-NEXT:    cmove ca0, cs2
-; CHECK-NEXT:    cmove ca1, cs1
+; CHECK-NEXT:    cmove ca0, cs1
+; CHECK-NEXT:    cmove ca1, cs2
 ; CHECK-NEXT:    ccall call
 ; CHECK-NEXT:    j .LBB1_1
 ; CHECK-NEXT:  .LBB1_4: # %for.cond.cleanup
