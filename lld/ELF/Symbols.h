@@ -230,7 +230,7 @@ public:
                                   uint64_t offset) const;
   uint64_t getMipsCheriCapTableOffset(const InputSectionBase *isec,
                                       uint64_t offset) const;
-  uint64_t getSize() const;
+  uint64_t getSize(bool forCheriCap = false) const;
   OutputSection *getOutputSection() const;
 
   // The following two functions are used for symbol resolution.
@@ -370,7 +370,7 @@ public:
   }
 
   static bool classof(const Symbol *s) { return s->isDefined(); }
-  uint64_t getSize() const;
+  uint64_t getSize(bool forCheriCap = false) const;
   void setSize(uint64_t newSize) {
     assert(!isSectionStartSymbol);
     size = newSize;
