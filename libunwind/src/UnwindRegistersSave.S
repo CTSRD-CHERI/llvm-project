@@ -1237,7 +1237,7 @@ DEFINE_LIBUNWIND_FUNCTION(__unw_getcontext)
 
 .macro save_fpr num, ctxreg
 #ifdef __CHERI_PURE_CAPABILITY__
-  fsd    f\num, (RISCV_FOFFSET + RISCV_FSIZE * \num)(c\ctxreg)
+  FSTORE f\num, (RISCV_FOFFSET + RISCV_FSIZE * \num)(c\ctxreg)
 #else
   FSTORE f\num, (RISCV_FOFFSET + RISCV_FSIZE * \num)(\ctxreg)
 #endif
