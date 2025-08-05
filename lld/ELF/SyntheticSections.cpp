@@ -4082,6 +4082,10 @@ size_t PackageMetadataNote::getSize() const {
          alignTo(config->packageMetadata.size() + 1, 4);
 }
 
+void CheriPccPaddingSection::writeTo(uint8_t *buf) {
+  memset(buf, 0, size);
+}
+
 uint64_t elf::pccBase(const Compartment *c) {
   return cheriBoundsPhdr(c)->firstSec->addr;
 }

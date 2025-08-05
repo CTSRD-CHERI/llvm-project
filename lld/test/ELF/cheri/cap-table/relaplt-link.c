@@ -94,7 +94,7 @@
 // PURECAP-OBJ-NEXT:  }
 // RUN: ld.lld -shared -o %t.so %t.o
 // RUN: llvm-readobj --dynamic-table --file-headers -r --sections %t.so | FileCheck --check-prefix PURECAP-SHLIB %s
-// PURECAP-SHLIB:      SectionHeaderCount: 20
+// PURECAP-SHLIB:      SectionHeaderCount: 21
 // PURECAP-SHLIB:  Section {
 // PURECAP-SHLIB:      Index: [[DYNSYM_INDEX:3]]
 // PURECAP-SHLIB-NEXT: Name: .dynsym
@@ -155,7 +155,7 @@
 // PURECAP-SHLIB-NEXT:  }
 
 // RUN: llvm-strip -o - %t.so | llvm-readobj --file-headers - | FileCheck %s --check-prefix PURECAP-STRIPPED
-// PURECAP-STRIPPED: SectionHeaderCount: 15
+// PURECAP-STRIPPED: SectionHeaderCount: 16
 
 
 extern void* extern_function(void *);

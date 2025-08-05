@@ -75,6 +75,9 @@ public:
   // This section is the first section after the end of a relro segment.
   bool relroEnd = false;
 
+  // Sections accessed using PCC on CHERI architectures.
+  bool cheriPcc = false;
+
   void recordSection(InputSectionBase *isec);
   void commitSection(InputSection *isec);
   void finalizeInputSections();
