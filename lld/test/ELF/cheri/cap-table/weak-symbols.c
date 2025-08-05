@@ -42,8 +42,8 @@ int __start(void) {
 // DYNAMIC-EXE: 0000000000030900 g       .bss             0000000000000000 _end
 // DYNAMIC-EXE: 0000000000010810 g       .text            0000000000000000 etext
 // DYNAMIC-EXE: 0000000000010810 g       .text            0000000000000000 _etext
-// DYNAMIC-EXE: 00000000000308f0 g       .got             0000000000000000 edata
-// DYNAMIC-EXE: 00000000000308f0 g       .got             0000000000000000 _edata
+// DYNAMIC-EXE: 0000000000030900 g       .pad.cheri.pcc   0000000000000000 edata
+// DYNAMIC-EXE: 0000000000030900 g       .pad.cheri.pcc   0000000000000000 _edata
 // DYNAMIC-EXE: 0000000000010808 g     F .text            0000000000000008 __start
 
 // STATIC-EXE: 0000000000030610 l       .preinit_array    0000000000000008 .hidden __preinit_array_start
@@ -55,7 +55,7 @@ int __start(void) {
 // STATIC-EXE: 0000000000040700 g       .bss              0000000000000000 _end
 // STATIC-EXE: 0000000000020610 g       .text             0000000000000000 etext
 // STATIC-EXE: 0000000000020610 g       .text             0000000000000000 _etext
-// STATIC-EXE: 00000000000406e0 g       .got              0000000000000000 edata
-// STATIC-EXE: 00000000000406e0 g       .got              0000000000000000 _edata
+// STATIC-EXE: 0000000000040700 g       .pad.cheri.pcc    0000000000000000 edata
+// STATIC-EXE: 0000000000040700 g       .pad.cheri.pcc    0000000000000000 _edata
 // STATIC-EXE: 0000000000000000  w      *UND*             0000000000000000 _DYNAMIC
 // STATIC-EXE: 0000000000020608 g     F .text             0000000000000008 __start

@@ -4037,6 +4037,8 @@ size_t PackageMetadataNote::getSize() const {
          alignTo(config->packageMetadata.size() + 1, 4);
 }
 
+void CheriPccPaddingSection::writeTo(uint8_t *buf) { memset(buf, 0, size); }
+
 InStruct elf::in;
 
 std::vector<Partition> elf::partitions;

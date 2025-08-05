@@ -952,41 +952,33 @@ void addRelativeCapabilityRelocation(
                             addend);
 }
 
-static OutputSection *nextOutputSection(OutputSection *sec) {
-  bool isNext = false;
-  for (OutputSection *os : outputSections) {
-    if (isNext) {
-      if (!(os->flags & SHF_ALLOC))
-        continue;
-      return os;
-    }
-    if (os == sec)
-      isNext = true;
-  }
-  return nullptr;
-}
-
-// Determine the required alignment for a single PT_CHERI_PCC segment and apply
-// it to the first OutputSection and the following OutputSection after the last
-// OutputSection.  Returns true if the alignment of any OutputSections were
-// modified.
-static bool alignPCCBounds(PhdrEntry *p) {
+// Determine the required alignment for a single PT_CHERI_PCC segment.  Apply
+// the alignment to the first OutputSection and adjust the length of the padding
+// section to align the end of the segment.  Returns true if the alignment of
+// the first OutputSection changed or the size of the padding section changed.
+static bool alignPCCBounds(PhdrEntry *p, CheriPccPaddingSection &psec) {
   OutputSection *first = p->firstSec;
   OutputSection *last = p->lastSec;
 
   if (!first)
     return false;
 
-  uint64_t size = last->getVA() + last->size - first->getVA();
+  assert(psec.getParent() == last && "padding section is not last");
+  assert(psec.isNeeded() && "padding section is not enabled");
+
+  // Ignore existing padding.
+  uint64_t size = last->getVA() - first->getVA();
   uint64_t align = target->getCheriRequiredAlignment(size);
+  if (align == 0)
+    align = 1;
   bool changed = false;
   if (first->addralign < align) {
     first->addralign = align;
     changed = true;
   }
-  OutputSection *next = nextOutputSection(last);
-  if (next != nullptr && next->addralign < align) {
-    next->addralign = align;
+  uint64_t padSize = alignTo(size, align) - size;
+  if (psec.getSize() != padSize) {
+    psec.setSize(padSize);
     changed = true;
   }
   return changed;
@@ -995,7 +987,7 @@ static bool alignPCCBounds(PhdrEntry *p) {
 bool cheriCapabilityBoundsAlign() {
   // Align the PT_CHERI_PCC segment.
   bool changed = false;
-  changed |= alignPCCBounds(in.cheriBounds);
+  changed |= alignPCCBounds(in.cheriBounds, *in.pccPadding);
   return changed;
 }
 

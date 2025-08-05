@@ -72,6 +72,9 @@ public:
   uint64_t addr = 0;
   uint32_t shName = 0;
 
+  // Sections accessed using PCC on CHERI architectures.
+  bool cheriPcc = false;
+
   void recordSection(InputSectionBase *isec);
   void commitSection(InputSection *isec);
   void finalizeInputSections();

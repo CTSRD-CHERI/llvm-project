@@ -61,6 +61,7 @@ private:
   void finalizeAddressDependentContent();
   void optimizeBasicBlockJumps();
   void sortInputSections();
+  void sortCheriPccPaddingSection();
   void sortOrphanSections();
   void finalizeSections();
   void checkExecuteOnly();
@@ -533,6 +534,11 @@ template <class ELFT> void elf::createSyntheticSections() {
   add(*in.plt);
   in.iplt = std::make_unique<IpltSection>();
   add(*in.iplt);
+
+  if (config->isCheriAbi) {
+    in.pccPadding = std::make_unique<CheriPccPaddingSection>();
+    add(*in.pccPadding);
+  }
 
   if (config->andFeatures)
     add(*make<GnuPropertySection>());
@@ -1463,6 +1469,50 @@ template <class ELFT> void Writer<ELFT>::sortInputSections() {
       sortSection(osd->osec, order);
 }
 
+// The CHERI PCC padding output section for each compartment must be placed
+// immediately after the last section covered by the PCC bounds.
+template <class ELFT> void Writer<ELFT>::sortCheriPccPaddingSection() {
+  CheriPccPaddingSection *psec = in.pccPadding.get();
+  if (!psec->isNeeded())
+    return;
+
+  // First, find and remove the existing padding output section.
+  auto isPaddingSection = [&](SectionCommand *cmd) {
+    auto *to = dyn_cast<OutputDesc>(cmd);
+    return to != nullptr && psec->getParent() == &to->osec;
+  };
+  auto fromPos = llvm::find_if(script->sectionCommands, isPaddingSection);
+  assert(fromPos != script->sectionCommands.end() &&
+         "PCC padding section not found");
+  auto paddingSec = *fromPos;
+  script->sectionCommands.erase(fromPos);
+
+  // Second, find the last CHERI PCC output section.
+  auto isPccSection = [&](SectionCommand *cmd) {
+    auto *to = dyn_cast<OutputDesc>(cmd);
+    return to != nullptr && to->osec.cheriPcc;
+  };
+
+  auto insertPos = llvm::find_if(script->sectionCommands, isPccSection);
+  assert(insertPos != script->sectionCommands.end() &&
+         "did not find first PCC section");
+  for (;;) {
+    auto nextPos = std::find_if(insertPos + 1, script->sectionCommands.end(),
+                                isPccSection);
+    if (nextPos == script->sectionCommands.end())
+      break;
+    insertPos = nextPos;
+  }
+
+  // Change the flags of the padding output section to match the last CHERI PCC
+  // output section so it is treated as part of the same load segment.
+  cast<OutputDesc>(paddingSec)->osec.flags =
+      cast<OutputDesc>(*insertPos)->osec.flags;
+
+  // Insert the padding output section in its new location.
+  script->sectionCommands.insert(insertPos + 1, paddingSec);
+}
+
 template <class ELFT> void Writer<ELFT>::sortSections() {
   llvm::TimeTraceScope timeScope("Sort sections");
 
@@ -1494,6 +1544,9 @@ template <class ELFT> void Writer<ELFT>::sortSections() {
 
   if (script->hasSectionsCommand)
     sortOrphanSections();
+
+  if (config->isCheriAbi)
+    sortCheriPccPaddingSection();
 
   script->adjustSectionsAfterSorting();
 }
@@ -1820,6 +1873,76 @@ template <class ELFT> void Writer<ELFT>::optimizeBasicBlockJumps() {
       is->trim();
 }
 
+// Which sections are covered by CHERI PCC bounds.  Currently this includes
+// executable sections, read-only data sections, and GOTs.
+static bool isCheriBoundsSection(const OutputSection *sec) {
+  uint64_t flags = sec->flags;
+
+  // Non-allocatable sections are not mapped into memory.
+  if (!(flags & SHF_ALLOC))
+    return false;
+
+  // Executable sections are fetched via PCC.
+  if (flags & SHF_EXECINSTR)
+    return true;
+
+  // .got is accessed relative to PCC.
+  if (in.got && sec == in.got->getParent())
+    return true;
+  if (in.mipsGot && sec == in.mipsGot->getParent())
+    return true;
+
+  // .got.plt is accessed relative to PCC.
+  if (sec == in.gotPlt->getParent())
+    return true;
+
+  // CHERI capability table is accessed relative to PCC.
+  if (in.mipsCheriCapTable && sec == in.mipsCheriCapTable->getParent())
+    return true;
+
+  // .rodata symbols are accessed relative to PCC.
+  if (sec->name.startswith(".rodata"))
+    return true;
+
+  // The PCC padding section is included in PCC bounds.
+  if (sec == in.pccPadding->getParent())
+    return true;
+
+  return false;
+}
+
+// Mark all output sections covered by CHERI PCC bounds.  In addition,
+// enable the padding section for the associated compartment.
+static void markCheriPccSections() {
+  // Mark padding section as needed as long as there is at least one executable
+  // input section.
+  for (InputSectionBase *s : ctx.inputSections) {
+    // Ignore unused synthetic sections
+    if (isa<SyntheticSection>(s)) {
+      auto *sec = cast<SyntheticSection>(s);
+      if (!(sec->getParent() && sec->isNeeded()))
+        continue;
+    }
+    // Ignore empty input sections
+    if (s->getSize() == 0)
+      continue;
+    if ((s->flags & (SHF_ALLOC | SHF_EXECINSTR)) == (SHF_ALLOC | SHF_EXECINSTR))
+      in.pccPadding->markNeeded();
+  }
+
+  // Mark all output sections accessed via PCC if there is at least one
+  // executable input section.
+  for (SectionCommand *cmd : script->sectionCommands) {
+    if (auto *osd = dyn_cast<OutputDesc>(cmd)) {
+      OutputSection &osec = osd->osec;
+      if (!in.pccPadding->isNeeded())
+        continue;
+      if (isCheriBoundsSection(&osec))
+        osec.cheriPcc = true;
+    }
+  }
+}
+
 // In order to allow users to manipulate linker-synthesized sections,
 // we had to add synthetic sections to the input section list early,
 // even before we make decisions whether they are needed. This allows
@@ -2083,6 +2206,8 @@ template <class ELFT> void Writer<ELFT>::finalizeSections() {
   if (in.mipsGot)
     in.mipsGot->build();
 
+  if (config->isCheriAbi)
+    markCheriPccSections();
   removeUnusedSyntheticSections();
   script->diagnoseOrphanHandling();
   script->diagnoseMissingSGSectionAddress();
@@ -2169,6 +2294,8 @@ template <class ELFT> void Writer<ELFT>::finalizeSections() {
     finalizeSynthetic(in.mipsGot.get());
     finalizeSynthetic(in.igotPlt.get());
     finalizeSynthetic(in.gotPlt.get());
+    if (config->isCheriAbi)
+      finalizeSynthetic(in.pccPadding.get());
     finalizeSynthetic(in.relaIplt.get());
     finalizeSynthetic(in.relaPlt.get());
     finalizeSynthetic(in.plt.get());
@@ -2400,40 +2527,6 @@ static uint64_t computeFlags(uint64_t flags) {
   return flags;
 }
 
-// Which sections are covered by CHERI PCC bounds.  Currently this includes
-// executable sections, read-only data sections, and GOTs.
-static bool isCheriBoundsSection(const OutputSection *sec) {
-  uint64_t flags = sec->flags;
-
-  // Non-allocatable sections are not mapped into memory.
-  if (!(flags & SHF_ALLOC))
-    return false;
-
-  // Executable sections are fetched via PCC.
-  if (flags & SHF_EXECINSTR)
-    return true;
-
-  // .got is accessed relative to PCC.
-  if (in.got && sec == in.got->getParent())
-    return true;
-  if (in.mipsGot && sec == in.mipsGot->getParent())
-    return true;
-
-  // .got.plt is accessed relative to PCC.
-  if (sec == in.gotPlt->getParent())
-    return true;
-
-  // CHERI capability table is accessed relative to PCC.
-  if (in.mipsCheriCapTable && sec == in.mipsCheriCapTable->getParent())
-    return true;
-
-  // .rodata symbols are accessed relative to PCC.
-  if (sec->name.startswith(".rodata"))
-    return true;
-
-  return false;
-}
-
 // Decide which program headers to create and which sections to include in each
 // one.
 template <class ELFT>
@@ -2485,7 +2578,10 @@ SmallVector<PhdrEntry *, 0> Writer<ELFT>::createPhdrs(Partition &part) {
   for (OutputSection *sec : outputSections) {
     if (sec->partition != partNo || !needsPtLoad(sec))
       continue;
-    if (isRelroSection(sec)) {
+    // Treat a CHERI PCC padding section as relro if it is preceded by a relro
+    // section.
+    if (isRelroSection(sec) || (config->isCheriAbi && inRelroPhdr &&
+                                sec == in.pccPadding->getParent())) {
       inRelroPhdr = true;
       if (!relroEnd)
         relRo->add(sec);
@@ -2505,7 +2601,7 @@ SmallVector<PhdrEntry *, 0> Writer<ELFT>::createPhdrs(Partition &part) {
     for (OutputSection *sec : outputSections) {
       if (sec->partition != partNo || !needsPtLoad(sec))
         continue;
-      if (!isCheriBoundsSection(sec))
+      if (!sec->cheriPcc)
         continue;
       in.cheriBounds->add(sec);
     }
@@ -2867,12 +2963,6 @@ template <class ELFT> void Writer<ELFT>::setPhdrs(Partition &part) {
       p->p_memsz =
           alignToPowerOf2(p->p_offset + p->p_memsz, config->commonPageSize) -
           p->p_offset;
-    }
-
-    if (p->p_type == PT_CHERI_PCC) {
-      // Round up the size to cover any padding.
-      p->p_memsz = alignToPowerOf2(
-          p->p_memsz, target->getCheriRequiredAlignment(p->p_memsz));
     }
   }
 }

@@ -1253,6 +1253,23 @@ public:
   size_t getSize() const override;
 };
 
+class CheriPccPaddingSection final : public SyntheticSection {
+public:
+  CheriPccPaddingSection()
+      : SyntheticSection(llvm::ELF::SHF_ALLOC, llvm::ELF::SHT_PROGBITS,
+                         /*alignment=*/1, ".pad.cheri.pcc") {}
+
+  void writeTo(uint8_t *buf) override;
+  void markNeeded() { needed = true; }
+  bool isNeeded() const override { return needed; }
+  size_t getSize() const override { return size; }
+  void setSize(uint64_t len) { size = len; }
+
+private:
+  uint64_t size = 0;
+  bool needed = false;
+};
+
 InputSection *createInterpSection();
 MergeInputSection *createCommentSection();
 template <class ELFT> void splitSections();
@@ -1313,6 +1330,7 @@ struct InStruct {
   std::unique_ptr<GotPltSection> gotPlt;
   std::unique_ptr<IgotPltSection> igotPlt;
   std::unique_ptr<MipsCheriCapTableSection> mipsCheriCapTable;
+  std::unique_ptr<CheriPccPaddingSection> pccPadding;
   std::unique_ptr<CheriCapRelocsSection> capRelocs;
   // For per-file/per-function tables:
   std::unique_ptr<MipsCheriCapTableMappingSection> mipsCheriCapTableMapping;

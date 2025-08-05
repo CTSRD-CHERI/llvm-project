@@ -56,10 +56,10 @@
 ; HEADERS-NEXT: 01     .MIPS.abiflags .MIPS.options .dynsym .hash .dynamic .dynstr .rel.dyn .rel.plt .eh_frame __cap_relocs {{$}}
 ; HEADERS-NEXT: 02     .text
 ; HEADERS-NEXT: 03     .gcc_except_table
-; HEADERS-NEXT: 04     .data .captable .got
+; HEADERS-NEXT: 04     .data .captable .got .pad.cheri.pcc
 ; HEADERS-NEXT: 05     .dynamic
 ; HEADERS-NEXT: 06     .gcc_except_table
-; HEADERS-NEXT: 07     .text .gcc_except_table .data .captable .got
+; HEADERS-NEXT: 07     .text .gcc_except_table .data .captable .got .pad.cheri.pcc
 ; HEADERS-NEXT: 08
 ; HEADERS-NEXT: 09     .MIPS.options
 ; HEADERS-NEXT: 10     .MIPS.abiflags
