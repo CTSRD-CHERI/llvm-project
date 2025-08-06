@@ -839,11 +839,13 @@ public:
   virtual void EmitCheriCapability(const MCExpr *Value, unsigned CapSize,
                                    SMLoc Loc = SMLoc());
   void EmitCheriCapability(const MCSymbol *Value, const MCExpr *Addend,
-                           unsigned CapSize, SMLoc Loc = SMLoc());
-  void EmitCheriCapability(const MCSymbol *Value, int64_t Addend,
-                           unsigned CapSize, SMLoc Loc = SMLoc());
-  void EmitCheriCapability(const MCSymbol *Value, unsigned CapSize,
+                           unsigned CapSize, bool Code = false,
                            SMLoc Loc = SMLoc());
+  void EmitCheriCapability(const MCSymbol *Value, int64_t Addend,
+                           unsigned CapSize, bool Code = false,
+                           SMLoc Loc = SMLoc());
+  void EmitCheriCapability(const MCSymbol *Value, unsigned CapSize,
+                           bool Code = false, SMLoc Loc = SMLoc());
 
   // Emit \p Value as an untagged capability-size value
   virtual void emitCheriIntcap(int64_t Value, unsigned CapSize,

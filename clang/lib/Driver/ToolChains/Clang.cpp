@@ -7211,6 +7211,11 @@ void Clang::ConstructJob(Compilation &C, const JobAction &JA,
     }
   }
 
+  if (Args.hasArg(options::OPT_cheri_codeptr_relocs)) {
+    CmdArgs.push_back("-mllvm");
+    CmdArgs.push_back("-cheri-codeptr-relocs");
+  }
+
   // With -save-temps, we want to save the unoptimized bitcode output from the
   // CompileJobAction, use -disable-llvm-passes to get pristine IR generated
   // by the frontend.

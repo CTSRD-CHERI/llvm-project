@@ -660,6 +660,9 @@ def : Flag<["-"], "cheri-comparison=address">, Flags<[NoXarchOption,CC1Option]>,
 def : Flag<["-"], "cheri-comparison=exact">, Flags<[NoXarchOption,CC1Option]>, Group<cheri_Group>,
   HelpText<cheri_exact_equality.HelpText>, Alias<cheri_exact_equality>;
 
+def cheri_codeptr_relocs : Flag<["-"], "cheri-codeptr-relocs">, Flags<[CC1Option]>, Group<cheri_Group>,
+  HelpText<"Emit relocations for code pointers differently from function pointers">;
+
 
 class InternalDriverOpt : Group<internal_driver_Group>,
   Flags<[NoXarchOption, HelpHidden]>;
