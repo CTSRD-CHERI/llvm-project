@@ -64,8 +64,11 @@ struct CheriCapReloc {
   // will be e.g. `.rodata.str + 0x90` -> need to store offset as well
   SymbolAndOffset target;
   int64_t capabilityOffset;
+  RelType type;
   bool operator==(const CheriCapReloc &other) const {
-    return target == other.target && capabilityOffset == other.capabilityOffset;
+    return target == other.target &&
+           capabilityOffset == other.capabilityOffset &&
+           type == other.type;
   }
 };
 
@@ -76,7 +79,8 @@ public:
   size_t getSize() const override { return relocsMap.size() * entsize; }
   void writeTo(uint8_t *buf) override;
   void addCapReloc(CheriCapRelocLocation loc, const SymbolAndOffset &target,
-                   int64_t capabilityOffset, Symbol *sourceSymbol = nullptr);
+                   int64_t capabilityOffset, RelType type,
+                   Symbol *sourceSymbol = nullptr);
 
 private:
   template <class ELFT> void writeToImpl(uint8_t *);

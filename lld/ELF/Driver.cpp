@@ -1189,6 +1189,7 @@ static void readConfigs(opt::InputArgList &args) {
   config->capTableScope = getCapTableScope(args);
   config->checkSections =
       args.hasFlag(OPT_check_sections, OPT_no_check_sections, true);
+  config->cheriEmitCodePtrRelocs = args.hasArg(OPT_cheri_codeptr_relocs);
   config->chroot = args.getLastArgValue(OPT_chroot);
   config->compressDebugSections = getCompressionType(
       args.getLastArgValue(OPT_compress_debug_sections, "none"),

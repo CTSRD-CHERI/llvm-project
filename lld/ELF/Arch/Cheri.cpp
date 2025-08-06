@@ -181,6 +181,7 @@ std::string CheriCapRelocLocation::toString() const {
 void CheriCapRelocsSection::addCapReloc(CheriCapRelocLocation loc,
                                         const SymbolAndOffset &target,
                                         int64_t capabilityOffset,
+                                        RelType type,
                                         Symbol *sourceSymbol) {
   assert(!isa<Symbol *>(target.symOrSec) || !target.sym()->isPreemptible);
 
@@ -210,7 +211,7 @@ void CheriCapRelocsSection::addCapReloc(CheriCapRelocLocation loc,
     return;
   }
 
-  addEntry(loc, {target, capabilityOffset});
+  addEntry(loc, {target, capabilityOffset, type});
 }
 
 static uint64_t getTargetSize(const CheriCapRelocLocation &location,
@@ -316,6 +317,8 @@ struct CaptablePermissions {
       UINT64_C(1) << ((sizeof(typename ELFT::uint) * 8) - 2);
   static const uint64_t indirect =
       UINT64_C(1) << ((sizeof(typename ELFT::uint) * 8) - 3);
+  static const uint64_t code =
+      UINT64_C(1) << ((sizeof(typename ELFT::uint) * 8) - 4);
 };
 
 template <class ELFT>
@@ -369,6 +372,9 @@ void CheriCapRelocsSection::writeToImpl(uint8_t *buf) {
     // Fow now Function implies ReadOnly so don't add the flag
     if (isFunc || isGnuIFunc) {
       permissions |= CaptablePermissions<ELFT>::function;
+      if (config->cheriEmitCodePtrRelocs &&
+          reloc.type == target->cheriCodeCapRel)
+        permissions |= CaptablePermissions<ELFT>::code;
       if (isGnuIFunc)
         permissions |= CaptablePermissions<ELFT>::indirect;
     } else if (os) {
@@ -938,7 +944,7 @@ void addRelativeCapabilityRelocation(
   assert(!sym || !sym->isPreemptible);
   assert(!config->useRelativeElfCheriRelocs &&
          "relative ELF capability relocations not currently implemented");
-  in.capRelocs->addCapReloc({&isec, offsetInSec}, {symOrSec, 0u}, addend);
+  in.capRelocs->addCapReloc({&isec, offsetInSec}, {symOrSec, 0u}, addend, type);
 }
 
 } // namespace elf

@@ -903,7 +903,15 @@ static void addRelativeReloc(InputSectionBase &isec, uint64_t offsetInSec,
       part.relrDyn->relocs.push_back({&isec, offsetInSec});
     return;
   }
-  part.relaDyn->addRelativeReloc<shard>(target->relativeRel, isec, offsetInSec,
+  // Currently, relative capability relocations are not added through this code
+  // path, so all relocations processed here are against integers.
+  RelType reltype;
+  if (config->cheriEmitCodePtrRelocs &&
+      sym.isFunc() && target->relativeFuncRel.has_value())
+    reltype = *target->relativeFuncRel;
+  else
+    reltype = target->relativeRel;
+  part.relaDyn->addRelativeReloc<shard>(reltype, isec, offsetInSec,
                                         sym, addend, type, expr);
 }
 
@@ -921,7 +929,9 @@ static void addPltEntry(PltSection &plt, GotPltSection &gotPlt,
     }
 
     addRelativeCapabilityRelocation(gotPlt, sym.getGotPltOffset(), &plt, 0,
-                                    R_ABS_CAP, *target->cheriCapRel);
+                                    R_ABS_CAP,
+                                    target->cheriCodeCapRel.value_or(
+                                        *target->cheriCapRel));
   }
 
   rel.addReloc({type, &gotPlt, sym.getGotPltOffset(),
@@ -1166,7 +1176,8 @@ void RelocationScanner::processAux(RelExpr expr, RelType type, uint64_t offset,
   if (canWrite) {
     RelType rel = target->getDynRel(type);
     if (oneof<R_GOT, R_LOONGARCH_GOT>(expr) ||
-        ((rel == target->symbolicRel || rel == target->cheriCapRel) &&
+        ((rel == target->symbolicRel || rel == target->cheriCapRel ||
+          rel == target->cheriCodeCapRel) &&
          !sym.isPreemptible)) {
       addRelativeReloc<true>(*sec, offset, sym, addend, expr, type);
       return;
@@ -1474,6 +1485,12 @@ template <class ELFT, class RelTy> void RelocationScanner::scanOne(RelTy *&i) {
   if (sym.isUndefined() && symIndex != 0 &&
       maybeReportUndefined(cast<Undefined>(sym), *sec, offset))
     return;
+
+  if (config->cheriEmitCodePtrRelocs && sym.isPreemptible &&
+      type == target->cheriCodeCapRel) {
+    error("Cannot relocate code capability to preemptible symbol: " +
+          toString(sym));
+  }
 
   if (config->emachine == EM_PPC64) {
     // We can separate the small code model relocations into 2 categories:
