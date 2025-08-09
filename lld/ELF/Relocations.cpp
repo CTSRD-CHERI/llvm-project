@@ -906,8 +906,7 @@ static void addRelativeReloc(InputSectionBase &isec, uint64_t offsetInSec,
   // Currently, relative capability relocations are not added through this code
   // path, so all relocations processed here are against integers.
   RelType reltype;
-  if (config->cheriEmitCodePtrRelocs &&
-      sym.isFunc() && target->relativeFuncRel.has_value())
+  if (sym.isFunc() && target->relativeFuncRel.has_value())
     reltype = *target->relativeFuncRel;
   else
     reltype = target->relativeRel;
@@ -1486,8 +1485,7 @@ template <class ELFT, class RelTy> void RelocationScanner::scanOne(RelTy *&i) {
       maybeReportUndefined(cast<Undefined>(sym), *sec, offset))
     return;
 
-  if (config->cheriEmitCodePtrRelocs && sym.isPreemptible &&
-      type == target->cheriCodeCapRel) {
+  if (sym.isPreemptible && type == target->cheriCodeCapRel) {
     error("Cannot relocate code capability to preemptible symbol: " +
           toString(sym));
   }

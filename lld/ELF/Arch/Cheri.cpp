@@ -372,8 +372,7 @@ void CheriCapRelocsSection::writeToImpl(uint8_t *buf) {
     // Fow now Function implies ReadOnly so don't add the flag
     if (isFunc || isGnuIFunc) {
       permissions |= CaptablePermissions<ELFT>::function;
-      if (config->cheriEmitCodePtrRelocs &&
-          reloc.type == target->cheriCodeCapRel)
+      if (reloc.type == target->cheriCodeCapRel)
         permissions |= CaptablePermissions<ELFT>::code;
       if (isGnuIFunc)
         permissions |= CaptablePermissions<ELFT>::indirect;

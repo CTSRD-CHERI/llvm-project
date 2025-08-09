@@ -338,8 +338,6 @@ struct Config {
   Target2Policy target2;
   bool useRelativeElfCheriRelocs;
   CapTableScopePolicy capTableScope;
-  // To emit relocations for code pointers differently from function pointers
-  bool cheriEmitCodePtrRelocs = false;
 
   bool power10Stubs;
   ARMVFPArgKind armVFPArgs = ARMVFPArgKind::Default;
