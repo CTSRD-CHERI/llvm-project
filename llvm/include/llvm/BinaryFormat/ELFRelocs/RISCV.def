@@ -58,11 +58,13 @@ ELF_RELOC(R_RISCV_PLT32,             59)
 
 ELF_RELOC(R_RISCV_CHERI_CAPTAB_PCREL_HI20,        192)
 ELF_RELOC(R_RISCV_CHERI_CAPABILITY,               193)
-// 194 reserved
-// 195 reserved
+ELF_RELOC(R_RISCV_FUNC_RELATIVE,                  194)
+ELF_RELOC(R_RISCV_CHERI_CODE_CAPABILITY,          195)
 ELF_RELOC(R_RISCV_CHERI_TPREL_CINCOFFSET,         196) // Deprecated
 ELF_RELOC(R_RISCV_CHERI_TLS_IE_CAPTAB_PCREL_HI20, 197) // Deprecated
 ELF_RELOC(R_RISCV_CHERI_TLS_GD_CAPTAB_PCREL_HI20, 198) // Deprecated
 ELF_RELOC(R_RISCV_CHERI_CJAL,                     199) // Deprecated
 ELF_RELOC(R_RISCV_CHERI_CCALL,                    200) // Deprecated
 ELF_RELOC(R_RISCV_CHERI_RVC_CJUMP,                201) // Deprecated
+ELF_RELOC(R_RISCV_CHERI_RELATIVE,                 202) // Not used while caprelocs is used
+ELF_RELOC(R_RISCV_CHERI_FUNC_RELATIVE,            203) // Not used while caprelocs is used

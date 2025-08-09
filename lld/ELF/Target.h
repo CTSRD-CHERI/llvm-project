@@ -132,7 +132,9 @@ public:
   RelType tlsOffsetRel;
   std::optional<RelType> absPointerRel; // TODO: remove the optional
   std::optional<RelType> sizeRel;
+  std::optional<RelType> relativeFuncRel;
   std::optional<RelType> cheriCapRel;
+  std::optional<RelType> cheriCodeCapRel;
   std::optional<RelType> cheriCapCallRel;
   unsigned gotEntrySize = config->wordsize;
   unsigned pltEntrySize;

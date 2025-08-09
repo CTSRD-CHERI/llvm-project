@@ -3662,11 +3662,11 @@ static void emitGlobalConstantCHERICap(const DataLayout &DL, const Constant *CV,
     return;
   } else if (const MCSymbolRefExpr *SRE = dyn_cast<MCSymbolRefExpr>(Expr)) {
     if (auto BA = dyn_cast<BlockAddress>(CV)) {
-      // For block addresses we emit `.chericap FN+(.LtmpN - FN)`
+      // For block addresses we emit `.chericap FN@code+(.LtmpN - FN)`
       // NB: Must use a non-preemptible symbol
       auto FnStart = AP.getSymbolPreferLocal(*BA->getFunction(), true);
       const MCExpr *DiffToStart = MCBinaryExpr::createSub(SRE, MCSymbolRefExpr::create(FnStart, AP.OutContext), AP.OutContext);
-      AP.OutStreamer->EmitCheriCapability(FnStart, DiffToStart, CapWidth);
+      AP.OutStreamer->EmitCheriCapability(FnStart, DiffToStart, CapWidth, true);
       return;
     }
     // Emit capability for label whose address is stored in a global variable

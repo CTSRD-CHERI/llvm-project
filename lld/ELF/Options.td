@@ -752,6 +752,8 @@ def captable_scope_file: F<"captable-scope=file">,
 def captable_scope_function: F<"captable-scope=function">,
   HelpText<"Use one captable per function for global accesses (very slow but minimizes scope of $cgp)">;
 
+def cheri_codeptr_relocs : F<"cheri-codeptr-relocs">, HelpText<"Emit relocations for code pointers differently from function pointers">;
+
 // Options listed below are silently ignored for now for compatibility.
 def: Flag<["-"], "d">;
 def: Flag<["-"], "g">;

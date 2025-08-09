@@ -110,8 +110,10 @@ RISCV::RISCV() {
   copyRel = R_RISCV_COPY;
   pltRel = R_RISCV_JUMP_SLOT;
   relativeRel = R_RISCV_RELATIVE;
+  relativeFuncRel = R_RISCV_FUNC_RELATIVE;
   iRelativeRel = R_RISCV_IRELATIVE;
   cheriCapRel = R_RISCV_CHERI_CAPABILITY;
+  cheriCodeCapRel = R_RISCV_CHERI_CODE_CAPABILITY;
   if (config->is64) {
     symbolicRel = R_RISCV_64;
     tlsModuleIndexRel = R_RISCV_TLS_DTPMOD64;
@@ -288,7 +290,7 @@ void RISCV::writePlt(uint8_t *buf, const Symbol &sym,
 }
 
 RelType RISCV::getDynRel(RelType type) const {
-  return type == symbolicRel || type == cheriCapRel
+  return type == symbolicRel || type == cheriCapRel || type == cheriCodeCapRel
              ? type
              : static_cast<RelType>(R_RISCV_NONE);
 }
@@ -353,6 +355,7 @@ RelExpr RISCV::getRelExpr(const RelType type, const Symbol &s,
   case R_RISCV_RELAX:
     return config->relax ? R_RELAX_HINT : R_NONE;
   case R_RISCV_CHERI_CAPABILITY:
+  case R_RISCV_CHERI_CODE_CAPABILITY:
     return R_ABS_CAP;
   // TODO: Deprecate and eventually remove these
   case R_RISCV_CHERI_CAPTAB_PCREL_HI20:

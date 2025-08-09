@@ -186,11 +186,12 @@ cheri_init_globals_impl(const struct capreloc *start_relocs,
         __builtin_trap();
 #endif
     }
-    if (reloc->permissions == function_reloc_flag) {
+    if ((reloc->permissions & function_reloc_flag) == function_reloc_flag) {
       base_cap = code_cap; /* code pointer */
       /* Do not set tight bounds for functions (unless we are in the plt ABI) */
       can_set_bounds = tight_code_bounds;
-    } else if (reloc->permissions == constant_reloc_flag) {
+    } else if ((reloc->permissions & constant_reloc_flag) ==
+        constant_reloc_flag) {
       base_cap = rodata_cap; /* read-only data pointer */
     } else if (reloc->permissions == 0) {
       base_cap = data_cap; /* read-write data */

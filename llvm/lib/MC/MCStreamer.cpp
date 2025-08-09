@@ -227,22 +227,24 @@ void MCStreamer::EmitCheriCapability(const MCExpr *Value, unsigned CapSize,
 
 void MCStreamer::EmitCheriCapability(const MCSymbol *Value,
                                      const MCExpr *Addend, unsigned CapSize,
-                                     SMLoc Loc) {
-  const MCExpr *Expr = MCSymbolRefExpr::create(Value, Context);
+                                     bool Code, SMLoc Loc) {
+  MCSymbolRefExpr::VariantKind VK =
+      Code ?  MCSymbolRefExpr::VK_CHERI_CODE : MCSymbolRefExpr::VK_None;
+  const MCExpr *Expr = MCSymbolRefExpr::create(Value, VK, Context);
   if (Addend)
     Expr = MCBinaryExpr::createAdd(Expr, Addend, Context);
   EmitCheriCapability(Expr, CapSize, Loc);
 }
 
 void MCStreamer::EmitCheriCapability(const MCSymbol *Value, int64_t Addend,
-                                     unsigned CapSize, SMLoc Loc) {
+                                     unsigned CapSize, bool Code, SMLoc Loc) {
   EmitCheriCapability(Value, MCConstantExpr::create(Addend, Context), CapSize,
-                      Loc);
+                      Code, Loc);
 }
 
 void MCStreamer::EmitCheriCapability(const MCSymbol *Value, unsigned CapSize,
-                                     SMLoc Loc) {
-  EmitCheriCapability(Value, nullptr, CapSize, Loc);
+                                     bool Code, SMLoc Loc) {
+  EmitCheriCapability(Value, nullptr, CapSize, Code, Loc);
 }
 
 void MCStreamer::emitCheriIntcap(int64_t Value, unsigned CapSize, SMLoc Loc) {
