@@ -27,12 +27,6 @@
 #include <cstdint>
 using namespace llvm;
 
-cl::opt<bool> CheriEmitCodePtrRelocs(
-  "cheri-codeptr-relocs",
-  cl::desc("Emit different relocations for code pointers compared to function"
-           "pointers"),
-  cl::init(false));
-
 #define DEBUG_TYPE "asm-printer"
 
 //===----------------------------------------------------------------------===//
@@ -223,8 +217,7 @@ void AsmPrinter::emitCallSiteCheriCapability(const MCSymbol *Hi,
   // bounds and permissions info and need to use a non-preemptible alias.
   assert(CurrentFnBeginLocal && "Missing local function entry alias for EH!");
   OutStreamer->EmitCheriCapability(CurrentFnBeginLocal, DiffToStart,
-                                   TLOF.getCheriCapabilitySize(TM),
-                                   CheriEmitCodePtrRelocs);
+                                   TLOF.getCheriCapabilitySize(TM), true);
 }
 
 //===----------------------------------------------------------------------===//

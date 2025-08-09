@@ -106,7 +106,6 @@
 #include "llvm/Pass.h"
 #include "llvm/Remarks/RemarkStreamer.h"
 #include "llvm/Support/Casting.h"
-#include "llvm/Support/CommandLine.h"
 #include "llvm/Support/Compiler.h"
 #include "llvm/Support/ErrorHandling.h"
 #include "llvm/Support/FileSystem.h"
@@ -140,8 +139,6 @@ static cl::opt<std::string> BasicBlockProfileDump(
              "matching up BBs with afterwards, the compilation must be "
              "performed with -basic-block-sections=labels. Enabling this "
              "flag during in-process ThinLTO is not supported."));
-
-extern cl::opt<bool> CheriEmitCodePtrRelocs;
 
 const char DWARFGroupName[] = "dwarf";
 const char DWARFGroupDescription[] = "DWARF Emission";
@@ -3669,8 +3666,7 @@ static void emitGlobalConstantCHERICap(const DataLayout &DL, const Constant *CV,
       // NB: Must use a non-preemptible symbol
       auto FnStart = AP.getSymbolPreferLocal(*BA->getFunction(), true);
       const MCExpr *DiffToStart = MCBinaryExpr::createSub(SRE, MCSymbolRefExpr::create(FnStart, AP.OutContext), AP.OutContext);
-      AP.OutStreamer->EmitCheriCapability(FnStart, DiffToStart, CapWidth,
-                                          CheriEmitCodePtrRelocs);
+      AP.OutStreamer->EmitCheriCapability(FnStart, DiffToStart, CapWidth, true);
       return;
     }
     // Emit capability for label whose address is stored in a global variable
