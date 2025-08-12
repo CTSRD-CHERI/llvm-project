@@ -3610,6 +3610,7 @@ template <class ELFT> void ELFDumper<ELFT>::printCheriCapRelocs() {
     case Function | DontSeal:
       PermStr = "Function(Unsealed)";
       break;
+    // TODO - Function | Indirect | DontSeal
     default:
       PermStr = "Unknown";
       break;

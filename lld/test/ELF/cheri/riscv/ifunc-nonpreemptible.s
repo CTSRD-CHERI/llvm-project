@@ -4,14 +4,14 @@
 # RUN: llvm-readobj -r --cap-relocs -x .got.plt %t.32 | FileCheck --check-prefix=RELOC32 %s
 # RUN: llvm-readelf -x .got.plt %t.32 | FileCheck --check-prefix=GOTPLT32 %s
 # RUN: llvm-readelf -S -s %t.32 | FileCheck --check-prefixes=SEC,NM %s
-# RUN: llvm-objdump -d --no-show-raw-insn %t.32 | FileCheck --check-prefixes=DIS,DIS32 %s
+# RUN: llvm-objdump -d --no-show-raw-insn --mattr=+zcheripurecap %t.32 | FileCheck --check-prefixes=DIS,DIS32 %s
 
 # RUN: %riscv64_cheri_purecap_llvm-mc -filetype=obj %s -o %t.64.o
 # RUN: ld.lld %t.64.o -z separate-code -o %t.64
 # RUN: llvm-readelf -S -s %t.64 | FileCheck --check-prefixes=SEC,NM %s
 # RUN: llvm-readobj -r --cap-relocs -x .got.plt %t.64 | FileCheck --check-prefix=RELOC64 %s
 # RUN: llvm-readelf -x .got.plt %t.64 | FileCheck --check-prefix=GOTPLT64 %s
-# RUN: llvm-objdump -d --no-show-raw-insn %t.64 | FileCheck --check-prefixes=DIS,DIS64 %s
+# RUN: llvm-objdump -d --no-show-raw-insn --mattr=+zcheripurecap %t.64 | FileCheck --check-prefixes=DIS,DIS64 %s
 
 # SEC: .iplt PROGBITS {{0*}}00011010
 
@@ -38,14 +38,14 @@
 
 # DIS:      <_start>:
 ## func - . = 0x11010-0x11004 = 12
-# DIS-NEXT: 11004: auipcc ca0, 0
+# DIS-NEXT: 11004: auipc ca0, 0
 # DIS-NEXT:        cincoffset ca0, ca0, 12
 
 # DIS:      Disassembly of section .iplt:
 # DIS:      <func>:
 ## 32-bit: &.got.plt[func]-. = 0x12008-0x11010 = 4096*1-8
 ## 64-bit: &.got.plt[func]-. = 0x12010-0x11010 = 4096*1+0
-# DIS-NEXT: 11010: auipcc ct3, 1
+# DIS-NEXT: 11010: auipc ct3, 1
 # DIS32-NEXT:      lc ct3, -8(ct3)
 # DIS64-NEXT:      lc ct3, 0(ct3)
 # DIS-NEXT:        jalr ct1, ct3
