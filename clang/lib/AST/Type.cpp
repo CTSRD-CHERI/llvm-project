@@ -650,6 +650,18 @@ bool Type::isCHERICapabilityType(const ASTContext &Context,
   return false;
 }
 
+bool Type::isSingleCapabilityRecord(const ASTContext &Context) const {
+  if (auto *RT = getAs<RecordType>())
+    return Context.containsCapabilities(RT->getDecl()) &&
+           Context.getTypeSize(this) ==
+               Context.getTargetInfo().getCHERICapabilityWidth();
+  if (const AtomicType *AT = getAs<AtomicType>())
+    return AT->getValueType()->isSingleCapabilityRecord(Context);
+  if (const AttributedType *AT = getAs<AttributedType>())
+    return AT->getModifiedType()->isSingleCapabilityRecord(Context);
+  return false;
+}
+
 bool Type::isIntCapType() const {
   if (const BuiltinType *BT = dyn_cast<BuiltinType>(CanonicalType))
     return BT->getKind() == BuiltinType::IntCap ||
