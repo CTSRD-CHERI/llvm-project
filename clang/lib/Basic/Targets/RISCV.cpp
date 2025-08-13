@@ -223,21 +223,44 @@ void RISCVTargetInfo::getTargetDefines(const LangOptions &Opts,
     }
 
     // Macros for use with the set and get permissions builtins.
-    Builder.defineMacro("__CHERI_CAP_PERMISSION_GLOBAL__", Twine(1<<0));
-    Builder.defineMacro("__CHERI_CAP_PERMISSION_PERMIT_EXECUTE__",
-            Twine(1<<1));
-    Builder.defineMacro("__CHERI_CAP_PERMISSION_PERMIT_LOAD__", Twine(1<<2));
-    Builder.defineMacro("__CHERI_CAP_PERMISSION_PERMIT_STORE__", Twine(1<<3));
-    Builder.defineMacro("__CHERI_CAP_PERMISSION_PERMIT_LOAD_CAPABILITY__",
-            Twine(1<<4));
-    Builder.defineMacro("__CHERI_CAP_PERMISSION_PERMIT_STORE_CAPABILITY__",
-            Twine(1<<5));
-    Builder.defineMacro("__CHERI_CAP_PERMISSION_PERMIT_STORE_LOCAL__",
-            Twine(1<<6));
-    Builder.defineMacro("__CHERI_CAP_PERMISSION_PERMIT_SEAL__", Twine(1<<7));
-    Builder.defineMacro("__CHERI_CAP_PERMISSION_PERMIT_INVOKE__", Twine(1<<8));
-    Builder.defineMacro("__CHERI_CAP_PERMISSION_PERMIT_UNSEAL__", Twine(1<<9));
-    Builder.defineMacro("__CHERI_CAP_PERMISSION_ACCESS_SYSTEM_REGISTERS__", Twine(1<<10));
+    if (ISAInfo->hasExtension("y")) {
+      Builder.defineMacro("__CHERI_CAP_PERMISSION_WRITE__", Twine(1 << 0));
+      Builder.defineMacro("__CHERI_CAP_PERMISSION_LOAD_MUTABLE__",
+                          Twine(1 << 1));
+      Builder.defineMacro("__CHERI_CAP_PERMISSION_LOAD_GLOBAL__",
+                          Twine(1 << 2));
+      Builder.defineMacro("__CHERI_CAP_PERMISSION_STORE_LOCAL__",
+                          Twine(1 << 3));
+      Builder.defineMacro("__CHERI_CAP_PERMISSION_CAPABILITY_GLOBAL__",
+                          Twine(1 << 4));
+      Builder.defineMacro("__CHERI_CAP_PERMISSION_CAPABILITY__", Twine(1 << 5));
+      Builder.defineMacro("__CHERI_CAP_PERMISSION_ACCESS_SYSTEM_REGISTERS__",
+                          Twine(1 << 16));
+      Builder.defineMacro("__CHERI_CAP_PERMISSION_EXECUTE__", Twine(1 << 17));
+      Builder.defineMacro("__CHERI_CAP_PERMISSION_READ__", Twine(1 << 18));
+    } else {
+      Builder.defineMacro("__CHERI_CAP_PERMISSION_GLOBAL__", Twine(1 << 0));
+      Builder.defineMacro("__CHERI_CAP_PERMISSION_PERMIT_EXECUTE__",
+                          Twine(1 << 1));
+      Builder.defineMacro("__CHERI_CAP_PERMISSION_PERMIT_LOAD__",
+                          Twine(1 << 2));
+      Builder.defineMacro("__CHERI_CAP_PERMISSION_PERMIT_STORE__",
+                          Twine(1 << 3));
+      Builder.defineMacro("__CHERI_CAP_PERMISSION_PERMIT_LOAD_CAPABILITY__",
+                          Twine(1 << 4));
+      Builder.defineMacro("__CHERI_CAP_PERMISSION_PERMIT_STORE_CAPABILITY__",
+                          Twine(1 << 5));
+      Builder.defineMacro("__CHERI_CAP_PERMISSION_PERMIT_STORE_LOCAL__",
+                          Twine(1 << 6));
+      Builder.defineMacro("__CHERI_CAP_PERMISSION_PERMIT_SEAL__",
+                          Twine(1 << 7));
+      Builder.defineMacro("__CHERI_CAP_PERMISSION_PERMIT_INVOKE__",
+                          Twine(1 << 8));
+      Builder.defineMacro("__CHERI_CAP_PERMISSION_PERMIT_UNSEAL__",
+                          Twine(1 << 9));
+      Builder.defineMacro("__CHERI_CAP_PERMISSION_ACCESS_SYSTEM_REGISTERS__",
+                          Twine(1 << 10));
+    }
 
     Builder.defineMacro("__riscv_clen", Twine(getCHERICapabilityWidth()));
     // TODO: _MIPS_CAP_ALIGN_MASK equivalent?
@@ -249,6 +272,11 @@ void RISCVTargetInfo::getTargetDefines(const LangOptions &Opts,
     // Defines to allow software to detect a ISAv9 compiler vs. an older v8 one.
     Builder.defineMacro("__riscv_xcheri_tag_clear");
     Builder.defineMacro("__riscv_xcheri_no_relocation");
+    // Define macros for compatibility.
+    if (ISAInfo->hasExtension("y"))
+      Builder.defineMacro("__riscv_zcheripurecap", "9000");
+    if (ISAInfo->hasExtension("zyhybrid"))
+      Builder.defineMacro("__riscv_zcherihybrid", "9000");
   }
 
   if (ISAInfo->hasExtension("zve32x")) {
@@ -372,7 +400,7 @@ bool RISCVTargetInfo::handleTargetFeatures(std::vector<std::string> &Features,
   } else {
     ISAInfo = std::move(*ParseResult);
   }
-  if (ISAInfo->hasExtension("xcheri")) {
+  if (ISAInfo->hasExtension("xcheri") || ISAInfo->hasExtension("y")) {
     HasCheri = true;
     CapSize = XLen * 2;
   }
