@@ -482,6 +482,10 @@ class LLVMConfig(object):
         riscv64_cheri_args = [triple_opt + '=riscv64-unknown-freebsd', '-mattr=+xcheri'] + extra_args
         riscv32_cheri_purecap_args = ['-target-abi', 'il32pc64d', '-mattr=+cap-mode'] + riscv32_cheri_args
         riscv64_cheri_purecap_args = ['-target-abi', 'l64pc128d', '-mattr=+cap-mode'] + riscv64_cheri_args
+        riscv32y_purecap_args = [triple_opt + '=riscv32-unknown-freebsd', '-mattr=+y,+cap-mode', '-target-abi', 'il32pc64d']
+        riscv64y_purecap_args = [triple_opt + '=riscv64-unknown-freebsd', '-mattr=+y,+cap-mode', '-target-abi', 'l64pc128d']
+        riscv32y_hybrid_args = [triple_opt + '=riscv32-unknown-freebsd', '-mattr=+y,+zyhybrid']
+        riscv64y_hybrid_args = [triple_opt + '=riscv64-unknown-freebsd', '-mattr=+y,+zyhybrid']
 
         default_args = cheri128_args
         tool_patterns = [
@@ -495,6 +499,10 @@ class LLVMConfig(object):
             ToolSubst('%riscv64_cheri_' + tool, FindTool(tool), extra_args=riscv64_cheri_args),
             ToolSubst('%riscv32_cheri_purecap_' + tool, FindTool(tool), extra_args=riscv32_cheri_purecap_args),
             ToolSubst('%riscv64_cheri_purecap_' + tool, FindTool(tool), extra_args=riscv64_cheri_purecap_args),
+            ToolSubst('%riscv32y_purecap_' + tool, FindTool(tool), extra_args=riscv32y_purecap_args),
+            ToolSubst('%riscv64y_purecap_' + tool, FindTool(tool), extra_args=riscv64y_purecap_args),
+            ToolSubst('%riscv32y_hybrid_' + tool, FindTool(tool), extra_args=riscv32y_hybrid_args),
+            ToolSubst('%riscv64y_hybrid_' + tool, FindTool(tool), extra_args=riscv64y_hybrid_args),
         ]
         self.add_tool_substitutions(tool_patterns, [self.config.llvm_tools_dir])
 
@@ -652,6 +660,15 @@ class LLVMConfig(object):
             riscv64_cheri_cc1_args = clang_cc1_args + [ '-triple', 'riscv64-unknown-freebsd',
                     '-target-feature', '+xcheri', '-mllvm', '-verify-machineinstrs']
 
+            riscv32y_purecap_cc1_args = clang_cc1_args + ['-triple', 'riscv32-unknown-freebsd',
+                    '-target-feature', '+y', '-mllvm', '-verify-machineinstrs']
+            riscv64y_purecap_cc1_args = clang_cc1_args + ['-triple', 'riscv64-unknown-freebsd',
+                    '-target-feature', '+y', '-mllvm', '-verify-machineinstrs']
+            riscv32y_hybrid_cc1_args = clang_cc1_args + ['-triple', 'riscv32-unknown-freebsd',
+                    '-target-feature', '+zyhybrid', '-mllvm', '-verify-machineinstrs']
+            riscv64y_hybrid_cc1_args = clang_cc1_args + ['-triple', 'riscv64-unknown-freebsd',
+                    '-target-feature', '+zyhybrid', '-mllvm', '-verify-machineinstrs']
+
             cheri_cc1_args = cheri128_cc1_args
             default_cheri_cpu = 'cheri128'
             cheri_clang_args = ['-target', 'mips64-unknown-freebsd', '-nostdinc',
@@ -661,6 +678,10 @@ class LLVMConfig(object):
 
             tool_substitutions = [
                 # CHERI substitutions (order is important due to repeated substitutions!)
+                ToolSubst('%riscv32y_purecap_cc1', command=self.config.clang, extra_args=riscv32y_purecap_cc1_args+additional_flags+['-target-abi', 'il32pc64', '-target-feature', '+cap-mode']),
+                ToolSubst('%riscv64y_purecap_cc1', command=self.config.clang, extra_args=riscv64y_purecap_cc1_args+additional_flags+['-target-abi', 'l64pc128', '-target-feature', '+cap-mode']),
+                ToolSubst('%riscv32y_hybrid_cc1', command=self.config.clang, extra_args=riscv32y_hybrid_cc1_args+additional_flags),
+                ToolSubst('%riscv64y_hybrid_cc1', command=self.config.clang, extra_args=riscv64y_hybrid_cc1_args+additional_flags),
                 ToolSubst('%cheri_purecap_cc1',    command='%cheri_cc1',    extra_args=['-target-abi', 'purecap']+additional_flags),
                 ToolSubst('%cheri128_purecap_cc1', command='%cheri128_cc1', extra_args=['-target-abi', 'purecap']+additional_flags),
                 ToolSubst('%cheri_cc1',    command=self.config.clang, extra_args=cheri_cc1_args+additional_flags),
