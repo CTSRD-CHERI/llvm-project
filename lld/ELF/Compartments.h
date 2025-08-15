@@ -16,10 +16,17 @@ namespace lld {
 namespace elf {
 
 struct Compartment;
+class InputSectionBase;
+class Symbol;
 
 void readCompartmentPolicy(MemoryBufferRef mb);
 
 void assignSectionsToCompartments();
+
+void verifyExecSymbol(const Compartment &c, const InputSectionBase &sec,
+                      const Symbol &sym, uint64_t off);
+void verifyAccessSymbol(const Compartment &c, const InputSectionBase &sec,
+                        const Symbol &sym, uint64_t off);
 
 } // namespace elf
 } // namespace lld
