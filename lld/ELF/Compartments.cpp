@@ -92,6 +92,103 @@ namespace std {
 namespace lld {
 namespace elf {
 
+class CompartmentAcls {
+  struct ParsedAcl {
+    GlobPattern subject;
+    CompartmentPermissions permissions;
+    std::vector<GlobPattern> symbols;
+    std::vector<GlobPattern> compartments;
+  };
+
+public:
+  bool addRule(const CompartmentAcl &acl) {
+    ParsedAcl p;
+
+    Expected<GlobPattern> subject = GlobPattern::create(acl.subject);
+    if (!subject) {
+      error(toString(subject.takeError()));
+      return false;
+    }
+    p.subject = std::move(*subject);
+    p.permissions = acl.permissions;
+    for (const auto &sym : acl.symbols) {
+      Expected<GlobPattern> glob = GlobPattern::create(sym);
+      if (!glob) {
+        error(toString(glob.takeError()));
+        return false;
+      }
+      p.symbols.emplace_back(std::move(*glob));
+    }
+    for (const auto &compart : acl.compartments) {
+      Expected<GlobPattern> glob = GlobPattern::create(compart);
+      if (!glob) {
+        error(toString(glob.takeError()));
+        return false;
+      }
+      p.compartments.emplace_back(std::move(*glob));
+    }
+    rules.emplace_back(p);
+    return true;
+  }
+
+  bool empty() const { return rules.empty(); }
+
+  template <class Pred>
+  bool hasMatch(const Compartment *c, const Symbol &sym, Pred p) const {
+    auto symCompart = sym.containingCompartment();
+
+    // Access within the compartment is always permitted
+    if (symCompart && *symCompart == c)
+      return true;
+
+    // The default compartment matches the empty string.  Unnamed symbols only
+    // match the glob pattern "*".
+    for (const auto &rule : rules) {
+      // Check the subject.
+      if (!rule.subject.isTrivialMatchAll()) {
+        if (!rule.subject.match(c == nullptr ? "" : c->name))
+          continue;
+      }
+
+      // Check the objects.
+      StringRef symName = sym.getName();
+      bool matches = false;
+      for (const auto &glob : rule.symbols) {
+        if (glob.isTrivialMatchAll()) {
+          matches = true;
+          break;
+        }
+        if (!symName.empty() && glob.match(symName)) {
+          matches = true;
+          break;
+        }
+      }
+      if (!matches) {
+        for (const auto &glob : rule.compartments) {
+          if (glob.isTrivialMatchAll()) {
+            matches = true;
+            break;
+          }
+          if (symCompart &&
+              glob.match(*symCompart == nullptr ? "" : (*symCompart)->name)) {
+            matches = true;
+            break;
+          }
+        }
+      }
+      if (!matches)
+        continue;
+
+      if (p(rule.permissions))
+        return true;
+    }
+    return false;
+  }
+
+private:
+  std::vector<ParsedAcl> rules;
+} acls;
+
 class CompartmentLookup {
 public:
   bool addPattern(StringRef glob, Compartment *c)
@@ -590,6 +687,9 @@ void assignSectionsToCompartments() {
         valid &= symbolLookup.addPattern(glob, c);
       }
     }
+    for (const auto &acl : policy.acls) {
+      valid &= acls.addRule(acl);
+    }
   }
   if (!valid)
     exitLld(1);
@@ -898,6 +998,30 @@ void assignSectionsToCompartments() {
   }
 
   checkDefaultCompartment();
+}
+
+static bool requireExec(const CompartmentPermissions &perms) {
+  return perms.execute;
+}
+
+static bool requireAccess(const CompartmentPermissions &perms) {
+  return perms.read || perms.write || perms.execute;
+}
+
+void verifyExecSymbol(const Compartment *c, const Symbol &sym) {
+  if (acls.empty() || acls.hasMatch(c, sym, requireExec))
+    return;
+
+  error("policy forbids executing " + symbolName(&sym) + " from " +
+        compartmentName(c));
+}
+
+void verifyAccessSymbol(const Compartment *c, const Symbol &sym) {
+  if (acls.empty() || acls.hasMatch(c, sym, requireAccess))
+    return;
+
+  error("policy forbids accessing " + symbolName(&sym) + " from " +
+        compartmentName(c));
 }
 
 }

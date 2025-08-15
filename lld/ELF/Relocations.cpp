@@ -42,6 +42,7 @@
 
 #include "Relocations.h"
 #include "Arch/Cheri.h"
+#include "Compartments.h"
 #include "Config.h"
 #include "InputFiles.h"
 #include "LinkerScript.h"
@@ -1541,6 +1542,11 @@ template <class ELFT, class RelTy> void RelocationScanner::scanOne(RelTy *&i) {
         ++offset;
     }
   }
+
+  if (expr == R_PLT_PC || sym.type == STT_FUNC || sym.type == STT_GNU_IFUNC)
+    verifyExecSymbol(c, sym);
+  else
+    verifyAccessSymbol(c, sym);
 
   // If the relocation does not emit a GOT or GOTPLT entry but its computation
   // uses their addresses, we need GOT or GOTPLT to be created.

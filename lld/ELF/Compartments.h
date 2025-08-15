@@ -16,6 +16,7 @@ namespace lld {
 namespace elf {
 
 struct Compartment;
+class Symbol;
 
 void addCompartment(StringRef name);
 
@@ -24,6 +25,9 @@ Compartment *findCompartment(StringRef name);
 void readCompartmentPolicy(MemoryBufferRef mb);
 
 void assignSectionsToCompartments();
+
+void verifyExecSymbol(const Compartment *c, const Symbol &sym);
+void verifyAccessSymbol(const Compartment *c, const Symbol &sym);
 
 } // namespace elf
 } // namespace lld
