@@ -21,6 +21,13 @@ class FunctionPass;
 class Pass;
 
 //===----------------------------------------------------------------------===//
+// LogCheriSetBounds - This pass logs information on generated CSetBounds
+// calls.
+//
+FunctionPass *createLogCheriSetBoundsPass();
+extern char &LogCheriSetBoundsID;
+
+//===----------------------------------------------------------------------===//
 //
 // LowerInvoke - This pass removes invoke instructions, converting them to call
 // instructions.
