@@ -42,6 +42,7 @@
 
 #include "Relocations.h"
 #include "Arch/Cheri.h"
+#include "Compartments.h"
 #include "Config.h"
 #include "InputFiles.h"
 #include "LinkerScript.h"
@@ -1636,6 +1637,15 @@ template <class ELFT, class RelTy> void RelocationScanner::scanOne(RelTy *&i) {
       if (i->getType(/*isMips64EL=*/false) == R_PPC64_REL24_NOTOC)
         ++offset;
     }
+  }
+
+  // Undefined weak references will be static link time constants that do not
+  // belong to any compartment for -no-pie static linking.
+  if (config->isPic || !sym.isUndefWeak()) {
+    if (expr == R_PLT_PC || sym.type == STT_FUNC || sym.type == STT_GNU_IFUNC)
+      verifyExecSymbol(c, *sec, sym, offset);
+    else
+      verifyAccessSymbol(c, *sec, sym, offset);
   }
 
   // If the relocation does not emit a GOT or GOTPLT entry but its computation
