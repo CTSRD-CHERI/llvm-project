@@ -564,6 +564,7 @@ constexpr const char *knownZFlags[] = {
     "relro",
     "retpolineplt",
     "rodynamic",
+    "rvy",
     "separate-code",
     "separate-loadable-segments",
     "shstk",
@@ -1394,6 +1395,7 @@ static void readConfigs(opt::InputArgList &args) {
       args.hasFlag(OPT_warn_symbol_ordering, OPT_no_warn_symbol_ordering, true);
   config->whyExtract = args.getLastArgValue(OPT_why_extract);
   config->zCapTableDebug = getZFlag(args, "captabledebug", "nocaptabledebug", false);
+  config->zRVY = hasZOption(args, "rvy");
   config->zCombreloc = getZFlag(args, "combreloc", "nocombreloc", true);
   config->zCopyreloc = getZFlag(args, "copyreloc", "nocopyreloc", true);
   config->zForceBti = hasZOption(args, "force-bti");
