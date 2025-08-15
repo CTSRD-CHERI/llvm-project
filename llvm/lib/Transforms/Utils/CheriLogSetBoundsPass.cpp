@@ -8,11 +8,8 @@
 //===----------------------------------------------------------------------===//
 
 #include "llvm/Transforms/Utils/CheriLogSetBounds.h"
-
 #include "llvm/Analysis/AssumptionCache.h"
-#include "llvm/CodeGen/MachineFunctionPass.h"
-#include "llvm/CodeGen/MachineModuleInfo.h"
-#include "llvm/CodeGen/Passes.h"
+#include "llvm/Transforms/Utils.h"
 #include "llvm/Transforms/Utils/CheriSetBounds.h"
 #include "llvm/Transforms/Utils/Local.h"
 
@@ -136,12 +133,16 @@ public:
 
 char CheriLogSetBoundsLegacyPass::ID;
 
-FunctionPass *llvm::createLogCheriSetBoundsPass() {
+namespace llvm {
+char &LogCheriSetBoundsID = CheriLogSetBoundsLegacyPass::ID;
+
+FunctionPass *createLogCheriSetBoundsPass() {
   static bool created = false;
   assert(!created && "Should only be created once");
   created = true;
   return new CheriLogSetBoundsLegacyPass();
 }
+} // namespace llvm
 
 PreservedAnalyses CheriLogSetBoundsPass::run(Function &F,
                                              FunctionAnalysisManager &AM) {
