@@ -150,8 +150,22 @@ struct CompartmentMembers {
   std::vector<std::string> files;
 };
 
+struct CompartmentPermissions {
+  bool read = false;
+  bool write = false;
+  bool execute = false;
+};
+
+struct CompartmentAcl {
+  std::string subject;
+  CompartmentPermissions permissions;
+  std::vector<std::string> symbols;
+  std::vector<std::string> compartments;
+};
+
 struct CompartmentPolicy {
   std::map<std::string, CompartmentMembers> compartments;
+  std::vector<CompartmentAcl> acls;
 };
 
 // This struct contains the global configuration for the linker.
