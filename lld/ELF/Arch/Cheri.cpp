@@ -982,8 +982,8 @@ static bool alignPCCBounds(PhdrEntry *p, CheriPccPaddingSection &psec) {
   // Ignore existing padding.
   uint64_t size = last->getVA() - first->getVA();
   uint64_t align = target->getCheriRequiredAlignment(size);
-  if (align == 0)
-    align = 1;
+//  if (align == 0)
+//    align = 1;
   bool changed = false;
   if (first->addralign < align) {
     first->addralign = align;

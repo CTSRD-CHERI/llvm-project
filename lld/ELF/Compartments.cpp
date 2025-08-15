@@ -222,6 +222,131 @@ Compartment *findCompartment(StringRef name) {
   return nullptr;
 }
 
+// Support both "subject": { "name": "foo"} and "subject": "foo"
+static bool parseSubject(const json::Value *E, std::string &Out,
+                         json::Path P) {
+  if (!E) {
+    P.report("missing value");
+    return false;
+  }
+  switch (E->kind()) {
+  case json::Value::String:
+    return fromJSON(*E, Out, P);
+  case json::Value::Object: {
+    std::map<std::string, std::string> values;
+    if (!fromJSON(*E, values, P))
+      return false;
+    auto it = values.find("name");
+    if (it == values.end()) {
+      P.field("name").report("missing value");
+      return false;
+    }
+    Out = it->second;
+    return true;
+  }
+  default:
+    P.report("expected object or string");
+    return false;
+  }
+}
+
+static bool parsePermissions(const json::Value *E, CompartmentPermissions &Out,
+                             json::Path P) {
+  if (!E) {
+    P.report("missing value");
+    return false;
+  }
+
+  std::string perms;
+  if (!fromJSON(*E, perms, P))
+    return false;
+
+  if (perms.empty()) {
+    P.report("invalid permissions");
+    return false;
+  }
+
+  for (char c : perms) {
+    switch (c) {
+    case 'r':
+      Out.read = true;
+      break;
+    case 'w':
+      Out.write = true;
+      break;
+    case 'x':
+      Out.execute = true;
+      break;
+    default:
+      P.report("invalid permissions");
+      return false;
+    }
+  }
+  return true;
+}
+
+// Support "object": { "name": "foo", "type": "symbol" }
+static bool parseObject(const json::Value &E, CompartmentAcl &Out,
+                        json::Path P)
+{
+  llvm::json::ObjectMapper O(E, P);
+  std::string name, type;
+  if (!(O && O.map("name", name) && O.map("type", type)))
+    return false;
+  if (type == "symbol") {
+    Out.symbols.push_back(name);
+    return true;
+  }
+  if (type == "compartment") {
+    Out.compartments.push_back(name);
+    return true;
+  }
+  P.field("type").report("invalid value");
+  return false;
+}
+
+// Parse { ..., "symbols": [...], "compartments": [...] }
+static bool parseObjects(const json::Value &E, CompartmentAcl &Out,
+                         json::Path P)
+{
+  llvm::json::ObjectMapper O(E, P);
+  if (!(O && O.mapOptional("symbols", Out.symbols) &&
+        O.mapOptional("compartments", Out.compartments)))
+    return false;
+  if (Out.symbols.empty() && Out.compartments.empty()) {
+    P.report("no rule objects specified");
+    return false;
+  }
+  return true;
+}
+
+static bool fromJSON(const json::Value &E, CompartmentAcl &Out,
+                     json::Path P) {
+  const json::Object *O = E.getAsObject();
+  if (!O) {
+    P.report("expected object");
+    return false;
+  }
+
+  if (!parseSubject(O->get("subject"), Out.subject, P.field("subject")))
+    return false;
+
+  if (!parsePermissions(O->get("permissions"), Out.permissions,
+                        P.field("permissions")))
+    return false;
+
+  const json::Value *objE = O->get("object");
+  if (objE) {
+    if (O->get("compartments") || O->get("symbols")) {
+      P.report("cannot specify both \"object\" and \"symbols\" and/or \"compartments\"");
+      return false;
+    }
+
+    return parseObject(*objE, Out, P.field("object"));
+  }
+  return parseObjects(E, Out, P);
+}
+
 static bool fromJSON(const json::Value &E, CompartmentMembers &Out,
                      json::Path P) {
   llvm::json::ObjectMapper O(E, P);
@@ -232,7 +357,8 @@ static bool fromJSON(const json::Value &E, CompartmentMembers &Out,
 static bool fromJSON(const json::Value &E, CompartmentPolicy &Out,
                      json::Path P) {
   llvm::json::ObjectMapper O(E, P);
-  return O && O.map("compartments", Out.compartments);
+  return O && O.map("compartments", Out.compartments) &&
+    O.mapOptional("acls", Out.acls);
 }
 
 void readCompartmentPolicy(MemoryBufferRef mb) {
