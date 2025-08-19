@@ -34,18 +34,11 @@ define i32 @nneg_nneg(ptr addrspace(200) %p, i16 %x) {
 define i32 @neg_neg(ptr addrspace(200) %p, i16 %x) {
 ; PURECAP-LABEL: neg_neg:
 ; PURECAP:       # %bb.0:
-; PURECAP-NEXT:    daddiu $1, $zero, -1
-; PURECAP-NEXT:    xor $1, $4, $1
-; PURECAP-NEXT:    daddiu $2, $zero, 1
-; PURECAP-NEXT:    dsll $3, $2, 46
-; PURECAP-NEXT:    daddiu $3, $3, -1
-; PURECAP-NEXT:    dsll $3, $3, 16
-; PURECAP-NEXT:    or $1, $1, $3
-; PURECAP-NEXT:    dsll $2, $2, 62
-; PURECAP-NEXT:    daddiu $2, $2, -2
-; PURECAP-NEXT:    and $1, $1, $2
+; PURECAP-NEXT:    ori $1, $4, 1
+; PURECAP-NEXT:    andi $1, $1, 65535
+; PURECAP-NEXT:    dnegu $1, $1
 ; PURECAP-NEXT:    dsll $1, $1, 2
-; PURECAP-NEXT:    clw $2, $1, 0($c3)
+; PURECAP-NEXT:    clw $2, $1, -4($c3)
 ; PURECAP-NEXT:    cjr $c17
 ; PURECAP-NEXT:    nop
 ;

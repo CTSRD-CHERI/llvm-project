@@ -12,9 +12,8 @@ define i32 @nneg_nneg(ptr addrspace(200) %p, i16 %x) {
 ; PURECAP-NEXT:    slli a1, a1, 16
 ; PURECAP-NEXT:    srli a1, a1, 16
 ; PURECAP-NEXT:    slli a1, a1, 2
-; PURECAP-NEXT:    addi a1, a1, 4
 ; PURECAP-NEXT:    cincoffset ca0, ca0, a1
-; PURECAP-NEXT:    lw a0, 0(ca0)
+; PURECAP-NEXT:    lw a0, 4(ca0)
 ; PURECAP-NEXT:    ret
 ;
 ; HYBRID-LABEL: nneg_nneg:
@@ -36,13 +35,13 @@ define i32 @nneg_nneg(ptr addrspace(200) %p, i16 %x) {
 define i32 @neg_neg(ptr addrspace(200) %p, i16 %x) {
 ; PURECAP-LABEL: neg_neg:
 ; PURECAP:       # %bb.0:
-; PURECAP-NEXT:    not a1, a1
-; PURECAP-NEXT:    andi a1, a1, -2
+; PURECAP-NEXT:    ori a1, a1, 1
+; PURECAP-NEXT:    slli a1, a1, 16
+; PURECAP-NEXT:    srli a1, a1, 16
+; PURECAP-NEXT:    neg a1, a1
 ; PURECAP-NEXT:    slli a1, a1, 2
-; PURECAP-NEXT:    lui a2, 1048512
-; PURECAP-NEXT:    or a1, a1, a2
 ; PURECAP-NEXT:    cincoffset ca0, ca0, a1
-; PURECAP-NEXT:    lw a0, 0(ca0)
+; PURECAP-NEXT:    lw a0, -4(ca0)
 ; PURECAP-NEXT:    ret
 ;
 ; HYBRID-LABEL: neg_neg:

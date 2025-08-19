@@ -2630,6 +2630,20 @@ bool SelectionDAG::SignBitIsZero(SDValue Op, unsigned Depth) const {
   return MaskedValueIsZero(Op, APInt::getSignMask(BitWidth), Depth);
 }
 
+/// SignBitIsOne - Return true if the sign bit of Op is known to be one.  We
+/// use this predicate to simplify operations downstream.
+bool SelectionDAG::SignBitIsOne(SDValue Op, unsigned Depth) const {
+  unsigned BitWidth = Op.getScalarValueSizeInBits();
+  return MaskedValueIsAllOnes(Op, APInt::getSignMask(BitWidth), Depth);
+}
+
+/// SignBitIsSame - Return true if the sign bits of N0 and N1 are known to be
+/// the same.  We use this predicate to simplify operations downstream.
+bool SelectionDAG::SignBitIsSame(SDValue N0, SDValue N1, unsigned Depth) const {
+  return (SignBitIsZero(N0, Depth) && SignBitIsZero(N1, Depth)) ||
+         (SignBitIsOne(N0, Depth) && SignBitIsOne(N1, Depth));
+}
+
 /// MaskedValueIsZero - Return true if 'V & Mask' is known to be zero.  We use
 /// this predicate to simplify operations downstream.  Mask is known to be zero
 /// for bits that V cannot have.
