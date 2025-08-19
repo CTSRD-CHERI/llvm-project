@@ -116,10 +116,10 @@ define void @hoist_alloca_cond(i32 signext %cond) local_unnamed_addr addrspace(2
 ; CHECK-NEXT:    li s3, 100
 ; CHECK-NEXT:    li a0, 492
 ; CHECK-NEXT:    caddi ca1, csp, 100
-; CHECK-NEXT:    scbndsr cs2, ca1, a0
+; CHECK-NEXT:    scbndsr cs1, ca1, a0
 ; CHECK-NEXT:    li a0, 88
 ; CHECK-NEXT:    caddi ca1, csp, 12
-; CHECK-NEXT:    scbndsr cs1, ca1, a0
+; CHECK-NEXT:    scbndsr cs2, ca1, a0
 ; CHECK-NEXT:    j .LBB1_2
 ; CHECK-NEXT:  .LBB1_1: # %for.inc
 ; CHECK-NEXT:    # in Loop: Header=BB1_2 Depth=1
@@ -130,8 +130,8 @@ define void @hoist_alloca_cond(i32 signext %cond) local_unnamed_addr addrspace(2
 ; CHECK-NEXT:    beqz s0, .LBB1_1
 ; CHECK-NEXT:  # %bb.3: # %if.then
 ; CHECK-NEXT:    # in Loop: Header=BB1_2 Depth=1
-; CHECK-NEXT:    cmv ca0, cs2
-; CHECK-NEXT:    cmv ca1, cs1
+; CHECK-NEXT:    cmv ca0, cs1
+; CHECK-NEXT:    cmv ca1, cs2
 ; CHECK-NEXT:    call call
 ; CHECK-NEXT:    j .LBB1_1
 ; CHECK-NEXT:  .LBB1_4: # %for.cond.cleanup
