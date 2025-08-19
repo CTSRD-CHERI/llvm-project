@@ -20,6 +20,31 @@ using namespace llvm;
 class RISCVELFStreamer : public MCELFStreamer {
   void reset() override;
 
+  int64_t MappingSymbolCounter = 0;
+
+  enum ElfMappingSymbol {
+    EMS_None,
+    EMS_CapMode,
+    EMS_NoCapMode,
+  };
+
+  struct ElfMappingSymbolInfo {
+    ElfMappingSymbolInfo(SMLoc Loc, MCFragment *F, uint64_t O)
+        : Loc(Loc), F(F), Offset(O), State(EMS_None) {}
+    void ResetInfo() {
+      F = nullptr;
+      Offset = 0;
+    }
+    bool hasInfo() { return F != nullptr; }
+    SMLoc Loc;
+    MCFragment *F;
+    uint64_t Offset;
+    ElfMappingSymbol State;
+  };
+  void EmitCapModeMappingSymbol();
+  void EmitNoCapModeMappingSymbol();
+  void EmitMappingSymbol(StringRef Name);
+
 public:
   RISCVELFStreamer(MCContext &C, std::unique_ptr<MCAsmBackend> MAB,
                    std::unique_ptr<MCObjectWriter> MOW,
@@ -31,6 +56,14 @@ public:
 protected:
   void EmitCheriCapability(const MCExpr *Value, unsigned CapSize,
                            SMLoc Loc) override;
+
+  void changeSection(MCSection *Section, const MCExpr *Subsection) override;
+  void emitInstruction(const MCInst &Inst, const MCSubtargetInfo &STI) override;
+
+private:
+  DenseMap<const MCSection *, std::unique_ptr<ElfMappingSymbolInfo>>
+      LastMappingSymbols;
+  std::unique_ptr<ElfMappingSymbolInfo> LastEMSInfo;
 };
 
 namespace llvm {
