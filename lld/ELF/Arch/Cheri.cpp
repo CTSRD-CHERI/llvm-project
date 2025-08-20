@@ -393,8 +393,7 @@ static uint64_t getTargetSize(const CheriCapRelocLocation &location,
   return targetSize;
 }
 
-template <class ELFT>
-struct CaptablePermissions {
+template <class ELFT> struct CapRelocPermission {
   static constexpr uint64_t permissionBit(uint64_t bit) {
     return UINT64_C(1) << ((sizeof(typename ELFT::uint) * 8) - bit);
   }
@@ -459,16 +458,16 @@ void CheriCapRelocsSection::writeToImpl(uint8_t *buf) {
     uint64_t permissions = 0;
     // Fow now Function implies ReadOnly so don't add the flag
     if (isFunc || isGnuIFunc) {
-      permissions |= CaptablePermissions<ELFT>::function;
+      permissions |= CapRelocPermission<ELFT>::function;
       if (isGnuIFunc)
-        permissions |= CaptablePermissions<ELFT>::indirect;
+        permissions |= CapRelocPermission<ELFT>::indirect;
       if (dontSeal)
-        permissions |= CaptablePermissions<ELFT>::dontSeal;
+        permissions |= CapRelocPermission<ELFT>::dontSeal;
     } else if (os) {
       assert(!isTls);
       // if ((OS->getPhdrFlags() & PF_W) == 0) {
       if (((os->flags & SHF_WRITE) == 0) || isRelroSection(os)) {
-        permissions |= CaptablePermissions<ELFT>::readOnly;
+        permissions |= CapRelocPermission<ELFT>::readOnly;
       } else if (os->flags & SHF_EXECINSTR) {
         warn("Non-function __cap_reloc against symbol in section with "
              "SHF_EXECINSTR (" +
