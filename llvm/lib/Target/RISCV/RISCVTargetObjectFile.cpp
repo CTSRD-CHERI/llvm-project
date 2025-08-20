@@ -7,9 +7,9 @@
 //===----------------------------------------------------------------------===//
 
 #include "RISCVTargetObjectFile.h"
+#include "MCTargetDesc/RISCVCompressedCap.h"
 #include "MCTargetDesc/RISCVMCObjectFileInfo.h"
 #include "RISCVTargetMachine.h"
-#include "MCTargetDesc/RISCVCompressedCap.h"
 #include "llvm/BinaryFormat/ELF.h"
 #include "llvm/MC/MCAsmInfo.h"
 #include "llvm/MC/MCContext.h"
