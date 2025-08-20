@@ -903,8 +903,11 @@ static void addRelativeReloc(InputSectionBase &isec, uint64_t offsetInSec,
       part.relrDyn->relocs.push_back({&isec, offsetInSec});
     return;
   }
-  part.relaDyn->addRelativeReloc<shard>(target->relativeRel, isec, offsetInSec,
-                                        sym, addend, type, expr);
+  RelType relativeType = target->relativeRel;
+  if (target->relativeFuncRel && sym.isFunc())
+    relativeType = *target->relativeFuncRel;
+  part.relaDyn->addRelativeReloc<shard>(relativeType, isec, offsetInSec, sym,
+                                        addend, type, expr);
 }
 
 template <class PltSection, class GotPltSection>
@@ -921,7 +924,7 @@ static void addPltEntry(PltSection &plt, GotPltSection &gotPlt,
     }
 
     addRelativeCapabilityRelocation(gotPlt, sym.getGotPltOffset(), &plt, 0,
-                                    R_ABS_CAP, *target->symbolicCapRel);
+                                    R_ABS_CAP, *target->symbolicCodeCapRel);
   }
 
   rel.addReloc({type, &gotPlt, sym.getGotPltOffset(),
@@ -1167,7 +1170,8 @@ void RelocationScanner::processAux(RelExpr expr, RelType type, uint64_t offset,
   if (canWrite) {
     RelType rel = target->getDynRel(type);
     if (oneof<R_GOT, R_LOONGARCH_GOT>(expr) ||
-        ((rel == target->symbolicRel || rel == target->symbolicCapRel) &&
+        ((rel == target->symbolicRel || rel == target->symbolicCapRel ||
+          type == target->symbolicCodeCapRel) &&
          !sym.isPreemptible)) {
       addRelativeReloc<true>(*sec, offset, sym, addend, expr, type);
       return;
@@ -1197,6 +1201,11 @@ void RelocationScanner::processAux(RelExpr expr, RelType type, uint64_t offset,
       // behaviour.
       if (config->emachine == EM_MIPS && expr != R_ABS_CAP)
         in.mipsGot->addEntry(*sec->file, sym, addend, expr);
+      return;
+    } else if (type == target->symbolicCodeCapRel) {
+      errorOrWarn("relocation " + toString(type) +
+                  " cannot be used against preemptible symbol '" +
+                  toString(sym) + "'" + getLocation(*sec, sym, offset));
       return;
     }
   }
