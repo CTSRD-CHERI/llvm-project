@@ -1744,12 +1744,12 @@ void RelocationBaseSection::partitionRels() {
   if (!combreloc)
     return;
   const RelType relativeRel = target->relativeRel;
-  numRelativeRelocs = llvm::partition(relocs,
-                                      [=](auto &r) {
-                                        return r.type == relativeRel ||
-                                               r.type == R_RISCV_CHERI_RELATIVE;
-                                      }) -
-                      relocs.begin();
+  const std::optional<RelType> relativeFuncRel = target->relativeFuncRel;
+  const auto *firstNonRelativeReloc = llvm::partition(relocs, [=](auto &r) {
+    return r.type == relativeRel || r.type == relativeFuncRel ||
+           r.type == R_RISCV_CHERI_RELATIVE;
+  });
+  numRelativeRelocs = firstNonRelativeReloc - relocs.begin();
 }
 
 void RelocationBaseSection::finalizeContents() {

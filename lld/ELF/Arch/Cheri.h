@@ -60,12 +60,18 @@ struct CheriCapRelocLocation {
 };
 
 struct CheriCapReloc {
+  // Indicates this is a relocation where the symbol is a function symbol but
+  // we do not want any interposition, as this reference is for a specific
+  // instruction within the function. Normal references to functions should not
+  // set this.
+  bool isCode;
   // We can't use a plain Symbol* here as capabilities to string constants
   // will be e.g. `.rodata.str + 0x90` -> need to store offset as well
   SymbolAndOffset target;
   int64_t capabilityOffset;
   bool operator==(const CheriCapReloc &other) const {
-    return target == other.target && capabilityOffset == other.capabilityOffset;
+    return isCode == other.isCode && target == other.target &&
+           capabilityOffset == other.capabilityOffset;
   }
 };
 
@@ -75,8 +81,9 @@ public:
   bool isNeeded() const override { return !relocsMap.empty(); }
   size_t getSize() const override { return relocsMap.size() * entsize; }
   void writeTo(uint8_t *buf) override;
-  void addCapReloc(CheriCapRelocLocation loc, const SymbolAndOffset &target,
-                   int64_t capabilityOffset, Symbol *sourceSymbol = nullptr);
+  void addCapReloc(bool isCode, CheriCapRelocLocation loc,
+                   const SymbolAndOffset &target, int64_t capabilityOffset,
+                   Symbol *sourceSymbol = nullptr);
 
 private:
   template <class ELFT> void writeToImpl(uint8_t *);
@@ -88,8 +95,10 @@ private:
             " does not match existing one:\n>   Existing: " +
             it.first->second.target.verboseToString() +
             ", cap offset=" + Twine(it.first->second.capabilityOffset) +
+            ", is code=" + Twine(it.first->second.isCode) +
             "\n>   New:     " + relocation.target.verboseToString() +
-            ", cap offset=" + Twine(relocation.capabilityOffset));
+            ", cap offset=" + Twine(relocation.capabilityOffset) +
+            ", is code=" + Twine(relocation.isCode));
     }
     return it.second;
   }
