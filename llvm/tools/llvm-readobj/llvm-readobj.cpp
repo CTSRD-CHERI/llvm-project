@@ -100,6 +100,7 @@ enum SortSymbolKeyTy {
 } // namespace
 
 namespace opts {
+static bool Acls;
 static bool Addrsig;
 static bool All;
 static bool ArchSpecificInfo;
@@ -218,6 +219,7 @@ void reportWarning(Error Err, StringRef Input) {
 } // namespace llvm
 
 static void parseOptions(const opt::InputArgList &Args) {
+  opts::Acls = Args.hasArg(OPT_acls);
   opts::Addrsig = Args.hasArg(OPT_addrsig);
   opts::All = Args.hasArg(OPT_all);
   opts::ArchSpecificInfo = Args.hasArg(OPT_arch_specific);
@@ -469,6 +471,8 @@ static void dumpObject(ObjectFile &Obj, ScopedPrinter &Writer,
       Dumper->printELFLinkerOptions();
     if (opts::ArchSpecificInfo)
       Dumper->printArchSpecificInfo();
+    if (opts::Acls)
+      Dumper->printAcls();
     if (opts::CheriCapRelocs)
       Dumper->printCheriCapRelocs();
     if (opts::CheriCapTable)
@@ -697,6 +701,7 @@ int llvm_readobj_main(int argc, char **argv, const llvm::ToolContext &) {
     opts::SectionGroups = true;
     opts::HashHistogram = true;
     if (opts::Output == opts::LLVM) {
+      opts::Acls = true;
       opts::CheriCapRelocs = true;
       opts::CheriCapTable = true;
       opts::Addrsig = true;
