@@ -76,7 +76,8 @@ declare dso_local void @__cxa_end_catch() local_unnamed_addr addrspace(200)
 ; Note: RISC-V uses DW_EH_PE_udata4, so the 0xc marker uses 4 bytes instead of 1
 ; CHECK-NEXT:  [[SMALL_CS_DIRECTIVE:(\.byte)|(\.word)]] 12     # (landing pad is a capability)
 ; Note: the following line should not be using _Z8do_catchv, but a local alias
-; CHECK-NEXT:  .chericap  .L_Z8do_catchv$local+(.Ltmp2-.Lfunc_begin0)   #     jumps to .Ltmp2
+@IF-MIPS@; CHECK-NEXT:  .chericap  .L_Z8do_catchv$local+(.Ltmp2-.Lfunc_begin0)   #     jumps to .Ltmp2
+@IF-RISCV@; CHECK-NEXT:  .chericap  %code(.L_Z8do_catchv$local+(.Ltmp2-.Lfunc_begin0))   #     jumps to .Ltmp2
 ; CHECK-NEXT:  .byte 3                               #   On action: 2
 ; CHECK-NEXT:  [[CS_DIRECTIVE]] .Ltmp1-.Lfunc_begin0           # >> Call Site 2 <<
 ; CHECK-NEXT:  [[CS_DIRECTIVE]] .Lfunc_end0-.Ltmp1             #   Call between .Ltmp1 and .Lfunc_end0
@@ -105,7 +106,7 @@ declare dso_local void @__cxa_end_catch() local_unnamed_addr addrspace(200)
 ; RELOCS-LABEL:  Section ({{.+}}) .rela.gcc_except_table {
 @IF-MIPS@; RELOCS-NEXT:    R_MIPS_CHERI_CAPABILITY/R_MIPS_NONE/R_MIPS_NONE  .L_Z8do_catchv$local 0x4C
 @IF-MIPS@; RELOCS-NEXT:    R_MIPS_PC32/R_MIPS_NONE/R_MIPS_NONE .L_ZTIi.DW.stub 0x0
-@IF-RISCV@; RELOCS-NEXT:   R_RISCV_CHERI_CAPABILITY  .L_Z8do_catchv$local 0x34
+@IF-RISCV@; RELOCS-NEXT:   R_RISCV_CHERI_CAPABILITY_CODE .L_Z8do_catchv$local 0x34
 @IF-RISCV@; RELOCS-NEXT:   R_RISCV_ADD32 <null> 0x0
 @IF-RISCV@; RELOCS-NEXT:   R_RISCV_SUB32 <null> 0x0
 @IF-RISCV@; RELOCS-NEXT:   R_RISCV_ADD32 .L_ZTIi.DW.stub 0x0
