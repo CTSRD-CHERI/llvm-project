@@ -195,6 +195,13 @@ public:
     return nullptr;
   }
 
+  /// Return an MCExpr to use for a reference to the specified symbol with the
+  /// specified offset, where the symbol is a function symbol but we do not
+  /// want any interposition, as this reference is for a specific instruction
+  /// within the function (e.g. a BlockAddress).
+  virtual const MCExpr *lowerCheriCodeReference(const MCSymbol *Sym,
+                                                const MCExpr *Addend) const;
+
   /// Target supports a native lowering of a dso_local_equivalent constant
   /// without needing to replace it with equivalent IR.
   bool supportDSOLocalEquivalentLowering() const {
