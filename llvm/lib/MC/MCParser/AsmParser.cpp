@@ -3203,7 +3203,7 @@ bool AsmParser::parseDirectiveValue(StringRef IDVal, unsigned Size) {
   auto parseOp = [&]() -> bool {
     const MCExpr *Value;
     SMLoc ExprLoc = getLexer().getLoc();
-    if (checkForValidSection() || parseExpression(Value))
+    if (checkForValidSection() || getTargetParser().parseDataExpr(Value))
       return true;
     // Special case constant expressions to match code generator.
     if (const MCConstantExpr *MCE = dyn_cast<MCConstantExpr>(Value)) {
@@ -5881,7 +5881,7 @@ bool AsmParser::parseDirectiveCheriCap(SMLoc DirectiveLoc) {
   if (!getTargetParser().isCheri())
     return Error(DirectiveLoc, "'.chericap' requires CHERI");
 
-  if (parseExpression(Expr))
+  if (getTargetParser().parseDataExpr(Expr))
     return true;
 
   int64_t Value;

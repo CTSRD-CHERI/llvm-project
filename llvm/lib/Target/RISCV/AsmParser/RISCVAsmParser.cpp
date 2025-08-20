@@ -244,6 +244,8 @@ class RISCVAsmParser : public MCTargetAsmParser {
   ParseStatus parseZcmpSpimm(OperandVector &Operands);
 
   bool parseOperand(OperandVector &Operands, StringRef Mnemonic);
+  bool parseExprWithModifier(const MCExpr *&Res, SMLoc &E);
+  bool parseDataExpr(const MCExpr *&Res) override;
 
   bool parseDirectiveOption();
   bool parseDirectiveAttribute();
@@ -2132,7 +2134,14 @@ ParseStatus RISCVAsmParser::parseOperandWithModifier(OperandVector &Operands) {
 
   if (parseToken(AsmToken::Percent, "expected '%' for operand modifier"))
     return ParseStatus::Failure;
+  const MCExpr *Expr = nullptr;
+  bool Failed = parseExprWithModifier(Expr, E);
+  if (!Failed)
+    Operands.push_back(RISCVOperand::createImm(Expr, S, E, isRV64()));
+  return Failed;
+}
 
+bool RISCVAsmParser::parseExprWithModifier(const MCExpr *&Res, SMLoc &E) {
   if (getLexer().getKind() != AsmToken::Identifier)
     return Error(getLoc(), "expected valid identifier for operand modifier");
   StringRef Identifier = getParser().getTok().getIdentifier();
@@ -2142,15 +2151,21 @@ ParseStatus RISCVAsmParser::parseOperandWithModifier(OperandVector &Operands) {
 
   getParser().Lex(); // Eat the identifier
   if (parseToken(AsmToken::LParen, "expected '('"))
-    return ParseStatus::Failure;
+    return true;
 
   const MCExpr *SubExpr;
   if (getParser().parseParenExpression(SubExpr, E))
-    return ParseStatus::Failure;
+    return true;
 
-  const MCExpr *ModExpr = RISCVMCExpr::create(SubExpr, VK, getContext());
-  Operands.push_back(RISCVOperand::createImm(ModExpr, S, E, isRV64()));
-  return ParseStatus::Success;
+  Res = RISCVMCExpr::create(SubExpr, VK, getContext());
+  return false;
+}
+
+bool RISCVAsmParser::parseDataExpr(const MCExpr *&Res) {
+  SMLoc E;
+  if (parseOptionalToken(AsmToken::Percent))
+    return parseExprWithModifier(Res, E);
+  return getParser().parseExpression(Res);
 }
 
 ParseStatus RISCVAsmParser::parseBareSymbol(OperandVector &Operands) {
