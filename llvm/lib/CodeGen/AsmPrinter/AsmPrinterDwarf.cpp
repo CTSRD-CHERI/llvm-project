@@ -217,8 +217,8 @@ void AsmPrinter::emitCallSiteCheriCapability(const MCSymbol *Hi,
   // this would result in emitCheriCapability() creating a relocation against
   // section plus offset rather than function + offset. We need the right
   // bounds and permissions info and need to use a non-preemptible alias.
-  const MCExpr *Expr = MCSymbolRefExpr::create(CurrentFnBeginLocal, OutContext);
-  Expr = MCBinaryExpr::createAdd(Expr, DiffToStart, OutContext);
+  const MCExpr *Expr =
+      TLOF.lowerCheriCodeReference(CurrentFnBeginLocal, DiffToStart);
   OutStreamer->emitCheriCapability(Expr, TLOF.getCheriCapabilitySize(TM));
 }
 
