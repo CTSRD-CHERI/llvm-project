@@ -473,15 +473,8 @@ void CheriCapRelocsSection::writeToImpl(uint8_t *buf) {
         permissions |= CapRelocPermission<ELFT>::dontSeal;
     } else if (os) {
       assert(!isTls);
-      // if ((OS->getPhdrFlags() & PF_W) == 0) {
-      if (((os->flags & SHF_WRITE) == 0) || isRelroSection(os)) {
+      if (((os->flags & SHF_WRITE) == 0) || isRelroSection(os))
         permissions |= CapRelocPermission<ELFT>::readOnly;
-      } else if (os->flags & SHF_EXECINSTR) {
-        warn("Non-function __cap_reloc against symbol in section with "
-             "SHF_EXECINSTR (" +
-             toString(os->name) + ") for symbol " +
-             realTarget.verboseToString());
-      }
     }
 
     // For function relocs, use the PCC bounds from the containing
