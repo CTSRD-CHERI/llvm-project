@@ -29,7 +29,7 @@ public:
                        SMLoc Loc) override;
 
 protected:
-  void EmitCheriCapability(const MCExpr *Value, unsigned CapSize,
+  void emitCheriCapability(const MCExpr *Value, unsigned CapSize,
                            SMLoc Loc) override;
 };
 

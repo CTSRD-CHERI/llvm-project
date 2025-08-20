@@ -157,7 +157,7 @@ void RISCVELFStreamer::emitCheriIntcap(const MCExpr *Expr, unsigned CapSize,
   emitCheriIntcapGeneric(Expr, CapSize, Loc);
 }
 
-void RISCVELFStreamer::EmitCheriCapability(const MCExpr *Value,
+void RISCVELFStreamer::emitCheriCapability(const MCExpr *Value,
                                            unsigned CapSize, SMLoc Loc) {
   visitUsedExpr(*Value);
 

@@ -105,7 +105,7 @@ void MipsELFStreamer::emitValueImpl(const MCExpr *Value, unsigned Size,
   Labels.clear();
 }
 
-void MipsELFStreamer::EmitCheriCapability(const MCExpr *Value, unsigned CapSize,
+void MipsELFStreamer::emitCheriCapability(const MCExpr *Value, unsigned CapSize,
                                           SMLoc Loc) {
   visitUsedExpr(*Value);
 
