@@ -220,6 +220,7 @@ public:
   void printLoadName() override;
   void printVersionInfo() override;
   void printArchSpecificInfo() override;
+  void printAcls() override;
   void printCheriCapRelocs() override;
   void printCheriCapTable() override;
   void printCheriCapTableMapping() override;
@@ -398,6 +399,7 @@ protected:
   const Elf_Shdr *SymbolVersionSection = nullptr;   // .gnu.version
   const Elf_Shdr *SymbolVersionNeedSection = nullptr; // .gnu.version_r
   const Elf_Shdr *SymbolVersionDefSection = nullptr; // .gnu.version_d
+  const Elf_Shdr *AclSection = nullptr;
 
   std::string getFullSymbolName(const Elf_Sym &Symbol, unsigned SymIndex,
                                 DataRegion<Elf_Word> ShndxTable,
@@ -2005,6 +2007,10 @@ ELFDumper<ELFT>::ELFDumper(const object::ELFObjectFile<ELFT> &O,
       if (!DotAddrsigSec)
         DotAddrsigSec = &Sec;
       break;
+    case ELF::SHT_C18N_ACL:
+      if (!AclSection)
+        AclSection = &Sec;
+      break;
     }
   }
 
@@ -3342,6 +3348,90 @@ static int getMipsRegisterSize(uint8_t Flag) {
     return 128;
   default:
     return -1;
+  }
+}
+
+template <class ELFT> void ELFDumper<ELFT>::printAcls() {
+  if (!AclSection)
+    return;
+
+  const Elf_Shdr &Sec = *AclSection;
+  Expected<StringRef> StrTabOrErr = this->Obj.getLinkAsStrtab(Sec);
+  if (!StrTabOrErr) {
+    reportUniqueWarning(toString(StrTabOrErr.takeError()));
+    return;
+  }
+
+  Expected<ArrayRef<uint8_t>> ContentsOrErr = this->Obj.getSectionContents(Sec);
+  if (!ContentsOrErr) {
+    reportUniqueWarning("cannot read content of " + describe(Sec) + ": " +
+                        toString(ContentsOrErr.takeError()));
+    return;
+  }
+
+  if (ContentsOrErr->size() % sizeof(Elf_Acl) != 0) {
+    reportUniqueWarning("invalid " + describe(Sec) +
+                        ": size is not a multiple of the ACL structure size");
+    return;
+  }
+
+  const uint8_t *Start = ContentsOrErr->data();
+  const uint8_t *End = Start + ContentsOrErr->size();
+  StringRef StrTab = *StrTabOrErr;
+
+  ListScope L(W, "ACLs");
+  for (const uint8_t *Buf = Start; Buf < End; Buf += sizeof(Elf_Acl)) {
+    uint32_t Subject = support::endian::read32<ELFT::TargetEndianness>(Buf);
+    uint32_t Object = support::endian::read32<ELFT::TargetEndianness>(Buf + 4);
+    uint32_t Perms = support::endian::read32<ELFT::TargetEndianness>(Buf + 8);
+
+    std::string SubName;
+    if (Subject > StrTab.size())
+      SubName = "<corrupt acl_subject: " + std::to_string(Subject) + ">";
+    else {
+      SubName = std::string(StrTab.data() + Subject);
+    }
+    if (SubName.empty())
+      SubName = "the default compartment";
+    else
+      SubName = "compartment " + SubName;
+
+    std::string ObjName;
+    if (Object > StrTab.size())
+      ObjName = "<corrupt acl_object: " + std::to_string(Object) + ">";
+    else
+      ObjName = std::string(StrTab.data() + Object);
+
+    switch (Perms & ACL_MASKOBJECT) {
+    case ACL_OBJECT_SYMBOL:
+      ObjName = "symbol " + ObjName;
+      break;
+    case ACL_OBJECT_COMPARTMENT:
+      if (ObjName.empty())
+        ObjName = "the default compartment";
+      else
+        ObjName = "compartment " + ObjName;
+      break;
+    default:
+      ObjName = "<unknown type: " +
+        std::to_string((Perms & ACL_MASKOBJECT) >> 16) + "> " + ObjName;
+    }
+
+    raw_ostream &OS = W.startLine();
+    OS << "Subject: " << SubName << " Permissions: ";
+    if (Perms & ACL_R)
+      OS << "r";
+    else
+      OS << "-";
+    if (Perms & ACL_W)
+      OS << "w";
+    else
+      OS << "-";
+    if (Perms & ACL_X)
+      OS << "x";
+    else
+      OS << "-";
+    OS << " Object: " << ObjName << "\n";
   }
 }
 
