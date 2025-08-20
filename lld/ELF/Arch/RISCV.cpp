@@ -110,8 +110,11 @@ RISCV::RISCV() {
   copyRel = R_RISCV_COPY;
   pltRel = R_RISCV_JUMP_SLOT;
   relativeRel = R_RISCV_RELATIVE;
+  if (config->isCheriAbi)
+    relativeFuncRel = R_RISCV_FUNC_RELATIVE;
   iRelativeRel = R_RISCV_IRELATIVE;
   symbolicCapRel = R_RISCV_CHERI_CAPABILITY;
+  symbolicCodeCapRel = R_RISCV_CHERI_CAPABILITY_CODE;
   if (config->is64) {
     symbolicRel = R_RISCV_64;
     tlsModuleIndexRel = R_RISCV_TLS_DTPMOD64;
@@ -353,6 +356,7 @@ RelExpr RISCV::getRelExpr(const RelType type, const Symbol &s,
   case R_RISCV_RELAX:
     return config->relax ? R_RELAX_HINT : R_NONE;
   case R_RISCV_CHERI_CAPABILITY:
+  case R_RISCV_CHERI_CAPABILITY_CODE:
     return R_ABS_CAP;
   // TODO: Deprecate and eventually remove these
   case R_RISCV_CHERI_CAPTAB_PCREL_HI20:
@@ -576,6 +580,7 @@ void RISCV::relocate(uint8_t *loc, const Relocation &rel, uint64_t val) const {
     return; // Ignored (for now)
 
   case R_RISCV_CHERI_CAPABILITY:
+  case R_RISCV_CHERI_CAPABILITY_CODE:
     // Write a word within the capability
     if (config->is64)
       write64le(loc, val);
