@@ -1029,6 +1029,7 @@ enum : unsigned {
   // https://android.googlesource.com/platform/bionic/+/6f12bfece5dcc01325e0abba56a46b1bcf991c69/tools/relocation_packer/src/elf_file.cc#37
   SHT_ANDROID_REL = 0x60000001,
   SHT_ANDROID_RELA = 0x60000002,
+  SHT_C18N_ACL = 0x64331380,       // Compartment access rules
   SHT_LLVM_ODRTAB = 0x6fff4c00,         // LLVM ODR table.
   SHT_LLVM_LINKER_OPTIONS = 0x6fff4c01, // LLVM Linker Options.
   SHT_LLVM_ADDRSIG = 0x6fff4c03,        // List of address-significant symbols
@@ -1865,6 +1866,18 @@ enum {
   ELFCOMPRESS_HIOS = 0x6fffffff,   // End of OS-specific.
   ELFCOMPRESS_LOPROC = 0x70000000, // Start of processor-specific.
   ELFCOMPRESS_HIPROC = 0x7fffffff  // End of processor-specific.
+};
+
+// ACL permission bits.
+enum : unsigned {
+  ACL_X = 1,                // Execute
+  ACL_W = 2,                // Write
+  ACL_R = 4,                // Read
+  ACL_MASKOBJECT = 0x000f0000, // Object type mask
+  ACL_OBJECT_SYMBOL = 0x10000,
+  ACL_OBJECT_COMPARTMENT = 0x20000,
+  ACL_MASKOS = 0x0ff00000,  // Bits for operating system-specific semantics.
+  ACL_MASKPROC = 0xf0000000 // Bits for processor-specific semantics.
 };
 
 /// Convert an architecture name into ELF's e_machine value.
