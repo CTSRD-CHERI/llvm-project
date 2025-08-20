@@ -13,6 +13,7 @@ multiclass Eq<string name, string help> {
   def : Separate<["--"], name>, Alias<!cast<Joined>(NAME #_EQ)>;
 }
 
+def acls : FF<"acls", "Display compartmentalization ACLs">;
 def addrsig : FF<"addrsig", "Display address-significance table">;
 def all : FF<"all", "Equivalent to setting: --file-header, --program-headers, --section-headers, "
              "--symbols, --relocations, --dynamic-table, --notes, --version-info, --unwind, "

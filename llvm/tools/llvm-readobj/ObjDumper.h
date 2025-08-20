@@ -138,6 +138,7 @@ public:
   virtual void printArchSpecificInfo() {}
   virtual void printMemtag() {}
 
+  virtual void printAcls() {}
   virtual void printCheriCapRelocs() {}
   virtual void printCheriCapTable() {}
   virtual void printCheriCapTableMapping() {}
