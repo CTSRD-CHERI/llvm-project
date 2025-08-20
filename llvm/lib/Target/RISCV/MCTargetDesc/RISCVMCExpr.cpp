@@ -121,6 +121,7 @@ RISCVMCExpr::VariantKind RISCVMCExpr::getVariantKindForName(StringRef name) {
       .Case("tprel_add", VK_RISCV_TPREL_ADD)
       .Case("tls_ie_pcrel_hi", VK_RISCV_TLS_GOT_HI)
       .Case("tls_gd_pcrel_hi", VK_RISCV_TLS_GD_HI)
+      .Case("code", VK_RISCV_CODE)
       .Default(VK_RISCV_Invalid);
 }
 
@@ -155,6 +156,8 @@ StringRef RISCVMCExpr::getVariantKindName(VariantKind Kind) {
     return "call_plt";
   case VK_RISCV_32_PCREL:
     return "32_pcrel";
+  case VK_RISCV_CODE:
+    return "code";
   }
   llvm_unreachable("Invalid ELF symbol kind");
 }
