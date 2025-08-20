@@ -149,13 +149,15 @@ unsigned RISCVELFObjectWriter::getRelocType(MCContext &Ctx,
                       "8-byte capability relocations not supported on RV64");
       return ELF::R_RISCV_NONE;
     }
-    return ELF::R_RISCV_CHERI_CAPABILITY;
+    goto CheriCapability;
   case FK_Cap_16:
     if (!is64Bit()) {
       Ctx.reportError(Fixup.getLoc(),
                       "16-byte capability relocations not supported on RV32");
       return ELF::R_RISCV_NONE;
     }
+    goto CheriCapability;
+  CheriCapability:
     return ELF::R_RISCV_CHERI_CAPABILITY;
   case RISCV::fixup_riscv_set_6b:
     return ELF::R_RISCV_SET6;
