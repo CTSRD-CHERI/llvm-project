@@ -653,6 +653,7 @@ def SC_C_CAP_128 : CheriStoreCond_r<0b11100, "sc.c.cap", GPCR, GPCRMemZeroOffset
 
 let Predicates = [HasCheri, HasStdExtA, IsRV64] in
 def CPOISON : CheriStoreCond_r<0b11101, "cpoison", GPCR, GPCRMemZeroOffset>;
+def CCLEARPOISON : CheriStoreCond_r<0b11110, "cclearpoison", GPCR, GPCRMemZeroOffset>;
 //===----------------------------------------------------------------------===//
 // Memory-Access Instructions
 //===----------------------------------------------------------------------===//
