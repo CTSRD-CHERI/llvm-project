@@ -431,10 +431,6 @@ static CapRelocType getTargetType(const SymbolAndOffset &target) {
   if (os) {
     if ((os->flags & SHF_WRITE) == 0 || (!isTls && isRelroSection(os)))
       return CapRelocType::RODATA;
-    if (os->flags & SHF_EXECINSTR)
-      warn("Non-function __cap_reloc against symbol in section with "
-           "SHF_EXECINSTR (" +
-           toString(os->name) + ") for symbol " + target.verboseToString());
   }
   return CapRelocType::DATA;
 }
