@@ -220,29 +220,15 @@ void MCStreamer::emitGPRel32Value(const MCExpr *Value) {
   report_fatal_error("unsupported directive in streamer");
 }
 
-void MCStreamer::EmitCheriCapability(const MCExpr *Value, unsigned CapSize,
+void MCStreamer::emitCheriCapability(const MCExpr *Value, unsigned CapSize,
                                      SMLoc Loc) {
-  report_fatal_error("EmitCheriCapability is not implemented for this target!");
+  report_fatal_error("emitCheriCapability is not implemented for this target!");
 }
 
-void MCStreamer::EmitCheriCapability(const MCSymbol *Value,
-                                     const MCExpr *Addend, unsigned CapSize,
-                                     SMLoc Loc) {
-  const MCExpr *Expr = MCSymbolRefExpr::create(Value, Context);
-  if (Addend)
-    Expr = MCBinaryExpr::createAdd(Expr, Addend, Context);
-  EmitCheriCapability(Expr, CapSize, Loc);
-}
-
-void MCStreamer::EmitCheriCapability(const MCSymbol *Value, int64_t Addend,
-                                     unsigned CapSize, SMLoc Loc) {
-  EmitCheriCapability(Value, MCConstantExpr::create(Addend, Context), CapSize,
-                      Loc);
-}
-
-void MCStreamer::EmitCheriCapability(const MCSymbol *Value, unsigned CapSize,
-                                     SMLoc Loc) {
-  EmitCheriCapability(Value, nullptr, CapSize, Loc);
+void MCStreamer::emitSymbolCheriCapability(const MCSymbol *Sym,
+                                           unsigned CapSize) {
+  const MCExpr *Expr = MCSymbolRefExpr::create(Sym, getContext());
+  emitCheriCapability(Expr, CapSize);
 }
 
 void MCStreamer::emitCheriIntcap(int64_t Value, unsigned CapSize, SMLoc Loc) {

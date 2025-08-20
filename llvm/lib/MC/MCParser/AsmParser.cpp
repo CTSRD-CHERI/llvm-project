@@ -5890,7 +5890,7 @@ bool AsmParser::parseDirectiveCheriCap(SMLoc DirectiveLoc) {
   if (Expr->evaluateAsAbsolute(Value, getStreamer().getAssemblerPtr()))
     getStreamer().emitCheriIntcap(Value, CapSize, ExprLoc);
   else
-    getStreamer().EmitCheriCapability(Expr, CapSize, ExprLoc);
+    getStreamer().emitCheriCapability(Expr, CapSize, ExprLoc);
 
   if (parseToken(AsmToken::EndOfStatement, "expected end of statement"))
     return true;
