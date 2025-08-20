@@ -111,7 +111,7 @@ RISCV::RISCV() {
   pltRel = R_RISCV_JUMP_SLOT;
   relativeRel = R_RISCV_RELATIVE;
   iRelativeRel = R_RISCV_IRELATIVE;
-  cheriCapRel = R_RISCV_CHERI_CAPABILITY;
+  symbolicCapRel = R_RISCV_CHERI_CAPABILITY;
   if (config->is64) {
     symbolicRel = R_RISCV_64;
     tlsModuleIndexRel = R_RISCV_TLS_DTPMOD64;
@@ -124,7 +124,7 @@ RISCV::RISCV() {
     tlsGotRel = R_RISCV_TLS_TPREL32;
   }
   if (config->isCheriAbi)
-    gotRel = *cheriCapRel;
+    gotRel = *symbolicCapRel;
   else
     gotRel = symbolicRel;
   absPointerRel = symbolicRel;
@@ -288,7 +288,7 @@ void RISCV::writePlt(uint8_t *buf, const Symbol &sym,
 }
 
 RelType RISCV::getDynRel(RelType type) const {
-  return type == symbolicRel || type == cheriCapRel
+  return type == symbolicRel || type == symbolicCapRel
              ? type
              : static_cast<RelType>(R_RISCV_NONE);
 }

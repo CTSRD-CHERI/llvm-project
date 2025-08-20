@@ -1689,8 +1689,8 @@ RelocationBaseSection::RelocationBaseSection(StringRef name, uint32_t type,
 void RelocationBaseSection::addSymbolReloc(
     RelType dynType, InputSectionBase &isec, uint64_t offsetInSec, Symbol &sym,
     int64_t addend, std::optional<RelType> addendRelType) {
-  bool isCap =
-      dynType == target->cheriCapRel || dynType == target->cheriCapCallRel;
+  bool isCap = dynType == target->symbolicCapRel ||
+               dynType == target->symbolicCapCallRel;
   if (isCap && sym.isFunc() && addend != 0)
     warn("capability relocation with non-zero addend (0x" +
          llvm::utohexstr(addend) + ") against preemptible function " +

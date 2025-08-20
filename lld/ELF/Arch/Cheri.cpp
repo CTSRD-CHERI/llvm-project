@@ -674,8 +674,8 @@ uint64_t MipsCheriCapTableSection::assignIndices(uint64_t startIndex,
     // relocation instead which allows the runtime linker to create non-unique
     // plt stubs.
     RelType elfCapabilityReloc = it.second.usedInCallExpr
-                                     ? *target->cheriCapCallRel
-                                     : *target->cheriCapRel;
+                                     ? *target->symbolicCapCallRel
+                                     : *target->symbolicCapRel;
     // All capability call relocations should end up in the pltrel section
     // rather than the normal relocation section to make processing of PLT
     // relocations in RTLD more efficient.
@@ -880,7 +880,7 @@ static bool needsCheriMipsTrampoline(RelType type, const Symbol &sym) {
   if (config->emachine != EM_MIPS)
     return false;
 
-  if (!sym.isFunc() || type == *target->cheriCapCallRel)
+  if (!sym.isFunc() || type == *target->symbolicCapCallRel)
     return false;
 
   // In static binaries we do not need PLT stubs for function pointers since
