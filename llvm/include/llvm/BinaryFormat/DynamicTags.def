@@ -93,6 +93,8 @@ DYNAMIC_TAG_MARKER(HIPROC, 0x7FFFFFFF) // End of processor specific tags.
 
 DYNAMIC_TAG(C18N_STRTAB, 0x64331380)
 DYNAMIC_TAG(C18N_STRTABSZ, 0x64331381)
+DYNAMIC_TAG(C18N_ACL, 0x64331382)
+DYNAMIC_TAG(C18N_ACLSZ, 0x64331383)
 
 // Android packed relocation section tags.
 // https://android.googlesource.com/platform/bionic/+/6f12bfece5dcc01325e0abba56a46b1bcf991c69/tools/relocation_packer/src/elf_file.cc#31
