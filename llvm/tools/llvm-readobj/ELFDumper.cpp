@@ -2527,6 +2527,7 @@ std::string ELFDumper<ELFT>::getDynamicEntry(uint64_t Type,
   case DT_ANDROID_RELASZ:
   case DT_CHERI_TGOTRELSZ:
   case DT_C18N_STRTABSZ:
+  case DT_C18N_ACLSZ:
     return std::to_string(Value) + " (bytes)";
   case DT_NEEDED:
   case DT_SONAME:

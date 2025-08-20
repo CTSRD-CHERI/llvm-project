@@ -749,6 +749,8 @@ static StringRef getDefaultLinkSec(unsigned SecType) {
     return ".dynstr";
   case ELF::SHT_SYMTAB:
     return ".strtab";
+  case ELF::SHT_C18N_ACL:
+    return ".c18nstrtab";
   default:
     return "";
   }
