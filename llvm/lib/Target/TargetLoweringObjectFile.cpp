@@ -461,6 +461,18 @@ const MCExpr *TargetLoweringObjectFile::getDebugThreadLocalSymbol(const MCSymbol
   return MCSymbolRefExpr::create(Sym, getContext());
 }
 
+const MCExpr *
+TargetLoweringObjectFile::lowerCheriCodeReference(const MCSymbol *Sym,
+                                                  const MCExpr *Addend) const {
+  // Default to a normal expression if the target does not treat these
+  // specially.
+  // TODO: Require every CHERI target to implement this?
+  const MCExpr *Expr = MCSymbolRefExpr::create(Sym, getContext());
+  if (Addend != nullptr)
+    Expr = MCBinaryExpr::createAdd(Expr, Addend, getContext());
+  return Expr;
+}
+
 void TargetLoweringObjectFile::getNameWithPrefix(
     SmallVectorImpl<char> &OutName, const GlobalValue *GV,
     const TargetMachine &TM) const {
