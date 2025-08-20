@@ -310,12 +310,15 @@ static uint64_t getTargetSize(const CheriCapRelocLocation &location,
 
 template <class ELFT>
 struct CaptablePermissions {
-  static const uint64_t function =
-      UINT64_C(1) << ((sizeof(typename ELFT::uint) * 8) - 1);
-  static const uint64_t readOnly =
-      UINT64_C(1) << ((sizeof(typename ELFT::uint) * 8) - 2);
-  static const uint64_t indirect =
-      UINT64_C(1) << ((sizeof(typename ELFT::uint) * 8) - 3);
+  static constexpr uint64_t permissionBit(uint64_t bit) {
+    return UINT64_C(1) << ((sizeof(typename ELFT::uint) * 8) - bit);
+  }
+
+  // clang-format off
+  static const uint64_t function = permissionBit(1);
+  static const uint64_t readOnly = permissionBit(2);
+  static const uint64_t indirect = permissionBit(3);
+  // clang-format on
 };
 
 template <class ELFT>
