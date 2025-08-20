@@ -18,6 +18,7 @@
 #include "llvm/MC/MCAsmLayout.h"
 #include "llvm/MC/MCAssembler.h"
 #include "llvm/MC/MCContext.h"
+#include "llvm/MC/MCObjectWriter.h"
 #include "llvm/MC/MCStreamer.h"
 #include "llvm/MC/MCSymbolELF.h"
 #include "llvm/MC/MCValue.h"
@@ -96,7 +97,23 @@ bool RISCVMCExpr::evaluateAsRelocatableImpl(MCValue &Res,
   // Explicitly drop the layout and assembler to prevent any symbolic folding in
   // the expression handling.  This is required to preserve symbolic difference
   // expressions to emit the paired relocations.
-  if (!getSubExpr()->evaluateAsRelocatable(Res, nullptr, nullptr))
+  //
+  // However, for fixups that need provenance (where VK_RISCV_CODE for a
+  // capability is the only case currently that uses a RISCVMCExpr), we do need
+  // this, and don't support paired relocations.
+  MCAssembler *Asm = Layout ? &Layout->getAssembler() : nullptr;
+  bool NeedsProvenance =
+      Fixup && Asm && Asm->getWriter().fixupNeedsProvenance(*Asm, Fixup);
+  const MCAsmLayout *SubLayout;
+  const MCFixup *SubFixup;
+  if (NeedsProvenance) {
+    SubLayout = Layout;
+    SubFixup = Fixup;
+  } else {
+    SubLayout = nullptr;
+    SubFixup = nullptr;
+  }
+  if (!getSubExpr()->evaluateAsRelocatable(Res, SubLayout, SubFixup))
     return false;
 
   Res =

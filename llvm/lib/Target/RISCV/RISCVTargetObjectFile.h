@@ -56,6 +56,9 @@ public:
                                      const TargetMachine &TM) const override;
 
   int getCheriCapabilitySize(const TargetMachine &TM) const override;
+
+  const MCExpr *lowerCheriCodeReference(const MCSymbol *Sym,
+                                        const MCExpr *Addend) const override;
 };
 
 } // end namespace llvm
