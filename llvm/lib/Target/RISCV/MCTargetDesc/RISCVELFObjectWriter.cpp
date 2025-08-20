@@ -158,6 +158,9 @@ unsigned RISCVELFObjectWriter::getRelocType(MCContext &Ctx,
     }
     goto CheriCapability;
   CheriCapability:
+    if (Expr->getKind() == MCExpr::Target &&
+        cast<RISCVMCExpr>(Expr)->getKind() == RISCVMCExpr::VK_RISCV_CODE)
+      return ELF::R_RISCV_CHERI_CAPABILITY_CODE;
     return ELF::R_RISCV_CHERI_CAPABILITY;
   case RISCV::fixup_riscv_set_6b:
     return ELF::R_RISCV_SET6;
