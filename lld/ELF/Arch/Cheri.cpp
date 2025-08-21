@@ -1,4 +1,5 @@
 #include "Cheri.h"
+#include "../Compartments.h"
 #include "../InputFiles.h"
 #include "../OutputSections.h"
 #include "../SymbolTable.h"
@@ -403,7 +404,8 @@ bool isCapRelocTypeExec(CapRelocType type) {
   llvm_unreachable("unknown CapRelocType");
 }
 
-static CapRelocType getTargetType(const SymbolAndOffset &target) {
+static CapRelocType getTargetType(const CheriCapRelocLocation &location,
+                                  const SymbolAndOffset &target) {
   bool isFunc, isGnuIFunc, isTls;
   OutputSection *os;
   if (Symbol *s = dyn_cast<Symbol *>(target.symOrSec)) {
@@ -426,6 +428,16 @@ static CapRelocType getTargetType(const SymbolAndOffset &target) {
     if ((os->flags & SHF_WRITE) == 0 || (!isTls && isRelroSection(os)))
       return CapRelocType::RODATA;
   }
+
+  bool canWrite;
+  if (Symbol *s = dyn_cast<Symbol *>(target.symOrSec)) {
+    canWrite = canWriteSymbol(location.section->getCompartment(), *s);
+  } else {
+    InputSectionBase *isec = cast<InputSectionBase *>(target.symOrSec);
+    canWrite = canWriteSection(location.section->getCompartment(), isec);
+  }
+  if (!canWrite)
+    return CapRelocType::RODATA;
   return CapRelocType::DATA;
 }
 
@@ -497,7 +509,7 @@ void CheriCapRelocsSection::writeToImpl(uint8_t *buf) {
     }
     uint64_t targetSize = getTargetSize(location, realTarget);
     uint64_t targetOffset = reloc.capabilityOffset + realTarget.offset;
-    CapRelocType targetType = getTargetType(realTarget);
+    CapRelocType targetType = getTargetType(location, realTarget);
     if (isCode) {
       if (targetType != CapRelocType::FUNC)
         errorOrWarn("code relocation against non-function symbol " +
