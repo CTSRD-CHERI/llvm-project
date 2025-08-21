@@ -259,10 +259,10 @@ void RISCV::writePltHeader(uint8_t *buf) const {
   uint32_t offset = in.gotPlt->getVA() - in.plt->getVA();
   uint32_t ptrload =
       config->isCheriAbi
-          ? (config->zRVY ? CLY : (config->is64 ? CLC_128 : CLC_64))
+          ? (config->isRVY ? CLY : (config->is64 ? CLC_128 : CLC_64))
           : (config->is64 ? LD : LW);
   uint32_t ptraddi =
-      config->isCheriAbi ? (config->zRVY ? ADDIY : CIncOffsetImm) : ADDI;
+      config->isCheriAbi ? (config->isRVY ? ADDIY : CIncOffsetImm) : ADDI;
   // Shift is log2(pltsize / ptrsize), which is 0 for CHERI-128 so skipped
   uint32_t shift = 2 - config->is64 - config->isCheriAbi;
   uint32_t ptrsize = config->isCheriAbi ? config->capabilitySize
@@ -288,7 +288,7 @@ void RISCV::writePlt(uint8_t *buf, const Symbol &sym,
   // nop
   uint32_t ptrload =
       config->isCheriAbi
-          ? (config->zRVY ? CLY : (config->is64 ? CLC_128 : CLC_64))
+          ? (config->isRVY ? CLY : (config->is64 ? CLC_128 : CLC_64))
           : (config->is64 ? LD : LW);
   uint32_t entryva = sym.getGotPltVA();
   uint32_t offset = entryva - pltEntryAddr;
@@ -1083,6 +1083,7 @@ mergeAttributesSection(const SmallVector<InputSectionBase *, 0> &sections) {
             std::make_unique<RISCVISAInfo>(xlen, exts))) {
       merged.strAttr.try_emplace(RISCVAttrs::ARCH,
                                  saver().save((*result)->toString()));
+      config->isRVY = result.get()->hasExtension("y");
     } else {
       errorOrWarn(llvm::toString(result.takeError()));
     }
