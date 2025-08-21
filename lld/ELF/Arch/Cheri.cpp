@@ -1,4 +1,5 @@
 #include "Cheri.h"
+#include "../Compartments.h"
 #include "../InputFiles.h"
 #include "../OutputSections.h"
 #include "../SymbolTable.h"
@@ -384,6 +385,18 @@ void CheriCapRelocsSection::writeToImpl(uint8_t *buf) {
       assert(!isTls);
       if (((os->flags & SHF_WRITE) == 0) || isRelroSection(os))
         permissions |= CapRelocPermission<ELFT>::readOnly;
+      else {
+        bool canWrite;
+        if (Symbol *s = dyn_cast<Symbol *>(realTarget.symOrSec)) {
+          canWrite = canWriteSymbol(location.section->compartment, *s);
+        } else {
+          InputSectionBase *isec =
+            cast<InputSectionBase *>(realTarget.symOrSec);
+          canWrite = canWriteSection(location.section->compartment, isec);
+        }
+        if (!canWrite)
+          permissions |= CapRelocPermission<ELFT>::readOnly;
+      }
     }
 
     // For function symbols, use the PCC bounds from the containing
