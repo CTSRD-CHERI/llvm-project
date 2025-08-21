@@ -27,6 +27,8 @@ void verifyExecSymbol(const Compartment &c, const InputSectionBase &sec,
                       const Symbol &sym, uint64_t off);
 void verifyAccessSymbol(const Compartment &c, const InputSectionBase &sec,
                         const Symbol &sym, uint64_t off);
+bool canWriteSymbol(const Compartment &c, const Symbol &sym);
+bool canWriteSection(const Compartment &c, const InputSectionBase *isec);
 
 } // namespace elf
 } // namespace lld
