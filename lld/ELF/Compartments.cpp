@@ -185,6 +185,41 @@ public:
     return false;
   }
 
+  template <class Pred>
+  bool hasMatch(const Compartment *c, const Compartment *target, Pred p) const {
+    // Access within the compartment is always permitted
+    if (target == c)
+      return true;
+
+    // The default compartment only matches the glob pattern "*".
+    for (const auto &rule : rules) {
+      // Check the subject.
+      if (!rule.subject.isTrivialMatchAll()) {
+        if (c == nullptr || !rule.subject.match(c->name))
+          continue;
+      }
+
+      // Check the objects.
+      bool matches = false;
+      for (const auto &glob : rule.compartments) {
+        if (glob.isTrivialMatchAll()) {
+          matches = true;
+          break;
+        }
+        if (target != nullptr && glob.match(target->name)) {
+          matches = true;
+          break;
+        }
+      }
+      if (!matches)
+        continue;
+
+      if (p(rule.permissions))
+        return true;
+    }
+    return false;
+  }
+
 private:
   std::vector<ParsedAcl> rules;
 } acls;
@@ -1008,6 +1043,10 @@ static bool requireAccess(const CompartmentPermissions &perms) {
   return perms.read || perms.write || perms.execute;
 }
 
+static bool requireWrite(const CompartmentPermissions &perms) {
+  return perms.write;
+}
+
 void verifyExecSymbol(const Compartment *c, const Symbol &sym) {
   if (acls.empty() || acls.hasMatch(c, sym, requireExec))
     return;
@@ -1022,6 +1061,14 @@ void verifyAccessSymbol(const Compartment *c, const Symbol &sym) {
 
   error("policy forbids accessing " + symbolName(&sym) + " from " +
         compartmentName(c));
+}
+
+bool canWriteSymbol(const Compartment *c, const Symbol &sym) {
+  return acls.empty() || acls.hasMatch(c, sym, requireWrite);
+}
+
+bool canWriteSection(const Compartment *c, const InputSectionBase *isec) {
+  return acls.empty() || acls.hasMatch(c, isec->compartment, requireWrite);
 }
 
 }

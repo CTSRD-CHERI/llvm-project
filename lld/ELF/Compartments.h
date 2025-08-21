@@ -16,6 +16,7 @@ namespace lld {
 namespace elf {
 
 struct Compartment;
+class InputSectionBase;
 class Symbol;
 
 void addCompartment(StringRef name);
@@ -28,6 +29,8 @@ void assignSectionsToCompartments();
 
 void verifyExecSymbol(const Compartment *c, const Symbol &sym);
 void verifyAccessSymbol(const Compartment *c, const Symbol &sym);
+bool canWriteSymbol(const Compartment *c, const Symbol &sym);
+bool canWriteSection(const Compartment *c, const InputSectionBase *isec);
 
 } // namespace elf
 } // namespace lld
