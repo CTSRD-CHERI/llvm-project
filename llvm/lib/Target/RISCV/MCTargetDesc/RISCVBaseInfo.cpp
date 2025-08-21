@@ -37,6 +37,11 @@ namespace RISCVSpecialCapReg {
 #include "RISCVGenSearchableTables.inc"
 } // namespace RISCVSpecialCapReg
 
+namespace RISCVCheriSysReg {
+#define GET_CheriSysRegsList_IMPL
+#include "RISCVGenSearchableTables.inc"
+} // namespace RISCVCheriSysReg
+
 namespace RISCVInsnOpcode {
 #define GET_RISCVOpcodesList_IMPL
 #include "RISCVGenSearchableTables.inc"

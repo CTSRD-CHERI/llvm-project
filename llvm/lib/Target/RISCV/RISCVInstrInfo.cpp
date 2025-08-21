@@ -11,6 +11,7 @@
 //===----------------------------------------------------------------------===//
 
 #include "RISCVInstrInfo.h"
+#include "MCTargetDesc/RISCVMCTargetDesc.h"
 #include "MCTargetDesc/RISCVMatInt.h"
 #include "RISCV.h"
 #include "RISCVMachineFunctionInfo.h"
@@ -129,6 +130,10 @@ unsigned RISCVInstrInfo::isLoadFromStackSlot(const MachineInstr &MI,
   case RISCV::LC_128:
     MemBytes = 16;
     break;
+  case RISCV::CLY:
+  case RISCV::LY:
+    MemBytes = STI.isRV32() ? 8 : 16;
+    break;
   }
 
   if (MI.getOperand(1).isFI() && MI.getOperand(2).isImm() &&
@@ -177,8 +182,12 @@ unsigned RISCVInstrInfo::isStoreToStackSlot(const MachineInstr &MI,
     break;
   case RISCV::SC_128:
   case RISCV::CSC_128:
-      MemBytes = 16;
-      break;
+    MemBytes = 16;
+    break;
+  case RISCV::SY:
+  case RISCV::CSY:
+    MemBytes = STI.isRV32() ? 8 : 16;
+    break;
   }
 
   if (MI.getOperand(1).isFI() && MI.getOperand(2).isImm() &&
@@ -346,7 +355,9 @@ void RISCVInstrInfo::copyPhysReg(MachineBasicBlock &MBB,
         .setMIFlag(Flag);
     return;
   } else if (RISCV::GPCRRegClass.contains(DstReg, SrcReg)) {
-    BuildMI(MBB, MBBI, DL, get(RISCV::CMove), DstReg)
+    unsigned MoveOpc =
+        STI.hasFeature(RISCV::FeatureStdExtY) ? RISCV::YMV : RISCV::CMove;
+    BuildMI(MBB, MBBI, DL, get(MoveOpc), DstReg)
         .addReg(SrcReg, getKillRegState(KillSrc))
         .setMIFlag(Flag);
     return;
@@ -576,9 +587,8 @@ void RISCVInstrInfo::storeRegToStackSlot(MachineBasicBlock &MBB,
                                                                : RISCV::CSD;
       IsScalableVector = false;
     } else if (RISCV::GPCRRegClass.hasSubClassEq(RC)) {
-      Opcode = TRI->getRegSizeInBits(RISCV::GPCRRegClass) == 64
-                   ? RISCV::CSC_64
-                   : RISCV::CSC_128;
+      Opcode = ST.hasStdExtY() ? RISCV::CSY
+                               : (ST.isRV64() ? RISCV::CSC_128 : RISCV::CSC_64);
       IsScalableVector = false;
     } else if (RISCV::FPR32RegClass.hasSubClassEq(RC)) {
       Opcode = RISCV::CFSW;
@@ -595,8 +605,8 @@ void RISCVInstrInfo::storeRegToStackSlot(MachineBasicBlock &MBB,
                RISCV::SW : RISCV::SD;
       IsScalableVector = false;
     } else if (RISCV::GPCRRegClass.hasSubClassEq(RC)) {
-      Opcode = TRI->getRegSizeInBits(RISCV::GPCRRegClass) == 64 ? RISCV::SC_64
-                                                                : RISCV::SC_128;
+      Opcode = ST.hasStdExtY() ? RISCV::SY
+                               : (ST.isRV64() ? RISCV::SC_128 : RISCV::SC_64);
       IsScalableVector = false;
     } else if (RISCV::GPRPF64RegClass.hasSubClassEq(RC)) {
       Opcode = RISCV::PseudoRV32ZdinxSD;
@@ -689,9 +699,8 @@ void RISCVInstrInfo::loadRegFromStackSlot(MachineBasicBlock &MBB,
                                                                : RISCV::CLD;
       IsScalableVector = false;
     } else if (RISCV::GPCRRegClass.hasSubClassEq(RC)) {
-      Opcode = TRI->getRegSizeInBits(RISCV::GPCRRegClass) == 64
-                   ? RISCV::CLC_64
-                   : RISCV::CLC_128;
+      Opcode = ST.hasStdExtY() ? RISCV::CLY
+                               : (ST.isRV64() ? RISCV::CLC_128 : RISCV::CLC_64);
       IsScalableVector = false;
     } else if (RISCV::FPR32RegClass.hasSubClassEq(RC)) {
       Opcode = RISCV::CFLW;
@@ -708,8 +717,8 @@ void RISCVInstrInfo::loadRegFromStackSlot(MachineBasicBlock &MBB,
                RISCV::LW : RISCV::LD;
       IsScalableVector = false;
     } else if (RISCV::GPCRRegClass.hasSubClassEq(RC)) {
-      Opcode = TRI->getRegSizeInBits(RISCV::GPCRRegClass) == 64 ? RISCV::LC_64
-                                                                : RISCV::LC_128;
+      Opcode = ST.hasStdExtY() ? RISCV::LY
+                               : (ST.isRV64() ? RISCV::LC_128 : RISCV::LC_64);
       IsScalableVector = false;
     } else if (RISCV::GPRPF64RegClass.hasSubClassEq(RC)) {
       Opcode = RISCV::PseudoRV32ZdinxLD;
@@ -1420,8 +1429,10 @@ bool RISCVInstrInfo::isAsCheapAsAMove(const MachineInstr &MI) const {
   default:
     break;
   case RISCV::CMove:
+  case RISCV::YMV:
     return true;
   case RISCV::CIncOffset:
+  case RISCV::ADDY:
     // Creating a NULL-derived capability is fast since it's the same as moving
     // to another register and zeroing the capability metadata.
     // While incrementing a capability by zero is not quite as fast as a move
@@ -1437,6 +1448,7 @@ bool RISCVInstrInfo::isAsCheapAsAMove(const MachineInstr &MI) const {
             MI.getOperand(2).getReg() == RISCV::X0) ||
            (MI.getOperand(1).isReg() && MI.getOperand(1).getReg() == RISCV::C0);
   case RISCV::CIncOffsetImm:
+  case RISCV::ADDIY:
     return (MI.getOperand(2).isImm() && MI.getOperand(2).getImm() == 0) ||
            (MI.getOperand(1).isReg() && MI.getOperand(1).getReg() == RISCV::C0);
   case RISCV::FSGNJ_D:
@@ -1485,6 +1497,103 @@ RISCVInstrInfo::getAsIntImmediate(const MachineOperand &Op,
   return std::nullopt; // Unknown immediate
 }
 
+static bool expandPseudoPCCGet(MachineInstr &MI, MachineBasicBlock *MBB,
+                               const RISCVSubtarget &Subtarget) {
+  DebugLoc DL = MI.getDebugLoc();
+  const RISCVInstrInfo *TII = Subtarget.getInstrInfo();
+  Register DstReg = MI.getOperand(0).getReg();
+
+  // ymodeswy
+  // auipcc $dst, 0
+  // ymodeswi
+  BuildMI(*MBB, MI, DL, TII->get(RISCV::YMODESWY));
+  BuildMI(*MBB, MI, DL, TII->get(RISCV::AUIPCC), DstReg).addImm(0);
+  BuildMI(*MBB, MI, DL, TII->get(RISCV::YMODESWI));
+
+  MI.eraseFromParent();
+  return true;
+}
+
+static bool expandLoadWithExplicitCap(MachineInstr &MI, MachineBasicBlock *MBB,
+                                      const RISCVSubtarget &Subtarget,
+                                      unsigned LoadOpc) {
+  DebugLoc DL = MI.getDebugLoc();
+  const RISCVInstrInfo *TII = Subtarget.getInstrInfo();
+  Register DstReg = MI.getOperand(0).getReg();
+  Register AuthCap = MI.getOperand(1).getReg();
+
+  // ymodeswy
+  // <load> $dst, 0($cap)
+  // ymodeswi
+  BuildMI(*MBB, MI, DL, TII->get(RISCV::YMODESWY));
+  BuildMI(*MBB, MI, DL, TII->get(LoadOpc), DstReg).addReg(AuthCap).addImm(0);
+  BuildMI(*MBB, MI, DL, TII->get(RISCV::YMODESWI));
+
+  MI.eraseFromParent();
+  return true;
+}
+
+static bool expandStoreWithExplicitCap(MachineInstr &MI, MachineBasicBlock *MBB,
+                                       const RISCVSubtarget &Subtarget,
+                                       unsigned StoreOpc) {
+  DebugLoc DL = MI.getDebugLoc();
+  const RISCVInstrInfo *TII = Subtarget.getInstrInfo();
+  Register AuthCap = MI.getOperand(0).getReg();
+  Register Value = MI.getOperand(1).getReg();
+
+  // ymodeswy
+  // <store> $val, 0($cap)
+  // ymodeswi
+  BuildMI(*MBB, MI, DL, TII->get(RISCV::YMODESWY));
+  BuildMI(*MBB, MI, DL, TII->get(StoreOpc))
+      .addReg(Value)
+      .addReg(AuthCap)
+      .addImm(0);
+  BuildMI(*MBB, MI, DL, TII->get(RISCV::YMODESWI));
+
+  MI.eraseFromParent();
+  return true;
+}
+
+bool RISCVInstrInfo::expandPostRAPseudo(MachineInstr &MI) const {
+  MachineBasicBlock *MBB = MI.getParent();
+
+  switch (MI.getOpcode()) {
+  default:
+    break;
+  case RISCV::PseudoPCCGet:
+    return expandPseudoPCCGet(MI, MBB, STI);
+  case RISCV::PseudoLB_CAP:
+    return expandLoadWithExplicitCap(MI, MBB, STI, RISCV::CLB);
+  case RISCV::PseudoLH_CAP:
+    return expandLoadWithExplicitCap(MI, MBB, STI, RISCV::CLH);
+  case RISCV::PseudoLW_CAP:
+    return expandLoadWithExplicitCap(MI, MBB, STI, RISCV::CLW);
+  case RISCV::PseudoLBU_CAP:
+    return expandLoadWithExplicitCap(MI, MBB, STI, RISCV::CLBU);
+  case RISCV::PseudoLHU_CAP:
+    return expandLoadWithExplicitCap(MI, MBB, STI, RISCV::CLHU);
+  case RISCV::PseudoLC_CAP:
+    return expandLoadWithExplicitCap(MI, MBB, STI, RISCV::CLY);
+  case RISCV::PseudoLWU_CAP:
+    return expandLoadWithExplicitCap(MI, MBB, STI, RISCV::CLWU);
+  case RISCV::PseudoLD_CAP:
+    return expandLoadWithExplicitCap(MI, MBB, STI, RISCV::CLD);
+  case RISCV::PseudoSB_CAP:
+    return expandStoreWithExplicitCap(MI, MBB, STI, RISCV::CSB);
+  case RISCV::PseudoSH_CAP:
+    return expandStoreWithExplicitCap(MI, MBB, STI, RISCV::CSH);
+  case RISCV::PseudoSW_CAP:
+    return expandStoreWithExplicitCap(MI, MBB, STI, RISCV::CSW);
+  case RISCV::PseudoSD_CAP:
+    return expandStoreWithExplicitCap(MI, MBB, STI, RISCV::CSD);
+  case RISCV::PseudoSC_CAP:
+    return expandStoreWithExplicitCap(MI, MBB, STI, RISCV::CSY);
+  }
+
+  return false;
+}
+
 bool RISCVInstrInfo::isSetBoundsInstr(const MachineInstr &I,
                                       const MachineOperand *&Base,
                                       const MachineOperand *&Size) const {
@@ -1494,6 +1603,9 @@ bool RISCVInstrInfo::isSetBoundsInstr(const MachineInstr &I,
   case RISCV::CSetBounds:
   case RISCV::CSetBoundsExact:
   case RISCV::CSetBoundsImm:
+  case RISCV::YBNDSW:
+  case RISCV::YBNDSRW:
+  case RISCV::YBNDSIW:
     Base = &I.getOperand(1);
     Size = &I.getOperand(2);
     return true;
@@ -1513,6 +1625,8 @@ bool RISCVInstrInfo::isPtrAddInstr(const MachineInstr &I,
     return false;
   case RISCV::CIncOffsetImm:
   case RISCV::CIncOffset:
+  case RISCV::ADDY:
+  case RISCV::ADDIY:
     Base = &I.getOperand(1);
     Increment = &I.getOperand(2);
     return true;
