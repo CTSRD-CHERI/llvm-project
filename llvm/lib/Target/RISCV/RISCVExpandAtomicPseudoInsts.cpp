@@ -111,7 +111,8 @@ bool RISCVExpandAtomicPseudo::expandMI(MachineBasicBlock &MBB,
   // expanded instructions for each pseudo is correct in the Size field of the
   // tablegen definition for the pseudo.
   const auto &Subtarget = MBB.getParent()->getSubtarget<RISCVSubtarget>();
-  MVT CLenVT = Subtarget.hasCheri() ? Subtarget.typeForCapabilities() : MVT();
+  MVT CLenVT =
+      Subtarget.hasCheriOrStdExtY() ? Subtarget.typeForCapabilities() : MVT();
   switch (MBBI->getOpcode()) {
   case RISCV::PseudoAtomicLoadNand32:
     return expandAtomicBinOp(MBB, MBBI, AtomicRMWInst::Nand, false, MVT::i32,
@@ -506,7 +507,42 @@ static unsigned getSCForRMWCap128(bool PtrIsCap, AtomicOrdering Ordering) {
   }
 }
 
-static unsigned getLRForRMW(bool PtrIsCap, AtomicOrdering Ordering, MVT VT) {
+static unsigned getLRForRMWCapRVY(bool PtrIsCap, AtomicOrdering Ordering) {
+  switch (Ordering) {
+  default:
+    llvm_unreachable("Unexpected AtomicOrdering");
+  case AtomicOrdering::Monotonic:
+    return PtrIsCap ? RISCV::CLR_Y : RISCV::LR_Y;
+  case AtomicOrdering::Acquire:
+    return PtrIsCap ? RISCV::CLR_Y_AQ : RISCV::LR_Y_AQ;
+  case AtomicOrdering::Release:
+    return PtrIsCap ? RISCV::CLR_Y_RL : RISCV::LR_Y_RL;
+  case AtomicOrdering::AcquireRelease:
+    return PtrIsCap ? RISCV::CLR_Y_AQ : RISCV::LR_Y_AQ;
+  case AtomicOrdering::SequentiallyConsistent:
+    return PtrIsCap ? RISCV::CLR_Y_AQ_RL : RISCV::LR_Y_AQ_RL;
+  }
+}
+
+static unsigned getSCForRMWCapRVY(bool PtrIsCap, AtomicOrdering Ordering) {
+  switch (Ordering) {
+  default:
+    llvm_unreachable("Unexpected AtomicOrdering");
+  case AtomicOrdering::Monotonic:
+    return PtrIsCap ? RISCV::CSC_Y : RISCV::SC_Y;
+  case AtomicOrdering::Acquire:
+    return PtrIsCap ? RISCV::CSC_Y_AQ : RISCV::SC_Y_AQ;
+  case AtomicOrdering::Release:
+    return PtrIsCap ? RISCV::CSC_Y : RISCV::SC_Y;
+  case AtomicOrdering::AcquireRelease:
+    return PtrIsCap ? RISCV::CSC_Y_AQ : RISCV::SC_Y_AQ;
+  case AtomicOrdering::SequentiallyConsistent:
+    return PtrIsCap ? RISCV::CSC_Y_AQ_RL : RISCV::SC_Y_AQ_RL;
+  }
+}
+
+static unsigned getLRForRMW(bool PtrIsCap, AtomicOrdering Ordering, MVT VT,
+                            bool HasRVY) {
   if (VT == MVT::i8)
     return getLRForRMW8(PtrIsCap, Ordering);
   if (VT == MVT::i16)
@@ -515,6 +551,8 @@ static unsigned getLRForRMW(bool PtrIsCap, AtomicOrdering Ordering, MVT VT) {
     return getLRForRMW32(PtrIsCap, Ordering);
   if (VT == MVT::i64)
     return getLRForRMW64(PtrIsCap, Ordering);
+  if (VT.isCapability() && HasRVY)
+    return getLRForRMWCapRVY(PtrIsCap, Ordering);
   if (VT == MVT::c64)
     return getLRForRMWCap64(PtrIsCap, Ordering);
   if (VT == MVT::c128)
@@ -522,7 +560,8 @@ static unsigned getLRForRMW(bool PtrIsCap, AtomicOrdering Ordering, MVT VT) {
   llvm_unreachable("Unexpected LR type\n");
 }
 
-static unsigned getSCForRMW(bool PtrIsCap, AtomicOrdering Ordering, MVT VT) {
+static unsigned getSCForRMW(bool PtrIsCap, AtomicOrdering Ordering, MVT VT,
+                            bool HasRVY) {
   if (VT == MVT::i8)
     return getSCForRMW8(PtrIsCap, Ordering);
   if (VT == MVT::i16)
@@ -531,6 +570,8 @@ static unsigned getSCForRMW(bool PtrIsCap, AtomicOrdering Ordering, MVT VT) {
     return getSCForRMW32(PtrIsCap, Ordering);
   if (VT == MVT::i64)
     return getSCForRMW64(PtrIsCap, Ordering);
+  if (VT.isCapability() && HasRVY)
+    return getSCForRMWCapRVY(PtrIsCap, Ordering);
   if (VT == MVT::c64)
     return getSCForRMWCap64(PtrIsCap, Ordering);
   if (VT == MVT::c128)
@@ -550,12 +591,13 @@ static void doAtomicBinOpExpansion(const RISCVInstrInfo *TII, MachineInstr &MI,
   Register IncrReg = MI.getOperand(3).getReg();
   AtomicOrdering Ordering =
       static_cast<AtomicOrdering>(MI.getOperand(4).getImm());
+  const RISCVSubtarget &ST =
+      ThisMBB->getParent()->getSubtarget<RISCVSubtarget>();
 
   Register ScratchIntReg;
   Register DestIntReg;
   if (VT.isFatPointer()) {
-    MachineFunction *MF = ThisMBB->getParent();
-    const TargetRegisterInfo *TRI = MF->getSubtarget().getRegisterInfo();
+    const TargetRegisterInfo *TRI = ST.getRegisterInfo();
     IncrReg = TRI->getSubReg(IncrReg, RISCV::sub_cap_addr);
     ScratchIntReg = TRI->getSubReg(ScratchReg, RISCV::sub_cap_addr);
     DestIntReg = TRI->getSubReg(DestReg, RISCV::sub_cap_addr);
@@ -563,13 +605,15 @@ static void doAtomicBinOpExpansion(const RISCVInstrInfo *TII, MachineInstr &MI,
     ScratchIntReg = ScratchReg;
     DestIntReg = DestReg;
   }
+  const bool HasRVY = ST.hasFeature(RISCV::FeatureStdExtY);
 
   // .loop:
   //   lr.[w|d] dest, (addr)
   //   binop scratch, dest, val
   //   sc.[w|d] scratch, scratch, (addr)
   //   bnez scratch, loop
-  BuildMI(LoopMBB, DL, TII->get(getLRForRMW(PtrIsCap, Ordering, VT)), DestReg)
+  BuildMI(LoopMBB, DL, TII->get(getLRForRMW(PtrIsCap, Ordering, VT, HasRVY)),
+          DestReg)
       .addReg(AddrReg);
   switch (BinOp) {
   default:
@@ -582,7 +626,8 @@ static void doAtomicBinOpExpansion(const RISCVInstrInfo *TII, MachineInstr &MI,
     break;
   case AtomicRMWInst::Add:
     if (VT.isFatPointer()) {
-      BuildMI(LoopMBB, DL, TII->get(RISCV::CIncOffset), ScratchReg)
+      BuildMI(LoopMBB, DL, TII->get(HasRVY ? RISCV::ADDY : RISCV::CIncOffset),
+              ScratchReg)
           .addReg(DestReg)
           .addReg(IncrReg);
       break;
@@ -625,10 +670,11 @@ static void doAtomicBinOpExpansion(const RISCVInstrInfo *TII, MachineInstr &MI,
     break;
   }
   if (VT.isFatPointer() && BinOp != AtomicRMWInst::Add)
-    BuildMI(LoopMBB, DL, TII->get(RISCV::CSetAddr), ScratchReg)
+    BuildMI(LoopMBB, DL, TII->get(HasRVY ? RISCV::YADDRW : RISCV::CSetAddr),
+            ScratchReg)
         .addReg(DestReg)
         .addReg(ScratchIntReg);
-  BuildMI(LoopMBB, DL, TII->get(getSCForRMW(PtrIsCap, Ordering, VT)),
+  BuildMI(LoopMBB, DL, TII->get(getSCForRMW(PtrIsCap, Ordering, VT, HasRVY)),
           ScratchIntReg)
       .addReg(AddrReg)
       .addReg(ScratchReg);
@@ -906,17 +952,19 @@ bool RISCVExpandAtomicPseudo::expandAtomicMinMaxOp(
       ScratchIntReg = ScratchReg;
       IncrIntReg = IncrReg;
     }
+    const bool HasRVY = MF->getSubtarget().hasFeature(RISCV::FeatureStdExtY);
 
     //
     // .loophead:
     //   lr.[b|h] dest, (addr)
     //   mv scratch, dest
     //   ifnochangeneeded scratch, incr, .looptail
-    BuildMI(LoopHeadMBB, DL, TII->get(getLRForRMW(PtrIsCap, Ordering, VT)),
-            DestReg)
+    BuildMI(LoopHeadMBB, DL,
+            TII->get(getLRForRMW(PtrIsCap, Ordering, VT, HasRVY)), DestReg)
         .addReg(AddrReg);
     if (VT.isFatPointer())
-      BuildMI(LoopHeadMBB, DL, TII->get(RISCV::CMove), ScratchReg)
+      BuildMI(LoopHeadMBB, DL, TII->get(HasRVY ? RISCV::YMV : RISCV::CMove),
+              ScratchReg)
           .addReg(DestReg);
     else
       BuildMI(LoopHeadMBB, DL, TII->get(RISCV::ADDI), ScratchReg)
@@ -957,7 +1005,8 @@ bool RISCVExpandAtomicPseudo::expandAtomicMinMaxOp(
     // .loopifbody:
     //   mv scratch, incr
     if (VT.isFatPointer())
-      BuildMI(LoopIfBodyMBB, DL, TII->get(RISCV::CMove), ScratchReg)
+      BuildMI(LoopIfBodyMBB, DL, TII->get(HasRVY ? RISCV::YMV : RISCV::CMove),
+              ScratchReg)
           .addReg(DestReg);
     else
       BuildMI(LoopIfBodyMBB, DL, TII->get(RISCV::ADDI), ScratchReg)
@@ -967,7 +1016,8 @@ bool RISCVExpandAtomicPseudo::expandAtomicMinMaxOp(
     // .looptail:
     //   sc.[b|h] scratch, scratch, (addr)
     //   bnez scratch, loop
-    BuildMI(LoopTailMBB, DL, TII->get(getSCForRMW(PtrIsCap, Ordering, VT)),
+    BuildMI(LoopTailMBB, DL,
+            TII->get(getSCForRMW(PtrIsCap, Ordering, VT, HasRVY)),
             ScratchIntReg)
         .addReg(AddrReg)
         .addReg(ScratchReg);
@@ -1083,6 +1133,7 @@ bool RISCVExpandAtomicPseudo::expandAtomicCmpXchg(
 
   AtomicOrdering Ordering =
       static_cast<AtomicOrdering>(MI.getOperand(IsMasked ? 6 : 5).getImm());
+  const bool HasRVY = MF->getSubtarget().hasFeature(RISCV::FeatureStdExtY);
 
   if (!IsMasked) {
     Register DestIntReg;
@@ -1099,8 +1150,8 @@ bool RISCVExpandAtomicPseudo::expandAtomicCmpXchg(
     // .loophead:
     //   lr.[w|d] dest, (addr)
     //   bne dest, cmpval, done
-    BuildMI(LoopHeadMBB, DL, TII->get(getLRForRMW(PtrIsCap, Ordering, VT)),
-            DestReg)
+    BuildMI(LoopHeadMBB, DL,
+            TII->get(getLRForRMW(PtrIsCap, Ordering, VT, HasRVY)), DestReg)
         .addReg(AddrReg);
     BuildMI(LoopHeadMBB, DL, TII->get(RISCV::BNE))
         .addReg(DestIntReg, 0)
@@ -1109,8 +1160,8 @@ bool RISCVExpandAtomicPseudo::expandAtomicCmpXchg(
     // .looptail:
     //   sc.[w|d] scratch, newval, (addr)
     //   bnez scratch, loophead
-    BuildMI(LoopTailMBB, DL, TII->get(getSCForRMW(PtrIsCap, Ordering, VT)),
-            ScratchReg)
+    BuildMI(LoopTailMBB, DL,
+            TII->get(getSCForRMW(PtrIsCap, Ordering, VT, HasRVY)), ScratchReg)
         .addReg(AddrReg)
         .addReg(NewValReg);
     BuildMI(LoopTailMBB, DL, TII->get(RISCV::BNE))
@@ -1126,7 +1177,7 @@ bool RISCVExpandAtomicPseudo::expandAtomicCmpXchg(
     //   and scratch, dest, mask
     //   bne scratch, cmpval, done
     Register MaskReg = MI.getOperand(5).getReg();
-    BuildMI(LoopHeadMBB, DL, TII->get(getLRForRMW(false, Ordering, VT)),
+    BuildMI(LoopHeadMBB, DL, TII->get(getLRForRMW(false, Ordering, VT, HasRVY)),
             DestReg)
         .addReg(AddrReg);
     BuildMI(LoopHeadMBB, DL, TII->get(RISCV::AND), ScratchReg)
@@ -1145,7 +1196,7 @@ bool RISCVExpandAtomicPseudo::expandAtomicCmpXchg(
     //   bnez scratch, loophead
     insertMaskedMerge(TII, DL, LoopTailMBB, ScratchReg, DestReg, NewValReg,
                       MaskReg, ScratchReg);
-    BuildMI(LoopTailMBB, DL, TII->get(getSCForRMW(false, Ordering, VT)),
+    BuildMI(LoopTailMBB, DL, TII->get(getSCForRMW(false, Ordering, VT, HasRVY)),
             ScratchReg)
         .addReg(AddrReg)
         .addReg(ScratchReg);

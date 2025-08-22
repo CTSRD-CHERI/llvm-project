@@ -42,7 +42,7 @@ struct RISCVSupportedExtension {
 
 } // end anonymous namespace
 
-static constexpr StringLiteral AllStdExts = "mafdqlcbkjtpvnh";
+static constexpr StringLiteral AllStdExts = "mafdqlcbkjtpvnhy";
 
 static const char *RISCVGImplications[] = {
   "i", "m", "a", "f", "d", "zicsr", "zifencei"
@@ -84,6 +84,8 @@ static const RISCVSupportedExtension SupportedExtensions[] = {
     {"xtheadsync", RISCVExtensionVersion{1, 0}},
     {"xtheadvdot", RISCVExtensionVersion{1, 0}},
     {"xventanacondops", RISCVExtensionVersion{1, 0}},
+
+    {"y", RISCVExtensionVersion{0, 9}},
 
     {"zawrs", RISCVExtensionVersion{1, 0}},
 
@@ -154,6 +156,8 @@ static const RISCVSupportedExtension SupportedExtensions[] = {
     {"zvl64b", RISCVExtensionVersion{1, 0}},
     {"zvl65536b", RISCVExtensionVersion{1, 0}},
     {"zvl8192b", RISCVExtensionVersion{1, 0}},
+
+    {"zyhybrid", RISCVExtensionVersion{0, 9}},
 };
 
 // NOTE: This table should be sorted alphabetically by extension name.
@@ -1004,6 +1008,7 @@ static const char *ImpliedExtsZvl512b[] = {"zvl256b"};
 static const char *ImpliedExtsZvl64b[] = {"zvl32b"};
 static const char *ImpliedExtsZvl65536b[] = {"zvl32768b"};
 static const char *ImpliedExtsZvl8192b[] = {"zvl4096b"};
+static const char *ImpliedExtsZYHybrid[] = {"y"};
 
 struct ImpliedExtsEntry {
   StringLiteral Name;
@@ -1069,6 +1074,7 @@ static constexpr ImpliedExtsEntry ImpliedExts[] = {
     {{"zvl64b"}, {ImpliedExtsZvl64b}},
     {{"zvl65536b"}, {ImpliedExtsZvl65536b}},
     {{"zvl8192b"}, {ImpliedExtsZvl8192b}},
+    {{"zyhybrid"}, {ImpliedExtsZYHybrid}},
 };
 
 void RISCVISAInfo::updateImplication() {

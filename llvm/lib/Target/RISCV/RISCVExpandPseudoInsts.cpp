@@ -228,19 +228,21 @@ bool RISCVExpandPseudo::expandAuipccInstPair(
 bool RISCVExpandPseudo::expandCapLoadLocalCap(
     MachineBasicBlock &MBB, MachineBasicBlock::iterator MBBI,
     MachineBasicBlock::iterator &NextMBBI) {
+  const auto &STI = MBB.getParent()->getSubtarget<RISCVSubtarget>();
+  const bool HasRVY = STI.hasFeature(RISCV::FeatureStdExtY);
   return expandAuipccInstPair(MBB, MBBI, NextMBBI, RISCVII::MO_PCREL_HI,
-                              RISCV::CIncOffsetImm);
+                              HasRVY ? RISCV::ADDIY : RISCV::CIncOffsetImm);
 }
 
 bool RISCVExpandPseudo::expandCapLoadGlobalCap(
     MachineBasicBlock &MBB, MachineBasicBlock::iterator MBBI,
     MachineBasicBlock::iterator &NextMBBI) {
-  MachineFunction *MF = MBB.getParent();
-
-  const auto &STI = MF->getSubtarget<RISCVSubtarget>();
-  unsigned SecondOpcode = STI.is64Bit() ? RISCV::CLC_128 : RISCV::CLC_64;
+  const auto &STI = MBB.getParent()->getSubtarget<RISCVSubtarget>();
+  const bool HasRVY = STI.hasFeature(RISCV::FeatureStdExtY);
+  unsigned LoadCapOpc =
+      HasRVY ? RISCV::CLY : (STI.is64Bit() ? RISCV::CLC_128 : RISCV::CLC_64);
   return expandAuipccInstPair(MBB, MBBI, NextMBBI, RISCVII::MO_GOT_HI,
-                              SecondOpcode);
+                              LoadCapOpc);
 }
 
 bool RISCVExpandPseudo::expandCapLoadTLSIEAddress(
@@ -257,8 +259,11 @@ bool RISCVExpandPseudo::expandCapLoadTLSIEAddress(
 bool RISCVExpandPseudo::expandCapLoadTLSGDCap(
     MachineBasicBlock &MBB, MachineBasicBlock::iterator MBBI,
     MachineBasicBlock::iterator &NextMBBI) {
+  const auto &STI = MBB.getParent()->getSubtarget<RISCVSubtarget>();
+  const bool HasRVY = STI.hasFeature(RISCV::FeatureStdExtY);
+  const unsigned IncOpc = HasRVY ? RISCV::ADDIY : RISCV::CIncOffsetImm;
   return expandAuipccInstPair(MBB, MBBI, NextMBBI, RISCVII::MO_TLS_GD_HI,
-                              RISCV::CIncOffsetImm);
+                              IncOpc);
 }
 
 bool RISCVExpandPseudo::expandCGetAddr(MachineBasicBlock &MBB,

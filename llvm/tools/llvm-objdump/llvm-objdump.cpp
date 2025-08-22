@@ -508,13 +508,19 @@ static bool isArmElf(const ObjectFile &Obj) {
   return Elf && Elf->getEMachine() == ELF::EM_ARM;
 }
 
+static bool isRiscvElf(const ObjectFile &Obj) {
+  const auto *Elf = dyn_cast<ELFObjectFileBase>(&Obj);
+  return Elf && Elf->getEMachine() == ELF::EM_RISCV;
+}
+
 static bool isCSKYElf(const ObjectFile &Obj) {
   const auto *Elf = dyn_cast<ELFObjectFileBase>(&Obj);
   return Elf && Elf->getEMachine() == ELF::EM_CSKY;
 }
 
 static bool hasMappingSymbols(const ObjectFile &Obj) {
-  return isArmElf(Obj) || isAArch64Elf(Obj) || isCSKYElf(Obj) ;
+  return isArmElf(Obj) || isAArch64Elf(Obj) || isRiscvElf(Obj) ||
+         isCSKYElf(Obj);
 }
 
 static bool isMappingSymbol(const SymbolInfoTy &Sym) {
@@ -1342,6 +1348,10 @@ static void disassembleObject(const Target *TheTarget, ObjectFile &Obj,
   if (isArmElf(Obj))
     PrimaryIsThumb = STI->checkFeatures("+thumb-mode");
 
+  bool PrimaryIsCapMode = false;
+  if (isRiscvElf(Obj))
+    PrimaryIsCapMode = STI->checkFeatures("+cap-mode");
+
   std::map<SectionRef, std::vector<RelocationRef>> RelocMap;
   if (InlineRelocs)
     RelocMap = getRelocsMap(Obj);
@@ -1512,8 +1522,16 @@ static void disassembleObject(const Target *TheTarget, ObjectFile &Obj,
         StringRef Name = Symb.Name;
         if (Name.startswith("$d"))
           MappingSymbols.emplace_back(Address - SectionAddr, 'd');
-        if (Name.startswith("$x"))
-          MappingSymbols.emplace_back(Address - SectionAddr, 'x');
+        if (Name.startswith("$x")) {
+          if (Name.startswith("$x<capmode>"))
+            MappingSymbols.emplace_back(Address - SectionAddr,
+                                        'c'); // c for capmode
+          else if (Name.startswith("$x<nocapmode>"))
+            MappingSymbols.emplace_back(Address - SectionAddr,
+                                        'n'); // n for (n)ocapmode
+          else
+            MappingSymbols.emplace_back(Address - SectionAddr, 'x');
+        }
         if (Name.startswith("$a"))
           MappingSymbols.emplace_back(Address - SectionAddr, 'a');
         if (Name.startswith("$t"))
@@ -1798,12 +1816,22 @@ static void disassembleObject(const Target *TheTarget, ObjectFile &Obj,
           char Kind = getMappingSymbolKind(MappingSymbols, Index);
           DumpARMELFData = Kind == 'd';
           if (SecondarySTI) {
-            if (Kind == 'a') {
-              STI = PrimaryIsThumb ? SecondarySTI : PrimarySTI;
-              DisAsm = PrimaryIsThumb ? SecondaryDisAsm : PrimaryDisAsm;
-            } else if (Kind == 't') {
-              STI = PrimaryIsThumb ? PrimarySTI : SecondarySTI;
-              DisAsm = PrimaryIsThumb ? PrimaryDisAsm : SecondaryDisAsm;
+            if (isRiscvElf(Obj)) {
+              if (Kind == 'c') {
+                STI = PrimaryIsCapMode ? PrimarySTI : SecondarySTI;
+                DisAsm = PrimaryIsCapMode ? PrimaryDisAsm : SecondaryDisAsm;
+              } else if (Kind == 'n') {
+                STI = PrimaryIsCapMode ? SecondarySTI : PrimarySTI;
+                DisAsm = PrimaryIsCapMode ? SecondaryDisAsm : PrimaryDisAsm;
+              }
+            } else {
+              if (Kind == 'a') {
+                STI = PrimaryIsThumb ? SecondarySTI : PrimarySTI;
+                DisAsm = PrimaryIsThumb ? SecondaryDisAsm : PrimaryDisAsm;
+              } else if (Kind == 't') {
+                STI = PrimaryIsThumb ? PrimarySTI : SecondarySTI;
+                DisAsm = PrimaryIsThumb ? PrimaryDisAsm : SecondaryDisAsm;
+              }
             }
           }
         }
@@ -2310,6 +2338,18 @@ static void disassembleObject(ObjectFile *Obj, bool InlineRelocs) {
       Features.AddFeature("-thumb-mode");
     else
       Features.AddFeature("+thumb-mode");
+    SecondarySTI.reset(TheTarget->createMCSubtargetInfo(TripleName, MCPU,
+                                                        Features.getString()));
+    SecondaryDisAsm.reset(TheTarget->createMCDisassembler(*SecondarySTI, Ctx));
+  }
+
+  // Similarly to ARM thumb mode, we need a second disassembler to handle
+  // switching in and out of capmode.
+  if (isRiscvElf(*Obj) && STI->checkFeatures("+zyhybrid")) {
+    if (STI->checkFeatures("+cap-mode"))
+      Features.AddFeature("-cap-mode");
+    else
+      Features.AddFeature("+cap-mode");
     SecondarySTI.reset(TheTarget->createMCSubtargetInfo(TripleName, MCPU,
                                                         Features.getString()));
     SecondaryDisAsm.reset(TheTarget->createMCDisassembler(*SecondarySTI, Ctx));

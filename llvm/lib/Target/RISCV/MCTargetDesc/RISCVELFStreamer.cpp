@@ -151,6 +151,52 @@ void RISCVELFStreamer::reset() {
   MCELFStreamer::reset();
 }
 
+void RISCVELFStreamer::changeSection(MCSection *Section,
+                                     const MCExpr *Subsection) {
+  LastMappingSymbols[getCurrentSection().first] = std::move(LastEMSInfo);
+  MCELFStreamer::changeSection(Section, Subsection);
+  auto LastMappingSymbol = LastMappingSymbols.find(Section);
+  if (LastMappingSymbol != LastMappingSymbols.end()) {
+    LastEMSInfo = std::move(LastMappingSymbol->second);
+    return;
+  }
+  LastEMSInfo.reset(new ElfMappingSymbolInfo(SMLoc(), nullptr, 0));
+}
+
+void RISCVELFStreamer::EmitCapModeMappingSymbol() {
+  if (LastEMSInfo->State == EMS_CapMode)
+    return;
+  EmitMappingSymbol("$x<capmode>");
+  LastEMSInfo->State = EMS_CapMode;
+}
+
+void RISCVELFStreamer::EmitNoCapModeMappingSymbol() {
+  if (LastEMSInfo->State == EMS_NoCapMode)
+    return;
+  EmitMappingSymbol("$x<nocapmode>");
+  LastEMSInfo->State = EMS_NoCapMode;
+}
+
+void RISCVELFStreamer::EmitMappingSymbol(StringRef Name) {
+  auto *Symbol = cast<MCSymbolELF>(getContext().getOrCreateSymbol(
+      Name + "." + Twine(MappingSymbolCounter++)));
+  emitLabel(Symbol);
+  Symbol->setType(ELF::STT_NOTYPE);
+  Symbol->setBinding(ELF::STB_LOCAL);
+}
+
+void RISCVELFStreamer::emitInstruction(const MCInst &Inst,
+                                       const MCSubtargetInfo &STI) {
+  if (STI.hasFeature(RISCV::FeatureStdExtY)) {
+    if (STI.hasFeature(RISCV::FeatureCapMode)) {
+      EmitCapModeMappingSymbol();
+    } else {
+      EmitNoCapModeMappingSymbol();
+    }
+  }
+  MCELFStreamer::emitInstruction(Inst, STI);
+}
+
 void RISCVELFStreamer::emitCheriIntcap(const MCExpr *Expr, unsigned CapSize,
                                        SMLoc Loc) {
   assert(CapSize == (getContext().getTargetTriple().isArch64Bit() ? 16 : 8));
