@@ -5,21 +5,26 @@
 # RUN: %riscv64_cheri_purecap_llvm-mc -filetype=obj %t/two.s -o %t/two.o
 # RUN: %riscv64_cheri_purecap_llvm-mc -filetype=obj %t/three.s -o %t/three.o
 # RUN: ld.lld --compartment-policy=%t/compartments.json %t/one.o %t/two.o %t/three.o -o %t/acl_caprelocs_perms.exe
-# RUN: readelf -t --cap-relocs %t/acl_caprelocs_perms.exe | FileCheck %s
+# RUN: readelf -t --acls --cap-relocs %t/acl_caprelocs_perms.exe | FileCheck %s
 
 # CHECK-LABEL: Section Headers:
-# CHECK:         [ 5] .got.one
-# CHECK-NEXT:         PROGBITS        0000000000012450 000450 000030 00   0   0  16
-# CHECK:         [ 9] .got.two
-# CHECK-NEXT:         PROGBITS        0000000000015ca0 000ca0 000030 00   0   0  16
+# CHECK:         [ 6] .got.one
+# CHECK-NEXT:         PROGBITS        0000000000012480 000480 000030 00   0   0  16
+# CHECK:         [10] .got.two
+# CHECK-NEXT:         PROGBITS        0000000000015cd0 000cd0 000030 00   0   0  16
+
+# CHECK-LABEL: ACLs
+# CHECK-NEXT:    Subject: compartment one Permissions: r-- Object: symbol buf
+# CHECK-NEXT:    Subject: compartment one Permissions: rw- Object: symbol buf2
+# CHECK-NEXT:    Subject: compartment two Permissions: rw- Object: compartment three
 
 # CHECK-LABEL: CHERI __cap_relocs
 # relocs for compartment one
-# CHECK-NEXT:     0x012460 Base: 0x13480 (buf) Length: 1024 Perms: Constant
-# CHECK-NEXT:     0x012470 Base: 0x13880 (buf2) Length: 1024 Perms: Object
+# CHECK-NEXT:     0x012490 Base: 0x134b0 (buf) Length: 1024 Perms: Constant
+# CHECK-NEXT:     0x0124a0 Base: 0x138b0 (buf2) Length: 1024 Perms: Object
 # relocs for compartment two
-# CHECK-NEXT:     0x015cb0 Base: 0x13480 (buf) Length: 1024 Perms: Object
-# CHECK-NEXT:     0x015cc0 Base: 0x13880 (buf2) Length: 1024 Perms: Object
+# CHECK-NEXT:     0x015ce0 Base: 0x134b0 (buf) Length: 1024 Perms: Object
+# CHECK-NEXT:     0x015cf0 Base: 0x138b0 (buf2) Length: 1024 Perms: Object
 
 #--- one.s
 
