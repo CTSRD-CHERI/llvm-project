@@ -1524,6 +1524,10 @@ DynamicSection<ELFT>::computeContents() {
     addInSec(DT_C18N_STRTAB, *in.compartStrTab);
     addInt(DT_C18N_STRTABSZ, in.compartStrTab->getSize());
   }
+  if (in.acls && in.acls->isNeeded()) {
+    addInSec(DT_C18N_ACL, *in.acls);
+    addInt(DT_C18N_ACLSZ, in.acls->getSize());
+  }
 
   if (isMain) {
     if (Out::preinitArray) {
@@ -4086,6 +4090,59 @@ void CheriPccPaddingSection::writeTo(uint8_t *buf) {
   memset(buf, 0, size);
 }
 
+template <class ELFT>
+std::unique_ptr<CompartAclSection<ELFT>> CompartAclSection<ELFT>::create() {
+  auto sec = std::make_unique<CompartAclSection>();
+  for (const auto &policy : config->compartmentPolicies)
+    for (const auto &acl : policy.acls)
+      sec->addRules(acl);
+  return sec;
+}
+
+template <class ELFT>
+void CompartAclSection<ELFT>::addRules(const CompartmentAcl &acl) {
+  uint32_t subject = in.compartStrTab->addString(acl.subject);
+  uint32_t permissions = 0;
+  if (acl.permissions.read)
+    permissions |= ELF::ACL_R;
+  if (acl.permissions.write)
+    permissions |= ELF::ACL_W;
+  if (acl.permissions.execute)
+    permissions |= ELF::ACL_X;
+  for (const auto &sym : acl.symbols) {
+    Elf_Acl rule;
+    rule.acl_subject = subject;
+    rule.acl_perms = permissions | ACL_OBJECT_SYMBOL;
+    rule.acl_object = in.compartStrTab->addString(sym);
+    rules.emplace_back(rule);
+  }
+  for (const auto &compart : acl.compartments) {
+    Elf_Acl rule;
+    rule.acl_subject = subject;
+    rule.acl_perms = permissions | ACL_OBJECT_COMPARTMENT;
+    rule.acl_object = in.compartStrTab->addString(compart);
+    rules.emplace_back(rule);
+  }
+}
+
+template <class ELFT>
+void CompartAclSection<ELFT>::finalizeContents() {
+  if (isNeeded()) {
+    if (OutputSection *sec = in.compartStrTab->getParent())
+      getParent()->link = sec->sectionIndex;
+  }
+}
+
+template <class ELFT>
+void CompartAclSection<ELFT>::writeTo(uint8_t *buf) {
+  for (const Elf_Acl &acl : rules) {
+    write32(buf, acl.acl_subject);
+    write32(buf + 4, acl.acl_object);
+    write32(buf + 8, acl.acl_perms);
+    buf += 12;
+  }
+}
+
 uint64_t elf::pccBase(const Compartment *c) {
   return cheriBoundsPhdr(c)->firstSec->addr;
 }
@@ -4189,3 +4246,8 @@ template class elf::PartitionProgramHeadersSection<ELF32LE>;
 template class elf::PartitionProgramHeadersSection<ELF32BE>;
 template class elf::PartitionProgramHeadersSection<ELF64LE>;
 template class elf::PartitionProgramHeadersSection<ELF64BE>;
+
+template class elf::CompartAclSection<ELF32LE>;
+template class elf::CompartAclSection<ELF32BE>;
+template class elf::CompartAclSection<ELF64LE>;
+template class elf::CompartAclSection<ELF64BE>;
