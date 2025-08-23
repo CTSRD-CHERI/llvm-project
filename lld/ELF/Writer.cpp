@@ -300,9 +300,11 @@ template <class ELFT> void elf::createSyntheticSections() {
 
   auto add = [](SyntheticSection &sec) { ctx.inputSections.push_back(&sec); };
 
-  if (compartments.size() > 1)
+  if (compartments.size() > 1 || config->compartmentPolicies.size() != 0) {
     in.compartStrTab =
         std::make_unique<StringTableSection>(".c18nstrtab", true);
+    in.acls = CompartAclSection<ELFT>::create();
+  }
 
   in.shStrTab = std::make_unique<StringTableSection>(".shstrtab", false);
 
@@ -608,6 +610,8 @@ template <class ELFT> void elf::createSyntheticSections() {
     add(*in.strTab);
   if (in.compartStrTab)
     add(*in.compartStrTab);
+  if (in.acls)
+    add(*in.acls);
 }
 
 // The main function of the writer.
@@ -2395,6 +2399,7 @@ template <class ELFT> void Writer<ELFT>::finalizeSections() {
     finalizeSynthetic(in.bss.get());
     finalizeSynthetic(in.bssRelRo.get());
     finalizeSynthetic(in.compartStrTab.get());
+    finalizeSynthetic(in.acls.get());
     finalizeSynthetic(in.symTabShndx.get());
     finalizeSynthetic(in.shStrTab.get());
     finalizeSynthetic(in.strTab.get());
