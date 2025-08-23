@@ -1297,6 +1297,25 @@ private:
   bool needed = false;
 };
 
+template <class ELFT>
+class CompartAclSection final : public SyntheticSection {
+  using Elf_Acl = typename ELFT::Acl;
+
+  std::vector<Elf_Acl> rules;
+public:
+  static std::unique_ptr<CompartAclSection> create();
+
+  CompartAclSection()
+      : SyntheticSection(llvm::ELF::SHF_ALLOC, llvm::ELF::SHT_C18N_ACL,
+                         /*alignment=*/4, ".c18nacl") {}
+
+  void addRules(const CompartmentAcl &acl);
+  size_t getSize() const override { return rules.size() * sizeof(Elf_Acl); }
+  bool isNeeded() const override { return !rules.empty(); }
+  void finalizeContents() override;
+  void writeTo(uint8_t *buf) override;
+};
+
 InputSection *createInterpSection();
 MergeInputSection *createCommentSection();
 template <class ELFT> void splitSections();
@@ -1360,6 +1379,7 @@ struct InStruct {
   std::unique_ptr<BssSection> bss;
   std::unique_ptr<BssSection> bssRelRo;
   std::unique_ptr<StringTableSection> compartStrTab;
+  std::unique_ptr<SyntheticSection> acls;
   std::unique_ptr<MipsCheriCapTableSection> mipsCheriCapTable;
   // For per-file/per-function tables:
   std::unique_ptr<MipsCheriCapTableMappingSection> mipsCheriCapTableMapping;

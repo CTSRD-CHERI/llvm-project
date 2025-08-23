@@ -5,22 +5,27 @@
 # RUN: %riscv64_cheri_purecap_llvm-mc -filetype=obj %t/two.s -o %t/two.o
 # RUN: %riscv64_cheri_purecap_llvm-mc -filetype=obj %t/three.s -o %t/three.o
 # RUN: ld.lld --compartment-policy=%t/compartments.json %t/one.o %t/two.o %t/three.o -o %t/acl_caprelocs_perms.exe
-# RUN: readelf -t --cap-relocs %t/acl_caprelocs_perms.exe | FileCheck %s
+# RUN: readelf -t --acls --cap-relocs %t/acl_caprelocs_perms.exe | FileCheck %s
 
 # CHECK-LABEL: Section Headers:
-# CHECK:         [ 5] .got.one
-# CHECK-NEXT:         PROGBITS        0000000000012450 000450 000030 00   0   0  16
-# CHECK:         [ 9] .got.two
-# CHECK-NEXT:         PROGBITS        0000000000015ca0 000ca0 000030 00   0   0  16
+# CHECK:         [ 6] .got.one
+# CHECK-NEXT:         PROGBITS        0000000000012480 000480 000030 00   0   0  16
+# CHECK:         [10] .got.two
+# CHECK-NEXT:         PROGBITS        0000000000015cd0 000cd0 000030 00   0   0  16
+
+# CHECK-LABEL: ACLs
+# CHECK-NEXT:    Subject: compartment one Permissions: r-- Object: symbol buf
+# CHECK-NEXT:    Subject: compartment one Permissions: rw- Object: symbol buf2
+# CHECK-NEXT:    Subject: compartment two Permissions: rw- Object: compartment three
 
 # CHECK-LABEL: CHERI capability relocation section '__cap_relocs'
 # CHECK-NEXT:      Offset             Info         Type        Value
 # relocs for compartment one
-# CHECK-NEXT:  0000000000012460  4000000000000000 RODATA  0000000000013480 [0000000000013480-0000000000013880]
-# CHECK-NEXT:  0000000000012470  0000000000000000 DATA    0000000000013880 [0000000000013880-0000000000013c80]
+# CHECK-NEXT:  0000000000012490  4000000000000000 RODATA  00000000000134b0 [00000000000134b0-00000000000138b0]
+# CHECK-NEXT:  00000000000124a0  0000000000000000 DATA    00000000000138b0 [00000000000138b0-0000000000013cb0]
 # relocs for compartment two
-# CHECK-NEXT:  0000000000015cb0  0000000000000000 DATA    0000000000013480 [0000000000013480-0000000000013880]
-# CHECK-NEXT:  0000000000015cc0  0000000000000000 DATA    0000000000013880 [0000000000013880-0000000000013c80]
+# CHECK-NEXT:  0000000000015ce0  0000000000000000 DATA    00000000000134b0 [00000000000134b0-00000000000138b0]
+# CHECK-NEXT:  0000000000015cf0  0000000000000000 DATA    00000000000138b0 [00000000000138b0-0000000000013cb0]
 
 #--- one.s
 
