@@ -16,7 +16,8 @@ define i8 @adduw(i32 signext %0, ptr addrspace(200) %1) nounwind {
 ;
 ; ZCHERIPURECAPZBA-LABEL: adduw:
 ; ZCHERIPURECAPZBA:       # %bb.0:
-; ZCHERIPURECAPZBA-NEXT:    add.uw ca0, a0, ca1
+; ZCHERIPURECAPZBA-NEXT:    zext.w a0, a0
+; ZCHERIPURECAPZBA-NEXT:    cadd ca0, ca1, a0
 ; ZCHERIPURECAPZBA-NEXT:    lb a0, 0(ca0)
 ; ZCHERIPURECAPZBA-NEXT:    ret
   %3 = zext i32 %0 to i64
@@ -96,8 +97,7 @@ define i64 @adduw_2(i64 %a, i64 %b) nounwind {
 ;
 ; ZCHERIPURECAPZBA-LABEL: adduw_2:
 ; ZCHERIPURECAPZBA:       # %bb.0:
-; ZCHERIPURECAPZBA-NEXT:    add.uw ca1, a1, cnull
-; ZCHERIPURECAPZBA-NEXT:    add a0, a1, a0
+; ZCHERIPURECAPZBA-NEXT:    add.uw a0, a1, a0
 ; ZCHERIPURECAPZBA-NEXT:    ret
   %and = and i64 %b, 4294967295
   %add = add i64 %and, %a

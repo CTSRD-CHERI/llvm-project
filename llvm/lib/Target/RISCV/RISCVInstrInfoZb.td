@@ -310,11 +310,12 @@ def SH3ADD : ALU_rr<0b0010000, 0b110, "sh3add">,
 } // Predicates = [HasStdExtZba, NotCapMode]
 
 let Predicates = [HasStdExtZba, IsRV64, NotCapMode] in {
-let Predicates = [HasStdExtZba, IsRV64] in
+let Predicates = [HasStdExtZba, IsRV64] in {
 def SLLI_UW : RVBShift_ri<0b00001, 0b001, OPC_OP_IMM_32, "slli.uw">,
               Sched<[WriteShiftImm32, ReadShiftImm32]>;
 def ADD_UW : ALUW_rr<0b0000100, 0b000, "add.uw">,
              Sched<[WriteIALU32, ReadIALU32, ReadIALU32]>;
+}
 def SH1ADD_UW : ALUW_rr<0b0010000, 0b010, "sh1add.uw">,
                 Sched<[WriteSHXADD32, ReadSHXADD32, ReadSHXADD32]>;
 def SH2ADD_UW : ALUW_rr<0b0010000, 0b100, "sh2add.uw">,
@@ -732,7 +733,7 @@ def : Pat<(mul_const_oneuse GPR:$r, (XLenVT 81)),
           (SH3ADD (SH3ADD GPR:$r, GPR:$r), (SH3ADD GPR:$r, GPR:$r))>;
 } // Predicates = [HasStdExtZba, NotCapMode]
 
-let Predicates = [HasStdExtZba, IsRV64, NotCapMode] in {
+let Predicates = [HasStdExtZba, IsRV64] in {
 let Predicates = [HasStdExtZba, IsRV64] in
 def : Pat<(i64 (shl (and GPR:$rs1, 0xFFFFFFFF), uimm5:$shamt)),
           (SLLI_UW GPR:$rs1, uimm5:$shamt)>;
@@ -742,9 +743,11 @@ def : Pat<(i64 (and GPR:$rs1, Shifted32OnesMask:$mask)),
           (SLLI_UW (SRLI GPR:$rs1, Shifted32OnesMask:$mask),
                    Shifted32OnesMask:$mask)>;
 
+let Predicates = [HasStdExtZba, IsRV64] in {
 def : Pat<(i64 (add (and GPR:$rs1, 0xFFFFFFFF), non_imm12:$rs2)),
           (ADD_UW GPR:$rs1, GPR:$rs2)>;
 def : Pat<(i64 (and GPR:$rs, 0xFFFFFFFF)), (ADD_UW GPR:$rs, (XLenVT X0))>;
+}
 
 def : Pat<(i64 (add (shl (and GPR:$rs1, 0xFFFFFFFF), (i64 1)), non_imm12:$rs2)),
           (SH1ADD_UW GPR:$rs1, GPR:$rs2)>;

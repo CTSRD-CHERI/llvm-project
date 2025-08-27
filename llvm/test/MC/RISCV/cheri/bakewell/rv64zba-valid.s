@@ -6,9 +6,6 @@
 # RUN:     | llvm-objdump --mattr=+zba,zcheripurecap,+cap-mode -d -r - \
 # RUN:     | FileCheck --check-prefix=CHECK-ASM-AND-OBJ %s
 
-# CHECK-ASM-AND-OBJ: add.uw ct0, t1, ct2
-# CHECK-ASM: encoding: [0xbb,0x02,0x73,0x08]
-add.uw ct0, t1, ct2
 # CHECK-ASM-AND-OBJ: sh1add.uw ct0, t1, ct2
 # CHECK-ASM: encoding: [0xbb,0x22,0x73,0x20]
 sh1add.uw ct0, t1, ct2

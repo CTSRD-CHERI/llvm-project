@@ -809,7 +809,6 @@ MachineInstr *RISCVInstrInfo::foldMemoryOperandImpl(
     MachineBasicBlock::iterator InsertPt, int FrameIndex, LiveIntervals *LIS,
     VirtRegMap *VRM) const {
   const MachineFrameInfo &MFI = MF.getFrameInfo();
-  MachineRegisterInfo &MRI = MF.getRegInfo();
 
   // The below optimizations narrow the load so they are only valid for little
   // endian.
@@ -857,14 +856,6 @@ MachineInstr *RISCVInstrInfo::foldMemoryOperandImpl(
       MFI.getObjectAlign(FrameIndex));
 
   Register DstReg = MI.getOperand(0).getReg();
-  if (LoadOpc == RISCV::CLWU) {
-    DstReg = MRI.createVirtualRegister(&RISCV::GPRRegClass);
-    MachineInstr *CopyInstr = MI.getNextNode();
-    if (!CopyInstr->isCopy())
-      return nullptr;
-    CopyInstr->getOperand(1).ChangeToRegister(DstReg, false);
-  }
-
   return BuildMI(*MI.getParent(), InsertPt, MI.getDebugLoc(), get(LoadOpc),
                  DstReg)
       .addFrameIndex(FrameIndex)
@@ -2991,9 +2982,7 @@ bool RISCV::isSEXT_W(const MachineInstr &MI) {
 // Returns true if this is the zext.w pattern, adduw rd, rs1, x0.
 bool RISCV::isZEXT_W(const MachineInstr &MI) {
   return (MI.getOpcode() == RISCV::ADD_UW && MI.getOperand(1).isReg() &&
-          MI.getOperand(2).isReg() && MI.getOperand(2).getReg() == RISCV::X0) ||
-         (MI.getOpcode() == RISCV::C_ADD_UW && MI.getOperand(1).isReg() &&
-          MI.getOperand(2).isReg() && MI.getOperand(2).getReg() == RISCV::C0);
+          MI.getOperand(2).isReg() && MI.getOperand(2).getReg() == RISCV::X0);
 }
 
 // Returns true if this is the zext.b pattern, andi rd, rs1, 255.

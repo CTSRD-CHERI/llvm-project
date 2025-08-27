@@ -2307,8 +2307,6 @@ def C_SH3ADD : C_ALU_rr<0b0010000, 0b110, "sh3add">,
 } // Predicates = [HasStdExtZba, HasZCheriPurecapOrCheri, IsCapMode]
 
 let Predicates = [HasStdExtZba, IsRV64, HasZCheriPurecapOrCheri, IsCapMode] in {
-def C_ADD_UW   : C_ALUW_rr<0b0000100, 0b000, "add.uw">,
-                 Sched<[WriteIALU32, ReadIALU32, ReadIALU32]>;
 def C_SH1ADD_UW : C_ALUW_rr<0b0010000, 0b010, "sh1add.uw">,
                   Sched<[WriteSHXADD32, ReadSHXADD32, ReadSHXADD32]>;
 def C_SH2ADD_UW : C_ALUW_rr<0b0010000, 0b100, "sh2add.uw">,
@@ -2359,19 +2357,12 @@ defm : ZbaMultPat<72, C_SH3ADD, C_SH3ADD>;
 } // Predicates = [HasStdExtZba, HasZCheriPurecapOrCheri, IsCapMode]
 
 let Predicates = [HasStdExtZba, HasZCheriPurecapOrCheri, IsRV64, IsCapMode] in {
-def : Pat<(cptradd GPCR:$rs2, (and (XLenVT GPR:$rs1), 0xFFFFFFFF)),
-          (C_ADD_UW GPR:$rs1, GPCR:$rs2)>;
-
-def : Pat<(i64 (and (XLenVT GPR:$rs), 0xFFFFFFFF)),
-          (EXTRACT_SUBREG (C_ADD_UW GPR:$rs, C0), sub_cap_addr)>;
-
 def : Pat<(cptradd GPCR:$rs2, (shl (and (XLenVT GPR:$rs1), 0xFFFFFFFF), (i64 1))),
           (C_SH1ADD_UW GPR:$rs1, GPCR:$rs2)>;
 def : Pat<(cptradd GPCR:$rs2, (shl (and (XLenVT GPR:$rs1), 0xFFFFFFFF), (i64 2))),
           (C_SH2ADD_UW GPR:$rs1, GPCR:$rs2)>;
 def : Pat<(cptradd GPCR:$rs2, (shl (and (XLenVT GPR:$rs1), 0xFFFFFFFF), (i64 3))),
           (C_SH3ADD_UW GPR:$rs1, GPCR:$rs2)>;
-
 } // Predicates = [HasStdExtZba, HasZCheriPurecapOrCheri, IsRV64, IsCapMode]
 
 //===----------------------------------------------------------------------===//
