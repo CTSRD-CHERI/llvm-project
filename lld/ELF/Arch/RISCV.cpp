@@ -208,6 +208,7 @@ int64_t RISCV::getImplicitAddend(const uint8_t *buf, RelType type) const {
     return read64le(buf);
   case R_RISCV_RELATIVE:
   case R_RISCV_IRELATIVE:
+  case R_RISCV_FUNC_RELATIVE:
     return config->is64 ? read64le(buf) : read32le(buf);
   case R_RISCV_NONE:
   case R_RISCV_JUMP_SLOT:
