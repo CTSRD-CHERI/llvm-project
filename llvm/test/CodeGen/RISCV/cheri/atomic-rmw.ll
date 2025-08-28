@@ -13788,10 +13788,9 @@ define i64 @atomicrmw_min_i64_monotonic(i64 addrspace(200)* %a, i64 %b) nounwind
 ; RV32IXCHERI-NEXT:    sltu a0, s2, a4
 ; RV32IXCHERI-NEXT:  .LBB205_5: # %atomicrmw.start
 ; RV32IXCHERI-NEXT:    # in Loop: Header=BB205_2 Depth=1
-; RV32IXCHERI-NEXT:    xori a0, a0, 1
 ; RV32IXCHERI-NEXT:    mv a2, a4
 ; RV32IXCHERI-NEXT:    mv a3, a5
-; RV32IXCHERI-NEXT:    bnez a0, .LBB205_1
+; RV32IXCHERI-NEXT:    beqz a0, .LBB205_1
 ; RV32IXCHERI-NEXT:  # %bb.6: # %atomicrmw.start
 ; RV32IXCHERI-NEXT:    # in Loop: Header=BB205_2 Depth=1
 ; RV32IXCHERI-NEXT:    mv a2, s2
@@ -13847,10 +13846,9 @@ define i64 @atomicrmw_min_i64_monotonic(i64 addrspace(200)* %a, i64 %b) nounwind
 ; RV32IAXCHERI-NEXT:    sltu a0, s2, a4
 ; RV32IAXCHERI-NEXT:  .LBB205_5: # %atomicrmw.start
 ; RV32IAXCHERI-NEXT:    # in Loop: Header=BB205_2 Depth=1
-; RV32IAXCHERI-NEXT:    xori a0, a0, 1
 ; RV32IAXCHERI-NEXT:    mv a2, a4
 ; RV32IAXCHERI-NEXT:    mv a3, a5
-; RV32IAXCHERI-NEXT:    bnez a0, .LBB205_1
+; RV32IAXCHERI-NEXT:    beqz a0, .LBB205_1
 ; RV32IAXCHERI-NEXT:  # %bb.6: # %atomicrmw.start
 ; RV32IAXCHERI-NEXT:    # in Loop: Header=BB205_2 Depth=1
 ; RV32IAXCHERI-NEXT:    mv a2, s2
@@ -13955,10 +13953,9 @@ define i64 @atomicrmw_min_i64_acquire(i64 addrspace(200)* %a, i64 %b) nounwind {
 ; RV32IXCHERI-NEXT:    sltu a0, s2, a4
 ; RV32IXCHERI-NEXT:  .LBB206_5: # %atomicrmw.start
 ; RV32IXCHERI-NEXT:    # in Loop: Header=BB206_2 Depth=1
-; RV32IXCHERI-NEXT:    xori a0, a0, 1
 ; RV32IXCHERI-NEXT:    mv a2, a4
 ; RV32IXCHERI-NEXT:    mv a3, a5
-; RV32IXCHERI-NEXT:    bnez a0, .LBB206_1
+; RV32IXCHERI-NEXT:    beqz a0, .LBB206_1
 ; RV32IXCHERI-NEXT:  # %bb.6: # %atomicrmw.start
 ; RV32IXCHERI-NEXT:    # in Loop: Header=BB206_2 Depth=1
 ; RV32IXCHERI-NEXT:    mv a2, s2
@@ -14014,10 +14011,9 @@ define i64 @atomicrmw_min_i64_acquire(i64 addrspace(200)* %a, i64 %b) nounwind {
 ; RV32IAXCHERI-NEXT:    sltu a0, s2, a4
 ; RV32IAXCHERI-NEXT:  .LBB206_5: # %atomicrmw.start
 ; RV32IAXCHERI-NEXT:    # in Loop: Header=BB206_2 Depth=1
-; RV32IAXCHERI-NEXT:    xori a0, a0, 1
 ; RV32IAXCHERI-NEXT:    mv a2, a4
 ; RV32IAXCHERI-NEXT:    mv a3, a5
-; RV32IAXCHERI-NEXT:    bnez a0, .LBB206_1
+; RV32IAXCHERI-NEXT:    beqz a0, .LBB206_1
 ; RV32IAXCHERI-NEXT:  # %bb.6: # %atomicrmw.start
 ; RV32IAXCHERI-NEXT:    # in Loop: Header=BB206_2 Depth=1
 ; RV32IAXCHERI-NEXT:    mv a2, s2
@@ -14122,10 +14118,9 @@ define i64 @atomicrmw_min_i64_release(i64 addrspace(200)* %a, i64 %b) nounwind {
 ; RV32IXCHERI-NEXT:    sltu a0, s2, a4
 ; RV32IXCHERI-NEXT:  .LBB207_5: # %atomicrmw.start
 ; RV32IXCHERI-NEXT:    # in Loop: Header=BB207_2 Depth=1
-; RV32IXCHERI-NEXT:    xori a0, a0, 1
 ; RV32IXCHERI-NEXT:    mv a2, a4
 ; RV32IXCHERI-NEXT:    mv a3, a5
-; RV32IXCHERI-NEXT:    bnez a0, .LBB207_1
+; RV32IXCHERI-NEXT:    beqz a0, .LBB207_1
 ; RV32IXCHERI-NEXT:  # %bb.6: # %atomicrmw.start
 ; RV32IXCHERI-NEXT:    # in Loop: Header=BB207_2 Depth=1
 ; RV32IXCHERI-NEXT:    mv a2, s2
@@ -14181,10 +14176,9 @@ define i64 @atomicrmw_min_i64_release(i64 addrspace(200)* %a, i64 %b) nounwind {
 ; RV32IAXCHERI-NEXT:    sltu a0, s2, a4
 ; RV32IAXCHERI-NEXT:  .LBB207_5: # %atomicrmw.start
 ; RV32IAXCHERI-NEXT:    # in Loop: Header=BB207_2 Depth=1
-; RV32IAXCHERI-NEXT:    xori a0, a0, 1
 ; RV32IAXCHERI-NEXT:    mv a2, a4
 ; RV32IAXCHERI-NEXT:    mv a3, a5
-; RV32IAXCHERI-NEXT:    bnez a0, .LBB207_1
+; RV32IAXCHERI-NEXT:    beqz a0, .LBB207_1
 ; RV32IAXCHERI-NEXT:  # %bb.6: # %atomicrmw.start
 ; RV32IAXCHERI-NEXT:    # in Loop: Header=BB207_2 Depth=1
 ; RV32IAXCHERI-NEXT:    mv a2, s2
@@ -14289,10 +14283,9 @@ define i64 @atomicrmw_min_i64_acq_rel(i64 addrspace(200)* %a, i64 %b) nounwind {
 ; RV32IXCHERI-NEXT:    sltu a0, s2, a4
 ; RV32IXCHERI-NEXT:  .LBB208_5: # %atomicrmw.start
 ; RV32IXCHERI-NEXT:    # in Loop: Header=BB208_2 Depth=1
-; RV32IXCHERI-NEXT:    xori a0, a0, 1
 ; RV32IXCHERI-NEXT:    mv a2, a4
 ; RV32IXCHERI-NEXT:    mv a3, a5
-; RV32IXCHERI-NEXT:    bnez a0, .LBB208_1
+; RV32IXCHERI-NEXT:    beqz a0, .LBB208_1
 ; RV32IXCHERI-NEXT:  # %bb.6: # %atomicrmw.start
 ; RV32IXCHERI-NEXT:    # in Loop: Header=BB208_2 Depth=1
 ; RV32IXCHERI-NEXT:    mv a2, s2
@@ -14348,10 +14341,9 @@ define i64 @atomicrmw_min_i64_acq_rel(i64 addrspace(200)* %a, i64 %b) nounwind {
 ; RV32IAXCHERI-NEXT:    sltu a0, s2, a4
 ; RV32IAXCHERI-NEXT:  .LBB208_5: # %atomicrmw.start
 ; RV32IAXCHERI-NEXT:    # in Loop: Header=BB208_2 Depth=1
-; RV32IAXCHERI-NEXT:    xori a0, a0, 1
 ; RV32IAXCHERI-NEXT:    mv a2, a4
 ; RV32IAXCHERI-NEXT:    mv a3, a5
-; RV32IAXCHERI-NEXT:    bnez a0, .LBB208_1
+; RV32IAXCHERI-NEXT:    beqz a0, .LBB208_1
 ; RV32IAXCHERI-NEXT:  # %bb.6: # %atomicrmw.start
 ; RV32IAXCHERI-NEXT:    # in Loop: Header=BB208_2 Depth=1
 ; RV32IAXCHERI-NEXT:    mv a2, s2
@@ -14456,10 +14448,9 @@ define i64 @atomicrmw_min_i64_seq_cst(i64 addrspace(200)* %a, i64 %b) nounwind {
 ; RV32IXCHERI-NEXT:    sltu a0, s2, a4
 ; RV32IXCHERI-NEXT:  .LBB209_5: # %atomicrmw.start
 ; RV32IXCHERI-NEXT:    # in Loop: Header=BB209_2 Depth=1
-; RV32IXCHERI-NEXT:    xori a0, a0, 1
 ; RV32IXCHERI-NEXT:    mv a2, a4
 ; RV32IXCHERI-NEXT:    mv a3, a5
-; RV32IXCHERI-NEXT:    bnez a0, .LBB209_1
+; RV32IXCHERI-NEXT:    beqz a0, .LBB209_1
 ; RV32IXCHERI-NEXT:  # %bb.6: # %atomicrmw.start
 ; RV32IXCHERI-NEXT:    # in Loop: Header=BB209_2 Depth=1
 ; RV32IXCHERI-NEXT:    mv a2, s2
@@ -14515,10 +14506,9 @@ define i64 @atomicrmw_min_i64_seq_cst(i64 addrspace(200)* %a, i64 %b) nounwind {
 ; RV32IAXCHERI-NEXT:    sltu a0, s2, a4
 ; RV32IAXCHERI-NEXT:  .LBB209_5: # %atomicrmw.start
 ; RV32IAXCHERI-NEXT:    # in Loop: Header=BB209_2 Depth=1
-; RV32IAXCHERI-NEXT:    xori a0, a0, 1
 ; RV32IAXCHERI-NEXT:    mv a2, a4
 ; RV32IAXCHERI-NEXT:    mv a3, a5
-; RV32IAXCHERI-NEXT:    bnez a0, .LBB209_1
+; RV32IAXCHERI-NEXT:    beqz a0, .LBB209_1
 ; RV32IAXCHERI-NEXT:  # %bb.6: # %atomicrmw.start
 ; RV32IAXCHERI-NEXT:    # in Loop: Header=BB209_2 Depth=1
 ; RV32IAXCHERI-NEXT:    mv a2, s2
@@ -15448,10 +15438,9 @@ define i64 @atomicrmw_umin_i64_monotonic(i64 addrspace(200)* %a, i64 %b) nounwin
 ; RV32IXCHERI-NEXT:    sltu a0, s2, a4
 ; RV32IXCHERI-NEXT:  .LBB215_5: # %atomicrmw.start
 ; RV32IXCHERI-NEXT:    # in Loop: Header=BB215_2 Depth=1
-; RV32IXCHERI-NEXT:    xori a0, a0, 1
 ; RV32IXCHERI-NEXT:    mv a2, a4
 ; RV32IXCHERI-NEXT:    mv a3, a5
-; RV32IXCHERI-NEXT:    bnez a0, .LBB215_1
+; RV32IXCHERI-NEXT:    beqz a0, .LBB215_1
 ; RV32IXCHERI-NEXT:  # %bb.6: # %atomicrmw.start
 ; RV32IXCHERI-NEXT:    # in Loop: Header=BB215_2 Depth=1
 ; RV32IXCHERI-NEXT:    mv a2, s2
@@ -15507,10 +15496,9 @@ define i64 @atomicrmw_umin_i64_monotonic(i64 addrspace(200)* %a, i64 %b) nounwin
 ; RV32IAXCHERI-NEXT:    sltu a0, s2, a4
 ; RV32IAXCHERI-NEXT:  .LBB215_5: # %atomicrmw.start
 ; RV32IAXCHERI-NEXT:    # in Loop: Header=BB215_2 Depth=1
-; RV32IAXCHERI-NEXT:    xori a0, a0, 1
 ; RV32IAXCHERI-NEXT:    mv a2, a4
 ; RV32IAXCHERI-NEXT:    mv a3, a5
-; RV32IAXCHERI-NEXT:    bnez a0, .LBB215_1
+; RV32IAXCHERI-NEXT:    beqz a0, .LBB215_1
 ; RV32IAXCHERI-NEXT:  # %bb.6: # %atomicrmw.start
 ; RV32IAXCHERI-NEXT:    # in Loop: Header=BB215_2 Depth=1
 ; RV32IAXCHERI-NEXT:    mv a2, s2
@@ -15615,10 +15603,9 @@ define i64 @atomicrmw_umin_i64_acquire(i64 addrspace(200)* %a, i64 %b) nounwind 
 ; RV32IXCHERI-NEXT:    sltu a0, s2, a4
 ; RV32IXCHERI-NEXT:  .LBB216_5: # %atomicrmw.start
 ; RV32IXCHERI-NEXT:    # in Loop: Header=BB216_2 Depth=1
-; RV32IXCHERI-NEXT:    xori a0, a0, 1
 ; RV32IXCHERI-NEXT:    mv a2, a4
 ; RV32IXCHERI-NEXT:    mv a3, a5
-; RV32IXCHERI-NEXT:    bnez a0, .LBB216_1
+; RV32IXCHERI-NEXT:    beqz a0, .LBB216_1
 ; RV32IXCHERI-NEXT:  # %bb.6: # %atomicrmw.start
 ; RV32IXCHERI-NEXT:    # in Loop: Header=BB216_2 Depth=1
 ; RV32IXCHERI-NEXT:    mv a2, s2
@@ -15674,10 +15661,9 @@ define i64 @atomicrmw_umin_i64_acquire(i64 addrspace(200)* %a, i64 %b) nounwind 
 ; RV32IAXCHERI-NEXT:    sltu a0, s2, a4
 ; RV32IAXCHERI-NEXT:  .LBB216_5: # %atomicrmw.start
 ; RV32IAXCHERI-NEXT:    # in Loop: Header=BB216_2 Depth=1
-; RV32IAXCHERI-NEXT:    xori a0, a0, 1
 ; RV32IAXCHERI-NEXT:    mv a2, a4
 ; RV32IAXCHERI-NEXT:    mv a3, a5
-; RV32IAXCHERI-NEXT:    bnez a0, .LBB216_1
+; RV32IAXCHERI-NEXT:    beqz a0, .LBB216_1
 ; RV32IAXCHERI-NEXT:  # %bb.6: # %atomicrmw.start
 ; RV32IAXCHERI-NEXT:    # in Loop: Header=BB216_2 Depth=1
 ; RV32IAXCHERI-NEXT:    mv a2, s2
@@ -15782,10 +15768,9 @@ define i64 @atomicrmw_umin_i64_release(i64 addrspace(200)* %a, i64 %b) nounwind 
 ; RV32IXCHERI-NEXT:    sltu a0, s2, a4
 ; RV32IXCHERI-NEXT:  .LBB217_5: # %atomicrmw.start
 ; RV32IXCHERI-NEXT:    # in Loop: Header=BB217_2 Depth=1
-; RV32IXCHERI-NEXT:    xori a0, a0, 1
 ; RV32IXCHERI-NEXT:    mv a2, a4
 ; RV32IXCHERI-NEXT:    mv a3, a5
-; RV32IXCHERI-NEXT:    bnez a0, .LBB217_1
+; RV32IXCHERI-NEXT:    beqz a0, .LBB217_1
 ; RV32IXCHERI-NEXT:  # %bb.6: # %atomicrmw.start
 ; RV32IXCHERI-NEXT:    # in Loop: Header=BB217_2 Depth=1
 ; RV32IXCHERI-NEXT:    mv a2, s2
@@ -15841,10 +15826,9 @@ define i64 @atomicrmw_umin_i64_release(i64 addrspace(200)* %a, i64 %b) nounwind 
 ; RV32IAXCHERI-NEXT:    sltu a0, s2, a4
 ; RV32IAXCHERI-NEXT:  .LBB217_5: # %atomicrmw.start
 ; RV32IAXCHERI-NEXT:    # in Loop: Header=BB217_2 Depth=1
-; RV32IAXCHERI-NEXT:    xori a0, a0, 1
 ; RV32IAXCHERI-NEXT:    mv a2, a4
 ; RV32IAXCHERI-NEXT:    mv a3, a5
-; RV32IAXCHERI-NEXT:    bnez a0, .LBB217_1
+; RV32IAXCHERI-NEXT:    beqz a0, .LBB217_1
 ; RV32IAXCHERI-NEXT:  # %bb.6: # %atomicrmw.start
 ; RV32IAXCHERI-NEXT:    # in Loop: Header=BB217_2 Depth=1
 ; RV32IAXCHERI-NEXT:    mv a2, s2
@@ -15949,10 +15933,9 @@ define i64 @atomicrmw_umin_i64_acq_rel(i64 addrspace(200)* %a, i64 %b) nounwind 
 ; RV32IXCHERI-NEXT:    sltu a0, s2, a4
 ; RV32IXCHERI-NEXT:  .LBB218_5: # %atomicrmw.start
 ; RV32IXCHERI-NEXT:    # in Loop: Header=BB218_2 Depth=1
-; RV32IXCHERI-NEXT:    xori a0, a0, 1
 ; RV32IXCHERI-NEXT:    mv a2, a4
 ; RV32IXCHERI-NEXT:    mv a3, a5
-; RV32IXCHERI-NEXT:    bnez a0, .LBB218_1
+; RV32IXCHERI-NEXT:    beqz a0, .LBB218_1
 ; RV32IXCHERI-NEXT:  # %bb.6: # %atomicrmw.start
 ; RV32IXCHERI-NEXT:    # in Loop: Header=BB218_2 Depth=1
 ; RV32IXCHERI-NEXT:    mv a2, s2
@@ -16008,10 +15991,9 @@ define i64 @atomicrmw_umin_i64_acq_rel(i64 addrspace(200)* %a, i64 %b) nounwind 
 ; RV32IAXCHERI-NEXT:    sltu a0, s2, a4
 ; RV32IAXCHERI-NEXT:  .LBB218_5: # %atomicrmw.start
 ; RV32IAXCHERI-NEXT:    # in Loop: Header=BB218_2 Depth=1
-; RV32IAXCHERI-NEXT:    xori a0, a0, 1
 ; RV32IAXCHERI-NEXT:    mv a2, a4
 ; RV32IAXCHERI-NEXT:    mv a3, a5
-; RV32IAXCHERI-NEXT:    bnez a0, .LBB218_1
+; RV32IAXCHERI-NEXT:    beqz a0, .LBB218_1
 ; RV32IAXCHERI-NEXT:  # %bb.6: # %atomicrmw.start
 ; RV32IAXCHERI-NEXT:    # in Loop: Header=BB218_2 Depth=1
 ; RV32IAXCHERI-NEXT:    mv a2, s2
@@ -16116,10 +16098,9 @@ define i64 @atomicrmw_umin_i64_seq_cst(i64 addrspace(200)* %a, i64 %b) nounwind 
 ; RV32IXCHERI-NEXT:    sltu a0, s2, a4
 ; RV32IXCHERI-NEXT:  .LBB219_5: # %atomicrmw.start
 ; RV32IXCHERI-NEXT:    # in Loop: Header=BB219_2 Depth=1
-; RV32IXCHERI-NEXT:    xori a0, a0, 1
 ; RV32IXCHERI-NEXT:    mv a2, a4
 ; RV32IXCHERI-NEXT:    mv a3, a5
-; RV32IXCHERI-NEXT:    bnez a0, .LBB219_1
+; RV32IXCHERI-NEXT:    beqz a0, .LBB219_1
 ; RV32IXCHERI-NEXT:  # %bb.6: # %atomicrmw.start
 ; RV32IXCHERI-NEXT:    # in Loop: Header=BB219_2 Depth=1
 ; RV32IXCHERI-NEXT:    mv a2, s2
@@ -16175,10 +16156,9 @@ define i64 @atomicrmw_umin_i64_seq_cst(i64 addrspace(200)* %a, i64 %b) nounwind 
 ; RV32IAXCHERI-NEXT:    sltu a0, s2, a4
 ; RV32IAXCHERI-NEXT:  .LBB219_5: # %atomicrmw.start
 ; RV32IAXCHERI-NEXT:    # in Loop: Header=BB219_2 Depth=1
-; RV32IAXCHERI-NEXT:    xori a0, a0, 1
 ; RV32IAXCHERI-NEXT:    mv a2, a4
 ; RV32IAXCHERI-NEXT:    mv a3, a5
-; RV32IAXCHERI-NEXT:    bnez a0, .LBB219_1
+; RV32IAXCHERI-NEXT:    beqz a0, .LBB219_1
 ; RV32IAXCHERI-NEXT:  # %bb.6: # %atomicrmw.start
 ; RV32IAXCHERI-NEXT:    # in Loop: Header=BB219_2 Depth=1
 ; RV32IAXCHERI-NEXT:    mv a2, s2

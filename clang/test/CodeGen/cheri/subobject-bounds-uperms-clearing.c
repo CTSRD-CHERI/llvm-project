@@ -46,7 +46,7 @@ extern int printf(const char*, ...);
 // CLEAR-PERM2-SAME: (i32 noundef signext [[ARGC:%.*]], ptr addrspace(200) nocapture noundef readnone [[ARGV:%.*]]) local_unnamed_addr addrspace(200) #[[ATTR2:[0-9]+]] {
 // CLEAR-PERM2-NEXT:  entry:
 // CLEAR-PERM2-NEXT:    [[F:%.*]] = alloca [[STRUCT_FOO_0:%.*]], align 4, addrspace(200)
-// CLEAR-PERM2-NEXT:    call void @llvm.lifetime.start.p200(i64 2, ptr addrspace(200) nonnull [[F]]) #[[ATTR5:[0-9]+]]
+// CLEAR-PERM2-NEXT:    call void @llvm.lifetime.start.p200(i64 2, ptr addrspace(200) nonnull [[F]]) #[[ATTR4:[0-9]+]]
 // CLEAR-PERM2-NEXT:    store i16 24930, ptr addrspace(200) [[F]], align 4
 // CLEAR-PERM2-NEXT:    [[TMP0:%.*]] = call ptr addrspace(200) @llvm.cheri.cap.bounds.set.i64(ptr addrspace(200) nonnull [[F]], i64 1)
 // CLEAR-PERM2-NEXT:    [[CUR_LEN:%.*]] = call i64 @llvm.cheri.cap.length.get.i64(ptr addrspace(200) nonnull [[F]])
@@ -76,7 +76,7 @@ extern int printf(const char*, ...);
 // CLEAR-PERM2-NEXT:    [[NEW_BOUNDS_LESS15:%.*]] = icmp ult i64 [[NEW_LEN13]], [[CUR_LEN12]]
 // CLEAR-PERM2-NEXT:    [[RESULT16:%.*]] = select i1 [[NEW_BOUNDS_LESS15]], ptr addrspace(200) [[NEW_LEN14]], ptr addrspace(200) [[TMP3]]
 // CLEAR-PERM2-NEXT:    [[CALL17:%.*]] = call signext i32 (ptr addrspace(200), ...) @printf(ptr addrspace(200) noundef nonnull dereferenceable(1) [[RESULT16]], ptr addrspace(200) noundef [[RESULT6]])
-// CLEAR-PERM2-NEXT:    call void @llvm.lifetime.end.p200(i64 2, ptr addrspace(200) nonnull [[F]]) #[[ATTR5]]
+// CLEAR-PERM2-NEXT:    call void @llvm.lifetime.end.p200(i64 2, ptr addrspace(200) nonnull [[F]]) #[[ATTR4]]
 // CLEAR-PERM2-NEXT:    ret i32 0
 //
 int main(int argc, char **argv) {

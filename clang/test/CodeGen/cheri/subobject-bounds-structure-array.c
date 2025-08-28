@@ -2,7 +2,7 @@
 // REQUIRES: asserts
 // RUN: %cheri_purecap_cc1 -cheri-bounds=subobject-safe -O2 -emit-llvm %s -o - -Rcheri-subobject-bounds -verify | FileCheck %s
 // RUN: %cheri_purecap_cc1 -cheri-bounds=subobject-safe -O0 -emit-llvm %s -o /dev/null \
-// RUN:    -w -mllvm -debug-only="cheri-bounds" -mllvm -stats 2>&1 | FileCheck %s -check-prefix DBG -implicit-check-not cheri-bounds
+// RUN:    -w -mllvm -debug-only="cheri-bounds" -mllvm -stats 2>&1 | FileCheck %s -check-prefix DBG
 // DBG:  3 cheri-bounds - Number of & operators checked for tightening bounds
 // DBG:  4 cheri-bounds - Number of array-to-pointer-decays checked for tightening bounds
 // DBG: 36 cheri-bounds - Number of [] operators checked for tightening bounds

@@ -53,7 +53,7 @@ extern "C" int test1(duration<int> &e) {
 // While this often can make sense, it causes errors here.
 
 // N64-CHERI128-IR-LABEL: define {{[^@]+}}@test2
-// N64-CHERI128-IR-SAME: (ptr nocapture noundef nonnull readonly align 16 dereferenceable(16) [[E:%.*]]) local_unnamed_addr #[[ATTR2:[0-9]+]] {
+// N64-CHERI128-IR-SAME: (ptr nocapture noundef nonnull readonly align 16 dereferenceable(16) [[E:%.*]]) local_unnamed_addr #[[ATTR0]] {
 // N64-CHERI128-IR-NEXT:  entry:
 // N64-CHERI128-IR-NEXT:    [[REF_TMP_SROA_0:%.*]] = alloca i128, align 16
 // N64-CHERI128-IR-NEXT:    call void @llvm.lifetime.start.p0(i64 16, ptr nonnull [[REF_TMP_SROA_0]])
@@ -64,7 +64,7 @@ extern "C" int test1(duration<int> &e) {
 // N64-CHERI128-IR-NEXT:    ret i128 [[REF_TMP_SROA_0_0_REF_TMP_SROA_0_0_REF_TMP_SROA_0_0_REF_TMP_SROA_0_0_]]
 //
 // PURECAP-CHERI128-IR-LABEL: define {{[^@]+}}@test2
-// PURECAP-CHERI128-IR-SAME: (ptr addrspace(200) nocapture noundef nonnull readonly align 16 dereferenceable(16) [[E:%.*]]) local_unnamed_addr addrspace(200) #[[ATTR2:[0-9]+]] {
+// PURECAP-CHERI128-IR-SAME: (ptr addrspace(200) nocapture noundef nonnull readonly align 16 dereferenceable(16) [[E:%.*]]) local_unnamed_addr addrspace(200) #[[ATTR0]] {
 // PURECAP-CHERI128-IR-NEXT:  entry:
 // PURECAP-CHERI128-IR-NEXT:    [[REF_TMP_SROA_0:%.*]] = alloca i128, align 16, addrspace(200)
 // PURECAP-CHERI128-IR-NEXT:    call void @llvm.lifetime.start.p200(i64 16, ptr addrspace(200) nonnull [[REF_TMP_SROA_0]])
