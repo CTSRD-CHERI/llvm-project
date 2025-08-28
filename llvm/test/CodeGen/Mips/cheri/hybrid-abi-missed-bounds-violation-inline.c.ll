@@ -18,9 +18,9 @@ define signext i32 @test() local_unnamed_addr nounwind {
 ; CHECK-NEXT:    daddiu $1, $sp, 12
 ; CHECK-NEXT:    cfromddc $c1, $1
 ; CHECK-NEXT:    csetbounds $c17, $c1, 4
-; CHECK-NEXT:    cgetlen $6, $c17
+; CHECK-NEXT:    cgetlen $1, $c17
 ; CHECK-NEXT:    cgettag $5, $c17
-; CHECK-NEXT:    sll $6, $6, 0
+; CHECK-NEXT:    sll $6, $1, 0
 ; CHECK-NEXT:    lui $1, %highest(.L.str)
 ; CHECK-NEXT:    daddiu $1, $1, %higher(.L.str)
 ; CHECK-NEXT:    dsll $1, $1, 16
