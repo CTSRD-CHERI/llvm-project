@@ -481,13 +481,14 @@ define i8 @atomicrmw_sub_i8_monotonic(i8 addrspace(200)* %a, i8 %b) nounwind {
 ;
 ; RV32IAXCHERI-LABEL: atomicrmw_sub_i8_monotonic:
 ; RV32IAXCHERI:       # %bb.0:
+; RV32IAXCHERI-NEXT:    neg a2, a1
 ; RV32IAXCHERI-NEXT:  .LBB10_1: # =>This Inner Loop Header: Depth=1
-; RV32IAXCHERI-NEXT:    lr.b a2, (ca0)
-; RV32IAXCHERI-NEXT:    sub a3, a2, a1
+; RV32IAXCHERI-NEXT:    lr.b a1, (ca0)
+; RV32IAXCHERI-NEXT:    add a3, a1, a2
 ; RV32IAXCHERI-NEXT:    sc.b a3, a3, (ca0)
 ; RV32IAXCHERI-NEXT:    bnez a3, .LBB10_1
 ; RV32IAXCHERI-NEXT:  # %bb.2:
-; RV32IAXCHERI-NEXT:    mv a0, a2
+; RV32IAXCHERI-NEXT:    mv a0, a1
 ; RV32IAXCHERI-NEXT:    ret
 ;
 ; RV64IXCHERI-LABEL: atomicrmw_sub_i8_monotonic:
@@ -502,13 +503,14 @@ define i8 @atomicrmw_sub_i8_monotonic(i8 addrspace(200)* %a, i8 %b) nounwind {
 ;
 ; RV64IAXCHERI-LABEL: atomicrmw_sub_i8_monotonic:
 ; RV64IAXCHERI:       # %bb.0:
+; RV64IAXCHERI-NEXT:    neg a2, a1
 ; RV64IAXCHERI-NEXT:  .LBB10_1: # =>This Inner Loop Header: Depth=1
-; RV64IAXCHERI-NEXT:    lr.b a2, (ca0)
-; RV64IAXCHERI-NEXT:    sub a3, a2, a1
+; RV64IAXCHERI-NEXT:    lr.b a1, (ca0)
+; RV64IAXCHERI-NEXT:    add a3, a1, a2
 ; RV64IAXCHERI-NEXT:    sc.b a3, a3, (ca0)
 ; RV64IAXCHERI-NEXT:    bnez a3, .LBB10_1
 ; RV64IAXCHERI-NEXT:  # %bb.2:
-; RV64IAXCHERI-NEXT:    mv a0, a2
+; RV64IAXCHERI-NEXT:    mv a0, a1
 ; RV64IAXCHERI-NEXT:    ret
   %1 = atomicrmw sub i8 addrspace(200)* %a, i8 %b monotonic
   ret i8 %1
@@ -527,13 +529,14 @@ define i8 @atomicrmw_sub_i8_acquire(i8 addrspace(200)* %a, i8 %b) nounwind {
 ;
 ; RV32IAXCHERI-LABEL: atomicrmw_sub_i8_acquire:
 ; RV32IAXCHERI:       # %bb.0:
+; RV32IAXCHERI-NEXT:    neg a2, a1
 ; RV32IAXCHERI-NEXT:  .LBB11_1: # =>This Inner Loop Header: Depth=1
-; RV32IAXCHERI-NEXT:    lr.b.aq a2, (ca0)
-; RV32IAXCHERI-NEXT:    sub a3, a2, a1
+; RV32IAXCHERI-NEXT:    lr.b.aq a1, (ca0)
+; RV32IAXCHERI-NEXT:    add a3, a1, a2
 ; RV32IAXCHERI-NEXT:    sc.b a3, a3, (ca0)
 ; RV32IAXCHERI-NEXT:    bnez a3, .LBB11_1
 ; RV32IAXCHERI-NEXT:  # %bb.2:
-; RV32IAXCHERI-NEXT:    mv a0, a2
+; RV32IAXCHERI-NEXT:    mv a0, a1
 ; RV32IAXCHERI-NEXT:    ret
 ;
 ; RV64IXCHERI-LABEL: atomicrmw_sub_i8_acquire:
@@ -548,13 +551,14 @@ define i8 @atomicrmw_sub_i8_acquire(i8 addrspace(200)* %a, i8 %b) nounwind {
 ;
 ; RV64IAXCHERI-LABEL: atomicrmw_sub_i8_acquire:
 ; RV64IAXCHERI:       # %bb.0:
+; RV64IAXCHERI-NEXT:    neg a2, a1
 ; RV64IAXCHERI-NEXT:  .LBB11_1: # =>This Inner Loop Header: Depth=1
-; RV64IAXCHERI-NEXT:    lr.b.aq a2, (ca0)
-; RV64IAXCHERI-NEXT:    sub a3, a2, a1
+; RV64IAXCHERI-NEXT:    lr.b.aq a1, (ca0)
+; RV64IAXCHERI-NEXT:    add a3, a1, a2
 ; RV64IAXCHERI-NEXT:    sc.b a3, a3, (ca0)
 ; RV64IAXCHERI-NEXT:    bnez a3, .LBB11_1
 ; RV64IAXCHERI-NEXT:  # %bb.2:
-; RV64IAXCHERI-NEXT:    mv a0, a2
+; RV64IAXCHERI-NEXT:    mv a0, a1
 ; RV64IAXCHERI-NEXT:    ret
   %1 = atomicrmw sub i8 addrspace(200)* %a, i8 %b acquire
   ret i8 %1
@@ -573,13 +577,14 @@ define i8 @atomicrmw_sub_i8_release(i8 addrspace(200)* %a, i8 %b) nounwind {
 ;
 ; RV32IAXCHERI-LABEL: atomicrmw_sub_i8_release:
 ; RV32IAXCHERI:       # %bb.0:
+; RV32IAXCHERI-NEXT:    neg a2, a1
 ; RV32IAXCHERI-NEXT:  .LBB12_1: # =>This Inner Loop Header: Depth=1
-; RV32IAXCHERI-NEXT:    lr.b a2, (ca0)
-; RV32IAXCHERI-NEXT:    sub a3, a2, a1
+; RV32IAXCHERI-NEXT:    lr.b a1, (ca0)
+; RV32IAXCHERI-NEXT:    add a3, a1, a2
 ; RV32IAXCHERI-NEXT:    sc.b.rl a3, a3, (ca0)
 ; RV32IAXCHERI-NEXT:    bnez a3, .LBB12_1
 ; RV32IAXCHERI-NEXT:  # %bb.2:
-; RV32IAXCHERI-NEXT:    mv a0, a2
+; RV32IAXCHERI-NEXT:    mv a0, a1
 ; RV32IAXCHERI-NEXT:    ret
 ;
 ; RV64IXCHERI-LABEL: atomicrmw_sub_i8_release:
@@ -594,13 +599,14 @@ define i8 @atomicrmw_sub_i8_release(i8 addrspace(200)* %a, i8 %b) nounwind {
 ;
 ; RV64IAXCHERI-LABEL: atomicrmw_sub_i8_release:
 ; RV64IAXCHERI:       # %bb.0:
+; RV64IAXCHERI-NEXT:    neg a2, a1
 ; RV64IAXCHERI-NEXT:  .LBB12_1: # =>This Inner Loop Header: Depth=1
-; RV64IAXCHERI-NEXT:    lr.b a2, (ca0)
-; RV64IAXCHERI-NEXT:    sub a3, a2, a1
+; RV64IAXCHERI-NEXT:    lr.b a1, (ca0)
+; RV64IAXCHERI-NEXT:    add a3, a1, a2
 ; RV64IAXCHERI-NEXT:    sc.b.rl a3, a3, (ca0)
 ; RV64IAXCHERI-NEXT:    bnez a3, .LBB12_1
 ; RV64IAXCHERI-NEXT:  # %bb.2:
-; RV64IAXCHERI-NEXT:    mv a0, a2
+; RV64IAXCHERI-NEXT:    mv a0, a1
 ; RV64IAXCHERI-NEXT:    ret
   %1 = atomicrmw sub i8 addrspace(200)* %a, i8 %b release
   ret i8 %1
@@ -619,13 +625,14 @@ define i8 @atomicrmw_sub_i8_acq_rel(i8 addrspace(200)* %a, i8 %b) nounwind {
 ;
 ; RV32IAXCHERI-LABEL: atomicrmw_sub_i8_acq_rel:
 ; RV32IAXCHERI:       # %bb.0:
+; RV32IAXCHERI-NEXT:    neg a2, a1
 ; RV32IAXCHERI-NEXT:  .LBB13_1: # =>This Inner Loop Header: Depth=1
-; RV32IAXCHERI-NEXT:    lr.b.aq a2, (ca0)
-; RV32IAXCHERI-NEXT:    sub a3, a2, a1
+; RV32IAXCHERI-NEXT:    lr.b.aq a1, (ca0)
+; RV32IAXCHERI-NEXT:    add a3, a1, a2
 ; RV32IAXCHERI-NEXT:    sc.b.rl a3, a3, (ca0)
 ; RV32IAXCHERI-NEXT:    bnez a3, .LBB13_1
 ; RV32IAXCHERI-NEXT:  # %bb.2:
-; RV32IAXCHERI-NEXT:    mv a0, a2
+; RV32IAXCHERI-NEXT:    mv a0, a1
 ; RV32IAXCHERI-NEXT:    ret
 ;
 ; RV64IXCHERI-LABEL: atomicrmw_sub_i8_acq_rel:
@@ -640,13 +647,14 @@ define i8 @atomicrmw_sub_i8_acq_rel(i8 addrspace(200)* %a, i8 %b) nounwind {
 ;
 ; RV64IAXCHERI-LABEL: atomicrmw_sub_i8_acq_rel:
 ; RV64IAXCHERI:       # %bb.0:
+; RV64IAXCHERI-NEXT:    neg a2, a1
 ; RV64IAXCHERI-NEXT:  .LBB13_1: # =>This Inner Loop Header: Depth=1
-; RV64IAXCHERI-NEXT:    lr.b.aq a2, (ca0)
-; RV64IAXCHERI-NEXT:    sub a3, a2, a1
+; RV64IAXCHERI-NEXT:    lr.b.aq a1, (ca0)
+; RV64IAXCHERI-NEXT:    add a3, a1, a2
 ; RV64IAXCHERI-NEXT:    sc.b.rl a3, a3, (ca0)
 ; RV64IAXCHERI-NEXT:    bnez a3, .LBB13_1
 ; RV64IAXCHERI-NEXT:  # %bb.2:
-; RV64IAXCHERI-NEXT:    mv a0, a2
+; RV64IAXCHERI-NEXT:    mv a0, a1
 ; RV64IAXCHERI-NEXT:    ret
   %1 = atomicrmw sub i8 addrspace(200)* %a, i8 %b acq_rel
   ret i8 %1
@@ -665,13 +673,14 @@ define i8 @atomicrmw_sub_i8_seq_cst(i8 addrspace(200)* %a, i8 %b) nounwind {
 ;
 ; RV32IAXCHERI-LABEL: atomicrmw_sub_i8_seq_cst:
 ; RV32IAXCHERI:       # %bb.0:
+; RV32IAXCHERI-NEXT:    neg a2, a1
 ; RV32IAXCHERI-NEXT:  .LBB14_1: # =>This Inner Loop Header: Depth=1
-; RV32IAXCHERI-NEXT:    lr.b.aqrl a2, (ca0)
-; RV32IAXCHERI-NEXT:    sub a3, a2, a1
+; RV32IAXCHERI-NEXT:    lr.b.aqrl a1, (ca0)
+; RV32IAXCHERI-NEXT:    add a3, a1, a2
 ; RV32IAXCHERI-NEXT:    sc.b.aqrl a3, a3, (ca0)
 ; RV32IAXCHERI-NEXT:    bnez a3, .LBB14_1
 ; RV32IAXCHERI-NEXT:  # %bb.2:
-; RV32IAXCHERI-NEXT:    mv a0, a2
+; RV32IAXCHERI-NEXT:    mv a0, a1
 ; RV32IAXCHERI-NEXT:    ret
 ;
 ; RV64IXCHERI-LABEL: atomicrmw_sub_i8_seq_cst:
@@ -686,13 +695,14 @@ define i8 @atomicrmw_sub_i8_seq_cst(i8 addrspace(200)* %a, i8 %b) nounwind {
 ;
 ; RV64IAXCHERI-LABEL: atomicrmw_sub_i8_seq_cst:
 ; RV64IAXCHERI:       # %bb.0:
+; RV64IAXCHERI-NEXT:    neg a2, a1
 ; RV64IAXCHERI-NEXT:  .LBB14_1: # =>This Inner Loop Header: Depth=1
-; RV64IAXCHERI-NEXT:    lr.b.aqrl a2, (ca0)
-; RV64IAXCHERI-NEXT:    sub a3, a2, a1
+; RV64IAXCHERI-NEXT:    lr.b.aqrl a1, (ca0)
+; RV64IAXCHERI-NEXT:    add a3, a1, a2
 ; RV64IAXCHERI-NEXT:    sc.b.aqrl a3, a3, (ca0)
 ; RV64IAXCHERI-NEXT:    bnez a3, .LBB14_1
 ; RV64IAXCHERI-NEXT:  # %bb.2:
-; RV64IAXCHERI-NEXT:    mv a0, a2
+; RV64IAXCHERI-NEXT:    mv a0, a1
 ; RV64IAXCHERI-NEXT:    ret
   %1 = atomicrmw sub i8 addrspace(200)* %a, i8 %b seq_cst
   ret i8 %1
@@ -4581,13 +4591,14 @@ define i16 @atomicrmw_sub_i16_monotonic(i16 addrspace(200)* %a, i16 %b) nounwind
 ;
 ; RV32IAXCHERI-LABEL: atomicrmw_sub_i16_monotonic:
 ; RV32IAXCHERI:       # %bb.0:
+; RV32IAXCHERI-NEXT:    neg a2, a1
 ; RV32IAXCHERI-NEXT:  .LBB65_1: # =>This Inner Loop Header: Depth=1
-; RV32IAXCHERI-NEXT:    lr.h a2, (ca0)
-; RV32IAXCHERI-NEXT:    sub a3, a2, a1
+; RV32IAXCHERI-NEXT:    lr.h a1, (ca0)
+; RV32IAXCHERI-NEXT:    add a3, a1, a2
 ; RV32IAXCHERI-NEXT:    sc.h a3, a3, (ca0)
 ; RV32IAXCHERI-NEXT:    bnez a3, .LBB65_1
 ; RV32IAXCHERI-NEXT:  # %bb.2:
-; RV32IAXCHERI-NEXT:    mv a0, a2
+; RV32IAXCHERI-NEXT:    mv a0, a1
 ; RV32IAXCHERI-NEXT:    ret
 ;
 ; RV64IXCHERI-LABEL: atomicrmw_sub_i16_monotonic:
@@ -4602,13 +4613,14 @@ define i16 @atomicrmw_sub_i16_monotonic(i16 addrspace(200)* %a, i16 %b) nounwind
 ;
 ; RV64IAXCHERI-LABEL: atomicrmw_sub_i16_monotonic:
 ; RV64IAXCHERI:       # %bb.0:
+; RV64IAXCHERI-NEXT:    neg a2, a1
 ; RV64IAXCHERI-NEXT:  .LBB65_1: # =>This Inner Loop Header: Depth=1
-; RV64IAXCHERI-NEXT:    lr.h a2, (ca0)
-; RV64IAXCHERI-NEXT:    sub a3, a2, a1
+; RV64IAXCHERI-NEXT:    lr.h a1, (ca0)
+; RV64IAXCHERI-NEXT:    add a3, a1, a2
 ; RV64IAXCHERI-NEXT:    sc.h a3, a3, (ca0)
 ; RV64IAXCHERI-NEXT:    bnez a3, .LBB65_1
 ; RV64IAXCHERI-NEXT:  # %bb.2:
-; RV64IAXCHERI-NEXT:    mv a0, a2
+; RV64IAXCHERI-NEXT:    mv a0, a1
 ; RV64IAXCHERI-NEXT:    ret
   %1 = atomicrmw sub i16 addrspace(200)* %a, i16 %b monotonic
   ret i16 %1
@@ -4627,13 +4639,14 @@ define i16 @atomicrmw_sub_i16_acquire(i16 addrspace(200)* %a, i16 %b) nounwind {
 ;
 ; RV32IAXCHERI-LABEL: atomicrmw_sub_i16_acquire:
 ; RV32IAXCHERI:       # %bb.0:
+; RV32IAXCHERI-NEXT:    neg a2, a1
 ; RV32IAXCHERI-NEXT:  .LBB66_1: # =>This Inner Loop Header: Depth=1
-; RV32IAXCHERI-NEXT:    lr.h.aq a2, (ca0)
-; RV32IAXCHERI-NEXT:    sub a3, a2, a1
+; RV32IAXCHERI-NEXT:    lr.h.aq a1, (ca0)
+; RV32IAXCHERI-NEXT:    add a3, a1, a2
 ; RV32IAXCHERI-NEXT:    sc.h a3, a3, (ca0)
 ; RV32IAXCHERI-NEXT:    bnez a3, .LBB66_1
 ; RV32IAXCHERI-NEXT:  # %bb.2:
-; RV32IAXCHERI-NEXT:    mv a0, a2
+; RV32IAXCHERI-NEXT:    mv a0, a1
 ; RV32IAXCHERI-NEXT:    ret
 ;
 ; RV64IXCHERI-LABEL: atomicrmw_sub_i16_acquire:
@@ -4648,13 +4661,14 @@ define i16 @atomicrmw_sub_i16_acquire(i16 addrspace(200)* %a, i16 %b) nounwind {
 ;
 ; RV64IAXCHERI-LABEL: atomicrmw_sub_i16_acquire:
 ; RV64IAXCHERI:       # %bb.0:
+; RV64IAXCHERI-NEXT:    neg a2, a1
 ; RV64IAXCHERI-NEXT:  .LBB66_1: # =>This Inner Loop Header: Depth=1
-; RV64IAXCHERI-NEXT:    lr.h.aq a2, (ca0)
-; RV64IAXCHERI-NEXT:    sub a3, a2, a1
+; RV64IAXCHERI-NEXT:    lr.h.aq a1, (ca0)
+; RV64IAXCHERI-NEXT:    add a3, a1, a2
 ; RV64IAXCHERI-NEXT:    sc.h a3, a3, (ca0)
 ; RV64IAXCHERI-NEXT:    bnez a3, .LBB66_1
 ; RV64IAXCHERI-NEXT:  # %bb.2:
-; RV64IAXCHERI-NEXT:    mv a0, a2
+; RV64IAXCHERI-NEXT:    mv a0, a1
 ; RV64IAXCHERI-NEXT:    ret
   %1 = atomicrmw sub i16 addrspace(200)* %a, i16 %b acquire
   ret i16 %1
@@ -4673,13 +4687,14 @@ define i16 @atomicrmw_sub_i16_release(i16 addrspace(200)* %a, i16 %b) nounwind {
 ;
 ; RV32IAXCHERI-LABEL: atomicrmw_sub_i16_release:
 ; RV32IAXCHERI:       # %bb.0:
+; RV32IAXCHERI-NEXT:    neg a2, a1
 ; RV32IAXCHERI-NEXT:  .LBB67_1: # =>This Inner Loop Header: Depth=1
-; RV32IAXCHERI-NEXT:    lr.h a2, (ca0)
-; RV32IAXCHERI-NEXT:    sub a3, a2, a1
+; RV32IAXCHERI-NEXT:    lr.h a1, (ca0)
+; RV32IAXCHERI-NEXT:    add a3, a1, a2
 ; RV32IAXCHERI-NEXT:    sc.h.rl a3, a3, (ca0)
 ; RV32IAXCHERI-NEXT:    bnez a3, .LBB67_1
 ; RV32IAXCHERI-NEXT:  # %bb.2:
-; RV32IAXCHERI-NEXT:    mv a0, a2
+; RV32IAXCHERI-NEXT:    mv a0, a1
 ; RV32IAXCHERI-NEXT:    ret
 ;
 ; RV64IXCHERI-LABEL: atomicrmw_sub_i16_release:
@@ -4694,13 +4709,14 @@ define i16 @atomicrmw_sub_i16_release(i16 addrspace(200)* %a, i16 %b) nounwind {
 ;
 ; RV64IAXCHERI-LABEL: atomicrmw_sub_i16_release:
 ; RV64IAXCHERI:       # %bb.0:
+; RV64IAXCHERI-NEXT:    neg a2, a1
 ; RV64IAXCHERI-NEXT:  .LBB67_1: # =>This Inner Loop Header: Depth=1
-; RV64IAXCHERI-NEXT:    lr.h a2, (ca0)
-; RV64IAXCHERI-NEXT:    sub a3, a2, a1
+; RV64IAXCHERI-NEXT:    lr.h a1, (ca0)
+; RV64IAXCHERI-NEXT:    add a3, a1, a2
 ; RV64IAXCHERI-NEXT:    sc.h.rl a3, a3, (ca0)
 ; RV64IAXCHERI-NEXT:    bnez a3, .LBB67_1
 ; RV64IAXCHERI-NEXT:  # %bb.2:
-; RV64IAXCHERI-NEXT:    mv a0, a2
+; RV64IAXCHERI-NEXT:    mv a0, a1
 ; RV64IAXCHERI-NEXT:    ret
   %1 = atomicrmw sub i16 addrspace(200)* %a, i16 %b release
   ret i16 %1
@@ -4719,13 +4735,14 @@ define i16 @atomicrmw_sub_i16_acq_rel(i16 addrspace(200)* %a, i16 %b) nounwind {
 ;
 ; RV32IAXCHERI-LABEL: atomicrmw_sub_i16_acq_rel:
 ; RV32IAXCHERI:       # %bb.0:
+; RV32IAXCHERI-NEXT:    neg a2, a1
 ; RV32IAXCHERI-NEXT:  .LBB68_1: # =>This Inner Loop Header: Depth=1
-; RV32IAXCHERI-NEXT:    lr.h.aq a2, (ca0)
-; RV32IAXCHERI-NEXT:    sub a3, a2, a1
+; RV32IAXCHERI-NEXT:    lr.h.aq a1, (ca0)
+; RV32IAXCHERI-NEXT:    add a3, a1, a2
 ; RV32IAXCHERI-NEXT:    sc.h.rl a3, a3, (ca0)
 ; RV32IAXCHERI-NEXT:    bnez a3, .LBB68_1
 ; RV32IAXCHERI-NEXT:  # %bb.2:
-; RV32IAXCHERI-NEXT:    mv a0, a2
+; RV32IAXCHERI-NEXT:    mv a0, a1
 ; RV32IAXCHERI-NEXT:    ret
 ;
 ; RV64IXCHERI-LABEL: atomicrmw_sub_i16_acq_rel:
@@ -4740,13 +4757,14 @@ define i16 @atomicrmw_sub_i16_acq_rel(i16 addrspace(200)* %a, i16 %b) nounwind {
 ;
 ; RV64IAXCHERI-LABEL: atomicrmw_sub_i16_acq_rel:
 ; RV64IAXCHERI:       # %bb.0:
+; RV64IAXCHERI-NEXT:    neg a2, a1
 ; RV64IAXCHERI-NEXT:  .LBB68_1: # =>This Inner Loop Header: Depth=1
-; RV64IAXCHERI-NEXT:    lr.h.aq a2, (ca0)
-; RV64IAXCHERI-NEXT:    sub a3, a2, a1
+; RV64IAXCHERI-NEXT:    lr.h.aq a1, (ca0)
+; RV64IAXCHERI-NEXT:    add a3, a1, a2
 ; RV64IAXCHERI-NEXT:    sc.h.rl a3, a3, (ca0)
 ; RV64IAXCHERI-NEXT:    bnez a3, .LBB68_1
 ; RV64IAXCHERI-NEXT:  # %bb.2:
-; RV64IAXCHERI-NEXT:    mv a0, a2
+; RV64IAXCHERI-NEXT:    mv a0, a1
 ; RV64IAXCHERI-NEXT:    ret
   %1 = atomicrmw sub i16 addrspace(200)* %a, i16 %b acq_rel
   ret i16 %1
@@ -4765,13 +4783,14 @@ define i16 @atomicrmw_sub_i16_seq_cst(i16 addrspace(200)* %a, i16 %b) nounwind {
 ;
 ; RV32IAXCHERI-LABEL: atomicrmw_sub_i16_seq_cst:
 ; RV32IAXCHERI:       # %bb.0:
+; RV32IAXCHERI-NEXT:    neg a2, a1
 ; RV32IAXCHERI-NEXT:  .LBB69_1: # =>This Inner Loop Header: Depth=1
-; RV32IAXCHERI-NEXT:    lr.h.aqrl a2, (ca0)
-; RV32IAXCHERI-NEXT:    sub a3, a2, a1
+; RV32IAXCHERI-NEXT:    lr.h.aqrl a1, (ca0)
+; RV32IAXCHERI-NEXT:    add a3, a1, a2
 ; RV32IAXCHERI-NEXT:    sc.h.aqrl a3, a3, (ca0)
 ; RV32IAXCHERI-NEXT:    bnez a3, .LBB69_1
 ; RV32IAXCHERI-NEXT:  # %bb.2:
-; RV32IAXCHERI-NEXT:    mv a0, a2
+; RV32IAXCHERI-NEXT:    mv a0, a1
 ; RV32IAXCHERI-NEXT:    ret
 ;
 ; RV64IXCHERI-LABEL: atomicrmw_sub_i16_seq_cst:
@@ -4786,13 +4805,14 @@ define i16 @atomicrmw_sub_i16_seq_cst(i16 addrspace(200)* %a, i16 %b) nounwind {
 ;
 ; RV64IAXCHERI-LABEL: atomicrmw_sub_i16_seq_cst:
 ; RV64IAXCHERI:       # %bb.0:
+; RV64IAXCHERI-NEXT:    neg a2, a1
 ; RV64IAXCHERI-NEXT:  .LBB69_1: # =>This Inner Loop Header: Depth=1
-; RV64IAXCHERI-NEXT:    lr.h.aqrl a2, (ca0)
-; RV64IAXCHERI-NEXT:    sub a3, a2, a1
+; RV64IAXCHERI-NEXT:    lr.h.aqrl a1, (ca0)
+; RV64IAXCHERI-NEXT:    add a3, a1, a2
 ; RV64IAXCHERI-NEXT:    sc.h.aqrl a3, a3, (ca0)
 ; RV64IAXCHERI-NEXT:    bnez a3, .LBB69_1
 ; RV64IAXCHERI-NEXT:  # %bb.2:
-; RV64IAXCHERI-NEXT:    mv a0, a2
+; RV64IAXCHERI-NEXT:    mv a0, a1
 ; RV64IAXCHERI-NEXT:    ret
   %1 = atomicrmw sub i16 addrspace(200)* %a, i16 %b seq_cst
   ret i16 %1

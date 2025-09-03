@@ -10,14 +10,14 @@
 ; MIPS-OBJ-RELOCS:      Section ({{.+}}) .rela.gcc_except_table {
 ; MIPS-OBJ-RELOCS-NEXT:   R_MIPS_CHERI_CAPABILITY/R_MIPS_NONE/R_MIPS_NONE .L_Z4testll$local 0x80
 ; MIPS-OBJ-RELOCS-NEXT:   R_MIPS_CHERI_CAPABILITY/R_MIPS_NONE/R_MIPS_NONE .L_Z4testll$local 0x60
-; MIPS-OBJ-RELOCS-NEXT:   R_MIPS_CHERI_CAPABILITY/R_MIPS_NONE/R_MIPS_NONE .L_Z5test2ll$local 0x60
+; MIPS-OBJ-RELOCS-NEXT:   R_MIPS_CHERI_CAPABILITY/R_MIPS_NONE/R_MIPS_NONE .L_Z5test2ll$local 0x5C
 ; MIPS-OBJ-RELOCS-NEXT:   R_MIPS_PC32/R_MIPS_NONE/R_MIPS_NONE .L_ZTIl.DW.stub 0x0
 ; MIPS-OBJ-RELOCS-NEXT:   R_MIPS_CHERI_CAPABILITY/R_MIPS_NONE/R_MIPS_NONE .L_Z9test_weakll$local 0x34
 ; MIPS-OBJ-RELOCS-NEXT: }
 ; RV64-OBJ-RELOCS:      Section ({{.+}}) .rela.gcc_except_table {
 ; RV64-OBJ-RELOCS-NEXT:   0x20 R_RISCV_CHERI_CAPABILITY_CODE .L_Z4testll$local 0x5C
 ; RV64-OBJ-RELOCS-NEXT:   0x40 R_RISCV_CHERI_CAPABILITY_CODE .L_Z4testll$local 0x48
-; RV64-OBJ-RELOCS-NEXT:   0x80 R_RISCV_CHERI_CAPABILITY_CODE .L_Z5test2ll$local 0x48
+; RV64-OBJ-RELOCS-NEXT:   0x80 R_RISCV_CHERI_CAPABILITY_CODE .L_Z5test2ll$local 0x44
 ; RV64-OBJ-RELOCS-NEXT:   0x95 R_RISCV_ADD32 <null> 0x0
 ; RV64-OBJ-RELOCS-NEXT:   0x95 R_RISCV_SUB32 <null> 0x0
 ; RV64-OBJ-RELOCS-NEXT:   0xA4 R_RISCV_ADD32 .L_ZTIl.DW.stub 0x0
@@ -76,7 +76,7 @@
 
 ; MIPS-RELOCS-LABEL: Symbol table '.symtab' contains
 ; MIPS-RELOCS: [[#%.16x,TEST_ADDR:]]        160 FUNC    LOCAL  DEFAULT    11 .L_Z4testll$local
-; MIPS-RELOCS: [[#%.16x,TEST2_ADDR:]]       168 FUNC    LOCAL  DEFAULT    11 .L_Z5test2ll$local
+; MIPS-RELOCS: [[#%.16x,TEST2_ADDR:]]       164 FUNC    LOCAL  DEFAULT    11 .L_Z5test2ll$local
 ; MIPS-RELOCS: [[#%.16x,TEST_WEAK_ADDR:]]    84 FUNC    LOCAL  DEFAULT    11 .L_Z9test_weakll$local
 
 ;; Local relocations for exception handling:
@@ -84,7 +84,7 @@
 ; MIPS-RELOCS-NEXT:      Offset             Info         Type        Value
 ; MIPS-RELOCS-NEXT:  {{0*}}2{{.+}}     8000000000000000 FUNC    [[#TEST_ADDR+128]] [{{[0-9a-f]+}}-{{[0-9a-f]+}}]
 ; MIPS-RELOCS-NEXT:  {{0*}}2{{.+}}     8000000000000000 FUNC    [[#TEST_ADDR+96]] [{{[0-9a-f]+}}-{{[0-9a-f]+}}]
-; MIPS-RELOCS-NEXT:  {{0*}}2{{.+}}     8000000000000000 FUNC    [[#TEST2_ADDR+96]] [{{[0-9a-f]+}}-{{[0-9a-f]+}}]
+; MIPS-RELOCS-NEXT:  {{0*}}2{{.+}}     8000000000000000 FUNC    [[#TEST2_ADDR+92]] [{{[0-9a-f]+}}-{{[0-9a-f]+}}]
 ; MIPS-RELOCS-NEXT:  {{0*}}2{{.+}}     8000000000000000 FUNC    [[#TEST_WEAK_ADDR+52]] [{{[0-9a-f]+}}-{{[0-9a-f]+}}]
 
 ;; Should also emit __cap_relocs for RISC-V:
@@ -111,7 +111,7 @@
 ; RV64-RELOCS-NEXT:      Offset             Info         Type        Value
 ; RV64-RELOCS-NEXT:  {{0*}}2{{.+}}     9000000000000000 CODE    [[#TEST_ADDR+92]] [{{[0-9a-f]+}}-{{[0-9a-f]+}}]
 ; RV64-RELOCS-NEXT:  {{0*}}2{{.+}}     9000000000000000 CODE    [[#TEST_ADDR+72]] [{{[0-9a-f]+}}-{{[0-9a-f]+}}]
-; RV64-RELOCS-NEXT:  {{0*}}2{{.+}}     9000000000000000 CODE    [[#TEST2_ADDR+72]] [{{[0-9a-f]+}}-{{[0-9a-f]+}}]
+; RV64-RELOCS-NEXT:  {{0*}}2{{.+}}     9000000000000000 CODE    [[#TEST2_ADDR+68]] [{{[0-9a-f]+}}-{{[0-9a-f]+}}]
 ; Next one references the local symbol, and uses that length rather than the override:
 ; RV64-RELOCS-NEXT:  {{0*}}2{{.+}}     9000000000000000 CODE    [[#TEST_WEAK_ADDR+28]] [{{[0-9a-f]+}}-{{[0-9a-f]+}}]
 ; RV64-RELOCS-NEXT:  {{0*}}3{{.+}}     9000000000000000 CODE    [[#PLT0_ADDR]] [{{[0-9a-f]+}}-{{[0-9a-f]+}}]
