@@ -380,6 +380,8 @@ def : InstAlias<"addi $cd, $cs1, $imm",
                 (CIncOffsetImm GPCR:$cd, GPCR:$cs1, simm12:$imm), 0>;
 def : InstAlias<"add $cd, $cs1, $imm",
                 (CIncOffsetImm GPCR:$cd, GPCR:$cs1, simm12:$imm), 0>;
+def CSetCapPoison       : Cheri_r<0x18, "csetcappoison", GPCR>;
+
 def CSetBounds      : Cheri_rr<0x8, "csetbounds">;
 def : InstAlias<"scbndsr $cd, $cs1, $rs2",
                 (CSetBounds GPCR:$cd, GPCR:$cs1, GPR:$rs2), 0>;
