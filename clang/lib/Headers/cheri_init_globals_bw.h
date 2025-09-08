@@ -41,8 +41,10 @@ static __attribute__((always_inline)) void cheri_init_globals_cbuildcap_impl(
     const __SIZE_TYPE__ addr = __builtin_cheri_address_get(*dest);
     const __SIZE_TYPE__ perms = __builtin_cheri_perms_get(*dest);
     const __SIZE_TYPE__ is_sealed = __builtin_cheri_sealed_get(*dest);
+    const __SIZE_TYPE__ length = __builtin_cheri_length_get(*dest);
     const bool is_fn = perms & __CHERI_CAP_PERMISSION_EXECUTE__;
-    const bool is_rw = perms & __CHERI_CAP_PERMISSION_WRITE__;
+    const bool is_rw = !is_fn && (perms & __CHERI_CAP_PERMISSION_WRITE__);
+    const bool can_set_bounds = !is_fn || (is_fn && tight_code_bounds);
 
     if (addr == 0) {
       *dest = (void *__capability)0;
@@ -62,8 +64,10 @@ static __attribute__((always_inline)) void cheri_init_globals_cbuildcap_impl(
     // if we can't set tight code bounds on the fn then we have
     // to initialize it manually from the base cap.
     // TODO - can we initialize the bounds correctly in the linker
-    if ((is_fn && !tight_code_bounds) || !init_with_cbld) {
+    if (!init_with_cbld) {
       src = __builtin_cheri_address_set(base_cap, addr + base_addr);
+      if (can_set_bounds)
+        src = __builtin_cheri_bounds_set(src, length);
       src = __builtin_cheri_offset_increment(src, rela->addend);
       src = __builtin_cheri_perms_and(src, perms);
       if (is_sealed) {

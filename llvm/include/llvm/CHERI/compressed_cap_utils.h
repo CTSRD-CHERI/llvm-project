@@ -77,11 +77,11 @@ constexpr void updateCT(CapTy<Is64Bit> *Csp, uint8_t Val) {
 
 template <bool Is64Bit>
 constexpr void decompressMem(uint64_t Pesbt, uint64_t Cursor, bool Tag,
-                             CapTy<Is64Bit> *Csp) {
+                             uint8_t LVBits, CapTy<Is64Bit> *Csp) {
   if constexpr (Is64Bit) {
-    cc128r_decompress_mem(Pesbt, Cursor, Tag, Csp);
+    cc128r_decompress_raw__(Pesbt, Cursor, Tag, LVBits, Csp);
   } else {
-    cc64r_decompress_mem(Pesbt, Cursor, Tag, Csp);
+    cc64r_decompress_raw__(Pesbt, Cursor, Tag, LVBits, Csp);
   }
 }
 } // namespace llvm::cc

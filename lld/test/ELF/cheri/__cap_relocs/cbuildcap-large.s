@@ -9,62 +9,36 @@
 
 # RELOCS:      Relocations [
 # RELOCS-NEXT:   Section ({{[0-9]+}}) .rela.dyn {
-# RELOCS-NEXT:     0x12250 R_RISCV_CHERI_RELATIVE - 0x0
+# RELOCS-NEXT:     0x12200 R_RISCV_CHERI_RELATIVE - 0x0
 # RELOCS-NEXT:   }
 
 #RELADYN: Contents of section .rela.dyn:
-#RELADYN-NEXT: 10200 
-#RELADYN-NEXT: 10210 00000000 00000000
+#RELADYN-NEXT: 101c8
+#RELADYN-NEXT: 101d8 00000000 00000000
 
 # GOT: Contents of section .got:
-# GOT-NEXT: 12240
-# GOT-NEXT: 12250 60320100 00000000 33994f02 0070e201
+# GOT-NEXT: 121f0
+# GOT-NEXT: 12200 10320100 00000000 0b994502 0078ee01
 #                 [    address    ] [      meta     ]
 #                 address = 0x13250 -> matches symbol VA
 
-# SYM:      0000000000010200    24 NOTYPE  LOCAL  HIDDEN      1 __rela_dyn_start
-# SYM-NEXT: 0000000000010218     0 NOTYPE  LOCAL  HIDDEN      1 __rela_dyn_end
-# SYM:      0000000000013260  8193 OBJECT  GLOBAL DEFAULT     4 x
-        .text
-        .attribute      4, 16
-        .attribute      5, "rv64i2p1_zcheripurecap0p9"
-        .file   "test.c"
-        .globl  foo                             # -- Begin function foo
-        .p2align        2
-        .type   foo,@function
-foo:                                    # @foo
-.Lfoo$local:
-        .type   .Lfoo$local,@function
-# %bb.0:                                # %entry
-        caddi   csp, csp, -16
-.LBB0_1:                                # %entry
-                                        # Label of block must be emitted
-        auipc   ca0, %got_pcrel_hi(x)
-        lc      ca0, %pcrel_lo(.LBB0_1)(ca0)
-        sc      ca0, 0(csp)
-        lc      ca0, 0(csp)
-        caddi   csp, csp, 16
-        ret
-.Lfunc_end0:
-        .size   foo, .Lfunc_end0-foo
-        .size   .Lfoo$local, .Lfunc_end0-foo
-                                        # -- End function
-        .type   x,@object                       # @x
-        .bss
-        .globl  x
-        .p2align        2, 0x0
-x:
-        .word   0                               # 0x0
-        .size   x, 0x2001 
-
-        .ident  "clang version 17.0.0 (git@gitlab.codasip.com:cheri/software/bakewell/cherillvm.git f885005c7c20325bf3300c4fe2e28e8aa57d34b3)"
-        .section        ".note.GNU-stack","",@progbits
-
-.global _start 
+# SYM:      00000000000101c8    24 NOTYPE  LOCAL  HIDDEN      1 __rela_dyn_start
+# SYM-NEXT: 00000000000101e0     0 NOTYPE  LOCAL  HIDDEN      1 __rela_dyn_end
+# SYM:      0000000000013210  8193 OBJECT  GLOBAL DEFAULT     4 x
+.text
+.globl  x, _start
 _start:
-   call foo 
+  auipc ca0, %got_pcrel_hi(x)
+  lc ca0, %pcrel_lo(_start)(ca0)
+.size _start, . - _start
+
+.data
+  .type x, @object
+x:
+  .word   0
+  .size   x, 0x2001
+
 .weak __rela_dyn_start
 .hidden __rela_dyn_start
 .weak __rela_dyn_end
 .hidden __rela_dyn_end
-

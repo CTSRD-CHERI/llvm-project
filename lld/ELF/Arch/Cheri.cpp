@@ -40,22 +40,23 @@ static uint64_t getCapabilityTopBits(cc::AddrTy<Is64Bit> addr,
       cc::getRepresentableLength<Is64Bit>(length);
   cc::AddrTy<Is64Bit> top = addr + representableLength;
   cc::CapTy<Is64Bit> cap =
-      cc::makeMaxPermCap<Is64Bit>(addr, /*cursor=*/addr, top);
+      cc::makeMaxPermCapMLV<Is64Bit>(addr, addr, top, /*mode=*/0, /*lvbits=*/1);
   switch (kind) {
   case PK_DONT_SEAL:
-    cap.cr_arch_perm = cap.cr_arch_perm & ~(CAP_AP_W | CAP_AP_ASR);
-    break;
   case PK_FUNC:
-    cap.cr_m = 0;
-    cap.cr_arch_perm = cap.cr_arch_perm & ~(CAP_AP_W | CAP_AP_ASR);
-    cc::updateCT<Is64Bit>(&cap, 1);
+    // only clear W on rv64 as on rv32 it will also clear ASR
+    if (Is64Bit)
+      cap.cr_arch_perm = cap.cr_arch_perm & ~(CAP_AP_W);
+    if (kind != PK_DONT_SEAL)
+      cc::updateCT<Is64Bit>(&cap, 1);
     break;
   case PK_OBJ:
     cap.cr_arch_perm = cap.cr_arch_perm & ~(CAP_AP_X | CAP_AP_ASR);
     break;
   case PK_CONST:
-    cap.cr_arch_perm =
-        cap.cr_arch_perm & ~(CAP_AP_W | CAP_AP_X | CAP_AP_ASR | CAP_AP_SL);
+    cap.cr_arch_perm = cap.cr_arch_perm & ~(CAP_AP_W | CAP_AP_X | CAP_AP_ASR);
+    if (!Is64Bit)
+      cap.cr_arch_perm = cap.cr_arch_perm & ~(CAP_AP_SL);
     break;
   }
   cc::compressMem<Is64Bit>(&cap);

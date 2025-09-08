@@ -3436,16 +3436,16 @@ template <class ELFT> void ELFDumper<ELFT>::printCheriCapRelocsCBuildCap() {
             CapFrag.data() + sizeof(TargetUint));
 
     cc::CapTy<ELFT::Is64Bits> Cap;
-    cc::decompressMem<ELFT::Is64Bits>(MetaBits, Base, false, &Cap);
+    cc::decompressMem<ELFT::Is64Bits>(MetaBits, Base, /*tag=*/false,
+                                      /*lvbits=*/1, &Cap);
     const TargetUint Length = Cap.length();
     const TargetUint Perms = Cap.permissions();
     const TargetUint Target = RelaRel.Offset;
     const TargetUint Offset = RelaRel.Addend.value_or(0);
     const bool IsFunction = Perms & CAP_AP_X;
     const bool IsObject = Perms & CAP_AP_W;
-    const bool IsReadOnly = !IsObject;
     const char *PermStr =
-        IsFunction ? "Function" : (IsReadOnly ? "Constant" : "Object");
+        IsFunction ? "Function" : (IsObject ? "Object" : "Constant");
 
     std::string BaseSymbol;
     if (Base != 0) {
