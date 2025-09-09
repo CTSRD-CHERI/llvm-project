@@ -27,13 +27,12 @@ _Bool is_aligned(void *ptr, long align) {
 }
 
 // CHECK-LABEL: define {{[^@]+}}@align_up
-// CHECK-SAME: (ptr addrspace(200) noundef [[PTR:%.*]], i64 noundef signext [[ALIGN:%.*]]) local_unnamed_addr addrspace(200) #[[ATTR2:[0-9]+]] {
+// CHECK-SAME: (ptr addrspace(200) noundef readnone [[PTR:%.*]], i64 noundef signext [[ALIGN:%.*]]) local_unnamed_addr addrspace(200) #[[ATTR2:[0-9]+]] {
 // CHECK-NEXT:  entry:
 // CHECK-NEXT:    [[TMP0:%.*]] = getelementptr i8, ptr addrspace(200) [[PTR]], i64 [[ALIGN]]
 // CHECK-NEXT:    [[OVER_BOUNDARY:%.*]] = getelementptr i8, ptr addrspace(200) [[TMP0]], i64 -1
 // CHECK-NEXT:    [[INVERTED_MASK:%.*]] = sub i64 0, [[ALIGN]]
 // CHECK-NEXT:    [[ALIGNED_RESULT:%.*]] = tail call ptr addrspace(200) @llvm.ptrmask.p200.i64(ptr addrspace(200) [[OVER_BOUNDARY]], i64 [[INVERTED_MASK]])
-// CHECK-NEXT:    call void @llvm.assume(i1 true) [ "align"(ptr addrspace(200) [[ALIGNED_RESULT]], i64 [[ALIGN]]) ]
 // CHECK-NEXT:    ret ptr addrspace(200) [[ALIGNED_RESULT]]
 //
 void* align_up(void *ptr, long align) {
@@ -53,11 +52,10 @@ void* align_up(void *ptr, long align) {
 }
 
 // CHECK-LABEL: define {{[^@]+}}@align_down
-// CHECK-SAME: (ptr addrspace(200) noundef [[PTR:%.*]], i64 noundef signext [[ALIGN:%.*]]) local_unnamed_addr addrspace(200) #[[ATTR2]] {
+// CHECK-SAME: (ptr addrspace(200) noundef readnone [[PTR:%.*]], i64 noundef signext [[ALIGN:%.*]]) local_unnamed_addr addrspace(200) #[[ATTR2]] {
 // CHECK-NEXT:  entry:
 // CHECK-NEXT:    [[INVERTED_MASK:%.*]] = sub i64 0, [[ALIGN]]
 // CHECK-NEXT:    [[ALIGNED_RESULT:%.*]] = tail call ptr addrspace(200) @llvm.ptrmask.p200.i64(ptr addrspace(200) [[PTR]], i64 [[INVERTED_MASK]])
-// CHECK-NEXT:    call void @llvm.assume(i1 true) [ "align"(ptr addrspace(200) [[ALIGNED_RESULT]], i64 [[ALIGN]]) ]
 // CHECK-NEXT:    ret ptr addrspace(200) [[ALIGNED_RESULT]]
 //
 void* align_down(void *ptr, long align) {

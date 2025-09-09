@@ -173,11 +173,9 @@ void test_alignment_builtins(void *__capability cap, __SIZE_TYPE__ align);
 // CHECK-NEXT:    [[OVER_BOUNDARY:%.*]] = getelementptr inbounds i8, ptr addrspace(200) %cap, i64 %mask
 // CHECK-NEXT:    [[INVERTED_MASK:%.*]] = sub i64 0, [[ALIGN]]
 // CHECK-NEXT:    [[ALIGNED_RESULT:%.*]] = tail call ptr addrspace(200) @llvm.ptrmask.p200.i64(ptr addrspace(200) [[OVER_BOUNDARY]], i64 [[INVERTED_MASK]])
-// CHECK-NEXT:    call void @llvm.assume(i1 true) [ "align"(ptr addrspace(200) [[ALIGNED_RESULT]], i64 [[ALIGN]]) ]
 // CHECK-NEXT:    tail call void @use_cap(ptr addrspace(200) noundef [[ALIGNED_RESULT]]) #[[ATTR5]]
 //
 // CHECK-NEXT:    [[ALIGNED_RESULT3:%.*]] = tail call ptr addrspace(200) @llvm.ptrmask.p200.i64(ptr addrspace(200) [[CAP]], i64 [[INVERTED_MASK]])
-// CHECK-NEXT:    call void @llvm.assume(i1 true) [ "align"(ptr addrspace(200) [[ALIGNED_RESULT3]], i64 [[ALIGN]]) ]
 // CHECK-NEXT:    tail call void @use_cap(ptr addrspace(200) noundef [[ALIGNED_RESULT3]]) #[[ATTR5]]
 //
 // CHECK-NEXT:    [[PTRADDR:%.*]] = tail call i64 @llvm.cheri.cap.address.get.i64(ptr addrspace(200) [[CAP]])

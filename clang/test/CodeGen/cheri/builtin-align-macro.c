@@ -144,23 +144,21 @@ int *align_up_macro(int *ptr, ptraddr_t align) {
 }
 
 // PURECAP-LABEL: define {{[^@]+}}@align_up_builtin
-// PURECAP-SAME: (ptr addrspace(200) noundef [[PTR:%.*]], i64 noundef signext [[ALIGN:%.*]]) local_unnamed_addr addrspace(200) #[[ATTR2:[0-9]+]] {
+// PURECAP-SAME: (ptr addrspace(200) noundef readnone [[PTR:%.*]], i64 noundef signext [[ALIGN:%.*]]) local_unnamed_addr addrspace(200) #[[ATTR2:[0-9]+]] {
 // PURECAP-NEXT:  entry:
 // PURECAP-NEXT:    [[TMP0:%.*]] = getelementptr i8, ptr addrspace(200) [[PTR]], i64 [[ALIGN]]
 // PURECAP-NEXT:    [[OVER_BOUNDARY:%.*]] = getelementptr i8, ptr addrspace(200) [[TMP0]], i64 -1
 // PURECAP-NEXT:    [[INVERTED_MASK:%.*]] = sub i64 0, [[ALIGN]]
 // PURECAP-NEXT:    [[ALIGNED_RESULT:%.*]] = tail call ptr addrspace(200) @llvm.ptrmask.p200.i64(ptr addrspace(200) [[OVER_BOUNDARY]], i64 [[INVERTED_MASK]])
-// PURECAP-NEXT:    call void @llvm.assume(i1 true) [ "align"(ptr addrspace(200) [[ALIGNED_RESULT]], i64 [[ALIGN]]) ]
 // PURECAP-NEXT:    ret ptr addrspace(200) [[ALIGNED_RESULT]]
 //
 // HYBRID-LABEL: define {{[^@]+}}@align_up_builtin
-// HYBRID-SAME: (ptr noundef [[PTR:%.*]], i64 noundef signext [[ALIGN:%.*]]) local_unnamed_addr #[[ATTR1:[0-9]+]] {
+// HYBRID-SAME: (ptr noundef readnone [[PTR:%.*]], i64 noundef signext [[ALIGN:%.*]]) local_unnamed_addr #[[ATTR1:[0-9]+]] {
 // HYBRID-NEXT:  entry:
 // HYBRID-NEXT:    [[TMP0:%.*]] = getelementptr i8, ptr [[PTR]], i64 [[ALIGN]]
 // HYBRID-NEXT:    [[OVER_BOUNDARY:%.*]] = getelementptr i8, ptr [[TMP0]], i64 -1
 // HYBRID-NEXT:    [[INVERTED_MASK:%.*]] = sub i64 0, [[ALIGN]]
 // HYBRID-NEXT:    [[ALIGNED_RESULT:%.*]] = tail call ptr @llvm.ptrmask.p0.i64(ptr [[OVER_BOUNDARY]], i64 [[INVERTED_MASK]])
-// HYBRID-NEXT:    call void @llvm.assume(i1 true) [ "align"(ptr [[ALIGNED_RESULT]], i64 [[ALIGN]]) ]
 // HYBRID-NEXT:    ret ptr [[ALIGNED_RESULT]]
 //
 int *align_up_builtin(int *ptr, ptraddr_t align) {
@@ -274,19 +272,17 @@ int *align_down_macro(int *ptr, ptraddr_t align) {
 }
 
 // PURECAP-LABEL: define {{[^@]+}}@align_down_builtin
-// PURECAP-SAME: (ptr addrspace(200) noundef [[PTR:%.*]], i64 noundef signext [[ALIGN:%.*]]) local_unnamed_addr addrspace(200) #[[ATTR2]] {
+// PURECAP-SAME: (ptr addrspace(200) noundef readnone [[PTR:%.*]], i64 noundef signext [[ALIGN:%.*]]) local_unnamed_addr addrspace(200) #[[ATTR2]] {
 // PURECAP-NEXT:  entry:
 // PURECAP-NEXT:    [[INVERTED_MASK:%.*]] = sub i64 0, [[ALIGN]]
 // PURECAP-NEXT:    [[ALIGNED_RESULT:%.*]] = tail call ptr addrspace(200) @llvm.ptrmask.p200.i64(ptr addrspace(200) [[PTR]], i64 [[INVERTED_MASK]])
-// PURECAP-NEXT:    call void @llvm.assume(i1 true) [ "align"(ptr addrspace(200) [[ALIGNED_RESULT]], i64 [[ALIGN]]) ]
 // PURECAP-NEXT:    ret ptr addrspace(200) [[ALIGNED_RESULT]]
 //
 // HYBRID-LABEL: define {{[^@]+}}@align_down_builtin
-// HYBRID-SAME: (ptr noundef [[PTR:%.*]], i64 noundef signext [[ALIGN:%.*]]) local_unnamed_addr #[[ATTR1]] {
+// HYBRID-SAME: (ptr noundef readnone [[PTR:%.*]], i64 noundef signext [[ALIGN:%.*]]) local_unnamed_addr #[[ATTR1]] {
 // HYBRID-NEXT:  entry:
 // HYBRID-NEXT:    [[INVERTED_MASK:%.*]] = sub i64 0, [[ALIGN]]
 // HYBRID-NEXT:    [[ALIGNED_RESULT:%.*]] = tail call ptr @llvm.ptrmask.p0.i64(ptr [[PTR]], i64 [[INVERTED_MASK]])
-// HYBRID-NEXT:    call void @llvm.assume(i1 true) [ "align"(ptr [[ALIGNED_RESULT]], i64 [[ALIGN]]) ]
 // HYBRID-NEXT:    ret ptr [[ALIGNED_RESULT]]
 //
 int *align_down_builtin(int *ptr, ptraddr_t align) {
