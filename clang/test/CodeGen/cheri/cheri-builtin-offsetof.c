@@ -45,7 +45,7 @@ unsigned long off_with_intcap(unsigned __intcap bit) {
 // RV64-NEXT:    [[AND:%.*]] = shl i32 [[BIT]], 4
 // RV64-NEXT:    [[TMP0:%.*]] = and i32 [[AND]], 16
 // RV64-NEXT:    [[NARROW:%.*]] = add nuw nsw i32 [[TMP0]], 16
-// RV64-NEXT:    [[TMP1:%.*]] = zext i32 [[NARROW]] to i64
+// RV64-NEXT:    [[TMP1:%.*]] = zext nneg i32 [[NARROW]] to i64
 // RV64-NEXT:    ret i64 [[TMP1]]
 //
 unsigned long off_with_int(unsigned int bit) {
