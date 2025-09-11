@@ -2336,7 +2336,7 @@ multiclass ZbaMultPat<int n, RVInst First, RVInst Second> {
 def : Pat<(add (mul_oneuse GPR:$rs1, (XLenVT n)), GPR:$rs2),
           (XLenVT (EXTRACT_SUBREG
             (First
-              (XLenVT (EXTRACT_SUBREG (Second GPR:$rs1, (SUBREG_TO_REG GPCR, $rs2, sub_cap_addr)), sub_cap_addr)),
+              (XLenVT (EXTRACT_SUBREG (Second GPR:$rs1, (SUBREG_TO_REG GPCR, $rs1, sub_cap_addr)), sub_cap_addr)),
               (SUBREG_TO_REG GPCR, $rs2, sub_cap_addr)
             ),
           sub_cap_addr))>;

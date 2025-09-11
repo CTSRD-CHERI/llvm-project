@@ -51,7 +51,8 @@ define i64 @addmul272(i64 %a, i64 %b) {
 ; ZISH4A-LABEL: addmul272:
 ; ZISH4A:       # %bb.0:
 ; ZISH4A-NEXT:    # kill: def $x11 killed $x11 def $c11
-; ZISH4A-NEXT:    sh4add ca0, a0, ca1
+; ZISH4A-NEXT:    # kill: def $x10 killed $x10 def $c10
+; ZISH4A-NEXT:    sh4add ca0, a0, ca0
 ; ZISH4A-NEXT:    sh4add ca0, a0, ca1
 ; ZISH4A-NEXT:    # kill: def $x10 killed $x10 killed $c10
 ; ZISH4A-NEXT:    ret
