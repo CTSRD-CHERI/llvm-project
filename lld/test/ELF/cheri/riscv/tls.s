@@ -8,13 +8,13 @@
 # RUN: ld.lld %t.32.o %t1.32.so -o %t.32
 # RUN: llvm-readobj -r %t.32 | FileCheck --check-prefix=RV32-REL %s
 # RUN: llvm-readelf -x .got %t.32 | FileCheck --check-prefix=RV32-GOT %s
-# RUN: llvm-objdump -d --no-show-raw-insn %t.32 | FileCheck --check-prefix=RV32-DIS %s
+# RUN: llvm-objdump --no-print-imm-hex -d --no-show-raw-insn %t.32 | FileCheck --check-prefix=RV32-DIS %s
 
 # RUN: %riscv32_cheri_purecap_llvm-mc --defsym PIC=1 -filetype=obj %s -o %t.32.pico
 # RUN: ld.lld -shared %t.32.pico %t1.32.so -o %t.32.so
 # RUN: llvm-readobj -r %t.32.so | FileCheck --check-prefix=RV32-SO-REL %s
 # RUN: llvm-readelf -x .got %t.32.so | FileCheck --check-prefix=RV32-SO-GOT %s
-# RUN: llvm-objdump -d --no-show-raw-insn %t.32.so | FileCheck --check-prefix=RV32-SO-DIS %s
+# RUN: llvm-objdump --no-print-imm-hex -d --no-show-raw-insn %t.32.so | FileCheck --check-prefix=RV32-SO-DIS %s
 
 # RUN: %riscv64_cheri_purecap_llvm-mc -filetype=obj %t.s -o %t1.64.o
 # RUN: ld.lld -shared -soname=t1.so %t1.64.o -o %t1.64.so
@@ -23,13 +23,13 @@
 # RUN: ld.lld %t.64.o %t1.64.so -o %t.64
 # RUN: llvm-readobj -r %t.64 | FileCheck --check-prefix=RV64-REL %s
 # RUN: llvm-readelf -x .got %t.64 | FileCheck --check-prefix=RV64-GOT %s
-# RUN: llvm-objdump -d --no-show-raw-insn %t.64 | FileCheck --check-prefix=RV64-DIS %s
+# RUN: llvm-objdump --no-print-imm-hex -d --no-show-raw-insn %t.64 | FileCheck --check-prefix=RV64-DIS %s
 
 # RUN: %riscv64_cheri_purecap_llvm-mc --defsym PIC=1 -filetype=obj %s -o %t.64.pico
 # RUN: ld.lld -shared %t.64.pico %t1.64.so -o %t.64.so
 # RUN: llvm-readobj -r %t.64.so | FileCheck --check-prefix=RV64-SO-REL %s
 # RUN: llvm-readelf -x .got %t.64.so | FileCheck --check-prefix=RV64-SO-GOT %s
-# RUN: llvm-objdump -d --no-show-raw-insn %t.64.so | FileCheck --check-prefix=RV64-SO-DIS %s
+# RUN: llvm-objdump --no-print-imm-hex -d --no-show-raw-insn %t.64.so | FileCheck --check-prefix=RV64-SO-DIS %s
 
 # RV32-REL:      .rela.dyn {
 # RV32-REL-NEXT:   0x12248 R_RISCV_TLS_DTPMOD32 evar 0x0

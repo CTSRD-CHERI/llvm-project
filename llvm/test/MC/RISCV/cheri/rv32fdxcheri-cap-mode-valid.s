@@ -1,12 +1,12 @@
 # RUN: llvm-mc %s -triple=riscv32 -mattr=+xcheri,+cap-mode,+f,+d  -riscv-no-aliases -show-encoding \
 # RUN:     | FileCheck -check-prefixes=CHECK-ASM,CHECK-ASM-AND-OBJ %s
 # RUN: llvm-mc -filetype=obj -triple riscv32 -mattr=+xcheri,+cap-mode,+f,+d < %s \
-# RUN:     | llvm-objdump -M no-aliases --mattr=+xcheri,+cap-mode,+f,+d  -d - \
+# RUN:     | llvm-objdump --no-print-imm-hex -M no-aliases --mattr=+xcheri,+cap-mode,+f,+d  -d - \
 # RUN:     | FileCheck -check-prefixes=CHECK-ASM-AND-OBJ %s
 # RUN: llvm-mc %s -triple=riscv64 -mattr=+xcheri,+cap-mode,+f,+d  -riscv-no-aliases -show-encoding \
 # RUN:     | FileCheck -check-prefixes=CHECK-ASM,CHECK-ASM-AND-OBJ %s
 # RUN: llvm-mc -filetype=obj -triple riscv64 -mattr=+xcheri,+cap-mode,+f,+d < %s \
-# RUN:     | llvm-objdump -M no-aliases --mattr=+xcheri,+cap-mode,+f,+d  -d - \
+# RUN:     | llvm-objdump --no-print-imm-hex -M no-aliases --mattr=+xcheri,+cap-mode,+f,+d  -d - \
 # RUN:     | FileCheck -check-prefixes=CHECK-ASM-AND-OBJ %s
 
 

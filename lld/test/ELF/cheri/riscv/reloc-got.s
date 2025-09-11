@@ -8,7 +8,7 @@
 # RUN: llvm-readobj -r --cap-relocs %t | FileCheck --check-prefix=RELOC32 %s
 # RUN: llvm-nm %t | FileCheck --check-prefix=NM32 %s
 # RUN: llvm-readobj -x .got %t | FileCheck --check-prefix=HEX32 %s
-# RUN: llvm-objdump -d --no-show-raw-insn %t | FileCheck --check-prefix=DIS32 %s
+# RUN: llvm-objdump --no-print-imm-hex -d --no-show-raw-insn %t | FileCheck --check-prefix=DIS32 %s
 
 # RUN: echo '.globl b; b:' | %riscv64_cheri_purecap_llvm-mc -filetype=obj - -o %t1.o
 # RUN: ld.lld -shared %t1.o -soname=t1.so -o %t1.so
@@ -19,7 +19,7 @@
 # RUN: llvm-readobj -r --cap-relocs %t | FileCheck --check-prefix=RELOC64 %s
 # RUN: llvm-nm %t | FileCheck --check-prefix=NM64 %s
 # RUN: llvm-readobj -x .got %t | FileCheck --check-prefix=HEX64 %s
-# RUN: llvm-objdump -d --no-show-raw-insn %t | FileCheck --check-prefix=DIS64 %s
+# RUN: llvm-objdump --no-print-imm-hex -d --no-show-raw-insn %t | FileCheck --check-prefix=DIS64 %s
 
 # SEC32: .got PROGBITS         00012230 000230 000018
 # SEC64: .got PROGBITS 00000000000123a0 0003a0 000030

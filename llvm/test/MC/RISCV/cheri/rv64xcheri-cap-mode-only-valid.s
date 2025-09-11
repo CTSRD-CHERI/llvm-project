@@ -1,7 +1,7 @@
 # RUN: llvm-mc -triple=riscv64 -mattr=+xcheri,+cap-mode -riscv-no-aliases -show-encoding < %s\
 # RUN:     | FileCheck -check-prefixes=CHECK-ASM,CHECK-ASM-AND-OBJ %s
 # RUN: llvm-mc -filetype=obj -triple riscv64 -mattr=+xcheri,+cap-mode < %s \
-# RUN:     | llvm-objdump -M no-aliases --mattr=+xcheri,+cap-mode -d - \
+# RUN:     | llvm-objdump --no-print-imm-hex -M no-aliases --mattr=+xcheri,+cap-mode -d - \
 # RUN:     | FileCheck -check-prefixes=CHECK-ASM-AND-OBJ %s
 
 ## Same test again without the "c" prefix on all lines
@@ -9,7 +9,7 @@
 # RUN: llvm-mc -triple=riscv64 -mattr=+xcheri,+cap-mode -riscv-no-aliases -show-encoding < %t.s\
 # RUN:     | FileCheck -check-prefixes=CHECK-ASM,CHECK-ASM-AND-OBJ %s
 # RUN: llvm-mc -filetype=obj -triple riscv64 -mattr=+xcheri,+cap-mode < %t.s \
-# RUN:     | llvm-objdump -M no-aliases --mattr=+xcheri,+cap-mode -d - \
+# RUN:     | llvm-objdump --no-print-imm-hex -M no-aliases --mattr=+xcheri,+cap-mode -d - \
 # RUN:     | FileCheck -check-prefixes=CHECK-ASM-AND-OBJ %s
 
 # Capability load/store uses different encodings for RV32 vs RV64
