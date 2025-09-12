@@ -39,11 +39,7 @@ define void @set_tp(i64 %value) local_unnamed_addr #2 {
 ;
 ; CHECK-LP64-LABEL: set_tp:
 ; CHECK-LP64:       # %bb.0: # %entry
-; CHECK-LP64-NEXT:    addi sp, sp, -16
-; CHECK-LP64-NEXT:    sd tp, 8(sp) # 8-byte Folded Spill
 ; CHECK-LP64-NEXT:    mv tp, a0
-; CHECK-LP64-NEXT:    ld tp, 8(sp) # 8-byte Folded Reload
-; CHECK-LP64-NEXT:    addi sp, sp, 16
 ; CHECK-LP64-NEXT:    ret
 entry:
   tail call void @llvm.write_register.i64(metadata !0, i64 %value)
@@ -86,11 +82,7 @@ define void @set_ctp(i8 addrspace(200)* %value) local_unnamed_addr #2 {
 ;
 ; CHECK-LP64-LABEL: set_ctp:
 ; CHECK-LP64:       # %bb.0: # %entry
-; CHECK-LP64-NEXT:    addi sp, sp, -16
-; CHECK-LP64-NEXT:    sd tp, 8(sp) # 8-byte Folded Spill
 ; CHECK-LP64-NEXT:    cmove ctp, ca0
-; CHECK-LP64-NEXT:    ld tp, 8(sp) # 8-byte Folded Reload
-; CHECK-LP64-NEXT:    addi sp, sp, 16
 ; CHECK-LP64-NEXT:    ret
 entry:
   tail call void @llvm.write_register.p200i8(metadata !1, i8 addrspace(200)* %value)
@@ -168,11 +160,7 @@ define void @set_gp_addr(i64 %value) local_unnamed_addr #2 {
 ;
 ; CHECK-LP64-LABEL: set_gp_addr:
 ; CHECK-LP64:       # %bb.0: # %entry
-; CHECK-LP64-NEXT:    addi sp, sp, -16
-; CHECK-LP64-NEXT:    sd gp, 8(sp) # 8-byte Folded Spill
 ; CHECK-LP64-NEXT:    cincoffset cgp, cnull, a0
-; CHECK-LP64-NEXT:    ld gp, 8(sp) # 8-byte Folded Reload
-; CHECK-LP64-NEXT:    addi sp, sp, 16
 ; CHECK-LP64-NEXT:    ret
 entry:
   %0 = getelementptr i8, i8 addrspace(200)* null, i64 %value
