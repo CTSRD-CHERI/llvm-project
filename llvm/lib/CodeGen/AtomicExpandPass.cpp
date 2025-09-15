@@ -1894,6 +1894,10 @@ bool AtomicExpand::expandAtomicOpToLibcall(
   Value *PtrVal = PointerOperand;
   auto PtrTypeAS = PointerOperand->getType()->getPointerAddressSpace();
   auto PtrValAS = PointerOperandIsCap ? PtrTypeAS : DL.getAllocaAddrSpace();
+  // FIXME -- AMD gpu relies to casting to addrspace(0) even if allocAS is
+  // non-zero
+  if (!PointerOperandIsCap && PtrValAS != 0)
+    PtrValAS = 0;
   PtrVal = Builder.CreateAddrSpaceCast(PtrVal, PointerType::get(Ctx, PtrValAS));
   Args.push_back(PtrVal);
 
