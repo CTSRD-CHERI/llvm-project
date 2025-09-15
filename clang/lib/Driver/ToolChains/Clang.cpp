@@ -7387,16 +7387,16 @@ void Clang::ConstructJob(Compilation &C, const JobAction &JA,
   }
   for (const Arg *A : Args.filtered(options::OPT_mllvm)) {
     A->claim();
-    if (StringRef(A->getValue(0)).startswith("-cheri-cap-table")) {
+    if (StringRef(A->getValue(0)).starts_with("-cheri-cap-table")) {
       D.Diag(diag::err_drv_unsupported_opt_with_suggestion)
           << A->getAsString(Args) << StringRef(A->getValue(0));
     }
-    if (StringRef(A->getValue(0)).startswith("-mxcaptable")) {
+    if (StringRef(A->getValue(0)).starts_with("-mxcaptable")) {
       StringRef Replacement = StringRef(A->getValue(0)) == "-mxcaptable=false" ? "-no-mxcaptable" : "-mxcaptable";
       D.Diag(diag::err_drv_unsupported_opt_with_suggestion)
           << A->getAsString(Args) << Replacement;
     }
-    if (StringRef(A->getValue(0)).startswith("-cheri-cap-tls-abi")) {
+    if (StringRef(A->getValue(0)).starts_with("-cheri-cap-tls-abi")) {
       D.Diag(diag::err_drv_unsupported_opt_with_suggestion)
           << A->getAsString(Args) << StringRef(A->getValue(0));
     }

@@ -1967,7 +1967,7 @@ bool AtomicExpand::expandAtomicOpToLibcall(
   if (PointerOperandIsCap && !TLI->isCheriPureCap()) {
     // Add a _c suffix if the function uses capability pointer operands in
     // hybrid mode.
-    assert(StringRef(LibcallName).startswith("__atomic"));
+    assert(StringRef(LibcallName).starts_with("__atomic"));
     LibcallName += "_c";
   }
   FunctionCallee LibcallFn = M->getOrInsertFunction(LibcallName, FnType, Attr);

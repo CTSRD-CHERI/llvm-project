@@ -1059,7 +1059,7 @@ static bool upgradeIntrinsicFunction1(Function *F, Function *&NewFn) {
       NewFn = Intrinsic::getDeclaration(F->getParent(), Intrinsic::coro_end);
       return true;
     }
-    if (Name.startswith("cheri.cap.offset.increment") && F->arg_size() == 2) {
+    if (Name.starts_with("cheri.cap.offset.increment") && F->arg_size() == 2) {
       NewFn = nullptr;
       return true;
     }
@@ -4250,7 +4250,7 @@ void llvm::UpgradeIntrinsicCall(CallBase *CI, Function *NewFn) {
       }
     } else if (IsARM) {
       Rep = upgradeARMIntrinsicCall(Name, CI, F, Builder);
-    } else if (!IsX86 && Name.startswith("cheri.cap.offset.increment")) {
+    } else if (!IsX86 && Name.starts_with("cheri.cap.offset.increment")) {
       Rep = Builder.CreateGEP(Builder.getInt8Ty(), CI->getArgOperand(0),
                               CI->getArgOperand(1));
       Rep->takeName(CI);

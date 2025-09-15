@@ -984,10 +984,10 @@ Triple::Triple(const Twine &Str)
   // Compat to allow "mips64c128-clang" to be purecap clang
   // TODO: remove this
   if (Environment == UnknownEnvironment && Components.size() == 1 &&
-      Components[0].startswith("mips64c")) {
+      Components[0].starts_with("mips64c")) {
     // allow mips64c for purecap and mips64c128hybrid for CHERI128 (hybrid)
     // And remove the hybrid suffix from the string representation:
-    if (Components[0].endswith("hybrid")) {
+    if (Components[0].ends_with("hybrid")) {
       Components[0].consume_back("hybrid");
       setArchName(Components[0]);
       setEnvironment(Triple::GNUABI64);

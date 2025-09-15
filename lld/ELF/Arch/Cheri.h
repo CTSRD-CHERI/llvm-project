@@ -287,8 +287,8 @@ inline bool isSectionEndSymbol(StringRef name) {
   // Section end symbols like __preinit_array_end, etc. should actually be
   // zero size symbol since they are just markers for the end of a section
   // and not usable as a valid pointer
-  return name.startswith("__stop_") ||
-         (name.startswith("__") && name.endswith("_end")) || name == "end" ||
+  return name.starts_with("__stop_") ||
+         (name.starts_with("__") && name.ends_with("_end")) || name == "end" ||
          name == "_end" || name == "etext" || name == "_etext" ||
          name == "edata" || name == "_edata";
 }
@@ -297,8 +297,8 @@ inline bool isSectionStartSymbol(StringRef name) {
   // Section end symbols like __preinit_array_start, might end up pointing to
   // .text (see commments in Writer.cpp) if they are emtpy to avoid relocation
   // overflow. In that case returning a size of 0 is fine too.
-  return name.startswith("__start_") ||
-         (name.startswith("__") && name.endswith("_start")) ||
+  return name.starts_with("__start_") ||
+         (name.starts_with("__") && name.ends_with("_start")) ||
          name == "_DYNAMIC";
 }
 

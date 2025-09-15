@@ -6822,13 +6822,13 @@ int MipsAsmParser::matchCheriRegisterName(StringRef Name,
 
 int MipsAsmParser::matchCheriHWRegsRegisterName(StringRef Name) {
   LLVM_DEBUG(dbgs() << "matchCheriHWRegsRegisterName(" << Name << ")\n");
-  if (!Name.startswith("chwr_"))
+  if (!Name.starts_with("chwr_"))
     return -1;
 
   int Result = -1;
   for (int Reg = Mips::CAPHWR0; Reg <= Mips::CAPHWR31; Reg++) {
     StringRef RegName = MipsInstPrinter::getRegisterName(Reg);
-    if (RegName.startswith("chwr_") && Name == RegName) {
+    if (RegName.starts_with("chwr_") && Name == RegName) {
       Result = Reg - Mips::CAPHWR0;
       LLVM_DEBUG(dbgs() << "-> CheriHWReg " << Result << ")\n");
       break;
@@ -7256,7 +7256,7 @@ ParseStatus MipsAsmParser::matchAnyRegisterNameWithoutDollar(
   Index = matchCheriRegisterName(Identifier, Operands);
   if (Index != -1) {
     if (Index == -2)
-      return MatchOperand_ParseFail;
+      return ParseStatus::Failure;
     Operands.push_back(MipsOperand::CreateCheriReg(
         Index, Identifier, getContext().getRegisterInfo(), S, getLexer().getLoc(), *this));
     return ParseStatus::Success;

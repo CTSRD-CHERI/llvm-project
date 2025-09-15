@@ -86,7 +86,7 @@ SymbolAndOffset::fromSectionWithOffset(InputSectionBase *isec, int64_t offset,
     // worst case we fall back to the section + offset
     // Don't warn if the relocation is against an anonymous string constant
     // since clang won't emit a symbol (and no size) for those
-    if (!isec->name.startswith(".rodata.str"))
+    if (!isec->name.starts_with(".rodata.str"))
       nonFatalWarning("Could not find a real symbol for " + isec->name +
            "+0x" + utohexstr(offset) + " in " + toString(isec->file));
     // Could not find a symbol -> return section+offset
@@ -258,7 +258,7 @@ static uint64_t getTargetSize(const CheriCapRelocLocation &location,
     if (Defined *definedSym =
       dyn_cast<Defined>(targetSym)) {
       if (definedSym->isSection() &&
-          definedSym->section->name.startswith(".rodata.str")) {
+          definedSym->section->name.starts_with(".rodata.str")) {
         warnAboutUnknownSize = false;
       }
     }
