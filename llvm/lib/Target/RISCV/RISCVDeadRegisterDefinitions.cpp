@@ -51,6 +51,10 @@ bool RISCVDeadRegisterDefinitions::runOnMachineFunction(MachineFunction &MF) {
   if (skipFunction(MF.getFunction()))
     return false;
 
+  // FIXME - enable this for CHERI
+  if (MF.getDataLayout().hasCheriCapabilities())
+    return false;
+
   const MachineRegisterInfo *MRI = &MF.getRegInfo();
   const TargetInstrInfo *TII = MF.getSubtarget().getInstrInfo();
   const TargetRegisterInfo *TRI = MF.getSubtarget().getRegisterInfo();
