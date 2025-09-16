@@ -380,7 +380,7 @@ def : InstAlias<"addi $cd, $cs1, $imm",
                 (CIncOffsetImm GPCR:$cd, GPCR:$cs1, simm12:$imm), 0>;
 def : InstAlias<"add $cd, $cs1, $imm",
                 (CIncOffsetImm GPCR:$cd, GPCR:$cs1, simm12:$imm), 0>;
-def CSetCapPoison       : Cheri_r<0x18, "csetcappoison", GPCR>;
+def CSetCapPermPoison       : Cheri_r<0x18, "csetcappermpoison", GPCR>;
 
 def CSetBounds      : Cheri_rr<0x8, "csetbounds">;
 def : InstAlias<"scbndsr $cd, $cs1, $rs2",
@@ -549,9 +549,11 @@ let DecoderNamespace = "RISCV32Only_",
     Predicates = [HasCheri, IsRV32] in
 def SC_DDC_64  : CheriStore_r<0b00011, "sc.ddc", GPCR, GPRMemZeroOffset>;
 
-let Predicates = [HasCheri, IsRV64] in
+let Predicates = [HasCheri, IsRV64] in {
 def SC_DDC_128 : CheriStore_r<0b00100, "sc.ddc", GPCR, GPRMemZeroOffset>;
-
+def CPOISON : CheriStoreCond_r<0b11101, "cpoison", GPCR, GPCRMemZeroOffset>;
+def CCLEARPOISON : CheriStoreCond_r<0b11110, "cclearpoison", GPCR, GPCRMemZeroOffset>;
+}
 let Predicates = [HasCheri] in {
 def LB_CAP  : CheriLoad_r<0b01000, "lb.cap",  GPR, GPCRMemZeroOffset>;
 def LH_CAP  : CheriLoad_r<0b01001, "lh.cap",  GPR, GPCRMemZeroOffset>;
@@ -563,6 +565,8 @@ def LHU_CAP : CheriLoad_r<0b01101, "lhu.cap", GPR, GPCRMemZeroOffset>;
 let Predicates = [HasCheri, IsRV64] in {
 def LWU_CAP : CheriLoad_r<0b01110, "lwu.cap", GPR, GPCRMemZeroOffset>;
 def LD_CAP  : CheriLoad_r<0b01011, "ld.cap",  GPR, GPCRMemZeroOffset>;
+def CGETPOISON  : CheriLoad_r<0b01111, "cgetpoison",  GPR, GPCRMemZeroOffset>;
+
 }
 
 let DecoderNamespace = "RISCV32Only_",
@@ -653,9 +657,6 @@ def SC_C_CAP_64  : CheriStoreCond_r<0b11011, "sc.c.cap", GPCR, GPCRMemZeroOffset
 let Predicates = [HasCheri, HasStdExtA, IsRV64] in
 def SC_C_CAP_128 : CheriStoreCond_r<0b11100, "sc.c.cap", GPCR, GPCRMemZeroOffset>;
 
-let Predicates = [HasCheri, HasStdExtA, IsRV64] in
-def CPOISON : CheriStoreCond_r<0b11101, "cpoison", GPCR, GPCRMemZeroOffset>;
-def CCLEARPOISON : CheriStoreCond_r<0b11110, "cclearpoison", GPCR, GPCRMemZeroOffset>;
 //===----------------------------------------------------------------------===//
 // Memory-Access Instructions
 //===----------------------------------------------------------------------===//
