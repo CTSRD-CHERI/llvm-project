@@ -8,15 +8,13 @@
 // TODO - Remove once all references have been updated.
 #include <cheri_init_globals.h>
 
-#define ELF64_R_TYPE(INFO) ((INFO) & 0xFFFFFFFF)
-#define ELF32_R_TYPE(INFO) ((INFO) & 0xFF)
+// Add local definitions of the ELF structures to avoid dependencies.
 #if __CHERI_ADDRESS_BITS__ == 32
-#define R_TYPE ELF32_R_TYPE
+#define CIG_R_TYPE(INFO) ((INFO) & 0xFF)
 #else
-#define R_TYPE ELF64_R_TYPE
+#define CIG_R_TYPE(INFO) ((INFO) & 0xFFFFFFFF)
 #endif
-
-struct ELFRela {
+struct CIG_ELF_Rela {
   __SIZE_TYPE__ offset;
   __SIZE_TYPE__ info;
   __SIZE_TYPE__ addend;
@@ -27,13 +25,14 @@ struct ELFRela {
 #define R_RISCV_CHERI_RELATIVE 202
 #endif
 
-static __attribute__((always_inline)) void cheri_init_globals_cbuildcap_impl(
-    const struct ELFRela *start_rela, const struct ELFRela *stop_rela,
+static __attribute__((always_inline, unused)) void
+cheri_init_globals_cbuildcap_impl(
+    const struct CIG_ELF_Rela *start_rela, const struct CIG_ELF_Rela *stop_rela,
     void *__capability data_cap, const void *__capability code_cap,
     const void *__capability rodata_cap, bool tight_code_bounds,
     __SIZE_TYPE__ base_addr, bool init_with_cbld) {
-  for (const struct ELFRela *rela = start_rela; rela < stop_rela; rela++) {
-    if (R_TYPE(rela->info) != R_RISCV_CHERI_RELATIVE)
+  for (const struct CIG_ELF_Rela *rela = start_rela; rela < stop_rela; rela++) {
+    if (CIG_R_TYPE(rela->info) != R_RISCV_CHERI_RELATIVE)
       continue;
     const void *__capability *__capability dest =
         (const void *__capability *__capability)__builtin_cheri_address_set(
@@ -84,12 +83,12 @@ static __attribute__((always_inline)) void cheri_init_globals_cbuildcap_impl(
   }
 }
 
-static __attribute__((always_inline)) void
+static __attribute__((always_inline, unused)) void
 cheri_init_globals_cbuildcap(void *__capability data_cap,
                              const void *__capability code_cap,
                              const void *__capability rodata_cap) {
-  const struct ELFRela *start_relocs;
-  const struct ELFRela *stop_relocs;
+  const struct CIG_ELF_Rela *start_relocs;
+  const struct CIG_ELF_Rela *stop_relocs;
   __SIZE_TYPE__ start_addr, stop_addr;
 #if !defined(__CHERI_PURE_CAPABILITY__)
   __asm__(
@@ -118,8 +117,8 @@ cheri_init_globals_cbuildcap(void *__capability data_cap,
     return;
 
 #if !defined(__CHERI_PURE_CAPABILITY__)
-  start_relocs = (const struct ELFRela *)(__UINTPTR_TYPE__)start_addr;
-  stop_relocs = (const struct ELFRela *)(__UINTPTR_TYPE__)stop_addr;
+  start_relocs = (const struct CIG_ELF_Rela *)(__UINTPTR_TYPE__)start_addr;
+  stop_relocs = (const struct CIG_ELF_Rela *)(__UINTPTR_TYPE__)stop_addr;
 #else
   __SIZE_TYPE__ relocs_size = stop_addr - start_addr;
   /*
@@ -127,7 +126,7 @@ cheri_init_globals_cbuildcap(void *__capability data_cap,
    * rodata and rw data, too so we can access __cap_relocs, no matter where it
    * was placed.
    */
-  start_relocs = (const struct ELFRela *)__builtin_cheri_address_set(
+  start_relocs = (const struct CIG_ELF_Rela *)__builtin_cheri_address_set(
       __builtin_cheri_program_counter_get(), start_addr);
   start_relocs = __builtin_cheri_bounds_set(start_relocs, relocs_size);
   /*
@@ -136,8 +135,8 @@ cheri_init_globals_cbuildcap(void *__capability data_cap,
    * TODO: use csetboundsexact and teach the linker to align __cap_relocs.
    */
   stop_relocs =
-      (const struct ELFRela *)(const void *)((const char *)start_relocs +
-                                              relocs_size);
+      (const struct CIG_ELF_Rela *)(const void *)((const char *)start_relocs +
+                                                  relocs_size);
 #endif
 
 #if !defined(__CHERI_PURE_CAPABILITY__) || __CHERI_CAPABILITY_TABLE__ == 3
