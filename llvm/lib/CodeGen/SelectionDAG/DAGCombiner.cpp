@@ -2668,8 +2668,9 @@ SDValue DAGCombiner::visitPTRADD(SDNode *N) {
   //   * x is a null pointer; or
   //   * the add can be constant-folded; or
   //   * the add can be combined and z is not a constant; or
-  //   * y is a constant and z has one use; or
-  //   * y is a constant and (ptradd x, y) has one use; or
+  //   * y is a constant and z has one use and z is not a constant; or
+  //   * y is a constant and (ptradd x, y) has one use and z is not a
+  //     constant; or
   //   * (ptradd x, y) and z have one use and z is not a constant.
   //
   // Some of these overly-restrictive conditions are to not obfuscate CAndAddr
@@ -2678,12 +2679,15 @@ SDValue DAGCombiner::visitPTRADD(SDNode *N) {
   // and canonicalise it to a PTRMASK.
   //
   // Commute: (ptradd (ptradd x, y), z) -> (ptradd (ptradd x, z), y) if:
-  //   * y and z have the same sign and y is a constant.
+  //   * y and z have the same sign and only y is a constant.
   //
   // This allows immediate addressing modes to be used. Note that we need to be
   // careful to ensure we don't transiently become unrepresentable if the
   // original DAG does not already do so, and this is the case if both PTRADDs
   // have the same sign.
+  //
+  // Note we must be careful to handle the case that both are
+  // constants, as opaque constants will not be constant-folded.
   if (N0.getOpcode() == ISD::PTRADD &&
       !reassociationCanBreakAddressingModePattern(ISD::PTRADD, DL, N, N0, N1)) {
     SDValue X = N0.getOperand(0);
@@ -2706,15 +2710,18 @@ SDValue DAGCombiner::visitPTRADD(SDNode *N) {
     }
     LLVM_DEBUG(dbgs() << "visitPTRADD() add operand:"; Add.dump(&DAG));
     assert(Add->getOpcode() != ISD::DELETED_NODE && "Deleted Node used");
-    if (isNullConstant(X) ||
-        DAG.isConstantIntBuildVectorOrConstantInt(Add) ||
-        (VisitedAdd && !DAG.isConstantIntBuildVectorOrConstantInt(Z)) ||
-        (DAG.isConstantIntBuildVectorOrConstantInt(Y) && Z.hasOneUse()) ||
-        (DAG.isConstantIntBuildVectorOrConstantInt(Y) && N0.hasOneUse()) ||
-        (N0.hasOneUse() && Z.hasOneUse() &&
-         !DAG.isConstantIntBuildVectorOrConstantInt(Z)))
+    bool IsZConst = DAG.isConstantIntBuildVectorOrConstantInt(Z);
+    if (isNullConstant(X) || DAG.isConstantIntBuildVectorOrConstantInt(Add) ||
+        (VisitedAdd && !IsZConst) ||
+        (DAG.isConstantIntBuildVectorOrConstantInt(Y) && Z.hasOneUse() &&
+         !IsZConst) ||
+        (DAG.isConstantIntBuildVectorOrConstantInt(Y) && N0.hasOneUse() &&
+         !IsZConst) ||
+        (N0.hasOneUse() && Z.hasOneUse() && !IsZConst))
       return DAG.getPointerAdd(DL, X, Add);
-    if (DAG.SignBitIsSame(Y, Z) && DAG.isConstantIntBuildVectorOrConstantInt(Y))
+    if (DAG.SignBitIsSame(Y, Z) &&
+        DAG.isConstantIntBuildVectorOrConstantInt(Y) &&
+        !DAG.isConstantIntBuildVectorOrConstantInt(Z))
       return GetPTRADD2(X, Z, Y);
   }
 
@@ -2722,7 +2729,8 @@ SDValue DAGCombiner::visitPTRADD(SDNode *N) {
   //   * both y and z have the same sign and z is a constant.
   //
   // Transform: (ptradd x, (add y, z)) -> (ptradd (ptradd x, z), y) if:
-  //   * both y and z have the same sign and y is a constant.
+  //   * both y and z have the same sign and y is a constant (and
+  //     implicitly not z due to the previous transform).
   //
   // As above, this allows for immediate addressing modes.
   if (N1.getOpcode() == ISD::ADD) {
@@ -2730,10 +2738,10 @@ SDValue DAGCombiner::visitPTRADD(SDNode *N) {
     SDValue Y = N1.getOperand(0);
     SDValue Z = N1.getOperand(1);
     if (DAG.SignBitIsSame(Y, Z)) {
-      if (DAG.isConstantIntBuildVectorOrConstantInt(Y))
-        return GetPTRADD2(X, Z, Y);
       if (DAG.isConstantIntBuildVectorOrConstantInt(Z))
         return GetPTRADD2(X, Y, Z);
+      if (DAG.isConstantIntBuildVectorOrConstantInt(Y))
+        return GetPTRADD2(X, Z, Y);
     }
   }
 
