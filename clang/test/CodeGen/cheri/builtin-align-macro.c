@@ -146,14 +146,14 @@ int *align_up_macro(int *ptr, ptraddr_t align) {
 // PURECAP-LABEL: define {{[^@]+}}@align_up_builtin
 // PURECAP-SAME: (ptr addrspace(200) noundef readnone [[PTR:%.*]], i64 noundef signext [[ALIGN:%.*]]) local_unnamed_addr addrspace(200) #[[ATTR2:[0-9]+]] {
 // PURECAP-NEXT:  entry:
-// PURECAP-NEXT:    [[TMP0:%.*]] = getelementptr i8, ptr addrspace(200) [[PTR]], i64 [[ALIGN]]
-// PURECAP-NEXT:    [[OVER_BOUNDARY:%.*]] = getelementptr i8, ptr addrspace(200) [[TMP0]], i64 -1
+// PURECAP-NEXT:    [[MASK:%.*]] = add i64 [[ALIGN]], -1
+// PURECAP-NEXT:    [[OVER_BOUNDARY:%.*]] = getelementptr inbounds i8, ptr addrspace(200) [[PTR]], i64 [[MASK]]
 // PURECAP-NEXT:    [[INVERTED_MASK:%.*]] = sub i64 0, [[ALIGN]]
 // PURECAP-NEXT:    [[ALIGNED_RESULT:%.*]] = tail call ptr addrspace(200) @llvm.ptrmask.p200.i64(ptr addrspace(200) [[OVER_BOUNDARY]], i64 [[INVERTED_MASK]])
 // PURECAP-NEXT:    ret ptr addrspace(200) [[ALIGNED_RESULT]]
 //
 // HYBRID-LABEL: define {{[^@]+}}@align_up_builtin
-// HYBRID-SAME: (ptr noundef readnone [[PTR:%.*]], i64 noundef signext [[ALIGN:%.*]]) local_unnamed_addr #[[ATTR1:[0-9]+]] {
+// HYBRID-SAME: (ptr noundef readnone [[PTR:%.*]], i64 noundef signext [[ALIGN:%.*]]) local_unnamed_addr #[[ATTR0]] {
 // HYBRID-NEXT:  entry:
 // HYBRID-NEXT:    [[TMP0:%.*]] = getelementptr i8, ptr [[PTR]], i64 [[ALIGN]]
 // HYBRID-NEXT:    [[OVER_BOUNDARY:%.*]] = getelementptr i8, ptr [[TMP0]], i64 -1
@@ -166,7 +166,7 @@ int *align_up_builtin(int *ptr, ptraddr_t align) {
 }
 
 // PURECAP-LABEL: define {{[^@]+}}@align_up_macro_int_type
-// PURECAP-SAME: (i64 noundef signext [[ADDR:%.*]], i64 noundef signext [[ALIGN:%.*]]) local_unnamed_addr addrspace(200) #[[ATTR5:[0-9]+]] {
+// PURECAP-SAME: (i64 noundef signext [[ADDR:%.*]], i64 noundef signext [[ALIGN:%.*]]) local_unnamed_addr addrspace(200) #[[ATTR2]] {
 // PURECAP-NEXT:  entry:
 // PURECAP-NEXT:    [[SUB:%.*]] = add nsw i64 [[ALIGN]], -1
 // PURECAP-NEXT:    [[AND:%.*]] = and i64 [[SUB]], [[ADDR]]
@@ -192,7 +192,7 @@ ptraddr_t align_up_macro_int_type(ptraddr_t addr, ptraddr_t align) {
 }
 
 // PURECAP-LABEL: define {{[^@]+}}@align_up_builtin_int_type
-// PURECAP-SAME: (i64 noundef signext [[ADDR:%.*]], i64 noundef signext [[ALIGN:%.*]]) local_unnamed_addr addrspace(200) #[[ATTR5]] {
+// PURECAP-SAME: (i64 noundef signext [[ADDR:%.*]], i64 noundef signext [[ALIGN:%.*]]) local_unnamed_addr addrspace(200) #[[ATTR2]] {
 // PURECAP-NEXT:  entry:
 // PURECAP-NEXT:    [[MASK:%.*]] = add i64 [[ADDR]], -1
 // PURECAP-NEXT:    [[OVER_BOUNDARY:%.*]] = add i64 [[MASK]], [[ALIGN]]
@@ -214,7 +214,7 @@ ptraddr_t align_up_builtin_int_type(ptraddr_t addr, ptraddr_t align) {
 }
 
 // PURECAP-LABEL: define {{[^@]+}}@align_up_macro_const
-// PURECAP-SAME: () local_unnamed_addr addrspace(200) #[[ATTR5]] {
+// PURECAP-SAME: () local_unnamed_addr addrspace(200) #[[ATTR2]] {
 // PURECAP-NEXT:  entry:
 // PURECAP-NEXT:    ret i32 64
 //
@@ -228,7 +228,7 @@ int align_up_macro_const() {
 }
 
 // PURECAP-LABEL: define {{[^@]+}}@align_up_builtin_const
-// PURECAP-SAME: () local_unnamed_addr addrspace(200) #[[ATTR5]] {
+// PURECAP-SAME: () local_unnamed_addr addrspace(200) #[[ATTR2]] {
 // PURECAP-NEXT:  entry:
 // PURECAP-NEXT:    ret i32 64
 //
@@ -279,7 +279,7 @@ int *align_down_macro(int *ptr, ptraddr_t align) {
 // PURECAP-NEXT:    ret ptr addrspace(200) [[ALIGNED_RESULT]]
 //
 // HYBRID-LABEL: define {{[^@]+}}@align_down_builtin
-// HYBRID-SAME: (ptr noundef readnone [[PTR:%.*]], i64 noundef signext [[ALIGN:%.*]]) local_unnamed_addr #[[ATTR1]] {
+// HYBRID-SAME: (ptr noundef readnone [[PTR:%.*]], i64 noundef signext [[ALIGN:%.*]]) local_unnamed_addr #[[ATTR0]] {
 // HYBRID-NEXT:  entry:
 // HYBRID-NEXT:    [[INVERTED_MASK:%.*]] = sub i64 0, [[ALIGN]]
 // HYBRID-NEXT:    [[ALIGNED_RESULT:%.*]] = tail call ptr @llvm.ptrmask.p0.i64(ptr [[PTR]], i64 [[INVERTED_MASK]])
@@ -290,7 +290,7 @@ int *align_down_builtin(int *ptr, ptraddr_t align) {
 }
 
 // PURECAP-LABEL: define {{[^@]+}}@align_down_macro_int_type
-// PURECAP-SAME: (i64 noundef signext [[ADDR:%.*]], i64 noundef signext [[ALIGN:%.*]]) local_unnamed_addr addrspace(200) #[[ATTR5]] {
+// PURECAP-SAME: (i64 noundef signext [[ADDR:%.*]], i64 noundef signext [[ALIGN:%.*]]) local_unnamed_addr addrspace(200) #[[ATTR2]] {
 // PURECAP-NEXT:  entry:
 // PURECAP-NEXT:    [[SUB_NOT:%.*]] = sub i64 0, [[ALIGN]]
 // PURECAP-NEXT:    [[SUB1:%.*]] = and i64 [[SUB_NOT]], [[ADDR]]
@@ -308,7 +308,7 @@ ptraddr_t align_down_macro_int_type(ptraddr_t addr, ptraddr_t align) {
 }
 
 // PURECAP-LABEL: define {{[^@]+}}@align_down_builtin_int_type
-// PURECAP-SAME: (i64 noundef signext [[ADDR:%.*]], i64 noundef signext [[ALIGN:%.*]]) local_unnamed_addr addrspace(200) #[[ATTR5]] {
+// PURECAP-SAME: (i64 noundef signext [[ADDR:%.*]], i64 noundef signext [[ALIGN:%.*]]) local_unnamed_addr addrspace(200) #[[ATTR2]] {
 // PURECAP-NEXT:  entry:
 // PURECAP-NEXT:    [[INVERTED_MASK:%.*]] = sub i64 0, [[ALIGN]]
 // PURECAP-NEXT:    [[ALIGNED_RESULT:%.*]] = and i64 [[INVERTED_MASK]], [[ADDR]]
@@ -326,7 +326,7 @@ ptraddr_t align_down_builtin_int_type(ptraddr_t addr, ptraddr_t align) {
 }
 
 // PURECAP-LABEL: define {{[^@]+}}@align_down_macro_const
-// PURECAP-SAME: () local_unnamed_addr addrspace(200) #[[ATTR5]] {
+// PURECAP-SAME: () local_unnamed_addr addrspace(200) #[[ATTR2]] {
 // PURECAP-NEXT:  entry:
 // PURECAP-NEXT:    ret i32 64
 //
@@ -340,7 +340,7 @@ int align_down_macro_const() {
 }
 
 // PURECAP-LABEL: define {{[^@]+}}@align_down_builtin_const
-// PURECAP-SAME: () local_unnamed_addr addrspace(200) #[[ATTR5]] {
+// PURECAP-SAME: () local_unnamed_addr addrspace(200) #[[ATTR2]] {
 // PURECAP-NEXT:  entry:
 // PURECAP-NEXT:    ret i32 64
 //
