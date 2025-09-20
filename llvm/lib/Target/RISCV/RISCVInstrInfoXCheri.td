@@ -587,6 +587,9 @@ def SC_CAP_64  : CheriStore_r<0b01011, "sc.cap", GPCR, GPCRMemZeroOffset>;
 let Predicates = [HasCheri, IsRV64] in
 def SC_CAP_128 : CheriStore_r<0b01100, "sc.cap", GPCR, GPCRMemZeroOffset>;
 
+let Predicates = [HasCheri, IsRV64] in
+def DataCache_Zero : CheriStore_r<0b01101, "dczero", GPCR, GPCRMemZeroOffset>;
+
 let Predicates = [HasCheri, HasStdExtA] in {
 def LR_B_DDC  : CheriLoad_r<0b10000, "lr.b.ddc",  GPR, GPRMemZeroOffset>;
 def LR_H_DDC  : CheriLoad_r<0b10001, "lr.h.ddc",  GPR, GPRMemZeroOffset>;
