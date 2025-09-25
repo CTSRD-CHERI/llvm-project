@@ -15,11 +15,14 @@ extern "C" char* test1(char* c, int b) {
 
 // Found while compiling libnv
 // CHECK-LABEL: define {{[^@]+}}@test2
-// CHECK-SAME: (ptr addrspace(200) noundef readnone [[VALUE:%.*]]) local_unnamed_addr addrspace(200) #[[ATTR0]] {
+// CHECK-SAME: (ptr addrspace(200) noundef [[VALUE:%.*]]) local_unnamed_addr addrspace(200) #[[ATTR2:[0-9]+]] {
 // CHECK-NEXT:  entry:
-// CHECK-NEXT:    [[OVER_BOUNDARY:%.*]] = getelementptr inbounds i8, ptr addrspace(200) [[VALUE]], i64 3
-// CHECK-NEXT:    [[ALIGNED_RESULT:%.*]] = tail call align 4 ptr addrspace(200) @llvm.ptrmask.p200.i64(ptr addrspace(200) nonnull [[OVER_BOUNDARY]], i64 -4)
-// CHECK-NEXT:    ret ptr addrspace(200) [[ALIGNED_RESULT]]
+// CHECK-NEXT:    [[PTRADDR:%.*]] = tail call i64 @llvm.cheri.cap.address.get.i64(ptr addrspace(200) [[VALUE]])
+// CHECK-NEXT:    [[OVER_BOUNDARY:%.*]] = add i64 [[PTRADDR]], 3
+// CHECK-NEXT:    [[ALIGNED_RESULT:%.*]] = and i64 [[OVER_BOUNDARY]], -4
+// CHECK-NEXT:    [[ALIGNED_CAP:%.*]] = tail call ptr addrspace(200) @llvm.cheri.cap.address.set.i64(ptr addrspace(200) [[VALUE]], i64 [[ALIGNED_RESULT]])
+// CHECK-NEXT:    call void @llvm.assume(i1 true) [ "align"(ptr addrspace(200) [[ALIGNED_CAP]], i64 4) ]
+// CHECK-NEXT:    ret ptr addrspace(200) [[ALIGNED_CAP]]
 //
 extern "C" __uintcap_t test2(__uintcap_t value) {
   // There should be two casts from capability to address (one for size, one for

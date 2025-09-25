@@ -27,21 +27,26 @@ _Bool is_aligned(void *ptr, long align) {
 }
 
 // CHECK-LABEL: define {{[^@]+}}@align_up
-// CHECK-SAME: (ptr addrspace(200) noundef readnone [[PTR:%.*]], i64 noundef signext [[ALIGN:%.*]]) local_unnamed_addr addrspace(200) #[[ATTR2:[0-9]+]] {
+// CHECK-SAME: (ptr addrspace(200) noundef [[PTR:%.*]], i64 noundef signext [[ALIGN:%.*]]) local_unnamed_addr addrspace(200) #[[ATTR2:[0-9]+]] {
 // CHECK-NEXT:  entry:
 // CHECK-NEXT:    [[MASK:%.*]] = add i64 [[ALIGN]], -1
-// CHECK-NEXT:    [[OVER_BOUNDARY:%.*]] = getelementptr inbounds i8, ptr addrspace(200) [[PTR]], i64 [[MASK]]
+// CHECK-NEXT:    [[PTRADDR:%.*]] = tail call i64 @llvm.cheri.cap.address.get.i64(ptr addrspace(200) [[PTR]])
+// CHECK-NEXT:    [[OVER_BOUNDARY:%.*]] = add i64 [[MASK]], [[PTRADDR]]
 // CHECK-NEXT:    [[INVERTED_MASK:%.*]] = sub i64 0, [[ALIGN]]
-// CHECK-NEXT:    [[ALIGNED_RESULT:%.*]] = tail call ptr addrspace(200) @llvm.ptrmask.p200.i64(ptr addrspace(200) [[OVER_BOUNDARY]], i64 [[INVERTED_MASK]])
-// CHECK-NEXT:    ret ptr addrspace(200) [[ALIGNED_RESULT]]
+// CHECK-NEXT:    [[ALIGNED_RESULT:%.*]] = and i64 [[OVER_BOUNDARY]], [[INVERTED_MASK]]
+// CHECK-NEXT:    [[ALIGNED_CAP:%.*]] = tail call ptr addrspace(200) @llvm.cheri.cap.address.set.i64(ptr addrspace(200) [[PTR]], i64 [[ALIGNED_RESULT]])
+// CHECK-NEXT:    call void @llvm.assume(i1 true) [ "align"(ptr addrspace(200) [[ALIGNED_CAP]], i64 [[ALIGN]]) ]
+// CHECK-NEXT:    ret ptr addrspace(200) [[ALIGNED_CAP]]
 //
 void* align_up(void *ptr, long align) {
   // ASM-LABEL: align_up:
-  // PURECAP-ASM:      daddiu $1, $4, -1
-  // PURECAP-ASM-NEXT: cincoffset $c1, $c3, $1
-  // PURECAP-ASM-NEXT: dnegu $1, $4
-  // PURECAP-ASM-NEXT: cjr	$c17
-  // PURECAP-ASM-NEXT: candaddr $c3, $c1, $1
+  // PURECAP-ASM:      cgetaddr $1, $c3
+  // PURECAP-ASM-NEXT: daddu $1, $4, $1
+  // PURECAP-ASM-NEXT: daddiu $1, $1, -1
+  // PURECAP-ASM-NEXT: dnegu $2, $4
+  // PURECAP-ASM-NEXT: and $1, $1, $2
+  // PURECAP-ASM-NEXT: cjr $c17
+  // PURECAP-ASM-NEXT: csetaddr $c3, $c3, $1
   //
   // MIPS-ASM:      daddu	$1, $4, $5
   // MIPS-ASM-NEXT: daddiu	$1, $1, -1
@@ -52,7 +57,7 @@ void* align_up(void *ptr, long align) {
 }
 
 // CHECK-LABEL: define {{[^@]+}}@align_down
-// CHECK-SAME: (ptr addrspace(200) noundef readnone [[PTR:%.*]], i64 noundef signext [[ALIGN:%.*]]) local_unnamed_addr addrspace(200) #[[ATTR2]] {
+// CHECK-SAME: (ptr addrspace(200) noundef readnone [[PTR:%.*]], i64 noundef signext [[ALIGN:%.*]]) local_unnamed_addr addrspace(200) #[[ATTR4:[0-9]+]] {
 // CHECK-NEXT:  entry:
 // CHECK-NEXT:    [[INVERTED_MASK:%.*]] = sub i64 0, [[ALIGN]]
 // CHECK-NEXT:    [[ALIGNED_RESULT:%.*]] = tail call ptr addrspace(200) @llvm.ptrmask.p200.i64(ptr addrspace(200) [[PTR]], i64 [[INVERTED_MASK]])

@@ -20499,12 +20499,18 @@ RValue CodeGenFunction::EmitBuiltinIsAligned(const CallExpr *E) {
 RValue CodeGenFunction::EmitBuiltinAlignTo(const CallExpr *E, bool AlignUp) {
   BuiltinAlignArgs Args(E, *this);
   llvm::Value *SrcForMask = Args.Src;
+  const DataLayout &DL = CGM.getDataLayout();
+  const bool SrcIsCap = DL.isFatPointer(Args.SrcType);
   if (AlignUp) {
     // When aligning up we have to first add the mask to ensure we go over the
     // next alignment value and then align down to the next valid multiple.
     // By adding the mask, we ensure that align_up on an already aligned
     // value will not change the value.
-    if (Args.Src->getType()->isPointerTy()) {
+    // CHERI: It may not be valid to icrement a capability as it might go
+    // out-of-bounds and strip away the tag. When aligning a capability we
+    // instead have to perform it as an arithmetic calculation on the address
+    // and update the capability address.
+    if (Args.Src->getType()->isPointerTy() && !SrcIsCap) {
       if (getLangOpts().isSignedOverflowDefined())
         SrcForMask =
             Builder.CreateGEP(Int8Ty, SrcForMask, Args.Mask, "over_boundary");
@@ -20514,18 +20520,26 @@ RValue CodeGenFunction::EmitBuiltinAlignTo(const CallExpr *E, bool AlignUp) {
                                             /*isSubtraction=*/false,
                                             E->getExprLoc(), "over_boundary");
     } else {
+      if (SrcIsCap)
+        SrcForMask = getPtrAddr(Args, *this);
       SrcForMask = Builder.CreateAdd(SrcForMask, Args.Mask, "over_boundary");
     }
   }
   // Invert the mask to only clear the lower bits.
   llvm::Value *InvertedMask = Builder.CreateNot(Args.Mask, "inverted_mask");
   llvm::Value *Result = nullptr;
-  if (Args.Src->getType()->isPointerTy()) {
+  if (Args.Src->getType()->isPointerTy() && !(SrcIsCap && AlignUp)) {
     Result = Builder.CreateIntrinsic(
         Intrinsic::ptrmask, {Args.SrcType, Args.IntType},
         {SrcForMask, InvertedMask}, nullptr, "aligned_result");
   } else {
     Result = Builder.CreateAnd(SrcForMask, InvertedMask, "aligned_result");
+    if (SrcIsCap) {
+      Result = Builder.CreateIntrinsic(Intrinsic::cheri_cap_address_set,
+                                       {Result->getType()}, {Args.Src, Result},
+                                       nullptr, "aligned_cap");
+      emitAlignmentAssumption(Result, E, E->getExprLoc(), Args.Alignment);
+    }
   }
   assert(Result->getType() == Args.SrcType);
   return RValue::get(Result);

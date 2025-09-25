@@ -9,9 +9,12 @@ extern int test_ptr(char *c);
 // PURECAP-NEXT:  entry:
 // PURECAP-NEXT:    [[BUF:%.*]] = alloca [1024 x i8], align 1, addrspace(200)
 // PURECAP-NEXT:    [[ARRAYDECAY:%.*]] = getelementptr inbounds [1024 x i8], ptr addrspace(200) [[BUF]], i64 0, i64 0
-// PURECAP-NEXT:    [[OVER_BOUNDARY:%.*]] = getelementptr inbounds i8, ptr addrspace(200) [[ARRAYDECAY]], i64 15
-// PURECAP-NEXT:    [[ALIGNED_RESULT:%.*]] = call ptr addrspace(200) @llvm.ptrmask.p200.i64(ptr addrspace(200) [[OVER_BOUNDARY]], i64 -16)
-// PURECAP-NEXT:    [[CALL:%.*]] = call signext i32 @test_ptr(ptr addrspace(200) noundef [[ALIGNED_RESULT]])
+// PURECAP-NEXT:    [[PTRADDR:%.*]] = call i64 @llvm.cheri.cap.address.get.i64(ptr addrspace(200) [[ARRAYDECAY]])
+// PURECAP-NEXT:    [[OVER_BOUNDARY:%.*]] = add i64 [[PTRADDR]], 15
+// PURECAP-NEXT:    [[ALIGNED_RESULT:%.*]] = and i64 [[OVER_BOUNDARY]], -16
+// PURECAP-NEXT:    [[ALIGNED_CAP:%.*]] = call ptr addrspace(200) @llvm.cheri.cap.address.set.i64(ptr addrspace(200) [[ARRAYDECAY]], i64 [[ALIGNED_RESULT]])
+// PURECAP-NEXT:    call void @llvm.assume(i1 true) [ "align"(ptr addrspace(200) [[ALIGNED_CAP]], i64 16) ]
+// PURECAP-NEXT:    [[CALL:%.*]] = call signext i32 @test_ptr(ptr addrspace(200) noundef [[ALIGNED_CAP]])
 // PURECAP-NEXT:    ret i32 [[CALL]]
 //
 // N64-LABEL: define {{[^@]+}}@test_array
