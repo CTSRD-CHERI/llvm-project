@@ -346,6 +346,8 @@ def CGetFlags  : Cheri_r<0x7, "cgetflags">;
 // NB: No alias for gcmode->cgetflags since the result is inverted.
 def CGetHigh   : Cheri_r<0x17, "cgethigh">;
 def : MnemonicAlias<"gchi", "cgethigh">;
+def CGetPoison : Cheri_r<0x19, "cgetpoison">;
+def : MnemonicAlias<"gcpoison", "cgetpoison">;
 // For backwards compatibility we still accept cgetaddr from assembly.
 let mayStore = false, mayLoad = false, Size = 4, isCodeGenOnly = false,
 hasSideEffects = false in
@@ -563,8 +565,6 @@ def LHU_CAP : CheriLoad_r<0b01101, "lhu.cap", GPR, GPCRMemZeroOffset>;
 let Predicates = [HasCheri, IsRV64] in {
 def LWU_CAP : CheriLoad_r<0b01110, "lwu.cap", GPR, GPCRMemZeroOffset>;
 def LD_CAP  : CheriLoad_r<0b01011, "ld.cap",  GPR, GPCRMemZeroOffset>;
-def CGETPOISON  : CheriLoad_r<0b01111, "cgetpoison",  GPR, GPCRMemZeroOffset>;
-
 }
 
 let DecoderNamespace = "RISCV32Only_",
@@ -1269,6 +1269,7 @@ def : PatGpcr<int_cheri_cap_type_get, CGetType>;
 def : PatGpcr<int_cheri_cap_base_get, CGetBase>;
 def : PatGpcr<int_cheri_cap_length_get, CGetLen>;
 def : PatGpcr<riscv_cap_tag_get, CGetTag>;
+def : PatGpcr<riscv_cap_tag_get, CGetPoison>;
 def : PatGpcr<riscv_cap_sealed_get, CGetSealed>;
 def : PatGpcr<int_cheri_cap_offset_get, CGetOffset>;
 def : PatGpcr<int_cheri_cap_flags_get, CGetFlags>;
