@@ -551,8 +551,6 @@ def SC_DDC_64  : CheriStore_r<0b00011, "sc.ddc", GPCR, GPRMemZeroOffset>;
 
 let Predicates = [HasCheri, IsRV64] in {
 def SC_DDC_128 : CheriStore_r<0b00100, "sc.ddc", GPCR, GPRMemZeroOffset>;
-def CPOISON : CheriStoreCond_r<0b11101, "cpoison", GPCR, GPCRMemZeroOffset>;
-def CCLEARPOISON : CheriStoreCond_r<0b11110, "cclearpoison", GPCR, GPCRMemZeroOffset>;
 }
 let Predicates = [HasCheri] in {
 def LB_CAP  : CheriLoad_r<0b01000, "lb.cap",  GPR, GPCRMemZeroOffset>;
@@ -592,6 +590,8 @@ def SC_CAP_64  : CheriStore_r<0b01011, "sc.cap", GPCR, GPCRMemZeroOffset>;
 
 let Predicates = [HasCheri, IsRV64] in
 def SC_CAP_128 : CheriStore_r<0b01100, "sc.cap", GPCR, GPCRMemZeroOffset>;
+def CCLEARPOISON : CheriStore_r<0b01101, "cclearpoison", GPCR, GPCRMemZeroOffset>;
+def CPOISON : CheriStore_r<0b01110, "cpoison", GPCR, GPCRMemZeroOffset>;
 
 let Predicates = [HasCheri, HasStdExtA] in {
 def LR_B_DDC  : CheriLoad_r<0b10000, "lr.b.ddc",  GPR, GPRMemZeroOffset>;
