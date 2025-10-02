@@ -139,6 +139,8 @@ public:
     if (symCompart == &c)
       return true;
 
+    bool matchedAnySubject = false;
+
     // The default compartment matches the empty string.  Unnamed symbols only
     // match the glob pattern "*".
     for (const auto &rule : rules) {
@@ -147,6 +149,7 @@ public:
         if (!rule.subject.match(c.isDefault() ? "" : c.name))
           continue;
       }
+      matchedAnySubject = true;
 
       // Check the objects.
       StringRef symName = sym.getName();
@@ -180,7 +183,10 @@ public:
       if (p(rule.permissions))
         return true;
     }
-    return false;
+    if (matchedAnySubject)
+      return false;
+    else
+      return true;
   }
 
   template <class Pred>
@@ -189,6 +195,8 @@ public:
     if (&target == &c)
       return true;
 
+    bool matchedAnySubject = false;
+
     // The default compartment only matches the glob pattern "*".
     for (const auto &rule : rules) {
       // Check the subject.
@@ -196,6 +204,7 @@ public:
         if (c.isDefault() || !rule.subject.match(c.name))
           continue;
       }
+      matchedAnySubject = true;
 
       // Check the objects.
       bool matches = false;
@@ -215,7 +224,10 @@ public:
       if (p(rule.permissions))
         return true;
     }
-    return false;
+    if (matchedAnySubject)
+      return false;
+    else
+      return true;
   }
 
 private:
