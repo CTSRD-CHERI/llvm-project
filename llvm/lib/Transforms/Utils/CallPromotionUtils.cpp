@@ -587,7 +587,7 @@ bool llvm::tryPromoteCall(CallBase &CB) {
   BasicBlock::iterator BBI(VTablePtrLoad);
   Value *VTablePtr = FindAvailableLoadedValue(
       VTablePtrLoad, VTablePtrLoad->getParent(), BBI, 0, nullptr, nullptr);
-  if (!VTablePtr)
+  if (!VTablePtr || !VTablePtr->getType()->isPointerTy())
     return false; // No vtable found.
   APInt VTableOffsetGVBase(DL.getPointerAddrSizeInBits(VTablePtr->getType()),
                            0);
