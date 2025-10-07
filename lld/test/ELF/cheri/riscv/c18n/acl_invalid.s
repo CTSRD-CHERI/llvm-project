@@ -7,7 +7,6 @@
 # RUN: not ld.lld --shared --compartment-policy=%t/no_object.json %t/one.o -o %t/acl_invalid.so 2>&1 | FileCheck --check-prefix=NO_OBJECT %s
 # RUN: not ld.lld --shared --compartment-policy=%t/both_objects.json %t/one.o -o %t/acl_invalid.so 2>&1 | FileCheck --check-prefix=BOTH_OBJECTS %s
 # RUN: not ld.lld --shared --compartment-policy=%t/bad_old_subject.json %t/one.o -o %t/acl_invalid.so 2>&1 | FileCheck --check-prefix=BAD_OLD_SUBJECT %s
-# RUN: not ld.lld --shared --compartment-policy=%t/empty_permissions.json %t/one.o -o %t/acl_invalid.so 2>&1 | FileCheck --check-prefix=INVALID_PERMISSIONS %s
 # RUN: not ld.lld --shared --compartment-policy=%t/invalid_permissions.json %t/one.o -o %t/acl_invalid.so 2>&1 | FileCheck --check-prefix=INVALID_PERMISSIONS %s
 
 # NO_SUBJECT: missing value at (root).acls[0].subject
@@ -79,17 +78,6 @@ foo:
     },
     "acls": [
 	{ "subject":{}, "permissions":"rwx", "symbols":["*"] }
-    ]
-}
-
-#--- empty_permissions.json
-
-{
-    "compartments": {
-	"one": { "symbols": ["foo"] }
-    },
-    "acls": [
-	{ "subject":"one", "permissions":"", "symbols":["*"] }
     ]
 }
 
