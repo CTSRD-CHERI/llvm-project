@@ -403,11 +403,6 @@ static bool parsePermissions(const json::Value *E, CompartmentPermissions &Out,
   if (!fromJSON(*E, perms, P))
     return false;
 
-  if (perms.empty()) {
-    P.report("invalid permissions");
-    return false;
-  }
-
   for (char c : perms) {
     switch (c) {
     case 'r':
