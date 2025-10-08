@@ -239,6 +239,8 @@ bool ICF<ELFT>::constantEq(const InputSection *secA, ArrayRef<RelTy> ra,
                            const InputSection *secB, ArrayRef<RelTy> rb) {
   if (ra.size() != rb.size())
     return false;
+  const Compartment &ca = secA->getCompartment();
+  const Compartment &cb = secB->getCompartment();
   for (size_t i = 0; i < ra.size(); ++i) {
     if (ra[i].r_offset != rb[i].r_offset ||
         ra[i].getType(config->isMips64EL) != rb[i].getType(config->isMips64EL))
@@ -247,8 +249,8 @@ bool ICF<ELFT>::constantEq(const InputSection *secA, ArrayRef<RelTy> ra,
     uint64_t addA = getAddend<ELFT>(ra[i]);
     uint64_t addB = getAddend<ELFT>(rb[i]);
 
-    Symbol &sa = secA->template getFile<ELFT>()->getRelocTargetSym(ra[i]);
-    Symbol &sb = secB->template getFile<ELFT>()->getRelocTargetSym(rb[i]);
+    Symbol &sa = secA->template getFile<ELFT>()->getRelocTargetSym(ca, ra[i]);
+    Symbol &sb = secB->template getFile<ELFT>()->getRelocTargetSym(cb, rb[i]);
     if (&sa == &sb) {
       if (addA == addB)
         continue;
@@ -336,10 +338,12 @@ bool ICF<ELFT>::variableEq(const InputSection *secA, ArrayRef<RelTy> ra,
                            const InputSection *secB, ArrayRef<RelTy> rb) {
   assert(ra.size() == rb.size());
 
+  const Compartment &ca = secA->getCompartment();
+  const Compartment &cb = secB->getCompartment();
   for (size_t i = 0; i < ra.size(); ++i) {
     // The two sections must be identical.
-    Symbol &sa = secA->template getFile<ELFT>()->getRelocTargetSym(ra[i]);
-    Symbol &sb = secB->template getFile<ELFT>()->getRelocTargetSym(rb[i]);
+    Symbol &sa = secA->template getFile<ELFT>()->getRelocTargetSym(ca, ra[i]);
+    Symbol &sb = secB->template getFile<ELFT>()->getRelocTargetSym(cb, rb[i]);
     if (&sa == &sb)
       continue;
 
@@ -441,8 +445,9 @@ template <class ELFT, class RelTy>
 static void combineRelocHashes(unsigned cnt, InputSection *isec,
                                ArrayRef<RelTy> rels) {
   uint32_t hash = isec->eqClass[cnt % 2];
+  const Compartment &c = isec->getCompartment();
   for (RelTy rel : rels) {
-    Symbol &s = isec->template getFile<ELFT>()->getRelocTargetSym(rel);
+    Symbol &s = isec->template getFile<ELFT>()->getRelocTargetSym(c, rel);
     if (auto *d = dyn_cast<Defined>(&s))
       if (auto *relSec = dyn_cast_or_null<InputSection>(d->section))
         hash += relSec->eqClass[cnt % 2];

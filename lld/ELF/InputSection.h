@@ -19,6 +19,7 @@
 #include "llvm/ADT/TinyPtrVector.h"
 #include "llvm/Object/ELF.h"
 #include "llvm/Support/Compiler.h"
+#include <unordered_map>
 
 namespace lld {
 namespace elf {
@@ -295,6 +296,10 @@ public:
                     StringRef name);
   MergeInputSection(uint64_t flags, uint32_t type, uint64_t entsize,
                     ArrayRef<uint8_t> data, StringRef name);
+  MergeInputSection(const Compartment &c, const MergeInputSection &other);
+
+  MergeInputSection *clone(const Compartment &c);
+  Symbol &getCompartmentSymbol(const Compartment &c, Symbol &other);
 
   static bool classof(const SectionBase *s) { return s->kind() == Merge; }
   void splitIntoPieces();
@@ -328,6 +333,15 @@ public:
   }
 
 private:
+  // Each compartment contains its own copy of each merge section.
+  SmallVector<MergeInputSection *, 0> clones;
+
+  // Clones contain private symbols that are clones of symbols for the original
+  // section.
+  std::unordered_map<Symbol *, Defined *> symMap;
+
+  void cloneSymbols(const MergeInputSection *other);
+
   void splitStrings(StringRef s, size_t size);
   void splitNonStrings(ArrayRef<uint8_t> a, size_t size);
 };

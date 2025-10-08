@@ -374,12 +374,13 @@ template <class ELFT, class RelTy>
 void InputSection::copyRelocations(uint8_t *buf, ArrayRef<RelTy> rels) {
   const TargetInfo &target = *elf::target;
   InputSectionBase *sec = getRelocatedSection();
+  const Compartment &c = getCompartment();
   (void)sec->contentMaybeDecompress(); // uncompress if needed
 
   for (const RelTy &rel : rels) {
     RelType type = rel.getType(config->isMips64EL);
     const ObjFile<ELFT> *file = getFile<ELFT>();
-    Symbol &sym = file->getRelocTargetSym(rel);
+    Symbol &sym = file->getRelocTargetSym(c, rel);
 
     auto *p = reinterpret_cast<typename ELFT::Rela *>(buf);
     buf += sizeof(RelTy);
@@ -970,6 +971,7 @@ void InputSection::relocateNonAlloc(uint8_t *buf, ArrayRef<RelTy> rels) {
       break;
     }
 
+  const Compartment &c = getCompartment();
   for (const RelTy &rel : rels) {
     RelType type = rel.getType(config->isMips64EL);
 
@@ -986,7 +988,7 @@ void InputSection::relocateNonAlloc(uint8_t *buf, ArrayRef<RelTy> rels) {
     if (!RelTy::IsRela)
       addend += target.getImplicitAddend(bufLoc, type);
 
-    Symbol &sym = getFile<ELFT>()->getRelocTargetSym(rel);
+    Symbol &sym = getFile<ELFT>()->getRelocTargetSym(c, rel);
     RelExpr expr = target.getRelExpr(type, sym, bufLoc);
     if (expr == R_NONE)
       continue;
@@ -1406,6 +1408,62 @@ MergeInputSection::MergeInputSection(uint64_t flags, uint32_t type,
     : InputSectionBase(nullptr, flags, type, entsize, /*Link*/ 0, /*Info*/ 0,
                        /*Alignment*/ entsize, data, name, SectionBase::Merge) {}
 
+MergeInputSection::MergeInputSection(const Compartment &c,
+                                     const MergeInputSection &other)
+    : InputSectionBase(other) {
+  name = saver().save(other.name + c.suffix);
+  compartment = c.getNumber();
+}
+
+MergeInputSection *MergeInputSection::clone(const Compartment &c) {
+  MergeInputSection *copy = make<MergeInputSection>(c, *this);
+  if (file)
+    copy->cloneSymbols(this);
+
+  if (clones.size() == 0)
+    clones.resize(compartments.size());
+  assert(clones[copy->compartment] == nullptr);
+  clones[copy->compartment] = copy;
+  return copy;
+}
+
+void MergeInputSection::cloneSymbols(const MergeInputSection *other) {
+  const Compartment &c = getCompartment();
+  assert(!c.isDefault());
+  for (Symbol *b : file->getSymbols()) {
+    if (Defined *d = dyn_cast<Defined>(b)) {
+      if (d->section != other)
+        continue;
+
+      StringRef newName;
+      if (!d->getName().empty())
+        newName = saver().save(d->getName() + c.suffix);
+
+      Defined *newSym =
+          makeDefined(file, newName, (uint8_t)d->binding, d->stOther,
+                      (uint8_t)d->type, d->value, d->getSize(), this);
+      ctx.compartSymbols.push_back(newSym);
+      symMap.emplace(b, newSym);
+    }
+  }
+}
+
+Symbol &MergeInputSection::getCompartmentSymbol(const Compartment &c,
+                                                Symbol &other) {
+  if (c.isDefault() || clones.size() == 0)
+    return other;
+
+  Defined *d = dyn_cast<Defined>(&other);
+  assert(d != nullptr);
+  assert(d->section == this);
+
+  assert(c.getNumber() < clones.size() && clones[c.getNumber()] != nullptr);
+  MergeInputSection *ms = clones[c.getNumber()];
+
+  assert(ms->symMap.count(&other) != 0);
+  return *ms->symMap[&other];
+}
+
 // This function is called after we obtain a complete list of input sections
 // that need to be linked. This is responsible to split section contents
 // into small chunks for further processing.
@@ -1419,6 +1477,10 @@ void MergeInputSection::splitIntoPieces() {
     splitStrings(toStringRef(contentMaybeDecompress()), entsize);
   else
     splitNonStrings(contentMaybeDecompress(), entsize);
+
+  for (MergeInputSection *ms : clones)
+    if (ms)
+      ms->splitIntoPieces();
 }
 
 SectionPiece &MergeInputSection::getSectionPiece(uint64_t offset) {

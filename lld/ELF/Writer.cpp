@@ -694,10 +694,10 @@ template <class ELFT> void Writer<ELFT>::run() {
 }
 
 template <class ELFT, class RelTy>
-static void markUsedLocalSymbolsImpl(ObjFile<ELFT> *file,
+static void markUsedLocalSymbolsImpl(const Compartment &c, ObjFile<ELFT> *file,
                                      llvm::ArrayRef<RelTy> rels) {
   for (const RelTy &rel : rels) {
-    Symbol &sym = file->getRelocTargetSym(rel);
+    Symbol &sym = file->getRelocTargetSym(c, rel);
     if (sym.isLocal())
       sym.used = true;
   }
@@ -716,10 +716,13 @@ template <class ELFT> static void markUsedLocalSymbols() {
       InputSection *isec = dyn_cast_or_null<InputSection>(s);
       if (!isec)
         continue;
-      if (isec->type == SHT_REL)
-        markUsedLocalSymbolsImpl(f, isec->getDataAs<typename ELFT::Rel>());
-      else if (isec->type == SHT_RELA)
-        markUsedLocalSymbolsImpl(f, isec->getDataAs<typename ELFT::Rela>());
+      if (isec->type == SHT_REL) {
+        const Compartment &c = f->getRelocTargetCompartment(isec);
+        markUsedLocalSymbolsImpl(c, f, isec->getDataAs<typename ELFT::Rel>());
+      } else if (isec->type == SHT_RELA) {
+        const Compartment &c = f->getRelocTargetCompartment(isec);
+        markUsedLocalSymbolsImpl(c, f, isec->getDataAs<typename ELFT::Rela>());
+      }
     }
   }
 }

@@ -955,6 +955,22 @@ template <class ELFT> static uint32_t readAndFeatures(const InputSection &sec) {
 }
 
 template <class ELFT>
+const Compartment &
+ObjFile<ELFT>::getRelocTargetCompartment(InputSectionBase *isec) {
+  assert(isec->type == SHT_REL || isec->type == SHT_RELA);
+
+  uint32_t idx = isec->info;
+  assert(idx < this->sections.size());
+
+  InputSectionBase *target = this->sections[idx];
+
+  if (target == &InputSection::discarded || target == nullptr)
+    return *defaultCompart;
+
+  return target->getCompartment();
+}
+
+template <class ELFT>
 InputSectionBase *ObjFile<ELFT>::getRelocTarget(uint32_t idx,
                                                 const Elf_Shdr &sec,
                                                 uint32_t info) {

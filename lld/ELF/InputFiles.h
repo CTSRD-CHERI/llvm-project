@@ -254,10 +254,13 @@ public:
 
   uint32_t getSectionIndex(const Elf_Sym &sym) const;
 
-  template <typename RelT> Symbol &getRelocTargetSym(const RelT &rel) const {
+  template <typename RelT>
+  Symbol &getRelocTargetSym(const Compartment &c, const RelT &rel) const {
     uint32_t symIndex = rel.getSymbol(config->isMips64EL);
-    return getSymbol(symIndex);
+    return getCompartmentSymbol(c, getSymbol(symIndex));
   }
+
+  const Compartment &getRelocTargetCompartment(InputSectionBase *isec);
 
   std::optional<llvm::DILineInfo> getDILineInfo(const InputSectionBase *, uint64_t);
   std::optional<std::pair<std::string, unsigned>>
