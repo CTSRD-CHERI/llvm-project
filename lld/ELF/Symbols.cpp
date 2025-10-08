@@ -657,6 +657,16 @@ bool Symbol::shouldReplace(const Defined &other) const {
   return !isGlobal() && other.isGlobal();
 }
 
+Symbol &elf::getCompartmentSymbol(const Compartment &c, Symbol &other) {
+  if (Defined *d = dyn_cast<Defined>(&other)) {
+    if (d->section && MergeInputSection::classof(d->section)) {
+      MergeInputSection *ms = cast<MergeInputSection>(d->section);
+      return ms->getCompartmentSymbol(c, other);
+    }
+  }
+  return other;
+}
+
 void elf::reportDuplicate(const Symbol &sym, const InputFile *newFile,
                           InputSectionBase *errSec, uint64_t errOffset) {
   if (config->allowMultipleDefinition)

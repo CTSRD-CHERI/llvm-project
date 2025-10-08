@@ -2331,11 +2331,12 @@ template <typename ELFT>
 static void readSymbolPartitionSection(InputSectionBase *s) {
   // Read the relocation that refers to the partition's entry point symbol.
   Symbol *sym;
+  const Compartment &c = s->getCompartment();
   const RelsOrRelas<ELFT> rels = s->template relsOrRelas<ELFT>();
   if (rels.areRelocsRel())
-    sym = &s->getFile<ELFT>()->getRelocTargetSym(rels.rels[0]);
+    sym = &s->getFile<ELFT>()->getRelocTargetSym(c, rels.rels[0]);
   else
-    sym = &s->getFile<ELFT>()->getRelocTargetSym(rels.relas[0]);
+    sym = &s->getFile<ELFT>()->getRelocTargetSym(c, rels.relas[0]);
   if (!isa<Defined>(sym) || !sym->includeInDynsym())
     return;
 
@@ -3020,6 +3021,9 @@ void LinkerDriver::link(opt::InputArgList &args) {
   if (!config->relocatable)
     ctx.inputSections.push_back(createCommentSection());
 
+  // Assign input sections to compartments.
+  assignSectionsToCompartments();
+
   // Split SHF_MERGE and .eh_frame sections into pieces in preparation for garbage collection.
   invokeELFT(splitSections,);
 
@@ -3030,9 +3034,6 @@ void LinkerDriver::link(opt::InputArgList &args) {
   // Make copies of any input sections that need to be copied into each
   // partition.
   copySectionsIntoPartitions();
-
-  // Assign input sections to compartments.
-  assignSectionsToCompartments();
 
   // Create synthesized sections such as .got and .plt. This is called before
   // processSectionCommands() so that they can be placed by SECTIONS commands.

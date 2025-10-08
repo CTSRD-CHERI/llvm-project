@@ -1564,9 +1564,8 @@ static unsigned handleTlsRelocation(RelType type, Symbol &sym,
 
 template <class ELFT, class RelTy> void RelocationScanner::scanOne(RelTy *&i) {
   const RelTy &rel = *i;
-  uint32_t symIndex = rel.getSymbol(config->isMips64EL);
-  Symbol &sym = sec->getFile<ELFT>()->getSymbol(symIndex);
   Compartment &c = sec->getCompartment();
+  Symbol &sym = sec->getFile<ELFT>()->getRelocTargetSym(c, rel);
   RelType type;
   if (config->mipsN32Abi) {
     type = getMipsN32RelType(i);
@@ -1595,6 +1594,7 @@ template <class ELFT, class RelTy> void RelocationScanner::scanOne(RelTy *&i) {
 
   // Error if the target symbol is undefined. Symbol index 0 may be used by
   // marker relocations, e.g. R_*_NONE and R_ARM_V4BX. Don't error on them.
+  uint32_t symIndex = rel.getSymbol(config->isMips64EL);
   if (sym.isUndefined() && symIndex != 0 &&
       maybeReportUndefined(cast<Undefined>(sym), *sec, offset))
     return;
@@ -2037,6 +2037,10 @@ void elf::postScanRelocations() {
     for (Symbol *sym : file->getLocalSymbols())
       for (Compartment &c : compartments)
         fn(c, *sym);
+
+  for (Symbol *sym : ctx.compartSymbols)
+    for (Compartment &c : compartments)
+      fn(c, *sym);
 }
 
 static bool mergeCmp(const InputSection *a, const InputSection *b) {

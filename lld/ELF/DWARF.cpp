@@ -16,6 +16,7 @@
 #include "DWARF.h"
 #include "InputSection.h"
 #include "Symbols.h"
+#include "SyntheticSections.h"
 #include "lld/Common/Memory.h"
 #include "llvm/DebugInfo/DWARF/DWARFDebugPubTable.h"
 #include "llvm/Object/ELFObjectFile.h"
@@ -119,7 +120,7 @@ LLDDwarfObj<ELFT>::findAux(const InputSectionBase &sec, uint64_t pos,
   // shall still resolve it. This is important for --gdb-index: the end address
   // offset of an entry in .debug_ranges is relocated. If it is not resolved,
   // its zero value will terminate the decoding of .debug_ranges prematurely.
-  Symbol &s = file->getRelocTargetSym(rel);
+  Symbol &s = file->getRelocTargetSym(sec.getCompartment(), rel);
   uint64_t val = 0;
   if (auto *dr = dyn_cast<Defined>(&s))
     val = dr->value;

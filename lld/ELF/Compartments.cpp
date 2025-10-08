@@ -380,8 +380,9 @@ static void checkDefaultCompartment() {
 template <class ELFT, class RelTy>
 static void scanRelocations(InputSectionBase *sec, ArrayRef<RelTy> rels,
                             SectionDepends &depends) {
+  const Compartment &c = sec->getCompartment();
   for (const auto &rel : rels) {
-    Symbol &sym = sec->getFile<ELFT>()->getRelocTargetSym(rel);
+    Symbol &sym = sec->getFile<ELFT>()->getRelocTargetSym(c, rel);
     if (sym.isUndefined())
       continue;
 
@@ -422,6 +423,26 @@ static void scanRelocations(InputSectionBase *sec, SectionDepends &depends) {
     scanRelocations<ELFT>(sec, rels.rels, depends);
   else
     scanRelocations<ELFT>(sec, rels.relas, depends);
+}
+
+static void duplicateSectionsForCompartments() {
+  SmallVector<InputSectionBase *, 0> newSections;
+  for (InputSectionBase *s : ctx.inputSections) {
+    if (!canCompartmentalize(s) || s->compartment != 0 ||
+        !MergeInputSection::classof(s) || firstExportedSymbol(s) != nullptr) {
+      continue;
+    }
+
+    MergeInputSection *ms = cast<MergeInputSection>(s);
+    for (Compartment &c : compartments) {
+      if (c.isDefault())
+        continue;
+      newSections.push_back(ms->clone(c));
+    }
+  }
+
+  ctx.inputSections.insert(ctx.inputSections.end(), newSections.begin(),
+                           newSections.end());
 }
 
 void assignSectionsToCompartments() {
@@ -514,7 +535,10 @@ void assignSectionsToCompartments() {
   if (!valid)
     exitLld(1);
 
-  // Third, build table of input section dependencies and add initial sets to
+  // Third, Duplicate SHF_MERGE sections not yet assigned to a compartment.
+  duplicateSectionsForCompartments();
+
+  // Fourth, build table of input section dependencies and add initial sets to
   // DSU used in fifth step.
   SectionDepends depends;
   SectionDSU dsu;
@@ -529,7 +553,7 @@ void assignSectionsToCompartments() {
     dsu.makeSet(s);
   }
 
-  // Fourth, for purecap CHERI, look for "hard" dependencies where an
+  // Fifth, for purecap CHERI, look for "hard" dependencies where an
   // input section is required to be contained within the PCC bounds
   // of another compartmentalized section.  These dependencies should
   // always be from .text sections against some other section.  This
@@ -630,7 +654,7 @@ void assignSectionsToCompartments() {
     }
   }
 
-  // Fifth, look for compartmentalizable sections not yet assigned to a
+  // Sixth, look for compartmentalizable sections not yet assigned to a
   // compartment that can be compartmentalized.  Start by using a disjoint set
   // union pattern to build sets of related input sections.  Note that edges
   // between sections that are already compartmentalized are ignored.  The goal
