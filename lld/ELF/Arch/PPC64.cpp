@@ -329,9 +329,10 @@ getRelaTocSymAndAddend(InputSectionBase *tocSec, uint64_t offset) {
   if (relas.empty())
     return {};
   uint64_t index = std::min<uint64_t>(offset / 8, relas.size() - 1);
+  const Compartment &c = tocSec->getCompartment();
   for (;;) {
     if (relas[index].r_offset == offset) {
-      Symbol &sym = tocSec->getFile<ELFT>()->getRelocTargetSym(relas[index]);
+      Symbol &sym = tocSec->getFile<ELFT>()->getRelocTargetSym(c, relas[index]);
       return {dyn_cast<Defined>(&sym), getAddend<ELFT>(relas[index])};
     }
     if (relas[index].r_offset < offset || index == 0)
