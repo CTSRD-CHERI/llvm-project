@@ -664,6 +664,7 @@ template <typename... T> Defined *makeDefined(T &&...args) {
   return &s;
 }
 
+Symbol &getCompartmentSymbol(const Compartment &c, Symbol &other);
 void reportDuplicate(const Symbol &sym, const InputFile *newFile,
                      InputSectionBase *errSec, uint64_t errOffset);
 void maybeWarnUnorderableSymbol(const Symbol *sym);
