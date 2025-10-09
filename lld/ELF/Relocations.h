@@ -233,6 +233,8 @@ static inline int64_t getAddend(const typename ELFT::Rela &rel) {
 
 std::string getLocationMessage(const InputSectionBase &s, const Symbol &sym,
                                uint64_t off);
+std::string getReferenceMessage(const InputSectionBase &s, const Symbol &sym,
+                                uint64_t off);
 
 
 template <typename RelTy>

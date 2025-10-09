@@ -83,6 +83,15 @@ static std::string getDefinedLocation(const Symbol &sym) {
   return "";
 }
 
+std::string elf::getReferenceMessage(const InputSectionBase &s,
+                                     const Symbol &sym, uint64_t off) {
+  std::string msg = "\n>>> referenced by ";
+  std::string src = s.getSrcMsg(sym, off);
+  if (!src.empty())
+    msg += src + "\n>>>               ";
+  return msg + s.getObjMsg(off);
+}
+
 // Construct a message in the following format.
 //
 // >>> defined in /home/alice/src/foo.o
@@ -90,11 +99,7 @@ static std::string getDefinedLocation(const Symbol &sym) {
 // >>>               /home/alice/src/bar.o:(.text+0x1)
 static std::string getLocation(const InputSectionBase &s, const Symbol &sym,
                                uint64_t off) {
-  std::string msg = getDefinedLocation(sym) + "\n>>> referenced by ";
-  std::string src = s.getSrcMsg(sym, off);
-  if (!src.empty())
-    msg += src + "\n>>>               ";
-  return msg + s.getObjMsg(off);
+  return getDefinedLocation(sym) + getReferenceMessage(s, sym, off);
 }
 
 std::string elf::getLocationMessage(const InputSectionBase &s,
