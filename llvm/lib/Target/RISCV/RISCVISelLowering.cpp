@@ -15683,8 +15683,6 @@ static SDValue unpackFromMemLoc(SelectionDAG &DAG, SDValue Chain,
                                 EVT PtrVT, SDValue ArgRegArgs) {
   MachineFunction &MF = DAG.getMachineFunction();
   MachineFrameInfo &MFI = MF.getFrameInfo();
-  const RISCVSubtarget &STI = MF.getSubtarget<RISCVSubtarget>();
-  const bool IsPureCapABI = RISCVABI::isCheriPureCapABI(STI.getTargetABI());
   const bool UseBoundedMemArgsCallee = ArgRegArgs != SDValue();
 
   EVT LocVT = VA.getLocVT();
