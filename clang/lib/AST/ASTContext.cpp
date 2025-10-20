@@ -11367,6 +11367,8 @@ QualType ASTContext::getCorrespondingSignedType(QualType T) const {
     return LongTy;
   case BuiltinType::ULongLong:
     return LongLongTy;
+  case BuiltinType::UIntCap:
+    return IntCapTy;
   case BuiltinType::UInt128:
     return Int128Ty;
   // wchar_t is special. It is either unsigned or not, but when it's unsigned,
