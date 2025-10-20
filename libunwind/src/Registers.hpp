@@ -3662,8 +3662,10 @@ private:
     __uintcap_t __c[33];
   };
   mips_cheri_thread_state_t _registers;
+#if defined(_LIBUNWIND_IS_NATIVE_ONLY)
   static_assert(__builtin_offsetof(mips_cheri_thread_state_t, __c) ==
                 _LIBUNWIND_CAPREG_START * sizeof(uint64_t), "Wrong offset for capregs");
+#endif
 };
 
 inline Registers_mips_cheri::Registers_mips_cheri(const void *registers) {
