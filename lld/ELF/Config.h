@@ -425,6 +425,8 @@ struct Config {
   // True if we are creating a pure-capability CheriABI output.
   bool isCheriAbi = false;
 
+  // True if riscv 'y' extension is enabled.
+  bool isRVY = false;
   // Mode of MTE to write to the ELF note. Should be one of NT_MEMTAG_ASYNC (for
   // async), NT_MEMTAG_SYNC (for sync), or NT_MEMTAG_LEVEL_NONE (for none). If
   // async or sync is enabled, write the ELF note specifying the default MTE

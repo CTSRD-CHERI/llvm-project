@@ -149,6 +149,8 @@ public:
   getAsIntImmediate(const MachineOperand &Op,
                     const MachineRegisterInfo &MRI) const override;
 
+  bool expandPostRAPseudo(MachineInstr &MI) const override;
+
   std::optional<DestSourcePair>
   isCopyInstrImpl(const MachineInstr &MI) const override;
 
