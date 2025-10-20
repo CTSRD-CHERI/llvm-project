@@ -2206,8 +2206,6 @@ inline const char *Registers_arm64::getRegisterName(int regNum) {
     return "clr";
   case UNW_ARM64_C31:
     return "csp";
-  case UNW_ARM64_ECSP:
-    return "ecsp";
   default:
     return "unknown register";
   }
@@ -4554,10 +4552,19 @@ public:
   void        setSP(reg_t value) { _registers[2] = value; }
   reg_t       getIP() const { return _registers[0]; }
   void        setIP(reg_t value) { _registers[0] = value; }
+#ifdef __CHERI_PURE_CAPABILITY__
+  reg_t       getTrustedStack() const { return _registers[32]; }
+  void        setTrustedStack(reg_t value) { _registers[32] = value; }
+#endif
 
 private:
   // _registers[0] holds the pc
+#ifdef __CHERI_PURE_CAPABILITY__
+  // _registers[32] holds the trusted stack pointer
+  reg_t _registers[33];
+#else
   reg_t _registers[32];
+#endif
 # if defined(__riscv_flen)
   fp_t _floats[32];
 # endif
@@ -4568,8 +4575,8 @@ inline Registers_riscv::Registers_riscv(const void *registers) {
                 "riscv registers do not fit into unw_context_t");
   memcpy(&_registers, registers, sizeof(_registers));
 # ifdef __CHERI_PURE_CAPABILITY__
-  static_assert(sizeof(_registers) == 0x200,
-                "expected float registers to be at offset 512");
+  static_assert(sizeof(_registers) == 0x210,
+                "expected float registers to be at offset 528");
 # elif __riscv_xlen == 32
   static_assert(sizeof(_registers) == 0x80,
                 "expected float registers to be at offset 128");
