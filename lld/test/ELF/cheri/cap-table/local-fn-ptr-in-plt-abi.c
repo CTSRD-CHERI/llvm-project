@@ -14,7 +14,7 @@
 // Build a shared library that uses the function pointer:
 // RUN: ld.lld -shared %t-shlib.o -o %t-shlib.so
 // RUN: llvm-objdump --syms %t-shlib.so | FileCheck %s --check-prefix SHLIB-DUMP
-// SHLIB-DUMP: 0000000000010380 g     F .text		 000000{{[0-9a-f]+}} use_callback
+// SHLIB-DUMP: 0000000000010400 g     F .text		 000000{{[0-9a-f]+}} use_callback
 
 // Check that we emit a R_CHERI_CAPABILITY relocation instead of __cap_relocs for shlib/pie/dynamically linked exe
 // RUN: ld.lld -shared %t.o %t-shlib.so -o %t.so  --verbose-cap-relocs 2>&1 | FileCheck %s -check-prefixes VERBOSE-MSG
@@ -117,9 +117,9 @@
 // STATIC-NEXT:  DynamicSymbols [
 // STATIC-NEXT:  ]
 // STATIC-NEXT:  CHERI __cap_relocs [
-// STATIC-NEXT:     0x0303c0 (return1@CAPTABLE.0) Base: 0x20368 (return1+0) Length: 12 Perms: Function
-// STATIC-NEXT:     0x0303d0 (use_callback@CAPTABLE) Base: 0x20380 (use_callback+0) Length: {{[0-9]+}} Perms: Function
-// STATIC-NEXT:     0x0303e0 (global_return2@CAPTABLE) Base: 0x202f0 (global_return2+0) Length: 12 Perms: Function
+// STATIC-NEXT:     0x0304d0 (return1@CAPTABLE.0) Base: 0x20478 (return1) Length: 12 Perms: Function
+// STATIC-NEXT:     0x0304e0 (use_callback@CAPTABLE) Base: 0x20490 (use_callback) Length: {{[0-9]+}} Perms: Function
+// STATIC-NEXT:     0x0304f0 (global_return2@CAPTABLE) Base: 0x20400 (global_return2) Length: 12 Perms: Function
 // STATIC-NEXT:  ]
 // STATIC-NEXT:  CHERI .captable [
 // STATIC-NEXT:    0x0      return1@CAPTABLE.0

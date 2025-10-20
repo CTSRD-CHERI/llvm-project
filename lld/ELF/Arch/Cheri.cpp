@@ -393,6 +393,13 @@ void CheriCapRelocsSection::writeToImpl(uint8_t *buf) {
       }
     }
 
+    // For function relocs, use PCC bounds from the PT_CHERI_PCC segment.
+    if (config->emachine != EM_MIPS && (isFunc || isGnuIFunc)) {
+      targetOffset += targetVA - pccBase();
+      targetVA = pccBase();
+      targetSize = pccSize();
+    }
+
     // TODO: should we warn about symbols that are out-of-bounds?
     // mandoc seems to do it so I guess we need it
     // if (TargetOffset < 0 || TargetOffset > TargetSize) warn(...);
@@ -950,6 +957,45 @@ void addRelativeCapabilityRelocation(
          "relative ELF capability relocations not currently implemented");
   in.capRelocs->addCapReloc(isCode, {&isec, offsetInSec}, {symOrSec, 0u},
                             addend);
+}
+
+// Determine the required alignment for a single PT_CHERI_PCC segment.  Apply
+// the alignment to the first OutputSection and adjust the length of the padding
+// section to align the end of the segment.  Returns true if the alignment of
+// the first OutputSection changed or the size of the padding section changed.
+static bool alignPCCBounds(PhdrEntry *p, CheriPccPaddingSection &psec) {
+  OutputSection *first = p->firstSec;
+  OutputSection *last = p->lastSec;
+
+  if (!first)
+    return false;
+
+  assert(psec.getParent() == last && "padding section is not last");
+  assert(psec.isNeeded() && "padding section is not enabled");
+
+  // Ignore existing padding.
+  uint64_t size = last->getVA() - first->getVA();
+  uint64_t align = target->getCheriRequiredAlignment(size);
+  if (align == 0)
+    align = 1;
+  bool changed = false;
+  if (first->addralign < align) {
+    first->addralign = align;
+    changed = true;
+  }
+  uint64_t padSize = alignTo(size, align) - size;
+  if (psec.getSize() != padSize) {
+    psec.setSize(padSize);
+    changed = true;
+  }
+  return changed;
+}
+
+bool cheriCapabilityBoundsAlign() {
+  // Align the PT_CHERI_PCC segment.
+  bool changed = false;
+  changed |= alignPCCBounds(in.cheriBounds, *in.pccPadding);
+  return changed;
 }
 
 } // namespace elf

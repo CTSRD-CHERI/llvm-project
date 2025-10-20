@@ -3990,6 +3990,7 @@ void InStruct::reset() {
   strTab.reset();
   symTab.reset();
   symTabShndx.reset();
+  cheriBounds = nullptr;
 }
 
 constexpr char kMemtagAndroidNoteName[] = "Android";
@@ -4034,6 +4035,17 @@ void PackageMetadataNote::writeTo(uint8_t *buf) {
 size_t PackageMetadataNote::getSize() const {
   return sizeof(llvm::ELF::Elf64_Nhdr) + 4 +
          alignTo(config->packageMetadata.size() + 1, 4);
+}
+
+void CheriPccPaddingSection::writeTo(uint8_t *buf) { memset(buf, 0, size); }
+
+uint64_t elf::pccBase() { return in.cheriBounds->firstSec->addr; }
+
+uint64_t elf::pccSize() {
+  PhdrEntry *phdr = in.cheriBounds;
+  OutputSection *first = phdr->firstSec;
+  OutputSection *last = phdr->lastSec;
+  return last->getVA() + last->size - first->getVA();
 }
 
 InStruct elf::in;

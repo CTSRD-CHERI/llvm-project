@@ -17,8 +17,8 @@
 // EXE-DAG: [[GLOBAL_CAPTAB:[0-9a-f]+]]  l     O .captable		 00000000000000{{1|2}}0  global@CAPTABLE
 // EXE-DAG: [[GLOBAL2_CAPTAB:[0-9a-f]+]]  l     O .captable		 00000000000000{{1|2}}0  global2@CAPTABLE
 // EXE-LABEL: CAPABILITY RELOCATION RECORDS:
-// EXE-NEXT: 0x[[GLOBAL_CAPTAB]]      Base: global (0x00000000000403{{3|6}}0)       Offset: 0x0000000000000000      Length: 0x0000000000000004    Permissions: 0x00000000
-// EXE-NEXT: 0x[[GLOBAL2_CAPTAB]]      Base: global2 (0x00000000000403{{3|6}}8)      Offset: 0x0000000000000000      Length: 0x0000000000000008    Permissions: 0x00000000
+// EXE-NEXT: 0x[[GLOBAL_CAPTAB]]      Base: global (0x00000000000403{{6|7}}0)       Offset: 0x0000000000000000      Length: 0x0000000000000004    Permissions: 0x00000000
+// EXE-NEXT: 0x[[GLOBAL2_CAPTAB]]      Base: global2 (0x00000000000403{{6|7}}8)      Offset: 0x0000000000000000      Length: 0x0000000000000008    Permissions: 0x00000000
 
 // EXE:          3c 01 00 00 	lui	$1, 0
 // EXE-NEXT:     64 21 00 00 	daddiu	$1, $1, 0

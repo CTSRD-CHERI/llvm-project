@@ -314,6 +314,12 @@ void addRelativeCapabilityRelocation(
     InputSectionBase &isec, uint64_t offsetInSec,
     llvm::PointerUnion<Symbol *, InputSectionBase *> symOrSec, int64_t addend,
     RelExpr expr, RelType type);
+
+// Align OutputSections as needed to ensure the bounds of capabilities
+// such as PCC do not permit undesired access to portions of other
+// OutputSections.  Return true if the alignment of any OutputSection
+// was modified.
+bool cheriCapabilityBoundsAlign();
 } // namespace elf
 } // namespace lld
 

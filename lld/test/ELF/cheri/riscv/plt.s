@@ -31,8 +31,8 @@
 # RELOC32-NEXT:   0x13090 R_RISCV_JUMP_SLOT weak 0x0
 # RELOC32-NEXT: }
 # RELOC32:      CHERI __cap_relocs [
-# RELOC32-NEXT:   0x013088 Base: 0x11030 (<unknown symbol>+0) Length: 64 Perms: Code
-# RELOC32-NEXT:   0x013090 Base: 0x11030 (<unknown symbol>+0) Length: 64 Perms: Code
+# RELOC32-NEXT:   0x013088 Base: 0x11000 (_start+48) Length: 9216 Perms: Code
+# RELOC32-NEXT:   0x013090 Base: 0x11000 (_start+48) Length: 9216 Perms: Code
 # RELOC32-NEXT: ]
 # GOTPLT32:      section '.got.plt'
 # GOTPLT32-NEXT: 0x00013078 00000000 00000000 00000000 00000000
@@ -43,8 +43,8 @@
 # RELOC64-NEXT:   0x13120 R_RISCV_JUMP_SLOT weak 0x0
 # RELOC64-NEXT: }
 # RELOC64:      CHERI __cap_relocs [
-# RELOC64-NEXT:   0x013110 Base: 0x11030 (<unknown symbol>+0) Length: 64 Perms: Code
-# RELOC64-NEXT:   0x013120 Base: 0x11030 (<unknown symbol>+0) Length: 64 Perms: Code
+# RELOC64-NEXT:   0x013110 Base: 0x11000 (_start+48) Length: 8496 Perms: Code
+# RELOC64-NEXT:   0x013120 Base: 0x11000 (_start+48) Length: 8496 Perms: Code
 # RELOC64-NEXT: ]
 # GOTPLT64:      section '.got.plt'
 # GOTPLT64-NEXT: 0x000130f0 00000000 00000000 00000000 00000000
