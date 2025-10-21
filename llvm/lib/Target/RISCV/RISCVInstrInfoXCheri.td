@@ -325,6 +325,26 @@ class CCheriStore_rri<bits<3> funct3, string OpcodeStr,
     : RVInst16CS<funct3, 0b00, (outs), (ins cls:$rs2, GPCRC:$rs1, opnd:$imm),
                  OpcodeStr, "$rs2, ${imm}(${rs1})">;
 
+let hasSideEffects = 0, mayLoad = 1, mayStore = 0 in
+class CheriLoadU_r<bits<5> op, string opcodestr, RegisterClass rdClass,
+                  RegisterOperand rs1Operand>
+    : RVInstCheriSrcDst<0x79, op, 0, OPC_CHERI, (outs rdClass:$rd),
+                        (ins rs1Operand:$rs1), opcodestr, "$rd, $rs1">;
+
+let hasSideEffects = 0, mayLoad = 0, mayStore = 1 in
+class CheriStoreU_r<bits<5> op, string opcodestr, RegisterClass rs2Class,
+                   RegisterOperand rs1Operand>
+    : RVInstCheriTwoSrc<0x78, op, 0, OPC_CHERI, (outs),
+                        (ins rs2Class:$rs2, rs1Operand:$rs1),
+                        opcodestr, "$rs2, $rs1">;
+
+let hasSideEffects = 0, mayLoad = 0, mayStore = 1, Constraints = "$rd = $rs2" in
+class CheriStoreCondU_r<bits<5> op, string opcodestr, RegisterClass rs2Class,
+                       RegisterOperand rs1Operand>
+    : RVInstCheriTwoSrc<0x78, op, 0, OPC_CHERI, (outs rs2Class:$rd),
+                        (ins rs2Class:$rs2, rs1Operand:$rs1),
+                        opcodestr, "$rs2, $rs1">;
+
 //===----------------------------------------------------------------------===//
 // Capability-Inspection Instructions
 //===----------------------------------------------------------------------===//
@@ -707,6 +727,84 @@ defm LR_C       : LR_C_r_aq_rl<"128", 0b100, "lr.c">;
 defm SC_C       : AMO_C_rr_aq_rl<"128", 0b00011, 0b100, "sc.c", GPR>;
 defm AMOSWAP_C  : AMO_C_rr_aq_rl<"128", 0b00001, 0b100, "amoswap.c", GPCR>;
 }
+
+//===----------------------------------------------------------------------===//
+// As-User Capability-Authorized Memory-Access Instructions
+//===----------------------------------------------------------------------===//
+
+// non-atomics
+
+let Predicates = [HasCheri] in {
+def LB_U_CAP  : CheriLoadU_r<0b01000, "lb.u.cap",  GPR, GPCRMemAtomic>;
+def LH_U_CAP  : CheriLoadU_r<0b01001, "lh.u.cap",  GPR, GPCRMemAtomic>;
+def LW_U_CAP  : CheriLoadU_r<0b01010, "lw.u.cap",  GPR, GPCRMemAtomic>;
+def LBU_U_CAP : CheriLoadU_r<0b01100, "lbu.u.cap", GPR, GPCRMemAtomic>;
+def LHU_U_CAP : CheriLoadU_r<0b01101, "lhu.u.cap", GPR, GPCRMemAtomic>;
+}
+
+let Predicates = [HasCheri, IsRV64] in {
+def LWU_U_CAP : CheriLoadU_r<0b01110, "lwu.u.cap", GPR, GPCRMemAtomic>;
+def LD_U_CAP  : CheriLoadU_r<0b01011, "ld.u.cap",  GPR, GPCRMemAtomic>;
+}
+
+let DecoderNamespace = "RISCV32Only_",
+    Predicates = [HasCheri, IsRV32] in
+def LC_U_CAP_64  : CheriLoadU_r<0b01011, "lc.u.cap", GPCR, GPCRMemAtomic>;
+
+let Predicates = [HasCheri, IsRV64] in
+def LC_U_CAP_128 : CheriLoadU_r<0b11111, "lc.u.cap", GPCR, GPCRMemAtomic>;
+
+let Predicates = [HasCheri] in {
+def SB_U_CAP  : CheriStoreU_r<0b01000, "sb.u.cap", GPR, GPCRMemAtomic>;
+def SH_U_CAP  : CheriStoreU_r<0b01001, "sh.u.cap", GPR, GPCRMemAtomic>;
+def SW_U_CAP  : CheriStoreU_r<0b01010, "sw.u.cap", GPR, GPCRMemAtomic>;
+}
+
+let Predicates = [HasCheri, IsRV64] in {
+def SD_U_CAP  : CheriStoreU_r<0b01011, "sd.u.cap", GPR, GPCRMemAtomic>;
+}
+
+let DecoderNamespace = "RISCV32Only_",
+    Predicates = [HasCheri, IsRV32] in
+def SC_U_CAP_64  : CheriStoreU_r<0b01011, "sc.u.cap", GPCR, GPCRMemAtomic>;
+
+let Predicates = [HasCheri, IsRV64] in
+def SC_U_CAP_128 : CheriStoreU_r<0b01100, "sc.u.cap", GPCR, GPCRMemAtomic>;
+
+// atomics
+
+let Predicates = [HasCheri, HasStdExtA] in {
+def LR_B_U_CAP  : CheriLoadU_r<0b11000, "lr.b.u.cap",  GPR, GPCRMemAtomic>;
+def LR_H_U_CAP  : CheriLoadU_r<0b11001, "lr.h.u.cap",  GPR, GPCRMemAtomic>;
+def LR_W_U_CAP  : CheriLoadU_r<0b11010, "lr.w.u.cap",  GPR, GPCRMemAtomic>;
+}
+
+let Predicates = [HasCheri, HasStdExtA, IsRV64] in
+def LR_D_U_CAP  : CheriLoadU_r<0b11011, "lr.d.u.cap",  GPR, GPCRMemAtomic>;
+
+let DecoderNamespace = "RISCV32Only_",
+    Predicates = [HasCheri, HasStdExtA, IsRV32] in
+def LR_C_U_CAP_64  : CheriLoadU_r<0b11011, "lr.c.u.cap", GPCR, GPCRMemAtomic>;
+
+let Predicates = [HasCheri, HasStdExtA, IsRV64] in
+def LR_C_U_CAP_128 : CheriLoadU_r<0b11100, "lr.c.u.cap", GPCR, GPCRMemAtomic>;
+
+let Predicates = [HasCheri, HasStdExtA] in {
+def SC_B_U_CAP  : CheriStoreCondU_r<0b11000, "sc.b.u.cap",  GPR, GPCRMemAtomic>;
+def SC_H_U_CAP  : CheriStoreCondU_r<0b11001, "sc.h.u.cap",  GPR, GPCRMemAtomic>;
+def SC_W_U_CAP  : CheriStoreCondU_r<0b11010, "sc.w.u.cap",  GPR, GPCRMemAtomic>;
+}
+
+let Predicates = [HasCheri, HasStdExtA, IsRV64] in
+def SC_D_U_CAP  : CheriStoreCondU_r<0b11011, "sc.d.u.cap",  GPR, GPCRMemAtomic>;
+
+let DecoderNamespace = "RISCV32Only_",
+    Predicates = [HasCheri, HasStdExtA, IsRV32] in
+def SC_C_U_CAP_64  : CheriStoreCondU_r<0b11011, "sc.c.u.cap", GPCR, GPCRMemAtomic>;
+
+let Predicates = [HasCheri, HasStdExtA, IsRV64] in
+def SC_C_U_CAP_128 : CheriStoreCondU_r<0b11100, "sc.c.u.cap", GPCR, GPCRMemAtomic>;
+
 
 //===----------------------------------------------------------------------===//
 // Capability Mode Instructions
