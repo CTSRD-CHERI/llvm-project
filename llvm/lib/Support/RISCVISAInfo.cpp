@@ -11,6 +11,7 @@
 #include "llvm/ADT/SetVector.h"
 #include "llvm/ADT/StringExtras.h"
 #include "llvm/ADT/StringRef.h"
+#include "llvm/CHERI/cheri-compressed-cap/cheri_compressed_cap.h"
 #include "llvm/Support/Errc.h"
 #include "llvm/Support/Error.h"
 #include "llvm/Support/raw_ostream.h"
@@ -1252,4 +1253,13 @@ StringRef RISCVISAInfo::computeDefaultABI() const {
     return "lp64";
   }
   llvm_unreachable("Invalid XLEN");
+}
+
+uint64_t RISCVISAInfo::getCHERIRepresentableAlignmentMask(
+    uint64_t Length) const {
+  if (XLen == 64) {
+    return cc128_get_alignment_mask(Length);
+  } else {
+    return static_cast<int32_t>(cc64_get_alignment_mask(Length));
+  }
 }

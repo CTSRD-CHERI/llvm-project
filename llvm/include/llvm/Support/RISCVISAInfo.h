@@ -82,6 +82,7 @@ public:
   std::string toString() const;
   std::vector<std::string> toFeatureVector() const;
   StringRef computeDefaultABI() const;
+  uint64_t getCHERIRepresentableAlignmentMask(uint64_t Length) const;
 
   static bool isSupportedExtensionFeature(StringRef Ext);
   static bool isSupportedExtension(StringRef Ext);
