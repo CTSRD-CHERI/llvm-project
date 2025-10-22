@@ -417,3 +417,8 @@ void RISCVTargetInfo::fillValidTuneCPUList(
   bool Is64Bit = getTriple().isArch64Bit();
   llvm::RISCV::fillValidTuneCPUArchList(Values, Is64Bit);
 }
+
+uint64_t RISCVTargetInfo::getCHERIRepresentableAlignmentMask(
+    uint64_t Length) const {
+  return ISAInfo->getCHERIRepresentableAlignmentMask(Length);
+}

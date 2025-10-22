@@ -489,6 +489,10 @@ public:
 
   virtual uint64_t getPointerRangeForCHERICapability() const { return -1; }
 
+  virtual uint64_t getCHERIRepresentableAlignmentMask(uint64_t Length) const {
+    return -1;
+  }
+
   /// Return the size of '_Bool' and C++ 'bool' for this target, in bits.
   unsigned getBoolWidth() const { return BoolWidth; }
 

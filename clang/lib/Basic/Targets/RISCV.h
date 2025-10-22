@@ -139,6 +139,8 @@ public:
 
   uint64_t getCHERICapabilityAlign() const override { return CapSize; }
 
+  uint64_t getCHERIRepresentableAlignmentMask(uint64_t Length) const override;
+
   uint64_t getPointerWidthV(LangAS AddrSpace) const override {
     return (AddrSpace == LangAS::cheri_capability) ? CapSize : PointerWidth;
   }
