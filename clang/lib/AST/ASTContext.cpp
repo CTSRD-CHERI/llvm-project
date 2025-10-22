@@ -2538,6 +2538,23 @@ CharUnits ASTContext::getTypeAlignInChars(const Type *T) const {
   return toCharUnitsFromBits(getTypeAlign(T));
 }
 
+/// getCHERIRepresentableSizeInChars - Return the ABI-specified representable
+/// size for a CHERI capability length, in characters.
+CharUnits ASTContext::getCHERIRepresentableSizeInChars(
+    CharUnits CharSize) const {
+  CharUnits Align = getCHERIRepresentableAlignInChars(CharSize);
+  return CharSize.alignTo(Align);
+}
+
+/// getCHERIRepresentableAlignInChars - Return the ABI-specified representable
+/// alignment for a CHERI given length, in characters.
+CharUnits ASTContext::getCHERIRepresentableAlignInChars(
+    CharUnits CharSize) const {
+  uint64_t Mask = Target->getCHERIRepresentableAlignmentMask(
+      CharSize.getQuantity());
+  return CharUnits::fromQuantity(~Mask + 1);
+}
+
 /// getTypeUnadjustedAlignInChars - Return the ABI-specified alignment of a
 /// type, in characters, before alignment adjustments. This method does
 /// not work on incomplete types.

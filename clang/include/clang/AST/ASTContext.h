@@ -2374,6 +2374,21 @@ public:
   unsigned getTypeAlign(QualType T) const { return getTypeInfo(T).Align; }
   unsigned getTypeAlign(const Type *T) const { return getTypeInfo(T).Align; }
 
+  /// Return the ABI-specified CHERI representable size for a given object size.
+  CharUnits getCHERIRepresentableSizeInChars(CharUnits CharSize) const;
+  uint64_t getCHERIRepresentableSize(uint64_t BitSize) const {
+    return toBits(getCHERIRepresentableSizeInChars(
+        toCharUnitsFromBits(BitSize)));
+  }
+
+  /// Return the ABI-specified CHERI representable alignment for a
+  /// given object size.
+  CharUnits getCHERIRepresentableAlignInChars(CharUnits CharSize) const;
+  uint64_t getCHERIRepresentableAlign(uint64_t BitSize) const {
+    return toBits(getCHERIRepresentableAlignInChars(
+        toCharUnitsFromBits(BitSize)));
+  }
+
   /// Return the ABI-specified natural alignment of a (complete) type \p T,
   /// before alignment adjustments, in bits.
   ///
