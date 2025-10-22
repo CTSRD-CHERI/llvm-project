@@ -1906,6 +1906,13 @@ void ItaniumRecordLayoutBuilder::LayoutField(const FieldDecl *D,
     EffectiveFieldSize = FieldSize =
         IsIncompleteArrayType ? CharUnits::Zero() : TI.Width;
     AlignRequirement = TI.AlignRequirement;
+
+    if (D->hasAttr<CHERIPadRepresentableAttr>()) {
+      FieldAlign = Context.getCHERIRepresentableAlignInChars(
+          EffectiveFieldSize);
+      EffectiveFieldSize = Context.getCHERIRepresentableSizeInChars(
+          EffectiveFieldSize);
+    }
   };
 
   if (D->getType()->isIncompleteArrayType()) {

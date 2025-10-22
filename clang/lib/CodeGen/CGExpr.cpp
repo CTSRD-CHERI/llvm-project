@@ -1198,8 +1198,18 @@ CodeGenFunction::canTightenCheriBounds(QualType Ty, const Expr *E,
     Result.IsSubObject = IsSubObject;
     Result.TargetField = TargetField;
     Result.Size = Size;
-    Result.UseExactSetBounds =
-        BoundsMode == LangOptions::CBM_SubObjectsSafeExact;
+    // TODO: We should always use the exact bounds instruction, however at this
+    // stage we need to extract the padded base field and padded top fields,
+    // so that the setbounds operation can work.
+    // The TBR result will need to change accordingly to transport additional
+    // information for the base and top fields.
+    if (TargetField != nullptr &&
+        TargetField->hasAttr<CHERIPadRepresentableAttr>()) {
+      Result.UseExactSetBounds = false;
+    } else {
+      Result.UseExactSetBounds =
+          BoundsMode == LangOptions::CBM_SubObjectsSafeExact;
+    }
     return Result;
   };
   const auto UseRemainingSize = [IsSubObject, BoundsMode, &DbgOS, &Result,
