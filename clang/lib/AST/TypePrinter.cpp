@@ -1875,6 +1875,9 @@ void TypePrinter::printAttributedAfter(const AttributedType *T,
   case attr::PointerInterpretationCaps:
      OS << "pointer_interpretation_capabilities";
      break;
+  case attr::CHERIPadRepresentable:
+    OS << "cheri_pad_representable(...)";
+    break;
 
 
   case attr::NSReturnsRetained:

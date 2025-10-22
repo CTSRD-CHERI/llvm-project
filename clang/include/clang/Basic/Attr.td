@@ -2458,6 +2458,15 @@ def CHERINoSubobjectBounds : DeclOrTypeAttr {
   let Documentation = [Undocumented];
 }
 
+// TODO: Is this InheritableAttr like UseRemainingSize?
+def CHERIPadRepresentable : DeclOrTypeAttr {
+  let Spellings = [GNU<"cheri_pad_representable">,
+                   CXX11<"cheri", "pad_representable">,
+                   C2x<"cheri", "pad_representable">];
+  let Args = [UnsignedArgument<"MaxSize", /*Optional=*/1>];
+  let Documentation = [Undocumented];
+}
+
 // For pre-C99 variable length arrays or variable legnth arrays that have a
 // maximum size.
 def CHERISubobjectBoundsUseRemainingSize : InheritableAttr {

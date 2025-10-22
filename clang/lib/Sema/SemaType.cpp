@@ -9098,6 +9098,17 @@ static void processTypeAttrs(TypeProcessingState &state, QualType &type,
     case ParsedAttr::AT_CHERINoProvenance:
       handleCheriNoProvenanceAttr(type, state, TAL, attr);
       break;
+    case ParsedAttr::AT_CHERIPadRepresentable:
+      attr.setUsedAsTypeAttr();
+      if (type->hasAttr(attr::CHERIPadRepresentable))
+        state.getSema().Diag(attr.getLoc(),
+                             diag::warn_duplicate_attribute_exact)
+            << attr.getAttrName();
+      type = state.getAttributedType(
+          createSimpleAttr<CHERIPadRepresentableAttr>(
+              state.getSema().Context, attr),
+          type, type);
+      break;
     case ParsedAttr::AT_MemoryAddress:
       if (!HandleMemoryAddressAttr(type, state, TAL, attr)) {
         attr.setUsedAsTypeAttr();

@@ -2401,6 +2401,17 @@ handleCHERISubobjectBoundsUseRemainingSizeAttr(Sema &S, Decl *D,
                                                           maxSize));
 }
 
+static void
+handleCHERIPadRepresentableAttr(Sema &S, Decl *D, const ParsedAttr &AL) {
+  int maxSize = 0;
+  if (AL.getNumArgs() &&
+      !checkPositiveIntArgument(S, AL, AL.getArgAsExpr(0), maxSize))
+    return;
+
+  D->addAttr(::new (S.Context)
+                 CHERIPadRepresentableAttr(S.Context, AL, maxSize));
+}
+
 static void handleConstructorAttr(Sema &S, Decl *D, const ParsedAttr &AL) {
   uint32_t priority = ConstructorAttr::DefaultPriority;
   if (S.getLangOpts().HLSL && AL.getNumArgs()) {
@@ -9397,6 +9408,9 @@ ProcessDeclAttribute(Sema &S, Scope *scope, Decl *D, const ParsedAttr &AL,
     break;
   case ParsedAttr::AT_CHERISubobjectBoundsUseRemainingSize:
     handleCHERISubobjectBoundsUseRemainingSizeAttr(S, D, AL);
+    break;
+  case ParsedAttr::AT_CHERIPadRepresentable:
+    handleCHERIPadRepresentableAttr(S, D, AL);
     break;
   case ParsedAttr::AT_StdCall:
   case ParsedAttr::AT_CDecl:
