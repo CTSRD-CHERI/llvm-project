@@ -1909,9 +1909,12 @@ void ItaniumRecordLayoutBuilder::LayoutField(const FieldDecl *D,
 
     const auto *CPRA = D->getAttr<CHERIPadRepresentableAttr>();
     if (CPRA) {
-      if (IsIncompleteArrayType && CPRA->getMaxSize() > 0) {
-        FieldAlign = Context.getCHERIRepresentableAlignInChars(
-            CharUnits::fromQuantity(CPRA->getMaxSize()));
+      CharUnits MaxSize = CharUnits::fromQuantity(CPRA->getMaxSize());
+      if (MaxSize > EffectiveFieldSize) {
+        FieldAlign = Context.getCHERIRepresentableAlignInChars(MaxSize);
+        if (!IsIncompleteArrayType)
+          EffectiveFieldSize = Context.getCHERIRepresentableSizeInChars(
+              EffectiveFieldSize);
       } else {
         FieldAlign = Context.getCHERIRepresentableAlignInChars(
             EffectiveFieldSize);
