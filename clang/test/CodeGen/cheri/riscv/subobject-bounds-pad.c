@@ -23,9 +23,20 @@ struct NeedPadBoth {
   int post;
 } s_both;
 
-// CHECK-IL32PC64-LABEL: @small_global = addrspace(200) global [1024 x i8] zeroinitializer, align 1
-// CHECK-L64PC128-LABEL: @small_global = addrspace(200) global [1024 x i8] zeroinitializer, align 1
-char small_global[1024];
+// CHECK-IL32PC64-LABEL: %struct.NeedMaxPad = type { i32, [508 x i8], [0 x i8] }
+// CHECK-L64PC128-LABEL: %struct.NeedMaxPad = type { i32, [4 x i8], [0 x i8] }
+struct NeedMaxPad {
+  int pre;
+  char unrepresentable[] __attribute__((cheri_pad_representable(0x1000)));
+} s_variable;
+
+// CHECK-IL32PC64-LABEL: %struct.NeedMaxPad1 = type { i32, [508 x i8], [1 x i8], [511 x i8] }
+// CHECK-L64PC128-LABEL: %struct.NeedMaxPad1 = type { i32, [4 x i8], [1 x i8], [7 x i8] }
+struct NeedMaxPad1 {
+  int pre;
+  char unrepresentable[1] __attribute__((cheri_pad_representable(0x1000)));
+} s_variable1;
+
 
 // CHECK-IL32PC64-LABEL: @large_global = addrspace(200) global [4097 x i8] zeroinitializer, align 1
 // CHECK-L64PC128-LABEL: @large_global = addrspace(200) global [4097 x i8] zeroinitializer, align 1
