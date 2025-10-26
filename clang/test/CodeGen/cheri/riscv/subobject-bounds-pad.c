@@ -40,11 +40,26 @@ struct NeedMaxPad1 {
 
 // CHECK-IL32PC64-LABEL: @large_global = addrspace(200) global [4097 x i8] zeroinitializer, align 1
 // CHECK-L64PC128-LABEL: @large_global = addrspace(200) global [4097 x i8] zeroinitializer, align 1
-char large_global[0x1001];
+char large_global[0x1001] __attribute__((cheri_pad_representable));
 
-char small_global_pad[1024] __attribute__((cheri_pad_representable));
-char large_global_pad[0x1001] __attribute__((cheri_pad_representable));
+//
+// CHECK-L64PC128-LABEL: @check_global
+// CHECK-L64PC128-NEXT:  entry:
+// CHECK-L64PC128-NEXT:    [[TMP1:%.*]] = call ptr addrspace(200) @llvm.cheri.cap.bounds.set.i64(ptr addrspace(200) @large_global, i64 4097)
+// CHECK-L64PC128-NEXT:    ret ptr addrspace(200) [[TMP1]]
+char *check_global() {
+  return large_global;
+}
 
+// CHECK-L64PC128-LABEL: @check_global
+// CHECK-L64PC128-NEXT:  entry:
+// CHECK-L64PC128-NEXT:    [[TMP1:%.*]] = call ptr addrspace(200) @llvm.cheri.cap.bounds.set.i64(ptr addrspace(200) @large_global, i64 4097)
+// CHECK-L64PC128-NEXT:    [[TMP2:%.*]] = call ptr addrspace(200) @llvm.cheri.cap.bounds.set.i64(ptr addrspace(200) [[TMP1]], i64 4097)
+// CHECK-L64PC128-NEXT:    [[ARRIDX:%.*]] = getelementptr inbounds [4097 x i8], ptr addrspace(200) [[TMP2]], i64 0, i64 0
+// CHECK-L64PC128-NEXT:    ret ptr addrspace(200) [[ARRIDX]]
+char *check_global1() {
+  return &large_global[0];
+}
 
 // CHECK-IL32PC64-LABEL: @get_s_base
 // CHECK-IL32PC64-NEXT:  entry:
