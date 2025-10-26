@@ -12,9 +12,11 @@
 
 // RUN: %cheri_purecap_clang -E -dM -Xclang -cheri-bounds=subobject-safe %s 2>&1 | FileCheck --check-prefixes=CHECK,SUBOBJECT-SAFE %s
 // RUN: %cheri_purecap_clang -E -dM -Xclang -cheri-bounds=conservative %s 2>&1 | FileCheck --check-prefixes=CHECK,SUBOBJECT-DISABLED %s
+// RUN: %cheri_purecap_clang -E -dM -Xclang -cheri-bounds=subobject-safe-exact %s 2>&1 | FileCheck --check-prefixes=CHECK,SUBOBJECT-SAFE-EXACT %s
 // Without any flag subobject bounds should currently be disabled
 // RUN: %cheri_purecap_clang -E -dM %s 2>&1 | FileCheck --check-prefixes=SUBOBJECT-DISABLED %s
 // CHECK: #define __CHERI_PURE_CAPABILITY__ 2
 // SUBOBJECT-DISABLED-NOT: __CHERI_SUBOBJECT_BOUNDS__
 // SUBOBJECT-SAFE: #define __CHERI_SUBOBJECT_BOUNDS__ 2
+// SUBOBJECT-SAFE-EXACT: #define __CHERI_SUBOBJECT_BOUNDS__ 3
 // CHECK: #define __CHERI__ 1
