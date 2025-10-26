@@ -1194,19 +1194,19 @@ CodeGenFunction::canTightenCheriBounds(QualType Ty, const Expr *E,
 
     return Result;
   };
-  const ValueDecl *TargetField = nullptr;
+  const ValueDecl *TargetDecl = nullptr;
   const auto ExactBounds = [IsSubObject, BoundsMode,
-                            &TargetField, &Result](int64_t Size) {
+                            &TargetDecl, &Result](int64_t Size) {
     Result.IsSubObject = IsSubObject;
-    Result.TargetField = (IsSubObject) ? TargetField : nullptr;
+    Result.TargetField = (IsSubObject) ? TargetDecl : nullptr;
     Result.Size = Size;
     // TODO: We should always use the exact bounds instruction, however at this
     // stage we need to extract the padded base field and padded top fields,
     // so that the setbounds operation can work.
     // The TBR result will need to change accordingly to transport additional
     // information for the base and top fields.
-    if (TargetField != nullptr &&
-        TargetField->hasAttr<CHERIPadRepresentableAttr>()) {
+    if (TargetDecl != nullptr &&
+        TargetDecl->hasAttr<CHERIPadRepresentableAttr>()) {
       Result.UseExactSetBounds = false;
     } else {
       Result.UseExactSetBounds =
@@ -1215,7 +1215,7 @@ CodeGenFunction::canTightenCheriBounds(QualType Ty, const Expr *E,
     return Result;
   };
   const auto UseRemainingSize = [IsSubObject, BoundsMode, &DbgOS, &Result,
-                                 &TargetField](Twine Msg, uint64_t MaxSize = 0,
+                                 &TargetDecl](Twine Msg, uint64_t MaxSize = 0,
                                                bool IsContainerSize = false) {
     Result.IsSubObject = IsSubObject;
     Result.IsContainerSize = false;
@@ -1223,13 +1223,13 @@ CodeGenFunction::canTightenCheriBounds(QualType Ty, const Expr *E,
     if (MaxSize != 0) {
       Result.Size = MaxSize;
     }
-    Result.TargetField = (IsSubObject) ? TargetField : nullptr;
+    Result.TargetField = (IsSubObject) ? TargetDecl : nullptr;
     if (!Msg.isTriviallyEmpty()) {
       CHERI_BOUNDS_DBG(<< Msg << " -> ");
       Result.DiagMessage = (" (" + Msg + ")").str();
     }
-    if (TargetField != nullptr &&
-        TargetField->hasAttr<CHERIPadRepresentableAttr>()) {
+    if (TargetDecl != nullptr &&
+        TargetDecl->hasAttr<CHERIPadRepresentableAttr>()) {
       Result.UseExactSetBounds = false;
     } else {
       Result.UseExactSetBounds =
@@ -1346,14 +1346,14 @@ CodeGenFunction::canTightenCheriBounds(QualType Ty, const Expr *E,
 
     // Check whether the field or the field type has a "use-remaining-size" attr
     // TODO: also allow this attribute on typedefs?
-    TargetField = ME->getMemberDecl();
-    auto RSA = TargetField->getAttr<CHERISubobjectBoundsUseRemainingSizeAttr>();
+    TargetDecl = ME->getMemberDecl();
+    auto RSA = TargetDecl->getAttr<CHERISubobjectBoundsUseRemainingSizeAttr>();
     StringRef AttrSource;
     if (RSA) {
       AttrSource = "member";
     } else {
       AttrSource = "member type";
-      if (auto TypeDecl = TargetField->getType()->getAsRecordDecl())
+      if (auto TypeDecl = TargetDecl->getType()->getAsRecordDecl())
         RSA = TypeDecl->getAttr<CHERISubobjectBoundsUseRemainingSizeAttr>();
     }
     if (RSA) {
@@ -1416,7 +1416,7 @@ CodeGenFunction::canTightenCheriBounds(QualType Ty, const Expr *E,
     CHERI_BOUNDS_DBG(<< KindStr << " on constant size array -> ");
     if (const DeclRefExpr *DE = dyn_cast<DeclRefExpr>(E)) {
       // Ensure that ExactBounds can detect attributes on the ValueDecl
-      TargetField = DE->getDecl();
+      TargetDecl = DE->getDecl();
     }
     return ExactBounds(TypeSize);
   }
