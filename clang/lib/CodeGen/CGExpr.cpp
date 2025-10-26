@@ -1192,11 +1192,11 @@ CodeGenFunction::canTightenCheriBounds(QualType Ty, const Expr *E,
     assert(Kind != SubObjectBoundsKind::ArraySubscript);
     return Result;
   };
-  ValueDecl* TargetField = nullptr;
+  const ValueDecl *TargetField = nullptr;
   const auto ExactBounds = [IsSubObject, BoundsMode,
                             &TargetField, &Result](int64_t Size) {
     Result.IsSubObject = IsSubObject;
-    Result.TargetField = TargetField;
+    Result.TargetField = (IsSubObject) ? TargetField : nullptr;
     Result.Size = Size;
     // TODO: We should always use the exact bounds instruction, however at this
     // stage we need to extract the padded base field and padded top fields,
@@ -1221,13 +1221,18 @@ CodeGenFunction::canTightenCheriBounds(QualType Ty, const Expr *E,
     if (MaxSize != 0) {
       Result.Size = MaxSize;
     }
-    Result.TargetField = TargetField;
+    Result.TargetField = (IsSubObject) ? TargetField : nullptr;
     if (!Msg.isTriviallyEmpty()) {
       CHERI_BOUNDS_DBG(<< Msg << " -> ");
       Result.DiagMessage = (" (" + Msg + ")").str();
     }
-    Result.UseExactSetBounds =
-        BoundsMode == LangOptions::CBM_SubObjectsSafeExact;
+    if (TargetField != nullptr &&
+        TargetField->hasAttr<CHERIPadRepresentableAttr>()) {
+      Result.UseExactSetBounds = false;
+    } else {
+      Result.UseExactSetBounds =
+          BoundsMode == LangOptions::CBM_SubObjectsSafeExact;
+    }
     return Result;
   };
 
@@ -1407,6 +1412,10 @@ CodeGenFunction::canTightenCheriBounds(QualType Ty, const Expr *E,
       return UseRemainingSize("array " + KindStr + " on variable size type");
     }
     CHERI_BOUNDS_DBG(<< KindStr << " on constant size array -> ");
+    if (const DeclRefExpr *DE = dyn_cast<DeclRefExpr>(E)) {
+      // Ensure that ExactBounds can detect attributes on the ValueDecl
+      TargetField = DE->getDecl();
+    }
     return ExactBounds(TypeSize);
   }
 

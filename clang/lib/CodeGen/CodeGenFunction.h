@@ -570,7 +570,7 @@ public:
     bool UseRemainingSize = false;
     std::string DebugMessage;
     std::string DiagMessage;
-    ValueDecl *TargetField = nullptr;
+    const ValueDecl *TargetField = nullptr;
     const Expr *ContainerAccessExpr = nullptr;
     bool UseExactSetBounds = false;
   };
