@@ -1190,6 +1190,8 @@ CodeGenFunction::canTightenCheriBounds(QualType Ty, const Expr *E,
     Result.ContainerAccessExpr = BaseExpr;
     Result.Size = getContext().getTypeSizeInChars(Container).getQuantity();
     assert(Kind != SubObjectBoundsKind::ArraySubscript);
+    Result.UseExactSetBounds = false;
+
     return Result;
   };
   const ValueDecl *TargetField = nullptr;
