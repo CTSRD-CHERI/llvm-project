@@ -6167,7 +6167,7 @@ llvm::getBasePtrIgnoringCapabilityAddressManipulation(Value *V,
       return ConstantPointerNull::get(cast<PointerType>(V->getType()));
     }
   }
-  if (auto *I2P = dyn_cast<IntToPtrInst>(V)) {
+  if (isa<IntToPtrInst>(V)) {
     return ConstantPointerNull::get(cast<PointerType>(V->getType()));
   }
   Value *Op0 = nullptr;
