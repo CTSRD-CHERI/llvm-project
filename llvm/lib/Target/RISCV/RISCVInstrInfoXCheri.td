@@ -348,6 +348,8 @@ def CGetHigh   : Cheri_r<0x17, "cgethigh">;
 def : MnemonicAlias<"gchi", "cgethigh">;
 def CGetPoison : Cheri_r<0x19, "cgetpoison">;
 def : MnemonicAlias<"gcpoison", "cgetpoison">;
+def CGetCapVersion : Cheri_r<0x1a, "cgetcappver">;
+def : MnemonicAlias<"gcppver", "cgetcappver">;
 // For backwards compatibility we still accept cgetaddr from assembly.
 let mayStore = false, mayLoad = false, Size = 4, isCodeGenOnly = false,
 hasSideEffects = false in
@@ -372,6 +374,7 @@ def CSetAddr        : Cheri_rr<0x10, "csetaddr">;
 def : MnemonicAlias<"scaddr", "csetaddr">;
 def CSetHigh        : Cheri_rr<0x16, "csethigh">;
 def : MnemonicAlias<"schi", "csethigh">;
+def CSetCapPver        : Cheri_rr<0x17, "csetcappver">;
 let isReMaterializable = 1, isAsCheapAsAMove = 1 in
 def CIncOffset      : Cheri_rr<0x11, "cincoffset">;
 def : InstAlias<"add $cd, $cs1, $rs2",
@@ -1275,6 +1278,7 @@ def : PatGpcr<int_cheri_cap_offset_get, CGetOffset>;
 def : PatGpcr<int_cheri_cap_flags_get, CGetFlags>;
 def : Pat<(XLenVT (int_cheri_cap_address_get GPCR:$cs1)), (PseudoCGetAddr GPCR:$cs1)>;
 def : PatGpcr<int_cheri_cap_high_get, CGetHigh>;
+def : PatGpcr<int_cheri_cap_high_get, CGetCapVersion>;
 
 /// Capability-Modification Instructions
 
@@ -1285,6 +1289,7 @@ def : PatGpcrGpr<int_cheri_cap_flags_set, CSetFlags>;
 def : PatGpcrGpr<int_cheri_cap_offset_set, CSetOffset>;
 def : PatGpcrGpr<int_cheri_cap_address_set, CSetAddr>;
 def : PatGpcrGpr<int_cheri_cap_high_set, CSetHigh>;
+def : PatGpcrGpr<int_cheri_cap_high_set, CSetCapPver>;
 def : PatGpcrGpr<cptradd, CIncOffset>;
 def : PatGpcrSimm12<cptradd, CIncOffsetImm>;
 def : PatGpcrGpr<int_cheri_cap_bounds_set, CSetBounds>;
