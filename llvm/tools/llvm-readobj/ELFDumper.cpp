@@ -3345,11 +3345,8 @@ template <class ELFT> void ELFDumper<ELFT>::printCheriCapRelocs() {
     W.startLine() << "There is no __cap_relocs section in the file.\n";
     return;
   }
-  // TODO: get symbol name for __cap_reloc
   ArrayRef<uint8_t> Data =
       unwrapOrError(ObjF.getFileName(), Obj.getSectionContents(*Shdr));
-  const uint64_t CapRelocsStartVaddr = Shdr->sh_addr;
-  const uint64_t CapRelocsEndVaddr = Shdr->sh_addr + Shdr->sh_size;
   const size_t entry_size = ELFT::Is64Bits ? 40 : 20;
   if (Data.size() % entry_size != 0) {
     W.startLine() << "The __cap_relocs section has a wrong size: "
@@ -3357,25 +3354,6 @@ template <class ELFT> void ELFDumper<ELFT>::printCheriCapRelocs() {
     return;
   }
   ListScope L(W, "CHERI __cap_relocs");
-#if 0
-  errs() << "Cap relocs section from 0x" << utohexstr(CapRelocsFileOffset)
-         << " to 0x" << utohexstr(CapRelocsEnd)
-         << " size =" << (CapRelocsEnd - CapRelocsFileOffset) << "\n";
-#endif
-  // Create a map of all dynamic relocations that point into the
-  // __cap_relocs section to add a symbol name to unresolved values
-  // FIXME: this hardcodes REL so won't work for architectures that use RELA
-  using Elf_Rel = typename ELFT::Rel;
-  // typedef Elf64_Rel Elf_Rel;
-  DenseMap<uint64_t, Elf_Rel> CapRelocsDynRels;
-  for (const Elf_Rel &R : DynRelRegion.getAsArrayRef<Elf_Rel>()) {
-    if (R.r_offset >= CapRelocsStartVaddr && R.r_offset < CapRelocsEndVaddr) {
-      // No need to store relocations aginst symbol zero since they don't have
-      // a name
-      if (R.getSymbol(Obj.isMips64EL()) != 0)
-        CapRelocsDynRels.insert(std::make_pair((uint64_t)R.r_offset, R));
-    }
-  }
 
   // Use the .symtab section if available otherwise use .dynsym:
   typename ELFT::SymRange Syms;
@@ -3407,17 +3385,7 @@ template <class ELFT> void ELFDumper<ELFT>::printCheriCapRelocs() {
       continue;
     SymbolNames.insert({Start, Name});
   }
-  // errs() << "Found " << CapRelocsDynRels.size()
-  //        << " dynamic relocations pointing to __cap_relocs section\n";
 
-  // Static binaries won't have a dynamic symbol table, and we only use this
-  // for looking up relocations' symbols.
-  const Elf_Shdr *SymTab = DotDynsymSec;
-  if (!SymTab && !CapRelocsDynRels.empty())
-    reportError(
-        createStringError(object_error::parse_failed,
-                          "No dynamic symbol section"),
-        ObjF.getFileName());
   using TargetUint = typename ELFT::uint;
   using TargetInt =
       typename std::conditional<ELFT::Is64Bits, int64_t, int32_t>::type;
@@ -3465,25 +3433,10 @@ template <class ELFT> void ELFDumper<ELFT>::printCheriCapRelocs() {
       break;
     }
     std::string BaseSymbol;
-    if (Base == 0) {
-      // Base is 0 -> either it is really NULL or (more likely) there is a
-      // dynamic relocation that will set the real address
-      auto it = CapRelocsDynRels.find(CapRelocsStartVaddr + CurrentOffset + 8);
-      if (it != CapRelocsDynRels.end()) {
-        Elf_Rel R = it->second;
-        const Elf_Sym *Sym = unwrapOrError(ObjF.getFileName(),
-                                           Obj.getRelocationSymbol(R, SymTab));
-        // Since we are looking up dynamic relocations, we have to look for the
-        // symbol name in the .dynstrtab section.
-        BaseSymbol = getFullSymbolName(*Sym, R.getSymbol(Obj.isMips64EL()),
-                                       DynShndxTable, DynamicStringTable, true);
-        // errs() << "Found dyn_rel for base: 0x" << utohexstr(R.r_offset) << "Name=" << BaseSymbol << "\n";
-      }
-    } else {
+    if (Base != 0) {
       auto it = SymbolNames.find(Base);
       if (it != SymbolNames.end()) {
         BaseSymbol = it->second;
-        // errs() << "BaseSymbol = SymbolNames[" << Base << "] = " << it->second << "\n";
       }
     }
     if (BaseSymbol.empty())
@@ -3491,7 +3444,6 @@ template <class ELFT> void ELFDumper<ELFT>::printCheriCapRelocs() {
     StringRef LocationSym;
     if (SymbolNames.find(Target) != SymbolNames.end())
       LocationSym = SymbolNames[Target];
-    // TODO: If base == 0 find the dynamic relocation target
     if (opts::ExpandRelocs) {
       DictScope L(W, "Relocation");
       raw_ostream &OS = W.startLine();
