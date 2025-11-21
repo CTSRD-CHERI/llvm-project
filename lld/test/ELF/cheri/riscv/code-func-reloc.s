@@ -8,11 +8,11 @@
 # CHECK-NEXT:   0x3100 R_RISCV_FUNC_RELATIVE - 0x1000
 # CHECK-NEXT:   0x3108 R_RISCV_RELATIVE - 0x30D0
 # CHECK-NEXT: }
-# CHECK:      CHERI __cap_relocs [
-# CHECK-NEXT:   0x0030d0 (data) Base: 0x1000 (func+0) Length: 4 Perms: Function
-# CHECK-NEXT:   0x0030e0 Base: 0x1000 (func+0) Length: 4 Perms: Code
-# CHECK-NEXT:   0x0030f0 Base: 0x30d0 (data+0) Length: 64 Perms: Object
-# CHECK-NEXT: ]
+# CHECK:      __cap_relocs {
+# CHECK-NEXT:   0x30D0 FUNC - 0x1000 [0x1000-0x1004]
+# CHECK-NEXT:   0x30E0 CODE - 0x1000 [0x1000-0x1004]
+# CHECK-NEXT:   0x30F0 DATA - 0x30D0 [0x30D0-0x3110]
+# CHECK-NEXT: }
 
   .type func, @function
 func:

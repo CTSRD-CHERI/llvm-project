@@ -33,8 +33,10 @@
 // PER-FILE-NEXT:     0x20A50 R_MIPS_CHERI_CAPABILITY_CALL/R_MIPS_NONE/R_MIPS_NONE extern_char_ptr{{$}}
 // PER-FILE-NEXT:   }
 // PER-FILE-NEXT: ]
-// PER-FILE-NEXT: CHERI __cap_relocs [
-// PER-FILE-NEXT:    0x020a20 (function3@CAPTABLE@file1.o.4) Base: 0x10{{.+}} (function3+0) Length: {{.+}} Perms: Function
+// PER-FILE-NEXT: CHERI Capability Relocations [
+// PER-FILE-NEXT:   Section ({{.+}}) __cap_relocs {
+// PER-FILE-NEXT:     0x20A20 FUNC - 0x10910 [0x10910-0x10960]
+// PER-FILE-NEXT:   }
 // PER-FILE-NEXT: ]
 // PER-FILE-NEXT: CHERI .captable [
 // PER-FILE-NEXT:   0x0      extern_void_ptr@CAPTABLE@file1.o   R_MIPS_CHERI_CAPABILITY_CALL/R_MIPS_NONE/R_MIPS_NONE against extern_void_ptr
@@ -63,14 +65,18 @@
 // GLOBAL-NEXT:     0x208B0 R_MIPS_CHERI_CAPABILITY_CALL/R_MIPS_NONE/R_MIPS_NONE extern_int{{$}}
 // GLOBAL-NEXT:   }
 // GLOBAL-NEXT: ]
-// GLOBAL-LABEL: CHERI .captable [
+// GLOBAL-NEXT: CHERI Capability Relocations [
+// GLOBAL-NEXT:   Section ({{.+}}) __cap_relocs {
+// GLOBAL-NEXT:     0x208D0 FUNC - 0x107C0 [0x107C0-0x10810]
+// GLOBAL-NEXT:   }
+// GLOBAL-NEXT: ]
+// GLOBAL-NEXT: CHERI .captable [
 // GLOBAL-NEXT:   0x0      extern_void_ptr@CAPTABLE        R_MIPS_CHERI_CAPABILITY_CALL/R_MIPS_NONE/R_MIPS_NONE against extern_void_ptr
 // GLOBAL-NEXT:   0x10     extern_char_ptr@CAPTABLE        R_MIPS_CHERI_CAPABILITY_CALL/R_MIPS_NONE/R_MIPS_NONE against extern_char_ptr
 // GLOBAL-NEXT:   0x20     extern_int@CAPTABLE             R_MIPS_CHERI_CAPABILITY_CALL/R_MIPS_NONE/R_MIPS_NONE against extern_int
 // GLOBAL-NEXT:   0x30     global_int@CAPTABLE             R_MIPS_CHERI_CAPABILITY/R_MIPS_NONE/R_MIPS_NONE against global_int
 // GLOBAL-NEXT:   0x40     function3@CAPTABLE.4
 // GLOBAL-NEXT: ]
-
 
 extern void *extern_void_ptr(void);
 extern char *extern_char_ptr(void);

@@ -113,9 +113,14 @@
 // CHECK-NEXT:   }
 // CHECK-NEXT: ]
 // __cap_relocs should be empty other than the one global reference to callbacks
-// CHECK-NEXT: CHERI __cap_relocs [
-// CHECK-NEXT:   0x{{.+}} (check_if_default@CAPTABLE) Base: 0x{{.+}} (check_if_default+0) Length: {{.+}} Perms: Function
-// CHECK-NEXT:   0x{{.+}} (callbacks@CAPTABLE.3) Base: 0x{{.+}} (callbacks+0) Length: 64 Perms: Constant
+// CHECK-NEXT: CHERI Capability Relocations [
+// CHECK-NEXT:   Section ({{.+}}) __cap_relocs {
+/// check_if_default
+// CHECK-NEXT:     0x{{.+}} FUNC - 0x{{.+}} [0x{{.+}}-0x{{.+}}]
+/// callbacks
+// CHECK-NEXT:     0x{{.+}} RODATA - 0x{{.+}} [0x[[#%X,CALLBACKS_BASE:]]-
+// CHECK-SAME:     0x[[#CALLBACKS_BASE+64]]]
+// CHECK-NEXT:   }
 // CHECK-NEXT: ]
 // CHECK-NEXT: CHERI .captable [
 // CHECK-NEXT:   0x0 default_callback@CAPTABLE R_MIPS_CHERI_CAPABILITY/R_MIPS_NONE/R_MIPS_NONE against {{default_callback|__cheri_fnptr_default_callback}}
@@ -133,15 +138,17 @@
 // STATIC-NEXT:  }
 // STATIC-NEXT:  DynamicSymbols [
 // STATIC-NEXT:  ]
-// STATIC-NEXT:  CHERI __cap_relocs [
-// STATIC-NEXT:     0x030600 (callbacks)     Base: 0x203c0 (default_callback+0) Length: 12 Perms: Function
-// STATIC-NEXT:     0x030610 Base: 0x20448 (static_callback+0) Length: 12 Perms: Function
-// STATIC-NEXT:     0x030620 Base: 0x203c0 (default_callback+0) Length: 12 Perms: Function
-// STATIC-NEXT:     0x030630 Base: 0x20448 (static_callback+0) Length: 12 Perms: Function
-// STATIC-NEXT:     0x030640 (default_callback@CAPTABLE) Base: 0x203c0 (default_callback+0) Length: 12 Perms: Function
-// STATIC-NEXT:     0x030650 (check_if_default@CAPTABLE) Base: 0x205d0 (check_if_default+0) Length: {{.+}} Perms: Function
-// STATIC-NEXT:     0x030660 (static_callback@CAPTABLE.2) Base: 0x20448 (static_callback+0) Length: 12 Perms: Function
-// STATIC-NEXT:     0x030670 (callbacks@CAPTABLE.3) Base: 0x30600 (callbacks+0) Length: 64 Perms: Constant
+// STATIC-NEXT:  CHERI Capability Relocations [
+// STATIC-NEXT:    Section ({{.+}}) __cap_relocs {
+// STATIC-NEXT:      0x30600 FUNC - 0x203C0 [0x203C0-0x203CC]
+// STATIC-NEXT:      0x30610 FUNC - 0x20448 [0x20448-0x20454]
+// STATIC-NEXT:      0x30620 FUNC - 0x203C0 [0x203C0-0x203CC]
+// STATIC-NEXT:      0x30630 FUNC - 0x20448 [0x20448-0x20454]
+// STATIC-NEXT:      0x30640 FUNC - 0x203C0 [0x203C0-0x203CC]
+// STATIC-NEXT:      0x30650 FUNC - 0x205D0 [0x205D0-0x{{[0-9A-F]+}}]
+// STATIC-NEXT:      0x30660 FUNC - 0x20448 [0x20448-0x20454]
+// STATIC-NEXT:      0x30670 RODATA - 0x30600 [0x30600-0x30640]
+// STATIC-NEXT:    }
 // STATIC-NEXT:  ]
 // STATIC-NEXT:  CHERI .captable [
 // STATIC-NEXT:    0x0      default_callback@CAPTABLE

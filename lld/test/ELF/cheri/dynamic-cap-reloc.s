@@ -52,9 +52,11 @@ local_ref_with_addend:
 # DYN-RELOCS-NEXT:      0x{{204D0|30560}} R_MIPS_CHERI_CAPABILITY/R_MIPS_NONE/R_MIPS_NONE foo{{$}}
 # DYN-RELOCS-NEXT:   }
 
-# DYN-RELOCS-LABEL: CHERI __cap_relocs [
-# DYN-RELOCS-NEXT:     0x0204b0 (local_ref) Base: 0x10480 (bar+0) Length: 8 Perms: Function
-# DYN-RELOCS-NEXT:     0x0204f0 (local_ref_with_addend) Base: 0x10480 (bar+4) Length: 8 Perms: Function
+# DYN-RELOCS-LABEL: CHERI Capability Relocations [
+# DYN-RELOCS-NEXT:    Section ({{.+}}) __cap_relocs {
+# DYN-RELOCS-NEXT:      0x204B0 FUNC - 0x10480 [0x10480-0x10488]
+# DYN-RELOCS-NEXT:      0x204F0 FUNC - 0x10484 [0x10480-0x10488]
+# DYN-RELOCS-NEXT:    }
 # DYN-RELOCS-NEXT:  ]
 
 

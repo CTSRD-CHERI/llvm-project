@@ -7,7 +7,7 @@
 .balign 32
 .chericap data_end
 
-# CHECK:      CHERI __cap_relocs [
-# CHECK-NEXT:   0x0100a0 Base: 0x10000 (data_begin+0) Length: 0 Perms: Constant
-# CHECK-NEXT:   0x0100c0 Base: 0x20000 (data_end+0) Length: 0 Perms: Object
-# CHECK-NEXT: ]
+# CHECK:      __cap_relocs {
+# CHECK-NEXT:   0x100A0 RODATA - 0x10000 [0x10000-0x10000]
+# CHECK-NEXT:   0x100C0 DATA - 0x20000 [0x20000-0x20000]
+# CHECK-NEXT: }

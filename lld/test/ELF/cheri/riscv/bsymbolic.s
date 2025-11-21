@@ -8,10 +8,10 @@
 
 # CHECK:      Relocations [
 # CHECK-NEXT: ]
-# CHECK-NEXT: CHERI __cap_relocs [
-# CHECK-NEXT:   0x003390 (data) Base: 0x3390 (data+0) Length: 32 Perms: Object
-# CHECK-NEXT:   0x0033a0 Base: 0x12e8 (func+0) Length: 4 Perms: Function
-# CHECK-NEXT: ]
+# CHECK:      __cap_relocs {
+# CHECK-NEXT:   0x3390 DATA - 0x3390 [0x3390-0x33B0]
+# CHECK-NEXT:   0x33A0 FUNC - 0x12E8 [0x12E8-0x12EC]
+# CHECK-NEXT: }
 
   .type func, @function
   .global func

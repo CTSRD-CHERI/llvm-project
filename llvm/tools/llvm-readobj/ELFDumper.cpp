@@ -220,7 +220,6 @@ public:
   void printLoadName() override;
   void printVersionInfo() override;
   void printArchSpecificInfo() override;
-  void printCheriCapRelocs() override;
   void printCheriCapTable() override;
   void printCheriCapTableMapping() override;
 
@@ -308,6 +307,13 @@ protected:
                            DataRegion<Elf_Word> ShndxTable,
                            std::optional<StringRef> StrTable, bool IsDynamic,
                            bool NonVisibilityBitsUsed) const = 0;
+
+  void printCheriCapRelocsHelper();
+  virtual void printCheriCapRelocsSection(const Elf_Shdr &Sec) = 0;
+  void printCheriCapRelocsSectionHelper(const Elf_Shdr &Sec);
+  virtual void printCheriCapReloc(uintX_t Offset, uintX_t Base, uintX_t Addend,
+                                  uintX_t Length, uintX_t Type,
+                                  StringRef TypeName) = 0;
 
   virtual void printMipsABIFlags() = 0;
   virtual void printMipsGOT(const MipsGOTParser<ELFT> &Parser) = 0;
@@ -598,6 +604,11 @@ public:
   void printNotes() override;
   void printELFLinkerOptions() override;
   void printStackSizes() override;
+  void printCheriCapRelocs() override;
+  void printCheriCapRelocsSection(const Elf_Shdr &Sec) override;
+  void printCheriCapReloc(uintX_t Offset, uintX_t Base, uintX_t Addend,
+                          uintX_t Length, uintX_t Type,
+                          StringRef TypeName) override;
   void printMemtag(
       const ArrayRef<std::pair<std::string, std::string>> DynamicEntries,
       const ArrayRef<uint8_t> AndroidNoteDesc,
@@ -706,6 +717,11 @@ public:
   void printNotes() override;
   void printELFLinkerOptions() override;
   void printStackSizes() override;
+  void printCheriCapRelocs() override;
+  void printCheriCapRelocsSection(const Elf_Shdr &Sec) override;
+  void printCheriCapReloc(uintX_t Offset, uintX_t Base, uintX_t Addend,
+                          uintX_t Length, uintX_t Type,
+                          StringRef TypeName) override;
   void printMemtag(
       const ArrayRef<std::pair<std::string, std::string>> DynamicEntries,
       const ArrayRef<uint8_t> AndroidNoteDesc,
@@ -3338,138 +3354,63 @@ static int getMipsRegisterSize(uint8_t Flag) {
   }
 }
 
-template <class ELFT> void ELFDumper<ELFT>::printCheriCapRelocs() {
-  const ELFFile<ELFT> &Obj = ObjF.getELFFile();
-  const Elf_Shdr *Shdr = findSectionByName("__cap_relocs");
-  if (!Shdr) {
-    W.startLine() << "There is no __cap_relocs section in the file.\n";
-    return;
-  }
+template <class ELFT>
+void ELFDumper<ELFT>::printCheriCapRelocsSectionHelper(const Elf_Shdr &Sec) {
+  StringRef SecName = this->getPrintableSectionName(Sec);
   ArrayRef<uint8_t> Data =
-      unwrapOrError(ObjF.getFileName(), Obj.getSectionContents(*Shdr));
-  const size_t entry_size = ELFT::Is64Bits ? 40 : 20;
-  if (Data.size() % entry_size != 0) {
-    W.startLine() << "The __cap_relocs section has a wrong size: "
-                  << Data.size() << "\n";
+      unwrapOrError(ObjF.getFileName(), Obj.getSectionContents(Sec));
+  const size_t EntrySize = ELFT::Is64Bits ? 40 : 20;
+  if (Data.size() % EntrySize != 0) {
+    reportUniqueWarning("The " + Twine(SecName) +
+                        " section has a wrong size: " + Twine(Data.size()));
     return;
   }
-  ListScope L(W, "CHERI __cap_relocs");
 
-  // Use the .symtab section if available otherwise use .dynsym:
-  typename ELFT::SymRange Syms;
-  StringRef StrTable;
-  DataRegion<Elf_Word> ShndxTable = ArrayRef<Elf_Word>();
-  DataRegion<Elf_Word> DynShndxTable(
-      (const Elf_Word *)this->DynSymTabShndxRegion.Addr, this->Obj.end());
-  bool UsingDynsym = false;
-  if (DotSymtabSec) {
-    StrTable = unwrapOrError(ObjF.getFileName(),
-                             Obj.getStringTableForSymtab(*DotSymtabSec));
-    Syms = unwrapOrError(ObjF.getFileName(), Obj.symbols(DotSymtabSec));
-    ShndxTable = this->getShndxTable(this->DotSymtabSec);
-  } else {
-    StrTable = DynamicStringTable;
-    Syms = dynamic_symbols();
-    ShndxTable = DynShndxTable;
-    UsingDynsym = true;
-  }
-  std::unordered_map<uint64_t, std::string> SymbolNames;
-  const Elf_Sym &FirstSym = Syms[0];
-  for (const auto &Sym : Syms) {
-    uint64_t Start = Sym.st_value;
-    if (!Start)
-      continue;
-    std::string Name =
-        getFullSymbolName(Sym, &Sym - &FirstSym, ShndxTable, StrTable, UsingDynsym);
-    if (Name.empty())
-      continue;
-    SymbolNames.insert({Start, Name});
-  }
-
-  using TargetUint = typename ELFT::uint;
-  using TargetInt =
-      typename std::conditional<ELFT::Is64Bits, int64_t, int32_t>::type;
-  for (int i = 0, e = Data.size() / entry_size; i < e; i++) {
-    const uint64_t CurrentOffset = entry_size * i;
-    const uint8_t *entry = Data.data() + CurrentOffset;
-    uint64_t Target =
-        support::endian::read<TargetUint, ELFT::TargetEndianness, 1>(
-                entry);
-    uint64_t Base =
-        support::endian::read<TargetUint, ELFT::TargetEndianness, 1>(
-                entry + sizeof(TargetUint));
-    int64_t Offset =
-        support::endian::read<TargetInt,  ELFT::TargetEndianness, 1>(
-                entry + 2*sizeof(TargetUint));
-    uint64_t Length =
-        support::endian::read<TargetUint, ELFT::TargetEndianness, 1>(
-                entry + 3*sizeof(TargetUint));
-    uint64_t Perms =
-        support::endian::read<TargetUint, ELFT::TargetEndianness, 1>(
-                entry + 4*sizeof(TargetUint));
-    const uint64_t Function = UINT64_C(1) << ((sizeof(TargetUint) * 8) - 1);
-    const uint64_t Constant = UINT64_C(1) << ((sizeof(TargetUint) * 8) - 2);
-    const uint64_t Indirect = UINT64_C(1) << ((sizeof(TargetUint) * 8) - 3);
-    const uint64_t Code = UINT64_C(1) << ((sizeof(TargetUint) * 8) - 4);
-    StringRef PermStr;
-    switch (Perms) {
+  for (int I = 0, E = Data.size() / EntrySize; I < E; I++) {
+    const uint64_t CurrentOffset = EntrySize * I;
+    const uint8_t *Entry = Data.data() + CurrentOffset;
+    uintX_t Offset =
+        support::endian::read<uintX_t, ELFT::TargetEndianness, 1>(Entry);
+    uintX_t Base = support::endian::read<uintX_t, ELFT::TargetEndianness, 1>(
+        Entry + sizeof(uintX_t));
+    uintX_t Addend = support::endian::read<uintX_t, ELFT::TargetEndianness, 1>(
+        Entry + 2 * sizeof(uintX_t));
+    uintX_t Length = support::endian::read<uintX_t, ELFT::TargetEndianness, 1>(
+        Entry + 3 * sizeof(uintX_t));
+    uintX_t Type = support::endian::read<uintX_t, ELFT::TargetEndianness, 1>(
+        Entry + 4 * sizeof(uintX_t));
+    const uintX_t Function = uintX_t(1) << ((sizeof(uintX_t) * 8) - 1);
+    const uintX_t Constant = uintX_t(1) << ((sizeof(uintX_t) * 8) - 2);
+    const uintX_t Indirect = uintX_t(1) << ((sizeof(uintX_t) * 8) - 3);
+    const uintX_t Code = uintX_t(1) << ((sizeof(uintX_t) * 8) - 4);
+    StringRef TypeName;
+    switch (Type) {
     case 0:
-      PermStr = "Object";
+      TypeName = "DATA";
       break;
     case Constant:
-      PermStr = "Constant";
+      TypeName = "RODATA";
       break;
     case Function:
-      PermStr = "Function";
+      TypeName = "FUNC";
       break;
     case Function | Indirect:
-      PermStr = "GNU Indirect Function";
+      TypeName = "IFUNC";
       break;
     case Function | Code:
-      PermStr = "Code";
+      TypeName = "CODE";
       break;
     default:
-      PermStr = "Unknown";
+      TypeName = "Unknown";
       break;
     }
-    std::string BaseSymbol;
-    if (Base != 0) {
-      auto it = SymbolNames.find(Base);
-      if (it != SymbolNames.end()) {
-        BaseSymbol = it->second;
-      }
-    }
-    if (BaseSymbol.empty())
-      BaseSymbol = "<unknown symbol>";
-    StringRef LocationSym;
-    if (SymbolNames.find(Target) != SymbolNames.end())
-      LocationSym = SymbolNames[Target];
-    if (opts::ExpandRelocs) {
-      DictScope L(W, "Relocation");
-      raw_ostream &OS = W.startLine();
-      OS << "Location: 0x" << utohexstr(Target);
-      if (!LocationSym.empty())
-        OS << " (" << LocationSym << ")";
-      OS << "\n";
-      W.printHex("Base", BaseSymbol, Base);
-      W.printNumber("Offset", Offset);
-      W.printNumber("Length", Length);
-      W.printHex("Permissions", PermStr, Perms);
-    } else {
-      raw_ostream &OS = W.startLine();
-      OS << format(" 0x%06lx", static_cast<unsigned long>(Target));
-      if (!LocationSym.empty())
-        OS << left_justify((" (" + LocationSym + ")").str(), 16);
-      OS << format(" Base: 0x%lx (", static_cast<unsigned long>(Base))
-         << BaseSymbol;
-      if (Offset >= 0)
-        OS << "+";
-      OS << Offset;
-      OS << format(") Length: %ld", static_cast<unsigned long>(Length));
-      OS << " Perms: " << PermStr;
-      OS << "\n";
-    }
+    printCheriCapReloc(Offset, Base, Addend, Length, Type, TypeName);
   }
+}
+
+template <class ELFT> void ELFDumper<ELFT>::printCheriCapRelocsHelper() {
+  if (const Elf_Shdr *Shdr = findSectionByName("__cap_relocs"))
+    printCheriCapRelocsSection(*Shdr);
 }
 
 template <class ELFT> void ELFDumper<ELFT>::printCheriCapTable() {
@@ -5438,6 +5379,60 @@ template <class ELFT> void GNUELFDumper<ELFT>::printAddrsig() {
       printField(Entry);
     OS << "\n";
   }
+}
+
+template <class ELFT> void GNUELFDumper<ELFT>::printCheriCapRelocs() {
+  this->printCheriCapRelocsHelper();
+}
+
+template <class ELFT>
+static void printCheriCapRelocHeaderFields(formatted_raw_ostream &OS) {
+  if (ELFT::Is64Bits)
+    OS << "    ";
+  else
+    OS << " ";
+  OS << "Offset";
+  if (ELFT::Is64Bits)
+    OS << "             Info         Type        Value";
+  else
+    OS << "     Info    Type    Value";
+  OS << "\n";
+}
+
+template <class ELFT>
+void GNUELFDumper<ELFT>::printCheriCapRelocsSection(const Elf_Shdr &Sec) {
+  ArrayRef<uint8_t> Data = unwrapOrError(this->ObjF.getFileName(),
+                                         this->Obj.getSectionContents(Sec));
+  const size_t EntrySize = ELFT::Is64Bits ? 40 : 20;
+  StringRef Name = this->getPrintableSectionName(Sec);
+  uint64_t Offset = Data.data() - this->Obj.base();
+  std::string EntriesNum = std::to_string(Data.size() / EntrySize);
+  OS << "\nCHERI capability relocation section '" << Name << "' at offset 0x"
+     << utohexstr(Offset, /*LowerCase=*/true) << " contains " << EntriesNum
+     << " entries:\n";
+  printCheriCapRelocHeaderFields<ELFT>(OS);
+  this->printCheriCapRelocsSectionHelper(Sec);
+}
+
+template <class ELFT>
+void GNUELFDumper<ELFT>::printCheriCapReloc(uintX_t Offset, uintX_t Base,
+                                            uintX_t Addend, uintX_t Length,
+                                            uintX_t Type, StringRef TypeName) {
+  // First two fields are bit width dependent. The rest of them are fixed width.
+  unsigned Bias = ELFT::Is64Bits ? 8 : 0;
+  Field Fields[4] = {0, 10 + Bias, 19 + 2 * Bias, 27 + 2 * Bias};
+  unsigned Width = ELFT::Is64Bits ? 16 : 8;
+
+  Fields[0].Str = to_string(format_hex_no_prefix(Offset, Width));
+  Fields[1].Str = to_string(format_hex_no_prefix(Type, Width));
+  Fields[2].Str = TypeName;
+  Fields[3].Str = to_string(format_hex_no_prefix(Base + Addend, Width));
+
+  for (const Field &F : Fields)
+    printField(F);
+
+  OS << " [" << to_string(format_hex_no_prefix(Base, Width)) << "-"
+     << to_string(format_hex_no_prefix(Base + Length, Width)) << "]\n";
 }
 
 template <typename ELFT>
@@ -7878,6 +7873,41 @@ template <class ELFT> void LLVMELFDumper<ELFT>::printAddrsig() {
 
   for (uint64_t Sym : *SymsOrErr)
     W.printNumber("Sym", this->getStaticSymbolName(Sym), Sym);
+}
+
+template <class ELFT> void LLVMELFDumper<ELFT>::printCheriCapRelocs() {
+  ListScope D(W, "CHERI Capability Relocations");
+  this->printCheriCapRelocsHelper();
+}
+
+template <class ELFT>
+void LLVMELFDumper<ELFT>::printCheriCapRelocsSection(const Elf_Shdr &Sec) {
+  StringRef SecName = this->getPrintableSectionName(Sec);
+  unsigned SecNdx = &Sec - &cantFail(this->Obj.sections()).front();
+  DictScope D(W, (Twine("Section (") + Twine(SecNdx) + ") " + SecName).str());
+  this->printCheriCapRelocsSectionHelper(Sec);
+}
+
+template <class ELFT>
+void LLVMELFDumper<ELFT>::printCheriCapReloc(uintX_t Offset, uintX_t Base,
+                                             uintX_t Addend, uintX_t Length,
+                                             uintX_t Type, StringRef TypeName) {
+  if (opts::ExpandRelocs) {
+    DictScope L(W, "Relocation");
+    W.printHex("Offset", Offset);
+    W.printHex("Type", TypeName, Type);
+    W.printHex("Address", Base + Addend);
+    W.printHex("Base", Base);
+    W.printNumber("Length", Length);
+  } else {
+    raw_ostream &OS = W.startLine();
+    // NB: The "-" corresponds to how relocations with no symbol are printed,
+    // and helps provide visual separation for the pile of hex, but we don't
+    // bother to print a Symbol field above as everything's already labelled
+    // on their own lines and that seems a bit unnecessary.
+    OS << W.hex(Offset) << " " << TypeName << " - " << W.hex(Base + Addend)
+       << " [" << W.hex(Base) << "-" << W.hex(Base + Length) << "]\n";
+  }
 }
 
 template <typename ELFT>

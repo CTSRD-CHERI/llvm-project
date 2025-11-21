@@ -98,7 +98,8 @@
 // CHECK-NODYN-NEXT:   }
 // CHECK-NEXT: ]
 // __cap_relocs should be empty! we need a dynamic relocaiton for return1 since we are using it as a function pointer
-// CHECK-NEXT: There is no __cap_relocs section in the file.
+// CHECK-NEXT: CHERI Capability Relocations [
+// CHECK-NEXT: ]
 // CHECK-NEXT: CHERI .captable [
 // CHECK-NEXT:   0x0      return1@CAPTABLE.0              R_MIPS_CHERI_CAPABILITY/R_MIPS_NONE/R_MIPS_NONE against __cheri_fnptr_return1
 // CHECK-NEXT:   0x10     use_callback@CAPTABLE           R_MIPS_CHERI_CAPABILITY_CALL/R_MIPS_NONE/R_MIPS_NONE against use_callback
@@ -116,10 +117,12 @@
 // STATIC-NEXT:  }
 // STATIC-NEXT:  DynamicSymbols [
 // STATIC-NEXT:  ]
-// STATIC-NEXT:  CHERI __cap_relocs [
-// STATIC-NEXT:     0x0303c0 (return1@CAPTABLE.0) Base: 0x20368 (return1+0) Length: 12 Perms: Function
-// STATIC-NEXT:     0x0303d0 (use_callback@CAPTABLE) Base: 0x20380 (use_callback+0) Length: {{[0-9]+}} Perms: Function
-// STATIC-NEXT:     0x0303e0 (global_return2@CAPTABLE) Base: 0x202f0 (global_return2+0) Length: 12 Perms: Function
+// STATIC-NEXT:  CHERI Capability Relocations [
+// STATIC-NEXT:    __cap_relocs {
+// STATIC-NEXT:      0x303C0 FUNC - 0x20368 [0x20368-0x20374]
+// STATIC-NEXT:      0x303D0 FUNC - 0x20380 [0x20380-0x{{[0-9A-F]+}}]
+// STATIC-NEXT:      0x303E0 FUNC - 0x202F0 [0x202F0-0x202FC]
+// STATIC-NEXT:    }
 // STATIC-NEXT:  ]
 // STATIC-NEXT:  CHERI .captable [
 // STATIC-NEXT:    0x0      return1@CAPTABLE.0

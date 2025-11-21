@@ -5,12 +5,12 @@
 
 # RUN: %cheri_purecap_llvm-mc %s -filetype=obj -o %t.o
 # RUNNOT: llvm-readobj -r %t.o
-# RUN: not ld.lld -shared %t.o -o %t.so 2>&1 | FileCheck %s
+# RUN: not ld.lld -shared %t.o -o %t.so 2>&1 | FileCheck %s --check-prefix=ERR
 # RUN: ld.lld -shared %t.o -o %t.so -z notext
-# RUN: llvm-readobj --cap-relocs %t.so | FileCheck %s --check-prefix SHLIB
-# RUN: not ld.lld -static %t.o -o %t.exe 2>&1 | FileCheck %s
+# RUN: llvm-readobj -s --cap-relocs %t.so | FileCheck %s
+# RUN: not ld.lld -static %t.o -o %t.exe 2>&1 | FileCheck %s --check-prefix=ERR
 # RUN: ld.lld -static %t.o -o %t.exe -z notext
-# RUN: llvm-readobj --cap-relocs %t.exe | FileCheck %s --check-prefix EXE
+# RUN: llvm-readobj -s --cap-relocs %t.exe | FileCheck %s
 
 .text
 .global __start
@@ -42,21 +42,25 @@ bar:
   .chericap foo + 123
 .Lend_bar:
 .size bar, .Lend_bar - bar
-# CHECK: error: attempting to add a capability relocation against symbol __start in a read-only section; pass -Wl,-z,notext if you really want to do this
-# CHECK-NEXT: >>> referenced by object foo
-# CHECK-NEXT: >>> defined in  ({{.+}}capability-in-rodata.s.tmp.o:(foo))
-# CHECK-EMPTY:
-# CHECK: error: attempting to add a capability relocation against symbol foo in a read-only section; pass -Wl,-z,notext if you really want to do this
-# CHECK-NEXT: >>> referenced by object bar
-# CHECK-NEXT: >>> defined in  ({{.+}}capability-in-rodata.s.tmp.o:(bar))
-# CHECK-EMPTY:
+# ERR: error: attempting to add a capability relocation against symbol __start in a read-only section; pass -Wl,-z,notext if you really want to do this
+# ERR-NEXT: >>> referenced by object foo
+# ERR-NEXT: >>> defined in  ({{.+}}capability-in-rodata.s.tmp.o:(foo))
+# ERR-EMPTY:
+# ERR: error: attempting to add a capability relocation against symbol foo in a read-only section; pass -Wl,-z,notext if you really want to do this
+# ERR-NEXT: >>> referenced by object bar
+# ERR-NEXT: >>> defined in  ({{.+}}capability-in-rodata.s.tmp.o:(bar))
+# ERR-EMPTY:
 
-# EXE: CHERI __cap_relocs [
-# EXE-NEXT: 0x{{[0-9a-f]+}} (foo)           Base: 0x{{[0-9a-f]+}} (__start+4) Length: 16 Perms: Function
-# EXE-NEXT: 0x{{[0-9a-f]+}} (bar)           Base: 0x{{[0-9a-f]+}} (foo+123) Length: {{16|32}} Perms: Constant
-# EXE-NEXT: ]
+# CHECK:      Name: __start
+# CHECK-NEXT: Value: 0x[[#%X,START:]]
+# CHECK:      Name: foo
+# CHECK-NEXT: Value: 0x[[#%X,FOO:]]
+# CHECK:      Name: bar
+# CHECK-NEXT: Value: 0x[[#%X,BAR:]]
 
-# SHLIB: CHERI __cap_relocs [
-# SHLIB-NEXT: 0x{{[0-9a-f]+}} (foo)           Base: 0x{{[0-9a-f]+}} (__start+4) Length: 16 Perms: Function
-# SHLIB-NEXT: 0x{{[0-9a-f]+}} (bar)           Base: 0x{{[0-9a-f]+}} (foo+123) Length: {{16|32}} Perms: Constant
-# SHLIB-NEXT: ]
+# CHECK:      CHERI Capability Relocations [
+# CHECK-NEXT:   Section ({{.+}}) __cap_relocs {
+# CHECK-NEXT:     0x[[#FOO]] FUNC - 0x[[#START+4]] [0x[[#START]]-0x[[#START+16]]]
+# CHECK-NEXT:     0x[[#BAR]] RODATA - 0x[[#FOO+123]] [0x[[#FOO]]-0x[[#FOO+16]]]
+# CHECK-NEXT:   }
+# CHECK-NEXT: ]

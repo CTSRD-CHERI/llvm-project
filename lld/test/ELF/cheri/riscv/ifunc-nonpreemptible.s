@@ -20,19 +20,19 @@
 
 # RELOC32:      Relocations [
 # RELOC32-NEXT: ]
-# RELOC32:      CHERI __cap_relocs [
-# RELOC32-NEXT:   0x012000 (fptr) Base: 0x11010 (func+0) Length: 16 Perms: Function
-# RELOC32-NEXT:   0x012008 Base: 0x11000 (<unknown symbol>+0) Length: 4 Perms: GNU Indirect Function
-# RELOC32-NEXT: ]
+# RELOC32:      __cap_relocs {
+# RELOC32-NEXT:   0x12000 FUNC - 0x11010 [0x11010-0x11020]
+# RELOC32-NEXT:   0x12008 IFUNC - 0x11000 [0x11000-0x11004]
+# RELOC32-NEXT: }
 # GOTPLT32:      section '.got.plt':
 # GOTPLT32-NEXT: 0x00012008 00000000 00000000
 
 # RELOC64:      Relocations [
 # RELOC64-NEXT: ]
-# RELOC64:      CHERI __cap_relocs [
-# RELOC64-NEXT:   0x012000 (fptr) Base: 0x11010 (func+0) Length: 16 Perms: Function
-# RELOC64-NEXT:   0x012010 Base: 0x11000 (<unknown symbol>+0) Length: 4 Perms: GNU Indirect Function
-# RELOC64-NEXT: ]
+# RELOC64:      __cap_relocs {
+# RELOC64-NEXT:   0x12000 FUNC - 0x11010 [0x11010-0x11020]
+# RELOC64-NEXT:   0x12010 IFUNC - 0x11000 [0x11000-0x11004]
+# RELOC64-NEXT: }
 # GOTPLT64:      section '.got.plt':
 # GOTPLT64-NEXT: 0x00012010 00000000 00000000 00000000 00000000
 

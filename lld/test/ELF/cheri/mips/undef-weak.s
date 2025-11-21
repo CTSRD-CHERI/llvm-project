@@ -10,7 +10,8 @@
 # RUN: llvm-readobj --cap-relocs %t.256 | FileCheck --check-prefix=RELOC %s
 # RUN: llvm-readobj -x .data %t.256 | FileCheck --check-prefix=HEX256 %s
 
-# RELOC: There is no __cap_relocs section in the file.
+# RELOC:      CHERI Capability Relocations [
+# RELOC-NEXT: ]
 
 # HEX128-LABEL: section '.data':
 # HEX128-NEXT:  [[#%x,]] 00000000 00000000 00000000 00000000

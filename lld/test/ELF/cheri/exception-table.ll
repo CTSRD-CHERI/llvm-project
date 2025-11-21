@@ -28,11 +28,11 @@
 ;; This should work with both -z text and -z notext
 ;; Check that .gcc_except_table ends up in the relro section and the relocations are correct
 ; RUN: ld.lld -shared %t/mips.o -o %t/mips.so -z notext
-; RUN: llvm-readelf -r --section-mapping --sections --program-headers --cap-relocs  %t/mips.so | FileCheck %s --check-prefixes=HEADERS,MIPS-RELOCS
+; RUN: llvm-readelf -r --section-mapping --sections --program-headers --symbols --cap-relocs  %t/mips.so | FileCheck %s --check-prefixes=HEADERS,MIPS-RELOCS
 ; RUN: ld.lld -shared %t/mips.o -o %t/mips.so -z text
-; RUN: llvm-readelf -r --section-mapping --sections --program-headers --cap-relocs  %t/mips.so | FileCheck %s --check-prefixes=HEADERS,MIPS-RELOCS
+; RUN: llvm-readelf -r --section-mapping --sections --program-headers --symbols --cap-relocs  %t/mips.so | FileCheck %s --check-prefixes=HEADERS,MIPS-RELOCS
 ; RUN: ld.lld -shared %t/mips.o %t/mips-override.o -o %t/mips.so 
-; RUN: llvm-readelf -r --section-mapping --sections --program-headers --cap-relocs  %t/mips.so | FileCheck %s --check-prefixes=HEADERS,MIPS-RELOCS
+; RUN: llvm-readelf -r --section-mapping --sections --program-headers --symbols --cap-relocs  %t/mips.so | FileCheck %s --check-prefixes=HEADERS,MIPS-RELOCS
 
 ; HEADERS-LABEL: There are 10 program headers, starting at
 ; HEADERS-EMPTY:
@@ -74,19 +74,27 @@
 ; MIPS-RELOCS-NEXT:                R_MIPS_CHERI_CAPABILITY_CALL/R_MIPS_NONE/R_MIPS_NONE 0000000000000000 __cxa_begin_catch
 ; MIPS-RELOCS-NEXT:                R_MIPS_CHERI_CAPABILITY_CALL/R_MIPS_NONE/R_MIPS_NONE 0000000000000000 __cxa_end_catch
 
+; MIPS-RELOCS-LABEL: Symbol table '.symtab' contains
+; MIPS-RELOCS: [[#%.16x,TEST_ADDR:]]        160 FUNC    LOCAL  DEFAULT    11 .L_Z4testll$local
+; MIPS-RELOCS: [[#%.16x,TEST2_ADDR:]]       168 FUNC    LOCAL  DEFAULT    11 .L_Z5test2ll$local
+; MIPS-RELOCS: [[#%.16x,TEST_WEAK_ADDR:]]    84 FUNC    LOCAL  DEFAULT    11 .L_Z9test_weakll$local
+
 ;; Local relocations for exception handling:
-; MIPS-RELOCS-NEXT: CHERI __cap_relocs [
-; MIPS-RELOCS-NEXT:   0x02{{.+}} Base: 0x1{{.+}} (.L_Z4testll$local+128) Length: 160 Perms: Function
-; MIPS-RELOCS-NEXT:   0x02{{.+}} Base: 0x1{{.+}} (.L_Z4testll$local+96) Length: 160 Perms: Function
-; MIPS-RELOCS-NEXT:   0x02{{.+}} Base: 0x1{{.+}} (.L_Z5test2ll$local+96) Length: 168 Perms: Function
-; MIPS-RELOCS-NEXT:   0x02{{.+}} Base: 0x1{{.+}} (.L_Z9test_weakll$local+52) Length: 84 Perms: Function
-; MIPS-RELOCS-NEXT: ]
+; MIPS-RELOCS-LABEL: CHERI capability relocation section '__cap_relocs' at offset {{.+}} contains 4 entries:
+; MIPS-RELOCS-NEXT:      Offset             Info         Type        Value
+; MIPS-RELOCS-NEXT:  {{0*}}2{{.+}}     8000000000000000 FUNC    [[#TEST_ADDR+128]] [{{[0-9a-f]+}}-{{[0-9a-f]+}}]
+; MIPS-RELOCS-NEXT:  {{0*}}2{{.+}}     8000000000000000 FUNC    [[#TEST_ADDR+96]] [{{[0-9a-f]+}}-{{[0-9a-f]+}}]
+; MIPS-RELOCS-NEXT:  {{0*}}2{{.+}}     8000000000000000 FUNC    [[#TEST2_ADDR+96]] [{{[0-9a-f]+}}-{{[0-9a-f]+}}]
+; MIPS-RELOCS-NEXT:  {{0*}}2{{.+}}     8000000000000000 FUNC    [[#TEST_WEAK_ADDR+52]] [{{[0-9a-f]+}}-{{[0-9a-f]+}}]
 
 ;; Should also emit __cap_relocs for RISC-V:
 ; RUN: ld.lld -shared %t/riscv.o -o %t/riscv.so
-; RUN: llvm-readelf -r --symbols --cap-relocs %t/riscv.so | FileCheck %s --check-prefixes=RV64-RELOCS,RV64-RELOCS-WEAK
+; RUN: llvm-readelf -r --sections --symbols --cap-relocs %t/riscv.so | FileCheck %s --check-prefixes=RV64-RELOCS,RV64-RELOCS-WEAK
 ; RUN: ld.lld -shared %t/riscv.o %t/riscv-override.o -o %t/riscv.so
-; RUN: llvm-readelf -r --symbols --cap-relocs %t/riscv.so | FileCheck %s --check-prefixes=RV64-RELOCS,RV64-RELOCS-OVERRIDE
+; RUN: llvm-readelf -r --sections --symbols --cap-relocs %t/riscv.so | FileCheck %s --check-prefixes=RV64-RELOCS,RV64-RELOCS-OVERRIDE
+
+; RV64-RELOCS-LABEL: Section Headers:
+; RV64-RELOCS: .plt PROGBITS [[#%.16x,PLT0_ADDR:]]
 
 ; RV64-RELOCS-LABEL: Symbol table '.symtab' contains
 ; RV64-RELOCS: [[#%.16x,TEST_ADDR:]]        116 FUNC    LOCAL  DEFAULT     9 .L_Z4testll$local
@@ -99,16 +107,16 @@
 ; RV64-RELOCS-OVERRIDE-NOT: [[#%.16x,TEST_WEAK_ADDR]]
 ; RV64-RELOCS-OVERRIDE: [[#%.16x,TEST_WEAK_OVERRIDE_ADDR:]] 8 FUNC    GLOBAL   DEFAULT     9 _Z9test_weakll{{$}}
 
-; RV64-RELOCS: CHERI __cap_relocs [
-; RV64-RELOCS-NEXT:   0x002{{.+}} Base: 0x[[#%x,TEST_ADDR]] (.L_Z4testll$local+92) Length: 116 Perms: Code
-; RV64-RELOCS-NEXT:   0x002{{.+}} Base: 0x[[#%x,TEST_ADDR]] (.L_Z4testll$local+72) Length: 116 Perms: Code
-; RV64-RELOCS-NEXT:   0x002{{.+}} Base: 0x[[#%x,TEST2_ADDR]] (.L_Z5test2ll$local+72) Length: 124 Perms: Code
+; RV64-RELOCS-LABEL: CHERI capability relocation section '__cap_relocs' at offset {{.+}} contains 7 entries:
+; RV64-RELOCS-NEXT:      Offset             Info         Type        Value
+; RV64-RELOCS-NEXT:  {{0*}}2{{.+}}     9000000000000000 CODE    [[#TEST_ADDR+92]] [{{[0-9a-f]+}}-{{[0-9a-f]+}}]
+; RV64-RELOCS-NEXT:  {{0*}}2{{.+}}     9000000000000000 CODE    [[#TEST_ADDR+72]] [{{[0-9a-f]+}}-{{[0-9a-f]+}}]
+; RV64-RELOCS-NEXT:  {{0*}}2{{.+}}     9000000000000000 CODE    [[#TEST2_ADDR+72]] [{{[0-9a-f]+}}-{{[0-9a-f]+}}]
 ; Next one references the local symbol, and uses that length rather than the override:
-; RV64-RELOCS-NEXT:   0x002{{.+}} Base: 0x[[#%x,TEST_WEAK_ADDR]] (.L_Z9test_weakll$local+28) Length: 52 Perms: Code
-; RV64-RELOCS-NEXT:   0x003{{.+}} Base: 0x[[#%x,PLT0_ADDR:]] (<unknown symbol>+0) Length: 80 Perms: Code
-; RV64-RELOCS-NEXT:   0x003{{.+}} Base: 0x[[#%x,PLT0_ADDR]] (<unknown symbol>+0) Length: 80 Perms: Code
-; RV64-RELOCS-NEXT:   0x003{{.+}} Base: 0x[[#%x,PLT0_ADDR]] (<unknown symbol>+0) Length: 80 Perms: Code
-; RV64-RELOCS-NEXT: ]
+; RV64-RELOCS-NEXT:  {{0*}}2{{.+}}     9000000000000000 CODE    [[#TEST_WEAK_ADDR+28]] [{{[0-9a-f]+}}-{{[0-9a-f]+}}]
+; RV64-RELOCS-NEXT:  {{0*}}3{{.+}}     9000000000000000 CODE    [[#PLT0_ADDR]] [{{[0-9a-f]+}}-{{[0-9a-f]+}}]
+; RV64-RELOCS-NEXT:  {{0*}}3{{.+}}     9000000000000000 CODE    [[#PLT0_ADDR]] [{{[0-9a-f]+}}-{{[0-9a-f]+}}]
+; RV64-RELOCS-NEXT:  {{0*}}3{{.+}}     9000000000000000 CODE    [[#PLT0_ADDR]] [{{[0-9a-f]+}}-{{[0-9a-f]+}}]
 
 ; IR was generated from the following code:
 ; long external_fn(long arg);
