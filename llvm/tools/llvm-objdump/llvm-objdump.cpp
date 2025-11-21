@@ -2090,123 +2090,6 @@ static void disassembleObject(const Target *TheTarget, ObjectFile &Obj,
     reportWarning("failed to disassemble missing symbol " + Sym, FileName);
 }
 
-template <class ELFT> static void
-printELFCapRelocations(const ELFObjectFile<ELFT> *Obj) {
-  StringRef AddrFmt = Obj->getBytesInAddress() > 4 ? "0x%016" PRIx64 :
-                                                     "0x%08" PRIx64;
-  StringRef PermsFmt = Obj->getBytesInAddress() > 4 ? "0x%08" PRIx64 :
-                                                      "0x%04" PRIx64;
-
-  std::unordered_map<uint64_t, std::string> SymbolNames;
-  for (const SymbolRef &Sym : Obj->symbols()) {
-    if (auto Type = Sym.getType()) {
-      // Skip STT_FILE symbols
-      if (*Type == SymbolRef::ST_File)
-        continue;
-    }
-    auto Section = Sym.getSection();
-    if (!Section || *Section == Obj->section_end()) {
-      continue; // Skip undefined symbols
-    }
-    Expected<uint64_t> Start = Sym.getAddress();
-    if (!Start)
-      continue;
-    Expected<StringRef> Name = Sym.getName();
-    if (!Name) {
-      continue;
-    }
-    SymbolNames.insert({Start.get(), Name.get().str()});
-  }
-  StringRef Data;
-  for (const SectionRef &Sec : Obj->sections()) {
-    Expected<StringRef> Name = Sec.getName();
-    if (!Name) {
-      consumeError(Name.takeError());
-      continue;
-    }
-    if (*Name == "__cap_relocs") {
-      Data = unwrapOrError(Sec.getContents(), Obj->getFileName());
-      break;
-    }
-  }
-  outs() << "CAPABILITY RELOCATION RECORDS:\n";
-  const size_t entry_size = ELFT::Is64Bits ? 40 : 20;
-  using TargetUint = typename ELFT::uint;
-  for (int i = 0, e = Data.size() / entry_size; i < e; i++) {
-    const char *entry = Data.data() + (entry_size * i);
-    uint64_t Target =
-        support::endian::read<TargetUint, ELFT::TargetEndianness, 1>(
-                entry);
-    uint64_t Base =
-        support::endian::read<TargetUint, ELFT::TargetEndianness, 1>(
-                entry + sizeof(TargetUint));
-    uint64_t Offset =
-        support::endian::read<TargetUint, ELFT::TargetEndianness, 1>(
-                entry + 2*sizeof(TargetUint));
-    uint64_t Length =
-        support::endian::read<TargetUint, ELFT::TargetEndianness, 1>(
-                entry + 3*sizeof(TargetUint));
-    uint64_t Perms =
-        support::endian::read<TargetUint, ELFT::TargetEndianness, 1>(
-                entry + 4*sizeof(TargetUint));
-    const uint64_t Function = UINT64_C(1) << ((sizeof(TargetUint) * 8) - 1);
-    const uint64_t Constant = UINT64_C(1) << ((sizeof(TargetUint) * 8) - 2);
-    const uint64_t Indirect = UINT64_C(1) << ((sizeof(TargetUint) * 8) - 3);
-    const uint64_t Code = UINT64_C(1) << ((sizeof(TargetUint) * 8) - 4);
-    StringRef PermStr;
-    switch (Perms) {
-    case 0:
-      PermStr = "";
-      break;
-    case Constant:
-      PermStr = " (Constant)";
-      break;
-    case Function:
-      PermStr = " (Function)";
-      break;
-    case Function | Indirect:
-      PermStr = " (GNU Indirect Function)";
-      break;
-    case Function | Code:
-      PermStr = " (Code)";
-      break;
-    default:
-      PermStr = " (Unknown)";
-      break;
-    }
-    StringRef Symbol = "<Unnamed symbol>";
-    if (SymbolNames.find(Base) != SymbolNames.end())
-      Symbol = SymbolNames[Base];
-    outs() << format(AddrFmt.data(), Target) << "\tBase: " << Symbol << " ("
-           << format(AddrFmt.data(), Base)
-           << ")\tOffset: " << format(AddrFmt.data(), Offset)
-           << "\tLength: " << format(AddrFmt.data(), Length)
-           << "\tPermissions: " << format(PermsFmt.data(), Perms)
-           << PermStr << "\n";
-  }
-  outs() << "\n";
-}
-
-void objdump::printCapRelocations(const ObjectFile *Obj) {
-  if (!Obj->isELF()) {
-    WithColor::error(errs(), ToolName)
-        << "This operation is only currently supported "
-           "for ELF object files.\n";
-    return;
-  }
-
-  if (auto *Elf32LEObj = dyn_cast<ELF32LEObjectFile>(Obj))
-    printELFCapRelocations(Elf32LEObj);
-  else if (auto *Elf64LEObj = dyn_cast<ELF64LEObjectFile>(Obj))
-    printELFCapRelocations(Elf64LEObj);
-  else if (auto *Elf32BEObj = dyn_cast<ELF32BEObjectFile>(Obj))
-    printELFCapRelocations(Elf32BEObj);
-  else if (auto *Elf64BEObj = cast<ELF64BEObjectFile>(Obj))
-    printELFCapRelocations(Elf64BEObj);
-  else
-    llvm_unreachable("Unsupported binary format");
-}
-
 static void disassembleObject(ObjectFile *Obj, bool InlineRelocs) {
   // If information useful for showing the disassembly is missing, try to find a
   // more complete binary and disassemble that instead.
@@ -3003,10 +2886,10 @@ static void dumpObject(ObjectFile *O, const Archive *A = nullptr,
   }
   if (Relocations && !Disassemble)
     D.printRelocations();
-  if (CapRelocations)
-    printCapRelocations(O);
   if (DynamicRelocations)
     D.printDynamicRelocations();
+  if (CapRelocations)
+    D.printCheriCapRelocations();
   if (SectionContents)
     printSectionContents(O);
   if (Disassemble)

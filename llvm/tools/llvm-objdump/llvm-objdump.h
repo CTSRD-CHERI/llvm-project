@@ -86,6 +86,7 @@ public:
 
   virtual void printPrivateHeaders(bool MachOOnlyFirst);
   virtual void printDynamicRelocations() {}
+  virtual void printCheriCapRelocations() {}
   void printSymbolTable(StringRef ArchiveName,
                         StringRef ArchitectureName = StringRef(),
                         bool DumpDynamic = false);
@@ -114,7 +115,6 @@ object::SectionFilter ToolSectionFilter(const llvm::object::ObjectFile &O,
                                         uint64_t *Idx = nullptr);
 
 bool isRelocAddressLess(object::RelocationRef A, object::RelocationRef B);
-void printCapRelocations(const object::ObjectFile *O);
 void printSectionHeaders(object::ObjectFile &O);
 void printSectionContents(const object::ObjectFile *O);
 [[noreturn]] void reportError(StringRef File, const Twine &Message);

@@ -7,11 +7,14 @@
 # RUN: llvm-objdump --cap-relocs -D -t %t.exe | FileCheck %s --check-prefix EXE
 # check that symbols with small immediates come first:
 # EXE-LABEL: SYMBOL TABLE
-# EXE: [[MXCTB000_ADDR:[0-9a-f]+]] l     O .captable		 0000000000000010 sym_mxcaptable000@CAPTABLE
-# EXE: [[SMALL000_ADDR:[0-9a-f]+]] l     O .captable		 0000000000000010 sym_small000@CAPTABLE
+# EXE: [[#%.16x,MXCTB000_CTAB:]] l     O .captable 0000000000000010 sym_mxcaptable000@CAPTABLE
+# EXE: [[#%.16x,SMALL000_CTAB:]] l     O .captable 0000000000000010 sym_small000@CAPTABLE
+# EXE: [[#%.16x,MXCTB000_ADDR:]] g     O .data     0000000000000001 sym_mxcaptable000
+# EXE: [[#%.16x,SMALL000_ADDR:]] g     O .data     0000000000000001 sym_small000
 # EXE-LABEL: CAPABILITY RELOCATION RECORDS:
-# EXE-NEXT: 0x[[SMALL000_ADDR]]	Base: sym_small000 (0x000000000005ead8)	Offset: 0x0000000000000000	Length: 0x0000000000000001	Permissions: 0x00000000
-# EXE:      0x[[MXCTB000_ADDR]]	Base: sym_mxcaptable000 (0x000000000005e6f0)	Offset: 0x0000000000000000	Length: 0x0000000000000001	Permissions: 0x00000000
+# EXE-NEXT: OFFSET           TYPE    VALUE
+# EXE-NEXT: [[#SMALL000_CTAB]] DATA    [[#SMALL000_ADDR]] {{\[}}[[#SMALL000_ADDR]]-[[#SMALL000_ADDR+1]]]
+# EXE:      [[#MXCTB000_CTAB]] DATA    [[#MXCTB000_ADDR]] {{\[}}[[#MXCTB000_ADDR]]-[[#MXCTB000_ADDR+1]]]
 # EXE-LABEL: Disassembly of section .captable:
 # EXE-EMPTY:
 # EXE-NEXT: <sym_small000@CAPTABLE>:

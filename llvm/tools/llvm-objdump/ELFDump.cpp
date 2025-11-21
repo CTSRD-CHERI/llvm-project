@@ -30,6 +30,7 @@ public:
   ELFDumper(const ELFObjectFile<ELFT> &O) : Dumper(O), Obj(O) {}
   void printPrivateHeaders(bool MachOOnlyFirst) override;
   void printDynamicRelocations() override;
+  void printCheriCapRelocations() override;
 
 private:
   const ELFObjectFile<ELFT> &Obj;
@@ -343,6 +344,83 @@ template <typename ELFT> void ELFDumper<ELFT>::printDynamicRelocations() {
       outs() << format(Fmt.data(), Address) << ' '
              << left_justify(RelocName, TypePadding) << ' ' << ValueStr << '\n';
     }
+}
+
+template <typename ELFT> void ELFDumper<ELFT>::printCheriCapRelocations() {
+  StringRef Data;
+  for (const SectionRef &Sec : Obj.sections()) {
+    Expected<StringRef> Name = Sec.getName();
+    if (!Name) {
+      consumeError(Name.takeError());
+      continue;
+    }
+    if (*Name == "__cap_relocs") {
+      Data = unwrapOrError(Sec.getContents(), Obj.getFileName());
+      break;
+    }
+  }
+
+  using uintX_t = typename ELFT::uint;
+  const size_t EntrySize = ELFT::Is64Bits ? 40 : 20;
+  StringRef Fmt = ELFT::Is64Bits ? "%016" PRIx64 : "%08" PRIx64;
+  const uint32_t OffsetPadding = ELFT::Is64Bits ? 16 : 8;
+  const uint32_t TypePadding = 7;
+  auto PrintReloc = [&](const char *Entry) {
+    uintX_t Offset =
+        support::endian::read<uintX_t, ELFT::TargetEndianness, 1>(Entry);
+    uintX_t Base = support::endian::read<uintX_t, ELFT::TargetEndianness, 1>(
+        Entry + sizeof(uintX_t));
+    uintX_t Addend = support::endian::read<uintX_t, ELFT::TargetEndianness, 1>(
+        Entry + 2 * sizeof(uintX_t));
+    uintX_t Length = support::endian::read<uintX_t, ELFT::TargetEndianness, 1>(
+        Entry + 3 * sizeof(uintX_t));
+    uintX_t Type = support::endian::read<uintX_t, ELFT::TargetEndianness, 1>(
+        Entry + 4 * sizeof(uintX_t));
+    const uintX_t Function = uintX_t(1) << ((sizeof(uintX_t) * 8) - 1);
+    const uintX_t Constant = uintX_t(1) << ((sizeof(uintX_t) * 8) - 2);
+    const uintX_t Indirect = uintX_t(1) << ((sizeof(uintX_t) * 8) - 3);
+    const uintX_t Code = uintX_t(1) << ((sizeof(uintX_t) * 8) - 4);
+    StringRef TypeName;
+    switch (Type) {
+    case 0:
+      TypeName = "DATA";
+      break;
+    case Constant:
+      TypeName = "RODATA";
+      break;
+    case Function:
+      TypeName = "FUNC";
+      break;
+    case Function | Indirect:
+      TypeName = "IFUNC";
+      break;
+    case Function | Code:
+      TypeName = "CODE";
+      break;
+    default:
+      TypeName = "Unknown";
+      break;
+    }
+    outs() << format(Fmt.data(), uint64_t(Offset)) << ' '
+           << left_justify(TypeName, TypePadding) << ' '
+           << format(Fmt.data(), uint64_t(Base + Addend)) << " ["
+           << format(Fmt.data(), uint64_t(Base)) << '-'
+           << format(Fmt.data(), uint64_t(Base + Length)) << "]\n";
+  };
+
+  auto PrintRelocs = [&](StringRef RelocsData, StringRef Header) {
+    if (!RelocsData.data())
+      return;
+
+    outs() << '\n' << Header << '\n';
+    outs() << left_justify("OFFSET", OffsetPadding) << ' '
+           << left_justify("TYPE", TypePadding) << " VALUE\n";
+
+    for (int I = 0, E = Data.size() / EntrySize; I < E; I++)
+      PrintReloc(Data.data() + I * EntrySize);
+  };
+
+  PrintRelocs(Data, "CAPABILITY RELOCATION RECORDS:");
 }
 
 template <class ELFT>
