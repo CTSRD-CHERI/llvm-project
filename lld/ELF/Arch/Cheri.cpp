@@ -308,16 +308,72 @@ static uint64_t getTargetSize(const CheriCapRelocLocation &location,
   return targetSize;
 }
 
+enum class CapRelocType {
+  DATA,
+  RODATA,
+  FUNC,
+  IFUNC,
+  CODE,
+};
+
+static CapRelocType getTargetType(const SymbolAndOffset &target) {
+  bool isFunc, isGnuIFunc, isTls;
+  OutputSection *os;
+  if (Symbol *s = dyn_cast<Symbol *>(target.symOrSec)) {
+    isFunc = s->isFunc();
+    isGnuIFunc = s->isGnuIFunc();
+    isTls = s->isTls();
+    os = s->getOutputSection();
+  } else {
+    InputSectionBase *isec = cast<InputSectionBase *>(target.symOrSec);
+    isFunc = (isec->flags & SHF_EXECINSTR) != 0;
+    isGnuIFunc = false;
+    isTls = isec->type == STT_TLS;
+    os = isec->getOutputSection();
+  }
+  if (isFunc)
+    return CapRelocType::FUNC;
+  if (isGnuIFunc)
+    return CapRelocType::IFUNC;
+  if (os) {
+    assert(!isTls);
+    if ((os->flags & SHF_WRITE) == 0 || isRelroSection(os))
+      return CapRelocType::RODATA;
+    if (os->flags & SHF_EXECINSTR)
+      warn("Non-function __cap_reloc against symbol in section with "
+           "SHF_EXECINSTR (" +
+           toString(os->name) + ") for symbol " + target.verboseToString());
+  }
+  return CapRelocType::DATA;
+}
+
 template <class ELFT> struct CapRelocPermission {
+  static uint64_t encodeType(CapRelocType type) {
+    switch (type) {
+    case CapRelocType::DATA:
+      return 0;
+    case CapRelocType::RODATA:
+      return readOnlyFlag;
+    case CapRelocType::FUNC:
+      return functionFlag;
+    case CapRelocType::IFUNC:
+      return functionFlag | indirectFlag;
+    case CapRelocType::CODE:
+      return functionFlag | codeFlag;
+    }
+    llvm_unreachable("unknown CapRelocType");
+  }
+
+private:
   static constexpr uint64_t permissionBit(uint64_t bit) {
     return UINT64_C(1) << ((sizeof(typename ELFT::uint) * 8) - bit);
   }
 
   // clang-format off
-  static const uint64_t function = permissionBit(1);
-  static const uint64_t readOnly = permissionBit(2);
-  static const uint64_t indirect = permissionBit(3);
-  static const uint64_t code     = permissionBit(4);
+  static const uint64_t functionFlag = permissionBit(1);
+  static const uint64_t readOnlyFlag = permissionBit(2);
+  static const uint64_t indirectFlag = permissionBit(3);
+  static const uint64_t codeFlag     = permissionBit(4);
   // clang-format on
 };
 
@@ -350,48 +406,24 @@ void CheriCapRelocsSection::writeToImpl(uint8_t *buf) {
 
     // The target VA is the base address of the capability, so symbol + 0
     uint64_t targetVA;
-    bool isFunc, isGnuIFunc, isTls, isCode = reloc.isCode;
-    OutputSection *os;
-    if (Symbol *s = dyn_cast<Symbol *>(realTarget.symOrSec)) {
+    bool isCode = reloc.isCode;
+    if (Symbol *s = dyn_cast<Symbol *>(realTarget.symOrSec))
       targetVA = realTarget.sym()->getVA(0);
-      isFunc = s->isFunc();
-      isGnuIFunc = s->isGnuIFunc();
-      isTls = s->isTls();
-      os = s->getOutputSection();
-    } else {
+    else {
       InputSectionBase *isec = cast<InputSectionBase *>(realTarget.symOrSec);
       targetVA = isec->getVA(0);
-      isFunc = (isec->flags & SHF_EXECINSTR) != 0;
-      isGnuIFunc = false;
-      isTls = isec->type == STT_TLS;
-      os = isec->getOutputSection();
     }
-    if (isCode && !isFunc)
-      errorOrWarn("code relocation against non-function symbol " +
-                  realTarget.verboseToString() + "\n>>> referenced by " +
-                  location.toString());
     uint64_t targetSize = getTargetSize(location, realTarget);
     uint64_t targetOffset = reloc.capabilityOffset + realTarget.offset;
-    uint64_t permissions = 0;
-    // Fow now Function implies ReadOnly so don't add the flag
-    if (isFunc || isGnuIFunc) {
-      permissions |= CapRelocPermission<ELFT>::function;
-      if (isGnuIFunc)
-        permissions |= CapRelocPermission<ELFT>::indirect;
-      if (isCode)
-        permissions |= CapRelocPermission<ELFT>::code;
-    } else if (os) {
-      assert(!isTls);
-      // if ((OS->getPhdrFlags() & PF_W) == 0) {
-      if (((os->flags & SHF_WRITE) == 0) || isRelroSection(os)) {
-        permissions |= CapRelocPermission<ELFT>::readOnly;
-      } else if (os->flags & SHF_EXECINSTR) {
-        warn("Non-function __cap_reloc against symbol in section with "
-             "SHF_EXECINSTR (" +
-             toString(os->name) + ") for symbol " +
-             realTarget.verboseToString());
-      }
+    CapRelocType targetType = getTargetType(realTarget);
+    if (isCode) {
+      if (targetType != CapRelocType::FUNC)
+        errorOrWarn("code relocation against non-function symbol " +
+                    realTarget.verboseToString() + "\n>>> referenced by " +
+                    location.toString());
+      targetType = CapRelocType::CODE;
     }
+    uint64_t permissions = CapRelocPermission<ELFT>::encodeType(targetType);
 
     // TODO: should we warn about symbols that are out-of-bounds?
     // mandoc seems to do it so I guess we need it
