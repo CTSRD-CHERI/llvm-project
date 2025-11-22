@@ -400,13 +400,6 @@ void CheriCapRelocsSection::writeToImpl(uint8_t *buf) {
     InMemoryCapRelocEntry<ELFT> entry(locationVA, targetVA, targetOffset,
                                       targetSize, permissions);
     memcpy(buf + offset, &entry, sizeof(entry));
-    //     if (errorHandler().verbose) {
-    //       errs() << "Added capability reloc: loc=" << utohexstr(LocationVA)
-    //              << ", object=" << utohexstr(TargetVA)
-    //              << ", offset=" << utohexstr(TargetOffset)
-    //              << ", size=" << utohexstr(TargetSize)
-    //              << ", permissions=" << utohexstr(Permissions) << "\n";
-    //     }
     offset += InMemoryCapRelocEntry<ELFT>::relocSize;
   }
 
