@@ -6,7 +6,7 @@
 # SEGMENTS-NEXT:  Segment Sections...
 # SEGMENTS-NEXT:   00
 # __cap_relocs should be in the rodata segment (since it uses relative relocations)
-# SEGMENTS-NEXT:   01     .MIPS.abiflags .MIPS.options .dynsym .hash .dynamic .dynstr .rodata __cap_relocs
+# SEGMENTS-NEXT:   01     .MIPS.abiflags .MIPS.options .dynsym .hash .dynamic .dynstr __cap_relocs .rodata
 # SEGMENTS-NEXT:   02     .data .got
 # SEGMENTS-NEXT:   03     .dynamic
 
@@ -28,8 +28,8 @@ foo:
 # CHECK-NEXT: Flags [ (0x2)
 # CHECK-NEXT:   SHF_ALLOC (0x2)
 # CHECK-NEXT: ]
-# CHECK-NEXT: Address: [[CAPRELOCS_ADDR:0x3A0]]
-# CHECK-NEXT: Offset: [[CAPRELOCS_ADDR]]
+# CHECK-NEXT: Address: 0x[[#%X,CAPRELOCS_ADDR:]]
+# CHECK-NEXT: Offset: 0x[[#CAPRELOCS_ADDR]]
 # CHECK-NEXT: Size: 40
 # CHECK-NEXT: Link: 0
 # CHECK-NEXT: Info: 0
@@ -42,5 +42,5 @@ foo:
 # CHECK:      0x000000006FFFFFFB FLAGS_1 NOW
 # CHECK:      0x000000007000C002 MIPS_CHERI_FLAGS ABI_PCREL RELATIVE_CAPRELOCS
 # flag name is so long that there is no space:
-# CHECK-NEXT: 0x000000007000C000 MIPS_CHERI___CAPRELOCS [[CAPRELOCS_ADDR]]
+# CHECK-NEXT: 0x000000007000C000 MIPS_CHERI___CAPRELOCS 0x[[#CAPRELOCS_ADDR]]
 # CHECK-NEXT: 0x000000007000C001 MIPS_CHERI___CAPRELOCSSZ 0x28

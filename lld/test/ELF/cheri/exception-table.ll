@@ -52,7 +52,7 @@
 ; HEADERS-NEXT: Section to Segment mapping:
 ; HEADERS-NEXT: Segment Sections...
 ; HEADERS-NEXT: 00
-; HEADERS-NEXT: 01     .MIPS.abiflags .MIPS.options .dynsym .hash .dynamic .dynstr .rel.dyn .rel.plt .eh_frame __cap_relocs {{$}}
+; HEADERS-NEXT: 01     .MIPS.abiflags .MIPS.options .dynsym .hash .dynamic .dynstr .rel.dyn .rel.plt __cap_relocs .eh_frame {{$}}
 ; HEADERS-NEXT: 02     .text
 ; HEADERS-NEXT: 03     .gcc_except_table
 ; HEADERS-NEXT: 04     .data .captable .got

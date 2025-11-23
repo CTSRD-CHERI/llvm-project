@@ -944,7 +944,8 @@ static unsigned getSectionRank(const OutputSection &osec) {
     // Make PROGBITS sections (e.g .rodata .eh_frame) closer to .text to
     // alleviate relocation overflow pressure. Large special sections such as
     // .dynstr and .dynsym can be away from .text.
-    if (osec.type == SHT_PROGBITS)
+    // Treat __cap_relocs like REL* even though it's PROGBITS.
+    if (osec.type == SHT_PROGBITS && osec.name != "__cap_relocs")
       rank |= RF_RODATA;
     // Among PROGBITS sections, place .lrodata further from .text.
     if (!(osec.flags & SHF_X86_64_LARGE && config->emachine == EM_X86_64))
