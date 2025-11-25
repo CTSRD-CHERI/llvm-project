@@ -16,6 +16,10 @@
 // RUN: %cheri_cc1 -xc %s -o /dev/null -Wall -Wextra -Wpedantic -Wsystem-headers -verify -emit-obj -Werror=undef
 // RUN: %riscv64_cheri_cc1 -xc %s -o /dev/null -Wall -Wextra -Wpedantic -Wsystem-headers -verify -emit-obj -Werror=undef
 // RUN: %riscv32_cheri_cc1 -xc %s -o /dev/null -Wall -Wextra -Wpedantic -Wsystem-headers -verify -emit-obj -Werror=undef
+// RUN: %riscv64y_purecap_cc1 -xc %s -o /dev/null -Wall -Wextra -Wpedantic -Wsystem-headers -verify -Werror=undef
+// RUN: %riscv32y_purecap_cc1 -xc %s -o /dev/null -Wall -Wextra -Wpedantic -Wsystem-headers -verify -Werror=undef
+// RUN: %riscv64y_hybrid_cc1 -xc %s -o /dev/null -Wall -Wextra -Wpedantic -Wsystem-headers -verify -Werror=undef
+// RUN: %riscv32y_hybrid_cc1 -xc %s -o /dev/null -Wall -Wextra -Wpedantic -Wsystem-headers -verify -Werror=undef
 
 // expected-no-diagnostics
 #include <cheri_init_globals.h>

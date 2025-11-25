@@ -169,7 +169,7 @@ void riscv::getRISCVTargetFeatures(const Driver &D, const llvm::Triple &Triple,
   if (Args.hasArg(options::OPT_ffixed_x31))
     Features.push_back("+reserve-x31");
 
-  bool IsCheri = ISAInfo->hasExtension("xcheri");
+  bool IsCheri = ISAInfo->hasExtension("xcheri") || ISAInfo->hasExtension("y");
 
   // -mrelax is default, unless -mno-relax is specified.
   // For CHERI it's currently not supported, so forbid enabling it and disable
@@ -208,7 +208,8 @@ void riscv::getRISCVTargetFeatures(const Driver &D, const llvm::Triple &Triple,
       if (!IsCheri) {
         D.Diag(diag::err_riscv_invalid_abi)
             << A->getValue()
-            << "pure capability ABI requires xcheri extension to be specified";
+            << "pure capability ABI requires xcheri or y extension to be "
+               "specified";
         return;
       }
       Features.push_back("+cap-mode");

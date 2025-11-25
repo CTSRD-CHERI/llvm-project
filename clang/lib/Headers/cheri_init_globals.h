@@ -50,12 +50,26 @@ struct capreloc {
 };
 static const __SIZE_TYPE__ function_reloc_flag = (__SIZE_TYPE__)1
                                                  << (__SIZE_WIDTH__ - 1);
+static const __SIZE_TYPE__ constant_reloc_flag = (__SIZE_TYPE__)1
+                                                 << (__SIZE_WIDTH__ - 2);
+static const __SIZE_TYPE__ indirect_reloc_flag = (__SIZE_TYPE__)1
+                                                 << (__SIZE_WIDTH__ - 3);
+static const __SIZE_TYPE__ code_reloc_flag = (__SIZE_TYPE__)1
+                                             << (__SIZE_WIDTH__ - 4);
+#if defined(__riscv_y)
+static const __SIZE_TYPE__ function_pointer_permissions_mask =
+    ~(__SIZE_TYPE__)(__CHERI_CAP_PERMISSION_WRITE__);
+static const __SIZE_TYPE__ constant_pointer_permissions_mask =
+    ~(__SIZE_TYPE__)(__CHERI_CAP_PERMISSION_WRITE__ |
+                     __CHERI_CAP_PERMISSION_STORE_LOCAL__ |
+                     __CHERI_CAP_PERMISSION_EXECUTE__);
+static const __SIZE_TYPE__ global_pointer_permissions_mask =
+    ~(__SIZE_TYPE__)(__CHERI_CAP_PERMISSION_EXECUTE__);
+#else
 static const __SIZE_TYPE__ function_pointer_permissions_mask =
     ~(__SIZE_TYPE__)(__CHERI_CAP_PERMISSION_PERMIT_SEAL__ |
                      __CHERI_CAP_PERMISSION_PERMIT_STORE_CAPABILITY__ |
                      __CHERI_CAP_PERMISSION_PERMIT_STORE__);
-static const __SIZE_TYPE__ constant_reloc_flag = (__SIZE_TYPE__)1
-                                                 << (__SIZE_WIDTH__ - 2);
 static const __SIZE_TYPE__ constant_pointer_permissions_mask =
     ~(__SIZE_TYPE__)(__CHERI_CAP_PERMISSION_PERMIT_SEAL__ |
                      __CHERI_CAP_PERMISSION_PERMIT_STORE_CAPABILITY__ |
@@ -65,16 +79,13 @@ static const __SIZE_TYPE__ constant_pointer_permissions_mask =
 static const __SIZE_TYPE__ global_pointer_permissions_mask =
     ~(__SIZE_TYPE__)(__CHERI_CAP_PERMISSION_PERMIT_SEAL__ |
                      __CHERI_CAP_PERMISSION_PERMIT_EXECUTE__);
-static const __SIZE_TYPE__ indirect_reloc_flag = (__SIZE_TYPE__)1
-                                                 << (__SIZE_WIDTH__ - 3);
-static const __SIZE_TYPE__ code_reloc_flag = (__SIZE_TYPE__)1
-                                             << (__SIZE_WIDTH__ - 4);
+#endif
 
-__attribute__((weak)) extern struct capreloc __start___cap_relocs[];
-__attribute__((weak)) extern struct capreloc __stop___cap_relocs[];
+__attribute__((__weak__)) extern struct capreloc __start___cap_relocs;
+__attribute__((__weak__)) extern struct capreloc __stop___cap_relocs;
 
-__attribute__((weak)) extern void *__capability __cap_table_start[];
-__attribute__((weak)) extern void *__capability __cap_table_end[];
+__attribute__((__weak__)) extern void *__capability __cap_table_start;
+__attribute__((__weak__)) extern void *__capability __cap_table_end;
 
 /*
  * Sandbox data segments are relocated by moving DDC, since they're compiled as

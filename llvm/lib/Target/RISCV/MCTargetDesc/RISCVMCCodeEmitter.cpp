@@ -89,6 +89,10 @@ public:
                          SmallVectorImpl<MCFixup> &Fixups,
                          const MCSubtargetInfo &STI) const;
 
+  unsigned getCSetBndImmOpValue(const MCInst &MI, unsigned OpNo,
+                                SmallVectorImpl<MCFixup> &Fixups,
+                                const MCSubtargetInfo &STI) const;
+
   unsigned getVMaskReg(const MCInst &MI, unsigned OpNo,
                        SmallVectorImpl<MCFixup> &Fixups,
                        const MCSubtargetInfo &STI) const;
@@ -254,8 +258,9 @@ void RISCVMCCodeEmitter::expandCIncOffsetTPRel(
         0, Dummy, MCFixupKind(RISCV::fixup_riscv_relax), MI.getLoc()));
   }
 
+  const bool HasRVY = STI.hasFeature(RISCV::FeatureStdExtY);
   // Emit a normal CIncOffset instruction with the given operands.
-  MCInst TmpInst = MCInstBuilder(RISCV::CIncOffset)
+  MCInst TmpInst = MCInstBuilder(HasRVY ? RISCV::ADDY : RISCV::CIncOffset)
                        .addOperand(DestReg)
                        .addOperand(TPReg)
                        .addOperand(SrcReg);
@@ -564,6 +569,18 @@ unsigned RISCVMCCodeEmitter::getImmOpValue(const MCInst &MI, unsigned OpNo,
   }
 
   return 0;
+}
+
+unsigned
+RISCVMCCodeEmitter::getCSetBndImmOpValue(const MCInst &MI, unsigned OpNo,
+                                         SmallVectorImpl<MCFixup> &Fixups,
+                                         const MCSubtargetInfo &STI) const {
+  unsigned Imm = getImmOpValue(MI, OpNo, Fixups, STI);
+  if (Imm > 31) {
+    Imm = Imm >> 4;
+    Imm |= (1 << 5);
+  }
+  return Imm;
 }
 
 unsigned RISCVMCCodeEmitter::getVMaskReg(const MCInst &MI, unsigned OpNo,

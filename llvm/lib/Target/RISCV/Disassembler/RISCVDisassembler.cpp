@@ -316,6 +316,28 @@ static DecodeStatus decodeVMaskReg(MCInst &Inst, uint64_t RegNo,
   return MCDisassembler::Success;
 }
 
+static DecodeStatus DecodeCSetBndImm(MCInst &Inst, uint64_t Imm,
+                                     int64_t Address,
+                                     const MCDisassembler *Decoder) {
+  assert(isUInt<6>(Imm) && "Invalid immediate");
+  const bool Shift = Imm & (1 << 5);
+  if (Shift)
+    Imm = (Imm & ~(1 << 5)) << 4;
+  Inst.addOperand(MCOperand::createImm(Imm));
+  return MCDisassembler::Success;
+}
+
+static DecodeStatus decodeCheriSysReg(MCInst &Inst, uint64_t Imm,
+                                      int64_t Address,
+                                      const MCDisassembler *Decoder) {
+  assert(isUInt<12>(Imm) && "Invalid immediate");
+  const auto *CheriSysReg = RISCVCheriSysReg::lookupCheriSysRegByEncoding(Imm);
+  if (!CheriSysReg)
+    return MCDisassembler::Fail;
+  Inst.addOperand(MCOperand::createImm(Imm));
+  return MCDisassembler::Success;
+}
+
 template <unsigned N>
 static DecodeStatus decodeUImmOperand(MCInst &Inst, uint32_t Imm,
                                       int64_t Address,
@@ -576,6 +598,11 @@ DecodeStatus RISCVDisassembler::getInstruction(MCInst &MI, uint64_t &Size,
                   "RISCV32CapModeOnly_32 table");
     TRY_TO_DECODE(!STI.hasFeature(RISCV::Feature64Bit),
                   DecoderTableRISCV32Only_32, "RISCV32Only_32 table");
+    TRY_TO_DECODE_FEATURE(RISCV::FeatureStdExtY, DecoderTableRVYOnly_32,
+                          "RISCVRVYOnly_32 table");
+    TRY_TO_DECODE(STI.hasFeature(RISCV::FeatureStdExtY) &&
+                      STI.hasFeature(RISCV::FeatureCapMode),
+                  DecoderTableRVYCapModeOnly_32, "RVYCapModeOnly_32 table");
     TRY_TO_DECODE_FEATURE(RISCV::FeatureCapMode, DecoderTableCapModeOnly_32,
                           "CapModeOnly_32 table");
     TRY_TO_DECODE(STI.hasFeature(RISCV::FeatureStdExtZdinx) &&

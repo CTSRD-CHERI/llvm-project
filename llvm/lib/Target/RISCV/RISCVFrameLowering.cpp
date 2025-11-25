@@ -701,8 +701,10 @@ void RISCVFrameLowering::emitPrologue(MachineFunction &MF,
             .setMIFlag(MachineInstr::FrameSetup);
       }
 
+      const bool HasRVY = STI.hasFeature(RISCV::FeatureStdExtY);
       if (RISCVABI::isCheriPureCapABI(STI.getTargetABI()))
-        BuildMI(MBB, MBBI, DL, TII->get(RISCV::CSetAddr), SPReg)
+        BuildMI(MBB, MBBI, DL,
+                TII->get(HasRVY ? RISCV::YADDRW : RISCV::CSetAddr), SPReg)
             .addReg(SPReg)
             .addReg(SPAddrDstReg);
 
