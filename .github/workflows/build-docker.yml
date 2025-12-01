@@ -1,0 +1,80 @@
+name: Build and Package
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [ "main", "dev" ]
+
+jobs:
+  build_docker_image:
+    name: Build Docker Image for CI
+    if: github.repository_owner == 'CTSRD-CHERI'
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+      packages: write
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v4
+
+    - name: Install Dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y ninja-build cmake build-essential lld
+
+    - name: ccache
+      uses: hendrikmuhs/ccache-action@v1.2
+
+    - name: Configure CMake
+      run: |
+        # Build a minimal version of LLVM with features we do not need disabled
+        cmake -G Ninja -S llvm -B build \
+          -DLLVM_ENABLE_ASSERTIONS=TRUE \
+          -DCMAKE_BUILD_TYPE=Release \
+          -DCMAKE_INSTALL_PREFIX=/usr/local \
+          -DLLVM_ENABLE_PROJECTS="clang;lld" \
+          -DLLVM_TARGETS_TO_BUILD="all" \
+          -DLLVM_CCACHE_BUILD=TRUE \
+          -DLLVM_ENABLE_LLD=TRUE \
+          -DCLANG_ENABLE_STATIC_ANALYZER=FALSE -DCLANG_ENABLE_ARCMT=FALSE -DLLVM_ENABLE_Z3_SOLVER=FALSE \
+          -DLLVM_TOOL_LLVM_MCA_BUILD=FALSE -DLLVM_TOOL_LLVM_EXEGESIS_BUILD=FALSE -DLLVM_TOOL_LLVM_RC_BUILD=FALSE
+
+    - name: Build
+      run: cmake --build build
+
+    - name: Install
+      run: DESTDIR=$GITHUB_WORKSPACE/install cmake --install build
+
+    - name: Create Dockerfile
+      run: |
+        cat <<EOF > Dockerfile
+        FROM ubuntu:24.04
+        COPY --chown=root install/usr/local /usr/local
+        EOF
+
+    - name: Prepare Docker Metadata
+      run: |
+        IMAGE_ID=ghcr.io/${{ github.repository }}
+        # Change all uppercase to lowercase
+        IMAGE_ID=$(echo $IMAGE_ID | tr '[A-Z]' '[a-z]')
+        # Sanitize branch name for use as a docker tag (replace / with -)
+        TAG_NAME=$(echo "${{ github.ref_name }}" | tr '/' '-')
+        echo "IMAGE_ID=$IMAGE_ID" >> $GITHUB_ENV
+        echo "TAG_NAME=$TAG_NAME" >> $GITHUB_ENV
+
+    - name: Build Docker Image
+      run: |
+        echo "Building $IMAGE_ID:$TAG_NAME"
+        docker build -t $IMAGE_ID:$TAG_NAME .
+
+    - name: Log in to GitHub Container Registry
+      uses: docker/login-action@v3
+      with:
+        registry: ghcr.io
+        username: ${{ github.actor }}
+        password: ${{ secrets.GITHUB_TOKEN }}
+
+    - name: Push Docker Image
+      run: |
+        echo "Pushing $IMAGE_ID:$TAG_NAME"
+        docker push $IMAGE_ID:$TAG_NAME
