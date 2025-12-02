@@ -3,7 +3,7 @@ name: Build and Package
 on:
   workflow_dispatch:
   push:
-    branches: [ "main", "dev" ]
+    branches: [ "main", "dev", "github-action-docker-image" ]
 
 jobs:
   build_docker_image:
