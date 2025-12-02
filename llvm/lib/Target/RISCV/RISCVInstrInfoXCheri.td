@@ -414,6 +414,10 @@ def : InstAlias<"cincoffsetimm $cd, $cs1, $imm",
                 (CIncOffsetImm GPCR:$cd, GPCR:$cs1, simm12:$imm), 0>;
 def : InstAlias<"csetboundsimm $cd, $cs1, $imm",
                 (CSetBoundsImm GPCR:$cd, GPCR:$cs1, uimm12:$imm), 0>;
+def : InstAlias<"caddi $cd, $cs1, $imm",
+                (CIncOffsetImm GPCR:$cd, GPCR:$cs1, simm12:$imm), 0>;
+def : InstAlias<"cadd $cd, $cs1, $rs2",
+                (CIncOffset GPCR:$cd, GPCR:$cs1, GPR:$rs2), 0>;
 }
 
 //===----------------------------------------------------------------------===//
@@ -428,6 +432,8 @@ def PseudoCSub : Pseudo<(outs GPR:$rd), (ins GPCR:$cs1, GPCR:$cs2), [],
 let isMoveReg = 1, isReMaterializable = 1, isAsCheapAsAMove = 1,
     defsCanBeSealed = 1 in
 def CMove       : Cheri_r<0xa, "cmove", GPCR>;
+def : InstAlias<"cmv $cd, $cs1",
+                (CMove GPCR:$cd, GPCR:$cs1), 0>;
 }
 
 //===----------------------------------------------------------------------===//
@@ -1188,6 +1194,8 @@ let hasSideEffects = 0, mayLoad = 0, mayStore = 0, isCodeGenOnly = 0,
     isAsmParserOnly = 1, Size = 8 in
 def PseudoCLLC : Pseudo<(outs GPCR:$dst), (ins bare_symbol:$src), [],
                         "cllc", "$dst, $src">;
+def : InstAlias<"llc $dst, $src",
+                (PseudoCLLC GPCR:$dst, bare_symbol:$src), 0>;
 
 def : Pat<(riscv_cllc tglobaladdr:$in), (PseudoCLLC tglobaladdr:$in)>;
 def : Pat<(riscv_cllc tblockaddress:$in), (PseudoCLLC tblockaddress:$in)>;
@@ -1198,6 +1206,8 @@ let hasSideEffects = 0, mayLoad = 1, mayStore = 0, isCodeGenOnly = 0,
     isAsmParserOnly = 1, Size = 8 in
 def PseudoCLGC : Pseudo<(outs GPCR:$dst), (ins bare_symbol:$src), [],
                         "clgc", "$dst, $src">;
+def : InstAlias<"lgc $dst, $src",
+                (PseudoCLGC GPCR:$dst, bare_symbol:$src), 0>;
 
 def : Pat<(riscv_clgc tglobaladdr:$in), (PseudoCLGC tglobaladdr:$in)>;
 
@@ -1859,12 +1869,18 @@ def PseudoCCALLReg : Pseudo<(outs GPCR:$rd),
                             (ins cap_call_symbol:$func), []> {
   let AsmString = "ccall\t$rd, $func";
 }
+let Predicates = [HasCheri, IsCapMode] in
+def : InstAlias<"call $rd, $func",
+                (PseudoCCALLReg GPCR:$rd, cap_call_symbol:$func), 0>;
 
 let Predicates = [HasCheri, IsCapMode],
     isCall = 1, Defs = [C1], isCodeGenOnly = 0, Size = 8 in
 def PseudoCCALL : Pseudo<(outs), (ins cap_call_symbol:$func), []> {
   let AsmString = "ccall\t$func";
 }
+let Predicates = [HasCheri, IsCapMode] in
+def : InstAlias<"call $func",
+                (PseudoCCALL cap_call_symbol:$func), 0>;
 
 let Predicates = [HasCheri, IsCapMode, IsPureCapABI] in {
 def : Pat<(riscv_cap_call tglobaladdr:$func),
