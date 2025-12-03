@@ -13,6 +13,7 @@ jobs:
     permissions:
       contents: read
       packages: write
+      checks: write
     steps:
     - name: Checkout
       uses: actions/checkout@v4
@@ -37,10 +38,20 @@ jobs:
           -DLLVM_CCACHE_BUILD=TRUE \
           -DLLVM_ENABLE_LLD=TRUE \
           -DCLANG_ENABLE_STATIC_ANALYZER=FALSE -DCLANG_ENABLE_ARCMT=FALSE -DLLVM_ENABLE_Z3_SOLVER=FALSE \
-          -DLLVM_TOOL_LLVM_MCA_BUILD=FALSE -DLLVM_TOOL_LLVM_EXEGESIS_BUILD=FALSE -DLLVM_TOOL_LLVM_RC_BUILD=FALSE
+          -DLLVM_TOOL_LLVM_MCA_BUILD=FALSE -DLLVM_TOOL_LLVM_EXEGESIS_BUILD=FALSE -DLLVM_TOOL_LLVM_RC_BUILD=FALSE \
+          -DLLVM_LIT_ARGS="-v --xunit-xml-output=test-results.xml"
 
     - name: Build
       run: cmake --build build
+
+    - name: Run Tests
+      run: cmake --build build --target check-all
+
+    - name: Publish Test Results
+      uses: EnricoMi/publish-unit-test-result-action@v2
+      if: always()
+      with:
+        files: build/test-results.xml
 
     - name: Install
       run: DESTDIR=$GITHUB_WORKSPACE/install cmake --install build
