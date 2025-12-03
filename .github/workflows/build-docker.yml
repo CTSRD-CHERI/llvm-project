@@ -64,6 +64,8 @@ jobs:
 
     - name: Build Docker Image
       run: |
+        # Free up disk space so that the docker build can succeed
+        rm -rf build
         echo "Building $IMAGE_ID:$TAG_NAME"
         docker build -t $IMAGE_ID:$TAG_NAME .
 
