@@ -19,6 +19,18 @@ jobs:
     - name: Checkout
       uses: actions/checkout@v4
 
+    - name: Free up disk space
+      uses: jlumbroso/free-disk-space@main
+      with:
+        # We run out of disk space when building all targets and docker images
+        # Use this action to delete some SDKs that we do not require.
+        android: true
+        dotnet: true
+        haskell: true
+        large-packages: false
+        swap-storage: false
+        docker-images: false
+
     - name: Install Dependencies
       run: |
         sudo apt-get update
