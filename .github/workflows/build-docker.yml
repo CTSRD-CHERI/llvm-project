@@ -110,5 +110,4 @@ jobs:
 
     - name: Push Docker Image
       run: |
-        echo "Pushing $IMAGE_ID:$TAG_NAME"
         docker push $IMAGE_ID:$TAG_NAME
