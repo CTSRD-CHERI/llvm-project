@@ -98,7 +98,6 @@ jobs:
         # Free up disk space so that the docker build can succeed
         rm -rf build
         df -h
-        echo "Building $IMAGE_ID:$TAG_NAME"
         docker build -t $IMAGE_ID:$TAG_NAME .
         df -h
 
