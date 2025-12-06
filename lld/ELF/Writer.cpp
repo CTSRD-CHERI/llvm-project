@@ -1945,17 +1945,51 @@ static void markCheriPccSections() {
     // Ignore empty input sections
     if (s->getSize() == 0)
       continue;
-    if ((s->flags & (SHF_ALLOC | SHF_EXECINSTR)) == (SHF_ALLOC | SHF_EXECINSTR))
+    if ((s->flags & (SHF_ALLOC | SHF_EXECINSTR)) ==
+        (SHF_ALLOC | SHF_EXECINSTR)) {
       in.pccPadding->markNeeded();
+      break;
+    }
   }
+
+  // Even if all executable input sections are empty, there may be a symbol
+  // defined in one, for which we need to have CHERI PCC bounds.
+  if (!in.pccPadding->isNeeded()) {
+    for (Symbol *sym : symtab.getSymbols()) {
+      Defined *d = dyn_cast<Defined>(sym);
+      if (!d || !d->section)
+        continue;
+      if ((d->section->flags & (SHF_ALLOC | SHF_EXECINSTR)) ==
+          (SHF_ALLOC | SHF_EXECINSTR)) {
+        in.pccPadding->markNeeded();
+        break;
+      }
+    }
+  }
+
+  if (!in.pccPadding->isNeeded()) {
+    for (ELFFileBase *file : ctx.objectFiles) {
+      for (Symbol *sym : file->getLocalSymbols()) {
+        Defined *d = dyn_cast<Defined>(sym);
+        if (!d || !d->section)
+          continue;
+        if ((d->section->flags & (SHF_ALLOC | SHF_EXECINSTR)) ==
+            (SHF_ALLOC | SHF_EXECINSTR)) {
+          in.pccPadding->markNeeded();
+          break;
+        }
+      }
+    }
+  }
+
+  if (!in.pccPadding->isNeeded())
+    return;
 
   // Mark all output sections accessed via PCC if there is at least one
   // executable input section.
   for (SectionCommand *cmd : script->sectionCommands) {
     if (auto *osd = dyn_cast<OutputDesc>(cmd)) {
       OutputSection &osec = osd->osec;
-      if (!in.pccPadding->isNeeded())
-        continue;
       if (isCheriBoundsSection(&osec))
         osec.cheriPcc.store(true, std::memory_order_relaxed);
     }

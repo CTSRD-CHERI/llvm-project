@@ -17,7 +17,7 @@
 
 # CHERI: Sections:
 # CHERI: Idx Name          Size      VMA          Type
-# CHERI:   6 .bss          00000010  [[ADDR:[0-9a-f]+]] BSS
+# CHERI:   7 .bss          00000010  [[ADDR:[0-9a-f]+]] BSS
 # CHERI: SYMBOL TABLE:
 # CHERI: [[ADDR]] g        .bss 0000000000000010 __bss_start
 
