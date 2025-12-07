@@ -1406,12 +1406,13 @@ struct Compartment {
   std::unique_ptr<GotSection> got;
   std::unique_ptr<GotPltSection> gotPlt;
   std::unique_ptr<IgotPltSection> igotPlt;
+  std::unique_ptr<TgotSection> tgot;
   std::unique_ptr<CheriPccPaddingSection> pccPadding;
   std::unique_ptr<PltSection> plt;
   std::unique_ptr<IpltSection> iplt;
   std::unique_ptr<RelocationBaseSection> relaPlt;
 
-  PhdrEntry *phdr;
+  SmallVector<PhdrEntry *, 1> phdrs;
   PhdrEntry *relRo;
   PhdrEntry *cheriBounds;
 };
@@ -1437,6 +1438,13 @@ inline IgotPltSection *igotPlt(const Compartment *c) {
     return in.igotPlt.get();
   else
     return c->igotPlt.get();
+}
+
+inline TgotSection *tgot(const Compartment *c) {
+  if (c == nullptr)
+    return in.tgot.get();
+  else
+    return c->tgot.get();
 }
 
 inline CheriPccPaddingSection *pccPadding(const Compartment *c) {

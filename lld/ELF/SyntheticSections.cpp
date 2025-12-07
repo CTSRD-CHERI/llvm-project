@@ -1298,7 +1298,7 @@ TgotSection::TgotSection()
 
 void TgotSection::addConstant(const Relocation &r) { relocations.push_back(r); }
 void TgotSection::addEntry(Symbol &sym) {
-  assert(sym.auxIdx(nullptr) == symAux.size() - 1);
+  assert(sym.auxIdx(compartment) == symAux.size() - 1);
   symAux.back().tgotIdx = numEntries++;
 }
 
@@ -1886,9 +1886,25 @@ void RelocationBaseSection::finalizeContents() {
       }
     }
   }
-  if (in.relaTgot.get() == this && in.tgot->getParent()) {
-    getParent()->flags |= ELF::SHF_INFO_LINK;
-    getParent()->info = in.tgot->getParent()->sectionIndex;
+  if (in.relaTgot.get() == this) {
+    // Only add a link if there is exactly one Tgot section.
+    TgotSection *tgot = nullptr;
+    if (lld::elf::tgot(nullptr)->isNeeded())
+      tgot = lld::elf::tgot(nullptr);
+    for (const Compartment &c : compartments) {
+      if (lld::elf::tgot(&c)->isNeeded()) {
+        if (tgot == nullptr) {
+          tgot = lld::elf::tgot(&c);
+        } else {
+          tgot = nullptr;
+          break;
+        }
+      }
+    }
+    if (tgot && tgot->getParent()) {
+      getParent()->flags |= ELF::SHF_INFO_LINK;
+      getParent()->info = tgot->getParent()->sectionIndex;
+    }
   }
   for (auto reloc : relocs) {
     if (config->isCheriAbi && reloc.inputSec->name == "__cap_relocs") {

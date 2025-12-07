@@ -299,13 +299,13 @@ uint64_t Symbol::getPltVA(const Compartment *c) const {
   return outVA;
 }
 
-uint64_t Symbol::getTgotVA() const {
+uint64_t Symbol::getTgotVA(const Compartment *c) const {
   // Like TLS symbols, the TGOT VA is the offset within the TGOT address space.
-  return in.tgot->getVA() + getTgotOffset() - Out::tgotPhdr->firstSec->addr;
+  return tgot(c)->getVA() + getTgotOffset(c) - Out::tgotPhdr->firstSec->addr;
 }
 
-uint64_t Symbol::getTgotOffset() const {
-  return getTgotIdx() * target->gotEntrySize;
+uint64_t Symbol::getTgotOffset(const Compartment *c) const {
+  return getTgotIdx(c) * target->gotEntrySize;
 }
 
 uint64_t Symbol::getMipsCheriCapTableVA(const InputSectionBase *isec,

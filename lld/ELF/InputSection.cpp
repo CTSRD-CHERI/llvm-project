@@ -658,8 +658,8 @@ static int64_t getTlsTpOffset(const Symbol &s) {
   return getTpOffset(s.getVA(0), Out::tlsPhdr);
 }
 
-static int64_t getTgotTpOffset(const Symbol &s) {
-  return getTpOffset(s.getTgotVA(), Out::tgotPhdr);
+static int64_t getTgotTpOffset(const Compartment *c, const Symbol &s) {
+  return getTpOffset(s.getTgotVA(c), Out::tgotPhdr);
 }
 
 uint64_t InputSectionBase::getRelocTargetVA(const Compartment *c,
@@ -876,11 +876,11 @@ uint64_t InputSectionBase::getRelocTargetVA(const Compartment *c,
   case R_TLSLD_PC:
     return got(c)->getTlsIndexVA() + a - p;
   case R_TGOT:
-    return sym.getTgotVA() + a;
+    return sym.getTgotVA(c) + a;
   case R_TGOT_TP:
   case R_RELAX_TGOT_TLS_GD_TO_LE:
   case R_RELAX_TGOT_TLS_IE_TO_LE:
-    return getTgotTpOffset(sym) + a;
+    return getTgotTpOffset(c, sym) + a;
   case R_TGOT_GOT:
   case R_RELAX_TGOT_TLS_GD_TO_IE_ABS:
     return got(c)->getTgotAddr(sym) + a;

@@ -513,6 +513,9 @@ template <class ELFT> void elf::createSyntheticSections() {
     compart.igotPlt = std::make_unique<IgotPltSection>();
     compart.igotPlt->compartment = &compart;
     add(*compart.igotPlt);
+    compart.tgot = std::make_unique<TgotSection>();
+    compart.tgot->compartment = &compart;
+    add(*compart.tgot);
   }
 
   if (config->emachine == EM_ARM) {
@@ -968,18 +971,20 @@ enum RankFlags {
   RF_EXEC = 1 << 14,
   RF_RODATA = 1 << 13,
   RF_LARGE = 1 << 12,
-  RF_NOT_RELRO = 1 << 9,
+  RF_NOT_RELRO = 1 << 10,
+  RF_NOT_TGOT = 1 << 9,
   RF_NOT_TLS = 1 << 8,
   RF_BSS = 1 << 7,
 };
 
 static unsigned getSectionRank(const OutputSection &osec) {
   unsigned rank = osec.partition * RF_PARTITION;
+  const Compartment *c = osec.compartment;
 
   // The default compartment uses an index of 1 since the partition number of
   // mainPart is 1.  Increment the index so that additional compartments start
-  // at 2.
-  if (osec.compartment != nullptr)
+  // at 2. However, TGOT sections get grouped together into a single segment.
+  if (osec.compartment != nullptr && &osec != tgot(c)->getParent())
     rank = (osec.compartment->index + 1) * RF_COMPARTMENT;
 
   // We want to put section specified by -T option first, so we
@@ -1044,6 +1049,8 @@ static unsigned getSectionRank(const OutputSection &osec) {
     // TLS sections directly before the other RELRO sections.
     if (!(osec.flags & SHF_TLS))
       rank |= RF_NOT_TLS;
+    if (&osec != tgot(c)->getParent())
+      rank |= RF_NOT_TGOT;
     if (!isRelroSection(&osec))
       rank |= RF_NOT_RELRO;
     // Place .ldata and .lbss after .bss. Making .bss closer to .text alleviates
@@ -1995,7 +2002,7 @@ static bool isCheriBoundsSection(const OutputSection *sec) {
   // XXX: CheriBSD's runtime loader assumes all read-only capabilities can be
   // derived from PCC, so include all read-only sections as a workaround for
   // now.  Once CheriBSD 25.03 is no longer supported, this can be removed.
-  if (sec->type == SHT_PROGBITS && sec != in.tgot->getParent() &&
+  if (sec->type == SHT_PROGBITS && sec != tgot(c)->getParent() &&
       ((flags & SHF_WRITE) == 0 || isRelroSection(sec, /*ignoreZRelro=*/true)))
     return true;
 
@@ -2456,6 +2463,7 @@ template <class ELFT> void Writer<ELFT>::finalizeSections() {
       finalizeSynthetic(c.got.get());
       finalizeSynthetic(c.gotPlt.get());
       finalizeSynthetic(c.igotPlt.get());
+      finalizeSynthetic(c.tgot.get());
       finalizeSynthetic(c.pccPadding.get());
       finalizeSynthetic(c.relaPlt.get());
       finalizeSynthetic(c.plt.get());
@@ -2713,15 +2721,12 @@ SmallVector<PhdrEntry *, 0> Writer<ELFT>::createPhdrs(Partition &part) {
       continue;
     }
     if (sec->compartment != lastCompartment) {
-      if (sec->compartment->phdr == nullptr) {
+      if (sec->compartment->phdrs.empty())
         sec->compartment->nameIndex =
           in.compartStrTab->addString(sec->compartment->name);
-        sec->compartment->phdr = make<PhdrEntry>(PT_C18N_NAME, 0);
-      } else
-        error("section: " + sec->name + " is not contiguous with other" +
-              " sections for compartment " + sec->compartment->name);
+      sec->compartment->phdrs.push_back(make<PhdrEntry>(PT_C18N_NAME, 0));
     }
-    sec->compartment->phdr->add(sec);
+    sec->compartment->phdrs.back()->add(sec);
     lastCompartment = sec->compartment;
   }
 
@@ -2840,21 +2845,30 @@ SmallVector<PhdrEntry *, 0> Writer<ELFT>::createPhdrs(Partition &part) {
   if (tlsHdr->firstSec)
     ret.push_back(tlsHdr);
 
-  // Add an entry for .tgot.
+  // Add entries for .tgot.
+  PhdrEntry *tgotHdr = make<PhdrEntry>(PT_CHERI_TGOT, PF_R);
   if (in.tgot->isNeeded()) {
     OutputSection *sec = in.tgot->getParent();
-    addHdr(PT_CHERI_TGOT, sec->getPhdrFlags())->add(sec);
+    tgotHdr->add(sec);
   }
+  for (Compartment &compart : compartments) {
+    if (compart.tgot->isNeeded()) {
+      OutputSection *sec = compart.tgot->getParent();
+      tgotHdr->add(sec);
+    }
+  }
+  if (tgotHdr->firstSec)
+    ret.push_back(tgotHdr);
 
   // Add an entry for .dynamic.
   if (OutputSection *sec = part.dynamic->getParent())
     addHdr(PT_DYNAMIC, sec->getPhdrFlags())->add(sec);
 
   for (Compartment &compart : compartments) {
-    if (compart.phdr != nullptr)
-      ret.push_back(compart.phdr);
-    else
+    if (compart.phdrs.empty())
       error("no output sections for compartment " + compart.name);
+    for (PhdrEntry *phdr : compart.phdrs)
+      ret.push_back(phdr);
   }
 
   if (firstRelRo->firstSec)
