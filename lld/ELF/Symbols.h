@@ -52,7 +52,7 @@ enum {
   NEEDS_COPY = 1 << 3,
   NEEDS_TLSDESC = 1 << 4,
   NEEDS_TLSGD = 1 << 5,
-  NEEDS_TLSGD_TO_IE = 1 << 6,
+  // 1 << 6 unused
   NEEDS_GOT_DTPREL = 1 << 7,
   NEEDS_TLSIE = 1 << 8,
   NEEDS_TGOT = 1 << 9,
@@ -349,8 +349,8 @@ public:
   bool needsDynReloc() const {
     return flags.load(std::memory_order_relaxed) &
            (NEEDS_COPY | NEEDS_GOT | NEEDS_PLT | NEEDS_TLSDESC | NEEDS_TLSGD |
-            NEEDS_TLSGD_TO_IE | NEEDS_GOT_DTPREL | NEEDS_TLSIE | NEEDS_TGOT |
-            NEEDS_TGOT_GOT | NEEDS_TGOT_TLSGD | NEEDS_TGOT_TLSDESC);
+            NEEDS_GOT_DTPREL | NEEDS_TLSIE | NEEDS_TGOT | NEEDS_TGOT_GOT |
+            NEEDS_TGOT_TLSGD | NEEDS_TGOT_TLSDESC);
   }
   void allocateAux() {
     assert(auxIdx == 0);

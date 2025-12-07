@@ -1487,7 +1487,7 @@ static unsigned handleTlsRelocation(RelType type, Symbol &sym,
         sym.setFlags(NEEDS_TGOT_GOT);
         relaxExpr = R_RELAX_TGOT_TLS_GD_TO_IE;
       } else {
-        sym.setFlags(NEEDS_TLSGD_TO_IE);
+        sym.setFlags(NEEDS_TLSIE);
         relaxExpr = R_RELAX_TLS_GD_TO_IE;
       }
       c.addReloc(
@@ -1892,18 +1892,13 @@ void elf::postScanRelocations() {
       else
         got->addConstant({R_ABS, target->tlsOffsetRel, offsetOff, 0, &sym});
     }
-    if (flags & NEEDS_TLSGD_TO_IE) {
-      got->addEntry(sym);
-      mainPart->relaDyn->addSymbolReloc(target->tlsGotRel, *got,
-                                        sym.getGotOffset(), sym);
-    }
     if (flags & NEEDS_GOT_DTPREL) {
       got->addEntry(sym);
       got->addConstant(
           {R_ABS, target->tlsOffsetRel, sym.getGotOffset(), 0, &sym});
     }
 
-    if ((flags & NEEDS_TLSIE) && !(flags & NEEDS_TLSGD_TO_IE))
+    if (flags & NEEDS_TLSIE)
       addTpOffsetGotEntry(sym);
 
     if (flags & NEEDS_TGOT)
