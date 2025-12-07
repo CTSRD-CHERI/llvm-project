@@ -512,6 +512,9 @@ template <class ELFT> void elf::createSyntheticSections() {
     compart.igotPlt = std::make_unique<IgotPltSection>();
     compart.igotPlt->compartment = &compart;
     add(*compart.igotPlt);
+    compart.tgot = std::make_unique<TgotSection>();
+    compart.tgot->compartment = &compart;
+    add(*compart.tgot);
   }
 
   if (config->emachine == EM_ARM) {
@@ -562,10 +565,20 @@ template <class ELFT> void elf::createSyntheticSections() {
       config->isRela ? ".rela.tgot" : ".rel.tgot", /*sort=*/false,
       /*threadCount=*/1);
   add(*in.relaTgot);
+  for (Compartment &compart : compartments) {
+    compart.relaTgot = std::make_unique<RelocationSection<ELFT>>(
+        config->isRela ? ".rela.tgot" : ".rel.tgot", /*sort=*/false,
+        /*threadCount=*/1);
+    add(*compart.relaTgot);
+  }
 
-  if (config->isCheriAbi)
+  if (config->isCheriAbi) {
     in.tgotCapRelocs =
         std::make_unique<CheriCapRelocsSection>("__tgot_cap_relocs");
+    for (Compartment &compart : compartments)
+      compart.tgotCapRelocs =
+          std::make_unique<CheriCapRelocsSection>("__tgot_cap_relocs");
+  }
 
   if ((config->emachine == EM_386 || config->emachine == EM_X86_64) &&
       (config->andFeatures & GNU_PROPERTY_X86_FEATURE_1_IBT)) {
@@ -2255,6 +2268,8 @@ template <class ELFT> void Writer<ELFT>::finalizeSections() {
     if (in.iplt && in.iplt->isNeeded())
       in.iplt->addSymbols();
     for (Compartment &c : compartments) {
+      if (c.tgotCapRelocs)
+        finalizeSynthetic(c.tgotCapRelocs.get());
       if (c.plt && c.plt->isNeeded())
         c.plt->addSymbols();
       if (c.iplt && c.iplt->isNeeded())
@@ -2452,8 +2467,10 @@ template <class ELFT> void Writer<ELFT>::finalizeSections() {
       finalizeSynthetic(c.got.get());
       finalizeSynthetic(c.gotPlt.get());
       finalizeSynthetic(c.igotPlt.get());
+      finalizeSynthetic(c.tgot.get());
       finalizeSynthetic(c.pccPadding.get());
       finalizeSynthetic(c.relaPlt.get());
+      finalizeSynthetic(c.relaTgot.get());
       finalizeSynthetic(c.plt.get());
       finalizeSynthetic(c.iplt.get());
     }
@@ -2836,10 +2853,16 @@ SmallVector<PhdrEntry *, 0> Writer<ELFT>::createPhdrs(Partition &part) {
   if (tlsHdr->firstSec)
     ret.push_back(tlsHdr);
 
-  // Add an entry for .tgot.
+  // Add entries for .tgot.
   if (in.tgot->isNeeded()) {
     OutputSection *sec = in.tgot->getParent();
     addHdr(PT_CHERI_TGOT, sec->getPhdrFlags())->add(sec);
+  }
+  for (Compartment &compart : compartments) {
+    if (compart.tgot->isNeeded()) {
+      OutputSection *sec = compart.tgot->getParent();
+      addHdr(PT_CHERI_TGOT, sec->getPhdrFlags())->add(sec);
+    }
   }
 
   // Add an entry for .dynamic.

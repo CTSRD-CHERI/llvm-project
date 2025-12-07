@@ -3056,6 +3056,9 @@ void LinkerDriver::link(opt::InputArgList &args) {
         ctx.inputSections.push_back(part.capRelocs.get());
     if (in.tgotCapRelocs)
       ctx.inputSections.push_back(in.tgotCapRelocs.get());
+    for (Compartment &c : compartments)
+      if (c.tgotCapRelocs)
+        ctx.inputSections.push_back(c.tgotCapRelocs.get());
   }
 
   // Merge .riscv.attributes sections.

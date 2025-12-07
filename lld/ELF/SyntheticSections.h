@@ -1406,10 +1406,13 @@ struct Compartment {
   std::unique_ptr<GotSection> got;
   std::unique_ptr<GotPltSection> gotPlt;
   std::unique_ptr<IgotPltSection> igotPlt;
+  std::unique_ptr<TgotSection> tgot;
   std::unique_ptr<CheriPccPaddingSection> pccPadding;
+  std::unique_ptr<CheriCapRelocsSection> tgotCapRelocs;
   std::unique_ptr<PltSection> plt;
   std::unique_ptr<IpltSection> iplt;
   std::unique_ptr<RelocationBaseSection> relaPlt;
+  std::unique_ptr<RelocationBaseSection> relaTgot;
 
   PhdrEntry *phdr;
   PhdrEntry *relRo;
@@ -1439,11 +1442,25 @@ inline IgotPltSection *igotPlt(const Compartment *c) {
     return c->igotPlt.get();
 }
 
+inline TgotSection *tgot(const Compartment *c) {
+  if (c == nullptr)
+    return in.tgot.get();
+  else
+    return c->tgot.get();
+}
+
 inline CheriPccPaddingSection *pccPadding(const Compartment *c) {
   if (c == nullptr)
     return in.pccPadding.get();
   else
     return c->pccPadding.get();
+}
+
+inline CheriCapRelocsSection *tgotCapRelocs(const Compartment *c) {
+  if (c == nullptr)
+    return in.tgotCapRelocs.get();
+  else
+    return c->tgotCapRelocs.get();
 }
 
 inline PltSection *plt(const Compartment *c) {
@@ -1465,6 +1482,13 @@ inline RelocationBaseSection *relaPlt(const Compartment *c) {
     return in.relaPlt.get();
   else
     return c->relaPlt.get();
+}
+
+inline RelocationBaseSection *relaTgot(const Compartment *c) {
+  if (c == nullptr)
+    return in.relaTgot.get();
+  else
+    return c->relaTgot.get();
 }
 
 inline PhdrEntry *cheriBounds(const Compartment *c) {

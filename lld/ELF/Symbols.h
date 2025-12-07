@@ -312,7 +312,9 @@ public:
   uint32_t getTlsGdIdx(const Compartment *c) const {
     return symAux[auxIdx(c)].tlsGdIdx;
   }
-  uint32_t getTgotIdx() const { return symAux[auxIdx(nullptr)].tgotIdx; }
+  uint32_t getTgotIdx(const Compartment *c) const {
+    return symAux[auxIdx(c)].tgotIdx;
+  }
   uint32_t getTgotGotIdx(const Compartment *c) const {
     return symAux[auxIdx(c)].tgotGotIdx;
   }
@@ -335,8 +337,8 @@ public:
   uint64_t getGotPltOffset(const Compartment *c) const;
   uint64_t getGotPltVA(const Compartment *c) const;
   uint64_t getPltVA(const Compartment *c) const;
-  uint64_t getTgotOffset() const;
-  uint64_t getTgotVA() const;
+  uint64_t getTgotOffset(const Compartment *c) const;
+  uint64_t getTgotVA(const Compartment *c) const;
   uint64_t getMipsCheriCapTableVA(const InputSectionBase *isec,
                                   uint64_t offset) const;
   uint64_t getMipsCheriCapTableOffset(const InputSectionBase *isec,

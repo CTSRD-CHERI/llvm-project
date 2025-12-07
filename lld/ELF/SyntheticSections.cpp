@@ -1298,7 +1298,7 @@ TgotSection::TgotSection()
 
 void TgotSection::addConstant(const Relocation &r) { relocations.push_back(r); }
 void TgotSection::addEntry(Symbol &sym) {
-  assert(sym.auxIdx(nullptr) == symAux.size() - 1);
+  assert(sym.auxIdx(compartment) == symAux.size() - 1);
   symAux.back().tgotIdx = entries.size();
   entries.push_back(&sym);
 }
@@ -1561,10 +1561,22 @@ DynamicSection<ELFT>::computeContents() {
       addInt(DT_PLTREL, config->isRela ? DT_RELA : DT_REL);
   }
 
-  if (isMain && in.relaTgot->isNeeded()) {
-    addInSec(DT_CHERI_TGOTREL, *in.relaTgot);
-    addInt(DT_CHERI_TGOTRELSZ, in.relaTgot->getSize());
-    addInt(DT_CHERI_TGOTRELT, config->isRela ? DT_RELA : DT_REL);
+  if (isMain) {
+    bool tgotrelt = false;
+    if (in.relaTgot->isNeeded()) {
+      addInSec(DT_CHERI_TGOTREL, *in.relaTgot);
+      addInt(DT_CHERI_TGOTRELSZ, in.relaTgot->getSize());
+      tgotrelt = true;
+    }
+    for (const Compartment &c : compartments) {
+      if (c.relaTgot->isNeeded()) {
+        addInSec(DT_CHERI_TGOTREL, *c.relaTgot);
+        addInt(DT_CHERI_TGOTRELSZ, c.relaTgot->getSize());
+        tgotrelt = true;
+      }
+    }
+    if (tgotrelt)
+      addInt(DT_CHERI_TGOTRELT, config->isRela ? DT_RELA : DT_REL);
   }
 
   if (config->emachine == EM_AARCH64) {
@@ -1696,6 +1708,13 @@ DynamicSection<ELFT>::computeContents() {
       addInSec(DT_RISCV_CHERI___TGOTCAPRELOCS, *in.tgotCapRelocs);
       addInt(DT_RISCV_CHERI___TGOTCAPRELOCSSZ,
              in.tgotCapRelocs->getParent()->size);
+    }
+    for (const Compartment &c : compartments) {
+      if (c.tgotCapRelocs && c.tgotCapRelocs->isNeeded()) {
+        addInSec(DT_RISCV_CHERI___TGOTCAPRELOCS, *c.tgotCapRelocs);
+        addInt(DT_RISCV_CHERI___TGOTCAPRELOCSSZ,
+               c.tgotCapRelocs->getParent()->size);
+      }
     }
   }
 
@@ -1887,9 +1906,9 @@ void RelocationBaseSection::finalizeContents() {
       }
     }
   }
-  if (in.relaTgot.get() == this && in.tgot->getParent()) {
+  if (relaTgot(c) == this && tgot(c)->getParent()) {
     getParent()->flags |= ELF::SHF_INFO_LINK;
-    getParent()->info = in.tgot->getParent()->sectionIndex;
+    getParent()->info = tgot(c)->getParent()->sectionIndex;
   }
   for (auto reloc : relocs) {
     if (config->isCheriAbi && reloc.inputSec->name == "__cap_relocs") {

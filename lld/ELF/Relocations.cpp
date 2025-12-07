@@ -985,13 +985,13 @@ static void addTpOffsetGotEntry(Compartment *c, Symbol &sym) {
       target->tlsGotRel, *got(c), off, sym, target->symbolicRel);
 }
 
-static void addTgotEntry(Symbol &sym) {
-  in.tgot->addEntry(sym);
-  uint64_t off = sym.getTgotOffset();
+static void addTgotEntry(Compartment *c, Symbol &sym) {
+  tgot(c)->addEntry(sym);
+  uint64_t off = sym.getTgotOffset(c);
 
   // If preemptible, emit a TGOT_SLOT relocation with a symbol.
   if (sym.isPreemptible) {
-    in.relaTgot->addReloc({target->tgotRel, in.tgot.get(), off,
+    relaTgot(c)->addReloc({target->tgotRel, tgot(c), off,
                            DynamicReloc::AgainstSymbol, sym, 0, R_ADDEND});
     return;
   }
@@ -1003,12 +1003,12 @@ static void addTgotEntry(Symbol &sym) {
   // Otherwise, the value is either an undef weak link-time constant or
   // relative to this module's TLS block.
   if (sym.isUndefWeak())
-    in.tgot->addConstant({expr, type, off, 0, &sym});
+    tgot(c)->addConstant({expr, type, off, 0, &sym});
   else if (config->isCheriAbi && !config->useRelativeElfCheriRelocs)
-    in.tgotCapRelocs->addReloc(*in.tgot, off, sym, 0, expr, type);
+    tgotCapRelocs(c)->addReloc(*tgot(c), off, sym, 0, expr, type);
   else
-    in.relaTgot->addReloc(DynamicReloc::AddendOnlyWithTargetVA, target->tgotRel,
-                          *in.tgot, off, sym, 0, expr, type);
+    relaTgot(c)->addReloc(DynamicReloc::AddendOnlyWithTargetVA, target->tgotRel,
+                          *tgot(c), off, sym, 0, expr, type);
 }
 
 // Return true if we can define a symbol in the executable that
@@ -1411,7 +1411,7 @@ static unsigned handleTlsRelocation(RelType type, Symbol &sym,
 
   if (oneof<R_TPREL, R_TPREL_NEG, R_TGOT, R_TGOT_TP>(expr)) {
     if (isTgot)
-      sym.setFlags(nullptr, NEEDS_TGOT);
+      sym.setFlags(c.compartment, NEEDS_TGOT);
 
     if (config->shared) {
       errorOrWarn("relocation " + toString(type) + " against " + toString(sym) +
@@ -1425,7 +1425,7 @@ static unsigned handleTlsRelocation(RelType type, Symbol &sym,
     return handleMipsTlsRelocation(type, sym, c, offset, addend, expr);
 
   if (isTgot)
-    sym.setFlags(nullptr, NEEDS_TGOT);
+    sym.setFlags(c.compartment, NEEDS_TGOT);
 
   if (oneof<R_AARCH64_TLSDESC_PAGE, R_TLSDESC, R_TLSDESC_CALL, R_TLSDESC_PC,
             R_TLSDESC_GOTPLT, R_TGOT_TLSDESC, R_TGOT_TLSDESC_CALL>(expr) &&
@@ -1976,7 +1976,7 @@ void elf::postScanRelocations() {
       addTpOffsetGotEntry(c, sym);
 
     if (flags & NEEDS_TGOT)
-      addTgotEntry(sym);
+      addTgotEntry(c, sym);
 
     if (flags & NEEDS_TGOT_GOT) {
       got->addTgotEntry(sym);
