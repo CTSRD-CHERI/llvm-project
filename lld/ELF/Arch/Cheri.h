@@ -81,8 +81,18 @@ public:
   bool isNeeded() const override { return !relocsMap.empty(); }
   size_t getSize() const override { return relocsMap.size() * entsize; }
   void writeTo(uint8_t *buf) override;
-  void addCapReloc(bool isCode, CheriCapRelocLocation loc,
-                   const SymbolAndOffset &target, int64_t addend);
+  void addReloc(InputSectionBase &isec, uint64_t offsetInSec, Symbol &sym,
+                int64_t addend, RelExpr expr, RelType type) {
+    addReloc(isec, offsetInSec, &sym, addend, expr, type);
+  }
+  void addReloc(InputSectionBase &isec, uint64_t offsetInSec,
+                InputSectionBase &targetSec, int64_t addend, RelExpr expr,
+                RelType type) {
+    addReloc(isec, offsetInSec, &targetSec, addend, expr, type);
+  }
+  void addReloc(InputSectionBase &isec, uint64_t offsetInSec,
+                llvm::PointerUnion<Symbol *, InputSectionBase *> symOrSec,
+                int64_t addend, RelExpr expr, RelType type);
 
 private:
   template <class ELFT> void writeToImpl(uint8_t *);

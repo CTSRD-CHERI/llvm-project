@@ -989,7 +989,7 @@ static void addTgotEntry(Symbol &sym) {
   if (sym.isUndefWeak())
     in.tgot->addConstant({expr, type, off, 0, &sym});
   else if (config->isCheriAbi && !config->useRelativeElfCheriRelocs)
-    in.tgotCapRelocs->addCapReloc(false, {in.tgot.get(), off}, {&sym, 0}, 0);
+    in.tgotCapRelocs->addReloc(*in.tgot, off, sym, 0, expr, type);
   else
     in.relaTgot->addReloc(DynamicReloc::AddendOnlyWithTargetVA, target->tgotRel,
                           *in.tgot, off, sym, 0, expr, type);

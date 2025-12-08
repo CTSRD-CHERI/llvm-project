@@ -178,10 +178,16 @@ std::string CheriCapRelocLocation::toString() const {
  return SymbolAndOffset(section, offset).verboseToString();
 }
 
-void CheriCapRelocsSection::addCapReloc(bool isCode, CheriCapRelocLocation loc,
-                                        const SymbolAndOffset &target,
-                                        int64_t addend) {
-  assert(!isa<Symbol *>(target.symOrSec) || !target.sym()->isPreemptible);
+void CheriCapRelocsSection::addReloc(
+    InputSectionBase &isec, uint64_t offsetInSec,
+    llvm::PointerUnion<Symbol *, InputSectionBase *> symOrSec, int64_t addend,
+    RelExpr expr, RelType type) {
+  Symbol *sym = dyn_cast<Symbol *>(symOrSec);
+  CheriCapRelocLocation loc{&isec, offsetInSec};
+  SymbolAndOffset target{symOrSec, 0};
+
+  assert(expr == R_ABS_CAP);
+  assert(!sym || !sym->isPreemptible);
 
   auto sourceMsg = [&]() { return loc.toString(); };
   if (isa<Symbol *>(target.symOrSec) && target.sym()->isUndefined() &&
@@ -207,6 +213,7 @@ void CheriCapRelocsSection::addCapReloc(bool isCode, CheriCapRelocLocation loc,
     return;
   }
 
+  bool isCode = type == elf::target->symbolicCodeCapRel;
   addEntry(loc, {isCode, target, addend});
 }
 
@@ -997,12 +1004,9 @@ void addRelativeCapabilityRelocation(
     part.relaDyn->addSymbolReloc(type, isec, offsetInSec, *sym, addend, type);
     return;
   }
-  bool isCode = type == target->symbolicCodeCapRel;
-  assert(!sym || !sym->isPreemptible);
   assert(!config->useRelativeElfCheriRelocs &&
          "relative ELF capability relocations not currently implemented");
-  part.capRelocs->addCapReloc(isCode, {&isec, offsetInSec}, {symOrSec, 0u},
-                              addend);
+  part.capRelocs->addReloc(isec, offsetInSec, symOrSec, addend, expr, type);
 }
 
 // CHERI-MIPS using the PLT and fndesc ABIs uses a different mechanism for
