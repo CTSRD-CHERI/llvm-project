@@ -180,13 +180,10 @@ std::string CheriCapRelocLocation::toString() const {
 
 void CheriCapRelocsSection::addCapReloc(bool isCode, CheriCapRelocLocation loc,
                                         const SymbolAndOffset &target,
-                                        int64_t capabilityOffset,
-                                        Symbol *sourceSymbol) {
+                                        int64_t capabilityOffset) {
   assert(!isa<Symbol *>(target.symOrSec) || !target.sym()->isPreemptible);
 
-  auto sourceMsg = [&]() -> std::string {
-    return sourceSymbol ? verboseToString(sourceSymbol) : loc.toString();
-  };
+  auto sourceMsg = [&]() { return loc.toString(); };
   if (isa<Symbol *>(target.symOrSec) && target.sym()->isUndefined() &&
       !target.sym()->isUndefWeak()) {
     std::string msg =

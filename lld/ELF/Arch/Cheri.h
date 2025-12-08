@@ -82,8 +82,7 @@ public:
   size_t getSize() const override { return relocsMap.size() * entsize; }
   void writeTo(uint8_t *buf) override;
   void addCapReloc(bool isCode, CheriCapRelocLocation loc,
-                   const SymbolAndOffset &target, int64_t capabilityOffset,
-                   Symbol *sourceSymbol = nullptr);
+                   const SymbolAndOffset &target, int64_t capabilityOffset);
 
 private:
   template <class ELFT> void writeToImpl(uint8_t *);
