@@ -319,11 +319,6 @@ inline void readOnlyCapRelocsError(Symbol &sym, const Twine &sourceMsg) {
         sourceMsg);
 }
 
-void addRelativeCapabilityRelocation(
-    InputSectionBase &isec, uint64_t offsetInSec,
-    llvm::PointerUnion<Symbol *, InputSectionBase *> symOrSec, int64_t addend,
-    RelExpr expr, RelType type);
-
 bool needsCheriPccSegment();
 
 // Align OutputSections as needed to ensure the bounds of capabilities
