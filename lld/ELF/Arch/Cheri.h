@@ -90,12 +90,12 @@ public:
                 RelType type) {
     addReloc(isec, offsetInSec, &targetSec, addend, expr, type);
   }
-  void addReloc(InputSectionBase &isec, uint64_t offsetInSec,
-                llvm::PointerUnion<Symbol *, InputSectionBase *> symOrSec,
-                int64_t addend, RelExpr expr, RelType type);
 
 private:
   template <class ELFT> void writeToImpl(uint8_t *);
+  void addReloc(InputSectionBase &isec, uint64_t offsetInSec,
+                llvm::PointerUnion<Symbol *, InputSectionBase *> symOrSec,
+                int64_t addend, RelExpr expr, RelType type);
   bool addEntry(CheriCapRelocLocation loc, CheriCapReloc relocation) {
     auto it = relocsMap.insert(std::make_pair(loc, relocation));
     // assert(it.first->second == Relocation);
