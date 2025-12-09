@@ -987,6 +987,7 @@ void addRelativeCapabilityRelocation(
     InputSectionBase &isec, uint64_t offsetInSec,
     llvm::PointerUnion<Symbol *, InputSectionBase *> symOrSec, int64_t addend,
     RelExpr expr, RelType type) {
+  Partition &part = isec.getPartition();
   Symbol *sym = dyn_cast<Symbol *>(symOrSec);
   assert(expr == R_ABS_CAP);
   if (sym && needsCheriMipsTrampoline(type, *sym)) {
@@ -996,16 +997,15 @@ void addRelativeCapabilityRelocation(
               verboseToString(sym));
 
     sym = &getCheriMipsTrampolineSym(type, *sym);
-    mainPart->relaDyn->addSymbolReloc(type, isec, offsetInSec, *sym, addend,
-                                      type);
+    part.relaDyn->addSymbolReloc(type, isec, offsetInSec, *sym, addend, type);
     return;
   }
   bool isCode = type == target->symbolicCodeCapRel;
   assert(!sym || !sym->isPreemptible);
   assert(!config->useRelativeElfCheriRelocs &&
          "relative ELF capability relocations not currently implemented");
-  in.capRelocs->addCapReloc(isCode, {&isec, offsetInSec}, {symOrSec, 0u},
-                            addend);
+  part.capRelocs->addCapReloc(isCode, {&isec, offsetInSec}, {symOrSec, 0u},
+                              addend);
 }
 
 // CHERI-MIPS using the PLT and fndesc ABIs uses a different mechanism for

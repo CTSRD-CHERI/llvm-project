@@ -322,8 +322,6 @@ template <class ELFT> void elf::createSyntheticSections() {
   add(*in.bssRelRo);
 
   if (config->capabilitySize > 0) {
-    in.capRelocs = std::make_unique<CheriCapRelocsSection>("__cap_relocs");
-
     if (config->emachine == EM_MIPS) {
       in.mipsCheriCapTable = std::make_unique<MipsCheriCapTableSection>();
       add(*in.mipsCheriCapTable);
@@ -334,10 +332,6 @@ template <class ELFT> void elf::createSyntheticSections() {
       }
     }
   }
-
-  if (config->isCheriAbi)
-    in.tgotCapRelocs =
-        std::make_unique<CheriCapRelocsSection>("__tgot_cap_relocs");
 
   // Add MIPS-specific sections.
   if (config->emachine == EM_MIPS) {
@@ -428,6 +422,9 @@ template <class ELFT> void elf::createSyntheticSections() {
       part.relrDyn = std::make_unique<RelrSection<ELFT>>(threadCount);
       add(*part.relrDyn);
     }
+
+    if (config->capabilitySize > 0)
+      part.capRelocs = std::make_unique<CheriCapRelocsSection>("__cap_relocs");
 
     if (!config->relocatable) {
       if (config->ehFrameHdr) {
@@ -532,6 +529,10 @@ template <class ELFT> void elf::createSyntheticSections() {
       config->isRela ? ".rela.tgot" : ".rel.tgot", /*sort=*/false,
       /*threadCount=*/1);
   add(*in.relaTgot);
+
+  if (config->isCheriAbi)
+    in.tgotCapRelocs =
+        std::make_unique<CheriCapRelocsSection>("__tgot_cap_relocs");
 
   if ((config->emachine == EM_386 || config->emachine == EM_X86_64) &&
       (config->andFeatures & GNU_PROPERTY_X86_FEATURE_1_IBT)) {
@@ -2187,11 +2188,9 @@ template <class ELFT> void Writer<ELFT>::finalizeSections() {
 
     // Now handle __cap_relocs (must be before RelaDyn because it might
     // result in new dynamic relocations being added)
-    if (in.capRelocs) {
-      finalizeSynthetic(in.capRelocs.get());
-    }
-    if (in.tgotCapRelocs)
-      finalizeSynthetic(in.tgotCapRelocs.get());
+    for (Partition &part : partitions)
+      finalizeSynthetic(part.capRelocs.get());
+    finalizeSynthetic(in.tgotCapRelocs.get());
     if (in.plt && in.plt->isNeeded())
       in.plt->addSymbols();
     if (in.iplt && in.iplt->isNeeded())

@@ -3017,8 +3017,9 @@ void LinkerDriver::link(opt::InputArgList &args) {
   // output sections in the usual way.
   if (!config->relocatable) {
     combineEhSections();
-    if (in.capRelocs)
-      ctx.inputSections.push_back(in.capRelocs.get());
+    for (Partition &part : partitions)
+      if (part.capRelocs)
+        ctx.inputSections.push_back(part.capRelocs.get());
     if (in.tgotCapRelocs)
       ctx.inputSections.push_back(in.tgotCapRelocs.get());
   }

@@ -1664,14 +1664,14 @@ DynamicSection<ELFT>::computeContents() {
       addInt(DT_MIPS_CHERI_CAPTABLE_MAPPINGSZ,
              in.mipsCheriCapTableMapping->getParent()->size);
     }
-    if (in.capRelocs && in.capRelocs->isNeeded()) {
-      addInSec(DT_MIPS_CHERI___CAPRELOCS, *in.capRelocs);
-      addInt(DT_MIPS_CHERI___CAPRELOCSSZ, in.capRelocs->getParent()->size);
+    if (part.capRelocs && part.capRelocs->isNeeded()) {
+      addInSec(DT_MIPS_CHERI___CAPRELOCS, *part.capRelocs);
+      addInt(DT_MIPS_CHERI___CAPRELOCSSZ, part.capRelocs->getParent()->size);
     }
   } else if (config->emachine == EM_RISCV) {
-    if (in.capRelocs && in.capRelocs->isNeeded()) {
-      addInSec(DT_RISCV_CHERI___CAPRELOCS, *in.capRelocs);
-      addInt(DT_RISCV_CHERI___CAPRELOCSSZ, in.capRelocs->getParent()->size);
+    if (part.capRelocs && part.capRelocs->isNeeded()) {
+      addInSec(DT_RISCV_CHERI___CAPRELOCS, *part.capRelocs);
+      addInt(DT_RISCV_CHERI___CAPRELOCSSZ, part.capRelocs->getParent()->size);
     }
     if (in.tgotCapRelocs && in.tgotCapRelocs->isNeeded()) {
       addInSec(DT_RISCV_CHERI___TGOTCAPRELOCS, *in.tgotCapRelocs);
@@ -4044,7 +4044,6 @@ void InStruct::reset() {
   riscvAttributes.reset();
   bss.reset();
   bssRelRo.reset();
-  capRelocs.reset();
   mipsCheriCapTableMapping.reset();
   mipsCheriCapTableMapping.reset();
   got.reset();

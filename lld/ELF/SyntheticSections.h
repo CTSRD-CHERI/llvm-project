@@ -1327,6 +1327,7 @@ struct Partition {
   std::unique_ptr<PackageMetadataNote> packageMetadataNote;
   std::unique_ptr<RelocationBaseSection> relaDyn;
   std::unique_ptr<RelrBaseSection> relrDyn;
+  std::unique_ptr<CheriCapRelocsSection> capRelocs;
   std::unique_ptr<VersionDefinitionSection> verDef;
   std::unique_ptr<SyntheticSection> verNeed;
   std::unique_ptr<VersionTableSection> verSym;
@@ -1354,8 +1355,6 @@ struct InStruct {
   std::unique_ptr<TgotSection> tgot;
   std::unique_ptr<MipsCheriCapTableSection> mipsCheriCapTable;
   std::unique_ptr<CheriPccPaddingSection> pccPadding;
-  std::unique_ptr<CheriCapRelocsSection> capRelocs;
-  std::unique_ptr<CheriCapRelocsSection> tgotCapRelocs;
   // For per-file/per-function tables:
   std::unique_ptr<MipsCheriCapTableMappingSection> mipsCheriCapTableMapping;
   std::unique_ptr<SyntheticSection> armCmseSGSection;
@@ -1374,6 +1373,7 @@ struct InStruct {
   std::unique_ptr<RelocationBaseSection> relaPlt;
   std::unique_ptr<RelocationBaseSection> relaIplt;
   std::unique_ptr<RelocationBaseSection> relaTgot;
+  std::unique_ptr<CheriCapRelocsSection> tgotCapRelocs;
   std::unique_ptr<StringTableSection> shStrTab;
   std::unique_ptr<StringTableSection> strTab;
   std::unique_ptr<SymbolTableBaseSection> symTab;
