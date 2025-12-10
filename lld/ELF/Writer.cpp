@@ -900,10 +900,10 @@ bool elf::isRelroSection(const OutputSection *sec, bool ignoreZRelro) {
 // * It is easy to check if a give branch was taken.
 // * It is easy two see how similar two ranks are (see getRankProximity).
 enum RankFlags {
-  RF_NOT_ADDR_SET = 1 << 27,
-  RF_NOT_ALLOC = 1 << 26,
-  RF_PARTITION = 1 << 18, // Partition number (8 bits)
-  RF_NOT_SPECIAL = 1 << 17,
+  RF_NOT_ADDR_SET = 1 << 28,
+  RF_NOT_ALLOC = 1 << 27,
+  RF_PARTITION = 1 << 19, // Partition number (8 bits)
+  RF_NOT_SPECIAL = 1 << 18,
   RF_WRITE = 1 << 16,
   RF_EXEC_WRITE = 1 << 15,
   RF_EXEC = 1 << 14,
