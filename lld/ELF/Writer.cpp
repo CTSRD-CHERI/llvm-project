@@ -904,6 +904,7 @@ enum RankFlags {
   RF_NOT_ALLOC = 1 << 27,
   RF_PARTITION = 1 << 19, // Partition number (8 bits)
   RF_NOT_SPECIAL = 1 << 18,
+  RF_NOT_CHERI_PCC = 1 << 17,
   RF_WRITE = 1 << 16,
   RF_EXEC_WRITE = 1 << 15,
   RF_EXEC = 1 << 14,
@@ -945,6 +946,13 @@ static unsigned getSectionRank(const OutputSection &osec) {
     return rank | 3;
 
   rank |= RF_NOT_SPECIAL;
+
+  // Group sections covered by PT_CHERI_PCC before other PROGBITS and NOBITS
+  // sections.
+  if (in.pccPadding && in.pccPadding->isNeeded() &&
+      (osec.type == SHT_PROGBITS || osec.type == SHT_NOBITS) &&
+      !osec.cheriPcc.load(std::memory_order_relaxed))
+    rank |= RF_NOT_CHERI_PCC;
 
   // Sort sections based on their access permission in the following
   // order: R, RX, RXW, RW(RELRO), RW(non-RELRO).
