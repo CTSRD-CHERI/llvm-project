@@ -609,6 +609,36 @@ void LinkerScript::processSectionCommands() {
       return false;
     }
 
+    if (osec->name == "HEADERS") {
+      bool erased = false;
+      llvm::erase_if(osec->commands, [&erased](SectionCommand *cmd) {
+        if (!isa<SymbolAssignment>(cmd)) {
+          erased = true;
+          return true;
+        }
+        return false;
+      });
+      if (erased) {
+        for (InputSectionBase *s : v)
+          s->parent = nullptr;
+        error(osec->location + " can only include symbol assignments");
+      }
+      if (headers)
+        error(osec->location + " duplicates existing HEADERS at " +
+              headers->location);
+      else
+        headers = osec;
+      // Set dummy section index to match Out::elfHeader
+      osec->sectionIndex = 1;
+      osec->partition = 1;
+      // Header always has offset 0 so address's page offset bits must be 0,
+      // and must be at least word-aligned.
+      osec->addralign =
+          std::max<uint64_t>(config->maxPageSize, config->wordsize);
+      osec->flags = SHF_ALLOC;
+      return false;
+    }
+
     // This is for ONLY_IF_RO and ONLY_IF_RW. An output section directive
     // ".foo : ONLY_IF_R[OW] { ... }" is handled only if all member input
     // sections satisfy a given constraint. If not, a directive is handled
@@ -1028,9 +1058,10 @@ void LinkerScript::assignOffsets(OutputSection *sec) {
     state->lmaOffset = 0;
   }
 
-  // Propagate state->lmaOffset to the first "non-header" section.
+  // Propagate state->lmaOffset to the first "non-header" section (but include
+  // an explicit HEADERS).
   if (PhdrEntry *l = sec->ptLoad)
-    if (sec == findFirstSection(l))
+    if (sec == findFirstSection(l) || sec == headers)
       l->lmaOffset = state->lmaOffset;
 
   // We can call this method multiple times during the creation of
@@ -1074,6 +1105,13 @@ void LinkerScript::assignOffsets(OutputSection *sec) {
     }
   }
 
+  // HEADERS implicitly includes the ELF headers
+  if (sec == headers) {
+    const uint64_t pos = dot;
+    dot += elf::getHeaderSize();
+    expandOutputSection(dot - pos);
+  }
+
   // Non-SHF_ALLOC sections do not affect the addresses of other OutputSections
   // as they are not part of the process image.
   if (!(sec->flags & SHF_ALLOC)) {
@@ -1088,6 +1126,9 @@ void LinkerScript::assignOffsets(OutputSection *sec) {
 static bool isDiscardable(const OutputSection &sec) {
   if (sec.name == "/DISCARD/")
     return true;
+
+  if (sec.name == "HEADERS")
+    return false;
 
   // We do not want to remove OutputSections with expressions that reference
   // symbols even if the OutputSection is empty. We want to ensure that the
@@ -1170,12 +1211,12 @@ void LinkerScript::adjustOutputSections() {
     // If sec has at least one input section and not discarded, remember its
     // flags to be inherited by subsequent output sections. (sec may contain
     // just one empty synthetic section.)
-    if (sec->hasInputSections && !discardable)
+    if ((sec->hasInputSections && !discardable) || sec == headers)
       flags = sec->flags;
 
     // We do not want to keep any special flags for output section
-    // in case it is empty.
-    if (isEmpty)
+    // in case it is empty and not an explicit HEADERS section.
+    if (isEmpty && sec != headers)
       sec->flags = flags & ((sec->nonAlloc ? 0 : (uint64_t)SHF_ALLOC) |
                             SHF_WRITE | SHF_EXECINSTR);
 
@@ -1259,6 +1300,16 @@ static uint64_t computeBase(uint64_t min, bool allocateHeaders) {
 // enough space for these sections, we'll remove them from the PT_LOAD segment,
 // and we'll also remove the PT_PHDR segment.
 void LinkerScript::allocateHeaders(SmallVector<PhdrEntry *, 0> &phdrs) {
+  // If there is an explicit HEADERS section then we can use its layout
+  if (headers) {
+    Out::elfHeader->addr = headers->addr;
+    Out::programHeaders->addr = headers->addr + Out::elfHeader->size;
+    // Set ptLoad so the LMAs are consistent
+    Out::elfHeader->ptLoad = headers->ptLoad;
+    Out::programHeaders->ptLoad = headers->ptLoad;
+    return;
+  }
+
   uint64_t min = std::numeric_limits<uint64_t>::max();
   for (OutputSection *sec : outputSections)
     if (sec->flags & SHF_ALLOC)

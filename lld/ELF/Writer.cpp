@@ -91,6 +91,7 @@ private:
 
   uint64_t fileSize;
   uint64_t sectionHeaderOff;
+  OutputSection *sectionBeforeHeaders = nullptr;
 };
 } // anonymous namespace
 
@@ -927,6 +928,8 @@ static unsigned getSectionRank(const OutputSection &osec) {
   if (!(osec.flags & SHF_ALLOC))
     return rank | RF_NOT_ALLOC;
 
+  if (&osec == script->getHeadersSection())
+    return rank;
   if (osec.type == SHT_LLVM_PART_EHDR)
     return rank;
   if (osec.type == SHT_LLVM_PART_PHDR)
@@ -1924,7 +1927,7 @@ static bool isCheriBoundsSection(const OutputSection *sec) {
   // XXX: CheriBSD's runtime loader assumes all read-only capabilities can be
   // derived from PCC, so include all read-only sections as a workaround for
   // now.  Once CheriBSD 25.03 is no longer supported, this can be removed.
-  if (sec->type == SHT_PROGBITS &&
+  if (sec->type == SHT_PROGBITS && sec != script->getHeadersSection() &&
       (((flags & SHF_WRITE) == 0) || isRelroSection(sec)))
     return true;
 
@@ -2270,9 +2273,18 @@ template <class ELFT> void Writer<ELFT>::finalizeSections() {
 
   // Create a list of OutputSections, assign sectionIndex, and populate
   // in.shStrTab.
+  OutputSection *headersSection = script->getHeadersSection();
   for (SectionCommand *cmd : script->sectionCommands)
     if (auto *osd = dyn_cast<OutputDesc>(cmd)) {
       OutputSection *osec = &osd->osec;
+      if (osec == headersSection) {
+        // Give symbols a section index of the preceding section rather than 1
+        if (!outputSections.empty()) {
+          sectionBeforeHeaders = outputSections.back();
+          osec->sectionIndex = outputSections.size();
+        }
+        continue;
+      }
       outputSections.push_back(osec);
       osec->sectionIndex = outputSections.size();
       osec->shName = in.shStrTab->addString(osec->name);
@@ -2297,7 +2309,8 @@ template <class ELFT> void Writer<ELFT>::finalizeSections() {
   // This is a bit of a hack. A value of 0 means undef, so we set it
   // to 1 to make __ehdr_start defined. The section number is not
   // particularly relevant.
-  Out::elfHeader->sectionIndex = 1;
+  Out::elfHeader->sectionIndex =
+      headersSection ? headersSection->sectionIndex : 1;
   Out::elfHeader->size = sizeof(typename ELFT::Ehdr);
 
   // Binary and relocatable output does not have PHDRS.
@@ -2594,14 +2607,27 @@ SmallVector<PhdrEntry *, 0> Writer<ELFT>::createPhdrs(Partition &part) {
 
   unsigned partNo = part.getNumber();
   bool isMain = partNo == 1;
+  OutputSection *headersSection = script->getHeadersSection();
+  // If the explicit HEADERS is not first in the output we'll need to create a
+  // PT_LOAD for it like any other section in the right order.
+  SmallVector<OutputSection *, 0> outputSectionsWithHeaders = outputSections;
+  if (isMain && sectionBeforeHeaders) {
+    auto insertPos =
+        llvm::find_if(outputSectionsWithHeaders, [this](OutputSection *sec) {
+          return sec == sectionBeforeHeaders;
+        });
+    outputSectionsWithHeaders.insert(insertPos + 1, headersSection);
+  }
 
   // Add the first PT_LOAD segment for regular output sections.
   uint64_t flags = computeFlags(PF_R);
   PhdrEntry *load = nullptr;
 
   // nmagic or omagic output does not have PT_PHDR, PT_INTERP, or the readonly
-  // PT_LOAD.
-  if (!config->nmagic && !config->omagic) {
+  // PT_LOAD, unless there is an explicit HEADERS section, in which case we
+  // still include PT_PHDR and PT_LOAD.
+  bool paged = !config->nmagic && !config->omagic;
+  if (paged || headersSection) {
     // The first phdr entry is PT_PHDR which describes the program header
     // itself.
     if (isMain)
@@ -2610,16 +2636,20 @@ SmallVector<PhdrEntry *, 0> Writer<ELFT>::createPhdrs(Partition &part) {
       addHdr(PT_PHDR, PF_R)->add(part.programHeaders->getParent());
 
     // PT_INTERP must be the second entry if exists.
-    if (OutputSection *cmd = findSection(".interp", partNo))
+    if (OutputSection *cmd = findSection(".interp", partNo); cmd && paged)
       addHdr(PT_INTERP, cmd->getPhdrFlags())->add(cmd);
 
     // Add the headers. We will remove them if they don't fit.
     // In the other partitions the headers are ordinary sections, so they don't
     // need to be added here.
-    if (isMain) {
+    if (isMain && !sectionBeforeHeaders) {
       load = addHdr(PT_LOAD, flags);
-      load->add(Out::elfHeader);
-      load->add(Out::programHeaders);
+      if (headersSection)
+        load->add(headersSection);
+      else {
+        load->add(Out::elfHeader);
+        load->add(Out::programHeaders);
+      }
     }
   }
 
@@ -2662,7 +2692,7 @@ SmallVector<PhdrEntry *, 0> Writer<ELFT>::createPhdrs(Partition &part) {
     }
   }
 
-  for (OutputSection *sec : outputSections) {
+  for (OutputSection *sec : outputSectionsWithHeaders) {
     if (!needsPtLoad(sec))
       continue;
 
@@ -2685,7 +2715,9 @@ SmallVector<PhdrEntry *, 0> Writer<ELFT>::createPhdrs(Partition &part) {
     // using AT or AT> linker script command, respectively.
     //
     // As an exception, we don't create a separate load segment for the ELF
-    // headers, even if the first "real" output has an AT or AT> attribute.
+    // headers, even if the first "real" output has an AT or AT> attribute,
+    // except if it's an explicit HEADERS section that's not first in the
+    // output.
     //
     // In addition, NOBITS sections should only be placed at the end of a LOAD
     // segment (since it's represented as p_filesz < p_memsz). If we have a
@@ -2699,7 +2731,11 @@ SmallVector<PhdrEntry *, 0> Writer<ELFT>::createPhdrs(Partition &part) {
         load && !sec->lmaExpr && sec->lmaRegion == load->firstSec->lmaRegion;
     if (!(load && newFlags == flags && sec != relroEnd &&
           sec->memRegion == load->firstSec->memRegion &&
-          (sameLMARegion || load->lastSec == Out::programHeaders) &&
+          (sameLMARegion || load->lastSec == Out::programHeaders ||
+           load->lastSec == headersSection) &&
+          (!sectionBeforeHeaders ||
+           (load->lastSec != sectionBeforeHeaders &&
+            load->lastSec != headersSection)) &&
           (script->hasSectionsCommand || sec->type == SHT_NOBITS ||
            load->lastSec->type != SHT_NOBITS))) {
       load = addHdr(PT_LOAD, newFlags);

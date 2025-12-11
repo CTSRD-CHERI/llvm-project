@@ -303,6 +303,7 @@ class LinkerScript final {
   AddressState *state = nullptr;
 
   OutputSection *aether;
+  OutputSection *headers = nullptr;
 
   uint64_t dot;
 
@@ -325,6 +326,7 @@ public:
 
   SmallVector<PhdrEntry *, 0> createPhdrs();
   bool needsInterpSection();
+  OutputSection *getHeadersSection() const { return headers; }
 
   bool shouldKeep(InputSectionBase *s);
   const Defined *assignAddresses();
