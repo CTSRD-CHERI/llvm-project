@@ -302,6 +302,18 @@ static uint64_t getTargetSize(const CheriCapRelocLocation &location,
   auto targetSym = target.sym();
   if (targetSize == 0 && !targetSym->isPreemptible) {
     StringRef name = targetSym->getName();
+
+    // __ehdr_start is a special symbol that can be used to reach the ELF
+    // header and program headers if loaded.
+    if (name == "__ehdr_start") {
+      if (OutputSection *os = targetSym->getOutputSection(); os->ptLoad) {
+        if (os == Out::elfHeader || os == script->getHeadersSection()) {
+          if (Defined *d = dyn_cast<Defined>(targetSym); d->value == 0)
+            return getHeaderSize();
+        }
+      }
+    }
+
     // Section end symbols like __preinit_array_end, etc. should actually be
     // zero size symbol since they are just markers for the end of a section
     // and not usable as a valid pointer
