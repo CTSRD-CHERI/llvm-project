@@ -57,7 +57,7 @@ uint8_t getMipsIsaExt(uint64_t oldExt, llvm::StringRef oldFile, uint64_t newExt,
                       llvm::StringRef newFile);
 void checkMipsShlibCompatible(InputFile *f, uint64_t shlibCheriFlags,
                               uint64_t targetCheriFlags);
-bool isRelroSection(const OutputSection *sec);
+bool isRelroSection(const OutputSection *sec, bool ignoreZRelro = false);
 
 bool isMipsN32Abi(const InputFile *f);
 bool isMicroMips();

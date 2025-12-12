@@ -1149,7 +1149,8 @@ void RelocationScanner::processAux(RelExpr expr, RelType type, uint64_t offset,
           "PCC-accessed symbol defined in unsupported section type");
     // TODO: Make this an error in future? Would need special relocation to
     // allow bypassing for specific use cases (e.g. kernel startup code).
-    if ((osec->flags & SHF_WRITE) && !isRelroSection(osec))
+    if ((osec->flags & SHF_WRITE) &&
+        !isRelroSection(osec, /*ignoreZRelro=*/true))
       warn("relocation " + toString(type) + " against symbol '" +
            toString(sym) + "' in non-PCC section" +
            getLocation(*sec, sym, offset));

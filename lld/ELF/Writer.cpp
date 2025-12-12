@@ -810,8 +810,8 @@ template <class ELFT> void Writer<ELFT>::addSectionSymbols() {
 //
 // This function returns true if a section needs to be put into a
 // PT_GNU_RELRO segment.
-bool elf::isRelroSection(const OutputSection *sec) {
-  if (!config->zRelro)
+bool elf::isRelroSection(const OutputSection *sec, bool ignoreZRelro) {
+  if (!ignoreZRelro && !config->zRelro)
     return false;
   if (sec->relro)
     return true;
@@ -1924,8 +1924,8 @@ static bool isCheriBoundsSection(const OutputSection *sec) {
   // XXX: CheriBSD's runtime loader assumes all read-only capabilities can be
   // derived from PCC, so include all read-only sections as a workaround for
   // now.  Once CheriBSD 25.03 is no longer supported, this can be removed.
-  if (sec->type == SHT_PROGBITS &&
-      (((flags & SHF_WRITE) == 0) || isRelroSection(sec)))
+  if (sec->type == SHT_PROGBITS && (((flags & SHF_WRITE) == 0) ||
+                                    isRelroSection(sec, /*ignoreZRelro=*/true)))
     return true;
 
   return false;
