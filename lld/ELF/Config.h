@@ -460,8 +460,7 @@ struct Config {
   llvm::SmallVector<std::pair<llvm::GlobPattern, llvm::StringRef>, 0>
       remapInputsWildcards;
 
-  // XXX: Make uint8_t here and in InputFile
-  Compartment *compartment = nullptr;
+  uint8_t compartment = 0;
   std::vector<CompartmentPolicy> compartmentPolicies;
   bool verboseCompartmentalization = false;
 };

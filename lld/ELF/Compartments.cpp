@@ -51,10 +51,8 @@ typedef std::map<Compartment *, CompartmentValue> CompartmentDeps;
 namespace std {
 template <> struct less<Compartment *> {
   bool operator()(const Compartment *lhs, const Compartment *rhs) const {
-    if (lhs == nullptr)
-      return true;
-    if (rhs == nullptr)
-      return false;
+    if (lhs == defaultCompart || rhs == defaultCompart)
+      return rhs != defaultCompart;
 
     return lhs->name.compare(rhs->name) < 0;
   }
@@ -94,18 +92,18 @@ namespace elf {
 
 class CompartmentLookup {
 public:
-  bool addPattern(StringRef glob, Compartment *c) {
+  bool addPattern(StringRef glob, Compartment &c) {
     Expected<GlobPattern> GlobOrErr = GlobPattern::create(glob);
     if (!GlobOrErr) {
       error(toString(GlobOrErr.takeError()));
       return false;
     }
-    matches.emplace_back(std::make_pair(std::move(*GlobOrErr), c));
+    matches.emplace_back(std::make_pair(std::move(*GlobOrErr), &c));
     return true;
   }
 
-  Expected<Compartment *> findMatch(StringRef name) const {
-    Compartment *current = nullptr;
+  Expected<Compartment &> findMatch(StringRef name) const {
+    Compartment *current = defaultCompart;
 
     for (const auto &p : matches) {
       if (!p.first.match(name))
@@ -113,14 +111,14 @@ public:
 
       if (current == p.second)
         continue;
-      if (current != nullptr)
+      if (current != defaultCompart)
         return make_error<StringError>("assigned to compartment " +
                                            current->name + " and " +
                                            p.second->name,
                                        errc::invalid_argument);
       current = p.second;
     }
-    return current;
+    return *current;
   }
 
 private:
@@ -213,7 +211,7 @@ void addCompartment(StringRef name) {
 
 Compartment *findCompartment(StringRef name) {
   if (name.empty())
-    return nullptr;
+    return defaultCompart;
   for (Compartment &compart : compartments) {
     if (compart.name.compare(name) == 0)
       return &compart;
@@ -251,11 +249,11 @@ void readCompartmentPolicy(MemoryBufferRef mb) {
   config->compartmentPolicies.emplace_back(std::move(*policy));
 }
 
-static std::string compartmentName(const Compartment *c) {
-  if (c == defaultCompart)
+static std::string compartmentName(const Compartment &c) {
+  if (&c == defaultCompart)
     return "the default compartment";
   else
-    return "compartment " + toString(c->name);
+    return "compartment " + toString(c.name);
 }
 
 static std::string isecName(const InputSectionBase *s) {
@@ -270,15 +268,15 @@ static std::string symbolName(const Symbol *sym) {
     return "symbol " + toString(sym->getName());
 }
 
-static Compartment *
+static Compartment &
 compartmentForSection(const InputSectionBase *s,
                       const CompartmentLookup &symbolLookup) {
   if (s->file == nullptr)
-    return nullptr;
+    return *defaultCompart;
 
   InputFile *f = s->file;
   Symbol *firstSym = nullptr;
-  Compartment *current = nullptr;
+  Compartment *current = defaultCompart;
   bool hasError = false;
   std::vector<Symbol *> implicit_symbols;
   for (Symbol *b : f->getSymbols()) {
@@ -289,30 +287,30 @@ compartmentForSection(const InputSectionBase *s,
       if (b->getName().empty())
         continue;
 
-      Expected<Compartment *> symbolC = symbolLookup.findMatch(b->getName());
+      Expected<Compartment &> symbolC = symbolLookup.findMatch(b->getName());
       if (!symbolC) {
         error("symbol " + b->getName() + " " + toString(symbolC.takeError()));
         hasError = true;
         continue;
       }
 
-      if (*symbolC == current)
+      if (&*symbolC == current)
         continue;
 
       // Allow unspecified symbols to follow other rules for their containing
       // section.
-      if (*symbolC == nullptr) {
+      if (&*symbolC == defaultCompart) {
         implicit_symbols.emplace_back(d);
         continue;
       }
 
-      if (current != nullptr) {
-        error(isecName(s) + " assigned to " + compartmentName(current) +
+      if (current != defaultCompart) {
+        error(isecName(s) + " assigned to " + compartmentName(*current) +
               " by " + symbolName(firstSym) + " and " +
               compartmentName(*symbolC) + " by " + symbolName(b));
         hasError = true;
       } else {
-        current = *symbolC;
+        current = &*symbolC;
         firstSym = b;
       }
     }
@@ -327,11 +325,11 @@ compartmentForSection(const InputSectionBase *s,
       if (!b->includeInDynsym())
         continue;
       message("note: " + symbolName(b) + " implicitly assigned to " +
-              compartmentName(current));
+              compartmentName(*current));
     }
   }
 
-  return current;
+  return *current;
 }
 
 // Returns true for sections that can be assigned to a compartment
@@ -455,10 +453,10 @@ void assignSectionsToCompartments() {
     for (const auto &kv : policy.compartments) {
       Compartment *c = findCompartment(kv.first);
       for (const auto &glob : kv.second.files) {
-        valid &= fileLookup.addPattern(glob, c);
+        valid &= fileLookup.addPattern(glob, *c);
       }
       for (const auto &glob : kv.second.symbols) {
-        valid &= symbolLookup.addPattern(glob, c);
+        valid &= symbolLookup.addPattern(glob, *c);
       }
     }
   }
@@ -475,11 +473,11 @@ void assignSectionsToCompartments() {
     lastFile = s->file;
 
     // Compartment specified via --compartment=
-    if (s->file->compartment != nullptr)
+    if (s->file->compartment != 0)
       continue;
 
     StringRef path = s->file->getName();
-    Expected<Compartment *> c = fileLookup.findMatch(path);
+    Expected<Compartment &> c = fileLookup.findMatch(path);
     if (!c) {
       error("input file " + path + " " + toString(c.takeError()));
       valid = false;
@@ -487,7 +485,7 @@ void assignSectionsToCompartments() {
     }
 
     // If the path is not a basename, try to match on the basename.
-    if (*c == nullptr && llvm::sys::path::has_parent_path(path)) {
+    if (&*c == defaultCompart && llvm::sys::path::has_parent_path(path)) {
       c = fileLookup.findMatch(llvm::sys::path::filename(path));
       if (!c) {
         error("input file " + path + " " + toString(c.takeError()));
@@ -496,10 +494,10 @@ void assignSectionsToCompartments() {
       }
     }
 
-    if (*c == nullptr)
+    if (&*c == defaultCompart)
       continue;
 
-    s->file->compartment = *c;
+    s->file->compartment = c->getNumber();
     if (config->verboseCompartmentalization)
       message("info: input file " + s->file->getName() + " matched to " +
               compartmentName(*c));
@@ -512,15 +510,15 @@ void assignSectionsToCompartments() {
       continue;
     }
 
-    Compartment *c = compartmentForSection(s, symbolLookup);
-    if (s->file != nullptr && s->file->compartment != nullptr) {
-      if (c == nullptr)
-        c = s->file->compartment;
-      else if (s->file->compartment != c) {
-        error("input file assigned to " +
-              compartmentName(s->file->compartment) +
+    Compartment *c = &compartmentForSection(s, symbolLookup);
+    if (s->file != nullptr && s->file->compartment != 0) {
+      Compartment &sc = compartments[s->file->compartment];
+      if (c == defaultCompart)
+        c = &sc;
+      else if (&sc != c) {
+        error("input file assigned to " + compartmentName(sc) +
               " but symbols in section " + s->name + " assigned to " +
-              compartmentName(c));
+              compartmentName(*c));
         valid = false;
         continue;
       }
@@ -529,7 +527,7 @@ void assignSectionsToCompartments() {
       continue;
 
     if (config->verboseCompartmentalization)
-      message("info: " + isecName(s) + " assigned to " + compartmentName(c));
+      message("info: " + isecName(s) + " assigned to " + compartmentName(*c));
     s->compartment = c->getNumber();
   }
   if (!valid)
@@ -585,7 +583,7 @@ void assignSectionsToCompartments() {
         if (cdeps.size() > 1) {
           std::string clist;
           for (const auto &cdep : cdeps) {
-            Compartment *c = cdep.first;
+            Compartment &c = *cdep.first;
             const auto pair = cdep.second;
             const InputSectionBase *s1 = pair.first;
             const Symbol *sym = pair.second;
@@ -599,8 +597,8 @@ void assignSectionsToCompartments() {
           continue;
         }
 
-        Compartment *c = cdeps.begin()->first;
-        if (c->getNumber() == s2->compartment)
+        Compartment &c = *cdeps.begin()->first;
+        if (c.getNumber() == s2->compartment)
           continue;
 
         const auto pair = cdeps.begin()->second;
@@ -609,7 +607,7 @@ void assignSectionsToCompartments() {
 
         if (s2->compartment != 0) {
           error(symbolName(sym) + " assigned to " +
-                compartmentName(&s2->getCompartment()) +
+                compartmentName(s2->getCompartment()) +
                 " is directly accessed by " + compartmentName(c) + " in " +
                 isecName(s1));
           valid = false;
@@ -642,7 +640,7 @@ void assignSectionsToCompartments() {
           message("info: " + isecName(s2) + " assigned to implied " +
                   compartmentName(c) + " due to direct access of " +
                   symbolName(sym) + " in " + isecName(s1));
-        s2->compartment = c->getNumber();
+        s2->compartment = c.getNumber();
         assigned = true;
       }
       if (!valid)
@@ -719,7 +717,7 @@ void assignSectionsToCompartments() {
         for (InputSectionBase *s : list)
           if (canCompartmentalize(s))
             message("\t" + isecName(s) + " from " +
-                    compartmentName(&s->getCompartment()));
+                    compartmentName(s->getCompartment()));
       }
       continue;
     }
@@ -748,7 +746,7 @@ void assignSectionsToCompartments() {
       Symbol *b = firstExportedSymbol(s);
       if (b != nullptr) {
         message("info: " + isecName(s) + " not assigned to implied " +
-                compartmentName(c) + " due to exported " + symbolName(b));
+                compartmentName(*c) + " due to exported " + symbolName(b));
         exportedSym = true;
       }
     }
@@ -756,7 +754,7 @@ void assignSectionsToCompartments() {
       continue;
 
     if (config->verboseCompartmentalization)
-      message("info: assigning disjoint set to " + compartmentName(c) + ":");
+      message("info: assigning disjoint set to " + compartmentName(*c) + ":");
     for (InputSectionBase *s : list) {
       if (s->compartment == c->getNumber() || !canCompartmentalize(s))
         continue;

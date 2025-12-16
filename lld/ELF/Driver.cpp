@@ -1836,7 +1836,7 @@ void LinkerDriver::createFiles(opt::InputArgList &args) {
       config->asNeeded = true;
       break;
     case OPT_compartment:
-      config->compartment = findCompartment(arg->getValue());
+      config->compartment = findCompartment(arg->getValue())->getNumber();
       break;
     case OPT_format:
       config->formatBinary = isFormatBinary(arg->getValue());

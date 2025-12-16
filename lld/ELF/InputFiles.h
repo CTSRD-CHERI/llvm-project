@@ -152,9 +152,8 @@ public:
   // R_PPC64_TLSLD. Disable TLS relaxation to avoid bad code generation.
   bool ppc64DisableTLSRelax = false;
 
-  // Compartment containing this file or nullptr.
-  // XXX uint8_t
-  Compartment *compartment = nullptr;
+  // Compartment containing this file.
+  uint8_t compartment;
 
 protected:
   InputFile(Kind k, MemoryBufferRef m);
