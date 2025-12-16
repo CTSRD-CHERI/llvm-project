@@ -333,7 +333,7 @@ static void replaceWithDefined(Symbol &sym, SectionBase &sec, uint64_t value,
   sym.isUsedInRegularObj = true;
 
   // A copy relocated alias may need a GOT entry.
-  // NB: compartAux not copied to old, but preserved on sym; modify in-place.
+  // NB: compartAux not copied for old, but preserved on sym; modify in-place.
   for (Compartment &c : compartments)
     sym.compartAux(c).flags.fetch_and(NEEDS_GOT, std::memory_order_relaxed);
   sym.needsCopyAny = false;
