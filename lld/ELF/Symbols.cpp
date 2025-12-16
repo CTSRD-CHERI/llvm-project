@@ -230,14 +230,14 @@ static uint64_t getSymVA(const Symbol &sym, int64_t addend) {
 
 bool Symbol::isInAnyGot() const {
   for (Compartment &c : compartments)
-    if (isInGot(&c))
+    if (isInGot(c))
       return true;
   return false;
 }
 
 bool Symbol::isInAnyPlt() const {
   for (Compartment &c : compartments)
-    if (isInPlt(&c))
+    if (isInPlt(c))
       return true;
   return false;
 }
@@ -246,36 +246,36 @@ uint64_t Symbol::getVA(int64_t addend) const {
   return getSymVA(*this, addend) + addend;
 }
 
-uint64_t Symbol::getGotVA(const Compartment *c) const {
+uint64_t Symbol::getGotVA(const Compartment &c) const {
   const SymbolCompartAux &aux = compartAux(c);
   if (aux.gotInIgot)
-    return c->igotPlt->getVA() + getGotPltOffset(c);
-  return c->got->getVA() + getGotOffset(c);
+    return c.igotPlt->getVA() + getGotPltOffset(c);
+  return c.got->getVA() + getGotOffset(c);
 }
 
-uint64_t Symbol::getGotOffset(const Compartment *c) const {
+uint64_t Symbol::getGotOffset(const Compartment &c) const {
   return getGotIdx(c) * target->gotEntrySize;
 }
 
-uint64_t Symbol::getGotPltVA(const Compartment *c) const {
+uint64_t Symbol::getGotPltVA(const Compartment &c) const {
   const SymbolCompartAux &aux = compartAux(c);
   if (aux.isInIplt)
-    return c->igotPlt->getVA() + getGotPltOffset(c);
-  return c->gotPlt->getVA() + getGotPltOffset(c);
+    return c.igotPlt->getVA() + getGotPltOffset(c);
+  return c.gotPlt->getVA() + getGotPltOffset(c);
 }
 
-uint64_t Symbol::getGotPltOffset(const Compartment *c) const {
+uint64_t Symbol::getGotPltOffset(const Compartment &c) const {
   const SymbolCompartAux &aux = compartAux(c);
   if (aux.isInIplt)
     return getPltIdx(c) * target->gotEntrySize;
   return (getPltIdx(c) + target->gotPltHeaderEntriesNum) * target->gotEntrySize;
 }
 
-uint64_t Symbol::getPltVA(const Compartment *c) const {
+uint64_t Symbol::getPltVA(const Compartment &c) const {
   const SymbolCompartAux &aux = compartAux(c);
   uint64_t outVA = aux.isInIplt
-                       ? c->iplt->getVA() + getPltIdx(c) * target->ipltEntrySize
-                       : c->plt->getVA() + c->plt->headerSize +
+                       ? c.iplt->getVA() + getPltIdx(c) * target->ipltEntrySize
+                       : c.plt->getVA() + c.plt->headerSize +
                              getPltIdx(c) * target->pltEntrySize;
 
   // While linking microMIPS code PLT code are always microMIPS
@@ -286,12 +286,12 @@ uint64_t Symbol::getPltVA(const Compartment *c) const {
   return outVA;
 }
 
-uint64_t Symbol::getTgotVA(const Compartment *c) const {
+uint64_t Symbol::getTgotVA(const Compartment &c) const {
   // Like TLS symbols, the TGOT VA is the offset within the TGOT address space.
-  return c->tgot->getVA() + getTgotOffset(c) - Out::tgotPhdr->firstSec->addr;
+  return c.tgot->getVA() + getTgotOffset(c) - Out::tgotPhdr->firstSec->addr;
 }
 
-uint64_t Symbol::getTgotOffset(const Compartment *c) const {
+uint64_t Symbol::getTgotOffset(const Compartment &c) const {
   return getTgotIdx(c) * target->gotEntrySize;
 }
 

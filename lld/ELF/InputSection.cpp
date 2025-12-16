@@ -658,7 +658,7 @@ static int64_t getTlsTpOffset(const Symbol &s) {
   return getTpOffset(s.getVA(0), Out::tlsPhdr);
 }
 
-static int64_t getTgotTpOffset(const Compartment *c, const Symbol &s) {
+static int64_t getTgotTpOffset(const Compartment &c, const Symbol &s) {
   return getTpOffset(s.getTgotVA(c), Out::tgotPhdr);
 }
 
@@ -667,7 +667,7 @@ uint64_t InputSectionBase::getRelocTargetVA(const InputFile *file, RelType type,
                                             const Symbol &sym, RelExpr expr,
                                             const InputSectionBase *isec,
                                             uint64_t offset) {
-  const Compartment *c = &isec->getCompartment();
+  const Compartment &c = isec->getCompartment();
   switch (expr) {
   case R_ABS:
   case R_DTPREL:
@@ -690,21 +690,21 @@ uint64_t InputSectionBase::getRelocTargetVA(const InputFile *file, RelType type,
     // so we have to duplicate some logic here.
     if (sym.hasFlag(c, NEEDS_TLSGD) && type != R_LARCH_TLS_IE_PC_LO12)
       // Like R_LOONGARCH_TLSGD_PAGE_PC but taking the absolute value.
-      return c->got->getGlobalDynAddr(sym) + a;
+      return c.got->getGlobalDynAddr(sym) + a;
     return getRelocTargetVA(file, type, a, p, sym, R_GOT, isec, offset);
   }
   case R_GOTONLY_PC:
-    return c->got->getVA() + a - p;
+    return c.got->getVA() + a - p;
   case R_GOTPLTONLY_PC:
-    return c->gotPlt->getVA() + a - p;
+    return c.gotPlt->getVA() + a - p;
   case R_GOTREL:
   case R_PPC64_RELAX_TOC:
-    return sym.getVA(a) - c->got->getVA();
+    return sym.getVA(a) - c.got->getVA();
   case R_GOTPLTREL:
-    return sym.getVA(a) - c->gotPlt->getVA();
+    return sym.getVA(a) - c.gotPlt->getVA();
   case R_GOTPLT:
   case R_RELAX_TLS_GD_TO_IE_GOTPLT:
-    return sym.getGotVA(c) + a - c->gotPlt->getVA();
+    return sym.getGotVA(c) + a - c.gotPlt->getVA();
   case R_TLSLD_GOT_OFF:
   case R_GOT_OFF:
   case R_RELAX_TLS_GD_TO_IE_GOT_OFF:
@@ -713,13 +713,13 @@ uint64_t InputSectionBase::getRelocTargetVA(const InputFile *file, RelType type,
   case R_AARCH64_RELAX_TLS_GD_TO_IE_PAGE_PC:
     return getAArch64Page(sym.getGotVA(c) + a) - getAArch64Page(p);
   case R_AARCH64_GOT_PAGE:
-    return sym.getGotVA(c) + a - getAArch64Page(c->got->getVA());
+    return sym.getGotVA(c) + a - getAArch64Page(c.got->getVA());
   case R_GOT_PC:
   case R_RELAX_TLS_GD_TO_IE:
     return sym.getGotVA(c) + a - p;
   case R_LOONGARCH_GOT_PAGE_PC:
     if (sym.hasFlag(c, NEEDS_TLSGD))
-      return getLoongArchPageDelta(c->got->getGlobalDynAddr(sym) + a, p);
+      return getLoongArchPageDelta(c.got->getGlobalDynAddr(sym) + a, p);
     return getLoongArchPageDelta(sym.getGotVA(c) + a, p);
   case R_MIPS_GOTREL:
     return sym.getVA(a) - in.mipsGot->getGp(file);
@@ -807,7 +807,7 @@ uint64_t InputSectionBase::getRelocTargetVA(const InputFile *file, RelType type,
   case R_LOONGARCH_PLT_PAGE_PC:
     return getLoongArchPageDelta(sym.getPltVA(c) + a, p);
   case R_PLT_GOTPLT:
-    return sym.getPltVA(c) + a - c->gotPlt->getVA();
+    return sym.getPltVA(c) + a - c.gotPlt->getVA();
   case R_PPC32_PLTREL:
     // R_PPC_PLTREL24 uses the addend (usually 0 or 0x8000) to indicate r30
     // stores _GLOBAL_OFFSET_TABLE_ or .got2+0x8000. The addend is ignored for
@@ -853,27 +853,27 @@ uint64_t InputSectionBase::getRelocTargetVA(const InputFile *file, RelType type,
   case R_SIZE:
     return sym.getSize() + a;
   case R_TLSDESC:
-    return c->got->getTlsDescAddr(sym) + a;
+    return c.got->getTlsDescAddr(sym) + a;
   case R_TLSDESC_PC:
-    return c->got->getTlsDescAddr(sym) + a - p;
+    return c.got->getTlsDescAddr(sym) + a - p;
   case R_TLSDESC_GOTPLT:
-    return c->got->getTlsDescAddr(sym) + a - c->gotPlt->getVA();
+    return c.got->getTlsDescAddr(sym) + a - c.gotPlt->getVA();
   case R_AARCH64_TLSDESC_PAGE:
-    return getAArch64Page(c->got->getTlsDescAddr(sym) + a) - getAArch64Page(p);
+    return getAArch64Page(c.got->getTlsDescAddr(sym) + a) - getAArch64Page(p);
   case R_TLSGD_GOT:
-    return c->got->getGlobalDynOffset(sym) + a;
+    return c.got->getGlobalDynOffset(sym) + a;
   case R_TLSGD_GOTPLT:
-    return c->got->getGlobalDynAddr(sym) + a - c->gotPlt->getVA();
+    return c.got->getGlobalDynAddr(sym) + a - c.gotPlt->getVA();
   case R_TLSGD_PC:
-    return c->got->getGlobalDynAddr(sym) + a - p;
+    return c.got->getGlobalDynAddr(sym) + a - p;
   case R_LOONGARCH_TLSGD_PAGE_PC:
-    return getLoongArchPageDelta(c->got->getGlobalDynAddr(sym) + a, p);
+    return getLoongArchPageDelta(c.got->getGlobalDynAddr(sym) + a, p);
   case R_TLSLD_GOTPLT:
-    return c->got->getVA() + c->got->getTlsIndexOff() + a - c->gotPlt->getVA();
+    return c.got->getVA() + c.got->getTlsIndexOff() + a - c.gotPlt->getVA();
   case R_TLSLD_GOT:
-    return c->got->getTlsIndexOff() + a;
+    return c.got->getTlsIndexOff() + a;
   case R_TLSLD_PC:
-    return c->got->getTlsIndexVA() + a - p;
+    return c.got->getTlsIndexVA() + a - p;
   case R_TGOT:
     return sym.getTgotVA(c) + a;
   case R_TGOT_TP:
@@ -882,14 +882,14 @@ uint64_t InputSectionBase::getRelocTargetVA(const InputFile *file, RelType type,
     return getTgotTpOffset(c, sym) + a;
   case R_TGOT_GOT:
   case R_RELAX_TGOT_TLS_GD_TO_IE_ABS:
-    return c->got->getTgotAddr(sym) + a;
+    return c.got->getTgotAddr(sym) + a;
   case R_TGOT_GOT_PC:
   case R_RELAX_TGOT_TLS_GD_TO_IE:
-    return c->got->getTgotAddr(sym) + a - p;
+    return c.got->getTgotAddr(sym) + a - p;
   case R_TGOT_TLSDESC:
-    return c->got->getTgotTlsDescAddr(sym) + a;
+    return c.got->getTgotTlsDescAddr(sym) + a;
   case R_TGOT_TLSGD_PC:
-    return c->got->getTgotGlobalDynAddr(sym) + a - p;
+    return c.got->getTgotGlobalDynAddr(sym) + a - p;
   case R_ABS_CAP:
     llvm_unreachable("R_ABS_CAP should not be handled here!");
   case R_ABS_CAP_ADDR:

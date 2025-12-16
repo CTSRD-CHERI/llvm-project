@@ -33,18 +33,18 @@ public:
   RelType getDynRel(RelType type) const override;
   int64_t getImplicitAddend(const uint8_t *buf, RelType type) const override;
   void writeGotHeader(uint8_t *buf) const override;
-  void writePltHeader(Compartment *c, uint8_t *buf) const override {
+  void writePltHeader(Compartment &c, uint8_t *buf) const override {
     llvm_unreachable("should call writePPC32GlinkSection() instead");
   }
-  void writePlt(Compartment *c, uint8_t *buf, const Symbol &sym,
+  void writePlt(Compartment &c, uint8_t *buf, const Symbol &sym,
                 uint64_t pltEntryAddr) const override {
     llvm_unreachable("should call writePPC32GlinkSection() instead");
   }
-  void writeIplt(Compartment *c, uint8_t *buf, const Symbol &sym,
+  void writeIplt(Compartment &c, uint8_t *buf, const Symbol &sym,
                  uint64_t pltEntryAddr) const override;
-  void writeGotPlt(Compartment *c, uint8_t *buf, const Symbol &s) const override;
+  void writeGotPlt(Compartment &c, uint8_t *buf, const Symbol &s) const override;
   bool needsThunk(RelExpr expr, RelType relocType, const InputFile *file,
-                  const Compartment *c, uint64_t branchAddr, const Symbol &s,
+                  const Compartment &c, uint64_t branchAddr, const Symbol &s,
                   int64_t a) const override;
   uint32_t getThunkSectionSpacing() const override;
   bool inBranchRange(RelType type, uint64_t src, uint64_t dst) const override;
@@ -75,13 +75,13 @@ static void writeFromHalf16(uint8_t *loc, uint32_t insn) {
   write32(config->isLE ? loc : loc - 2, insn);
 }
 
-void elf::writePPC32GlinkSection(Compartment *c, uint8_t *buf,
+void elf::writePPC32GlinkSection(Compartment &c, uint8_t *buf,
                                  size_t numEntries) {
   // Create canonical PLT entries for non-PIE code. Compilers don't generate
   // non-GOT-non-PLT relocations referencing external functions for -fpie/-fPIE.
-  uint32_t glink = c->plt->getVA(); // VA of .glink
+  uint32_t glink = c.plt->getVA(); // VA of .glink
   if (!config->isPic) {
-    for (const Symbol *sym : cast<PPC32GlinkSection>(*c->plt).canonical_plts) {
+    for (const Symbol *sym : cast<PPC32GlinkSection>(*c.plt).canonical_plts) {
       writePPC32PltCallStub(buf, sym->getGotPltVA(c), nullptr, c, 0);
       buf += 16;
       glink += 16;
@@ -105,10 +105,10 @@ void elf::writePPC32GlinkSection(Compartment *c, uint8_t *buf,
   // Then write PLTresolve(), which has two forms: PIC and non-PIC. PLTresolve()
   // computes the PLT index (by computing the distance from the landing b to
   // itself) and calls _dl_runtime_resolve() (in glibc).
-  uint32_t got = c->got->getVA();
+  uint32_t got = c.got->getVA();
   const uint8_t *end = buf + 64;
   if (config->isPic) {
-    uint32_t afterBcl = 4 * c->plt->getNumEntries() + 12;
+    uint32_t afterBcl = 4 * c.plt->getNumEntries() + 12;
     uint32_t gotBcl = got + 4 - (glink + afterBcl);
     write32(buf + 0, 0x3d6b0000 | ha(afterBcl));  // addis r11,r11,1f-glink@ha
     write32(buf + 4, 0x7c0802a6);                 // mflr r0
@@ -180,7 +180,7 @@ PPC::PPC() {
   write32(trapInstr.data(), 0x7fe00008);
 }
 
-void PPC::writeIplt(Compartment *c, uint8_t *buf, const Symbol &sym,
+void PPC::writeIplt(Compartment &c, uint8_t *buf, const Symbol &sym,
                     uint64_t /*pltEntryAddr*/) const {
   // In -pie or -shared mode, assume r30 points to .got2+0x8000, and use a
   // .got2.plt_pic32. thunk.
@@ -194,13 +194,13 @@ void PPC::writeGotHeader(uint8_t *buf) const {
   write32(buf, mainPart->dynamic->getVA());
 }
 
-void PPC::writeGotPlt(Compartment *c, uint8_t *buf, const Symbol &s) const {
+void PPC::writeGotPlt(Compartment &c, uint8_t *buf, const Symbol &s) const {
   // Address of the symbol resolver stub in .glink .
-  write32(buf, c->plt->getVA() + c->plt->headerSize + 4 * s.getPltIdx(c));
+  write32(buf, c.plt->getVA() + c.plt->headerSize + 4 * s.getPltIdx(c));
 }
 
 bool PPC::needsThunk(RelExpr expr, RelType type, const InputFile *file,
-                     const Compartment *c,
+                     const Compartment &c,
                      uint64_t branchAddr, const Symbol &s, int64_t a) const {
   if (type != R_PPC_LOCAL24PC && type != R_PPC_REL24 && type != R_PPC_PLTREL24)
     return false;

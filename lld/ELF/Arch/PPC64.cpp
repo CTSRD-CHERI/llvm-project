@@ -159,16 +159,16 @@ public:
                      const uint8_t *loc) const override;
   RelType getDynRel(RelType type) const override;
   int64_t getImplicitAddend(const uint8_t *buf, RelType type) const override;
-  void writePltHeader(Compartment *c, uint8_t *buf) const override;
-  void writePlt(Compartment *c, uint8_t *buf, const Symbol &sym,
+  void writePltHeader(Compartment &c, uint8_t *buf) const override;
+  void writePlt(Compartment &c, uint8_t *buf, const Symbol &sym,
                 uint64_t pltEntryAddr) const override;
-  void writeIplt(Compartment *c, uint8_t *buf, const Symbol &sym,
+  void writeIplt(Compartment &c, uint8_t *buf, const Symbol &sym,
                  uint64_t pltEntryAddr) const override;
   void relocate(uint8_t *loc, const Relocation &rel,
                 uint64_t val) const override;
   void writeGotHeader(uint8_t *buf) const override;
   bool needsThunk(RelExpr expr, RelType type, const InputFile *file,
-                  const Compartment *c, uint64_t branchAddr, const Symbol &s,
+                  const Compartment &c, uint64_t branchAddr, const Symbol &s,
                   int64_t a) const override;
   uint32_t getThunkSectionSpacing() const override;
   bool inBranchRange(RelType type, uint64_t src, uint64_t dst) const override;
@@ -1098,7 +1098,7 @@ void PPC64::writeGotHeader(uint8_t *buf) const {
   write64(buf, getPPC64TocBase());
 }
 
-void PPC64::writePltHeader(Compartment *c, uint8_t *buf) const {
+void PPC64::writePltHeader(Compartment &c, uint8_t *buf) const {
   // The generic resolver stub goes first.
   write32(buf +  0, 0x7c0802a6); // mflr r0
   write32(buf +  4, 0x429f0005); // bcl  20,4*cr7+so,8 <_glink+0x8>
@@ -1117,18 +1117,18 @@ void PPC64::writePltHeader(Compartment *c, uint8_t *buf) const {
   // The 'bcl' instruction will set the link register to the address of the
   // following instruction ('mflr r11'). Here we store the offset from that
   // instruction  to the first entry in the GotPlt section.
-  int64_t gotPltOffset = c->gotPlt->getVA() - (c->plt->getVA() + 8);
+  int64_t gotPltOffset = c.gotPlt->getVA() - (c.plt->getVA() + 8);
   write64(buf + 52, gotPltOffset);
 }
 
-void PPC64::writePlt(Compartment *c, uint8_t *buf, const Symbol &sym,
+void PPC64::writePlt(Compartment &c, uint8_t *buf, const Symbol &sym,
                      uint64_t /*pltEntryAddr*/) const {
   int32_t offset = pltHeaderSize + sym.getPltIdx(c) * pltEntrySize;
   // bl __glink_PLTresolve
   write32(buf, 0x48000000 | ((-offset) & 0x03FFFFFc));
 }
 
-void PPC64::writeIplt(Compartment *c, uint8_t *buf, const Symbol &sym,
+void PPC64::writeIplt(Compartment &c, uint8_t *buf, const Symbol &sym,
                       uint64_t /*pltEntryAddr*/) const {
   writePPC64LoadAndBranch(buf, sym.getGotPltVA(c) - getPPC64TocBase());
 }
@@ -1386,7 +1386,7 @@ void PPC64::relocate(uint8_t *loc, const Relocation &rel,
 }
 
 bool PPC64::needsThunk(RelExpr expr, RelType type, const InputFile *file,
-                       const Compartment *c,
+                       const Compartment &c,
                        uint64_t branchAddr, const Symbol &s, int64_t a) const {
   if (type != R_PPC64_REL14 && type != R_PPC64_REL24 &&
       type != R_PPC64_REL24_NOTOC)

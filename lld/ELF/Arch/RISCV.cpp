@@ -36,10 +36,10 @@ public:
   uint64_t getCheriRequiredAlignment(uint64_t len) const override;
   int64_t getImplicitAddend(const uint8_t *buf, RelType type) const override;
   void writeGotHeader(uint8_t *buf) const override;
-  void writeGotPlt(Compartment *c, uint8_t *buf, const Symbol &s) const override;
+  void writeGotPlt(Compartment &c, uint8_t *buf, const Symbol &s) const override;
   void writeIgotPlt(uint8_t *buf, const Symbol &s) const override;
-  void writePltHeader(Compartment *c, uint8_t *buf) const override;
-  void writePlt(Compartment *c, uint8_t *buf, const Symbol &sym,
+  void writePltHeader(Compartment &c, uint8_t *buf) const override;
+  void writePlt(Compartment &c, uint8_t *buf, const Symbol &sym,
                 uint64_t pltEntryAddr) const override;
   RelType getDynRel(RelType type) const override;
   RelExpr getRelExpr(RelType type, const Symbol &s,
@@ -235,15 +235,15 @@ void RISCV::writeGotHeader(uint8_t *buf) const {
     write32le(buf, mainPart->dynamic->getVA());
 }
 
-void RISCV::writeGotPlt(Compartment *c, uint8_t *buf, const Symbol &s) const {
+void RISCV::writeGotPlt(Compartment &c, uint8_t *buf, const Symbol &s) const {
   // Initialised by __cap_relocs for CHERI
   if (config->isCheriAbi)
     return;
 
   if (config->is64)
-    write64le(buf, c->plt->getVA());
+    write64le(buf, c.plt->getVA());
   else
-    write32le(buf, c->plt->getVA());
+    write32le(buf, c.plt->getVA());
 }
 
 void RISCV::writeIgotPlt(uint8_t *buf, const Symbol &s) const {
@@ -255,7 +255,7 @@ void RISCV::writeIgotPlt(uint8_t *buf, const Symbol &s) const {
   }
 }
 
-void RISCV::writePltHeader(Compartment *c, uint8_t *buf) const {
+void RISCV::writePltHeader(Compartment &c, uint8_t *buf) const {
   // 1: auipc(c) (c)t2, %pcrel_hi(.got.plt)
   // (c)sub t1, (c)t1, (c)t3
   // l[wdc] (c)t3, %pcrel_lo(1b)((c)t2); (c)t3 = _dl_runtime_resolve
@@ -265,7 +265,7 @@ void RISCV::writePltHeader(Compartment *c, uint8_t *buf) const {
   // l[wdc] (c)t0, Ptrsize((c)t0); (c)t0 = link_map
   // (c)jr (c)t3
   // (if shift == 0): nop
-  uint32_t offset = c->gotPlt->getVA() - c->plt->getVA();
+  uint32_t offset = c.gotPlt->getVA() - c.plt->getVA();
   uint32_t ptrload = config->isCheriAbi ? config->is64 ? CLC_128 : CLC_64
                                         : config->is64 ? LD : LW;
   uint32_t ptraddi = config->isCheriAbi ? CIncOffsetImm : ADDI;
@@ -286,7 +286,7 @@ void RISCV::writePltHeader(Compartment *c, uint8_t *buf) const {
     write32le(buf + 28, itype(ADDI, 0, 0, 0));
 }
 
-void RISCV::writePlt(Compartment *c, uint8_t *buf, const Symbol &sym,
+void RISCV::writePlt(Compartment &c, uint8_t *buf, const Symbol &sym,
                      uint64_t pltEntryAddr) const {
   // 1: auipc(c) (c)t3, %pcrel_hi(f@[.got.plt|.got])
   // l[wdc] (c)t3, %pcrel_lo(1b)((c)t3)
@@ -720,7 +720,7 @@ static void relaxCall(const InputSection &sec, size_t i, uint64_t loc,
   const uint64_t insnPair = read64le(sec.content().data() + r.offset);
   const uint32_t rd = extractBits(insnPair, 32 + 11, 32 + 7);
   const uint64_t dest =
-      (r.expr == R_PLT_PC ? sym.getPltVA(&sec.getCompartment()) : sym.getVA()) + r.addend;
+      (r.expr == R_PLT_PC ? sym.getPltVA(sec.getCompartment()) : sym.getVA()) + r.addend;
   const int64_t displace = dest - loc;
 
   if (rvc && isInt<12>(displace) && rd == 0) {

@@ -61,7 +61,7 @@ private:
   void finalizeAddressDependentContent();
   void optimizeBasicBlockJumps();
   void sortInputSections();
-  void sortCheriPccPaddingSection(Compartment *c);
+  void sortCheriPccPaddingSection(Compartment &c);
   void sortOrphanSections();
   void finalizeSections();
   void checkExecuteOnly();
@@ -1541,8 +1541,8 @@ template <class ELFT> void Writer<ELFT>::sortInputSections() {
 // The CHERI PCC padding output section must be placed immediately after the
 // last section covered by the PCC bounds.
 template <class ELFT>
-void Writer<ELFT>::sortCheriPccPaddingSection(Compartment *c) {
-  CheriPccPaddingSection *psec = c->pccPadding.get();
+void Writer<ELFT>::sortCheriPccPaddingSection(Compartment &c) {
+  CheriPccPaddingSection *psec = c.pccPadding.get();
   if (!psec->isNeeded())
     return;
 
@@ -1560,7 +1560,7 @@ void Writer<ELFT>::sortCheriPccPaddingSection(Compartment *c) {
   // Second, find the last CHERI PCC output section for this compartment.
   auto isPccSection = [&](SectionCommand *cmd) {
     auto *to = dyn_cast<OutputDesc>(cmd);
-    return to != nullptr && to->osec.compartment == c->getNumber() && to->osec.cheriPcc;
+    return to != nullptr && to->osec.compartment == c.getNumber() && to->osec.cheriPcc;
   };
 
   auto insertPos = llvm::find_if(script->sectionCommands, isPccSection);
@@ -1617,7 +1617,7 @@ template <class ELFT> void Writer<ELFT>::sortSections() {
 
   for (Compartment &c : compartments)
     if (c.pccPadding)
-      sortCheriPccPaddingSection(&c);
+      sortCheriPccPaddingSection(c);
 
   script->adjustSectionsAfterSorting();
 }
@@ -1947,7 +1947,7 @@ template <class ELFT> void Writer<ELFT>::optimizeBasicBlockJumps() {
 // Which output sections are always covered by CHERI PCC bounds.  This includes
 // executable sections, GOTs, and PCC padding.
 static bool isCheriBoundsSection(const OutputSection *sec) {
-  const Compartment *c = &sec->getCompartment();
+  const Compartment &c = sec->getCompartment();
   uint64_t flags = sec->flags;
 
   // Non-allocatable sections are not mapped into memory.
@@ -1959,15 +1959,15 @@ static bool isCheriBoundsSection(const OutputSection *sec) {
     return true;
 
   // .got is accessed relative to PCC.
-  if (c->got && sec == c->got->getParent())
+  if (c.got && sec == c.got->getParent())
     return true;
   if (in.mipsGot && sec == in.mipsGot->getParent())
     return true;
 
   // .got.plt is accessed relative to PCC.
-  if (sec == c->gotPlt->getParent())
+  if (sec == c.gotPlt->getParent())
     return true;
-  if (sec == c->igotPlt->getParent())
+  if (sec == c.igotPlt->getParent())
     return true;
 
   // CHERI-MIPS capability table is accessed relative to PCC.
@@ -1975,13 +1975,13 @@ static bool isCheriBoundsSection(const OutputSection *sec) {
     return true;
 
   // The PCC padding section is included in PCC bounds.
-  if (sec == c->pccPadding->getParent())
+  if (sec == c.pccPadding->getParent())
     return true;
 
   // XXX: CheriBSD's runtime loader assumes all read-only capabilities can be
   // derived from PCC, so include all read-only sections as a workaround for
   // now.  Once CheriBSD 25.03 is no longer supported, this can be removed.
-  if (sec->type == SHT_PROGBITS && sec != c->tgot->getParent() &&
+  if (sec->type == SHT_PROGBITS && sec != c.tgot->getParent() &&
       ((flags & SHF_WRITE) == 0 || isRelroSection(sec, /*ignoreZRelro=*/true)))
     return true;
 

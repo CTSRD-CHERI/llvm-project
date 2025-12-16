@@ -274,51 +274,51 @@ public:
   // truncated by Symbol::parseSymbolVersion().
   const char *getVersionSuffix() const { return nameData + nameSize; }
 
-  const SymbolCompartAux &compartAux(const Compartment *c) const;
+  const SymbolCompartAux &compartAux(const Compartment &c) const;
 
-  SymbolCompartAux &compartAux(Compartment *c);
+  SymbolCompartAux &compartAux(Compartment &c);
 
-  uint32_t auxIdx(const Compartment *c) const { return compartAux(c).auxIdx; }
+  uint32_t auxIdx(const Compartment &c) const { return compartAux(c).auxIdx; }
 
-  uint32_t getGotIdx(const Compartment *c) const {
+  uint32_t getGotIdx(const Compartment &c) const {
     return symAux[auxIdx(c)].gotIdx;
   }
-  uint32_t getPltIdx(const Compartment *c) const {
+  uint32_t getPltIdx(const Compartment &c) const {
     return symAux[auxIdx(c)].pltIdx;
   }
-  uint32_t getTlsDescIdx(const Compartment *c) const {
+  uint32_t getTlsDescIdx(const Compartment &c) const {
     return symAux[auxIdx(c)].tlsDescIdx;
   }
-  uint32_t getTlsGdIdx(const Compartment *c) const {
+  uint32_t getTlsGdIdx(const Compartment &c) const {
     return symAux[auxIdx(c)].tlsGdIdx;
   }
-  uint32_t getTgotIdx(const Compartment *c) const {
+  uint32_t getTgotIdx(const Compartment &c) const {
     return symAux[auxIdx(c)].tgotIdx;
   }
-  uint32_t getTgotGotIdx(const Compartment *c) const {
+  uint32_t getTgotGotIdx(const Compartment &c) const {
     return symAux[auxIdx(c)].tgotGotIdx;
   }
-  uint32_t getTgotTlsDescIdx(const Compartment *c) const {
+  uint32_t getTgotTlsDescIdx(const Compartment &c) const {
     return symAux[auxIdx(c)].tgotTlsDescIdx;
   }
-  uint32_t getTgotTlsGdIdx(const Compartment *c) const {
+  uint32_t getTgotTlsGdIdx(const Compartment &c) const {
     return symAux[auxIdx(c)].tgotTlsGdIdx;
   }
 
-  bool isInGot(const Compartment *c) const { return getGotIdx(c) != uint32_t(-1); }
-  bool isInPlt(const Compartment *c) const { return getPltIdx(c) != uint32_t(-1); }
+  bool isInGot(const Compartment &c) const { return getGotIdx(c) != uint32_t(-1); }
+  bool isInPlt(const Compartment &c) const { return getPltIdx(c) != uint32_t(-1); }
   bool isInAnyGot() const;
   bool isInAnyPlt() const;
 
   uint64_t getVA(int64_t addend = 0) const;
 
-  uint64_t getGotOffset(const Compartment *c) const;
-  uint64_t getGotVA(const Compartment *c) const;
-  uint64_t getGotPltOffset(const Compartment *c) const;
-  uint64_t getGotPltVA(const Compartment *c) const;
-  uint64_t getPltVA(const Compartment *c) const;
-  uint64_t getTgotOffset(const Compartment *c) const;
-  uint64_t getTgotVA(const Compartment *c) const;
+  uint64_t getGotOffset(const Compartment &c) const;
+  uint64_t getGotVA(const Compartment &c) const;
+  uint64_t getGotPltOffset(const Compartment &c) const;
+  uint64_t getGotPltVA(const Compartment &c) const;
+  uint64_t getPltVA(const Compartment &c) const;
+  uint64_t getTgotOffset(const Compartment &c) const;
+  uint64_t getTgotVA(const Compartment &c) const;
   uint64_t getMipsCheriCapTableVA(const InputSectionBase *isec,
                                   uint64_t offset) const;
   uint64_t getMipsCheriCapTableOffset(const InputSectionBase *isec,
@@ -406,23 +406,23 @@ public:
   uint16_t versionId;
 
   void setFlags(Compartment &c, uint16_t bits) {
-    SymbolCompartAux &aux = compartAux(&c);
+    SymbolCompartAux &aux = compartAux(c);
     aux.setFlags(bits);
   }
-  bool hasFlag(const Compartment *c, uint16_t bit) const {
+  bool hasFlag(const Compartment &c, uint16_t bit) const {
     assert(bit && (bit & (bit - 1)) == 0 && "bit must be a power of 2");
     const SymbolCompartAux &aux = compartAux(c);
     return aux.hasFlag(bit);
   }
 
-  bool needsDynReloc(const Compartment *c) const {
+  bool needsDynReloc(const Compartment &c) const {
     const SymbolCompartAux &aux = compartAux(c);
     return aux.flags.load(std::memory_order_relaxed) &
            (NEEDS_COPY | NEEDS_GOT | NEEDS_PLT | NEEDS_TLSDESC | NEEDS_TLSGD |
             NEEDS_GOT_DTPREL | NEEDS_TLSIE | NEEDS_TGOT | NEEDS_TGOT_GOT |
             NEEDS_TGOT_TLSGD | NEEDS_TGOT_TLSDESC);
   }
-  void allocateAux(Compartment *c) {
+  void allocateAux(Compartment &c) {
     SymbolCompartAux &aux = compartAux(c);
     assert(aux.auxIdx == 0);
     aux.auxIdx = symAux.size();

@@ -662,19 +662,19 @@ void GotSection::addEntry(Symbol &sym) {
   // TODO: Separate out TLS IE entries for CHERI so we can pack them more
   // efficiently rather than consuming a whole capability-sized slot for an
   // integer.
-  assert(sym.auxIdx(&getCompartment()) == symAux.size() - 1);
+  assert(sym.auxIdx(getCompartment()) == symAux.size() - 1);
   symAux.back().gotIdx = numEntries++;
 }
 
 bool GotSection::addTlsDescEntry(Symbol &sym) {
-  assert(sym.auxIdx(&getCompartment()) == symAux.size() - 1);
+  assert(sym.auxIdx(getCompartment()) == symAux.size() - 1);
   symAux.back().tlsDescIdx = numEntries;
   numEntries += 2;
   return true;
 }
 
 bool GotSection::addDynTlsEntry(Symbol &sym) {
-  assert(sym.auxIdx(&getCompartment()) == symAux.size() - 1);
+  assert(sym.auxIdx(getCompartment()) == symAux.size() - 1);
   symAux.back().tlsGdIdx = numEntries;
   // Global Dynamic TLS entries take two GOT slots, except on CHERI where they
   // can be packed into one GOT slot.
@@ -686,18 +686,18 @@ bool GotSection::addDynTlsEntry(Symbol &sym) {
 }
 
 void GotSection::addTgotEntry(Symbol &sym) {
-  assert(sym.auxIdx(&getCompartment()) == symAux.size() - 1);
+  assert(sym.auxIdx(getCompartment()) == symAux.size() - 1);
   symAux.back().tgotGotIdx = numEntries++;
 }
 
 void GotSection::addTgotTlsDescEntry(Symbol &sym) {
-  assert(sym.auxIdx(&getCompartment()) == symAux.size() - 1);
+  assert(sym.auxIdx(getCompartment()) == symAux.size() - 1);
   symAux.back().tgotTlsDescIdx = numEntries;
   numEntries += 2;
 }
 
 bool GotSection::addTgotDynTlsEntry(Symbol &sym) {
-  assert(sym.auxIdx(&getCompartment()) == symAux.size() - 1);
+  assert(sym.auxIdx(getCompartment()) == symAux.size() - 1);
   symAux.back().tgotTlsGdIdx = numEntries;
   // Global Dynamic TLS entries take two GOT slots, except on CHERI where they
   // can be packed into one GOT slot.
@@ -719,7 +719,7 @@ bool GotSection::addTlsIndex() {
 }
 
 uint32_t GotSection::getTlsDescOffset(const Symbol &sym) const {
-  return sym.getTlsDescIdx(&getCompartment()) * target->gotEntrySize;
+  return sym.getTlsDescIdx(getCompartment()) * target->gotEntrySize;
 }
 
 uint64_t GotSection::getTlsDescAddr(const Symbol &sym) const {
@@ -727,15 +727,15 @@ uint64_t GotSection::getTlsDescAddr(const Symbol &sym) const {
 }
 
 uint64_t GotSection::getGlobalDynAddr(const Symbol &b) const {
-  return this->getVA() + b.getTlsGdIdx(&getCompartment()) * target->gotEntrySize;
+  return this->getVA() + b.getTlsGdIdx(getCompartment()) * target->gotEntrySize;
 }
 
 uint64_t GotSection::getGlobalDynOffset(const Symbol &b) const {
-  return b.getTlsGdIdx(&getCompartment()) * target->gotEntrySize;
+  return b.getTlsGdIdx(getCompartment()) * target->gotEntrySize;
 }
 
 uint64_t GotSection::getTgotOffset(const Symbol &sym) const {
-  return sym.getTgotGotIdx(&getCompartment()) * target->gotEntrySize;
+  return sym.getTgotGotIdx(getCompartment()) * target->gotEntrySize;
 }
 
 uint64_t GotSection::getTgotAddr(const Symbol &sym) const {
@@ -743,7 +743,7 @@ uint64_t GotSection::getTgotAddr(const Symbol &sym) const {
 }
 
 uint64_t GotSection::getTgotTlsDescOffset(const Symbol &sym) const {
-  return sym.getTgotTlsDescIdx(&getCompartment()) * target->gotEntrySize;
+  return sym.getTgotTlsDescIdx(getCompartment()) * target->gotEntrySize;
 }
 
 uint64_t GotSection::getTgotTlsDescAddr(const Symbol &sym) const {
@@ -751,11 +751,11 @@ uint64_t GotSection::getTgotTlsDescAddr(const Symbol &sym) const {
 }
 
 uint64_t GotSection::getTgotGlobalDynAddr(const Symbol &b) const {
-  return this->getVA() + b.getTgotTlsGdIdx(&getCompartment()) * target->gotEntrySize;
+  return this->getVA() + b.getTgotTlsGdIdx(getCompartment()) * target->gotEntrySize;
 }
 
 uint64_t GotSection::getTgotGlobalDynOffset(const Symbol &b) const {
-  return b.getTgotTlsGdIdx(&getCompartment()) * target->gotEntrySize;
+  return b.getTgotTlsGdIdx(getCompartment()) * target->gotEntrySize;
 }
 
 void GotSection::finalizeContents() {
@@ -1055,13 +1055,13 @@ void MipsGotSection::build() {
   // Update SymbolAux::gotIdx field to use this
   // value later in the `sortMipsSymbols` function.
   for (auto &p : primGot->global) {
-    if (p.first->auxIdx(&getCompartment()) == 0)
-      p.first->allocateAux(&getCompartment());
+    if (p.first->auxIdx(getCompartment()) == 0)
+      p.first->allocateAux(getCompartment());
     symAux.back().gotIdx = p.second;
   }
   for (auto &p : primGot->relocs) {
-    if (p.first->auxIdx(&getCompartment()) == 0)
-      p.first->allocateAux(&getCompartment());
+    if (p.first->auxIdx(getCompartment()) == 0)
+      p.first->allocateAux(getCompartment());
     symAux.back().gotIdx = p.second;
   }
 
@@ -1231,7 +1231,7 @@ GotPltSection::GotPltSection()
 }
 
 void GotPltSection::addEntry(Symbol &sym) {
-  assert(sym.auxIdx(&getCompartment()) == symAux.size() - 1 &&
+  assert(sym.auxIdx(getCompartment()) == symAux.size() - 1 &&
          symAux.back().pltIdx == entries.size());
   entries.push_back(&sym);
 }
@@ -1245,7 +1245,7 @@ void GotPltSection::writeTo(uint8_t *buf) {
   target->writeGotPltHeader(buf);
   buf += target->gotPltHeaderEntriesNum * target->gotEntrySize;
   for (const Symbol *b : entries) {
-    target->writeGotPlt(&getCompartment(), buf, *b);
+    target->writeGotPlt(getCompartment(), buf, *b);
     buf += target->gotEntrySize;
   }
 }
@@ -1298,7 +1298,7 @@ TgotSection::TgotSection()
 
 void TgotSection::addConstant(const Relocation &r) { relocations.push_back(r); }
 void TgotSection::addEntry(Symbol &sym) {
-  assert(sym.auxIdx(&getCompartment()) == symAux.size() - 1);
+  assert(sym.auxIdx(getCompartment()) == symAux.size() - 1);
   symAux.back().tgotIdx = numEntries++;
 }
 
@@ -1386,10 +1386,10 @@ static uint64_t addRelaSz(const RelocationBaseSection &relaDyn) {
 // output section. When this occurs we cannot just use the OutputSection
 // Size. Moreover the [DT_JMPREL, DT_JMPREL + DT_PLTRELSZ) is permitted to
 // overlap with the [DT_RELA, DT_RELA + DT_RELASZ).
-static uint64_t addPltRelSz(const Compartment *c) {
-  size_t size = c->relaPlt->getSize();
-  if (in.relaIplt->getParent() == c->relaPlt->getParent() &&
-      in.relaIplt->name == c->relaPlt->name)
+static uint64_t addPltRelSz(const Compartment &c) {
+  size_t size = c.relaPlt->getSize();
+  if (in.relaIplt->getParent() == c.relaPlt->getParent() &&
+      in.relaIplt->name == c.relaPlt->name)
     size += in.relaIplt->getSize();
   return size;
 }
@@ -1515,35 +1515,35 @@ DynamicSection<ELFT>::computeContents() {
   // case, so here we always use relaPlt as marker for the beginning of
   // .rel[a].plt section.
   bool pltrel = false, aarch64_variant_pcs = false, riscv_variant_cc = false;
-  auto addPlt = [&](const Compartment *c) {
-    if (!c->relaPlt->isNeeded() && (c != defaultCompart || !in.relaIplt->isNeeded()))
+  auto addPlt = [&](const Compartment &c) {
+    if (!c.relaPlt->isNeeded() && (&c != defaultCompart || !in.relaIplt->isNeeded()))
       return;
-    addInSec(DT_JMPREL, *c->relaPlt);
+    addInSec(DT_JMPREL, *c.relaPlt);
     addInt(DT_PLTRELSZ, addPltRelSz(c));
     switch (config->emachine) {
     case EM_MIPS:
-      addInSec(DT_MIPS_PLTGOT, *c->gotPlt);
+      addInSec(DT_MIPS_PLTGOT, *c.gotPlt);
       break;
     case EM_SPARCV9:
-      addInSec(DT_PLTGOT, *c->plt);
+      addInSec(DT_PLTGOT, *c.plt);
       break;
     case EM_AARCH64:
-      if (llvm::find_if(c->relaPlt->relocs, [](const DynamicReloc &r) {
+      if (llvm::find_if(c.relaPlt->relocs, [](const DynamicReloc &r) {
            return r.type == target->pltRel &&
                   r.sym->stOther & STO_AARCH64_VARIANT_PCS;
-          }) != c->relaPlt->relocs.end())
+          }) != c.relaPlt->relocs.end())
         aarch64_variant_pcs = true;
-      addInSec(DT_PLTGOT, *c->gotPlt);
+      addInSec(DT_PLTGOT, *c.gotPlt);
       break;
     case EM_RISCV:
-      if (llvm::any_of(c->relaPlt->relocs, [](const DynamicReloc &r) {
+      if (llvm::any_of(c.relaPlt->relocs, [](const DynamicReloc &r) {
             return r.type == target->pltRel &&
                    (r.sym->stOther & STO_RISCV_VARIANT_CC);
           }))
         riscv_variant_cc = true;
       [[fallthrough]];
     default:
-      addInSec(DT_PLTGOT, *c->gotPlt);
+      addInSec(DT_PLTGOT, *c.gotPlt);
       break;
     }
     pltrel = true;
@@ -1551,7 +1551,7 @@ DynamicSection<ELFT>::computeContents() {
 
   if (isMain) {
     for (const Compartment &c : compartments)
-      addPlt(&c);
+      addPlt(c);
     if (aarch64_variant_pcs)
       addInt(DT_AARCH64_VARIANT_PCS, 0);
     if (riscv_variant_cc)
@@ -2328,7 +2328,7 @@ SymbolTableBaseSection::SymbolTableBaseSection(StringTableSection &strTabSec)
 static bool sortMipsSymbols(const SymbolTableEntry &l,
                             const SymbolTableEntry &r) {
   // XXXJHB: Assume a single compartment for MIPS.
-  Compartment *c = defaultCompart;
+  Compartment &c = *defaultCompart;
 
   // Sort entries related to non-local preemptible symbols by GOT indexes.
   // All other entries go to the beginning of a dynsym in arbitrary order.
@@ -2779,17 +2779,17 @@ PltSection::PltSection()
 void PltSection::writeTo(uint8_t *buf) {
   // At beginning of PLT, we have code to call the dynamic
   // linker to resolve dynsyms at runtime. Write such code.
-  target->writePltHeader(&getCompartment(), buf);
+  target->writePltHeader(getCompartment(), buf);
   size_t off = headerSize;
 
   for (const Symbol *sym : entries) {
-    target->writePlt(&getCompartment(), buf + off, *sym, getVA() + off);
+    target->writePlt(getCompartment(), buf + off, *sym, getVA() + off);
     off += target->pltEntrySize;
   }
 }
 
 void PltSection::addEntry(Symbol &sym) {
-  assert(sym.auxIdx(&getCompartment()) == symAux.size() - 1);
+  assert(sym.auxIdx(getCompartment()) == symAux.size() - 1);
   symAux.back().pltIdx = entries.size();
   entries.push_back(&sym);
 }
@@ -2826,7 +2826,7 @@ IpltSection::IpltSection()
 void IpltSection::writeTo(uint8_t *buf) {
   uint32_t off = 0;
   for (const Symbol *sym : entries) {
-    target->writeIplt(&getCompartment(), buf + off, *sym, getVA() + off);
+    target->writeIplt(getCompartment(), buf + off, *sym, getVA() + off);
     off += target->ipltEntrySize;
   }
 }
@@ -2836,7 +2836,7 @@ size_t IpltSection::getSize() const {
 }
 
 void IpltSection::addEntry(Symbol &sym) {
-  assert(sym.auxIdx(&getCompartment()) == symAux.size() - 1);
+  assert(sym.auxIdx(getCompartment()) == symAux.size() - 1);
   symAux.back().pltIdx = entries.size();
   entries.push_back(&sym);
 }
@@ -2856,7 +2856,7 @@ PPC32GlinkSection::PPC32GlinkSection() {
 }
 
 void PPC32GlinkSection::writeTo(uint8_t *buf) {
-  writePPC32GlinkSection(&getCompartment(), buf, entries.size());
+  writePPC32GlinkSection(getCompartment(), buf, entries.size());
 }
 
 size_t PPC32GlinkSection::getSize() const {
@@ -2925,7 +2925,7 @@ IBTPltSection::IBTPltSection()
     : SyntheticSection(SHF_ALLOC | SHF_EXECINSTR, SHT_PROGBITS, 16, ".plt") {}
 
 void IBTPltSection::writeTo(uint8_t *buf) {
-  target->writeIBTPlt(&getCompartment(), buf, getCompartment().plt->getNumEntries());
+  target->writeIBTPlt(getCompartment(), buf, getCompartment().plt->getNumEntries());
 }
 
 size_t IBTPltSection::getSize() const {

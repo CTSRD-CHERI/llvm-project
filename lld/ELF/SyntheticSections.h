@@ -1412,22 +1412,22 @@ struct Compartment {
   unsigned getNumber() const { return this - &compartments[0]; }
 };
 
-inline const SymbolCompartAux &Symbol::compartAux(const Compartment *c) const {
+inline const SymbolCompartAux &Symbol::compartAux(const Compartment &c) const {
   // Could be a shared lock if lock_guard worked for such things
   std::lock_guard<std::mutex> lock(compartMutex);
-  const SymCompartMap &map = c->symCompartMap;
+  const SymCompartMap &map = c.symCompartMap;
   auto it = map.find(this);
   return it == map.end() ? defaultSymbolCompartAux : *it->second.get();
 }
 
-inline SymbolCompartAux &Symbol::compartAux(Compartment *c) {
+inline SymbolCompartAux &Symbol::compartAux(Compartment &c) {
   // XXX: This should possibly by an assertion to require the caller
   // to hold the lock so that it also protects the caller's operations
   // on the compartAux, but C++ people don't believe in lock assertions,
   // so just write lock while adding the new entry to the table and
   // let the caller (not) deal with the races.
   std::lock_guard<std::mutex> lock(compartMutex);
-  SymCompartMap &map = c->symCompartMap;
+  SymCompartMap &map = c.symCompartMap;
   auto p = map.emplace(this, std::make_unique<SymbolCompartAux>());
   return *p.first->second.get();
 }

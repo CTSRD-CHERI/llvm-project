@@ -153,6 +153,7 @@ public:
   bool ppc64DisableTLSRelax = false;
 
   // Compartment containing this file or nullptr.
+  // XXX uint8_t
   Compartment *compartment = nullptr;
 
 protected:
