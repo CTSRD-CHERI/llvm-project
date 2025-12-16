@@ -33,6 +33,9 @@ class SyntheticSection;
 template <class ELFT> class ObjFile;
 class OutputSection;
 
+LLVM_LIBRARY_VISIBILITY extern std::vector<Compartment> compartments;
+LLVM_LIBRARY_VISIBILITY extern Compartment *defaultCompart;
+
 LLVM_LIBRARY_VISIBILITY extern std::vector<Partition> partitions;
 
 // Returned by InputSectionBase::relsOrRelas. At least one member is empty.
@@ -63,6 +66,7 @@ public:
   uint8_t keepUnique : 1;
 
   uint8_t partition = 1;
+  uint8_t compartment = 0;
   uint32_t type;
   StringRef name;
 
@@ -71,14 +75,14 @@ public:
   // partition, so this will either be 0 or 1.
   elf::Partition &getPartition() const;
 
+  elf::Compartment &getCompartment() const;
+
   // These corresponds to the fields in Elf_Shdr.
   uint64_t flags;
   uint32_t addralign;
   uint32_t entsize;
   uint32_t link;
   uint32_t info;
-
-  Compartment *compartment = nullptr;
 
   OutputSection *getOutputSection();
   const OutputSection *getOutputSection() const {
@@ -208,8 +212,7 @@ public:
   // relocations, assuming that Buf points to this section's copy in
   // the mmap'ed output buffer.
   template <class ELFT> void relocate(uint8_t *buf, uint8_t *bufEnd);
-  static uint64_t getRelocTargetVA(const Compartment *c, const InputFile *File,
-                                   RelType Type,
+  static uint64_t getRelocTargetVA(const InputFile *File, RelType Type,
                                    int64_t A, uint64_t P, const Symbol &Sym,
                                    RelExpr Expr, const InputSectionBase *isec,
                                    uint64_t offset);
@@ -418,8 +421,7 @@ private:
   template <class ELFT> void copyShtGroup(uint8_t *buf);
 };
 
-static_assert(sizeof(InputSection) <= 168 + sizeof(Compartment *),
-              "InputSection is too big");
+static_assert(sizeof(InputSection) <= 168, "InputSection is too big");
 
 class SyntheticSection : public InputSection {
 public:

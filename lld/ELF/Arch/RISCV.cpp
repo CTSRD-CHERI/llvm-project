@@ -44,7 +44,7 @@ public:
   RelType getDynRel(RelType type) const override;
   RelExpr getRelExpr(RelType type, const Symbol &s,
                      const uint8_t *loc) const override;
-  void relocate(Compartment *c, uint8_t *loc, const Relocation &rel,
+  void relocate(uint8_t *loc, const Relocation &rel,
                 uint64_t val) const override;
   bool relaxOnce(int pass) const override;
 };
@@ -241,9 +241,9 @@ void RISCV::writeGotPlt(Compartment *c, uint8_t *buf, const Symbol &s) const {
     return;
 
   if (config->is64)
-    write64le(buf, plt(c)->getVA());
+    write64le(buf, c->plt->getVA());
   else
-    write32le(buf, plt(c)->getVA());
+    write32le(buf, c->plt->getVA());
 }
 
 void RISCV::writeIgotPlt(uint8_t *buf, const Symbol &s) const {
@@ -265,7 +265,7 @@ void RISCV::writePltHeader(Compartment *c, uint8_t *buf) const {
   // l[wdc] (c)t0, Ptrsize((c)t0); (c)t0 = link_map
   // (c)jr (c)t3
   // (if shift == 0): nop
-  uint32_t offset = gotPlt(c)->getVA() - plt(c)->getVA();
+  uint32_t offset = c->gotPlt->getVA() - c->plt->getVA();
   uint32_t ptrload = config->isCheriAbi ? config->is64 ? CLC_128 : CLC_64
                                         : config->is64 ? LD : LW;
   uint32_t ptraddi = config->isCheriAbi ? CIncOffsetImm : ADDI;
@@ -406,7 +406,7 @@ RelExpr RISCV::getRelExpr(const RelType type, const Symbol &s,
   }
 }
 
-void RISCV::relocate(Compartment *c, uint8_t *loc, const Relocation &rel,
+void RISCV::relocate(uint8_t *loc, const Relocation &rel,
                      uint64_t val) const {
   const unsigned bits = config->wordsize * 8;
 
@@ -503,8 +503,8 @@ void RISCV::relocate(Compartment *c, uint8_t *loc, const Relocation &rel,
     int64_t hi = SignExtend64(val + 0x800, bits) >> 12;
     checkInt(loc, hi, 20, rel);
     if (isInt<20>(hi)) {
-      relocateNoSym(c, loc, R_RISCV_PCREL_HI20, val);
-      relocateNoSym(c, loc + 4, R_RISCV_PCREL_LO12_I, val);
+      relocateNoSym(loc, R_RISCV_PCREL_HI20, val);
+      relocateNoSym(loc + 4, R_RISCV_PCREL_LO12_I, val);
     }
     return;
   }
@@ -720,7 +720,7 @@ static void relaxCall(const InputSection &sec, size_t i, uint64_t loc,
   const uint64_t insnPair = read64le(sec.content().data() + r.offset);
   const uint32_t rd = extractBits(insnPair, 32 + 11, 32 + 7);
   const uint64_t dest =
-      (r.expr == R_PLT_PC ? sym.getPltVA(sec.compartment) : sym.getVA()) + r.addend;
+      (r.expr == R_PLT_PC ? sym.getPltVA(&sec.getCompartment()) : sym.getVA()) + r.addend;
   const int64_t displace = dest - loc;
 
   if (rvc && isInt<12>(displace) && rd == 0) {

@@ -662,19 +662,19 @@ void GotSection::addEntry(Symbol &sym) {
   // TODO: Separate out TLS IE entries for CHERI so we can pack them more
   // efficiently rather than consuming a whole capability-sized slot for an
   // integer.
-  assert(sym.auxIdx(compartment) == symAux.size() - 1);
+  assert(sym.auxIdx(&getCompartment()) == symAux.size() - 1);
   symAux.back().gotIdx = numEntries++;
 }
 
 bool GotSection::addTlsDescEntry(Symbol &sym) {
-  assert(sym.auxIdx(compartment) == symAux.size() - 1);
+  assert(sym.auxIdx(&getCompartment()) == symAux.size() - 1);
   symAux.back().tlsDescIdx = numEntries;
   numEntries += 2;
   return true;
 }
 
 bool GotSection::addDynTlsEntry(Symbol &sym) {
-  assert(sym.auxIdx(compartment) == symAux.size() - 1);
+  assert(sym.auxIdx(&getCompartment()) == symAux.size() - 1);
   symAux.back().tlsGdIdx = numEntries;
   // Global Dynamic TLS entries take two GOT slots, except on CHERI where they
   // can be packed into one GOT slot.
@@ -686,18 +686,18 @@ bool GotSection::addDynTlsEntry(Symbol &sym) {
 }
 
 void GotSection::addTgotEntry(Symbol &sym) {
-  assert(sym.auxIdx(compartment) == symAux.size() - 1);
+  assert(sym.auxIdx(&getCompartment()) == symAux.size() - 1);
   symAux.back().tgotGotIdx = numEntries++;
 }
 
 void GotSection::addTgotTlsDescEntry(Symbol &sym) {
-  assert(sym.auxIdx(compartment) == symAux.size() - 1);
+  assert(sym.auxIdx(&getCompartment()) == symAux.size() - 1);
   symAux.back().tgotTlsDescIdx = numEntries;
   numEntries += 2;
 }
 
 bool GotSection::addTgotDynTlsEntry(Symbol &sym) {
-  assert(sym.auxIdx(compartment) == symAux.size() - 1);
+  assert(sym.auxIdx(&getCompartment()) == symAux.size() - 1);
   symAux.back().tgotTlsGdIdx = numEntries;
   // Global Dynamic TLS entries take two GOT slots, except on CHERI where they
   // can be packed into one GOT slot.
@@ -719,7 +719,7 @@ bool GotSection::addTlsIndex() {
 }
 
 uint32_t GotSection::getTlsDescOffset(const Symbol &sym) const {
-  return sym.getTlsDescIdx(compartment) * target->gotEntrySize;
+  return sym.getTlsDescIdx(&getCompartment()) * target->gotEntrySize;
 }
 
 uint64_t GotSection::getTlsDescAddr(const Symbol &sym) const {
@@ -727,15 +727,15 @@ uint64_t GotSection::getTlsDescAddr(const Symbol &sym) const {
 }
 
 uint64_t GotSection::getGlobalDynAddr(const Symbol &b) const {
-  return this->getVA() + b.getTlsGdIdx(compartment) * target->gotEntrySize;
+  return this->getVA() + b.getTlsGdIdx(&getCompartment()) * target->gotEntrySize;
 }
 
 uint64_t GotSection::getGlobalDynOffset(const Symbol &b) const {
-  return b.getTlsGdIdx(compartment) * target->gotEntrySize;
+  return b.getTlsGdIdx(&getCompartment()) * target->gotEntrySize;
 }
 
 uint64_t GotSection::getTgotOffset(const Symbol &sym) const {
-  return sym.getTgotGotIdx(compartment) * target->gotEntrySize;
+  return sym.getTgotGotIdx(&getCompartment()) * target->gotEntrySize;
 }
 
 uint64_t GotSection::getTgotAddr(const Symbol &sym) const {
@@ -743,7 +743,7 @@ uint64_t GotSection::getTgotAddr(const Symbol &sym) const {
 }
 
 uint64_t GotSection::getTgotTlsDescOffset(const Symbol &sym) const {
-  return sym.getTgotTlsDescIdx(compartment) * target->gotEntrySize;
+  return sym.getTgotTlsDescIdx(&getCompartment()) * target->gotEntrySize;
 }
 
 uint64_t GotSection::getTgotTlsDescAddr(const Symbol &sym) const {
@@ -751,11 +751,11 @@ uint64_t GotSection::getTgotTlsDescAddr(const Symbol &sym) const {
 }
 
 uint64_t GotSection::getTgotGlobalDynAddr(const Symbol &b) const {
-  return this->getVA() + b.getTgotTlsGdIdx(compartment) * target->gotEntrySize;
+  return this->getVA() + b.getTgotTlsGdIdx(&getCompartment()) * target->gotEntrySize;
 }
 
 uint64_t GotSection::getTgotGlobalDynOffset(const Symbol &b) const {
-  return b.getTgotTlsGdIdx(compartment) * target->gotEntrySize;
+  return b.getTgotTlsGdIdx(&getCompartment()) * target->gotEntrySize;
 }
 
 void GotSection::finalizeContents() {
@@ -1055,13 +1055,13 @@ void MipsGotSection::build() {
   // Update SymbolAux::gotIdx field to use this
   // value later in the `sortMipsSymbols` function.
   for (auto &p : primGot->global) {
-    if (p.first->auxIdx(compartment) == 0)
-      p.first->allocateAux(compartment);
+    if (p.first->auxIdx(&getCompartment()) == 0)
+      p.first->allocateAux(&getCompartment());
     symAux.back().gotIdx = p.second;
   }
   for (auto &p : primGot->relocs) {
-    if (p.first->auxIdx(compartment) == 0)
-      p.first->allocateAux(compartment);
+    if (p.first->auxIdx(&getCompartment()) == 0)
+      p.first->allocateAux(&getCompartment());
     symAux.back().gotIdx = p.second;
   }
 
@@ -1231,7 +1231,7 @@ GotPltSection::GotPltSection()
 }
 
 void GotPltSection::addEntry(Symbol &sym) {
-  assert(sym.auxIdx(compartment) == symAux.size() - 1 &&
+  assert(sym.auxIdx(&getCompartment()) == symAux.size() - 1 &&
          symAux.back().pltIdx == entries.size());
   entries.push_back(&sym);
 }
@@ -1245,7 +1245,7 @@ void GotPltSection::writeTo(uint8_t *buf) {
   target->writeGotPltHeader(buf);
   buf += target->gotPltHeaderEntriesNum * target->gotEntrySize;
   for (const Symbol *b : entries) {
-    target->writeGotPlt(compartment, buf, *b);
+    target->writeGotPlt(&getCompartment(), buf, *b);
     buf += target->gotEntrySize;
   }
 }
@@ -1298,7 +1298,7 @@ TgotSection::TgotSection()
 
 void TgotSection::addConstant(const Relocation &r) { relocations.push_back(r); }
 void TgotSection::addEntry(Symbol &sym) {
-  assert(sym.auxIdx(compartment) == symAux.size() - 1);
+  assert(sym.auxIdx(&getCompartment()) == symAux.size() - 1);
   symAux.back().tgotIdx = entries.size();
   entries.push_back(&sym);
 }
@@ -1377,8 +1377,9 @@ static uint64_t addRelaSz(const RelocationBaseSection &relaDyn) {
   size_t size = relaDyn.getSize();
   if (in.relaIplt->getParent() == relaDyn.getParent())
     size += in.relaIplt->getSize();
-  if (in.relaPlt->getParent() == relaDyn.getParent())
-    size += in.relaPlt->getSize();
+  for (const Compartment &c : compartments)
+    if (c.relaPlt->getParent() == relaDyn.getParent())
+      size += c.relaPlt->getSize();
   return size;
 }
 
@@ -1387,9 +1388,9 @@ static uint64_t addRelaSz(const RelocationBaseSection &relaDyn) {
 // Size. Moreover the [DT_JMPREL, DT_JMPREL + DT_PLTRELSZ) is permitted to
 // overlap with the [DT_RELA, DT_RELA + DT_RELASZ).
 static uint64_t addPltRelSz(const Compartment *c) {
-  size_t size = relaPlt(c)->getSize();
-  if (in.relaIplt->getParent() == relaPlt(c)->getParent() &&
-      in.relaIplt->name == relaPlt(c)->name)
+  size_t size = c->relaPlt->getSize();
+  if (in.relaIplt->getParent() == c->relaPlt->getParent() &&
+      in.relaIplt->name == c->relaPlt->name)
     size += in.relaIplt->getSize();
   return size;
 }
@@ -1516,41 +1517,40 @@ DynamicSection<ELFT>::computeContents() {
   // .rel[a].plt section.
   bool pltrel = false, aarch64_variant_pcs = false, riscv_variant_cc = false;
   auto addPlt = [&](const Compartment *c) {
-    if (!relaPlt(c)->isNeeded() && !(c == nullptr && in.relaIplt->isNeeded()))
+    if (!c->relaPlt->isNeeded() && (c != defaultCompart || !in.relaIplt->isNeeded()))
       return;
-    addInSec(DT_JMPREL, *relaPlt(c));
+    addInSec(DT_JMPREL, *c->relaPlt);
     addInt(DT_PLTRELSZ, addPltRelSz(c));
     switch (config->emachine) {
     case EM_MIPS:
-      addInSec(DT_MIPS_PLTGOT, *gotPlt(c));
+      addInSec(DT_MIPS_PLTGOT, *c->gotPlt);
       break;
     case EM_SPARCV9:
-      addInSec(DT_PLTGOT, *plt(c));
+      addInSec(DT_PLTGOT, *c->plt);
       break;
     case EM_AARCH64:
-      if (llvm::find_if(relaPlt(c)->relocs, [](const DynamicReloc &r) {
+      if (llvm::find_if(c->relaPlt->relocs, [](const DynamicReloc &r) {
            return r.type == target->pltRel &&
                   r.sym->stOther & STO_AARCH64_VARIANT_PCS;
-          }) != relaPlt(c)->relocs.end())
+          }) != c->relaPlt->relocs.end())
         aarch64_variant_pcs = true;
-      addInSec(DT_PLTGOT, *gotPlt(c));
+      addInSec(DT_PLTGOT, *c->gotPlt);
       break;
     case EM_RISCV:
-      if (llvm::any_of(relaPlt(c)->relocs, [](const DynamicReloc &r) {
+      if (llvm::any_of(c->relaPlt->relocs, [](const DynamicReloc &r) {
             return r.type == target->pltRel &&
                    (r.sym->stOther & STO_RISCV_VARIANT_CC);
           }))
         riscv_variant_cc = true;
       [[fallthrough]];
     default:
-      addInSec(DT_PLTGOT, *gotPlt(c));
+      addInSec(DT_PLTGOT, *c->gotPlt);
       break;
     }
     pltrel = true;
   };
 
   if (isMain) {
-    addPlt(nullptr);
     for (const Compartment &c : compartments)
       addPlt(&c);
     if (aarch64_variant_pcs)
@@ -1563,11 +1563,6 @@ DynamicSection<ELFT>::computeContents() {
 
   if (isMain) {
     bool tgotrelt = false;
-    if (in.relaTgot->isNeeded()) {
-      addInSec(DT_CHERI_TGOTREL, *in.relaTgot);
-      addInt(DT_CHERI_TGOTRELSZ, in.relaTgot->getSize());
-      tgotrelt = true;
-    }
     for (const Compartment &c : compartments) {
       if (c.relaTgot->isNeeded()) {
         addInSec(DT_CHERI_TGOTREL, *c.relaTgot);
@@ -1704,11 +1699,6 @@ DynamicSection<ELFT>::computeContents() {
       addInSec(DT_RISCV_CHERI___CAPRELOCS, *part.capRelocs);
       addInt(DT_RISCV_CHERI___CAPRELOCSSZ, part.capRelocs->getParent()->size);
     }
-    if (in.tgotCapRelocs && in.tgotCapRelocs->isNeeded()) {
-      addInSec(DT_RISCV_CHERI___TGOTCAPRELOCS, *in.tgotCapRelocs);
-      addInt(DT_RISCV_CHERI___TGOTCAPRELOCSSZ,
-             in.tgotCapRelocs->getParent()->size);
-    }
     for (const Compartment &c : compartments) {
       if (c.tgotCapRelocs && c.tgotCapRelocs->isNeeded()) {
         addInSec(DT_RISCV_CHERI___TGOTCAPRELOCS, *c.tgotCapRelocs);
@@ -1721,13 +1711,13 @@ DynamicSection<ELFT>::computeContents() {
   // DT_PPC_GOT indicates to glibc Secure PLT is used. If DT_PPC_GOT is absent,
   // glibc assumes the old-style BSS PLT layout which we don't support.
   if (config->emachine == EM_PPC)
-    addInSec(DT_PPC_GOT, *in.got);
+    addInSec(DT_PPC_GOT, *defaultCompart->got);
 
   // Glink dynamic tag is required by the V2 abi if the plt section isn't empty.
-  if (config->emachine == EM_PPC64 && in.plt->isNeeded()) {
+  if (config->emachine == EM_PPC64 && defaultCompart->plt->isNeeded()) {
     // The Glink tag points to 32 bytes before the first lazy symbol resolution
     // stub, which starts directly after the header.
-    addInt(DT_PPC64_GLINK, in.plt->getVA() + target->pltHeaderSize - 32);
+    addInt(DT_PPC64_GLINK, defaultCompart->plt->getVA() + target->pltHeaderSize - 32);
   }
 
   if (config->emachine == EM_PPC64)
@@ -1767,8 +1757,7 @@ int64_t DynamicReloc::computeAddend() const {
     return addend;
   case AddendOnlyWithTargetVA:
   case AgainstSymbolWithTargetVA: {
-    uint64_t ca = InputSection::getRelocTargetVA(inputSec->compartment,
-                                                 inputSec->file, type, addend,
+    uint64_t ca = InputSection::getRelocTargetVA(inputSec->file, type, addend,
                                                  getOffset(), *sym, expr,
                                                  inputSec, offsetInSec);
     return config->is64 ? ca : SignExtend64<32>(ca);
@@ -1858,7 +1847,7 @@ void RelocationBaseSection::partitionRels() {
 
 void RelocationBaseSection::finalizeContents() {
   SymbolTableBaseSection *symTab = getPartition().dynSymTab.get();
-  Compartment *c = compartment;
+  Compartment &c = getCompartment();
 
   // When linking glibc statically, .rel{,a}.plt contains R_*_IRELATIVE
   // relocations due to IFUNC (e.g. strcpy). sh_link will be set to 0 in that
@@ -1868,7 +1857,7 @@ void RelocationBaseSection::finalizeContents() {
   else
     getParent()->link = 0;
 
-  if (relaPlt(c) == this && gotPlt(c)->getParent()) {
+  if (c.relaPlt.get() == this && c.gotPlt->getParent()) {
     getParent()->flags |= ELF::SHF_INFO_LINK;
     // For CheriABI we use the captable as the sh_info value
     if (config->isCheriAbi && in.mipsCheriCapTable &&
@@ -1876,23 +1865,20 @@ void RelocationBaseSection::finalizeContents() {
       assert(in.mipsCheriCapTable->getParent()->sectionIndex != UINT32_MAX);
       getParent()->info = in.mipsCheriCapTable->getParent()->sectionIndex;
     } else {
-      getParent()->info = gotPlt(c)->getParent()->sectionIndex;
+      getParent()->info = c.gotPlt->getParent()->sectionIndex;
     }
   }
   if (in.relaIplt.get() == this) {
     // Only add a link if there is exactly one Iplt section.
     IgotPltSection *igotPlt = nullptr;
-    if (lld::elf::igotPlt(nullptr)->isNeeded())
-      igotPlt = lld::elf::igotPlt(nullptr);
     for (const Compartment &c : compartments) {
-      if (lld::elf::igotPlt(&c)->isNeeded()) {
-        if (igotPlt == nullptr) {
-          igotPlt = lld::elf::igotPlt(&c);
-        } else {
-          igotPlt = nullptr;
-          break;
-        }
+      if (!c.igotPlt->isNeeded())
+        continue;
+      if (igotPlt != nullptr) {
+        igotPlt = nullptr;
+        break;
       }
+      igotPlt = c.igotPlt.get();
     }
     if (igotPlt && igotPlt->getParent()) {
       getParent()->flags |= ELF::SHF_INFO_LINK;
@@ -1906,9 +1892,9 @@ void RelocationBaseSection::finalizeContents() {
       }
     }
   }
-  if (relaTgot(c) == this && tgot(c)->getParent()) {
+  if (c.relaTgot.get() == this && c.tgot->getParent()) {
     getParent()->flags |= ELF::SHF_INFO_LINK;
-    getParent()->info = tgot(c)->getParent()->sectionIndex;
+    getParent()->info = c.tgot->getParent()->sectionIndex;
   }
   for (auto reloc : relocs) {
     if (config->isCheriAbi && reloc.inputSec->name == "__cap_relocs") {
@@ -2339,7 +2325,7 @@ SymbolTableBaseSection::SymbolTableBaseSection(StringTableSection &strTabSec)
 static bool sortMipsSymbols(const SymbolTableEntry &l,
                             const SymbolTableEntry &r) {
   // XXXJHB: Assume a single compartment for MIPS.
-  Compartment *c = nullptr;
+  Compartment *c = defaultCompart;
 
   // Sort entries related to non-local preemptible symbols by GOT indexes.
   // All other entries go to the beginning of a dynsym in arbitrary order.
@@ -2790,17 +2776,17 @@ PltSection::PltSection()
 void PltSection::writeTo(uint8_t *buf) {
   // At beginning of PLT, we have code to call the dynamic
   // linker to resolve dynsyms at runtime. Write such code.
-  target->writePltHeader(compartment, buf);
+  target->writePltHeader(&getCompartment(), buf);
   size_t off = headerSize;
 
   for (const Symbol *sym : entries) {
-    target->writePlt(compartment, buf + off, *sym, getVA() + off);
+    target->writePlt(&getCompartment(), buf + off, *sym, getVA() + off);
     off += target->pltEntrySize;
   }
 }
 
 void PltSection::addEntry(Symbol &sym) {
-  assert(sym.auxIdx(compartment) == symAux.size() - 1);
+  assert(sym.auxIdx(&getCompartment()) == symAux.size() - 1);
   symAux.back().pltIdx = entries.size();
   entries.push_back(&sym);
 }
@@ -2811,7 +2797,7 @@ size_t PltSection::getSize() const {
 
 bool PltSection::isNeeded() const {
   // For -z retpolineplt, .iplt needs the .plt header.
-  return !entries.empty() || (config->zRetpolineplt && in.iplt->isNeeded());
+  return !entries.empty() || (config->zRetpolineplt && getCompartment().iplt->isNeeded());
 }
 
 // Used by ARM to add mapping symbols in the PLT section, which aid
@@ -2837,7 +2823,7 @@ IpltSection::IpltSection()
 void IpltSection::writeTo(uint8_t *buf) {
   uint32_t off = 0;
   for (const Symbol *sym : entries) {
-    target->writeIplt(compartment, buf + off, *sym, getVA() + off);
+    target->writeIplt(&getCompartment(), buf + off, *sym, getVA() + off);
     off += target->ipltEntrySize;
   }
 }
@@ -2847,7 +2833,7 @@ size_t IpltSection::getSize() const {
 }
 
 void IpltSection::addEntry(Symbol &sym) {
-  assert(sym.auxIdx(compartment) == symAux.size() - 1);
+  assert(sym.auxIdx(&getCompartment()) == symAux.size() - 1);
   symAux.back().pltIdx = entries.size();
   entries.push_back(&sym);
 }
@@ -2867,7 +2853,7 @@ PPC32GlinkSection::PPC32GlinkSection() {
 }
 
 void PPC32GlinkSection::writeTo(uint8_t *buf) {
-  writePPC32GlinkSection(compartment, buf, entries.size());
+  writePPC32GlinkSection(&getCompartment(), buf, entries.size());
 }
 
 size_t PPC32GlinkSection::getSize() const {
@@ -2936,16 +2922,16 @@ IBTPltSection::IBTPltSection()
     : SyntheticSection(SHF_ALLOC | SHF_EXECINSTR, SHT_PROGBITS, 16, ".plt") {}
 
 void IBTPltSection::writeTo(uint8_t *buf) {
-  target->writeIBTPlt(compartment, buf, plt(compartment)->getNumEntries());
+  target->writeIBTPlt(&getCompartment(), buf, getCompartment().plt->getNumEntries());
 }
 
 size_t IBTPltSection::getSize() const {
   // 16 is the header size of .plt.
-  return 16 + plt(compartment)->getNumEntries() * target->pltEntrySize;
+  return 16 + getCompartment().plt->getNumEntries() * target->pltEntrySize;
 }
 
 bool IBTPltSection::isNeeded() const {
-  return plt(compartment)->getNumEntries() > 0;
+  return getCompartment().plt->getNumEntries() > 0;
 }
 
 // The string hash function for .gdb_index.
@@ -3829,8 +3815,7 @@ void ARMExidxSyntheticSection::writeTo(uint8_t *buf) {
       write32(buf + offset + 4, 0x1);
       uint64_t s = isec->getVA();
       uint64_t p = getVA() + offset;
-      target->relocateNoSym(isec->compartment, buf + offset, R_ARM_PREL31,
-                            s - p);
+      target->relocateNoSym(buf + offset, R_ARM_PREL31, s - p);
       offset += 8;
     }
   }
@@ -3839,7 +3824,7 @@ void ARMExidxSyntheticSection::writeTo(uint8_t *buf) {
   write32(buf + offset + 4, 0x1);
   uint64_t s = sentinel->getVA(sentinel->getSize());
   uint64_t p = getVA() + offset;
-  target->relocateNoSym(nullptr, buf + offset, R_ARM_PREL31, s - p);
+  target->relocateNoSym(buf + offset, R_ARM_PREL31, s - p);
   assert(size == offset + 8);
 }
 
@@ -4108,12 +4093,7 @@ void InStruct::reset() {
   bss.reset();
   bssRelRo.reset();
   compartStrTab.reset();
-  got.reset();
-  gotPlt.reset();
-  igotPlt.reset();
-  tgot.reset();
   mipsCheriCapTable.reset();
-  pccPadding.reset();
   mipsCheriCapTableMapping.reset();
   armCmseSGSection.reset();
   ppc64LongBranchTarget.reset();
@@ -4124,19 +4104,13 @@ void InStruct::reset() {
   mipsRldMap.reset();
   partEnd.reset();
   partIndex.reset();
-  plt.reset();
-  iplt.reset();
   ppc32Got2.reset();
   ibtPlt.reset();
-  relaPlt.reset();
   relaIplt.reset();
-  relaTgot.reset();
-  tgotCapRelocs.reset();
   shStrTab.reset();
   strTab.reset();
   symTab.reset();
   symTabShndx.reset();
-  cheriBounds = nullptr;
 }
 
 constexpr char kMemtagAndroidNoteName[] = "Android";
@@ -4186,6 +4160,7 @@ size_t PackageMetadataNote::getSize() const {
 InStruct elf::in;
 
 std::vector<Compartment> elf::compartments;
+Compartment *elf::defaultCompart;
 
 std::vector<Partition> elf::partitions;
 Partition *elf::mainPart;

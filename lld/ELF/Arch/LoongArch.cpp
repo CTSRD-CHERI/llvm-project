@@ -35,7 +35,7 @@ public:
   RelExpr getRelExpr(RelType type, const Symbol &s,
                      const uint8_t *loc) const override;
   bool usesOnlyLowPageBits(RelType type) const override;
-  void relocate(Compartment *c, uint8_t *loc, const Relocation &rel,
+  void relocate(uint8_t *loc, const Relocation &rel,
                 uint64_t val) const override;
 };
 } // end anonymous namespace
@@ -342,9 +342,9 @@ int64_t LoongArch::getImplicitAddend(const uint8_t *buf, RelType type) const {
 void LoongArch::writeGotPlt(Compartment *c, uint8_t *buf,
                             const Symbol &s) const {
   if (config->is64)
-    write64le(buf, plt(c)->getVA());
+    write64le(buf, c->plt->getVA());
   else
-    write32le(buf, plt(c)->getVA());
+    write32le(buf, c->plt->getVA());
 }
 
 void LoongArch::writeIgotPlt(uint8_t *buf, const Symbol &s) const {
@@ -375,7 +375,7 @@ void LoongArch::writePltHeader(Compartment *c, uint8_t *buf) const {
   //   srli.[wd] $t1, $t1, (is64?1:2)             ; t1 = &.got.plt[i] - &.got.plt[0]
   //   ld.[wd]   $t0, $t0, Wordsize               ; t0 = link_map
   //   jr        $t3
-  uint32_t offset = gotPlt(c)->getVA() - plt(c)->getVA();
+  uint32_t offset = c->gotPlt->getVA() - c->plt->getVA();
   uint32_t sub = config->is64 ? SUB_D : SUB_W;
   uint32_t ld = config->is64 ? LD_D : LD_W;
   uint32_t addi = config->is64 ? ADDI_D : ADDI_W;
@@ -550,7 +550,7 @@ bool LoongArch::usesOnlyLowPageBits(RelType type) const {
   }
 }
 
-void LoongArch::relocate(Compartment *c, uint8_t *loc, const Relocation &rel,
+void LoongArch::relocate(uint8_t *loc, const Relocation &rel,
                          uint64_t val) const {
   switch (rel.type) {
   case R_LARCH_32_PCREL:

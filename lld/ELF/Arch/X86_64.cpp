@@ -35,7 +35,7 @@ public:
   void writePltHeader(Compartment *c, uint8_t *buf) const override;
   void writePlt(Compartment *c, uint8_t *buf, const Symbol &sym,
                 uint64_t pltEntryAddr) const override;
-  void relocate(Compartment *c, uint8_t *loc, const Relocation &rel,
+  void relocate(uint8_t *loc, const Relocation &rel,
                 uint64_t val) const override;
   int64_t getImplicitAddend(const uint8_t *buf, RelType type) const override;
   void applyJumpInstrMod(uint8_t *loc, JumpModType type,
@@ -177,7 +177,7 @@ static bool isFallThruRelocation(InputSection &is, InputFile *file,
     return false;
 
   uint64_t addrLoc = is.getOutputSection()->addr + is.outSecOff + r.offset;
-  uint64_t targetOffset = InputSectionBase::getRelocTargetVA(is.compartment,
+  uint64_t targetOffset = InputSectionBase::getRelocTargetVA(
       file, r.type, r.addend, addrLoc, *r.sym, r.expr, &is, r.offset);
 
   // If this jmp is a fall thru, the target offset is the beginning of the
@@ -387,8 +387,8 @@ void X86_64::writePltHeader(Compartment *c, uint8_t *buf) const {
       0x0f, 0x1f, 0x40, 0x00, // nop
   };
   memcpy(buf, pltData, sizeof(pltData));
-  uint64_t gotPlt = lld::elf::gotPlt(c)->getVA();
-  uint64_t plt = in.ibtPlt ? in.ibtPlt->getVA() : lld::elf::plt(c)->getVA();
+  uint64_t gotPlt = c->gotPlt->getVA();
+  uint64_t plt = in.ibtPlt ? in.ibtPlt->getVA() : c->plt->getVA();
   write32le(buf + 2, gotPlt - plt + 2); // GOTPLT+8
   write32le(buf + 8, gotPlt - plt + 4); // GOTPLT+16
 }
@@ -404,7 +404,7 @@ void X86_64::writePlt(Compartment *c, uint8_t *buf, const Symbol &sym,
 
   write32le(buf + 2, sym.getGotPltVA(c) - pltEntryAddr - 6);
   write32le(buf + 7, sym.getPltIdx(c));
-  write32le(buf + 12, plt(c)->getVA() - pltEntryAddr - 16);
+  write32le(buf + 12, c->plt->getVA() - pltEntryAddr - 16);
 }
 
 RelType X86_64::getDynRel(RelType type) const {
@@ -717,7 +717,7 @@ int64_t X86_64::getImplicitAddend(const uint8_t *buf, RelType type) const {
 
 static void relaxGot(uint8_t *loc, const Relocation &rel, uint64_t val);
 
-void X86_64::relocate(Compartment *c, uint8_t *loc, const Relocation &rel,
+void X86_64::relocate(uint8_t *loc, const Relocation &rel,
                       uint64_t val) const {
   switch (rel.type) {
   case R_X86_64_8:
@@ -991,15 +991,14 @@ void X86_64::relocateAlloc(InputSectionBase &sec, uint8_t *buf) const {
   uint64_t secAddr = sec.getOutputSection()->addr;
   if (auto *s = dyn_cast<InputSection>(&sec))
     secAddr += s->outSecOff;
-  Compartment *c = sec.compartment;
   for (const Relocation &rel : sec.relocs()) {
     if (rel.expr == R_NONE) // See deleteFallThruJmpInsn
       continue;
     uint8_t *loc = buf + rel.offset;
     const uint64_t val =
-        sec.getRelocTargetVA(c, sec.file, rel.type, rel.addend,
+        sec.getRelocTargetVA(sec.file, rel.type, rel.addend,
                              secAddr + rel.offset, *rel.sym, rel.expr, &sec, rel.offset);
-    relocate(c, loc, rel, val);
+    relocate(loc, rel, val);
   }
   if (sec.jumpInstrMod) {
     applyJumpInstrMod(buf + sec.jumpInstrMod->offset,
@@ -1118,8 +1117,8 @@ void Retpoline::writePltHeader(Compartment *c, uint8_t *buf) const {
   };
   memcpy(buf, insn, sizeof(insn));
 
-  uint64_t gotPlt = lld::elf::gotPlt(c)->getVA();
-  uint64_t plt = lld::elf::plt(c)->getVA();
+  uint64_t gotPlt = c->gotPlt->getVA();
+  uint64_t plt = c->plt->getVA();
   write32le(buf + 2, gotPlt - plt - 6 + 8);
   write32le(buf + 9, gotPlt - plt - 13 + 16);
 }
@@ -1136,7 +1135,7 @@ void Retpoline::writePlt(Compartment *c, uint8_t *buf, const Symbol &sym,
   };
   memcpy(buf, insn, sizeof(insn));
 
-  uint64_t off = pltEntryAddr - plt(c)->getVA();
+  uint64_t off = pltEntryAddr - c->plt->getVA();
 
   write32le(buf + 3, sym.getGotPltVA(c) - pltEntryAddr - 7);
   write32le(buf + 8, -off - 12 + 32);
@@ -1177,7 +1176,7 @@ void RetpolineZNow::writePlt(Compartment *c, uint8_t *buf, const Symbol &sym,
   memcpy(buf, insn, sizeof(insn));
 
   write32le(buf + 3, sym.getGotPltVA(c) - pltEntryAddr - 7);
-  write32le(buf + 8, plt(c)->getVA() - pltEntryAddr - 12);
+  write32le(buf + 8, c->plt->getVA() - pltEntryAddr - 12);
 }
 
 static TargetInfo *getTargetInfo() {

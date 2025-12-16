@@ -136,6 +136,7 @@ bool link(ArrayRef<const char *> args, llvm::raw_ostream &stdoutOS,
     in.reset();
 
     compartments.clear();
+    compartments.emplace_back();
     partitions.clear();
     partitions.emplace_back();
 
@@ -154,6 +155,7 @@ bool link(ArrayRef<const char *> args, llvm::raw_ostream &stdoutOS,
   symAux.emplace_back();
 
   compartments.clear();
+  compartments.emplace_back();
   partitions.clear();
   partitions.emplace_back();
 
@@ -2992,6 +2994,9 @@ void LinkerDriver::link(opt::InputArgList &args) {
   // partition.
   mainPart = &partitions[0];
 
+  // Similarly for the default compartment.
+  defaultCompart = &compartments[0];
+
   // Read .note.gnu.property sections from input object files which
   // contain a hint to tweak linker's and loader's behaviors.
   config->andFeatures = getAndFeatures();
@@ -3054,8 +3059,6 @@ void LinkerDriver::link(opt::InputArgList &args) {
     for (Partition &part : partitions)
       if (part.capRelocs)
         ctx.inputSections.push_back(part.capRelocs.get());
-    if (in.tgotCapRelocs)
-      ctx.inputSections.push_back(in.tgotCapRelocs.get());
     for (Compartment &c : compartments)
       if (c.tgotCapRelocs)
         ctx.inputSections.push_back(c.tgotCapRelocs.get());

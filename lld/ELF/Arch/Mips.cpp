@@ -39,7 +39,7 @@ public:
   bool needsThunk(RelExpr expr, RelType type, const InputFile *file,
                   const Compartment *c, uint64_t branchAddr, const Symbol &s,
                   int64_t a) const override;
-  void relocate(Compartment *c, uint8_t *loc, const Relocation &rel,
+  void relocate(uint8_t *loc, const Relocation &rel,
                 uint64_t val) const override;
   bool usesOnlyLowPageBits(RelType type) const override;
 };
@@ -256,7 +256,7 @@ template <class ELFT> RelType MIPS<ELFT>::getDynRel(RelType type) const {
 template <class ELFT>
 void MIPS<ELFT>::writeGotPlt(Compartment *c, uint8_t *buf,
                              const Symbol &) const {
-  uint64_t va = plt(c)->getVA();
+  uint64_t va = c->plt->getVA();
   if (isMicroMips())
     va |= 1;
   write32(buf, va);
@@ -309,8 +309,8 @@ static void writeMicroRelocation16(uint8_t *loc, uint64_t v, uint8_t bitsSize,
 template <class ELFT> void MIPS<ELFT>::writePltHeader(Compartment *c,
                                                       uint8_t *buf) const {
   if (isMicroMips()) {
-    uint64_t gotPlt = lld::elf::gotPlt(c)->getVA();
-    uint64_t plt = lld::elf::plt(c)->getVA();
+    uint64_t gotPlt = c->gotPlt->getVA();
+    uint64_t plt = c->plt->getVA();
     // Overwrite trap instructions written by Writer::writeTrapInstr.
     memset(buf, 0, pltHeaderSize);
 
@@ -325,12 +325,12 @@ template <class ELFT> void MIPS<ELFT>::writePltHeader(Compartment *c,
       write16(buf + 18, 0x0f83); // move    $28, $3
       write16(buf + 20, 0x472b); // jalrc   $25
       write16(buf + 22, 0x0c00); // nop
-      relocateNoSym(c, buf, R_MICROMIPS_PC19_S2, gotPlt - plt);
+      relocateNoSym(buf, R_MICROMIPS_PC19_S2, gotPlt - plt);
     } else {
       write16(buf + 18, 0x45f9); // jalrc   $25
       write16(buf + 20, 0x0f83); // move    $28, $3
       write16(buf + 22, 0x0c00); // nop
-      relocateNoSym(c, buf, R_MICROMIPS_PC23_S2, gotPlt - plt);
+      relocateNoSym(buf, R_MICROMIPS_PC23_S2, gotPlt - plt);
     }
     return;
   }
@@ -362,7 +362,7 @@ template <class ELFT> void MIPS<ELFT>::writePltHeader(Compartment *c,
   write32(buf + 24, jalrInst); // jalr.hb $25 or jalr $25
   write32(buf + 28, 0x2718fffe); // subu  $24, $24, 2
 
-  uint64_t gotPlt = lld::elf::gotPlt(c)->getVA();
+  uint64_t gotPlt = c->gotPlt->getVA();
   writeValue(buf, gotPlt + 0x8000, 16, 16);
   writeValue(buf + 4, gotPlt, 16, 0);
   writeValue(buf + 8, gotPlt, 16, 0);
@@ -381,13 +381,13 @@ void MIPS<ELFT>::writePlt(Compartment *c, uint8_t *buf, const Symbol &sym,
       write16(buf + 4, 0xff22);  // lw $25, 0($2)
       write16(buf + 8, 0x0f02);  // move $24, $2
       write16(buf + 10, 0x4723); // jrc $25 / jr16 $25
-      relocateNoSym(c, buf, R_MICROMIPS_PC19_S2, gotPltEntryAddr - pltEntryAddr);
+      relocateNoSym(buf, R_MICROMIPS_PC19_S2, gotPltEntryAddr - pltEntryAddr);
     } else {
       write16(buf, 0x7900);      // addiupc $2, (GOTPLT) - .
       write16(buf + 4, 0xff22);  // lw $25, 0($2)
       write16(buf + 8, 0x4599);  // jrc $25 / jr16 $25
       write16(buf + 10, 0x0f02); // move $24, $2
-      relocateNoSym(c, buf, R_MICROMIPS_PC23_S2, gotPltEntryAddr - pltEntryAddr);
+      relocateNoSym(buf, R_MICROMIPS_PC23_S2, gotPltEntryAddr - pltEntryAddr);
     }
     return;
   }
@@ -622,7 +622,7 @@ static uint64_t fixupCrossModeJump(uint8_t *loc, RelType type, uint64_t val) {
 }
 
 template <class ELFT>
-void MIPS<ELFT>::relocate(Compartment *c, uint8_t *loc,
+void MIPS<ELFT>::relocate(uint8_t *loc,
                           const Relocation &rel,
                           uint64_t val) const {
   const endianness e = ELFT::TargetEndianness;

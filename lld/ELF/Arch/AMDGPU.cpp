@@ -29,7 +29,7 @@ private:
 public:
   AMDGPU();
   uint32_t calcEFlags() const override;
-  void relocate(Compartment *c, uint8_t *loc, const Relocation &rel,
+  void relocate(uint8_t *loc, const Relocation &rel,
                 uint64_t val) const override;
   RelExpr getRelExpr(RelType type, const Symbol &s,
                      const uint8_t *loc) const override;
@@ -126,7 +126,7 @@ uint32_t AMDGPU::calcEFlags() const {
   }
 }
 
-void AMDGPU::relocate(Compartment *c, uint8_t *loc, const Relocation &rel,
+void AMDGPU::relocate(uint8_t *loc, const Relocation &rel,
                       uint64_t val) const {
   switch (rel.type) {
   case R_AMDGPU_ABS32:

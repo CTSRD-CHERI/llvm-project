@@ -144,17 +144,8 @@ Defined *ElfSym::relaIpltStart;
 Defined *ElfSym::relaIpltEnd;
 Defined *ElfSym::tlsModuleBase;
 SmallVector<SymbolAux, 0> elf::symAux;
-SymCompartMap elf::defaultSymCompartMap;
 SymbolCompartAux elf::defaultSymbolCompartAux;
 std::mutex elf::compartMutex;
-
-const SymCompartMap &lld::elf::symCompartMap(const Compartment *c) {
-  return c == nullptr ? defaultSymCompartMap : c->symCompartMap;
-}
-
-SymCompartMap &lld::elf::symCompartMap(Compartment *c) {
-  return c == nullptr ? defaultSymCompartMap : c->symCompartMap;
-}
 
 static uint64_t getSymVA(const Symbol &sym, int64_t addend) {
   switch (sym.kind()) {
@@ -238,8 +229,6 @@ static uint64_t getSymVA(const Symbol &sym, int64_t addend) {
 }
 
 bool Symbol::isInAnyGot() const {
-  if (isInGot(nullptr))
-    return true;
   for (Compartment &c : compartments)
     if (isInGot(&c))
       return true;
@@ -247,8 +236,6 @@ bool Symbol::isInAnyGot() const {
 }
 
 bool Symbol::isInAnyPlt() const {
-  if (isInPlt(nullptr))
-    return true;
   for (Compartment &c : compartments)
     if (isInPlt(&c))
       return true;
@@ -262,8 +249,8 @@ uint64_t Symbol::getVA(int64_t addend) const {
 uint64_t Symbol::getGotVA(const Compartment *c) const {
   const SymbolCompartAux &aux = compartAux(c);
   if (aux.gotInIgot)
-    return igotPlt(c)->getVA() + getGotPltOffset(c);
-  return got(c)->getVA() + getGotOffset(c);
+    return c->igotPlt->getVA() + getGotPltOffset(c);
+  return c->got->getVA() + getGotOffset(c);
 }
 
 uint64_t Symbol::getGotOffset(const Compartment *c) const {
@@ -273,8 +260,8 @@ uint64_t Symbol::getGotOffset(const Compartment *c) const {
 uint64_t Symbol::getGotPltVA(const Compartment *c) const {
   const SymbolCompartAux &aux = compartAux(c);
   if (aux.isInIplt)
-    return igotPlt(c)->getVA() + getGotPltOffset(c);
-  return gotPlt(c)->getVA() + getGotPltOffset(c);
+    return c->igotPlt->getVA() + getGotPltOffset(c);
+  return c->gotPlt->getVA() + getGotPltOffset(c);
 }
 
 uint64_t Symbol::getGotPltOffset(const Compartment *c) const {
@@ -287,8 +274,8 @@ uint64_t Symbol::getGotPltOffset(const Compartment *c) const {
 uint64_t Symbol::getPltVA(const Compartment *c) const {
   const SymbolCompartAux &aux = compartAux(c);
   uint64_t outVA = aux.isInIplt
-                       ? iplt(c)->getVA() + getPltIdx(c) * target->ipltEntrySize
-                       : plt(c)->getVA() + plt(c)->headerSize +
+                       ? c->iplt->getVA() + getPltIdx(c) * target->ipltEntrySize
+                       : c->plt->getVA() + c->plt->headerSize +
                              getPltIdx(c) * target->pltEntrySize;
 
   // While linking microMIPS code PLT code are always microMIPS
@@ -300,7 +287,7 @@ uint64_t Symbol::getPltVA(const Compartment *c) const {
 }
 
 uint64_t Symbol::getTgotVA(const Compartment *c) const {
-  return tgot(c)->getVA() + getTgotOffset(c);
+  return c->tgot->getVA() + getTgotOffset(c);
 }
 
 uint64_t Symbol::getTgotOffset(const Compartment *c) const {
@@ -351,11 +338,11 @@ OutputSection *Symbol::getOutputSection() const {
   return nullptr;
 }
 
-std::optional<Compartment *> Symbol::containingCompartment() const {
+Compartment *Symbol::containingCompartment() const {
   if (auto *s = dyn_cast<Defined>(this))
     if (auto *sec = s->section)
-      return sec->compartment;
-  return {};
+      return &sec->getCompartment();
+  return nullptr;
 }
 
 // If a symbol name contains '@', the characters after that is
