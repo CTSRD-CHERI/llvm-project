@@ -124,14 +124,10 @@ struct SymbolCompartAux {
 
 typedef std::unordered_map<const Symbol *,
                            std::unique_ptr<SymbolCompartAux>> SymCompartMap;
-extern SymCompartMap defaultSymCompartMap;
 extern SymbolCompartAux defaultSymbolCompartAux;
 
 // XXX: This could be per-SymCompartMap
 extern std::mutex compartMutex;
-
-const SymCompartMap &symCompartMap(const Compartment *c);
-SymCompartMap &symCompartMap(Compartment *c);
 
 // The base class for real symbol classes.
 class Symbol {
@@ -268,7 +264,7 @@ public:
     nameSize = s.size();
   }
 
-  std::optional<Compartment *> containingCompartment() const;
+  Compartment *containingCompartment() const;
 
   void parseSymbolVersion();
 
@@ -278,25 +274,9 @@ public:
   // truncated by Symbol::parseSymbolVersion().
   const char *getVersionSuffix() const { return nameData + nameSize; }
 
-  const SymbolCompartAux &compartAux(const Compartment *c) const {
-    // Could be a shared lock if lock_guard worked for such things
-    std::lock_guard lock(compartMutex);
-    const SymCompartMap &map = symCompartMap(c);
-    auto it = map.find(this);
-    return it == map.end() ? defaultSymbolCompartAux : *it->second.get();
-  }
+  const SymbolCompartAux &compartAux(const Compartment *c) const;
 
-  SymbolCompartAux &compartAux(Compartment *c) {
-    // XXX: This should possibly by an assertion to require the caller
-    // to hold the lock so that it also protects the caller's operations
-    // on the compartAux, but C++ people don't believe in lock assertions,
-    // so just write lock while adding the new entry to the table and
-    // let the caller (not) deal with the races.
-    std::lock_guard lock(compartMutex);
-    SymCompartMap &map = symCompartMap(c);
-    auto p = map.emplace(this, std::make_unique<SymbolCompartAux>());
-    return *p.first->second.get();
-  }
+  SymbolCompartAux &compartAux(Compartment *c);
 
   uint32_t auxIdx(const Compartment *c) const { return compartAux(c).auxIdx; }
 
@@ -425,8 +405,8 @@ public:
   // Version definition index.
   uint16_t versionId;
 
-  void setFlags(Compartment *c, uint16_t bits) {
-    SymbolCompartAux &aux = compartAux(c);
+  void setFlags(Compartment &c, uint16_t bits) {
+    SymbolCompartAux &aux = compartAux(&c);
     aux.setFlags(bits);
   }
   bool hasFlag(const Compartment *c, uint16_t bit) const {

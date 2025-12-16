@@ -662,12 +662,12 @@ static int64_t getTgotTpOffset(const Compartment *c, const Symbol &s) {
   return getTpOffset(s.getTgotVA(c), Out::tgotPhdr);
 }
 
-uint64_t InputSectionBase::getRelocTargetVA(const Compartment *c,
-                                            const InputFile *file, RelType type,
+uint64_t InputSectionBase::getRelocTargetVA(const InputFile *file, RelType type,
                                             int64_t a, uint64_t p,
                                             const Symbol &sym, RelExpr expr,
                                             const InputSectionBase *isec,
                                             uint64_t offset) {
+  const Compartment *c = &isec->getCompartment();
   switch (expr) {
   case R_ABS:
   case R_DTPREL:
@@ -690,21 +690,21 @@ uint64_t InputSectionBase::getRelocTargetVA(const Compartment *c,
     // so we have to duplicate some logic here.
     if (sym.hasFlag(c, NEEDS_TLSGD) && type != R_LARCH_TLS_IE_PC_LO12)
       // Like R_LOONGARCH_TLSGD_PAGE_PC but taking the absolute value.
-      return got(c)->getGlobalDynAddr(sym) + a;
-    return getRelocTargetVA(c, file, type, a, p, sym, R_GOT, isec, offset);
+      return c->got->getGlobalDynAddr(sym) + a;
+    return getRelocTargetVA(file, type, a, p, sym, R_GOT, isec, offset);
   }
   case R_GOTONLY_PC:
-    return got(c)->getVA() + a - p;
+    return c->got->getVA() + a - p;
   case R_GOTPLTONLY_PC:
-    return gotPlt(c)->getVA() + a - p;
+    return c->gotPlt->getVA() + a - p;
   case R_GOTREL:
   case R_PPC64_RELAX_TOC:
-    return sym.getVA(a) - got(c)->getVA();
+    return sym.getVA(a) - c->got->getVA();
   case R_GOTPLTREL:
-    return sym.getVA(a) - gotPlt(c)->getVA();
+    return sym.getVA(a) - c->gotPlt->getVA();
   case R_GOTPLT:
   case R_RELAX_TLS_GD_TO_IE_GOTPLT:
-    return sym.getGotVA(c) + a - gotPlt(c)->getVA();
+    return sym.getGotVA(c) + a - c->gotPlt->getVA();
   case R_TLSLD_GOT_OFF:
   case R_GOT_OFF:
   case R_RELAX_TLS_GD_TO_IE_GOT_OFF:
@@ -713,15 +713,14 @@ uint64_t InputSectionBase::getRelocTargetVA(const Compartment *c,
   case R_AARCH64_RELAX_TLS_GD_TO_IE_PAGE_PC:
     return getAArch64Page(sym.getGotVA(c) + a) - getAArch64Page(p);
   case R_AARCH64_GOT_PAGE:
-    return sym.getGotVA(c) + a - getAArch64Page(got(c)->getVA());
+    return sym.getGotVA(c) + a - getAArch64Page(c->got->getVA());
   case R_GOT_PC:
   case R_RELAX_TLS_GD_TO_IE:
     return sym.getGotVA(c) + a - p;
-  case R_LOONGARCH_GOT_PAGE_PC: {
+  case R_LOONGARCH_GOT_PAGE_PC:
     if (sym.hasFlag(c, NEEDS_TLSGD))
-      return getLoongArchPageDelta(got(c)->getGlobalDynAddr(sym) + a, p);
+      return getLoongArchPageDelta(c->got->getGlobalDynAddr(sym) + a, p);
     return getLoongArchPageDelta(sym.getGotVA(c) + a, p);
-  }
   case R_MIPS_GOTREL:
     return sym.getVA(a) - in.mipsGot->getGp(file);
   case R_MIPS_GOT_GP:
@@ -766,7 +765,7 @@ uint64_t InputSectionBase::getRelocTargetVA(const Compartment *c,
   }
   case R_RISCV_PC_INDIRECT: {
     if (const Relocation *hiRel = getRISCVPCRelHi20(&sym, a))
-      return getRelocTargetVA(c, file, hiRel->type, hiRel->addend, sym.getVA(),
+      return getRelocTargetVA(file, hiRel->type, hiRel->addend, sym.getVA(),
                               *hiRel->sym, hiRel->expr, isec, offset);
     return 0;
   }
@@ -808,7 +807,7 @@ uint64_t InputSectionBase::getRelocTargetVA(const Compartment *c,
   case R_LOONGARCH_PLT_PAGE_PC:
     return getLoongArchPageDelta(sym.getPltVA(c) + a, p);
   case R_PLT_GOTPLT:
-    return sym.getPltVA(c) + a - gotPlt(c)->getVA();
+    return sym.getPltVA(c) + a - c->gotPlt->getVA();
   case R_PPC32_PLTREL:
     // R_PPC_PLTREL24 uses the addend (usually 0 or 0x8000) to indicate r30
     // stores _GLOBAL_OFFSET_TABLE_ or .got2+0x8000. The addend is ignored for
@@ -854,27 +853,27 @@ uint64_t InputSectionBase::getRelocTargetVA(const Compartment *c,
   case R_SIZE:
     return sym.getSize() + a;
   case R_TLSDESC:
-    return got(c)->getTlsDescAddr(sym) + a;
+    return c->got->getTlsDescAddr(sym) + a;
   case R_TLSDESC_PC:
-    return got(c)->getTlsDescAddr(sym) + a - p;
+    return c->got->getTlsDescAddr(sym) + a - p;
   case R_TLSDESC_GOTPLT:
-    return got(c)->getTlsDescAddr(sym) + a - gotPlt(c)->getVA();
+    return c->got->getTlsDescAddr(sym) + a - c->gotPlt->getVA();
   case R_AARCH64_TLSDESC_PAGE:
-    return getAArch64Page(got(c)->getTlsDescAddr(sym) + a) - getAArch64Page(p);
+    return getAArch64Page(c->got->getTlsDescAddr(sym) + a) - getAArch64Page(p);
   case R_TLSGD_GOT:
-    return got(c)->getGlobalDynOffset(sym) + a;
+    return c->got->getGlobalDynOffset(sym) + a;
   case R_TLSGD_GOTPLT:
-    return got(c)->getGlobalDynAddr(sym) + a - gotPlt(c)->getVA();
+    return c->got->getGlobalDynAddr(sym) + a - c->gotPlt->getVA();
   case R_TLSGD_PC:
-    return got(c)->getGlobalDynAddr(sym) + a - p;
+    return c->got->getGlobalDynAddr(sym) + a - p;
   case R_LOONGARCH_TLSGD_PAGE_PC:
-    return getLoongArchPageDelta(got(c)->getGlobalDynAddr(sym) + a, p);
+    return getLoongArchPageDelta(c->got->getGlobalDynAddr(sym) + a, p);
   case R_TLSLD_GOTPLT:
-    return got(c)->getVA() + got(c)->getTlsIndexOff() + a - gotPlt(c)->getVA();
+    return c->got->getVA() + c->got->getTlsIndexOff() + a - c->gotPlt->getVA();
   case R_TLSLD_GOT:
-    return got(c)->getTlsIndexOff() + a;
+    return c->got->getTlsIndexOff() + a;
   case R_TLSLD_PC:
-    return got(c)->getTlsIndexVA() + a - p;
+    return c->got->getTlsIndexVA() + a - p;
   case R_TGOT:
     return sym.getTgotVA(c) + a;
   case R_TGOT_TP:
@@ -883,14 +882,14 @@ uint64_t InputSectionBase::getRelocTargetVA(const Compartment *c,
     return getTgotTpOffset(c, sym) + a;
   case R_TGOT_GOT:
   case R_RELAX_TGOT_TLS_GD_TO_IE_ABS:
-    return got(c)->getTgotAddr(sym) + a;
+    return c->got->getTgotAddr(sym) + a;
   case R_TGOT_GOT_PC:
   case R_RELAX_TGOT_TLS_GD_TO_IE:
-    return got(c)->getTgotAddr(sym) + a - p;
+    return c->got->getTgotAddr(sym) + a - p;
   case R_TGOT_TLSDESC:
-    return got(c)->getTgotTlsDescAddr(sym) + a;
+    return c->got->getTgotTlsDescAddr(sym) + a;
   case R_TGOT_TLSGD_PC:
-    return got(c)->getTgotGlobalDynAddr(sym) + a - p;
+    return c->got->getTgotGlobalDynAddr(sym) + a - p;
   case R_ABS_CAP:
     llvm_unreachable("R_ABS_CAP should not be handled here!");
   case R_ABS_CAP_ADDR:
@@ -1027,7 +1026,7 @@ void InputSection::relocateNonAlloc(uint8_t *buf, ArrayRef<RelTy> rels) {
         // If -z dead-reloc-in-nonalloc= is specified, respect it.
         const uint64_t value = tombstone ? SignExtend64<bits>(*tombstone)
                                          : (isDebugLocOrRanges ? 1 : 0);
-        target.relocateNoSym(compartment, bufLoc, type, value);
+        target.relocateNoSym(bufLoc, type, value);
         continue;
       }
     }
@@ -1037,7 +1036,7 @@ void InputSection::relocateNonAlloc(uint8_t *buf, ArrayRef<RelTy> rels) {
       continue;
 
     if (expr == R_SIZE) {
-      target.relocateNoSym(compartment, bufLoc, type,
+      target.relocateNoSym(bufLoc, type,
                            SignExtend64<bits>(sym.getSize() + addend));
       continue;
     }
@@ -1046,7 +1045,7 @@ void InputSection::relocateNonAlloc(uint8_t *buf, ArrayRef<RelTy> rels) {
     // sections.
     if (expr == R_ABS || expr == R_DTPREL || expr == R_GOTPLTREL ||
         expr == R_RISCV_ADD) {
-      target.relocateNoSym(compartment, bufLoc, type,
+      target.relocateNoSym(bufLoc, type,
                            SignExtend64<bits>(sym.getVA(addend)));
       continue;
     }
@@ -1067,7 +1066,7 @@ void InputSection::relocateNonAlloc(uint8_t *buf, ArrayRef<RelTy> rels) {
     // address 0. For bug-compatibility, we accept them with warnings. We
     // know Steel Bank Common Lisp as of 2018 have this bug.
     warn(msg);
-    target.relocateNoSym(compartment,
+    target.relocateNoSym(
         bufLoc, type,
         SignExtend64<bits>(sym.getVA(addend - offset - outSecOff)));
   }
@@ -1086,7 +1085,7 @@ static void relocateNonAllocForRelocatable(InputSection *sec, uint8_t *buf) {
     assert(rel.expr == R_ABS);
     uint8_t *bufLoc = buf + rel.offset;
     uint64_t targetVA = SignExtend64(rel.sym->getVA(rel.addend), bits);
-    target->relocate(sec->compartment, bufLoc, rel, targetVA);
+    target->relocate(bufLoc, rel, targetVA);
   }
 }
 

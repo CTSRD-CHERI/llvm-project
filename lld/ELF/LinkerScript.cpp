@@ -50,7 +50,7 @@ static bool isSectionPrefix(StringRef prefix, StringRef name) {
   return name.consume_front(prefix) && (name.empty() || name[0] == '.');
 }
 
-static StringRef getOutputSectionName(const InputSectionBase *s) {
+static StringRef getOutputSectionBaseName(const InputSectionBase *s) {
   if (config->relocatable)
     return s->name;
 
@@ -108,6 +108,13 @@ static StringRef getOutputSectionName(const InputSectionBase *s) {
       return v;
 
   return s->name;
+}
+
+static StringRef getOutputSectionName(const InputSectionBase *s) {
+  StringRef name = getOutputSectionBaseName(s);
+  if (s->compartment != 0)
+    name = saver().save(name + s->getCompartment().suffix);
+  return name;
 }
 
 uint64_t ExprValue::getValue() const {
@@ -509,7 +516,7 @@ LinkerScript::computeInputSections(const InputSectionDescription *cmd,
         continue;
 
       // Ignore sections in a compartment
-      if (sec->compartment != nullptr)
+      if (sec->compartment != 0)
         continue;
 
       // For --emit-relocs we have to ignore entries like
@@ -831,8 +838,6 @@ void LinkerScript::addOrphanSections() {
       orphanSections.push_back(s);
 
       StringRef name = getOutputSectionName(s);
-      if (s->compartment != nullptr)
-        name = saver().save(name.str() + s->compartment->suffix);
       if (config->unique) {
         v.push_back(createSection(s, name));
       } else if (OutputSection *sec = findByName(sectionCommands, name)) {
@@ -897,8 +902,6 @@ void LinkerScript::diagnoseOrphanHandling() const {
       continue;
 
     StringRef name = getOutputSectionName(sec);
-    if (sec->compartment != nullptr)
-      name = saver().save(name.str() + sec->compartment->suffix);
     if (config->orphanHandling == OrphanHandlingPolicy::Error)
       error(toString(sec) + " is being placed in '" + name + "'");
     else

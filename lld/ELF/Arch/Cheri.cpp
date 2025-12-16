@@ -515,12 +515,12 @@ void CheriCapRelocsSection::writeToImpl(uint8_t *buf) {
     if (isCapRelocTypeExec(targetType)) {
       Compartment *c;
       if (Symbol *s = dyn_cast<Symbol *>(realTarget.symOrSec))
-        c = *s->containingCompartment();
+        c = s->containingCompartment();
       else {
         InputSectionBase *isec = cast<InputSectionBase *>(realTarget.symOrSec);
-        c = isec->compartment;
+        c = &isec->getCompartment();
       }
-      if (PhdrEntry *ph = cheriBounds(c)) {
+      if (PhdrEntry *ph = c->cheriBounds) {
         targetOffset += targetVA - ph->p_vaddr;
         targetVA = ph->p_vaddr;
         targetSize = ph->p_memsz;
@@ -816,7 +816,7 @@ uint64_t MipsCheriCapTableSection::assignIndices(uint64_t startIndex,
     // rather than the normal relocation section to make processing of PLT
     // relocations in RTLD more efficient.
     RelocationBaseSection &dynRelSec =
-        it.second.usedInCallExpr ? *relaPlt(compartment) : *mainPart->relaDyn;
+        it.second.usedInCallExpr ? *getCompartment().relaPlt : *mainPart->relaDyn;
     if (targetSym->isPreemptible)
       dynRelSec.addSymbolReloc(elfCapabilityReloc, *this, off, *targetSym);
     else if (targetSym->isUndefWeak())
@@ -1045,8 +1045,6 @@ static bool alignPCCBounds(PhdrEntry *p, CheriPccPaddingSection &psec) {
 bool cheriCapabilityBoundsAlign() {
   // Align the PT_CHERI_PCC segment.
   bool changed = false;
-  if (in.cheriBounds)
-    changed |= alignPCCBounds(in.cheriBounds, *in.pccPadding);
   for (Compartment &compart : compartments)
     if (compart.cheriBounds)
       changed |= alignPCCBounds(compart.cheriBounds, *compart.pccPadding);

@@ -136,6 +136,7 @@ bool link(ArrayRef<const char *> args, llvm::raw_ostream &stdoutOS,
     in.reset();
 
     compartments.clear();
+    compartments.emplace_back();
     partitions.clear();
     partitions.emplace_back();
 
@@ -154,6 +155,7 @@ bool link(ArrayRef<const char *> args, llvm::raw_ostream &stdoutOS,
   symAux.emplace_back();
 
   compartments.clear();
+  compartments.emplace_back();
   partitions.clear();
   partitions.emplace_back();
 
@@ -2991,6 +2993,9 @@ void LinkerDriver::link(opt::InputArgList &args) {
   // Now that the number of partitions is fixed, save a pointer to the main
   // partition.
   mainPart = &partitions[0];
+
+  // Similarly for the default compartment.
+  defaultCompart = &compartments[0];
 
   // Read .note.gnu.property sections from input object files which
   // contain a hint to tweak linker's and loader's behaviors.

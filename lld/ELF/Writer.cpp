@@ -300,7 +300,7 @@ template <class ELFT> void elf::createSyntheticSections() {
 
   auto add = [](SyntheticSection &sec) { ctx.inputSections.push_back(&sec); };
 
-  if (compartments.size() != 0)
+  if (compartments.size() > 1)
     in.compartStrTab = std::make_unique<StringTableSection>(".c18nstrtab",
                                                             true);
 
@@ -453,7 +453,7 @@ template <class ELFT> void elf::createSyntheticSections() {
   }
 
   if (partitions.size() != 1) {
-    if (compartments.size() != 0)
+    if (compartments.size() > 1)
       error("Compartments are not supported with partitions");
 
     // Create the partition end marker. This needs to be in partition number 255
@@ -477,44 +477,36 @@ template <class ELFT> void elf::createSyntheticSections() {
     in.mipsGot = std::make_unique<MipsGotSection>();
     add(*in.mipsGot);
   } else {
-    in.got = std::make_unique<GotSection>();
-    add(*in.got);
     for (Compartment &compart : compartments) {
       compart.got = std::make_unique<GotSection>();
-      compart.got->compartment = &compart;
+      compart.got->compartment = compart.getNumber();
       add(*compart.got);
     }
   }
 
   if (config->emachine == EM_PPC) {
-    if (compartments.size() != 0)
+    if (compartments.size() > 1)
       error("Compartments are not supported with for EM_PCC");
     in.ppc32Got2 = std::make_unique<PPC32Got2Section>();
     add(*in.ppc32Got2);
   }
 
   if (config->emachine == EM_PPC64) {
-    if (compartments.size() != 0)
+    if (compartments.size() > 1)
       error("Compartments are not supported with for EM_PCC64");
     in.ppc64LongBranchTarget = std::make_unique<PPC64LongBranchTargetSection>();
     add(*in.ppc64LongBranchTarget);
   }
 
-  in.gotPlt = std::make_unique<GotPltSection>();
-  add(*in.gotPlt);
-  in.igotPlt = std::make_unique<IgotPltSection>();
-  add(*in.igotPlt);
-  in.tgot = std::make_unique<TgotSection>();
-  add(*in.tgot);
   for (Compartment &compart : compartments) {
     compart.gotPlt = std::make_unique<GotPltSection>();
-    compart.gotPlt->compartment = &compart;
+    compart.gotPlt->compartment = compart.getNumber();
     add(*compart.gotPlt);
     compart.igotPlt = std::make_unique<IgotPltSection>();
-    compart.igotPlt->compartment = &compart;
+    compart.igotPlt->compartment = compart.getNumber();
     add(*compart.igotPlt);
     compart.tgot = std::make_unique<TgotSection>();
-    compart.tgot->compartment = &compart;
+    compart.tgot->compartment = compart.getNumber();
     add(*compart.tgot);
   }
 
@@ -529,9 +521,9 @@ template <class ELFT> void elf::createSyntheticSections() {
   // TODO: _GLOBAL_OFFSET_TABLE_ should be compartment-relative?
   if (ElfSym::globalOffsetTable && config->emachine != EM_MIPS) {
     if (target->gotBaseSymInGotPlt)
-      in.gotPlt->hasGotPltOffRel = true;
+      defaultCompart->gotPlt->hasGotPltOffRel = true;
     else
-      in.got->hasGotOffRel = true;
+      defaultCompart->got->hasGotOffRel = true;
   }
 
   if (config->gdbIndex)
@@ -539,15 +531,11 @@ template <class ELFT> void elf::createSyntheticSections() {
 
   // We always need to add rel[a].plt to output if it has entries.
   // Even for static linking it can contain R_[*]_IRELATIVE relocations.
-  in.relaPlt = std::make_unique<RelocationSection<ELFT>>(
-      config->isRela ? ".rela.plt" : ".rel.plt", /*sort=*/false,
-      /*threadCount=*/1);
-  add(*in.relaPlt);
   for (Compartment &compart : compartments) {
     compart.relaPlt = std::make_unique<RelocationSection<ELFT>>(
         config->isRela ? ".rela.plt" : ".rel.plt", /*sort=*/false,
         /*threadCount=*/1);
-    compart.relaPlt->compartment = &compart;
+    compart.relaPlt->compartment = compart.getNumber();
     add(*compart.relaPlt);
   }
 
@@ -558,7 +546,7 @@ template <class ELFT> void elf::createSyntheticSections() {
   // dynamic loader reads .rel.plt after .rel.dyn, we can get the desired
   // behaviour by placing the iplt section in .rel.plt.
   in.relaIplt = std::make_unique<RelocationSection<ELFT>>(
-      config->androidPackDynRelocs ? in.relaPlt->name : relaDynName,
+      config->androidPackDynRelocs ? defaultCompart->relaPlt->name : relaDynName,
       /*sort=*/false, /*threadCount=*/1);
   add(*in.relaIplt);
 
@@ -573,37 +561,28 @@ template <class ELFT> void elf::createSyntheticSections() {
 
   if ((config->emachine == EM_386 || config->emachine == EM_X86_64) &&
       (config->andFeatures & GNU_PROPERTY_X86_FEATURE_1_IBT)) {
-    if (compartments.size() != 0)
+    if (compartments.size() > 1)
       error("Compartments are not supported with IBT");
     in.ibtPlt = std::make_unique<IBTPltSection>();
     add(*in.ibtPlt);
   }
 
-  if (config->emachine == EM_PPC)
-    in.plt = std::make_unique<PPC32GlinkSection>();
-  else
-    in.plt = std::make_unique<PltSection>();
-  add(*in.plt);
-  in.iplt = std::make_unique<IpltSection>();
-  add(*in.iplt);
   for (Compartment &compart : compartments) {
     if (config->emachine == EM_PPC)
       compart.plt = std::make_unique<PPC32GlinkSection>();
     else
       compart.plt = std::make_unique<PltSection>();
-    compart.plt->compartment = &compart;
+    compart.plt->compartment = compart.getNumber();
     add(*compart.plt);
     compart.iplt = std::make_unique<IpltSection>();
-    compart.iplt->compartment = &compart;
+    compart.iplt->compartment = compart.getNumber();
     add(*compart.iplt);
   }
 
   if (config->isCheriAbi && needsCheriPccSegment()) {
-    in.pccPadding = std::make_unique<CheriPccPaddingSection>();
-    add(*in.pccPadding);
     for (Compartment &compart : compartments) {
       compart.pccPadding = std::make_unique<CheriPccPaddingSection>();
-      compart.pccPadding->compartment = &compart;
+      compart.pccPadding->compartment = compart.getNumber();
       add(*compart.pccPadding);
     }
   }
@@ -886,7 +865,7 @@ bool elf::isRelroSection(const OutputSection *sec, bool ignoreZRelro) {
   if (sec->relro)
     return true;
 
-  const Compartment *c = sec->compartment;
+  const Compartment &c = sec->getCompartment();
   uint64_t flags = sec->flags;
 
   // Non-allocatable or non-writable sections don't need RELRO because
@@ -918,7 +897,7 @@ bool elf::isRelroSection(const OutputSection *sec, bool ignoreZRelro) {
   // .got contains pointers to external symbols. They are resolved by
   // the dynamic linker when a module is loaded into memory, and after
   // that they are not expected to change. So, it can be in RELRO.
-  if (got(c) && sec == got(c)->getParent())
+  if (c.got && sec == c.got->getParent())
     return true;
 
   // .toc is a GOT-ish section for PowerPC64. Their contents are accessed
@@ -933,7 +912,7 @@ bool elf::isRelroSection(const OutputSection *sec, bool ignoreZRelro) {
   // by default resolved lazily, so we usually cannot put it into RELRO.
   // However, if "-z now" is given, the lazy symbol resolution is
   // disabled, which enables us to put it into RELRO.
-  if (sec == gotPlt(c)->getParent())
+  if (sec == c.gotPlt->getParent())
     return config->zNow;
 
   // Similarly the CHERI capability table is also relro since the capabilities
@@ -979,13 +958,15 @@ enum RankFlags {
 
 static unsigned getSectionRank(const OutputSection &osec) {
   unsigned rank = osec.partition * RF_PARTITION;
-  const Compartment *c = osec.compartment;
+  const Compartment &c = osec.getCompartment();
 
-  // The default compartment uses an index of 1 since the partition number of
-  // mainPart is 1.  Increment the index so that additional compartments start
-  // at 2. However, TGOT sections get grouped together into a single segment.
-  if (osec.compartment != nullptr && &osec != tgot(c)->getParent())
-    rank = (osec.compartment->index + 1) * RF_COMPARTMENT;
+  // The default compartment uses an index of 0, which we leave as using the
+  // partition number for the rank. Since the partition number of mainPart is
+  // 1, increment the index so that additional compartments start at 2 for
+  // their ranks. However, TGOT sections get grouped together into a single
+  // segment.
+  if (osec.compartment != 0 && &osec != c.tgot->getParent())
+    rank = (osec.compartment + 1) * RF_COMPARTMENT;
 
   // We want to put section specified by -T option first, so we
   // can start assigning VA starting from them later.
@@ -1049,7 +1030,7 @@ static unsigned getSectionRank(const OutputSection &osec) {
     // TLS sections directly before the other RELRO sections.
     if (!(osec.flags & SHF_TLS))
       rank |= RF_NOT_TLS;
-    if (&osec != tgot(c)->getParent())
+    if (&osec != c.tgot->getParent())
       rank |= RF_NOT_TGOT;
     if (!isRelroSection(&osec))
       rank |= RF_NOT_RELRO;
@@ -1155,10 +1136,10 @@ template <class ELFT> void Writer<ELFT>::setReservedSymbolSections() {
   if (ElfSym::globalOffsetTable) {
     // The _GLOBAL_OFFSET_TABLE_ symbol is defined by target convention usually
     // to the start of the .got or .got.plt section.
-    InputSection *sec = in.gotPlt.get();
+    InputSection *sec = defaultCompart->gotPlt.get();
     if (!target->gotBaseSymInGotPlt)
       sec = in.mipsGot ? cast<InputSection>(in.mipsGot.get())
-                       : cast<InputSection>(in.got.get());
+                       : cast<InputSection>(defaultCompart->got.get());
     ElfSym::globalOffsetTable->section = sec;
   }
 
@@ -1561,7 +1542,7 @@ template <class ELFT> void Writer<ELFT>::sortInputSections() {
 // last section covered by the PCC bounds.
 template <class ELFT>
 void Writer<ELFT>::sortCheriPccPaddingSection(Compartment *c) {
-  CheriPccPaddingSection *psec = pccPadding(c);
+  CheriPccPaddingSection *psec = c->pccPadding.get();
   if (!psec->isNeeded())
     return;
 
@@ -1579,7 +1560,7 @@ void Writer<ELFT>::sortCheriPccPaddingSection(Compartment *c) {
   // Second, find the last CHERI PCC output section for this compartment.
   auto isPccSection = [&](SectionCommand *cmd) {
     auto *to = dyn_cast<OutputDesc>(cmd);
-    return to != nullptr && to->osec.compartment == c && to->osec.cheriPcc;
+    return to != nullptr && to->osec.compartment == c->getNumber() && to->osec.cheriPcc;
   };
 
   auto insertPos = llvm::find_if(script->sectionCommands, isPccSection);
@@ -1634,8 +1615,6 @@ template <class ELFT> void Writer<ELFT>::sortSections() {
   if (script->hasSectionsCommand)
     sortOrphanSections();
 
-  if (in.pccPadding)
-    sortCheriPccPaddingSection(nullptr);
   for (Compartment &c : compartments)
     if (c.pccPadding)
       sortCheriPccPaddingSection(&c);
@@ -1968,7 +1947,7 @@ template <class ELFT> void Writer<ELFT>::optimizeBasicBlockJumps() {
 // Which output sections are always covered by CHERI PCC bounds.  This includes
 // executable sections, GOTs, and PCC padding.
 static bool isCheriBoundsSection(const OutputSection *sec) {
-  const Compartment *c = sec->compartment;
+  const Compartment *c = &sec->getCompartment();
   uint64_t flags = sec->flags;
 
   // Non-allocatable sections are not mapped into memory.
@@ -1980,15 +1959,15 @@ static bool isCheriBoundsSection(const OutputSection *sec) {
     return true;
 
   // .got is accessed relative to PCC.
-  if (got(c) && sec == got(c)->getParent())
+  if (c->got && sec == c->got->getParent())
     return true;
   if (in.mipsGot && sec == in.mipsGot->getParent())
     return true;
 
   // .got.plt is accessed relative to PCC.
-  if (sec == gotPlt(c)->getParent())
+  if (sec == c->gotPlt->getParent())
     return true;
-  if (sec == igotPlt(c)->getParent())
+  if (sec == c->igotPlt->getParent())
     return true;
 
   // CHERI-MIPS capability table is accessed relative to PCC.
@@ -1996,13 +1975,13 @@ static bool isCheriBoundsSection(const OutputSection *sec) {
     return true;
 
   // The PCC padding section is included in PCC bounds.
-  if (sec == pccPadding(c)->getParent())
+  if (sec == c->pccPadding->getParent())
     return true;
 
   // XXX: CheriBSD's runtime loader assumes all read-only capabilities can be
   // derived from PCC, so include all read-only sections as a workaround for
   // now.  Once CheriBSD 25.03 is no longer supported, this can be removed.
-  if (sec->type == SHT_PROGBITS && sec != tgot(c)->getParent() &&
+  if (sec->type == SHT_PROGBITS && sec != c->tgot->getParent() &&
       ((flags & SHF_WRITE) == 0 || isRelroSection(sec, /*ignoreZRelro=*/true)))
     return true;
 
@@ -2026,7 +2005,7 @@ static void markCheriPccSections() {
       continue;
     if ((s->flags & (SHF_ALLOC | SHF_EXECINSTR)) ==
         (SHF_ALLOC | SHF_EXECINSTR))
-      pccPadding(s->compartment)->markNeeded();
+      s->getCompartment().pccPadding->markNeeded();
   }
 
   // Even if all executable input sections are empty, there may be a symbol
@@ -2037,7 +2016,7 @@ static void markCheriPccSections() {
       continue;
     if ((d->section->flags & (SHF_ALLOC | SHF_EXECINSTR)) ==
         (SHF_ALLOC | SHF_EXECINSTR))
-      pccPadding(d->section->compartment)->markNeeded();
+      d->section->getCompartment().pccPadding->markNeeded();
   }
 
   for (ELFFileBase *file : ctx.objectFiles) {
@@ -2047,7 +2026,7 @@ static void markCheriPccSections() {
         continue;
       if ((d->section->flags & (SHF_ALLOC | SHF_EXECINSTR)) ==
           (SHF_ALLOC | SHF_EXECINSTR))
-        pccPadding(d->section->compartment)->markNeeded();
+        d->section->getCompartment().pccPadding->markNeeded();
     }
   }
 
@@ -2056,7 +2035,7 @@ static void markCheriPccSections() {
   for (SectionCommand *cmd : script->sectionCommands) {
     if (auto *osd = dyn_cast<OutputDesc>(cmd)) {
       OutputSection &osec = osd->osec;
-      if (!pccPadding(osec.compartment)->isNeeded())
+      if (!osec.getCompartment().pccPadding->isNeeded())
         continue;
       if (isCheriBoundsSection(&osec))
         osec.cheriPcc.store(true, std::memory_order_relaxed);
@@ -2258,10 +2237,6 @@ template <class ELFT> void Writer<ELFT>::finalizeSections() {
     for (Partition &part : partitions)
       finalizeSynthetic(part.capRelocs.get());
     finalizeSynthetic(in.tgotCapRelocs.get());
-    if (in.plt && in.plt->isNeeded())
-      in.plt->addSymbols();
-    if (in.iplt && in.iplt->isNeeded())
-      in.iplt->addSymbols();
     for (Compartment &c : compartments) {
       if (c.plt && c.plt->isNeeded())
         c.plt->addSymbols();
@@ -2333,7 +2308,7 @@ template <class ELFT> void Writer<ELFT>::finalizeSections() {
   if (in.mipsGot)
     in.mipsGot->build();
 
-  if (in.pccPadding)
+  if (config->isCheriAbi && needsCheriPccSegment())
     markCheriPccSections();
   removeUnusedSyntheticSections();
   script->diagnoseOrphanHandling();
@@ -2421,19 +2396,22 @@ template <class ELFT> void Writer<ELFT>::finalizeSections() {
     finalizeSynthetic(in.symTabShndx.get());
     finalizeSynthetic(in.shStrTab.get());
     finalizeSynthetic(in.strTab.get());
-    finalizeSynthetic(in.got.get());
     finalizeSynthetic(in.mipsGot.get());
-    finalizeSynthetic(in.igotPlt.get());
-    finalizeSynthetic(in.gotPlt.get());
-    finalizeSynthetic(in.tgot.get());
-    finalizeSynthetic(in.pccPadding.get());
     finalizeSynthetic(in.relaIplt.get());
-    finalizeSynthetic(in.relaPlt.get());
     finalizeSynthetic(in.relaTgot.get());
-    finalizeSynthetic(in.plt.get());
-    finalizeSynthetic(in.iplt.get());
     finalizeSynthetic(in.ppc32Got2.get());
     finalizeSynthetic(in.partIndex.get());
+
+    for (Compartment &c : compartments) {
+      finalizeSynthetic(c.got.get());
+      finalizeSynthetic(c.gotPlt.get());
+      finalizeSynthetic(c.igotPlt.get());
+      finalizeSynthetic(c.tgot.get());
+      finalizeSynthetic(c.pccPadding.get());
+      finalizeSynthetic(c.relaPlt.get());
+      finalizeSynthetic(c.plt.get());
+      finalizeSynthetic(c.iplt.get());
+    }
 
     // Dynamic section must be the last one in this list and dynamic
     // symbol table section (dynSymTab) must be the first one.
@@ -2457,17 +2435,6 @@ template <class ELFT> void Writer<ELFT>::finalizeSections() {
       finalizeSynthetic(part.verSym.get());
       finalizeSynthetic(part.verNeed.get());
       finalizeSynthetic(part.dynamic.get());
-    }
-
-    for (Compartment &c : compartments) {
-      finalizeSynthetic(c.got.get());
-      finalizeSynthetic(c.gotPlt.get());
-      finalizeSynthetic(c.igotPlt.get());
-      finalizeSynthetic(c.tgot.get());
-      finalizeSynthetic(c.pccPadding.get());
-      finalizeSynthetic(c.relaPlt.get());
-      finalizeSynthetic(c.plt.get());
-      finalizeSynthetic(c.iplt.get());
     }
   }
 
@@ -2716,50 +2683,44 @@ SmallVector<PhdrEntry *, 0> Writer<ELFT>::createPhdrs(Partition &part) {
   for (OutputSection *sec : outputSections) {
     if (sec->partition != partNo || !needsPtLoad(sec))
       continue;
-    if (sec->compartment == nullptr) {
-      lastCompartment = nullptr;
-      continue;
+    Compartment &c = sec->getCompartment();
+    if (&c != defaultCompart) {
+      if (&c != lastCompartment) {
+        if (c.phdrs.empty())
+          c.nameIndex = in.compartStrTab->addString(c.name);
+        c.phdrs.push_back(make<PhdrEntry>(PT_C18N_NAME, 0));
+      }
+      c.phdrs.back()->add(sec);
     }
-    if (sec->compartment != lastCompartment) {
-      if (sec->compartment->phdrs.empty())
-        sec->compartment->nameIndex =
-          in.compartStrTab->addString(sec->compartment->name);
-      sec->compartment->phdrs.push_back(make<PhdrEntry>(PT_C18N_NAME, 0));
-    }
-    sec->compartment->phdrs.back()->add(sec);
-    lastCompartment = sec->compartment;
+    lastCompartment = &c;
   }
 
   // PT_GNU_RELRO includes all sections that should be marked as
   // read-only by dynamic linker after processing relocations.
   // Current dynamic loaders only support one PT_GNU_RELRO PHDR, give
   // an error message if more than one PT_GNU_RELRO PHDR is required.
-  PhdrEntry *firstRelRo = make<PhdrEntry>(PT_GNU_RELRO, PF_R);
   for (Compartment &compart : compartments)
     compart.relRo = make<PhdrEntry>(PT_GNU_RELRO, PF_R);
 
-  PhdrEntry *relRo = firstRelRo;
+  PhdrEntry *relRo = nullptr;
   bool inRelroPhdr = false;
   lastCompartment = nullptr;
   for (OutputSection *sec : outputSections) {
     if (sec->partition != partNo || !needsPtLoad(sec))
       continue;
-    if (sec->compartment != lastCompartment) {
+    Compartment &c = sec->getCompartment();
+    if (&c != lastCompartment) {
       if (inRelroPhdr) {
         inRelroPhdr = false;
         sec->relroEnd = true;
       }
-      lastCompartment = sec->compartment;
-      if (sec->compartment == nullptr)
-        relRo = firstRelRo;
-      else
-        relRo = sec->compartment->relRo;
+      lastCompartment = &c;
+      relRo = c.relRo;
     }
     // Treat a CHERI PCC padding section as relro if it is preceded by a relro
     // section.
     if (isRelroSection(sec) ||
-        (pccPadding(sec->compartment) && inRelroPhdr &&
-         sec == pccPadding(sec->compartment)->getParent())) {
+        (c.pccPadding && inRelroPhdr && sec == c.pccPadding->getParent())) {
       if (inRelroPhdr || !relRo->firstSec) {
         inRelroPhdr = true;
         relRo->add(sec);
@@ -2773,8 +2734,7 @@ SmallVector<PhdrEntry *, 0> Writer<ELFT>::createPhdrs(Partition &part) {
   }
 
   // Determine the sections PCC should cover for each compartment.
-  if (in.pccPadding) {
-    in.cheriBounds = make<PhdrEntry>(PT_CHERI_PCC, PF_R | PF_X);
+  if (config->isCheriAbi && needsCheriPccSegment()) {
     for (Compartment &compart : compartments)
       compart.cheriBounds = make<PhdrEntry>(PT_CHERI_PCC, PF_R | PF_X);
 
@@ -2783,10 +2743,7 @@ SmallVector<PhdrEntry *, 0> Writer<ELFT>::createPhdrs(Partition &part) {
         continue;
       if (!sec->cheriPcc.load(std::memory_order_relaxed))
         continue;
-      if (sec->compartment == nullptr)
-        in.cheriBounds->add(sec);
-      else
-        sec->compartment->cheriBounds->add(sec);
+      sec->getCompartment().cheriBounds->add(sec);
     }
   }
 
@@ -2847,10 +2804,6 @@ SmallVector<PhdrEntry *, 0> Writer<ELFT>::createPhdrs(Partition &part) {
 
   // Add entries for .tgot.
   PhdrEntry *tgotHdr = make<PhdrEntry>(PT_CHERI_TGOT, PF_R);
-  if (in.tgot->isNeeded()) {
-    OutputSection *sec = in.tgot->getParent();
-    tgotHdr->add(sec);
-  }
   for (Compartment &compart : compartments) {
     if (compart.tgot->isNeeded()) {
       OutputSection *sec = compart.tgot->getParent();
@@ -2865,22 +2818,18 @@ SmallVector<PhdrEntry *, 0> Writer<ELFT>::createPhdrs(Partition &part) {
     addHdr(PT_DYNAMIC, sec->getPhdrFlags())->add(sec);
 
   for (Compartment &compart : compartments) {
+    if (&compart == defaultCompart)
+      continue;
     if (compart.phdrs.empty())
       error("no output sections for compartment " + compart.name);
     for (PhdrEntry *phdr : compart.phdrs)
       ret.push_back(phdr);
   }
 
-  if (firstRelRo->firstSec)
-    ret.push_back(firstRelRo);
   for (Compartment &compart : compartments)
     if (compart.relRo->firstSec)
       ret.push_back(compart.relRo);
 
-  if (in.cheriBounds) {
-    if (in.cheriBounds->firstSec)
-      ret.push_back(in.cheriBounds);
-  }
   for (Compartment &compart : compartments) {
     if (compart.cheriBounds) {
       if (compart.cheriBounds->firstSec)
@@ -3181,7 +3130,7 @@ template <class ELFT> void Writer<ELFT>::setPhdrs(Partition &part) {
 
     if (p->p_type == PT_C18N_NAME) {
       // Store the name index in the paddr field.
-      p->p_paddr = first->compartment->nameIndex;
+      p->p_paddr = first->getCompartment().nameIndex;
     }
   }
 }

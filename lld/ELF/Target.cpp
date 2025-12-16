@@ -176,15 +176,14 @@ void TargetInfo::relocateAlloc(InputSectionBase &sec, uint8_t *buf) const {
   uint64_t secAddr = sec.getOutputSection()->addr;
   if (auto *s = dyn_cast<InputSection>(&sec))
     secAddr += s->outSecOff;
-  Compartment *c = sec.compartment;
   for (const Relocation &rel : sec.relocs()) {
     uint8_t *loc = buf + rel.offset;
     const uint64_t val = SignExtend64(
-        sec.getRelocTargetVA(c, sec.file, rel.type, rel.addend,
+        sec.getRelocTargetVA(sec.file, rel.type, rel.addend,
                              secAddr + rel.offset, *rel.sym, rel.expr, &sec, rel.offset),
         bits);
     if (rel.expr != R_RELAX_HINT)
-      relocate(c, loc, rel, val);
+      relocate(loc, rel, val);
   }
 }
 
@@ -193,4 +192,8 @@ uint64_t TargetInfo::getImageBase() const {
   if (config->imageBase)
     return *config->imageBase;
   return config->isPic ? 0 : defaultImageBase;
+}
+void lld::elf::TargetInfo::relocateNoSym(uint8_t *loc,
+                                         RelType type, uint64_t val) const {
+  relocate(loc, Relocation{R_NONE, type, 0, 0, nullptr}, val);
 }

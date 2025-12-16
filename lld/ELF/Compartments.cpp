@@ -206,10 +206,9 @@ private:
 };
 
 void addCompartment(StringRef name) {
-    compartments.emplace_back();
-    Compartment &newCompart = compartments.back();
-    newCompart.name = name;
-    newCompart.index = compartments.size();
+  compartments.emplace_back();
+  Compartment &newCompart = compartments.back();
+  newCompart.name = name;
 }
 
 Compartment *findCompartment(StringRef name) {
@@ -254,7 +253,7 @@ void readCompartmentPolicy(MemoryBufferRef mb) {
 
 static std::string compartmentName(const Compartment *c)
 {
-  if (c == nullptr)
+  if (c == defaultCompart)
     return "the default compartment";
   else
     return "compartment " + toString(c->name);
@@ -373,7 +372,7 @@ static void checkDefaultCompartment()
       if (!canCompartmentalize(s))
         continue;
 
-      if (s->compartment == nullptr) {
+      if (s->compartment == 0) {
         error(isecName(s) + " not assigned to a compartment");
         valid = false;
       }
@@ -442,12 +441,14 @@ static void scanRelocations(InputSectionBase *sec, SectionDepends &depends) {
 }
 
 void assignSectionsToCompartments() {
-  if (compartments.empty()) {
+  if (compartments.size() == 1) {
     checkDefaultCompartment();
     return;
   }
 
   for (Compartment &c : compartments) {
+    if (&c == defaultCompart)
+      continue;
     c.suffix = "." + c.name.str();
   }
 
@@ -533,7 +534,7 @@ void assignSectionsToCompartments() {
 
     if (config->verboseCompartmentalization)
       message("info: " + isecName(s) + " assigned to " + compartmentName(c));
-    s->compartment = c;
+    s->compartment = c->getNumber();
   }
   if (!valid)
     exitLld(1);
@@ -578,7 +579,7 @@ void assignSectionsToCompartments() {
           }
 
           const InputSectionBase *s1 = skv.first.first;
-          Compartment *c = s1->compartment;
+          Compartment *c = &s1->getCompartment();
           if (cdeps.count(c) == 0)
             cdeps[c] = std::make_pair(s1, &skv.second);
         }
@@ -604,16 +605,16 @@ void assignSectionsToCompartments() {
         }
 
         Compartment *c = cdeps.begin()->first;
-        if (c == s2->compartment)
+        if (c->getNumber() == s2->compartment)
           continue;
 
         const auto pair = cdeps.begin()->second;
         const InputSectionBase *s1 = pair.first;
         const Symbol *sym = pair.second;
 
-        if (s2->compartment != nullptr) {
+        if (s2->compartment != 0) {
           error(symbolName(sym) + " assigned to " +
-                compartmentName(s2->compartment) +
+                compartmentName(&s2->getCompartment()) +
                 " is directly accessed by " + compartmentName(c) + " in " +
                 isecName(s1));
           valid = false;
@@ -646,7 +647,7 @@ void assignSectionsToCompartments() {
           message("info: " + isecName(s2) + " assigned to implied " +
                   compartmentName(c) + " due to direct access of " +
                   symbolName(sym) + " in " + isecName(s1));
-        s2->compartment = c;
+        s2->compartment = c->getNumber();
         assigned = true;
       }
       if (!valid)
@@ -668,7 +669,7 @@ void assignSectionsToCompartments() {
     for (const auto &skv : sdeps) {
       InputSectionBase *s1 = skv.first.first;
 
-      if (s1->compartment != nullptr && s2->compartment != nullptr)
+      if (s1->compartment != 0 && s2->compartment != 0)
         continue;
       dsu.unionSets(s2, s1);
     }
@@ -679,7 +680,7 @@ void assignSectionsToCompartments() {
     if (list.size() == 1) {
       if (config->verboseCompartmentalization) {
         InputSectionBase *s = list.front();
-        if (s->compartment == nullptr && canCompartmentalize(s)) {
+        if (s->compartment == 0 && canCompartmentalize(s)) {
           message("info: potential compartment:");
           message("\t" + isecName(s));
         }
@@ -697,21 +698,21 @@ void assignSectionsToCompartments() {
     }
 
     // More than one compartment?
-    Compartment *c = nullptr;
+    Compartment *c = defaultCompart;
     bool multiple = false;
     bool anyDefault = false;
     for (InputSectionBase *s : list) {
       if (!canCompartmentalize(s))
         continue;
-      if (s->compartment == nullptr) {
+      if (s->compartment == 0) {
         anyDefault = true;
         continue;
       }
-      if (c == nullptr) {
-        c = s->compartment;
+      if (c == defaultCompart) {
+        c = &s->getCompartment();
         continue;
       }
-      if (c == s->compartment)
+      if (c->getNumber() == s->compartment)
         continue;
       multiple = true;
       break;
@@ -723,7 +724,7 @@ void assignSectionsToCompartments() {
         for (InputSectionBase *s : list)
           if (canCompartmentalize(s))
             message("\t" + isecName(s) + " from " +
-                    compartmentName(s->compartment));
+                    compartmentName(&s->getCompartment()));
       }
       continue;
     }
@@ -746,7 +747,7 @@ void assignSectionsToCompartments() {
     // compartment contain exported symbols.
     bool exportedSym = false;
     for (InputSectionBase *s : list) {
-      if (s->compartment == c || !canCompartmentalize(s))
+      if (s->compartment == c->getNumber() || !canCompartmentalize(s))
         continue;
 
       Symbol *b = firstExportedSymbol(s);
@@ -762,10 +763,10 @@ void assignSectionsToCompartments() {
     if (config->verboseCompartmentalization)
       message("info: assigning disjoint set to " + compartmentName(c) + ":");
     for (InputSectionBase *s : list) {
-      if (s->compartment == c || !canCompartmentalize(s))
+      if (s->compartment == c->getNumber() || !canCompartmentalize(s))
         continue;
 
-      s->compartment = c;
+      s->compartment = c->getNumber();
       if (config->verboseCompartmentalization)
         message("\t" + isecName(s));
     }
