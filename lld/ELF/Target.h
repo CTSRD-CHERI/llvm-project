@@ -70,8 +70,8 @@ public:
   // targeting S.
   virtual bool needsThunk(RelExpr expr, RelType relocType,
                           const InputFile *file, const Compartment &c,
-                          uint64_t branchAddr,
-                          const Symbol &s, int64_t a) const;
+                          uint64_t branchAddr, const Symbol &s,
+                          int64_t a) const;
 
   // On systems with range extensions we place collections of Thunks at
   // regular spacings that enable the majority of branches reach the Thunks.
@@ -92,8 +92,7 @@ public:
 
   virtual void relocate(uint8_t *loc, const Relocation &rel,
                         uint64_t val) const = 0;
-  void relocateNoSym(uint8_t *loc, RelType type,
-                     uint64_t val) const;
+  void relocateNoSym(uint8_t *loc, RelType type, uint64_t val) const;
   virtual void relocateAlloc(InputSectionBase &sec, uint8_t *buf) const;
 
   // Do a linker relaxation pass and return true if we changed something.

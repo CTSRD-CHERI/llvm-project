@@ -391,7 +391,7 @@ void LoongArch::writePltHeader(Compartment &c, uint8_t *buf) const {
 }
 
 void LoongArch::writePlt(Compartment &c, uint8_t *buf, const Symbol &sym,
-                     uint64_t pltEntryAddr) const {
+                         uint64_t pltEntryAddr) const {
   // See the comment in writePltHeader for reason why pcaddu12i is used instead
   // of the pcalau12i that's more commonly seen in the ELF psABI v2.0 days.
   //

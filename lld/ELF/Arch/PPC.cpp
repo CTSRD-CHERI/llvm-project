@@ -42,7 +42,8 @@ public:
   }
   void writeIplt(Compartment &c, uint8_t *buf, const Symbol &sym,
                  uint64_t pltEntryAddr) const override;
-  void writeGotPlt(Compartment &c, uint8_t *buf, const Symbol &s) const override;
+  void writeGotPlt(Compartment &c, uint8_t *buf,
+                   const Symbol &s) const override;
   bool needsThunk(RelExpr expr, RelType relocType, const InputFile *file,
                   const Compartment &c, uint64_t branchAddr, const Symbol &s,
                   int64_t a) const override;
@@ -55,11 +56,9 @@ public:
   void relocateAlloc(InputSectionBase &sec, uint8_t *buf) const override;
 
 private:
-  void relaxTlsGdToIe(uint8_t *loc, const Relocation &rel,
-                      uint64_t val) const;
+  void relaxTlsGdToIe(uint8_t *loc, const Relocation &rel, uint64_t val) const;
   void relaxTlsGdToLe(uint8_t *loc, const Relocation &rel, uint64_t val) const;
-  void relaxTlsLdToLe(uint8_t *loc, const Relocation &rel,
-                      uint64_t val) const;
+  void relaxTlsLdToLe(uint8_t *loc, const Relocation &rel, uint64_t val) const;
   void relaxTlsIeToLe(uint8_t *loc, const Relocation &rel, uint64_t val) const;
 };
 } // namespace
@@ -200,8 +199,8 @@ void PPC::writeGotPlt(Compartment &c, uint8_t *buf, const Symbol &s) const {
 }
 
 bool PPC::needsThunk(RelExpr expr, RelType type, const InputFile *file,
-                     const Compartment &c,
-                     uint64_t branchAddr, const Symbol &s, int64_t a) const {
+                     const Compartment &c, uint64_t branchAddr, const Symbol &s,
+                     int64_t a) const {
   if (type != R_PPC_LOCAL24PC && type != R_PPC_REL24 && type != R_PPC_PLTREL24)
     return false;
   if (s.isInPlt(c))
@@ -312,8 +311,7 @@ static std::pair<RelType, uint64_t> fromDTPREL(RelType type, uint64_t val) {
   }
 }
 
-void PPC::relocate(uint8_t *loc, const Relocation &rel,
-                   uint64_t val) const {
+void PPC::relocate(uint8_t *loc, const Relocation &rel, uint64_t val) const {
   RelType newType;
   std::tie(newType, val) = fromDTPREL(rel.type, val);
   switch (newType) {

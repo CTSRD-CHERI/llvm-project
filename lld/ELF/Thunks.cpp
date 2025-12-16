@@ -1099,8 +1099,7 @@ void elf::writePPC32PltCallStub(uint8_t *buf, uint64_t gotPltVA,
 
 void PPC32PltCallStub::writeTo(uint8_t *buf) {
   Compartment &c = *getThunkTargetSym()->containingCompartment();
-  writePPC32PltCallStub(buf, destination.getGotPltVA(c), file,
-                        c, addend);
+  writePPC32PltCallStub(buf, destination.getGotPltVA(c), file, c, addend);
 }
 
 void PPC32PltCallStub::addSymbols(ThunkSection &isec) {
@@ -1224,8 +1223,7 @@ bool PPC64R2SaveStub::isCompatibleWith(const InputSection &isec,
 
 void PPC64R12SetupStub::writeTo(uint8_t *buf) {
   Compartment &c = *getThunkTargetSym()->containingCompartment();
-  int64_t offset = (gotPlt ? destination.getGotPltVA(c) :
-                    destination.getVA()) -
+  int64_t offset = (gotPlt ? destination.getGotPltVA(c) : destination.getVA()) -
                    getThunkTargetSym()->getVA();
   if (!isInt<34>(offset))
     reportRangeError(buf, offset, 34, destination, "R12 setup stub offset");

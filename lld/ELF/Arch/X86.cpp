@@ -29,7 +29,8 @@ public:
   int64_t getImplicitAddend(const uint8_t *buf, RelType type) const override;
   void writeGotPltHeader(uint8_t *buf) const override;
   RelType getDynRel(RelType type) const override;
-  void writeGotPlt(Compartment &c, uint8_t *buf, const Symbol &s) const override;
+  void writeGotPlt(Compartment &c, uint8_t *buf,
+                   const Symbol &s) const override;
   void writeIgotPlt(uint8_t *buf, const Symbol &s) const override;
   void writePltHeader(Compartment &c, uint8_t *buf) const override;
   void writePlt(Compartment &c, uint8_t *buf, const Symbol &sym,
@@ -280,8 +281,7 @@ int64_t X86::getImplicitAddend(const uint8_t *buf, RelType type) const {
   }
 }
 
-void X86::relocate(uint8_t *loc, const Relocation &rel,
-                   uint64_t val) const {
+void X86::relocate(uint8_t *loc, const Relocation &rel, uint64_t val) const {
   switch (rel.type) {
   case R_386_8:
     // R_386_{PC,}{8,16} are not part of the i386 psABI, but they are
@@ -520,7 +520,8 @@ namespace {
 class IntelIBT : public X86 {
 public:
   IntelIBT();
-  void writeGotPlt(Compartment &c, uint8_t *buf, const Symbol &s) const override;
+  void writeGotPlt(Compartment &c, uint8_t *buf,
+                   const Symbol &s) const override;
   void writePlt(Compartment &c, uint8_t *buf, const Symbol &sym,
                 uint64_t pltEntryAddr) const override;
   void writeIBTPlt(Compartment &c, uint8_t *buf,
@@ -532,7 +533,8 @@ public:
 
 IntelIBT::IntelIBT() { pltHeaderSize = 0; }
 
-void IntelIBT::writeGotPlt(Compartment &c, uint8_t *buf, const Symbol &s) const {
+void IntelIBT::writeGotPlt(Compartment &c, uint8_t *buf,
+                           const Symbol &s) const {
   uint64_t va =
       in.ibtPlt->getVA() + IBTPltHeaderSize + s.getPltIdx(c) * pltEntrySize;
   write32le(buf, va);
@@ -584,7 +586,8 @@ namespace {
 class RetpolinePic : public X86 {
 public:
   RetpolinePic();
-  void writeGotPlt(Compartment &c, uint8_t *buf, const Symbol &s) const override;
+  void writeGotPlt(Compartment &c, uint8_t *buf,
+                   const Symbol &s) const override;
   void writePltHeader(Compartment &c, uint8_t *buf) const override;
   void writePlt(Compartment &c, uint8_t *buf, const Symbol &sym,
                 uint64_t pltEntryAddr) const override;
@@ -593,7 +596,8 @@ public:
 class RetpolineNoPic : public X86 {
 public:
   RetpolineNoPic();
-  void writeGotPlt(Compartment &c, uint8_t *buf, const Symbol &s) const override;
+  void writeGotPlt(Compartment &c, uint8_t *buf,
+                   const Symbol &s) const override;
   void writePltHeader(Compartment &c, uint8_t *buf) const override;
   void writePlt(Compartment &c, uint8_t *buf, const Symbol &sym,
                 uint64_t pltEntryAddr) const override;

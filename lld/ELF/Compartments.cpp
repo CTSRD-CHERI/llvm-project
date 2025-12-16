@@ -11,6 +11,7 @@
 //===----------------------------------------------------------------------===//
 
 #include "Compartments.h"
+#include "Arch/Cheri.h"
 #include "Config.h"
 #include "InputFiles.h"
 #include "SyntheticSections.h"
@@ -18,7 +19,6 @@
 #include "llvm/Support/GlobPattern.h"
 #include "llvm/Support/JSON.h"
 #include "llvm/Support/Path.h"
-#include "Arch/Cheri.h"
 
 #include <list>
 #include <set>
@@ -49,53 +49,52 @@ typedef std::pair<const InputSectionBase *, const Symbol *> CompartmentValue;
 typedef std::map<Compartment *, CompartmentValue> CompartmentDeps;
 
 namespace std {
-  template <> struct less<Compartment *> {
-    bool operator()(const Compartment *lhs, const Compartment *rhs) const {
-      if (lhs == nullptr)
-        return (true);
-      if (rhs == nullptr)
-        return (false);
+template <> struct less<Compartment *> {
+  bool operator()(const Compartment *lhs, const Compartment *rhs) const {
+    if (lhs == nullptr)
+      return true;
+    if (rhs == nullptr)
+      return false;
 
-      return (lhs->name.compare(rhs->name) < 0);
+    return lhs->name.compare(rhs->name) < 0;
+  }
+};
+
+template <> struct less<InputSectionBase *> {
+  bool operator()(const InputSectionBase *lhs,
+                  const InputSectionBase *rhs) const {
+    if (lhs->file != nullptr || rhs->file != nullptr) {
+      if (lhs->file == nullptr)
+        return true;
+      if (rhs->file == nullptr)
+        return false;
+
+      int rval = lhs->file->getName().compare(rhs->file->getName());
+      if (rval < 0)
+        return true;
+      if (rval > 0)
+        return false;
     }
-  };
 
-  template <> struct less<InputSectionBase *> {
-    bool operator()(const InputSectionBase *lhs,
-                    const InputSectionBase *rhs) const {
-      if (lhs->file != nullptr || rhs->file != nullptr) {
-        if (lhs->file == nullptr)
-          return (true);
-        if (rhs->file == nullptr)
-          return (false);
+    return lhs->name.compare(rhs->name) < 0;
+  }
+};
 
-        int rval = lhs->file->getName().compare(rhs->file->getName());
-        if (rval < 0)
-          return (true);
-        if (rval > 0)
-          return (false);
-      }
-
-      return (lhs->name.compare(rhs->name) < 0);
-    }
-  };
-
-  template <> struct hash<SectionKey> {
-    size_t operator()(SectionKey A) const {
-      size_t h1 = std::hash<InputSectionBase *>{}(A.first);
-      size_t h2 = std::hash<RelExpr>{}(A.second);
-      return h1 ^ (h2 << 1);
-    }
-  };
-}
+template <> struct hash<SectionKey> {
+  size_t operator()(SectionKey A) const {
+    size_t h1 = std::hash<InputSectionBase *>{}(A.first);
+    size_t h2 = std::hash<RelExpr>{}(A.second);
+    return h1 ^ (h2 << 1);
+  }
+};
+} // namespace std
 
 namespace lld {
 namespace elf {
 
 class CompartmentLookup {
 public:
-  bool addPattern(StringRef glob, Compartment *c)
-  {
+  bool addPattern(StringRef glob, Compartment *c) {
     Expected<GlobPattern> GlobOrErr = GlobPattern::create(glob);
     if (!GlobOrErr) {
       error(toString(GlobOrErr.takeError()));
@@ -105,8 +104,7 @@ public:
     return true;
   }
 
-  Expected<Compartment *> findMatch(StringRef name) const
-  {
+  Expected<Compartment *> findMatch(StringRef name) const {
     Compartment *current = nullptr;
 
     for (const auto &p : matches) {
@@ -117,15 +115,16 @@ public:
         continue;
       if (current != nullptr)
         return make_error<StringError>("assigned to compartment " +
-                                       current->name + " and " +
-                                       p.second->name, errc::invalid_argument);
+                                           current->name + " and " +
+                                           p.second->name,
+                                       errc::invalid_argument);
       current = p.second;
     }
     return current;
   }
 
 private:
-  std::vector<std::pair<GlobPattern, Compartment *> > matches;
+  std::vector<std::pair<GlobPattern, Compartment *>> matches;
 };
 
 // A disjoint set union of input sections is implemented by having a
@@ -135,12 +134,11 @@ typedef std::list<InputSectionBase *> SectionList;
 
 class SectionDSU {
   typedef std::map<InputSectionBase *, SectionList> setMap;
-public:
 
+public:
   class iterator {
   public:
-    explicit iterator(setMap &sets, bool start)
-    {
+    explicit iterator(setMap &sets, bool start) {
       end = sets.end();
       if (start) {
         it = next(sets.begin());
@@ -149,16 +147,21 @@ public:
       }
     }
 
-    iterator & operator++() { it = next(++it); return *this; }
-    iterator operator++(int)
-    { iterator retval = *this; ++(*this); return retval; }
+    iterator &operator++() {
+      it = next(++it);
+      return *this;
+    }
+    iterator operator++(int) {
+      iterator retval = *this;
+      ++(*this);
+      return retval;
+    }
     bool operator==(iterator other) const { return it == other.it; }
     bool operator!=(iterator other) const { return it != other.it; }
-    SectionList & operator*() const { return it->second; }
+    SectionList &operator*() const { return it->second; }
 
   private:
-    setMap::iterator next(setMap::iterator it)
-    {
+    setMap::iterator next(setMap::iterator it) {
       while (it != end && it->second.empty())
         it++;
       return it;
@@ -171,21 +174,18 @@ public:
   iterator begin() { return iterator(sets, true); }
   iterator end() { return iterator(sets, false); }
 
-  void makeSet(InputSectionBase *s)
-  {
+  void makeSet(InputSectionBase *s) {
     parents.emplace(s, s);
-    sets.emplace(s, std::initializer_list<InputSectionBase *>({ s }));
+    sets.emplace(s, std::initializer_list<InputSectionBase *>({s}));
   }
 
-  InputSectionBase *findSet(InputSectionBase *s)
-  {
+  InputSectionBase *findSet(InputSectionBase *s) {
     if (parents[s] == s)
       return s;
     return parents[s] = findSet(parents[s]);
   }
 
-  void unionSets(InputSectionBase *a, InputSectionBase *b)
-  {
+  void unionSets(InputSectionBase *a, InputSectionBase *b) {
     a = findSet(a);
     b = findSet(b);
     if (a == b)
@@ -225,7 +225,7 @@ static bool fromJSON(const json::Value &E, CompartmentMembers &Out,
                      json::Path P) {
   llvm::json::ObjectMapper O(E, P);
   return O && O.mapOptional("symbols", Out.symbols) &&
-    O.mapOptional("files", Out.files);
+         O.mapOptional("files", Out.files);
 }
 
 static bool fromJSON(const json::Value &E, CompartmentPolicy &Out,
@@ -236,7 +236,7 @@ static bool fromJSON(const json::Value &E, CompartmentPolicy &Out,
 
 void readCompartmentPolicy(MemoryBufferRef mb) {
   Expected<CompartmentPolicy> policy =
-    json::parse<CompartmentPolicy>(mb.getBuffer());
+      json::parse<CompartmentPolicy>(mb.getBuffer());
   if (!policy)
     fatal(Twine("failed to parse compartmentalization policy \"") +
           mb.getBufferIdentifier() + Twine("\": ") +
@@ -251,31 +251,28 @@ void readCompartmentPolicy(MemoryBufferRef mb) {
   config->compartmentPolicies.emplace_back(std::move(*policy));
 }
 
-static std::string compartmentName(const Compartment *c)
-{
+static std::string compartmentName(const Compartment *c) {
   if (c == defaultCompart)
     return "the default compartment";
   else
     return "compartment " + toString(c->name);
 }
 
-static std::string isecName(const InputSectionBase *s)
-{
+static std::string isecName(const InputSectionBase *s) {
   return "input section " + toString(s->file->getName()) + ":" +
-      toString(s->name);
+         toString(s->name);
 }
 
-static std::string symbolName(const Symbol *sym)
-{
+static std::string symbolName(const Symbol *sym) {
   if (sym->getName().empty())
     return "local symbol";
   else
     return "symbol " + toString(sym->getName());
 }
 
-static Compartment *compartmentForSection(const InputSectionBase *s,
-                                          const CompartmentLookup &symbolLookup)
-{
+static Compartment *
+compartmentForSection(const InputSectionBase *s,
+                      const CompartmentLookup &symbolLookup) {
   if (s->file == nullptr)
     return nullptr;
 
@@ -340,7 +337,7 @@ static Compartment *compartmentForSection(const InputSectionBase *s,
 // Returns true for sections that can be assigned to a compartment
 static bool canCompartmentalize(const InputSectionBase *s) {
   return s->name.startswith(".text") || s->name.startswith(".rodata") ||
-    s->name.startswith(".data") || s->name.startswith(".bss");
+         s->name.startswith(".data") || s->name.startswith(".bss");
 }
 
 // Returns a pointer to an exported symbol if a section contains exported
@@ -361,8 +358,7 @@ static Symbol *firstExportedSymbol(const InputSectionBase *s) {
   return nullptr;
 }
 
-static void checkDefaultCompartment()
-{
+static void checkDefaultCompartment() {
   bool valid = true;
   if (config->noDefaultCompartment) {
     for (InputSectionBase *s : ctx.inputSections) {
@@ -595,11 +591,10 @@ void assignSectionsToCompartments() {
             const Symbol *sym = pair.second;
 
             clist += "\n\t" + toString(compartmentName(c)) +
-              " directly accesses " + toString(symbolName(sym)) + " from " +
-              toString(isecName(s1));
+                     " directly accesses " + toString(symbolName(sym)) +
+                     " from " + toString(isecName(s1));
           }
-          error(isecName(s2) + " required by multiple compartments:" +
-                clist);
+          error(isecName(s2) + " required by multiple compartments:" + clist);
           valid = false;
           continue;
         }
@@ -775,5 +770,5 @@ void assignSectionsToCompartments() {
   checkDefaultCompartment();
 }
 
-}
-}
+} // namespace elf
+} // namespace lld

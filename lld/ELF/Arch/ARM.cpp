@@ -34,7 +34,8 @@ public:
                      const uint8_t *loc) const override;
   RelType getDynRel(RelType type) const override;
   int64_t getImplicitAddend(const uint8_t *buf, RelType type) const override;
-  void writeGotPlt(Compartment &c, uint8_t *buf, const Symbol &s) const override;
+  void writeGotPlt(Compartment &c, uint8_t *buf,
+                   const Symbol &s) const override;
   void writeIgotPlt(uint8_t *buf, const Symbol &s) const override;
   void writePltHeader(Compartment &c, uint8_t *buf) const override;
   void writePlt(Compartment &c, uint8_t *buf, const Symbol &sym,
@@ -308,8 +309,7 @@ void ARM::addPltSymbols(InputSection &isec, uint64_t off) const {
 }
 
 bool ARM::needsThunk(RelExpr expr, RelType type, const InputFile *file,
-                     const Compartment &c,
-                     uint64_t branchAddr, const Symbol &s,
+                     const Compartment &c, uint64_t branchAddr, const Symbol &s,
                      int64_t a) const {
   // If s is an undefined weak symbol and does not have a PLT entry then it will
   // be resolved as a branch to the next instruction. If it is hidden, its

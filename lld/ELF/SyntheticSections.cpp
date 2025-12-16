@@ -751,7 +751,8 @@ uint64_t GotSection::getTgotTlsDescAddr(const Symbol &sym) const {
 }
 
 uint64_t GotSection::getTgotGlobalDynAddr(const Symbol &b) const {
-  return this->getVA() + b.getTgotTlsGdIdx(getCompartment()) * target->gotEntrySize;
+  return this->getVA() +
+         b.getTgotTlsGdIdx(getCompartment()) * target->gotEntrySize;
 }
 
 uint64_t GotSection::getTgotGlobalDynOffset(const Symbol &b) const {
@@ -1516,7 +1517,8 @@ DynamicSection<ELFT>::computeContents() {
   // .rel[a].plt section.
   bool pltrel = false, aarch64_variant_pcs = false, riscv_variant_cc = false;
   auto addPlt = [&](const Compartment &c) {
-    if (!c.relaPlt->isNeeded() && (&c != defaultCompart || !in.relaIplt->isNeeded()))
+    if (!c.relaPlt->isNeeded() &&
+        (&c != defaultCompart || !in.relaIplt->isNeeded()))
       return;
     addInSec(DT_JMPREL, *c.relaPlt);
     addInt(DT_PLTRELSZ, addPltRelSz(c));
@@ -1529,8 +1531,8 @@ DynamicSection<ELFT>::computeContents() {
       break;
     case EM_AARCH64:
       if (llvm::find_if(c.relaPlt->relocs, [](const DynamicReloc &r) {
-           return r.type == target->pltRel &&
-                  r.sym->stOther & STO_AARCH64_VARIANT_PCS;
+            return r.type == target->pltRel &&
+                   r.sym->stOther & STO_AARCH64_VARIANT_PCS;
           }) != c.relaPlt->relocs.end())
         aarch64_variant_pcs = true;
       addInSec(DT_PLTGOT, *c.gotPlt);
@@ -1707,7 +1709,8 @@ DynamicSection<ELFT>::computeContents() {
   if (config->emachine == EM_PPC64 && defaultCompart->plt->isNeeded()) {
     // The Glink tag points to 32 bytes before the first lazy symbol resolution
     // stub, which starts directly after the header.
-    addInt(DT_PPC64_GLINK, defaultCompart->plt->getVA() + target->pltHeaderSize - 32);
+    addInt(DT_PPC64_GLINK,
+           defaultCompart->plt->getVA() + target->pltHeaderSize - 32);
   }
 
   if (config->emachine == EM_PPC64)
@@ -2800,7 +2803,8 @@ size_t PltSection::getSize() const {
 
 bool PltSection::isNeeded() const {
   // For -z retpolineplt, .iplt needs the .plt header.
-  return !entries.empty() || (config->zRetpolineplt && getCompartment().iplt->isNeeded());
+  return !entries.empty() ||
+         (config->zRetpolineplt && getCompartment().iplt->isNeeded());
 }
 
 // Used by ARM to add mapping symbols in the PLT section, which aid
@@ -2925,7 +2929,8 @@ IBTPltSection::IBTPltSection()
     : SyntheticSection(SHF_ALLOC | SHF_EXECINSTR, SHT_PROGBITS, 16, ".plt") {}
 
 void IBTPltSection::writeTo(uint8_t *buf) {
-  target->writeIBTPlt(getCompartment(), buf, getCompartment().plt->getNumEntries());
+  target->writeIBTPlt(getCompartment(), buf,
+                      getCompartment().plt->getNumEntries());
 }
 
 size_t IBTPltSection::getSize() const {

@@ -1045,8 +1045,7 @@ void InputSection::relocateNonAlloc(uint8_t *buf, ArrayRef<RelTy> rels) {
     // sections.
     if (expr == R_ABS || expr == R_DTPREL || expr == R_GOTPLTREL ||
         expr == R_RISCV_ADD) {
-      target.relocateNoSym(bufLoc, type,
-                           SignExtend64<bits>(sym.getVA(addend)));
+      target.relocateNoSym(bufLoc, type, SignExtend64<bits>(sym.getVA(addend)));
       continue;
     }
 

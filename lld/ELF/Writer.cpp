@@ -301,8 +301,8 @@ template <class ELFT> void elf::createSyntheticSections() {
   auto add = [](SyntheticSection &sec) { ctx.inputSections.push_back(&sec); };
 
   if (compartments.size() > 1)
-    in.compartStrTab = std::make_unique<StringTableSection>(".c18nstrtab",
-                                                            true);
+    in.compartStrTab =
+        std::make_unique<StringTableSection>(".c18nstrtab", true);
 
   in.shStrTab = std::make_unique<StringTableSection>(".shstrtab", false);
 
@@ -546,7 +546,8 @@ template <class ELFT> void elf::createSyntheticSections() {
   // dynamic loader reads .rel.plt after .rel.dyn, we can get the desired
   // behaviour by placing the iplt section in .rel.plt.
   in.relaIplt = std::make_unique<RelocationSection<ELFT>>(
-      config->androidPackDynRelocs ? defaultCompart->relaPlt->name : relaDynName,
+      config->androidPackDynRelocs ? defaultCompart->relaPlt->name
+                                   : relaDynName,
       /*sort=*/false, /*threadCount=*/1);
   add(*in.relaIplt);
 
@@ -844,8 +845,7 @@ template <class ELFT> void Writer<ELFT>::addSectionSymbols() {
 // bit unfortunate because section names shouldn't be significant in
 // ELF in spirit. But in reality many linker features depend on
 // magic section names.
-bool elf::isRelroSection(StringRef s)
-{
+bool elf::isRelroSection(StringRef s) {
   return s == ".data.rel.ro" || s == ".bss.rel.ro" || s == ".ctors" ||
          s == ".dtors" || s == ".jcr" || s == ".eh_frame" ||
          s == ".fini_array" || s == ".init_array" ||
@@ -1560,7 +1560,8 @@ void Writer<ELFT>::sortCheriPccPaddingSection(Compartment &c) {
   // Second, find the last CHERI PCC output section for this compartment.
   auto isPccSection = [&](SectionCommand *cmd) {
     auto *to = dyn_cast<OutputDesc>(cmd);
-    return to != nullptr && to->osec.compartment == c.getNumber() && to->osec.cheriPcc;
+    return to != nullptr && to->osec.compartment == c.getNumber() &&
+           to->osec.cheriPcc;
   };
 
   auto insertPos = llvm::find_if(script->sectionCommands, isPccSection);
@@ -2003,8 +2004,7 @@ static void markCheriPccSections() {
     // Ignore empty input sections
     if (s->getSize() == 0)
       continue;
-    if ((s->flags & (SHF_ALLOC | SHF_EXECINSTR)) ==
-        (SHF_ALLOC | SHF_EXECINSTR))
+    if ((s->flags & (SHF_ALLOC | SHF_EXECINSTR)) == (SHF_ALLOC | SHF_EXECINSTR))
       s->getCompartment().pccPadding->markNeeded();
   }
 

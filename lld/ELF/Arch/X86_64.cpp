@@ -30,7 +30,8 @@ public:
                      const uint8_t *loc) const override;
   RelType getDynRel(RelType type) const override;
   void writeGotPltHeader(uint8_t *buf) const override;
-  void writeGotPlt(Compartment &c, uint8_t *buf, const Symbol &s) const override;
+  void writeGotPlt(Compartment &c, uint8_t *buf,
+                   const Symbol &s) const override;
   void writeIgotPlt(uint8_t *buf, const Symbol &s) const override;
   void writePltHeader(Compartment &c, uint8_t *buf) const override;
   void writePlt(Compartment &c, uint8_t *buf, const Symbol &sym,
@@ -717,8 +718,7 @@ int64_t X86_64::getImplicitAddend(const uint8_t *buf, RelType type) const {
 
 static void relaxGot(uint8_t *loc, const Relocation &rel, uint64_t val);
 
-void X86_64::relocate(uint8_t *loc, const Relocation &rel,
-                      uint64_t val) const {
+void X86_64::relocate(uint8_t *loc, const Relocation &rel, uint64_t val) const {
   switch (rel.type) {
   case R_X86_64_8:
     checkIntUInt(loc, val, 8, rel);
@@ -1013,7 +1013,8 @@ namespace {
 class IntelIBT : public X86_64 {
 public:
   IntelIBT();
-  void writeGotPlt(Compartment &c, uint8_t *buf, const Symbol &s) const override;
+  void writeGotPlt(Compartment &c, uint8_t *buf,
+                   const Symbol &s) const override;
   void writePlt(Compartment &c, uint8_t *buf, const Symbol &sym,
                 uint64_t pltEntryAddr) const override;
   void writeIBTPlt(Compartment &c, uint8_t *buf,
@@ -1025,7 +1026,8 @@ public:
 
 IntelIBT::IntelIBT() { pltHeaderSize = 0; }
 
-void IntelIBT::writeGotPlt(Compartment &c, uint8_t *buf, const Symbol &s) const {
+void IntelIBT::writeGotPlt(Compartment &c, uint8_t *buf,
+                           const Symbol &s) const {
   uint64_t va =
       in.ibtPlt->getVA() + IBTPltHeaderSize + s.getPltIdx(c) * pltEntrySize;
   write64le(buf, va);
@@ -1075,7 +1077,8 @@ namespace {
 class Retpoline : public X86_64 {
 public:
   Retpoline();
-  void writeGotPlt(Compartment &c, uint8_t *buf, const Symbol &s) const override;
+  void writeGotPlt(Compartment &c, uint8_t *buf,
+                   const Symbol &s) const override;
   void writePltHeader(Compartment &c, uint8_t *buf) const override;
   void writePlt(Compartment &c, uint8_t *buf, const Symbol &sym,
                 uint64_t pltEntryAddr) const override;
@@ -1084,7 +1087,8 @@ public:
 class RetpolineZNow : public X86_64 {
 public:
   RetpolineZNow();
-  void writeGotPlt(Compartment &c, uint8_t *buf, const Symbol &s) const override {}
+  void writeGotPlt(Compartment &c, uint8_t *buf,
+                   const Symbol &s) const override {}
   void writePltHeader(Compartment &c, uint8_t *buf) const override;
   void writePlt(Compartment &c, uint8_t *buf, const Symbol &sym,
                 uint64_t pltEntryAddr) const override;
@@ -1097,7 +1101,8 @@ Retpoline::Retpoline() {
   ipltEntrySize = 32;
 }
 
-void Retpoline::writeGotPlt(Compartment &c, uint8_t *buf, const Symbol &s) const {
+void Retpoline::writeGotPlt(Compartment &c, uint8_t *buf,
+                            const Symbol &s) const {
   write64le(buf, s.getPltVA(c) + 17);
 }
 

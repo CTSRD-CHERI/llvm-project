@@ -815,8 +815,9 @@ uint64_t MipsCheriCapTableSection::assignIndices(uint64_t startIndex,
     // All capability call relocations should end up in the pltrel section
     // rather than the normal relocation section to make processing of PLT
     // relocations in RTLD more efficient.
-    RelocationBaseSection &dynRelSec =
-        it.second.usedInCallExpr ? *getCompartment().relaPlt : *mainPart->relaDyn;
+    RelocationBaseSection &dynRelSec = it.second.usedInCallExpr
+                                           ? *getCompartment().relaPlt
+                                           : *mainPart->relaDyn;
     if (targetSym->isPreemptible)
       dynRelSec.addSymbolReloc(elfCapabilityReloc, *this, off, *targetSym);
     else if (targetSym->isUndefWeak())

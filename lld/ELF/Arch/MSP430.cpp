@@ -59,8 +59,7 @@ RelExpr MSP430::getRelExpr(RelType type, const Symbol &s,
   }
 }
 
-void MSP430::relocate(uint8_t *loc, const Relocation &rel,
-                      uint64_t val) const {
+void MSP430::relocate(uint8_t *loc, const Relocation &rel, uint64_t val) const {
   switch (rel.type) {
   case R_MSP430_8:
     checkIntUInt(loc, val, 8, rel);

@@ -24,8 +24,8 @@
 
 #include "Driver.h"
 #include "Arch/Cheri.h"
-#include "Config.h"
 #include "Compartments.h"
+#include "Config.h"
 #include "ICF.h"
 #include "InputFiles.h"
 #include "InputSection.h"

@@ -81,12 +81,9 @@ LLVM_LIBRARY_VISIBILITY extern SmallVector<SymbolAux, 0> symAux;
 // Per-compartment data stored for each symbol.  Since each compartment has a
 // separate GOTs, this holds fields related to GOT and PLT entries.
 struct SymbolCompartAux {
-  SymbolCompartAux()
-      : isInIplt(false), gotInIgot(false)
-  {}
+  SymbolCompartAux() : isInIplt(false), gotInIgot(false) {}
 
-  SymbolCompartAux& operator=(const SymbolCompartAux &other)
-  {
+  SymbolCompartAux &operator=(const SymbolCompartAux &other) {
     if (this != &other) {
       flags.store(other.flags.load(std::memory_order_relaxed),
                   std::memory_order_relaxed);
@@ -122,8 +119,8 @@ struct SymbolCompartAux {
   }
 };
 
-typedef std::unordered_map<const Symbol *,
-                           std::unique_ptr<SymbolCompartAux>> SymCompartMap;
+typedef std::unordered_map<const Symbol *, std::unique_ptr<SymbolCompartAux>>
+    SymCompartMap;
 extern SymbolCompartAux defaultSymbolCompartAux;
 
 // XXX: This could be per-SymCompartMap
@@ -305,8 +302,12 @@ public:
     return symAux[auxIdx(c)].tgotTlsGdIdx;
   }
 
-  bool isInGot(const Compartment &c) const { return getGotIdx(c) != uint32_t(-1); }
-  bool isInPlt(const Compartment &c) const { return getPltIdx(c) != uint32_t(-1); }
+  bool isInGot(const Compartment &c) const {
+    return getGotIdx(c) != uint32_t(-1);
+  }
+  bool isInPlt(const Compartment &c) const {
+    return getPltIdx(c) != uint32_t(-1);
+  }
   bool isInAnyGot() const;
   bool isInAnyPlt() const;
 
@@ -360,9 +361,9 @@ protected:
   Symbol(Kind k, InputFile *file, StringRef name, uint8_t binding,
          uint8_t stOther, uint8_t type)
       : file(file), nameData(name.data()), nameSize(name.size()), type(type),
-        binding(binding), stOther(stOther), symbolKind(k), 
-        usedByDynReloc(false), isSectionStartSymbol(false), 
-	exportDynamic(false), needsCopyAny(false) {}
+        binding(binding), stOther(stOther), symbolKind(k),
+        usedByDynReloc(false), isSectionStartSymbol(false),
+        exportDynamic(false), needsCopyAny(false) {}
 
   void overwrite(Symbol &sym, Kind k) const {
     if (sym.traced)

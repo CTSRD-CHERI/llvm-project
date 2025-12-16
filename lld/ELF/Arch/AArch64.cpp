@@ -36,7 +36,8 @@ public:
                      const uint8_t *loc) const override;
   RelType getDynRel(RelType type) const override;
   int64_t getImplicitAddend(const uint8_t *buf, RelType type) const override;
-  void writeGotPlt(Compartment &c, uint8_t *buf, const Symbol &s) const override;
+  void writeGotPlt(Compartment &c, uint8_t *buf,
+                   const Symbol &s) const override;
   void writeIgotPlt(uint8_t *buf, const Symbol &s) const override;
   void writePltHeader(Compartment &c, uint8_t *buf) const override;
   void writePlt(Compartment &c, uint8_t *buf, const Symbol &sym,
@@ -278,9 +279,8 @@ void AArch64::writePlt(Compartment &c, uint8_t *buf, const Symbol &sym,
 }
 
 bool AArch64::needsThunk(RelExpr expr, RelType type, const InputFile *file,
-                         const Compartment &c,
-                         uint64_t branchAddr, const Symbol &s,
-                         int64_t a) const {
+                         const Compartment &c, uint64_t branchAddr,
+                         const Symbol &s, int64_t a) const {
   // If s is an undefined weak symbol and does not have a PLT entry then it will
   // be resolved as a branch to the next instruction. If it is hidden, its
   // binding has been converted to local, so we just check isUndefined() here. A
@@ -520,8 +520,7 @@ void AArch64::relocate(uint8_t *loc, const Relocation &rel,
   }
 }
 
-void AArch64::relaxTlsGdToLe(uint8_t *loc,
-                             const Relocation &rel,
+void AArch64::relaxTlsGdToLe(uint8_t *loc, const Relocation &rel,
                              uint64_t val) const {
   // TLSDESC Global-Dynamic relocation are in the form:
   //   adrp    x0, :tlsdesc:v             [R_AARCH64_TLSDESC_ADR_PAGE21]
@@ -552,8 +551,7 @@ void AArch64::relaxTlsGdToLe(uint8_t *loc,
   }
 }
 
-void AArch64::relaxTlsGdToIe(uint8_t *loc,
-                             const Relocation &rel,
+void AArch64::relaxTlsGdToIe(uint8_t *loc, const Relocation &rel,
                              uint64_t val) const {
   // TLSDESC Global-Dynamic relocation are in the form:
   //   adrp    x0, :tlsdesc:v             [R_AARCH64_TLSDESC_ADR_PAGE21]
@@ -585,8 +583,7 @@ void AArch64::relaxTlsGdToIe(uint8_t *loc,
   }
 }
 
-void AArch64::relaxTlsIeToLe(uint8_t *loc,
-                             const Relocation &rel,
+void AArch64::relaxTlsIeToLe(uint8_t *loc, const Relocation &rel,
                              uint64_t val) const {
   checkUInt(loc, val, 32, rel);
 

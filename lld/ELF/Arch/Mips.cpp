@@ -32,7 +32,8 @@ public:
                      const uint8_t *loc) const override;
   int64_t getImplicitAddend(const uint8_t *buf, RelType type) const override;
   RelType getDynRel(RelType type) const override;
-  void writeGotPlt(Compartment &c, uint8_t *buf, const Symbol &s) const override;
+  void writeGotPlt(Compartment &c, uint8_t *buf,
+                   const Symbol &s) const override;
   void writePltHeader(Compartment &c, uint8_t *buf) const override;
   void writePlt(Compartment &c, uint8_t *buf, const Symbol &sym,
                 uint64_t pltEntryAddr) const override;
@@ -306,8 +307,8 @@ static void writeMicroRelocation16(uint8_t *loc, uint64_t v, uint8_t bitsSize,
   write16(loc, data);
 }
 
-template <class ELFT> void MIPS<ELFT>::writePltHeader(Compartment &c,
-                                                      uint8_t *buf) const {
+template <class ELFT>
+void MIPS<ELFT>::writePltHeader(Compartment &c, uint8_t *buf) const {
   if (isMicroMips()) {
     uint64_t gotPlt = c.gotPlt->getVA();
     uint64_t plt = c.plt->getVA();
@@ -408,9 +409,8 @@ void MIPS<ELFT>::writePlt(Compartment &c, uint8_t *buf, const Symbol &sym,
 
 template <class ELFT>
 bool MIPS<ELFT>::needsThunk(RelExpr expr, RelType type, const InputFile *file,
-                            const Compartment &c,
-                            uint64_t branchAddr, const Symbol &s,
-                            int64_t /*a*/) const {
+                            const Compartment &c, uint64_t branchAddr,
+                            const Symbol &s, int64_t /*a*/) const {
   // Any MIPS PIC code function is invoked with its address in register $t9.
   // So if we have a branch instruction from non-PIC code to the PIC one
   // we cannot make the jump directly and need to create a small stubs
@@ -622,8 +622,7 @@ static uint64_t fixupCrossModeJump(uint8_t *loc, RelType type, uint64_t val) {
 }
 
 template <class ELFT>
-void MIPS<ELFT>::relocate(uint8_t *loc,
-                          const Relocation &rel,
+void MIPS<ELFT>::relocate(uint8_t *loc, const Relocation &rel,
                           uint64_t val) const {
   const endianness e = ELFT::TargetEndianness;
   RelType type = rel.type;

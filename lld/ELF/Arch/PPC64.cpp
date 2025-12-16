@@ -175,22 +175,17 @@ public:
   RelExpr adjustTlsExpr(RelType type, RelExpr expr) const override;
   RelExpr adjustGotPcExpr(RelType type, int64_t addend,
                           const uint8_t *loc) const override;
-  void relaxGot(uint8_t *loc, const Relocation &rel,
-                uint64_t val) const;
+  void relaxGot(uint8_t *loc, const Relocation &rel, uint64_t val) const;
   void relocateAlloc(InputSectionBase &sec, uint8_t *buf) const override;
 
   bool adjustPrologueForCrossSplitStack(uint8_t *loc, uint8_t *end,
                                         uint8_t stOther) const override;
 
 private:
-  void relaxTlsGdToIe(uint8_t *loc, const Relocation &rel,
-                      uint64_t val) const;
-  void relaxTlsGdToLe(uint8_t *loc, const Relocation &rel,
-                      uint64_t val) const;
-  void relaxTlsLdToLe(uint8_t *loc, const Relocation &rel,
-                      uint64_t val) const;
-  void relaxTlsIeToLe(uint8_t *loc, const Relocation &rel,
-                      uint64_t val) const;
+  void relaxTlsGdToIe(uint8_t *loc, const Relocation &rel, uint64_t val) const;
+  void relaxTlsGdToLe(uint8_t *loc, const Relocation &rel, uint64_t val) const;
+  void relaxTlsLdToLe(uint8_t *loc, const Relocation &rel, uint64_t val) const;
+  void relaxTlsIeToLe(uint8_t *loc, const Relocation &rel, uint64_t val) const;
 };
 } // namespace
 
@@ -638,8 +633,7 @@ uint32_t PPC64::calcEFlags() const {
   return 2;
 }
 
-void PPC64::relaxGot(uint8_t *loc, const Relocation &rel,
-                     uint64_t val) const {
+void PPC64::relaxGot(uint8_t *loc, const Relocation &rel, uint64_t val) const {
   switch (rel.type) {
   case R_PPC64_TOC16_HA:
     // Convert "addis reg, 2, .LC0@toc@h" to "addis reg, 2, var@toc@h" or "nop".
@@ -703,8 +697,7 @@ void PPC64::relaxGot(uint8_t *loc, const Relocation &rel,
   }
 }
 
-void PPC64::relaxTlsGdToLe(uint8_t *loc,
-                           const Relocation &rel,
+void PPC64::relaxTlsGdToLe(uint8_t *loc, const Relocation &rel,
                            uint64_t val) const {
   // Reference: 3.7.4.2 of the 64-bit ELF V2 abi supplement.
   // The general dynamic code sequence for a global `x` will look like:
@@ -767,8 +760,7 @@ void PPC64::relaxTlsGdToLe(uint8_t *loc,
   }
 }
 
-void PPC64::relaxTlsLdToLe(uint8_t *loc,
-                           const Relocation &rel,
+void PPC64::relaxTlsLdToLe(uint8_t *loc, const Relocation &rel,
                            uint64_t val) const {
   // Reference: 3.7.4.3 of the 64-bit ELF V2 abi supplement.
   // The local dynamic code sequence for a global `x` will look like:
@@ -858,8 +850,7 @@ unsigned elf::getPPCDFormOp(unsigned secondaryOp) {
   }
 }
 
-void PPC64::relaxTlsIeToLe(uint8_t *loc,
-                           const Relocation &rel,
+void PPC64::relaxTlsIeToLe(uint8_t *loc, const Relocation &rel,
                            uint64_t val) const {
   // The initial exec code sequence for a global `x` will look like:
   // Instruction                    Relocation                Symbol
@@ -1218,8 +1209,7 @@ static bool isTocOptType(RelType type) {
   }
 }
 
-void PPC64::relocate(uint8_t *loc, const Relocation &rel,
-                     uint64_t val) const {
+void PPC64::relocate(uint8_t *loc, const Relocation &rel, uint64_t val) const {
   RelType type = rel.type;
   bool shouldTocOptimize =  isTocOptType(type);
   // For dynamic thread pointer relative, toc-relative, and got-indirect
@@ -1386,8 +1376,8 @@ void PPC64::relocate(uint8_t *loc, const Relocation &rel,
 }
 
 bool PPC64::needsThunk(RelExpr expr, RelType type, const InputFile *file,
-                       const Compartment &c,
-                       uint64_t branchAddr, const Symbol &s, int64_t a) const {
+                       const Compartment &c, uint64_t branchAddr,
+                       const Symbol &s, int64_t a) const {
   if (type != R_PPC64_REL14 && type != R_PPC64_REL24 &&
       type != R_PPC64_REL24_NOTOC)
     return false;
@@ -1473,8 +1463,7 @@ RelExpr PPC64::adjustGotPcExpr(RelType type, int64_t addend,
 //    thread pointer.
 // Since the nop must directly follow the call, the R_PPC64_TLSGD relocation is
 // used as the relaxation hint for both steps 2 and 3.
-void PPC64::relaxTlsGdToIe(uint8_t *loc,
-                           const Relocation &rel,
+void PPC64::relaxTlsGdToIe(uint8_t *loc, const Relocation &rel,
                            uint64_t val) const {
   switch (rel.type) {
   case R_PPC64_GOT_TLSGD16_HA:

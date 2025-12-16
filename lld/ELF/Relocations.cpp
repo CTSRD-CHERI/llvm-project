@@ -1124,7 +1124,8 @@ bool RelocationScanner::isStaticLinkTimeConstant(RelExpr e, RelType type,
 void RelocationScanner::processAux(RelExpr expr, RelType type, uint64_t offset,
                                    Symbol &sym, int64_t addend) const {
   Compartment *symCompartment = sym.containingCompartment();
-  bool crossCompartment = symCompartment && symCompartment != &sec->getCompartment();
+  bool crossCompartment =
+      symCompartment && symCompartment != &sec->getCompartment();
 
   // If non-ifunc non-preemptible, change PLT to direct call and optimize GOT
   // indirection.
@@ -2014,8 +2015,8 @@ void elf::postScanRelocations() {
           mainPart->relaDyn->addReloc(
               {target->tlsModuleIndexRel, got, got->getTlsIndexOff()});
         else
-          got->addConstant(
-              {R_ADDEND, target->symbolicRel, got->getTlsIndexOff(), 1, &dummy});
+          got->addConstant({R_ADDEND, target->symbolicRel,
+                            got->getTlsIndexOff(), 1, &dummy});
       }
     }
   }
@@ -2477,12 +2478,13 @@ bool ThunkCreator::createThunks(uint32_t pass,
             // If we are a relocation to an existing Thunk, check if it is
             // still in range. If not then Rel will be altered to point to its
             // original target so another Thunk can be generated.
-            if (pass > 0 && normalizeExistingThunk(isec->getCompartment(), rel, src))
+            if (pass > 0 &&
+                normalizeExistingThunk(isec->getCompartment(), rel, src))
               continue;
 
             if (!target->needsThunk(rel.expr, rel.type, isec->file,
-                                    isec->getCompartment(), src,
-                                    *rel.sym, rel.addend))
+                                    isec->getCompartment(), src, *rel.sym,
+                                    rel.addend))
               continue;
 
             Thunk *t;

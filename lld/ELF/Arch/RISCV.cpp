@@ -36,7 +36,8 @@ public:
   uint64_t getCheriRequiredAlignment(uint64_t len) const override;
   int64_t getImplicitAddend(const uint8_t *buf, RelType type) const override;
   void writeGotHeader(uint8_t *buf) const override;
-  void writeGotPlt(Compartment &c, uint8_t *buf, const Symbol &s) const override;
+  void writeGotPlt(Compartment &c, uint8_t *buf,
+                   const Symbol &s) const override;
   void writeIgotPlt(uint8_t *buf, const Symbol &s) const override;
   void writePltHeader(Compartment &c, uint8_t *buf) const override;
   void writePlt(Compartment &c, uint8_t *buf, const Symbol &sym,
@@ -406,8 +407,7 @@ RelExpr RISCV::getRelExpr(const RelType type, const Symbol &s,
   }
 }
 
-void RISCV::relocate(uint8_t *loc, const Relocation &rel,
-                     uint64_t val) const {
+void RISCV::relocate(uint8_t *loc, const Relocation &rel, uint64_t val) const {
   const unsigned bits = config->wordsize * 8;
 
   switch (rel.type) {
@@ -720,7 +720,8 @@ static void relaxCall(const InputSection &sec, size_t i, uint64_t loc,
   const uint64_t insnPair = read64le(sec.content().data() + r.offset);
   const uint32_t rd = extractBits(insnPair, 32 + 11, 32 + 7);
   const uint64_t dest =
-      (r.expr == R_PLT_PC ? sym.getPltVA(sec.getCompartment()) : sym.getVA()) + r.addend;
+      (r.expr == R_PLT_PC ? sym.getPltVA(sec.getCompartment()) : sym.getVA()) +
+      r.addend;
   const int64_t displace = dest - loc;
 
   if (rvc && isInt<12>(displace) && rd == 0) {
