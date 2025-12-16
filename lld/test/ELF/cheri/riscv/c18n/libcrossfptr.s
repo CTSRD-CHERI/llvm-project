@@ -14,18 +14,19 @@
 # SECTIONS:	  [ 8] .text.one
 # SECTIONS:	  [ 9] .got.one
 # SECTIONS-NEXT:       PROGBITS        0000000000003580
-# SECTIONS:	  [10] .text.two
-# SECTIONS:	  [11] .got.two
+# SECTIONS:	  [11] .text.two
+# SECTIONS:	  [12] .got.two
 # SECTIONS-NEXT:       PROGBITS        00000000000055b0
 
 # SYMBOLS-LABEL: Symbol table '.symtab'
 # SYMBOLS:	    3: 0000000000002568     8 FUNC    LOCAL  HIDDEN      8 dice_roll
 # SYMBOLS:          5: 0000000000002570    12 FUNC    GLOBAL DEFAULT     8 one_func
-# SYMBOLS-NEXT:     6: 00000000000045a0    12 FUNC    GLOBAL DEFAULT    10 two_func
+# SYMBOLS-NEXT:     6: 00000000000045a0    12 FUNC    GLOBAL DEFAULT    11 two_func
 
-# CAPRELOCS-LABEL: CHERI __cap_relocs [
-# CAPRELOCS-NEXT:     0x003590 Base: 0x2568 (dice_roll+0) Length: 8 Perms: Function
-# CAPRELOCS-NEXT:     0x0055c0 Base: 0x2568 (dice_roll+0) Length: 8 Perms: Function
+# CAPRELOCS-LABEL: CHERI capability relocation section '__cap_relocs' at offset {{.+}} contains 2 entries:
+# CAPRELOCS-NEXT:      Offset             Info         Type        Value
+# CAPRELOCS-NEXT:  0000000000003590  8000000000000000 FUNC    0000000000002568 [0000000000002568-00000000000035a0]
+# CAPRELOCS-NEXT:  00000000000055c0  8000000000000000 FUNC    0000000000002568 [0000000000002568-00000000000035a0]
 
 #--- dice.s
 

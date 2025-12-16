@@ -82,24 +82,24 @@
 # SEGMENTS-NEXT:   09     .got.plt.two
 # SEGMENTS-NEXT:   10     .tbss
 # SEGMENTS-NEXT:   11     .dynamic
-# SEGMENTS-NEXT:   12     .text.one .got.one .pad.cheri.pcc.one .bss.one
-# SEGMENTS-NEXT:   13     .rela.plt.two .rodata.two .text.two .plt.two .got.two .got.plt.two .pad.cheri.pcc.two
+# SEGMENTS-NEXT:   12     .text.one .got.one .bss.one
+# SEGMENTS-NEXT:   13     .rela.plt.two .rodata.two .text.two .plt.two .got.two .got.plt.two
 # SEGMENTS-NEXT:   14     .dynamic
 # SEGMENTS-NEXT:   15     .got.one
 # SEGMENTS-NEXT:   16     .got.two
 # SEGMENTS-NEXT:   17     .text.one .got.one
 # SEGMENTS-NEXT:   18     .rodata.two .text.two .plt.two .got.two .got.plt.two
 # SEGMENTS-NEXT:   19
-# SEGMENTS-NEXT:   None   .comment .symtab .shstrtab .strtab
+# SEGMENTS-NEXT:   None   .pad.cheri.pcc.one .pad.cheri.pcc.two .comment .symtab .shstrtab .strtab
 
 # SYMBOLS-LABEL: Symbol table '.dynsym'
 # SYMBOLS:	 3: 0000000000002820    16 FUNC    GLOBAL DEFAULT    10 set_counter
 # SYMBOLS-NEXT:  4: 0000000000002830    24 FUNC    GLOBAL DEFAULT    10 increment_counter
 # SYMBOLS-NEXT:  5: 0000000000002848    24 FUNC    GLOBAL DEFAULT    10 decrement_counter
-# SYMBOLS-NEXT:  6: 00000000000068c8    84 FUNC    GLOBAL DEFAULT    15 counter_str
+# SYMBOLS-NEXT:  6: 00000000000068c8    84 FUNC    GLOBAL DEFAULT    16 counter_str
 
 # SYMBOLS-LABEL: Symbol table '.symtab'
-# SYMBOLS:	 3: 0000000000004880     4 OBJECT  LOCAL  HIDDEN     12 counter
+# SYMBOLS:	 3: 0000000000004880     4 OBJECT  LOCAL  HIDDEN     13 counter
 # SYMBOLS:	 5: 0000000000000000   128 TLS     LOCAL  DEFAULT     8 counter_buffer
 
 # DYNAMIC-LABEL: Dynamic section
