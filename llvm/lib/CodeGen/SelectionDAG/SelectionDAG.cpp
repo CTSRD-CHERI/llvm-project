@@ -7324,7 +7324,7 @@ diagnoseInefficientCheriMemOp(SelectionDAG &DAG, const DiagnosticLocation &Loc,
   DiagnosticInfoCheriInefficient Warning(
       DAG.getMachineFunction().getFunction(), Loc,
       MemOp + " operation with capability argument " + Type +
-          " and underaligned destination (aligned to " + Twine(Align) +
+          " and underaligned source/destination (aligned to " + Twine(Align) +
           " bytes) may be inefficient or result in CHERI tags bits being "
           "stripped");
   DAG.getContext()->diagnose(Warning);
