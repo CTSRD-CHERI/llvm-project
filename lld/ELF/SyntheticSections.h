@@ -1420,7 +1420,7 @@ inline const SymbolCompartAux &Symbol::compartAux(const Compartment &c) const {
   return it == map.end() ? defaultSymbolCompartAux : *it->second.get();
 }
 
-inline SymbolCompartAux &Symbol::compartAux(Compartment &c) {
+inline SymbolCompartAux &Symbol::mutableCompartAux(Compartment &c) {
   // XXX: This should possibly by an assertion to require the caller
   // to hold the lock so that it also protects the caller's operations
   // on the compartAux, but C++ people don't believe in lock assertions,

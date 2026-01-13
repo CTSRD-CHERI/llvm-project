@@ -334,8 +334,13 @@ static void replaceWithDefined(Symbol &sym, SectionBase &sec, uint64_t value,
 
   // A copy relocated alias may need a GOT entry.
   // NB: compartAux not copied for old, but preserved on sym; modify in-place.
-  for (Compartment &c : compartments)
-    sym.compartAux(c).flags.fetch_and(NEEDS_GOT, std::memory_order_relaxed);
+  for (Compartment &c : compartments) {
+    const SymbolCompartAux &aux = sym.compartAux(c);
+    if (&aux == &defaultSymbolCompartAux)
+      continue;
+    const_cast<SymbolCompartAux &>(aux).flags.fetch_and(
+        NEEDS_GOT, std::memory_order_relaxed);
+  }
   sym.needsCopyAny = false;
 }
 
@@ -1814,7 +1819,7 @@ static bool handleNonPreemptibleIfunc(Compartment &c, Symbol &sym,
   if (!(flags & (NEEDS_GOT | NEEDS_PLT | HAS_DIRECT_RELOC)))
     return true;
 
-  SymbolCompartAux &aux = sym.compartAux(c);
+  SymbolCompartAux &aux = sym.mutableCompartAux(c);
   aux.isInIplt = true;
 
   // Create an Iplt and the associated IRELATIVE relocation pointing to the
@@ -1822,7 +1827,7 @@ static bool handleNonPreemptibleIfunc(Compartment &c, Symbol &sym,
   // may alter section/value, so create a copy of the symbol to make
   // section/value fixed.
   auto *directSym = makeDefined(cast<Defined>(sym));
-  SymbolCompartAux &directAux = directSym->compartAux(c);
+  SymbolCompartAux &directAux = directSym->mutableCompartAux(c);
   directAux = aux;
   directSym->allocateAux(c);
   addPltEntry(*c.iplt, *c.igotPlt, *in.relaIplt, target->iRelativeRel,
@@ -1873,7 +1878,7 @@ static bool handleCrossCompartmentCall(Compartment &c, Symbol &sym,
   if (symCompartment == &c)
     return false;
 
-  SymbolCompartAux &aux = sym.compartAux(c);
+  SymbolCompartAux &aux = sym.mutableCompartAux(c);
   aux.isInIplt = true;
 
   // Create an Iplt entry and the associated RELATIVE relocation.
@@ -1890,7 +1895,7 @@ static bool handleCrossCompartmentCall(Compartment &c, Symbol &sym,
 
 void elf::postScanRelocations() {
   auto fn = [](Compartment &c, Symbol &sym) {
-    SymbolCompartAux &aux = sym.compartAux(c);
+    const SymbolCompartAux &aux = sym.compartAux(c);
     auto flags = aux.flags.load(std::memory_order_relaxed);
     if (handleNonPreemptibleIfunc(c, sym, flags))
       return;
@@ -1917,7 +1922,7 @@ void elf::postScanRelocations() {
                              target->pltHeaderSize +
                                  target->pltEntrySize * sym.getPltIdx(c),
                              0);
-          aux.setFlags(NEEDS_COPY);
+          const_cast<SymbolCompartAux &>(aux).setFlags(NEEDS_COPY);
           sym.needsCopyAny = true;
           if (config->emachine == EM_PPC) {
             // XXXJHB: This would need to be per-compartment

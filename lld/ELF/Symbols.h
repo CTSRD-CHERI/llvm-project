@@ -273,7 +273,7 @@ public:
 
   const SymbolCompartAux &compartAux(const Compartment &c) const;
 
-  SymbolCompartAux &compartAux(Compartment &c);
+  SymbolCompartAux &mutableCompartAux(Compartment &c);
 
   uint32_t auxIdx(const Compartment &c) const { return compartAux(c).auxIdx; }
 
@@ -407,7 +407,7 @@ public:
   uint16_t versionId;
 
   void setFlags(Compartment &c, uint16_t bits) {
-    SymbolCompartAux &aux = compartAux(c);
+    SymbolCompartAux &aux = mutableCompartAux(c);
     aux.setFlags(bits);
   }
   bool hasFlag(const Compartment &c, uint16_t bit) const {
@@ -424,7 +424,7 @@ public:
             NEEDS_TGOT_TLSGD | NEEDS_TGOT_TLSDESC);
   }
   void allocateAux(Compartment &c) {
-    SymbolCompartAux &aux = compartAux(c);
+    SymbolCompartAux &aux = mutableCompartAux(c);
     assert(aux.auxIdx == 0);
     aux.auxIdx = symAux.size();
     symAux.emplace_back();
