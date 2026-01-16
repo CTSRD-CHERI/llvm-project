@@ -601,13 +601,7 @@ static Relocation *getRISCVPCRelHi20(const Symbol *sym, uint64_t addend) {
   return nullptr;
 }
 
-// A TLS symbol's virtual address is relative to the TLS segment. Add a
-// target-specific adjustment to produce a thread-pointer-relative offset.
-static int64_t getTlsTpOffset(const Symbol &s) {
-  // On targets that support TLSDESC, _TLS_MODULE_BASE_@tpoff = 0.
-  if (&s == ElfSym::tlsModuleBase)
-    return 0;
-
+static int64_t getTpOffset(uint64_t va, PhdrEntry *p) {
   // There are 2 TLS layouts. Among targets we support, x86 uses TLS Variant 2
   // while most others use Variant 1. At run time TP will be aligned to p_align.
 
@@ -619,13 +613,15 @@ static int64_t getTlsTpOffset(const Symbol &s) {
   // Variant 2. Static TLS blocks, followed by alignment padding are placed
   // before TP. The alignment padding is added so that (TP - padding -
   // p_memsz) is congruent to p_vaddr modulo p_align.
-  PhdrEntry *tls = Out::tlsPhdr;
+  //
+  // For TGOT-based TLS, this function instead considers the static TGOT
+  // accessed via TP, rather than the TLS data itself.
   switch (config->emachine) {
     // Variant 1.
   case EM_ARM:
   case EM_AARCH64:
-    return s.getVA(0) + config->wordsize * 2 +
-           ((tls->p_vaddr - config->wordsize * 2) & (tls->p_align - 1));
+    return va + config->wordsize * 2 +
+           ((p->p_vaddr - config->wordsize * 2) & (p->p_align - 1));
   case EM_MIPS:
   case EM_PPC:
   case EM_PPC64:
@@ -635,25 +631,36 @@ static int64_t getTlsTpOffset(const Symbol &s) {
     //
     // For CheriABI we always use an offset of 0 to stay representable.
     if (!config->isCheriAbi)
-      return s.getVA(0) + (tls->p_vaddr & (tls->p_align - 1)) - 0x7000;
+      return va + (p->p_vaddr & (p->p_align - 1)) - 0x7000;
     LLVM_FALLTHROUGH;
   case EM_LOONGARCH:
   case EM_RISCV:
-    return s.getVA(0) + (tls->p_vaddr & (tls->p_align - 1));
+    return va + (p->p_vaddr & (p->p_align - 1));
 
     // Variant 2.
   case EM_HEXAGON:
   case EM_SPARCV9:
   case EM_386:
   case EM_X86_64:
-    return s.getVA(0) - tls->p_memsz -
-           ((-tls->p_vaddr - tls->p_memsz) & (tls->p_align - 1));
+    return va - p->p_memsz - ((-p->p_vaddr - p->p_memsz) & (p->p_align - 1));
   default:
     llvm_unreachable("unhandled Config->EMachine");
   }
 }
 
-static int64_t getTlsTgotOffset(const Symbol &s) { return s.getTgotVA(); }
+// A TLS symbol's virtual address is relative to the TLS segment. Add a
+// target-specific adjustment to produce a thread-pointer-relative offset.
+static int64_t getTlsTpOffset(const Symbol &s) {
+  // On targets that support TLSDESC, _TLS_MODULE_BASE_@tpoff = 0.
+  if (&s == ElfSym::tlsModuleBase)
+    return 0;
+
+  return getTpOffset(s.getVA(0), Out::tlsPhdr);
+}
+
+static int64_t getTgotTpOffset(const Symbol &s) {
+  return getTpOffset(s.getTgotVA(), Out::tgotPhdr);
+}
 
 uint64_t InputSectionBase::getRelocTargetVA(const InputFile *file, RelType type,
                                             int64_t a, uint64_t p,
@@ -870,7 +877,7 @@ uint64_t InputSectionBase::getRelocTargetVA(const InputFile *file, RelType type,
   case R_TGOT_TP:
   case R_RELAX_TGOT_TLS_GD_TO_LE:
   case R_RELAX_TGOT_TLS_IE_TO_LE:
-    return getTlsTgotOffset(sym) + a;
+    return getTgotTpOffset(sym) + a;
   case R_TGOT_GOT:
   case R_RELAX_TGOT_TLS_GD_TO_IE_ABS:
     return in.got->getTgotAddr(sym) + a;
