@@ -620,8 +620,8 @@ static int64_t getTpOffset(uint64_t va, PhdrEntry *p) {
     // Variant 1.
   case EM_ARM:
   case EM_AARCH64:
-    return va + config->wordsize * 2 +
-           ((p->p_vaddr - config->wordsize * 2) & (p->p_align - 1));
+    return va + target->gotEntrySize * 2 +
+           ((p->p_vaddr - target->gotEntrySize * 2) & (p->p_align - 1));
   case EM_MIPS:
   case EM_PPC:
   case EM_PPC64:
