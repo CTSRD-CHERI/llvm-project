@@ -282,6 +282,7 @@ template <class ELFT> void elf::createSyntheticSections() {
   // Initialize all pointers with NULL. This is needed because
   // you can call lld::elf::main more than once as a library.
   Out::tlsPhdr = nullptr;
+  Out::tgotPhdr = nullptr;
   Out::preinitArray = nullptr;
   Out::initArray = nullptr;
   Out::finiArray = nullptr;
@@ -2327,9 +2328,12 @@ template <class ELFT> void Writer<ELFT>::finalizeSections() {
     // Android relocation packing can look up TLS symbol addresses. We only need
     // to care about the main partition here because all TLS symbols were moved
     // to the main partition (see MarkLive.cpp).
-    for (PhdrEntry *p : mainPart->phdrs)
+    for (PhdrEntry *p : mainPart->phdrs) {
       if (p->p_type == PT_TLS)
         Out::tlsPhdr = p;
+      if (p->p_type == PT_CHERI_TGOT)
+        Out::tgotPhdr = p;
+    }
   }
 
   // Some symbols are defined in term of program headers. Now that we

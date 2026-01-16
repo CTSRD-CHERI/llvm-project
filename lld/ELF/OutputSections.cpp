@@ -38,6 +38,7 @@ using namespace lld::elf;
 
 uint8_t *Out::bufferStart;
 PhdrEntry *Out::tlsPhdr;
+PhdrEntry *Out::tgotPhdr;
 OutputSection *Out::elfHeader;
 OutputSection *Out::programHeaders;
 OutputSection *Out::preinitArray;

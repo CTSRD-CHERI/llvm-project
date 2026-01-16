@@ -267,7 +267,8 @@ uint64_t Symbol::getPltVA() const {
 }
 
 uint64_t Symbol::getTgotVA() const {
-  return in.tgot->getVA() + getTgotOffset();
+  // Like TLS symbols, the TGOT VA is the offset within the TGOT address space.
+  return in.tgot->getVA() + getTgotOffset() - Out::tgotPhdr->firstSec->addr;
 }
 
 uint64_t Symbol::getTgotOffset() const {

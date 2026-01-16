@@ -151,6 +151,7 @@ getInputSections(const OutputSection &os,
 struct Out {
   static uint8_t *bufferStart;
   static PhdrEntry *tlsPhdr;
+  static PhdrEntry *tgotPhdr;
   static OutputSection *elfHeader;
   static OutputSection *programHeaders;
   static OutputSection *preinitArray;
