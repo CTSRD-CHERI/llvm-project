@@ -278,12 +278,6 @@ void CheriCapRelocsSection::addReloc(
             " is less than 0:\n>>> Location: " + loc.toString() +
             "\n>>> Target: " + target.verboseToString());
 
-  bool canWriteLoc = (loc.section->flags & SHF_WRITE) || !config->zText;
-  if (!canWriteLoc) {
-    readOnlyCapRelocsError(*target.sym(), "\n>>> referenced by " + sourceMsg());
-    return;
-  }
-
   bool isCode = type == elf::target->symbolicCodeCapRel;
   addEntry(loc, {isCode, target, addend});
 }
