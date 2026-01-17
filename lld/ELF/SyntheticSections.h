@@ -399,10 +399,10 @@ public:
   void addEntry(Symbol &sym);
   size_t getSize() const override;
   void writeTo(uint8_t *buf) override;
-  bool isNeeded() const override { return !entries.empty(); }
+  bool isNeeded() const override { return numEntries > 0; }
 
 private:
-  SmallVector<const Symbol *, 0> entries;
+  size_t numEntries = 0;
 };
 
 class StringTableSection final : public SyntheticSection {
