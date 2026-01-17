@@ -1293,8 +1293,8 @@ void IgotPltSection::writeTo(uint8_t *buf) {
 }
 
 TgotSection::TgotSection()
-    : SyntheticSection(SHF_ALLOC | SHF_WRITE, SHT_PROGBITS,
-                       target->gotEntrySize, ".tgot") {}
+    : SyntheticSection(SHF_ALLOC, SHT_PROGBITS, target->gotEntrySize, ".tgot") {
+}
 
 void TgotSection::addConstant(const Relocation &r) { relocations.push_back(r); }
 void TgotSection::addEntry(Symbol &sym) {
