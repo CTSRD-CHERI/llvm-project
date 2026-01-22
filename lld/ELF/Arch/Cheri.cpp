@@ -494,7 +494,7 @@ void CheriCapRelocsSection::writeToImpl(uint8_t *buf) {
     uint64_t targetVA;
     bool isCode = reloc.isCode;
     if (Symbol *s = dyn_cast<Symbol *>(realTarget.symOrSec))
-      targetVA = realTarget.sym()->getVA(0);
+      targetVA = s->getVA(0);
     else {
       InputSectionBase *isec = cast<InputSectionBase *>(realTarget.symOrSec);
       targetVA = isec->getVA(0);
