@@ -28,6 +28,7 @@
 #include "clang/AST/StmtVisitor.h"
 #include "clang/AST/RecursiveASTVisitor.h"
 #include "clang/AST/Type.h"
+#include "clang/AST/RecordLayout.h"
 #include "clang/Analysis/Analyses/CFGReachabilityAnalysis.h"
 #include "clang/Analysis/Analyses/CalledOnceCheck.h"
 #include "clang/Analysis/Analyses/Consumed.h"
@@ -58,6 +59,175 @@
 #include <optional>
 
 using namespace clang;
+
+//===----------------------------------------------------------------------===//
+// Warning on first field punning - incompatible with suboject capabilities
+//===----------------------------------------------------------------------===//
+
+/* Only checks cast back to child type - warning is limited to single TU, 
+   whereas addrof and cast may be split across different files */
+
+static const RecordDecl *canonRD(const RecordDecl *RD) {
+  return RD ? llvm::cast<RecordDecl>(RD->getCanonicalDecl()) : nullptr;
+}
+
+static bool firstFieldMatchesBase(ASTContext &Ctx,
+                                  const RecordDecl *ContainerRD,
+                                  const RecordDecl *BaseRD,
+                                  const FieldDecl *&OutFirstField) {
+  OutFirstField = nullptr;
+  if (!ContainerRD || !ContainerRD->isCompleteDefinition() || !BaseRD) return false;
+
+  // Grab first field syntactically.
+  for (const FieldDecl *F : ContainerRD->fields()) { OutFirstField = F; break; }
+  if (!OutFirstField) return false;
+
+  // First field must NOT be a pointer.
+  if (OutFirstField->getType()->isPointerType())
+    return false;
+
+  // First field must be record-typed.
+  const auto *FRT = OutFirstField->getType()->getAs<RecordType>();
+  if (!FRT) return false;
+
+  // Types must match (ignore qualifiers/sugar).
+  const RecordDecl *FldBase = canonRD(FRT->getDecl());
+  if (FldBase != canonRD(BaseRD)) return false;
+
+  // And it must start at offset 0 (robust against attributes/bit-fields).
+  const auto &Layout = Ctx.getASTRecordLayout(ContainerRD);
+  return (Layout.getFieldCount() > 0 &&
+          OutFirstField->getFieldIndex() == 0 &&
+          Layout.getFieldOffset(0) == 0);
+}
+
+static void diagnoseCastBack(Sema &S,
+                             SourceLocation Loc,
+                             const RecordDecl *BaseRD,
+                             const RecordDecl *ContainerRD,
+                             const FieldDecl *FirstFieldForNote) {
+  ASTContext &Ctx = S.Context;
+  S.Diag(Loc, diag::warn_first_field_punning_reconstruct)
+      << Ctx.getRecordType(BaseRD) << Ctx.getRecordType(ContainerRD);
+  if (FirstFieldForNote)
+    S.Diag(FirstFieldForNote->getLocation(), diag::note_first_field_origin_here)
+        << FirstFieldForNote << ContainerRD;
+}
+
+static void checkExplicitCastSink(Sema &S, const ExplicitCastExpr *CE) {
+  // Destination must be Container*
+  const auto *ToPtr = CE->getTypeAsWritten()->getAs<PointerType>();
+  if (!ToPtr) return;
+  const auto *ToRT  = ToPtr->getPointeeType()->getAs<RecordType>();
+  if (!ToRT) return;
+
+  const auto *ContainerRD = canonRD(ToRT->getDecl());
+  if (!ContainerRD || !ContainerRD->isCompleteDefinition()) return;
+
+  // Source must be Base*
+  const Expr *Op = CE->getSubExpr();
+  const auto *FromPtr = Op->getType()->getAs<PointerType>();
+  if (!FromPtr) return;
+  const auto *FromRT = FromPtr->getPointeeType()->getAs<RecordType>();
+  if (!FromRT) return;
+
+  const auto *BaseRD = canonRD(FromRT->getDecl());
+
+  // Suppress when casting from a pointer *field* (e.g., h.hash where
+  //          'hash' has pointer type). This is not first-field punning.
+  if (const Expr *OpI = Op->IgnoreParenImpCasts()) {
+    if (const auto *ME = llvm::dyn_cast<MemberExpr>(OpI)) {
+      if (const auto *Fld = llvm::dyn_cast<FieldDecl>(ME->getMemberDecl())) {
+        if (Fld->getType()->isPointerType())
+          return; // suppress false positive like ngx_hash_wildcard_t* from h.hash
+      }
+    }
+  }
+  // Verify "first field is Base at offset 0"
+  const FieldDecl *First = nullptr;
+  if (!firstFieldMatchesBase(S.Context, ContainerRD, BaseRD, First))
+    return;
+
+  // Emit
+  diagnoseCastBack(S, CE->getExprLoc(), BaseRD, ContainerRD, First);
+}
+
+static void checkContainerOfSink(Sema &S, const CStyleCastExpr *Outer) {
+  // Destination must be Container*
+  const auto *ToPtr = Outer->getTypeAsWritten()->getAs<PointerType>();
+  if (!ToPtr) return;
+  const auto *ToRT  = ToPtr->getPointeeType()->getAs<RecordType>();
+  if (!ToRT) return;
+
+  const auto *ContainerRD = canonRD(ToRT->getDecl());
+  if (!ContainerRD || !ContainerRD->isCompleteDefinition()) return;
+
+  // Look for (char*)p +/- offsetof(Container, field)
+  const Expr *E   = Outer->getSubExpr()->IgnoreParenImpCasts();
+  const auto *Bin = llvm::dyn_cast<BinaryOperator>(E);
+  if (!Bin) return;
+  if (Bin->getOpcode() != BO_Sub && Bin->getOpcode() != BO_Add) return;
+
+  const Expr *LHS = Bin->getLHS()->IgnoreParenImpCasts();
+  const Expr *RHS = Bin->getRHS()->IgnoreParenImpCasts();
+
+  const OffsetOfExpr *Off = llvm::dyn_cast<OffsetOfExpr>(LHS);
+  const Expr *PtrSide = RHS;
+  if (!Off) { Off = llvm::dyn_cast<OffsetOfExpr>(RHS); PtrSide = LHS; }
+  if (!Off) return;
+
+  // offsetof must name the same Container and its *first* field
+  const TypeSourceInfo *TSI = Off->getTypeSourceInfo();
+  if (!TSI) return;
+  const auto *OffRT = TSI->getType()->getAs<RecordType>();
+  if (!OffRT) return;
+  if (canonRD(OffRT->getDecl()) != ContainerRD) return;
+
+  const FieldDecl *Fld = nullptr;
+  for (unsigned I = 0, N = Off->getNumComponents(); I < N; ++I)
+    if (Off->getComponent(I).getKind() == OffsetOfNode::Field)
+      Fld = Off->getComponent(I).getField();
+  if (!Fld) return;
+
+  // First field must not be a pointer type.
+  if (Fld->getType()->isPointerType())
+    return;
+
+  // Must be first field at offset 0, and record-typed -> gives us Base
+  const auto *BaseRT = Fld->getType()->getAs<RecordType>();
+  if (!BaseRT) return;
+  const auto *BaseRD = canonRD(BaseRT->getDecl());
+
+  const FieldDecl *FirstForNote = nullptr;
+  if (!firstFieldMatchesBase(S.Context, ContainerRD, BaseRD, FirstForNote))
+    return;
+
+  diagnoseCastBack(S, Outer->getExprLoc(), BaseRD, ContainerRD, FirstForNote);
+}
+
+static void CheckFirstFieldCastBack_SinksOnly(Sema &S,
+                                              const FunctionDecl *FD,
+                                              const Stmt *Body) {
+  if (!Body) return;
+
+  std::function<void(const Stmt*)> Walk = [&](const Stmt *St) {
+    if (!St) return;
+
+    // (1) Any explicit cast (C-style, C++ named/functional)
+    if (const auto *ECE = llvm::dyn_cast<ExplicitCastExpr>(St))
+      checkExplicitCastSink(S, ECE);
+
+    // (2) container_of pattern (only seen as C-style cast to Container*)
+    if (const auto *CSE = llvm::dyn_cast<CStyleCastExpr>(St))
+      checkContainerOfSink(S, CSE);
+
+    for (const Stmt *Child : St->children())
+      if (Child) Walk(Child);
+  };
+
+  Walk(Body);
+}
+
 
 //===----------------------------------------------------------------------===//
 // Unreachable code analysis.
@@ -2688,6 +2858,20 @@ void clang::sema::AnalysisBasedWarnings::IssueWarnings(
     if (const FunctionDecl *FD = dyn_cast<FunctionDecl>(D))
       if (S.getLangOpts().CPlusPlus && !fscope->isCoroutine() && isNoexcept(FD))
         checkThrowInNonThrowingFunc(S, FD, AC);
+
+  // Check for struct field punning which is incompatible with subobject capabilities
+  const Stmt *StBody = D->getBody();
+  if (const auto *FD = llvm::dyn_cast_or_null<FunctionDecl>(D)) {
+    if (StBody && !S.getDiagnostics().isIgnored(diag::warn_first_field_punning_reconstruct,
+                                              FD->getLocation())) {
+      // Check only cast back
+      CheckFirstFieldCastBack_SinksOnly(S, FD, StBody);
+
+      // intra-procedural analysis for both addrof and cast
+      //CheckFirstFieldPunningReconstruct(S, FD, StBody);
+    }
+  }
+
 
   // If none of the previous checks caused a CFG build, trigger one here
   // for the logical error handler.
