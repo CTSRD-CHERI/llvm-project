@@ -15,7 +15,7 @@ def jobProperties = [rateLimitBuilds(throttle: [count: 1, durationName: 'hour', 
 ]
 if (env.JOB_NAME.startsWith('CLANG-LLVM-linux/') || env.JOB_NAME.startsWith('CLANG-LLVM-freebsd/')) {
     // Skip pull requests and non-default branches:
-    def archiveBranches = ['master', 'dev', 'upstream-llvm-merge', 'c18n_policy']
+    def archiveBranches = ['master', 'dev', 'upstream-llvm-merge', 'c18n_policy', 'c18n_acl']
     if (!env.CHANGE_ID && (archiveBranches.contains(env.BRANCH_NAME))) {
         archiveArtifacts = true
         cheribuildArgs.add("--use-all-cores")
