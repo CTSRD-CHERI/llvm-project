@@ -1285,9 +1285,12 @@ bool Triple::getMacOSXVersion(VersionTuple &Version) const {
     }
     if (Version.getMajor() <= 19) {
       Version = VersionTuple(10, Version.getMajor() - 4);
-    } else {
-      // darwin20+ corresponds to macOS 11+.
+    } else if (Version.getMajor() < 25) {
+      // darwin20-24 corresponds to macOS 11-15.
       Version = VersionTuple(11 + Version.getMajor() - 20);
+    } else {
+      // darwin25 corresponds with macOS26+.
+      Version = VersionTuple(Version.getMajor() + 1);
     }
     break;
   case MacOSX:
