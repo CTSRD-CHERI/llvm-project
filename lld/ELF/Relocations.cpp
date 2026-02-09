@@ -1381,7 +1381,7 @@ static unsigned handleMipsTlsRelocation(RelType type, Symbol &sym,
 //
 // Returns the number of relocations processed.
 static unsigned handleTlsRelocation(RelType type, Symbol &sym,
-                                    InputSectionBase &c, uint64_t offset,
+                                    InputSectionBase *sec, uint64_t offset,
                                     int64_t addend, RelExpr expr) {
   bool isTgot =
       oneof<R_TGOT, R_TGOT_TP, R_TGOT_GOT, R_TGOT_GOT_PC, R_TGOT_TLSDESC,
@@ -1393,14 +1393,15 @@ static unsigned handleTlsRelocation(RelType type, Symbol &sym,
 
     if (config->shared) {
       errorOrWarn("relocation " + toString(type) + " against " + toString(sym) +
-                  " cannot be used with -shared" + getLocation(c, sym, offset));
+                  " cannot be used with -shared" +
+                  getLocation(*sec, sym, offset));
       return 1;
     }
     return 0;
   }
 
   if (config->emachine == EM_MIPS)
-    return handleMipsTlsRelocation(type, sym, c, offset, addend, expr);
+    return handleMipsTlsRelocation(type, sym, *sec, offset, addend, expr);
 
   if (isTgot)
     sym.setFlags(NEEDS_TGOT);
@@ -1413,7 +1414,7 @@ static unsigned handleTlsRelocation(RelType type, Symbol &sym,
         sym.setFlags(NEEDS_TGOT_TLSDESC);
       else
         sym.setFlags(NEEDS_TLSDESC);
-      c.addReloc({expr, type, offset, addend, &sym});
+      sec->addReloc({expr, type, offset, addend, &sym});
     }
     return 1;
   }
@@ -1426,7 +1427,7 @@ static unsigned handleTlsRelocation(RelType type, Symbol &sym,
                      config->emachine != EM_HEXAGON &&
                      config->emachine != EM_LOONGARCH &&
                      config->emachine != EM_RISCV &&
-                     !c.file->ppc64DisableTLSRelax;
+                     !sec->file->ppc64DisableTLSRelax;
 
   // If we are producing an executable and the symbol is non-preemptable, it
   // must be defined and the code sequence can be relaxed to use Local-Exec.
@@ -1444,14 +1445,14 @@ static unsigned handleTlsRelocation(RelType type, Symbol &sym,
   if (oneof<R_TLSLD_GOT, R_TLSLD_GOTPLT, R_TLSLD_PC, R_TLSLD_HINT>(expr)) {
     // Local-Dynamic relocs can be relaxed to Local-Exec.
     if (toExecRelax) {
-      c.addReloc({target->adjustTlsExpr(type, R_RELAX_TLS_LD_TO_LE), type,
-                  offset, addend, &sym});
+      sec->addReloc({target->adjustTlsExpr(type, R_RELAX_TLS_LD_TO_LE), type,
+                     offset, addend, &sym});
       return target->getTlsGdRelaxSkip(type);
     }
     if (expr == R_TLSLD_HINT)
       return 1;
     ctx.needsTlsLd.store(true, std::memory_order_relaxed);
-    c.addReloc({expr, type, offset, addend, &sym});
+    sec->addReloc({expr, type, offset, addend, &sym});
     return 1;
   }
 
@@ -1459,7 +1460,7 @@ static unsigned handleTlsRelocation(RelType type, Symbol &sym,
   if (expr == R_DTPREL) {
     if (toExecRelax)
       expr = target->adjustTlsExpr(type, R_RELAX_TLS_LD_TO_LE);
-    c.addReloc({expr, type, offset, addend, &sym});
+    sec->addReloc({expr, type, offset, addend, &sym});
     return 1;
   }
 
@@ -1467,7 +1468,7 @@ static unsigned handleTlsRelocation(RelType type, Symbol &sym,
   // thread pointer is stored in the got. This cannot be relaxed to Local-Exec.
   if (expr == R_TLSLD_GOT_OFF) {
     sym.setFlags(NEEDS_GOT_DTPREL);
-    c.addReloc({expr, type, offset, addend, &sym});
+    sec->addReloc({expr, type, offset, addend, &sym});
     return 1;
   }
 
@@ -1480,7 +1481,7 @@ static unsigned handleTlsRelocation(RelType type, Symbol &sym,
         sym.setFlags(NEEDS_TGOT_TLSGD);
       else
         sym.setFlags(NEEDS_TLSGD);
-      c.addReloc({expr, type, offset, addend, &sym});
+      sec->addReloc({expr, type, offset, addend, &sym});
       return 1;
     }
 
@@ -1496,7 +1497,7 @@ static unsigned handleTlsRelocation(RelType type, Symbol &sym,
         sym.setFlags(NEEDS_TLSIE);
         relaxExpr = R_RELAX_TLS_GD_TO_IE;
       }
-      c.addReloc(
+      sec->addReloc(
           {target->adjustTlsExpr(type, relaxExpr), type, offset, addend, &sym});
     } else {
       RelExpr relaxExpr;
@@ -1504,7 +1505,7 @@ static unsigned handleTlsRelocation(RelType type, Symbol &sym,
         relaxExpr = R_RELAX_TGOT_TLS_GD_TO_LE;
       else
         relaxExpr = R_RELAX_TLS_GD_TO_LE;
-      c.addReloc(
+      sec->addReloc(
           {target->adjustTlsExpr(type, relaxExpr), type, offset, addend, &sym});
     }
     return target->getTlsGdRelaxSkip(type);
@@ -1523,7 +1524,7 @@ static unsigned handleTlsRelocation(RelType type, Symbol &sym,
         relaxExpr = R_RELAX_TGOT_TLS_IE_TO_LE;
       else
         relaxExpr = R_RELAX_TLS_IE_TO_LE;
-      c.addReloc({relaxExpr, type, offset, addend, &sym});
+      sec->addReloc({relaxExpr, type, offset, addend, &sym});
     } else if (expr != R_TLSIE_HINT) {
       if (isTgot)
         sym.setFlags(NEEDS_TGOT_GOT);
@@ -1531,9 +1532,9 @@ static unsigned handleTlsRelocation(RelType type, Symbol &sym,
         sym.setFlags(NEEDS_TLSIE);
       // R_GOT needs a relative relocation for PIC on i386 and Hexagon.
       if (expr == R_GOT && config->isPic && !target->usesOnlyLowPageBits(type))
-        addRelativeReloc<true>(c, offset, sym, addend, expr, type);
+        addRelativeReloc<true>(*sec, offset, sym, addend, expr, type);
       else
-        c.addReloc({expr, type, offset, addend, &sym});
+        sec->addReloc({expr, type, offset, addend, &sym});
     }
     return 1;
   }
@@ -1627,7 +1628,7 @@ template <class ELFT, class RelTy> void RelocationScanner::scanOne(RelTy *&i) {
   // R_TPREL and R_TPREL_NEG relocations are resolved in processAux.
   if (sym.isTls()) {
     if (unsigned processed =
-            handleTlsRelocation(type, sym, *sec, offset, addend, expr)) {
+            handleTlsRelocation(type, sym, sec, offset, addend, expr)) {
       i += processed - 1;
       return;
     }
