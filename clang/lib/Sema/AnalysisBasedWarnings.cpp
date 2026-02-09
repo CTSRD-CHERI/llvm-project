@@ -64,8 +64,8 @@ using namespace clang;
 // Warning on first field punning - incompatible with suboject capabilities
 //===----------------------------------------------------------------------===//
 
-/* Only checks cast back to child type - warning is limited to single TU, 
-   whereas addrof and cast may be split across different files */
+// Only checks cast back to child type - warning is limited to single TU, 
+//   whereas addrof and cast may be split across different files 
 
 static const RecordDecl *canonRD(const RecordDecl *RD) {
   return RD ? llvm::cast<RecordDecl>(RD->getCanonicalDecl()) : nullptr;
