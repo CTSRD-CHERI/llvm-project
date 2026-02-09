@@ -50,7 +50,7 @@ static bool isSectionPrefix(StringRef prefix, StringRef name) {
   return name.consume_front(prefix) && (name.empty() || name[0] == '.');
 }
 
-static StringRef getOutputSectionName(const InputSectionBase *s) {
+static StringRef getOutputSectionBaseName(const InputSectionBase *s) {
   if (config->relocatable)
     return s->name;
 
@@ -71,7 +71,8 @@ static StringRef getOutputSectionName(const InputSectionBase *s) {
   if (s->name == "COMMON")
     return ".bss";
 
-  if (script->hasSectionsCommand)
+  // SECTIONS only applies to the default compartment, so ignore for others.
+  if (script->hasSectionsCommand && s->compartment == 0)
     return s->name;
 
   // When no SECTIONS is specified, emulate GNU ld's internal linker scripts
@@ -108,6 +109,13 @@ static StringRef getOutputSectionName(const InputSectionBase *s) {
       return v;
 
   return s->name;
+}
+
+static StringRef getOutputSectionName(const InputSectionBase *s) {
+  StringRef name = getOutputSectionBaseName(s);
+  if (s->compartment != 0)
+    name = saver().save(name + s->getCompartment().suffix);
+  return name;
 }
 
 uint64_t ExprValue::getValue() const {
@@ -508,6 +516,10 @@ LinkerScript::computeInputSections(const InputSectionDescription *cmd,
       if (!sec->isLive() || sec->parent || seen.contains(i))
         continue;
 
+      // Ignore sections in a compartment
+      if (sec->compartment != 0)
+        continue;
+
       // For --emit-relocs we have to ignore entries like
       //   .rela.dyn : { *(.rela.data) }
       // which are common because they are in the default bfd script.
@@ -789,6 +801,8 @@ static OutputDesc *addInputSec(StringMap<TinyPtrVector<OutputSection *>> &map,
   TinyPtrVector<OutputSection *> &v = map[outsecName];
   for (OutputSection *sec : v) {
     if (sec->partition != isec->partition)
+      continue;
+    if (sec->compartment != isec->compartment)
       continue;
 
     if (config->relocatable && (isec->flags & SHF_LINK_ORDER)) {

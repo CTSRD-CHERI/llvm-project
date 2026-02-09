@@ -1347,6 +1347,11 @@ inline Partition &SectionBase::getPartition() const {
   return partitions[partition - 1];
 }
 
+inline Compartment &SectionBase::getCompartment() const {
+  // XXX: Should this work? assert(isLive());
+  return compartments[compartment];
+}
+
 // Linker generated sections which can be used as inputs and are not specific to
 // a partition.
 struct InStruct {
@@ -1354,12 +1359,7 @@ struct InStruct {
   std::unique_ptr<SyntheticSection> riscvAttributes;
   std::unique_ptr<BssSection> bss;
   std::unique_ptr<BssSection> bssRelRo;
-  std::unique_ptr<GotSection> got;
-  std::unique_ptr<GotPltSection> gotPlt;
-  std::unique_ptr<IgotPltSection> igotPlt;
-  std::unique_ptr<TgotSection> tgot;
   std::unique_ptr<MipsCheriCapTableSection> mipsCheriCapTable;
-  std::unique_ptr<CheriPccPaddingSection> pccPadding;
   // For per-file/per-function tables:
   std::unique_ptr<MipsCheriCapTableMappingSection> mipsCheriCapTableMapping;
   std::unique_ptr<SyntheticSection> armCmseSGSection;
@@ -1371,11 +1371,8 @@ struct InStruct {
   std::unique_ptr<MipsRldMapSection> mipsRldMap;
   std::unique_ptr<SyntheticSection> partEnd;
   std::unique_ptr<SyntheticSection> partIndex;
-  std::unique_ptr<PltSection> plt;
-  std::unique_ptr<IpltSection> iplt;
   std::unique_ptr<PPC32Got2Section> ppc32Got2;
   std::unique_ptr<IBTPltSection> ibtPlt;
-  std::unique_ptr<RelocationBaseSection> relaPlt;
   std::unique_ptr<RelocationBaseSection> relaIplt;
   std::unique_ptr<RelocationBaseSection> relaTgot;
   std::unique_ptr<CheriCapRelocsSection> tgotCapRelocs;
@@ -1384,12 +1381,65 @@ struct InStruct {
   std::unique_ptr<SymbolTableBaseSection> symTab;
   std::unique_ptr<SymtabShndxSection> symTabShndx;
 
-  PhdrEntry *cheriBounds;
-
   void reset();
 };
 
 LLVM_LIBRARY_VISIBILITY extern InStruct in;
+
+template <typename T> class MovableAtomic : public std::atomic<T> {
+public:
+  MovableAtomic() : std::atomic<T>() {}
+
+  MovableAtomic(T desired) : std::atomic<T>(desired) {}
+
+  MovableAtomic(MovableAtomic &&other) : std::atomic<T>() {
+    *this = std::forward<MovableAtomic>(other);
+  }
+
+  MovableAtomic &operator=(MovableAtomic &&other) {
+    if (this != &other) {
+      this->store(other.exchange(T{}, std::memory_order_relaxed),
+                  std::memory_order_relaxed);
+    }
+    return *this;
+  }
+};
+
+struct Compartment {
+  StringRef name;
+  unsigned nameIndex;
+
+  std::string suffix;
+
+  // Synthetic sections
+  std::unique_ptr<GotSection> got;
+  std::unique_ptr<GotPltSection> gotPlt;
+  std::unique_ptr<IgotPltSection> igotPlt;
+  std::unique_ptr<TgotSection> tgot;
+  std::unique_ptr<CheriPccPaddingSection> pccPadding;
+  std::unique_ptr<PltSection> plt;
+  std::unique_ptr<IpltSection> iplt;
+  std::unique_ptr<RelocationBaseSection> relaPlt;
+
+  // True if we need to reserve two .got entries for local-dynamic TLS model.
+  MovableAtomic<bool> needsTlsLd{false};
+
+  PhdrEntry *relRo;
+  PhdrEntry *cheriBounds;
+
+  unsigned getNumber() const { return this - &compartments[0]; }
+  bool isDefault() const { return this == &compartments[0]; }
+};
+
+inline const SymbolCompartAux &Symbol::compartAux(const Compartment &c) const {
+  assert(c.isDefault());
+  return defaultCompartAux;
+}
+
+inline SymbolCompartAux &Symbol::mutableCompartAux(Compartment &c) {
+  assert(c.isDefault());
+  return defaultCompartAux;
+}
 
 } // namespace lld::elf
 

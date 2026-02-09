@@ -490,8 +490,6 @@ struct Ctx {
   std::atomic<bool> hasSympart{false};
   // True if there are TLS IE relocations. Set DF_STATIC_TLS if -shared.
   std::atomic<bool> hasTlsIe{false};
-  // True if we need to reserve two .got entries for local-dynamic TLS model.
-  std::atomic<bool> needsTlsLd{false};
 
   void reset();
 
