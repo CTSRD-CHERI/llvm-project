@@ -20,9 +20,7 @@ def warn_first_field_punning_reconstruct : Warning<
   InGroup<FirstFieldPunning>;
 
 def note_first_field_origin_here : Note<
-  "pointer originated here as '&%1::%0' (first field)">;
-
-
+  "pointer originated here as '&%1.%0' (first field)">;
 
 def warn_calling_non_sensitive_from_sensitive : Warning<
   "Calling non-sensitive function %0 from sensitive function %1 may result in"
