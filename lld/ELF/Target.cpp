@@ -178,8 +178,8 @@ void TargetInfo::relocateAlloc(InputSectionBase &sec, uint8_t *buf) const {
   for (const Relocation &rel : sec.relocs()) {
     uint8_t *loc = buf + rel.offset;
     const uint64_t val = SignExtend64(
-        sec.getRelocTargetVA(sec.file, rel.type, rel.addend,
-                             secAddr + rel.offset, *rel.sym, rel.expr, &sec, rel.offset),
+        sec.getRelocTargetVA(rel.type, rel.addend, secAddr + rel.offset,
+                             *rel.sym, rel.expr, rel.offset),
         bits);
     if (rel.expr != R_RELAX_HINT)
       relocate(loc, rel, val);

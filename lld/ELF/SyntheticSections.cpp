@@ -1728,9 +1728,8 @@ int64_t DynamicReloc::computeAddend() const {
     return addend;
   case AddendOnlyWithTargetVA:
   case AgainstSymbolWithTargetVA: {
-    uint64_t ca = InputSection::getRelocTargetVA(inputSec->file, type, addend,
-                                                 getOffset(), *sym, expr,
-                                                 inputSec, offsetInSec);
+    uint64_t ca = inputSec->getRelocTargetVA(type, addend, getOffset(), *sym,
+                                             expr, offsetInSec);
     return config->is64 ? ca : SignExtend64<32>(ca);
   }
   case MipsMultiGotPage:

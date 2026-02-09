@@ -662,11 +662,9 @@ static int64_t getTgotTpOffset(const Symbol &s) {
   return getTpOffset(s.getTgotVA(), Out::tgotPhdr);
 }
 
-uint64_t InputSectionBase::getRelocTargetVA(const InputFile *file, RelType type,
-                                            int64_t a, uint64_t p,
+uint64_t InputSectionBase::getRelocTargetVA(RelType type, int64_t a, uint64_t p,
                                             const Symbol &sym, RelExpr expr,
-                                            const InputSectionBase *isec,
-                                            uint64_t offset) {
+                                            uint64_t offset) const {
   switch (expr) {
   case R_ABS:
   case R_DTPREL:
@@ -690,7 +688,7 @@ uint64_t InputSectionBase::getRelocTargetVA(const InputFile *file, RelType type,
     if (sym.hasFlag(NEEDS_TLSGD) && type != R_LARCH_TLS_IE_PC_LO12)
       // Like R_LOONGARCH_TLSGD_PAGE_PC but taking the absolute value.
       return in.got->getGlobalDynAddr(sym) + a;
-    return getRelocTargetVA(file, type, a, p, sym, R_GOT, isec, offset);
+    return getRelocTargetVA(type, a, p, sym, R_GOT, offset);
   case R_GOTONLY_PC:
     return in.got->getVA() + a - p;
   case R_GOTPLTONLY_PC:
@@ -763,8 +761,8 @@ uint64_t InputSectionBase::getRelocTargetVA(const InputFile *file, RelType type,
   }
   case R_RISCV_PC_INDIRECT: {
     if (const Relocation *hiRel = getRISCVPCRelHi20(&sym, a))
-      return getRelocTargetVA(file, hiRel->type, hiRel->addend, sym.getVA(),
-                              *hiRel->sym, hiRel->expr, isec, offset);
+      return getRelocTargetVA(hiRel->type, hiRel->addend, sym.getVA(),
+                              *hiRel->sym, hiRel->expr, offset);
     return 0;
   }
   case R_LOONGARCH_PAGE_PC:
@@ -901,7 +899,7 @@ uint64_t InputSectionBase::getRelocTargetVA(const InputFile *file, RelType type,
   case R_MIPS_CHERI_CAPTAB_INDEX_CALL:
   case R_MIPS_CHERI_CAPTAB_INDEX_CALL_SMALL_IMMEDIATE:
     assert(a == 0 && "capability table index relocs should not have addends");
-    return sym.getMipsCheriCapTableOffset(isec, offset);
+    return sym.getMipsCheriCapTableOffset(this, offset);
   case R_MIPS_CHERI_CAPTAB_REL:
     if (!ElfSym::mipsCheriCapabilityTable) {
       error("cannot compute difference between non-existent "

@@ -177,8 +177,8 @@ static bool isFallThruRelocation(InputSection &is, InputFile *file,
     return false;
 
   uint64_t addrLoc = is.getOutputSection()->addr + is.outSecOff + r.offset;
-  uint64_t targetOffset = InputSectionBase::getRelocTargetVA(
-      file, r.type, r.addend, addrLoc, *r.sym, r.expr, &is, r.offset);
+  uint64_t targetOffset =
+      is.getRelocTargetVA(r.type, r.addend, addrLoc, *r.sym, r.expr, r.offset);
 
   // If this jmp is a fall thru, the target offset is the beginning of the
   // next section.
@@ -995,8 +995,8 @@ void X86_64::relocateAlloc(InputSectionBase &sec, uint8_t *buf) const {
       continue;
     uint8_t *loc = buf + rel.offset;
     const uint64_t val =
-        sec.getRelocTargetVA(sec.file, rel.type, rel.addend,
-                             secAddr + rel.offset, *rel.sym, rel.expr, &sec, rel.offset);
+        sec.getRelocTargetVA(rel.type, rel.addend, secAddr + rel.offset,
+                             *rel.sym, rel.expr, rel.offset);
     relocate(loc, rel, val);
   }
   if (sec.jumpInstrMod) {

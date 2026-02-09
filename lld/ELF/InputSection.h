@@ -205,10 +205,9 @@ public:
   // relocations, assuming that Buf points to this section's copy in
   // the mmap'ed output buffer.
   template <class ELFT> void relocate(uint8_t *buf, uint8_t *bufEnd);
-  static uint64_t getRelocTargetVA(const InputFile *File, RelType Type,
-                                   int64_t A, uint64_t P, const Symbol &Sym,
-                                   RelExpr Expr, const InputSectionBase *isec,
-                                   uint64_t offset);
+  uint64_t getRelocTargetVA(RelType Type, int64_t A, uint64_t P,
+                            const Symbol &Sym, RelExpr Expr,
+                            uint64_t offset) const;
 
   // The native ELF reloc data type is not very convenient to handle.
   // So we convert ELF reloc records to our own records in Relocations.cpp.
