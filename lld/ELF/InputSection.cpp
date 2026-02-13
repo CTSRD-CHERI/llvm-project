@@ -1410,8 +1410,11 @@ MergeInputSection::MergeInputSection(uint64_t flags, uint32_t type,
 
 MergeInputSection::MergeInputSection(const Compartment &c,
                                      const MergeInputSection &other)
-    : InputSectionBase(other) {
-  name = saver().save(other.name + c.suffix);
+    : InputSectionBase(other.file, other.flags & ~SHF_COMPRESSED, other.type,
+                       other.entsize, /*Link*/ 0, /*Info*/ 0, other.addralign,
+                       other.contentMaybeDecompress(),
+                       saver().save(other.name + c.suffix),
+                       SectionBase::Merge) {
   compartment = c.getNumber();
 }
 
