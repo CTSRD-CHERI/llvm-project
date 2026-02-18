@@ -34,13 +34,14 @@
 ; RUN: ld.lld -shared %t/mips.o %t/mips-override.o -o %t/mips.so 
 ; RUN: llvm-readelf -r --section-mapping --sections --program-headers --symbols --cap-relocs  %t/mips.so | FileCheck %s --check-prefixes=HEADERS,MIPS-RELOCS
 
-; HEADERS-LABEL: There are 11 program headers, starting at
+; HEADERS-LABEL: There are 12 program headers, starting at
 ; HEADERS-EMPTY:
 ; HEADERS-NEXT: Program Headers:
 ; HEADERS-NEXT: Type           Offset   VirtAddr PhysAddr FileSiz  MemSiz   Flg Align
 ; HEADERS-NEXT: PHDR           0x{{.+}} 0x{{.+}} 0x{{.+}} 0x{{.+}} 0x{{.+}} R   0x8
 ; HEADERS-NEXT: LOAD           0x{{.+}} 0x{{.+}} 0x{{.+}} 0x{{.+}} 0x{{.+}} R   0x10000
 ; HEADERS-NEXT: LOAD           0x{{.+}} 0x{{.+}} 0x{{.+}} 0x{{.+}} 0x{{.+}} R E 0x10000
+; HEADERS-NEXT: LOAD           0x{{.+}} 0x{{.+}} 0x{{.+}} 0x{{.+}} 0x{{.+}} RW  0x10000
 ; HEADERS-NEXT: LOAD           0x{{.+}} 0x{{.+}} 0x{{.+}} 0x{{.+}} 0x{{.+}} RW  0x10000
 ; HEADERS-NEXT: LOAD           0x{{.+}} 0x{{.+}} 0x{{.+}} 0x{{.+}} 0x{{.+}} RW  0x10000
 ; HEADERS-NEXT: DYNAMIC        0x{{.+}} 0x{{.+}} 0x{{.+}} 0x{{.+}} 0x{{.+}} R   0x8
@@ -55,14 +56,15 @@
 ; HEADERS-NEXT: 00
 ; HEADERS-NEXT: 01     .MIPS.abiflags .MIPS.options .dynsym .hash .dynamic .dynstr .rel.dyn .rel.plt __cap_relocs .eh_frame {{$}}
 ; HEADERS-NEXT: 02     .text
-; HEADERS-NEXT: 03     .gcc_except_table
-; HEADERS-NEXT: 04     .data .captable .got .pad.cheri.pcc
-; HEADERS-NEXT: 05     .dynamic
-; HEADERS-NEXT: 06     .gcc_except_table
-; HEADERS-NEXT: 07     .eh_frame .text .gcc_except_table .data .captable .got .pad.cheri.pcc {{$}}
-; HEADERS-NEXT: 08
-; HEADERS-NEXT: 09     .MIPS.options
-; HEADERS-NEXT: 10     .MIPS.abiflags
+; HEADERS-NEXT: 03     .captable .got
+; HEADERS-NEXT: 04     .gcc_except_table .pad.cheri.pcc
+; HEADERS-NEXT: 05     .data
+; HEADERS-NEXT: 06     .dynamic
+; HEADERS-NEXT: 07     .gcc_except_table
+; HEADERS-NEXT: 08     .eh_frame .text .captable .got .gcc_except_table .pad.cheri.pcc {{$}}
+; HEADERS-NEXT: 09
+; HEADERS-NEXT: 10     .MIPS.options
+; HEADERS-NEXT: 11     .MIPS.abiflags
 ; HEADERS-NEXT: None   .bss .mdebug.abi64 .pdr .comment .symtab .shstrtab .strtab
 
 ; MIPS-RELOCS-LABEL:      Relocation section '.rel.dyn' {{.+}} contains 2 entries:
@@ -84,10 +86,10 @@
 ;; Local relocations for exception handling:
 ; MIPS-RELOCS-LABEL: CHERI capability relocation section '__cap_relocs' at offset {{.+}} contains 4 entries:
 ; MIPS-RELOCS-NEXT:      Offset             Info         Type        Value
-; MIPS-RELOCS-NEXT:  {{0*}}2{{.+}}     8000000000000000 FUNC    [[#TEST_ADDR+128]] [{{[0-9a-f]+}}-{{[0-9a-f]+}}]
-; MIPS-RELOCS-NEXT:  {{0*}}2{{.+}}     8000000000000000 FUNC    [[#TEST_ADDR+96]] [{{[0-9a-f]+}}-{{[0-9a-f]+}}]
-; MIPS-RELOCS-NEXT:  {{0*}}2{{.+}}     8000000000000000 FUNC    [[#TEST2_ADDR+96]] [{{[0-9a-f]+}}-{{[0-9a-f]+}}]
-; MIPS-RELOCS-NEXT:  {{0*}}2{{.+}}     8000000000000000 FUNC    [[#TEST_WEAK_ADDR+52]] [{{[0-9a-f]+}}-{{[0-9a-f]+}}]
+; MIPS-RELOCS-NEXT:  {{0*}}3{{.+}}     8000000000000000 FUNC    [[#TEST_ADDR+128]] [{{[0-9a-f]+}}-{{[0-9a-f]+}}]
+; MIPS-RELOCS-NEXT:  {{0*}}3{{.+}}     8000000000000000 FUNC    [[#TEST_ADDR+96]] [{{[0-9a-f]+}}-{{[0-9a-f]+}}]
+; MIPS-RELOCS-NEXT:  {{0*}}3{{.+}}     8000000000000000 FUNC    [[#TEST2_ADDR+96]] [{{[0-9a-f]+}}-{{[0-9a-f]+}}]
+; MIPS-RELOCS-NEXT:  {{0*}}3{{.+}}     8000000000000000 FUNC    [[#TEST_WEAK_ADDR+52]] [{{[0-9a-f]+}}-{{[0-9a-f]+}}]
 
 ;; Should also emit __cap_relocs for RISC-V:
 ; RUN: ld.lld -shared %t/riscv.o -o %t/riscv.so
@@ -111,14 +113,14 @@
 
 ; RV64-RELOCS-LABEL: CHERI capability relocation section '__cap_relocs' at offset {{.+}} contains 7 entries:
 ; RV64-RELOCS-NEXT:      Offset             Info         Type        Value
-; RV64-RELOCS-NEXT:  {{0*}}2{{.+}}     9000000000000000 CODE    [[#TEST_ADDR+92]] [{{[0-9a-f]+}}-{{[0-9a-f]+}}]
-; RV64-RELOCS-NEXT:  {{0*}}2{{.+}}     9000000000000000 CODE    [[#TEST_ADDR+72]] [{{[0-9a-f]+}}-{{[0-9a-f]+}}]
-; RV64-RELOCS-NEXT:  {{0*}}2{{.+}}     9000000000000000 CODE    [[#TEST2_ADDR+72]] [{{[0-9a-f]+}}-{{[0-9a-f]+}}]
+; RV64-RELOCS-NEXT:  {{0*}}2{{.+}}     9000000000000000 CODE    [[#PLT0_ADDR]] [{{[0-9a-f]+}}-{{[0-9a-f]+}}]
+; RV64-RELOCS-NEXT:  {{0*}}2{{.+}}     9000000000000000 CODE    [[#PLT0_ADDR]] [{{[0-9a-f]+}}-{{[0-9a-f]+}}]
+; RV64-RELOCS-NEXT:  {{0*}}2{{.+}}     9000000000000000 CODE    [[#PLT0_ADDR]] [{{[0-9a-f]+}}-{{[0-9a-f]+}}]
+; RV64-RELOCS-NEXT:  {{0*}}3{{.+}}     9000000000000000 CODE    [[#TEST_ADDR+92]] [{{[0-9a-f]+}}-{{[0-9a-f]+}}]
+; RV64-RELOCS-NEXT:  {{0*}}3{{.+}}     9000000000000000 CODE    [[#TEST_ADDR+72]] [{{[0-9a-f]+}}-{{[0-9a-f]+}}]
+; RV64-RELOCS-NEXT:  {{0*}}3{{.+}}     9000000000000000 CODE    [[#TEST2_ADDR+72]] [{{[0-9a-f]+}}-{{[0-9a-f]+}}]
 ; Next one references the local symbol, and uses that length rather than the override:
-; RV64-RELOCS-NEXT:  {{0*}}2{{.+}}     9000000000000000 CODE    [[#TEST_WEAK_ADDR+28]] [{{[0-9a-f]+}}-{{[0-9a-f]+}}]
-; RV64-RELOCS-NEXT:  {{0*}}3{{.+}}     9000000000000000 CODE    [[#PLT0_ADDR]] [{{[0-9a-f]+}}-{{[0-9a-f]+}}]
-; RV64-RELOCS-NEXT:  {{0*}}3{{.+}}     9000000000000000 CODE    [[#PLT0_ADDR]] [{{[0-9a-f]+}}-{{[0-9a-f]+}}]
-; RV64-RELOCS-NEXT:  {{0*}}3{{.+}}     9000000000000000 CODE    [[#PLT0_ADDR]] [{{[0-9a-f]+}}-{{[0-9a-f]+}}]
+; RV64-RELOCS-NEXT:  {{0*}}3{{.+}}     9000000000000000 CODE    [[#TEST_WEAK_ADDR+28]] [{{[0-9a-f]+}}-{{[0-9a-f]+}}]
 
 ; IR was generated from the following code:
 ; long external_fn(long arg);

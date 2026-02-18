@@ -61,11 +61,11 @@
 
 # plt uses RW for the padding to match .got.plt
 # PLT-LABEL: Section Headers:
-# PLT:         [11] .got.plt
-# PLT-NEXT:         PROGBITS        0000000000005440 002440 000030 00   0   0  16
+# PLT:         [10] .got.plt
+# PLT-NEXT:         PROGBITS        0000000000004370 002370 000030 00   0   0  16
 # PLT-NEXT:         [0000000000000003]: WRITE, ALLOC
-# PLT-NEXT:    [12] .pad.cheri.pcc
-# PLT-NEXT:         PROGBITS        0000000000005470 002470 000010 00   0   0  1
+# PLT-NEXT:    [11] .pad.cheri.pcc
+# PLT-NEXT:         PROGBITS        00000000000043a0 0023a0 000000 00   0   0  1
 # PLT-NEXT:         [0000000000000003]: WRITE, ALLOC
 
 #--- small-text.s

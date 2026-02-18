@@ -27,30 +27,30 @@
 # NM: {{0*}}00000000 0 FUNC WEAK   DEFAULT UND weak
 
 # RELOC32:      .rela.plt {
-# RELOC32-NEXT:   0x13088 R_RISCV_JUMP_SLOT bar 0x0
-# RELOC32-NEXT:   0x13090 R_RISCV_JUMP_SLOT weak 0x0
+# RELOC32-NEXT:   0x12010 R_RISCV_JUMP_SLOT bar 0x0
+# RELOC32-NEXT:   0x12018 R_RISCV_JUMP_SLOT weak 0x0
 # RELOC32-NEXT: }
 # RELOC32:      __cap_relocs {
-# RELOC32-NEXT:   0x13088 CODE - 0x11030 [0x11000-0x13400]
-# RELOC32-NEXT:   0x13090 CODE - 0x11030 [0x11000-0x13400]
+# RELOC32-NEXT:   0x12010 CODE - 0x11030 [0x11000-0x12200]
+# RELOC32-NEXT:   0x12018 CODE - 0x11030 [0x11000-0x12200]
 # RELOC32-NEXT: }
 # GOTPLT32:      section '.got.plt'
-# GOTPLT32-NEXT: 0x00013078 00000000 00000000 00000000 00000000
-# GOTPLT32-NEXT: 0x00013088 00000000 00000000 00000000 00000000
+# GOTPLT32-NEXT: 0x00012000 00000000 00000000 00000000 00000000
+# GOTPLT32-NEXT: 0x00012010 00000000 00000000 00000000 00000000
 
 # RELOC64:      .rela.plt {
-# RELOC64-NEXT:   0x13110 R_RISCV_JUMP_SLOT bar 0x0
-# RELOC64-NEXT:   0x13120 R_RISCV_JUMP_SLOT weak 0x0
+# RELOC64-NEXT:   0x12020 R_RISCV_JUMP_SLOT bar 0x0
+# RELOC64-NEXT:   0x12030 R_RISCV_JUMP_SLOT weak 0x0
 # RELOC64-NEXT: }
 # RELOC64:      __cap_relocs {
-# RELOC64-NEXT:   0x13110 CODE - 0x11030 [0x11000-0x13130]
-# RELOC64-NEXT:   0x13120 CODE - 0x11030 [0x11000-0x13130]
+# RELOC64-NEXT:   0x12020 CODE - 0x11030 [0x11000-0x12040]
+# RELOC64-NEXT:   0x12030 CODE - 0x11030 [0x11000-0x12040]
 # RELOC64-NEXT: }
 # GOTPLT64:      section '.got.plt'
-# GOTPLT64-NEXT: 0x000130f0 00000000 00000000 00000000 00000000
-# GOTPLT64-NEXT: 0x00013100 00000000 00000000 00000000 00000000
-# GOTPLT64-NEXT: 0x00013110 00000000 00000000 00000000 00000000
-# GOTPLT64-NEXT: 0x00013120 00000000 00000000 00000000 00000000
+# GOTPLT64-NEXT: 0x00012000 00000000 00000000 00000000 00000000
+# GOTPLT64-NEXT: 0x00012010 00000000 00000000 00000000 00000000
+# GOTPLT64-NEXT: 0x00012020 00000000 00000000 00000000 00000000
+# GOTPLT64-NEXT: 0x00012030 00000000 00000000 00000000 00000000
 
 # DIS:      <_start>:
 ## Direct call
@@ -71,34 +71,31 @@
 
 # DIS:      Disassembly of section .plt:
 # DIS:      <.plt>:
-# DIS-NEXT:     auipcc ct2, 2
+# DIS-NEXT:     auipcc ct2, 1
 # DIS-NEXT:     sub t1, t1, t3
-## 32-bit: .got.plt - .plt = 0x13078 - 0x11030 = 4096*2+72
-## 64-bit: .got.plt - .plt = 0x130f0 - 0x11030 = 4096*2+192
-# DIS32-NEXT:   lc ct3, 72(ct2)
-# DIS64-NEXT:   lc ct3, 192(ct2)
+## .got.plt - .plt = 0x12000 - 0x11030 = 4096*1-48
+# DIS-NEXT:     lc ct3, -48(ct2)
 # DIS-NEXT:     addi t1, t1, -44
-# DIS32-NEXT:   cincoffset ct0, ct2, 72
-# DIS64-NEXT:   cincoffset ct0, ct2, 192
+# DIS-NEXT:     cincoffset ct0, ct2, -48
 # DIS32-NEXT:   srli t1, t1, 1
 # DIS32-NEXT:   lc ct0, 8(ct0)
 # DIS64-NEXT:   lc ct0, 16(ct0)
 # DIS-NEXT:     jr ct3
 # DIS64-NEXT:   nop
 
-## 32-bit (.got.plt): &.got.plt[bar]-. = 0x13088-0x11050 = 4096*2+56
-## 64-bit (.got.plt): &.got.plt[bar]-. = 0x13110-0x11050 = 4096*2+192
-# DIS:        11050: auipcc ct3, 2
-# DIS32-NEXT:   lc ct3, 56(ct3)
-# DIS64-NEXT:   lc ct3, 192(ct3)
+## 32-bit (.got.plt): &.got.plt[bar]-. = 0x12010-0x11050 = 4096*1-64
+## 64-bit (.got.plt): &.got.plt[bar]-. = 0x12020-0x11050 = 4096*1-48
+# DIS:        11050: auipcc ct3, 1
+# DIS32-NEXT:   lc ct3, -64(ct3)
+# DIS64-NEXT:   lc ct3, -48(ct3)
 # DIS-NEXT:     jalr ct1, ct3
 # DIS-NEXT:     nop
 
-## 32-bit (.got.plt): &.got.plt[weak]-. = 0x13090-0x11060 = 4096*2+48
-## 64-bit (.got.plt): &.got.plt[weak]-. = 0x13120-0x11060 = 4096*2+192
-# DIS:        11060: auipcc ct3, 2
-# DIS32-NEXT:   lc ct3, 48(ct3)
-# DIS64-NEXT:   lc ct3, 192(ct3)
+## 32-bit (.got.plt): &.got.plt[weak]-. = 0x12018-0x11060 = 4096*1-72
+## 64-bit (.got.plt): &.got.plt[weak]-. = 0x12030-0x11060 = 4096*1-48
+# DIS:        11060: auipcc ct3, 1
+# DIS32-NEXT:   lc ct3, -72(ct3)
+# DIS64-NEXT:   lc ct3, -48(ct3)
 # DIS-NEXT:     jalr ct1, ct3
 # DIS-NEXT:     nop
 
