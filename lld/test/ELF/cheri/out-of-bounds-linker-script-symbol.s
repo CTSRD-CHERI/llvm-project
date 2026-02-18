@@ -30,23 +30,23 @@
 
 # WARN-NOT:  warning:
 # WARN:      ld.lld: warning: Symbol <unknown kind> _TLS_Data_begin
-# WARN-NEXT: >>> defined in <internal> is defined as being in section .tdata but the value ({{0xFFFFFFFFFFFFFFF8|0xA8}}) is outside this section. Will create a zero-size capability.
+# WARN-NEXT: >>> defined in <internal> is defined as being in section .tdata but the value ({{0xFFFFFFFFFFFFFFF8|0xD8}}) is outside this section. Will create a zero-size capability.
 # WARN-NEXT: >>> referenced by <internal>:(.captable+0x0)
 # WARN-EMPTY:
 # WARN-NEXT: warning: Symbol <unknown kind> _TLS_Data_end
-# WARN-NEXT: >>> defined in <internal> is defined as being in section .tdata but the value ({{0x1|0xB9}}) is outside this section. Will create a zero-size capability.
+# WARN-NEXT: >>> defined in <internal> is defined as being in section .tdata but the value ({{0x1|0xE9}}) is outside this section. Will create a zero-size capability.
 # WARN-NEXT: >>> referenced by <internal>:(.captable+0x10)
 # WARN-EMPTY:
 # WARN-NOT:  warning:
 
 # DUMP-TDATA-LABEL: SYMBOL TABLE:
-# DUMP-TDATA: 00000000000000a8 g       .tdata	0000000000000000 _TLS_Data_begin
-# DUMP-TDATA: 00000000000000b9 g       .tdata	0000000000000000 _TLS_Data_end
+# DUMP-TDATA: 00000000000000d8 g       .tdata	0000000000000000 _TLS_Data_begin
+# DUMP-TDATA: 00000000000000e9 g       .tdata	0000000000000000 _TLS_Data_end
 # DUMP-TDATA: 0000000000000008 g       *ABS*	0000000000000000 _TLS_Data_size
 # DUMP-TDATA-LABEL: CAPABILITY RELOCATION RECORDS:
 # DUMP-TDATA-NEXT: OFFSET           TYPE    VALUE
-# DUMP-TDATA-NEXT: {{[0-9a-f]+}}    RODATA  00000000000000a8 [00000000000000a8-00000000000000a8]
-# DUMP-TDATA-NEXT: {{[0-9a-f]+}}    RODATA  00000000000000b9 [00000000000000b9-00000000000000b9]
+# DUMP-TDATA-NEXT: {{[0-9a-f]+}}    RODATA  00000000000000d8 [00000000000000d8-00000000000000d8]
+# DUMP-TDATA-NEXT: {{[0-9a-f]+}}    RODATA  00000000000000e9 [00000000000000e9-00000000000000e9]
 # DUMP-TDATA-EMPTY:
 
 # DUMP-NO-TDATA-LABEL: SYMBOL TABLE:

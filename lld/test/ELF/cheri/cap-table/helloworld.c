@@ -11,5 +11,5 @@
 // CHECK: [[#%.16x,WRAP_ACC_ADDR:]]  g     F .text           0000000000000038 __wrap_accept
 
 // CHECK-LABEL: CAPABILITY RELOCATION RECORDS:
-// CHECK: [[#LIBC_INT_ADDR]] FUNC    [[#WRAP_ACC_ADDR]] [{{[0-9a-f]+}}-{{[0-9a-f]+}}]
 // CHECK: [[#LIBC_INT_CTAB]] DATA    [[#LIBC_INT_ADDR]] {{\[}}[[#LIBC_INT_ADDR]]-[[#LIBC_INT_ADDR+0x540]]]
+// CHECK: [[#LIBC_INT_ADDR]] FUNC    [[#WRAP_ACC_ADDR]] [{{[0-9a-f]+}}-{{[0-9a-f]+}}]

@@ -900,16 +900,18 @@ bool elf::isRelroSection(const OutputSection *sec, bool ignoreZRelro) {
 // * It is easy to check if a give branch was taken.
 // * It is easy two see how similar two ranks are (see getRankProximity).
 enum RankFlags {
-  RF_NOT_ADDR_SET = 1 << 27,
-  RF_NOT_ALLOC = 1 << 26,
-  RF_PARTITION = 1 << 18, // Partition number (8 bits)
-  RF_NOT_SPECIAL = 1 << 17,
-  RF_WRITE = 1 << 16,
-  RF_EXEC_WRITE = 1 << 15,
-  RF_EXEC = 1 << 14,
+  RF_NOT_ADDR_SET = 1 << 29,
+  RF_NOT_ALLOC = 1 << 28,
+  RF_PARTITION = 1 << 20, // Partition number (8 bits)
+  RF_NOT_SPECIAL = 1 << 19,
+  RF_WRITE = 1 << 18,
+  RF_PCC_WRITE = 1 << 17,
+  RF_EXEC_WRITE = 1 << 16,
+  RF_EXEC = 1 << 15,
+  RF_PCC_RODATA = 1 << 14,
   RF_RODATA = 1 << 13,
   RF_LARGE = 1 << 12,
-  RF_NOT_RELRO = 1 << 9,
+  RF_PCC_EQ_RELRO = 1 << 9,
   RF_NOT_TLS = 1 << 8,
   RF_BSS = 1 << 7,
 };
@@ -946,8 +948,21 @@ static unsigned getSectionRank(const OutputSection &osec) {
 
   rank |= RF_NOT_SPECIAL;
 
-  // Sort sections based on their access permission in the following
-  // order: R, RX, RXW, RW(RELRO), RW(non-RELRO).
+  // Sort sections based on their access permission and whether they need to be
+  // within PCC's bounds for CHERI in the following order:
+  //
+  //  * R(non-PCC)
+  //  * R(PCC)
+  //  * RX
+  //  * RXW
+  //  * RW(PCC,non-RELRO)[^1]
+  //  * RW(PCC,RELRO)
+  //  * RW(non-PCC,RELRO)
+  //  * RW(non-PCC,non-RELRO)
+  //
+  // [^1]: RelocationScanner::processAux ignores such cases for input files,
+  //       but this can occur for synthetic sections, in particular .got.plt
+  //       without -z now.
   //
   // Read-only sections come first such that they go in the PT_LOAD covering the
   // program headers at the start of the file.
@@ -959,28 +974,33 @@ static unsigned getSectionRank(const OutputSection &osec) {
   // places.
   bool isExec = osec.flags & SHF_EXECINSTR;
   bool isWrite = osec.flags & SHF_WRITE;
+  bool isPcc = in.pccPadding && in.pccPadding->isNeeded() &&
+               osec.cheriPcc.load(std::memory_order_relaxed);
 
   if (!isWrite && !isExec) {
     // Make PROGBITS sections (e.g .rodata .eh_frame) closer to .text to
     // alleviate relocation overflow pressure. Large special sections such as
     // .dynstr and .dynsym can be away from .text.
     // Treat __(tgot_)cap_relocs like REL* even though it's PROGBITS.
-    if (osec.type == SHT_PROGBITS && osec.name != "__cap_relocs" &&
-        osec.name != "__tgot_cap_relocs")
-      rank |= RF_RODATA;
+    // Special sections accessed via PCC need to be sorted later like normal
+    // sections, though (e.g. for self-relocating static binaries).
+    if ((osec.type == SHT_PROGBITS && osec.name != "__cap_relocs" &&
+         osec.name != "__tgot_cap_relocs") ||
+        isPcc)
+      rank |= isPcc ? RF_PCC_RODATA : RF_RODATA;
     // Among PROGBITS sections, place .lrodata further from .text.
     if (!(osec.flags & SHF_X86_64_LARGE && config->emachine == EM_X86_64))
       rank |= RF_LARGE;
   } else if (isExec) {
     rank |= isWrite ? RF_EXEC_WRITE : RF_EXEC;
   } else {
-    rank |= RF_WRITE;
+    rank |= isPcc ? RF_PCC_WRITE : RF_WRITE;
     // The TLS initialization block needs to be a single contiguous block. Place
     // TLS sections directly before the other RELRO sections.
     if (!(osec.flags & SHF_TLS))
       rank |= RF_NOT_TLS;
-    if (!isRelroSection(&osec))
-      rank |= RF_NOT_RELRO;
+    if (isPcc == isRelroSection(&osec))
+      rank |= RF_PCC_EQ_RELRO;
     // Place .ldata and .lbss after .bss. Making .bss closer to .text alleviates
     // relocation overflow pressure.
     if (osec.flags & SHF_X86_64_LARGE && config->emachine == EM_X86_64)
@@ -2701,11 +2721,17 @@ SmallVector<PhdrEntry *, 0> Writer<ELFT>::createPhdrs(Partition &part) {
     // supposed-to-be-NOBITS section to the output file. (However, we cannot do
     // so when hasSectionsCommand, since we cannot introduce the extra alignment
     // needed to create a new LOAD)
+    //
+    // We also start a new segment for TLS sections as with PCC-based sorting
+    // they may no longer implicitly be the start of the first (or any other)
+    // RW PT_LOAD (specifically if there's at least one RW(PCC,RELRO) section);
+    // for why this is needed see fixSectionAlignments.
     uint64_t newFlags = computeFlags(sec->getPhdrFlags());
     bool sameLMARegion =
         load && !sec->lmaExpr && sec->lmaRegion == load->firstSec->lmaRegion;
-    if (!(load && newFlags == flags && sec != relroEnd &&
-          sec->memRegion == load->firstSec->memRegion &&
+    if (!(load && newFlags == flags && sec != relRo->firstSec &&
+          sec != relroEnd && sec->memRegion == load->firstSec->memRegion &&
+          ((load->firstSec->flags & SHF_TLS) || !(sec->flags & SHF_TLS)) &&
           (sameLMARegion || load->lastSec == Out::programHeaders) &&
           (script->hasSectionsCommand || sec->type == SHT_NOBITS ||
            load->lastSec->type != SHT_NOBITS))) {
