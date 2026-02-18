@@ -80,8 +80,8 @@ fn_reloc1:
 # EXE-RELOCS-NEXT:     Offset: 0x3480
 # EXE-RELOCS-NEXT:     Type: FUNC (0x8000000000000000)
 # EXE-RELOCS-NEXT:     Address: 0x1378
-# EXE-RELOCS-NEXT:     Base: 0x280
-# EXE-RELOCS-NEXT:     Length: 4360
+# EXE-RELOCS-NEXT:     Base: 0x1370
+# EXE-RELOCS-NEXT:     Length: 24
 # EXE-RELOCS-NEXT:   }
 
 fn_reloc2:
@@ -105,8 +105,8 @@ fn_reloc2:
 # EXE-RELOCS-NEXT:     Offset: 0x3490
 # EXE-RELOCS-NEXT:     Type: FUNC (0x8000000000000000)
 # EXE-RELOCS-NEXT:     Address: 0x1384
-# EXE-RELOCS-NEXT:     Base: 0x280
-# EXE-RELOCS-NEXT:     Length: 4360
+# EXE-RELOCS-NEXT:     Base: 0x1370
+# EXE-RELOCS-NEXT:     Length: 24
 # EXE-RELOCS-NEXT:   }
 data_reloc1:
 .chericap .Linside_obj1

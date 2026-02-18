@@ -10,7 +10,7 @@
 # CHECK-NEXT: ]
 # CHECK:      __cap_relocs {
 # CHECK-NEXT:   0x33D0 DATA - 0x33D0 [0x33D0-0x33F0]
-# CHECK-NEXT:   0x33E0 FUNC - 0x1320 [0x2D0-0x1328]
+# CHECK-NEXT:   0x33E0 FUNC - 0x1320 [0x1320-0x1324]
 # CHECK-NEXT: }
 
   .type func, @function
