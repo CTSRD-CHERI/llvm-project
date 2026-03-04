@@ -841,18 +841,6 @@ template <class ELFT> void Writer<ELFT>::addSectionSymbols() {
   }
 }
 
-// Sections with some special names are put into RELRO. This is a
-// bit unfortunate because section names shouldn't be significant in
-// ELF in spirit. But in reality many linker features depend on
-// magic section names.
-bool elf::isRelroSection(StringRef s) {
-  return s == ".data.rel.ro" || s == ".bss.rel.ro" || s == ".ctors" ||
-         s == ".dtors" || s == ".jcr" || s == ".eh_frame" ||
-         s == ".fini_array" || s == ".init_array" ||
-         s == ".openbsd.randomdata" || s == ".preinit_array" ||
-         s == "__cap_relocs" || s == ".gcc_except_table";
-}
-
 // Today's loaders have a feature to make segments read-only after
 // processing dynamic relocations to enhance security. PT_GNU_RELRO
 // is defined for that.
@@ -929,7 +917,18 @@ bool elf::isRelroSection(const OutputSection *sec, bool ignoreZRelro) {
   if (sec->name == ".dynamic")
     return true;
 
-  return isRelroSection(sec->name);
+  // Sections with some special names are put into RELRO. This is a
+  // bit unfortunate because section names shouldn't be significant in
+  // ELF in spirit. But in reality many linker features depend on
+  // magic section names.
+  StringRef s = sec->name;
+  if (sec->compartment != 0)
+    s.consume_back(sec->getCompartment().suffix);
+  return s == ".data.rel.ro" || s == ".bss.rel.ro" || s == ".ctors" ||
+         s == ".dtors" || s == ".jcr" || s == ".eh_frame" ||
+         s == ".fini_array" || s == ".init_array" ||
+         s == ".openbsd.randomdata" || s == ".preinit_array" ||
+         s == "__cap_relocs" || s == ".gcc_except_table";
 }
 
 // We compute a rank for each section. The rank indicates where the
