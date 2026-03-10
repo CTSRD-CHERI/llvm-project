@@ -2501,11 +2501,12 @@ SDValue SelectionDAG::FoldSetCC(EVT VT, SDValue N1, SDValue N2,
   case ISD::SETUO:
   case ISD::SETUEQ:
   case ISD::SETUNE:
-    assert(!OpVT.isInteger() && "Illegal setcc for integer!");
+    assert(!OpVT.isInteger() && !OpVT.isFatPointer() &&
+           "Illegal setcc for integer or pointer!");
     break;
   }
 
-  if (OpVT.isInteger()) {
+  if (OpVT.isInteger() || OpVT.isFatPointer()) {
     // For EQ and NE, we can always pick a value for the undef to make the
     // predicate pass or fail, so we can return undef.
     // Matches behavior in llvm::ConstantFoldCompareInstruction.
