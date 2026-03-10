@@ -98,6 +98,66 @@ define i32 @sle(i8 addrspace(200)* %a, i8 addrspace(200)* %b) nounwind {
   ret i32 %conv
 }
 
+define i32 @eq_same(i8 addrspace(200)* %a) nounwind {
+  %cmp = icmp eq i8 addrspace(200)* %a, %a
+  %conv = zext i1 %cmp to i32
+  ret i32 %conv
+}
+
+define i32 @ne_same(i8 addrspace(200)* %a) nounwind {
+  %cmp = icmp ne i8 addrspace(200)* %a, %a
+  %conv = zext i1 %cmp to i32
+  ret i32 %conv
+}
+
+define i32 @ugt_same(i8 addrspace(200)* %a) nounwind {
+  %cmp = icmp ugt i8 addrspace(200)* %a, %a
+  %conv = zext i1 %cmp to i32
+  ret i32 %conv
+}
+
+define i32 @uge_same(i8 addrspace(200)* %a) nounwind {
+  %cmp = icmp uge i8 addrspace(200)* %a, %a
+  %conv = zext i1 %cmp to i32
+  ret i32 %conv
+}
+
+define i32 @ult_same(i8 addrspace(200)* %a) nounwind {
+  %cmp = icmp ult i8 addrspace(200)* %a, %a
+  %conv = zext i1 %cmp to i32
+  ret i32 %conv
+}
+
+define i32 @ule_same(i8 addrspace(200)* %a) nounwind {
+  %cmp = icmp ule i8 addrspace(200)* %a, %a
+  %conv = zext i1 %cmp to i32
+  ret i32 %conv
+}
+
+define i32 @sgt_same(i8 addrspace(200)* %a) nounwind {
+  %cmp = icmp sgt i8 addrspace(200)* %a, %a
+  %conv = zext i1 %cmp to i32
+  ret i32 %conv
+}
+
+define i32 @sge_same(i8 addrspace(200)* %a) nounwind {
+  %cmp = icmp sge i8 addrspace(200)* %a, %a
+  %conv = zext i1 %cmp to i32
+  ret i32 %conv
+}
+
+define i32 @slt_same(i8 addrspace(200)* %a) nounwind {
+  %cmp = icmp slt i8 addrspace(200)* %a, %a
+  %conv = zext i1 %cmp to i32
+  ret i32 %conv
+}
+
+define i32 @sle_same(i8 addrspace(200)* %a) nounwind {
+  %cmp = icmp sle i8 addrspace(200)* %a, %a
+  %conv = zext i1 %cmp to i32
+  ret i32 %conv
+}
+
 define i32 @eq_null(i8 addrspace(200)* %a) nounwind {
   %cmp = icmp eq i8 addrspace(200)* %a, null
   %conv = zext i1 %cmp to i32

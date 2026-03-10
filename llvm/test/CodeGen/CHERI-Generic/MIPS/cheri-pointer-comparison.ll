@@ -190,6 +190,156 @@ define i32 @sle(i8 addrspace(200)* %a, i8 addrspace(200)* %b) nounwind {
   ret i32 %conv
 }
 
+define i32 @eq_same(i8 addrspace(200)* %a) nounwind {
+; HYBRID-LABEL: eq_same:
+; HYBRID:       # %bb.0:
+; HYBRID-NEXT:    jr $ra
+; HYBRID-NEXT:    addiu $2, $zero, 1
+;
+; PURECAP-LABEL: eq_same:
+; PURECAP:       # %bb.0:
+; PURECAP-NEXT:    cjr $c17
+; PURECAP-NEXT:    addiu $2, $zero, 1
+  %cmp = icmp eq i8 addrspace(200)* %a, %a
+  %conv = zext i1 %cmp to i32
+  ret i32 %conv
+}
+
+define i32 @ne_same(i8 addrspace(200)* %a) nounwind {
+; HYBRID-LABEL: ne_same:
+; HYBRID:       # %bb.0:
+; HYBRID-NEXT:    jr $ra
+; HYBRID-NEXT:    addiu $2, $zero, 0
+;
+; PURECAP-LABEL: ne_same:
+; PURECAP:       # %bb.0:
+; PURECAP-NEXT:    cjr $c17
+; PURECAP-NEXT:    addiu $2, $zero, 0
+  %cmp = icmp ne i8 addrspace(200)* %a, %a
+  %conv = zext i1 %cmp to i32
+  ret i32 %conv
+}
+
+define i32 @ugt_same(i8 addrspace(200)* %a) nounwind {
+; HYBRID-LABEL: ugt_same:
+; HYBRID:       # %bb.0:
+; HYBRID-NEXT:    jr $ra
+; HYBRID-NEXT:    addiu $2, $zero, 0
+;
+; PURECAP-LABEL: ugt_same:
+; PURECAP:       # %bb.0:
+; PURECAP-NEXT:    cjr $c17
+; PURECAP-NEXT:    addiu $2, $zero, 0
+  %cmp = icmp ugt i8 addrspace(200)* %a, %a
+  %conv = zext i1 %cmp to i32
+  ret i32 %conv
+}
+
+define i32 @uge_same(i8 addrspace(200)* %a) nounwind {
+; HYBRID-LABEL: uge_same:
+; HYBRID:       # %bb.0:
+; HYBRID-NEXT:    jr $ra
+; HYBRID-NEXT:    addiu $2, $zero, 1
+;
+; PURECAP-LABEL: uge_same:
+; PURECAP:       # %bb.0:
+; PURECAP-NEXT:    cjr $c17
+; PURECAP-NEXT:    addiu $2, $zero, 1
+  %cmp = icmp uge i8 addrspace(200)* %a, %a
+  %conv = zext i1 %cmp to i32
+  ret i32 %conv
+}
+
+define i32 @ult_same(i8 addrspace(200)* %a) nounwind {
+; HYBRID-LABEL: ult_same:
+; HYBRID:       # %bb.0:
+; HYBRID-NEXT:    jr $ra
+; HYBRID-NEXT:    addiu $2, $zero, 0
+;
+; PURECAP-LABEL: ult_same:
+; PURECAP:       # %bb.0:
+; PURECAP-NEXT:    cjr $c17
+; PURECAP-NEXT:    addiu $2, $zero, 0
+  %cmp = icmp ult i8 addrspace(200)* %a, %a
+  %conv = zext i1 %cmp to i32
+  ret i32 %conv
+}
+
+define i32 @ule_same(i8 addrspace(200)* %a) nounwind {
+; HYBRID-LABEL: ule_same:
+; HYBRID:       # %bb.0:
+; HYBRID-NEXT:    jr $ra
+; HYBRID-NEXT:    addiu $2, $zero, 1
+;
+; PURECAP-LABEL: ule_same:
+; PURECAP:       # %bb.0:
+; PURECAP-NEXT:    cjr $c17
+; PURECAP-NEXT:    addiu $2, $zero, 1
+  %cmp = icmp ule i8 addrspace(200)* %a, %a
+  %conv = zext i1 %cmp to i32
+  ret i32 %conv
+}
+
+define i32 @sgt_same(i8 addrspace(200)* %a) nounwind {
+; HYBRID-LABEL: sgt_same:
+; HYBRID:       # %bb.0:
+; HYBRID-NEXT:    jr $ra
+; HYBRID-NEXT:    addiu $2, $zero, 0
+;
+; PURECAP-LABEL: sgt_same:
+; PURECAP:       # %bb.0:
+; PURECAP-NEXT:    cjr $c17
+; PURECAP-NEXT:    addiu $2, $zero, 0
+  %cmp = icmp sgt i8 addrspace(200)* %a, %a
+  %conv = zext i1 %cmp to i32
+  ret i32 %conv
+}
+
+define i32 @sge_same(i8 addrspace(200)* %a) nounwind {
+; HYBRID-LABEL: sge_same:
+; HYBRID:       # %bb.0:
+; HYBRID-NEXT:    jr $ra
+; HYBRID-NEXT:    addiu $2, $zero, 1
+;
+; PURECAP-LABEL: sge_same:
+; PURECAP:       # %bb.0:
+; PURECAP-NEXT:    cjr $c17
+; PURECAP-NEXT:    addiu $2, $zero, 1
+  %cmp = icmp sge i8 addrspace(200)* %a, %a
+  %conv = zext i1 %cmp to i32
+  ret i32 %conv
+}
+
+define i32 @slt_same(i8 addrspace(200)* %a) nounwind {
+; HYBRID-LABEL: slt_same:
+; HYBRID:       # %bb.0:
+; HYBRID-NEXT:    jr $ra
+; HYBRID-NEXT:    addiu $2, $zero, 0
+;
+; PURECAP-LABEL: slt_same:
+; PURECAP:       # %bb.0:
+; PURECAP-NEXT:    cjr $c17
+; PURECAP-NEXT:    addiu $2, $zero, 0
+  %cmp = icmp slt i8 addrspace(200)* %a, %a
+  %conv = zext i1 %cmp to i32
+  ret i32 %conv
+}
+
+define i32 @sle_same(i8 addrspace(200)* %a) nounwind {
+; HYBRID-LABEL: sle_same:
+; HYBRID:       # %bb.0:
+; HYBRID-NEXT:    jr $ra
+; HYBRID-NEXT:    addiu $2, $zero, 1
+;
+; PURECAP-LABEL: sle_same:
+; PURECAP:       # %bb.0:
+; PURECAP-NEXT:    cjr $c17
+; PURECAP-NEXT:    addiu $2, $zero, 1
+  %cmp = icmp sle i8 addrspace(200)* %a, %a
+  %conv = zext i1 %cmp to i32
+  ret i32 %conv
+}
+
 define i32 @eq_null(i8 addrspace(200)* %a) nounwind {
 ; HYBRID-LABEL: eq_null:
 ; HYBRID:       # %bb.0:
@@ -732,7 +882,7 @@ define i32 @branch_eq(i8 addrspace(200)* %a, i8 addrspace(200)* %b) nounwind {
 ; HYBRID-NEXT:    lui $1, %hi(%neg(%gp_rel(branch_eq)))
 ; HYBRID-NEXT:    daddu $1, $1, $25
 ; HYBRID-NEXT:    cne $2, $c3, $c4
-; HYBRID-NEXT:    beqz $2, .LBB40_2
+; HYBRID-NEXT:    beqz $2, .LBB50_2
 ; HYBRID-NEXT:    daddiu $gp, $1, %lo(%neg(%gp_rel(branch_eq)))
 ; HYBRID-NEXT:  # %bb.1: # %if.end
 ; HYBRID-NEXT:    ld $25, %call16(func2)($gp)
@@ -744,7 +894,7 @@ define i32 @branch_eq(i8 addrspace(200)* %a, i8 addrspace(200)* %b) nounwind {
 ; HYBRID-NEXT:    ld $ra, 8($sp) # 8-byte Folded Reload
 ; HYBRID-NEXT:    jr $ra
 ; HYBRID-NEXT:    daddiu $sp, $sp, 16
-; HYBRID-NEXT:  .LBB40_2: # %if.then
+; HYBRID-NEXT:  .LBB50_2: # %if.then
 ; HYBRID-NEXT:    ld $25, %call16(func1)($gp)
 ; HYBRID-NEXT:    .reloc .Ltmp1, R_MIPS_JALR, func1
 ; HYBRID-NEXT:  .Ltmp1:
@@ -763,7 +913,7 @@ define i32 @branch_eq(i8 addrspace(200)* %a, i8 addrspace(200)* %b) nounwind {
 ; PURECAP-NEXT:    lui $2, %pcrel_hi(_CHERI_CAPABILITY_TABLE_-8)
 ; PURECAP-NEXT:    daddiu $2, $2, %pcrel_lo(_CHERI_CAPABILITY_TABLE_-4)
 ; PURECAP-NEXT:    cgetpccincoffset $c1, $2
-; PURECAP-NEXT:    beqz $1, .LBB40_2
+; PURECAP-NEXT:    beqz $1, .LBB50_2
 ; PURECAP-NEXT:    nop
 ; PURECAP-NEXT:  # %bb.1: # %if.end
 ; PURECAP-NEXT:    clcbi $c12, %capcall20(func2)($c1)
@@ -772,7 +922,7 @@ define i32 @branch_eq(i8 addrspace(200)* %a, i8 addrspace(200)* %b) nounwind {
 ; PURECAP-NEXT:    clc $c17, $zero, 0($c11) # 16-byte Folded Reload
 ; PURECAP-NEXT:    cjr $c17
 ; PURECAP-NEXT:    cincoffset $c11, $c11, 16
-; PURECAP-NEXT:  .LBB40_2: # %if.then
+; PURECAP-NEXT:  .LBB50_2: # %if.then
 ; PURECAP-NEXT:    clcbi $c12, %capcall20(func1)($c1)
 ; PURECAP-NEXT:    cjalr $c12, $c17
 ; PURECAP-NEXT:    nop
@@ -799,7 +949,7 @@ define i32 @branch_ne(i8 addrspace(200)* %a, i8 addrspace(200)* %b) nounwind {
 ; HYBRID-NEXT:    lui $1, %hi(%neg(%gp_rel(branch_ne)))
 ; HYBRID-NEXT:    daddu $1, $1, $25
 ; HYBRID-NEXT:    ceq $2, $c3, $c4
-; HYBRID-NEXT:    bnez $2, .LBB41_2
+; HYBRID-NEXT:    bnez $2, .LBB51_2
 ; HYBRID-NEXT:    daddiu $gp, $1, %lo(%neg(%gp_rel(branch_ne)))
 ; HYBRID-NEXT:  # %bb.1: # %if.then
 ; HYBRID-NEXT:    ld $25, %call16(func1)($gp)
@@ -811,7 +961,7 @@ define i32 @branch_ne(i8 addrspace(200)* %a, i8 addrspace(200)* %b) nounwind {
 ; HYBRID-NEXT:    ld $ra, 8($sp) # 8-byte Folded Reload
 ; HYBRID-NEXT:    jr $ra
 ; HYBRID-NEXT:    daddiu $sp, $sp, 16
-; HYBRID-NEXT:  .LBB41_2: # %if.end
+; HYBRID-NEXT:  .LBB51_2: # %if.end
 ; HYBRID-NEXT:    ld $25, %call16(func2)($gp)
 ; HYBRID-NEXT:    .reloc .Ltmp3, R_MIPS_JALR, func2
 ; HYBRID-NEXT:  .Ltmp3:
@@ -830,7 +980,7 @@ define i32 @branch_ne(i8 addrspace(200)* %a, i8 addrspace(200)* %b) nounwind {
 ; PURECAP-NEXT:    lui $2, %pcrel_hi(_CHERI_CAPABILITY_TABLE_-8)
 ; PURECAP-NEXT:    daddiu $2, $2, %pcrel_lo(_CHERI_CAPABILITY_TABLE_-4)
 ; PURECAP-NEXT:    cgetpccincoffset $c1, $2
-; PURECAP-NEXT:    bnez $1, .LBB41_2
+; PURECAP-NEXT:    bnez $1, .LBB51_2
 ; PURECAP-NEXT:    nop
 ; PURECAP-NEXT:  # %bb.1: # %if.then
 ; PURECAP-NEXT:    clcbi $c12, %capcall20(func1)($c1)
@@ -839,7 +989,7 @@ define i32 @branch_ne(i8 addrspace(200)* %a, i8 addrspace(200)* %b) nounwind {
 ; PURECAP-NEXT:    clc $c17, $zero, 0($c11) # 16-byte Folded Reload
 ; PURECAP-NEXT:    cjr $c17
 ; PURECAP-NEXT:    cincoffset $c11, $c11, 16
-; PURECAP-NEXT:  .LBB41_2: # %if.end
+; PURECAP-NEXT:  .LBB51_2: # %if.end
 ; PURECAP-NEXT:    clcbi $c12, %capcall20(func2)($c1)
 ; PURECAP-NEXT:    cjalr $c12, $c17
 ; PURECAP-NEXT:    nop
@@ -866,7 +1016,7 @@ define i32 @branch_ugt(i8 addrspace(200)* %a, i8 addrspace(200)* %b) nounwind {
 ; HYBRID-NEXT:    lui $1, %hi(%neg(%gp_rel(branch_ugt)))
 ; HYBRID-NEXT:    daddu $1, $1, $25
 ; HYBRID-NEXT:    cleu $2, $c3, $c4
-; HYBRID-NEXT:    bnez $2, .LBB42_2
+; HYBRID-NEXT:    bnez $2, .LBB52_2
 ; HYBRID-NEXT:    daddiu $gp, $1, %lo(%neg(%gp_rel(branch_ugt)))
 ; HYBRID-NEXT:  # %bb.1: # %if.then
 ; HYBRID-NEXT:    ld $25, %call16(func1)($gp)
@@ -878,7 +1028,7 @@ define i32 @branch_ugt(i8 addrspace(200)* %a, i8 addrspace(200)* %b) nounwind {
 ; HYBRID-NEXT:    ld $ra, 8($sp) # 8-byte Folded Reload
 ; HYBRID-NEXT:    jr $ra
 ; HYBRID-NEXT:    daddiu $sp, $sp, 16
-; HYBRID-NEXT:  .LBB42_2: # %if.end
+; HYBRID-NEXT:  .LBB52_2: # %if.end
 ; HYBRID-NEXT:    ld $25, %call16(func2)($gp)
 ; HYBRID-NEXT:    .reloc .Ltmp5, R_MIPS_JALR, func2
 ; HYBRID-NEXT:  .Ltmp5:
@@ -897,7 +1047,7 @@ define i32 @branch_ugt(i8 addrspace(200)* %a, i8 addrspace(200)* %b) nounwind {
 ; PURECAP-NEXT:    lui $2, %pcrel_hi(_CHERI_CAPABILITY_TABLE_-8)
 ; PURECAP-NEXT:    daddiu $2, $2, %pcrel_lo(_CHERI_CAPABILITY_TABLE_-4)
 ; PURECAP-NEXT:    cgetpccincoffset $c1, $2
-; PURECAP-NEXT:    bnez $1, .LBB42_2
+; PURECAP-NEXT:    bnez $1, .LBB52_2
 ; PURECAP-NEXT:    nop
 ; PURECAP-NEXT:  # %bb.1: # %if.then
 ; PURECAP-NEXT:    clcbi $c12, %capcall20(func1)($c1)
@@ -906,7 +1056,7 @@ define i32 @branch_ugt(i8 addrspace(200)* %a, i8 addrspace(200)* %b) nounwind {
 ; PURECAP-NEXT:    clc $c17, $zero, 0($c11) # 16-byte Folded Reload
 ; PURECAP-NEXT:    cjr $c17
 ; PURECAP-NEXT:    cincoffset $c11, $c11, 16
-; PURECAP-NEXT:  .LBB42_2: # %if.end
+; PURECAP-NEXT:  .LBB52_2: # %if.end
 ; PURECAP-NEXT:    clcbi $c12, %capcall20(func2)($c1)
 ; PURECAP-NEXT:    cjalr $c12, $c17
 ; PURECAP-NEXT:    nop
@@ -933,7 +1083,7 @@ define i32 @branch_uge(i8 addrspace(200)* %a, i8 addrspace(200)* %b) nounwind {
 ; HYBRID-NEXT:    lui $1, %hi(%neg(%gp_rel(branch_uge)))
 ; HYBRID-NEXT:    daddu $1, $1, $25
 ; HYBRID-NEXT:    cltu $2, $c3, $c4
-; HYBRID-NEXT:    bnez $2, .LBB43_2
+; HYBRID-NEXT:    bnez $2, .LBB53_2
 ; HYBRID-NEXT:    daddiu $gp, $1, %lo(%neg(%gp_rel(branch_uge)))
 ; HYBRID-NEXT:  # %bb.1: # %if.then
 ; HYBRID-NEXT:    ld $25, %call16(func1)($gp)
@@ -945,7 +1095,7 @@ define i32 @branch_uge(i8 addrspace(200)* %a, i8 addrspace(200)* %b) nounwind {
 ; HYBRID-NEXT:    ld $ra, 8($sp) # 8-byte Folded Reload
 ; HYBRID-NEXT:    jr $ra
 ; HYBRID-NEXT:    daddiu $sp, $sp, 16
-; HYBRID-NEXT:  .LBB43_2: # %if.end
+; HYBRID-NEXT:  .LBB53_2: # %if.end
 ; HYBRID-NEXT:    ld $25, %call16(func2)($gp)
 ; HYBRID-NEXT:    .reloc .Ltmp7, R_MIPS_JALR, func2
 ; HYBRID-NEXT:  .Ltmp7:
@@ -964,7 +1114,7 @@ define i32 @branch_uge(i8 addrspace(200)* %a, i8 addrspace(200)* %b) nounwind {
 ; PURECAP-NEXT:    lui $2, %pcrel_hi(_CHERI_CAPABILITY_TABLE_-8)
 ; PURECAP-NEXT:    daddiu $2, $2, %pcrel_lo(_CHERI_CAPABILITY_TABLE_-4)
 ; PURECAP-NEXT:    cgetpccincoffset $c1, $2
-; PURECAP-NEXT:    bnez $1, .LBB43_2
+; PURECAP-NEXT:    bnez $1, .LBB53_2
 ; PURECAP-NEXT:    nop
 ; PURECAP-NEXT:  # %bb.1: # %if.then
 ; PURECAP-NEXT:    clcbi $c12, %capcall20(func1)($c1)
@@ -973,7 +1123,7 @@ define i32 @branch_uge(i8 addrspace(200)* %a, i8 addrspace(200)* %b) nounwind {
 ; PURECAP-NEXT:    clc $c17, $zero, 0($c11) # 16-byte Folded Reload
 ; PURECAP-NEXT:    cjr $c17
 ; PURECAP-NEXT:    cincoffset $c11, $c11, 16
-; PURECAP-NEXT:  .LBB43_2: # %if.end
+; PURECAP-NEXT:  .LBB53_2: # %if.end
 ; PURECAP-NEXT:    clcbi $c12, %capcall20(func2)($c1)
 ; PURECAP-NEXT:    cjalr $c12, $c17
 ; PURECAP-NEXT:    nop
@@ -1000,7 +1150,7 @@ define i32 @branch_ult(i8 addrspace(200)* %a, i8 addrspace(200)* %b) nounwind {
 ; HYBRID-NEXT:    lui $1, %hi(%neg(%gp_rel(branch_ult)))
 ; HYBRID-NEXT:    daddu $1, $1, $25
 ; HYBRID-NEXT:    cleu $2, $c4, $c3
-; HYBRID-NEXT:    bnez $2, .LBB44_2
+; HYBRID-NEXT:    bnez $2, .LBB54_2
 ; HYBRID-NEXT:    daddiu $gp, $1, %lo(%neg(%gp_rel(branch_ult)))
 ; HYBRID-NEXT:  # %bb.1: # %if.then
 ; HYBRID-NEXT:    ld $25, %call16(func1)($gp)
@@ -1012,7 +1162,7 @@ define i32 @branch_ult(i8 addrspace(200)* %a, i8 addrspace(200)* %b) nounwind {
 ; HYBRID-NEXT:    ld $ra, 8($sp) # 8-byte Folded Reload
 ; HYBRID-NEXT:    jr $ra
 ; HYBRID-NEXT:    daddiu $sp, $sp, 16
-; HYBRID-NEXT:  .LBB44_2: # %if.end
+; HYBRID-NEXT:  .LBB54_2: # %if.end
 ; HYBRID-NEXT:    ld $25, %call16(func2)($gp)
 ; HYBRID-NEXT:    .reloc .Ltmp9, R_MIPS_JALR, func2
 ; HYBRID-NEXT:  .Ltmp9:
@@ -1031,7 +1181,7 @@ define i32 @branch_ult(i8 addrspace(200)* %a, i8 addrspace(200)* %b) nounwind {
 ; PURECAP-NEXT:    lui $2, %pcrel_hi(_CHERI_CAPABILITY_TABLE_-8)
 ; PURECAP-NEXT:    daddiu $2, $2, %pcrel_lo(_CHERI_CAPABILITY_TABLE_-4)
 ; PURECAP-NEXT:    cgetpccincoffset $c1, $2
-; PURECAP-NEXT:    bnez $1, .LBB44_2
+; PURECAP-NEXT:    bnez $1, .LBB54_2
 ; PURECAP-NEXT:    nop
 ; PURECAP-NEXT:  # %bb.1: # %if.then
 ; PURECAP-NEXT:    clcbi $c12, %capcall20(func1)($c1)
@@ -1040,7 +1190,7 @@ define i32 @branch_ult(i8 addrspace(200)* %a, i8 addrspace(200)* %b) nounwind {
 ; PURECAP-NEXT:    clc $c17, $zero, 0($c11) # 16-byte Folded Reload
 ; PURECAP-NEXT:    cjr $c17
 ; PURECAP-NEXT:    cincoffset $c11, $c11, 16
-; PURECAP-NEXT:  .LBB44_2: # %if.end
+; PURECAP-NEXT:  .LBB54_2: # %if.end
 ; PURECAP-NEXT:    clcbi $c12, %capcall20(func2)($c1)
 ; PURECAP-NEXT:    cjalr $c12, $c17
 ; PURECAP-NEXT:    nop
@@ -1067,7 +1217,7 @@ define i32 @branch_ule(i8 addrspace(200)* %a, i8 addrspace(200)* %b) nounwind {
 ; HYBRID-NEXT:    lui $1, %hi(%neg(%gp_rel(branch_ule)))
 ; HYBRID-NEXT:    daddu $1, $1, $25
 ; HYBRID-NEXT:    cltu $2, $c4, $c3
-; HYBRID-NEXT:    bnez $2, .LBB45_2
+; HYBRID-NEXT:    bnez $2, .LBB55_2
 ; HYBRID-NEXT:    daddiu $gp, $1, %lo(%neg(%gp_rel(branch_ule)))
 ; HYBRID-NEXT:  # %bb.1: # %if.then
 ; HYBRID-NEXT:    ld $25, %call16(func1)($gp)
@@ -1079,7 +1229,7 @@ define i32 @branch_ule(i8 addrspace(200)* %a, i8 addrspace(200)* %b) nounwind {
 ; HYBRID-NEXT:    ld $ra, 8($sp) # 8-byte Folded Reload
 ; HYBRID-NEXT:    jr $ra
 ; HYBRID-NEXT:    daddiu $sp, $sp, 16
-; HYBRID-NEXT:  .LBB45_2: # %if.end
+; HYBRID-NEXT:  .LBB55_2: # %if.end
 ; HYBRID-NEXT:    ld $25, %call16(func2)($gp)
 ; HYBRID-NEXT:    .reloc .Ltmp11, R_MIPS_JALR, func2
 ; HYBRID-NEXT:  .Ltmp11:
@@ -1098,7 +1248,7 @@ define i32 @branch_ule(i8 addrspace(200)* %a, i8 addrspace(200)* %b) nounwind {
 ; PURECAP-NEXT:    lui $2, %pcrel_hi(_CHERI_CAPABILITY_TABLE_-8)
 ; PURECAP-NEXT:    daddiu $2, $2, %pcrel_lo(_CHERI_CAPABILITY_TABLE_-4)
 ; PURECAP-NEXT:    cgetpccincoffset $c1, $2
-; PURECAP-NEXT:    bnez $1, .LBB45_2
+; PURECAP-NEXT:    bnez $1, .LBB55_2
 ; PURECAP-NEXT:    nop
 ; PURECAP-NEXT:  # %bb.1: # %if.then
 ; PURECAP-NEXT:    clcbi $c12, %capcall20(func1)($c1)
@@ -1107,7 +1257,7 @@ define i32 @branch_ule(i8 addrspace(200)* %a, i8 addrspace(200)* %b) nounwind {
 ; PURECAP-NEXT:    clc $c17, $zero, 0($c11) # 16-byte Folded Reload
 ; PURECAP-NEXT:    cjr $c17
 ; PURECAP-NEXT:    cincoffset $c11, $c11, 16
-; PURECAP-NEXT:  .LBB45_2: # %if.end
+; PURECAP-NEXT:  .LBB55_2: # %if.end
 ; PURECAP-NEXT:    clcbi $c12, %capcall20(func2)($c1)
 ; PURECAP-NEXT:    cjalr $c12, $c17
 ; PURECAP-NEXT:    nop
@@ -1134,7 +1284,7 @@ define i32 @branch_sgt(i8 addrspace(200)* %a, i8 addrspace(200)* %b) nounwind {
 ; HYBRID-NEXT:    lui $1, %hi(%neg(%gp_rel(branch_sgt)))
 ; HYBRID-NEXT:    daddu $1, $1, $25
 ; HYBRID-NEXT:    cle $2, $c3, $c4
-; HYBRID-NEXT:    bnez $2, .LBB46_2
+; HYBRID-NEXT:    bnez $2, .LBB56_2
 ; HYBRID-NEXT:    daddiu $gp, $1, %lo(%neg(%gp_rel(branch_sgt)))
 ; HYBRID-NEXT:  # %bb.1: # %if.then
 ; HYBRID-NEXT:    ld $25, %call16(func1)($gp)
@@ -1146,7 +1296,7 @@ define i32 @branch_sgt(i8 addrspace(200)* %a, i8 addrspace(200)* %b) nounwind {
 ; HYBRID-NEXT:    ld $ra, 8($sp) # 8-byte Folded Reload
 ; HYBRID-NEXT:    jr $ra
 ; HYBRID-NEXT:    daddiu $sp, $sp, 16
-; HYBRID-NEXT:  .LBB46_2: # %if.end
+; HYBRID-NEXT:  .LBB56_2: # %if.end
 ; HYBRID-NEXT:    ld $25, %call16(func2)($gp)
 ; HYBRID-NEXT:    .reloc .Ltmp13, R_MIPS_JALR, func2
 ; HYBRID-NEXT:  .Ltmp13:
@@ -1165,7 +1315,7 @@ define i32 @branch_sgt(i8 addrspace(200)* %a, i8 addrspace(200)* %b) nounwind {
 ; PURECAP-NEXT:    lui $2, %pcrel_hi(_CHERI_CAPABILITY_TABLE_-8)
 ; PURECAP-NEXT:    daddiu $2, $2, %pcrel_lo(_CHERI_CAPABILITY_TABLE_-4)
 ; PURECAP-NEXT:    cgetpccincoffset $c1, $2
-; PURECAP-NEXT:    bnez $1, .LBB46_2
+; PURECAP-NEXT:    bnez $1, .LBB56_2
 ; PURECAP-NEXT:    nop
 ; PURECAP-NEXT:  # %bb.1: # %if.then
 ; PURECAP-NEXT:    clcbi $c12, %capcall20(func1)($c1)
@@ -1174,7 +1324,7 @@ define i32 @branch_sgt(i8 addrspace(200)* %a, i8 addrspace(200)* %b) nounwind {
 ; PURECAP-NEXT:    clc $c17, $zero, 0($c11) # 16-byte Folded Reload
 ; PURECAP-NEXT:    cjr $c17
 ; PURECAP-NEXT:    cincoffset $c11, $c11, 16
-; PURECAP-NEXT:  .LBB46_2: # %if.end
+; PURECAP-NEXT:  .LBB56_2: # %if.end
 ; PURECAP-NEXT:    clcbi $c12, %capcall20(func2)($c1)
 ; PURECAP-NEXT:    cjalr $c12, $c17
 ; PURECAP-NEXT:    nop
@@ -1201,7 +1351,7 @@ define i32 @branch_sge(i8 addrspace(200)* %a, i8 addrspace(200)* %b) nounwind {
 ; HYBRID-NEXT:    lui $1, %hi(%neg(%gp_rel(branch_sge)))
 ; HYBRID-NEXT:    daddu $1, $1, $25
 ; HYBRID-NEXT:    clt $2, $c3, $c4
-; HYBRID-NEXT:    bnez $2, .LBB47_2
+; HYBRID-NEXT:    bnez $2, .LBB57_2
 ; HYBRID-NEXT:    daddiu $gp, $1, %lo(%neg(%gp_rel(branch_sge)))
 ; HYBRID-NEXT:  # %bb.1: # %if.then
 ; HYBRID-NEXT:    ld $25, %call16(func1)($gp)
@@ -1213,7 +1363,7 @@ define i32 @branch_sge(i8 addrspace(200)* %a, i8 addrspace(200)* %b) nounwind {
 ; HYBRID-NEXT:    ld $ra, 8($sp) # 8-byte Folded Reload
 ; HYBRID-NEXT:    jr $ra
 ; HYBRID-NEXT:    daddiu $sp, $sp, 16
-; HYBRID-NEXT:  .LBB47_2: # %if.end
+; HYBRID-NEXT:  .LBB57_2: # %if.end
 ; HYBRID-NEXT:    ld $25, %call16(func2)($gp)
 ; HYBRID-NEXT:    .reloc .Ltmp15, R_MIPS_JALR, func2
 ; HYBRID-NEXT:  .Ltmp15:
@@ -1232,7 +1382,7 @@ define i32 @branch_sge(i8 addrspace(200)* %a, i8 addrspace(200)* %b) nounwind {
 ; PURECAP-NEXT:    lui $2, %pcrel_hi(_CHERI_CAPABILITY_TABLE_-8)
 ; PURECAP-NEXT:    daddiu $2, $2, %pcrel_lo(_CHERI_CAPABILITY_TABLE_-4)
 ; PURECAP-NEXT:    cgetpccincoffset $c1, $2
-; PURECAP-NEXT:    bnez $1, .LBB47_2
+; PURECAP-NEXT:    bnez $1, .LBB57_2
 ; PURECAP-NEXT:    nop
 ; PURECAP-NEXT:  # %bb.1: # %if.then
 ; PURECAP-NEXT:    clcbi $c12, %capcall20(func1)($c1)
@@ -1241,7 +1391,7 @@ define i32 @branch_sge(i8 addrspace(200)* %a, i8 addrspace(200)* %b) nounwind {
 ; PURECAP-NEXT:    clc $c17, $zero, 0($c11) # 16-byte Folded Reload
 ; PURECAP-NEXT:    cjr $c17
 ; PURECAP-NEXT:    cincoffset $c11, $c11, 16
-; PURECAP-NEXT:  .LBB47_2: # %if.end
+; PURECAP-NEXT:  .LBB57_2: # %if.end
 ; PURECAP-NEXT:    clcbi $c12, %capcall20(func2)($c1)
 ; PURECAP-NEXT:    cjalr $c12, $c17
 ; PURECAP-NEXT:    nop
@@ -1268,7 +1418,7 @@ define i32 @branch_slt(i8 addrspace(200)* %a, i8 addrspace(200)* %b) nounwind {
 ; HYBRID-NEXT:    lui $1, %hi(%neg(%gp_rel(branch_slt)))
 ; HYBRID-NEXT:    daddu $1, $1, $25
 ; HYBRID-NEXT:    cle $2, $c4, $c3
-; HYBRID-NEXT:    bnez $2, .LBB48_2
+; HYBRID-NEXT:    bnez $2, .LBB58_2
 ; HYBRID-NEXT:    daddiu $gp, $1, %lo(%neg(%gp_rel(branch_slt)))
 ; HYBRID-NEXT:  # %bb.1: # %if.then
 ; HYBRID-NEXT:    ld $25, %call16(func1)($gp)
@@ -1280,7 +1430,7 @@ define i32 @branch_slt(i8 addrspace(200)* %a, i8 addrspace(200)* %b) nounwind {
 ; HYBRID-NEXT:    ld $ra, 8($sp) # 8-byte Folded Reload
 ; HYBRID-NEXT:    jr $ra
 ; HYBRID-NEXT:    daddiu $sp, $sp, 16
-; HYBRID-NEXT:  .LBB48_2: # %if.end
+; HYBRID-NEXT:  .LBB58_2: # %if.end
 ; HYBRID-NEXT:    ld $25, %call16(func2)($gp)
 ; HYBRID-NEXT:    .reloc .Ltmp17, R_MIPS_JALR, func2
 ; HYBRID-NEXT:  .Ltmp17:
@@ -1299,7 +1449,7 @@ define i32 @branch_slt(i8 addrspace(200)* %a, i8 addrspace(200)* %b) nounwind {
 ; PURECAP-NEXT:    lui $2, %pcrel_hi(_CHERI_CAPABILITY_TABLE_-8)
 ; PURECAP-NEXT:    daddiu $2, $2, %pcrel_lo(_CHERI_CAPABILITY_TABLE_-4)
 ; PURECAP-NEXT:    cgetpccincoffset $c1, $2
-; PURECAP-NEXT:    bnez $1, .LBB48_2
+; PURECAP-NEXT:    bnez $1, .LBB58_2
 ; PURECAP-NEXT:    nop
 ; PURECAP-NEXT:  # %bb.1: # %if.then
 ; PURECAP-NEXT:    clcbi $c12, %capcall20(func1)($c1)
@@ -1308,7 +1458,7 @@ define i32 @branch_slt(i8 addrspace(200)* %a, i8 addrspace(200)* %b) nounwind {
 ; PURECAP-NEXT:    clc $c17, $zero, 0($c11) # 16-byte Folded Reload
 ; PURECAP-NEXT:    cjr $c17
 ; PURECAP-NEXT:    cincoffset $c11, $c11, 16
-; PURECAP-NEXT:  .LBB48_2: # %if.end
+; PURECAP-NEXT:  .LBB58_2: # %if.end
 ; PURECAP-NEXT:    clcbi $c12, %capcall20(func2)($c1)
 ; PURECAP-NEXT:    cjalr $c12, $c17
 ; PURECAP-NEXT:    nop
@@ -1335,7 +1485,7 @@ define i32 @branch_sle(i8 addrspace(200)* %a, i8 addrspace(200)* %b) nounwind {
 ; HYBRID-NEXT:    lui $1, %hi(%neg(%gp_rel(branch_sle)))
 ; HYBRID-NEXT:    daddu $1, $1, $25
 ; HYBRID-NEXT:    clt $2, $c4, $c3
-; HYBRID-NEXT:    bnez $2, .LBB49_2
+; HYBRID-NEXT:    bnez $2, .LBB59_2
 ; HYBRID-NEXT:    daddiu $gp, $1, %lo(%neg(%gp_rel(branch_sle)))
 ; HYBRID-NEXT:  # %bb.1: # %if.then
 ; HYBRID-NEXT:    ld $25, %call16(func1)($gp)
@@ -1347,7 +1497,7 @@ define i32 @branch_sle(i8 addrspace(200)* %a, i8 addrspace(200)* %b) nounwind {
 ; HYBRID-NEXT:    ld $ra, 8($sp) # 8-byte Folded Reload
 ; HYBRID-NEXT:    jr $ra
 ; HYBRID-NEXT:    daddiu $sp, $sp, 16
-; HYBRID-NEXT:  .LBB49_2: # %if.end
+; HYBRID-NEXT:  .LBB59_2: # %if.end
 ; HYBRID-NEXT:    ld $25, %call16(func2)($gp)
 ; HYBRID-NEXT:    .reloc .Ltmp19, R_MIPS_JALR, func2
 ; HYBRID-NEXT:  .Ltmp19:
@@ -1366,7 +1516,7 @@ define i32 @branch_sle(i8 addrspace(200)* %a, i8 addrspace(200)* %b) nounwind {
 ; PURECAP-NEXT:    lui $2, %pcrel_hi(_CHERI_CAPABILITY_TABLE_-8)
 ; PURECAP-NEXT:    daddiu $2, $2, %pcrel_lo(_CHERI_CAPABILITY_TABLE_-4)
 ; PURECAP-NEXT:    cgetpccincoffset $c1, $2
-; PURECAP-NEXT:    bnez $1, .LBB49_2
+; PURECAP-NEXT:    bnez $1, .LBB59_2
 ; PURECAP-NEXT:    nop
 ; PURECAP-NEXT:  # %bb.1: # %if.then
 ; PURECAP-NEXT:    clcbi $c12, %capcall20(func1)($c1)
@@ -1375,7 +1525,7 @@ define i32 @branch_sle(i8 addrspace(200)* %a, i8 addrspace(200)* %b) nounwind {
 ; PURECAP-NEXT:    clc $c17, $zero, 0($c11) # 16-byte Folded Reload
 ; PURECAP-NEXT:    cjr $c17
 ; PURECAP-NEXT:    cincoffset $c11, $c11, 16
-; PURECAP-NEXT:  .LBB49_2: # %if.end
+; PURECAP-NEXT:  .LBB59_2: # %if.end
 ; PURECAP-NEXT:    clcbi $c12, %capcall20(func2)($c1)
 ; PURECAP-NEXT:    cjalr $c12, $c17
 ; PURECAP-NEXT:    nop
@@ -1401,7 +1551,7 @@ define i32 @branch_eq_null(i8 addrspace(200)* %a) nounwind {
 ; HYBRID-NEXT:    sd $gp, 0($sp) # 8-byte Folded Spill
 ; HYBRID-NEXT:    lui $1, %hi(%neg(%gp_rel(branch_eq_null)))
 ; HYBRID-NEXT:    daddu $1, $1, $25
-; HYBRID-NEXT:    cbez $c3, .LBB50_2
+; HYBRID-NEXT:    cbez $c3, .LBB60_2
 ; HYBRID-NEXT:    daddiu $gp, $1, %lo(%neg(%gp_rel(branch_eq_null)))
 ; HYBRID-NEXT:  # %bb.1: # %if.end
 ; HYBRID-NEXT:    ld $25, %call16(func2)($gp)
@@ -1413,7 +1563,7 @@ define i32 @branch_eq_null(i8 addrspace(200)* %a) nounwind {
 ; HYBRID-NEXT:    ld $ra, 8($sp) # 8-byte Folded Reload
 ; HYBRID-NEXT:    jr $ra
 ; HYBRID-NEXT:    daddiu $sp, $sp, 16
-; HYBRID-NEXT:  .LBB50_2: # %if.then
+; HYBRID-NEXT:  .LBB60_2: # %if.then
 ; HYBRID-NEXT:    ld $25, %call16(func1)($gp)
 ; HYBRID-NEXT:    .reloc .Ltmp21, R_MIPS_JALR, func1
 ; HYBRID-NEXT:  .Ltmp21:
@@ -1431,7 +1581,7 @@ define i32 @branch_eq_null(i8 addrspace(200)* %a) nounwind {
 ; PURECAP-NEXT:    lui $1, %pcrel_hi(_CHERI_CAPABILITY_TABLE_-8)
 ; PURECAP-NEXT:    daddiu $1, $1, %pcrel_lo(_CHERI_CAPABILITY_TABLE_-4)
 ; PURECAP-NEXT:    cgetpccincoffset $c1, $1
-; PURECAP-NEXT:    cbez $c3, .LBB50_2
+; PURECAP-NEXT:    cbez $c3, .LBB60_2
 ; PURECAP-NEXT:    nop
 ; PURECAP-NEXT:  # %bb.1: # %if.end
 ; PURECAP-NEXT:    clcbi $c12, %capcall20(func2)($c1)
@@ -1440,7 +1590,7 @@ define i32 @branch_eq_null(i8 addrspace(200)* %a) nounwind {
 ; PURECAP-NEXT:    clc $c17, $zero, 0($c11) # 16-byte Folded Reload
 ; PURECAP-NEXT:    cjr $c17
 ; PURECAP-NEXT:    cincoffset $c11, $c11, 16
-; PURECAP-NEXT:  .LBB50_2: # %if.then
+; PURECAP-NEXT:  .LBB60_2: # %if.then
 ; PURECAP-NEXT:    clcbi $c12, %capcall20(func1)($c1)
 ; PURECAP-NEXT:    cjalr $c12, $c17
 ; PURECAP-NEXT:    nop
@@ -1466,7 +1616,7 @@ define i32 @branch_ne_null(i8 addrspace(200)* %a) nounwind {
 ; HYBRID-NEXT:    sd $gp, 0($sp) # 8-byte Folded Spill
 ; HYBRID-NEXT:    lui $1, %hi(%neg(%gp_rel(branch_ne_null)))
 ; HYBRID-NEXT:    daddu $1, $1, $25
-; HYBRID-NEXT:    cbez $c3, .LBB51_2
+; HYBRID-NEXT:    cbez $c3, .LBB61_2
 ; HYBRID-NEXT:    daddiu $gp, $1, %lo(%neg(%gp_rel(branch_ne_null)))
 ; HYBRID-NEXT:  # %bb.1: # %if.then
 ; HYBRID-NEXT:    ld $25, %call16(func1)($gp)
@@ -1478,7 +1628,7 @@ define i32 @branch_ne_null(i8 addrspace(200)* %a) nounwind {
 ; HYBRID-NEXT:    ld $ra, 8($sp) # 8-byte Folded Reload
 ; HYBRID-NEXT:    jr $ra
 ; HYBRID-NEXT:    daddiu $sp, $sp, 16
-; HYBRID-NEXT:  .LBB51_2: # %if.end
+; HYBRID-NEXT:  .LBB61_2: # %if.end
 ; HYBRID-NEXT:    ld $25, %call16(func2)($gp)
 ; HYBRID-NEXT:    .reloc .Ltmp23, R_MIPS_JALR, func2
 ; HYBRID-NEXT:  .Ltmp23:
@@ -1496,7 +1646,7 @@ define i32 @branch_ne_null(i8 addrspace(200)* %a) nounwind {
 ; PURECAP-NEXT:    lui $1, %pcrel_hi(_CHERI_CAPABILITY_TABLE_-8)
 ; PURECAP-NEXT:    daddiu $1, $1, %pcrel_lo(_CHERI_CAPABILITY_TABLE_-4)
 ; PURECAP-NEXT:    cgetpccincoffset $c1, $1
-; PURECAP-NEXT:    cbez $c3, .LBB51_2
+; PURECAP-NEXT:    cbez $c3, .LBB61_2
 ; PURECAP-NEXT:    nop
 ; PURECAP-NEXT:  # %bb.1: # %if.then
 ; PURECAP-NEXT:    clcbi $c12, %capcall20(func1)($c1)
@@ -1505,7 +1655,7 @@ define i32 @branch_ne_null(i8 addrspace(200)* %a) nounwind {
 ; PURECAP-NEXT:    clc $c17, $zero, 0($c11) # 16-byte Folded Reload
 ; PURECAP-NEXT:    cjr $c17
 ; PURECAP-NEXT:    cincoffset $c11, $c11, 16
-; PURECAP-NEXT:  .LBB51_2: # %if.end
+; PURECAP-NEXT:  .LBB61_2: # %if.end
 ; PURECAP-NEXT:    clcbi $c12, %capcall20(func2)($c1)
 ; PURECAP-NEXT:    cjalr $c12, $c17
 ; PURECAP-NEXT:    nop
@@ -1532,7 +1682,7 @@ define i32 @branch_ugt_null(i8 addrspace(200)* %a) nounwind {
 ; HYBRID-NEXT:    lui $1, %hi(%neg(%gp_rel(branch_ugt_null)))
 ; HYBRID-NEXT:    daddu $1, $1, $25
 ; HYBRID-NEXT:    cleu $2, $c3, $cnull
-; HYBRID-NEXT:    bnez $2, .LBB52_2
+; HYBRID-NEXT:    bnez $2, .LBB62_2
 ; HYBRID-NEXT:    daddiu $gp, $1, %lo(%neg(%gp_rel(branch_ugt_null)))
 ; HYBRID-NEXT:  # %bb.1: # %if.then
 ; HYBRID-NEXT:    ld $25, %call16(func1)($gp)
@@ -1544,7 +1694,7 @@ define i32 @branch_ugt_null(i8 addrspace(200)* %a) nounwind {
 ; HYBRID-NEXT:    ld $ra, 8($sp) # 8-byte Folded Reload
 ; HYBRID-NEXT:    jr $ra
 ; HYBRID-NEXT:    daddiu $sp, $sp, 16
-; HYBRID-NEXT:  .LBB52_2: # %if.end
+; HYBRID-NEXT:  .LBB62_2: # %if.end
 ; HYBRID-NEXT:    ld $25, %call16(func2)($gp)
 ; HYBRID-NEXT:    .reloc .Ltmp25, R_MIPS_JALR, func2
 ; HYBRID-NEXT:  .Ltmp25:
@@ -1563,7 +1713,7 @@ define i32 @branch_ugt_null(i8 addrspace(200)* %a) nounwind {
 ; PURECAP-NEXT:    lui $2, %pcrel_hi(_CHERI_CAPABILITY_TABLE_-8)
 ; PURECAP-NEXT:    daddiu $2, $2, %pcrel_lo(_CHERI_CAPABILITY_TABLE_-4)
 ; PURECAP-NEXT:    cgetpccincoffset $c1, $2
-; PURECAP-NEXT:    bnez $1, .LBB52_2
+; PURECAP-NEXT:    bnez $1, .LBB62_2
 ; PURECAP-NEXT:    nop
 ; PURECAP-NEXT:  # %bb.1: # %if.then
 ; PURECAP-NEXT:    clcbi $c12, %capcall20(func1)($c1)
@@ -1572,7 +1722,7 @@ define i32 @branch_ugt_null(i8 addrspace(200)* %a) nounwind {
 ; PURECAP-NEXT:    clc $c17, $zero, 0($c11) # 16-byte Folded Reload
 ; PURECAP-NEXT:    cjr $c17
 ; PURECAP-NEXT:    cincoffset $c11, $c11, 16
-; PURECAP-NEXT:  .LBB52_2: # %if.end
+; PURECAP-NEXT:  .LBB62_2: # %if.end
 ; PURECAP-NEXT:    clcbi $c12, %capcall20(func2)($c1)
 ; PURECAP-NEXT:    cjalr $c12, $c17
 ; PURECAP-NEXT:    nop
@@ -1599,7 +1749,7 @@ define i32 @branch_uge_null(i8 addrspace(200)* %a) nounwind {
 ; HYBRID-NEXT:    lui $1, %hi(%neg(%gp_rel(branch_uge_null)))
 ; HYBRID-NEXT:    daddu $1, $1, $25
 ; HYBRID-NEXT:    cltu $2, $c3, $cnull
-; HYBRID-NEXT:    bnez $2, .LBB53_2
+; HYBRID-NEXT:    bnez $2, .LBB63_2
 ; HYBRID-NEXT:    daddiu $gp, $1, %lo(%neg(%gp_rel(branch_uge_null)))
 ; HYBRID-NEXT:  # %bb.1: # %if.then
 ; HYBRID-NEXT:    ld $25, %call16(func1)($gp)
@@ -1611,7 +1761,7 @@ define i32 @branch_uge_null(i8 addrspace(200)* %a) nounwind {
 ; HYBRID-NEXT:    ld $ra, 8($sp) # 8-byte Folded Reload
 ; HYBRID-NEXT:    jr $ra
 ; HYBRID-NEXT:    daddiu $sp, $sp, 16
-; HYBRID-NEXT:  .LBB53_2: # %if.end
+; HYBRID-NEXT:  .LBB63_2: # %if.end
 ; HYBRID-NEXT:    ld $25, %call16(func2)($gp)
 ; HYBRID-NEXT:    .reloc .Ltmp27, R_MIPS_JALR, func2
 ; HYBRID-NEXT:  .Ltmp27:
@@ -1630,7 +1780,7 @@ define i32 @branch_uge_null(i8 addrspace(200)* %a) nounwind {
 ; PURECAP-NEXT:    lui $2, %pcrel_hi(_CHERI_CAPABILITY_TABLE_-8)
 ; PURECAP-NEXT:    daddiu $2, $2, %pcrel_lo(_CHERI_CAPABILITY_TABLE_-4)
 ; PURECAP-NEXT:    cgetpccincoffset $c1, $2
-; PURECAP-NEXT:    bnez $1, .LBB53_2
+; PURECAP-NEXT:    bnez $1, .LBB63_2
 ; PURECAP-NEXT:    nop
 ; PURECAP-NEXT:  # %bb.1: # %if.then
 ; PURECAP-NEXT:    clcbi $c12, %capcall20(func1)($c1)
@@ -1639,7 +1789,7 @@ define i32 @branch_uge_null(i8 addrspace(200)* %a) nounwind {
 ; PURECAP-NEXT:    clc $c17, $zero, 0($c11) # 16-byte Folded Reload
 ; PURECAP-NEXT:    cjr $c17
 ; PURECAP-NEXT:    cincoffset $c11, $c11, 16
-; PURECAP-NEXT:  .LBB53_2: # %if.end
+; PURECAP-NEXT:  .LBB63_2: # %if.end
 ; PURECAP-NEXT:    clcbi $c12, %capcall20(func2)($c1)
 ; PURECAP-NEXT:    cjalr $c12, $c17
 ; PURECAP-NEXT:    nop
@@ -1666,7 +1816,7 @@ define i32 @branch_ult_null(i8 addrspace(200)* %a) nounwind {
 ; HYBRID-NEXT:    lui $1, %hi(%neg(%gp_rel(branch_ult_null)))
 ; HYBRID-NEXT:    daddu $1, $1, $25
 ; HYBRID-NEXT:    cleu $2, $cnull, $c3
-; HYBRID-NEXT:    bnez $2, .LBB54_2
+; HYBRID-NEXT:    bnez $2, .LBB64_2
 ; HYBRID-NEXT:    daddiu $gp, $1, %lo(%neg(%gp_rel(branch_ult_null)))
 ; HYBRID-NEXT:  # %bb.1: # %if.then
 ; HYBRID-NEXT:    ld $25, %call16(func1)($gp)
@@ -1678,7 +1828,7 @@ define i32 @branch_ult_null(i8 addrspace(200)* %a) nounwind {
 ; HYBRID-NEXT:    ld $ra, 8($sp) # 8-byte Folded Reload
 ; HYBRID-NEXT:    jr $ra
 ; HYBRID-NEXT:    daddiu $sp, $sp, 16
-; HYBRID-NEXT:  .LBB54_2: # %if.end
+; HYBRID-NEXT:  .LBB64_2: # %if.end
 ; HYBRID-NEXT:    ld $25, %call16(func2)($gp)
 ; HYBRID-NEXT:    .reloc .Ltmp29, R_MIPS_JALR, func2
 ; HYBRID-NEXT:  .Ltmp29:
@@ -1697,7 +1847,7 @@ define i32 @branch_ult_null(i8 addrspace(200)* %a) nounwind {
 ; PURECAP-NEXT:    lui $2, %pcrel_hi(_CHERI_CAPABILITY_TABLE_-8)
 ; PURECAP-NEXT:    daddiu $2, $2, %pcrel_lo(_CHERI_CAPABILITY_TABLE_-4)
 ; PURECAP-NEXT:    cgetpccincoffset $c1, $2
-; PURECAP-NEXT:    bnez $1, .LBB54_2
+; PURECAP-NEXT:    bnez $1, .LBB64_2
 ; PURECAP-NEXT:    nop
 ; PURECAP-NEXT:  # %bb.1: # %if.then
 ; PURECAP-NEXT:    clcbi $c12, %capcall20(func1)($c1)
@@ -1706,7 +1856,7 @@ define i32 @branch_ult_null(i8 addrspace(200)* %a) nounwind {
 ; PURECAP-NEXT:    clc $c17, $zero, 0($c11) # 16-byte Folded Reload
 ; PURECAP-NEXT:    cjr $c17
 ; PURECAP-NEXT:    cincoffset $c11, $c11, 16
-; PURECAP-NEXT:  .LBB54_2: # %if.end
+; PURECAP-NEXT:  .LBB64_2: # %if.end
 ; PURECAP-NEXT:    clcbi $c12, %capcall20(func2)($c1)
 ; PURECAP-NEXT:    cjalr $c12, $c17
 ; PURECAP-NEXT:    nop
@@ -1733,7 +1883,7 @@ define i32 @branch_ule_null(i8 addrspace(200)* %a) nounwind {
 ; HYBRID-NEXT:    lui $1, %hi(%neg(%gp_rel(branch_ule_null)))
 ; HYBRID-NEXT:    daddu $1, $1, $25
 ; HYBRID-NEXT:    cltu $2, $cnull, $c3
-; HYBRID-NEXT:    bnez $2, .LBB55_2
+; HYBRID-NEXT:    bnez $2, .LBB65_2
 ; HYBRID-NEXT:    daddiu $gp, $1, %lo(%neg(%gp_rel(branch_ule_null)))
 ; HYBRID-NEXT:  # %bb.1: # %if.then
 ; HYBRID-NEXT:    ld $25, %call16(func1)($gp)
@@ -1745,7 +1895,7 @@ define i32 @branch_ule_null(i8 addrspace(200)* %a) nounwind {
 ; HYBRID-NEXT:    ld $ra, 8($sp) # 8-byte Folded Reload
 ; HYBRID-NEXT:    jr $ra
 ; HYBRID-NEXT:    daddiu $sp, $sp, 16
-; HYBRID-NEXT:  .LBB55_2: # %if.end
+; HYBRID-NEXT:  .LBB65_2: # %if.end
 ; HYBRID-NEXT:    ld $25, %call16(func2)($gp)
 ; HYBRID-NEXT:    .reloc .Ltmp31, R_MIPS_JALR, func2
 ; HYBRID-NEXT:  .Ltmp31:
@@ -1764,7 +1914,7 @@ define i32 @branch_ule_null(i8 addrspace(200)* %a) nounwind {
 ; PURECAP-NEXT:    lui $2, %pcrel_hi(_CHERI_CAPABILITY_TABLE_-8)
 ; PURECAP-NEXT:    daddiu $2, $2, %pcrel_lo(_CHERI_CAPABILITY_TABLE_-4)
 ; PURECAP-NEXT:    cgetpccincoffset $c1, $2
-; PURECAP-NEXT:    bnez $1, .LBB55_2
+; PURECAP-NEXT:    bnez $1, .LBB65_2
 ; PURECAP-NEXT:    nop
 ; PURECAP-NEXT:  # %bb.1: # %if.then
 ; PURECAP-NEXT:    clcbi $c12, %capcall20(func1)($c1)
@@ -1773,7 +1923,7 @@ define i32 @branch_ule_null(i8 addrspace(200)* %a) nounwind {
 ; PURECAP-NEXT:    clc $c17, $zero, 0($c11) # 16-byte Folded Reload
 ; PURECAP-NEXT:    cjr $c17
 ; PURECAP-NEXT:    cincoffset $c11, $c11, 16
-; PURECAP-NEXT:  .LBB55_2: # %if.end
+; PURECAP-NEXT:  .LBB65_2: # %if.end
 ; PURECAP-NEXT:    clcbi $c12, %capcall20(func2)($c1)
 ; PURECAP-NEXT:    cjalr $c12, $c17
 ; PURECAP-NEXT:    nop
@@ -1800,7 +1950,7 @@ define i32 @branch_sgt_null(i8 addrspace(200)* %a) nounwind {
 ; HYBRID-NEXT:    lui $1, %hi(%neg(%gp_rel(branch_sgt_null)))
 ; HYBRID-NEXT:    daddu $1, $1, $25
 ; HYBRID-NEXT:    cle $2, $c3, $cnull
-; HYBRID-NEXT:    bnez $2, .LBB56_2
+; HYBRID-NEXT:    bnez $2, .LBB66_2
 ; HYBRID-NEXT:    daddiu $gp, $1, %lo(%neg(%gp_rel(branch_sgt_null)))
 ; HYBRID-NEXT:  # %bb.1: # %if.then
 ; HYBRID-NEXT:    ld $25, %call16(func1)($gp)
@@ -1812,7 +1962,7 @@ define i32 @branch_sgt_null(i8 addrspace(200)* %a) nounwind {
 ; HYBRID-NEXT:    ld $ra, 8($sp) # 8-byte Folded Reload
 ; HYBRID-NEXT:    jr $ra
 ; HYBRID-NEXT:    daddiu $sp, $sp, 16
-; HYBRID-NEXT:  .LBB56_2: # %if.end
+; HYBRID-NEXT:  .LBB66_2: # %if.end
 ; HYBRID-NEXT:    ld $25, %call16(func2)($gp)
 ; HYBRID-NEXT:    .reloc .Ltmp33, R_MIPS_JALR, func2
 ; HYBRID-NEXT:  .Ltmp33:
@@ -1831,7 +1981,7 @@ define i32 @branch_sgt_null(i8 addrspace(200)* %a) nounwind {
 ; PURECAP-NEXT:    lui $2, %pcrel_hi(_CHERI_CAPABILITY_TABLE_-8)
 ; PURECAP-NEXT:    daddiu $2, $2, %pcrel_lo(_CHERI_CAPABILITY_TABLE_-4)
 ; PURECAP-NEXT:    cgetpccincoffset $c1, $2
-; PURECAP-NEXT:    bnez $1, .LBB56_2
+; PURECAP-NEXT:    bnez $1, .LBB66_2
 ; PURECAP-NEXT:    nop
 ; PURECAP-NEXT:  # %bb.1: # %if.then
 ; PURECAP-NEXT:    clcbi $c12, %capcall20(func1)($c1)
@@ -1840,7 +1990,7 @@ define i32 @branch_sgt_null(i8 addrspace(200)* %a) nounwind {
 ; PURECAP-NEXT:    clc $c17, $zero, 0($c11) # 16-byte Folded Reload
 ; PURECAP-NEXT:    cjr $c17
 ; PURECAP-NEXT:    cincoffset $c11, $c11, 16
-; PURECAP-NEXT:  .LBB56_2: # %if.end
+; PURECAP-NEXT:  .LBB66_2: # %if.end
 ; PURECAP-NEXT:    clcbi $c12, %capcall20(func2)($c1)
 ; PURECAP-NEXT:    cjalr $c12, $c17
 ; PURECAP-NEXT:    nop
@@ -1867,7 +2017,7 @@ define i32 @branch_sge_null(i8 addrspace(200)* %a) nounwind {
 ; HYBRID-NEXT:    lui $1, %hi(%neg(%gp_rel(branch_sge_null)))
 ; HYBRID-NEXT:    daddu $1, $1, $25
 ; HYBRID-NEXT:    clt $2, $c3, $cnull
-; HYBRID-NEXT:    bnez $2, .LBB57_2
+; HYBRID-NEXT:    bnez $2, .LBB67_2
 ; HYBRID-NEXT:    daddiu $gp, $1, %lo(%neg(%gp_rel(branch_sge_null)))
 ; HYBRID-NEXT:  # %bb.1: # %if.then
 ; HYBRID-NEXT:    ld $25, %call16(func1)($gp)
@@ -1879,7 +2029,7 @@ define i32 @branch_sge_null(i8 addrspace(200)* %a) nounwind {
 ; HYBRID-NEXT:    ld $ra, 8($sp) # 8-byte Folded Reload
 ; HYBRID-NEXT:    jr $ra
 ; HYBRID-NEXT:    daddiu $sp, $sp, 16
-; HYBRID-NEXT:  .LBB57_2: # %if.end
+; HYBRID-NEXT:  .LBB67_2: # %if.end
 ; HYBRID-NEXT:    ld $25, %call16(func2)($gp)
 ; HYBRID-NEXT:    .reloc .Ltmp35, R_MIPS_JALR, func2
 ; HYBRID-NEXT:  .Ltmp35:
@@ -1898,7 +2048,7 @@ define i32 @branch_sge_null(i8 addrspace(200)* %a) nounwind {
 ; PURECAP-NEXT:    lui $2, %pcrel_hi(_CHERI_CAPABILITY_TABLE_-8)
 ; PURECAP-NEXT:    daddiu $2, $2, %pcrel_lo(_CHERI_CAPABILITY_TABLE_-4)
 ; PURECAP-NEXT:    cgetpccincoffset $c1, $2
-; PURECAP-NEXT:    bnez $1, .LBB57_2
+; PURECAP-NEXT:    bnez $1, .LBB67_2
 ; PURECAP-NEXT:    nop
 ; PURECAP-NEXT:  # %bb.1: # %if.then
 ; PURECAP-NEXT:    clcbi $c12, %capcall20(func1)($c1)
@@ -1907,7 +2057,7 @@ define i32 @branch_sge_null(i8 addrspace(200)* %a) nounwind {
 ; PURECAP-NEXT:    clc $c17, $zero, 0($c11) # 16-byte Folded Reload
 ; PURECAP-NEXT:    cjr $c17
 ; PURECAP-NEXT:    cincoffset $c11, $c11, 16
-; PURECAP-NEXT:  .LBB57_2: # %if.end
+; PURECAP-NEXT:  .LBB67_2: # %if.end
 ; PURECAP-NEXT:    clcbi $c12, %capcall20(func2)($c1)
 ; PURECAP-NEXT:    cjalr $c12, $c17
 ; PURECAP-NEXT:    nop
@@ -1934,7 +2084,7 @@ define i32 @branch_slt_null(i8 addrspace(200)* %a) nounwind {
 ; HYBRID-NEXT:    lui $1, %hi(%neg(%gp_rel(branch_slt_null)))
 ; HYBRID-NEXT:    daddu $1, $1, $25
 ; HYBRID-NEXT:    cle $2, $cnull, $c3
-; HYBRID-NEXT:    bnez $2, .LBB58_2
+; HYBRID-NEXT:    bnez $2, .LBB68_2
 ; HYBRID-NEXT:    daddiu $gp, $1, %lo(%neg(%gp_rel(branch_slt_null)))
 ; HYBRID-NEXT:  # %bb.1: # %if.then
 ; HYBRID-NEXT:    ld $25, %call16(func1)($gp)
@@ -1946,7 +2096,7 @@ define i32 @branch_slt_null(i8 addrspace(200)* %a) nounwind {
 ; HYBRID-NEXT:    ld $ra, 8($sp) # 8-byte Folded Reload
 ; HYBRID-NEXT:    jr $ra
 ; HYBRID-NEXT:    daddiu $sp, $sp, 16
-; HYBRID-NEXT:  .LBB58_2: # %if.end
+; HYBRID-NEXT:  .LBB68_2: # %if.end
 ; HYBRID-NEXT:    ld $25, %call16(func2)($gp)
 ; HYBRID-NEXT:    .reloc .Ltmp37, R_MIPS_JALR, func2
 ; HYBRID-NEXT:  .Ltmp37:
@@ -1965,7 +2115,7 @@ define i32 @branch_slt_null(i8 addrspace(200)* %a) nounwind {
 ; PURECAP-NEXT:    lui $2, %pcrel_hi(_CHERI_CAPABILITY_TABLE_-8)
 ; PURECAP-NEXT:    daddiu $2, $2, %pcrel_lo(_CHERI_CAPABILITY_TABLE_-4)
 ; PURECAP-NEXT:    cgetpccincoffset $c1, $2
-; PURECAP-NEXT:    bnez $1, .LBB58_2
+; PURECAP-NEXT:    bnez $1, .LBB68_2
 ; PURECAP-NEXT:    nop
 ; PURECAP-NEXT:  # %bb.1: # %if.then
 ; PURECAP-NEXT:    clcbi $c12, %capcall20(func1)($c1)
@@ -1974,7 +2124,7 @@ define i32 @branch_slt_null(i8 addrspace(200)* %a) nounwind {
 ; PURECAP-NEXT:    clc $c17, $zero, 0($c11) # 16-byte Folded Reload
 ; PURECAP-NEXT:    cjr $c17
 ; PURECAP-NEXT:    cincoffset $c11, $c11, 16
-; PURECAP-NEXT:  .LBB58_2: # %if.end
+; PURECAP-NEXT:  .LBB68_2: # %if.end
 ; PURECAP-NEXT:    clcbi $c12, %capcall20(func2)($c1)
 ; PURECAP-NEXT:    cjalr $c12, $c17
 ; PURECAP-NEXT:    nop
@@ -2001,7 +2151,7 @@ define i32 @branch_sle_null(i8 addrspace(200)* %a) nounwind {
 ; HYBRID-NEXT:    lui $1, %hi(%neg(%gp_rel(branch_sle_null)))
 ; HYBRID-NEXT:    daddu $1, $1, $25
 ; HYBRID-NEXT:    clt $2, $cnull, $c3
-; HYBRID-NEXT:    bnez $2, .LBB59_2
+; HYBRID-NEXT:    bnez $2, .LBB69_2
 ; HYBRID-NEXT:    daddiu $gp, $1, %lo(%neg(%gp_rel(branch_sle_null)))
 ; HYBRID-NEXT:  # %bb.1: # %if.then
 ; HYBRID-NEXT:    ld $25, %call16(func1)($gp)
@@ -2013,7 +2163,7 @@ define i32 @branch_sle_null(i8 addrspace(200)* %a) nounwind {
 ; HYBRID-NEXT:    ld $ra, 8($sp) # 8-byte Folded Reload
 ; HYBRID-NEXT:    jr $ra
 ; HYBRID-NEXT:    daddiu $sp, $sp, 16
-; HYBRID-NEXT:  .LBB59_2: # %if.end
+; HYBRID-NEXT:  .LBB69_2: # %if.end
 ; HYBRID-NEXT:    ld $25, %call16(func2)($gp)
 ; HYBRID-NEXT:    .reloc .Ltmp39, R_MIPS_JALR, func2
 ; HYBRID-NEXT:  .Ltmp39:
@@ -2032,7 +2182,7 @@ define i32 @branch_sle_null(i8 addrspace(200)* %a) nounwind {
 ; PURECAP-NEXT:    lui $2, %pcrel_hi(_CHERI_CAPABILITY_TABLE_-8)
 ; PURECAP-NEXT:    daddiu $2, $2, %pcrel_lo(_CHERI_CAPABILITY_TABLE_-4)
 ; PURECAP-NEXT:    cgetpccincoffset $c1, $2
-; PURECAP-NEXT:    bnez $1, .LBB59_2
+; PURECAP-NEXT:    bnez $1, .LBB69_2
 ; PURECAP-NEXT:    nop
 ; PURECAP-NEXT:  # %bb.1: # %if.then
 ; PURECAP-NEXT:    clcbi $c12, %capcall20(func1)($c1)
@@ -2041,7 +2191,7 @@ define i32 @branch_sle_null(i8 addrspace(200)* %a) nounwind {
 ; PURECAP-NEXT:    clc $c17, $zero, 0($c11) # 16-byte Folded Reload
 ; PURECAP-NEXT:    cjr $c17
 ; PURECAP-NEXT:    cincoffset $c11, $c11, 16
-; PURECAP-NEXT:  .LBB59_2: # %if.end
+; PURECAP-NEXT:  .LBB69_2: # %if.end
 ; PURECAP-NEXT:    clcbi $c12, %capcall20(func2)($c1)
 ; PURECAP-NEXT:    cjalr $c12, $c17
 ; PURECAP-NEXT:    nop

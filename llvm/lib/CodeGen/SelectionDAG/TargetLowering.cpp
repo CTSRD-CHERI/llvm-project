@@ -5045,7 +5045,8 @@ SDValue TargetLowering::SimplifySetCC(EVT VT, SDValue N0, SDValue N1,
     // The sext(setcc()) => setcc() optimization relies on the appropriate
     // constant being emitted.
     assert(!N0.getValueType().isInteger() &&
-           "Integer types should be handled by FoldSetCC");
+           !N0.getValueType().isFatPointer() &&
+           "Integer and pointer types should be handled by FoldSetCC");
 
     bool EqTrue = ISD::isTrueWhenEqual(Cond);
     unsigned UOF = ISD::getUnorderedFlavor(Cond);
