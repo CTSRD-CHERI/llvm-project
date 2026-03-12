@@ -156,7 +156,7 @@ define signext i32 @setbounds_escapes() local_unnamed_addr addrspace(200) nounwi
 ; llvm.assume() should not add bounds:
 define void @assume_aligned() local_unnamed_addr addrspace(200) nounwind {
   %1 = alloca [4 x i8], align 4, addrspace(200)
-  call void @llvm.assume(i1 true) [ "align"([4 x i8] addrspace(200)* %1, i64 4) ]
+  call void @llvm.assume(i1 true) [ "align"(ptr addrspace(200) %1, i64 4) ]
   store i32 1, ptr addrspace(200) %1
   ret void
 }

@@ -7,41 +7,41 @@
 @a8 = global i64 0, align 8
 
 define i64 @load_global_i64_align_1(i64 %y) addrspace(200) nounwind {
-  %ret = load i64, i64 addrspace(200)* addrspacecast(i64* @a1 to i64 addrspace(200)*), align 1
+  %ret = load i64, ptr addrspace(200) addrspacecast(ptr @a1 to ptr addrspace(200)), align 1
   ret i64 %ret
 }
 
 define i64 @load_global_i64_align_2(i64 %y) addrspace(200) nounwind {
-  %ret = load i64, i64 addrspace(200)* addrspacecast(i64* @a2 to i64 addrspace(200)*), align 2
+  %ret = load i64, ptr addrspace(200) addrspacecast(ptr @a2 to ptr addrspace(200)), align 2
   ret i64 %ret
 }
 
 define i64 @load_global_i64_align_4(i64 %y) addrspace(200) nounwind {
-  %ret = load i64, i64 addrspace(200)* addrspacecast(i64* @a4 to i64 addrspace(200)*), align 4
+  %ret = load i64, ptr addrspace(200) addrspacecast(ptr @a4 to ptr addrspace(200)), align 4
   ret i64 %ret
 }
 
 define i64 @load_global_i64_align_8(i64 %y) addrspace(200) nounwind {
-  %ret = load i64, i64 addrspace(200)* addrspacecast(i64* @a8 to i64 addrspace(200)*), align 8
+  %ret = load i64, ptr addrspace(200) addrspacecast(ptr @a8 to ptr addrspace(200)), align 8
   ret i64 %ret
 }
 
 define void @store_global_i64_align_1(i64 %y) addrspace(200) nounwind {
-  store i64 %y, i64 addrspace(200)* addrspacecast(i64* @a1 to i64 addrspace(200)*), align 1
+  store i64 %y, ptr addrspace(200) addrspacecast(ptr @a1 to ptr addrspace(200)), align 1
   ret void
 }
 
 define void @store_global_i64_align_2(i64 %y) addrspace(200) nounwind {
-  store i64 %y, i64 addrspace(200)* addrspacecast(i64* @a2 to i64 addrspace(200)*), align 2
+  store i64 %y, ptr addrspace(200) addrspacecast(ptr @a2 to ptr addrspace(200)), align 2
   ret void
 }
 
 define void @store_global_i64_align_4(i64 %y) addrspace(200) nounwind {
-  store i64 %y, i64 addrspace(200)* addrspacecast(i64* @a4 to i64 addrspace(200)*), align 4
+  store i64 %y, ptr addrspace(200) addrspacecast(ptr @a4 to ptr addrspace(200)), align 4
   ret void
 }
 
 define void @store_global_i64_align_8(i64 %y) addrspace(200) nounwind {
-  store i64 %y, i64 addrspace(200)* addrspacecast(i64* @a8 to i64 addrspace(200)*), align 8
+  store i64 %y, ptr addrspace(200) addrspacecast(ptr @a8 to ptr addrspace(200)), align 8
   ret void
 }

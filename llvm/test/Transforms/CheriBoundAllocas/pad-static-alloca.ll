@@ -55,7 +55,7 @@ entry:
 %struct.asn_oid = type { [28 x i32] }
 
 @snmp_discover_engine_resp = addrspace(200) global %struct.snmp_pdu zeroinitializer, align 4
-declare void @snmp_pdu_free(%struct.snmp_pdu addrspace(200)* noundef) addrspace(200)
+declare void @snmp_pdu_free(ptr addrspace(200) noundef) addrspace(200)
 
 define dso_local void @snmp_discover_engine(ptr addrspace(200) noalias sret(%struct.snmp_pdu) align 4 %agg.result) addrspace(200) #0 {
 ; CHECK-LABEL: @snmp_discover_engine(

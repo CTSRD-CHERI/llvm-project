@@ -84,15 +84,15 @@ for.cond.cleanup:
 
 for.body:
   %i.04 = phi i32 [ 0, %entry ], [ %inc, %for.body ]
-  %arraydecay = getelementptr inbounds [123 x i32], [123 x i32] addrspace(200)* %buf1, i64 0, i64 0
-  %arraydecay1 = getelementptr inbounds [22 x i32], [22 x i32] addrspace(200)* %buf2, i64 0, i64 0
-  call void @call(i32 addrspace(200)* nonnull %arraydecay, i32 addrspace(200)* nonnull %arraydecay1)
+  %arraydecay = getelementptr inbounds [123 x i32], ptr addrspace(200) %buf1, i64 0, i64 0
+  %arraydecay1 = getelementptr inbounds [22 x i32], ptr addrspace(200) %buf2, i64 0, i64 0
+  call void @call(ptr addrspace(200) nonnull %arraydecay, ptr addrspace(200) nonnull %arraydecay1)
   %inc = add nuw nsw i32 %i.04, 1
   %exitcond.not = icmp eq i32 %inc, 100
   br i1 %exitcond.not, label %for.cond.cleanup, label %for.body
 }
 
-declare void @call(i32 addrspace(200)*, i32 addrspace(200)*) local_unnamed_addr addrspace(200) nounwind
+declare void @call(ptr addrspace(200), ptr addrspace(200)) local_unnamed_addr addrspace(200) nounwind
 
 define void @hoist_alloca_cond(i32 signext %cond) local_unnamed_addr addrspace(200) nounwind {
 ; CHECK-LABEL: hoist_alloca_cond:
@@ -148,9 +148,9 @@ for.body:
   br i1 %tobool.not, label %for.inc, label %if.then
 
 if.then:
-  %arraydecay = getelementptr inbounds [123 x i32], [123 x i32] addrspace(200)* %buf1, i64 0, i64 0
-  %arraydecay1 = getelementptr inbounds [22 x i32], [22 x i32] addrspace(200)* %buf2, i64 0, i64 0
-  call void @call(i32 addrspace(200)* nonnull %arraydecay, i32 addrspace(200)* nonnull %arraydecay1)
+  %arraydecay = getelementptr inbounds [123 x i32], ptr addrspace(200) %buf1, i64 0, i64 0
+  %arraydecay1 = getelementptr inbounds [22 x i32], ptr addrspace(200) %buf2, i64 0, i64 0
+  call void @call(ptr addrspace(200) nonnull %arraydecay, ptr addrspace(200) nonnull %arraydecay1)
   br label %for.inc
 
 for.inc:

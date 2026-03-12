@@ -40,7 +40,7 @@
 ; }
 ; See https://git.morello-project.org/morello/llvm-project/-/issues/22
 
-define i32 @eq(i8 addrspace(200)* %a, i8 addrspace(200)* %b) nounwind {
+define i32 @eq(ptr addrspace(200) %a, ptr addrspace(200) %b) nounwind {
 ; HYBRID-LABEL: eq:
 ; HYBRID:       # %bb.0:
 ; HYBRID-NEXT:    xor a0, a0, a1
@@ -52,12 +52,12 @@ define i32 @eq(i8 addrspace(200)* %a, i8 addrspace(200)* %b) nounwind {
 ; PURECAP-NEXT:    xor a0, a0, a1
 ; PURECAP-NEXT:    seqz a0, a0
 ; PURECAP-NEXT:    ret
-  %cmp = icmp eq i8 addrspace(200)* %a, %b
+  %cmp = icmp eq ptr addrspace(200) %a, %b
   %conv = zext i1 %cmp to i32
   ret i32 %conv
 }
 
-define i32 @ne(i8 addrspace(200)* %a, i8 addrspace(200)* %b) nounwind {
+define i32 @ne(ptr addrspace(200) %a, ptr addrspace(200) %b) nounwind {
 ; HYBRID-LABEL: ne:
 ; HYBRID:       # %bb.0:
 ; HYBRID-NEXT:    xor a0, a0, a1
@@ -69,12 +69,12 @@ define i32 @ne(i8 addrspace(200)* %a, i8 addrspace(200)* %b) nounwind {
 ; PURECAP-NEXT:    xor a0, a0, a1
 ; PURECAP-NEXT:    snez a0, a0
 ; PURECAP-NEXT:    ret
-  %cmp = icmp ne i8 addrspace(200)* %a, %b
+  %cmp = icmp ne ptr addrspace(200) %a, %b
   %conv = zext i1 %cmp to i32
   ret i32 %conv
 }
 
-define i32 @ugt(i8 addrspace(200)* %a, i8 addrspace(200)* %b) nounwind {
+define i32 @ugt(ptr addrspace(200) %a, ptr addrspace(200) %b) nounwind {
 ; HYBRID-LABEL: ugt:
 ; HYBRID:       # %bb.0:
 ; HYBRID-NEXT:    sltu a0, a1, a0
@@ -84,12 +84,12 @@ define i32 @ugt(i8 addrspace(200)* %a, i8 addrspace(200)* %b) nounwind {
 ; PURECAP:       # %bb.0:
 ; PURECAP-NEXT:    sltu a0, a1, a0
 ; PURECAP-NEXT:    ret
-  %cmp = icmp ugt i8 addrspace(200)* %a, %b
+  %cmp = icmp ugt ptr addrspace(200) %a, %b
   %conv = zext i1 %cmp to i32
   ret i32 %conv
 }
 
-define i32 @uge(i8 addrspace(200)* %a, i8 addrspace(200)* %b) nounwind {
+define i32 @uge(ptr addrspace(200) %a, ptr addrspace(200) %b) nounwind {
 ; HYBRID-LABEL: uge:
 ; HYBRID:       # %bb.0:
 ; HYBRID-NEXT:    sltu a0, a0, a1
@@ -101,12 +101,12 @@ define i32 @uge(i8 addrspace(200)* %a, i8 addrspace(200)* %b) nounwind {
 ; PURECAP-NEXT:    sltu a0, a0, a1
 ; PURECAP-NEXT:    xori a0, a0, 1
 ; PURECAP-NEXT:    ret
-  %cmp = icmp uge i8 addrspace(200)* %a, %b
+  %cmp = icmp uge ptr addrspace(200) %a, %b
   %conv = zext i1 %cmp to i32
   ret i32 %conv
 }
 
-define i32 @ult(i8 addrspace(200)* %a, i8 addrspace(200)* %b) nounwind {
+define i32 @ult(ptr addrspace(200) %a, ptr addrspace(200) %b) nounwind {
 ; HYBRID-LABEL: ult:
 ; HYBRID:       # %bb.0:
 ; HYBRID-NEXT:    sltu a0, a0, a1
@@ -116,12 +116,12 @@ define i32 @ult(i8 addrspace(200)* %a, i8 addrspace(200)* %b) nounwind {
 ; PURECAP:       # %bb.0:
 ; PURECAP-NEXT:    sltu a0, a0, a1
 ; PURECAP-NEXT:    ret
-  %cmp = icmp ult i8 addrspace(200)* %a, %b
+  %cmp = icmp ult ptr addrspace(200) %a, %b
   %conv = zext i1 %cmp to i32
   ret i32 %conv
 }
 
-define i32 @ule(i8 addrspace(200)* %a, i8 addrspace(200)* %b) nounwind {
+define i32 @ule(ptr addrspace(200) %a, ptr addrspace(200) %b) nounwind {
 ; HYBRID-LABEL: ule:
 ; HYBRID:       # %bb.0:
 ; HYBRID-NEXT:    sltu a0, a1, a0
@@ -133,12 +133,12 @@ define i32 @ule(i8 addrspace(200)* %a, i8 addrspace(200)* %b) nounwind {
 ; PURECAP-NEXT:    sltu a0, a1, a0
 ; PURECAP-NEXT:    xori a0, a0, 1
 ; PURECAP-NEXT:    ret
-  %cmp = icmp ule i8 addrspace(200)* %a, %b
+  %cmp = icmp ule ptr addrspace(200) %a, %b
   %conv = zext i1 %cmp to i32
   ret i32 %conv
 }
 
-define i32 @sgt(i8 addrspace(200)* %a, i8 addrspace(200)* %b) nounwind {
+define i32 @sgt(ptr addrspace(200) %a, ptr addrspace(200) %b) nounwind {
 ; HYBRID-LABEL: sgt:
 ; HYBRID:       # %bb.0:
 ; HYBRID-NEXT:    slt a0, a1, a0
@@ -148,12 +148,12 @@ define i32 @sgt(i8 addrspace(200)* %a, i8 addrspace(200)* %b) nounwind {
 ; PURECAP:       # %bb.0:
 ; PURECAP-NEXT:    slt a0, a1, a0
 ; PURECAP-NEXT:    ret
-  %cmp = icmp sgt i8 addrspace(200)* %a, %b
+  %cmp = icmp sgt ptr addrspace(200) %a, %b
   %conv = zext i1 %cmp to i32
   ret i32 %conv
 }
 
-define i32 @sge(i8 addrspace(200)* %a, i8 addrspace(200)* %b) nounwind {
+define i32 @sge(ptr addrspace(200) %a, ptr addrspace(200) %b) nounwind {
 ; HYBRID-LABEL: sge:
 ; HYBRID:       # %bb.0:
 ; HYBRID-NEXT:    slt a0, a0, a1
@@ -165,12 +165,12 @@ define i32 @sge(i8 addrspace(200)* %a, i8 addrspace(200)* %b) nounwind {
 ; PURECAP-NEXT:    slt a0, a0, a1
 ; PURECAP-NEXT:    xori a0, a0, 1
 ; PURECAP-NEXT:    ret
-  %cmp = icmp sge i8 addrspace(200)* %a, %b
+  %cmp = icmp sge ptr addrspace(200) %a, %b
   %conv = zext i1 %cmp to i32
   ret i32 %conv
 }
 
-define i32 @slt(i8 addrspace(200)* %a, i8 addrspace(200)* %b) nounwind {
+define i32 @slt(ptr addrspace(200) %a, ptr addrspace(200) %b) nounwind {
 ; HYBRID-LABEL: slt:
 ; HYBRID:       # %bb.0:
 ; HYBRID-NEXT:    slt a0, a0, a1
@@ -180,12 +180,12 @@ define i32 @slt(i8 addrspace(200)* %a, i8 addrspace(200)* %b) nounwind {
 ; PURECAP:       # %bb.0:
 ; PURECAP-NEXT:    slt a0, a0, a1
 ; PURECAP-NEXT:    ret
-  %cmp = icmp slt i8 addrspace(200)* %a, %b
+  %cmp = icmp slt ptr addrspace(200) %a, %b
   %conv = zext i1 %cmp to i32
   ret i32 %conv
 }
 
-define i32 @sle(i8 addrspace(200)* %a, i8 addrspace(200)* %b) nounwind {
+define i32 @sle(ptr addrspace(200) %a, ptr addrspace(200) %b) nounwind {
 ; HYBRID-LABEL: sle:
 ; HYBRID:       # %bb.0:
 ; HYBRID-NEXT:    slt a0, a1, a0
@@ -197,12 +197,12 @@ define i32 @sle(i8 addrspace(200)* %a, i8 addrspace(200)* %b) nounwind {
 ; PURECAP-NEXT:    slt a0, a1, a0
 ; PURECAP-NEXT:    xori a0, a0, 1
 ; PURECAP-NEXT:    ret
-  %cmp = icmp sle i8 addrspace(200)* %a, %b
+  %cmp = icmp sle ptr addrspace(200) %a, %b
   %conv = zext i1 %cmp to i32
   ret i32 %conv
 }
 
-define i32 @eq_same(i8 addrspace(200)* %a) nounwind {
+define i32 @eq_same(ptr addrspace(200) %a) nounwind {
 ; HYBRID-LABEL: eq_same:
 ; HYBRID:       # %bb.0:
 ; HYBRID-NEXT:    li a0, 1
@@ -212,12 +212,12 @@ define i32 @eq_same(i8 addrspace(200)* %a) nounwind {
 ; PURECAP:       # %bb.0:
 ; PURECAP-NEXT:    li a0, 1
 ; PURECAP-NEXT:    ret
-  %cmp = icmp eq i8 addrspace(200)* %a, %a
+  %cmp = icmp eq ptr addrspace(200) %a, %a
   %conv = zext i1 %cmp to i32
   ret i32 %conv
 }
 
-define i32 @ne_same(i8 addrspace(200)* %a) nounwind {
+define i32 @ne_same(ptr addrspace(200) %a) nounwind {
 ; HYBRID-LABEL: ne_same:
 ; HYBRID:       # %bb.0:
 ; HYBRID-NEXT:    li a0, 0
@@ -227,12 +227,12 @@ define i32 @ne_same(i8 addrspace(200)* %a) nounwind {
 ; PURECAP:       # %bb.0:
 ; PURECAP-NEXT:    li a0, 0
 ; PURECAP-NEXT:    ret
-  %cmp = icmp ne i8 addrspace(200)* %a, %a
+  %cmp = icmp ne ptr addrspace(200) %a, %a
   %conv = zext i1 %cmp to i32
   ret i32 %conv
 }
 
-define i32 @ugt_same(i8 addrspace(200)* %a) nounwind {
+define i32 @ugt_same(ptr addrspace(200) %a) nounwind {
 ; HYBRID-LABEL: ugt_same:
 ; HYBRID:       # %bb.0:
 ; HYBRID-NEXT:    li a0, 0
@@ -242,12 +242,12 @@ define i32 @ugt_same(i8 addrspace(200)* %a) nounwind {
 ; PURECAP:       # %bb.0:
 ; PURECAP-NEXT:    li a0, 0
 ; PURECAP-NEXT:    ret
-  %cmp = icmp ugt i8 addrspace(200)* %a, %a
+  %cmp = icmp ugt ptr addrspace(200) %a, %a
   %conv = zext i1 %cmp to i32
   ret i32 %conv
 }
 
-define i32 @uge_same(i8 addrspace(200)* %a) nounwind {
+define i32 @uge_same(ptr addrspace(200) %a) nounwind {
 ; HYBRID-LABEL: uge_same:
 ; HYBRID:       # %bb.0:
 ; HYBRID-NEXT:    li a0, 1
@@ -257,12 +257,12 @@ define i32 @uge_same(i8 addrspace(200)* %a) nounwind {
 ; PURECAP:       # %bb.0:
 ; PURECAP-NEXT:    li a0, 1
 ; PURECAP-NEXT:    ret
-  %cmp = icmp uge i8 addrspace(200)* %a, %a
+  %cmp = icmp uge ptr addrspace(200) %a, %a
   %conv = zext i1 %cmp to i32
   ret i32 %conv
 }
 
-define i32 @ult_same(i8 addrspace(200)* %a) nounwind {
+define i32 @ult_same(ptr addrspace(200) %a) nounwind {
 ; HYBRID-LABEL: ult_same:
 ; HYBRID:       # %bb.0:
 ; HYBRID-NEXT:    li a0, 0
@@ -272,12 +272,12 @@ define i32 @ult_same(i8 addrspace(200)* %a) nounwind {
 ; PURECAP:       # %bb.0:
 ; PURECAP-NEXT:    li a0, 0
 ; PURECAP-NEXT:    ret
-  %cmp = icmp ult i8 addrspace(200)* %a, %a
+  %cmp = icmp ult ptr addrspace(200) %a, %a
   %conv = zext i1 %cmp to i32
   ret i32 %conv
 }
 
-define i32 @ule_same(i8 addrspace(200)* %a) nounwind {
+define i32 @ule_same(ptr addrspace(200) %a) nounwind {
 ; HYBRID-LABEL: ule_same:
 ; HYBRID:       # %bb.0:
 ; HYBRID-NEXT:    li a0, 1
@@ -287,12 +287,12 @@ define i32 @ule_same(i8 addrspace(200)* %a) nounwind {
 ; PURECAP:       # %bb.0:
 ; PURECAP-NEXT:    li a0, 1
 ; PURECAP-NEXT:    ret
-  %cmp = icmp ule i8 addrspace(200)* %a, %a
+  %cmp = icmp ule ptr addrspace(200) %a, %a
   %conv = zext i1 %cmp to i32
   ret i32 %conv
 }
 
-define i32 @sgt_same(i8 addrspace(200)* %a) nounwind {
+define i32 @sgt_same(ptr addrspace(200) %a) nounwind {
 ; HYBRID-LABEL: sgt_same:
 ; HYBRID:       # %bb.0:
 ; HYBRID-NEXT:    li a0, 0
@@ -302,12 +302,12 @@ define i32 @sgt_same(i8 addrspace(200)* %a) nounwind {
 ; PURECAP:       # %bb.0:
 ; PURECAP-NEXT:    li a0, 0
 ; PURECAP-NEXT:    ret
-  %cmp = icmp sgt i8 addrspace(200)* %a, %a
+  %cmp = icmp sgt ptr addrspace(200) %a, %a
   %conv = zext i1 %cmp to i32
   ret i32 %conv
 }
 
-define i32 @sge_same(i8 addrspace(200)* %a) nounwind {
+define i32 @sge_same(ptr addrspace(200) %a) nounwind {
 ; HYBRID-LABEL: sge_same:
 ; HYBRID:       # %bb.0:
 ; HYBRID-NEXT:    li a0, 1
@@ -317,12 +317,12 @@ define i32 @sge_same(i8 addrspace(200)* %a) nounwind {
 ; PURECAP:       # %bb.0:
 ; PURECAP-NEXT:    li a0, 1
 ; PURECAP-NEXT:    ret
-  %cmp = icmp sge i8 addrspace(200)* %a, %a
+  %cmp = icmp sge ptr addrspace(200) %a, %a
   %conv = zext i1 %cmp to i32
   ret i32 %conv
 }
 
-define i32 @slt_same(i8 addrspace(200)* %a) nounwind {
+define i32 @slt_same(ptr addrspace(200) %a) nounwind {
 ; HYBRID-LABEL: slt_same:
 ; HYBRID:       # %bb.0:
 ; HYBRID-NEXT:    li a0, 0
@@ -332,12 +332,12 @@ define i32 @slt_same(i8 addrspace(200)* %a) nounwind {
 ; PURECAP:       # %bb.0:
 ; PURECAP-NEXT:    li a0, 0
 ; PURECAP-NEXT:    ret
-  %cmp = icmp slt i8 addrspace(200)* %a, %a
+  %cmp = icmp slt ptr addrspace(200) %a, %a
   %conv = zext i1 %cmp to i32
   ret i32 %conv
 }
 
-define i32 @sle_same(i8 addrspace(200)* %a) nounwind {
+define i32 @sle_same(ptr addrspace(200) %a) nounwind {
 ; HYBRID-LABEL: sle_same:
 ; HYBRID:       # %bb.0:
 ; HYBRID-NEXT:    li a0, 1
@@ -347,12 +347,12 @@ define i32 @sle_same(i8 addrspace(200)* %a) nounwind {
 ; PURECAP:       # %bb.0:
 ; PURECAP-NEXT:    li a0, 1
 ; PURECAP-NEXT:    ret
-  %cmp = icmp sle i8 addrspace(200)* %a, %a
+  %cmp = icmp sle ptr addrspace(200) %a, %a
   %conv = zext i1 %cmp to i32
   ret i32 %conv
 }
 
-define i32 @eq_null(i8 addrspace(200)* %a) nounwind {
+define i32 @eq_null(ptr addrspace(200) %a) nounwind {
 ; HYBRID-LABEL: eq_null:
 ; HYBRID:       # %bb.0:
 ; HYBRID-NEXT:    seqz a0, a0
@@ -362,12 +362,12 @@ define i32 @eq_null(i8 addrspace(200)* %a) nounwind {
 ; PURECAP:       # %bb.0:
 ; PURECAP-NEXT:    seqz a0, a0
 ; PURECAP-NEXT:    ret
-  %cmp = icmp eq i8 addrspace(200)* %a, null
+  %cmp = icmp eq ptr addrspace(200) %a, null
   %conv = zext i1 %cmp to i32
   ret i32 %conv
 }
 
-define i32 @ne_null(i8 addrspace(200)* %a) nounwind {
+define i32 @ne_null(ptr addrspace(200) %a) nounwind {
 ; HYBRID-LABEL: ne_null:
 ; HYBRID:       # %bb.0:
 ; HYBRID-NEXT:    snez a0, a0
@@ -377,12 +377,12 @@ define i32 @ne_null(i8 addrspace(200)* %a) nounwind {
 ; PURECAP:       # %bb.0:
 ; PURECAP-NEXT:    snez a0, a0
 ; PURECAP-NEXT:    ret
-  %cmp = icmp ne i8 addrspace(200)* %a, null
+  %cmp = icmp ne ptr addrspace(200) %a, null
   %conv = zext i1 %cmp to i32
   ret i32 %conv
 }
 
-define i32 @ugt_null(i8 addrspace(200)* %a) nounwind {
+define i32 @ugt_null(ptr addrspace(200) %a) nounwind {
 ; HYBRID-LABEL: ugt_null:
 ; HYBRID:       # %bb.0:
 ; HYBRID-NEXT:    snez a0, a0
@@ -392,12 +392,12 @@ define i32 @ugt_null(i8 addrspace(200)* %a) nounwind {
 ; PURECAP:       # %bb.0:
 ; PURECAP-NEXT:    snez a0, a0
 ; PURECAP-NEXT:    ret
-  %cmp = icmp ugt i8 addrspace(200)* %a, null
+  %cmp = icmp ugt ptr addrspace(200) %a, null
   %conv = zext i1 %cmp to i32
   ret i32 %conv
 }
 
-define i32 @uge_null(i8 addrspace(200)* %a) nounwind {
+define i32 @uge_null(ptr addrspace(200) %a) nounwind {
 ; HYBRID-LABEL: uge_null:
 ; HYBRID:       # %bb.0:
 ; HYBRID-NEXT:    sltu a0, a0, zero
@@ -409,12 +409,12 @@ define i32 @uge_null(i8 addrspace(200)* %a) nounwind {
 ; PURECAP-NEXT:    sltu a0, a0, zero
 ; PURECAP-NEXT:    xori a0, a0, 1
 ; PURECAP-NEXT:    ret
-  %cmp = icmp uge i8 addrspace(200)* %a, null
+  %cmp = icmp uge ptr addrspace(200) %a, null
   %conv = zext i1 %cmp to i32
   ret i32 %conv
 }
 
-define i32 @ult_null(i8 addrspace(200)* %a) nounwind {
+define i32 @ult_null(ptr addrspace(200) %a) nounwind {
 ; HYBRID-LABEL: ult_null:
 ; HYBRID:       # %bb.0:
 ; HYBRID-NEXT:    sltiu a0, a0, 0
@@ -424,12 +424,12 @@ define i32 @ult_null(i8 addrspace(200)* %a) nounwind {
 ; PURECAP:       # %bb.0:
 ; PURECAP-NEXT:    sltiu a0, a0, 0
 ; PURECAP-NEXT:    ret
-  %cmp = icmp ult i8 addrspace(200)* %a, null
+  %cmp = icmp ult ptr addrspace(200) %a, null
   %conv = zext i1 %cmp to i32
   ret i32 %conv
 }
 
-define i32 @ule_null(i8 addrspace(200)* %a) nounwind {
+define i32 @ule_null(ptr addrspace(200) %a) nounwind {
 ; HYBRID-LABEL: ule_null:
 ; HYBRID:       # %bb.0:
 ; HYBRID-NEXT:    snez a0, a0
@@ -441,12 +441,12 @@ define i32 @ule_null(i8 addrspace(200)* %a) nounwind {
 ; PURECAP-NEXT:    snez a0, a0
 ; PURECAP-NEXT:    xori a0, a0, 1
 ; PURECAP-NEXT:    ret
-  %cmp = icmp ule i8 addrspace(200)* %a, null
+  %cmp = icmp ule ptr addrspace(200) %a, null
   %conv = zext i1 %cmp to i32
   ret i32 %conv
 }
 
-define i32 @sgt_null(i8 addrspace(200)* %a) nounwind {
+define i32 @sgt_null(ptr addrspace(200) %a) nounwind {
 ; HYBRID-LABEL: sgt_null:
 ; HYBRID:       # %bb.0:
 ; HYBRID-NEXT:    sgtz a0, a0
@@ -456,12 +456,12 @@ define i32 @sgt_null(i8 addrspace(200)* %a) nounwind {
 ; PURECAP:       # %bb.0:
 ; PURECAP-NEXT:    sgtz a0, a0
 ; PURECAP-NEXT:    ret
-  %cmp = icmp sgt i8 addrspace(200)* %a, null
+  %cmp = icmp sgt ptr addrspace(200) %a, null
   %conv = zext i1 %cmp to i32
   ret i32 %conv
 }
 
-define i32 @sge_null(i8 addrspace(200)* %a) nounwind {
+define i32 @sge_null(ptr addrspace(200) %a) nounwind {
 ; HYBRID-LABEL: sge_null:
 ; HYBRID:       # %bb.0:
 ; HYBRID-NEXT:    sltz a0, a0
@@ -473,12 +473,12 @@ define i32 @sge_null(i8 addrspace(200)* %a) nounwind {
 ; PURECAP-NEXT:    sltz a0, a0
 ; PURECAP-NEXT:    xori a0, a0, 1
 ; PURECAP-NEXT:    ret
-  %cmp = icmp sge i8 addrspace(200)* %a, null
+  %cmp = icmp sge ptr addrspace(200) %a, null
   %conv = zext i1 %cmp to i32
   ret i32 %conv
 }
 
-define i32 @slt_null(i8 addrspace(200)* %a) nounwind {
+define i32 @slt_null(ptr addrspace(200) %a) nounwind {
 ; HYBRID-LABEL: slt_null:
 ; HYBRID:       # %bb.0:
 ; HYBRID-NEXT:    slti a0, a0, 0
@@ -488,12 +488,12 @@ define i32 @slt_null(i8 addrspace(200)* %a) nounwind {
 ; PURECAP:       # %bb.0:
 ; PURECAP-NEXT:    slti a0, a0, 0
 ; PURECAP-NEXT:    ret
-  %cmp = icmp slt i8 addrspace(200)* %a, null
+  %cmp = icmp slt ptr addrspace(200) %a, null
   %conv = zext i1 %cmp to i32
   ret i32 %conv
 }
 
-define i32 @sle_null(i8 addrspace(200)* %a) nounwind {
+define i32 @sle_null(ptr addrspace(200) %a) nounwind {
 ; HYBRID-LABEL: sle_null:
 ; HYBRID:       # %bb.0:
 ; HYBRID-NEXT:    sgtz a0, a0
@@ -505,12 +505,12 @@ define i32 @sle_null(i8 addrspace(200)* %a) nounwind {
 ; PURECAP-NEXT:    sgtz a0, a0
 ; PURECAP-NEXT:    xori a0, a0, 1
 ; PURECAP-NEXT:    ret
-  %cmp = icmp sle i8 addrspace(200)* %a, null
+  %cmp = icmp sle ptr addrspace(200) %a, null
   %conv = zext i1 %cmp to i32
   ret i32 %conv
 }
 
-define i8 addrspace(200)* @select_eq(i8 addrspace(200)* %a, i8 addrspace(200)* %b) nounwind {
+define ptr addrspace(200) @select_eq(ptr addrspace(200) %a, ptr addrspace(200) %b) nounwind {
 ; HYBRID-LABEL: select_eq:
 ; HYBRID:       # %bb.0:
 ; HYBRID-NEXT:    beq a0, a1, .LBB30_2
@@ -526,12 +526,12 @@ define i8 addrspace(200)* @select_eq(i8 addrspace(200)* %a, i8 addrspace(200)* %
 ; PURECAP-NEXT:    cmove ca0, ca1
 ; PURECAP-NEXT:  .LBB30_2:
 ; PURECAP-NEXT:    ret
-  %cmp = icmp eq i8 addrspace(200)* %a, %b
-  %cond = select i1 %cmp, i8 addrspace(200)* %a, i8 addrspace(200)* %b
-  ret i8 addrspace(200)* %cond
+  %cmp = icmp eq ptr addrspace(200) %a, %b
+  %cond = select i1 %cmp, ptr addrspace(200) %a, ptr addrspace(200) %b
+  ret ptr addrspace(200) %cond
 }
 
-define i8 addrspace(200)* @select_ne(i8 addrspace(200)* %a, i8 addrspace(200)* %b) nounwind {
+define ptr addrspace(200) @select_ne(ptr addrspace(200) %a, ptr addrspace(200) %b) nounwind {
 ; HYBRID-LABEL: select_ne:
 ; HYBRID:       # %bb.0:
 ; HYBRID-NEXT:    bne a0, a1, .LBB31_2
@@ -547,12 +547,12 @@ define i8 addrspace(200)* @select_ne(i8 addrspace(200)* %a, i8 addrspace(200)* %
 ; PURECAP-NEXT:    cmove ca0, ca1
 ; PURECAP-NEXT:  .LBB31_2:
 ; PURECAP-NEXT:    ret
-  %cmp = icmp ne i8 addrspace(200)* %a, %b
-  %cond = select i1 %cmp, i8 addrspace(200)* %a, i8 addrspace(200)* %b
-  ret i8 addrspace(200)* %cond
+  %cmp = icmp ne ptr addrspace(200) %a, %b
+  %cond = select i1 %cmp, ptr addrspace(200) %a, ptr addrspace(200) %b
+  ret ptr addrspace(200) %cond
 }
 
-define i8 addrspace(200)* @select_ugt(i8 addrspace(200)* %a, i8 addrspace(200)* %b) nounwind {
+define ptr addrspace(200) @select_ugt(ptr addrspace(200) %a, ptr addrspace(200) %b) nounwind {
 ; HYBRID-LABEL: select_ugt:
 ; HYBRID:       # %bb.0:
 ; HYBRID-NEXT:    bltu a1, a0, .LBB32_2
@@ -568,12 +568,12 @@ define i8 addrspace(200)* @select_ugt(i8 addrspace(200)* %a, i8 addrspace(200)* 
 ; PURECAP-NEXT:    cmove ca0, ca1
 ; PURECAP-NEXT:  .LBB32_2:
 ; PURECAP-NEXT:    ret
-  %cmp = icmp ugt i8 addrspace(200)* %a, %b
-  %cond = select i1 %cmp, i8 addrspace(200)* %a, i8 addrspace(200)* %b
-  ret i8 addrspace(200)* %cond
+  %cmp = icmp ugt ptr addrspace(200) %a, %b
+  %cond = select i1 %cmp, ptr addrspace(200) %a, ptr addrspace(200) %b
+  ret ptr addrspace(200) %cond
 }
 
-define i8 addrspace(200)* @select_uge(i8 addrspace(200)* %a, i8 addrspace(200)* %b) nounwind {
+define ptr addrspace(200) @select_uge(ptr addrspace(200) %a, ptr addrspace(200) %b) nounwind {
 ; HYBRID-LABEL: select_uge:
 ; HYBRID:       # %bb.0:
 ; HYBRID-NEXT:    bgeu a0, a1, .LBB33_2
@@ -589,12 +589,12 @@ define i8 addrspace(200)* @select_uge(i8 addrspace(200)* %a, i8 addrspace(200)* 
 ; PURECAP-NEXT:    cmove ca0, ca1
 ; PURECAP-NEXT:  .LBB33_2:
 ; PURECAP-NEXT:    ret
-  %cmp = icmp uge i8 addrspace(200)* %a, %b
-  %cond = select i1 %cmp, i8 addrspace(200)* %a, i8 addrspace(200)* %b
-  ret i8 addrspace(200)* %cond
+  %cmp = icmp uge ptr addrspace(200) %a, %b
+  %cond = select i1 %cmp, ptr addrspace(200) %a, ptr addrspace(200) %b
+  ret ptr addrspace(200) %cond
 }
 
-define i8 addrspace(200)* @select_ult(i8 addrspace(200)* %a, i8 addrspace(200)* %b) nounwind {
+define ptr addrspace(200) @select_ult(ptr addrspace(200) %a, ptr addrspace(200) %b) nounwind {
 ; HYBRID-LABEL: select_ult:
 ; HYBRID:       # %bb.0:
 ; HYBRID-NEXT:    bltu a0, a1, .LBB34_2
@@ -610,12 +610,12 @@ define i8 addrspace(200)* @select_ult(i8 addrspace(200)* %a, i8 addrspace(200)* 
 ; PURECAP-NEXT:    cmove ca0, ca1
 ; PURECAP-NEXT:  .LBB34_2:
 ; PURECAP-NEXT:    ret
-  %cmp = icmp ult i8 addrspace(200)* %a, %b
-  %cond = select i1 %cmp, i8 addrspace(200)* %a, i8 addrspace(200)* %b
-  ret i8 addrspace(200)* %cond
+  %cmp = icmp ult ptr addrspace(200) %a, %b
+  %cond = select i1 %cmp, ptr addrspace(200) %a, ptr addrspace(200) %b
+  ret ptr addrspace(200) %cond
 }
 
-define i8 addrspace(200)* @select_ule(i8 addrspace(200)* %a, i8 addrspace(200)* %b) nounwind {
+define ptr addrspace(200) @select_ule(ptr addrspace(200) %a, ptr addrspace(200) %b) nounwind {
 ; HYBRID-LABEL: select_ule:
 ; HYBRID:       # %bb.0:
 ; HYBRID-NEXT:    bgeu a1, a0, .LBB35_2
@@ -631,12 +631,12 @@ define i8 addrspace(200)* @select_ule(i8 addrspace(200)* %a, i8 addrspace(200)* 
 ; PURECAP-NEXT:    cmove ca0, ca1
 ; PURECAP-NEXT:  .LBB35_2:
 ; PURECAP-NEXT:    ret
-  %cmp = icmp ule i8 addrspace(200)* %a, %b
-  %cond = select i1 %cmp, i8 addrspace(200)* %a, i8 addrspace(200)* %b
-  ret i8 addrspace(200)* %cond
+  %cmp = icmp ule ptr addrspace(200) %a, %b
+  %cond = select i1 %cmp, ptr addrspace(200) %a, ptr addrspace(200) %b
+  ret ptr addrspace(200) %cond
 }
 
-define i8 addrspace(200)* @select_sgt(i8 addrspace(200)* %a, i8 addrspace(200)* %b) nounwind {
+define ptr addrspace(200) @select_sgt(ptr addrspace(200) %a, ptr addrspace(200) %b) nounwind {
 ; HYBRID-LABEL: select_sgt:
 ; HYBRID:       # %bb.0:
 ; HYBRID-NEXT:    blt a1, a0, .LBB36_2
@@ -652,12 +652,12 @@ define i8 addrspace(200)* @select_sgt(i8 addrspace(200)* %a, i8 addrspace(200)* 
 ; PURECAP-NEXT:    cmove ca0, ca1
 ; PURECAP-NEXT:  .LBB36_2:
 ; PURECAP-NEXT:    ret
-  %cmp = icmp sgt i8 addrspace(200)* %a, %b
-  %cond = select i1 %cmp, i8 addrspace(200)* %a, i8 addrspace(200)* %b
-  ret i8 addrspace(200)* %cond
+  %cmp = icmp sgt ptr addrspace(200) %a, %b
+  %cond = select i1 %cmp, ptr addrspace(200) %a, ptr addrspace(200) %b
+  ret ptr addrspace(200) %cond
 }
 
-define i8 addrspace(200)* @select_sge(i8 addrspace(200)* %a, i8 addrspace(200)* %b) nounwind {
+define ptr addrspace(200) @select_sge(ptr addrspace(200) %a, ptr addrspace(200) %b) nounwind {
 ; HYBRID-LABEL: select_sge:
 ; HYBRID:       # %bb.0:
 ; HYBRID-NEXT:    bge a0, a1, .LBB37_2
@@ -673,12 +673,12 @@ define i8 addrspace(200)* @select_sge(i8 addrspace(200)* %a, i8 addrspace(200)* 
 ; PURECAP-NEXT:    cmove ca0, ca1
 ; PURECAP-NEXT:  .LBB37_2:
 ; PURECAP-NEXT:    ret
-  %cmp = icmp sge i8 addrspace(200)* %a, %b
-  %cond = select i1 %cmp, i8 addrspace(200)* %a, i8 addrspace(200)* %b
-  ret i8 addrspace(200)* %cond
+  %cmp = icmp sge ptr addrspace(200) %a, %b
+  %cond = select i1 %cmp, ptr addrspace(200) %a, ptr addrspace(200) %b
+  ret ptr addrspace(200) %cond
 }
 
-define i8 addrspace(200)* @select_slt(i8 addrspace(200)* %a, i8 addrspace(200)* %b) nounwind {
+define ptr addrspace(200) @select_slt(ptr addrspace(200) %a, ptr addrspace(200) %b) nounwind {
 ; HYBRID-LABEL: select_slt:
 ; HYBRID:       # %bb.0:
 ; HYBRID-NEXT:    blt a0, a1, .LBB38_2
@@ -694,12 +694,12 @@ define i8 addrspace(200)* @select_slt(i8 addrspace(200)* %a, i8 addrspace(200)* 
 ; PURECAP-NEXT:    cmove ca0, ca1
 ; PURECAP-NEXT:  .LBB38_2:
 ; PURECAP-NEXT:    ret
-  %cmp = icmp slt i8 addrspace(200)* %a, %b
-  %cond = select i1 %cmp, i8 addrspace(200)* %a, i8 addrspace(200)* %b
-  ret i8 addrspace(200)* %cond
+  %cmp = icmp slt ptr addrspace(200) %a, %b
+  %cond = select i1 %cmp, ptr addrspace(200) %a, ptr addrspace(200) %b
+  ret ptr addrspace(200) %cond
 }
 
-define i8 addrspace(200)* @select_sle(i8 addrspace(200)* %a, i8 addrspace(200)* %b) nounwind {
+define ptr addrspace(200) @select_sle(ptr addrspace(200) %a, ptr addrspace(200) %b) nounwind {
 ; HYBRID-LABEL: select_sle:
 ; HYBRID:       # %bb.0:
 ; HYBRID-NEXT:    bge a1, a0, .LBB39_2
@@ -715,12 +715,12 @@ define i8 addrspace(200)* @select_sle(i8 addrspace(200)* %a, i8 addrspace(200)* 
 ; PURECAP-NEXT:    cmove ca0, ca1
 ; PURECAP-NEXT:  .LBB39_2:
 ; PURECAP-NEXT:    ret
-  %cmp = icmp sle i8 addrspace(200)* %a, %b
-  %cond = select i1 %cmp, i8 addrspace(200)* %a, i8 addrspace(200)* %b
-  ret i8 addrspace(200)* %cond
+  %cmp = icmp sle ptr addrspace(200) %a, %b
+  %cond = select i1 %cmp, ptr addrspace(200) %a, ptr addrspace(200) %b
+  ret ptr addrspace(200) %cond
 }
 
-define i8 addrspace(200)* @select_eq_null(i8 addrspace(200)* %a, i8 addrspace(200)* %b) nounwind {
+define ptr addrspace(200) @select_eq_null(ptr addrspace(200) %a, ptr addrspace(200) %b) nounwind {
 ; HYBRID-LABEL: select_eq_null:
 ; HYBRID:       # %bb.0:
 ; HYBRID-NEXT:    beqz a0, .LBB40_2
@@ -736,12 +736,12 @@ define i8 addrspace(200)* @select_eq_null(i8 addrspace(200)* %a, i8 addrspace(20
 ; PURECAP-NEXT:    cmove ca0, ca1
 ; PURECAP-NEXT:  .LBB40_2:
 ; PURECAP-NEXT:    ret
-  %cmp = icmp eq i8 addrspace(200)* %a, null
-  %cond = select i1 %cmp, i8 addrspace(200)* %a, i8 addrspace(200)* %b
-  ret i8 addrspace(200)* %cond
+  %cmp = icmp eq ptr addrspace(200) %a, null
+  %cond = select i1 %cmp, ptr addrspace(200) %a, ptr addrspace(200) %b
+  ret ptr addrspace(200) %cond
 }
 
-define i8 addrspace(200)* @select_ne_null(i8 addrspace(200)* %a, i8 addrspace(200)* %b) nounwind {
+define ptr addrspace(200) @select_ne_null(ptr addrspace(200) %a, ptr addrspace(200) %b) nounwind {
 ; HYBRID-LABEL: select_ne_null:
 ; HYBRID:       # %bb.0:
 ; HYBRID-NEXT:    bnez a0, .LBB41_2
@@ -757,12 +757,12 @@ define i8 addrspace(200)* @select_ne_null(i8 addrspace(200)* %a, i8 addrspace(20
 ; PURECAP-NEXT:    cmove ca0, ca1
 ; PURECAP-NEXT:  .LBB41_2:
 ; PURECAP-NEXT:    ret
-  %cmp = icmp ne i8 addrspace(200)* %a, null
-  %cond = select i1 %cmp, i8 addrspace(200)* %a, i8 addrspace(200)* %b
-  ret i8 addrspace(200)* %cond
+  %cmp = icmp ne ptr addrspace(200) %a, null
+  %cond = select i1 %cmp, ptr addrspace(200) %a, ptr addrspace(200) %b
+  ret ptr addrspace(200) %cond
 }
 
-define i8 addrspace(200)* @select_ugt_null(i8 addrspace(200)* %a, i8 addrspace(200)* %b) nounwind {
+define ptr addrspace(200) @select_ugt_null(ptr addrspace(200) %a, ptr addrspace(200) %b) nounwind {
 ; HYBRID-LABEL: select_ugt_null:
 ; HYBRID:       # %bb.0:
 ; HYBRID-NEXT:    bltu zero, a0, .LBB42_2
@@ -778,12 +778,12 @@ define i8 addrspace(200)* @select_ugt_null(i8 addrspace(200)* %a, i8 addrspace(2
 ; PURECAP-NEXT:    cmove ca0, ca1
 ; PURECAP-NEXT:  .LBB42_2:
 ; PURECAP-NEXT:    ret
-  %cmp = icmp ugt i8 addrspace(200)* %a, null
-  %cond = select i1 %cmp, i8 addrspace(200)* %a, i8 addrspace(200)* %b
-  ret i8 addrspace(200)* %cond
+  %cmp = icmp ugt ptr addrspace(200) %a, null
+  %cond = select i1 %cmp, ptr addrspace(200) %a, ptr addrspace(200) %b
+  ret ptr addrspace(200) %cond
 }
 
-define i8 addrspace(200)* @select_uge_null(i8 addrspace(200)* %a, i8 addrspace(200)* %b) nounwind {
+define ptr addrspace(200) @select_uge_null(ptr addrspace(200) %a, ptr addrspace(200) %b) nounwind {
 ; HYBRID-LABEL: select_uge_null:
 ; HYBRID:       # %bb.0:
 ; HYBRID-NEXT:    bgeu a0, zero, .LBB43_2
@@ -799,12 +799,12 @@ define i8 addrspace(200)* @select_uge_null(i8 addrspace(200)* %a, i8 addrspace(2
 ; PURECAP-NEXT:    cmove ca0, ca1
 ; PURECAP-NEXT:  .LBB43_2:
 ; PURECAP-NEXT:    ret
-  %cmp = icmp uge i8 addrspace(200)* %a, null
-  %cond = select i1 %cmp, i8 addrspace(200)* %a, i8 addrspace(200)* %b
-  ret i8 addrspace(200)* %cond
+  %cmp = icmp uge ptr addrspace(200) %a, null
+  %cond = select i1 %cmp, ptr addrspace(200) %a, ptr addrspace(200) %b
+  ret ptr addrspace(200) %cond
 }
 
-define i8 addrspace(200)* @select_ult_null(i8 addrspace(200)* %a, i8 addrspace(200)* %b) nounwind {
+define ptr addrspace(200) @select_ult_null(ptr addrspace(200) %a, ptr addrspace(200) %b) nounwind {
 ; HYBRID-LABEL: select_ult_null:
 ; HYBRID:       # %bb.0:
 ; HYBRID-NEXT:    bltu a0, zero, .LBB44_2
@@ -820,12 +820,12 @@ define i8 addrspace(200)* @select_ult_null(i8 addrspace(200)* %a, i8 addrspace(2
 ; PURECAP-NEXT:    cmove ca0, ca1
 ; PURECAP-NEXT:  .LBB44_2:
 ; PURECAP-NEXT:    ret
-  %cmp = icmp ult i8 addrspace(200)* %a, null
-  %cond = select i1 %cmp, i8 addrspace(200)* %a, i8 addrspace(200)* %b
-  ret i8 addrspace(200)* %cond
+  %cmp = icmp ult ptr addrspace(200) %a, null
+  %cond = select i1 %cmp, ptr addrspace(200) %a, ptr addrspace(200) %b
+  ret ptr addrspace(200) %cond
 }
 
-define i8 addrspace(200)* @select_ule_null(i8 addrspace(200)* %a, i8 addrspace(200)* %b) nounwind {
+define ptr addrspace(200) @select_ule_null(ptr addrspace(200) %a, ptr addrspace(200) %b) nounwind {
 ; HYBRID-LABEL: select_ule_null:
 ; HYBRID:       # %bb.0:
 ; HYBRID-NEXT:    bgeu zero, a0, .LBB45_2
@@ -841,12 +841,12 @@ define i8 addrspace(200)* @select_ule_null(i8 addrspace(200)* %a, i8 addrspace(2
 ; PURECAP-NEXT:    cmove ca0, ca1
 ; PURECAP-NEXT:  .LBB45_2:
 ; PURECAP-NEXT:    ret
-  %cmp = icmp ule i8 addrspace(200)* %a, null
-  %cond = select i1 %cmp, i8 addrspace(200)* %a, i8 addrspace(200)* %b
-  ret i8 addrspace(200)* %cond
+  %cmp = icmp ule ptr addrspace(200) %a, null
+  %cond = select i1 %cmp, ptr addrspace(200) %a, ptr addrspace(200) %b
+  ret ptr addrspace(200) %cond
 }
 
-define i8 addrspace(200)* @select_sgt_null(i8 addrspace(200)* %a, i8 addrspace(200)* %b) nounwind {
+define ptr addrspace(200) @select_sgt_null(ptr addrspace(200) %a, ptr addrspace(200) %b) nounwind {
 ; HYBRID-LABEL: select_sgt_null:
 ; HYBRID:       # %bb.0:
 ; HYBRID-NEXT:    bgtz a0, .LBB46_2
@@ -862,12 +862,12 @@ define i8 addrspace(200)* @select_sgt_null(i8 addrspace(200)* %a, i8 addrspace(2
 ; PURECAP-NEXT:    cmove ca0, ca1
 ; PURECAP-NEXT:  .LBB46_2:
 ; PURECAP-NEXT:    ret
-  %cmp = icmp sgt i8 addrspace(200)* %a, null
-  %cond = select i1 %cmp, i8 addrspace(200)* %a, i8 addrspace(200)* %b
-  ret i8 addrspace(200)* %cond
+  %cmp = icmp sgt ptr addrspace(200) %a, null
+  %cond = select i1 %cmp, ptr addrspace(200) %a, ptr addrspace(200) %b
+  ret ptr addrspace(200) %cond
 }
 
-define i8 addrspace(200)* @select_sge_null(i8 addrspace(200)* %a, i8 addrspace(200)* %b) nounwind {
+define ptr addrspace(200) @select_sge_null(ptr addrspace(200) %a, ptr addrspace(200) %b) nounwind {
 ; HYBRID-LABEL: select_sge_null:
 ; HYBRID:       # %bb.0:
 ; HYBRID-NEXT:    bgez a0, .LBB47_2
@@ -883,12 +883,12 @@ define i8 addrspace(200)* @select_sge_null(i8 addrspace(200)* %a, i8 addrspace(2
 ; PURECAP-NEXT:    cmove ca0, ca1
 ; PURECAP-NEXT:  .LBB47_2:
 ; PURECAP-NEXT:    ret
-  %cmp = icmp sge i8 addrspace(200)* %a, null
-  %cond = select i1 %cmp, i8 addrspace(200)* %a, i8 addrspace(200)* %b
-  ret i8 addrspace(200)* %cond
+  %cmp = icmp sge ptr addrspace(200) %a, null
+  %cond = select i1 %cmp, ptr addrspace(200) %a, ptr addrspace(200) %b
+  ret ptr addrspace(200) %cond
 }
 
-define i8 addrspace(200)* @select_slt_null(i8 addrspace(200)* %a, i8 addrspace(200)* %b) nounwind {
+define ptr addrspace(200) @select_slt_null(ptr addrspace(200) %a, ptr addrspace(200) %b) nounwind {
 ; HYBRID-LABEL: select_slt_null:
 ; HYBRID:       # %bb.0:
 ; HYBRID-NEXT:    bltz a0, .LBB48_2
@@ -904,12 +904,12 @@ define i8 addrspace(200)* @select_slt_null(i8 addrspace(200)* %a, i8 addrspace(2
 ; PURECAP-NEXT:    cmove ca0, ca1
 ; PURECAP-NEXT:  .LBB48_2:
 ; PURECAP-NEXT:    ret
-  %cmp = icmp slt i8 addrspace(200)* %a, null
-  %cond = select i1 %cmp, i8 addrspace(200)* %a, i8 addrspace(200)* %b
-  ret i8 addrspace(200)* %cond
+  %cmp = icmp slt ptr addrspace(200) %a, null
+  %cond = select i1 %cmp, ptr addrspace(200) %a, ptr addrspace(200) %b
+  ret ptr addrspace(200) %cond
 }
 
-define i8 addrspace(200)* @select_sle_null(i8 addrspace(200)* %a, i8 addrspace(200)* %b) nounwind {
+define ptr addrspace(200) @select_sle_null(ptr addrspace(200) %a, ptr addrspace(200) %b) nounwind {
 ; HYBRID-LABEL: select_sle_null:
 ; HYBRID:       # %bb.0:
 ; HYBRID-NEXT:    blez a0, .LBB49_2
@@ -925,15 +925,15 @@ define i8 addrspace(200)* @select_sle_null(i8 addrspace(200)* %a, i8 addrspace(2
 ; PURECAP-NEXT:    cmove ca0, ca1
 ; PURECAP-NEXT:  .LBB49_2:
 ; PURECAP-NEXT:    ret
-  %cmp = icmp sle i8 addrspace(200)* %a, null
-  %cond = select i1 %cmp, i8 addrspace(200)* %a, i8 addrspace(200)* %b
-  ret i8 addrspace(200)* %cond
+  %cmp = icmp sle ptr addrspace(200) %a, null
+  %cond = select i1 %cmp, ptr addrspace(200) %a, ptr addrspace(200) %b
+  ret ptr addrspace(200) %cond
 }
 
 declare i32 @func1() nounwind
 declare i32 @func2() nounwind
 
-define i32 @branch_eq(i8 addrspace(200)* %a, i8 addrspace(200)* %b) nounwind {
+define i32 @branch_eq(ptr addrspace(200) %a, ptr addrspace(200) %b) nounwind {
 ; HYBRID-LABEL: branch_eq:
 ; HYBRID:       # %bb.0: # %entry
 ; HYBRID-NEXT:    beq a0, a1, .LBB50_2
@@ -950,7 +950,7 @@ define i32 @branch_eq(i8 addrspace(200)* %a, i8 addrspace(200)* %b) nounwind {
 ; PURECAP-NEXT:  .LBB50_2: # %if.then
 ; PURECAP-NEXT:    ctail func1
 entry:
-  %cmp = icmp eq i8 addrspace(200)* %a, %b
+  %cmp = icmp eq ptr addrspace(200) %a, %b
   br i1 %cmp, label %if.then, label %if.end
 if.then:
   %retval1 = tail call i32 @func1()
@@ -960,7 +960,7 @@ if.end:
   ret i32 %retval2
 }
 
-define i32 @branch_ne(i8 addrspace(200)* %a, i8 addrspace(200)* %b) nounwind {
+define i32 @branch_ne(ptr addrspace(200) %a, ptr addrspace(200) %b) nounwind {
 ; HYBRID-LABEL: branch_ne:
 ; HYBRID:       # %bb.0: # %entry
 ; HYBRID-NEXT:    beq a0, a1, .LBB51_2
@@ -977,7 +977,7 @@ define i32 @branch_ne(i8 addrspace(200)* %a, i8 addrspace(200)* %b) nounwind {
 ; PURECAP-NEXT:  .LBB51_2: # %if.end
 ; PURECAP-NEXT:    ctail func2
 entry:
-  %cmp = icmp ne i8 addrspace(200)* %a, %b
+  %cmp = icmp ne ptr addrspace(200) %a, %b
   br i1 %cmp, label %if.then, label %if.end
 if.then:
   %retval1 = tail call i32 @func1()
@@ -987,7 +987,7 @@ if.end:
   ret i32 %retval2
 }
 
-define i32 @branch_ugt(i8 addrspace(200)* %a, i8 addrspace(200)* %b) nounwind {
+define i32 @branch_ugt(ptr addrspace(200) %a, ptr addrspace(200) %b) nounwind {
 ; HYBRID-LABEL: branch_ugt:
 ; HYBRID:       # %bb.0: # %entry
 ; HYBRID-NEXT:    bgeu a1, a0, .LBB52_2
@@ -1004,7 +1004,7 @@ define i32 @branch_ugt(i8 addrspace(200)* %a, i8 addrspace(200)* %b) nounwind {
 ; PURECAP-NEXT:  .LBB52_2: # %if.end
 ; PURECAP-NEXT:    ctail func2
 entry:
-  %cmp = icmp ugt i8 addrspace(200)* %a, %b
+  %cmp = icmp ugt ptr addrspace(200) %a, %b
   br i1 %cmp, label %if.then, label %if.end
 if.then:
   %retval1 = tail call i32 @func1()
@@ -1014,7 +1014,7 @@ if.end:
   ret i32 %retval2
 }
 
-define i32 @branch_uge(i8 addrspace(200)* %a, i8 addrspace(200)* %b) nounwind {
+define i32 @branch_uge(ptr addrspace(200) %a, ptr addrspace(200) %b) nounwind {
 ; HYBRID-LABEL: branch_uge:
 ; HYBRID:       # %bb.0: # %entry
 ; HYBRID-NEXT:    bltu a0, a1, .LBB53_2
@@ -1031,7 +1031,7 @@ define i32 @branch_uge(i8 addrspace(200)* %a, i8 addrspace(200)* %b) nounwind {
 ; PURECAP-NEXT:  .LBB53_2: # %if.end
 ; PURECAP-NEXT:    ctail func2
 entry:
-  %cmp = icmp uge i8 addrspace(200)* %a, %b
+  %cmp = icmp uge ptr addrspace(200) %a, %b
   br i1 %cmp, label %if.then, label %if.end
 if.then:
   %retval1 = tail call i32 @func1()
@@ -1041,7 +1041,7 @@ if.end:
   ret i32 %retval2
 }
 
-define i32 @branch_ult(i8 addrspace(200)* %a, i8 addrspace(200)* %b) nounwind {
+define i32 @branch_ult(ptr addrspace(200) %a, ptr addrspace(200) %b) nounwind {
 ; HYBRID-LABEL: branch_ult:
 ; HYBRID:       # %bb.0: # %entry
 ; HYBRID-NEXT:    bgeu a0, a1, .LBB54_2
@@ -1058,7 +1058,7 @@ define i32 @branch_ult(i8 addrspace(200)* %a, i8 addrspace(200)* %b) nounwind {
 ; PURECAP-NEXT:  .LBB54_2: # %if.end
 ; PURECAP-NEXT:    ctail func2
 entry:
-  %cmp = icmp ult i8 addrspace(200)* %a, %b
+  %cmp = icmp ult ptr addrspace(200) %a, %b
   br i1 %cmp, label %if.then, label %if.end
 if.then:
   %retval1 = tail call i32 @func1()
@@ -1068,7 +1068,7 @@ if.end:
   ret i32 %retval2
 }
 
-define i32 @branch_ule(i8 addrspace(200)* %a, i8 addrspace(200)* %b) nounwind {
+define i32 @branch_ule(ptr addrspace(200) %a, ptr addrspace(200) %b) nounwind {
 ; HYBRID-LABEL: branch_ule:
 ; HYBRID:       # %bb.0: # %entry
 ; HYBRID-NEXT:    bltu a1, a0, .LBB55_2
@@ -1085,7 +1085,7 @@ define i32 @branch_ule(i8 addrspace(200)* %a, i8 addrspace(200)* %b) nounwind {
 ; PURECAP-NEXT:  .LBB55_2: # %if.end
 ; PURECAP-NEXT:    ctail func2
 entry:
-  %cmp = icmp ule i8 addrspace(200)* %a, %b
+  %cmp = icmp ule ptr addrspace(200) %a, %b
   br i1 %cmp, label %if.then, label %if.end
 if.then:
   %retval1 = tail call i32 @func1()
@@ -1095,7 +1095,7 @@ if.end:
   ret i32 %retval2
 }
 
-define i32 @branch_sgt(i8 addrspace(200)* %a, i8 addrspace(200)* %b) nounwind {
+define i32 @branch_sgt(ptr addrspace(200) %a, ptr addrspace(200) %b) nounwind {
 ; HYBRID-LABEL: branch_sgt:
 ; HYBRID:       # %bb.0: # %entry
 ; HYBRID-NEXT:    bge a1, a0, .LBB56_2
@@ -1112,7 +1112,7 @@ define i32 @branch_sgt(i8 addrspace(200)* %a, i8 addrspace(200)* %b) nounwind {
 ; PURECAP-NEXT:  .LBB56_2: # %if.end
 ; PURECAP-NEXT:    ctail func2
 entry:
-  %cmp = icmp sgt i8 addrspace(200)* %a, %b
+  %cmp = icmp sgt ptr addrspace(200) %a, %b
   br i1 %cmp, label %if.then, label %if.end
 if.then:
   %retval1 = tail call i32 @func1()
@@ -1122,7 +1122,7 @@ if.end:
   ret i32 %retval2
 }
 
-define i32 @branch_sge(i8 addrspace(200)* %a, i8 addrspace(200)* %b) nounwind {
+define i32 @branch_sge(ptr addrspace(200) %a, ptr addrspace(200) %b) nounwind {
 ; HYBRID-LABEL: branch_sge:
 ; HYBRID:       # %bb.0: # %entry
 ; HYBRID-NEXT:    blt a0, a1, .LBB57_2
@@ -1139,7 +1139,7 @@ define i32 @branch_sge(i8 addrspace(200)* %a, i8 addrspace(200)* %b) nounwind {
 ; PURECAP-NEXT:  .LBB57_2: # %if.end
 ; PURECAP-NEXT:    ctail func2
 entry:
-  %cmp = icmp sge i8 addrspace(200)* %a, %b
+  %cmp = icmp sge ptr addrspace(200) %a, %b
   br i1 %cmp, label %if.then, label %if.end
 if.then:
   %retval1 = tail call i32 @func1()
@@ -1149,7 +1149,7 @@ if.end:
   ret i32 %retval2
 }
 
-define i32 @branch_slt(i8 addrspace(200)* %a, i8 addrspace(200)* %b) nounwind {
+define i32 @branch_slt(ptr addrspace(200) %a, ptr addrspace(200) %b) nounwind {
 ; HYBRID-LABEL: branch_slt:
 ; HYBRID:       # %bb.0: # %entry
 ; HYBRID-NEXT:    bge a0, a1, .LBB58_2
@@ -1166,7 +1166,7 @@ define i32 @branch_slt(i8 addrspace(200)* %a, i8 addrspace(200)* %b) nounwind {
 ; PURECAP-NEXT:  .LBB58_2: # %if.end
 ; PURECAP-NEXT:    ctail func2
 entry:
-  %cmp = icmp slt i8 addrspace(200)* %a, %b
+  %cmp = icmp slt ptr addrspace(200) %a, %b
   br i1 %cmp, label %if.then, label %if.end
 if.then:
   %retval1 = tail call i32 @func1()
@@ -1176,7 +1176,7 @@ if.end:
   ret i32 %retval2
 }
 
-define i32 @branch_sle(i8 addrspace(200)* %a, i8 addrspace(200)* %b) nounwind {
+define i32 @branch_sle(ptr addrspace(200) %a, ptr addrspace(200) %b) nounwind {
 ; HYBRID-LABEL: branch_sle:
 ; HYBRID:       # %bb.0: # %entry
 ; HYBRID-NEXT:    blt a1, a0, .LBB59_2
@@ -1193,7 +1193,7 @@ define i32 @branch_sle(i8 addrspace(200)* %a, i8 addrspace(200)* %b) nounwind {
 ; PURECAP-NEXT:  .LBB59_2: # %if.end
 ; PURECAP-NEXT:    ctail func2
 entry:
-  %cmp = icmp sle i8 addrspace(200)* %a, %b
+  %cmp = icmp sle ptr addrspace(200) %a, %b
   br i1 %cmp, label %if.then, label %if.end
 if.then:
   %retval1 = tail call i32 @func1()
@@ -1203,7 +1203,7 @@ if.end:
   ret i32 %retval2
 }
 
-define i32 @branch_eq_null(i8 addrspace(200)* %a) nounwind {
+define i32 @branch_eq_null(ptr addrspace(200) %a) nounwind {
 ; HYBRID-LABEL: branch_eq_null:
 ; HYBRID:       # %bb.0: # %entry
 ; HYBRID-NEXT:    beqz a0, .LBB60_2
@@ -1220,7 +1220,7 @@ define i32 @branch_eq_null(i8 addrspace(200)* %a) nounwind {
 ; PURECAP-NEXT:  .LBB60_2: # %if.then
 ; PURECAP-NEXT:    ctail func1
 entry:
-  %cmp = icmp eq i8 addrspace(200)* %a, null
+  %cmp = icmp eq ptr addrspace(200) %a, null
   br i1 %cmp, label %if.then, label %if.end
 if.then:
   %retval1 = tail call i32 @func1()
@@ -1230,7 +1230,7 @@ if.end:
   ret i32 %retval2
 }
 
-define i32 @branch_ne_null(i8 addrspace(200)* %a) nounwind {
+define i32 @branch_ne_null(ptr addrspace(200) %a) nounwind {
 ; HYBRID-LABEL: branch_ne_null:
 ; HYBRID:       # %bb.0: # %entry
 ; HYBRID-NEXT:    beqz a0, .LBB61_2
@@ -1247,7 +1247,7 @@ define i32 @branch_ne_null(i8 addrspace(200)* %a) nounwind {
 ; PURECAP-NEXT:  .LBB61_2: # %if.end
 ; PURECAP-NEXT:    ctail func2
 entry:
-  %cmp = icmp ne i8 addrspace(200)* %a, null
+  %cmp = icmp ne ptr addrspace(200) %a, null
   br i1 %cmp, label %if.then, label %if.end
 if.then:
   %retval1 = tail call i32 @func1()
@@ -1257,7 +1257,7 @@ if.end:
   ret i32 %retval2
 }
 
-define i32 @branch_ugt_null(i8 addrspace(200)* %a) nounwind {
+define i32 @branch_ugt_null(ptr addrspace(200) %a) nounwind {
 ; HYBRID-LABEL: branch_ugt_null:
 ; HYBRID:       # %bb.0: # %entry
 ; HYBRID-NEXT:    bgeu zero, a0, .LBB62_2
@@ -1274,7 +1274,7 @@ define i32 @branch_ugt_null(i8 addrspace(200)* %a) nounwind {
 ; PURECAP-NEXT:  .LBB62_2: # %if.end
 ; PURECAP-NEXT:    ctail func2
 entry:
-  %cmp = icmp ugt i8 addrspace(200)* %a, null
+  %cmp = icmp ugt ptr addrspace(200) %a, null
   br i1 %cmp, label %if.then, label %if.end
 if.then:
   %retval1 = tail call i32 @func1()
@@ -1284,7 +1284,7 @@ if.end:
   ret i32 %retval2
 }
 
-define i32 @branch_uge_null(i8 addrspace(200)* %a) nounwind {
+define i32 @branch_uge_null(ptr addrspace(200) %a) nounwind {
 ; HYBRID-LABEL: branch_uge_null:
 ; HYBRID:       # %bb.0: # %entry
 ; HYBRID-NEXT:    bltu a0, zero, .LBB63_2
@@ -1301,7 +1301,7 @@ define i32 @branch_uge_null(i8 addrspace(200)* %a) nounwind {
 ; PURECAP-NEXT:  .LBB63_2: # %if.end
 ; PURECAP-NEXT:    ctail func2
 entry:
-  %cmp = icmp uge i8 addrspace(200)* %a, null
+  %cmp = icmp uge ptr addrspace(200) %a, null
   br i1 %cmp, label %if.then, label %if.end
 if.then:
   %retval1 = tail call i32 @func1()
@@ -1311,7 +1311,7 @@ if.end:
   ret i32 %retval2
 }
 
-define i32 @branch_ult_null(i8 addrspace(200)* %a) nounwind {
+define i32 @branch_ult_null(ptr addrspace(200) %a) nounwind {
 ; HYBRID-LABEL: branch_ult_null:
 ; HYBRID:       # %bb.0: # %entry
 ; HYBRID-NEXT:    bgeu a0, zero, .LBB64_2
@@ -1328,7 +1328,7 @@ define i32 @branch_ult_null(i8 addrspace(200)* %a) nounwind {
 ; PURECAP-NEXT:  .LBB64_2: # %if.end
 ; PURECAP-NEXT:    ctail func2
 entry:
-  %cmp = icmp ult i8 addrspace(200)* %a, null
+  %cmp = icmp ult ptr addrspace(200) %a, null
   br i1 %cmp, label %if.then, label %if.end
 if.then:
   %retval1 = tail call i32 @func1()
@@ -1338,7 +1338,7 @@ if.end:
   ret i32 %retval2
 }
 
-define i32 @branch_ule_null(i8 addrspace(200)* %a) nounwind {
+define i32 @branch_ule_null(ptr addrspace(200) %a) nounwind {
 ; HYBRID-LABEL: branch_ule_null:
 ; HYBRID:       # %bb.0: # %entry
 ; HYBRID-NEXT:    bltu zero, a0, .LBB65_2
@@ -1355,7 +1355,7 @@ define i32 @branch_ule_null(i8 addrspace(200)* %a) nounwind {
 ; PURECAP-NEXT:  .LBB65_2: # %if.end
 ; PURECAP-NEXT:    ctail func2
 entry:
-  %cmp = icmp ule i8 addrspace(200)* %a, null
+  %cmp = icmp ule ptr addrspace(200) %a, null
   br i1 %cmp, label %if.then, label %if.end
 if.then:
   %retval1 = tail call i32 @func1()
@@ -1365,7 +1365,7 @@ if.end:
   ret i32 %retval2
 }
 
-define i32 @branch_sgt_null(i8 addrspace(200)* %a) nounwind {
+define i32 @branch_sgt_null(ptr addrspace(200) %a) nounwind {
 ; HYBRID-LABEL: branch_sgt_null:
 ; HYBRID:       # %bb.0: # %entry
 ; HYBRID-NEXT:    blez a0, .LBB66_2
@@ -1382,7 +1382,7 @@ define i32 @branch_sgt_null(i8 addrspace(200)* %a) nounwind {
 ; PURECAP-NEXT:  .LBB66_2: # %if.end
 ; PURECAP-NEXT:    ctail func2
 entry:
-  %cmp = icmp sgt i8 addrspace(200)* %a, null
+  %cmp = icmp sgt ptr addrspace(200) %a, null
   br i1 %cmp, label %if.then, label %if.end
 if.then:
   %retval1 = tail call i32 @func1()
@@ -1392,7 +1392,7 @@ if.end:
   ret i32 %retval2
 }
 
-define i32 @branch_sge_null(i8 addrspace(200)* %a) nounwind {
+define i32 @branch_sge_null(ptr addrspace(200) %a) nounwind {
 ; HYBRID-LABEL: branch_sge_null:
 ; HYBRID:       # %bb.0: # %entry
 ; HYBRID-NEXT:    bltz a0, .LBB67_2
@@ -1409,7 +1409,7 @@ define i32 @branch_sge_null(i8 addrspace(200)* %a) nounwind {
 ; PURECAP-NEXT:  .LBB67_2: # %if.end
 ; PURECAP-NEXT:    ctail func2
 entry:
-  %cmp = icmp sge i8 addrspace(200)* %a, null
+  %cmp = icmp sge ptr addrspace(200) %a, null
   br i1 %cmp, label %if.then, label %if.end
 if.then:
   %retval1 = tail call i32 @func1()
@@ -1419,7 +1419,7 @@ if.end:
   ret i32 %retval2
 }
 
-define i32 @branch_slt_null(i8 addrspace(200)* %a) nounwind {
+define i32 @branch_slt_null(ptr addrspace(200) %a) nounwind {
 ; HYBRID-LABEL: branch_slt_null:
 ; HYBRID:       # %bb.0: # %entry
 ; HYBRID-NEXT:    bgez a0, .LBB68_2
@@ -1436,7 +1436,7 @@ define i32 @branch_slt_null(i8 addrspace(200)* %a) nounwind {
 ; PURECAP-NEXT:  .LBB68_2: # %if.end
 ; PURECAP-NEXT:    ctail func2
 entry:
-  %cmp = icmp slt i8 addrspace(200)* %a, null
+  %cmp = icmp slt ptr addrspace(200) %a, null
   br i1 %cmp, label %if.then, label %if.end
 if.then:
   %retval1 = tail call i32 @func1()
@@ -1446,7 +1446,7 @@ if.end:
   ret i32 %retval2
 }
 
-define i32 @branch_sle_null(i8 addrspace(200)* %a) nounwind {
+define i32 @branch_sle_null(ptr addrspace(200) %a) nounwind {
 ; HYBRID-LABEL: branch_sle_null:
 ; HYBRID:       # %bb.0: # %entry
 ; HYBRID-NEXT:    bgtz a0, .LBB69_2
@@ -1463,7 +1463,7 @@ define i32 @branch_sle_null(i8 addrspace(200)* %a) nounwind {
 ; PURECAP-NEXT:  .LBB69_2: # %if.end
 ; PURECAP-NEXT:    ctail func2
 entry:
-  %cmp = icmp sle i8 addrspace(200)* %a, null
+  %cmp = icmp sle ptr addrspace(200) %a, null
   br i1 %cmp, label %if.then, label %if.end
 if.then:
   %retval1 = tail call i32 @func1()

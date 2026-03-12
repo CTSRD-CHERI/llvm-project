@@ -7,7 +7,7 @@
 ; RUN: llc -mtriple=riscv64 --relocation-model=pic -target-abi lp64d -mattr=+xcheri,+f,+d -mattr=+a < %s | FileCheck %s --check-prefixes=HYBRID,HYBRID-ATOMICS --allow-unused-prefixes
 ; RUN: llc -mtriple=riscv64 --relocation-model=pic -target-abi lp64d -mattr=+xcheri,+f,+d -mattr=-a < %s | FileCheck %s --check-prefixes=HYBRID,HYBRID-LIBCALLS --allow-unused-prefixes
 
-define i64 @atomic_cap_ptr_xchg(i64 addrspace(200)* %ptr, i64 %val) nounwind {
+define i64 @atomic_cap_ptr_xchg(ptr addrspace(200) %ptr, i64 %val) nounwind {
 ; PURECAP-ATOMICS-LABEL: atomic_cap_ptr_xchg:
 ; PURECAP-ATOMICS:       # %bb.0:
 ; PURECAP-ATOMICS-NEXT:    amoswap.d.aqrl a0, a1, (ca0)
@@ -32,11 +32,11 @@ define i64 @atomic_cap_ptr_xchg(i64 addrspace(200)* %ptr, i64 %val) nounwind {
 ; HYBRID-NEXT:    ld ra, 8(sp) # 8-byte Folded Reload
 ; HYBRID-NEXT:    addi sp, sp, 16
 ; HYBRID-NEXT:    ret
-  %tmp = atomicrmw xchg i64 addrspace(200)* %ptr, i64 %val seq_cst
+  %tmp = atomicrmw xchg ptr addrspace(200) %ptr, i64 %val seq_cst
   ret i64 %tmp
 }
 
-define i64 @atomic_cap_ptr_add(i64 addrspace(200)* %ptr, i64 %val) nounwind {
+define i64 @atomic_cap_ptr_add(ptr addrspace(200) %ptr, i64 %val) nounwind {
 ; PURECAP-ATOMICS-LABEL: atomic_cap_ptr_add:
 ; PURECAP-ATOMICS:       # %bb.0:
 ; PURECAP-ATOMICS-NEXT:    amoadd.d.aqrl a0, a1, (ca0)
@@ -61,11 +61,11 @@ define i64 @atomic_cap_ptr_add(i64 addrspace(200)* %ptr, i64 %val) nounwind {
 ; HYBRID-NEXT:    ld ra, 8(sp) # 8-byte Folded Reload
 ; HYBRID-NEXT:    addi sp, sp, 16
 ; HYBRID-NEXT:    ret
-  %tmp = atomicrmw add i64 addrspace(200)* %ptr, i64 %val seq_cst
+  %tmp = atomicrmw add ptr addrspace(200) %ptr, i64 %val seq_cst
   ret i64 %tmp
 }
 
-define i64 @atomic_cap_ptr_sub(i64 addrspace(200)* %ptr, i64 %val) nounwind {
+define i64 @atomic_cap_ptr_sub(ptr addrspace(200) %ptr, i64 %val) nounwind {
 ; PURECAP-ATOMICS-LABEL: atomic_cap_ptr_sub:
 ; PURECAP-ATOMICS:       # %bb.0:
 ; PURECAP-ATOMICS-NEXT:    neg a1, a1
@@ -91,11 +91,11 @@ define i64 @atomic_cap_ptr_sub(i64 addrspace(200)* %ptr, i64 %val) nounwind {
 ; HYBRID-NEXT:    ld ra, 8(sp) # 8-byte Folded Reload
 ; HYBRID-NEXT:    addi sp, sp, 16
 ; HYBRID-NEXT:    ret
-  %tmp = atomicrmw sub i64 addrspace(200)* %ptr, i64 %val seq_cst
+  %tmp = atomicrmw sub ptr addrspace(200) %ptr, i64 %val seq_cst
   ret i64 %tmp
 }
 
-define i64 @atomic_cap_ptr_and(i64 addrspace(200)* %ptr, i64 %val) nounwind {
+define i64 @atomic_cap_ptr_and(ptr addrspace(200) %ptr, i64 %val) nounwind {
 ; PURECAP-ATOMICS-LABEL: atomic_cap_ptr_and:
 ; PURECAP-ATOMICS:       # %bb.0:
 ; PURECAP-ATOMICS-NEXT:    amoand.d.aqrl a0, a1, (ca0)
@@ -120,11 +120,11 @@ define i64 @atomic_cap_ptr_and(i64 addrspace(200)* %ptr, i64 %val) nounwind {
 ; HYBRID-NEXT:    ld ra, 8(sp) # 8-byte Folded Reload
 ; HYBRID-NEXT:    addi sp, sp, 16
 ; HYBRID-NEXT:    ret
-  %tmp = atomicrmw and i64 addrspace(200)* %ptr, i64 %val seq_cst
+  %tmp = atomicrmw and ptr addrspace(200) %ptr, i64 %val seq_cst
   ret i64 %tmp
 }
 
-define i64 @atomic_cap_ptr_nand(i64 addrspace(200)* %ptr, i64 %val) nounwind {
+define i64 @atomic_cap_ptr_nand(ptr addrspace(200) %ptr, i64 %val) nounwind {
 ; PURECAP-ATOMICS-LABEL: atomic_cap_ptr_nand:
 ; PURECAP-ATOMICS:       # %bb.0:
 ; PURECAP-ATOMICS-NEXT:  .LBB4_1: # =>This Inner Loop Header: Depth=1
@@ -156,11 +156,11 @@ define i64 @atomic_cap_ptr_nand(i64 addrspace(200)* %ptr, i64 %val) nounwind {
 ; HYBRID-NEXT:    ld ra, 8(sp) # 8-byte Folded Reload
 ; HYBRID-NEXT:    addi sp, sp, 16
 ; HYBRID-NEXT:    ret
-  %tmp = atomicrmw nand i64 addrspace(200)* %ptr, i64 %val seq_cst
+  %tmp = atomicrmw nand ptr addrspace(200) %ptr, i64 %val seq_cst
   ret i64 %tmp
 }
 
-define i64 @atomic_cap_ptr_or(i64 addrspace(200)* %ptr, i64 %val) nounwind {
+define i64 @atomic_cap_ptr_or(ptr addrspace(200) %ptr, i64 %val) nounwind {
 ; PURECAP-ATOMICS-LABEL: atomic_cap_ptr_or:
 ; PURECAP-ATOMICS:       # %bb.0:
 ; PURECAP-ATOMICS-NEXT:    amoor.d.aqrl a0, a1, (ca0)
@@ -185,11 +185,11 @@ define i64 @atomic_cap_ptr_or(i64 addrspace(200)* %ptr, i64 %val) nounwind {
 ; HYBRID-NEXT:    ld ra, 8(sp) # 8-byte Folded Reload
 ; HYBRID-NEXT:    addi sp, sp, 16
 ; HYBRID-NEXT:    ret
-  %tmp = atomicrmw or i64 addrspace(200)* %ptr, i64 %val seq_cst
+  %tmp = atomicrmw or ptr addrspace(200) %ptr, i64 %val seq_cst
   ret i64 %tmp
 }
 
-define i64 @atomic_cap_ptr_xor(i64 addrspace(200)* %ptr, i64 %val) nounwind {
+define i64 @atomic_cap_ptr_xor(ptr addrspace(200) %ptr, i64 %val) nounwind {
 ; PURECAP-ATOMICS-LABEL: atomic_cap_ptr_xor:
 ; PURECAP-ATOMICS:       # %bb.0:
 ; PURECAP-ATOMICS-NEXT:    amoxor.d.aqrl a0, a1, (ca0)
@@ -214,11 +214,11 @@ define i64 @atomic_cap_ptr_xor(i64 addrspace(200)* %ptr, i64 %val) nounwind {
 ; HYBRID-NEXT:    ld ra, 8(sp) # 8-byte Folded Reload
 ; HYBRID-NEXT:    addi sp, sp, 16
 ; HYBRID-NEXT:    ret
-  %tmp = atomicrmw xor i64 addrspace(200)* %ptr, i64 %val seq_cst
+  %tmp = atomicrmw xor ptr addrspace(200) %ptr, i64 %val seq_cst
   ret i64 %tmp
 }
 
-define i64 @atomic_cap_ptr_max(i64 addrspace(200)* %ptr, i64 %val) nounwind {
+define i64 @atomic_cap_ptr_max(ptr addrspace(200) %ptr, i64 %val) nounwind {
 ; PURECAP-ATOMICS-LABEL: atomic_cap_ptr_max:
 ; PURECAP-ATOMICS:       # %bb.0:
 ; PURECAP-ATOMICS-NEXT:    amomax.d.aqrl a0, a1, (ca0)
@@ -297,11 +297,11 @@ define i64 @atomic_cap_ptr_max(i64 addrspace(200)* %ptr, i64 %val) nounwind {
 ; HYBRID-NEXT:    ld s0, 32(sp) # 8-byte Folded Reload
 ; HYBRID-NEXT:    addi sp, sp, 48
 ; HYBRID-NEXT:    ret
-  %tmp = atomicrmw max i64 addrspace(200)* %ptr, i64 %val seq_cst
+  %tmp = atomicrmw max ptr addrspace(200) %ptr, i64 %val seq_cst
   ret i64 %tmp
 }
 
-define i64 @atomic_cap_ptr_min(i64 addrspace(200)* %ptr, i64 %val) nounwind {
+define i64 @atomic_cap_ptr_min(ptr addrspace(200) %ptr, i64 %val) nounwind {
 ; PURECAP-ATOMICS-LABEL: atomic_cap_ptr_min:
 ; PURECAP-ATOMICS:       # %bb.0:
 ; PURECAP-ATOMICS-NEXT:    amomin.d.aqrl a0, a1, (ca0)
@@ -380,11 +380,11 @@ define i64 @atomic_cap_ptr_min(i64 addrspace(200)* %ptr, i64 %val) nounwind {
 ; HYBRID-NEXT:    ld s0, 32(sp) # 8-byte Folded Reload
 ; HYBRID-NEXT:    addi sp, sp, 48
 ; HYBRID-NEXT:    ret
-  %tmp = atomicrmw min i64 addrspace(200)* %ptr, i64 %val seq_cst
+  %tmp = atomicrmw min ptr addrspace(200) %ptr, i64 %val seq_cst
   ret i64 %tmp
 }
 
-define i64 @atomic_cap_ptr_umax(i64 addrspace(200)* %ptr, i64 %val) nounwind {
+define i64 @atomic_cap_ptr_umax(ptr addrspace(200) %ptr, i64 %val) nounwind {
 ; PURECAP-ATOMICS-LABEL: atomic_cap_ptr_umax:
 ; PURECAP-ATOMICS:       # %bb.0:
 ; PURECAP-ATOMICS-NEXT:    amomaxu.d.aqrl a0, a1, (ca0)
@@ -463,11 +463,11 @@ define i64 @atomic_cap_ptr_umax(i64 addrspace(200)* %ptr, i64 %val) nounwind {
 ; HYBRID-NEXT:    ld s0, 32(sp) # 8-byte Folded Reload
 ; HYBRID-NEXT:    addi sp, sp, 48
 ; HYBRID-NEXT:    ret
-  %tmp = atomicrmw umax i64 addrspace(200)* %ptr, i64 %val seq_cst
+  %tmp = atomicrmw umax ptr addrspace(200) %ptr, i64 %val seq_cst
   ret i64 %tmp
 }
 
-define i64 @atomic_cap_ptr_umin(i64 addrspace(200)* %ptr, i64 %val) nounwind {
+define i64 @atomic_cap_ptr_umin(ptr addrspace(200) %ptr, i64 %val) nounwind {
 ; PURECAP-ATOMICS-LABEL: atomic_cap_ptr_umin:
 ; PURECAP-ATOMICS:       # %bb.0:
 ; PURECAP-ATOMICS-NEXT:    amominu.d.aqrl a0, a1, (ca0)
@@ -546,11 +546,11 @@ define i64 @atomic_cap_ptr_umin(i64 addrspace(200)* %ptr, i64 %val) nounwind {
 ; HYBRID-NEXT:    ld s0, 32(sp) # 8-byte Folded Reload
 ; HYBRID-NEXT:    addi sp, sp, 48
 ; HYBRID-NEXT:    ret
-  %tmp = atomicrmw umin i64 addrspace(200)* %ptr, i64 %val seq_cst
+  %tmp = atomicrmw umin ptr addrspace(200) %ptr, i64 %val seq_cst
   ret i64 %tmp
 }
 
-define float @atomic_cap_ptr_fadd(float addrspace(200)* %ptr, float %val) nounwind {
+define float @atomic_cap_ptr_fadd(ptr addrspace(200) %ptr, float %val) nounwind {
 ; PURECAP-ATOMICS-LABEL: atomic_cap_ptr_fadd:
 ; PURECAP-ATOMICS:       # %bb.0:
 ; PURECAP-ATOMICS-NEXT:    flw fa5, 0(ca0)
@@ -636,11 +636,11 @@ define float @atomic_cap_ptr_fadd(float addrspace(200)* %ptr, float %val) nounwi
 ; HYBRID-NEXT:    fld fs0, 32(sp) # 8-byte Folded Reload
 ; HYBRID-NEXT:    addi sp, sp, 48
 ; HYBRID-NEXT:    ret
-  %tmp = atomicrmw fadd float addrspace(200)* %ptr, float %val seq_cst
+  %tmp = atomicrmw fadd ptr addrspace(200) %ptr, float %val seq_cst
   ret float %tmp
 }
 
-define float @atomic_cap_ptr_fsub(float addrspace(200)* %ptr, float %val) nounwind {
+define float @atomic_cap_ptr_fsub(ptr addrspace(200) %ptr, float %val) nounwind {
 ; PURECAP-ATOMICS-LABEL: atomic_cap_ptr_fsub:
 ; PURECAP-ATOMICS:       # %bb.0:
 ; PURECAP-ATOMICS-NEXT:    flw fa5, 0(ca0)
@@ -726,6 +726,6 @@ define float @atomic_cap_ptr_fsub(float addrspace(200)* %ptr, float %val) nounwi
 ; HYBRID-NEXT:    fld fs0, 32(sp) # 8-byte Folded Reload
 ; HYBRID-NEXT:    addi sp, sp, 48
 ; HYBRID-NEXT:    ret
-  %tmp = atomicrmw fsub float addrspace(200)* %ptr, float %val seq_cst
+  %tmp = atomicrmw fsub ptr addrspace(200) %ptr, float %val seq_cst
   ret float %tmp
 }

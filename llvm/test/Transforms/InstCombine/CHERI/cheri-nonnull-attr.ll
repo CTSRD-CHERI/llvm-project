@@ -26,7 +26,7 @@ define void @foo() local_unnamed_addr #0 {
   ; Probably this one should be nonnnull too because it is a GEP into a known constant
   ; Other targets don't do so leave it like this
   call void @test(ptr addrspace(200) @.str) #0
-  ; CHECK-NOTYET: call void @test(i8 addrspace(200)* nonnull getelementptr inbounds ([5 x i8], [5 x i8] addrspace(200)* @.str, i64 0, i64 0))
+  ; CHECK-NOTYET: call void @test(ptr addrspace(200) nonnull getelementptr inbounds ([5 x i8], ptr addrspace(200) @.str, i64 0, i64 0))
   ; CHECK: call void @test(ptr addrspace(200) nonnull @.str)
   ret void
 }

@@ -49,7 +49,7 @@ define i64 @load_global_i64_align_1(i64 %y) addrspace(200) nounwind {
 ; CHECK-NEXT:    or a1, a1, a4
 ; CHECK-NEXT:    or a1, a1, a2
 ; CHECK-NEXT:    ret
-  %ret = load i64, i64 addrspace(200)* addrspacecast(i64* @a1 to i64 addrspace(200)*), align 1
+  %ret = load i64, ptr addrspace(200) addrspacecast(ptr @a1 to ptr addrspace(200)), align 1
   ret i64 %ret
 }
 
@@ -79,7 +79,7 @@ define i64 @load_global_i64_align_2(i64 %y) addrspace(200) nounwind {
 ; CHECK-NEXT:    slli a1, a4, 16
 ; CHECK-NEXT:    or a1, a1, a3
 ; CHECK-NEXT:    ret
-  %ret = load i64, i64 addrspace(200)* addrspacecast(i64* @a2 to i64 addrspace(200)*), align 2
+  %ret = load i64, ptr addrspace(200) addrspacecast(ptr @a2 to ptr addrspace(200)), align 2
   ret i64 %ret
 }
 
@@ -101,7 +101,7 @@ define i64 @load_global_i64_align_4(i64 %y) addrspace(200) nounwind {
 ; CHECK-NEXT:    cincoffset ca1, ca1, 4
 ; CHECK-NEXT:    lw.cap a1, (ca1)
 ; CHECK-NEXT:    ret
-  %ret = load i64, i64 addrspace(200)* addrspacecast(i64* @a4 to i64 addrspace(200)*), align 4
+  %ret = load i64, ptr addrspace(200) addrspacecast(ptr @a4 to ptr addrspace(200)), align 4
   ret i64 %ret
 }
 
@@ -123,7 +123,7 @@ define i64 @load_global_i64_align_8(i64 %y) addrspace(200) nounwind {
 ; CHECK-NEXT:    cincoffset ca1, ca1, 4
 ; CHECK-NEXT:    lw.cap a1, (ca1)
 ; CHECK-NEXT:    ret
-  %ret = load i64, i64 addrspace(200)* addrspacecast(i64* @a8 to i64 addrspace(200)*), align 8
+  %ret = load i64, ptr addrspace(200) addrspacecast(ptr @a8 to ptr addrspace(200)), align 8
   ret i64 %ret
 }
 
@@ -163,7 +163,7 @@ define void @store_global_i64_align_1(i64 %y) addrspace(200) nounwind {
 ; CHECK-NEXT:    srli a0, a0, 8
 ; CHECK-NEXT:    sb.cap a0, (ca1)
 ; CHECK-NEXT:    ret
-  store i64 %y, i64 addrspace(200)* addrspacecast(i64* @a1 to i64 addrspace(200)*), align 1
+  store i64 %y, ptr addrspace(200) addrspacecast(ptr @a1 to ptr addrspace(200)), align 1
   ret void
 }
 
@@ -191,7 +191,7 @@ define void @store_global_i64_align_2(i64 %y) addrspace(200) nounwind {
 ; CHECK-NEXT:    srli a0, a0, 16
 ; CHECK-NEXT:    sh.cap a0, (ca1)
 ; CHECK-NEXT:    ret
-  store i64 %y, i64 addrspace(200)* addrspacecast(i64* @a2 to i64 addrspace(200)*), align 2
+  store i64 %y, ptr addrspace(200) addrspacecast(ptr @a2 to ptr addrspace(200)), align 2
   ret void
 }
 
@@ -213,7 +213,7 @@ define void @store_global_i64_align_4(i64 %y) addrspace(200) nounwind {
 ; CHECK-NEXT:    cincoffset ca0, ca2, 4
 ; CHECK-NEXT:    sw.cap a1, (ca0)
 ; CHECK-NEXT:    ret
-  store i64 %y, i64 addrspace(200)* addrspacecast(i64* @a4 to i64 addrspace(200)*), align 4
+  store i64 %y, ptr addrspace(200) addrspacecast(ptr @a4 to ptr addrspace(200)), align 4
   ret void
 }
 
@@ -235,6 +235,6 @@ define void @store_global_i64_align_8(i64 %y) addrspace(200) nounwind {
 ; CHECK-NEXT:    cincoffset ca0, ca2, 4
 ; CHECK-NEXT:    sw.cap a1, (ca0)
 ; CHECK-NEXT:    ret
-  store i64 %y, i64 addrspace(200)* addrspacecast(i64* @a8 to i64 addrspace(200)*), align 8
+  store i64 %y, ptr addrspace(200) addrspacecast(ptr @a8 to ptr addrspace(200)), align 8
   ret void
 }

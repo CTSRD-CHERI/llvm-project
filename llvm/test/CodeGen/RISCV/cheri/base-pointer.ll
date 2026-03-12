@@ -5,7 +5,7 @@
 ; RUN: %riscv64_cheri_purecap_llc -verify-machineinstrs < %s \
 ; RUN:   | FileCheck -check-prefix=RV64IXCHERI %s
 
-declare void @callee(i8 addrspace(200)*, i8 addrspace(200)*)
+declare void @callee(ptr addrspace(200), ptr addrspace(200))
 
 ; Used to erroneously allocate s1 when cs1 was live as the base pointer
 define i32 @caller(i32 zeroext %n) nounwind {
@@ -78,6 +78,6 @@ define i32 @caller(i32 zeroext %n) nounwind {
 ; RV64IXCHERI-NEXT:    ret
   %1 = alloca i8, align 64, addrspace(200)
   %2 = alloca i8, i32 %n, addrspace(200)
-  call void @callee(i8 addrspace(200)* %1, i8 addrspace(200)* %2)
+  call void @callee(ptr addrspace(200) %1, ptr addrspace(200) %2)
   ret i32 %n
 }

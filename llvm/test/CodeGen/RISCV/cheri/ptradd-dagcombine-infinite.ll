@@ -5,32 +5,32 @@
 
 %struct.foo = type { i64, { i64, i64 }, i8 }
 
-define %struct.foo addrspace(200)* @fold_geps(i64 %arg1, %struct.foo addrspace(200)* %arg2) nounwind {
+define ptr addrspace(200) @fold_geps(i64 %arg1, ptr addrspace(200) %arg2) nounwind {
 ; CHECK-LABEL: fold_geps:
 ; CHECK:       # %bb.0: # %entry
 ; CHECK-NEXT:    cincoffset ca0, ca1, -32
 ; CHECK-NEXT:    ret
 entry:
   %mul = mul nsw i64 0, %arg1
-  %gep1 = getelementptr inbounds %struct.foo, %struct.foo addrspace(200)* %arg2, i64 %mul
-  %gep2 = getelementptr inbounds %struct.foo, %struct.foo addrspace(200)* %gep1, i64 -1
-  ret %struct.foo addrspace(200)* %gep2
+  %gep1 = getelementptr inbounds %struct.foo, ptr addrspace(200) %arg2, i64 %mul
+  %gep2 = getelementptr inbounds %struct.foo, ptr addrspace(200) %gep1, i64 -1
+  ret ptr addrspace(200) %gep2
 }
 
-define %struct.foo addrspace(200)* @fold_geps2(i64 %a, i64 %b, %struct.foo addrspace(200)* %ptr) nounwind {
+define ptr addrspace(200) @fold_geps2(i64 %a, i64 %b, ptr addrspace(200) %ptr) nounwind {
 ; CHECK-LABEL: fold_geps2:
 ; CHECK:       # %bb.0: # %entry
 ; CHECK-NEXT:    cincoffset ca0, ca2, -32
 ; CHECK-NEXT:    ret
 entry:
   %zero = sub i64 %a, %a  ; Use a fold that does not return SDValue(N, 0)
-  %gep1 = getelementptr inbounds %struct.foo, %struct.foo addrspace(200)* %ptr, i64 %zero
-  %gep2 = getelementptr inbounds %struct.foo, %struct.foo addrspace(200)* %gep1, i64 -1
-  ret %struct.foo addrspace(200)* %gep2
+  %gep1 = getelementptr inbounds %struct.foo, ptr addrspace(200) %ptr, i64 %zero
+  %gep2 = getelementptr inbounds %struct.foo, ptr addrspace(200) %gep1, i64 -1
+  ret ptr addrspace(200) %gep2
 }
 
 ; Negative check, this one can't be folded since the multiply is not a constant
-define %struct.foo addrspace(200)* @cannot_fold(i64 %arg1, %struct.foo addrspace(200)* %arg2) nounwind {
+define ptr addrspace(200) @cannot_fold(i64 %arg1, ptr addrspace(200) %arg2) nounwind {
 ; CHECK-LABEL: cannot_fold:
 ; CHECK:       # %bb.0: # %entry
 ; CHECK-NEXT:    mul a0, a0, a0
@@ -40,13 +40,13 @@ define %struct.foo addrspace(200)* @cannot_fold(i64 %arg1, %struct.foo addrspace
 ; CHECK-NEXT:    ret
 entry:
   %mul = mul i64 %arg1, %arg1
-  %gep1 = getelementptr inbounds %struct.foo, %struct.foo addrspace(200)* %arg2, i64 %mul
-  %gep2 = getelementptr inbounds %struct.foo, %struct.foo addrspace(200)* %gep1, i64 -1
-  ret %struct.foo addrspace(200)* %gep2
+  %gep1 = getelementptr inbounds %struct.foo, ptr addrspace(200) %arg2, i64 %mul
+  %gep2 = getelementptr inbounds %struct.foo, ptr addrspace(200) %gep1, i64 -1
+  ret ptr addrspace(200) %gep2
 }
 
 ; Another check where we can't fold the ptradd, but where visitAdd() returns a new node.
-define i8 addrspace(200)* @cannot_fold_2(i64 %arg1, i8 addrspace(200)* %ptr) nounwind {
+define ptr addrspace(200) @cannot_fold_2(i64 %arg1, ptr addrspace(200) %ptr) nounwind {
 ; CHECK-LABEL: cannot_fold_2:
 ; CHECK:       # %bb.0: # %entry
 ; CHECK-NEXT:    neg a0, a0
@@ -55,20 +55,20 @@ define i8 addrspace(200)* @cannot_fold_2(i64 %arg1, i8 addrspace(200)* %ptr) nou
 ; CHECK-NEXT:    ret
 entry:
   %sub = sub i64 0, %arg1
-  %gep1 = getelementptr inbounds i8, i8 addrspace(200)* %ptr, i64 %sub
-  %gep2 = getelementptr inbounds i8, i8 addrspace(200)* %gep1, i64 304
-  ret i8 addrspace(200)* %gep2
+  %gep1 = getelementptr inbounds i8, ptr addrspace(200) %ptr, i64 %sub
+  %gep2 = getelementptr inbounds i8, ptr addrspace(200) %gep1, i64 304
+  ret ptr addrspace(200) %gep2
 }
 
 ; The following is a regression for an assertion failure that was triggered by DAGCombiner::visitPTRADD() calling
 ; deleteAndRecombine() instead of recursivelyDeleteUnusedNodes().
 ; The problem happens when the line `SDValue Reassociated = DAG.getPointerAdd(DL, X, Add);` returns a node that
 ; already exists in the current DAG (in this case part of the memcpy() expansion) instead of a new one.
-%struct.bar = type { i8 addrspace(200)*, i8 addrspace(200)* }
+%struct.bar = type { ptr addrspace(200), ptr addrspace(200) }
 
-declare void @llvm.memcpy.p200i8.p200i8.i64(i8 addrspace(200)* noalias nocapture writeonly, i8 addrspace(200)* noalias nocapture readonly, i64, i1 immarg) addrspace(200)
+declare void @llvm.memcpy.p200.p200.i64(ptr addrspace(200) noalias nocapture writeonly, ptr addrspace(200) noalias nocapture readonly, i64, i1 immarg) addrspace(200)
 
-define i8 addrspace(200)* @reassociated_node_reuses_other_node(i64 %arg1, %struct.bar addrspace(200)* %arg2) nounwind {
+define ptr addrspace(200) @reassociated_node_reuses_other_node(i64 %arg1, ptr addrspace(200) %arg2) nounwind {
 ; CHECK-LABEL: reassociated_node_reuses_other_node:
 ; CHECK:       # %bb.0: # %bb
 ; CHECK-NEXT:    slli a0, a0, 5
@@ -82,26 +82,24 @@ define i8 addrspace(200)* @reassociated_node_reuses_other_node(i64 %arg1, %struc
 ; CHECK-NEXT:    sc ca1, 0(ca0)
 ; CHECK-NEXT:    ret
 bb:
-  %dst0 = getelementptr inbounds %struct.bar, %struct.bar addrspace(200)* %arg2, i64 %arg1, i32 0
-  %dst1 = getelementptr inbounds %struct.bar, %struct.bar addrspace(200)* %arg2, i64 %arg1, i32 1
-  %src0 = getelementptr inbounds %struct.bar, %struct.bar addrspace(200)* %arg2, i64 0, i32 0
-  %src = bitcast i8 addrspace(200)* addrspace(200)* %src0 to i8 addrspace(200)*
-  %dst = bitcast i8 addrspace(200)* addrspace(200)* %dst0 to i8 addrspace(200)*
-  store i8 addrspace(200)* null, i8 addrspace(200)* addrspace(200)* %dst1, align 16
-  call addrspace(200) void @llvm.memcpy.p200i8.p200i8.i64(i8 addrspace(200)* align 16 %dst, i8 addrspace(200)* align 16 %src, i64 32, i1 false)
-  ret i8 addrspace(200)* %dst
+  %dst0 = getelementptr inbounds %struct.bar, ptr addrspace(200) %arg2, i64 %arg1, i32 0
+  %dst1 = getelementptr inbounds %struct.bar, ptr addrspace(200) %arg2, i64 %arg1, i32 1
+  %src0 = getelementptr inbounds %struct.bar, ptr addrspace(200) %arg2, i64 0, i32 0
+  store ptr addrspace(200) null, ptr addrspace(200) %dst1, align 16
+  call addrspace(200) void @llvm.memcpy.p200.p200.i64(ptr addrspace(200) align 16 %dst0, ptr addrspace(200) align 16 %src0, i64 32, i1 false)
+  ret ptr addrspace(200) %dst0
 }
 
 ; This test case previously triggered an overly-restrictive assertion in
 ; DAGCombiner::visitPTRADD: assert(Reassociated.getOperand(1) == Add)
 ; This assertion does not hold if add ends up being folded to a zero constant since
 ; DAG.getPointerAdd() will return the original node in that case.
-define i8 addrspace(200)* @trivial_ptradd_fold(i8 addrspace(200)* %this) nounwind {
+define ptr addrspace(200) @trivial_ptradd_fold(ptr addrspace(200) %this) nounwind {
 ; CHECK-LABEL: trivial_ptradd_fold:
 ; CHECK:       # %bb.0: # %entry
 ; CHECK-NEXT:    ret
 entry:
-  %0 = getelementptr inbounds i8, i8 addrspace(200)* %this, i64 -16
-  %1 = getelementptr inbounds i8, i8 addrspace(200)* %0, i64 16
-  ret i8 addrspace(200)* %1
+  %0 = getelementptr inbounds i8, ptr addrspace(200) %this, i64 -16
+  %1 = getelementptr inbounds i8, ptr addrspace(200) %0, i64 16
+  ret ptr addrspace(200) %1
 }

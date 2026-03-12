@@ -12,8 +12,8 @@
 
 
 declare void @foo() addrspace(200)
-declare void @one_arg(i32 addrspace(200)*) addrspace(200)
-declare void @multi_arg(i32 addrspace(200)* %start, i32 addrspace(200)* %end, i8 addrspace(200)* %buf) addrspace(200)
+declare void @one_arg(ptr addrspace(200)) addrspace(200)
+declare void @multi_arg(ptr addrspace(200) %start, ptr addrspace(200) %end, ptr addrspace(200) %buf) addrspace(200)
 
 define void @use_after_call() addrspace(200) nounwind {
 ; CHECK-LABEL: use_after_call:
@@ -63,9 +63,9 @@ define void @use_after_call() addrspace(200) nounwind {
 ; HYBRID-NEXT:    jr $ra
 ; HYBRID-NEXT:    daddiu $sp, $sp, 32
   %x = alloca i32, align 4, addrspace(200)
-  store i32 123, i32 addrspace(200)* %x, align 4
+  store i32 123, ptr addrspace(200) %x, align 4
   call void @foo()
-  call void @one_arg(i32 addrspace(200)* %x)
+  call void @one_arg(ptr addrspace(200) %x)
   ret void
 }
 
@@ -124,8 +124,8 @@ define void @use_after_call_no_store() addrspace(200) nounwind {
   %x = alloca i32, align 4, addrspace(200)
   %y = alloca i32, align 4, addrspace(200)
   call void @foo()
-  call void @one_arg(i32 addrspace(200)* %x)
-  call void @one_arg(i32 addrspace(200)* %y)
+  call void @one_arg(ptr addrspace(200) %x)
+  call void @one_arg(ptr addrspace(200) %y)
   ret void
 }
 
@@ -203,12 +203,11 @@ define void @multi_use() addrspace(200) nounwind {
   %y = alloca i32, align 4, addrspace(200)
   %x = alloca i32, align 4, addrspace(200)
   call void @foo()
-  %x_plus0 = getelementptr inbounds i32, i32 addrspace(200)* %x, i32 0
-  %x_plus1 = getelementptr i32, i32 addrspace(200)* %x, i32 1
-  %x_i8 = bitcast i32 addrspace(200)* %x to i8 addrspace(200)*
-  %x_i8_plus_1 = getelementptr inbounds i8, i8 addrspace(200)* %x_i8, i32 1
-  call void @multi_arg(i32 addrspace(200)* %x_plus0, i32 addrspace(200)* %x_plus1, i8 addrspace(200)* %x_i8_plus_1)
-  call void @one_arg(i32 addrspace(200)* %y)
-  call void @one_arg(i32 addrspace(200)* %x)
+  %x_plus0 = getelementptr inbounds i32, ptr addrspace(200) %x, i32 0
+  %x_plus1 = getelementptr i32, ptr addrspace(200) %x, i32 1
+  %x_i8_plus_1 = getelementptr inbounds i8, ptr addrspace(200) %x, i32 1
+  call void @multi_arg(ptr addrspace(200) %x_plus0, ptr addrspace(200) %x_plus1, ptr addrspace(200) %x_i8_plus_1)
+  call void @one_arg(ptr addrspace(200) %y)
+  call void @one_arg(ptr addrspace(200) %x)
   ret void
 }

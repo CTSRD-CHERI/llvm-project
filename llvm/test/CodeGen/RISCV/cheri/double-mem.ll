@@ -18,7 +18,7 @@
 
 ; Uses both loaded values in an FP op to ensure an fld is used, even for the
 ; soft float ABI
-define dso_local double @ddc_fld(double* %a) nounwind {
+define dso_local double @ddc_fld(ptr %a) nounwind {
 ; CHECK-ILP32-LABEL: ddc_fld:
 ; CHECK-ILP32:       # %bb.0:
 ; CHECK-ILP32-NEXT:    addi sp, sp, -16
@@ -116,16 +116,16 @@ define dso_local double @ddc_fld(double* %a) nounwind {
 ; CHECK-L64PC128D-NEXT:    fmv.d.x fa4, a0
 ; CHECK-L64PC128D-NEXT:    fadd.d fa0, fa5, fa4
 ; CHECK-L64PC128D-NEXT:    ret
-  %1 = load double, double* %a
-  %2 = getelementptr double, double* %a, i32 3
-  %3 = load double, double* %2
+  %1 = load double, ptr %a
+  %2 = getelementptr double, ptr %a, i32 3
+  %3 = load double, ptr %2
   %4 = fadd double %1, %3
   ret double %4
 }
 
 ; Uses %b and %c in an FP op to ensure floating point registers are used, even
 ; for the soft float ABI
-define dso_local void @ddc_fsd(double* %a, double %b, double %c) nounwind {
+define dso_local void @ddc_fsd(ptr %a, double %b, double %c) nounwind {
 ; CHECK-ILP32-LABEL: ddc_fsd:
 ; CHECK-ILP32:       # %bb.0:
 ; CHECK-ILP32-NEXT:    addi sp, sp, -16
@@ -230,15 +230,15 @@ define dso_local void @ddc_fsd(double* %a, double %b, double %c) nounwind {
 ; CHECK-L64PC128D-NEXT:    sd.ddc a1, (a0)
 ; CHECK-L64PC128D-NEXT:    ret
   %1 = fadd double %b, %c
-  store double %1, double* %a
-  %2 = getelementptr double, double* %a, i32 8
-  store double %1, double* %2
+  store double %1, ptr %a
+  %2 = getelementptr double, ptr %a, i32 8
+  store double %1, ptr %2
   ret void
 }
 
 ; Uses both loaded values in an FP op to ensure a cfld is used, even for the
 ; soft float ABI
-define dso_local double @cap_fld(double addrspace(200)* %a) nounwind {
+define dso_local double @cap_fld(ptr addrspace(200) %a) nounwind {
 ; CHECK-ILP32-LABEL: cap_fld:
 ; CHECK-ILP32:       # %bb.0:
 ; CHECK-ILP32-NEXT:    addi sp, sp, -16
@@ -336,16 +336,16 @@ define dso_local double @cap_fld(double addrspace(200)* %a) nounwind {
 ; CHECK-L64PC128D-NEXT:    fld fa4, 24(ca0)
 ; CHECK-L64PC128D-NEXT:    fadd.d fa0, fa5, fa4
 ; CHECK-L64PC128D-NEXT:    ret
-  %1 = load double, double addrspace(200)* %a
-  %2 = getelementptr double, double addrspace(200)* %a, i32 3
-  %3 = load double, double addrspace(200)* %2
+  %1 = load double, ptr addrspace(200) %a
+  %2 = getelementptr double, ptr addrspace(200) %a, i32 3
+  %3 = load double, ptr addrspace(200) %2
   %4 = fadd double %1, %3
   ret double %4
 }
 
 ; Uses %b and %c in an FP op to ensure floating point registers are used, even
 ; for the soft float ABI
-define dso_local void @cap_fsd(double addrspace(200)* %a, double %b, double %c) nounwind {
+define dso_local void @cap_fsd(ptr addrspace(200) %a, double %b, double %c) nounwind {
 ; CHECK-ILP32-LABEL: cap_fsd:
 ; CHECK-ILP32:       # %bb.0:
 ; CHECK-ILP32-NEXT:    addi sp, sp, -16
@@ -450,8 +450,8 @@ define dso_local void @cap_fsd(double addrspace(200)* %a, double %b, double %c) 
 ; CHECK-L64PC128D-NEXT:    fsd fa5, 64(ca0)
 ; CHECK-L64PC128D-NEXT:    ret
   %1 = fadd double %b, %c
-  store double %1, double addrspace(200)* %a
-  %2 = getelementptr double, double addrspace(200)* %a, i32 8
-  store double %1, double addrspace(200)* %2
+  store double %1, ptr addrspace(200) %a
+  %2 = getelementptr double, ptr addrspace(200) %a, i32 8
+  store double %1, ptr addrspace(200) %2
   ret void
 }

@@ -56,9 +56,9 @@ define void @g(i32 %x, i32 %y) addrspace(200) nounwind {
 }
 
 ; define void @g(i32 %x, i32 %y)  nounwind {
-;   %tmp1 = tail call i8 addrspace(200)* @llvm.cheri.cap.offset.increment.i32(i8 addrspace(200)* bitcast (i32 addrspace(200)* @d to i8 addrspace(200)*), i32 %x)
-;   %tmp3 = tail call i8 addrspace(200)* @llvm.cheri.cap.offset.increment.i32(i8 addrspace(200)* %tmp1, i32 %y)
-;   store i8 addrspace(200)* %tmp3, i8 addrspace(200)* addrspace(200)* @e, align 32
+;   %tmp1 = tail call ptr addrspace(200) @llvm.cheri.cap.offset.increment.i32(ptr addrspace(200) @d, i32 %x)
+;   %tmp3 = tail call ptr addrspace(200) @llvm.cheri.cap.offset.increment.i32(ptr addrspace(200) %tmp1, i32 %y)
+;   store ptr addrspace(200) %tmp3, ptr addrspace(200) @e, align 32
 ;   ret void
 ; }
 ;

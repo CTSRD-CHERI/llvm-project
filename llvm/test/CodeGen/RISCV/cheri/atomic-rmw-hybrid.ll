@@ -8,7 +8,7 @@
 ; RUN: %riscv64_cheri_llc -mattr=+a -verify-machineinstrs < %s \
 ; RUN:   | FileCheck -check-prefix=RV64IAXCHERI %s
 
-define i8 addrspace(200)* @atomicrmw_xchg_cap_monotonic(i8 addrspace(200)** %a, i8 addrspace(200)* %b) nounwind {
+define ptr addrspace(200) @atomicrmw_xchg_cap_monotonic(ptr %a, ptr addrspace(200) %b) nounwind {
 ; RV32IXCHERI-LABEL: atomicrmw_xchg_cap_monotonic:
 ; RV32IXCHERI:       # %bb.0:
 ; RV32IXCHERI-NEXT:    addi sp, sp, -16
@@ -38,11 +38,11 @@ define i8 addrspace(200)* @atomicrmw_xchg_cap_monotonic(i8 addrspace(200)** %a, 
 ; RV64IAXCHERI:       # %bb.0:
 ; RV64IAXCHERI-NEXT:    amoswap.c ca0, ca1, (a0)
 ; RV64IAXCHERI-NEXT:    ret
-  %1 = atomicrmw xchg i8 addrspace(200)** %a, i8 addrspace(200)* %b monotonic
-  ret i8 addrspace(200)* %1
+  %1 = atomicrmw xchg ptr %a, ptr addrspace(200) %b monotonic
+  ret ptr addrspace(200) %1
 }
 
-define i8 addrspace(200)* @atomicrmw_xchg_cap_acquire(i8 addrspace(200)** %a, i8 addrspace(200)* %b) nounwind {
+define ptr addrspace(200) @atomicrmw_xchg_cap_acquire(ptr %a, ptr addrspace(200) %b) nounwind {
 ; RV32IXCHERI-LABEL: atomicrmw_xchg_cap_acquire:
 ; RV32IXCHERI:       # %bb.0:
 ; RV32IXCHERI-NEXT:    addi sp, sp, -16
@@ -72,11 +72,11 @@ define i8 addrspace(200)* @atomicrmw_xchg_cap_acquire(i8 addrspace(200)** %a, i8
 ; RV64IAXCHERI:       # %bb.0:
 ; RV64IAXCHERI-NEXT:    amoswap.c.aq ca0, ca1, (a0)
 ; RV64IAXCHERI-NEXT:    ret
-  %1 = atomicrmw xchg i8 addrspace(200)** %a, i8 addrspace(200)* %b acquire
-  ret i8 addrspace(200)* %1
+  %1 = atomicrmw xchg ptr %a, ptr addrspace(200) %b acquire
+  ret ptr addrspace(200) %1
 }
 
-define i8 addrspace(200)* @atomicrmw_xchg_cap_release(i8 addrspace(200)** %a, i8 addrspace(200)* %b) nounwind {
+define ptr addrspace(200) @atomicrmw_xchg_cap_release(ptr %a, ptr addrspace(200) %b) nounwind {
 ; RV32IXCHERI-LABEL: atomicrmw_xchg_cap_release:
 ; RV32IXCHERI:       # %bb.0:
 ; RV32IXCHERI-NEXT:    addi sp, sp, -16
@@ -106,11 +106,11 @@ define i8 addrspace(200)* @atomicrmw_xchg_cap_release(i8 addrspace(200)** %a, i8
 ; RV64IAXCHERI:       # %bb.0:
 ; RV64IAXCHERI-NEXT:    amoswap.c.rl ca0, ca1, (a0)
 ; RV64IAXCHERI-NEXT:    ret
-  %1 = atomicrmw xchg i8 addrspace(200)** %a, i8 addrspace(200)* %b release
-  ret i8 addrspace(200)* %1
+  %1 = atomicrmw xchg ptr %a, ptr addrspace(200) %b release
+  ret ptr addrspace(200) %1
 }
 
-define i8 addrspace(200)* @atomicrmw_xchg_cap_acq_rel(i8 addrspace(200)** %a, i8 addrspace(200)* %b) nounwind {
+define ptr addrspace(200) @atomicrmw_xchg_cap_acq_rel(ptr %a, ptr addrspace(200) %b) nounwind {
 ; RV32IXCHERI-LABEL: atomicrmw_xchg_cap_acq_rel:
 ; RV32IXCHERI:       # %bb.0:
 ; RV32IXCHERI-NEXT:    addi sp, sp, -16
@@ -140,11 +140,11 @@ define i8 addrspace(200)* @atomicrmw_xchg_cap_acq_rel(i8 addrspace(200)** %a, i8
 ; RV64IAXCHERI:       # %bb.0:
 ; RV64IAXCHERI-NEXT:    amoswap.c.aqrl ca0, ca1, (a0)
 ; RV64IAXCHERI-NEXT:    ret
-  %1 = atomicrmw xchg i8 addrspace(200)** %a, i8 addrspace(200)* %b acq_rel
-  ret i8 addrspace(200)* %1
+  %1 = atomicrmw xchg ptr %a, ptr addrspace(200) %b acq_rel
+  ret ptr addrspace(200) %1
 }
 
-define i8 addrspace(200)* @atomicrmw_xchg_cap_seq_cst(i8 addrspace(200)** %a, i8 addrspace(200)* %b) nounwind {
+define ptr addrspace(200) @atomicrmw_xchg_cap_seq_cst(ptr %a, ptr addrspace(200) %b) nounwind {
 ; RV32IXCHERI-LABEL: atomicrmw_xchg_cap_seq_cst:
 ; RV32IXCHERI:       # %bb.0:
 ; RV32IXCHERI-NEXT:    addi sp, sp, -16
@@ -174,6 +174,6 @@ define i8 addrspace(200)* @atomicrmw_xchg_cap_seq_cst(i8 addrspace(200)** %a, i8
 ; RV64IAXCHERI:       # %bb.0:
 ; RV64IAXCHERI-NEXT:    amoswap.c.aqrl ca0, ca1, (a0)
 ; RV64IAXCHERI-NEXT:    ret
-  %1 = atomicrmw xchg i8 addrspace(200)** %a, i8 addrspace(200)* %b seq_cst
-  ret i8 addrspace(200)* %1
+  %1 = atomicrmw xchg ptr %a, ptr addrspace(200) %b seq_cst
+  ret ptr addrspace(200) %1
 }

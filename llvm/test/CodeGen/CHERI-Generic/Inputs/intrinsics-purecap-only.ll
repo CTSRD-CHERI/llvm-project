@@ -3,10 +3,10 @@
 ; This test checks target-independent CHERI intrinsics that are only available for purecap code
 
 ; Currently the only purecap-only intrinsic is llvm.cheri.stack.cap.get()
-declare i8 addrspace(200)* @llvm.cheri.stack.cap.get()
+declare ptr addrspace(200) @llvm.cheri.stack.cap.get()
 
-define i8 addrspace(200)* @stack_get() nounwind {
-  %cap = call i8 addrspace(200)* @llvm.cheri.stack.cap.get()
-  ret i8 addrspace(200)* %cap
+define ptr addrspace(200) @stack_get() nounwind {
+  %cap = call ptr addrspace(200) @llvm.cheri.stack.cap.get()
+  ret ptr addrspace(200) %cap
 }
 ; HYBRID-ERROR: LLVM ERROR: Cannot select: intrinsic %llvm.cheri.stack.cap.get

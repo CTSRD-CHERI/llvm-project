@@ -36,7 +36,7 @@ define i64 @load_global_i64_align_1(i64 %y) addrspace(200) nounwind {
 ; CHECK-NEXT:    slli a0, a0, 32
 ; CHECK-NEXT:    or a0, a0, a1
 ; CHECK-NEXT:    ret
-  %ret = load i64, i64 addrspace(200)* @a1, align 1
+  %ret = load i64, ptr addrspace(200) @a1, align 1
   ret i64 %ret
 }
 
@@ -57,7 +57,7 @@ define i64 @load_global_i64_align_2(i64 %y) addrspace(200) nounwind {
 ; CHECK-NEXT:    or a0, a0, a3
 ; CHECK-NEXT:    or a0, a0, a1
 ; CHECK-NEXT:    ret
-  %ret = load i64, i64 addrspace(200)* @a2, align 2
+  %ret = load i64, ptr addrspace(200) @a2, align 2
   ret i64 %ret
 }
 
@@ -72,7 +72,7 @@ define i64 @load_global_i64_align_4(i64 %y) addrspace(200) nounwind {
 ; CHECK-NEXT:    slli a1, a1, 32
 ; CHECK-NEXT:    or a0, a1, a0
 ; CHECK-NEXT:    ret
-  %ret = load i64, i64 addrspace(200)* @a4, align 4
+  %ret = load i64, ptr addrspace(200) @a4, align 4
   ret i64 %ret
 }
 
@@ -84,7 +84,7 @@ define i64 @load_global_i64_align_8(i64 %y) addrspace(200) nounwind {
 ; CHECK-NEXT:    lc ca0, %pcrel_lo(.LBB3_1)(ca0)
 ; CHECK-NEXT:    ld a0, 0(ca0)
 ; CHECK-NEXT:    ret
-  %ret = load i64, i64 addrspace(200)* @a8, align 8
+  %ret = load i64, ptr addrspace(200) @a8, align 8
   ret i64 %ret
 }
 
@@ -110,7 +110,7 @@ define void @store_global_i64_align_1(i64 %y) addrspace(200) nounwind {
 ; CHECK-NEXT:    srli a0, a0, 8
 ; CHECK-NEXT:    sb a0, 1(ca1)
 ; CHECK-NEXT:    ret
-  store i64 %y, i64 addrspace(200)* @a1, align 1
+  store i64 %y, ptr addrspace(200) @a1, align 1
   ret void
 }
 
@@ -128,7 +128,7 @@ define void @store_global_i64_align_2(i64 %y) addrspace(200) nounwind {
 ; CHECK-NEXT:    srli a0, a0, 16
 ; CHECK-NEXT:    sh a0, 2(ca1)
 ; CHECK-NEXT:    ret
-  store i64 %y, i64 addrspace(200)* @a2, align 2
+  store i64 %y, ptr addrspace(200) @a2, align 2
   ret void
 }
 
@@ -142,7 +142,7 @@ define void @store_global_i64_align_4(i64 %y) addrspace(200) nounwind {
 ; CHECK-NEXT:    srli a0, a0, 32
 ; CHECK-NEXT:    sw a0, 4(ca1)
 ; CHECK-NEXT:    ret
-  store i64 %y, i64 addrspace(200)* @a4, align 4
+  store i64 %y, ptr addrspace(200) @a4, align 4
   ret void
 }
 
@@ -154,6 +154,6 @@ define void @store_global_i64_align_8(i64 %y) addrspace(200) nounwind {
 ; CHECK-NEXT:    lc ca1, %pcrel_lo(.LBB7_1)(ca1)
 ; CHECK-NEXT:    sd a0, 0(ca1)
 ; CHECK-NEXT:    ret
-  store i64 %y, i64 addrspace(200)* @a8, align 8
+  store i64 %y, ptr addrspace(200) @a8, align 8
   ret void
 }

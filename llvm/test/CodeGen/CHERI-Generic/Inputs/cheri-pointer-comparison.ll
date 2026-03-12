@@ -38,312 +38,312 @@
 ; }
 ; See https://git.morello-project.org/morello/llvm-project/-/issues/22
 
-define i32 @eq(i8 addrspace(200)* %a, i8 addrspace(200)* %b) nounwind {
-  %cmp = icmp eq i8 addrspace(200)* %a, %b
+define i32 @eq(ptr addrspace(200) %a, ptr addrspace(200) %b) nounwind {
+  %cmp = icmp eq ptr addrspace(200) %a, %b
   %conv = zext i1 %cmp to i32
   ret i32 %conv
 }
 
-define i32 @ne(i8 addrspace(200)* %a, i8 addrspace(200)* %b) nounwind {
-  %cmp = icmp ne i8 addrspace(200)* %a, %b
+define i32 @ne(ptr addrspace(200) %a, ptr addrspace(200) %b) nounwind {
+  %cmp = icmp ne ptr addrspace(200) %a, %b
   %conv = zext i1 %cmp to i32
   ret i32 %conv
 }
 
-define i32 @ugt(i8 addrspace(200)* %a, i8 addrspace(200)* %b) nounwind {
-  %cmp = icmp ugt i8 addrspace(200)* %a, %b
+define i32 @ugt(ptr addrspace(200) %a, ptr addrspace(200) %b) nounwind {
+  %cmp = icmp ugt ptr addrspace(200) %a, %b
   %conv = zext i1 %cmp to i32
   ret i32 %conv
 }
 
-define i32 @uge(i8 addrspace(200)* %a, i8 addrspace(200)* %b) nounwind {
-  %cmp = icmp uge i8 addrspace(200)* %a, %b
+define i32 @uge(ptr addrspace(200) %a, ptr addrspace(200) %b) nounwind {
+  %cmp = icmp uge ptr addrspace(200) %a, %b
   %conv = zext i1 %cmp to i32
   ret i32 %conv
 }
 
-define i32 @ult(i8 addrspace(200)* %a, i8 addrspace(200)* %b) nounwind {
-  %cmp = icmp ult i8 addrspace(200)* %a, %b
+define i32 @ult(ptr addrspace(200) %a, ptr addrspace(200) %b) nounwind {
+  %cmp = icmp ult ptr addrspace(200) %a, %b
   %conv = zext i1 %cmp to i32
   ret i32 %conv
 }
 
-define i32 @ule(i8 addrspace(200)* %a, i8 addrspace(200)* %b) nounwind {
-  %cmp = icmp ule i8 addrspace(200)* %a, %b
+define i32 @ule(ptr addrspace(200) %a, ptr addrspace(200) %b) nounwind {
+  %cmp = icmp ule ptr addrspace(200) %a, %b
   %conv = zext i1 %cmp to i32
   ret i32 %conv
 }
 
-define i32 @sgt(i8 addrspace(200)* %a, i8 addrspace(200)* %b) nounwind {
-  %cmp = icmp sgt i8 addrspace(200)* %a, %b
+define i32 @sgt(ptr addrspace(200) %a, ptr addrspace(200) %b) nounwind {
+  %cmp = icmp sgt ptr addrspace(200) %a, %b
   %conv = zext i1 %cmp to i32
   ret i32 %conv
 }
 
-define i32 @sge(i8 addrspace(200)* %a, i8 addrspace(200)* %b) nounwind {
-  %cmp = icmp sge i8 addrspace(200)* %a, %b
+define i32 @sge(ptr addrspace(200) %a, ptr addrspace(200) %b) nounwind {
+  %cmp = icmp sge ptr addrspace(200) %a, %b
   %conv = zext i1 %cmp to i32
   ret i32 %conv
 }
 
-define i32 @slt(i8 addrspace(200)* %a, i8 addrspace(200)* %b) nounwind {
-  %cmp = icmp slt i8 addrspace(200)* %a, %b
+define i32 @slt(ptr addrspace(200) %a, ptr addrspace(200) %b) nounwind {
+  %cmp = icmp slt ptr addrspace(200) %a, %b
   %conv = zext i1 %cmp to i32
   ret i32 %conv
 }
 
-define i32 @sle(i8 addrspace(200)* %a, i8 addrspace(200)* %b) nounwind {
-  %cmp = icmp sle i8 addrspace(200)* %a, %b
+define i32 @sle(ptr addrspace(200) %a, ptr addrspace(200) %b) nounwind {
+  %cmp = icmp sle ptr addrspace(200) %a, %b
   %conv = zext i1 %cmp to i32
   ret i32 %conv
 }
 
-define i32 @eq_same(i8 addrspace(200)* %a) nounwind {
-  %cmp = icmp eq i8 addrspace(200)* %a, %a
+define i32 @eq_same(ptr addrspace(200) %a) nounwind {
+  %cmp = icmp eq ptr addrspace(200) %a, %a
   %conv = zext i1 %cmp to i32
   ret i32 %conv
 }
 
-define i32 @ne_same(i8 addrspace(200)* %a) nounwind {
-  %cmp = icmp ne i8 addrspace(200)* %a, %a
+define i32 @ne_same(ptr addrspace(200) %a) nounwind {
+  %cmp = icmp ne ptr addrspace(200) %a, %a
   %conv = zext i1 %cmp to i32
   ret i32 %conv
 }
 
-define i32 @ugt_same(i8 addrspace(200)* %a) nounwind {
-  %cmp = icmp ugt i8 addrspace(200)* %a, %a
+define i32 @ugt_same(ptr addrspace(200) %a) nounwind {
+  %cmp = icmp ugt ptr addrspace(200) %a, %a
   %conv = zext i1 %cmp to i32
   ret i32 %conv
 }
 
-define i32 @uge_same(i8 addrspace(200)* %a) nounwind {
-  %cmp = icmp uge i8 addrspace(200)* %a, %a
+define i32 @uge_same(ptr addrspace(200) %a) nounwind {
+  %cmp = icmp uge ptr addrspace(200) %a, %a
   %conv = zext i1 %cmp to i32
   ret i32 %conv
 }
 
-define i32 @ult_same(i8 addrspace(200)* %a) nounwind {
-  %cmp = icmp ult i8 addrspace(200)* %a, %a
+define i32 @ult_same(ptr addrspace(200) %a) nounwind {
+  %cmp = icmp ult ptr addrspace(200) %a, %a
   %conv = zext i1 %cmp to i32
   ret i32 %conv
 }
 
-define i32 @ule_same(i8 addrspace(200)* %a) nounwind {
-  %cmp = icmp ule i8 addrspace(200)* %a, %a
+define i32 @ule_same(ptr addrspace(200) %a) nounwind {
+  %cmp = icmp ule ptr addrspace(200) %a, %a
   %conv = zext i1 %cmp to i32
   ret i32 %conv
 }
 
-define i32 @sgt_same(i8 addrspace(200)* %a) nounwind {
-  %cmp = icmp sgt i8 addrspace(200)* %a, %a
+define i32 @sgt_same(ptr addrspace(200) %a) nounwind {
+  %cmp = icmp sgt ptr addrspace(200) %a, %a
   %conv = zext i1 %cmp to i32
   ret i32 %conv
 }
 
-define i32 @sge_same(i8 addrspace(200)* %a) nounwind {
-  %cmp = icmp sge i8 addrspace(200)* %a, %a
+define i32 @sge_same(ptr addrspace(200) %a) nounwind {
+  %cmp = icmp sge ptr addrspace(200) %a, %a
   %conv = zext i1 %cmp to i32
   ret i32 %conv
 }
 
-define i32 @slt_same(i8 addrspace(200)* %a) nounwind {
-  %cmp = icmp slt i8 addrspace(200)* %a, %a
+define i32 @slt_same(ptr addrspace(200) %a) nounwind {
+  %cmp = icmp slt ptr addrspace(200) %a, %a
   %conv = zext i1 %cmp to i32
   ret i32 %conv
 }
 
-define i32 @sle_same(i8 addrspace(200)* %a) nounwind {
-  %cmp = icmp sle i8 addrspace(200)* %a, %a
+define i32 @sle_same(ptr addrspace(200) %a) nounwind {
+  %cmp = icmp sle ptr addrspace(200) %a, %a
   %conv = zext i1 %cmp to i32
   ret i32 %conv
 }
 
-define i32 @eq_null(i8 addrspace(200)* %a) nounwind {
-  %cmp = icmp eq i8 addrspace(200)* %a, null
+define i32 @eq_null(ptr addrspace(200) %a) nounwind {
+  %cmp = icmp eq ptr addrspace(200) %a, null
   %conv = zext i1 %cmp to i32
   ret i32 %conv
 }
 
-define i32 @ne_null(i8 addrspace(200)* %a) nounwind {
-  %cmp = icmp ne i8 addrspace(200)* %a, null
+define i32 @ne_null(ptr addrspace(200) %a) nounwind {
+  %cmp = icmp ne ptr addrspace(200) %a, null
   %conv = zext i1 %cmp to i32
   ret i32 %conv
 }
 
-define i32 @ugt_null(i8 addrspace(200)* %a) nounwind {
-  %cmp = icmp ugt i8 addrspace(200)* %a, null
+define i32 @ugt_null(ptr addrspace(200) %a) nounwind {
+  %cmp = icmp ugt ptr addrspace(200) %a, null
   %conv = zext i1 %cmp to i32
   ret i32 %conv
 }
 
-define i32 @uge_null(i8 addrspace(200)* %a) nounwind {
-  %cmp = icmp uge i8 addrspace(200)* %a, null
+define i32 @uge_null(ptr addrspace(200) %a) nounwind {
+  %cmp = icmp uge ptr addrspace(200) %a, null
   %conv = zext i1 %cmp to i32
   ret i32 %conv
 }
 
-define i32 @ult_null(i8 addrspace(200)* %a) nounwind {
-  %cmp = icmp ult i8 addrspace(200)* %a, null
+define i32 @ult_null(ptr addrspace(200) %a) nounwind {
+  %cmp = icmp ult ptr addrspace(200) %a, null
   %conv = zext i1 %cmp to i32
   ret i32 %conv
 }
 
-define i32 @ule_null(i8 addrspace(200)* %a) nounwind {
-  %cmp = icmp ule i8 addrspace(200)* %a, null
+define i32 @ule_null(ptr addrspace(200) %a) nounwind {
+  %cmp = icmp ule ptr addrspace(200) %a, null
   %conv = zext i1 %cmp to i32
   ret i32 %conv
 }
 
-define i32 @sgt_null(i8 addrspace(200)* %a) nounwind {
-  %cmp = icmp sgt i8 addrspace(200)* %a, null
+define i32 @sgt_null(ptr addrspace(200) %a) nounwind {
+  %cmp = icmp sgt ptr addrspace(200) %a, null
   %conv = zext i1 %cmp to i32
   ret i32 %conv
 }
 
-define i32 @sge_null(i8 addrspace(200)* %a) nounwind {
-  %cmp = icmp sge i8 addrspace(200)* %a, null
+define i32 @sge_null(ptr addrspace(200) %a) nounwind {
+  %cmp = icmp sge ptr addrspace(200) %a, null
   %conv = zext i1 %cmp to i32
   ret i32 %conv
 }
 
-define i32 @slt_null(i8 addrspace(200)* %a) nounwind {
-  %cmp = icmp slt i8 addrspace(200)* %a, null
+define i32 @slt_null(ptr addrspace(200) %a) nounwind {
+  %cmp = icmp slt ptr addrspace(200) %a, null
   %conv = zext i1 %cmp to i32
   ret i32 %conv
 }
 
-define i32 @sle_null(i8 addrspace(200)* %a) nounwind {
-  %cmp = icmp sle i8 addrspace(200)* %a, null
+define i32 @sle_null(ptr addrspace(200) %a) nounwind {
+  %cmp = icmp sle ptr addrspace(200) %a, null
   %conv = zext i1 %cmp to i32
   ret i32 %conv
 }
 
-define i8 addrspace(200)* @select_eq(i8 addrspace(200)* %a, i8 addrspace(200)* %b) nounwind {
-  %cmp = icmp eq i8 addrspace(200)* %a, %b
-  %cond = select i1 %cmp, i8 addrspace(200)* %a, i8 addrspace(200)* %b
-  ret i8 addrspace(200)* %cond
+define ptr addrspace(200) @select_eq(ptr addrspace(200) %a, ptr addrspace(200) %b) nounwind {
+  %cmp = icmp eq ptr addrspace(200) %a, %b
+  %cond = select i1 %cmp, ptr addrspace(200) %a, ptr addrspace(200) %b
+  ret ptr addrspace(200) %cond
 }
 
-define i8 addrspace(200)* @select_ne(i8 addrspace(200)* %a, i8 addrspace(200)* %b) nounwind {
-  %cmp = icmp ne i8 addrspace(200)* %a, %b
-  %cond = select i1 %cmp, i8 addrspace(200)* %a, i8 addrspace(200)* %b
-  ret i8 addrspace(200)* %cond
+define ptr addrspace(200) @select_ne(ptr addrspace(200) %a, ptr addrspace(200) %b) nounwind {
+  %cmp = icmp ne ptr addrspace(200) %a, %b
+  %cond = select i1 %cmp, ptr addrspace(200) %a, ptr addrspace(200) %b
+  ret ptr addrspace(200) %cond
 }
 
-define i8 addrspace(200)* @select_ugt(i8 addrspace(200)* %a, i8 addrspace(200)* %b) nounwind {
-  %cmp = icmp ugt i8 addrspace(200)* %a, %b
-  %cond = select i1 %cmp, i8 addrspace(200)* %a, i8 addrspace(200)* %b
-  ret i8 addrspace(200)* %cond
+define ptr addrspace(200) @select_ugt(ptr addrspace(200) %a, ptr addrspace(200) %b) nounwind {
+  %cmp = icmp ugt ptr addrspace(200) %a, %b
+  %cond = select i1 %cmp, ptr addrspace(200) %a, ptr addrspace(200) %b
+  ret ptr addrspace(200) %cond
 }
 
-define i8 addrspace(200)* @select_uge(i8 addrspace(200)* %a, i8 addrspace(200)* %b) nounwind {
-  %cmp = icmp uge i8 addrspace(200)* %a, %b
-  %cond = select i1 %cmp, i8 addrspace(200)* %a, i8 addrspace(200)* %b
-  ret i8 addrspace(200)* %cond
+define ptr addrspace(200) @select_uge(ptr addrspace(200) %a, ptr addrspace(200) %b) nounwind {
+  %cmp = icmp uge ptr addrspace(200) %a, %b
+  %cond = select i1 %cmp, ptr addrspace(200) %a, ptr addrspace(200) %b
+  ret ptr addrspace(200) %cond
 }
 
-define i8 addrspace(200)* @select_ult(i8 addrspace(200)* %a, i8 addrspace(200)* %b) nounwind {
-  %cmp = icmp ult i8 addrspace(200)* %a, %b
-  %cond = select i1 %cmp, i8 addrspace(200)* %a, i8 addrspace(200)* %b
-  ret i8 addrspace(200)* %cond
+define ptr addrspace(200) @select_ult(ptr addrspace(200) %a, ptr addrspace(200) %b) nounwind {
+  %cmp = icmp ult ptr addrspace(200) %a, %b
+  %cond = select i1 %cmp, ptr addrspace(200) %a, ptr addrspace(200) %b
+  ret ptr addrspace(200) %cond
 }
 
-define i8 addrspace(200)* @select_ule(i8 addrspace(200)* %a, i8 addrspace(200)* %b) nounwind {
-  %cmp = icmp ule i8 addrspace(200)* %a, %b
-  %cond = select i1 %cmp, i8 addrspace(200)* %a, i8 addrspace(200)* %b
-  ret i8 addrspace(200)* %cond
+define ptr addrspace(200) @select_ule(ptr addrspace(200) %a, ptr addrspace(200) %b) nounwind {
+  %cmp = icmp ule ptr addrspace(200) %a, %b
+  %cond = select i1 %cmp, ptr addrspace(200) %a, ptr addrspace(200) %b
+  ret ptr addrspace(200) %cond
 }
 
-define i8 addrspace(200)* @select_sgt(i8 addrspace(200)* %a, i8 addrspace(200)* %b) nounwind {
-  %cmp = icmp sgt i8 addrspace(200)* %a, %b
-  %cond = select i1 %cmp, i8 addrspace(200)* %a, i8 addrspace(200)* %b
-  ret i8 addrspace(200)* %cond
+define ptr addrspace(200) @select_sgt(ptr addrspace(200) %a, ptr addrspace(200) %b) nounwind {
+  %cmp = icmp sgt ptr addrspace(200) %a, %b
+  %cond = select i1 %cmp, ptr addrspace(200) %a, ptr addrspace(200) %b
+  ret ptr addrspace(200) %cond
 }
 
-define i8 addrspace(200)* @select_sge(i8 addrspace(200)* %a, i8 addrspace(200)* %b) nounwind {
-  %cmp = icmp sge i8 addrspace(200)* %a, %b
-  %cond = select i1 %cmp, i8 addrspace(200)* %a, i8 addrspace(200)* %b
-  ret i8 addrspace(200)* %cond
+define ptr addrspace(200) @select_sge(ptr addrspace(200) %a, ptr addrspace(200) %b) nounwind {
+  %cmp = icmp sge ptr addrspace(200) %a, %b
+  %cond = select i1 %cmp, ptr addrspace(200) %a, ptr addrspace(200) %b
+  ret ptr addrspace(200) %cond
 }
 
-define i8 addrspace(200)* @select_slt(i8 addrspace(200)* %a, i8 addrspace(200)* %b) nounwind {
-  %cmp = icmp slt i8 addrspace(200)* %a, %b
-  %cond = select i1 %cmp, i8 addrspace(200)* %a, i8 addrspace(200)* %b
-  ret i8 addrspace(200)* %cond
+define ptr addrspace(200) @select_slt(ptr addrspace(200) %a, ptr addrspace(200) %b) nounwind {
+  %cmp = icmp slt ptr addrspace(200) %a, %b
+  %cond = select i1 %cmp, ptr addrspace(200) %a, ptr addrspace(200) %b
+  ret ptr addrspace(200) %cond
 }
 
-define i8 addrspace(200)* @select_sle(i8 addrspace(200)* %a, i8 addrspace(200)* %b) nounwind {
-  %cmp = icmp sle i8 addrspace(200)* %a, %b
-  %cond = select i1 %cmp, i8 addrspace(200)* %a, i8 addrspace(200)* %b
-  ret i8 addrspace(200)* %cond
+define ptr addrspace(200) @select_sle(ptr addrspace(200) %a, ptr addrspace(200) %b) nounwind {
+  %cmp = icmp sle ptr addrspace(200) %a, %b
+  %cond = select i1 %cmp, ptr addrspace(200) %a, ptr addrspace(200) %b
+  ret ptr addrspace(200) %cond
 }
 
-define i8 addrspace(200)* @select_eq_null(i8 addrspace(200)* %a, i8 addrspace(200)* %b) nounwind {
-  %cmp = icmp eq i8 addrspace(200)* %a, null
-  %cond = select i1 %cmp, i8 addrspace(200)* %a, i8 addrspace(200)* %b
-  ret i8 addrspace(200)* %cond
+define ptr addrspace(200) @select_eq_null(ptr addrspace(200) %a, ptr addrspace(200) %b) nounwind {
+  %cmp = icmp eq ptr addrspace(200) %a, null
+  %cond = select i1 %cmp, ptr addrspace(200) %a, ptr addrspace(200) %b
+  ret ptr addrspace(200) %cond
 }
 
-define i8 addrspace(200)* @select_ne_null(i8 addrspace(200)* %a, i8 addrspace(200)* %b) nounwind {
-  %cmp = icmp ne i8 addrspace(200)* %a, null
-  %cond = select i1 %cmp, i8 addrspace(200)* %a, i8 addrspace(200)* %b
-  ret i8 addrspace(200)* %cond
+define ptr addrspace(200) @select_ne_null(ptr addrspace(200) %a, ptr addrspace(200) %b) nounwind {
+  %cmp = icmp ne ptr addrspace(200) %a, null
+  %cond = select i1 %cmp, ptr addrspace(200) %a, ptr addrspace(200) %b
+  ret ptr addrspace(200) %cond
 }
 
-define i8 addrspace(200)* @select_ugt_null(i8 addrspace(200)* %a, i8 addrspace(200)* %b) nounwind {
-  %cmp = icmp ugt i8 addrspace(200)* %a, null
-  %cond = select i1 %cmp, i8 addrspace(200)* %a, i8 addrspace(200)* %b
-  ret i8 addrspace(200)* %cond
+define ptr addrspace(200) @select_ugt_null(ptr addrspace(200) %a, ptr addrspace(200) %b) nounwind {
+  %cmp = icmp ugt ptr addrspace(200) %a, null
+  %cond = select i1 %cmp, ptr addrspace(200) %a, ptr addrspace(200) %b
+  ret ptr addrspace(200) %cond
 }
 
-define i8 addrspace(200)* @select_uge_null(i8 addrspace(200)* %a, i8 addrspace(200)* %b) nounwind {
-  %cmp = icmp uge i8 addrspace(200)* %a, null
-  %cond = select i1 %cmp, i8 addrspace(200)* %a, i8 addrspace(200)* %b
-  ret i8 addrspace(200)* %cond
+define ptr addrspace(200) @select_uge_null(ptr addrspace(200) %a, ptr addrspace(200) %b) nounwind {
+  %cmp = icmp uge ptr addrspace(200) %a, null
+  %cond = select i1 %cmp, ptr addrspace(200) %a, ptr addrspace(200) %b
+  ret ptr addrspace(200) %cond
 }
 
-define i8 addrspace(200)* @select_ult_null(i8 addrspace(200)* %a, i8 addrspace(200)* %b) nounwind {
-  %cmp = icmp ult i8 addrspace(200)* %a, null
-  %cond = select i1 %cmp, i8 addrspace(200)* %a, i8 addrspace(200)* %b
-  ret i8 addrspace(200)* %cond
+define ptr addrspace(200) @select_ult_null(ptr addrspace(200) %a, ptr addrspace(200) %b) nounwind {
+  %cmp = icmp ult ptr addrspace(200) %a, null
+  %cond = select i1 %cmp, ptr addrspace(200) %a, ptr addrspace(200) %b
+  ret ptr addrspace(200) %cond
 }
 
-define i8 addrspace(200)* @select_ule_null(i8 addrspace(200)* %a, i8 addrspace(200)* %b) nounwind {
-  %cmp = icmp ule i8 addrspace(200)* %a, null
-  %cond = select i1 %cmp, i8 addrspace(200)* %a, i8 addrspace(200)* %b
-  ret i8 addrspace(200)* %cond
+define ptr addrspace(200) @select_ule_null(ptr addrspace(200) %a, ptr addrspace(200) %b) nounwind {
+  %cmp = icmp ule ptr addrspace(200) %a, null
+  %cond = select i1 %cmp, ptr addrspace(200) %a, ptr addrspace(200) %b
+  ret ptr addrspace(200) %cond
 }
 
-define i8 addrspace(200)* @select_sgt_null(i8 addrspace(200)* %a, i8 addrspace(200)* %b) nounwind {
-  %cmp = icmp sgt i8 addrspace(200)* %a, null
-  %cond = select i1 %cmp, i8 addrspace(200)* %a, i8 addrspace(200)* %b
-  ret i8 addrspace(200)* %cond
+define ptr addrspace(200) @select_sgt_null(ptr addrspace(200) %a, ptr addrspace(200) %b) nounwind {
+  %cmp = icmp sgt ptr addrspace(200) %a, null
+  %cond = select i1 %cmp, ptr addrspace(200) %a, ptr addrspace(200) %b
+  ret ptr addrspace(200) %cond
 }
 
-define i8 addrspace(200)* @select_sge_null(i8 addrspace(200)* %a, i8 addrspace(200)* %b) nounwind {
-  %cmp = icmp sge i8 addrspace(200)* %a, null
-  %cond = select i1 %cmp, i8 addrspace(200)* %a, i8 addrspace(200)* %b
-  ret i8 addrspace(200)* %cond
+define ptr addrspace(200) @select_sge_null(ptr addrspace(200) %a, ptr addrspace(200) %b) nounwind {
+  %cmp = icmp sge ptr addrspace(200) %a, null
+  %cond = select i1 %cmp, ptr addrspace(200) %a, ptr addrspace(200) %b
+  ret ptr addrspace(200) %cond
 }
 
-define i8 addrspace(200)* @select_slt_null(i8 addrspace(200)* %a, i8 addrspace(200)* %b) nounwind {
-  %cmp = icmp slt i8 addrspace(200)* %a, null
-  %cond = select i1 %cmp, i8 addrspace(200)* %a, i8 addrspace(200)* %b
-  ret i8 addrspace(200)* %cond
+define ptr addrspace(200) @select_slt_null(ptr addrspace(200) %a, ptr addrspace(200) %b) nounwind {
+  %cmp = icmp slt ptr addrspace(200) %a, null
+  %cond = select i1 %cmp, ptr addrspace(200) %a, ptr addrspace(200) %b
+  ret ptr addrspace(200) %cond
 }
 
-define i8 addrspace(200)* @select_sle_null(i8 addrspace(200)* %a, i8 addrspace(200)* %b) nounwind {
-  %cmp = icmp sle i8 addrspace(200)* %a, null
-  %cond = select i1 %cmp, i8 addrspace(200)* %a, i8 addrspace(200)* %b
-  ret i8 addrspace(200)* %cond
+define ptr addrspace(200) @select_sle_null(ptr addrspace(200) %a, ptr addrspace(200) %b) nounwind {
+  %cmp = icmp sle ptr addrspace(200) %a, null
+  %cond = select i1 %cmp, ptr addrspace(200) %a, ptr addrspace(200) %b
+  ret ptr addrspace(200) %cond
 }
 
 declare i32 @func1() nounwind
 declare i32 @func2() nounwind
 
-define i32 @branch_eq(i8 addrspace(200)* %a, i8 addrspace(200)* %b) nounwind {
+define i32 @branch_eq(ptr addrspace(200) %a, ptr addrspace(200) %b) nounwind {
 entry:
-  %cmp = icmp eq i8 addrspace(200)* %a, %b
+  %cmp = icmp eq ptr addrspace(200) %a, %b
   br i1 %cmp, label %if.then, label %if.end
 if.then:
   %retval1 = tail call i32 @func1()
@@ -353,9 +353,9 @@ if.end:
   ret i32 %retval2
 }
 
-define i32 @branch_ne(i8 addrspace(200)* %a, i8 addrspace(200)* %b) nounwind {
+define i32 @branch_ne(ptr addrspace(200) %a, ptr addrspace(200) %b) nounwind {
 entry:
-  %cmp = icmp ne i8 addrspace(200)* %a, %b
+  %cmp = icmp ne ptr addrspace(200) %a, %b
   br i1 %cmp, label %if.then, label %if.end
 if.then:
   %retval1 = tail call i32 @func1()
@@ -365,9 +365,9 @@ if.end:
   ret i32 %retval2
 }
 
-define i32 @branch_ugt(i8 addrspace(200)* %a, i8 addrspace(200)* %b) nounwind {
+define i32 @branch_ugt(ptr addrspace(200) %a, ptr addrspace(200) %b) nounwind {
 entry:
-  %cmp = icmp ugt i8 addrspace(200)* %a, %b
+  %cmp = icmp ugt ptr addrspace(200) %a, %b
   br i1 %cmp, label %if.then, label %if.end
 if.then:
   %retval1 = tail call i32 @func1()
@@ -377,9 +377,9 @@ if.end:
   ret i32 %retval2
 }
 
-define i32 @branch_uge(i8 addrspace(200)* %a, i8 addrspace(200)* %b) nounwind {
+define i32 @branch_uge(ptr addrspace(200) %a, ptr addrspace(200) %b) nounwind {
 entry:
-  %cmp = icmp uge i8 addrspace(200)* %a, %b
+  %cmp = icmp uge ptr addrspace(200) %a, %b
   br i1 %cmp, label %if.then, label %if.end
 if.then:
   %retval1 = tail call i32 @func1()
@@ -389,9 +389,9 @@ if.end:
   ret i32 %retval2
 }
 
-define i32 @branch_ult(i8 addrspace(200)* %a, i8 addrspace(200)* %b) nounwind {
+define i32 @branch_ult(ptr addrspace(200) %a, ptr addrspace(200) %b) nounwind {
 entry:
-  %cmp = icmp ult i8 addrspace(200)* %a, %b
+  %cmp = icmp ult ptr addrspace(200) %a, %b
   br i1 %cmp, label %if.then, label %if.end
 if.then:
   %retval1 = tail call i32 @func1()
@@ -401,9 +401,9 @@ if.end:
   ret i32 %retval2
 }
 
-define i32 @branch_ule(i8 addrspace(200)* %a, i8 addrspace(200)* %b) nounwind {
+define i32 @branch_ule(ptr addrspace(200) %a, ptr addrspace(200) %b) nounwind {
 entry:
-  %cmp = icmp ule i8 addrspace(200)* %a, %b
+  %cmp = icmp ule ptr addrspace(200) %a, %b
   br i1 %cmp, label %if.then, label %if.end
 if.then:
   %retval1 = tail call i32 @func1()
@@ -413,9 +413,9 @@ if.end:
   ret i32 %retval2
 }
 
-define i32 @branch_sgt(i8 addrspace(200)* %a, i8 addrspace(200)* %b) nounwind {
+define i32 @branch_sgt(ptr addrspace(200) %a, ptr addrspace(200) %b) nounwind {
 entry:
-  %cmp = icmp sgt i8 addrspace(200)* %a, %b
+  %cmp = icmp sgt ptr addrspace(200) %a, %b
   br i1 %cmp, label %if.then, label %if.end
 if.then:
   %retval1 = tail call i32 @func1()
@@ -425,9 +425,9 @@ if.end:
   ret i32 %retval2
 }
 
-define i32 @branch_sge(i8 addrspace(200)* %a, i8 addrspace(200)* %b) nounwind {
+define i32 @branch_sge(ptr addrspace(200) %a, ptr addrspace(200) %b) nounwind {
 entry:
-  %cmp = icmp sge i8 addrspace(200)* %a, %b
+  %cmp = icmp sge ptr addrspace(200) %a, %b
   br i1 %cmp, label %if.then, label %if.end
 if.then:
   %retval1 = tail call i32 @func1()
@@ -437,9 +437,9 @@ if.end:
   ret i32 %retval2
 }
 
-define i32 @branch_slt(i8 addrspace(200)* %a, i8 addrspace(200)* %b) nounwind {
+define i32 @branch_slt(ptr addrspace(200) %a, ptr addrspace(200) %b) nounwind {
 entry:
-  %cmp = icmp slt i8 addrspace(200)* %a, %b
+  %cmp = icmp slt ptr addrspace(200) %a, %b
   br i1 %cmp, label %if.then, label %if.end
 if.then:
   %retval1 = tail call i32 @func1()
@@ -449,9 +449,9 @@ if.end:
   ret i32 %retval2
 }
 
-define i32 @branch_sle(i8 addrspace(200)* %a, i8 addrspace(200)* %b) nounwind {
+define i32 @branch_sle(ptr addrspace(200) %a, ptr addrspace(200) %b) nounwind {
 entry:
-  %cmp = icmp sle i8 addrspace(200)* %a, %b
+  %cmp = icmp sle ptr addrspace(200) %a, %b
   br i1 %cmp, label %if.then, label %if.end
 if.then:
   %retval1 = tail call i32 @func1()
@@ -461,9 +461,9 @@ if.end:
   ret i32 %retval2
 }
 
-define i32 @branch_eq_null(i8 addrspace(200)* %a) nounwind {
+define i32 @branch_eq_null(ptr addrspace(200) %a) nounwind {
 entry:
-  %cmp = icmp eq i8 addrspace(200)* %a, null
+  %cmp = icmp eq ptr addrspace(200) %a, null
   br i1 %cmp, label %if.then, label %if.end
 if.then:
   %retval1 = tail call i32 @func1()
@@ -473,9 +473,9 @@ if.end:
   ret i32 %retval2
 }
 
-define i32 @branch_ne_null(i8 addrspace(200)* %a) nounwind {
+define i32 @branch_ne_null(ptr addrspace(200) %a) nounwind {
 entry:
-  %cmp = icmp ne i8 addrspace(200)* %a, null
+  %cmp = icmp ne ptr addrspace(200) %a, null
   br i1 %cmp, label %if.then, label %if.end
 if.then:
   %retval1 = tail call i32 @func1()
@@ -485,9 +485,9 @@ if.end:
   ret i32 %retval2
 }
 
-define i32 @branch_ugt_null(i8 addrspace(200)* %a) nounwind {
+define i32 @branch_ugt_null(ptr addrspace(200) %a) nounwind {
 entry:
-  %cmp = icmp ugt i8 addrspace(200)* %a, null
+  %cmp = icmp ugt ptr addrspace(200) %a, null
   br i1 %cmp, label %if.then, label %if.end
 if.then:
   %retval1 = tail call i32 @func1()
@@ -497,9 +497,9 @@ if.end:
   ret i32 %retval2
 }
 
-define i32 @branch_uge_null(i8 addrspace(200)* %a) nounwind {
+define i32 @branch_uge_null(ptr addrspace(200) %a) nounwind {
 entry:
-  %cmp = icmp uge i8 addrspace(200)* %a, null
+  %cmp = icmp uge ptr addrspace(200) %a, null
   br i1 %cmp, label %if.then, label %if.end
 if.then:
   %retval1 = tail call i32 @func1()
@@ -509,9 +509,9 @@ if.end:
   ret i32 %retval2
 }
 
-define i32 @branch_ult_null(i8 addrspace(200)* %a) nounwind {
+define i32 @branch_ult_null(ptr addrspace(200) %a) nounwind {
 entry:
-  %cmp = icmp ult i8 addrspace(200)* %a, null
+  %cmp = icmp ult ptr addrspace(200) %a, null
   br i1 %cmp, label %if.then, label %if.end
 if.then:
   %retval1 = tail call i32 @func1()
@@ -521,9 +521,9 @@ if.end:
   ret i32 %retval2
 }
 
-define i32 @branch_ule_null(i8 addrspace(200)* %a) nounwind {
+define i32 @branch_ule_null(ptr addrspace(200) %a) nounwind {
 entry:
-  %cmp = icmp ule i8 addrspace(200)* %a, null
+  %cmp = icmp ule ptr addrspace(200) %a, null
   br i1 %cmp, label %if.then, label %if.end
 if.then:
   %retval1 = tail call i32 @func1()
@@ -533,9 +533,9 @@ if.end:
   ret i32 %retval2
 }
 
-define i32 @branch_sgt_null(i8 addrspace(200)* %a) nounwind {
+define i32 @branch_sgt_null(ptr addrspace(200) %a) nounwind {
 entry:
-  %cmp = icmp sgt i8 addrspace(200)* %a, null
+  %cmp = icmp sgt ptr addrspace(200) %a, null
   br i1 %cmp, label %if.then, label %if.end
 if.then:
   %retval1 = tail call i32 @func1()
@@ -545,9 +545,9 @@ if.end:
   ret i32 %retval2
 }
 
-define i32 @branch_sge_null(i8 addrspace(200)* %a) nounwind {
+define i32 @branch_sge_null(ptr addrspace(200) %a) nounwind {
 entry:
-  %cmp = icmp sge i8 addrspace(200)* %a, null
+  %cmp = icmp sge ptr addrspace(200) %a, null
   br i1 %cmp, label %if.then, label %if.end
 if.then:
   %retval1 = tail call i32 @func1()
@@ -557,9 +557,9 @@ if.end:
   ret i32 %retval2
 }
 
-define i32 @branch_slt_null(i8 addrspace(200)* %a) nounwind {
+define i32 @branch_slt_null(ptr addrspace(200) %a) nounwind {
 entry:
-  %cmp = icmp slt i8 addrspace(200)* %a, null
+  %cmp = icmp slt ptr addrspace(200) %a, null
   br i1 %cmp, label %if.then, label %if.end
 if.then:
   %retval1 = tail call i32 @func1()
@@ -569,9 +569,9 @@ if.end:
   ret i32 %retval2
 }
 
-define i32 @branch_sle_null(i8 addrspace(200)* %a) nounwind {
+define i32 @branch_sle_null(ptr addrspace(200) %a) nounwind {
 entry:
-  %cmp = icmp sle i8 addrspace(200)* %a, null
+  %cmp = icmp sle ptr addrspace(200) %a, null
   br i1 %cmp, label %if.then, label %if.end
 if.then:
   %retval1 = tail call i32 @func1()

@@ -28,7 +28,7 @@
 
 ; No model specified
 
-define i32 addrspace(200)* @f1() nounwind {
+define ptr addrspace(200) @f1() nounwind {
 ; IL32PC64-PIC-LABEL: f1:
 ; IL32PC64-PIC:       # %bb.0: # %entry
 ; IL32PC64-PIC-NEXT:    cincoffset csp, csp, -16
@@ -113,13 +113,13 @@ define i32 addrspace(200)* @f1() nounwind {
 ; L64PC128-TGOT-NOPIC-NEXT:    lc ca0, %tgot_tprel_lo(unspecified)(ca0)
 ; L64PC128-TGOT-NOPIC-NEXT:    ret
 entry:
-  ret i32 addrspace(200)* @unspecified
+  ret ptr addrspace(200) @unspecified
 }
 
 
 ; localdynamic specified
 
-define i32 addrspace(200)* @f2() nounwind {
+define ptr addrspace(200) @f2() nounwind {
 ; IL32PC64-PIC-LABEL: f2:
 ; IL32PC64-PIC:       # %bb.0: # %entry
 ; IL32PC64-PIC-NEXT:    cincoffset csp, csp, -16
@@ -204,13 +204,13 @@ define i32 addrspace(200)* @f2() nounwind {
 ; L64PC128-TGOT-NOPIC-NEXT:    lc ca0, %tgot_tprel_lo(ld)(ca0)
 ; L64PC128-TGOT-NOPIC-NEXT:    ret
 entry:
-  ret i32 addrspace(200)* @ld
+  ret ptr addrspace(200) @ld
 }
 
 
 ; initialexec specified
 
-define i32 addrspace(200)* @f3() nounwind {
+define ptr addrspace(200) @f3() nounwind {
 ; IL32PC64-PIC-LABEL: f3:
 ; IL32PC64-PIC:       # %bb.0: # %entry
 ; IL32PC64-PIC-NEXT:  .LBB2_1: # %entry
@@ -281,13 +281,13 @@ define i32 addrspace(200)* @f3() nounwind {
 ; L64PC128-TGOT-NOPIC-NEXT:    lc ca0, %tgot_tprel_lo(ie)(ca0)
 ; L64PC128-TGOT-NOPIC-NEXT:    ret
 entry:
-  ret i32 addrspace(200)* @ie
+  ret ptr addrspace(200) @ie
 }
 
 
 ; localexec specified
 
-define i32 addrspace(200)* @f4() nounwind {
+define ptr addrspace(200) @f4() nounwind {
 ; IL32PC64-PIC-LABEL: f4:
 ; IL32PC64-PIC:       # %bb.0: # %entry
 ; IL32PC64-PIC-NEXT:    lui a0, %tprel_hi(le)
@@ -344,5 +344,5 @@ define i32 addrspace(200)* @f4() nounwind {
 ; L64PC128-TGOT-NOPIC-NEXT:    lc ca0, %tgot_tprel_lo(le)(ca0)
 ; L64PC128-TGOT-NOPIC-NEXT:    ret
 entry:
-  ret i32 addrspace(200)* @le
+  ret ptr addrspace(200) @le
 }

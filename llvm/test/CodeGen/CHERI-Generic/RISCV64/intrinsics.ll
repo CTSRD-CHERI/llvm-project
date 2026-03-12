@@ -8,18 +8,18 @@
 
 ; Capability-Inspection Instructions
 
-declare i64 @llvm.cheri.cap.perms.get.i64(i8 addrspace(200)*)
-declare i64 @llvm.cheri.cap.type.get.i64(i8 addrspace(200)*)
-declare i64 @llvm.cheri.cap.base.get.i64(i8 addrspace(200)*)
-declare i64 @llvm.cheri.cap.length.get.i64(i8 addrspace(200)*)
-declare i1 @llvm.cheri.cap.tag.get(i8 addrspace(200)*)
-declare i1 @llvm.cheri.cap.sealed.get(i8 addrspace(200)*)
-declare i64 @llvm.cheri.cap.offset.get.i64(i8 addrspace(200)*)
-declare i64 @llvm.cheri.cap.flags.get.i64(i8 addrspace(200)*)
-declare i64 @llvm.cheri.cap.address.get.i64(i8 addrspace(200)*)
-declare i64 @llvm.cheri.cap.high.get.i64(i8 addrspace(200)*)
+declare i64 @llvm.cheri.cap.perms.get.i64(ptr addrspace(200))
+declare i64 @llvm.cheri.cap.type.get.i64(ptr addrspace(200))
+declare i64 @llvm.cheri.cap.base.get.i64(ptr addrspace(200))
+declare i64 @llvm.cheri.cap.length.get.i64(ptr addrspace(200))
+declare i1 @llvm.cheri.cap.tag.get(ptr addrspace(200))
+declare i1 @llvm.cheri.cap.sealed.get(ptr addrspace(200))
+declare i64 @llvm.cheri.cap.offset.get.i64(ptr addrspace(200))
+declare i64 @llvm.cheri.cap.flags.get.i64(ptr addrspace(200))
+declare i64 @llvm.cheri.cap.address.get.i64(ptr addrspace(200))
+declare i64 @llvm.cheri.cap.high.get.i64(ptr addrspace(200))
 
-define i64 @perms_get(i8 addrspace(200)* %cap) nounwind {
+define i64 @perms_get(ptr addrspace(200) %cap) nounwind {
 ; PURECAP-LABEL: perms_get:
 ; PURECAP:       # %bb.0:
 ; PURECAP-NEXT:    cgetperm a0, ca0
@@ -29,11 +29,11 @@ define i64 @perms_get(i8 addrspace(200)* %cap) nounwind {
 ; HYBRID:       # %bb.0:
 ; HYBRID-NEXT:    cgetperm a0, ca0
 ; HYBRID-NEXT:    ret
-  %perms = call i64 @llvm.cheri.cap.perms.get.i64(i8 addrspace(200)* %cap)
+  %perms = call i64 @llvm.cheri.cap.perms.get.i64(ptr addrspace(200) %cap)
   ret i64 %perms
 }
 
-define i64 @type_get(i8 addrspace(200)* %cap) nounwind {
+define i64 @type_get(ptr addrspace(200) %cap) nounwind {
 ; PURECAP-LABEL: type_get:
 ; PURECAP:       # %bb.0:
 ; PURECAP-NEXT:    cgettype a0, ca0
@@ -43,11 +43,11 @@ define i64 @type_get(i8 addrspace(200)* %cap) nounwind {
 ; HYBRID:       # %bb.0:
 ; HYBRID-NEXT:    cgettype a0, ca0
 ; HYBRID-NEXT:    ret
-  %type = call i64 @llvm.cheri.cap.type.get.i64(i8 addrspace(200)* %cap)
+  %type = call i64 @llvm.cheri.cap.type.get.i64(ptr addrspace(200) %cap)
   ret i64 %type
 }
 
-define i64 @base_get(i8 addrspace(200)* %cap) nounwind {
+define i64 @base_get(ptr addrspace(200) %cap) nounwind {
 ; PURECAP-LABEL: base_get:
 ; PURECAP:       # %bb.0:
 ; PURECAP-NEXT:    cgetbase a0, ca0
@@ -57,11 +57,11 @@ define i64 @base_get(i8 addrspace(200)* %cap) nounwind {
 ; HYBRID:       # %bb.0:
 ; HYBRID-NEXT:    cgetbase a0, ca0
 ; HYBRID-NEXT:    ret
-  %base = call i64 @llvm.cheri.cap.base.get.i64(i8 addrspace(200)* %cap)
+  %base = call i64 @llvm.cheri.cap.base.get.i64(ptr addrspace(200) %cap)
   ret i64 %base
 }
 
-define i64 @length_get(i8 addrspace(200)* %cap) nounwind {
+define i64 @length_get(ptr addrspace(200) %cap) nounwind {
 ; PURECAP-LABEL: length_get:
 ; PURECAP:       # %bb.0:
 ; PURECAP-NEXT:    cgetlen a0, ca0
@@ -71,11 +71,11 @@ define i64 @length_get(i8 addrspace(200)* %cap) nounwind {
 ; HYBRID:       # %bb.0:
 ; HYBRID-NEXT:    cgetlen a0, ca0
 ; HYBRID-NEXT:    ret
-  %length = call i64 @llvm.cheri.cap.length.get.i64(i8 addrspace(200)* %cap)
+  %length = call i64 @llvm.cheri.cap.length.get.i64(ptr addrspace(200) %cap)
   ret i64 %length
 }
 
-define i64 @tag_get(i8 addrspace(200)* %cap) nounwind {
+define i64 @tag_get(ptr addrspace(200) %cap) nounwind {
 ; PURECAP-LABEL: tag_get:
 ; PURECAP:       # %bb.0:
 ; PURECAP-NEXT:    cgettag a0, ca0
@@ -85,12 +85,12 @@ define i64 @tag_get(i8 addrspace(200)* %cap) nounwind {
 ; HYBRID:       # %bb.0:
 ; HYBRID-NEXT:    cgettag a0, ca0
 ; HYBRID-NEXT:    ret
-  %tag = call i1 @llvm.cheri.cap.tag.get(i8 addrspace(200)* %cap)
+  %tag = call i1 @llvm.cheri.cap.tag.get(ptr addrspace(200) %cap)
   %tag.zext = zext i1 %tag to i64
   ret i64 %tag.zext
 }
 
-define i64 @sealed_get(i8 addrspace(200)* %cap) nounwind {
+define i64 @sealed_get(ptr addrspace(200) %cap) nounwind {
 ; PURECAP-LABEL: sealed_get:
 ; PURECAP:       # %bb.0:
 ; PURECAP-NEXT:    cgetsealed a0, ca0
@@ -100,12 +100,12 @@ define i64 @sealed_get(i8 addrspace(200)* %cap) nounwind {
 ; HYBRID:       # %bb.0:
 ; HYBRID-NEXT:    cgetsealed a0, ca0
 ; HYBRID-NEXT:    ret
-  %sealed = call i1 @llvm.cheri.cap.sealed.get(i8 addrspace(200)* %cap)
+  %sealed = call i1 @llvm.cheri.cap.sealed.get(ptr addrspace(200) %cap)
   %sealed.zext = zext i1 %sealed to i64
   ret i64 %sealed.zext
 }
 
-define i64 @offset_get(i8 addrspace(200)* %cap) nounwind {
+define i64 @offset_get(ptr addrspace(200) %cap) nounwind {
 ; PURECAP-LABEL: offset_get:
 ; PURECAP:       # %bb.0:
 ; PURECAP-NEXT:    cgetoffset a0, ca0
@@ -115,11 +115,11 @@ define i64 @offset_get(i8 addrspace(200)* %cap) nounwind {
 ; HYBRID:       # %bb.0:
 ; HYBRID-NEXT:    cgetoffset a0, ca0
 ; HYBRID-NEXT:    ret
-  %offset = call i64 @llvm.cheri.cap.offset.get.i64(i8 addrspace(200)* %cap)
+  %offset = call i64 @llvm.cheri.cap.offset.get.i64(ptr addrspace(200) %cap)
   ret i64 %offset
 }
 
-define i64 @flags_get(i8 addrspace(200)* %cap) nounwind {
+define i64 @flags_get(ptr addrspace(200) %cap) nounwind {
 ; PURECAP-LABEL: flags_get:
 ; PURECAP:       # %bb.0:
 ; PURECAP-NEXT:    cgetflags a0, ca0
@@ -129,11 +129,11 @@ define i64 @flags_get(i8 addrspace(200)* %cap) nounwind {
 ; HYBRID:       # %bb.0:
 ; HYBRID-NEXT:    cgetflags a0, ca0
 ; HYBRID-NEXT:    ret
-  %flags = call i64 @llvm.cheri.cap.flags.get.i64(i8 addrspace(200)* %cap)
+  %flags = call i64 @llvm.cheri.cap.flags.get.i64(ptr addrspace(200) %cap)
   ret i64 %flags
 }
 
-define i64 @address_get(i8 addrspace(200)* %cap) nounwind {
+define i64 @address_get(ptr addrspace(200) %cap) nounwind {
 ; PURECAP-LABEL: address_get:
 ; PURECAP:       # %bb.0:
 ; PURECAP-NEXT:    mv a0, a0
@@ -143,11 +143,11 @@ define i64 @address_get(i8 addrspace(200)* %cap) nounwind {
 ; HYBRID:       # %bb.0:
 ; HYBRID-NEXT:    mv a0, a0
 ; HYBRID-NEXT:    ret
-  %address = call i64 @llvm.cheri.cap.address.get.i64(i8 addrspace(200)* %cap)
+  %address = call i64 @llvm.cheri.cap.address.get.i64(ptr addrspace(200) %cap)
   ret i64 %address
 }
 
-define i64 @high_get(i8 addrspace(200)* %cap) nounwind {
+define i64 @high_get(ptr addrspace(200) %cap) nounwind {
 ; PURECAP-LABEL: high_get:
 ; PURECAP:       # %bb.0:
 ; PURECAP-NEXT:    cgethigh a0, ca0
@@ -157,28 +157,28 @@ define i64 @high_get(i8 addrspace(200)* %cap) nounwind {
 ; HYBRID:       # %bb.0:
 ; HYBRID-NEXT:    cgethigh a0, ca0
 ; HYBRID-NEXT:    ret
-  %high = call i64 @llvm.cheri.cap.high.get.i64(i8 addrspace(200)* %cap)
+  %high = call i64 @llvm.cheri.cap.high.get.i64(ptr addrspace(200) %cap)
   ret i64 %high
 }
 
 ; Capability-Modification Instructions
 
-declare i8 addrspace(200)* @llvm.cheri.cap.seal(i8 addrspace(200)*, i8 addrspace(200)*)
-declare i8 addrspace(200)* @llvm.cheri.cap.unseal(i8 addrspace(200)*, i8 addrspace(200)*)
-declare i8 addrspace(200)* @llvm.cheri.cap.perms.and.i64(i8 addrspace(200)*, i64)
-declare i8 addrspace(200)* @llvm.cheri.cap.flags.set.i64(i8 addrspace(200)*, i64)
-declare i8 addrspace(200)* @llvm.cheri.cap.offset.set.i64(i8 addrspace(200)*, i64)
-declare i8 addrspace(200)* @llvm.cheri.cap.address.set.i64(i8 addrspace(200)*, i64)
-declare i8 addrspace(200)* @llvm.cheri.cap.bounds.set.i64(i8 addrspace(200)*, i64)
-declare i8 addrspace(200)* @llvm.cheri.cap.bounds.set.exact.i64(i8 addrspace(200)*, i64)
-declare i8 addrspace(200)* @llvm.cheri.cap.high.set.i64(i8 addrspace(200)*, i64)
-declare i8 addrspace(200)* @llvm.cheri.cap.tag.clear(i8 addrspace(200)*)
-declare i8 addrspace(200)* @llvm.cheri.cap.build(i8 addrspace(200)*, i8 addrspace(200)*)
-declare i8 addrspace(200)* @llvm.cheri.cap.type.copy(i8 addrspace(200)*, i8 addrspace(200)*)
-declare i8 addrspace(200)* @llvm.cheri.cap.conditional.seal(i8 addrspace(200)*, i8 addrspace(200)*)
-declare i8 addrspace(200)* @llvm.cheri.cap.seal.entry(i8 addrspace(200)*)
+declare ptr addrspace(200) @llvm.cheri.cap.seal(ptr addrspace(200), ptr addrspace(200))
+declare ptr addrspace(200) @llvm.cheri.cap.unseal(ptr addrspace(200), ptr addrspace(200))
+declare ptr addrspace(200) @llvm.cheri.cap.perms.and.i64(ptr addrspace(200), i64)
+declare ptr addrspace(200) @llvm.cheri.cap.flags.set.i64(ptr addrspace(200), i64)
+declare ptr addrspace(200) @llvm.cheri.cap.offset.set.i64(ptr addrspace(200), i64)
+declare ptr addrspace(200) @llvm.cheri.cap.address.set.i64(ptr addrspace(200), i64)
+declare ptr addrspace(200) @llvm.cheri.cap.bounds.set.i64(ptr addrspace(200), i64)
+declare ptr addrspace(200) @llvm.cheri.cap.bounds.set.exact.i64(ptr addrspace(200), i64)
+declare ptr addrspace(200) @llvm.cheri.cap.high.set.i64(ptr addrspace(200), i64)
+declare ptr addrspace(200) @llvm.cheri.cap.tag.clear(ptr addrspace(200))
+declare ptr addrspace(200) @llvm.cheri.cap.build(ptr addrspace(200), ptr addrspace(200))
+declare ptr addrspace(200) @llvm.cheri.cap.type.copy(ptr addrspace(200), ptr addrspace(200))
+declare ptr addrspace(200) @llvm.cheri.cap.conditional.seal(ptr addrspace(200), ptr addrspace(200))
+declare ptr addrspace(200) @llvm.cheri.cap.seal.entry(ptr addrspace(200))
 
-define i8 addrspace(200)* @seal(i8 addrspace(200)* %cap1, i8 addrspace(200)* %cap2) nounwind {
+define ptr addrspace(200) @seal(ptr addrspace(200) %cap1, ptr addrspace(200) %cap2) nounwind {
 ; PURECAP-LABEL: seal:
 ; PURECAP:       # %bb.0:
 ; PURECAP-NEXT:    cseal ca0, ca0, ca1
@@ -188,11 +188,11 @@ define i8 addrspace(200)* @seal(i8 addrspace(200)* %cap1, i8 addrspace(200)* %ca
 ; HYBRID:       # %bb.0:
 ; HYBRID-NEXT:    cseal ca0, ca0, ca1
 ; HYBRID-NEXT:    ret
-  %sealed = call i8 addrspace(200)* @llvm.cheri.cap.seal(i8 addrspace(200)* %cap1, i8 addrspace(200)* %cap2)
-  ret i8 addrspace(200)* %sealed
+  %sealed = call ptr addrspace(200) @llvm.cheri.cap.seal(ptr addrspace(200) %cap1, ptr addrspace(200) %cap2)
+  ret ptr addrspace(200) %sealed
 }
 
-define i8 addrspace(200)* @unseal(i8 addrspace(200)* %cap1, i8 addrspace(200)* %cap2) nounwind {
+define ptr addrspace(200) @unseal(ptr addrspace(200) %cap1, ptr addrspace(200) %cap2) nounwind {
 ; PURECAP-LABEL: unseal:
 ; PURECAP:       # %bb.0:
 ; PURECAP-NEXT:    cunseal ca0, ca0, ca1
@@ -202,11 +202,11 @@ define i8 addrspace(200)* @unseal(i8 addrspace(200)* %cap1, i8 addrspace(200)* %
 ; HYBRID:       # %bb.0:
 ; HYBRID-NEXT:    cunseal ca0, ca0, ca1
 ; HYBRID-NEXT:    ret
-  %unsealed = call i8 addrspace(200)* @llvm.cheri.cap.unseal(i8 addrspace(200)* %cap1, i8 addrspace(200)* %cap2)
-  ret i8 addrspace(200)* %unsealed
+  %unsealed = call ptr addrspace(200) @llvm.cheri.cap.unseal(ptr addrspace(200) %cap1, ptr addrspace(200) %cap2)
+  ret ptr addrspace(200) %unsealed
 }
 
-define i8 addrspace(200)* @perms_and(i8 addrspace(200)* %cap, i64 %perms) nounwind {
+define ptr addrspace(200) @perms_and(ptr addrspace(200) %cap, i64 %perms) nounwind {
 ; PURECAP-LABEL: perms_and:
 ; PURECAP:       # %bb.0:
 ; PURECAP-NEXT:    candperm ca0, ca0, a1
@@ -216,11 +216,11 @@ define i8 addrspace(200)* @perms_and(i8 addrspace(200)* %cap, i64 %perms) nounwi
 ; HYBRID:       # %bb.0:
 ; HYBRID-NEXT:    candperm ca0, ca0, a1
 ; HYBRID-NEXT:    ret
-  %newcap = call i8 addrspace(200)* @llvm.cheri.cap.perms.and.i64(i8 addrspace(200)* %cap, i64 %perms)
-  ret i8 addrspace(200)* %newcap
+  %newcap = call ptr addrspace(200) @llvm.cheri.cap.perms.and.i64(ptr addrspace(200) %cap, i64 %perms)
+  ret ptr addrspace(200) %newcap
 }
 
-define i8 addrspace(200)* @flags_set(i8 addrspace(200)* %cap, i64 %flags) nounwind {
+define ptr addrspace(200) @flags_set(ptr addrspace(200) %cap, i64 %flags) nounwind {
 ; PURECAP-LABEL: flags_set:
 ; PURECAP:       # %bb.0:
 ; PURECAP-NEXT:    csetflags ca0, ca0, a1
@@ -230,11 +230,11 @@ define i8 addrspace(200)* @flags_set(i8 addrspace(200)* %cap, i64 %flags) nounwi
 ; HYBRID:       # %bb.0:
 ; HYBRID-NEXT:    csetflags ca0, ca0, a1
 ; HYBRID-NEXT:    ret
-  %newcap = call i8 addrspace(200)* @llvm.cheri.cap.flags.set.i64(i8 addrspace(200)* %cap, i64 %flags)
-  ret i8 addrspace(200)* %newcap
+  %newcap = call ptr addrspace(200) @llvm.cheri.cap.flags.set.i64(ptr addrspace(200) %cap, i64 %flags)
+  ret ptr addrspace(200) %newcap
 }
 
-define i8 addrspace(200)* @offset_set(i8 addrspace(200)* %cap, i64 %offset) nounwind {
+define ptr addrspace(200) @offset_set(ptr addrspace(200) %cap, i64 %offset) nounwind {
 ; PURECAP-LABEL: offset_set:
 ; PURECAP:       # %bb.0:
 ; PURECAP-NEXT:    csetoffset ca0, ca0, a1
@@ -244,11 +244,11 @@ define i8 addrspace(200)* @offset_set(i8 addrspace(200)* %cap, i64 %offset) noun
 ; HYBRID:       # %bb.0:
 ; HYBRID-NEXT:    csetoffset ca0, ca0, a1
 ; HYBRID-NEXT:    ret
-  %newcap = call i8 addrspace(200)* @llvm.cheri.cap.offset.set.i64(i8 addrspace(200)* %cap, i64 %offset)
-  ret i8 addrspace(200)* %newcap
+  %newcap = call ptr addrspace(200) @llvm.cheri.cap.offset.set.i64(ptr addrspace(200) %cap, i64 %offset)
+  ret ptr addrspace(200) %newcap
 }
 
-define i8 addrspace(200)* @address_set(i8 addrspace(200)* %cap, i64 %address) nounwind {
+define ptr addrspace(200) @address_set(ptr addrspace(200) %cap, i64 %address) nounwind {
 ; PURECAP-LABEL: address_set:
 ; PURECAP:       # %bb.0:
 ; PURECAP-NEXT:    csetaddr ca0, ca0, a1
@@ -258,11 +258,11 @@ define i8 addrspace(200)* @address_set(i8 addrspace(200)* %cap, i64 %address) no
 ; HYBRID:       # %bb.0:
 ; HYBRID-NEXT:    csetaddr ca0, ca0, a1
 ; HYBRID-NEXT:    ret
-  %newcap = call i8 addrspace(200)* @llvm.cheri.cap.address.set.i64(i8 addrspace(200)* %cap, i64 %address)
-  ret i8 addrspace(200)* %newcap
+  %newcap = call ptr addrspace(200) @llvm.cheri.cap.address.set.i64(ptr addrspace(200) %cap, i64 %address)
+  ret ptr addrspace(200) %newcap
 }
 
-define i8 addrspace(200)* @bounds_set(i8 addrspace(200)* %cap, i64 %bounds) nounwind {
+define ptr addrspace(200) @bounds_set(ptr addrspace(200) %cap, i64 %bounds) nounwind {
 ; PURECAP-LABEL: bounds_set:
 ; PURECAP:       # %bb.0:
 ; PURECAP-NEXT:    csetbounds ca0, ca0, a1
@@ -272,11 +272,11 @@ define i8 addrspace(200)* @bounds_set(i8 addrspace(200)* %cap, i64 %bounds) noun
 ; HYBRID:       # %bb.0:
 ; HYBRID-NEXT:    csetbounds ca0, ca0, a1
 ; HYBRID-NEXT:    ret
-  %newcap = call i8 addrspace(200)* @llvm.cheri.cap.bounds.set.i64(i8 addrspace(200)* %cap, i64 %bounds)
-  ret i8 addrspace(200)* %newcap
+  %newcap = call ptr addrspace(200) @llvm.cheri.cap.bounds.set.i64(ptr addrspace(200) %cap, i64 %bounds)
+  ret ptr addrspace(200) %newcap
 }
 
-define i8 addrspace(200)* @bounds_set_exact(i8 addrspace(200)* %cap, i64 %bounds) nounwind {
+define ptr addrspace(200) @bounds_set_exact(ptr addrspace(200) %cap, i64 %bounds) nounwind {
 ; PURECAP-LABEL: bounds_set_exact:
 ; PURECAP:       # %bb.0:
 ; PURECAP-NEXT:    csetboundsexact ca0, ca0, a1
@@ -286,11 +286,11 @@ define i8 addrspace(200)* @bounds_set_exact(i8 addrspace(200)* %cap, i64 %bounds
 ; HYBRID:       # %bb.0:
 ; HYBRID-NEXT:    csetboundsexact ca0, ca0, a1
 ; HYBRID-NEXT:    ret
-  %newcap = call i8 addrspace(200)* @llvm.cheri.cap.bounds.set.exact.i64(i8 addrspace(200)* %cap, i64 %bounds)
-  ret i8 addrspace(200)* %newcap
+  %newcap = call ptr addrspace(200) @llvm.cheri.cap.bounds.set.exact.i64(ptr addrspace(200) %cap, i64 %bounds)
+  ret ptr addrspace(200) %newcap
 }
 
-define i8 addrspace(200)* @high_set(i8 addrspace(200)* %cap, i64 %high) nounwind {
+define ptr addrspace(200) @high_set(ptr addrspace(200) %cap, i64 %high) nounwind {
 ; PURECAP-LABEL: high_set:
 ; PURECAP:       # %bb.0:
 ; PURECAP-NEXT:    csethigh ca0, ca0, a1
@@ -300,11 +300,11 @@ define i8 addrspace(200)* @high_set(i8 addrspace(200)* %cap, i64 %high) nounwind
 ; HYBRID:       # %bb.0:
 ; HYBRID-NEXT:    csethigh ca0, ca0, a1
 ; HYBRID-NEXT:    ret
-  %newcap = call i8 addrspace(200)* @llvm.cheri.cap.high.set.i64(i8 addrspace(200)* %cap, i64 %high)
-  ret i8 addrspace(200)* %newcap
+  %newcap = call ptr addrspace(200) @llvm.cheri.cap.high.set.i64(ptr addrspace(200) %cap, i64 %high)
+  ret ptr addrspace(200) %newcap
 }
 
-define i8 addrspace(200)* @bounds_set_immediate(i8 addrspace(200)* %cap) nounwind {
+define ptr addrspace(200) @bounds_set_immediate(ptr addrspace(200) %cap) nounwind {
 ; PURECAP-LABEL: bounds_set_immediate:
 ; PURECAP:       # %bb.0:
 ; PURECAP-NEXT:    csetbounds ca0, ca0, 42
@@ -314,11 +314,11 @@ define i8 addrspace(200)* @bounds_set_immediate(i8 addrspace(200)* %cap) nounwin
 ; HYBRID:       # %bb.0:
 ; HYBRID-NEXT:    csetbounds ca0, ca0, 42
 ; HYBRID-NEXT:    ret
-  %newcap = call i8 addrspace(200)* @llvm.cheri.cap.bounds.set.i64(i8 addrspace(200)* %cap, i64 42)
-  ret i8 addrspace(200)* %newcap
+  %newcap = call ptr addrspace(200) @llvm.cheri.cap.bounds.set.i64(ptr addrspace(200) %cap, i64 42)
+  ret ptr addrspace(200) %newcap
 }
 
-define i8 addrspace(200)* @tag_clear(i8 addrspace(200)* %cap) nounwind {
+define ptr addrspace(200) @tag_clear(ptr addrspace(200) %cap) nounwind {
 ; PURECAP-LABEL: tag_clear:
 ; PURECAP:       # %bb.0:
 ; PURECAP-NEXT:    ccleartag ca0, ca0
@@ -328,11 +328,11 @@ define i8 addrspace(200)* @tag_clear(i8 addrspace(200)* %cap) nounwind {
 ; HYBRID:       # %bb.0:
 ; HYBRID-NEXT:    ccleartag ca0, ca0
 ; HYBRID-NEXT:    ret
-  %untagged = call i8 addrspace(200)* @llvm.cheri.cap.tag.clear(i8 addrspace(200)* %cap)
-  ret i8 addrspace(200)* %untagged
+  %untagged = call ptr addrspace(200) @llvm.cheri.cap.tag.clear(ptr addrspace(200) %cap)
+  ret ptr addrspace(200) %untagged
 }
 
-define i8 addrspace(200)* @build(i8 addrspace(200)* %cap1, i8 addrspace(200)* %cap2) nounwind {
+define ptr addrspace(200) @build(ptr addrspace(200) %cap1, ptr addrspace(200) %cap2) nounwind {
 ; PURECAP-LABEL: build:
 ; PURECAP:       # %bb.0:
 ; PURECAP-NEXT:    cbuildcap ca0, ca0, ca1
@@ -342,11 +342,11 @@ define i8 addrspace(200)* @build(i8 addrspace(200)* %cap1, i8 addrspace(200)* %c
 ; HYBRID:       # %bb.0:
 ; HYBRID-NEXT:    cbuildcap ca0, ca0, ca1
 ; HYBRID-NEXT:    ret
-  %built = call i8 addrspace(200)* @llvm.cheri.cap.build(i8 addrspace(200)* %cap1, i8 addrspace(200)* %cap2)
-  ret i8 addrspace(200)* %built
+  %built = call ptr addrspace(200) @llvm.cheri.cap.build(ptr addrspace(200) %cap1, ptr addrspace(200) %cap2)
+  ret ptr addrspace(200) %built
 }
 
-define i8 addrspace(200)* @type_copy(i8 addrspace(200)* %cap1, i8 addrspace(200)* %cap2) nounwind {
+define ptr addrspace(200) @type_copy(ptr addrspace(200) %cap1, ptr addrspace(200) %cap2) nounwind {
 ; PURECAP-LABEL: type_copy:
 ; PURECAP:       # %bb.0:
 ; PURECAP-NEXT:    ccopytype ca0, ca0, ca1
@@ -356,11 +356,11 @@ define i8 addrspace(200)* @type_copy(i8 addrspace(200)* %cap1, i8 addrspace(200)
 ; HYBRID:       # %bb.0:
 ; HYBRID-NEXT:    ccopytype ca0, ca0, ca1
 ; HYBRID-NEXT:    ret
-  %newcap = call i8 addrspace(200)* @llvm.cheri.cap.type.copy(i8 addrspace(200)* %cap1, i8 addrspace(200)* %cap2)
-  ret i8 addrspace(200)* %newcap
+  %newcap = call ptr addrspace(200) @llvm.cheri.cap.type.copy(ptr addrspace(200) %cap1, ptr addrspace(200) %cap2)
+  ret ptr addrspace(200) %newcap
 }
 
-define i8 addrspace(200)* @conditional_seal(i8 addrspace(200)* %cap1, i8 addrspace(200)* %cap2) nounwind {
+define ptr addrspace(200) @conditional_seal(ptr addrspace(200) %cap1, ptr addrspace(200) %cap2) nounwind {
 ; PURECAP-LABEL: conditional_seal:
 ; PURECAP:       # %bb.0:
 ; PURECAP-NEXT:    ccseal ca0, ca0, ca1
@@ -370,11 +370,11 @@ define i8 addrspace(200)* @conditional_seal(i8 addrspace(200)* %cap1, i8 addrspa
 ; HYBRID:       # %bb.0:
 ; HYBRID-NEXT:    ccseal ca0, ca0, ca1
 ; HYBRID-NEXT:    ret
-  %newcap = call i8 addrspace(200)* @llvm.cheri.cap.conditional.seal(i8 addrspace(200)* %cap1, i8 addrspace(200)* %cap2)
-  ret i8 addrspace(200)* %newcap
+  %newcap = call ptr addrspace(200) @llvm.cheri.cap.conditional.seal(ptr addrspace(200) %cap1, ptr addrspace(200) %cap2)
+  ret ptr addrspace(200) %newcap
 }
 
-define i8 addrspace(200)* @seal_entry(i8 addrspace(200)* %cap) nounwind {
+define ptr addrspace(200) @seal_entry(ptr addrspace(200) %cap) nounwind {
 ; PURECAP-LABEL: seal_entry:
 ; PURECAP:       # %bb.0:
 ; PURECAP-NEXT:    csealentry ca0, ca0
@@ -384,19 +384,19 @@ define i8 addrspace(200)* @seal_entry(i8 addrspace(200)* %cap) nounwind {
 ; HYBRID:       # %bb.0:
 ; HYBRID-NEXT:    csealentry ca0, ca0
 ; HYBRID-NEXT:    ret
-  %newcap = call i8 addrspace(200)* @llvm.cheri.cap.seal.entry(i8 addrspace(200)* %cap)
-  ret i8 addrspace(200)* %newcap
+  %newcap = call ptr addrspace(200) @llvm.cheri.cap.seal.entry(ptr addrspace(200) %cap)
+  ret ptr addrspace(200) %newcap
 }
 
 ; Pointer-Arithmetic Instructions
 
-declare i64 @llvm.cheri.cap.to.pointer(i8 addrspace(200)*, i8 addrspace(200)*)
-declare i8 addrspace(200)* @llvm.cheri.cap.from.pointer(i8 addrspace(200)*, i64)
-declare i64 @llvm.cheri.cap.diff(i8 addrspace(200)*, i8 addrspace(200)*)
-declare i8 addrspace(200)* @llvm.cheri.ddc.get()
-declare i8 addrspace(200)* @llvm.cheri.pcc.get()
+declare i64 @llvm.cheri.cap.to.pointer(ptr addrspace(200), ptr addrspace(200))
+declare ptr addrspace(200) @llvm.cheri.cap.from.pointer(ptr addrspace(200), i64)
+declare i64 @llvm.cheri.cap.diff(ptr addrspace(200), ptr addrspace(200))
+declare ptr addrspace(200) @llvm.cheri.ddc.get()
+declare ptr addrspace(200) @llvm.cheri.pcc.get()
 
-define i64 @to_pointer(i8 addrspace(200)* %cap1, i8 addrspace(200)* %cap2) nounwind {
+define i64 @to_pointer(ptr addrspace(200) %cap1, ptr addrspace(200) %cap2) nounwind {
 ; PURECAP-LABEL: to_pointer:
 ; PURECAP:       # %bb.0:
 ; PURECAP-NEXT:    cgettag a0, ca1
@@ -410,11 +410,11 @@ define i64 @to_pointer(i8 addrspace(200)* %cap1, i8 addrspace(200)* %cap2) nounw
 ; HYBRID-NEXT:    neg a0, a0
 ; HYBRID-NEXT:    and a0, a1, a0
 ; HYBRID-NEXT:    ret
-  %ptr = call i64 @llvm.cheri.cap.to.pointer(i8 addrspace(200)* %cap1, i8 addrspace(200)* %cap2)
+  %ptr = call i64 @llvm.cheri.cap.to.pointer(ptr addrspace(200) %cap1, ptr addrspace(200) %cap2)
   ret i64 %ptr
 }
 
-define i64 @to_pointer_ddc_relative(i8 addrspace(200)* %cap) nounwind {
+define i64 @to_pointer_ddc_relative(ptr addrspace(200) %cap) nounwind {
 ; PURECAP-LABEL: to_pointer_ddc_relative:
 ; PURECAP:       # %bb.0:
 ; PURECAP-NEXT:    cgettag a1, ca0
@@ -428,12 +428,12 @@ define i64 @to_pointer_ddc_relative(i8 addrspace(200)* %cap) nounwind {
 ; HYBRID-NEXT:    neg a1, a1
 ; HYBRID-NEXT:    and a0, a0, a1
 ; HYBRID-NEXT:    ret
-  %ddc = call i8 addrspace(200)* @llvm.cheri.ddc.get()
-  %ptr = call i64 @llvm.cheri.cap.to.pointer(i8 addrspace(200)* %ddc, i8 addrspace(200)* %cap)
+  %ddc = call ptr addrspace(200) @llvm.cheri.ddc.get()
+  %ptr = call i64 @llvm.cheri.cap.to.pointer(ptr addrspace(200) %ddc, ptr addrspace(200) %cap)
   ret i64 %ptr
 }
 
-define i8 addrspace(200)* @from_pointer(i8 addrspace(200)* %cap, i64 %ptr) nounwind {
+define ptr addrspace(200) @from_pointer(ptr addrspace(200) %cap, i64 %ptr) nounwind {
 ; PURECAP-LABEL: from_pointer:
 ; PURECAP:       # %bb.0:
 ; PURECAP-NEXT:    bnez a1, .LBB27_2
@@ -453,11 +453,11 @@ define i8 addrspace(200)* @from_pointer(i8 addrspace(200)* %cap, i64 %ptr) nounw
 ; HYBRID-NEXT:  .LBB27_2:
 ; HYBRID-NEXT:    csetaddr ca0, ca0, a1
 ; HYBRID-NEXT:    ret
-  %newcap = call i8 addrspace(200)* @llvm.cheri.cap.from.pointer(i8 addrspace(200)* %cap, i64 %ptr)
-  ret i8 addrspace(200)* %newcap
+  %newcap = call ptr addrspace(200) @llvm.cheri.cap.from.pointer(ptr addrspace(200) %cap, i64 %ptr)
+  ret ptr addrspace(200) %newcap
 }
 
-define i8 addrspace(200)* @from_ddc(i64 %ptr) nounwind {
+define ptr addrspace(200) @from_ddc(i64 %ptr) nounwind {
 ; PURECAP-LABEL: from_ddc:
 ; PURECAP:       # %bb.0:
 ; PURECAP-NEXT:    cspecialr ca1, ddc
@@ -479,12 +479,12 @@ define i8 addrspace(200)* @from_ddc(i64 %ptr) nounwind {
 ; HYBRID-NEXT:  .LBB28_2:
 ; HYBRID-NEXT:    csetaddr ca0, ca1, a0
 ; HYBRID-NEXT:    ret
-  %ddc = call i8 addrspace(200)* @llvm.cheri.ddc.get()
-  %cap = call i8 addrspace(200)* @llvm.cheri.cap.from.pointer(i8 addrspace(200)* %ddc, i64 %ptr)
-  ret i8 addrspace(200)* %cap
+  %ddc = call ptr addrspace(200) @llvm.cheri.ddc.get()
+  %cap = call ptr addrspace(200) @llvm.cheri.cap.from.pointer(ptr addrspace(200) %ddc, i64 %ptr)
+  ret ptr addrspace(200) %cap
 }
 
-define i64 @diff(i8 addrspace(200)* %cap1, i8 addrspace(200)* %cap2) nounwind {
+define i64 @diff(ptr addrspace(200) %cap1, ptr addrspace(200) %cap2) nounwind {
 ; PURECAP-LABEL: diff:
 ; PURECAP:       # %bb.0:
 ; PURECAP-NEXT:    sub a0, a0, a1
@@ -494,11 +494,11 @@ define i64 @diff(i8 addrspace(200)* %cap1, i8 addrspace(200)* %cap2) nounwind {
 ; HYBRID:       # %bb.0:
 ; HYBRID-NEXT:    sub a0, a0, a1
 ; HYBRID-NEXT:    ret
-  %diff = call i64 @llvm.cheri.cap.diff(i8 addrspace(200)* %cap1, i8 addrspace(200)* %cap2)
+  %diff = call i64 @llvm.cheri.cap.diff(ptr addrspace(200) %cap1, ptr addrspace(200) %cap2)
   ret i64 %diff
 }
 
-define i8 addrspace(200)* @ddc_get() nounwind {
+define ptr addrspace(200) @ddc_get() nounwind {
 ; PURECAP-LABEL: ddc_get:
 ; PURECAP:       # %bb.0:
 ; PURECAP-NEXT:    cspecialr ca0, ddc
@@ -508,11 +508,11 @@ define i8 addrspace(200)* @ddc_get() nounwind {
 ; HYBRID:       # %bb.0:
 ; HYBRID-NEXT:    cspecialr ca0, ddc
 ; HYBRID-NEXT:    ret
-  %cap = call i8 addrspace(200)* @llvm.cheri.ddc.get()
-  ret i8 addrspace(200)* %cap
+  %cap = call ptr addrspace(200) @llvm.cheri.ddc.get()
+  ret ptr addrspace(200) %cap
 }
 
-define i8 addrspace(200)* @pcc_get() nounwind {
+define ptr addrspace(200) @pcc_get() nounwind {
 ; PURECAP-LABEL: pcc_get:
 ; PURECAP:       # %bb.0:
 ; PURECAP-NEXT:    auipcc ca0, 0
@@ -522,15 +522,15 @@ define i8 addrspace(200)* @pcc_get() nounwind {
 ; HYBRID:       # %bb.0:
 ; HYBRID-NEXT:    cspecialr ca0, pcc
 ; HYBRID-NEXT:    ret
-  %cap = call i8 addrspace(200)* @llvm.cheri.pcc.get()
-  ret i8 addrspace(200)* %cap
+  %cap = call ptr addrspace(200) @llvm.cheri.pcc.get()
+  ret ptr addrspace(200) %cap
 }
 
 ; Assertion Instructions
 
-declare i1 @llvm.cheri.cap.subset.test(i8 addrspace(200)* %cap1, i8 addrspace(200)* %cap2)
+declare i1 @llvm.cheri.cap.subset.test(ptr addrspace(200) %cap1, ptr addrspace(200) %cap2)
 
-define i64 @subset_test(i8 addrspace(200)* %cap1, i8 addrspace(200)* %cap2) nounwind {
+define i64 @subset_test(ptr addrspace(200) %cap1, ptr addrspace(200) %cap2) nounwind {
 ; PURECAP-LABEL: subset_test:
 ; PURECAP:       # %bb.0:
 ; PURECAP-NEXT:    ctestsubset a0, ca0, ca1
@@ -540,14 +540,14 @@ define i64 @subset_test(i8 addrspace(200)* %cap1, i8 addrspace(200)* %cap2) noun
 ; HYBRID:       # %bb.0:
 ; HYBRID-NEXT:    ctestsubset a0, ca0, ca1
 ; HYBRID-NEXT:    ret
-  %subset = call i1 @llvm.cheri.cap.subset.test(i8 addrspace(200)* %cap1, i8 addrspace(200)* %cap2)
+  %subset = call i1 @llvm.cheri.cap.subset.test(ptr addrspace(200) %cap1, ptr addrspace(200) %cap2)
   %subset.zext = zext i1 %subset to i64
   ret i64 %subset.zext
 }
 
-declare i1 @llvm.cheri.cap.equal.exact(i8 addrspace(200)* %cap1, i8 addrspace(200)* %cap2)
+declare i1 @llvm.cheri.cap.equal.exact(ptr addrspace(200) %cap1, ptr addrspace(200) %cap2)
 
-define i64 @equal_exact(i8 addrspace(200)* %cap1, i8 addrspace(200)* %cap2) nounwind {
+define i64 @equal_exact(ptr addrspace(200) %cap1, ptr addrspace(200) %cap2) nounwind {
 ; PURECAP-LABEL: equal_exact:
 ; PURECAP:       # %bb.0:
 ; PURECAP-NEXT:    cseqx a0, ca0, ca1
@@ -557,7 +557,7 @@ define i64 @equal_exact(i8 addrspace(200)* %cap1, i8 addrspace(200)* %cap2) noun
 ; HYBRID:       # %bb.0:
 ; HYBRID-NEXT:    cseqx a0, ca0, ca1
 ; HYBRID-NEXT:    ret
-  %eqex = call i1 @llvm.cheri.cap.equal.exact(i8 addrspace(200)* %cap1, i8 addrspace(200)* %cap2)
+  %eqex = call i1 @llvm.cheri.cap.equal.exact(ptr addrspace(200) %cap1, ptr addrspace(200) %cap2)
   %eqex.zext = zext i1 %eqex to i64
   ret i64 %eqex.zext
 }

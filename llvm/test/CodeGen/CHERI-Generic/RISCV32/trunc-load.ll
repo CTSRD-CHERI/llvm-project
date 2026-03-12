@@ -3,7 +3,7 @@
 ; RUN: llc -mtriple=riscv32 --relocation-model=pic -target-abi il32pc64f -mattr=+xcheri,+cap-mode,+f %s -o - < %s | FileCheck %s --check-prefix=PURECAP
 ; RUN: llc -mtriple=riscv32 --relocation-model=pic -target-abi ilp32f -mattr=+xcheri,+f -o - < %s | FileCheck %s --check-prefix=HYBRID
 
-define zeroext i16 @trunc_load_zext(i32 addrspace(200)* %p) {
+define zeroext i16 @trunc_load_zext(ptr addrspace(200) %p) {
 ; PURECAP-LABEL: trunc_load_zext:
 ; PURECAP:       # %bb.0:
 ; PURECAP-NEXT:    lhu a0, 0(ca0)
@@ -13,12 +13,12 @@ define zeroext i16 @trunc_load_zext(i32 addrspace(200)* %p) {
 ; HYBRID:       # %bb.0:
 ; HYBRID-NEXT:    lhu.cap a0, (ca0)
 ; HYBRID-NEXT:    ret
-  %1 = load i32, i32 addrspace(200)* %p
+  %1 = load i32, ptr addrspace(200) %p
   %2 = trunc i32 %1 to i16
   ret i16 %2
 }
 
-define signext i16 @trunc_load_sext(i32 addrspace(200)* %p) {
+define signext i16 @trunc_load_sext(ptr addrspace(200) %p) {
 ; PURECAP-LABEL: trunc_load_sext:
 ; PURECAP:       # %bb.0:
 ; PURECAP-NEXT:    lh a0, 0(ca0)
@@ -28,12 +28,12 @@ define signext i16 @trunc_load_sext(i32 addrspace(200)* %p) {
 ; HYBRID:       # %bb.0:
 ; HYBRID-NEXT:    lh.cap a0, (ca0)
 ; HYBRID-NEXT:    ret
-  %1 = load i32, i32 addrspace(200)* %p
+  %1 = load i32, ptr addrspace(200) %p
   %2 = trunc i32 %1 to i16
   ret i16 %2
 }
 
-define zeroext i16 @trunc_load_gep_zext(i32 addrspace(200)* %p) {
+define zeroext i16 @trunc_load_gep_zext(ptr addrspace(200) %p) {
 ; PURECAP-LABEL: trunc_load_gep_zext:
 ; PURECAP:       # %bb.0:
 ; PURECAP-NEXT:    lhu a0, 4(ca0)
@@ -44,13 +44,13 @@ define zeroext i16 @trunc_load_gep_zext(i32 addrspace(200)* %p) {
 ; HYBRID-NEXT:    cincoffset ca0, ca0, 4
 ; HYBRID-NEXT:    lhu.cap a0, (ca0)
 ; HYBRID-NEXT:    ret
-  %1 = getelementptr i32, i32 addrspace(200)* %p, i32 1
-  %2 = load i32, i32 addrspace(200)* %1
+  %1 = getelementptr i32, ptr addrspace(200) %p, i32 1
+  %2 = load i32, ptr addrspace(200) %1
   %3 = trunc i32 %2 to i16
   ret i16 %3
 }
 
-define signext i16 @trunc_load_gep_sext(i32 addrspace(200)* %p) {
+define signext i16 @trunc_load_gep_sext(ptr addrspace(200) %p) {
 ; PURECAP-LABEL: trunc_load_gep_sext:
 ; PURECAP:       # %bb.0:
 ; PURECAP-NEXT:    lh a0, 4(ca0)
@@ -61,13 +61,13 @@ define signext i16 @trunc_load_gep_sext(i32 addrspace(200)* %p) {
 ; HYBRID-NEXT:    cincoffset ca0, ca0, 4
 ; HYBRID-NEXT:    lh.cap a0, (ca0)
 ; HYBRID-NEXT:    ret
-  %1 = getelementptr i32, i32 addrspace(200)* %p, i32 1
-  %2 = load i32, i32 addrspace(200)* %1
+  %1 = getelementptr i32, ptr addrspace(200) %p, i32 1
+  %2 = load i32, ptr addrspace(200) %1
   %3 = trunc i32 %2 to i16
   ret i16 %3
 }
 
-define zeroext i16 @trunc_lshr_load_zext(i32 addrspace(200)* %p) {
+define zeroext i16 @trunc_lshr_load_zext(ptr addrspace(200) %p) {
 ; PURECAP-LABEL: trunc_lshr_load_zext:
 ; PURECAP:       # %bb.0:
 ; PURECAP-NEXT:    lhu a0, 2(ca0)
@@ -78,13 +78,13 @@ define zeroext i16 @trunc_lshr_load_zext(i32 addrspace(200)* %p) {
 ; HYBRID-NEXT:    cincoffset ca0, ca0, 2
 ; HYBRID-NEXT:    lhu.cap a0, (ca0)
 ; HYBRID-NEXT:    ret
-  %1 = load i32, i32 addrspace(200)* %p
+  %1 = load i32, ptr addrspace(200) %p
   %2 = lshr i32 %1, 16
   %3 = trunc i32 %2 to i16
   ret i16 %3
 }
 
-define signext i16 @trunc_lshr_load_sext(i32 addrspace(200)* %p) {
+define signext i16 @trunc_lshr_load_sext(ptr addrspace(200) %p) {
 ; PURECAP-LABEL: trunc_lshr_load_sext:
 ; PURECAP:       # %bb.0:
 ; PURECAP-NEXT:    lh a0, 2(ca0)
@@ -95,7 +95,7 @@ define signext i16 @trunc_lshr_load_sext(i32 addrspace(200)* %p) {
 ; HYBRID-NEXT:    cincoffset ca0, ca0, 2
 ; HYBRID-NEXT:    lh.cap a0, (ca0)
 ; HYBRID-NEXT:    ret
-  %1 = load i32, i32 addrspace(200)* %p
+  %1 = load i32, ptr addrspace(200) %p
   %2 = lshr i32 %1, 16
   %3 = trunc i32 %2 to i16
   ret i16 %3

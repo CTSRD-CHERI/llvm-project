@@ -24,9 +24,8 @@ define i32 @get_ith_word(i32 signext %i, ...) addrspace(200) nounwind {
 ; CHECK-NEXT:    ret
 entry:
   %ap = alloca ptr addrspace(200), align 8, addrspace(200)
-  %0 = bitcast ptr addrspace(200) %ap to ptr addrspace(200)
-  call void @llvm.lifetime.start.p200(i64 8, ptr addrspace(200) nonnull %0)
-  call void @llvm.va_start.p200(ptr addrspace(200) nonnull %0)
+  call void @llvm.lifetime.start.p200(i64 8, ptr addrspace(200) nonnull %ap)
+  call void @llvm.va_start.p200(ptr addrspace(200) nonnull %ap)
   %ap.promoted = load ptr addrspace(200), ptr addrspace(200) %ap, align 8
   br label %while.cond
 
@@ -40,11 +39,10 @@ while.cond:                                       ; preds = %while.cond, %entry
 
 while.end:                                        ; preds = %while.cond
   store ptr addrspace(200) %argp.next, ptr addrspace(200) %ap, align 8
-  %1 = bitcast ptr addrspace(200) %argp.next6 to ptr addrspace(200)
-  %2 = load i32, ptr addrspace(200) %1, align 4
-  call void @llvm.va_end.p200(ptr addrspace(200) nonnull %0)
-  call void @llvm.lifetime.end.p200(i64 8, ptr addrspace(200) nonnull %0)
-  ret i32 %2
+  %0 = load i32, ptr addrspace(200) %argp.next6, align 4
+  call void @llvm.va_end.p200(ptr addrspace(200) nonnull %ap)
+  call void @llvm.lifetime.end.p200(i64 8, ptr addrspace(200) nonnull %ap)
+  ret i32 %0
 }
 
 define ptr addrspace(200) @get_ith_cap(i32 signext %i, ...) addrspace(200) nounwind {
@@ -72,9 +70,8 @@ define ptr addrspace(200) @get_ith_cap(i32 signext %i, ...) addrspace(200) nounw
 ; CHECK-NEXT:    ret
 entry:
   %ap = alloca ptr addrspace(200), align 8, addrspace(200)
-  %0 = bitcast ptr addrspace(200) %ap to ptr addrspace(200)
-  call void @llvm.lifetime.start.p200(i64 8, ptr addrspace(200) nonnull %0)
-  call void @llvm.va_start.p200(ptr addrspace(200) nonnull %0)
+  call void @llvm.lifetime.start.p200(i64 8, ptr addrspace(200) nonnull %ap)
+  call void @llvm.va_start.p200(ptr addrspace(200) nonnull %ap)
   %ap.promoted = load ptr addrspace(200), ptr addrspace(200) %ap, align 8
   br label %while.cond
 
@@ -83,20 +80,19 @@ while.cond:                                       ; preds = %while.cond, %entry
   %i.addr.0 = phi i32 [ %i, %entry ], [ %dec, %while.cond ]
   %dec = add nsw i32 %i.addr.0, -1
   %cmp = icmp sgt i32 %i.addr.0, 0
-  %1 = call i32 @llvm.cheri.cap.address.get.i32(ptr addrspace(200) %argp.next6)
-  %2 = add i32 %1, 7
-  %3 = and i32 %2, -8
-  %4 = call ptr addrspace(200) @llvm.cheri.cap.address.set.i32(ptr addrspace(200) %argp.next6, i32 %3)
-  %argp.next = getelementptr inbounds i8, ptr addrspace(200) %4, i64 8
+  %0 = call i32 @llvm.cheri.cap.address.get.i32(ptr addrspace(200) %argp.next6)
+  %1 = add i32 %0, 7
+  %2 = and i32 %1, -8
+  %3 = call ptr addrspace(200) @llvm.cheri.cap.address.set.i32(ptr addrspace(200) %argp.next6, i32 %2)
+  %argp.next = getelementptr inbounds i8, ptr addrspace(200) %3, i64 8
   br i1 %cmp, label %while.cond, label %while.end
 
 while.end:                                        ; preds = %while.cond
   store ptr addrspace(200) %argp.next, ptr addrspace(200) %ap, align 8
-  %5 = bitcast ptr addrspace(200) %4 to ptr addrspace(200)
-  %6 = load ptr addrspace(200), ptr addrspace(200) %5, align 8
-  call void @llvm.va_end.p200(ptr addrspace(200) nonnull %0)
-  call void @llvm.lifetime.end.p200(i64 8, ptr addrspace(200) nonnull %0)
-  ret ptr addrspace(200) %6
+  %4 = load ptr addrspace(200), ptr addrspace(200) %3, align 8
+  call void @llvm.va_end.p200(ptr addrspace(200) nonnull %ap)
+  call void @llvm.lifetime.end.p200(i64 8, ptr addrspace(200) nonnull %ap)
+  ret ptr addrspace(200) %4
 }
 
 declare void @varargs(i32, ...) addrspace(200) nounwind

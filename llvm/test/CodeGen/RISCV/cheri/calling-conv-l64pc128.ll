@@ -70,9 +70,8 @@ define ptr addrspace(200) @get_ith_cap(i32 signext %i, ...) addrspace(200) nounw
 ; CHECK-NEXT:    ret
 entry:
   %ap = alloca ptr addrspace(200), align 16, addrspace(200)
-  %0 = bitcast ptr addrspace(200) %ap to ptr addrspace(200)
-  call void @llvm.lifetime.start.p200(i64 16, ptr addrspace(200) nonnull %0)
-  call void @llvm.va_start.p200(ptr addrspace(200) nonnull %0)
+  call void @llvm.lifetime.start.p200(i64 16, ptr addrspace(200) nonnull %ap)
+  call void @llvm.va_start.p200(ptr addrspace(200) nonnull %ap)
   %ap.promoted = load ptr addrspace(200), ptr addrspace(200) %ap, align 16
   br label %while.cond
 
@@ -81,20 +80,19 @@ while.cond:                                       ; preds = %while.cond, %entry
   %i.addr.0 = phi i32 [ %i, %entry ], [ %dec, %while.cond ]
   %dec = add nsw i32 %i.addr.0, -1
   %cmp = icmp sgt i32 %i.addr.0, 0
-  %1 = call i64 @llvm.cheri.cap.address.get.i64(ptr addrspace(200) %argp.next6)
-  %2 = add i64 %1, 15
-  %3 = and i64 %2, -16
-  %4 = call ptr addrspace(200) @llvm.cheri.cap.address.set.i64(ptr addrspace(200) %argp.next6, i64 %3)
-  %argp.next = getelementptr inbounds i8, ptr addrspace(200) %4, i64 16
+  %0 = call i64 @llvm.cheri.cap.address.get.i64(ptr addrspace(200) %argp.next6)
+  %1 = add i64 %0, 15
+  %2 = and i64 %1, -16
+  %3 = call ptr addrspace(200) @llvm.cheri.cap.address.set.i64(ptr addrspace(200) %argp.next6, i64 %2)
+  %argp.next = getelementptr inbounds i8, ptr addrspace(200) %3, i64 16
   br i1 %cmp, label %while.cond, label %while.end
 
 while.end:                                        ; preds = %while.cond
   store ptr addrspace(200) %argp.next, ptr addrspace(200) %ap, align 16
-  %5 = bitcast ptr addrspace(200) %4 to ptr addrspace(200)
-  %6 = load ptr addrspace(200), ptr addrspace(200) %5, align 16
-  call void @llvm.va_end.p200(ptr addrspace(200) nonnull %0)
-  call void @llvm.lifetime.end.p200(i64 8, ptr addrspace(200) nonnull %0)
-  ret ptr addrspace(200) %6
+  %4 = load ptr addrspace(200), ptr addrspace(200) %3, align 16
+  call void @llvm.va_end.p200(ptr addrspace(200) nonnull %ap)
+  call void @llvm.lifetime.end.p200(i64 8, ptr addrspace(200) nonnull %ap)
+  ret ptr addrspace(200) %4
 }
 
 declare void @varargs(i32, ...) addrspace(200) nounwind

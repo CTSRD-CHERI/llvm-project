@@ -4,7 +4,7 @@
 ; RUN: %riscv32_cheri_purecap_llc -verify-machineinstrs < %s | FileCheck --check-prefix=CHECK-IL32PC64 %s
 ; RUN: %riscv64_cheri_purecap_llc -verify-machineinstrs < %s | FileCheck --check-prefix=CHECK-L64PC128 %s
 
-define void @callee_cap_int(i8 addrspace(200)* %cap, i8 %int) nounwind {
+define void @callee_cap_int(ptr addrspace(200) %cap, i8 %int) nounwind {
 ; CHECK-ILP32-LABEL: callee_cap_int:
 ; CHECK-ILP32:       # %bb.0:
 ; CHECK-ILP32-NEXT:    sb.cap a1, (ca0)
@@ -24,11 +24,11 @@ define void @callee_cap_int(i8 addrspace(200)* %cap, i8 %int) nounwind {
 ; CHECK-L64PC128:       # %bb.0:
 ; CHECK-L64PC128-NEXT:    sb a1, 0(ca0)
 ; CHECK-L64PC128-NEXT:    ret
-  store i8 %int, i8 addrspace(200)* %cap
+  store i8 %int, ptr addrspace(200) %cap
   ret void
 }
 
-define void @callee_int_cap(i8 %int, i8 addrspace(200)* %cap) nounwind {
+define void @callee_int_cap(i8 %int, ptr addrspace(200) %cap) nounwind {
 ; CHECK-ILP32-LABEL: callee_int_cap:
 ; CHECK-ILP32:       # %bb.0:
 ; CHECK-ILP32-NEXT:    sb.cap a0, (ca1)
@@ -48,11 +48,11 @@ define void @callee_int_cap(i8 %int, i8 addrspace(200)* %cap) nounwind {
 ; CHECK-L64PC128:       # %bb.0:
 ; CHECK-L64PC128-NEXT:    sb a0, 0(ca1)
 ; CHECK-L64PC128-NEXT:    ret
-  store i8 %int, i8 addrspace(200)* %cap
+  store i8 %int, ptr addrspace(200) %cap
   ret void
 }
 
-define void @callee_cap_cap_int(i8 addrspace(200)* %dst, i8 addrspace(200)* %src, i32 signext %offset) nounwind {
+define void @callee_cap_cap_int(ptr addrspace(200) %dst, ptr addrspace(200) %src, i32 signext %offset) nounwind {
 ; CHECK-ILP32-LABEL: callee_cap_cap_int:
 ; CHECK-ILP32:       # %bb.0:
 ; CHECK-ILP32-NEXT:    cincoffset ca1, ca1, a2
@@ -84,9 +84,9 @@ define void @callee_cap_cap_int(i8 addrspace(200)* %dst, i8 addrspace(200)* %src
 ; CHECK-L64PC128-NEXT:    cincoffset ca0, ca0, a2
 ; CHECK-L64PC128-NEXT:    sb a1, 0(ca0)
 ; CHECK-L64PC128-NEXT:    ret
-  %srcoff = getelementptr inbounds i8, i8 addrspace(200)* %src, i32 %offset
-  %val = load i8, i8 addrspace(200)* %srcoff
-  %dstoff = getelementptr inbounds i8, i8 addrspace(200)* %dst, i32 %offset
-  store i8 %val, i8 addrspace(200)* %dstoff
+  %srcoff = getelementptr inbounds i8, ptr addrspace(200) %src, i32 %offset
+  %val = load i8, ptr addrspace(200) %srcoff
+  %dstoff = getelementptr inbounds i8, ptr addrspace(200) %dst, i32 %offset
+  store i8 %val, ptr addrspace(200) %dstoff
   ret void
 }

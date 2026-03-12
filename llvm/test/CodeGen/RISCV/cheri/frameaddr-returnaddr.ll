@@ -4,11 +4,11 @@
 ; RUN: %riscv64_cheri_purecap_llc -verify-machineinstrs < %s \
 ; RUN:   | FileCheck --check-prefix=RV64IXCHERI %s
 
-declare void @notdead(i8 addrspace(200)*) addrspace(200)
-declare i8 addrspace(200)* @llvm.frameaddress(i32)
-declare i8 addrspace(200)* @llvm.returnaddress(i32)
+declare void @notdead(ptr addrspace(200)) addrspace(200)
+declare ptr addrspace(200) @llvm.frameaddress(i32)
+declare ptr addrspace(200) @llvm.returnaddress(i32)
 
-define i8 addrspace(200)* @test_frameaddress_0() nounwind {
+define ptr addrspace(200) @test_frameaddress_0() nounwind {
 ; RV32IXCHERI-LABEL: test_frameaddress_0:
 ; RV32IXCHERI:       # %bb.0:
 ; RV32IXCHERI-NEXT:    cincoffset csp, csp, -16
@@ -32,11 +32,11 @@ define i8 addrspace(200)* @test_frameaddress_0() nounwind {
 ; RV64IXCHERI-NEXT:    lc cs0, 0(csp) # 16-byte Folded Reload
 ; RV64IXCHERI-NEXT:    cincoffset csp, csp, 32
 ; RV64IXCHERI-NEXT:    ret
-  %1 = call i8 addrspace(200)* @llvm.frameaddress(i32 0)
-  ret i8 addrspace(200)* %1
+  %1 = call ptr addrspace(200) @llvm.frameaddress(i32 0)
+  ret ptr addrspace(200) %1
 }
 
-define i8 addrspace(200)* @test_frameaddress_0_alloca() nounwind {
+define ptr addrspace(200) @test_frameaddress_0_alloca() nounwind {
 ; RV32IXCHERI-LABEL: test_frameaddress_0_alloca:
 ; RV32IXCHERI:       # %bb.0:
 ; RV32IXCHERI-NEXT:    cincoffset csp, csp, -128
@@ -67,13 +67,12 @@ define i8 addrspace(200)* @test_frameaddress_0_alloca() nounwind {
 ; RV64IXCHERI-NEXT:    cincoffset csp, csp, 144
 ; RV64IXCHERI-NEXT:    ret
   %1 = alloca [100 x i8], addrspace(200)
-  %2 = bitcast [100 x i8] addrspace(200)* %1 to i8 addrspace(200)*
-  call addrspace(200) void @notdead(i8 addrspace(200)* %2)
-  %3 = call i8 addrspace(200)* @llvm.frameaddress(i32 0)
-  ret i8 addrspace(200)* %3
+  call addrspace(200) void @notdead(ptr addrspace(200) %1)
+  %2 = call ptr addrspace(200) @llvm.frameaddress(i32 0)
+  ret ptr addrspace(200) %2
 }
 
-define i8 addrspace(200)* @test_frameaddress_2() nounwind {
+define ptr addrspace(200) @test_frameaddress_2() nounwind {
 ; RV32IXCHERI-LABEL: test_frameaddress_2:
 ; RV32IXCHERI:       # %bb.0:
 ; RV32IXCHERI-NEXT:    cincoffset csp, csp, -16
@@ -99,11 +98,11 @@ define i8 addrspace(200)* @test_frameaddress_2() nounwind {
 ; RV64IXCHERI-NEXT:    lc cs0, 0(csp) # 16-byte Folded Reload
 ; RV64IXCHERI-NEXT:    cincoffset csp, csp, 32
 ; RV64IXCHERI-NEXT:    ret
-  %1 = call i8 addrspace(200)* @llvm.frameaddress(i32 2)
-  ret i8 addrspace(200)* %1
+  %1 = call ptr addrspace(200) @llvm.frameaddress(i32 2)
+  ret ptr addrspace(200) %1
 }
 
-define i8 addrspace(200)* @test_frameaddress_3_alloca() nounwind {
+define ptr addrspace(200) @test_frameaddress_3_alloca() nounwind {
 ; RV32IXCHERI-LABEL: test_frameaddress_3_alloca:
 ; RV32IXCHERI:       # %bb.0:
 ; RV32IXCHERI-NEXT:    cincoffset csp, csp, -128
@@ -138,13 +137,12 @@ define i8 addrspace(200)* @test_frameaddress_3_alloca() nounwind {
 ; RV64IXCHERI-NEXT:    cincoffset csp, csp, 144
 ; RV64IXCHERI-NEXT:    ret
   %1 = alloca [100 x i8], addrspace(200)
-  %2 = bitcast [100 x i8] addrspace(200)* %1 to i8 addrspace(200)*
-  call addrspace(200) void @notdead(i8 addrspace(200)* %2)
-  %3 = call i8 addrspace(200)* @llvm.frameaddress(i32 3)
-  ret i8 addrspace(200)* %3
+  call addrspace(200) void @notdead(ptr addrspace(200) %1)
+  %2 = call ptr addrspace(200) @llvm.frameaddress(i32 3)
+  ret ptr addrspace(200) %2
 }
 
-define i8 addrspace(200)* @test_returnaddress_0() nounwind {
+define ptr addrspace(200) @test_returnaddress_0() nounwind {
 ; RV32IXCHERI-LABEL: test_returnaddress_0:
 ; RV32IXCHERI:       # %bb.0:
 ; RV32IXCHERI-NEXT:    cmove ca0, cra
@@ -154,11 +152,11 @@ define i8 addrspace(200)* @test_returnaddress_0() nounwind {
 ; RV64IXCHERI:       # %bb.0:
 ; RV64IXCHERI-NEXT:    cmove ca0, cra
 ; RV64IXCHERI-NEXT:    ret
-  %1 = call i8 addrspace(200)* @llvm.returnaddress(i32 0)
-  ret i8 addrspace(200)* %1
+  %1 = call ptr addrspace(200) @llvm.returnaddress(i32 0)
+  ret ptr addrspace(200) %1
 }
 
-define i8 addrspace(200)* @test_returnaddress_0_alloca() nounwind {
+define ptr addrspace(200) @test_returnaddress_0_alloca() nounwind {
 ; RV32IXCHERI-LABEL: test_returnaddress_0_alloca:
 ; RV32IXCHERI:       # %bb.0:
 ; RV32IXCHERI-NEXT:    cincoffset csp, csp, -128
@@ -189,13 +187,12 @@ define i8 addrspace(200)* @test_returnaddress_0_alloca() nounwind {
 ; RV64IXCHERI-NEXT:    cincoffset csp, csp, 144
 ; RV64IXCHERI-NEXT:    ret
   %1 = alloca [100 x i8], addrspace(200)
-  %2 = bitcast [100 x i8] addrspace(200)* %1 to i8 addrspace(200)*
-  call addrspace(200) void @notdead(i8 addrspace(200)* %2)
-  %3 = call i8 addrspace(200)* @llvm.returnaddress(i32 0)
-  ret i8 addrspace(200)* %3
+  call addrspace(200) void @notdead(ptr addrspace(200) %1)
+  %2 = call ptr addrspace(200) @llvm.returnaddress(i32 0)
+  ret ptr addrspace(200) %2
 }
 
-define i8 addrspace(200)* @test_returnaddress_2() nounwind {
+define ptr addrspace(200) @test_returnaddress_2() nounwind {
 ; RV32IXCHERI-LABEL: test_returnaddress_2:
 ; RV32IXCHERI:       # %bb.0:
 ; RV32IXCHERI-NEXT:    cincoffset csp, csp, -16
@@ -223,11 +220,11 @@ define i8 addrspace(200)* @test_returnaddress_2() nounwind {
 ; RV64IXCHERI-NEXT:    lc cs0, 0(csp) # 16-byte Folded Reload
 ; RV64IXCHERI-NEXT:    cincoffset csp, csp, 32
 ; RV64IXCHERI-NEXT:    ret
-  %1 = call i8 addrspace(200)* @llvm.returnaddress(i32 2)
-  ret i8 addrspace(200)* %1
+  %1 = call ptr addrspace(200) @llvm.returnaddress(i32 2)
+  ret ptr addrspace(200) %1
 }
 
-define i8 addrspace(200)* @test_returnaddress_3_alloca() nounwind {
+define ptr addrspace(200) @test_returnaddress_3_alloca() nounwind {
 ; RV32IXCHERI-LABEL: test_returnaddress_3_alloca:
 ; RV32IXCHERI:       # %bb.0:
 ; RV32IXCHERI-NEXT:    cincoffset csp, csp, -128
@@ -264,8 +261,7 @@ define i8 addrspace(200)* @test_returnaddress_3_alloca() nounwind {
 ; RV64IXCHERI-NEXT:    cincoffset csp, csp, 144
 ; RV64IXCHERI-NEXT:    ret
   %1 = alloca [100 x i8], addrspace(200)
-  %2 = bitcast [100 x i8] addrspace(200)* %1 to i8 addrspace(200)*
-  call addrspace(200) void @notdead(i8 addrspace(200)* %2)
-  %3 = call i8 addrspace(200)* @llvm.returnaddress(i32 3)
-  ret i8 addrspace(200)* %3
+  call addrspace(200) void @notdead(ptr addrspace(200) %1)
+  %2 = call ptr addrspace(200) @llvm.returnaddress(i32 3)
+  ret ptr addrspace(200) %2
 }

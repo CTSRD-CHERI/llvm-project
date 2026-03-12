@@ -4,7 +4,7 @@
 ; RUN: %riscv64_cheri_purecap_llc < %s | FileCheck %s --check-prefix=ISAV9
 
 ;; (int_cheri_cap_from_ptr auth, x) -> x == 0 ? null : csetoffset(auth, x)
-define dso_local i8 addrspace(200)* @cap_from_ptr(i8 addrspace(200)* addrspace(200)* %ptr, i8 addrspace(200)* %cap, i64 %offset) nounwind {
+define dso_local ptr addrspace(200) @cap_from_ptr(ptr addrspace(200) %ptr, ptr addrspace(200) %cap, i64 %offset) nounwind {
 ; ISAV9-LABEL: cap_from_ptr:
 ; ISAV9:       # %bb.0: # %entry
 ; ISAV9-NEXT:    bnez a2, .LBB0_2
@@ -18,13 +18,13 @@ define dso_local i8 addrspace(200)* @cap_from_ptr(i8 addrspace(200)* addrspace(2
 ; ISAV9-NEXT:    cmove ca0, ca1
 ; ISAV9-NEXT:    ret
 entry:
-  %new = call i8 addrspace(200)* @llvm.cheri.cap.from.pointer.i64(i8 addrspace(200)* %cap, i64 %offset)
-  store i8 addrspace(200)* %new, i8 addrspace(200)* addrspace(200)* %ptr, align 16
-  ret i8 addrspace(200)* %new
+  %new = call ptr addrspace(200) @llvm.cheri.cap.from.pointer.i64(ptr addrspace(200) %cap, i64 %offset)
+  store ptr addrspace(200) %new, ptr addrspace(200) %ptr, align 16
+  ret ptr addrspace(200) %new
 }
 
 ;; (int_cheri_cap_from_ptr ddc, y) -> x == 0 ? null : csetaddr(ddc, x)
-define dso_local i8 addrspace(200)* @cap_from_ptr_ddc(i8 addrspace(200)* addrspace(200)* %ptr, i64 %offset) nounwind {
+define dso_local ptr addrspace(200) @cap_from_ptr_ddc(ptr addrspace(200) %ptr, i64 %offset) nounwind {
 ; ISAV9-LABEL: cap_from_ptr_ddc:
 ; ISAV9:       # %bb.0: # %entry
 ; ISAV9-NEXT:    cspecialr ca2, ddc
@@ -39,11 +39,11 @@ define dso_local i8 addrspace(200)* @cap_from_ptr_ddc(i8 addrspace(200)* addrspa
 ; ISAV9-NEXT:    cmove ca0, ca1
 ; ISAV9-NEXT:    ret
 entry:
-  %ddc = call i8 addrspace(200)* @llvm.cheri.ddc.get()
-  %new = call i8 addrspace(200)* @llvm.cheri.cap.from.pointer.i64(i8 addrspace(200)* %ddc, i64 %offset)
-  store i8 addrspace(200)* %new, i8 addrspace(200)* addrspace(200)* %ptr, align 16
-  ret i8 addrspace(200)* %new
+  %ddc = call ptr addrspace(200) @llvm.cheri.ddc.get()
+  %new = call ptr addrspace(200) @llvm.cheri.cap.from.pointer.i64(ptr addrspace(200) %ddc, i64 %offset)
+  store ptr addrspace(200) %new, ptr addrspace(200) %ptr, align 16
+  ret ptr addrspace(200) %new
 }
 
-declare i8 addrspace(200)* @llvm.cheri.cap.from.pointer.i64(i8 addrspace(200)*, i64)
-declare i8 addrspace(200)* @llvm.cheri.ddc.get()
+declare ptr addrspace(200) @llvm.cheri.cap.from.pointer.i64(ptr addrspace(200), i64)
+declare ptr addrspace(200) @llvm.cheri.ddc.get()

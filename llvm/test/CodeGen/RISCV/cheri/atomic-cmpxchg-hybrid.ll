@@ -8,7 +8,7 @@
 ; RUN: %riscv64_cheri_llc -mattr=+a -verify-machineinstrs < %s \
 ; RUN:   | FileCheck -check-prefix=RV64IAXCHERI %s
 
-define void @cmpxchg_cap_monotonic_monotonic(i8 addrspace(200)** %ptr, i8 addrspace(200)* %cmp, i8 addrspace(200)* %val) nounwind {
+define void @cmpxchg_cap_monotonic_monotonic(ptr %ptr, ptr addrspace(200) %cmp, ptr addrspace(200) %val) nounwind {
 ; RV32IXCHERI-LABEL: cmpxchg_cap_monotonic_monotonic:
 ; RV32IXCHERI:       # %bb.0:
 ; RV32IXCHERI-NEXT:    addi sp, sp, -16
@@ -56,11 +56,11 @@ define void @cmpxchg_cap_monotonic_monotonic(i8 addrspace(200)** %ptr, i8 addrsp
 ; RV64IAXCHERI-NEXT:    bnez a4, .LBB0_1
 ; RV64IAXCHERI-NEXT:  .LBB0_3:
 ; RV64IAXCHERI-NEXT:    ret
-  %res = cmpxchg i8 addrspace(200)** %ptr, i8 addrspace(200)* %cmp, i8 addrspace(200)* %val monotonic monotonic
+  %res = cmpxchg ptr %ptr, ptr addrspace(200) %cmp, ptr addrspace(200) %val monotonic monotonic
   ret void
 }
 
-define void @cmpxchg_cap_acquire_monotonic(i8 addrspace(200)** %ptr, i8 addrspace(200)* %cmp, i8 addrspace(200)* %val) nounwind {
+define void @cmpxchg_cap_acquire_monotonic(ptr %ptr, ptr addrspace(200) %cmp, ptr addrspace(200) %val) nounwind {
 ; RV32IXCHERI-LABEL: cmpxchg_cap_acquire_monotonic:
 ; RV32IXCHERI:       # %bb.0:
 ; RV32IXCHERI-NEXT:    addi sp, sp, -16
@@ -108,11 +108,11 @@ define void @cmpxchg_cap_acquire_monotonic(i8 addrspace(200)** %ptr, i8 addrspac
 ; RV64IAXCHERI-NEXT:    bnez a4, .LBB1_1
 ; RV64IAXCHERI-NEXT:  .LBB1_3:
 ; RV64IAXCHERI-NEXT:    ret
-  %res = cmpxchg i8 addrspace(200)** %ptr, i8 addrspace(200)* %cmp, i8 addrspace(200)* %val acquire monotonic
+  %res = cmpxchg ptr %ptr, ptr addrspace(200) %cmp, ptr addrspace(200) %val acquire monotonic
   ret void
 }
 
-define void @cmpxchg_cap_acquire_acquire(i8 addrspace(200)** %ptr, i8 addrspace(200)* %cmp, i8 addrspace(200)* %val) nounwind {
+define void @cmpxchg_cap_acquire_acquire(ptr %ptr, ptr addrspace(200) %cmp, ptr addrspace(200) %val) nounwind {
 ; RV32IXCHERI-LABEL: cmpxchg_cap_acquire_acquire:
 ; RV32IXCHERI:       # %bb.0:
 ; RV32IXCHERI-NEXT:    addi sp, sp, -16
@@ -160,11 +160,11 @@ define void @cmpxchg_cap_acquire_acquire(i8 addrspace(200)** %ptr, i8 addrspace(
 ; RV64IAXCHERI-NEXT:    bnez a4, .LBB2_1
 ; RV64IAXCHERI-NEXT:  .LBB2_3:
 ; RV64IAXCHERI-NEXT:    ret
-  %res = cmpxchg i8 addrspace(200)** %ptr, i8 addrspace(200)* %cmp, i8 addrspace(200)* %val acquire acquire
+  %res = cmpxchg ptr %ptr, ptr addrspace(200) %cmp, ptr addrspace(200) %val acquire acquire
   ret void
 }
 
-define void @cmpxchg_cap_release_monotonic(i8 addrspace(200)** %ptr, i8 addrspace(200)* %cmp, i8 addrspace(200)* %val) nounwind {
+define void @cmpxchg_cap_release_monotonic(ptr %ptr, ptr addrspace(200) %cmp, ptr addrspace(200) %val) nounwind {
 ; RV32IXCHERI-LABEL: cmpxchg_cap_release_monotonic:
 ; RV32IXCHERI:       # %bb.0:
 ; RV32IXCHERI-NEXT:    addi sp, sp, -16
@@ -212,11 +212,11 @@ define void @cmpxchg_cap_release_monotonic(i8 addrspace(200)** %ptr, i8 addrspac
 ; RV64IAXCHERI-NEXT:    bnez a4, .LBB3_1
 ; RV64IAXCHERI-NEXT:  .LBB3_3:
 ; RV64IAXCHERI-NEXT:    ret
-  %res = cmpxchg i8 addrspace(200)** %ptr, i8 addrspace(200)* %cmp, i8 addrspace(200)* %val release monotonic
+  %res = cmpxchg ptr %ptr, ptr addrspace(200) %cmp, ptr addrspace(200) %val release monotonic
   ret void
 }
 
-define void @cmpxchg_cap_release_acquire(i8 addrspace(200)** %ptr, i8 addrspace(200)* %cmp, i8 addrspace(200)* %val) nounwind {
+define void @cmpxchg_cap_release_acquire(ptr %ptr, ptr addrspace(200) %cmp, ptr addrspace(200) %val) nounwind {
 ; RV32IXCHERI-LABEL: cmpxchg_cap_release_acquire:
 ; RV32IXCHERI:       # %bb.0:
 ; RV32IXCHERI-NEXT:    addi sp, sp, -16
@@ -264,11 +264,11 @@ define void @cmpxchg_cap_release_acquire(i8 addrspace(200)** %ptr, i8 addrspace(
 ; RV64IAXCHERI-NEXT:    bnez a4, .LBB4_1
 ; RV64IAXCHERI-NEXT:  .LBB4_3:
 ; RV64IAXCHERI-NEXT:    ret
-  %res = cmpxchg i8 addrspace(200)** %ptr, i8 addrspace(200)* %cmp, i8 addrspace(200)* %val release acquire
+  %res = cmpxchg ptr %ptr, ptr addrspace(200) %cmp, ptr addrspace(200) %val release acquire
   ret void
 }
 
-define void @cmpxchg_cap_acq_rel_monotonic(i8 addrspace(200)** %ptr, i8 addrspace(200)* %cmp, i8 addrspace(200)* %val) nounwind {
+define void @cmpxchg_cap_acq_rel_monotonic(ptr %ptr, ptr addrspace(200) %cmp, ptr addrspace(200) %val) nounwind {
 ; RV32IXCHERI-LABEL: cmpxchg_cap_acq_rel_monotonic:
 ; RV32IXCHERI:       # %bb.0:
 ; RV32IXCHERI-NEXT:    addi sp, sp, -16
@@ -316,11 +316,11 @@ define void @cmpxchg_cap_acq_rel_monotonic(i8 addrspace(200)** %ptr, i8 addrspac
 ; RV64IAXCHERI-NEXT:    bnez a4, .LBB5_1
 ; RV64IAXCHERI-NEXT:  .LBB5_3:
 ; RV64IAXCHERI-NEXT:    ret
-  %res = cmpxchg i8 addrspace(200)** %ptr, i8 addrspace(200)* %cmp, i8 addrspace(200)* %val acq_rel monotonic
+  %res = cmpxchg ptr %ptr, ptr addrspace(200) %cmp, ptr addrspace(200) %val acq_rel monotonic
   ret void
 }
 
-define void @cmpxchg_cap_acq_rel_acquire(i8 addrspace(200)** %ptr, i8 addrspace(200)* %cmp, i8 addrspace(200)* %val) nounwind {
+define void @cmpxchg_cap_acq_rel_acquire(ptr %ptr, ptr addrspace(200) %cmp, ptr addrspace(200) %val) nounwind {
 ; RV32IXCHERI-LABEL: cmpxchg_cap_acq_rel_acquire:
 ; RV32IXCHERI:       # %bb.0:
 ; RV32IXCHERI-NEXT:    addi sp, sp, -16
@@ -368,11 +368,11 @@ define void @cmpxchg_cap_acq_rel_acquire(i8 addrspace(200)** %ptr, i8 addrspace(
 ; RV64IAXCHERI-NEXT:    bnez a4, .LBB6_1
 ; RV64IAXCHERI-NEXT:  .LBB6_3:
 ; RV64IAXCHERI-NEXT:    ret
-  %res = cmpxchg i8 addrspace(200)** %ptr, i8 addrspace(200)* %cmp, i8 addrspace(200)* %val acq_rel acquire
+  %res = cmpxchg ptr %ptr, ptr addrspace(200) %cmp, ptr addrspace(200) %val acq_rel acquire
   ret void
 }
 
-define void @cmpxchg_cap_seq_cst_monotonic(i8 addrspace(200)** %ptr, i8 addrspace(200)* %cmp, i8 addrspace(200)* %val) nounwind {
+define void @cmpxchg_cap_seq_cst_monotonic(ptr %ptr, ptr addrspace(200) %cmp, ptr addrspace(200) %val) nounwind {
 ; RV32IXCHERI-LABEL: cmpxchg_cap_seq_cst_monotonic:
 ; RV32IXCHERI:       # %bb.0:
 ; RV32IXCHERI-NEXT:    addi sp, sp, -16
@@ -420,11 +420,11 @@ define void @cmpxchg_cap_seq_cst_monotonic(i8 addrspace(200)** %ptr, i8 addrspac
 ; RV64IAXCHERI-NEXT:    bnez a4, .LBB7_1
 ; RV64IAXCHERI-NEXT:  .LBB7_3:
 ; RV64IAXCHERI-NEXT:    ret
-  %res = cmpxchg i8 addrspace(200)** %ptr, i8 addrspace(200)* %cmp, i8 addrspace(200)* %val seq_cst monotonic
+  %res = cmpxchg ptr %ptr, ptr addrspace(200) %cmp, ptr addrspace(200) %val seq_cst monotonic
   ret void
 }
 
-define void @cmpxchg_cap_seq_cst_acquire(i8 addrspace(200)** %ptr, i8 addrspace(200)* %cmp, i8 addrspace(200)* %val) nounwind {
+define void @cmpxchg_cap_seq_cst_acquire(ptr %ptr, ptr addrspace(200) %cmp, ptr addrspace(200) %val) nounwind {
 ; RV32IXCHERI-LABEL: cmpxchg_cap_seq_cst_acquire:
 ; RV32IXCHERI:       # %bb.0:
 ; RV32IXCHERI-NEXT:    addi sp, sp, -16
@@ -472,11 +472,11 @@ define void @cmpxchg_cap_seq_cst_acquire(i8 addrspace(200)** %ptr, i8 addrspace(
 ; RV64IAXCHERI-NEXT:    bnez a4, .LBB8_1
 ; RV64IAXCHERI-NEXT:  .LBB8_3:
 ; RV64IAXCHERI-NEXT:    ret
-  %res = cmpxchg i8 addrspace(200)** %ptr, i8 addrspace(200)* %cmp, i8 addrspace(200)* %val seq_cst acquire
+  %res = cmpxchg ptr %ptr, ptr addrspace(200) %cmp, ptr addrspace(200) %val seq_cst acquire
   ret void
 }
 
-define void @cmpxchg_cap_seq_cst_seq_cst(i8 addrspace(200)** %ptr, i8 addrspace(200)* %cmp, i8 addrspace(200)* %val) nounwind {
+define void @cmpxchg_cap_seq_cst_seq_cst(ptr %ptr, ptr addrspace(200) %cmp, ptr addrspace(200) %val) nounwind {
 ; RV32IXCHERI-LABEL: cmpxchg_cap_seq_cst_seq_cst:
 ; RV32IXCHERI:       # %bb.0:
 ; RV32IXCHERI-NEXT:    addi sp, sp, -16
@@ -524,6 +524,6 @@ define void @cmpxchg_cap_seq_cst_seq_cst(i8 addrspace(200)** %ptr, i8 addrspace(
 ; RV64IAXCHERI-NEXT:    bnez a4, .LBB9_1
 ; RV64IAXCHERI-NEXT:  .LBB9_3:
 ; RV64IAXCHERI-NEXT:    ret
-  %res = cmpxchg i8 addrspace(200)** %ptr, i8 addrspace(200)* %cmp, i8 addrspace(200)* %val seq_cst seq_cst
+  %res = cmpxchg ptr %ptr, ptr addrspace(200) %cmp, ptr addrspace(200) %val seq_cst seq_cst
   ret void
 }

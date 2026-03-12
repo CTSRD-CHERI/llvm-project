@@ -86,7 +86,7 @@ declare dso_local i32 @_Z3foov() local_unnamed_addr addrspace(200)
 
 declare dso_local i32 @__gxx_personality_v0(...) addrspace(200)
 
-declare i32 @llvm.eh.typeid.for(i8*) addrspace(200) nounwind readnone
+declare i32 @llvm.eh.typeid.for(ptr) addrspace(200) nounwind readnone
 
 declare dso_local ptr addrspace(200) @__cxa_begin_catch(ptr addrspace(200)) local_unnamed_addr addrspace(200)
 

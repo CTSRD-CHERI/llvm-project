@@ -4,7 +4,7 @@
 ; RUN: sed 's/iXLEN/i64/g' %s | %riscv64_cheri_purecap_llc -verify-machineinstrs \
 ; RUN:   | FileCheck --check-prefix=RV64IXCHERI %s
 
-declare i32 @use_arg(i32 addrspace(200)*) addrspace(200)
+declare i32 @use_arg(ptr addrspace(200)) addrspace(200)
 
 define i32 @static_alloca() nounwind {
 ; RV32IXCHERI-LABEL: static_alloca:
@@ -29,7 +29,7 @@ define i32 @static_alloca() nounwind {
 ; RV64IXCHERI-NEXT:    cincoffset csp, csp, 32
 ; RV64IXCHERI-NEXT:    ret
   %var = alloca i32, align 4, addrspace(200)
-  %call = call i32 @use_arg(i32 addrspace(200)* nonnull %var)
+  %call = call i32 @use_arg(ptr addrspace(200) nonnull %var)
   ret i32 %call
 }
 
@@ -84,6 +84,6 @@ define i32 @dynamic_alloca(iXLEN %x) nounwind {
 ; RV64IXCHERI-NEXT:    cincoffset csp, csp, 32
 ; RV64IXCHERI-NEXT:    ret
   %var = alloca i32, iXLEN %x, align 4, addrspace(200)
-  %call = call i32 @use_arg(i32 addrspace(200)* nonnull %var)
+  %call = call i32 @use_arg(ptr addrspace(200) nonnull %var)
   ret i32 %call
 }

@@ -2,7 +2,7 @@
 
 ; CHECK: alignment_bits,size,kind,source_loc,compiler_pass,details
 ; CHECK-EMPTY:
-%class.a = type { i32 (...)** }
+%class.a = type { ptr }
 
 @c = global i32 0, align 4
 

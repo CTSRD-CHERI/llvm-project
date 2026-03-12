@@ -10,11 +10,11 @@ declare void @throw_exception() addrspace(200)
 
 declare i32 @__gxx_personality_v0(...) addrspace(200)
 
-declare i8 addrspace(200)* @__cxa_begin_catch(i8 addrspace(200)*) addrspace(200)
+declare ptr addrspace(200) @__cxa_begin_catch(ptr addrspace(200)) addrspace(200)
 
 declare void @__cxa_end_catch() addrspace(200)
 
-define void @test() addrspace(200) personality i8 addrspace(200)* bitcast (i32 (...) addrspace(200)* @__gxx_personality_v0 to i8 addrspace(200)*) {
+define void @test() addrspace(200) personality ptr addrspace(200) @__gxx_personality_v0 {
 ; RV32IXCHERI-LABEL: test:
 ; RV32IXCHERI:       # %bb.0: # %entry
 ; RV32IXCHERI-NEXT:    cincoffset csp, csp, -16
@@ -58,9 +58,9 @@ entry:
   invoke void @throw_exception() to label %try.cont unwind label %lpad
 
 lpad:
-  %0 = landingpad { i8 addrspace(200)*, i32 } catch i8 addrspace(200)* null
-  %1 = extractvalue { i8 addrspace(200)*, i32 } %0, 0
-  %2 = tail call i8 addrspace(200)* @__cxa_begin_catch(i8 addrspace(200)* %1)
+  %0 = landingpad { ptr addrspace(200), i32 } catch ptr addrspace(200) null
+  %1 = extractvalue { ptr addrspace(200), i32 } %0, 0
+  %2 = tail call ptr addrspace(200) @__cxa_begin_catch(ptr addrspace(200) %1)
   tail call void @__cxa_end_catch()
   br label %try.cont
 

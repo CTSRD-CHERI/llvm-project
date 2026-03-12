@@ -7,7 +7,7 @@
   target datalayout = "e-m:e-pf200:128:128:128:64-p:64:64-i64:64-i128:128-n64-S128-A200-P200-G200"
   target triple = "riscv64-unknown-freebsd"
 
-  declare void @call(i32 addrspace(200)*, i32 addrspace(200)*) local_unnamed_addr addrspace(200) #0
+  declare void @call(ptr addrspace(200), ptr addrspace(200)) local_unnamed_addr addrspace(200) #0
 
   define void @hoist_alloca_cond(i32 signext %cond) local_unnamed_addr addrspace(200) #0 {
   entry:
@@ -24,15 +24,9 @@
     br i1 %tobool.not, label %for.inc, label %if.then
 
   if.then:                                          ; preds = %for.body
-    %0 = bitcast [123 x i32] addrspace(200)* %buf1 to i8 addrspace(200)*
-    %1 = call i8 addrspace(200)* @llvm.cheri.bounded.stack.cap.i64(i8 addrspace(200)* %0, i64 492)
-    %2 = bitcast i8 addrspace(200)* %1 to [123 x i32] addrspace(200)*
-    %arraydecay2 = bitcast [123 x i32] addrspace(200)* %2 to i32 addrspace(200)*
-    %3 = bitcast [22 x i32] addrspace(200)* %buf2 to i8 addrspace(200)*
-    %4 = call i8 addrspace(200)* @llvm.cheri.bounded.stack.cap.i64(i8 addrspace(200)* %3, i64 88)
-    %5 = bitcast i8 addrspace(200)* %4 to [22 x i32] addrspace(200)*
-    %arraydecay13 = bitcast [22 x i32] addrspace(200)* %5 to i32 addrspace(200)*
-    call void @call(i32 addrspace(200)* nonnull %arraydecay2, i32 addrspace(200)* nonnull %arraydecay13)
+    %arraydecay2 = call ptr addrspace(200) @llvm.cheri.bounded.stack.cap.i64(ptr addrspace(200) %buf1, i64 492)
+    %arraydecay13 = call ptr addrspace(200) @llvm.cheri.bounded.stack.cap.i64(ptr addrspace(200) %buf2, i64 88)
+    call void @call(ptr addrspace(200) nonnull %arraydecay2, ptr addrspace(200) nonnull %arraydecay13)
     br label %for.inc
 
   for.inc:                                          ; preds = %if.then, %for.body
@@ -41,7 +35,7 @@
     br i1 %exitcond.not, label %for.cond.cleanup, label %for.body
   }
 
-  declare i8 addrspace(200)* @llvm.cheri.bounded.stack.cap.i64(i8 addrspace(200)*, i64) addrspace(200) #1
+  declare ptr addrspace(200) @llvm.cheri.bounded.stack.cap.i64(ptr addrspace(200), i64) addrspace(200) #1
 
   attributes #0 = { nounwind "target-features"="+cap-mode,+xcheri" }
   attributes #1 = { nounwind readnone willreturn }

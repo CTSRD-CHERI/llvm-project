@@ -6,10 +6,10 @@
 ; Function Attrs: noinline nounwind optnone
 ; define void @foo(i64 %i) {
 ; entry:
-;   %saved_stack = call i8 addrspace(200)* @llvm.stacksave.p200i8()
+;   %saved_stack = call ptr addrspace(200) @llvm.stacksave.p200()
 ;   %vla = alloca i8, i64 %i, align 1, addrspace(200)
-;   call void @test(i8 addrspace(200)* %vla)
-;   call void @llvm.stackrestore.p200i8(i8 addrspace(200)* %saved_stack)
+;   call void @test(ptr addrspace(200) %vla)
+;   call void @llvm.stackrestore.p200(ptr addrspace(200) %saved_stack)
 ;   ret void
 ; }
 

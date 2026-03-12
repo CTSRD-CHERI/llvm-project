@@ -6,9 +6,9 @@
 ; because the frontend would almost always emit a local alloca already.
 
 ; First check that non-CHERI targets add a memcpy
-; RUN: sed -e 's/addrspace(200)/addrspace(0)/g' -e 's/p200i8/p0i8/g' %s | llc -mtriple riscv64-unknown-freebsd -o - -relocation-model=static | FileCheck %s --check-prefixes CHECK,RV64,RV64-STATIC --allow-unused-prefixes
-; RUN: sed -e 's/addrspace(200)/addrspace(0)/g' -e 's/p200i8/p0i8/g' %s | llc -mtriple riscv64-unknown-freebsd -o - -relocation-model=pic | FileCheck %s --check-prefixes CHECK,RV64,RV64-PIC --allow-unused-prefixes
-; RUN: sed -e 's/addrspace(200)/addrspace(0)/g' -e 's/p200i8/p0i8/g' %s | llc -mtriple mips64-unknown-freebsd -o - -relocation-model=pic | FileCheck %s --check-prefixes CHECK,MIPS,MIPS-PIC --allow-unused-prefixes
+; RUN: sed -e 's/addrspace(200)/addrspace(0)/g' -e 's/p200/p0/g' %s | llc -mtriple riscv64-unknown-freebsd -o - -relocation-model=static | FileCheck %s --check-prefixes CHECK,RV64,RV64-STATIC --allow-unused-prefixes
+; RUN: sed -e 's/addrspace(200)/addrspace(0)/g' -e 's/p200/p0/g' %s | llc -mtriple riscv64-unknown-freebsd -o - -relocation-model=pic | FileCheck %s --check-prefixes CHECK,RV64,RV64-PIC --allow-unused-prefixes
+; RUN: sed -e 's/addrspace(200)/addrspace(0)/g' -e 's/p200/p0/g' %s | llc -mtriple mips64-unknown-freebsd -o - -relocation-model=pic | FileCheck %s --check-prefixes CHECK,MIPS,MIPS-PIC --allow-unused-prefixes
 ; Next check purecap targets:
 ; RUN: %riscv64_cheri_purecap_llc -o - %s | FileCheck %s --check-prefixes CHECK,PURECAP-RV64 --allow-unused-prefixes
 ; RUN: %cheri_purecap_llc -o - %s | FileCheck %s --check-prefixes CHECK,PURECAP-MIPS --allow-unused-prefixes
@@ -38,15 +38,15 @@
 
 @global_foo = dso_local local_unnamed_addr addrspace(200) global %struct.foo zeroinitializer, align 8
 
-declare dso_local void @foo_byval(%struct.foo addrspace(200)* nocapture byval(%struct.foo) align 8 %f) local_unnamed_addr addrspace(200) noinline nounwind writeonly
-; define dso_local void @foo_byval(%struct.foo addrspace(200)* nocapture byval(%struct.foo) align 8 %f) local_unnamed_addr addrspace(200) noinline nounwind writeonly {
+declare dso_local void @foo_byval(ptr addrspace(200) nocapture byval(%struct.foo) align 8 %f) local_unnamed_addr addrspace(200) noinline nounwind writeonly
+; define dso_local void @foo_byval(ptr addrspace(200) nocapture byval(%struct.foo) align 8 %f) local_unnamed_addr addrspace(200) noinline nounwind writeonly {
 ; entry:
-;   %arraydecay = getelementptr inbounds %struct.foo, %struct.foo addrspace(200)* %f, i64 0, i32 0, i64 0
-;   call void @llvm.memset.p200i8.i64(i8 addrspace(200)* nonnull align 8 dereferenceable(1024) %arraydecay, i8 42, i64 1024, i1 false)
+;   %arraydecay = getelementptr inbounds %struct.foo, ptr addrspace(200) %f, i64 0, i32 0, i64 0
+;   call void @llvm.memset.p200.i64(ptr addrspace(200) nonnull align 8 dereferenceable(1024) %arraydecay, i8 42, i64 1024, i1 false)
 ;   ret void
 ; }
 
-declare void @llvm.memset.p200i8.i64(i8 addrspace(200)* nocapture writeonly, i8, i64, i1 immarg) addrspace(200) argmemonly nounwind willreturn writeonly
+declare void @llvm.memset.p200.i64(ptr addrspace(200) nocapture writeonly, i8, i64, i1 immarg) addrspace(200) argmemonly nounwind willreturn writeonly
 
 define dso_local void @clang_purecap_byval_args() local_unnamed_addr addrspace(200) nounwind {
 ; RV64-STATIC-LABEL: clang_purecap_byval_args:
@@ -238,12 +238,12 @@ define dso_local void @clang_purecap_byval_args() local_unnamed_addr addrspace(2
 ; PURECAP-MIPS-NEXT:    cincoffset $c11, $c11, $1
 ; Note: MIPS passes the first 64 byval bytes in registers
 entry:
-  call void @llvm.memset.p200i8.i64(i8 addrspace(200)* nonnull align 8 dereferenceable(1024) getelementptr inbounds (%struct.foo, %struct.foo addrspace(200)* @global_foo, i64 0, i32 0, i64 0), i8 0, i64 1024, i1 false)
-  %0 = load i8, i8 addrspace(200)* getelementptr inbounds (%struct.foo, %struct.foo addrspace(200)* @global_foo, i64 0, i32 0, i64 0), align 8
+  call void @llvm.memset.p200.i64(ptr addrspace(200) nonnull align 8 dereferenceable(1024) getelementptr inbounds (%struct.foo, ptr addrspace(200) @global_foo, i64 0, i32 0, i64 0), i8 0, i64 1024, i1 false)
+  %0 = load i8, ptr addrspace(200) getelementptr inbounds (%struct.foo, ptr addrspace(200) @global_foo, i64 0, i32 0, i64 0), align 8
   %conv = sext i8 %0 to i64
   call void @assert_eq(i64 signext %conv, i64 signext 0) nounwind
-  call void @foo_byval(%struct.foo addrspace(200)* nonnull byval(%struct.foo) align 8 @global_foo)
-  %1 = load i8, i8 addrspace(200)* getelementptr inbounds (%struct.foo, %struct.foo addrspace(200)* @global_foo, i64 0, i32 0, i64 0), align 8
+  call void @foo_byval(ptr addrspace(200) nonnull byval(%struct.foo) align 8 @global_foo)
+  %1 = load i8, ptr addrspace(200) getelementptr inbounds (%struct.foo, ptr addrspace(200) @global_foo, i64 0, i32 0, i64 0), align 8
   %conv1 = sext i8 %1 to i64
   call void @assert_eq(i64 signext %conv1, i64 signext 0) nounwind
   ret void

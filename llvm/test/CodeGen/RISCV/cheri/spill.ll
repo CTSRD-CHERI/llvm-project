@@ -4,7 +4,7 @@
 ; RUN: %riscv64_cheri_llc -verify-machineinstrs -target-abi lp64 < %s \
 ; RUN:   | FileCheck -check-prefix=RV64IXCHERI-LP64 %s
 
-define void @test_spill_slot(i8 addrspace(200)** %ptr) nounwind {
+define void @test_spill_slot(ptr %ptr) nounwind {
 ; RV32IXCHERI-ILP32-LABEL: test_spill_slot:
 ; RV32IXCHERI-ILP32:       # %bb.0:
 ; RV32IXCHERI-ILP32-NEXT:    addi sp, sp, -80
@@ -86,10 +86,10 @@ define void @test_spill_slot(i8 addrspace(200)** %ptr) nounwind {
 ; RV64IXCHERI-LP64-NEXT:    ld s11, 40(sp) # 8-byte Folded Reload
 ; RV64IXCHERI-LP64-NEXT:    addi sp, sp, 144
 ; RV64IXCHERI-LP64-NEXT:    ret
-  %a = load volatile i8 addrspace(200)*, i8 addrspace(200)** %ptr
+  %a = load volatile ptr addrspace(200), ptr %ptr
   ; Clobber all non-reserved capability registers (ie all but cnull, csp, cgp
   ; and ctp). Note that cfp may be not be reserved so we must clobber it.
   tail call void asm sideeffect "nop", "~{c1},~{c5},~{c6},~{c7},~{c8},~{c9},~{c10},~{c11},~{c12},~{c13},~{c14},~{c15},~{c16},~{c17},~{c18},~{c19},~{c20},~{c21},~{c22},~{c23},~{c24},~{c25},~{c26},~{c27},~{c28},~{c29},~{c30},~{c31}"()
-  store volatile i8 addrspace(200)* %a, i8 addrspace(200)** %ptr
+  store volatile ptr addrspace(200) %a, ptr %ptr
   ret void
 }

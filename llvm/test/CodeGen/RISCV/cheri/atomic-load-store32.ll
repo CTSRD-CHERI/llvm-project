@@ -4,7 +4,7 @@
 ; RUN: %riscv32_cheri_purecap_llc -mattr=+a -verify-machineinstrs < %s \
 ; RUN:   | FileCheck -check-prefix=RV32IAXCHERI %s
 
-define i8 addrspace(200)* @atomic_load_cap_unordered(i8 addrspace(200)* addrspace(200)* %a) nounwind {
+define ptr addrspace(200) @atomic_load_cap_unordered(ptr addrspace(200) %a) nounwind {
 ; RV32IXCHERI-LABEL: atomic_load_cap_unordered:
 ; RV32IXCHERI:       # %bb.0:
 ; RV32IXCHERI-NEXT:    cincoffset csp, csp, -16
@@ -19,11 +19,11 @@ define i8 addrspace(200)* @atomic_load_cap_unordered(i8 addrspace(200)* addrspac
 ; RV32IAXCHERI:       # %bb.0:
 ; RV32IAXCHERI-NEXT:    lc ca0, 0(ca0)
 ; RV32IAXCHERI-NEXT:    ret
-  %1 = load atomic i8 addrspace(200)*, i8 addrspace(200)* addrspace(200)* %a unordered, align 8
-  ret i8 addrspace(200)* %1
+  %1 = load atomic ptr addrspace(200), ptr addrspace(200) %a unordered, align 8
+  ret ptr addrspace(200) %1
 }
 
-define i8 addrspace(200)* @atomic_load_cap_monotonic(i8 addrspace(200)* addrspace(200)* %a) nounwind {
+define ptr addrspace(200) @atomic_load_cap_monotonic(ptr addrspace(200) %a) nounwind {
 ; RV32IXCHERI-LABEL: atomic_load_cap_monotonic:
 ; RV32IXCHERI:       # %bb.0:
 ; RV32IXCHERI-NEXT:    cincoffset csp, csp, -16
@@ -38,11 +38,11 @@ define i8 addrspace(200)* @atomic_load_cap_monotonic(i8 addrspace(200)* addrspac
 ; RV32IAXCHERI:       # %bb.0:
 ; RV32IAXCHERI-NEXT:    lc ca0, 0(ca0)
 ; RV32IAXCHERI-NEXT:    ret
-  %1 = load atomic i8 addrspace(200)*, i8 addrspace(200)* addrspace(200)* %a monotonic, align 8
-  ret i8 addrspace(200)* %1
+  %1 = load atomic ptr addrspace(200), ptr addrspace(200) %a monotonic, align 8
+  ret ptr addrspace(200) %1
 }
 
-define i8 addrspace(200)* @atomic_load_cap_acquire(i8 addrspace(200)* addrspace(200)* %a) nounwind {
+define ptr addrspace(200) @atomic_load_cap_acquire(ptr addrspace(200) %a) nounwind {
 ; RV32IXCHERI-LABEL: atomic_load_cap_acquire:
 ; RV32IXCHERI:       # %bb.0:
 ; RV32IXCHERI-NEXT:    cincoffset csp, csp, -16
@@ -58,11 +58,11 @@ define i8 addrspace(200)* @atomic_load_cap_acquire(i8 addrspace(200)* addrspace(
 ; RV32IAXCHERI-NEXT:    lc ca0, 0(ca0)
 ; RV32IAXCHERI-NEXT:    fence r, rw
 ; RV32IAXCHERI-NEXT:    ret
-  %1 = load atomic i8 addrspace(200)*, i8 addrspace(200)* addrspace(200)* %a acquire, align 8
-  ret i8 addrspace(200)* %1
+  %1 = load atomic ptr addrspace(200), ptr addrspace(200) %a acquire, align 8
+  ret ptr addrspace(200) %1
 }
 
-define i8 addrspace(200)* @atomic_load_cap_seq_cst(i8 addrspace(200)* addrspace(200)* %a) nounwind {
+define ptr addrspace(200) @atomic_load_cap_seq_cst(ptr addrspace(200) %a) nounwind {
 ; RV32IXCHERI-LABEL: atomic_load_cap_seq_cst:
 ; RV32IXCHERI:       # %bb.0:
 ; RV32IXCHERI-NEXT:    cincoffset csp, csp, -16
@@ -79,11 +79,11 @@ define i8 addrspace(200)* @atomic_load_cap_seq_cst(i8 addrspace(200)* addrspace(
 ; RV32IAXCHERI-NEXT:    lc ca0, 0(ca0)
 ; RV32IAXCHERI-NEXT:    fence r, rw
 ; RV32IAXCHERI-NEXT:    ret
-  %1 = load atomic i8 addrspace(200)*, i8 addrspace(200)* addrspace(200)* %a seq_cst, align 8
-  ret i8 addrspace(200)* %1
+  %1 = load atomic ptr addrspace(200), ptr addrspace(200) %a seq_cst, align 8
+  ret ptr addrspace(200) %1
 }
 
-define void @atomic_store_cap_unordered(i8 addrspace(200)* addrspace(200)* %a, i8 addrspace(200)* %b) nounwind {
+define void @atomic_store_cap_unordered(ptr addrspace(200) %a, ptr addrspace(200) %b) nounwind {
 ; RV32IXCHERI-LABEL: atomic_store_cap_unordered:
 ; RV32IXCHERI:       # %bb.0:
 ; RV32IXCHERI-NEXT:    cincoffset csp, csp, -16
@@ -98,11 +98,11 @@ define void @atomic_store_cap_unordered(i8 addrspace(200)* addrspace(200)* %a, i
 ; RV32IAXCHERI:       # %bb.0:
 ; RV32IAXCHERI-NEXT:    sc ca1, 0(ca0)
 ; RV32IAXCHERI-NEXT:    ret
-  store atomic i8 addrspace(200)* %b, i8 addrspace(200)* addrspace(200)* %a unordered, align 8
+  store atomic ptr addrspace(200) %b, ptr addrspace(200) %a unordered, align 8
   ret void
 }
 
-define void @atomic_store_cap_monotonic(i8 addrspace(200)* addrspace(200)* %a, i8 addrspace(200)* %b) nounwind {
+define void @atomic_store_cap_monotonic(ptr addrspace(200) %a, ptr addrspace(200) %b) nounwind {
 ; RV32IXCHERI-LABEL: atomic_store_cap_monotonic:
 ; RV32IXCHERI:       # %bb.0:
 ; RV32IXCHERI-NEXT:    cincoffset csp, csp, -16
@@ -117,11 +117,11 @@ define void @atomic_store_cap_monotonic(i8 addrspace(200)* addrspace(200)* %a, i
 ; RV32IAXCHERI:       # %bb.0:
 ; RV32IAXCHERI-NEXT:    sc ca1, 0(ca0)
 ; RV32IAXCHERI-NEXT:    ret
-  store atomic i8 addrspace(200)* %b, i8 addrspace(200)* addrspace(200)* %a monotonic, align 8
+  store atomic ptr addrspace(200) %b, ptr addrspace(200) %a monotonic, align 8
   ret void
 }
 
-define void @atomic_store_cap_release(i8 addrspace(200)* addrspace(200)* %a, i8 addrspace(200)* %b) nounwind {
+define void @atomic_store_cap_release(ptr addrspace(200) %a, ptr addrspace(200) %b) nounwind {
 ; RV32IXCHERI-LABEL: atomic_store_cap_release:
 ; RV32IXCHERI:       # %bb.0:
 ; RV32IXCHERI-NEXT:    cincoffset csp, csp, -16
@@ -137,11 +137,11 @@ define void @atomic_store_cap_release(i8 addrspace(200)* addrspace(200)* %a, i8 
 ; RV32IAXCHERI-NEXT:    fence rw, w
 ; RV32IAXCHERI-NEXT:    sc ca1, 0(ca0)
 ; RV32IAXCHERI-NEXT:    ret
-  store atomic i8 addrspace(200)* %b, i8 addrspace(200)* addrspace(200)* %a release, align 8
+  store atomic ptr addrspace(200) %b, ptr addrspace(200) %a release, align 8
   ret void
 }
 
-define void @atomic_store_cap_seq_cst(i8 addrspace(200)* addrspace(200)* %a, i8 addrspace(200)* %b) nounwind {
+define void @atomic_store_cap_seq_cst(ptr addrspace(200) %a, ptr addrspace(200) %b) nounwind {
 ; RV32IXCHERI-LABEL: atomic_store_cap_seq_cst:
 ; RV32IXCHERI:       # %bb.0:
 ; RV32IXCHERI-NEXT:    cincoffset csp, csp, -16
@@ -157,6 +157,6 @@ define void @atomic_store_cap_seq_cst(i8 addrspace(200)* addrspace(200)* %a, i8 
 ; RV32IAXCHERI-NEXT:    fence rw, w
 ; RV32IAXCHERI-NEXT:    sc ca1, 0(ca0)
 ; RV32IAXCHERI-NEXT:    ret
-  store atomic i8 addrspace(200)* %b, i8 addrspace(200)* addrspace(200)* %a seq_cst, align 8
+  store atomic ptr addrspace(200) %b, ptr addrspace(200) %a seq_cst, align 8
   ret void
 }

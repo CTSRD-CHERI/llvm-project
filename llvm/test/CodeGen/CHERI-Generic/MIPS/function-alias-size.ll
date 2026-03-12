@@ -8,8 +8,8 @@
 ; and did not have size information, which triggered the assertion after the April 2021 merge.
 ; Check that we emit size information for function aliases:
 
-@a = constant i8 addrspace(200)* bitcast (void () addrspace(200)* @_ZN3fooD1Ev to i8 addrspace(200)*)
-@_ZN3fooD1Ev = alias void (), void () addrspace(200)* @_ZN3fooD2Ev
+@a = constant ptr addrspace(200) @_ZN3fooD1Ev
+@_ZN3fooD1Ev = alias void (), ptr addrspace(200) @_ZN3fooD2Ev
 define void @_ZN3fooD2Ev() addrspace(200) nounwind {
 ; ASM-LABEL: _ZN3fooD2Ev:
 ; ASM:       # %bb.0:
@@ -19,8 +19,8 @@ define void @_ZN3fooD2Ev() addrspace(200) nounwind {
 }
 
 @two_ints = private global {i32, i32} {i32 1, i32 2}
-@elem0 = alias i32, getelementptr({i32, i32}, {i32, i32}*  @two_ints, i32 0, i32 0)
-@elem1 = alias i32, getelementptr({i32, i32}, {i32, i32}*  @two_ints, i32 0, i32 1)
+@elem0 = alias i32, getelementptr({i32, i32}, ptr @two_ints, i32 0, i32 0)
+@elem1 = alias i32, getelementptr({i32, i32}, ptr @two_ints, i32 0, i32 1)
 
 ; UTC_ARGS: --disable
 ; ASM: .size _ZN3fooD2Ev, .Lfunc_end0-_ZN3fooD2Ev

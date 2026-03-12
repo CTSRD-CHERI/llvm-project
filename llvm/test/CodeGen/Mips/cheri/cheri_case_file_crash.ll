@@ -78,7 +78,7 @@ define void @c() personality ptr addrspace(200) @__gxx_personality_v0 {
           to label %19 unwind label %16
 }
 
-declare void @i(i8 addrspace(200)*, i32, ...)
+declare void @i(ptr addrspace(200), i32, ...)
 
 declare void @h()
 

@@ -3,7 +3,7 @@
 ; RUN: llc -mtriple=mips64 -mcpu=cheri128 -mattr=+cheri128 --relocation-model=pic -target-abi n64 %s -o - | FileCheck %s --check-prefix=HYBRID
 ; RUN: llc -mtriple=mips64 -mcpu=cheri128 -mattr=+cheri128 --relocation-model=pic -target-abi purecap %s -o - | FileCheck %s --check-prefix=PURECAP
 
-define i64 @subp(i8 addrspace(200)* readnone %a, i8 addrspace(200)* readnone %b) nounwind {
+define i64 @subp(ptr addrspace(200) readnone %a, ptr addrspace(200) readnone %b) nounwind {
 ; HYBRID-LABEL: subp:
 ; HYBRID:       # %bb.0:
 ; HYBRID-NEXT:    jr $ra
@@ -13,8 +13,8 @@ define i64 @subp(i8 addrspace(200)* readnone %a, i8 addrspace(200)* readnone %b)
 ; PURECAP:       # %bb.0:
 ; PURECAP-NEXT:    cjr $c17
 ; PURECAP-NEXT:    csub $2, $c3, $c4
-  %1 = tail call i64 @llvm.cheri.cap.diff.i64(i8 addrspace(200)* %a, i8 addrspace(200)* %b)
+  %1 = tail call i64 @llvm.cheri.cap.diff.i64(ptr addrspace(200) %a, ptr addrspace(200) %b)
   ret i64 %1
 }
 
-declare i64 @llvm.cheri.cap.diff.i64(i8 addrspace(200)*, i8 addrspace(200)*)
+declare i64 @llvm.cheri.cap.diff.i64(ptr addrspace(200), ptr addrspace(200))

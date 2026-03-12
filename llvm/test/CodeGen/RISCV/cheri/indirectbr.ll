@@ -4,7 +4,7 @@
 ; RUN: %riscv64_cheri_purecap_llc -verify-machineinstrs < %s \
 ; RUN:   | FileCheck %s -check-prefix=RV64IXCHERI
 
-define i32 @indirectbr(i8 addrspace(200)* %target) nounwind {
+define i32 @indirectbr(ptr addrspace(200) %target) nounwind {
 ; RV32IXCHERI-LABEL: indirectbr:
 ; RV32IXCHERI:       # %bb.0:
 ; RV32IXCHERI-NEXT:    cincoffset csp, csp, -16
@@ -26,14 +26,14 @@ define i32 @indirectbr(i8 addrspace(200)* %target) nounwind {
 ; RV64IXCHERI-NEXT:    lc cra, 0(csp) # 16-byte Folded Reload
 ; RV64IXCHERI-NEXT:    cincoffset csp, csp, 16
 ; RV64IXCHERI-NEXT:    ret
-  indirectbr i8 addrspace(200)* %target, [label %test_label]
+  indirectbr ptr addrspace(200) %target, [label %test_label]
 test_label:
   br label %ret
 ret:
   ret i32 0
 }
 
-define i32 @indirectbr_with_offset(i8 addrspace(200)* %a) nounwind {
+define i32 @indirectbr_with_offset(ptr addrspace(200) %a) nounwind {
 ; RV32IXCHERI-LABEL: indirectbr_with_offset:
 ; RV32IXCHERI:       # %bb.0:
 ; RV32IXCHERI-NEXT:    cincoffset csp, csp, -16
@@ -55,8 +55,8 @@ define i32 @indirectbr_with_offset(i8 addrspace(200)* %a) nounwind {
 ; RV64IXCHERI-NEXT:    lc cra, 0(csp) # 16-byte Folded Reload
 ; RV64IXCHERI-NEXT:    cincoffset csp, csp, 16
 ; RV64IXCHERI-NEXT:    ret
-  %target = getelementptr inbounds i8, i8 addrspace(200)* %a, i32 1380
-  indirectbr i8 addrspace(200)* %target, [label %test_label]
+  %target = getelementptr inbounds i8, ptr addrspace(200) %a, i32 1380
+  indirectbr ptr addrspace(200) %target, [label %test_label]
 test_label:
   br label %ret
 ret:

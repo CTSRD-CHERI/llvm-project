@@ -23,7 +23,7 @@ define double @constant_pool(double %a) nounwind {
 
 
 ; Block addresses should also use auipcc+cincoffset
-define i8 addrspace(200)* @blockaddress() nounwind {
+define ptr addrspace(200) @blockaddress() nounwind {
 ; L64PC128-LABEL: blockaddress:
 ; L64PC128:       # %bb.0: # %entry
 ; L64PC128-NEXT:  .Ltmp0: # Block address taken
@@ -36,7 +36,7 @@ define i8 addrspace(200)* @blockaddress() nounwind {
 entry:
   br label %block
 block:
-  ret i8 addrspace(200)* blockaddress(@blockaddress, %block)
+  ret ptr addrspace(200) blockaddress(@blockaddress, %block)
 }
 
 ; External variables always have to be loaded from the captable to get bounds
@@ -56,7 +56,7 @@ define i64 @load_external_global_variable(double %a) nounwind {
 ; L64PC128-NEXT:    lc ca0, %pcrel_lo(.LBB2_1)(ca0)
 ; L64PC128-NEXT:    ld a0, 0(ca0)
 ; L64PC128-NEXT:    ret
-  %ret = load i64, i64 addrspace(200)* @external_variable
+  %ret = load i64, ptr addrspace(200) @external_variable
   ret i64 %ret
 }
 
@@ -69,7 +69,7 @@ define i64 @load_external_global_constant(double %a) nounwind {
 ; L64PC128-NEXT:    lc ca0, %pcrel_lo(.LBB3_1)(ca0)
 ; L64PC128-NEXT:    ld a0, 0(ca0)
 ; L64PC128-NEXT:    ret
-  %ret = load i64, i64 addrspace(200)* @external_constant
+  %ret = load i64, ptr addrspace(200) @external_constant
   ret i64 %ret
 }
 
@@ -82,7 +82,7 @@ define i64 @load_dso_local_external_global_variable(double %a) nounwind {
 ; L64PC128-NEXT:    lc ca0, %pcrel_lo(.LBB4_1)(ca0)
 ; L64PC128-NEXT:    ld a0, 0(ca0)
 ; L64PC128-NEXT:    ret
-  %ret = load i64, i64 addrspace(200)* @dso_local_external_variable
+  %ret = load i64, ptr addrspace(200) @dso_local_external_variable
   ret i64 %ret
 }
 
@@ -96,7 +96,7 @@ define i64 @load_dso_local_external_global_constant(double %a) nounwind {
 ; L64PC128-NEXT:    lc ca0, %pcrel_lo(.LBB5_1)(ca0)
 ; L64PC128-NEXT:    ld a0, 0(ca0)
 ; L64PC128-NEXT:    ret
-  %ret = load i64, i64 addrspace(200)* @dso_local_external_constant
+  %ret = load i64, ptr addrspace(200) @dso_local_external_constant
   ret i64 %ret
 }
 
@@ -109,7 +109,7 @@ define i64 @load_defined_variable(double %a) nounwind {
 ; L64PC128-NEXT:    lc ca0, %pcrel_lo(.LBB6_1)(ca0)
 ; L64PC128-NEXT:    ld a0, 0(ca0)
 ; L64PC128-NEXT:    ret
-  %ret = load i64, i64 addrspace(200)* @defined_variable
+  %ret = load i64, ptr addrspace(200) @defined_variable
   ret i64 %ret
 }
 
@@ -122,7 +122,7 @@ define i64 @load_defined_constant(double %a) nounwind {
 ; L64PC128-NEXT:    lc ca0, %pcrel_lo(.LBB7_1)(ca0)
 ; L64PC128-NEXT:    ld a0, 0(ca0)
 ; L64PC128-NEXT:    ret
-  %ret = load i64, i64 addrspace(200)* @defined_constant
+  %ret = load i64, ptr addrspace(200) @defined_constant
   ret i64 %ret
 }
 
@@ -135,7 +135,7 @@ define i64 @load_hidden_variable(double %a) nounwind {
 ; L64PC128-NEXT:    lc ca0, %pcrel_lo(.LBB8_1)(ca0)
 ; L64PC128-NEXT:    ld a0, 0(ca0)
 ; L64PC128-NEXT:    ret
-  %ret = load i64, i64 addrspace(200)* @hidden_variable
+  %ret = load i64, ptr addrspace(200) @hidden_variable
   ret i64 %ret
 }
 
@@ -148,7 +148,7 @@ define i64 @load_hidden_constant(double %a) nounwind {
 ; L64PC128-NEXT:    lc ca0, %pcrel_lo(.LBB9_1)(ca0)
 ; L64PC128-NEXT:    ld a0, 0(ca0)
 ; L64PC128-NEXT:    ret
-  %ret = load i64, i64 addrspace(200)* @hidden_constant
+  %ret = load i64, ptr addrspace(200) @hidden_constant
   ret i64 %ret
 }
 
@@ -161,7 +161,7 @@ define i64 @load_dso_local_variable(double %a) nounwind {
 ; L64PC128-NEXT:    lc ca0, %pcrel_lo(.LBB10_1)(ca0)
 ; L64PC128-NEXT:    ld a0, 0(ca0)
 ; L64PC128-NEXT:    ret
-  %ret = load i64, i64 addrspace(200)* @dso_local_variable
+  %ret = load i64, ptr addrspace(200) @dso_local_variable
   ret i64 %ret
 }
 
@@ -174,6 +174,6 @@ define i64 @load_dso_local_constant(double %a) nounwind {
 ; L64PC128-NEXT:    lc ca0, %pcrel_lo(.LBB11_1)(ca0)
 ; L64PC128-NEXT:    ld a0, 0(ca0)
 ; L64PC128-NEXT:    ret
-  %ret = load i64, i64 addrspace(200)* @dso_local_constant
+  %ret = load i64, ptr addrspace(200) @dso_local_constant
   ret i64 %ret
 }

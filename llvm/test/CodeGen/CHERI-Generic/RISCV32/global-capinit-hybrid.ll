@@ -10,70 +10,70 @@ declare void @extern_fn()
 
 ; TODO: should the inttoptr ones be tagged -> emit a constructor?
 
-@global_ptr_const = global i8* inttoptr (i32 1234 to i8*), align 4
+@global_ptr_const = global ptr inttoptr (i32 1234 to ptr), align 4
 ; ASM-LABEL: .globl global_ptr_const
 ; ASM-NEXT:  .p2align 2
 ; ASM-NEXT: global_ptr_const:
 ; ASM-NEXT:  [[PTR_DIRECTIVE]] 1234
 ; ASM-NEXT:  .size global_ptr_const, 4
-@global_cap_inttoptr = global i8 addrspace(200)* inttoptr (i32 1234 to i8 addrspace(200)*), align 8
+@global_cap_inttoptr = global ptr addrspace(200) inttoptr (i32 1234 to ptr addrspace(200)), align 8
 ; ASM-LABEL: .globl global_cap_inttoptr
 ; ASM-NEXT:  .p2align	3
 ; ASM-NEXT: global_cap_inttoptr:
 ; ASM-NEXT:  .chericap 1234
 ; ASM-NEXT:  .size global_cap_inttoptr, 8
-@global_cap_addrspacecast = global i8 addrspace(200)* addrspacecast (i8* inttoptr (i32 1234 to i8*) to i8 addrspace(200)*), align 8
+@global_cap_addrspacecast = global ptr addrspace(200) addrspacecast (ptr inttoptr (i32 1234 to ptr) to ptr addrspace(200)), align 8
 ; ASM-LABEL: .globl global_cap_addrspacecast
 ; ASM-NEXT:  .p2align	3
 ; ASM-NEXT: global_cap_addrspacecast:
 ; ASM-NEXT:  .chericap 1234
 ; ASM-NEXT:  .size global_cap_addrspacecast, 8
-@global_cap_nullgep = global i8 addrspace(200)* getelementptr (i8, i8 addrspace(200)* null, i32 1234), align 8
+@global_cap_nullgep = global ptr addrspace(200) getelementptr (i8, ptr addrspace(200) null, i32 1234), align 8
 ; ASM-LABEL: .globl global_cap_nullgep
 ; ASM-NEXT:  .p2align	3
 ; ASM-NEXT: global_cap_nullgep:
 ; ASM-NEXT:  .chericap 1234
 ; ASM-NEXT:  .size global_cap_nullgep, 8
 
-@global_ptr_data = global i8* @extern_data, align 4
+@global_ptr_data = global ptr @extern_data, align 4
 ; ASM-LABEL: .globl global_ptr_data
 ; ASM-NEXT:  .p2align 2
 ; ASM-NEXT: global_ptr_data:
 ; ASM-NEXT:  [[PTR_DIRECTIVE]] extern_data
 ; ASM-NEXT:  .size global_ptr_data, 4
-@global_ptr_data_past_end = global i8* getelementptr inbounds (i8, i8* @extern_data, i32 1), align 4
+@global_ptr_data_past_end = global ptr getelementptr inbounds (i8, ptr @extern_data, i32 1), align 4
 ; ASM-LABEL: .globl global_ptr_data_past_end
 ; ASM-NEXT:  .p2align 2
 ; ASM-NEXT: global_ptr_data_past_end:
 ; ASM-NEXT:  [[PTR_DIRECTIVE]] extern_data+1
 ; ASM-NEXT:  .size global_ptr_data_past_end, 4
-@global_ptr_data_two_past_end = global i8* getelementptr (i8, i8* @extern_data, i32 2), align 4
+@global_ptr_data_two_past_end = global ptr getelementptr (i8, ptr @extern_data, i32 2), align 4
 ; ASM-LABEL: .globl global_ptr_data_two_past_end
 ; ASM-NEXT:  .p2align 2
 ; ASM-NEXT: global_ptr_data_two_past_end:
 ; ASM-NEXT:  [[PTR_DIRECTIVE]] extern_data+2
 ; ASM-NEXT:  .size global_ptr_data_two_past_end, 4
 
-@global_cap_data_addrspacecast = global i8 addrspace(200)* addrspacecast (i8* @extern_data to i8 addrspace(200)*), align 8
+@global_cap_data_addrspacecast = global ptr addrspace(200) addrspacecast (ptr @extern_data to ptr addrspace(200)), align 8
 ; ASM-LABEL: .globl global_cap_data_addrspacecast
 ; ASM-NEXT:  .p2align	3
 ; ASM-NEXT: global_cap_data_addrspacecast:
 ; ASM-NEXT:  .chericap extern_data
 ; ASM-NEXT:  .size global_cap_data_addrspacecast, 8
-@global_cap_data_addrspacecast_past_end = global i8 addrspace(200)* addrspacecast (i8* getelementptr inbounds (i8, i8* @extern_data, i32 1) to i8 addrspace(200)*), align 8
+@global_cap_data_addrspacecast_past_end = global ptr addrspace(200) addrspacecast (ptr getelementptr inbounds (i8, ptr @extern_data, i32 1) to ptr addrspace(200)), align 8
 ; ASM-LABEL: .globl global_cap_data_addrspacecast_past_end
 ; ASM-NEXT:  .p2align	3
 ; ASM-NEXT: global_cap_data_addrspacecast_past_end:
 ; ASM-NEXT:  .chericap extern_data+1
 ; ASM-NEXT:  .size global_cap_data_addrspacecast_past_end, 8
-@global_cap_data_addrspacecast_two_past_end = global i8 addrspace(200)* addrspacecast (i8* getelementptr (i8, i8* @extern_data, i32 2) to i8 addrspace(200)*), align 8
+@global_cap_data_addrspacecast_two_past_end = global ptr addrspace(200) addrspacecast (ptr getelementptr (i8, ptr @extern_data, i32 2) to ptr addrspace(200)), align 8
 ; ASM-LABEL: .globl global_cap_data_addrspacecast_two_past_end
 ; ASM-NEXT:  .p2align	3
 ; ASM-NEXT: global_cap_data_addrspacecast_two_past_end:
 ; ASM-NEXT:  .chericap extern_data+2
 ; ASM-NEXT:  .size global_cap_data_addrspacecast_two_past_end, 8
 
-@global_cap_data_nullgep = global i8 addrspace(200)* getelementptr (i8, i8 addrspace(200)* null, i32 ptrtoint (i8* @extern_data to i32)), align 8
+@global_cap_data_nullgep = global ptr addrspace(200) getelementptr (i8, ptr addrspace(200) null, i32 ptrtoint (ptr @extern_data to i32)), align 8
 ; ASM-LABEL: .globl global_cap_data_nullgep
 ; ASM-NEXT:  .p2align	3
 ; ASM-NEXT: global_cap_data_nullgep:
@@ -81,7 +81,7 @@ declare void @extern_fn()
 ; ASM-NEXT:  [[PTR_DIRECTIVE]] extern_data
 ; ASM-NEXT:  [[PTR_DIRECTIVE]] 0
 ; ASM-NEXT:  .size global_cap_data_nullgep, 8
-@global_cap_data_nullgep_past_end = global i8 addrspace(200)* getelementptr (i8, i8 addrspace(200)* null, i32 ptrtoint (i8* getelementptr inbounds (i8, i8* @extern_data, i32 1) to i32)), align 8
+@global_cap_data_nullgep_past_end = global ptr addrspace(200) getelementptr (i8, ptr addrspace(200) null, i32 ptrtoint (ptr getelementptr inbounds (i8, ptr @extern_data, i32 1) to i32)), align 8
 ; ASM-LABEL: .globl global_cap_data_nullgep_past_end
 ; ASM-NEXT:  .p2align	3
 ; ASM-NEXT: global_cap_data_nullgep_past_end:
@@ -89,7 +89,7 @@ declare void @extern_fn()
 ; ASM-NEXT:  [[PTR_DIRECTIVE]] extern_data+1
 ; ASM-NEXT:  [[PTR_DIRECTIVE]] 0
 ; ASM-NEXT:  .size global_cap_data_nullgep_past_end, 8
-@global_cap_data_nullgep_two_past_end = global i8 addrspace(200)* getelementptr (i8, i8 addrspace(200)* null, i32 ptrtoint (i8* getelementptr (i8, i8* @extern_data, i32 2) to i32)), align 8
+@global_cap_data_nullgep_two_past_end = global ptr addrspace(200) getelementptr (i8, ptr addrspace(200) null, i32 ptrtoint (ptr getelementptr (i8, ptr @extern_data, i32 2) to i32)), align 8
 ; ASM-LABEL: .globl global_cap_data_nullgep_two_past_end
 ; ASM-NEXT:  .p2align	3
 ; ASM-NEXT: global_cap_data_nullgep_two_past_end:
@@ -98,25 +98,25 @@ declare void @extern_fn()
 ; ASM-NEXT:  [[PTR_DIRECTIVE]] 0
 ; ASM-NEXT:  .size global_cap_data_nullgep_two_past_end, 8
 
-@global_fnptr = global void ()* @extern_fn, align 4
+@global_fnptr = global ptr @extern_fn, align 4
 ; ASM-LABEL: .globl global_fnptr
 ; ASM-NEXT:  .p2align 2
 ; ASM-NEXT: global_fnptr:
 ; ASM-NEXT:  [[PTR_DIRECTIVE]] extern_fn
 ; ASM-NEXT:  .size global_fnptr, 4
-@global_fncap_addrspacecast = global void () addrspace(200)* addrspacecast (void ()* @extern_fn to void () addrspace(200)*), align 8
+@global_fncap_addrspacecast = global ptr addrspace(200) addrspacecast (ptr @extern_fn to ptr addrspace(200)), align 8
 ; ASM-LABEL: .globl global_fncap_addrspacecast
 ; ASM-NEXT:  .p2align	3
 ; ASM-NEXT: global_fncap_addrspacecast:
 ; ASM-NEXT:  .chericap extern_fn
 ; ASM-NEXT:  .size global_fncap_addrspacecast, 8
-@global_fncap_intcap_addrspacecast = global i8 addrspace(200)* addrspacecast (i8* bitcast (void ()* @extern_fn to i8*) to i8 addrspace(200)*), align 8
+@global_fncap_intcap_addrspacecast = global ptr addrspace(200) addrspacecast (ptr @extern_fn to ptr addrspace(200)), align 8
 ; ASM-LABEL: .globl global_fncap_intcap_addrspacecast
 ; ASM-NEXT:  .p2align	3
 ; ASM-NEXT: global_fncap_intcap_addrspacecast:
 ; ASM-NEXT:  .chericap extern_fn
 ; ASM-NEXT:  .size global_fncap_intcap_addrspacecast, 8
-@global_fncap_intcap_nullgep = global i8 addrspace(200)* getelementptr (i8, i8 addrspace(200)* null, i32 ptrtoint (void ()* @extern_fn to i32)), align 8
+@global_fncap_intcap_nullgep = global ptr addrspace(200) getelementptr (i8, ptr addrspace(200) null, i32 ptrtoint (ptr @extern_fn to i32)), align 8
 ; ASM-LABEL: .globl global_fncap_intcap_nullgep
 ; ASM-NEXT:  .p2align	3
 ; ASM-NEXT: global_fncap_intcap_nullgep:
@@ -124,13 +124,13 @@ declare void @extern_fn()
 ; ASM-NEXT:  [[PTR_DIRECTIVE]] extern_fn
 ; ASM-NEXT:  [[PTR_DIRECTIVE]] 0
 ; ASM-NEXT:  .size global_fncap_intcap_nullgep, 8
-@global_fncap_addrspacecast_plus_two = global i8 addrspace(200)* addrspacecast (i8* getelementptr (i8, i8* bitcast (void ()* @extern_fn to i8*), i32 2) to i8 addrspace(200)*), align 8
+@global_fncap_addrspacecast_plus_two = global ptr addrspace(200) addrspacecast (ptr getelementptr (i8, ptr @extern_fn, i32 2) to ptr addrspace(200)), align 8
 ; ASM-LABEL: .globl global_fncap_addrspacecast_plus_two
 ; ASM-NEXT:  .p2align	3
 ; ASM-NEXT: global_fncap_addrspacecast_plus_two:
 ; ASM-NEXT:  .chericap extern_fn+2
 ; ASM-NEXT:  .size global_fncap_addrspacecast_plus_two, 8
-@global_fncap_nullgep_plus_two = global i8 addrspace(200)* getelementptr (i8, i8 addrspace(200)* null, i32 ptrtoint (i8* getelementptr (i8, i8* bitcast (void ()* @extern_fn to i8*), i32 2) to i32)), align 8
+@global_fncap_nullgep_plus_two = global ptr addrspace(200) getelementptr (i8, ptr addrspace(200) null, i32 ptrtoint (ptr getelementptr (i8, ptr @extern_fn, i32 2) to i32)), align 8
 ; ASM-LABEL: .globl global_fncap_nullgep_plus_two
 ; ASM-NEXT:  .p2align	3
 ; ASM-NEXT: global_fncap_nullgep_plus_two:

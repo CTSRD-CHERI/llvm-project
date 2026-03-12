@@ -12,13 +12,13 @@ declare void @extern_func() addrspace(200) #0
 ; Function Attrs: nounwind
 define void @test(ptr addrspace(200) %arg) local_unnamed_addr addrspace(200) #1 {
 entry:
-  %0 = load void () addrspace(200)*, void () addrspace(200)* addrspace(200)* @fn, align 32
+  %0 = load ptr addrspace(200), ptr addrspace(200) @fn, align 32
   ; load address of fn:
   ; BIGTABLE:      lui	$1, %captab_hi(fn)
   ; BIGTABLE-NEXT: daddiu	$1, $1, %captab_lo(fn)
   ; BIGTABLE-NEXT: clc	$c1, $1, 0($c18)
   ; SMALLTABLE: clcbi $c1, %captab20(fn)($c18)
-  store void () addrspace(200)* %arg, void () addrspace(200)* addrspace(200)* @fn2, align 32
+  store ptr addrspace(200) %arg, ptr addrspace(200) @fn2, align 32
   ; load address of fn2:
   ; BIGTABLE-NEXT: lui	$1, %captab_hi(fn2)
   ; BIGTABLE-NEXT: daddiu	$1, $1, %captab_lo(fn2)

@@ -9,8 +9,8 @@ target triple = "cheri-unknown-freebsd"
 declare i64 @check_fold(i64) #0
 declare i64 @check_fold_cap(ptr addrspace(200)) #0
 declare i64 @llvm.cheri.cap.address.get.i64(ptr addrspace(200)) #1
-declare i8 addrspace(200)* @llvm.cheri.cap.address.set.i64(ptr addrspace(200), i64) #1
-declare i8 addrspace(200)* @llvm.cheri.cap.offset.set.i64(ptr addrspace(200), i64) #1
+declare ptr addrspace(200) @llvm.cheri.cap.address.set.i64(ptr addrspace(200), i64) #1
+declare ptr addrspace(200) @llvm.cheri.cap.offset.set.i64(ptr addrspace(200), i64) #1
 
 define i64 @null_get_vaddr() #1 {
 ; OPT-LABEL: null_get_vaddr:

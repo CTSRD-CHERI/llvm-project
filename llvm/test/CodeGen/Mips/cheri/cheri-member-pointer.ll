@@ -90,37 +90,33 @@ memptr.end:                                       ; preds = %memptr.nonvirtual, 
 }
 
 ; ; Function Attrs: nounwind
-; define void @call_global_func_ptr(%class.A addrspace(200)* %a) local_unnamed_addr #0 {
+; define void @call_global_func_ptr(ptr addrspace(200) %a) local_unnamed_addr #0 {
 ; entry:
-;   %0 = load void (%class.A addrspace(200)*) addrspace(200)*, void (%class.A addrspace(200)*) addrspace(200)* addrspace(200)* @global_func_ptr, align 32, !tbaa !5
-;   tail call void %0(%class.A addrspace(200)* %a) #1
+;   %0 = load ptr addrspace(200), ptr addrspace(200) @global_func_ptr, align 32, !tbaa !5
+;   tail call void ptr addrspace(200) %a) #1
 ;   ret void
 ; }
 ;
 ; ; Function Attrs: nounwind
-; define void @call_func_ptr_param(void (%class.A addrspace(200)*) addrspace(200)* nocapture %func, %class.A addrspace(200)* %a) local_unnamed_addr #0 {
+; define void @call_func_ptr_param(ptr addrspace(200) nocapture %func, ptr addrspace(200) %a) local_unnamed_addr #0 {
 ; entry:
-;   tail call void %func(%class.A addrspace(200)* %a) #1
+;   tail call void %func(ptr addrspace(200) %a) #1
 ;   ret void
 ; }
 ;
 ; ; Function Attrs: nounwind
-; define void @call_func_ptr_adjusted(void (%class.A addrspace(200)*) addrspace(200)* nocapture %func, %class.A addrspace(200)* %a, i64 signext %this_adj) local_unnamed_addr #0 {
+; define void @call_func_ptr_adjusted(ptr addrspace(200) nocapture %func, ptr addrspace(200) %a, i64 signext %this_adj) local_unnamed_addr #0 {
 ; entry:
-;   %0 = bitcast %class.A addrspace(200)* %a to i8 addrspace(200)*
-;   %add.ptr = getelementptr inbounds i8, i8 addrspace(200)* %0, i64 %this_adj
-;   %1 = bitcast i8 addrspace(200)* %add.ptr to %class.A addrspace(200)*
-;   tail call void %func(%class.A addrspace(200)* %1) #1
+;   %add.ptr = getelementptr inbounds i8, ptr addrspace(200) %a, i64 %this_adj
+;   tail call void %func(ptr addrspace(200) %add.otr) #1
 ;   ret void
 ; }
 ;
 ; ; Function Attrs: nounwind
-; define void @call_func_ptr_adjusted_2(%class.A addrspace(200)* %a, void (%class.A addrspace(200)*) addrspace(200)* nocapture %func, i64 signext %this_adj) local_unnamed_addr #0 {
+; define void @call_func_ptr_adjusted_2(ptr addrspace(200) %a, ptr addrspace(200) nocapture %func, i64 signext %this_adj) local_unnamed_addr #0 {
 ; entry:
-;   %0 = bitcast %class.A addrspace(200)* %a to i8 addrspace(200)*
-;   %add.ptr = getelementptr inbounds i8, i8 addrspace(200)* %0, i64 %this_adj
-;   %1 = bitcast i8 addrspace(200)* %add.ptr to %class.A addrspace(200)*
-;   tail call void %func(%class.A addrspace(200)* %1) #1
+;   %add.ptr = getelementptr inbounds i8, ptr addrspace(200) %a, i64 %this_adj
+;   tail call void %func(ptr addrspace(200) %add.otr) #1
 ;   ret void
 ; }
 

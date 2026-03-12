@@ -11,7 +11,7 @@
 
   %struct.foo = type { i32, i32 }
 
-  define dso_local void @hoist_csetbounds(i64 %arg, %struct.foo addrspace(200)* %f, %struct.foo addrspace(200)* %f2) local_unnamed_addr addrspace(200) #0 {
+  define dso_local void @hoist_csetbounds(i64 %arg, ptr addrspace(200) %f, ptr addrspace(200) %f2) local_unnamed_addr addrspace(200) #0 {
   entry:
     br label %for.body
 

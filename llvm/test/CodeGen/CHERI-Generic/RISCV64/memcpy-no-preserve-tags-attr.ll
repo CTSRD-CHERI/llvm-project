@@ -7,12 +7,12 @@
 %struct.pair = type { i64, i64 }
 
 ; Function Attrs: argmemonly nounwind
-declare void @llvm.memcpy.p200i8.p200i8.i64(i8 addrspace(200)* nocapture writeonly, i8 addrspace(200)* nocapture readonly, i64, i1)
-declare void @llvm.memmove.p200i8.p200i8.i64(i8 addrspace(200)* nocapture writeonly, i8 addrspace(200)* nocapture readonly, i64, i1)
+declare void @llvm.memcpy.p200.p200.i64(ptr addrspace(200) nocapture writeonly, ptr addrspace(200) nocapture readonly, i64, i1)
+declare void @llvm.memmove.p200.p200.i64(ptr addrspace(200) nocapture writeonly, ptr addrspace(200) nocapture readonly, i64, i1)
 
 ; Without a no_preserve_tags attribute we always call memcpy. In this case we
 ; don't know whether the type might actually contain capabilities (e.g. unions).
-define void @memcpy_no_attr(%struct.pair addrspace(200)* %a, %struct.pair addrspace(200)* %b) addrspace(200) nounwind {
+define void @memcpy_no_attr(ptr addrspace(200) %a, ptr addrspace(200) %b) addrspace(200) nounwind {
 ; CHECK-LABEL: memcpy_no_attr:
 ; CHECK:       # %bb.0: # %entry
 ; CHECK-NEXT:    cincoffset csp, csp, -16
@@ -23,13 +23,11 @@ define void @memcpy_no_attr(%struct.pair addrspace(200)* %a, %struct.pair addrsp
 ; CHECK-NEXT:    cincoffset csp, csp, 16
 ; CHECK-NEXT:    ret
 entry:
-  %a_i8 = bitcast %struct.pair addrspace(200)* %a to i8 addrspace(200)*
-  %b_i8 = bitcast %struct.pair addrspace(200)* %b to i8 addrspace(200)*
-  call void @llvm.memcpy.p200i8.p200i8.i64(i8 addrspace(200)* align 8 %a_i8, i8 addrspace(200)* align 8 %b_i8, i64 16, i1 false)
+  call void @llvm.memcpy.p200.p200.i64(ptr addrspace(200) align 8 %a, ptr addrspace(200) align 8 %b, i64 16, i1 false)
   ret void
 }
 
-define void @memmove_no_attr(%struct.pair addrspace(200)* %a, %struct.pair addrspace(200)* %b) addrspace(200) nounwind {
+define void @memmove_no_attr(ptr addrspace(200) %a, ptr addrspace(200) %b) addrspace(200) nounwind {
 ; CHECK-LABEL: memmove_no_attr:
 ; CHECK:       # %bb.0: # %entry
 ; CHECK-NEXT:    cincoffset csp, csp, -16
@@ -40,14 +38,12 @@ define void @memmove_no_attr(%struct.pair addrspace(200)* %a, %struct.pair addrs
 ; CHECK-NEXT:    cincoffset csp, csp, 16
 ; CHECK-NEXT:    ret
 entry:
-  %a_i8 = bitcast %struct.pair addrspace(200)* %a to i8 addrspace(200)*
-  %b_i8 = bitcast %struct.pair addrspace(200)* %b to i8 addrspace(200)*
-  call void @llvm.memmove.p200i8.p200i8.i64(i8 addrspace(200)* align 8 %a_i8, i8 addrspace(200)* align 8 %b_i8, i64 16, i1 false)
+  call void @llvm.memmove.p200.p200.i64(ptr addrspace(200) align 8 %a, ptr addrspace(200) align 8 %b, i64 16, i1 false)
   ret void
 }
 
 ; We have to emit a call if the intrinsic has must_preserve_cheri_tags:
-define void @memcpy_must_preserve(%struct.pair addrspace(200)* %a, %struct.pair addrspace(200)* %b) addrspace(200) nounwind {
+define void @memcpy_must_preserve(ptr addrspace(200) %a, ptr addrspace(200) %b) addrspace(200) nounwind {
 ; CHECK-LABEL: memcpy_must_preserve:
 ; CHECK:       # %bb.0: # %entry
 ; CHECK-NEXT:    cincoffset csp, csp, -16
@@ -58,13 +54,11 @@ define void @memcpy_must_preserve(%struct.pair addrspace(200)* %a, %struct.pair 
 ; CHECK-NEXT:    cincoffset csp, csp, 16
 ; CHECK-NEXT:    ret
 entry:
-  %a_i8 = bitcast %struct.pair addrspace(200)* %a to i8 addrspace(200)*
-  %b_i8 = bitcast %struct.pair addrspace(200)* %b to i8 addrspace(200)*
-  call void @llvm.memcpy.p200i8.p200i8.i64(i8 addrspace(200)* align 8 %a_i8, i8 addrspace(200)* align 8 %b_i8, i64 16, i1 false) must_preserve_cheri_tags
+  call void @llvm.memcpy.p200.p200.i64(ptr addrspace(200) align 8 %a, ptr addrspace(200) align 8 %b, i64 16, i1 false) must_preserve_cheri_tags
   ret void
 }
 
-define void @memmove_must_preserve(%struct.pair addrspace(200)* %a, %struct.pair addrspace(200)* %b) addrspace(200) nounwind {
+define void @memmove_must_preserve(ptr addrspace(200) %a, ptr addrspace(200) %b) addrspace(200) nounwind {
 ; CHECK-LABEL: memmove_must_preserve:
 ; CHECK:       # %bb.0: # %entry
 ; CHECK-NEXT:    cincoffset csp, csp, -16
@@ -75,14 +69,12 @@ define void @memmove_must_preserve(%struct.pair addrspace(200)* %a, %struct.pair
 ; CHECK-NEXT:    cincoffset csp, csp, 16
 ; CHECK-NEXT:    ret
 entry:
-  %a_i8 = bitcast %struct.pair addrspace(200)* %a to i8 addrspace(200)*
-  %b_i8 = bitcast %struct.pair addrspace(200)* %b to i8 addrspace(200)*
-  call void @llvm.memmove.p200i8.p200i8.i64(i8 addrspace(200)* align 8 %a_i8, i8 addrspace(200)* align 8 %b_i8, i64 16, i1 false) must_preserve_cheri_tags
+  call void @llvm.memmove.p200.p200.i64(ptr addrspace(200) align 8 %a, ptr addrspace(200) align 8 %b, i64 16, i1 false) must_preserve_cheri_tags
   ret void
 }
 
 ; We should be able to inline the call memcpy/memmove if the intrinsic has no_preserve_cheri_tags:
-define void @memcpy_no_preserve(%struct.pair addrspace(200)* %a, %struct.pair addrspace(200)* %b) addrspace(200) nounwind {
+define void @memcpy_no_preserve(ptr addrspace(200) %a, ptr addrspace(200) %b) addrspace(200) nounwind {
 ; CHECK-LABEL: memcpy_no_preserve:
 ; CHECK:       # %bb.0: # %entry
 ; CHECK-NEXT:    ld a2, 8(ca1)
@@ -91,13 +83,11 @@ define void @memcpy_no_preserve(%struct.pair addrspace(200)* %a, %struct.pair ad
 ; CHECK-NEXT:    sd a1, 0(ca0)
 ; CHECK-NEXT:    ret
 entry:
-  %a_i8 = bitcast %struct.pair addrspace(200)* %a to i8 addrspace(200)*
-  %b_i8 = bitcast %struct.pair addrspace(200)* %b to i8 addrspace(200)*
-  call void @llvm.memcpy.p200i8.p200i8.i64(i8 addrspace(200)* align 8 %a_i8, i8 addrspace(200)* align 8 %b_i8, i64 16, i1 false) no_preserve_cheri_tags
+  call void @llvm.memcpy.p200.p200.i64(ptr addrspace(200) align 8 %a, ptr addrspace(200) align 8 %b, i64 16, i1 false) no_preserve_cheri_tags
   ret void
 }
 
-define void @memmove_no_preserve(%struct.pair addrspace(200)* %a, %struct.pair addrspace(200)* %b) addrspace(200) nounwind {
+define void @memmove_no_preserve(ptr addrspace(200) %a, ptr addrspace(200) %b) addrspace(200) nounwind {
 ; CHECK-LABEL: memmove_no_preserve:
 ; CHECK:       # %bb.0: # %entry
 ; CHECK-NEXT:    ld a2, 8(ca1)
@@ -106,8 +96,6 @@ define void @memmove_no_preserve(%struct.pair addrspace(200)* %a, %struct.pair a
 ; CHECK-NEXT:    sd a1, 0(ca0)
 ; CHECK-NEXT:    ret
 entry:
-  %a_i8 = bitcast %struct.pair addrspace(200)* %a to i8 addrspace(200)*
-  %b_i8 = bitcast %struct.pair addrspace(200)* %b to i8 addrspace(200)*
-  call void @llvm.memmove.p200i8.p200i8.i64(i8 addrspace(200)* align 8 %a_i8, i8 addrspace(200)* align 8 %b_i8, i64 16, i1 false) no_preserve_cheri_tags
+  call void @llvm.memmove.p200.p200.i64(ptr addrspace(200) align 8 %a, ptr addrspace(200) align 8 %b, i64 16, i1 false) no_preserve_cheri_tags
   ret void
 }

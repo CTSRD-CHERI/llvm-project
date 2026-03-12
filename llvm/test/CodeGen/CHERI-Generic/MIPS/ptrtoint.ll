@@ -4,7 +4,7 @@
 ; RUN: llc -mtriple=mips64 -mcpu=cheri128 -mattr=+cheri128 --relocation-model=pic -target-abi purecap < %s | FileCheck %s
 ; RUN: llc -mtriple=mips64 -mcpu=cheri128 -mattr=+cheri128 --relocation-model=pic -target-abi n64 < %s | FileCheck %s --check-prefix=HYBRID
 
-define internal i64 @ptrtoint(i8 addrspace(200)* %cap) addrspace(200) nounwind {
+define internal i64 @ptrtoint(ptr addrspace(200) %cap) addrspace(200) nounwind {
 ; CHECK-LABEL: ptrtoint:
 ; CHECK:       # %bb.0:
 ; CHECK-NEXT:    cjr $c17
@@ -14,11 +14,11 @@ define internal i64 @ptrtoint(i8 addrspace(200)* %cap) addrspace(200) nounwind {
 ; HYBRID:       # %bb.0:
 ; HYBRID-NEXT:    jr $ra
 ; HYBRID-NEXT:    ctoptr $2, $c3, $ddc
-  %ret = ptrtoint i8 addrspace(200)* %cap to i64
+  %ret = ptrtoint ptr addrspace(200) %cap to i64
   ret i64 %ret
 }
 
-define internal i64 @ptrtoint_plus_const(i8 addrspace(200)* %cap) addrspace(200) nounwind {
+define internal i64 @ptrtoint_plus_const(ptr addrspace(200) %cap) addrspace(200) nounwind {
 ; CHECK-LABEL: ptrtoint_plus_const:
 ; CHECK:       # %bb.0:
 ; CHECK-NEXT:    cgetaddr $1, $c3
@@ -30,12 +30,12 @@ define internal i64 @ptrtoint_plus_const(i8 addrspace(200)* %cap) addrspace(200)
 ; HYBRID-NEXT:    ctoptr $1, $c3, $ddc
 ; HYBRID-NEXT:    jr $ra
 ; HYBRID-NEXT:    daddiu $2, $1, 2
-  %zero = ptrtoint i8 addrspace(200)* %cap to i64
+  %zero = ptrtoint ptr addrspace(200) %cap to i64
   %ret = add i64 %zero, 2
   ret i64 %ret
 }
 
-define internal i64 @ptrtoint_plus_var(i8 addrspace(200)* %cap, i64 %add) addrspace(200) nounwind {
+define internal i64 @ptrtoint_plus_var(ptr addrspace(200) %cap, i64 %add) addrspace(200) nounwind {
 ; CHECK-LABEL: ptrtoint_plus_var:
 ; CHECK:       # %bb.0:
 ; CHECK-NEXT:    cgetaddr $1, $c3
@@ -47,7 +47,7 @@ define internal i64 @ptrtoint_plus_var(i8 addrspace(200)* %cap, i64 %add) addrsp
 ; HYBRID-NEXT:    ctoptr $1, $c3, $ddc
 ; HYBRID-NEXT:    jr $ra
 ; HYBRID-NEXT:    daddu $2, $1, $4
-  %zero = ptrtoint i8 addrspace(200)* %cap to i64
+  %zero = ptrtoint ptr addrspace(200) %cap to i64
   %ret = add i64 %zero, %add
   ret i64 %ret
 }
@@ -62,7 +62,7 @@ define internal i64 @ptrtoint_null() addrspace(200) nounwind {
 ; HYBRID:       # %bb.0:
 ; HYBRID-NEXT:    jr $ra
 ; HYBRID-NEXT:    ctoptr $2, $cnull, $ddc
-  %ret = ptrtoint i8 addrspace(200)* null to i64
+  %ret = ptrtoint ptr addrspace(200) null to i64
   ret i64 %ret
 }
 
@@ -78,7 +78,7 @@ define internal i64 @ptrtoint_null_plus_const() addrspace(200) nounwind {
 ; HYBRID-NEXT:    ctoptr $1, $cnull, $ddc
 ; HYBRID-NEXT:    jr $ra
 ; HYBRID-NEXT:    daddiu $2, $1, 2
-  %zero = ptrtoint i8 addrspace(200)* null to i64
+  %zero = ptrtoint ptr addrspace(200) null to i64
   %ret = add i64 %zero, 2
   ret i64 %ret
 }
@@ -95,7 +95,7 @@ define internal i64 @ptrtoint_null_plus_var(i64 %add) addrspace(200) nounwind {
 ; HYBRID-NEXT:    ctoptr $1, $cnull, $ddc
 ; HYBRID-NEXT:    jr $ra
 ; HYBRID-NEXT:    daddu $2, $1, $4
-  %zero = ptrtoint i8 addrspace(200)* null to i64
+  %zero = ptrtoint ptr addrspace(200) null to i64
   %ret = add i64 %zero, %add
   ret i64 %ret
 }

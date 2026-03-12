@@ -37,7 +37,7 @@ define i64 @load_global_i64_align_1(i64 %y) addrspace(200) nounwind {
 ; CHECK-NEXT:    dsll $2, $2, 32
 ; CHECK-NEXT:    cjr $c17
 ; CHECK-NEXT:    or $2, $2, $1
-  %ret = load i64, i64 addrspace(200)* @a1, align 1
+  %ret = load i64, ptr addrspace(200) @a1, align 1
   ret i64 %ret
 }
 
@@ -59,7 +59,7 @@ define i64 @load_global_i64_align_2(i64 %y) addrspace(200) nounwind {
 ; CHECK-NEXT:    or $2, $2, $3
 ; CHECK-NEXT:    cjr $c17
 ; CHECK-NEXT:    or $2, $2, $1
-  %ret = load i64, i64 addrspace(200)* @a2, align 2
+  %ret = load i64, ptr addrspace(200) @a2, align 2
   ret i64 %ret
 }
 
@@ -75,7 +75,7 @@ define i64 @load_global_i64_align_4(i64 %y) addrspace(200) nounwind {
 ; CHECK-NEXT:    dsll $1, $1, 32
 ; CHECK-NEXT:    cjr $c17
 ; CHECK-NEXT:    or $2, $1, $2
-  %ret = load i64, i64 addrspace(200)* @a4, align 4
+  %ret = load i64, ptr addrspace(200) @a4, align 4
   ret i64 %ret
 }
 
@@ -88,7 +88,7 @@ define i64 @load_global_i64_align_8(i64 %y) addrspace(200) nounwind {
 ; CHECK-NEXT:    clcbi $c1, %captab20(a8)($c1)
 ; CHECK-NEXT:    cjr $c17
 ; CHECK-NEXT:    cld $2, $zero, 0($c1)
-  %ret = load i64, i64 addrspace(200)* @a8, align 8
+  %ret = load i64, ptr addrspace(200) @a8, align 8
   ret i64 %ret
 }
 
@@ -115,7 +115,7 @@ define void @store_global_i64_align_1(i64 %y) addrspace(200) nounwind {
 ; CHECK-NEXT:    dsrl $1, $4, 56
 ; CHECK-NEXT:    cjr $c17
 ; CHECK-NEXT:    csb $1, $zero, 0($c1)
-  store i64 %y, i64 addrspace(200)* @a1, align 1
+  store i64 %y, ptr addrspace(200) @a1, align 1
   ret void
 }
 
@@ -134,7 +134,7 @@ define void @store_global_i64_align_2(i64 %y) addrspace(200) nounwind {
 ; CHECK-NEXT:    dsrl $1, $4, 48
 ; CHECK-NEXT:    cjr $c17
 ; CHECK-NEXT:    csh $1, $zero, 0($c1)
-  store i64 %y, i64 addrspace(200)* @a2, align 2
+  store i64 %y, ptr addrspace(200) @a2, align 2
   ret void
 }
 
@@ -149,7 +149,7 @@ define void @store_global_i64_align_4(i64 %y) addrspace(200) nounwind {
 ; CHECK-NEXT:    dsrl $1, $4, 32
 ; CHECK-NEXT:    cjr $c17
 ; CHECK-NEXT:    csw $1, $zero, 0($c1)
-  store i64 %y, i64 addrspace(200)* @a4, align 4
+  store i64 %y, ptr addrspace(200) @a4, align 4
   ret void
 }
 
@@ -162,6 +162,6 @@ define void @store_global_i64_align_8(i64 %y) addrspace(200) nounwind {
 ; CHECK-NEXT:    clcbi $c1, %captab20(a8)($c1)
 ; CHECK-NEXT:    cjr $c17
 ; CHECK-NEXT:    csd $4, $zero, 0($c1)
-  store i64 %y, i64 addrspace(200)* @a8, align 8
+  store i64 %y, ptr addrspace(200) @a8, align 8
   ret void
 }

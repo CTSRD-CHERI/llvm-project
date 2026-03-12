@@ -3,7 +3,7 @@
 ; RUN: llc -mtriple=riscv32 --relocation-model=pic -target-abi ilp32f -mattr=+xcheri,+f %s -o - | FileCheck %s --check-prefix=HYBRID
 ; RUN: llc -mtriple=riscv32 --relocation-model=pic -target-abi il32pc64f -mattr=+xcheri,+cap-mode,+f %s -o - | FileCheck %s --check-prefix=PURECAP
 
-define i32 @subp(i8 addrspace(200)* readnone %a, i8 addrspace(200)* readnone %b) nounwind {
+define i32 @subp(ptr addrspace(200) readnone %a, ptr addrspace(200) readnone %b) nounwind {
 ; HYBRID-LABEL: subp:
 ; HYBRID:       # %bb.0:
 ; HYBRID-NEXT:    sub a0, a0, a1
@@ -13,8 +13,8 @@ define i32 @subp(i8 addrspace(200)* readnone %a, i8 addrspace(200)* readnone %b)
 ; PURECAP:       # %bb.0:
 ; PURECAP-NEXT:    sub a0, a0, a1
 ; PURECAP-NEXT:    ret
-  %1 = tail call i32 @llvm.cheri.cap.diff.i32(i8 addrspace(200)* %a, i8 addrspace(200)* %b)
+  %1 = tail call i32 @llvm.cheri.cap.diff.i32(ptr addrspace(200) %a, ptr addrspace(200) %b)
   ret i32 %1
 }
 
-declare i32 @llvm.cheri.cap.diff.i32(i8 addrspace(200)*, i8 addrspace(200)*)
+declare i32 @llvm.cheri.cap.diff.i32(ptr addrspace(200), ptr addrspace(200))

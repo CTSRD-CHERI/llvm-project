@@ -6,7 +6,7 @@
 %class.duration = type { i128 }
 
 ; Previously this input would result in an invalid ptrtoint instruction and a crash for CHERI128 (CHERI256 works fine)
-; TODO: On CHERI we convert the memcpy to a i8 addrspace(200)* load/store which results in worse output assembly
+; TODO: On CHERI we convert the memcpy to a ptr addrspace(200) load/store which results in worse output assembly
 
 define i128 @test2(ptr dereferenceable(16) %e) local_unnamed_addr nounwind {
 ; CHERI128-LABEL: define {{[^@]+}}@test2

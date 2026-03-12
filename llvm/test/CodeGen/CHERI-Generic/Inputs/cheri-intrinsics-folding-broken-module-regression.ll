@@ -35,9 +35,9 @@ define void @g(iCAPRANGE %x, iCAPRANGE %y) addrspace(200) nounwind {
 }
 
 ; define void @g(iCAPRANGE %x, iCAPRANGE %y)  nounwind {
-;   %tmp1 = tail call i8 addrspace(200)* @llvm.cheri.cap.offset.increment.iCAPRANGE(i8 addrspace(200)* bitcast (iCAPRANGE addrspace(200)* @d to i8 addrspace(200)*), iCAPRANGE %x)
-;   %tmp3 = tail call i8 addrspace(200)* @llvm.cheri.cap.offset.increment.iCAPRANGE(i8 addrspace(200)* %tmp1, iCAPRANGE %y)
-;   store i8 addrspace(200)* %tmp3, i8 addrspace(200)* addrspace(200)* @e, align 32
+;   %tmp1 = tail call ptr addrspace(200) @llvm.cheri.cap.offset.increment.iCAPRANGE(ptr addrspace(200) @d, iCAPRANGE %x)
+;   %tmp3 = tail call ptr addrspace(200) @llvm.cheri.cap.offset.increment.iCAPRANGE(ptr addrspace(200) %tmp1, iCAPRANGE %y)
+;   store ptr addrspace(200) %tmp3, ptr addrspace(200) @e, align 32
 ;   ret void
 ; }
 ;

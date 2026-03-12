@@ -4,7 +4,7 @@
 ; RUN: llc -mtriple=riscv32 --relocation-model=pic -target-abi il32pc64f -mattr=+xcheri,+cap-mode,+f < %s | FileCheck %s
 ; RUN: llc -mtriple=riscv32 --relocation-model=pic -target-abi ilp32f -mattr=+xcheri,+f < %s | FileCheck %s --check-prefix=HYBRID
 
-define internal i32 @ptrtoint(i8 addrspace(200)* %cap) addrspace(200) nounwind {
+define internal i32 @ptrtoint(ptr addrspace(200) %cap) addrspace(200) nounwind {
 ; CHECK-LABEL: ptrtoint:
 ; CHECK:       # %bb.0:
 ; CHECK-NEXT:    mv a0, a0
@@ -16,11 +16,11 @@ define internal i32 @ptrtoint(i8 addrspace(200)* %cap) addrspace(200) nounwind {
 ; HYBRID-NEXT:    neg a1, a1
 ; HYBRID-NEXT:    and a0, a0, a1
 ; HYBRID-NEXT:    ret
-  %ret = ptrtoint i8 addrspace(200)* %cap to i32
+  %ret = ptrtoint ptr addrspace(200) %cap to i32
   ret i32 %ret
 }
 
-define internal i32 @ptrtoint_plus_const(i8 addrspace(200)* %cap) addrspace(200) nounwind {
+define internal i32 @ptrtoint_plus_const(ptr addrspace(200) %cap) addrspace(200) nounwind {
 ; CHECK-LABEL: ptrtoint_plus_const:
 ; CHECK:       # %bb.0:
 ; CHECK-NEXT:    addi a0, a0, 2
@@ -33,12 +33,12 @@ define internal i32 @ptrtoint_plus_const(i8 addrspace(200)* %cap) addrspace(200)
 ; HYBRID-NEXT:    and a0, a0, a1
 ; HYBRID-NEXT:    addi a0, a0, 2
 ; HYBRID-NEXT:    ret
-  %zero = ptrtoint i8 addrspace(200)* %cap to i32
+  %zero = ptrtoint ptr addrspace(200) %cap to i32
   %ret = add i32 %zero, 2
   ret i32 %ret
 }
 
-define internal i32 @ptrtoint_plus_var(i8 addrspace(200)* %cap, i32 %add) addrspace(200) nounwind {
+define internal i32 @ptrtoint_plus_var(ptr addrspace(200) %cap, i32 %add) addrspace(200) nounwind {
 ; CHECK-LABEL: ptrtoint_plus_var:
 ; CHECK:       # %bb.0:
 ; CHECK-NEXT:    add a0, a0, a1
@@ -51,7 +51,7 @@ define internal i32 @ptrtoint_plus_var(i8 addrspace(200)* %cap, i32 %add) addrsp
 ; HYBRID-NEXT:    and a0, a0, a2
 ; HYBRID-NEXT:    add a0, a0, a1
 ; HYBRID-NEXT:    ret
-  %zero = ptrtoint i8 addrspace(200)* %cap to i32
+  %zero = ptrtoint ptr addrspace(200) %cap to i32
   %ret = add i32 %zero, %add
   ret i32 %ret
 }
@@ -68,7 +68,7 @@ define internal i32 @ptrtoint_null() addrspace(200) nounwind {
 ; HYBRID-NEXT:    neg a0, a0
 ; HYBRID-NEXT:    and a0, zero, a0
 ; HYBRID-NEXT:    ret
-  %ret = ptrtoint i8 addrspace(200)* null to i32
+  %ret = ptrtoint ptr addrspace(200) null to i32
   ret i32 %ret
 }
 
@@ -85,7 +85,7 @@ define internal i32 @ptrtoint_null_plus_const() addrspace(200) nounwind {
 ; HYBRID-NEXT:    and a0, zero, a0
 ; HYBRID-NEXT:    addi a0, a0, 2
 ; HYBRID-NEXT:    ret
-  %zero = ptrtoint i8 addrspace(200)* null to i32
+  %zero = ptrtoint ptr addrspace(200) null to i32
   %ret = add i32 %zero, 2
   ret i32 %ret
 }
@@ -103,7 +103,7 @@ define internal i32 @ptrtoint_null_plus_var(i32 %add) addrspace(200) nounwind {
 ; HYBRID-NEXT:    and a1, zero, a1
 ; HYBRID-NEXT:    add a0, a1, a0
 ; HYBRID-NEXT:    ret
-  %zero = ptrtoint i8 addrspace(200)* null to i32
+  %zero = ptrtoint ptr addrspace(200) null to i32
   %ret = add i32 %zero, %add
   ret i32 %ret
 }

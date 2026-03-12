@@ -24,7 +24,7 @@
 
 ; Basic check that we can use CHERI compressed instructions
 
-define i32 @loadstore(i32 addrspace(200)* %intptrarg, i8 addrspace(200)* addrspace(200)* %ptrptrarg) addrspace(200) #0 {
+define i32 @loadstore(ptr addrspace(200) %intptrarg, ptr addrspace(200) %ptrptrarg) addrspace(200) #0 {
 ; CHECK-LABEL: <loadstore>:
 ; CHECK-NEXT:    {{[[:<:]]}}c.cincoffset16csp csp, -32
 ; CHECK-NEXT:    {{[[:<:]]}}c.lw a2, 0(ca0)
@@ -53,16 +53,16 @@ define i32 @loadstore(i32 addrspace(200)* %intptrarg, i8 addrspace(200)* addrspa
 ; CHECK-NORVC-NEXT:  {{[[:<:]]}}c.mv a0, a2
 ; CHECK-NORVC-NEXT:  {{[[:<:]]}}cincoffset csp, csp, 32
 ; CHECK-NORVC-NEXT:  {{[[:<:]]}}jalr cnull, 0(cra)
-  %stackptr = alloca i8 addrspace(200)*, align 16, addrspace(200)
+  %stackptr = alloca ptr addrspace(200), align 16, addrspace(200)
   %stackint = alloca i32, align 16, addrspace(200)
-  %val = load volatile i32, i32 addrspace(200)* %intptrarg
-  store volatile i32 1, i32 addrspace(200)* %intptrarg
-  %ptrval = load volatile i8 addrspace(200)*, i8 addrspace(200)* addrspace(200)* %ptrptrarg
-  store volatile i8 addrspace(200)* %ptrval, i8 addrspace(200)* addrspace(200)* %ptrptrarg
-  store volatile i8 addrspace(200)* %ptrval, i8 addrspace(200)* addrspace(200)* %stackptr
-  %stackptrval = load volatile i8 addrspace(200)*, i8 addrspace(200)* addrspace(200)* %stackptr
-  store volatile i32 %val, i32 addrspace(200)* %stackint
-  %stackintval = load volatile i32, i32 addrspace(200)* %stackint
+  %val = load volatile i32, ptr addrspace(200) %intptrarg
+  store volatile i32 1, ptr addrspace(200) %intptrarg
+  %ptrval = load volatile ptr addrspace(200), ptr addrspace(200) %ptrptrarg
+  store volatile ptr addrspace(200) %ptrval, ptr addrspace(200) %ptrptrarg
+  store volatile ptr addrspace(200) %ptrval, ptr addrspace(200) %stackptr
+  %stackptrval = load volatile ptr addrspace(200), ptr addrspace(200) %stackptr
+  store volatile i32 %val, ptr addrspace(200) %stackint
+  %stackintval = load volatile i32, ptr addrspace(200) %stackint
   ret i32 %val
 }
 
@@ -97,10 +97,10 @@ define i32 @call() addrspace(200) #0 {
 ; CHECK-NORVC-NEXT:  {{[[:<:]]}}cincoffset csp, csp, 144
 ; CHECK-NORVC-NEXT:  {{[[:<:]]}}jalr cnull, 0(cra)
 
-  %ptrarray = alloca [4 x i8 addrspace(200)*], align 16, addrspace(200)
+  %ptrarray = alloca [4 x ptr addrspace(200)], align 16, addrspace(200)
   %intarray = alloca [16 x i32], align 1, addrspace(200)
-  %ptrgep = getelementptr inbounds [4 x i8 addrspace(200)*], [4 x i8 addrspace(200)*] addrspace(200)* %ptrarray, i64 0, i64 3
-  %intgep = getelementptr inbounds [16 x i32], [16 x i32] addrspace(200)* %intarray, i64 0, i64 3
-  %ret = call i32 @loadstore(i32 addrspace(200)* %intgep, i8 addrspace(200)* addrspace(200)* %ptrgep)
+  %ptrgep = getelementptr inbounds [4 x ptr addrspace(200)], ptr addrspace(200) %ptrarray, i64 0, i64 3
+  %intgep = getelementptr inbounds [16 x i32], ptr addrspace(200) %intarray, i64 0, i64 3
+  %ret = call i32 @loadstore(ptr addrspace(200) %intgep, ptr addrspace(200) %ptrgep)
   ret i32 %ret
 }

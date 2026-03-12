@@ -2,10 +2,10 @@
 # Check that we can rematerialize constant CIncOffset/CMove instead of spilling to the stack
 # RUN: %riscv64_cheri_purecap_llc -verify-machineinstrs %s -o - -run-pass=register-coalescer | FileCheck %s
 --- |
-  declare void @external_fn(i8 addrspace(200)*) addrspace(200) nounwind
+  declare void @external_fn(ptr addrspace(200)) addrspace(200) nounwind
 
   define void @test_remat() addrspace(200) nounwind {
-    call void @external_fn(i8 addrspace(200)* getelementptr (i8, i8 addrspace(200)* null, i64 123)) nounwind
+    call void @external_fn(ptr addrspace(200) getelementptr (i8, ptr addrspace(200) null, i64 123)) nounwind
     ret void
   }
 

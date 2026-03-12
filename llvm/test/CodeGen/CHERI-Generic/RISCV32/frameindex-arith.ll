@@ -20,12 +20,12 @@ define void @foo() nounwind {
 ; CHECK-NEXT:    cincoffset csp, csp, 16
 ; CHECK-NEXT:    ret
   %x = alloca [2 x i8], align 1, addrspace(200)
-  %x_plus_1 = getelementptr inbounds [2 x i8], [2 x i8] addrspace(200)* %x, i32 0, i32 1
-  %p = call i8 addrspace(200)* @llvm.cheri.cap.bounds.set.i32(i8 addrspace(200)* %x_plus_1, i32 0)
-  call void @bar(i8 addrspace(200)* %p)
+  %x_plus_1 = getelementptr inbounds [2 x i8], ptr addrspace(200) %x, i32 0, i32 1
+  %p = call ptr addrspace(200) @llvm.cheri.cap.bounds.set.i32(ptr addrspace(200) %x_plus_1, i32 0)
+  call void @bar(ptr addrspace(200) %p)
   ret void
 }
 
-declare void @bar(i8 addrspace(200)*)
+declare void @bar(ptr addrspace(200))
 
-declare i8 addrspace(200)* @llvm.cheri.cap.bounds.set.i32(i8 addrspace(200)*, i32)
+declare ptr addrspace(200) @llvm.cheri.cap.bounds.set.i32(ptr addrspace(200), i32)

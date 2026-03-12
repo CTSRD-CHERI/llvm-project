@@ -5,7 +5,7 @@
 ; RUN: %riscv64_cheri_purecap_llc < %s | FileCheck %s --check-prefix=PURECAP
 ; RUN: %riscv64_cheri_llc < %s | FileCheck %s --check-prefix=HYBRID
 
-define dso_local i64 @ptrtoint(i8 addrspace(200)* %cap) addrspace(200) nounwind {
+define dso_local i64 @ptrtoint(ptr addrspace(200) %cap) addrspace(200) nounwind {
 ; PURECAP-LABEL: ptrtoint:
 ; PURECAP:       # %bb.0:
 ; PURECAP-NEXT:    mv a0, a0
@@ -17,11 +17,11 @@ define dso_local i64 @ptrtoint(i8 addrspace(200)* %cap) addrspace(200) nounwind 
 ; HYBRID-NEXT:    neg a1, a1
 ; HYBRID-NEXT:    and a0, a0, a1
 ; HYBRID-NEXT:    ret
-  %ret = ptrtoint i8 addrspace(200)* %cap to i64
+  %ret = ptrtoint ptr addrspace(200) %cap to i64
   ret i64 %ret
 }
 
-define dso_local i64 @ptrtoint_plus_const(i8 addrspace(200)* %cap) addrspace(200) nounwind {
+define dso_local i64 @ptrtoint_plus_const(ptr addrspace(200) %cap) addrspace(200) nounwind {
 ; PURECAP-LABEL: ptrtoint_plus_const:
 ; PURECAP:       # %bb.0:
 ; PURECAP-NEXT:    addi a0, a0, 2
@@ -34,12 +34,12 @@ define dso_local i64 @ptrtoint_plus_const(i8 addrspace(200)* %cap) addrspace(200
 ; HYBRID-NEXT:    and a0, a0, a1
 ; HYBRID-NEXT:    addi a0, a0, 2
 ; HYBRID-NEXT:    ret
-  %zero = ptrtoint i8 addrspace(200)* %cap to i64
+  %zero = ptrtoint ptr addrspace(200) %cap to i64
   %ret = add i64 %zero, 2
   ret i64 %ret
 }
 
-define dso_local i64 @ptrtoint_plus_var(i8 addrspace(200)* %cap, i64 %add) addrspace(200) nounwind {
+define dso_local i64 @ptrtoint_plus_var(ptr addrspace(200) %cap, i64 %add) addrspace(200) nounwind {
 ; PURECAP-LABEL: ptrtoint_plus_var:
 ; PURECAP:       # %bb.0:
 ; PURECAP-NEXT:    add a0, a0, a1
@@ -52,7 +52,7 @@ define dso_local i64 @ptrtoint_plus_var(i8 addrspace(200)* %cap, i64 %add) addrs
 ; HYBRID-NEXT:    and a0, a0, a2
 ; HYBRID-NEXT:    add a0, a0, a1
 ; HYBRID-NEXT:    ret
-  %zero = ptrtoint i8 addrspace(200)* %cap to i64
+  %zero = ptrtoint ptr addrspace(200) %cap to i64
   %ret = add i64 %zero, %add
   ret i64 %ret
 }
@@ -69,7 +69,7 @@ define dso_local i64 @ptrtoint_null() addrspace(200) nounwind {
 ; HYBRID-NEXT:    neg a0, a0
 ; HYBRID-NEXT:    and a0, zero, a0
 ; HYBRID-NEXT:    ret
-  %ret = ptrtoint i8 addrspace(200)* null to i64
+  %ret = ptrtoint ptr addrspace(200) null to i64
   ret i64 %ret
 }
 
@@ -86,7 +86,7 @@ define dso_local i64 @ptrtoint_null_plus_const() addrspace(200) nounwind {
 ; HYBRID-NEXT:    and a0, zero, a0
 ; HYBRID-NEXT:    addi a0, a0, 2
 ; HYBRID-NEXT:    ret
-  %zero = ptrtoint i8 addrspace(200)* null to i64
+  %zero = ptrtoint ptr addrspace(200) null to i64
   %ret = add i64 %zero, 2
   ret i64 %ret
 }
@@ -104,7 +104,7 @@ define dso_local i64 @ptrtoint_null_plus_var(i64 %add) addrspace(200) nounwind {
 ; HYBRID-NEXT:    and a1, zero, a1
 ; HYBRID-NEXT:    add a0, a1, a0
 ; HYBRID-NEXT:    ret
-  %zero = ptrtoint i8 addrspace(200)* null to i64
+  %zero = ptrtoint ptr addrspace(200) null to i64
   %ret = add i64 %zero, %add
   ret i64 %ret
 }

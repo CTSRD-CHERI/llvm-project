@@ -38,7 +38,7 @@ declare ptr addrspace(200) @llvm.cheri.cap.offset.set.i64(ptr addrspace(200), i6
 
 ; Function Attrs: nounwind
 define void @foo(ptr addrspace(200) %x) local_unnamed_addr addrspace(200) #0 {
-; Previously we were generating a %magicptr = ptrtoint i8 addrspace(200)* %x to i64 here
+; Previously we were generating a %magicptr = ptrtoint ptr addrspace(200) %x to i64 here
 ; CHECK-LABEL: @foo(
 ; CHECK-NEXT:  entry:
 ; CHECK-NEXT:    [[CMP:%.*]] = icmp eq ptr addrspace(200) [[X:%.*]], null

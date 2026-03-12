@@ -7,9 +7,9 @@
 ; RUN: llc -mtriple=riscv32 --relocation-model=pic -target-abi ilp32f -mattr=+xcheri,+f %s -o - | FileCheck %s --check-prefix=HYBRID
 ; RUN: llc -mtriple=riscv32 --relocation-model=pic -target-abi il32pc64f -mattr=+xcheri,+cap-mode,+f %s -o - | FileCheck %s --check-prefix=PURECAP
 
-declare i32 @bar(i32 addrspace(200)*)
+declare i32 @bar(ptr addrspace(200))
 
-define internal i32 @foo(i32 addrspace(200)* %a, i32 addrspace(200)* %b) nounwind {
+define internal i32 @foo(ptr addrspace(200) %a, ptr addrspace(200) %b) nounwind {
 ; HYBRID-LABEL: foo:
 ; HYBRID:       # %bb.0: # %entry
 ; HYBRID-NEXT:    addi sp, sp, -16
@@ -37,10 +37,10 @@ entry:
   br label %loop
 
 loop:
-  %0 = getelementptr inbounds i32, i32 addrspace(200)* %a, i32 1
-  %1 = load i32, i32 addrspace(200)* %b, align 16
+  %0 = getelementptr inbounds i32, ptr addrspace(200) %a, i32 1
+  %1 = load i32, ptr addrspace(200) %b, align 16
   %2 = mul i32 0, %1
-  %3 = getelementptr inbounds i32, i32 addrspace(200)* %0, i32 %2
-  %4 = call i32 @bar(i32 addrspace(200)* %3)
+  %3 = getelementptr inbounds i32, ptr addrspace(200) %0, i32 %2
+  %4 = call i32 @bar(ptr addrspace(200) %3)
   br label %loop
 }

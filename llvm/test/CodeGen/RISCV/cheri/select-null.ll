@@ -12,8 +12,8 @@
 ;target datalayout = "e-m:e-pf200:128:128:128:64-p:64:64-i64:64-i128:128-n64-S128-A200-P200-G200"
 ; target triple = "riscv64-unknown-freebsd"
 
-declare void @barney(i8 addrspace(200)*) local_unnamed_addr addrspace(200)
-define i8 addrspace(200)* @eggs(i1 %cond) local_unnamed_addr addrspace(200) #0 {
+declare void @barney(ptr addrspace(200)) local_unnamed_addr addrspace(200)
+define ptr addrspace(200) @eggs(i1 %cond) local_unnamed_addr addrspace(200) #0 {
 ; RV64-LABEL: eggs:
 ; RV64:       # %bb.0: # %bb
 ; RV64-NEXT:    addi sp, sp, -16
@@ -49,9 +49,9 @@ define i8 addrspace(200)* @eggs(i1 %cond) local_unnamed_addr addrspace(200) #0 {
 ; PURECAP-NEXT:    cincoffset csp, csp, 32
 ; PURECAP-NEXT:    ret
 bb:
-  %tmp1.0 = select i1 %cond, i8 addrspace(200)* null, i8 addrspace(200)* inttoptr (i64 32 to i8 addrspace(200)*)
-  tail call void @barney(i8 addrspace(200)* null)
-  ret i8 addrspace(200)* %tmp1.0
+  %tmp1.0 = select i1 %cond, ptr addrspace(200) null, ptr addrspace(200) inttoptr (i64 32 to ptr addrspace(200))
+  tail call void @barney(ptr addrspace(200) null)
+  ret ptr addrspace(200) %tmp1.0
 }
 
 attributes #0 = { nounwind }

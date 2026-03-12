@@ -6,7 +6,7 @@
 
 %struct.wobble = type { [64 x i8] }
 
-define i8 addrspace(200)* @pluto() addrspace(200) nounwind {
+define ptr addrspace(200) @pluto() addrspace(200) nounwind {
 ; IL32PC64-LABEL: pluto:
 ; IL32PC64:       # %bb.0: # %bb
 ; IL32PC64-NEXT:    cincoffset csp, csp, -128
@@ -40,6 +40,5 @@ define i8 addrspace(200)* @pluto() addrspace(200) nounwind {
 ; L64PC128-NEXT:    ret
 bb:
   %tmp = alloca %struct.wobble, align 64, addrspace(200)
-  %ret = bitcast %struct.wobble addrspace(200)* %tmp to i8 addrspace(200)*
-  ret i8 addrspace(200)* %ret
+  ret ptr addrspace(200) %tmp
 }

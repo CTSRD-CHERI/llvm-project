@@ -3,33 +3,32 @@ target datalayout = "E-m:e-pf200:128:128:128:64-i8:8:32-i16:16:32-i64:64-n32:64-
 target triple = "cheri-unknown-freebsd"
 
 ; Function Attrs: noinline nounwind optnone
-define i32 @foo(i32* %i) #0 !dbg !9 {
+define i32 @foo(ptr %i) #0 !dbg !9 {
 entry:
-  %i.addr = alloca i32*, align 16
+  %i.addr = alloca ptr, align 16
   %j = alloca i32, align 4
   %j1 = alloca i32, align 4
-  store i32* %i, i32** %i.addr, align 16
-  call void @llvm.dbg.declare(metadata i32** %i.addr, metadata !14, metadata !DIExpression()), !dbg !15
-  %0 = load i32*, i32** %i.addr, align 16, !dbg !16
-  %tobool = icmp ne i32* %0, null, !dbg !16
+  store ptr %i, ptr %i.addr, align 16
+  call void @llvm.dbg.declare(metadata ptr %i.addr, metadata !14, metadata !DIExpression()), !dbg !15
+  %0 = load ptr, ptr %i.addr, align 16, !dbg !16
+  %tobool = icmp ne ptr %0, null, !dbg !16
   br i1 %tobool, label %if.then, label %if.else, !dbg !18
 
 if.then:                                          ; preds = %entry
-  call void @llvm.dbg.declare(metadata i32* %j, metadata !19, metadata !DIExpression()), !dbg !21
-  store i32 2, i32* %j, align 4, !dbg !21
+  call void @llvm.dbg.declare(metadata ptr %j, metadata !19, metadata !DIExpression()), !dbg !21
+  store i32 2, ptr %j, align 4, !dbg !21
   br label %if.end, !dbg !22
 
 if.else:                                          ; preds = %entry
-  call void @llvm.dbg.declare(metadata i32* %j1, metadata !23, metadata !DIExpression()), !dbg !25
-  store i32 3, i32* %j1, align 4, !dbg !25
+  call void @llvm.dbg.declare(metadata ptr %j1, metadata !23, metadata !DIExpression()), !dbg !25
+  store i32 3, ptr %j1, align 4, !dbg !25
   br label %if.end
 
 if.end:                                           ; preds = %if.else, %if.then
-  %1 = load i32*, i32** %i.addr, align 16, !dbg !26
-  %2 = bitcast i32* %1 to i8*, !dbg !27
-  %3 = ptrtoint i8* %2 to i64, !dbg !27
-  %4 = trunc i64 %3 to i32, !dbg !27
-  ret i32 %4, !dbg !28
+  %1 = load ptr, ptr %i.addr, align 16, !dbg !26
+  %2 = ptrtoint ptr %1 to i64, !dbg !27
+  %3 = trunc i64 %2 to i32, !dbg !27
+  ret i32 %3, !dbg !28
 }
 
 ; Function Attrs: nounwind readnone speculatable

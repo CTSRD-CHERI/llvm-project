@@ -44,7 +44,7 @@ entry:
 
 loop:
   %i = phi i32 [ %inc, %loop ], [ 0, %entry ]
-  %0 = load volatile i32, i32 addrspace(200)* @g, align 4
+  %0 = load volatile i32, ptr addrspace(200) @g, align 4
   %inc = add nuw nsw i32 %i, 1
   %cmp = icmp slt i32 %inc, %n
   br i1 %cmp, label %loop, label %ret
@@ -92,7 +92,7 @@ entry:
 
 loop:
   %i = phi i32 [ %inc, %loop ], [ 0, %entry ]
-  %0 = load volatile i32, i32 addrspace(200)* @ie, align 4
+  %0 = load volatile i32, ptr addrspace(200) @ie, align 4
   %inc = add nuw nsw i32 %i, 1
   %cmp = icmp slt i32 %inc, %n
   br i1 %cmp, label %loop, label %ret
@@ -164,7 +164,7 @@ entry:
 
 loop:
   %i = phi i32 [ %inc, %loop ], [ 0, %entry ]
-  %0 = load volatile i32, i32 addrspace(200)* @gd, align 4
+  %0 = load volatile i32, ptr addrspace(200) @gd, align 4
   %inc = add nuw nsw i32 %i, 1
   %cmp = icmp slt i32 %inc, %n
   br i1 %cmp, label %loop, label %ret

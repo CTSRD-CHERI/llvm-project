@@ -5,14 +5,13 @@
 ; Check that lifetime markers don't get lost due to CheriBoundAllocas, as we'd
 ; risk StackSlotColoring reusing the slot.
 
-declare void @use(i8 addrspace(200)*)
+declare void @use(ptr addrspace(200))
 
 define void @static_alloca() {
   %1 = alloca i32, align 4, addrspace(200)
-  %2 = bitcast i32 addrspace(200)* %1 to i8 addrspace(200)*
-  call void @llvm.lifetime.start.p200i8(i64 4, i8 addrspace(200)* %2)
-  call void @use(i8 addrspace(200)* %2)
-  call void @llvm.lifetime.end.p200i8(i64 4, i8 addrspace(200)* %2)
+  call void @llvm.lifetime.start.p200(i64 4, ptr addrspace(200) %1)
+  call void @use(ptr addrspace(200) %1)
+  call void @llvm.lifetime.end.p200(i64 4, ptr addrspace(200) %1)
   ret void
 }
 
@@ -20,12 +19,11 @@ define void @static_alloca() {
 ; that the analysis works correctly, but the IR is here for completeness.
 define void @dynamic_alloca(i64 zeroext %n) {
   %1 = alloca i32, i64 %n, align 4, addrspace(200)
-  %2 = bitcast i32 addrspace(200)* %1 to i8 addrspace(200)*
-  call void @llvm.lifetime.start.p200i8(i64 -1, i8 addrspace(200)* %2)
-  call void @use(i8 addrspace(200)* %2)
-  call void @llvm.lifetime.end.p200i8(i64 -1, i8 addrspace(200)* %2)
+  call void @llvm.lifetime.start.p200(i64 -1, ptr addrspace(200) %1)
+  call void @use(ptr addrspace(200) %1)
+  call void @llvm.lifetime.end.p200(i64 -1, ptr addrspace(200) %1)
   ret void
 }
 
-declare void @llvm.lifetime.start.p200i8(i64, i8 addrspace(200)*)
-declare void @llvm.lifetime.end.p200i8(i64, i8 addrspace(200)*)
+declare void @llvm.lifetime.start.p200(i64, ptr addrspace(200))
+declare void @llvm.lifetime.end.p200(i64, ptr addrspace(200))

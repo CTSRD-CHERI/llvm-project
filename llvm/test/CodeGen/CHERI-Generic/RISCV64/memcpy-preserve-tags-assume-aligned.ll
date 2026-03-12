@@ -5,11 +5,11 @@
 ; RUN: opt -mtriple=riscv64 --relocation-model=pic -target-abi l64pc128d -mattr=+xcheri,+cap-mode,+f,+d -S -passes=instcombine < %s | llc -mtriple=riscv64 --relocation-model=pic -target-abi l64pc128d -mattr=+xcheri,+cap-mode,+f,+d -O2 -o - | FileCheck %s
 target datalayout = "e-m:e-pf200:128:128:128:64-p:64:64-i64:64-i128:128-n64-S128-A200-P200-G200"
 
-declare void @llvm.memcpy.p200i8.p200i8.i64(i8 addrspace(200)* nocapture writeonly, i8 addrspace(200)* nocapture readonly, i64, i1)
-declare void @llvm.memmove.p200i8.p200i8.i64(i8 addrspace(200)* nocapture writeonly, i8 addrspace(200)* nocapture readonly, i64, i1)
+declare void @llvm.memcpy.p200.p200.i64(ptr addrspace(200) nocapture writeonly, ptr addrspace(200) nocapture readonly, i64, i1)
+declare void @llvm.memmove.p200.p200.i64(ptr addrspace(200) nocapture writeonly, ptr addrspace(200) nocapture readonly, i64, i1)
 declare void @llvm.assume(i1) addrspace(200)
 
-define void @memcpy_assume(i8 addrspace(200)* addrspace(200)* %local_cap_ptr, i8 addrspace(200)* %align1) addrspace(200) nounwind {
+define void @memcpy_assume(ptr addrspace(200) %local_cap_ptr, ptr addrspace(200) %align1) addrspace(200) nounwind {
 ; CHECK-LABEL: memcpy_assume:
 ; CHECK:       # %bb.0:
 ; CHECK-NEXT:    lc ca2, 16(ca0)
@@ -17,16 +17,15 @@ define void @memcpy_assume(i8 addrspace(200)* addrspace(200)* %local_cap_ptr, i8
 ; CHECK-NEXT:    lc ca0, 0(ca0)
 ; CHECK-NEXT:    sc ca0, 0(ca1)
 ; CHECK-NEXT:    ret
-  %ptrint = ptrtoint i8 addrspace(200)* %align1 to i64
+  %ptrint = ptrtoint ptr addrspace(200) %align1 to i64
   %maskedptr = and i64 %ptrint, 15
   %maskcond = icmp eq i64 %maskedptr, 0
   tail call void @llvm.assume(i1 %maskcond)
-  %1 = bitcast i8 addrspace(200)* addrspace(200)* %local_cap_ptr to i8 addrspace(200)*
-  call void @llvm.memcpy.p200i8.p200i8.i64(i8 addrspace(200)* align 1 %align1, i8 addrspace(200)* align 16 %1, i64 32, i1 false) must_preserve_cheri_tags
+  call void @llvm.memcpy.p200.p200.i64(ptr addrspace(200) align 1 %align1, ptr addrspace(200) align 16 %local_cap_ptr, i64 32, i1 false) must_preserve_cheri_tags
   ret void
 }
 
-define void @memmove_assume(i8 addrspace(200)* addrspace(200)* %local_cap_ptr, i8 addrspace(200)* %align1) addrspace(200) nounwind {
+define void @memmove_assume(ptr addrspace(200) %local_cap_ptr, ptr addrspace(200) %align1) addrspace(200) nounwind {
 ; CHECK-LABEL: memmove_assume:
 ; CHECK:       # %bb.0:
 ; CHECK-NEXT:    lc ca2, 16(ca0)
@@ -34,12 +33,11 @@ define void @memmove_assume(i8 addrspace(200)* addrspace(200)* %local_cap_ptr, i
 ; CHECK-NEXT:    sc ca2, 16(ca1)
 ; CHECK-NEXT:    sc ca0, 0(ca1)
 ; CHECK-NEXT:    ret
-  %ptrint = ptrtoint i8 addrspace(200)* %align1 to i64
+  %ptrint = ptrtoint ptr addrspace(200) %align1 to i64
   %maskedptr = and i64 %ptrint, 15
   %maskcond = icmp eq i64 %maskedptr, 0
   tail call void @llvm.assume(i1 %maskcond)
-  %1 = bitcast i8 addrspace(200)* addrspace(200)* %local_cap_ptr to i8 addrspace(200)*
-  call void @llvm.memmove.p200i8.p200i8.i64(i8 addrspace(200)* align 1 %align1, i8 addrspace(200)* align 16 %1, i64 32, i1 false) must_preserve_cheri_tags
+  call void @llvm.memmove.p200.p200.i64(ptr addrspace(200) align 1 %align1, ptr addrspace(200) align 16 %local_cap_ptr, i64 32, i1 false) must_preserve_cheri_tags
   ret void
 }
 

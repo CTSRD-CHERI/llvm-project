@@ -4,7 +4,7 @@
 ; RUN: %riscv64_cheri_purecap_llc < %s | FileCheck %s --check-prefix=ISAV9
 
 ;; (int_cheri_cap_from_ptr x, y) -> y == 0 ? null : csetaddr(x, y)
-define dso_local i64 @cap_to_ptr(i64 addrspace(200)* %dst, i8 addrspace(200)* %auth, i8 addrspace(200)* %cap) nounwind {
+define dso_local i64 @cap_to_ptr(ptr addrspace(200) %dst, ptr addrspace(200) %auth, ptr addrspace(200) %cap) nounwind {
 ; ISAV9-LABEL: cap_to_ptr:
 ; ISAV9:       # %bb.0: # %entry
 ; ISAV9-NEXT:    cgettag a1, ca2
@@ -14,12 +14,12 @@ define dso_local i64 @cap_to_ptr(i64 addrspace(200)* %dst, i8 addrspace(200)* %a
 ; ISAV9-NEXT:    mv a0, a1
 ; ISAV9-NEXT:    ret
 entry:
-  %new = call i64 @llvm.cheri.cap.to.pointer.i64(i8 addrspace(200)* %auth, i8 addrspace(200)* %cap)
-  store i64 %new, i64 addrspace(200)* %dst, align 16
+  %new = call i64 @llvm.cheri.cap.to.pointer.i64(ptr addrspace(200) %auth, ptr addrspace(200) %cap)
+  store i64 %new, ptr addrspace(200) %dst, align 16
   ret i64 %new
 }
 
-define dso_local i64 @cap_from_ptr_ddc(i64 addrspace(200)* %dst, i8 addrspace(200)* %cap) nounwind {
+define dso_local i64 @cap_from_ptr_ddc(ptr addrspace(200) %dst, ptr addrspace(200) %cap) nounwind {
 ; ISAV9-LABEL: cap_from_ptr_ddc:
 ; ISAV9:       # %bb.0: # %entry
 ; ISAV9-NEXT:    cgettag a2, ca1
@@ -29,11 +29,11 @@ define dso_local i64 @cap_from_ptr_ddc(i64 addrspace(200)* %dst, i8 addrspace(20
 ; ISAV9-NEXT:    mv a0, a1
 ; ISAV9-NEXT:    ret
 entry:
-  %ddc = call i8 addrspace(200)* @llvm.cheri.ddc.get()
-  %new = call i64 @llvm.cheri.cap.to.pointer.i64(i8 addrspace(200)* %ddc, i8 addrspace(200)* %cap)
-  store i64 %new, i64 addrspace(200)* %dst, align 16
+  %ddc = call ptr addrspace(200) @llvm.cheri.ddc.get()
+  %new = call i64 @llvm.cheri.cap.to.pointer.i64(ptr addrspace(200) %ddc, ptr addrspace(200) %cap)
+  store i64 %new, ptr addrspace(200) %dst, align 16
   ret i64 %new
 }
 
-declare i64 @llvm.cheri.cap.to.pointer.i64(i8 addrspace(200)*, i8 addrspace(200)*)
-declare i8 addrspace(200)* @llvm.cheri.ddc.get()
+declare i64 @llvm.cheri.cap.to.pointer.i64(ptr addrspace(200), ptr addrspace(200))
+declare ptr addrspace(200) @llvm.cheri.ddc.get()

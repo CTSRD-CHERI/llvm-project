@@ -46,14 +46,14 @@ define dso_local void @bar() addrspace(200) nounwind {
 ; RV64IXCHERI-L64PC128-NEXT:    ret
 entry:
   %buf = alloca [4096 x i8], align 1, addrspace(200)
-  %0 = getelementptr inbounds [4096 x i8], [4096 x i8] addrspace(200)* %buf, i32 0, i32 0
-  call addrspace(200) void @llvm.lifetime.start.p200i8(i64 4096, i8 addrspace(200)* nonnull %0) #3
-  call addrspace(200) void @foo(i8 addrspace(200)* nonnull %0) #3
-  call addrspace(200) void @llvm.lifetime.end.p200i8(i64 4096, i8 addrspace(200)* nonnull %0) #3
+  %0 = getelementptr inbounds [4096 x i8], ptr addrspace(200) %buf, i32 0, i32 0
+  call addrspace(200) void @llvm.lifetime.start.p200(i64 4096, ptr addrspace(200) nonnull %0) #3
+  call addrspace(200) void @foo(ptr addrspace(200) nonnull %0) #3
+  call addrspace(200) void @llvm.lifetime.end.p200(i64 4096, ptr addrspace(200) nonnull %0) #3
   ret void
 }
 
-declare void @llvm.lifetime.start.p200i8(i64 immarg, i8 addrspace(200)* nocapture) addrspace(200)
-declare void @llvm.lifetime.end.p200i8(i64 immarg, i8 addrspace(200)* nocapture) addrspace(200)
+declare void @llvm.lifetime.start.p200(i64 immarg, ptr addrspace(200) nocapture) addrspace(200)
+declare void @llvm.lifetime.end.p200(i64 immarg, ptr addrspace(200) nocapture) addrspace(200)
 
-declare void @foo(i8 addrspace(200)*) addrspace(200)
+declare void @foo(ptr addrspace(200)) addrspace(200)

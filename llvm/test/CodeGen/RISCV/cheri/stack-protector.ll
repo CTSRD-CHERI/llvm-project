@@ -7,7 +7,7 @@
 ; RUN: %riscv32_cheri_purecap_llc --enable-purecap-stack-protector < %s | FileCheck --check-prefix=IL32PC64 %s
 ; RUN: %riscv64_cheri_purecap_llc --enable-purecap-stack-protector < %s | FileCheck --check-prefix=L64PC128 %s
 
-declare void @callee(i8 addrspace(200)*) addrspace(200)
+declare void @callee(ptr addrspace(200)) addrspace(200)
 
 define void @caller() addrspace(200) nounwind sspstrong {
 ; IL32PC64-DEFAULT-LABEL: caller:
@@ -80,6 +80,6 @@ define void @caller() addrspace(200) nounwind sspstrong {
 ; L64PC128-NEXT:  .LBB0_2:
 ; L64PC128-NEXT:    ccall __stack_chk_fail
   %ptr = alloca i8, addrspace(200)
-  call void @callee(i8 addrspace(200)* %ptr)
+  call void @callee(ptr addrspace(200) %ptr)
   ret void
 }

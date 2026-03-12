@@ -16,7 +16,7 @@ target triple = "riscv64"
 ; it triggered a different assertion:
 ; Slices of alloca:   %d = alloca %struct.anon, align 16, addrspace(200)
 ;    [0,32) slice #0 (splittable)
-;      used by:   call void @llvm.memcpy.p200i8.p200i8.i64(i8 addrspace(200)* %0, i8 addrspace(200)* %1, i64 32, i1 false)
+;      used by:   call void @llvm.memcpy.p200.p200.i64(ptr addrspace(200) %0, ptr addrspace(200) %1, i64 32, i1 false)
 ;  Pre-splitting loads and stores
 ;    Searching for candidate loads and stores
 ;  Rewriting alloca partition [0,32) to:   %d = alloca %struct.anon, align 16, addrspace(200)

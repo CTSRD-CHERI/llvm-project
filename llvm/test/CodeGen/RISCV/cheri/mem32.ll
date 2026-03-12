@@ -4,11 +4,11 @@
 ; RUN: %riscv32_cheri_purecap_llc -verify-machineinstrs < %s \
 ; RUN:   | FileCheck --check-prefix=CHECK-IL32PC64 %s
 
-declare i32 @llvm.cheri.cap.diff(i8 addrspace(200) *, i8 addrspace(200) *)
+declare i32 @llvm.cheri.cap.diff(ptr addrspace(200), ptr addrspace(200))
 
 ; DDC-relative loads
 
-define i32 @ddc_lb(i8 *%ptr) nounwind {
+define i32 @ddc_lb(ptr %ptr) nounwind {
 ; CHECK-ILP32-LABEL: ddc_lb:
 ; CHECK-ILP32:       # %bb.0:
 ; CHECK-ILP32-NEXT:    lb a1, 0(a0)
@@ -23,15 +23,15 @@ define i32 @ddc_lb(i8 *%ptr) nounwind {
 ; CHECK-IL32PC64-NEXT:    lb.ddc a0, (a0)
 ; CHECK-IL32PC64-NEXT:    mv a0, a1
 ; CHECK-IL32PC64-NEXT:    ret
-  %1 = load i8, i8 *%ptr
+  %1 = load i8, ptr %ptr
   %2 = sext i8 %1 to i32
-  %3 = getelementptr i8, i8 *%ptr, i32 1
+  %3 = getelementptr i8, ptr %ptr, i32 1
   ; Unused to test anyext
-  %4 = load volatile i8, i8 *%3
+  %4 = load volatile i8, ptr %3
   ret i32 %2
 }
 
-define i32 @ddc_lh(i16 *%ptr) nounwind {
+define i32 @ddc_lh(ptr %ptr) nounwind {
 ; CHECK-ILP32-LABEL: ddc_lh:
 ; CHECK-ILP32:       # %bb.0:
 ; CHECK-ILP32-NEXT:    lh a1, 0(a0)
@@ -46,15 +46,15 @@ define i32 @ddc_lh(i16 *%ptr) nounwind {
 ; CHECK-IL32PC64-NEXT:    lh.ddc a0, (a0)
 ; CHECK-IL32PC64-NEXT:    mv a0, a1
 ; CHECK-IL32PC64-NEXT:    ret
-  %1 = load i16, i16 *%ptr
+  %1 = load i16, ptr %ptr
   %2 = sext i16 %1 to i32
-  %3 = getelementptr i16, i16 *%ptr, i32 2
+  %3 = getelementptr i16, ptr %ptr, i32 2
   ; Unused to test anyext
-  %4 = load volatile i16, i16 *%3
+  %4 = load volatile i16, ptr %3
   ret i32 %2
 }
 
-define i32 @ddc_lw(i32 *%ptr) nounwind {
+define i32 @ddc_lw(ptr %ptr) nounwind {
 ; CHECK-ILP32-LABEL: ddc_lw:
 ; CHECK-ILP32:       # %bb.0:
 ; CHECK-ILP32-NEXT:    lw a1, 0(a0)
@@ -69,13 +69,13 @@ define i32 @ddc_lw(i32 *%ptr) nounwind {
 ; CHECK-IL32PC64-NEXT:    lw.ddc a0, (a0)
 ; CHECK-IL32PC64-NEXT:    mv a0, a1
 ; CHECK-IL32PC64-NEXT:    ret
-  %1 = load i32, i32 *%ptr
-  %2 = getelementptr i32, i32 *%ptr, i32 3
-  %3 = load volatile i32, i32 *%2
+  %1 = load i32, ptr %ptr
+  %2 = getelementptr i32, ptr %ptr, i32 3
+  %3 = load volatile i32, ptr %2
   ret i32 %1
 }
 
-define i32 @ddc_lbu(i8 *%ptr) nounwind {
+define i32 @ddc_lbu(ptr %ptr) nounwind {
 ; CHECK-ILP32-LABEL: ddc_lbu:
 ; CHECK-ILP32:       # %bb.0:
 ; CHECK-ILP32-NEXT:    lbu a1, 0(a0)
@@ -90,16 +90,16 @@ define i32 @ddc_lbu(i8 *%ptr) nounwind {
 ; CHECK-IL32PC64-NEXT:    lbu.ddc a0, (a0)
 ; CHECK-IL32PC64-NEXT:    add a0, a1, a0
 ; CHECK-IL32PC64-NEXT:    ret
-  %1 = load i8, i8 *%ptr
+  %1 = load i8, ptr %ptr
   %2 = zext i8 %1 to i32
-  %3 = getelementptr i8, i8 *%ptr, i32 4
-  %4 = load i8, i8 *%3
+  %3 = getelementptr i8, ptr %ptr, i32 4
+  %4 = load i8, ptr %3
   %5 = zext i8 %4 to i32
   %6 = add i32 %2, %5
   ret i32 %6
 }
 
-define i32 @ddc_lhu(i16 *%ptr) nounwind {
+define i32 @ddc_lhu(ptr %ptr) nounwind {
 ; CHECK-ILP32-LABEL: ddc_lhu:
 ; CHECK-ILP32:       # %bb.0:
 ; CHECK-ILP32-NEXT:    lhu a1, 0(a0)
@@ -114,16 +114,16 @@ define i32 @ddc_lhu(i16 *%ptr) nounwind {
 ; CHECK-IL32PC64-NEXT:    lhu.ddc a0, (a0)
 ; CHECK-IL32PC64-NEXT:    add a0, a1, a0
 ; CHECK-IL32PC64-NEXT:    ret
-  %1 = load i16, i16 *%ptr
+  %1 = load i16, ptr %ptr
   %2 = zext i16 %1 to i32
-  %3 = getelementptr i16, i16 *%ptr, i32 5
-  %4 = load i16, i16 *%3
+  %3 = getelementptr i16, ptr %ptr, i32 5
+  %4 = load i16, ptr %3
   %5 = zext i16 %4 to i32
   %6 = add i32 %2, %5
   ret i32 %6
 }
 
-define i32 @ddc_lc(i8 addrspace(200) **%ptr) nounwind {
+define i32 @ddc_lc(ptr %ptr) nounwind {
 ; CHECK-ILP32-LABEL: ddc_lc:
 ; CHECK-ILP32:       # %bb.0:
 ; CHECK-ILP32-NEXT:    lc ca1, 0(a0)
@@ -138,16 +138,16 @@ define i32 @ddc_lc(i8 addrspace(200) **%ptr) nounwind {
 ; CHECK-IL32PC64-NEXT:    lc.ddc ca0, (a0)
 ; CHECK-IL32PC64-NEXT:    sub a0, a1, a0
 ; CHECK-IL32PC64-NEXT:    ret
-  %1 = load i8 addrspace(200) *, i8 addrspace(200) **%ptr
-  %2 = getelementptr i8 addrspace(200) *, i8 addrspace(200) **%ptr, i32 6
-  %3 = load i8 addrspace(200) *, i8 addrspace(200) **%2
-  %4 = call i32 @llvm.cheri.cap.diff(i8 addrspace(200) *%1, i8 addrspace(200) *%3)
+  %1 = load ptr addrspace(200), ptr %ptr
+  %2 = getelementptr ptr addrspace(200), ptr %ptr, i32 6
+  %3 = load ptr addrspace(200), ptr %2
+  %4 = call i32 @llvm.cheri.cap.diff(ptr addrspace(200) %1, ptr addrspace(200) %3)
   ret i32 %4
 }
 
 ; DDC-relative stores
 
-define void @ddc_sb(i8 *%ptr, i8 %val) nounwind {
+define void @ddc_sb(ptr %ptr, i8 %val) nounwind {
 ; CHECK-ILP32-LABEL: ddc_sb:
 ; CHECK-ILP32:       # %bb.0:
 ; CHECK-ILP32-NEXT:    sb a1, 0(a0)
@@ -160,13 +160,13 @@ define void @ddc_sb(i8 *%ptr, i8 %val) nounwind {
 ; CHECK-IL32PC64-NEXT:    addi a0, a0, 7
 ; CHECK-IL32PC64-NEXT:    sb.ddc a1, (a0)
 ; CHECK-IL32PC64-NEXT:    ret
-  store i8 %val, i8 *%ptr
-  %1 = getelementptr i8, i8 *%ptr, i32 7
-  store i8 %val, i8 *%1
+  store i8 %val, ptr %ptr
+  %1 = getelementptr i8, ptr %ptr, i32 7
+  store i8 %val, ptr %1
   ret void
 }
 
-define void @ddc_sh(i16 *%ptr, i16 %val) nounwind {
+define void @ddc_sh(ptr %ptr, i16 %val) nounwind {
 ; CHECK-ILP32-LABEL: ddc_sh:
 ; CHECK-ILP32:       # %bb.0:
 ; CHECK-ILP32-NEXT:    sh a1, 0(a0)
@@ -179,13 +179,13 @@ define void @ddc_sh(i16 *%ptr, i16 %val) nounwind {
 ; CHECK-IL32PC64-NEXT:    addi a0, a0, 16
 ; CHECK-IL32PC64-NEXT:    sh.ddc a1, (a0)
 ; CHECK-IL32PC64-NEXT:    ret
-  store i16 %val, i16 *%ptr
-  %1 = getelementptr i16, i16 *%ptr, i32 8
-  store i16 %val, i16 *%1
+  store i16 %val, ptr %ptr
+  %1 = getelementptr i16, ptr %ptr, i32 8
+  store i16 %val, ptr %1
   ret void
 }
 
-define void @ddc_sw(i32 *%ptr, i32 %val) nounwind {
+define void @ddc_sw(ptr %ptr, i32 %val) nounwind {
 ; CHECK-ILP32-LABEL: ddc_sw:
 ; CHECK-ILP32:       # %bb.0:
 ; CHECK-ILP32-NEXT:    sw a1, 0(a0)
@@ -198,13 +198,13 @@ define void @ddc_sw(i32 *%ptr, i32 %val) nounwind {
 ; CHECK-IL32PC64-NEXT:    addi a0, a0, 36
 ; CHECK-IL32PC64-NEXT:    sw.ddc a1, (a0)
 ; CHECK-IL32PC64-NEXT:    ret
-  store i32 %val, i32 *%ptr
-  %1 = getelementptr i32, i32 *%ptr, i32 9
-  store i32 %val, i32 *%1
+  store i32 %val, ptr %ptr
+  %1 = getelementptr i32, ptr %ptr, i32 9
+  store i32 %val, ptr %1
   ret void
 }
 
-define void @ddc_sc(i8 addrspace(200) **%ptr, i8 addrspace(200) *%val) nounwind {
+define void @ddc_sc(ptr %ptr, ptr addrspace(200) %val) nounwind {
 ; CHECK-ILP32-LABEL: ddc_sc:
 ; CHECK-ILP32:       # %bb.0:
 ; CHECK-ILP32-NEXT:    sc ca1, 0(a0)
@@ -217,15 +217,15 @@ define void @ddc_sc(i8 addrspace(200) **%ptr, i8 addrspace(200) *%val) nounwind 
 ; CHECK-IL32PC64-NEXT:    addi a0, a0, 80
 ; CHECK-IL32PC64-NEXT:    sc.ddc ca1, (a0)
 ; CHECK-IL32PC64-NEXT:    ret
-  store i8 addrspace(200) *%val, i8 addrspace(200) **%ptr
-  %1 = getelementptr i8 addrspace(200) *, i8 addrspace(200) **%ptr, i32 10
-  store i8 addrspace(200) *%val, i8 addrspace(200) **%1
+  store ptr addrspace(200) %val, ptr %ptr
+  %1 = getelementptr ptr addrspace(200), ptr %ptr, i32 10
+  store ptr addrspace(200) %val, ptr %1
   ret void
 }
 
 ; Capability-relative loads
 
-define i32 @cap_lb(i8 addrspace(200) *%cap) nounwind {
+define i32 @cap_lb(ptr addrspace(200) %cap) nounwind {
 ; CHECK-ILP32-LABEL: cap_lb:
 ; CHECK-ILP32:       # %bb.0:
 ; CHECK-ILP32-NEXT:    lb.cap a1, (ca0)
@@ -240,15 +240,15 @@ define i32 @cap_lb(i8 addrspace(200) *%cap) nounwind {
 ; CHECK-IL32PC64-NEXT:    lb a0, 11(ca0)
 ; CHECK-IL32PC64-NEXT:    mv a0, a1
 ; CHECK-IL32PC64-NEXT:    ret
-  %1 = load i8, i8 addrspace(200) *%cap
+  %1 = load i8, ptr addrspace(200) %cap
   %2 = sext i8 %1 to i32
-  %3 = getelementptr i8, i8 addrspace(200) *%cap, i32 11
+  %3 = getelementptr i8, ptr addrspace(200) %cap, i32 11
   ; Unused to test anyext
-  %4 = load volatile i8, i8 addrspace(200) *%3
+  %4 = load volatile i8, ptr addrspace(200) %3
   ret i32 %2
 }
 
-define i32 @cap_lh(i16 addrspace(200) *%cap) nounwind {
+define i32 @cap_lh(ptr addrspace(200) %cap) nounwind {
 ; CHECK-ILP32-LABEL: cap_lh:
 ; CHECK-ILP32:       # %bb.0:
 ; CHECK-ILP32-NEXT:    lh.cap a1, (ca0)
@@ -263,15 +263,15 @@ define i32 @cap_lh(i16 addrspace(200) *%cap) nounwind {
 ; CHECK-IL32PC64-NEXT:    lh a0, 24(ca0)
 ; CHECK-IL32PC64-NEXT:    mv a0, a1
 ; CHECK-IL32PC64-NEXT:    ret
-  %1 = load i16, i16 addrspace(200) *%cap
+  %1 = load i16, ptr addrspace(200) %cap
   %2 = sext i16 %1 to i32
-  %3 = getelementptr i16, i16 addrspace(200) *%cap, i32 12
+  %3 = getelementptr i16, ptr addrspace(200) %cap, i32 12
   ; Unused to test anyext
-  %4 = load volatile i16, i16 addrspace(200) *%3
+  %4 = load volatile i16, ptr addrspace(200) %3
   ret i32 %2
 }
 
-define i32 @cap_lw(i32 addrspace(200) *%cap) nounwind {
+define i32 @cap_lw(ptr addrspace(200) %cap) nounwind {
 ; CHECK-ILP32-LABEL: cap_lw:
 ; CHECK-ILP32:       # %bb.0:
 ; CHECK-ILP32-NEXT:    lw.cap a1, (ca0)
@@ -286,13 +286,13 @@ define i32 @cap_lw(i32 addrspace(200) *%cap) nounwind {
 ; CHECK-IL32PC64-NEXT:    lw a0, 52(ca0)
 ; CHECK-IL32PC64-NEXT:    mv a0, a1
 ; CHECK-IL32PC64-NEXT:    ret
-  %1 = load i32, i32 addrspace(200) *%cap
-  %2 = getelementptr i32, i32 addrspace(200) *%cap, i32 13
-  %3 = load volatile i32, i32 addrspace(200) *%2
+  %1 = load i32, ptr addrspace(200) %cap
+  %2 = getelementptr i32, ptr addrspace(200) %cap, i32 13
+  %3 = load volatile i32, ptr addrspace(200) %2
   ret i32 %1
 }
 
-define i32 @cap_lbu(i8 addrspace(200) *%cap) nounwind {
+define i32 @cap_lbu(ptr addrspace(200) %cap) nounwind {
 ; CHECK-ILP32-LABEL: cap_lbu:
 ; CHECK-ILP32:       # %bb.0:
 ; CHECK-ILP32-NEXT:    lbu.cap a1, (ca0)
@@ -307,16 +307,16 @@ define i32 @cap_lbu(i8 addrspace(200) *%cap) nounwind {
 ; CHECK-IL32PC64-NEXT:    lbu a0, 14(ca0)
 ; CHECK-IL32PC64-NEXT:    add a0, a1, a0
 ; CHECK-IL32PC64-NEXT:    ret
-  %1 = load i8, i8 addrspace(200) *%cap
+  %1 = load i8, ptr addrspace(200) %cap
   %2 = zext i8 %1 to i32
-  %3 = getelementptr i8, i8 addrspace(200) *%cap, i32 14
-  %4 = load i8, i8 addrspace(200) *%3
+  %3 = getelementptr i8, ptr addrspace(200) %cap, i32 14
+  %4 = load i8, ptr addrspace(200) %3
   %5 = zext i8 %4 to i32
   %6 = add i32 %2, %5
   ret i32 %6
 }
 
-define i32 @cap_lhu(i16 addrspace(200) *%cap) nounwind {
+define i32 @cap_lhu(ptr addrspace(200) %cap) nounwind {
 ; CHECK-ILP32-LABEL: cap_lhu:
 ; CHECK-ILP32:       # %bb.0:
 ; CHECK-ILP32-NEXT:    lhu.cap a1, (ca0)
@@ -331,16 +331,16 @@ define i32 @cap_lhu(i16 addrspace(200) *%cap) nounwind {
 ; CHECK-IL32PC64-NEXT:    lhu a0, 30(ca0)
 ; CHECK-IL32PC64-NEXT:    add a0, a1, a0
 ; CHECK-IL32PC64-NEXT:    ret
-  %1 = load i16, i16 addrspace(200) *%cap
+  %1 = load i16, ptr addrspace(200) %cap
   %2 = zext i16 %1 to i32
-  %3 = getelementptr i16, i16 addrspace(200) *%cap, i32 15
-  %4 = load i16, i16 addrspace(200) *%3
+  %3 = getelementptr i16, ptr addrspace(200) %cap, i32 15
+  %4 = load i16, ptr addrspace(200) %3
   %5 = zext i16 %4 to i32
   %6 = add i32 %2, %5
   ret i32 %6
 }
 
-define i32 @cap_lc(i8 addrspace(200) *addrspace(200) *%cap) nounwind {
+define i32 @cap_lc(ptr addrspace(200) %cap) nounwind {
 ; CHECK-ILP32-LABEL: cap_lc:
 ; CHECK-ILP32:       # %bb.0:
 ; CHECK-ILP32-NEXT:    lc.cap ca1, (ca0)
@@ -355,16 +355,16 @@ define i32 @cap_lc(i8 addrspace(200) *addrspace(200) *%cap) nounwind {
 ; CHECK-IL32PC64-NEXT:    lc ca0, 128(ca0)
 ; CHECK-IL32PC64-NEXT:    sub a0, a1, a0
 ; CHECK-IL32PC64-NEXT:    ret
-  %1 = load i8 addrspace(200) *, i8 addrspace(200) *addrspace(200) *%cap
-  %2 = getelementptr i8 addrspace(200) *, i8 addrspace(200) *addrspace(200) *%cap, i32 16
-  %3 = load i8 addrspace(200) *, i8 addrspace(200) *addrspace(200) *%2
-  %4 = call i32 @llvm.cheri.cap.diff(i8 addrspace(200) *%1, i8 addrspace(200) *%3)
+  %1 = load ptr addrspace(200), ptr addrspace(200) %cap
+  %2 = getelementptr ptr addrspace(200), ptr addrspace(200) %cap, i32 16
+  %3 = load ptr addrspace(200), ptr addrspace(200) %2
+  %4 = call i32 @llvm.cheri.cap.diff(ptr addrspace(200) %1, ptr addrspace(200) %3)
   ret i32 %4
 }
 
 ; Capability-relative stores
 
-define void @cap_sb(i8 addrspace(200) *%cap, i8 %val) nounwind {
+define void @cap_sb(ptr addrspace(200) %cap, i8 %val) nounwind {
 ; CHECK-ILP32-LABEL: cap_sb:
 ; CHECK-ILP32:       # %bb.0:
 ; CHECK-ILP32-NEXT:    sb.cap a1, (ca0)
@@ -377,13 +377,13 @@ define void @cap_sb(i8 addrspace(200) *%cap, i8 %val) nounwind {
 ; CHECK-IL32PC64-NEXT:    sb a1, 0(ca0)
 ; CHECK-IL32PC64-NEXT:    sb a1, 17(ca0)
 ; CHECK-IL32PC64-NEXT:    ret
-  store i8 %val, i8 addrspace(200) *%cap
-  %1 = getelementptr i8, i8 addrspace(200) *%cap, i32 17
-  store i8 %val, i8 addrspace(200) *%1
+  store i8 %val, ptr addrspace(200) %cap
+  %1 = getelementptr i8, ptr addrspace(200) %cap, i32 17
+  store i8 %val, ptr addrspace(200) %1
   ret void
 }
 
-define void @cap_sh(i16 addrspace(200) *%cap, i16 %val) nounwind {
+define void @cap_sh(ptr addrspace(200) %cap, i16 %val) nounwind {
 ; CHECK-ILP32-LABEL: cap_sh:
 ; CHECK-ILP32:       # %bb.0:
 ; CHECK-ILP32-NEXT:    sh.cap a1, (ca0)
@@ -396,13 +396,13 @@ define void @cap_sh(i16 addrspace(200) *%cap, i16 %val) nounwind {
 ; CHECK-IL32PC64-NEXT:    sh a1, 0(ca0)
 ; CHECK-IL32PC64-NEXT:    sh a1, 36(ca0)
 ; CHECK-IL32PC64-NEXT:    ret
-  store i16 %val, i16 addrspace(200) *%cap
-  %1 = getelementptr i16, i16 addrspace(200) *%cap, i32 18
-  store i16 %val, i16 addrspace(200) *%1
+  store i16 %val, ptr addrspace(200) %cap
+  %1 = getelementptr i16, ptr addrspace(200) %cap, i32 18
+  store i16 %val, ptr addrspace(200) %1
   ret void
 }
 
-define void @cap_sw(i32 addrspace(200) *%cap, i32 %val) nounwind {
+define void @cap_sw(ptr addrspace(200) %cap, i32 %val) nounwind {
 ; CHECK-ILP32-LABEL: cap_sw:
 ; CHECK-ILP32:       # %bb.0:
 ; CHECK-ILP32-NEXT:    sw.cap a1, (ca0)
@@ -415,13 +415,13 @@ define void @cap_sw(i32 addrspace(200) *%cap, i32 %val) nounwind {
 ; CHECK-IL32PC64-NEXT:    sw a1, 0(ca0)
 ; CHECK-IL32PC64-NEXT:    sw a1, 76(ca0)
 ; CHECK-IL32PC64-NEXT:    ret
-  store i32 %val, i32 addrspace(200) *%cap
-  %1 = getelementptr i32, i32 addrspace(200) *%cap, i32 19
-  store i32 %val, i32 addrspace(200) *%1
+  store i32 %val, ptr addrspace(200) %cap
+  %1 = getelementptr i32, ptr addrspace(200) %cap, i32 19
+  store i32 %val, ptr addrspace(200) %1
   ret void
 }
 
-define void @cap_sc(i8 addrspace(200) *addrspace(200) *%cap, i8 addrspace(200) *%val) nounwind {
+define void @cap_sc(ptr addrspace(200) %cap, ptr addrspace(200) %val) nounwind {
 ; CHECK-ILP32-LABEL: cap_sc:
 ; CHECK-ILP32:       # %bb.0:
 ; CHECK-ILP32-NEXT:    sc.cap ca1, (ca0)
@@ -434,13 +434,13 @@ define void @cap_sc(i8 addrspace(200) *addrspace(200) *%cap, i8 addrspace(200) *
 ; CHECK-IL32PC64-NEXT:    sc ca1, 0(ca0)
 ; CHECK-IL32PC64-NEXT:    sc ca1, 160(ca0)
 ; CHECK-IL32PC64-NEXT:    ret
-  store i8 addrspace(200) *%val, i8 addrspace(200) *addrspace(200) *%cap
-  %1 = getelementptr i8 addrspace(200) *, i8 addrspace(200) *addrspace(200) *%cap, i32 20
-  store i8 addrspace(200) *%val, i8 addrspace(200) *addrspace(200) *%1
+  store ptr addrspace(200) %val, ptr addrspace(200) %cap
+  %1 = getelementptr ptr addrspace(200), ptr addrspace(200) %cap, i32 20
+  store ptr addrspace(200) %val, ptr addrspace(200) %1
   ret void
 }
 
-define i32 addrspace(200)* @lc_far_local(i32 addrspace(200)* addrspace(200)* %a)  {
+define ptr addrspace(200) @lc_far_local(ptr addrspace(200) %a)  {
 ; CHECK-ILP32-LABEL: lc_far_local:
 ; CHECK-ILP32:       # %bb.0:
 ; CHECK-ILP32-NEXT:    lui a1, 8
@@ -456,12 +456,12 @@ define i32 addrspace(200)* @lc_far_local(i32 addrspace(200)* addrspace(200)* %a)
 ; CHECK-IL32PC64-NEXT:    cincoffset ca0, ca0, a1
 ; CHECK-IL32PC64-NEXT:    lc ca0, 0(ca0)
 ; CHECK-IL32PC64-NEXT:    ret
-  %1 = getelementptr inbounds i32 addrspace(200)*, i32 addrspace(200)* addrspace(200)* %a, i64 4095
-  %2 = load volatile i32 addrspace(200)*, i32 addrspace(200)* addrspace(200)* %1
-  ret i32 addrspace(200)* %2
+  %1 = getelementptr inbounds ptr addrspace(200), ptr addrspace(200) %a, i64 4095
+  %2 = load volatile ptr addrspace(200), ptr addrspace(200) %1
+  ret ptr addrspace(200) %2
 }
 
-define void @sc_far_local(i32 addrspace(200)* addrspace(200)* %a, i32 addrspace(200)* %b)  {
+define void @sc_far_local(ptr addrspace(200) %a, ptr addrspace(200) %b)  {
 ; CHECK-ILP32-LABEL: sc_far_local:
 ; CHECK-ILP32:       # %bb.0:
 ; CHECK-ILP32-NEXT:    lui a2, 8
@@ -477,12 +477,12 @@ define void @sc_far_local(i32 addrspace(200)* addrspace(200)* %a, i32 addrspace(
 ; CHECK-IL32PC64-NEXT:    cincoffset ca0, ca0, a2
 ; CHECK-IL32PC64-NEXT:    sc ca1, 0(ca0)
 ; CHECK-IL32PC64-NEXT:    ret
-  %1 = getelementptr inbounds i32 addrspace(200)*, i32 addrspace(200)* addrspace(200)* %a, i64 4095
-  store i32 addrspace(200)* %b, i32 addrspace(200)* addrspace(200)* %1
+  %1 = getelementptr inbounds ptr addrspace(200), ptr addrspace(200) %a, i64 4095
+  store ptr addrspace(200) %b, ptr addrspace(200) %1
   ret void
 }
 
-define i32 addrspace(200)* @lc_sc_far_local(i32 addrspace(200)* addrspace(200)* %a, i32 addrspace(200)* %b)  {
+define ptr addrspace(200) @lc_sc_far_local(ptr addrspace(200) %a, ptr addrspace(200) %b)  {
 ; CHECK-ILP32-LABEL: lc_sc_far_local:
 ; CHECK-ILP32:       # %bb.0:
 ; CHECK-ILP32-NEXT:    lui a2, 8
@@ -500,8 +500,8 @@ define i32 addrspace(200)* @lc_sc_far_local(i32 addrspace(200)* addrspace(200)* 
 ; CHECK-IL32PC64-NEXT:    lc ca0, 0(ca2)
 ; CHECK-IL32PC64-NEXT:    sc ca1, 0(ca2)
 ; CHECK-IL32PC64-NEXT:    ret
-  %1 = getelementptr inbounds i32 addrspace(200)*, i32 addrspace(200)* addrspace(200)* %a, i64 4095
-  %2 = load volatile i32 addrspace(200)*, i32 addrspace(200)* addrspace(200)* %1
-  store i32 addrspace(200)* %b, i32 addrspace(200)* addrspace(200)* %1
-  ret i32 addrspace(200)* %2
+  %1 = getelementptr inbounds ptr addrspace(200), ptr addrspace(200) %a, i64 4095
+  %2 = load volatile ptr addrspace(200), ptr addrspace(200) %1
+  store ptr addrspace(200) %b, ptr addrspace(200) %1
+  ret ptr addrspace(200) %2
 }

@@ -8,67 +8,67 @@
 @IF-RISCV@; RUN: llc @HYBRID_HARDFLOAT_ARGS@ -mattr=-a < %s | FileCheck %s --check-prefixes=HYBRID,HYBRID-LIBCALLS --allow-unused-prefixes
 @IFNOT-RISCV@; RUN: llc @HYBRID_HARDFLOAT_ARGS@ %s -o - | FileCheck %s --check-prefix=HYBRID
 
-define iCAPRANGE @atomic_cap_ptr_xchg(iCAPRANGE addrspace(200)* %ptr, iCAPRANGE %val) nounwind {
-  %tmp = atomicrmw xchg iCAPRANGE addrspace(200)* %ptr, iCAPRANGE %val seq_cst
+define iCAPRANGE @atomic_cap_ptr_xchg(ptr addrspace(200) %ptr, iCAPRANGE %val) nounwind {
+  %tmp = atomicrmw xchg ptr addrspace(200) %ptr, iCAPRANGE %val seq_cst
   ret iCAPRANGE %tmp
 }
 
-define iCAPRANGE @atomic_cap_ptr_add(iCAPRANGE addrspace(200)* %ptr, iCAPRANGE %val) nounwind {
-  %tmp = atomicrmw add iCAPRANGE addrspace(200)* %ptr, iCAPRANGE %val seq_cst
+define iCAPRANGE @atomic_cap_ptr_add(ptr addrspace(200) %ptr, iCAPRANGE %val) nounwind {
+  %tmp = atomicrmw add ptr addrspace(200) %ptr, iCAPRANGE %val seq_cst
   ret iCAPRANGE %tmp
 }
 
-define iCAPRANGE @atomic_cap_ptr_sub(iCAPRANGE addrspace(200)* %ptr, iCAPRANGE %val) nounwind {
-  %tmp = atomicrmw sub iCAPRANGE addrspace(200)* %ptr, iCAPRANGE %val seq_cst
+define iCAPRANGE @atomic_cap_ptr_sub(ptr addrspace(200) %ptr, iCAPRANGE %val) nounwind {
+  %tmp = atomicrmw sub ptr addrspace(200) %ptr, iCAPRANGE %val seq_cst
   ret iCAPRANGE %tmp
 }
 
-define iCAPRANGE @atomic_cap_ptr_and(iCAPRANGE addrspace(200)* %ptr, iCAPRANGE %val) nounwind {
-  %tmp = atomicrmw and iCAPRANGE addrspace(200)* %ptr, iCAPRANGE %val seq_cst
+define iCAPRANGE @atomic_cap_ptr_and(ptr addrspace(200) %ptr, iCAPRANGE %val) nounwind {
+  %tmp = atomicrmw and ptr addrspace(200) %ptr, iCAPRANGE %val seq_cst
   ret iCAPRANGE %tmp
 }
 
-define iCAPRANGE @atomic_cap_ptr_nand(iCAPRANGE addrspace(200)* %ptr, iCAPRANGE %val) nounwind {
-  %tmp = atomicrmw nand iCAPRANGE addrspace(200)* %ptr, iCAPRANGE %val seq_cst
+define iCAPRANGE @atomic_cap_ptr_nand(ptr addrspace(200) %ptr, iCAPRANGE %val) nounwind {
+  %tmp = atomicrmw nand ptr addrspace(200) %ptr, iCAPRANGE %val seq_cst
   ret iCAPRANGE %tmp
 }
 
-define iCAPRANGE @atomic_cap_ptr_or(iCAPRANGE addrspace(200)* %ptr, iCAPRANGE %val) nounwind {
-  %tmp = atomicrmw or iCAPRANGE addrspace(200)* %ptr, iCAPRANGE %val seq_cst
+define iCAPRANGE @atomic_cap_ptr_or(ptr addrspace(200) %ptr, iCAPRANGE %val) nounwind {
+  %tmp = atomicrmw or ptr addrspace(200) %ptr, iCAPRANGE %val seq_cst
   ret iCAPRANGE %tmp
 }
 
-define iCAPRANGE @atomic_cap_ptr_xor(iCAPRANGE addrspace(200)* %ptr, iCAPRANGE %val) nounwind {
-  %tmp = atomicrmw xor iCAPRANGE addrspace(200)* %ptr, iCAPRANGE %val seq_cst
+define iCAPRANGE @atomic_cap_ptr_xor(ptr addrspace(200) %ptr, iCAPRANGE %val) nounwind {
+  %tmp = atomicrmw xor ptr addrspace(200) %ptr, iCAPRANGE %val seq_cst
   ret iCAPRANGE %tmp
 }
 
-define iCAPRANGE @atomic_cap_ptr_max(iCAPRANGE addrspace(200)* %ptr, iCAPRANGE %val) nounwind {
-  %tmp = atomicrmw max iCAPRANGE addrspace(200)* %ptr, iCAPRANGE %val seq_cst
+define iCAPRANGE @atomic_cap_ptr_max(ptr addrspace(200) %ptr, iCAPRANGE %val) nounwind {
+  %tmp = atomicrmw max ptr addrspace(200) %ptr, iCAPRANGE %val seq_cst
   ret iCAPRANGE %tmp
 }
 
-define iCAPRANGE @atomic_cap_ptr_min(iCAPRANGE addrspace(200)* %ptr, iCAPRANGE %val) nounwind {
-  %tmp = atomicrmw min iCAPRANGE addrspace(200)* %ptr, iCAPRANGE %val seq_cst
+define iCAPRANGE @atomic_cap_ptr_min(ptr addrspace(200) %ptr, iCAPRANGE %val) nounwind {
+  %tmp = atomicrmw min ptr addrspace(200) %ptr, iCAPRANGE %val seq_cst
   ret iCAPRANGE %tmp
 }
 
-define iCAPRANGE @atomic_cap_ptr_umax(iCAPRANGE addrspace(200)* %ptr, iCAPRANGE %val) nounwind {
-  %tmp = atomicrmw umax iCAPRANGE addrspace(200)* %ptr, iCAPRANGE %val seq_cst
+define iCAPRANGE @atomic_cap_ptr_umax(ptr addrspace(200) %ptr, iCAPRANGE %val) nounwind {
+  %tmp = atomicrmw umax ptr addrspace(200) %ptr, iCAPRANGE %val seq_cst
   ret iCAPRANGE %tmp
 }
 
-define iCAPRANGE @atomic_cap_ptr_umin(iCAPRANGE addrspace(200)* %ptr, iCAPRANGE %val) nounwind {
-  %tmp = atomicrmw umin iCAPRANGE addrspace(200)* %ptr, iCAPRANGE %val seq_cst
+define iCAPRANGE @atomic_cap_ptr_umin(ptr addrspace(200) %ptr, iCAPRANGE %val) nounwind {
+  %tmp = atomicrmw umin ptr addrspace(200) %ptr, iCAPRANGE %val seq_cst
   ret iCAPRANGE %tmp
 }
 
-define float @atomic_cap_ptr_fadd(float addrspace(200)* %ptr, float %val) nounwind {
-  %tmp = atomicrmw fadd float addrspace(200)* %ptr, float %val seq_cst
+define float @atomic_cap_ptr_fadd(ptr addrspace(200) %ptr, float %val) nounwind {
+  %tmp = atomicrmw fadd ptr addrspace(200) %ptr, float %val seq_cst
   ret float %tmp
 }
 
-define float @atomic_cap_ptr_fsub(float addrspace(200)* %ptr, float %val) nounwind {
-  %tmp = atomicrmw fsub float addrspace(200)* %ptr, float %val seq_cst
+define float @atomic_cap_ptr_fsub(ptr addrspace(200) %ptr, float %val) nounwind {
+  %tmp = atomicrmw fsub ptr addrspace(200) %ptr, float %val seq_cst
   ret float %tmp
 }
