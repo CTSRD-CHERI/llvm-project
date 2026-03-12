@@ -87,10 +87,10 @@ if( LLVM_ENABLE_ASSERTIONS )
   add_compile_definitions(_GLIBCXX_ASSERTIONS)
   # Cautiously enable the safe hardened mode in libc++.
   if((DEFINED LIBCXX_HARDENING_MODE) AND
-     (NOT LIBCXX_HARDENING_MODE STREQUAL "safe"))
-    message(WARNING "LLVM_ENABLE_ASSERTIONS implies LIBCXX_HARDENING_MODE \"safe\" but is overriden from command line with value \"${LIBCXX_HARDENING_MODE}\".")
+     (NOT LIBCXX_HARDENING_MODE STREQUAL "hardened"))
+    message(WARNING "LLVM_ENABLE_ASSERTIONS implies LIBCXX_HARDENING_MODE \"hardened\" but is overriden from command line with value \"${LIBCXX_HARDENING_MODE}\".")
   else()
-    set(LIBCXX_HARDENING_MODE "safe")
+    set(LIBCXX_HARDENING_MODE "hardened")
   endif()
 endif()
 
