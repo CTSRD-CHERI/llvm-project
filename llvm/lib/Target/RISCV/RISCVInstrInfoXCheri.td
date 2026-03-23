@@ -346,6 +346,7 @@ def CGetFlags  : Cheri_r<0x7, "cgetflags">;
 // NB: No alias for gcmode->cgetflags since the result is inverted.
 def CGetHigh   : Cheri_r<0x17, "cgethigh">;
 def : MnemonicAlias<"gchi", "cgethigh">;
+def CGetCapPoison : Cheri_r<0x1b, "cgetcappoison">;
 def CGetPoison : Cheri_r<0x19, "cgetpoison">;
 def : MnemonicAlias<"gcpoison", "cgetpoison">;
 def CGetCapVersion : Cheri_r<0x1a, "cgetcappver">;
