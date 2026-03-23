@@ -1906,6 +1906,9 @@ let Predicates = [HasCheri, IsCapMode],
 def PseudoCTAIL : Pseudo<(outs), (ins cap_call_symbol:$dst), []> {
   let AsmString = "ctail\t$dst";
 }
+let Predicates = [HasCheri, IsCapMode] in
+def : InstAlias<"tail $func",
+                (PseudoCTAIL cap_call_symbol:$func), 0>;
 
 let Predicates = [HasCheri, IsCapMode, IsPureCapABI],
     isCall = 1, isTerminator = 1, isReturn = 1, isBarrier = 1, Uses = [C2] in
