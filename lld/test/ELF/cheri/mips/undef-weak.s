@@ -3,20 +3,25 @@
 # RUN: llvm-mc -triple=mips64 -mcpu=cheri128 -mattr=+cheri128 -filetype=obj %s -o %t.128.o
 # RUN: ld.lld %t.128.o -o %t.128
 # RUN: llvm-readobj --cap-relocs %t.128 | FileCheck --check-prefix=RELOC %s
-# RUN: llvm-readobj -x .data %t.128 | FileCheck --check-prefix=HEX128 %s
+# RUN: llvm-readobj -x .captable -x .data %t.128 | FileCheck --check-prefix=HEX128 %s
 
 # RUN: llvm-mc -triple=mips64 -mcpu=cheri256 -mattr=+cheri256 -filetype=obj %s -o %t.256.o
 # RUN: ld.lld %t.256.o -o %t.256
 # RUN: llvm-readobj --cap-relocs %t.256 | FileCheck --check-prefix=RELOC %s
-# RUN: llvm-readobj -x .data %t.256 | FileCheck --check-prefix=HEX256 %s
+# RUN: llvm-readobj -x .captable -x .data %t.256 | FileCheck --check-prefix=HEX256 %s
 
 # RELOC:      CHERI Capability Relocations [
 # RELOC-NEXT: ]
 
+# HEX128-LABEL: section '.captable':
+# HEX128-NEXT:  [[#%x,]] 00000000 00000000 00000000 00000000
 # HEX128-LABEL: section '.data':
 # HEX128-NEXT:  [[#%x,]] 00000000 00000000 00000000 00000000
 # HEX128-NEXT:  [[#%x,]] 00000000 00000000 00000000 00000003
 
+# HEX256-LABEL: section '.captable':
+# HEX256-NEXT:  [[#%x,]] 00000000 00000000 00000000 00000000
+# HEX256-NEXT:  [[#%x,]] 00000000 00000000 00000000 00000000
 # HEX256-LABEL: section '.data':
 # HEX256-NEXT:  [[#%x,]] 00000000 00000000 00000000 00000000
 # HEX256-NEXT:  [[#%x,]] 00000000 00000000 00000000 00000000
@@ -24,6 +29,8 @@
 # HEX256-NEXT:  [[#%x,]] 00000000 00000000 00000000 00000000
 
 .weak undef_weak
+
+clcbi $c1, %captab20(undef_weak)($c1)
 
 .data
 .chericap undef_weak
