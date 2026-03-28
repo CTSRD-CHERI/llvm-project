@@ -29,11 +29,11 @@ extern "C" {
 // In normal runtime code, use the __sanitizer::internal_X() aliases instead.
 SANITIZER_INTERFACE_ATTRIBUTE void *__sanitizer_internal_memcpy(void *dest,
                                                                 const void *src,
-                                                                uptr n);
+                                                                usize n);
 SANITIZER_INTERFACE_ATTRIBUTE void *__sanitizer_internal_memmove(
-    void *dest, const void *src, uptr n);
+    void *dest, const void *src, usize n);
 SANITIZER_INTERFACE_ATTRIBUTE void *__sanitizer_internal_memset(void *s, int c,
-                                                                uptr n);
+                                                                usize n);
 }  // extern "C"
 
 // String functions
