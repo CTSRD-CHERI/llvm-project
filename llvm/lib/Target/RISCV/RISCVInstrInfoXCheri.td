@@ -1906,6 +1906,9 @@ let Predicates = [HasCheri, IsCapMode],
 def PseudoCTAIL : Pseudo<(outs), (ins cap_call_symbol:$dst), []> {
   let AsmString = "ctail\t$dst";
 }
+let Predicates = [HasCheri, IsCapMode] in
+def : InstAlias<"tail $func",
+                (PseudoCTAIL cap_call_symbol:$func), 0>;
 
 let Predicates = [HasCheri, IsCapMode, IsPureCapABI],
     isCall = 1, isTerminator = 1, isReturn = 1, isBarrier = 1, Uses = [C2] in
@@ -1927,6 +1930,9 @@ def PseudoCJump : Pseudo<(outs GPCR:$rd),
                          (ins pseudo_cap_jump_symbol:$target), []> {
   let AsmString = "cjump\t$target, $rd";
 }
+let Predicates = [HasCheri, IsCapMode, IsPureCapABI] in
+def : InstAlias<"jump $target, $rd",
+                (PseudoCJump GPCR:$rd, pseudo_cap_jump_symbol:$target)>;
 
 defm : CheriLdPat<sextloadi8, CLB>, Requires<[HasCheri, IsCapMode]>;
 defm : CheriLdPat<extloadi8, CLB>, Requires<[HasCheri, IsCapMode]>;
