@@ -346,6 +346,9 @@ def CGetFlags  : Cheri_r<0x7, "cgetflags">;
 // NB: No alias for gcmode->cgetflags since the result is inverted.
 def CGetHigh   : Cheri_r<0x17, "cgethigh">;
 def : MnemonicAlias<"gchi", "cgethigh">;
+def CGetMTE   : Cheri_r<0x18, "cgetmte">;
+def CGetTLOC   : Cheri_r<0x19, "cgettloc">;
+def CGetMemMTE : Cheri_r<0x1a, "cgetmemmte">;
 // For backwards compatibility we still accept cgetaddr from assembly.
 let mayStore = false, mayLoad = false, Size = 4, isCodeGenOnly = false,
 hasSideEffects = false in
@@ -370,6 +373,9 @@ def CSetAddr        : Cheri_rr<0x10, "csetaddr">;
 def : MnemonicAlias<"scaddr", "csetaddr">;
 def CSetHigh        : Cheri_rr<0x16, "csethigh">;
 def : MnemonicAlias<"schi", "csethigh">;
+def CSetMTE        : Cheri_rr<0x17, "csetmte">;
+def CSetTLOC       : Cheri_rr<0x18, "csettloc">;
+
 let isReMaterializable = 1, isAsCheapAsAMove = 1 in
 def CIncOffset      : Cheri_rr<0x11, "cincoffset">;
 def : InstAlias<"add $cd, $cs1, $rs2",
@@ -1278,6 +1284,7 @@ def : PatGpcrGpr<int_cheri_cap_flags_set, CSetFlags>;
 def : PatGpcrGpr<int_cheri_cap_offset_set, CSetOffset>;
 def : PatGpcrGpr<int_cheri_cap_address_set, CSetAddr>;
 def : PatGpcrGpr<int_cheri_cap_high_set, CSetHigh>;
+
 def : PatGpcrGpr<cptradd, CIncOffset>;
 def : PatGpcrSimm12<cptradd, CIncOffsetImm>;
 def : PatGpcrGpr<int_cheri_cap_bounds_set, CSetBounds>;
