@@ -375,6 +375,7 @@ def CSetHigh        : Cheri_rr<0x16, "csethigh">;
 def : MnemonicAlias<"schi", "csethigh">;
 def CSetMTE        : Cheri_rr<0x17, "csetmte">;
 def CSetTLOC       : Cheri_rr<0x18, "csettloc">;
+def CSetMemMTE     : Cheri_rr<0x19, "csetmemmte">;
 
 let isReMaterializable = 1, isAsCheapAsAMove = 1 in
 def CIncOffset      : Cheri_rr<0x11, "cincoffset">;
