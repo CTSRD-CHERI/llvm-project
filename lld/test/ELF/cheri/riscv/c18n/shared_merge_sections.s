@@ -4,13 +4,13 @@
 # RUN: %riscv64_cheri_purecap_llvm-mc -filetype=obj %t/one.s -o %t/one.o
 # RUN: ld.lld --shared --compartment-policy=%t/compartments.json %t/one.o -o %t/shared_merge_sections.so
 # RUN: ld.lld --gc-sections --shared --compartment-policy=%t/compartments.json %t/one.o -o %t/shared_merge_sections_gc.so
-# RUN: readelf -t %t/shared_merge_sections.so | FileCheck --check-prefix=SECTIONS %s
-# RUN: readelf -t %t/shared_merge_sections_gc.so | FileCheck --check-prefix=SECTIONS-GC %s
-# RUN: objdump -s -j .rodata %t/shared_merge_sections.so | FileCheck --check-prefix=RODATA %s
-# RUN: objdump -s -j .rodata.one %t/shared_merge_sections.so | FileCheck --check-prefix=RODATA %s
-# RUN: objdump -s -j .rodata.two %t/shared_merge_sections.so | FileCheck --check-prefix=RODATA %s
-# RUN: objdump -s -j .rodata.one %t/shared_merge_sections_gc.so | FileCheck --check-prefix=RODATA-ONE %s
-# RUN: objdump -s -j .rodata.two %t/shared_merge_sections_gc.so | FileCheck --check-prefix=RODATA-TWO %s
+# RUN: llvm-readelf -t %t/shared_merge_sections.so | FileCheck --check-prefix=SECTIONS %s
+# RUN: llvm-readelf -t %t/shared_merge_sections_gc.so | FileCheck --check-prefix=SECTIONS-GC %s
+# RUN: llvm-objdump -s -j .rodata %t/shared_merge_sections.so | FileCheck --check-prefix=RODATA %s
+# RUN: llvm-objdump -s -j .rodata.one %t/shared_merge_sections.so | FileCheck --check-prefix=RODATA %s
+# RUN: llvm-objdump -s -j .rodata.two %t/shared_merge_sections.so | FileCheck --check-prefix=RODATA %s
+# RUN: llvm-objdump -s -j .rodata.one %t/shared_merge_sections_gc.so | FileCheck --check-prefix=RODATA-ONE %s
+# RUN: llvm-objdump -s -j .rodata.two %t/shared_merge_sections_gc.so | FileCheck --check-prefix=RODATA-TWO %s
 
 # SECTIONS-LABEL: Section Headers:
 # SECTIONS:         [ 6] .rodata

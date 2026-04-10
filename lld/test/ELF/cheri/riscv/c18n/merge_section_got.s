@@ -3,9 +3,9 @@
 
 # RUN: %riscv64_cheri_purecap_llvm-mc -filetype=obj %t/one.s -o %t/one.o
 # RUN: ld.lld --shared --compartment-policy=%t/compartments.json %t/one.o -o %t/merge_section_got.so
-# RUN: readelf -t %t/merge_section_got.so | FileCheck --check-prefix=SECTIONS %s
-# RUN: objdump -d --no-show-raw-insn %t/merge_section_got.so | FileCheck --check-prefix=DIS %s
-# RUN: readelf --cap-relocs %t/merge_section_got.so | FileCheck --check-prefix=CAP-RELOCS %s
+# RUN: llvm-readelf -t %t/merge_section_got.so | FileCheck --check-prefix=SECTIONS %s
+# RUN: llvm-objdump -d --no-show-raw-insn %t/merge_section_got.so | FileCheck --check-prefix=DIS %s
+# RUN: llvm-readelf --cap-relocs %t/merge_section_got.so | FileCheck --check-prefix=CAP-RELOCS %s
 
 # SECTIONS-LABEL: Section Headers:
 # SECTIONS:         [10] .rodata.one
