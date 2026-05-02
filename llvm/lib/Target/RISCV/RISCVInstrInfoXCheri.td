@@ -355,6 +355,7 @@ def : MnemonicAlias<"gchi", "cgethigh">;
 def CGetMTE   : Cheri_r<0x18, "cgetmte">;
 def CGetTLOC   : Cheri_r<0x19, "cgettloc">;
 def CGetMemMTE : Cheri_r<0x1a, "cgetmemmte">;
+
 // For backwards compatibility we still accept cgetaddr from assembly.
 let mayStore = false, mayLoad = false, Size = 4, isCodeGenOnly = false,
 hasSideEffects = false in
@@ -382,6 +383,8 @@ def : MnemonicAlias<"schi", "csethigh">;
 def CSetMTE        : Cheri_rr<0x17, "csetmte">;
 def CSetTLOC       : Cheri_rr<0x18, "csettloc">;
 def CSetMemMTE     : Cheri_rr<0x19, "csetmemmte">;
+def CSetTMode     : Cheri_rr<0x1a, "csettmode">;
+
 
 let isReMaterializable = 1, isAsCheapAsAMove = 1 in
 def CIncOffset      : Cheri_rr<0x11, "cincoffset">;
