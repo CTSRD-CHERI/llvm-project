@@ -677,7 +677,7 @@ tightenCHERIBounds(CodeGenFunction &CGF, SubObjectBoundsKind Kind,
   StringRef KindStr = boundsKindStr(Kind);
   assert(!TBR.IsContainerSize && "not handled by this function");
   llvm::Type *BoundedTy = ValueToBound->getType();
-
+  assert(llvm::isCheriPointer(BoundedTy, &CGF.CGM.getDataLayout()));
   SourceLocation Loc = LocExpr->getExprLoc();
   SourceRange Range = LocExpr->getSourceRange();
   StringRef StatsPrefix;
@@ -4609,7 +4609,8 @@ Address CodeGenFunction::EmitArrayToPointerDecay(const Expr *E,
   if (TBAAInfo) *TBAAInfo = CGM.getTBAAAccessInfo(EltType);
 
   Addr.withElementType(ConvertTypeForMem(EltType));
-  if (getLangOpts().getCheriBounds() >= LangOptions::CBM_SubObjectsSafe) {
+  if (getTarget().areAllPointersCapabilities() &&
+      getLangOpts().getCheriBounds() >= LangOptions::CBM_SubObjectsSafe) {
     auto BoundedResult = setCHERIBoundsOnArrayDecay(Addr.getPointer(), E);
     assert(BoundedResult->getType() == Addr.getType());
     Addr = Address(BoundedResult, Addr.getElementType(), Addr.getAlignment());
@@ -4644,7 +4645,8 @@ emitArraySubscriptGEP(CodeGenFunction &CGF, llvm::Type *elemType,
                                          CGF.AddCheriContainerBoundsInfo);
   }
   if (auto *ASE = dyn_cast<ArraySubscriptExpr>(E)) {
-    if (CGF.getLangOpts().getCheriBounds() >= LangOptions::CBM_SubObjectsSafe) {
+    if (llvm::isCheriPointer(ptr->getType(), &CGF.CGM.getDataLayout()) &&
+        CGF.getLangOpts().getCheriBounds() >= LangOptions::CBM_SubObjectsSafe) {
       // CSetBounds must be done before the GEP otherwise we set the base before
       // adding the index!
       auto BoundedResult = CGF.setCHERIBoundsOnArraySubscript(ptr, ASE);
