@@ -31,7 +31,7 @@
 
 # ONE: one.o:.text assigned to compartment one
 # TWO: three.o:.text assigned to compartment two
-# BUF: one.o:.data assigned to implied compartment one due to direct access of symbol buf
+# BUF: one.o:.rodata assigned to implied compartment one due to direct access of symbol buf
 # NOBAR: three.o:.text not assigned to implied compartment one due to exported symbol bar
 # NOBAZ: two.o:.data not assigned to implied compartment one due to exported symbol baz
 # BAZ: info: assigning disjoint set to compartment one:
@@ -55,7 +55,7 @@ foo:
 	ret
 	.size	foo, . - foo
 
-	.data
+	.rodata
 	.type	buf, @object
 buf:
 	.space 1024
