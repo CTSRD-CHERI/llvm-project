@@ -148,6 +148,10 @@ defm compartment_policy: EEq<"compartment-policy", "Use a policy file to split o
 
 def verbose_c18n : F<"verbose-c18n">, HelpText<"Log compartmentalization policy inferences">;
 
+defm compartment_inference: BB<"compartment-inference",
+     "Implicitly assign input sections used by a single compartment (default)",
+     "Only assign input sections to compartments explicitly">;
+
 def cref: FF<"cref">,
   HelpText<"Output cross reference table. If -Map is specified, print to the map file">;
 

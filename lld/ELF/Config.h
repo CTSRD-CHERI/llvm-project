@@ -462,6 +462,7 @@ struct Config {
 
   std::vector<CompartmentPolicy> compartmentPolicies;
   bool verboseCompartmentalization = false;
+  bool implicitCompartmentAssignment = true;
 };
 struct ConfigWrapper {
   Config c;
