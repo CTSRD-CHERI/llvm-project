@@ -1244,6 +1244,8 @@ static void readConfigs(opt::InputArgList &args) {
       args.hasArg(OPT_ignore_data_address_equality);
   config->ignoreFunctionAddressEquality =
       args.hasArg(OPT_ignore_function_address_equality);
+  config->implicitCompartmentAssignment = args.hasFlag(
+      OPT_compartment_inference, OPT_no_compartment_inference, true);
   config->init = args.getLastArgValue(OPT_init, "_init");
   // TODO: change default to true
   config->useRelativeElfCheriRelocs =
