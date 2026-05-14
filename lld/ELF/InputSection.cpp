@@ -889,6 +889,7 @@ uint64_t InputSectionBase::getRelocTargetVA(RelType type, int64_t a, uint64_t p,
   case R_TGOT_TLSGD_PC:
     return c.got->getTgotGlobalDynAddr(sym) + a - p;
   case R_ABS_CAP:
+  case R_ABS_ROCAP:
     llvm_unreachable("R_ABS_CAP should not be handled here!");
   case R_ABS_CAP_ADDR:
     return sym.getVA(a);
@@ -924,7 +925,7 @@ uint64_t InputSectionBase::getRelocTargetVA(RelType type, int64_t a, uint64_t p,
 }
 
 void InputSectionBase::addRelocCap(const Relocation &r) {
-  assert(r.expr == R_ABS_CAP);
+  assert(r.expr == R_ABS_CAP || r.expr == R_ABS_ROCAP);
 
   RelExpr exprLo = R_ABS_CAP_ADDR, exprHi = R_ABS_CAP_META;
   if (!config->isLE)
