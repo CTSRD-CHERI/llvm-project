@@ -660,112 +660,114 @@ void assignSectionsToCompartments() {
   // between sections that are already compartmentalized are ignored.  The goal
   // is to find sets of sections in the default compartment that are only used
   // by a single compartment.
-  for (const auto &kv : depends) {
-    InputSectionBase *s2 = kv.first;
-    const SectionDeps &sdeps = kv.second;
-    for (const auto &skv : sdeps) {
-      InputSectionBase *s1 = skv.first.first;
+  if (config->implicitCompartmentAssignment) {
+    for (const auto &kv : depends) {
+      InputSectionBase *s2 = kv.first;
+      const SectionDeps &sdeps = kv.second;
+      for (const auto &skv : sdeps) {
+        InputSectionBase *s1 = skv.first.first;
 
-      if (s1->compartment != 0 && s2->compartment != 0)
-        continue;
-      dsu.unionSets(s2, s1);
+        if (s1->compartment != 0 && s2->compartment != 0)
+          continue;
+        dsu.unionSets(s2, s1);
+      }
     }
-  }
 
-  for (SectionList &list : dsu) {
-    // Ignore singleton sets.
-    if (list.size() == 1) {
+    for (SectionList &list : dsu) {
+      // Ignore singleton sets.
+      if (list.size() == 1) {
+        if (config->verboseCompartmentalization) {
+          InputSectionBase *s = list.front();
+          if (s->compartment == 0 && canCompartmentalize(s)) {
+            message("info: potential compartment:");
+            message("\t" + isecName(s));
+          }
+        }
+        continue;
+      }
+
       if (config->verboseCompartmentalization) {
-        InputSectionBase *s = list.front();
-        if (s->compartment == 0 && canCompartmentalize(s)) {
+        std::set<InputSectionBase *> set;
+        for (InputSectionBase *s : list)
+          set.insert(s);
+        list.clear();
+        for (InputSectionBase *s : set)
+          list.push_back(s);
+      }
+
+      // More than one compartment?
+      Compartment *c = defaultCompart;
+      bool multiple = false;
+      bool anyDefault = false;
+      for (InputSectionBase *s : list) {
+        if (!canCompartmentalize(s))
+          continue;
+        if (s->compartment == 0) {
+          anyDefault = true;
+          continue;
+        }
+        if (c->isDefault()) {
+          c = &s->getCompartment();
+          continue;
+        }
+        if (c->getNumber() == s->compartment)
+          continue;
+        multiple = true;
+        break;
+      }
+
+      if (multiple) {
+        if (config->verboseCompartmentalization) {
+          message("info: disjoint set spans multiple compartments:");
+          for (InputSectionBase *s : list)
+            if (canCompartmentalize(s))
+              message("\t" + isecName(s) + " from " +
+                      compartmentName(s->getCompartment()));
+        }
+        continue;
+      }
+
+      // Nothing to do if the sole compartment is the default compartment or all
+      // of the input sections are already assigned.
+      if (!anyDefault)
+        continue;
+      if (c == nullptr) {
+        if (config->verboseCompartmentalization) {
           message("info: potential compartment:");
-          message("\t" + isecName(s));
+          for (InputSectionBase *s : list)
+            if (canCompartmentalize(s))
+              message("\t" + isecName(s));
+        }
+        continue;
+      }
+
+      // Don't assign anything if any of the input sections in the default
+      // compartment contain exported symbols.
+      bool exportedSym = false;
+      for (InputSectionBase *s : list) {
+        if (s->compartment == c->getNumber() || !canCompartmentalize(s))
+          continue;
+
+        Symbol *b = firstExportedSymbol(s);
+        if (b != nullptr) {
+          message("info: " + isecName(s) + " not assigned to implied " +
+                  compartmentName(*c) + " due to exported " + symbolName(b));
+          exportedSym = true;
         }
       }
-      continue;
-    }
-
-    if (config->verboseCompartmentalization) {
-      std::set<InputSectionBase *> set;
-      for (InputSectionBase *s : list)
-        set.insert(s);
-      list.clear();
-      for (InputSectionBase *s : set)
-        list.push_back(s);
-    }
-
-    // More than one compartment?
-    Compartment *c = defaultCompart;
-    bool multiple = false;
-    bool anyDefault = false;
-    for (InputSectionBase *s : list) {
-      if (!canCompartmentalize(s))
-        continue;
-      if (s->compartment == 0) {
-        anyDefault = true;
-        continue;
-      }
-      if (c->isDefault()) {
-        c = &s->getCompartment();
-        continue;
-      }
-      if (c->getNumber() == s->compartment)
-        continue;
-      multiple = true;
-      break;
-    }
-
-    if (multiple) {
-      if (config->verboseCompartmentalization) {
-        message("info: disjoint set spans multiple compartments:");
-        for (InputSectionBase *s : list)
-          if (canCompartmentalize(s))
-            message("\t" + isecName(s) + " from " +
-                    compartmentName(s->getCompartment()));
-      }
-      continue;
-    }
-
-    // Nothing to do if the sole compartment is the default compartment or all
-    // of the input sections are already assigned.
-    if (!anyDefault)
-      continue;
-    if (c == nullptr) {
-      if (config->verboseCompartmentalization) {
-        message("info: potential compartment:");
-        for (InputSectionBase *s : list)
-          if (canCompartmentalize(s))
-            message("\t" + isecName(s));
-      }
-      continue;
-    }
-
-    // Don't assign anything if any of the input sections in the default
-    // compartment contain exported symbols.
-    bool exportedSym = false;
-    for (InputSectionBase *s : list) {
-      if (s->compartment == c->getNumber() || !canCompartmentalize(s))
+      if (exportedSym)
         continue;
 
-      Symbol *b = firstExportedSymbol(s);
-      if (b != nullptr) {
-        message("info: " + isecName(s) + " not assigned to implied " +
-                compartmentName(*c) + " due to exported " + symbolName(b));
-        exportedSym = true;
-      }
-    }
-    if (exportedSym)
-      continue;
-
-    if (config->verboseCompartmentalization)
-      message("info: assigning disjoint set to " + compartmentName(*c) + ":");
-    for (InputSectionBase *s : list) {
-      if (s->compartment == c->getNumber() || !canCompartmentalize(s))
-        continue;
-
-      s->compartment = c->getNumber();
       if (config->verboseCompartmentalization)
-        message("\t" + isecName(s));
+        message("info: assigning disjoint set to " + compartmentName(*c) + ":");
+      for (InputSectionBase *s : list) {
+        if (s->compartment == c->getNumber() || !canCompartmentalize(s))
+          continue;
+
+        s->compartment = c->getNumber();
+        if (config->verboseCompartmentalization)
+          message("\t" + isecName(s));
+      }
     }
   }
 
