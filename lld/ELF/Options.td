@@ -143,9 +143,6 @@ def : Flag<["--"], "color-diagnostics">, Alias<color_diagnostics>, AliasArgs<["a
 def : Flag<["--"], "no-color-diagnostics">, Alias<color_diagnostics>, AliasArgs<["never"]>,
   HelpText<"Alias for --color-diagnostics=never">;
 
-defm compartment: EEq<"compartment", "Set the containing compartment of the inputs following this option">,
-  MetaVarName<"<compart>">;
-
 defm compartment_policy: EEq<"compartment-policy", "Use a policy file to split output into compartments">,
   MetaVarName<"<file>">;
 
