@@ -477,6 +477,8 @@ public:
 
   void computeRaw(SymbolTableBaseSection *symtab);
 
+  bool isRoCap() const { return expr == R_ABS_ROCAP; }
+
   Symbol *sym;
   const OutputSection *outputSec = nullptr;
   const InputSectionBase *inputSec;
@@ -509,6 +511,8 @@ private:
   std::vector<std::pair<int32_t, uint64_t>> computeContents();
   uint64_t size = 0;
 };
+
+class CheriRelFlagsSection;
 
 class RelocationBaseSection : public SyntheticSection {
 public:
@@ -567,6 +571,9 @@ public:
   void mergeRels();
   void partitionRels();
   void finalizeContents() override;
+  void setCheriRelFlagsSection(CheriRelFlagsSection *sec) {
+    cheriRelFlags = sec;
+  }
   static bool classof(const SectionBase *d) {
     return SyntheticSection::classof(d) &&
            (d->type == llvm::ELF::SHT_RELA || d->type == llvm::ELF::SHT_REL ||
@@ -582,6 +589,7 @@ protected:
   SmallVector<SmallVector<DynamicReloc, 0>, 0> relocsVec;
   size_t numRelativeRelocs = 0; // used by -z combreloc
   bool combreloc;
+  CheriRelFlagsSection *cheriRelFlags;
 };
 
 template <>
@@ -1297,6 +1305,30 @@ private:
   bool needed = false;
 };
 
+class CheriRelFlagsSection final : public SyntheticSection {
+  RelocationBaseSection *rel;
+  std::vector<uint32_t> flags;
+  bool needed = false;
+
+public:
+  CheriRelFlagsSection(RelocationBaseSection *parent)
+      : SyntheticSection(llvm::ELF::SHF_ALLOC, llvm::ELF::SHT_CHERI_RELFLAGS,
+                         /*alignment=*/4,
+                         saver().save(parent->name + ".flags")),
+        rel(parent) {
+    parent->setCheriRelFlagsSection(this);
+    this->entsize = 4;
+  }
+
+  size_t getSize() const override { return flags.size() * sizeof(uint32_t); }
+  void markNeeded() { needed = true; }
+  bool isNeeded() const override { return needed; }
+  void setFlag(uint64_t index, uint32_t val);
+  void grow(uint64_t count);
+  void finalizeContents() override;
+  void writeTo(uint8_t *buf) override;
+};
+
 template <class ELFT>
 class CompartAclSection final : public SyntheticSection {
   using Elf_Acl = typename ELFT::Acl;
@@ -1350,6 +1382,7 @@ struct Partition {
   std::unique_ptr<MemtagAndroidNote> memtagAndroidNote;
   std::unique_ptr<PackageMetadataNote> packageMetadataNote;
   std::unique_ptr<RelocationBaseSection> relaDyn;
+  std::unique_ptr<CheriRelFlagsSection> cheriRelFlags;
   std::unique_ptr<RelrBaseSection> relrDyn;
   std::unique_ptr<CheriCapRelocsSection> capRelocs;
   std::unique_ptr<VersionDefinitionSection> verDef;

@@ -960,6 +960,12 @@ static void addGotEntry(Compartment &c, Symbol &sym) {
 
   // If preemptible, emit a GLOB_DAT relocation.
   if (sym.isPreemptible) {
+    if (mainPart->cheriRelFlags &&
+        !(sym.type == STT_FUNC || sym.type == STT_GNU_IFUNC) &&
+        !canWriteSymbol(c, sym)) {
+      expr = R_ABS_ROCAP;
+      mainPart->cheriRelFlags->markNeeded();
+    }
     mainPart->relaDyn->addReloc({target->gotRel, c.got.get(), off,
                                  DynamicReloc::AgainstSymbol, sym, 0, expr});
     return;
@@ -1000,6 +1006,7 @@ static void addTgotEntry(Compartment &c, Symbol &sym) {
     return;
   }
 
+  // TODO: R_ABS_ROCAP?
   RelExpr expr = config->isCheriAbi ? R_ABS_CAP : R_ABS;
   RelType type =
       config->isCheriAbi ? *target->symbolicCapRel : target->symbolicRel;

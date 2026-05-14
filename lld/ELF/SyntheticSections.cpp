@@ -1489,6 +1489,11 @@ DynamicSection<ELFT>::computeContents() {
     addInSec(part.relaDyn->dynamicTag, *part.relaDyn);
     entries.emplace_back(part.relaDyn->sizeDynamicTag,
                          addRelaSz(*part.relaDyn));
+    if (part.cheriRelFlags && part.cheriRelFlags->isNeeded()) {
+      size_t entSize = config->isRela ? sizeof(Elf_Rela) : sizeof(Elf_Rel);
+      part.cheriRelFlags->grow(addRelaSz(*part.relaDyn) / entSize);
+      addInSec(DT_CHERI_RELFLAGS, *part.cheriRelFlags);
+    }
 
     bool isRela = config->isRela;
     addInt(isRela ? DT_RELAENT : DT_RELENT,
@@ -1953,6 +1958,7 @@ RelocationSection<ELFT>::RelocationSection(StringRef name, bool combreloc,
 
 template <class ELFT> void RelocationSection<ELFT>::writeTo(uint8_t *buf) {
   computeRels();
+  size_t idx = 0;
   for (const DynamicReloc &rel : relocs) {
     auto *p = reinterpret_cast<Elf_Rela *>(buf);
     p->r_offset = rel.r_offset;
@@ -1960,6 +1966,9 @@ template <class ELFT> void RelocationSection<ELFT>::writeTo(uint8_t *buf) {
     if (config->isRela)
       p->r_addend = rel.addend;
     buf += config->isRela ? sizeof(Elf_Rela) : sizeof(Elf_Rel);
+    if (cheriRelFlags && rel.isRoCap())
+      cheriRelFlags->setFlag(idx, CHERI_RELOCATION_READ_ONLY);
+    idx++;
   }
 }
 
@@ -4173,6 +4182,30 @@ void PackageMetadataNote::writeTo(uint8_t *buf) {
 size_t PackageMetadataNote::getSize() const {
   return sizeof(llvm::ELF::Elf64_Nhdr) + 4 +
          alignTo(config->packageMetadata.size() + 1, 4);
+}
+
+void CheriRelFlagsSection::setFlag(uint64_t index, uint32_t val) {
+  grow(index + 1);
+  flags[index] = val;
+}
+
+void CheriRelFlagsSection::grow(uint64_t count) {
+  if (flags.size() < count)
+    flags.resize(count, 0);
+}
+
+void CheriRelFlagsSection::finalizeContents() {
+  if (isNeeded()) {
+    if (OutputSection *sec = rel->getParent())
+      getParent()->link = sec->sectionIndex;
+  }
+}
+
+void CheriRelFlagsSection::writeTo(uint8_t *buf) {
+  for (const uint32_t &flag : flags) {
+    write32(buf, flag);
+    buf += 4;
+  }
 }
 
 template <class ELFT>
