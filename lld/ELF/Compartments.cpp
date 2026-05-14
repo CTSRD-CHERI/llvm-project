@@ -793,7 +793,7 @@ void assignSectionsToCompartments() {
         continue;
       }
     }
-    if (c == nullptr)
+    if (c->isDefault())
       continue;
 
     if (config->verboseCompartmentalization)
