@@ -381,7 +381,11 @@ let hasSideEffects = 0, mayLoad = 0, mayStore = 0, isCodeGenOnly = 0,
 def PseudoYPERMC  : Pseudo<(outs GPCR:$rd), (ins GPCR:$rs1, GPR:$rs2), [],
                            "ypermc", "$rd, $rs1, $rs2">;
 def CSetFlags       : Cheri_rr<0xe, "csetflags">;
-// NB: No alias for scmode->csetflags since the argument is inverted.
+// Need a special Pseudo for YMODEW since the argument is inverted
+let hasSideEffects = 0, mayLoad = 0, mayStore = 0, isCodeGenOnly = 0,
+    isAsmParserOnly = 1, Size = 8 in
+def PseudoYMODEW  : Pseudo<(outs GPCR:$rd), (ins GPCR:$rs1, GPR:$rs2), [],
+                           "ymodew", "$rd, $rs1, $rs2">;
 def CSetOffset      : Cheri_rr<0xf, "csetoffset">;
 def CSetAddr        : Cheri_rr<0x10, "csetaddr">;
 def : MnemonicAlias<"scaddr", "csetaddr">;

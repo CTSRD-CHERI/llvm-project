@@ -14,3 +14,7 @@ yss x1, c2, ddc
 ## Check that ypermc rejects rd == rs1 since expansion requires a temporary register.
 # CHECK: :[[@LINE+1]]:8: error: expanding RVY compatible mnemonic requires destination and source capability registers to be different since this needs a temporary register to negate the mask
 ypermc c1, c1, x3
+
+## Check that ymodew rejects rd == rs1 since expansion requires a temporary register.
+# CHECK: :[[@LINE+1]]:8: error: expanding RVY compatible mnemonic requires destination and source capability registers to be different since this needs a temporary register to negate the mask
+ymodew c1, c1, x3
