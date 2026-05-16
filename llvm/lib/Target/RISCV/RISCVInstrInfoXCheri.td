@@ -338,20 +338,26 @@ class CCheriStore_rri<bits<3> funct3, string OpcodeStr,
 let Predicates = [HasCheri] in {
 def CGetPerm   : Cheri_r<0x0, "cgetperm">;
 def : MnemonicAlias<"gcperm", "cgetperm">;
+def : MnemonicAlias<"ypermr", "cgetperm">;
 def CGetType   : Cheri_r<0x1, "cgettype">;
 def : MnemonicAlias<"gctype", "cgettype">;
+def : MnemonicAlias<"ytyper", "cgettype">;
 def CGetBase   : Cheri_r<0x2, "cgetbase">;
 def : MnemonicAlias<"gcbase", "cgetbase">;
+def : MnemonicAlias<"ybaser", "cgetbase">;
 def CGetLen    : Cheri_r<0x3, "cgetlen">;
 def : MnemonicAlias<"gclen", "cgetlen">;
+def : MnemonicAlias<"ylenr", "cgetlen">;
 def CGetTag    : Cheri_r<0x4, "cgettag">;
 def : MnemonicAlias<"gctag", "cgettag">;
+def : MnemonicAlias<"ytagr", "cgettag">;
 def CGetSealed : Cheri_r<0x5, "cgetsealed">;
 def CGetOffset : Cheri_r<0x6, "cgetoffset">;
 def CGetFlags  : Cheri_r<0x7, "cgetflags">;
 // NB: No alias for gcmode->cgetflags since the result is inverted.
 def CGetHigh   : Cheri_r<0x17, "cgethigh">;
 def : MnemonicAlias<"gchi", "cgethigh">;
+def : MnemonicAlias<"yhir", "cgethigh">;
 // For backwards compatibility we still accept cgetaddr from assembly.
 let mayStore = false, mayLoad = false, Size = 4, isCodeGenOnly = false,
 hasSideEffects = false in
@@ -374,11 +380,15 @@ def CSetFlags       : Cheri_rr<0xe, "csetflags">;
 def CSetOffset      : Cheri_rr<0xf, "csetoffset">;
 def CSetAddr        : Cheri_rr<0x10, "csetaddr">;
 def : MnemonicAlias<"scaddr", "csetaddr">;
+def : MnemonicAlias<"yaddrw", "csetaddr">;
 def CSetHigh        : Cheri_rr<0x16, "csethigh">;
 def : MnemonicAlias<"schi", "csethigh">;
+def : MnemonicAlias<"yhiw", "csethigh">;
 let isReMaterializable = 1, isAsCheapAsAMove = 1 in
 def CIncOffset      : Cheri_rr<0x11, "cincoffset">;
 def : InstAlias<"add $cd, $cs1, $rs2",
+                (CIncOffset GPCR:$cd, GPCR:$cs1, GPR:$rs2), 0>;
+def : InstAlias<"yadd $cd, $cs1, $rs2",
                 (CIncOffset GPCR:$cd, GPCR:$cs1, GPR:$rs2), 0>;
 let isReMaterializable = 1, isAsCheapAsAMove = 1 in
 def CIncOffsetImm   : Cheri_ri<0x1, "cincoffset", 1>;
@@ -386,11 +396,18 @@ def : InstAlias<"addi $cd, $cs1, $imm",
                 (CIncOffsetImm GPCR:$cd, GPCR:$cs1, simm12:$imm), 0>;
 def : InstAlias<"add $cd, $cs1, $imm",
                 (CIncOffsetImm GPCR:$cd, GPCR:$cs1, simm12:$imm), 0>;
+def : InstAlias<"yaddi $cd, $cs1, $imm",
+                (CIncOffsetImm GPCR:$cd, GPCR:$cs1, simm12:$imm), 0>;
+def : InstAlias<"yadd $cd, $cs1, $imm",
+                (CIncOffsetImm GPCR:$cd, GPCR:$cs1, simm12:$imm), 0>;
 def CSetBounds      : Cheri_rr<0x8, "csetbounds">;
 def : InstAlias<"scbndsr $cd, $cs1, $rs2",
                 (CSetBounds GPCR:$cd, GPCR:$cs1, GPR:$rs2), 0>;
+def : MnemonicAlias<"ybndsrw", "csetbounds">;
 def CSetBoundsExact : Cheri_rr<0x9, "csetboundsexact">;
 def : InstAlias<"scbnds $cd, $cs1, $rs2",
+                (CSetBoundsExact GPCR:$cd, GPCR:$cs1, GPR:$rs2), 0>;
+def : InstAlias<"ybndsw $cd, $cs1, $rs2",
                 (CSetBoundsExact GPCR:$cd, GPCR:$cs1, GPR:$rs2), 0>;
 def CSetBoundsImm   : Cheri_ri<0x2, "csetbounds", 0>;
 // TODO: should restrict the valid immediates for scbnds(i)
@@ -398,10 +415,15 @@ def : InstAlias<"scbndsi $cd, $cs1, $imm",
                 (CSetBoundsImm GPCR:$cd, GPCR:$cs1, uimm12:$imm), 0>;
 def : InstAlias<"scbnds $cd, $cs1, $imm",
                 (CSetBoundsImm GPCR:$cd, GPCR:$cs1, uimm12:$imm), 0>;
+def : InstAlias<"ybndsw $cd, $cs1, $imm",
+                (CSetBoundsImm GPCR:$cd, GPCR:$cs1, uimm12:$imm), 0>;
+def : MnemonicAlias<"ybndswi", "csetbounds">;
 def CClearTag       : Cheri_r<0xb, "ccleartag", GPCR>;
 let defsCanBeSealed = 1 in
 def CBuildCap       : Cheri_rr<0x1d, "cbuildcap", GPCR, GPCR, GPCRC0IsDDC>;
 def : InstAlias<"cbld $cd, $cs1, $cs2",
+                (CBuildCap GPCR:$cd, GPCRNoC0:$cs1, GPCR:$cs2), 0>;
+def : InstAlias<"ybld $cd, $cs1, $cs2",
                 (CBuildCap GPCR:$cd, GPCRNoC0:$cs1, GPCR:$cs2), 0>;
 def CCopyType       : Cheri_rr<0x1e, "ccopytype", GPCR, GPCR>;
 let defsCanBeSealed = 1 in
@@ -409,6 +431,7 @@ def CCSeal          : Cheri_rr<0x1f, "ccseal", GPCR, GPCR>;
 let defsCanBeSealed = 1 in
 def CSealEntry      : Cheri_r<0x11, "csealentry", GPCR>;
 def : MnemonicAlias<"sentry", "csealentry">;
+def : MnemonicAlias<"ysentry", "csealentry">;
 
 def : InstAlias<"cincoffsetimm $cd, $cs1, $imm",
                 (CIncOffsetImm GPCR:$cd, GPCR:$cs1, simm12:$imm), 0>;
@@ -432,8 +455,8 @@ def PseudoCSub : Pseudo<(outs GPR:$rd), (ins GPCR:$cs1, GPCR:$cs2), [],
 let isMoveReg = 1, isReMaterializable = 1, isAsCheapAsAMove = 1,
     defsCanBeSealed = 1 in
 def CMove       : Cheri_r<0xa, "cmove", GPCR>;
-def : InstAlias<"cmv $cd, $cs1",
-                (CMove GPCR:$cd, GPCR:$cs1), 0>;
+def : InstAlias<"cmv $cd, $cs1", (CMove GPCR:$cd, GPCR:$cs1), 0>;
+def : InstAlias<"ymv $cd, $cs1", (CMove GPCR:$cd, GPCR:$cs1), 0>;
 }
 
 //===----------------------------------------------------------------------===//
@@ -471,10 +494,13 @@ let Predicates = [HasCheri] in {
 def CTestSubset : Cheri_rr<0x20, "ctestsubset", GPR, GPCR, GPCRC0IsDDC>;
 def : InstAlias<"scss $rd, $cs1, $cs2",
                 (CTestSubset GPR:$rd, GPCRNoC0:$cs1, GPCR:$cs2), 0>;
+def : InstAlias<"yss $rd, $cs1, $cs2",
+                (CTestSubset GPR:$rd, GPCRNoC0:$cs1, GPCR:$cs2), 0>;
 def CSEQX       : Cheri_rr<0x21, "csetequalexact", GPR, GPCR, GPCR>;
 
 def : InstAlias<"cseqx $rd, $cs1, $cs2", (CSEQX GPR:$rd, GPCR:$cs1, GPCR:$cs2)>;
 def : InstAlias<"sceq $rd, $cs1, $cs2", (CSEQX GPR:$rd, GPCR:$cs1, GPCR:$cs2), 0>;
+def : InstAlias<"yeq $rd, $cs1, $cs2", (CSEQX GPR:$rd, GPCR:$cs1, GPCR:$cs2), 0>;
 }
 
 //===----------------------------------------------------------------------===//
@@ -512,6 +538,7 @@ def CRAM : Cheri_r<0x9, "crepresentablealignmentmask", GPR, GPR>;
 
 def : InstAlias<"crrl $rd, $rs1", (CRRL GPR:$rd, GPR:$rs1)>;
 def : InstAlias<"cram $rd, $rs1", (CRAM GPR:$rd, GPR:$rs1)>;
+def : InstAlias<"yamask $rd, $rs1", (CRAM GPR:$rd, GPR:$rs1), 0>;
 }
 
 //===----------------------------------------------------------------------===//
@@ -667,6 +694,11 @@ def SC_C_CAP_128 : CheriStoreCond_r<0b11100, "sc.c.cap", GPCR, GPCRMemZeroOffset
 // Memory-Access Instructions
 //===----------------------------------------------------------------------===//
 
+let Predicates = [HasCheri] in {
+def : MnemonicAlias<"ly", "lc">;
+def : MnemonicAlias<"sy", "sc">;
+}
+
 let Predicates = [HasCheri, IsRV32, NotCapMode] in {
 let DecoderNamespace = "RISCV32Only_",
     hasSideEffects = 0, mayLoad = 1, mayStore = 0 in
@@ -707,17 +739,44 @@ def : InstAlias<"sc $rs2, (${rs1})",
 }
 }
 
-let DecoderNamespace = "RISCV32Only_",
-    Predicates = [HasCheri, HasStdExtA, IsRV32, NotCapMode] in {
+// Atomic instruction aliases multiclass for hybrid mode.
+multiclass AtomicInstAliases<string asm, string opnds, string inst, string sfx,
+                             dag args> {
+  def : InstAlias<asm#opnds, !con((!cast<Instruction>(inst#sfx)), args), 0>;
+  def : InstAlias<asm#".aq"#opnds,
+                  !con((!cast<Instruction>(inst#"_AQ"#sfx)), args), 0>;
+  def : InstAlias<asm#".rl"#opnds,
+                  !con((!cast<Instruction>(inst#"_RL"#sfx)), args), 0>;
+  def : InstAlias<asm#".aqrl"#opnds,
+                  !con((!cast<Instruction>(inst#"_AQ_RL"#sfx)), args), 0>;
+}
+
+let Predicates = [HasCheri, HasStdExtA, IsRV32, NotCapMode] in {
+let DecoderNamespace = "RISCV32Only_" in {
 defm LR_C       : LR_C_r_aq_rl<"64", 0b011, "lr.c">;
 defm SC_C       : AMO_C_rr_aq_rl<"64", 0b00011, 0b011, "sc.c", GPR>;
 defm AMOSWAP_C  : AMO_C_rr_aq_rl<"64", 0b00001, 0b011, "amoswap.c", GPCR>;
+}
+
+defm : AtomicInstAliases<"lr.y", " $rd, $rs1", "LR_C", "_64",
+                         (? GPCR:$rd, GPRMemZeroOffset:$rs1)>;
+defm : AtomicInstAliases<"sc.y", " $rd, $rs2, $rs1", "SC_C", "_64",
+                         (? GPR:$rd, GPRMemZeroOffset:$rs1, GPCR:$rs2)>;
+defm : AtomicInstAliases<"amoswap.y", " $rd, $rs2, $rs1", "AMOSWAP_C", "_64",
+                         (? GPCR:$rd, GPRMemZeroOffset:$rs1, GPCR:$rs2)>;
 }
 
 let Predicates = [HasCheri, HasStdExtA, IsRV64, NotCapMode] in {
 defm LR_C       : LR_C_r_aq_rl<"128", 0b100, "lr.c">;
 defm SC_C       : AMO_C_rr_aq_rl<"128", 0b00011, 0b100, "sc.c", GPR>;
 defm AMOSWAP_C  : AMO_C_rr_aq_rl<"128", 0b00001, 0b100, "amoswap.c", GPCR>;
+
+defm : AtomicInstAliases<"lr.y", " $rd, $rs1", "LR_C", "_128",
+                         (? GPCR:$rd, GPRMemZeroOffset:$rs1)>;
+defm : AtomicInstAliases<"sc.y", " $rd, $rs2, $rs1", "SC_C", "_128",
+                         (? GPR:$rd, GPRMemZeroOffset:$rs1, GPCR:$rs2)>;
+defm : AtomicInstAliases<"amoswap.y", " $rd, $rs2, $rs1", "AMOSWAP_C", "_128",
+                         (? GPCR:$rd, GPRMemZeroOffset:$rs1, GPCR:$rs2)>;
 }
 
 //===----------------------------------------------------------------------===//
@@ -904,6 +963,14 @@ let Predicates = [HasCheri, HasStdExtA, IsRV64, IsCapMode] in {
 defm CLR_C       : CLR_C_r_aq_rl<"128", 0b100, "lr.c">;
 defm CSC_C       : CAMO_C_rr_aq_rl<"128", 0b00011, 0b100, "sc.c", GPR>;
 defm CAMOSWAP_C  : CAMO_C_rr_aq_rl<"128", 0b00001, 0b100, "amoswap.c", GPCR>;
+}
+
+let Predicates = [HasCheri, HasStdExtA, IsCapMode] in {
+foreach s = ["", ".aq", ".rl", ".aqrl"] in {
+  def : MnemonicAlias<"lr.y" # s, "clr.c" # s>;
+  def : MnemonicAlias<"sc.y" # s, "csc.c" # s>;
+  def : MnemonicAlias<"amoswap.y" # s, "camoswap.c" # s>;
+}
 }
 
 /// 'F' (Single-Precision Floating-Point) extension
