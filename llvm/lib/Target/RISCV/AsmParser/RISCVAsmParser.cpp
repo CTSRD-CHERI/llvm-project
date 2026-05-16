@@ -3921,6 +3921,17 @@ bool RISCVAsmParser::processInstruction(MCInst &Inst, SMLoc IDLoc,
                        .addReg(DestIntReg));
     return false;
   }
+  case RISCV::PseudoYMODER: {
+    // Expand ymoder rd, rs1 to `cgetflags rd, rs1; xori rd, rd, 1`.
+    MCRegister DestReg = Inst.getOperand(0).getReg();
+    MCRegister SrcReg = Inst.getOperand(1).getReg();
+    emitToStreamer(
+        Out, MCInstBuilder(RISCV::CGetFlags).addReg(DestReg).addReg(SrcReg));
+    emitToStreamer(
+        Out,
+        MCInstBuilder(RISCV::XORI).addReg(DestReg).addReg(DestReg).addImm(1));
+    return false;
+  }
   case RISCV::PseudoSEXT_B:
     emitPseudoExtend(Inst, /*SignExtend=*/true, /*Width=*/8, IDLoc, Out);
     return false;

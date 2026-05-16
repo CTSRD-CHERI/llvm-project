@@ -354,7 +354,11 @@ def : MnemonicAlias<"ytagr", "cgettag">;
 def CGetSealed : Cheri_r<0x5, "cgetsealed">;
 def CGetOffset : Cheri_r<0x6, "cgetoffset">;
 def CGetFlags  : Cheri_r<0x7, "cgetflags">;
-// NB: No alias for gcmode->cgetflags since the result is inverted.
+// Need a special Pseudo for YMODER since the result is inverted
+let hasSideEffects = 0, mayLoad = 0, mayStore = 0, isCodeGenOnly = 0,
+    isAsmParserOnly = 1, Size = 8 in
+def PseudoYMODER  : Pseudo<(outs GPR:$rd), (ins GPCR:$rs1), [],
+                           "ymoder", "$rd, $rs1">;
 def CGetHigh   : Cheri_r<0x17, "cgethigh">;
 def : MnemonicAlias<"gchi", "cgethigh">;
 def : MnemonicAlias<"yhir", "cgethigh">;

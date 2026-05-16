@@ -52,6 +52,9 @@ yeq x1, c2, c3
 # CHECK-NEXT: xori ra, gp, -1 # encoding: [0x93,0xc0,0xf1,0xff]
 # CHECK-NEXT: candperm cra, csp, ra # encoding: [0xdb,0x00,0x11,0x1a]
 ypermc c1, c2, x3
+# CHECK-NEXT: cgetflags ra, csp # encoding: [0xdb,0x00,0x71,0xfe]
+# CHECK-NEXT: xori ra, ra, 1 # encoding: [0x93,0xc0,0x10,0x00]
+ymoder x1, c2
 # CHECK-NEXT: xori ra, gp, 1 # encoding: [0x93,0xc0,0x11,0x00]
 # CHECK-NEXT: csetflags cra, csp, ra # encoding: [0xdb,0x00,0x11,0x1c]
 ymodew c1, c2, x3
