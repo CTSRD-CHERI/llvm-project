@@ -3890,6 +3890,33 @@ bool RISCVAsmParser::processInstruction(MCInst &Inst, SMLoc IDLoc,
                                                   RISCV::sub_cap_addr)));
     return false;
   }
+  case RISCV::PseudoYPERMC: {
+    // Expand ypermc rd, rs1, rs2 to `not rd, rs2; candperm rd, rs1, rd`.
+    // This requires rd != rs1 to prevent clobbering the source capability if
+    // rd and rs1 were the same register.
+    if (Inst.getOperand(0).getReg() == Inst.getOperand(1).getReg()) {
+      SMLoc ErrorLoc = Operands[1]->getStartLoc();
+      return Error(ErrorLoc,
+                   "expanding RVY compatible mnemonic requires destination and "
+                   "source capability registers to be different since this "
+                   "needs a temporary register to negate the mask");
+    }
+    const MCRegisterInfo *RI = getContext().getRegisterInfo();
+    MCRegister DestCapReg = Inst.getOperand(0).getReg();
+    MCRegister SrcCapReg = Inst.getOperand(1).getReg();
+    MCRegister MaskReg = Inst.getOperand(2).getReg();
+    MCRegister DestIntReg = RI->getSubReg(DestCapReg, RISCV::sub_cap_addr);
+
+    emitToStreamer(Out, MCInstBuilder(RISCV::XORI)
+                            .addReg(DestIntReg)
+                            .addReg(MaskReg)
+                            .addImm(-1));
+    emitToStreamer(Out, MCInstBuilder(RISCV::CAndPerm)
+                            .addReg(DestCapReg)
+                            .addReg(SrcCapReg)
+                            .addReg(DestIntReg));
+    return false;
+  }
   case RISCV::PseudoSEXT_B:
     emitPseudoExtend(Inst, /*SignExtend=*/true, /*Width=*/8, IDLoc, Out);
     return false;

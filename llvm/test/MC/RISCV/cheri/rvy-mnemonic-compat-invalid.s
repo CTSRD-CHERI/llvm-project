@@ -10,3 +10,7 @@ ybld c1, c2, ddc
 yss x1, ddc, c3
 # CHECK: :[[@LINE+1]]:13: error: invalid operand for instruction
 yss x1, c2, ddc
+
+## Check that ypermc rejects rd == rs1 since expansion requires a temporary register.
+# CHECK: :[[@LINE+1]]:8: error: expanding RVY compatible mnemonic requires destination and source capability registers to be different since this needs a temporary register to negate the mask
+ypermc c1, c1, x3
