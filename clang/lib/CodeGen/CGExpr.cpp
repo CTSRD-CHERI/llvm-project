@@ -780,8 +780,8 @@ static llvm::Value *tightenCHERIBoundsForContainer(
 }
 
 LValue CodeGenFunction::emitLValueWithCheriSubobjectBounds(
-    const Expr *E, const Expr *OuterExpr, QualType Ty, SubObjectBoundsKind Kind,
-    const TightenBoundsResult &TBR) {
+    const Expr *E, const Expr *OuterExpr, KnownNonNull_t IsKnownNonNull,
+    QualType Ty, SubObjectBoundsKind Kind, const TightenBoundsResult &TBR) {
   assert(getTarget().SupportsCapabilities() &&
          "subobject bounds only work with CHERI");
   assert((Kind == SubObjectBoundsKind::Reference &&
@@ -794,7 +794,7 @@ LValue CodeGenFunction::emitLValueWithCheriSubobjectBounds(
   auto OldBoundsInfo = AddCheriContainerBoundsInfo;
   InCheriContainerBoundsEmission = TBR.IsContainerSize;
   AddCheriContainerBoundsInfo = {OuterExpr, &TBR, Ty, Kind, false};
-  LValue Result = EmitLValue(E);
+  LValue Result = EmitLValue(E, IsKnownNonNull);
   if (!TBR.IsContainerSize) {
     Address Unbounded = Result.getAddress(*this);
     Result.setAddress(Unbounded.withPointer(
@@ -838,16 +838,21 @@ LValue CodeGenFunction::emitLValueForReferenceBinding(const Expr *E) {
     } else {
       NumTightBoundsSetOnReferences++;
     }
-    return emitLValueWithCheriSubobjectBounds(E, E, Ty, Kind, *TBR);
+    return emitLValueWithCheriSubobjectBounds(E, E, NotKnownNonNull, Ty, Kind,
+                                              *TBR);
   }
   return EmitLValue(E);
 }
 
-llvm::Value *CodeGenFunction::emitAddrOf(const Expr *E, const Expr *OuterExpr) {
+// XXX: This should really be more integrated with EmitLValue rather than
+// having to find and update everywhere that needs subobject bounds.
+LValue CodeGenFunction::EmitLValueForAddrOf(const Expr *E,
+                                            const Expr *OuterExpr,
+                                            KnownNonNull_t IsKnownNonNull) {
   // If subobject bounds are disabled (or non-CHERI codegen) emit the address.
   if (getLangOpts().getCheriBounds() < LangOptions::CBM_SubObjectsSafe ||
       !OuterExpr->getType()->isCapabilityPointerType()) {
-    return EmitLValue(E).getPointer(*this);
+    return EmitLValue(E, IsKnownNonNull);
   }
   // CHERI_BOUNDS_DBG(<< "Trying to set CHERI bounds on addrof operator ";
   //                  E->dump(llvm::dbgs()));
@@ -862,10 +867,10 @@ llvm::Value *CodeGenFunction::emitAddrOf(const Expr *E, const Expr *OuterExpr) {
     } else {
       NumTightBoundsSetOnAddrOf++;
     }
-    return emitLValueWithCheriSubobjectBounds(E, OuterExpr, Ty, Kind, *TBR)
-        .getPointer(*this);
+    return emitLValueWithCheriSubobjectBounds(E, OuterExpr, IsKnownNonNull, Ty,
+                                              Kind, *TBR);
   }
-  return EmitLValue(E).getPointer(*this);
+  return EmitLValue(E, IsKnownNonNull);
 }
 
 llvm::Value *

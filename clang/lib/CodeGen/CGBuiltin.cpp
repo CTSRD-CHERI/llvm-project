@@ -4900,7 +4900,7 @@ RValue CodeGenFunction::EmitBuiltinExpr(const GlobalDecl GD, unsigned BuiltinID,
   case Builtin::BIaddressof:
   case Builtin::BI__addressof:
   case Builtin::BI__builtin_addressof: {
-    Value *Addr = emitAddrOf(E->getArg(0), E);
+    Value *Addr = EmitLValueForAddrOf(E->getArg(0), E).getPointer(*this);
     return RValue::get(Addr);
   }
   case Builtin::BI__builtin_function_start:

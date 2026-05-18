@@ -633,7 +633,8 @@ public:
     if (isa<MemberPointerType>(E->getType())) // never sugared
       return CGF.CGM.getMemberPointerConstant(E);
 
-    llvm::Value *Addr = CGF.emitAddrOf(E->getSubExpr(), E);
+    llvm::Value *Addr =
+        CGF.EmitLValueForAddrOf(E->getSubExpr(), E).getPointer(CGF);
     auto &TI = CGF.getContext().getTargetInfo();
     if (TI.areAllPointersCapabilities()) {
       assert(Addr->getType()->getPointerAddressSpace() ==
