@@ -1029,6 +1029,7 @@ enum : unsigned {
   // https://android.googlesource.com/platform/bionic/+/6f12bfece5dcc01325e0abba56a46b1bcf991c69/tools/relocation_packer/src/elf_file.cc#37
   SHT_ANDROID_REL = 0x60000001,
   SHT_ANDROID_RELA = 0x60000002,
+  SHT_CHERI_RELFLAGS = 0x64348454, // CHERI Relocation entry flags
   SHT_C18N_ACL = 0x64331380,       // Compartment access rules
   SHT_LLVM_ODRTAB = 0x6fff4c00,         // LLVM ODR table.
   SHT_LLVM_LINKER_OPTIONS = 0x6fff4c01, // LLVM Linker Options.
@@ -1730,6 +1731,11 @@ enum : unsigned {
   GNU_PROPERTY_X86_ISA_1_V2 = 1 << 1,
   GNU_PROPERTY_X86_ISA_1_V3 = 1 << 2,
   GNU_PROPERTY_X86_ISA_1_V4 = 1 << 3,
+};
+
+// CHERI Relocation flags
+enum : unsigned {
+  CHERI_RELOCATION_READ_ONLY = 1 << 0,
 };
 
 // FreeBSD note types.
