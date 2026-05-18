@@ -143,13 +143,14 @@ def : Flag<["--"], "color-diagnostics">, Alias<color_diagnostics>, AliasArgs<["a
 def : Flag<["--"], "no-color-diagnostics">, Alias<color_diagnostics>, AliasArgs<["never"]>,
   HelpText<"Alias for --color-diagnostics=never">;
 
-defm compartment: EEq<"compartment", "Set the containing compartment of the inputs following this option">,
-  MetaVarName<"<compart>">;
-
 defm compartment_policy: EEq<"compartment-policy", "Use a policy file to split output into compartments">,
   MetaVarName<"<file>">;
 
 def verbose_c18n : F<"verbose-c18n">, HelpText<"Log compartmentalization policy inferences">;
+
+defm compartment_inference: BB<"compartment-inference",
+     "Implicitly assign input sections used by a single compartment (default)",
+     "Only assign input sections to compartments explicitly">;
 
 def cref: FF<"cref">,
   HelpText<"Output cross reference table. If -Map is specified, print to the map file">;

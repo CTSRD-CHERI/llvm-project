@@ -29,9 +29,16 @@
 # Exported 'bar' in separate compartment blocks implicit 'baz'
 # RUN: ld.lld --shared --verbose-c18n --compartment-policy=%t/two.json %t/one.o %t/two_hidden.o %t/three.o -o %t/implicit_two.so.0 2>&1 | FileCheck --check-prefixes=ONE,TWO,BUF %s
 
+# No DSU assignment when disabled
+# RUN: ld.lld --shared --no-compartment-inference --verbose-c18n --compartment-policy=%t/one.json %t/one.o %t/two_hidden.o -o %t/no_infer_baz_hidden.so.0 2>&1 | FileCheck --check-prefixes=ONE,BUF %s
+# RUN: llvm-readelf -t -s %t/no_infer_baz_hidden.so.0 | FileCheck --check-prefix=NOINFERBAZ %s
+
+# RUN: ld.lld --shared --no-compartment-inference --verbose-c18n --compartment-policy=%t/one.json %t/one.o %t/two_hidden.o %t/three_hidden.o -o %t/no_infer_bar_baz.so.0 2>&1 | FileCheck --check-prefixes=ONE,BUF %s
+# RUN: llvm-readelf -t -s %t/no_infer_bar_baz.so.0 | FileCheck --check-prefix=NOINFERBARBAZ %s
+
 # ONE: one.o:.text assigned to compartment one
 # TWO: three.o:.text assigned to compartment two
-# BUF: one.o:.data assigned to implied compartment one due to direct access of symbol buf
+# BUF: one.o:.rodata assigned to implied compartment one due to direct access of symbol buf
 # NOBAR: three.o:.text not assigned to implied compartment one due to exported symbol bar
 # NOBAZ: two.o:.data not assigned to implied compartment one due to exported symbol baz
 # BAZ: info: assigning disjoint set to compartment one:
@@ -44,6 +51,20 @@
 # TWO-NEXT: three.o:.text from compartment two
 # TWO-NEXT: two_hidden.o:.data from the default compartment
 
+# NOINFERBAZ-LABEL: Section Headers:
+# NOINFERBAZ:         [ 9] .data
+
+# NOINFERBAZ-LABEL: Symbol table '.symtab'
+# NOINFERBAZ:            4: 00000000000034a0  1024 OBJECT  LOCAL  HIDDEN      9 baz
+
+# NOINFERBARBAZ-LABEL: Section Headers:
+# NOINFERBARBAZ:         [ 7] .text
+# NOINFERBARBAZ:         [11] .data
+
+# NOINFERBARBAZ-LABEL: Symbol table '.symtab'
+# NOINFERBARBAZ:            5: 0000000000001450    12 FUNC    LOCAL  HIDDEN      7 bar
+# NOINFERBARBAZ:            6: 0000000000003530  1024 OBJECT  LOCAL  HIDDEN     11 baz
+
 #--- one.s
 
 	.text
@@ -55,7 +76,7 @@ foo:
 	ret
 	.size	foo, . - foo
 
-	.data
+	.rodata
 	.type	buf, @object
 buf:
 	.space 1024
