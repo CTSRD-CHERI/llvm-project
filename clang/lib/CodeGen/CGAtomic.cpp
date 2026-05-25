@@ -148,7 +148,7 @@ bool isAtomicStoreOp(AtomicExpr::AtomicOp Op) {
       }
       UseLibcall = !C.getTargetInfo().hasBuiltinAtomic(
           AtomicSizeInBits, C.toBits(lvalue.getAlignment()),
-          AtomicTy->isCHERICapabilityType(CGF.CGM.getContext()));
+          CGF.CGM.getContext().containsCapabilities(AtomicTy));
     }
 
     QualType getAtomicType() const { return AtomicTy; }
@@ -874,10 +874,13 @@ RValue CodeGenFunction::EmitAtomicExpr(AtomicExpr *E) {
   uint64_t Size = TInfo.Width.getQuantity();
   unsigned MaxInlineWidthInBits = getTarget().getMaxAtomicInlineWidth();
 
-  bool IsCheriCap = AtomicTy->isCHERICapabilityType(CGM.getContext());
-  bool Oversized = (!IsCheriCap &&
+  bool HasCheriCaps = getContext().containsCapabilities(AtomicTy);
+  bool AsCheriCap =
+      HasCheriCaps && (uint64_t)getContext().toBits(TInfo.Width) ==
+                          getTarget().getCHERICapabilityWidth();
+  bool Oversized = (!HasCheriCaps &&
                     getContext().toBits(TInfo.Width) > MaxInlineWidthInBits) ||
-                   (IsCheriCap && MaxInlineWidthInBits == 0);
+                   (HasCheriCaps && (MaxInlineWidthInBits == 0 || !AsCheriCap));
   bool Misaligned = (Ptr.getAlignment() % TInfo.Width) != 0;
   bool UseLibcall = Misaligned | Oversized;
   bool ShouldCastToIntPtrTy = true;
@@ -1124,7 +1127,7 @@ RValue CodeGenFunction::EmitAtomicExpr(AtomicExpr *E) {
     case AtomicExpr::AO__atomic_compare_exchange_n:
       // Only use optimized library calls for sizes for which they exist.
       // FIXME: Size == 16 optimized library functions exist too.
-      if (IsCheriCap || (Size == 1 || Size == 2 || Size == 4 || Size == 8))
+      if (AsCheriCap || (Size == 1 || Size == 2 || Size == 4 || Size == 8))
         UseOptimizedLibcall = true;
       break;
     }
@@ -1157,7 +1160,7 @@ RValue CodeGenFunction::EmitAtomicExpr(AtomicExpr *E) {
 
     std::string LibCallName;
     QualType LoweredMemTy =
-        IsCheriCap
+        AsCheriCap
             ? getContext().IntCapTy
             : (MemTy->isPointerType() ? getContext().getIntPtrType() : MemTy);
     QualType RetTy;
@@ -1344,13 +1347,13 @@ RValue CodeGenFunction::EmitAtomicExpr(AtomicExpr *E) {
     // incorrect values being stored. We therefore call a different libcall that
     // uses _cap as the suffix.
     if (UseOptimizedLibcall)
-      LibCallName += IsCheriCap ? "_cap" : ("_" + llvm::utostr(Size));
+      LibCallName += AsCheriCap ? "_cap" : ("_" + llvm::utostr(Size));
     // By default, assume we return a value of the atomic type.
     if (!HaveRetTy) {
       if (UseOptimizedLibcall) {
         // Value is returned directly.
         // The function returns an appropriately sized integer type.
-        RetTy = IsCheriCap
+        RetTy = AsCheriCap
                     ? getContext().UnsignedIntCapTy
                     : getContext().getIntTypeForBitwidth(
                           getContext().toBits(TInfo.Width), /*Signed=*/false);
@@ -1387,7 +1390,7 @@ RValue CodeGenFunction::EmitAtomicExpr(AtomicExpr *E) {
                                       ResVal, LoadVal1);
       } else if (PostOp) {
         llvm::Value *LoadVal1 = Args[1].getRValue(*this).getScalarVal();
-        if (IsCheriCap) {
+        if (AsCheriCap) {
           ResVal = getCapabilityIntegerValue(ResVal);
           LoadVal1 = getCapabilityIntegerValue(LoadVal1);
         }
@@ -1395,7 +1398,7 @@ RValue CodeGenFunction::EmitAtomicExpr(AtomicExpr *E) {
       }
       if (E->getOp() == AtomicExpr::AO__atomic_nand_fetch)
         ResVal = Builder.CreateNot(ResVal);
-      if (IsCheriCap && !PostOpMinMax && PostOp)
+      if (AsCheriCap && !PostOpMinMax && PostOp)
         ResVal = setCapabilityIntegerValue(Res.getScalarVal(), ResVal,
                                            E->getExprLoc());
 
@@ -1523,14 +1526,17 @@ RValue CodeGenFunction::EmitAtomicExpr(AtomicExpr *E) {
 
 Address AtomicInfo::castToAtomicIntPointer(Address addr) const {
   llvm::Type *ty;
-  if (AtomicTy->isCHERICapabilityType(CGF.getContext())) {
+  ASTContext &C = CGF.getContext();
+  if (C.containsCapabilities(AtomicTy)) {
     // If capability atomics are natively supported the instruction expects
     // a capability type. We also pass capabilities directly to the atomic
     // libcalls (i.e. always use optimized ones) since this is required to
     // support the RMW operations and special-casing the load/store/xchg to
     // use the generic libcalls (with mutex+memcpy) adds unncessary complexity.
-    if (!UseLibcall) {
-      // If we aren't using a libcall there is no need to cast to i8*
+    if (!UseLibcall && AtomicTy->isCHERICapabilityType(C)) {
+      // If we aren't using a libcall there is no need to cast to i8*. We may
+      // be punning an aggregate though so only reuse the type if it's actually
+      // a capability already.
       return addr.withElementType(getAtomicAddress().getElementType());
     }
     ty = CGF.CGM.Int8CheriCapTy;
