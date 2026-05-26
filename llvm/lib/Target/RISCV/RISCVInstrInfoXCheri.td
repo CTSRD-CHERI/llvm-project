@@ -355,6 +355,8 @@ def : MnemonicAlias<"gchi", "cgethigh">;
 def CGetMTE   : Cheri_r<0x18, "cgetmte">;
 def CGetTLOC   : Cheri_r<0x19, "cgettloc">;
 def CGetMemMTE : Cheri_r<0x1a, "cgetmemmte">;
+def CGetTMode : Cheri_r<0x1b, "cgettmode">;
+
 
 // For backwards compatibility we still accept cgetaddr from assembly.
 let mayStore = false, mayLoad = false, Size = 4, isCodeGenOnly = false,
