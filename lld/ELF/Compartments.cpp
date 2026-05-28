@@ -479,29 +479,48 @@ void assignSectionsToCompartments() {
     assert(s->file->compartment == 0);
 
     StringRef path = s->file->getName();
-    Expected<Compartment &> c = fileLookup.findMatch(path);
-    if (!c) {
-      error("input file " + path + " " + toString(c.takeError()));
-      valid = false;
-      continue;
+    StringRef scope = s->file->archiveName;
+    Twine scopedPath = scope.empty() ? path : scope + ":" + path;
+    Expected<Compartment &> c = *defaultCompart;
+    handleAllErrors(c.takeError());
+    auto tryMatch = [&](StringRef s) -> bool {
+      llvm::errs() << "tryMatch: " << s << "\n";
+      c = fileLookup.findMatch(s);
+      if (!c) {
+        error("input file " + scopedPath + " " + toString(c.takeError()));
+        valid = false;
+        return false;
+      }
+      return true;
+    };
+
+    // First, prioritise explicitly-scoped matches.
+    if (!scope.empty()) {
+      if (!tryMatch(scopedPath.str()))
+        continue;
+
+      // If the archive path is not a basename, try to match with a scope of
+      // just the basename.
+      if (c->isDefault() && llvm::sys::path::has_parent_path(scope) &&
+          !tryMatch((llvm::sys::path::filename(scope) + ":" + path).str()))
+        continue;
     }
 
+    // Next, prioritise matches with a full path.
+    if (c->isDefault() && !tryMatch(path))
+      continue;
+
     // If the path is not a basename, try to match on the basename.
-    if (c->isDefault() && llvm::sys::path::has_parent_path(path)) {
-      c = fileLookup.findMatch(llvm::sys::path::filename(path));
-      if (!c) {
-        error("input file " + path + " " + toString(c.takeError()));
-        valid = false;
-        continue;
-      }
-    }
+    if (c->isDefault() && llvm::sys::path::has_parent_path(path) &&
+        !tryMatch(llvm::sys::path::filename(path)))
+      continue;
 
     if (c->isDefault())
       continue;
 
     s->file->compartment = c->getNumber();
     if (config->verboseCompartmentalization)
-      message("info: input file " + s->file->getName() + " matched to " +
+      message("info: input file " + scopedPath + " matched to " +
               compartmentName(*c));
   }
 
