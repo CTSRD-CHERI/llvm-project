@@ -891,8 +891,7 @@ uint64_t InputSectionBase::getRelocTargetVA(RelType type, int64_t a, uint64_t p,
   case R_ABS_CAP_ADDR:
     return sym.getVA(a);
   case R_ABS_CAP_META:
-    assert(sym.isUndefined() &&
-           "cannot encode non-null derived capability yet");
+    assert(isAbsolute(sym) && "cannot encode non-null derived capability yet");
     return 0;
   case R_MIPS_CHERI_CAPTAB_INDEX:
   case R_MIPS_CHERI_CAPTAB_INDEX_SMALL_IMMEDIATE:
@@ -933,7 +932,7 @@ void InputSectionBase::addRelocCap(const Relocation &r) {
 
   // Handle deprecated CHERI-256
   if (config->capabilitySize == config->wordsize * 4) {
-    assert(r.sym->isUndefined() &&
+    assert(isAbsolute(*r.sym) &&
            "can encode only null-derived capabilities for CHERI-256");
     addReloc({R_ABS_CAP_META, r.type, r.offset + 2 * config->wordsize,
               r.addend, r.sym});
