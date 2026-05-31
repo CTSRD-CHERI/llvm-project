@@ -160,6 +160,8 @@ template <class ELFT> void scanRelocations();
 void reportUndefinedSymbols();
 void postScanRelocations();
 
+bool isAbsolute(const Symbol &sym, bool ignoreWeak = false);
+
 void hexagonTLSSymbolUpdate(ArrayRef<OutputSection *> outputSections);
 bool hexagonNeedsTLSSymbol(ArrayRef<OutputSection *> outputSections);
 
