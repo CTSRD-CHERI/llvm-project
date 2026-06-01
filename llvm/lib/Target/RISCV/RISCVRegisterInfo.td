@@ -234,6 +234,42 @@ def GPCRNoC0 : RegisterClass<"RISCV", [CLenVT], 64, (sub GPCR, C0)> {
   let RegInfos = CLenRI;
 }
 
+def YGPROperand : AsmOperandClass {
+  let Name = "YGPR";
+  let RenderMethod = "addRegOperands";
+  let DiagnosticType = "InvalidYGPR";
+}
+def YGPR : RegisterOperand<GPCR> {
+  let ParserMatchClass = YGPROperand;
+}
+
+def YGPRNoX0Operand : AsmOperandClass {
+  let Name = "YGPRNoX0";
+  let RenderMethod = "addRegOperands";
+  let DiagnosticType = "InvalidYGPRNoX0";
+}
+def YGPRNoX0 : RegisterOperand<GPCRNoC0> {
+  let ParserMatchClass = YGPRNoX0Operand;
+}
+
+def RVYCompatGPCROperand : AsmOperandClass {
+  let Name = "RVYCompatGPCR";
+  let RenderMethod = "addRegOperands";
+  let DiagnosticType = "InvalidRVYCompatGPCR";
+}
+def RVYCompatGPCR : RegisterOperand<GPCR> {
+  let ParserMatchClass = RVYCompatGPCROperand;
+}
+
+def RVYCompatGPCRNoC0Operand : AsmOperandClass {
+  let Name = "RVYCompatGPCRNoC0";
+  let RenderMethod = "addRegOperands";
+  let DiagnosticType = "InvalidRVYCompatGPCRNoC0";
+}
+def RVYCompatGPCRNoC0 : RegisterOperand<GPCRNoC0> {
+  let ParserMatchClass = RVYCompatGPCRNoC0Operand;
+}
+
 def GPRNoX0X2 : GPRRegisterClass<(sub GPR, X0, X2)>;
 
 // Don't use X1 or X5 for JALR since that is a hint to pop the return address
@@ -268,10 +304,55 @@ def GPCRTC : RegisterClass<"RISCV", [CLenVT], 64, (add
   let RegInfos = CLenRI;
 }
 
+def YGPRCOperand : AsmOperandClass {
+  let Name = "YGPRC";
+  let RenderMethod = "addRegOperands";
+  let DiagnosticType = "InvalidYGPRC";
+}
+def YGPRC : RegisterOperand<GPCRC> {
+  let ParserMatchClass = YGPRCOperand;
+}
+
+def RVYCompatGPCRCOperand : AsmOperandClass {
+  let Name = "RVYCompatGPCRC";
+  let RenderMethod = "addRegOperands";
+  let DiagnosticType = "InvalidRVYCompatGPCR";
+}
+def RVYCompatGPCRC : RegisterOperand<GPCRC> {
+  let ParserMatchClass = RVYCompatGPCRCOperand;
+}
+
+def RVYCompatGPCRTCOperand : AsmOperandClass {
+  let Name = "RVYCompatGPCRTC";
+  let RenderMethod = "addRegOperands";
+  let DiagnosticType = "InvalidRVYCompatGPCR";
+}
+def RVYCompatGPCRTC : RegisterOperand<GPCRTC> {
+  let ParserMatchClass = RVYCompatGPCRTCOperand;
+}
+
 def SP : GPRRegisterClass<(add X2)>;
 
 def CSP : RegisterClass<"RISCV", [CLenVT], 64, (add C2)> {
   let RegInfos = CLenRI;
+}
+
+def YSPOperand : AsmOperandClass {
+  let Name = "YSP";
+  let RenderMethod = "addRegOperands";
+  let DiagnosticType = "InvalidYSP";
+}
+def YSP : RegisterOperand<CSP> {
+  let ParserMatchClass = YSPOperand;
+}
+
+def RVYCompatCSPOperand : AsmOperandClass {
+  let Name = "RVYCompatCSP";
+  let RenderMethod = "addRegOperands";
+  let DiagnosticType = "InvalidRVYCompatCSP";
+}
+def RVYCompatCSP : RegisterOperand<CSP> {
+  let ParserMatchClass = RVYCompatCSPOperand;
 }
 
 // Saved Registers from s0 to s7, for C.MVA01S07 instruction in Zcmp extension

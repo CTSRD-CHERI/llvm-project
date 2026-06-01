@@ -39,8 +39,7 @@ c.sw a5, 1(ca3)
 c.csw a5, 4(a3)
 # CHECK: <stdin>:[[#@LINE-1]]:13: error: invalid operand for instruction
 c.sw a5, 4(a3)
-# CHECK-NO-C: <stdin>:[[#@LINE-1]]:1: error: instruction requires the following: 'C' (Compressed Instructions) or 'Zca' (part of the C extension, excluding compressed floating point loads/stores), Not Capability Mode
-# CHECK-C: <stdin>:[[#@LINE-2]]:1: error: instruction requires the following: Not Capability Mode
+# CHECK-NO-C: <stdin>:[[#@LINE-1]]:1: error: instruction requires the following: 'C' (Compressed Instructions){{$}}
 
 # Bad operands:
 c.cjalr a1
@@ -48,11 +47,9 @@ c.cjalr a1
 c.cjr a1
 # CHECK: <stdin>:[[#@LINE-1]]:7: error: invalid operand for instruction
 c.jalr a1
-# CHECK-C: <stdin>:[[#@LINE-1]]:1: error: instruction requires the following: Not Capability Mode{{$}}
-# CHECK-NO-C: <stdin>:[[#@LINE-2]]:1: error: instruction requires the following: 'C' (Compressed Instructions) or 'Zca' (part of the C extension, excluding compressed floating point loads/stores), Not Capability Mode{{$}}
+# CHECK-NO-C: <stdin>:[[#@LINE-1]]:1: error: instruction requires the following: 'C' (Compressed Instructions){{$}}
 c.jr a1
-# CHECK-C: <stdin>:[[#@LINE-1]]:1: error: instruction requires the following: Not Capability Mode{{$}}
-# CHECK-NO-C: <stdin>:[[#@LINE-2]]:1: error: instruction requires the following: 'C' (Compressed Instructions) or 'Zca' (part of the C extension, excluding compressed floating point loads/stores), Not Capability Mode{{$}}
+# CHECK-NO-C: <stdin>:[[#@LINE-1]]:1: error: instruction requires the following: 'C' (Compressed Instructions){{$}}
 c.csc a5, 16(ca3)
 # CHECK: <stdin>:[[#@LINE-1]]:7: error: invalid operand for instruction
 c.csc ca5, 16(a3)
