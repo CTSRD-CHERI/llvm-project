@@ -823,24 +823,35 @@ multiclass CPrefixedInstAlias<string Asm, dag Result, int Emit = 0> {
 
 let Predicates = [HasCheri, IsCapMode] in {
 // "cj" is the non-canonical form, but we provide this for completeness.
-defm: CPrefixedInstAlias<"j $offset",   (CJAL C0, simm21_lsb0_jal:$offset), 1>;
-defm: CPrefixedInstAlias<"jal $offset", (CJAL C1, simm21_lsb0_jal:$offset), 1>;
+def: InstAlias<"j $offset",    (CJAL C0, simm21_lsb0_jal:$offset), 1>;
+def: InstAlias<"cj $offset",   (CJAL C0, simm21_lsb0_jal:$offset), 0>;
+def: InstAlias<"jal $offset",  (CJAL C1, simm21_lsb0_jal:$offset), 1>;
+def: InstAlias<"cjal $offset", (CJAL C1, simm21_lsb0_jal:$offset), 0>;
 def: InstAlias<"cjal $rd, $offset", (CJAL GPCR:$rd, simm21_lsb0_jal:$offset), 0>;
 def: InstAlias<"cjalr $rd, ${offset}(${rs1})", (CJALR GPCR:$rd, GPCR:$rs1, simm12:$offset), 0>;
 
 // Non-zero offset aliases of "cjalr" are the lowest weight, followed by the
 // two-register form, then the one-register forms and finally "cret".
-defm: CPrefixedInstAlias<"jr $rs",                (CJALR       C0, GPCR:$rs, 0), 3>;
-defm: CPrefixedInstAlias<"jr ${offset}(${rs})",   (CJALR       C0, GPCR:$rs, simm12:$offset), 1>;
-defm: CPrefixedInstAlias<"jalr $rs",              (CJALR       C1, GPCR:$rs, 0), 3>;
-defm: CPrefixedInstAlias<"jalr ${offset}(${rs})", (CJALR       C1, GPCR:$rs, simm12:$offset), 1>;
-defm: CPrefixedInstAlias<"jalr $rd, $rs",         (CJALR GPCR:$rd, GPCR:$rs, 0), 2>;
-defm: CPrefixedInstAlias<"ret",                   (CJALR       C0,       C1, 0), 4>;
+def: InstAlias<"jr $rs",                 (CJALR       C0, GPCR:$rs, 0), 3>;
+def: InstAlias<"cjr $rs",                (CJALR       C0, GPCR:$rs, 0), 0>;
+def: InstAlias<"jr ${offset}(${rs})",    (CJALR       C0, GPCR:$rs, simm12:$offset), 1>;
+def: InstAlias<"cjr ${offset}(${rs})",   (CJALR       C0, GPCR:$rs, simm12:$offset), 0>;
+def: InstAlias<"jalr $rs",               (CJALR       C1, GPCR:$rs, 0), 3>;
+def: InstAlias<"cjalr $rs",              (CJALR       C1, GPCR:$rs, 0), 0>;
+def: InstAlias<"jalr ${offset}(${rs})",  (CJALR       C1, GPCR:$rs, simm12:$offset), 1>;
+def: InstAlias<"cjalr ${offset}(${rs})", (CJALR       C1, GPCR:$rs, simm12:$offset), 0>;
+def: InstAlias<"jalr $rd, $rs",          (CJALR GPCR:$rd, GPCR:$rs, 0), 2>;
+def: InstAlias<"cjalr $rd, $rs",         (CJALR GPCR:$rd, GPCR:$rs, 0), 0>;
+def: InstAlias<"ret",                    (CJALR       C0,       C1, 0), 4>;
+def: InstAlias<"cret",                   (CJALR       C0,       C1, 0), 0>;
 
 // Non-canonical forms for jump targets also accepted by the assembler.
-defm: CPrefixedInstAlias<"jr $rs, $offset",        (CJALR       C0, GPCR:$rs, simm12:$offset), 0>;
-defm: CPrefixedInstAlias<"jalr $rs, $offset",      (CJALR       C1, GPCR:$rs, simm12:$offset), 0>;
-defm: CPrefixedInstAlias<"jalr $rd, $rs, $offset", (CJALR GPCR:$rd, GPCR:$rs, simm12:$offset), 0>;
+def: InstAlias<"jr $rs, $offset",         (CJALR       C0, GPCR:$rs, simm12:$offset), 0>;
+def: InstAlias<"cjr $rs, $offset",        (CJALR       C0, GPCR:$rs, simm12:$offset), 0>;
+def: InstAlias<"jalr $rs, $offset",       (CJALR       C1, GPCR:$rs, simm12:$offset), 0>;
+def: InstAlias<"cjalr $rs, $offset",      (CJALR       C1, GPCR:$rs, simm12:$offset), 0>;
+def: InstAlias<"jalr $rd, $rs, $offset",  (CJALR GPCR:$rd, GPCR:$rs, simm12:$offset), 0>;
+def: InstAlias<"cjalr $rd, $rs, $offset", (CJALR GPCR:$rd, GPCR:$rs, simm12:$offset), 0>;
 } // Predicates = [HasCheri, IsCapMode]
 
 
