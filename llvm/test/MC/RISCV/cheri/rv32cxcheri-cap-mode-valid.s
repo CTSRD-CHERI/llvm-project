@@ -33,6 +33,9 @@ c.csw a5, 124(ca3)
 # CHECK-ASM-AND-OBJ: {{[[:<:]]}}c.sw a5, 124(ca3)
 # CHECK-ASM-SAME: encoding: [0xfc,0xde]
 c.sw a5, 124(ca3)
+# CHECK-ASM-AND-OBJ: {{[[:<:]]}}c.sw a5, 4(ca3)
+# CHECK-ASM-SAME: encoding: [0xdc,0xc2]
+c.sw a5, 4(a3)
 
 # CHECK-ASM-AND-OBJ: {{[[:<:]]}}c.jr ca7
 # CHECK-ASM-SAME: encoding: [0x82,0x88]

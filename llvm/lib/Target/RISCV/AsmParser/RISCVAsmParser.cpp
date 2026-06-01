@@ -372,6 +372,7 @@ struct RISCVOperand final : public MCParsedAsmOperand {
   struct RegOp {
     MCRegister RegNum;
     bool IsGPRAsFPR;
+    bool CoercedFromGPR;
   };
 
   struct ImmOp {
@@ -509,6 +510,38 @@ public:
   bool isGPCR() const {
     return Kind == KindTy::Register &&
            RISCVMCRegisterClasses[RISCV::GPCRRegClassID].contains(Reg.RegNum);
+  }
+
+  bool isYGPR() const { return isGPCR() && Reg.CoercedFromGPR; }
+
+  bool isYGPRNoX0() const { return isYGPR() && Reg.RegNum != RISCV::C0; }
+
+  bool isYGPRC() const {
+    return isYGPR() &&
+           RISCVMCRegisterClasses[RISCV::GPCRCRegClassID].contains(Reg.RegNum);
+  }
+
+  bool isYSP() const {
+    return isYGPR() &&
+           RISCVMCRegisterClasses[RISCV::CSPRegClassID].contains(Reg.RegNum);
+  }
+
+  bool isRVYCompatGPCR() const { return isGPCR(); }
+
+  bool isRVYCompatGPCRNoC0() const {
+    return isRVYCompatGPCR() && Reg.RegNum != RISCV::C0;
+  }
+
+  bool isRVYCompatGPCRC() const {
+    return RISCVMCRegisterClasses[RISCV::GPCRCRegClassID].contains(Reg.RegNum);
+  }
+
+  bool isRVYCompatGPCRTC() const {
+    return RISCVMCRegisterClasses[RISCV::GPCRTCRegClassID].contains(Reg.RegNum);
+  }
+
+  bool isRVYCompatCSP() const {
+    return RISCVMCRegisterClasses[RISCV::CSPRegClassID].contains(Reg.RegNum);
   }
 
   bool isGPRAsFPR() const { return isGPR() && Reg.IsGPRAsFPR; }
@@ -1143,6 +1176,7 @@ public:
     auto Op = std::make_unique<RISCVOperand>(KindTy::Register);
     Op->Reg.RegNum = RegNo;
     Op->Reg.IsGPRAsFPR = IsGPRAsFPR;
+    Op->Reg.CoercedFromGPR = false;
     Op->StartLoc = S;
     Op->EndLoc = E;
     return Op;
@@ -1381,6 +1415,61 @@ unsigned RISCVAsmParser::validateTargetOperandClass(MCParsedAsmOperand &AsmOp,
     if (Op.Reg.RegNum == 0)
       return Match_InvalidOperand;
     return Match_Success;
+  }
+  // In RVY mode, capability registers can be referenced using unprefixed GPR
+  // register names (e.g. a0 instead of ca0). We coerce GPRs to GPCRs when
+  // the InstAlias uses the YGPR* (only allowing X registers) or RVYCompat*
+  // operand types (allowing both C and X registers).
+  const MCRegisterClass *RC = nullptr;
+  bool CoerceInAllModes = false;
+  switch (Kind) {
+  case MCK_YGPR:
+    RC = &RISCVMCRegisterClasses[RISCV::GPCRRegClassID];
+    CoerceInAllModes = true;
+    break;
+  case MCK_RVYCompatGPCR:
+  case MCK_RVYCompatZeroOffsetMemOpOperand:
+  case MCK_YGPRZeroOffsetMemOpOperand:
+    RC = &RISCVMCRegisterClasses[RISCV::GPCRRegClassID];
+    break;
+  case MCK_YGPRNoX0:
+    RC = &RISCVMCRegisterClasses[RISCV::GPCRNoC0RegClassID];
+    CoerceInAllModes = true;
+    break;
+  case MCK_RVYCompatGPCRNoC0:
+    RC = &RISCVMCRegisterClasses[RISCV::GPCRNoC0RegClassID];
+    break;
+  case MCK_YGPRC:
+    RC = &RISCVMCRegisterClasses[RISCV::GPCRCRegClassID];
+    CoerceInAllModes = true;
+    break;
+  case MCK_RVYCompatGPCRC:
+    RC = &RISCVMCRegisterClasses[RISCV::GPCRCRegClassID];
+    break;
+  case MCK_RVYCompatGPCRTC:
+    RC = &RISCVMCRegisterClasses[RISCV::GPCRTCRegClassID];
+    break;
+  case MCK_YSP:
+    RC = &RISCVMCRegisterClasses[RISCV::CSPRegClassID];
+    CoerceInAllModes = true;
+    break;
+  case MCK_RVYCompatCSP:
+    RC = &RISCVMCRegisterClasses[RISCV::CSPRegClassID];
+    break;
+  }
+  if (RC) {
+    // For the RVY mnemonics (MCK_Y*) we coerce in all modes, but for others,
+    // only capmode should accept x registers (instructions such as jalr, etc.)
+    bool ShouldCoerceGPR =
+        CoerceInAllModes || getSTI().hasFeature(RISCV::FeatureCapMode);
+    if (Op.isGPR() && ShouldCoerceGPR) {
+      MCRegister CapReg = convertGPRToGPCR(Reg);
+      if (!RC->contains(CapReg))
+        return getDiagKindFromRegisterClass((MatchClassKind)Kind);
+      Op.Reg.RegNum = CapReg;
+      Op.Reg.CoercedFromGPR = true;
+      return Match_Success;
+    }
   }
   return Match_InvalidOperand;
 }
@@ -1685,6 +1774,17 @@ bool RISCVAsmParser::MatchAndEmitInstruction(SMLoc IDLoc, unsigned &Opcode,
   case Match_InvalidRnumArg: {
     return generateImmOutOfRangeError(Operands, ErrorInfo, 0, 10);
   }
+  case Match_InvalidRVYCompatGPCR:
+  case Match_InvalidYGPR:
+  case Match_InvalidYGPRC:
+    return Error(Operands[ErrorInfo]->getStartLoc(), "operand must be a GPR");
+  case Match_InvalidRVYCompatGPCRNoC0:
+  case Match_InvalidYGPRNoX0:
+    return Error(Operands[ErrorInfo]->getStartLoc(),
+                 "operand must be a GPR other than x0");
+  case Match_InvalidRVYCompatCSP:
+  case Match_InvalidYSP:
+    return Error(Operands[ErrorInfo]->getStartLoc(), "operand must be sp");
   }
 
   llvm_unreachable("Unknown match type detected!");
