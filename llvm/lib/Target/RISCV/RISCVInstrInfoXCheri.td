@@ -73,6 +73,12 @@ def GPCRMemZeroOffset : MemOperand<GPCR> {
   let PrintMethod = "printZeroOffsetMemOp";
 }
 
+def GPCRMem : MemOperand<GPCR>;
+
+def CSPMem : MemOperand<CSP>;
+
+def GPCRCMem : MemOperand<GPCRC>;
+
 // A 9-bit unsigned immediate where the least significant four bits are zero.
 def uimm9_lsb0000 : Operand<XLenVT>,
                     ImmLeaf<XLenVT, [{return isShiftedUInt<5, 4>(Imm);}]> {
@@ -198,10 +204,10 @@ multiclass CheriLoad_ri<bits<3> funct3, string opcodestr> {
   let hasSideEffects = 0, mayLoad = 1, mayStore = 0,
       DecoderNamespace = "CapModeOnly_" in
   def "" : RVInstI<funct3, OPC_LOAD, (outs GPR:$rd),
-                   (ins GPCR:$rs1, simm12:$imm12), opcodestr,
+                   (ins GPCRMem:$rs1, simm12:$imm12), opcodestr,
                    "$rd, ${imm12}(${rs1})">;
   def : InstAlias<"c" # opcodestr # " $rd, ${imm12}(${rs1})",
-                  (!cast<Instruction>(NAME) GPR:$rd, GPCR:$rs1, simm12:$imm12),
+                  (!cast<Instruction>(NAME) GPR:$rd, GPCRMem:$rs1, simm12:$imm12),
                   0>;
 }
 
@@ -209,10 +215,10 @@ multiclass CheriStore_ri<bits<3> funct3, string opcodestr> {
   let hasSideEffects = 0, mayLoad = 0, mayStore = 1,
       DecoderNamespace = "CapModeOnly_" in
   def "" : RVInstS<funct3, OPC_STORE, (outs),
-                   (ins GPR:$rs2, GPCR:$rs1, simm12:$imm12),
+                   (ins GPR:$rs2, GPCRMem:$rs1, simm12:$imm12),
                    opcodestr, "$rs2, ${imm12}(${rs1})">;
   def : InstAlias<"c" # opcodestr # "$rs2, ${imm12}(${rs1})",
-                  (!cast<Instruction>(NAME) GPR:$rs2, GPCR:$rs1, simm12:$imm12),
+                  (!cast<Instruction>(NAME) GPR:$rs2, GPCRMem:$rs1, simm12:$imm12),
                   0>;
 }
 
@@ -310,25 +316,25 @@ multiclass CAMO_C_rr_aq_rl<string clenstr, bits<5> funct5, bits<3> funct3,
 let hasSideEffects = 0, mayLoad = 1, mayStore = 0 in
 class CCheriStackLoad<bits<3> funct3, string OpcodeStr,
                       RegisterClass cls, DAGOperand opnd>
-    : RVInst16CI<funct3, 0b10, (outs cls:$rd), (ins CSP:$rs1, opnd:$imm),
+    : RVInst16CI<funct3, 0b10, (outs cls:$rd), (ins CSPMem:$rs1, opnd:$imm),
                  OpcodeStr, "$rd, ${imm}(${rs1})">;
 
 let hasSideEffects = 0, mayLoad = 0, mayStore = 1 in
 class CCheriStackStore<bits<3> funct3, string OpcodeStr,
                        RegisterClass cls, DAGOperand opnd>
-    : RVInst16CSS<funct3, 0b10, (outs), (ins cls:$rs2, CSP:$rs1, opnd:$imm),
+    : RVInst16CSS<funct3, 0b10, (outs), (ins cls:$rs2, CSPMem:$rs1, opnd:$imm),
                   OpcodeStr, "$rs2, ${imm}(${rs1})">;
 
 let hasSideEffects = 0, mayLoad = 1, mayStore = 0 in
 class CCheriLoad_ri<bits<3> funct3, string OpcodeStr,
                     RegisterClass cls, DAGOperand opnd>
-    : RVInst16CL<funct3, 0b00, (outs cls:$rd), (ins GPCRC:$rs1, opnd:$imm),
+    : RVInst16CL<funct3, 0b00, (outs cls:$rd), (ins GPCRCMem:$rs1, opnd:$imm),
                  OpcodeStr, "$rd, ${imm}(${rs1})">;
 
 let hasSideEffects = 0, mayLoad = 0, mayStore = 1 in
 class CCheriStore_rri<bits<3> funct3, string OpcodeStr,
                       RegisterClass cls, DAGOperand opnd>
-    : RVInst16CS<funct3, 0b00, (outs), (ins cls:$rs2, GPCRC:$rs1, opnd:$imm),
+    : RVInst16CS<funct3, 0b00, (outs), (ins cls:$rs2, GPCRCMem:$rs1, opnd:$imm),
                  OpcodeStr, "$rs2, ${imm}(${rs1})">;
 
 //===----------------------------------------------------------------------===//
@@ -877,23 +883,23 @@ let Predicates = [HasCheri, IsRV32, IsCapMode] in {
 let DecoderNamespace = "RISCV32CapModeOnly_",
     hasSideEffects = 0, mayLoad = 1, mayStore = 0 in
 def CLC_64  : RVInstI<0x3, OPC_LOAD, (outs GPCR:$rd),
-                      (ins GPCR:$rs1, simm12:$imm12),
+                      (ins GPCRMem:$rs1, simm12:$imm12),
                       "lc", "$rd, ${imm12}(${rs1})">;
 def : InstAlias<"clc $rd, ${imm12}(${rs1})",
-                (CLC_64  GPCR:$rd, GPCR:$rs1, simm12:$imm12), 0>;
+                (CLC_64  GPCR:$rd, GPCRMem:$rs1, simm12:$imm12), 0>;
 
 let DecoderNamespace = "RISCV32CapModeOnly_",
     hasSideEffects = 0, mayLoad = 0, mayStore = 1 in
 def CSC_64  : RVInstS<0x3, OPC_STORE, (outs),
-                      (ins GPCR:$rs2, GPCR:$rs1, simm12:$imm12),
+                      (ins GPCR:$rs2, GPCRMem:$rs1, simm12:$imm12),
                       "sc", "$rs2, ${imm12}(${rs1})">;
 def : InstAlias<"csc $rs2, ${imm12}(${rs1})",
-                (CSC_64  GPCR:$rs2, GPCR:$rs1, simm12:$imm12), 0>;
+                (CSC_64  GPCR:$rs2, GPCRMem:$rs1, simm12:$imm12), 0>;
 
 defm : CPrefixedInstAlias<"lc $rd, (${rs1})",
-                          (CLC_64  GPCR:$rd, GPCR:$rs1, 0)>;
+                          (CLC_64  GPCR:$rd, GPCRMem:$rs1, 0)>;
 defm : CPrefixedInstAlias<"sc $rs2, (${rs1})",
-                          (CSC_64  GPCR:$rs2, GPCR:$rs1, 0)>;
+                          (CSC_64  GPCR:$rs2, GPCRMem:$rs1, 0)>;
 def : InstAlias<"ly $rd, ${imm12}(${rs1})",
                 (CLC_64  GPCR:$rd, GPCR:$rs1, simm12:$imm12), 0>;
 def : InstAlias<"sy $rs2, ${imm12}(${rs1})",
@@ -908,23 +914,23 @@ let Predicates = [HasCheri, IsRV64, IsCapMode] in {
 let DecoderNamespace = "CapModeOnly_",
     hasSideEffects = 0, mayLoad = 1, mayStore = 0 in
 def CLC_128  : RVInstI<0x2, OPC_MISC_MEM, (outs GPCR:$rd),
-                       (ins GPCR:$rs1, simm12:$imm12),
+                       (ins GPCRMem:$rs1, simm12:$imm12),
                        "lc", "$rd, ${imm12}(${rs1})">;
 def : InstAlias<"clc $rd, ${imm12}(${rs1})",
-                (CLC_128  GPCR:$rd, GPCR:$rs1, simm12:$imm12), 0>;
+                (CLC_128  GPCR:$rd, GPCRMem:$rs1, simm12:$imm12), 0>;
 
 let DecoderNamespace = "CapModeOnly_",
     hasSideEffects = 0, mayLoad = 0, mayStore = 1 in
 def CSC_128  : RVInstS<0x4, OPC_STORE, (outs),
-                       (ins GPCR:$rs2, GPCR:$rs1, simm12:$imm12),
+                       (ins GPCR:$rs2, GPCRMem:$rs1, simm12:$imm12),
                        "sc", "$rs2, ${imm12}(${rs1})">;
 def : InstAlias<"csc $rs2, ${imm12}(${rs1})",
-                (CSC_128  GPCR:$rs2, GPCR:$rs1, simm12:$imm12), 0>;
+                (CSC_128  GPCR:$rs2, GPCRMem:$rs1, simm12:$imm12), 0>;
 
 defm : CPrefixedInstAlias<"lc $rd, (${rs1})",
-                          (CLC_128  GPCR:$rd, GPCR:$rs1, 0)>;
+                          (CLC_128  GPCR:$rd, GPCRMem:$rs1, 0)>;
 defm : CPrefixedInstAlias<"sc $rs2, (${rs1})",
-                          (CSC_128  GPCR:$rs2, GPCR:$rs1, 0)>;
+                          (CSC_128  GPCR:$rs2, GPCRMem:$rs1, 0)>;
 def : InstAlias<"ly $rd, ${imm12}(${rs1})",
                 (CLC_128  GPCR:$rd, GPCR:$rs1, simm12:$imm12), 0>;
 def : InstAlias<"sy $rs2, ${imm12}(${rs1})",
@@ -1021,22 +1027,22 @@ let Predicates = [HasCheri, HasStdExtF, IsCapMode] in {
 let DecoderNamespace = "CapModeOnly_",
     hasSideEffects = 0, mayLoad = 1, mayStore = 0 in
 def CFLW : RVInstI<0b010, OPC_LOAD_FP, (outs FPR32:$rd),
-                   (ins GPCR:$rs1, simm12:$imm12),
+                   (ins GPCRMem:$rs1, simm12:$imm12),
                    "flw", "$rd, ${imm12}(${rs1})">;
 
 let DecoderNamespace = "CapModeOnly_",
     hasSideEffects = 0, mayLoad = 0, mayStore = 1 in
 def CFSW : RVInstS<0b010, OPC_STORE_FP, (outs),
-                   (ins FPR32:$rs2, GPCR:$rs1, simm12:$imm12),
+                   (ins FPR32:$rs2, GPCRMem:$rs1, simm12:$imm12),
                    "fsw", "$rs2, ${imm12}(${rs1})">;
 
-defm : CPrefixedInstAlias<"flw $rd, (${rs1})", (CFLW FPR32:$rd, GPCR:$rs1, 0)>;
+defm : CPrefixedInstAlias<"flw $rd, (${rs1})", (CFLW FPR32:$rd, GPCRMem:$rs1, 0)>;
 defm : CPrefixedInstAlias<"fsw $rs2, (${rs1})",
-                          (CFSW FPR32:$rs2, GPCR:$rs1, 0)>;
+                          (CFSW FPR32:$rs2, GPCRMem:$rs1, 0)>;
 def : InstAlias<"cflw $rd, ${imm12}(${rs1})",
-                (CFLW FPR32:$rd, GPCR:$rs1, simm12:$imm12), 0>;
+                (CFLW FPR32:$rd, GPCRMem:$rs1, simm12:$imm12), 0>;
 def : InstAlias<"cfsw $rs2, ${imm12}(${rs1})",
-                (CFSW FPR32:$rs2, GPCR:$rs1, simm12:$imm12), 0>;
+                (CFSW FPR32:$rs2, GPCRMem:$rs1, simm12:$imm12), 0>;
 } // Predicates = [HasCheri, HasStdExtF, IsCapMode]
 
 /// 'D' (Single-Precision Floating-Point) extension
@@ -1045,22 +1051,22 @@ let Predicates = [HasCheri, HasStdExtD, IsCapMode] in {
 let DecoderNamespace = "CapModeOnly_",
     hasSideEffects = 0, mayLoad = 1, mayStore = 0 in
 def CFLD : RVInstI<0b011, OPC_LOAD_FP, (outs FPR64:$rd),
-                   (ins GPCR:$rs1, simm12:$imm12),
+                   (ins GPCRMem:$rs1, simm12:$imm12),
                    "fld", "$rd, ${imm12}(${rs1})">;
 
 let DecoderNamespace = "CapModeOnly_",
     hasSideEffects = 0, mayLoad = 0, mayStore = 1 in
 def CFSD : RVInstS<0b011, OPC_STORE_FP, (outs),
-                   (ins FPR64:$rs2, GPCR:$rs1, simm12:$imm12),
+                   (ins FPR64:$rs2, GPCRMem:$rs1, simm12:$imm12),
                    "fsd", "$rs2, ${imm12}(${rs1})">;
 
-defm : CPrefixedInstAlias<"fld $rd, (${rs1})", (CFLD FPR64:$rd, GPCR:$rs1, 0)>;
+defm : CPrefixedInstAlias<"fld $rd, (${rs1})", (CFLD FPR64:$rd, GPCRMem:$rs1, 0)>;
 defm : CPrefixedInstAlias<"fsd $rs2, (${rs1})",
-                          (CFSD FPR64:$rs2, GPCR:$rs1, 0)>;
+                          (CFSD FPR64:$rs2, GPCRMem:$rs1, 0)>;
 def : InstAlias<"cfld $rd, ${imm12}(${rs1})",
-                (CFLD FPR64:$rd, GPCR:$rs1, simm12:$imm12), 0>;
+                (CFLD FPR64:$rd, GPCRMem:$rs1, simm12:$imm12), 0>;
 def : InstAlias<"cfsd $rs2, ${imm12}(${rs1})",
-                (CFSD FPR64:$rs2, GPCR:$rs1, simm12:$imm12), 0>;
+                (CFSD FPR64:$rs2, GPCRMem:$rs1, simm12:$imm12), 0>;
 } // Predicates = [HasCheri, HasStdExtD, IsCapMode]
 
 /// 'C' (Compressed Instructions) extension
@@ -2264,53 +2270,53 @@ def : CompressPat<(CIncOffsetImm GPCRC:$rd, CSP:$rs1, uimm10_lsb00nonzero:$imm),
 } // Predicates = [HasCheri, HasCheriRVC, HasStdExtC, IsCapMode]
 
 let Predicates = [HasCheri, HasCheriRVC, HasStdExtC, HasStdExtD, IsRV32, IsCapMode] in {
-def : CompressPat<(CFLD FPR64C:$rd, GPCRC:$rs1, uimm8_lsb000:$imm),
-                  (C_CFLD FPR64C:$rd, GPCRC:$rs1, uimm8_lsb000:$imm)>;
+def : CompressPat<(CFLD FPR64C:$rd, GPCRCMem:$rs1, uimm8_lsb000:$imm),
+                  (C_CFLD FPR64C:$rd, GPCRCMem:$rs1, uimm8_lsb000:$imm)>;
 } // Predicates = [HasCheri, HasCheriRVC, HasStdExtC, HasStdExtD, IsRV32, IsCapMode]
 
 let Predicates = [HasCheri, HasCheriRVC, HasStdExtC, IsRV64, IsCapMode] in {
-def : CompressPat<(CLC_128 GPCRC:$rd, GPCRC:$rs1, uimm9_lsb0000:$imm),
-                  (C_CLC_128 GPCRC:$rd, GPCRC:$rs1, uimm9_lsb0000:$imm)>;
+def : CompressPat<(CLC_128 GPCRC:$rd, GPCRCMem:$rs1, uimm9_lsb0000:$imm),
+                  (C_CLC_128 GPCRC:$rd, GPCRCMem:$rs1, uimm9_lsb0000:$imm)>;
 } // Predicates = [HasCheri, HasCheriRVC, HasStdExtC, IsRV64, IsCapMode]
 
 let Predicates = [HasCheri, HasCheriRVC, HasStdExtC, IsCapMode] in {
-def : CompressPat<(CLW GPRC:$rd, GPCRC:$rs1, uimm7_lsb00:$imm),
-                  (C_CLW GPRC:$rd, GPCRC:$rs1, uimm7_lsb00:$imm)>;
+def : CompressPat<(CLW GPRC:$rd, GPCRCMem:$rs1, uimm7_lsb00:$imm),
+                  (C_CLW GPRC:$rd, GPCRCMem:$rs1, uimm7_lsb00:$imm)>;
 } // Predicates = [HasCheri, HasCheriRVC, HasStdExtC, IsCapMode]
 
 let Predicates = [HasCheri, HasCheriRVC, HasStdExtC, IsRV32, IsCapMode] in {
-def : CompressPat<(CLC_64 GPCRC:$rd, GPCRC:$rs1, uimm8_lsb000:$imm),
-                  (C_CLC_64 GPCRC:$rd, GPCRC:$rs1, uimm8_lsb000:$imm)>;
+def : CompressPat<(CLC_64 GPCRC:$rd, GPCRCMem:$rs1, uimm8_lsb000:$imm),
+                  (C_CLC_64 GPCRC:$rd, GPCRCMem:$rs1, uimm8_lsb000:$imm)>;
 } // Predicates = [HasCheri, HasCheriRVC, HasStdExtC, IsRV32, IsCapMode]
 
 let Predicates = [HasCheri, HasCheriRVC, HasStdExtC, IsRV64, IsCapMode] in {
-def : CompressPat<(CLD GPRC:$rd, GPCRC:$rs1, uimm8_lsb000:$imm),
-                  (C_CLD GPRC:$rd, GPCRC:$rs1, uimm8_lsb000:$imm)>;
+def : CompressPat<(CLD GPRC:$rd, GPCRCMem:$rs1, uimm8_lsb000:$imm),
+                  (C_CLD GPRC:$rd, GPCRCMem:$rs1, uimm8_lsb000:$imm)>;
 } // Predicates = [HasCheri, HasCheriRVC, HasStdExtC, IsRV64, IsCapMode]
 
 let Predicates = [HasCheri, HasCheriRVC, HasStdExtC, HasStdExtD, IsRV32, IsCapMode] in {
-def : CompressPat<(CFSD FPR64C:$rs2, GPCRC:$rs1, uimm8_lsb000:$imm),
-                  (C_CFSD FPR64C:$rs2, GPCRC:$rs1, uimm8_lsb000:$imm)>;
+def : CompressPat<(CFSD FPR64C:$rs2, GPCRCMem:$rs1, uimm8_lsb000:$imm),
+                  (C_CFSD FPR64C:$rs2, GPCRCMem:$rs1, uimm8_lsb000:$imm)>;
 } // Predicates = [HasCheri, HasCheriRVC, HasStdExtC, HasStdExtD, IsRV32, IsCapMode]
 
 let Predicates = [HasCheri, HasCheriRVC, HasStdExtC, IsRV64, IsCapMode] in {
-def : CompressPat<(CSC_128 GPCRC:$rs2, GPCRC:$rs1, uimm9_lsb0000:$imm),
-                  (C_CSC_128 GPCRC:$rs2, GPCRC:$rs1, uimm9_lsb0000:$imm)>;
+def : CompressPat<(CSC_128 GPCRC:$rs2, GPCRCMem:$rs1, uimm9_lsb0000:$imm),
+                  (C_CSC_128 GPCRC:$rs2, GPCRCMem:$rs1, uimm9_lsb0000:$imm)>;
 } // Predicates = [HasCheri, HasCheriRVC, HasStdExtC, IsRV64, IsCapMode]
 
 let Predicates = [HasCheri, HasCheriRVC, HasStdExtC, IsCapMode] in {
-def : CompressPat<(CSW GPRC:$rs2, GPCRC:$rs1, uimm7_lsb00:$imm),
-                  (C_CSW GPRC:$rs2, GPCRC:$rs1, uimm7_lsb00:$imm)>;
+def : CompressPat<(CSW GPRC:$rs2, GPCRCMem:$rs1, uimm7_lsb00:$imm),
+                  (C_CSW GPRC:$rs2, GPCRCMem:$rs1, uimm7_lsb00:$imm)>;
 } // Predicates = [HasCheri, HasCheriRVC, HasStdExtC, IsCapMode]
 
 let Predicates = [HasCheri, HasCheriRVC, HasStdExtC, IsRV32, IsCapMode] in {
-def : CompressPat<(CSC_64 GPCRC:$rs2, GPCRC:$rs1, uimm8_lsb000:$imm),
-                  (C_CSC_64 GPCRC:$rs2, GPCRC:$rs1, uimm8_lsb000:$imm)>;
+def : CompressPat<(CSC_64 GPCRC:$rs2, GPCRCMem:$rs1, uimm8_lsb000:$imm),
+                  (C_CSC_64 GPCRC:$rs2, GPCRCMem:$rs1, uimm8_lsb000:$imm)>;
 } // Predicates = [HasCheri, HasCheriRVC, HasStdExtC, IsRV32, IsCapMode]
 
 let Predicates = [HasCheri, HasCheriRVC, HasStdExtC, IsRV64, IsCapMode] in {
-def : CompressPat<(CSD GPRC:$rs2, GPCRC:$rs1, uimm8_lsb000:$imm),
-                  (C_CSD GPRC:$rs2, GPCRC:$rs1, uimm8_lsb000:$imm)>;
+def : CompressPat<(CSD GPRC:$rs2, GPCRCMem:$rs1, uimm8_lsb000:$imm),
+                  (C_CSD GPRC:$rs2, GPCRCMem:$rs1, uimm8_lsb000:$imm)>;
 } // Predicates = [HasCheri, HasCheriRVC, HasStdExtC, IsRV64, IsCapMode]
 
 // Quadrant 1
@@ -2331,28 +2337,28 @@ def : CompressPat<(CJAL C0, simm12_lsb0:$offset),
 
 // Quadrant 2
 let Predicates = [HasCheri, HasCheriRVC, HasStdExtC, HasStdExtD, IsRV32, IsCapMode] in {
-def : CompressPat<(CFLD FPR64:$rd, CSP:$rs1, uimm9_lsb000:$imm),
-                  (C_CFLDCSP FPR64:$rd, CSP:$rs1, uimm9_lsb000:$imm)>;
+def : CompressPat<(CFLD FPR64:$rd, CSPMem:$rs1, uimm9_lsb000:$imm),
+                  (C_CFLDCSP FPR64:$rd, CSPMem:$rs1, uimm9_lsb000:$imm)>;
 } // Predicates = [HasCheri, HasCheriRVC, HasStdExtC, HasStdExtD, IsRV32, IsCapMode]
 
 let Predicates = [HasCheri, HasCheriRVC, HasStdExtC, IsRV64, IsCapMode] in {
-def : CompressPat<(CLC_128 GPCRNoC0:$rd, CSP:$rs1, uimm10_lsb0000:$imm),
-                  (C_CLCCSP_128 GPCRNoC0:$rd, CSP:$rs1, uimm10_lsb0000:$imm)>;
+def : CompressPat<(CLC_128 GPCRNoC0:$rd, CSPMem:$rs1, uimm10_lsb0000:$imm),
+                  (C_CLCCSP_128 GPCRNoC0:$rd, CSPMem:$rs1, uimm10_lsb0000:$imm)>;
 } // Predicates = [HasCheri, HasCheriRVC, HasStdExtC, IsRV64, IsCapMode]
 
 let Predicates = [HasCheri, HasCheriRVC, HasStdExtC, IsCapMode] in {
-def : CompressPat<(CLW GPRNoX0:$rd, CSP:$rs1,  uimm8_lsb00:$imm),
-                  (C_CLWCSP GPRNoX0:$rd, CSP:$rs1, uimm8_lsb00:$imm)>;
+def : CompressPat<(CLW GPRNoX0:$rd, CSPMem:$rs1,  uimm8_lsb00:$imm),
+                  (C_CLWCSP GPRNoX0:$rd, CSPMem:$rs1, uimm8_lsb00:$imm)>;
 } // Predicates = [HasCheri, HasCheriRVC, HasStdExtC, IsCapMode]
 
 let Predicates = [HasCheri, HasCheriRVC, HasStdExtC, IsRV32, IsCapMode] in {
-def : CompressPat<(CLC_64 GPCRNoC0:$rd, CSP:$rs1, uimm9_lsb000:$imm),
-                  (C_CLCCSP_64 GPCRNoC0:$rd, CSP:$rs1, uimm9_lsb000:$imm)>;
+def : CompressPat<(CLC_64 GPCRNoC0:$rd, CSPMem:$rs1, uimm9_lsb000:$imm),
+                  (C_CLCCSP_64 GPCRNoC0:$rd, CSPMem:$rs1, uimm9_lsb000:$imm)>;
 } // Predicates = [HasCheri, HasCheriRVC, HasStdExtC, IsRV32, IsCapMode]
 
 let Predicates = [HasCheri, HasCheriRVC, HasStdExtC, IsRV64, IsCapMode] in {
-def : CompressPat<(CLD GPRNoX0:$rd, CSP:$rs1, uimm9_lsb000:$imm),
-                  (C_CLDCSP GPRNoX0:$rd, CSP:$rs1, uimm9_lsb000:$imm)>;
+def : CompressPat<(CLD GPRNoX0:$rd, CSPMem:$rs1, uimm9_lsb000:$imm),
+                  (C_CLDCSP GPRNoX0:$rd, CSPMem:$rs1, uimm9_lsb000:$imm)>;
 } // Predicates = [HasCheri, HasCheriRVC, HasStdExtC, IsRV64, IsCapMode]
 
 let Predicates = [HasCheri, HasCheriRVC, HasStdExtC, IsCapMode] in {
@@ -2366,26 +2372,26 @@ def : CompressPat<(CJALR C1, GPCRNoC0:$rs1, 0),
 } // Predicates = [HasCheri, HasCheriRVC, HasStdExtC, IsCapMode]
 
 let Predicates = [HasCheri, HasCheriRVC, HasStdExtC, HasStdExtD, IsRV32, IsCapMode] in {
-def : CompressPat<(CFSD FPR64:$rs2, CSP:$rs1, uimm9_lsb000:$imm),
-                  (C_CFSDCSP FPR64:$rs2, CSP:$rs1, uimm9_lsb000:$imm)>;
+def : CompressPat<(CFSD FPR64:$rs2, CSPMem:$rs1, uimm9_lsb000:$imm),
+                  (C_CFSDCSP FPR64:$rs2, CSPMem:$rs1, uimm9_lsb000:$imm)>;
 } // Predicates = [HasCheri, HasCheriRVC, HasStdExtC, HasStdExtD, IsRV32, IsCapMode]
 
 let Predicates = [HasCheri, HasCheriRVC, HasStdExtC, IsRV64, IsCapMode] in {
-def : CompressPat<(CSC_128 GPCR:$rs2, CSP:$rs1, uimm10_lsb0000:$imm),
-                  (C_CSCCSP_128 GPCR:$rs2, CSP:$rs1, uimm10_lsb0000:$imm)>;
+def : CompressPat<(CSC_128 GPCR:$rs2, CSPMem:$rs1, uimm10_lsb0000:$imm),
+                  (C_CSCCSP_128 GPCR:$rs2, CSPMem:$rs1, uimm10_lsb0000:$imm)>;
 } // Predicates = [HasCheri, HasCheriRVC, HasStdExtC, IsRV64, IsCapMode]
 
 let Predicates = [HasCheri, HasCheriRVC, HasStdExtC, IsCapMode] in {
-def : CompressPat<(CSW GPR:$rs2, CSP:$rs1, uimm8_lsb00:$imm),
-                  (C_CSWCSP GPR:$rs2, CSP:$rs1, uimm8_lsb00:$imm)>;
+def : CompressPat<(CSW GPR:$rs2, CSPMem:$rs1, uimm8_lsb00:$imm),
+                  (C_CSWCSP GPR:$rs2, CSPMem:$rs1, uimm8_lsb00:$imm)>;
 } // Predicates = [HasCheri, HasCheriRVC, HasStdExtC, IsCapMode]
 
 let Predicates = [HasCheri, HasCheriRVC, HasStdExtC, IsRV32, IsCapMode] in {
-def : CompressPat<(CSC_64 GPCR:$rs2, CSP:$rs1, uimm9_lsb000:$imm),
-                  (C_CSCCSP_64 GPCR:$rs2, CSP:$rs1, uimm9_lsb000:$imm)>;
+def : CompressPat<(CSC_64 GPCR:$rs2, CSPMem:$rs1, uimm9_lsb000:$imm),
+                  (C_CSCCSP_64 GPCR:$rs2, CSPMem:$rs1, uimm9_lsb000:$imm)>;
 } // Predicates = [HasCheri, HasCheriRVC, HasStdExtC, IsRV32, IsCapMode]
 
 let Predicates = [HasCheri, HasCheriRVC, HasStdExtC, IsRV64, IsCapMode] in {
-def : CompressPat<(CSD GPR:$rs2, CSP:$rs1, uimm9_lsb000:$imm),
-                  (C_CSDCSP GPR:$rs2, CSP:$rs1, uimm9_lsb000:$imm)>;
+def : CompressPat<(CSD GPR:$rs2, CSPMem:$rs1, uimm9_lsb000:$imm),
+                  (C_CSDCSP GPR:$rs2, CSPMem:$rs1, uimm9_lsb000:$imm)>;
 } // Predicates = [HasCheri, HasCheriRVC, HasStdExtC, IsRV64, IsCapMode]
