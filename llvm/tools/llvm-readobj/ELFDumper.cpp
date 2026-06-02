@@ -286,13 +286,16 @@ protected:
                            function_ref<void(StringRef, uint64_t)> OnLibEntry);
 
   virtual void printRelRelaReloc(const Relocation<ELFT> &R,
-                                 const RelSymbol<ELFT> &RelSym) = 0;
+                                 const RelSymbol<ELFT> &RelSym,
+                                 uint32_t CheriFlags) = 0;
   virtual void printRelrReloc(const Elf_Relr &R) = 0;
   virtual void printDynamicRelocHeader(unsigned Type, StringRef Name,
                                        const DynRegionInfo &Reg) {}
+  uint32_t cheriRelocationFlags(const Elf_Shdr &Sec, unsigned RelIndex);
   void printReloc(const Relocation<ELFT> &R, unsigned RelIndex,
                   const Elf_Shdr &Sec, const Elf_Shdr *SymTab);
-  void printDynamicReloc(const Relocation<ELFT> &R);
+  void printDynamicReloc(const Relocation<ELFT> &R, uint32_t CheriFlags);
+  uint32_t cheriDynamicRelocationFlags(unsigned RelIndex);
   void printDynamicRelocationsHelper();
   void printRelocationsHelper(const Elf_Shdr &Sec);
   void forEachRelocationDo(
@@ -387,6 +390,7 @@ protected:
 
   DynRegionInfo DynRelRegion;
   DynRegionInfo DynRelaRegion;
+  DynRegionInfo DynCheriRelFlagsRegion;
   DynRegionInfo DynRelrRegion;
   DynRegionInfo DynPLTRelRegion;
   std::optional<DynRegionInfo> DynSymRegion;
@@ -406,6 +410,7 @@ protected:
   const Elf_Shdr *SymbolVersionNeedSection = nullptr; // .gnu.version_r
   const Elf_Shdr *SymbolVersionDefSection = nullptr; // .gnu.version_d
   const Elf_Shdr *AclSection = nullptr;
+  DenseMap<const Elf_Shdr *, const Elf_Shdr *> CheriRelocationFlags;
 
   std::string getFullSymbolName(const Elf_Sym &Symbol, unsigned SymIndex,
                                 DataRegion<Elf_Word> ShndxTable,
@@ -671,7 +676,8 @@ private:
                          uint32_t Bucket);
   void printRelrReloc(const Elf_Relr &R) override;
   void printRelRelaReloc(const Relocation<ELFT> &R,
-                         const RelSymbol<ELFT> &RelSym) override;
+                         const RelSymbol<ELFT> &RelSym,
+                         uint32_t CheriFlags) override;
   void printSymbol(const Elf_Sym &Symbol, unsigned SymIndex,
                    DataRegion<Elf_Word> ShndxTable,
                    std::optional<StringRef> StrTable, bool IsDynamic,
@@ -738,7 +744,8 @@ public:
 private:
   void printRelrReloc(const Elf_Relr &R) override;
   void printRelRelaReloc(const Relocation<ELFT> &R,
-                         const RelSymbol<ELFT> &RelSym) override;
+                         const RelSymbol<ELFT> &RelSym,
+                         uint32_t CheriFlags) override;
 
   void printSymbol(const Elf_Sym &Symbol, unsigned SymIndex,
                    DataRegion<Elf_Word> ShndxTable,
@@ -759,10 +766,12 @@ protected:
   void printSymbolOtherField(const Elf_Sym &Symbol) const;
   virtual void printExpandedRelRelaReloc(const Relocation<ELFT> &R,
                                          StringRef SymbolName,
-                                         StringRef RelocName);
+                                         StringRef RelocName,
+                                         uint32_t CheriFlags);
   virtual void printDefaultRelRelaReloc(const Relocation<ELFT> &R,
                                         StringRef SymbolName,
-                                        StringRef RelocName);
+                                        StringRef RelocName,
+                                        uint32_t CheriFlags);
   virtual void printRelocationSectionInfo(const Elf_Shdr &Sec, StringRef Name,
                                           const unsigned SecNdx);
   virtual void printSectionGroupMembers(StringRef Name, uint64_t Idx) const;
@@ -789,7 +798,8 @@ public:
 
   void printDefaultRelRelaReloc(const Relocation<ELFT> &R,
                                 StringRef SymbolName,
-                                StringRef RelocName) override;
+                                StringRef RelocName,
+                                uint32_t CheriFlags) override;
 
   void printRelocationSectionInfo(const Elf_Shdr &Sec, StringRef Name,
                                   const unsigned SecNdx) override;
@@ -1949,9 +1959,9 @@ ELFDumper<ELFT>::ELFDumper(const object::ELFObjectFile<ELFT> &O,
                            ScopedPrinter &Writer)
     : ObjDumper(Writer, O.getFileName()), ObjF(O), Obj(O.getELFFile()),
       FileName(O.getFileName()), DynRelRegion(O, *this),
-      DynRelaRegion(O, *this), DynRelrRegion(O, *this),
-      DynPLTRelRegion(O, *this), DynSymTabShndxRegion(O, *this),
-      DynamicTable(O, *this) {
+      DynRelaRegion(O, *this), DynCheriRelFlagsRegion(O, *this),
+      DynRelrRegion(O, *this), DynPLTRelRegion(O, *this),
+      DynSymTabShndxRegion(O, *this), DynamicTable(O, *this) {
   if (!O.IsContentValid())
     return;
 
@@ -2028,6 +2038,24 @@ ELFDumper<ELFT>::ELFDumper(const object::ELFObjectFile<ELFT> &O,
       if (!AclSection)
         AclSection = &Sec;
       break;
+    case ELF::SHT_CHERI_RELFLAGS: {
+      uint32_t RelNdx = Sec.sh_link;
+      if (RelNdx >= Sections.size()) {
+        reportUniqueWarning(
+            "unable to get the associated relocation section for " +
+            describe(Sec) + ": sh_link (" + Twine(RelNdx) +
+            ") is greater than or equal to the total number of sections (" +
+            Twine(Sections.size()) + ")");
+        continue;
+      }
+
+      const Elf_Shdr &RelSec = Sections[RelNdx];
+      if (!CheriRelocationFlags.insert({&RelSec, &Sec}).second)
+          reportUniqueWarning(
+              "multiple SHT_CHERI_RELFLAGS sections are linked to " +
+              describe(RelSec));
+      break;
+    }
     }
   }
 
@@ -2153,7 +2181,23 @@ template <typename ELFT> void ELFDumper<ELFT>::parseDynamicTable() {
       DynSymTabShndxRegion.Addr = toMappedAddr(Dyn.getTag(), Dyn.getPtr());
       DynSymTabShndxRegion.EntSize = sizeof(Elf_Word);
       break;
+    case ELF::DT_CHERI_RELFLAGS:
+      DynCheriRelFlagsRegion.Addr = toMappedAddr(Dyn.getTag(), Dyn.getPtr());
+      DynCheriRelFlagsRegion.EntSize = sizeof(Elf_Word);
+      break;
     }
+  }
+
+  if (DynCheriRelFlagsRegion.EntSize != 0) {
+    unsigned Count = 0;
+
+    // Infer size from relocation table region
+    if (DynRelaRegion.Size != 0 && DynRelaRegion.EntSize != 0) {
+      Count = DynRelaRegion.Size / DynRelaRegion.EntSize;
+    } else if (DynRelRegion.Size != 0 && DynRelRegion.EntSize != 0) {
+      Count = DynRelRegion.Size / DynRelRegion.EntSize;
+    }
+    DynCheriRelFlagsRegion.Size = Count * DynCheriRelFlagsRegion.EntSize;
   }
 
   if (StringTableBegin) {
@@ -3857,6 +3901,19 @@ template <class ELFT> void ELFDumper<ELFT>::printStackMap() const {
 }
 
 template <class ELFT>
+uint32_t ELFDumper<ELFT>::cheriRelocationFlags(const Elf_Shdr &Sec,
+                                               unsigned RelIndex) {
+  auto It = CheriRelocationFlags.find(&Sec);
+  if (It != CheriRelocationFlags.end()) {
+    Expected<const Elf_Word *> FlagsOrErr =
+      Obj.template getEntry<Elf_Word>(*It->second, RelIndex);
+    if (FlagsOrErr)
+      return **FlagsOrErr;
+  }
+  return 0;
+}
+
+template <class ELFT>
 void ELFDumper<ELFT>::printReloc(const Relocation<ELFT> &R, unsigned RelIndex,
                                  const Elf_Shdr &Sec, const Elf_Shdr *SymTab) {
   Expected<RelSymbol<ELFT>> Target = getRelocationTarget(R, SymTab);
@@ -3865,7 +3922,7 @@ void ELFDumper<ELFT>::printReloc(const Relocation<ELFT> &R, unsigned RelIndex,
                         " in " + describe(Sec) + ": " +
                         toString(Target.takeError()));
   else
-    printRelRelaReloc(R, *Target);
+    printRelRelaReloc(R, *Target, cheriRelocationFlags(Sec, RelIndex));
 }
 
 template <class ELFT>
@@ -4175,7 +4232,8 @@ void GNUELFDumper<ELFT>::printRelrReloc(const Elf_Relr &R) {
 
 template <class ELFT>
 void GNUELFDumper<ELFT>::printRelRelaReloc(const Relocation<ELFT> &R,
-                                           const RelSymbol<ELFT> &RelSym) {
+                                           const RelSymbol<ELFT> &RelSym,
+                                           uint32_t CheriFlags) {
   // First two fields are bit width dependent. The rest of them are fixed width.
   unsigned Bias = ELFT::Is64Bits ? 8 : 0;
   Field Fields[5] = {0, 10 + Bias, 19 + 2 * Bias, 42 + 2 * Bias, 53 + 2 * Bias};
@@ -4212,7 +4270,11 @@ void GNUELFDumper<ELFT>::printRelRelaReloc(const Relocation<ELFT> &R,
     }
     Addend += utohexstr(RelAddend, /*LowerCase=*/true);
   }
-  OS << Addend << "\n";
+  OS << Addend;
+
+  if (CheriFlags & CHERI_RELOCATION_READ_ONLY)
+    OS << " (RO)";
+  OS << "\n";
 }
 
 template <class ELFT>
@@ -5252,8 +5314,9 @@ template <class ELFT> void GNUELFDumper<ELFT>::printDynamicRelocations() {
 }
 
 template <class ELFT>
-void ELFDumper<ELFT>::printDynamicReloc(const Relocation<ELFT> &R) {
-  printRelRelaReloc(R, getSymbolForReloc(*this, R));
+void ELFDumper<ELFT>::printDynamicReloc(const Relocation<ELFT> &R,
+                                        uint32_t CheriFlags) {
+  printRelRelaReloc(R, getSymbolForReloc(*this, R), CheriFlags);
 }
 
 template <class ELFT>
@@ -5265,20 +5328,37 @@ void ELFDumper<ELFT>::printRelocationsHelper(const Elf_Shdr &Sec) {
       [&](const Elf_Relr &R) { printRelrReloc(R); });
 }
 
+template <class ELFT>
+uint32_t ELFDumper<ELFT>::cheriDynamicRelocationFlags(unsigned RelIndex) {
+  if (DynCheriRelFlagsRegion.EntSize != 0 &&
+      RelIndex < DynCheriRelFlagsRegion.Size / DynCheriRelFlagsRegion.EntSize) {
+    return DynCheriRelFlagsRegion.template getAsArrayRef<Elf_Word>()[RelIndex];
+  }
+  return 0;
+}
+
 template <class ELFT> void ELFDumper<ELFT>::printDynamicRelocationsHelper() {
   const bool IsMips64EL = this->Obj.isMips64EL();
   if (this->DynRelaRegion.Size > 0) {
     printDynamicRelocHeader(ELF::SHT_RELA, "RELA", this->DynRelaRegion);
+    unsigned RelIndex = 0;
     for (const Elf_Rela &Rela :
-         this->DynRelaRegion.template getAsArrayRef<Elf_Rela>())
-      printDynamicReloc(Relocation<ELFT>(Rela, IsMips64EL));
+         this->DynRelaRegion.template getAsArrayRef<Elf_Rela>()) {
+      printDynamicReloc(Relocation<ELFT>(Rela, IsMips64EL),
+                        cheriDynamicRelocationFlags(RelIndex));
+      RelIndex++;
+    }
   }
 
   if (this->DynRelRegion.Size > 0) {
     printDynamicRelocHeader(ELF::SHT_REL, "REL", this->DynRelRegion);
+    unsigned RelIndex = 0;
     for (const Elf_Rel &Rel :
-         this->DynRelRegion.template getAsArrayRef<Elf_Rel>())
-      printDynamicReloc(Relocation<ELFT>(Rel, IsMips64EL));
+         this->DynRelRegion.template getAsArrayRef<Elf_Rel>()) {
+      printDynamicReloc(Relocation<ELFT>(Rel, IsMips64EL),
+                        cheriDynamicRelocationFlags(RelIndex));
+      RelIndex++;
+    }
   }
 
   if (this->DynRelrRegion.Size > 0) {
@@ -5286,7 +5366,7 @@ template <class ELFT> void ELFDumper<ELFT>::printDynamicRelocationsHelper() {
     Elf_Relr_Range Relrs =
         this->DynRelrRegion.template getAsArrayRef<Elf_Relr>();
     for (const Elf_Rel &Rel : Obj.decode_relrs(Relrs))
-      printDynamicReloc(Relocation<ELFT>(Rel, IsMips64EL));
+      printDynamicReloc(Relocation<ELFT>(Rel, IsMips64EL), 0);
   }
 
   if (this->DynPLTRelRegion.Size) {
@@ -5294,12 +5374,12 @@ template <class ELFT> void ELFDumper<ELFT>::printDynamicRelocationsHelper() {
       printDynamicRelocHeader(ELF::SHT_RELA, "PLT", this->DynPLTRelRegion);
       for (const Elf_Rela &Rela :
            this->DynPLTRelRegion.template getAsArrayRef<Elf_Rela>())
-        printDynamicReloc(Relocation<ELFT>(Rela, IsMips64EL));
+        printDynamicReloc(Relocation<ELFT>(Rela, IsMips64EL), 0);
     } else {
       printDynamicRelocHeader(ELF::SHT_REL, "PLT", this->DynPLTRelRegion);
       for (const Elf_Rel &Rel :
            this->DynPLTRelRegion.template getAsArrayRef<Elf_Rel>())
-        printDynamicReloc(Relocation<ELFT>(Rel, IsMips64EL));
+        printDynamicReloc(Relocation<ELFT>(Rel, IsMips64EL), 0);
     }
   }
 }
@@ -7466,24 +7546,30 @@ void LLVMELFDumper<ELFT>::printRelrReloc(const Elf_Relr &R) {
 template <class ELFT>
 void LLVMELFDumper<ELFT>::printExpandedRelRelaReloc(const Relocation<ELFT> &R,
                                                     StringRef SymbolName,
-                                                    StringRef RelocName) {
+                                                    StringRef RelocName,
+                                                    uint32_t CheriFlags) {
   DictScope Group(W, "Relocation");
   W.printHex("Offset", R.Offset);
   W.printNumber("Type", RelocName, R.Type);
   W.printNumber("Symbol", !SymbolName.empty() ? SymbolName : "-", R.Symbol);
   if (R.Addend)
     W.printHex("Addend", (uintX_t)*R.Addend);
+  if (CheriFlags)
+    W.printHex("CheriFlags", CheriFlags);
 }
 
 template <class ELFT>
 void LLVMELFDumper<ELFT>::printDefaultRelRelaReloc(const Relocation<ELFT> &R,
                                                    StringRef SymbolName,
-                                                   StringRef RelocName) {
+                                                   StringRef RelocName,
+                                                   uint32_t CheriFlags) {
   raw_ostream &OS = W.startLine();
   OS << W.hex(R.Offset) << " " << RelocName << " "
      << (!SymbolName.empty() ? SymbolName : "-");
   if (R.Addend)
     OS << " " << W.hex((uintX_t)*R.Addend);
+  if (CheriFlags & CHERI_RELOCATION_READ_ONLY)
+    OS << " (RO)";
   OS << "\n";
 }
 
@@ -7501,7 +7587,8 @@ template <class ELFT> void LLVMELFDumper<ELFT>::printEmptyGroupMessage() const {
 
 template <class ELFT>
 void LLVMELFDumper<ELFT>::printRelRelaReloc(const Relocation<ELFT> &R,
-                                            const RelSymbol<ELFT> &RelSym) {
+                                            const RelSymbol<ELFT> &RelSym,
+                                            uint32_t CheriFlags) {
   StringRef SymbolName = RelSym.Name;
   if (RelSym.Sym && RelSym.Name.empty())
     SymbolName = "<null>";
@@ -7509,9 +7596,9 @@ void LLVMELFDumper<ELFT>::printRelRelaReloc(const Relocation<ELFT> &R,
   this->Obj.getRelocationTypeName(R.Type, RelocName);
 
   if (opts::ExpandRelocs) {
-    printExpandedRelRelaReloc(R, SymbolName, RelocName);
+    printExpandedRelRelaReloc(R, SymbolName, RelocName, CheriFlags);
   } else {
-    printDefaultRelRelaReloc(R, SymbolName, RelocName);
+    printDefaultRelRelaReloc(R, SymbolName, RelocName, CheriFlags);
   }
 }
 
@@ -8504,8 +8591,9 @@ void JSONELFDumper<ELFT>::printZeroSymbolOtherField(
 template <class ELFT>
 void JSONELFDumper<ELFT>::printDefaultRelRelaReloc(const Relocation<ELFT> &R,
                                                    StringRef SymbolName,
-                                                   StringRef RelocName) {
-  this->printExpandedRelRelaReloc(R, SymbolName, RelocName);
+                                                   StringRef RelocName,
+                                                   uint32_t CheriFlags) {
+  this->printExpandedRelRelaReloc(R, SymbolName, RelocName, CheriFlags);
 }
 
 template <class ELFT>

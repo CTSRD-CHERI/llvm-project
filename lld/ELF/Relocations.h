@@ -34,6 +34,7 @@ enum RelExpr {
   R_ABS_CAP,
   R_ABS_CAP_ADDR,
   R_ABS_CAP_META,
+  R_ABS_ROCAP,
   R_ADDEND,
   R_DTPREL,
   R_GOT,
