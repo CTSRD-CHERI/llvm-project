@@ -235,6 +235,13 @@ static bool isRelExpr(RelExpr expr) {
                R_MIPS_CHERI_CAPTAB_REL>(expr);
 }
 
+// True if this expression is of the form Sym - PC and must point directly to
+// Sym rather than to some synthetic section (e.g. GOT or PLT). Used to
+// determine what must be within PCC's bounds on CHERI.
+bool elf::isDirectPcExpr(RelExpr expr) {
+  return oneof<R_PC, R_AARCH64_PAGE_PC>(expr);
+}
+
 static RelExpr toPlt(RelExpr expr) {
   switch (expr) {
   case R_LOONGARCH_PAGE_PC:
@@ -1141,7 +1148,7 @@ void RelocationScanner::processAux(RelExpr expr, RelType type, uint64_t offset,
   }
 
   if (config->isCheriAbi && sym.isDefined() && (sec->flags & SHF_EXECINSTR) &&
-      oneof<R_PC, R_AARCH64_PAGE_PC>(expr)) {
+      isDirectPcExpr(expr)) {
     OutputSection *osec = sym.getOutputSection();
     if (osec == nullptr)
       llvm_unreachable(
