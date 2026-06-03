@@ -2772,8 +2772,6 @@ SmallVector<PhdrEntry *, 0> Writer<ELFT>::createPhdrs(Partition &part) {
     }
   }
 
-  lastCompartment = nullptr;
-  relRo = nullptr;
   for (OutputSection *sec : outputSections) {
     if (!needsPtLoad(sec))
       continue;
@@ -2788,12 +2786,6 @@ SmallVector<PhdrEntry *, 0> Writer<ELFT>::createPhdrs(Partition &part) {
       if (isMain && sec->partition == 255)
         addHdr(PT_LOAD, computeFlags(sec->getPhdrFlags()))->add(sec);
       continue;
-    }
-
-    Compartment &c = sec->getCompartment();
-    if (&c != lastCompartment) {
-      lastCompartment = &c;
-      relRo = c.relRo;
     }
 
     // Segments are contiguous memory regions that has the same attributes
@@ -2820,7 +2812,8 @@ SmallVector<PhdrEntry *, 0> Writer<ELFT>::createPhdrs(Partition &part) {
     uint64_t newFlags = computeFlags(sec->getPhdrFlags());
     bool sameLMARegion =
         load && !sec->lmaExpr && sec->lmaRegion == load->firstSec->lmaRegion;
-    if (!(load && newFlags == flags && sec != relRo->firstSec &&
+    const Compartment &c = sec->getCompartment();
+    if (!(load && newFlags == flags && sec != c.relRo->firstSec &&
           !sec->relroEnd && sec->memRegion == load->firstSec->memRegion &&
           ((load->firstSec->flags & SHF_TLS) || !(sec->flags & SHF_TLS)) &&
           (sameLMARegion || load->lastSec == Out::programHeaders) &&
