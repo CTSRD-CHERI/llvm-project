@@ -1926,7 +1926,6 @@ void elf::postScanRelocations() {
           const_cast<SymbolCompartAux &>(aux).setFlags(NEEDS_COPY);
           sym.needsCopyAny = true;
           if (config->emachine == EM_PPC) {
-            // XXXJHB: This would need to be per-compartment
             // PPC32 canonical PLT entries are at the beginning of .glink
             cast<Defined>(sym).value = c.plt->headerSize;
             c.plt->headerSize += 16;
