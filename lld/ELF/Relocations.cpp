@@ -1403,13 +1403,14 @@ static unsigned handleMipsTlsRelocation(RelType type, Symbol &sym,
 static unsigned handleTlsRelocation(RelType type, Symbol &sym,
                                     InputSectionBase *sec, uint64_t offset,
                                     int64_t addend, RelExpr expr) {
+  Compartment &c = sec->getCompartment();
   bool isTgot =
       oneof<R_TGOT, R_TGOT_TP, R_TGOT_GOT, R_TGOT_GOT_PC, R_TGOT_TLSDESC,
             R_TGOT_TLSDESC_CALL, R_TGOT_TLSGD_PC>(expr);
 
   if (oneof<R_TPREL, R_TPREL_NEG, R_TGOT, R_TGOT_TP>(expr)) {
     if (isTgot)
-      sym.setFlags(sec->getCompartment(), NEEDS_TGOT);
+      sym.setFlags(c, NEEDS_TGOT);
 
     if (config->shared) {
       errorOrWarn("relocation " + toString(type) + " against " + toString(sym) +
@@ -1424,16 +1425,16 @@ static unsigned handleTlsRelocation(RelType type, Symbol &sym,
     return handleMipsTlsRelocation(type, sym, *sec, offset, addend, expr);
 
   if (isTgot)
-    sym.setFlags(sec->getCompartment(), NEEDS_TGOT);
+    sym.setFlags(c, NEEDS_TGOT);
 
   if (oneof<R_AARCH64_TLSDESC_PAGE, R_TLSDESC, R_TLSDESC_CALL, R_TLSDESC_PC,
             R_TLSDESC_GOTPLT, R_TGOT_TLSDESC, R_TGOT_TLSDESC_CALL>(expr) &&
       config->shared) {
     if (!oneof<R_TLSDESC_CALL, R_TGOT_TLSDESC_CALL>(expr)) {
       if (isTgot)
-        sym.setFlags(sec->getCompartment(), NEEDS_TGOT_TLSDESC);
+        sym.setFlags(c, NEEDS_TGOT_TLSDESC);
       else
-        sym.setFlags(sec->getCompartment(), NEEDS_TLSDESC);
+        sym.setFlags(c, NEEDS_TLSDESC);
       sec->addReloc({expr, type, offset, addend, &sym});
     }
     return 1;
@@ -1471,7 +1472,7 @@ static unsigned handleTlsRelocation(RelType type, Symbol &sym,
     }
     if (expr == R_TLSLD_HINT)
       return 1;
-    ctx.needsTlsLd.store(true, std::memory_order_relaxed);
+    c.needsTlsLd.store(true, std::memory_order_relaxed);
     sec->addReloc({expr, type, offset, addend, &sym});
     return 1;
   }
@@ -1487,7 +1488,7 @@ static unsigned handleTlsRelocation(RelType type, Symbol &sym,
   // Local-Dynamic sequence where offset of tls variable relative to dynamic
   // thread pointer is stored in the got. This cannot be relaxed to Local-Exec.
   if (expr == R_TLSLD_GOT_OFF) {
-    sym.setFlags(sec->getCompartment(), NEEDS_GOT_DTPREL);
+    sym.setFlags(c, NEEDS_GOT_DTPREL);
     sec->addReloc({expr, type, offset, addend, &sym});
     return 1;
   }
@@ -1498,9 +1499,9 @@ static unsigned handleTlsRelocation(RelType type, Symbol &sym,
             R_LOONGARCH_TLSGD_PAGE_PC>(expr)) {
     if (!toExecRelax) {
       if (isTgot)
-        sym.setFlags(sec->getCompartment(), NEEDS_TGOT_TLSGD);
+        sym.setFlags(c, NEEDS_TGOT_TLSGD);
       else
-        sym.setFlags(sec->getCompartment(), NEEDS_TLSGD);
+        sym.setFlags(c, NEEDS_TLSGD);
       sec->addReloc({expr, type, offset, addend, &sym});
       return 1;
     }
@@ -1511,10 +1512,10 @@ static unsigned handleTlsRelocation(RelType type, Symbol &sym,
     if (sym.isPreemptible && !isTgot) {
       RelExpr relaxExpr;
       if (isTgot) {
-        sym.setFlags(sec->getCompartment(), NEEDS_TGOT_GOT);
+        sym.setFlags(c, NEEDS_TGOT_GOT);
         relaxExpr = R_RELAX_TGOT_TLS_GD_TO_IE;
       } else {
-        sym.setFlags(sec->getCompartment(), NEEDS_TLSIE);
+        sym.setFlags(c, NEEDS_TLSIE);
         relaxExpr = R_RELAX_TLS_GD_TO_IE;
       }
       sec->addReloc(
@@ -1547,9 +1548,9 @@ static unsigned handleTlsRelocation(RelType type, Symbol &sym,
       sec->addReloc({relaxExpr, type, offset, addend, &sym});
     } else if (expr != R_TLSIE_HINT) {
       if (isTgot)
-        sym.setFlags(sec->getCompartment(), NEEDS_TGOT_GOT);
+        sym.setFlags(c, NEEDS_TGOT_GOT);
       else
-        sym.setFlags(sec->getCompartment(), NEEDS_TLSIE);
+        sym.setFlags(c, NEEDS_TLSIE);
       // R_GOT needs a relative relocation for PIC on i386 and Hexagon.
       if (expr == R_GOT && config->isPic && !target->usesOnlyLowPageBits(type))
         addRelativeReloc<true>(*sec, offset, sym, addend, expr, type);
@@ -1925,7 +1926,6 @@ void elf::postScanRelocations() {
           const_cast<SymbolCompartAux &>(aux).setFlags(NEEDS_COPY);
           sym.needsCopyAny = true;
           if (config->emachine == EM_PPC) {
-            // XXXJHB: This would need to be per-compartment
             // PPC32 canonical PLT entries are at the beginning of .glink
             cast<Defined>(sym).value = c.plt->headerSize;
             c.plt->headerSize += 16;
@@ -2011,8 +2011,8 @@ void elf::postScanRelocations() {
     }
   };
 
-  if (ctx.needsTlsLd.load(std::memory_order_relaxed)) {
-    for (Compartment &c : compartments) {
+  for (Compartment &c : compartments) {
+    if (c.needsTlsLd.load(std::memory_order_relaxed)) {
       GotSection *got = c.got.get();
       if (got->addTlsIndex()) {
         static Undefined dummy(nullptr, "", STB_LOCAL, 0, 0);

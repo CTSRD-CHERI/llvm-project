@@ -192,7 +192,3 @@ uint64_t TargetInfo::getImageBase() const {
     return *config->imageBase;
   return config->isPic ? 0 : defaultImageBase;
 }
-void lld::elf::TargetInfo::relocateNoSym(uint8_t *loc, RelType type,
-                                         uint64_t val) const {
-  relocate(loc, Relocation{R_NONE, type, 0, 0, nullptr}, val);
-}

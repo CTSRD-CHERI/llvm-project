@@ -1046,9 +1046,9 @@ static bool alignPCCBounds(PhdrEntry *p, CheriPccPaddingSection &psec) {
 bool cheriCapabilityBoundsAlign() {
   // Align the PT_CHERI_PCC segment.
   bool changed = false;
-  for (Compartment &compart : compartments)
-    if (compart.cheriBounds)
-      changed |= alignPCCBounds(compart.cheriBounds, *compart.pccPadding);
+  for (Compartment &c : compartments)
+    if (c.cheriBounds)
+      changed |= alignPCCBounds(c.cheriBounds, *c.pccPadding);
   return changed;
 }
 

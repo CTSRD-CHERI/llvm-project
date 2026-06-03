@@ -477,10 +477,10 @@ template <class ELFT> void elf::createSyntheticSections() {
     in.mipsGot = std::make_unique<MipsGotSection>();
     add(*in.mipsGot);
   } else {
-    for (Compartment &compart : compartments) {
-      compart.got = std::make_unique<GotSection>();
-      compart.got->compartment = compart.getNumber();
-      add(*compart.got);
+    for (Compartment &c : compartments) {
+      c.got = std::make_unique<GotSection>();
+      c.got->compartment = c.getNumber();
+      add(*c.got);
     }
   }
 
@@ -498,16 +498,16 @@ template <class ELFT> void elf::createSyntheticSections() {
     add(*in.ppc64LongBranchTarget);
   }
 
-  for (Compartment &compart : compartments) {
-    compart.gotPlt = std::make_unique<GotPltSection>();
-    compart.gotPlt->compartment = compart.getNumber();
-    add(*compart.gotPlt);
-    compart.igotPlt = std::make_unique<IgotPltSection>();
-    compart.igotPlt->compartment = compart.getNumber();
-    add(*compart.igotPlt);
-    compart.tgot = std::make_unique<TgotSection>();
-    compart.tgot->compartment = compart.getNumber();
-    add(*compart.tgot);
+  for (Compartment &c : compartments) {
+    c.gotPlt = std::make_unique<GotPltSection>();
+    c.gotPlt->compartment = c.getNumber();
+    add(*c.gotPlt);
+    c.igotPlt = std::make_unique<IgotPltSection>();
+    c.igotPlt->compartment = c.getNumber();
+    add(*c.igotPlt);
+    c.tgot = std::make_unique<TgotSection>();
+    c.tgot->compartment = c.getNumber();
+    add(*c.tgot);
   }
 
   if (config->emachine == EM_ARM) {
@@ -531,12 +531,12 @@ template <class ELFT> void elf::createSyntheticSections() {
 
   // We always need to add rel[a].plt to output if it has entries.
   // Even for static linking it can contain R_[*]_IRELATIVE relocations.
-  for (Compartment &compart : compartments) {
-    compart.relaPlt = std::make_unique<RelocationSection<ELFT>>(
+  for (Compartment &c : compartments) {
+    c.relaPlt = std::make_unique<RelocationSection<ELFT>>(
         config->isRela ? ".rela.plt" : ".rel.plt", /*sort=*/false,
         /*threadCount=*/1);
-    compart.relaPlt->compartment = compart.getNumber();
-    add(*compart.relaPlt);
+    c.relaPlt->compartment = c.getNumber();
+    add(*c.relaPlt);
   }
 
   // The relaIplt immediately follows .rel[a].dyn to ensure that the IRelative
@@ -568,23 +568,23 @@ template <class ELFT> void elf::createSyntheticSections() {
     add(*in.ibtPlt);
   }
 
-  for (Compartment &compart : compartments) {
+  for (Compartment &c : compartments) {
     if (config->emachine == EM_PPC)
-      compart.plt = std::make_unique<PPC32GlinkSection>();
+      c.plt = std::make_unique<PPC32GlinkSection>();
     else
-      compart.plt = std::make_unique<PltSection>();
-    compart.plt->compartment = compart.getNumber();
-    add(*compart.plt);
-    compart.iplt = std::make_unique<IpltSection>();
-    compart.iplt->compartment = compart.getNumber();
-    add(*compart.iplt);
+      c.plt = std::make_unique<PltSection>();
+    c.plt->compartment = c.getNumber();
+    add(*c.plt);
+    c.iplt = std::make_unique<IpltSection>();
+    c.iplt->compartment = c.getNumber();
+    add(*c.iplt);
   }
 
   if (config->isCheriAbi && needsCheriPccSegment()) {
-    for (Compartment &compart : compartments) {
-      compart.pccPadding = std::make_unique<CheriPccPaddingSection>();
-      compart.pccPadding->compartment = compart.getNumber();
-      add(*compart.pccPadding);
+    for (Compartment &c : compartments) {
+      c.pccPadding = std::make_unique<CheriPccPaddingSection>();
+      c.pccPadding->compartment = c.getNumber();
+      add(*c.pccPadding);
     }
   }
 
@@ -2724,44 +2724,42 @@ SmallVector<PhdrEntry *, 0> Writer<ELFT>::createPhdrs(Partition &part) {
   // read-only by dynamic linker after processing relocations.
   // Current dynamic loaders only support one PT_GNU_RELRO PHDR, give
   // an error message if more than one PT_GNU_RELRO PHDR is required.
-  for (Compartment &compart : compartments)
-    compart.relRo = make<PhdrEntry>(PT_GNU_RELRO, PF_R);
+  for (Compartment &c : compartments)
+    c.relRo = make<PhdrEntry>(PT_GNU_RELRO, PF_R);
 
-  PhdrEntry *relRo = nullptr;
   bool inRelroPhdr = false;
   lastCompartment = nullptr;
+  DenseSet<OutputSection *> relroEnd;
   for (OutputSection *sec : outputSections) {
     if (sec->partition != partNo || !needsPtLoad(sec))
       continue;
     Compartment &c = sec->getCompartment();
-    if (&c != lastCompartment) {
-      if (inRelroPhdr) {
-        inRelroPhdr = false;
-        sec->relroEnd = true;
-      }
-      lastCompartment = &c;
-      relRo = c.relRo;
+    if (&c != lastCompartment && inRelroPhdr) {
+      inRelroPhdr = false;
+      relroEnd.insert(sec);
     }
+    lastCompartment = &c;
     // Treat a CHERI PCC padding section as relro if it is preceded by a relro
     // section.
     if (isRelroSection(sec) ||
         (c.pccPadding && inRelroPhdr && sec == c.pccPadding->getParent())) {
-      if (inRelroPhdr || !relRo->firstSec) {
+      if (!c.relRo->firstSec)
         inRelroPhdr = true;
-        relRo->add(sec);
-      } else
+      if (inRelroPhdr)
+        c.relRo->add(sec);
+      else
         error("section: " + sec->name + " is not contiguous with other relro" +
               " sections");
     } else if (inRelroPhdr) {
       inRelroPhdr = false;
-      sec->relroEnd = true;
+      relroEnd.insert(sec);
     }
   }
 
   // Determine the sections PCC should cover for each compartment.
   if (config->isCheriAbi && needsCheriPccSegment()) {
-    for (Compartment &compart : compartments)
-      compart.cheriBounds = make<PhdrEntry>(PT_CHERI_PCC, PF_R | PF_X);
+    for (Compartment &c : compartments)
+      c.cheriBounds = make<PhdrEntry>(PT_CHERI_PCC, PF_R | PF_X);
 
     for (OutputSection *sec : outputSections) {
       if (sec->partition != partNo || !needsPtLoad(sec))
@@ -2772,8 +2770,6 @@ SmallVector<PhdrEntry *, 0> Writer<ELFT>::createPhdrs(Partition &part) {
     }
   }
 
-  lastCompartment = nullptr;
-  relRo = nullptr;
   for (OutputSection *sec : outputSections) {
     if (!needsPtLoad(sec))
       continue;
@@ -2788,12 +2784,6 @@ SmallVector<PhdrEntry *, 0> Writer<ELFT>::createPhdrs(Partition &part) {
       if (isMain && sec->partition == 255)
         addHdr(PT_LOAD, computeFlags(sec->getPhdrFlags()))->add(sec);
       continue;
-    }
-
-    Compartment &c = sec->getCompartment();
-    if (&c != lastCompartment) {
-      lastCompartment = &c;
-      relRo = c.relRo;
     }
 
     // Segments are contiguous memory regions that has the same attributes
@@ -2820,8 +2810,10 @@ SmallVector<PhdrEntry *, 0> Writer<ELFT>::createPhdrs(Partition &part) {
     uint64_t newFlags = computeFlags(sec->getPhdrFlags());
     bool sameLMARegion =
         load && !sec->lmaExpr && sec->lmaRegion == load->firstSec->lmaRegion;
-    if (!(load && newFlags == flags && sec != relRo->firstSec &&
-          !sec->relroEnd && sec->memRegion == load->firstSec->memRegion &&
+    const Compartment &c = sec->getCompartment();
+    if (!(load && newFlags == flags && sec != c.relRo->firstSec &&
+          !relroEnd.contains(sec) &&
+          sec->memRegion == load->firstSec->memRegion &&
           ((load->firstSec->flags & SHF_TLS) || !(sec->flags & SHF_TLS)) &&
           (sameLMARegion || load->lastSec == Out::programHeaders) &&
           (script->hasSectionsCommand || sec->type == SHT_NOBITS ||
@@ -2843,9 +2835,9 @@ SmallVector<PhdrEntry *, 0> Writer<ELFT>::createPhdrs(Partition &part) {
 
   // Add entries for .tgot.
   PhdrEntry *tgotHdr = make<PhdrEntry>(PT_CHERI_TGOT, PF_R);
-  for (Compartment &compart : compartments) {
-    if (compart.tgot->isNeeded()) {
-      OutputSection *sec = compart.tgot->getParent();
+  for (Compartment &c : compartments) {
+    if (c.tgot->isNeeded()) {
+      OutputSection *sec = c.tgot->getParent();
       tgotHdr->add(sec);
     }
   }
@@ -2856,23 +2848,23 @@ SmallVector<PhdrEntry *, 0> Writer<ELFT>::createPhdrs(Partition &part) {
   if (OutputSection *sec = part.dynamic->getParent())
     addHdr(PT_DYNAMIC, sec->getPhdrFlags())->add(sec);
 
-  for (Compartment &compart : compartments) {
-    if (compart.isDefault())
+  for (Compartment &c : compartments) {
+    if (c.isDefault())
       continue;
-    if (compart.phdrs.empty())
-      error("no output sections for compartment " + compart.name);
-    for (PhdrEntry *phdr : compart.phdrs)
+    if (c.phdrs.empty())
+      error("no output sections for compartment " + c.name);
+    for (PhdrEntry *phdr : c.phdrs)
       ret.push_back(phdr);
   }
 
-  for (Compartment &compart : compartments)
-    if (compart.relRo->firstSec)
-      ret.push_back(compart.relRo);
+  for (Compartment &c : compartments)
+    if (c.relRo->firstSec)
+      ret.push_back(c.relRo);
 
-  for (Compartment &compart : compartments) {
-    if (compart.cheriBounds) {
-      if (compart.cheriBounds->firstSec)
-        ret.push_back(compart.cheriBounds);
+  for (Compartment &c : compartments) {
+    if (c.cheriBounds) {
+      if (c.cheriBounds->firstSec)
+        ret.push_back(c.cheriBounds);
     }
   }
 
