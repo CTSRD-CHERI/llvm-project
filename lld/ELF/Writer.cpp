@@ -2730,6 +2730,7 @@ SmallVector<PhdrEntry *, 0> Writer<ELFT>::createPhdrs(Partition &part) {
   PhdrEntry *relRo = nullptr;
   bool inRelroPhdr = false;
   lastCompartment = nullptr;
+  DenseSet<OutputSection *> relroEnd;
   for (OutputSection *sec : outputSections) {
     if (sec->partition != partNo || !needsPtLoad(sec))
       continue;
@@ -2737,7 +2738,7 @@ SmallVector<PhdrEntry *, 0> Writer<ELFT>::createPhdrs(Partition &part) {
     if (&c != lastCompartment) {
       if (inRelroPhdr) {
         inRelroPhdr = false;
-        sec->relroEnd = true;
+        relroEnd.insert(sec);
       }
       lastCompartment = &c;
       relRo = c.relRo;
@@ -2754,7 +2755,7 @@ SmallVector<PhdrEntry *, 0> Writer<ELFT>::createPhdrs(Partition &part) {
               " sections");
     } else if (inRelroPhdr) {
       inRelroPhdr = false;
-      sec->relroEnd = true;
+      relroEnd.insert(sec);
     }
   }
 
@@ -2814,7 +2815,8 @@ SmallVector<PhdrEntry *, 0> Writer<ELFT>::createPhdrs(Partition &part) {
         load && !sec->lmaExpr && sec->lmaRegion == load->firstSec->lmaRegion;
     const Compartment &c = sec->getCompartment();
     if (!(load && newFlags == flags && sec != c.relRo->firstSec &&
-          !sec->relroEnd && sec->memRegion == load->firstSec->memRegion &&
+          !relroEnd.contains(sec) &&
+          sec->memRegion == load->firstSec->memRegion &&
           ((load->firstSec->flags & SHF_TLS) || !(sec->flags & SHF_TLS)) &&
           (sameLMARegion || load->lastSec == Out::programHeaders) &&
           (script->hasSectionsCommand || sec->type == SHT_NOBITS ||

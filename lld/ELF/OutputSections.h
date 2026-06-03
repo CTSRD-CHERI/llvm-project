@@ -75,9 +75,6 @@ public:
   // Sections accessed using PCC on CHERI architectures.
   std::atomic<bool> cheriPcc{false};
 
-  // This section is the first section after the end of a relro segment.
-  bool relroEnd = false;
-
   void recordSection(InputSectionBase *isec);
   void commitSection(InputSection *isec);
   void finalizeInputSections();
