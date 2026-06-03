@@ -213,9 +213,9 @@ static void addCompartment(StringRef name) {
 static Compartment *findCompartment(StringRef name) {
   if (name.empty())
     return defaultCompart;
-  for (Compartment &compart : compartments) {
-    if (compart.name.compare(name) == 0)
-      return &compart;
+  for (Compartment &c : compartments) {
+    if (c.name.compare(name) == 0)
+      return &c;
   }
   return nullptr;
 }
