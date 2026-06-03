@@ -1472,7 +1472,7 @@ static unsigned handleTlsRelocation(RelType type, Symbol &sym,
     }
     if (expr == R_TLSLD_HINT)
       return 1;
-    ctx.needsTlsLd.store(true, std::memory_order_relaxed);
+    c.needsTlsLd.store(true, std::memory_order_relaxed);
     sec->addReloc({expr, type, offset, addend, &sym});
     return 1;
   }
@@ -2011,8 +2011,8 @@ void elf::postScanRelocations() {
     }
   };
 
-  if (ctx.needsTlsLd.load(std::memory_order_relaxed)) {
-    for (Compartment &c : compartments) {
+  for (Compartment &c : compartments) {
+    if (c.needsTlsLd.load(std::memory_order_relaxed)) {
       GotSection *got = c.got.get();
       if (got->addTlsIndex()) {
         static Undefined dummy(nullptr, "", STB_LOCAL, 0, 0);

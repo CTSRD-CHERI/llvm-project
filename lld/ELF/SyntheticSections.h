@@ -1387,6 +1387,25 @@ struct InStruct {
 
 LLVM_LIBRARY_VISIBILITY extern InStruct in;
 
+template <typename T> class MovableAtomic : public std::atomic<T> {
+public:
+  MovableAtomic() : std::atomic<T>() {}
+
+  MovableAtomic(T desired) : std::atomic<T>(desired) {}
+
+  MovableAtomic(MovableAtomic &&other) : std::atomic<T>() {
+    *this = std::forward<MovableAtomic>(other);
+  }
+
+  MovableAtomic &operator=(MovableAtomic &&other) {
+    if (this != &other) {
+      this->store(other.exchange(T{}, std::memory_order_relaxed),
+                  std::memory_order_relaxed);
+    }
+    return *this;
+  }
+};
+
 struct Compartment {
   StringRef name;
   unsigned nameIndex;
@@ -1404,6 +1423,9 @@ struct Compartment {
   std::unique_ptr<PltSection> plt;
   std::unique_ptr<IpltSection> iplt;
   std::unique_ptr<RelocationBaseSection> relaPlt;
+
+  // True if we need to reserve two .got entries for local-dynamic TLS model.
+  MovableAtomic<bool> needsTlsLd{false};
 
   SmallVector<PhdrEntry *, 1> phdrs;
   PhdrEntry *relRo;
