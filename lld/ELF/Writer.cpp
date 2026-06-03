@@ -2727,7 +2727,6 @@ SmallVector<PhdrEntry *, 0> Writer<ELFT>::createPhdrs(Partition &part) {
   for (Compartment &c : compartments)
     c.relRo = make<PhdrEntry>(PT_GNU_RELRO, PF_R);
 
-  PhdrEntry *relRo = nullptr;
   bool inRelroPhdr = false;
   lastCompartment = nullptr;
   DenseSet<OutputSection *> relroEnd;
@@ -2735,22 +2734,20 @@ SmallVector<PhdrEntry *, 0> Writer<ELFT>::createPhdrs(Partition &part) {
     if (sec->partition != partNo || !needsPtLoad(sec))
       continue;
     Compartment &c = sec->getCompartment();
-    if (&c != lastCompartment) {
-      if (inRelroPhdr) {
-        inRelroPhdr = false;
-        relroEnd.insert(sec);
-      }
-      lastCompartment = &c;
-      relRo = c.relRo;
+    if (&c != lastCompartment && inRelroPhdr) {
+      inRelroPhdr = false;
+      relroEnd.insert(sec);
     }
+    lastCompartment = &c;
     // Treat a CHERI PCC padding section as relro if it is preceded by a relro
     // section.
     if (isRelroSection(sec) ||
         (c.pccPadding && inRelroPhdr && sec == c.pccPadding->getParent())) {
-      if (inRelroPhdr || !relRo->firstSec) {
+      if (!c.relRo->firstSec)
         inRelroPhdr = true;
-        relRo->add(sec);
-      } else
+      if (inRelroPhdr)
+        c.relRo->add(sec);
+      else
         error("section: " + sec->name + " is not contiguous with other relro" +
               " sections");
     } else if (inRelroPhdr) {
