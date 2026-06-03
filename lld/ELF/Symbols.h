@@ -78,7 +78,7 @@ struct SymbolAux {
 
 LLVM_LIBRARY_VISIBILITY extern SmallVector<SymbolAux, 0> symAux;
 
-// Per-compartment data stored for each symbol.  Since each compartment has a
+// Per-compartment data stored for each symbol.  Since each compartment has
 // separate GOTs, this holds fields related to GOT and PLT entries.
 struct SymbolCompartAux {
   SymbolCompartAux() : isInIplt(false), gotInIgot(false) {}
