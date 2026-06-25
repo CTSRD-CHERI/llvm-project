@@ -1884,6 +1884,7 @@ bool CastExpr::CastConsistency(const ASTContext &Ctx) const {
   case CK_IntegralToPointer:
   case CK_FloatingToIntegral:
   case CK_FixedPointToIntegral:
+  case CK_LValueToRValueBitCast: // __builtin_bit_cast has no such restriction.
     // These can convert capability <-> non-capability
     break;
   case CK_IntegralToBoolean:
