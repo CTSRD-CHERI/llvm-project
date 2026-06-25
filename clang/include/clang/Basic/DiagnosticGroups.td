@@ -17,6 +17,10 @@ def Implicit : DiagGroup<"implicit", [
 
 def DeprecatedStaticAnalyzerFlag : DiagGroup<"deprecated-static-analyzer-flag">;
 
+// Diag group for struct field punning
+def FirstFieldPunning : DiagGroup<"first-field-punning">;
+
+
 // Empty DiagGroups are recognized by clang but ignored.
 def ODR : DiagGroup<"odr">;
 def : DiagGroup<"abi">;
