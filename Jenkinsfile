@@ -34,7 +34,8 @@ if (env.JOB_NAME.toLowerCase().contains("linux")) {
     // Ensure that we can run the resulting binaries on all Linux slaves:
     nodeLabel = "linux-baseline"
 } else if (env.JOB_NAME.toLowerCase().contains("freebsd")) {
-    nodeLabel = "freebsd"
+    //nodeLabel = "freebsd"
+    nodeLabel = "freebsd-next"
 } else {
     error("Invalid job name: ${env.JOB_NAME}")
 }
