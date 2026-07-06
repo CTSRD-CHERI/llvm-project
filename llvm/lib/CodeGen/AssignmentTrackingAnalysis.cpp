@@ -227,7 +227,15 @@ void FunctionVarLocs::clear() {
 static std::pair<Value *, DIExpression *>
 walkToAllocaAndPrependOffsetDeref(const DataLayout &DL, Value *Start,
                                   DIExpression *Expression) {
-  APInt OffsetInBytes(DL.getIndexTypeSizeInBits(Start->getType()), false);
+  // XXX: CodeGenPrepare will sometimes turn the address argument for a dbg
+  // assign from a pointer to an integer, e.g. inttoptr i64 0 to ptr will end
+  // up as i64 0 rather than ptr null as in the case of stores. This is true
+  // even for the newer #dbg_assign as of LLVM 22.
+  Type *StartTy = Start->getType();
+  unsigned IndexWidth = StartTy->isPointerTy()
+                            ? DL.getIndexTypeSizeInBits(Start->getType())
+                            : DL.getTypeSizeInBits(Start->getType());
+  APInt OffsetInBytes(IndexWidth, false);
   Value *End =
       Start->stripAndAccumulateInBoundsConstantOffsets(DL, OffsetInBytes);
   SmallVector<uint64_t, 3> Ops;
