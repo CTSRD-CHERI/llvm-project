@@ -1367,6 +1367,8 @@ def PseudoCLLC : Pseudo<(outs GPCR:$dst), (ins bare_symbol:$src), [],
                         "cllc", "$dst, $src">;
 def : InstAlias<"llc $dst, $src",
                 (PseudoCLLC GPCR:$dst, bare_symbol:$src), 0>;
+def : InstAlias<"lly $dst, $src",
+                (PseudoCLLC YGPR:$dst, bare_symbol:$src), 0>;
 
 def : Pat<(riscv_cllc tglobaladdr:$in), (PseudoCLLC tglobaladdr:$in)>;
 def : Pat<(riscv_cllc tblockaddress:$in), (PseudoCLLC tblockaddress:$in)>;
@@ -1379,6 +1381,8 @@ def PseudoCLGC : Pseudo<(outs GPCR:$dst), (ins bare_symbol:$src), [],
                         "clgc", "$dst, $src">;
 def : InstAlias<"lgc $dst, $src",
                 (PseudoCLGC GPCR:$dst, bare_symbol:$src), 0>;
+def : InstAlias<"lgy $dst, $src",
+                (PseudoCLGC YGPR:$dst, bare_symbol:$src), 0>;
 
 def : Pat<(riscv_clgc tglobaladdr:$in), (PseudoCLGC tglobaladdr:$in)>;
 
