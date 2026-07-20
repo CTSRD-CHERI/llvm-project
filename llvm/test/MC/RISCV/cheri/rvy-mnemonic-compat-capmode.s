@@ -61,3 +61,16 @@ ly ra, 0(sp)
 # CHECK-32-NEXT: sc cra, 0(csp) # encoding: [0x23,0x30,0x11,0x00]
 # CHECK-64-NEXT: sc cra, 0(csp) # encoding: [0x23,0x40,0x11,0x00]
 sy ra, 0(sp)
+
+## Check that lly and lgy pseudos are handled as expected
+label:
+# CHECK-32: auipcc  cra, %got_pcrel_hi(label) # encoding: [0x97,0bAAAA0000,A,A]
+# CHECK-32: lc cra, %pcrel_lo(.Lpcrel_hi0)(cra) # encoding: [0x83,0xb0,0bAAAA0000,A]
+# CHECK-64: auipcc  cra, %got_pcrel_hi(label) # encoding: [0x97,0bAAAA0000,A,A]
+# CHECK-64: lc      cra, %pcrel_lo(.Lpcrel_hi0)(cra) # encoding: [0x8f,0xa0,0bAAAA0000,A]
+lgy x1, label
+# CHECK-32: auipcc  cra, %pcrel_hi(label) # encoding: [0x97,0bAAAA0000,A,A]
+# CHECK-32: cincoffset cra, cra, %pcrel_lo(.Lpcrel_hi1) # encoding: [0xdb,0x90,0bAAAA0000,A]
+# CHECK-64: auipcc  cra, %pcrel_hi(label) # encoding: [0x97,0bAAAA0000,A,A]
+# CHECK-64: cincoffset cra, cra, %pcrel_lo(.Lpcrel_hi1) # encoding: [0xdb,0x90,0bAAAA0000,A]
+lly x1, label
