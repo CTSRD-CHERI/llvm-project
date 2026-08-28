@@ -311,7 +311,7 @@ RelType RISCV::getDynRel(RelType type) const {
 RelExpr RISCV::getRelExpr(const RelType type, const Symbol &s,
                           const uint8_t *loc) const {
   // TODO: Remove these
-  auto warnDeprecated = [=]() {
+  auto warnDeprecated = [&]() {
     warn(getErrorLocation(loc) + "deprecated relocation (" + toString(type) +
          ") against symbol '" + toString(s) +
          "'; recompile with this toolchain");
