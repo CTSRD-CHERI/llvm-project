@@ -84,7 +84,8 @@ static void NORETURN ReportInternalAllocatorOutOfMemory(uptr requested_size) {
   Die();
 }
 
-void *InternalAlloc(uptr size, InternalAllocatorCache *cache, usize alignment) {
+void *InternalAlloc(usize size, InternalAllocatorCache *cache,
+                    usize alignment) {
   void *p = RawInternalAlloc(size, cache, alignment);
   if (UNLIKELY(!p))
     ReportInternalAllocatorOutOfMemory(size);
