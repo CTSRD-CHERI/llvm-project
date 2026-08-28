@@ -20,6 +20,7 @@
 #include "SyntheticSections.h"
 #include "Target.h"
 #include "Writer.h"
+#include "Arch/Cheri.h"
 #include "lld/Common/CommonLinkerContext.h"
 #include "lld/Common/Strings.h"
 #include "llvm/ADT/STLExtras.h"
@@ -229,6 +230,11 @@ void LinkerScript::addSymbol(SymbolAssignment *cmd) {
 
   Defined newSym(nullptr, cmd->name, STB_GLOBAL, visibility, value.type,
                  symValue, 0, sec);
+
+  if (value.sec && value.val == 0 && isSectionStartSymbol(cmd->name)) {
+    log("Treating " + cmd->name + " as a section start symbol");
+    newSym.isSectionStartSymbol = true;
+  }
 
   Symbol *sym = symtab.insert(cmd->name);
   sym->mergeProperties(newSym);
