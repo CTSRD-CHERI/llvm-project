@@ -15,10 +15,9 @@
 # RUN: llvm-readelf -l %t/section-symbol.exe | FileCheck --check-prefix=SECTION-SYMBOL %s
 # RUN: llvm-readelf -l %t/merge-section.so | FileCheck --check-prefix=MERGE-SECTION %s
 
-## text-only's segment will eventually only cover .text, but .rodata is
-## included for now
+## text-only's segment should only cover .text
 # TEXT-ONLY-LABEL: Section to Segment mapping:
-# TEXT-ONLY:         06     .rodata .text .pad.cheri.pcc {{$}}
+# TEXT-ONLY:         06     .text {{$}}
 
 ## text-rodata's segment should cover .rodata as well
 # TEXT-RODATA-LABEL: Section to Segment mapping:

@@ -46,7 +46,7 @@
 ; HEADERS-NEXT: LOAD           0x{{.+}} 0x{{.+}} 0x{{.+}} 0x{{.+}} 0x{{.+}} RW  0x10000
 ; HEADERS-NEXT: DYNAMIC        0x{{.+}} 0x{{.+}} 0x{{.+}} 0x{{.+}} 0x{{.+}} R   0x8
 ; HEADERS-NEXT: GNU_RELRO      0x{{.+}} 0x{{.+}} 0x{{.+}} 0x{{.+}} 0x{{.+}} R   0x1
-; HEADERS-NEXT: CHERI_PCC      0x{{.+}} 0x{{.+}} 0x{{.+}} 0x{{.+}} 0x{{.+}} R E 0x10
+; HEADERS-NEXT: CHERI_PCC      0x{{.+}} 0x{{.+}} 0x{{.+}} 0x{{.+}} 0x{{.+}} R E 0x80
 ; HEADERS-NEXT: GNU_STACK      0x{{.+}} 0x{{.+}} 0x{{.+}} 0x{{.+}} 0x{{.+}} RW  0x0
 ; HEADERS-NEXT: OPTIONS        0x{{.+}} 0x{{.+}} 0x{{.+}} 0x{{.+}} 0x{{.+}} R   0x8
 ; HEADERS-NEXT: ABIFLAGS       0x{{.+}} 0x{{.+}} 0x{{.+}} 0x{{.+}} 0x{{.+}} R   0x8
@@ -56,12 +56,12 @@
 ; HEADERS-NEXT: 00
 ; HEADERS-NEXT: 01     .MIPS.abiflags .MIPS.options .dynsym .hash .dynamic .dynstr .rel.dyn .rel.plt __cap_relocs .eh_frame {{$}}
 ; HEADERS-NEXT: 02     .text
-; HEADERS-NEXT: 03     .captable .got
-; HEADERS-NEXT: 04     .gcc_except_table .pad.cheri.pcc
+; HEADERS-NEXT: 03     .captable .got .pad.cheri.pcc
+; HEADERS-NEXT: 04     .gcc_except_table
 ; HEADERS-NEXT: 05     .data
 ; HEADERS-NEXT: 06     .dynamic
 ; HEADERS-NEXT: 07     .gcc_except_table
-; HEADERS-NEXT: 08     .eh_frame .text .captable .got .gcc_except_table .pad.cheri.pcc {{$}}
+; HEADERS-NEXT: 08     .text .captable .got .pad.cheri.pcc {{$}}
 ; HEADERS-NEXT: 09
 ; HEADERS-NEXT: 10     .MIPS.options
 ; HEADERS-NEXT: 11     .MIPS.abiflags
