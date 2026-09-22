@@ -40,7 +40,7 @@
 namespace __sanitizer {
 
 #if SANITIZER_FREEBSD
-void GetMemoryProfile(fill_profile_f cb, uptr *stats) {
+void GetMemoryProfile(fill_profile_f cb, usize *stats) {
   const int Mib[] = {
     CTL_KERN,
     KERN_PROC,
@@ -49,11 +49,12 @@ void GetMemoryProfile(fill_profile_f cb, uptr *stats) {
   }; 
 
   struct kinfo_proc InfoProc;
-  uptr Len = sizeof(InfoProc);
-  CHECK_EQ(internal_sysctl(Mib, ARRAY_SIZE(Mib), nullptr, (uptr *)&InfoProc, &Len, 0), 0);
+  usize Len = sizeof(InfoProc);
+  CHECK_EQ(internal_sysctl(Mib, ARRAY_SIZE(Mib), &InfoProc, &Len, nullptr, 0),
+           0);
   cb(0, InfoProc.ki_rssize * GetPageSizeCached(), false, stats);
 }
-#endif
+#  endif
 
 void ReadProcMaps(ProcSelfMapsBuff *proc_maps) {
   const int Mib[] = {
