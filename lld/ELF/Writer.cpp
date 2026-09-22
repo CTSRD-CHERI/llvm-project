@@ -2677,6 +2677,9 @@ SmallVector<PhdrEntry *, 0> Writer<ELFT>::createPhdrs(Partition &part) {
         continue;
       in.cheriBounds->add(sec);
     }
+    // Ignore alignment of PCC sections and reset back to 0. alignPCCBounds
+    // will ensure it's set to the actual required PCC alignment.
+    in.cheriBounds->p_align = 0;
   }
 
   for (OutputSection *sec : outputSections) {
