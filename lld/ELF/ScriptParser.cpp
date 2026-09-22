@@ -495,6 +495,8 @@ void ScriptParser::readPhdrs() {
         cmd.hasFilehdr = true;
       else if (consume("PHDRS"))
         cmd.hasPhdrs = true;
+      else if (cmd.type == PT_CHERI_PCC && consume("AT"))
+        setError("cannot set LMA for PT_CHERI_PCC");
       else if (consume("AT"))
         cmd.lmaExpr = readParenExpr();
       else if (consume("FLAGS"))

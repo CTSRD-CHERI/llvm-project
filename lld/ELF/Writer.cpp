@@ -3058,9 +3058,18 @@ template <class ELFT> void Writer<ELFT>::setPhdrs(Partition &part) {
     // new PT_LOAD can increase p_offset and p_vaddr by differing amounts).
     // Zeroing the offset-related fields should ensure they don't believe any
     // sections are within the segments from an offset perspective.
+    //
+    // Similarly, p_paddr can get weird if linker scripts are assigning LMAs
+    // for the PT_LOADs PT_CHERI_PCC overlaps with that aren't just the VMAs at
+    // a constant offset. This hasn't been seen to cause issues, but zero it
+    // out as well to be clear it's not meaningful (beyond being the LMA of the
+    // first section in the segment).
     if (p->p_type == PT_CHERI_PCC) {
       p->p_filesz = 0;
       p->p_offset = 0;
+      // See ScriptParser::readPhdrs
+      assert(!p->hasLMA && "PT_CHERI_PCC should never have an explicit LMA");
+      p->p_paddr = 0;
     }
   }
 }
