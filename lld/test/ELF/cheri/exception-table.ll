@@ -61,7 +61,7 @@
 ; HEADERS-NEXT: 05     .data
 ; HEADERS-NEXT: 06     .dynamic
 ; HEADERS-NEXT: 07     .gcc_except_table
-; HEADERS-NEXT: 08     .text .captable .got .pad.cheri.pcc {{$}}
+; HEADERS-NEXT: 08
 ; HEADERS-NEXT: 09
 ; HEADERS-NEXT: 10     .MIPS.options
 ; HEADERS-NEXT: 11     .MIPS.abiflags

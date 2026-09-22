@@ -3051,6 +3051,17 @@ template <class ELFT> void Writer<ELFT>::setPhdrs(Partition &part) {
           alignToPowerOf2(p->p_offset + p->p_memsz, config->commonPageSize) -
           p->p_offset;
     }
+
+    // PT_CHERI_PCC can span multiple PT_LOADs, and having a program header
+    // where section offsets and section addresses are not just constant
+    // offsets from each other confuses tools like llvm-objcopy -O binary (each
+    // new PT_LOAD can increase p_offset and p_vaddr by differing amounts).
+    // Zeroing the offset-related fields should ensure they don't believe any
+    // sections are within the segments from an offset perspective.
+    if (p->p_type == PT_CHERI_PCC) {
+      p->p_filesz = 0;
+      p->p_offset = 0;
+    }
   }
 }
 
