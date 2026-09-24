@@ -164,7 +164,7 @@ document soon.
    windows_support
    missingkeyfunction
    error_handling_script
-   Partitions
+   Compartments
    ReleaseNotes
    ELF/linker_script
    ELF/start-stop-gc
