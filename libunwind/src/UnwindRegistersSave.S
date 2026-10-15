@@ -1237,7 +1237,7 @@ DEFINE_LIBUNWIND_FUNCTION(__unw_getcontext)
 
 .macro save_fpr num, ctxreg
 #ifdef __CHERI_PURE_CAPABILITY__
-  fsd    f\num, (RISCV_FOFFSET + RISCV_FSIZE * \num)(c\ctxreg)
+  fsd    f\num, (RISCV_FOFFSET + RISCV_FSIZE * \num)(\ctxreg)
 #else
   FSTORE f\num, (RISCV_FOFFSET + RISCV_FSIZE * \num)(\ctxreg)
 #endif
@@ -1245,7 +1245,7 @@ DEFINE_LIBUNWIND_FUNCTION(__unw_getcontext)
 
 .macro save_gpr num, ctxreg
 #ifdef __CHERI_PURE_CAPABILITY__
-  sc     c\num, (__SIZEOF_CHERI_CAPABILITY__ * \num)(c\ctxreg)
+  sy     x\num, (__SIZEOF_CHERI_CAPABILITY__ * \num)(\ctxreg)
 #else
   ISTORE x\num, (RISCV_ISIZE * \num)(\ctxreg)
 #endif
@@ -1259,7 +1259,7 @@ DEFINE_LIBUNWIND_FUNCTION(__unw_getcontext)
 #
 DEFINE_LIBUNWIND_FUNCTION(__unw_getcontext)
 #ifdef __CHERI_PURE_CAPABILITY__
-  sc        c1, (__SIZEOF_CHERI_CAPABILITY__ * 0)(ca0) // store ra as pc
+  sy        x1, (__SIZEOF_CHERI_CAPABILITY__ * 0)(a0) // store ra as pc
 #else
   ISTORE    x1, (RISCV_ISIZE * 0)(a0) // store ra as pc
 #endif
