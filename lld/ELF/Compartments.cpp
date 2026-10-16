@@ -479,21 +479,60 @@ void assignSectionsToCompartments() {
     assert(s->file->compartment == 0);
 
     StringRef path = s->file->getName();
-    Expected<Compartment &> c = fileLookup.findMatch(path);
-    if (!c) {
-      error("input file " + path + " " + toString(c.takeError()));
-      valid = false;
-      continue;
+    StringRef scope = s->file->archiveName;
+    StringRef scopedPath = path;
+    std::string scopedStr;
+    if (!scope.empty()) {
+      scopedStr = (scope + ":" + path).str();
+      scopedPath = scopedStr;
     }
-
-    // If the path is not a basename, try to match on the basename.
-    if (c->isDefault() && llvm::sys::path::has_parent_path(path)) {
-      c = fileLookup.findMatch(llvm::sys::path::filename(path));
+    Expected<Compartment &> c = *defaultCompart;
+    handleAllErrors(c.takeError());
+    auto tryMatch = [&](StringRef s) -> bool {
+      llvm::errs() << "tryMatch: " << s << "\n";
+      c = fileLookup.findMatch(s);
       if (!c) {
-        error("input file " + path + " " + toString(c.takeError()));
+        error("input file " + scopedPath + " " + toString(c.takeError()));
         valid = false;
-        continue;
+        return false;
       }
+      return true;
+    };
+
+    // When matching, give precedence to full-path matches for the archive
+    // name (for archive members) or file name (for standalone input files).
+
+    // For archive members, require the pattern to include the name of the
+    // archive with an optional colon-prefixed suffix of the member name.
+    if (!scope.empty()) {
+      // First, try to match a fully scoped <archive>:<member>.
+      if (!tryMatch(scopedPath))
+        continue;
+
+      // Second, match on just the archive name.
+      if (c->isDefault() && !tryMatch(scope))
+        continue;
+
+      // If the archive path is not a basename, try to match with a scope of
+      // just the basename.
+      if (c->isDefault() && llvm::sys::path::has_parent_path(scope)) {
+        StringRef baseScope = llvm::sys::path::filename(scope);
+        if (!tryMatch((baseScope + ":" + path).str()))
+          continue;
+
+        // Try to match just the archive basename.
+        if (c->isDefault() && !tryMatch(baseScope))
+          continue;
+      }
+    } else {
+      // Prioritise matches with a full path.
+      if (c->isDefault() && !tryMatch(path))
+        continue;
+
+      // If the path is not a basename, try to match on the basename.
+      if (c->isDefault() && llvm::sys::path::has_parent_path(path) &&
+          !tryMatch(llvm::sys::path::filename(path)))
+        continue;
     }
 
     if (c->isDefault())
@@ -501,7 +540,7 @@ void assignSectionsToCompartments() {
 
     s->file->compartment = c->getNumber();
     if (config->verboseCompartmentalization)
-      message("info: input file " + s->file->getName() + " matched to " +
+      message("info: input file " + scopedPath + " matched to " +
               compartmentName(*c));
   }
 
