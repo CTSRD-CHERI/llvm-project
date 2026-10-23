@@ -1306,22 +1306,6 @@ DEFINE_LIBUNWIND_FUNCTION(_ZN9libunwind15Registers_sparc6jumptoEv)
 
 #elif defined(__riscv)
 
-.macro restore_fpr num, ctxreg
-#ifdef __CHERI_PURE_CAPABILITY__
-  fld    f\num, (RISCV_FOFFSET + RISCV_FSIZE * \num)(\ctxreg)
-#else
-  FLOAD  f\num, (RISCV_FOFFSET + RISCV_FSIZE * \num)(\ctxreg)
-#endif
-.endm
-
-.macro restore_gpr num, ctxreg
-#ifdef __CHERI_PURE_CAPABILITY__
-  ly    x\num, (__SIZEOF_CHERI_CAPABILITY__ * \num)(\ctxreg)
-#else
-  ILOAD x\num, (RISCV_ISIZE * \num)(\ctxreg)
-#endif
-.endm
-
 //
 // void libunwind::Registers_riscv::jumpto()
 //
@@ -1344,26 +1328,22 @@ DEFINE_LIBUNWIND_FUNCTION(_ZN9libunwind15Registers_riscv6jumptoEv)
 
 # if defined(__riscv_flen)
   .irp i,FROM_0_TO_31
-    restore_fpr \i, a0
+    FLOAD f\i, (RISCV_FOFFSET + RISCV_FSIZE * \i)(a0)
   .endr
 # endif
 
   // x0 is zero
-#ifdef __CHERI_PURE_CAPABILITY__
-  ly       x1, (__SIZEOF_CHERI_CAPABILITY__ * 0)(a0) // restore pc into ra
-#else
-  ILOAD    x1, (RISCV_ISIZE * 0)(a0) // restore pc into ra
-#endif
+  GLOAD    x1, (RISCV_GSIZE * 0)(a0) // restore pc into ra
   .irp i,2,3,4,5,6,7,8,9
-    restore_gpr \i, a0
+    GLOAD x\i, (RISCV_GSIZE * \i)(a0)
   .endr
   // skip a0 for now
   .irp i,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29,30,31
-    restore_gpr \i, a0
+    GLOAD x\i, (RISCV_GSIZE * \i)(a0)
   .endr
-  restore_gpr 10, a0  // restore a0
+  GLOAD    x10, (RISCV_GSIZE * 10)(a0)   // restore a0
 
-  ret           // jump to ra
+  ret                       // jump to ra
 END_LIBUNWIND_FUNCTION(_ZN9libunwind15Registers_riscv6jumptoEv)
 
 #elif defined(__s390x__)

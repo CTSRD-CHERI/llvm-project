@@ -35,22 +35,26 @@
 #elif defined(__APPLE__) && defined(__aarch64__)
 #define SEPARATOR %%
 #elif defined(__riscv)
-#ifdef __CHERI_PURE_CAPABILITY__
-# define RISCV_FOFFSET (__SIZEOF_CHERI_CAPABILITY__ * 33)
-#else
-# define RISCV_ISIZE (__riscv_xlen / 8)
-# define RISCV_FOFFSET (RISCV_ISIZE * 32)
-#endif
+# ifdef __CHERI_PURE_CAPABILITY__
+#  define RISCV_GSIZE (__SIZEOF_CHERI_CAPABILITY__)
+#  define RISCV_FOFFSET (RISCV_GSIZE * 33)
+# else
+#  define RISCV_GSIZE (__riscv_xlen / 8)
+#  define RISCV_FOFFSET (RISCV_GSIZE * 32)
+# endif
 # if defined(__riscv_flen)
 #  define RISCV_FSIZE (__riscv_flen / 8)
 # endif
 
-# if __riscv_xlen == 64
-#  define ILOAD ld
-#  define ISTORE sd
+# ifdef __CHERI_PURE_CAPABILITY__
+#  define GLOAD ly
+#  define GSTORE sy
+# elif __riscv_xlen == 64
+#  define GLOAD ld
+#  define GSTORE sd
 # elif __riscv_xlen == 32
-#  define ILOAD lw
-#  define ISTORE sw
+#  define GLOAD lw
+#  define GSTORE sw
 # else
 #  error "Unsupported __riscv_xlen"
 # endif
