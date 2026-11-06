@@ -477,6 +477,7 @@ let defsCanBeSealed = 1 in
 def CSealEntry      : Cheri_r<0x11, "csealentry", GPCR>;
 def : InstAlias<"sentry $rd, $rs1", (CSealEntry GPCR:$rd, GPCR:$rs1), 0>;
 def : InstAlias<"ysentry $rd, $rs1", (CSealEntry YGPR:$rd, YGPR:$rs1), 0>;
+def : InstAlias<"yseale $rd, $rs1", (CSealEntry YGPR:$rd, YGPR:$rs1), 0>;
 
 def : InstAlias<"cincoffsetimm $cd, $cs1, $imm",
                 (CIncOffsetImm GPCR:$cd, GPCR:$cs1, simm12:$imm), 0>;
