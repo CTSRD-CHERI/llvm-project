@@ -69,8 +69,6 @@ label:
 # CHECK-64: auipcc  cra, %got_pcrel_hi(label) # encoding: [0x97,0bAAAA0000,A,A]
 # CHECK-64: lc      cra, %pcrel_lo(.Lpcrel_hi0)(cra) # encoding: [0x8f,0xa0,0bAAAA0000,A]
 lgy x1, label
-# CHECK-32: auipcc  cra, %pcrel_hi(label) # encoding: [0x97,0bAAAA0000,A,A]
-# CHECK-32: cincoffset cra, cra, %pcrel_lo(.Lpcrel_hi1) # encoding: [0xdb,0x90,0bAAAA0000,A]
-# CHECK-64: auipcc  cra, %pcrel_hi(label) # encoding: [0x97,0bAAAA0000,A,A]
-# CHECK-64: cincoffset cra, cra, %pcrel_lo(.Lpcrel_hi1) # encoding: [0xdb,0x90,0bAAAA0000,A]
+# CHECK: auipcc  cra, %pcrel_hi(label) # encoding: [0x97,0bAAAA0000,A,A]
+# CHECK: cincoffset cra, cra, %pcrel_lo(.Lpcrel_hi1) # encoding: [0xdb,0x90,0bAAAA0000,A]
 lly x1, label
