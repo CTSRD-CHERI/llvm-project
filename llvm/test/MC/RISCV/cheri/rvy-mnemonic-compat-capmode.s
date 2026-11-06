@@ -72,3 +72,10 @@ lgy x1, label
 # CHECK: auipcc  cra, %pcrel_hi(label) # encoding: [0x97,0bAAAA0000,A,A]
 # CHECK: cincoffset cra, cra, %pcrel_lo(.Lpcrel_hi1) # encoding: [0xdb,0x90,0bAAAA0000,A]
 lly x1, label
+
+## Check that TLS pseudos are handled as expected
+# CHECK: auipcc  cra, %tls_gd_pcrel_hi(tls) # encoding: [0x97,0bAAAA0000,A,A]
+# CHECK: cincoffset cra, cra, %pcrel_lo(.Lpcrel_hi2) # encoding: [0xdb,0x90,0bAAAA0000,A]
+ly.tls.gd x1, tls
+# CHECK: cincoffset cra, ctp, sp, %tprel_add(tls) # encoding: [0xdb,0x00,0x22,0x22]
+yadd x1, tp, x2, %tprel_add(tls)
