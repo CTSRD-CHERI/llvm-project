@@ -294,7 +294,7 @@ def warn_subobject_bounds_unknown_type :
   InGroup<CheriSubobjectBoundsSuspicous>, DefaultWarnNoWerror;
 
 def warn_cheri_memintrin_misaligned_inefficient : Warning<
-  "%0 operation with capability argument %2 and underaligned destination"
+  "%0 operation with capability argument %2 and underaligned source/destination"
   " (aligned to %1 bytes) may be inefficient or result in CHERI tags bits"
   " being stripped">, InGroup<CHERIMisaligned>, DefaultWarnNoWerror;
 def warn_fe_backend_cheri_inefficient : Warning<"%0">, BackendInfo,
